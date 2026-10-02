@@ -60,7 +60,6 @@ export const search = {
   'replace.one': { en: "Replace", es: "Reemplazar" },
   'replace.oneTip': { en: "Only this one", es: "Solo esta" },
   'replace.page': { en: "Replace in page", es: "Reemplazar en la página" },
-  'replace.pageTip': { en: "All in this page", es: "Todas las de esta página" },
   'replace.leaveOut': { en: "Leave out of this replacement", es: "Dejar afuera de este reemplazo" },
   'replace.leaveOutPage': { en: "Leave this page out", es: "Dejar esta página afuera" },
   'replace.summary': {
@@ -113,6 +112,14 @@ export const search = {
   'replace.skip.boundary': {
     en: { one: "{count} crosses a deleted photo (use Replace all on that page)", other: "{count} cross a deleted photo (use Replace all on that page)" },
     es: { one: "{count} cruza una foto borrada (usá Reemplazar todo en esa página)", other: "{count} cruzan una foto borrada (usá Reemplazar todo en esa página)" },
+  },
+  'replace.skip.same': {
+    en: { one: "{count} was already the same", other: "{count} were already the same" },
+    es: { one: "{count} ya era igual", other: "{count} ya eran iguales" },
+  },
+  'replace.skip.hidden': {
+    en: { one: "{count} is in a collapsed section", other: "{count} are in collapsed sections" },
+    es: { one: "{count} está en una sección colapsada", other: "{count} están en secciones colapsadas" },
   },
   'replace.skip.pages': {
     en: { one: "{count} in a page you can't change now", other: "{count} in pages you can't change now" },

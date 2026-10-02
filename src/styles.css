@@ -5318,6 +5318,11 @@ ins.replace-new {
   }
 }
 
+/* El avance con el panel cerrado: encima del aviso común, si hay uno. */
+.notice.replace-progress-bar {
+  bottom: calc(76px + env(safe-area-inset-bottom));
+}
+
 .replace-confirm-backdrop {
   position: absolute;
   inset: 0;

@@ -108,8 +108,8 @@ Cada bloque sale con su id (`blockContainer.id`), su tipo y su texto. Un salto d
 
 - Se normalizan el texto y lo buscado: minúsculas (`toLocaleLowerCase`), sin tildes ni diéresis (NFD y fuera
   las marcas combinadas), con un mapa de cada carácter normalizado a su lugar en el original (para resaltar
-  justo lo que se encontró, también con una "Í" descompuesta pegada desde macOS). **La ñ vale como n**, como el
-  Ctrl+F de Chrome (a confirmar: "ano" encontraría "año").
+  justo lo que se encontró, también con una "Í" descompuesta pegada desde macOS). ~~La ñ vale como n~~: **desde la decisión D12
+  (2026-10-01), la ñ es otra letra** ("ano" no encuentra "año"; ver "Cómo quedó (entrega 3)").
 - **Partes de palabras:** "cam" encuentra "cámara". Los espacios de más se juntan en uno.
 - **Página:** lo escrito se busca como una frase, igual que el navegador.
 - **Proyecto:** cada palabra por separado; una página entra si tiene todas (en el título o en cualquier
@@ -343,7 +343,9 @@ Pruebas:
    de la actual), con *Aa* y *Palabra entera*. En todo el proyecto, más adelante, con la lista de cambios y
    solo en las páginas que se pueden editar (sección 11).
 3. **Ctrl/⌘+K pasa a la búsqueda**, y el panel muestra también los proyectos que coinciden (entrega 2).
-4. **La ñ vale como n** al buscar, salvo con *Aa*.
+4. ~~**La ñ vale como n** al buscar, salvo con *Aa*~~. **Cambiado por D12 (2026-10-01): la ñ es otra letra, no una n con
+   tilde**: ni buscar ni reemplazar hacen coincidir "ano" con "año", con o sin *Aa*. Las vocales con tilde siguen igual
+   ("camara" encuentra "cámara").
 5. **La papelera no entra** en la búsqueda del proyecto.
 6. **Comentarios, no en la primera entrega.**
 7. **Pies de foto y nombres de archivo:** se encuentran, pero no se reemplazan en la primera entrega.
@@ -1275,7 +1277,7 @@ Donde esto y el diseño no coinciden, vale esto. Va todo junto (el núcleo y la 
   es `listClose` (sumado `ProjectReplace.tsx` en `shortcutSources.ts`).
 - Sin tipo de bloque ni propiedad, sin migración, sin subir `min_app_version`.
 
-**Pruebas (2040 en total con `main` hasta v0.090, 2037 que corren):**
+**Pruebas (2089 en total con `main` hasta v0.091 y los arreglos de la auditoría, 2086 que corren):**
 
 - `src/search/replaceDoc.test.ts` (15): formato partido, link, salto de línea, celdas de tabla, código, la cuenta igual a
   la del índice, lo que se saltea, fotos en línea, pegadas, *Aa* y *ab*, "solo esta" por sus ids aunque otro agregue una
@@ -1309,3 +1311,31 @@ Donde esto y el diseño no coinciden, vale esto. Va todo junto (el núcleo y la 
 **Queda para después:** reemplazar en los títulos, en pies y nombres, *Conservar mayúsculas* y el borde de una foto
 borrada; la lista como `tree` para lectores de pantalla (hoy son botones); probar a mano en Safari de Mac, el iPhone y
 Firefox, y con la base real.
+
+### Lo que pidió la auditoría de la implementación (independiente, 2026-10-01)
+
+Veredicto: "se puede publicar con cambios"; en ninguna de sus pruebas (unas 6.000 corridas al azar, mutantes, ataques y
+dos recorridos en Chromium) se perdió texto de nadie. Arreglado todo lo que encontró:
+
+1. **Las condiciones de cada página se vuelven a mirar adentro del candado**, justo antes de escribir, y también al
+   deshacer (`blockOf` no toma el candado: es un `db.get`). Antes solo se miraban antes de abrir, y mientras el
+   reemplazo esperaba el candado podía llegar una bajada ilegible, un rechazo del servidor o un permiso menos.
+2. **El que corre no sale entre los últimos** (mostraba "Last" con las cuentas a medias): aparece al terminar. La prueba
+   de pantalla que fallaba de a ratos espera el aviso antes de leer.
+3. **Pruebas nuevas para la ×** (Replace all no toca lo sacado de la lista) y para la página abierta con el documento
+   viejo. Cada una falla sin su protección (probado sacándola), igual que las de los puntos 1, 2, 5 y 7.
+4. **Cerrar sesión** (el menú de la cuenta, la pantalla sin proyectos y la de "sacado") avisa y espera con un reemplazo
+   corriendo (`replaceBlocksLeaving`), como ya hacían cerrar la pestaña y cambiar de workspace.
+5. **Los últimos para deshacer:** un reemplazo que no escribió nada no se guarda; se poda al final y solo si se escribió
+   algo; y se guardan los últimos 5 *Replace all* aparte de los últimos 5 sueltos (una coincidencia o una página,
+   `scope: 'some'`): los sueltos no le sacan el *Undo* a un *Replace all* grande.
+6. **Con el panel abierto, igual de rápido:** mientras corre, la lista no se vuelve a buscar ni revisa las páginas con
+   cada página escrita (se congela y se recalcula al terminar). Con el panel cerrado, el avance con *Stop* se ve abajo,
+   encima del aviso (`ReplaceProgressHost` en Workspace.tsx).
+7. **D12, la ñ es otra letra:** `normalize` saca las marcas combinadas menos la tilde de la ñ (también la de una ñ
+   descompuesta, n + U+0303, como pega macOS), y una coincidencia no puede terminar entre la n y su tilde ("an" no es el
+   principio de "año"). Vale para las dos lupas y para reemplazar. La ayuda de reemplazar lo dice.
+8. Menores: *Replace* de una sola cambia también una escondida (la eligió en la lista); si no cambió nada, el aviso dice
+   por qué (un link entero, una foto borrada, ya era igual, escondida); sin el tooltip de *Replace in page*, que repetía
+   el botón. Donde decía "idéntico" al deshacer, vale **igual en texto y formato**: en 5 de 750 corridas un link quedó en
+   dos marcas iguales seguidas (Yjs compara los atributos de objeto por referencia), que el editor muestra igual.

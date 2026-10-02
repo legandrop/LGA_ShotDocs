@@ -11,7 +11,7 @@ import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { saveCollapse } from './collapseStore';
 import { closeFindBar, updateFindUi } from './findUi';
-import { replaceSession } from './replaceUi';
+import { replaceBlocksLeaving, replaceSession } from './replaceUi';
 import { Shell } from './Workspace';
 
 // Reemplazar en todo el proyecto, con la app de verdad (el árbol, la base local, el editor y el panel de Ctrl/⌘+K
@@ -298,10 +298,40 @@ describe('reemplazar', () => {
     await until(() => panel()!.querySelector('.replace-confirm'), 'la confirmación');
     const ok = [...panel()!.querySelectorAll<HTMLButtonElement>('.replace-confirm button')].find((x) => x.textContent === 'Replace 4')!;
     act(() => ok.click());
-    await until(() => panel()!.querySelector('.replace-recent'), 'los últimos');
+    // Mientras corre no aparece entre los últimos (sus cuentas estarían a medias): se espera a que termine.
+    await until(() => document.querySelector('.notice')?.textContent?.includes('4 replacements in 2 pages'), 'el aviso');
+    await until(() => panel()!.querySelector('.replace-recent')?.textContent?.includes('4 in 2 pages'), 'los últimos');
     expect(panel()!.querySelector('.replace-recent')!.textContent).toContain('Last: “camara” → “Z”, 4 in 2 pages');
     act(() => panel()!.querySelector<HTMLButtonElement>('.replace-recent button')!.click());
     await until(async () => (await textOf(d, b)).includes('cámaras'), 'deshecho desde el panel');
     act(() => navigate('/'));
+  });
+});
+
+describe('mientras corre', () => {
+  it('con el panel cerrado se ve el avance con Stop, y cerrar sesión espera', async () => {
+    const { d, b } = await app();
+    const engine = replaceSession(services(d)).engine;
+    const alerts: string[] = [];
+    vi.stubGlobal('alert', (m: string) => alerts.push(m));
+    let sawBar = false;
+    let blocked = false;
+    const unsub = engine.subscribe(() => {
+      if (engine.getProgress()?.done === 1 && !blocked) {
+        blocked = replaceBlocksLeaving();
+        sawBar = !!document.querySelector('.replace-progress-bar');
+      }
+    });
+    const { a } = { a: d.tree.roots(d.tree.workspaceId)[0].id };
+    await act(async () => {
+      await engine.run({ projectId: d.tree.workspaceId, pageIds: [a, b], query: 'camara', replacement: 'Z', options: {} });
+    });
+    unsub();
+    expect(blocked).toBe(true);
+    expect(alerts[0]).toContain('still running');
+    expect(sawBar).toBe(true);
+    // Terminado: ya no frena.
+    expect(replaceBlocksLeaving()).toBe(false);
+    expect(document.querySelector('.replace-progress-bar')).toBeNull();
   });
 });

@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { metaOf, ProjectReplace } from '../search/projectReplace';
+import { t } from '../i18n';
 import { useServices, type Services } from '../services';
 import { Permissions } from '../sync/access';
 
@@ -66,17 +67,33 @@ export class ReplaceSession {
 }
 
 const sessions = new WeakMap<object, ReplaceSession>();
+/** Todas las sesiones de esta pestaña (para cerrar sesión desde una pantalla sin servicios). */
+const every = new Set<ReplaceSession>();
 
 /** El reemplazo de una instancia de servicios. */
 export function replaceSession(services: Pick<Services, 'tree' | 'docs' | 'db' | 'engine' | 'access' | 'user'>): ReplaceSession {
   let session = sessions.get(services.docs);
-  if (!session) sessions.set(services.docs, (session = new ReplaceSession(services)));
+  if (!session) {
+    session = new ReplaceSession(services);
+    sessions.set(services.docs, session);
+    every.add(session);
+  }
   return session;
 }
 
 /** Si hay un reemplazo (o su deshacer) corriendo en esta instancia de servicios. */
 export function replaceRunning(services: { docs: object }): boolean {
   return sessions.get(services.docs)?.engine.isRunning() ?? false;
+}
+
+/**
+ * Si hay un reemplazo (o su deshacer) corriendo en esta pestaña: cerrar sesión lo dejaría escribiendo en una base
+ * cerrada (Docs/Doc_Buscar.md, auditoría de la entrega 3, hallazgo 4). Avisa y devuelve `true` si hay que esperar.
+ */
+export function replaceBlocksLeaving(): boolean {
+  if (![...every].some((s) => s.engine.isRunning())) return false;
+  alert(t('replace.runningLeave'));
+  return true;
 }
 
 export function useReplaceSession(): { session: ReplaceSession; ui: ReplaceUiState } {

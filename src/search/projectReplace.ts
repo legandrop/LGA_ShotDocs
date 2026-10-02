@@ -97,6 +97,11 @@ export interface ReplaceRequest {
   options: SearchOptions;
   /** Coincidencias sacadas de la lista (por sus ids). */
   exclude?: ReadonlySet<string>;
+  /**
+   * `all`: *Replace all*; `some`: una coincidencia o una página. Se guardan para deshacer los últimos 5 de cada uno:
+   * los sueltos no le sacan el *Undo* a un *Replace all* grande.
+   */
+  scope?: OpScope;
   /** Solo estas coincidencias (reemplazar una). */
   only?: ReadonlySet<string>;
   /** Con el reemplazo vacío, borrar también las escondidas (la casilla). */
@@ -128,6 +133,8 @@ export interface Summary {
   offline: boolean;
 }
 
+export type OpScope = 'all' | 'some';
+
 export type OpStatus = 'running' | 'done' | 'stopped' | 'partial';
 
 export interface OpHeader {
@@ -138,6 +145,8 @@ export interface OpHeader {
   replacement: string;
   options: SearchOptions;
   status: OpStatus;
+  /** De qué tipo es (sin el campo, de antes: `all`). */
+  scope?: OpScope;
   /** Las páginas que se escribieron (o se intentaron: el registro se guarda antes). */
   pages: string[];
   replaced: number;
@@ -348,6 +357,7 @@ export class ProjectReplace {
       pages: [],
       replaced: 0,
       planned: request.pageIds.length,
+      scope: request.scope ?? 'all',
     };
     this.current = opId;
     this.stopRequested = false;
@@ -359,7 +369,6 @@ export class ProjectReplace {
     try {
       await meta.put(headerKey(opId), header);
       result.opId = opId;
-      await this.prune(request.projectId, opId);
       for (const pageId of request.pageIds) {
         if (this.stopRequested) {
           result.stopped = true;
@@ -373,7 +382,9 @@ export class ProjectReplace {
           let outcome: { block?: PageBlock; count?: number; written?: boolean };
           try {
             outcome = await docs.edit(pageId, async (doc) => {
-              const late = this.docBlock(pageId, doc);
+              // Otra vez adentro del candado, justo antes de escribir: mientras se esperaba pudo llegar una bajada
+              // ilegible, un rechazo del servidor, un permiso menos o la papelera (`blockOf` no toma el candado).
+              const late = (await this.blockOf(pageId, request.projectId)) ?? this.docBlock(pageId, doc);
               if (late) return { block: late };
               const planOf = () =>
                 planReplace(doc, request.query, request.replacement, {
@@ -435,9 +446,14 @@ export class ProjectReplace {
       }
       header.replaced = result.replaced;
       header.status = result.stopped || result.unsaved ? 'stopped' : 'done';
-      if (header.pages.length === 0) await meta.delete(headerKey(opId));
-      else await meta.put(headerKey(opId), header);
-      if (header.pages.length === 0) result.opId = null;
+      if (header.pages.length === 0) {
+        // No se escribió nada: no ocupa lugar entre los que se pueden deshacer.
+        await meta.delete(headerKey(opId));
+        result.opId = null;
+      } else {
+        await meta.put(headerKey(opId), header);
+        await this.prune(request.projectId, opId, header.scope ?? 'all');
+      }
     } finally {
       this.progress = null;
       this.current = null;
@@ -469,8 +485,8 @@ export class ProjectReplace {
           } else {
             let outcome: { block?: PageBlock; written?: boolean };
             try {
-              outcome = await docs.edit(pageId, (doc) => {
-                const late = this.docBlock(pageId, doc);
+              outcome = await docs.edit(pageId, async (doc) => {
+                const late = (await this.blockOf(pageId, header.projectId)) ?? this.docBlock(pageId, doc);
                 if (late) return { block: late };
                 const undo = planUndo(doc, record.edits);
                 undo.outcomes.forEach((o, i) => {
@@ -527,13 +543,16 @@ export class ProjectReplace {
 
   // --- La lista de los últimos ---------------------------------------------------------------------------------
 
-  /** Los últimos reemplazos del proyecto que se pueden deshacer, el más nuevo primero. */
+  /**
+   * Los últimos reemplazos del proyecto que se pueden deshacer, el más nuevo primero. El que está corriendo no: sus
+   * cuentas están a medias (el avance se ve aparte).
+   */
   async list(projectId: string): Promise<OpHeader[]> {
     const out: OpHeader[] = [];
     for (const key of await this.deps.meta.keys(REPLACE_PREFIX)) {
       if (key.slice(REPLACE_PREFIX.length).includes(':')) continue;
       const header = (await this.deps.meta.get(key)) as OpHeader | undefined;
-      if (!header || header.projectId !== projectId) continue;
+      if (!header || header.projectId !== projectId || header.id === this.current) continue;
       // Uno que quedó "corriendo" y no es el de ahora: se cerró la app a la mitad.
       if (header.status === 'running' && header.id !== this.current) out.push({ ...header, status: 'stopped' });
       else out.push(header);
@@ -541,9 +560,9 @@ export class ProjectReplace {
     return out.sort((a, b) => b.at - a.at);
   }
 
-  /** Deja los últimos `KEEP_PER_PROJECT` del proyecto (contando el nuevo). */
-  private async prune(projectId: string, keep: string): Promise<void> {
-    const old = (await this.list(projectId)).filter((h) => h.id !== keep).slice(KEEP_PER_PROJECT - 1);
+  /** Deja los últimos `KEEP_PER_PROJECT` del proyecto de ese tipo (contando el nuevo). */
+  private async prune(projectId: string, keep: string, scope: OpScope): Promise<void> {
+    const old = (await this.list(projectId)).filter((h) => h.id !== keep && (h.scope ?? 'all') === scope).slice(KEEP_PER_PROJECT - 1);
     for (const header of old) {
       for (const key of await this.deps.meta.keys(`${headerKey(header.id)}:`)) await this.deps.meta.delete(key);
       await this.deps.meta.delete(headerKey(header.id));

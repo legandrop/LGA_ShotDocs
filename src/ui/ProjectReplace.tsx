@@ -61,6 +61,14 @@ export function reportRun(session: ReplaceSession, result: RunResult): void {
   if (result.unsaved) parts.push(t('replace.unsaved'));
   parts.push(t('replace.done', { count: result.replaced, pages: t('replace.pages', { count: result.pages }) }));
   if (result.stopped) parts.push(t('replace.stopped'));
+  // Nada cambió: por qué (un link entero, el borde de una foto, ya era igual).
+  if (result.replaced === 0) {
+    const s = result.skipped;
+    if (s.link) parts.push(t('replace.skip.link', { count: s.link }));
+    if (s.boundary) parts.push(t('replace.skip.boundary', { count: s.boundary }));
+    if (s.same) parts.push(t('replace.skip.same', { count: s.same }));
+    if (s.hidden) parts.push(t('replace.skip.hidden', { count: s.hidden }));
+  }
   const notTouched = Object.values(result.blocked).reduce((n, v) => n + (v ?? 0), 0);
   if (notTouched > 0) parts.push(t('replace.pagesSkipped', { count: notTouched }));
   const opId = result.opId;
@@ -156,8 +164,6 @@ export function ReplaceResults({ index, projectId, searched, indexRevision, onGo
   /** Los ids de cada coincidencia de las páginas con algo sacado de la lista (para esconder esos renglones). */
   const [keys, setKeys] = useState<Map<string, Map<string, string>>>(new Map());
   const cancelRef = useRef<HTMLButtonElement>(null);
-  const treeRevision = tree.getRevision();
-  const engineVersion = useSyncExternalStore(engine.subscribe, engine.getVersion);
 
   // Lo sacado de la lista vale para esta búsqueda.
   const signature = `${searched}\u0000${ui.matchCase}\u0000${ui.wholeWord}`;
@@ -168,10 +174,19 @@ export function ReplaceResults({ index, projectId, searched, indexRevision, onGo
     setLimit(PAGE_LIMIT);
   }, [signature, session]);
 
+  // Mientras corre un reemplazo (o su deshacer), la lista no se recalcula con cada página escrita: cada cambio del
+  // índice volvería a buscar y a revisar hasta 50 páginas en IndexedDB (con el panel abierto tardaba el triple). Al
+  // terminar, se recalcula una vez.
+  const running = progress !== null;
+  const frozen = useRef({ index: indexRevision, tree: tree.getRevision() });
+  if (!running) frozen.current = { index: indexRevision, tree: tree.getRevision() };
+  const listRevision = frozen.current.index;
+  const listTreeRevision = frozen.current.tree;
+
   const hits: PhraseHit[] = useMemo(
     () => (searched.trim() ? index.phrase(projectId, searched, options).filter((h) => !ui.excludedPages.has(h.page.id)) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [index, indexRevision, treeRevision, projectId, searched, options, ui.excludedPages],
+    [index, listRevision, listTreeRevision, projectId, searched, options, ui.excludedPages],
   );
   const shown = hits.slice(0, limit);
 
@@ -188,7 +203,7 @@ export function ReplaceResults({ index, projectId, searched, indexRevision, onGo
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageIdsKey, projectId, engine, indexRevision, treeRevision, perms.known, engineVersion]);
+  }, [pageIdsKey, projectId, engine, listRevision, listTreeRevision, perms.known, running]);
 
   // Los ids de las coincidencias de las páginas con algo sacado: así un renglón sacado sigue afuera aunque otro
   // agregue una antes (se identifica por sus caracteres, no por su número).
@@ -207,7 +222,7 @@ export function ReplaceResults({ index, projectId, searched, indexRevision, onGo
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [excludedKey, indexRevision, searched, options, engine]);
+  }, [excludedKey, listRevision, searched, options, engine]);
 
   // Los últimos reemplazos del proyecto.
   useEffect(() => {
@@ -218,7 +233,7 @@ export function ReplaceResults({ index, projectId, searched, indexRevision, onGo
     return () => {
       cancelled = true;
     };
-  }, [engine, projectId, engineVersion]);
+  }, [engine, projectId, running]);
 
   const isExcluded = (pageId: string, m: PhraseMatch) => {
     const key = keys.get(pageId)?.get(`${m.blockId}#${m.occurrence}`);
@@ -257,7 +272,8 @@ export function ReplaceResults({ index, projectId, searched, indexRevision, onGo
   const replaceOne = async (pageId: string, m: PhraseMatch) => {
     const key = await keyFor(pageId, m);
     if (!key) return notify(tr('replace.changed'));
-    await run(baseRequest([pageId], { only: new Set([key]), exclude: undefined }));
+    // La eligió en la lista: se cambia aunque esté escondida (también con el reemplazo vacío).
+    await run(baseRequest([pageId], { only: new Set([key]), exclude: undefined, scope: 'some', deleteHidden: true }));
   };
 
   const exclude = async (pageId: string, m: PhraseMatch) => {
@@ -386,11 +402,11 @@ export function ReplaceResults({ index, projectId, searched, indexRevision, onGo
                     <button
                       className="find-text-button"
                       disabled={busy}
-                      data-tip={tr('replace.pageTip')}
                       onClick={() =>
                         void run(
                           baseRequest([hit.page.id], {
                             exclude: excludedSet(hit.page.id),
+                            scope: 'some',
                           }),
                         )
                       }

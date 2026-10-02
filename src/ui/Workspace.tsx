@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { AuthUser } from '../auth';
 import { t, useT } from '../i18n';
 import { useCodaOwner } from '../import/codaOwner';
@@ -26,7 +26,7 @@ import { menuBelow, PageMenu, type MenuPosition } from './menus';
 import { MoveDialog } from './MoveDialog';
 import { PageFormatDialog } from './PageFormatDialog';
 import { notify, useNotice } from './notice';
-import { replaceRunning } from './replaceUi';
+import { replaceBlocksLeaving, replaceRunning, replaceSession } from './replaceUi';
 import { InstallBanner, InstallHost } from './InstallBanner';
 import { lastPageOf, rememberPage, useCurrentProject, useSwitchProject } from './project';
 import { RemovedScreen } from './RemovedScreen';
@@ -403,6 +403,7 @@ export function Shell() {
       <HelpHost />
       <TourHost />
       <InstallHost />
+      <ReplaceProgressHost />
       {notice && (
         <div className="notice" role="status">
           <span>{notice}</span>
@@ -421,6 +422,28 @@ export function Shell() {
             {tr('common.ok')}
           </button>
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * El avance de reemplazar en el proyecto con el panel de Ctrl/⌘+K cerrado (sigue corriendo), con *Stop*. Con el panel
+ * abierto, el avance está en el panel.
+ */
+function ReplaceProgressHost() {
+  const session = replaceSession(useServices());
+  const progress = useSyncExternalStore(session.engine.subscribe, () => session.engine.getProgress());
+  const search = useSearchSession();
+  const tr = useT();
+  if (!progress || search.isOpen()) return null;
+  return (
+    <div className="notice replace-progress-bar" role="status">
+      <span>{tr(progress.kind === 'undo' ? 'replace.barUndo' : 'replace.bar', { done: progress.done, total: progress.total })}</span>
+      {progress.kind === 'replace' && (
+        <button className="link" onClick={() => session.engine.stop()}>
+          {tr('replace.barStop')}
+        </button>
       )}
     </div>
   );
@@ -657,6 +680,7 @@ export function NoProjects({
           className="link"
           onClick={() => {
             // Como el menú de la cuenta: con algo sin subir, salir pregunta (no se borra nada del dispositivo).
+            if (replaceBlocksLeaving()) return;
             if (pending > 0 && !confirm(t('account.signOutPending', { count: pending }))) return;
             void client.auth.signOut({ scope: 'local' });
           }}

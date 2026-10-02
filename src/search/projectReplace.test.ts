@@ -255,6 +255,123 @@ describe('qué páginas se tocan', () => {
   });
 });
 
+describe('lo que pidió la auditoría de la implementación', () => {
+  it('ilegible mientras espera el candado (una bajada que la marca): no se escribe', async () => {
+    const d = await device();
+    const a = await d.tree.create(null, 'A');
+    await write(d, a, ['la cámara']);
+    const docs = Object.create(d.docs) as typeof d.docs;
+    let first = true;
+    docs.stateOf = async (id: string) => {
+      const s = await d.docs.stateOf(id);
+      // Como una bajada que toma el candado justo después de que el reemplazo miró el estado (la primera vez).
+      if (first) {
+        first = false;
+        void d.docs.markUnreadable(id);
+      }
+      return s;
+    };
+    const result = await engineOf(d, { docs }).run(request(d, [a]));
+    expect([result.replaced, result.blocked]).toEqual([0, { unreadable: 1 }]);
+    expect(await textOf(d, a)).toBe('|la cámara|');
+  });
+
+  it('rechazada mientras espera el candado (una subida rechazada): no se escribe', async () => {
+    const d = await device();
+    const a = await d.tree.create(null, 'A');
+    await write(d, a, ['la cámara']);
+    const docs = Object.create(d.docs) as typeof d.docs;
+    docs.edit = async (pageId, fn) => {
+      await updateDocState(d.db, pageId, (s) => {
+        s.rejected = 'forbidden';
+      });
+      return d.docs.edit(pageId, fn);
+    };
+    const result = await engineOf(d, { docs }).run(request(d, [a]));
+    expect([result.replaced, result.blocked]).toEqual([0, { rejected: 1 }]);
+    expect(await textOf(d, a)).toBe('|la cámara|');
+  });
+
+  it('el permiso sacado mientras espera el candado: no se escribe, y deshacer tampoco', async () => {
+    const d = await device();
+    const a = await d.tree.create(null, 'A');
+    await write(d, a, ['la cámara']);
+    let canEdit = true;
+    const docs = Object.create(d.docs) as typeof d.docs;
+    docs.edit = async (pageId, fn) => {
+      canEdit = false;
+      return d.docs.edit(pageId, fn);
+    };
+    const perms = { known: true, canEditPage: () => canEdit };
+    const result = await engineOf(d, { docs }, perms).run(request(d, [a]));
+    expect([result.replaced, result.blocked]).toEqual([0, { viewOnly: 1 }]);
+    expect(await textOf(d, a)).toBe('|la cámara|');
+    // Deshacer: reemplazado con permiso, y el permiso se va mientras el deshacer espera el candado.
+    canEdit = true;
+    const engine = engineOf(d, {}, perms);
+    await engine.run(request(d, [a]));
+    const [op] = await engine.list(d.tree.workspaceId);
+    const undo = await engineOf(d, { docs }, perms).undo(op.id);
+    expect([undo.undone, undo.remaining]).toEqual([0, 1]);
+    expect(await textOf(d, a)).toBe('|la Camera|');
+  });
+
+  it('la × (sacar una de la lista): Replace all no la toca', async () => {
+    const d = await device();
+    const a = await d.tree.create(null, 'A');
+    await write(d, a, ['uno cámara dos cámara tres cámara']);
+    const engine = engineOf(d);
+    const matches = await engine.matchesOf(a, 'camara', {});
+    const result = await engine.run(request(d, [a], 'camara', 'X', { exclude: new Set([matches[1].key]) }));
+    expect(result.replaced).toBe(2);
+    expect(await textOf(d, a)).toBe('|uno X dos cámara tres X|');
+  });
+
+  it('la página abierta con el documento viejo (llegó algo que esta versión no puede mostrar): no se escribe', async () => {
+    const d = await device();
+    const a = await d.tree.create(null, 'A');
+    await write(d, a, ['la cámara']);
+    const live = await d.docs.open(a);
+    // Como `applyRemote` cuando lo bajado no se puede mostrar: lo guardado tiene más que el documento abierto.
+    (d.docs as unknown as { live: Map<string, { stale?: boolean }> }).live.get(a)!.stale = true;
+    const result = await engineOf(d).run(request(d, [a]));
+    expect([result.replaced, result.blocked]).toEqual([0, { unsupported: 1 }]);
+    expect(live.getXmlFragment(CONTENT_FRAGMENT).toString()).toContain('cámara');
+    d.docs.close(a);
+  });
+
+  it('un reemplazo que no cambió nada no ocupa lugar, y los sueltos no sacan el Undo de un Replace all', async () => {
+    const d = await device();
+    const { a } = await threePages(d);
+    const engine = engineOf(d);
+    await engine.run(request(d, [a], 'camara', 'Camera'));
+    const [big] = await engine.list(d.tree.workspaceId);
+    for (let i = 0; i < KEEP_PER_PROJECT + 1; i++) {
+      await engine.run(request(d, [a], i % 2 === 0 ? 'camera' : 'cámara', i % 2 === 0 ? 'cámara' : 'Camera', { scope: 'some' }));
+    }
+    // Uno que no coincide con nada: no se guarda.
+    expect((await engine.run(request(d, [a], 'nada-que-coincida', 'X'))).opId).toBeNull();
+    const list = await engine.list(d.tree.workspaceId);
+    expect(list.filter((h) => h.scope === 'some')).toHaveLength(KEEP_PER_PROJECT);
+    expect(list.some((h) => h.id === big.id)).toBe(true);
+  });
+
+  it('el que está corriendo no aparece entre los últimos (sus cuentas están a medias)', async () => {
+    const d = await device();
+    const { a, b } = await threePages(d);
+    const engine = engineOf(d);
+    const seen: number[] = [];
+    const unsub = engine.subscribe(() => {
+      if (engine.getProgress()?.done === 1) void engine.list(d.tree.workspaceId).then((l) => seen.push(l.length));
+    });
+    await engine.run(request(d, [a, b]));
+    unsub();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(seen[0]).toBe(0);
+    expect(await engine.list(d.tree.workspaceId)).toHaveLength(1);
+  });
+});
+
 describe('las protecciones', () => {
   it('si no quedó guardado en el dispositivo, se corta todo (no sigue con las demás)', async () => {
     const d = await device();

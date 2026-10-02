@@ -9,7 +9,7 @@ cuántos escondidos en secciones colapsadas (borrarlos pide su casilla). Escribe
 puede editar y está completa, sin editor, por el mismo camino que cualquier edición; antes guarda un registro, y
 *Undo* vuelve a poner lo que nadie cambió después, también sin red o tras cerrar la app. Diseño auditado (la
 protección del editor abierto, el guardado comprobado, los permisos conocidos). Pruebas al azar con dos
-dispositivos: nada del otro se pierde. Ayuda nueva.
+dispositivos: nada del otro se pierde. Al buscar, la ñ pasa a ser otra letra (D12). Ayuda nueva.
 [ Reemplazar en el proyecto - vista previa, confirmación y deshacer en todas las páginas ]
 
 v0.091 :
