@@ -8,6 +8,12 @@ export interface PageRow {
   /** Ajustes de la rama; en copias guardadas por versiones anteriores de la app puede faltar. */
   settings?: PageSettings;
   update_seq: number;
+  /**
+   * El `to_seq` de la base limpia vigente (0: ninguna; Docs/Doc_Privacidad_Borrado.md). Para quien no ve lo borrado y
+   * con el interruptor prendido, "al día" es llegar hasta acá. Ausente con una base anterior a la versión 12 y en las
+   * copias guardadas por versiones anteriores de la app.
+   */
+  clean_seq?: number;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
@@ -157,6 +163,11 @@ export interface WorkspaceSettings {
    * hasta que Lega lo confirme; `false` también si la base todavía no tiene la columna.
    */
   autoPurgeFiles?: boolean;
+  /**
+   * El interruptor de la privacidad de lo borrado (`clean_min_version`, versión 12 de la base): `null`, apagado (todos
+   * bajan las filas); con un número, quien no ve lo borrado baja solo bases, y las arman las versiones desde esa.
+   */
+  cleanMinVersion?: number | null;
 }
 
 /** Un archivo nuevo para `register_file` (el proyecto sale de la página). */

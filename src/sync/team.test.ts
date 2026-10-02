@@ -94,6 +94,24 @@ describe('niveles en el dispositivo', () => {
     expect(p.canManagePage(pages.a)).toBe(false);
   });
 
+  it('la pestaña Archivos de la papelera no se le ofrece a un invitado, aunque tenga Editar y crear sobre el proyecto', async () => {
+    const { server } = await teamWorkspace();
+    server.addMember('gus', 'guest');
+    server.grant('gus', { projectId: server.workspaceId }, 'edit_pages');
+    server.addMember('mia', 'member');
+    server.grant('mia', { projectId: server.workspaceId }, 'edit_pages');
+    const gus = await device(server, { id: 'gus' });
+    const mia = await device(server, { id: 'mia' });
+    await gus.engine.syncNow();
+    await mia.engine.syncNow();
+    expect(perms(gus).projectLevel(server.workspaceId)).toBe(4);
+    expect(perms(gus).canSeeFileTrash(server.workspaceId)).toBe(false);
+    // Lo mismo que contesta la base (el servidor en memoria sigue a `private.can_see_file_trash`).
+    expect(server.canSeeFileTrash('gus', server.workspaceId)).toBe(false);
+    expect(perms(mia).canSeeFileTrash(server.workspaceId)).toBe(true);
+    expect(server.canSeeFileTrash('mia', server.workspaceId)).toBe(true);
+  });
+
   it('quien creó el proyecto tiene 4 solo siendo miembro activo', async () => {
     const { server, owner, pages } = await teamWorkspace();
     expect(perms(owner).pageLevel(pages.a1a)).toBe(4);

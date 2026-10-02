@@ -3,6 +3,7 @@ import { t } from '../i18n';
 import { fromBase64, toBase64 } from '../lib/base64';
 import type { HistoryRow } from './history';
 import { THUMB_MAX_BYTES } from '../media/probe';
+import { CLEAN_SCHEMA_VERSION } from './clean';
 import { MAX_FILE_BYTES } from './files';
 import { parseAccess, type AccessSnapshot, type GrantLevel, type Role } from './access';
 import {
@@ -34,9 +35,10 @@ export interface Remote {
   ensureWorkspace(): Promise<string | null>;
   /**
    * Las páginas de estos proyectos. Se pide por proyecto (y no "todo lo visible") para usar el índice y
-   * para que, cuando se pueda compartir, lo compartido llegue por su propio camino.
+   * para que, cuando se pueda compartir, lo compartido llegue por su propio camino. `schemaVersion`: la versión de la
+   * base, si se sabe; desde la 12 se pide también `clean_seq` (Docs/Doc_Privacidad_Borrado.md).
    */
-  fetchTree(projectIds: string[]): Promise<PageRow[]>;
+  fetchTree(projectIds: string[], schemaVersion?: number | null): Promise<PageRow[]>;
   /**
    * Los proyectos que ve la sesión. `schemaVersion`: la versión de la base, si se sabe; desde la 9 (P.14) se
    * pide también `archived_at`. Una base sin esa columna nunca corta la sincronización (ver la implementación).
@@ -53,6 +55,13 @@ export interface Remote {
   /** Idempotente por `clientUpdateId`. Devuelve el `seq` asignado. */
   pushUpdate(pageId: string, clientUpdateId: string, update: Uint8Array): Promise<number>;
   pullUpdates(pageId: string, afterSeq: number, limit: number): Promise<RemoteUpdate[]>;
+  /**
+   * Las páginas que esta sesión puede armar como base limpia ahora (`clean_work`, versión 12): vacío con el interruptor
+   * apagado, una versión que no alcanza o una base sin la función. `urgent`: sin esperar la cadencia.
+   */
+  cleanWork(options?: { pages?: string[]; urgent?: boolean }): Promise<CleanWorkRow[]>;
+  /** Sube una base limpia (`push_clean_base`). Idempotente por `id`. */
+  pushCleanBase(base: NewCleanBase): Promise<CleanPushResult>;
   /** Idempotente: si el archivo ya está subido no hace nada. */
   uploadFile(path: string, data: ArrayBuffer, mime: string): Promise<void>;
   downloadFile(path: string): Promise<Blob>;
@@ -69,6 +78,34 @@ export interface Remote {
 }
 
 /** Una fila de `list_members`. */
+/** Una página que se puede armar como base limpia (`clean_work`). */
+export interface CleanWorkRow {
+  page_id: string;
+  update_seq: number;
+  /** `page_updates.id` de la fila `update_seq`: va con la base (la base mira que siga siendo esa fila). */
+  last_update_id: number;
+  clean_seq: number;
+  base_bytes: number;
+}
+
+/** Una base limpia para `push_clean_base`. */
+export interface NewCleanBase {
+  id: string;
+  pageId: string;
+  toSeq: number;
+  lastUpdateId: number;
+  state: Uint8Array;
+  sha256: string;
+}
+
+/** `ok` (guardada), `clean_old` (había una igual o más nueva) o `clean_stale` (anterior a compartir). */
+export type CleanPushResult = 'ok' | 'clean_old' | 'clean_stale';
+
+export function cleanPushResult(data: unknown): CleanPushResult {
+  if (data === 'ok' || data === 'clean_old' || data === 'clean_stale') return data;
+  throw new RemoteError(`push_clean_base: unexpected answer ${String(data)}`, true);
+}
+
 export interface MemberRow {
   user_id: string;
   email: string;
@@ -529,6 +566,7 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRem
       name?: string | null;
       local_key?: string | null;
       auto_purge_files?: boolean | null;
+      clean_min_version?: number | string | null;
     };
     return {
       generation: Number(row.generation),
@@ -540,6 +578,8 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRem
       localKey: extra.local_key || null,
       // Solo `true` lo prende: sin la columna (base anterior a la versión 6) queda apagado.
       autoPurgeFiles: extra.auto_purge_files === true,
+      // Sin la columna (base anterior a la versión 12), apagado.
+      cleanMinVersion: extra.clean_min_version == null ? null : Number(extra.clean_min_version),
     };
   }
 
@@ -549,27 +589,36 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRem
     return (data as string | null) || null;
   }
 
-  async fetchTree(projectIds: string[]): Promise<PageRow[]> {
+  async fetchTree(projectIds: string[], schemaVersion?: number | null): Promise<PageRow[]> {
     // De a 100 proyectos por consulta: la lista viaja en la dirección y tiene un largo máximo.
     const rows: PageRow[] = [];
     for (let i = 0; i < projectIds.length; i += 100) {
-      rows.push(...(await this.fetchTreeOf(projectIds.slice(i, i + 100))));
+      rows.push(...(await this.fetchTreeOf(projectIds.slice(i, i + 100), schemaVersion)));
     }
     return rows;
   }
 
-  private async fetchTreeOf(projectIds: string[]): Promise<PageRow[]> {
+  /** Desde cuándo la base no tiene `pages.clean_seq` (aunque diga la versión 12); se reintenta cada tanto. */
+  private cleanSeqMissingAt = 0;
+
+  private async fetchTreeOf(projectIds: string[], schemaVersion?: number | null): Promise<PageRow[]> {
     // De a 1000, por id: si se crean páginas mientras se baja, no se saltea ninguna.
     const rows: PageRow[] = [];
     let after: string | null = null;
+    // `clean_seq` solo con la versión 12 o más; si falta igual, se sigue sin ella un rato (como `settings`).
+    const clean = (schemaVersion ?? 0) >= CLEAN_SCHEMA_VERSION && Date.now() - this.cleanSeqMissingAt >= 10 * 60_000;
     for (;;) {
-      const columns = this.settingsMissing ? PAGE_COLUMNS_WITHOUT_SETTINGS : PAGE_COLUMNS;
+      const columns = (this.settingsMissing ? PAGE_COLUMNS_WITHOUT_SETTINGS : PAGE_COLUMNS) + (clean ? ', clean_seq' : '');
       let query = this.client.from('pages').select(columns).in('workspace_id', projectIds);
       if (after) query = query.gt('id', after);
       const { data, error, status } = await timed(query.order('id').limit(1000));
+      if (error?.code === UNDEFINED_COLUMN && clean) {
+        this.cleanSeqMissingAt = Date.now();
+        return this.fetchTreeOf(projectIds, schemaVersion);
+      }
       if (error?.code === UNDEFINED_COLUMN && !this.settingsMissing) {
         this.settingsMissingAt = Date.now();
-        return this.fetchTreeOf(projectIds);
+        return this.fetchTreeOf(projectIds, schemaVersion);
       }
       if (error) throw toRemoteError(error, status);
       const page = data as unknown as PageRow[];
@@ -702,6 +751,40 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRem
       seq: Number(r.seq),
       data: fromBase64(r.update),
     }));
+  }
+
+  async cleanWork({ pages, urgent = false }: { pages?: string[]; urgent?: boolean } = {}): Promise<CleanWorkRow[]> {
+    const args: Record<string, unknown> = { p_app_version: this.appVersion || null, p_urgent: urgent };
+    if (pages) args.p_pages = pages;
+    const { data, error, status } = await timed(this.client.rpc('clean_work', args));
+    // Una base sin la migración: nada que armar.
+    if (error?.code === MISSING_FUNCTION) return [];
+    if (error) throw toRemoteError(error, status);
+    return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+      page_id: String(r.page_id),
+      update_seq: Number(r.update_seq),
+      last_update_id: Number(r.last_update_id),
+      clean_seq: Number(r.clean_seq),
+      base_bytes: Number(r.base_bytes),
+    }));
+  }
+
+  async pushCleanBase(base: NewCleanBase): Promise<CleanPushResult> {
+    const state = toBase64(base.state);
+    const { data, error, status } = await timed(
+      this.client.rpc('push_clean_base', {
+        p_id: base.id,
+        p_page_id: base.pageId,
+        p_to_seq: base.toSeq,
+        p_last_update_id: base.lastUpdateId,
+        p_state: state,
+        p_sha256: base.sha256,
+        p_app_version: this.appVersion || null,
+      }),
+      timeoutFor(state.length),
+    );
+    if (error) throw toRemoteError(error, status);
+    return cleanPushResult(data);
   }
 
   async pageHistory(pageId: string, afterSeq: number, limit: number): Promise<HistoryRow[]> {

@@ -99,6 +99,32 @@ papelera antes de compartirle la rama.
   PL/pgSQL (Postgres 17 vuelve a planificar en cada llamada una función SQL que no se puede expandir; PL/pgSQL guarda
   el plan en la sesión) y juntan permisos y papelera en una sola consulta.
 
+### Lo borrado y quién lo recibe (bases limpias)
+
+Migración `20261010120000_privacidad_borrado.sql` (aplicada el 2026-10-02, interruptor apagado; diseño y cómo quedó en `Doc_Privacidad_Borrado.md`).
+Recibe lo borrado de una página quien ve su historial (`private.sees_deleted`: nivel 3 o más y no invitado). Con el
+interruptor `workspace_settings.clean_min_version` prendido, a los demás (Ver, Comentar, invitados) `pull_page_updates`
+les da solo la **base limpia** vigente (`page_clean_bases`, una por página, la arma y sube un editor con
+`push_clean_base`; `clean_work` dice cuáles), o nada si no hay; apagado (`null`, como queda la migración), todos bajan
+filas como siempre. `share`, `create_invitation` (con Ver, Comentar o a un invitado) y mover una página a una rama con
+lectores ponen `clean_reset_seq = update_seq`: una base de antes no se sirve ni se acepta.
+
+Valen desde que se aplica, con el interruptor apagado: la columna `update` de `page_updates` no se lee directo desde la
+API (nadie: la app baja por funciones); un uso sacado de un archivo (`page_files.removed_at`) no da permiso a quien no
+ve lo borrado de esa página (`can_view_file`, `file_level`, la política de `page_files`, y con ellas `files`, `thumbs`
+y el portero); la papelera de archivos (`trashed_files`) no responde a invitados.
+
+- **Prenderlo:** el script de restaurar del repo de copias tiene que vaciar `page_clean_bases` y dejar `clean_seq` en
+  0 y `clean_reset_seq` en el `update_seq` restaurado; `min_app_version` en la versión que trae las bases; copia de
+  seguridad; y `update public.workspace_settings set clean_min_version = <esa versión> where id`. El `check`
+  `workspace_settings_clean_min_le_min_app` no deja prenderlo por encima de `min_app_version` (ni sin ella), ni bajar la
+  mínima por debajo de él.
+- **`clean_work`** junta solo páginas vivas de proyectos vivos alcanzadas por un permiso de lector, de los proyectos
+  donde la sesión edita algo, y mira cada una (`sees_deleted`, `has_plain_readers`) antes de contarla en las 50.
+- **Apagarlo** (`clean_min_version = null`) vuelve a servir filas a todos. No se borra nada en ningún sentido: las
+  bases son copias derivadas.
+- **Pruebas:** `supabase/tests/privacidad_borrado_permisos.sql` (corrida en `begin … rollback`).
+
 ### Aplicar las migraciones
 
 Con un token personal de Supabase (supabase.com → Account → Access Tokens):

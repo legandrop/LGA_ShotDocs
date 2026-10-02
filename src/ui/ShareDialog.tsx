@@ -5,6 +5,7 @@ import { usePermissions, useServices, useTree } from '../services';
 import { GRANT_LEVELS, LEVEL_LABELS, ROLE_LABELS, levelValue, type GrantLevel, type Role } from '../sync/access';
 import type { AccessRow, MemberRow } from '../sync/remote';
 import { inviteAndCopy, useInviteLink } from './MembersDialog';
+import { ShareGateNotes, UNSYNCED_BEFORE_SHARE, useShareGate } from './shareGate';
 import { teamErrorText } from './teamText';
 
 // "Share…" en el menú de la página y en el del proyecto: quién tiene acceso y con qué nivel, cambiarlo,
@@ -46,6 +47,8 @@ export function ShareDialog({ target, onClose }: { target: ShareTarget; onClose:
   const [level, setLevel] = useState<GrantLevel>('edit');
   const [role, setRole] = useState<'member' | 'guest'>('guest');
   const [manualLink, setManualLink] = useState<string | null>(null);
+  // Privacidad de lo borrado: subir antes lo pendiente y armar las bases después (shareGate.tsx).
+  const gate = useShareGate();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -113,13 +116,30 @@ export function ShareDialog({ target, onClose }: { target: ShareTarget; onClose:
   const address = email.trim().toLowerCase();
   const knownUser = knownByEmail.get(address);
 
+  /** El rol de alguien que ya está en el workspace (de la lista de miembros o de quién tiene acceso). */
+  const roleOf = (uid: string) => members.find((m) => m.user_id === uid)?.role ?? rows?.find((r) => r.user_id === uid)?.role;
+  /** Quien no ve lo borrado (Ver, Comentar, o un invitado): recibe la página limpia. */
+  const isReader = (lvl: GrantLevel, who: Role | undefined) => lvl === 'view' || lvl === 'comment' || who === 'guest';
+  const formReader = !!address && isReader(level, knownUser ? roleOf(knownUser) : role);
+
   async function add(e: FormEvent) {
     e.preventDefault();
+    await submit(false);
+  }
+
+  /** Comparte o invita; `anyway`: sin esperar a que suba lo pendiente (el aviso de shareGate.tsx). */
+  async function submit(anyway: boolean) {
     if (!address) return;
+    const reader = formReader;
+    const retry = () => void submit(false);
+    const skip = () => void submit(true);
+    if (anyway) gate.clearBlocked();
     if (knownUser) {
       await run('add', async () => {
+        if (!anyway && !(await gate.ready(target, reader, retry, skip))) return;
         await remote.share(knownUser, target, level);
         setEmail('');
+        gate.after(target, reader, address);
       });
       return;
     }
@@ -129,11 +149,37 @@ export function ShareDialog({ target, onClose }: { target: ShareTarget; onClose:
     }
     const grant = isProject ? { project_id: target.projectId, level } : { page_id: target.pageId, level };
     // Sin nada que espere antes: el portapapeles se pide en el mismo gesto.
-    const copying = inviteAndCopy(remote.createInvitation(address, role, [grant]).then(() => makeLink(targetId)));
+    const copying = inviteAndCopy(
+      (anyway ? Promise.resolve(true) : gate.ready(target, reader, retry, skip))
+        .then((ok) => {
+          if (!ok) throw UNSYNCED_BEFORE_SHARE;
+          return remote.createInvitation(address, role, [grant]);
+        })
+        .then(() => makeLink(targetId)),
+    );
     await run('add', async () => {
-      const manual = await copying;
+      let manual: string | null;
+      try {
+        manual = await copying;
+      } catch (err) {
+        // Quedó el aviso de lo pendiente (con Retry y Share anyway): no es un error.
+        if (err === UNSYNCED_BEFORE_SHARE) return;
+        throw err;
+      }
       setEmail('');
       setManualLink(manual);
+      gate.after(target, reader, address);
+    });
+  }
+
+  /** Cambiar el nivel de alguien de la lista, con el mismo paso previo si pasa a no ver lo borrado. */
+  async function changeLevel(person: Person, next: GrantLevel, anyway = false) {
+    const reader = isReader(next, person.role);
+    if (anyway) gate.clearBlocked();
+    await run(`level:${person.userId}`, async () => {
+      if (!anyway && !(await gate.ready(target, reader, () => void changeLevel(person, next), () => void changeLevel(person, next, true)))) return;
+      await remote.share(person.userId, target, next);
+      gate.after(target, reader, person.email);
     });
   }
 
@@ -193,6 +239,7 @@ export function ShareDialog({ target, onClose }: { target: ShareTarget; onClose:
               <input readOnly value={manualLink} onFocus={(e) => e.currentTarget.select()} aria-label={tr('team.inviteLink')} />
             </div>
           )}
+          <ShareGateNotes gate={gate} reader={formReader || gate.blocked !== null} />
         </form>
 
         {error && <p className="error">{error}</p>}
@@ -217,10 +264,7 @@ export function ShareDialog({ target, onClose }: { target: ShareTarget; onClose:
                   aria-label={tr('share.accessOf', { email: p.email })}
                   value={p.direct.level}
                   disabled={busy !== null}
-                  onChange={(e) => {
-                    const next = e.target.value as GrantLevel;
-                    void run(`level:${p.userId}`, async () => void (await remote.share(p.userId, target, next)));
-                  }}
+                  onChange={(e) => void changeLevel(p, e.target.value as GrantLevel)}
                 >
                   {GRANT_LEVELS.map((l) => (
                     <option key={l} value={l}>
