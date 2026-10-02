@@ -8,7 +8,7 @@ import type { PageSize } from '../ui/pageFormat';
 
 // El proyecto de prueba de exportar (P.22, Docs/Doc_Exportar.md, entrega 0): un árbol de N páginas con lo que tiene
 // un proyecto de rodaje de verdad (texto, Script, preguntas, saltos de hoja, tablas, fotos-bloque en filas, fotos en
-// línea y en las celdas, páginas que son solo carpetas, alguna página muy larga) y hojas de cuatro tamaños. Lo usan
+// línea y en las celdas, tarjetas de Drive, páginas que son solo carpetas, alguna página muy larga) y hojas de cuatro tamaños. Lo usan
 // las pruebas (export.test.tsx, con pocas páginas) y la medición en el navegador (bench/), con 300. Siempre el
 // mismo proyecto para la misma semilla. Solo para probar: la app no lo importa.
 
@@ -100,6 +100,11 @@ export function testProject(options: TestProjectOptions, photo: (n: number) => T
       { type: 'numberedListItem', content: sentence(4, 9) },
       { type: 'paragraph', props: { question: true }, content: '¿' + sentence(5, 10).slice(0, -1) + '?' },
     ];
+    // La mitad de las escenas, con la tarjeta de un video de referencia en Drive.
+    if (rnd() < 0.5) {
+      const href = `https://drive.google.com/file/d/1Bench${String(Math.floor(rnd() * 1e9)).padStart(9, '0')}AbCdEfGhIjKlMn/view`;
+      out.push({ type: 'paragraph', props: { driveCard: true }, content: [{ type: 'link', href, content: href }] });
+    }
     // Las fotos en renglones de a 3 o 4 (en línea), con texto entre medio.
     let left = photos;
     while (left > 0) {

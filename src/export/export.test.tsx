@@ -118,7 +118,7 @@ describe('exportar: las páginas', () => {
     live.on('update', () => liveUpdates++);
 
     const e = await editor();
-    const seen: { title: string; html: string; photos: number; script: number; questions: number; breaks: number; tables: number }[] = [];
+    const seen: { title: string; html: string; photos: number; script: number; questions: number; breaks: number; tables: number; cards: number }[] = [];
     const progress: ExportProgress[] = [];
     const out = await renderPages(plan, device.docs, e, {
       onProgress: (p) => progress.push(p),
@@ -132,6 +132,7 @@ describe('exportar: las páginas', () => {
           questions: root.querySelectorAll('.question-line').length,
           breaks: root.querySelectorAll('.print-page-break-empty').length,
           tables: root.querySelectorAll('table').length,
+          cards: root.querySelectorAll('.drive-card').length,
         });
         page.view.root.remove();
       },
@@ -150,12 +151,15 @@ describe('exportar: las páginas', () => {
       expect(got.questions).toBe((flat.match(/"question":true/g) ?? []).length);
       expect(got.breaks).toBe((flat.match(/"pageBreak":true/g) ?? []).length);
       expect(got.tables).toBe((flat.match(/"tableContent"/g) ?? []).length);
+      // La tarjeta de Drive, sin el reproductor (queda el link).
+      expect(got.cards).toBe((flat.match(/"driveCard":true/g) ?? []).length);
+      expect(got.html).not.toContain('<iframe');
       // Sin tiradores, ni editable, ni ids repetidos.
       expect(got.html).not.toContain('contenteditable');
       expect(got.html).not.toMatch(/\sid="/);
     });
     // Las clases y la estructura de cada tipo están en algún lado.
-    for (const what of ['photos', 'script', 'questions', 'breaks', 'tables'] as const) expect(seen.some((p) => p[what] > 0)).toBe(true);
+    for (const what of ['photos', 'script', 'questions', 'breaks', 'tables', 'cards'] as const) expect(seen.some((p) => p[what] > 0)).toBe(true);
     // Ninguna vista queda en el documento.
     expect(document.querySelectorAll('.print-view')).toHaveLength(0);
 
@@ -300,7 +304,7 @@ describe('exportar: las páginas', () => {
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
     expect(a).toHaveLength(300);
     const all = JSON.stringify(a.map((s: TestPageSpec) => s.blocks));
-    for (const needle of ['"script":true', '"question":true', '"pageBreak":true', '"tableContent"', '"type":"photo"', '"rowWidth"', '"previewWidth"']) {
+    for (const needle of ['"script":true', '"question":true', '"pageBreak":true', '"tableContent"', '"type":"photo"', '"rowWidth"', '"previewWidth"', '"driveCard":true']) {
       expect(all).toContain(needle);
     }
     const photos = a.reduce((n, s) => n + s.photos, 0);

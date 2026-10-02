@@ -331,11 +331,13 @@ async function run() {
     log(`pantalla: ${Math.round((performance.now() - ts) / 1000)} s`);
   }
 
-  // 2. Lo guardado, antes. Y una página abierta mientras se exporta.
-  const before = new Map<string, string>();
-  for (const p of plan) before.set(p.id, await storedHash(d, p.id));
+  // 2. Una página abierta mientras se exporta (abrirla puede guardar su reparación, por eso antes de leer lo
+  // guardado), y lo guardado de todas, antes.
   const openId = plan.find((_, i) => i > 0 && specs[i].blocks.length > 0)!.id;
   const live = await d.docs.open(openId);
+  await d.docs.flush(openId);
+  const before = new Map<string, string>();
+  for (const p of plan) before.set(p.id, await storedHash(d, p.id));
   const liveBefore = await sha256([Y.encodeStateAsUpdate(live)]);
   let liveUpdates = 0;
   live.on('update', () => liveUpdates++);
@@ -413,7 +415,7 @@ async function run() {
       heapMB: heapBefore !== null && heapAfter !== null ? { before: Math.round(heapBefore / 1e6), after: Math.round(heapAfter / 1e6) } : null,
       keptImages,
     },
-    unchanged: { pagesChanged: changed.length, liveUpdates, liveSame: liveBefore === liveAfter, treeOpsBefore: opsBefore, treeOpsAfter: opsAfter },
+    unchanged: { pagesChanged: changed.length, changed: changed.map((id) => ({ id, open: id === openId })), liveUpdates, liveSame: liveBefore === liveAfter, treeOpsBefore: opsBefore, treeOpsAfter: opsAfter },
     screen: SCREEN
       ? {
           perPage: stats(screen.map((s) => s.ms)),
