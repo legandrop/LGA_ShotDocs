@@ -91,7 +91,7 @@ const HISTORY = '0.098';
 /** Los cambios marcados por persona en el historial (entrega 2; la versión la pone quien publica). */
 const HISTORY_CHANGES = '0.103';
 /** Las versiones con nombre y el historial sin red (entrega 3; la versión la pone quien publica). */
-const HISTORY_NAMES = '0.105';
+const HISTORY_NAMES = '0.0XX';
 /** Reemplazar en todo el proyecto (Doc_Buscar.md, "Reemplazar en el proyecto"). */
 const REPLACE_PROJECT = '0.094';
 /** El aviso de lo que escribiste en algo que otro borró (roadmap B.16, Doc_Sincronizacion.md): la versión se pone al publicar. */

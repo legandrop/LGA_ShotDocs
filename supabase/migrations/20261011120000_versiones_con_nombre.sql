@@ -142,6 +142,10 @@ begin
     if v.page_id is distinct from p_page_id or v.seq is distinct from p_seq or v.kind <> 'named' then
       raise exception 'version_conflict' using errcode = 'P0001';
     end if;
+    -- El reintento de un nombre que alguien sacó en el medio: ya no está (no se vuelve a mostrar).
+    if v.removed_at is not null then
+      raise exception 'version_not_found' using errcode = 'P0002';
+    end if;
   else
     lbl := private.version_label(p_label);
     upd_id := private.page_update_id(p_page_id, p_seq);

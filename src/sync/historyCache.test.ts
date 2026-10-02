@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import type { HistoryRow, PageVersionRow } from './history';
-import { deleteHistoryCache, HistoryCache, historyCacheFor, historyDbName } from './historyCache';
+import { deleteHistoryCache, HistoryCache, historyCacheFor, historyDbName, pruneHistoryCache } from './historyCache';
 
 // La caché del historial (P.18, entrega 3; Docs/Doc_Historial.md, sección 8): por página, las filas bajadas, los
 // correos y los nombres; se escriben solo las filas nuevas, otra generación la tira, el tope libera lo menos abierto y
@@ -66,6 +66,32 @@ describe('la caché del historial', () => {
     expect(got?.rows.map((r) => r.id)).toEqual([99]);
     expect(got?.meta.generation).toBe(2);
     cache.close();
+  });
+
+  it('dos pestañas guardan a la vez (una con menos filas después de otra con más): la última nunca baja y lo guardado sirve', async () => {
+    const cache = await fresh();
+    await Promise.all([
+      cache.save('p1', { rows: rows(25), emails: new Map(), versions: null, generation: 1 }),
+      cache.save('p1', { rows: rows(40), emails: new Map(), versions: null, generation: 1 }),
+      cache.save('p1', { rows: rows(30), emails: new Map(), versions: null, generation: 1 }),
+    ]);
+    const got = await cache.read('p1');
+    expect(got?.rows.length).toBe(40);
+    expect(got?.meta.lastSeq).toBe(40);
+    expect(got?.meta.lastId).toBe(row(40).id);
+    cache.close();
+  });
+
+  it('se tira lo de las páginas cuyo historial ya no se puede ver; sin caché no se crea una base', async () => {
+    const local = `test-${crypto.randomUUID()}`;
+    expect(await pruneHistoryCache(local, () => false)).toEqual([]);
+    expect((await indexedDB.databases()).map((d) => d.name)).not.toContain(historyDbName(local));
+    const cache = await historyCacheFor(local);
+    for (const id of ['sigue', 'perdida']) await cache!.save(id, { rows: rows(2), emails: new Map(), versions: null, generation: 1 });
+    expect(await pruneHistoryCache(local, (id) => id === 'sigue')).toEqual(['perdida']);
+    expect(await cache!.read('perdida')).toBeNull();
+    expect(await cache!.read('sigue')).not.toBeNull();
+    await deleteHistoryCache(local);
   });
 
   it('si lo guardado no cuadra (se cortó a medio guardar), lo tira', async () => {

@@ -1422,6 +1422,7 @@ export class FakeRemote
     const known = this.server.versions.find((v) => v.id === id);
     if (known) {
       if (known.pageId !== pageId || known.seq !== seq || known.kind !== 'named') throw new RemoteError('version_conflict', true, 'P0001');
+      if (known.removedAt) throw new RemoteError('version_not_found', true, 'P0002');
       return FakeRemote.plain(known);
     }
     const text = FakeRemote.label(label);

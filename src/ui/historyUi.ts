@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import type { Permissions } from '../sync/access';
-import { HISTORY_SCHEMA_VERSION } from '../sync/history';
+import { HISTORY_SCHEMA_VERSION, type RestoreTrace } from '../sync/history';
 import { IS_MAC, isLetter, modPressed } from './findUi';
 
 // El historial de versiones (P.18, Docs/Doc_Historial.md): si está abierto y para qué página, quién lo puede ver y
@@ -62,7 +62,7 @@ export function isHistoryShortcut(
 /** Lo que devuelve el editor al pedirle restaurar. */
 export type RestoreOutcome =
   /** `undo`: deshace la restauración si sigue siendo lo último; `onEdit`: avisa la próxima edición de la página. */
-  | { ok: true; undo: () => boolean; onEdit: (fn: () => void) => () => void }
+  | { ok: true; undo: () => boolean; onEdit: (fn: () => void) => () => void; trace?: RestoreTrace }
   /** `shape`: la versión no pasó la ida y vuelta (algo que el editor no puede armar); `notEditable`: sin editor. */
   | { ok: false; reason: 'shape' | 'notEditable' | 'failed' };
 

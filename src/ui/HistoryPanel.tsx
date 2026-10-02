@@ -760,12 +760,15 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
       const key = `history:${pageId}:${session.seq}:${Date.now()}`;
       const date = whenLabel(session.end, lang);
       // "Restored from…" en la lista: la marca se guarda cuando la restauración llega al servidor (historyLoad.ts).
-      const mark = namesSupported
-        ? markRestoreLater(
-            { remote: historyRemote, cache: cacheRef.current, engine, docs },
-            { id: crypto.randomUUID(), pageId, userId: user.id, fromSeq: session.seq, afterSeq, at: Date.now() },
-          )
-        : null;
+      // Sin huella (no cambió nada) no hay marca.
+      const trace = outcome.trace;
+      const mark =
+        namesSupported && trace && (trace.ins.length > 0 || trace.del.length > 0)
+          ? markRestoreLater(
+              { remote: historyRemote, cache: cacheRef.current, engine, docs },
+              { id: crypto.randomUUID(), pageId, userId: user.id, fromSeq: session.seq, afterSeq, at: Date.now(), trace },
+            )
+          : null;
       closeHistory();
       notify(t('history.restored', { date }), {
         key,

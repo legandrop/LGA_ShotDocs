@@ -72,6 +72,51 @@ export function versionBreaks(versions: readonly PageVersionRow[]): { after: num
   };
 }
 
+/**
+ * La huella de una restauración: los tramos `[autor de Yjs, desde, largo]` que agregó y los que borró (el paso de
+ * deshacer que dejó en el editor). Sirve para reconocer la fila que la subió (`rowHasTrace`) y no marcar *Restored
+ * from…* sobre otra edición (una restauración deshecha antes de subir, otro dispositivo de la misma persona).
+ */
+export interface RestoreTrace {
+  ins: [number, number, number][];
+  del: [number, number, number][];
+}
+
+/** Tope de tramos que se guardan de cada lado (alcanza con uno para reconocer la fila). */
+const TRACE_MAX = 200;
+
+type DeleteSetLike = { clients: Map<number, { clock: number; len: number }[]> };
+
+/** La huella a partir de lo agregado y lo borrado (dos delete sets, como los de un paso de deshacer de Yjs). */
+export function traceFromSets(insertions: DeleteSetLike, deletions: DeleteSetLike): RestoreTrace {
+  const flat = (ds: DeleteSetLike) => {
+    const out: [number, number, number][] = [];
+    for (const [client, items] of ds.clients) for (const it of items) if (out.length < TRACE_MAX) out.push([client, it.clock, it.len]);
+    return out;
+  };
+  return { ins: flat(insertions), del: flat(deletions) };
+}
+
+/** Si la fila trae algo de esa restauración (lo agregado o lo borrado), sin integrarla. */
+export function rowHasTrace(data: Uint8Array, trace: RestoreTrace): boolean {
+  try {
+    const { from, to } = Y.parseUpdateMeta(data);
+    for (const [client, clock, len] of trace.ins) {
+      const a = from.get(client);
+      const b = to.get(client);
+      if (a !== undefined && b !== undefined && clock < b && clock + len > a) return true;
+    }
+    if (trace.del.length === 0) return false;
+    const { ds } = Y.decodeUpdate(data);
+    for (const [client, clock, len] of trace.del) {
+      for (const it of ds.clients.get(client) ?? []) if (it.clock < clock + len && it.clock + it.len > clock) return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 export interface HistorySession {
   /** Fila primera y última (índices en `rows`). */
   first: number;

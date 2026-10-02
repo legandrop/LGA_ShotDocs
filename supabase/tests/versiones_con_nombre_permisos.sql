@@ -206,6 +206,28 @@ begin
   assert (select count(*) from public.list_page_versions('00000000-0000-4000-8000-0000000b1d0c')) = 1, 's: no nombra en su página';
 end;
 $$;
+-- Nombres raros: se guardan literal (sin interpretar nada); saltos de línea y tabulaciones, un espacio; se cuentan
+-- letras, no bytes; nulo, vacío o de más de 100, rechazados. Un seq que solo existe en otra página, no.
+do $$
+declare
+  r public.page_version_row;
+begin
+  r := public.rename_page_version('00000000-0000-4000-8000-0000000b1703', $l$x'); drop table public.page_versions; --$l$);
+  assert r.label = $l$x'); drop table public.page_versions; --$l$, 'el nombre con comillas no quedó literal';
+  assert to_regclass('public.page_versions') is not null, 'la tabla desapareció';
+  r := public.rename_page_version('00000000-0000-4000-8000-0000000b1703', E'línea\nnueva\ttab');
+  assert r.label = 'línea nueva tab', 'los saltos de línea no se volvieron un espacio: ' || r.label;
+  r := public.rename_page_version('00000000-0000-4000-8000-0000000b1703', repeat('ñ', 100));
+  assert char_length(r.label) = 100, '100 ñ';
+  perform pg_temp.expect_error(format('select public.rename_page_version(%L, %L)', '00000000-0000-4000-8000-0000000b1703', repeat('ñ', 101)),
+    'label_invalid', '101 ñ');
+  perform pg_temp.expect_error(format('select public.rename_page_version(%L, null)', '00000000-0000-4000-8000-0000000b1703'),
+    'label_invalid', 'renombrar a nulo');
+  r := public.rename_page_version('00000000-0000-4000-8000-0000000b1703', 'De s');
+  perform pg_temp.expect_error($q$select public.name_page_version(gen_random_uuid(), '00000000-0000-4000-8000-0000000b1d0c', 3, 'x')$q$,
+    'version_not_found', 'un seq que solo existe en otra página');
+end;
+$$;
 -- k edita p1 (compartida arriba): nombra en p1c, que hereda.
 select pg_temp.as_user('00000000-0000-4000-8000-0000000b1601');
 do $$
@@ -278,8 +300,29 @@ begin
 end;
 $$;
 
+-- Sacarlo otra vez, ahora d (nivel 4), no pisa quién ni cuándo; y reintentar nombrar con el id de uno sacado no lo
+-- devuelve (la respuesta de antes se perdió y alguien lo sacó en el medio).
+select pg_temp.as_console();
+create temp table removed_before on commit drop as
+  select removed_at from public.page_versions where id = '00000000-0000-4000-8000-0000000b1702';
+select pg_temp.as_user('00000000-0000-4000-8000-0000000b1d01');
+select public.remove_page_version('00000000-0000-4000-8000-0000000b1702');
+select pg_temp.as_user('00000000-0000-4000-8000-0000000b1e01');
+do $$
+begin
+  perform pg_temp.expect_error($q$select public.name_page_version('00000000-0000-4000-8000-0000000b1702', '00000000-0000-4000-8000-0000000b1d09', 2, 'Rodaje')$q$,
+    'version_not_found', 'reintentar el id de un nombre sacado lo devuelve');
+end;
+$$;
+
 -- Sacar el nombre no borra la fila: queda con quién y cuándo.
 select pg_temp.as_console();
+do $$
+begin
+  assert (select v.removed_at = b.removed_at from public.page_versions v, removed_before b
+          where v.id = '00000000-0000-4000-8000-0000000b1702'), 'sacar otra vez cambió cuándo se sacó';
+end;
+$$;
 do $$
 begin
   assert (select removed_at is not null and removed_by = '00000000-0000-4000-8000-0000000b1a01' and label = 'Rodaje día 1'
@@ -306,6 +349,8 @@ begin
     'version_not_found', 'restaurada desde ella misma');
   perform pg_temp.expect_error($q$select public.mark_page_restored(gen_random_uuid(), '00000000-0000-4000-8000-0000000b1d09', 3, 77)$q$,
     'version_not_found', 'restaurada desde una que no existe');
+  perform pg_temp.expect_error($q$select public.mark_page_restored(gen_random_uuid(), '00000000-0000-4000-8000-0000000b1d09', 3, 0)$q$,
+    'version_not_found', 'restaurada desde una fila anterior que no existe (0)');
   perform pg_temp.expect_error($q$select public.rename_page_version('00000000-0000-4000-8000-0000000b1705', 'x')$q$,
     'version_not_named', 'renombrar una marca de restauración');
   perform pg_temp.expect_error($q$select public.remove_page_version('00000000-0000-4000-8000-0000000b1705')$q$,
@@ -422,6 +467,21 @@ begin
   perform pg_temp.expect_error($q$select count(*) from public.page_versions$q$, '42501', 'anon lee la tabla');
 end;
 $$;
+
+-- Quien puso un nombre y después bajó a Ver ya no lo cambia ni lo saca.
+select pg_temp.as_console();
+update public.grants set level = 'view' where user_id = '00000000-0000-4000-8000-0000000b1e01';
+select pg_temp.as_user('00000000-0000-4000-8000-0000000b1e01');
+do $$
+begin
+  perform pg_temp.expect_error($q$select public.rename_page_version('00000000-0000-4000-8000-0000000b1701', 'x')$q$,
+    'page_not_found', 'bajado a Ver renombra el suyo');
+  perform pg_temp.expect_error($q$select public.remove_page_version('00000000-0000-4000-8000-0000000b1701')$q$,
+    'page_not_found', 'bajado a Ver saca el suyo');
+end;
+$$;
+select pg_temp.as_console();
+update public.grants set level = 'edit' where user_id = '00000000-0000-4000-8000-0000000b1e01';
 
 -- ---------------------------------------------------------------------------------------------------
 -- Un proyecto borrado (P.14): nadie ve sus nombres. Y el historial de siempre sigue igual.

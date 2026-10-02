@@ -38,6 +38,7 @@ import { TourHost } from '../tutorial/TourHost';
 import { startTour } from '../tutorial/tourState';
 import { setNavOpen, useNavOpen } from './navStore';
 import { canSeeHistory, closeHistory, historyOpen, isHistoryShortcut, openHistory, useHistoryUi } from './historyUi';
+import { useHistoryCachePruning } from './historyCachePrune';
 import { lazyPart, Part, preloadWhenIdle, watchPendingWrites } from './lazyPart';
 import { startAppUpdates, stopAppUpdates } from './appUpdate';
 import { focusTitle, PageView, preloadPageParts } from './PageView';
@@ -189,6 +190,8 @@ export function Shell() {
   const tr = useT();
   const search = useSearchSession();
   useInviteTarget();
+  // La caché del historial de una página cuyo historial ya no se puede ver se tira (D13).
+  useHistoryCachePruning();
 
   // Ctrl/⌘+K busca en el proyecto desde cualquier lugar (Docs/Doc_Buscar.md, sección 9); con el panel abierto,
   // lo cierra. En el editor con texto elegido sigue siendo "crear un link" de BlockNote.

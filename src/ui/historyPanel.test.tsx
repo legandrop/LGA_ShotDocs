@@ -6,7 +6,7 @@ import * as Y from 'yjs';
 import { t } from '../i18n';
 import { prefs } from '../prefs';
 import { ServicesContext, type Services } from '../services';
-import { HISTORY_SCHEMA_VERSION, NAMED_VERSIONS_SCHEMA_VERSION, yShape, type HistoryRow } from '../sync/history';
+import { HISTORY_SCHEMA_VERSION, NAMED_VERSIONS_SCHEMA_VERSION, traceFromSets, yShape, type HistoryRow } from '../sync/history';
 import { HistoryCore, type HistoryRequest } from '../sync/historyCore';
 import type { SupabaseRemote } from '../sync/remote';
 import { CONTENT_FRAGMENT } from '../sync/structure';
@@ -890,11 +890,18 @@ describe('entrega 3: Restored from…', () => {
   it('después de restaurar, la lista dice "Restored from" y la fecha de la versión, y la de antes de restaurar sigue', async () => {
     prefs.set({ language: 'en' });
     const { a, pageId, server } = await setupNamed();
-    // El editor de la página "restaura": una edición propia que sube con la sincronización.
+    // El editor de la página "restaura": una edición propia (con su huella, como el paso de deshacer del editor) que
+    // sube con la sincronización.
+    const live = await a.docs.open(pageId);
+    offs.push(() => a.docs.close(pageId));
     offs.push(
       registerRestoreTarget(pageId, () => {
-        void edit(a, pageId, (g) => g.insert(0, [block('r', 'Restaurada')])).then(() => a.engine.syncNow());
-        return { ok: true, undo: () => true, onEdit: () => () => undefined };
+        const was = Y.getState(live.store, live.clientID);
+        live.transact(() => (live.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement).insert(0, [block('r', 'Restaurada')]), 'test');
+        const now = Y.getState(live.store, live.clientID);
+        const trace = traceFromSets({ clients: new Map([[live.clientID, [{ clock: was, len: now - was }]]]) }, { clients: new Map() });
+        void a.docs.flush(pageId).then(() => a.engine.syncNow());
+        return { ok: true, undo: () => true, onEdit: () => () => undefined, trace };
       }),
     );
     // Diez minutos después de la última: sin el corte, la restauración caería en la misma sesión.

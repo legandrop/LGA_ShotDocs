@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import type { HistoryRow, PageVersionRow } from './history';
+import type { HistoryRow, PageVersionRow, RestoreTrace } from './history';
 
 // La caché del historial de versiones (P.18, entrega 3; Docs/Doc_Historial.md, secciones 8 y 10). Una base aparte,
 // `<base local>:history` (como `:media` y `:comments`: la de siempre no cambia de versión), con, por página, las filas
@@ -54,8 +54,10 @@ export interface PendingRestore {
   userId: string;
   /** La versión restaurada (el `seq` de su última fila). */
   fromSeq: number;
-  /** La última fila que había en el servidor al restaurar: la restauración es la primera fila propia después. */
+  /** La última fila que había en el servidor al restaurar: la restauración es una fila propia posterior. */
   afterSeq: number;
+  /** Lo que agregó y borró la restauración: la fila que se marca es la primera que lo trae. Sin huella no se marca. */
+  trace?: RestoreTrace;
   at: number;
 }
 
@@ -87,6 +89,24 @@ export function historyCacheFor(localDbName: string): Promise<HistoryCache | nul
     opened.set(name, got);
   }
   return got;
+}
+
+/**
+ * `prune` sobre la caché de una base local, solo si ya existe (no crea una base vacía para quien nunca abrió el
+ * historial). Devuelve las páginas tiradas.
+ */
+export async function pruneHistoryCache(localDbName: string, keep: (pageId: string) => boolean): Promise<string[]> {
+  if (!localDbName || typeof indexedDB === 'undefined') return [];
+  const name = historyDbName(localDbName);
+  if (!opened.has(name)) {
+    try {
+      if (typeof indexedDB.databases !== 'function' || !(await indexedDB.databases()).some((d) => d.name === name)) return [];
+    } catch {
+      return [];
+    }
+  }
+  const cache = await historyCacheFor(localDbName);
+  return cache ? cache.prune(keep).catch(() => []) : [];
 }
 
 /** Borra la caché del historial de una base local (cierra la conexión de esta pestaña antes). */
@@ -190,11 +210,13 @@ export class HistoryCache {
       bytes += rowBytes(row);
       count++;
     }
-    const last = data.rows[data.rows.length - 1];
+    // Lo guardado puede ser más nuevo que lo que llega (dos pestañas con el mismo historial abierto guardan a la vez):
+    // la última nunca baja, así lo guardado sigue cuadrando.
+    const incoming = data.rows[data.rows.length - 1];
+    const last = keep && (!incoming || keep.lastSeq > incoming.seq) ? { seq: keep.lastSeq, id: keep.lastId } : incoming;
     await pages.put({
       pageId,
       generation: data.generation,
-      // `rows` es el historial entero: la última es la más nueva.
       lastSeq: last ? last.seq : 0,
       lastId: last ? last.id : 0,
       count,
@@ -230,6 +252,21 @@ export class HistoryCache {
     await tx.objectStore('rows').delete(IDBKeyRange.bound([pageId, -Infinity], [pageId, Infinity]));
     await tx.objectStore('pages').delete(pageId);
     await tx.done;
+  }
+
+  /** Las páginas que tienen algo guardado. */
+  async pages(): Promise<string[]> {
+    return this.db.getAllKeys('pages');
+  }
+
+  /**
+   * Tira lo guardado de las páginas cuyo historial esta persona ya no puede ver (`keep` dice que no): perdió el permiso,
+   * pasó a invitada, la página salió del árbol. Lo guardado tiene lo borrado de la página (D13). Devuelve las tiradas.
+   */
+  async prune(keep: (pageId: string) => boolean): Promise<string[]> {
+    const gone = (await this.pages()).filter((id) => !keep(id));
+    for (const id of gone) await this.drop(id);
+    return gone;
   }
 
   /** Cuánto ocupa todo. */

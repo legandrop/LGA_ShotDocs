@@ -2,7 +2,7 @@ import type { Node as PMNode, Schema } from '@tiptap/pm/model';
 import type { EditorView } from '@tiptap/pm/view';
 import { yUndoPluginKey, yXmlFragmentToProseMirrorRootNode } from 'y-prosemirror';
 import * as Y from 'yjs';
-import { sameShape, yShape, type ContentShape } from '../sync/history';
+import { sameShape, traceFromSets, yShape, type ContentShape } from '../sync/history';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import type { RestoreOutcome } from './historyUi';
 import { asOneUndoStep } from './undoGuard';
@@ -166,7 +166,10 @@ export function restoreInEditor(
     return { ok: false, reason: 'failed' };
   }
   const size = undo?.undoStack.length ?? 0;
-  return { ok: true, undo: () => undoRestore(view, size), onEdit };
+  // La huella de la restauración (su paso de deshacer): con ella se reconoce la fila que la sube (*Restored from…*).
+  const step = undo?.undoStack[size - 1];
+  const trace = step ? traceFromSets(step.insertions, step.deletions) : undefined;
+  return { ok: true, undo: () => undoRestore(view, size), onEdit, trace };
 }
 
 /** Deshace la restauración (el aviso con **Undo**): solo si lo último del deshacer sigue siendo ella. */

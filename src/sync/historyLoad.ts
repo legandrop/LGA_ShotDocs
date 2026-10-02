@@ -1,4 +1,4 @@
-import { loadPageHistory, type HistoryRow, type PageVersionRow } from './history';
+import { loadPageHistory, rowHasTrace, type HistoryRow, type PageVersionRow } from './history';
 import type { HistoryCache, PendingRestore } from './historyCache';
 import type { HistoryRemote, NamedVersionsRemote } from './remote';
 import { isNetworkError, RemoteError } from './types';
@@ -128,9 +128,12 @@ export async function settleRestores(
       await cache?.removeRestore(p.id).catch(() => undefined);
       continue;
     }
-    const mine = rows.find((r) => r.seq > p.afterSeq && r.createdBy === p.userId);
+    // La fila de la restauración: propia, posterior y con lo que agregó o borró la restauración (su huella). Sin huella
+    // (o si nunca subió) no se marca nada: mejor sin rótulo que con uno sobre otra edición.
+    const trace = p.trace;
+    const mine = trace ? rows.find((r) => r.seq > p.afterSeq && r.createdBy === p.userId && rowHasTrace(r.data, trace)) : undefined;
     if (!mine) {
-      if (now - p.at > PENDING_MAX_AGE_MS) {
+      if (!trace || now - p.at > PENDING_MAX_AGE_MS) {
         abandoned.add(p.id);
         await cache?.removeRestore(p.id).catch(() => undefined);
       }

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
-import { PageHistory, versionBreaks, type HistoryRow } from './history';
+import { PageHistory, rowHasTrace, traceFromSets, versionBreaks, type HistoryRow, type RestoreTrace } from './history';
 import { HistoryCache, historyDbName } from './historyCache';
 import { loadHistory, markRestoreLater, settleRestores } from './historyLoad';
 import type { HistoryRemote, NamedVersionsRemote } from './remote';
@@ -221,6 +221,8 @@ describe('versiones con nombre', () => {
     await remote.removePageVersion('n1');
     await remote.removePageVersion('n1');
     expect(await remote.listPageVersions(pageId)).toEqual([]);
+    // Reintentar con el id de uno sacado (la respuesta se perdió y alguien lo sacó en el medio): ya no está.
+    await expect(remote.namePageVersion('n1', pageId, mid, 'Antes del cliente')).rejects.toThrow('version_not_found');
     expect(server.versions.find((x) => x.id === 'n1')?.removedAt).not.toBeNull();
   });
 
@@ -266,8 +268,37 @@ describe('versiones con nombre', () => {
   });
 });
 
+/**
+ * Corre `fn` en una transacción del documento y devuelve su huella (lo agregado y lo borrado), como la que deja en el
+ * paso de deshacer una restauración.
+ */
+function traced(doc: Y.Doc, fn: () => void): RestoreTrace {
+  let trace: RestoreTrace = { ins: [], del: [] };
+  const on = (tr: Y.Transaction) => {
+    const ins = new Map<number, { clock: number; len: number }[]>();
+    for (const [client, after] of tr.afterState) {
+      const before = tr.beforeState.get(client) ?? 0;
+      if (after > before) ins.set(client, [{ clock: before, len: after - before }]);
+    }
+    trace = traceFromSets({ clients: ins }, tr.deleteSet as unknown as { clients: Map<number, { clock: number; len: number }[]> });
+  };
+  doc.on('afterTransaction', on);
+  doc.transact(fn, 'test');
+  doc.off('afterTransaction', on);
+  return trace;
+}
+
+/** Una edición propia guardada en el dispositivo (sin subir), con su huella. */
+async function tracedEdit(d: Device, pageId: string, fn: (g: Y.XmlElement) => void): Promise<RestoreTrace> {
+  const doc = await d.docs.open(pageId);
+  const trace = traced(doc, () => fn(doc.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement));
+  await d.docs.flush(pageId);
+  d.docs.close(pageId);
+  return trace;
+}
+
 describe('Restored from…', () => {
-  it('después de restaurar, la primera fila propia que sube queda marcada; Undo antes de subir no la marca', async () => {
+  it('después de restaurar, la fila propia que sube con la huella queda marcada; Undo antes de subir no la marca', async () => {
     const { server, a, pageId } = await setup(2);
     const remote = new FakeRemote(server, '9.999');
     const cache = await cacheFor();
@@ -280,11 +311,8 @@ describe('Restored from…', () => {
     await b.engine.syncNow();
     await write(b, pageId, 'deb', 'de Bea');
     // "La restauración" (una edición propia), que sube con la sincronización que lanza la marca.
-    const doc = await a.docs.open(pageId);
-    doc.transact(() => ((doc.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement).insert(0, [block('r', 'restaurada')])), 'test');
-    await a.docs.flush(pageId);
-    a.docs.close(pageId);
-    const pending = { id: 'm1', pageId, userId: server.ownerId, fromSeq, afterSeq, at: Date.now() };
+    const trace = await tracedEdit(a, pageId, (g) => g.insert(0, [block('r', 'restaurada')]));
+    const pending = { id: 'm1', pageId, userId: server.ownerId, fromSeq, afterSeq, at: Date.now(), trace };
     const mark = markRestoreLater({ remote, cache, engine: a.engine, docs: a.docs }, pending);
     await mark.done;
     const list = await remote.listPageVersions(pageId);
@@ -303,12 +331,9 @@ describe('Restored from…', () => {
 
     // Undo antes de que suba: no se marca.
     server.online = false;
-    const doc2 = await a.docs.open(pageId);
-    doc2.transact(() => ((doc2.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement).insert(0, [block('r2', 'otra')])), 'test');
-    await a.docs.flush(pageId);
-    a.docs.close(pageId);
+    const trace2 = await tracedEdit(a, pageId, (g) => g.insert(0, [block('r2', 'otra')]));
     const last = (server.updates.get(pageId) ?? []).at(-1)!.seq;
-    const second = markRestoreLater({ remote, cache, engine: a.engine, docs: a.docs }, { ...pending, id: 'm2', afterSeq: last });
+    const second = markRestoreLater({ remote, cache, engine: a.engine, docs: a.docs }, { ...pending, id: 'm2', afterSeq: last, trace: trace2 });
     await new Promise((r) => setTimeout(r, 50));
     await second.cancel();
     server.online = true;
@@ -316,8 +341,42 @@ describe('Restored from…', () => {
     await settleRestores(remote, cache, pageId, await remote.pageHistory(pageId, 0, 500));
     expect((await remote.listPageVersions(pageId)).length).toBe(1);
     // Aunque una vuelta ya en marcha la tenga en la mano (o no haya caché), una marca dejada de lado no se guarda.
-    expect(await settleRestores(remote, null, pageId, await remote.pageHistory(pageId, 0, 500), [{ ...pending, id: 'm2', afterSeq: last }])).toEqual([]);
-    expect(await settleRestores(remote, null, pageId, await remote.pageHistory(pageId, 0, 500), [{ ...pending, id: 'm3', afterSeq: last }])).toHaveLength(1);
+    const all = await remote.pageHistory(pageId, 0, 500);
+    expect(await settleRestores(remote, null, pageId, all, [{ ...pending, id: 'm2', afterSeq: last, trace: trace2 }])).toEqual([]);
+    expect(await settleRestores(remote, null, pageId, all, [{ ...pending, id: 'm3', afterSeq: last, trace: trace2 }])).toHaveLength(1);
+  });
+
+  it('la marca va solo en la fila que trae la restauración: no en otra edición propia ni en la de otro dispositivo de la misma persona', async () => {
+    const { server, a, pageId } = await setup(2);
+    const remote = new FakeRemote(server, '9.999');
+    const afterSeq = (server.updates.get(pageId) ?? []).at(-1)!.seq;
+    // Una restauración que nunca subió (se deshizo antes, o se perdió): su huella no está en ninguna fila.
+    const lost = new Y.Doc();
+    Y.applyUpdate(lost, Y.encodeStateAsUpdate(await a.docs.open(pageId)));
+    a.docs.close(pageId);
+    const lostTrace = traced(lost, () => (lost.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement).insert(0, [block('l', 'perdida')]));
+    lost.destroy();
+    // Otro dispositivo de la misma persona sube algo, y después este, una edición común.
+    const other = await device(server);
+    await other.engine.syncNow();
+    await write(other, pageId, 'o', 'del otro dispositivo');
+    await write(a, pageId, 'c', 'edición común');
+    const rows = await remote.pageHistory(pageId, 0, 500);
+    expect(rows.filter((r) => r.seq > afterSeq && r.createdBy === server.ownerId).length).toBeGreaterThanOrEqual(2);
+    const p = { id: 'x1', pageId, userId: server.ownerId, fromSeq: 1, afterSeq, at: Date.now(), trace: lostTrace };
+    expect(await settleRestores(remote, null, pageId, rows, [p])).toEqual([]);
+    // Sin huella, tampoco.
+    expect(await settleRestores(remote, null, pageId, rows, [{ ...p, id: 'x2', trace: undefined }])).toEqual([]);
+    // Con la restauración de verdad después de las dos: se marca su fila, no las de antes.
+    const trace = await tracedEdit(a, pageId, (g) => g.delete(0, 1));
+    await a.engine.syncNow();
+    const now = await remote.pageHistory(pageId, 0, 500);
+    const marked = await settleRestores(remote, null, pageId, now, [{ ...p, id: 'x3', trace }]);
+    expect(marked.map((m) => m.seq)).toEqual([now.at(-1)!.seq]);
+    // La huella reconoce lo agregado y lo borrado (esta solo borró).
+    expect(trace.ins.length).toBe(0);
+    expect(rowHasTrace(now.at(-1)!.data, trace)).toBe(true);
+    expect(rowHasTrace(now.at(-2)!.data, trace)).toBe(false);
   });
 
   it('una marca pendiente de antes (la app se cerró) se termina al abrir el historial; una ajena o imposible se deja', async () => {
@@ -325,15 +384,14 @@ describe('Restored from…', () => {
     const remote = new FakeRemote(server, '9.999');
     const cache = await cacheFor();
     const before = (server.updates.get(pageId) ?? []).at(-1)!.seq;
-    await cache.addRestore({ id: 'p1', pageId, userId: server.ownerId, fromSeq: 1, afterSeq: before, at: Date.now() });
-    // Una de otra persona (la fila no es suya): la base no la acepta y se deja de lado.
-    await cache.addRestore({ id: 'p2', pageId, userId: 'nadie', fromSeq: 1, afterSeq: 0, at: Date.now() });
-    await write(a, pageId, 'r', 'restaurada');
+    const trace = await tracedEdit(a, pageId, (g) => g.insert(0, [block('r', 'restaurada')]));
+    await cache.addRestore({ id: 'p1', pageId, userId: server.ownerId, fromSeq: 1, afterSeq: before, at: Date.now(), trace });
+    // Una de otra persona (la fila no es suya): no se encuentra y espera.
+    await cache.addRestore({ id: 'p2', pageId, userId: 'nadie', fromSeq: 1, afterSeq: 0, at: Date.now(), trace });
+    await a.engine.syncNow();
     const marked = await settleRestores(remote, cache, pageId, await remote.pageHistory(pageId, 0, 500));
     expect(marked.map((m) => m.id)).toEqual(['p1']);
-    expect(await cache.restoresOf(pageId)).toEqual([
-      expect.objectContaining({ id: 'p2' }),
-    ]);
+    expect(await cache.restoresOf(pageId)).toEqual([expect.objectContaining({ id: 'p2' })]);
     // p2 sin fila propia sigue esperando hasta que pase una semana.
     await settleRestores(remote, cache, pageId, await remote.pageHistory(pageId, 0, 500), undefined, Date.now() + 8 * 24 * 3600_000);
     expect(await cache.restoresOf(pageId)).toEqual([]);
