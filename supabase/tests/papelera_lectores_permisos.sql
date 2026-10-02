@@ -6,10 +6,12 @@
 
 begin;
 
+-- Con el header de versión de la app (como la app desde v0.099): la prueba anda con cualquier versión mínima de la base.
 create function pg_temp.as_user(uid uuid) returns void language sql as $$
   select set_config('role', 'authenticated', true),
          set_config('request.jwt.claims',
-                    json_build_object('sub', uid, 'role', 'authenticated')::text, true);
+                    json_build_object('sub', uid, 'role', 'authenticated')::text, true),
+         set_config('request.headers', '{"x-shotdocs-version": "9.999"}', true);
 $$;
 
 -- Corre `stmt` y exige que falle con ese mensaje o ese código (sqlstate).
