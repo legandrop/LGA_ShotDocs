@@ -189,10 +189,10 @@ export function PageEditor({ pageId }: { pageId: string }) {
     if (!incomplete) return;
     let cancelled = false;
     const check = () =>
-      void engine.contentGap(pageId).then((gap) => {
+      void Promise.all([engine.isMissingContent(pageId), engine.contentGap(pageId)]).then(([missing, gap]) => {
         if (cancelled) return;
         setPreparing(gap === 'preparing');
-        if (gap === null) setAttempt((n) => n + 1);
+        if (!missing) setAttempt((n) => n + 1);
       });
     check();
     // Con la app vieja para el workspace no se baja contenido: no llega nada hasta actualizar (o hasta que bajen la
