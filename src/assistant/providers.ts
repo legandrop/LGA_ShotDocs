@@ -226,6 +226,27 @@ export function defaultModel(provider: ProviderId, models: ModelInfo[]): string 
 
 // --- Pedir ----------------------------------------------------------------------------------------------------------
 
+/**
+ * Lo que se suma al tope de salida de un modelo que razona antes de contestar: en OpenAI (`o3`, `o4-mini`, `gpt-5` y
+ * siguientes) y en Gemini 2.5 o más nuevo, lo que "piensa" cuenta dentro de `max_output_tokens` / `maxOutputTokens` y
+ * se cobra; con el tope justo para la respuesta, puede gastarlo entero pensando y la respuesta llega cortada (y
+ * cobrada). El tope no cuesta nada si no se usa, y todos esos modelos aceptan 64 000 tokens de salida o más. Si igual
+ * llega cortada, el panel lo dice y no la aplica.
+ */
+export const REASONING_ALLOWANCE = 16_000;
+
+/** Si el modelo razona antes de contestar (por el nombre). */
+export function reasons(config: ProviderConfig): boolean {
+  if (config.provider === 'openai') return /^(?:o\d|gpt-(?:[5-9]|\d{2,}))/i.test(config.model);
+  if (config.provider === 'gemini') return /^gemini-(?:2\.5|[3-9]|\d{2,}|.*latest)/i.test(config.model);
+  return false;
+}
+
+/** El tope de salida que se manda: el de la respuesta, más lo que puede pensar un modelo que razona. */
+export function outputCap(config: ProviderConfig, maxTokens: number): number {
+  return reasons(config) ? maxTokens + REASONING_ALLOWANCE : maxTokens;
+}
+
 /** Lee un cuerpo con eventos (`text/event-stream`): cada `data:` con su JSON, en orden. */
 async function* events(res: Response, signal?: AbortSignal): AsyncGenerator<{ event: string; data: string }> {
   const reader = res.body?.getReader();
@@ -320,14 +341,14 @@ export async function complete(
     case 'openai':
       // `store: false`: de fábrica la API guarda la respuesta (Docs/Doc_Asistente.md, 3.1).
       url = `${base}/responses`;
-      body = { model: config.model, instructions: request.system, input: request.user, max_output_tokens: request.maxTokens, store: false, stream: true };
+      body = { model: config.model, instructions: request.system, input: request.user, max_output_tokens: outputCap(config, request.maxTokens), store: false, stream: true };
       break;
     case 'gemini':
       url = `${base}/models/${encodeURIComponent(config.model)}:streamGenerateContent?alt=sse`;
       body = {
         systemInstruction: { parts: [{ text: request.system }] },
         contents: [{ role: 'user', parts: [{ text: request.user }] }],
-        generationConfig: { maxOutputTokens: request.maxTokens },
+        generationConfig: { maxOutputTokens: outputCap(config, request.maxTokens) },
       };
       break;
     default:

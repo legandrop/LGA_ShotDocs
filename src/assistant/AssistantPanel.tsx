@@ -314,6 +314,13 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
     root.current?.focus({ preventScroll: true });
   }, []);
 
+  // El botón que se tocó desaparece al pedir (y otra vez con la respuesta) y el foco queda en la nada: vuelve al panel,
+  // así Esc y Ctrl/⌘+Enter andan sin hacer clic. Si la persona siguió escribiendo en la página, el foco queda donde está.
+  useEffect(() => {
+    const active = document.activeElement;
+    if (!active || active === document.body) root.current?.focus({ preventScroll: true });
+  }, [phase.kind]);
+
   const notice = !allowed
     ? tr(policy === 'off' ? 'assistant.policyOff' : 'assistant.policyLocal')
     : offline

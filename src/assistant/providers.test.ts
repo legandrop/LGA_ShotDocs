@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { complete, defaultModel, isLocalUrl, listModels, ProviderError, redact, type ProviderConfig } from './providers';
+import { complete, defaultModel, isLocalUrl, listModels, outputCap, ProviderError, REASONING_ALLOWANCE, reasons, redact, type ProviderConfig } from './providers';
 
 // Los adaptadores de los cuatro proveedores con un `fetch` simulado (Docs/Doc_Asistente.md, prueba 1 de la sección 13):
 // los headers de cada uno, la respuesta por partes, *Stop*, los errores, la respuesta cortada y la lista de modelos.
@@ -147,7 +147,7 @@ describe('OpenAI', () => {
     expect(out).toEqual({ text: 'Hola mundo', cut: false, usage: { input: 10, output: 3 } });
     expect(calls[0].url).toBe('https://api.openai.com/v1/responses');
     expect(calls[0].headers.authorization).toBe('Bearer sk-proj-ABCDEF123456');
-    expect(calls[0].body).toMatchObject({ store: false, stream: true, instructions: 'SYS', input: 'USER', max_output_tokens: 1000 });
+    expect(calls[0].body).toMatchObject({ store: false, stream: true, instructions: 'SYS', input: 'USER', max_output_tokens: 1000 + REASONING_ALLOWANCE });
   });
 
   it('incompleta: cortada; 429 sin retry-after legible usa el tiempo del cuerpo; el 401 que repite la clave no la muestra', async () => {
@@ -202,7 +202,7 @@ describe('Gemini', () => {
     expect(out).toEqual({ text: 'Hola mundo', cut: false, usage: { input: 7, output: 2 } });
     expect(calls[0].url).toBe('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:streamGenerateContent?alt=sse');
     expect(calls[0].headers['x-goog-api-key']).toBe('AIzaSyPRUEBA1234567890');
-    expect(calls[0].body).toMatchObject({ systemInstruction: { parts: [{ text: 'SYS' }] }, contents: [{ role: 'user', parts: [{ text: 'USER' }] }], generationConfig: { maxOutputTokens: 1000 } });
+    expect(calls[0].body).toMatchObject({ systemInstruction: { parts: [{ text: 'SYS' }] }, contents: [{ role: 'user', parts: [{ text: 'USER' }] }], generationConfig: { maxOutputTokens: 1000 + REASONING_ALLOWANCE } });
   });
 
   it('MAX_TOKENS o SAFETY: cortada; el 429 lee el tiempo del cuerpo; la lista de modelos y la preelección', async () => {
@@ -252,6 +252,28 @@ describe('compatible con OpenAI', () => {
     }));
     const err = (await complete(compatible, '', request, { fetcher }).catch((e: unknown) => e)) as ProviderError;
     expect(err.kind).toBe('network');
+  });
+});
+
+describe('el tope de salida de los modelos que razonan', () => {
+  it('OpenAI (o-, gpt-5 y siguientes) y Gemini 2.5 o más nuevo suman lo que pueden pensar; los demás, el tope justo', () => {
+    for (const model of ['gpt-5.4-mini', 'gpt-5-nano', 'gpt-6-luna', 'o4-mini', 'o3']) expect(reasons({ provider: 'openai', model }), model).toBe(true);
+    for (const model of ['gpt-4.1-mini', 'gpt-4o-mini']) expect(reasons({ provider: 'openai', model }), model).toBe(false);
+    for (const model of ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-3-flash', 'gemini-flash-latest']) expect(reasons({ provider: 'gemini', model }), model).toBe(true);
+    expect(reasons({ provider: 'gemini', model: 'gemini-2.0-flash' })).toBe(false);
+    expect(reasons({ provider: 'anthropic', model: 'claude-haiku-4-5' })).toBe(false);
+    expect(reasons({ provider: 'compatible', model: 'gpt-5-mini', baseUrl: 'https://openrouter.ai/api/v1' })).toBe(false);
+    expect(outputCap({ provider: 'openai', model: 'gpt-5-mini' }, 1024)).toBe(1024 + REASONING_ALLOWANCE);
+    expect(outputCap({ provider: 'openai', model: 'gpt-4.1-mini' }, 1024)).toBe(1024);
+  });
+
+  it('el pedido lleva ese tope: OpenAI y Gemini que razonan, con margen; uno que no, el justo', async () => {
+    const { fetcher, calls } = fakeFetch(() => sse([{ type: 'response.completed', response: { status: 'completed' } }]));
+    await complete({ provider: 'openai', model: 'gpt-4.1-mini' }, 'sk-proj-ABCDEF123456', request, { fetcher });
+    expect(calls[0].body).toMatchObject({ max_output_tokens: 1000 });
+    const g = fakeFetch(() => sse([{ candidates: [{ content: { parts: [{ text: 'x' }] }, finishReason: 'STOP' }] }]));
+    await complete({ provider: 'gemini', model: 'gemini-2.0-flash' }, 'AIzaSyPRUEBA1234567890', request, { fetcher: g.fetcher });
+    expect(g.calls[0].body).toMatchObject({ generationConfig: { maxOutputTokens: 1000 } });
   });
 });
 

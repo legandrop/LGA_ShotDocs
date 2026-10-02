@@ -13,8 +13,12 @@ import { NodeSelection, type EditorState } from '@tiptap/pm/state';
 // - La respuesta se compara con lo de antes por palabras (con su formato): solo lo que cambió se reemplaza. Lo igual no
 //   se toca (ni sus colores, ni las fotos en línea que quedan en su lugar).
 
-/** Lo máximo que se manda en un pedido (unos 15 000 a 20 000 tokens). */
-export const MAX_CHARS = 60_000;
+/**
+ * Lo máximo que se manda en un pedido (unos 5 000 a 7 000 tokens). La respuesta tiene que entrar en el tope de salida
+ * (prompt.ts: 16 000 tokens, para no pasar del máximo de ningún modelo): lo mismo de largo, o el doble al traducir. Con
+ * más, una traducción larga llegaba cortada después de cobrarse.
+ */
+export const MAX_CHARS = 20_000;
 
 /** Las marcas de texto que el Markdown acotado sabe escribir. Las demás (colores) se conservan aparte. */
 export const MD_MARKS = ['bold', 'italic', 'underline', 'strike', 'code'] as const;
@@ -280,7 +284,9 @@ function pieceMarkdown(units: OldUnit[]): string {
   out += spaces;
   // Un texto que empieza como un prefijo de tipo (`1. `, `- `, `# `) no se lee como tal.
   if (PREFIX.test(out)) out = /^\d/.test(out) ? out.replace(/^(\d{1,3})([.)])/, '$1\\$2') : `\\${out}`;
-  return out;
+  // Un `<user_content>` o `</user_content>` escrito en la página no "cierra" la etiqueta del pedido (las palabras van
+  // en unidades separadas: se mira el pedazo entero).
+  return out.replace(/<(?=\/?user_content)/gi, '\\<');
 }
 
 /** Un espacio o un salto de renglón (lo que no viaja en las puntas de un pedazo). */
@@ -385,7 +391,7 @@ export interface Parsed {
 /** Saca lo que el modelo a veces agrega alrededor: un bloque de código entero o las etiquetas del pedido. */
 export function cleanAnswer(text: string): string {
   let s = text.replace(/\r\n?/g, '\n').trim();
-  s = s.replace(/^<user_content>\s*/i, '').replace(/\s*<\/user_content>$/i, '').trim();
+  s = s.replace(/^<user_content>\s*/i, '').replace(/\s*(?<!\\)<\/user_content>$/i, '').trim();
   const fence = /^```[\w-]*\n([\s\S]*?)\n```$/.exec(s);
   if (fence) s = fence[1].trim();
   return s;
@@ -419,7 +425,7 @@ export function parseInline(src: string, known: { photos: Set<number>; links: Se
   while (i < src.length) {
     const c = src[i];
     const rest = src.slice(i);
-    if (c === '\\' && i + 1 < src.length && /[\\*`[\]⟦⟧~+_#>\-.!()|]/.test(src[i + 1])) {
+    if (c === '\\' && i + 1 < src.length && /[\\*`[\]⟦⟧~+_#<>\-.!()|]/.test(src[i + 1])) {
       push(src[i + 1]);
       i += 2;
       continue;

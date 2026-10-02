@@ -84,7 +84,7 @@ function services(d: Device, client: unknown = { auth: {} }): Services {
 }
 
 /** Un `fetch` de proveedor simulado (Anthropic) que contesta `answer` por partes y anota los pedidos. */
-function provider(answer: string | ((body: { messages: { content: string }[] }) => string), opts: { status?: number; body?: unknown } = {}) {
+function provider(answer: string | ((body: { messages: { content: string }[] }) => string), opts: { status?: number; body?: unknown; stop?: string } = {}) {
   const calls: { url: string; body: string; headers: Record<string, string> }[] = [];
   const fetcher = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const body = String(init.body ?? '');
@@ -94,7 +94,7 @@ function provider(answer: string | ((body: { messages: { content: string }[] }) 
     const events = [
       { type: 'message_start', message: { usage: { input_tokens: 1240 } } },
       ...text.match(/[\s\S]{1,5}/g)!.map((t) => ({ type: 'content_block_delta', delta: { type: 'text_delta', text: t } })),
-      { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 512 } },
+      { type: 'message_delta', delta: { stop_reason: opts.stop ?? 'end_turn' }, usage: { output_tokens: 512 } },
       { type: 'message_stop' },
     ];
     return new Response(events.map((e) => `data: ${JSON.stringify(e)}`).join('\n\n') + '\n\n', { status: 200 });
@@ -228,6 +228,33 @@ describe('el panel', () => {
       panel.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }));
     });
     expect(blockText(ed, 'p')).toBe('La cámara se movió en la toma 3');
+  });
+
+  it('el foco vuelve al panel cuando el botón tocado desaparece: Ctrl+Enter aplica sin hacer clic en el panel', async () => {
+    const { host, ed } = await setup();
+    provider('La cámara se movió en la toma 3');
+    selectAll(ed, 'p', 0, 31);
+    const fix = button(host, 'Fix spelling & grammar');
+    fix.focus();
+    await click(fix);
+    for (let i = 0; i < 20 && !button(host, 'Apply'); i++) await wait(30);
+    const panel = host.querySelector<HTMLElement>('.assistant-panel')!;
+    expect(document.activeElement).toBe(panel);
+    await act(async () => {
+      document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }));
+    });
+    expect(blockText(ed, 'p')).toBe('La cámara se movió en la toma 3');
+  });
+
+  it('una respuesta cortada por el tope no se aplica aunque traiga todas las marcas', async () => {
+    const { host, ed } = await setup();
+    provider('La cámara se movió en la toma 3', { stop: 'max_tokens' });
+    selectAll(ed, 'p', 0, 31);
+    await click(button(host, 'Fix spelling & grammar'));
+    for (let i = 0; i < 20 && !host.querySelector('.assistant-error'); i++) await wait(30);
+    expect(host.textContent).toContain('The answer was cut off.');
+    expect(button(host, 'Apply')).toBeUndefined();
+    expect(blockText(ed, 'p')).toBe('el kamara se movio en la toma 3');
   });
 
   it('sin Editar: Fix, Improve y Shorter apagados, Translate sí, y sin Apply (solo Copy)', async () => {
