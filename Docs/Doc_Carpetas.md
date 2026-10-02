@@ -156,27 +156,58 @@ ve la página no lista ni recibe pases; el corte por grafema). Cada zip de las p
 suma tres pedidos con y sin el origen de la app. **Recorrido en Chromium** con la página real, el portero real en la
 página y un Drive de mentira (un invitado con "Ver"): 28 de 28 (el zip con el selector sobre OPFS, abierto con Python y
 con `unzip -t`; a una carpeta, dos veces; cancelar; sin red; en memoria sin selectores, guardado con el botón; el tope
-de 500 MB con un iPhone; la barra de la tarjeta, en castellano).
+de 500 MB con un iPhone; la barra de la tarjeta, en castellano). Lo que quedó (rama `lega/carpetas-restos`):
+`folderZip.test.ts` suma el portero colgado (sin respuesta ni de `/health`: espera y sigue; una respuesta quieta a
+mitad sigue con `Range`; si `/health` contesta, se saltea a los 4 intentos; cancelar corta en el acto) y *Retry
+missing* (a un zip, a una carpeta, la subcarpeta que vuelve a fallar); `attachments.test.ts` y `zipWriter.test.ts`,
+el ZWJ. Recorrido en Chromium con el mismo arnés: 22 de 22 (los tres destinos, en castellano, y el portero colgado 50 s:
+"No connection" a los 40 s y la bajada entera al volver).
 
-**Lo que falta de la entrega 2 (BAJO):** el recorrido pide una subcarpeta por pedido (el diseño decía ~40 por pedido,
-con una ruta nueva del portero): una carpeta con 500 subcarpetas son 500 pedidos de listado, lejos del límite del día.
+**Lo que quedó de la entrega 2, hecho (rama `lega/carpetas-restos`):**
+
+- **Tope sin avance (R1):** cada pedido de un archivo tiene un tope de 30 s sin que llegue nada (`STALL_MS`: hasta la
+  respuesta y entre un pedazo y el siguiente; el tiempo que tarda el disco o el CRC no cuenta). Pasado, se corta y
+  cuenta como un corte de la red: prueba `/health` (con su propio tope de 10 s) y, si tampoco contesta, dice "No
+  connection" y vuelve a probar cada 5 segundos sin gastar intentos; si el portero contesta, el archivo gasta un intento
+  (4 y se saltea). Un portero colgado muestra "No connection" a los ~40 s y la bajada sigue sola cuando vuelve.
+  Cancelar corta en el acto, también con un pedido colgado.
+- ***Retry missing*:** al terminar con algo que vale la pena volver a probar (un archivo que falló o quedó a medias,
+  una subcarpeta que no se pudo listar por un error del portero; no un acceso directo, un documento de Google, un ciclo
+  ni una carpeta de más de 64 niveles), la ventana ofrece *Retry missing*. `planRetry` arma el plan con esos archivos
+  (con su pase; si venció, se renueva como siempre) y vuelve a listar cada subcarpeta que falló (`planFolder` con
+  `start`, con los mismos nombres limpios que en la primera). Lo que sigue sin poder bajarse queda en la lista nueva.
+  - *Download to a folder…*: escribe en la misma carpeta, sin volver a pedirla; si ya no falta nada, borra
+    `MISSING_FILES.txt`, y si falta, lo reescribe.
+  - Zip con selector: pide dónde guardar `Referencias (missing files).zip` (el clic es el gesto que pide Chrome; la
+    lista se arma después) con la misma carpeta de arriba, para descomprimirlo encima del primero. Lleva siempre su
+    `MISSING_FILES.txt`, que reemplaza al viejo (si ya no falta nada, lo dice).
+  - En memoria (Firefox, Safari, teléfonos): el botón aparece recién después de *Save*: el segundo zip reemplaza al
+    primero en la memoria.
+  - Se puede reintentar otra vez lo que siga fallando. Sin red, el clic dice que hace falta conexión.
+- **El ZWJ de los emojis compuestos (O4), en la app:** `cleanFileName` deja el U+200D cuando está entre dos emojis (antes
+  un emoji, su selector de variante U+FE0F o su tono de piel; después, un emoji): una familia sigue siendo una en el
+  nombre de la base, en la tarjeta y en el zip. Entre letras o suelto se sigue sacando (no se ve: dos nombres iguales a
+  la vista serían distintos), y el U+200C también. **Falta el portero** (ver abajo).
+
+**Lo que falta de la entrega 2 (BAJO):** el recorrido pide una subcarpeta por pedido (el diseño decía ~40 por pedido):
+una carpeta con 500 subcarpetas son 500 pedidos de listado, lejos del límite del día. **No se puede del lado de la app:**
+`/folder/list` lista una sola subcarpeta (`dir`) por pedido; hace falta que el portero acepte una lista (`dirs`, hasta
+40) y pida a Drive `('a' in parents or 'b' in parents …) and trashed = false` con `parents` en los campos, agrupando
+la respuesta por padre (con el control `inTree` de cada una y el tope de CPU de los pases a la vista). El ZWJ en el
+portero: su `cleanFileName` (`HIDDEN_CHARS` en `portero/src/core.ts`) lo sigue sacando, así que lo que sube y lo que
+lista el portero llega sin él; tiene que aplicar la misma regla que la app (y cambia la prueba de `driveFolderName`).
 Firefox por el service worker (sin tope) queda para otra entrega (D24). Los documentos de Google no se bajan como PDF
 (decisión 5). Probar a mano en Safari, el iPhone y con el Drive real (lista de la tanda). De la auditoría:
 
-- **Sin tiempo máximo de lectura (R1):** si el portero deja de contestar sin cortar la conexión, la barra queda quieta
-  sin «No connection» (se puede cancelar). Un tope por pedido sin avance lo cerraría, como el de las subidas (v0.092).
 - **`APP_ORIGINS` mal puesto en el portero de un dueño (R2):** `/m/` falla por CORS y se saltea todo; si `/health` también
   falla, la bajada espera para siempre. Distinguir el error de CORS del corte de red.
 - **Un nombre de un solo grafema gigante (R3)** puede quedar recortado de forma rara (no es prefijo del original). Inofensivo.
 
-- **Emojis compuestos (O4, preexistente):** `cleanFileName` (app y portero) saca U+200D y U+200C, así que una familia
-  (`👨‍👩‍👧‍👦`) queda como cuatro emojis sueltos, en el zip y en Drive, y el corte por grafema puede partirla. Va con el
-  pendiente de nombres de D3: dejar el ZWJ cuando está entre dos caracteres visibles.
+- **Emojis compuestos (O4, preexistente):** hecho en la app (arriba); falta el portero.
 - **`tar.exe` de Windows (O11, informativa):** no extrae nombres con emojis desde la consola (le pasa igual con un zip
   hecho por Python). El Explorador (*Extraer todo*) y .NET extraen todo.
 - **Reemplazar un zip existente:** en *Download as .zip…*, cancelar o fallar borra el archivo elegido, también si ya
   existía y se aceptó reemplazarlo (coherente con "reemplazar").
-- *Retry missing* (bajar solo lo de `MISSING_FILES.txt`) no existe: hay que bajar todo otra vez.
 
 **Correcciones de la segunda auditoría (2026-10-01):**
 

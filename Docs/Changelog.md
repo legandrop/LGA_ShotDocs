@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+Lo que quedó de *Download all* (P.9). Un portero que dejaba de contestar sin cortar la conexión dejaba la barra quieta:
+no había tope de lectura. Ahora cada pedido tiene uno sin avance (30 s hasta la respuesta o entre pedazos); pasado,
+cuenta como un corte: prueba `/health` (con su tope de 10 s) y, si tampoco contesta, dice "No connection" y sigue sola
+cuando vuelve. Faltaba *Retry missing*: baja solo lo que falló o quedó a medias y vuelve a listar las subcarpetas que no
+se abrieron; a una carpeta escribe en la misma (y borra la lista vieja si ya no falta nada), y un zip va a
+`<carpeta> (missing files).zip`, para descomprimir encima del primero. Los nombres limpios de la app sacaban el ZWJ de
+los emojis compuestos (O4): ahora se queda entre dos emojis.
+[ Bajar todo - Retry missing, el tope sin avance y el ZWJ de los emojis ]
+
 v0.110 :
 
 No se podía sacar una foto ni filmar desde la página: había que salir de la app, sacarla y elegirla con "/Image", y
