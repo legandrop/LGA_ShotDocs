@@ -261,6 +261,11 @@ export interface DownloadDeps {
    * sigue diciendo que hay red). Por defecto, `PROBE_MS`.
    */
   probeMs?: number;
+  /**
+   * Cuánto se espera un pedido sin que llegue nada (la respuesta o el próximo pedazo) antes de tratarlo como un corte
+   * (el portero dejó de contestar sin cortar la conexión). Por defecto, `STALL_MS`.
+   */
+  stallMs?: number;
   /** El pase nuevo de un archivo (cuando el que se tenía venció): vuelve a listar su subcarpeta. */
   refresh?: (file: PlanFile) => Promise<string | null>;
   /** El texto de `MISSING_FILES.txt`. */
@@ -276,6 +281,20 @@ const FILE_TRIES = 4;
 const RETRY_MS = [1_000, 3_000, 9_000];
 /** Cada cuánto se prueba si el portero volvió a contestar, sin red de verdad. */
 const PROBE_MS = 5_000;
+/**
+ * Lo más que se espera sin que llegue nada (la respuesta o el próximo pedazo): después cuenta como un corte, como el
+ * tope de las subidas trabadas. Un portero que deja de contestar sin cortar la conexión dejaba la barra quieta.
+ */
+const STALL_MS = 30_000;
+/** Lo más que se espera la respuesta de `/health` al probar si el portero contesta. */
+const HEALTH_MS = 10_000;
+
+/** No llegó nada en `stallMs`: se trata como un corte de la red (prueba el portero y, si no contesta, espera). */
+class Stalled extends TypeError {
+  constructor() {
+    super('The media server stopped answering.');
+  }
+}
 
 /** El pedido ni llegó a tener respuesta (`fetch` falló): la red, no el archivo. */
 class NetworkFailed extends Error {}
@@ -353,6 +372,44 @@ export async function runDownload(
   const report = () => opts.onProgress?.({ ...progress });
   let done = 0;
   let written = 0;
+  const stallMs = deps.stallMs ?? STALL_MS;
+
+  /**
+   * `work` con su propia señal (cancelar la bajada la corta) y un tope: si en `ms` no terminó, la corta y falla con
+   * `Stalled`.
+   */
+  const within = async <T>(ms: number, work: (s: AbortSignal) => Promise<T>): Promise<T> => {
+    if (signal?.aborted) throw abortError();
+    const local = new AbortController();
+    const relay = () => local.abort();
+    signal?.addEventListener('abort', relay, { once: true });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        work(local.signal),
+        new Promise<never>((_, fail) => {
+          timer = setTimeout(() => {
+            fail(new Stalled());
+            local.abort();
+          }, ms);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', relay);
+    }
+  };
+
+  /** El próximo pedazo de la respuesta, con el tope sin avance; cancelar la bajada lo corta en el acto. */
+  const readSome = (reader: ReadableStreamDefaultReader<Uint8Array>) =>
+    within(
+      stallMs,
+      (s) =>
+        new Promise<ReadableStreamReadResult<Uint8Array>>((ok, fail) => {
+          s.addEventListener('abort', () => fail(abortError()), { once: true });
+          reader.read().then(ok, fail);
+        }),
+    );
 
   /** Cuántos pedidos están esperando la conexión (los de adelante también): la ventana dice "No connection". */
   let waiting = 0;
@@ -378,10 +435,14 @@ export async function runDownload(
   /** Si el portero contesta algo (cualquier cosa, también un error): hay camino hasta él. */
   const reachable = async (url: string): Promise<boolean> => {
     try {
-      await http(new URL('/health', url).href, { signal, mode: 'cors', credentials: 'omit', cache: 'no-store' });
+      // Con su tope: un portero colgado tampoco contesta esto.
+      await within(Math.min(stallMs, HEALTH_MS), async (s) => {
+        const res = await http(new URL('/health', url).href, { signal: s, mode: 'cors', credentials: 'omit', cache: 'no-store' });
+        res.body?.cancel().catch(() => undefined);
+      });
       return true;
-    } catch (err) {
-      if (isAbort(err) || signal?.aborted) throw abortError();
+    } catch {
+      if (signal?.aborted) throw abortError();
       return false;
     }
   };
@@ -427,17 +488,19 @@ export async function runDownload(
     const headers: Record<string, string> = from > 0 ? { Range: `bytes=${from}-` } : {};
     let res: Response;
     try {
-      res = await http(withOffline(file.url), { headers, signal, mode: 'cors', credentials: 'omit', cache: 'no-store' });
+      // Hasta que llega la respuesta, con el tope sin avance (después, cada pedazo tiene el suyo: `readSome`).
+      res = await within(stallMs, (s) => http(withOffline(file.url), { headers, signal: s, mode: 'cors', credentials: 'omit', cache: 'no-store' }));
     } catch (err) {
-      if (isAbort(err) || signal?.aborted) throw abortError();
+      if (signal?.aborted) throw abortError();
       throw new NetworkFailed(err instanceof Error ? err.message : String(err));
     }
     if (res.ok) return res;
     let code = '';
     try {
-      code = ((await res.json()) as { code?: string }).code ?? '';
+      code = ((await within(stallMs, () => res.json())) as { code?: string }).code ?? '';
     } catch {
-      // sin cuerpo JSON
+      // sin cuerpo JSON (o no llegó)
+      res.body?.cancel().catch(() => undefined);
     }
     if (res.status === 403 && code === 'pass_expired') throw new FileFailed('pass_expired', true);
     if (res.status >= 500 || res.status === 429) throw new TypeError(`The media server answered ${res.status}.`);
@@ -526,7 +589,7 @@ export async function runDownload(
       try {
         if (!reader) throw new TypeError('No body.');
         for (;;) {
-          const { value, done: end } = await reader.read();
+          const { value, done: end } = await readSome(reader);
           if (end) break;
           if (value?.length) {
             got += value.length;

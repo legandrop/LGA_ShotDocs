@@ -554,3 +554,126 @@ describe('Download all: a una carpeta del disco (Chrome y Edge)', () => {
     });
   });
 });
+
+describe('Download all: un portero que deja de contestar sin cortar (R1)', () => {
+  /** Un pedido que no contesta nunca (ni la respuesta ni un error); solo la señal lo corta. */
+  const hang = (init?: RequestInit) =>
+    new Promise<Response>((_, fail) => {
+      if (init?.signal?.aborted) return fail(new DOMException('aborted', 'AbortError'));
+      init?.signal?.addEventListener('abort', () => fail(new DOMException('aborted', 'AbortError')), { once: true });
+    });
+
+  /** Una respuesta que entrega `first` bytes y después se queda quieta (sin cortarse). */
+  function stuckResponse(data: Uint8Array, first: number): Response {
+    let sent = false;
+    const body = new ReadableStream<Uint8Array>({
+      pull(ctrl) {
+        if (sent) return new Promise<void>(() => undefined);
+        sent = true;
+        ctrl.enqueue(data.slice(0, first));
+      },
+    });
+    return new Response(body, { status: 200, headers: { 'Content-Length': String(data.length) } });
+  }
+
+  it('sin respuesta (tampoco de /health): dice "No connection", espera y sigue solo cuando vuelve, sin saltear nada', async () => {
+    const w = world({ 'a.txt': 'aaa', 'b.txt': 'bbbb', 'c.txt': 'cc' });
+    const plan = await planFolder(w.lister, 'carpeta-1', 'X');
+    // Colgado hasta que se probó el portero tres veces sin respuesta.
+    let healthHung = 0;
+    const fetcher = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (healthHung < 3) {
+        if (String(input).endsWith('/health')) healthHung++;
+        return hang(init);
+      }
+      return w.fetcher(input, init);
+    }) as typeof fetch;
+    const states: boolean[] = [];
+    const sink = new BlobSink();
+    const result = await runDownload(
+      plan,
+      { kind: 'zip', sink },
+      { fetch: fetcher, wait: noWait, online: () => true, whenOnline: () => new Promise(() => undefined), probeMs: 1, stallMs: 20, missingText },
+      { onProgress: (p) => states.push(p.offline) },
+    );
+    expect(result.missing).toEqual([]);
+    expect(result.done).toBe(3);
+    expect(states).toContain(true);
+    expect(states.at(-1)).toBe(false);
+    expect(healthHung).toBe(3);
+  });
+
+  it('una respuesta que se queda quieta a mitad cuenta como un corte: sigue desde donde quedó (Range) y queda entera', async () => {
+    const big = 'z'.repeat(3000);
+    const w = world({ 'toma.mov': big });
+    const plan = await planFolder(w.lister, 'carpeta-1', 'X');
+    const id = w.idOf('toma.mov');
+    const data = w.files.get(id)!;
+    w.behave.set(id, (_r, count) => (count === 1 ? stuckResponse(data, 1200) : 'normal'));
+    // El portero tampoco contesta /health una vez: se espera diciendo "No connection".
+    let healthHung = 0;
+    const fetcher = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith('/health') && healthHung++ < 1) return hang(init);
+      return w.fetcher(input, init);
+    }) as typeof fetch;
+    const states: boolean[] = [];
+    const sink = new BlobSink();
+    const result = await runDownload(
+      { ...plan, files: plan.files.map((f) => ({ ...f, size: 5 * 1024 * 1024 })) },
+      { kind: 'zip', sink },
+      { fetch: fetcher, wait: noWait, online: () => true, whenOnline: () => new Promise(() => undefined), probeMs: 1, stallMs: 20, missingText },
+      { onProgress: (p) => states.push(p.offline) },
+    );
+    expect(result.missing).toEqual([]);
+    expect(states).toContain(true);
+    expect(w.requests.filter((r) => r.id === id).map((r) => r.range)).toEqual([null, 'bytes=1200-']);
+    if (hasPython) expect(text(pythonReadZip(new Uint8Array(await sink.blob().arrayBuffer())).entries[1])).toBe(big);
+  });
+
+  it('si el portero contesta /health, el archivo que no contesta gasta sus intentos y se saltea; lo demás se baja', async () => {
+    const w = world({ 'a.txt': 'aaa', 'b.txt': 'bbb' });
+    const plan = await planFolder(w.lister, 'carpeta-1', 'X');
+    const stuckUrl = plan.files.find((f) => f.path === 'a.txt')!.url;
+    let tries = 0;
+    const fetcher = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).startsWith(stuckUrl)) {
+        tries++;
+        return hang(init);
+      }
+      return w.fetcher(input, init);
+    }) as typeof fetch;
+    const result = await runDownload(plan, { kind: 'zip', sink: new BlobSink() }, { fetch: fetcher, wait: noWait, online: () => true, probeMs: 1, stallMs: 20, missingText });
+    expect(result.done).toBe(1);
+    expect(result.missing).toEqual([{ path: 'a.txt', reason: 'failed', detail: 'The media server stopped answering.' }]);
+    expect(tries).toBe(4);
+  });
+
+  it('cancelar mientras el portero no contesta corta en el acto (no espera el tope)', async () => {
+    const w = world({ 'a.txt': 'aaa' });
+    const plan = await planFolder(w.lister, 'carpeta-1', 'X');
+    const ctrl = new AbortController();
+    const fetcher = ((_input: RequestInfo | URL, init?: RequestInit) => hang(init)) as typeof fetch;
+    const started = Date.now();
+    const run = runDownload(plan, { kind: 'zip', sink: new BlobSink() }, { fetch: fetcher, wait: noWait, online: () => true, stallMs: 60_000, missingText }, { signal: ctrl.signal });
+    setTimeout(() => ctrl.abort(), 30);
+    await expect(run).rejects.toMatchObject({ name: 'AbortError' });
+    expect(Date.now() - started).toBeLessThan(5_000);
+  });
+
+  it('cancelar mientras una respuesta está quieta a mitad también corta en el acto', async () => {
+    const w = world({ 'toma.mov': 'z'.repeat(3000) });
+    const plan = await planFolder(w.lister, 'carpeta-1', 'X');
+    const id = w.idOf('toma.mov');
+    w.behave.set(id, () => stuckResponse(w.files.get(id)!, 100));
+    const ctrl = new AbortController();
+    const started = Date.now();
+    const run = runDownload(
+      { ...plan, files: plan.files.map((f) => ({ ...f, size: 5 * 1024 * 1024 })) },
+      { kind: 'zip', sink: new BlobSink() },
+      { fetch: w.fetcher, wait: noWait, online: () => true, stallMs: 60_000, missingText },
+      { signal: ctrl.signal, onProgress: (p) => p.bytesDone >= 100 && ctrl.abort() },
+    );
+    await expect(run).rejects.toMatchObject({ name: 'AbortError' });
+    expect(Date.now() - started).toBeLessThan(5_000);
+  });
+});
