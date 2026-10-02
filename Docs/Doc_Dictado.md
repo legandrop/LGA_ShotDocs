@@ -878,8 +878,8 @@ sin login con un proveedor falso local: 42 de 42 (R1, R2, R7, *ask*, solo ver, *
 castellano). Mutantes del autor: 13 de 14 mueren; el que vive, insertar la fila con `updateBlock` de la tabla, es
 equivalente hoy: y-prosemirror compara las filas iguales y no las rehace, así que lo que otro escribe sin red en otra
 fila queda igual (la prueba lo comprueba); se deja la inserción como un nodo, que no depende de ese diff. Mutantes de la
-auditoría y de sus correcciones: 24 de 25, y los 4 de la re-verificación mueren; el que vive, Ctrl+Enter sin permiso, es equivalente (`applyChanges` también
-mira el permiso).
+auditoría y de sus correcciones: 24 de 25, y los 4 de la re-verificación mueren; el que vive, Ctrl+Enter sin permiso,
+es equivalente (`applyChanges` también mira el permiso).
 
 **Lo que prueba Lega** (no se puede acá): la calidad con una clave real (10.3), el dictado del teclado dentro de una
 celda y de un comentario en el iPhone y en Android, y Ctrl+Alt+Shift+D / ⌘⌥⇧D en navegadores
