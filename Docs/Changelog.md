@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+Compactar (B.9), entrega 1: leer snapshots. Un dispositivo nuevo baja todas las filas de cada página, y una página muy
+editada llega a miles. Nueva migración `20261019120000_compactar_leer.sql` (`schema_version` 17, snapshots apagados):
+`page_snapshots` y la reserva en `page_compaction`, sin permisos directos; `pull_page_content`, que con un snapshot
+vigente lo manda primero y si no llama a `pull_page_updates`; y las funciones de quien compacta, para la entrega 2.
+Solo lo recibe quien ve lo borrado. En la app, `pullContent` (apagados, el mismo pedido de siempre), la época de
+contenido en `DocState`, un snapshot ilegible que no mueve el cursor y el reinicio de la página si su cadena se
+invalida. Sin snapshots, los pedidos son los de antes. Pruebas SQL en rollback con 60 mutantes y 32 del dispositivo.
+[ Compactar, entrega 1 - leer snapshots: la migración apagada, pull_page_content, la época de contenido y sus pruebas ]
+
 v0.125 :
 
 Menciones en comentarios (P.21), entrega 2. Para mencionar a alguien que no veía la página había que ir a *Share*,

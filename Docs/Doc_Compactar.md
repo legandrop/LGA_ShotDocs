@@ -1,6 +1,8 @@
 # Compactar el contenido en el servidor (`page_snapshots`)
 
-**Estado: diseño, sin implementar** (roadmap B.9, 2026-10-01). Toca la regla de no perder datos, así que va con
+**Estado: entrega 1 implementada (LEER snapshots, v0.0XX; migración `20261019120000_compactar_leer.sql`, sin
+aplicar, con los snapshots apagados; ver "Cómo quedó la entrega 1", al final). Las entregas 2 y 3 (crearlos y
+prenderlos), sin implementar** (roadmap B.9, diseño del 2026-10-01). Toca la regla de no perder datos, así que va con
 pruebas antes de cualquier código que escriba en la base. **Revisado el 2026-10-01 con el diseño del historial
 (`Doc_Historial.md`, decisión de Lega):** el snapshot se arma aplicando las filas en orden, no con
 `Y.mergeUpdates`, para que conserve lo borrado (sección 3). Nada de esto está aplicado: la migración de abajo es un
@@ -417,8 +419,10 @@ anteriores, que leen y vuelven a escribir el mismo objeto, conservan esos campos
 
 - `page_snapshots`: **ningún permiso directo** para `authenticated` ni `anon` (RLS prendida y sin políticas). Todo
   pasa por funciones, que sirven solo lo confirmado y válido; si la tabla se pudiera leer, se verían también los sin
-  confirmar e invalidados (hasta 8 MB cada uno). Lo que un snapshot muestra es lo mismo que las filas que cubre, que
-  quien ve la página ya puede leer (también lo borrado, igual que ellas).
+  confirmar e invalidados (hasta 8 MB cada uno). Lo que un snapshot muestra es lo mismo que las filas que cubre
+  (también lo borrado), así que **solo se sirve a quien ve lo borrado** (`private.sees_deleted`, D14,
+  `Doc_Privacidad_Borrado.md`, sección 5): los demás bajan lo de siempre por `pull_page_updates` (con la privacidad
+  prendida, la base limpia).
 - Escriben solo las funciones `security definer`: reservar, subir, confirmar e invalidar piden nivel 3 sobre la
   página (`page_level`); bajar, **`private.sees_deleted`** (el snapshot conserva lo borrado: quien no lo ve baja la
   base limpia, `Doc_Privacidad_Borrado.md`). Todas controlan que la página no esté en un proyecto borrado (como hoy
@@ -732,3 +736,81 @@ problemas menores. Todo quedó corregido en el texto:
 | Versiones como texto, función auxiliar ejecutable por todos, tabla legible con lo no confirmado | `numeric(8,3)`, `revoke`, sin permisos directos sobre la tabla (10, 13) |
 | El reinicio por época volvía a subir todo | Solo el cursor: un snapshot incompleto no pudo inflar `syncedSV` (12). **Revisado con B.15:** uno malo con algo de más sí infla `syncedSV` y `syncedDS`, así que el reinicio borra las dos cuentas y la página sube entera una vez (12) |
 | Otra versión de Yjs puede dar otros bytes para lo mismo | Huellas distintas invalidan solo entre la misma versión de la app (4.5) |
+
+## Cómo quedó la entrega 1 (LEER snapshots)
+
+Implementada en v0.0XX. Nadie arma snapshots todavía: la app solo sabe bajarlos. **Sin filas en `page_snapshots`, o con
+los snapshots apagados (como deja la migración), la app hace exactamente los mismos pedidos que antes** y baja lo
+mismo (probado con el servidor en memoria y con el cliente de verdad contra un PostgREST de juguete). Se puede publicar
+sola. No hace falta subir `min_app_version`: no cambia nada de lo guardado ni de cómo se sube.
+
+**La base** (`supabase/migrations/20261019120000_compactar_leer.sql`, `schema_version` 17; la 16 es de menciones):
+
+- `page_snapshots` como en la sección 13, con los `check` de tamaño (1 byte a 8 MB) y de la huella (32 bytes);
+  `pages.snapshot_seq` y `pages.content_epoch` (se leen con el árbol, no se escriben desde la API); el interruptor
+  `workspace_settings.snapshot_min_version` (nulo: apagados).
+- **La reserva va en una tabla aparte, `page_compaction`** (`claim_at`, `claim_by`, `skip_until`, `skip_why`), sin
+  permisos: en `pages` se leería con el árbol quién compacta qué. Cambio respecto de la sección 13.
+- `private.current_snapshot`, `private.snapshots_allowed` y `private.invalidate_snapshot_chain` (sin `execute` para
+  nadie de la API).
+- `pull_page_content(page, after_seq, limit)`: si quien llama ve lo borrado y hay un snapshot vigente que pasa del
+  cursor y pesa menos que las filas que reemplaza, el snapshot y las filas siguientes; si no, **llama a
+  `pull_page_updates`** (misma respuesta, también la base limpia para quien no ve lo borrado) y le suma la época. Así,
+  sin snapshots, no puede devolver otra cosa que lo de siempre.
+- Las funciones de quien compacta, para la entrega 2: `claim_page_compaction` (ver lo borrado, prendidos y versión,
+  fuera de la papelera, sin reserva de otro ni salteo vigente, 100 filas y 64 KB de cola y la mitad del vigente),
+  `push_page_snapshot` (devuelve `(snapshot_id, result)` con `ok`, `snapshot_mismatch` o `snapshot_exists`: con
+  `snapshot_mismatch` tiene que guardar e invalidar, así que no puede ser un error), `pull_page_snapshot` (el vigente,
+  o uno propio sin confirmar), `confirm_page_snapshot` (solo quien lo subió, con su huella; limpia los anteriores a la
+  base, los sin confirmar de más de un día y los invalidados de más de 30), `skip_page_compaction` e
+  `invalidate_page_snapshot` (nivel 3, toda la cadena, `content_epoch` + 1).
+
+**La app** (`src/sync/`):
+
+- `remote.ts`: `pullContent` (con los snapshots apagados según los últimos ajustes, o sin la función, hace el mismo
+  pedido de siempre a `pull_page_updates`; sin la función, por 10 minutos); el árbol pide `snapshot_seq` y
+  `content_epoch` desde la versión 17 y, si faltan igual, reintenta sin ellas; `SNAPSHOT_SCHEMA_VERSION` (no sube
+  `DB_SCHEMA_VERSION`). `linkRemote.ts`: el visitante del link sigue bajando por `plink_pull_page`.
+- `docs.ts`: `pullPage` baja con `pullContent`; `applyRemote` anota en `DocState` el último snapshot aplicado y la
+  época de la misma respuesta, en la misma transacción que lo guardado y el cursor. **Un snapshot ilegible** no guarda
+  nada del lote ni mueve el cursor, y la página baja en filas hasta que se vuelve a abrir la app. **El reinicio por
+  época** (si el dispositivo aplicó un snapshot y la época es otra, la del árbol o la de la misma respuesta): cursor a
+  0, sin `syncedSV`, `syncedDS` ni envío pendiente, y si la persona puede escribir, la página vuelve a subir entera una
+  vez; lo guardado no se toca. `resetForRestore` borra también los dos campos nuevos.
+- `engine.ts`: el ciclo baja también las páginas al día cuya época cambió, y le pasa a cada una la época del árbol.
+- `testing.ts`: el servidor en memoria con las mismas funciones y reglas (y `contentCalls`, los pedidos de contenido,
+  para comparar con lo de antes).
+
+**Lo que cambió respecto del diseño:** la reserva en `page_compaction`; `push_page_snapshot` devuelve una fila con el
+resultado; `pull_page_content` y `pull_page_snapshot` piden `sees_deleted` (D14); el reinicio por época, que el plan
+ponía en la entrega 2, va en esta porque es parte de leer: una versión que baja snapshots tiene que poder dejarlos; si
+un snapshot vigente cambia de id en su fila final (copia restaurada sin el paso del script), se sirve el anterior de la
+cadena que siga valiendo, no ninguno.
+
+**Pruebas:**
+
+- `supabase/tests/snapshots_permisos.sql` (prueba 5), corrida en `begin … rollback` contra la base real con la
+  migración: apagados y prendidos sin snapshots, `pull_page_content` igual a `pull_page_updates` para todos; nadie lee
+  las tablas ni llama a lo de `private`; quién reserva, sube, baja, confirma, saltea e invalida, con cada rechazo;
+  quien no ve lo borrado nunca recibe el snapshot, tampoco con D14 prendido (recibe la base limpia); el peso y el lote;
+  mismo tramo con la misma huella, con otra y la misma versión (invalida la cadena) y con otra versión; la cadena y su
+  invalidación; subir `snapshot_min_version`; una fila final con otro id y `update_seq` menor; la limpieza al
+  confirmar; un proyecto borrado; `page_updates` intacta. **60 mutantes de la migración: 56 detectados; los 4 que no,
+  equivalentes.** Las otras 23 pruebas de `supabase/tests/` pasan con la migración puesta.
+- `src/sync/snapshots.test.ts` (pruebas 2, 3 y 6): sin snapshots, los mismos pedidos y el mismo resultado; un
+  dispositivo nuevo, uno atrasado (filas si pesan menos), uno atrasado con ediciones sin subir, una subida en vuelo,
+  cerrar la app en cada punto de la bajada, un snapshot ilegible, quien solo ve y el invitado, la versión publicada
+  v0.100 sobre la misma base, una base de una versión anterior que conserva los campos, la invalidación (un snapshot
+  al que le falta una fila y otro con un borrado de más, la época de la misma respuesta, el ciclo), subir la versión
+  mínima, restaurar una copia en tres momentos y sin el paso del script, el cliente de verdad (qué pide, según la
+  versión y el interruptor) y la corrida al azar (tres dispositivos, la versión publicada, snapshots armados por el
+  servidor en momentos al azar, invalidaciones, sin red, cerrar la app y dispositivos nuevos; `SNAPSHOT_SEEDS`, 6 por
+  defecto; con 200: 86 snapshots servidos, 68 invalidados, todo igual al servidor y las cuentas sin decir de más).
+  **23 mutantes del dispositivo y del servidor en memoria: 22 detectados**; el otro (el reinicio sin anotar la época)
+  es equivalente: la bajada que sigue la anota.
+- La prueba 6 se corrió con el servidor en memoria (el script de restaurar del repo privado no cambió: es requisito
+  de la entrega 3, antes de prenderlos).
+
+**Para prenderlos (entrega 3):** aplicar esta migración (con copia de seguridad), que el script de restaurar vacíe
+`page_snapshots` y `page_compaction`, deje `snapshot_seq` en 0 y no haga volver atrás `content_epoch`; la entrega 2
+publicada; y `update public.workspace_settings set snapshot_min_version = <versión de la entrega 2> where id`.
