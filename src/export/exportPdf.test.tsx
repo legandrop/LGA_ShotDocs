@@ -608,6 +608,8 @@ describe('exportar PDF: los comentarios', () => {
       failedSeqs: [],
       failedKinds: [],
       rejectedText: null,
+      mentions: [],
+      unnotified: [],
       ...extra,
     });
     const section = commentsSection(

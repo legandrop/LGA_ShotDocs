@@ -13,6 +13,7 @@ import { notify } from './ui/notice';
 import { acceptInvitationsQuietly, AccessStore, Permissions } from './sync/access';
 import { CommentQueue, commentsDbName, openCommentsDb, type CommentRemote, type CommentsDb } from './sync/comments';
 import { SupabaseCommentRemote } from './sync/commentsRemote';
+import { MentionsInbox } from './sync/mentions';
 import { PageDocs } from './sync/docs';
 import { SyncEngine, type SyncStatus } from './sync/engine';
 import { PageFiles } from './sync/files';
@@ -51,6 +52,11 @@ export interface Services {
   comments: CommentQueue;
   /** `null` si la base de comentarios no se pudo abrir (se leen con red, no se escriben). */
   commentsDb: CommentsDb | null;
+  /**
+   * La campana de las menciones (P.21, Docs/Doc_Menciones.md). No está con un link público ni en las pruebas que
+   * arman los servicios a mano; con la base del workspace sin migrar, está apagada (`ready` en falso).
+   */
+  mentions?: MentionsInbox;
   /** Cuánto ocupa cada proyecto en el Drive (P.7), con la última respuesta guardada en el dispositivo. */
   sizes: ProjectSizes;
   /** "Available offline" y el espacio de la app en este dispositivo (P.10, Docs/Doc_Copias_Locales.md). */
@@ -337,10 +343,18 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser, link
       } catch (err) {
         commentsProblem = stored('boot.commentsStorage', { reason: errorMessage(err) });
       }
-      const comments = new CommentQueue(commentsDb, link?.comments ?? new SupabaseCommentRemote(workspace.client), user.id, {
+      const commentsRemote = link?.comments ?? new SupabaseCommentRemote(workspace.client);
+      const comments = new CommentQueue(commentsDb, commentsRemote, user.id, {
         unavailable: commentsProblem,
       });
       await comments.load().catch(() => undefined);
+      // La campana: solo con una cuenta (un visitante de un link no menciona ni recibe menciones, ME7).
+      let online = () => true;
+      const mentions =
+        commentsRemote instanceof SupabaseCommentRemote
+          ? new MentionsInbox(commentsDb, commentsRemote, comments, { online: () => online() })
+          : undefined;
+      await mentions?.load();
       const sizes = new ProjectSizes(db, remote);
       await sizes.load().catch(() => undefined);
       const engine = new SyncEngine(remote, tree, docs, files, {
@@ -371,12 +385,15 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser, link
       });
       await offline.load().catch(() => undefined);
       if (cancelled) {
+        mentions?.stop();
         mediaDb?.close();
         commentsDb?.close();
         foldersDb?.close();
         return db.close();
       }
       engine.start();
+      online = () => engine.getStatus().online;
+      mentions?.start();
       // Después de cada sincronización (y al volver la red), "Available offline" mira si algo cambió y baja lo que falte.
       const offlineManager = offline;
       let lastSync = engine.getStatus().lastSyncAt;
@@ -410,6 +427,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser, link
       const shutdown = () => {
         closing ??= (async () => {
           const stopping = engine.stop();
+          mentions?.stop();
           unwatch();
           unwatchFolders();
           offlineManager.stop();
@@ -453,6 +471,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser, link
           mediaDb,
           comments,
           commentsDb,
+          mentions,
           sizes,
           offline: offlineManager,
           shutdown,

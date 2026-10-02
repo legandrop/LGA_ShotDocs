@@ -79,12 +79,12 @@ export const tutorial = {
   },
   'tour.comments.title': { en: "Comments and questions", es: "Comentarios y preguntas" },
   'tour.comments.text': {
-    en: "Comment on any block ({comment}); all threads are here. A question, like the one above, can be answered by anyone who can comment.",
-    es: "Comentá cualquier bloque ({comment}) y acá ves todos los hilos. Una pregunta, como la del ejemplo, la puede contestar quien solo comenta.",
+    en: "Comment on any block ({comment}); all threads are here. Type @ to mention someone. A question, like the one above, can be answered by anyone who can comment.",
+    es: "Comentá cualquier bloque ({comment}) y acá ves todos los hilos. Con @ mencionás a alguien. Una pregunta, como la del ejemplo, la puede contestar quien solo comenta.",
   },
   'tour.comments.textPhone': {
-    en: "Comment on any block; all threads are here. A question, like the one above, can be answered by anyone who can comment.",
-    es: "Comentá cualquier bloque y acá ves todos los hilos. Una pregunta, como la del ejemplo, la puede contestar quien solo comenta.",
+    en: "Comment on any block; all threads are here. Type @ to mention someone. A question, like the one above, can be answered by anyone who can comment.",
+    es: "Comentá cualquier bloque y acá ves todos los hilos. Con @ mencionás a alguien. Una pregunta, como la del ejemplo, la puede contestar quien solo comenta.",
   },
   'tour.find.title': { en: "Find", es: "Buscar" },
   'tour.find.text': { en: "Find and replace in the page ({find}).", es: "Buscá y reemplazá en la página ({find})." },

@@ -8,6 +8,7 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
   find: ['PageEditor.tsx', 'findUi.ts'],
   print: ['printPage.ts'],
   history: ['Workspace.tsx', 'historyUi.ts'],
+  newDayReport: ['dayReportUi.tsx', 'dayReport.ts'],
   assistant: ['AssistantHost.tsx', 'assistantUi.ts'],
   titleEnter: ['PageView.tsx', 'PracticeView.tsx'],
   // Recién elegida una plantilla, Ctrl/⌘+Z en el título vacío deshace la página (templatesUi.ts).
@@ -29,6 +30,8 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
   findClose: ['FindBar.tsx'],
   commentsSend: ['CommentsPanel.tsx', 'commentsUi.ts'],
   commentsCancel: ['CommentsPanel.tsx'],
+  mentionPick: ['CommentsPanel.tsx'],
+  mentionClose: ['CommentsPanel.tsx'],
   treeStep: ['Sidebar.tsx', 'treeNav.ts'],
   treeEnds: ['Sidebar.tsx', 'treeNav.ts'],
   treeExpand: ['Sidebar.tsx', 'treeNav.ts'],

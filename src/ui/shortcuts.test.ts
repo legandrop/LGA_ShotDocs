@@ -16,6 +16,7 @@ import { editorSchemaOptions } from './editorSchema';
 import { isFindShortcut, isStepShortcut } from './findUi';
 import { isPrintShortcut } from './printPage';
 import { isHistoryShortcut } from './historyUi';
+import { isDayReportShortcut } from '../templates/dayReport';
 import { isAssistantShortcut } from '../assistant/assistantUi';
 import { isSearchShortcut } from './projectSearchUi';
 import { SHORTCUT_FILES, SHORTCUT_RULES } from './shortcutSources';
@@ -200,6 +201,7 @@ const FUNCTIONS: Record<string, { fn: Fn; id: string; keys?: string[] }> = {
   isSearchShortcut: { fn: isSearchShortcut as Fn, id: 'search' },
   isPrintShortcut: { fn: isPrintShortcut as Fn, id: 'print' },
   isHistoryShortcut: { fn: isHistoryShortcut as Fn, id: 'history' },
+  isDayReportShortcut: { fn: isDayReportShortcut as Fn, id: 'newDayReport' },
   isAssistantShortcut: { fn: isAssistantShortcut as Fn, id: 'assistant' },
   isCommentShortcut: { fn: isCommentShortcut as Fn, id: 'comment' },
   isSendShortcut: { fn: isSendShortcut as Fn, id: 'commentsSend' },

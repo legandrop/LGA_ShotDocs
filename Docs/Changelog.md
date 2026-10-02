@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.122 :
 
 Exportar (P.22), entrega 1: el PDF de una rama o de un proyecto. Para entregarle un reporte al cliente había que
 imprimir página por página. Nuevo: *Export…* en el menú de la página y *Export project…* en el selector arman un solo
@@ -10,6 +10,28 @@ opcionales (bajados antes, con nombres y nunca correos) y topes de páginas y de
 salen en unos 30 s con 1621 hojas, cada página en la hoja que dice el índice. Un salto de hoja vacío cortaba la primera
 hoja de la página: se pagina en el orden del documento.
 [ Exportar, entrega 1 - el PDF de una rama o un proyecto con índice, hojas con nombre, anotaciones y comentarios ]
+
+v0.121 :
+
+En el set, el reporte de cada día se armaba a mano copiando fecha, número de día, locación y cámara de ayer (P.23,
+entrega 2 de `Doc_Plantillas.md`). Ahora *New day report*, arriba del título de la carpeta de reportes y de cada reporte
+(también en el menú ⋯ y con Ctrl/⌘+Alt+Shift+N, sin AltGr), abre un globito con la fecha local, el día siguiente y la
+locación de ayer; Enter crea `2026-10-02 | Day 06` con la unidad, la gente de VFX y la cámara del anterior, o abre el
+de esa fecha (*Create another*, con el mismo día). La carpeta se marca sola con el primer *On-Set Report* adentro
+(`settings.dayReports`, sin migración) o a mano. Todo local, sin red. Auditada: corregidos el día de *Create another*,
+las páginas vacías, Enter mientras lee y el reintento sin duplicar.
+[ Reporte del día - el botón New day report, la carpeta de reportes y lo que se copia de ayer ]
+
+v0.120 :
+
+Menciones en comentarios (P.21), entrega 1. No había forma de avisarle a alguien de un comentario: solo se veía
+abriendo la página. Nueva migración `20261015120000_menciones.sql` (`comment_mentions`, la regla de a quién se puede
+mencionar, la campana y las leídas; `list_comments` suma `mentions`; `schema_version` 15) con sus pruebas de permisos
+y 30 mutantes. En la app: `@` en un comentario abre la lista de quienes ven la página, la mención se pinta y viaja en
+la cola como operación `mentions`, con copia en `meta` para una versión vieja; una campana arriba con las sin leer
+(9+), la lista, abrir una lleva al hilo, *Mark all as read*, y un punto en el botón de comentarios; sin red, lo
+guardado. Las menciones de Coda se ven como `@Nombre`. Con la base sin migrar, nada cambia.
+[ Menciones, entrega 1 - el @ en los comentarios, la campana y su migración ]
 
 v0.119 :
 

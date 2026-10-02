@@ -330,11 +330,18 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   plantillas a medio bajar, datos de set que faltaban y una sección *Internal* para lo que no debe ver un cliente.
   Entregas: 0 (las tres plantillas en el código y una vista para que Lega las revise), 1 (crear desde una de fábrica),
   2 (el reporte del día), 3 (plantillas propias). **Entregas 0 y 1 hechas** (v0.117): la vista previa
-  (`/practice?template=on-set`), la tira de la página nueva, *More…* y *Apply template…*; **falta** que Lega revise el
-  contenido de las tres (PL1), y las entregas 2 y 3. Quedó de la auditoría: *Exit* de la vista previa abierta desde
-  la ventana va al inicio y no a la página donde se elegía (Atrás sí vuelve); un aviso de ProseMirror en la consola al
-  abrir la vista previa (sin efecto visible); y que deshacer la plantilla deja `template_id` (la entrega 2 lo tiene
-  que tener en cuenta). **Para después:** que la base fusione las claves de `pages.settings`
+  (`/practice?template=on-set`), la tira de la página nueva, *More…* y *Apply template…*. **Entrega 2 hecha**
+  (v0.121): *New day report* (botón, globito, menú ⋯ y Ctrl/⌘+Alt+Shift+N), la carpeta de reportes marcada o deducida,
+  lo que se copia del día anterior, "ya existe" y el orden, sin red. **Falta** que Lega revise el contenido de las tres
+  (PL1) y pruebe el atajo en Firefox y Safari de la Mac y con un teclado latinoamericano físico, y la entrega 3. De la
+  sección 6 quedaron para después el selector de plantilla del globito (con las propias, entrega 3) y la marca *2
+  reports for…* en la barra lateral con la papelera ofrecida para el repetido sin tocar (O6). Quedó de la auditoría de
+  la entrega 1: *Exit* de la vista previa abierta desde la ventana va al inicio y no a la página donde se elegía
+  (Atrás sí vuelve); y un aviso de ProseMirror en la consola al abrir la vista previa (sin efecto visible). De la
+  auditoría de la entrega 2 (las demás observaciones, corregidas): un invitado con *Edit & create pages* crea reportes,
+  porque la base mira el nivel y no el rol; si un cliente nunca tiene que crear páginas, es una decisión del modelo de
+  permisos (`Plan_Workspaces.md`); y al reusar un reporte vacío hecho por la app se le cambia el número de día por el
+  siguiente al último (no se pierde nada). **Para después:** que la base fusione las claves de `pages.settings`
   (`settings || patch`) en vez de reemplazar el objeto entero, con su migración: hoy dos cambios de ajustes a la vez
   se pisan (`Doc_Plantillas.md`, sección 8).
 - **P.20 Anotar sobre las fotos** (Lega, 2026-10-02): flechas, círculos, rectángulos, texto y lápiz encima de una
@@ -364,7 +371,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   de exportación medido), 1 (PDF), 2 (zip), 3 (volver, con la migración de `imported_from`), 4 (carpetas de Drive,
   reusar archivos, link público). **Entrega 0 hecha (v0.115):** el editor de exportación en `src/export/`
   (sin interfaz), medido con 300 páginas y 2219 fotos en Chromium: 14,5 a 38,9 s, nada guardado cambia y las hojas de
-  las 300 iguales a las marcas de la pantalla. **Entrega 1 hecha (v0.0XX): el PDF de una rama o de un proyecto**
+  las 300 iguales a las marcas de la pantalla. **Entrega 1 hecha (v0.122): el PDF de una rama o de un proyecto**
   (*Export…* en el menú de la página, *Export project…* en el selector): índice con la hoja de cada página y links
   internos, cada página con su hoja (Chrome y Edge de computadora; los demás, todo con la hoja de la raíz y avisado),
   fotos con sus anotaciones y achicadas a su ancho impreso en Workers, comentarios opcionales bajados antes y sin
@@ -372,9 +379,17 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   resueltas O3 a O7 de la auditoría de la 0 y los tres bloqueantes y O1 a O7 de la auditoría de la 1. Falta a mano:
   Safari, Firefox, el iPhone, una compu de 8 GB y guardar de verdad en Chrome y Edge (`Doc_Exportar.md`, "Cómo quedó
   la entrega 1"). Sigue la entrega 2 (zip).
+  Observaciones de la re-verificación de la entrega 1: (R1) el Imprimir del menú del navegador mientras se arma el PDF
+  puede llevar la vista de la página en curso: sacar `print-output` a esa vista hasta `place()`; (R2) la prueba de la
+  vuelta al achicador del hilo principal no distingue la mutación: hacerlo inyectable en `workerResizer`; (R3) con
+  *Comments* tildada se hace un pedido por página, en fila: medirlo contra Supabase con 300 páginas y, si pesa, pedir de
+  a varias.
 - **P.21 Menciones en comentarios: *@persona*** (Lega, 2026-10-02): escribir `@` en un comentario, elegir a alguien y
-  que le llegue un aviso en la app; por correo cuando haya clave de Resend (C.12). **Diseño en `Doc_Menciones.md`** (sin
-  código ni migración; auditado y corregido; decisiones propuestas ME1 a ME10, ME10 espera a Lega): solo a quien ya
+  que le llegue un aviso en la app; por correo cuando haya clave de Resend (C.12). **Entrega 1 programada (v0.120;
+  migración `20261015120000_menciones.sql` sin aplicar):** el `@` con la lista, el pintado, la cola, la campana y el
+  punto en el botón de comentarios; auditada y corregida. Faltan las entregas 2 y 3, y un detalle cosmético (O6 de la
+  auditoría): un comentario con mención cuenta como 2 cambios sin subir (alta y menciones). **Diseño en `Doc_Menciones.md`** (auditado y
+  corregido; decisiones propuestas ME1 a ME10, ME10 espera a Lega): solo a quien ya
   ve la página; un miembro ve al equipo y a los clientes que ya comentaron (ME10); el dueño y los admins la comparten
   desde la mención (entrega 2); un invitado ve solo a quienes participan en los comentarios y a quien le compartió
   algo; va después del link público (`schema_version` 15); el texto sigue plano (`@lega`) y quién es va en `comment_mentions`, así una versión vieja no rompe

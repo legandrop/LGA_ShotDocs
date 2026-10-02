@@ -105,6 +105,7 @@ export const sync = {
   'sync.comment.edit': { en: "An edited comment on “{page}”", es: "Un comentario editado en “{page}”" },
   'sync.comment.delete': { en: "A deleted comment on “{page}”", es: "Un comentario borrado en “{page}”" },
   'sync.comment.resolve': { en: "A resolved thread on “{page}”", es: "Un hilo resuelto en “{page}”" },
+  'sync.comment.mentions': { en: "The mentions in a comment on “{page}”", es: "Las menciones de un comentario en “{page}”" },
   'sync.copyText': { en: "Copy text", es: "Copiar el texto" },
   'sync.hideDiscardable': { en: "Hide what can be discarded", es: "Ocultar lo que se puede descartar" },
   'sync.downloadFailed': {

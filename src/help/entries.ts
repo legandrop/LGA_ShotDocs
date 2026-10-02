@@ -108,10 +108,14 @@ const CAMERA = '0.110';
 const ASSISTANT = '0.118';
 /** Las plantillas de fábrica (Docs/Doc_Plantillas.md, entregas 0 y 1): la versión se ajusta al publicar. */
 const TEMPLATES = '0.117';
+/** El reporte del día (Docs/Doc_Plantillas.md, entrega 2): la versión la pone quien publica. */
+const DAY_REPORTS = '0.121';
 /** El link público, *Can view* (Doc_Link_Publico.md, entrega 1): la versión se pone al publicar, igual que en el changelog. */
 const PUBLIC_LINK = '0.111';
 /** Exportar una rama o un proyecto como PDF (P.22, Doc_Exportar.md, entrega 1): la versión se pone al publicar. */
-const EXPORT_PDF = '0.0XX';
+const EXPORT_PDF = '0.122';
+/** Las menciones en comentarios (P.21, Doc_Menciones.md, entrega 1): la versión se pone al publicar, igual que en el changelog. */
+const MENTIONS = '0.120';
 /** Ver las anotaciones de las fotos (P.20, Doc_Anotar_Fotos.md, entrega 1): la versión se pone al publicar. */
 const PHOTO_MARKUP = '0.116';
 
@@ -152,6 +156,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
     keys: { enter: 'titleEnter', undo: 'undo' },
     words: ['template', 'plantilla', 'report', 'reporte', 'on-set', 'rodaje', 'breakdown', 'desglose', 'preproducción', 'pre-production', 'apply', 'aplicar'],
     since: TEMPLATES,
+  },
+  {
+    id: 'dayReports',
+    section: 'pages',
+    title: 'help.dayReports.title',
+    text: 'help.dayReports.text',
+    keys: { newReport: 'newDayReport' },
+    words: ['day report', 'reporte del día', 'shoot day', 'día de rodaje', 'on-set', 'rodaje', 'unit', 'unidad', 'location', 'locación'],
+    since: DAY_REPORTS,
   },
   {
     id: 'projects',
@@ -372,6 +385,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
     more: ['commentsCancel'],
     showMe: 'comments',
     since: BEFORE_HELP,
+  },
+  {
+    id: 'mentions',
+    section: 'comments',
+    title: 'help.mentions.title',
+    text: 'help.mentions.text',
+    keys: { pick: 'mentionPick', close: 'mentionClose' },
+    words: ['@', 'mention', 'mencionar', 'mención', 'campana', 'bell', 'notification', 'aviso', 'unread', 'sin leer'],
+    since: MENTIONS,
   },
   { id: 'questions', section: 'comments', title: 'help.questions.title', text: 'help.questions.text', keys: { question: 'question' }, since: BEFORE_HELP },
 

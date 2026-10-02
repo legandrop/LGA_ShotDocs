@@ -1,6 +1,6 @@
 # Exportar una página o un proyecto entero (P.22)
 
-**Estado: entregas 0 (v0.115) y 1 (v0.0XX: el PDF de una rama o de un proyecto) hechas; el zip y volver, pendientes**
+**Estado: entregas 0 (v0.115) y 1 (v0.122: el PDF de una rama o de un proyecto) hechas; el zip y volver, pendientes**
 (roadmap P.22; pedido de Lega del 2026-10-02). Se diseñó contra `main` v0.108. Cómo quedaron, al final: "Cómo quedó la
 entrega 0" (el editor de exportación medido con 300 páginas) y "Cómo quedó la entrega 1" (el PDF, medido con la
 impresión real de Chrome y Edge). Las decisiones EX1 a EX15 (sección 11) son propuestas con la recomendación tomada: Lega no estaba y quedan a
@@ -796,7 +796,7 @@ rápido que abrir cada página.
    Firefox, a mano en la entrega 1; videos y adjuntos (necesitan el portero y la vista previa de PDF; se dibujan con el
    mismo bloque `image` y la misma marca que la página).
 
-## Cómo quedó la entrega 1 (v0.0XX)
+## Cómo quedó la entrega 1 (v0.122)
 
 **Qué ve el usuario.** *Export…* en el menú ⋯ de la página (debajo de *Export PDF / Print*, que sigue igual) y *Export
 project…* en cada proyecto del selector (ícono en la computadora, renglón en el menú del teléfono), solo para quien ve
