@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.108 :
+v0.0XX :
 
 No se podía sacar una foto ni filmar desde la página: había que salir de la app, sacarla y elegirla con "/Image", y
 no había cómo guardar en el teléfono una foto de la página. Pedido de Lega (P.19). En el teléfono, *Take photo* y

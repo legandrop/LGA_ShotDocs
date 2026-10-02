@@ -284,7 +284,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   mismo lote crece la sesión elegida y aparece otra, la elegida puede saltar a la actual. Aparte, después: que lo borrado no llegue a quien solo ve la página (decisión 2;
   diseño en `Doc_Privacidad_Borrado.md`, B.18).
   Ojo: `npm run db:test` aplica las migraciones de verdad; esta se probó con un script en `begin … rollback`.
-- **P.19 Sacar una foto o filmar desde la app** (Lega, 2026-10-01). **Hecho para la web (v0.108):** *Take photo* y
+- **P.19 Sacar una foto o filmar desde la app** (Lega, 2026-10-01). **Hecho para la web (v0.0XX):** *Take photo* y
   *Record video* en el menú "/" y en el menú de la página, solo en el teléfono y la tableta (el video, con portero):
   abren la cámara con el selector del sistema y lo sacado entra en el renglón y sube por la cola de siempre; *Save to
   camera roll* (*Guardar en Fotos*) en la barra de cada foto o video abre la hoja de compartir con el original. Ver

@@ -928,7 +928,7 @@ impresión), `inlinePhotoCreate.test.ts` y `codaInlinePhotos.test.ts` (las celda
 - La barra de la foto, como en un renglón, puede quedar sobre la fila de arriba (O5).
 - Sin probar en Safari ni en el iPhone de verdad (el teléfono, emulado en Chromium).
 
-## Cámara: sacar una foto o filmar desde la página (P.19, v0.108)
+## Cámara: sacar una foto o filmar desde la página (P.19, v0.0XX)
 
 Pedido de Lega (2026-10-01): sacar una foto o filmar desde la app, que entre en el renglón y suba al Drive como
 cualquier foto, y poder guardarla en el carrete del teléfono.
