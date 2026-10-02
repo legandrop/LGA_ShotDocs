@@ -293,6 +293,15 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   Depende del interruptor de la privacidad de lo borrado (B.18) prendido en Wanka. Entregas: 0 (prueba de los headers y
   de la caché de miniaturas en la base real, y `noindex`), 1 (*Can view*), 2 (*Can edit*, con topes por bytes y la
   cuarentena de filas malas; se vuelve a auditar ese diseño antes de programarla), 3 (medir y ajustar los topes).
+- **P.22 Exportar una página o un proyecto entero** (Lega, 2026-10-02): PDF y/o zip con las páginas y las fotos, para
+  entregarle al cliente o archivar un proyecto terminado. **Diseño en `Doc_Exportar.md`** (sin código; EX1 a EX15 a
+  confirmar por Lega; falta su auditoría): un PDF para entregar (toda la rama en orden con un índice que dice la hoja de
+  cada página, cada página con su hoja y sus cortes de la fase 4, sin comentarios por defecto) y un zip para archivar
+  (una carpeta por página con `.html`, `.md`, los originales del Drive, los comentarios y los bloques en JSON para
+  volver; el zip de *Download all*). Lo exporta quien ve, solo su rama; nunca lo borrado (se exportan bloques, nunca el
+  documento Yjs) ni la papelera. Volver: *Import Shot Docs archive…*, siempre a un proyecto nuevo. Entregas: 0 (el editor
+  de exportación medido), 1 (PDF), 2 (zip), 3 (volver, con la migración de `imported_from`), 4 (carpetas de Drive,
+  reusar archivos, link público).
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.

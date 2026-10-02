@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+No había cómo sacar de la app una página con sus subpáginas o un proyecto entero para entregarle al cliente o archivarlo:
+solo el PDF de una página por vez y *Download all* de una carpeta de Drive. `Doc_Exportar.md` lo diseña (P.22, sin
+código): un PDF con toda la rama en orden, un índice con la hoja de cada página y cada página con su tamaño de hoja
+(medido en Chromium), y un zip con HTML, Markdown y JSON por página, los originales y los comentarios, que vuelve a
+Shot Docs como proyecto nuevo. Exporta quien ve, solo lo suyo; nunca lo borrado ni la papelera. Decisiones EX1 a EX15
+a confirmar.
+[ Exportar - diseño del PDF con índice y del zip para archivar y volver ]
+
 v0.108 :
 
 Compartir una página con alguien sin cuenta no existía: solo usuarios invitados. Faltaba un diseño seguro para
