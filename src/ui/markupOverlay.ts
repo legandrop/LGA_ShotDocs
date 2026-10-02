@@ -52,9 +52,8 @@ export function attachMarkupOverlay(root: HTMLElement, map: Y.Map<unknown>): Mar
   let queued = false;
   let stopped = false;
 
-  const draw = (svg: SVGSVGElement, photo: PhotoMarkup, host: Element) => {
-    const rect = host.getBoundingClientRect();
-    const min = minStrokeFor(photo.frame, rect);
+  const draw = (svg: SVGSVGElement, photo: PhotoMarkup, box: { width: number; height: number }) => {
+    const min = minStrokeFor(photo.frame, box);
     drawMarkup(svg, photo, { minStroke: min });
     drawn.set(svg, { fileId: photo.fileId, stamp: stamps.get(photo.fileId) ?? 0, min });
   };
@@ -62,6 +61,9 @@ export function attachMarkupOverlay(root: HTMLElement, map: Y.Map<unknown>): Mar
   const scan = () => {
     queued = false;
     if (stopped) return;
+    // Primero se lee todo (qué falta dibujar y el tamaño de cada caja) y después se escribe: medir entre dibujo y
+    // dibujo obligaba al navegador a rearmar la página cada vez (medido: 200 fotos anotadas, 200 ms por cambio).
+    const pending: { svg: SVGSVGElement; photo: PhotoMarkup; host: Element }[] = [];
     for (const img of root.querySelectorAll<HTMLImageElement>(PHOTO_IMGS)) {
       const host = img.parentElement;
       if (!host) continue;
@@ -79,8 +81,10 @@ export function attachMarkupOverlay(root: HTMLElement, map: Y.Map<unknown>): Mar
         resizes?.observe(host);
       }
       const was = drawn.get(svg);
-      if (!was || was.fileId !== photo.fileId || was.stamp !== (stamps.get(photo.fileId) ?? 0)) draw(svg, photo, host);
+      if (!was || was.fileId !== photo.fileId || was.stamp !== (stamps.get(photo.fileId) ?? 0)) pending.push({ svg, photo, host });
     }
+    const boxes = pending.map((job) => job.host.getBoundingClientRect());
+    pending.forEach((job, i) => draw(job.svg, job.photo, boxes[i]));
   };
 
   const schedule = () => {
@@ -121,8 +125,9 @@ export function attachMarkupOverlay(root: HTMLElement, map: Y.Map<unknown>): Mar
           const was = svg ? drawn.get(svg) : undefined;
           const photo = was ? photos.get(was.fileId) : undefined;
           if (!svg || !was || !photo) continue;
-          const min = minStrokeFor(photo.frame, entry.target.getBoundingClientRect());
-          if (Math.abs(min - was.min) > was.min * 0.1) draw(svg, photo, entry.target);
+          // El tamaño que trae el aviso (la caja de la foto no tiene relleno ni borde): sin medir otra vez.
+          const min = minStrokeFor(photo.frame, entry.contentRect);
+          if (Math.abs(min - was.min) > was.min * 0.1) draw(svg, photo, entry.contentRect);
         }
       })
     : null;
