@@ -309,7 +309,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   **Entrega 2 rediseñada (2026-10-02, sin código):** lo que escribe un link espera en una sala
   (`public_link_updates`) y entra a `page_updates` cuando el dispositivo de un editor lo prueba (`plink_admit`); partida
   en 2a (texto), 2b (archivos) y 2c (lo apartado a la vista); propuestas LE1 a LE13. **Auditado: aprobado con
-  condiciones, corregido** (B1 a B5, E2.18; la re-verificación revisa solo esos puntos). Observaciones que quedan para
+  condiciones, corregido** (B1 a B5, E2.18) **y aprobado en la re-verificación** (con la condición C1 aplicada: un
+  bloque de imagen vacío entra). **Para la 2a** (R1 a R4): en modo link, no mandar una subida que pase `push_max_bytes`;
+  `plink_push_status` cuenta como `pass`; el paso 8 acepta `tableCell.colwidth` como lista o nulo, con un caso honesto
+  por cada propiedad propia de la app; y **no prender `link_edit_min_version` hasta que la barrera de error alrededor de
+  `PageEditor` esté en `main`**. Observaciones que quedan para
   después: adelantar a la 2a "volver a la página como la ve el equipo" para el visitante con algo apartado; **decisión de
   Lega:** que el dueño pueda descartar algo apartado después de bajarlo (la sala solo crece, hasta 100 MB por link, y va
   contra "no hay borrado duro"); probar el script de restaurar del repo privado con la sala y las columnas nuevas;

@@ -2,7 +2,7 @@
 
 **Estado: entregas 0 y 1 implementadas (v0.114, *Can view*; migración aplicada, ver "Cómo quedó (entregas 0 y 1)"
 al final); la 2 (*Can edit*) se rediseñó el 2026-10-02 contra v0.137 (sala de espera y admisión por un editor, ver
-"Entrega 2: *Can edit* (rediseño 2026-10-02)", al final) y se auditó: aprobado con condiciones, ya corregido (E2.18)** (roadmap P.19;
+"Entrega 2: *Can edit* (rediseño 2026-10-02)", al final) y se auditó: aprobado con condiciones, corregido y aprobado en la re-verificación (E2.18)** (roadmap P.19;
 pedido de Lega del 2026-10-02). Corregido con la auditoría
 independiente del mismo día ("aprobado con condiciones"; ver "Correcciones de la auditoría", al final) y con las
 decisiones D29 a D31 (sección 9). Toca permisos, entrar sin cuenta y abuso: riesgo alto. Cada entrega va con sus pruebas
@@ -1076,7 +1076,7 @@ Reemplaza a 3.8 (3.8.1 a 3.8.3), a la fila *Compactar* de 3.10, a lo de la entre
 de la sección 7: todo eso queda como historia. Se diseñó contra `main` v0.137 (copias resumidas listas y apagadas, D14
 aplicada y apagada, menciones, anotaciones de fotos, plantillas, exportar, dictado V1, deshacer por orden de edición).
 Lo comprobado, con sus números, está en E2.16. **Auditado el mismo día: aprobado con condiciones; los cinco bloqueantes
-están corregidos en el texto (E2.18)** y la re-verificación revisa solo esos puntos.
+están corregidos en el texto (E2.18)**; la re-verificación del mismo día lo dio por **listo**, con la condición C1 ya aplicada.
 
 ### E2.0 En corto
 
@@ -1173,9 +1173,10 @@ link, lo que estaba esperando tampoco entra.
 4. **La subida sin GC** (D15) en modo link: umbral 1 MB (como decía 3.8.1, LE13). Arriba de eso sube con GC: lo visible
    es lo mismo; se pierde solo el texto que el visitante tecleó y borró antes de subir.
 5. **Cuánto esperó cada cosa:** `plink_push_status()` le dice al visitante, por página, cuántas de las suyas (este link
-   y este dispositivo) esperan y cuántas se apartaron. **Cuenta como una bajada** (`pull`, una vez y sus bytes;
-   observación 7: si no, se podía pedir sin límite). La app lo pide solo mientras tenga algo esperando, una vez por
-   ciclo de 30 s.
+   y este dispositivo) esperan y cuántas se apartaron. **Cuenta como un pase** (`pass`, que tiene tope de cantidad por
+   día; observación 7 y R2 de la re-verificación: como `pull` casi no limitaba, porque `pull` solo tiene tope de bytes).
+   La app lo pide solo mientras tenga algo esperando, una vez por ciclo de 30 s, y un `link_rate_limited` del estado no
+   se avisa como "el link no puede escribir": solo deja de pedirlo hasta el día siguiente.
 
 ### E2.3 La admisión
 
@@ -1219,10 +1220,10 @@ esta vuelta:
 | 2 | Ningún struct cuelga de un tipo raíz que la app no usa (solo `document-store`, `collapsedHeadings`, `photoMarkup`) | `unknown_root` |
 | 3 | Se aplica sin error y **no agrega nada pendiente**: `pendingKey` (de `compact.ts`, structs y borrados como tramos) igual antes y después | `pending` |
 | 4 | Si antes la página no tenía nada desconocido, después tampoco (`findUnknownContent`) | `unknown_content` |
-| 5 | Cada `sdmedia://` nuevo es de un archivo que registró el link o que **una página de la rama usa hoy** (sin `removed_at` ni `is_foreign`; LE9-B, B4); y ninguna dirección nueva en un atributo `url` que no sea `sdmedia://` (una imagen externa le avisaría al visitante cuándo abre la página alguien del equipo; observación 8) | `foreign_media`, `external_url` |
+| 5 | Cada `sdmedia://` nuevo es de un archivo que registró el link o que **una página de la rama usa hoy** (sin `removed_at` ni `is_foreign`; LE9-B, B4); y ninguna dirección nueva **no vacía** en un atributo `url` que no sea `sdmedia://` (una imagen externa le avisaría al visitante cuándo abre la página alguien del equipo; observación 8). **Una dirección vacía vale** (C1 de la re-verificación): el editor guarda `url: ""` en un bloque de imagen insertado sin archivo todavía (*/Image*), y apartarlo apartaría en cadena todo lo que el visitante escriba colgado de él | `foreign_media`, `external_url` |
 | 6 | La base limpia que sale (`buildCleanBase` con la fila) pesa hasta 8 MB | `too_big` |
 | 7 | Esa base pasa `checkCleanBase` (privacidad y contenido) | `clean_<motivo>` |
-| 8 | **Forma y valores** (B3): en `document-store` solo hay `XmlElement` y `XmlText` (nada de `Y.Map`, `Y.Array` ni valores sueltos, en ningún nivel); cada atributo nuevo o cambiado de un nodo está en el `propSchema` de su tipo en el esquema de esta versión, con el tipo de su valor por defecto (texto, número o sí/no; un número puede llegar como texto de dígitos y se acepta si su valor es válido) y, si el esquema tiene `values`, uno de ellos (`level` del encabezado, `textAlignment`); los atributos que no son de bloque (`id` del `blockContainer`, los de la tabla y las fotos en línea), de su tipo; cada marca nueva con el tipo de valor que espera (`textColor`, `backgroundColor`, `link`: texto; las demás: sí/no). Se mira solo lo que la fila agrega o cambia | `bad_shape` |
+| 8 | **Forma y valores** (B3): en `document-store` solo hay `XmlElement` y `XmlText` (nada de `Y.Map`, `Y.Array` ni valores sueltos, en ningún nivel); cada atributo nuevo o cambiado de un nodo está en el `propSchema` de su tipo en el esquema de esta versión, con el tipo de su valor por defecto (texto, número o sí/no; un número puede llegar como texto de dígitos y se acepta si su valor es válido) y, si el esquema tiene `values`, uno de ellos (`level` del encabezado, `textAlignment`); los atributos que no son de bloque (`id` del `blockContainer`, los de la tabla y las fotos en línea), de su tipo, con `tableCell.colwidth` como lista de números o nulo (lo que guarda el editor al achicar una columna; R3); cada marca nueva con el tipo de valor que espera (`textColor`, `backgroundColor`, `link`: texto; las demás: sí/no). Se mira solo lo que la fila agrega o cambia | `bad_shape` |
 
 - **El paso 8 (B3), por qué y cómo.** La auditoría armó a mano 19 filas hostiles que pasaban los pasos 1 a 7; 3 hacían
   tirar al editor real del equipo, al abrir la página y con la página abierta: un `Y.Map` adentro de un párrafo
@@ -1274,7 +1275,7 @@ esta vuelta:
 | Deshacer (también el orden de edición, P.26) | Sí, local | No toca la base |
 | Buscar; reemplazar en la página | Sí | Es una edición |
 | Reemplazar en todo el proyecto | No | Es de quien edita el proyecto (3.10) |
-| Aplicar una plantilla en una página vacía de la rama (de fábrica o propia, si está en la rama) | Sí | Agrega bloques; nada nuevo en la base. Una propia de afuera de la rama no la ve; si la tuviera, sus fotos se apartarían (`foreign_media`) |
+| Aplicar una plantilla en una página vacía de la rama (de fábrica o propia, si está en la rama) | Sí | Agrega bloques; nada nuevo en la base. Una propia de afuera de la rama no la ve; si la tuviera, sus fotos se apartarían (`foreign_media`). Una propia de la rama con una imagen por dirección externa se apartaría entera al aplicarla (`external_url`): la ayuda lo dice, o la app la aplica sin esas imágenes (re-verificación) |
 | Guardar como plantilla, reporte del día, crear, mover, renombrar, papelera | No (D29) | Crean o cambian filas de `pages` |
 | Comentar y responder | Sí (entrega 1) | — |
 | Mencionar | No (ME7) | — |
@@ -1322,7 +1323,9 @@ se suman `waiting_bytes` y los de archivos de la 2b. Ajustables en `workspace_se
   | Cualquier versión que borra tipos de bloque nuevos | No le llega ninguno: la prueba (4) aparta lo que el admisor no conoce, y el admisor no es más viejo que el visitante |
 
 - **Al publicar la 2a:** se sube `min_app_version` a esa versión y se prende `link_edit_min_version` a la misma (LEY 1:
-  sin preguntar). El orden importa poco: con el interruptor apagado, nada cambia.
+  sin preguntar). El orden importa poco: con el interruptor apagado, nada cambia. **Pero `link_edit_min_version` no se
+  prende hasta que la barrera de error alrededor de `PageEditor` esté en `main`** (R4 de la re-verificación): el paso 8
+  cubre lo conocido, y la barrera es para lo que nadie previó.
 
 ### E2.7 Revocar, *Reset link* y lo retenido
 
@@ -1370,7 +1373,7 @@ se suman `waiting_bytes` y los de archivos de la 2b. Ajustables en `workspace_se
   | `link_not_found` | Deja de reintentar; *This link no longer works. You have N unsent changes:* ***Download them*** |
   | `page_not_found` (la página salió de la rama o el link pasó a *Can view*) | Igual, por página |
   | `link_rate_limited` (día, vida, total, guarda, `waiting_bytes`) | Espera (al día siguiente, o a que el equipo admita) sin reintentar cada 10 s, lo dice y ofrece *Download them* |
-  | `update_size_invalid` | La página queda trabada en ese dispositivo (N3): *This change is too big to send through a link. Undo it to keep going, or download it.* Deshacer solo no alcanza: la página queda salteada (`rejected`) hasta reabrir la app (observación 3). En modo link, la primera edición guardada de esa página después del rechazo le saca la marca (`clearRejected` de esa página) y vuelve a intentar: con el pegado deshecho, la subida (con GC) pesa poco. El aviso tiene además *Retry* |
+  | `update_size_invalid` | La página queda trabada en ese dispositivo (N3): *This change is too big to send through a link. Undo it to keep going, or download it.* Deshacer solo no alcanza: la página queda salteada (`rejected`) hasta reabrir la app (observación 3). En modo link, la primera edición guardada de esa página después del rechazo le saca la marca (`clearRejected` de esa página) y vuelve a intentar: con el pegado deshecho, la subida (con GC) pesa poco. El aviso tiene además *Retry*. **Y en modo link una subida armada que pasa `push_max_bytes` no se manda** (R1 de la re-verificación): queda `rejected` en el dispositivo sin pedido, así seguir escribiendo sin deshacer no repite subidas de más de 1 MB que la base rechaza |
   | `app_outdated` | Se actualiza la app y sube |
 
 ### E2.10 Abuso y plan gratis
@@ -1651,8 +1654,8 @@ begin
 end;
 $$;
 
--- Cómo van las de este link y este dispositivo, por página: cuántas esperan y cuántas se apartaron. Cuenta como una
--- bajada (`pull`: una vez y sus bytes; observación 7 de la auditoría). VOLATILE: escribe la cuenta.
+-- Cómo van las de este link y este dispositivo, por página: cuántas esperan y cuántas se apartaron. Cuenta como un pase
+-- (`pass`, con tope de cantidad por día; observación 7 y R2 de la re-verificación). VOLATILE: escribe la cuenta.
 create function public.plink_push_status()
 returns table (page_id uuid, waiting int, aside int)
 language plpgsql volatile security definer set search_path = ''
@@ -1674,7 +1677,7 @@ begin
           and (u.decided_at is null or u.decision = 'aside')
         group by u.page_id
         limit 500) s;
-  perform private.plink_count('pull', 1, octet_length(out_rows::text));
+  perform private.plink_count('pass', 1, octet_length(out_rows::text));
   return query
     select (r ->> 'page_id')::uuid, (r ->> 'waiting')::int, (r ->> 'aside')::int
     from jsonb_array_elements(out_rows) r;
@@ -2194,8 +2197,10 @@ Se puede publicar la 2a sola (texto) y prender el interruptor; la 2b agrega el b
    reales, más una fila con el bloque `photo` en línea, una con `photoMarkup` y `collapsedHeadings` (entran), una con la
    marca `lgaStableGaps` (entra) y la corrida al azar (0 honestas apartadas); **las 19 filas hostiles de la auditoría**
    (`hostile.test.ts`, en jsdom con el editor real: ninguna que entre hace tirar al editor; las 3 que hoy lo rompen se
-   apartan con `bad_shape`); una imagen externa (`external_url`); la lista del paso 8 comparada con el esquema real; un
-   mutante por cada paso de la tabla.
+   apartan con `bad_shape`); una imagen externa (`external_url`); **un bloque de imagen vacío (`url: ""`, como lo inserta
+   el editor) entra** (C1); **un caso honesto por cada propiedad propia de la app**: `script`, `question`, `driveCard`,
+   `pageBreak`, `rowWidth`, `thumbHeight`, `isToggleable`, `checked`, `colwidth` (lista y nulo), `colspan` y `rowspan`
+   (R3); la lista del paso 8 comparada con el esquema real; un mutante por cada paso de la tabla.
 3. **El motor** con el servidor en memoria: el visitante escribe sin red y con red, la fila espera, un editor la admite y
    arma la base, el visitante la baja; dos editores admitiendo a la vez; un editor con una versión más vieja que la fila
    no decide; *Reset* con filas esperando (quedan apartadas con `link_revoked`, el visitante ve *This link no longer
@@ -2307,6 +2312,7 @@ editor real. Corregido en este documento:
 | Obs. 6: el nivel por fila en *Share* y en el aviso | Una vez por página o por link (`public_link_json`, `public_link_updates_of`) |
 | Obs. 7: `plink_push_status` sin contar | Cuenta como bajada (`pull`) y es `VOLATILE` (E2.2) |
 | Obs. 8: imagen externa | La prueba (5) aparta un `url` nuevo que no sea `sdmedia://` (`external_url`) |
+| Re-verificación (2026-10-02): **listo, con la condición C1** | **Diseño aprobado tras la re-verificación del 2026-10-02, con la condición C1 aplicada**: una dirección vacía vale en el paso 5 y la 2a prueba que un bloque de imagen vacío entra. R1 a R4 van a la lista de la 2a (E2.6, E2.9, E2.14) y al roadmap: no mandar una subida que pase `push_max_bytes`, el estado cuenta como `pass`, `tableCell.colwidth` como lista o nulo con un caso honesto por cada propiedad propia, y no prender `link_edit_min_version` sin la barrera de error en `main` |
 | Obs. 1, 5, 9, 10 y 11 | Al roadmap (P.19): adelantar "volver a la página del equipo"; que el dueño pueda descartar lo apartado (decisión de Lega, va contra "no hay borrado duro"); `plink_set_file_drive` abierta a `anon` es inofensiva por `checkMark`; probar el script de restaurar; invitar al cliente con Editar ya cubre "el cliente escribe" sin superficie anónima. Y, para D14, que la base limpia lleva los ids de archivos de las anotaciones borradas (sin el contenido) |
 
 ## Cómo se midió
