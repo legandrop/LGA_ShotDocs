@@ -37,6 +37,17 @@ const blockItem = (d: Y.Doc, id: string) => {
   return (group.toArray() as Y.XmlElement[]).find((bc) => bc.getAttribute('id') === id) ?? null;
 };
 const settle = () => new Promise((r) => setTimeout(r, 0));
+/** Un bloque `blockContainer > paragraph > texto` de Yjs, como BlockNote. */
+function yBlock(id: string, text: string): Y.XmlElement {
+  const bc = new Y.XmlElement('blockContainer');
+  bc.setAttribute('id', id);
+  const p = new Y.XmlElement('paragraph');
+  const t = new Y.XmlText();
+  t.insert(0, text);
+  p.insert(0, [t]);
+  bc.insert(0, [p]);
+  return bc;
+}
 
 const photo = (name: string) => ({ type: 'photo', props: { url: `sdmedia://${name}`, name: `${name}.jpg`, w: 0.3 } });
 
@@ -175,6 +186,46 @@ describe('restaurar por el editor', () => {
     expect(yText(doc)).toBe(now);
     // La versión (en memoria) tampoco se tocó: la ida y vuelta se hace sobre una copia.
     expect(ids(broken)).toEqual(['ok', 'bad']);
+  });
+
+  it('una versión con dos bloques del mismo id (dos dispositivos rehicieron el mismo bloque a la vez) se restaura: el segundo, con un id nuevo', async () => {
+    // La versión: «k» dos veces arriba y «h» dos veces adentro de un bloque (los hijos).
+    const v = new Y.Doc();
+    v.transact(() => {
+      const group = new Y.XmlElement('blockGroup');
+      v.getXmlFragment(CONTENT_FRAGMENT).insert(0, [group]);
+      const parent = yBlock('p', 'Padre');
+      const kids = new Y.XmlElement('blockGroup');
+      kids.insert(0, [yBlock('h', 'Hijo uno'), yBlock('h', 'Hijo dos')]);
+      parent.insert(1, [kids]);
+      group.insert(0, [yBlock('a', 'Uno'), yBlock('k', 'Rehecho en A'), yBlock('b', 'Dos'), yBlock('k', 'Rehecho en B'), parent]);
+    });
+    const doc = new Y.Doc();
+    const ed = mountEditor(doc, 'A');
+    ed.replaceBlocks(ed.document, [
+      { id: 'a', type: 'paragraph', content: 'Uno' },
+      { id: 'k', type: 'paragraph', content: 'Lo de hoy' },
+    ] as PartialBlock[]);
+    undoManager(ed).stopCapturing();
+    await settle();
+    const now = yText(doc);
+    const kept = blockItem(doc, 'a');
+    expect(versionNode(v, view(ed).state.schema).complete).toBe(true);
+    const outcome = restoreInEditor(view(ed), v);
+    expect(outcome).toMatchObject({ ok: true });
+    expect(yText(doc)).toBe(yText(v));
+    const got = ids(doc);
+    // El primero de cada repetido (en el orden de Yjs) conserva su id; el segundo tiene uno nuevo, distinto de todos.
+    expect(got.length).toBe(7);
+    expect([got[0], got[1], got[2], got[4], got[5]]).toEqual(['a', 'k', 'b', 'p', 'h']);
+    expect(new Set(got).size).toBe(7);
+    expect(blockItem(doc, 'a')).toBe(kept);
+    expect(view(ed).state.doc.eq(pmFromY(ed, doc))).toBe(true);
+    // La versión en memoria sigue como estaba (los ids se cambian en una copia).
+    expect(ids(v)).toEqual(['a', 'k', 'b', 'k', 'p', 'h', 'h']);
+    // Se deshace en un paso.
+    expect(outcome.ok && outcome.undo()).toBe(true);
+    expect(yText(doc)).toBe(now);
   });
 
   it('la marca de los huecos estables es la misma que conoce la guarda del editor', () => {

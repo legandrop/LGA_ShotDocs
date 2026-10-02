@@ -32,13 +32,51 @@ export function pmShape(doc: PMNode): ContentShape {
 }
 
 /**
+ * Le da un id nuevo a cada bloque cuyo id ya apareció antes (en el orden del documento de Yjs): dos dispositivos que
+ * rehacen el mismo bloque a la vez (cambiar el tipo, sangrar) dejan dos con el mismo id. El editor no acepta ids
+ * repetidos (los cambia al recibir la edición), así que una versión así, restaurada tal cual, no quedaba igual a la
+ * versión y la restauración se deshacía sola. El primero conserva el suyo (los comentarios siguen anclados). Se llama
+ * solo sobre una copia en memoria. Devuelve cuántos cambió.
+ */
+export function uniqueBlockIds(doc: Y.Doc): number {
+  const seen = new Set<string>();
+  const repeated: Y.XmlElement[] = [];
+  const walk = (t: Y.XmlFragment | Y.XmlElement) => {
+    for (const child of t.toArray()) {
+      if (!(child instanceof Y.XmlElement)) continue;
+      if (child.nodeName === 'blockContainer') {
+        const id = child.getAttribute('id');
+        if (typeof id === 'string' && id) {
+          if (seen.has(id)) repeated.push(child);
+          else seen.add(id);
+        }
+      }
+      walk(child);
+    }
+  };
+  walk(doc.getXmlFragment(CONTENT_FRAGMENT));
+  if (repeated.length === 0) return 0;
+  doc.transact(() => {
+    for (const el of repeated) {
+      let id = crypto.randomUUID();
+      while (seen.has(id)) id = crypto.randomUUID();
+      seen.add(id);
+      el.setAttribute('id', id);
+    }
+  });
+  return repeated.length;
+}
+
+/**
  * El nodo de ProseMirror de una versión, y si pasó la ida y vuelta. y-prosemirror, cuando no puede armar un bloque, lo
  * borra de su documento y sigue sin avisar: por eso se arma sobre una copia y se compara la forma (ids, texto, nodos)
- * con la de la versión en Yjs. Si no coincide, algo se perdería: no se muestra como completa ni se restaura.
+ * con la de la versión en Yjs. Si no coincide, algo se perdería: no se muestra como completa ni se restaura. En la copia,
+ * los ids repetidos ya cambiados (`uniqueBlockIds`).
  */
 export function versionNode(version: Y.Doc, schema: Schema): { node: PMNode | null; complete: boolean } {
   const copy = new Y.Doc();
   Y.applyUpdate(copy, Y.encodeStateAsUpdate(version));
+  uniqueBlockIds(copy);
   const expected = yShape(copy);
   try {
     const node = yXmlFragmentToProseMirrorRootNode(copy.getXmlFragment(CONTENT_FRAGMENT), schema);
