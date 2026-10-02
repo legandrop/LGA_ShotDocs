@@ -397,12 +397,16 @@ const MARKER = /^⟦(photo|link|block):(\d{1,4})⟧|^⟦\/link⟧/;
 
 /**
  * Lee un bloque de la respuesta (sin el prefijo): letras con formato, fotos, links de lo elegido y saltos de renglón.
- * Un link nuevo (`[texto](dirección)`) queda como texto. Lo que no reconoce queda como texto.
+ * Un link nuevo (`[texto](dirección)`) queda como texto. Lo que no reconoce queda como texto. Cada `⟦link:N⟧` se cierra
+ * con un `⟦/link⟧` antes de terminar el bloque, sin links adentro de otro ni cierres sueltos; si no, `seen.unbalanced`
+ * (6.4: una marca mal cerrada no se aplica, porque el link se extendería sobre texto que no lo era).
  */
-export function parseInline(src: string, known: { photos: Set<number>; links: Set<number> }, seen: { photos: Map<number, number>; links: Map<number, number>; blocks: number; linksRemoved: boolean }): Atom[] {
+export function parseInline(src: string, known: { photos: Set<number>; links: Set<number> }, seen: Seen): Atom[] {
   const atoms: Atom[] = [];
   const marks: MdMark[] = [];
   let link: number | null = null;
+  /** Hay un `⟦link:N⟧` abierto (aunque N no exista: entonces `link` es `null`). */
+  let open = false;
   const push = (text: string) => {
     for (const ch of text) atoms.push({ t: 'char', ch, marks: [...marks], link });
   };
@@ -429,6 +433,8 @@ export function parseInline(src: string, known: { photos: Set<number>; links: Se
       const m = MARKER.exec(rest);
       if (m) {
         if (m[0] === '⟦/link⟧') {
+          if (!open) seen.unbalanced = true;
+          open = false;
           link = null;
         } else {
           const n = Number(m[2]);
@@ -437,6 +443,8 @@ export function parseInline(src: string, known: { photos: Set<number>; links: Se
             if (known.photos.has(n)) atoms.push({ t: 'photo', n });
           } else if (m[1] === 'link') {
             seen.links.set(n, (seen.links.get(n) ?? 0) + 1);
+            if (open) seen.unbalanced = true;
+            open = true;
             link = known.links.has(n) ? n : null;
           } else {
             // Una marca de bloque adentro de un texto: cambió de lugar.
@@ -492,7 +500,19 @@ export function parseInline(src: string, known: { photos: Set<number>; links: Se
     push(String.fromCodePoint(rest.codePointAt(0)!));
     i += String.fromCodePoint(rest.codePointAt(0)!).length;
   }
+  if (open) seen.unbalanced = true;
   return atoms;
+}
+
+/** Lo que `parseInline` va anotando de todos los bloques de una respuesta, para validarla al final. */
+export interface Seen {
+  photos: Map<number, number>;
+  links: Map<number, number>;
+  /** Marcas de bloque adentro de un texto. */
+  blocks: number;
+  linksRemoved: boolean;
+  /** Un link sin cerrar, un cierre suelto o un link adentro de otro. */
+  unbalanced: boolean;
 }
 
 /** Las unidades de lo nuevo (las mismas reglas que lo de antes, para compararlas). */
@@ -539,7 +559,7 @@ export function parseAnswer(answer: string, selected: Selected): Parsed | ParseE
   const raw = clean.split(/\n[ \t]*\n+/).map((b) => b.replace(/^\s+|\s+$/g, ''));
   if (raw.length !== selected.pieces.length) return 'structure';
   const known = { photos: new Set(selected.photos.keys()), links: new Set(selected.links.keys()) };
-  const seen = { photos: new Map<number, number>(), links: new Map<number, number>(), blocks: 0, linksRemoved: false };
+  const seen: Seen = { photos: new Map<number, number>(), links: new Map<number, number>(), blocks: 0, linksRemoved: false, unbalanced: false };
   const blocks: (NewUnit[] | null)[] = [];
   for (const [i, piece] of selected.pieces.entries()) {
     const text = raw[i];
@@ -553,7 +573,7 @@ export function parseAnswer(answer: string, selected: Selected): Parsed | ParseE
     const body = piece.prefix ? text.replace(PREFIX, '') : text;
     blocks.push(newUnits(parseInline(body, known, seen)));
   }
-  if (seen.blocks > 0) return 'marker';
+  if (seen.blocks > 0 || seen.unbalanced) return 'marker';
   for (const n of known.photos) if (seen.photos.get(n) !== 1) return 'marker';
   for (const n of known.links) if (seen.links.get(n) !== 1) return 'marker';
   for (const n of seen.photos.keys()) if (!known.photos.has(n)) return 'marker';

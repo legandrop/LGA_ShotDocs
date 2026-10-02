@@ -156,6 +156,28 @@ describe('la respuesta (6.4)', () => {
     expect(parseAnswer('La cámara ⟦photo:1⟧acá\n\n⟦block:1⟧\n\nFin.', s)).toBe('marker');
     expect(parseAnswer('La cámara ⟦photo:1⟧⟦link:1⟧acá⟦/link⟧\n\nFin.\n\n⟦block:1⟧', s)).toBe('marker');
     expect(parseAnswer('La cámara ⟦photo:1⟧⟦link:1⟧acá⟦/link⟧ ⟦block:1⟧\n\nx\n\nFin.', s)).toBe('marker');
+    // La marca de bloque reemplazada por texto, y una de más adentro de un texto (con la cantidad de bloques bien).
+    expect(parseAnswer('La cámara ⟦photo:1⟧⟦link:1⟧acá⟦/link⟧\n\nfoto\n\nFin.', s)).toBe('marker');
+    expect(parseAnswer('La cámara ⟦photo:1⟧⟦link:1⟧acá⟦/link⟧⟦block:1⟧\n\n⟦block:1⟧\n\nFin.', s)).toBe('marker');
+  });
+
+  it('un link mal cerrado no se aplica: sin cierre, cierre suelto o doble, uno adentro de otro, inventado o partido entre bloques', () => {
+    const e = ed();
+    select(e, 'p', 0, 'q', 3);
+    const s = selected(e);
+    // Sin cierre: el link se extendería sobre el resto del bloque.
+    expect(parseAnswer('La cámara ⟦photo:1⟧⟦link:1⟧acá **del director.**\n\n⟦block:1⟧\n\nFin.', s)).toBe('marker');
+    // Un cierre suelto antes de abrir, o dos cierres.
+    expect(parseAnswer('La ⟦/link⟧cámara ⟦photo:1⟧⟦link:1⟧acá⟦/link⟧\n\n⟦block:1⟧\n\nFin.', s)).toBe('marker');
+    expect(parseAnswer('La cámara ⟦photo:1⟧⟦link:1⟧acá⟦/link⟧ y⟦/link⟧\n\n⟦block:1⟧\n\nFin.', s)).toBe('marker');
+    expect(parseAnswer('La cámara ⟦photo:1⟧⟦link:1⟧acá⟦/link⟧\n\n⟦block:1⟧\n\nFin.⟦/link⟧', s)).toBe('marker');
+    // Un link inventado (adentro del que existe o aparte).
+    expect(parseAnswer('La cámara ⟦photo:1⟧⟦link:1⟧a⟦link:9⟧cá⟦/link⟧\n\n⟦block:1⟧\n\nFin.', s)).toBe('marker');
+    expect(parseAnswer('La cámara ⟦photo:1⟧⟦link:1⟧acá⟦/link⟧\n\n⟦block:1⟧\n\n⟦link:9⟧Fin.⟦/link⟧', s)).toBe('marker');
+    // Abierto en un bloque y cerrado en otro.
+    expect(parseAnswer('La cámara ⟦photo:1⟧⟦link:1⟧acá\n\n⟦block:1⟧\n\nFin.⟦/link⟧', s)).toBe('marker');
+    // Bien cerrado, sí (también con formato adentro).
+    expect(typeof parseAnswer('La cámara ⟦photo:1⟧⟦link:1⟧**acá**⟦/link⟧ y más.\n\n⟦block:1⟧\n\nFin.', s)).toBe('object');
   });
 
   it('otra cantidad de bloques: no se aplica', () => {
