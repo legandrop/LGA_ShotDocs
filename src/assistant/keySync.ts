@@ -79,7 +79,7 @@ export function normalizePassphrase(passphrase: string): string {
 }
 
 /** Un número parejo en [0, n) con `getRandomValues`, sin sesgo: se descarta lo que no entra parejo. */
-export function uniformIndex(n: number, random: (a: Uint32Array) => Uint32Array = (a) => crypto.getRandomValues(a)): number {
+export function uniformIndex(n: number, random: (a: Uint32Array<ArrayBuffer>) => unknown = (a) => crypto.getRandomValues(a)): number {
   const limit = Math.floor(0x1_0000_0000 / n) * n;
   const buf = new Uint32Array(1);
   for (;;) {
@@ -89,7 +89,7 @@ export function uniformIndex(n: number, random: (a: Uint32Array) => Uint32Array 
 }
 
 /** La frase que propone la app: seis palabras al azar de la lista corta de la EFF, en minúsculas y con guiones. */
-export function generatePassphrase(random?: (a: Uint32Array) => Uint32Array): string {
+export function generatePassphrase(random?: (a: Uint32Array<ArrayBuffer>) => unknown): string {
   const words: string[] = [];
   for (let i = 0; i < 6; i++) words.push(EFF_SHORT_WORDS[uniformIndex(EFF_SHORT_WORDS.length, random)]);
   return words.join('-');

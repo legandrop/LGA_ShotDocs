@@ -5,6 +5,7 @@ import { useServices } from '../services';
 import { errorText } from './AssistantPanel';
 import { closeAssistantSettings } from './assistantUi';
 import { forgetKey, loadSettings, readKey, sameDestination, saveSettings, type AssistantSettings as Saved } from './keyStore';
+import { KeySyncSection } from './KeySyncSection';
 import { defaultModel, listModels, PROVIDER_NAMES, PROVIDERS, SPEND_LIMIT_URLS, type ModelInfo, type ProviderId } from './providers';
 import { WorkspacePolicy } from './WorkspacePolicy';
 import './assistant.css';
@@ -36,19 +37,21 @@ export function AssistantSettings() {
   const [busy, setBusy] = useState(false);
   const first = useRef<HTMLSelectElement>(null);
 
+  /** Lo guardado cambió (al abrir, o al abrir una copia sincronizada): el formulario muestra lo de ahora. */
+  const showSaved = (s: Saved | null) => {
+    setSaved(s);
+    if (s) {
+      setProvider(s.provider);
+      setBaseUrl(s.baseUrl ?? '');
+      setModel(s.model);
+      setModels(s.models);
+    }
+  };
+
   useEffect(() => {
     let live = true;
     void loadSettings(user.email)
-      .then((s) => {
-        if (!live) return;
-        setSaved(s);
-        if (s) {
-          setProvider(s.provider);
-          setBaseUrl(s.baseUrl ?? '');
-          setModel(s.model);
-          setModels(s.models);
-        }
-      })
+      .then((s) => live && showSaved(s))
       .catch(() => live && setSaved(null));
     return () => {
       live = false;
@@ -226,7 +229,9 @@ export function AssistantSettings() {
               </datalist>
             </label>
             <p className="muted assistant-small">
-              {tr('assistant.settings.stays', { provider: destination })}{' '}
+              {saved?.sync && sameProvider
+                ? tr('assistant.settings.staysSynced', { provider: destination, workspace: saved.sync.name || saved.sync.ref })
+                : tr('assistant.settings.stays', { provider: destination })}{' '}
               {limitUrl && (
                 <a href={limitUrl} target="_blank" rel="noopener noreferrer">
                   {tr('assistant.settings.limit')}
@@ -252,6 +257,8 @@ export function AssistantSettings() {
                 {tr('assistant.settings.save')}
               </button>
             </div>
+            {/* La clave en todos los dispositivos, cifrada con una frase (Docs/Doc_Clave_Sincronizada.md, S1). */}
+            <KeySyncSection saved={saved} onSaved={showSaved} />
           </>
         )}
         {/* La política del workspace (A2): solo el dueño y los admins la ven; se guarda al elegir. */}
