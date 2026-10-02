@@ -58,6 +58,8 @@ import { openAssistant } from '../assistant/assistantUi';
 import { downloadUnsynced } from './unsyncedDownload';
 import { usePendingCount } from './usePendingCount';
 import { errorMessage } from '../sync/types';
+import { disposeUndoTimeline } from './undoTimeline';
+import { useUndoTimelineKeys } from './undoTimelineUi';
 
 // La página de práctica (P.13, Docs/Doc_Tutorial.md): se baja aparte, con sus plantillas y sus textos.
 const PracticeView = lazyPart(() => import('../tutorial/PracticeView').then((m) => m.PracticeView));
@@ -77,6 +79,8 @@ export function Workspace({ user, link }: { user: AuthUser; link?: LinkBoot }) {
   // suelta (el índice deja de escuchar y de leer, y lo leído se libera).
   const readyServices = boot.state === 'ready' ? boot.services : null;
   useEffect(() => (readyServices ? () => disposeSearchSession(readyServices) : undefined), [readyServices]);
+  // La línea de tiempo de deshacer también (P.26): suelta los documentos que retenía.
+  useEffect(() => (readyServices ? () => disposeUndoTimeline(readyServices) : undefined), [readyServices]);
 
   // Las preferencias de la cuenta (tema, fuente…) se bajan al entrar y se suben cuando cambian.
   // Con un link público no hay cuenta: las preferencias quedan las del dispositivo.
@@ -201,6 +205,8 @@ export function Shell() {
   useInviteTarget();
   // La caché del historial de una página cuyo historial ya no se puede ver se tira (D13).
   useHistoryCachePruning();
+  // ⌘Z y ⌘⇧Z en el orden en que editaste, también en otra página (P.26, undoTimelineUi.ts).
+  useUndoTimelineKeys();
 
   // Ctrl/⌘+K busca en el proyecto desde cualquier lugar (Docs/Doc_Buscar.md, sección 9); con el panel abierto,
   // lo cierra. En el editor con texto elegido sigue siendo "crear un link" de BlockNote.
