@@ -46,21 +46,21 @@ export function tooBigNote(cap: number): string {
   return t('folders.zipTooBig', { max: formatSize(cap) });
 }
 
-// Lo que da Chrome y Edge (no está en los tipos de TypeScript).
-type Writable = { write(data: Uint8Array): Promise<void>; close(): Promise<void>; abort(): Promise<void> };
-type FileHandle = { name: string; createWritable(): Promise<Writable>; remove?: () => Promise<void> };
-type DirHandle = {
+// Lo que da Chrome y Edge (no está en los tipos de TypeScript). Exportar (src/export/zipTarget.ts) usa los mismos.
+export type Writable = { write(data: Uint8Array): Promise<void>; close(): Promise<void>; abort(): Promise<void> };
+export type FileHandle = { name: string; createWritable(): Promise<Writable>; remove?: () => Promise<void> };
+export type DirHandle = {
   name: string;
   getDirectoryHandle(name: string, opts?: { create?: boolean }): Promise<DirHandle>;
   getFileHandle(name: string, opts?: { create?: boolean }): Promise<FileHandle>;
   removeEntry(name: string): Promise<void>;
 };
-type Pickers = {
+export type Pickers = {
   showSaveFilePicker?: (opts: unknown) => Promise<FileHandle>;
   showDirectoryPicker?: (opts: unknown) => Promise<DirHandle>;
 };
 
-function pickers(): Pickers {
+export function pickers(): Pickers {
   return typeof window === 'undefined' ? {} : (window as unknown as Pickers);
 }
 
@@ -499,7 +499,7 @@ function reasonOf(err: unknown, tr: ReturnType<typeof useT>): string {
 }
 
 /** Una carpeta nueva adentro de la elegida: `Referencias`, o `Referencias (2)` si ya hay una (nunca se mezcla). */
-async function freshFolder(parent: DirHandle, name: string): Promise<DirHandle> {
+export async function freshFolder(parent: DirHandle, name: string): Promise<DirHandle> {
   for (let n = 1; n < 1000; n++) {
     const candidate = n === 1 ? name : `${name} (${n})`;
     const exists = await parent.getDirectoryHandle(candidate).then(

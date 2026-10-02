@@ -1,7 +1,8 @@
 # Anotar sobre las fotos (P.20)
 
-**Estado: entregas 0, 1 y 2 hechas (v0.116: el mapa, sus pruebas y ver las anotaciones; v0.123: el anotador en la
-compu y la poda; ver "Cómo quedó" al final); el dedo y el lápiz (entrega 3) siguen en diseño.** Pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.108. Las decisiones
+**Estado: entregas 0 a 3 hechas (v0.116: el mapa, sus pruebas y ver las anotaciones; v0.123: el anotador en la
+compu y la poda; v0.129: el dedo y el lápiz del iPad; ver "Cómo quedó" al final); bajar y copiar con anotaciones
+(entrega 4) sigue en diseño.** Pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.108. Las decisiones
 (AN1 a AN11, sección 12) son propuestas con la recomendación elegida: el número final lo pone quien las cierre con Lega.
 Auditado el 2026-10-02 (aprobado con condiciones): las correcciones ya están en el texto y resumidas al final
 ("Correcciones de la auditoría").
@@ -724,3 +725,58 @@ Auditoría independiente: **no aprobado**, con dos bloqueantes de arreglo chico.
 | O3 Ctrl+[ sin prueba que caiga | Prueba de que se frena (`defaultPrevented`) y de que una letra en el campo del grosor no cambia la herramienta |
 | O5 Un texto que otro borra mientras se edita se perdía | Se vuelve a crear con lo escrito, en el mismo lugar y con su letra (con prueba) |
 | O2, O3 (*Annotate* de `PageEditor` sin prueba), O4, O6, O7, O8, O9 | Al roadmap (P.20) |
+
+## Cómo quedó la entrega 3 (el dedo y el lápiz, v0.129)
+
+**La pantalla del teléfono y del iPad** (`Annotator.tsx`, con el puntero principal táctil o la ventana de 760 px o
+menos): arriba deshacer, rehacer, borrar, encuadrar y *Done*; abajo una tira con las nueve herramientas (se desliza si
+no entran) y el punto de color, siempre a la vista, con el grosor al lado. El punto abre una hoja con la franja de la
+compu en grande (colores de 36 px, barras anchas, números de 16 px para que el iPhone no amplíe la página); tocar la foto
+la cierra sin dibujar. Controles de 44 px, márgenes de la muesca, sin animación si el sistema pide menos movimiento.
+
+**Los gestos** (`src/ui/annotatorTouch.ts`, la regla sin pantalla): un dedo dibuja y se escribe al soltar; el segundo
+dedo deja lo que el primero empezaba (no se había escrito nada) y amplía y mueve; el que queda mueve la foto y nunca
+dibuja. Con Select, un dedo elige y mueve con más tolerancia (16 px a la forma, 22 al tirador); dos toques editan un
+texto o renumeran un número. El lápiz (`pointerType: 'pen'`) prende *Only the pencil draws* la primera vez (guardado en
+el dispositivo): el dedo mueve, la palma apoyada no hace nada y el lápiz manda sobre un dibujo a medias del dedo; se
+apaga en la hoja y entonces no se vuelve a prender sola. Los puntos que el navegador junta en un evento
+(`getCoalescedEvents`; el lápiz manda 240 por segundo) entran al trazo, y al soltar se simplifica como antes. El
+anotador frena el pellizco y el doble toque de la página (`touch-action`, los `gesture*` de Safari) y el menú del dedo
+apoyado sobre la foto.
+
+**El texto con el dedo:** un toque con Text abre una caja común arriba (16 px), con el foco puesto dentro del mismo toque
+(si no, el iPhone no abre el teclado); lo escrito se ve en la foto mientras tanto, y *OK* (o un toque afuera, al soltar)
+lo guarda. Un pellizco con el texto abierto no lo cierra.
+
+**Arreglo de paso:** tocar o hacer clic en un tirador sin moverlo cambiaba la forma (llevaba la esquina al punto
+tocado); ahora no escribe nada. Con el dedo pasaba casi siempre, porque los tiradores son grandes.
+
+**Pruebas:** `annotatorTouch.test.tsx` (18: la regla, un dedo, dos dedos con el zoom medido en el marco, un tercer dedo,
+la cancelación del sistema, los tiradores, el lápiz recordado, la palma, 240 por segundo con un pico que solo está en los
+puntos juntados y menos de 2,5 KB, la tira y la hoja, el texto con el foco, el doble toque, apagar el lápiz, dos
+dispositivos sin red con uno ampliando, y la versión publicada y dos anteriores abriendo una página anotada con el dedo y
+el lápiz: el mapa vuelve intacto). 11 de 12 mutantes mueren; vive el de enfocar después del toque (React ya enfoca
+dentro del mismo evento: en jsdom no se distingue). **En el navegador** (Chromium sin ventana con un iPhone y un iPad
+emulados, dedos de verdad por CDP y el lápiz con `pointerType: 'pen'`; y WebKit, el motor de Safari, con eventos
+sintéticos): 22 de 22. Entre ellas: el círculo dibujado con la foto ampliada al triple cae sobre la mira (0,25 y 0,30 del
+marco), la página no se amplía con el pellizco, y el texto abre con el foco y letra de 16 px.
+
+**Decisiones tomadas sin Lega** (cambiables): la pantalla táctil va también en una ventana angosta de la compu; *Only
+the pencil draws* se prende sola y se apaga en la hoja; el segundo dedo descarta lo del primero aunque haya dibujado un
+rato; el texto del teléfono se escribe arriba y no sobre la foto; la caja termina con *OK* (no otro *Done*).
+
+**Falta (Lega, con un iPhone y un iPad):** que el teclado se abra con el toque en Safari de verdad, que el gesto de
+"atrás" desde el borde y el doble toque no se peleen con el dibujo (riesgo 6), el Apple Pencil con la palma apoyada, y
+medir el dedo a 60 y 120 Hz y las fotos HEIC (entrega 0). Esta entrega no suma tipos de bloque ni propiedades ni cambia
+el mapa: `min_app_version` no hace falta subirla.
+
+### Correcciones de la auditoría de la entrega 3 (2026-10-02)
+
+Auditoría independiente: **aprobado con observaciones**, sin bloqueantes. Lo que pedía y dónde quedó:
+
+| Hallazgo | Corrección |
+|---|---|
+| **O1** Con la caja de texto abierta, si la pantalla pasaba de la del teléfono a la de la compu (agrandar la ventana) o al revés, la caja nueva salía vacía y lo escrito se perdía | Las dos cajas arrancan con lo ya escrito y el dibujo de mientras tanto también lo usa. Prueba que cambia la pantalla en los dos sentidos (cae con el código anterior) |
+| **O2** Con Elegir y el dedo, una forma chica ya elegida no se podía mover: los tiradores de 22 px de las esquinas la tapaban y se estiraba | El tirador toma como mucho un tercio de la distancia entre dos tiradores (nunca menos que con el mouse). Prueba: un rectángulo de 60 × 36 px se mueve desde el medio de un lado y uno grande se sigue estirando cerca de la esquina (cae con el código anterior) |
+| O3 (un `pointercancel` del sistema descarta el trazo en curso), O5 (la tira no se desliza hasta la herramienta elegida) | Al roadmap (P.20) |
+| O4 (el foco en el mismo toque, sin prueba que caiga en jsdom), O6 (la foto rota del arnés) | Sin cambios: el primero va en la lista de Lega; el segundo es del arnés |

@@ -13,7 +13,10 @@ import { editorSchemaOptions as publishedOptions } from './fixtures/editorSchema
 // Lo nuevo de una tanda que todavía no se publicó va en NUEVO_SIN_PUBLICAR (una línea por diferencia, como la muestra el
 // error), con su prueba de que la versión publicada lo conserva. Al publicarla: se regenera el fixture (cómo, en su
 // encabezado) y se vacía la lista.
-const NUEVO_SIN_PUBLICAR: string[] = [];
+const NUEVO_SIN_PUBLICAR: string[] = [
+  // El alto de las miniaturas de una tabla (cellThumbs.ts, D27 → B); la versión publicada lo conserva: cellThumbs.test.ts.
+  'atributo table.thumbHeight = 96',
+];
 
 function signature(options: unknown): string[] {
   const editor = BlockNoteEditor.create(options as typeof editorSchemaOptions);

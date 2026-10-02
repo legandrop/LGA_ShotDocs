@@ -14,6 +14,7 @@ import {
 import type { Node as PMNode, Slice } from '@tiptap/pm/model';
 import { type EditorState, Plugin, PluginKey, TextSelection } from '@tiptap/pm/state';
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
+import { cellThumbsExtension, DEFAULT_THUMB_HEIGHT, THUMB_HEIGHT_PROP } from './cellThumbs';
 import { createDriveCardView, DRIVE_CARD_PROP, driveLinkInContent } from './driveCard';
 import { imageRowsExtension, ROW_WIDTH_PROP } from './imageRowsEditor';
 import { photoSpec } from './inlinePhoto';
@@ -539,13 +540,25 @@ const image = {
   extensions: [...(blockSpecs.image.extensions ?? []), imageRowsExtension],
 };
 
+// La tabla, con una propiedad más: `thumbHeight` (cellThumbs.ts, Docs/Doc_Fotos_En_Linea.md, "Alto de las miniaturas
+// (D27 → B)"), el alto en px de las miniaturas de sus celdas (64, 96 o 160; de fábrica 96). El tipo sigue siendo
+// `table`: una versión vieja la ignora y muestra 96, y si edita la tabla pierde solo el alto (vuelve a 96).
+const table = {
+  ...blockSpecs.table,
+  config: {
+    ...blockSpecs.table.config,
+    propSchema: { ...blockSpecs.table.config.propSchema, [THUMB_HEIGHT_PROP]: { default: DEFAULT_THUMB_HEIGHT as number } },
+  },
+  extensions: [...(blockSpecs.table.extensions ?? []), cellThumbsExtension],
+};
+
 /** El workspace tiene portero: el bloque `image` ofrece también videos y cualquier archivo. Lo llama el editor al abrirse. */
 export function setVideosAccepted(on: boolean): void {
   imageAccept.splice(0, imageAccept.length, ...(on ? ['image/*', 'video/*', '*/*'] : ['image/*']));
 }
 
 /** Los bloques de la app (sin el contenido en línea: una prueba arma con ellos el esquema de la versión anterior). */
-export const appBlockSpecs = { ...blockSpecs, image, paragraph: createParagraph() };
+export const appBlockSpecs = { ...blockSpecs, image, table, paragraph: createParagraph() };
 
 // El contenido en línea: el de BlockNote (texto y link) más la foto en línea (inlinePhoto.ts), el único tipo
 // de nodo que se sumó después de la regla "nada de tipos nuevos". Lo cubre el resguardo de `unknownContent.ts`.

@@ -101,8 +101,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   final de su texto; la barra ofrece *Thumbnail* y *Full cell width* (D32), sin alinear; ↑ desde una celda con fotos va
   a la de arriba; imprimir las deja igual; importar de Coda deja las fotos de una celda en la celda. Sin tipos ni
   propiedades nuevas (la versión publicada abre la página sin escribir nada). `Doc_Fotos_En_Linea.md`, "Cómo quedó
-  (entrega 5)". Queda: probar en Safari y el iPhone, y con una exportación de Coda que tenga fotos en tablas de página;
-  a decidir, si el alto de la miniatura (96 px) se puede elegir. Para después (auditoría): pegar solo `text/html` de una
+  (entrega 5)". Queda: probar en Safari y el iPhone, y con una exportación de Coda que tenga fotos en tablas de página.
+  **El alto de la miniatura se elige por tabla (v0.129, D27 → B):** *Thumbnail size* con *Small*, *Medium* y *Large*
+  (64, 96 y 160 px), en la barra de la foto y en la de la tabla; propiedad de la tabla, la versión publicada vuelve a 96
+  si edita la tabla (`Doc_Fotos_En_Linea.md`, "Alto de las miniaturas (D27 → B)"). Para después (auditoría): pegar solo `text/html` de una
   fila con fotos las pierde (O1); una tabla de Google Docs o Excel con imágenes llega sin ellas (O2); la papelera de
   archivos al borrar una fila con fotos, a probar con la base real (O5); ↑ con el cursor al principio de un segundo
   renglón de una celda que empieza con una miniatura (bajó porque no entraba al lado del texto) va a la celda de la
@@ -368,15 +370,19 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   de FrameRev, Shift y Alt, colores y grosor contra 1920 px, estilo por herramienta, deshacer propio por foto, escribir
   al soltar, topes en bytes y la poda de AN11; *Annotate* en la barra de la foto y A en el carrete; el PDF con el
   grosor mínimo de su caja impresa (la observación O2). Falta: que `min_app_version` esté en 0.116 o más al publicarla
-  (AN10); probar ⌘[ y ⌘] en Safari y Chrome de una Mac; la entrega 3 (el dedo y el lápiz del iPad), y medir el dedo a 60
+  (AN10); probar ⌘[ y ⌘] en Safari y Chrome de una Mac, y medir el dedo a 60
   y 120 Hz y las fotos HEIC de un iPhone real (entrega 0, no se pudo sin teléfono).
+  **Entrega 3 hecha (v0.129):** el dedo y el lápiz: la tira de herramientas abajo, la hoja de propiedades desde el punto de
+  color, un dedo dibuja y dos amplían sin dibujar, el lápiz del iPad dibuja y el dedo mueve (*Only the pencil draws*), la
+  palma no dibuja, el texto en una caja común con el teclado, tocar un tirador sin moverlo ya no cambia la forma. Falta
+  a mano en un iPhone y un iPad reales: el teclado con el toque, el gesto de "atrás" desde el borde y el doble toque
+  contra el dibujo, el Apple Pencil con la palma. De su auditoría quedan: un `pointercancel` del sistema (el gesto de «atrás», una llamada) descarta el trazo en curso, como en la compu (decidir si se guarda); la tira de herramientas no se desliza sola hasta la elegida al abrir. Sigue la entrega 4 (bajar y copiar con anotaciones).
   De la auditoría de la entrega 2 (`Doc_Anotar_Fotos.md`, "Correcciones de la auditoría de la entrega 2"), pendientes:
   una prueba que caiga si la condición «página sincronizada» de `PageEditor` (red, nada sin subir, nada sin bajar) que
   frena la poda se rompe (hoy, con `synced = async () => true`, la suite sigue en verde; la re-verificación lo comprobó en
   el navegador); una prueba que caiga si `PageEditor` ofrece *Annotate* sin poder editar; un marco ilegible lo pisa la primera forma
   (revisar el día que cambie `v`); una forma con grosor 0 y sin relleno no se ve pero se puede elegir (sirve para
-  borrarla; decidir); en el teléfono el anotador abre y un dedo dibuja sin pellizco: decidir si se esconde en pantallas
-  táctiles hasta la entrega 3; un workspace sin la migración del equipo no conoce los permisos y nunca poda.
+  borrarla; decidir); un workspace sin la migración del equipo no conoce los permisos y nunca poda.
 - **P.22 Exportar una página o un proyecto entero** (Lega, 2026-10-02): PDF y/o zip con las páginas y las fotos, para
   entregarle al cliente o archivar un proyecto terminado. **Diseño en `Doc_Exportar.md`** (sin código; EX1 a EX15 a
   confirmar por Lega; auditado con condiciones y corregido: ningún correo en el zip, vista JPEG de cada foto): un PDF para entregar (toda la rama en orden con un índice que dice la hoja de
@@ -394,7 +400,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   correos, topes de páginas y de píxeles (menos con menos de 8 GB). 300 páginas en ~30 s (Chromium sin ventana);
   resueltas O3 a O7 de la auditoría de la 0 y los tres bloqueantes y O1 a O7 de la auditoría de la 1. Falta a mano:
   Safari, Firefox, el iPhone, una compu de 8 GB y guardar de verdad en Chrome y Edge (`Doc_Exportar.md`, "Cómo quedó
-  la entrega 1"). Sigue la entrega 2 (zip).
+  la entrega 1"). **Entrega 2 hecha (v0.129): el zip** (*Zip — to archive* en la misma ventana): una carpeta por página
+  con `.html` sin JavaScript, `.md` con rutas relativas (D57), una vista JPEG de cada foto (también HEIC), los
+  originales elegidos (del dispositivo o por el portero con lo de *Download all*), comentarios sin correos, el JSON para
+  volver y `MISSING_FILES.txt`; los destinos de *Download all*, sin red y cancelar. Solo dueño y admins (D60), nunca
+  desde un teléfono (D63). Probado con `file://` y sin red en Chromium y Firefox. Falta a mano: ERSO entero con el
+  portero de verdad (tiempo y llamados al Durable Object), Safari de la Mac y las rutas largas de Windows
+  (`Doc_Exportar.md`, "Cómo quedó la entrega 2"). Sigue la entrega 3 (volver a Shot Docs).
   Observaciones de la re-verificación de la entrega 1: (R1) el Imprimir del menú del navegador mientras se arma el PDF
   puede llevar la vista de la página en curso: sacar `print-output` a esa vista hasta `place()`; (R2) la prueba de la
   vuelta al achicador del hilo principal no distingue la mutación: hacerlo inyectable en `workerResizer`; (R3) con

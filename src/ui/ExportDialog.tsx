@@ -2,20 +2,24 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { t, useT } from '../i18n';
 import { notify } from './notice';
 import '../i18n/lazy/exportPdf';
+import '../i18n/lazy/exportZip';
 import { appComments } from '../export/exportComments';
 import { ExportCancelled, ExportEditor } from '../export/exportEditor';
 import { deviceImages, PhotoLimitError } from '../export/exportImages';
 import { exportPlan, type ExportPlanPage, type ExportProgress } from '../export/exportPages';
 import { buildPdf, deviceLimits, printBook, type PdfBook } from '../export/exportPdf';
 import { keepsPageSizes, touchDevice } from '../export/printSupport';
-import { useServices, useSyncStatus, useTree } from '../services';
+import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
 import type { PageTree } from '../sync/tree';
 import { isPrintShortcut } from './printPage';
 import { sizeLabel } from './pageFormat';
+import { zipAllowed } from '../export/exportZip';
+import { ExportZipPanel } from './ExportZip';
+import { detectPlatform, isMobilePlatform } from './install';
 import { porteroDownload } from './sharpImages';
 
-// La ventana *Export* (P.22, Docs/Doc_Exportar.md, sección 7; entrega 1: el PDF). Desde el menú de una página (esta
-// página, o con las de adentro) o desde el de un proyecto (el proyecto entero). Arma la vista del PDF
+// La ventana *Export* (P.22, Docs/Doc_Exportar.md, sección 7; entrega 1: el PDF; entrega 2: el zip, en ExportZip.tsx).
+// Desde el menú de una página (esta página, o con las de adentro) o desde el de un proyecto (el proyecto entero). Arma la vista del PDF
 // (src/export/exportPdf.ts) con avance y *Cancel*, y abre el diálogo de imprimir, donde se elige *Save as PDF*. La
 // vista queda armada mientras la ventana está abierta (se puede volver a abrir el diálogo) y se suelta al cerrarla.
 // Exportar nunca escribe nada: lee copias de lo guardado en el dispositivo.
@@ -56,6 +60,15 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
   const [scope, setScope] = useState<Scope>(target.kind === 'project' ? 'project' : inside > 0 ? 'branch' : 'page');
   const [sharp, setSharp] = useState(false);
   const [withComments, setWithComments] = useState(false);
+  /** Para qué (EX1): el PDF para compartir o el zip para archivar. */
+  const [format, setFormat] = useState<'pdf' | 'zip'>('pdf');
+  /** El zip está trabajando: no se cierra ni se cambia qué se exporta. */
+  const [zipBusy, setZipBusy] = useState(false);
+  const perms = usePermissions();
+  // El zip (D60, D63: Lega 2026-10-02): solo el dueño y los admins, y nunca desde un teléfono o una tableta (el mismo
+  // criterio que el tope de *Download all*: iPhone, iPad y Android, instalada o en el navegador). El PDF, siempre.
+  const phone = useMemo(() => isMobilePlatform(detectPlatform()), []);
+  const zipBlocked = phone ? tr('exportZip.notOnPhone') : !zipAllowed(perms) ? tr('exportZip.adminsOnly') : null;
   const [phase, setPhase] = useState<Phase>({ name: 'choose' });
   const abort = useRef<AbortController | null>(null);
   const book = useRef<PdfBook | null>(null);
@@ -67,9 +80,9 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
   const plan = useMemo(() => planFor(tree, target, scope), [tree, target, scope]);
   const title = target.kind === 'project' ? (tree.project(target.id)?.name ?? '') : (tree.get(target.id)?.title ?? '');
   const shownTitle = title.trim() || tr('common.untitled');
-  const tooMany = plan.length > limits.pages;
+  const tooMany = format === 'pdf' && plan.length > limits.pages;
   const online = status.online && (typeof navigator === 'undefined' || navigator.onLine !== false);
-  const working = phase.name === 'working';
+  const working = phase.name === 'working' || zipBusy;
 
   // Al cerrar: cancela lo que está armando, deja la impresión como estaba y suelta la vista.
   useEffect(
@@ -201,7 +214,7 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
 
         {(phase.name === 'choose' || phase.name === 'tooBig' || phase.name === 'failed') && (
           <>
-            {target.kind === 'page' && inside > 0 ? (
+            {zipBusy ? null : target.kind === 'page' && inside > 0 ? (
               <fieldset className="export-what">
                 <legend className="sr-only">{tr('exportDialog.what')}</legend>
                 <label>
@@ -218,48 +231,73 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
                 {target.kind === 'project' ? tr('exportDialog.project', { count: plan.length }) : tr('exportDialog.thisPage')}
               </p>
             )}
-            <p className="export-format">
-              <strong>{tr('exportDialog.pdf')}</strong>
-              <span className="muted">{tr('exportDialog.pdfNote')}</span>
-            </p>
-            <div className="export-options">
-              {media.enabled && (
-                <label data-tip={tr('exportDialog.sharpTip')}>
-                  <input type="checkbox" checked={sharp && online} disabled={!online} onChange={(e) => setSharp(e.target.checked)} />
-                  {tr('exportDialog.sharp')}
+            {!zipBusy && (
+              <fieldset className="export-what">
+                <legend className="sr-only">{tr('exportZip.format')}</legend>
+                <label>
+                  <input type="radio" name="export-format" checked={format === 'pdf'} onChange={() => setFormat('pdf')} />
+                  <strong>{tr('exportDialog.pdf')}</strong>
                 </label>
-              )}
-              <label data-tip={tr('exportDialog.commentsTip')}>
-                <input type="checkbox" checked={withComments} onChange={(e) => setWithComments(e.target.checked)} />
-                {tr('exportDialog.comments')}
-              </label>
-            </div>
-            {!named && <p className="muted">{tr('exportDialog.oneSize', { size: rootSize })}</p>}
-            <p className="muted">{tr('exportDialog.margins')}</p>
-            {plan.length === 0 && <p className="error">{tr('exportDialog.empty')}</p>}
-            {phase.name === 'failed' && <p className="error">{tr('exportDialog.failed')}</p>}
-            {(tooMany || phase.name === 'tooBig') && (
-              <div className="export-too-big">
-                <p className="error">
-                  {tooMany ? tr('exportDialog.tooManyPages', { count: plan.length, limit: limits.pages }) : tr('exportDialog.tooManyPhotos')}
-                </p>
-                <ul>
-                  {parts.map((p) => (
-                    <li key={p.id}>
-                      <button className="link" onClick={() => pick(p.id)}>
-                        {tr('exportDialog.branch', { title: p.title.trim() || tr('common.untitled'), count: p.pages })}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+                <label {...(zipBlocked ? { 'data-tip': zipBlocked, 'aria-disabled': true } : {})}>
+                  <input type="radio" name="export-format" checked={format === 'zip' && !zipBlocked} disabled={!!zipBlocked} onChange={() => setFormat('zip')} />
+                  <strong>{tr('exportZip.zip')}</strong>
+                </label>
+              </fieldset>
             )}
-            <div className="modal-actions">
-              <button onClick={props.onClose}>{tr('common.cancel')}</button>
-              <button className="primary" disabled={plan.length === 0 || tooMany} onClick={() => void run()}>
-                {tr('exportDialog.export')}
-              </button>
-            </div>
+            {format === 'zip' && !zipBlocked ? (
+              <ExportZipPanel
+                plan={plan}
+                kind={target.kind}
+                project={target.kind === 'project' ? { id: target.id, name: title } : null}
+                title={title}
+                onBusy={setZipBusy}
+                onClose={props.onClose}
+              />
+            ) : (
+              <>
+                <p className="export-format">
+                  <span className="muted">{tr('exportDialog.pdfNote')}</span>
+                </p>
+                <div className="export-options">
+                  {media.enabled && (
+                    <label data-tip={tr('exportDialog.sharpTip')}>
+                      <input type="checkbox" checked={sharp && online} disabled={!online} onChange={(e) => setSharp(e.target.checked)} />
+                      {tr('exportDialog.sharp')}
+                    </label>
+                  )}
+                  <label data-tip={tr('exportDialog.commentsTip')}>
+                    <input type="checkbox" checked={withComments} onChange={(e) => setWithComments(e.target.checked)} />
+                    {tr('exportDialog.comments')}
+                  </label>
+                </div>
+                {!named && <p className="muted">{tr('exportDialog.oneSize', { size: rootSize })}</p>}
+                <p className="muted">{tr('exportDialog.margins')}</p>
+                {plan.length === 0 && <p className="error">{tr('exportDialog.empty')}</p>}
+                {phase.name === 'failed' && <p className="error">{tr('exportDialog.failed')}</p>}
+                {(tooMany || phase.name === 'tooBig') && (
+                  <div className="export-too-big">
+                    <p className="error">
+                      {tooMany ? tr('exportDialog.tooManyPages', { count: plan.length, limit: limits.pages }) : tr('exportDialog.tooManyPhotos')}
+                    </p>
+                    <ul>
+                      {parts.map((p) => (
+                        <li key={p.id}>
+                          <button className="link" onClick={() => pick(p.id)}>
+                            {tr('exportDialog.branch', { title: p.title.trim() || tr('common.untitled'), count: p.pages })}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <div className="modal-actions">
+                  <button onClick={props.onClose}>{tr('common.cancel')}</button>
+                  <button className="primary" disabled={plan.length === 0 || tooMany} onClick={() => void run()}>
+                    {tr('exportDialog.export')}
+                  </button>
+                </div>
+              </>
+            )}
           </>
         )}
 

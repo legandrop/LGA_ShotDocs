@@ -26,6 +26,7 @@ import { ImageBlockBar, useChosenImageBlock } from './MediaBar';
 const FILE_ITEMS = new Set(['fileCaptionButton', 'replaceFileButton', 'fileRenameButton', 'fileDeleteButton', 'fileDownloadButton', 'filePreviewButton']);
 import { onlyPhotosSelected, selectedPhotos } from './inlinePhotoSize';
 import { PhotoSizeButtons } from './PhotoToolbar';
+import { TableThumbsButton } from './CellThumbsMenu';
 
 // La barra de formato de la página (PageEditor.tsx). Aparece al elegir texto y también al hacer clic en los
 // puntos de un bloque (BlockSideMenu.tsx, el bloque entero elegido): ahí trae además los colores del bloque (los
@@ -200,7 +201,7 @@ export function PageFormattingToolbar({ items, canComment }: { items: BlockTypeS
           : item.key === 'createLinkButton'
               ? [<HideOnBlockSelection key="createLinkButton">{item}</HideOnBlockSelection>]
               : item.key === 'colorStyleButton'
-                ? [item, <BlockColorButton key="blockColorButton" />]
+                ? [item, <BlockColorButton key="blockColorButton" />, <TableThumbsButton key="tableThumbsButton" />]
                 : [item],
       )}
       {photos === 'mixed' && <PhotoSizeButtons key="photoSizeButtons" />}

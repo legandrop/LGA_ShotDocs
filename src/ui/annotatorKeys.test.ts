@@ -60,7 +60,7 @@ describe('las teclas del anotador', () => {
 
 describe('el estilo guardado en el dispositivo', () => {
   it('lo guardado se limpia; algo roto vuelve a los valores de fábrica', () => {
-    expect(parsePrefs(null)).toEqual({ styles: expect.any(Object), recent: [], tool: 'arrow' });
+    expect(parsePrefs(null)).toEqual({ styles: expect.any(Object), recent: [], tool: 'arrow', penOnly: false, penSet: false });
     expect(parsePrefs('{no es json').tool).toBe('arrow');
     const p = parsePrefs(JSON.stringify({ tool: 'pencil', recent: ['#ff0000', 'javascript:x', '#FF0000', 3], styles: { arrow: { color: '#0a84ff', width: 12 } } }));
     expect(p.tool).toBe('pencil');

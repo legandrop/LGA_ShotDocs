@@ -106,6 +106,10 @@ In production (v0.049). What works today:
   colors and thickness of LGA FrameRev. The original never changes; annotations show on the page, in table cells, in
   the viewer and in the PDF, are saved as you draw (also offline) and appear live for everyone editing the page. Only
   people who can edit the page annotate.
+- Annotate photos on a phone or an iPad: the tools sit in a strip at the bottom and the color dot opens the colors and
+  thickness; one finger draws, two fingers zoom and move the photo without drawing, and text is typed in a regular box
+  with the phone keyboard. Once you use a pencil (Apple Pencil on the iPad), only the pencil draws and your finger moves
+  the photo, like in Notes.
 - iPhone photos (HEIC) are converted to JPEG on your device when you add them to a page, so every browser
   shows them; the converter is downloaded only the first time it is needed.
 - Attach any file (PDF, zip, anything): drop or paste it, it goes to the owner's Drive and shows as a card;
@@ -130,6 +134,7 @@ In production (v0.049). What works today:
 - Keyboard in the page tree: ↑ and ↓ open the previous or next page, → and ← expand and collapse (← on a page with nothing to collapse goes to its parent page).
 - Page breaks and PDF: pages with a paper size show where each sheet starts, and *Export PDF / Print* in the page menu prints exactly those sheets. A manual page break (*Page break* in the / menu, or Ctrl+Enter, ⌘↩ on a Mac) makes what follows start on a new sheet, on screen and in the PDF.
 - Export a branch or a whole project as one PDF: *Export…* in the page menu (the page and the pages inside) or *Export project…* in the project list. It starts with a contents page that links to each page and says on which PDF page it starts, every page keeps its own paper size (in Chrome or Edge on a computer), photos keep their annotations and are scaled to their printed size, and comments can be included with names but never email addresses. Pages in the trash are never included, and a guest exports only what they can see.
+- Export a branch or a whole project as a zip to archive it: a folder for each page with the page as a web page that opens in any browser without a connection, its text as Markdown, a JPEG of every photo (also iPhone HEIC photos), the original photos, attachments and videos from Drive if you tick them, and the comments with names but never email addresses. It also keeps the blocks and the page tree for importing it back later. On Chrome and Edge on a computer it is written as it is made (or into a folder); in other browsers it is built in memory. Only the workspace owner and admins can export a zip, and only from a computer.
 - English and Spanish: the whole interface in both languages, chosen in the account menu and saved in your account (Script is *Guion* in Spanish).
 - Available offline: mark a page (with its subpages) or a whole project from its menu, choose what to keep (large
   photos, original photos, attachments, videos) with the size of each, and it downloads everything needed to use it

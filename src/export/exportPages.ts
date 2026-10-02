@@ -22,6 +22,8 @@ export interface ExportPlanPage {
   title: string;
   /** El nivel adentro de lo exportado (0: la raíz). */
   depth: number;
+  /** La página de arriba, si también se exporta (`null` en la raíz: nunca el id de algo de afuera, regla 2). */
+  parent: string | null;
   /** El encabezado: el de la página (sus ajustes de títulos), sin nada de arriba de la raíz exportada (regla 2). */
   header: string[];
   /** La hoja que hereda (una página libre sale en A4, como el PDF de siempre). */
@@ -47,6 +49,7 @@ export function exportPlan(tree: PlanTree, kind: 'page' | 'project', target: str
       id,
       title: row.title,
       depth,
+      parent: parentDepth === undefined ? null : row.parent_id,
       // Solo los contenedores que también se exportan: nunca el título de algo de arriba de la rama.
       header: headerPages(tree as PageTree, id)
         .filter((p) => inside.has(p.id))

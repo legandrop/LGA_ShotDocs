@@ -12,6 +12,13 @@ export interface AnnotatorPrefs {
   recent: string[];
   /** La última herramienta usada (la próxima vez abre con esa). */
   tool: Tool;
+  /**
+   * Solo el lápiz dibuja y el dedo mueve la foto (AN8, como Notas en el iPad): se prende sola la primera vez que se usa
+   * un lápiz en este dispositivo y se apaga en la hoja de propiedades (*Only the pencil draws*).
+   */
+  penOnly: boolean;
+  /** Quien usa el dispositivo ya eligió (prendió o apagó *Only the pencil draws*): no se vuelve a prender sola. */
+  penSet: boolean;
 }
 
 /** Lo guardado, limpio (cualquier cosa rara vuelve a los valores de fábrica). */
@@ -25,7 +32,7 @@ export function parsePrefs(raw: string | null): AnnotatorPrefs {
   const o = data && typeof data === 'object' && !Array.isArray(data) ? (data as Record<string, unknown>) : {};
   const recent = Array.isArray(o.recent) ? o.recent.map((c) => safeColor(c, '')).filter(Boolean).slice(0, 8) : [];
   const tool = typeof o.tool === 'string' && (TOOLS as readonly string[]).includes(o.tool) ? (o.tool as Tool) : 'arrow';
-  return { styles: cleanStyles(o.styles), recent: [...new Set(recent)], tool };
+  return { styles: cleanStyles(o.styles), recent: [...new Set(recent)], tool, penOnly: o.penOnly === true, penSet: o.penSet === true };
 }
 
 export function loadPrefs(): AnnotatorPrefs {

@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.129 :
+
+Tres entregas de fotos y exportar. **El zip para archivar** (P.22, entrega 2): guardar un proyecto fuera de la app no
+tenía forma; *Zip — to archive* en *Export…* arma por página un `.html` sin red, un `.md` con rutas relativas, vistas
+JPEG, los originales, los comentarios sin correos, el JSON para volver y `MISSING_FILES.txt`; los nombres se acortan para
+que ninguna ruta pase 180 caracteres en Windows. Solo dueño y admins. **Anotar con el dedo y el lápiz** (P.20, entrega
+3): en pantallas táctiles una tira abajo, dos dedos amplían sin dibujar, el lápiz del iPad dibuja y el dedo mueve, la
+palma no cuenta. **El alto de las miniaturas en las celdas** (D27 → B): *Thumbnail size* por tabla (64, 96 o 160 px),
+como propiedad de la tabla (`thumbHeight`); una versión vieja la ignora y, si edita la tabla, vuelve a 96 sin perder
+nada. `min_app_version` sube a esta versión.
+[ El zip para archivar, anotar con el dedo y el lápiz, y el alto de las miniaturas en las celdas ]
+
 v0.128 :
 
 Carpetas con guiones bajos (D3 → B) y dos diseños. Las carpetas que se sueltan en una página llegaban al Drive del dueño

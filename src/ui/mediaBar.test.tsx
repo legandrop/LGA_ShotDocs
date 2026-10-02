@@ -240,6 +240,7 @@ describe('la barra de una foto en una celda de tabla (entrega 5)', () => {
       '|',
       'Thumbnail',
       'Full cell width',
+      'Thumbnail size',
       '|',
       'Comment',
       '|',
@@ -249,7 +250,7 @@ describe('la barra de una foto en una celda de tabla (entrega 5)', () => {
     ]);
     const thumb = document.querySelector(`${INLINE} [aria-label="Thumbnail"]`)!;
     expect(thumb.getAttribute('aria-pressed')).toBe('true');
-    expect(thumb.getAttribute('data-tip')).toMatch(/table row/);
+    expect(thumb.getAttribute('data-tip')).toMatch(/table's thumbnail size/);
     expect(thumb.hasAttribute('title')).toBe(false);
   });
 
@@ -261,6 +262,114 @@ describe('la barra de una foto en una celda de tabla (entrega 5)', () => {
     await choosePhoto(editor, 'C2');
     await click(INLINE, 'Thumbnail');
     expect(widths(editor)).toEqual([0, 0]);
+  });
+});
+
+/** Abre el menú de *Thumbnail size* (el de `scope`) y devuelve sus ítems, esperando a que aparezcan (Mantine, un cuadro después). */
+async function thumbSizeMenu(scope: string): Promise<HTMLElement[]> {
+  const trigger = document.querySelector<HTMLButtonElement>(`${scope} [data-test="cellThumbs-size"]`);
+  if (!trigger) throw new Error('No Thumbnail size');
+  await act(async () => {
+    trigger.click();
+    await new Promise((r) => setTimeout(r, 50));
+  });
+  let items: HTMLElement[] = [];
+  for (let i = 0; items.length < 3 && i < 60; i++) {
+    items = [64, 96, 160].map((h) => document.querySelector<HTMLElement>(`[data-test="cellThumbs-${h}"]`)).filter((x): x is HTMLElement => !!x);
+    if (items.length < 3) {
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 50));
+      });
+    }
+  }
+  return items;
+}
+/** El ítem marcado (el de Mantine lleva el tilde; los demás, el espacio del tilde). */
+const checkedOf = (items: HTMLElement[]) => items.filter((i) => !i.querySelector('.bn-tick-space')).map((i) => i.textContent);
+
+describe('el alto de las miniaturas de la tabla (D27 → B)', () => {
+  async function inTable(cells: unknown[][] = [[ph('C1', 0), ph('C2', 0.5)], [{ type: 'text', text: 'nota', styles: {} }]]) {
+    const m = await mount();
+    await act(async () => {
+      m.editor.replaceBlocks(m.editor.document, [
+        { id: 'tb', type: 'table', content: { type: 'tableContent', rows: [{ cells }] } },
+        { id: 'tc', type: 'table', content: { type: 'tableContent', rows: [{ cells: [[{ type: 'text', text: 'sin fotos', styles: {} }]] }] } },
+      ] as never);
+    });
+    return m;
+  }
+  const height = (e: BlockNoteEditor, id = 'tb') => (e.getBlock(id)!.props as Record<string, unknown>).thumbHeight;
+  const widthsOf = (e: BlockNoteEditor) => {
+    const out: number[] = [];
+    view(e).state.doc.descendants((n) => {
+      if (n.type.name === PHOTO) out.push(Number(n.attrs.w));
+      return true;
+    });
+    return out;
+  };
+  async function chooseTable(e: BlockNoteEditor, id: string) {
+    await act(async () => {
+      e.focus();
+      let at = -1;
+      view(e).state.doc.descendants((n, pos) => {
+        if (n.type.name === 'blockContainer' && n.attrs.id === id) at = pos;
+        return at < 0;
+      });
+      view(e).dispatch(view(e).state.tr.setSelection(NodeSelection.create(view(e).state.doc, at)));
+    });
+  }
+
+  it('en la barra de una foto de la celda: Small, Medium y Large, el actual marcado; Large cambia toda la tabla, no las fotos', async () => {
+    const { editor } = await inTable();
+    await choosePhoto(editor, 'C1');
+    const trigger = document.querySelector(`${INLINE} [data-test="cellThumbs-size"]`)!;
+    expect(trigger.getAttribute('aria-label')).toBe('Thumbnail size');
+    // El tooltip dice lo que el nombre no dice: para toda la tabla, y las agrandadas no cambian.
+    expect(trigger.getAttribute('data-tip')).toMatch(/every thumbnail in this table/);
+    expect(trigger.hasAttribute('title')).toBe(false);
+    let items = await thumbSizeMenu(INLINE);
+    expect(items.map((i) => i.textContent)).toEqual(['Small', 'Medium', 'Large']);
+    expect(checkedOf(items)).toEqual(['Medium']);
+    await act(async () => {
+      items[2].click();
+    });
+    expect(height(editor)).toBe(160);
+    expect(height(editor, 'tc')).toBe(96);
+    expect(widthsOf(editor)).toEqual([0, 0.5]);
+    // La foto sigue elegida (con su barra).
+    const sel = view(editor).state.selection;
+    expect(sel instanceof NodeSelection && sel.node.type.name === PHOTO && sel.node.attrs.name === 'C1').toBe(true);
+    await choosePhoto(editor, 'C1');
+    items = await thumbSizeMenu(INLINE);
+    expect(checkedOf(items)).toEqual(['Large']);
+  });
+
+  it('con la tabla elegida entera (sus puntos): Thumbnail size en la barra; en una tabla sin fotos, no', async () => {
+    const { editor } = await inTable();
+    await chooseTable(editor, 'tb');
+    const toolbar = '.bn-formatting-toolbar';
+    expect(document.querySelector(`${toolbar} [data-test="cellThumbs-size"]`)).not.toBeNull();
+    const items = await thumbSizeMenu(toolbar);
+    expect(checkedOf(items)).toEqual(['Medium']);
+    await act(async () => {
+      items[0].click();
+    });
+    expect(height(editor)).toBe(64);
+    // Sigue elegida la tabla entera.
+    const sel = view(editor).state.selection;
+    expect(sel instanceof NodeSelection && sel.node.attrs.id === 'tb').toBe(true);
+    await chooseTable(editor, 'tc');
+    expect(document.querySelector(`${toolbar} [data-test="blockColors"]`)).not.toBeNull();
+    expect(document.querySelector(`${toolbar} [data-test="cellThumbs-size"]`)).toBeNull();
+  });
+
+  it('en una página de solo lectura no aparece', async () => {
+    const { editor } = await inTable();
+    await act(async () => {
+      editor.isEditable = false;
+    });
+    await chooseTable(editor, 'tb');
+    expect(document.querySelector('[data-test="cellThumbs-size"]')).toBeNull();
   });
 });
 
