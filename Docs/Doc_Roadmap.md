@@ -343,6 +343,17 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   nada; una campana con las no leídas que pregunta cada 60 segundos (sin Realtime); sin red con la cola de siempre;
   los visitantes del link no mencionan; las menciones de Coda se ven como `@Nombre`. Entregas: 1 (base, `@`, campana,
   sin red), 2 (compartir desde la mención, marcas en el árbol y en el ícono), 3 (correo, grupo C).
+- **P.24 Asistente con la clave de cada usuario y servidor MCP (fase 5)** (era C.11; 2026-10-02, ya sin esperar a
+  Lega). **Diseño en `Doc_Asistente.md`** (sin código; decisiones propuestas IA1 a IA10; auditado, corregido): la clave
+  solo en el dispositivo y por persona (IA1, D-06; el cifrado solo evita verla por accidente); el pedido directo del navegador al proveedor (Anthropic, OpenAI, Google
+  y compatibles con OpenAI, CORS probado); vista previa y aplicar como una edición que se deshace, sin aplicar si el
+  texto cambió mientras el modelo pensaba; aplicar pide Editar; un interruptor del dueño (*On*, *Local models only*,
+  *Off*). El MCP en el portero (IA2, D-07), con el OAuth del Supabase del workspace, el token cerrado de fábrica,
+  lectura de la base limpia de D14 y escritura opcional por proyecto con guarda, nunca en páginas con invitados sin un
+  permiso aparte; con páginas reales pide, casi seguro, el plan pago de Workers del dueño (US$ 5 por mes) o el MCP local. Entregas: A1 (texto elegido), A2
+  (página, formato, política), A3 (pie de foto), M0 (prueba técnica del MCP: OAuth de Supabase con el registro cerrado,
+  el rol del token, 10 ms de CPU), M1 (MCP de lectura; requiere el interruptor de D14), M2 (MCP que escribe), M3
+  (medir). Recortar, achicar y comprimir fotos no necesitan un modelo: van al roadmap de fotos.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
@@ -567,6 +578,9 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
 
 10. **Fase 3 (plantillas): pasó a P.23** (2026-10-02), con una primera versión de los campos para que Lega la ajuste.
 11. **Fase 5.** Asistente con la clave de cada usuario y MCP: Lega elige entre las opciones de D-06 y D-07.
+10. **Fase 3.** Plantillas: definir con Lega los campos de *Pre-production Notes*, *On-Set Report* y
+    *Shot Breakdown*.
+11. **Pasó a P.24** (2026-10-02): el asistente y el MCP ya no esperan a Lega; diseño en `Doc_Asistente.md`.
 12. **Correo automático de invitaciones** (el portero lo manda con Resend): hace falta una clave de Resend
     solo para enviar, cargada por Lega en el portero. Mientras tanto, la app copia el link.
 13. **Que la pantalla de Google diga "LGA Shot Docs"** (pedido de Lega). Hoy, al conectar Drive, Google

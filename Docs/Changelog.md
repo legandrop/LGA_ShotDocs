@@ -57,6 +57,15 @@ quién es va en `comment_mentions`, así una versión vieja ve `@lega` sin perde
 cada 60 segundos; sin red con la cola de siempre. Correo, después (grupo C). Auditado y corregido (va después del link
 público; compartir desde la mención, solo dueño y admins); ME1 a ME10, ME10 espera a Lega.
 [ Menciones - diseño de @persona en comentarios, con la campana y sin red ]
+v0.0XX :
+
+El asistente de la fase 5 y su servidor MCP esperaban que Lega eligiera entre D-06 y D-07. `Doc_Asistente.md` lo
+diseña sin esperar (IA1 a IA10, propuestas, auditado): la clave de cada persona solo en su dispositivo; el pedido directo
+del navegador al proveedor (Anthropic, OpenAI, Google y compatibles; CORS probado); vista previa y aplicar como una
+edición que se deshace, sin aplicar si el texto cambió mientras tanto; aplicar pide Editar; un interruptor del dueño. El
+MCP va en el portero, con el OAuth del Supabase del workspace, el token cerrado de fábrica, la base limpia de D14 y sin
+escribir en páginas con invitados; con páginas reales pide, casi seguro, el plan pago de Workers (o un MCP local).
+[ Asistente del producto - diseño de la clave, el panel y el servidor MCP ]
 
 v0.108 :
 
