@@ -231,7 +231,7 @@ async function zipOf(w: World, d: Device, extra: Partial<ZipOptions> = {}, kind:
     target: { kind: 'zip', sink },
     download: { fetch: w.server.portero.fetch as never, online: () => w.server.online, wait: async () => undefined },
     convertHeic: fakeConvertHeic,
-    appVersion: '0.0XX',
+    appVersion: '0.129',
     lastSync: d.engine.getStatus().lastSyncAt,
     ...extra,
   });
@@ -895,7 +895,7 @@ describe('exportar zip: rutas largas de Windows y marcas de plantilla (auditorí
       online: true,
       target: { kind: 'zip', sink },
       convertHeic: fakeConvertHeic,
-      appVersion: '0.0XX',
+      appVersion: '0.129',
     });
     return { result, zip: new Uint8Array(await sink.blob().arrayBuffer()) };
   }

@@ -102,7 +102,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   a la de arriba; imprimir las deja igual; importar de Coda deja las fotos de una celda en la celda. Sin tipos ni
   propiedades nuevas (la versión publicada abre la página sin escribir nada). `Doc_Fotos_En_Linea.md`, "Cómo quedó
   (entrega 5)". Queda: probar en Safari y el iPhone, y con una exportación de Coda que tenga fotos en tablas de página.
-  **El alto de la miniatura se elige por tabla (v0.0XX, D27 → B):** *Thumbnail size* con *Small*, *Medium* y *Large*
+  **El alto de la miniatura se elige por tabla (v0.129, D27 → B):** *Thumbnail size* con *Small*, *Medium* y *Large*
   (64, 96 y 160 px), en la barra de la foto y en la de la tabla; propiedad de la tabla, la versión publicada vuelve a 96
   si edita la tabla (`Doc_Fotos_En_Linea.md`, "Alto de las miniaturas (D27 → B)"). Para después (auditoría): pegar solo `text/html` de una
   fila con fotos las pierde (O1); una tabla de Google Docs o Excel con imágenes llega sin ellas (O2); la papelera de
@@ -372,7 +372,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   grosor mínimo de su caja impresa (la observación O2). Falta: que `min_app_version` esté en 0.116 o más al publicarla
   (AN10); probar ⌘[ y ⌘] en Safari y Chrome de una Mac, y medir el dedo a 60
   y 120 Hz y las fotos HEIC de un iPhone real (entrega 0, no se pudo sin teléfono).
-  **Entrega 3 hecha (v0.0XX):** el dedo y el lápiz: la tira de herramientas abajo, la hoja de propiedades desde el punto de
+  **Entrega 3 hecha (v0.129):** el dedo y el lápiz: la tira de herramientas abajo, la hoja de propiedades desde el punto de
   color, un dedo dibuja y dos amplían sin dibujar, el lápiz del iPad dibuja y el dedo mueve (*Only the pencil draws*), la
   palma no dibuja, el texto en una caja común con el teclado, tocar un tirador sin moverlo ya no cambia la forma. Falta
   a mano en un iPhone y un iPad reales: el teclado con el toque, el gesto de "atrás" desde el borde y el doble toque
@@ -400,7 +400,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   correos, topes de páginas y de píxeles (menos con menos de 8 GB). 300 páginas en ~30 s (Chromium sin ventana);
   resueltas O3 a O7 de la auditoría de la 0 y los tres bloqueantes y O1 a O7 de la auditoría de la 1. Falta a mano:
   Safari, Firefox, el iPhone, una compu de 8 GB y guardar de verdad en Chrome y Edge (`Doc_Exportar.md`, "Cómo quedó
-  la entrega 1"). **Entrega 2 hecha (v0.0XX): el zip** (*Zip — to archive* en la misma ventana): una carpeta por página
+  la entrega 1"). **Entrega 2 hecha (v0.129): el zip** (*Zip — to archive* en la misma ventana): una carpeta por página
   con `.html` sin JavaScript, `.md` con rutas relativas (D57), una vista JPEG de cada foto (también HEIC), los
   originales elegidos (del dispositivo o por el portero con lo de *Download all*), comentarios sin correos, el JSON para
   volver y `MISSING_FILES.txt`; los destinos de *Download all*, sin red y cancelar. Solo dueño y admins (D60), nunca

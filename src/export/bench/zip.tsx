@@ -198,7 +198,7 @@ async function run() {
       online: true,
       target: { kind: 'zip', sink },
       expected: remoteOf(estimate, include),
-      appVersion: '0.0XX',
+      appVersion: '0.129',
       lastSync: b.engine.getStatus().lastSyncAt,
     });
     const after = await Promise.all(plan.map((p) => storedHash(b, p.id)));

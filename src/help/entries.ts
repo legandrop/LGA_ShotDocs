@@ -99,7 +99,7 @@ const REMOVED_WRITING = '0.095';
 /** Las fotos en las celdas de una tabla (Doc_Fotos_En_Linea.md, entrega 5): la versión se pone al publicar. */
 const CELL_PHOTOS = '0.107';
 /** El alto de las miniaturas de una tabla (Doc_Fotos_En_Linea.md, D27 → B): la versión se pone al publicar. */
-const CELL_THUMBS = '0.0XX';
+const CELL_THUMBS = '0.129';
 /** La que trajo "Update now" que espera la versión nueva y "Force the update" (Doc_Sincronizacion.md, "Volver después de mucho tiempo sin red"). */
 const UPDATE_APP = '0.097';
 /** *Download all* de una carpeta (P.9, entrega 2, Doc_Carpetas.md): la versión se pone al publicar, igual que en el changelog. */
@@ -121,7 +121,7 @@ const PUBLIC_LINK = '0.111';
 /** Exportar una rama o un proyecto como PDF (P.22, Doc_Exportar.md, entrega 1): la versión se pone al publicar. */
 const EXPORT_PDF = '0.122';
 /** Exportar como zip (P.22, Doc_Exportar.md, entrega 2): la versión se pone al publicar. */
-const EXPORT_ZIP = '0.0XX';
+const EXPORT_ZIP = '0.129';
 /** Las menciones en comentarios (P.21, Doc_Menciones.md, entrega 1): la versión se pone al publicar, igual que en el changelog. */
 const MENTIONS = '0.120';
 /** Menciones, entrega 2: compartir desde la mención, el punto del árbol y el número afuera (la versión la pone quien publica). */
@@ -131,7 +131,7 @@ const PHOTO_MARKUP = '0.116';
 /** Anotar las fotos en la compu (P.20, entrega 2). El número lo pone quien publica. */
 const ANNOTATE = '0.123';
 /** Anotar con el dedo y con el lápiz (P.20, entrega 3). El número lo pone quien publica. */
-const ANNOTATE_TOUCH = '0.0XX';
+const ANNOTATE_TOUCH = '0.129';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---

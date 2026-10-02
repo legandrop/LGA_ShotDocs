@@ -1,7 +1,7 @@
 # Anotar sobre las fotos (P.20)
 
 **Estado: entregas 0 a 3 hechas (v0.116: el mapa, sus pruebas y ver las anotaciones; v0.123: el anotador en la
-compu y la poda; v0.0XX: el dedo y el lápiz del iPad; ver "Cómo quedó" al final); bajar y copiar con anotaciones
+compu y la poda; v0.129: el dedo y el lápiz del iPad; ver "Cómo quedó" al final); bajar y copiar con anotaciones
 (entrega 4) sigue en diseño.** Pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.108. Las decisiones
 (AN1 a AN11, sección 12) son propuestas con la recomendación elegida: el número final lo pone quien las cierre con Lega.
 Auditado el 2026-10-02 (aprobado con condiciones): las correcciones ya están en el texto y resumidas al final
@@ -726,7 +726,7 @@ Auditoría independiente: **no aprobado**, con dos bloqueantes de arreglo chico.
 | O5 Un texto que otro borra mientras se edita se perdía | Se vuelve a crear con lo escrito, en el mismo lugar y con su letra (con prueba) |
 | O2, O3 (*Annotate* de `PageEditor` sin prueba), O4, O6, O7, O8, O9 | Al roadmap (P.20) |
 
-## Cómo quedó la entrega 3 (el dedo y el lápiz, v0.0XX)
+## Cómo quedó la entrega 3 (el dedo y el lápiz, v0.129)
 
 **La pantalla del teléfono y del iPad** (`Annotator.tsx`, con el puntero principal táctil o la ventana de 760 px o
 menos): arriba deshacer, rehacer, borrar, encuadrar y *Done*; abajo una tira con las nueve herramientas (se desliza si

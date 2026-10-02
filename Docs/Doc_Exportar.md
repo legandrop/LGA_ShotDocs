@@ -1,6 +1,6 @@
 # Exportar una página o un proyecto entero (P.22)
 
-**Estado: entregas 0 (v0.115), 1 (v0.122: el PDF de una rama o de un proyecto) y 2 (v0.0XX: el zip) hechas; volver,
+**Estado: entregas 0 (v0.115), 1 (v0.122: el PDF de una rama o de un proyecto) y 2 (v0.129: el zip) hechas; volver,
 pendiente** (roadmap P.22; pedido de Lega del 2026-10-02). Se diseñó contra `main` v0.108. Cómo quedaron, al final:
 "Cómo quedó la entrega 0" (el editor de exportación medido con 300 páginas), "Cómo quedó la entrega 1" (el PDF, medido
 con la impresión real de Chrome y Edge) y "Cómo quedó la entrega 2" (el zip, abierto con `file://` en Chromium y
@@ -896,7 +896,7 @@ y ofrece las ramas de primer nivel. Teléfono: 60 páginas y 50 millones, sin me
 Firefox, el iPhone y el iPad (hojas mezcladas, memoria, el toque para abrir el diálogo), una compu de 8 GB con el
 proyecto más grande, *Sharp photos* con el portero real, las anotaciones en el PDF con fotos reales, videos y adjuntos.
 
-## Cómo quedó la entrega 2 (v0.0XX)
+## Cómo quedó la entrega 2 (v0.129)
 
 **Qué ve el usuario.** La ventana *Export* suma *Format*: *PDF — to share* (lo de la entrega 1) o *Zip — to archive*.
 Con el zip: *Original photos*, *Attachments* y *Videos* tildadas, cada una con su cantidad y su peso, y *Comments*
