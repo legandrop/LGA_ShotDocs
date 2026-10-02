@@ -430,7 +430,7 @@ portero) y `picker.ts` (el selector de carpetas de Google).
   sigan saliendo bytes. Los topes y el detalle están en `Doc_Portero.md`, "Subidas que se traban". Lo mismo
   con la miniatura si Storage no contesta (v0.070; ver "Cada consulta a la base tiene un tope de tiempo"). Si
   se traban dos archivos distintos seguidos sin avanzar, la vuelta deja de subir archivos y la cola espera
-  antes de volver a probar (v0.0XX; `Doc_Portero.md`, "Colgado para todos").
+  antes de volver a probar (v0.092; `Doc_Portero.md`, "Colgado para todos").
 - **Si la base de archivos del dispositivo no se abre,** la app arranca igual: la cola de fotos y videos
   queda apagada (no se pueden agregar), el estado lo avisa con un aviso propio (`mediaWarning`, que no
   pisa ni es pisado por los demás) y el texto sincroniza como siempre. Un error de esa base nunca corta la
@@ -689,7 +689,7 @@ si se viera, haría falta un vigilante del ciclo en `engine.ts`. Pruebas en `src
 
 **Los archivos de Storage no usan el tope fijo** (una foto grande en una red lenta puede tardar más), pero
 desde v0.070 **las miniaturas sí tienen uno, proporcional** (hoy a Storage van solo miniaturas, de 480 px y
-decenas de KB; los originales van al Drive por el portero), y desde v0.0XX también las imágenes del bucket
+decenas de KB; los originales van al Drive por el portero), y desde v0.092 también las imágenes del bucket
 `page-files` (un workspace sin portero). No pasan por `timed`: son una carrera contra el tope (`within` en
 `remote.ts`), que termina en el mismo `request_timeout`.
 
@@ -700,7 +700,7 @@ decenas de KB; los originales van al Drive por el portero), y desde v0.0XX tambi
 | Subir una imagen de `page-files` (`uploadFile`) | `storageTimeout(tamaño)`: 30 s más lo que tarda a 16 KB/s, **sin el techo** de las consultas (una de 25 MB tiene 27 minutos) | Queda por subir con su error y la pasada sigue con las demás; a la segunda seguida, la pasada termina (`PageFiles.pushPending`). Las que vencieron van al final de la pasada siguiente |
 | Bajar una imagen de `page-files` (`downloadFile`) | `FILE_DOWNLOAD_TIMEOUT_MS`: el de la más pesada que acepta el bucket (25 MB, 27 minutos) | Error de red: la imagen no se muestra y se vuelve a pedir al dibujarla |
 
-- **Las subidas se cortan de verdad** (v0.0XX). `upload` del cliente de Storage (`@supabase/storage-js` 2.117)
+- **Las subidas se cortan de verdad** (v0.092). `upload` del cliente de Storage (`@supabase/storage-js` 2.117)
   no acepta una señal de corte, pero cada pedido sale por el `fetch` del cliente, y cada `storage.from(bucket)`
   es un objeto nuevo con el suyo: `bucketWith` lo envuelve para que lleve la señal del tope. Antes la subida
   cortada quedaba suelta, y con Storage colgado para todos se acumulaban. Si la miniatura igual había llegado
@@ -712,7 +712,7 @@ decenas de KB; los originales van al Drive por el portero), y desde v0.0XX tambi
   anterior no lo lee y usa el tope de siempre.
 - **Por qué una sola no cuenta como "sin red"** (que corta la vuelta): la vuelta siguiente empezaría otra vez por
   el mismo archivo, porque van por orden de llegada, y con Storage colgado solo para él los demás no subirían
-  nunca. **Dos seguidas sí** (v0.0XX): con Storage colgado para todos, cada archivo esperaba su tope entero (de 30
+  nunca. **Dos seguidas sí** (v0.092): con Storage colgado para todos, cada archivo esperaba su tope entero (de 30
   a 62 s). La vuelta deja de subir archivos y la cola espera antes de volver a probar, igual que con el portero
   colgado (`Doc_Portero.md`, "Colgado para todos"). Lo mismo en `PageFiles.pushPending` con `page-files`. Una
   falla de red de verdad (el pedido falla en vez de colgarse) sigue cortando enseguida.

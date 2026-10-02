@@ -305,7 +305,7 @@ subida, no en cada parte (una subida dura minutos); al terminar, la base lo vuel
   `src/media/portero.test.ts` (el cliente) y `src/media/queue.test.ts` (la cola). Los tipos del portero se
   revisan aparte, con `npx tsc -p portero --noEmit` (`npm run typecheck` no los cubre).
 
-### Subidas que se traban (v0.068 y v0.0XX)
+### Subidas que se traban (v0.068 y v0.092)
 
 **Qué pasaba.** La cola sube de a un archivo y ningún pedido al portero tenía tiempo límite. Un pedido que
 nunca contestaba, sin error de red, dejaba la cola entera esperando: visto al importar un doc de unos 2300
@@ -340,7 +340,7 @@ corta, se manda entera otra vez y se vuelve a cortar.
   misma red lenta de los topes de la base: 10 minutos y medio para una parte de 8 MiB, 5 para una foto
   de 3 MB. Más lento que eso y con el cuerpo tragado de golpe, la parte no pasa: es el único caso que
   queda sin cubrir.
-- **Se recuerda el plazo que funcionó** (v0.0XX, `Portero.learn`). Sin eso, detrás del mismo proxy cada archivo
+- **Se recuerda el plazo que funcionó** (v0.092, `Portero.learn`). Sin eso, detrás del mismo proxy cada archivo
   nuevo volvía a empezar con el plazo corto y se trababa una o más veces antes de pasar. Cuando la respuesta de
   una parte llega después de un minuto o más con el cuerpo ya afuera (`LEARN_FROM_MS`), el cliente anota a qué
   velocidad llegó (bytes por segundo, sin el tiempo suspendido) y el plazo de las partes siguientes es lo que
@@ -357,7 +357,7 @@ corta, se manda entera otra vez y se vuelve a cortar.
   estuvo suspendido o la pestaña congelada: ese tiempo no se cuenta, y al despertar una parte sana no se
   corta. El umbral no puede ser más chico: con la pestaña en segundo plano el navegador deja correr los
   temporizadores una vez por minuto, y ahí el vigilante tiene que seguir cortando (tarda hasta un minuto
-  más en darse cuenta). Desde v0.0XX se descuentan **a lo sumo dos huecos seguidos** sin que el pedido se mueva
+  más en darse cuenta). Desde v0.092 se descuentan **a lo sumo dos huecos seguidos** sin que el pedido se mueva
   (`FROZEN_DISCOUNTS`): una pestaña tan frenada que el vigilante mira menos de una vez por minuto y medio hacía que
   cada hueco pareciera una suspensión y no cortaba nunca. Un movimiento vuelve a dar los dos. Y el tiempo
   suspendido tampoco cuenta como tiempo del cuerpo: si el equipo se suspendía mientras salía, la espera de la
@@ -369,7 +369,7 @@ stopped moving; it will try again* y vuelve a la cola con la espera de cualquier
 (10 s, 20 s… hasta 10 minutos), y la cola sigue con los demás archivos. No se pierde nada: el original
 sigue en el dispositivo y lo que Drive ya recibió sigue en la subida.
 
-**Colgado para todos (v0.0XX).** Si el portero no contesta a nadie, seguir con el archivo siguiente no sirve:
+**Colgado para todos (v0.092).** Si el portero no contesta a nadie, seguir con el archivo siguiente no sirve:
 cada uno esperaba su minuto entero, y una vuelta por 2300 archivos duraba horas sin subir nada. Por eso, a la
 **segunda trabada seguida de archivos distintos sin avance** (`STALLS_TO_CLOSE_ROUND`, en `src/sync/types.ts`) la
 vuelta deja de subir archivos, como sin conexión, y la cola espera antes de volver a probar (`stallPause` en
@@ -419,7 +419,7 @@ más bytes y cuando el archivo termina de subir (abrir otra subida no es avanzar
 opcional: lo guardado por una versión anterior no lo tiene y vale 0. Con el mismo avance vuelve a 0
 `failures`, de donde sale la espera para reintentar: un video largo al que le llega una parte más en cada
 vuelta vuelve a intentar a los 10 segundos, no cada vez más tarde. Avanzar es que el portero confirme **más de lo
-que ya había confirmado de ese archivo** (v0.0XX): si el portero pierde la subida en cada vuelta y se empieza otra,
+que ya había confirmado de ese archivo** (v0.092): si el portero pierde la subida en cada vuelta y se empieza otra,
 volver a mandar lo que la perdida ya tenía no es avanzar, y la espera se alarga (antes reintentaba siempre a los
 10 s).
 
@@ -430,7 +430,7 @@ contesta al abrir la subida se cortan y el navegador aborta el pedido (con la pe
 los 60 segundos al abrir y a los 125 la parte); al retomar no se manda nada dos veces. Falta verlo en
 Safari de iPhone y con una red lenta de verdad.
 
-**"Colgado para todos", probado en Chromium (v0.0XX)** con la cola real, las partes por `XMLHttpRequest` y las
+**"Colgado para todos", probado en Chromium (v0.092)** con la cola real, las partes por `XMLHttpRequest` y las
 miniaturas por el cliente de Supabase real, contra un portero y un Storage locales que reciben el pedido y no
 contestan nunca: con el portero colgado y 4 fotos, la vuelta terminó a los 120 s con 2 subidas abiertas (no 4) y
 los 2 pedidos cortados por el navegador; una vuelta enseguida no volvió a probar; al volver el portero subieron las

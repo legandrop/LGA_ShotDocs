@@ -2,7 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../i18n';
 import { SupabaseRemote, THUMB_DOWNLOAD_TIMEOUT_MS, timeoutFor } from '../sync/remote';
-import { FakeServer, fakeProbe, makeDevice, type Device } from '../sync/testing';
+import { FakeServer, fakePreview, fakeProbe, makeDevice, type Device } from '../sync/testing';
+import { PreviewUnavailable } from './pdfPreview';
 import { resolveObjectURL } from 'node:buffer';
 import { FileRejected } from '../sync/files';
 import { CONTROL_TIMEOUT_MS, PART_BYTES, STALL_CHECK_MS, STALL_MS, answerLimit, localDay } from './portero';
@@ -1986,6 +1987,309 @@ describe('adjuntos', () => {
     expect(a.media.enabled).toBe(false);
     await expect(a.media.add(page, makeFile(10, 'notas.pdf', 'application/pdf'))).rejects.toThrow(/Google Drive/);
     expect(mediaIdOf(await a.media.add(page, makeFile(10, 'IMG_1.JPG', 'image/jpeg')))).toBeTruthy();
+  });
+});
+
+describe('adjuntos: vista previa (Docs/Doc_Adjuntos.md, entrega 2)', () => {
+  /** La vista previa que trae una tarjeta (`data:image/jpeg;base64,…`), decodificada, o `null`. */
+  function previewIn(card: string): string | null {
+    const m = /href="data:image\/jpeg;base64,([A-Za-z0-9+/=]+)"/.exec(card);
+    return m ? Buffer.from(m[1], 'base64').toString('latin1') : null;
+  }
+
+  it('un PDF: la primera página se hace al agregarlo, va al bucket antes que el original y la tarjeta la muestra', async () => {
+    const server = new FakeServer();
+    server.preview = vi.fn(fakePreview);
+    const { a, page } = await withPage(server);
+    const url = await a.media.add(page, makeFile(2048, 'guion.pdf', 'application/pdf'));
+    const id = mediaIdOf(url)!;
+    await a.media.idle();
+    expect(server.preview).toHaveBeenCalledTimes(1);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ thumb: 'local', previewTried: true, probed: true, width: null });
+    const card = cardText(await a.media.resolve(url));
+    expect(card).toContain('width="360" height="268"');
+    expect(previewIn(card)).toContain('preview:guion.pdf');
+    expect(card).toContain('guion.pdf');
+    expect(card).toContain('>PDF<');
+
+    await sync(a);
+    expect(server.thumbs.has(id)).toBe(true);
+    expect(server.mediaFiles.get(id)?.thumb_at).toBeTruthy();
+    expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ thumb: 'done', pending: 0 });
+    // La impresión sigue sin tomarlo por una foto.
+    expect(await a.media.localImage(id)).toBeNull();
+  });
+
+  it('otro dispositivo baja la vista previa del bucket una vez y después la muestra sin red', async () => {
+    const server = new FakeServer();
+    server.preview = fakePreview;
+    const { a, page } = await withPage(server);
+    const url = await a.media.add(page, makeFile(2048, 'plano.pdf', 'application/pdf'));
+    const id = mediaIdOf(url)!;
+    await sync(a);
+
+    const name = crypto.randomUUID();
+    const b = await device(server, name);
+    await sync(b);
+    expect(previewIn(cardText(await b.media.resolve(url)))).toContain('preview:plano.pdf');
+    expect(await b.mediaDb.get('thumbs', id)).toBeTruthy();
+
+    // La app se cierra y se vuelve a abrir sin red: la vista previa sigue.
+    await close(b);
+    server.online = false;
+    const again = await device(server, name);
+    expect(previewIn(cardText(await again.media.resolve(url)))).toContain('preview:plano.pdf');
+  });
+
+  it('un zip o un PDF dañado: tarjeta con ícono, sin volver a probar', async () => {
+    const server = new FakeServer();
+    server.preview = vi.fn(async () => null);
+    const { a, page } = await withPage(server);
+    const zip = await a.media.add(page, makeFile(10, 'todo.zip', 'application/zip'));
+    const pdf = await a.media.add(page, makeFile(10, 'roto.pdf', 'application/pdf'));
+    await a.media.idle();
+    // Al zip ni se le pregunta.
+    expect(server.preview).toHaveBeenCalledTimes(1);
+    expect(await a.mediaDb.get('files', mediaIdOf(pdf)!)).toMatchObject({ thumb: 'none', previewTried: true });
+    for (const url of [zip, pdf]) expect(cardText(await a.media.resolve(url))).toContain('width="360" height="96"');
+    await sync(a);
+    expect(server.preview).toHaveBeenCalledTimes(1);
+    expect(server.thumbs.size).toBe(0);
+  });
+
+  it('si pdf.js no se pudo bajar, se sube igual y la vista previa se hace después, al mostrarlo, y se sube', async () => {
+    const server = new FakeServer();
+    server.preview = async () => {
+      throw new PreviewUnavailable('sin red');
+    };
+    const { a, page } = await withPage(server);
+    const url = await a.media.add(page, makeFile(2048, 'notas.pdf', 'application/pdf'));
+    const id = mediaIdOf(url)!;
+    await a.media.idle();
+    const record = await a.mediaDb.get('files', id);
+    expect(record).toMatchObject({ thumb: 'none', probed: true });
+    expect(record?.previewTried).toBeUndefined();
+    await sync(a);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 0, thumb: 'none' });
+
+    server.preview = fakePreview;
+    const heard: string[] = [];
+    a.media.subscribeThumbs((x) => heard.push(x));
+    expect(cardText(await a.media.resolve(url))).toContain('height="96"');
+    await vi.waitFor(async () => expect(await a.mediaDb.get('files', id)).toMatchObject({ thumb: 'done', previewTried: true }));
+    expect(heard).toContain(id);
+    expect(server.thumbs.has(id)).toBe(true);
+    expect(server.mediaFiles.get(id)?.thumb_at).toBeTruthy();
+    expect(previewIn(cardText(await a.media.resolve(url)))).toContain('preview:notas.pdf');
+  });
+
+  it('un PDF agregado antes de la vista previa: la hace el dispositivo que tiene el original, y el otro la ve en la sesión siguiente', async () => {
+    const server = new FakeServer();
+    server.enableMedia();
+    const nameA = crypto.randomUUID();
+    const a = await device(server, nameA);
+    const page = await a.tree.create(null, 'Día 3');
+    await sync(a);
+    const url = await a.media.add(page, makeFile(2048, 'viejo.pdf', 'application/pdf'));
+    const id = mediaIdOf(url)!;
+    await sync(a);
+    // Como lo dejó una versión anterior: medido y subido, sin vista previa y sin la marca de que se probó.
+    const old = (await a.mediaDb.get('files', id))!;
+    delete old.previewTried;
+    await a.mediaDb.put('files', old);
+    await close(a);
+
+    const nameB = crypto.randomUUID();
+    const b = await device(server, nameB);
+    await sync(b);
+    expect(cardText(await b.media.resolve(url))).toContain('height="96"');
+
+    // Se abre la página en el dispositivo que lo agregó: la hace y la sube.
+    server.preview = fakePreview;
+    const a2 = await device(server, nameA);
+    await a2.media.resolve(url);
+    await vi.waitFor(() => expect(server.mediaFiles.get(id)?.thumb_at).toBeTruthy());
+
+    // El otro dispositivo, en su sesión siguiente, se entera al preguntar por el archivo y la vuelve a dibujar.
+    await close(b);
+    const b2 = await device(server, nameB);
+    const heard: string[] = [];
+    b2.media.subscribeThumbs((x) => heard.push(x));
+    await b2.media.resolve(url);
+    await vi.waitFor(() => expect(heard).toContain(id));
+    expect(previewIn(cardText(await b2.media.resolve(url)))).toContain('preview:viejo.pdf');
+  });
+
+  it('si la vista previa no se pudo bajar (sin red), se baja sola cuando vuelve la red y la tarjeta se redibuja', async () => {
+    const server = new FakeServer();
+    server.preview = fakePreview;
+    const { a, page } = await withPage(server);
+    const url = await a.media.add(page, makeFile(2048, 'tarde.pdf', 'application/pdf'));
+    const id = mediaIdOf(url)!;
+    await sync(a);
+    const b = await device(server);
+    await sync(b);
+    // La fila llega, pero Storage no contesta cuando se dibuja la tarjeta.
+    const download = vi.spyOn(b.remote, 'downloadThumb').mockRejectedValueOnce(new Error('Failed to fetch'));
+    expect(cardText(await b.media.resolve(url))).toContain('height="96"');
+    expect(download).toHaveBeenCalledTimes(1);
+    const heard: string[] = [];
+    b.media.subscribeThumbs((x) => heard.push(x));
+    server.clockOffset += 61_000;
+    await b.engine.syncMedia();
+    expect(heard).toContain(id);
+    expect(previewIn(cardText(await b.media.resolve(url)))).toContain('preview:tarde.pdf');
+  });
+
+  it('learnInfo: lo que no se sabía de un archivo de otro dispositivo (una carpeta) se averigua sin contarlo como abierto', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    const url = await a.media.add(page, makeFile(10, 'notas.pdf', 'application/pdf'));
+    const id = mediaIdOf(url)!;
+    await sync(a);
+    // Como si fuera la fila de una carpeta soltada en otro dispositivo.
+    server.mediaFiles.get(id)!.mime = 'inode/directory';
+    const b = await device(server);
+    await sync(b);
+    expect(b.media.fileInfo(id)).toBeNull();
+    await b.media.learnInfo([id]);
+    expect(b.media.isFolder(id)).toBe(true);
+  });
+
+  it('si la pestaña se cierra mientras se dibuja la vista previa, al volver a abrir no se prueba otra vez y el PDF sube', async () => {
+    const server = new FakeServer();
+    server.enableMedia();
+    const name = crypto.randomUUID();
+    const a = await device(server, name);
+    const page = await a.tree.create(null, 'Día 3');
+    await sync(a);
+    let calls = 0;
+    // El navegador cierra la pestaña acá (memoria, en el iPhone): la vista previa nunca termina.
+    server.preview = async (_f, _m, _n, onStart) => {
+      calls++;
+      await onStart?.();
+      return new Promise(() => undefined);
+    };
+    const url = await a.media.add(page, makeFile(4096, 'pesado.pdf', 'application/pdf'));
+    const id = mediaIdOf(url)!;
+    await vi.waitFor(() => expect(calls).toBe(1));
+    // La marca quedó antes de dibujar, sin terminar.
+    await vi.waitFor(async () => expect(await a.mediaDb.get('files', id)).toMatchObject({ probed: false, previewTried: true, registered: false }));
+    a.engine.stop();
+
+    // Se vuelve a abrir la app (la misma base del dispositivo), varias veces.
+    for (let i = 0; i < 3; i++) {
+      const again = await device(server, name);
+      await sync(again);
+      again.engine.stop();
+    }
+    expect(calls).toBe(1);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ probed: true, previewTried: true, thumb: 'none', registered: true, pending: 0 });
+    expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+    expect(server.thumbs.has(id)).toBe(false);
+  });
+
+  it('la app se cierra con tres PDF en fila: solo el que se estaba dibujando queda sin vista previa', async () => {
+    const server = new FakeServer();
+    server.enableMedia();
+    const name = crypto.randomUUID();
+    const a = await device(server, name);
+    const page = await a.tree.create(null, 'Día 3');
+    await sync(a);
+    // De a una, como la de verdad: cada una avisa que empieza en su turno; la primera se queda dibujando y la app se
+    // cierra (las otras dos esperan su turno).
+    let started = 0;
+    let chain: Promise<unknown> = Promise.resolve();
+    server.preview = (_f, _m, _n, onStart) => {
+      const run = chain.then(async () => {
+        started++;
+        await onStart?.();
+        return new Promise<Blob | null>(() => undefined);
+      });
+      chain = run.catch(() => undefined);
+      return run;
+    };
+    const ids: string[] = [];
+    for (const n of ['a.pdf', 'b.pdf', 'c.pdf']) ids.push(mediaIdOf(await a.media.add(page, makeFile(4096, n, 'application/pdf')))!);
+    await vi.waitFor(async () => expect((await a.mediaDb.get('files', ids[0]))?.previewTried).toBe(true));
+    expect(started).toBe(1);
+    expect((await a.mediaDb.get('files', ids[1]))?.previewTried).toBeUndefined();
+    expect((await a.mediaDb.get('files', ids[2]))?.previewTried).toBeUndefined();
+    a.engine.stop();
+
+    // Se vuelve a abrir con pdf.js andando: b y c tienen vista previa; a queda con el ícono; los tres suben.
+    let calls = 0;
+    server.preview = async (f, m, n, onStart) => {
+      calls++;
+      return fakePreview(f, m, n, onStart);
+    };
+    const again = await device(server, name);
+    await sync(again);
+    expect(calls).toBe(2);
+    const after = await Promise.all(ids.map((id) => again.mediaDb.get('files', id)));
+    expect(after.map((r) => r?.thumb)).toEqual(['none', 'done', 'done']);
+    expect(after.every((r) => r?.pending === 0 && r?.previewTried === true)).toBe(true);
+    expect(cardText(await again.media.resolve(MEDIA_SCHEME + ids[0]))).toContain('height="96"');
+    expect(cardText(await again.media.resolve(MEDIA_SCHEME + ids[1]))).toContain('height="268"');
+  });
+
+  it('al hacerla después, si pdf.js no se pudo bajar no queda marcada y se prueba la próxima vez', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    const url = await a.media.add(page, makeFile(2048, 'viejo.pdf', 'application/pdf'));
+    const id = mediaIdOf(url)!;
+    await sync(a);
+    const old = (await a.mediaDb.get('files', id))!;
+    delete old.previewTried;
+    await a.mediaDb.put('files', old);
+
+    let calls = 0;
+    server.preview = async () => {
+      calls++;
+      throw new PreviewUnavailable('sin red');
+    };
+    await a.media.resolve(url);
+    await vi.waitFor(() => expect(calls).toBe(1));
+    await new Promise((r) => setTimeout(r, 20));
+    expect((await a.mediaDb.get('files', id))?.previewTried).toBeUndefined();
+    // La próxima vez que se muestra (otra sesión), con pdf.js andando, se hace.
+    server.preview = fakePreview;
+    // La tarjeta se vuelve a dibujar (como cuando cambia algo del archivo).
+    (a.media as unknown as { thumbReady(id: string): void }).thumbReady(id);
+    await a.media.resolve(url);
+    await vi.waitFor(async () => expect(await a.mediaDb.get('files', id)).toMatchObject({ thumb: 'done', previewTried: true }));
+  });
+
+  it('lo mismo al hacerla después (un PDF de antes): si la pestaña se cierra, no se vuelve a probar', async () => {
+    const server = new FakeServer();
+    server.enableMedia();
+    const name = crypto.randomUUID();
+    const a = await device(server, name);
+    const page = await a.tree.create(null, 'Día 3');
+    await sync(a);
+    const url = await a.media.add(page, makeFile(2048, 'viejo.pdf', 'application/pdf'));
+    const id = mediaIdOf(url)!;
+    await sync(a);
+    const old = (await a.mediaDb.get('files', id))!;
+    delete old.previewTried;
+    await a.mediaDb.put('files', old);
+
+    let calls = 0;
+    server.preview = async (_f, _m, _n, onStart) => {
+      calls++;
+      await onStart?.();
+      return new Promise(() => undefined);
+    };
+    await a.media.resolve(url);
+    await vi.waitFor(() => expect(calls).toBe(1));
+    await vi.waitFor(async () => expect((await a.mediaDb.get('files', id))?.previewTried).toBe(true));
+    a.engine.stop();
+
+    const again = await device(server, name);
+    expect(cardText(await again.media.resolve(url))).toContain('height="96"');
+    await new Promise((r) => setTimeout(r, 30));
+    expect(calls).toBe(1);
   });
 });
 

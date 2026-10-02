@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.092 :
 
 Subidas que se traban (lo que quedó de v0.068 y v0.070). Con el portero o Storage colgados para todos, la cola
 esperaba el tope entero de cada archivo: un minuto, o hasta 62 s por miniatura. Ahora, a la segunda trabada seguida
@@ -10,6 +10,16 @@ sueltas) y su tope crece con las fallas seguidas; `page-files` tiene tope. El po
 respuesta lenta (un proxy que recibe el cuerpo de golpe), descuenta a lo sumo dos huecos seguidos como suspensión,
 una suspensión no estira la espera de la respuesta, y volver a mandar lo que una subida perdida tenía no es avance.
 [ Subidas trabadas - la cola deja de subir cuando el portero o Storage no contestan, y lo demás de B.11 ]
+
+v0.091 :
+
+Un PDF adjunto se veía solo como un ícono y el carrete salteaba los adjuntos. Ahora la tarjeta de un PDF muestra su
+primera página: la dibuja con pdf.js (bajado aparte, solo cuando llega un PDF) el dispositivo que lo agrega, y viaja
+como la miniatura de una foto, sin pasar por el portero; lo ya visto se ve sin red. Se eligió sobre la miniatura de
+Drive, que llega tarde y pedía cambiar el portero. Si pdf.js no estaba, o el PDF es de antes, se hace al mostrarlo;
+si la pestaña se cierra mientras se dibuja, no se reintenta y el PDF sube igual. En el carrete, los adjuntos se ven
+en grande con *Open* y *Download*. Sin migración ni propiedades nuevas en el bloque.
+[ Adjuntos - vista previa del PDF y tarjeta grande en el carrete ]
 
 v0.090 :
 

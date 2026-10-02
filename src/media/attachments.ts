@@ -240,6 +240,11 @@ export interface AttachmentCardInfo {
   state?: 'ok' | 'pending' | 'foreign' | 'deleted';
   /** Con `deleted`, lo que se dice en vez de "Borrado" (por ejemplo, que se pidió y falta confirmarlo). */
   notice?: string;
+  /**
+   * La vista previa (la primera página de un PDF, entrega 2) como dirección `data:image/jpeg;base64,…`. Con ella
+   * la tarjeta es más alta: la vista previa arriba y el nombre y el peso abajo. Solo con `ok` y `pending`.
+   */
+  preview?: string | null;
 }
 
 const WIDTH = 360;
@@ -283,14 +288,14 @@ function widthOf(chars: string[], size: number): number {
 }
 
 /** Un renglón que entra en el ancho, con "…" al final si hubo que cortar. */
-function fitOne(text: string, size: number): string {
+function fitOne(text: string, size: number, room = TEXT_W): string {
   const chars = Array.from(text);
-  if (widthOf(chars, size) <= TEXT_W) return text;
+  if (widthOf(chars, size) <= room) return text;
   const out: string[] = [];
   let width = charWidth('…') * size;
   for (const ch of chars) {
     const w = charWidth(ch) * size;
-    if (width + w > TEXT_W) break;
+    if (width + w > room) break;
     out.push(ch);
     width += w;
   }
@@ -410,6 +415,9 @@ export function attachmentCardUrl(info: AttachmentCardInfo): string {
     meta = details;
   }
 
+  const preview = (state === 'ok' || state === 'pending') && info.preview && SAFE_PREVIEW.test(info.preview) ? info.preview : null;
+  if (preview) return previewCard({ title, meta: state === 'ok' || !name ? size : meta, label, badge, badgeInk, preview });
+
   const lines = nameLines(title);
   const faded = state === 'deleted';
   const nameY = lines.length === 1 ? [45] : [36, 55];
@@ -442,4 +450,59 @@ export function attachmentCardUrl(info: AttachmentCardInfo): string {
     `<g font-family="${FONT}" clip-path="url(#text)">${text}</g>` +
     '</svg>';
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+/** Solo una foto JPEG, PNG o WebP en base64 entra en la tarjeta (nada que se pueda leer como otra cosa). */
+const SAFE_PREVIEW = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/;
+
+/** El alto de la vista previa en la tarjeta alta, y el de la franja con el nombre. */
+export const PREVIEW_CARD_HEIGHT = 200;
+const PREVIEW_INFO_HEIGHT = 68;
+const PREVIEW_PAD = 16;
+
+/**
+ * La tarjeta con vista previa: 360×268, la vista previa arriba (llena el ancho y muestra la parte de arriba de la
+ * página, como la cuadrícula de Drive), y abajo el nombre en un renglón y la etiqueta del tipo con el peso (o el
+ * estado). La foto va adentro del SVG como `data:` (un SVG que se muestra en un `<img>` no carga nada de afuera).
+ */
+function previewCard(p: { title: string; meta: string; label: string; badge: string; badgeInk: string; preview: string }): string {
+  const height = PREVIEW_CARD_HEIGHT + PREVIEW_INFO_HEIGHT;
+  const room = WIDTH - PREVIEW_PAD * 2;
+  const top = PREVIEW_CARD_HEIGHT;
+  const badgeW = p.label ? Math.ceil(widthOf(Array.from(p.label), 11) + 12) : 0;
+  const metaX = PREVIEW_PAD + (badgeW ? badgeW + 8 : 0);
+  const badgeSvg = p.label
+    ? `<rect x="${PREVIEW_PAD}" y="${top + 38}" width="${badgeW}" height="18" rx="4" fill="${p.badge}"/>` +
+      `<text x="${PREVIEW_PAD + badgeW / 2}" y="${top + 51}" text-anchor="middle" font-size="11" font-weight="700" letter-spacing="0.3" fill="${p.badgeInk}">${escapeXml(p.label)}</text>`
+    : '';
+  const metaSvg = p.meta
+    ? `<text x="${metaX}" y="${top + 52}" font-size="${META_SIZE}" fill="#76716b">${escapeXml(fitOne(p.meta, META_SIZE, WIDTH - PREVIEW_PAD - metaX))}</text>`
+    : '';
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${height}" viewBox="0 0 ${WIDTH} ${height}">` +
+    `<defs><clipPath id="card"><rect x="0.5" y="0.5" width="${WIDTH - 1}" height="${height - 1}" rx="10"/></clipPath>` +
+    `<clipPath id="text"><rect x="${PREVIEW_PAD}" y="${top}" width="${room}" height="${PREVIEW_INFO_HEIGHT}"/></clipPath></defs>` +
+    `<rect x="0.5" y="0.5" width="${WIDTH - 1}" height="${height - 1}" rx="10" fill="#ebe8e4"/>` +
+    `<g clip-path="url(#card)">` +
+    `<rect x="0" y="0" width="${WIDTH}" height="${top}" fill="#f6f4f1"/>` +
+    `<image x="0" y="0" width="${WIDTH}" height="${top}" preserveAspectRatio="xMidYMin slice" href="${p.preview}"/>` +
+    '</g>' +
+    `<line x1="0.5" y1="${top + 0.5}" x2="${WIDTH - 0.5}" y2="${top + 0.5}" stroke="#dcd8d3"/>` +
+    `<rect x="0.5" y="0.5" width="${WIDTH - 1}" height="${height - 1}" rx="10" fill="none" stroke="#dcd8d3"/>` +
+    `<g font-family="${FONT}">${badgeSvg}</g>` +
+    `<g font-family="${FONT}" clip-path="url(#text)">` +
+    `<text x="${PREVIEW_PAD}" y="${top + 26}" font-size="${NAME_SIZE}" font-weight="500" fill="#3f3b37">${escapeXml(fitOne(p.title, NAME_SIZE, room))}</text>` +
+    metaSvg +
+    '</g>' +
+    '</svg>';
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+/** Una foto (la vista previa guardada) como `data:<tipo>;base64,…`, para meterla en la tarjeta. */
+export async function blobToDataUrl(blob: Blob): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  const type = /^image\/(jpeg|png|webp)$/.test(blob.type) ? blob.type : 'image/jpeg';
+  return `data:${type};base64,${btoa(binary)}`;
 }
