@@ -75,6 +75,7 @@ import { registerRestoreTarget } from './historyUi';
 import { historyMarksExtension, type HistoryMarksInput } from './historyMarks';
 import { restoreInEditor } from './historyRestore';
 import { RemovedWritingBanner } from './RemovedWritingBanner';
+import { registerAssistantTarget } from '../assistant/assistantUi';
 import { TemplateHost } from '../templates/TemplateHost';
 
 // El carrete se baja aparte, la primera vez que se abre (roadmap B.4).
@@ -541,6 +542,13 @@ export function BlockEditor({
       return restoreInEditor(view, version, (fn) => editor.onChange(() => fn(), false));
     });
   }, [editor, pageId, editable]);
+
+  // El asistente (Docs/Doc_Asistente.md, A1) usa este editor: lo elegido, la guarda y aplicar. No una versión del
+  // historial ni la página de práctica.
+  useEffect(() => {
+    if (preview || filesNotice) return;
+    return registerAssistantTarget({ pageId, view: () => editor.prosemirrorView ?? null, editable: () => editableRef.current });
+  }, [editor, pageId, preview, filesNotice]);
 
   // Sacar una foto o filmar (camera.ts): el selector con `capture`, por el mismo camino que "/Image". Solo en un
   // dispositivo de toque; el video, con portero.

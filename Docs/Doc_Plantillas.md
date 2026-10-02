@@ -1,7 +1,7 @@
 # Plantillas y el reporte del día
 
-**Estado: entregas 0 y 1 implementadas** (las tres de fábrica, la vista previa y crear desde una; ver "Cómo quedó",
-al final); las entregas 2 y 3 siguen en diseño. Sin migración (roadmap P.23, fase 3 de `Plan_ShotDocs.md`; pedido de
+**Estado: entregas 0, 1 y 2 implementadas** (las tres de fábrica, la vista previa, crear desde una y el reporte del día;
+ver "Cómo quedó", al final); la entrega 3 sigue en diseño. Sin migración (roadmap P.23, fase 3 de `Plan_ShotDocs.md`; pedido de
 Lega del 2026-10-02). Diseñado contra `main` v0.108. Las decisiones PL1 a PL10 (sección 13) son propuestas: se adoptan como
 están hasta que Lega diga otra cosa. El contenido de las tres plantillas es una primera versión para que Lega la
 ajuste: la entrega 0 la deja a la vista sin guardar nada, justamente para eso. Corregido con la auditoría
@@ -634,3 +634,74 @@ repartidos, el `colwidth` de siempre de las celdas) para entrar en una A4 vertic
   guardó el deshacer (Enter llevaba al pie o, tras dos vueltas, al rótulo de la ficha): ahora rehacer vuelve a poner
   el punto de escritura en el primer dato (`placeAtFirstDatum`).
 - **Pendiente para Lega:** mirar las tres vistas previas en la computadora y en el iPhone (PL1) y decir qué cambiar.
+
+## Cómo quedó (entrega 2: el reporte del día)
+
+Sin migración: la marca es `pages.settings.dayReports` (`{}` marcada, `false` dejada a mano), que ya sube y baja como
+el formato de hoja. Todo es local: leer los reportes de la carpeta, crear la página (cola del árbol) y escribir su
+contenido (IndexedDB primero).
+
+- **Dónde está el código.** `src/templates/dayReport.ts` va en la primera carga y no arrastra el editor: la fecha local,
+  el título (`2026-10-02 | Day 06`, `Día 06`), cuál es la carpeta de reportes y el atajo (`isDayReportShortcut`).
+  `dayReportFacts.ts`: los rótulos de la ficha en los dos idiomas (6.4), leer y llenar la ficha por rótulo.
+  `dayReportCreate.ts` (los dos, con el globito):
+  leer los reportes de la carpeta (`planDayReport`), dónde va (`placeBefore`) y crear (`createDayReport`, que escribe
+  el contenido como `writePage`: documento con la semilla, editor sin pantalla, bloques **antes** del párrafo vacío).
+  `dayReportUi.tsx`: el botón arriba a la derecha del título (en la fila del encabezado), el atajo y los pedidos del
+  menú; `DayReportPopover.tsx`: el globito. Los ids de las de fábrica pasaron a `builtinIds.ts` para que la primera
+  carga los use.
+- **La carpeta de reportes.** Marcada, o deducida si alguna página de adentro tiene `template_id` de *On-Set Report*
+  **y** una fecha al principio del título: una página a la que se le deshizo la plantilla conserva el `template_id`
+  (entrega 1) pero no la fecha, así que no cuenta (desvío consciente de 6.2, que deduce solo por `template_id`).
+  *Stop using for day reports* deja `false`, que gana. Cada *New day report* vuelve a escribir `{}` si falta y la
+  persona puede editar la carpeta. El menú ⋯ trae *Use for day reports* / *Stop using for day reports* (quien puede
+  editar la página) y *New day report* (en la carpeta y en sus reportes, con nivel 4 en la carpeta). Una página que
+  no está abierta se abre y el globito sale cuando está lista.
+- **La tira.** *On-Set Report* en una página vacía **adentro de una carpeta** es el primer reporte: se llena con la
+  fecha, el día y lo del reporte anterior de la carpeta, toma el título `… | Day 01` si no tenía, marca la carpeta y
+  deja el cursor en *Summary*. Ahí el deshacer desde el título (entrega 1) no se arma: el título ya tiene texto; Ctrl/⌘+Z
+  en la página saca la plantilla y el título queda. **En la raíz del proyecto** queda como en la entrega 1 (plantilla
+  común, foco en el título vacío) con el aviso *Put day reports inside a folder to get New day report*.
+- **El globito.** Fecha (`type="date"`), día y locación, con el foco en la fecha: Enter crea (o abre el de esa fecha si
+  ya hay uno, con *Create another* al lado, que propone el mismo día de rodaje); si hay dos o más, *2 reports for 2026-10-02*. El anterior a medio bajar
+  muestra el aviso de O2. La propuesta se lee una vez al abrir; lo escrito en los campos manda. El nuevo reporte se abre
+  con el cursor en *Summary*. Se baja apenas se ve el botón (sin red tiene que estar).
+- **Qué se copia.** Fecha con el día de la semana (`2026-10-02 · Fri`), día y locación del globito; unidad, *VFX on
+  set* y *Director · DP* con su formato (una celda vacía ayer no borra *Main unit*), y la tabla *Camera package* entera.
+  Las páginas sin fecha (título o fila *Date*) no cuentan; se leen como mucho 40 documentos buscando la fila.
+- **Lo que no se hizo de la sección 6** (queda para la entrega 3 o después): el selector *Template* y
+  `dayReports.template` (no hay plantillas propias todavía; O4 tampoco aplica), y la marca *2 reports for…* en la barra
+  lateral con la papelera ofrecida para el que quedó sin tocar (O6): el globito sí lo dice.
+- **Pruebas.** `dayReport.test.ts` (fecha local en Buenos Aires a las 23:30 y a las 00:30, nombre, día de la semana,
+  rótulos en los dos idiomas y uno renombrado, llenar sin tocar la plantilla, la carpeta marcada, deducida, dejada y con
+  forma rara, el atajo en Mac y Windows, con `code` y con AltGr), `dayReportSync.test.ts` (la prueba de aceptación con
+  el servidor en memoria: el primero desde la tira, el segundo sin red con lo de ayer, ya existe, la subida al volver
+  la red y otro dispositivo; la marca perdida y *Stop using*; el orden con una fecha anterior; sin número legible; el
+  anterior a medio bajar; la versión publicada y la anterior abren lo creado sin escribir nada) y
+  `dayReportHost.test.tsx` (la página de verdad: la tira en una carpeta y en la raíz, el globito, ya existe, *Create
+  another*, el atajo, sin red, los permisos Edit y Edit pages, y el menú). En Chromium sin ventana, con la app real
+  sobre el servidor en memoria y la zona horaria de Buenos Aires: la prueba de aceptación entera (con modo avión) y el
+  atajo con las teclas de Chromium en Windows y con la plataforma de Mac, AltGr simulado y el teléfono.
+- **Pendiente para Lega:** el atajo en Firefox y Safari de la Mac y con un teclado latinoamericano físico (9), y el
+  botón en el iPhone.
+
+### Correcciones de la auditoría de la entrega 2
+
+Auditoría independiente sobre `67b3793`: aprobado con observaciones, sin bloqueantes. Cada arreglo con una prueba que
+falla sin él (`dayReportSync.test.ts`, `dayReportHost.test.tsx`, "correcciones de la auditoría").
+
+| Hallazgo | Corrección |
+|---|---|
+| **O1** *Create another* proponía el día siguiente | Si la fecha ya tiene un reporte, *Shoot day* propone su número (`suggestedDay`); cambiar la fecha lo vuelve a calcular salvo que la persona haya tocado el día. |
+| **O2** El primero deshecho dejaba una página vacía con cara de reporte | La propuesta no cuenta los **reportes hechos por la app** vacíos y completos (`isReusableReport`: `template_id` de *On-Set Report*, el título exacto `AAAA-MM-DD \| Day NN` y sin subpáginas; se miran los 10 más recientes; uno a medio bajar no se toma por vacío). Si se crea un reporte con esa fecha, se escribe en él en vez de crear otro. Una página de la persona con fecha en el título (*2026-10-04 Fotos de set*, vacía o con subpáginas) sigue contando como de ese día y **nunca** se reusa ni se renombra (re-verificación, B1). No se escribe nada al deshacer. |
+| **O3** Enter mientras se leía la carpeta no hacía nada | El botón queda habilitado: Enter se recuerda y se hace apenas llega la propuesta, con lo que la persona ya haya tocado respetado. El formulario valida solo (`noValidate`): el día vacío mientras carga frenaba el envío del navegador. |
+| **O4** Si fallaba escribir el contenido, el reintento duplicaba la página | `createDayReport` tira `DayReportWriteError` con el id; el reintento escribe en esa página (también si se cambió la fecha: se le pone el título nuevo, que ya tenía la forma de reporte). `writeNewPage` solo escribe en una página vacía: si el intento anterior llegó a escribir, no agrega otra copia. |
+| **O5** Un invitado con *Edit & create pages* crea reportes | Coincide con la base; al roadmap como decisión del modelo de permisos. |
+| **O6** *Use for day reports* en el menú de cada reporte | Se esconde en las páginas que son reportes (salvo que ya estén marcadas como carpeta). |
+| **O7** En Dvorak el atajo es la tecla física N | Una línea en la ayuda: el atajo va por la posición de la tecla. |
+
+La re-verificación (sobre `7070d9d`) encontró que el reuso de O2 tomaba cualquier página vacía con la fecha al principio
+del título, también una carpeta de la persona, y le cambiaba el nombre (B1). Quedó limitado a los reportes hechos por la
+app, con pruebas de una carpeta con fecha con y sin subpágina, con texto, un reporte con subpágina y uno renombrado por
+la persona. Además, si el de fecha más alta no tiene número de día (una página de la persona), el día sale del número
+más alto de la carpeta + 1.

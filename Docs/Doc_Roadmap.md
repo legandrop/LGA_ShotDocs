@@ -163,9 +163,15 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   zip sin comprimir con Zip64 escrito a medida que llega en Chrome y Edge, o el árbol en una carpeta; en memoria con
   tope en Firefox, Safari y los teléfonos (D24); nombres de Drive limpios para Windows y la Mac (`.`, `..`, punto al
   final, `CON`…, a lo sumo 255 bytes) y cortes de 200 y 250 caracteres por grafema. *Retry missing*, el tope sin avance
-  de cada pedido (R1) y el ZWJ de los emojis compuestos en la app (O4), hechos (rama `lega/carpetas-restos`). Falta
-  (BAJO): listar ~40 subcarpetas por pedido (pide un cambio del portero: `/folder/list` con varias), el ZWJ en el
-  portero, Firefox sin tope por el service worker y probar a mano en Safari, el iPhone y con el Drive real. Detalle en
+  de cada pedido (R1) y el ZWJ de los emojis compuestos en la app (O4), hechos (rama `lega/carpetas-restos`); listar
+  hasta 40 subcarpetas por pedido (`dirs` en `/folder/list`) y el ZWJ en el portero, hechos (v0.119, rama
+  `lega/carpetas-e2`). Falta (BAJO): Firefox sin tope por el service worker y probar a mano en Safari, el iPhone y con
+  el Drive real (si Drive rechaza la consulta con varios padres, la app cae a de a una sin perder nada, pero gasta un
+  pedido de más por tanda; medir el CPU de un pedido con 40 subcarpetas en el plan gratis). De la auditoría de la entrega
+  2 (BAJO): la confianza de 60 s del listado de varias deja listar hasta 60 s una subcarpeta recién movida a otro proyecto
+  (D81); en las páginas siguientes esa confianza vale 10 min y no 60 s; el ZWJ va como carácter invisible en el código
+  (pasarlo a `'‍'`); `inTree` toma cualquier 403 de Drive (también el de límite de pedidos) como «fuera del árbol»,
+  y la subcarpeta aparece como faltante hasta *Retry missing*. Detalle en
   `Doc_Carpetas.md`, "Cómo quedó" y "Cómo quedó (entrega 2)". Pendiente de los nombres (auditoría de D3, BAJO):
   - Mac y Windows: la marca de cada subcarpeta resume la ruta sin normalizar los acentos (la Mac da `í` en dos
     partes). Volver a soltar desde el otro sistema crea subcarpetas nuevas, con el mismo nombre, al lado de las de
@@ -324,11 +330,18 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   plantillas a medio bajar, datos de set que faltaban y una sección *Internal* para lo que no debe ver un cliente.
   Entregas: 0 (las tres plantillas en el código y una vista para que Lega las revise), 1 (crear desde una de fábrica),
   2 (el reporte del día), 3 (plantillas propias). **Entregas 0 y 1 hechas** (v0.117): la vista previa
-  (`/practice?template=on-set`), la tira de la página nueva, *More…* y *Apply template…*; **falta** que Lega revise el
-  contenido de las tres (PL1), y las entregas 2 y 3. Quedó de la auditoría: *Exit* de la vista previa abierta desde
-  la ventana va al inicio y no a la página donde se elegía (Atrás sí vuelve); un aviso de ProseMirror en la consola al
-  abrir la vista previa (sin efecto visible); y que deshacer la plantilla deja `template_id` (la entrega 2 lo tiene
-  que tener en cuenta). **Para después:** que la base fusione las claves de `pages.settings`
+  (`/practice?template=on-set`), la tira de la página nueva, *More…* y *Apply template…*. **Entrega 2 hecha**
+  (v0.121): *New day report* (botón, globito, menú ⋯ y Ctrl/⌘+Alt+Shift+N), la carpeta de reportes marcada o deducida,
+  lo que se copia del día anterior, "ya existe" y el orden, sin red. **Falta** que Lega revise el contenido de las tres
+  (PL1) y pruebe el atajo en Firefox y Safari de la Mac y con un teclado latinoamericano físico, y la entrega 3. De la
+  sección 6 quedaron para después el selector de plantilla del globito (con las propias, entrega 3) y la marca *2
+  reports for…* en la barra lateral con la papelera ofrecida para el repetido sin tocar (O6). Quedó de la auditoría de
+  la entrega 1: *Exit* de la vista previa abierta desde la ventana va al inicio y no a la página donde se elegía
+  (Atrás sí vuelve); y un aviso de ProseMirror en la consola al abrir la vista previa (sin efecto visible). De la
+  auditoría de la entrega 2 (las demás observaciones, corregidas): un invitado con *Edit & create pages* crea reportes,
+  porque la base mira el nivel y no el rol; si un cliente nunca tiene que crear páginas, es una decisión del modelo de
+  permisos (`Plan_Workspaces.md`); y al reusar un reporte vacío hecho por la app se le cambia el número de día por el
+  siguiente al último (no se pierde nada). **Para después:** que la base fusione las claves de `pages.settings`
   (`settings || patch`) en vez de reemplazar el objeto entero, con su migración: hoy dos cambios de ajustes a la vez
   se pisan (`Doc_Plantillas.md`, sección 8).
 - **P.20 Anotar sobre las fotos** (Lega, 2026-10-02): flechas, círculos, rectángulos, texto y lápiz encima de una
@@ -365,8 +378,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   pantalla en 8 de 25 casos (pierde el renglón de encabezado); una marca de texto desconocida borra ese texto en la
   copia y el aviso no lo usa nadie; el proyecto de prueba no tiene páginas de hoja libre.
 - **P.21 Menciones en comentarios: *@persona*** (Lega, 2026-10-02): escribir `@` en un comentario, elegir a alguien y
-  que le llegue un aviso en la app; por correo cuando haya clave de Resend (C.12). **Diseño en `Doc_Menciones.md`** (sin
-  código ni migración; auditado y corregido; decisiones propuestas ME1 a ME10, ME10 espera a Lega): solo a quien ya
+  que le llegue un aviso en la app; por correo cuando haya clave de Resend (C.12). **Entrega 1 programada (v0.120;
+  migración `20261015120000_menciones.sql` sin aplicar):** el `@` con la lista, el pintado, la cola, la campana y el
+  punto en el botón de comentarios; auditada y corregida. Faltan las entregas 2 y 3, y un detalle cosmético (O6 de la
+  auditoría): un comentario con mención cuenta como 2 cambios sin subir (alta y menciones). **Diseño en `Doc_Menciones.md`** (auditado y
+  corregido; decisiones propuestas ME1 a ME10, ME10 espera a Lega): solo a quien ya
   ve la página; un miembro ve al equipo y a los clientes que ya comentaron (ME10); el dueño y los admins la comparten
   desde la mención (entrega 2); un invitado ve solo a quienes participan en los comentarios y a quien le compartió
   algo; va después del link público (`schema_version` 15); el texto sigue plano (`@lega`) y quién es va en `comment_mentions`, así una versión vieja no rompe
@@ -374,7 +390,16 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   los visitantes del link no mencionan; las menciones de Coda se ven como `@Nombre`. Entregas: 1 (base, `@`, campana,
   sin red), 2 (compartir desde la mención, marcas en el árbol y en el ícono), 3 (correo, grupo C).
 - **P.24 Asistente con la clave de cada usuario y servidor MCP (fase 5)** (era C.11; 2026-10-02, ya sin esperar a
-  Lega). **Diseño en `Doc_Asistente.md`** (sin código; decisiones propuestas IA1 a IA10; auditado, corregido): la clave
+  Lega). **A1 implementada (v0.118):** ajustes con los cuatro proveedores y la clave en el dispositivo, el panel con *Fix*,
+  *Improve*, *Shorter*, *Translate to…* y *Ask…* sobre lo elegido, vista previa por palabras, *Apply* con un deshacer y
+  la guarda de "cambió mientras pensaba", permisos, sin red, atajo, ayuda, CSP y la migración de `assistant_policy`
+  (sin aplicar; la aplica quien publica). Falta: A2, A3 y el MCP (M0 a M3); lo que Lega prueba con sus claves está en
+  "Cómo quedó A1". Quedó de la auditoría de A1 (chico): la barra de formato de BlockNote se dibuja encima del panel
+  cuando lo elegido queda debajo; una traducción a japonés o chino de cerca de 20 000 caracteres todavía puede
+  llegar cortada (se avisa y no se aplica; afinar el tope por idioma o por modelo); un modelo que razona por un servicio
+  compatible (OpenRouter) no lleva el margen de tokens, y en OpenAI y Gemini se podría además bajar cuánto piensan
+  (`reasoning.effort`, `thinkingConfig`) cuando se pruebe con claves reales qué acepta cada modelo; si el modelo saca
+  las barras de un `\+` o un `\*`, el `++` se lee como subrayado (se ve en la vista previa). **Diseño en `Doc_Asistente.md`** (decisiones propuestas IA1 a IA10; auditado, corregido): la clave
   solo en el dispositivo y por persona (IA1, D-06; el cifrado solo evita verla por accidente); el pedido directo del navegador al proveedor (Anthropic, OpenAI, Google
   y compatibles con OpenAI, CORS probado); vista previa y aplicar como una edición que se deshace, sin aplicar si el
   texto cambió mientras el modelo pensaba; aplicar pide Editar; un interruptor del dueño (*On*, *Local models only*,

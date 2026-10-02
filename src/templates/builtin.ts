@@ -1,6 +1,7 @@
 import { paragraphProps } from '../ui/editorSchema';
 import { builtinEn } from './builtin.en';
 import { builtinEs } from './builtin.es';
+import { BUILTIN_ONSET, BUILTIN_PREPRO, BUILTIN_SHOT } from './builtinIds';
 
 // Las tres plantillas de fábrica (Docs/Doc_Plantillas.md, sección 2): viven en el código, en todos los workspaces y
 // proyectos, y andan sin red. Solo usan bloques que ya conoce la versión mínima publicada (tablas con encabezado,
@@ -14,11 +15,10 @@ export const BUILTIN_KINDS: BuiltinKind[] = ['prepro', 'onset', 'shot'];
 
 /**
  * Los ids de las de fábrica, para `pages.template_id` (informativo: de qué plantilla salió una página). Son uuid fijos:
- * no se cambian nunca (el reporte del día, entrega 2, deduce la carpeta de reportes por el de *On-Set Report*).
+ * no se cambian nunca (el reporte del día deduce la carpeta de reportes por el de *On-Set Report*). Viven en
+ * `builtinIds.ts`, que puede ir en la primera carga.
  */
-export const BUILTIN_PREPRO = '5d1b7a0e-3c4f-4e8a-9b21-0f6c2a7d1e01';
-export const BUILTIN_ONSET = '5d1b7a0e-3c4f-4e8a-9b21-0f6c2a7d1e02';
-export const BUILTIN_SHOT = '5d1b7a0e-3c4f-4e8a-9b21-0f6c2a7d1e03';
+export { BUILTIN_PREPRO, BUILTIN_ONSET, BUILTIN_SHOT };
 
 export const BUILTIN_IDS: Record<BuiltinKind, string> = { prepro: BUILTIN_PREPRO, onset: BUILTIN_ONSET, shot: BUILTIN_SHOT };
 

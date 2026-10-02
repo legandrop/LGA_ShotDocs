@@ -302,15 +302,23 @@ export class PageTree {
 
   /**
    * Crea una página adentro de `parentId`, o en la raíz de `projectId` (o del primer proyecto). Una página sin título
-   * ni plantilla (la del "+") queda anotada como recién creada acá (`isFresh`): ofrece las plantillas.
+   * ni plantilla (la del "+") queda anotada como recién creada acá (`isFresh`): ofrece las plantillas. Va al final, o
+   * justo antes de la hermana `before` (el reporte del día con una fecha anterior, Doc_Plantillas.md 6.5).
    */
-  async create(parentId: string | null, title = '', projectId?: string, options: { templateId?: string } = {}): Promise<string> {
+  async create(
+    parentId: string | null,
+    title = '',
+    projectId?: string,
+    options: { templateId?: string; before?: string } = {},
+  ): Promise<string> {
     const parent = parentId ? this.view.get(parentId) : undefined;
     const workspaceId = parent?.workspace_id ?? projectId ?? this.workspaceId;
     const siblings = this.siblingsIn(parentId, workspaceId);
-    const last = siblings.at(-1)?.sort_key ?? null;
+    const at = options.before ? siblings.findIndex((p) => p.id === options.before) : -1;
+    const sortKey =
+      at >= 0 ? keyBetween(siblings[at - 1]?.sort_key ?? null, siblings[at].sort_key) : keyBetween(siblings.at(-1)?.sort_key ?? null, null);
     const id = crypto.randomUUID();
-    const page = { id, workspace_id: workspaceId, parent_id: parentId, title, sort_key: keyBetween(last, null) };
+    const page = { id, workspace_id: workspaceId, parent_id: parentId, title, sort_key: sortKey };
     // Antes de encolar: la página se dibuja apenas entra a la cola y ya tiene que saberse nueva.
     if (!title && !options.templateId) this.fresh = [...this.fresh.filter((f) => f !== id), id].slice(-FRESH_MAX);
     await this.enqueue({ kind: 'create', page: options.templateId ? { ...page, template_id: options.templateId } : page });

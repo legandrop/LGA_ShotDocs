@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import { errorMessage, isNetworkError, isPermanent } from './types';
+import { errorMessage, isNetworkError, isPermanent, RemoteError } from './types';
 import { APP_OUTDATED } from './remote';
 import { localize, stored, t } from '../i18n';
 
@@ -29,6 +29,24 @@ export const MAX_COMMENT_LENGTH = 10_000;
 // versión solo borra en `meta` las claves `since:`, así que al abrir, lo que está en `meta` y ya no está ni en
 // la cola ni en lo bajado vuelve a la cola (el mismo id: nada se duplica).
 const IMPORT_KEY = 'import:';
+
+// Las menciones de un comentario (Docs/Doc_Menciones.md, 3.3) viajan en una operación aparte, `mentions`, detrás del
+// alta o la edición. Una versión vieja de la app no la conoce y la daría por subida sin mandarla: como con `import`,
+// cada una queda también en `meta` (`mentions:<id del comentario>`) hasta que el servidor la confirma o la descarta.
+const MENTIONS_KEY = 'mentions:';
+// A quién la base no avisó (lo descartó por permisos): solo lo ve el autor, en este dispositivo.
+const UNNOTIFIED_KEY = 'unnotified:';
+
+/** La versión de la base con `comment_mentions` y sus funciones (20261015120000_menciones.sql). */
+export const MENTIONS_SCHEMA_VERSION = 15;
+/** Lo más que acepta la base por comentario. */
+export const MAX_MENTIONS = 20;
+
+/** Una persona mencionada en un comentario: su id y el rótulo que se escribió (`@lega` → `lega`). */
+export interface MentionRef {
+  userId: string;
+  label: string;
+}
 
 /** La forma que acepta `comments.block_id`. */
 const BLOCK_ID = /^[A-Za-z0-9_-]{1,128}$/;
@@ -64,6 +82,8 @@ export interface CommentRow {
    * demás. Se muestra siempre con "(via link)".
    */
   plink_author?: string | null;
+  /** Las menciones activas (`list_comments` desde la versión 15 de la base); `null` si se borró. */
+  mentions?: { user_id: string; label: string }[] | null;
 }
 
 /** Un comentario que viene de otra herramienta (`import_comment`, 20260930200000_comentarios_importados.sql). */
@@ -113,6 +133,11 @@ export interface CommentRemote {
    * (se sigue con la vista entera).
    */
   listComments?(pageId: string, since: string | null): Promise<ListedComment[] | null>;
+  /**
+   * `set_comment_mentions`: el conjunto entero de las menciones de un comentario propio; devuelve los ids que la base
+   * aceptó (los demás los descartó por permisos). Sin la función (una base vieja, un link público), no está.
+   */
+  setCommentMentions?(commentId: string, mentions: { user_id: string; label: string }[]): Promise<string[]>;
 }
 
 /** Una fila de `list_comments`: la de la vista más cuándo cambió por última vez. */
@@ -127,6 +152,8 @@ export type CommentOp =
   | { kind: 'edit'; id: string; pageId: string; body: string; at: string }
   | { kind: 'delete'; id: string; pageId: string; at: string }
   | { kind: 'resolve'; id: string; pageId: string; resolved: boolean; at: string }
+  // Las menciones de un comentario propio: el conjunto entero (Doc_Menciones.md, 3.3).
+  | { kind: 'mentions'; id: string; pageId: string; mentions: MentionRef[]; at: string }
   // Un comentario importado (Doc_Importar_Coda.md): `at` es la fecha original.
   | {
       kind: 'import';
@@ -216,6 +243,10 @@ export interface CommentView {
   failedKinds: CommentOp['kind'][];
   /** El texto de un alta o una edición rechazadas (para copiarlo antes de descartar). */
   rejectedText: string | null;
+  /** Las menciones activas (lo bajado, o lo que espera subir). */
+  mentions: MentionRef[];
+  /** Los rótulos de quienes la base no avisó (solo en el dispositivo de quien escribió). */
+  unnotified: string[];
 }
 
 export interface CommentThread {
@@ -258,6 +289,8 @@ export function commentErrorText(error: string, kind?: CommentOp['kind']): strin
       return stored('commentError.threadInvalid');
     case 'import_denied':
       return stored('commentError.importDenied');
+    case 'mentions_invalid':
+      return stored('commentError.mentionsInvalid');
     case 'created_invalid':
     case 'resolved_invalid':
       return stored('commentError.importInvalid');
@@ -334,11 +367,15 @@ export class CommentQueue {
   onChange?: () => void;
   /** La base rechazó un cambio por la versión mínima del workspace (`app_outdated`): se ve el aviso de actualizar. */
   onOutdated?: () => void;
+  /** Subió un comentario propio (la campana pregunta ya: Doc_Menciones.md, 5.1). */
+  onUploaded?: () => void;
 
   private ops: QueuedCommentOp[] = [];
   private readonly rows = new Map<string, Map<string, CommentRow>>();
   private readonly loadingRows = new Map<string, Promise<void>>();
   private readonly authors = new Map<string, string>();
+  /** A quién no avisó la base, por comentario propio (`unnotified:` en `meta`). */
+  private readonly unnotified = new Map<string, string[]>();
   private readonly watched = new Map<string, number>();
   /** Páginas que ya se bajaron en esta sesión (las demás se muestran con lo guardado). */
   private readonly pulled = new Set<string>();
@@ -389,10 +426,44 @@ export class CommentQueue {
   async load(): Promise<void> {
     if (!this.db) return;
     await this.restoreImports().catch(() => undefined);
+    await this.restoreMentions().catch(() => undefined);
     const [ops, authors] = await Promise.all([this.db.getAll('outbox'), this.db.getAll('authors')]);
     this.ops = ops.sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0));
     for (const a of authors) this.authors.set(a.userId, a.email);
+    const keys = (await this.db.getAllKeys('meta')).filter((k): k is string => typeof k === 'string' && k.startsWith(UNNOTIFIED_KEY));
+    for (const key of keys) {
+      const labels = await this.db.get('meta', key);
+      if (Array.isArray(labels)) this.unnotified.set(key.slice(UNNOTIFIED_KEY.length), labels.filter((l) => typeof l === 'string'));
+    }
     this.changed();
+  }
+
+  /**
+   * Las menciones que están en `meta` y ya no están en la cola (una versión vieja de la app las sacó sin mandarlas, o
+   * la app se cortó entre confirmar y olvidarlas): si lo bajado ya las tiene, o el comentario no llegó nunca o se
+   * borró, se olvidan; si no, vuelven a la cola (el conjunto entero: repetirlo no cambia nada).
+   */
+  private async restoreMentions(): Promise<void> {
+    const db = this.db!;
+    const tx = db.transaction(['outbox', 'meta', 'comments'], 'readwrite');
+    const outbox = tx.objectStore('outbox');
+    const meta = tx.objectStore('meta');
+    const rows = tx.objectStore('comments');
+    const keys = (await meta.getAllKeys()).filter((k): k is string => typeof k === 'string' && k.startsWith(MENTIONS_KEY));
+    if (keys.length > 0) {
+      const queue = await outbox.getAll();
+      const queued = new Set(queue.filter((e) => e.op.kind === 'mentions').map((e) => e.op.id));
+      const unsent = new Set(queue.filter((e) => isNew(e.op)).map((e) => e.op.id));
+      for (const key of keys) {
+        const op = (await meta.get(key)) as CommentOp | undefined;
+        if (!op || op.kind !== 'mentions' || queued.has(op.id)) continue;
+        const row = await rows.get(op.id);
+        const gone = row ? !!row.deleted_at : !unsent.has(op.id);
+        if (gone || (row && sameMentions(row.mentions ?? [], op.mentions, this.userId))) await meta.delete(key);
+        else await outbox.add({ op, attempted: false, failed: false, error: null, queuedAt: this.now() });
+      }
+    }
+    await tx.done;
   }
 
   /**
@@ -424,9 +495,18 @@ export class CommentQueue {
    */
   configure(schemaVersion: number | null, generation: number | null = null): void {
     const before = this.ready;
+    const mentionsBefore = this.mentionsReady;
     this.schemaVersion = schemaVersion;
     if (generation !== null) this.generation = generation;
-    if (before !== this.ready) this.changed();
+    if (before !== this.ready || mentionsBefore !== this.mentionsReady) this.changed();
+  }
+
+  /**
+   * La base del workspace tiene las menciones (versión 15 o más) y la cola las puede mandar. Sin eso (una base sin
+   * migrar, un link público), el `@` es texto y no hay campana.
+   */
+  get mentionsReady(): boolean {
+    return this.schemaVersion !== null && this.schemaVersion >= MENTIONS_SCHEMA_VERSION && !!this.remote.setCommentMentions;
   }
 
   /**
@@ -484,8 +564,11 @@ export class CommentQueue {
 
   // --- Cambios (la interfaz) ------------------------------------------------------------------------------
 
-  /** Abre un hilo (o responde, con `threadId`). Devuelve el id nuevo. */
-  async add(pageId: string, blockId: string | null, body: string, threadId: string | null = null): Promise<string> {
+  /**
+   * Abre un hilo (o responde, con `threadId`). Devuelve el id nuevo. `mentions`: a quién se nombró (sale detrás del
+   * alta, en la misma escritura del dispositivo).
+   */
+  async add(pageId: string, blockId: string | null, body: string, threadId: string | null = null, mentions: MentionRef[] = []): Promise<string> {
     const text = cleanBody(body);
     if (blockId !== null && !BLOCK_ID.test(blockId)) throw new CommentInvalid(t('commentError.badBlock'));
     let block = blockId;
@@ -496,13 +579,37 @@ export class CommentQueue {
       block = root.blockId;
     }
     const id = crypto.randomUUID();
-    await this.enqueue({ kind: 'add', id, pageId, blockId: block, threadId, body: text, at: this.stamp() });
+    const at = this.stamp();
+    const named = this.mentionsOp(id, pageId, mentions, at);
+    await this.enqueue({ kind: 'add', id, pageId, blockId: block, threadId, body: text, at }, named && named.mentions.length > 0 ? named : null);
     return id;
   }
 
-  async edit(pageId: string, id: string, body: string): Promise<void> {
+  /**
+   * Edita un comentario propio. `mentions`: el conjunto nuevo de menciones (sin pasarlo, no cambian); si es el mismo
+   * que ya tiene, no se manda nada.
+   */
+  async edit(pageId: string, id: string, body: string, mentions?: MentionRef[]): Promise<void> {
     const text = cleanBody(body);
-    await this.enqueue({ kind: 'edit', id, pageId, body: text, at: this.stamp() });
+    const at = this.stamp();
+    let named = mentions ? this.mentionsOp(id, pageId, mentions, at) : null;
+    if (named && sameMentions(toRows(this.view(pageId).get(id)?.mentions ?? []), named.mentions, this.userId)) named = null;
+    await this.enqueue({ kind: 'edit', id, pageId, body: text, at }, named);
+  }
+
+  /** La operación `mentions` de un comentario (sin repetidos ni uno mismo, hasta 20); `null` si la base no las tiene. */
+  private mentionsOp(id: string, pageId: string, mentions: MentionRef[], at: string): Extract<CommentOp, { kind: 'mentions' }> | null {
+    if (!this.mentionsReady) return null;
+    const seen = new Set<string>();
+    const clean: MentionRef[] = [];
+    for (const m of mentions) {
+      const label = cleanLabel(m.label);
+      if (!UUID.test(m.userId) || m.userId === this.userId || seen.has(m.userId) || !label) continue;
+      seen.add(m.userId);
+      clean.push({ userId: m.userId, label });
+      if (clean.length === MAX_MENTIONS) break;
+    }
+    return { kind: 'mentions', id, pageId, mentions: clean, at };
   }
 
   async remove(pageId: string, id: string): Promise<void> {
@@ -616,6 +723,7 @@ export class CommentQueue {
       if (!drop.has(e.seq!)) continue;
       await store.delete(e.seq!);
       if (e.op.kind === 'import') await tx.objectStore('meta').delete(IMPORT_KEY + e.op.id);
+      if (e.op.kind === 'mentions') await forgetCopy(tx.objectStore('meta'), e.op);
     }
     await tx.done;
     await this.reloadOps();
@@ -637,6 +745,8 @@ export class CommentQueue {
         parts.push(t('commentDiscard.edit'));
       } else if (op.kind === 'delete') {
         parts.push(t('commentDiscard.delete'));
+      } else if (op.kind === 'mentions') {
+        parts.push(t('commentDiscard.mentions'));
       } else {
         parts.push(op.resolved ? t('commentDiscard.resolve') : t('commentDiscard.reopen'));
       }
@@ -761,9 +871,20 @@ export class CommentQueue {
       if (this.stopped) return;
       const entry = await this.claimNext(waiting, isPageUnsent);
       if (!entry) return;
+      let result: unknown;
       try {
-        await this.send(entry.op);
+        result = await this.send(entry.op);
       } catch (err) {
+        if (entry.op.kind === 'mentions' && isMissingFunction(err) && this.mentionsReady) {
+          // La base dice que tiene menciones (versión 15) pero la API todavía no ve la función (recarga su caché
+          // después de migrar): es pasajero, se reintenta en la próxima vuelta.
+          throw new RemoteError(errorMessage(err), false, 'PGRST202');
+        }
+        if (entry.op.kind === 'mentions' && isGoneForMentions(err)) {
+          // El comentario ya no está o no se ve (o la base no tiene menciones): no hay nada que arreglar a mano.
+          await this.forget(entry);
+          continue;
+        }
         if (errorMessage(err) === APP_OUTDATED) {
           // La base frena los comentarios por versión (B.17) y subieron la mínima entre la consulta y el pedido: este y
           // los que siguen quedan en la cola, sin error ni rechazo, y salen al actualizar. El motor muestra el aviso.
@@ -774,10 +895,22 @@ export class CommentQueue {
         await this.fail(entry, commentErrorText(errorMessage(err), entry.op.kind));
         continue;
       }
-      await this.ack(entry);
+      await this.ack(entry, result);
       // Se subió algo de esta página: se baja en esta misma vuelta (fechas y autor de verdad).
       this.dirty.add(entry.op.pageId);
+      if (entry.op.kind === 'add') this.onUploaded?.();
     }
+  }
+
+  /** Saca de la cola, sin error a la vista, unas menciones que ya no tienen dónde ir (y su copia en `meta`). */
+  private async forget(entry: QueuedCommentOp): Promise<void> {
+    if (!this.db) return;
+    const tx = this.db.transaction(['outbox', 'meta'], 'readwrite');
+    await tx.objectStore('outbox').delete(entry.seq!);
+    if (entry.op.kind === 'mentions') await forgetCopy(tx.objectStore('meta'), entry.op);
+    await tx.done;
+    this.ops = this.ops.filter((o) => o.seq !== entry.seq);
+    this.changed();
   }
 
   /**
@@ -792,9 +925,13 @@ export class CommentQueue {
     const tx = this.db.transaction('outbox', 'readwrite');
     let cursor = await tx.store.openCursor();
     let found: QueuedCommentOp | null = null;
+    // Las menciones de un comentario cuya alta fue rechazada esperan con ella (al reintentarla, salen detrás).
+    const rejected = new Set<string>();
     while (cursor) {
       const entry = cursor.value;
-      if (!entry.failed && !waiting.has(entry.op.pageId)) {
+      if (entry.failed && isNew(entry.op)) rejected.add(entry.op.id);
+      const held = entry.op.kind === 'mentions' && rejected.has(entry.op.id);
+      if (!entry.failed && !held && !waiting.has(entry.op.pageId)) {
         // Una página creada sin red todavía no está en el servidor: lo suyo espera (y en orden).
         if (isPageUnsent(entry.op.pageId)) waiting.add(entry.op.pageId);
         else {
@@ -810,8 +947,11 @@ export class CommentQueue {
     return found;
   }
 
-  private send(op: CommentOp): Promise<void> {
+  private async send(op: CommentOp): Promise<unknown> {
     switch (op.kind) {
+      case 'mentions':
+        if (!this.remote.setCommentMentions) return null;
+        return this.remote.setCommentMentions(op.id, toRows(op.mentions));
       case 'add':
         return this.remote.addComment({ id: op.id, pageId: op.pageId, blockId: op.blockId, threadId: op.threadId, body: op.body });
       case 'edit':
@@ -837,15 +977,31 @@ export class CommentQueue {
   }
 
   /** Confirmado: sale de la cola y queda en lo guardado, así se sigue viendo hasta la próxima bajada. */
-  private async ack(entry: QueuedCommentOp): Promise<void> {
+  private async ack(entry: QueuedCommentOp, result: unknown = null): Promise<void> {
     if (!this.db) return;
     const tx = this.db.transaction(['outbox', 'comments', 'meta'], 'readwrite');
     const rows = tx.objectStore('comments');
+    const meta = tx.objectStore('meta');
     const current = await rows.get(entry.op.id);
-    const next = applyOp(current, entry.op, this.userId);
+    const op = entry.op;
+    let next: CommentRow | null;
+    if (op.kind === 'mentions') {
+      // Quedan las que la base aceptó; a las demás no las avisó (solo lo ve quien escribió).
+      const accepted = new Set(Array.isArray(result) ? result.filter((x): x is string => typeof x === 'string') : op.mentions.map((m) => m.userId));
+      const kept = op.mentions.filter((m) => accepted.has(m.userId));
+      const dropped = op.mentions.filter((m) => !accepted.has(m.userId)).map((m) => m.label);
+      next = current && !current.deleted_at ? { ...current, mentions: toRows(kept) } : null;
+      await forgetCopy(meta, op);
+      if (dropped.length > 0) await meta.put(dropped, UNNOTIFIED_KEY + op.id);
+      else await meta.delete(UNNOTIFIED_KEY + op.id);
+      if (dropped.length > 0) this.unnotified.set(op.id, dropped);
+      else this.unnotified.delete(op.id);
+    } else {
+      next = applyOp(current, op, this.userId);
+    }
     if (next) await rows.put(next);
     await tx.objectStore('outbox').delete(entry.seq!);
-    if (entry.op.kind === 'import') await tx.objectStore('meta').delete(IMPORT_KEY + entry.op.id);
+    if (op.kind === 'import') await meta.delete(IMPORT_KEY + op.id);
     await tx.done;
     if (next) this.pageRows(entry.op.pageId)?.set(next.id, next);
     this.ops = this.ops.filter((o) => o.seq !== entry.seq);
@@ -900,8 +1056,10 @@ export class CommentQueue {
 
     const unknown = new Set<string>();
     for (const r of map.values()) {
-      for (const id of [r.author_id, r.resolved_by, r.deleted_by, r.imported_by]) {
-        if (id && id !== this.userId && !this.authors.has(id)) unknown.add(id);
+      // También las mencionadas: su correo va en el tooltip de cada `@rótulo`.
+      const named = Array.isArray(r.mentions) ? r.mentions.map((m) => m?.user_id) : [];
+      for (const id of [r.author_id, r.resolved_by, r.deleted_by, r.imported_by, ...named]) {
+        if (typeof id === 'string' && id && id !== this.userId && !this.authors.has(id)) unknown.add(id);
       }
     }
     if (unknown.size > 0) await this.pullAuthors(pageId);
@@ -966,6 +1124,9 @@ export class CommentQueue {
         } else if (r.author_id === me && !r.deleted_at && r.body) {
           if (!s) {
             recovered.push({ kind: 'add', id: r.id, pageId, blockId: r.block_id, threadId: r.thread_id, body: r.body, at: r.created_at });
+            // Con sus menciones (las que bajaron antes de la copia): el alta vuelve, y detrás quién se nombró.
+            const named = fromRows(r.mentions);
+            if (named.length > 0 && this.mentionsReady) recovered.push({ kind: 'mentions', id: r.id, pageId, mentions: named, at: r.created_at });
           } else if (!s.deleted_at && s.body !== r.body && r.edited_at && (!s.edited_at || r.edited_at > s.edited_at)) {
             recovered.push({ kind: 'edit', id: r.id, pageId, body: r.body, at: r.edited_at });
           }
@@ -1017,16 +1178,17 @@ export class CommentQueue {
     return this.writing > 0;
   }
 
-  private async enqueue(op: CommentOp): Promise<void> {
+  private async enqueue(op: CommentOp, mentions: Extract<CommentOp, { kind: 'mentions' }> | null = null): Promise<void> {
     this.writing++;
     try {
-      await this.enqueueNow(op);
+      await this.enqueueNow(op, mentions);
     } finally {
       this.writing--;
     }
   }
 
-  private async enqueueNow(op: CommentOp): Promise<void> {
+  /** `mentions`: las menciones del alta o la edición, que entran detrás en la misma transacción. */
+  private async enqueueNow(op: CommentOp, mentions: Extract<CommentOp, { kind: 'mentions' }> | null = null): Promise<void> {
     if (!this.db) throw new CommentInvalid(t('commentError.off', { reason: localize(this.unavailable ?? '') }));
     const tx = this.db.transaction(['outbox', 'meta'], 'readwrite');
     const store = tx.objectStore('outbox');
@@ -1035,6 +1197,7 @@ export class CommentQueue {
     const drop = async (e: QueuedCommentOp) => {
       await store.delete(e.seq!);
       if (e.op.kind === 'import') await tx.objectStore('meta').delete(IMPORT_KEY + e.op.id);
+      if (e.op.kind === 'mentions') await tx.objectStore('meta').delete(MENTIONS_KEY + e.op.id);
     };
     const open = (e: QueuedCommentOp) => !e.attempted && !e.failed && e.op.id === op.id;
     let done = false;
@@ -1064,8 +1227,8 @@ export class CommentQueue {
         for (const e of all) if (e.op.id === op.id && !e.attempted && !e.failed) await drop(e);
         done = true;
       } else {
-        // Una edición sin mandar de algo que se borra ya no hace falta.
-        for (const e of all) if (open(e) && e.op.kind === 'edit') await drop(e);
+        // Una edición (o unas menciones) sin mandar de algo que se borra ya no hace falta.
+        for (const e of all) if (open(e) && (e.op.kind === 'edit' || e.op.kind === 'mentions')) await drop(e);
       }
     } else if (op.kind === 'resolve') {
       const same = all.find((e) => open(e) && e.op.kind === 'resolve');
@@ -1076,6 +1239,13 @@ export class CommentQueue {
     }
     if (!done) {
       await store.add({ op, attempted: false, failed: false, error: null, queuedAt: this.now() });
+    }
+    if (mentions) {
+      // Unas menciones sin mandar del mismo comentario se reemplazan (queda la última); si no, van detrás.
+      const same = all.find((e) => open(e) && e.op.kind === 'mentions');
+      if (same) await store.put({ ...same, op: mentions });
+      else await store.add({ op: mentions, attempted: false, failed: false, error: null, queuedAt: this.now() });
+      await tx.objectStore('meta').put(mentions, MENTIONS_KEY + mentions.id);
     }
     await tx.done;
     await this.reloadOps();
@@ -1149,11 +1319,17 @@ export class CommentQueue {
         c.body = '';
       } else if (op.kind === 'resolve') {
         resolutions.set(op.id, op.resolved ? { at: op.at, by: this.userId } : { at: null, by: null });
+      } else if (op.kind === 'mentions' && !c.deleted) {
+        c.mentions = op.mentions;
       }
     }
     for (const [id, r] of resolutions) {
       const c = out.get(id);
       if (c) Object.assign(c, { resolvedAt: r.at, resolvedBy: r.by });
+    }
+    for (const [id, labels] of this.unnotified) {
+      const c = out.get(id);
+      if (c && c.authorId === this.userId && !c.deleted) c.unnotified = labels;
     }
     return out;
   }
@@ -1205,6 +1381,8 @@ export function fromRow(r: CommentRow): ViewWithResolution {
     failedSeqs: [],
     failedKinds: [],
     rejectedText: null,
+    mentions: r.deleted_at ? [] : fromRows(r.mentions),
+    unnotified: [],
     resolvedAt: r.resolved_at,
     resolvedBy: r.resolved_by,
   };
@@ -1253,7 +1431,75 @@ function applyOp(row: CommentRow | undefined, op: CommentOp, userId: string): Co
     case 'resolve':
       if (op.resolved === !!row.resolved_at) return row;
       return op.resolved ? { ...row, resolved_at: op.at, resolved_by: userId } : { ...row, resolved_at: null, resolved_by: null };
+    case 'mentions':
+      return row.deleted_at ? row : { ...row, mentions: toRows(op.mentions) };
   }
+}
+
+// --- Menciones ------------------------------------------------------------------------------------------------
+
+/**
+ * El rótulo de una mención como lo acepta la base: sin espacios, controles, comillas, @ ni los caracteres invisibles
+ * que la base rechaza (los mismos que en el nombre de un visitante del link), hasta 64.
+ */
+export function cleanLabel(label: string): string {
+  // eslint-disable-next-line no-control-regex, no-misleading-character-class
+  return label.replace(/[\s\u0000-\u001f\u007f"@\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2069\ufeff]/gu, '').slice(0, 64);
+}
+
+/** El rótulo que propone la lista para un correo (como `private.mention_label` de la base). */
+export function labelForEmail(email: string): string {
+  return cleanLabel(email.split('@')[0] ?? '') || 'user';
+}
+
+function toRows(mentions: MentionRef[]): { user_id: string; label: string }[] {
+  return mentions.map((m) => ({ user_id: m.userId, label: m.label }));
+}
+
+function fromRows(rows: unknown): MentionRef[] {
+  if (!Array.isArray(rows)) return [];
+  const out: MentionRef[] = [];
+  for (const r of rows as { user_id?: unknown; label?: unknown }[]) {
+    if (r && typeof r.user_id === 'string' && typeof r.label === 'string') out.push({ userId: r.user_id, label: r.label });
+  }
+  return out;
+}
+
+/** Las mismas personas (sin contar a uno mismo, que la base descarta siempre). */
+function sameMentions(rows: { user_id: string }[], mentions: MentionRef[], me: string): boolean {
+  const a = new Set(rows.map((r) => r.user_id).filter((id) => id !== me));
+  const b = new Set(mentions.map((m) => m.userId).filter((id) => id !== me));
+  return a.size === b.size && [...a].every((id) => b.has(id));
+}
+
+/** Un rechazo de unas menciones que no tiene arreglo a mano: el comentario no está, se borró, o la base no las tiene. */
+function isGoneForMentions(err: unknown): boolean {
+  const message = errorMessage(err);
+  return (isPermanent(err) && (message === 'comment_not_found' || message === 'comment_deleted')) || isMissingFunction(err);
+}
+
+/** La API no tiene la función (base sin migrar, o caché de la API todavía sin recargar). */
+function isMissingFunction(err: unknown): boolean {
+  return err instanceof RemoteError && err.code === 'PGRST202';
+}
+
+/**
+ * Olvida la copia en `meta` de unas menciones solo si es la de esta operación (mismo momento y mismo conjunto): si
+ * mientras tanto se guardaron otras más nuevas del mismo comentario, esa copia queda (es la que recupera una versión
+ * vieja que saque la cola).
+ */
+async function forgetCopy(
+  meta: { get(key: string): Promise<unknown>; delete(key: string): Promise<void> },
+  op: Extract<CommentOp, { kind: 'mentions' }>,
+): Promise<void> {
+  const saved = (await meta.get(MENTIONS_KEY + op.id)) as CommentOp | undefined;
+  if (!saved || (saved.kind === 'mentions' && saved.at === op.at && sameMentionList(saved.mentions, op.mentions))) {
+    await meta.delete(MENTIONS_KEY + op.id);
+  }
+}
+
+function sameMentionList(a: MentionRef[], b: MentionRef[]): boolean {
+  return a.length === b.length && a.every((m, i) => m.userId === b[i].userId && m.label === b[i].label);
 }
 
 function byDate(a: { createdAt: string; id: string }, b: { createdAt: string; id: string }): number {

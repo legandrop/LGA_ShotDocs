@@ -100,6 +100,11 @@ export const help = {
     en: "A new empty page offers Start from a template: Pre-production Notes (one page per scene), On-Set Report (one per shoot day) or Shot Breakdown (one per VFX shot). More… describes each one and has Preview, to try it without saving anything. Keep writing and the strip goes away. Pick one, type the page name and {enter} takes you to its first field; {undo} takes it all back. Apply template… in the ⋯ menu does the same on any empty page. The page gets a copy in the app's language. Internal — remove before sharing holds bids and vendors: delete that section before sharing the page with a client.",
     es: "Una página nueva vacía ofrece Empezar con una plantilla: Notas de preproducción (una página por escena), Reporte de rodaje (una por día de rodaje) o Desglose de plano (una por plano de VFX). Más… cuenta qué trae cada una y tiene Ver, para probarla sin guardar nada. Si seguís escribiendo, la tira se va. Elegí una, escribí el nombre de la página y {enter} te lleva a su primer dato; {undo} la saca entera. Aplicar plantilla…, en el menú ⋯, hace lo mismo en cualquier página vacía. La página recibe una copia en el idioma de la app. Interno — borrar antes de compartir tiene cotizaciones y proveedores: borrá esa sección antes de compartir la página con un cliente.",
   },
+  'help.dayReports.title': { en: "Day reports", es: "Reportes del día" },
+  'help.dayReports.text': {
+    en: "New day report ({newReport}) is above the title of the day reports folder and of each report inside it. It suggests today's date (your device's time), the next shoot day and the previous report's location: change anything and press Enter. The new page is named like 2026-10-02 | Day 06 and copies the unit, the VFX crew, the director and DP, and the camera package from the previous report. If there's already a report for that date, Enter opens it and Create another makes a second one with the same shoot day (a second unit, a split day). Choosing On-Set Report on a new page inside a folder makes that folder the day reports folder; Use for day reports in the ⋯ menu does it by hand, and a project can have several. It all works offline. The shortcut goes by the key's position (where N is on a US keyboard): on Dvorak it's the key that types B.",
+    es: "Nuevo reporte del día ({newReport}) está arriba del título de la carpeta de reportes y de cada reporte de adentro. Propone la fecha de hoy (la hora de tu dispositivo), el día de rodaje siguiente y la locación del reporte anterior: cambiá lo que haga falta y apretá Enter. La página nueva se llama como 2026-10-02 | Día 06 y copia del reporte anterior la unidad, la gente de VFX, director y DF, y el equipo de cámara. Si ya hay un reporte con esa fecha, Enter lo abre y Crear otro hace uno más con el mismo día de rodaje (una segunda unidad, un día partido). Elegir Reporte de rodaje en una página nueva adentro de una carpeta la vuelve la carpeta de reportes; Usar para reportes del día, en el menú ⋯, lo hace a mano, y un proyecto puede tener varias. Todo anda sin conexión. El atajo va por la posición de la tecla (donde está la N en un teclado de EE. UU.): en Dvorak es la tecla que escribe B.",
+  },
   'help.title.title': { en: "The page title", es: "El título de la página" },
   'help.title.text': { en: "{enter} in the title moves you to the text.", es: "{enter} en el título te pasa al texto." },
   'help.projects.title': { en: "Projects", es: "Proyectos" },
@@ -263,6 +268,11 @@ export const help = {
     en: "Comment on any block with {comment}, the button in its margin or the formatting bar. The comments icon at the top shows every thread of the page. {send} sends, Esc cancels.",
     es: "Comentá cualquier bloque con {comment}, el botón de su margen o la barra de formato. El ícono de comentarios de arriba muestra todos los hilos de la página. {send} manda, Esc cancela.",
   },
+  'help.mentions.title': { en: "Mention someone in a comment", es: "Mencionar a alguien en un comentario" },
+  'help.mentions.text': {
+    en: "In a comment, type @ and pick someone who can see the page: they get a notice in the bell at the top, with the number of unread mentions. {pick} choose from the list, {close} closes it without erasing what you wrote. Deleting the @name before sending removes the mention. A dot on the comments button means someone mentioned you on that page.",
+    es: "En un comentario, escribí @ y elegí a alguien que vea la página: le llega un aviso en la campana de arriba, con el número de menciones sin leer. {pick} eligen de la lista, {close} la cierra sin borrar lo escrito. Borrar el @nombre antes de mandar saca la mención. Un punto en el botón de comentarios quiere decir que te mencionaron en esa página.",
+  },
   'help.questions.title': { en: "Questions", es: "Preguntas" },
   'help.questions.text': {
     en: "A question is a line marked with a ? icon ({question}, or / Question). Anyone who can comment answers it in a thread, without editing the page.",
@@ -334,6 +344,18 @@ export const help = {
   'help.deletedPrivacy.text': {
     en: "People who can edit a page (not guests) see everything that was deleted, like in the version history. People who only view or comment, and guests, get a clean copy of the page instead: the page as it was the last time an editor's app prepared it, about 20 seconds after you stop typing, every 2 minutes while you keep typing (longer for very large pages) and when you close the app. Until an editor prepares it, they see that the page is being prepared. Something that stayed on the page for a while may have reached them even if you delete it later; something deleted within seconds almost never does. They can tell that something was deleted and how long it was, not what it said. Photos and files removed from a page stop opening for them. What a device already downloaded can't be taken back from it. Until the workspace turns clean copies on, deleted text and photos can still reach the people a page is shared with.",
     es: "Quienes pueden editar una página (no los invitados) ven todo lo que se borró, como en el historial de versiones. Quienes solo ven o comentan, y los invitados, reciben en cambio una copia limpia de la página: la página como estaba la última vez que la app de alguien que edita la preparó, unos 20 segundos después de que dejás de escribir, cada 2 minutos mientras seguís escribiendo (más espaciado en páginas muy grandes) y al cerrar la app. Hasta que alguien que edita la prepara, ven que la página está en preparación. Algo que quedó un rato en la página les pudo haber llegado aunque después lo borres; algo borrado en segundos casi nunca. Pueden saber que se borró algo y cuánto ocupaba, no qué decía. Las fotos y archivos que se sacan de una página dejan de abrirse para ellos. Lo que un dispositivo ya bajó no se le puede quitar. Hasta que el workspace prenda las copias limpias, el texto y las fotos borrados todavía les pueden llegar a las personas con quienes se comparte una página.",
+  },
+
+  // --- El asistente ---
+  'help.assistant.title': { en: "Assistant", es: "Asistente" },
+  'help.assistant.text': {
+    en: "Select some text (or put the cursor in a paragraph) and choose Assistant in the toolbar, in the page menu or with {open}. Fix spelling & grammar, Improve writing, Make shorter, Translate to… or Ask… sends only what you selected to your provider, with your own key, and shows a preview of what changes. Apply replaces it as one edit: undo it with {undo}, or apply the suggestion with {apply}. If the text changes while the assistant is working (you or someone else typed in it), nothing is applied. Photos inside the selection stay; links the assistant invents are removed. If you can only view or comment on the page, you can translate or ask and copy the result. Without internet the assistant doesn't work (a local model on your computer still does).",
+    es: "Elegí un texto (o poné el cursor en un párrafo) y tocá Asistente en la barra, en el menú de la página o con {open}. Corregir ortografía y gramática, Mejorar la redacción, Acortar, Traducir al… o Pedir… manda solo lo elegido a tu proveedor, con tu propia clave, y muestra una vista previa de lo que cambia. Aplicar lo reemplaza como una sola edición: se deshace con {undo}, y la sugerencia se aplica con {apply}. Si el texto cambia mientras el asistente trabaja (escribiste vos u otra persona), no se aplica nada. Las fotos dentro de lo elegido quedan; los links que invente el asistente se sacan. Si en la página solo podés ver o comentar, podés traducir o pedir y copiar el resultado. Sin internet el asistente no anda (un modelo local en tu computadora sí).",
+  },
+  'help.assistantKey.title': { en: "Your assistant key", es: "Tu clave del asistente" },
+  'help.assistantKey.text': {
+    en: "In the account menu, Assistant… sets the provider (Anthropic, OpenAI, Google Gemini or an OpenAI-compatible service such as OpenRouter, Ollama or LM Studio), your API key and the model; Test checks the key and lists the models. The key is saved only on this device, encrypted, and is sent only to that provider (for a compatible service, only to the address it was saved with: if you change the address, paste the key again): not to the workspace, not to the file gatekeeper, not to anyone else. The encryption only keeps it from showing in plain text by accident: anyone using this browser could still use it, so set a spending limit in your provider's account, and on a shared computer check Also forget my assistant key on this device when you sign out (or use Forget key). Each request is charged by the provider to your account; the assistant shows the tokens it used. The workspace owner can turn the assistant off or allow only local models: it's a rule of the app, since anyone who can read a page can copy it.",
+    es: "En el menú de la cuenta, Asistente… elige el proveedor (Anthropic, OpenAI, Google Gemini o un servicio compatible con OpenAI, como OpenRouter, Ollama o LM Studio), tu clave de la API y el modelo; Probar revisa la clave y lista los modelos. La clave se guarda solo en este dispositivo, cifrada, y se manda solo a ese proveedor (en un servicio compatible, solo a la dirección con que se guardó: si cambiás la dirección, pegá la clave de nuevo): ni al workspace, ni al portero de archivos, ni a nadie más. El cifrado solo evita que se vea en claro por accidente: quien use este navegador igual la podría usar, así que poné un tope de gasto en tu cuenta del proveedor, y en una computadora compartida tildá Olvidar también mi clave del asistente en este dispositivo al cerrar la sesión (u Olvidar la clave). Cada pedido lo cobra el proveedor a tu cuenta; el asistente muestra los tokens que usó. El dueño del workspace puede apagar el asistente o permitir solo modelos locales: es una regla de la app, porque quien puede leer una página la puede copiar.",
   },
 
   // --- Papelera ---
@@ -431,6 +453,12 @@ export const help = {
   'shortcut.find': { en: "Find and replace in the page", es: "Buscar y reemplazar en la página" },
   'shortcut.print': { en: "Export PDF / print the page", es: "Exportar PDF / imprimir la página" },
   'shortcut.history': { en: "Version history of the page", es: "Historial de versiones de la página" },
+  'shortcut.newDayReport': {
+    en: "New day report (in the day reports folder or a report)",
+    es: "Nuevo reporte del día (en la carpeta de reportes o en un reporte)",
+  },
+  'shortcut.assistant': { en: "Open or close the assistant", es: "Abrir o cerrar el asistente" },
+  'shortcut.assistantApply': { en: "Apply the assistant's suggestion", es: "Aplicar la sugerencia del asistente" },
   'shortcut.titleEnter': { en: "From the title, go to the text", es: "Desde el título, pasar al texto" },
   'shortcut.comment': { en: "Comment on the block", es: "Comentar el bloque" },
   'shortcut.question': { en: "Question", es: "Pregunta" },
@@ -541,6 +569,14 @@ export const help = {
     es: "En la lista de proyectos, el panel de buscar y el menú de pegar Drive: moverse y elegir",
   },
   'shortcut.listClose': { en: "Close that list", es: "Cerrar esa lista" },
+  'shortcut.mentionPick': {
+    en: "With the @ list open: choose who to mention and put them in",
+    es: "Con la lista del @ abierta: elegir a quién mencionar y ponerlo",
+  },
+  'shortcut.mentionClose': {
+    en: "Close the @ list without erasing what you wrote",
+    es: "Cerrar la lista del @ sin borrar lo escrito",
+  },
   'shortcut.versionName': {
     en: "Naming a version in the history: save / leave it as it was",
     es: "Al ponerle nombre a una versión del historial: guardar / dejar como estaba",

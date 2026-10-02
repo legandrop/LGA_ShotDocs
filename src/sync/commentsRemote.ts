@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { CommentAuthor, CommentRemote, CommentRow, ImportedComment, ListedComment, NewComment } from './comments';
+import type { InboxResponse, MentionCandidate, MentionsRemote } from './mentions';
 import { timed, toRemoteError } from './remote';
 
 // Las llamadas de los comentarios a Supabase (supabase/migrations/20260930170000_comentarios.sql). La tabla
@@ -12,7 +13,7 @@ const PAGE = 1000;
 // La función todavía no existe en la base (falta aplicar una migración).
 const MISSING_FUNCTION = 'PGRST202';
 
-export class SupabaseCommentRemote implements CommentRemote {
+export class SupabaseCommentRemote implements CommentRemote, MentionsRemote {
   /** Desde cuándo la base no tiene `list_comments`; se vuelve a probar cada tanto por si se migró. */
   private listMissingAt = 0;
 
@@ -99,6 +100,45 @@ export class SupabaseCommentRemote implements CommentRemote {
   async deleteComment(id: string): Promise<void> {
     const { error, status } = await timed(this.client.rpc('delete_comment', { p_id: id }));
     if (error) throw toRemoteError(error, status);
+  }
+
+  // --- Menciones (20261015120000_menciones.sql; Docs/Doc_Menciones.md) ---
+
+  /** `set_comment_mentions`: el conjunto entero; devuelve los ids que la base aceptó. */
+  async setCommentMentions(commentId: string, mentions: { user_id: string; label: string }[]): Promise<string[]> {
+    const { data, error, status } = await timed(
+      this.client.rpc('set_comment_mentions', { p_comment_id: commentId, p_mentions: mentions }),
+    );
+    if (error) throw toRemoteError(error, status);
+    return Array.isArray(data) ? data.filter((x): x is string => typeof x === 'string') : [];
+  }
+
+  async mentionCandidates(pageId: string): Promise<MentionCandidate[]> {
+    const { data, error, status } = await timed(this.client.rpc('mention_candidates', { p_page_id: pageId }));
+    if (error) throw toRemoteError(error, status);
+    // En la entrega 1 la base no manda filas sin acceso; si llegara alguna, no se ofrece.
+    return ((data ?? []) as { user_id: string; email: string; label: string; has_access: boolean }[])
+      .filter((r) => r.has_access !== false)
+      .map((r) => ({ userId: r.user_id, email: r.email, label: r.label }));
+  }
+
+  async mentionsInbox(since: string | null, limit: number): Promise<InboxResponse> {
+    const { data, error, status } = await timed(this.client.rpc('mentions_inbox', { p_since: since, p_limit: limit }));
+    if (error) throw toRemoteError(error, status);
+    const d = (data ?? {}) as Partial<InboxResponse>;
+    return { now: d.now ?? '', unread: Number(d.unread) || 0, rows: Array.isArray(d.rows) ? d.rows : [] };
+  }
+
+  async mentionsIndex(): Promise<[string, boolean, boolean][]> {
+    const { data, error, status } = await timed(this.client.rpc('mentions_index'));
+    if (error) throw toRemoteError(error, status);
+    return Array.isArray(data) ? (data as [string, boolean, boolean][]) : [];
+  }
+
+  async markMentionsRead(ids: string[] | null, upTo: string | null): Promise<number> {
+    const { data, error, status } = await timed(this.client.rpc('mark_mentions_read', { p_ids: ids, p_up_to: upTo }));
+    if (error) throw toRemoteError(error, status);
+    return Number(data) || 0;
   }
 
   async resolveThread(threadId: string, resolved: boolean): Promise<void> {

@@ -64,6 +64,18 @@ export function placeAtFirstDatum(editor: TemplateEditor): void {
 }
 
 /**
+ * El reporte del día se abre con el cursor en *Summary* (Docs/Doc_Plantillas.md, 6.5): el bloque que sigue al primer
+ * título de sección (H2) de la página. Sin títulos, en el primer dato de la ficha. Solo cambia la selección.
+ */
+export function placeAtSummary(editor: TemplateEditor): void {
+  const blocks = editor.document as { id: string; type?: string; props?: { level?: number } }[];
+  const at = blocks.findIndex((b) => b.type === 'heading' && b.props?.level === 2);
+  const next = at >= 0 ? blocks[at + 1] : undefined;
+  if (next) cursorToStart(editor, next.id);
+  else placeAtFirstDatum(editor);
+}
+
+/**
  * Pone el cursor (sin llevar el foco) en el primer renglón escribible del bloque: en una tabla, la segunda celda de
  * la primera fila (el valor del primer dato de una ficha) o la primera si hay una sola. Solo cambia la selección.
  */

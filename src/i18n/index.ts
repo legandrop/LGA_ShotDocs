@@ -1,6 +1,7 @@
 import { createElement, Fragment, useMemo, useSyncExternalStore, type ReactNode } from 'react';
 import { prefs, type Language } from '../prefs';
 import type { annotator } from './lazy/annotator';
+import type { assistant } from './lazy/assistant';
 import type { carrete } from './lazy/carrete';
 import type { commentsPanel } from './lazy/commentsPanel';
 import type { drive } from './lazy/drive';
@@ -36,6 +37,7 @@ import type { Dict, Entry } from './types';
 
 export type { Entry, Plural } from './types';
 type LazyStrings = typeof annotator &
+  typeof assistant &
   typeof carrete &
   typeof commentsPanel &
   typeof drive &

@@ -49,6 +49,11 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'print', keys: ['Mod-p'], place: 'global', owner: 'app', source: 'window' },
   // El historial de versiones de la página (P.18, Docs/Doc_Historial.md), el mismo de Google Docs.
   { id: 'history', keys: ['Mod-Alt-Shift-h'], place: 'global', owner: 'app', source: 'window' },
+  // El reporte del día (Docs/Doc_Plantillas.md, 6.1 y 9): con la carpeta de reportes o un reporte abierto. ⌘⌥N no
+  // (es *Open split view* de Chrome en la Mac), ⌘⌥D tampoco (esconde el Dock).
+  { id: 'newDayReport', keys: ['Mod-Alt-Shift-n'], place: 'global', context: 'dayReport', owner: 'app', source: 'window' },
+  // El asistente (Docs/Doc_Asistente.md, A1): abre y cierra su panel sobre lo elegido.
+  { id: 'assistant', keys: ['Mod-Alt-j'], place: 'global', owner: 'app', source: 'window' },
   { id: 'titleEnter', keys: ['Enter'], place: 'global', context: 'title', owner: 'app', source: 'dom' },
 
   // --- Editor: lo de la app ---
@@ -163,6 +168,9 @@ export const SHORTCUTS: Shortcut[] = [
   // --- Comentarios ---
   { id: 'commentsSend', keys: ['Mod-Enter'], place: 'comments', owner: 'app', source: 'dom' },
   { id: 'commentsCancel', keys: ['Escape'], place: 'comments', owner: 'app', source: 'dom' },
+  // La lista del @ (Docs/Doc_Menciones.md, 2.1): con la lista abierta, eligen y la cierran sin borrar lo escrito.
+  { id: 'mentionPick', keys: ['ArrowUp', 'ArrowDown', 'Enter', 'Tab'], place: 'comments', context: 'mentions', owner: 'app', source: 'dom' },
+  { id: 'mentionClose', keys: ['Escape'], place: 'comments', context: 'mentions', owner: 'app', source: 'dom' },
 
   // --- Árbol de páginas y barra lateral ---
   { id: 'treeStep', keys: ['ArrowUp', 'ArrowDown'], place: 'tree', owner: 'app', source: 'dom' },
@@ -180,6 +188,8 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'listClose', keys: ['Escape'], place: 'menus', context: 'list', owner: 'app', source: 'dom' },
   // El nombre de una versión del historial (Docs/Doc_Historial.md, entrega 3): guardar o dejar como estaba.
   { id: 'versionName', keys: ['Enter', 'Escape'], place: 'menus', context: 'versionName', owner: 'app', source: 'dom' },
+  // Aplicar la sugerencia del asistente, con el foco en su panel (Esc la descarta: `menusClose`).
+  { id: 'assistantApply', keys: ['Mod-Enter'], place: 'menus', context: 'assistant', owner: 'app', source: 'dom' },
   // Las pestañas de una ventana (Install app: iPhone, Android, computadora).
   { id: 'tabsMove', keys: ['ArrowLeft', 'ArrowRight', 'Home', 'End'], place: 'menus', context: 'tabs', owner: 'app', source: 'dom' },
 

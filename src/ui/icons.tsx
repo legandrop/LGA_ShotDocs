@@ -27,6 +27,10 @@ export const CollapseIcon = icon('M5.5 8l4.5 4.5L14.5 8', { strokeWidth: 1.8 });
 export const ChevronUpIcon = icon('M5.5 12l4.5-4.5 4.5 4.5', { strokeWidth: 1.8 });
 // Plantilla (Docs/Doc_Plantillas.md): una hoja con renglones de una ficha ya armada.
 export const TemplateIcon = icon('M5.75 2.75h8.5a1 1 0 0 1 1 1v12.5a1 1 0 0 1-1 1h-8.5a1 1 0 0 1-1-1V3.75a1 1 0 0 1 1-1zM7.5 6.25h5M7.5 9.25h5M7.5 12.25h2.5');
+// El reporte del día (Docs/Doc_Plantillas.md, 6.1): un calendario con un +.
+export const DayReportIcon = icon(
+  'M4.75 4.25h10.5a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4.75a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1zM3.75 7.75h12.5M7 2.75v3M13 2.75v3M10 10v4.5M7.75 12.25h4.5',
+);
 export const RenameIcon = icon('M12.5 4.5l3 3L8 15H5v-3z');
 export const MoveIcon = icon('M3.75 6.25h4l1.5 1.5h7v7.5a1 1 0 0 1-1 1h-10.5a1 1 0 0 1-1-1zM8.5 12h5M11.5 10l2 2-2 2');
 // Importar: una carpeta con una flecha que entra.
@@ -203,3 +207,7 @@ export const NumberToolIcon = icon('M10 3.25a6.75 6.75 0 1 1 0 13.5 6.75 6.75 0 
 export const UndoIcon = icon('M7.5 5L4 8.5 7.5 12M4.5 8.5h7.25a4 4 0 0 1 0 8H9');
 export const RedoIcon = icon('M12.5 5L16 8.5 12.5 12M15.5 8.5H8.25a4 4 0 0 0 0 8H11');
 export const FitIcon = icon('M3.5 7.5v-4h4M16.5 7.5v-4h-4M3.5 12.5v4h4M16.5 12.5v4h-4M7 7h6v6H7z');
+// El asistente (Docs/Doc_Asistente.md): un destello.
+export const AssistantIcon = icon('M9 3.25l1.35 3.9 3.9 1.35-3.9 1.35L9 13.75l-1.35-3.9-3.9-1.35 3.9-1.35zM14.75 12l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z');
+// Los ajustes del asistente: dos reguladores.
+export const SettingsIcon = icon('M4 6.5h7.5M15 6.5h1M13.25 4.75v3.5M4 13.5h1.5M9 13.5h7M7.25 11.75v3.5');

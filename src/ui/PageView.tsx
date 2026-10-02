@@ -3,6 +3,7 @@ import { useT } from '../i18n';
 import { usePrefs } from '../prefs';
 import { navigate, pagePath } from '../router';
 import { usePermissions, useSyncStatus, useTree } from '../services';
+import { DayReportButton } from '../templates/dayReportUi';
 import { disarmTitleUndo, titleUndoFor } from '../templates/templatesUi';
 import { clearCommentsTarget, closeComments, useCommentsUi } from './commentsUi';
 import { isLetter, modPressed } from './findUi';
@@ -110,7 +111,7 @@ function CommentsSlot({ pageId }: { pageId: string }) {
   const { open } = useCommentsUi();
   useEffect(() => CommentsPanel.preload(), []);
   // Al salir de la página, lo pedido para ella no sigue (también con el panel cerrado).
-  useEffect(() => () => clearCommentsTarget(), [pageId]);
+  useEffect(() => () => clearCommentsTarget(pageId), [pageId]);
   if (!open) return null;
   return (
     <Part onClose={closeComments}>
@@ -293,6 +294,8 @@ function PageHeader({ id, editable }: { id: string; editable: boolean }) {
         </button>
       )}
       {open && editable && <HeaderOptions id={id} anchor={toggle.current} onClose={() => setOpen(false)} />}
+      {/* *New day report*, a la derecha (Docs/Doc_Plantillas.md, 6.1): en la carpeta de reportes y en sus reportes. */}
+      <DayReportButton pageId={id} />
     </div>
   );
 }

@@ -104,10 +104,16 @@ const UPDATE_APP = '0.097';
 const FOLDER_ZIP = '0.105';
 /** Sacar una foto o filmar desde la página y guardar en Fotos (camera.ts): la versión se pone al publicar. */
 const CAMERA = '0.110';
+/** El asistente, entrega A1 (Docs/Doc_Asistente.md): la versión se pone al publicar, igual que en el changelog. */
+const ASSISTANT = '0.118';
 /** Las plantillas de fábrica (Docs/Doc_Plantillas.md, entregas 0 y 1): la versión se ajusta al publicar. */
 const TEMPLATES = '0.117';
+/** El reporte del día (Docs/Doc_Plantillas.md, entrega 2): la versión la pone quien publica. */
+const DAY_REPORTS = '0.121';
 /** El link público, *Can view* (Doc_Link_Publico.md, entrega 1): la versión se pone al publicar, igual que en el changelog. */
 const PUBLIC_LINK = '0.111';
+/** Las menciones en comentarios (P.21, Doc_Menciones.md, entrega 1): la versión se pone al publicar, igual que en el changelog. */
+const MENTIONS = '0.120';
 /** Ver las anotaciones de las fotos (P.20, Doc_Anotar_Fotos.md, entrega 1): la versión se pone al publicar. */
 const PHOTO_MARKUP = '0.116';
 /** Anotar las fotos en la compu (P.20, entrega 2). El número lo pone quien publica. */
@@ -150,6 +156,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
     keys: { enter: 'titleEnter', undo: 'undo' },
     words: ['template', 'plantilla', 'report', 'reporte', 'on-set', 'rodaje', 'breakdown', 'desglose', 'preproducción', 'pre-production', 'apply', 'aplicar'],
     since: TEMPLATES,
+  },
+  {
+    id: 'dayReports',
+    section: 'pages',
+    title: 'help.dayReports.title',
+    text: 'help.dayReports.text',
+    keys: { newReport: 'newDayReport' },
+    words: ['day report', 'reporte del día', 'shoot day', 'día de rodaje', 'on-set', 'rodaje', 'unit', 'unidad', 'location', 'locación'],
+    since: DAY_REPORTS,
   },
   {
     id: 'projects',
@@ -209,6 +224,23 @@ export const HELP_ENTRIES: HelpEntry[] = [
   },
   { id: 'script', section: 'writing', title: 'help.script.title', text: 'help.script.text', keys: { script: 'script' }, more: ['scriptEnter'], since: BEFORE_HELP },
   { id: 'undo', section: 'writing', title: 'help.undo.title', text: 'help.undo.text', keys: { undo: 'undo', redo: 'redo' }, more: ['selectAll'], since: BEFORE_HELP },
+  {
+    id: 'assistant',
+    section: 'writing',
+    title: 'help.assistant.title',
+    text: 'help.assistant.text',
+    keys: { open: 'assistant', undo: 'undo', apply: 'assistantApply' },
+    words: ['asistente', 'corregir', 'ortografía', 'gramática', 'traducir', 'resumir', 'acortar', 'mejorar', 'assistant', 'fix', 'spelling', 'grammar', 'translate', 'improve', 'shorter', 'ai', 'ia', 'claude', 'gpt', 'gemini'],
+    since: ASSISTANT,
+  },
+  {
+    id: 'assistantKey',
+    section: 'writing',
+    title: 'help.assistantKey.title',
+    text: 'help.assistantKey.text',
+    words: ['clave', 'api key', 'key', 'proveedor', 'provider', 'anthropic', 'openai', 'gemini', 'openrouter', 'ollama', 'lm studio', 'tope', 'gasto', 'spending limit', 'olvidar', 'forget', 'local'],
+    since: ASSISTANT,
+  },
 
   // --- Fotos y videos ---
   { id: 'photosAdd', section: 'photos', title: 'help.photosAdd.title', text: 'help.photosAdd.text', keys: { paste: 'pasteFiles' }, since: BEFORE_HELP },
@@ -378,6 +410,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
     more: ['commentsCancel'],
     showMe: 'comments',
     since: BEFORE_HELP,
+  },
+  {
+    id: 'mentions',
+    section: 'comments',
+    title: 'help.mentions.title',
+    text: 'help.mentions.text',
+    keys: { pick: 'mentionPick', close: 'mentionClose' },
+    words: ['@', 'mention', 'mencionar', 'mención', 'campana', 'bell', 'notification', 'aviso', 'unread', 'sin leer'],
+    since: MENTIONS,
   },
   { id: 'questions', section: 'comments', title: 'help.questions.title', text: 'help.questions.text', keys: { question: 'question' }, since: BEFORE_HELP },
 

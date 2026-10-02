@@ -3877,6 +3877,10 @@ button.link.danger {
   --question-border: #c9d6ee;
   --question-accent: #3d5f9e;
   --comment-flash: rgba(232, 178, 58, 0.22);
+  /* Las menciones (`@lega`): azul de las preguntas; la propia, con el ámbar del acento. */
+  --mention-bg: rgba(61, 95, 158, 0.12);
+  --mention-text: #2f4f8c;
+  --mention-me-bg: rgba(232, 178, 58, 0.3);
 }
 
 :root[data-theme='dark'] {
@@ -3884,6 +3888,9 @@ button.link.danger {
   --question-border: #2d3a54;
   --question-accent: #9db8ea;
   --comment-flash: rgba(232, 178, 58, 0.16);
+  --mention-bg: rgba(157, 184, 234, 0.16);
+  --mention-text: #b7cdf2;
+  --mention-me-bg: rgba(232, 178, 58, 0.26);
 }
 
 /* Una pregunta: párrafo con `question: true`. Abajo queda lugar para el botón "Answer" (va en el margen,
@@ -4011,6 +4018,156 @@ button.link.danger {
   font-weight: 700;
   line-height: 16px;
   text-align: center;
+}
+
+/* El punto de "te mencionaron acá" en el botón de comentarios y en la lista de la campana. */
+.mention-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex: none;
+}
+
+.comments-toggle-dot {
+  position: absolute;
+  bottom: 5px;
+  right: 5px;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+/* La campana de las menciones (Doc_Menciones.md, 2.3). */
+.mentions-bell {
+  position: relative;
+}
+
+.mentions-bell[aria-expanded='true'] {
+  background: var(--active);
+}
+
+.mentions-panel {
+  position: fixed;
+  z-index: 60;
+  width: min(380px, calc(100vw - 16px));
+  max-height: min(70vh, 560px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.mentions-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 8px 16px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.mentions-head h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.mentions-head .link {
+  font-size: 13px;
+}
+
+.mentions-panel > .comments-note {
+  margin: 8px 12px 0;
+}
+
+.mentions-empty {
+  margin: 14px 16px 18px;
+  font-size: 14px;
+}
+
+.mentions-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.mention-item {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  text-align: left;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.mention-item:hover,
+.mention-item:focus-visible {
+  background: var(--hover);
+}
+
+.mention-item-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mention-item-head > * {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mention-item-page {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-2);
+}
+
+.mention-item-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text-2);
+  line-height: 1.4;
+}
+
+.mention-item.unread .mention-item-text {
+  color: var(--text);
+}
+
+.mention-item-meta {
+  font-size: 12px;
+}
+
+@media (max-width: 760px) {
+  /* En el teléfono, una hoja desde abajo (la posición que pone useFloating no cuenta acá). */
+  .mentions-panel {
+    top: auto !important;
+    left: 8px;
+    right: 8px !important;
+    bottom: calc(8px + env(safe-area-inset-bottom)) !important;
+    width: auto;
+    max-height: 75vh;
+    border-radius: 16px;
+  }
+
+  .mention-item {
+    padding: 10px 12px;
+    font-size: 14px;
+  }
 }
 
 /* El panel: a la derecha en la computadora. */
@@ -4225,6 +4382,97 @@ button.thread-anchor:hover:not(:disabled) {
   color: var(--text-2);
 }
 
+/* Una mención pintada (`@lega`); la de quien mira, más fuerte. */
+.mention {
+  padding: 0 2px;
+  border-radius: 4px;
+  background: var(--mention-bg);
+  color: var(--mention-text);
+  font-weight: 600;
+}
+
+.mention.me {
+  background: var(--mention-me-bg);
+  color: var(--text);
+}
+
+.comment-unnotified {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* El campo con menciones: detrás del cuadro, una copia del texto que pinta las elegidas (misma letra y medidas). */
+.mention-field {
+  position: relative;
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.mention-field.on textarea {
+  position: relative;
+  background: transparent;
+}
+
+.mention-backdrop {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  color: transparent;
+  pointer-events: none;
+}
+
+.mention-backdrop mark {
+  border-radius: 3px;
+  background: var(--mention-bg);
+  color: transparent;
+}
+
+.mention-list {
+  list-style: none;
+  margin: -4px 0 0;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.mention-list li[role='option'] {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.mention-list li[role='option'] .muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mention-list li.selected {
+  background: var(--active);
+}
+
+.mention-list-note {
+  padding: 6px 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
 .comment-actions,
 .thread-actions {
   display: flex;
@@ -4353,8 +4601,13 @@ button.thread-anchor:hover:not(:disabled) {
     min-height: 36px;
   }
 
-  .comment-composer textarea {
+  .comment-composer textarea,
+  .mention-backdrop {
     font-size: 16px; /* sin zoom automático en el iPhone */
+  }
+
+  .mention-list li[role='option'] {
+    padding: 10px 8px;
   }
 
   .comment-count,

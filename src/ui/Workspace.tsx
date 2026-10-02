@@ -45,11 +45,14 @@ import { lazyPart, Part, preloadWhenIdle, watchPendingWrites } from './lazyPart'
 import { startAppUpdates, stopAppUpdates } from './appUpdate';
 import { focusTitle, PageView, preloadPageParts } from './PageView';
 import { CommentsToggle } from './CommentsToggle';
+import { MentionsBell } from './MentionsBell';
 import { Sidebar } from './Sidebar';
 import { SidebarResizer } from './SidebarResizer';
 import { SyncIcon } from './SyncBadge';
 import { SpaceHost } from './SpaceHost';
 import { TrashView } from './TrashView';
+import { AssistantHost } from '../assistant/AssistantHost';
+import { openAssistant } from '../assistant/assistantUi';
 import { downloadUnsynced } from './unsyncedDownload';
 import { usePendingCount } from './usePendingCount';
 import { errorMessage } from '../sync/types';
@@ -374,6 +377,8 @@ export function Shell() {
               <span className="only-mobile">
                 <SyncIcon onClick={() => setNavOpen(true)} />
               </span>
+              {/* La campana de las menciones (P.21): siempre, haya o no una página abierta. */}
+              <MentionsBell />
               {pageId && current && (
                 <button
                   className="icon-button"
@@ -425,6 +430,7 @@ export function Shell() {
           onFormat={() => setFormatting(pageId)}
           onShare={perms.canSharePage(pageId) ? () => setSharing({ pageId }) : undefined}
           onHistory={historyAllowed ? () => openHistory(pageId) : undefined}
+          onAssistant={() => void openAssistant()}
           onTrash={async () => {
             // Primero se manda a la papelera y después se sale: si no, el inicio vuelve a la última página.
             await tree.trash(pageId);
@@ -450,6 +456,8 @@ export function Shell() {
       <SpaceHost />
       <HelpHost />
       <HistoryHost />
+      {/* El asistente (Docs/Doc_Asistente.md, A1): su atajo, el panel y los ajustes. */}
+      <AssistantHost />
       <TourHost />
       <InstallHost />
       <ReplaceProgressHost />
