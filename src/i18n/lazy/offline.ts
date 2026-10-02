@@ -159,10 +159,35 @@ export const offline = {
   'storage.listViews': { en: "Large photos made for pages", es: "Fotos en grande hechas para las páginas" },
   'storage.openedAgo': { en: "opened {when}", es: "abierto {when}" },
   'storage.nothingToFree': { en: "Nothing to free up right now.", es: "Ahora no hay nada para liberar." },
-  'storage.ownLater': {
-    en: "Photos and videos added on this device stay for now: freeing them comes in a later version.",
-    es: "Las fotos y los videos agregados en este dispositivo quedan por ahora: liberarlos llega en una versión próxima.",
+  'storage.ownFreeable': {
+    en: {
+      one: "Added on this device and already in Drive: {size} ({count} file). Before removing it, Shot Docs checks that Drive has the same file.",
+      other: "Added on this device and already in Drive: {size} ({count} files). Before removing each one, Shot Docs checks that Drive has the same file.",
+    },
+    es: {
+      one: "Agregado en este dispositivo y ya en Drive: {size} ({count} archivo). Antes de sacarlo, Shot Docs comprueba que Drive tenga el mismo archivo.",
+      other: "Agregado en este dispositivo y ya en Drive: {size} ({count} archivos). Antes de sacar cada uno, Shot Docs comprueba que Drive tenga el mismo archivo.",
+    },
   },
+  'storage.ownRecent': {
+    en: {
+      one: "{count} file added on this device ({size}) was uploaded less than 14 days ago: it stays for now.",
+      other: "{count} files added on this device ({size}) were uploaded less than 14 days ago: they stay for now.",
+    },
+    es: {
+      one: "{count} archivo agregado en este dispositivo ({size}) se subió hace menos de 14 días: queda por ahora.",
+      other: "{count} archivos agregados en este dispositivo ({size}) se subieron hace menos de 14 días: quedan por ahora.",
+    },
+  },
+  'storage.ownOffline': {
+    en: "Photos and videos added on this device ({size}) can be freed only with a connection: Drive is checked first.",
+    es: "Las fotos y los videos agregados en este dispositivo ({size}) se pueden liberar solo con conexión: antes se comprueba Drive.",
+  },
+  'storage.ownServer': {
+    en: "Photos and videos added on this device ({size}) can't be freed until the media server is updated.",
+    es: "Las fotos y los videos agregados en este dispositivo ({size}) no se pueden liberar hasta que se actualice el servidor de archivos.",
+  },
+  'storage.listOwn': { en: "added on this device", es: "agregado en este dispositivo" },
   'storage.offline': { en: "Available offline", es: "Disponible sin conexión" },
   'storage.noMarks': {
     en: "Nothing yet. Use “Available offline…” in the menu of a page or a project.",
