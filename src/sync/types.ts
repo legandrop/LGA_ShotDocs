@@ -41,6 +41,13 @@ export interface PageSettings {
    * dice que se dejó de usar a mano y gana sobre lo que se deduce de los reportes de adentro.
    */
   dayReports?: { template?: string } | false;
+  /**
+   * La página es una plantilla propia (Docs/Doc_Plantillas.md, 3 y 5): su descripción y si sirve para el reporte del
+   * día. No se hereda. `false`: se dejó de usar a mano (gana sobre lo que se deduce de la carpeta *Templates*).
+   */
+  template?: { description?: string; dayReport?: true } | false;
+  /** La carpeta *Templates* del proyecto (una página raíz). No se hereda. */
+  templatesFolder?: true;
 }
 
 export type PagePatch = Partial<Pick<PageRow, 'title' | 'icon' | 'parent_id' | 'sort_key' | 'deleted_at' | 'settings' | 'template_id'>>;

@@ -100,6 +100,11 @@ export const help = {
     en: "A new empty page offers Start from a template: Pre-production Notes (one page per scene), On-Set Report (one per shoot day) or Shot Breakdown (one per VFX shot). More… describes each one and has Preview, to try it without saving anything. Keep writing and the strip goes away. Pick one, type the page name and {enter} takes you to its first field; {undo} takes it all back. Apply template… in the ⋯ menu does the same on any empty page. The page gets a copy in the app's language. Internal — remove before sharing holds bids and vendors: delete that section before sharing the page with a client.",
     es: "Una página nueva vacía ofrece Empezar con una plantilla: Notas de preproducción (una página por escena), Reporte de rodaje (una por día de rodaje) o Desglose de plano (una por plano de VFX). Más… cuenta qué trae cada una y tiene Ver, para probarla sin guardar nada. Si seguís escribiendo, la tira se va. Elegí una, escribí el nombre de la página y {enter} te lleva a su primer dato; {undo} la saca entera. Aplicar plantilla…, en el menú ⋯, hace lo mismo en cualquier página vacía. La página recibe una copia en el idioma de la app. Interno — borrar antes de compartir tiene cotizaciones y proveedores: borrá esa sección antes de compartir la página con un cliente.",
   },
+  'help.ownTemplates.title': { en: "Your own templates", es: "Plantillas propias" },
+  'help.ownTemplates.text': {
+    en: "Save as template… in the ⋯ menu copies a page to the project's Templates folder (it's created the first time), with a name and a description; the page itself doesn't change. Clear filled-in values empties the tables (keeps headers and row labels), unchecks the checkboxes and leaves out photos and files. A template is a page: open it and write to change it. New pages get a copy, so pages already made don't change. Above its title, Template settings… has the description and Use for day reports, and Stop using as template turns it back into a normal page. Customize, next to each built-in one in Templates, makes your own copy to change. Templates lists this project's templates and the ones from other projects you can see; one from another project comes without its photos and files. With Use for day reports, New day report uses it, and lets you pick when there's more than one. Whoever sees the Templates folder sees its templates: share it with your team, not with clients.",
+    es: "Guardar como plantilla…, en el menú ⋯, copia una página a la carpeta Plantillas del proyecto (se crea la primera vez), con un nombre y una descripción; la página no cambia. Vaciar lo completado vacía las tablas (deja encabezados y rótulos), desmarca las casillas y no copia fotos ni archivos. Una plantilla es una página: abrila y escribí para cambiarla. Las páginas nuevas reciben una copia, así que las ya hechas no cambian. Arriba de su título, Ajustes de la plantilla… tiene la descripción y Usar para reportes del día, y Dejar de usar como plantilla la vuelve una página común. Personalizar, al lado de cada una de fábrica en Plantillas, hace una copia tuya para cambiarla. Plantillas muestra las de este proyecto y las de otros proyectos que ves; una de otro proyecto llega sin sus fotos ni archivos. Con Usar para reportes del día, Nuevo reporte del día la usa, y deja elegir cuando hay más de una. Quien ve la carpeta Plantillas ve sus plantillas: compartila con tu equipo, no con clientes.",
+  },
   'help.dayReports.title': { en: "Day reports", es: "Reportes del día" },
   'help.dayReports.text': {
     en: "New day report ({newReport}) is above the title of the day reports folder and of each report inside it. It suggests today's date (your device's time), the next shoot day and the previous report's location: change anything and press Enter. The new page is named like 2026-10-02 | Day 06 and copies the unit, the VFX crew, the director and DP, and the camera package from the previous report. If there's already a report for that date, Enter opens it and Create another makes a second one with the same shoot day (a second unit, a split day). Choosing On-Set Report on a new page inside a folder makes that folder the day reports folder; Use for day reports in the ⋯ menu does it by hand, and a project can have several. It all works offline. The shortcut goes by the key's position (where N is on a US keyboard): on Dvorak it's the key that types B.",
@@ -270,8 +275,13 @@ export const help = {
   },
   'help.mentions.title': { en: "Mention someone in a comment", es: "Mencionar a alguien en un comentario" },
   'help.mentions.text': {
-    en: "In a comment, type @ and pick someone who can see the page: they get a notice in the bell at the top, with the number of unread mentions. {pick} choose from the list, {close} closes it without erasing what you wrote. Deleting the @name before sending removes the mention. A dot on the comments button means someone mentioned you on that page.",
-    es: "En un comentario, escribí @ y elegí a alguien que vea la página: le llega un aviso en la campana de arriba, con el número de menciones sin leer. {pick} eligen de la lista, {close} la cierra sin borrar lo escrito. Borrar el @nombre antes de mandar saca la mención. Un punto en el botón de comentarios quiere decir que te mencionaron en esa página.",
+    en: "In a comment, type @ and pick someone who can see the page: they get a notice in the bell at the top, with the number of unread mentions. {pick} choose from the list, {close} closes it without erasing what you wrote. Deleting the @name before sending removes the mention. A dot on the comments button and in the page tree means someone mentioned you on that page; the number also shows in the tab title and on the installed app's icon.",
+    es: "En un comentario, escribí @ y elegí a alguien que vea la página: le llega un aviso en la campana de arriba, con el número de menciones sin leer. {pick} eligen de la lista, {close} la cierra sin borrar lo escrito. Borrar el @nombre antes de mandar saca la mención. Un punto en el botón de comentarios y en el árbol de páginas quiere decir que te mencionaron en esa página; el número también aparece en el título de la pestaña y en el ícono de la app instalada.",
+  },
+  'help.mentionsShare.title': { en: "Mention someone who can't see the page", es: "Mencionar a alguien que no ve la página" },
+  'help.mentionsShare.text': {
+    en: "If you're the owner or an admin and can share the page, the @ list also shows, in gray under “Can't see this page”, people who can't see it. Pick one and choose Share and mention: the page is shared with them with Comment (only that page and the ones inside it) and they're mentioned. It needs a connection. {cancel} closes the question without sharing.",
+    es: "Si sos dueño o admin y podés compartir la página, la lista del @ también muestra, en gris bajo «No ven esta página», a quienes no la ven. Elegí a alguien y tocá Compartir y mencionar: se le comparte la página con Comentar (solo esa página y las de adentro) y queda mencionado. Pide conexión. {cancel} cierra la pregunta sin compartir.",
   },
   'help.questions.title': { en: "Questions", es: "Preguntas" },
   'help.questions.text': {
@@ -581,6 +591,10 @@ export const help = {
   'shortcut.mentionClose': {
     en: "Close the @ list without erasing what you wrote",
     es: "Cerrar la lista del @ sin borrar lo escrito",
+  },
+  'shortcut.mentionShareCancel': {
+    en: "Close the question to share the page with someone you mention, without sharing",
+    es: "Cerrar la pregunta de compartir la página con quien mencionás, sin compartir",
   },
   'shortcut.versionName': {
     en: "Naming a version in the history: save / leave it as it was",

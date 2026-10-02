@@ -6,12 +6,15 @@ import { CONTENT_FRAGMENT } from '../sync/structure';
 import type { PageTree } from '../sync/tree';
 import type { PageRow } from '../sync/types';
 import { editorSchemaOptions, schema } from '../ui/editorSchema';
+import { SHARED_COLLAPSE_MAP } from '../ui/collapseEditor';
 import { findUnknownContent } from '../ui/unknownContent';
 import { isEmptyPage } from './apply';
 import { builtinBlocks, type TemplateBlock } from './builtin';
 import { BUILTIN_ONSET } from './builtinIds';
 import { dateAtStart, dayInTitle, dayReportsMark, isReusableReport, localDate, reportTitle } from './dayReport';
 import { fillReport, readFacts, type ReportFacts } from './dayReportFacts';
+import { isTemplatePage } from './own';
+import { readOwnTemplate } from './ownCopy';
 
 // Crear el reporte del día (Docs/Doc_Plantillas.md, 6.3 a 6.6): leer los reportes de la carpeta (todo está en el
 // dispositivo: anda sin red), proponer la fecha, el día y la locación, y crear la página con la plantilla llena. La
@@ -20,9 +23,24 @@ import { fillReport, readFacts, type ReportFacts } from './dayReportFacts';
 
 export interface DayReportDeps {
   tree: PageTree;
-  docs: Pick<PageDocs, 'open' | 'close' | 'flush' | 'snapshot'>;
-  engine: { isMissingContent(pageId: string): Promise<boolean> };
+  docs: Pick<PageDocs, 'open' | 'close' | 'flush' | 'snapshot'> & Partial<Pick<PageDocs, 'peek'>>;
+  engine: { isMissingContent(pageId: string): Promise<boolean>; prefetchPage?(pageId: string, timeoutMs?: number): Promise<boolean> };
 }
+
+/** Una plantilla propia de reporte del día, ya leída (entrega 3): sus bloques (ids nuevos) y su colapsado. */
+export interface ReportTemplate {
+  id: string;
+  blocks: TemplateBlock[];
+  collapsed: string[];
+  /** Fotos y archivos que no se copiaron por ser de otro proyecto (PL10). */
+  removed: number;
+}
+
+/**
+ * Por qué la carpeta usa *On-Set Report* de fábrica en vez de su plantilla (6.2, O4): no la ve (`notShared`), está en la
+ * papelera (`gone`), no terminó de bajar (`missing`) o es de una versión más nueva (`newer`). Nunca corta el reporte.
+ */
+export type ReportTemplateNotice = 'notShared' | 'gone' | 'missing' | 'newer';
 
 /** Un reporte de la carpeta: una página con fecha (en el título o en la fila *Date*). */
 export interface ReportEntry {
@@ -52,6 +70,35 @@ export interface DayReportPlan {
   lastIncomplete: boolean;
   /** Lo que el globito propone, editable. */
   suggestion: { date: string; day: number; location: string };
+  /** La plantilla de la carpeta (`dayReports.template`), leída; `null`: *On-Set Report* de fábrica. */
+  template: ReportTemplate | null;
+  /** La carpeta tiene una plantilla que no se pudo usar (se usa la de fábrica, con este aviso). */
+  templateNotice: ReportTemplateNotice | null;
+}
+
+/** La plantilla que la carpeta de reportes tiene anotada (`dayReports.template`), o `null`. */
+export function folderTemplateId(tree: Pick<PageTree, 'get'>, folderId: string | null): string | null {
+  const value: unknown = folderId ? tree.get(folderId)?.settings?.dayReports : undefined;
+  const id = value && typeof value === 'object' ? (value as { template?: unknown }).template : undefined;
+  return typeof id === 'string' && id ? id : null;
+}
+
+/**
+ * Lee la plantilla de reporte `templateId` para una carpeta del proyecto `projectId` (6.2, O4): si la persona no la ve,
+ * está en la papelera, no terminó de bajar o es de una versión más nueva, `null` con el aviso (se usa la de fábrica).
+ */
+export async function resolveReportTemplate(
+  deps: DayReportDeps,
+  templateId: string | null | undefined,
+  projectId: string,
+): Promise<{ template: ReportTemplate | null; notice: ReportTemplateNotice | null }> {
+  if (!templateId) return { template: null, notice: null };
+  const row = deps.tree.get(templateId);
+  if (!row) return { template: null, notice: 'notShared' };
+  if (!isTemplatePage(deps.tree, templateId)) return { template: null, notice: 'gone' };
+  const read = await readOwnTemplate(deps, templateId, projectId, { wait: 2000 });
+  if (read.status !== 'ok') return { template: null, notice: read.status };
+  return { template: { id: templateId, blocks: read.blocks, collapsed: read.collapsed, removed: read.removed }, notice: null };
 }
 
 /** Cuántos documentos se leen como mucho buscando la fila *Date* de páginas sin fecha en el título. */
@@ -144,7 +191,10 @@ export async function planDayReport(
   // más alto de los demás; si ninguno tiene, la cantidad (abajo).
   const days = reports.map((r) => r.day).filter((d): d is number => d !== null);
   const previousDay = facts?.day ?? last?.day ?? (days.length ? Math.max(...days) : null);
+  const resolved = await resolveReportTemplate(deps, folderTemplateId(tree, target.parentId), target.projectId);
   return {
+    template: resolved.template,
+    templateNotice: resolved.notice,
     parentId: target.parentId,
     projectId: target.projectId,
     reports,
@@ -192,18 +242,38 @@ export interface DayReportInput {
   location: string;
 }
 
-/** Los bloques del reporte nuevo: la plantilla *On-Set Report* con la fecha, el día, la locación y lo de ayer. */
-export function reportBlocks(plan: DayReportPlan, input: DayReportInput, lang: string): TemplateBlock[] {
-  return fillReport(builtinBlocks('onset', lang), { ...input, previous: plan.facts }, lang);
+/**
+ * Los bloques del reporte nuevo: la plantilla (la propia de la carpeta, o *On-Set Report* de fábrica) con la fecha, el
+ * día, la locación y lo de ayer, escritos por el rótulo de cada fila (6.4: vale para la de fábrica y para una propia).
+ */
+export function reportBlocks(
+  plan: Pick<DayReportPlan, 'facts'>,
+  input: DayReportInput,
+  lang: string,
+  template: ReportTemplate | null = null,
+): TemplateBlock[] {
+  return fillReport(template ? template.blocks : builtinBlocks('onset', lang), { ...input, previous: plan.facts }, lang);
 }
 
 /**
  * Marca la carpeta de reportes si no tiene marca (6.2: "cada New day report vuelve a escribir `dayReports` si falta").
- * Si se dejó de usar a mano (`false`), no la toca.
+ * Si se dejó de usar a mano (`false`), no la toca. `template`: la plantilla elegida (`null`, la de fábrica); si es otra
+ * que la anotada, se anota (6.5). `undefined`: la anotada no se toca (no se pudo usar, O4).
  */
-export async function markReportFolder(tree: PageTree, folderId: string): Promise<void> {
-  if (dayReportsMark(tree.get(folderId)) !== null) return;
-  await tree.setSetting(folderId, 'dayReports', {});
+export async function markReportFolder(tree: PageTree, folderId: string, template?: string | null): Promise<void> {
+  const row = tree.get(folderId);
+  const mark = dayReportsMark(row);
+  if (mark === 'off') return;
+  if (mark === null) {
+    await tree.setSetting(folderId, 'dayReports', template ? { template } : {});
+    return;
+  }
+  if (template === undefined) return;
+  const current = { ...(row!.settings!.dayReports as { template?: string }) };
+  if ((current.template ?? null) === template) return;
+  if (template) current.template = template;
+  else delete current.template;
+  await tree.setSetting(folderId, 'dayReports', current);
 }
 
 /** La página del reporte quedó creada pero no se pudo escribir su contenido (O4): el reintento la usa. */
@@ -230,12 +300,21 @@ export async function createDayReport(
   plan: DayReportPlan,
   input: DayReportInput,
   lang: string,
-  options: { canMark: boolean; reuse?: string },
+  options: {
+    canMark: boolean;
+    reuse?: string;
+    /** La plantilla propia elegida (ya leída); sin ella, *On-Set Report* de fábrica. */
+    template?: ReportTemplate | null;
+    /** Lo que se anota en la carpeta como su plantilla: `undefined` no la toca (la suya no se pudo usar, O4). */
+    markTemplate?: string | null;
+  },
 ): Promise<string> {
   const { tree } = deps;
-  const blocks = reportBlocks(plan, input, lang);
+  const template = options.template ?? null;
+  const blocks = reportBlocks(plan, input, lang, template);
+  const templateId = template?.id ?? BUILTIN_ONSET;
   const title = reportTitle(input.date, input.day, lang);
-  if (plan.parentId && options.canMark) await markReportFolder(tree, plan.parentId);
+  if (plan.parentId && options.canMark) await markReportFolder(tree, plan.parentId, options.markTemplate);
   // Solo un reporte hecho por la app, con su título de reporte y sin subpáginas, de esta carpeta (B1). La vacía se
   // vuelve a comprobar al escribir (`writeNewPage` no escribe en una página con contenido).
   const usable = (id: string | undefined): id is string => {
@@ -248,11 +327,12 @@ export async function createDayReport(
     id = candidate;
     // Ya tiene la forma de un reporte (`isReusableReport`): solo puede cambiar la fecha o el día que eligió la persona.
     if (tree.get(id)!.title !== title) await tree.rename(id, title);
+    if (tree.get(id)!.template_id !== templateId) await tree.setPatch(id, { template_id: templateId });
   } else {
-    id = await tree.create(plan.parentId, title, plan.projectId, { templateId: BUILTIN_ONSET, before: placeBefore(plan, input.date) });
+    id = await tree.create(plan.parentId, title, plan.projectId, { templateId, before: placeBefore(plan, input.date) });
   }
   try {
-    await writeNewPage(deps.docs, id, blocks);
+    await writeNewPage(deps.docs, id, blocks, template?.collapsed ?? []);
   } catch (err) {
     throw new DayReportWriteError(id, err);
   }
@@ -265,7 +345,13 @@ export async function createDayReport(
  * la semilla queda al final). Nunca reemplaza ni borra. Si la página ya tiene contenido (un intento anterior llegó a
  * escribir), no agrega nada: solo espera a que lo de antes quede guardado.
  */
-export async function writeNewPage(docs: DayReportDeps['docs'], pageId: string, blocks: TemplateBlock[]): Promise<void> {
+export async function writeNewPage(
+  docs: DayReportDeps['docs'],
+  pageId: string,
+  blocks: TemplateBlock[],
+  /** Los títulos colapsados para todos de una plantilla propia (con los ids que traen `blocks`). */
+  collapsed: string[] = [],
+): Promise<void> {
   const doc = await docs.open(pageId, { seed: true });
   try {
     // Algo que esta versión no conoce: el editor lo borraría. No se toca.
@@ -289,6 +375,12 @@ export async function writeNewPage(docs: DayReportDeps['docs'], pageId: string, 
       const first = editor.document[0];
       if (!first) throw new Error('The page has no blocks to insert before.');
       editor.insertBlocks(blocks as never[], first.id, 'before');
+      if (collapsed.length) {
+        const shared = doc.getMap(SHARED_COLLAPSE_MAP);
+        doc.transact(() => {
+          for (const id of collapsed) shared.set(id, true);
+        });
+      }
       await docs.flush(pageId);
     } finally {
       editor.unmount();

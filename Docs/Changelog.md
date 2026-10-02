@@ -2,13 +2,36 @@
 
 v0.0XX :
 
-Diseño de ⌘Z en el orden en que editaste (D10, P.26), sin código: `Docs/Doc_Deshacer.md`. Hoy la pila de deshacer de
-cada página muere al cambiar de página y el reemplazo del proyecto no está en ninguna; además, deshacer el reemplazo y
-después lo escrito antes deja texto de más (medido). La propuesta: una línea de tiempo por proyecto arriba de las pilas
-de Yjs, que se retienen al salir de la página; ⌘Z en otra página te lleva y lo deshace a la vista; el reemplazo entra en
-la pila de las páginas editadas y por las anclas en las demás; ⌘⇧Z rehace todo. Prototipos al azar con dos
-dispositivos: nada del otro borrado. Decisiones DH1 a DH10.
+Diseño de ⌘Z en el orden en que editaste (pedido de Lega del 2026-10-02, P.26), sin código: `Docs/Doc_Deshacer.md`.
+Hoy la pila de deshacer de cada página muere al cambiar de página y el reemplazo del proyecto no está en ninguna; además,
+deshacer el reemplazo y después lo escrito antes deja texto de más (medido). La propuesta: una línea de tiempo por
+proyecto arriba de las pilas de Yjs, que se retienen al salir de la página; ⌘Z en otra página te lleva y lo deshace a la
+vista; el reemplazo entra en la pila de las páginas editadas (también al deshacerlo desde el panel) y por las anclas en
+las demás; ⌘⇧Z rehace todo. Auditado: corregidos el panel fuera de orden y la memoria del editor viejo; investigar el
+resto de Yjs (B.21) antes de la entrega 1. Decisiones DH1 a DH10.
 [ Deshacer, diseño - la línea de tiempo de ⌘Z con el reemplazo del proyecto adentro ]
+
+v0.125 :
+
+Menciones en comentarios (P.21), entrega 2. Para mencionar a alguien que no veía la página había que ir a *Share*,
+compartirla y volver, y sin abrir la campana no se veía que había menciones. Nueva migración
+`20261016120000_menciones_e2.sql` (`schema_version` 16): `mention_candidates` suma a quienes no ven la página solo
+para el dueño y los admins que pueden compartirla, y `share_for_mention` la comparte con Comentar, solo esa página y
+sin tocar a quien ya la ve; pruebas en rollback y 19 mutantes. En la app, esas personas aparecen en gris bajo *Can't
+see this page* y elegir una pregunta *Share and mention*, por el mismo paso previo que *Share*. Además, un punto en el
+árbol (hueco en la madre plegada) y el número en el título de la pestaña y en el ícono de la app instalada.
+[ Menciones, entrega 2 - compartir desde la mención, el punto del árbol y el número en la pestaña y el ícono ]
+
+v0.124 :
+
+No se podía guardar una página como plantilla ni cambiar las de fábrica (P.23, entrega 3 de `Doc_Plantillas.md`). Ahora
+*Save as template…* (menú ⋯) copia la página a la carpeta *Templates* del proyecto, sin tocarla, con nombre, descripción
+y *Clear filled-in values* (vacía tablas y casillas, deja rótulos, saca fotos). Una plantilla es una página marcada
+(`settings.template`, sin migración): se edita escribiendo, con una franja arriba (*Template settings…*, *Stop using as
+template*). La ventana *Templates* suma las del proyecto, las de otros proyectos (sin sus fotos, con aviso) y
+*Customize*; una a medio bajar nunca se copia (*Wait*, *Use built-in*). *New day report* usa la plantilla de la carpeta y
+deja elegir entre varias; si no la ve, usa la de fábrica y avisa.
+[ Plantillas propias - guardar como plantilla, la carpeta Templates, editar, personalizar y usarlas en el reporte del día ]
 
 v0.123 :
 

@@ -90,12 +90,12 @@ export const tutorial = {
   'tour.find.text': { en: "Find and replace in the page ({find}).", es: "Buscá y reemplazá en la página ({find})." },
   'tour.pageMenu.title': { en: "The page", es: "La página" },
   'tour.pageMenu.text': {
-    en: "Share, move, page size and Export PDF ({print}).",
-    es: "Compartir, mover, tamaño de hoja y Exportar PDF ({print}).",
+    en: "Share, move, page size, Save as template and Export PDF ({print}).",
+    es: "Compartir, mover, tamaño de hoja, Guardar como plantilla y Exportar PDF ({print}).",
   },
   'tour.pageMenu.textPhone': {
-    en: "Share, move, page size and Export PDF.",
-    es: "Compartir, mover, tamaño de hoja y Exportar PDF.",
+    en: "Share, move, page size, Save as template and Export PDF.",
+    es: "Compartir, mover, tamaño de hoja, Guardar como plantilla y Exportar PDF.",
   },
   'tour.sync.title': { en: "Always saved", es: "Siempre guardado" },
   'tour.sync.text': {
