@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.130 :
+
+Buscar dentro de secciones colapsadas (D11) y el reporte de set en la raíz (D82), dos pedidos de Lega del 2026-10-02.
+**Buscar**: las coincidencias escondidas en una sección colapsada solo se veían al ir una por una y esa sección quedaba
+abierta para siempre. Ahora buscar en la página (o abrir un resultado del proyecto) abre todas las secciones que esconden
+coincidencias y las vuelve a cerrar al terminar; es solo la vista de este dispositivo (los registros de "abrir para vos"
+de P.11), no escribe el Y.Doc. **Reporte en la raíz**: *On-Set Report* en una página de la raíz creaba la plantilla común
+sin "ayer" que copiar ni días que numerar. Ahora ofrece la carpeta de reportes que ya tenga el proyecto o crear una
+(*On-Set Reports*), mueve la página adentro y la llena como `2026-10-02 | Day 01`; si la página cambió o falta permiso,
+no escribe nada (`dayReportRoot.ts`, `RootReportDialog.tsx`). Sin migración ni `min_app_version`.
+[ Buscar con secciones colapsadas (D11) y el reporte de set en la raíz (D82) ]
+
 v0.129 :
 
 Tres entregas de fotos y exportar. **El zip para archivar** (P.22, entrega 2): guardar un proyecto fuera de la app no

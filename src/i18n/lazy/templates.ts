@@ -158,9 +158,21 @@ export const templates = {
     en: "The day report couldn't be created. Nothing was lost; try again.",
     es: "No se pudo crear el reporte del día. No se perdió nada; probá de nuevo.",
   },
-  'dayReport.atRoot': {
-    en: "Put day reports inside a folder to get New day report",
-    es: "Poné los reportes del día adentro de una carpeta para tener Nuevo reporte del día",
+  // *On-Set Report* en la raíz del proyecto (D82): el reporte va adentro de una carpeta, que se ofrece crear o elegir.
+  'dayReport.folderName': { en: "On-Set Reports", es: "Reportes de rodaje" },
+  'dayReport.rootTitle': { en: "Day reports go in a folder", es: "Los reportes del día van en una carpeta" },
+  'dayReport.rootText': {
+    en: "The folder keeps every report of the shoot, so each new one can copy the previous day and number the days. This page goes inside it.",
+    es: "La carpeta junta todos los reportes del rodaje, así cada nuevo copia el día anterior y numera los días. Esta página queda adentro.",
+  },
+  'dayReport.rootFolder': { en: "Folder", es: "Carpeta" },
+  'dayReport.rootNew': { en: "New folder…", es: "Carpeta nueva…" },
+  'dayReport.rootName': { en: "Folder name", es: "Nombre de la carpeta" },
+  'dayReport.rootCreate': { en: "Create folder and report", es: "Crear carpeta y reporte" },
+  'dayReport.rootUse': { en: "Create report in folder", es: "Crear reporte en la carpeta" },
+  'dayReport.rootBlocked': {
+    en: "Day reports go inside a folder, and you can't create one here. Put this page inside a folder first.",
+    es: "Los reportes del día van adentro de una carpeta y acá no podés crear una. Poné primero esta página adentro de una carpeta.",
   },
 
   // --- La vista previa (la página de práctica con una plantilla) ---

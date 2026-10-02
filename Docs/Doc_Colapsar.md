@@ -1088,3 +1088,12 @@ con deshacer y arrastrada, las lleva todas, sin perder ni duplicar ninguna, tamb
 (`collapseMove.test.ts` y el recorrido de punta a punta).
 
 **Pendiente:** probar a mano en Safari, Firefox y el iPhone (el arrastre y el teclado).
+
+## Buscar abre las secciones colapsadas (D11, v0.130)
+
+Decisión de Lega (2026-10-02): al buscar en la página, las secciones colapsadas que esconden coincidencias se abren
+**solo a la vista y en este dispositivo**, y se vuelven a colapsar al terminar la búsqueda, salvo lo que la persona tocó o
+donde dejó la selección. Es la misma "apertura para vos" de la sección 6 (los `records` de este documento), con tres
+diferencias: no se guarda en el dispositivo (`persistable`), no pisa lo que la persona cierra a mano durante la
+búsqueda, y se devuelve sola. **Nunca escribe el mapa de "para todos" ni el contenido.** Detalle y pruebas en
+`Doc_Buscar.md`, "Abrir al buscar (D11)".
