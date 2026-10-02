@@ -27,6 +27,10 @@ export const CollapseIcon = icon('M5.5 8l4.5 4.5L14.5 8', { strokeWidth: 1.8 });
 export const ChevronUpIcon = icon('M5.5 12l4.5-4.5 4.5 4.5', { strokeWidth: 1.8 });
 // Plantilla (Docs/Doc_Plantillas.md): una hoja con renglones de una ficha ya armada.
 export const TemplateIcon = icon('M5.75 2.75h8.5a1 1 0 0 1 1 1v12.5a1 1 0 0 1-1 1h-8.5a1 1 0 0 1-1-1V3.75a1 1 0 0 1 1-1zM7.5 6.25h5M7.5 9.25h5M7.5 12.25h2.5');
+// El reporte del día (Docs/Doc_Plantillas.md, 6.1): un calendario con un +.
+export const DayReportIcon = icon(
+  'M4.75 4.25h10.5a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4.75a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1zM3.75 7.75h12.5M7 2.75v3M13 2.75v3M10 10v4.5M7.75 12.25h4.5',
+);
 export const RenameIcon = icon('M12.5 4.5l3 3L8 15H5v-3z');
 export const MoveIcon = icon('M3.75 6.25h4l1.5 1.5h7v7.5a1 1 0 0 1-1 1h-10.5a1 1 0 0 1-1-1zM8.5 12h5M11.5 10l2 2-2 2');
 // Importar: una carpeta con una flecha que entra.

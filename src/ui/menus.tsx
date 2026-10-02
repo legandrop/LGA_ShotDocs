@@ -8,6 +8,7 @@ import { pageFormat, sizeLabel } from './pageFormat';
 import { ownSplit, splitEnabled } from './titles';
 import {
   CameraIcon,
+  DayReportIcon,
   HistoryIcon,
   CollapseAllIcon,
   DarkIcon,
@@ -32,6 +33,8 @@ import {
   VideoIcon,
 } from './icons';
 import { requestTemplates, templateTargetFor } from '../templates/templatesUi';
+import { isDayReportFolder } from '../templates/dayReport';
+import { requestDayReport, useDayReportFolder } from '../templates/dayReportUi';
 import { offlineSupported, openOffline, openStorage } from './SpaceHost';
 import { openHelp } from '../help/helpUi';
 import { isPhoneLayout } from './commentsUi';
@@ -167,6 +170,10 @@ export function PageMenu(props: {
   // *Apply template…* (Docs/Doc_Plantillas.md, 4.1): solo con la página vacía. Si no está abierta, se abre y se ve allá.
   const templateTarget = templateTargetFor(props.pageId);
   const templateBlocked = !!templateTarget && !templateTarget.empty();
+  // El reporte del día (Docs/Doc_Plantillas.md, 6.1 y 6.2): *New day report* en la carpeta de reportes y en sus
+  // reportes (con permiso para crear ahí), y marcar o dejar de usar una página como carpeta de reportes.
+  const reportFolder = useDayReportFolder(props.pageId);
+  const isReportFolder = isDayReportFolder(tree, props.pageId);
 
   const item = (label: string, icon: ReactNode, action: () => void, danger = false, enabled = true) => (
     <button
@@ -206,6 +213,8 @@ export function PageMenu(props: {
           {tr('pageMenu.applyTemplate')}
         </button>
       )}
+      {reportFolder &&
+        item(tr('dayReport.new'), <DayReportIcon />, () => requestDayReport(props.pageId))}
       <button
         role="menuitem"
         disabled={!canEdit}
@@ -308,6 +317,20 @@ export function PageMenu(props: {
         >
           <span className="split-sample" aria-hidden="true" />
           {tr('pageMenu.shortTitlesInherit')}
+        </button>
+      )}
+      {/* La carpeta de reportes a mano (6.2): puede haber varias (una por unidad). Dejarla gana sobre lo deducido. */}
+      {canEdit && (
+        <button
+          role="menuitem"
+          data-tip={isReportFolder ? undefined : tr('pageMenu.useForDayReportsTip')}
+          onClick={() => {
+            props.onClose();
+            void tree.setSetting(props.pageId, 'dayReports', isReportFolder ? false : {});
+          }}
+        >
+          <DayReportIcon />
+          {isReportFolder ? tr('pageMenu.stopDayReports') : tr('pageMenu.useForDayReports')}
         </button>
       )}
       <hr />

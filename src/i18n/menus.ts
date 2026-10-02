@@ -22,6 +22,14 @@ export const menus = {
   // Las plantillas (Docs/Doc_Plantillas.md, 4.1): la ventana se baja con el editor.
   'pageMenu.applyTemplate': { en: "Apply template…", es: "Aplicar plantilla…" },
   'pageMenu.applyTemplateEmpty': { en: "Only on an empty page", es: "Solo en una página vacía" },
+  // El reporte del día (Docs/Doc_Plantillas.md, sección 6): el botón arriba del título y el menú de la página.
+  'dayReport.new': { en: "New day report", es: "Nuevo reporte del día" },
+  'pageMenu.useForDayReports': { en: "Use for day reports", es: "Usar para reportes del día" },
+  'pageMenu.useForDayReportsTip': {
+    en: "New day report, on this page and the ones inside,\ncreates the next report here",
+    es: "Nuevo reporte del día, en esta página y en las de adentro,\ncrea el próximo reporte acá",
+  },
+  'pageMenu.stopDayReports': { en: "Stop using for day reports", es: "Dejar de usar para reportes del día" },
   'pageMenu.expandAll': { en: "Expand all", es: "Abrir todo" },
   'pageMenu.printTip': {
     en: "Opens the print dialog with this page size.\nChoose **Save as PDF** to export.",
