@@ -664,7 +664,7 @@ Inventario de lo que hace hoy la foto-bloque (el código de `src/ui/`: `MediaBar
   `Doc_Colaboracion.md`. El lugar de las fotos mientras se guardan, si el otro aprieta Enter antes o une o borra el
   renglón, puede quedar al final de la parte izquierda o en un renglón nuevo después del bloque siguiente (nunca se
   pierde nada). Pegar HTML de la app con una foto adentro de una celda crea una foto en línea en la celda (los datos
-  están bien; la impresión de celdas con fotos no está probada: entrega 5). Buscar y la importación de comentarios de
+  están bien; la impresión de celdas con fotos no está probada: entrega 5; hasta la entrega 5, que la probó). Buscar y la importación de comentarios de
   Coda le ponen un espacio al principio a un renglón con la marca (no escriben nada).
 
 ### Lo medido
@@ -705,7 +705,8 @@ Pruebas en el repo: `inlinePhotoCreate.test.ts`, `inlinePhotoSize.test.ts`, `med
   es de la entrega 3, con la conversión de imágenes `data:`.
 - "/Image" y *Replace image* ya no ofrecen pegar una dirección (*Embed*) para una foto de otro sitio: abren el
   selector de archivos.
-- Las fotos en las celdas de una tabla siguen afuera (van en un renglón después de la tabla; entrega 5).
+- Las fotos en las celdas de una tabla siguen afuera (van en un renglón después de la tabla; hasta la entrega 5, que
+  las pone en la celda).
 - La marca de espera solo se ve en el renglón; si las fotos van a un renglón nuevo, no hay marca mientras se guardan.
 - Lo que sigue de editar a la vez junto a fotos (unir renglones, cambiar el tipo, dos Enter a la vez, deshacer una
   foto mientras otro escribe al lado) está en `Doc_Colaboracion.md`.
@@ -798,7 +799,7 @@ escribe en un bloque hijo de una foto. Y de la foto-bloque no pasan al renglón 
   las más anchas que el renglón, a todo el renglón. En una lista, el renglón de Coda es más angosto (24 px menos por
   nivel) y `w` se calcula sobre él (auditoría, ronda 3: sin eso salían 1 a 5 % más chicas). Un título con solo fotos pasa a párrafo. Un adjunto sigue
   siendo la tarjeta (bloque). Las fotos de una celda de tabla van debajo de la tabla, juntas en un renglón
-  (las fotos en celdas son la entrega 5). Detalle en `Doc_Importar_Coda.md`, "La conversión".
+  (hasta la entrega 5, que las deja en su celda). Detalle en `Doc_Importar_Coda.md`, "La conversión".
 - **Las fichas de las tablas** (`codaTables.mjs`, el comando): las fotos de una columna de fotos van en un solo
   renglón (una con su ancho; varias, a un tercio cada una). Cambia lo que escribe `--convert-only`: para una
   importación nueva hay que volver a correrlo (sin red ni token).
@@ -848,8 +849,11 @@ Pedido anterior de Lega: miniaturas en las celdas. Sin tipos ni propiedades nuev
 
 ### Qué cambió
 
-- **Crear** (`inlinePhotoCreate.ts`): `canHostPhoto` acepta la celda (sigue fuera el código). Pegar, soltar (también en
-  el relleno de la celda: `dropPos`), "/Image" y "Copy image" ponen las fotos en la celda, donde está el cursor, **todas
+- **Crear** (`inlinePhotoCreate.ts`): `canHostPhoto` acepta la celda (sigue fuera el código). Pegar, soltar, "/Image"
+  y "Copy image" ponen las fotos en la celda, donde está el cursor o entre las letras donde se soltaron. Soltar en el
+  relleno de la celda (abajo, en una fila alta por una miniatura, o a los costados) las pone al final del texto de esa
+  celda (`dropPos`, `cellTextEnd`; ahí ProseMirror da una posición entre el cierre del texto y el de la celda, donde no
+  entra nada en línea, y antes de la auditoría terminaban debajo de la tabla). Entran **todas
   con `w = 0`** (`CELL_PHOTO_WIDTH`), aunque sean varias (no a 1/3: un tercio de una celda angosta es una estampilla).
   Un adjunto sigue siendo una tarjeta debajo de la tabla. Con varias celdas elegidas no hay lugar: van debajo.
 - **Cómo se ve** (`styles.css`, "Fotos en las celdas"): en una celda, una foto sin ancho es una **miniatura de 96 px
@@ -857,10 +861,15 @@ Pedido anterior de Lega: miniaturas en las celdas. Sin tipos ni propiedades nuev
   lado de la otra, a la misma altura, con el espacio de las filas (8 px) a la derecha de cada una. Con ancho propio es
   una parte de la celda (como en un renglón), y no agranda la columna (`contain: inline-size`; antes la columna tomaba
   lo que medía el original). La misma tabla mide ahora **656 px** de alto.
-- **La barra** (`PhotoToolbar.tsx`): en una celda suma **Thumbnail / Miniatura** (vuelve a `w = 0`, marcada cuando lo
-  está), los tamaños dicen "de la celda" (*Half the cell width*…) y no va alinear (la tabla no tiene alineación; el
-  botón no hacía nada). Los tiradores y *Arrange in rows* miden el renglón de la celda (`photoLine` en
-  `inlinePhoto.ts`; antes tomaban la tabla entera).
+- **La barra** (`PhotoToolbar.tsx`; D32): en una celda ofrece solo **Thumbnail / Miniatura** (vuelve a `w = 0`, marcada
+  cuando lo está) y **Full cell width / Todo el ancho de la celda**; no van 1/2, 1/3, 1/4 ni *Arrange in rows* (en una
+  columna de 120 px, la de fábrica, dejaban la foto más chica que la miniatura: 49 × 33 px con 1/2), ni alinear (la
+  tabla no tiene alineación; el botón no hacía nada). El tirador sigue agrandándola dentro de la celda; los tiradores
+  miden el renglón de la celda (`photoLine` en `inlinePhoto.ts`; antes tomaban la tabla entera). Con una selección que
+  mezcla fotos de celdas y de renglones, la barra de siempre (tamaños de la página), sin alinear (auditoría, O7).
+- **↑ desde el primer renglón de una celda con fotos** (`inlinePhotoEditor.ts`, `handleCellArrowUp`): va al final del
+  texto de la celda de arriba. Antes iba a la celda de la izquierda: la miniatura hace alto el renglón y ProseMirror no
+  veía el cursor arriba de todo, así que la tecla quedaba al navegador (auditoría, O4).
 - **Imprimir** (`printView.ts`): la copia fija el ancho de una foto sin ancho propio en el de su miniatura; en una celda,
   el ancho que da el alto de 96 px (lo lee de la pantalla), así el original que pone la impresión sale igual y no se
   deforma.
@@ -876,7 +885,7 @@ celda (probado). La versión publicada de v0.083 a v0.092 (`fixtures/editorSchem
 en celdas **sin escribir nada** y, al escribir en esas celdas, no borra ninguna foto; las de v0.052 a v0.076 (sin
 `photo`) no la abren (el resguardo). Una versión de v0.078 a v0.104 la abre y la ve con las fotos grandes (como antes).
 Ojo: `fixtures/editorSchemaMain.ts` quedó de antes de `photo` (no es la `main` de hoy): montado sin el resguardo borra
-la foto de la celda, como cualquier versión sin `photo`.
+la foto de la celda, como cualquier versión sin `photo` (roadmap, B.20).
 
 ### Lo medido
 
@@ -889,19 +898,31 @@ la foto de la celda, como cualquier versión sin `photo`.
 | Alto de la tabla de prueba (6 filas, 8 fotos) | 2799 px | 656 px; cada miniatura de 96 px de alto (144, 64, 96 px de ancho según la proporción) |
 | Clic, segundo clic, carrete en orden (10 fotos), toque en el teléfono | andaba | igual |
 | Tirador arrastrado 70 px | — | `w` 0,67 de la celda (213 px); Ctrl+Z vuelve a miniatura |
-| *Half the cell width* / *Thumbnail* | — | la mitad de la celda / vuelve a `w = 0` |
+| *Full cell width* / *Thumbnail* | — | todo el ancho de la celda / vuelve a `w = 0` |
+| Soltar en el relleno de abajo de una celda de una fila alta, y en la celda vacía (script de la auditoría) | — | antes de la auditoría, 2 de 4 debajo de la tabla; ahora 4 de 4 en la celda, al final de su texto |
+| ↑ desde el principio de "Texto [foto] y más texto" | — | antes, la celda de la izquierda; ahora la de arriba (las otras 7 flechas, iguales) |
 | Una letra, ←, Espacio, Retroceso con una foto de la celda elegida | — | la letra después de la foto, ← la elige, Espacio la abre en el carrete, Retroceso la borra y Ctrl+Z la devuelve |
 | Imprimir (A4) | las 8 fotos grandes | las 8 como en pantalla (144 × 96…), cargadas, los originales del dispositivo |
 | Teléfono (375 px) | fotos de hasta 99 px de ancho, una debajo de otra | miniaturas con tope en su celda; la página no se desborda; un toque abre el carrete |
 
 Pruebas en el repo: `src/ui/cellPhotos.test.ts` (dónde entra, varias y un solo deshacer, soltar, adjuntos, selección de
 celdas, la forma guardada, el carrete y las claves del clic, `mediaIdsInDoc`, las filas, la versión publicada y la
-anterior a `photo`), casos nuevos en `mediaBar.test.tsx` (la barra en una celda), `pagination.test.ts` (el ancho de
+anterior a `photo`, soltar en el relleno de una celda con lo que da `posAtCoords` en Chromium, ↑ desde una celda con
+fotos), casos nuevos en `mediaBar.test.tsx` (la barra en una celda y con una selección mixta), `pagination.test.ts` (el ancho de
 impresión), `inlinePhotoCreate.test.ts` y `codaInlinePhotos.test.ts` (las celdas de Coda).
 
 ### Límites que quedan
 
 - La columna no crece sola para una foto con ancho propio: para agrandarla hay que ensanchar la columna (su tirador).
+- **Lo que dejó la auditoría para después** (no lo cambió esta entrega):
+  - O1: pegar solo `text/html` de una fila con fotos (el portapapeles entre dos orígenes, o un navegador que no pase el
+    formato propio de la app) la deja sin las fotos: el camino de HTML externo de las tablas de BlockNote
+    (`parseTableContent`) pierde las fotos en línea de las celdas. Con los formatos que pone la app, copiar o cortar
+    una fila anda. Ya pasaba antes. Propuesta: tratar como interno el HTML con `data-inline-content-type="photo"`.
+  - O2: una tabla de Google Docs o Excel con imágenes llega con las celdas vacías (ya pasaba). Propuesta: pasar los
+    `<img>` de las celdas a fotos en línea con `w = 0`, guardando el archivo como "Copy image".
+  - O5: la papelera de archivos al borrar una fila o columna con fotos no se pudo comprobar sin la base real
+    (`mediaIdsInDoc` deja de contarlas y Ctrl+Z las vuelve a contar; la desvinculación es del motor, sin cambios).
 - El alto de la miniatura es fijo (96 px); no hay opción para cambiarlo.
 - El texto pegado a una miniatura queda a 8 px (el espacio de la foto) además de su espacio.
 - La barra de la foto, como en un renglón, puede quedar sobre la fila de arriba (O5).
