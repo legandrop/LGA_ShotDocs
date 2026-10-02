@@ -750,9 +750,13 @@ function Composer({
   };
   const cancelAsk = () => {
     setAsking(null);
-    // La lista vuelve a abrirse en ese `@` (para elegir a otro).
+    // La lista vuelve a abrirse en ese `@` (para elegir a otro). Mientras se leía la pregunta el foco estuvo en su botón
+    // y el campo olvidó el cursor (onBlur); enfocar por código no avisa que cambió la selección, así que se vuelve a leer.
     setClosedAt(null);
-    requestAnimationFrame(() => ref.current?.focus());
+    requestAnimationFrame(() => {
+      ref.current?.focus();
+      setCaret(ref.current?.selectionStart ?? null);
+    });
   };
 
   // Lo escrito a medias: cerrar el panel (tocar afuera, Escape, la X) pide confirmación.

@@ -77,6 +77,7 @@ export function MentionShareArea({
     >
       <p>{tr('mentions.shareAsk', { name: who.label })}</p>
       <p className="muted small">{who.email}</p>
+      <p className="muted small">{tr('mentions.shareNow')}</p>
       {offline && <p className="muted small">{tr('mentions.shareOffline')}</p>}
       <ShareGateNotes gate={gate} reader />
       {error && <p className="comment-error">{error}</p>}

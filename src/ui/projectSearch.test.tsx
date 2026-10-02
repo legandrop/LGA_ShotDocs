@@ -9,7 +9,7 @@ import type { SupabaseRemote } from '../sync/remote';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
-import { saveCollapse } from './collapseStore';
+import { loadCollapse, saveCollapse } from './collapseStore';
 import { closeFindBar, getFindUi, hasFindTarget, openFindBarAt, updateFindUi } from './findUi';
 import { isSearchShortcut, searchSession, takesSearchShortcut } from './projectSearchUi';
 import { Sidebar } from './Sidebar';
@@ -741,6 +741,10 @@ describe('con secciones colapsadas (P.11)', () => {
       // La sección se abrió: el bloque ya no está escondido.
       await until(() => !block.querySelector('.bn-block-content.sd-collapsed-hidden'), 'la sección abierta');
       expect(host.querySelector('.find-count')!.textContent).toBe('1 of 1');
+      // D11: la barra avisa que la búsqueda la abrió, y eso no se guarda en el dispositivo (sigue colapsada).
+      expect(host.querySelector('.find-status')?.textContent).toContain('1 collapsed section opened for the search');
+      await new Promise((r) => setTimeout(r, 600));
+      expect([...(await loadCollapse(d.db, hidden)).entries()]).toEqual([['h1', { c: true, g: null }]]);
     } finally {
       vi.unstubAllGlobals();
     }

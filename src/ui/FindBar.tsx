@@ -7,8 +7,9 @@ import {
   clearFind,
   closeFind,
   getFindState,
-  hiddenCount,
+  hiddenCounts,
   landOnOccurrence,
+  openedBySearch,
   replaceAll,
   replaceCurrent,
   revealCurrent,
@@ -19,6 +20,7 @@ import {
   type ReplaceResult,
 } from './findEditor';
 import { closeFindBar, dropFindTarget, getFindUi, hasFindTarget, takeFindTarget, isStepShortcut, takeFocusRequest, takesStepShortcut, updateFindUi, useFindUi, type FindStatus } from './findUi';
+import { onCollapseChange } from './collapseEditor';
 import { scrollParent, stopKeepingInView } from './findScroll';
 import { ChevronUpIcon, CloseIcon, CollapseIcon, ExpandIcon } from './icons';
 
@@ -60,6 +62,8 @@ export function FindBar({
 
   // Cada cambio de la búsqueda (coincidencias, la actual) redibuja la cuenta.
   useEffect(() => (view ? subscribeFind(view, redraw) : undefined), [view]);
+  // Y lo colapsado (el triángulo, Collapse all, un cambio de otro): el aviso de lo escondido y de lo abierto lo cuenta.
+  useEffect(() => (view ? onCollapseChange(view, redraw) : undefined), [view]);
 
   // Abrir (o Ctrl/⌘+F con la barra abierta): lo elegido en el editor como búsqueda, y el foco al campo. Solo
   // con un pedido nuevo: si la barra se vuelve a montar (el editor se reabrió), no le roba el foco a nadie.
@@ -176,7 +180,9 @@ export function FindBar({
     else count = tr(state.truncated ? 'find.countMore' : 'find.count', { current: state.current + 1, total });
   }
   const where = current?.field === 'caption' ? tr('find.inCaption') : current?.field === 'name' ? tr('find.inName') : '';
-  const hidden = state ? hiddenCount(state.matches, view) : 0;
+  const hidden = state ? hiddenCounts(state.matches, view) : { sections: 0, toggles: 0 };
+  // Las secciones colapsadas que abrió la búsqueda (decisión D11): se vuelven a cerrar al cerrar la barra.
+  const opened = state?.query.trim() ? openedBySearch(view) : 0;
 
   const close = () => {
     closeFindBar();
@@ -318,9 +324,9 @@ export function FindBar({
             </button>
           </div>
         )}
-        {(where || hidden > 0 || status) && (
+        {(where || opened > 0 || hidden.sections > 0 || hidden.toggles > 0 || status) && (
           <div className="find-status" role="status">
-            {[where, hidden > 0 ? tr('find.hidden', { count: hidden }) : '', status?.text ?? ''].filter(Boolean).join(' · ')}
+            {[where, opened > 0 ? tr('find.opened', { count: opened }) : '', hidden.sections > 0 ? tr('find.hidden', { count: hidden.sections }) : '', hidden.toggles > 0 ? tr('find.hiddenToggles', { count: hidden.toggles }) : '', status?.text ?? ''].filter(Boolean).join(' · ')}
             {status?.undoItem !== undefined && canUndoReplace(view, status.undoItem) && (
               <>
                 {' '}

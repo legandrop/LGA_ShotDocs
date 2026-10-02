@@ -10,9 +10,11 @@ import { insertTemplate, insertTemplateCopy, isEmptyPage, placeAtFirstDatum, pla
 import { BUILTIN_IDS, BUILTIN_KINDS, BUILTIN_SLUGS, builtinBlocks, builtinTexts, type BuiltinKind } from './builtin';
 import { reportTitle } from './dayReport';
 import { markReportFolder, planDayReport, reportBlocks, type ReportTemplate } from './dayReportCreate';
+import { createReportFolder, reportFolderOptions } from './dayReportRoot';
 import { takeReportFocus } from './dayReportUi';
 import { builtinOrigin, listTemplates, templateInfo, templatesFolderOf, type OwnTemplate } from './own';
 import { customizeBuiltin, readFailureText, readOwnTemplate } from './ownCopy';
+import { RootReportDialog, type RootReportChoice } from './RootReportDialog';
 import { armTitleUndo, registerTemplateTarget, takeTemplatesRequest } from './templatesUi';
 import './templates.css';
 
@@ -59,6 +61,11 @@ export function TemplateHost({ pageId, doc, editor, editable, complete }: Props)
   const tr = useT();
   const empty = useEmpty(doc);
   const [dialog, setDialog] = useState(false);
+  // *On-Set Report* en la raíz del proyecto (6.2, D82): la ventana que ofrece la carpeta de reportes. `template`: la propia
+  // con *Use for day reports* que se eligió (ya leída), o `null`: la de fábrica.
+  const [rootAsk, setRootAsk] = useState<{ template: ReportTemplate | null } | null>(null);
+  // La carpeta que dejó un intento que falló al mover la página: el reintento la usa en vez de crear otra.
+  const madeFolder = useRef<string | null>(null);
   const fresh = tree.isFresh(pageId);
   const hasChildren = tree.children(pageId).length > 0;
   const live = useRef({ editable, editor });
@@ -158,6 +165,72 @@ export function TemplateHost({ pageId, doc, editor, editable, complete }: Props)
     [tree, docs, engine, perms, pageId, doc, tr.lang],
   );
 
+  // *On-Set Report* (o una propia con *Use for day reports*) en una página de la raíz del proyecto (6.2, D82): no hay
+  // reporte sin carpeta. Si la persona puede poner la página en una carpeta de reportes del proyecto, o crear una en la
+  // raíz, se le ofrece (`RootReportDialog`); si no, se le dice y no se escribe nada.
+  const askRootFolder = useCallback(
+    (template: ReportTemplate | null) => {
+      const row = tree.get(pageId);
+      if (!row) return;
+      setDialog(false);
+      const canCreate = perms.canManagePage(pageId) && perms.canCreateIn(null, row.workspace_id);
+      if (!canCreate && reportFolderOptions(tree, perms, row.workspace_id, pageId).length === 0) {
+        notify(t('dayReport.rootBlocked'));
+        return;
+      }
+      setRootAsk({ template });
+    },
+    [tree, perms, pageId],
+  );
+
+  /**
+   * Confirma la ventana de la raíz: crea la carpeta (marcada, donde está la página) o toma la elegida, mueve la página
+   * adentro y la llena como un reporte del día (`applyDayReport`). Antes de tocar nada se vuelve a mirar que la página
+   * siga vacía y en la raíz (otro dispositivo pudo cambiarla). La página es la misma: nada se duplica ni se borra; si algo
+   * falla a medias queda una carpeta marcada y vacía, que la próxima vez se ofrece en vez de crear otra.
+   */
+  const confirmRootFolder = useCallback(
+    async (choice: RootReportChoice): Promise<boolean> => {
+      const ask = rootAsk;
+      const row = tree.get(pageId);
+      if (!ask || !row) return true;
+      const { editable: canWrite, editor: current } = live.current;
+      if (row.parent_id) {
+        // Ya está adentro de algo (otro dispositivo la movió): sigue como un reporte de esa carpeta.
+        setRootAsk(null);
+        await applyDayReport(ask.template);
+        return true;
+      }
+      if (!canWrite || !current || !isEmptyPage(doc)) {
+        setRootAsk(null);
+        notify(t('pageMenu.applyTemplateEmpty'));
+        return true;
+      }
+      try {
+        let folderId: string;
+        if ('folder' in choice) {
+          folderId = choice.folder;
+          if (!reportFolderOptions(tree, perms, row.workspace_id, pageId).some((f) => f.id === folderId)) {
+            throw new Error('The folder is not available.');
+          }
+        } else {
+          if (!perms.canManagePage(pageId) || !perms.canCreateIn(null, row.workspace_id)) throw new Error('Needs permission to create pages here.');
+          folderId = await createReportFolder(tree, choice.name, row.workspace_id, pageId, t('dayReport.folderName'), madeFolder.current);
+          madeFolder.current = folderId;
+        }
+        await tree.move(pageId, folderId);
+      } catch (err) {
+        console.error('Reporte del día en la raíz: no se pudo preparar la carpeta', err);
+        return false;
+      }
+      setRootAsk(null);
+      madeFolder.current = null;
+      await applyDayReport(ask.template);
+      return true;
+    },
+    [rootAsk, tree, perms, pageId, doc, applyDayReport],
+  );
+
   // Después de agregar una plantilla común (de fábrica o propia), el foco. Con título, a la página (el cursor ya quedó
   // en el primer dato); sin título, al título vacío (4.2, paso 5), y mientras no se escriba ahí, Ctrl/Cmd+Z en el título
   // saca la plantilla (y Ctrl/Cmd+Shift+Z la devuelve).
@@ -203,8 +276,10 @@ export function TemplateHost({ pageId, doc, editor, editable, complete }: Props)
         notify(readFailureText(read.status));
         return;
       }
-      if (templateInfo(read.row).dayReport && row.parent_id) {
-        await applyDayReport({ id: templateId, blocks: read.blocks, collapsed: read.collapsed, removed: read.removed });
+      if (templateInfo(read.row).dayReport) {
+        const template = { id: templateId, blocks: read.blocks, collapsed: read.collapsed, removed: read.removed };
+        if (row.parent_id) await applyDayReport(template);
+        else askRootFolder(template);
         return;
       }
       const { editable: canWrite, editor: current } = live.current;
@@ -224,7 +299,7 @@ export function TemplateHost({ pageId, doc, editor, editable, complete }: Props)
       if (read.removed) notify(t('templates.mediaRemoved', { count: read.removed }));
       focusAfterInsert(pageEditor);
     },
-    [tree, docs, engine, pageId, doc, applyDayReport, focusAfterInsert],
+    [tree, docs, engine, pageId, doc, applyDayReport, askRootFolder, focusAfterInsert],
   );
 
   // *Wait*: se vuelve a intentar bajar la plantilla mientras la ventana siga abierta; al llegar, se usa.
@@ -271,8 +346,9 @@ export function TemplateHost({ pageId, doc, editor, editable, complete }: Props)
       // Se vuelve a mirar en el momento: otro dispositivo pudo escribir mientras la ventana estaba abierta.
       if (!canWrite || !current || !isEmptyPage(doc)) return;
       const row = tree.get(pageId);
-      if (kind === 'onset' && row?.parent_id) {
-        void applyDayReport();
+      if (kind === 'onset' && row) {
+        if (row.parent_id) void applyDayReport();
+        else askRootFolder(null);
         return;
       }
       const pageEditor = current as PageEditorLike;
@@ -286,11 +362,9 @@ export function TemplateHost({ pageId, doc, editor, editable, complete }: Props)
       setDialog(false);
       if (row && row.template_id !== BUILTIN_IDS[kind]) void tree.setPatch(pageId, { template_id: BUILTIN_IDS[kind] });
       void tree.dropFresh(pageId);
-      // En la raíz del proyecto no hay carpeta de reportes (6.2): la página queda como una plantilla común.
-      if (kind === 'onset') notify(t('dayReport.atRoot'));
       focusAfterInsert(pageEditor);
     },
-    [doc, tree, pageId, tr.lang, applyDayReport, focusAfterInsert],
+    [doc, tree, pageId, tr.lang, applyDayReport, askRootFolder, focusAfterInsert],
   );
 
   const strip = fresh && empty && editable && !!editor && !hasChildren;
@@ -312,6 +386,14 @@ export function TemplateHost({ pageId, doc, editor, editable, complete }: Props)
           </div>
         </div>
       )}
+      {rootAsk && (
+        <RootReportDialog
+          folders={rootFolders(tree, perms, pageId)}
+          defaultName={tr('dayReport.folderName')}
+          onConfirm={confirmRootFolder}
+          onClose={() => setRootAsk(null)}
+        />
+      )}
       {dialog && (
         <TemplatesDialog
           pageId={pageId}
@@ -327,6 +409,12 @@ export function TemplateHost({ pageId, doc, editor, editable, complete }: Props)
       )}
     </>
   );
+}
+
+/** Las carpetas de reportes que ofrece la ventana de la raíz: las del proyecto de la página adonde se la puede mover. */
+function rootFolders(tree: ReturnType<typeof useTree>, perms: ReturnType<typeof usePermissions>, pageId: string) {
+  const row = tree.get(pageId);
+  return row ? reportFolderOptions(tree, perms, row.workspace_id, pageId) : [];
 }
 
 /**
