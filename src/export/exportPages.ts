@@ -1,4 +1,5 @@
 import type * as Y from 'yjs';
+import { PHOTO_MARKUP_MAP } from '../media/markup';
 import { branchPages } from '../media/offlinePlan';
 import type { PageTree } from '../sync/tree';
 import { pageFormat, type PageFormat } from '../ui/pageFormat';
@@ -84,6 +85,8 @@ export interface ExportProgress {
   total: number;
   /** La página que se está preparando. */
   title: string;
+  /** Qué se está haciendo: dibujar las páginas (lo de siempre) o bajar sus comentarios antes. */
+  step?: 'pages' | 'comments';
 }
 
 export interface RunOptions {
@@ -116,16 +119,17 @@ export async function renderPages(plan: ExportPlanPage[], source: ExportSource, 
     try {
       const snap = await source.snapshot(page.id);
       unreadable = !snap.supported || !!snap.state.unreadable;
+      // La copia vive hasta dibujar: de ella salen también las anotaciones de las fotos (su mapa aparte).
       try {
         content = readPageContent(snap.doc);
+        read = performance.now() - t0;
+        rendered = await editor.render(
+          { id: page.id, title: page.title, header: page.header, format: page.format, blocks: content.blocks, markup: snap.doc.getMap<unknown>(PHOTO_MARKUP_MAP) },
+          { signal: options.signal },
+        );
       } finally {
         snap.doc.destroy();
       }
-      read = performance.now() - t0;
-      rendered = await editor.render(
-        { id: page.id, title: page.title, header: page.header, format: page.format, blocks: content.blocks },
-        { signal: options.signal },
-      );
     } catch (err) {
       if (err instanceof ExportCancelled) throw err;
       // Una página mala no corta la exportación: se saltea con su motivo y siguen las demás.

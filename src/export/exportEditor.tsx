@@ -1,4 +1,5 @@
 import { BlockNoteEditor, type PartialBlock } from '@blocknote/core';
+import type * as Y from 'yjs';
 import { BlockNoteView } from '@blocknote/mantine';
 import { createRoot, type Root } from 'react-dom/client';
 import { t } from '../i18n';
@@ -6,6 +7,7 @@ import '../i18n/lazy/editor';
 import { mediaIdOf, type MediaQueue } from '../media/queue';
 import type { Language } from '../prefs';
 import { markAttachments } from '../ui/attachments';
+import { attachMarkupOverlay } from '../ui/markupOverlay';
 import { pageEditorExtensions } from '../ui/editorExtensions';
 import { editorDictionary } from '../ui/editorLocale';
 import { editorSchemaOptions } from '../ui/editorSchema';
@@ -37,6 +39,11 @@ export interface ExportPageInput {
   header: string[];
   format: Format;
   blocks: PartialBlock<any, any, any>[];
+  /**
+   * Las anotaciones de las fotos (el mapa `photoMarkup` de una COPIA del documento, Docs/Doc_Anotar_Fotos.md): se
+   * dibujan encima de cada foto antes de copiar la vista, como en la página (así salen en el PDF).
+   */
+  markup?: Y.Map<unknown> | null;
 }
 
 export interface ExportEditorOptions {
@@ -229,7 +236,13 @@ export class ExportEditor {
     await document.fonts?.ready.catch(() => undefined);
     check(signal);
     const t2 = performance.now();
+    // Las anotaciones, encima de las fotos ya puestas (el mismo dibujo que monta PageEditor.tsx); la copia las lleva.
+    const overlay = page.markup && page.markup.size > 0 && this.editor.domElement ? attachMarkupOverlay(this.editor.domElement, page.markup) : null;
+    overlay?.flush();
+    overlay?.stop();
     const view = buildPrintView(this.article, page.format, 'output');
+    // Las de esta página no quedan en el editor para la siguiente.
+    if (overlay) for (const svg of this.article.querySelectorAll('svg.sd-markup')) svg.remove();
     try {
       // Las imágenes de la copia ya están en la memoria del navegador; igual se esperan, como `printPage`. Si las del
       // editor no llegaron, las de la copia son las mismas y tampoco van a llegar: no se espera otra vez.

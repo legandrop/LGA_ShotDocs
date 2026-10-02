@@ -6,7 +6,7 @@ import { appComments } from '../export/exportComments';
 import { ExportCancelled, ExportEditor } from '../export/exportEditor';
 import { deviceImages, PhotoLimitError } from '../export/exportImages';
 import { exportPlan, type ExportPlanPage, type ExportProgress } from '../export/exportPages';
-import { buildPdf, PDF_LIMITS, printBook, type PdfBook } from '../export/exportPdf';
+import { buildPdf, deviceLimits, printBook, type PdfBook } from '../export/exportPdf';
 import { keepsPageSizes, touchDevice } from '../export/printSupport';
 import { useServices, useSyncStatus, useTree } from '../services';
 import type { PageTree } from '../sync/tree';
@@ -62,7 +62,7 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
   const unprint = useRef<(() => void) | null>(null);
   const touch = useMemo(() => touchDevice(), []);
   const named = useMemo(() => keepsPageSizes(), []);
-  const limits = touch ? PDF_LIMITS.touch : PDF_LIMITS.desktop;
+  const limits = useMemo(() => deviceLimits(touch), [touch]);
 
   const plan = useMemo(() => planFor(tree, target, scope), [tree, target, scope]);
   const title = target.kind === 'project' ? (tree.project(target.id)?.name ?? '') : (tree.get(target.id)?.title ?? '');
@@ -103,10 +103,11 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
         props.onClose();
         return;
       }
-      // Ctrl/⌘+P con el PDF listo: este PDF, no la página de atrás (printPage.ts mira `defaultPrevented`).
-      if (phase.name === 'ready' && isPrintShortcut(e)) {
+      // Ctrl/⌘+P con el PDF listo: este PDF, no la página de atrás (printPage.ts mira `defaultPrevented`). Mientras
+      // arma, nada (el libro a medio armar no se imprime).
+      if ((phase.name === 'ready' || phase.name === 'working') && isPrintShortcut(e)) {
         e.preventDefault();
-        openPrint(phase.book);
+        if (phase.name === 'ready') openPrint(phase.book);
       }
     };
     window.addEventListener('keydown', onKey, true);
@@ -267,11 +268,17 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
             <div className="export-progress" role="status">
               <progress max={Math.max(1, phase.progress?.total ?? plan.length)} value={phase.progress?.done ?? 0} />
               <span>
-                {tr('exportDialog.preparing', {
-                  done: Math.min((phase.progress?.done ?? 0) + 1, phase.progress?.total ?? plan.length),
-                  total: phase.progress?.total ?? plan.length,
-                  title: phase.progress?.title.trim() || tr('common.untitled'),
-                })}
+                {phase.progress?.step === 'comments'
+                  ? tr('exportDialog.fetchingComments', {
+                      done: Math.min(phase.progress.done + 1, phase.progress.total),
+                      total: phase.progress.total,
+                    })
+                  : tr('exportDialog.preparing', {
+                      done: Math.min((phase.progress?.done ?? 0) + 1, phase.progress?.total ?? plan.length),
+                      total: phase.progress?.total ?? plan.length,
+                      // Antes del primer aviso, la primera página (no "Untitled").
+                      title: (phase.progress ? phase.progress.title : (plan[0]?.title ?? '')).trim() || tr('common.untitled'),
+                    })}
               </span>
             </div>
             <div className="modal-actions">
@@ -288,6 +295,7 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
             {count((p) => p.imagesTimedOut) > 0 && <p className="muted">{tr('exportDialog.missingPhotos', { count: count((p) => p.imagesTimedOut) })}</p>}
             {count((p) => p.outdated) > 0 && <p className="muted">{tr('exportDialog.outdatedPages', { count: count((p) => p.outdated) })}</p>}
             {count((p) => p.unknown) > 0 && <p className="muted">{tr('exportDialog.unknownPages', { count: count((p) => p.unknown) })}</p>}
+            {phase.book.commentsStale > 0 && <p className="muted">{tr('exportDialog.commentsStale', { count: phase.book.commentsStale })}</p>}
             {count((p) => p.failed) > 0 && <p className="error">{tr('exportDialog.failedPages', { count: count((p) => p.failed) })}</p>}
             <p className="muted">{tr('exportDialog.margins')}</p>
             <div className="modal-actions">

@@ -11,6 +11,12 @@ import { buildThreads, fromRow, type CommentQueue, type CommentsDb, type Comment
 
 /** De dónde salen los hilos de una página. */
 export interface CommentSource {
+  /**
+   * Antes de armar: baja del servidor los comentarios de esas páginas (lo mismo que hace abrir cada una), así salen
+   * también los de los demás en las páginas que este dispositivo no abrió. Devuelve cuántas no se pudieron bajar (sin
+   * red, o el servidor no contestó): esas salen con lo que tiene el dispositivo, avisado.
+   */
+  prepare?(pageIds: readonly string[], options: { signal?: AbortSignal; onProgress?: (done: number, total: number) => void }): Promise<number>;
   threads(pageId: string): Promise<CommentThread[]>;
   /** El nombre para mostrar de una cuenta del equipo (nunca el correo entero), o `null`. */
   nameOf(userId: string): string | null;
@@ -28,8 +34,36 @@ export function nameFromEmail(email: string | null | undefined): string | null {
  * Los hilos de la app: los guardados en el dispositivo (la base de comentarios) con lo que la cola tiene en memoria
  * encima (lo que todavía no subió y lo bajado en esta sesión). Solo lee.
  */
-export function appComments(queue: Pick<CommentQueue, 'threads' | 'emailOf'>, db: CommentsDb | null, me: { id: string; email?: string | null }): CommentSource {
+export function appComments(
+  queue: Pick<CommentQueue, 'threads' | 'emailOf'> & Partial<Pick<CommentQueue, 'refresh'>>,
+  db: CommentsDb | null,
+  me: { id: string; email?: string | null },
+): CommentSource {
   return {
+    async prepare(pageIds, { signal, onProgress } = {}) {
+      if (!queue.refresh) return 0;
+      let failed = 0;
+      let offline = false;
+      for (let i = 0; i < pageIds.length; i++) {
+        if (signal?.aborted) break;
+        onProgress?.(i, pageIds.length);
+        // Sin red no se insiste página por página: todas las que faltan salen con lo del dispositivo.
+        if (offline || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
+          offline = true;
+          failed++;
+          continue;
+        }
+        try {
+          await queue.refresh(pageIds[i]);
+        } catch {
+          // `refresh` solo tira sin red (los demás errores los guarda la cola y sigue).
+          offline = true;
+          failed++;
+        }
+      }
+      onProgress?.(pageIds.length, pageIds.length);
+      return failed;
+    },
     async threads(pageId) {
       const rows = db ? await db.getAllFromIndex('comments', 'page', pageId).catch(() => []) : [];
       const stored = buildThreads(pageId, new Map(rows.map((r) => [r.id, fromRow(r)])));
@@ -47,7 +81,8 @@ export function appComments(queue: Pick<CommentQueue, 'threads' | 'emailOf'>, db
 
 /** Quién escribió un comentario, como se imprime (sin correos). */
 export function authorLabel(c: Pick<CommentView, 'authorId' | 'importedAuthor' | 'linkAuthor'>, source: Pick<CommentSource, 'nameOf'>): string {
-  if (c.linkAuthor) return `${c.linkAuthor} ${t('link.viaLink')}`;
+  // El nombre que escribió quien comentó por el link: si escribió un correo, solo lo de antes de la `@`.
+  if (c.linkAuthor) return `${nameFromEmail(c.linkAuthor) ?? c.linkAuthor} ${t('link.viaLink')}`;
   if (c.importedAuthor) return nameFromEmail(c.importedAuthor) ?? c.importedAuthor;
   if (!c.authorId) return t('exportPdf.deletedAccount');
   return source.nameOf(c.authorId) ?? t('exportPdf.someone');

@@ -2710,6 +2710,14 @@ code {
   pointer-events: none;
 }
 
+/* El libro solo se imprime cuando lo pone `printBook` (`sd-export-printing`): el Imprimir del navegador mientras la
+   ventana arma o tiene el PDF listo imprime la página de siempre, sin el libro encima. */
+@media print {
+  html.sd-printing:not(.sd-export-printing) .sd-export-book {
+    display: none !important;
+  }
+}
+
 /* Cada página empieza en una hoja nueva (las hojas de adentro las ponen los saltos calculados). */
 .sd-export-book > .print-view + .print-view {
   break-before: page;
@@ -5724,6 +5732,14 @@ ins.replace-new {
   align-items: center;
   gap: 8px;
   font-size: 13px;
+}
+
+/* La regla general `input { width: 100% }` estiraba cada círculo y casilla a todo el ancho (auditoría B3). */
+.export-what input,
+.export-options input {
+  flex: none;
+  width: auto;
+  margin: 0;
 }
 
 .export-format {

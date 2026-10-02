@@ -18,6 +18,10 @@ export const exportPdf = {
   },
   'exportPdf.failedPage': { en: "This page could not be exported.", es: "No se pudo exportar esta página." },
   'exportPdf.comments': { en: "Comments", es: "Comentarios" },
+  'exportPdf.commentsAsOf': {
+    en: "Some comments could not be updated: they are as on this device on {date}.",
+    es: "Algunos comentarios no se pudieron poner al día: están como en este dispositivo el {date}.",
+  },
   'exportPdf.onPage': { en: "On the page", es: "En la página" },
   'exportPdf.resolved': { en: "Resolved", es: "Resuelto" },
   'exportPdf.deletedComment': { en: "(deleted comment)", es: "(comentario borrado)" },
@@ -73,6 +77,11 @@ export const exportPdf = {
   },
   'exportDialog.empty': { en: "There is nothing to export here.", es: "Acá no hay nada para exportar." },
   'exportDialog.export': { en: "Export PDF", es: "Exportar PDF" },
+  'exportDialog.fetchingComments': { en: "Fetching comments: page {done} of {total}", es: "Bajando los comentarios: página {done} de {total}" },
+  'exportDialog.commentsStale': {
+    en: { one: "The comments of {count} page could not be updated (no connection): it has the ones on this device.", other: "The comments of {count} pages could not be updated (no connection): they have the ones on this device." },
+    es: { one: "Los comentarios de {count} página no se pudieron poner al día (sin conexión): lleva los de este dispositivo.", other: "Los comentarios de {count} páginas no se pudieron poner al día (sin conexión): llevan los de este dispositivo." },
+  },
   'exportDialog.preparing': { en: "Preparing page {done} of {total}: {title}", es: "Preparando la página {done} de {total}: {title}" },
   'exportDialog.ready': {
     en: { one: "Ready: {count} PDF page.", other: "Ready: {count} PDF pages." },

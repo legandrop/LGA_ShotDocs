@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { undoDepth } from 'prosemirror-history';
+import * as Y from 'yjs';
+import { addShape, type ShapeFields } from '../media/markup';
+import { mountEditor, tick, unmountAll } from '../ui/collabHarness';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ServicesContext, type Services } from '../services';
 import { Permissions, LEVEL_VIEW } from '../sync/access';
@@ -11,9 +16,9 @@ import { installPrintShortcuts } from '../ui/printPage';
 import { ExportDialog } from '../ui/ExportDialog';
 import { appComments, authorLabel, blockText, commentsSection, nameFromEmail } from './exportComments';
 import { ExportEditor } from './exportEditor';
-import { PhotoLimitError, PixelBudget, printSize, shrinkImages, type Resizer } from './exportImages';
+import { PhotoLimitError, PixelBudget, printSize, shrinkImages, workerResizer, type Resizer } from './exportImages';
 import { exportPlan, type ExportSource } from './exportPages';
-import { anchorId, buildPdf, PageLimitError, pageRules, paginateExport, PDF_LIMITS, printBook, rewriteLinks, sheetName, type BuildOptions } from './exportPdf';
+import { anchorId, buildPdf, deviceLimits, PageLimitError, pageRules, paginateExport, PDF_LIMITS, printBook, rewriteLinks, sheetName, SMALL_DESKTOP_PIXELS, type BuildOptions } from './exportPdf';
 import { keepsPageSizes } from './printSupport';
 import { testProject, writeBlocks, writeTestProject } from './testProject';
 
@@ -86,7 +91,11 @@ async function build(device: Device, plan: BuildOptions['plan'], extra: Partial<
 async function stored(device: Device, pageId: string): Promise<string> {
   const rows = await device.db.getAllFromIndex('docUpdates', 'pageId', pageId);
   const state = await device.db.get('docState', pageId);
-  const comments = await device.commentsDb.getAllFromIndex('comments', 'page', pageId);
+  // Los comentarios: los mismos, con el mismo texto (bajarlos del servidor antes de armar es sincronizar, como abrir la
+  // página: puede reescribir la fila igual, pero nunca cambiar ni perder uno).
+  const comments = (await device.commentsDb.getAllFromIndex('comments', 'page', pageId))
+    .map((c) => [c.id, c.body, !!c.deleted_at, !!c.resolved_at])
+    .sort();
   return JSON.stringify({ rows: rows.map((r) => Array.from(r.data)), state, comments });
 }
 
@@ -107,6 +116,14 @@ describe('exportar PDF: la lista de navegadores probados', () => {
     expect(keepsPageSizes(ua('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/19.0 Safari/605.1.15'))).toBe(false);
     expect(keepsPageSizes(ua('Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/19.0 Mobile/15E148 Safari/604.1'))).toBe(false);
     expect(keepsPageSizes(null)).toBe(false);
+  });
+
+  it('los topes: el teléfono, la computadora, y una computadora con menos de 8 GB con menos píxeles', () => {
+    expect(deviceLimits(true, 16)).toBe(PDF_LIMITS.touch);
+    expect(deviceLimits(false, undefined)).toBe(PDF_LIMITS.desktop);
+    expect(deviceLimits(false, 8)).toBe(PDF_LIMITS.desktop);
+    expect(deviceLimits(false, 4)).toEqual({ ...PDF_LIMITS.desktop, pixels: SMALL_DESKTOP_PIXELS });
+    expect(SMALL_DESKTOP_PIXELS).toBeLessThan(PDF_LIMITS.desktop.pixels);
   });
 
   it('las hojas con nombre de CSS: una regla por tamaño, y una sola sin nombre donde no se respetan', () => {
@@ -196,6 +213,49 @@ describe('exportar PDF: las fotos', () => {
     await expect(
       shrinkImages(root, { source: { best: async () => new Blob(['x'], { type: 'image/x-4000x3000' }) }, budget, resizer: fake }),
     ).rejects.toBeInstanceOf(PhotoLimitError);
+  });
+
+  it('en Workers: abre y achica en el grupo, reparte las fotos, y si un Worker se cae sigue en el hilo principal', async () => {
+    vi.stubGlobal('OffscreenCanvas', class {});
+    vi.stubGlobal('Worker', class {});
+    const sent: { worker: number; kind: string }[] = [];
+    let n = 0;
+    /** Un Worker falso: contesta como resize.worker.ts (medidas fijas y un JPEG). */
+    const fakeWorker = () => {
+      const me = n++;
+      const w = {
+        onmessage: null as ((e: MessageEvent) => void) | null,
+        onerror: null as (() => void) | null,
+        terminated: false,
+        postMessage(msg: { id: number; kind: string; width?: number }) {
+          sent.push({ worker: me, kind: msg.kind });
+          const reply = msg.kind === 'open' ? { handle: 1, width: 4000, height: 3000 } : msg.kind === 'draw' ? { blob: new Blob(['j'], { type: 'image/jpeg' }) } : {};
+          queueMicrotask(() => w.onmessage?.({ data: { id: msg.id, ok: true, ...reply } } as MessageEvent));
+        },
+        terminate() {
+          w.terminated = true;
+        },
+      };
+      return w as unknown as Worker;
+    };
+    const pool = workerResizer(2, fakeWorker);
+    const a = (await pool.open(new Blob(['x'])))!;
+    const b = (await pool.open(new Blob(['x'])))!;
+    expect([a.width, a.height]).toEqual([4000, 3000]);
+    expect((await a.draw(334, 251))?.type).toBe('image/jpeg');
+    a.close();
+    b.close();
+    // Dos Workers, una foto en cada uno; abrir, dibujar y cerrar en el mismo.
+    expect(new Set(sent.map((s) => s.worker))).toEqual(new Set([0, 1]));
+    expect(sent.filter((s) => s.worker === 0).map((s) => s.kind)).toEqual(['open', 'draw', 'close']);
+    pool.dispose();
+
+    // Un Worker que no arranca: la foto se hace igual en el hilo principal (acá, jsdom no abre imágenes: `null`).
+    const broken = workerResizer(2, () => {
+      throw new Error('sin Worker');
+    });
+    expect(await broken.open(new Blob(['x']))).toBeNull();
+    broken.dispose();
   });
 
   it('una foto que el navegador no abre (un HEIC) queda con la que se ve', async () => {
@@ -374,6 +434,52 @@ describe('exportar PDF: el libro', () => {
   });
 });
 
+describe('exportar PDF: las anotaciones de las fotos', () => {
+  it('una foto anotada sale con su dibujo, como en el PDF de una página (y la que no tiene, sin)', async () => {
+    const ID = '0f8fad5b-d9cb-469f-a165-708677289501';
+    const OTHER = '0f8fad5b-d9cb-469f-a165-708677289502';
+    const arrow: ShapeFields = { type: 'arrow', zValue: 3, posX: 2000, posY: 2000, startX: 0, startY: 0, endX: 900, endY: -600, strokeWidth: 9 };
+    const doc = new Y.Doc();
+    const E = mountEditor(doc, 'hoy');
+    E.replaceBlocks(E.document, [
+      { id: 'b1', type: 'image', props: { url: `sdmedia://${ID}`, name: 'F1.jpg' } },
+      { id: 'b2', type: 'image', props: { url: `sdmedia://${OTHER}`, name: 'F2.jpg' } },
+      { type: 'paragraph', content: 'texto' },
+    ] as never);
+    await tick(10);
+    unmountAll();
+    addShape(doc, ID, 'a', arrow, { w: 4000, h: 3000 });
+    const copies: Y.Doc[] = [];
+    const source: ExportSource = {
+      snapshot: async () => {
+        const c = new Y.Doc();
+        Y.applyUpdate(c, Y.encodeStateAsUpdate(doc));
+        copies.push(c);
+        return { doc: c, supported: true, state: {} };
+      },
+    };
+    const plan = [
+      { id: 'p1', title: 'Reporte', depth: 0, header: [], format: { size: 'A4' as const, landscape: false } },
+      { id: 'p2', title: 'Otra', depth: 0, header: [], format: { size: 'A4' as const, landscape: false } },
+    ];
+    const e = await editor();
+    const book = await buildPdf({ title: 'Reporte', plan, source, editor: e, named: true, limits: PDF_LIMITS.desktop });
+    const first = book.root.querySelector<HTMLElement>(`#${anchorId('p1')}`)!;
+    expect(first.querySelectorAll('img.bn-visual-media')).toHaveLength(2);
+    // Una sola foto anotada: un solo dibujo, al lado de su imagen, con la flecha.
+    const svgs = first.querySelectorAll('svg.sd-markup');
+    expect(svgs).toHaveLength(1);
+    expect(svgs[0].closest('[data-url]')?.getAttribute('data-url')).toBe(`sdmedia://${ID}`);
+    expect(svgs[0].children.length).toBeGreaterThan(0);
+    // El dibujo no queda en el editor para la página siguiente (la misma página otra vez lleva el suyo, no dos).
+    expect(e.dom.querySelectorAll('svg.sd-markup')).toHaveLength(0);
+    expect(book.root.querySelector(`#${anchorId('p2')}`)!.querySelectorAll('svg.sd-markup')).toHaveLength(1);
+    book.destroy();
+    // La copia del documento se suelta; el documento de verdad no cambia.
+    for (const c of copies) expect(c.isDestroyed).toBe(true);
+  });
+});
+
 describe('exportar PDF: los comentarios', () => {
   it('con la casilla, cada página termina con sus hilos: nombres y nunca correos; sin la casilla, nada', async () => {
     const server = new FakeServer();
@@ -416,12 +522,65 @@ describe('exportar PDF: los comentarios', () => {
     book.destroy();
   });
 
+  it('los comentarios de otra persona en una página que este dispositivo nunca abrió también salen (se bajan antes)', async () => {
+    const server = new FakeServer();
+    server.enableComments();
+    const owner = await makeDevice(server, crypto.randomUUID(), '0.021', {}, undefined, { email: 'lega.supervisor@wanka.test' });
+    devices.push(owner);
+    const branch = await owner.tree.create(null, 'Rodaje');
+    const scene = await owner.tree.create(branch, 'Escena 12');
+    await writeBlocks(owner.docs, scene, [{ type: 'paragraph', content: 'Plano general' }]);
+    await owner.engine.syncNow();
+    server.addMember('ana', 'member', 'ana.garcia@estudio.test');
+    server.grant('ana', { pageId: branch }, 'comment');
+    const ana = await makeDevice(server, crypto.randomUUID(), '0.021', {}, undefined, { id: 'ana', email: 'ana.garcia@estudio.test' });
+    devices.push(ana);
+    await ana.engine.syncNow();
+    await ana.comments.add(scene, null, 'COMENTARIO_DE_ANA');
+    await ana.engine.syncNow();
+    await ana.comments.run();
+    await owner.engine.syncNow();
+    // El dueño nunca abrió la escena: su dispositivo no tiene el comentario.
+    expect(owner.comments.threads(scene)).toHaveLength(0);
+    const me = { id: owner.remote.userId, email: 'lega.supervisor@wanka.test' };
+    const progress: string[] = [];
+    const book = await build(owner, exportPlan(owner.tree, 'page', branch), {
+      comments: appComments(owner.comments, owner.commentsDb, me),
+      onProgress: (p) => progress.push(p.step ?? 'pages'),
+    });
+    const text = book.root.querySelector(`#${anchorId(scene)}`)?.textContent ?? '';
+    expect(text).toContain('COMENTARIO_DE_ANA');
+    expect(text).toContain('ana.garcia');
+    expect(book.root.textContent).not.toMatch(/@/);
+    expect(book.commentsStale).toBe(0);
+    // Primero los comentarios, después las páginas.
+    expect(progress[0]).toBe('comments');
+    expect(progress.at(-1)).toBe('pages');
+    book.destroy();
+  });
+
+  it('sin red, los comentarios salen con los del dispositivo y el índice lo dice', async () => {
+    const server = new FakeServer();
+    server.enableComments();
+    const { device, projectId } = await project(6, server);
+    await device.engine.syncNow();
+    server.online = false;
+    const book = await build(device, exportPlan(device.tree, 'project', projectId), {
+      comments: appComments(device.comments, device.commentsDb, { id: device.remote.userId, email: 'x@y.test' }),
+    });
+    expect(book.commentsStale).toBe(6);
+    expect(book.root.querySelector('.sd-export-index')?.textContent).toContain('Some comments could not be updated');
+    book.destroy();
+  });
+
   it('el autor sale con su nombre: el del equipo sin la parte del correo, el importado y el del link tal cual', () => {
     const source = { nameOf: (id: string) => (id === 'u1' ? nameFromEmail('ana.garcia@estudio.test') : null) };
     expect(authorLabel({ authorId: 'u1', importedAuthor: null, linkAuthor: null }, source)).toBe('ana.garcia');
     expect(authorLabel({ authorId: null, importedAuthor: 'Productora', linkAuthor: null }, source)).toBe('Productora');
     expect(authorLabel({ authorId: null, importedAuthor: 'cliente@afuera.test', linkAuthor: null }, source)).toBe('cliente');
     expect(authorLabel({ authorId: null, importedAuthor: null, linkAuthor: 'Juan' }, source)).toBe('Juan (via link)');
+    // Quien comentó por el link y escribió su correo como nombre: tampoco sale el correo.
+    expect(authorLabel({ authorId: null, importedAuthor: null, linkAuthor: 'juan.perez@cliente.test' }, source)).toBe('juan.perez (via link)');
     expect(authorLabel({ authorId: null, importedAuthor: null, linkAuthor: null }, source)).toBe('Deleted account');
     expect(authorLabel({ authorId: 'u9', importedAuthor: null, linkAuthor: null }, source)).toBe('Someone');
   });
@@ -513,15 +672,18 @@ describe('exportar PDF: imprimir', () => {
     printBook(book, {
       print: () => {
         printed++;
-        during = { cls: document.documentElement.classList.contains('sd-printing'), css: document.head.querySelector('style[data-sd-export]')?.textContent ?? '', title: document.title };
+        during = { cls: document.documentElement.classList.contains('sd-printing') && document.documentElement.classList.contains('sd-export-printing'), css: document.head.querySelector('style[data-sd-export]')?.textContent ?? '', title: document.title };
       },
     });
     expect(printed).toBe(1);
     expect(during.cls).toBe(true);
+    // Solo con `sd-export-printing` se imprime el libro (el Imprimir del navegador sin pasar por acá, no).
+    expect(readFileSync(resolve(__dirname, '../styles.css'), 'utf8')).toMatch(/html\.sd-printing:not\(\.sd-export-printing\) \.sd-export-book \{\s*display: none !important;/);
     expect(during.css).toBe(book.css);
     expect(during.title).toBe(book.fileTitle);
     window.dispatchEvent(new Event('afterprint'));
     expect(document.documentElement.classList.contains('sd-printing')).toBe(false);
+    expect(document.documentElement.classList.contains('sd-export-printing')).toBe(false);
     expect(document.head.querySelector('style[data-sd-export]')).toBeNull();
     expect(document.title).toBe(before);
     // El libro sigue armado (se puede volver a abrir el diálogo).
@@ -647,6 +809,17 @@ describe('exportar PDF: la ventana', () => {
     expect(document.querySelectorAll('.sd-export-book, .print-view')).toHaveLength(0);
     expect(document.documentElement.classList.contains('sd-printing')).toBe(false);
     expect(closed).toBe(0);
+  });
+
+  it('los círculos y las casillas no se estiran a todo el ancho (la regla general de `input`)', () => {
+    // La regla general `input { width: 100% }` (styles.css) los estiraba y el texto quedaba corrido (auditoría B3). jsdom
+    // no calcula el ancho: se mira que la ventana tenga su regla, después de la general. En Chromium, medido aparte.
+    const css = readFileSync(resolve(__dirname, '../styles.css'), 'utf8');
+    const general = css.search(/^input\s*\{[^}]*width:\s*100%/m);
+    const own = css.search(/\.export-what input,\s*\.export-options input\s*\{[^}]*width:\s*auto[^}]*\}/);
+    expect(general).toBeGreaterThan(-1);
+    expect(own).toBeGreaterThan(general);
+    expect(css.slice(own, css.indexOf('}', own))).toMatch(/flex:\s*none/);
   });
 
   it('pasado el tope de páginas no empieza y ofrece las partes', async () => {

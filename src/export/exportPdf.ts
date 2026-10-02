@@ -6,8 +6,8 @@ import { measureUnits, paginate, SHEET_TOLERANCE_PX, type Unit } from '../ui/pag
 import { applyBreaks, type Paginated, type PrintView } from '../ui/printView';
 import { internalPageId } from '../ui/internalLinks';
 import { commentsSection, type CommentSource } from './exportComments';
-import { imagesLoaded, PixelBudget, shrinkImages, type ImageSource, type Resizer } from './exportImages';
-import type { ExportEditor } from './exportEditor';
+import { imagesLoaded, PixelBudget, shrinkImages, workerResizer, type ImageSource, type Resizer } from './exportImages';
+import { ExportCancelled, type ExportEditor } from './exportEditor';
 import { renderPages, type ContentGap, type ExportedPage, type ExportPlanPage, type ExportProgress, type ExportSource } from './exportPages';
 import type { PageContent } from './pageContent';
 
@@ -32,6 +32,20 @@ export interface PdfLimits {
   /** Nítidas pedidas al Drive con *Sharp photos*. */
   sharp: number;
 }
+
+/**
+ * Los topes de este dispositivo: el del teléfono, o el de la computadora con el tope de píxeles según la memoria que
+ * dice el navegador (`navigator.deviceMemory`, Chrome y Edge, hasta 8): con menos de 8 GB, 400 millones (el diálogo de
+ * imprimir decodifica todas las fotos a la vez: 1000 millones son unos 4 GB).
+ */
+export function deviceLimits(touch: boolean, memoryGb: number | undefined = typeof navigator === 'undefined' ? undefined : (navigator as Navigator & { deviceMemory?: number }).deviceMemory): PdfLimits {
+  if (touch) return PDF_LIMITS.touch;
+  if (typeof memoryGb === 'number' && memoryGb > 0 && memoryGb < 8) return { ...PDF_LIMITS.desktop, pixels: SMALL_DESKTOP_PIXELS };
+  return PDF_LIMITS.desktop;
+}
+
+/** El tope de píxeles de una computadora con menos de 8 GB. */
+export const SMALL_DESKTOP_PIXELS = 400_000_000;
 
 export const PDF_LIMITS: { desktop: PdfLimits; touch: PdfLimits } = {
   // Medido en Chrome con la impresión real (entrega 1): 300 páginas con 2219 fotos son 882 millones de píxeles y los
@@ -96,6 +110,8 @@ export interface PdfBook {
   named: boolean;
   /** Píxeles de fotos decodificados (ya achicados). */
   pixels: number;
+  /** Páginas cuyos comentarios no se pudieron bajar (salen los del dispositivo; el índice lo dice). */
+  commentsStale: number;
   /** Lo saca todo y suelta las imágenes. */
   destroy(): void;
 }
@@ -232,6 +248,9 @@ export async function buildPdf(options: BuildOptions): Promise<PdfBook> {
   document.body.append(book);
   const urls: string[] = [];
   const budget = new PixelBudget(options.limits.pixels);
+  // Las fotos se achican en Workers (fuera del hilo de la pantalla), salvo que se pase otro achicador (las pruebas).
+  const pool = options.resizer ? null : workerResizer();
+  const resizer = options.resizer ?? pool!;
   const pages: BookPage[] = [];
   /** Las vistas armadas (en la del PDF o todavía sueltas): se sacan todas si algo falla o al cerrar. */
   const views = new Set<PrintView>();
@@ -253,6 +272,15 @@ export async function buildPdf(options: BuildOptions): Promise<PdfBook> {
   };
 
   try {
+    // Los comentarios de los demás, al día (con red): antes de dibujar, con su propio avance.
+    let commentsStale = 0;
+    if (options.comments?.prepare) {
+      commentsStale = await options.comments.prepare(
+        plan.map((p) => p.id),
+        { signal: options.signal, onProgress: (done, total) => options.onProgress?.({ done, total, title: '', step: 'comments' }) },
+      );
+      if (options.signal?.aborted) throw new ExportCancelled();
+    }
     await renderPages(plan, options.source, options.editor, {
       signal: options.signal,
       onProgress: options.onProgress,
@@ -270,7 +298,7 @@ export async function buildPdf(options: BuildOptions): Promise<PdfBook> {
           if (section) view.page.append(section);
         }
         const t0 = performance.now();
-        const shrunk = await shrinkImages(view.root, { source: options.images, budget, resizer: options.resizer, signal: options.signal });
+        const shrunk = await shrinkImages(view.root, { source: options.images, budget, resizer, signal: options.signal });
         urls.push(...shrunk.urls);
         const t1 = performance.now();
         if (shrunk.shrunk > 0) await imagesLoaded(view.root, 6000);
@@ -294,6 +322,10 @@ export async function buildPdf(options: BuildOptions): Promise<PdfBook> {
     head.append(el('h1', 'sd-export-index-title', options.title.trim() || t('common.untitled')));
     const asOf = options.lastSync ? t('exportPdf.asOf', { date: formatDate(options.lastSync, true) }) : null;
     head.append(el('p', 'sd-export-index-meta', [t('exportPdf.exported', { date: formatDate(now, false) }), asOf].filter(Boolean).join(' · ')));
+    if (commentsStale > 0) {
+      const at = options.lastSync ?? now.getTime();
+      head.append(el('p', 'sd-export-index-meta', t('exportPdf.commentsAsOf', { date: formatDate(at, true) })));
+    }
     head.append(el('h2', 'sd-export-index-label', t('exportPdf.contents')));
     index.page.append(head);
     const numbers: HTMLElement[] = [];
@@ -329,11 +361,14 @@ export async function buildPdf(options: BuildOptions): Promise<PdfBook> {
       css: pageRules([rootFormat, ...pages.map((p) => p.format)], options.named),
       named: options.named,
       pixels: budget.used,
+      commentsStale,
       destroy,
     };
   } catch (err) {
     destroy();
     throw err;
+  } finally {
+    pool?.dispose();
   }
 }
 
@@ -353,7 +388,9 @@ export function printBook(book: PdfBook, options: { touch?: boolean; print?: () 
   style.textContent = book.css;
   document.head.append(style);
   const html = document.documentElement;
-  html.classList.add('sd-printing');
+  // `sd-export-printing`: solo así se imprime el libro (styles.css); el Imprimir del navegador mientras la ventana
+  // arma o tiene el PDF listo imprime la página de siempre, sin el libro encima.
+  html.classList.add('sd-printing', 'sd-export-printing');
   book.root.removeAttribute('aria-hidden');
   const titleBefore = document.title;
   document.title = book.fileTitle;
@@ -363,7 +400,7 @@ export function printBook(book: PdfBook, options: { touch?: boolean; print?: () 
     if (done) return;
     done = true;
     style.remove();
-    html.classList.remove('sd-printing');
+    html.classList.remove('sd-printing', 'sd-export-printing');
     book.root.setAttribute('aria-hidden', 'true');
     if (document.title === book.fileTitle) document.title = titleBefore;
     window.removeEventListener('afterprint', onAfter);

@@ -112,6 +112,80 @@ export const browserResizer: Resizer = {
   },
 };
 
+/** Un achicador que hay que soltar al terminar (el de los Workers). */
+export interface DisposableResizer extends Resizer {
+  dispose(): void;
+}
+
+type Reply = { id: number; ok: boolean; error?: string; handle?: number; width?: number; height?: number; blob?: Blob };
+
+/**
+ * Abrir y achicar en un grupo de Workers (`resize.worker.ts`, `OffscreenCanvas`): el hilo de la pantalla queda libre y
+ * van de a varias de verdad (la auditoría midió 2 a 3 veces más rápido). Donde no hay Worker u `OffscreenCanvas`, o si
+ * un Worker falla, esa foto se hace en el hilo principal (`browserResizer`): nunca se pierde una foto por esto.
+ */
+export function workerResizer(size = 4, create: () => Worker = () => new Worker(new URL('./resize.worker.ts', import.meta.url), { type: 'module', name: 'export-resize' })): DisposableResizer {
+  if (typeof Worker !== 'function' || typeof OffscreenCanvas !== 'function') return { ...browserResizer, dispose: () => undefined };
+  const workers: Worker[] = [];
+  const waiting = new Map<number, (reply: Reply) => void>();
+  let seq = 0;
+  let turn = 0;
+  let broken = false;
+  const fail = () => {
+    broken = true;
+    for (const resolve of waiting.values()) resolve({ id: -1, ok: false, error: 'worker' });
+    waiting.clear();
+  };
+  const worker = (i: number): Worker | null => {
+    if (broken) return null;
+    try {
+      workers[i] ??= (() => {
+        const w = create();
+        w.onmessage = (e: MessageEvent<Reply>) => {
+          const resolve = waiting.get(e.data.id);
+          waiting.delete(e.data.id);
+          resolve?.(e.data);
+        };
+        w.onerror = fail;
+        return w;
+      })();
+      return workers[i];
+    } catch {
+      broken = true;
+      return null;
+    }
+  };
+  const ask = (w: Worker, msg: Record<string, unknown>): Promise<Reply> =>
+    new Promise((resolve) => {
+      const id = ++seq;
+      waiting.set(id, resolve);
+      w.postMessage({ id, ...msg });
+    });
+  return {
+    async open(blob) {
+      const w = worker(turn++ % size);
+      if (!w) return browserResizer.open(blob);
+      const opened = await ask(w, { kind: 'open', blob });
+      if (!opened.ok) return broken ? browserResizer.open(blob) : null;
+      const handle = opened.handle!;
+      return {
+        width: opened.width!,
+        height: opened.height!,
+        async draw(width, height) {
+          const r = await ask(w, { kind: 'draw', handle, width, height });
+          return r.ok ? (r.blob ?? null) : null;
+        },
+        close: () => void ask(w, { kind: 'close', handle }),
+      };
+    },
+    dispose() {
+      for (const w of workers) w?.terminate();
+      workers.length = 0;
+      fail();
+    },
+  };
+}
+
 /** La cuenta de lo decodificado de un PDF entero, con su tope. */
 export class PixelBudget {
   used = 0;
