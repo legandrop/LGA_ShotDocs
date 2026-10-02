@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.118 :
+
+*Download all* y *Retry missing* listaban una subcarpeta por pedido: una carpeta con 500 subcarpetas eran 505 pedidos al
+portero (el diseño decía ~40 por pedido). `POST /folder/list` acepta `dirs` (hasta 40 ids; `dir` sigue igual para el
+visor y las apps viejas): una sola consulta a Drive con `or` entre padres, agrupada por padre, con el control de árbol
+de cada una, el tope de llamados a Drive (las que no entran vuelven en `later`) y el mismo tope de 100 pases por
+pedido. La app toma 40 de la cola por pedido (505 pasan a 18); si el portero es anterior, o un pedido falla a mitad,
+lista de a una sin perder nada. Además el portero conserva el ZWJ de los emojis compuestos (una familia en el nombre de
+un archivo o carpeta) con la misma regla que la app; una prueba compara las dos.
+[ Carpetas - el portero lista varias subcarpetas por pedido y conserva el ZWJ; Download all usa 40 por pedido ]
+
 v0.117 :
 
 No había plantillas: cada reporte o ficha de plano se armaba a mano (P.23, entregas 0 y 1 de `Doc_Plantillas.md`).
