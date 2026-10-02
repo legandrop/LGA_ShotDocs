@@ -49,6 +49,8 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'print', keys: ['Mod-p'], place: 'global', owner: 'app', source: 'window' },
   // El historial de versiones de la página (P.18, Docs/Doc_Historial.md), el mismo de Google Docs.
   { id: 'history', keys: ['Mod-Alt-Shift-h'], place: 'global', owner: 'app', source: 'window' },
+  // El asistente (Docs/Doc_Asistente.md, A1): abre y cierra su panel sobre lo elegido.
+  { id: 'assistant', keys: ['Mod-Alt-j'], place: 'global', owner: 'app', source: 'window' },
   { id: 'titleEnter', keys: ['Enter'], place: 'global', context: 'title', owner: 'app', source: 'dom' },
 
   // --- Editor: lo de la app ---
@@ -154,6 +156,8 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'listClose', keys: ['Escape'], place: 'menus', context: 'list', owner: 'app', source: 'dom' },
   // El nombre de una versión del historial (Docs/Doc_Historial.md, entrega 3): guardar o dejar como estaba.
   { id: 'versionName', keys: ['Enter', 'Escape'], place: 'menus', context: 'versionName', owner: 'app', source: 'dom' },
+  // Aplicar la sugerencia del asistente, con el foco en su panel (Esc la descarta: `menusClose`).
+  { id: 'assistantApply', keys: ['Mod-Enter'], place: 'menus', context: 'assistant', owner: 'app', source: 'dom' },
   // Las pestañas de una ventana (Install app: iPhone, Android, computadora).
   { id: 'tabsMove', keys: ['ArrowLeft', 'ArrowRight', 'Home', 'End'], place: 'menus', context: 'tabs', owner: 'app', source: 'dom' },
 

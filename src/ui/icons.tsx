@@ -188,3 +188,7 @@ export const EyeOffIcon = icon('M2.5 10s2.75-5 7.5-5 7.5 5 7.5 5-2.75 5-7.5 5-7.
 export const CameraIcon = icon('M3 7a1 1 0 0 1 1-1h2.5l1.25-2h4.5l1.25 2H16a1 1 0 0 1 1 1v8.25a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1zM10 8.25a3 3 0 1 1 0 6 3 3 0 0 1 0-6z');
 // Filmar: una cámara de video.
 export const VideoIcon = icon('M3.5 6h8.75a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H3.5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1zM13.25 9l4.25-2.5v7L13.25 11');
+// El asistente (Docs/Doc_Asistente.md): un destello.
+export const AssistantIcon = icon('M9 3.25l1.35 3.9 3.9 1.35-3.9 1.35L9 13.75l-1.35-3.9-3.9-1.35 3.9-1.35zM14.75 12l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z');
+// Los ajustes del asistente: dos reguladores.
+export const SettingsIcon = icon('M4 6.5h7.5M15 6.5h1M13.25 4.75v3.5M4 13.5h1.5M9 13.5h7M7.25 11.75v3.5');
