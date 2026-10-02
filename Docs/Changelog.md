@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.108 :
 
 Compartir una página con alguien sin cuenta no existía: solo usuarios invitados. Faltaba un diseño seguro para
 «Anyone with the link» con el registro cerrado y el plan gratis. `Doc_Link_Publico.md` lo describe: una llave larga en
@@ -10,6 +10,29 @@ bytes por link y por día, guarda del tamaño de la base y nada indexable. *Can 
 edit* (texto y archivos, sin tocar el árbol, D29) después; vencimiento opcional (D30). Dos auditorías independientes:
 la segunda dejó dos condiciones para programar la entrega 1 (topes de bytes de los comentarios y lecturas contadas).
 [ Link público - diseño de Anyone with the link, auditado ]
+
+v0.107 :
+
+Una foto no entraba en una celda de tabla: pegar, soltar, "/Image" y "Copy image" la ponían debajo (o arriba) de la
+tabla, y la que llegaba a una celda se veía enorme (una tabla de 8 fotos medía 2799 px de alto). La creación filtraba
+las celdas a propósito y el CSS no tenía nada para ellas. Entrega 5 de `Doc_Fotos_En_Linea.md`: la foto en línea entra
+en la celda donde está el cursor como miniatura de 96 px de alto (`w = 0`), una al lado de la otra; la barra suma
+*Thumbnail* y *Full cell width* (D32), sin alinear; los tiradores miden la celda; ↑ va a la celda de arriba; la impresión las deja iguales; importar de
+Coda deja las fotos de una celda en la celda. Sin tipos ni propiedades nuevas: la versión publicada abre la página sin
+escribir nada. Ayuda nueva.
+[ Fotos en las celdas - entran en la celda como miniaturas, con su barra, impresión e importación de Coda ]
+
+v0.106 :
+
+El historial no dejaba nombrar versiones ni se veía sin red (P.18, entrega 3): faltaban la tabla y la caché del
+diseño. La migración `20261011120000_versiones_con_nombre.sql` (sin aplicar) suma `page_versions`: un nombre que
+apunta a una fila, sin contenido, con los permisos del historial (editar, no invitados, no en la papelera); renombrar y
+quitar, quien lo puso o nivel 4; con la versión mínima y sin borrar nunca una fila. En la lista, el ⋯ de cada versión
+la nombra, renombra o le quita el nombre; *Only named versions* filtra; lo escrito después de un nombre va a una
+versión nueva, y después de restaurar dice *Restored from <fecha>*. La caché `<base local>:history` guarda las filas:
+se baja solo lo nuevo y sin red se ve lo último bajado, con su aviso; restaurar y nombrar piden red. Se borra al salir
+de la cuenta y al sacar el workspace.
+[ Historial entrega 3 - versiones con nombre, Restored from y el historial sin red ]
 
 v0.105 :
 

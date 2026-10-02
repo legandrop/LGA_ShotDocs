@@ -3,7 +3,7 @@
 // hace cada botón de la foto en línea (paridad con la foto-bloque).
 import { BlockNoteEditor } from '@blocknote/core';
 import { BlockNoteView } from '@blocknote/mantine';
-import { NodeSelection } from '@tiptap/pm/state';
+import { NodeSelection, TextSelection } from '@tiptap/pm/state';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -205,6 +205,88 @@ describe('la barra, por sectores (D-24)', () => {
     expect(buttons.every((b) => b.classList.contains('sd-bar-button'))).toBe(true);
     // Con la foto en línea elegida no se abre la barra de la foto-bloque ni la de texto.
     expect(document.querySelectorAll('.bn-formatting-toolbar').length).toBe(1);
+  });
+});
+
+describe('la barra de una foto en una celda de tabla (entrega 5)', () => {
+  async function inCell() {
+    const m = await mount();
+    await act(async () => {
+      m.editor.replaceBlocks(m.editor.document, [
+        {
+          id: 'tb',
+          type: 'table',
+          content: { type: 'tableContent', rows: [{ cells: [[ph('C1', 0), ph('C2', 0)], [{ type: 'text', text: 'nota', styles: {} }]] }] },
+        },
+      ] as never);
+    });
+    return m;
+  }
+  const widths = (e: BlockNoteEditor) => {
+    const out: number[] = [];
+    view(e).state.doc.descendants((n) => {
+      if (n.type.name === PHOTO) out.push(Number(n.attrs.w));
+      return true;
+    });
+    return out;
+  };
+
+  it('solo miniatura y todo el ancho de la celda (D32); sin 1/2, 1/3, 1/4, acomodar ni alinear', async () => {
+    const { editor } = await inCell();
+    await choosePhoto(editor, 'C1');
+    expect(bar(INLINE)).toEqual([
+      'View full screen',
+      'Download image',
+      '|',
+      'Thumbnail',
+      'Full cell width',
+      '|',
+      'Comment',
+      '|',
+      'Replace image',
+      'Rename image',
+      'Delete image',
+    ]);
+    const thumb = document.querySelector(`${INLINE} [aria-label="Thumbnail"]`)!;
+    expect(thumb.getAttribute('aria-pressed')).toBe('true');
+    expect(thumb.getAttribute('data-tip')).toMatch(/table row/);
+    expect(thumb.hasAttribute('title')).toBe(false);
+  });
+
+  it('todo el ancho de la celda la pasa a w = 1 y Miniatura la vuelve a miniatura', async () => {
+    const { editor } = await inCell();
+    await choosePhoto(editor, 'C2');
+    await click(INLINE, 'Full cell width');
+    expect(widths(editor)).toEqual([0, 1]);
+    await choosePhoto(editor, 'C2');
+    await click(INLINE, 'Thumbnail');
+    expect(widths(editor)).toEqual([0, 0]);
+  });
+});
+
+describe('una selección con fotos de una celda y de un renglón (auditoría de la entrega 5, O7)', () => {
+  it('la barra de siempre (tamaños de la página), sin lo de la celda; sin alinear (hay una en una celda)', async () => {
+    const { editor } = await mount();
+    await act(async () => {
+      editor.replaceBlocks(editor.document, [
+        { id: 'p', type: 'paragraph', content: [ph('P1')] },
+        { id: 'tb', type: 'table', content: { type: 'tableContent', rows: [{ cells: [[ph('C1', 0)], [{ type: 'text', text: 'nota', styles: {} }]] }] } },
+      ] as never);
+    });
+    await act(async () => {
+      editor.focus();
+      const from = photoPos(editor, 'P1');
+      const to = photoPos(editor, 'C1') + 1;
+      view(editor).dispatch(view(editor).state.tr.setSelection(TextSelection.create(view(editor).state.doc, from, to)));
+    });
+    await act(async () => {
+      document.dispatchEvent(new FocusEvent('focusin'));
+    });
+    const labels = bar(INLINE);
+    expect(labels).toContain('Half the page width');
+    expect(labels).not.toContain('Thumbnail');
+    expect(labels).not.toContain('Full cell width');
+    expect(labels).not.toContain('Align left');
   });
 });
 

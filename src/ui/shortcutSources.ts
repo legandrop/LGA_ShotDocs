@@ -55,6 +55,7 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
   listPick: ['ProjectSwitcher.tsx', 'ProjectSearch.tsx', 'DrivePasteMenu.tsx'],
   // La confirmación de "Replace all" (ProjectReplace.tsx): Esc la cierra sin cerrar el panel.
   listClose: ['ProjectSwitcher.tsx', 'ProjectSearch.tsx', 'DrivePasteMenu.tsx', 'ProjectReplace.tsx'],
+  versionName: ['HistoryPanel.tsx'],
   tabsMove: ['InstallDialog.tsx'],
   tourNext: ['TourLayer.tsx'],
   tourBack: ['TourLayer.tsx'],

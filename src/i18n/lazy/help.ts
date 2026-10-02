@@ -175,6 +175,11 @@ export const help = {
     en: "Drag a photo's handles to resize it: they snap to the full width, 1/2, 1/3 and 1/4. Its bar (the same for every photo) has view, download, quick sizes for all the selected photos, Arrange in rows for the selected ones, align the line, comment, replace, rename and delete. In the PDF a line of photos breaks between sheets by rows. In an older row of photo blocks, {next} and {prev} go from photo to photo, {leave} leave the row and {enter} adds a line after it.",
     es: "Arrastrá los tiradores de una foto para cambiarle el tamaño: imantan al ancho entero, 1/2, 1/3 y 1/4. Su barra (la misma para todas las fotos) tiene ver, bajar, tamaños rápidos para todas las elegidas, Acomodar en filas de las elegidas, alinear el renglón, comentar, reemplazar, renombrar y borrar. En el PDF, un renglón de fotos se parte entre hojas por filas. En una fila vieja de fotos-bloque, {next} y {prev} van de una foto a otra, {leave} salen de la fila y {enter} suma un renglón después.",
   },
+  'help.photosCells.title': { en: "Photos in a table", es: "Fotos en una tabla" },
+  'help.photosCells.text': {
+    en: "Paste, drop or choose photos with the cursor in a table cell and they go into that cell, as thumbnails as tall as a row, side by side. Their bar has Thumbnail and Full cell width, and their handles make them bigger inside the cell: for more, widen the column. They open full screen like any photo and come out the same in the PDF.",
+    es: "Pegá, soltá o elegí fotos con el cursor en una celda de una tabla y entran en esa celda, como miniaturas del alto de una fila, una al lado de la otra. Su barra tiene Miniatura y Todo el ancho de la celda, y sus tiradores las agrandan dentro de la celda: para más, ensanchá la columna. Se abren en grande como cualquier foto y salen iguales en el PDF.",
+  },
   'help.carrete.title': { en: "The full-screen viewer", es: "El carrete" },
   'help.carrete.text': {
     en: "Shows every photo, video and file of the page: {prev} {next} to go through them, {ends} to jump to the first or last, scroll or double-click to zoom, {close} to close. Download gets the original.",
@@ -310,6 +315,11 @@ export const help = {
   'help.historyChanges.text': {
     en: "In Version history, Show changes (on by default) compares each version with the previous one in the list: what was added is underlined and what was deleted is struck through, in the color of the person who did it (point at a mark, or touch it on the phone, to see who and when). A whole block added or deleted gets a bar on its left, and a block that changed its type or formatting says so (Changed to Heading 2). Text someone wrote in a part that had already been removed shows above the version, with Copy. Turn Show changes off to see the version as it was. The list updates by itself when new changes arrive.",
     es: "En el historial de versiones, Mostrar cambios (prendido de entrada) compara cada versión con la anterior de la lista: lo agregado va subrayado y lo borrado tachado, con el color de quien lo hizo (señalá una marca, o tocala en el teléfono, para ver quién y cuándo). Un bloque entero agregado o borrado lleva una barra a la izquierda, y uno que cambió de tipo o de formato lo dice (Cambió a Título 2). Lo que alguien escribió en una parte que ya se había borrado aparece arriba de la versión, con Copiar. Apagá Mostrar cambios para ver la versión tal como era. La lista se actualiza sola cuando llegan cambios nuevos.",
+  },
+  'help.historyNames.title': { en: "Name versions", es: "Ponerle nombre a una versión" },
+  'help.historyNames.text': {
+    en: "In Version history, the ⋯ button of a version lets you name it (Draft for the client, Shooting day 1), rename it or remove the name; Only named versions shows just those and the current one. What is written after a named version goes into a new one. Whoever named it, or someone who can edit and create pages there, can change the name. After restoring, the list says Restored from and the date of that version. Without a connection you still see the history up to the last time it was downloaded on this device; naming and restoring need a connection.",
+    es: "En el historial de versiones, el botón ⋯ de una versión sirve para ponerle nombre (Borrador para el cliente, Rodaje día 1), cambiárselo o quitarlo; Solo versiones con nombre muestra esas y la actual. Lo que se escribe después de una versión con nombre va a una nueva. El nombre lo cambia quien lo puso, o quien puede editar y crear páginas ahí. Después de restaurar, la lista dice Restaurada desde y la fecha de esa versión. Sin conexión se sigue viendo el historial hasta la última vez que se bajó en este dispositivo; ponerle nombre y restaurar piden conexión.",
   },
   'help.trash.title': { en: "Trash", es: "Papelera" },
   'help.trash.text': {
@@ -478,6 +488,10 @@ export const help = {
     es: "En la lista de proyectos, el panel de buscar y el menú de pegar Drive: moverse y elegir",
   },
   'shortcut.listClose': { en: "Close that list", es: "Cerrar esa lista" },
+  'shortcut.versionName': {
+    en: "Naming a version in the history: save / leave it as it was",
+    es: "Al ponerle nombre a una versión del historial: guardar / dejar como estaba",
+  },
   'shortcut.photoDelete': { en: "Photos selected: delete them", es: "Fotos elegidas: borrarlas" },
   'shortcut.pasteFiles': {
     en: "Paste files: photos and videos into the line, where the cursor is (other files, as a card)",

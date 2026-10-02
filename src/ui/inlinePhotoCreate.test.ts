@@ -119,7 +119,7 @@ function at(e: BlockNoteEditor, id: string, offset: number): number {
 }
 
 describe('dónde puede ir una foto en línea', () => {
-  it('en párrafos, títulos, listas y citas; no en una celda ni en código', () => {
+  it('en párrafos, títulos, listas, citas y celdas de tabla (entrega 5); no en código', () => {
     const E = mount([
       p('a', 'texto'),
       { id: 'h', type: 'heading', content: 'Título' } as never,
@@ -136,7 +136,7 @@ describe('dónde puede ir una foto en línea', () => {
       if (n.type.name === 'tableParagraph' && cell < 0) cell = pos + 1;
       return cell < 0;
     });
-    expect(canHostPhoto(view(E).state.doc.resolve(cell))).toBe(false);
+    expect(canHostPhoto(view(E).state.doc.resolve(cell))).toBe(true);
   });
 
   it('al pegar: el cursor; con una foto elegida, después de ella; con un bloque elegido entero, ninguno', () => {
@@ -207,7 +207,7 @@ describe('pegar fotos', () => {
     expect(lines(E)).toEqual(['a[N.jpg@0]ef', 'x[F1@0.5][M.jpg@0]y']);
   });
 
-  it('con una foto-bloque elegida o el cursor en una celda: en un renglón nuevo después del bloque', async () => {
+  it('con una foto-bloque elegida: en un renglón nuevo después del bloque', async () => {
     const E = mount([p('a', 'uno'), { id: 'i', type: 'image', props: { url: 'https://example.invalid/x.jpg' } } as never, p('z', 'fin')]);
     view(E).dispatch(view(E).state.tr.setSelection(NodeSelection.create(view(E).state.doc, at(E, 'i', -1))));
     const s = storage();
