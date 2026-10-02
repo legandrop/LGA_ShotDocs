@@ -110,7 +110,7 @@ interface Setup {
   pageId: string;
 }
 
-async function setup(opts: { key?: boolean; editable?: boolean; client?: unknown; blocks?: unknown[]; offline?: boolean; baseUrl?: string } = {}): Promise<Setup> {
+async function setup(opts: { key?: boolean; editable?: boolean; editableRef?: { current: boolean }; client?: unknown; blocks?: unknown[]; offline?: boolean; baseUrl?: string } = {}): Promise<Setup> {
   const server = new FakeServer();
   const device = await makeDevice(server);
   devices.push(device);
@@ -132,8 +132,8 @@ async function setup(opts: { key?: boolean; editable?: boolean; client?: unknown
       { id: 'q', type: 'paragraph', content: 'Presupuesto interno: no mandar.' },
     ]) as PartialBlock[],
   );
-  const editable = opts.editable ?? true;
-  offTargets.push(registerAssistantTarget({ pageId, view: () => view(ed), editable: () => editable }));
+  const editable = opts.editableRef ?? { current: opts.editable ?? true };
+  offTargets.push(registerAssistantTarget({ pageId, view: () => view(ed), editable: () => editable.current }));
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
@@ -244,6 +244,21 @@ describe('el panel', () => {
     expect(button(host, 'Apply')?.disabled).toBe(true);
     await click(button(host, 'Apply'));
     expect(blockText(ed, 'p')).toBe('el kamara se movio en la toma 3');
+  });
+
+  it('el permiso se mira otra vez al aplicar: si se perdió Editar mientras se veía la sugerencia, no aplica', async () => {
+    const editableRef = { current: true };
+    const { host, ed } = await setup({ editableRef });
+    provider('La cámara se movió en la toma 3');
+    selectAll(ed, 'p', 0, 31);
+    await click(button(host, 'Fix spelling & grammar'));
+    for (let i = 0; i < 20 && !button(host, 'Apply'); i++) await wait(30);
+    expect(button(host, 'Apply')?.disabled).toBe(false);
+    // Le sacan Editar (el editor se vuelve de solo lectura) sin que el panel se vuelva a dibujar.
+    editableRef.current = false;
+    await click(button(host, 'Apply'));
+    expect(blockText(ed, 'p')).toBe('el kamara se movio en la toma 3');
+    expect(host.textContent).toContain('You can view this page but not edit it: copy the result instead.');
   });
 
   it('sin red: dice que necesita internet y no pide nada; con un modelo local se intenta igual', async () => {

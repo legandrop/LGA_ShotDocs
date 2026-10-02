@@ -272,7 +272,9 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
       setPhase({ kind: 'error', action: phase.action, message: tr('assistant.readOnly') });
       return;
     }
-    const outcome = applySuggestion(view, run.current.snapshot, phase.parsed, canEdit);
+    // El permiso se mira otra vez al aplicar (7.1): pudo cambiar mientras se veía la sugerencia.
+    const allowed = perms.canEditPage(pageId) && (target?.editable() ?? false);
+    const outcome = applySuggestion(view, run.current.snapshot, phase.parsed, allowed);
     if (!outcome.ok) {
       const message = outcome.reason === 'changed' ? tr('assistant.changed') : outcome.reason === 'readOnly' ? tr('assistant.readOnly') : tr('assistant.failed');
       setPhase({ kind: 'error', action: phase.action, message, retake: outcome.reason === 'changed' });
