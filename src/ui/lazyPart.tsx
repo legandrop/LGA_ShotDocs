@@ -98,8 +98,13 @@ function markReload(): void {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** Hay algo que todavía no llegó al dispositivo, o un comentario escrito sin mandar. */
+export function hasUnsavedWork(): boolean {
+  return !!pendingWrites?.unsaved() || hasDrafts();
+}
+
 /** Espera a que lo escrito llegue al dispositivo. Devuelve si quedó todo guardado. */
-async function waitForSaved(): Promise<boolean> {
+export async function waitForSaved(): Promise<boolean> {
   const writes = pendingWrites;
   if (!writes) return true;
   const deadline = Date.now() + reloadTimings.saveWaitMs;
@@ -138,6 +143,9 @@ export function reloadForNewVersion(cause: unknown): Promise<never> {
   if (hasDrafts()) return Promise.reject(new PartLoadError(cause, 'unsaved'));
   const run = (async (): Promise<never> => {
     try {
+      // Primero, en silencio, que lo escrito esté guardado: el aviso de recargar sale solo si de verdad se va a
+      // recargar (si no, quedaría prometiendo una recarga que no pasa).
+      if (!(await waitForSaved()) || hasDrafts()) throw new PartLoadError(cause, 'unsaved');
       notify(newVersionNotice());
       await sleep(reloadTimings.noticeMs);
       if (!(await waitForSaved()) || hasDrafts()) throw new PartLoadError(cause, 'unsaved');

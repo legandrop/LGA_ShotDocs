@@ -130,7 +130,7 @@ describe('una parte que se carga aparte', () => {
   }
   const failing = () => Promise.reject(new TypeError('Failed to fetch dynamically imported module'));
 
-  it('si no baja (versión nueva): avisa, espera lo que falta guardar y recarga una sola vez', async () => {
+  it('si no baja (versión nueva): espera lo que falta guardar, recién ahí avisa, y recarga una sola vez', async () => {
     const { lazyPart, Part, watchPendingWrites, newVersionNotice, reload, seen } = await reloadSetup();
     // Hay una edición a medio guardar: la recarga espera a que termine.
     let unsaved = true;
@@ -153,7 +153,8 @@ describe('una parte que se carga aparte', () => {
       </>,
     );
     await wait(30);
-    expect(seen).toEqual([newVersionNotice()]);
+    // Todavía guardando: el aviso de recargar sale recién cuando se va a recargar.
+    expect(seen).toEqual([]);
     expect(reload).not.toHaveBeenCalled();
     // Mientras tanto sigue el esqueleto (nada de avisos de error).
     expect(host.querySelector('.skeleton')).not.toBeNull();

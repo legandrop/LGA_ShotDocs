@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AppUpdates, type WorkerContainer } from './appUpdate';
+import { AppUpdates, ControllerWatch, forceUpdate, mainScriptOf, type ForceDeps, type WorkerContainer } from './appUpdate';
 
 /** Un `navigator.serviceWorker` de mentira: el navegador encuentra (o no) una versión nueva al buscar. */
 function fakeWorker(opts: { controlled?: boolean; newVersion?: boolean; activateMs?: number; fail?: boolean } = {}) {
@@ -9,6 +9,7 @@ function fakeWorker(opts: { controlled?: boolean; newVersion?: boolean; activate
     installing: null as object | null,
     waiting: null as object | null,
     updates: 0,
+    unregister: vi.fn(async () => true),
     update: vi.fn(async () => {
       reg.updates++;
       if (opts.fail) throw new TypeError('Failed to fetch');
@@ -36,20 +37,30 @@ function fakeWorker(opts: { controlled?: boolean; newVersion?: boolean; activate
   return { container, reg, takeOver };
 }
 
-function setup(worker: ReturnType<typeof fakeWorker>, waitMs = 1000) {
+function setup(
+  worker: ReturnType<typeof fakeWorker>,
+  waitMs = 1000,
+  opts: { watch?: ControllerWatch; published?: string | null; unsaved?: () => boolean } = {},
+) {
   const reload = vi.fn(async () => undefined);
   const reloadByHand = vi.fn();
+  const onStuck = vi.fn();
   const win = new EventTarget();
   let clock = 0;
   const updates = new AppUpdates({
     container: worker.container,
+    watch: opts.watch,
     reload,
     reloadByHand,
+    unsaved: opts.unsaved ?? (() => false),
+    published: async () => (opts.published === undefined ? null : opts.published),
+    running: () => 'index-viejo.js',
+    onStuck,
     events: win as unknown as Window,
     now: () => clock,
     waitMs,
   });
-  return { updates, reload, reloadByHand, win, advance: (ms: number) => (clock += ms) };
+  return { updates, reload, reloadByHand, onStuck, win, advance: (ms: number) => (clock += ms) };
 }
 
 const tick = (ms = 20) => new Promise((r) => setTimeout(r, ms));
@@ -174,5 +185,115 @@ describe('la versión nueva de la app cuando el workspace pide una más nueva', 
     updates.setOutdated(true);
     await updates.updateNow();
     expect(reloadByHand).toHaveBeenCalledTimes(1);
+  });
+
+  it('una versión nueva que tomó el control antes de entrar al workspace también cuenta (se anota desde el arranque)', async () => {
+    const worker = fakeWorker();
+    const watch = new ControllerWatch(worker.container);
+    worker.takeOver();
+    const { updates, reload } = setup(worker, 1000, { watch });
+    updates.setOutdated(true);
+    await tick();
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(worker.reg.update).not.toHaveBeenCalled();
+    updates.stop();
+  });
+
+  it('con algo sin guardar no intenta recargar ni avisa; vuelve a probar con los cambios de estado, no más de una vez cada 5 s', async () => {
+    const worker = fakeWorker();
+    let unsaved = true;
+    const { updates, reload, advance } = setup(worker, 1000, { unsaved: () => unsaved });
+    updates.setOutdated(true);
+    worker.takeOver();
+    await tick();
+    expect(reload).not.toHaveBeenCalled();
+    unsaved = false;
+    updates.setOutdated(true);
+    await tick();
+    expect(reload).toHaveBeenCalledTimes(1);
+    // La recarga no pasó (por ejemplo, la guarda de un minuto): los cambios de estado seguidos no la repiten enseguida.
+    updates.setOutdated(true);
+    updates.setOutdated(true);
+    await tick();
+    expect(reload).toHaveBeenCalledTimes(1);
+    advance(5_000);
+    updates.setOutdated(true);
+    await tick();
+    expect(reload).toHaveBeenCalledTimes(2);
+    updates.stop();
+  });
+
+  it('"Update now" sin versión nueva en el navegador pero con otra en el servidor ofrece forzarla en vez de recargar', async () => {
+    const worker = fakeWorker();
+    const { updates, reloadByHand, onStuck } = setup(worker, 1000, { published: 'index-nuevo.js' });
+    updates.setOutdated(true);
+    await updates.updateNow();
+    expect(reloadByHand).not.toHaveBeenCalled();
+    expect(onStuck).toHaveBeenLastCalledWith(true);
+    // Si deja de ser vieja (bajaron la mínima), ya no se ofrece.
+    updates.setOutdated(false);
+    expect(onStuck).toHaveBeenLastCalledWith(false);
+    updates.stop();
+
+    // Con la misma versión en el servidor (o sin poder leerla), recarga como siempre.
+    const same = setup(fakeWorker(), 1000, { published: 'index-viejo.js' });
+    same.updates.setOutdated(true);
+    await same.updates.updateNow();
+    expect(same.reloadByHand).toHaveBeenCalledTimes(1);
+    same.updates.stop();
+  });
+
+  it('el archivo principal de un index.html', () => {
+    expect(mainScriptOf('<script type="module" crossorigin src="/assets/index-Cn9KvtxV.js"></script>')).toBe('index-Cn9KvtxV.js');
+    expect(mainScriptOf('http://localhost:4221/assets/index-BEb5lLGl.js')).toBe('index-BEb5lLGl.js');
+    expect(mainScriptOf('<html></html>')).toBeNull();
+  });
+});
+
+describe('forzar la actualización', () => {
+  function forceSetup(over: Partial<ForceDeps> = {}) {
+    const worker = fakeWorker();
+    const reload = vi.fn();
+    const deps: ForceDeps = {
+      container: worker.container,
+      online: () => true,
+      published: async () => 'index-nuevo.js',
+      saved: async () => true,
+      confirmDrafts: () => true,
+      reload,
+      ...over,
+    };
+    return { worker, reload, deps };
+  }
+
+  it('con red y todo guardado: saca el service worker y recarga', async () => {
+    const { worker, reload, deps } = forceSetup();
+    expect(await forceUpdate(deps)).toBe(true);
+    expect(worker.reg.unregister).toHaveBeenCalledTimes(1);
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('nunca deja la app sin service worker y sin red: sin conexión o sin respuesta del servidor no toca nada', async () => {
+    for (const over of [{ online: () => false }, { published: async () => null }] as Partial<ForceDeps>[]) {
+      const { worker, reload, deps } = forceSetup(over);
+      expect(await forceUpdate(deps)).toBe(false);
+      expect(worker.reg.unregister).not.toHaveBeenCalled();
+      expect(reload).not.toHaveBeenCalled();
+    }
+  });
+
+  it('con algo sin guardar, o un comentario sin mandar que la persona quiere conservar, no hace nada', async () => {
+    for (const over of [{ saved: async () => false }, { confirmDrafts: () => false }] as Partial<ForceDeps>[]) {
+      const { worker, reload, deps } = forceSetup(over);
+      expect(await forceUpdate(deps)).toBe(false);
+      expect(worker.reg.unregister).not.toHaveBeenCalled();
+      expect(reload).not.toHaveBeenCalled();
+    }
+  });
+
+  it('sin service worker no hace nada', async () => {
+    const { reload, deps } = forceSetup({ container: null });
+    expect(await forceUpdate(deps)).toBe(false);
+    expect(reload).not.toHaveBeenCalled();
   });
 });

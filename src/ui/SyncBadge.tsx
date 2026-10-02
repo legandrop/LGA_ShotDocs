@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { localize, t, useT, type Translate } from '../i18n';
 import type { MediaFailure } from '../media/queue';
 import { useServices, useSyncStatus, useTree } from '../services';
@@ -8,7 +8,7 @@ import { copyText } from './commentsUi';
 import { usePendingCount } from './usePendingCount';
 import { downloadUnsynced } from './unsyncedDownload';
 import { notify } from './notice';
-import { updateNow } from './appUpdate';
+import { forceUpdate, isUpdateStuck, subscribeUpdateStuck, updateNow } from './appUpdate';
 
 type Tone = 'ok' | 'busy' | 'offline' | 'warn' | 'error';
 
@@ -92,6 +92,8 @@ export function SyncIcon({ onClick }: { onClick: () => void }) {
 /** Siempre dice si hay cambios sin subir y si algo anda mal (regla 6 de la sincronización). */
 export function SyncBadge() {
   const status = useSyncStatus();
+  // "Update now" no trajo la versión nueva aunque el servidor tiene otra: se ofrece forzarla (appUpdate.ts).
+  const stuck = useSyncExternalStore(subscribeUpdateStuck, isUpdateStuck);
   const tree = useTree();
   const services = useServices();
   const { engine, media, comments } = services;
@@ -165,6 +167,21 @@ export function SyncBadge() {
               <strong>{tr('sync.detail.outdatedTitle')}</strong> {tr('sync.detail.outdated')}{' '}
               <button className="link" onClick={() => void updateNow()}>
                 {tr('sync.detail.updateNow')}
+              </button>
+            </p>
+          )}
+          {status.outdated && stuck && (
+            <p>
+              {tr('sync.detail.stuck')}{' '}
+              <button
+                className="link"
+                onClick={() =>
+                  void forceUpdate().then((reloaded) => {
+                    if (!reloaded) notify(tr('sync.detail.forceFailed'));
+                  })
+                }
+              >
+                {tr('sync.detail.force')}
               </button>
             </p>
           )}

@@ -58,6 +58,15 @@ export const sync = {
     es: "Tus cambios y archivos están guardados en este dispositivo y se suben después de actualizar.",
   },
   'sync.detail.updateNow': { en: "Update now", es: "Actualizar ahora" },
+  'sync.detail.stuck': {
+    en: "The browser didn't load the new version. Forcing it reloads the app from the internet; what is saved on this device stays.",
+    es: "El navegador no cargó la versión nueva. Forzarla recarga la app desde internet; lo guardado en este dispositivo queda.",
+  },
+  'sync.detail.force': { en: "Force the update", es: "Forzar la actualización" },
+  'sync.detail.forceFailed': {
+    en: "Couldn't force the update: it needs a connection and everything saved on this device.",
+    es: "No se pudo forzar la actualización: hace falta conexión y que todo esté guardado en este dispositivo.",
+  },
   'sync.detail.schemaTitle': {
     en: "The workspace database needs an update.",
     es: "La base de datos del workspace necesita una actualización.",

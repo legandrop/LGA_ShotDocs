@@ -303,7 +303,9 @@ export class SyncEngine {
     const pull = (async () => {
       // Con la app vieja para el workspace no se baja contenido (ver `cycle`). Al abrir la app, una página se puede
       // abrir antes de que el primer ciclo sepa si esta versión es vieja: entonces se pregunta antes de bajar.
-      if (!this.versionKnown) await this.learnOutdated();
+      // Si esa lectura falla (sin red, muy lenta), se baja como antes: la bajada fallará igual sin red, y una versión
+      // que no es vieja no tiene por qué esperar al ciclo.
+      if (!this.versionKnown) await this.learnOutdated().catch(() => undefined);
       if (this.status.outdated) return;
       await this.docs.pullPage(pageId, this.remote);
     })().catch(() => undefined);

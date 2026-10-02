@@ -319,8 +319,8 @@ export const help = {
   },
   'help.syncSafe.title': { en: "Nothing gets lost", es: "No se pierde nada" },
   'help.syncSafe.text': {
-    en: "Every change is saved on this device first and uploads by itself, offline too, even after weeks without a connection: if the workspace needs a newer version of the app, it updates itself when the connection returns and then uploads everything. Edits made on two devices at the same time are merged, never overwritten. Signing out with changes not uploaded asks first.",
-    es: "Cada cambio se guarda primero en este dispositivo y se sube solo, también sin red y aunque pasen semanas: si el workspace pide una versión más nueva de la app, se actualiza sola al volver la conexión y después sube todo. Lo que se edita a la vez en dos dispositivos se junta, nunca se pisa. Cerrar sesión con cambios sin subir pregunta antes.",
+    en: "Every change is saved on this device first and uploads by itself, offline too, even after weeks without a connection. If the workspace needs a newer version of the app, it usually updates itself when the connection returns (if not, Update now in the sync status) and then uploads everything; until then, pages someone else changed can be read but not edited. Edits made on two devices at the same time are merged, never overwritten. Signing out with changes not uploaded asks first.",
+    es: "Cada cambio se guarda primero en este dispositivo y se sube solo, también sin red y aunque pasen semanas. Si el workspace pide una versión más nueva de la app, normalmente se actualiza sola al volver la conexión (si no, Actualizar ahora en el estado de sincronización) y después sube todo; mientras tanto, las páginas que cambió otro se pueden leer pero no editar. Lo que se edita a la vez en dos dispositivos se junta, nunca se pisa. Cerrar sesión con cambios sin subir pregunta antes.",
   },
 
   // --- Hojas y PDF ---
