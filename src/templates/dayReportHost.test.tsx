@@ -16,7 +16,8 @@ import { createDayReport, planDayReport } from './dayReportCreate';
 
 // El reporte del día en la página de verdad (PageView con el editor, sobre el servidor en memoria): la tira con *On-Set
 // Report* adentro de una carpeta, el botón *New day report* y su globito, "ya existe", el atajo con AltGr y `code`, los
-// permisos y el menú de la página (Docs/Doc_Plantillas.md, sección 6 y entrega 2).
+// permisos y el menú de la página (Docs/Doc_Plantillas.md, sección 6 y entrega 2). *On-Set Report* en la raíz del
+// proyecto (D82) está en dayReportRoot.test.tsx.
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -197,25 +198,6 @@ describe('el primero desde la tira', () => {
     expect(cursorBlock(pageView(host))).toEqual({ type: 'paragraph', text: '', after: 'Summary' });
     // Ya es un reporte: tiene el botón.
     expect(host.querySelector('.day-report-button')).not.toBeNull();
-  });
-
-  it('en la raíz del proyecto queda como una plantilla común y avisa dónde ponerla', async () => {
-    const { device } = await setup();
-    const page = await device.tree.create(null, '');
-    const notices: unknown[] = [];
-    const listen = (e: Event) => notices.push((e as CustomEvent).detail);
-    window.addEventListener('shotdocs:notice', listen);
-    try {
-      const host = await open(device, page);
-      click(host.querySelector('.template-strip [data-template="onset"]'));
-      await wait(100);
-      expect(device.tree.get(page)?.title).toBe('');
-      expect(device.tree.get(page)?.template_id).toBe(BUILTIN_ONSET);
-      expect(notices).toContain('Put day reports inside a folder to get New day report');
-      expect(host.querySelector('.day-report-button')).toBeNull();
-    } finally {
-      window.removeEventListener('shotdocs:notice', listen);
-    }
   });
 });
 

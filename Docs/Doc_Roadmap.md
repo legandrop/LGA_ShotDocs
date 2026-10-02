@@ -335,7 +335,8 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   lo que se copia del día anterior, "ya existe" y el orden, sin red. **Entrega 3 hecha** (v0.124): plantillas propias
   (*Save as template…* con *Clear filled-in values*, la carpeta *Templates*, la franja con *Template settings…* y *Stop
   using as template*, *Customize*, las de otros proyectos sin sus fotos, *Wait* / *Use built-in* a medio bajar y el
-  selector de plantilla del globito, con el aviso de O4). **Falta** que Lega revise el contenido de las tres (PL1) y
+  selector de plantilla del globito, con el aviso de O4). **D82 hecha** (v0.125): *On-Set Report* en la raíz del proyecto
+  ofrece crear o elegir la carpeta de reportes y mueve ahí la página (ya no sale como plantilla común). **Falta** que Lega revise el contenido de las tres (PL1) y
   pruebe el atajo en Firefox y Safari de la Mac y con un teclado latinoamericano físico. Quedan para después la marca
   *2 reports for…* en la barra lateral con la papelera ofrecida para el repetido sin tocar (O6), y en *Buscar en el
   proyecto* la marca *Template* con *Replace all* que saltee las plantillas salvo *Include templates* (O9, va con la

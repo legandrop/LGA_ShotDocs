@@ -1,5 +1,10 @@
 # Changelog — LGA Shot Docs
 
+v0.125 :
+
+*On-Set Report* en una página de la raíz del proyecto creaba la plantilla común con un aviso: sin carpeta de reportes no había "ayer" que copiar ni días que numerar (D82, `Doc_Plantillas.md`). Ahora, en la raíz, no se crea un reporte de set: *On-Set Report* (la tira, *More…*, *Apply template…* o una propia con *Use for day reports*) abre una ventana que propone la carpeta de reportes que ya tenga el proyecto, o crear una nueva (*On-Set Reports*, nombre editable) marcada para reportes. Enter crea la carpeta donde estaba la página, mueve la misma página adentro y la llena como `2026-10-02 | Day 01`: no queda ninguna vacía. Sin red anda igual; si la página cambió con la ventana abierta, o falta permiso para crear, no escribe nada. Nuevo `dayReportRoot.ts` y `RootReportDialog.tsx`; sin migración.
+[ Reporte en la raíz - On-Set Report ofrece crear o elegir la carpeta de reportes y el reporte va adentro ]
+
 v0.124 :
 
 No se podía guardar una página como plantilla ni cambiar las de fábrica (P.23, entrega 3 de `Doc_Plantillas.md`). Ahora

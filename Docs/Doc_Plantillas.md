@@ -1,7 +1,7 @@
 # Plantillas y el reporte del día
 
 **Estado: entregas 0 a 3 implementadas** (las tres de fábrica, la vista previa, crear desde una, el reporte del día y las
-plantillas propias; ver "Cómo quedó", al final). Sin migración (roadmap P.23, fase 3 de `Plan_ShotDocs.md`; pedido de
+plantillas propias; ver "Cómo quedó", al final) **y D82** (el reporte del día en la raíz del proyecto pide una carpeta). Sin migración (roadmap P.23, fase 3 de `Plan_ShotDocs.md`; pedido de
 Lega del 2026-10-02). Diseñado contra `main` v0.108. Las decisiones PL1 a PL10 (sección 13) son propuestas: se adoptan como
 están hasta que Lega diga otra cosa. El contenido de las tres plantillas es una primera versión para que Lega la
 ajuste: la entrega 0 la deja a la vista sin guardar nada, justamente para eso. Corregido con la auditoría
@@ -271,8 +271,8 @@ queda para después.
 - Es la página con `settings.dayReports = { template?: string }` (`template`: la plantilla que usó el último reporte;
   sin él, *On-Set Report* de fábrica).
 - **Se marca sola** al usar *On-Set Report* (o una plantilla propia con *Use for day reports*) en una página que está
-  adentro de otra: la de arriba queda marcada (si la persona puede editarla). En la raíz del proyecto no hay carpeta:
-  el reporte se crea igual, sin botón, y un aviso dice *Put day reports inside a folder to get New day report*.
+  adentro de otra: la de arriba queda marcada (si la persona puede editarla). **En la raíz del proyecto no se crea un
+  reporte** (D82, Lega, 2026-10-02): la app ofrece primero la carpeta de reportes, ver "Cómo quedó (D82)", al final.
 - A mano: *Use for day reports* / *Stop using for day reports* en el menú de una página. Puede haber varias (unidad
   principal y segunda unidad).
 - **Si la marca se pierde** (dos cambios de ajustes a la vez, ver 8): una carpeta también cuenta como de reportes si
@@ -416,6 +416,7 @@ caché sin red y su propio editor: es lo que esta propuesta evita.
   molde de `collabPhotosVersions.published.test.ts` para la `y-prosemirror` publicada.
 - **Permisos en la interfaz:** sin nivel 4 en la carpeta no hay botón; sin nivel 3 no hay tira; *Save as template*
   deshabilitado sin permiso en *Templates*.
+- **El reporte en la raíz** (D82, `src/templates/dayReportRoot.test.tsx`): ver "Cómo quedó (D82)".
 - **Registro de atajos e i18n:** las pruebas de siempre (`shortcuts.test.ts`, `i18n.test.tsx`).
 - **Base:** ninguna nueva (no hay migración); las de permisos de páginas cubren crear y editar.
 
@@ -660,8 +661,8 @@ contenido (IndexedDB primero).
 - **La tira.** *On-Set Report* en una página vacía **adentro de una carpeta** es el primer reporte: se llena con la
   fecha, el día y lo del reporte anterior de la carpeta, toma el título `… | Day 01` si no tenía, marca la carpeta y
   deja el cursor en *Summary*. Ahí el deshacer desde el título (entrega 1) no se arma: el título ya tiene texto; Ctrl/⌘+Z
-  en la página saca la plantilla y el título queda. **En la raíz del proyecto** queda como en la entrega 1 (plantilla
-  común, foco en el título vacío) con el aviso *Put day reports inside a folder to get New day report*.
+  en la página saca la plantilla y el título queda. **En la raíz del proyecto** quedaba como plantilla común con el aviso
+  *Put day reports inside a folder to get New day report*; **D82 lo cambió** (v0.125, ver "Cómo quedó (D82)").
 - **El globito.** Fecha (`type="date"`), día y locación, con el foco en la fecha: Enter crea (o abre el de esa fecha si
   ya hay uno, con *Create another* al lado, que propone el mismo día de rodaje); si hay dos o más, *2 reports for 2026-10-02*. El anterior a medio bajar
   muestra el aviso de O2. La propuesta se lee una vez al abrir; lo escrito en los campos manda. El nuevo reporte se abre
@@ -776,3 +777,48 @@ plantilla y crear el reporte pasan por la cola del árbol y por IndexedDB.
   lateral (O6, de la entrega 2). Copiar subpáginas y esconder las de fábrica (14).
 - **Pendiente para Lega:** guardar un reporte real como plantilla, editarla y crear el día siguiente; usar una de ERSO
   desde MGTZD (el aviso de fotos); mirar la franja y la ventana en el iPhone.
+
+## Cómo quedó (D82: el reporte del día en la raíz del proyecto)
+
+> 🔄 **D82, cambiada por Lega (2026-10-02):** hasta v0.124, *On-Set Report* en una página de la raíz (sin carpeta arriba)
+> salía como plantilla común con un aviso. Ahora **en la raíz no se crea un reporte de set**: la app ofrece primero la
+> carpeta de reportes y el reporte va adentro, como siempre (`2026-10-02 | Day 01`). Sin migración.
+
+- **El flujo (el mínimo de clics).** En una página de la raíz, *On-Set Report* (la tira, *More…* o *Apply template…*, y
+  también una plantilla propia con *Use for day reports*) abre la ventana **Day reports go in a folder**; todavía no se
+  toca nada. **Sin carpeta de reportes en el proyecto:** el nombre de la carpeta ya escrito y elegido (*On-Set Reports*,
+  *Reportes de rodaje*) y el botón *Create folder and report*; con **Enter** (un clic en *On-Set Report* y Enter) queda
+  hecho, o se escribe otro nombre encima. **Con una carpeta de reportes ya hecha** (marcada, o deducida por un reporte
+  adentro, a cualquier profundidad): se propone usarla, con el foco en *Create report in folder*; un Enter y listo. El
+  selector *Folder* lista todas las que la persona puede usar (con el camino si están anidadas) y *New folder…* para crear
+  otra a propósito. *Cancel* y Escape no cambian nada: la página sigue vacía en la raíz con su tira.
+- **Qué hace al confirmar** (`confirmRootFolder` en `TemplateHost.tsx`, funciones en `dayReportRoot.ts`): vuelve a
+  mirar que la página siga vacía y en la raíz (otro dispositivo pudo cambiarla); crea la carpeta en la raíz **justo donde
+  estaba la página** (así no se separan en la barra lateral), marcada `dayReports: {}`; **mueve la misma página adentro**
+  (no queda ninguna vacía en la raíz y nunca hay dos) y la llena con `applyDayReport`, el camino de siempre: fecha, día y
+  lo de ayer de esa carpeta, título `… | Day NN` si no tenía (uno que escribió la persona se respeta), `template_id`, la
+  plantilla propia anotada en la carpeta y el cursor en *Summary*. Todo local: la cola del árbol y IndexedDB; sin red
+  igual, y sube al volver.
+- **Las carreras.** Si otro dispositivo ya movió la página a una carpeta mientras la ventana estaba abierta, es un
+  reporte de esa carpeta y no se crea otra. Si llegó texto a la página, se avisa *Only on an empty page* y no se crea ni se
+  mueve nada. Si mover falla a medias, la ventana avisa y sigue abierta; la carpeta que ya quedó (marcada y vacía) se
+  ofrece al reintentar, así no se duplica. Dos dispositivos sin red que crean *On-Set Reports* a la vez terminan con dos
+  carpetas, como con las páginas de 6.6: nada se pierde ni se fusiona solo.
+- **Permisos.** Mover la página y crear la carpeta piden nivel 4 (`canMove`, `canCreateIn`). Una carpeta de reportes que la
+  persona no puede usar no se ofrece. Si no puede crear en la raíz ni hay carpeta adonde ir (editar una página de la raíz
+  que le compartieron, por ejemplo), se avisa *Day reports go inside a folder, and you can't create one here. Put this page
+  inside a folder first.* y no se escribe nada.
+- **Adentro de una carpeta no cambia nada** (la tira sigue marcando la carpeta y llenando el reporte). *Pre-production Notes*
+  y *Shot Breakdown* siguen sin ventana también en la raíz. El aviso *Put day reports inside a folder…* se retiró.
+- **Ayuda.** La entrada *Day reports* (`help.dayReports`) cuenta lo de la raíz. Ningún atajo nuevo (la ventana se cierra con
+  Escape).
+- **Pruebas.** `dayReportRoot.test.tsx` (16, la página de verdad sobre el servidor en memoria): la tira abre la ventana sin
+  escribir y Enter crea carpeta y reporte (orden, marca, cursor en Summary, sin páginas vacías); el nombre editable y el
+  de respaldo; con una carpeta ya hecha propone usarla (Day 02, al final, sin otra carpeta); *New folder…* a propósito;
+  Cancel y Escape; las otras dos de fábrica y la carpeta como antes; *Apply template…* (título respetado) y una plantilla
+  propia (la carpeta la anota); sin red, otro dispositivo y el contenido entero; página movida o con texto con la ventana
+  abierta; fallo al mover y reintento sin duplicar; sin permiso; y `reportFolderOptions` / `createReportFolder` (camino,
+  papelera, la propia página y lo de adentro, marca dejada o perdida, sin permiso). Mutantes a mano (sin volver a mirar que
+  esté vacía, sin marca, la carpeta al final de la raíz, ofrecer la propia página): cada uno tira 1 o 2 pruebas. En
+  Chromium sin ventana con la app real sobre el servidor en memoria: 26 controles (la carpeta nueva, la existente, Cancel,
+  Apply template…, modo avión con otro dispositivo, castellano y teléfono de 375 px).

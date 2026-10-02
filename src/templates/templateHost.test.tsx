@@ -12,7 +12,7 @@ import { mountEditor, typeAt, unmountAll } from '../ui/collabHarness';
 import { IS_MAC } from '../ui/shortcuts';
 import { isEmptyPage } from './apply';
 import { blockedReason } from './TemplateHost';
-import { BUILTIN_ONSET, BUILTIN_PREPRO, BUILTIN_SHOT, builtinBlocks } from './builtin';
+import { BUILTIN_PREPRO, BUILTIN_SHOT, builtinBlocks } from './builtin';
 
 // La tira *Start from a template*, la ventana *Templates* y *Apply template…* en la página de verdad (PageView con el
 // editor, sobre el servidor en memoria): Docs/Doc_Plantillas.md, 4.1 y entrega 1.
@@ -161,13 +161,13 @@ describe('la tira de la página vacía', () => {
     expect(stripButtons(host)).toEqual(['Pre-production Notes', 'On-Set Report', 'Shot Breakdown', 'More…']);
     expect(host.querySelector('.template-strip')?.getAttribute('aria-label')).toBe('Start from a template');
 
-    click(host.querySelector('.template-strip [data-template="onset"]'));
+    click(host.querySelector('.template-strip [data-template="prepro"]'));
     await wait(100);
     const doc = await docOf(device, page);
     expect(isEmptyPage(doc)).toBe(false);
-    expect(host.querySelectorAll('.bn-block-outer').length).toBeGreaterThanOrEqual(builtinBlocks('onset', 'en').length);
+    expect(host.querySelectorAll('.bn-block-outer').length).toBeGreaterThanOrEqual(builtinBlocks('prepro', 'en').length);
     expect(host.querySelector('.template-strip')).toBeNull();
-    expect(device.tree.get(page)?.template_id).toBe(BUILTIN_ONSET);
+    expect(device.tree.get(page)?.template_id).toBe(BUILTIN_PREPRO);
     expect(device.tree.isFresh(page)).toBe(false);
     expect(document.activeElement?.classList.contains('page-title')).toBe(true);
   });
@@ -204,7 +204,7 @@ describe('la tira de la página vacía', () => {
     const { device } = await setup();
     const page = await device.tree.create(null, '');
     const host = await open(device, page);
-    click(host.querySelector('.template-strip [data-template="onset"]'));
+    click(host.querySelector('.template-strip [data-template="prepro"]'));
     await wait(100);
     const title = host.querySelector('.page-title')!;
     expect(document.activeElement).toBe(title);
@@ -245,7 +245,7 @@ describe('la tira de la página vacía', () => {
   });
 
   it('deshacer y rehacer desde el título, dos vueltas (con Ctrl/⌘+Shift+Z y con Ctrl/⌘+Y): Enter y escribir caen en el primer dato', async () => {
-    for (const kind of ['shot', 'onset'] as const) {
+    for (const kind of ['shot', 'prepro'] as const) {
       const { device } = await setup();
       const page = await device.tree.create(null, '');
       const host = await open(device, page);
