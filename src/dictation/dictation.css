@@ -1,0 +1,237 @@
+/* *Dictate to report* (Docs/Doc_Dictado.md, V1): la hoja usa el lugar y las piezas del panel del asistente
+   (assistant.css); acá va lo propio. Se baja con ella. */
+
+.dictation-compose {
+  display: grid;
+  gap: 10px;
+}
+
+.dictation-field {
+  width: 100%;
+  min-height: 96px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.dictation-field:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 0;
+}
+
+.dictation-big {
+  min-height: 44px;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+.dictation-heard {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 13.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.dictation-heard .mono-label {
+  margin-right: 6px;
+}
+
+.dictation-changes {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dictation-change {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.dictation-change.focused {
+  border-color: var(--accent);
+}
+
+.dictation-change.off .dictation-change-body {
+  opacity: 0.55;
+}
+
+.dictation-change > input[type='checkbox'] {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 1px 0 0;
+  accent-color: var(--accent-text);
+}
+
+.dictation-change-body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+/* El destino en palabras (lo arma la app con el mapa): tocarlo lleva la página a ese lugar. */
+.dictation-where {
+  justify-content: flex-start;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.4;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.dictation-where:hover {
+  text-decoration: underline;
+}
+
+.dictation-diff {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.dictation-diff del {
+  color: var(--danger);
+  text-decoration: line-through;
+}
+
+.dictation-diff ins {
+  color: var(--ok);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.dictation-empty,
+.dictation-arrow {
+  color: var(--faint);
+}
+
+.dictation-flag {
+  padding: 3px 8px;
+  font-size: 12.5px;
+}
+
+.dictation-why {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.dictation-question {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.dictation-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.dictation-options button {
+  min-height: 52px;
+  justify-content: center;
+  font-size: 15px;
+}
+
+.dictation-pending {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px dashed var(--warn-border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--warn-bg) 60%, transparent);
+}
+
+.dictation-pending .mono-label {
+  margin: 0;
+}
+
+.dictation-pending ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dictation-pending li {
+  display: grid;
+  gap: 6px;
+}
+
+.dictation-pending-text {
+  font-size: 14px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.dictation-pending-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dictation-confirm {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius);
+  background: var(--danger-bg);
+}
+
+.dictation-confirm p {
+  margin: 0;
+  color: var(--danger);
+  font-size: 14px;
+}
+
+/* Los lugares de la vista previa, marcados sobre la página (encima, sin tocar el documento ni recibir toques). */
+.dictation-mark {
+  position: fixed;
+  z-index: 1;
+  border: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  pointer-events: none;
+}
+
+.dictation-mark.focused {
+  border-color: var(--accent-text);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+@media (max-width: 760px) {
+  .dictation-field {
+    font-size: 16px; /* sin zoom automático en el iPhone */
+  }
+
+  .dictation-big,
+  .dictation-pending button {
+    min-height: 44px;
+  }
+}
