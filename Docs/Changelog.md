@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+Ver las anotaciones de las fotos (P.20, entregas 0 y 1 de `Doc_Anotar_Fotos.md`). No había dónde guardarlas ni cómo
+mostrarlas. Viven en un mapa del documento de la página (`photoMarkup`), afuera del contenido, con una clave por forma:
+las pruebas muestran que las versiones publicadas lo conservan aunque saquen la foto, que quien solo ve recibe por la
+base limpia solo lo vivo, que el historial lo trae y que dos anotando sin red no pierden nada. Se dibujan en un SVG encima
+de la foto en línea, la de una celda, la foto-bloque, el carrete (con *Hide annotations*) y el PDF, montado siempre
+(sale aunque la foto no se haya visto). El mapa se lee como entrada no confiable. Todavía no se puede anotar
+(entrega 2).
+[ Anotar fotos - entregas 0 y 1: el mapa de anotaciones, sus pruebas y verlas en la página, la celda, el carrete y el PDF ]
+
 v0.112 :
 
 Cinco pedidos de Lega del 2026-10-02 no tenían diseño. Se publican los cinco, sin código, cada uno auditado por

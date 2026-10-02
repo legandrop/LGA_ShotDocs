@@ -1,6 +1,7 @@
 # Anotar sobre las fotos (P.20)
 
-**Estado: diseño, sin código** (pedido de Lega del 2026-10-02). Se diseñó contra `main` v0.108. Las decisiones
+**Estado: entregas 0 y 1 hechas (v0.0XX: el mapa, sus pruebas y ver las anotaciones; ver "Cómo quedó" al final); el
+anotador (entrega 2) sigue en diseño.** Pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.108. Las decisiones
 (AN1 a AN11, sección 12) son propuestas con la recomendación elegida: el número final lo pone quien las cierre con Lega.
 Auditado el 2026-10-02 (aprobado con condiciones): las correcciones ya están en el texto y resumidas al final
 ("Correcciones de la auditoría").
@@ -559,3 +560,53 @@ Auditoría independiente: **aprobado con condiciones**. Lo que pedía y dónde q
 | **O10** Quien recibe bases ve con la demora de D14 | Dicho en la sección 2 |
 | **O11** ⌘[ y ⌘] son atrás/adelante en la Mac | `preventDefault` probado en Safari y Chrome (sección 2, entrega 2, riesgo 10) |
 | **O12** Una sesión de solo anotar se junta con la versión anterior | Dicho en la sección 9; lo arregla la entrega 5 |
+
+## Cómo quedó (entregas 0 y 1, v0.0XX)
+
+**Entrega 0, la prueba técnica.** Pasó todo lo que se podía probar sin un teléfono:
+
+- `src/media/markup.ts` es el modelo: el mapa raíz `photoMarkup` con claves planas, la lectura que trata el mapa como
+  entrada no confiable (`readShape`, `readFrame`) y el único camino para escribir (`addShape`, `updateShape`,
+  `deleteShape`, `removePhotoMarkup`, cada uno una transacción con el origen `sd-markup:<fileId>`). Lo usará el anotador.
+- Versiones: el editor publicado (v0.107 a v0.111), el de v0.083 a v0.092 y uno sin la foto en línea abren la página,
+  la editan y sacan la foto anotada, y el mapa vuelve con todas sus claves (`src/ui/photoMarkup.test.ts`); lo mismo con la
+  librería de verdad de v0.052 a v0.075 (`photoMarkup.published.test.ts`) y con la sincronización de v0.029, que además
+  no resucita una forma borrada (`publishedCompat.test.ts`).
+- Base limpia: con el motor de verdad, quien solo ve recibe las formas vivas y nunca el texto de una forma borrada ni el
+  de una foto podada; con una base armada sin GC (la mutante) sí lo recibiría (`src/sync/markupClean.test.ts`).
+- Historial: cada versión trae las anotaciones de entonces, y vaciar lo de colapsar no las toca.
+- Carrera: dos que anotan por primera vez la misma foto sin red conservan 3 de 3 formas; con un `Y.Map` por foto (lo que
+  descartó la auditoría) se pierden. Color de uno y posición de otro sobre la misma forma: quedan las dos cosas.
+- Deshacer: un `Y.UndoManager` con el origen de una foto deshace solo lo de esa foto; el Ctrl/⌘+Z de la página no deshace
+  anotaciones.
+- La proporción (riesgo 1): en Chromium, una JPEG con EXIF de orientación 1, 3, 6 y 8 da en `files.width/height` y en la
+  miniatura la misma medida, ya girada, que muestra el navegador. **Falta**: Safari, fotos HEIC de un iPhone real y el
+  dedo a 60 y 120 Hz (no hay teléfono en esta máquina).
+
+**Entrega 1, ver.**
+
+- `src/ui/markupSvg.ts` dibuja las nueve formas con las cuentas de FrameRev a la escala del marco (cabeza de la flecha:
+  4 veces el grosor, 22°; tinta del texto por contraste con umbral 128; número con 0,6). Texto solo con `textContent`,
+  colores `#RRGGBB`, ningún `href`, `style` ni id; Banner se dibuja como la cabeza llena.
+- `src/ui/markupOverlay.ts` pone un `<svg class="sd-markup">` justo después del `<img>` de cada foto anotada (en línea,
+  en una celda y foto-bloque), en su misma caja, **montado siempre**; se redibuja cuando cambian las suyas (también de
+  otro) y cuando el editor vuelve a dibujar la foto. Lo engancha `PageEditor.tsx` (también en solo lectura y en la vista
+  de una versión del historial, que ya trae su mapa). El grosor nunca baja de 1 px de pantalla.
+- El carrete (`CarreteMarkup.tsx`) dibuja las de la foto que se ve, con su zoom; *Hide annotations* / *Show annotations*
+  (un ojo) solo aparece con una foto anotada, no se guarda, y con las anotaciones ocultas una marca chica en la esquina
+  dice que las tiene. La vista de impresión las copia con el editor.
+- Ayuda: *Annotations on photos* (sección Fotos). Sin atajos nuevos.
+
+**Medido en el navegador** (Chromium, servidor en memoria, sin login): en la compu y a 375 px de ancho, el aro y la cruz
+dibujados en las fotos coinciden con la elipse y la punta de la flecha anotadas (0 px de diferencia; la caja del dibujo
+es la de la foto) en la foto-bloque, la vertical en línea, la miniatura de 96 px de la celda y la del final; en el
+carrete; y en el PDF, también la foto del final de una página larga que nunca se vio en pantalla. Con 200 fotos anotadas
+en la página y 3240 claves en el mapa, un cambio se redibuja en unos 20 ms (antes de leer todas las cajas juntas, 200 ms).
+
+**Decisiones tomadas sin Lega** (cambiables): el ícono de ocultar es un ojo (el lápiz queda para *Annotate*); la letra del
+texto es la de la app (se ignora `fontFamily` del mapa: es entrada no confiable y la letra tiene que cargar en la web);
+el texto se corta en renglones solo donde el navegador puede medir (`OffscreenCanvas`); una forma sin marco o de un tipo
+desconocido no se dibuja ni se borra; se dibujan como mucho 2000 formas por foto (las de más arriba) y las coordenadas se
+acotan a 4 veces el lado de la foto.
+
+**Falta para publicar:** subir `workspace_settings.min_app_version` a esta versión (AN10) antes de la entrega 2.

@@ -320,6 +320,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   anotaciones se arma en el dispositivo al bajar; anota quien edita la página. Entregas: 0 (prueba técnica), 1 (ver),
   2 (anotar en la compu), 3 (dedo, y lápiz en el iPad), 4 (bajar, copiar y exportar a FrameRev), 5 (historial, copiar entre
   páginas, buscar), 6 opcional (dibujar en un comentario).
+  **Entregas 0 y 1 hechas (v0.0XX):** el mapa `photoMarkup` y su lectura segura (`src/media/markup.ts`), las pruebas de
+  versiones publicadas, base limpia, historial y carrera, y el dibujo encima de la foto en línea, la de una celda, la
+  foto-bloque, el carrete (*Hide annotations*) y el PDF. Falta: subir `min_app_version` a esta versión al publicarla
+  (AN10) y la entrega 2 (el anotador, con la poda de AN11); medir el dedo a 60 y 120 Hz y las fotos HEIC de un iPhone
+  real (entrega 0, no se pudo sin teléfono).
 - **P.22 Exportar una página o un proyecto entero** (Lega, 2026-10-02): PDF y/o zip con las páginas y las fotos, para
   entregarle al cliente o archivar un proyecto terminado. **Diseño en `Doc_Exportar.md`** (sin código; EX1 a EX15 a
   confirmar por Lega; auditado con condiciones y corregido: ningún correo en el zip, vista JPEG de cada foto): un PDF para entregar (toda la rama en orden con un índice que dice la hoja de
