@@ -174,7 +174,7 @@ async function click(el: HTMLElement | undefined | null) {
   await wait(60);
 }
 
-async function until(host: HTMLElement, test: () => boolean) {
+async function until(test: () => boolean) {
   for (let i = 0; i < 60 && !test(); i++) await wait(30);
 }
 
@@ -192,7 +192,7 @@ async function type(host: HTMLElement, text: string) {
 async function place(host: HTMLElement, note: string) {
   await type(host, note);
   await click(button(host, 'Place'));
-  await until(host, () => !!button(host, 'Apply') || !!host.querySelector('.dictation-options') || !!host.querySelector('.assistant-error'));
+  await until(() => !!button(host, 'Apply') || !!host.querySelector('.dictation-options') || !!host.querySelector('.assistant-error'));
 }
 
 const LENS = { op: 'setCell', at: 'T3 r3 c3', row: '12 · 010 · 3', col: 'Lens · Filters (ND, diffusion, pola)', old: '', new: '50 mm', why: 'cursor row' };
@@ -247,7 +247,7 @@ describe('Dictate to report', () => {
     const v = view(s.ed);
     v.dispatch(v.state.tr.insertText('nublado', mapOf(s.ed).targets.get('T1 r7 c2')!.start));
     await click(button(s.host, '12 · 010 · 3'));
-    await until(s.host, () => !!button(s.host, 'Apply'));
+    await until(() => !!button(s.host, 'Apply'));
     expect(p.calls).toHaveLength(2);
     expect(p.user(1)).toContain('The person answered: "12 · 010 · 3 (row r3 of table T3, \\"Setups & takes\\")"');
     expect(p.user(1)).toContain('r7 c1 "Weather" | c2 "nublado"');
@@ -316,7 +316,7 @@ describe('Dictate to report', () => {
     expect(s.host.textContent).toContain('Part of the page changed while the assistant was working. Nothing was applied.');
     expect(cellText(s.ed, 3, 3, 3)).toBe('35 mm');
     await click(button(s.host, 'Try again'));
-    await until(s.host, () => !!button(s.host, 'Apply'));
+    await until(() => !!button(s.host, 'Apply'));
     expect(p.calls).toHaveLength(2);
     expect(s.host.querySelector('.dictation-changes')!.textContent).toContain('Replaces “35 mm”');
     await click(button(s.host, 'Apply'));
@@ -389,7 +389,7 @@ describe('Dictate to report', () => {
     };
     await type(s.host, 'el 12_010 setup 3 con un 50');
     await ctrlEnter();
-    await until(s.host, () => !!button(s.host, 'Apply'));
+    await until(() => !!button(s.host, 'Apply'));
     await ctrlEnter();
     expect(cellText(s.ed, 3, 3, 3)).toBe('50 mm');
     await click(button(s.host, 'New note'));

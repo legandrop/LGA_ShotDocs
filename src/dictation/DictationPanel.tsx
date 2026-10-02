@@ -6,7 +6,7 @@ import { builtinTexts } from '../templates/builtin';
 import { CloseIcon, SettingsIcon } from '../ui/icons';
 import { IS_MAC, modPressed } from '../ui/findUi';
 import { shortcutLabel } from '../ui/shortcuts';
-import { errorText } from '../assistant/AssistantPanel';
+import { errorText } from '../assistant/errorText';
 import { openAssistantSettings, useAssistantTarget, useAssistantUi } from '../assistant/assistantUi';
 import { loadSettings, readKey, type AssistantSettings } from '../assistant/keyStore';
 import { fetchPolicy, policyAllows, type AssistantPolicy } from '../assistant/policy';
