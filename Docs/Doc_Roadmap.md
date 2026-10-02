@@ -330,7 +330,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   de exportación medido), 1 (PDF), 2 (zip), 3 (volver, con la migración de `imported_from`), 4 (carpetas de Drive,
   reusar archivos, link público). **Entrega 0 hecha (v0.0XX):** el editor de exportación en `src/export/`
   (sin interfaz), medido con 300 páginas y 2219 fotos en Chromium: 14,5 a 38,9 s, nada guardado cambia y las hojas de
-  las 300 iguales a las marcas de la pantalla. Sigue la entrega 1 (PDF).
+  las 300 iguales a las marcas de la pantalla. Sigue la entrega 1 (PDF), con lo que dejó la auditoría de la 0: una foto
+  que no carga cuesta 14 s por página (dos esperas que se suman: una sola, más corta); el editor acumula el deshacer
+  y retiene las páginas anteriores (~0,4 MB cada 100: apagar el historial); exportar una rama sola corta distinto que la
+  pantalla en 8 de 25 casos (pierde el renglón de encabezado); una marca de texto desconocida borra ese texto en la
+  copia y el aviso no lo usa nadie; el proyecto de prueba no tiene páginas de hoja libre.
 - **P.21 Menciones en comentarios: *@persona*** (Lega, 2026-10-02): escribir `@` en un comentario, elegir a alguien y
   que le llegue un aviso en la app; por correo cuando haya clave de Resend (C.12). **Diseño en `Doc_Menciones.md`** (sin
   código ni migración; auditado y corregido; decisiones propuestas ME1 a ME10, ME10 espera a Lega): solo a quien ya
