@@ -318,6 +318,24 @@ export function Annotator({ doc, fileId, name, item, loader, onClose }: Annotato
     };
   }, [loader, item]);
 
+  // Sin marco guardado (la primera anotación de la foto), el marco es la medida de la foto: se averigua antes de
+  // mostrarla (la caja de dibujo tiene la proporción del marco).
+  useEffect(() => {
+    if (stored || image.natural) return;
+    const url = image.full ?? image.preview;
+    if (!url) return;
+    let alive = true;
+    const probe = new Image();
+    probe.onload = () => {
+      if (!alive || !(probe.naturalWidth > 0 && probe.naturalHeight > 0)) return;
+      setImage((s) => (s.natural ? s : { ...s, natural: { width: probe.naturalWidth, height: probe.naturalHeight } }));
+    };
+    probe.src = url;
+    return () => {
+      alive = false;
+    };
+  }, [!!stored, image.natural, image.full, image.preview]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const onNatural = (e: { currentTarget: HTMLImageElement }, full: boolean) => {
     const img = e.currentTarget;
     if (!(img.naturalWidth > 0 && img.naturalHeight > 0)) return;
