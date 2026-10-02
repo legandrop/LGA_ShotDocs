@@ -37,6 +37,7 @@ import { TourHost } from '../tutorial/TourHost';
 import { startTour } from '../tutorial/tourState';
 import { setNavOpen, useNavOpen } from './navStore';
 import { lazyPart, Part, preloadWhenIdle, watchPendingWrites } from './lazyPart';
+import { startAppUpdates, stopAppUpdates } from './appUpdate';
 import { focusTitle, PageView, preloadPageParts } from './PageView';
 import { CommentsToggle } from './CommentsToggle';
 import { Sidebar } from './Sidebar';
@@ -169,7 +170,7 @@ function useInviteTarget(): void {
 export function Shell() {
   const route = useRoute();
   const tree = useTree();
-  const { comments, docs, media, folders, user, workspace } = useServices();
+  const { comments, docs, media, folders, user, workspace, engine } = useServices();
   const keys = workspace.config.storage;
   const navOpen = useNavOpen();
   const [pageMenu, setPageMenu] = useState<{ position: MenuPosition; anchor: HTMLElement } | null>(null);
@@ -248,6 +249,19 @@ export function Shell() {
       unwatch();
     };
   }, [comments, docs, tree, media, folders]);
+
+  // Con la app vieja para el workspace (`min_app_version`) no se sube nada: se busca la versión nueva y, cuando toma el
+  // control, se recarga sola una vez (appUpdate.ts).
+  useEffect(() => {
+    const updates = startAppUpdates();
+    const follow = () => updates.setOutdated(engine.getStatus().outdated);
+    follow();
+    const unsubscribe = engine.subscribe(follow);
+    return () => {
+      unsubscribe();
+      stopAppUpdates(updates);
+    };
+  }, [engine]);
 
   // Con la barra lateral ya dibujada, el editor se baja cuando el navegador está libre: abrir una página
   // después no espera, y una versión nueva publicada mientras tanto no deja al editor sin sus archivos.

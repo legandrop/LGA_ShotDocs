@@ -8,6 +8,7 @@ import { copyText } from './commentsUi';
 import { usePendingCount } from './usePendingCount';
 import { downloadUnsynced } from './unsyncedDownload';
 import { notify } from './notice';
+import { updateNow } from './appUpdate';
 
 type Tone = 'ok' | 'busy' | 'offline' | 'warn' | 'error';
 
@@ -162,7 +163,7 @@ export function SyncBadge() {
           {status.outdated && (
             <p>
               <strong>{tr('sync.detail.outdatedTitle')}</strong> {tr('sync.detail.outdated')}{' '}
-              <button className="link" onClick={() => location.reload()}>
+              <button className="link" onClick={() => void updateNow()}>
                 {tr('sync.detail.updateNow')}
               </button>
             </p>

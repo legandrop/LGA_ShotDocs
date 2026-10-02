@@ -71,7 +71,7 @@ let reloading: Promise<never> | null = null;
 export const pageReload = { now: (): void => location.reload() };
 
 /** El botón "Reload" de los avisos: un comentario sin mandar se pierde, así que pregunta antes. */
-function reloadByHand(): void {
+export function reloadByHand(): void {
   if (hasDrafts() && !window.confirm(t('lazy.draftQuestion'))) return;
   pageReload.now();
 }
