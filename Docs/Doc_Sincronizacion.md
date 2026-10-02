@@ -462,7 +462,9 @@ se guarda como hueco: es una copia de algo que ya está en las filas, no texto q
   restaurar una copia, lo de un tercero no se avisa (sí a quien lo escribió); descartar borra solo lo que se mostró;
   el texto del aviso (orden, fotos por nombre, sin autores propios no avisa); el estado avisa solo con la página
   cerrada; y compactar en orden conserva el texto que una fila posterior trae como hueco (también al abrir con 70
-  filas propias más una fila hueco: falla si `loadInto` vuelve a `mergeUpdates`).
+  filas propias más una fila hueco: falla si `loadInto` vuelve a `mergeUpdates`). Desde v0.0XX, lo que copia la
+  reparación que vino con lo bajado (Yjs le cambia el autor al documento) también avisa: falla si se vuelve a anotar
+  solo el autor que tiene el documento al guardar.
 - **`src/ui/collabRemovedWriting.test.ts`:** al azar con el editor real, tres dispositivos y uno de la versión
   publicada, escribiendo en párrafos, listas anidadas, celdas de tablas y secciones con el mapa de colapsar
   mientras otros borran bloques padres, tablas y secciones enteras; sin red, bajando antes de subir, respuestas que
@@ -471,7 +473,14 @@ se guarda como hueco: es una copia de algo que ya está en las filas, no texto q
   guardó con su texto esté en el servidor con su texto**, que todos terminen iguales al servidor (con el mapa de
   colapsar) y que cada aviso sea solo de lo propio y diga **exactamente las letras de sus tramos**, borradas en el
   servidor. En la suite, 12 corridas de 60 pasos (`REMOVED_SEEDS`, `REMOVED_STEPS`; pasaron 40 de 80). Con la subida
-  de antes fallan 29 de 30 corridas.
+  de antes fallan 29 de 30 corridas. Desde v0.0XX lo propio de cada dispositivo son todos los autores que tuvieron sus
+  documentos (la prueba los anota en cada transacción) y no solo el número con que se abrió cada uno: con 300 corridas
+  de 200 pasos, la prueba de antes fallaba en 25 («was told about text it did not write», que era texto del mismo
+  dispositivo escrito después de que Yjs le cambió el número); ahora pasan las 300, y las semillas 2 y 88 con 120
+  pasos quedan como casos fijos (fallan si la prueba vuelve a mirar solo el primer número). Las corridas al azar
+  además vuelven a abrir la página, en la misma pestaña o en otra (otro `PageDocs` sobre la misma base), a veces
+  después de 70 filas sin red (al abrir se compactan): en 300 × 200, 2976 aperturas, 861 compactando, 67 cambios de
+  autor, ninguna letra propia fuera del servidor.
 - **`src/ui/RemovedWritingBanner.test.tsx`:** el aviso aparece con la página abierta, muestra, copia (y sin
   portapapeles deja el texto a la vista) y al cerrarlo se borra lo mostrado.
 
