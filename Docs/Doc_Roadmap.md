@@ -271,12 +271,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   Ojo: `npm run db:test` aplica las migraciones de verdad; esta se probó con un script en `begin … rollback`.
 - **P.19 Link público: *Anyone with the link*** (Lega, 2026-10-02): en *Share*, además de personas y correos, un link
   que cualquiera abre sin cuenta, con *Can view* (que siempre puede comentar) o *Can edit*; "debería estar seguro".
-  **Diseño en `Doc_Link_Publico.md`** (sin código; falta su auditoría y que Lega decida P1 a P17): el token del link
-  validado por la base en cada pedido (sin cuentas ni cambios en el login; las sesiones anónimas de Supabase no andan con
-  el registro cerrado), solo la página y lo de abajo, como un invitado (base limpia de D14, sin historial ni papelera),
-  comentarios con nombre *(via link)*, *Reset link* instantáneo y topes por link y día. Depende del interruptor de la
-  privacidad de lo borrado (B.18) prendido en Wanka. Entregas: 0 (prueba de los headers en la base real y `noindex`),
-  1 (*Can view*), 2 (*Can edit*), 3 (medir y ajustar los topes).
+  **Diseño en `Doc_Link_Publico.md`** (sin código; auditado: aprobado con condiciones, ya corregido; D29 a D31): el token
+  del link validado por la base en cada pedido (sin cuentas ni cambios en el login; las sesiones anónimas de Supabase no
+  andan con el registro cerrado), solo la página y lo de abajo, como un invitado (base limpia de D14, sin historial ni
+  papelera), comentarios con nombre *(via link)*, *Reset link* instantáneo y topes por link, por día y de por vida.
+  Depende del interruptor de la privacidad de lo borrado (B.18) prendido en Wanka. Entregas: 0 (prueba de los headers y
+  de la caché de miniaturas en la base real, y `noindex`), 1 (*Can view*), 2 (*Can edit*, con topes por bytes y la
+  cuarentena de filas malas; se vuelve a auditar ese diseño antes de programarla), 3 (medir y ajustar los topes).
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
