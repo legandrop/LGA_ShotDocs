@@ -767,14 +767,25 @@ export async function importArchive(
         if (c) pageNotes.push(t(BLOCK_NOTES[key], { count: c.n, list: [...c.details].join(', ') }));
       }
 
-      // Antes de escribir, la huella de lo que se va a escribir: si la importación se corta entre escribir y anotarlo,
-      // al seguir se reconoce la página como propia (y no se le suma una copia abajo).
+      // Antes de escribir, los bloques se prueban en un documento aparte: así se sabe si el editor los acepta y la huella
+      // de lo que va a quedar. Si la importación se corta entre escribir y anotarlo, al seguir se reconoce la página
+      // como propia (y no se le suma una copia abajo).
+      let toWrite = blocks;
+      let expected: string;
+      try {
+        expected = expectedFingerprint(blocks);
+      } catch {
+        // El editor no acepta los bloques: va el texto, en párrafos (nunca se pierde el texto), anotado.
+        pageNotes.push(t('importArchive.note.textOnly'));
+        toWrite = textOnlyBlocks(blocks);
+        expected = expectedFingerprint(toWrite);
+      }
       if (!current.written) {
-        current.expected = expectedFingerprint(blocks);
+        current.expected = expected;
         await save();
       }
       const firstWrite = !current.written;
-      const newIds = new Set(mediaIdsInBlocks(blocks));
+      const newIds = new Set(mediaIdsInBlocks(toWrite));
       const extra = (doc: Y.Doc, written: PageBlock[]) => {
         if (!firstWrite) return;
         const ids = new Set(written.map((b) => b.id));
@@ -791,28 +802,11 @@ export async function importArchive(
           if (carried.skipped.some((s) => s.reason !== 'notInContent')) pageNotes.push(t('importArchive.note.markupSkipped', { count: carried.skipped.length }));
         }
       };
-      /**
-       * Escribe; si la importación nunca la escribió (`expected` y no `written`) y la persona ya escribió otra cosa
-       * ahí, lo importado va debajo (`kept` solo vale para lo que la importación sí escribió).
-       */
-      const write = async (list: PartialBlock<any, any, any>[], withExtra?: typeof extra) => {
-        let got = await writePage(deps.docs, pageId, list, current.written ?? current.expected, withExtra);
-        if (got.result === 'kept' && !current.written) got = await writePage(deps.docs, pageId, list, undefined, withExtra);
-        return got;
-      };
-      let outcome: Awaited<ReturnType<typeof writePage>>;
-      try {
-        outcome = await write(blocks, extra);
-      } catch {
-        // El editor no aceptó los bloques: va el texto, en párrafos (nunca se pierde el texto), anotado.
-        pageNotes.push(t('importArchive.note.textOnly'));
-        const plain = textOnlyBlocks(blocks);
-        if (!current.written) {
-          current.expected = expectedFingerprint(plain);
-          await save();
-        }
-        outcome = await write(plain);
-      }
+      // Si la importación nunca la escribió (`expected` y no `written`) y la persona ya escribió otra cosa ahí, lo
+      // importado va debajo: `kept` (no tocar) vale solo para lo que la importación sí escribió. Un error al guardar
+      // sube: la página queda sin terminar, para seguir.
+      let outcome = await writePage(deps.docs, pageId, toWrite, current.written ?? current.expected, extra);
+      if (outcome.result === 'kept' && !current.written) outcome = await writePage(deps.docs, pageId, toWrite, undefined, extra);
       if (outcome.result === 'unsupported') {
         pageNotes.push(t('importArchive.note.unsupported'));
         complete = false;
