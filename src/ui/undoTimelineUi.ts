@@ -5,6 +5,7 @@ import { usePermissions, useServices } from '../services';
 import { isLetter, modPressed } from './findUi';
 import { notify } from './notice';
 import { useCurrentProject } from './project';
+import { replaceRunning } from './replaceUi';
 import { IS_MAC, shortcutLabel } from './shortcuts';
 import { setUndoRunner, undoTimelineFor, type StepKind, type UndoTimeline } from './undoTimeline';
 
@@ -179,15 +180,19 @@ export function useUndoTimelineKeys(): void {
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.isComposing || e.keyCode === 229) return;
       const kind: StepKind | null = isUndoShortcut(e) ? 'undo' : isRedoShortcut(e) ? 'redo' : null;
-      if (!kind || !takesUndoShortcut(timeline, e.target)) return;
+      // Solo con una página abierta (no en la papelera, el inicio ni la página de práctica).
+      if (!kind || state.current.page === null || !takesUndoShortcut(timeline, e.target)) return;
       e.preventDefault();
       e.stopPropagation();
+      // Con un reemplazo del proyecto corriendo (o su deshacer), ⌘Z no hace nada hasta que termine (Doc_Deshacer.md, 5).
+      if (replaceRunning(services)) return;
       const inEditor = e.target instanceof Element && timeline.ownsElement(e.target);
       void runner.run(kind, { repeat: e.repeat, focusInEditor: inEditor });
     };
     window.addEventListener('keydown', onKey, true);
     const offRunner = setUndoRunner((kind, el) => {
       if (!timeline.ownsElement(el)) return false;
+      if (replaceRunning(services)) return true;
       void runner.run(kind, { focusInEditor: true });
       return true;
     });

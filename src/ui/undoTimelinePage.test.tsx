@@ -242,6 +242,19 @@ describe('⌘Z en el orden en que editaste, con la app', () => {
     await until(() => location.pathname === pagePath(a) && text() === 'plano', 'deshecho en A desde el árbol');
   });
 
+  it('sin una página abierta (la papelera) ⌘Z no es de la línea de tiempo', async () => {
+    const { a } = await app();
+    typeText(' general');
+    await wait(600);
+    act(() => navigate('/trash'));
+    await wait(200);
+    const e = key(document.body, { key: 'z', ctrlKey: true });
+    expect(e.defaultPrevented).toBe(false);
+    await wait(200);
+    expect(location.pathname).toBe('/trash');
+    void a;
+  });
+
   it('fuera de la Mac, la tecla de Windows con Z no deshace (solo Ctrl)', async () => {
     const { b } = await app();
     typeText(' general');

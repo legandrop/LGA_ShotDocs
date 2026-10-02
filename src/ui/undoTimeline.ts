@@ -100,6 +100,8 @@ interface StackEvent {
 
 const DEFAULT_MAX_PAGES = 20;
 const DEFAULT_MAX_STEPS = 1000;
+/** Marcas de páginas que perdieron sus pasos (se avisan en el próximo ⌘Z que llegue ahí). */
+const MAX_LOST = 50;
 
 /** Los que quieren saber cuándo se deshizo un paso, de cualquier editor (la marca *Restored from…*, historyRestore.ts). */
 const poppedListeners = new Set<(stackItem: unknown, type: StepKind) => void>();
@@ -403,7 +405,10 @@ export class UndoTimeline {
         }
       },
       () => {
+        // No se pudo cargar: la referencia que sumó `open` se devuelve.
+        if (!h.retained) return;
         h.retained = false;
+        this.options.docs.close(h.pageId);
       },
     );
   }
@@ -438,7 +443,10 @@ export class UndoTimeline {
     this.pages.delete(h.pageId);
     if (lost) {
       const seq = Math.max(-1, ...this.stack(h, 'undo').map((i) => this.order.get(i) ?? 0));
-      if (seq >= 0) this.lost.push({ pageId: h.pageId, project: this.projectOfHistory(h), seq });
+      if (seq >= 0) {
+        this.lost = this.lost.filter((m) => m.pageId !== h.pageId).slice(-(MAX_LOST - 1));
+        this.lost.push({ pageId: h.pageId, project: this.projectOfHistory(h), seq });
+      }
     }
     for (const off of h.offs) off();
     h.offs = [];
