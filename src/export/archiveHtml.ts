@@ -27,7 +27,7 @@ type Format = Pick<PageFormat, 'size' | 'landscape'>;
 /** Lo que se hace con cada imagen de la vista (en el orden del documento). */
 export type ImagePlan =
   /** Una foto, un video o un adjunto del workspace: su vista y su original (rutas adentro del zip, o `null`). */
-  | { kind: 'media'; view: string | null; original: string | null; name: string; video: boolean; block: boolean }
+  | { kind: 'media'; view: string | null; original: string | null; name: string; video: boolean; attachment: boolean; block: boolean }
   /** Una imagen suelta del dispositivo (una imagen vieja de Supabase), copiada al zip. */
   | { kind: 'file'; path: string }
   /** Queda como está (una imagen `data:`, un ícono). */
@@ -49,7 +49,8 @@ html.sd-archive body { padding: 24px 12px 48px; font-family: system-ui, -apple-s
 .sd-archive-nav a, .sd-archive-index a { color: #8a5700; }
 .sd-archive-nav .sep { margin: 0 6px; color: #b8b3a8; }
 .sd-archive-link { display: contents; }
-.sd-archive-name { display: block; margin-top: 4px; font-size: 11px; color: #6b665d; overflow-wrap: anywhere; }
+.sd-archive .bn-visual-media-wrapper:has(> .sd-archive-name) { flex-wrap: wrap; }
+.sd-archive-name { display: block; flex: 0 0 100%; margin-top: 4px; font-size: 11px; color: #6b665d; overflow-wrap: anywhere; }
 .sd-archive-index { max-width: 860px; margin: 0 auto; padding: 32px 40px; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18); }
 .sd-archive-index h1 { margin: 0 0 6px; font-size: 30px; }
 .sd-archive-index .meta { margin: 0 0 18px; color: #6b665d; font-size: 13px; }
@@ -68,13 +69,25 @@ export function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+/** Los estilos del zip (`style.css`) y las letras que usa, para copiarlas a `fonts/` (así se ven igual sin red). */
+export interface ArchiveStyles {
+  css: string;
+  fonts: { url: string; name: string }[];
+}
+
+/** Lo más que se copia de letras (las de la app son unas decenas de archivos chicos). */
+const FONT_FILES_MAX = 60;
+
 /**
  * Los estilos de la app que tiene cargados el documento (los de la página y de la vista de impresión), sin nada que
- * pida la red ni otro archivo: sin `@import` ni `@font-face` (las letras caen a las del sistema) y cada `url(…)` que no
- * es `data:` cambiada por `none`. Después, los del archivo.
+ * pida la red: sin `@import`; las letras (`@font-face`) de la misma app apuntan a su copia en `fonts/` (quien arma el
+ * zip las copia), las de otro lado se sacan; cada otra `url(…)` que no es `data:` pasa a `none`. Después, los del
+ * archivo.
  */
-export function archiveCss(doc: Document = document): string {
+export function archiveStyles(doc: Document = document): ArchiveStyles {
   const parts: string[] = [];
+  const fonts = new Map<string, string>();
+  const origin = doc.location?.origin;
   for (const sheet of Array.from(doc.styleSheets)) {
     let rules: CSSRuleList;
     try {
@@ -83,13 +96,48 @@ export function archiveCss(doc: Document = document): string {
       // Una hoja de otro origen no se puede leer.
       continue;
     }
+    const base = sheet.href ?? doc.baseURI;
     for (const rule of Array.from(rules)) {
       const text = rule.cssText;
-      if (/^\s*@(import|font-face)\b/i.test(text)) continue;
+      if (/^\s*@import\b/i.test(text)) continue;
+      if (/^\s*@font-face\b/i.test(text)) {
+        let ok = true;
+        const css = text.replace(/url\(\s*(["']?)([^"')]+)\1\s*\)/gi, (whole, _q: string, raw: string) => {
+          if (/^data:/i.test(raw)) return whole;
+          let url: URL;
+          try {
+            url = new URL(raw, base);
+          } catch {
+            ok = false;
+            return whole;
+          }
+          if (!origin || url.origin !== origin || !/\.(woff2?|ttf|otf)$/i.test(url.pathname)) {
+            ok = false;
+            return whole;
+          }
+          let name = fonts.get(url.href);
+          if (!name) {
+            if (fonts.size >= FONT_FILES_MAX) {
+              ok = false;
+              return whole;
+            }
+            name = `${fonts.size + 1}_${url.pathname.split('/').pop()!.replace(/[^\w.-]/g, '_')}`;
+            fonts.set(url.href, name);
+          }
+          return `url("fonts/${name}")`;
+        });
+        if (ok) parts.push(css);
+        continue;
+      }
       parts.push(text.replace(/url\(\s*(?!["']?data:)[^)]*\)/gi, 'none'));
     }
   }
-  return `${parts.join('\n')}\n${ARCHIVE_CSS}`;
+  return { css: `${parts.join('\n')}\n${ARCHIVE_CSS}`, fonts: [...fonts].map(([url, name]) => ({ url, name })) };
+}
+
+/** Solo el texto de `archiveStyles`. */
+export function archiveCss(doc: Document = document): string {
+  return archiveStyles(doc).css;
 }
 
 /** Lo que nunca va en el `.html`: lo que corre código, carga algo o reproduce. */
@@ -184,8 +232,8 @@ export function pageHtml(input: PageHtmlInput): string {
       img.replaceWith(a);
       a.append(img);
     }
-    // Una foto de bloque sin su original (o un video): el nombre del archivo debajo.
-    if (plan.block && (!plan.original || plan.video || !plan.view)) {
+    // Una foto de bloque sin su original (o un video): el nombre del archivo debajo. Un adjunto ya lo dice en su tarjeta.
+    if (plan.block && !plan.attachment && (!plan.original || plan.video || !plan.view)) {
       const name = document.createElement('span');
       name.className = 'sd-archive-name';
       name.textContent = plan.video ? `▶ ${plan.name}` : plan.name;
@@ -350,8 +398,9 @@ export function pageMarkdown(input: MarkdownInput): string {
     const info = id ? input.media(id) : null;
     const name = info?.name || (typeof fallbackName === 'string' ? fallbackName : '') || 'file';
     const label = name.replace(/[[\]]/g, '\\$&');
-    const rel = (path: string) => `<${hrefOf(relativePath(input.dir, path))}>`;
-    if (!info) return typeof url === 'string' && /^https:/i.test(url) ? `![${label}](<${url}>)` : label;
+    // Rutas relativas y codificadas (sin espacios), sin `<…>`: así las lee cualquier visor de Markdown (D57).
+    const rel = (path: string) => hrefOf(relativePath(input.dir, path));
+    if (!info) return typeof url === 'string' && /^https:/i.test(url) ? `![${label}](${encodeURI(url)})` : label;
     const image = info.view ? `![${label}](${rel(info.view)})` : label;
     return info.original ? `[${image}](${rel(info.original)})` : image;
   };

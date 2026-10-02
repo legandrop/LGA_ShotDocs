@@ -9,11 +9,13 @@ import { deviceImages, PhotoLimitError } from '../export/exportImages';
 import { exportPlan, type ExportPlanPage, type ExportProgress } from '../export/exportPages';
 import { buildPdf, deviceLimits, printBook, type PdfBook } from '../export/exportPdf';
 import { keepsPageSizes, touchDevice } from '../export/printSupport';
-import { useServices, useSyncStatus, useTree } from '../services';
+import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
 import type { PageTree } from '../sync/tree';
 import { isPrintShortcut } from './printPage';
 import { sizeLabel } from './pageFormat';
+import { zipAllowed } from '../export/exportZip';
 import { ExportZipPanel } from './ExportZip';
+import { detectPlatform, isMobilePlatform } from './install';
 import { porteroDownload } from './sharpImages';
 
 // La ventana *Export* (P.22, Docs/Doc_Exportar.md, sección 7; entrega 1: el PDF; entrega 2: el zip, en ExportZip.tsx).
@@ -62,6 +64,11 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
   const [format, setFormat] = useState<'pdf' | 'zip'>('pdf');
   /** El zip está trabajando: no se cierra ni se cambia qué se exporta. */
   const [zipBusy, setZipBusy] = useState(false);
+  const perms = usePermissions();
+  // El zip (D60, D63: Lega 2026-10-02): solo el dueño y los admins, y nunca desde un teléfono o una tableta (el mismo
+  // criterio que el tope de *Download all*: iPhone, iPad y Android, instalada o en el navegador). El PDF, siempre.
+  const phone = useMemo(() => isMobilePlatform(detectPlatform()), []);
+  const zipBlocked = phone ? tr('exportZip.notOnPhone') : !zipAllowed(perms) ? tr('exportZip.adminsOnly') : null;
   const [phase, setPhase] = useState<Phase>({ name: 'choose' });
   const abort = useRef<AbortController | null>(null);
   const book = useRef<PdfBook | null>(null);
@@ -231,13 +238,13 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
                   <input type="radio" name="export-format" checked={format === 'pdf'} onChange={() => setFormat('pdf')} />
                   <strong>{tr('exportDialog.pdf')}</strong>
                 </label>
-                <label>
-                  <input type="radio" name="export-format" checked={format === 'zip'} onChange={() => setFormat('zip')} />
+                <label {...(zipBlocked ? { 'data-tip': zipBlocked, 'aria-disabled': true } : {})}>
+                  <input type="radio" name="export-format" checked={format === 'zip' && !zipBlocked} disabled={!!zipBlocked} onChange={() => setFormat('zip')} />
                   <strong>{tr('exportZip.zip')}</strong>
                 </label>
               </fieldset>
             )}
-            {format === 'zip' ? (
+            {format === 'zip' && !zipBlocked ? (
               <ExportZipPanel
                 plan={plan}
                 kind={target.kind}

@@ -336,7 +336,7 @@ describe('exportar zip: el .html, el .md y el JSON', () => {
       comments: null,
     });
     expect(md).toContain('# Día 1');
-    expect(md).toContain('[![IMG_1.HEIC](<Files/_view/IMG_1.jpg>)](<Files/IMG_1.HEIC>)');
+    expect(md).toContain('[![IMG_1.HEIC](Files/_view/IMG_1.jpg)](Files/IMG_1.HEIC)');
     expect(md).toContain('[otra](../02_Dia_2/02_Dia_2.md)');
     expect(md).toContain('y afuera');
     expect(md).not.toContain('33333333');
@@ -352,8 +352,8 @@ describe('exportar zip: el .html, el .md y el JSON', () => {
       notes: [],
       comments: null,
     });
-    expect(light).toContain('![IMG_1.HEIC](<Files/_view/IMG_1.jpg>)');
-    expect(light).not.toContain('](<Files/IMG_1.HEIC>)');
+    expect(light).toContain('![IMG_1.HEIC](Files/_view/IMG_1.jpg)');
+    expect(light).not.toContain('](Files/IMG_1.HEIC)');
   });
 
   it('en los bloques para volver, un link a una página de afuera queda solo con su texto (también en las tablas)', () => {
@@ -514,10 +514,23 @@ describe('exportar zip: el archivo entero', () => {
     expect(md).toContain('# Día 1: exteriores');
     expect(md).toContain('Escena 12');
     expect(md).toContain('Adentro del título');
-    expect(md).toContain('[![IMG_0412.JPG](<Files/_view/IMG_0412.jpg>)](<Files/IMG_0412.JPG>)');
+    expect(md).toContain('[![IMG_0412.JPG](Files/_view/IMG_0412.jpg)](Files/IMG_0412.JPG)');
     expect(md.split('\n')).toContain(PAGE_BREAK_MARK);
     expect(md).toContain('[el día 2](../02_Dia_2/02_Dia_2.md)');
     expect(md).toContain('Cambiar el lente a 35');
+    // D57: cada foto y archivo del `.md` con su ruta relativa, que existe en el zip (así se ven en un visor de Markdown).
+    const md2 = text(z.get(`${day2}/02_Dia_2.md`));
+    expect(md2).toContain('[![IMG_0412.JPG](../01_Dia_1_exteriores/Files/_view/IMG_0412.jpg)](../01_Dia_1_exteriores/Files/IMG_0412.JPG)');
+    for (const [file, dir] of [[md, day1], [md2, day2]] as const) {
+      const targets = [...file.matchAll(/\]\(([^)\s]+)\)/g)].map((m) => m[1]).filter((h) => !/^(https?:|mailto:|#)/.test(h));
+      expect(targets.length).toBeGreaterThan(0);
+      for (const h of targets) {
+        const parts = `${dir}/${decodeURIComponent(h)}`.split('/');
+        const resolved: string[] = [];
+        for (const part of parts) if (part === '..') resolved.pop(); else resolved.push(part);
+        expect(z.names, h).toContain(resolved.join('/'));
+      }
+    }
 
     // El JSON para volver: los bloques, el colapsado para todos, el manifest y los comentarios.
     const manifest = JSON.parse(text(z.get(`${top}/_shotdocs/manifest.json`))) as Record<string, any>;
@@ -787,5 +800,46 @@ describe('exportar zip: la ventana', () => {
     for (let i = 0; i < 100 && !host.textContent?.includes('Cancelled'); i++) await settle();
     expect(host.textContent).toContain('Cancelled: nothing was saved.');
     expect(document.querySelectorAll('.print-view, .sd-export-source')).toHaveLength(0);
+  });
+  it('el zip, solo para el dueño y los admins y nunca desde un teléfono; el PDF sigue para quien ve (D60, D63)', async () => {
+    const w = await world();
+    w.server.addMember('mem', 'member', 'miembro@estudio.test');
+    w.server.grant('mem', { pageId: w.root }, 'view');
+    const member = await device(w.server, { id: 'mem', email: 'miembro@estudio.test' });
+    await sync(member);
+    await sync(member);
+    const render = async (d: Device, user = OWNER_EMAIL) => {
+      const host = document.createElement('div');
+      document.body.append(host);
+      const root = createRoot(host);
+      roots.push(root);
+      const s = services(d);
+      (s as { user: unknown }).user = { id: d.remote.userId, email: user };
+      await act(async () =>
+        root.render(
+          <ServicesContext.Provider value={s}>
+            <ExportDialog target={{ kind: 'page', id: w.root }} onClose={() => undefined} />
+          </ServicesContext.Provider>,
+        ),
+      );
+      const radios = [...host.querySelectorAll<HTMLInputElement>('input[name="export-format"]')];
+      return { host, pdf: radios[0]!, zip: radios[1]! };
+    };
+    // Un miembro con Ver: el PDF sí; el zip apagado, con su porqué.
+    const m = await render(member, 'miembro@estudio.test');
+    expect(m.pdf.disabled).toBe(false);
+    expect(m.zip.disabled).toBe(true);
+    expect(m.zip.parentElement?.getAttribute('data-tip')).toBe('Only the workspace owner and admins can export a zip.');
+    expect([...m.host.querySelectorAll('button')].some((b) => b.textContent === 'Export PDF')).toBe(true);
+    // Un admin, sí.
+    w.server.addMember('adm', 'admin', 'admin@estudio.test');
+    const admin = await device(w.server, { id: 'adm', email: 'admin@estudio.test' });
+    await sync(admin);
+    expect((await render(admin, 'admin@estudio.test')).zip.disabled).toBe(false);
+    // El dueño en un iPhone: apagado (solo el PDF).
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/19.0 Mobile/15E148 Safari/604.1');
+    const phone = await render(w.b);
+    expect(phone.zip.disabled).toBe(true);
+    expect(phone.zip.parentElement?.getAttribute('data-tip')).toBe('The zip is made from a computer. On a phone or tablet, export the PDF.');
   });
 });

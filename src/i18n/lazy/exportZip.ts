@@ -43,6 +43,14 @@ export const exportZip = {
   // La ventana.
   'exportZip.format': { en: "Format", es: "Formato" },
   'exportZip.zip': { en: "Zip — to archive", es: "Zip — para archivar" },
+  'exportZip.adminsOnly': {
+    en: "Only the workspace owner and admins can export a zip.",
+    es: "Solo el dueño y los admins del workspace pueden exportar un zip.",
+  },
+  'exportZip.notOnPhone': {
+    en: "The zip is made from a computer. On a phone or tablet, export the PDF.",
+    es: "El zip se arma desde una computadora. En un teléfono o una tableta, exportá el PDF.",
+  },
   'exportZip.zipNote': {
     en: "A folder for each page, with the page to open in any browser, its text, the original files and the comments. It can be imported back into Shot Docs.",
     es: "Una carpeta por página, con la página para abrir en cualquier navegador, su texto, los archivos originales y los comentarios. Se puede volver a importar en Shot Docs.",

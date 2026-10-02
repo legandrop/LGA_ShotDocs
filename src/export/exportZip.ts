@@ -10,9 +10,10 @@ import { mediaIdOf, VIEW_PREFIX, VIEW_SMALL_PREFIX, type MediaQueue } from '../m
 import { mediaIdsInDoc } from '../media/usage';
 import { VIEW_SIDE } from '../media/probe';
 import { ZipWriter } from '../media/zipWriter';
+import type { Role } from '../sync/access';
 import type { CommentThread, CommentView } from '../sync/comments';
 import type { PageRow } from '../sync/types';
-import { archiveCss, blocksForArchive, indexHtml, pageHtml, pageMarkdown, type ImagePlan, type MdMedia } from './archiveHtml';
+import { archiveStyles, blocksForArchive, indexHtml, pageHtml, pageMarkdown, type ImagePlan, type MdMedia } from './archiveHtml';
 import { authorLabel, commentsSection, type CommentSource } from './exportComments';
 import { ExportCancelled, type ExportEditor } from './exportEditor';
 import { browserResizer, type Resizer } from './exportImages';
@@ -122,6 +123,14 @@ export function appArchiveMedia(
     pass: (id) => media.pass(id),
     download,
   };
+}
+
+/**
+ * Quién exporta el zip (D60, Lega 2026-10-02): solo el dueño y los admins del workspace. El PDF sigue para cualquiera
+ * que vea la página. Sin datos de permisos (una base sin el equipo), la única persona es el dueño.
+ */
+export function zipAllowed(perms: { known: boolean; role: Role | null }): boolean {
+  return !perms.known || perms.role === 'owner' || perms.role === 'admin';
 }
 
 /** Qué originales van (las vistas JPEG van siempre) y si van los comentarios. */
@@ -293,8 +302,8 @@ export interface ZipOptions {
   appVersion: string;
   now?: Date;
   lastSync?: number | null;
-  /** Los estilos (por defecto, los del documento: `archiveCss`). */
-  css?: string;
+  /** Los estilos y sus letras (por defecto, los del documento: `archiveStyles`). */
+  styles?: { css: string; fonts: { url: string; name: string }[] };
   /** Pasar un HEIC a JPEG (por defecto, el convertidor de la app). */
   convertHeic?: (file: Blob) => Promise<Blob>;
   resizer?: Resizer;
@@ -688,7 +697,15 @@ export async function buildZip(options: ZipOptions): Promise<ZipResult> {
             }
             const entry = i.id ? files.get(i.id) : undefined;
             if (entry?.meta && !entry.meta.deleted && !entry.meta.folder && (entry.view || entry.original)) {
-              plans.push({ kind: 'media', view: entry.view, original: entry.original, name: entry.meta.name, video: entry.meta.kind === 'video', block: i.block });
+              plans.push({
+                kind: 'media',
+                view: entry.view,
+                original: entry.original,
+                name: entry.meta.name,
+                video: entry.meta.kind === 'video',
+                attachment: entry.meta.kind === 'file',
+                block: i.block,
+              });
               continue;
             }
             const src = i.img.getAttribute('src') ?? '';
@@ -817,7 +834,14 @@ export async function buildZip(options: ZipOptions): Promise<ZipResult> {
     };
     await out.file(`${SHOTDOCS_DIR}/manifest.json`, JSON.stringify(manifest, null, 1));
     if (comments) await out.file(`${SHOTDOCS_DIR}/comments.json`, JSON.stringify({ format: ARCHIVE_FORMAT, threads: threadsOut }, null, 1));
-    await out.file('style.css', options.css ?? archiveCss());
+    const styles = options.styles ?? archiveStyles();
+    await out.file('style.css', styles.css);
+    // Las letras de la app, para que el archivo se vea igual sin red (una que no llega queda afuera: cae a otra).
+    for (const font of styles.fonts) {
+      check();
+      const blob = await fetchBlob(font.url);
+      if (blob) await out.file(`fonts/${font.name}`, blob);
+    }
     await out.file(
       'index.html',
       indexHtml({
