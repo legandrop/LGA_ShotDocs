@@ -2978,10 +2978,15 @@ code {
   contain: inline-size;
 }
 
-/* Entre dos fotos seguidas ProseMirror pone un `<img class="ProseMirror-separator">` de ancho 0. */
-.bn-editor [data-content-type='table'] .sd-photo + .sd-photo:not(.sd-photo-sized),
-.bn-editor [data-content-type='table'] .sd-photo + img.ProseMirror-separator + .sd-photo:not(.sd-photo-sized) {
-  margin-left: var(--img-gap, 8px);
+/* El espacio va a la derecha de cada miniatura (a la izquierda quedaba también en la que baja de renglón en una celda
+   angosta) y el renglón de la celda se estira lo mismo sobre el relleno de la celda (10 px), así la última del renglón
+   no baja por su espacio. */
+.bn-editor [data-content-type='table'] .sd-photo[data-w='0'] {
+  margin-right: var(--img-gap, 8px);
+}
+
+.bn-editor [data-content-type='table'] :is(td, th) > p:has(.sd-photo[data-w='0']) {
+  margin-right: calc(-1 * var(--img-gap, 8px));
 }
 
 /* El renglón con fotos ocupa todo el ancho del bloque. `.bn-block-content` es flex y el renglón, sin esto, mide lo que
