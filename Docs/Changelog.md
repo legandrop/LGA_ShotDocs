@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.091 :
+v0.0XX :
 
 Faltaba reemplazar en todo el proyecto: cambiar un nombre en cincuenta páginas era abrirlas de a una. Ahora la
 flecha del panel de Ctrl/⌘+K despliega el reemplazo: lista cada coincidencia con lo de antes tachado y lo nuevo
@@ -11,6 +11,16 @@ puede editar y está completa, sin editor, por el mismo camino que cualquier edi
 protección del editor abierto, el guardado comprobado, los permisos conocidos). Pruebas al azar con dos
 dispositivos: nada del otro se pierde. Ayuda nueva.
 [ Reemplazar en el proyecto - vista previa, confirmación y deshacer en todas las páginas ]
+
+v0.091 :
+
+Un PDF adjunto se veía solo como un ícono y el carrete salteaba los adjuntos. Ahora la tarjeta de un PDF muestra su
+primera página: la dibuja con pdf.js (bajado aparte, solo cuando llega un PDF) el dispositivo que lo agrega, y viaja
+como la miniatura de una foto, sin pasar por el portero; lo ya visto se ve sin red. Se eligió sobre la miniatura de
+Drive, que llega tarde y pedía cambiar el portero. Si pdf.js no estaba, o el PDF es de antes, se hace al mostrarlo;
+si la pestaña se cierra mientras se dibuja, no se reintenta y el PDF sube igual. En el carrete, los adjuntos se ven
+en grande con *Open* y *Download*. Sin migración ni propiedades nuevas en el bloque.
+[ Adjuntos - vista previa del PDF y tarjeta grande en el carrete ]
 
 v0.090 :
 

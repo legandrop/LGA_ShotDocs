@@ -172,6 +172,9 @@ describe('los pesos (sin tocar nada)', () => {
     expect(w.rows.attachments.count).toBe(1);
     expect(w.rows.attachments.over).toEqual({ count: 1, bytes: ATTACHMENT_MAX_BYTES + 1 });
     expect(w.extras.older).toBe(2);
+    expect(w.extras.thumbs).toBe(0);
+    // La vista previa de un adjunto (la primera página de un PDF) va con las miniaturas, siempre.
+    expect(weigh([{ ...photo({ id: 'pdf2' }), kind: 'file', mime: 'application/pdf', thumb: false, thumbAt: true }], 0, false).extras.thumbs).toBe(1);
     // Lo que pide cada casilla.
     expect(wanted(photo(), DEFAULT_OPTIONS)).toEqual({ orig: false, view: true });
     expect(wanted(photo(), { ...DEFAULT_OPTIONS, originals: true })).toEqual({ orig: true, view: false });

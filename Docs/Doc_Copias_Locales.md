@@ -90,7 +90,7 @@ comprobación en tres pasos con `POST /verify`, el `relink` sin bytes después d
 | | Cómo |
 |---|---|
 | Qué se marca | Una página con todas sus subpáginas, o un proyecto entero. Por dispositivo y por cuenta. |
-| Qué se baja | Siempre: las miniaturas, las imágenes viejas `sdfile://` y los comentarios. Según las casillas: la nítida de 2048 de cada foto, los originales de las fotos, los adjuntos de hasta 50 MB, los videos. El texto de todas las páginas ya está en el dispositivo. |
+| Qué se baja | Siempre: las miniaturas (también la vista previa de un PDF adjunto, `Doc_Adjuntos.md`), las imágenes viejas `sdfile://` y los comentarios. Según las casillas: la nítida de 2048 de cada foto, los originales de las fotos, los adjuntos de hasta 50 MB, los videos. El texto de todas las páginas ya está en el dispositivo. |
 | Dónde | IndexedDB, en la base de archivos de siempre (`<base local>:media`), con claves `off:` y `offview:`. |
 | Lo protegido | Un conjunto de archivos guardado en cada marca, que una página a medio bajar solo puede agrandar. |
 | Pesos | `files.size` de la base para lo que se baja entero; la nítida, estimada por sus píxeles (sección 3.3). |

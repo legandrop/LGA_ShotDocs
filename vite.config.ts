@@ -39,6 +39,10 @@ const LIBHEIF_BANNER =
   '/*! Includes libheif and libde265 (LGPL-3.0-or-later, (c) struktur AG, Dirk Farin and contributors) via libheif-js, ' +
   'unmodified. Source and license texts: /licenses/THIRD_PARTY_NOTICES.md */';
 
+// El aviso de PDF.js (Apache-2.0) al principio de su parte (la vista previa de los PDF adjuntos); su Worker ya trae el
+// suyo.
+const PDFJS_BANNER = '/*! Includes PDF.js (Copyright Mozilla Foundation, Apache-2.0): https://github.com/mozilla/pdf.js */';
+
 // La versión que se muestra en la app es la última entrada del changelog.
 function appVersion(): string {
   try {
@@ -156,12 +160,21 @@ export default defineConfig(({ mode }) => {
           // agrega un HEIC. Se guardan en la caché `heic-decoder` la primera vez que se usan (abajo): desde ahí
           // la conversión anda sin red. Un HEIC agregado sin red en un dispositivo que nunca lo bajó se guarda
           // tal cual y se convierte antes de subirlo, cuando vuelve la red.
-          globIgnores: ['**/heic.worker-*.js', '**/heicLib-*.js'],
+          // Lo mismo con pdf.js (Docs/Doc_Adjuntos.md, "Vista previa"): la librería (`pdfLib`, ~0,5 MB) y su Worker
+          // (`.mjs`, ~1,3 MB, que tampoco entra por la extensión) solo hacen falta cuando alguien agrega un PDF; se
+          // guardan en la caché `pdf-preview` la primera vez. Un PDF agregado sin red en un dispositivo que nunca
+          // la bajó queda sin vista previa hasta que se lo vuelve a mostrar con red.
+          globIgnores: ['**/heic.worker-*.js', '**/heicLib-*.js', '**/pdfLib-*.js'],
           runtimeCaching: [
             {
               urlPattern: /\/assets\/(?:heic\.worker|heicLib|libheif)-[^/]+\.(?:js|wasm)$/,
               handler: 'CacheFirst',
               options: { cacheName: 'heic-decoder', expiration: { maxEntries: 6 } },
+            },
+            {
+              urlPattern: /\/assets\/(?:pdfLib-[^/]+\.js|pdf\.worker\.min-[^/]+\.mjs)$/,
+              handler: 'CacheFirst',
+              options: { cacheName: 'pdf-preview', expiration: { maxEntries: 4 } },
             },
             // Las fotos de la página de práctica (Docs/Doc_Tutorial.md, corrección 18): no van en la instalación; se
             // guardan la primera vez que se ven, así la práctica anda sin red después.
@@ -182,7 +195,9 @@ export default defineConfig(({ mode }) => {
       // El editor se baja aparte (roadmap B.4) y pesa alrededor de 1 MB sin comprimir (300 KB comprimido).
       chunkSizeWarningLimit: 1200,
       rolldownOptions: {
-        output: { postBanner: (chunk: { name: string }) => (chunk.name === 'heicLib' ? LIBHEIF_BANNER : '') },
+        output: {
+          postBanner: (chunk: { name: string }) => (chunk.name === 'heicLib' ? LIBHEIF_BANNER : chunk.name === 'pdfLib' ? PDFJS_BANNER : ''),
+        },
       },
     },
     worker: {
