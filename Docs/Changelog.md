@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.135 :
+
+Exportar, entrega 3: volver a Shot Docs desde el zip. El zip guardaba lo necesario para volver, pero nada lo leía.
+*Import Shot Docs archive…* (selector de proyectos, dueño y admins) lee el zip por partes (`zipReader.ts`: CRC, Zip64,
+*deflate*, rechaza `..` y rutas absolutas) y crea siempre un proyecto nuevo: el árbol en orden, ajustes de hoja, marcas
+de plantilla con los ids nuevos, los bloques del JSON revisados contra el esquema (`archiveBlocks.ts`), el colapsado
+para todos, las anotaciones (el zip ahora las exporta) y los archivos por `media.add`; sin original, la vista JPEG de
+la foto o su nombre. Los comentarios vuelven con `import_comment` e ids derivados del proyecto nuevo, a nombre de quien
+importa solo si exportó él; piden la migración `20261021120000_comentarios_archivo.sql` (sin aplicar, versión 18). Si
+se corta, sigue sin duplicar.
+[ Exportar 3 - volver a Shot Docs desde el zip como proyecto nuevo, con anotaciones, plantillas y comentarios ]
+
 v0.134 :
 
 Exportar, entrega 1b: los cambios de Lega al PDF (D84, D85 y D88). Las fotos salían achicadas a 200 ppp, lo que pasaba
