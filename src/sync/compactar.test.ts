@@ -856,10 +856,8 @@ describe('al azar: tres dispositivos que compactan, la versión publicada, snaps
       const erased = new Set<string>();
       const bad = new Set<string>();
       let restore: (() => void) | null = null;
-      // Restaurar una copia con un snapshot malo sin invalidar todavía: quien lo aplicó vuelve a subir la página entera
-      // (`resetForRestore`) con lo que el snapshot borró de más. Es un riesgo que queda (Doc_Compactar.md, sección 16):
-      // acá no se mezclan.
-      let everBad = false;
+      // Restaurar una copia con un snapshot malo sin invalidar: quien lo aplicó sube sus elementos sin sus borrados
+      // (`resetForRestore`, O-B), así que se mezclan.
       let n = 0;
       for (let step = 0; step < 100; step++) {
         const r = rnd();
@@ -882,7 +880,7 @@ describe('al azar: tres dispositivos que compactan, la versión publicada, snaps
           await d.docs.flush(page);
         } else if (r < 0.58) {
           await d.engine.syncNow();
-        } else if (r < 0.62 && server.online && !restore) {
+        } else if (r < 0.62 && server.online) {
           // Un snapshot malo: le falta una fila, o borra una palabra que nadie borró.
           const missing = rnd() < 0.5;
           const id = await badSnapshot(server, page, (tail, doc) => {
@@ -896,10 +894,7 @@ describe('al azar: tres dispositivos que compactan, la versión publicada, snaps
             }
             return [];
           }).catch(() => null);
-          if (id) {
-            bad.add(server.snapshots.find((x) => x.id === id)!.chainId);
-            everBad = true;
-          }
+          if (id) bad.add(server.snapshots.find((x) => x.id === id)!.chainId);
         } else if (r < 0.66 && server.online) {
           // Alguien invalida la cadena vigente (a mano, o la comparación desde cero de otro).
           const valid = server.currentSnapshot(page);
@@ -926,7 +921,7 @@ describe('al azar: tres dispositivos que compactan, la versión publicada, snaps
           d.db.close();
           devs[i] = await compactor(server, { dbName: names[i - 1], compact: opts });
           lossy(devs[i]);
-        } else if (r < 0.86 && !restore && !everBad) {
+        } else if (r < 0.86 && !restore) {
           restore = server.backup();
           oldSinceBackup = [];
         } else if (r < 0.87 && restore && server.online) {
