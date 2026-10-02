@@ -20,6 +20,10 @@ export class KeySyncStore {
   online = true;
   /** Una base sin la migración. */
   missing = false;
+  /** Se llama justo antes de cada escritura (para simular otro dispositivo que escribe en el medio). */
+  beforeWrite?: () => void;
+  /** La política del asistente del workspace (`workspace_settings.assistant_policy`). */
+  policy: 'on' | 'local_only' | 'off' = 'on';
   /** Todo lo que salió hacia la base, tal cual (para buscar texto en claro). */
   sent: string[] = [];
   private clock = 0;
@@ -104,6 +108,7 @@ class Query implements PromiseLike<Res> {
     s.sent.push(JSON.stringify(this.filters));
     if (!s.online) throw new TypeError('Failed to fetch');
     if (s.missing) return { data: null, error: { code: 'PGRST205', message: "Could not find the table 'public.assistant_key_sync' in the schema cache" } };
+    if (this.op !== 'select') s.beforeWrite?.();
     if (this.values && Object.keys(this.values).some((k) => !COLUMNS.has(k))) {
       return { data: null, error: { code: '42501', message: 'permission denied for table assistant_key_sync' } };
     }
@@ -148,6 +153,9 @@ export class FakeKeySyncClient {
   ) {}
 
   from(table: string) {
+    if (table === 'workspace_settings') {
+      return { select: () => ({ maybeSingle: async () => ({ data: { assistant_policy: this.store.policy }, error: null }) }) };
+    }
     if (table !== 'assistant_key_sync') throw new Error(`tabla inesperada: ${table}`);
     return {
       select: (columns: string) => new Query(this.store, this.userId, 'select', null, columns),
