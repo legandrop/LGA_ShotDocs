@@ -385,6 +385,16 @@ describe('nombres de lo que se baja', () => {
     expect(second.endsWith(' (2).JPG')).toBe(true);
   });
 
+  it('O4: un emoji compuesto conserva su ZWJ en el zip y el corte por bytes no lo parte', () => {
+    const family = '👨\u200D👩\u200D👧\u200D👦';
+    expect(safeName(`${family} Familia.jpg`)).toBe(`${family} Familia.jpg`);
+    expect(safeName(`Toma${family}`)).toBe(`Toma${family}`);
+    // 115 « é » (230 bytes) más la familia (25 bytes) más `.jpg` pasan los 255: la familia se va entera, nunca a medias.
+    const cut = safeName(`${'é'.repeat(115)}${family}.jpg`);
+    expect(nameFits(cut)).toBe(true);
+    expect(cut).toBe(`${'é'.repeat(115)}.jpg`);
+  });
+
   it('nombres repetidos sin distinguir mayúsculas: « (2)», « (3)», también entre carpeta y archivo', () => {
     const ns = new NameSpace();
     ns.reserve('', 'MISSING_FILES.txt');
