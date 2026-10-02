@@ -1,6 +1,6 @@
 # Anotar sobre las fotos (P.20)
 
-**Estado: entregas 0 y 1 hechas (v0.0XX: el mapa, sus pruebas y ver las anotaciones; ver "Cómo quedó" al final); el
+**Estado: entregas 0 y 1 hechas (v0.116: el mapa, sus pruebas y ver las anotaciones; ver "Cómo quedó" al final); el
 anotador (entrega 2) sigue en diseño.** Pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.108. Las decisiones
 (AN1 a AN11, sección 12) son propuestas con la recomendación elegida: el número final lo pone quien las cierre con Lega.
 Auditado el 2026-10-02 (aprobado con condiciones): las correcciones ya están en el texto y resumidas al final
@@ -561,7 +561,7 @@ Auditoría independiente: **aprobado con condiciones**. Lo que pedía y dónde q
 | **O11** ⌘[ y ⌘] son atrás/adelante en la Mac | `preventDefault` probado en Safari y Chrome (sección 2, entrega 2, riesgo 10) |
 | **O12** Una sesión de solo anotar se junta con la versión anterior | Dicho en la sección 9; lo arregla la entrega 5 |
 
-## Cómo quedó (entregas 0 y 1, v0.0XX)
+## Cómo quedó (entregas 0 y 1, v0.116)
 
 **Entrega 0, la prueba técnica.** Pasó todo lo que se podía probar sin un teléfono:
 

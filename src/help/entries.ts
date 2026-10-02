@@ -107,7 +107,7 @@ const CAMERA = '0.110';
 /** El link público, *Can view* (Doc_Link_Publico.md, entrega 1): la versión se pone al publicar, igual que en el changelog. */
 const PUBLIC_LINK = '0.111';
 /** Ver las anotaciones de las fotos (P.20, Doc_Anotar_Fotos.md, entrega 1): la versión se pone al publicar. */
-const PHOTO_MARKUP = '0.115';
+const PHOTO_MARKUP = '0.116';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---

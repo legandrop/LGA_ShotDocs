@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.116 :
 
 Ver las anotaciones de las fotos (P.20, entregas 0 y 1 de `Doc_Anotar_Fotos.md`). No había dónde guardarlas ni cómo
 mostrarlas. Viven en un mapa del documento de la página (`photoMarkup`), afuera del contenido, con una clave por forma:
@@ -11,6 +11,17 @@ auditoría, cortar un texto en renglones es lineal (medía `renglón + palabra` 
 congelaban la página 6 s por cambio, ahora 12 ms), con topes, y no se dibuja sobre la tarjeta de una foto sin copia.
 Todavía no se puede anotar (entrega 2).
 [ Anotar fotos - entregas 0 y 1: el mapa de anotaciones, sus pruebas y verlas en la página, la celda, el carrete y el PDF ]
+
+v0.115 :
+
+Exportar (P.22), entrega 0. El PDF y el zip de una rama necesitan dibujar cada página fuera de la pantalla con el
+esquema real, y no se sabía si eso respetaba los cortes ni cuánto tardaba. Nuevo en `src/export/`: un editor de
+exportación sin colaboración ni interfaz que, por página, lee los bloques de una copia (`docs.snapshot`), espera las
+imágenes, copia la vista de impresión de siempre y la pagina; el plan de la rama sin la papelera, con avance y
+*Cancel*; un proyecto de prueba y su medición en Chromium. Con 300 páginas y 2219 fotos: entre 14,5 y 38,9 s, lo
+guardado de cada página igual byte por byte y las hojas de las 300 iguales a las marcas de la pantalla. Nada cambia para
+el usuario todavía.
+[ Exportar, entrega 0 - el editor de exportación medido con 300 páginas ]
 
 v0.114 :
 
