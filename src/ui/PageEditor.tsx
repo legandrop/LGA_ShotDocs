@@ -68,6 +68,7 @@ import { shortcutLabel, slashBadge } from './shortcuts';
 import { closeFindBar, isFindShortcut, openFindBar, openFindBarAt, takesFindShortcut } from './findUi';
 import { searchSession } from './projectSearchUi';
 import { registerRestoreTarget } from './historyUi';
+import { historyMarksExtension, type HistoryMarksInput } from './historyMarks';
 import { restoreInEditor } from './historyRestore';
 import { RemovedWritingBanner } from './RemovedWritingBanner';
 
@@ -275,6 +276,7 @@ export function BlockEditor({
   onBroken,
   filesNotice,
   preview = false,
+  marks,
 }: {
   doc: Y.Doc;
   /** Lo colapsado para vos (P.11): se actualiza en el lugar, así un editor que se vuelve a crear lo conserva. */
@@ -297,6 +299,11 @@ export function BlockEditor({
    * como el editor de la página (colapsar desde el menú, los bloques de los comentarios) ni muestra comentarios.
    */
   preview?: boolean;
+  /**
+   * Las marcas de "Show changes" de una versión del historial (historyMarks.ts): decoraciones, sin tocar el esquema ni
+   * el documento. Van con el documento que se muestra (el editor se crea de nuevo con cada uno).
+   */
+  marks?: HistoryMarksInput;
 }) {
   const { docs, files, media, user, db, folders } = useServices();
   const scheme = useScheme();
@@ -438,7 +445,8 @@ export function BlockEditor({
         user: { name: user.email, color: '#2383e2' },
       },
       // Las extensiones de la página (editorExtensions.ts): fotos en línea, buscar, deshacer, títulos y colapsar.
-      extensions: pageEditorExtensions(
+      extensions: [
+        ...pageEditorExtensions(
         canCollapse
           ? {
               initial: collapse,
@@ -452,7 +460,9 @@ export function BlockEditor({
               },
             }
           : null,
-      ),
+        ),
+        ...(marks ? [historyMarksExtension(marks)] : []),
+      ],
     }),
     [doc],
   );

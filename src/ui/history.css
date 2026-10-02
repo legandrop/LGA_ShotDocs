@@ -261,3 +261,126 @@
     font-weight: 600;
   }
 }
+
+/* --- Entrega 2: Show changes (decoraciones de historyMarks.ts) y el texto huérfano. --- */
+
+.history-changes {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--text-2);
+  cursor: pointer;
+  user-select: none;
+}
+
+.history-changes input {
+  margin: 0;
+}
+
+.history-version-loading {
+  max-width: var(--page-width);
+  margin: 24px auto;
+  padding: 0 16px;
+}
+
+/* Lo agregado: subrayado con un fondo suave del color de quien lo escribió. */
+.history-page .hist-add {
+  background: color-mix(in srgb, var(--hc) 16%, transparent);
+  text-decoration: underline 2px var(--hc);
+  text-underline-offset: 3px;
+  text-decoration-skip-ink: none;
+}
+
+/* Lo borrado: tachado en el color de quien lo borró, en el lugar donde estaba. */
+.history-page .hist-del {
+  color: var(--hc);
+  text-decoration: line-through 1.5px var(--hc);
+}
+
+/* Un bloque entero agregado o borrado: una barra de su color a la izquierda (el borrado, atenuado). */
+.history-page .hist-node.hist-block {
+  position: relative;
+  box-shadow: -10px 0 0 -7px var(--hc);
+}
+
+.history-page .hist-node-del.hist-block {
+  opacity: 0.6;
+}
+
+/* Una foto en línea (o algo de adentro de un bloque) agregada o borrada. */
+.history-page .hist-node-add:not(.hist-block) {
+  outline: 2px solid var(--hc);
+  outline-offset: 1px;
+}
+
+.history-page .hist-node-del:not(.hist-block) {
+  outline: 2px dashed var(--hc);
+  outline-offset: 1px;
+  opacity: 0.55;
+}
+
+/* Un bloque que cambió de tipo, de formato o de lugar: la barra punteada y el rótulo, chico, arriba a la derecha. */
+.history-page .hist-node-change.hist-block {
+  box-shadow: -10px 0 0 -8px var(--hc);
+}
+
+.history-page [data-hist-label]::after {
+  content: attr(data-hist-label);
+  position: absolute;
+  top: -2px;
+  right: 0;
+  padding: 0 6px;
+  border-radius: 4px;
+  font: 500 11px/18px var(--font-ui, system-ui, sans-serif);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--hc);
+  background: var(--bg);
+  border: 1px solid color-mix(in srgb, var(--hc) 45%, transparent);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* Con los cambios, la hoja sin las marcas de corte (lo borrado ocupa lugar y cortaría en otro lado). */
+.history-page.history-changes-on .sheet-break,
+.history-page.history-changes-on .sheet-breaks {
+  display: none;
+}
+
+/* El texto huérfano: lo que alguien escribió en algo que ya estaba borrado (no está en ninguna versión). */
+.history-orphan {
+  max-width: var(--page-width);
+  margin: 0 auto 12px;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--hc) 40%, var(--border));
+  border-left: 3px solid var(--hc);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--hc) 6%, var(--surface));
+}
+
+.history-orphan-who {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.history-orphan-text {
+  margin: 0 0 6px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--hc);
+  text-decoration: line-through 1px var(--hc);
+}
+
+@media (max-width: 760px) {
+  .history-screen.pane-list .history-changes {
+    display: none;
+  }
+
+  .history-orphan {
+    margin-left: 12px;
+    margin-right: 12px;
+  }
+}
