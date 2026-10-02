@@ -112,6 +112,8 @@ export interface BookPage {
   lowRes: number;
   /** Sus fotos solas pasaban el tope de un PDF: salieron todas achicadas (avisado arriba del título). */
   shrunkToFit: boolean;
+  /** Fotos cuyo original no llegó a tiempo (la bajada pasó su tope): salieron achicadas y la página va a la lista. */
+  timedOut: number;
   /** Milisegundos: leer y dibujar en el editor (por paso) y achicar las fotos (para medir). */
   ms?: ExportedPage['ms'] & { photos: number; load: number };
 }
@@ -131,6 +133,8 @@ export interface PdfBook {
   part: number | null;
   /** Peso de las fotos (bytes), con resolución completa. */
   bytes: number;
+  /** Los originales ya traídos de la primera página de la parte siguiente (la que no entró): se pasan a esa parte. */
+  carry: Map<string, Blob> | null;
   indexSheets: number;
   sheets: number;
   /** Las reglas `@page` para imprimir. */
@@ -165,6 +169,12 @@ export interface BuildOptions {
   convertHeic?: ((blob: Blob) => Promise<Blob>) | null;
   /** Cuánto se espera a que carguen las fotos cambiadas de cada página (las pruebas, sin cargar imágenes: 0). */
   photoLoadMs?: number;
+  /** Los originales que dejó la parte anterior (`PdfBook.carry`): no se vuelven a bajar. */
+  carry?: Map<string, Blob> | null;
+  /** Píxeles que se pueden estar convirtiendo a la vez (`DECODE_PIXELS`; las pruebas lo achican). */
+  decodePixels?: number;
+  /** El tope de tiempo de cada bajada de un original (`ORIGINAL_TIMEOUT_MS`; las pruebas lo achican). */
+  downloadMs?: number;
   /** Desde qué página del plan arranca este libro (el PDF en partes: donde terminó la parte anterior). */
   from?: number;
   /** El número de esta parte (1 la primera). */
@@ -324,7 +334,7 @@ export async function buildPdf(options: BuildOptions): Promise<PdfBook> {
     views.add(view);
     view.page.append(el('h1', 'page-title', page.title.trim() || t('common.untitled')));
     noteLine(view, t(reason === 'photos' ? 'exportPdf.failedPhotos' : 'exportPdf.failedPage'));
-    place(view, page, { outdated: false, unknown: false, failed: true, failReason: reason, imagesTimedOut: false, lowRes: 0, shrunkToFit: false });
+    place(view, page, { outdated: false, unknown: false, failed: true, failReason: reason, imagesTimedOut: false, lowRes: 0, shrunkToFit: false, timedOut: 0 });
   };
 
   /** Con el progreso de lo elegido entero (no el de esta parte). */
@@ -343,6 +353,7 @@ export async function buildPdf(options: BuildOptions): Promise<PdfBook> {
       if (options.signal?.aborted) throw new ExportCancelled();
     }
     let to = from + plan.length;
+    let carry: Map<string, Blob> | null = null;
     await renderPages(plan, options.source, options.editor, {
       signal: options.signal,
       onProgress: progress,
@@ -364,7 +375,17 @@ export async function buildPdf(options: BuildOptions): Promise<PdfBook> {
         const first = pages.length === 0;
         const own = new PixelBudget(first ? budget.limit : budget.limit - budget.used, first ? budget.byteLimit : budget.byteLimit - budget.bytes);
         const shrinkWith = (b: PixelBudget, fullSize: boolean) =>
-          shrinkImages(view.root, { source: options.images, budget: b, resizer, signal: options.signal, full: fullSize, convertHeic: options.convertHeic });
+          shrinkImages(view.root, {
+            source: options.images,
+            budget: b,
+            resizer,
+            signal: options.signal,
+            full: fullSize,
+            convertHeic: options.convertHeic,
+            carry: options.carry,
+            decodePixels: options.decodePixels,
+            downloadMs: options.downloadMs,
+          });
         let shrunk: Awaited<ReturnType<typeof shrinkImages>>;
         let shrunkToFit = false;
         try {
@@ -374,6 +395,7 @@ export async function buildPdf(options: BuildOptions): Promise<PdfBook> {
           if (!first) {
             // No entra en esta parte: va primera en la siguiente (se vuelve a dibujar ahí).
             to = from + plan.indexOf(page);
+            carry = err.fetched && err.fetched.size > 0 ? err.fetched : null;
             drop(view);
             return 'stop';
           }
@@ -400,7 +422,7 @@ export async function buildPdf(options: BuildOptions): Promise<PdfBook> {
         if (shrunk.shrunk + shrunk.full > 0) await imagesLoaded(view.root, options.photoLoadMs ?? 6000);
         const ms = { ...out.ms, photos: t1 - t0, load: performance.now() - t1, ...Object.fromEntries(Object.entries(shrunk.ms).map(([k, v]) => [`photo_${k}`, v])) };
         const lowRes = shrunkToFit ? shrunk.shrunk + shrunk.kept : shrunk.lowRes;
-        place(view, page, { outdated, unknown, failed: false, imagesTimedOut: out.imagesTimedOut, lowRes, shrunkToFit, ms });
+        place(view, page, { outdated, unknown, failed: false, imagesTimedOut: out.imagesTimedOut, lowRes, shrunkToFit, timedOut: shrunk.timedOut, ms });
       },
       onFailed: (page) => placeFailed(page, 'error'),
     });
@@ -468,6 +490,7 @@ export async function buildPdf(options: BuildOptions): Promise<PdfBook> {
       named: options.named,
       pixels: budget.used,
       bytes: budget.bytes,
+      carry,
       commentsStale,
       destroy,
     };

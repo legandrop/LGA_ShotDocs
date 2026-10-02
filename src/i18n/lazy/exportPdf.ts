@@ -107,8 +107,16 @@ export const exportPdf = {
     en: { one: "{count} page has too many photos for one PDF: its photos are at a lower resolution.", other: "{count} pages have too many photos for one PDF: their photos are at a lower resolution." },
     es: { one: "{count} página tiene demasiadas fotos para un PDF: sus fotos van en menor resolución.", other: "{count} páginas tienen demasiadas fotos para un PDF: sus fotos van en menor resolución." },
   },
-  'exportDialog.failedList': { en: "These pages could not be exported:", es: "Estas páginas no se pudieron exportar:" },
+  'exportDialog.failedList': { en: "These pages could not be exported in full:", es: "Estas páginas no se pudieron exportar enteras:" },
   'exportDialog.failedTooBig': { en: "too many photos for one PDF", es: "demasiadas fotos para un PDF" },
+  'exportDialog.failedTimeout': {
+    en: "some photos took too long to download and are at a lower resolution",
+    es: "algunas fotos tardaron demasiado en bajar y van en menor resolución",
+  },
+  'exportDialog.printFirst': {
+    en: "Open the print dialog and save this PDF first: this replaces it.",
+    es: "Abrí primero el diálogo de imprimir y guardá este PDF: esto lo reemplaza.",
+  },
   'exportDialog.retry': { en: "Export again", es: "Exportar de nuevo" },
   'exportDialog.retryLabel': { en: "Export “{title}” again, on its own", es: "Exportar “{title}” de nuevo, sola" },
   'exportDialog.ready': {

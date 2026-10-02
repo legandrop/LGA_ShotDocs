@@ -501,7 +501,10 @@ describe('exportar 1b: la ventana', () => {
   });
 
   it('en partes: arma la primera, abre el diálogo, y *Prepare part 2* arma la siguiente soltando la anterior', async () => {
-    const { device, root } = await photoProject(5, 0);
+    const { device, root, ids } = await photoProject(5, 0);
+    // Una página de la parte 1 falla: la lista va recién al terminar (en la última parte), no antes.
+    const snapshot = device.docs.snapshot.bind(device.docs);
+    vi.spyOn(device.docs, 'snapshot').mockImplementation((id: string) => (id === ids[1] ? Promise.reject(new Error('rota')) : snapshot(id)));
     const original = PDF_LIMITS.desktop.pages;
     PDF_LIMITS.desktop.pages = 2;
     const print = vi.fn();
@@ -510,12 +513,15 @@ describe('exportar 1b: la ventana', () => {
       const host = await mount(device, { kind: 'page', id: root });
       await act(async () => button(host, 'Export PDF')!.click());
       await waitFor(host, 'Part 1 ready: pages 1 to 2 of 5');
+      expect(host.textContent).toContain('1 page could not be exported (marked in the PDF).');
+      expect(host.querySelector('.export-failed')).toBeNull();
       expect(print).toHaveBeenCalledTimes(1);
       expect(document.title).toMatch(/Part 1$/);
       window.dispatchEvent(new Event('afterprint'));
       expect(host.textContent).toContain('Save this part first');
       await act(async () => button(host, 'Prepare part 2')!.click());
       await waitFor(host, 'Part 2 ready: pages 3 to 4 of 5');
+      expect(host.querySelector('.export-failed')).toBeNull();
       // Nunca dos partes en la memoria.
       expect(document.querySelectorAll('.sd-export-book')).toHaveLength(1);
       expect(print).toHaveBeenCalledTimes(2);
@@ -524,6 +530,7 @@ describe('exportar 1b: la ventana', () => {
       await waitFor(host, 'Part 3 ready: pages 5 to 5 of 5');
       expect(host.textContent).toContain('This is the last part.');
       expect(button(host, 'Prepare part 4')).toBeUndefined();
+      expect(host.querySelector('.export-failed a')?.textContent).toBe('Día 1');
       window.dispatchEvent(new Event('afterprint'));
     } finally {
       PDF_LIMITS.desktop.pages = original;
@@ -543,7 +550,7 @@ describe('exportar 1b: la ventana', () => {
     await waitFor(host, /Ready: \d+ PDF pages?\./);
     window.dispatchEvent(new Event('afterprint'));
     const list = host.querySelector('.export-failed')!;
-    expect(list.textContent).toContain('These pages could not be exported:');
+    expect(list.textContent).toContain('These pages could not be exported in full:');
     const link = list.querySelector('a')!;
     expect(link.textContent).toBe('Día 2');
     expect(link.getAttribute('href')).toBe(`/p/${bad}`);
@@ -578,5 +585,178 @@ describe('exportar 1b: la ventana', () => {
     await act(async () => host.querySelector<HTMLAnchorElement>('.export-failed a')!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 })));
     expect(closed).toBe(1);
     expect(location.pathname).toBe(`/p/${ids[1]}`);
+  });
+});
+
+// --- Las correcciones de la auditoría (O1 a O8) ------------------------------------------------------------------
+
+describe('exportar 1b: correcciones de la auditoría', () => {
+  it('O1: *Cancel* vuelve enseguida aunque una bajada de un original quede colgada, y la bajada se corta', async () => {
+    stubUrls();
+    const root = viewWithPhotos(3);
+    const controller = new AbortController();
+    const signals: AbortSignal[] = [];
+    const source: ImageSource = {
+      best: async () => null,
+      // Nunca contesta (la red del set floja, el portero trabado).
+      original: (_id, signal) => {
+        if (signal) signals.push(signal);
+        return new Promise<Blob | null>(() => undefined);
+      },
+      isPhoto: async () => true,
+    };
+    const t0 = performance.now();
+    const pending = shrinkImages(root, { source, budget: new PixelBudget(1e10, 1e10), resizer: fakeResizer(), full: true, signal: controller.signal });
+    setTimeout(() => controller.abort(), 30);
+    await pending;
+    expect(performance.now() - t0).toBeLessThan(1000);
+    // La señal llegó a la bajada y quedó cortada.
+    expect(signals.length).toBeGreaterThan(0);
+    expect(signals.every((s) => s.aborted)).toBe(true);
+    // Ninguna foto cambió.
+    for (const img of root.querySelectorAll('img')) expect(img.getAttribute('src')).toMatch(/^https:\/\/thumbs\.test\//);
+  });
+
+  it('O1: una bajada que pasa su tope de tiempo sale achicada, contada, y la página va a la lista de D88', async () => {
+    stubUrls();
+    const root = viewWithPhotos(2);
+    const view = new Blob(['v'], { type: 'image/x-2048x1536' });
+    const source: ImageSource = {
+      best: async () => view,
+      original: (id) => (id === ID(0) ? new Promise<Blob | null>(() => undefined) : Promise.resolve(jpegBlob(4032, 3024, { size: 1000 }))),
+      isPhoto: async () => true,
+    };
+    const out = await shrinkImages(root, { source, budget: new PixelBudget(1e10, 1e10), resizer: fakeResizer(), full: true, downloadMs: 40 });
+    expect(out.full).toBe(1);
+    expect(out.timedOut).toBe(1);
+    expect(out.lowRes).toBe(1);
+    expect(out.shrunk).toBe(1);
+
+    // En el libro: la página queda marcada con lo que no llegó (la ventana la suma a la lista de las que fallaron).
+    photosHaveWidth();
+    const { device, root: branch, ids } = await photoProject(3, 2);
+    const plan = exportPlan(device.tree, 'page', branch);
+    let n = 0;
+    const slow: ImageSource = { ...source, original: () => (n++ === 0 ? new Promise<Blob | null>(() => undefined) : Promise.resolve(jpegBlob(4032, 3024, { size: 1000 }))) };
+    const book = await build(device, plan, { images: slow, full: true, downloadMs: 40 });
+    expect(book.pages.find((p) => p.id === ids[1])?.timedOut).toBe(1);
+    expect(book.pages.find((p) => p.id === ids[2])?.timedOut).toBe(0);
+    book.destroy();
+  });
+
+  it('O2: las fotos que se pasan a JPEG entero van de a pocas (por píxeles), y una gigante sale achicada', async () => {
+    stubUrls();
+    const root = viewWithPhotos(6);
+    let open = 0;
+    let most = 0;
+    const base = fakeResizer();
+    const resizer: Resizer = {
+      async open(blob) {
+        const d = await base.open(blob);
+        if (!d) return null;
+        open++;
+        most = Math.max(most, open);
+        await new Promise((r) => setTimeout(r, 5));
+        return { ...d, close: () => void open-- };
+      },
+    };
+    // Fotos de 50 MP giradas: con 150 millones en curso, como mucho dos a la vez (antes, cuatro).
+    const rotated = () => jpegBlob(8192, 6144, { orientation: 6, size: 20_000_000 });
+    const out = await shrinkImages(root, { source: { best: async () => null, original: async () => rotated() }, budget: new PixelBudget(1e12, 1e12), resizer, full: true });
+    expect(out.full).toBe(6);
+    expect(most).toBe(2);
+
+    // Una de 108 MP girada: no se pasa entera (sale achicada, contada, sin dibujarla a tamaño completo).
+    const root2 = viewWithPhotos(1);
+    const r2 = fakeResizer();
+    const out2 = await shrinkImages(root2, {
+      source: { best: async () => new Blob(['v'], { type: 'image/x-2048x1536' }), original: async () => jpegBlob(12000, 9000, { orientation: 6, size: 44_000_000 }) },
+      budget: new PixelBudget(1e12, 1e12),
+      resizer: r2,
+      full: true,
+    });
+    expect(out2.full).toBe(0);
+    expect(out2.lowRes).toBe(1);
+    expect(r2.draws.every(([w, h]) => w * h < 100_000_000)).toBe(true);
+    // Un JPEG derecho gigante sí pasa tal cual (no se decodifica).
+    const root3 = viewWithPhotos(1);
+    const out3 = await shrinkImages(root3, { source: { best: async () => null, original: async () => jpegBlob(12000, 9000, { size: 44_000_000 }) }, budget: new PixelBudget(1e12, 1e12), resizer: fakeResizer(), full: true });
+    expect(out3.full).toBe(1);
+  });
+
+  it('O3: sin red y sin la ficha de la foto (no se sabe si es foto), la que sale como miniatura se cuenta igual', async () => {
+    stubUrls();
+    const root = viewWithPhotos(2);
+    const out = await shrinkImages(root, {
+      source: { best: async () => new Blob(['v'], { type: 'image/x-480x360' }), original: async () => null, isPhoto: async () => null },
+      budget: new PixelBudget(1e10, 1e10),
+      resizer: fakeResizer(),
+      full: true,
+    });
+    expect(out.lowRes).toBe(2);
+    // Con la cola de verdad: sin ficha (`kind: null`, sin tipo) no se sabe; un adjunto (con tipo) no cuenta.
+    const media = {
+      localImage: async () => null,
+      view: async () => null,
+      source: async (id: string) => (id === 'pdf' ? { kind: null, name: 'a.pdf', original: null, mime: 'application/pdf' } : { kind: null, name: '', original: null }),
+    };
+    const images = deviceImages(media as never, {});
+    expect(await images.isPhoto!('sin-ficha')).toBeNull();
+    expect(await images.isPhoto!('pdf')).toBe(false);
+  });
+
+  it('O6: la página que no entra en una parte no vuelve a bajar sus originales en la siguiente', async () => {
+    stubUrls();
+    photosHaveWidth();
+    const { device, root } = await photoProject(7, 2);
+    const plan = exportPlan(device.tree, 'page', root);
+    const asked: string[] = [];
+    const source: ImageSource = { best: async () => null, original: async (id) => (asked.push(id), jpegBlob(4032, 3024, { size: 3_000_000 })), isPhoto: async () => true };
+    let from = 0;
+    let carry: Map<string, Blob> | null = null;
+    let parts = 0;
+    for (let part = 1; from < plan.length; part++) {
+      const book = await build(device, plan, { images: source, full: true, limits: limits({ bytes: 13_000_000 }), from, part, carry });
+      carry = book.carry;
+      from = book.to;
+      parts++;
+      book.destroy();
+    }
+    expect(parts).toBeGreaterThan(1);
+    // 12 fotos, cada una pedida una sola vez.
+    expect(asked).toHaveLength(12);
+    expect(new Set(asked).size).toBe(12);
+  });
+
+  it('O7: en un táctil, *Prepare part 2* y *Export again* esperan a que se abra el diálogo de imprimir', async () => {
+    const { device, root, ids } = await photoProject(3, 0);
+    const snapshot = device.docs.snapshot.bind(device.docs);
+    vi.spyOn(device.docs, 'snapshot').mockImplementation((id: string) => (id === ids[1] ? Promise.reject(new Error('rota')) : snapshot(id)));
+    vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => ({ matches: query === '(pointer: coarse)', media: query, addEventListener: () => undefined, removeEventListener: () => undefined }) as never);
+    const print = vi.fn();
+    vi.stubGlobal('print', print);
+    const original = PDF_LIMITS.touch.pages;
+    PDF_LIMITS.touch.pages = 2;
+    try {
+      const host = await mount(device, { kind: 'page', id: root });
+      await act(async () => button(host, 'Export PDF')!.click());
+      await waitFor(host, 'Part 1 ready');
+      // En el teléfono el diálogo no se abre solo, y la siguiente parte no puede soltar esta sin guardarla.
+      expect(print).not.toHaveBeenCalled();
+      const next = button(host, 'Prepare part 2')!;
+      expect(next.disabled).toBe(true);
+      expect(next.getAttribute('data-tip')).toContain('save this PDF first');
+      await act(async () => button(host, 'Open the print dialog')!.click());
+      expect(print).toHaveBeenCalledTimes(1);
+      expect(button(host, 'Prepare part 2')!.disabled).toBe(false);
+      await act(async () => button(host, 'Prepare part 2')!.click());
+      await waitFor(host, 'Part 2 ready');
+      const again = host.querySelector<HTMLButtonElement>('.export-failed button')!;
+      expect(again.disabled).toBe(true);
+      await act(async () => button(host, 'Open the print dialog')!.click());
+      expect(host.querySelector<HTMLButtonElement>('.export-failed button')!.disabled).toBe(false);
+    } finally {
+      PDF_LIMITS.touch.pages = original;
+    }
   });
 });

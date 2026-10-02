@@ -2,14 +2,15 @@
 
 v0.0XX :
 
-Exportar, entrega 1b: los cambios de Lega al PDF (D84, D85 y D88). Las fotos del PDF salían achicadas a 200 ppp, un proyecto que
-pasaba el tope solo ofrecía exportar por ramas y una página que fallaba quedaba apenas marcada en el PDF. Ahora cada foto
-va con su original (del dispositivo o bajado por el portero): un JPEG derecho entra tal cual y uno girado por EXIF, una
-PNG o un HEIC se pasan antes a JPEG del mismo tamaño en Workers (Chrome los recodificaba al imprimir, con seis veces el
-peso). *Smaller file* vuelve a las achicadas. Si no entra en un PDF, sale en partes por páginas enteras (*Part 1*,
-*Part 2*…, una por vez, con tope de peso y de píxeles); al terminar, la lista de las que fallaron con su link y *Export
-again*.
+Exportar, entrega 1b: los cambios de Lega al PDF (D84, D85 y D88). Las fotos salían achicadas a 200 ppp, lo que pasaba
+el tope solo se podía exportar por ramas y una página que fallaba quedaba apenas marcada. Ahora cada foto va con su
+original (del dispositivo o por el portero): un JPEG derecho entra tal cual; uno girado por EXIF, una PNG o un HEIC se
+pasan antes a JPEG del mismo tamaño en Workers, de a pocas por píxeles (Chrome los recodificaba con seis veces el
+peso). *Smaller file* vuelve a las achicadas. Lo que no entra sale en partes por páginas enteras (*Part 1*, *Part 2*…,
+una por vez, con tope de peso); al terminar, la lista de las que fallaron con su link y *Export again*. *Cancel* corta
+las bajadas, que tienen tope de 90 s.
 [ Exportar 1b - fotos en resolución completa, el PDF en partes y la lista de las páginas que fallaron ]
+
 v0.132 :
 
 Deshacer, entrega 0 (B.21, `Doc_Deshacer.md`, sección 16). Deshacer lo escrito dejaba restos ("la ía" en vez de "la ")

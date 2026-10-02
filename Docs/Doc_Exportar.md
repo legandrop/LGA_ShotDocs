@@ -999,7 +999,7 @@ soltando la anterior ("Save this part first"); en la última, "This is the last 
 "Part 2 · pages 34 to 55 of 300" y solo lleva sus páginas; un link a una página de otra parte queda como texto. Al
 terminar (la última parte o el único PDF), **la lista de las páginas que fallaron** (D88), juntas de todas las partes:
 el título como link (cierra la ventana y abre la página; con Ctrl/⌘ o la rueda, en otra pestaña) y *Export again*, que
-la exporta sola en un PDF aparte y la saca de la lista si sale bien. La ayuda (*Export pages and projects as one PDF*)
+la exporta sola en un PDF aparte y la saca de la lista si sale bien. La ayuda (*Export pages and projects as PDF*, antes "as one PDF")
 lo cuenta; sin atajos nuevos.
 
 **Cómo está hecho:**
@@ -1048,3 +1048,32 @@ prueba sale en unas 17 partes; con *Smaller file*, en una.
 **Lo que no se midió (para Lega, a mano):** el diálogo de imprimir de verdad con *Save as PDF* y su vista previa con
 una parte de 500 MB (Chrome y Edge, también en una compu de 8 GB), originales reales de iPhone (HEIC y JPEG con P3) por
 el portero de verdad (tiempo de bajada y pedidos al Worker: unos dos por foto), Safari, Firefox y el iPhone con partes.
+
+### Correcciones de la auditoría de la entrega 1b (O1 a O9)
+
+- **O1 · *Cancel* con una bajada colgada.** La señal de cortar llega a cada bajada (`original` y `best` de
+  `deviceImages`, `porteroDownload` y su `fetch`), y cada foto corre en carrera con ella: *Cancel* vuelve enseguida
+  aunque un `fetch` no termine nunca. Cada bajada tiene un tope de tiempo (`ORIGINAL_TIMEOUT_MS`, 90 s: un original de
+  44 MB a 1 MB/s entra); la que vence sale achicada, se cuenta, y su página va a la lista de D88 ("some photos took too
+  long to download…") para *Export again*.
+- **O2 · Fotos gigantes giradas.** Lo que se pasa a JPEG entero va de a pocas: un semáforo por píxeles
+  (`DECODE_PIXELS`, 150 millones en curso: dos fotos de 61 MP, o una sola más grande; una de medidas desconocidas, como
+  un HEIC, sola). Más de 100 millones (`MAX_CONVERT_PIXELS`) no se pasa entera: se achica a su ancho impreso desde su
+  propio original, sola, y se cuenta. El peso del JPEG nuevo vuelve a chequearse contra el tope. **Medido de nuevo**
+  (arnés `parts.tsx`, Chromium sin ventana, todas giradas): 13 fotos de 50 MP, **+2,1 GB** (la auditoría midió +3,4 GB
+  de a cuatro); 13 de 108 MP, **+1,1 GB** (antes +6,6 GB), achicadas desde el original; las de teléfono en partes de
+  500 MB, +1,4 a +3,1 GB (como antes).
+- **O3 · Sin red, las miniaturas no se contaban.** `isPhoto` dice `null` cuando no se sabe (sin red y sin la ficha
+  guardada) y eso se cuenta igual; solo un video o un adjunto (con tipo conocido) no cuentan.
+- **O4 · README** al día (resolución completa, *Smaller file*, partes, la lista). **O5 · Ayuda:** el título pasa a
+  *Export pages and projects as PDF*.
+- **O6 · Originales bajados dos veces.** Si una página no entra en una parte, los originales que ya trajo pasan a la
+  siguiente (`PhotoLimitError.fetched` → `PdfBook.carry` → `BuildOptions.carry`): como mucho los de una página.
+  Probado: 12 fotos en 3 partes, 12 pedidos.
+- **O7 · *Export again* en el teléfono.** En un táctil, *Prepare part N* y *Export again* quedan apagados (con su
+  `data-tip`) hasta que se abre el diálogo de imprimir de lo que está listo: así nada se suelta sin guardarse.
+- **O8 · Prueba de la lista solo al final.** La prueba de las partes hace fallar una página de la parte 1 y comprueba
+  que la lista no aparece en las partes 1 y 2 y sí en la 3.
+- **O9 · El PDF con originales para quien solo ve.** No es una decisión nueva: Lega ya decidió en D60 que el PDF lo
+  saca cualquiera que vea (el zip, solo dueño y admins). Con D85 ese PDF lleva las fotos en su resolución original.
+- **O10 y O11** (el margen de 500 MB en una compu de 8 GB; Safari y Firefox sin medir) quedan para la prueba a mano.

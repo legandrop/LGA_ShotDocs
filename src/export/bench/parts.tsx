@@ -13,7 +13,7 @@
 // y `rotated` de ellas llevan el giro de EXIF de una foto vertical de teléfono (se pasan a JPEG en los Workers).
 //
 // Parámetros: `pages`, `photos`, `full=0|1`, `photoW`, `rotated` (0 a 1), `bytes` y `fullPixels` (los topes, en MB y
-// millones), `comments=0|1`.
+// millones), `comments=0|1`, `base` (cuántas fotos distintas).
 import '@blocknote/core/fonts/inter.css';
 import '@blocknote/mantine/style.css';
 import '../../ui/drive.css';
@@ -40,6 +40,8 @@ const FULL = q.get('full') !== '0';
 const PHOTO_W = Number(q.get('photoW') ?? 4032);
 const ROTATED = Number(q.get('rotated') ?? 0.25);
 const COMMENTS = q.get('comments') === '1';
+/** Cuántas fotos distintas hay de base (con fotos gigantes, menos: cada una se arma en un lienzo entero). */
+const BASE = Number(q.get('base') ?? 24);
 const LIMITS = {
   ...PDF_LIMITS.desktop,
   ...(q.get('bytes') ? { bytes: Number(q.get('bytes')) * 1e6 } : {}),
@@ -145,7 +147,7 @@ async function run() {
   }
   await d.engine.syncNow();
   const base: Uint8Array[] = [];
-  if (FULL) for (let n = 0; n < 24; n++) base.push(await noisyJpeg(n, PHOTO_W));
+  if (FULL) for (let n = 0; n < BASE; n++) base.push(await noisyJpeg(n, PHOTO_W));
   const plan = exportPlan(d.tree, 'project', projectId);
   const before = new Map<string, string>();
   for (const p of plan) before.set(p.id, await storedHash(d, p.id));

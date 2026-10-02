@@ -40,7 +40,7 @@ type Phase =
   | { name: 'failed' };
 
 /** Una página que no se pudo exportar (D88): se juntan las de todas las partes. */
-type Failure = { id: string; title: string; reason: 'error' | 'photos' };
+type Failure = { id: string; title: string; reason: 'error' | 'photos' | 'timeout' };
 
 /** Las páginas de una elección (la raíz sola, la rama o el proyecto). */
 function planFor(tree: PageTree, target: ExportTarget, scope: Scope): ExportPlanPage[] {
@@ -86,6 +86,8 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
   const title = target.kind === 'project' ? (tree.project(target.id)?.name ?? '') : (tree.get(target.id)?.title ?? '');
   const shownTitle = title.trim() || tr('common.untitled');
   const [failures, setFailures] = useState<Failure[]>([]);
+  /** El diálogo de imprimir ya se abrió para el PDF listo (en un táctil no se abre solo: hasta entonces, nada lo suelta). */
+  const [printed, setPrinted] = useState(false);
   const online = status.online && (typeof navigator === 'undefined' || navigator.onLine !== false);
   const working = phase.name === 'working' || zipBusy;
 
@@ -107,6 +109,7 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
 
   function openPrint(current: PdfBook) {
     unprint.current?.();
+    setPrinted(true);
     try {
       unprint.current = printBook(current, { touch, onDone: () => (unprint.current = null) });
     } catch {
@@ -140,8 +143,11 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
     const what = only ? [{ ...only, depth: 0, parent: null }] : plan;
     if (what.length === 0) return;
     unprint.current?.();
+    // Los originales ya traídos de la página que no entró en la parte anterior (D84: no se bajan dos veces).
+    const carry = !only && from > 0 && book.current?.to === from ? book.current.carry : null;
     book.current?.destroy();
     book.current = null;
+    setPrinted(false);
     const controller = new AbortController();
     abort.current = controller;
     setPhase({ name: 'working', progress: null, part: only ? 1 : part, first: what[only ? 0 : from]?.title });
@@ -162,6 +168,7 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
         plan: what,
         from: only ? 0 : from,
         part: only ? 1 : part,
+        carry,
         source: docs,
         editor,
         gap: (id) => {
@@ -193,7 +200,10 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
       }
       book.current = result;
       // Las que fallaron, juntas (D88): las de esta parte se suman; la reexportada sola sale de la lista si salió bien.
-      const failedNow: Failure[] = result.pages.filter((p) => p.failed).map((p) => ({ id: p.id, title: p.title, reason: p.failReason ?? 'error' }));
+      // También las que salieron con alguna foto cuyo original no llegó a tiempo: *Export again* lo vuelve a intentar.
+      const failedNow: Failure[] = result.pages
+        .filter((p) => p.failed || p.timedOut > 0)
+        .map((p) => ({ id: p.id, title: p.title, reason: p.failed ? (p.failReason ?? 'error') : 'timeout' }));
       setFailures((list) => {
         const rest = list.filter((f) => !result.pages.some((p) => p.id === f.id));
         return [...rest, ...failedNow];
@@ -238,6 +248,8 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
   const lowRes = pages.reduce((sum, p) => sum + (p.shrunkToFit ? 0 : p.lowRes), 0);
   /** Terminó todo lo elegido (la última parte, o el único PDF): ahí va la lista de las que fallaron (D88). */
   const finished = phase.name === 'ready' && phase.book.to >= phase.book.total;
+  /** En un táctil, lo listo se suelta solo después de abrir su diálogo (si no, se perdería sin guardar). */
+  const mustPrintFirst = touch && phase.name === 'ready' && !printed;
 
   return (
     <div className="modal-backdrop" onClick={close}>
@@ -381,7 +393,14 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
                           {shown}
                         </a>
                         {f.reason === 'photos' && <span className="muted small">{tr('exportDialog.failedTooBig')}</span>}
-                        <button className="small" aria-label={tr('exportDialog.retryLabel', { title: shown })} onClick={() => retry(f.id)}>
+                        {f.reason === 'timeout' && <span className="muted small">{tr('exportDialog.failedTimeout')}</span>}
+                        <button
+                          className="small"
+                          aria-label={tr('exportDialog.retryLabel', { title: shown })}
+                          disabled={mustPrintFirst}
+                          {...(mustPrintFirst ? { 'data-tip': tr('exportDialog.printFirst') } : {})}
+                          onClick={() => retry(f.id)}
+                        >
                           {tr('exportDialog.retry')}
                         </button>
                       </li>
@@ -399,7 +418,12 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
                   <button className={touch ? 'primary' : ''} onClick={() => openPrint(phase.book)}>
                     {tr('exportDialog.print')}
                   </button>
-                  <button className={touch ? '' : 'primary'} onClick={() => void run(phase.book.to, (phase.book.part ?? 1) + 1)}>
+                  <button
+                    className={touch ? '' : 'primary'}
+                    disabled={mustPrintFirst}
+                    {...(mustPrintFirst ? { 'data-tip': tr('exportDialog.printFirst') } : {})}
+                    onClick={() => void run(phase.book.to, (phase.book.part ?? 1) + 1, null)}
+                  >
                     {tr('exportDialog.nextPart', { part: (phase.book.part ?? 1) + 1 })}
                   </button>
                 </>
