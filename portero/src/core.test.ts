@@ -117,6 +117,8 @@ function fakeWorld() {
   /** Lo que pasa en la base justo antes de confirmar la carpeta (otra persona que restaura, por ejemplo). */
   let beforeConfirm: ((id: string) => void) | null = null;
   let connectEmail = 'lega@example.com';
+  /** La búsqueda de un archivo por su marca falla (Drive responde 500). */
+  let searchFails = false;
   /** En la papelera: él mismo o alguna carpeta de arriba (como Drive). */
   const inTrash = (id: string, seen = new Set<string>()): boolean => {
     const f = files.get(id);
@@ -252,6 +254,16 @@ function fakeWorld() {
       const q = url.searchParams.get('q') ?? '';
       const parent = /^'([^']+)' in parents$/.exec(q)?.[1];
       if (parent) return jsonRes({ files: [...files.entries()].filter(([, f]) => f.parents.includes(parent)).map(([id, f]) => describe(id, f)) });
+      // La búsqueda de un archivo de la app por su marca (antes de abrir una subida y en `only: 'known'`).
+      const fileMark = /^appProperties has \{ key='sdFile' and value='([0-9a-f-]{36})' \} and trashed = false and mimeType != 'application\/vnd\.google-apps\.folder'$/.exec(q)?.[1];
+      if (fileMark) {
+        if (searchFails) return jsonRes({ error: 'backend error' }, 500);
+        return jsonRes({
+          files: [...files.entries()]
+            .filter(([id, f]) => f.mime !== 'application/vnd.google-apps.folder' && !inTrash(id) && f.appProperties?.sdFile === fileMark)
+            .map(([id, f]) => ({ ...describe(id, f), size: String(f.data.length) })),
+        });
+      }
       const mark = /^mimeType = 'application\/vnd\.google-apps\.folder' and appProperties has \{ key='sdProject' and value='([0-9a-f-]{36})' \}$/.exec(q)?.[1];
       if (!mark) return jsonRes({ error: `unexpected q ${q}` }, 400);
       return jsonRes({
@@ -370,6 +382,8 @@ function fakeWorld() {
     beforeConfirm: (hook: typeof beforeConfirm) => (beforeConfirm = hook),
     /** La cuenta de Google con la que se conecta Drive la próxima vez. */
     connectAs: (email: string) => (connectEmail = email),
+    /** La búsqueda de un archivo por su marca falla. */
+    failSearch: (fail = true) => (searchFails = fail),
     inTrash,
   };
 }
@@ -2027,6 +2041,68 @@ describe('portero: códigos, /verify, only known y ?offline=1', () => {
     expect(done.status).toBe('done');
     const again = await startFile(p, 'editor-jwt', { file: FILE_A, size: 1000, only: 'known' });
     expect(await again.json()).toMatchObject({ status: 'done', linked: true });
+  });
+
+  it("entrega 2: el portero que perdió `file:<id>` encuentra el archivo por su marca (only: 'known' y antes de abrir)", async () => {
+    const { world, store, p } = await setup();
+    addBaseFile(world, FILE_A);
+    const done = await uploadFile(p, 'editor-jwt', FILE_A, bytes(1000));
+    expect(done.status).toBe('done');
+    const driveId = (done.file as { id: string }).id;
+    // Se restauró la base (sin `drive_id`) y el portero perdió lo que recordaba del archivo.
+    world.base.get(FILE_A)!.drive_id = null;
+    store.data.delete(`file:${FILE_A}`);
+    const calls = world.calls.length;
+    const known = await startFile(p, 'editor-jwt', { file: FILE_A, size: 1000, day: '2026-09-30', only: 'known' });
+    expect(await known.json()).toMatchObject({ status: 'done', linked: true, file: { id: driveId, size: 1000 } });
+    // Sin abrir una subida y la base vuelve a saber dónde está.
+    expect(world.calls.slice(calls).some((c) => c.includes('/upload/drive/v3/files'))).toBe(false);
+    expect(world.base.get(FILE_A)!.drive_id).toBe(driveId);
+    // Lo mismo sin `only`: no se sube dos veces.
+    world.base.get(FILE_A)!.drive_id = null;
+    store.data.delete(`file:${FILE_A}`);
+    const files = world.files.size;
+    const again = await startFile(p, 'editor-jwt', { file: FILE_A, size: 1000, day: '2026-09-30' });
+    expect(await again.json()).toMatchObject({ status: 'done', file: { id: driveId } });
+    expect(world.files.size).toBe(files);
+  });
+
+  it('la marca no alcanza si el peso es otro, si está en la papelera de Drive, o si es de otro archivo', async () => {
+    const { world, store, p } = await setup();
+    addBaseFile(world, FILE_A);
+    addBaseFile(world, FILE_B);
+    const done = await uploadFile(p, 'editor-jwt', FILE_A, bytes(1000));
+    const driveId = (done.file as { id: string }).id;
+    const forget = () => {
+      world.base.get(FILE_A)!.drive_id = null;
+      store.data.delete(`file:${FILE_A}`);
+    };
+    // Otro archivo de la app nunca toma el de A.
+    expect(await (await startFile(p, 'editor-jwt', { file: FILE_B, size: 1000, only: 'known' })).json()).toEqual({ status: 'unknown' });
+    // En la papelera de Drive: no cuenta.
+    forget();
+    world.files.get(driveId)!.trashed = true;
+    expect(await (await startFile(p, 'editor-jwt', { file: FILE_A, size: 1000, only: 'known' })).json()).toEqual({ status: 'unknown' });
+    world.files.get(driveId)!.trashed = false;
+    // Otro peso (la base dice 1000, Drive tiene 999): no es este.
+    world.files.get(driveId)!.data = bytes(999);
+    expect(await (await startFile(p, 'editor-jwt', { file: FILE_A, size: 1000, only: 'known' })).json()).toEqual({ status: 'unknown' });
+    expect(world.base.get(FILE_A)!.drive_id).toBeNull();
+  });
+
+  it('si Drive no contesta la búsqueda, no se abre una subida ni se responde unknown (502, se reintenta)', async () => {
+    const { world, p } = await setup();
+    addBaseFile(world, FILE_A);
+    world.failSearch();
+    const calls = world.calls.length;
+    const res = await startFile(p, 'editor-jwt', { file: FILE_A, size: 1000, day: '2026-09-30' });
+    expect(res.status).toBe(502);
+    expect(await code(res)).toBe('drive_failed');
+    const known = await startFile(p, 'editor-jwt', { file: FILE_A, size: 1000, only: 'known' });
+    expect(known.status).toBe(502);
+    expect(world.calls.slice(calls).some((c) => c.includes('/upload/drive/v3/files'))).toBe(false);
+    world.failSearch(false);
+    expect((await uploadFile(p, 'editor-jwt', FILE_A, bytes(1000))).status).toBe('done');
   });
 
   it('las features que anuncia /drive/status son las que entiende', () => {
