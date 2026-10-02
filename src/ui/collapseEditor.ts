@@ -704,8 +704,10 @@ interface SearchSession {
   wanted: ReadonlySet<string>;
   /** Lo colapsado justo después del último paso: lo que cambie después, lo cambió la persona. */
   seen: ReadonlyMap<string, HeadingRecord>;
-  /** Cuántos títulos abrió la última vez. */
-  opened: number;
+  /** Los títulos que abrió la última vez (el aviso cuenta los que siguen abiertos por ella). */
+  openedIds: ReadonlySet<string>;
+  /** Lo colapsado para todos justo después del último paso: si cambia, el título pasó a ser de la persona (Shift+clic). */
+  seenShared: Shared;
 }
 
 const sessions = new WeakMap<EditorView, SearchSession>();
@@ -714,21 +716,34 @@ const sessions = new WeakMap<EditorView, SearchSession>();
  * Lo que se guarda en el dispositivo: lo tuyo sin lo que abrió la búsqueda y nadie tocó (si la ventana se cierra
  * en medio de una búsqueda, la página no vuelve a abrirse con eso abierto).
  */
-function persistable(view: EditorView, records: ReadonlyMap<string, HeadingRecord>): ReadonlyMap<string, HeadingRecord> {
+function persistable(view: EditorView, records: ReadonlyMap<string, HeadingRecord>, shared?: Shared): ReadonlyMap<string, HeadingRecord> {
   const session = sessions.get(view);
   if (!session || session.held.size === 0) return records;
   const out = new Map(records);
   for (const [id, h] of session.held) {
-    if (out.get(id) !== h.set) continue;
+    // Un Shift+clic (colapsar o abrir para todos) deja sin registro tuyo, igual que lo que abrió la búsqueda: no es
+    // "nadie lo tocó".
+    if (out.get(id) !== h.set || (shared && session.seenShared.has(id) !== shared.has(id))) continue;
     if (h.prev) out.set(id, h.prev);
     else out.delete(id);
   }
   return out;
 }
 
-/** Cuántas secciones tiene abiertas ahora la búsqueda (para el aviso de la barra). */
+/**
+ * Cuántas secciones tiene abiertas ahora la búsqueda (para el aviso de la barra): las que abrió y siguen como las dejó
+ * (si la persona las colapsó, las abrió ella o las pasó a "para todos", ya no cuentan).
+ */
 export function searchOpenedCount(view: EditorView): number {
-  return sessions.get(view)?.opened ?? 0;
+  const session = sessions.get(view);
+  const state = collapseKey.getState(view.state);
+  if (!session || !state) return 0;
+  let n = 0;
+  for (const id of session.openedIds) {
+    const h = session.held.get(id);
+    if (h && state.records.get(id) === h.set && session.seenShared.has(id) === state.shared.has(id) && !isCollapsed(state.merged.get(id))) n++;
+  }
+  return n;
 }
 
 /**
@@ -745,7 +760,7 @@ export function syncSearchOpen(
   const state = collapseKey.getState(view.state);
   let session = sessions.get(view);
   if (!state || (!session && (end || wanted.size === 0))) return { changed: false, opened: 0 };
-  if (!session) sessions.set(view, (session = { held: new Map(), touched: new Set(), wanted, seen: state.records, opened: 0 }));
+  if (!session) sessions.set(view, (session = { held: new Map(), touched: new Set(), wanted, seen: state.records, openedIds: new Set(), seenShared: state.shared }));
   const doc = view.state.doc;
   const current = state.records;
   const shared = state.shared;
@@ -761,8 +776,9 @@ export function syncSearchOpen(
 
   // 1. Lo que abrió la búsqueda y nadie tocó vuelve a lo de antes; lo tocado pasa a ser de la persona.
   const base = new Map(current);
+  const heldBefore = [...session.held.keys()];
   for (const [id, h] of session.held) {
-    if (base.get(id) !== h.set) {
+    if (base.get(id) !== h.set || session.seenShared.has(id) !== shared.has(id)) {
       session.touched.add(id);
       continue;
     }
@@ -814,8 +830,12 @@ export function syncSearchOpen(
   if (!changed) for (const [id, h] of session.held) h.set = current.get(id);
   session.wanted = wanted;
   session.seen = changed ? base : current;
-  session.opened = openedNow.size;
+  session.seenShared = shared;
+  session.openedIds = openedNow;
   if (changed) dispatchRecords(view, base);
+  // Lo que pasó a ser de la persona (la selección quedó adentro, un Shift+clic) sin cambiar ningún registro tampoco
+  // dispara el guardado del plugin: se guarda acá, o el dispositivo conservaría lo colapsado de antes.
+  else if (heldBefore.some((id) => !session!.held.has(id))) optionsOf.get(view)?.save?.(persistable(view, current, shared));
   if (end) sessions.delete(view);
   return { changed, opened: openedNow.size };
 }
@@ -1725,7 +1745,7 @@ function createCollapsePlugin(options: CollapseOptions): Plugin<CollapseState> {
           const now = collapseKey.getState(view.state);
           const was = collapseKey.getState(prev);
           if (!now || now === was) return;
-          if (!was || !sameRecords(now.records, was.records)) options.save?.(persistable(view, now.records));
+          if (!was || !sameRecords(now.records, was.records)) options.save?.(persistable(view, now.records, now.shared));
           const structural = !was || was.analysis.hidden !== now.analysis.hidden || was.analysis.collapsed !== now.analysis.collapsed;
           if (structural) {
             // Un reproductor de Drive que queda escondido se para (se vuelve a cargar).

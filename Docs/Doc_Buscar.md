@@ -1362,7 +1362,13 @@ búsqueda del proyecto. Antes solo se abría la sección de la coincidencia actu
   abren, de afuera hacia adentro, los títulos que esconden alguna; las que dejan de tener coincidencias vuelven a
   cerrarse. La barra dice cuántas abrió ("1 collapsed section opened for the search"). Con 0 secciones colapsadas no
   hace nada. Las **listas plegables** (`toggleListItem`) siguen como antes (solo se abre la de la coincidencia actual;
-  la barra cuenta las cerradas: "in closed toggle lists"): no son secciones.
+  la barra cuenta las cerradas: "in closed toggle lists"): no son secciones. Las escondidas en secciones que la persona
+  cerró a mano durante la búsqueda (o que otro colapsó para todos) se cuentan aparte: "in collapsed sections". El aviso de
+  las abiertas ("N collapsed sections opened for the search") se calcula al dibujar, así que después de *Collapse all*,
+  *Expand all*, un triángulo o un Shift+clic dice lo cierto (las que pasaron a ser de la persona ya no cuentan).
+- **Lo que pasa a ser de la persona se guarda como suyo** (auditoría, O2 y O3): un Shift+clic sobre una sección que abrió la
+  búsqueda deja sin registro tuyo (como siempre), no se restaura el viejo; y una sección que queda abierta por el cursor
+  se guarda abierta al cerrar la búsqueda, no vuelve colapsada al reabrir la página.
 - **Solo la vista, solo en este dispositivo.** Abrir va por lo mismo que "abrir para vos" (`records` de P.11): nunca
   se escribe el mapa de "para todos" (un título colapsado para todos se abre con un registro tuyo, y al terminar vuelve a
   quedar sin él) ni el contenido (la prueba cuenta los updates del Y.Doc: 0). Lo abierto por la búsqueda **no se guarda
@@ -1381,7 +1387,8 @@ búsqueda del proyecto. Antes solo se abría la sección de la coincidencia actu
 - **Reemplazar** no cambia: las coincidencias de las secciones abiertas se reemplazan como las demás (y las de la
   búsqueda del proyecto siguen con su casilla *Also delete the N in collapsed sections*). Después de *Replace all* ya no
   hay coincidencias, y al volver a buscar (150 ms) las secciones vuelven a cerrarse. Deshacer o rehacer un reemplazo no
-  abre nada, como antes.
+  abre nada por sí mismo, pero al volver las coincidencias la búsqueda vuelve a abrir las secciones que las tienen (el *Undo*
+  del aviso de *Replace all* las reabre).
 
 **Pruebas:** `collapseFind.test.ts` (12: abrir solo las que tienen coincidencias, cerrar al terminar, cambiar lo
 buscado, Esc con la selección adentro y afuera, lo tocado, lo cerrado y reabierto con Enter, el cursor adentro, que no

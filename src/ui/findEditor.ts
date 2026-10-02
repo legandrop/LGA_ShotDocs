@@ -141,30 +141,45 @@ function closedToggleBlocks(view: EditorView): { ids: Set<string>; key: string }
   return { ids, key: keys.join(',') };
 }
 
-const hiddenMemo = new WeakMap<FindMatch[], { key: string; hooks: FindCollapseHooks | null; count: number }>();
+export interface HiddenCounts {
+  /** Escondidas en secciones colapsadas (P.11): las que la persona cerró a mano durante la búsqueda o otro colapsó para todos. */
+  sections: number;
+  /** Escondidas en listas plegables cerradas. */
+  toggles: number;
+}
+
+const hiddenMemo = new WeakMap<FindMatch[], { key: string; hooks: FindCollapseHooks | null; counts: HiddenCounts }>();
 
 /**
- * Cuántas coincidencias están escondidas: en listas plegables cerradas o en secciones colapsadas (P.11). Se
- * guarda por lista de coincidencias (la barra lo pide en cada dibujo) mientras no se abra ni se cierre nada.
+ * Cuántas coincidencias están escondidas, por qué: en secciones colapsadas (P.11) o en listas plegables cerradas (una
+ * dentro de una sección colapsada cuenta como de la sección, que es la que se abre primero). Se guarda por lista de
+ * coincidencias (la barra lo pide en cada dibujo) mientras no se abra ni se cierre nada.
  */
-export function hiddenCount(matches: FindMatch[], view?: EditorView): number {
+export function hiddenCounts(matches: FindMatch[], view?: EditorView): HiddenCounts {
   const registered = view ? collapseHooksByView.get(view) : undefined;
   const hooks = registered && registered.anyHidden?.() !== false ? registered : null;
-  if (!hooks && !view) return 0;
+  if (!hooks && !view) return { sections: 0, toggles: 0 };
   const toggles = view ? closedToggleBlocks(view) : { ids: new Set<string>(), key: '' };
-  if (!hooks && toggles.ids.size === 0) return 0;
+  if (!hooks && toggles.ids.size === 0) return { sections: 0, toggles: 0 };
   const memo = hiddenMemo.get(matches);
   // Con P.11 lo colapsado puede cambiar sin que cambie el DOM que se mira acá: sin memoria.
-  if (!hooks && memo && memo.key === toggles.key && memo.hooks === null) return memo.count;
-  const seen = new Map<string, boolean>();
-  let count = 0;
+  if (!hooks && memo && memo.key === toggles.key && memo.hooks === null) return memo.counts;
+  const seen = new Map<string, 'section' | 'toggle' | null>();
+  const counts: HiddenCounts = { sections: 0, toggles: 0 };
   for (const m of matches) {
-    let hidden = seen.get(m.blockId);
-    if (hidden === undefined) seen.set(m.blockId, (hidden = toggles.ids.has(m.blockId) || !!hooks?.isHidden(m.blockId)));
-    if (hidden) count++;
+    let kind = seen.get(m.blockId);
+    if (kind === undefined) seen.set(m.blockId, (kind = hooks?.isHidden(m.blockId) ? 'section' : toggles.ids.has(m.blockId) ? 'toggle' : null));
+    if (kind === 'section') counts.sections++;
+    else if (kind === 'toggle') counts.toggles++;
   }
-  hiddenMemo.set(matches, { key: toggles.key, hooks, count });
-  return count;
+  hiddenMemo.set(matches, { key: toggles.key, hooks, counts });
+  return counts;
+}
+
+/** Cuántas coincidencias están escondidas en total (secciones colapsadas y listas plegables cerradas). */
+export function hiddenCount(matches: FindMatch[], view?: EditorView): number {
+  const c = hiddenCounts(matches, view);
+  return c.sections + c.toggles;
 }
 
 /**

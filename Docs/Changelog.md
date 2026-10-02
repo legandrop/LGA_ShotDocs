@@ -8,7 +8,7 @@ búsqueda del proyecto), se abren todas las secciones colapsadas que esconden co
 la barra o si lo buscado ya no está ahí; la barra cuenta cuántas abrió. Es solo la vista de este dispositivo: va por los
 registros de "abrir para vos" de P.11 y no escribe el Y.Doc ni lo colapsado para todos ni el dispositivo (`persistable`).
 Lo que la persona toca (el triángulo) o donde queda la selección (Esc) se conserva; ir a una coincidencia siempre la
-muestra. Reemplazar sigue igual. Pruebas y un recorrido en Chromium; sin migración ni `min_app_version`.
+muestra. El aviso de la barra cuenta lo cierto (abiertas, cerradas a mano, listas plegables) y lo que pasa a ser de la persona se guarda como suyo. Reemplazar sigue igual. Sin migración ni `min_app_version`.
 [ Buscar con secciones colapsadas (D11) - se abren las que esconden coincidencias, solo a la vista, y se cierran al terminar ]
 
 v0.127 :

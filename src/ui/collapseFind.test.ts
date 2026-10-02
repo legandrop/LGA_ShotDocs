@@ -6,9 +6,9 @@ import { yUndoPluginKey } from 'y-prosemirror';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import type { HeadingRecord } from './collapse';
-import { collapseExtension, collapseState, setCollapsed, SHARED_COLLAPSE_MAP, toggleShared } from './collapseEditor';
+import { collapseExtension, collapseState, searchOpenedCount, setAllCollapsed, setCollapsed, SHARED_COLLAPSE_MAP, toggleShared } from './collapseEditor';
 import { schema } from './editorSchema';
-import { clearFind, closeFind, findExtension, getFindState, hiddenCount, replaceAll, setFind, stepFind } from './findEditor';
+import { clearFind, closeFind, findExtension, getFindState, hiddenCount, hiddenCounts, replaceAll, setFind, stepFind } from './findEditor';
 
 // Colapsar (Docs/Doc_Colapsar.md) con la búsqueda en la página (Docs/Doc_Buscar.md), con el editor real y las dos
 // extensiones. Decisión D11 de Lega (2026-10-02): al buscar, las secciones colapsadas que esconden coincidencias se
@@ -251,6 +251,58 @@ describe('buscar con secciones colapsadas', () => {
     // Nada de lo abierto por la búsqueda llegó al dispositivo: cada guardado es lo de antes (A, B y D tuyos).
     expect(saves.length).toBeGreaterThan(0);
     for (const saved of saves) expect([...saved.keys()].sort()).toEqual([a, b, d].sort());
+  });
+
+  it('O1: los avisos dicen lo cierto también después de Collapse all / Expand all (secciones, no listas plegables)', () => {
+    const { editor } = page(PAGE());
+    const view_ = view(editor);
+    setCollapsed(view_, heads(editor), true);
+    setFind(view_, 'uno', {});
+    expect(searchOpenedCount(view_)).toBe(2);
+    expect(hiddenCounts(getFindState(view_.state).matches, view_)).toEqual({ sections: 0, toggles: 0 });
+    // Collapse all: nada queda abierto por la búsqueda; las dos coincidencias escondidas son de secciones colapsadas.
+    setAllCollapsed(view_, true);
+    expect(searchOpenedCount(view_)).toBe(0);
+    expect(hiddenCounts(getFindState(view_.state).matches, view_)).toEqual({ sections: 2, toggles: 0 });
+    // Expand all: lo abrió la persona, no la búsqueda.
+    setAllCollapsed(view_, false);
+    expect(searchOpenedCount(view_)).toBe(0);
+    expect(hiddenCounts(getFindState(view_.state).matches, view_)).toEqual({ sections: 0, toggles: 0 });
+    closeFind(view_, { select: false });
+    expect(hiddenTexts(editor)).toEqual([]);
+  });
+
+  it('O2: Shift+clic (colapsar para todos) sobre una sección que abrió la búsqueda no deja el registro viejo en el dispositivo', async () => {
+    const { editor, doc, saves } = page(PAGE(), { shared: true });
+    await tick();
+    const [a, b] = heads(editor);
+    setCollapsed(view(editor), [a, b], true);
+    setFind(view(editor), 'uno', {});
+    expect(hiddenTexts(editor)).toEqual(['nada en B']);
+    expect(toggleShared(view(editor), a)).toBe(true);
+    await tick();
+    expect([...doc.getMap(SHARED_COLLAPSE_MAP).keys()]).toEqual([a]);
+    closeFind(view(editor), { select: false });
+    // Colapsada para todos (y para vos, por lo de todos), sin un registro tuyo viejo; B sigue colapsada para vos.
+    expect(hiddenTexts(editor)).toEqual(['uno en A', 'nada en B']);
+    expect([...collapseState(view(editor).state)!.records.keys()]).toEqual([b]);
+    expect([...saves[saves.length - 1].keys()]).toEqual([b]);
+  });
+
+  it('O3: una sección que queda abierta por el cursor se guarda abierta al cerrar la búsqueda', () => {
+    const { editor, saves } = page(PAGE());
+    const [a, b] = heads(editor);
+    setCollapsed(view(editor), [a, b], true);
+    setFind(view(editor), 'uno', {});
+    // Lo único que abrió la búsqueda queda donde está el cursor: nada cambia en los registros, pero se guarda.
+    expect(getFindState(view(editor).state).matches).toHaveLength(2);
+    setFind(view(editor), 'uno en A', {});
+    stepFind(view(editor), 1);
+    saves.length = 0;
+    closeFind(view(editor), { select: true });
+    expect(hiddenTexts(editor)).toEqual(['nada en B']);
+    expect(saves.length).toBeGreaterThan(0);
+    expect([...saves[saves.length - 1].keys()]).toEqual([b]);
   });
 
   it('sin secciones colapsadas, buscar no hace nada de esto', () => {

@@ -20,6 +20,10 @@ export const editor = {
   'find.inCaption': { en: "in a caption", es: "en un pie" },
   'find.inName': { en: "in a file name", es: "en el nombre de un archivo" },
   'find.hidden': {
+    en: { one: "{count} in collapsed sections", other: "{count} in collapsed sections" },
+    es: { one: "{count} en secciones colapsadas", other: "{count} en secciones colapsadas" },
+  },
+  'find.hiddenToggles': {
     en: { one: "{count} in closed toggle lists", other: "{count} in closed toggle lists" },
     es: { one: "{count} en listas plegables cerradas", other: "{count} en listas plegables cerradas" },
   },
