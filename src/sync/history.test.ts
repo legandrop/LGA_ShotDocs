@@ -1,7 +1,9 @@
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { loadPageHistory, PageHistory, sameShape, yShape, type HistoryRow } from './history';
-import { CONTENT_FRAGMENT, normalizeStructure } from './structure';
+import { CONTENT_FRAGMENT, normalizeStructure, seedIfEmpty } from './structure';
+import { PageDocs as OldPageDocs } from './fixtures/mainDocs';
+import { openLocalDb } from './localDb';
 import { FakeRemote, FakeServer, makeDevice, type Device } from './testing';
 import { RemoteError, REQUEST_TIMEOUT } from './types';
 
@@ -96,6 +98,11 @@ function serverAt(rows: HistoryRow[], n: number): string {
   return out;
 }
 
+/** Si la fila trae ese texto (aunque esté borrado): se lee el update sin integrarlo. */
+function rowHasText(data: Uint8Array, text: string): boolean {
+  return Y.decodeUpdate(data).structs.some((x) => x instanceof Y.Item && x.content instanceof Y.ContentString && x.content.str.includes(text));
+}
+
 function seeded(seed: number) {
   let s = seed;
   return () => ((s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
@@ -176,6 +183,96 @@ describe('reconstruir versiones desde las filas', () => {
     }
   });
 
+  it('filas de los dos tipos: la versión publicada (sube con GC) y esta (sin GC, desde v0.095) en la misma página', async () => {
+    // Desde B.16 (v0.095) la subida se arma sin GC: lleva el texto de lo que ya está borrado. Una versión anterior
+    // (fixtures/mainDocs.ts) sube con GC, y después de restaurar una copia vuelve a subir todo con huecos. El
+    // historial tiene que armar cada versión igual a lo que tenía el servidor, con filas de los dos tipos mezcladas.
+    for (const seed of [11, 12, 13]) {
+      const { server, a, pageId, tick } = await setup();
+      const oldDb = await openLocalDb(crypto.randomUUID());
+      const old = new OldPageDocs(oldDb, { normalize: normalizeStructure, seed: seedIfEmpty });
+      const oldRemote = new FakeRemote(server, '0.082', B.id, B.email);
+      const rnd = seeded(seed);
+      let ids = 0;
+      let wroteAndDeleted = false;
+      for (let step = 0; step < 40; step++) {
+        const useOld = rnd() < 0.5;
+        const docs = (useOld ? old : a.docs) as unknown as { open(id: string): Promise<Y.Doc>; flush(id?: string): Promise<void>; close(id: string): void };
+        if (useOld) await old.pullPage(pageId, oldRemote);
+        else await a.docs.pullPage(pageId, a.remote);
+        if (rnd() < 0.08) {
+          if (useOld) await old.resetForRestore();
+          else await a.docs.resetForRestore();
+        } else {
+          const doc = await docs.open(pageId);
+          doc.transact(() => {
+            const g = group(doc);
+            const r = rnd();
+            const pick = () => g.get(Math.floor(rnd() * g.length)) as Y.XmlElement;
+            if (g.length === 0 || r < 0.3) g.insert(Math.floor(rnd() * (g.length + 1)), [block(`m${seed}-${++ids}`, `texto ${ids} `)]);
+            else if (r < 0.45 && g.length > 2) g.delete(Math.floor(rnd() * g.length), 1);
+            else if (r < 0.6) {
+              // Escribir ahora y borrar en otra transacción, antes de subir (abajo): sin GC, el texto viaja igual.
+              textOf(pick()).insert(0, 'tmp ');
+              if (!useOld) wroteAndDeleted = true;
+            } else if (r < 0.85) {
+              const t = textOf(pick());
+              t.insert(Math.floor(rnd() * (t.length + 1)), ` p${step}`);
+            } else {
+              const t = textOf(pick());
+              if (t.length > 3) t.delete(Math.floor(rnd() * (t.length - 3)), 1 + Math.floor(rnd() * 3));
+            }
+          }, 'test');
+          await docs.flush(pageId);
+          // Lo escrito recién (de esta apertura) se borra en otra transacción, antes de subir.
+          doc.transact(() => {
+            const g = group(doc);
+            for (let i = 0; i < g.length; i++) {
+              const t = textOf(g.get(i) as Y.XmlElement);
+              if (t.toString().startsWith('tmp ')) t.delete(0, 4);
+            }
+          }, 'test');
+          await docs.flush(pageId);
+          docs.close(pageId);
+        }
+        if (useOld) {
+          for (const id of await old.unsyncedPages()) await old.pushPage(id, oldRemote);
+        } else await a.engine.syncNow();
+        tick(rnd() < 0.2 ? 45 * 60_000 : 1000 + Math.floor(rnd() * 60_000));
+      }
+      await old.pullPage(pageId, oldRemote);
+      await a.engine.syncNow();
+      const rows = rowsOf(server, pageId);
+      // Hay filas de los dos: con huecos (la publicada) y con texto ya borrado (esta, sin GC).
+      const kinds = rows.map((r) => {
+        const { structs } = Y.decodeUpdate(r.data);
+        return {
+          gc: structs.some((x) => x instanceof Y.GC || (x instanceof Y.Item && x.content instanceof Y.ContentDeleted)),
+          by: r.createdBy,
+        };
+      });
+      expect(kinds.some((k) => k.by === B.id), `semilla ${seed}: filas de la publicada`).toBe(true);
+      expect(kinds.some((k) => k.by === server.ownerId), `semilla ${seed}: filas de esta`).toBe(true);
+      if (wroteAndDeleted) {
+        const deletedText = rows.some((r) => r.createdBy === server.ownerId && rowHasText(r.data, 'tmp '));
+        expect(deletedText, `semilla ${seed}: lo borrado antes de subir viaja sin GC`).toBe(true);
+      }
+      const history = new PageHistory(rows);
+      for (let i = 0; i < history.sessions.length; i++) {
+        const v = history.version(i);
+        expect(visible(v), `semilla ${seed}, sesión ${i}`).toBe(serverAt(rows, history.sessions[i].last + 1));
+        v.destroy();
+      }
+      history.destroy();
+      old.dispose();
+      oldDb.close();
+      for (const d of devices.splice(0)) {
+        await d.engine.stop();
+        d.db.close();
+      }
+    }
+  });
+
   it('armar el documento con mergeUpdates (en vez de en orden) pierde lo borrado de las versiones del medio', async () => {
     // Que `mergeUpdates` se quede con el hueco depende de los autores de Yjs (números al azar): se repite el guion y
     // alcanza con que pierda una vez. En orden, nunca.
@@ -189,10 +286,20 @@ describe('reconstruir versiones desde las filas', () => {
       await edit(a, pageId, (_d, g) => g.delete(1, 1));
       await a.engine.syncNow();
       tick(60 * 60_000);
-      // Restaurar una copia: el dispositivo sube de nuevo todo, ya con el bloque recolectado.
-      await a.docs.resetForRestore();
-      await edit(a, pageId, (_d, g) => textOf(g.get(0) as Y.XmlElement).insert(4, '!'));
-      await a.engine.syncNow();
+      // Restaurar una copia con una versión anterior de la app sobre la misma base (sube con GC; desde v0.095 esta sube
+      // sin GC): vuelve a subir todo, ya con el bloque recolectado.
+      await a.engine.stop();
+      const old = new OldPageDocs(a.db, { normalize: normalizeStructure, seed: seedIfEmpty });
+      const oldRemote = new FakeRemote(server, '0.082');
+      await old.resetForRestore();
+      {
+        const doc = await old.open(pageId);
+        doc.transact(() => textOf(group(doc).get(0) as Y.XmlElement).insert(4, '!'), 'test');
+        await old.flush(pageId);
+        old.close(pageId);
+      }
+      for (const id of await old.unsyncedPages()) await old.pushPage(id, oldRemote);
+      old.dispose();
       const rows = rowsOf(server, pageId);
       const history = new PageHistory(rows);
       const first = history.version(0);

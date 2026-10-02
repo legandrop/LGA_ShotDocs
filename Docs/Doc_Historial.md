@@ -836,3 +836,14 @@ sección colapsada, el mismo caso sin colapsar, dos tramos con *Undo* en un paso
 y tabla, otro escribiendo en una sección colapsada) y en `historyPanel.test.tsx` el foco y `inert` (B3), el aviso al
 confirmar (O1), `recentOther` y la línea del motivo (O4). Sacar `inert` o la nueva consulta al confirmar hace fallar su
 prueba. Suite: 2184 pasan.
+
+## Con la subida sin GC (B.16, v0.095)
+
+Desde v0.095 la subida se arma sin GC: una fila trae también el texto de lo que ya estaba borrado en el dispositivo
+(lo escrito en algo que otro borró llega al servidor; sección 5.4, punto 1). Las filas de antes y las de una versión
+anterior de la app abierta todavía (que restaura una copia y vuelve a subir todo) siguen viniendo con huecos. El
+historial no cambia: aplica las filas en orden y cada elemento queda con la primera que lo trae. Lo prueba
+`src/sync/history.test.ts` ("filas de los dos tipos"): la versión publicada (`fixtures/mainDocs.ts`, con GC) y esta en
+la misma página, al azar, con restauraciones y con texto escrito y borrado antes de subir; cada versión es igual a lo
+que tenía el servidor. La mutante de `mergeUpdates` ahora usa la versión publicada para la subida entera con huecos:
+con esta, que sube sin GC, ya no aparecen.

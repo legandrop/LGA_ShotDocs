@@ -88,6 +88,8 @@ const ATTACH_PREVIEW = '0.091';
 const HISTORY = '0.0XX';
 /** Reemplazar en todo el proyecto (Doc_Buscar.md, "Reemplazar en el proyecto"). */
 const REPLACE_PROJECT = '0.094';
+/** El aviso de lo que escribiste en algo que otro borró (roadmap B.16, Doc_Sincronizacion.md): la versión se pone al publicar. */
+const REMOVED_WRITING = '0.095';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -360,6 +362,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
   // --- Sin red ---
   { id: 'syncStatus', section: 'sync', title: 'help.syncStatus.title', text: 'help.syncStatus.text', showMe: 'sync', since: BEFORE_HELP },
   { id: 'syncSafe', section: 'sync', title: 'help.syncSafe.title', text: 'help.syncSafe.text', since: BEFORE_HELP },
+  {
+    id: 'removedWriting',
+    section: 'sync',
+    title: 'help.removedWriting.title',
+    text: 'help.removedWriting.text',
+    words: ['borrado', 'borró', 'deleted', 'perdí', 'lost', 'a la vez', 'same time', 'recuperar', 'recover'],
+    since: REMOVED_WRITING,
+  },
   {
     id: 'availableOffline',
     section: 'sync',

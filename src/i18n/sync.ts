@@ -99,6 +99,10 @@ export const sync = {
     en: "Photos and videos are off on this device: {reason}",
     es: "Las fotos y los videos no andan en este dispositivo: {reason}",
   },
+  'engine.removedWriting': {
+    en: "Someone deleted a part of “{page}” while you were writing in it. Open the page to get back what you wrote.",
+    es: "Alguien borró una parte de “{page}” mientras escribías en ella. Abrí la página para recuperar lo que escribiste.",
+  },
   'engine.restored': {
     en: "The workspace was restored from a backup.",
     es: "El workspace se restauró desde una copia de seguridad.",

@@ -6380,6 +6380,40 @@ button.folder-row-main:hover {
   gap: 4px;
 }
 
+/* --- Lo que escribiste quedó adentro de algo que otro borró (B.16) ------------------------------- */
+
+.banner.removed-writing {
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.banner.removed-writing p {
+  margin: 0;
+  flex: 1 1 280px;
+}
+
+.removed-writing-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.removed-writing-text {
+  flex: 1 1 100%;
+  max-height: 240px;
+  margin: 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
 .menu .menu-label {
   display: flex;
   align-items: center;

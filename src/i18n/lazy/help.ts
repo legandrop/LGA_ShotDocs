@@ -317,6 +317,11 @@ export const help = {
     en: "Storage on this device, in the account menu, shows how much Shot Docs keeps here and what is available offline. Copies of files already in Drive are kept up to a limit you choose (2 GB by default); past it, the app asks before removing the ones opened least recently. Pages marked offline, photos added on this device and anything not uploaded yet are never removed to make room.",
     es: "Espacio en este dispositivo, en el menú de la cuenta, muestra cuánto guarda Shot Docs acá y qué está disponible sin conexión. Las copias de archivos que ya están en Drive se guardan hasta un tope que elegís (2 GB de fábrica); pasado el tope, la app pregunta antes de sacar las que hace más que no se abren. Lo marcado sin conexión, las fotos agregadas en este dispositivo y lo que todavía no se subió nunca se sacan para hacer lugar.",
   },
+  'help.removedWriting.title': { en: "When someone deletes what you were writing in", es: "Cuando alguien borra donde estabas escribiendo" },
+  'help.removedWriting.text': {
+    en: "If someone deletes a block (or a list, a table or a section) while you are writing in it, the deletion wins for everyone. You get a notice on the page with what you wrote there, so you can copy it and paste it back.",
+    es: "Si alguien borra un bloque (o una lista, una tabla o una sección) mientras escribís en él, el borrado gana para todos. Te aparece un aviso en la página con lo que escribiste ahí, para copiarlo y volver a pegarlo.",
+  },
   'help.syncSafe.title': { en: "Nothing gets lost", es: "No se pierde nada" },
   'help.syncSafe.text': {
     en: "Every change is saved on this device first and uploads by itself, offline too. Edits made on two devices at the same time are merged, never overwritten. Signing out with changes not uploaded asks first.",

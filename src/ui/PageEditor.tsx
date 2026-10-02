@@ -69,6 +69,7 @@ import { closeFindBar, isFindShortcut, openFindBar, openFindBarAt, takesFindShor
 import { searchSession } from './projectSearchUi';
 import { registerRestoreTarget } from './historyUi';
 import { restoreInEditor } from './historyRestore';
+import { RemovedWritingBanner } from './RemovedWritingBanner';
 
 // El carrete se baja aparte, la primera vez que se abre (roadmap B.4).
 const Carrete = lazyPart(() => import('./Carrete').then((m) => m.Carrete));
@@ -210,6 +211,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
   return (
     <>
       <FindBar editor={findEditor} editable={opening.complete && canEdit} complete={opening.complete} pageId={pageId} />
+      <RemovedWritingBanner docs={docs} pageId={pageId} />
       {!opening.complete && (
         <p className="muted editor-missing">
           {status.online ? tr('editor.missingOnline') : tr('editor.missingOffline')}
