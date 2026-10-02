@@ -70,6 +70,19 @@ describe('el validador', () => {
     expect(plan.unplaced).toEqual(['uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis']);
   });
 
+  it('Replaces muestra el valor entero que se toca en una celda combinada; agregar no reemplaza', () => {
+    const map = mapOf(reportEditor());
+    const plan = check(
+      map,
+      answer([
+        lens({ at: 'T3 r2 c3', row: '12 · 010 · 1', old: '35 mm · ND .6', new: '50 mm · ND .6' }),
+        lens({ at: 'T3 r2 c4', row: '12 · 010 · 1', col: 'T-stop · Focus', old: 'T2.8 · 2,5 m', new: 'T2.8 · 2,5 m · split diopter' }),
+      ]),
+      'el 12_010 1 era un 50',
+    );
+    expect(plan.changes.map((c) => c.replaces)).toEqual(['35 mm', '']);
+  });
+
   it('la columna se acepta sin lo de entre paréntesis; la ficha se dirige T1 r7 c2', () => {
     const map = mapOf(reportEditor());
     const plan = check(

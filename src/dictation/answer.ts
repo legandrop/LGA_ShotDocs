@@ -170,15 +170,43 @@ export function newUnitsOf(atoms: Atom[]): { key: string; atoms: Atom[]; text: s
   return out;
 }
 
-/** Lo que lo nuevo saca de lo que había (palabras, no espacios), o `''` si solo agrega. */
+/**
+ * Lo que lo nuevo saca de lo que había, o `''` si solo agrega. Se muestra el valor entero que se toca (lo que hay entre
+ * los separadores de una celda combinada, `35 mm · ND .6` → `35 mm`), no solo la palabra que cambia.
+ */
 function removedText(target: Target, atoms: Atom[]): string {
   const old = target.units.slice(target.labelUnits);
-  const removed: string[] = [];
-  for (const h of diffKeys(oldKeys(target), newUnitsOf(atoms).map((u) => u.key))) {
-    const gone = old.slice(h.a0, h.a1);
-    if (gone.some((u) => u.atom === 'photo' || /\S/.test(u.text))) removed.push(gone.map((u) => (u.atom === 'photo' ? '▣' : u.text)).join('').trim());
+  const texts = old.map((u) => (u.atom === 'photo' ? '▣' : u.text));
+  const starts: number[] = [];
+  let at = 0;
+  for (const t of texts) {
+    starts.push(at);
+    at += t.length;
   }
-  return removed.filter(Boolean).join(' … ');
+  const full = texts.join('');
+  // Los valores de la celda: lo que hay entre separadores (·, coma, punto y coma, barra o salto de renglón).
+  const segments: { from: number; to: number }[] = [];
+  const sep = /\s*[·•,;|/\n]\s*/g;
+  let last = 0;
+  for (const m of full.matchAll(sep)) {
+    segments.push({ from: last, to: m.index! });
+    last = m.index! + m[0].length;
+  }
+  segments.push({ from: last, to: full.length });
+  const touched = new Set<number>();
+  for (const h of diffKeys(oldKeys(target), newUnitsOf(atoms).map((u) => u.key))) {
+    for (let i = h.a0; i < h.a1; i++) {
+      if (!/\S/.test(texts[i])) continue;
+      const pos = starts[i];
+      const k = segments.findIndex((s) => pos >= s.from && pos < Math.max(s.to, s.from + 1));
+      if (k >= 0) touched.add(k);
+    }
+  }
+  return [...touched]
+    .sort((a, b) => a - b)
+    .map((k) => full.slice(segments[k].from, segments[k].to).trim())
+    .filter(Boolean)
+    .join(' … ');
 }
 
 const same = (a: string, b: string) => a.replace(/\s+/g, ' ').trim() === b.replace(/\s+/g, ' ').trim();
