@@ -752,6 +752,67 @@ describe('D110 con un snapshot malo que trae un elemento de más (auditoría de 
   });
 });
 
+describe('D110 con un snapshot malo que trae un elemento de más: la espera y el aviso', () => {
+  it('una bajada mientras hay algo sin subir olvida syncedSV: la subida siguiente ya lleva el elemento y lo propio se ve', async () => {
+    const { server, page } = await setup({ edits: 9 });
+    const bad = await badSnapshot(server, page, (tail, doc) => {
+      for (const u of tail) Y.applyUpdate(doc, u.data);
+      const t = doc.getText('t');
+      t.insert(t.toString().indexOf('palabra4 '), 'FANTASMA ');
+      return [];
+    });
+    const c = await device(server);
+    await c.engine.syncNow();
+    server.online = false;
+    await edit(c, page, (t) => t.insert(t.toString().indexOf('FANTASMA ') + 9, 'MIO '));
+    server.online = true;
+    await new FakeRemote(server, '1.000').invalidateSnapshot(bad, 'test');
+    // La bajada con la época nueva espera (hay algo sin subir) y la subida que sigue lleva también el elemento.
+    await c.docs.pullPage(page, c.remote, { contentEpoch: 1 });
+    expect((await state(c, page))?.snapshotId).toBe(bad);
+    await c.docs.pushPage(page, c.remote);
+    expect(serverText(server, page)).toContain('FANTASMA MIO');
+  });
+
+  it('el rearmado no repite el aviso de lo propio que otro borró (lo que baja vuelve a borrar lo mismo)', async () => {
+    const { server, e1, page } = await setup();
+    // Un párrafo (en un fragmento aparte: la reparación de estructura no lo toca).
+    const d = await e1.docs.open(page);
+    d.transact(() => {
+      const para = new Y.XmlElement('p');
+      para.insert(0, [new Y.XmlText('hola')]);
+      d.getXmlFragment('f').insert(0, [para]);
+    }, 'test');
+    await e1.docs.flush(page);
+    e1.docs.close(page);
+    await e1.engine.syncNow();
+    const snap = await badSnapshot(server, page, () => undefined);
+    const c = await device(server);
+    await c.engine.syncNow();
+    expect((await state(c, page))?.snapshotId).toBe(snap);
+    // c escribe sin red adentro del párrafo; e1 lo borra; c sube y baja: el aviso de B.16, una vez.
+    server.online = false;
+    const cd = await c.docs.open(page);
+    cd.transact(() => ((cd.getXmlFragment('f').get(0) as Y.XmlElement).get(0) as Y.XmlText).insert(4, ' MIO'), 'test');
+    await c.docs.flush(page);
+    c.docs.close(page);
+    server.online = true;
+    const ed = await e1.docs.open(page);
+    ed.transact(() => ed.getXmlFragment('f').delete(0, 1), 'test');
+    await e1.docs.flush(page);
+    e1.docs.close(page);
+    await e1.engine.syncNow();
+    await c.engine.syncNow();
+    expect((await c.docs.removedWriting(page)).map((n) => n.text)).toEqual([' MIO']);
+    // Se invalida y c se rearma: lo que baja vuelve a borrar el párrafo; no es un aviso nuevo.
+    await new FakeRemote(server, '1.000').invalidateSnapshot(snap, 'test');
+    await c.engine.syncNow();
+    await c.engine.syncNow();
+    expect((await state(c, page))?.snapshotId).toBeUndefined();
+    expect(await c.docs.removedWriting(page)).toHaveLength(1);
+  });
+});
+
 describe('restaurar una copia de la base con un snapshot malo sin invalidar (auditoría de la entrega 2, O-B)', () => {
   it('quien lo aplicó vuelve a subir sus elementos sin sus borrados: lo que el snapshot borró de más no llega a nadie', async () => {
     const { server, e1, page } = await setup({ edits: 6 });
