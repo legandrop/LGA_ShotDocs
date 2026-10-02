@@ -218,6 +218,15 @@ describe('liberar originales propios (entrega 2)', () => {
     expect(await hasOriginal(a, photo)).toBe(false);
   });
 
+  it('abierto mientras se comprueba (dentro de `/verify`): no se libera', async () => {
+    const { server, a, photo, video } = await setup();
+    server.portero.beforeVerify = () => a.media.localOriginal(video);
+    await a.offline.freeUp('all');
+    expect(await hasOriginal(a, video)).toBe(true);
+    expect(await hasOriginal(a, photo)).toBe(false);
+    expect(a.offline.getSnapshot().report!.skipped).toEqual({ changed: 1 });
+  });
+
   it('la base dice otro archivo de Drive, o en una papelera: no se libera', async () => {
     const { server, a, photo, video } = await setup();
     server.mediaFiles.get(photo)!.drive_id = 'drive-otro';

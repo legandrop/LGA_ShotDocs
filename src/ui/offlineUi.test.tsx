@@ -179,6 +179,44 @@ describe('la ventana "Available offline"', { timeout: 30_000 }, () => {
     expect(host.querySelector('.error')?.textContent).toMatch(/^Needs .*; .* available, keeping 1 GB for new photos and videos\.$/);
   });
 
+  it('"Free up … and make available offline" libera solo copias: los originales agregados acá no cuentan ni se liberan', async () => {
+    const { b, page } = await setup();
+    // Sin lugar libre fuera de la reserva: solo entra liberando.
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      onLine: true,
+      storage: { estimate: async () => ({ quota: 4 * 1024 * MB, usage: 3 * 1024 * MB }), persisted: async () => true, persist: async () => true },
+    });
+    const usage = (copies: number, own: number) => ({
+      kept: copies + own,
+      freeable: copies + own,
+      own: { freeable: own, count: own ? 3 : 0, recent: 0, recentCount: 0, held: null, heldBytes: 0 },
+      waiting: 0,
+      waitingCount: 0,
+      offline: 0,
+      gone: { count: 0, bytes: 0, ids: [] },
+    });
+    // Solo originales propios para liberar: no alcanza (no se ofrece liberarlos desde esta ventana).
+    const spyUsage = vi.spyOn(b.offline, 'usage').mockResolvedValue(usage(0, 50 * 1024 * MB));
+    await act(async () => b.offline.refresh());
+    const host = await mount(services(b), <OfflineDialog kind="page" target={page} onClose={() => undefined} />);
+    await until(() => !host.querySelector('.offline-total .offline-spinner'));
+    await settle();
+    expect(([...host.querySelectorAll('button')].find((x) => x.textContent === 'Make available offline') as HTMLButtonElement).disabled).toBe(true);
+    // Con copias bajadas para liberar: el botón lo dice, y al tocarlo libera solo copias.
+    spyUsage.mockResolvedValue(usage(50 * 1024 * MB, 50 * 1024 * MB));
+    await act(async () => b.offline.refresh());
+    await settle();
+    const freeUp = vi.spyOn(b.offline, 'freeUp').mockResolvedValue(0);
+    const mark = vi.spyOn(b.offline, 'mark').mockResolvedValue('m');
+    const start = [...host.querySelectorAll('button')].find((x) => /^Free up .* and make available offline$/.test(x.textContent ?? '')) as HTMLButtonElement;
+    expect(start.disabled).toBe(false);
+    await act(async () => start.click());
+    await settle();
+    expect(freeUp).toHaveBeenCalledWith('all', { own: false });
+    expect(mark).toHaveBeenCalled();
+  });
+
   it('una marca existente: estado, sacar con la casilla de borrar las copias', async () => {
     const { b, page, ids } = await setup();
     await b.offline.mark('page', page);
@@ -273,7 +311,7 @@ describe('liberar los originales agregados en este dispositivo (entrega 2)', { t
     const usage = vi.spyOn(a.offline, 'usage').mockResolvedValue(own({ held: 'offline', heldBytes: 3 * MB }));
     const host = await mount(services(a), <StorageDialog onClose={() => undefined} onEdit={() => undefined} />);
     await until(() => (host.textContent ?? '').includes('only with a connection'));
-    expect(host.textContent).toContain('Photos and videos added on this device (3 MB) can be freed only with a connection');
+    expect(host.textContent).toContain('Files added on this device (3 MB) can be freed only with a connection');
     expect(host.textContent).toContain('Nothing to free up right now.');
     usage.mockResolvedValue(own({ held: 'server', heldBytes: 3 * MB }));
     await act(async () => a.offline.refresh());
@@ -287,7 +325,7 @@ describe('liberar los originales agregados en este dispositivo (entrega 2)', { t
     const host = await mount(services(a), <SpaceHost />);
     act(() => a.offline.rejected(new File([new Uint8Array(10)], 'IMG_0500.JPG', { type: 'image/jpeg' })));
     await until(() => (host.textContent ?? '').includes('Free up 3 MB'));
-    expect(host.querySelector('.unsaved-notice')!.textContent).toMatch(/IMG_0500\.JPG.*Not enough space for new files on this device\. Free up 3 MB of photos and videos added here/s);
+    expect(host.querySelector('.unsaved-notice')!.textContent).toMatch(/IMG_0500\.JPG.*\(0\.1 KB\) was not added\. Save it so it isn't lost\.Free up 3 MB of files added here that are already in Drive\?/s);
     expect(freeUp).not.toHaveBeenCalled();
     const button = [...host.querySelectorAll('button')].find((x) => x.textContent === 'Free up 3 MB') as HTMLButtonElement;
     await act(async () => button.click());

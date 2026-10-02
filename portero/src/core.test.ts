@@ -117,8 +117,8 @@ function fakeWorld() {
   /** Lo que pasa en la base justo antes de confirmar la carpeta (otra persona que restaura, por ejemplo). */
   let beforeConfirm: ((id: string) => void) | null = null;
   let connectEmail = 'lega@example.com';
-  /** La búsqueda de un archivo por su marca falla (Drive responde 500). */
-  let searchFails = false;
+  /** La búsqueda de un archivo por su marca falla: Drive responde 500, la rechaza (400, como una consulta inválida) o se corta la red. */
+  let searchFails: false | '500' | '400' | 'red' = false;
   /** En la papelera: él mismo o alguna carpeta de arriba (como Drive). */
   const inTrash = (id: string, seen = new Set<string>()): boolean => {
     const f = files.get(id);
@@ -257,6 +257,8 @@ function fakeWorld() {
       // La búsqueda de un archivo de la app por su marca (antes de abrir una subida y en `only: 'known'`).
       const fileMark = /^appProperties has \{ key='sdFile' and value='([0-9a-f-]{36})' \} and trashed = false and mimeType != 'application\/vnd\.google-apps\.folder'$/.exec(q)?.[1];
       if (fileMark) {
+        if (searchFails === 'red') throw new TypeError('fetch failed');
+        if (searchFails === '400') return jsonRes({ error: { code: 400, message: 'Invalid Value', errors: [{ reason: 'invalid', location: 'q' }] } }, 400);
         if (searchFails) return jsonRes({ error: 'backend error' }, 500);
         return jsonRes({
           files: [...files.entries()]
@@ -383,7 +385,7 @@ function fakeWorld() {
     /** La cuenta de Google con la que se conecta Drive la próxima vez. */
     connectAs: (email: string) => (connectEmail = email),
     /** La búsqueda de un archivo por su marca falla. */
-    failSearch: (fail = true) => (searchFails = fail),
+    failSearch: (how: false | '500' | '400' | 'red' = '500') => (searchFails = how),
     inTrash,
   };
 }
@@ -2090,19 +2092,22 @@ describe('portero: códigos, /verify, only known y ?offline=1', () => {
     expect(world.base.get(FILE_A)!.drive_id).toBeNull();
   });
 
-  it('si Drive no contesta la búsqueda, no se abre una subida ni se responde unknown (502, se reintenta)', async () => {
-    const { world, p } = await setup();
-    addBaseFile(world, FILE_A);
-    world.failSearch();
-    const calls = world.calls.length;
-    const res = await startFile(p, 'editor-jwt', { file: FILE_A, size: 1000, day: '2026-09-30' });
-    expect(res.status).toBe(502);
-    expect(await code(res)).toBe('drive_failed');
-    const known = await startFile(p, 'editor-jwt', { file: FILE_A, size: 1000, only: 'known' });
-    expect(known.status).toBe(502);
-    expect(world.calls.slice(calls).some((c) => c.includes('/upload/drive/v3/files'))).toBe(false);
-    world.failSearch(false);
-    expect((await uploadFile(p, 'editor-jwt', FILE_A, bytes(1000))).status).toBe('done');
+  it('si Drive rechaza o no contesta la búsqueda, la subida sigue como antes; only known responde 502, nunca unknown', async () => {
+    for (const how of ['500', '400', 'red'] as const) {
+      const { world, p } = await setup();
+      addBaseFile(world, FILE_A);
+      world.failSearch(how);
+      const calls = world.calls.length;
+      // `only: 'known'` no sabe: 502 (la app vuelve a preguntar) y no abre nada.
+      const known = await startFile(p, 'editor-jwt', { file: FILE_A, size: 1000, only: 'known' });
+      expect(known.status, how).toBe(502);
+      expect(await code(known), how).toBe('drive_failed');
+      expect(world.calls.slice(calls).some((c) => c.includes('/upload/drive/v3/files')), how).toBe(false);
+      // Una subida con bytes no se corta por la búsqueda: abre y termina.
+      const done = await uploadFile(p, 'editor-jwt', FILE_A, bytes(1000));
+      expect(done.status, how).toBe('done');
+      expect(world.base.get(FILE_A)!.drive_id, how).toBeTruthy();
+    }
   });
 
   it('las features que anuncia /drive/status son las que entiende', () => {

@@ -180,12 +180,12 @@ export const offline = {
     },
   },
   'storage.ownOffline': {
-    en: "Photos and videos added on this device ({size}) can be freed only with a connection: Drive is checked first.",
-    es: "Las fotos y los videos agregados en este dispositivo ({size}) se pueden liberar solo con conexión: antes se comprueba Drive.",
+    en: "Files added on this device ({size}) can be freed only with a connection: Drive is checked first.",
+    es: "Los archivos agregados en este dispositivo ({size}) se pueden liberar solo con conexión: antes se comprueba Drive.",
   },
   'storage.ownServer': {
-    en: "Photos and videos added on this device ({size}) can't be freed until the media server is updated.",
-    es: "Las fotos y los videos agregados en este dispositivo ({size}) no se pueden liberar hasta que se actualice el servidor de archivos.",
+    en: "Files added on this device ({size}) can't be freed until the media server is updated.",
+    es: "Los archivos agregados en este dispositivo ({size}) no se pueden liberar hasta que se actualice el servidor de archivos.",
   },
   'storage.listOwn': { en: "added on this device", es: "agregado en este dispositivo" },
   'storage.offline': { en: "Available offline", es: "Disponible sin conexión" },

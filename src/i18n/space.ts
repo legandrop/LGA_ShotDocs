@@ -35,8 +35,12 @@ export const space = {
     es: "Nuevo: Shot Docs guarda hasta {limit} de archivos en este dispositivo. Marcá las páginas Disponible sin conexión para conservarlas. Las fotos originales y los videos quedan solo si los tildás al marcar.",
   },
   'space.promptRoom': {
-    en: "Not enough space for new files on this device. Free up {free} of photos and videos added here that are already in Drive? Without a connection you'll see their thumbnails.",
-    es: "No hay lugar para archivos nuevos en este dispositivo. ¿Liberar {free} de fotos y videos agregados acá que ya están en Drive? Sin conexión vas a ver sus miniaturas.",
+    en: "Not enough space for new files on this device. Free up {free} of files added here that are already in Drive? Without a connection you'll see their thumbnails.",
+    es: "No hay lugar para archivos nuevos en este dispositivo. ¿Liberar {free} de archivos agregados acá que ya están en Drive? Sin conexión vas a ver sus miniaturas.",
+  },
+  'space.promptRoomShort': {
+    en: "Free up {free} of files added here that are already in Drive? Without a connection you'll see their thumbnails.",
+    es: "¿Liberar {free} de archivos agregados acá que ya están en Drive? Sin conexión vas a ver sus miniaturas.",
   },
   'space.freeRoom': { en: "Free up {size}", es: "Liberar {size}" },
   'space.keptSome': {

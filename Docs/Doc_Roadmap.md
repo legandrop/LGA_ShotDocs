@@ -47,6 +47,12 @@ Lega.
    hechos y publicados** (v0.031 a v0.041, migraciones aplicadas en Wanka el 2026-09-30). Absorbe la vieja fase 2 (compartir un proyecto, una
    página o una subpágina con usuarios y con links legibles, D-13) y los que figuran abajo en "Resueltos
    adentro del plan".
+2. **La marca de un archivo en Drive, atada a su workspace** (auditoría de P.10, entrega 2, O4). El portero busca un
+   archivo de la app por su marca `sdFile` (el id) y el peso. Si una misma cuenta de Google y el mismo cliente OAuth
+   sirvieran a dos workspaces, un editor del B que conozca el id y el peso de un archivo del A podría registrarlo en B
+   y el portero de B lo enlazaría. Hoy hay un solo workspace por Drive. Antes de que dos workspaces compartan cuenta de
+   Google: sumar `sdWorkspace` a `appProperties` al subir y exigirlo en la búsqueda (o buscar solo adentro de la
+   carpeta del proyecto).
 
 ### P. Pedidos de Lega (2026-09-30), en este orden
 

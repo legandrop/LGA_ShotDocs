@@ -912,6 +912,8 @@ export class FakePortero {
   features: string[] = ['verify', 'known', 'offline', 'codes'];
   /** `/verify` no contesta (se cortó la red justo ahí). */
   failVerify = false;
+  /** Lo que pasa mientras `/verify` pregunta (una carrera con el dispositivo). */
+  beforeVerify: (() => unknown) | null = null;
   /** Drive no da el MD5 en `/verify` (pasa con algunos archivos). */
   noMd5 = false;
   /** El portero no encuentra nada por la marca (lo que subió se perdió del todo): `only: 'known'` responde `unknown`. */
@@ -1080,6 +1082,7 @@ export class FakePortero {
     }
     if (method === 'POST' && url.pathname === '/verify') {
       if (this.failVerify) throw new TypeError('Failed to fetch');
+      await this.beforeVerify?.();
       const results: Record<string, unknown> = {};
       for (const id of (body?.files as string[]) ?? []) {
         const media = this.server.mediaFiles.get(id);

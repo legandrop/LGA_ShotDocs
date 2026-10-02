@@ -1110,12 +1110,23 @@ red, el carrete agrega "The copy on this device was freed to save space; it's in
 6. **El aviso de un archivo que no entró** ofrece los originales ya en Drive dentro del mismo aviso del archivo; al
    liberar, el archivo no se agrega solo (no se sabe dónde iba en la página): se guarda con *Save…* o se agrega de
    nuevo.
-7. **El portero busca por la marca también antes de abrir una subida** (no solo en `only: 'known'`), y si la búsqueda
-   falla responde 502 en vez de abrir a ciegas: abrir sin saber podría dejar el archivo dos veces en Drive.
+7. **El portero busca por la marca también antes de abrir una subida** (no solo en `only: 'known'`): evita que un
+   archivo quede dos veces en Drive. Si Drive rechaza o no contesta la búsqueda, **la subida sigue como antes** (corregido
+   por la auditoría, O5: una subida cortada por la búsqueda es peor que un duplicado); `only: 'known'` responde 502 (la
+   app vuelve a preguntar), nunca `unknown`.
 8. **La fecha de uso de un original propio** va en `copy:<id>` (una entrada solo con `usedAt`), y `dropCopy` ya no
    borra una entrada en la que no había nada que borrar.
 9. **El MD5 se calcula solo de lo que hace falta** para llegar al objetivo (cada lote de 15 se arma con lo justo), una
    vez por archivo.
+10. **La coincidencia por la marca** pide el mismo peso y que esté fuera de la papelera de Drive; si hubiera dos, la
+    primera (una subida de Drive recién crea el archivo al terminar, así que uno marcado está entero).
+
+**Correcciones de la auditoría (aprobada con observaciones):** O1, la prueba de que la ventana de marcar libera solo
+copias; O2, un archivo que se abre mientras se comprueba (el MD5 o `/verify` tardan) ya no se libera; O5, la búsqueda
+por la marca que falla en Drive no corta la subida; O6, los textos dicen "archivos" (también se liberan adjuntos); O7,
+el aviso del archivo que no entró no repite "no hay lugar"; O8, la decisión 10. O3 (sin `uploadedAt` cuenta desde el
+estreno: solo pasa con una pestaña anterior a v0.083, y Drive igual confirma el MD5) queda así. O4 (la marca atada al
+workspace) va al roadmap, sección A.
 
 **Lo que quedó afuera:** liberar a mano lo que está en una papelera (decisión 4), *Share* de un original liberado sin
 bajarlo (entrega 3, sección 5.4) y el aviso al reconectar Drive con otra cuenta (Riesgos). La medición del iPhone casi

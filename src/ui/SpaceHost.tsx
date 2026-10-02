@@ -133,7 +133,7 @@ export function SpaceHost() {
             {prompt?.reason === 'room' && (
               <>
                 <br />
-                {tr('space.promptRoom', { free: formatSize(prompt.free, tr.lang) })}
+                {tr('space.promptRoomShort', { free: formatSize(prompt.free, tr.lang) })}
               </>
             )}
           </span>
@@ -143,7 +143,7 @@ export function SpaceHost() {
             </button>
             {prompt?.reason === 'room' && (
               // Los originales agregados acá que ya están en Drive (nunca se liberan sin este sí: sección 5.7).
-              <button className="secondary" disabled={freeing} onClick={() => void free()}>
+              <button className="secondary" style={{ whiteSpace: 'nowrap' }} disabled={freeing} onClick={() => void free()}>
                 {tr('space.freeRoom', { size: formatSize(prompt.free, tr.lang) })}
               </button>
             )}

@@ -794,6 +794,12 @@ export class OfflineManager {
           note('mismatch');
           continue;
         }
+        // Se abrió mientras se comprobaba (el MD5 o `/verify` tardan): no se libera (en Safari, un video que se está
+        // mirando desde un `Blob` de IndexedDB puede cortarse si se borra su original).
+        if (this.opened.has(record.id)) {
+          note('changed');
+          continue;
+        }
         const bytes = await freeOwn(db, record.id, { rev, driveId: r.driveId, size: r.size, md5, now: this.now(), rollout }).catch(() => 0);
         if (bytes > 0) {
           freed += bytes;
