@@ -491,7 +491,7 @@ se guarda como hueco: es una copia de algo que ya está en las filas, no texto q
 
 ## Bajar con snapshots (compactar, B.9)
 
-Entregas 1 y 2 de `Doc_Compactar.md` (v0.127: la app sabe bajar snapshots; v0.0XX: el dispositivo de quien edita los
+Entregas 1 y 2 de `Doc_Compactar.md` (v0.127: la app sabe bajar snapshots; v0.133: el dispositivo de quien edita los
 arma). Siguen apagados en la base hasta la entrega 3.
 
 - **El pedido.** `PageDocs.pullPage` baja con `remote.pullContent`: con los snapshots prendidos y la base en la versión

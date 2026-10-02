@@ -151,7 +151,7 @@ Deja los snapshots **apagados** (`workspace_settings.snapshot_min_version` nulo)
   `page_compaction`, dejar `snapshot_seq` en 0 y no hacer volver atrás `content_epoch`; recién ahí
   `update public.workspace_settings set snapshot_min_version = <versión> where id`.
 - **Pruebas:** `supabase/tests/snapshots_permisos.sql` (corrida en `begin … rollback`).
-- **Entrega 2** (`20261020120000_compactar_crear.sql`, sin aplicar, no sube `schema_version`): la app arma los
+- **Entrega 2** (`20261020120000_compactar_crear.sql`, aplicada en v0.133, no sube `schema_version`): la app arma los
   snapshots con las mismas funciones; la migración solo hace que `invalidate_page_snapshot` pida ver lo borrado
   (`sees_deleted`), como las demás: un invitado con Editar ya no invalida. Invalidar a mano sigue igual, con una sesión
   que ve lo borrado o desde el SQL Editor.

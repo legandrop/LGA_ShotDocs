@@ -1,7 +1,7 @@
 # Compactar el contenido en el servidor (`page_snapshots`)
 
 **Estado: entregas 1 y 2 implementadas (LEER snapshots, v0.127, migración `20261019120000_compactar_leer.sql`,
-aplicada y con los snapshots apagados; CREARLOS en el dispositivo, v0.0XX, migración `20261020120000_compactar_crear.sql`,
+aplicada y con los snapshots apagados; CREARLOS en el dispositivo, v0.133, migración `20261020120000_compactar_crear.sql`,
 sin aplicar; ver "Cómo quedó la entrega 1" y "Cómo quedó la entrega 2", al final). La entrega 3 (prenderlos), sin
 implementar** (roadmap B.9, diseño del 2026-10-01). Toca la regla de no perder datos, así que va con
 pruebas antes de cualquier código que escriba en la base. **Revisado el 2026-10-01 con el diseño del historial
@@ -684,7 +684,7 @@ Antes de escribir en la base, en este orden:
    funciones, el servidor en memoria, `pullContent` en la app, las pruebas 2, 3 (sin compactar todavía), 5 y 6. Sin
    snapshots en la base, la app se comporta exactamente igual: se puede publicar sola. Copia de seguridad antes de
    migrar.
-2. **Crear snapshots** (hecha, v0.0XX): `compact.ts`, el paso en el ciclo, la confirmación, la invalidación y el
+2. **Crear snapshots** (hecha, v0.133): `compact.ts`, el paso en el ciclo, la confirmación, la invalidación y el
    rearmado por `content_epoch` (D110); las pruebas 1, 3 completas y 4. Se publica con los snapshots apagados.
 3. **Prenderlos**: antes, el cambio del script de restaurar (vaciar `page_snapshots`, `content_epoch` que no vuelve
    atrás; repo privado, con su prueba 6). Probar de punta a punta en un proyecto de prueba (7) y medir (8); después
@@ -829,13 +829,13 @@ cadena que siga valiendo, no ninguno.
 - La prueba 6 se corrió con el servidor en memoria (el script de restaurar del repo privado no cambió: es requisito
   de la entrega 3, antes de prenderlos).
 
-**Para prenderlos (entrega 3):** aplicar esta migración (con copia de seguridad), que el script de restaurar vacíe
+**Para prenderlos (entrega 3):** (la migración de la entrega 2 ya está aplicada desde v0.133) que el script de restaurar vacíe
 `page_snapshots` y `page_compaction`, deje `snapshot_seq` en 0 y no haga volver atrás `content_epoch`; la entrega 2
 publicada; y `update public.workspace_settings set snapshot_min_version = <versión de la entrega 2> where id`.
 
 ## Cómo quedó la entrega 2 (CREAR snapshots)
 
-Implementada en v0.0XX. El dispositivo de quien edita arma los snapshots y los sube; **siguen apagados en la base**
+Implementada en v0.133. El dispositivo de quien edita arma los snapshots y los sube; **siguen apagados en la base**
 (`snapshot_min_version` nulo): con ellos apagados la app no pide nada nuevo (ni reservas ni snapshots) y se comporta
 como v0.129. Todo se prueba prendido con el servidor en memoria.
 
@@ -894,7 +894,7 @@ cambia.
   los dispositivos que compactan (258 snapshots confirmados, 65 cadenas malas invalidadas, 175 rearmados) y 60 de la de
   la entrega 1, sin una falla.
 
-**Para prenderlos (entrega 3):** aplicar `20261020120000_compactar_crear.sql`; el script de restaurar (sección 9);
+**Para prenderlos (entrega 3):** (`20261020120000_compactar_crear.sql` ya está aplicada desde v0.133); el script de restaurar (sección 9);
 **subir `min_app_version` a la versión de esta entrega** (O5: las versiones v0.127 a v0.129 leen snapshots y, al
 invalidarse uno, vuelven a subir la página entera: el O1); probar de punta a punta y medir en el iPhone (pruebas 7 y
 8, también cuánto tarda armar uno en el hilo principal y cuánto frena el ciclo, O-C); separar un snapshot corrupto de
