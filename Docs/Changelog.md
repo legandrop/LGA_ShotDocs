@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.100 :
+
+Lo borrado de una página viajaba en las filas de `page_updates` a cualquiera que la puede ver, invitados incluidos, y
+las fotos sacadas se seguían abriendo (D14). Diseño, sin código, en `Doc_Privacidad_Borrado.md`, medido con filas
+reales y simulaciones y corregido con la auditoría: quien no edita (Ver, Comentar, invitados) baja siempre la última
+base limpia de la página, armada por el dispositivo de un editor con lo borrado como hueco (también al cerrar la app),
+nunca filas; al compartir se sube lo pendiente y se exige una base posterior; los usos sacados de fotos y archivos, y la
+papelera de archivos para invitados, dejan de darle permiso. La subida no cambia (D19) y los deltas quedan para más
+adelante (D20). Con la migración en borrador, las pruebas y una pregunta para Lega.
+[ Privacidad de lo borrado - diseño de la base limpia para quien no edita ]
+
 v0.099 :
 
 Una versión anterior a v0.097 abierta seguía subiendo cambios del árbol y comentarios aunque el workspace pidiera una

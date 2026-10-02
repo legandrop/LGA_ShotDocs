@@ -257,7 +257,8 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   `20261007120000_historial.sql` está **sin aplicar** (probada en `begin … rollback`). **Falta:** aplicarla (con copia
   de seguridad), las marcas por persona, el texto huérfano con el aviso a quien escribió (necesita la subida sin GC,
   en otra rama), nombrar versiones, la caché sin red, que la lista se actualice sola con el historial abierto (O3 de la
-  auditoría) y medir en el iPhone. Aparte, después: que lo borrado no llegue a quien solo ve la página (decisión 2).
+  auditoría) y medir en el iPhone. Aparte, después: que lo borrado no llegue a quien solo ve la página (decisión 2;
+  diseño en `Doc_Privacidad_Borrado.md`, B.18).
   Ojo: `npm run db:test` aplica las migraciones de verdad; esta se probó con un script en `begin … rollback`.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
@@ -455,6 +456,14 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
     la misma versión que corre, *Update now* sigue diciendo que falló en vez de recargar (cualquier instalación nueva
     lo borra; no pierde nada). Ver `Doc_Sincronizacion.md`, "La versión mínima, el árbol y los comentarios" y "Volver
     después de mucho tiempo sin red".
+18. **Que lo borrado no llegue a quien solo ve la página (D14). Diseño en `Doc_Privacidad_Borrado.md`, sin código.**
+    Hoy lo borrado viaja en las filas a cualquiera que ve la página (también invitados) y las fotos sacadas se siguen
+    abriendo. Entregas: (0) avisarlo al compartir y en la ayuda; (1) la base limpia: quien no edita baja siempre la
+    última base de la página (armada por un editor, con lo borrado como hueco), con `clean_reset_seq` al compartir, los
+    permisos de los usos sacados de archivos y el interruptor `clean_min_version`, antes de invitar al primer cliente de
+    verdad; (2) medir; (3) limpiar el dispositivo de quien deja de ver lo borrado; (4) deltas si hacen falta. La subida
+    no cambia (D19). Depende del frente de las páginas en la papelera legibles con Ver. Pregunta para Lega: aceptar la
+    demora del cliente (sección 13).
 
 ### C. Esperan a Lega
 

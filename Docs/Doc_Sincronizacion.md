@@ -1175,10 +1175,10 @@ red y en el momento, no colas. Un header alto falso pasa: la mínima es una guar
 abrir, y sale con la cola de hoy al actualizar. Esa versión muestra el código `app_outdated` como error del comentario
 (no lo conoce); desde v0.099 sale en palabras.
 
-**Para que frene:** aplicar `20261008120000_version_minima_arbol.sql` (con copia de seguridad), publicar la v0.099 y,
+**Aplicada el 2026-10-02 con la v0.099, y la mínima subida a 0.099 ese día.** **Para que frene:** aplicar `20261008120000_version_minima_arbol.sql` (con copia de seguridad), publicar la v0.099 y,
 cuando Lega la tenga en sus dispositivos, subir `min_app_version` a 0.099 o más. 0.099 está escrito en
 `private.write_version_allowed` y en la prueba: quien publica pone el número real en los dos (la migración no corre
-con `0.099`) y `src/sync/writeVersion.test.ts` falla si no coincide con la entrada del changelog que nombra la
+con el número provisional) y `src/sync/writeVersion.test.ts` falla si no coincide con la entrada del changelog que nombra la
 migración. No sube `schema_version`: la app no necesita saber si la base la tiene.
 
 ## Volver después de mucho tiempo sin red
