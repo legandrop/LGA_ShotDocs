@@ -238,8 +238,14 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
         }
         const parsed = parseAnswer(answer.text, next.snapshot.selected);
         if (typeof parsed === 'string') {
-          const message =
-            parsed === 'marker' ? tr('assistant.invalid.marker') : parsed === 'structure' ? tr('assistant.invalid.structure') : tr('assistant.cutOff');
+          // Quien no puede editar igual solo copia: no se le habla de fotos o bloques que no se aplicarían.
+          const message = !canEdit
+            ? tr('assistant.copyOnly')
+            : parsed === 'marker'
+              ? tr('assistant.invalid.marker')
+              : parsed === 'structure'
+                ? tr('assistant.invalid.structure')
+                : tr('assistant.cutOff');
           setPhase({ kind: 'error', action: next.action, message, text: answer.text });
           return;
         }
@@ -249,7 +255,7 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
         setPhase({ kind: 'error', action: next.action, message: errorText(err, providerName, tr) });
       }
     },
-    [settings, config, busy, target, language, instruction, user.email, tr, providerName],
+    [settings, config, busy, target, language, instruction, user.email, tr, providerName, canEdit],
   );
 
   const stop = () => {

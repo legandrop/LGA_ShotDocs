@@ -273,6 +273,20 @@ describe('el panel', () => {
     expect(blockText(ed, 'p')).toBe('el kamara se movio en la toma 3');
   });
 
+  it('sin Editar, una respuesta sin las marcas (un resumen sin la foto) se ofrece para copiar, sin hablar de fotos ni bloques', async () => {
+    const { host, ed } = await setup({
+      editable: false,
+      blocks: [{ id: 'p', type: 'paragraph', content: [{ type: 'text', text: 'el kamara ', styles: {} }, { type: 'photo', props: { url: 'sdmedia://foto', name: 'set.jpg', w: 0.3 } }, { type: 'text', text: ' se movio', styles: {} }] }],
+    });
+    provider('the camera moved');
+    selectAll(ed, 'p', 0, 19);
+    await click(button(host, 'Translate to…'));
+    for (let i = 0; i < 20 && !host.querySelector('.assistant-error'); i++) await wait(30);
+    expect(host.textContent).toContain('This suggestion can only be copied here.');
+    expect(host.textContent).not.toContain('would remove a photo');
+    expect(button(host, 'Copy')).toBeDefined();
+  });
+
   it('el permiso se mira otra vez al aplicar: si se perdió Editar mientras se veía la sugerencia, no aplica', async () => {
     const editableRef = { current: true };
     const { host, ed } = await setup({ editableRef });

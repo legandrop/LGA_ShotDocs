@@ -60,6 +60,10 @@ export const assistant = {
     en: "The suggestion would remove a photo or a block.",
     es: "La sugerencia sacaría una foto o un bloque.",
   },
+  'assistant.copyOnly': {
+    en: "This suggestion can only be copied here.",
+    es: "Acá esta sugerencia solo se puede copiar.",
+  },
   'assistant.invalid.structure': {
     en: "The suggestion changed how the text is split into paragraphs. Try again, or copy it.",
     es: "La sugerencia cambió cómo se divide el texto en párrafos. Probá de nuevo, o copiala.",
