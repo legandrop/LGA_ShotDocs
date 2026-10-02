@@ -4,6 +4,7 @@ import { toBase64 } from '../lib/base64';
 import type { MediaDb } from '../media/mediaDb';
 import { exportComments, unsyncedComments, type CommentsDb } from './comments';
 import { unsyncedDocStates, type LocalDb } from './localDb';
+import { applyRowsInOrder, removedWritingKey, type RemovedWriting } from './removedWriting';
 import { CONTENT_FRAGMENT } from './structure';
 
 // Lo que el dispositivo tiene sin subir, para no perderlo cuando sacan a alguien del workspace (sección 8
@@ -108,9 +109,14 @@ export async function exportUnsyncedBlob(
   parts.push(',"pages":[');
   let first = true;
   for (const state of states) {
-    const rows = await db.getAllFromIndex('docUpdates', 'pageId', state.pageId);
-    const doc = new Y.Doc();
-    if (rows.length > 0) Y.applyUpdate(doc, Y.mergeUpdates(rows.map((r) => r.data)));
+    const [rows, removed] = await Promise.all([
+      db.getAllFromIndex('docUpdates', 'pageId', state.pageId),
+      db.get('meta', removedWritingKey(state.pageId)),
+    ]);
+    // Sin GC y fila por fila, como la subida (B.16): lo propio que quedó adentro de algo que otro borró va con su
+    // texto (borrado), no como hueco.
+    const doc = new Y.Doc({ gc: false });
+    applyRowsInOrder(doc, rows.map((r) => r.data));
     // Lo que el servidor todavía no confirmó: la diferencia contra lo que ya tiene.
     const update = Y.encodeStateAsUpdate(doc, state.syncedSV);
     parts.push(
@@ -120,6 +126,8 @@ export async function exportUnsyncedBlob(
           title: info.titleOf(state.pageId) ?? null,
           rejected: state.rejected ?? null,
           text: plainText(doc),
+          // Lo escrito acá que otro borró mientras se escribía (el aviso de la página), si lo hay.
+          removedWriting: Array.isArray(removed) ? (removed as RemovedWriting[]).map((n) => n.text) : [],
           yjsUpdate: toBase64(update),
           yjsFullState: toBase64(Y.encodeStateAsUpdate(doc)),
         }),

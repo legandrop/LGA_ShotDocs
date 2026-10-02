@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.096 :
 
 Detalles del salto de hoja. Pegar en un renglón de salto algo que traía saltos los perdía: v0.093 dejaba uno solo,
 sin distinguir los pegados del heredado. Ahora se anota qué bloques eran saltos al pegar y se conservan; el del
@@ -10,6 +10,17 @@ lo escondido, como al final. Supr en un salto vacío último hijo de un bloque s
 ahora saca el salto y lo de abajo no se mueve. Cada caso se deshace en un paso. Roadmap: Apple Developer y
 Microsoft Store para cuando la app esté terminada.
 [ Salto de hoja - pegar conserva los saltos pegados, Ctrl/⌘+Enter en un título colapsado y Supr en un último hijo ]
+
+v0.095 :
+
+Lo que alguien escribía adentro de un bloque que otro borraba al mismo tiempo podía no llegar nunca al servidor: la
+subida se armaba en un `Y.Doc` con GC y, si el dispositivo bajaba el borrado antes de subir, ese texto viajaba como
+hueco y quedaba solo en su IndexedDB (lo encontró la auditoría del historial). Ahora la subida se arma sin GC,
+aplicando lo guardado fila por fila y en orden: el texto llega, borrado (también lo escrito y borrado entre dos
+subidas; con más de 6 MB se arma con GC, como antes). Y quien escribió se entera: la página muestra un aviso con lo
+que escribió ahí, para verlo, copiarlo o descartarlo; el estado lo dice si la página no está abierta, y *Download my
+unsynced changes* lo incluye. Sin migración. Suma el diseño de compactar en el servidor (`Doc_Compactar.md`).
+[ Subida sin GC - lo escrito en algo que otro borra a la vez llega al servidor y se avisa ]
 
 v0.094 :
 
