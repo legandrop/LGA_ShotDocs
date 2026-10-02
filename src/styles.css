@@ -2958,6 +2958,32 @@ code {
   margin-left: var(--img-gap, 8px);
 }
 
+/* Fotos en las celdas de una tabla (Docs/Doc_Fotos_En_Linea.md, entrega 5): una foto sin ancho propio (`w = 0`, con
+   lo que entran pegadas, soltadas o importadas en una celda) es una miniatura con el alto de una fila, como en Coda; el
+   ancho sale de su proporción, con tope en la celda. Las de una celda quedan una al lado de la otra, a la misma
+   altura, con el espacio de las filas entre ellas. Con ancho propio (tamaños, tiradores) es una parte de la celda,
+   como en un renglón. Lo mismo en la vista de impresión y el PDF (printView.ts lee este alto). */
+.bn-editor {
+  --sd-cell-photo-h: 96px;
+}
+
+.bn-editor [data-content-type='table'] .sd-photo[data-w='0'] > img.bn-visual-media {
+  max-height: var(--sd-cell-photo-h);
+}
+
+/* Con ancho propio, la parte de la celda que tiene, sin agrandar la columna: sin esto, la tabla (de ancho automático)
+   le daba a la columna lo que mide el original de la foto (hasta todo el ancho de la página) y "1/2" no era la mitad
+   de nada que se viera. El ancho de la columna lo dan lo demás de la columna o el tirador de la columna. */
+.bn-editor [data-content-type='table'] .sd-photo.sd-photo-sized {
+  contain: inline-size;
+}
+
+/* Entre dos fotos seguidas ProseMirror pone un `<img class="ProseMirror-separator">` de ancho 0. */
+.bn-editor [data-content-type='table'] .sd-photo + .sd-photo:not(.sd-photo-sized),
+.bn-editor [data-content-type='table'] .sd-photo + img.ProseMirror-separator + .sd-photo:not(.sd-photo-sized) {
+  margin-left: var(--img-gap, 8px);
+}
+
 /* El renglón con fotos ocupa todo el ancho del bloque. `.bn-block-content` es flex y el renglón, sin esto, mide lo que
    su contenido: en un renglón de solo fotos que no lo llenan, la suma de los anchos naturales de las miniaturas (480 px
    o menos), y el ancho de cada foto (una parte del renglón) salía de esa medida (medido con fotos de ERSO: una a 1/1

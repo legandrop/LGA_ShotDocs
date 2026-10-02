@@ -9,7 +9,7 @@ import { mediaIdOf } from '../media/queue';
 import { BarButton } from './BarButton';
 import { ROW_PRESETS } from './imageRows';
 import { PHOTO, photoWidth } from './inlinePhoto';
-import { liveView, trackSpot, takeSpot } from './inlinePhotoCreate';
+import { inTableCell, liveView, trackSpot, takeSpot } from './inlinePhotoCreate';
 import { photoKeyAtPos } from './inlinePhotoEditor';
 import { arrangeSelected, arrangeTarget, aspectAt, onlyPhotosSelected, selectedPhotos, setPhotoWidths } from './inlinePhotoSize';
 import {
@@ -49,6 +49,8 @@ interface PhotoChoice {
   /** Los bloques de las fotos (sin repetir) y su alineación, si es la misma en todos. */
   blocks: string[];
   align: Alignment | null;
+  /** Alguna está en una celda de tabla: ahí no se alinea (la tabla no tiene alineación propia). */
+  inTable: boolean;
 }
 
 /** El bloque de la foto en `pos` y la alineación de su texto. */
@@ -80,6 +82,7 @@ function choiceOf(state: EditorState): PhotoChoice | null {
     arrange: arrangeTarget(state),
     blocks,
     align: aligns.size === 1 ? [...aligns][0] : null,
+    inTable: positions.some((p) => inTableCell(state.doc.resolve(p))),
   };
 }
 
@@ -94,6 +97,7 @@ const sameChoice = (a: PhotoChoice | null, b: PhotoChoice | null) =>
     a.key === b.key &&
     a.blocks.join() === b.blocks.join() &&
     a.align === b.align &&
+    a.inTable === b.inTable &&
     a.arrange?.positions.join() === b.arrange?.positions.join() &&
     a.arrange?.adjacent === b.arrange?.adjacent);
 
@@ -203,7 +207,8 @@ export function PhotoToolbar() {
             </>
           ),
           <PhotoSizeButtons />,
-          <AlignButtons current={choice.align} inline onAlign={(a) => alignBlocks(editor, choice.blocks, a)} />,
+          // En una celda, alinear no tiene qué alinear (la tabla no tiene alineación): no va.
+          !choice.inTable && <AlignButtons current={choice.align} inline onAlign={(a) => alignBlocks(editor, choice.blocks, a)} />,
           actions?.canComment && <CommentButton blockId={choice.blocks[0] ?? null} />,
           <>
             {single && actions && <ReplaceButton accept={actions.accept.inline} kind={kind} onFile={(file) => replacePhoto(editor, choice.positions[0], choice.url ?? '', file, actions.store)} />}
