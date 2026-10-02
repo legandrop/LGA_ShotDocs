@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.121 :
 
 En el set, el reporte de cada día se armaba a mano copiando fecha, número de día, locación y cámara de ayer (P.23,
 entrega 2 de `Doc_Plantillas.md`). Ahora *New day report*, arriba del título de la carpeta de reportes y de cada reporte
@@ -10,6 +10,17 @@ de esa fecha (*Create another*, con el mismo día). La carpeta se marca sola con
 (`settings.dayReports`, sin migración) o a mano. Todo local, sin red. Auditada: corregidos el día de *Create another*,
 las páginas vacías, Enter mientras lee y el reintento sin duplicar.
 [ Reporte del día - el botón New day report, la carpeta de reportes y lo que se copia de ayer ]
+
+v0.120 :
+
+Menciones en comentarios (P.21), entrega 1. No había forma de avisarle a alguien de un comentario: solo se veía
+abriendo la página. Nueva migración `20261015120000_menciones.sql` (`comment_mentions`, la regla de a quién se puede
+mencionar, la campana y las leídas; `list_comments` suma `mentions`; `schema_version` 15) con sus pruebas de permisos
+y 30 mutantes. En la app: `@` en un comentario abre la lista de quienes ven la página, la mención se pinta y viaja en
+la cola como operación `mentions`, con copia en `meta` para una versión vieja; una campana arriba con las sin leer
+(9+), la lista, abrir una lleva al hilo, *Mark all as read*, y un punto en el botón de comentarios; sin red, lo
+guardado. Las menciones de Coda se ven como `@Nombre`. Con la base sin migrar, nada cambia.
+[ Menciones, entrega 1 - el @ en los comentarios, la campana y su migración ]
 
 v0.119 :
 

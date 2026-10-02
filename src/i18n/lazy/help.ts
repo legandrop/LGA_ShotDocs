@@ -262,6 +262,11 @@ export const help = {
     en: "Comment on any block with {comment}, the button in its margin or the formatting bar. The comments icon at the top shows every thread of the page. {send} sends, Esc cancels.",
     es: "Comentá cualquier bloque con {comment}, el botón de su margen o la barra de formato. El ícono de comentarios de arriba muestra todos los hilos de la página. {send} manda, Esc cancela.",
   },
+  'help.mentions.title': { en: "Mention someone in a comment", es: "Mencionar a alguien en un comentario" },
+  'help.mentions.text': {
+    en: "In a comment, type @ and pick someone who can see the page: they get a notice in the bell at the top, with the number of unread mentions. {pick} choose from the list, {close} closes it without erasing what you wrote. Deleting the @name before sending removes the mention. A dot on the comments button means someone mentioned you on that page.",
+    es: "En un comentario, escribí @ y elegí a alguien que vea la página: le llega un aviso en la campana de arriba, con el número de menciones sin leer. {pick} eligen de la lista, {close} la cierra sin borrar lo escrito. Borrar el @nombre antes de mandar saca la mención. Un punto en el botón de comentarios quiere decir que te mencionaron en esa página.",
+  },
   'help.questions.title': { en: "Questions", es: "Preguntas" },
   'help.questions.text': {
     en: "A question is a line marked with a ? icon ({question}, or / Question). Anyone who can comment answers it in a thread, without editing the page.",
@@ -536,6 +541,14 @@ export const help = {
     es: "En la lista de proyectos, el panel de buscar y el menú de pegar Drive: moverse y elegir",
   },
   'shortcut.listClose': { en: "Close that list", es: "Cerrar esa lista" },
+  'shortcut.mentionPick': {
+    en: "With the @ list open: choose who to mention and put them in",
+    es: "Con la lista del @ abierta: elegir a quién mencionar y ponerlo",
+  },
+  'shortcut.mentionClose': {
+    en: "Close the @ list without erasing what you wrote",
+    es: "Cerrar la lista del @ sin borrar lo escrito",
+  },
   'shortcut.versionName': {
     en: "Naming a version in the history: save / leave it as it was",
     es: "Al ponerle nombre a una versión del historial: guardar / dejar como estaba",

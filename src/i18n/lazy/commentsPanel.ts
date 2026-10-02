@@ -5,6 +5,14 @@ import type { Dict } from '../types';
 
 export const commentsPanel = {
   'comments.onPage': { en: "Comment on the page", es: "Comentar la página" },
+  // La lista del @ (Doc_Menciones.md, 2.1) y a quién no se avisó (2.2).
+  'mentions.listLabel': { en: "People to mention", es: "Personas para mencionar" },
+  'mentions.noMatch': { en: "No one with access matches", es: "Nadie con acceso coincide" },
+  'mentions.max': { en: "Up to {max} people per comment", es: "Hasta {max} personas por comentario" },
+  'comments.notNotified': {
+    en: { one: "{names} wasn't notified.", other: "{names} weren't notified." },
+    es: { one: "No se le avisó a {names}.", other: "No se les avisó a {names}." },
+  },
   'comments.close': { en: "Close comments", es: "Cerrar los comentarios" },
   'comments.offline': {
     en: "Offline: what you write is saved on this device and uploads when you’re back online.",

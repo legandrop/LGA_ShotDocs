@@ -41,7 +41,11 @@ import {
   type CommentsDb,
   type ImportedComment,
   type NewComment,
+  cleanLabel,
+  labelForEmail,
+  MENTIONS_SCHEMA_VERSION,
 } from './comments';
+import { MentionsInbox, type InboxResponse, type MentionCandidate, type MentionsRemote } from './mentions';
 import { CLEAN_SCHEMA_VERSION } from './clean';
 import { normalizeStructure, seedIfEmpty } from './structure';
 import { PageTree } from './tree';
@@ -133,7 +137,7 @@ export class FakeServer {
    */
   team = false;
   readonly members = new Map<string, { email: string; role: Role; removed_at: string | null }>();
-  readonly grants: { id: string; user_id: string; project_id: string | null; page_id: string | null; level: GrantLevel }[] = [];
+  readonly grants: { id: string; user_id: string; project_id: string | null; page_id: string | null; level: GrantLevel; granted_by?: string }[] = [];
   readonly invitations: {
     id: string;
     email: string;
@@ -142,6 +146,8 @@ export class FakeServer {
     used_at: string | null;
     invited_by?: string;
     revoked_at?: string | null;
+    /** Quien entró con ella (para las menciones de un invitado, ME3). */
+    used_by?: string;
   }[] = [];
   /** Simula una base sin `list_invitations`/`revoke_invitation` (PGRST202). */
   noInvitationList = false;
@@ -312,7 +318,24 @@ export class FakeServer {
   /** Las funciones de comentarios que se llamaron, en orden (`add <id>`, `edit <id>`...). */
   readonly commentCalls: string[] = [];
   /** Funciones de comentarios que hacen su trabajo y después pierden la respuesta, una vez cada una. */
-  readonly loseCommentResponse = new Set<'add' | 'edit' | 'delete' | 'resolve' | 'import'>();
+  readonly loseCommentResponse = new Set<'add' | 'edit' | 'delete' | 'resolve' | 'import' | 'mentions'>();
+  /** Funciones de comentarios que fallan una vez como un 500, por el comienzo de su nombre. */
+  readonly failCommentOnce = new Set<string>();
+  /** La base tiene las menciones (versión 15, 20261015120000_menciones.sql). */
+  mentionsEnabled = false;
+  /** `comment_mentions`, con las filas sacadas (`removed_at`): nada se borra. */
+  readonly mentions: {
+    id: string;
+    comment_id: string;
+    page_id: string;
+    user_id: string;
+    mentioned_by: string;
+    label: string;
+    created_at: string;
+    updated_at: string;
+    removed_at: string | null;
+    read_at: string | null;
+  }[] = [];
   /** Las funciones de comentarios fallan como un 500 (se arregla solo). */
   commentsServerError = false;
   private commentClock = 0;
@@ -379,6 +402,30 @@ export class FakeServer {
     this.enableComments();
     this.importCommentsEnabled = true;
     this.settings = { ...this.settings!, schemaVersion: 8 };
+  }
+
+  /** Prende las menciones: la base en la versión 15, con `list_comments` (y las reglas del equipo). */
+  enableMentions(): void {
+    this.enableImportedComments();
+    this.listCommentsEnabled = true;
+    this.mentionsEnabled = true;
+    this.settings = { ...this.settings!, schemaVersion: MENTIONS_SCHEMA_VERSION };
+  }
+
+  /** `private.mention_allowed` (Docs/Doc_Menciones.md, sección 4). */
+  mentionAllowed(pageId: string, caller: string, target: string): boolean {
+    const cr = this.role(caller);
+    const tr = this.role(target);
+    if (!target || target === caller || !cr || !tr || this.pageLevel(target, pageId) < 1) return false;
+    if (cr === 'owner' || cr === 'admin' || (cr !== 'guest' && tr !== 'guest')) return true;
+    for (const c of this.comments.values()) {
+      if (c.page_id === pageId && !c.deleted_at && [c.author_id, c.resolved_by, c.imported_by].includes(target)) return true;
+    }
+    return (
+      cr === 'guest' &&
+      (this.grants.some((g) => g.user_id === caller && g.granted_by === target) ||
+        this.invitations.some((i) => i.used_by === caller && i.invited_by === target))
+    );
   }
 
   /** Una hora del servidor que siempre avanza (para el orden de los comentarios). */
@@ -928,7 +975,7 @@ const pageNotFound = () => new RemoteError('page_not_found', true, 'P0002');
 const fileNotFound = () => new RemoteError('file_not_found', true, 'P0002');
 
 export class FakeRemote
-  implements Remote, MediaRemote, TeamRemote, CommentRemote, ProjectStatesRemote, HistoryRemote, NamedVersionsRemote
+  implements Remote, MediaRemote, TeamRemote, CommentRemote, MentionsRemote, ProjectStatesRemote, HistoryRemote, NamedVersionsRemote
 {
   /** La sesión: por defecto, el dueño del workspace. */
   readonly userId: string;
@@ -1941,9 +1988,16 @@ export class FakeRemote
     this.server.check();
     this.server.commentCalls.push(name);
     if (this.server.commentsServerError) throw new RemoteError('Internal Server Error', false, '500');
+    // Una función que falla una vez como un 500 (se arregla sola), por el comienzo de su nombre (`edit`, `set_comment_mentions`).
+    for (const prefix of this.server.failCommentOnce) {
+      if (name.startsWith(prefix)) {
+        this.server.failCommentOnce.delete(prefix);
+        throw new RemoteError('Internal Server Error', false, '500');
+      }
+    }
   }
 
-  private lostCommentResponse(name: 'add' | 'edit' | 'delete' | 'resolve' | 'import'): void {
+  private lostCommentResponse(name: 'add' | 'edit' | 'delete' | 'resolve' | 'import' | 'mentions'): void {
     if (this.server.loseCommentResponse.delete(name)) throw new RemoteError('Failed to fetch', false, undefined, true);
   }
 
@@ -1964,7 +2018,21 @@ export class FakeRemote
     if (this.commentLevel(pageId) < 1) throw new RemoteError('page_not_found', true, 'P0002');
     return [...this.server.comments.values()]
       .filter((c) => c.page_id === pageId && (since === null || (c.updated_at ?? c.created_at) > since))
-      .map((c) => ({ ...c, body: c.deleted_at ? null : c.body, updated_at: c.updated_at ?? c.created_at }));
+      .map((c) => ({
+        ...c,
+        body: c.deleted_at ? null : c.body,
+        updated_at: c.updated_at ?? c.created_at,
+        // Desde la versión 15, las menciones activas al final (nulo si se borró).
+        ...(this.server.mentionsEnabled
+          ? {
+              mentions: c.deleted_at
+                ? null
+                : this.server.mentions
+                    .filter((m) => m.comment_id === c.id && !m.removed_at)
+                    .map((m) => ({ user_id: m.user_id, label: m.label })),
+            }
+          : {}),
+      }));
   }
 
   async fetchCommentAuthors(pageId: string): Promise<CommentAuthor[]> {
@@ -1975,6 +2043,10 @@ export class FakeRemote
     for (const c of this.server.comments.values()) {
       if (c.page_id !== pageId) continue;
       for (const id of [c.author_id, c.resolved_by, c.deleted_by, c.imported_by]) if (id) ids.add(id);
+    }
+    // Las mencionadas en comentarios sin borrar (versión 15).
+    for (const m of this.server.mentions) {
+      if (m.page_id === pageId && !m.removed_at && !this.server.comments.get(m.comment_id)?.deleted_at) ids.add(m.user_id);
     }
     return [...ids].map((id) => ({ user_id: id, email: this.server.members.get(id)?.email ?? `${id}@test` }));
   }
@@ -2153,6 +2225,153 @@ export class FakeRemote
     this.lostCommentResponse('resolve');
   }
 
+  // --- menciones (mismas reglas que supabase/migrations/20261015120000_menciones.sql) ---
+
+  private mentionsCheck(name: string): void {
+    this.commentCheck(name);
+    if (!this.server.mentionsEnabled) throw new RemoteError(`Could not find the function public.${name.split(' ')[0]}`, true, 'PGRST202');
+  }
+
+  /** Lo que la sesión ve: miembro activo (como `workspace_role()`). */
+  private get member(): boolean {
+    return !this.team || !!this.server.role(this.userId);
+  }
+
+  async setCommentMentions(commentId: string, mentions: { user_id: string; label: string }[]): Promise<string[]> {
+    this.mentionsCheck(`set_comment_mentions ${commentId}`);
+    const invalid = () => new RemoteError('mentions_invalid', true, '22023');
+    if (!Array.isArray(mentions) || mentions.length > 20) throw invalid();
+    for (const m of mentions) {
+      const label = typeof m?.label === 'string' ? m.label.trim() : '';
+      if (
+        Object.keys(m ?? {}).length !== 2 ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(m.user_id ?? '') ||
+        label.length < 1 ||
+        label.length > 64 ||
+        // Los mismos caracteres que rechaza la base (también los invisibles).
+        label !== cleanLabel(label)
+      ) {
+        throw invalid();
+      }
+    }
+    const uid = this.userId;
+    const wanted = mentions.map((m) => m.user_id);
+    const cur = this.server.comments.get(commentId);
+    const active = () => this.server.mentions.filter((m) => m.comment_id === commentId && !m.removed_at);
+    // El reintento del mismo conjunto da bien antes de mirar el permiso.
+    if (
+      cur &&
+      cur.author_id === uid &&
+      !cur.deleted_at &&
+      active().every((m) => wanted.includes(m.user_id)) &&
+      wanted.every((w) => w === uid || active().some((m) => m.user_id === w))
+    ) {
+      this.lostCommentResponse('mentions');
+      return active().map((m) => m.user_id);
+    }
+    const lvl = cur ? this.commentLevel(cur.page_id) : 0;
+    if (!cur || lvl < 1) throw new RemoteError('comment_not_found', true, 'P0002');
+    if (cur.author_id !== uid) throw new RemoteError('not_allowed', true, '42501');
+    if (lvl < 2) throw new RemoteError('comment_denied', true, '42501');
+    if (cur.deleted_at) throw new RemoteError('comment_deleted', true, 'P0001');
+    this.checkWriteVersion();
+    const accepted: string[] = [];
+    let changed = false;
+    const at = this.server.commentNow();
+    for (const m of mentions) {
+      if (accepted.includes(m.user_id) || !this.server.mentionAllowed(cur.page_id, uid, m.user_id)) continue;
+      const label = m.label.trim();
+      const row = this.server.mentions.find((r) => r.comment_id === commentId && r.user_id === m.user_id);
+      if (!row) {
+        this.server.mentions.push({
+          id: crypto.randomUUID(), comment_id: commentId, page_id: cur.page_id, user_id: m.user_id, mentioned_by: uid,
+          label, created_at: at, updated_at: at, removed_at: null, read_at: null,
+        });
+        changed = true;
+      } else if (row.removed_at || row.label !== label) {
+        Object.assign(row, { removed_at: null, label, updated_at: at });
+        changed = true;
+      }
+      accepted.push(m.user_id);
+    }
+    for (const row of active()) {
+      if (accepted.includes(row.user_id)) continue;
+      Object.assign(row, { removed_at: at, updated_at: at });
+      changed = true;
+    }
+    if (changed) cur.updated_at = at;
+    this.lostCommentResponse('mentions');
+    return accepted;
+  }
+
+  async mentionCandidates(pageId: string): Promise<MentionCandidate[]> {
+    this.mentionsCheck('mention_candidates');
+    const lvl = this.commentLevel(pageId);
+    if (lvl < 1 || !this.member) throw new RemoteError('page_not_found', true, 'P0002');
+    if (lvl < 2) throw new RemoteError('comment_denied', true, '42501');
+    return [...this.server.members]
+      .filter(([id, m]) => !m.removed_at && this.server.mentionAllowed(pageId, this.userId, id))
+      .map(([id, m]) => ({ userId: id, email: m.email, label: labelForEmail(m.email) }))
+      .sort((a, b) => (a.email < b.email ? -1 : 1));
+  }
+
+  /** Lo que `mentions_inbox` y `mentions_index` dan por ido. */
+  private mentionGone(m: FakeServer['mentions'][number]): boolean {
+    return !!m.removed_at || !!this.server.comments.get(m.comment_id)?.deleted_at || this.server.pageLevel(this.userId, m.page_id) < 1;
+  }
+
+  async mentionsInbox(since: string | null, limit: number): Promise<InboxResponse> {
+    this.mentionsCheck('mentions_inbox');
+    const now = this.server.commentNow();
+    if (!this.server.role(this.userId)) return { now, unread: 0, rows: [] };
+    const mine = this.server.mentions.filter((m) => m.user_id === this.userId);
+    const unread = Math.min(mine.filter((m) => !m.read_at && !this.mentionGone(m)).length, 10);
+    const rows = mine
+      .filter((m) => since === null || m.updated_at >= since)
+      .sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1))
+      .slice(0, Math.min(Math.max(limit || 30, 1), 50))
+      .map((m) => {
+        if (this.mentionGone(m)) return { id: m.id, gone: true, updated_at: m.updated_at };
+        const c = this.server.comments.get(m.comment_id)!;
+        const root = c.thread_id ? this.server.comments.get(c.thread_id) : null;
+        const page = this.server.pages.get(m.page_id);
+        return {
+          id: m.id, gone: false, updated_at: m.updated_at, created_at: m.created_at, read_at: m.read_at,
+          comment_id: m.comment_id, page_id: m.page_id, thread_id: c.thread_id, block_id: c.block_id, label: m.label,
+          mentioned_by: m.mentioned_by, mentioned_by_email: this.server.members.get(m.mentioned_by)?.email ?? null,
+          snippet: c.body.slice(0, 280), resolved: !!c.resolved_at || !!root?.resolved_at,
+          page_title: page?.title ?? '', project_id: page?.workspace_id ?? null,
+        };
+      });
+    return { now, unread, rows };
+  }
+
+  async mentionsIndex(): Promise<[string, boolean, boolean][]> {
+    this.mentionsCheck('mentions_index');
+    if (!this.server.role(this.userId)) return [];
+    return this.server.mentions
+      .filter((m) => m.user_id === this.userId)
+      .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+      .slice(0, 200)
+      .map((m) => [m.id, this.mentionGone(m), !!m.read_at]);
+  }
+
+  async markMentionsRead(ids: string[] | null, upTo: string | null): Promise<number> {
+    this.mentionsCheck('mark_mentions_read');
+    this.server.commentCalls.push(`read ${ids?.length ?? 0} ${upTo ?? '-'}`);
+    if (!this.server.role(this.userId)) return 0;
+    const at = this.server.commentNow();
+    let n = 0;
+    for (const m of this.server.mentions) {
+      if (m.user_id !== this.userId || m.read_at) continue;
+      if ((ids ?? []).includes(m.id) || (upTo !== null && m.created_at <= upTo)) {
+        m.read_at = at;
+        m.updated_at = at;
+        n++;
+      }
+    }
+    return n;
+  }
 }
 
 
@@ -2208,6 +2427,8 @@ export interface Device {
   access: AccessStore;
   comments: CommentQueue;
   commentsDb: CommentsDb;
+  /** La campana (no arranca sola: las pruebas llaman a `poll`). */
+  mentions: MentionsInbox;
   sizes: ProjectSizes;
   offline: OfflineManager;
 }
@@ -2268,6 +2489,8 @@ export async function makeDevice(
   const commentsDb = await openCommentsDb(commentsDbName(dbName));
   const comments = new CommentQueue(commentsDb, remote, remote.userId, { now: () => Date.now() + server.clockOffset });
   await comments.load();
+  const mentions = new MentionsInbox(commentsDb, remote, comments, { now: () => Date.now() + server.clockOffset, online: () => server.online });
+  await mentions.load();
   const sizes = new ProjectSizes(db, {
     projectSizes: async () => {
       server.check();
@@ -2294,7 +2517,7 @@ export async function makeDevice(
   });
   await offline.load();
   offlineRef = offline;
-  return { db, tree, docs, files, media, mediaDb, engine, remote, access, comments, commentsDb, sizes, offline };
+  return { db, tree, docs, files, media, mediaDb, engine, remote, access, comments, commentsDb, mentions, sizes, offline };
 }
 
 /** Lo que se corta al matar la app (un dispositivo, o la versión publicada sin motor). */
