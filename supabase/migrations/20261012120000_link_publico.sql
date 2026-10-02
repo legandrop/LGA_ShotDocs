@@ -725,7 +725,7 @@ begin
     raise exception 'page_not_found' using errcode = 'P0002';
   end if;
   if name is null or char_length(name) not between 1 and 60
-     or name ~ '[[:cntrl:]​-‏‪-‮⁠-⁩﻿]' then
+     or name ~ '[[:cntrl:]\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]' then
     raise exception 'author_invalid' using errcode = '22023';
   end if;
   if p_thread_id is not null then
@@ -853,8 +853,8 @@ create policy thumbs_select_link on storage.objects
 -- ---------------------------------------------------------------------------------------------------
 -- 5. Lo que llama quien comparte (authenticated, con `can_share`)
 -- ---------------------------------------------------------------------------------------------------
--- El link de una página, para quien la comparte: el token solo si es de esta página.
-create function private.public_link_json(l public.public_links, p_with_token boolean)
+-- El link de una página, con su token, para quien la comparte (el de una página de arriba va sin token, ver get_public_link).
+create function private.public_link_json(l public.public_links)
 returns jsonb
 language sql stable security definer set search_path = ''
 as $$
@@ -862,7 +862,7 @@ as $$
     'id', l.id, 'page_id', l.page_id, 'level', l.level, 'created_at', l.created_at, 'expires_at', l.expires_at,
     'created_by', l.created_by,
     'created_by_name', (select nullif(split_part(u.email, '@', 1), '') from auth.users u where u.id = l.created_by),
-    'token', case when p_with_token then l.token end,
+    'token', l.token,
     -- Anda hoy: no venció y quien lo creó todavía puede compartir (la raíz en la papelera, aparte).
     'alive', (l.expires_at is null or l.expires_at > now()) and l.created_by is not null
              and private.user_can_share_page(l.page_id, l.created_by),
@@ -880,7 +880,7 @@ as $$
     'comments', (select count(*) from public.comments c where c.plink_id = l.id and c.deleted_at is null));
 $$;
 
-revoke all on function private.public_link_json(public.public_links, boolean) from public, anon, authenticated;
+revoke all on function private.public_link_json(public.public_links) from public, anon, authenticated;
 
 -- Un token nuevo: `sdl_` + 32 bytes al azar en base64url (43 caracteres).
 create function private.new_link_token()
@@ -939,7 +939,7 @@ begin
   perform pg_advisory_xact_lock(hashtextextended('public_link:' || p_page::text, 0));
   select * into l from public.public_links pl where pl.page_id = p_page and pl.revoked_at is null;
   if found then
-    return private.public_link_json(l, true);
+    return private.public_link_json(l);
   end if;
   if exists (select 1 from public.public_links pl where pl.id = p_id) then
     raise exception 'link_invalid' using errcode = '22023';
@@ -949,7 +949,7 @@ begin
   values (p_id, p_page, t, extensions.digest(t, 'sha256'), p_level, auth.uid(), p_expires)
   returning * into l;
   perform private.clean_reset(null, p_page);
-  return private.public_link_json(l, true);
+  return private.public_link_json(l);
 end;
 $$;
 
@@ -974,7 +974,7 @@ begin
   if not found then
     raise exception 'link_not_found' using errcode = 'P0002';
   end if;
-  return private.public_link_json(l, true);
+  return private.public_link_json(l);
 end;
 $$;
 
@@ -997,7 +997,7 @@ begin
   -- Reintentar el mismo reset no crea un tercero.
   select * into l from public.public_links pl where pl.id = p_new_id and pl.page_id = p_page and pl.revoked_at is null;
   if found then
-    return private.public_link_json(l, true);
+    return private.public_link_json(l);
   end if;
   update public.public_links pl set revoked_at = now(), revoked_by = auth.uid()
   where pl.page_id = p_page and pl.revoked_at is null
@@ -1013,7 +1013,7 @@ begin
   values (p_new_id, p_page, t, extensions.digest(t, 'sha256'), old.level, auth.uid(),
           case when old.expires_at > now() then old.expires_at end)
   returning * into l;
-  return private.public_link_json(l, true);
+  return private.public_link_json(l);
 end;
 $$;
 
@@ -1058,7 +1058,7 @@ begin
   limit 1;
   return jsonb_build_object(
     'clean_on', private.clean_min_version() is not null,
-    'link', case when l.id is not null then private.public_link_json(l, true) end,
+    'link', case when l.id is not null then private.public_link_json(l) end,
     'above', case when above.id is not null then jsonb_build_object(
       'page_id', above.page_id, 'level', above.level,
       'title', case when private.page_level(above.page_id) >= 1

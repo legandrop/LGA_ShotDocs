@@ -764,6 +764,14 @@ begin
   assert pg_temp.tree(pg_temp.tok('H')) = 'error:link_not_found', 'el link revive al volver';
   -- El de S (de a) sigue.
   assert pg_temp.tree(pg_temp.tok('S')) = 'H,N,S', 'sacar a otro apagó S';
+  -- a creó el proyecto; si pasa a invitado, nunca comparte: su link se apaga (y vuelve con el rol).
+  update public.members set role = 'guest' where user_id = pg_temp.u('d1a1');
+  assert pg_temp.tree(pg_temp.tok('S')) = 'error:link_not_found', 'el link del dueño del proyecto pasado a invitado anda';
+  perform pg_temp.as_user('d1a1');
+  assert not private.can_share(null, pg_temp.u('d1b2')), 'el dueño del proyecto invitado comparte';
+  perform pg_temp.as_postgres();
+  update public.members set role = 'member' where user_id = pg_temp.u('d1a1');
+  assert pg_temp.tree(pg_temp.tok('S')) = 'H,N,S', 'no volvió con el rol';
   -- can_share: lo mismo que antes para las personas de la prueba (y nunca un invitado).
   perform pg_temp.as_user('d1a1');
   assert private.can_share(null, pg_temp.u('d1b2')), 'a no comparte';
