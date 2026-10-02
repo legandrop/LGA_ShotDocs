@@ -153,6 +153,11 @@ export class FakeServer {
   heicTimeoutMs?: number;
   /** Lo que el navegador saca de un archivo (por defecto `fakeProbe`; las pruebas lo cambian). */
   probe: (file: Blob, mime: string) => Promise<Probe> = fakeProbe;
+  /**
+   * La vista previa de un adjunto (Docs/Doc_Adjuntos.md, entrega 2). Por defecto ninguna (node no tiene canvas);
+   * las pruebas ponen `fakePreview` o una que tira `PreviewUnavailable`.
+   */
+  preview: (file: Blob, mime: string, name: string, onStart?: () => Promise<boolean>) => Promise<Blob | null> = async () => null;
   /** `comments`, con el texto aunque se haya borrado (como la tabla; la vista lo devuelve vacío). */
   readonly comments = new Map<string, StoredComment>();
   /** La base tiene `import_comment` (versión 8); apagado, la función no existe (PGRST202). */
@@ -783,6 +788,14 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     return new RemoteError(message, true, '42501');
   }
 
+  /** Como `private.app_version_allowed` de la base: con mínimo, una versión menor o ilegible no pasa. */
+  private checkAppVersion(): void {
+    const min = this.server.settings?.minAppVersion;
+    if (min != null && !(/^\d{1,4}(\.\d{1,3})?$/.test(this.appVersion) && Number(this.appVersion) >= min)) {
+      throw new RemoteError('app_outdated', true, 'P0001');
+    }
+  }
+
   async fetchWorkspaceSettings(): Promise<WorkspaceSettings | null> {
     this.server.check();
     return this.server.settings && { ...this.server.settings };
@@ -1027,10 +1040,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     if (!page || this.server.pageInDeletedProject(pageId) || (this.team && this.server.pageLevel(this.userId, pageId) < 3)) {
       throw new RemoteError('page_not_found', true, 'P0002');
     }
-    const min = this.server.settings?.minAppVersion;
-    if (min != null && !(/^\d{1,4}(\.\d{1,3})?$/.test(this.appVersion) && Number(this.appVersion) >= min)) {
-      throw new RemoteError('app_outdated', true, 'P0001');
-    }
+    this.checkAppVersion();
     const list = this.server.updates.get(pageId) ?? [];
     const existing = list.find((u) => u.clientUpdateId === clientUpdateId);
     if (existing) return existing.seq;
@@ -1273,6 +1283,8 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     this.server.mediaCalls.push(`register_file ${file.id}`);
     const page = this.server.pages.get(file.pageId);
     if (!page) throw pageNotFound();
+    // supabase/migrations/20261006120000_version_minima_archivos.sql: la cola de archivos también manda la versión.
+    this.checkAppVersion();
     const existing = this.server.mediaFiles.get(file.id);
     if (existing && existing.project_id !== page.workspace_id) {
       // De otro proyecto (que la sesión ve): guarda el uso ajeno y lo dice con el valor, sin error.
@@ -1314,6 +1326,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     this.server.mediaCalls.push(`link_page_file ${pageId} ${fileId}`);
     const page = this.server.pages.get(pageId);
     if (!page) throw pageNotFound();
+    this.checkAppVersion();
     const file = this.server.mediaFiles.get(fileId);
     if (!file) throw fileNotFound();
     if (file.project_id !== page.workspace_id) {
@@ -1338,6 +1351,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     this.server.seenSeqs.push(seenSeq ?? null);
     const page = this.server.pages.get(pageId);
     if (!page || (this.team && this.server.pageLevel(this.userId, pageId) < 3)) throw pageNotFound();
+    this.checkAppVersion();
     // `p_seen_seq`: si la página cambió después del documento con el que se decidió, no hace nada.
     if (seenSeq != null && page.update_seq > seenSeq) {
       this.server.lostMediaResponse('unlink_page_file');
@@ -1388,7 +1402,8 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
       .map((f) => ({ id: f.id, name: f.name, trashed_at: f.trashed_at! }));
   }
 
-  async uploadThumb(fileId: string, data: Blob): Promise<void> {
+  // `_stalledBefore`: el tope lo pone el cliente de verdad (`thumbUploadLimit`); acá no hay tope.
+  async uploadThumb(fileId: string, data: Blob, _stalledBefore?: number): Promise<void> {
     this.server.check();
     this.server.mediaCalls.push(`thumb ${fileId}`);
     if (!this.server.mediaFiles.has(fileId)) throw new RemoteError('new row violates row-level security policy', true, '42501');
@@ -1670,6 +1685,14 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
  * Lo que el navegador saca de un archivo, simulado: una foto o un video tienen medidas y miniatura; un HEIC
  * no (como en Chrome de Windows).
  */
+/** Una vista previa de mentira para un PDF (un JPEG corto que dice de qué archivo es); nada para lo demás. */
+export async function fakePreview(_file: Blob, mime: string, name: string, onStart?: () => Promise<boolean>): Promise<Blob | null> {
+  if (mime !== 'application/pdf') return null;
+  // Como la de verdad: avisa que empieza a dibujar.
+  if (onStart && !(await onStart())) return null;
+  return new Blob([new Uint8Array([0xff, 0xd8, 0xff]), new TextEncoder().encode(`preview:${name}`)], { type: 'image/jpeg' });
+}
+
 export async function fakeProbe(_file: Blob, mime: string): Promise<Probe> {
   if (mime === 'image/heic') return { width: null, height: null, duration: null, thumb: null };
   const video = mime.startsWith('video/');
@@ -1757,6 +1780,7 @@ export async function makeDevice(
     projectOf: (pageId) => tree.get(pageId)?.workspace_id,
     onForeignFile: (name) => server.foreignNotices.push(name),
     probe: (file, mime) => server.probe(file, mime),
+    preview: (file, mime, name, onStart) => server.preview(file, mime, name, onStart),
     playMark: async (thumb) => thumb,
     viewImage: fakeViewImage,
     convertHeic: (file) => server.convertHeic(file),

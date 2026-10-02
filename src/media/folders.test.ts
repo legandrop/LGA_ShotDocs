@@ -94,6 +94,15 @@ describe('leer una carpeta', () => {
     expect(source.dirs.every((d) => d.split('/').length <= 30)).toBe(true);
   });
 
+  it('el nombre de la carpeta queda tal cual (espacios, tildes, emojis); uno sin nada visible es "Folder"', async () => {
+    expect((await readFolder(entry('Día 2 - Puerto 🎬', { 'a.jpg': 1 }))).name).toBe('Día 2 - Puerto 🎬');
+    expect((await readFolder(entry('   ', { 'a.jpg': 1 }))).name).toBe('Folder');
+    expect((await readFolder(entry('\u202E\u200B', { 'a.jpg': 1 }))).name).toBe('Folder');
+    const file = (path: string) => Object.assign(new File(['x'], path.split('/').pop()!), { webkitRelativePath: path });
+    expect(foldersFromList([file('Día 2 - Puerto/a.jpg')])[0]!.name).toBe('Día 2 - Puerto');
+    expect(foldersFromList([file('  /a.jpg')])[0]!.name).toBe('Folder');
+  });
+
   it('la app y el portero aceptan las mismas rutas', () => {
     const long = Array.from({ length: 30 }, () => 'x').join('/');
     for (const path of ['Fotos', 'Fotos/Dia 2', 'a\\b', '..', 'a/./b', 'a//b', '', long, `${long}/y`, 'a\u0001b', 'z'.repeat(2001)]) {
@@ -466,6 +475,9 @@ describe('la fila de una carpeta', () => {
     expect(url).toBe(MEDIA_SCHEME + id);
     expect(server.mediaFiles.get(id)).toMatchObject({ mime: FOLDER_MIME, size: 1, name: 'Referencias' });
     expect(server.pageFiles.has(`${page}:${id}`)).toBe(true);
+    // Sin nada visible en el nombre, "Folder" (nunca el "file.bin" de los archivos).
+    const blank = await a.media.addFolder(page, '  \u202E ', 0);
+    expect(server.mediaFiles.get(blank.id)).toMatchObject({ name: 'Folder' });
     expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 0, registered: true });
     expect(await a.mediaDb.get('blobs', id)).toBeUndefined();
     expect(a.media.isFolder(id)).toBe(true);
@@ -517,6 +529,14 @@ describe('la fila de una carpeta', () => {
     const svg = decodeURIComponent(folderCardUrl({ name: '<script>x</script>', size: 5 * 1024 * 1024 }));
     expect(svg).not.toContain('<script>');
     expect(svg).toContain('&#60;script&#62;');
+  });
+
+  it('la tarjeta de una carpeta sin nada visible en el nombre dice "Folder", nunca "file.bin"', () => {
+    for (const name of ['\u202E', ' \u200B\u2066 ']) {
+      const svg = decodeURIComponent(folderCardUrl({ name, size: 5 }));
+      expect(svg).not.toContain('file.bin');
+      expect(svg).toContain('>Folder<');
+    }
   });
 });
 

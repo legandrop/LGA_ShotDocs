@@ -177,8 +177,8 @@ export const help = {
   },
   'help.carrete.title': { en: "The full-screen viewer", es: "El carrete" },
   'help.carrete.text': {
-    en: "Shows every photo and video of the page: {prev} {next} to go through them, {ends} to jump to the first or last, scroll or double-click to zoom, {close} to close. Download gets the original.",
-    es: "Muestra todas las fotos y los videos de la página: {prev} {next} para recorrerlos, {ends} para ir al primero o al último, la rueda o un doble clic para el zoom, {close} para cerrar. Descargar baja el original.",
+    en: "Shows every photo, video and file of the page: {prev} {next} to go through them, {ends} to jump to the first or last, scroll or double-click to zoom, {close} to close. Download gets the original.",
+    es: "Muestra todas las fotos, los videos y los archivos de la página: {prev} {next} para recorrerlos, {ends} para ir al primero o al último, la rueda o un doble clic para el zoom, {close} para cerrar. Descargar baja el original.",
   },
   'help.photosPhone.title': { en: "On the phone", es: "En el teléfono" },
   'help.photosPhone.text': {
@@ -194,8 +194,8 @@ export const help = {
   // --- Adjuntos ---
   'help.attach.title': { en: "Any file", es: "Cualquier archivo" },
   'help.attach.text': {
-    en: "Drop or paste any file (a PDF, a zip, a sound) and it shows as a card with its icon. A second click opens or downloads it; on a phone, a sheet offers Open, Download and Share.",
-    es: "Soltá o pegá cualquier archivo (un PDF, un zip, un sonido) y queda como una tarjeta con su ícono. Un segundo clic lo abre o lo baja; en el teléfono, una hoja ofrece Abrir, Descargar y Compartir.",
+    en: "Drop or paste any file (a PDF, a zip, a sound) and it shows as a card with its icon; a PDF shows its first page. A second click opens or downloads it; on a phone, a sheet offers Open, Download and Share. In the full-screen viewer, files appear large among the photos, with Open and Download. Previews you've already seen also show offline.",
+    es: "Soltá o pegá cualquier archivo (un PDF, un zip, un sonido) y queda como una tarjeta con su ícono; un PDF muestra su primera página. Un segundo clic lo abre o lo baja; en el teléfono, una hoja ofrece Abrir, Descargar y Compartir. En el carrete de fotos, los archivos aparecen en grande entre las fotos, con Abrir y Descargar. Las vistas previas que ya viste se ven también sin conexión.",
   },
 
   'help.folderDrop.title': { en: "Drop a folder", es: "Soltar una carpeta" },

@@ -1,7 +1,7 @@
 import { t } from '../i18n';
 import type { LocalDb } from './localDb';
 import type { Remote } from './remote';
-import { errorMessage, isNetworkError } from './types';
+import { errorMessage, isNetworkError, isTimeout, REQUEST_TIMEOUT, STALLS_TO_CLOSE_ROUND } from './types';
 
 /** Las imágenes se guardan en el documento con esta dirección, que no depende de ningún servidor. */
 export const FILE_SCHEME = 'sdfile://';
@@ -146,16 +146,31 @@ export class PageFiles {
    * sincronización, y ninguna se descarta. Devuelve el último error, si hubo.
    */
   async pushPending(skipPage: (pageId: string) => boolean): Promise<string | null> {
-    const pending = await this.db.getAllFromIndex('files', 'uploaded', 0);
+    // Las que ya vencieron su tope van al final: si dos están colgadas solo para ellas, irían siempre primero,
+    // cortarían la pasada (abajo) y las demás no subirían nunca.
+    const pending = (await this.db.getAllFromIndex('files', 'uploaded', 0)).sort(
+      (a, b) => Number(a.lastError === REQUEST_TIMEOUT) - Number(b.lastError === REQUEST_TIMEOUT),
+    );
     let lastError: string | null = null;
+    // Imágenes seguidas que vencieron su tope (Storage no contestó).
+    let timeouts = 0;
     for (const file of pending) {
       if (skipPage(file.pageId)) continue;
       try {
         await this.remote.uploadFile(file.path, file.data, file.mime);
         await this.db.put('files', { ...file, uploaded: 1, lastError: undefined });
+        timeouts = 0;
       } catch (err) {
         lastError = errorMessage(err);
         await this.db.put('files', { ...file, lastError });
+        // Una que venció su tope no corta la pasada: si Storage está colgado solo para ella, cortar haría que la
+        // pasada siguiente empezara otra vez por ella y las demás no subirían nunca. Dos seguidas, sí: Storage
+        // está colgado para todas y cada una esperaría su tope entero. Una falla de red de verdad corta siempre.
+        if (isTimeout(err)) {
+          if (++timeouts >= STALLS_TO_CLOSE_ROUND) break;
+          continue;
+        }
+        timeouts = 0;
         if (isNetworkError(err)) break;
       }
     }

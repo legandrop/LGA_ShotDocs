@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { t } from '../i18n';
 import { fromBase64, toBase64 } from '../lib/base64';
 import { THUMB_MAX_BYTES } from '../media/probe';
+import { MAX_FILE_BYTES } from './files';
 import { parseAccess, type AccessSnapshot, type GrantLevel, type Role } from './access';
 import {
   REQUEST_TIMEOUT,
@@ -142,8 +143,11 @@ export interface MediaRemote {
    * tarde). Devuelve `foreign` si es de otro proyecto: la base guardó el uso como ajeno; si no, `ok`.
    */
   linkPageFile(pageId: string, fileId: string): Promise<LinkResult>;
-  /** Sube `thumbs/<id>.jpg` sin reemplazar: si ya existe, está hecho. */
-  uploadThumb(fileId: string, data: Blob): Promise<void>;
+  /**
+   * Sube `thumbs/<id>.jpg` sin reemplazar: si ya existe, está hecho. `stalledBefore`: cuántas veces seguidas ya
+   * venció el tope de esta miniatura (el tope crece con eso, `thumbUploadLimit`).
+   */
+  uploadThumb(fileId: string, data: Blob, stalledBefore?: number): Promise<void>;
   setFileThumb(fileId: string): Promise<void>;
   downloadThumb(fileId: string): Promise<Blob>;
   /** Las filas de `files` que la sesión puede ver (las demás no vuelven). */
@@ -323,8 +327,9 @@ export function toRemoteError(
  * subir. Lo mismo con la cola de fotos y videos y la de comentarios. Al vencer, la consulta vuelve como un
  * error de red (estado 0) y la vuelta siguiente la reintenta; todo lo que se manda es idempotente
  * (`clientUpdateId`, ids creados en el dispositivo). Los archivos de Storage no usan este tope fijo (una foto
- * grande en una red lenta puede tardar más): las miniaturas tienen uno proporcional a su tamaño (`within` con
- * `timeoutFor`) y las imágenes del bucket `page-files` (un workspace sin portero) siguen sin ninguno.
+ * grande en una red lenta puede tardar más): las miniaturas tienen uno proporcional a su tamaño que crece con las
+ * fallas seguidas (`within` con `thumbUploadLimit`), y las imágenes del bucket `page-files` (un workspace sin
+ * portero) uno proporcional sin techo (`storageTimeout`).
  */
 export const REQUEST_TIMEOUT_MS = 30_000;
 /**
@@ -385,6 +390,50 @@ export function within<T>(ms: number, request: (signal: AbortSignal) => PromiseL
  */
 export const THUMB_DOWNLOAD_TIMEOUT_MS = timeoutFor(THUMB_MAX_BYTES);
 
+/** La red más lenta con la que todavía se espera una miniatura, después de varias fallas seguidas. */
+const THUMB_SLOWEST_BYTES_PER_SECOND = 2 * 1024;
+/** Lo menos que puede crecer el tope de una miniatura (una chica, donde casi todo es la espera fija). */
+const THUMB_MIN_GROWTH = 4;
+
+/**
+ * El tope de la subida de una miniatura que ya venció `stalledBefore` veces seguidas: el de siempre
+ * (`timeoutFor`), el doble, el triple... hasta lo que tardaría a 2 KB/s (30 s más 250 s para 500 KB), y nunca
+ * menos que cuatro veces el de siempre (una chica). Con un tope fijo, una miniatura de 500 KB con menos de unos
+ * 8 KB/s vencía siempre y el archivo no subía nunca; así, una red muy lenta termina pasando como pasa con el
+ * portero (`stalledBefore` en portero.ts).
+ */
+export function thumbUploadLimit(bytes: number, stalledBefore = 0): number {
+  const base = timeoutFor(bytes);
+  const ceiling = Math.max(THUMB_MIN_GROWTH * base, REQUEST_TIMEOUT_MS + Math.ceil((bytes / THUMB_SLOWEST_BYTES_PER_SECOND) * 1000));
+  return Math.min(base * (1 + Math.max(0, stalledBefore)), ceiling);
+}
+
+/**
+ * El tope de un pedido a Storage que manda o recibe `bytes`: 30 s más lo que tarda a 16 KB/s, **sin el techo** de
+ * las consultas (`timeoutFor`). Una imagen de `page-files` puede pesar 25 MB, y a esa velocidad tarda 27 minutos.
+ */
+export function storageTimeout(bytes: number): number {
+  return REQUEST_TIMEOUT_MS + Math.ceil((bytes / SLOW_BYTES_PER_SECOND) * 1000);
+}
+
+/** El tope de la bajada de una imagen de `page-files`, que no sabe cuánto llega: el de la más pesada que acepta. */
+export const FILE_DOWNLOAD_TIMEOUT_MS = storageTimeout(MAX_FILE_BYTES);
+
+/**
+ * El cliente de Storage de un bucket con todos sus pedidos atados a `signal`. `upload` no acepta una señal de
+ * corte (`@supabase/storage-js` 2.117), pero cada pedido sale por el `fetch` del cliente, y cada `from(bucket)` es
+ * un objeto nuevo con el suyo: se lo envuelve para que lleve la señal. Así, cuando vence el tope, el navegador
+ * corta la subida de verdad en vez de dejarla suelta (con Storage colgado para todos, se acumulaban). Si una
+ * versión del cliente no tuviera ese `fetch`, queda como antes: una carrera contra el tope.
+ */
+function bucketWith(client: SupabaseClient, bucket: string, signal: AbortSignal): ReturnType<SupabaseClient['storage']['from']> {
+  const api = client.storage.from(bucket);
+  const holder = api as unknown as { fetch?: typeof fetch };
+  const base = holder.fetch;
+  if (typeof base === 'function') holder.fetch = (input, init) => base(input, { ...init, signal: init?.signal ?? signal });
+  return api;
+}
+
 function networkError(err: unknown): RemoteError {
   // El tope de `within` ya viene como error de red.
   if (err instanceof RemoteError) return err;
@@ -428,10 +477,12 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRem
   /** Desde cuándo la base no tiene `workspace_settings` (o la subida con versión); se reintenta cada tanto. */
   private settingsTableMissingAt = 0;
   private versionedPushMissingAt = 0;
+  /** Desde cuándo la base no tiene las funciones de archivos con la versión de la app; se reintenta cada tanto. */
+  private versionedFilesMissingAt = 0;
 
   /**
-   * `appVersion` viaja con cada subida de contenido: el servidor rechaza las de una versión más vieja que
-   * la mínima del workspace.
+   * `appVersion` viaja con cada subida de contenido y con cada pedido de la cola de archivos (registrar, usar y
+   * dejar de usar): el servidor rechaza los de una versión más vieja que la mínima del workspace.
    */
   constructor(
     private readonly client: SupabaseClient,
@@ -638,9 +689,12 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRem
   async uploadFile(path: string, data: ArrayBuffer, mime: string): Promise<void> {
     let result;
     try {
-      result = await this.client.storage
-        .from(FILES_BUCKET)
-        .upload(path, data, { contentType: mime, upsert: false });
+      // Con tope, como las miniaturas: sin él, un Storage que no contesta dejaba el ciclo de sincronización
+      // esperando para siempre. Al vencer se corta el pedido; si la imagen ya había llegado, el reintento se
+      // encuentra con que está (409, abajo) y lo da por hecho (`upsert: false`: nunca se reemplaza).
+      result = await within(storageTimeout(data.byteLength), (signal) =>
+        bucketWith(this.client, FILES_BUCKET, signal).upload(path, data, { contentType: mime, upsert: false }),
+      );
     } catch (err) {
       throw networkError(err);
     }
@@ -655,7 +709,10 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRem
   async downloadFile(path: string): Promise<Blob> {
     let result;
     try {
-      result = await this.client.storage.from(FILES_BUCKET).download(path);
+      // Con tope: el de la imagen más pesada que acepta el bucket (no se sabe de antemano cuánto llega).
+      result = await within(FILE_DOWNLOAD_TIMEOUT_MS, (signal) =>
+        this.client.storage.from(FILES_BUCKET).download(path, {}, { signal }),
+      );
     } catch (err) {
       throw networkError(err);
     }
@@ -763,8 +820,32 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRem
     return (data ?? []) as AccessRow[];
   }
 
+  /**
+   * Un pedido de la cola de archivos con la versión de la app (`p_app_version`), que la base compara con la
+   * mínima del workspace (`app_outdated`). Una base sin esa migración no tiene la función con ese parámetro:
+   * se usa la de siempre por 10 minutos y se vuelve a probar.
+   */
+  private async fileRpc(name: string, args: Record<string, unknown>): Promise<unknown> {
+    const versioned = Date.now() - this.versionedFilesMissingAt >= 10 * 60_000;
+    const { data, error, status } = await timed(
+      this.client.rpc(name, versioned ? { ...args, p_app_version: this.appVersion || null } : args),
+    );
+    if (error?.code === MISSING_FUNCTION && versioned) {
+      this.versionedFilesMissingAt = Date.now();
+      return this.fileRpc(name, args);
+    }
+    // La de siempre dijo `app_outdated`: la base ya tiene la función con versión (la migración llegó en estos 10
+    // minutos) y una mínima de 0.090 o más. Se repite una vez con versión, que es la que vale para esta app.
+    if (error?.message === APP_OUTDATED && !versioned) {
+      this.versionedFilesMissingAt = 0;
+      return this.fileRpc(name, args);
+    }
+    if (error) throw toRemoteError(error, status);
+    return data;
+  }
+
   async registerFile(file: NewMediaFile): Promise<LinkResult> {
-    const { data, error, status } = await timed(this.client.rpc('register_file', {
+    const data = await this.fileRpc('register_file', {
       p_id: file.id,
       p_page_id: file.pageId,
       p_name: file.name,
@@ -773,33 +854,26 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRem
       p_width: file.width,
       p_height: file.height,
       p_duration: file.duration,
-    }));
-    if (error) throw toRemoteError(error, status);
+    });
     return linkResult(data);
   }
 
   async linkPageFile(pageId: string, fileId: string): Promise<LinkResult> {
-    const { data, error, status } = await timed(
-      this.client.rpc('link_page_file', { p_page_id: pageId, p_file_id: fileId }),
-    );
-    if (error) throw toRemoteError(error, status);
-    return linkResult(data);
+    return linkResult(await this.fileRpc('link_page_file', { p_page_id: pageId, p_file_id: fileId }));
   }
 
-  async uploadThumb(fileId: string, data: Blob): Promise<void> {
+  async uploadThumb(fileId: string, data: Blob, stalledBefore = 0): Promise<void> {
     let result;
     try {
       // Con tope: sin él, un Storage que no contesta dejaba clavada la cola de archivos, que sube de a uno
-      // (la miniatura va antes que el original). Es proporcional al tamaño (30 s más lo que tarda a 16 KB/s),
-      // así una miniatura lenta pero sana termina. `upload` no acepta una señal de corte en esta versión del
-      // cliente, por eso es una carrera: si el tope vence, el pedido queda suelto y puede terminar solo. No
-      // hace daño: no reemplaza (`upsert: false`), así que el reintento se encuentra con que ya está (409,
-      // abajo) y lo da por hecho, y si no había llegado, la sube. `thumb_at` se marca recién después de una
-      // subida confirmada (`setFileThumb`), nunca por una que quedó suelta.
-      result = await within(timeoutFor(data.size), () =>
-        this.client.storage
-          .from(THUMBS_BUCKET)
-          .upload(thumbPath(fileId), data, { contentType: 'image/jpeg', upsert: false }),
+      // (la miniatura va antes que el original). Es proporcional al tamaño (30 s más lo que tarda a 16 KB/s) y
+      // crece con las veces seguidas que ya venció (`thumbUploadLimit`), así una miniatura lenta pero sana
+      // termina. Al vencer, el navegador corta el pedido (`bucketWith`). Si la miniatura igual había llegado
+      // (la respuesta se perdió), no hace daño: no reemplaza (`upsert: false`), así que el reintento se
+      // encuentra con que ya está (409, abajo) y lo da por hecho. `thumb_at` se marca recién después de una
+      // subida confirmada (`setFileThumb`).
+      result = await within(thumbUploadLimit(data.size, stalledBefore), (signal) =>
+        bucketWith(this.client, THUMBS_BUCKET, signal).upload(thumbPath(fileId), data, { contentType: 'image/jpeg', upsert: false }),
       );
     } catch (err) {
       throw networkError(err);
@@ -896,12 +970,11 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRem
   }
 
   async unlinkPageFile(pageId: string, fileId: string, seenSeq?: number | null): Promise<boolean> {
-    const { data, error, status } = await timed(this.client.rpc('unlink_page_file', {
+    const data = await this.fileRpc('unlink_page_file', {
       p_page_id: pageId,
       p_file_id: fileId,
       p_seen_seq: seenSeq ?? null,
-    }));
-    if (error) throw toRemoteError(error, status);
+    });
     return !unlinkIgnored(data);
   }
 

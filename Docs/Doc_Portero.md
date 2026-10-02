@@ -11,7 +11,8 @@ dueño, a `Media_Test`) por si la usa una versión vieja. Conectar Drive y elegi
 app los hace solo el dueño (menú de la cuenta → *Google Drive*); subir y ver un archivo de una página depende del permiso de cada
 persona sobre esa página.
 
-Carpetas en el Drive del dueño, sin espacios (guiones bajos):
+Carpetas en el Drive del dueño. Las que crea la app van sin espacios (guiones bajos); las que suelta el usuario
+conservan su nombre (D3, 2026-10-01):
 
 ```
 <carpeta elegida por el dueño, o la raíz de su Drive>
@@ -21,7 +22,7 @@ Carpetas en el Drive del dueño, sin espacios (guiones bajos):
         ├── <AAAA-MM-DD>                (el día en que se subió)
         │   └── IMG_1234.MOV
         └── Carpetas                    (las carpetas soltadas en las páginas, P.9)
-            └── Referencias             (con su árbol; sin espacios: Dia 2 → Dia_2)
+            └── Día 2 - Puerto          (con su árbol, cada carpeta con su nombre tal cual)
 ```
 
 - **El nombre del proyecto** se pasa a guiones bajos y se le sacan los caracteres raros (barras, dos puntos,
@@ -304,7 +305,7 @@ subida, no en cada parte (una subida dura minutos); al terminar, la base lo vuel
   `src/media/portero.test.ts` (el cliente) y `src/media/queue.test.ts` (la cola). Los tipos del portero se
   revisan aparte, con `npx tsc -p portero --noEmit` (`npm run typecheck` no los cubre).
 
-### Subidas que se traban (v0.068)
+### Subidas que se traban (v0.068 y v0.092)
 
 **Qué pasaba.** La cola sube de a un archivo y ningún pedido al portero tenía tiempo límite. Un pedido que
 nunca contestaba, sin error de red, dejaba la cola entera esperando: visto al importar un doc de unos 2300
@@ -322,7 +323,7 @@ corta, se manda entera otra vez y se vuelve a cortar.
 |---|---|---|
 | Abrir la subida (`POST /upload`) y preguntar cuánto llegó (`bytes */total`) | Pasa 1 minuto sin respuesta | `CONTROL_TIMEOUT_MS` |
 | Una parte, mientras sale | Pasan 2 minutos sin que salga **ni un byte** más | `STALL_MS` |
-| Una parte, ya enviada entera | La respuesta tarda más que su plazo (`answerLimit`: 2 minutos, y 2 más por cada trabada seguida anterior) más lo que tardó en salir el cuerpo (hasta 2 minutos más) | `STALL_MS` |
+| Una parte, ya enviada entera | La respuesta tarda más que su plazo (`answerLimit`: 2 minutos, 2 más por cada trabada seguida anterior, o lo aprendido de una respuesta lenta anterior) más lo que tardó en salir el cuerpo sin contar una suspensión (hasta 2 minutos más) | `STALL_MS` |
 
 - Los pedidos de control casi no llevan cuerpo: tardan lo que tardan el portero y Drive (segundos), no lo
   que da la red. Un minuto sin respuesta es un pedido colgado.
@@ -339,6 +340,14 @@ corta, se manda entera otra vez y se vuelve a cortar.
   misma red lenta de los topes de la base: 10 minutos y medio para una parte de 8 MiB, 5 para una foto
   de 3 MB. Más lento que eso y con el cuerpo tragado de golpe, la parte no pasa: es el único caso que
   queda sin cubrir.
+- **Se recuerda el plazo que funcionó** (v0.092, `Portero.learn`). Sin eso, detrás del mismo proxy cada archivo
+  nuevo volvía a empezar con el plazo corto y se trababa una o más veces antes de pasar. Cuando la respuesta de
+  una parte llega después de un minuto o más con el cuerpo ya afuera (`LEARN_FROM_MS`), el cliente anota a qué
+  velocidad llegó (bytes por segundo, sin el tiempo suspendido) y el plazo de las partes siguientes es lo que
+  tardarían a esa velocidad más 2 minutos, con el mismo techo. Solo aprende de partes de 1 MiB o más
+  (`LEARN_MIN_BYTES`): en una foto chica casi todo es la espera fija, y escalada a una parte de 8 MiB daría minutos
+  de más. Una respuesta rápida de una de esas lo olvida. Vale para el cliente de la sesión (la cola y las carpetas comparten el mismo): al recargar se vuelve a
+  aprender.
 - Donde no hay `XMLHttpRequest`, o con un `fetch` propio (las pruebas del cliente), las partes van por
   `fetch` y **no se vigilan**: sin saber cuántos bytes salieron, cortar por tiempo cortaría las lentas.
   Los pedidos de control sí tienen su tope.
@@ -348,13 +357,45 @@ corta, se manda entera otra vez y se vuelve a cortar.
   estuvo suspendido o la pestaña congelada: ese tiempo no se cuenta, y al despertar una parte sana no se
   corta. El umbral no puede ser más chico: con la pestaña en segundo plano el navegador deja correr los
   temporizadores una vez por minuto, y ahí el vigilante tiene que seguir cortando (tarda hasta un minuto
-  más en darse cuenta).
+  más en darse cuenta). Desde v0.092 se descuentan **a lo sumo dos huecos seguidos** sin que el pedido se mueva
+  (`FROZEN_DISCOUNTS`): una pestaña tan frenada que el vigilante mira menos de una vez por minuto y medio hacía que
+  cada hueco pareciera una suspensión y no cortaba nunca. Un movimiento vuelve a dar los dos. Y el tiempo
+  suspendido tampoco cuenta como tiempo del cuerpo: si el equipo se suspendía mientras salía, la espera de la
+  respuesta quedaba hasta 2 minutos más larga.
 
 **Qué pasa al cortarse.** El pedido cortado no se reintenta en el momento (cada intento podría tardar lo
 mismo): la subida termina con un `UploadError` con `stalled`, el archivo queda con el aviso *The upload
 stopped moving; it will try again* y vuelve a la cola con la espera de cualquier error que se arregla solo
 (10 s, 20 s… hasta 10 minutos), y la cola sigue con los demás archivos. No se pierde nada: el original
 sigue en el dispositivo y lo que Drive ya recibió sigue en la subida.
+
+**Colgado para todos (v0.092).** Si el portero no contesta a nadie, seguir con el archivo siguiente no sirve:
+cada uno esperaba su minuto entero, y una vuelta por 2300 archivos duraba horas sin subir nada. Por eso, a la
+**segunda trabada seguida de archivos distintos sin avance** (`STALLS_TO_CLOSE_ROUND`, en `src/sync/types.ts`) la
+vuelta deja de subir archivos, como sin conexión, y la cola espera antes de volver a probar (`stallPause` en
+`queue.ts`: 10 s, 20 s… hasta 10 minutos, cada vez que vuelve a pasar). Cuenta igual una miniatura que Storage no
+contestó (`Doc_Sincronizacion.md`, "Cada consulta a la base tiene un tope de tiempo").
+
+- Una sola trabada no corta: puede estar colgado solo ese archivo, y cortar haría que la vuelta siguiente empezara
+  otra vez por él. Y los que ya se trabaron (`stalls` o `thumbStalls` mayor que 0) van **después** de los demás:
+  si no, dos archivos colgados solo para ellos irían siempre primero, cerrarían cada vuelta y el resto no subiría
+  nunca (lo encontró la auditoría).
+- Una trabada **después de avanzar** no cuenta: el portero anda, aunque despacio. Un archivo que termina de subir,
+  o cualquier avance, vuelve a cero la cuenta y la espera. Una carpeta registrada o un HEIC que espera su
+  decodificador no cuentan para nada: no hablaron con el portero ni con Storage.
+- Un archivo nuevo acorta la espera a la más corta (10 s), sin volver la cuenta a cero: si el portero ya anda, la
+  foto sube enseguida; si sigue colgado, la espera siguiente es más larga.
+- Los archivos que no se probaron quedan como estaban, sin error ni espera propia. Los usos de páginas
+  (`link_page_file`, `unlink_page_file`) salen igual en esa vuelta: van a la base, no al portero.
+- Mientras la cola espera, no hay nada "para subir ahora" (`hasUploadableNow`): las bajadas de "Available offline"
+  no se quedan esperando a las subidas.
+- La espera se levanta sola al pasar su plazo, y antes cuando vuelve la red (el evento `online`, o la base
+  contesta después de un ciclo sin conexión) y con *Retry* (que se ve solo si hay algo detenido). Un plazo más
+  largo que la espera más larga posible (el reloj del equipo saltó hacia atrás) se da por vencido. Vive en
+  memoria: al recargar, se prueba de nuevo.
+- Lo que sigue sin cubrir: mientras la cola espera tampoco se registran archivos nuevos ni se suben sus miniaturas
+  (como sin conexión), y las carpetas (P.9) tienen su propia cola, que no cierra la vuelta: con el portero colgado,
+  cada archivo de una carpeta se traba hasta sus 5 intentos y queda con su error a la vista hasta *Retry*.
 
 **Al retomar** siempre se le pregunta primero a la subida que quedó (`bytes */total`):
 
@@ -377,7 +418,10 @@ la ve el dueño en la carpeta del día.
 más bytes y cuando el archivo termina de subir (abrir otra subida no es avanzar). Es un campo nuevo y
 opcional: lo guardado por una versión anterior no lo tiene y vale 0. Con el mismo avance vuelve a 0
 `failures`, de donde sale la espera para reintentar: un video largo al que le llega una parte más en cada
-vuelta vuelve a intentar a los 10 segundos, no cada vez más tarde.
+vuelta vuelve a intentar a los 10 segundos, no cada vez más tarde. Avanzar es que el portero confirme **más de lo
+que ya había confirmado de ese archivo** (v0.092): si el portero pierde la subida en cada vuelta y se empieza otra,
+volver a mandar lo que la perdida ya tenía no es avanzar, y la espera se alarga (antes reintentaba siempre a los
+10 s).
 
 **Probado a mano en Chromium 152** contra un portero de mentira en otro origen (con el mismo CORS): tres partes
 por `XMLHttpRequest` llegan intactas; una parte leída a 256 KB/s (que tarda ocho veces el plazo) no se
@@ -385,6 +429,14 @@ corta; un servidor que no lee el cuerpo, que deja de leerlo a la mitad, que no c
 contesta al abrir la subida se cortan y el navegador aborta el pedido (con la pestaña en segundo plano: a
 los 60 segundos al abrir y a los 125 la parte); al retomar no se manda nada dos veces. Falta verlo en
 Safari de iPhone y con una red lenta de verdad.
+
+**"Colgado para todos", probado en Chromium (v0.092)** con la cola real, las partes por `XMLHttpRequest` y las
+miniaturas por el cliente de Supabase real, contra un portero y un Storage locales que reciben el pedido y no
+contestan nunca: con el portero colgado y 4 fotos, la vuelta terminó a los 120 s con 2 subidas abiertas (no 4) y
+los 2 pedidos cortados por el navegador; una vuelta enseguida no volvió a probar; al volver el portero subieron las
+4, una subida por archivo. Con Storage colgado y 3 fotos, la vuelta terminó a los 67 s con 2 miniaturas pedidas
+(no 3) y las 2 subidas cortadas por el navegador (no quedan sueltas); al volver, las 7 miniaturas quedaron una vez
+cada una en el bucket.
 
 **La miniatura (v0.070).** Los dos pedidos de la miniatura a Supabase Storage (subirla antes del original
 y bajar, al final de cada vuelta, las de otros dispositivos) no pasan por el portero y no tenían tope: si

@@ -80,6 +80,10 @@ const OFFLINE = '0.083';
 const COLLAPSE_2 = '0.084';
 /** El salto de hoja (fase 4, Docs/Doc_Hojas_PDF.md): la versión se pone al publicar, igual que en el changelog. */
 const PAGE_BREAK = '0.0XX';
+/**
+ * La vista previa de los PDF adjuntos y los adjuntos en el carrete (Doc_Adjuntos.md, entrega 2).
+ */
+const ATTACH_PREVIEW = '0.091';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -211,7 +215,17 @@ export const HELP_ENTRIES: HelpEntry[] = [
   { id: 'photosOffline', section: 'photos', title: 'help.photosOffline.title', text: 'help.photosOffline.text', since: BEFORE_HELP },
 
   // --- Adjuntos y links de Drive ---
-  { id: 'attach', section: 'attachments', title: 'help.attach.title', text: 'help.attach.text', when: 'portero', since: BEFORE_HELP },
+  {
+    id: 'attach',
+    section: 'attachments',
+    title: 'help.attach.title',
+    text: 'help.attach.text',
+    when: 'portero',
+    // La vista previa del PDF y la tarjeta grande en el carrete llegaron después (Doc_Adjuntos.md, entrega 2): sale en
+    // las novedades con esa versión.
+    words: ['pdf', 'vista previa', 'preview', 'miniatura', 'thumbnail', 'primera página', 'first page', 'carrete', 'viewer'],
+    since: ATTACH_PREVIEW,
+  },
   {
     id: 'folderDrop',
     section: 'attachments',

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MEDIA_SCHEME, MediaQueue, mediaIdOf } from '../media/queue';
-import { FakeServer, makeDevice, type Device } from '../sync/testing';
+import { FakeServer, fakePreview, makeDevice, type Device } from '../sync/testing';
 import { collectCarrete, type CarreteItem } from './carreteModel';
 import { resolveObjectURL } from 'node:buffer';
 import { createCarreteLoader, downloadTarget, isOffline, openTarget, originalFor, passFor, PASS_REUSE_MS } from './carreteLoader';
@@ -301,5 +301,108 @@ describe('originales envueltos: ningún blob: con un tipo que corra en la app', 
     expect(await openTarget(media, 'f1')).toBeNull();
     expect(await downloadTarget(media, 'f1')).toBeNull();
     expect(media.pass).not.toHaveBeenCalled();
+  });
+});
+
+describe('pases: dos pedidos a la vez usan el mismo', () => {
+  it('abrir y bajar un adjunto juntos piden un solo pase al portero', async () => {
+    let calls = 0;
+    let release: (url: string) => void = () => undefined;
+    const media = {
+      pass: () => {
+        calls++;
+        return new Promise<string>((r) => (release = r));
+      },
+    };
+    const both = Promise.all([passFor(media, 'x'), passFor(media, 'x')]);
+    release('https://portero.test/m/uno');
+    expect(await both).toEqual(['https://portero.test/m/uno', 'https://portero.test/m/uno']);
+    expect(calls).toBe(1);
+    // Ya guardado: el siguiente tampoco pide.
+    expect(await passFor(media, 'x')).toBe('https://portero.test/m/uno');
+    expect(calls).toBe(1);
+  });
+
+  it('si el pedido falla, el siguiente vuelve a pedir', async () => {
+    let calls = 0;
+    const media = {
+      pass: async () => {
+        calls++;
+        if (calls === 1) throw new Error('Failed to fetch');
+        return 'https://portero.test/m/dos';
+      },
+    };
+    await expect(passFor(media, 'y')).rejects.toThrow();
+    expect(await passFor(media, 'y')).toBe('https://portero.test/m/dos');
+    expect(calls).toBe(2);
+  });
+});
+
+describe('carrete: un adjunto en grande (Docs/Doc_Adjuntos.md, entrega 2)', () => {
+  async function withPdf(preview = true) {
+    const server = new FakeServer();
+    server.enableMedia();
+    if (preview) server.preview = fakePreview;
+    const a = await device(server);
+    const page = await a.tree.create(null, 'Día 3');
+    await sync(a);
+    const pdf = await a.media.add(page, file(2 * MB, 'guion.pdf', 'application/pdf'));
+    const zip = await a.media.add(page, file(MB, 'todo.zip', 'application/zip'));
+    await a.media.idle();
+    return { server, a, pdf, zip };
+  }
+
+  it('la vista previa tal cual (la primera página), con tipo y peso, y se puede abrir y bajar sin red', async () => {
+    const { server, a, pdf } = await withPdf();
+    server.online = false;
+    const loader = createCarreteLoader(a);
+    const p = await loader.preview(itemFor(pdf));
+    expect(p).toMatchObject({ kind: null, name: 'guion.pdf', file: { mime: 'application/pdf', size: 2 * MB, canOpen: true, card: false } });
+    expect(p.preview).toMatch(/^blob:/);
+    const thumb = resolveObjectURL(p.preview!);
+    expect(await thumb?.text()).toContain('preview:guion.pdf');
+
+    // Abrir: el original del dispositivo, con su tipo (un PDF se puede abrir). Bajar: para bajar, con su nombre.
+    const open = await loader.open!(itemFor(pdf));
+    expect(open).toMatch(/^blob:/);
+    expect(resolveObjectURL(open!)?.type).toBe('application/pdf');
+    const full = await loader.full(itemFor(pdf));
+    expect(full.local).toBe(true);
+    expect(resolveObjectURL(full.url)?.type).toBe('application/octet-stream');
+    loader.dispose();
+    expect(resolveObjectURL(open!)).toBeUndefined();
+  });
+
+  it('sin vista previa (un zip): la tarjeta, y solo bajar', async () => {
+    const { a, zip } = await withPdf();
+    const loader = createCarreteLoader(a);
+    const p = await loader.preview(itemFor(zip));
+    expect(p.file).toMatchObject({ mime: 'application/zip', canOpen: false, card: true });
+    expect(p.preview).toMatch(/^data:image\/svg\+xml/);
+    expect(await loader.open!(itemFor(zip))).toBeNull();
+  });
+
+  it('en otro dispositivo: la vista previa bajada del bucket, y abrir con un pase del portero', async () => {
+    const { server, a, pdf } = await withPdf();
+    await sync(a);
+    const b = await device(server);
+    await sync(b);
+    const loader = createCarreteLoader(b);
+    const p = await loader.preview(itemFor(pdf));
+    expect(p.file).toMatchObject({ canOpen: true, card: false });
+    expect(await resolveObjectURL(p.preview!)?.text()).toContain('preview:guion.pdf');
+    expect(await loader.open!(itemFor(pdf))).toMatch(/\/m\//);
+    const full = await loader.full(itemFor(pdf));
+    expect(full).toMatchObject({ local: false, portero: true });
+
+    // Sin red (y sin un pase guardado), lo que no está en el dispositivo no se puede preparar (el carrete lo dice) y
+    // se vuelve a pedir después.
+    const c = await device(server);
+    await sync(c);
+    const other = createCarreteLoader(c);
+    server.online = false;
+    await expect(other.open!(itemFor(pdf))).rejects.toThrow();
+    server.online = true;
+    expect(await other.open!(itemFor(pdf))).toMatch(/\/m\//);
   });
 });

@@ -1,14 +1,18 @@
 import { createClient } from '@supabase/supabase-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  FILE_DOWNLOAD_TIMEOUT_MS,
   MAX_REQUEST_TIMEOUT_MS,
   REQUEST_TIMEOUT_MS,
+  storageTimeout,
   SupabaseRemote,
   THUMB_DOWNLOAD_TIMEOUT_MS,
+  thumbUploadLimit,
   timed,
   timeoutFor,
   within,
 } from './remote';
+import { MAX_FILE_BYTES } from './files';
 import { FakeServer, makeDevice, type Device } from './testing';
 import { isNetworkError, isPermanent, isTimeout, REQUEST_TIMEOUT, RemoteError } from './types';
 import * as Y from 'yjs';
@@ -159,9 +163,9 @@ describe('tope de tiempo de las miniaturas (Storage)', () => {
     return settled;
   }
 
-  it('subir a un Storage que no contesta vuelve como error de red al vencer el tope, que crece con el tamaño', async () => {
+  it('subir a un Storage que no contesta vuelve como error de red al vencer el tope, que crece con el tamaño, y el pedido se corta', async () => {
     const signals: (AbortSignal | null | undefined)[] = [];
-    // Nunca contesta, y no hay señal que lo corte: `upload` no la acepta.
+    // Nunca contesta. `upload` no acepta una señal, pero el pedido sale por el `fetch` del cliente, que la lleva.
     const remote = remoteWith((_input, init) => {
       signals.push(init?.signal);
       return new Promise(() => undefined);
@@ -171,8 +175,11 @@ describe('tope de tiempo de las miniaturas (Storage)', () => {
     expect(timeoutFor(thumb.size)).toBe(40_000);
     const request = remote.uploadThumb('f', thumb);
     expect(await after(request, 39_000)).toBeNull();
+    expect(signals).toHaveLength(1);
+    expect(signals[0]?.aborted).toBe(false);
     const done = await after(request, 2000);
-    expect(signals).toEqual([undefined]);
+    // Al vencer, el navegador corta la subida: no queda suelta.
+    expect(signals[0]?.aborted).toBe(true);
     expect(done?.error).toBeInstanceOf(RemoteError);
     expect(isNetworkError(done?.error)).toBe(true);
     expect(isTimeout(done?.error)).toBe(true);
@@ -249,12 +256,172 @@ describe('tope de tiempo de las miniaturas (Storage)', () => {
     expect(bucket.size).toBe(1);
   });
 
+  it('el tope de la subida crece con las fallas seguidas, hasta lo que tardaría a 2 KB/s', () => {
+    // 500 KB: 30 s más 31 s a 16 KB/s; después el doble, el triple... y el techo, 30 s más 250 s a 2 KB/s.
+    const bytes = 500 * KB;
+    expect(thumbUploadLimit(bytes)).toBe(timeoutFor(bytes));
+    expect(thumbUploadLimit(bytes, 1)).toBe(2 * timeoutFor(bytes));
+    expect(thumbUploadLimit(bytes, 2)).toBe(3 * timeoutFor(bytes));
+    expect(thumbUploadLimit(bytes, 50)).toBe(REQUEST_TIMEOUT_MS + 250_000);
+    // Una miniatura chica (casi todo es la espera fija) crece hasta cuatro veces el tope de siempre.
+    expect(thumbUploadLimit(KB)).toBe(timeoutFor(KB));
+    expect(thumbUploadLimit(KB, 1)).toBe(2 * timeoutFor(KB));
+    expect(thumbUploadLimit(KB, 50)).toBe(4 * timeoutFor(KB));
+  });
+
+  it('la subida usa el tope que corresponde a sus fallas seguidas', async () => {
+    let aborted = 0;
+    const remote = remoteWith((input, init) => {
+      init?.signal?.addEventListener('abort', () => aborted++);
+      return hanging(input, init);
+    });
+    const thumb = jpeg(160 * KB);
+    const request = remote.uploadThumb('f', thumb, 1);
+    expect(await after(request, 2 * timeoutFor(thumb.size) - 1000)).toBeNull();
+    const done = await after(request, 2000);
+    expect(aborted).toBe(1);
+    expect(isTimeout(done?.error)).toBe(true);
+  });
+
   it('`within` deja pasar el resultado y el error del pedido, y no espera de más', async () => {
     (AbortSignal as { timeout: unknown }).timeout = undefined;
     vi.useFakeTimers();
     await expect(within(1000, async () => 7)).resolves.toBe(7);
     await expect(within(1000, async () => Promise.reject(new Error('boom')))).rejects.toThrow('boom');
     await expect(within(1000, () => { throw new Error('antes de pedir'); })).rejects.toThrow('antes de pedir');
+  });
+});
+
+// Las imágenes del bucket `page-files` (un workspace sin portero) tampoco tenían tope: con Storage colgado, el
+// ciclo de sincronización entero quedaba esperando (las sube antes de los comentarios y de la cola de archivos).
+describe('tope de tiempo de las imágenes de `page-files` (un workspace sin portero)', () => {
+  const MB = 1024 * 1024;
+
+  function remoteWith(storage: typeof fetch): SupabaseRemote {
+    (AbortSignal as { timeout: unknown }).timeout = undefined;
+    vi.useFakeTimers();
+    const client = createClient('https://example.supabase.co', 'sb_publishable_test', {
+      global: { fetch: storage },
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+    return new SupabaseRemote(client, '0.070');
+  }
+
+  async function after<T>(request: Promise<T>, ms: number): Promise<{ value?: T; error?: unknown } | null> {
+    let settled: { value?: T; error?: unknown } | null = null;
+    void request.then(
+      (value) => (settled = { value }),
+      (error: unknown) => (settled = { error }),
+    );
+    await vi.advanceTimersByTimeAsync(ms);
+    return settled;
+  }
+
+  it('subir y bajar de un Storage que no contesta vuelve como error de red al vencer el tope, y el pedido se corta', async () => {
+    let aborted = 0;
+    const remote = remoteWith((input, init) => {
+      init?.signal?.addEventListener('abort', () => aborted++);
+      return hanging(input, init);
+    });
+    // 2 MB: 30 s más lo que tardan a 16 KB/s (128 s).
+    const data = new ArrayBuffer(2 * MB);
+    expect(storageTimeout(data.byteLength)).toBe(REQUEST_TIMEOUT_MS + 128_000);
+    const up = remote.uploadFile('page/x.png', data, 'image/png');
+    expect(await after(up, storageTimeout(data.byteLength) - 1000)).toBeNull();
+    const upDone = await after(up, 2000);
+    expect(aborted).toBe(1);
+    expect(isTimeout(upDone?.error)).toBe(true);
+    expect(isNetworkError(upDone?.error)).toBe(true);
+
+    // La bajada no sabe cuánto llega: el tope de la más pesada que acepta el bucket (25 MB).
+    expect(FILE_DOWNLOAD_TIMEOUT_MS).toBe(storageTimeout(MAX_FILE_BYTES));
+    const down = remote.downloadFile('page/x.png');
+    expect(await after(down, FILE_DOWNLOAD_TIMEOUT_MS - 1000)).toBeNull();
+    const downDone = await after(down, 2000);
+    expect(aborted).toBe(2);
+    expect(isTimeout(downDone?.error)).toBe(true);
+  });
+
+  it('una imagen grande en una red lenta no se corta: el tope no tiene el techo de las consultas', async () => {
+    // 20 MB a 16 KB/s: 21 minutos, más que el tope más largo de una consulta.
+    const data = new ArrayBuffer(20 * MB);
+    expect(storageTimeout(data.byteLength)).toBeGreaterThan(MAX_REQUEST_TIMEOUT_MS);
+    const remote = remoteWith(
+      () =>
+        new Promise((resolve) =>
+          setTimeout(
+            () => resolve(new Response(JSON.stringify({ Id: '1', Key: 'page-files/page/x.png' }), { status: 200, headers: { 'content-type': 'application/json' } })),
+            21 * 60_000,
+          ),
+        ),
+    );
+    const up = remote.uploadFile('page/x.png', data, 'image/png');
+    expect(await after(up, 21 * 60_000 + 1000)).toEqual({ value: undefined });
+  });
+
+  it('una imagen que vence el tope no frena a las demás; dos seguidas cortan la pasada', async () => {
+    const server = new FakeServer();
+    const d = await makeDevice(server);
+    devices.push(d);
+    const page = await d.tree.create(null, 'Día 1');
+    await d.engine.syncNow();
+    const png = (n: number) => new File([new Uint8Array([n, 1, 2, 3])], `${n}.png`, { type: 'image/png' });
+    const urls = [await d.files.add(page, png(1)), await d.files.add(page, png(2)), await d.files.add(page, png(3))];
+    const paths = urls.map((u) => u.slice('sdfile://'.length));
+    const hung = new Set<string>();
+    const tried: string[] = [];
+    const upload = d.remote.uploadFile.bind(d.remote);
+    d.remote.uploadFile = async (path, data, mime) => {
+      tried.push(path);
+      if (hung.has(path)) throw new RemoteError(REQUEST_TIMEOUT, false, REQUEST_TIMEOUT, true);
+      return upload(path, data, mime);
+    };
+    const order = (await d.db.getAllFromIndex('files', 'uploaded', 0)).map((f) => f.path);
+
+    // La primera (en el orden en que se suben) no contesta: las otras suben igual.
+    hung.add(order[0]);
+    expect(await d.files.pushPending(() => false)).toBe(REQUEST_TIMEOUT);
+    expect(tried).toEqual(order);
+    for (const path of order.slice(1)) expect(server.files.has(path)).toBe(true);
+    expect(server.files.has(order[0])).toBe(false);
+    expect(await d.files.pendingCount()).toBe(1);
+
+    // Con Storage colgado para todas, a la segunda seguida se deja para la próxima pasada.
+    const more = [await d.files.add(page, png(4)), await d.files.add(page, png(5)), await d.files.add(page, png(6))];
+    for (const url of more) hung.add(url.slice('sdfile://'.length));
+    tried.length = 0;
+    await d.files.pushPending(() => false);
+    expect(tried).toHaveLength(2);
+    expect(await d.files.pendingCount()).toBe(4);
+    // Nada se pierde: siguen en el dispositivo.
+    for (const path of [...paths, ...more.map((u) => u.slice('sdfile://'.length))]) expect(await d.db.get('files', path)).toBeTruthy();
+  });
+
+  it('dos imágenes colgadas solo para ellas no dejan sin subir a las demás: las que vencieron van después', async () => {
+    const server = new FakeServer();
+    const d = await makeDevice(server);
+    devices.push(d);
+    const page = await d.tree.create(null, 'Día 1');
+    await d.engine.syncNow();
+    const png = (n: number) => new File([new Uint8Array([n, 1, 2, 3])], `${n}.png`, { type: 'image/png' });
+    for (const n of [1, 2, 3]) await d.files.add(page, png(n));
+    const order = (await d.db.getAllFromIndex('files', 'uploaded', 0)).map((f) => f.path);
+    const hung = new Set(order.slice(0, 2));
+    const tried: string[] = [];
+    const upload = d.remote.uploadFile.bind(d.remote);
+    d.remote.uploadFile = async (path, data, mime) => {
+      tried.push(path);
+      if (hung.has(path)) throw new RemoteError(REQUEST_TIMEOUT, false, REQUEST_TIMEOUT, true);
+      return upload(path, data, mime);
+    };
+    // Primera pasada: las dos primeras vencen y la pasada termina sin probar la tercera.
+    await d.files.pushPending(() => false);
+    expect(tried).toEqual(order.slice(0, 2));
+    // Segunda: la tercera va primero y sube.
+    tried.length = 0;
+    await d.files.pushPending(() => false);
+    expect(tried[0]).toBe(order[2]);
+    expect(server.files.has(order[2])).toBe(true);
   });
 });
 

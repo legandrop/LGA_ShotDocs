@@ -123,8 +123,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   pegar un PDF, un .zip o lo que sea; va al Drive del dueño como las fotos y se ve como una tarjeta con ícono,
   nombre y tamaño (el mismo bloque `image` con `sdmedia://`, sin tipo de bloque nuevo). Un PDF (o lo que el
   navegador sabe mostrar) se abre en una pestaña nueva; el resto se baja con su nombre; en el teléfono, un
-  toque abre una hoja. Falta: la vista previa (entrega 2), la tarjeta grande en el carrete y probar a mano con
-  el portero real.
+  toque abre una hoja. **Entrega 2 hecha (v0.091):** la primera página de un PDF como vista previa en la tarjeta
+  (pdf.js en el dispositivo que lo agrega, bajado aparte; viaja como la miniatura de una foto y se ve sin red), y los
+  adjuntos en grande en el carrete con *Open* y *Download*. Falta: probar a mano con el portero real, Safari y el
+  iPhone; la miniatura de Drive para Office, PSD y demás (CORS en `/t/` del portero y guardarla en el bucket
+  `thumbs`; `Doc_Adjuntos.md`, sección 4).
 - **P.7 Hecho (v0.050, primera entrega; migración 7 aplicada en Wanka): cuánto ocupa cada proyecto
   en el Drive.** El peso en el renglón de cada proyecto del selector, el total con su desglose en el diálogo
   de Google Drive (solo el dueño) y el total de la papelera de archivos, con la confirmación de vaciar
@@ -142,10 +145,17 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   Lega: vista en vivo de la carpeta de Drive, subida directa a Google, sin tope y en el plan gratis.
   **Entrega 1 hecha (v0.081):** soltar una carpeta, la ventana de qué se sube, su cola propia (los bytes por el
   portero), la tarjeta, el visor con el carrete y bajar uno, retomar volviendo a soltarla, y el portero con la
-  regla de no salir del árbol. Falta: que Lega decida `drive.readonly` (ver lo agregado a mano en Drive), probar
+  regla de no salir del árbol. Las carpetas soltadas conservan su nombre en el Drive (D3, 2026-10-01). Falta: que Lega decida `drive.readonly` (ver lo agregado a mano en Drive), probar
   la subida directa a Google con el Drive real, "Agregar a esta carpeta", la cuadrícula, la lista sin red, "Seguir"
   en Chrome y Edge, el botón "Carpeta…" del menú `/` y *Bajar todo* (entrega 2). Detalle en `Doc_Carpetas.md`,
-  "Cómo quedó".
+  "Cómo quedó". Pendientes de los nombres (auditoría de D3, todos BAJOS y previos al cambio):
+  - *Bajar todo* como zip tiene que limpiar cada nombre que viene de Drive: `.` y `..`, y los que terminan en punto
+    (Windows no los acepta). Vale aunque la app no los cree: el dueño puede renombrar en Drive a lo que quiera.
+  - El corte de 200 caracteres va por punto de código: en un nombre muy largo puede partir una bandera o sacar un tono
+    de piel. Cortar por grafema (`Intl.Segmenter`, existe en Workers) lo resuelve.
+  - Mac y Windows: la marca de cada subcarpeta resume la ruta sin normalizar los acentos (la Mac da `í` en dos
+    partes). Volver a soltar desde el otro sistema crea subcarpetas nuevas, con el mismo nombre, al lado de las de
+    antes. Normalizarla cambiaría la marca de lo ya subido: hay que pensarlo (por ejemplo, buscar por las dos formas).
 - **P.10 Espacio en el dispositivo y "Available offline"** (Lega, 2026-09-30 y D-25 del 2026-10-01): tope
   elegible, de fábrica 2 GB por workspace en cada dispositivo (pasado el tope, un aviso ofrece liberar las copias ya
   confirmadas en el Drive que hace más que no se abren, y se liberan recién con el sí; la miniatura queda), marcar una página o un proyecto para usarlo sin red (con una ventana de casillas y
@@ -319,26 +329,27 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
 
 11. **Subidas que se traban: lo que quedó de v0.068** (`Doc_Portero.md`, "Subidas que se traban"). La app
    corta los pedidos al portero que dejan de moverse (y, desde v0.070, los de la miniatura a Storage) y
-   sigue con los demás archivos. **Falta:**
-   - **Probarlo en Safari de iPhone y con una red lenta de verdad.** Está probado a mano en Chromium contra
-     un servidor local; el aviso de bytes que salen (`XMLHttpRequest`) puede portarse distinto en Safari,
-     con HTTP/2 y a través de Cloudflare.
-   - **Cerrar la vuelta de la cola como sin conexión** después de 2 o 3 trabadas seguidas de archivos
-     distintos: hoy, con el portero colgado para todos, gasta un minuto por archivo. Lo mismo con Storage
-     colgado para todos: de 30 a 62 s por archivo en cada vuelta, lo que tarda en vencer su miniatura.
-   - **La miniatura (lo que quedó de v0.070,** `Doc_Sincronizacion.md`, "Cada consulta a la base tiene un
-     tope de tiempo"**).** El tope de la subida no crece entre reintentos: una miniatura de 500 KB con
-     menos de unos 8 KB/s vence siempre (agrandarlo con las fallas seguidas, como `stalledBefore` en el
-     portero). Las subidas cortadas quedan sueltas y se acumulan si Storage está colgado para todos (subir
-     con un `fetch` propio que acepte una señal de corte). Y `uploadFile` y `downloadFile` del bucket
-     `page-files` (un workspace sin portero) siguen sin tope.
-   - **Recordar el plazo que funcionó.** Detrás de un antivirus o un proxy que recibe el cuerpo de golpe,
-     cada archivo vuelve a empezar con el plazo corto y se traba una o más veces antes de pasar.
-   - **Casos raros en que espera o reintenta de más** (no pierden ni duplican): una pestaña tan frenada
-     que el vigilante mira menos de una vez cada 90 s no corta nunca mientras dure (descontar a lo sumo uno
-     o dos huecos seguidos sin movimiento); si el equipo se suspende mientras sale el cuerpo, la espera de
-     la respuesta queda hasta 120 s más larga; y una subida que el portero pierde en cada vuelta reintenta
-     siempre a los 10 s en vez de espaciarse (comparar contra el máximo confirmado del intento).
+   sigue con los demás archivos. **Hecho en v0.092:** a la segunda trabada seguida de archivos distintos sin
+   avance, la vuelta deja de subir archivos y la cola espera antes de volver a probar (10 s, 20 s… hasta 10
+   minutos; `Doc_Portero.md`, "Colgado para todos"), también con Storage colgado; la miniatura se sube con la
+   señal de corte (ya no quedan subidas sueltas) y su tope crece con las fallas seguidas; `uploadFile` y
+   `downloadFile` de `page-files` tienen tope y una que vence no frena a las demás; el portero recuerda el plazo
+   de una respuesta lenta (un proxy que recibe el cuerpo de golpe); el vigilante descuenta a lo sumo dos huecos
+   seguidos, no estira la espera por una suspensión mientras sale el cuerpo, y volver a mandar lo que una subida
+   perdida ya tenía no cuenta como avance. Probado con relojes simulados y en Chromium contra un portero y un
+   Storage locales que se cuelgan. **Falta:**
+   - **Probarlo en Safari de iPhone y con una red lenta de verdad** (lo hace Lega). El aviso de bytes que salen
+     (`XMLHttpRequest`) puede portarse distinto en Safari, con HTTP/2 y a través de Cloudflare; y que cortar la
+     subida de una miniatura (la señal en el `fetch` del cliente de Supabase) la corte de verdad en Safari.
+   - **Las carpetas (P.9) no cierran la vuelta:** con el portero colgado para todos, cada archivo de una carpeta
+     se traba hasta sus 5 intentos y queda con su error hasta *Retry*. Y mientras la cola de archivos espera,
+     tampoco registra archivos nuevos ni sube sus miniaturas (como sin conexión).
+   - **La bajada de `page-files` espera hasta 27 minutos** aunque la imagen sea chica (no se sabe cuánto pesa
+     antes de pedirla).
+   - **`page-files` con Storage colgado para todos** (solo workspaces sin portero): `PageFiles.pushPending` corre
+     dentro del ciclo del motor y no tiene la espera de la cola, así que cada ciclo espera hasta dos topes
+     (`storageTimeout`, hasta unos 27 minutos cada uno con una imagen de 25 MB) antes de los comentarios. El texto
+     de las páginas ya salió antes en ese ciclo y nada se pierde.
 12. **Importar de Coda, direcciones sueltas: lo que quedó de v0.069** (`Doc_Importar_Coda.md`, "Direcciones
     sueltas"). **Falta:**
     - **Hecho (v0.071 y v0.087): el anclaje de un comentario** pegado a un renglón con direcciones: un último
@@ -371,11 +382,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
       de subir el HEIC tal cual; sin red los intentos no cuentan. **Sin red, la conversión arranca enseguida**
       (no espera la consulta a la base, que tardaba unos 7 s en fallar). **La comprobación del JPEG** mira además
       los puntos que se apartan del fondo: un canvas en blanco ya no pasa con una foto casi toda blanca.
-    - **Subir `min_app_version` a 0.075** cuando Lega tenga la versión en sus dispositivos: una pestaña de
-      v0.074 o anterior puede registrar un HEIC mientras esta lo convierte (sospecha de la auditoría, sin
-      reproducir). **Verificado (v0.086): no la frena.** Solo la usan `push_page_update` y el ciclo de páginas;
-      `register_file`, el portero y la cola de archivos no miran la versión. Frenarla pide una migración que haga
-      con `register_file` lo mismo que con `push_page_update` (`Doc_Imagenes.md`, "Pendiente").
+    - **Frenar a las versiones viejas (v0.074 o anterior registra un HEIC sin convertir).** Verificado en v0.086
+      que `min_app_version` no frenaba la cola de archivos. **Hecho en el código (v0.090):** la app se frena sola y
+      la migración `20261006120000_version_minima_archivos.sql` frena a las publicadas cuando la mínima es 0.090 o
+      más (`Doc_Sincronizacion.md`, "La versión mínima y los archivos"). **Falta:** aplicar la migración (con copia
+      de seguridad), publicar la v0.090 y, cuando Lega la tenga en sus dispositivos, subir `min_app_version` a
+      0.090. Un HEIC que una versión anterior a v0.075 guardó sin la marca se registra tal cual al actualizar: se
+      cerraría convirtiendo también, antes de registrarlo, un HEIC propio sin la marca.
     - **Hecho (v0.086): el perfil de color** es el de la imagen principal (`pitm` → `ipma` → `ipco`), en la app y
       en el comando de Coda (el mismo código, `src/media/heifColor.mjs`), y un HEIC con solo `nclx` lleva un
       Display P3 o BT.2020 estándar. HDR (`nclx` PQ o HLG) sigue sin perfil.

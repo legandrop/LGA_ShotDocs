@@ -45,6 +45,46 @@ export interface BlockLike {
 /** El tipo de la foto en línea (inlinePhoto.ts; acá sin importarlo, para no traer el editor). */
 const INLINE_PHOTO = 'photo';
 
+/** Lo más que se espera para averiguar qué es lo que no se sabe antes de abrir el carrete (una red que no contesta). */
+export const CARRETE_LEARN_WAIT_MS = 1500;
+
+/**
+ * Lo que va al carrete de una página: todo menos las carpetas (tienen su visor). Si de algún archivo todavía no se
+ * sabe qué es (de otro dispositivo, y la página no lo llegó a dibujar: una carpeta entraría como adjunto), primero se
+ * averigua (`learnInfo`), esperando como mucho `waitMs` (sin red no se pregunta). Si la respuesta llega después y
+ * cambia la lista, `onLate` recibe la lista nueva (el carrete ya abierto se actualiza).
+ */
+export async function carreteItemsOf(
+  blocks: readonly BlockLike[],
+  media: { fileInfo(id: string): unknown; isFolder(id: string): boolean; learnInfo(ids: readonly string[]): Promise<void> },
+  opts: { waitMs?: number; onLate?: (items: CarreteItem[]) => void; online?: boolean } = {},
+): Promise<CarreteItem[]> {
+  const unknown = collectCarrete(blocks)
+    .map((item) => item.mediaId)
+    .filter((id): id is string => !!id && !media.fileInfo(id));
+  const now = () => collectCarrete(blocks, (id) => media.isFolder(id));
+  const online = opts.online ?? (typeof navigator === 'undefined' || navigator.onLine !== false);
+  if (unknown.length === 0 || !online) return now();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const learning = media.learnInfo(unknown).catch(() => undefined);
+  const late = await Promise.race([
+    learning.then(() => false),
+    new Promise<boolean>((r) => {
+      timer = setTimeout(() => r(true), opts.waitMs ?? CARRETE_LEARN_WAIT_MS);
+    }),
+  ]);
+  clearTimeout(timer);
+  const items = now();
+  if (late && opts.onLate) {
+    const onLate = opts.onLate;
+    void learning.then(() => {
+      const next = now();
+      if (next.map((i) => i.key).join('|') !== items.map((i) => i.key).join('|')) onLate(next);
+    });
+  }
+  return items;
+}
+
 /** La clave de una foto: la de un bloque `image` es su id; la de una foto en línea, `<bloque>#<n>`. */
 export const photoKey = (blockId: string, at: number | null): string => (at === null ? blockId : `${blockId}#${at}`);
 
@@ -100,8 +140,8 @@ const text = (value: unknown): string => (typeof value === 'string' ? value : ''
  * Todas las fotos y videos de la página, en el orden en que aparecen (de arriba abajo, también los que
  * están adentro de otro bloque): los bloques `image` y las fotos en línea del texto de cada bloque (también en
  * listas y en celdas de tabla; las de un bloque, antes que sus hijos). Solo las que tienen una dirección que se
- * pueda mostrar. `skip`: las que no van (los adjuntos, Docs/Doc_Adjuntos.md: un PDF o un zip no se ven en el
- * carrete).
+ * pueda mostrar, también los adjuntos (un PDF, un zip: el carrete los muestra en grande, Docs/Doc_Adjuntos.md).
+ * `skip`: las que no van (las carpetas, que tienen su visor).
  */
 export function collectCarrete(blocks: readonly BlockLike[], skip?: (mediaId: string, name: string) => boolean): CarreteItem[] {
   const out: CarreteItem[] = [];

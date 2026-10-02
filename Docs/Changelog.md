@@ -11,6 +11,51 @@ secciones colapsadas. Puede tener texto, que nunca se pierde; Retroceso justo de
 *Page break* en *Sheets, PDF and printing*.
 [ Salto de hoja - párrafo con pageBreak, menú / y Ctrl/⌘+Enter, en las marcas y en el PDF ]
 
+v0.092 :
+
+Subidas que se traban (lo que quedó de v0.068 y v0.070). Con el portero o Storage colgados para todos, la cola
+esperaba el tope entero de cada archivo: un minuto, o hasta 62 s por miniatura. Ahora, a la segunda trabada seguida
+sin avance, deja de subir archivos y espera antes de volver a probar (10 s… hasta 10 minutos); los ya trabados van
+después de los demás. La miniatura se sube con la señal de corte atada al `fetch` del cliente (no quedan subidas
+sueltas) y su tope crece con las fallas seguidas; `page-files` tiene tope. El portero recuerda el plazo de una
+respuesta lenta (un proxy que recibe el cuerpo de golpe), descuenta a lo sumo dos huecos seguidos como suspensión,
+una suspensión no estira la espera de la respuesta, y volver a mandar lo que una subida perdida tenía no es avance.
+[ Subidas trabadas - la cola deja de subir cuando el portero o Storage no contestan, y lo demás de B.11 ]
+
+v0.091 :
+
+Un PDF adjunto se veía solo como un ícono y el carrete salteaba los adjuntos. Ahora la tarjeta de un PDF muestra su
+primera página: la dibuja con pdf.js (bajado aparte, solo cuando llega un PDF) el dispositivo que lo agrega, y viaja
+como la miniatura de una foto, sin pasar por el portero; lo ya visto se ve sin red. Se eligió sobre la miniatura de
+Drive, que llega tarde y pedía cambiar el portero. Si pdf.js no estaba, o el PDF es de antes, se hace al mostrarlo;
+si la pestaña se cierra mientras se dibuja, no se reintenta y el PDF sube igual. En el carrete, los adjuntos se ven
+en grande con *Open* y *Download*. Sin migración ni propiedades nuevas en el bloque.
+[ Adjuntos - vista previa del PDF y tarjeta grande en el carrete ]
+
+v0.090 :
+
+Subir `min_app_version` frenaba solo el contenido de las páginas: una pestaña vieja seguía registrando y subiendo
+archivos (por ejemplo, un HEIC sin convertir), porque `register_file`, `link_page_file` y `unlink_page_file` no
+recibían la versión y la cola de archivos no miraba el aviso de actualizar. Ahora la cola se frena sola con una
+versión menor a la mínima: no registra, no sube al portero, no manda usos ni manda a la papelera de Drive, y una
+carpeta no se puede soltar. Todo queda en el dispositivo, contado como pendiente y sin error, y sale al actualizar.
+Para las versiones ya publicadas, la migración `20261006120000_version_minima_archivos.sql` suma esas
+funciones con `p_app_version`; las de siempre las llaman solo versiones anteriores y dejan de andar cuando la mínima
+es 0.090 o más.
+[ Versión mínima - también frena la cola de archivos ]
+
+v0.089 :
+
+Una carpeta soltada en la página llegaba al Drive con otro nombre: «Día 2 - Puerto» quedaba `Día_2_-_Puerto`, y
+sus subcarpetas igual, porque el portero les aplicaba la regla de las carpetas de la app (sin espacios). Decisión D3
+(2026-10-01): las carpetas que suelta el usuario conservan su nombre, con espacios, tildes y emojis; solo se sacan,
+como en los archivos, controles, marcas de dirección y caracteres de ancho cero (un emoji compuesto, como el de una
+familia, queda en sus partes), las barras van como `_` y se corta en 200 caracteres. Las que crea la app
+(`LGA_ShotDocs`, la del proyecto, `Carpetas`) siguen sin espacios. Lo ya subido no se renombra, y retomarlo no
+duplica nada: cada subcarpeta se encuentra por su marca, no por el nombre. Además, una carpeta sin nada visible en
+el nombre se llamaba `file.bin`: ahora, `Folder`.
+[ Carpetas - las que suelta el usuario conservan su nombre en el Drive ]
+
 v0.088 :
 
 Cada subida de contenido repetía todos los borrados de la historia de la página (el *delete set* de Yjs):

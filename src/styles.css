@@ -3494,6 +3494,75 @@ code {
   }
 }
 
+/* Un adjunto en el carrete (Docs/Doc_Adjuntos.md, entrega 2): la vista previa (la primera página de un PDF) a su
+   tamaño, sin agrandarla, o la tarjeta; debajo el tipo y el peso, y abrir y bajar. */
+.carrete-file {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  padding: 16px 16px 24px;
+  text-align: center;
+}
+
+.carrete-file-preview {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-width: 100%;
+  max-height: calc(100% - 112px);
+  object-fit: contain;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.5);
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+}
+
+.carrete-file[data-card] .carrete-file-preview {
+  width: min(480px, 100%);
+  height: auto;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.carrete-file-meta {
+  margin: 0;
+  color: var(--carrete-muted);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.carrete-file-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.carrete-file-actions .carrete-notice-btn {
+  padding: 0 18px;
+}
+
+.carrete-file-actions .carrete-notice-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.carrete-file-note {
+  max-width: 480px;
+  margin: 0;
+  color: var(--carrete-muted);
+  font-size: 14px;
+  line-height: 1.4;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 .carrete-caption {
   flex-shrink: 0;
   max-height: 30vh;
