@@ -150,8 +150,9 @@ export function paginateExport(view: Pick<PrintView, 'page' | 'geometry'>): Pagi
   });
   const all = measured.units.map((unit, i) => ({ unit, el: measured.elements[i], members: measured.members?.[i] ?? [measured.elements[i]] }));
   for (const x of extra) if (x.unit.height > 0) all.push({ ...x, members: [x.el] });
-  // En el orden de la hoja (un aviso va arriba del título; los comentarios, al final).
-  all.sort((a, b) => a.unit.top - b.unit.top);
+  // En el orden del documento (un aviso va arriba del título; los comentarios, al final). Nunca por la altura: un
+  // salto de hoja vacío no se dibuja (mide 0 y queda arriba de todo) y ordenado por altura cortaría la primera hoja.
+  all.sort((a, b) => (a.el === b.el ? 0 : a.el.compareDocumentPosition(b.el) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
   const units = all.map((a) => a.unit);
   return {
     units,

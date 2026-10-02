@@ -13,7 +13,7 @@ import { appComments, authorLabel, blockText, commentsSection, nameFromEmail } f
 import { ExportEditor } from './exportEditor';
 import { PhotoLimitError, PixelBudget, printSize, shrinkImages, type Resizer } from './exportImages';
 import { exportPlan, type ExportSource } from './exportPages';
-import { anchorId, buildPdf, PageLimitError, pageRules, PDF_LIMITS, printBook, rewriteLinks, sheetName, type BuildOptions } from './exportPdf';
+import { anchorId, buildPdf, PageLimitError, pageRules, paginateExport, PDF_LIMITS, printBook, rewriteLinks, sheetName, type BuildOptions } from './exportPdf';
 import { keepsPageSizes } from './printSupport';
 import { testProject, writeBlocks, writeTestProject } from './testProject';
 
@@ -260,6 +260,31 @@ describe('exportar PDF: el libro', () => {
     for (const s of specs.filter((s) => s.parent === null && s.key !== '3')) expect(text).not.toContain(s.title);
     expect(book.root.querySelector('.sd-export-index-title')?.textContent).toBe(title);
     book.destroy();
+  });
+
+  it('se pagina en el orden del documento: un salto de hoja vacío más abajo no corta la primera hoja', () => {
+    // Medido en Chrome con el PDF de verdad: ordenadas por altura, el salto vacío (no se dibuja, mide 0) quedaba
+    // arriba de todo y la página empezaba con su encabezado solo en una hoja.
+    const page = document.createElement('div');
+    page.innerHTML = `
+      <div class="page-header" data-top="0" data-h="14"></div>
+      <p class="sd-export-note sd-export-unit" data-top="22" data-h="20"></p>
+      <h1 class="page-title" data-top="42" data-h="56"></h1>
+      <div data-id="a"><div class="bn-block-content" data-content-type="paragraph" data-top="98" data-h="200"></div></div>
+      <div data-id="b"><div class="bn-block-content" data-content-type="paragraph" data-page-break="true" data-top="0" data-h="0"></div></div>
+      <div data-id="c"><div class="bn-block-content" data-content-type="paragraph" data-top="298" data-h="30"></div></div>
+      <section><div class="sd-export-comment sd-export-unit" data-top="328" data-h="40"></div></section>`;
+    document.body.append(page);
+    for (const el of page.querySelectorAll<HTMLElement>('[data-top]')) {
+      const top = Number(el.dataset.top);
+      const h = Number(el.dataset.h);
+      el.getBoundingClientRect = () => ({ top, bottom: top + h, height: h, width: 100, left: 0, right: 100 }) as DOMRect;
+    }
+    page.getBoundingClientRect = () => ({ top: 0, bottom: 0, height: 0, width: 0, left: 0, right: 0 }) as DOMRect;
+    const r = paginateExport({ page, geometry: { contentHeight: 1000 } as never });
+    expect(r.units.map((u) => u.key)).toEqual(['header', 'x:0', 'title', 'b:a', 'b:b', 'b:c', 'x:1']);
+    // El salto corta después del bloque `a`: la hoja 2 empieza en `c`, nunca en el título.
+    expect(r.pagination.breaks.map((b) => b.key)).toEqual(['b:c']);
   });
 
   it('los links entre páginas: adentro del PDF, internos; afuera, solo el texto', async () => {
