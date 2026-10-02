@@ -161,6 +161,16 @@ Supabase (`Authorization: Bearer …`). "Nivel" es el de la persona sobre el arc
 | `POST /project/untrash` | Igual | `{ project: <id> }`: la trae de la papelera de Drive (para restaurar el proyecto, o *Look for its files again*). `drive`: `untrashed`, `none`, o `missing` (Drive, con la misma cuenta, no tiene ninguna: **la base no se toca**). |
 | `GET /project/inspect?project=<id>` | Dueño | Solo mirar (la prueba técnica): las carpetas del proyecto en Drive con su estado en la papelera, las carpetas del día y sus archivos (`parents`, `explicitlyTrashed`, `appProperties.sdFile`) y el registro del portero. No cambia nada. |
 
+### Con un link público (`Doc_Link_Publico.md`, 3.9)
+
+Un pedido con el header `x-shotdocs-link` (y sin sesión) es de alguien que abrió un link: el portero acepta solo
+`POST /pass`, `POST /verify`, `POST /folder/list` y `GET /drive/status`; lo demás da `403 link_denied` sin preguntarle
+nada a la base. Pregunta `plink_media_file` (por `POST`, con la clave publicable y el header reenviado: la base valida
+el link y cuenta el pase) en lugar de `media_file`, nunca reenvía un `Authorization` que venga en el pedido, y los
+pases del link vencen a las 2 horas (también los de `/folder/list`; las cuentas siguen con 8). Un link revocado o
+vencido da `401 link_not_found`; uno que llegó al tope del día, `429 link_rate_limited`. CORS acepta
+`x-shotdocs-link` y `x-shotdocs-device`.
+
 ### Lo que se sirve (`/m/<pase>`)
 
 Una sola función (`servedHeaders`) arma los encabezados de lo que viene de Drive y de lo que sale de la

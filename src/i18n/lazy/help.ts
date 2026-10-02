@@ -225,8 +225,8 @@ export const help = {
   },
   'help.folderDownload.title': { en: "Download a whole folder", es: "Bajar una carpeta entera" },
   'help.folderDownload.text': {
-    en: "Download all, in the folder viewer or in the card's bar, saves everything inside with its subfolders. In Chrome and Edge on a computer you choose where the .zip goes, or Download to a folder… writes the files as they are. Firefox, Safari and phones build the zip in memory: up to 1 GB (500 MB on a phone). Shortcuts, Google documents and anything that fails are listed in MISSING_FILES.txt. It needs a connection; keep the tab open until it finishes.",
-    es: "Bajar todo, en el visor de la carpeta o en la barra de la tarjeta, guarda todo lo de adentro con sus subcarpetas. En Chrome y Edge de computadora elegís dónde va el .zip, o Bajar a una carpeta… escribe los archivos tal cual. Firefox, Safari y los teléfonos arman el zip en memoria: hasta 1 GB (500 MB en un teléfono). Los accesos directos, los documentos de Google y lo que falle quedan anotados en MISSING_FILES.txt. Hace falta conexión; dejá la pestaña abierta hasta que termine.",
+    en: "Download all, in the folder viewer or in the card's bar, saves everything inside with its subfolders. In Chrome and Edge on a computer you choose where the .zip goes, or Download to a folder… writes the files as they are. Firefox, Safari and phones build the zip in memory: up to 1 GB (500 MB on a phone). Shortcuts, Google documents and anything that fails are listed in MISSING_FILES.txt; Retry missing downloads only what failed: into the same folder, or in a new .zip (Folder (missing files).zip, then (missing files 2).zip…) to extract over the first one, in order. It needs a connection; keep the tab open until it finishes. If the connection or the server stops answering, it waits and continues when they come back.",
+    es: "Bajar todo, en el visor de la carpeta o en la barra de la tarjeta, guarda todo lo de adentro con sus subcarpetas. En Chrome y Edge de computadora elegís dónde va el .zip, o Bajar a una carpeta… escribe los archivos tal cual. Firefox, Safari y los teléfonos arman el zip en memoria: hasta 1 GB (500 MB en un teléfono). Los accesos directos, los documentos de Google y lo que falle quedan anotados en MISSING_FILES.txt; Reintentar lo que falta baja solo lo que falló: en la misma carpeta, o en un .zip nuevo (Carpeta (missing files).zip, después (missing files 2).zip…) para descomprimir encima del primero, en orden. Hace falta conexión; dejá la pestaña abierta hasta que termine. Si la conexión o el servidor dejan de contestar, espera y sigue cuando vuelven.",
   },
   'help.folderWho.title': { en: "Who sees a folder", es: "Quién ve una carpeta" },
   'help.folderWho.text': {
@@ -297,6 +297,16 @@ export const help = {
   'help.share.text': {
     en: "Share from the ⋯ menu: view, comment, edit, or edit and create pages. A permission covers everything under that page and never what's above it.",
     es: "Se comparte desde el menú ⋯: ver, comentar, editar, o editar y crear páginas. Un permiso vale para todo lo de abajo de esa página y nunca para lo de arriba.",
+  },
+  'help.publicLink.title': { en: "Share with a link", es: "Compartir con un link" },
+  'help.publicLink.text': {
+    en: "In Share, General access: Anyone with the link can open the page and the ones inside, without an account, and comment with a name. It never shows what's above, what was deleted or the history. Copy link sends it; Reset link cuts it for everyone at once; it can expire. It needs the setting that keeps deleted text out of shared pages. Not for sensitive material.",
+    es: "En Compartir, Acceso general: cualquiera con el link abre la página y las de adentro, sin cuenta, y comenta con un nombre. Nunca ve lo de arriba, lo borrado ni el historial. Copiar link lo manda; Renovar link lo corta para todos en el acto; puede vencer. Pide el ajuste que deja afuera de lo compartido lo que se borró. No es para material sensible.",
+  },
+  'help.openedWithLink.title': { en: "Opened with a link", es: "Abierto con un link" },
+  'help.openedWithLink.text': {
+    en: "You see the shared page and the ones inside, without an account. To comment, write your name once: it's shown with “(via link)”. What you write is saved in this browser first, and a page you already opened shows again without a connection. The link can stop working if whoever shared it turns it off.",
+    es: "Ves la página compartida y las de adentro, sin cuenta. Para comentar, escribí tu nombre una vez: se muestra con “(vía link)”. Lo que escribís se guarda primero en este navegador, y una página que ya abriste se vuelve a ver sin conexión. El link puede dejar de andar si quien lo compartió lo apaga.",
   },
   'help.members.title': { en: "Members and guests", es: "Miembros e invitados" },
   'help.members.text': {

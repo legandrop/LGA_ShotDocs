@@ -1,4 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react';
+import { useLinkMode, useVisitorName } from '../linkMode';
 import { useT } from '../i18n';
 import { usePermissions, useServices } from '../services';
 import { LEVEL_COMMENT, LEVEL_DELETE_ANY } from '../sync/comments';
@@ -13,7 +14,14 @@ export function useCommentAccess(pageId: string): { canComment: boolean; canDele
   const { comments } = useServices();
   const perms = usePermissions();
   const level = perms.pageLevel(pageId);
-  return { level, canComment: level >= LEVEL_COMMENT && comments.writable, canDeleteAny: level >= LEVEL_DELETE_ANY };
+  // Con un link público se comenta con un nombre (P8): hasta escribirlo, el panel lo pide.
+  const link = useLinkMode();
+  const named = useVisitorName() !== '';
+  return {
+    level,
+    canComment: level >= LEVEL_COMMENT && comments.writable && (!link || named),
+    canDeleteAny: level >= LEVEL_DELETE_ANY,
+  };
 }
 
 /** El botón de la barra de arriba: abre y cierra el panel, con la cantidad de hilos abiertos. */

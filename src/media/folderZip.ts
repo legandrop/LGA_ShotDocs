@@ -46,6 +46,8 @@ export interface MissingItem {
   reason: MissingReason;
   /** El motivo técnico (un código del portero, un estado HTTP), en inglés. */
   detail?: string;
+  /** Una subcarpeta que no se pudo listar: su id de Drive, para volver a probar (*Retry missing*). */
+  dirId?: string;
 }
 
 export interface DownloadPlan {
@@ -116,12 +118,18 @@ export async function planFolder(
   lister: FolderLister,
   fileId: string,
   rootName: string,
-  opts: { signal?: AbortSignal; onProgress?: (p: PlanProgress) => void; wait?: Wait } = {},
+  opts: {
+    signal?: AbortSignal;
+    onProgress?: (p: PlanProgress) => void;
+    wait?: Wait;
+    /** Recorrer solo esta subcarpeta (su id y su ruta limpia): *Retry missing* de una que no se pudo listar. */
+    start?: { id: string; path: string };
+  } = {},
 ): Promise<DownloadPlan> {
   const wait = opts.wait ?? defaultWait;
   const seen = new Set<string>();
   const progress: PlanProgress = { folders: 0, files: 0, bytes: 0 };
-  const root: Node = { id: null, path: '', modified: null, entries: [], children: [] };
+  const root: Node = { id: opts.start?.id ?? null, path: opts.start?.path ?? '', modified: null, entries: [], children: [] };
 
   const listAll = async (node: Node): Promise<void> => {
     let token: string | null = null;
@@ -186,7 +194,11 @@ export async function planFolder(
       const child = children.get(e)!;
       child.path = join(names.take(node.path, e.name, 'Folder'));
       plan.dirs.push({ path: child.path, modified: e.modified });
-      if (child.failed) plan.skipped.push({ path: `${child.path}/`, reason: 'folder', detail: child.failed });
+      if (child.failed) {
+        // Un ciclo o una carpeta demasiado honda no cambian al volver a probar; lo demás (un error del portero), sí.
+        const again = child.failed !== 'loop' && child.failed !== 'too_deep';
+        plan.skipped.push({ path: `${child.path}/`, reason: 'folder', detail: child.failed, ...(again ? { dirId: e.id } : {}) });
+      }
       else walk(child);
     }
     for (const e of node.entries) {
@@ -200,6 +212,48 @@ export async function planFolder(
   };
   walk(root);
   return plan;
+}
+
+/** Si vale la pena volver a probar lo que falta: un archivo que falló o quedó a medias, o una subcarpeta que no se listó. */
+export function canRetry(item: MissingItem): boolean {
+  return item.reason === 'failed' || item.reason === 'incomplete' || (item.reason === 'folder' && !!item.dirId);
+}
+
+/**
+ * *Retry missing*: el plan de lo que vale la pena volver a bajar de una bajada que terminó (`plan` y lo que faltó,
+ * `missing`). Los archivos que fallaron o quedaron a medias, con su pase (si venció, `runDownload` lo renueva), y
+ * cada subcarpeta que no se pudo listar, listada de nuevo. Lo que no se puede bajar (accesos directos, documentos de
+ * Google, una subcarpeta que vuelve a fallar) queda en `skipped`, así `MISSING_FILES.txt` sigue entero.
+ */
+export async function planRetry(
+  lister: FolderLister,
+  fileId: string,
+  plan: DownloadPlan,
+  missing: MissingItem[],
+  opts: { signal?: AbortSignal; wait?: Wait } = {},
+): Promise<DownloadPlan> {
+  const again = new Set(missing.filter((m) => m.reason === 'failed' || m.reason === 'incomplete').map((m) => m.path));
+  const out: DownloadPlan = { root: plan.root, dirs: [], files: plan.files.filter((f) => again.has(f.path)), skipped: [], bytes: 0 };
+  for (const item of missing) {
+    if (item.reason === 'failed' || item.reason === 'incomplete') continue;
+    if (!canRetry(item)) {
+      out.skipped.push(item);
+      continue;
+    }
+    if (opts.signal?.aborted) throw abortError();
+    const path = item.path.replace(/\/$/, '');
+    try {
+      const sub = await planFolder(lister, fileId, plan.root, { ...opts, start: { id: item.dirId!, path } });
+      out.dirs.push({ path, modified: null }, ...sub.dirs);
+      out.files.push(...sub.files);
+      out.skipped.push(...sub.skipped);
+    } catch (err) {
+      if (isAbort(err)) throw err;
+      out.skipped.push({ ...item, detail: err instanceof PorteroError ? (err.code ?? String(err.status)) : String(err) });
+    }
+  }
+  out.bytes = out.files.reduce((sum, f) => sum + f.size, 0);
+  return out;
 }
 
 async function withRate<T>(work: () => Promise<T>, wait: Wait, signal?: AbortSignal): Promise<T> {
@@ -227,7 +281,13 @@ export interface FileOut {
 /** Adónde va la bajada: un zip, o una carpeta del disco con el árbol tal cual. */
 export type DownloadTarget =
   | { kind: 'zip'; sink: ZipSink; crc?: () => CrcStream }
-  | { kind: 'dir'; makeDir(path: string): Promise<void>; makeFile(path: string): Promise<FileOut> };
+  | {
+      kind: 'dir';
+      makeDir(path: string): Promise<void>;
+      makeFile(path: string): Promise<FileOut>;
+      /** Borra un archivo si está (la lista vieja de lo que faltaba, cuando *Retry missing* bajó todo). */
+      remove?(path: string): Promise<void>;
+    };
 
 export interface DownloadProgress {
   files: number;
@@ -261,6 +321,11 @@ export interface DownloadDeps {
    * sigue diciendo que hay red). Por defecto, `PROBE_MS`.
    */
   probeMs?: number;
+  /**
+   * Cuánto se espera un pedido sin que llegue nada (la respuesta o el próximo pedazo) antes de tratarlo como un corte
+   * (el portero dejó de contestar sin cortar la conexión). Por defecto, `STALL_MS`.
+   */
+  stallMs?: number;
   /** El pase nuevo de un archivo (cuando el que se tenía venció): vuelve a listar su subcarpeta. */
   refresh?: (file: PlanFile) => Promise<string | null>;
   /** El texto de `MISSING_FILES.txt`. */
@@ -276,6 +341,20 @@ const FILE_TRIES = 4;
 const RETRY_MS = [1_000, 3_000, 9_000];
 /** Cada cuánto se prueba si el portero volvió a contestar, sin red de verdad. */
 const PROBE_MS = 5_000;
+/**
+ * Lo más que se espera sin que llegue nada (la respuesta o el próximo pedazo): después cuenta como un corte, como el
+ * tope de las subidas trabadas. Un portero que deja de contestar sin cortar la conexión dejaba la barra quieta.
+ */
+const STALL_MS = 30_000;
+/** Lo más que se espera la respuesta de `/health` al probar si el portero contesta. */
+const HEALTH_MS = 10_000;
+
+/** No llegó nada en `stallMs`: se trata como un corte de la red (prueba el portero y, si no contesta, espera). */
+class Stalled extends TypeError {
+  constructor() {
+    super('The media server stopped answering.');
+  }
+}
 
 /** El pedido ni llegó a tener respuesta (`fetch` falló): la red, no el archivo. */
 class NetworkFailed extends Error {}
@@ -311,7 +390,15 @@ export async function runDownload(
   plan: DownloadPlan,
   target: DownloadTarget,
   deps: DownloadDeps,
-  opts: { signal?: AbortSignal; onProgress?: (p: DownloadProgress) => void } = {},
+  opts: {
+    signal?: AbortSignal;
+    onProgress?: (p: DownloadProgress) => void;
+    /**
+     * *Retry missing*: lo que se baja completa una bajada anterior. Si ya no falta nada, la lista vieja se borra de la
+     * carpeta, y en un zip va una nueva que lo dice (descomprimido encima del primero, la reemplaza).
+     */
+    retry?: boolean;
+  } = {},
 ): Promise<DownloadResult> {
   const signal = opts.signal;
   const http = deps.fetch ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
@@ -353,6 +440,44 @@ export async function runDownload(
   const report = () => opts.onProgress?.({ ...progress });
   let done = 0;
   let written = 0;
+  const stallMs = deps.stallMs ?? STALL_MS;
+
+  /**
+   * `work` con su propia señal (cancelar la bajada la corta) y un tope: si en `ms` no terminó, la corta y falla con
+   * `Stalled`.
+   */
+  const within = async <T>(ms: number, work: (s: AbortSignal) => Promise<T>): Promise<T> => {
+    if (signal?.aborted) throw abortError();
+    const local = new AbortController();
+    const relay = () => local.abort();
+    signal?.addEventListener('abort', relay, { once: true });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        work(local.signal),
+        new Promise<never>((_, fail) => {
+          timer = setTimeout(() => {
+            fail(new Stalled());
+            local.abort();
+          }, ms);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', relay);
+    }
+  };
+
+  /** El próximo pedazo de la respuesta, con el tope sin avance; cancelar la bajada lo corta en el acto. */
+  const readSome = (reader: ReadableStreamDefaultReader<Uint8Array>) =>
+    within(
+      stallMs,
+      (s) =>
+        new Promise<ReadableStreamReadResult<Uint8Array>>((ok, fail) => {
+          s.addEventListener('abort', () => fail(abortError()), { once: true });
+          reader.read().then(ok, fail);
+        }),
+    );
 
   /** Cuántos pedidos están esperando la conexión (los de adelante también): la ventana dice "No connection". */
   let waiting = 0;
@@ -378,10 +503,14 @@ export async function runDownload(
   /** Si el portero contesta algo (cualquier cosa, también un error): hay camino hasta él. */
   const reachable = async (url: string): Promise<boolean> => {
     try {
-      await http(new URL('/health', url).href, { signal, mode: 'cors', credentials: 'omit', cache: 'no-store' });
+      // Con su tope: un portero colgado tampoco contesta esto.
+      await within(Math.min(stallMs, HEALTH_MS), async (s) => {
+        const res = await http(new URL('/health', url).href, { signal: s, mode: 'cors', credentials: 'omit', cache: 'no-store' });
+        res.body?.cancel().catch(() => undefined);
+      });
       return true;
-    } catch (err) {
-      if (isAbort(err) || signal?.aborted) throw abortError();
+    } catch {
+      if (signal?.aborted) throw abortError();
       return false;
     }
   };
@@ -427,17 +556,19 @@ export async function runDownload(
     const headers: Record<string, string> = from > 0 ? { Range: `bytes=${from}-` } : {};
     let res: Response;
     try {
-      res = await http(withOffline(file.url), { headers, signal, mode: 'cors', credentials: 'omit', cache: 'no-store' });
+      // Hasta que llega la respuesta, con el tope sin avance (después, cada pedazo tiene el suyo: `readSome`).
+      res = await within(stallMs, (s) => http(withOffline(file.url), { headers, signal: s, mode: 'cors', credentials: 'omit', cache: 'no-store' }));
     } catch (err) {
-      if (isAbort(err) || signal?.aborted) throw abortError();
+      if (signal?.aborted) throw abortError();
       throw new NetworkFailed(err instanceof Error ? err.message : String(err));
     }
     if (res.ok) return res;
     let code = '';
     try {
-      code = ((await res.json()) as { code?: string }).code ?? '';
+      code = ((await within(stallMs, () => res.json())) as { code?: string }).code ?? '';
     } catch {
-      // sin cuerpo JSON
+      // sin cuerpo JSON (o no llegó)
+      res.body?.cancel().catch(() => undefined);
     }
     if (res.status === 403 && code === 'pass_expired') throw new FileFailed('pass_expired', true);
     if (res.status >= 500 || res.status === 429) throw new TypeError(`The media server answered ${res.status}.`);
@@ -526,7 +657,7 @@ export async function runDownload(
       try {
         if (!reader) throw new TypeError('No body.');
         for (;;) {
-          const { value, done: end } = await reader.read();
+          const { value, done: end } = await readSome(reader);
           if (end) break;
           if (value?.length) {
             got += value.length;
@@ -675,7 +806,7 @@ export async function runDownload(
     }
     progress.current = null;
 
-    if (missing.length) {
+    if (missing.length || (zip && opts.retry)) {
       const text = new TextEncoder().encode(deps.missingText(missing));
       if (zip) await zip.addFile(top(MISSING_NAME), text.length, new Date(), fromArray([text]));
       else if (target.kind === 'dir') {
@@ -683,7 +814,7 @@ export async function runDownload(
         await out.write(text);
         await out.close();
       }
-    }
+    } else if (opts.retry && target.kind === 'dir') await target.remove?.(MISSING_NAME);
     if (zip) await zip.finish();
     report();
     return { done, bytes: written, missing };

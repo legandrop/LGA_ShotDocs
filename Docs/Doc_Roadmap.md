@@ -162,9 +162,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   en Chrome y Edge y el botón "Carpeta…" del menú `/`. **Entrega 2 hecha (*Bajar todo*, rama `lega/carpetas-zip`):**
   zip sin comprimir con Zip64 escrito a medida que llega en Chrome y Edge, o el árbol en una carpeta; en memoria con
   tope en Firefox, Safari y los teléfonos (D24); nombres de Drive limpios para Windows y la Mac (`.`, `..`, punto al
-  final, `CON`…, a lo sumo 255 bytes) y cortes de 200 y 250 caracteres por grafema. Falta (BAJO): listar ~40 subcarpetas
-  por pedido (hoy una), Firefox sin tope por el service worker, *Retry missing*, los emojis compuestos que pierden el ZWJ
-  (O4 de la auditoría) y probar a mano en Safari, el iPhone y con el Drive real. Detalle en
+  final, `CON`…, a lo sumo 255 bytes) y cortes de 200 y 250 caracteres por grafema. *Retry missing*, el tope sin avance
+  de cada pedido (R1) y el ZWJ de los emojis compuestos en la app (O4), hechos (rama `lega/carpetas-restos`). Falta
+  (BAJO): listar ~40 subcarpetas por pedido (pide un cambio del portero: `/folder/list` con varias), el ZWJ en el
+  portero, Firefox sin tope por el service worker y probar a mano en Safari, el iPhone y con el Drive real. Detalle en
   `Doc_Carpetas.md`, "Cómo quedó" y "Cómo quedó (entrega 2)". Pendiente de los nombres (auditoría de D3, BAJO):
   - Mac y Windows: la marca de cada subcarpeta resume la ruta sin normalizar los acentos (la Mac da `í` en dos
     partes). Volver a soltar desde el otro sistema crea subcarpetas nuevas, con el mismo nombre, al lado de las de
@@ -283,7 +284,21 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   Ojo: `npm run db:test` aplica las migraciones de verdad; esta se probó con un script en `begin … rollback`.
 - **P.19 Link público: *Anyone with the link*** (Lega, 2026-10-02): en *Share*, además de personas y correos, un link
   que cualquiera abre sin cuenta, con *Can view* (que siempre puede comentar) o *Can edit*; "debería estar seguro".
-  **Diseño en `Doc_Link_Publico.md`** (sin código; auditado: aprobado con condiciones, ya corregido; D29 a D31): el token
+  **Entregas 0 y 1 hechas (v0.114: *Can view*, migración sin aplicar; ver "Cómo quedó" en `Doc_Link_Publico.md`).** Para
+  publicarla: aplicar la migración, prender el interruptor de D14 y subir la mínima. Falta: el ícono del árbol para las
+  páginas con link, el detalle *Can view link, created by…* para el equipo, y las entregas 2 y 3.
+  **Observaciones de las auditorías que quedaron para después** (ninguna pierde datos ni abre el link): `set_public_link`
+  revive un link vencido con la base de antes (le falta el `clean_reset`); en el visitante, *Open my workspace* desde la
+  cabecera del link, pruebas de las guardas de la interfaz (*Resolve*, papelera, preferencias, cartel del dominio,
+  modo liviano), avisar y ofrecer copiar los comentarios sin subir cuando el link muere, limpiar las bases locales de
+  links viejos, confirmar *Restricted* como *Reset link*, los plurales de «Today: opened 1 times», un texto propio del
+  link en vez de «Ask for edit access», `LinkRemote` cerrando también `namePageVersion`/`share`/`deleteProject`,
+  rechazar «(via link)» en el nombre, un selector de fecha en vez de `prompt()` al cambiar el vencimiento, la ayuda
+  según quién la lee; en la base, tiempos de un token que ya existe (el doc dice «cuesta lo mismo»), el costo sin contar
+  de `plink_tree(sig)` (26 ms con 423 páginas), el `max_rows` de PostgREST (1000: ramas más grandes llegan cortadas), la
+  prueba del portero de los pases de 2 horas en `/folder/list`, el texto de «cada archivo listado cuenta como un pase»,
+  y una línea de ayuda por `revoke_public_link` con la raíz en la papelera (`page_in_trash`).
+  **Diseño en `Doc_Link_Publico.md`** (auditado: aprobado con condiciones, ya corregido; D29 a D31): el token
   del link validado por la base en cada pedido (sin cuentas ni cambios en el login; las sesiones anónimas de Supabase no
   andan con el registro cerrado), solo la página y lo de abajo, como un invitado (base limpia de D14, sin historial ni
   papelera), comentarios con nombre *(via link)*, *Reset link* instantáneo y topes por link, por día y de por vida.
@@ -328,7 +343,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   volver; el zip de *Download all*). Lo exporta quien ve, solo su rama; nunca lo borrado (se exportan bloques, nunca el
   documento Yjs) ni la papelera. Volver: *Import Shot Docs archive…*, siempre a un proyecto nuevo. Entregas: 0 (el editor
   de exportación medido), 1 (PDF), 2 (zip), 3 (volver, con la migración de `imported_from`), 4 (carpetas de Drive,
-  reusar archivos, link público). **Entrega 0 hecha (v0.0XX):** el editor de exportación en `src/export/`
+  reusar archivos, link público). **Entrega 0 hecha (v0.115):** el editor de exportación en `src/export/`
   (sin interfaz), medido con 300 páginas y 2219 fotos en Chromium: 14,5 a 38,9 s, nada guardado cambia y las hojas de
   las 300 iguales a las marcas de la pantalla. Sigue la entrega 1 (PDF), con lo que dejó la auditoría de la 0: una foto
   que no carga cuesta 14 s por página (dos esperas que se suman: una sola, más corta); el editor acumula el deshacer

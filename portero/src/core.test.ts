@@ -102,6 +102,10 @@ function fakeWorld() {
   let mediaGets = 0;
   let metaGets = 0;
   const calls: string[] = [];
+  /** Links públicos de la base: el token, qué archivos ve (con su nivel) y si se revocó o llegó a un tope. */
+  const links = new Map<string, { files: Record<string, number>; revoked?: boolean; limited?: boolean }>();
+  /** Los headers de cada pedido a la base con un link (para ver que nunca va la sesión de nadie). */
+  const linkCalls: { path: string; authorization: string | null; link: string | null }[] = [];
   const projects = new Map<string, BaseProject>();
   let projectsReady = true;
   /** La hora de la base y de Google (las pruebas la mueven). */
@@ -139,6 +143,20 @@ function fakeWorld() {
     const jsonRes = (body: unknown, status = 200, extra: Record<string, string> = {}) =>
       new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...extra } });
 
+    if (url.host === 'ws.example' && headers.has('x-shotdocs-link')) {
+      // Un link público (rol anon): la clave publicable y el token; solo `plink_media_file`.
+      linkCalls.push({ path: url.pathname, authorization: headers.get('Authorization'), link: headers.get('x-shotdocs-link') });
+      if (headers.get('Authorization') !== `Bearer ${env.SUPABASE_PUBLISHABLE_KEY}`) return jsonRes({ message: 'JWT expired' }, 401);
+      if (url.pathname !== '/rest/v1/rpc/plink_media_file') return jsonRes({ code: '42501', message: 'permission denied' }, 401);
+      const l = links.get(headers.get('x-shotdocs-link')!);
+      if (!l || l.revoked) return jsonRes({ code: 'P0002', message: 'link_not_found' }, 404);
+      const args = JSON.parse(String(init.body ?? '{}')) as { p_file?: string };
+      const level = l.files[args.p_file ?? ''] ?? 0;
+      const bf = base.get(args.p_file ?? '');
+      if (!bf || level === 0) return jsonRes(null);
+      if (l.limited) return jsonRes({ code: 'P0001', message: 'link_rate_limited', details: 'pass' }, 400);
+      return jsonRes({ id: args.p_file, ...bf, levels: undefined, project_id: 'link-1', project_name: '', created_at: '2026-09-30T10:00:00Z', level, created_by: null });
+    }
     if (url.host === 'ws.example') {
       const s = sessions.get((headers.get('Authorization') ?? '').replace('Bearer ', ''));
       if (!s) return jsonRes({ message: 'JWT expired' }, 401);
@@ -329,6 +347,8 @@ function fakeWorld() {
     files,
     base,
     calls,
+    links,
+    linkCalls,
     breakRefresh: () => (refreshValid = false),
     refreshes: () => tokenRefreshes,
     refreshScopes: () => refreshScopes,
@@ -2493,5 +2513,96 @@ describe('portero: auditoría de la entrega 2', () => {
     expect(await b.json()).toMatchObject({ drive: 'untrashed', folders: 1 });
     expect(world.files.get(folder)!.trashed).toBe(false);
     expect(world.projects.get(PROJ)).toMatchObject({ requested_at: null, trashed_at: null });
+  });
+});
+
+const LINK = 'sdl_' + 'L'.repeat(43);
+
+function linkCall(p: Portero, path: string, init: RequestInit & { link?: string; jwt?: string } = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  headers.set('Origin', APP);
+  headers.set('Content-Type', 'application/json');
+  headers.set('x-shotdocs-link', init.link ?? LINK);
+  if (init.jwt) headers.set('Authorization', `Bearer ${init.jwt}`);
+  return p.handle(new Request(`${SELF}${path}`, { ...init, headers }));
+}
+
+/** Cuándo vence un pase (la parte firmada de `/m/<pase>`). */
+function passUntil(url: string): number {
+  const pass = new URL(url).pathname.split('/')[2].split('.')[0];
+  return (JSON.parse(Buffer.from(pass, 'base64url').toString()) as { u: number }).u;
+}
+
+describe('portero: link público (Can view, Docs/Doc_Link_Publico.md 3.9)', () => {
+  it('con el header del link: pases de 2 horas para lo que el link ve, por plink_media_file y sin la sesión de nadie', async () => {
+    const { world, p } = await setup();
+    addBaseFile(world, FILE_A, { mime: 'image/jpeg', name: 'foto.jpg' });
+    addBaseFile(world, FILE_B, { mime: 'image/jpeg', name: 'otra.jpg' });
+    await uploadFile(p, 'editor-jwt', FILE_A, bytes(1000));
+    await uploadFile(p, 'editor-jwt', FILE_B, bytes(1000));
+    world.links.set(LINK, { files: { [FILE_A]: 2 } });
+    const before = Date.now();
+    // Aunque el pedido traiga la sesión de alguien, con el link no se usa ni se reenvía.
+    const res = await linkCall(p, '/pass', { method: 'POST', jwt: 'owner-jwt', body: JSON.stringify({ file: FILE_A }) });
+    expect(res.status).toBe(200);
+    const { url } = (await res.json()) as { url: string };
+    expect(passUntil(url) - before).toBeGreaterThan(2 * 3600_000 - 60_000);
+    expect(passUntil(url) - before).toBeLessThanOrEqual(2 * 3600_000 + 60_000);
+    expect(world.linkCalls.length).toBeGreaterThan(0);
+    for (const c of world.linkCalls) {
+      expect(c.authorization).toBe(`Bearer ${env.SUPABASE_PUBLISHABLE_KEY}`);
+      expect(c.link).toBe(LINK);
+      expect(c.path).toBe('/rest/v1/rpc/plink_media_file');
+    }
+    // Lo que se sirve con ese pase anda.
+    expect((await p.handle(new Request(url))).status).toBe(200);
+    // Lo que el link no ve, no.
+    expect((await linkCall(p, '/pass', { method: 'POST', body: JSON.stringify({ file: FILE_B }) })).status).toBe(404);
+    // Una cuenta sigue con 8 horas.
+    const own = (await (await filePass(p, 'viewer-jwt', FILE_A)).json()) as { url: string };
+    expect(passUntil(own.url) - Date.now()).toBeGreaterThan(7 * 3600_000);
+  });
+
+  it('revocado, mal formado o con un tope: no hay pase, con un código fijo', async () => {
+    const { world, p } = await setup();
+    addBaseFile(world, FILE_A, { mime: 'image/jpeg', size: 10 });
+    await uploadFile(p, 'editor-jwt', FILE_A, bytes(10));
+    world.links.set(LINK, { files: { [FILE_A]: 2 }, revoked: true });
+    let res = await linkCall(p, '/pass', { method: 'POST', body: JSON.stringify({ file: FILE_A }) });
+    expect(res.status).toBe(401);
+    expect(((await res.json()) as { code: string }).code).toBe('link_not_found');
+    res = await linkCall(p, '/pass', { method: 'POST', link: 'sdl_corto', body: JSON.stringify({ file: FILE_A }) });
+    expect(res.status).toBe(401);
+    world.links.set(LINK, { files: { [FILE_A]: 2 }, limited: true });
+    res = await linkCall(p, '/pass', { method: 'POST', body: JSON.stringify({ file: FILE_A }) });
+    expect(res.status).toBe(429);
+    expect(((await res.json()) as { code: string }).code).toBe('link_rate_limited');
+  });
+
+  it('con el link solo se ve: subir, la papelera, lo del dueño y los proyectos dan 403 sin preguntarle nada a la base', async () => {
+    const { world, p } = await setup();
+    world.links.set(LINK, { files: { [FILE_A]: 3 } });
+    addBaseFile(world, FILE_A);
+    const n = world.linkCalls.length;
+    for (const [method, path] of [
+      ['POST', '/upload'], ['PUT', '/upload/x'], ['POST', '/trash'], ['POST', '/folder/prepare'], ['POST', '/folder/sessions'],
+      ['POST', '/project/trash'], ['POST', '/project/untrash'], ['POST', '/drive/connect'], ['POST', '/drive/folder'],
+      ['POST', '/drive/picker'], ['GET', '/project/inspect'],
+    ] as const) {
+      const res = await linkCall(p, path, { method, body: method === 'GET' ? undefined : '{}' });
+      expect(res.status, `${method} ${path}`).toBe(403);
+      expect(((await res.json()) as { code: string }).code).toBe('link_denied');
+    }
+    expect(world.linkCalls.length).toBe(n);
+    // El estado de Drive sí (sin el correo del dueño).
+    const status = (await (await linkCall(p, '/drive/status', { method: 'GET' })).json()) as { connected: boolean; email: string | null; isOwner: boolean };
+    expect(status).toMatchObject({ connected: true, email: null, isOwner: false });
+  });
+
+  it('CORS deja pasar los headers del link', async () => {
+    const { p } = await setup();
+    const res = await p.handle(new Request(`${SELF}/pass`, { method: 'OPTIONS', headers: { Origin: APP } }));
+    expect(res.headers.get('Access-Control-Allow-Headers')).toContain('x-shotdocs-link');
+    expect(res.headers.get('Access-Control-Allow-Headers')).toContain('x-shotdocs-device');
   });
 });
