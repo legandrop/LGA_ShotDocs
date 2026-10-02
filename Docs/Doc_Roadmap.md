@@ -96,6 +96,12 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   renglón que ocupaba en Coda (624 px = todo el renglón); las fotos de una ficha, juntas. Medido con una copia
   parcial de ERSO contra el HTML de Coda: las mismas filas, ±1 % de ancho. Sin el recorte de Coda (101 fotos de
   ERSO). Para la importación definitiva de ERSO hay que volver a correr `--convert-only`.
+  **Entrega 5 hecha (v0.0XX): fotos en las celdas de una tabla.** Pegar, soltar, "/Image" y "Copy image" con el cursor en
+  una celda ponen la foto en la celda, como miniatura de 96 px de alto (`w = 0`); la barra suma *Thumbnail* y tamaños de
+  la celda, sin alinear; imprimir las deja igual; importar de Coda deja las fotos de una celda en la celda. Sin tipos ni
+  propiedades nuevas (la versión publicada abre la página sin escribir nada). `Doc_Fotos_En_Linea.md`, "Cómo quedó
+  (entrega 5)". Queda: probar en Safari y el iPhone, y con una exportación de Coda que tenga fotos en tablas de página;
+  a decidir, si el alto de la miniatura (96 px) se puede elegir.
   **Queda:**
   - Probar en Safari y en el iPhone: pegar, soltar, "/Image" con la cámara, la barra con el dedo, la composición
     (sin tecla previa entre dos fotos duplica el primer carácter en Chromium). Medir la decoración de filas con un doc

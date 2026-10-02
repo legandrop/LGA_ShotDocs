@@ -171,8 +171,9 @@ BlockNote convierte texto, títulos, listas, checklists, tablas, citas y código
   `sdmedia://`: las fotos que en Coda iban juntas en un renglón quedan juntas, y las que iban con texto o debajo
   del texto de un ítem (un salto de línea) quedan igual. Vale en párrafos, ítems de lista, títulos y citas; un
   título con solo fotos pasa a ser un párrafo (un título vacío cortaría el guion). Un **adjunto** (PDF, zip…)
-  sigue siendo un bloque `image` (la tarjeta). Las fotos de las **celdas de una tabla** que queda como tabla van
-  debajo de la tabla, juntas en un renglón (las fotos en celdas son la entrega 5). Se sacan el espacio de ancho
+  sigue siendo un bloque `image` (la tarjeta). Las fotos de las **celdas de una tabla** que queda como tabla (modo
+  `table`) quedan en su celda, como miniaturas del alto de una fila (desde v0.0XX, entrega 5 de
+  `Doc_Fotos_En_Linea.md`; antes iban debajo de la tabla); un adjunto de una celda sigue yendo debajo. Se sacan el espacio de ancho
   cero y el carácter de objeto (U+FFFC) que Coda deja al lado de una foto, y los espacios sueltos entre fotos.
   **Una foto recortada en Coda se ve entera**: el recorte (`data-docx-crop`) no se trae (101 de 6129 fotos en ERSO;
   ver "Lo que no pasa"). Antes de v0.078 cada foto era un bloque aparte.
@@ -355,7 +356,8 @@ probada en `scripts/coda-tables.test.mjs` con datos inventados).
   celda). Juntarlos en `comments.json` es parte del paso de los comentarios, no del comando.
 - **Lo que no pasa:** las relaciones vivas, los filtros (queda el resultado), los botones (queda su texto), las
   fórmulas (queda su valor), las reglas de color (queda el color de cada celda, no la regla), las vistas como
-  vistas (calendario, línea de tiempo) y las fotos adentro de las celdas de una tabla que queda como tabla.
+  vistas (calendario, línea de tiempo). Las columnas de fotos de un índice de fichas siguen sin ir en el índice (las
+  fotos están en la ficha): ahora que una celda lleva fotos, un índice podría mostrar la miniatura (para después).
 
 ### Fotos HEIC (desde v0.072)
 
