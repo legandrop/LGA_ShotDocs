@@ -27,8 +27,8 @@ its own project: a tree of pages you own.
   for a whole branch. What you see while editing is exactly what the PDF export looks like.
 - **Assistant with your own key.** Add your own API key from Anthropic, OpenAI, Google Gemini or an
   OpenAI-compatible service (OpenRouter, or a local model such as Ollama) and fix, improve, shorten, translate,
-  rewrite or reshape what you select, or summarize and translate a whole page. You see a preview first; applying it is
-  a regular edit: synced, versioned and undoable. The workspace owner can turn it off or allow only local models.
+  rewrite or reshape what you select, summarize and translate a whole page, or suggest a caption for a photo. You see
+  a preview first; applying it is a regular edit: synced, versioned and undoable. The workspace owner can turn it off or allow only local models.
 - **Dictate to report.** Write or dictate (with the app's microphone or your keyboard's) an informal note on set, like “this shot
   was a 50 mm”, and the assistant places each piece where it goes in the report: the right row and column, the line
   after its label, the checkbox. You check every change before applying it, and nothing you said is lost.
@@ -162,7 +162,11 @@ In production (v0.049). What works today:
   what changes word by word; *Apply* replaces it as one edit you undo with Ctrl+Z, and nothing is applied if the text
   changed while the assistant was working. Photos and links inside the selection stay. *Format as…* turns the selected
   lines into a bulleted list, a checklist, a table or headings. *Summarize page* adds a summary at the top or below the
-  cursor, and *Translate page* replaces the text of every block in place or creates a translated subpage. The owner
+  cursor, and *Translate page* replaces the text of every block in place or creates a translated subpage. *Suggest
+  caption*, in a photo's toolbar or in the assistant with the photo selected, first asks before sending the photo to
+  your provider (a copy of up to 1,024 pixels without its location data, never the original, and nothing else from the
+  page), then shows the suggested caption in a field you can edit; *Apply* adds it as a normal line under the photo
+  (in a table, in the same cell). The owner
   and the admins choose, in *Assistant…*, whether the workspace allows the assistant, only local models, or none.
 - Dictate to report (the microphone in the page bar, the round button on the phone, the page menu or Ctrl+Alt+Shift+D,
   ⌘⌥⇧D on a Mac): write the note or dictate it with your keyboard's microphone and choose *Place*. The open page goes to
@@ -184,7 +188,7 @@ In production (v0.049). What works today:
   yesterday's location and camera package, offline too, from the report folder's template.
 - Public [privacy policy](https://shotdocs.lega.com.ar/privacy) and [terms](https://shotdocs.lega.com.ar/terms) pages, readable without signing in.
 
-Captions for photos and connecting other AI apps (MCP) come later. The plan, the decisions and the roadmap are in
+Connecting other AI apps (MCP) comes later. The plan, the decisions and the roadmap are in
 [`Docs/`](Docs/index.md) (in Spanish).
 
 ## Development

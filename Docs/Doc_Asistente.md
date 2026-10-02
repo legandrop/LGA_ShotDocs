@@ -1,8 +1,8 @@
 # Asistente con la clave de cada usuario y servidor MCP (fase 5)
 
-**Estado: entregas A1 (v0.118) y A2 (v0.126) implementadas (ver "Cómo quedó A1" y "Cómo quedó A2" al final; la
-migración de A2, sin aplicar); la clave sincronizada (D72 → B, `Doc_Clave_Sincronizada.md`), entrega S1 implementada
-(v0.138); A3, el MCP y la entrega S2 de la clave sincronizada, en diseño** (roadmap P.24; pedido de Lega del 2026-10-02, que decide entre las opciones
+**Estado: entregas A1 (v0.118), A2 (v0.126) y A3 (v0.0XX) implementadas (ver "Cómo quedó A1", "Cómo quedó A2" y
+"Cómo quedó A3" al final; la migración de A2, sin aplicar); la clave sincronizada (D72 → B, `Doc_Clave_Sincronizada.md`),
+entrega S1 implementada (v0.138); el MCP y la entrega S2 de la clave sincronizada, en diseño** (roadmap P.24; pedido de Lega del 2026-10-02, que decide entre las opciones
 de D-06 y D-07 y lo deja listo para programar por entregas). Las decisiones están propuestas (IA1 a IA11, sección 15; IA1 e IA10 cambiadas por Lega, D72 y D77) y
 valen hasta que Lega diga otra cosa. Se diseñó contra `main` v0.108. Precios, límites y CORS verificados el 2026-10-02
 en las páginas oficiales (sección 3, con la fuente de cada número); lo medido está en "Cómo se midió", al final.
@@ -110,7 +110,7 @@ de un proyecto), corregidos acá. Ver "Correcciones de la auditoría (2026-10-02
 | *Summarize page* | La página abierta | Un resumen en el panel | Opcional: *Insert at top* / *Insert below* | A2 |
 | *Translate page* | La página abierta | La página traducida | *Replace page content* (Editar) o *Create translated subpage* (Editar y crear) | A2 |
 | *Format as…* (*Bulleted list*, *Checklist*, *Table*, *Headings*) | Lo elegido | Los mismos datos con otra forma | Sí | A2 |
-| *Suggest caption* | Una foto elegida | Un pie de foto | Sí (en el pie, que ya existe) | A3 |
+| *Suggest caption* | Una foto elegida | Un pie de foto | Sí (como texto debajo de la foto; corregido al implementar, ver "Cómo quedó A3") | A3 |
 
 Sin texto elegido, las acciones de A1 toman **el bloque donde está el cursor**. Un pedido manda como máximo **20 000
 caracteres** (unos 5 000 a 7 000 tokens; eran 60 000 hasta la auditoría de A1, ver "Cómo quedó A1"): más que eso pide
@@ -131,7 +131,8 @@ proveedor cuenta y cobra; un token es más o menos 4 caracteres en inglés y alg
 - **Recortar, cambiar el tamaño y comprimir** no necesitan un modelo: son operaciones de la app sobre el original o la
   miniatura. Pasan al roadmap de fotos (`Doc_Imagenes.md`), sin clave ni costo.
 - **Sugerir un pie de foto o un texto alternativo** sí: el modelo mira la foto. Va en A3, con un aviso por pedido (la
-  foto sale del Drive del dueño hacia el proveedor), mandando la copia de 2048 px que ya existe y nunca el original.
+  foto sale del Drive del dueño hacia el proveedor), mandando la copia de 2048 px que ya existe y nunca el original
+  (al implementar: una copia de 1024 px rearmada en el dispositivo, sin EXIF; ver "Cómo quedó A3").
 - **Editar la imagen con un modelo** (borrar algo, cambiar el cielo): fuera de este diseño. En VFX la foto de set es
   referencia: alterarla sin querer es peor que no tenerla.
 
@@ -683,7 +684,8 @@ su Supabase y su portero, y cada persona su proveedor): por eso la vista previa 
 ### 10.5 Fotos (A3)
 
 La foto sale del Drive del dueño hacia el proveedor: confirmación por pedido (*Send this photo to <provider>?*), la copia de
-2048 px y nunca el original, y apagada con `assistant_policy = off` o `local_only` (salvo un proveedor local).
+2048 px y nunca el original, y apagada con `assistant_policy = off` o `local_only` (salvo un proveedor local). Al
+implementar: 1024 px, rearmada en el dispositivo (sin EXIF ni GPS), y nada más de la página ("Cómo quedó A3").
 
 ## 11. Interfaz y ayuda
 
@@ -1342,3 +1344,105 @@ Mutantes después de la ronda: 31 de 31 mueren (los 23 de antes y 8 nuevos de B1
   bloques en menos (una tabla) deja sin bloque los comentarios de los que sobran.
 - Lega, con sus claves: la prueba de aceptación de A2 (sección 14) con una página de rodaje real, en la compu y en el
   iPhone, y la ventana de la política con la migración aplicada.
+
+## Cómo quedó A3 (v0.0XX)
+
+Implementada en `src/assistant/` (la misma parte que se baja al abrir el panel: pasa de 40 a 52 KB sin comprimir, 3,4 KB más
+comprimida; el paquete principal, 0,25 KB más) y en la
+barra de la foto (`src/ui/MediaBar.tsx`, `PhotoToolbar.tsx`: un botón y `photoRef.ts`, chico, en la primera carga). Sin
+migración ni cambios en el esquema del editor.
+
+### Qué hay
+
+- ***Suggest caption*** en la barra de una foto (en línea, en una celda o foto-bloque; no en videos ni adjuntos, y solo
+  en el editor de la página abierta: no en el historial ni en la práctica) y en el panel, en la sección *Photo*, que toma
+  la foto elegida (si no hay, *Select a photo first…*). La barra de la foto ya sale solo con la página editable.
+- **El aviso, en cada pedido** (10.5): la miniatura de la foto y *Send this photo to <proveedor>?* (con un servicio
+  compatible, su dirección: `openrouter.ai`, `localhost:11434`), con lo que viaja (*a copy of up to 1,024 pixels, without
+  the file's location and camera data, never the original. Nothing else from the page is sent.*), el idioma del pie
+  (la lista de *Translate to…*, recordado en el dispositivo; de fábrica, el de la app) y *Send photo* / *Cancel*. Nada
+  sale antes del sí. *Try again* sobre la misma foto no vuelve a preguntar (ya se dijo que sí a esa foto y a ese
+  proveedor) y manda la misma copia.
+- **La foto que viaja** (`captionImage.ts`): la imagen nítida de la página que ya existe (`media.view` a 1024 px: la
+  guardada, el original del dispositivo o, con red, el original bajado una vez por el portero, como para verla nítida);
+  si no hay nada mejor (una foto chica, una HEIC sin convertir), la miniatura; una que no es del Drive, lo que da el
+  editor para mostrarla. **Siempre se rearma en el dispositivo**: lado mayor de 1024 px como mucho, JPEG al 85 %, en un
+  canvas, lo que además saca el EXIF (la ubicación GPS de un iPhone, la cámara). Va en base64 adentro del pedido, en la
+  forma de cada proveedor (Anthropic `image`, OpenAI `input_image`, Gemini `inline_data`, compatible `image_url`), antes
+  del texto. Nada más de la página: ni el nombre del archivo, ni su dirección, ni el texto de alrededor.
+- **Las instrucciones** (`caption.ts`): un pie corto (unas 15 palabras) de lo que importa al equipo (el set, la cámara,
+  la luz, una claqueta, marcadores), con el texto legible de la foto tal cual, en el idioma elegido; el texto que
+  aparece en la foto es dato, nunca instrucción. La respuesta se limpia: un renglón, sin comillas, sin *Caption:*, sin
+  Markdown, sin direcciones (se avisa si sacó alguna) y hasta 300 caracteres.
+- **La vista previa** es un campo con el pie, que se puede retocar (Enter no parte el renglón), con dónde va a quedar y
+  cuánto se mandó (*Sent 1024 × 768 px · 142 KB*). *Apply* (Ctrl/⌘+Enter) · *Discard* (Esc) · *Try again* · *Copy*.
+- **Dónde queda el pie:** como **texto común**, nunca como propiedad: un párrafo nuevo debajo del bloque de la foto (una
+  foto en un renglón, sola o en una fila, o una foto-bloque) o, en una celda, un renglón nuevo al final de la misma
+  celda (con un salto de renglón; la tabla no se rompe). Un solo paso de deshacer, el cursor al final del pie, sin
+  links (la transacción lleva `preventAutolink`).
+- **La guarda:** la foto se recuerda sin posiciones (`photoRef.ts`: el bloque, cuál de sus fotos y su dirección). Al
+  aplicar se la busca otra vez; si se borró, se reemplazó (otra dirección) o se borró su bloque, no se aplica nada:
+  *This photo was removed or replaced while the assistant was working. Nothing was applied.* Escribir antes, o agregar
+  otra foto al mismo bloque, no la pierde.
+- **Permisos, política y sin red:** pedir y aplicar piden Editar (sin Editar, el botón del panel está apagado y la barra
+  no sale); se mira otra vez al aplicar. La política *Off* lo apaga; *Local models only*, salvo un modelo local. Sin
+  red, lo de siempre (un modelo local se intenta; la foto sale del dispositivo).
+- **Un modelo que no mira imágenes** (el proveedor responde 400 hablando de imágenes): *This model can't look at
+  photos. Choose another one in the assistant settings.* La foto que no está en el dispositivo y no se pudo bajar, y
+  la que el navegador no abre, tienen su mensaje.
+- **Ayuda:** *Suggest a caption for a photo*, en "Writing". Sin atajos nuevos (*Apply* es `assistantApply`; el panel
+  y sus teclas, en `shortcutSources.ts`).
+
+### Decisiones al implementar
+
+- **El pie como texto, no como propiedad (corrige "en el pie, que ya existe" de 2.1).** Qué pasaba: la foto en línea no
+  tiene leyenda, y la foto-bloque dejó de ofrecerla (D-24, Lega sacó *Edit caption*); un pie guardado en una propiedad
+  sería un texto que nadie puede editar ni borrar desde la app, que la búsqueda y el PDF tratan aparte y que una versión
+  vieja pierde. Opciones: A) texto común debajo de la foto; B) una propiedad nueva `caption` en la foto en línea (con su
+  prueba con el esquema anterior); C) la propiedad `caption` de la foto-bloque. Elegí A: una versión vieja lo ve igual,
+  se busca, se traduce, sale en el PDF y se edita como cualquier renglón; no toca el esquema (riesgo normal). B y C
+  contradicen D-24.
+- **1024 px y no la copia de 2048 (corrige 2.3 y 10.5).** Para leer una claqueta alcanza, y cuesta la mitad o menos:
+  Anthropic cuenta ancho × alto / 750 tokens y achica de por sí a 1568 px (2048 × 1536 serían unos 2 400 tokens; 1024 ×
+  768, unos 1 050); OpenAI y Gemini cobran por mosaicos. La de 1024 px ya existe en el dispositivo para el teléfono
+  (`view1024:`), así que muchas veces ni hay que hacerla. Medido en Chromium (abajo): 75 a 150 KB.
+- **Siempre rearmada**, aunque ya sea un JPEG chico: la imagen nítida puede ser el original tal cual (un JPEG que ya
+  entraba), con su EXIF. Rearmarla garantiza que no viaje la ubicación.
+- **Sin texto alternativo:** la app no tiene dónde guardarlo (el `alt` de la foto es su nombre) ni dónde verlo; sería
+  una propiedad nueva sin interfaz. Queda para cuando haya un lector de pantalla que lo pida.
+- **Sin el texto de la página:** el pedido lleva solo la foto. El texto de alrededor ayudaría (el número de toma), pero
+  el aviso dice "la foto" y mandar más contradice 6.2; una claqueta en la foto se lee igual.
+- **Una sola foto:** con varias elegidas la barra no lo ofrece (el pie es de una).
+
+### Cómo se probó
+
+- **Pruebas nuevas (vitest):** `caption.test.ts` (10, con el editor real: qué foto se eligió, la guarda que la sigue
+  aunque se escriba antes o se agregue otra foto y la pierde si la borran o la reemplazan, el pie debajo en un renglón,
+  en la foto-bloque y en una celda, un solo Ctrl+Z también escribiendo justo antes, sin links, sin Editar, y **la versión
+  publicada `editorSchemaMain` abriendo lo aplicado sin cambiarlo**; lo que se manda y la limpieza de la respuesta),
+  `captionImage.test.ts` (6: de dónde sale, nunca el original, 1024 px, lo que no es una imagen), `panelA3.test.tsx` (6,
+  con un proveedor falso: el aviso antes de mandar y que sin el sí no sale nada, lo que se manda sin nada de la página,
+  el campo que se retoca y *Apply*, la celda, *Try again* sin volver a preguntar y con la misma copia, la foto borrada
+  mientras pensaba, un modelo sin visión, sin Editar y *Off*), 2 en `providers.test.ts` (la foto en los cuatro) y 2 en
+  `mediaBar.test.tsx` (el botón en las dos barras y abrir el panel con esa foto; no en el historial). Suite: 3433.
+- **Mutantes:** 16 de 16 mueren (la guarda, el permiso, el deshacer, la celda, la dirección de la foto en línea y de la
+  foto-bloque, las direcciones del pie, la foto en Anthropic y Gemini, mandar sin aviso, preparar la foto otra vez en
+  *Try again*, *Send* sin permiso, mandar el original, la nítida de 2048, el botón fuera de la página y el mensaje del
+  modelo sin visión).
+- **Recorrido en Chromium** (Playwright sin ventana, perfil temporal; la app real sobre el servidor en memoria, sin
+  login, con fotos de verdad guardadas en el dispositivo y el código real de miniaturas, nítidas y HEIC; un proveedor
+  falso local, nunca uno real): 33 de 33 — la barra con el botón y su `data-tip`, el aviso sin pedidos antes del sí,
+  JPEG de 1024 px, sin EXIF, nada de la página, el campo retocado y Ctrl+Enter, Ctrl+Z, desde el panel con la foto
+  elegida, *Discard*, *Try again*, la HEIC del iPhone en una celda, la foto-bloque, la foto borrada mientras pensaba,
+  nada afuera, la consola, *Off*, solo ver, y el teléfono (390 px, sin scroll horizontal).
+- **Lo medido** (lo que llega al proveedor, Chromium en la PC): una "foto de teléfono" de 4032 × 3024 con ruido (lo peor
+  para el JPEG) → 1024 × 769, 75 a 81 KB; una foto real de 6,3 MB → 1024 × 739, 138 KB; una real de 1,5 MB con EXIF →
+  745 × 1024, 149 KB, sin EXIF; la HEIC de prueba del iPhone (96 × 64, girada) → 64 × 96, 1 KB. Preparar y mandar,
+  0,2 a 0,5 s antes de la respuesta del proveedor falso. En base64, un tercio más.
+
+### Lo que falta y lo que prueba Lega
+
+- Falta: el MCP (M0 a M3). Lo chico de A3, en el roadmap (P.24).
+- Lega, con sus claves: la prueba de aceptación de A3 (sección 14) con Anthropic, OpenAI y Gemini de verdad (que el
+  modelo elegido mire imágenes: los baratos de los tres pueden), una foto del Drive en la compu y una recién sacada con
+  el iPhone, y una foto en una celda.

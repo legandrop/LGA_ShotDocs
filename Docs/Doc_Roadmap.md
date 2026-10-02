@@ -472,7 +472,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   (preguntando si cambia el destino), *Update* / *Replace synced key…*, *Stop syncing* y *Sign out other devices*; su
   migración `20261023120000_clave_sincronizada.sql`, sin aplicar. Falta S2 (*Change passphrase…*, *Keep the key on this
   device*, el aviso de "cambió en otro dispositivo", rechazar una copia más vieja, *Also sync in this workspace*) y medir
-  en el iPhone. Falta: A3 y el MCP (M0 a M3); lo que Lega prueba con
+  en el iPhone. **A3 implementada (v0.0XX):** *Suggest caption* en la barra de la foto y en el panel, con el aviso
+  antes de mandarla, la foto rearmada en el dispositivo a 1024 px sin EXIF, la vista previa que se retoca y el pie como
+  texto debajo de la foto (en una celda, en la misma celda); ver "Cómo quedó A3". Quedó de A3 (chico): el texto
+  alternativo no se hace (la app no tiene dónde guardarlo); una foto que no es del Drive (`https` de afuera) puede no
+  bajarse por CORS (lo dice); con varias fotos elegidas no se ofrece. Falta: el MCP (M0 a M3); lo que Lega prueba con
   sus claves está en "Cómo quedó A1" y "Cómo quedó A2". Quedó de A2 (chico): la política no se actualiza en vivo en un
   panel ya abierto (se lee al abrirlo); *Format as…* no conserva los colores de un bloque al que le cambia el texto, y
   cuando junta varios bloques en menos (renglones a una tabla) los comentarios de los que sobran quedan sin bloque;

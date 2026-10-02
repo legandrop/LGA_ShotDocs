@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+**Asistente, entrega A3: *Suggest caption*** (P.24): el asistente no miraba fotos. Ahora la barra de una foto (en
+línea, en una celda o foto-bloque) y el panel suman *Suggest caption*: primero pregunta *Send this photo to
+<proveedor>?* (nada sale sin el sí), arma en el dispositivo un JPEG de 1024 px como mucho (sin EXIF ni GPS; nunca el
+original) y se lo manda con la clave de la persona, sin nada más de la página. La vista previa es un campo que se
+retoca; *Apply* lo agrega como texto común debajo de la foto (en una celda, en un renglón nuevo de la misma celda), un
+solo Ctrl+Z, sin propiedades nuevas en el esquema. Si la foto se borró o se reemplazó mientras pensaba, no aplica.
+Respeta la política del workspace, pide Editar y avisa si el modelo no mira imágenes. Ayuda nueva.
+[ Pie de foto A3 - sugerir el pie mirando la foto, con aviso antes de mandarla, achicada en el dispositivo y aplicado como texto debajo ]
+
 v0.139 :
 
 **Dictar al reporte, entregas V2 y V3** (P.27): sin red, *Save for later* solo dejaba la nota en el borrador de su
