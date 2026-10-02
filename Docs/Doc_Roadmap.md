@@ -454,3 +454,14 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   otra página se registra el archivo también para la nueva (pasos 6 y 9), así quien ve solo esa página
   la ve.
 - D-05 (hosting para trabajos pagos): decidido, Cloudflare.
+
+## Cuando se termine esta app
+
+Pedido de Lega (2026-10-01), para cuando la app esté terminada:
+
+- **Apple Developer Program** (USD 99 por año): hace falta para la app nativa de iPhone y Mac, para probarla con
+  TestFlight y para guardar en el carrete del iPhone.
+- **Microsoft Store**: para que las apps de Windows no salgan como virus. Lo que se publica en la Store lo firma
+  Microsoft; un instalador propio fuera de la Store necesita además un certificado de firma (por ejemplo, Azure
+  Trusted Signing).
+- Google Play, no.

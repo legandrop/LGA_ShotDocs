@@ -12,8 +12,9 @@ import { undoGuardExtension } from './undoGuard';
 export const pageBreakExtension = createExtension({
   key: 'shotdocs-page-break',
   keyboardShortcuts: {
-    // Ctrl+Enter (⌘↩ en la Mac): un salto de hoja donde está el cursor. Al final de un título colapsado, primero lo
-    // que hace Enter ahí (un renglón después de lo escondido, sin abrir la sección), y ese renglón pasa a ser el salto.
+    // Ctrl+Enter (⌘↩ en la Mac): un salto de hoja donde está el cursor. En un título colapsado (al final, en el medio
+    // o con una parte elegida, no al principio), primero lo que hace Enter al final (un renglón después de lo
+    // escondido, sin partir el título ni abrir la sección), y ese renglón pasa a ser el salto.
     [PAGE_BREAK_SHORTCUT]: ({ editor }) => {
       const view = editor.prosemirrorView;
       if (view) enterAfterCollapsedHeading(view);
@@ -23,7 +24,7 @@ export const pageBreakExtension = createExtension({
     Backspace: ({ editor }) => removeBreakBefore(editor),
     // Enter al principio de un salto con texto: un renglón común arriba, sin duplicar el salto.
     Enter: ({ editor }) => enterAtBreakStart(editor),
-    // Supr en un salto vacío: lo saca.
+    // Supr en un salto vacío: lo saca (también si es el último hijo de un bloque: lo de abajo no se mueve).
     Delete: ({ editor }) => deleteEmptyBreak(editor),
   },
 });
