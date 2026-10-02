@@ -78,12 +78,16 @@ const HELP = '0.082';
 const OFFLINE = '0.083';
 /** La que trajo colapsar para todos y mover la sección entera (Doc_Colapsar.md, 1b y 2). */
 const COLLAPSE_2 = '0.084';
+/** El salto de hoja (fase 4, Docs/Doc_Hojas_PDF.md): la versión se pone al publicar, igual que en el changelog. */
+const PAGE_BREAK = '0.093';
 /**
  * La vista previa de los PDF adjuntos y los adjuntos en el carrete (Doc_Adjuntos.md, entrega 2).
  */
 const ATTACH_PREVIEW = '0.091';
-/** El aviso de lo que escribiste en algo que otro borró (roadmap B.16, Doc_Sincronizacion.md). */
-const REMOVED_WRITING = '0.093';
+/** Reemplazar en todo el proyecto (Doc_Buscar.md, "Reemplazar en el proyecto"). */
+const REPLACE_PROJECT = '0.094';
+/** El aviso de lo que escribiste en algo que otro borró (roadmap B.16, Doc_Sincronizacion.md): la versión se pone al publicar. */
+const REMOVED_WRITING = '0.0XX';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -305,6 +309,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
     more: ['listPick', 'listClose'],
     since: BEFORE_HELP,
   },
+  {
+    id: 'replaceProject',
+    section: 'find',
+    title: 'help.replaceProject.title',
+    text: 'help.replaceProject.text',
+    keys: { search: 'search', undo: 'undo' },
+    words: ['replace all', 'reemplazar todo', 'find and replace', 'buscar y reemplazar'],
+    since: REPLACE_PROJECT,
+  },
 
   // --- Colapsar ---
   { id: 'collapse', section: 'collapse', title: 'help.collapse.title', text: 'help.collapse.text', keys: { collapse: 'collapse' }, since: BEFORE_HELP },
@@ -365,6 +378,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
 
   // --- Hojas y PDF ---
   { id: 'sheets', section: 'print', title: 'help.sheets.title', text: 'help.sheets.text', since: BEFORE_HELP },
+  {
+    id: 'pageBreak',
+    section: 'print',
+    title: 'help.pageBreak.title',
+    text: 'help.pageBreak.text',
+    keys: { pageBreak: 'pageBreak' },
+    words: ['salto', 'salto de página', 'hoja nueva', 'page break', 'new page', 'new sheet', 'corte', 'ctrl enter'],
+    since: PAGE_BREAK,
+  },
   { id: 'pdf', section: 'print', title: 'help.pdf.title', text: 'help.pdf.text', keys: { print: 'print' }, showMe: 'page-menu', since: BEFORE_HELP },
 
   // --- Preferencias ---

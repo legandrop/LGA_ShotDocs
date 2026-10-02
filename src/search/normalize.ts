@@ -1,7 +1,7 @@
 // Cómo compara la búsqueda (Docs/Doc_Buscar.md, sección 4 y corrección 10). La usan la barra de la página
 // y, más adelante, la búsqueda del proyecto: las dos cuentan igual.
 //
-// - Sin *Aa*: sin mayúsculas ni tildes ("camara" encuentra "Cámara"; la ñ vale como n). Cada punto de código
+// - Sin *Aa*: sin mayúsculas ni tildes ("camara" encuentra "Cámara"; la ñ es otra letra, D12). Cada punto de código
 //   se pasa a NFD, se le sacan las marcas combinadas (`\p{M}`) y se pasa a minúsculas (`toLowerCase`, no la
 //   del idioma). NFD no separa ligaduras, ø ni ł: esas quedan como están. "ß" no es "ss".
 // - Con *Aa*: mayúsculas y tildes exactas. Igual se pasa a NFD, así una "Í" pegada desde macOS (I + tilde
@@ -25,9 +25,24 @@ export interface Normalized {
 }
 
 const MARK = /\p{M}/u;
-const MARKS = /\p{M}/gu;
 const SPACE = /\s/u;
 const WORD = /[\p{L}\p{N}]/u;
+
+/** La tilde de la ñ (U+0303 después de una n): la ñ es otra letra, no una n con tilde (decisión D12, 2026-10-01). */
+const ENYE_MARK = '̃';
+
+/**
+ * Saca las marcas combinadas y pasa a minúsculas, salvo la tilde de la ñ (`prev`: lo que va antes en el texto ya
+ * normalizado, para una ñ descompuesta que llega como "n" y la tilde aparte, como pega macOS).
+ */
+function fold(piece: string, prev: string): string {
+  let out = '';
+  for (const ch of piece.normalize('NFD').toLowerCase().normalize('NFD')) {
+    if (!MARK.test(ch)) out += ch;
+    else if (ch === ENYE_MARK && (out || prev).endsWith('n')) out += ch;
+  }
+  return out;
+}
 
 /** Normaliza un texto para buscar en él, con el mapa al original. */
 export function normalize(text: string, { matchCase = false }: SearchOptions = {}): Normalized {
@@ -39,8 +54,7 @@ export function normalize(text: string, { matchCase = false }: SearchOptions = {
     if (SPACE.test(cp)) {
       piece = out.endsWith(' ') ? '' : ' ';
     } else {
-      piece = cp.normalize('NFD');
-      if (!matchCase) piece = piece.replace(MARKS, '').toLowerCase().normalize('NFD').replace(MARKS, '');
+      piece = matchCase ? cp.normalize('NFD') : fold(cp, out);
     }
     for (let k = 0; k < piece.length; k++) map.push(index);
     out += piece;
@@ -63,7 +77,7 @@ export function normalizeQuery(query: string, options: SearchOptions = {}): stri
 export function findIn(
   norm: string,
   query: string,
-  { matchCase = false, wholeWord = false }: SearchOptions = {},
+  { wholeWord = false }: SearchOptions = {},
   map?: number[],
 ): [number, number][] {
   const out: [number, number][] = [];
@@ -73,8 +87,9 @@ export function findIn(
     const at = norm.indexOf(query, from);
     if (at < 0) return out;
     const end = at + query.length;
-    // Con *Aa* las tildes quedan como marcas combinadas: "I" no encuentra la "I" de una "Í" descompuesta.
-    const cutsLetter = matchCase && end < norm.length && MARK.test(norm[end]);
+    // Con *Aa* las tildes quedan como marcas combinadas: "I" no encuentra la "I" de una "Í" descompuesta. Sin *Aa*
+    // la única que queda es la de la ñ: "an" no encuentra el principio de "año".
+    const cutsLetter = end < norm.length && MARK.test(norm[end]);
     const whole = !wholeWord || (!isWordChar(norm, at - 1) && !isWordChar(norm, end));
     const edges = !map || ((at === 0 || map[at] !== map[at - 1]) && (end === norm.length || map[end] !== map[end - 1]));
     if (!cutsLetter && whole && edges) {

@@ -103,7 +103,8 @@ export function isEmptyParagraph(block: BlockLike | undefined): boolean {
   if (!block || block.type !== 'paragraph') return false;
   if (Array.isArray(block.children) && block.children.length > 0) return false;
   const props = block.props ?? {};
-  if (props.script === true || props.question === true || props.driveCard === true) return false;
+  // Un salto de hoja vacío tampoco (pageBreak, Docs/Doc_Hojas_PDF.md): soltar ahí lo borraría.
+  if (props.script === true || props.question === true || props.driveCard === true || props.pageBreak === true) return false;
   return !Array.isArray(block.content) || block.content.length === 0;
 }
 

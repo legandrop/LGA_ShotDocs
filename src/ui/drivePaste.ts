@@ -1,7 +1,7 @@
 import type { BlockNoteEditor, BlockNoteEditorOptions } from '@blocknote/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { parseDriveLink, type DriveLink } from './driveLinks';
-import { paragraphProps } from './editorSchema';
+import { PAGE_BREAK_PROP, paragraphProps } from './editorSchema';
 
 // Pegar un link de Drive (paso 13 de Docs/Plan_Workspaces.md). El link se pega como siempre (un texto con
 // el link) y al lado del cursor aparece un menú chico, como en Notion o Coda:
@@ -132,7 +132,10 @@ export function applyDrivePaste(editor: AnyEditor, target: DrivePasteTarget, cho
       tr.removeMark(from, to, linkMark);
       tr.addMark(from, to, linkMark.create({ href }));
     });
-    editor.updateBlock(block.id, { type: 'paragraph', props: paragraphProps('driveCard') } as never);
+    // Un salto de hoja que pasa a ser tarjeta sigue siendo salto (Docs/Doc_Hojas_PDF.md): la hoja nueva empieza después.
+    const keepBreak = textblock.type.name === 'paragraph' && textblock.attrs[PAGE_BREAK_PROP] === true;
+    const props = { ...paragraphProps('driveCard'), ...(keepBreak ? { [PAGE_BREAK_PROP]: true } : {}) };
+    editor.updateBlock(block.id, { type: 'paragraph', props } as never);
     moveCursorAfter(editor, block.id);
     return true;
   }

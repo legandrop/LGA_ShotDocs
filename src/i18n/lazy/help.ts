@@ -120,8 +120,8 @@ export const help = {
   // --- Escribir ---
   'help.slash.title': { en: "The / menu", es: "El menú /" },
   'help.slash.text': {
-    en: "Type / on an empty line to add headings, lists, checklists, a table, a quote, code, a divider, an image, Script or a question. Keep typing to filter; ↑ ↓ and Enter pick, Esc closes.",
-    es: "Escribí / en un renglón vacío para sumar títulos, listas, casillas, una tabla, una cita, código, un divisor, una foto, Script o una pregunta. Seguí escribiendo para filtrar; ↑ ↓ y Enter eligen, Esc cierra.",
+    en: "Type / on an empty line to add headings, lists, checklists, a table, a quote, code, a divider, an image, Script, a question or a page break. Keep typing to filter; ↑ ↓ and Enter pick, Esc closes.",
+    es: "Escribí / en un renglón vacío para sumar títulos, listas, casillas, una tabla, una cita, código, un divisor, una foto, Script, una pregunta o un salto de hoja. Seguí escribiendo para filtrar; ↑ ↓ y Enter eligen, Esc cierra.",
   },
   'help.blocks.title': { en: "Moving blocks", es: "Mover bloques" },
   'help.blocks.text': {
@@ -246,8 +246,13 @@ export const help = {
   },
   'help.findProject.title': { en: "Search the whole project", es: "Buscar en todo el proyecto" },
   'help.findProject.text': {
-    en: "{search} or the magnifying glass next to + searches the titles and text of every page in the project, offline too, and takes you to the exact spot. It also lists matching projects.",
-    es: "{search} o la lupa al lado del + buscan en los títulos y el texto de todas las páginas del proyecto, también sin red, y te llevan al lugar exacto. También muestran los proyectos que coinciden.",
+    en: "{search} or the magnifying glass next to + searches the titles and text of every page in the project, offline too, and takes you to the exact spot. It also lists matching projects. The arrow left of the field opens Replace.",
+    es: "{search} o la lupa al lado del + buscan en los títulos y el texto de todas las páginas del proyecto, también sin red, y te llevan al lugar exacto. También muestran los proyectos que coinciden. La flecha a la izquierda del campo despliega Reemplazar.",
+  },
+  'help.replaceProject.title': { en: "Replace in the whole project", es: "Reemplazar en todo el proyecto" },
+  'help.replaceProject.text': {
+    en: "Open {search} and use the arrow left of the field (if you can edit pages). Accents don't matter (camara finds cámara) unless you turn on Aa, but ñ is its own letter (ano doesn't find año). Each match shows the old text crossed out and the new one next to it; replace one, a whole page or all of them. Replace all asks first how many changes in how many pages, and says how many are in collapsed sections (deleting those needs its checkbox). Page titles, captions and file names don't change, and neither do pages you can only view or that aren't downloaded yet. Undo, in the notice or in the panel, puts back everything that wasn't changed afterwards; it works offline and after closing the app, on the device where you replaced. {undo} in the page doesn't undo it.",
+    es: "Abrí {search} y usá la flecha a la izquierda del campo (si podés editar páginas). Las tildes no cuentan (camara encuentra cámara) salvo con Aa, pero la ñ es otra letra (ano no encuentra año). Cada coincidencia muestra lo de antes tachado y lo nuevo al lado; reemplazá una, una página entera o todas. Reemplazar todo pregunta antes cuántos cambios en cuántas páginas, y dice cuántas están en secciones colapsadas (borrarlas pide su casilla). No cambian los títulos de las páginas, los pies ni los nombres de archivo, ni las páginas que solo podés ver o que todavía no bajaron. Deshacer, en el aviso o en el panel, vuelve a poner todo lo que nadie cambió después; anda sin red y después de cerrar la app, en el dispositivo donde reemplazaste. {undo} en la página no lo deshace.",
   },
 
   // --- Colapsar ---
@@ -324,6 +329,11 @@ export const help = {
     en: "A page can be free or have a sheet size (A5, A4, A3, Letter) in ⋯ › Page size, for the page or its whole branch. Marks show where each sheet ends, and what you see is what the PDF looks like.",
     es: "Una página puede ser libre o tener tamaño de hoja (A5, A4, A3, Carta) en ⋯ › Tamaño de hoja, para la página o toda su rama. Unas marcas muestran dónde termina cada hoja, y lo que ves es lo que sale en el PDF.",
   },
+  'help.pageBreak.title': { en: "Page break", es: "Salto de hoja" },
+  'help.pageBreak.text': {
+    en: "{pageBreak} or / Page break makes what follows start on a new sheet, in the Page marks and in the PDF. It shows as a dashed line; Backspace right after it removes it. On a free page it only counts when printing.",
+    es: "{pageBreak} o / Salto de hoja hace que lo que sigue empiece en una hoja nueva, en las marcas de hoja y en el PDF. Se ve como una línea punteada; Retroceso justo después lo saca. En una página libre cuenta solo al imprimir.",
+  },
   'help.pdf.title': { en: "PDF and printing", es: "PDF e impresión" },
   'help.pdf.text': {
     en: "{print} or ⋯ › Export PDF / Print opens the browser's print dialog with the same sheet breaks you see; choose Save as PDF there.",
@@ -357,6 +367,7 @@ export const help = {
   'shortcut.comment': { en: "Comment on the block", es: "Comentar el bloque" },
   'shortcut.question': { en: "Question", es: "Pregunta" },
   'shortcut.script': { en: "Script (screenplay)", es: "Script (guion)" },
+  'shortcut.pageBreak': { en: "Page break: what follows starts on a new sheet", es: "Salto de hoja: lo que sigue empieza en una hoja nueva" },
   'shortcut.scriptEnter': {
     en: "In a Script line: keep writing Script (on an empty line, back to normal text)",
     es: "En una línea de Script: seguir en Script (en una vacía, volver al texto común)",

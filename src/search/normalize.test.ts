@@ -6,11 +6,27 @@ import { normalize, normalizeQuery, searchText } from './normalize';
 const found = (text: string, query: string, options = {}) => searchText(text, query, options).map(([s, e]) => text.slice(s, e));
 
 describe('normalizar', () => {
-  it('sin mayúsculas ni tildes; la ñ vale como n', () => {
-    expect(normalize('Cámara ÑANDÚ Über').text).toBe('camara nandu uber');
+  it('sin mayúsculas ni tildes; la ñ es otra letra (D12): "ano" no encuentra "año"', () => {
+    expect(normalize('Cámara ÑANDÚ Über').text).toBe('camara ñandu uber');
     expect(found('La Cámara grande', 'camara')).toEqual(['Cámara']);
-    expect(found('Año nuevo', 'ano')).toEqual(['Año']);
+    expect(found('Año nuevo', 'ano')).toEqual([]);
+    expect(found('Año nuevo, el ano', 'ano')).toEqual(['ano']);
+    expect(found('Año nuevo', 'AÑO')).toEqual(['Año']);
+    expect(found('la peña y la pena', 'pena')).toEqual(['pena']);
     expect(found('camara', 'CÁMARA')).toEqual(['camara']);
+    // Tampoco con palabra entera, ni con un pedazo que corta la ñ ("an" no es el principio de "año").
+    expect(found('año', 'ano', { wholeWord: true })).toEqual([]);
+    expect(found('año', 'an')).toEqual([]);
+    expect(found('año', 'añ')).toEqual(['añ']);
+    // Una ñ descompuesta (n + tilde, como pega macOS) es la misma ñ.
+    expect(found('Año', 'año')).toEqual(['Año']);
+    expect(found('Año', 'ano')).toEqual([]);
+    // "an" tampoco corta una ñ descompuesta (la coincidencia no puede terminar entre la n y su tilde).
+    expect(found('Año', 'an')).toEqual([]);
+    expect(found('Año', 'añ')).toEqual(['Añ']);
+    expect(found('Año', 'año')).toEqual(['Año']);
+    // Con Aa, igual.
+    expect(found('Año', 'Ano', { matchCase: true })).toEqual([]);
   });
 
   it('una tilde descompuesta (I + tilde combinada, como pega macOS) queda adentro del resaltado', () => {

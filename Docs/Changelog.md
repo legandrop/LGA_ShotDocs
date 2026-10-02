@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.093 :
+v0.0XX :
 
 Lo que alguien escribía adentro de un bloque que otro borraba al mismo tiempo podía no llegar nunca al servidor: la
 subida se armaba en un `Y.Doc` con GC y, si el dispositivo bajaba el borrado antes de subir, ese texto viajaba como
@@ -10,6 +10,29 @@ subidas; con más de 6 MB se arma con GC, como antes). Y quien escribió se ente
 que escribió ahí, para verlo, copiarlo o descartarlo; el estado lo dice si la página no está abierta, y *Download my
 unsynced changes* lo incluye. Sin migración.
 [ Subida sin GC - lo escrito en algo que otro borra a la vez llega al servidor y se avisa ]
+
+v0.094 :
+
+Faltaba reemplazar en todo el proyecto: cambiar un nombre en cincuenta páginas era abrirlas de a una. Ahora la
+flecha del panel de Ctrl/⌘+K despliega el reemplazo: lista cada coincidencia con lo de antes tachado y lo nuevo
+al lado, y reemplaza una, una página o todas, con una confirmación que dice cuántos cambios, en cuántas páginas y
+cuántos escondidos en secciones colapsadas (borrarlos pide su casilla). Escribe en el Y.Doc de cada página que se
+puede editar y está completa, sin editor, por el mismo camino que cualquier edición; antes guarda un registro, y
+*Undo* vuelve a poner lo que nadie cambió después, también sin red o tras cerrar la app. Diseño auditado (la
+protección del editor abierto, el guardado comprobado, los permisos conocidos). Pruebas al azar con dos
+dispositivos: nada del otro se pierde. Al buscar, la ñ pasa a ser otra letra (D12). Ayuda nueva.
+[ Reemplazar en el proyecto - vista previa, confirmación y deshacer en todas las páginas ]
+
+v0.093 :
+
+En una página con tamaño de hoja no había forma de forzar que algo empiece en una hoja nueva: los cortes eran
+solo automáticos. Ahora hay **salto de hoja**: desde el menú "/" (*Page break*) o con Ctrl+Enter (⌘↩ en la Mac).
+Es un párrafo con la propiedad `pageBreak`, no un tipo de bloque nuevo: una versión anterior ve un párrafo y, si lo
+edita, pierde solo el salto (no hace falta subir `min_app_version`). Se ve como una línea punteada; lo que sigue
+empieza hoja en las marcas "Page N" y en el PDF, también en el teléfono, en una página libre (al imprimir) y con
+secciones colapsadas. Puede tener texto, que nunca se pierde; Retroceso justo después lo saca. Ayuda: entrada
+*Page break* en *Sheets, PDF and printing*.
+[ Salto de hoja - párrafo con pageBreak, menú / y Ctrl/⌘+Enter, en las marcas y en el PDF ]
 
 v0.092 :
 

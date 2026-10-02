@@ -34,6 +34,12 @@ export const ORIGIN_REPAIR = Symbol('repair');
  * pendiente ni sube nada.
  */
 export const ORIGIN_SEED = Symbol('seed');
+/**
+ * Reemplazar en todo el proyecto y su deshacer (Docs/Doc_Buscar.md, "Reemplazar en el proyecto"): una edición local
+ * como cualquier otra (se guarda y se sube), escrita sin editor. No es el origen del editor, así que no entra en la
+ * pila de Ctrl/⌘+Z de la página abierta y el editor la dibuja como un cambio que llega.
+ */
+export const ORIGIN_REPLACE = Symbol('replace');
 
 /** Con más updates guardados que esto, al abrir la página se fusionan en uno solo. */
 const COMPACT_AT = 64;
@@ -334,6 +340,45 @@ export class PageDocs {
     this.retryTimers.clear();
   }
 
+  /**
+   * Abre la página, corre `fn` con su documento y con el candado de la página (el mismo de subir, bajar e indexar:
+   * lo que llega del servidor para esta página espera) y la cierra. Adentro, `fn` nunca puede esperar algo que tome
+   * el candado de la misma página (`pushPage`, `pullPage`, `indexSnapshot`, `markUnreadable`): se trabaría.
+   */
+  async edit<T>(pageId: string, fn: (doc: Y.Doc) => Promise<T> | T): Promise<T> {
+    const doc = await this.open(pageId);
+    try {
+      return await this.withLock(pageId, async () => fn(doc));
+    } finally {
+      this.close(pageId);
+    }
+  }
+
+  /**
+   * Escribe una edición local en el documento abierto con la misma protección que los cambios del servidor
+   * (`applyRendering`): si el editor abierto falla al dibujarla, la edición YA está en el documento y guardada, y la
+   * página vuelve a dibujar el editor antes de la próxima tecla (`subscribeRenderFailed`). Devuelve `true` en ese
+   * caso también: lo escrito cuenta como escrito y no se reintenta. Un error antes de aplicar sale para afuera.
+   */
+  applyLocal(pageId: string, doc: Y.Doc, origin: symbol, apply: () => void): boolean {
+    this.applyRendering(pageId, doc, origin, true, apply);
+    return true;
+  }
+
+  /**
+   * Todo lo escrito en la página llegó a IndexedDB: no queda nada en memoria, ni programado, ni en curso, y guardar no
+   * está fallando. Después de `flush`: `flush` vuelve también cuando la escritura falló (queda en memoria y se
+   * reintenta cada 3 s).
+   */
+  isSaved(pageId: string): boolean {
+    return (
+      this.writeError === null &&
+      (this.unsaved.get(pageId)?.length ?? 0) === 0 &&
+      !this.scheduled.has(pageId) &&
+      !this.writes.has(pageId)
+    );
+  }
+
   close(pageId: string): void {
     const entry = this.live.get(pageId);
     if (!entry) return;
@@ -390,6 +435,11 @@ export class PageDocs {
     for (const pageId of dirty) pages.add(pageId);
     for (const [pageId, batch] of this.unsaved) if (batch.length > 0) pages.add(pageId);
     return [...pages];
+  }
+
+  /** El estado guardado de una página (sin armar nada). */
+  stateOf(pageId: string): Promise<DocState | undefined> {
+    return this.db.get('docState', pageId);
   }
 
   async states(): Promise<Map<string, DocState>> {

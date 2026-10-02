@@ -2,7 +2,7 @@ import { t } from '../i18n';
 import { thumbSize } from './sharpMarks';
 import type { PageFormat, PrintGeometry } from './pageFormat';
 import { printGeometry } from './pageFormat';
-import { measureUnits, paginate, SHEET_TOLERANCE_PX, type Measured, type Pagination } from './pagination';
+import { measureUnits, PAGE_BREAK_SELECTOR, paginate, SHEET_TOLERANCE_PX, type Measured, type Pagination } from './pagination';
 
 // La vista de impresión (roadmap B.7, Docs/Doc_Hojas_PDF.md).
 //
@@ -182,6 +182,11 @@ function cleanCopy(copy: HTMLElement, live: HTMLElement, asSeen = false): void {
   if (asSeen) {
     for (const el of copy.querySelectorAll('.bn-block-content.sd-collapsed-hidden')) el.closest('.bn-block-outer')?.remove();
     for (const el of copy.querySelectorAll('.bn-block-content.sd-collapsed')) el.parentElement?.querySelector(':scope > .bn-block-group')?.remove();
+  }
+  // Un salto de hoja vacío no ocupa lugar en el papel (con texto, se imprime como un párrafo común). La línea y
+  // su rótulo no van nunca (styles.css).
+  for (const el of copy.querySelectorAll<HTMLElement>(PAGE_BREAK_SELECTOR)) {
+    if (!el.textContent?.trim() && !el.querySelector('img')) el.classList.add('print-page-break-empty');
   }
   for (const el of [copy, ...copy.querySelectorAll<HTMLElement>('[contenteditable]')]) el.removeAttribute('contenteditable');
   // Sin ids repetidos en la página.

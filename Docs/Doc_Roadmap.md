@@ -187,8 +187,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   Safari, Firefox y el iPhone.
 - **P.12 Buscar (urgente, Lega 2026-09-30). Entrega 1 hecha (v0.051): buscar y reemplazar en la página;
   entrega 2 hecha (v0.054): buscar en el proyecto con Ctrl/⌘+K** (`Doc_Buscar.md`, "Cómo quedó (entrega 1)" y
-  "(entrega 2)"). Queda para después: reemplazar en el proyecto, la papelera, todos los proyectos y los
-  comentarios. Lo pedido: dos lupas. **En el proyecto:** una lupa a la izquierda del "+" de
+  "(entrega 2)"). **Entrega 3 hecha (v0.094): reemplazar en todo el proyecto** (`Doc_Buscar.md`, "Reemplazar en el proyecto
+  (diseño)" y "Cómo quedó (entrega 3)"): la flecha en Ctrl/⌘+K, vista previa, una, la página o todas con confirmación,
+  escrito en el Y.Doc de cada página que se puede editar y está completa, y *Undo* de todo lo que siga igual (también
+  sin red y después de cerrar la app). Falta probarlo a mano en Safari, el iPhone y Firefox. Queda para después:
+  reemplazar en los títulos, pies y nombres; la papelera, todos los proyectos y los comentarios. Lo pedido: dos lupas. **En el proyecto:** una lupa a la izquierda del "+" de
   páginas en la barra lateral, que busca en todas las páginas del proyecto que la persona puede ver (títulos y
   contenido) y lleva al lugar. **En la página:** una lupa a la izquierda del ícono de comentarios, que busca en
   la página abierta, también adentro de las secciones colapsadas (P.11: el resultado abre la sección). A pensar
@@ -301,8 +304,9 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
    la misma hoja (`@page`) y los mismos cortes, sin barra lateral ni controles, con las fotos grandes si el
    original está en el dispositivo, las tarjetas de Drive como link y Script con sus colores; una página
    libre sale en A4. En el teléfono la página se ve libre y las marcas van antes de los mismos bloques. Ver
-   `Doc_Hojas_PDF.md`. **Falta:** el bloque de salto de hoja (una propiedad de párrafo, para que degrade en
-   una versión vieja) y probar a mano en Safari y en el iPhone.
+   `Doc_Hojas_PDF.md`. **Hecho también el salto de hoja** (v0.093): un párrafo con `pageBreak` (nunca un tipo de
+   bloque nuevo), desde el menú "/" o con Ctrl/⌘+Enter; lo que sigue empieza hoja en las marcas y en el PDF.
+   **Falta:** probar a mano en Safari y en el iPhone.
 8. **Hecho: castellano e inglés (D-16).** Toda la interfaz en los dos idiomas: pantallas, menús, diálogos,
    avisos, tooltips, estados de sincronización, errores, el carrete, comentarios, papelera, miembros,
    compartir, workspaces, bienvenida y login. Los textos están en `src/i18n/` (cada clave con los dos
@@ -417,7 +421,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
     (lo midió el diseño de B.9). Ahora el dispositivo anota los que el servidor ya tiene (`syncedDS`, con la misma
     regla que `syncedSV`: nunca dice de más) y sube solo los demás; si algo no cierra, sube todos. Sin migración.
     Ver `Doc_Sincronizacion.md`, "Subir solo los borrados nuevos".
-16. **Hecho (v0.093): lo escrito adentro de algo que otro borra a la vez llega al servidor.** La subida se armaba
+16. **Hecho (v0.0XX): lo escrito adentro de algo que otro borra a la vez llega al servidor.** La subida se armaba
     con GC: si el dispositivo bajaba el borrado antes de subir, ese texto viajaba como hueco y se perdía para
     siempre (lo encontró la auditoría del historial; decisión D15: arreglarlo ya). Ahora se arma sin GC y en orden,
     y quien escribió ve en la página un aviso con su texto para copiarlo. Sin migración. Falta: subir
