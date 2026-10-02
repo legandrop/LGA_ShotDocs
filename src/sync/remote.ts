@@ -56,6 +56,13 @@ export interface Remote {
   pushUpdate(pageId: string, clientUpdateId: string, update: Uint8Array): Promise<number>;
   pullUpdates(pageId: string, afterSeq: number, limit: number): Promise<RemoteUpdate[]>;
   /**
+   * Como `pullUpdates`, por `pull_page_content` (compactar, versión 16 de la base; Docs/Doc_Compactar.md, sección 5): la
+   * primera fila puede ser un snapshot (`snapshotId`, con `seq` = la última fila que junta) y cada fila trae la época de
+   * contenido de la página. Con los snapshots apagados o una base sin la función, hace lo mismo que `pullUpdates`. Sin
+   * el método (otras implementaciones), se baja con `pullUpdates`.
+   */
+  pullContent?(pageId: string, afterSeq: number, limit: number): Promise<RemoteUpdate[]>;
+  /**
    * Las páginas que esta sesión puede armar como base limpia ahora (`clean_work`, versión 12): vacío con el interruptor
    * apagado, una versión que no alcanza o una base sin la función. `urgent`: sin esperar la cadencia.
    */
@@ -77,7 +84,6 @@ export interface Remote {
   acceptInvitations(): Promise<number | null>;
 }
 
-/** Una fila de `list_members`. */
 /** Una página que se puede armar como base limpia (`clean_work`). */
 export interface CleanWorkRow {
   page_id: string;
@@ -106,6 +112,7 @@ export function cleanPushResult(data: unknown): CleanPushResult {
   throw new RemoteError(`push_clean_base: unexpected answer ${String(data)}`, true);
 }
 
+/** Una fila de `list_members`. */
 export interface MemberRow {
   user_id: string;
   email: string;
@@ -228,6 +235,53 @@ export interface SizesRemote {
 export const PROJECT_STATES_SCHEMA_VERSION = 9;
 /** La versión con la carpeta de un proyecto borrado en la papelera de Drive (P.14, entrega 2, migración 10). */
 export const PROJECT_DRIVE_SCHEMA_VERSION = 10;
+/**
+ * La versión con los snapshots de compactar (Docs/Doc_Compactar.md; 20261019120000_compactar_leer.sql): `pages.snapshot_seq`,
+ * `pages.content_epoch`, `pull_page_content` y las funciones de compactar. Constante propia: no sube `DB_SCHEMA_VERSION`
+ * (una base sin la migración sigue andando igual, sin aviso).
+ */
+export const SNAPSHOT_SCHEMA_VERSION = 16;
+
+/** El tramo a compactar que devuelve `claim_page_compaction` (Docs/Doc_Compactar.md, 4.2). */
+export interface CompactionClaim {
+  baseId: string | null;
+  baseSeq: number;
+  upToSeq: number;
+  lastUpdateId: number;
+}
+
+/** Un snapshot para `push_page_snapshot`: el update de Yjs, su vector y su huella (SHA-256 en hexadecimal). */
+export interface NewSnapshot {
+  pageId: string;
+  baseId: string | null;
+  upToSeq: number;
+  lastUpdateId: number;
+  state: Uint8Array;
+  sv: Uint8Array;
+  sha256: string;
+}
+
+/**
+ * Lo que contesta `push_page_snapshot`: `ok` (guardado sin confirmar, o el mismo ya guardado), `snapshot_mismatch` (otra
+ * huella para lo mismo, con la misma versión de la app: se invalidó) o `snapshot_exists` (otra versión ya lo armó).
+ */
+export interface SnapshotPushResult {
+  id: string;
+  result: 'ok' | 'snapshot_mismatch' | 'snapshot_exists';
+}
+
+/**
+ * Las funciones de quien compacta (Docs/Doc_Compactar.md, secciones 4 y 12). En la entrega 1 solo las tiene el servidor
+ * en memoria (las pruebas arman snapshots como lo hará un dispositivo); la app las usa desde la entrega 2.
+ */
+export interface SnapshotsRemote {
+  claimCompaction(pageId: string): Promise<CompactionClaim | null>;
+  pushSnapshot(snapshot: NewSnapshot): Promise<SnapshotPushResult>;
+  pullSnapshot(id: string): Promise<Uint8Array>;
+  confirmSnapshot(id: string, sha256: string): Promise<boolean>;
+  skipCompaction(pageId: string, reason: string): Promise<void>;
+  invalidateSnapshot(id: string, reason: string): Promise<boolean>;
+}
 
 /**
  * Archivar, borrar y restaurar proyectos (P.14, supabase/migrations/20261001120000_proyectos_archivar_borrar.sql).
@@ -294,6 +348,17 @@ export function parsePageVersion(row: Record<string, unknown>): PageVersionRow {
     createdBy: row.created_by === null || row.created_by === undefined ? null : String(row.created_by),
     createdAt: String(row.created_at ?? ''),
   };
+}
+
+/** Las filas de `pull_page_content` como llegan (los números pueden venir como texto). */
+export function parseContentRows(data: unknown): RemoteUpdate[] {
+  type Row = { seq: number | string; update: string; snapshot_id?: string | null; content_epoch?: number | string | null };
+  return ((data ?? []) as Row[]).map((r) => ({
+    seq: Number(r.seq),
+    data: fromBase64(r.update),
+    ...(r.snapshot_id ? { snapshotId: String(r.snapshot_id) } : {}),
+    ...(r.content_epoch === null || r.content_epoch === undefined ? {} : { contentEpoch: Number(r.content_epoch) }),
+  }));
 }
 
 /** Una fila de `trashed_projects` como llega (los números pueden venir como texto). */
@@ -598,7 +663,11 @@ export class SupabaseRemote
       local_key?: string | null;
       auto_purge_files?: boolean | null;
       clean_min_version?: number | string | null;
+      snapshot_min_version?: number | string | null;
     };
+    // Los snapshots se bajan con `pull_page_content` solo prendidos y con la base en la versión 16 (si no, todo sale
+    // por `pull_page_updates`, como siempre).
+    this.snapshotsOn = Number(row.schema_version) >= SNAPSHOT_SCHEMA_VERSION && extra.snapshot_min_version != null;
     return {
       generation: Number(row.generation),
       minAppVersion: row.min_app_version === null ? null : Number(row.min_app_version),
@@ -611,6 +680,8 @@ export class SupabaseRemote
       autoPurgeFiles: extra.auto_purge_files === true,
       // Sin la columna (base anterior a la versión 12), apagado.
       cleanMinVersion: extra.clean_min_version == null ? null : Number(extra.clean_min_version),
+      // Sin la columna (base anterior a la versión 16), apagados.
+      snapshotMinVersion: extra.snapshot_min_version == null ? null : Number(extra.snapshot_min_version),
     };
   }
 
@@ -631,6 +702,12 @@ export class SupabaseRemote
 
   /** Desde cuándo la base no tiene `pages.clean_seq` (aunque diga la versión 12); se reintenta cada tanto. */
   private cleanSeqMissingAt = 0;
+  /** Lo mismo con `pages.snapshot_seq` y `content_epoch` (versión 16). */
+  private snapshotColumnsMissingAt = 0;
+  /** Lo mismo con `pull_page_content`: mientras tanto se baja con `pull_page_updates`. */
+  private pullContentMissingAt = 0;
+  /** Los snapshots están prendidos en la base, según los últimos ajustes leídos (`fetchWorkspaceSettings`). */
+  private snapshotsOn = false;
 
   private async fetchTreeOf(projectIds: string[], schemaVersion?: number | null): Promise<PageRow[]> {
     // De a 1000, por id: si se crean páginas mientras se baja, no se saltea ninguna.
@@ -638,11 +715,20 @@ export class SupabaseRemote
     let after: string | null = null;
     // `clean_seq` solo con la versión 12 o más; si falta igual, se sigue sin ella un rato (como `settings`).
     const clean = (schemaVersion ?? 0) >= CLEAN_SCHEMA_VERSION && Date.now() - this.cleanSeqMissingAt >= 10 * 60_000;
+    // `snapshot_seq` y `content_epoch` con la 16 o más; si faltan igual, se dejan primero ellas (son las más nuevas).
+    const snap = (schemaVersion ?? 0) >= SNAPSHOT_SCHEMA_VERSION && Date.now() - this.snapshotColumnsMissingAt >= 10 * 60_000;
     for (;;) {
-      const columns = (this.settingsMissing ? PAGE_COLUMNS_WITHOUT_SETTINGS : PAGE_COLUMNS) + (clean ? ', clean_seq' : '');
+      const columns =
+        (this.settingsMissing ? PAGE_COLUMNS_WITHOUT_SETTINGS : PAGE_COLUMNS) +
+        (clean ? ', clean_seq' : '') +
+        (snap ? ', snapshot_seq, content_epoch' : '');
       let query = this.client.from('pages').select(columns).in('workspace_id', projectIds);
       if (after) query = query.gt('id', after);
       const { data, error, status } = await timed(query.order('id').limit(1000));
+      if (error?.code === UNDEFINED_COLUMN && snap) {
+        this.snapshotColumnsMissingAt = Date.now();
+        return this.fetchTreeOf(projectIds, schemaVersion);
+      }
       if (error?.code === UNDEFINED_COLUMN && clean) {
         this.cleanSeqMissingAt = Date.now();
         return this.fetchTreeOf(projectIds, schemaVersion);
@@ -782,6 +868,23 @@ export class SupabaseRemote
       seq: Number(r.seq),
       data: fromBase64(r.update),
     }));
+  }
+
+  async pullContent(pageId: string, afterSeq: number, limit: number): Promise<RemoteUpdate[]> {
+    // Apagados (o sin la función hace poco): lo de siempre, el mismo pedido que hoy.
+    if (!this.snapshotsOn || Date.now() - this.pullContentMissingAt < 10 * 60_000) {
+      return this.pullUpdates(pageId, afterSeq, limit);
+    }
+    const { data, error, status } = await timed(
+      this.client.rpc('pull_page_content', { p_page_id: pageId, p_after_seq: afterSeq, p_limit: limit }),
+      limit <= 1 ? MAX_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS,
+    );
+    if (error?.code === MISSING_FUNCTION) {
+      this.pullContentMissingAt = Date.now();
+      return this.pullUpdates(pageId, afterSeq, limit);
+    }
+    if (error) throw toRemoteError(error, status);
+    return parseContentRows(data);
   }
 
   async cleanWork({ pages, urgent = false }: { pages?: string[]; urgent?: boolean } = {}): Promise<CleanWorkRow[]> {
