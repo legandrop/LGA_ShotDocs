@@ -99,6 +99,9 @@ export function PageEditor({ pageId }: { pageId: string }) {
   const [opening, setOpening] = useState<Opening>({ state: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const incomplete = opening.state === 'ready' && !opening.complete;
+  // La página tiene contenido pero ningún editor armó todavía la base limpia que le toca a esta persona
+  // (Docs/Doc_Privacidad_Borrado.md, 4.3): no hay nada que bajar, hay que esperar a que la preparen.
+  const [preparing, setPreparing] = useState(false);
   const tr = useT();
   // El editor que usa la barra de buscar (Docs/Doc_Buscar.md). La barra y lo buscado viven acá, arriba del
   // editor: el editor se vuelve a montar (al terminar de bajar, al cambiar el permiso o el idioma) y la
@@ -186,8 +189,10 @@ export function PageEditor({ pageId }: { pageId: string }) {
     if (!incomplete) return;
     let cancelled = false;
     const check = () =>
-      void engine.isMissingContent(pageId).then((missing) => {
-        if (!cancelled && !missing) setAttempt((n) => n + 1);
+      void engine.contentGap(pageId).then((gap) => {
+        if (cancelled) return;
+        setPreparing(gap === 'preparing');
+        if (gap === null) setAttempt((n) => n + 1);
       });
     check();
     // Con la app vieja para el workspace no se baja contenido: no llega nada hasta actualizar (o hasta que bajen la
@@ -216,7 +221,13 @@ export function PageEditor({ pageId }: { pageId: string }) {
       <RemovedWritingBanner docs={docs} pageId={pageId} />
       {!opening.complete && (
         <p className="muted editor-missing">
-          {!status.online ? tr('editor.missingOffline') : status.outdated ? tr('editor.missingOutdated') : tr('editor.missingOnline')}
+          {!status.online
+            ? tr('editor.missingOffline')
+            : status.outdated
+              ? tr('editor.missingOutdated')
+              : preparing
+                ? tr('editor.preparing')
+                : tr('editor.missingOnline')}
         </p>
       )}
       {!canEdit && perms.known && (

@@ -84,6 +84,8 @@ const PAGE_BREAK = '0.093';
  * La vista previa de los PDF adjuntos y los adjuntos en el carrete (Doc_Adjuntos.md, entrega 2).
  */
 const ATTACH_PREVIEW = '0.091';
+/** Quién ve lo borrado (Docs/Doc_Privacidad_Borrado.md, entregas 0 y 1): la versión se pone al publicar. */
+const DELETED_PRIVACY = '0.0XX';
 /** El historial de versiones de una página (P.18, Docs/Doc_Historial.md, entrega 1). */
 const HISTORY = '0.098';
 /** Reemplazar en todo el proyecto (Doc_Buscar.md, "Reemplazar en el proyecto"). */
@@ -348,6 +350,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
   // --- Compartir ---
   { id: 'share', section: 'sharing', title: 'help.share.title', text: 'help.share.text', since: BEFORE_HELP },
   { id: 'members', section: 'sharing', title: 'help.members.title', text: 'help.members.text', when: 'admin', since: BEFORE_HELP },
+  {
+    id: 'deletedPrivacy',
+    section: 'sharing',
+    title: 'help.deletedPrivacy.title',
+    text: 'help.deletedPrivacy.text',
+    words: ['borrado', 'borrar', 'privacidad', 'cliente', 'invitado', 'deleted', 'privacy', 'client', 'guest', 'preparación', 'prepared'],
+    since: DELETED_PRIVACY,
+  },
 
   // --- Papelera ---
   { id: 'trash', section: 'trash', title: 'help.trash.title', text: 'help.trash.text', since: BEFORE_HELP },

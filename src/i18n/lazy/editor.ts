@@ -187,6 +187,10 @@ export const editor = {
     en: "This page has newer changes that this version of the app doesn't download. Update the app to see them and edit the page.",
     es: "Esta página tiene cambios más nuevos que esta versión de la app no baja. Actualizá la app para verlos y editarla.",
   },
+  'editor.preparing': {
+    en: "The editors haven't prepared this page for you yet. It will appear when one of them opens the app.",
+    es: "Quienes editan todavía no prepararon esta página para vos. Aparece cuando alguno abra la app.",
+  },
   'editor.missingOffline': {
     en: "Part of this page has not been downloaded to this device yet. You can read what is here; connect to the internet to edit it.",
     es: "Una parte de esta página todavía no se bajó a este dispositivo. Podés leer lo que hay; conectate a internet para editarla.",

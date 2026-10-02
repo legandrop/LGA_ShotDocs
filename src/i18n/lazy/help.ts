@@ -289,6 +289,12 @@ export const help = {
     es: "El dueño y los admins invitan gente desde Miembros, en el menú de la cuenta. Los clientes entran como invitados y ven solo lo que se les comparte.",
   },
 
+  'help.deletedPrivacy.title': { en: "Who can see what was deleted", es: "Quién ve lo que se borró" },
+  'help.deletedPrivacy.text': {
+    en: "People who can edit a page (not guests) see everything that was deleted, like in the version history. People who only view or comment, and guests, get a clean copy of the page instead: the page as it was the last time an editor's app prepared it, about 20 seconds after you stop typing, every 2 minutes while you keep typing (longer for very large pages) and when you close the app. Until an editor prepares it, they see that the page is being prepared. Something that stayed on the page for a while may have reached them even if you delete it later; something deleted within seconds almost never does. They can tell that something was deleted and how long it was, not what it said. Photos and files removed from a page stop opening for them. What a device already downloaded can't be taken back from it. Until the workspace turns clean copies on, deleted text and photos can still reach the people a page is shared with.",
+    es: "Quienes pueden editar una página (no los invitados) ven todo lo que se borró, como en el historial de versiones. Quienes solo ven o comentan, y los invitados, reciben en cambio una copia limpia de la página: la página como estaba la última vez que la app de alguien que edita la preparó, unos 20 segundos después de que dejás de escribir, cada 2 minutos mientras seguís escribiendo (más espaciado en páginas muy grandes) y al cerrar la app. Hasta que alguien que edita la prepara, ven que la página está en preparación. Algo que quedó un rato en la página les pudo haber llegado aunque después lo borres; algo borrado en segundos casi nunca. Pueden saber que se borró algo y cuánto ocupaba, no qué decía. Las fotos y archivos que se sacan de una página dejan de abrirse para ellos. Lo que un dispositivo ya bajó no se le puede quitar. Hasta que el workspace prenda las copias limpias, el texto y las fotos borrados todavía les pueden llegar a las personas con quienes se comparte una página.",
+  },
+
   // --- Papelera ---
   'help.history.title': { en: "Version history", es: "Historial de versiones" },
   'help.history.text': {
