@@ -41,6 +41,7 @@ Las migraciones están en `supabase/migrations/`, en orden:
 | `20261007120000_historial.sql` | **Sin aplicar.** El historial de versiones (P.18, `Doc_Historial.md`): `page_history(page, after_seq, limit)` (las filas de `page_updates` con autor y hora) y `page_history_authors(page)` (los correos), solo con nivel 3 o más, sin ser invitado y fuera de la papelera (`private.check_history`); el autor y la hora ya no se leen directo de la tabla (`authenticated` lee solo las columnas del contenido). Sube `schema_version` a 11 (`HISTORY_SCHEMA_VERSION`). |
 | `20261006120000_version_minima_archivos.sql` | La versión mínima de la app también frena la cola de archivos (v0.090): `register_file`, `link_page_file` y `unlink_page_file` con `p_app_version` (la misma regla que el contenido), y las de siempre, que llaman solo las versiones anteriores, dejan de andar cuando la mínima es 0.090 o más (`private.files_version_allowed`). No sube `schema_version`. Ver `Doc_Sincronizacion.md`, "La versión mínima y los archivos". |
 | `20261008120000_version_minima_arbol.sql` | **Sin aplicar.** La versión mínima también frena el árbol y los comentarios (B.17, v0.099): la app manda su versión en el header `x-shotdocs-version` y dos políticas restrictivas (insert y update) en `pages` y `workspaces`, un trigger en `comments` y adentro `set_project_archived`, `delete_project` y `restore_project` (mismas firmas) la comparan con la mínima (`private.require_write_version`); sin header, rechazan solo con la mínima en 0.099 o más (el número real lo pone quien publica). El rechazo es un 503 `app_outdated` (`raise sqlstate 'PGRST'`), que todas las versiones reintentan. No sube `schema_version`. Ver `Doc_Sincronizacion.md`, "La versión mínima, el árbol y los comentarios". |
+| `20261009120000_papelera_lectores.sql` | **Sin aplicar.** La papelera de páginas ya no se lee con Ver: `private.user_page_level` da 0 sobre una página en la papelera (o que cuelga de una) a quien tiene menos de 3 y a los invitados, y la política de lectura de `pages` (`can_view_page_row`, que con un permiso sobre el proyecto entero dejaba ver cualquier fila) aplica la misma regla. Las dos pasan a PL/pgSQL con una sola pasada por la cadena de padres (más rápidas que antes). No cambia firmas ni sube `schema_version`. Ver "La papelera de páginas y quién la ve". |
 
 Reglas del esquema:
 
@@ -69,6 +70,34 @@ Reglas del esquema:
   `set media_url = 'https://…'` cuando se publica el portero; `set auto_purge_files = true` prende el borrado
   automático de la papelera de archivos a los 30 días (apagado hasta que Lega lo confirme; ver el paso 11 de
   `Plan_Workspaces.md`).
+
+### La papelera de páginas y quién la ve
+
+Una página en la papelera, o que cuelga de una que está, la ven **solo quienes pueden editarla (nivel 3 o 4) sin ser
+invitados**, el dueño del proyecto incluido: así la encuentran en la Papelera (restaurar sigue pidiendo 4). Ver,
+Comentar y los invitados (con cualquier nivel) no reciben nada de ella por ningún camino: la fila de `pages`, el
+contenido, los comentarios, los archivos que solo usa ella, las miniaturas ni el portero. Restaurarla devuelve todo
+(no se toca ningún permiso). Decisión del 2026-10-02 (migración `20261009120000_papelera_lectores.sql`); antes la
+regla miraba solo si el proyecto estaba borrado y un cliente bajaba, por ejemplo, una nota interna que se mandó a la
+papelera antes de compartirle la rama.
+
+- **En la app:** la página sale del árbol del lector en la próxima sincronización, como cuando le sacan un permiso,
+  sin errores. Lo que tenía sin subir no se pierde en silencio: un comentario queda rechazado con su texto
+  (*The page is not on the server, or you can no longer see it.*) y el contenido de una invitada con Editar queda
+  rechazado en el dispositivo (se puede bajar como archivo); restaurada la página, "reintentar" los sube
+  (`src/sync/trashReaders.test.ts`).
+- **Mandar a la papelera** sigue pidiendo 4, también a una invitada, que después deja de verla y no la puede
+  restaurar (lo hace el dueño o quien edita y crea sin ser invitado).
+- **Lo que no cubre:** lo que el dispositivo del lector ya había bajado sigue en su IndexedDB (la app no lo
+  muestra: la búsqueda y la barra miran el árbol); un pase del portero ya entregado sirve hasta que vence (8 horas,
+  igual que al sacar un permiso); el nombre del proyecto se sigue viendo; quien subió un archivo lo sigue viendo
+  mientras pueda editar alguna página del proyecto.
+- **Rendimiento** (base real, en una transacción deshecha, `explain analyze`, tres corridas): leer las 735 filas
+  del árbol como dueño pasó de ~395 ms a ~107 ms; 700 filas de un proyecto como lector con Ver, de ~490 ms a
+  ~125 ms; los comentarios de un proyecto como lector, de ~53 ms a ~14 ms; `page_level` de una hoja a 60 niveles,
+  2 ms igual. La regla nueva necesita mirar los padres en cada fila, pero las dos funciones pasaron de SQL a
+  PL/pgSQL (Postgres 17 vuelve a planificar en cada llamada una función SQL que no se puede expandir; PL/pgSQL guarda
+  el plan en la sesión) y juntan permisos y papelera en una sola consulta.
 
 ### Aplicar las migraciones
 
@@ -112,6 +141,7 @@ un error que dice qué; si todo pasa, devuelve una fila con `result = 'ok'`.
 | `historial_permisos.sql` | El historial: quien edita (nivel 3 y 4) ve las filas en orden con autor, hora e id y los correos; Ver, Comentar, un invitado con Editar, sin permiso y sacado reciben `page_not_found` (y `pull_page_updates` les sigue andando); una página en la papelera o adentro de una, `page_in_trash`; un proyecto borrado, nada; desde la API, `created_by` y `created_at` dan 42501 y el contenido se lee como antes; las funciones auxiliares y anon, 42501; nada escribe. |
 | `version_minima_archivos_permisos.sql` | La versión mínima en la cola de archivos: sin mínima anda todo; con una mínima menor a 0.090, las funciones con versión comparan y las de siempre andan; con 0.090 o más, las de siempre y las versiones menores, ilegibles o ausentes dan `app_outdated` sin escribir nada; el permiso va antes que la versión; anon no llama a nada. |
 | `version_minima_arbol_permisos.sql` | La versión mínima en el árbol y los comentarios: sin mínima anda todo; con una mínima menor a 0.099, sin header anda y con un header menor se rechaza; con 0.099 o más, sin header, vacío, ilegible o menor, crear (también reintentar una que ya está), renombrar, mover, papelera, ícono y formato, crear y renombrar proyectos, comentar, responder, editar, borrar, resolver e importar, y archivar, borrar y restaurar proyectos dan el 503 `app_outdated` sin escribir nada (repetir lo ya hecho anda), y leer sigue andando; la mínima y las mayores escriben todo sin duplicar; el permiso va antes; la consola no se frena; anon no llama a nada. |
+| `papelera_lectores_permisos.sql` | La papelera de páginas para quien solo ve: con una página en la papelera, su hija y una raíz en la papelera compartida sola, Ver (sobre el proyecto, sobre la raíz de arriba y sobre la página misma), Comentar y una invitada con Editar no ven la fila ni el contenido (`pull_page_updates` y la tabla), los comentarios (`list_comments`, la tabla, `comment_authors`, comentar), el archivo que solo usa esa página (`file_level`, `media_file` del portero, `files`) ni su uso de un archivo compartido, y la invitada no escribe ni renombra; Editar, una admin con Editar y el dueño sí (Editar no restaura: pide 4); el dueño crea adentro de una página de la papelera; Editar solo sobre la hija ve la hija y no la madre; una invitada con crear que reintenta un alta con el id de una página de la papelera no la ve ni la pisa; una invitada con crear manda una página a la papelera, deja de verla y no la restaura; al restaurar, Ver ve todo de nuevo con contenido, comentarios y archivo, la invitada escribe y quien comenta comenta. |
 
 **Pruebas de punta a punta** (no están en el repo): crean sus usuarios con la API de administración
 (`auth.admin.createUser`, que no pasa por el hook *Before User Created*) y les insertan un proyecto por SQL.

@@ -1,5 +1,5 @@
 -- LGA Shot Docs · la papelera de páginas no se lee con permiso de Ver (Docs/Doc_Supabase.md, "La papelera de páginas
--- y quién la ve"; decisión D21 del 2026-10-02).
+-- y quién la ve"; decisión del 2026-10-02).
 --
 -- Hasta ahora `private.user_page_level` miraba solo si el PROYECTO estaba borrado: una página en la papelera (o
 -- adentro de una) se seguía leyendo entera con Ver o Comentar sobre ella o sobre una de arriba (título, contenido,

@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+Quien solo podía ver o comentar una rama, y los invitados, leían enteras las páginas mandadas a la papelera dentro de
+ella: título, contenido, comentarios y archivos. La regla de permisos (`user_page_level`) miraba solo si el proyecto
+estaba borrado, y la política de `pages` dejaba ver cualquier fila con permiso sobre el proyecto. La migración
+`20261009120000_papelera_lectores.sql` (sin aplicar) da nivel 0 sobre una página en la papelera, o que cuelga de una,
+a quien tiene menos de Editar y a los invitados; quien edita y el dueño la siguen viendo para restaurarla. Las dos
+funciones pasan a PL/pgSQL con una sola pasada por los padres: leer el árbol es unas cuatro veces más rápido. En la
+app la página sale del árbol sin errores, y un comentario o una edición sin subir quedan rechazados con su texto
+hasta restaurarla.
+[ Papelera para lectores - Ver, Comentar e invitados no leen páginas en la papelera ]
+
 v0.099 :
 
 Una versión anterior a v0.097 abierta seguía subiendo cambios del árbol y comentarios aunque el workspace pidiera una

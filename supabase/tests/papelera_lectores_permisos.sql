@@ -1,4 +1,4 @@
--- Pruebas de la papelera de páginas para quien solo ve (20261009120000_papelera_lectores.sql, D21): una página en la
+-- Pruebas de la papelera de páginas para quien solo ve (20261009120000_papelera_lectores.sql, decisión del 2026-10-02): una página en la
 -- papelera, y lo que cuelga de ella, no se ve con Ver ni con Comentar ni siendo invitado (título, contenido,
 -- comentarios, archivos), por ningún camino; quien puede editar y no es invitado, y el dueño, sí. Restaurar devuelve
 -- el acceso. Corre dentro de una transacción que se deshace al final: no deja usuarios ni datos. Si todo pasa,

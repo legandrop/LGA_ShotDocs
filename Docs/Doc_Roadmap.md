@@ -455,6 +455,14 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
     la misma versión que corre, *Update now* sigue diciendo que falló en vez de recargar (cualquier instalación nueva
     lo borra; no pierde nada). Ver `Doc_Sincronizacion.md`, "La versión mínima, el árbol y los comentarios" y "Volver
     después de mucho tiempo sin red".
+18. **Hecho (v0.0XX): la papelera de páginas ya no se lee con Ver.** Ver, Comentar y los invitados leían enteras las
+    páginas mandadas a la papelera (título, contenido, comentarios, archivos) si veían algo de arriba: la regla de
+    permisos miraba solo si el proyecto estaba borrado (auditoría de D14). Ahora las ven solo quien edita sin ser
+    invitado y el dueño; migración `20261009120000_papelera_lectores.sql`, con su prueba SQL y
+    `src/sync/trashReaders.test.ts`. **Falta:** aplicar la migración. Menores: un pase del portero ya entregado sigue
+    sirviendo hasta que vence (8 horas, igual que al sacar un permiso); una invitada con crear que manda una página a la
+    papelera y la restaura antes de que suba lo primero recibe un rechazo en la segunda (la página queda en la
+    papelera, la restaura el dueño; no se pierde nada). Ver `Doc_Supabase.md`, "La papelera de páginas y quién la ve".
 
 ### C. Esperan a Lega
 
