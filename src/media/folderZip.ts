@@ -418,6 +418,12 @@ export interface DownloadDeps {
   stallMs?: number;
   /** El pase nuevo de un archivo (cuando el que se tenía venció): vuelve a listar su subcarpeta. */
   refresh?: (file: PlanFile) => Promise<string | null>;
+  /**
+   * El pase de un archivo que todavía no tiene (`url` vacía), recién cuando le toca: exportar (src/export/exportZip.ts)
+   * no pide miles de pases antes de empezar. Un error del portero con estado 4xx (el archivo ya no está, no terminó de
+   * subir) saltea el archivo; otro (la red) cuenta como un intento.
+   */
+  passFor?: (file: PlanFile) => Promise<string>;
   /** El texto de `MISSING_FILES.txt`. */
   missingText: (items: MissingItem[]) => string;
 }
@@ -488,6 +494,12 @@ export async function runDownload(
      * carpeta, y en un zip va una nueva que lo dice (descomprimido encima del primero, la reemplaza).
      */
     retry?: boolean;
+    /**
+     * La bajada es una parte de un zip o de una carpeta que arma otro (exportar, src/export/exportZip.ts): escribe en
+     * `zip` (ya abierto; no lo cierra) o en la carpeta del destino, sin crear las carpetas del plan ni
+     * `MISSING_FILES.txt`. Lo que falta vuelve en el resultado.
+     */
+    part?: { zip: ZipWriter | null };
   } = {},
 ): Promise<DownloadResult> {
   const signal = opts.signal;
@@ -665,6 +677,20 @@ export async function runDownload(
     throw new FileFailed(code || `HTTP ${res.status}`);
   };
 
+  /** El pase que todavía no tiene: lo que el portero niega (4xx) saltea el archivo; la red, otro intento. */
+  const passOf = async (file: PlanFile): Promise<string> => {
+    try {
+      return await deps.passFor!(file);
+    } catch (err) {
+      if (isAbort(err)) throw err;
+      const status = (err as { status?: unknown } | null)?.status;
+      if (typeof status === 'number' && status >= 400 && status < 500 && status !== 429) {
+        throw new FileFailed((err as { code?: string }).code || `HTTP ${status}`);
+      }
+      throw new TypeError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
   /** Abre el archivo con sus reintentos; si no se puede, `FileFailed`. */
   const open = async (file: PlanFile): Promise<Opened> => {
     let refreshed = false;
@@ -673,6 +699,7 @@ export async function runDownload(
       if (signal?.aborted) throw abortError();
       await ensureOnline();
       try {
+        if (!file.url && deps.passFor) file.url = await passOf(file);
         const res = await request(file, 0);
         const header = Number(res.headers.get('Content-Length'));
         const length = Number.isSafeInteger(header) && header >= 0 && res.headers.get('Content-Length') !== null ? header : null;
@@ -798,10 +825,13 @@ export async function runDownload(
     progress.missing = missing.length;
   };
 
-  const zip = target.kind === 'zip' ? new ZipWriter(target.sink, { crc: target.crc }) : null;
+  const part = opts.part ?? null;
+  const zip = part ? part.zip : target.kind === 'zip' ? new ZipWriter(target.sink, { crc: target.crc }) : null;
   const top = (path: string) => `${plan.root}/${path}`;
   try {
-    if (zip) {
+    if (part) {
+      // Las carpetas las pone quien arma el zip o la carpeta.
+    } else if (zip) {
       await zip.addDirectory(plan.root);
       for (const d of plan.dirs) await zip.addDirectory(top(d.path), dateOf(d.modified));
     } else if (target.kind === 'dir') {
@@ -896,6 +926,10 @@ export async function runDownload(
     }
     progress.current = null;
 
+    if (part) {
+      report();
+      return { done, bytes: written, missing };
+    }
     if (missing.length || (zip && opts.retry)) {
       const text = new TextEncoder().encode(deps.missingText(missing));
       if (zip) await zip.addFile(top(MISSING_NAME), text.length, new Date(), fromArray([text]));
