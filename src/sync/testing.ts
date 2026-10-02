@@ -205,14 +205,14 @@ export class FakeServer {
   // --- compactar: los snapshots (20261019120000_compactar_leer.sql, Docs/Doc_Compactar.md) -----------------------
   /** `page_snapshots`, en el orden en que se subieron. */
   readonly snapshots: StoredSnapshot[] = [];
-  /** `pages.snapshot_seq` y `pages.content_epoch` (aparte de `PageRow`: el árbol los trae solo desde la versión 16). */
+  /** `pages.snapshot_seq` y `pages.content_epoch` (aparte de `PageRow`: el árbol los trae solo desde la versión 17). */
   readonly snapshotMeta = new Map<string, { seq: number; epoch: number }>();
   /** `page_compaction`: la reserva y el "no reintentar". */
   readonly compaction = new Map<string, { claimAt: number | null; claimBy: string | null; skipUntil: number | null; skipWhy: string | null }>();
   /** Lo que pide `claim_page_compaction` (100 filas y 64 KB de cola en la base; las pruebas lo achican). */
   snapshotMinRows = 100;
   snapshotMinTailBytes = 65536;
-  /** Como una base que dice la versión 16 pero no tiene `pull_page_content` (PGRST202). */
+  /** Como una base que dice la versión 17 pero no tiene `pull_page_content` (PGRST202). */
   pullContentMissing = false;
   /** Los pedidos de contenido que llegaron, en orden (`pull_page_updates` o `pull_page_content`). */
   readonly contentCalls: string[] = [];
@@ -221,7 +221,7 @@ export class FakeServer {
   /** Restaurar sin el paso del script que vacía `page_snapshots` (la vigencia mira el id de la fila final). */
   keepSnapshotsOnRestore = false;
 
-  /** Prende los snapshots (`snapshot_min_version`) con la base en la versión 16. Llamarlo después de los otros `enable`. */
+  /** Prende los snapshots (`snapshot_min_version`) con la base en la versión 17. Llamarlo después de los otros `enable`. */
   enableSnapshots(minVersion = 0.001): void {
     this.settings = {
       ...(this.settings ?? { generation: 1, minAppVersion: null, mediaUrl: null, schemaVersion: 1 }),
@@ -230,7 +230,7 @@ export class FakeServer {
     };
   }
 
-  /** La base en la versión 16 con los snapshots apagados (la migración aplicada, como queda al publicarla). */
+  /** La base en la versión 17 con los snapshots apagados (la migración aplicada, como queda al publicarla). */
   migrateSnapshots(): void {
     this.settings = {
       ...(this.settings ?? { generation: 1, minAppVersion: null, mediaUrl: null, schemaVersion: 1 }),
@@ -290,15 +290,6 @@ export class FakeServer {
     return n;
   }
 
-  /** `private.page_in_trash`. */
-  pageInTrash(pageId: string): boolean {
-    const seen = new Set<string>();
-    for (let cur: string | null = pageId; cur && !seen.has(cur); cur = this.pages.get(cur)?.parent_id ?? null) {
-      seen.add(cur);
-      if (this.pages.get(cur)?.deleted_at) return true;
-    }
-    return false;
-  }
 
   /** Prende el interruptor (`clean_min_version`) con la base en la versión 12. Llamarlo después de los otros `enable`. */
   enableClean(minVersion = 0.001): void {
@@ -1234,7 +1225,7 @@ export class FakeRemote
     const ids = new Set(projectIds);
     // `clean_seq`, como pide la columna la app: con la versión 12 o más (y si la base la tiene).
     const clean = (schemaVersion ?? 0) >= CLEAN_SCHEMA_VERSION && (this.server.settings?.schemaVersion ?? 0) >= CLEAN_SCHEMA_VERSION;
-    // `snapshot_seq` y `content_epoch`: con la versión 16 o más (y si la base las tiene).
+    // `snapshot_seq` y `content_epoch`: con la versión 17 o más (y si la base las tiene).
     const snap = (schemaVersion ?? 0) >= SNAPSHOT_SCHEMA_VERSION && this.server.snapshotsMigrated();
     return [...this.server.pages.values()]
       .filter((p) => ids.has(p.workspace_id) && !this.server.projectDeleted(p.workspace_id))

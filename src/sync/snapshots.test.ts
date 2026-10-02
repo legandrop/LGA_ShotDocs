@@ -286,7 +286,7 @@ describe('sin snapshots, la app se comporta y pide exactamente lo mismo que hoy'
     expect(await text(b, page)).toBe('hola ');
     expect(server.contentCalls.every((c) => c === 'pull_page_updates')).toBe(true);
 
-    // Dice la versión 16 y los tiene prendidos, pero falta la función: se baja igual, por pull_page_updates.
+    // Dice la versión 17 y los tiene prendidos, pero falta la función: se baja igual, por pull_page_updates.
     server.enableSnapshots(0.5);
     server.pullContentMissing = true;
     server.contentCalls.splice(0);
@@ -917,8 +917,8 @@ describe('SupabaseRemote: qué pide', () => {
     return { remote: new SupabaseRemote(client, '0.124'), calls };
   }
 
-  it('sin la versión 16, o con los snapshots apagados: el mismo pedido de siempre (pull_page_updates)', async () => {
-    for (const opts of [{ schema: 15, snapshotMin: null }, { schema: 16, snapshotMin: null }]) {
+  it('sin la versión 17, o con los snapshots apagados: el mismo pedido de siempre (pull_page_updates)', async () => {
+    for (const opts of [{ schema: 16, snapshotMin: null }, { schema: 17, snapshotMin: null }]) {
       const { remote, calls } = fakeBase(opts);
       await remote.fetchWorkspaceSettings();
       const rows = await remote.pullContent('p', 0, 500);
@@ -926,13 +926,13 @@ describe('SupabaseRemote: qué pide', () => {
       expect(rows.map((r) => [r.seq, r.snapshotId, r.contentEpoch])).toEqual([[1, undefined, undefined], [2, undefined, undefined]]);
     }
     // Sin haber leído los ajustes todavía, también.
-    const { remote, calls } = fakeBase({ schema: 16, snapshotMin: '0.500' });
+    const { remote, calls } = fakeBase({ schema: 17, snapshotMin: '0.500' });
     await remote.pullContent('p', 0, 500);
     expect(calls).toEqual(['rpc/pull_page_updates']);
   });
 
   it('prendidos: pull_page_content, con el snapshot y la época como números', async () => {
-    const { remote, calls } = fakeBase({ schema: 16, snapshotMin: '0.500' });
+    const { remote, calls } = fakeBase({ schema: 17, snapshotMin: '0.500' });
     const settings = await remote.fetchWorkspaceSettings();
     expect(settings?.snapshotMinVersion).toBe(0.5);
     const rows = await remote.pullContent('p', 0, 500);
@@ -941,7 +941,7 @@ describe('SupabaseRemote: qué pide', () => {
   });
 
   it('una base sin pull_page_content: baja con pull_page_updates y no lo vuelve a pedir por 10 minutos', async () => {
-    const { remote, calls } = fakeBase({ schema: 16, snapshotMin: 0.5, contentMissing: true });
+    const { remote, calls } = fakeBase({ schema: 17, snapshotMin: 0.5, contentMissing: true });
     await remote.fetchWorkspaceSettings();
     const rows = await remote.pullContent('p', 0, 500);
     expect(rows.map((r) => r.seq)).toEqual([1, 2]);
@@ -949,16 +949,16 @@ describe('SupabaseRemote: qué pide', () => {
     expect(calls.filter((c) => c.startsWith('rpc/'))).toEqual(['rpc/pull_page_content', 'rpc/pull_page_updates', 'rpc/pull_page_updates']);
   });
 
-  it('el árbol pide snapshot_seq y content_epoch desde la 16; si faltan igual, sigue sin ellas', async () => {
-    const a = fakeBase({ schema: 15, snapshotMin: null });
-    await a.remote.fetchTree(['w'], 15);
+  it('el árbol pide snapshot_seq y content_epoch desde la 17; si faltan igual, sigue sin ellas', async () => {
+    const a = fakeBase({ schema: 16, snapshotMin: null });
+    await a.remote.fetchTree(['w'], 16);
     expect(a.calls.some((c) => c.includes('snapshot_seq'))).toBe(false);
-    const b = fakeBase({ schema: 16, snapshotMin: null });
-    await b.remote.fetchTree(['w'], 16);
+    const b = fakeBase({ schema: 17, snapshotMin: null });
+    await b.remote.fetchTree(['w'], 17);
     expect(b.calls).toHaveLength(1);
     expect(b.calls[0]).toContain('snapshot_seq,content_epoch');
-    const c = fakeBase({ schema: 16, snapshotMin: null, columnsMissing: true });
-    expect(await c.remote.fetchTree(['w'], 16)).toEqual([]);
+    const c = fakeBase({ schema: 17, snapshotMin: null, columnsMissing: true });
+    expect(await c.remote.fetchTree(['w'], 17)).toEqual([]);
     expect(c.calls).toHaveLength(2);
     expect(c.calls[1]).not.toContain('snapshot_seq');
     expect(c.calls[1]).toContain('clean_seq');

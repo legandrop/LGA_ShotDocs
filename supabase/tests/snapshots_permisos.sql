@@ -769,7 +769,7 @@ begin
     'las filas de R cambiaron';
   assert left(pg_temp.rows_of('d1b1'), length((select k from rows_before))) = (select k from rows_before),
     'las filas de K cambiaron';
-  assert (select schema_version from public.workspace_settings where id) >= 16, 'schema_version no es 16';
+  assert (select schema_version from public.workspace_settings where id) >= 17, 'schema_version no es 17';
 end;
 $$;
 

@@ -21,7 +21,7 @@
 --
 -- No toca `page_updates`, `push_page_update` ni `pull_page_updates`: las versiones anteriores de la app no se enteran.
 -- Con el interruptor apagado (o sin ningún snapshot), `pull_page_content` devuelve exactamente lo que devuelve
--- `pull_page_updates` (lo llama). Sube `schema_version` a 16: desde ahí la app pide `snapshot_seq` y `content_epoch`
+-- `pull_page_updates` (lo llama). Sube `schema_version` a 17: desde ahí la app pide `snapshot_seq` y `content_epoch`
 -- con el árbol. Necesita `pgcrypto` (`extensions.digest`), que Supabase ya trae.
 
 -- ---------------------------------------------------------------------------------------------------
@@ -534,8 +534,8 @@ grant execute on function public.skip_page_compaction(uuid, text) to authenticat
 grant execute on function public.invalidate_page_snapshot(uuid, text) to authenticated;
 
 -- ---------------------------------------------------------------------------------------------------
--- 6. Versión de la base: la app pide `snapshot_seq` y `content_epoch` con el árbol desde la 16
+-- 6. Versión de la base: la app pide `snapshot_seq` y `content_epoch` con el árbol desde la 17
 -- ---------------------------------------------------------------------------------------------------
-update public.workspace_settings set schema_version = 16 where id and schema_version < 16;
+update public.workspace_settings set schema_version = 17 where id and schema_version < 17;
 
 notify pgrst, 'reload schema';

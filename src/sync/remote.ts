@@ -56,7 +56,7 @@ export interface Remote {
   pushUpdate(pageId: string, clientUpdateId: string, update: Uint8Array): Promise<number>;
   pullUpdates(pageId: string, afterSeq: number, limit: number): Promise<RemoteUpdate[]>;
   /**
-   * Como `pullUpdates`, por `pull_page_content` (compactar, versión 16 de la base; Docs/Doc_Compactar.md, sección 5): la
+   * Como `pullUpdates`, por `pull_page_content` (compactar, versión 17 de la base; Docs/Doc_Compactar.md, sección 5): la
    * primera fila puede ser un snapshot (`snapshotId`, con `seq` = la última fila que junta) y cada fila trae la época de
    * contenido de la página. Con los snapshots apagados o una base sin la función, hace lo mismo que `pullUpdates`. Sin
    * el método (otras implementaciones), se baja con `pullUpdates`.
@@ -240,7 +240,7 @@ export const PROJECT_DRIVE_SCHEMA_VERSION = 10;
  * `pages.content_epoch`, `pull_page_content` y las funciones de compactar. Constante propia: no sube `DB_SCHEMA_VERSION`
  * (una base sin la migración sigue andando igual, sin aviso).
  */
-export const SNAPSHOT_SCHEMA_VERSION = 16;
+export const SNAPSHOT_SCHEMA_VERSION = 17;
 
 /** El tramo a compactar que devuelve `claim_page_compaction` (Docs/Doc_Compactar.md, 4.2). */
 export interface CompactionClaim {
@@ -665,7 +665,7 @@ export class SupabaseRemote
       clean_min_version?: number | string | null;
       snapshot_min_version?: number | string | null;
     };
-    // Los snapshots se bajan con `pull_page_content` solo prendidos y con la base en la versión 16 (si no, todo sale
+    // Los snapshots se bajan con `pull_page_content` solo prendidos y con la base en la versión 17 (si no, todo sale
     // por `pull_page_updates`, como siempre).
     this.snapshotsOn = Number(row.schema_version) >= SNAPSHOT_SCHEMA_VERSION && extra.snapshot_min_version != null;
     return {
@@ -680,7 +680,7 @@ export class SupabaseRemote
       autoPurgeFiles: extra.auto_purge_files === true,
       // Sin la columna (base anterior a la versión 12), apagado.
       cleanMinVersion: extra.clean_min_version == null ? null : Number(extra.clean_min_version),
-      // Sin la columna (base anterior a la versión 16), apagados.
+      // Sin la columna (base anterior a la versión 17), apagados.
       snapshotMinVersion: extra.snapshot_min_version == null ? null : Number(extra.snapshot_min_version),
     };
   }
@@ -702,7 +702,7 @@ export class SupabaseRemote
 
   /** Desde cuándo la base no tiene `pages.clean_seq` (aunque diga la versión 12); se reintenta cada tanto. */
   private cleanSeqMissingAt = 0;
-  /** Lo mismo con `pages.snapshot_seq` y `content_epoch` (versión 16). */
+  /** Lo mismo con `pages.snapshot_seq` y `content_epoch` (versión 17). */
   private snapshotColumnsMissingAt = 0;
   /** Lo mismo con `pull_page_content`: mientras tanto se baja con `pull_page_updates`. */
   private pullContentMissingAt = 0;
@@ -715,7 +715,7 @@ export class SupabaseRemote
     let after: string | null = null;
     // `clean_seq` solo con la versión 12 o más; si falta igual, se sigue sin ella un rato (como `settings`).
     const clean = (schemaVersion ?? 0) >= CLEAN_SCHEMA_VERSION && Date.now() - this.cleanSeqMissingAt >= 10 * 60_000;
-    // `snapshot_seq` y `content_epoch` con la 16 o más; si faltan igual, se dejan primero ellas (son las más nuevas).
+    // `snapshot_seq` y `content_epoch` con la 17 o más; si faltan igual, se dejan primero ellas (son las más nuevas).
     const snap = (schemaVersion ?? 0) >= SNAPSHOT_SCHEMA_VERSION && Date.now() - this.snapshotColumnsMissingAt >= 10 * 60_000;
     for (;;) {
       const columns =

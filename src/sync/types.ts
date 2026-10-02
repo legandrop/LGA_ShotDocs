@@ -16,13 +16,13 @@ export interface PageRow {
   clean_seq?: number;
   /**
    * El `up_to_seq` del snapshot vigente (0: ninguno; Docs/Doc_Compactar.md). Solo una pista: la base decide con el
-   * snapshot vigente de verdad. Ausente con una base anterior a la versión 16 y en las copias de versiones anteriores.
+   * snapshot vigente de verdad. Ausente con una base anterior a la versión 17 y en las copias de versiones anteriores.
    */
   snapshot_seq?: number;
   /**
    * La época de contenido de la página: sube cada vez que se invalida una cadena de snapshots. Si un dispositivo aplicó
    * un snapshot de la página y ve otra época, la vuelve a bajar (Docs/Doc_Compactar.md, sección 12). Ausente con una
-   * base anterior a la versión 16.
+   * base anterior a la versión 17.
    */
   content_epoch?: number;
   /**
@@ -200,7 +200,7 @@ export interface WorkspaceSettings {
    */
   cleanMinVersion?: number | null;
   /**
-   * El interruptor de los snapshots de compactar (`snapshot_min_version`, versión 16 de la base): `null`, apagados (todos
+   * El interruptor de los snapshots de compactar (`snapshot_min_version`, versión 17 de la base): `null`, apagados (todos
    * bajan con `pull_page_updates`, como siempre); con un número, se baja con `pull_page_content`.
    */
   snapshotMinVersion?: number | null;
