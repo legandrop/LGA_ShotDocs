@@ -47,6 +47,7 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
     'Tooltip.tsx',
     'HelpDialog.tsx',
     'FolderDialog.tsx',
+    'FolderDownload.tsx',
     'InstallDialog.tsx',
     'OfflinePart.tsx',
     'HistoryPanel.tsx',
