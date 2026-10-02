@@ -136,9 +136,10 @@ export function createUndoRunner(deps: UndoUiDeps) {
         return;
       }
       if (result !== 'nothing' && result !== 'failed') return;
-      // No cambió nada: en el mismo ⌘Z se sigue solo si lo anterior es de esta misma página.
+      // No cambió nada: en el mismo ⌘Z se sigue solo si lo anterior es de esta misma página. Si Yjs tiró un error
+      // (B.22), se avisa y se frena siempre: el próximo ⌘Z sigue con lo anterior.
       const after = timeline.peek(project, kind);
-      if (after?.kind === 'page' && after.pageId === pageId) continue;
+      if (result === 'nothing' && after?.kind === 'page' && after.pageId === pageId) continue;
       deps.notify(kind === 'undo' ? t('undo.nothingThere', { undo: label('undo') }) : t('undo.nothingThereRedo', { redo: label('redo') }));
       return;
     }
