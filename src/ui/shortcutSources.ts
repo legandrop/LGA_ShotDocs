@@ -58,6 +58,7 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
     'InstallDialog.tsx',
     'OfflinePart.tsx',
     'HistoryPanel.tsx',
+    'ExportDialog.tsx',
     'AssistantPanel.tsx',
     'AssistantSettings.tsx',
     'SignOutDialog.tsx',

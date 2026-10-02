@@ -417,6 +417,11 @@ export const help = {
     en: "{pageBreak} or / Page break makes what follows start on a new sheet, in the Page marks and in the PDF. It shows as a dashed line; Backspace right after it removes it. On a free page it only counts when printing.",
     es: "{pageBreak} o / Salto de hoja hace que lo que sigue empiece en una hoja nueva, en las marcas de hoja y en el PDF. Se ve como una línea punteada; Retroceso justo después lo saca. En una página libre cuenta solo al imprimir.",
   },
+  'help.export.title': { en: "Export pages and projects as one PDF", es: "Exportar páginas y proyectos en un solo PDF" },
+  'help.export.text': {
+    en: "⋯ › Export… makes one PDF with the page and the pages inside it; in the project list, Export project… does the whole project. It starts with a contents page that links to each page and says on which PDF page it starts; every page keeps its page size (in Chrome or Edge on a computer). Comments are left out unless you tick Comments, and they show names, never email addresses. Pages in the trash are never included. In the print dialog choose Save as PDF and leave margins and scale as they are.",
+    es: "⋯ › Exportar… arma un solo PDF con la página y las de adentro; en la lista de proyectos, Exportar proyecto… hace el proyecto entero. Empieza con un índice que lleva a cada página y dice en qué hoja empieza; cada página sale con su tamaño de hoja (en Chrome o Edge en una computadora). Los comentarios no van salvo que tildes Comentarios, y llevan nombres, nunca correos. Lo que está en la papelera no sale nunca. En el diálogo de imprimir elegí Guardar como PDF y dejá los márgenes y la escala como están.",
+  },
   'help.pdf.title': { en: "PDF and printing", es: "PDF e impresión" },
   'help.pdf.text': {
     en: "{print} or ⋯ › Export PDF / Print opens the browser's print dialog with the same sheet breaks you see; choose Save as PDF there.",

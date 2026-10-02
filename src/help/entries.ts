@@ -112,6 +112,8 @@ const TEMPLATES = '0.117';
 const DAY_REPORTS = '0.121';
 /** El link público, *Can view* (Doc_Link_Publico.md, entrega 1): la versión se pone al publicar, igual que en el changelog. */
 const PUBLIC_LINK = '0.111';
+/** Exportar una rama o un proyecto como PDF (P.22, Doc_Exportar.md, entrega 1): la versión se pone al publicar. */
+const EXPORT_PDF = '0.122';
 /** Las menciones en comentarios (P.21, Doc_Menciones.md, entrega 1): la versión se pone al publicar, igual que en el changelog. */
 const MENTIONS = '0.120';
 /** Ver las anotaciones de las fotos (P.20, Doc_Anotar_Fotos.md, entrega 1): la versión se pone al publicar. */
@@ -550,6 +552,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     since: PAGE_BREAK,
   },
   { id: 'pdf', section: 'print', title: 'help.pdf.title', text: 'help.pdf.text', keys: { print: 'print' }, showMe: 'page-menu', since: BEFORE_HELP },
+  {
+    id: 'export',
+    section: 'print',
+    title: 'help.export.title',
+    text: 'help.export.text',
+    words: ['exportar', 'export', 'pdf', 'índice', 'contents', 'proyecto entero', 'whole project', 'entregar', 'cliente', 'client', 'reporte'],
+    since: EXPORT_PDF,
+  },
 
   // --- Preferencias ---
   { id: 'prefs', section: 'prefs', title: 'help.prefs.title', text: 'help.prefs.text', since: BEFORE_HELP },

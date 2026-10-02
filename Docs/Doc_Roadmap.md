@@ -371,11 +371,19 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   de exportación medido), 1 (PDF), 2 (zip), 3 (volver, con la migración de `imported_from`), 4 (carpetas de Drive,
   reusar archivos, link público). **Entrega 0 hecha (v0.115):** el editor de exportación en `src/export/`
   (sin interfaz), medido con 300 páginas y 2219 fotos en Chromium: 14,5 a 38,9 s, nada guardado cambia y las hojas de
-  las 300 iguales a las marcas de la pantalla. Sigue la entrega 1 (PDF), con lo que dejó la auditoría de la 0: una foto
-  que no carga cuesta 14 s por página (dos esperas que se suman: una sola, más corta); el editor acumula el deshacer
-  y retiene las páginas anteriores (~0,4 MB cada 100: apagar el historial); exportar una rama sola corta distinto que la
-  pantalla en 8 de 25 casos (pierde el renglón de encabezado); una marca de texto desconocida borra ese texto en la
-  copia y el aviso no lo usa nadie; el proyecto de prueba no tiene páginas de hoja libre.
+  las 300 iguales a las marcas de la pantalla. **Entrega 1 hecha (v0.122): el PDF de una rama o de un proyecto**
+  (*Export…* en el menú de la página, *Export project…* en el selector): índice con la hoja de cada página y links
+  internos, cada página con su hoja (Chrome y Edge de computadora; los demás, todo con la hoja de la raíz y avisado),
+  fotos con sus anotaciones y achicadas a su ancho impreso en Workers, comentarios opcionales bajados antes y sin
+  correos, topes de páginas y de píxeles (menos con menos de 8 GB). 300 páginas en ~30 s (Chromium sin ventana);
+  resueltas O3 a O7 de la auditoría de la 0 y los tres bloqueantes y O1 a O7 de la auditoría de la 1. Falta a mano:
+  Safari, Firefox, el iPhone, una compu de 8 GB y guardar de verdad en Chrome y Edge (`Doc_Exportar.md`, "Cómo quedó
+  la entrega 1"). Sigue la entrega 2 (zip).
+  Observaciones de la re-verificación de la entrega 1: (R1) el Imprimir del menú del navegador mientras se arma el PDF
+  puede llevar la vista de la página en curso: sacar `print-output` a esa vista hasta `place()`; (R2) la prueba de la
+  vuelta al achicador del hilo principal no distingue la mutación: hacerlo inyectable en `workerResizer`; (R3) con
+  *Comments* tildada se hace un pedido por página, en fila: medirlo contra Supabase con 300 páginas y, si pesa, pedir de
+  a varias.
 - **P.21 Menciones en comentarios: *@persona*** (Lega, 2026-10-02): escribir `@` en un comentario, elegir a alguien y
   que le llegue un aviso en la app; por correo cuando haya clave de Resend (C.12). **Entrega 1 programada (v0.120;
   migración `20261015120000_menciones.sql` sin aplicar):** el `@` con la lista, el pintado, la cola, la campana y el
