@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.139 :
+
+**Dictar al reporte, entregas V2 y V3** (P.27): sin red, *Save for later* solo dejaba la nota en el borrador de su
+página, y el único micrófono era el del teclado, que obliga a tocar un campo. V2: *Save for later* pasa la nota a una
+cola del dispositivo (`shotdocs-dictation`, sin subir su versión) y vacía el campo recién con la escritura confirmada;
+el indicador de sincronización suma *N voice notes to place* con la lista, y la hoja las ubica de a una con su vista
+previa o las pega como texto. Nunca se borra sola. V3: un botón de 72 px graba pedazos de 1 s en la cola (*Recording*
+recién con el primero guardado; `ended` y `pagehide` cortan y guardan), con nivel, tope de 2 minutos y pantalla
+despierta; transcribe con OpenAI, Gemini o un compatible (WebM primero, plan B a WAV) y ubica. *Voice* usa la clave del
+asistente o una segunda cifrada; *Insert at cursor*; micrófono en *Ask…*.
+[ Dictar al reporte V2 y V3 - la cola sin red y el micrófono propio: grabar por pedazos, transcribir con la clave de la persona e insertar donde se escribía ]
+
 v0.138 :
 
 La clave del asistente sincronizada, entrega S1 (P.24, D72 → B, `Doc_Clave_Sincronizada.md`). La clave había que

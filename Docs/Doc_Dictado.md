@@ -1,7 +1,7 @@
 # Dictado por voz y notas informales que se ubican en el reporte
 
-**Estado: entrega V1 implementada (v0.135)**; V2 a V4, diseño. Cómo quedó V1 y lo que cambió al implementarla: sección
-15, al final. Roadmap P.27; pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.123, con el
+**Estado: entregas V1 (v0.135), V2 (v0.139) y V3 (v0.139) implementadas**; V4, diseño. Cómo quedaron y lo que cambió
+al implementarlas: secciones 15 a 17, al final. Roadmap P.27; pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.123, con el
 asistente A1 publicado (v0.118) y A2 terminado en su rama (`lega/asistente-a2`, en auditoría). Las decisiones están
 propuestas (DI1 a DI9, sección 13) y valen hasta que Lega diga otra cosa. Lo medido está en "Cómo se midió", al final;
 los precios y el CORS se verificaron el 2026-10-02 en las páginas oficiales y con pedidos sin clave. **Auditado el mismo
@@ -884,3 +884,112 @@ es equivalente (`applyChanges` también mira el permiso).
 **Lo que prueba Lega** (no se puede acá): la calidad con una clave real (10.3), el dictado del teclado dentro de una
 celda y de un comentario en el iPhone y en Android, y Ctrl+Alt+Shift+D / ⌘⌥⇧D en navegadores
 reales (en Firefox para la Mac, Option puede llegar como AltGraph y el atajo no andaría).
+
+## 16. Cómo quedó V2 (v0.139)
+
+**Qué hay.** *Save for later* (sin red, o después de un pedido que falló) pasa la nota del campo a la cola del
+dispositivo y dice *Saved. It will be placed when you're back online*; el campo se vacía solo cuando la cola confirmó
+la escritura (si falla: *The note couldn't be saved on this device. It's still in the field.*). Las notas se ven en
+tres lugares: el aviso *N voice notes to place* debajo del indicador de sincronización (en el teléfono, dentro del menú
+lateral) con la lista de todas (página, hora, texto; *Open*, *Copy text*, *Discard* con confirmación), el número sobre
+el botón redondo del teléfono (las de esa página) y *Saved notes* en la hoja (las de esa página, con *Open*). Una nota
+abierta en la hoja muestra *Place* (con red y la política que lo deje; Ctrl/⌘+Enter), *Insert as text* (párrafo al final
+de la página, como *Add to Summary* sin *Summary*), *Copy* y *Discard* (pregunta). Ubicarla es el recorrido de V1 contra
+la página como está en ese momento, de a una.
+
+**Archivos.** `dictationDb.ts` (la base `shotdocs-dictation`, la misma versión 1), `queue.ts` (la cola, sus avisos entre
+pestañas con `BroadcastChannel` y `useQueuedNotes`), `VoiceNotes.tsx` (el aviso y la lista, en la primera carga),
+`dictationUi.ts` (el pedido de abrir una nota en su página: la hoja se abre cuando el editor de esa página se anota) y
+la hoja. Textos nuevos de la hoja en `src/i18n/lazy/dictation.ts`; los del aviso, en `sync.ts`. Ayuda: *Notes saved for
+later*.
+
+**Lo que cambió al implementar:**
+
+- **Una sola base, sin subir la versión.** Las notas (`n:<id>`) y los pedazos de audio de V3 (`c:<id>:<número>`) van en
+  el mismo almacén `notes`, separados por el prefijo de la clave: una pestaña de V1 abierta sigue abriendo la base. Los
+  pedazos se guardan como `ArrayBuffer` (un `Blob` en IndexedDB falló en Safari viejos).
+- **La nota sale de la cola al aplicar, no con *Done*:** primero se guarda en el borrador de su página (*Your note* y lo
+  que quedó en *Couldn't place*, el mecanismo de V1 que ya dura hasta *Done*) y recién confirmado eso se saca de la cola;
+  si guardar falla, sigue en la cola. Así la nota vive en un solo lugar. *Undo* la devuelve a la cola (en orden con la
+  escritura de *Apply*: no se pueden cruzar).
+- ***Insert as text* también sin red o con la política en *Off*:** no manda nada afuera del dispositivo. *Place* sí
+  respeta las dos cosas.
+- **Salir de la cuenta** no borra la cola (es por correo: vuelve al entrar con el mismo). El número en la ventana de
+  salir y la casilla para borrarlas quedan para cuando cierre la clave sincronizada (S1), que reescribe esa ventana.
+- El estado *transcribed* se llama `ready` (una nota escrita nace lista); `recording` y `failed` son de V3.
+
+**Pruebas.** 9 de Vitest en `queue.test.tsx` (la cola, el recorrido de aceptación con recargar y volver la red,
+*Discard* con confirmación, la escritura que falla, *Insert as text* que no pudo escribir, la política al volver la red,
+sin Editar, el aviso con su lista y el pedido de abrir). Recorrido en Chromium y en WebKit de Playwright, sin login y
+con el proveedor falso: 24 de 24 en cada uno (las tres pruebas de aceptación, recargar, teléfono de 390 px). Mutantes de
+las guardas de la cola: 10 de 11 mueren; el que vive (Ctrl+Enter sin mirar la política) es equivalente: *Place* vuelve a
+pedir la política antes de mandar.
+
+## 17. Cómo quedó V3 (v0.139)
+
+**Qué hay.** En *Dictate to report*, arriba del campo, el botón redondo de 72 px: tocar para grabar y otra vez para
+cortar. Mientras abre el micrófono dice *Getting the microphone…*; *Recording · 0:12 · tap to stop* aparece recién con el
+primer pedazo guardado en el dispositivo (C5); a 1:45 avisa el corte y a los 2:00 corta solo. Al lado, el nivel del
+micrófono y el link *Voice*. Al cortar: *Transcribing…*, *Placing…* y la vista previa de V1 (R1). Sin red (o con la
+política que no deja), la grabación queda en la cola sin preguntar (*Saved. It will be transcribed and placed when
+you're back online.*) y se transcribe sola al volver la red, sin ubicar nada. Una nota con audio abierta en la hoja
+muestra la grabación sin transcribir (*Transcribe*), el error (*Try again*) o la transcripción en un campo editable, con
+*Place*, *Insert at cursor*, *Insert as text*, *Copy* y *Discard*. En el asistente, un micrófono chico en *Ask…* suma lo
+dictado al campo, sin mandarlo.
+
+**Archivos.** `recorder.ts` (grabar: el formato, los pedazos, el primer pedazo, `ended` y `pagehide`, el tope, el nivel,
+`wakeLock` y la vibración), `transcribe.ts` (OpenAI, Gemini y compatible; las pistas de la página; el plan B a WAV),
+`voiceSettings.ts` y `VoiceSettingsDialog.tsx` (*Voice*), `voiceQueue.ts` (la grabación en la cola, transcribir sin
+borrar nunca, la política al mandar), `caretInsert.ts` (*Insert at cursor*) y `AskMic.tsx`; la grabación cortada se
+cierra sola en `queue.ts` (`recoverRecordings`).
+
+**Lo que cambió al implementar:**
+
+- ***Voice* es una ventana propia**, que se abre desde la hoja (el link *Voice*, o el micrófono si todavía no hay con qué
+  transcribir) y desde el micrófono de *Ask…*; no es una sección de *Assistant settings*, que reescribe la entrega S1 de
+  la clave sincronizada. Con el asistente en OpenAI, Gemini o un compatible usa esa clave, leída con la misma API del
+  asistente (`loadSettings` y `readKey`, sin tocar `keyStore.ts`); si no (Anthropic), pide una segunda clave, cifrada
+  igual (AES-GCM, llave del dispositivo no exportable) en la base `shotdocs-dictation` (claves `v:<correo>` y `k:aes` del
+  almacén `notes`; la versión no sube). Cuando exista la sincronización (D72), esta clave tiene que seguirla (roadmap).
+  *Test* pide la lista de modelos (no cuesta).
+- **Modelos por defecto:** `gpt-4o-mini-transcribe` (OpenAI), `gemini-2.5-flash-lite` (Gemini) y `whisper-1`
+  (compatible); se cambian en *Voice*. Las pistas van en `prompt` (OpenAI) o en el pedido (Gemini): la jerga fija y los
+  rótulos de la página (filas, columnas, *Slate*, planos, títulos), nunca el texto de las celdas.
+- **El reconocimiento del navegador (B de 4.3) no se hizo:** era optativo y apagado, manda el audio a Google o Apple sin
+  que la persona lo elija y no existe en la app instalada del iPhone.
+- **La grabación cortada** (la pestaña murió grabando) se cierra al volver a leer la cola: con algún pedazo pasa a
+  `saved`; sin ninguno, a `failed` (*The recording is empty.*) para que la persona la descarte. Nunca se borra sola.
+- **Transcribir nunca borra:** una nota sale de la cola solo con las acciones de V2 (y con *Insert at cursor* ya escrito).
+  Un corte de red la deja `saved` (se reintenta sola); un error del proveedor, `failed` con el texto del error.
+- ***Insert at cursor*** escribe en la selección de la página que quedó al ir a la hoja (una edición más, sin abrir el
+  teclado) o en el último campo de texto donde estaba el foco (un comentario), con espacios si hacen falta. Si no hay
+  dónde, lo dice y la nota sigue.
+- **El micrófono de *Ask…* graba en memoria**, no en la cola: un pedido al asistente no es una nota del reporte, y sin
+  red no hay asistente.
+- La nota que se está grabando no aparece en las listas ni en el número hasta que se corta.
+
+**Pruebas.** Vitest: 17 en `voice.test.ts` (grabar con un `MediaRecorder` simulado: el primer pedazo, el que no se
+guarda, los cortes, el tope, sin permiso; los adaptadores con `fetch` simulado, el plan B, los errores sin la clave;
+*Voice*; la cola con audio y la política) y 5 en `voicePanel.test.tsx` (R1 sin teclado, sin red, *Insert at cursor* en
+un comentario y en la página, sin dónde escribir, el micrófono sin clave de voz). Recorrido en Chromium con el micrófono
+falso: 31 de 31 (72 px, *Recording* con el primer pedazo guardado, WebM/Opus, el nivel, el audio en multipart como
+`note.webm`, R1, R3 sin red con la transcripción sola al volver, cerrar la hoja y cerrar la pestaña grabando: lo
+guardado se decodifica y sin el primer pedazo no, *Insert at cursor*, *Voice*, *Ask…*, teléfono de 390 px). El WebKit
+de Playwright en Windows no trae micrófono: el iPhone lo prueba Lega. Mutantes de las guardas: 16 de 16 mueren.
+
+**Correcciones de la auditoría de V2 y V3** (aprobado con observaciones):
+
+- **O1, dos pestañas:** la misma nota se transcribía dos veces y la segunda pisaba la primera (aun una corrección). Ahora
+  una pestaña la reclama en una transacción antes de mandarla (`claimNote`: solo si sigue sin transcribir y nadie la
+  tiene; el reclamo vence a los 90 s si esa pestaña murió), y el resultado se escribe solo si la nota sigue reclamada por
+  ella y sin transcribir (`settleClaim`): nunca pisa otra transcripción ni lo que la persona corrigió.
+- **O2, *Insert at cursor*** reemplazaba el texto elegido. Ahora nunca lo borra: lo dictado va después de lo elegido (en
+  la página y en un campo).
+- **O3:** con la red «encendida» y un proveedor que no responde, la nota queda `saved`; se reintenta al volver la app al
+  frente y cada minuto, hasta 10 veces por sesión.
+- **O4:** pruebas para la segunda clave a otra dirección, volver a transcribir una nota ya transcrita, las pistas sin el
+  texto de las celdas, los pedazos que actualizan la nota sin que la propia pestaña la dé por cortada, la nota que se
+  graba fuera de las listas y el primer pedazo que no se guarda sin dejar una nota vacía (`voice.test.ts` pasa a 25).
+- **O5** (salir con «olvidar la clave» no borra la clave de voz ni cuenta las notas) queda para la tanda de S1, en el
+  roadmap. *Undo* de una nota con audio la devuelve sin su grabación (se borró al aplicar): queda el texto transcrito, que
+  es lo que importa (DI7).

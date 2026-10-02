@@ -112,6 +112,10 @@ const ASSISTANT = '0.118';
 const ASSISTANT_A2 = '0.126';
 /** *Dictate to report* (Docs/Doc_Dictado.md, entrega V1): la versión la pone quien publica. */
 const DICTATION = '0.135';
+/** *Dictate to report*, entrega V2 (la cola sin red): la versión la pone quien publica. */
+const DICTATION_QUEUE = '0.139';
+/** *Dictate to report*, entrega V3 (el micrófono propio): la versión la pone quien publica. */
+const DICTATION_VOICE = '0.139';
 /** Las plantillas de fábrica (Docs/Doc_Plantillas.md, entregas 0 y 1): la versión se ajusta al publicar. */
 const TEMPLATES = '0.117';
 /** Las plantillas propias (Docs/Doc_Plantillas.md, entrega 3): la versión la pone quien publica. */
@@ -303,6 +307,22 @@ export const HELP_ENTRIES: HelpEntry[] = [
     keys: { open: 'dictate', place: 'dictationPlace', apply: 'assistantApply', undo: 'undo' },
     words: ['dictar', 'dictado', 'voz', 'nota', 'reporte', 'ubicar', 'anotalo donde corresponda', 'dictate', 'dictation', 'voice', 'note', 'report', 'place', "couldn't place", 'asistente', 'assistant'],
     since: DICTATION,
+  },
+  {
+    id: 'dictationQueue',
+    section: 'writing',
+    title: 'help.dictationQueue.title',
+    text: 'help.dictationQueue.text',
+    words: ['sin red', 'sin internet', 'guardar para después', 'notas guardadas', 'notas de voz', 'insertar como texto', 'offline', 'save for later', 'saved notes', 'voice notes', 'insert as text', 'dictar', 'dictate'],
+    since: DICTATION_QUEUE,
+  },
+  {
+    id: 'dictationVoice',
+    section: 'writing',
+    title: 'help.dictationVoice.title',
+    text: 'help.dictationVoice.text',
+    words: ['grabar', 'micrófono', 'voz', 'nota de voz', 'transcribir', 'insertar en el cursor', 'record', 'microphone', 'voice', 'voice note', 'transcribe', 'insert at cursor', 'openai', 'gemini', 'whisper', 'dictar', 'dictate'],
+    since: DICTATION_VOICE,
   },
   {
     id: 'keyboardDictation',

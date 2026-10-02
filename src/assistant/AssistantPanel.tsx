@@ -20,6 +20,7 @@ import { buildRequest, EDIT_ONLY, LANGUAGES, PAGE_ACTIONS, type Action } from '.
 import { complete, isLocalProvider, PROVIDER_NAMES, type Usage } from './providers';
 import './assistant.css';
 import { errorText } from './errorText';
+import { AskMic } from '../dictation/AskMic';
 
 // El panel del asistente (Docs/Doc_Asistente.md, entregas A1 y A2, secciones 6 y 11): las acciones sobre lo elegido,
 // *Format as…*, las de la página entera (*Summarize page*, *Translate page*), la respuesta por partes, la vista previa y
@@ -767,6 +768,8 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
                     disabled={blocked}
                     onChange={(e) => setInstruction(e.target.value)}
                   />
+                  {/* Dictar el pedido con el micrófono propio (Docs/Doc_Dictado.md, V3). */}
+                  <AskMic disabled={blocked} onText={(said) => setInstruction((now) => (now.trim() ? `${now.trim()} ${said}` : said).slice(0, 500))} />
                   <button type="submit" disabled={blocked || !instruction.trim()}>
                     {tr('assistant.send')}
                   </button>
