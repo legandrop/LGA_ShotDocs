@@ -1021,12 +1021,12 @@ pasa el tope no se guarda). Se borra al salir de la cuenta (el aviso `SIGNED_OUT
 sesión; la base local queda, puede tener cambios sin subir) y con las bases del workspace al sacarlo del dispositivo
 (`deleteWorkspaceDatabases`). Si el navegador no la deja abrir, el historial anda como en la entrega 2.
 
-**Versiones viejas:** la app publicada (v0.102, v0.103) no llama a nada de esto; con la migración aplicada sigue igual
+**Versiones viejas:** la app publicada (v0.102 a v0.105) no llama a nada de esto; con la migración aplicada sigue igual
 (la prueba SQL comprueba que `page_history` y `pull_page_updates` no cambian). No hay tipos de bloque ni propiedades
 nuevas.
 
 **Pruebas:** `supabase/tests/versiones_con_nombre_permisos.sql` (en `begin … rollback` contra la base, con un script
-propio: `ok`, y las otras 17 de `supabase/tests/` también con la migración puesta; 23 de 23 mutantes de la migración la
+propio: `ok`, y las otras 18 de `supabase/tests/` también con la migración puesta; 23 de 23 mutantes de la migración la
 hacen fallar), `src/sync/historyCache.test.ts` (6), `src/sync/historyLoad.test.ts` (10: lo guardado y lo nuevo, sin red,
 copia restaurada y generación, permiso perdido, sin migración, nombrar y los cortes, permisos y versión mínima en el
 servidor en memoria, *Restored from…* con la fila de otra persona en el medio y el *Undo*, las marcas pendientes, y que
@@ -1036,8 +1036,28 @@ nombre; nombre ajeno, base sin migrar y sin la función; sin red y otro disposit
 guardado y al volver la red; sin nada guardado), más el atajo del campo del nombre en el registro (Enter guarda,
 Escape deja como estaba). Mutantes de la app: 25 de 26 hacen fallar alguna prueba; el que vive saca la espera a que la
 página termine de subir antes de buscar la fila de la restauración, que solo ahorra pedidos (sin ella, la busca, no la
-encuentra y espera a la sincronización siguiente). Suite, ya con la privacidad de v0.104: 2374 (2369 pasan, 5 salteadas).
+encuentra y espera a la sincronización siguiente). Suite, con main v0.105 unido y las correcciones de la auditoría: 2416 (2411 pasan, 5 salteadas).
 
 **Lo que falta:** medir en el iPhone; aplicar la migración. Detalles que quedaron así: Ctrl/⌘+Z de la restauración (en
 vez del *Undo* del aviso) no deja de lado la marca; en el filtro, la versión actual se ve siempre aunque no tenga
-nombre.
+nombre. De la auditoría (abajo): renombrar pisa el nombre anterior sin dejar rastro (O3) y la ventana de una copia
+restaurada que vuelve atrás el contador de `page_updates` (O7).
+
+## Correcciones de la auditoría de la entrega 3
+
+Una auditoría independiente dio «lista», sin bloqueantes, con ocho observaciones. Manda sobre «Cómo quedó (entrega 3)»
+en lo que toca:
+
+| Hallazgo | Corrección |
+|---|---|
+| **O1.** Dos pestañas con el historial de la misma página guardan a la vez: un guardado con menos filas después de uno con más bajaba la última guardada, lo guardado dejaba de cuadrar y se tiraba (solo la caché) | `save` nunca baja la última (`lastSeq`, `lastId`): si lo guardado es más nuevo que lo que llega, queda. Prueba: tres guardados a la vez (25, 40 y 30 filas) |
+| **O2.** *Restored from…* iba en «la primera fila propia posterior»: si la restauración nunca subía (deshecha antes, perdida) o subía algo otro dispositivo de la misma persona, quedaba sobre otra edición | La restauración deja su **huella** (`RestoreTrace`: los tramos que agregó y borró, del paso de deshacer del editor) en la marca pendiente; se marca solo la primera fila propia que la trae (`rowHasTrace`, sin integrarla). Sin huella no se marca. Pruebas con una restauración que nunca subió, otro dispositivo de la misma persona y una que solo borra |
+| **O4.** Reintentar nombrar con el id de un nombre que alguien sacó en el medio lo devolvía y la app lo volvía a mostrar | `name_page_version` da `version_not_found` (la pantalla pone la lista al día y lo dice) |
+| **O5.** Huecos de la prueba SQL: un origen inexistente menor que la fila en `mark_page_restored`, y sacar dos veces con otra persona | Casos nuevos (origen 0; d con nivel 4 saca otra vez y no pisa quién ni cuándo; el reintento de O4), más algunos de la auditoría: nombres con comillas, saltos de línea, 100 y 101 «ñ», nulo, un `seq` que solo existe en otra página, quien lo puso y bajó a Ver. 27 de 27 mutantes de la migración la hacen fallar |
+| **O6.** D13: la caché seguía en el dispositivo después de perder el permiso, hasta abrir ese historial con red o salir de la cuenta | `useHistoryCachePruning` (en la pantalla principal): con los permisos conocidos y la base en la versión del historial, cuando cambian los permisos o el árbol tira lo guardado de cada página cuyo historial ya no se ve (`canSeeHistory`; pasar a invitada tira todo). No crea la base si no existe |
+| **O8.** Versiones y cuentas de los docs | `HISTORY_NAMES` en `'0.0XX'` (la pone quien publica), «las otras 18», la app publicada hasta v0.105 |
+| O3. Renombrar pisa el nombre anterior sin rastro | Anotado: no es contenido de la página. Si hiciera falta, renombrar como «sacar + nombrar» (fila nueva) |
+| O7. Si una copia restaurada vuelve atrás el contador de `page_updates`, el `id` de la última fila guardada puede coincidir con otra | Anotado: la defensa real de la caché es la **generación** (el script de restauración la sube). Queda una ventana: abrir el historial antes de que el dispositivo se entere de la generación nueva. Para cerrarla, que `loadHistory` lea la generación del servidor antes de usar lo guardado |
+
+Mutantes de estas correcciones: 8 de 8 hacen fallar alguna prueba. Lo único sin prueba propia es que la pantalla
+principal llame a `useHistoryCachePruning` (una línea).
