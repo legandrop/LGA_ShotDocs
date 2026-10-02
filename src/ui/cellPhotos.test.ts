@@ -14,6 +14,7 @@ import { collectCarrete, type BlockLike } from './carreteModel';
 import { mountEditor, tick, undoManager, unmountAll, view as viewOf } from './collabHarness';
 import { schema } from './editorSchema';
 import { schema as previousPublished } from './fixtures/editorSchemaAnterior';
+import { schema as publishedSchema } from './fixtures/editorSchemaMain';
 import { PHOTO } from './inlinePhoto';
 import { addFiles, CELL_PHOTO_WIDTH, canHostPhoto, dropPos, inlinePhotoSpotsExtension, inTableCell, pasteSpot, type AddFilesOptions, type PhotoEditor } from './inlinePhotoCreate';
 import { cellAboveEnd, decorateRows, handleCellArrowUp, photoKeyAtPos } from './inlinePhotoEditor';
@@ -297,8 +298,13 @@ describe('versiones publicadas', () => {
   };
 
   // La publicada de v0.083 a v0.092 (fixtures/editorSchemaAnterior; conoce `photo` desde v0.076 y la marca del renglón
-  // desde v0.078). fixtures/editorSchemaMain es de antes de `photo`: ese caso es el de abajo (no abre la página).
-  for (const [name, published] of [['la versión publicada de v0.083 a v0.092', previousPublished]] as const) {
+  // desde v0.078) y la publicada hoy (fixtures/editorSchemaMain). Una versión de antes de `photo` es el caso de abajo
+  // (no abre la página).
+  const versions = [
+    ['la versión publicada de v0.083 a v0.092', previousPublished],
+    ['la versión publicada', publishedSchema],
+  ] as const;
+  for (const [name, published] of versions) {
     it(`${name} abre la página sin escribir nada y, al editar la tabla, no borra ninguna foto`, async () => {
       const shared = await cellPage();
       const before = storedPhotos(shared);

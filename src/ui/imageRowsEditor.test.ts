@@ -7,13 +7,15 @@ import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { schema } from './editorSchema';
 import { schema as mainSchema } from './fixtures/editorSchemaMain';
+import { schema as soloScriptSchema } from './fixtures/editorSchemaSoloScript';
 import { ROW_WIDTH_PROP } from './imageRowsEditor';
 import { findUnknownContent } from './unknownContent';
 
 // Fotos en fila (Docs/Doc_Imagenes.md): `rowWidth` es una propiedad del bloque `image`, nunca un tipo de
-// bloque nuevo. La versión publicada (el esquema de `main`, copiado en fixtures/) no la conoce: tiene que
-// abrir la página con las fotos y su `previewWidth`; si edita una foto pierde solo `rowWidth`. Y en esta
-// versión, las filas se dibujan con decoraciones (sin tocar el documento) y el teclado se mueve por la fila.
+// bloque nuevo. Una versión sin fotos en fila (la publicada hasta v0.040, fixtures/editorSchemaSoloScript.ts) no la
+// conoce: tiene que abrir la página con las fotos y su `previewWidth`; si edita una foto pierde solo `rowWidth`. La
+// publicada hoy (fixtures/editorSchemaMain.ts) también la abre sin escribir nada. Y en esta versión, las
+// filas se dibujan con decoraciones (sin tocar el documento) y el teclado se mueve por la fila.
 
 const editors: BlockNoteEditor[] = [];
 afterEach(() => {
@@ -75,33 +77,35 @@ function press(editor: BlockNoteEditor, key: string) {
   editor.prosemirrorView!.dom.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
 }
 
-describe('fotos en fila con el editor de la versión publicada (main)', () => {
-  it('abre la página con todas las fotos y su previewWidth, sin cambiar nada ni frenar en la guarda', async () => {
-    const { doc } = newPage();
-    await tick();
-    const docOld = new Y.Doc();
-    Y.applyUpdate(docOld, Y.encodeStateAsUpdate(doc));
-    const updates: Uint8Array[] = [];
-    docOld.on('update', (u: Uint8Array) => updates.push(u));
-    const old = mount(docOld, mainSchema);
-    await tick();
-    expect(findUnknownContent(docOld)).toBeNull();
-    const images = old.document.filter((b) => b.type === 'image');
-    expect(images).toHaveLength(3);
-    expect(images.map((b) => (b.props as { previewWidth?: number }).previewWidth)).toEqual([300, 300, 300]);
-    expect(updates).toHaveLength(0);
-    // En el documento compartido la propiedad sigue: esta versión la sigue viendo.
-    const again = mount(docOld);
-    await tick();
-    expect(rowWidths(again)).toEqual([0.5, 0.5, 0]);
-  });
+describe('fotos en fila con el editor de una versión anterior', () => {
+  for (const [name, published] of [['la publicada', mainSchema], ['una sin fotos en fila (hasta v0.040)', soloScriptSchema]] as const) {
+    it(`${name} abre la página con todas las fotos y su previewWidth, sin cambiar nada ni frenar en la guarda`, async () => {
+      const { doc } = newPage();
+      await tick();
+      const docOld = new Y.Doc();
+      Y.applyUpdate(docOld, Y.encodeStateAsUpdate(doc));
+      const updates: Uint8Array[] = [];
+      docOld.on('update', (u: Uint8Array) => updates.push(u));
+      const old = mount(docOld, published);
+      await tick();
+      expect(findUnknownContent(docOld)).toBeNull();
+      const images = old.document.filter((b) => b.type === 'image');
+      expect(images).toHaveLength(3);
+      expect(images.map((b) => (b.props as { previewWidth?: number }).previewWidth)).toEqual([300, 300, 300]);
+      expect(updates).toHaveLength(0);
+      // En el documento compartido la propiedad sigue: esta versión la sigue viendo.
+      const again = mount(docOld);
+      await tick();
+      expect(rowWidths(again)).toEqual([0.5, 0.5, 0]);
+    });
+  }
 
-  it('si la versión publicada edita una foto, queda la foto con su previewWidth (se pierde solo rowWidth)', async () => {
+  it('si una versión sin fotos en fila edita una foto, queda la foto con su previewWidth (se pierde solo rowWidth)', async () => {
     const { doc } = newPage();
     await tick();
     const docOld = new Y.Doc();
     Y.applyUpdate(docOld, Y.encodeStateAsUpdate(doc));
-    const old = mount(docOld, mainSchema);
+    const old = mount(docOld, soloScriptSchema);
     await tick();
     const first = old.document.find((b) => b.type === 'image')!;
     old.updateBlock(first, { props: { caption: 'Set 1' } as never });
