@@ -1,0 +1,181 @@
+// Copia de la versión publicada v0.090 (commit ca593e7) de src/sync/localDb.ts, para probar que lo que esa versión
+// deja en el dispositivo (por ejemplo, después de semanas sin red) lo lee y lo sube la versión actual sin perder
+// nada (src/sync/offlineLargo.test.ts). No se toca, salvo los caminos de los imports.
+import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
+import type { FailedOp, PageRow, QueuedOp } from '../../types';
+
+/** Estado de sincronización del contenido de una página en este dispositivo. */
+export interface DocState {
+  pageId: string;
+  /** Último `seq` del servidor que ya está guardado acá. */
+  cursor: number;
+  /**
+   * Cuenta las ediciones locales guardadas. Desde el guardado sin lecturas (ver `dirtyKey`) sube en una
+   * transacción aparte, justo después de cada edición guardada: lo que falta subir lo dice la marca, y la
+   * versión se sigue sumando para las versiones anteriores de la app que abran esta misma base (y para la
+   * papelera de archivos, que la usa para saber si el documento cambió).
+   */
+  version: number;
+  /** Hasta qué `version` confirmó el servidor. Si es menor que `version`, hay cambios sin subir. */
+  ackedVersion: number;
+  /**
+   * La "versión guardia": mientras una página se puede editar en esta versión de la app, su `version` queda
+   * siempre por encima de `ackedVersion` (se suma al abrirla y después de cada confirmación con la página
+   * abierta), y acá se anota ese valor. Una versión anterior de la app que abra esta base (solo mira
+   * `version > ackedVersion`) ve pendiente cualquier página que esta tuvo abierta, aunque la app se haya
+   * cerrado antes de sumar la versión de la última edición. Esta versión no la cuenta como pendiente
+   * mientras `version` siga siendo la guardia (ver `hasUnsyncedContent`). Las versiones anteriores la
+   * conservan sin mirarla.
+   */
+  guardVersion?: number;
+  /** Vector de estado de lo que el servidor ya tiene. Lo que falta subir se calcula contra esto. */
+  syncedSV?: Uint8Array;
+  /**
+   * Los borrados de Yjs que el servidor ya tiene (roadmap B.15), como un update sin elementos (ver
+   * `deleteSets.ts`): cada subida lleva solo los borrados que no están acá. Como `syncedSV`, nunca dice de
+   * más: crece solo con lo que el servidor confirma al subir o manda al bajar. Vale solo con la generación
+   * del workspace con que se anotó (`syncedDSGeneration`): una versión anterior de la app que restaura una
+   * copia borra `syncedSV` pero no conoce este campo, y guarda la generación nueva; con otra generación,
+   * esto no cuenta y se suben todos los borrados.
+   */
+  syncedDS?: Uint8Array;
+  /** La generación del workspace (`meta`, `GENERATION_KEY`, sin guardar vale 1) con que se anotó `syncedDS`. */
+  syncedDSGeneration?: number;
+  /** Update enviado y todavía sin confirmar. Se reenvía igual (mismo id) hasta que el servidor responde. */
+  pending?: {
+    id: string;
+    update: Uint8Array;
+    sv: Uint8Array;
+    /**
+     * Los borrados que lleva `update` (un update sin elementos): al confirmarse se suman a `syncedDS`. Un envío
+     * armado por una versión anterior no lo tiene: se leen del update mismo.
+     */
+    ds?: Uint8Array;
+    version: number;
+    /**
+     * La marca de ediciones sin subir (`dirtyKey`) que había al armar el envío, leída en la misma
+     * transacción que lo guardado. Al confirmarse, la marca se borra solo si sigue siendo esta. Un envío
+     * armado por una versión anterior no la tiene.
+     */
+    dirty?: string;
+  };
+  lastError?: string;
+  /** El servidor rechazó el contenido para siempre (por ejemplo, por tamaño). Se reintenta al abrir la app. */
+  rejected?: string;
+  /**
+   * Llegó del servidor un update que este dispositivo no pudo leer (quedó intacto en el servidor): al
+   * documento local le puede faltar contenido, así que nunca se usa para decir que la página dejó de usar
+   * un archivo (papelera de archivos). No se borra.
+   */
+  unreadable?: boolean;
+}
+
+/** Imagen pegada en una página. Se guarda acá primero y se sube cuando hay red. */
+export interface FileRecord {
+  path: string;
+  pageId: string;
+  mime: string;
+  data: ArrayBuffer;
+  /** 0 = falta subirla, 1 = ya está en el servidor. Número porque IndexedDB no indexa booleanos. */
+  uploaded: 0 | 1;
+  createdAt: number;
+  lastError?: string;
+}
+
+interface ShotDocsDB extends DBSchema {
+  meta: { key: string; value: unknown };
+  pages: { key: string; value: PageRow };
+  ops: { key: number; value: QueuedOp };
+  failedOps: { key: number; value: FailedOp };
+  docUpdates: { key: number; value: { pageId: string; data: Uint8Array }; indexes: { pageId: string } };
+  docState: { key: string; value: DocState };
+  files: { key: string; value: FileRecord; indexes: { uploaded: number } };
+}
+
+export type LocalDb = IDBPDatabase<ShotDocsDB>;
+
+export function openLocalDb(name: string): Promise<LocalDb> {
+  return openDB<ShotDocsDB>(name, 1, {
+    upgrade(db) {
+      db.createObjectStore('meta');
+      db.createObjectStore('pages', { keyPath: 'id' });
+      db.createObjectStore('ops', { keyPath: 'seq', autoIncrement: true });
+      db.createObjectStore('failedOps', { keyPath: 'seq', autoIncrement: true });
+      db.createObjectStore('docUpdates', { autoIncrement: true }).createIndex('pageId', 'pageId');
+      db.createObjectStore('docState', { keyPath: 'pageId' });
+      db.createObjectStore('files', { keyPath: 'path' }).createIndex('uploaded', 'uploaded');
+    },
+  });
+}
+
+/** Clave en `meta` de la última generación del workspace que vio el dispositivo (ver engine.ts). */
+export const GENERATION_KEY = 'generation';
+
+/** La generación guardada, como la cuenta el motor: sin guardar vale 1 (la que crea la migración). */
+export function storedGeneration(value: unknown): number {
+  return typeof value === 'number' ? value : 1;
+}
+
+export function emptyDocState(pageId: string): DocState {
+  return { pageId, cursor: 0, version: 0, ackedVersion: 0 };
+}
+
+/** Lee, modifica y guarda el estado de una página en una sola transacción. */
+export async function updateDocState(
+  db: LocalDb,
+  pageId: string,
+  mutate: (state: DocState) => void,
+): Promise<DocState> {
+  const tx = db.transaction('docState', 'readwrite');
+  const state = (await tx.store.get(pageId)) ?? emptyDocState(pageId);
+  mutate(state);
+  await tx.store.put(state);
+  await tx.done;
+  return state;
+}
+
+/**
+ * Clave en `meta` de la marca de ediciones locales guardadas que todavía no entraron en una subida
+ * confirmada. Cada escritura local pone una marca nueva (un id al azar) en la misma transacción que el
+ * update, sin leer nada antes: así la transacción se confirma en el acto (ver docs.ts, `startWrite`).
+ * `meta` ya existe y las versiones anteriores solo la leen por clave, así que la base no cambia de versión.
+ */
+export function dirtyKey(pageId: string): string {
+  return `${DIRTY_PREFIX}${pageId}`;
+}
+export const DIRTY_PREFIX = 'docDirty:';
+/** Todas las marcas de `meta`. */
+export function dirtyRange(): IDBKeyRange {
+  return IDBKeyRange.bound(DIRTY_PREFIX, `${DIRTY_PREFIX}\uffff`);
+}
+
+/**
+ * Si la página tiene algo sin subir: la marca de ediciones sin subir (`dirty`), un envío sin confirmar o
+ * una versión mayor que la confirmada (lo de siempre: así lo guardado por una versión anterior se sigue
+ * subiendo), salvo que esa versión sea solo la guardia (`guardVersion`).
+ */
+export function hasUnsyncedContent(state: DocState, dirty = false): boolean {
+  if (dirty || state.pending !== undefined) return true;
+  return state.version > state.ackedVersion && !onlyGuard(state);
+}
+
+/** `version` está por encima de la confirmada solo por la guardia (no hubo ediciones después). */
+export function onlyGuard(state: DocState): boolean {
+  return state.guardVersion !== undefined && state.version === state.guardVersion;
+}
+
+/**
+ * El estado de las páginas con algo sin subir (ver `hasUnsyncedContent`), leído en una sola transacción con
+ * las marcas. Una página con marca y sin estado guardado todavía (la app se cerró antes de sumar la
+ * versión) viene con el estado vacío.
+ */
+export async function unsyncedDocStates(db: LocalDb): Promise<DocState[]> {
+  const tx = db.transaction(['docState', 'meta'], 'readonly');
+  const [states, keys] = await Promise.all([tx.objectStore('docState').getAll(), tx.objectStore('meta').getAllKeys(dirtyRange())]);
+  await tx.done;
+  const dirty = new Set(keys.map((k) => String(k).slice(DIRTY_PREFIX.length)));
+  const out = states.filter((s) => hasUnsyncedContent(s, dirty.has(s.pageId)));
+  const known = new Set(states.map((s) => s.pageId));
+  for (const pageId of dirty) if (!known.has(pageId)) out.push(emptyDocState(pageId));
+  return out;
+}

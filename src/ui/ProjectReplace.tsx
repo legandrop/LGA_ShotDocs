@@ -3,7 +3,7 @@ import { t, useT, type Key } from '../i18n';
 import '../i18n/lazy/search';
 import type { ProjectIndex, PhraseHit, PhraseMatch } from '../search/projectIndex';
 import type { OpHeader, PageBlock, ReplaceRequest, RunResult, Summary, UndoResult } from '../search/projectReplace';
-import { usePermissions, useTree } from '../services';
+import { usePermissions, useSyncStatus, useTree } from '../services';
 import { CloseIcon, PageIcon } from './icons';
 import { notify } from './notice';
 import type { ResultRequest } from './projectSearchUi';
@@ -36,7 +36,9 @@ const BLOCK_TEXT: Record<PageBlock, Key> = {
   error: 'replace.block.error',
 };
 
-function blockText(block: PageBlock): string {
+function blockText(block: PageBlock, outdated = false): string {
+  // Con la app vieja para el workspace no se baja contenido: no está "bajando", llega al actualizar.
+  if (block === 'missing' && outdated) return t('replace.block.missingOutdated');
   return t(BLOCK_TEXT[block]);
 }
 
@@ -149,6 +151,7 @@ export function ReplaceResults({ index, projectId, searched, indexRevision, onGo
   const engine = session.engine;
   const tree = useTree();
   const perms = usePermissions();
+  const outdated = useSyncStatus().outdated;
   const tr = useT();
   const options = useMemo(() => ({ matchCase: ui.matchCase, wholeWord: ui.wholeWord }), [ui.matchCase, ui.wholeWord]);
   const [limit, setLimit] = useState(PAGE_LIMIT);
@@ -407,7 +410,7 @@ export function ReplaceResults({ index, projectId, searched, indexRevision, onGo
                     </span>
                   </button>
                   <span className="replace-count">{matches.length}</span>
-                  {block && <span className="replace-block muted">{blockText(block)}</span>}
+                  {block && <span className="replace-block muted">{blockText(block, outdated)}</span>}
                   {canDo && (
                     <button
                       className="find-text-button"

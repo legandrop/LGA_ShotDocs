@@ -431,6 +431,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
     y quien escribió ve en la página un aviso con su texto para copiarlo. Sin migración. Falta: subir
     `min_app_version` a esta versión cuando se publique (las anteriores siguen subiendo con GC) y, con el historial,
     decir quién borró. Ver `Doc_Sincronizacion.md`, "La subida sin GC".
+17. **Hecho (v0.097): volver después de semanas sin red con una versión vieja.** Prueba con la sincronización de la
+    v0.090 (`src/sync/offlineLargo.test.ts`): nada se pierde, con la mínima subida o sin ella. Desde esta versión, con
+    la app vieja para el workspace no sale ni baja nada y la app instalada se actualiza sola. **Falta:** ver en el
+    iPhone (Safari, app instalada) que se actualiza sola al volver la red (solo se midió Chromium); y la base no frena
+    por versión los cambios del árbol ni los comentarios (las versiones anteriores a esta los siguen subiendo con la
+    mínima subida): si alguna vez hace falta, una migración como la de archivos. Ver `Doc_Sincronizacion.md`, "Volver
+    después de mucho tiempo sin red".
 
 ### C. Esperan a Lega
 

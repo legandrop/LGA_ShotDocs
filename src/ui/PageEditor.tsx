@@ -188,12 +188,14 @@ export function PageEditor({ pageId }: { pageId: string }) {
         if (!cancelled && !missing) setAttempt((n) => n + 1);
       });
     check();
-    const timer = setInterval(check, 1000);
+    // Con la app vieja para el workspace no se baja contenido: no llega nada hasta actualizar (o hasta que bajen la
+    // mínima, que se ve en un ciclo). Se mira solo con cada sincronización, sin leer la base cada segundo.
+    const timer = status.outdated ? null : setInterval(check, 1000);
     return () => {
       cancelled = true;
-      clearInterval(timer);
+      if (timer) clearInterval(timer);
     };
-  }, [engine, pageId, incomplete, status.lastSyncAt]);
+  }, [engine, pageId, incomplete, status.lastSyncAt, status.outdated]);
 
   // La barra sigue montada mientras el editor se vuelve a abrir (terminó de bajar, cambió el permiso): no se
   // pierde el aviso del último reemplazo ni se vuelve a montar.
@@ -212,7 +214,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
       <RemovedWritingBanner docs={docs} pageId={pageId} />
       {!opening.complete && (
         <p className="muted editor-missing">
-          {status.online ? tr('editor.missingOnline') : tr('editor.missingOffline')}
+          {!status.online ? tr('editor.missingOffline') : status.outdated ? tr('editor.missingOutdated') : tr('editor.missingOnline')}
         </p>
       )}
       {!canEdit && perms.known && (

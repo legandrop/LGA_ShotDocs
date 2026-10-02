@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { localize, t, useT, type Translate } from '../i18n';
 import type { MediaFailure } from '../media/queue';
 import { useServices, useSyncStatus, useTree } from '../services';
@@ -8,6 +8,15 @@ import { copyText } from './commentsUi';
 import { usePendingCount } from './usePendingCount';
 import { downloadUnsynced } from './unsyncedDownload';
 import { notify } from './notice';
+import {
+  forceUpdate,
+  isOfflineNotReady,
+  isUpdateStuck,
+  setStuck,
+  subscribeOfflineNotReady,
+  subscribeUpdateStuck,
+  updateNow,
+} from './appUpdate';
 
 type Tone = 'ok' | 'busy' | 'offline' | 'warn' | 'error';
 
@@ -91,6 +100,10 @@ export function SyncIcon({ onClick }: { onClick: () => void }) {
 /** Siempre dice si hay cambios sin subir y si algo anda mal (regla 6 de la sincronización). */
 export function SyncBadge() {
   const status = useSyncStatus();
+  // "Update now" no trajo la versión nueva aunque el servidor tiene otra: se ofrece forzarla (appUpdate.ts).
+  const stuck = useSyncExternalStore(subscribeUpdateStuck, isUpdateStuck);
+  // Después de forzar la actualización, hasta que la versión nueva termine de instalarse, sin red no abre.
+  const notReady = useSyncExternalStore(subscribeOfflineNotReady, isOfflineNotReady);
   const tree = useTree();
   const services = useServices();
   const { engine, media, comments } = services;
@@ -135,6 +148,7 @@ export function SyncBadge() {
         <Icon size={15} />
         <span>{text}</span>
       </button>
+      {notReady && <p className="sync-hint">{tr('sync.offlineNotReady')}</p>}
       {rejected > 0 && (
         <button className="sync-warning" onClick={() => setDetails(!details)}>
           {tr('sync.rejected', { count: rejected })}
@@ -162,8 +176,26 @@ export function SyncBadge() {
           {status.outdated && (
             <p>
               <strong>{tr('sync.detail.outdatedTitle')}</strong> {tr('sync.detail.outdated')}{' '}
-              <button className="link" onClick={() => location.reload()}>
+              <button className="link" onClick={() => void updateNow()}>
                 {tr('sync.detail.updateNow')}
+              </button>
+            </p>
+          )}
+          {status.outdated && stuck === 'failed' && <p>{tr('sync.detail.installFailed')}</p>}
+          {status.outdated && stuck === 'force' && (
+            <p>
+              {tr('sync.detail.stuck')}{' '}
+              <button
+                className="link"
+                onClick={() =>
+                  void forceUpdate().then((result) => {
+                    // Sin lugar para instalarla, forzar dejaría la app sin abrir sin red: se explica qué hacer.
+                    if (result === 'noSpace') setStuck('failed');
+                    else if (result !== 'reloaded') notify(tr('sync.detail.forceFailed'));
+                  })
+                }
+              >
+                {tr('sync.detail.force')}
               </button>
             </p>
           )}

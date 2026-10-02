@@ -88,6 +88,8 @@ const ATTACH_PREVIEW = '0.091';
 const REPLACE_PROJECT = '0.094';
 /** El aviso de lo que escribiste en algo que otro borró (roadmap B.16, Doc_Sincronizacion.md): la versión se pone al publicar. */
 const REMOVED_WRITING = '0.095';
+/** La que trajo "Update now" que espera la versión nueva y "Force the update" (Doc_Sincronizacion.md, "Volver después de mucho tiempo sin red"). */
+const UPDATE_APP = '0.097';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -351,6 +353,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
   // --- Sin red ---
   { id: 'syncStatus', section: 'sync', title: 'help.syncStatus.title', text: 'help.syncStatus.text', showMe: 'sync', since: BEFORE_HELP },
   { id: 'syncSafe', section: 'sync', title: 'help.syncSafe.title', text: 'help.syncSafe.text', since: BEFORE_HELP },
+  {
+    id: 'updateApp',
+    section: 'sync',
+    title: 'help.updateApp.title',
+    text: 'help.updateApp.text',
+    words: ['actualizar', 'update', 'versión', 'version', 'forzar', 'force', 'vieja', 'old'],
+    since: UPDATE_APP,
+  },
   {
     id: 'removedWriting',
     section: 'sync',
