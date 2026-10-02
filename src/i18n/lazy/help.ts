@@ -282,13 +282,13 @@ export const help = {
   // --- Buscar ---
   'help.findPage.title': { en: "Find and replace in the page", es: "Buscar y reemplazar en la página" },
   'help.findPage.text': {
-    en: "{find} or the magnifying glass at the top finds in the open page; the arrow opens Replace (if you can edit). {next} next match, {prev} previous, {close} closes and leaves the match selected. {find} again inside the bar opens the browser's own search.",
-    es: "{find} o la lupa de arriba buscan en la página abierta; la flecha despliega Reemplazar (si podés editar). {next} siguiente, {prev} anterior, {close} cierra y deja elegida la coincidencia. {find} otra vez dentro de la barra abre la búsqueda del navegador.",
+    en: "{find} or the magnifying glass at the top finds in the open page; the arrow opens Replace (if you can edit). {next} next match, {prev} previous, {close} closes and leaves the match selected. Collapsed sections that hide matches open while you search, just on this device, and fold back when you close the bar (the one holding the selected match, or one you touched, stays open). {find} again inside the bar opens the browser's own search.",
+    es: "{find} o la lupa de arriba buscan en la página abierta; la flecha despliega Reemplazar (si podés editar). {next} siguiente, {prev} anterior, {close} cierra y deja elegida la coincidencia. Las secciones colapsadas que esconden coincidencias se abren mientras buscás, solo en este dispositivo, y se vuelven a cerrar al cerrar la barra (queda abierta la de la coincidencia elegida, o una que tocaste). {find} otra vez dentro de la barra abre la búsqueda del navegador.",
   },
   'help.findProject.title': { en: "Search the whole project", es: "Buscar en todo el proyecto" },
   'help.findProject.text': {
-    en: "{search} or the magnifying glass next to + searches the titles and text of every page in the project, offline too, and takes you to the exact spot. It also lists matching projects. The arrow left of the field opens Replace.",
-    es: "{search} o la lupa al lado del + buscan en los títulos y el texto de todas las páginas del proyecto, también sin red, y te llevan al lugar exacto. También muestran los proyectos que coinciden. La flecha a la izquierda del campo despliega Reemplazar.",
+    en: "{search} or the magnifying glass next to + searches the titles and text of every page in the project, offline too, and takes you to the exact spot, opening the collapsed section that hides it. It also lists matching projects. The arrow left of the field opens Replace.",
+    es: "{search} o la lupa al lado del + buscan en los títulos y el texto de todas las páginas del proyecto, también sin red, y te llevan al lugar exacto, abriendo la sección colapsada que lo esconde. También muestran los proyectos que coinciden. La flecha a la izquierda del campo despliega Reemplazar.",
   },
   'help.replaceProject.title': { en: "Replace in the whole project", es: "Reemplazar en todo el proyecto" },
   'help.replaceProject.text': {

@@ -680,6 +680,134 @@ export function revealBlock(view: EditorView, blockId: string): boolean {
   return true;
 }
 
+// --- Abrir por la búsqueda (decisión D11 de Lega, 2026-10-02; Docs/Doc_Buscar.md) ----------------------------
+//
+// Al buscar en la página, las secciones colapsadas que esconden coincidencias se abren para que se vean, solo en
+// este dispositivo y solo a la vista: lo que se abre así es de la persona (nunca se escribe el mapa "para todos") y
+// no se guarda en el dispositivo; al terminar la búsqueda (o si lo buscado ya no está ahí) se vuelve a lo de antes.
+// Lo que la persona toca mientras tanto (el triángulo, o dejar la selección adentro) pasa a ser suyo y no se vuelve
+// a cerrar. Va por los mismos `records` que el resto del colapso (así todas las reglas de edición valen igual); la
+// sesión recuerda qué cambió cada apertura (`prev`, lo de antes; `set`, lo que quedó) para devolverlo.
+
+interface Held {
+  /** Lo que había antes de abrir (`undefined`: nada tuyo). */
+  prev: HeadingRecord | undefined;
+  /** Lo que quedó al abrir: si ya no es este mismo objeto, la persona lo tocó. */
+  set: HeadingRecord | undefined;
+}
+
+interface SearchSession {
+  held: Map<string, Held>;
+  /** Títulos que la persona tocó durante esta búsqueda: la búsqueda no los vuelve a abrir (salvo al ir a una coincidencia). */
+  touched: Set<string>;
+  /** Los bloques con coincidencias de la última vez. */
+  wanted: ReadonlySet<string>;
+  /** Cuántos títulos abrió la última vez. */
+  opened: number;
+}
+
+const sessions = new WeakMap<EditorView, SearchSession>();
+
+/**
+ * Lo que se guarda en el dispositivo: lo tuyo sin lo que abrió la búsqueda y nadie tocó (si la ventana se cierra
+ * en medio de una búsqueda, la página no vuelve a abrirse con eso abierto).
+ */
+function persistable(view: EditorView, records: ReadonlyMap<string, HeadingRecord>): ReadonlyMap<string, HeadingRecord> {
+  const session = sessions.get(view);
+  if (!session || session.held.size === 0) return records;
+  const out = new Map(records);
+  for (const [id, h] of session.held) {
+    if (out.get(id) !== h.set) continue;
+    if (h.prev) out.set(id, h.prev);
+    else out.delete(id);
+  }
+  return out;
+}
+
+/** Cuántas secciones tiene abiertas ahora la búsqueda (para el aviso de la barra). */
+export function searchOpenedCount(view: EditorView): number {
+  return sessions.get(view)?.opened ?? 0;
+}
+
+/**
+ * Deja abiertas, para vos, las secciones que esconden estos bloques (las coincidencias de la búsqueda) y vuelve
+ * a como estaban las que abrió antes y ya no hacen falta, salvo las que la persona tocó o donde está la selección.
+ * Con `end` termina la búsqueda: todo vuelve (menos lo tocado). `force`: bloques que se muestran aunque la persona
+ * haya cerrado lo que los esconde (ir a una coincidencia con Enter). Devuelve si cambió algo y cuántas abrió.
+ */
+export function syncSearchOpen(
+  view: EditorView,
+  wanted: ReadonlySet<string>,
+  { end = false, force }: { end?: boolean; force?: ReadonlySet<string> } = {},
+): { changed: boolean; opened: number } {
+  const state = collapseKey.getState(view.state);
+  let session = sessions.get(view);
+  if (!state || (!session && (end || wanted.size === 0))) return { changed: false, opened: 0 };
+  if (!session) sessions.set(view, (session = { held: new Map(), touched: new Set(), wanted, opened: 0 }));
+  const doc = view.state.doc;
+  const current = state.records;
+  const shared = state.shared;
+
+  // 1. Lo que abrió la búsqueda y nadie tocó vuelve a lo de antes; lo tocado pasa a ser de la persona.
+  const base = new Map(current);
+  for (const [id, h] of session.held) {
+    if (base.get(id) !== h.set) {
+      session.touched.add(id);
+      continue;
+    }
+    if (h.prev) base.set(id, h.prev);
+    else base.delete(id);
+  }
+  session.held.clear();
+
+  // 2. La selección no queda en algo que se vuelve a esconder: ese título se queda abierto (es de la persona).
+  if (base.size !== current.size || [...base].some(([id, r]) => current.get(id) !== r)) {
+    let analysis = analyze(doc, effective(base, shared));
+    for (let guard = 0; guard < 64; guard++) {
+      const inside = hiddenInSelection(analysis, view.state.selection);
+      const id = inside.head ?? inside.anchor;
+      const hider = id ? analysis.hidden.get(id) : undefined;
+      if (!hider) break;
+      const kept = current.get(hider);
+      if (kept) base.set(hider, kept);
+      else base.delete(hider);
+      session.touched.add(hider);
+      analysis = analyze(doc, effective(base, shared));
+    }
+  }
+  const restored = new Map(base);
+
+  // 3. Se abre lo que esconde cada coincidencia (de afuera hacia adentro), menos lo que la persona cerró.
+  const openedNow = new Set<string>();
+  if (!end) {
+    let analysis = analyze(doc, effective(base, shared));
+    for (const id of wanted) {
+      for (let guard = 0; guard < 64; guard++) {
+        const hider = analysis.hidden.get(id);
+        if (!hider) break;
+        if (session.touched.has(hider)) {
+          if (!force?.has(id)) break;
+          session.touched.delete(hider);
+        }
+        openRecord(doc, base, analysis, hider, shared);
+        openedNow.add(hider);
+        analysis = analyze(doc, effective(base, shared));
+      }
+    }
+  }
+  for (const id of new Set([...restored.keys(), ...base.keys()])) {
+    if (restored.get(id) !== base.get(id)) session.held.set(id, { prev: restored.get(id), set: base.get(id) });
+  }
+  const changed = !sameRecords(base, current);
+  // Sin cambios de valor se conservan los objetos de ahora (así la próxima vez se sabe que nadie los tocó).
+  if (!changed) for (const [id, h] of session.held) h.set = current.get(id);
+  session.wanted = wanted;
+  session.opened = openedNow.size;
+  if (changed) dispatchRecords(view, base);
+  if (end) sessions.delete(view);
+  return { changed, opened: openedNow.size };
+}
+
 /** Cuántos títulos tiene la página y cuántos están colapsados. */
 export function headingCounts(state: EditorState): { headings: number; collapsed: number } {
   const s = collapseKey.getState(state);
@@ -1563,8 +1691,15 @@ function createCollapsePlugin(options: CollapseOptions): Plugin<CollapseState> {
       // abre para vos. Cada editor registra los suyos (por vista).
       const hooks: FindCollapseHooks = {
         isHidden: (blockId) => !!collapseKey.getState(editorView.state)?.analysis.hidden.has(blockId),
-        reveal: (blockId) => void revealBlock(editorView, blockId),
+        // Ir a una coincidencia: la sección se abre solo por la búsqueda (se vuelve a cerrar al terminar), también si la
+        // persona la había cerrado.
+        reveal: (blockId) => {
+          const wanted = new Set(sessions.get(editorView)?.wanted ?? []).add(blockId);
+          syncSearchOpen(editorView, wanted, { force: new Set([blockId]) });
+        },
         anyHidden: () => (collapseKey.getState(editorView.state)?.analysis.hidden.size ?? 0) > 0,
+        syncSearch: (wanted, end) => syncSearchOpen(editorView, wanted, { end }),
+        searchOpened: () => searchOpenedCount(editorView),
       };
       setFindCollapseHooks(editorView, hooks);
       return {
@@ -1578,7 +1713,7 @@ function createCollapsePlugin(options: CollapseOptions): Plugin<CollapseState> {
           const now = collapseKey.getState(view.state);
           const was = collapseKey.getState(prev);
           if (!now || now === was) return;
-          if (!was || !sameRecords(now.records, was.records)) options.save?.(now.records);
+          if (!was || !sameRecords(now.records, was.records)) options.save?.(persistable(view, now.records));
           const structural = !was || was.analysis.hidden !== now.analysis.hidden || was.analysis.collapsed !== now.analysis.collapsed;
           if (structural) {
             // Un reproductor de Drive que queda escondido se para (se vuelve a cargar).

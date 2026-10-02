@@ -9,6 +9,7 @@ import {
   getFindState,
   hiddenCount,
   landOnOccurrence,
+  openedBySearch,
   replaceAll,
   replaceCurrent,
   revealCurrent,
@@ -177,6 +178,8 @@ export function FindBar({
   }
   const where = current?.field === 'caption' ? tr('find.inCaption') : current?.field === 'name' ? tr('find.inName') : '';
   const hidden = state ? hiddenCount(state.matches, view) : 0;
+  // Las secciones colapsadas que abrió la búsqueda (decisión D11): se vuelven a cerrar al cerrar la barra.
+  const opened = state?.query.trim() ? openedBySearch(view) : 0;
 
   const close = () => {
     closeFindBar();
@@ -318,9 +321,9 @@ export function FindBar({
             </button>
           </div>
         )}
-        {(where || hidden > 0 || status) && (
+        {(where || opened > 0 || hidden > 0 || status) && (
           <div className="find-status" role="status">
-            {[where, hidden > 0 ? tr('find.hidden', { count: hidden }) : '', status?.text ?? ''].filter(Boolean).join(' · ')}
+            {[where, opened > 0 ? tr('find.opened', { count: opened }) : '', hidden > 0 ? tr('find.hidden', { count: hidden }) : '', status?.text ?? ''].filter(Boolean).join(' · ')}
             {status?.undoItem !== undefined && canUndoReplace(view, status.undoItem) && (
               <>
                 {' '}

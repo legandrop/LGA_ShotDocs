@@ -78,6 +78,13 @@ export interface FindCollapseHooks {
   reveal(blockId: string): void;
   /** Si hay algo colapsado en la página (sin esto, se pregunta bloque por bloque). */
   anyHidden?(): boolean;
+  /**
+   * Decisión D11: abre, solo a la vista y en este dispositivo, las secciones que esconden las coincidencias
+   * (`blockIds`) y vuelve a cerrar las que ya no hacen falta; con `end`, termina la búsqueda y vuelve todo.
+   */
+  syncSearch?(blockIds: ReadonlySet<string>, end?: boolean): { changed: boolean; opened: number };
+  /** Cuántas secciones tiene abiertas la búsqueda ahora. */
+  searchOpened?(): number;
 }
 
 /** Los enganches de cada editor (P.11 los registra por vista: con dos editores, cada uno los suyos). */
@@ -158,6 +165,28 @@ export function hiddenCount(matches: FindMatch[], view?: EditorView): number {
   }
   hiddenMemo.set(matches, { key: toggles.key, hooks, count });
   return count;
+}
+
+/**
+ * Decisión D11 (Lega, 2026-10-02): al buscar, las secciones colapsadas que esconden coincidencias se abren, solo a
+ * la vista y en este dispositivo (nunca se escribe lo colapsado para todos), y al terminar la búsqueda, o si lo
+ * buscado ya no está ahí, vuelven a como estaban (lo que la persona toca, no). Sin P.11 no hay nada que abrir.
+ */
+function syncExpansion(view: EditorView, end = false): void {
+  const hooks = collapseHooksByView.get(view);
+  if (!hooks?.syncSearch) return;
+  const ids = new Set<string>();
+  if (!end) for (const m of getFindState(view.state).matches) ids.add(m.blockId);
+  if (!hooks.syncSearch(ids, end).changed) return;
+  // Abrir y cerrar cambian los altos: las marcas de hoja tienen que recalcular (ver `takeFindOnlyChanges`) y la
+  // barra, el aviso de cuántas se abrieron.
+  docChanges++;
+  for (const fn of listeners.get(view) ?? []) fn();
+}
+
+/** Cuántas secciones colapsadas tiene abiertas esta búsqueda (el aviso de la barra). */
+export function openedBySearch(view: EditorView | undefined): number {
+  return view ? (collapseHooksByView.get(view)?.searchOpened?.() ?? 0) : 0;
 }
 
 /** Abre lo que esconde el bloque: las listas plegables de arriba y las secciones colapsadas (P.11). */
@@ -436,6 +465,7 @@ export function getFindState(state: EditorState): FindState {
 export function setFind(view: EditorView, query: string, options: SearchOptions): void {
   view.dispatch(view.state.tr.setMeta(findKey, { kind: 'set', query, options, anchor: view.state.selection.from } satisfies FindMeta));
   rememberCurrent(view);
+  syncExpansion(view);
 }
 
 /**
@@ -446,6 +476,7 @@ function refreshNow(view: EditorView, anchor?: number): void {
   const at = anchor ?? currentPlace(view)?.from;
   view.dispatch(view.state.tr.setMeta(findKey, { kind: 'refresh', anchor: at } satisfies FindMeta));
   rememberCurrent(view);
+  syncExpansion(view);
 }
 
 /** Pasa a la siguiente (1) o a la anterior (-1), dando la vuelta, y la lleva a la vista. */
@@ -565,6 +596,7 @@ export function clearFind(view: EditorView): void {
   stopKeepingInView(view.dom);
   if (getFindState(view.state).query) view.dispatch(view.state.tr.setMeta(findKey, { kind: 'clear' } satisfies FindMeta));
   anchors.set(view, null);
+  syncExpansion(view, true);
 }
 
 /**
@@ -588,6 +620,9 @@ export function closeFind(view: EditorView, { select = true }: { select?: boolea
   view.dispatch(tr);
   // Ctrl/⌘+K sobre esto abre la búsqueda del proyecto, no "crear un link" (findUi.ts).
   if (selected) recordFindSelection(view, view.state.selection.from, view.state.selection.to);
+  // Las secciones que abrió la búsqueda vuelven a cerrarse, salvo la de la coincidencia que quedó elegida (la
+  // persona está ahí) y lo que tocó.
+  syncExpansion(view, true);
 }
 
 // --- Reemplazar --------------------------------------------------------------------------------------------
