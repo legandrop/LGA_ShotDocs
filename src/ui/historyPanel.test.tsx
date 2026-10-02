@@ -12,7 +12,7 @@ import type { SupabaseRemote } from '../sync/remote';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeRemote, FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
-import { HistoryPanel, recentOther } from './HistoryPanel';
+import { HistoryPanel, mergeRows, recentOther } from './HistoryPanel';
 import { canSeeHistory, closeHistory, registerRestoreTarget } from './historyUi';
 
 // La pantalla del historial (P.18, Docs/Doc_Historial.md, entrega 1) montada contra el servidor en memoria: la lista
@@ -362,6 +362,56 @@ describe('la pantalla del historial', () => {
     expect(asked.length).toBe(1);
   });
 
+  it('al confirmar no sirve la consulta de filas que ya estaba en curso (empezó antes de sincronizar): se espera y se pide otra (O9)', async () => {
+    prefs.set({ language: 'en' });
+    const { a, b, pageId, server } = await setup();
+    const asked: Y.Doc[] = [];
+    offs.push(
+      registerRestoreTarget(pageId, (version) => {
+        asked.push(version);
+        return { ok: true, undo: () => true, onEdit: () => () => undefined };
+      }),
+    );
+    // La próxima consulta de filas lee el servidor al empezar y contesta recién cuando se la suelta.
+    const remote = a.remote as unknown as { pageHistory: (p: string, after: number, limit: number) => Promise<HistoryRow[]> };
+    const original = remote.pageHistory.bind(remote);
+    let hold: Promise<void> | null = null;
+    let release = () => undefined as void;
+    let held = 0;
+    remote.pageHistory = async (p, after, limit) => {
+      const rows = await original(p, after, limit);
+      if (hold) {
+        const wait = hold;
+        hold = null;
+        held++;
+        await wait;
+      }
+      return rows;
+    };
+    const host = await mount(services(a, server.ownerId), pageId);
+    await act(async () => (host.querySelectorAll('.history-session')[1] as HTMLButtonElement).click());
+    await settle(300);
+    await act(async () => host.querySelector<HTMLButtonElement>('.history-restore')!.click());
+    await settle(100);
+    expect(host.querySelector('.history-confirm')?.textContent).not.toContain('could be left out');
+    // Una sincronización deja una consulta de la lista en curso (todavía sin lo de Bea)…
+    hold = new Promise<void>((r) => (release = r));
+    await act(async () => void (await a.engine.syncNow()));
+    await settle(100);
+    expect(held).toBe(1);
+    // …y Bea escribe mientras tanto.
+    await edit(b, pageId, (g) => g.insert(0, [block('z', 'Bea, recién')]));
+    await b.engine.syncNow();
+    const confirm = () => [...host.querySelectorAll<HTMLButtonElement>('.history-confirm button')].find((x) => x.textContent === 'Restore')!;
+    await act(async () => confirm().click());
+    await settle(200);
+    // La restauración está esperando la consulta vieja: se suelta.
+    release();
+    await settle(300);
+    expect(asked.length).toBe(0);
+    expect(host.querySelector('.history-confirm')?.textContent).toContain('bea@example.com changed this page in the last 2 minutes');
+  });
+
   it('una restauración que el editor intenta y deshace (no quedó igual a la versión) dice que no cambió nada', async () => {
     prefs.set({ language: 'en' });
     const { a, pageId, server } = await setup();
@@ -375,6 +425,19 @@ describe('la pantalla del historial', () => {
     await act(async () => confirm.click());
     await settle(200);
     expect(host.querySelector('.history-message')?.textContent).toBe("Couldn't restore this version. Nothing changed.");
+  });
+});
+
+describe('sumar las filas nuevas a la lista (M5)', () => {
+  const row = (seq: number, by = 'a'): HistoryRow => ({ id: seq * 10, seq, createdBy: by, createdAt: new Date(seq * 60_000).toISOString(), data: new Uint8Array() });
+  it('descarta las que ya estaban (la última vuelve en la consulta) y las repetidas, y las deja en orden', () => {
+    const known = [row(1), row(2), row(3)];
+    const got = mergeRows(known, [row(5), row(3, 'otra'), row(4), row(5), row(2)]);
+    expect(got.map((r) => r.seq)).toEqual([1, 2, 3, 4, 5]);
+    // La que ya estaba queda la conocida (no la que volvió).
+    expect(got[2]).toBe(known[2]);
+    expect(mergeRows([], [row(2), row(1), row(2)]).map((r) => r.seq)).toEqual([1, 2]);
+    expect(mergeRows(known, [])).toEqual(known);
   });
 });
 
@@ -436,6 +499,35 @@ describe('entrega 2: Show changes, el texto huérfano y la lista que se actualiz
     expect(host.querySelector('.history-session[aria-current="true"]')?.textContent).toContain('You');
     expect(host.querySelector('.history-session[aria-current="true"]')?.textContent).not.toContain('Current version');
     expect(host.querySelector('.history-page .ProseMirror')).toBe(editorBefore);
+    expect(host.querySelector('.history-page')?.textContent).not.toContain('Bea, más tarde');
+  });
+
+  it('si en un mismo lote crece la versión elegida y aparece otra más nueva, la elegida sigue elegida (no salta a la actual; M10)', async () => {
+    prefs.set({ language: 'en' });
+    const { a, b, pageId, server } = await setup();
+    const host = await mount(services(a, server.ownerId), pageId);
+    // Se elige la de Bea, que hoy es la actual.
+    await act(async () => (host.querySelectorAll('.history-session')[0] as HTMLButtonElement).click());
+    await settle(300);
+    expect(host.querySelector('.history-session[aria-current="true"]')?.textContent).toContain('Current version');
+    // Sin que el dispositivo sincronice en el medio: Bea sigue escribiendo diez minutos después (su sesión crece) y
+    // vuelve dos horas más tarde (una sesión nueva). Las dos filas llegan en el mismo lote.
+    server.now = () => Date.parse('2026-09-30T16:10:00Z');
+    await edit(b, pageId, (g) => g.insert(0, [block('m', 'Bea, un rato después')]));
+    await b.engine.syncNow();
+    server.now = () => Date.parse('2026-09-30T18:10:00Z');
+    await edit(b, pageId, (g) => g.insert(0, [block('n', 'Bea, más tarde')]));
+    await b.engine.syncNow();
+    await act(async () => void (await a.engine.syncNow()));
+    await settle(400);
+    const items = [...host.querySelectorAll('.history-session')];
+    expect(items.length).toBe(3);
+    const chosen = host.querySelector('.history-session[aria-current="true"]');
+    expect(chosen).toBe(items[1]);
+    expect(chosen?.textContent).toContain('bea@example.com');
+    expect(chosen?.textContent).not.toContain('Current version');
+    // La versión elegida, con lo que creció, sin lo de la nueva.
+    expect(host.querySelector('.history-page')?.textContent).toContain('Bea, un rato después');
     expect(host.querySelector('.history-page')?.textContent).not.toContain('Bea, más tarde');
   });
 

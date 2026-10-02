@@ -142,10 +142,11 @@ export function labelText(label: ChangeLabel, tr: Tr): string {
   return label.kind === 'format' ? tr('history.formatChanged') : tr('history.moved');
 }
 
-/** Suma a las filas conocidas las que todavía no estaban (por `seq`), en orden. */
+/** Suma a las filas conocidas las que todavía no estaban (por `seq`, una vez cada una), en orden. */
 export function mergeRows(known: readonly HistoryRow[], fresh: readonly HistoryRow[]): HistoryRow[] {
   const last = known.length ? known[known.length - 1].seq : 0;
-  return [...known, ...fresh.filter((r) => r.seq > last).sort((a, b) => a.seq - b.seq)];
+  const added = fresh.filter((r) => r.seq > last).sort((a, b) => a.seq - b.seq);
+  return [...known, ...added.filter((r, i) => i === 0 || r.seq !== added[i - 1].seq)];
 }
 
 /** Show changes queda como lo dejó la persona mientras la app está abierta (prendido por defecto). */
@@ -544,9 +545,17 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
   const readyRef = useRef(ready);
   readyRef.current = ready;
   const refreshing = useRef<Promise<HistoryRow[] | null> | null>(null);
-  /** Pide las filas posteriores a la última conocida y, si hay, arma la lista de nuevo. Devuelve todas las filas. */
-  const refreshRows = useCallback((): Promise<HistoryRow[] | null> => {
-    if (refreshing.current) return refreshing.current;
+  /**
+   * Pide las filas posteriores a la última conocida y, si hay, arma la lista de nuevo. Devuelve todas las filas. Si ya
+   * hay una consulta en curso, la devuelve; con `fresh`, la espera y pide otra: al confirmar una restauración hace falta
+   * una consulta empezada DESPUÉS de sincronizar (O9 de la auditoría de la entrega 2: la que estaba en curso pudo
+   * empezar antes y no ver una fila de otra persona recién llegada).
+   */
+  const refreshRows = useCallback((fresh = false): Promise<HistoryRow[] | null> => {
+    const inFlight = refreshing.current;
+    if (inFlight && !fresh) return inFlight;
+    // Una que empiece después de esta llamada sirve (también la de otro que esperó a la misma).
+    if (inFlight) return inFlight.catch(() => null).then(() => refreshRowsRef.current());
     const run = (async () => {
       const known = readyRef.current;
       if (!known || !builder) return null;
@@ -559,7 +568,7 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
       }
       const all = mergeRows(known.rows, fresh);
       if (all.length === known.rows.length) return known.rows;
-      const summary = await builder.append(fresh);
+      const summary = await builder.append(all.slice(known.rows.length));
       // Los correos, si llegó alguien nuevo.
       const stranger = fresh.some((r) => r.createdBy && !known.emails.has(r.createdBy));
       const mails = stranger
@@ -569,6 +578,8 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
           )
         : known.emails;
       setLoading((cur) => (cur.state === 'ready' ? { ...cur, rows: all, emails: mails, summary } : cur));
+      // La próxima consulta (la de `fresh`, que puede correr antes de que se vuelva a dibujar) arranca desde acá.
+      readyRef.current = { ...known, rows: all, emails: mails, summary };
       const cache = cacheRef.current;
       if (cache) {
         void cache
@@ -582,6 +593,8 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
     refreshing.current = run;
     return run;
   }, [historyRemote, pageId, builder]);
+  const refreshRowsRef = useRef(refreshRows);
+  refreshRowsRef.current = refreshRows;
   const isReady = !!ready;
   const showingSaved = loading.state === 'ready' && loading.offlineAt !== null;
   useEffect(() => {
@@ -722,7 +735,7 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
       // sola mientras tanto, O3): si otra persona cambió la página, se vuelve a preguntar con el aviso de quién.
       let afterSeq = ready?.rows[ready.rows.length - 1]?.seq ?? 0;
       if (ready) {
-        const all = (await refreshRows()) ?? ready.rows;
+        const all = (await refreshRows(true)) ?? ready.rows;
         afterSeq = all[all.length - 1]?.seq ?? 0;
         const since = all.filter((row) => row.seq > confirmSeq.current);
         const others = since.filter((row) => row.createdBy !== user.id);
