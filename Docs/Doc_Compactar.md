@@ -1,8 +1,9 @@
 # Compactar el contenido en el servidor (`page_snapshots`)
 
-**Estado: entrega 1 implementada (LEER snapshots, v0.127; migración `20261019120000_compactar_leer.sql`, sin
-aplicar, con los snapshots apagados; ver "Cómo quedó la entrega 1", al final). Las entregas 2 y 3 (crearlos y
-prenderlos), sin implementar** (roadmap B.9, diseño del 2026-10-01). Toca la regla de no perder datos, así que va con
+**Estado: entregas 1 y 2 implementadas (LEER snapshots, v0.127, migración `20261019120000_compactar_leer.sql`,
+aplicada y con los snapshots apagados; CREARLOS en el dispositivo, v0.0XX, migración `20261020120000_compactar_crear.sql`,
+sin aplicar; ver "Cómo quedó la entrega 1" y "Cómo quedó la entrega 2", al final). La entrega 3 (prenderlos), sin
+implementar** (roadmap B.9, diseño del 2026-10-01). Toca la regla de no perder datos, así que va con
 pruebas antes de cualquier código que escriba en la base. **Revisado el 2026-10-01 con el diseño del historial
 (`Doc_Historial.md`, decisión de Lega):** el snapshot se arma aplicando las filas en orden, no con
 `Y.mergeUpdates`, para que conserve lo borrado (sección 3). Nada de esto está aplicado: la migración de abajo es un
@@ -229,7 +230,9 @@ Cada fila se decodifica; **si una no se puede leer** (la escribió una versión 
    casos al azar aunque sean el mismo documento: aplicar de a una parte los textos en otros lugares que el update
    fusionado. Comparar bytes daría falsas alarmas; comparar solo el texto visible no vería lo borrado.
 5. Cada 10 snapshots de una página, además, se compara el nuevo contra todo desde cero (`1..N` sin base), siempre
-   que esas filas pesen 16 MB o menos (si no, se salta y se anota). Si no da igual, se invalida la cadena entera
+   que esas filas pesen 16 MB o menos (si no, se salta y se anota). **Cuáles** (entrega 2): los que tienen base y cuya
+   huella SHA-256, leída como número, da resto 0 al dividir por 10. Es 1 de cada 10 en promedio sin contar nada, y
+   determinista por tramo: dos dispositivos que arman el mismo tramo deciden lo mismo. Si no da igual, se invalida la cadena entera
    (sección 12). Cada paso ya se comprueba contra lo que juntó, así que esto es una segunda red, contra un error de
    la propia comprobación o del dispositivo. Para las páginas más pesadas la segunda red no corre: es un riesgo que
    queda (sección 16) y que se achica mucho desde que las subidas no repiten los borrados (B.15), porque las filas
@@ -461,15 +464,21 @@ propone.
   arriba seguiría sirviéndose con el mismo error. Pone `pages.snapshot_seq` en 0 y suma uno a `pages.content_epoch`;
   la próxima compactación arranca desde la fila 1. Lo llama la app cuando la comparación desde cero no da igual, y se
   puede llamar a mano desde el SQL Editor.
-- **Los dispositivos que lo usaron:** el árbol trae `content_epoch`. Si es **distinto** del que el dispositivo anotó
-  (no "mayor": después de restaurar puede haber cambiado de cualquier forma) y el dispositivo aplicó algún snapshot de
-  esa página (`DocState.snapshotId`), pone el cursor de esa página en 0 y la baja de nuevo (filas, porque la cadena ya
-  no se sirve; Yjs no duplica lo que ya tiene). **Borra también `syncedSV` y `syncedDS` de esa página** (desde
-  B.15): un snapshot al que solo le faltaba algo no pudo hacer avanzar ninguna de las dos cuentas de más, pero uno
-  malo de otra forma (con un borrado o un elemento que las filas no tienen) suma a las dos al bajarlo, y con eso
-  el dispositivo dejaría de subir un borrado propio igual al del snapshot, que después de invalidarlo el servidor
-  no tiene. Sin las cuentas, la página vuelve a subir entera una vez (Yjs no duplica lo que el servidor ya tiene).
-  Lo propio sin subir nunca se toca.
+- **Los dispositivos que lo usaron** (revisado en la entrega 2, D110 de Lega y auditoría de la entrega 1, O1 y O2):
+  si el dispositivo aplicó algún snapshot de esa página (`DocState.snapshotId`) y la época que llega es otra (la de la
+  misma respuesta de `pull_page_content`; la del árbol, solo si es **más nueva** que la anotada, porque un árbol leído
+  antes de lo último bajado puede traer una vieja y la de la base nunca vuelve atrás):
+  - **Sin nada propio sin subir** (ni en memoria, ni marca, ni envío, ni versión sin confirmar, ni rechazo): tira lo que
+    tiene guardado de esa página y la **rearma con las filas del servidor**, en una sola transacción (filas locales,
+    cursor a 0, `syncedSV`, `syncedDS` y el snapshot). Todo lo que tenía ya está en el servidor, salvo lo que trajo el
+    snapshot malo (un borrado o un elemento que las filas no tienen): así eso no vuelve a subir ni llega a nadie. Si la
+    página está abierta, se vuelve a abrir desde lo guardado.
+  - **Con algo propio sin subir:** no toca nada y espera. Lo propio sube primero con las cuentas de siempre, que no
+    dejan subir lo que trajo el snapshot (según ellas el servidor ya lo tiene), y en la próxima bajada, ya sin nada
+    pendiente, se rearma. Mientras espera, lo bajado se guarda sin anotar la época nueva, así lo vuelve a intentar.
+  - Antes (v0.127) se borraban las cuentas y la página volvía a subir entera: el borrado de un snapshot malo llegaba a
+    todos (O1). Lo que queda: si la persona borró algo sin subir y el snapshot malo borró exactamente lo mismo, ese
+    borrado suyo no sube y vuelve a aparecer (sección 16).
 - **Apagar todo:** `snapshot_min_version = null` en `workspace_settings`. Desde el próximo pedido, todos bajan filas.
 
 ## 13. Migración (borrador, sin aplicar)
@@ -659,6 +668,9 @@ Antes de escribir en la base, en este orden:
 | Un snapshot enorme que no baja en una red mala | Hasta 8 MB, con el tope de tiempo del lote de a uno (pensado para 8 MB); si es más grande, no se compacta |
 | Yjs 14 (B.10) cambia el formato | Apagar o invalidar antes de esa migración |
 | Las versiones viejas siguen bajando todo | Es lento pero correcto; desaparece cuando se actualizan |
+| Restaurar una copia con un snapshot malo todavía sin invalidar | Quien lo aplicó vuelve a subir la página entera (`resetForRestore`) con lo que el snapshot borró de más: el texto sigue en las filas, pero el documento vivo lo pierde. Requiere un snapshot malo que nadie detectó (comprobación por dos caminos, vuelta, desde cero cada 10) y una restauración antes de invalidarlo. Antes de restaurar con los snapshots prendidos, conviene invalidarlos todos (entrega 3) |
+| Un borrado propio sin subir igual a uno que trajo un snapshot malo | Al rearmarse no sube y la palabra vuelve a aparecer (no se pierde texto: reaparece lo borrado). Necesita que el snapshot malo borre exactamente lo mismo |
+| Armar un snapshot cuesta CPU en el dispositivo (segundos en una página de miles de filas) | Una página por ciclo, de a tramos (el anterior más la cola), devolviendo el control cada 50 filas; en el hilo principal. Medir en el iPhone en la entrega 3 (prueba 8) y, si hace falta, pasarlo a un Worker como el historial |
 
 ## 17. Entregas
 
@@ -666,8 +678,8 @@ Antes de escribir en la base, en este orden:
    funciones, el servidor en memoria, `pullContent` en la app, las pruebas 2, 3 (sin compactar todavía), 5 y 6. Sin
    snapshots en la base, la app se comporta exactamente igual: se puede publicar sola. Copia de seguridad antes de
    migrar.
-2. **Crear snapshots**: `compact.ts`, el paso en el ciclo, la confirmación, la invalidación y el reinicio por
-   `content_epoch`; las pruebas 1, 3 completas y 4. Se publica con los snapshots apagados.
+2. **Crear snapshots** (hecha, v0.0XX): `compact.ts`, el paso en el ciclo, la confirmación, la invalidación y el
+   rearmado por `content_epoch` (D110); las pruebas 1, 3 completas y 4. Se publica con los snapshots apagados.
 3. **Prenderlos**: antes, el cambio del script de restaurar (vaciar `page_snapshots`, `content_epoch` que no vuelve
    atrás; repo privado, con su prueba 6). Probar de punta a punta en un proyecto de prueba (7) y medir (8); después
    `snapshot_min_version` a la versión de la entrega 2 en Wanka. Mirar los snapshots inválidos y las páginas

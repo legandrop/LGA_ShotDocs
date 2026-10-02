@@ -1,3 +1,4 @@
+import { createClient } from '@supabase/supabase-js';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { compareDocs, docFromUpdate, type CompactOptions } from './compact';
@@ -5,6 +6,7 @@ import { rangesOf, subtractRanges, unionRanges, type DeleteRanges } from './dele
 import { PageDocs as V100PageDocs } from './fixtures/v100/docs';
 import { GENERATION_KEY, openLocalDb, storedGeneration, updateDocState, type LocalDb } from './localDb';
 import { knownDeletes } from './docs';
+import { SupabaseRemote } from './remote';
 import { mergeRootGroups, seedIfEmpty } from './structure';
 import { FakeRemote, FakeServer, makeDevice, sha256Hex, type Device } from './testing';
 import { RemoteError, REQUEST_TIMEOUT, type RemoteUpdate } from './types';
@@ -691,8 +693,6 @@ describe('al azar: tres dispositivos que compactan, la versión publicada, snaps
         const r = rnd();
         const d = pick(devs);
         const i = devs.indexOf(d);
-        if (process.env.COMPACT_DEBUG) (await import('node:fs')).appendFileSync(`.zz-tmp/dbg-${seed}.log`, `paso ${step} r=${r.toFixed(3)} d=${i} online=${server.online} rows=${server.updates.get(page)?.length} epoch=${server.smeta(page).epoch} text=${serverText(server, page)}
-`);
         if (r < 0.32) {
           const doc = await docOf(d);
           const t = doc.getText('t');
@@ -700,8 +700,6 @@ describe('al azar: tres dispositivos que compactan, la versión publicada, snaps
             const w = `s${seed}w${n++}`;
             doc.transact(() => add(w)(t), 'test');
             written.add(w);
-            if (process.env.COMPACT_DEBUG) (await import('node:fs')).appendFileSync(`.zz-tmp/dbg-${seed}.log`, `  escribe ${w} en ${i}
-`);
           } else {
             const w = `s${seed}w${Math.floor(rnd() * Math.max(n, 1))}`;
             if (t.toString().includes(`${w} `)) {
@@ -792,13 +790,6 @@ describe('al azar: tres dispositivos que compactan, la versión publicada, snaps
         await old.pushPage(page, oldRemote);
       }
       const expected = serverText(server, page);
-      if (process.env.COMPACT_DEBUG) {
-        const fs = await import('node:fs');
-        for (const [k, d] of devs.entries()) fs.appendFileSync(`.zz-tmp/dbg-${seed}.log`, `fin ${k}: ${await text(d, page)} ${JSON.stringify({ ...(await state(d, page)), syncedSV: undefined, syncedDS: undefined, pending: undefined })}
-`);
-        fs.appendFileSync(`.zz-tmp/dbg-${seed}.log`, `fin servidor: ${expected}
-`);
-      }
       stats.confirmed += server.snapshots.filter((x) => x.confirmedAt !== null).length;
       stats.invalidated += server.snapshots.filter((x) => x.invalidAt !== null).length;
       stats.bad += bad.size;
@@ -829,4 +820,71 @@ describe('al azar: tres dispositivos que compactan, la versión publicada, snaps
       }
     });
   }
+});
+
+// --- el cliente de verdad (SupabaseRemote) con un fetch en memoria ------------------------------------------------------
+
+describe('SupabaseRemote: las funciones de quien compacta', () => {
+  function fakeBase(answers: Record<string, { status: number; body: unknown }>) {
+    const calls: { path: string; body: Record<string, unknown> }[] = [];
+    const fetchFn: typeof fetch = async (input, init) => {
+      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+      const path = url.pathname.replace('/rest/v1/', '');
+      calls.push({ path, body: init?.body ? JSON.parse(String(init.body)) : {} });
+      const a = answers[path] ?? { status: 404, body: { code: 'PGRST202', message: `no ${path}` } };
+      return new Response(JSON.stringify(a.body), { status: a.status, headers: { 'Content-Type': 'application/json' } });
+    };
+    const client = createClient('https://example.supabase.co', 'sb_publishable_test', {
+      global: { fetch: fetchFn },
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+    return { remote: new SupabaseRemote(client, '1.000'), calls };
+  }
+
+  it('reservar, subir, bajar la vuelta, confirmar, saltear e invalidar: qué pide y cómo lee la respuesta', async () => {
+    const { remote, calls } = fakeBase({
+      'rpc/claim_page_compaction': { status: 200, body: [{ base_id: null, base_seq: '0', up_to_seq: '120', last_update_id: '9001' }] },
+      'rpc/push_page_snapshot': { status: 200, body: [{ snapshot_id: 'snap-1', result: 'ok' }] },
+      'rpc/pull_page_snapshot': { status: 200, body: 'AQID' },
+      'rpc/confirm_page_snapshot': { status: 200, body: true },
+      'rpc/skip_page_compaction': { status: 200, body: null },
+      'rpc/invalidate_page_snapshot': { status: 200, body: true },
+    });
+    expect(await remote.claimCompaction('p')).toEqual({ baseId: null, baseSeq: 0, upToSeq: 120, lastUpdateId: 9001 });
+    const state = new Uint8Array([1, 2, 3]);
+    expect(
+      await remote.pushSnapshot({ pageId: 'p', baseId: null, upToSeq: 120, lastUpdateId: 9001, state, sv: new Uint8Array([0]), sha256: 'ab' }),
+    ).toEqual({ id: 'snap-1', result: 'ok' });
+    expect([...(await remote.pullSnapshot('snap-1'))]).toEqual([1, 2, 3]);
+    expect(await remote.confirmSnapshot('snap-1', 'ab')).toBe(true);
+    await remote.skipCompaction('p', 'too large');
+    expect(await remote.invalidateSnapshot('snap-1', 'x')).toBe(true);
+    expect(calls.map((c) => c.path)).toEqual([
+      'rpc/claim_page_compaction',
+      'rpc/push_page_snapshot',
+      'rpc/pull_page_snapshot',
+      'rpc/confirm_page_snapshot',
+      'rpc/skip_page_compaction',
+      'rpc/invalidate_page_snapshot',
+    ]);
+    expect(calls[0].body).toEqual({ p_page_id: 'p', p_app_version: '1.000' });
+    expect(calls[1].body).toEqual({
+      p_page_id: 'p', p_base_id: null, p_up_to_seq: 120, p_last_update_id: 9001, p_state: 'AQID', p_sv: 'AA==', p_sha256: 'ab', p_app_version: '1.000',
+    });
+    expect(calls[3].body).toEqual({ p_id: 'snap-1', p_sha256: 'ab' });
+  });
+
+  it('sin tramo, una base sin la migración y una respuesta rara', async () => {
+    expect(await fakeBase({ 'rpc/claim_page_compaction': { status: 200, body: [] } }).remote.claimCompaction('p')).toBeNull();
+    expect(await fakeBase({}).remote.claimCompaction('p')).toBeNull();
+    const odd = fakeBase({ 'rpc/push_page_snapshot': { status: 200, body: [{ snapshot_id: 's', result: 'otro' }] } });
+    await expect(
+      odd.remote.pushSnapshot({ pageId: 'p', baseId: null, upToSeq: 1, lastUpdateId: 1, state: new Uint8Array([1]), sv: new Uint8Array([0]), sha256: 'ab' }),
+    ).rejects.toThrow(/unexpected answer/);
+    const off = fakeBase({ 'rpc/push_page_snapshot': { status: 400, body: { code: 'P0001', message: 'snapshot_off' } } });
+    await expect(
+      off.remote.pushSnapshot({ pageId: 'p', baseId: null, upToSeq: 1, lastUpdateId: 1, state: new Uint8Array([1]), sv: new Uint8Array([0]), sha256: 'ab' }),
+    ).rejects.toThrow(/snapshot_off/);
+    expect(await fakeBase({ 'rpc/confirm_page_snapshot': { status: 200, body: false } }).remote.confirmSnapshot('s', 'ab')).toBe(false);
+  });
 });
