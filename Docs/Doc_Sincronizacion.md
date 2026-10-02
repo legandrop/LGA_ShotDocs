@@ -1368,6 +1368,27 @@ opción), `ui/DrivePasteMenu.tsx` (el menú), `ui/driveCard.ts` (la tarjeta) y `
 - **La copia liviana de un video** (para verlo sin el reproductor de Drive) queda para más adelante, solo si
   hace falta: sin un servidor que convierta videos, se haría en el navegador.
 
+## Quien no ve lo borrado baja bases limpias
+
+`Doc_Privacidad_Borrado.md` (D14). Con el interruptor del workspace prendido (`clean_min_version`, versión 12 de la
+base), quien no ve lo borrado de una página (menos que Editar, o invitado: `SyncEngine.isBaseReader`) no recibe filas
+sino la última **base limpia**: la página entera con lo borrado como hueco. Para ese dispositivo "al día" es llegar a
+`pages.clean_seq` (`PageTree.serverSeq`, `contentGap`): lo usan el ciclo, `isMissingContent`, *Available offline*, la
+búsqueda y el reemplazo del proyecto. Sin base todavía, la página está "en preparación" (solo lectura, sin semilla).
+
+- **Bajar:** la base llega como una fila con `seq = to_seq`. Si el dispositivo no tiene nada sin subir y la base cubre
+  todo lo guardado, lo reemplaza en la misma transacción (`applyRemote`); si no, se suma como una fila más.
+- **Armar** (dispositivos de quien edita, desde la versión del interruptor): al final de cada ciclo, si hubo actividad
+  en los últimos 5 minutos (o cada 2), `clean_work` dice qué páginas con lectores toca armar (sin base, o 20 s × f sin
+  escribir, o 2 minutos × f escribiendo); el dispositivo arma solo las que tiene exactamente como el servidor, con las
+  dos comprobaciones, como mucho 20 por vuelta. Al pasar a segundo plano (`appHidden`), sin esperar. Sus errores no
+  cortan el ciclo.
+- **Compartir, invitar y mover** suben antes lo pendiente de las páginas alcanzadas (`uploadPagesFirst`; mover, desde
+  la cola del árbol) y después arman las bases enseguida (`prepareBases`, que pide de a 50 a `clean_work` hasta que no
+  queda ninguna).
+- **Un invitado con Editar** sube sus filas como siempre; su cursor queda por delante de la base y baja la siguiente.
+- **La subida no cambia** (D15, D19).
+
 ## Restaurar una copia de seguridad: la generación
 
 Las copias de seguridad de la base (`Plan_Workspaces.md`, sección 7) se pueden restaurar, pero lo que se

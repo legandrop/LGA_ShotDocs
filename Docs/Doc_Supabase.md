@@ -41,7 +41,7 @@ Las migraciones están en `supabase/migrations/`, en orden:
 | `20261007120000_historial.sql` | **Aplicada (2026-10-01, v0.098).** El historial de versiones (P.18, `Doc_Historial.md`): `page_history(page, after_seq, limit)` (las filas de `page_updates` con autor y hora) y `page_history_authors(page)` (los correos), solo con nivel 3 o más, sin ser invitado y fuera de la papelera (`private.check_history`); el autor y la hora ya no se leen directo de la tabla (`authenticated` lee solo las columnas del contenido). Sube `schema_version` a 11 (`HISTORY_SCHEMA_VERSION`). |
 | `20261006120000_version_minima_archivos.sql` | La versión mínima de la app también frena la cola de archivos (v0.090): `register_file`, `link_page_file` y `unlink_page_file` con `p_app_version` (la misma regla que el contenido), y las de siempre, que llaman solo las versiones anteriores, dejan de andar cuando la mínima es 0.090 o más (`private.files_version_allowed`). No sube `schema_version`. Ver `Doc_Sincronizacion.md`, "La versión mínima y los archivos". |
 | `20261008120000_version_minima_arbol.sql` | **Aplicada (2026-10-02, v0.099).** La versión mínima también frena el árbol y los comentarios (B.17, v0.099): la app manda su versión en el header `x-shotdocs-version` y dos políticas restrictivas (insert y update) en `pages` y `workspaces`, un trigger en `comments` y adentro `set_project_archived`, `delete_project` y `restore_project` (mismas firmas) la comparan con la mínima (`private.require_write_version`); sin header, rechazan solo con la mínima en 0.099 o más (el número real lo pone quien publica). El rechazo es un 503 `app_outdated` (`raise sqlstate 'PGRST'`), que todas las versiones reintentan. No sube `schema_version`. Ver `Doc_Sincronizacion.md`, "La versión mínima, el árbol y los comentarios". |
-| `20261011120000_versiones_con_nombre.sql` | **Sin aplicar** (P.18, entrega 3; `Doc_Historial.md`). Las versiones con nombre: la tabla `page_versions` (un nombre, `kind = 'named'`, o la marca de una restauración, `kind = 'restore'` con `restored_from_seq`, que apunta a una fila de `page_updates` por su `seq` y guarda su `id` en `update_id`; sin contenido; `removed_at`/`removed_by` en vez de borrar), sin acceso directo desde la API (RLS sin políticas y `revoke all`). Funciones, todas con `private.check_history` (nivel 3, no invitado, ni la página ni una de arriba en la papelera): `list_page_versions(page)` (solo las vigentes cuya fila sigue teniendo ese `id`: después de restaurar una copia de seguridad, un `seq` reusado no hereda el nombre), `name_page_version(id, page, seq, label)` (id del dispositivo, idempotente; `version_conflict`, `version_named` si ya tiene nombre, `version_not_found`, `label_invalid`), `rename_page_version(id, label)` y `remove_page_version(id)` (quien lo puso o nivel 4 sobre la página; `not_allowed`; una marca de restauración, `version_not_named`), y `mark_page_restored(id, page, seq, from_seq)` (solo sobre una fila que subió quien llama). Las cuatro que escriben miran la versión mínima (`private.require_session_write_version`) antes de escribir. Sube `schema_version` a 13 (`NAMED_VERSIONS_SCHEMA_VERSION`; da por hecho que `20261010120000_privacidad_borrado.sql`, que sube a 12, sale antes). No toca `page_updates` ni las funciones de siempre. |
+| `20261011120000_versiones_con_nombre.sql` | **Sin aplicar** (P.18, entrega 3; `Doc_Historial.md`). Las versiones con nombre: la tabla `page_versions` (un nombre, `kind = 'named'`, o la marca de una restauración, `kind = 'restore'` con `restored_from_seq`, que apunta a una fila de `page_updates` por su `seq` y guarda su `id` en `update_id`; sin contenido; `removed_at`/`removed_by` en vez de borrar), sin acceso directo desde la API (RLS sin políticas y `revoke all`). Funciones, todas con `private.check_history` (nivel 3, no invitado, ni la página ni una de arriba en la papelera): `list_page_versions(page)` (solo las vigentes cuya fila sigue teniendo ese `id`: después de restaurar una copia de seguridad, un `seq` reusado no hereda el nombre), `name_page_version(id, page, seq, label)` (id del dispositivo, idempotente; `version_conflict`, `version_named` si ya tiene nombre, `version_not_found`, `label_invalid`), `rename_page_version(id, label)` y `remove_page_version(id)` (quien lo puso o nivel 4 sobre la página; `not_allowed`; una marca de restauración, `version_not_named`), y `mark_page_restored(id, page, seq, from_seq)` (solo sobre una fila que subió quien llama). Las cuatro que escriben miran la versión mínima (`private.require_session_write_version`) antes de escribir. Sube `schema_version` a 13 (`NAMED_VERSIONS_SCHEMA_VERSION`; después de `20261010120000_privacidad_borrado.sql`, la 12). No toca `page_updates` ni las funciones de siempre. |
 | `20261009120000_papelera_lectores.sql` | **Aplicada (2026-10-02, v0.102).** La papelera de páginas ya no se lee con Ver: `private.user_page_level` da 0 sobre una página en la papelera (o que cuelga de una) a quien tiene menos de 3 y a los invitados, y la política de lectura de `pages` (`can_view_page_row`, que con un permiso sobre el proyecto entero dejaba ver cualquier fila) aplica la misma regla. Las dos pasan a PL/pgSQL con una sola pasada por la cadena de padres (más rápidas que antes). No cambia firmas ni sube `schema_version`. Ver "La papelera de páginas y quién la ve". |
 
 Reglas del esquema:
@@ -99,6 +99,32 @@ papelera antes de compartirle la rama.
   2 ms igual. La regla nueva necesita mirar los padres en cada fila, pero las dos funciones pasaron de SQL a
   PL/pgSQL (Postgres 17 vuelve a planificar en cada llamada una función SQL que no se puede expandir; PL/pgSQL guarda
   el plan en la sesión) y juntan permisos y papelera en una sola consulta.
+
+### Lo borrado y quién lo recibe (bases limpias)
+
+Migración `20261010120000_privacidad_borrado.sql` (aplicada el 2026-10-02, interruptor apagado; diseño y cómo quedó en `Doc_Privacidad_Borrado.md`).
+Recibe lo borrado de una página quien ve su historial (`private.sees_deleted`: nivel 3 o más y no invitado). Con el
+interruptor `workspace_settings.clean_min_version` prendido, a los demás (Ver, Comentar, invitados) `pull_page_updates`
+les da solo la **base limpia** vigente (`page_clean_bases`, una por página, la arma y sube un editor con
+`push_clean_base`; `clean_work` dice cuáles), o nada si no hay; apagado (`null`, como queda la migración), todos bajan
+filas como siempre. `share`, `create_invitation` (con Ver, Comentar o a un invitado) y mover una página a una rama con
+lectores ponen `clean_reset_seq = update_seq`: una base de antes no se sirve ni se acepta.
+
+Valen desde que se aplica, con el interruptor apagado: la columna `update` de `page_updates` no se lee directo desde la
+API (nadie: la app baja por funciones); un uso sacado de un archivo (`page_files.removed_at`) no da permiso a quien no
+ve lo borrado de esa página (`can_view_file`, `file_level`, la política de `page_files`, y con ellas `files`, `thumbs`
+y el portero); la papelera de archivos (`trashed_files`) no responde a invitados.
+
+- **Prenderlo:** el script de restaurar del repo de copias tiene que vaciar `page_clean_bases` y dejar `clean_seq` en
+  0 y `clean_reset_seq` en el `update_seq` restaurado; `min_app_version` en la versión que trae las bases; copia de
+  seguridad; y `update public.workspace_settings set clean_min_version = <esa versión> where id`. El `check`
+  `workspace_settings_clean_min_le_min_app` no deja prenderlo por encima de `min_app_version` (ni sin ella), ni bajar la
+  mínima por debajo de él.
+- **`clean_work`** junta solo páginas vivas de proyectos vivos alcanzadas por un permiso de lector, de los proyectos
+  donde la sesión edita algo, y mira cada una (`sees_deleted`, `has_plain_readers`) antes de contarla en las 50.
+- **Apagarlo** (`clean_min_version = null`) vuelve a servir filas a todos. No se borra nada en ningún sentido: las
+  bases son copias derivadas.
+- **Pruebas:** `supabase/tests/privacidad_borrado_permisos.sql` (corrida en `begin … rollback`).
 
 ### Aplicar las migraciones
 

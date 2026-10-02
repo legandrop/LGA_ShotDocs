@@ -26,8 +26,8 @@
 -- Compatible con la app y el portero publicados: no toca `page_updates`, `push_page_update`, `pull_page_updates`,
 -- `page_history` ni ninguna fila; una versión anterior de la app no sabe de `page_versions` y sigue igual.
 --
--- OJO al publicar: `schema_version` 13 da por hecho que 20261010120000_privacidad_borrado.sql (que sube a 12) sale
--- antes. La app lo compara con `NAMED_VERSIONS_SCHEMA_VERSION` (src/sync/history.ts): si cambia acá, cambia allá.
+-- `schema_version` 13: va después de 20261010120000_privacidad_borrado.sql (12). La app lo compara con
+-- `NAMED_VERSIONS_SCHEMA_VERSION` (src/sync/history.ts): si cambia acá, cambia allá.
 
 create table public.page_versions (
   -- Lo crea el dispositivo: reintentar no duplica.

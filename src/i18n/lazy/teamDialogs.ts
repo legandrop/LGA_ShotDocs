@@ -39,6 +39,24 @@ export const teamDialogs = {
     es: "¿Revocar la invitación de {email}? Ya no va a poder entrar con ella; nada más cambia.",
   },
   'share.label': { en: "Share", es: "Compartir" },
+  'share.deletedNow': {
+    en: "Text and photos deleted from these pages can still reach the people you share them with.",
+    es: "El texto y las fotos que se borraron de estas páginas todavía pueden llegarles a las personas con quienes las compartís.",
+  },
+  'share.deletedClean': {
+    en: "They'll get the page as it is when the editors' apps refresh it, not its history. Something that stayed on the page for a minute may reach them even if you delete it later.",
+    es: "Les llega la página como está cuando las apps de quienes editan la actualizan, no su historia. Algo que quedó en la página un minuto les puede llegar aunque después lo borres.",
+  },
+  'share.unsynced': {
+    en: "There are unsynced changes on these pages: what you deleted may still reach them.",
+    es: "Hay cambios sin sincronizar en estas páginas: lo que borraste todavía les puede llegar.",
+  },
+  'share.retry': { en: "Retry", es: "Reintentar" },
+  'share.anyway': { en: "Share anyway", es: "Compartir igual" },
+  'share.preparing': {
+    en: "Preparing {done} of {count} pages for {email}…",
+    es: "Preparando {done} de {count} páginas para {email}…",
+  },
   'share.title': { en: "Share “{title}”", es: "Compartir “{title}”" },
   'share.projectScope': {
     en: "Access to a project covers every page in it.",

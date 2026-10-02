@@ -259,7 +259,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   huérfano en su versión, el Worker con la página de respaldo, la diferencia solo de lo tocado y la lista que se
   actualiza sola. **Entrega 3 hecha (v0.0XX):** versiones con nombre (`page_versions`: nombrar, renombrar, quitar,
   *Only named versions*, *Restored from…*) y la caché `<base local>:history` con el historial sin red. **Falta:** aplicar
-  `20261011120000_versiones_con_nombre.sql` (con copia de seguridad; `schema_version` 13, después de la de privacidad) y
+  `20261011120000_versiones_con_nombre.sql` (con copia de seguridad; `schema_version` 13, después de la 12 de privacidad) y
   medir en el iPhone. De la entrega 3, para después: la marca *Restored from…* se pierde si la app se cierra antes de
   que la restauración suba y nunca se vuelve a abrir el historial de esa página en una semana (es solo un rótulo); un
   Ctrl/⌘+Z de la restauración (en vez del *Undo* del aviso) no deja de lado la marca. Encontrado por la prueba al azar: una versión con dos bloques del mismo id no se puede
@@ -469,12 +469,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
     la misma versión que corre, *Update now* sigue diciendo que falló en vez de recargar (cualquier instalación nueva
     lo borra; no pierde nada). Ver `Doc_Sincronizacion.md`, "La versión mínima, el árbol y los comentarios" y "Volver
     después de mucho tiempo sin red".
-18. **Que lo borrado no llegue a quien solo ve la página (D14). Diseño en `Doc_Privacidad_Borrado.md`, sin código.**
-    Hoy lo borrado viaja en las filas a cualquiera que ve la página (también invitados) y las fotos sacadas se siguen
-    abriendo. Entregas: (0) avisarlo al compartir y en la ayuda; (1) la base limpia: quien no edita baja siempre la
-    última base de la página (armada por un editor, con lo borrado como hueco), con `clean_reset_seq` al compartir, los
-    permisos de los usos sacados de archivos y el interruptor `clean_min_version`, antes de invitar al primer cliente de
-    verdad; (2) medir; (3) limpiar el dispositivo de quien deja de ver lo borrado; (4) deltas si hacen falta. La subida
+18. **Que lo borrado no llegue a quien solo ve la página (D14). Entregas 0 y 1 hechas (v0.104), migración
+    `20261010120000_privacidad_borrado.sql` aplicada e interruptor apagado.** Quien no edita baja siempre la última
+    base limpia (armada por un editor, con lo borrado como hueco), con `clean_reset_seq` al compartir, invitar y mover,
+    los permisos de los usos sacados de archivos, la columna `update` cerrada y la línea al compartir y la ayuda.
+    **Falta para prenderlo** (antes de invitar al primer cliente de verdad): aplicar la migración, el cambio del script
+    de restaurar, `min_app_version` en esta versión, la prueba de punta a punta (7) y `clean_min_version`. Después: (2)
+    medir; (3) limpiar el dispositivo de quien deja de ver lo borrado; (4) deltas si hacen falta; medir en el iPhone. La subida
     no cambia (D19). Las páginas en la papelera ya no se leen con Ver (ítem 19, v0.102). Lega aceptó la demora del
     cliente (D22, sección 13).
 19. **Hecho (v0.102): la papelera de páginas ya no se lee con Ver.** Ver, Comentar y los invitados leían enteras las

@@ -3,6 +3,7 @@ import type { DocState } from '../sync/localDb';
 import type { PageRow } from '../sync/types';
 import { SEPARATOR, unitsFromYDoc, type UnitField } from './extract';
 import { findIn, normalize, normalizeQuery, searchNormalized, type Normalized, type SearchOptions } from './normalize';
+import { treeContentGap } from '../sync/clean';
 
 // La búsqueda en todo el proyecto (Docs/Doc_Buscar.md, secciones 7 y 8, con las correcciones 5, 7, 8 y 15 a
 // 17). Sin React, como `projectSizes.ts`: una instancia por instancia de servicios, en memoria.
@@ -27,6 +28,8 @@ export interface IndexTree {
   children(parentId: string | null): PageRow[];
   ancestors(id: string): PageRow[];
   hasUnsentCreate(pageId: string): boolean;
+  /** "Al día" para este dispositivo (privacidad de lo borrado); sin él, con `update_seq`. */
+  contentGap?(row: PageRow, cursor: number): 'missing' | 'preparing' | null;
 }
 
 export interface IndexDocs {
@@ -321,7 +324,8 @@ export class ProjectIndex {
     const pages = this.pagesOf(projectId);
     for (const page of pages) {
       const state = this.states.get(page.id);
-      if (page.update_seq > (state?.cursor ?? 0) && !this.tree.hasUnsentCreate(page.id)) missing++;
+      // Lo que falta bajar (o "en preparación": sin base limpia todavía, para quien no ve lo borrado).
+      if (treeContentGap(this.tree, page, state?.cursor ?? 0) !== null && !this.tree.hasUnsentCreate(page.id)) missing++;
       if (state?.unreadable) unreadable++;
     }
     return { pages: pages.length, building: this.building, missing, unreadable };

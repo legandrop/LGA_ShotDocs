@@ -437,6 +437,9 @@ comprobaciones en cada caso (sección 11).
 
 ## 7. Permisos
 
+(Desde la privacidad de lo borrado, `Doc_Privacidad_Borrado.md`, el mismo criterio decide quién recibe lo borrado:
+`private.sees_deleted`. La columna `update` de `page_updates` tampoco se lee directo desde la API.)
+
 - **Quién ve el historial, propuesto: quien puede editar la página** (nivel 3 o más: Editar, Editar y crear
   páginas, el dueño y los admins con permiso), como en Google Docs, donde quien solo ve o comenta no tiene
   historial. **Los invitados (`guest`), aunque tengan Editar, no**, hasta que Lega diga (pregunta 1). Lo comprueban
@@ -1033,7 +1036,7 @@ nombre; nombre ajeno, base sin migrar y sin la función; sin red y otro disposit
 guardado y al volver la red; sin nada guardado), más el atajo del campo del nombre en el registro (Enter guarda,
 Escape deja como estaba). Mutantes de la app: 25 de 26 hacen fallar alguna prueba; el que vive saca la espera a que la
 página termine de subir antes de buscar la fila de la restauración, que solo ahorra pedidos (sin ella, la busca, no la
-encuentra y espera a la sincronización siguiente). Suite: 2343 (2338 pasan, 5 salteadas).
+encuentra y espera a la sincronización siguiente). Suite, ya con la privacidad de v0.104: 2374 (2369 pasan, 5 salteadas).
 
 **Lo que falta:** medir en el iPhone; aplicar la migración. Detalles que quedaron así: Ctrl/⌘+Z de la restauración (en
 vez del *Undo* del aviso) no deja de lado la marca; en el filtro, la versión actual se ve siempre aunque no tenga

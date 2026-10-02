@@ -205,6 +205,8 @@ además en la consola, porque es la señal de un error del compactador.
 
 `pull_page_snapshot(base_id)` (la base) y `pull_page_updates(page, base_seq)` hasta `up_to_seq`: exactamente las
 filas del servidor, no lo guardado en el dispositivo (que mezcla lo propio sin subir y está compactado en local).
+**Nunca desde lo guardado en un dispositivo que fue lector** (privacidad de lo borrado, `Doc_Privacidad_Borrado.md`:
+tiene bases con huecos, no las filas).
 Cada fila se decodifica; **si una no se puede leer** (la escribió una versión más nueva), no se compacta.
 
 ### 4.4 Armar y comprobar
@@ -418,7 +420,8 @@ anteriores, que leen y vuelven a escribir el mismo objeto, conservan esos campos
   confirmar e invalidados (hasta 8 MB cada uno). Lo que un snapshot muestra es lo mismo que las filas que cubre, que
   quien ve la página ya puede leer (también lo borrado, igual que ellas).
 - Escriben solo las funciones `security definer`: reservar, subir, confirmar e invalidar piden nivel 3 sobre la
-  página (`page_level`); bajar, nivel 1. Todas controlan que la página no esté en un proyecto borrado (como hoy
+  página (`page_level`); bajar, **`private.sees_deleted`** (el snapshot conserva lo borrado: quien no lo ve baja la
+  base limpia, `Doc_Privacidad_Borrado.md`). Todas controlan que la página no esté en un proyecto borrado (como hoy
   `page_level`).
 - Las funciones auxiliares (`private.current_snapshot`, `private.snapshots_allowed`) llevan `revoke all ... from
   public, anon, authenticated`, como las de `equipo.sql`: si no, Postgres deja ejecutarlas a `PUBLIC`.
