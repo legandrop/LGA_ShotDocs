@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type * as Y from 'yjs';
 import { t, useT } from '../i18n';
 import '../i18n/lazy/templates';
+import type { CarryResult } from '../media/markupClipboard';
 import { navigate, pagePath } from '../router';
 import { usePermissions, useServices, useTree } from '../services';
 import { notify } from '../ui/notice';
@@ -141,8 +142,9 @@ export function TemplateHost({ pageId, doc, editor, editable, complete }: Props)
       // Mientras se leía la carpeta pudo llegar algo (otro dispositivo) o se pudo escribir: se vuelve a mirar.
       if (!canWrite || !current || !isEmptyPage(doc)) return;
       const pageEditor = current as PageEditorLike;
+      let carried: CarryResult | null = null;
       try {
-        if (template) insertTemplateCopy(pageEditor, doc, { ok: true, blocks, collapsed: template.collapsed });
+        if (template) carried = insertTemplateCopy(pageEditor, doc, { blocks, collapsed: template.collapsed, markup: template.markup });
         else insertTemplate(pageEditor, blocks);
       } catch (err) {
         console.error('No se pudo agregar la plantilla', err);
@@ -159,6 +161,7 @@ export function TemplateHost({ pageId, doc, editor, editable, complete }: Props)
       void tree.dropFresh(pageId);
       if (perms.canEditPage(row.parent_id)) void markReportFolder(tree, row.parent_id, template ? template.id : undefined);
       if (template?.removed) notify(t('templates.mediaRemoved', { count: template.removed }));
+      if (carried?.skipped.length) notify(t('templates.markupTooMany'));
       placeAtSummary(pageEditor);
       pageEditor.focus?.();
     },
@@ -277,7 +280,7 @@ export function TemplateHost({ pageId, doc, editor, editable, complete }: Props)
         return;
       }
       if (templateInfo(read.row).dayReport) {
-        const template = { id: templateId, blocks: read.blocks, collapsed: read.collapsed, removed: read.removed };
+        const template = { id: templateId, blocks: read.blocks, collapsed: read.collapsed, markup: read.markup, removed: read.removed };
         if (row.parent_id) await applyDayReport(template);
         else askRootFolder(template);
         return;
@@ -286,8 +289,9 @@ export function TemplateHost({ pageId, doc, editor, editable, complete }: Props)
       // Se vuelve a mirar en el momento: otro dispositivo pudo escribir mientras se leía la plantilla.
       if (!canWrite || !current || !isEmptyPage(doc)) return;
       const pageEditor = current as PageEditorLike;
+      let carried: CarryResult | null = null;
       try {
-        insertTemplateCopy(pageEditor, doc, { ok: true, blocks: read.blocks, collapsed: read.collapsed });
+        carried = insertTemplateCopy(pageEditor, doc, { blocks: read.blocks, collapsed: read.collapsed, markup: read.markup });
       } catch (err) {
         console.error('No se pudo agregar la plantilla', err);
         notify(t('templates.applyFailed'));
@@ -297,6 +301,7 @@ export function TemplateHost({ pageId, doc, editor, editable, complete }: Props)
       if (tree.get(pageId)?.template_id !== templateId) void tree.setPatch(pageId, { template_id: templateId });
       void tree.dropFresh(pageId);
       if (read.removed) notify(t('templates.mediaRemoved', { count: read.removed }));
+      if (carried?.skipped.length) notify(t('templates.markupTooMany'));
       focusAfterInsert(pageEditor);
     },
     [tree, docs, engine, pageId, doc, applyDayReport, askRootFolder, focusAfterInsert],
