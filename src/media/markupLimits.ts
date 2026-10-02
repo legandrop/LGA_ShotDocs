@@ -66,7 +66,14 @@ export function entriesBytes(entries: readonly [string, unknown][]): number {
       if (value && typeof value === 'object' && !Array.isArray(value) && parseMarkupKey(key)?.shapeId) {
         const shape = new Y.Map<unknown>();
         target.set(key, shape);
-        for (const [k, v] of Object.entries(value as Record<string, unknown>)) if (v !== undefined) shape.set(k, v);
+        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+          if (v === undefined) continue;
+          try {
+            shape.set(k, v);
+          } catch {
+            // Un valor que Yjs no guarda (no sale de un mapa de verdad): no se escribe, no se cuenta.
+          }
+        }
       } else target.set(key, value);
     }
   });

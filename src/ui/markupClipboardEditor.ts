@@ -40,7 +40,13 @@ function validClip(value: unknown): MarkupClip | null {
   if (typeof v.key !== 'string' || typeof v.scope !== 'string' || !Array.isArray(v.photos)) return null;
   const photos = v.photos.filter(
     (p): p is CopiedPhoto =>
-      !!p && typeof p === 'object' && typeof p.fileId === 'string' && !!p.frame && typeof p.frame === 'object' && Array.isArray(p.shapes),
+      !!p &&
+      typeof p === 'object' &&
+      typeof p.fileId === 'string' &&
+      !!p.frame &&
+      typeof p.frame === 'object' &&
+      Array.isArray(p.shapes) &&
+      p.shapes.every((s) => Array.isArray(s) && typeof s[0] === 'string' && !!s[1] && typeof s[1] === 'object'),
   );
   return photos.length > 0 ? { key: v.key, scope: v.scope, photos } : null;
 }
@@ -159,8 +165,13 @@ export function pasteWithMarkup(p: PasteWithMarkup): boolean | undefined {
   let result: CarryResult | null = null;
   const handled = asOneUndoStep(p.view.state, () => {
     const out = p.run();
-    // Lo que quedó de verdad en el contenido (una foto que no entró no deja anotaciones huérfanas).
-    result = carryMarkup(p.doc, clip.photos, mediaIdsInDoc(p.doc));
+    // Lo que quedó de verdad en el contenido (una foto que no entró no deja anotaciones huérfanas). Si algo falla, el
+    // pegado ya está hecho: la foto queda limpia, nunca se corta el pegado.
+    try {
+      result = carryMarkup(p.doc, clip.photos, mediaIdsInDoc(p.doc));
+    } catch (err) {
+      console.warn('[anotaciones] no se pudieron pegar las anotaciones', err);
+    }
     return out;
   });
   if ((result as CarryResult | null)?.skipped.some((s) => s.reason === 'limit')) p.onLimit?.();

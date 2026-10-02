@@ -83,6 +83,21 @@ function plain(value: unknown): unknown {
 }
 
 /**
+ * Un valor que Yjs guarda tal cual (como JSON): texto, número finito, sí/no, `null`, y listas u objetos planos de eso.
+ * Lo copiado sale del mapa, que ya es así; esto cuida lo que llega de otra pestaña, para que escribir nunca falle a mitad
+ * de camino (un campo raro se deja afuera, como hace la lectura con lo que no entiende).
+ */
+function jsonSafe(v: unknown, depth = 0): boolean {
+  if (v === null || typeof v === 'string' || typeof v === 'boolean') return true;
+  if (typeof v === 'number') return Number.isFinite(v);
+  if (depth > 8 || typeof v !== 'object') return false;
+  if (Array.isArray(v)) return v.every((x) => jsonSafe(x, depth + 1));
+  const proto = Object.getPrototypeOf(v);
+  if (proto !== Object.prototype && proto !== null) return false;
+  return Object.values(v as Record<string, unknown>).every((x) => jsonSafe(x, depth + 1));
+}
+
+/**
  * Lo que se lleva cada foto de `fileIds` que tiene anotaciones en la página: su marco y TODAS sus formas, campo por campo
  * (también los que esta versión no conoce: una versión más nueva no los pierde al pasar por esta). Las fotos sin marco
  * válido o sin formas no se llevan nada.
@@ -145,7 +160,8 @@ export function carryMarkup(doc: Y.Doc, photos: readonly CopiedPhoto[], inConten
       result.skipped.push({ fileId: photo.fileId, reason: 'frame' });
       continue;
     }
-    const missing = photo.shapes.filter(([id]) => parseMarkupKey(shapeKey(photo.fileId, id))?.shapeId && !map.has(shapeKey(photo.fileId, id)));
+    const missing = photo.shapes.filter(([id, fields]) =>
+      !!fields && typeof fields === 'object' && parseMarkupKey(shapeKey(photo.fileId, id))?.shapeId && !map.has(shapeKey(photo.fileId, id)));
     if (missing.length === 0) continue;
     const frame = here ? null : { v: src.v, w: src.w, h: src.h };
     // Lo que agrega, codificado como lo mide el tope (el marco y las formas nuevas).
@@ -168,7 +184,7 @@ export function carryMarkup(doc: Y.Doc, photos: readonly CopiedPhoto[], inConten
       if (p.frame) map.set(p.fileId, { v: p.frame.v, w: p.frame.w, h: p.frame.h });
       for (const [id, fields] of p.shapes) {
         const shape = new Y.Map<unknown>();
-        for (const [k, v] of Object.entries(fields)) if (v !== undefined) shape.set(k, plain(v));
+        for (const [k, v] of Object.entries(fields)) if (jsonSafe(v)) shape.set(k, plain(v));
         map.set(shapeKey(p.fileId, id), shape);
       }
       result.written.push(p.fileId);

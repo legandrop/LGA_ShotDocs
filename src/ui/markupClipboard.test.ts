@@ -537,6 +537,20 @@ describe('las piezas', () => {
     await vi.waitFor(() => expect(clipFor(data, SCOPE)?.photos[0].fileId).toBe(ID(1)));
     other.postMessage({ key: 5 });
     await vi.waitFor(() => expect(clipFor(data, SCOPE)).toBeNull());
+    // Formas que no son pares [id, campos]: se descarta la copia entera.
+    other.postMessage(got[0]);
+    await vi.waitFor(() => expect(clipFor(data, SCOPE)).not.toBeNull());
+    other.postMessage({ key: clipKey(data), scope: SCOPE, photos: [{ fileId: ID(1), frame: { v: 1, ...FRAME }, shapes: [5] }] });
+    await vi.waitFor(() => expect(clipFor(data, SCOPE)).toBeNull());
     other.close();
+  });
+
+  it('un campo que Yjs no guarda (de otra pestaña) se deja afuera y lo demás se escribe; nunca falla a mitad de camino', () => {
+    const dst = new Y.Doc();
+    const fields = { type: 'line', posX: 1, posY: 2, startX: 0, startY: 0, endX: 5, endY: 5, raro: new Date(0), nan: Number.NaN, mapa: new Map([[1, 2]]), lista: [1, 'a', { b: true }] };
+    const res = carryMarkup(dst, [{ fileId: ID(1), frame: { v: 1, ...FRAME }, shapes: [['s', fields as never]] }], new Set([ID(1)]));
+    expect(res.written).toEqual([ID(1)]);
+    const shape = (mapOf(dst).get(shapeKey(ID(1), 's')) as Y.Map<unknown>).toJSON();
+    expect(shape).toEqual({ type: 'line', posX: 1, posY: 2, startX: 0, startY: 0, endX: 5, endY: 5, lista: [1, 'a', { b: true }] });
   });
 });

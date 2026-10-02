@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+Copiar y pegar una foto con sus anotaciones (D46). Las flechas son de la foto en esa página (AN2): pegar una foto
+anotada en otra página la dejaba limpia, porque el mapa `photoMarkup` es de cada página y el portapapeles lleva solo el
+contenido. Lega pidió que viajen. Ahora, al copiar o cortar, la app guarda en memoria (y en sus otras pestañas, por
+`BroadcastChannel`) las formas de las fotos copiadas; al pegar, si el portapapeles trae justo eso y la página es del mismo
+workspace y proyecto, las escribe con las mismas claves (pegar dos veces no duplica) en el mismo paso de ⌘Z que el
+pegado. Al portapapeles no va nada nuevo; otro proyecto recibe la foto sin anotaciones; una versión vieja pega la foto
+limpia. Sin tipos ni propiedades nuevas: `min_app_version` no cambia.
+[ Copiar y pegar una foto con sus anotaciones (D46) ]
+
 v0.129 :
 
 Tres entregas de fotos y exportar. **El zip para archivar** (P.22, entrega 2): guardar un proyecto fuera de la app no
