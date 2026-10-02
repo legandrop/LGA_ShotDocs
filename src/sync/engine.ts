@@ -534,7 +534,13 @@ export class SyncEngine {
       const stale = this.status.outdated
         ? []
         : rows
-            .filter((r) => this.tree.serverSeq(r) > (cursors.get(r.id)?.cursor ?? 0) || epochBehind(cursors.get(r.id), r.content_epoch))
+            // Y las rearmadas que no terminaron (la app se cerró a mitad de la bajada, R-1): `pullPage` las cierra.
+            .filter(
+              (r) =>
+                this.tree.serverSeq(r) > (cursors.get(r.id)?.cursor ?? 0) ||
+                epochBehind(cursors.get(r.id), r.content_epoch) ||
+                cursors.get(r.id)?.rebuilt === true,
+            )
             .filter((r) => this.options.pullOnly?.(r.id, cursors.get(r.id)?.cursor ?? 0) ?? true)
             .map((r) => r.id);
       await runPool(stale, PULL_CONCURRENCY, (id) =>

@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.138 :
 
 La clave del asistente sincronizada, entrega S1 (P.24, D72 → B, `Doc_Clave_Sincronizada.md`). La clave había que
 pegarla en cada dispositivo. Ahora *Assistant…* → *Turn on sync…* la cifra en el dispositivo con una frase de seis
@@ -11,6 +11,17 @@ clave del dispositivo es otra, pregunta, y si la copia cambió en otro dispositi
 en el menú de la cuenta. La base del dispositivo sigue en la versión 1. Sin cambios en el editor ni en
 `min_app_version`.
 [ Clave del asistente sincronizada S1 - copia cifrada con una frase, abrir en otro dispositivo, dejar de sincronizar y cerrar la sesión en los otros dispositivos ]
+
+v0.137 :
+
+Compactar (B.9), entrega 3: listos para prender (siguen apagados). Faltaba lo que la re-verificación de la entrega 2
+pedía antes: la marca del rearmado vivía en memoria y, si la app se cerraba a mitad, lo escrito junto a un elemento de un
+snapshot malo quedaba invisible; ahora se guarda con el rearmado (R-1). La espera ya no sube la página entera en cada
+bajada (R-2). La base manda la huella de cada snapshot y el dispositivo no aplica uno que no coincide: lo invalida (O-D).
+`pull_page_content` sin versión (v0.127 a v0.133) deja de servir snapshots (migración
+`20261025120000_compactar_prender.sql`, sin aplicar). Restaurar empieza por anularlos (D142). Armar devuelve el control
+cada 30 ms (O-C, medido con la CPU frenada). El SQL para prenderlos queda en `Doc_Compactar.md`.
+[ Compactar, entrega 3 - listos para prender: marca del rearmado guardada, huella del snapshot y versiones viejas sin snapshots ]
 
 v0.136 :
 

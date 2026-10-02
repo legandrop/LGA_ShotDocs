@@ -1,6 +1,6 @@
 # La clave del asistente en todos tus dispositivos (D72 → B)
 
-**Estado: entrega S1 implementada (v0.0XX; ver "Cómo quedó S1", al final; la migración, sin aplicar); S2, en
+**Estado: entrega S1 implementada (v0.138; ver "Cómo quedó S1", al final; la migración, sin aplicar); S2, en
 diseño** (roadmap P.24; pedido de Lega del 2026-10-02, que cambió D72 de A a B: "la clave
 sincronizada entre tus dispositivos, cifrada con una frase que solo sabés vos"). Reemplaza la parte de IA1 de
 `Doc_Asistente.md` que decía "se carga una vez por dispositivo"; todo lo demás de la sección 4 de ese documento (la
@@ -675,7 +675,7 @@ tiene que cumplir:
 - **Adivinar:** la cuenta de la sección 4.2 usa unos 9 000 millones de vueltas de PBKDF2-SHA256 por segundo por placa,
   del orden de lo que publican los benchmarks de `hashcat` para las placas más rápidas de 2023-2024; no se midió acá.
 
-## Cómo quedó S1 (v0.0XX)
+## Cómo quedó S1 (v0.138)
 
 **Qué hay.** La migración `20261023120000_clave_sincronizada.sql` (la tabla de la sección 5, con una condición más:
 la sesión tiene que ser de la app, `private.session_allowed()`, como en el resto de la base; no sube `schema_version`,

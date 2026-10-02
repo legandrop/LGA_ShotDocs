@@ -137,7 +137,7 @@ const ANNOTATE_TOUCH = '0.129';
 /** Copiar y pegar una foto con sus anotaciones (P.20, D46). El número lo pone quien publica. */
 const ANNOTATE_COPY = '0.132';
 /** La clave del asistente sincronizada, entrega S1 (Doc_Clave_Sincronizada.md). El número lo pone quien publica. */
-const ASSISTANT_SYNC = '0.0XX';
+const ASSISTANT_SYNC = '0.138';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---

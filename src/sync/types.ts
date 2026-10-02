@@ -316,6 +316,11 @@ export interface RemoteUpdate {
   snapshotId?: string;
   /** La época de contenido de la página, leída en la misma consulta (`pull_page_content`). */
   contentEpoch?: number;
+  /**
+   * La huella SHA-256 (hex) que la base guardó de este snapshot (`pull_page_content` con la versión, entrega 3, O-D): el
+   * dispositivo la comprueba antes de aplicarlo. Sin ella (una base sin la migración), no se comprueba.
+   */
+  snapshotSha256?: string;
 }
 
 /** `permanent`: reintentar no va a cambiar el resultado (permisos, ciclo, datos inválidos). */
