@@ -3,6 +3,7 @@ import { BarButton, BarSep } from './BarButton';
 import { createContext, useCallback, useContext, useState, type ChangeEvent, type ReactNode } from 'react';
 import { t, useT } from '../i18n';
 import '../i18n/lazy/editor';
+import '../i18n/lazy/folders';
 import { mediaIdOf } from '../media/queue';
 import { useServices } from '../services';
 import { isAttachment } from './attachments';
@@ -32,6 +33,8 @@ export interface MediaActions {
   canComment: boolean;
   /** Abre el carrete en esa foto (la clave: el id del bloque o `<bloque>#<n>`). */
   onView: (key: string) => void;
+  /** *Download all* de la carpeta de ese bloque (P.9, entrega 2): abre su visor con la descarga. */
+  onDownloadAll?: (blockId: string) => void;
 }
 
 export const MediaActionsContext = createContext<MediaActions | null>(null);
@@ -87,17 +90,29 @@ export function ViewButton({ url, attachment = false, onView }: { url: string | 
  * Bajar: una foto del Drive, su original (OriginalDownloadButton); otra (`sdfile://`, `https`), lo que resuelve el
  * editor, con su nombre.
  */
-export function DownloadButton({ url, name }: { url: string | null; name: string }) {
+export function DownloadButton({ url, name, blockId }: { url: string | null; name: string; blockId?: string }) {
   const editor = useBlockNoteEditor();
   const { media } = useServices();
+  const actions = useMediaActions();
   const tr = useT();
   const kind = useMediaKind(url, name);
   const id = mediaIdOf(url);
   const label = kindLabel(kind, tr('mediaButton.download'), tr('photoBar.downloadVideo'), tr('photoBar.downloadFile'));
   if (!url) return null;
-  // Una carpeta (P.9) no se baja entera desde la barra todavía ("Bajar todo" es la entrega 2): cada archivo, desde su
-  // visor.
-  if (id && media.isFolder(id)) return null;
+  // Una carpeta (P.9): *Download all* abre su visor con la descarga (FolderDownload.tsx).
+  if (id && media.isFolder(id)) {
+    if (!blockId || !actions?.onDownloadAll) return null;
+    const all = tr('folders.downloadAll');
+    return (
+      <BarButton
+        label={all}
+        tip={`**${all}**\n${tr('folders.downloadAllTip')}`}
+        icon={<DownloadIcon size={18} />}
+        test="mediaDownloadAll"
+        onClick={() => actions.onDownloadAll!(blockId)}
+      />
+    );
+  }
   if (id) return <OriginalDownloadButton key={id} fileId={id} label={label} />;
   const download = () => {
     const resolve = (editor as unknown as { resolveFileUrl?: (u: string) => Promise<string> }).resolveFileUrl;
@@ -253,7 +268,7 @@ export function ImageBlockBar() {
           (carreteSourceOf(block.url) || block.url) && (
             <>
               <ViewButton url={block.url} attachment={attachment} onView={() => actions?.onView(block.id)} />
-              <DownloadButton url={block.url} name={block.name} />
+              <DownloadButton url={block.url} name={block.name} blockId={block.id} />
             </>
           ),
           !attachment && <ImageSizeButtons />,

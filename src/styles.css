@@ -5890,6 +5890,24 @@ ins.replace-new {
   gap: 12px;
 }
 
+.folder-viewer-actions {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
+/* Sin conexión, *Download all* se ve apagado pero explica por qué (aria-disabled: el tooltip y el clic siguen). */
+.folder-viewer-actions .button[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.folder-download-current {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .folder-crumbs {
   display: flex;
   flex-wrap: wrap;

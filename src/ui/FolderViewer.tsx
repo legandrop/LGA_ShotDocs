@@ -11,11 +11,13 @@ import { forceDownload, type CarreteLoader, type Full, type Preview } from './ca
 import { downloadNow, openInNewTab } from './attachmentOpen';
 import { FolderGlyph, useFolderProgress } from './FolderDialog';
 import { lazyPart, Part } from './lazyPart';
+import { FolderDownloadDialog } from './FolderDownload';
 
 // El visor de una carpeta (P.9, Docs/Doc_Carpetas.md, sección 8): lo que hay ahora en la carpeta de Drive,
 // servido por el portero con los mismos pases que las fotos. Las migas de pan empiezan en la carpeta (nunca más
 // arriba); primero las subcarpetas y después los archivos. Una foto o un video abre el carrete con las fotos y
-// videos de esa subcarpeta; un PDF se abre en otra pestaña; lo demás se baja.
+// videos de esa subcarpeta; un PDF se abre en otra pestaña; lo demás se baja. *Download all* baja todo (entrega 2,
+// FolderDownload.tsx).
 
 const Carrete = lazyPart(() => import('./Carrete').then((m) => m.Carrete));
 
@@ -26,7 +28,20 @@ interface Level {
   name: string;
 }
 
-export function FolderViewer({ fileId, name, onClose, onShowUpload }: { fileId: string; name: string; onClose: () => void; onShowUpload?: () => void }) {
+export function FolderViewer({
+  fileId,
+  name,
+  onClose,
+  onShowUpload,
+  startDownload = false,
+}: {
+  fileId: string;
+  name: string;
+  onClose: () => void;
+  onShowUpload?: () => void;
+  /** Abre enseguida *Download all* (desde la barra de la tarjeta). */
+  startDownload?: boolean;
+}) {
   const tr = useT();
   const { media, folders } = useServices();
   const { online } = useSyncStatus();
@@ -36,6 +51,9 @@ export function FolderViewer({ fileId, name, onClose, onShowUpload }: { fileId: 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [carrete, setCarrete] = useState<{ items: CarreteItem[]; start: number; loader: CarreteLoader } | null>(null);
+  const [downloading, setDownloading] = useState(startDownload && online);
+  /** Sin conexión, el botón explica por qué no baja (en vez de no hacer nada). */
+  const [offlineNote, setOfflineNote] = useState(startDownload && !online);
   const upload = useFolderProgress(folders, fileId);
   const here = path[path.length - 1]!;
 
@@ -80,13 +98,13 @@ export function FolderViewer({ fileId, name, onClose, onShowUpload }: { fileId: 
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || carrete) return;
+      if (e.key !== 'Escape' || carrete || downloading) return;
       if (path.length > 1) setPath((p) => p.slice(0, -1));
       else onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, path.length, carrete]);
+  }, [onClose, path.length, carrete, downloading]);
 
   // Las fotos y videos de esta subcarpeta, en el orden de la lista, para el carrete.
   const viewable = useMemo(
@@ -127,10 +145,21 @@ export function FolderViewer({ fileId, name, onClose, onShowUpload }: { fileId: 
               </span>
             ))}
           </nav>
-          <button className="button" onClick={onClose}>
-            {tr('common.close')}
-          </button>
+          <div className="folder-viewer-actions">
+            <button
+              className="button"
+              aria-disabled={!online}
+              data-tip={online ? tr('folders.downloadAllTip') : tr('folders.downloadAllOffline')}
+              onClick={() => (online ? setDownloading(true) : setOfflineNote(true))}
+            >
+              {tr('folders.downloadAll')}
+            </button>
+            <button className="button" onClick={onClose}>
+              {tr('common.close')}
+            </button>
+          </div>
         </header>
+        {offlineNote && !online && <p className="muted small">{tr('folders.downloadAllOffline')}</p>}
         {upload && upload.state !== 'done' && (
           <p className="folder-upload-strip small">
             {tr('folders.uploadHere')}: {upload.doneFiles} / {upload.files}
@@ -189,6 +218,7 @@ export function FolderViewer({ fileId, name, onClose, onShowUpload }: { fileId: 
           </button>
         )}
       </div>
+      {downloading && <FolderDownloadDialog fileId={fileId} name={name} onClose={() => setDownloading(false)} />}
       {carrete && (
         <Part onClose={() => setCarrete(null)}>
           <Carrete {...carrete} online={online} onClose={() => setCarrete(null)} />

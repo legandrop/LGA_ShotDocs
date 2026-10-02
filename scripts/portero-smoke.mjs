@@ -56,10 +56,11 @@ async function ready() {
 }
 
 const results = [];
-async function expect(name, method, path, want, init = {}) {
+async function expect(name, method, path, want, init = {}, cors) {
   const res = await fetch(`http://127.0.0.1:${PORT}${path}`, { method, ...init });
   await res.arrayBuffer();
-  const ok = res.status === want;
+  // `cors`: el `Access-Control-Allow-Origin` que tiene que traer (`null`: ninguno).
+  const ok = res.status === want && (cors === undefined || res.headers.get('Access-Control-Allow-Origin') === cors);
   results.push({ name, ok, status: res.status });
   console.log(`${ok ? 'OK  ' : 'FAIL'} ${name}: ${res.status}${ok ? '' : ` (se esperaba ${want})`}`);
 }
@@ -77,6 +78,10 @@ try {
   await expect('pase inválido con ?offline=1 y Range', 'GET', '/m/abc.def?offline=1', 403, { headers: { Range: 'bytes=0-16777215' } });
   await expect('verify sin sesión', 'POST', '/verify', 401, { body: '{"files":[]}', headers: { 'Content-Type': 'application/json' } });
   await expect('preflight de verify', 'OPTIONS', '/verify', 204, { headers: { Origin: vars.APP_ORIGINS, 'Access-Control-Request-Method': 'POST' } });
+  // "Download all" (P.9, entrega 2): la app lee /m/ con fetch; otro origen no.
+  await expect('pase inválido desde la app (CORS)', 'GET', '/m/abc.def', 403, { headers: { Origin: vars.APP_ORIGINS } }, vars.APP_ORIGINS);
+  await expect('pase inválido desde otro origen (sin CORS)', 'GET', '/m/abc.def', 403, { headers: { Origin: 'https://evil.example' } }, null);
+  await expect('preflight de /m/ desde otro origen (sin CORS)', 'OPTIONS', '/m/abc.def', 204, { headers: { Origin: 'https://evil.example', 'Access-Control-Request-Method': 'GET' } }, null);
   await expect('salud al final', 'GET', '/health', 200);
   failed = results.some((r) => !r.ok);
   console.log(failed ? 'El portero NO pasó la prueba: no publicarlo.' : `${results.length}/${results.length} bien.`);
