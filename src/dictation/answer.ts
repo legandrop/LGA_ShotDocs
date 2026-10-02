@@ -355,7 +355,11 @@ export function validateAnswer(answer: string, map: PageMap, ctx: ValidateContex
         // Los rótulos de la fila y de la columna, comparados con el mapa: frena correrse una fila o una columna.
         const rowOk = labelKey(str(r.row)) === labelKey(t.rowLabel ?? '') || (!!slate && labelKey(str(r.row)) === labelKey(slate));
         const colOk = t.colLabel ? sameColumn(str(r.col), t.colLabel) : !str(r.col).trim() || labelKey(str(r.col)) === labelKey(t.rowLabel ?? '') || /^c\d+$/i.test(str(r.col).trim());
-        if (t.labelCell || !rowOk || !colOk) {
+        // Las filas vacías tienen todas el mismo rótulo: si la nota le puso la *Slate* a otra fila vacía de esta tabla,
+        // lo de una fila vacía sin *Slate* propia se corrió de fila (no se adivina cuál era).
+        const strayEmpty =
+          !slate && !(t.rowLabel ?? '').trim() && [...slates.keys()].some((k) => k.startsWith(`${t.table}:`) && k !== `${t.table}:${t.row}`);
+        if (t.labelCell || !rowOk || !colOk || strayEmpty) {
           keepOut(r);
           continue;
         }
@@ -423,10 +427,12 @@ export function validateAnswer(answer: string, map: PageMap, ctx: ValidateContex
     if (op === 'appendText') {
       const t = map.targets.get(normAddr(r.at));
       const text = (str(r.text) || newText).trim();
-      if (!t || t.kind !== 'block' || !text) {
+      // Un solo cambio por lugar: escribir y agregar en el mismo párrafo vacío chocarían al aplicar.
+      if (!t || t.kind !== 'block' || !text || used.has(t.addr)) {
         keepOut(r);
         continue;
       }
+      used.add(t.addr);
       const atoms = parseNew(text, null, seen);
       if (atoms === 'marker') {
         keepOut(r);

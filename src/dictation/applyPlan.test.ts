@@ -294,3 +294,32 @@ describe('aplicar', () => {
     expect([...types].sort()).toEqual(['bulletListItem', 'checkListItem', 'heading', 'paragraph', 'table']);
   });
 });
+
+describe('aplicar, correcciones de la auditoría', () => {
+  it('X11: la guarda mira que el lugar siga en el mismo bloque', () => {
+    const ed = reportEditor();
+    const map = mapOf(ed);
+    const [change] = plan(map, [{ op: 'setCell', at: 'T3 r3 c3', row: '12 · 010 · 3', col: 'Lens · Filters', old: '', new: '50 mm' }]);
+    // El mismo contenido (vacío) pero de otro bloque: no es el lugar de la foto.
+    const moved = { ...change, target: { ...change.target!, blockId: 'otro-bloque' } };
+    expect(apply(ed, map, [moved])).toEqual({ ok: false, reason: 'changed' });
+    expect(cellText(ed, 3, 3, 3)).toBe('');
+  });
+
+  it('X12 y O3: un Apply que falla a mitad no deja nada, ni en la página ni en rehacer', () => {
+    const ed = reportEditor();
+    const map = mapOf(ed);
+    const summary = targetBy(map, (t) => t.code === 'P' && t.section === 'Summary');
+    // Armados a mano (el validador ya no deja dos cambios al mismo lugar): agregar llena el párrafo vacío primero y
+    // después escribir en él falla la guarda.
+    const [write] = plan(map, [{ op: 'setText', at: summary.addr, label: '', old: '', new: 'nublado' }]);
+    const [add] = plan(map, [{ op: 'appendText', at: summary.addr, text: 'llovió' }]);
+    const before = JSON.stringify(view(ed).state.doc.toJSON());
+    const um = undoManager(ed);
+    const undoBefore = um.undoStack.length;
+    expect(apply(ed, map, [write, add])).toEqual({ ok: false, reason: 'failed' });
+    expect(JSON.stringify(view(ed).state.doc.toJSON())).toBe(before);
+    expect(um.undoStack.length).toBe(undoBefore);
+    expect(um.redoStack.length).toBe(0);
+  });
+});

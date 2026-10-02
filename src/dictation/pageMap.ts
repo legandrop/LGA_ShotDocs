@@ -472,8 +472,19 @@ export function noteMentions(note: string, label: string): boolean {
     const key = labelKey(label);
     return key.length > 0 && labelKey(note).includes(key);
   }
-  const have = digitGroups(note);
+  const found = [...note.matchAll(/\d+/g)];
+  const have = found.map((m) => Number(m[0]));
   const need = want.slice(0, Math.min(2, want.length));
-  for (let i = 0; i + need.length <= have.length; i++) if (need.every((n, j) => have[i + j] === n)) return true;
+  for (let i = 0; i + need.length <= have.length; i++) {
+    if (!need.every((n, j) => have[i + j] === n)) continue;
+    // Si la nota dice también el setup pegado al plano («12_010_4», «12 010 setup 4»), tiene que ser el de la fila.
+    const next = found[i + need.length];
+    if (want.length > need.length && need.length === 2 && next) {
+      const prev = found[i + need.length - 1];
+      const between = note.slice(prev.index! + prev[0].length, next.index!);
+      if (/^[\s_·.\-/]*(?:set[\s-]?up)?[\s_·.\-/]*$/i.test(between) && Number(next[0]) !== want[2]) continue;
+    }
+    return true;
+  }
   return false;
 }

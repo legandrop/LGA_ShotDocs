@@ -93,17 +93,22 @@ function services(d: Device, client: unknown = { auth: {} }): Services {
 type Body = { system: string; messages: { content: string }[] };
 
 /** Un `fetch` de proveedor simulado (Anthropic) que contesta por partes y anota los pedidos. */
+/** Un texto que llega cortado (el proveedor lo frenó por el tope de tokens). */
+const CUT = '[[cortada]]';
+
 function provider(...answers: (string | ((body: Body) => string))[]) {
   const calls: { url: string; body: string }[] = [];
   const fetcher = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const body = String(init.body ?? '');
     calls.push({ url: String(input), body });
     const next = answers[Math.min(calls.length - 1, answers.length - 1)];
-    const text = typeof next === 'string' ? next : next(JSON.parse(body));
+    const raw = typeof next === 'string' ? next : next(JSON.parse(body));
+    const cut = raw.startsWith(CUT);
+    const text = cut ? raw.slice(CUT.length) : raw;
     const events = [
       { type: 'message_start', message: { usage: { input_tokens: 2100 } } },
       ...text.match(/[\s\S]{1,9}/g)!.map((t) => ({ type: 'content_block_delta', delta: { type: 'text_delta', text: t } })),
-      { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 140 } },
+      { type: 'message_delta', delta: { stop_reason: cut ? 'max_tokens' : 'end_turn' }, usage: { output_tokens: 140 } },
       { type: 'message_stop' },
     ];
     return new Response(events.map((e) => `data: ${JSON.stringify(e)}`).join('\n\n') + '\n\n', { status: 200 });
@@ -219,8 +224,9 @@ describe('Dictate to report', () => {
     await click(button(s.host, 'Apply'));
     expect(cellText(s.ed, 3, 3, 3)).toBe('50 mm');
     expect(s.host.textContent).toContain('Applied 1 change.');
-    // Ubicó todo: la nota sale del dispositivo.
-    expect(await draft(s.pageId)).toBeNull();
+    // La nota sigue en el dispositivo hasta Done o New note (B1), y la hoja la muestra.
+    expect((await draft(s.pageId))?.applied).toBe('este plano se filmó con un 50 mm, anotalo donde corresponda');
+    expect(s.host.querySelector('.dictation-kept')?.textContent).toContain('Your note “este plano se filmó con un 50 mm, anotalo donde corresponda”');
     await click(button(s.host, 'Undo'));
     expect(cellText(s.ed, 3, 3, 3)).toBe('');
     // La nota vuelve al campo.
@@ -288,6 +294,51 @@ describe('Dictate to report', () => {
     await click(button(s.host, 'Discard'));
     await wait(300);
     expect(await draft(s.pageId)).toBeNull();
+  });
+
+  it('B1: si el modelo se saltea una parte, la nota original se ve en la vista previa y sigue después de aplicar y de recargar', async () => {
+    const s = await setup();
+    const NOTE = 'el 12_010 setup 3 con un 50 mm y el productor pidió repetir la escena 14 mañana';
+    // El modelo ubica el lente y se calla lo del productor (ni en heard ni en unplaced).
+    provider(answer([LENS], { heard: 'el 12_010 setup 3 con un 50 mm' }));
+    await place(s.host, NOTE);
+    expect(s.host.textContent).toContain(`Your note “${NOTE}”`);
+    await click(button(s.host, 'Apply'));
+    expect(cellText(s.ed, 3, 3, 3)).toBe('50 mm');
+    expect(s.host.querySelector('.dictation-kept')?.textContent).toContain(NOTE);
+    // Cerrar y volver a abrir: la nota sigue a la vista.
+    await s.remount();
+    expect(s.host.querySelector('.dictation-kept')?.textContent).toContain(NOTE);
+    expect((await draft(s.pageId))?.applied).toBe(NOTE);
+    // Done la saca (no hay nada pendiente: no pregunta).
+    await click(button(s.host, 'Done'));
+    await wait(300);
+    expect(await draft(s.pageId)).toBeNull();
+  });
+
+  it('New note vacía la nota aplicada; lo pendiente de una nota anterior no se pisa con la siguiente', async () => {
+    const s = await setup();
+    const hdri = targetBy(mapOf(s.ed), (t) => t.code === 'K' && t.plain === 'HDRI');
+    const clean = targetBy(mapOf(s.ed), (t) => t.code === 'K' && t.plain === 'Clean plate');
+    provider(answer([LENS, { op: 'check', at: hdri.addr, label: 'HDRI' }]), answer([{ op: 'check', at: clean.addr, label: 'Clean plate' }], { unplaced: 'otra toma' }));
+    await place(s.host, 'el 12_010 setup 3 con un 50 y HDRI');
+    await click(s.host.querySelectorAll<HTMLInputElement>('.dictation-change input[type=checkbox]')[1]);
+    await click(button(s.host, 'Apply'));
+    await click(button(s.host, 'New note'));
+    expect(s.host.querySelector('.dictation-kept')).toBeNull();
+    await place(s.host, 'clean plate y otra toma');
+    await click(button(s.host, 'Apply'));
+    const pending = [...s.host.querySelectorAll('.dictation-pending-text')].map((e) => e.textContent);
+    expect(pending).toEqual(['“HDRI”', '“otra toma”']);
+    expect((await draft(s.pageId))?.pending.map((p) => p.text)).toEqual(['HDRI', 'otra toma']);
+  });
+
+  it('una respuesta cortada por el tope de tokens no se lee aunque traiga JSON válido', async () => {
+    const s = await setup();
+    provider(CUT + answer([LENS]));
+    await place(s.host, 'el 12_010 setup 3 con un 50');
+    expect(s.host.textContent).toContain("The answer couldn't be read. Your note is still here.");
+    expect(button(s.host, 'Apply')).toBeUndefined();
   });
 
   it('la nota se guarda mientras se escribe: cerrar y volver a abrir la hoja la trae', async () => {

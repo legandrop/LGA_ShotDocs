@@ -39,6 +39,24 @@
   overflow-wrap: anywhere;
 }
 
+.dictation-note {
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+.dictation-kept {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.dictation-kept p {
+  margin: 0;
+}
+
 .dictation-heard .mono-label {
   margin-right: 6px;
 }

@@ -371,6 +371,7 @@ export function applyChanges(
   }
   const undo = undoManagerOf(view.state);
   const before = undo?.undoStack.length ?? 0;
+  const redoBefore = undo?.redoStack.length ?? 0;
   // Del último lugar al primero: lo que se escribe abajo no corre lo de arriba.
   planned.sort((a, b) => b.order - a.order);
   let ok = true;
@@ -390,10 +391,20 @@ export function applyChanges(
   // Un solo paso de deshacer (si no, algo se partió: se deshace todo).
   if (ok && undo && undo.undoStack.length !== before + 1) ok = false;
   if (!ok) {
-    while (undo && undo.undoStack.length > before) undo.undo();
+    rollback(undo, before, redoBefore);
     return { ok: false, reason: 'failed' };
   }
   return { ok: true, changed: planned.length, undo: undo ? { depth: undo.undoStack.length, item: undo.undoStack[undo.undoStack.length - 1] } : null };
+}
+
+/**
+ * Vuelve atrás lo que haya quedado de un *Apply* a medias, sin dejarlo en la pila de rehacer (Ctrl+Shift+Z no lo vuelve
+ * a poner).
+ */
+function rollback(undo: Y.UndoManager | null, before: number, redoBefore: number): void {
+  if (!undo) return;
+  while (undo.undoStack.length > before) undo.undo();
+  undo.redoStack.splice(redoBefore);
 }
 
 /** *Undo* de la hoja: deshace lo aplicado si sigue siendo lo último que se hizo en la página. */
@@ -414,16 +425,17 @@ export function addToSummary(view: EditorView | null, editor: AssistantEditor | 
   const id = summaryId && findBlock(view.state.doc, summaryId) ? summaryId : null;
   const undo = undoManagerOf(view.state);
   const before = undo?.undoStack.length ?? 0;
+  const redoBefore = undo?.redoStack.length ?? 0;
   try {
     let done = false;
     asOneUndoStep(view.state, () => {
       done = appendIn(view, editor, id, text.trim());
     });
-    if (!done) while (undo && undo.undoStack.length > before) undo.undo();
+    if (!done) rollback(undo, before, redoBefore);
     return done;
   } catch (err) {
     console.error('Dictado: no se pudo agregar al resumen', err);
-    while (undo && undo.undoStack.length > before) undo.undo();
+    rollback(undo, before, redoBefore);
     return false;
   }
 }

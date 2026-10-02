@@ -32,7 +32,7 @@ type Phase =
   | { kind: 'ask'; question: string; options: AskOption[] }
   | { kind: 'preview'; plan: Plan }
   /** Recién aplicado: *Undo* mientras sea lo último que se hizo en la página. */
-  | { kind: 'applied'; count: number; undo: UndoHandle | null; note: string; added: string[]; message?: string }
+  | { kind: 'applied'; count: number; undo: UndoHandle | null; note: string; added: string[]; at: number; message?: string }
   | { kind: 'error'; message: string; retry: boolean };
 
 interface Run {
@@ -128,6 +128,13 @@ export function DictationPanel({ pageId }: { pageId: string }) {
   const [phase, setPhase] = useState<Phase>({ kind: 'compose' });
   const [text, setText] = useState('');
   const [pending, setPending] = useState<PendingItem[]>([]);
+  // La última nota aplicada (B1): a la vista hasta *Done* o *New note*. El ref la lleva a lo que se guarda.
+  const [applied, setAppliedState] = useState('');
+  const appliedRef = useRef('');
+  const setApplied = (value: string) => {
+    appliedRef.current = value;
+    setAppliedState(value);
+  };
   const [loaded, setLoaded] = useState(false);
   const [unchecked, setUnchecked] = useState<Set<number>>(new Set());
   const [usage, setUsage] = useState<Usage | null>(null);
@@ -169,6 +176,8 @@ export function DictationPanel({ pageId }: { pageId: string }) {
         if (d) {
           setText((t) => t || d.text);
           setPending(d.pending);
+          appliedRef.current = d.applied ?? '';
+          setAppliedState(d.applied ?? '');
         }
         setLoaded(true);
       })
@@ -181,7 +190,7 @@ export function DictationPanel({ pageId }: { pageId: string }) {
   // Se guarda mientras se escribe (cerrar la hoja o la app no la pierde).
   const persist = useCallback(
     (nextText: string, nextPending: PendingItem[]) => {
-      void saveDraft(user.email, workspaceKey, pageId, nextText, nextPending).catch((err) => console.error('Dictado: no se pudo guardar la nota en el dispositivo', err));
+      void saveDraft(user.email, workspaceKey, pageId, nextText, nextPending, appliedRef.current).catch((err) => console.error('Dictado: no se pudo guardar la nota en el dispositivo', err));
     },
     [user.email, workspaceKey, pageId],
   );
@@ -189,7 +198,7 @@ export function DictationPanel({ pageId }: { pageId: string }) {
     if (!loaded) return;
     const id = setTimeout(() => persist(text, pending), 250);
     return () => clearTimeout(id);
-  }, [text, pending, loaded, persist]);
+  }, [text, pending, applied, loaded, persist]);
 
   // Cerrar la hoja o cambiar de página corta el pedido.
   useEffect(() => () => abort.current?.abort(), []);
@@ -328,7 +337,10 @@ export function DictationPanel({ pageId }: { pageId: string }) {
     const added = [...phase.plan.unplaced, ...left.map((c) => c.text)].filter((t) => t.trim()).map((t) => ({ id: newId(), text: t }));
     const nextPending = [...pending, ...added];
     setPending(nextPending);
+    // La nota original NO se borra al aplicar (B1 de la auditoría): si el modelo se salteó una parte sin decirlo, la
+    // persona todavía la tiene. Se vacía solo con *New note* o *Done*.
     setText('');
+    setApplied(current.note);
     persist('', nextPending);
     const at = Date.now();
     const list = recentByPage.get(pageId) ?? [];
@@ -336,7 +348,7 @@ export function DictationPanel({ pageId }: { pageId: string }) {
     recentByPage.set(pageId, list);
     run.current = null;
     setFocused(null);
-    setPhase({ kind: 'applied', count: res.changed, undo: res.undo, note: current.note, added: added.map((a) => a.id) });
+    setPhase({ kind: 'applied', count: res.changed, undo: res.undo, note: current.note, added: added.map((a) => a.id), at });
   };
 
   const undo = () => {
@@ -347,7 +359,11 @@ export function DictationPanel({ pageId }: { pageId: string }) {
     }
     // Deshecho: la nota vuelve al campo y lo que había agregado a *Couldn't place* sale (no se pierde nada).
     const nextPending = pending.filter((p) => !phase.added.includes(p.id));
-    const nextText = text.trim() ? `${phase.note}\n${text}` : phase.note;
+    const nextText = text.trim() ? `${phase.note}
+${text}` : phase.note;
+    setApplied('');
+    // Lo deshecho ya no es una corrección posible: sale de lo reciente.
+    recentByPage.set(pageId, (recentByPage.get(pageId) ?? []).filter((r) => r.at !== phase.at));
     setPending(nextPending);
     setText(nextText);
     persist(nextText, nextPending);
@@ -378,11 +394,21 @@ export function DictationPanel({ pageId }: { pageId: string }) {
       ...p.unplaced,
     ].join('\n');
 
+  /** *New note*: la nota ya aplicada se vacía (lo que no se ubicó sigue en *Couldn't place*). */
+  const newNote = () => {
+    setApplied('');
+    persist(text, pending);
+    backToNote();
+  };
+
   const done = () => {
     if (pending.length > 0) {
       setConfirm('done');
       return;
     }
+    // *Done*: la nota aplicada se vacía (la persona ya la revisó).
+    setApplied('');
+    persist(text, []);
     closeDictation();
   };
 
@@ -473,6 +499,8 @@ export function DictationPanel({ pageId }: { pageId: string }) {
             className="danger"
             onClick={() => {
               setPending([]);
+              // *Done* también vacía la nota aplicada (ya se revisó); la que se está escribiendo queda.
+              setApplied('');
               persist(text, []);
               setConfirm(null);
               closeDictation();
@@ -502,6 +530,19 @@ export function DictationPanel({ pageId }: { pageId: string }) {
         </div>
       </div>
     ) : null;
+
+  /** La última nota aplicada, tal como se escribió (B1): para revisar que no haya quedado nada afuera. */
+  const keptBox = applied ? (
+    <div className="dictation-kept">
+      <p className="dictation-heard dictation-note">
+        <span className="mono-label">{tr('dictation.yourNote')}</span> “{applied}”
+      </p>
+      <p className="muted assistant-small">{tr('dictation.noteKept')}</p>
+      <div className="assistant-buttons">
+        <button onClick={() => copy(applied)}>{tr('assistant.copy')}</button>
+      </div>
+    </div>
+  ) : null;
 
   const changeRow = (c: Change) => {
     const off = unchecked.has(c.id);
@@ -607,9 +648,10 @@ export function DictationPanel({ pageId }: { pageId: string }) {
                 <p className="muted assistant-hint" role="status">
                   {phase.note ?? tr('dictation.hint')}
                 </p>
+                {keptBox}
                 {confirmBox}
                 {pendingBox}
-                {pending.length > 0 && (
+                {(pending.length > 0 || !!applied) && (
                   <div className="assistant-buttons">
                     <button onClick={done}>{tr('dictation.done')}</button>
                   </div>
@@ -663,6 +705,10 @@ export function DictationPanel({ pageId }: { pageId: string }) {
             )}
             {phase.kind === 'preview' && run.current && (
               <div className="assistant-result">
+                {/* La nota tal como la escribió o dictó la persona: si el modelo se salteó algo, se nota acá. */}
+                <p className="dictation-heard dictation-note">
+                  <span className="mono-label">{tr('dictation.yourNote')}</span> “{run.current.note}”
+                </p>
                 {phase.plan.heard && (
                   <p className="dictation-heard">
                     <span className="mono-label">{tr('dictation.heard')}</span> “{phase.plan.heard}”
@@ -715,6 +761,7 @@ export function DictationPanel({ pageId }: { pageId: string }) {
                   {tr('dictation.applied', { count: phase.count })}
                 </p>
                 {phase.message && <p className="assistant-notice">{phase.message}</p>}
+                {keptBox}
                 <div className="assistant-buttons">
                   <button className="dictation-big" onClick={undo}>
                     {tr('dictation.undo')}
@@ -722,7 +769,7 @@ export function DictationPanel({ pageId }: { pageId: string }) {
                   <button className="primary dictation-big" onClick={done}>
                     {tr('dictation.done')}
                   </button>
-                  <button onClick={backToNote}>{tr('dictation.another')}</button>
+                  <button onClick={newNote}>{tr('dictation.another')}</button>
                 </div>
                 {confirmBox}
                 {pendingBox}

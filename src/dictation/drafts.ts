@@ -26,6 +26,11 @@ export interface Draft {
   text: string;
   /** Lo que quedó sin ubicar. */
   pending: PendingItem[];
+  /**
+   * La última nota aplicada, tal como la escribió la persona: queda a la vista hasta *Done* o *New note*, por si el
+   * modelo se salteó una parte sin decirlo (B1 de la auditoría de V1).
+   */
+  applied?: string;
   updatedAt: number;
 }
 
@@ -63,13 +68,13 @@ export async function loadDraft(email: string, workspace: string, pageId: string
   return (await (await db()).get('drafts', draftId(email, workspace, pageId))) ?? null;
 }
 
-/** Guarda el borrador; si no queda nada (ni texto ni pendientes), lo borra. */
-export async function saveDraft(email: string, workspace: string, pageId: string, text: string, pending: PendingItem[]): Promise<void> {
+/** Guarda el borrador; si no queda nada (ni texto, ni pendientes, ni la nota aplicada), lo borra. */
+export async function saveDraft(email: string, workspace: string, pageId: string, text: string, pending: PendingItem[], applied = ''): Promise<void> {
   const d = await db();
   const id = draftId(email, workspace, pageId);
-  if (!text.trim() && pending.length === 0) {
+  if (!text.trim() && pending.length === 0 && !applied.trim()) {
     await d.delete('drafts', id);
     return;
   }
-  await d.put('drafts', { id, email: email.trim().toLowerCase(), workspace, pageId, text, pending, updatedAt: Date.now() });
+  await d.put('drafts', { id, email: email.trim().toLowerCase(), workspace, pageId, text, pending, applied: applied || undefined, updatedAt: Date.now() });
 }

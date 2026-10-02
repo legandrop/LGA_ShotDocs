@@ -292,6 +292,11 @@ export const assistant = {
   'dictation.placing': { en: "Placing…", es: "Ubicando…" },
   'dictation.whichShot': { en: "Which shot?", es: "¿Qué plano?" },
   'dictation.heard': { en: "Heard", es: "Se entendió" },
+  'dictation.yourNote': { en: "Your note", es: "Tu nota" },
+  'dictation.noteKept': {
+    en: "Your note stays here until you choose Done or New note: check that nothing was left out.",
+    es: "Tu nota queda acá hasta que toques Listo o Nota nueva: fijate que no haya quedado nada afuera.",
+  },
   'dictation.nothing': {
     en: "The assistant couldn't place this note. Edit it and try again, or copy it.",
     es: "El asistente no pudo ubicar esta nota. Editala y probá de nuevo, o copiala.",
@@ -308,8 +313,8 @@ export const assistant = {
   },
   'dictation.couldntPlace': { en: "Couldn't place", es: "No se pudo ubicar" },
   'dictation.unplacedHint': {
-    en: "These stay on this device after Apply, until you add them to the page, copy them or discard them.",
-    es: "Esto queda en este dispositivo después de Aplicar, hasta que lo agregues a la página, lo copies o lo descartes.",
+    en: "These stay on this device after Apply, until you add them to the page or discard them (Copy keeps them).",
+    es: "Esto queda en este dispositivo después de Aplicar, hasta que lo agregues a la página o lo descartes (Copiar lo deja).",
   },
   'dictation.addToSummary': { en: "Add to Summary", es: "Agregar al resumen" },
   'dictation.addFailed': {
