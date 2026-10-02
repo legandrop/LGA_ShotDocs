@@ -215,6 +215,13 @@ export const folders = {
       other: "{count} cosas no están en la descarga: quedan anotadas en MISSING_FILES.txt.",
     },
   },
+  'folders.zipRetry': { en: "Retry missing", es: "Reintentar lo que falta" },
+  'folders.zipRetryTipDir': { en: "Only what failed, into the same folder", es: "Solo lo que falló, en la misma carpeta" },
+  'folders.zipRetryTipZip': {
+    en: "Only what failed, in a second .zip: extract it over the first one",
+    es: "Solo lo que falló, en un segundo .zip: descomprimilo encima del primero",
+  },
+  'folders.zipRetryListing': { en: "Looking again at what could not be opened…", es: "Mirando de nuevo lo que no se pudo abrir…" },
   'folders.zipCancelled': { en: "Cancelled: nothing was saved.", es: "Cancelado: no se guardó nada." },
   'folders.zipCancelledDir': {
     en: "Cancelled: what was already downloaded stays in the folder you chose.",
@@ -225,6 +232,10 @@ export const folders = {
   'folders.missingHead': {
     en: "These items from the folder \"{name}\" are not in this download ({date}):",
     es: "Estas cosas de la carpeta \"{name}\" no están en esta descarga ({date}):",
+  },
+  'folders.missingNone': {
+    en: "Nothing from the folder \"{name}\" is missing anymore ({date}).",
+    es: "Ya no falta nada de la carpeta \"{name}\" ({date}).",
   },
   'folders.missingShortcut': { en: "a Google Drive shortcut (the app does not follow them)", es: "un acceso directo de Google Drive (la app no los sigue)" },
   'folders.missingGoogle': {

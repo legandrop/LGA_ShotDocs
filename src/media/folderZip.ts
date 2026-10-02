@@ -46,6 +46,8 @@ export interface MissingItem {
   reason: MissingReason;
   /** El motivo técnico (un código del portero, un estado HTTP), en inglés. */
   detail?: string;
+  /** Una subcarpeta que no se pudo listar: su id de Drive, para volver a probar (*Retry missing*). */
+  dirId?: string;
 }
 
 export interface DownloadPlan {
@@ -116,12 +118,18 @@ export async function planFolder(
   lister: FolderLister,
   fileId: string,
   rootName: string,
-  opts: { signal?: AbortSignal; onProgress?: (p: PlanProgress) => void; wait?: Wait } = {},
+  opts: {
+    signal?: AbortSignal;
+    onProgress?: (p: PlanProgress) => void;
+    wait?: Wait;
+    /** Recorrer solo esta subcarpeta (su id y su ruta limpia): *Retry missing* de una que no se pudo listar. */
+    start?: { id: string; path: string };
+  } = {},
 ): Promise<DownloadPlan> {
   const wait = opts.wait ?? defaultWait;
   const seen = new Set<string>();
   const progress: PlanProgress = { folders: 0, files: 0, bytes: 0 };
-  const root: Node = { id: null, path: '', modified: null, entries: [], children: [] };
+  const root: Node = { id: opts.start?.id ?? null, path: opts.start?.path ?? '', modified: null, entries: [], children: [] };
 
   const listAll = async (node: Node): Promise<void> => {
     let token: string | null = null;
@@ -186,7 +194,11 @@ export async function planFolder(
       const child = children.get(e)!;
       child.path = join(names.take(node.path, e.name, 'Folder'));
       plan.dirs.push({ path: child.path, modified: e.modified });
-      if (child.failed) plan.skipped.push({ path: `${child.path}/`, reason: 'folder', detail: child.failed });
+      if (child.failed) {
+        // Un ciclo o una carpeta demasiado honda no cambian al volver a probar; lo demás (un error del portero), sí.
+        const again = child.failed !== 'loop' && child.failed !== 'too_deep';
+        plan.skipped.push({ path: `${child.path}/`, reason: 'folder', detail: child.failed, ...(again ? { dirId: e.id } : {}) });
+      }
       else walk(child);
     }
     for (const e of node.entries) {
@@ -200,6 +212,48 @@ export async function planFolder(
   };
   walk(root);
   return plan;
+}
+
+/** Si vale la pena volver a probar lo que falta: un archivo que falló o quedó a medias, o una subcarpeta que no se listó. */
+export function canRetry(item: MissingItem): boolean {
+  return item.reason === 'failed' || item.reason === 'incomplete' || (item.reason === 'folder' && !!item.dirId);
+}
+
+/**
+ * *Retry missing*: el plan de lo que vale la pena volver a bajar de una bajada que terminó (`plan` y lo que faltó,
+ * `missing`). Los archivos que fallaron o quedaron a medias, con su pase (si venció, `runDownload` lo renueva), y
+ * cada subcarpeta que no se pudo listar, listada de nuevo. Lo que no se puede bajar (accesos directos, documentos de
+ * Google, una subcarpeta que vuelve a fallar) queda en `skipped`, así `MISSING_FILES.txt` sigue entero.
+ */
+export async function planRetry(
+  lister: FolderLister,
+  fileId: string,
+  plan: DownloadPlan,
+  missing: MissingItem[],
+  opts: { signal?: AbortSignal; wait?: Wait } = {},
+): Promise<DownloadPlan> {
+  const again = new Set(missing.filter((m) => m.reason === 'failed' || m.reason === 'incomplete').map((m) => m.path));
+  const out: DownloadPlan = { root: plan.root, dirs: [], files: plan.files.filter((f) => again.has(f.path)), skipped: [], bytes: 0 };
+  for (const item of missing) {
+    if (item.reason === 'failed' || item.reason === 'incomplete') continue;
+    if (!canRetry(item)) {
+      out.skipped.push(item);
+      continue;
+    }
+    if (opts.signal?.aborted) throw abortError();
+    const path = item.path.replace(/\/$/, '');
+    try {
+      const sub = await planFolder(lister, fileId, plan.root, { ...opts, start: { id: item.dirId!, path } });
+      out.dirs.push({ path, modified: null }, ...sub.dirs);
+      out.files.push(...sub.files);
+      out.skipped.push(...sub.skipped);
+    } catch (err) {
+      if (isAbort(err)) throw err;
+      out.skipped.push({ ...item, detail: err instanceof PorteroError ? (err.code ?? String(err.status)) : String(err) });
+    }
+  }
+  out.bytes = out.files.reduce((sum, f) => sum + f.size, 0);
+  return out;
 }
 
 async function withRate<T>(work: () => Promise<T>, wait: Wait, signal?: AbortSignal): Promise<T> {
@@ -227,7 +281,13 @@ export interface FileOut {
 /** Adónde va la bajada: un zip, o una carpeta del disco con el árbol tal cual. */
 export type DownloadTarget =
   | { kind: 'zip'; sink: ZipSink; crc?: () => CrcStream }
-  | { kind: 'dir'; makeDir(path: string): Promise<void>; makeFile(path: string): Promise<FileOut> };
+  | {
+      kind: 'dir';
+      makeDir(path: string): Promise<void>;
+      makeFile(path: string): Promise<FileOut>;
+      /** Borra un archivo si está (la lista vieja de lo que faltaba, cuando *Retry missing* bajó todo). */
+      remove?(path: string): Promise<void>;
+    };
 
 export interface DownloadProgress {
   files: number;
@@ -330,7 +390,15 @@ export async function runDownload(
   plan: DownloadPlan,
   target: DownloadTarget,
   deps: DownloadDeps,
-  opts: { signal?: AbortSignal; onProgress?: (p: DownloadProgress) => void } = {},
+  opts: {
+    signal?: AbortSignal;
+    onProgress?: (p: DownloadProgress) => void;
+    /**
+     * *Retry missing*: lo que se baja completa una bajada anterior. Si ya no falta nada, la lista vieja se borra de la
+     * carpeta, y en un zip va una nueva que lo dice (descomprimido encima del primero, la reemplaza).
+     */
+    retry?: boolean;
+  } = {},
 ): Promise<DownloadResult> {
   const signal = opts.signal;
   const http = deps.fetch ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
@@ -738,7 +806,7 @@ export async function runDownload(
     }
     progress.current = null;
 
-    if (missing.length) {
+    if (missing.length || (zip && opts.retry)) {
       const text = new TextEncoder().encode(deps.missingText(missing));
       if (zip) await zip.addFile(top(MISSING_NAME), text.length, new Date(), fromArray([text]));
       else if (target.kind === 'dir') {
@@ -746,7 +814,7 @@ export async function runDownload(
         await out.write(text);
         await out.close();
       }
-    }
+    } else if (opts.retry && target.kind === 'dir') await target.remove?.(MISSING_NAME);
     if (zip) await zip.finish();
     report();
     return { done, bytes: written, missing };
