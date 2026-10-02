@@ -76,6 +76,14 @@ export interface MediaRecord {
    * original propio no se libera antes de 14 días desde acá (Docs/Doc_Copias_Locales.md, sección 5.2).
    */
   uploadedAt?: number;
+  /**
+   * Cuándo se liberó el original de este dispositivo (`blobs[<id>]`), con el sí de la persona y después de comprobar
+   * que Drive tiene el mismo archivo (`freeOwn`, Docs/Doc_Copias_Locales.md, sección 5.3). El registro, la miniatura y
+   * los usos quedan; el original se abre por el portero. Opcional: una versión anterior lo ignora y lo conserva.
+   */
+  freedAt?: number;
+  /** El MD5 del original (hexadecimal), calculado una vez, justo antes de liberarlo. Opcional, como `freedAt`. */
+  md5?: string;
   /** La subida al portero que quedó a medias: con esto se retoma después de cerrar la app. */
   uploadId: string | null;
   /** Hasta dónde confirmó el portero (bytes). */
