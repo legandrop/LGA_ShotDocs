@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+Diseño de compactar, revisado con el del historial (sin código). El snapshot se armaba con `Y.mergeUpdates` de las
+filas, que no es "la misma información": cuando una fila vieja vuelve a subir el documento entero desde un
+dispositivo con GC, la mezcla se queda con el hueco y pierde el texto borrado de las versiones del medio (con las 63
+filas de la página real más editada, 37 de 63 versiones iguales). Ahora el snapshot se arma aplicando las filas en
+orden en un `Y.Doc` sin GC y `encodeStateAsUpdate`: 63 de 63, también incremental, con los mismos bytes. Decisión del
+2026-10-01; las pruebas suman el caso y la mutante.
+[ Docs - compactar: el snapshot conserva lo borrado ]
+
 v0.082 :
 
 Diseño de compactar el contenido en el servidor, sin código (roadmap B.9). Un dispositivo nuevo baja todas las

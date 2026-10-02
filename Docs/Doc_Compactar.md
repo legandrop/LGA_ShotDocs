@@ -1,15 +1,18 @@
 # Compactar el contenido en el servidor (`page_snapshots`)
 
 **Estado: diseño, sin implementar** (roadmap B.9, 2026-10-01). Toca la regla de no perder datos, así que va con
-pruebas antes de cualquier código que escriba en la base. Nada de esto está aplicado: la migración de abajo es un
+pruebas antes de cualquier código que escriba en la base. **Revisado el 2026-10-01 con el diseño del historial
+(`Doc_Historial.md`, decisión de Lega):** el snapshot se arma aplicando las filas en orden, no con
+`Y.mergeUpdates`, para que conserve lo borrado (sección 3). Nada de esto está aplicado: la migración de abajo es un
 borrador.
 
 ## En corto
 
 - **Qué es.** Un *snapshot* es el contenido de una página hasta el update `N` del servidor, en un solo update de
-  Yjs: `Y.mergeUpdates` de los updates `1..N` (sin recolectar lo borrado, o sea, la misma información que esas
-  filas juntas). Un dispositivo que no tiene la página baja el snapshot y la cola (`N+1..`) en vez de todas las
-  filas.
+  Yjs: las filas `1..N` **aplicadas en orden** en un `Y.Doc({ gc: false })` y `encodeStateAsUpdate` (sin recolectar
+  lo borrado, con el texto de la primera fila que trae cada elemento, o sea, la misma información que esas filas
+  aplicadas). Un dispositivo que no tiene la página baja el snapshot y la cola (`N+1..`) en vez de todas las
+  filas. Hasta el 2026-10-01 decía `Y.mergeUpdates`: pierde texto borrado de versiones del medio (sección 3).
 - **Nunca se borra una fila de `page_updates`.** El snapshot es una copia para bajar más rápido, no un reemplazo:
   lo que no se usa más es solo "dejar de bajarlo". Lo único que se borra son snapshots viejos, que se pueden volver a
   armar desde `page_updates`.
@@ -42,7 +45,7 @@ borrador.
 4. **`syncedSV` y `syncedDS` nunca dicen que el servidor tiene algo que no tiene** (`Doc_Sincronizacion.md`,
    punto 2 de "Contenido de las páginas" y "Subir solo los borrados nuevos"). Bajar un snapshot avanza el vector y
    la cuenta de borrados igual que bajar sus filas: por eso el snapshot conserva los borrados (sin recolectar).
-5. **Nada de editor en el camino.** Compactar es Yjs puro (`mergeUpdates`): no pasa por BlockNote, ni por
+5. **Nada de editor en el camino.** Compactar es Yjs puro (`Y.Doc` sin GC y `applyUpdate`): no pasa por BlockNote, ni por
    y-prosemirror, ni por la reparación de estructura, así que no puede borrar un bloque que no conoce.
 
 ## 1. Qué problema resuelve, con números
@@ -136,20 +139,32 @@ cerrar también eso, la opción es la Edge Function (pregunta 2).
 ## 3. El snapshot
 
 ```
-snapshot(base, cola) = Y.mergeUpdates([base, u(a+1), …, u(N)])     // base: el snapshot confirmado anterior (o nada)
+d = new Y.Doc({ gc: false })
+applyUpdate(d, base); applyUpdate(d, u(a+1)); …; applyUpdate(d, u(N))   // base: el snapshot confirmado anterior (o nada)
+snapshot(base, cola) = Y.encodeStateAsUpdate(d)
 ```
 
-- **Sin GC.** `mergeUpdates` no arma un documento: junta los updates tal cual, con lo borrado incluido. Armarlo con
-  un `Y.Doc` y `encodeStateAsUpdate` "recolectaría" el texto borrado (lo cambia por un hueco): pesa un poco menos (8,8
-  contra 11 KB en la página de 63 updates), pero pierde lo que hace falta para el historial de versiones (fase 6) y
-  deja de ser la misma información que las filas. Con `mergeUpdates`, el snapshot es exactamente lo mismo que las
-  filas que cubre.
+- **Sin GC y en orden.** Un `Y.Doc` con GC "recolectaría" el texto borrado (lo cambia por un hueco) y perdería lo
+  que hace falta para el historial de versiones. Por eso el documento es sin GC, y las filas se aplican **en orden de
+  `seq`**: Yjs saltea lo que ya tiene, así que cada elemento queda con el contenido de **la primera fila que lo
+  trae**, que es la que tenía el texto.
+- **Por qué no `Y.mergeUpdates`** (lo que decía este diseño hasta el 2026-10-01). Algunas filas vuelven a subir el
+  documento entero desde un dispositivo con GC (una versión vieja de la app; cualquiera después de restaurar una
+  copia, `resetForRestore`), con lo borrado ya como hueco, y `mergeUpdates` se queda con esa copia. El documento
+  de hoy sale igual, pero las versiones del medio pierden texto. Medido con las 63 filas de la página real más
+  editada (`Doc_Historial.md`, sección 3.2): armando el documento con `mergeUpdates`, **37 de 63** versiones salen
+  iguales a aplicar las filas hasta ahí; con el snapshot aplicado en orden, **63 de 63**, también incremental (de a
+  10 filas sobre el snapshot anterior), y los dos dan **los mismos bytes** que armarlo de una vez. Pesa un poco más
+  (12,7 contra 11,0 KB en esa página): es el texto que `mergeUpdates` perdía.
 - **Lo que depende de algo que falta.** Si una fila depende de otra que todavía no llegó al servidor (una subida
-  demorada), `mergeUpdates` la guarda igual, como pendiente, y el dispositivo que lo baja la integra cuando llega lo
-  que falta, como hoy. En el prototipo, 545 de 1850 snapshots tenían algo pendiente, todos correctos.
-- **Determinista.** La misma base y la misma cola dan los mismos bytes (1850 de 1850 en el prototipo): dos
-  dispositivos que compactan el mismo tramo sobre la misma base suben la misma huella (SHA-256), y si no, algo anda
-  mal (ver "Subir").
+  demorada), Yjs la guarda como pendiente en el documento (`store.pendingStructs`, `pendingDs`) y
+  `encodeStateAsUpdate` la incluye, así que el dispositivo que lo baja la integra cuando llega lo que falta, como
+  hoy. El prototipo con `mergeUpdates` tenía 545 de 1850 snapshots con algo pendiente, todos correctos; **hay que
+  repetir esa corrida con el armado nuevo** (prueba 1 de la sección 15) antes de implementarlo.
+- **Determinista.** La misma base y la misma cola dan los mismos bytes (comprobado en la página real, también
+  incremental contra desde cero; la corrida al azar de la prueba 1 lo vuelve a medir): dos dispositivos que
+  compactan el mismo tramo sobre la misma base suben la misma huella (SHA-256), y si no, algo anda mal (ver
+  "Subir").
 - **Hasta dónde.** `up_to_seq` (la última fila cubierta) y `last_update_id` (el `page_updates.id` de esa fila).
   El `id` es un contador que nunca vuelve atrás, ni al restaurar una copia (el script lo protege), así que "la fila
   `up_to_seq` sigue teniendo ese `id`" prueba que las filas `1..up_to_seq` son las mismas que se compactaron.
@@ -194,7 +209,7 @@ Cada fila se decodifica; **si una no se puede leer** (la escribió una versión 
 
 ### 4.4 Armar y comprobar
 
-1. `snap = Y.mergeUpdates([base, ...cola])`.
+1. `snap`: la base y la cola aplicadas en orden en un `Y.Doc({ gc: false })`, y `Y.encodeStateAsUpdate` (sección 3).
 2. **Comprobar por dos caminos:** un `Y.Doc({ gc: false })` con la base y las filas aplicadas de a una, contra otro
    con el snapshot. Tienen que ser **equivalentes**: el mismo vector de estado y el mismo delete set
    (`Y.equalSnapshots`), el mismo contenido, aplicar el estado completo de cada uno sobre una copia del otro no
@@ -218,7 +233,14 @@ Cada fila se decodifica; **si una no se puede leer** (la escribió una versión 
 
 ```js
 // El núcleo (lo probado en el prototipo).
-const compact = (base, tail) => Y.mergeUpdates(base ? [base, ...tail] : tail);
+function compact(base, tail) { // en orden y sin GC: conserva el texto de lo borrado (sección 3)
+  const d = new Y.Doc({ gc: false });
+  if (base) Y.applyUpdate(d, base);
+  for (const u of tail) Y.applyUpdate(d, u);
+  const out = Y.encodeStateAsUpdate(d); // incluye lo pendiente
+  d.destroy();
+  return out;
+}
 function absorbs(x, y) { // ¿aplicar todo lo de y sobre una copia de x cambia algo?
   const c = new Y.Doc({ gc: false });
   Y.applyUpdate(c, Y.encodeStateAsUpdate(x));
@@ -347,7 +369,7 @@ anteriores, que leen y vuelven a escribir el mismo objeto, conservan esos campos
 
 - **El parche de y-prosemirror no interviene.** Compactar no abre el editor: junta updates de Yjs. Lo que escribe
   el parche (el texto de los huecos, la marca del renglón `lgaStableGaps`, los atributos `lgaGapText`) son
-  elementos y atributos de Yjs como cualquier otro, y `mergeUpdates` los copia byte por byte.
+  elementos y atributos de Yjs como cualquier otro, y aplicarlos en un documento sin GC los conserva tal cual.
 - **Tipos de bloque que esta versión no conoce:** tampoco intervienen. Una versión vieja que compacta una página con
   un bloque nuevo lo copia igual (no mira el esquema). Lo que la protege al **mostrar** sigue siendo la guarda
   (`unknownContent.ts`).
@@ -366,8 +388,10 @@ anteriores, que leen y vuelven a escribir el mismo objeto, conservan esos campos
 - **`verifyHistory`** (la papelera de archivos comprueba que esta versión lea todo el historial antes de quitar un
   archivo por primera vez) sigue leyendo `page_updates`: no cambia en la primera entrega. Más adelante puede leer el
   snapshot (decodificarlo equivale a decodificar las filas que junta).
-- **Historial de versiones (fase 6):** las filas quedan con su autor y su hora; los snapshots, sin GC, sirven
-  además de puntos de partida para armar versiones.
+- **Historial de versiones (`Doc_Historial.md`):** las filas quedan con su autor y su hora. Los snapshots, armados
+  en orden y sin GC, conservan el texto borrado de las versiones del medio, así que pueden servir de punto de
+  partida para armar versiones de páginas enormes (con `mergeUpdates` no servían: 37 de 63). Hoy el historial lee
+  solo filas.
 
 ## 9. Copias de seguridad y restaurar
 
@@ -448,7 +472,7 @@ Va como `supabase/migrations/<fecha>_snapshots.sql` en la entrega 1, con su prue
 
 ```sql
 -- Snapshots del contenido de una página: una copia de page_updates 1..up_to_seq en un solo update de Yjs
--- (Y.mergeUpdates, sin GC). Nunca reemplazan a page_updates: solo se bajan en su lugar.
+-- (las filas aplicadas en orden en un Y.Doc sin GC). Nunca reemplazan a page_updates: solo se bajan en su lugar.
 create table public.page_snapshots (
   id             uuid primary key default gen_random_uuid(),
   page_id        uuid not null references public.pages (id) on delete cascade,
@@ -582,7 +606,10 @@ Antes de escribir en la base, en este orden:
    determinismo; un update ilegible corta; una página vacía, una con solo la semilla, una vieja con dos raíces; y
    **pruebas mutantes**: un snapshot al que le falta una fila, un borrado sobre algo integrado, **una fila pendiente o
    un borrado pendiente** (los casos de la auditoría) tiene que fallar la comprobación. Con la comparación de lo
-   pendiente, el prototipo rechaza los cuatro y sigue sin falsas alarmas en 600 corridas.
+   pendiente, el prototipo rechaza los cuatro y sigue sin falsas alarmas en 600 corridas. **Desde el 2026-10-01,
+   además:** con filas que vuelven a subir el documento entero desde un dispositivo con GC, cada versión armada sobre
+   el snapshot (con `Y.createDocFromSnapshot` y los snapshots del historial) es igual a aplicar las filas hasta ahí,
+   y un snapshot armado con `mergeUpdates` tiene que fallar esa comparación (mutante).
 2. **El dispositivo con el servidor en memoria** (`docs.test.ts`, `sync.test.ts`): dispositivo nuevo, cursor viejo,
    cursor viejo con ediciones sin subir, subida en vuelo mientras llega un snapshot, cerrar la app en cada punto de
    `applyRemote`, un snapshot ilegible (el cursor no se mueve), una invalidación con la época leída en la misma
@@ -663,11 +690,16 @@ Antes de cerrar cada entrega, la auditoría de siempre (funcionalidad, permisos 
    ítem aparte del roadmap**, porque es el 96 % del crecimiento de la base; los snapshots arreglan la bajada, eso
    arregla la base y la subida.
 
+**Decidido el 2026-10-01** (Lega delegó, con el diseño del historial): el snapshot conserva lo borrado, armado
+aplicando las filas en orden en un documento sin GC en vez de `Y.mergeUpdates` (sección 3, y `Doc_Historial.md`,
+pregunta 4).
+
 ## Cómo se midió
 
 - **La base**: consultas de solo lectura por la Management API de Supabase (filas, bytes, tamaño de tabla y base,
   `explain analyze` de la lectura de `pull_page_updates`). El viaje a Supabase, con `auth/v1/health` (unos 70 ms).
-- **Lo que daría un snapshot en páginas reales**: las filas bajadas por la misma API, juntadas con `Y.mergeUpdates`
+- **Lo que daría un snapshot en páginas reales** (antes del cambio del 2026-10-01; con el armado nuevo, la página de 63
+  filas da 12,7 KB en vez de 11,0): las filas bajadas por la misma API, juntadas con `Y.mergeUpdates`
   (Yjs 13.6.33) y comparadas contra aplicarlas de a una. No se guardó contenido.
 - **El crecimiento**: una simulación en Node con el patrón de subida de la app (una semilla fija; los tiempos son de
   una PC).
