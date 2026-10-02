@@ -102,7 +102,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   a la de arriba; imprimir las deja igual; importar de Coda deja las fotos de una celda en la celda. Sin tipos ni
   propiedades nuevas (la versión publicada abre la página sin escribir nada). `Doc_Fotos_En_Linea.md`, "Cómo quedó
   (entrega 5)". Queda: probar en Safari y el iPhone, y con una exportación de Coda que tenga fotos en tablas de página.
-  **El alto de la miniatura se elige por tabla (v0.125, D27 → B):** *Thumbnail size* con *Small*, *Medium* y *Large*
+  **El alto de la miniatura se elige por tabla (v0.0XX, D27 → B):** *Thumbnail size* con *Small*, *Medium* y *Large*
   (64, 96 y 160 px), en la barra de la foto y en la de la tabla; propiedad de la tabla, la versión publicada vuelve a 96
   si edita la tabla (`Doc_Fotos_En_Linea.md`, "Alto de las miniaturas (D27 → B)"). Para después (auditoría): pegar solo `text/html` de una
   fila con fotos las pierde (O1); una tabla de Google Docs o Excel con imágenes llega sin ellas (O2); la papelera de

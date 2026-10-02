@@ -99,7 +99,7 @@ const REMOVED_WRITING = '0.095';
 /** Las fotos en las celdas de una tabla (Doc_Fotos_En_Linea.md, entrega 5): la versión se pone al publicar. */
 const CELL_PHOTOS = '0.107';
 /** El alto de las miniaturas de una tabla (Doc_Fotos_En_Linea.md, D27 → B): la versión se pone al publicar. */
-const CELL_THUMBS = '0.125';
+const CELL_THUMBS = '0.0XX';
 /** La que trajo "Update now" que espera la versión nueva y "Force the update" (Doc_Sincronizacion.md, "Volver después de mucho tiempo sin red"). */
 const UPDATE_APP = '0.097';
 /** *Download all* de una carpeta (P.9, entrega 2, Doc_Carpetas.md): la versión se pone al publicar, igual que en el changelog. */

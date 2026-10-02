@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.125 :
+v0.0XX :
 
 El alto de las miniaturas de una tabla era fijo (96 px) y en una tabla de referencias se veían chicas o, en una lista
 larga de planos, ocupaban de más (D27, cambiada por Lega a B). Ahora cada tabla tiene su alto: *Thumbnail size* con

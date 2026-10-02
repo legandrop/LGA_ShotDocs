@@ -925,7 +925,7 @@ impresión), `inlinePhotoCreate.test.ts` y `codaInlinePhotos.test.ts` (las celda
     `<img>` de las celdas a fotos en línea con `w = 0`, guardando el archivo como "Copy image".
   - O5: la papelera de archivos al borrar una fila o columna con fotos no se pudo comprobar sin la base real
     (`mediaIdsInDoc` deja de contarlas y Ctrl+Z las vuelve a contar; la desvinculación es del motor, sin cambios).
-- El alto de la miniatura era fijo (96 px); desde v0.125 se elige por tabla (ver "Alto de las miniaturas (D27 → B)").
+- El alto de la miniatura era fijo (96 px); desde v0.0XX se elige por tabla (ver "Alto de las miniaturas (D27 → B)").
 - El texto pegado a una miniatura queda a 8 px (el espacio de la foto) además de su espacio.
 - La barra de la foto, como en un renglón, puede quedar sobre la fila de arriba (O5).
 - Sin probar en Safari ni en el iPhone de verdad (el teléfono, emulado en Chromium).
@@ -966,7 +966,7 @@ opciones armadas con el editor real (el ejemplo con A, B a 64 y 160 px, C y su v
   ProseMirror sí actualiza, y `styles.css` cambia `--sd-cell-photo-h` en esa tabla.
 - **Cambiarlo** es un solo paso de deshacer y no toca las fotos (solo el atributo de la tabla).
 
-### Cómo quedó (v0.125)
+### Cómo quedó (v0.0XX)
 
 - **`src/ui/cellThumbs.ts`:** la propiedad (`thumbHeight`, de fábrica 96), su atributo global de `table`, la decoración
   y `setThumbHeight` (las tablas de las fotos elegidas, en una transacción). `editorSchema.ts` le suma a la tabla de
