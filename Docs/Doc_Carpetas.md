@@ -1,7 +1,7 @@
 # Arrastrar una carpeta entera (P.9)
 
 Estado: **entrega 1 implementada (v0.081, rama `lega/carpetas`)**, con lo que no depende de Lega; ver "Cómo
-quedó" justo abajo. El diseño sigue debajo. Rediseñado el 2026-09-30 con las respuestas de Lega (ver "Respondidas por
+quedó" justo abajo. **Entrega 2 (*Download all*) implementada** (rama `lega/carpetas-zip`): "Cómo quedó (entrega 2)". El diseño sigue debajo. Rediseñado el 2026-09-30 con las respuestas de Lega (ver "Respondidas por
 Lega"): la carpeta de la página es **una vista en vivo de una carpeta del Drive**, sin tope de archivos y en el
 plan gratis de Cloudflare. El primer diseño (commit `47bbbf4`, una fila de `files` por archivo) y su auditoría
 quedan resumidos al final, en "Historia"; lo que la auditoría encontró y sigue valiendo está incorporado.
@@ -75,6 +75,109 @@ la carpeta, cierra. Los accesos directos y los documentos de Google se muestran 
   el segundo la encuentra en Drive por su marca `sdFile` y no crea otra; si igual quedaran dos, la app rearma el
   árbol cuando el portero dice que una subcarpeta no es de esta carpeta.
 
+## Cómo quedó (entrega 2, *Download all*)
+
+**Qué ve el usuario.** El visor tiene *Download all* arriba, al lado de *Close* (y la barra de la tarjeta, para quien
+edita, un botón con el mismo nombre que abre el visor con la descarga). Primero mira todo lo de adentro ("Looking at
+what is inside… 340 files in 12 folders") y dice cuánto es ("340 files in 12 folders · 2,1 GB") y cuántas cosas no se
+bajan (accesos directos, documentos de Google, una subcarpeta que no se pudo abrir). Después, según el navegador:
+
+- **Chrome y Edge de computadora** (`showSaveFilePicker`): *Download as .zip…* pide dónde guardarlo y lo escribe a
+  medida que llega, sin tope; *Download to a folder…* (`showDirectoryPicker`) escribe el árbol tal cual en una carpeta
+  nueva adentro de la elegida (`Referencias`, o `Referencias (2)` si ya hay una: nunca mezcla).
+- **Firefox, Safari y los teléfonos** (D24): *Download as .zip* lo arma en memoria hasta 1 GB (500 MB en un teléfono:
+  iPhone, iPad o Android, según el navegador); al terminar, *Save Referencias.zip* lo guarda con un clic (un gesto
+  nuevo: Safari no deja bajar sin uno después de minutos de espera). Pasado el tope, el aviso de bajar de a uno o desde
+  una computadora con Chrome o Edge, sin botón para bajar. El service worker no cambia (`generateSW`).
+
+Mientras baja: la barra, "34 of 340 files · 1,2 of 2,1 GB", el archivo en curso, "Keep this tab open until it
+finishes" y *Cancel* (Escape y el clic afuera no cierran nada mientras baja). Sin red se queda esperando ("No
+connection: it continues when it comes back") sin gastar reintentos; también con el wifi conectado y sin internet
+(el navegador sigue diciendo que hay red): un pedido que falla por la red prueba el portero (`/health`) y, si tampoco
+contesta, espera probándolo cada 5 segundos en vez de anotar el archivo como faltante. Al terminar dice dónde quedó y cuántas cosas no
+están. Cancelar un zip lo borra (no queda un archivo a medias); cancelar una carpeta deja lo ya bajado. Sin red, el
+botón se ve apagado y, con el clic, dice que hace falta conexión.
+
+**Cómo está hecho:**
+
+- `src/media/folderZip.ts`: `planFolder` recorre el árbol con `/folder/list` (4 subcarpetas a la vez, todas las
+  páginas de 100; si Drive pide ir más despacio, espera 5, 10, 20… segundos; una subcarpeta que no se puede listar se
+  anota y el resto sigue) y arma la lista en orden: primero las carpetas, después los archivos, como el visor.
+  `runDownload` baja cada archivo por su pase (`fetch` con CORS: `/m/` ya lo dejaba, solo para `APP_ORIGINS`, desde
+  v0.058). Los archivos de hasta 4 MB se piden de a 4 por delante; los grandes se escriben a medida que llegan y, si la
+  respuesta se corta, se sigue desde donde quedó con `Range` (un `206` más corto, como el del arranque de los videos
+  guardado en el portero, también). Todo se pide con `?offline=1`: una bajada entera no pasa por la caché del
+  arranque de los videos ni la desplaza. Un archivo que falla (404, `abusive`, 4 intentos con 5xx o con un `fetch` que
+  falla mientras el portero sí contesta) se saltea; un pase vencido (una bajada de más de 8 horas), al abrir el
+  archivo o entre un corte y el pedido que sigue, vuelve a listar su subcarpeta y sigue con el nuevo. Si el disco no
+  deja escribir, la bajada se frena entera; un nombre que el navegador no deja crear en el disco (Chrome rechaza
+  `.lnk`, `.scf`, `.local` con un `TypeError`) se saltea y se anota. El zip en memoria tiene su propio tope con los
+  bytes que llegan (`BlobSink`): si Drive dijo un peso menor, falla con el mismo aviso del tope.
+- `src/media/zipWriter.ts`: el zip a mano (sin librería: en modo *store* es simple). Sin comprimir (método 0), cada
+  archivo con su descriptor después de los datos (el CRC se sabe al final: nunca se vuelve atrás en lo escrito),
+  Zip64 en un archivo de 4 GiB o más (lo decide el `Content-Length` o el peso de Drive antes de escribir el
+  encabezado), en el índice cuando un lugar pasa los 4 GiB y en el final; nombres en UTF-8 (bit 11), permisos de Unix
+  y la fecha de Drive. Un archivo que se corta del todo queda en el zip con lo que llegó (el zip sigue sano) y se anota
+  como incompleto. Si un archivo sin Zip64 resultara pesar 4 GiB o más (Drive dijo un peso menor), la bajada falla
+  entera: un encabezado ya escrito no se arregla.
+- `src/media/crc32.ts` y `crc32.worker.ts`: CRC32 de a 8 bytes por vuelta (*slice-by-8*), en un Web Worker que recibe
+  los pedazos sin copiarlos; sin Worker, en la página.
+- `src/media/zipNames.ts`: cada parte de la ruta se limpia para Windows, la Mac y el iPhone (controles y marcas de
+  dirección; `<>:"/\|?*` como `_`; sin punto ni espacio al final; `.` y `..` como `_`; `CON`, `NUL`, `COM1`… con un `_`
+  adelante; 200 caracteres y 255 bytes UTF-8 y UTF-16 (la Mac, Linux y Android topan en bytes: 100 letras chinas son
+  300), por grafema y conservando la extensión) y, en cada carpeta, dos nombres iguales sin distinguir
+  mayúsculas (o que quedan iguales al limpiarlos) llevan « (2)», « (3)». Todo va adentro de una carpeta con el nombre
+  de la carpeta (como el zip de Drive), en el zip y en el disco.
+- **`MISSING_FILES.txt`** (decisión de esta tanda): en inglés, como la interfaz, para que el nombre sea el mismo en
+  cualquier idioma; el texto de adentro va en el idioma de la app, con BOM y renglones de Windows, una línea por cosa
+  (`ruta — motivo (detalle)`). Va adentro de la carpeta, solo si falta algo; un archivo de la carpeta con ese nombre
+  pasa a `MISSING_FILES (2).txt`.
+- `src/ui/FolderDownload.tsx`: la ventana; `FolderViewer.tsx` (el botón) y `MediaBar.tsx` (la barra de la tarjeta,
+  `onDownloadAll` de `MediaActions`). Ayuda: `folderDownload`. Sin atajos nuevos.
+- **Permisos:** los de siempre, sin nada nuevo en el portero ni en la base: listar pide nivel 1 sobre la carpeta (quien
+  ve la página), cada subcarpeta se comprueba adentro del árbol (`inTree`) y cada archivo baja con su pase firmado. Lo
+  de afuera de la carpeta no aparece nunca en la lista.
+- **Los cortes de 200 y 250 caracteres van por grafema** (`cutText`, en `src/lib/graphemes.ts` y en el portero): el
+  nombre para la base (`cleanFileName`, 250), el de las carpetas en Drive (`driveFolderName`, 200), el del pase (255)
+  y los del zip ya no parten una bandera ni le sacan el tono a un emoji, y nunca pasan el tope en puntos de código (lo
+  que mide la base).
+
+**Pruebas:** `src/media/zipWriter.test.ts` (CRC32 de referencia y por partes, el Worker sin copiar, store con carpetas
+vacías y UTF-8, Zip64 forzado, 65.534 y 65.535 cosas (el final con Zip64 desde 65.535), nombres de más de 255 bytes, un archivo de 4 GiB y 120 KB sin escribirlo entero (los datos son "huecos" de ceros y
+el CRC se arma sin recorrerlos), el que miente su peso, el que se corta, el disco que falla, la fecha, los nombres y
+el corte por grafema), `src/media/folderZip.test.ts` (recorrer con páginas, nombres repetidos y raros, Drive que pide
+despacio, subcarpeta que no se lista, el zip entero, un archivo que falla, 5xx, cortes con `Range`, el `206` corto,
+incompleto, pase vencido al abrir y a mitad, sin red, el wifi sin internet (espera; si el portero contesta, se
+saltea), el tope propio del zip en memoria, cancelar, los chicos por delante, a una carpeta, un nombre que el navegador
+rechaza, el disco lleno), `src/ui/folderDownload.test.ts` (el aviso del tope) y
+`portero/src/folders.test.ts` (CORS de `/m/` y `/t/` solo para el origen de la app, también en el preflight; quien no
+ve la página no lista ni recibe pases; el corte por grafema). Cada zip de las pruebas lo abre Python
+(`zipfile.testzip()`, que comprueba cada CRC); sin Python, esas comprobaciones se saltean. `scripts/portero-smoke.mjs`
+suma tres pedidos con y sin el origen de la app. **Recorrido en Chromium** con la página real, el portero real en la
+página y un Drive de mentira (un invitado con "Ver"): 28 de 28 (el zip con el selector sobre OPFS, abierto con Python y
+con `unzip -t`; a una carpeta, dos veces; cancelar; sin red; en memoria sin selectores, guardado con el botón; el tope
+de 500 MB con un iPhone; la barra de la tarjeta, en castellano).
+
+**Lo que falta de la entrega 2 (BAJO):** el recorrido pide una subcarpeta por pedido (el diseño decía ~40 por pedido,
+con una ruta nueva del portero): una carpeta con 500 subcarpetas son 500 pedidos de listado, lejos del límite del día.
+Firefox por el service worker (sin tope) queda para otra entrega (D24). Los documentos de Google no se bajan como PDF
+(decisión 5). Probar a mano en Safari, el iPhone y con el Drive real (lista de la tanda). De la auditoría:
+
+- **Sin tiempo máximo de lectura (R1):** si el portero deja de contestar sin cortar la conexión, la barra queda quieta
+  sin «No connection» (se puede cancelar). Un tope por pedido sin avance lo cerraría, como el de las subidas (v0.092).
+- **`APP_ORIGINS` mal puesto en el portero de un dueño (R2):** `/m/` falla por CORS y se saltea todo; si `/health` también
+  falla, la bajada espera para siempre. Distinguir el error de CORS del corte de red.
+- **Un nombre de un solo grafema gigante (R3)** puede quedar recortado de forma rara (no es prefijo del original). Inofensivo.
+
+- **Emojis compuestos (O4, preexistente):** `cleanFileName` (app y portero) saca U+200D y U+200C, así que una familia
+  (`👨‍👩‍👧‍👦`) queda como cuatro emojis sueltos, en el zip y en Drive, y el corte por grafema puede partirla. Va con el
+  pendiente de nombres de D3: dejar el ZWJ cuando está entre dos caracteres visibles.
+- **`tar.exe` de Windows (O11, informativa):** no extrae nombres con emojis desde la consola (le pasa igual con un zip
+  hecho por Python). El Explorador (*Extraer todo*) y .NET extraen todo.
+- **Reemplazar un zip existente:** en *Download as .zip…*, cancelar o fallar borra el archivo elegido, también si ya
+  existía y se aceptó reemplazarlo (coherente con "reemplazar").
+- *Retry missing* (bajar solo lo de `MISSING_FILES.txt`) no existe: hay que bajar todo otra vez.
+
 **Correcciones de la segunda auditoría (2026-10-01):**
 
 - **El portero se rompía desde el segundo pedido de cada instancia** (guardaba el stub del Durable Object entre
@@ -104,7 +207,7 @@ la carpeta, cierra. Los accesos directos y los documentos de Google se muestran 
 - **Entrega 1b pendiente (BAJO):** "Agregar a esta carpeta", la cuadrícula, la copia de la última lista para
   verla sin red, retomar con "Seguir" en Chrome y Edge (`FileSystemHandle`), el botón "Carpeta…" del menú `/`,
   la cuenta de pedidos del día y contar lo que falta subir en "sacar el workspace del dispositivo".
-- **Entrega 2:** *Bajar todo* como zip.
+- **Entrega 2:** *Bajar todo* como zip. **Hecho** ("Cómo quedó (entrega 2)").
 - **Nombres de las carpetas: decidido (D3, 2026-10-01).** Lega delegó; quedó respetar el nombre en las carpetas que
   suelta el usuario (ver "Respondidas por Lega", punto 6). Hecho en `driveFolderName`.
 - **El iPhone:** sin probar a mano; si el navegador no da `webkitGetAsEntry`, se sigue pidiendo comprimirla.
@@ -325,7 +428,8 @@ no puede ir nunca al navegador de un miembro.
   "Incluir archivos ocultos". Las carpetas vacías sí se crean (salvo con `webkitdirectory`, que no las ve).
 - Un archivo que no se puede leer queda afuera y figura como salteado.
 - **Nombres:** Drive acepta cualquier nombre; se limpian solo los controles, las marcas de dirección y los
-  caracteres de ancho cero (`cleanFileName`). Dos nombres que solo difieren en mayúsculas se suben tal cual (el zip los desambigua).
+  caracteres de ancho cero (`cleanFileName`). Dos nombres que solo difieren en mayúsculas se suben tal cual (el zip los
+  desambigua, y limpia lo que Windows no acepta: entrega 2).
   Las carpetas también conservan su nombre (D3, punto 6 de "Respondidas por Lega").
 
 ## 7. La ventana: "esta carpeta, con todo esto"
@@ -386,11 +490,11 @@ Otros dispositivos no ven la ventana: ven la tarjeta "subiendo desde otro dispos
   4 GB, las subcarpetas y los nombres repetidos por mayúsculas desambiguados (" (2)"). Dónde se escribe:
   - Chrome y Edge de computadora: `showSaveFilePicker()`, a medida que llega. Y "Bajar a una carpeta…"
     (`showDirectoryPicker()`), que escribe el árbol tal cual, sin zip.
-  - Firefox: por el service worker, a medida que se arma (hoy el service worker se genera solo, `generateSW`: una ruta
-    propia pide pasar a `injectManifest`).
-  - Safari (Mac e iPhone): en memoria, con tope (1 GB; en el iPhone, 500 MB); pasado el tope, el aviso de bajar de a
-    uno o desde la computadora.
-  - Se puede cancelar; lo que falla se saltea y se anota en un `LEEME_faltan.txt` adentro del zip.
+  - Firefox y Safari (Mac e iPhone), D24: en memoria, con tope (1 GB; en el teléfono, 500 MB); pasado el tope, el
+    aviso de bajar de a uno o desde la computadora con Chrome o Edge. Firefox por el service worker (sin tope) pedía
+    pasar de `generateSW` a `injectManifest`: queda para otra entrega.
+  - Se puede cancelar; lo que falla se saltea y se anota en `MISSING_FILES.txt` adentro del zip (era
+    `LEEME_faltan.txt` en el diseño).
 - **Por qué no en el portero:** el CRC de todos los bytes no entra en los 10 ms de CPU por pedido del plan gratis, ni
   pedir miles de archivos a Drive en los 50 llamados por pedido.
 

@@ -218,6 +218,11 @@ export const help = {
     en: "Click the card twice (once on the phone or without edit access), press {open} with it selected, or Open in its bar. You see what is in the Drive folder right now: subfolders first, then files with their thumbnail. A photo or a video opens in the viewer; a PDF opens in a new tab; the rest downloads. {up} goes up one level.",
     es: "Dos clics en la tarjeta (uno en el teléfono o sin permiso de editar), {open} con la tarjeta elegida, o Abrir en su barra. Ves lo que hay ahora en la carpeta de Drive: primero las subcarpetas, después los archivos con su miniatura. Una foto o un video se abren en el carrete; un PDF, en otra pestaña; lo demás se baja. {up} sube un nivel.",
   },
+  'help.folderDownload.title': { en: "Download a whole folder", es: "Bajar una carpeta entera" },
+  'help.folderDownload.text': {
+    en: "Download all, in the folder viewer or in the card's bar, saves everything inside with its subfolders. In Chrome and Edge on a computer you choose where the .zip goes, or Download to a folder… writes the files as they are. Firefox, Safari and phones build the zip in memory: up to 1 GB (500 MB on a phone). Shortcuts, Google documents and anything that fails are listed in MISSING_FILES.txt. It needs a connection; keep the tab open until it finishes.",
+    es: "Bajar todo, en el visor de la carpeta o en la barra de la tarjeta, guarda todo lo de adentro con sus subcarpetas. En Chrome y Edge de computadora elegís dónde va el .zip, o Bajar a una carpeta… escribe los archivos tal cual. Firefox, Safari y los teléfonos arman el zip en memoria: hasta 1 GB (500 MB en un teléfono). Los accesos directos, los documentos de Google y lo que falle quedan anotados en MISSING_FILES.txt. Hace falta conexión; dejá la pestaña abierta hasta que termine.",
+  },
   'help.folderWho.title': { en: "Who sees a folder", es: "Quién ve una carpeta" },
   'help.folderWho.text': {
     en: "Whoever sees the page sees and downloads what is in the folder, but never the folders above it or next to it. Only the person who added the folder uploads into it.",

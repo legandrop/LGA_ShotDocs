@@ -105,7 +105,9 @@ In production (v0.049). What works today:
   downloads with its name. In the full-screen viewer, files appear large among the photos, with Open and Download.
 - Drop a whole folder, subfolders included: a window shows what goes up, it uploads to the owner's Drive and
   stays in the page as a folder card. Opening it shows what is in that Drive folder right now, with thumbnails,
-  the photo viewer and downloads; whoever sees the page sees the folder, and nothing above it.
+  the photo viewer and downloads; whoever sees the page sees the folder, and nothing above it. *Download all*
+  saves the whole folder as a .zip (in Chrome and Edge on a computer, written as it arrives and with no size limit,
+  or straight into a folder; elsewhere, built in memory up to 1 GB, 500 MB on a phone).
 - Collapse sections by their headings: a triangle next to any heading hides everything up to the next heading
   of its level (just for you, saved on the device; Ctrl/⌘+Alt+Enter, and *Collapse all* in the page menu).
   Shift+click collapses or expands it for everyone who views the page (if you can edit it); the tooltip says

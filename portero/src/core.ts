@@ -292,13 +292,13 @@ const TREE_MEMORY_MAX = 20_000;
  * El nombre en el Drive del dueño de una carpeta que soltó el usuario y de sus subcarpetas: el suyo, tal cual
  * (D3, 2026-10-01: `Día 2 - Puerto` queda así, con espacios, tildes y emojis). Solo se saca lo que saca
  * `cleanFileName`, igual que la app: controles, marcas de dirección y los de ancho cero (también U+200C y U+200D,
- * así que un emoji compuesto, como el de una familia, queda en sus partes); las barras van como `_`. Se corta en 200 caracteres por
- * puntos de código y sin espacios en los bordes. Vacío, `Folder`. Las carpetas que crea la app (la de la app, la
+ * así que un emoji compuesto, como el de una familia, queda en sus partes); las barras van como `_`. Se corta en 200 caracteres
+ * sin partir un grafema (`cutText`) y sin espacios en los bordes. Vacío, `Folder`. Las carpetas que crea la app (la de la app, la
  * de cada proyecto, `Carpetas`) siguen sin espacios (`folderName`). Las de antes, con guiones bajos (`Dia_2`),
  * no se renombran: cada una se encuentra por su marca (`sdFile`, `sdPath`), nunca por el nombre.
  */
 export function driveFolderName(name: string): string {
-  return Array.from(cleanFileName(name)).slice(0, 200).join('').trim() || 'Folder';
+  return cutText(cleanFileName(name), 200).trim() || 'Folder';
 }
 
 /**
@@ -1679,7 +1679,7 @@ export class Portero {
       } else {
         const size = Number(f.size ?? 0);
         const type = MIME.test(mime) ? mime : '';
-        const pass: Pass = { f: f.id, t: type, u: until, s: Number.isSafeInteger(size) ? size : 0, n: keepExtension(Array.from(name), NAME_MAX), ...(modified ? { m: modified } : {}) };
+        const pass: Pass = { f: f.id, t: type, u: until, s: Number.isSafeInteger(size) ? size : 0, n: keepExtension(name, NAME_MAX), ...(modified ? { m: modified } : {}) };
         const url = await this.passUrl(req, pass);
         entries.push({ type: 'file', id: f.id, name, mime: type, size: pass.s, modified, url, thumb: f.hasThumbnail ? url.replace('/m/', '/t/') : null });
       }
@@ -2160,7 +2160,7 @@ export class Portero {
     if (mark === 'missing') throw new HttpError(404, 'This file is not in Google Drive anymore.', 'drive_missing');
     if (mark === 'other') throw new HttpError(403, 'This file in Google Drive does not belong to this file of the app.', 'drive_mismatch');
     // El nombre va tal cual (con un tope, para que el pase no crezca de más): se limpia al servir.
-    const name = typeof media.name === 'string' ? keepExtension(Array.from(media.name), NAME_MAX) : '';
+    const name = typeof media.name === 'string' ? keepExtension(media.name, NAME_MAX) : '';
     return { drive, type: MIME.test(media.mime ?? '') ? media.mime : '', size: Number(media.size) || 0, name };
   }
 
@@ -2541,15 +2541,48 @@ const LONE_SURROGATE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[
 /** El nombre de un archivo listo para `Content-Disposition`: sin controles, bidi ni barras; `''` si no queda nada. */
 export function cleanFileName(name: string): string {
   const clean = name.replace(LONE_SURROGATE, '').normalize('NFC').replace(HIDDEN_CHARS, '').replace(/[/\\]/g, '_').trim();
-  return keepExtension(Array.from(clean), NAME_MAX);
+  return keepExtension(clean, NAME_MAX);
 }
 
-/** Un nombre de hasta `max` caracteres; si hay que cortar, se corta antes de la extensión (queda `.pdf`). */
-function keepExtension(chars: string[], max: number): string {
-  if (chars.length <= max) return chars.join('');
+/**
+ * Un nombre de hasta `max` caracteres; si hay que cortar, se corta antes de la extensión (queda `.pdf`) y sin partir
+ * un grafema (`cutText`).
+ */
+function keepExtension(name: string, max: number): string {
+  const chars = Array.from(name);
+  if (chars.length <= max) return name;
   const dot = chars.lastIndexOf('.');
-  const ext = dot > 0 && chars.length - dot <= 16 ? chars.slice(dot) : [];
-  return [...chars.slice(0, max - ext.length), ...ext].join('');
+  const ext = dot > 0 && chars.length - dot <= 16 ? chars.slice(dot).join('') : '';
+  const stem = ext ? chars.slice(0, dot).join('') : name;
+  return cutText(stem, max - Array.from(ext).length) + ext;
+}
+
+type Segmenter = { segment(text: string): Iterable<{ segment: string }> };
+let graphemeSegmenter: Segmenter | null | undefined;
+
+/**
+ * El principio del texto con grafemas enteros (una bandera, un emoji con su tono, una letra con su tilde suelta) y a
+ * lo sumo `max` puntos de código: cortar por punto de código podía dejar media bandera. Sin `Intl.Segmenter` (lo
+ * tiene Workers), por punto de código. Igual que `cutText` de la app (src/lib/graphemes.ts).
+ */
+export function cutText(text: string, max: number): string {
+  if (max <= 0) return '';
+  const points = Array.from(text);
+  if (points.length <= max) return text;
+  if (graphemeSegmenter === undefined) {
+    const Ctor = (Intl as unknown as { Segmenter?: new (locale?: string, options?: { granularity: string }) => Segmenter }).Segmenter;
+    graphemeSegmenter = Ctor ? new Ctor(undefined, { granularity: 'grapheme' }) : null;
+  }
+  if (!graphemeSegmenter) return points.slice(0, max).join('');
+  let out = '';
+  let used = 0;
+  for (const { segment } of graphemeSegmenter.segment(text)) {
+    const n = Array.from(segment).length;
+    if (used + n > max) return used === 0 ? Array.from(segment).slice(0, max).join('') : out;
+    out += segment;
+    used += n;
+  }
+  return out;
 }
 
 /**

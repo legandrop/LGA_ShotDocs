@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DRIVE_CALL_BUDGET, driveFolderName, FOLDER_BATCH, Portero, TREE_TTL_MS, validFolderPath, type Env, type Store } from './core';
+import { cleanFileName, cutText, DRIVE_CALL_BUDGET, driveFolderName, FOLDER_BATCH, Portero, TREE_TTL_MS, validFolderPath, type Env, type Store } from './core';
 
 // Carpetas (P.9, Docs/Doc_Carpetas.md): crear el árbol, abrir las subidas, listar en vivo y, sobre todo, que
 // nadie pueda listar, subir ni bajar nada de afuera del árbol de la carpeta.
@@ -263,6 +263,20 @@ describe('carpetas: nombres y rutas', () => {
     expect(driveFolderName('x'.repeat(290) + '.final')).toBe('x'.repeat(200));
     expect(driveFolderName('🎬'.repeat(300))).toBe('🎬'.repeat(200));
     expect(driveFolderName('x'.repeat(199) + ' yyy')).toBe('x'.repeat(199));
+  });
+
+  it('el corte de 200 no parte una bandera ni le saca el tono a un emoji (por grafema, sin pasar 200 caracteres)', () => {
+    // Antes, por punto de código: quedaba media bandera (una letra regional suelta) o la mano sin su tono.
+    expect(driveFolderName('x'.repeat(199) + '🇦🇷')).toBe('x'.repeat(199));
+    expect(driveFolderName('x'.repeat(198) + '🇦🇷🇦🇷')).toBe('x'.repeat(198) + '🇦🇷');
+    expect(driveFolderName('x'.repeat(199) + '👍🏽')).toBe('x'.repeat(199));
+    expect(cutText('dí', 2)).toBe('d');
+    expect(cutText('abc', 0)).toBe('');
+    // El nombre de un archivo (el del pase, 255) también, y conserva la extensión.
+    const name = cleanFileName('a'.repeat(250) + '🇦🇷🇦🇷🇦🇷.mov');
+    expect(name).toBe('a'.repeat(250) + '.mov');
+    expect(cleanFileName('a'.repeat(249) + '🇦🇷🇦🇷.mov')).toBe('a'.repeat(249) + '🇦🇷.mov');
+    expect(cleanFileName('a'.repeat(248) + '🇦🇷🇦🇷.mov')).toBe('a'.repeat(248) + '🇦🇷.mov');
   });
 
   it('una ruta no puede subir ni empezar con barra', () => {
@@ -752,6 +766,51 @@ describe('carpetas: ver, nunca hacia arriba', () => {
     expect(pass.status).toBe(409);
     expect(((await pass.json()) as { code: string }).code).toBe('is_folder');
     expect(world.drive.get(tree.root.id)!.trashed).toBeFalsy();
+  });
+
+  it('Download all: la app lee cada archivo de la lista con fetch (CORS en /m/ y /t/ solo para su origen)', async () => {
+    const { p, tree, add } = await filled();
+    add('foto.jpg', tree.root.id, { thumb: true });
+    const listed = (await (await call(p, '/folder/list', 'viewer-jwt', { file: F1 })).json()) as Listed;
+    const photo = listed.entries.find((e) => e.name === 'foto.jpg')!;
+    // Desde la app: el origen habilitado y los encabezados que lee el zip (el peso, la parte, el nombre).
+    const ok = await p.handle(new Request(photo.url!, { headers: { Origin: APP } }));
+    expect(ok.status).toBe(200);
+    expect(ok.headers.get('Access-Control-Allow-Origin')).toBe(APP);
+    expect(ok.headers.get('Vary')).toContain('Origin');
+    const exposed = (ok.headers.get('Access-Control-Expose-Headers') ?? '').split(/,\s*/);
+    expect(exposed).toEqual(expect.arrayContaining(['Content-Length', 'Content-Range', 'Content-Disposition']));
+    expect(ok.headers.get('Content-Length')).toBe('2');
+    // Retomar a la mitad (Range, 206) lleva lo mismo: lo prueba core.test.ts ("GET desde la app").
+    // Otro origen: el navegador no le deja leer nada (sin la cabecera), ni en el archivo, ni en la miniatura, ni en
+    // el preflight.
+    for (const origin of ['https://evil.example', 'https://app.example.evil.example', 'null']) {
+      const evil = await p.handle(new Request(photo.url!, { headers: { Origin: origin } }));
+      expect(evil.headers.get('Access-Control-Allow-Origin')).toBeNull();
+      expect(evil.headers.get('Access-Control-Expose-Headers')).toBeNull();
+      expect(evil.headers.get('Vary')).toContain('Origin');
+      const thumb = await p.handle(new Request(photo.thumb!, { headers: { Origin: origin } }));
+      expect(thumb.headers.get('Access-Control-Allow-Origin')).toBeNull();
+      const pre = await p.handle(
+        new Request(photo.url!, { method: 'OPTIONS', headers: { Origin: origin, 'Access-Control-Request-Method': 'GET', 'Access-Control-Request-Headers': 'range' } }),
+      );
+      expect(pre.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    }
+    const appThumb = await p.handle(new Request(photo.thumb!, { headers: { Origin: APP } }));
+    expect(appThumb.headers.get('Access-Control-Allow-Origin')).toBe(APP);
+  });
+
+  it('Download all: lo de una subcarpeta lo baja quien ve la página; quien no, ni lista ni recibe pases', async () => {
+    const { p, tree, add } = await filled();
+    add('dentro.jpg', tree.dirs.Fotos!);
+    const sub = (await (await call(p, '/folder/list', 'viewer-jwt', { file: F1, dir: tree.dirs.Fotos })).json()) as Listed;
+    const file = sub.entries.find((e) => e.name === 'dentro.jpg')!;
+    expect((await p.handle(new Request(file.url!, { headers: { Origin: APP } }))).status).toBe(200);
+    for (const jwt of ['stranger-jwt', null]) {
+      const res = await call(p, '/folder/list', jwt, { file: F1, dir: tree.dirs.Fotos });
+      expect([401, 404]).toContain(res.status);
+      expect(JSON.stringify(await res.json())).not.toContain('/m/');
+    }
   });
 
   it('el estado dice que este portero sabe de carpetas', async () => {

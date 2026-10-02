@@ -11,6 +11,17 @@ Coda deja las fotos de una celda en la celda. Sin tipos ni propiedades nuevas: l
 escribir nada. Ayuda nueva.
 [ Fotos en las celdas - entran en la celda como miniaturas, con su barra, impresión e importación de Coda ]
 
+v0.105 :
+
+Una carpeta de Drive (P.9) solo se podía bajar de a un archivo: faltaba *Download all*. Ahora el visor y
+la barra de la tarjeta la ofrecen a quien ve la página: la app recorre el árbol con `/folder/list` y baja cada archivo
+por su pase (el CORS de `/m/` ya dejaba leerlo solo desde la app). En Chrome y Edge de computadora arma un zip sin
+comprimir, con CRC32 en un Worker y Zip64, escrito a medida que llega (o escribe el árbol en una carpeta); Firefox,
+Safari y los teléfonos lo arman en memoria hasta 1 GB (500 MB en el teléfono, D24). Cada nombre de Drive se limpia
+para Windows y la Mac, los repetidos por mayúsculas llevan « (2)», lo que falla va en `MISSING_FILES.txt` y se puede
+cancelar. Los nombres se cortan en 200 o 250 caracteres por grafema, sin partir una bandera.
+[ Bajar todo - una carpeta de Drive entera como zip o a una carpeta, con sus nombres limpios ]
+
 v0.104 :
 
 Lo borrado de una página les llegaba con las filas a quien solo ve, comenta o es invitado, y las fotos sacadas se seguían
