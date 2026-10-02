@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { crc32 } from '../media/crc32';
 import { BlobSink } from '../media/folderZip';
 import { ZipWriter } from '../media/zipWriter';
-import { folderSource, openZip, safePath, subSource, ZipReadError } from './zipReader';
+import { folderSource, INFLATE_PIECE, openZip, safePath, subSource, ZipReadError } from './zipReader';
 
 // El lector de zip de volver a Shot Docs (P.22, entrega 3; Docs/Doc_Exportar.md, sección 3): lee lo que escribe la app
 // (sin comprimir, con descriptores, Zip64) y lo que deja el Explorador o el Finder al volver a comprimir (*deflate*),
@@ -149,6 +149,57 @@ describe('volver a Shot Docs: leer el zip', () => {
     const src = await openZip(await handZip([{ name: 'Files/video.mov', data: big, method: 8, size: 100 }]));
     // `damaged` es el corte a mitad; si se descomprimiera todo, el error sería el del final (`crc`).
     await expect(src.blob('Files/video.mov')).rejects.toMatchObject({ code: 'damaged' });
+  });
+
+  it('una bomba: lo que se descomprime de más queda acotado a unos pedazos, no al tamaño real (ronda 2 de la auditoría)', async () => {
+    // Cuenta lo que sale del descompresor de verdad (envuelto): eso es lo que ocupa memoria antes del corte.
+    // Y el pedazo más grande de comprimido que se le pasa: en Chromium, el descompresor saca entero lo de cada pedazo
+    // antes de que el control lo vea (con `blob.stream()`, pedazos grandes: +2 GB medidos por la auditoría).
+    const Real = globalThis.DecompressionStream;
+    let produced = 0;
+    let biggestInput = 0;
+    class Counting {
+      readonly writable: WritableStream;
+      readonly readable: ReadableStream;
+      constructor(format: CompressionFormat) {
+        const real = new Real(format);
+        const input = new TransformStream<Uint8Array, Uint8Array>({
+          transform(chunk, ctl) {
+            biggestInput = Math.max(biggestInput, chunk.length);
+            ctl.enqueue(chunk);
+          },
+        });
+        void input.readable.pipeTo(real.writable as WritableStream).catch(() => undefined);
+        this.writable = input.writable as WritableStream;
+        this.readable = (real.readable as ReadableStream<Uint8Array>).pipeThrough(
+          new TransformStream<Uint8Array, Uint8Array>(
+            {
+              transform(chunk, ctl) {
+                produced += chunk.length;
+                ctl.enqueue(chunk);
+              },
+            },
+            undefined,
+            { highWaterMark: 0 },
+          ),
+        );
+      }
+    }
+    // 200 MB de ceros (unos 200 KB comprimidos) que dicen pesar 1 MB.
+    const zip = await handZip([{ name: 'Files/bomba.mov', data: new Uint8Array(200_000_000), method: 8, size: 1_000_000 }]);
+    vi.stubGlobal('DecompressionStream', Counting);
+    try {
+      const src = await openZip(zip);
+      await expect(src.blob('Files/bomba.mov')).rejects.toMatchObject({ code: 'damaged' });
+      expect(biggestInput).toBeLessThanOrEqual(INFLATE_PIECE);
+      // Con el comprimido de a 16 KB, cada pedazo da como mucho ~16 MB: lo de más queda en unos pocos pedazos.
+      expect(produced).toBeLessThan(40_000_000);
+      produced = 0;
+      await expect(src.text('Files/bomba.mov', 2_000_000)).rejects.toMatchObject({ code: 'damaged' });
+      expect(produced).toBeLessThan(40_000_000);
+    } finally {
+      vi.stubGlobal('DecompressionStream', Real);
+    }
   });
 
   it('topes del deflate (O2): uno que dice pesar más que el tope no se lee y se sabe antes; el total por zip también', async () => {

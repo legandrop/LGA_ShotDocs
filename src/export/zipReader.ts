@@ -114,6 +114,32 @@ async function bytesOf(blob: Blob, from: number, to: number): Promise<Uint8Array
 
 const utf8 = new TextDecoder('utf-8');
 
+/** De a cuánto se le pasa lo comprimido al descompresor (una bomba: 16 KB de *deflate* dan como mucho unos 16 MB). */
+export const INFLATE_PIECE = 16 * 1024;
+
+/**
+ * Lo comprimido de a pedazos chicos y solo cuando el descompresor pide más (`highWaterMark: 0`). Con `blob.stream()` el
+ * navegador le pasa pedazos grandes y descomprime cada uno entero antes de que el control vea nada: una bomba (2 MB que
+ * descomprimen 2 GB) subía +2 GB antes del corte. Así, lo de más que alcanza a salir queda acotado a un pedazo.
+ */
+function smallPieces(data: Blob): ReadableStream<Uint8Array> {
+  let at = 0;
+  return new ReadableStream<Uint8Array>(
+    {
+      async pull(ctl) {
+        if (at >= data.size) {
+          ctl.close();
+          return;
+        }
+        const piece = new Uint8Array(await data.slice(at, at + INFLATE_PIECE).arrayBuffer());
+        at += piece.length;
+        ctl.enqueue(piece);
+      },
+    },
+    { highWaterMark: 0 },
+  );
+}
+
 /** Lee el índice de un zip. Un archivo que no es zip, o cortado (sin el final), es un error. */
 export async function openZip(blob: Blob, limits: ZipLimits = {}): Promise<ArchiveSource> {
   const maxEntry = limits.maxDeflateEntry ?? MAX_DEFLATE_ENTRY;
@@ -257,27 +283,32 @@ export async function openZip(blob: Blob, limits: ZipLimits = {}): Promise<Archi
     inflated += e.size;
     let total = 0;
     let failure: ZipReadError | null = null;
-    const check = new TransformStream<Uint8Array, Uint8Array>({
-      transform(chunk, ctl) {
-        total += chunk.length;
-        if (total > e.size) {
-          failure = new ZipReadError('damaged', e.name);
-          ctl.error(failure);
-          return;
-        }
-        crc = crc32Update(crc, chunk);
-        ctl.enqueue(chunk);
+    const check = new TransformStream<Uint8Array, Uint8Array>(
+      {
+        transform(chunk, ctl) {
+          total += chunk.length;
+          if (total > e.size) {
+            failure = new ZipReadError('damaged', e.name);
+            ctl.error(failure);
+            return;
+          }
+          crc = crc32Update(crc, chunk);
+          ctl.enqueue(chunk);
+        },
+        flush(ctl) {
+          if (total !== e.size || crc !== e.crc) {
+            failure = new ZipReadError('crc', e.name);
+            ctl.error(failure);
+          }
+        },
       },
-      flush(ctl) {
-        if (total !== e.size || crc !== e.crc) {
-          failure = new ZipReadError('crc', e.name);
-          ctl.error(failure);
-        }
-      },
-    });
+      undefined,
+      // Sin acumular adelante: lo que sale se pide de a uno.
+      { highWaterMark: 0 },
+    );
     try {
       // Un `Blob` armado por el navegador a medida que llega (lo grande va al disco), nunca una lista de pedazos en memoria.
-      const out = await new Response(data.stream().pipeThrough(new DecompressionStream('deflate-raw')).pipeThrough(check) as ReadableStream<Uint8Array>).blob();
+      const out = await new Response(smallPieces(data).pipeThrough(new DecompressionStream('deflate-raw') as unknown as ReadableWritablePair<Uint8Array, Uint8Array>).pipeThrough(check) as ReadableStream<Uint8Array>).blob();
       if (failure) throw failure;
       return out.slice(0, out.size, type || '');
     } catch (err) {

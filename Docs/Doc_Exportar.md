@@ -1216,3 +1216,9 @@ zip grande desde Archivos); la migración aplicada y su prueba SQL.
   las marcas de plantilla y de reportes que apuntan a otro proyecto (se descartan; las de adentro van a la página
   nueva). Probados con su mutante: los cinco fallan.
 - O7 (una página dañada crea igual el proyecto, con esa página avisada y para seguir) queda como está: lo válido entra.
+- **Re-verificación · La bomba seguía inflando entera.** Un zip de 2 MB que dice 200 MB y descomprime 2 GB subía
+  +2 GB antes del corte: `blob.stream()` le pasaba al descompresor pedazos grandes y Chromium saca entero lo de cada
+  uno antes de que el control lo vea. Ahora el comprimido va de a 16 KB (`INFLATE_PIECE`, `blob.slice`, solo cuando el
+  descompresor pide más), en `blob()` y en `text()`. Medido en Chromium sin ventana: la bomba, **+314 MB** (con
+  `blob.stream()`, +2326 MB); una entrada legítima de 248 MB, +328 MB y 0,4 s. La prueba mide el pedazo más grande que
+  recibe el descompresor y lo que sale antes del corte (con `blob.stream()`, falla).

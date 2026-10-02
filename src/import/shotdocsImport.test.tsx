@@ -650,7 +650,7 @@ describe('volver a Shot Docs: cortes, la base y los zips hostiles', () => {
     // El zip dice que esos dos son *deflate* de más de 1 GB (lo que hace `tooBig` con el índice de verdad: zipReader.test.ts).
     const source = { ...archive.source, tooBig: (p: string) => big.has(p) };
     const limited: ShotDocsArchive = { ...archive, source };
-    expect(archiveWeight(limited)).toMatchObject({ tooBig: 2, previews: 1, missing: 1 });
+    expect(archiveWeight(limited)).toMatchObject({ tooBig: 2, previews: 1, missing: 0 });
     const result = await importArchive(limited, deps(w.a));
     expect(result.problems.some((p) => p.startsWith('Escena 1:') && p.includes('IMG_0412.JPG was compressed again'))).toBe(true);
     expect(result.problems.some((p) => p.startsWith('Escena 2:') && p.includes('clip 001.mov was compressed again'))).toBe(true);

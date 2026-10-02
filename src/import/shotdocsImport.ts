@@ -286,10 +286,12 @@ export function archiveWeight(archive: ShotDocsArchive): { files: number; bytes:
   let missing = 0;
   let tooBig = 0;
   for (const f of archive.manifest.files) {
-    if (recompressed(archive, f)) tooBig++;
+    const big = recompressed(archive, f);
+    if (big) tooBig++;
     const got = chosenBlob(archive, f);
     if (!got) {
-      missing++;
+      // Uno vuelto a comprimir y más grande que el tope ya se cuenta aparte (`tooBig`), no como "no está en el zip".
+      if (!big) missing++;
       continue;
     }
     files++;
