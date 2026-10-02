@@ -277,7 +277,10 @@ describe('el botón New day report y su globito', () => {
     click(host.querySelector('.day-report-button'));
     await popoverReady();
     click([...popover()!.querySelectorAll('button')].find((b) => b.textContent === 'Create another'));
-    for (let i = 0; i < 40 && device.tree.children(folder).length < 2; i++) await wait(30);
+    // Hasta que se abre el nuevo (si no, la navegación cae en la prueba siguiente).
+    const opened = () => device.tree.children(folder).length === 2 && location.pathname === `/p/${device.tree.children(folder)[1].id}`;
+    for (let i = 0; i < 80 && !opened(); i++) await wait(30);
+    expect(opened()).toBe(true);
     // O1: otro del mismo día es el mismo día de rodaje (una segunda unidad, un día partido).
     expect(device.tree.children(folder).map((p) => p.title)).toEqual([`${localDate()} | Day 01`, `${localDate()} | Day 01`]);
   });
@@ -308,7 +311,8 @@ describe('el botón New day report y su globito', () => {
     await wait(50);
     expect(device.tree.children(folder).length).toBe(1);
     release();
-    for (let i = 0; i < 60 && location.pathname === '/'; i++) await wait(30);
+    const opened = () => device.tree.children(folder).length === 2 && location.pathname === `/p/${device.tree.children(folder)[1].id}`;
+    for (let i = 0; i < 80 && !opened(); i++) await wait(30);
     const kids = device.tree.children(folder);
     expect(kids.map((p) => p.title)).toEqual([`${addDays(localDate(), -1)} | Day 01`, `${localDate()} | Day 02`]);
     expect(location.pathname).toBe(`/p/${kids[1].id}`);
@@ -341,8 +345,9 @@ describe('el botón New day report y su globito', () => {
     await popoverReady();
     setInput(inputs()[0], addDays(localDate(), 1));
     act(() => popover()!.requestSubmit());
-    for (let i = 0; i < 40 && device.tree.children(folder).length < 2; i++) await wait(30);
-    expect(device.tree.children(folder).length).toBe(2);
+    const opened = () => device.tree.children(folder).length === 2 && location.pathname === `/p/${device.tree.children(folder)[1].id}`;
+    for (let i = 0; i < 80 && !opened(); i++) await wait(30);
+    expect(opened()).toBe(true);
     await device.engine.syncNow();
     expect(device.tree.pendingOps().length).toBeGreaterThan(0);
   });
