@@ -324,11 +324,15 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   plantillas a medio bajar, datos de set que faltaban y una sección *Internal* para lo que no debe ver un cliente.
   Entregas: 0 (las tres plantillas en el código y una vista para que Lega las revise), 1 (crear desde una de fábrica),
   2 (el reporte del día), 3 (plantillas propias). **Entregas 0 y 1 hechas** (v0.117): la vista previa
-  (`/practice?template=on-set`), la tira de la página nueva, *More…* y *Apply template…*; **falta** que Lega revise el
-  contenido de las tres (PL1), y las entregas 2 y 3. Quedó de la auditoría: *Exit* de la vista previa abierta desde
-  la ventana va al inicio y no a la página donde se elegía (Atrás sí vuelve); un aviso de ProseMirror en la consola al
-  abrir la vista previa (sin efecto visible); y que deshacer la plantilla deja `template_id` (la entrega 2 lo tiene
-  que tener en cuenta). **Para después:** que la base fusione las claves de `pages.settings`
+  (`/practice?template=on-set`), la tira de la página nueva, *More…* y *Apply template…*. **Entrega 2 hecha**
+  (v0.0XX): *New day report* (botón, globito, menú ⋯ y Ctrl/⌘+Alt+Shift+N), la carpeta de reportes marcada o deducida,
+  lo que se copia del día anterior, "ya existe" y el orden, sin red. **Falta** que Lega revise el contenido de las tres
+  (PL1) y pruebe el atajo en Firefox y Safari de la Mac y con un teclado latinoamericano físico, y la entrega 3. De la
+  sección 6 quedaron para después el selector de plantilla del globito (con las propias, entrega 3) y la marca *2
+  reports for…* en la barra lateral con la papelera ofrecida para el repetido sin tocar (O6). Quedó de la auditoría de
+  la entrega 1: *Exit* de la vista previa abierta desde la ventana va al inicio y no a la página donde se elegía
+  (Atrás sí vuelve); y un aviso de ProseMirror en la consola al abrir la vista previa (sin efecto visible). **Para
+  después:** que la base fusione las claves de `pages.settings`
   (`settings || patch`) en vez de reemplazar el objeto entero, con su migración: hoy dos cambios de ajustes a la vez
   se pisan (`Doc_Plantillas.md`, sección 8).
 - **P.20 Anotar sobre las fotos** (Lega, 2026-10-02): flechas, círculos, rectángulos, texto y lápiz encima de una
