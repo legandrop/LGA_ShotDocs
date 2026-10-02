@@ -466,7 +466,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   al editor nuevo, sin parchear y-prosemirror); ⌘Z en otra página te lleva y lo deshace a la vista; el reemplazo entra
   en la pila de Yjs de las páginas editadas en la sesión (arregla un resto que deja hoy deshacer el reemplazo y después
   lo escrito antes, también desde el *Undo* del panel) y por las anclas en las demás; ⌘⇧Z rehace todo, también el
-  reemplazo. Dura lo que la pestaña; nada cambia en lo guardado. Entregas: 0 (hecha, v0.130: B.21), 1 (la
+  reemplazo. Dura lo que la pestaña; nada cambia en lo guardado. Entregas: 0 (hecha, v0.0XX: B.21), 1 (la
   línea de tiempo con las páginas, con la memoria medida con el editor real), 2 (el reemplazo adentro), 3 (anotar como un
   paso). Botones de deshacer en el teléfono y el árbol (mover, crear, papelera) quedan afuera (DH1, DH8).
 - **P.27 Dictado por voz y notas informales que se ubican en el reporte** (Lega, 2026-10-02): dictar en toda la app,
@@ -709,7 +709,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
    no ve un atributo nuevo del nodo `photo` (el fixture usa el de hoy), y nada avisa si nadie lo regenera después de
    publicar un cambio del esquema: al publicar una versión que cambia `editorSchema.ts`, regenerarlo.
 
-21. **Hecho (v0.130): restos del deshacer de Yjs** (entrega 0 de P.26, `Doc_Deshacer.md`, sección 16). Deshacer lo
+21. **Hecho (v0.0XX): restos del deshacer de Yjs** (entrega 0 de P.26, `Doc_Deshacer.md`, sección 16). Deshacer lo
    escrito seguía lo que otro deshacer había vuelto a poner solo hasta el primer corte: dejaba restos si se había escrito
    en el medio y se llevaba texto de antes si las copias se habían juntado. Un parche a Yjs (`patches/yjs+13.6.33.patch`,
    Yjs fijo en 13.6.33) sigue la copia entera: al azar, de 1.844 a 3.000 de 3.000 exactas y de 14 a 0 con algo de

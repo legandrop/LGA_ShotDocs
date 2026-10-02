@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.130 :
+v0.0XX :
 
 Deshacer, entrega 0 (B.21, `Doc_Deshacer.md`, sección 16). Deshacer lo escrito dejaba restos ("la ía" en vez de "la ")
 y a veces se llevaba texto de antes (un ⌘Z borró "ám" de "cámara"). La causa estaba en Yjs: deshacer un borrado escribe

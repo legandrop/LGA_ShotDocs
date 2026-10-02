@@ -224,7 +224,7 @@ escribía ahí creaba su propio texto; después los juntaba copiando uno en el o
    (algo que se perdía ahora queda). Revisar el caso, actualizar la tabla de arriba y la prueba.
 4. Correr la prueba de punta a punta `e2e.mjs` (dos dispositivos que se fusionan).
 
-### Yjs también lleva un parche (v0.130)
+### Yjs también lleva un parche (v0.0XX)
 
 `patches/yjs+13.6.33.patch` (Yjs fijo en 13.6.33): el deshacer sigue entera la copia que otro deshacer volvió a poner
 (sin él dejaba restos y a veces se llevaba texto de antes). La causa, el arreglo y lo medido están en
