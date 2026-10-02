@@ -686,6 +686,14 @@ code {
   color: var(--danger);
 }
 
+/* Aviso fijo debajo del estado (después de forzar la actualización, hasta que la app abra sin red). */
+.sync-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--warn);
+  padding: 6px 8px 0;
+}
+
 .sync-warning {
   border: none;
   font-size: 12px;

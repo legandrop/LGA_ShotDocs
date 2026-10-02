@@ -1145,10 +1145,16 @@ quizás con `min_app_version` subida. Qué pasa, paso a paso:
    momento hay algo sin guardar no avisa nada y vuelve a probar con los cambios del estado de sincronización; el aviso
    *A new version is available — reloading* sale recién cuando de verdad va a recargar. *Update now* espera a que la
    versión nueva tome el control antes de recargar (recargar antes abría otra vez la vieja desde la caché). Si el
-   navegador no trae nada pero el servidor publica otra versión (el service worker nuevo no se pudo instalar: un
-   teléfono sin espacio, una red que corta la descarga), el estado ofrece **Force the update**: saca el service worker
-   y recarga desde el servidor, sin tocar lo guardado en el dispositivo; solo con todo guardado y con red, comprobada
-   leyendo la versión publicada justo antes (sin service worker y sin red la app no abriría). Una segunda versión que
+   navegador **empezó a instalarla y no pudo** (el service worker nuevo pasa a `redundant`: un teléfono sin espacio,
+   una red que corta la descarga del precache), no se ofrece forzar, porque la causa sigue y forzar dejaría el
+   dispositivo sin ninguna versión para abrir sin red: el estado dice que libere espacio o busque mejor conexión y
+   vuelva a tocar *Update now*. Solo si el navegador **nunca empezó** a instalar nada y el servidor publica otra versión
+   (lee `/index.html?version-check=…` sin caché; si el servidor redirige a `/`, `fetch` sigue la redirección), el estado
+   ofrece **Force the update**: saca el service worker y recarga desde el servidor, sin tocar lo guardado en el
+   dispositivo. Antes exige todo guardado, red (comprobada leyendo la versión publicada justo antes) y lugar libre en
+   el almacenamiento del navegador para el precache con holgura (`FORCE_FREE_BYTES`, 10 MB; sin saberlo, no fuerza).
+   Después de forzar, mientras ningún service worker tome la app, el estado avisa fijo que todavía no abre sin
+   conexión. Una segunda versión que
    toma el control antes del minuto de la anterior no se recarga sola (la guarda contra bucles): queda *Update now*.
    Código: `src/ui/appUpdate.ts`.
 4. **La versión nueva abre la misma base local** (mismo nombre y misma versión de IndexedDB; lo nuevo de cada versión

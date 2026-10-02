@@ -8,7 +8,15 @@ import { copyText } from './commentsUi';
 import { usePendingCount } from './usePendingCount';
 import { downloadUnsynced } from './unsyncedDownload';
 import { notify } from './notice';
-import { forceUpdate, isUpdateStuck, subscribeUpdateStuck, updateNow } from './appUpdate';
+import {
+  forceUpdate,
+  isOfflineNotReady,
+  isUpdateStuck,
+  setStuck,
+  subscribeOfflineNotReady,
+  subscribeUpdateStuck,
+  updateNow,
+} from './appUpdate';
 
 type Tone = 'ok' | 'busy' | 'offline' | 'warn' | 'error';
 
@@ -94,6 +102,8 @@ export function SyncBadge() {
   const status = useSyncStatus();
   // "Update now" no trajo la versión nueva aunque el servidor tiene otra: se ofrece forzarla (appUpdate.ts).
   const stuck = useSyncExternalStore(subscribeUpdateStuck, isUpdateStuck);
+  // Después de forzar la actualización, hasta que la versión nueva termine de instalarse, sin red no abre.
+  const notReady = useSyncExternalStore(subscribeOfflineNotReady, isOfflineNotReady);
   const tree = useTree();
   const services = useServices();
   const { engine, media, comments } = services;
@@ -138,6 +148,7 @@ export function SyncBadge() {
         <Icon size={15} />
         <span>{text}</span>
       </button>
+      {notReady && <p className="sync-hint">{tr('sync.offlineNotReady')}</p>}
       {rejected > 0 && (
         <button className="sync-warning" onClick={() => setDetails(!details)}>
           {tr('sync.rejected', { count: rejected })}
@@ -170,14 +181,17 @@ export function SyncBadge() {
               </button>
             </p>
           )}
-          {status.outdated && stuck && (
+          {status.outdated && stuck === 'failed' && <p>{tr('sync.detail.installFailed')}</p>}
+          {status.outdated && stuck === 'force' && (
             <p>
               {tr('sync.detail.stuck')}{' '}
               <button
                 className="link"
                 onClick={() =>
-                  void forceUpdate().then((reloaded) => {
-                    if (!reloaded) notify(tr('sync.detail.forceFailed'));
+                  void forceUpdate().then((result) => {
+                    // Sin lugar para instalarla, forzar dejaría la app sin abrir sin red: se explica qué hacer.
+                    if (result === 'noSpace') setStuck('failed');
+                    else if (result !== 'reloaded') notify(tr('sync.detail.forceFailed'));
                   })
                 }
               >

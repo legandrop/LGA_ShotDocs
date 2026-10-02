@@ -63,6 +63,14 @@ export const sync = {
     es: "El navegador no cargó la versión nueva. Forzarla recarga la app desde internet; lo guardado en este dispositivo queda.",
   },
   'sync.detail.force': { en: "Force the update", es: "Forzar la actualización" },
+  'sync.detail.installFailed': {
+    en: "The new version couldn't be installed on this device (low storage or the connection dropped). Free up space or try a better connection, then tap Update now.",
+    es: "La versión nueva no se pudo instalar en este dispositivo (poco espacio o se cortó la conexión). Liberá espacio o probá con mejor conexión y tocá Actualizar ahora.",
+  },
+  'sync.offlineNotReady': {
+    en: "This device can't open the app offline yet — keep it connected until it finishes installing.",
+    es: "Este dispositivo todavía no puede abrir la app sin conexión: dejalo conectado hasta que termine de instalarse.",
+  },
   'sync.detail.forceFailed': {
     en: "Couldn't force the update: it needs a connection and everything saved on this device.",
     es: "No se pudo forzar la actualización: hace falta conexión y que todo esté guardado en este dispositivo.",

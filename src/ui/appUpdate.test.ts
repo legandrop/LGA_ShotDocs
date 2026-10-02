@@ -1,8 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AppUpdates, ControllerWatch, forceUpdate, mainScriptOf, type ForceDeps, type WorkerContainer } from './appUpdate';
+import {
+  AppUpdates,
+  ControllerWatch,
+  FORCE_FREE_BYTES,
+  forceUpdate,
+  isOfflineNotReady,
+  mainScriptOf,
+  refreshNotReady,
+  type ForceDeps,
+  type WorkerContainer,
+} from './appUpdate';
 
 /** Un `navigator.serviceWorker` de mentira: el navegador encuentra (o no) una versión nueva al buscar. */
-function fakeWorker(opts: { controlled?: boolean; newVersion?: boolean; activateMs?: number; fail?: boolean } = {}) {
+function fakeWorker(
+  opts: { controlled?: boolean; newVersion?: boolean; activateMs?: number; fail?: boolean; installFails?: boolean } = {},
+) {
   const events = new EventTarget();
   let controller: object | null = opts.controlled === false ? null : {};
   const reg = {
@@ -15,10 +27,15 @@ function fakeWorker(opts: { controlled?: boolean; newVersion?: boolean; activate
       if (opts.fail) throw new TypeError('Failed to fetch');
       if (!opts.newVersion) return;
       // Con `autoUpdate` (skipWaiting y clientsClaim): se instala y toma la pestaña enseguida.
-      reg.installing = {};
+      const installing = Object.assign(new EventTarget(), { state: 'installing' as ServiceWorkerState });
+      reg.installing = installing;
       setTimeout(() => {
         reg.installing = null;
-        takeOver();
+        // Un archivo del precache no baja (sin espacio, la red se corta): el service worker nuevo se descarta.
+        if (opts.installFails) {
+          installing.state = 'redundant';
+          installing.dispatchEvent(new Event('statechange'));
+        } else takeOver();
       }, opts.activateMs ?? 5);
     }),
   };
@@ -229,10 +246,10 @@ describe('la versión nueva de la app cuando el workspace pide una más nueva', 
     updates.setOutdated(true);
     await updates.updateNow();
     expect(reloadByHand).not.toHaveBeenCalled();
-    expect(onStuck).toHaveBeenLastCalledWith(true);
+    expect(onStuck).toHaveBeenLastCalledWith('force');
     // Si deja de ser vieja (bajaron la mínima), ya no se ofrece.
     updates.setOutdated(false);
-    expect(onStuck).toHaveBeenLastCalledWith(false);
+    expect(onStuck).toHaveBeenLastCalledWith('none');
     updates.stop();
 
     // Con la misma versión en el servidor (o sin poder leerla), recarga como siempre.
@@ -241,6 +258,18 @@ describe('la versión nueva de la app cuando el workspace pide una más nueva', 
     await same.updates.updateNow();
     expect(same.reloadByHand).toHaveBeenCalledTimes(1);
     same.updates.stop();
+  });
+
+  it('si la instalación de la versión nueva falla, no ofrece forzar: explica qué hacer (forzar dejaría la app sin abrir sin red)', async () => {
+    const worker = fakeWorker({ newVersion: true, installFails: true, activateMs: 20 });
+    const { updates, reloadByHand, onStuck } = setup(worker, 1000, { published: 'index-nuevo.js' });
+    updates.setOutdated(true);
+    await tick(60);
+    await updates.updateNow();
+    expect(onStuck).toHaveBeenLastCalledWith('failed');
+    expect(onStuck).not.toHaveBeenCalledWith('force');
+    expect(reloadByHand).not.toHaveBeenCalled();
+    updates.stop();
   });
 
   it('el archivo principal de un index.html', () => {
@@ -260,6 +289,8 @@ describe('forzar la actualización', () => {
       published: async () => 'index-nuevo.js',
       saved: async () => true,
       confirmDrafts: () => true,
+      freeBytes: async () => 500 * 1024 * 1024,
+      markForced: vi.fn(),
       reload,
       ...over,
     };
@@ -268,7 +299,8 @@ describe('forzar la actualización', () => {
 
   it('con red y todo guardado: saca el service worker y recarga', async () => {
     const { worker, reload, deps } = forceSetup();
-    expect(await forceUpdate(deps)).toBe(true);
+    expect(await forceUpdate(deps)).toBe('reloaded');
+    expect(deps.markForced).toHaveBeenCalledTimes(1);
     expect(worker.reg.unregister).toHaveBeenCalledTimes(1);
     expect(reload).toHaveBeenCalledTimes(1);
   });
@@ -276,7 +308,7 @@ describe('forzar la actualización', () => {
   it('nunca deja la app sin service worker y sin red: sin conexión o sin respuesta del servidor no toca nada', async () => {
     for (const over of [{ online: () => false }, { published: async () => null }] as Partial<ForceDeps>[]) {
       const { worker, reload, deps } = forceSetup(over);
-      expect(await forceUpdate(deps)).toBe(false);
+      expect(await forceUpdate(deps)).not.toBe('reloaded');
       expect(worker.reg.unregister).not.toHaveBeenCalled();
       expect(reload).not.toHaveBeenCalled();
     }
@@ -285,7 +317,7 @@ describe('forzar la actualización', () => {
   it('con algo sin guardar, o un comentario sin mandar que la persona quiere conservar, no hace nada', async () => {
     for (const over of [{ saved: async () => false }, { confirmDrafts: () => false }] as Partial<ForceDeps>[]) {
       const { worker, reload, deps } = forceSetup(over);
-      expect(await forceUpdate(deps)).toBe(false);
+      expect(await forceUpdate(deps)).not.toBe('reloaded');
       expect(worker.reg.unregister).not.toHaveBeenCalled();
       expect(reload).not.toHaveBeenCalled();
     }
@@ -293,7 +325,44 @@ describe('forzar la actualización', () => {
 
   it('sin service worker no hace nada', async () => {
     const { reload, deps } = forceSetup({ container: null });
-    expect(await forceUpdate(deps)).toBe(false);
+    expect(await forceUpdate(deps)).not.toBe('reloaded');
     expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('sin lugar holgado para instalar la versión nueva (o sin saber cuánto hay), no saca el service worker', async () => {
+    for (const free of [FORCE_FREE_BYTES - 1, null]) {
+      const { worker, reload, deps } = forceSetup({ freeBytes: async () => free });
+      expect(await forceUpdate(deps)).toBe('noSpace');
+      expect(worker.reg.unregister).not.toHaveBeenCalled();
+      expect(deps.markForced).not.toHaveBeenCalled();
+      expect(reload).not.toHaveBeenCalled();
+    }
+  });
+});
+
+describe('después de forzar la actualización', () => {
+  it('avisa fijo que todavía no abre sin conexión mientras ningún service worker tome la app', () => {
+    const store = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+    });
+    try {
+      const worker = fakeWorker({ controlled: false });
+      refreshNotReady(worker.container);
+      expect(isOfflineNotReady()).toBe(false);
+      // Se forzó (la marca que deja `forceUpdate`) y la página abrió sin service worker.
+      store.set('shotdocs-forced-update', '1');
+      refreshNotReady(worker.container);
+      expect(isOfflineNotReady()).toBe(true);
+      // La versión nueva terminó de instalarse y tomó la app: el aviso se va y la marca también.
+      worker.takeOver();
+      refreshNotReady(worker.container);
+      expect(isOfflineNotReady()).toBe(false);
+      expect(store.has('shotdocs-forced-update')).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

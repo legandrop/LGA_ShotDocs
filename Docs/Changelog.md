@@ -9,7 +9,7 @@ mínima sube directo; más variantes al azar. Encontró dos huecos. Una versión
 comentarios y bajaba contenido nuevo, que su editor podía degradar al editarlo: ahora no sale ni baja nada hasta
 actualizar (las páginas que cambiaron se ven en solo lectura, con aviso). Y la app instalada no recargaba al llegar la
 versión nueva: ahora la busca, recarga sola (también si llegó antes de entrar), *Update now* espera a que llegue y, si
-el navegador no la trae, ofrece forzarla (solo con red; lo guardado queda).
+el navegador nunca empezó a instalarla, ofrece forzarla (con red y lugar libre; lo guardado queda).
 [ Volver sin red - prueba de semanas offline con la v0.090, la versión vieja no sube ni baja nada y se actualiza sola ]
 
 v0.095 :

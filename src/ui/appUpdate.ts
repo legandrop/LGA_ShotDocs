@@ -57,11 +57,55 @@ function serviceWorkers(): WorkerContainer | null {
 
 let boot: ControllerWatch | null = null;
 
+/** Se forzó la actualización (`forceUpdate`) y todavía no hay un service worker al mando de la app. */
+const FORCED_KEY = 'shotdocs-forced-update';
+let notReady = false;
+const notReadyListeners = new Set<() => void>();
+
+/** Después de forzar: mientras ningún service worker tome la app, sin red no abre (se avisa fijo). */
+export function refreshNotReady(container: WorkerContainer | null): void {
+  let forced = false;
+  try {
+    forced = !!localStorage.getItem(FORCED_KEY);
+    if (forced && container?.controller) {
+      localStorage.removeItem(FORCED_KEY);
+      forced = false;
+    }
+  } catch {
+    // Sin localStorage no se puede saber: no se avisa.
+  }
+  const value = forced && !container?.controller;
+  if (value === notReady) return;
+  notReady = value;
+  for (const fn of [...notReadyListeners]) fn();
+}
+
+export function isOfflineNotReady(): boolean {
+  return notReady;
+}
+
+export function subscribeOfflineNotReady(fn: () => void): () => void {
+  notReadyListeners.add(fn);
+  return () => notReadyListeners.delete(fn);
+}
+
 /** Desde el arranque de la app (main.tsx): así no se pierde un cambio de control antes de entrar a un workspace. */
 export function watchNewVersionFromStart(): ControllerWatch {
-  boot ??= new ControllerWatch(serviceWorkers());
+  if (!boot) {
+    const container = serviceWorkers();
+    boot = new ControllerWatch(container);
+    refreshNotReady(container);
+    container?.addEventListener('controllerchange', () => refreshNotReady(container));
+  }
   return boot;
 }
+
+/**
+ * Lo que "Update now" no pudo arreglar: `force`, el navegador nunca empezó a instalar la versión nueva pero el servidor
+ * tiene otra (se ofrece forzarla); `failed`, empezó y no pudo (poco espacio, una red que corta la descarga): forzar
+ * dejaría el dispositivo sin ninguna versión para abrir sin red, así que solo se explica qué hacer.
+ */
+export type Stuck = 'none' | 'force' | 'failed';
 
 export interface AppUpdateDeps {
   /** `navigator.serviceWorker`, o `null` sin service worker (sin HTTPS, un navegador sin soporte, las pruebas). */
@@ -78,8 +122,8 @@ export interface AppUpdateDeps {
   published?: () => Promise<string | null>;
   /** El de la versión que está corriendo. */
   running?: () => string | null;
-  /** Avisa si "Update now" no pudo traer la versión nueva y conviene ofrecer forzarla. */
-  onStuck?: (stuck: boolean) => void;
+  /** Avisa si "Update now" no pudo traer la versión nueva: ofrecer forzarla, o explicar que no se pudo instalar. */
+  onStuck?: (stuck: Stuck) => void;
   /** Para el aviso de volver la red (por defecto `window`). */
   events?: Pick<Window, 'addEventListener' | 'removeEventListener'> | null;
   now?: () => number;
@@ -98,7 +142,11 @@ export function mainScriptOf(html: string): string | null {
   return /\/assets\/(index-[\w-]+\.js)/.exec(html)?.[1] ?? null;
 }
 
-/** Lee el `index.html` publicado, sin pasar por la caché del service worker (una dirección que no está precacheada). */
+/**
+ * Lee el `index.html` publicado, sin pasar por la caché del service worker (una dirección que no está precacheada). Si
+ * el servidor redirige `/index.html` a `/` (los estáticos de Cloudflare pueden hacerlo), `fetch` sigue la redirección
+ * y lee el mismo HTML.
+ */
 async function publishedScript(): Promise<string | null> {
   try {
     const res = await fetch(`/index.html?version-check=${Date.now()}`, { cache: 'no-store' });
@@ -116,6 +164,9 @@ function runningScript(): string | null {
   }
   return null;
 }
+
+/** El service worker que se está instalando. */
+type InstallingWorker = Pick<ServiceWorker, 'state' | 'addEventListener' | 'removeEventListener'>;
 
 export class AppUpdates {
   private outdated = false;
@@ -145,7 +196,7 @@ export class AppUpdates {
     const was = this.outdated;
     this.outdated = outdated;
     if (!outdated) {
-      this.deps.onStuck?.(false);
+      this.deps.onStuck?.('none');
       return;
     }
     if (this.watch.replaced) this.tryReload();
@@ -157,14 +208,21 @@ export class AppUpdates {
     const byHand = this.deps.reloadByHand ?? reloadByHand;
     if (!this.watch.replaced && this.deps.container) {
       const reg = await this.check(true);
-      // Hay una versión nueva instalándose: se espera a que tome el control (con `autoUpdate`, enseguida).
-      if (!this.watch.replaced && (reg?.installing || reg?.waiting)) await this.waitForChange(this.deps.waitMs ?? WAIT_MS);
-      if (!this.watch.replaced && this.outdated) {
-        // El navegador no trajo nada. Si el servidor tiene otra versión, recargar abriría otra vez esta desde la
-        // caché: se ofrece forzarla.
+      const worker = reg?.installing ?? reg?.waiting ?? null;
+      if (!this.watch.replaced && worker) {
+        // Hay una versión nueva instalándose: se espera a que tome el control (con `autoUpdate`, enseguida) o a que la
+        // instalación falle (pasa a `redundant`). Si falla, forzar no sirve: la causa sigue estando.
+        const failed = await this.waitForChange(this.deps.waitMs ?? WAIT_MS, worker);
+        if (failed && !this.watch.replaced) {
+          this.deps.onStuck?.('failed');
+          return;
+        }
+      } else if (!this.watch.replaced && this.outdated) {
+        // El navegador no empezó a instalar nada. Si el servidor tiene otra versión, recargar abriría otra vez esta
+        // desde la caché: se ofrece forzarla.
         const [published, running] = [await (this.deps.published ?? publishedScript)(), (this.deps.running ?? runningScript)()];
         if (published && running && published !== running) {
-          this.deps.onStuck?.(true);
+          this.deps.onStuck?.('force');
           return;
         }
       }
@@ -214,15 +272,23 @@ export class AppUpdates {
     }
   }
 
-  private waitForChange(ms: number): Promise<void> {
+  /** Espera a que la versión nueva tome el control. Devuelve `true` si su instalación falló (`redundant`). */
+  private waitForChange(ms: number, worker: InstallingWorker | null = null): Promise<boolean> {
     return new Promise((resolve) => {
-      const wake = () => {
+      const finish = (failed: boolean) => {
         clearTimeout(timer);
         this.waiters.delete(wake);
-        resolve();
+        worker?.removeEventListener('statechange', onState);
+        resolve(failed);
+      };
+      const wake = () => finish(false);
+      const onState = () => {
+        if (worker?.state === 'redundant') finish(true);
       };
       const timer = setTimeout(wake, ms);
       this.waiters.add(wake);
+      worker?.addEventListener('statechange', onState);
+      onState();
     });
   }
 }
@@ -235,23 +301,41 @@ export interface ForceDeps {
   published: () => Promise<string | null>;
   saved: () => Promise<boolean>;
   confirmDrafts: () => boolean;
+  /** Lo libre en el almacenamiento del navegador (`quota - usage`), o `null` si no lo dice. */
+  freeBytes: () => Promise<number | null>;
+  /** Anota que se forzó (para el aviso de "todavía no abre sin red"). */
+  markForced: () => void;
   reload: () => void;
 }
+
+export type ForceResult = 'reloaded' | 'noWorker' | 'offline' | 'unsaved' | 'drafts' | 'noSpace' | 'noServer';
+
+/**
+ * Lo que tiene que haber libre para forzar: el doble de lo que el service worker guarda al instalarse (el precache, hoy
+ * unos 3,6 MB según el build: "precache 65 entries (3564 KiB)"; se cuenta con 5 MB). Con menos, la versión nueva no se
+ * instalaría y el dispositivo quedaría sin ninguna para abrir sin red.
+ */
+export const FORCE_FREE_BYTES = 2 * 5 * 1024 * 1024;
 
 /**
  * Saca el service worker y recarga desde el servidor: la versión nueva se instala de nuevo al abrir. Lo guardado en el
  * dispositivo (IndexedDB) no se toca. Solo con red: justo antes se lee la versión publicada, y si no contesta no se
  * hace nada (sin service worker y sin red, la app no abriría). Devuelve si recargó.
  */
-export async function forceUpdate(deps: ForceDeps = defaultForceDeps()): Promise<boolean> {
-  if (!deps.container || !deps.online()) return false;
-  if (!(await deps.saved())) return false;
-  if (!deps.confirmDrafts()) return false;
-  if (!(await deps.published())) return false;
+export async function forceUpdate(deps: ForceDeps = defaultForceDeps()): Promise<ForceResult> {
+  if (!deps.container) return 'noWorker';
+  if (!deps.online()) return 'offline';
+  if (!(await deps.saved())) return 'unsaved';
+  if (!deps.confirmDrafts()) return 'drafts';
+  // Sin lugar para instalar la versión nueva (o sin saberlo), no se saca la que hay.
+  const free = await deps.freeBytes().catch(() => null);
+  if (free === null || free < FORCE_FREE_BYTES) return 'noSpace';
+  if (!(await deps.published())) return 'noServer';
   const reg = await deps.container.getRegistration().catch(() => undefined);
+  deps.markForced();
   if (reg) await reg.unregister().catch(() => false);
   deps.reload();
-  return true;
+  return 'reloaded';
 }
 
 function defaultForceDeps(): ForceDeps {
@@ -261,6 +345,17 @@ function defaultForceDeps(): ForceDeps {
     published: publishedScript,
     saved: waitForSaved,
     confirmDrafts: () => !hasDrafts() || window.confirm(t('lazy.draftQuestion')),
+    freeBytes: async () => {
+      const estimate = await navigator.storage?.estimate?.();
+      return estimate?.quota != null && estimate.usage != null ? estimate.quota - estimate.usage : null;
+    },
+    markForced: () => {
+      try {
+        localStorage.setItem(FORCED_KEY, String(Date.now()));
+      } catch {
+        // Sin localStorage no habrá aviso; forzar sigue igual.
+      }
+    },
     reload: () => pageReload.now(),
   };
 }
@@ -268,17 +363,17 @@ function defaultForceDeps(): ForceDeps {
 // --- La app abierta en un workspace ---------------------------------------------------------------------------------
 
 let current: AppUpdates | null = null;
-let stuck = false;
+let stuck: Stuck = 'none';
 const stuckListeners = new Set<() => void>();
 
-function setStuck(value: boolean): void {
+export function setStuck(value: Stuck): void {
   if (stuck === value) return;
   stuck = value;
   for (const fn of [...stuckListeners]) fn();
 }
 
-/** "Update now" no pudo traer la versión nueva: el estado ofrece forzarla. */
-export function isUpdateStuck(): boolean {
+/** Lo que "Update now" no pudo arreglar (ver `Stuck`): el estado ofrece forzar o explica qué hacer. */
+export function isUpdateStuck(): Stuck {
   return stuck;
 }
 
@@ -303,7 +398,7 @@ export function stopAppUpdates(updates: AppUpdates): void {
   updates.stop();
   if (current === updates) {
     current = null;
-    setStuck(false);
+    setStuck('none');
   }
 }
 
