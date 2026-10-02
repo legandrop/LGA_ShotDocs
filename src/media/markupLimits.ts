@@ -52,6 +52,29 @@ function liveBytes(map: Y.Map<unknown>, keep: (key: string) => boolean): number 
   return bytes;
 }
 
+/**
+ * Lo que pesan, codificadas como las mide el tope, claves nuevas del mapa (una forma: sus campos como objeto plano; el
+ * marco: su valor). Lo usa pegar una foto con sus anotaciones (`markupClipboard.ts`) para saber si entran.
+ */
+export function entriesBytes(entries: readonly [string, unknown][]): number {
+  if (entries.length === 0) return 0;
+  const doc = new Y.Doc();
+  doc.clientID = 1;
+  const target = doc.getMap<unknown>(PHOTO_MARKUP_MAP);
+  doc.transact(() => {
+    for (const [key, value] of entries) {
+      if (value && typeof value === 'object' && !Array.isArray(value) && parseMarkupKey(key)?.shapeId) {
+        const shape = new Y.Map<unknown>();
+        target.set(key, shape);
+        for (const [k, v] of Object.entries(value as Record<string, unknown>)) if (v !== undefined) shape.set(k, v);
+      } else target.set(key, value);
+    }
+  });
+  const bytes = Y.encodeStateAsUpdate(doc).byteLength;
+  doc.destroy();
+  return bytes;
+}
+
 /** Lo que pesan las anotaciones vivas de una foto (su marco y sus formas). */
 export function photoMarkupBytes(map: Y.Map<unknown>, fileId: string): number {
   return liveBytes(map, (key) => parseMarkupKey(key)?.fileId === fileId);
