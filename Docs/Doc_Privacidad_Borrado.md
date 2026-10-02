@@ -26,9 +26,11 @@ su auditoría. Lo medido está en prototipos fuera del repo (sección "Cómo se 
   versión: 5058 de 10 429). Las mutantes (servir filas, bases sin GC, aceptar una base anterior al compartir) dan entre
   374 y 20 348 fugas.
 - **Lo que garantiza:** quien no edita recibe la página como estaba en el momento en que un editor armó la última
-  base: al compartírsela (o después), unos 20 s después de que se deja de escribir, o cada 2 minutos mientras se
-  escribe (más espaciado en páginas de más de 100 KB). Lo que estuvo en la página menos que eso no le llega nunca; lo
-  que estuvo más le puede haber llegado, aunque después se borre. Un dispositivo nuevo recibe solo la última base.
+  base: al compartírsela (o después), unos 20 s después de que se deja de escribir, cada 2 minutos mientras se escribe
+  (más espaciado en páginas de más de 100 KB) y al pasar la app del editor a segundo plano. Lo que estuvo en la página
+  menos que eso casi nunca le llega (solo si justo cayó una base de las de cada 2 minutos: con 10 s, 1 de cada 12); lo
+  que estuvo más le puede haber llegado, aunque después se borre. Un dispositivo nuevo recibe solo la última base, que
+  puede ser anterior al último borrado si el editor cerró la app antes de armarla.
 - **Las fotos y archivos sacados** dejan de dar permiso a quien no ve lo borrado: `can_view_file`, `file_level` y la
   política de `page_files` ignoran los usos con `removed_at` para esa persona (la miniatura y el portero usan
   `file_level`).
@@ -40,8 +42,8 @@ su auditoría. Lo medido está en prototipos fuera del repo (sección "Cómo se 
   letras con el editor real y 100 semillas), y con la base limpia los lectores quedan protegidos igual.
 - **Costo:** quien no edita rebaja la página entera cada vez que cambia. Una página real típica pesa menos de 40 KB; un
   reporte de rodaje de 2000 subidas en un día: 5,2 MB en el día para el editor que arma y para cada lector con la
-  página abierta. Una página de 10 000 subidas (555 KB): 45 MB con la cadencia por tamaño. Armar una base: 0,2 a 3 ms
-  (incremental). Sin servicios nuevos: entra en el plan gratis de Supabase. Los deltas quedan como mejora si se mide
+  página abierta. Una página de 10 000 subidas (555 KB): 44,6 MB, porque las esperas escalan con el tamaño. En la red,
+  hasta un tercio más si la respuesta no va comprimida (base64). Armar una base: 0,2 a 3 ms (incremental). Sin servicios nuevos: entra en el plan gratis de Supabase. Los deltas quedan como mejora si se mide
   que hacen falta.
 - **Una pregunta para Lega** (sección 13): aceptar esa demora y esa garantía en vez de que el cliente vea letra por
   letra. Recomendación: sí.
@@ -51,7 +53,7 @@ la página a cualquiera que la pueda ver, también a un cliente invitado; no lo 
 navegador, y lo mismo pasa con las fotos que sacaste. Con el diseño, al cliente se le manda una copia de la página
 "pasada en limpio" que arma el equipo de alguien que edita, cada vez que dejás de escribir un rato. Le llega cómo
 estaba la página en esos momentos, no su pasado: si la nota estuvo un minuto, pudo llegarle; si la borraste en
-segundos, no. El precio es que el cliente ve los cambios con unos segundos o un par de minutos de demora.
+segundos, casi nunca. El precio es que el cliente ve los cambios con unos segundos o un par de minutos de demora.
 
 ## Reglas que no se rompen
 
@@ -182,8 +184,19 @@ minutos; como mucho 20 páginas por vuelta):
 
 - La página tiene algún lector (alguien activo con nivel 1 o 2, o un invitado con 1 o más) **y** no hay base vigente
   (primera vez, después de compartir con alguien nuevo, de restaurar una copia), **o** hay filas después de la base y:
-  la última fila tiene más de **20 s** (se dejó de escribir) o la base tiene más de **2 minutos × max(1, tamaño de la
-  base / 100 KB)** (se sigue escribiendo; una base de 555 KB espera 11 minutos).
+  la última fila tiene más de **20 s × f** (se dejó de escribir) o la base tiene más de **2 minutos × f** (se sigue
+  escribiendo), con **f = max(1, tamaño de la base / 100 KB)**. Las dos esperas escalan con el tamaño: una página de
+  menos de 100 KB (casi todas) arma a los 20 s de pausa o cada 2 minutos; una base de 555 KB, a los 2 minutos de pausa
+  o cada 11 minutos. Así el costo de 4.5 sale de esta regla.
+- **Además, sin esperar la cadencia, al pasar la app a segundo plano** (`visibilitychange` a `hidden` o `pagehide`:
+  cerrar la pestaña, bloquear el iPhone, cambiar de app), en las páginas con lectores que tienen filas después de la
+  base: se sube lo pendiente y se arma la base enseguida. Es lo que evita que una nota borrada justo antes de cerrar
+  la app quede en la base hasta que un editor la vuelva a abrir. Suma como mucho una base por vez que la app pasa a
+  segundo plano. En segundo plano el navegador puede cortar la app antes de terminar (sobre todo Safari en el iPhone);
+  si se corta, la arma el próximo editor que sincronice, y hasta entonces el lector tiene la base anterior.
+- **No se arma después de cada subida que borra algo** (la re-verificación lo propuso como alternativa): casi toda
+  subida borra algo (corregir una letra es un borrado), así que equivaldría a una base cada 20 s × f mientras se
+  escribe, varias veces el costo de 4.5, para acortar una demora que la cadencia ya acota.
 - Una página que solo ven editores (hoy, todas) no arma nada: cero costo.
 
 **Comprobaciones antes de subir** (en el dispositivo; la base no lee Yjs):
@@ -210,7 +223,17 @@ Al aceptarla: reemplaza la base vigente y pone `pages.clean_seq = to_seq` y `cle
 `share()` y `create_invitation()` con Ver, Comentar o para un invitado, y mover una página adentro de una rama con
 lectores (el trigger `pages_permissions`), ponen en las páginas alcanzadas (la página y su rama, o todo el proyecto)
 **`clean_reset_seq = update_seq`** y `clean_seq = 0`: la base vigente deja de servirse hasta que un editor arme una que
-llegue por lo menos a ese punto. La app, al compartir, arma enseguida las bases de las páginas alcanzadas, con
+llegue por lo menos a ese punto.
+
+**Antes, la app sube lo pendiente** de las páginas alcanzadas (re-verificación, R1): `clean_reset_seq` toma el
+`update_seq` del servidor, así que un borrado que todavía está en la cola de quien comparte (una subida lenta o fallida
+en el set) no quedaría cubierto, y otro editor al día con el servidor armaría una base válida con la nota. La app llama
+a `share()`, `create_invitation()` o mueve la página solo después de que el servidor confirmó lo pendiente de esas
+páginas; si no se confirma, avisa (*There are unsynced changes on these pages: what you deleted may still reach them.*)
+con **Retry** y **Share anyway**. Sin red no se comparte de todos modos (es un pedido a la base), así que el costo es
+esperar una subida.
+
+La app, al compartir, arma enseguida las bases de las páginas alcanzadas, con
 progreso (*Preparing 12 pages for ana@…*); si se corta o el dispositivo no está al día, las arma el próximo editor que
 sincronice, y mientras tanto el lector ve la página "en preparación" (4.3).
 
@@ -245,7 +268,8 @@ prepared this page for you yet. It will appear when one of them opens the app.*
 (observación 5): queda por delante de la base y no baja nada hasta que haya una base más nueva que su subida, que
 recibe entera. No rompe nada (aplicar la base de nuevo no duplica); el costo está en P7 (`guestDown`).
 
-**La demora.** El lector ve los cambios cuando un editor arma la base (4.1). Si el editor cierra la app enseguida,
+**La demora.** El lector ve los cambios cuando un editor arma la base (4.1). Al cerrar la app o pasar a otra, la del
+editor intenta armarla antes; si el navegador la corta antes de terminar,
 cuando un editor vuelva a sincronizar (el motor baja todas las páginas en cada ciclo, así que con abrir la app
 alcanza). Es la pregunta 1.
 
@@ -288,21 +312,31 @@ nuevo recibe 5058 de 10 429 textos ya borrados (auditoría); sus mutantes dan 77
 **Bytes** (las mismas 300 corridas): filas de los editores 699 KB; bases subidas 1,6 MB; lo que bajó el lector 1,5 MB
 (con deltas, 617 KB); el invitado que edita, 1,2 MB.
 
-**Una página muy editada** (P8, un editor con el patrón de subida de la app, una base cada 20 subidas, que es una pausa
-de escritura; "en vivo" es un lector con la página abierta todo el tiempo):
+**Una página muy editada** (P8, un editor con el patrón de subida de la app; "en vivo" es un lector con la página
+abierta todo el tiempo). P8 no modela segundos: cuenta una oportunidad de base cada 20 subidas (una pausa de escritura o
+2 minutos de escribir seguido, que en la app son unas 20 subidas). La columna "regla de 4.1" aplica la regla escrita:
+las dos esperas por `f`, o sea una base cada 20 × f subidas. La columna "sin escalar" es lo que costaría sin el
+factor, para mostrar por qué está:
 
-| Subidas | Filas | Base final | Solo bases: sube el editor = baja el lector en vivo | Con la cadencia por tamaño | Con deltas (P5) |
+| Subidas | Filas | Base final | Regla de 4.1: sube el editor = baja el lector en vivo | Sin escalar | Con deltas (P5) |
 |---|---|---|---|---|---|
 | 500 (una hora de edición activa) | 37 KB | 22 KB | 0,3 MB | 0,3 MB | — |
 | 2000 (un reporte de rodaje en un día) | 151 KB | 108 KB | 5,2 MB | 5,2 MB | 128 KB |
-| 10 000 (varios días de la misma página) | 787 KB | 555 KB | 133 MB | 45 MB | 672 KB |
+| 10 000 (varios días de la misma página) | 787 KB | 555 KB | 44,6 MB | 133 MB | 672 KB |
+
+A eso se suma, como mucho, una base por cada vez que la app de un editor pasa a segundo plano mientras edita la página.
+
+**En la red pesa un tercio más:** `pull_page_updates` devuelve la base en base64 dentro de JSON (como hoy las filas).
+Si la respuesta viaja comprimida (gzip o brotli, que el texto en base64 de un update de Yjs comprime bien), se recupera;
+no se verificó si la API de Supabase la comprime. Las cifras de esta sección son bytes del update; se mide en la
+entrega 2.
 
 Armar una base incremental (el editor no la arma de cero: aplica las filas nuevas a su documento): 0,2 a 3 ms; de cero,
 la de 10 000 subidas, 73 ms. Comprobar privacidad: 3 a 16 ms. En el teléfono, estimado de 3 a 5 veces.
 
 **Qué quiere decir para el plan gratis** (5 GB de egress por mes): un cliente que mira todos los días un reporte de
-2000 subidas por día baja unos 150 MB por mes; la página de 10 000 subidas con un lector en vivo, unos 9 MB por día de
-edición con la cadencia por tamaño. Para el primer cliente alcanza de sobra. **Cuándo hacen falta los deltas:** cuando
+2000 subidas por día baja unos 150 MB por mes (200 MB si la respuesta no va comprimida); la página de 10 000 subidas
+con un lector en vivo, unos 9 MB por día de edición con la regla de 4.1. Para el primer cliente alcanza de sobra. **Cuándo hacen falta los deltas:** cuando
 una página compartida pase de 100 KB y se edite mucho todos los días con lectores en vivo; se mide con
 `clean_at`/tamaño de las bases (entrega 4).
 
@@ -476,6 +510,10 @@ drop policy page_files_select on public.page_files;
 create policy page_files_select on public.page_files for select to authenticated
   using (private.can_view_page(page_id) and (not is_foreign or private.file_level(file_id) >= 1)
          and (removed_at is null or private.sees_deleted(page_id)));
+-- La papelera de archivos (`trashed_files`: nombre, tipo, peso de lo que ninguna página usa) no es para invitados,
+-- aunque tengan "Editar y crear páginas" sobre todo el proyecto (re-verificación, R2): son los nombres de lo sacado.
+create or replace function private.can_see_file_trash(ws uuid) returns boolean ...
+  -- igual que hoy, con: and not private.history_denied_for_guest()
 
 -- 9. El árbol trae clean_seq (la app la pide según schema_version).
 grant select (clean_seq) on public.pages to authenticated;
@@ -507,7 +545,10 @@ notify pgrst, 'reload schema';
    una copia restaurada, y la versión publicada (`fixtures/publishedDocs.ts`) como editor. En cada paso, el invariante
    de tokens (lo que recibe quien no edita estuvo visible en alguna base que recibió; el dispositivo nuevo, solo la
    última) y, al final, todos iguales al servidor. **Mutantes:** servir filas, base sin GC, sin `to_seq >=
-   clean_reset_seq`, sin reinicio al compartir.
+   clean_reset_seq`, sin reinicio al compartir, compartir sin subir antes lo pendiente (R1: quien comparte borró la
+   nota y el borrado sigue en su cola; otro editor al día arma una base; con la subida previa, esa base no vale; sin
+   ella, el lector recibe la nota). Y la base al pasar a segundo plano: un editor borra y la app se oculta; el
+   dispositivo nuevo del lector no recibe lo borrado (y sí, si la app se corta antes de armarla).
 2. **Con el editor real** (`src/ui/cleanEditor.test.ts`, jsdom): una página con fotos en línea, foto-bloque con
    epígrafe, Script, preguntas, tablas, tarjeta de Drive y colapsar para todos; se pisan y borran cosas con un secreto
    en cada lugar; la base no tiene ningún secreto en sus bytes, y la página que abre un lector es igual a la del editor
@@ -526,9 +567,11 @@ notify pgrst, 'reload schema';
    `update_seq`, menor que `clean_reset_seq` (el caso B3: una base anterior a compartir), no más nueva, otra huella o
    más de 8 MB; compartir, invitar y mover reinician; un proyecto borrado no sirve nada; `has_plain_readers` con
    permisos por proyecto, por página y revocados; **fotos:** un uso con `removed_at` no se lista ni da `can_view_file`,
-   `file_level` ni la miniatura a Ver, Comentar ni a un invitado con Editar, y sí al editor. **Mutantes de la
+   `file_level` ni la miniatura a Ver, Comentar ni a un invitado con Editar, y sí al editor; `trashed_files` no responde a un invitado con
+   "Editar y crear páginas" sobre todo el proyecto (R2), y sí a un admin. **Mutantes de la
    migración:** sin la rama de lectores en `pull_page_updates`, con la columna `update` legible, `sees_deleted` sin el
-   invitado, `current_clean_base` sin `clean_reset_seq`, `file_level` sin `removed_at`. Las demás pruebas de
+   invitado, `current_clean_base` sin `clean_reset_seq`, `file_level` sin `removed_at`, `can_see_file_trash` con
+   invitados. Las demás pruebas de
    `supabase/tests/` siguen pasando con la migración puesta.
 6. **Rendimiento:** P8 en el iPhone (armar una base de 2000 y 10 000 subidas, incremental y de cero) y lo que baja un
    lector en vivo durante una hora de edición.
@@ -562,7 +605,8 @@ Antes de cerrar cada entrega, la auditoría de siempre (funcionalidad, permisos 
 | Una base con texto borrado (un error, un `keep` de Yjs) | La comprobación de privacidad antes de subir y su mutante; la prueba con secretos en cada lugar |
 | Una base a la que le falta algo: el lector ve la página incompleta | La comprobación de contenido; la próxima base de cualquier editor la reemplaza; las filas siguen enteras (D4) |
 | Una base de antes de compartir (vista atrasada, reintento) | `to_seq >= clean_reset_seq` en `push_clean_base` y en `current_clean_base`, con mutante (P7 `noreset`: 374 notas) |
-| El lector espera a que un editor abra la app | La demora está acotada mientras alguien edita; "en preparación" lo dice; al compartir se arman las bases enseguida |
+| El lector espera a que un editor abra la app | La demora está acotada mientras alguien edita; la base al pasar a segundo plano; "en preparación" lo dice; al compartir se arman las bases enseguida |
+| Un borrado en la cola de quien comparte | Compartir, invitar y mover suben antes lo pendiente (R1) |
 | Páginas grandes muy editadas con lectores en vivo gastan egress | La cadencia por tamaño; medir (entrega 2) y, si hace falta, deltas (entrega 4) |
 | Una versión vieja como lector, sin entender `clean_seq` | El interruptor solo con `min_app_version` en la versión nueva |
 | `has_plain_readers` caro en cada ciclo | Se pide solo si el dispositivo subió o bajó algo, o cada 2 minutos; solo entre quienes tienen permisos sobre la rama |
@@ -586,21 +630,31 @@ Antes de cerrar cada entrega, la auditoría de siempre (funcionalidad, permisos 
   los invitados, esta regla cambia con él (una sola función), y también los permisos de los archivos sacados.
 - **Al compartir, la base arranca de cero** (`clean_reset_seq`), **al invitar y no al aceptar** (4.2).
 - **Sin base vigente, el lector no ve nada** ("en preparación") en vez de recibir las filas.
-- **Cadencia: 20 s sin escribir, o 2 minutos por cada 100 KB de base mientras se escribe.** Es un parámetro de
-  `clean_work`; se ajusta con lo que mida la entrega 2.
+- **Cadencia: 20 s sin escribir o 2 minutos escribiendo, las dos por f = max(1, tamaño de la base / 100 KB), y una
+  base al pasar a segundo plano** (re-verificación, C3 y C4). No una base después de cada subida que borra (4.1). Es un
+  parámetro de `clean_work`; se ajusta con lo que mida la entrega 2.
+- **Compartir, invitar y mover suben antes lo pendiente** de las páginas alcanzadas (R1); si no se confirma, avisan.
 - **Al dejar de ver lo borrado, el dispositivo rearma lo suyo** cuando no tiene nada sin subir (entrega 3).
 
 ## 13. Pregunta para Lega
 
 1. **¿Aceptás que quien solo ve o comenta (y los invitados) reciba la página como estaba la última vez que la app de
-   un editor la "pasó en limpio", en vez de letra por letra?** Ejemplo: en el set escribís en el reporte «el actor llegó
-   tarde por X». Si lo borrás a los 10 segundos sin dejar de escribir, al cliente **no le llega nunca**. Si lo dejás un
-   minuto y después lo borrás, **le pudo llegar** (estuvo en una copia limpia) aunque ya no lo vea en pantalla; un
-   teléfono nuevo del cliente que abra la página mañana **no** lo recibe. Lo que queda le aparece unos 20 segundos
-   después de que dejás de escribir (cada 2 minutos si seguís escribiendo); si cerrás la app enseguida, cuando vos u
-   otro editor la vuelvan a abrir, y mientras ningún editor la haya preparado la página le dice "en preparación". Un
-   cliente con Editar escribe sobre esa copia con la misma demora (Yjs junta las ediciones como siempre). La
-   alternativa, mandarle las ediciones al momento, le haría llegar también todo lo escrito y borrado, como hoy.
+   un editor la "pasó en limpio", en vez de letra por letra?** La app de quien edita la pasa en limpio unos 20 segundos
+   después de que dejás de escribir, cada 2 minutos mientras seguís escribiendo y al cerrarla o pasar a otra app; en
+   páginas grandes (más de 100 KB, por ejemplo una tabla importada de Coda) cada varios minutos. Ejemplo: en el set
+   escribís en el reporte «el actor llegó tarde por X».
+   - Si lo borrás a los 10 segundos sin dejar de escribir, al cliente **casi nunca** le llega: solo si justo en esos
+     segundos tocaba la copia de cada 2 minutos (más o menos 1 de cada 12 veces).
+   - Si lo dejás un minuto y después lo borrás, **le pudo llegar** (estuvo en una copia limpia), aunque ya no lo vea
+     en pantalla.
+   - Un teléfono nuevo del cliente que abre la página mañana recibe solo la última copia: no la frase, **salvo** que
+     la hayas borrado y la app se haya cortado antes de pasarla en limpio (por ejemplo, el iPhone sin señal o que
+     cierra la app de golpe); en ese caso la ve en pantalla hasta que vos u otro editor vuelvan a abrir la app.
+   - Lo que queda le aparece con esa demora; mientras ningún editor preparó una página, al cliente le dice "en
+     preparación". Un cliente con Editar escribe sobre esa copia con la misma demora (Yjs junta las ediciones como
+     siempre).
+
+   La alternativa, mandarle las ediciones al momento, le haría llegar todo lo escrito y borrado, como hoy.
    **Recomendación: aceptar.**
 
 ## Correcciones de la auditoría (2026-10-02)
@@ -623,6 +677,10 @@ arriba:
 | Obs. 9: P4 no calculaba `demotedViolations` ni modelaba vista atrasada ni el cursor del invitado | P7 los calcula y los modela |
 | Obs. 10: la pregunta no decía "en preparación" ni lo del invitado con Editar | Pregunta reescrita |
 | Las mutantes no eran de "300 corridas" | Re-medidas con 300 × 200 (4.5) |
+| Re-verificación R1 / C1: un borrado todavía en la cola de quien comparte no quedaba cubierto por `clean_reset_seq` | Compartir, invitar y mover suben antes lo pendiente (4.2, prueba 1) |
+| Re-verificación R2 / C2: `trashed_files` le daba a un invitado con "Editar y crear" los nombres de lo sacado | `can_see_file_trash` sin invitados (migración, punto 8; prueba 5) |
+| Re-verificación C3: la cadencia escrita no daba los 45 MB de P8; base64 | Las dos esperas escalan con el tamaño (4.1); 4.5 explica cómo lo modela P8 y suma el tercio del base64 |
+| Re-verificación C4: dos frases de la pregunta no eran ciertas ("nunca", el teléfono nuevo) | Pregunta reescrita (1 de cada 12; el corte antes de armar la base); base al pasar a segundo plano (4.1); páginas de más de 100 KB |
 | Fuera de alcance: páginas en la papelera legibles con Ver; `collabRemovedWriting` con 100 semillas | Frentes aparte del coordinador; nombrados como dependencias (secciones 5, 6 y 10) |
 
 ## Cómo se midió
