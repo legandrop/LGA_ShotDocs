@@ -1,7 +1,8 @@
 # Plantillas y el reporte del día
 
 **Estado: entregas 0 a 3 implementadas** (las tres de fábrica, la vista previa, crear desde una, el reporte del día y las
-plantillas propias; ver "Cómo quedó", al final) **y D82** (el reporte del día en la raíz del proyecto pide una carpeta). Sin migración (roadmap P.23, fase 3 de `Plan_ShotDocs.md`; pedido de
+plantillas propias; ver "Cómo quedó", al final), **D82** (el reporte del día en la raíz del proyecto pide una carpeta) **y las
+anotaciones de las fotos** (v0.134: viajan con la plantilla; "Cómo quedó (las anotaciones de las fotos)", al final). Sin migración (roadmap P.23, fase 3 de `Plan_ShotDocs.md`; pedido de
 Lega del 2026-10-02). Diseñado contra `main` v0.108. Las decisiones PL1 a PL10 (sección 13) son propuestas: se adoptan como
 están hasta que Lega diga otra cosa. El contenido de las tres plantillas es una primera versión para que Lega la
 ajuste: la entrega 0 la deja a la vista sin guardar nada, justamente para eso. Corregido con la auditoría
@@ -205,7 +206,8 @@ no se editan en la app: se personalizan con *Customize* (sección 5.3).
    `row.update_seq` es mayor que lo bajado, el mismo control de `reconcileMedia`, se avisa *This template hasn't
    finished downloading* con *Wait* —se usa sola al llegar— y, si hay una de fábrica del mismo tipo, *Use built-in*;
    nunca se copia a medias) y se pasa a bloques con `yXmlFragmentToBlocks` (`@blocknote/core/yjs`). La plantilla
-   nunca se monta en un editor: no se le escribe nada.
+   nunca se monta en un editor: no se le escribe nada. De la misma copia en memoria se leen las **anotaciones de sus
+   fotos** (el mapa `photoMarkup`, `Doc_Anotar_Fotos.md`): ver el paso 3 y "Cómo quedó (las anotaciones de las fotos)".
 2. **Se limpian:** ids nuevos para todos los bloques (los comentarios de la plantilla quedan en la plantilla); las
    preguntas van sin sus respuestas (las respuestas son comentarios); el "colapsado para todos" de la plantilla
    (`collapsedHeadings`) se copia con los ids nuevos.
@@ -827,3 +829,60 @@ plantilla y crear el reporte pasan por la cola del árbol y por IndexedDB.
   esté vacía, sin marca, la carpeta al final de la raíz, ofrecer la propia página): cada uno tira 1 o 2 pruebas. En
   Chromium sin ventana con la app real sobre el servidor en memoria: 26 controles (la carpeta nueva, la existente, Cancel,
   Apply template…, modo avión con otro dispositivo, castellano y teléfono de 375 px).
+
+## Cómo quedó (las anotaciones de las fotos, v0.134)
+
+Hasta v0.133, una foto anotada (flechas, texto, lápiz: el mapa `photoMarkup` del documento de la página, `Doc_Anotar_Fotos.md`)
+llegaba **limpia** a una página creada desde una plantilla y a la plantilla guardada desde esa página: la plantilla copia los
+bloques, y las anotaciones no están en los bloques. Ahora viajan con la misma regla que copiar y pegar dentro del proyecto
+(D46). Sin migración, sin tipos de bloque ni propiedades nuevas.
+
+- **Qué viaja.** Al leer la copia en memoria de la plantilla (`copyTemplateDoc`) se toma, de cada foto que tiene el contenido
+  (bloque, en línea, en una celda), su marco y **todas** sus formas campo por campo (también los campos que esta versión no
+  conoce), con `snapshotMarkup` del portapapeles de D46. La clave del mapa es `<id del archivo>/<id de la forma>`: no
+  depende del bloque, así que los ids nuevos de los bloques no la tocan y la foto copiada comparte el dibujo con la de la
+  plantilla (AN2: las anotaciones son de la foto en esa página).
+- **Dónde se escriben** (`carryMarkup`, el mismo de D46, con sus topes): al **usar** una plantilla (la ventana *Templates*,
+  la tira, *Apply template…*, el reporte del día con una plantilla propia, también el primero de una carpeta y el de la
+  raíz) y al **guardar** una página como plantilla (`saveAsTemplate`). Solo para las fotos que **quedaron en la página**
+  (se miran en el documento ya escrito; una anotación huérfana de una foto que ya no está no viaja), solo lo que falta
+  (una clave que ya está no se toca) y, si el marco de la foto ya es otro, nada. Con la página abierta (*Apply template…*,
+  la tira) los bloques y las anotaciones son **un solo paso** de ⌘/Ctrl+Z (`trackMarkupInUndo`: el mapa y el origen del
+  pegado entran en la pila de la página; lo del anotador sigue afuera); rehacer trae las dos cosas. Sin la página abierta
+  (el reporte del día, *Save as template*), se escriben en el documento antes de subirlo, como los bloques.
+- **Entre proyectos no viajan** (D136, igual que D46): una plantilla de otro proyecto del workspace llega sin sus fotos y
+  archivos (PL10) y, por lo tanto, sin anotaciones; el aviso de cuántas fotos no se copiaron ya lo dice. Entre workspaces no
+  hay plantillas (cada uno es una isla).
+- ***Clear filled-in values*** (decidido sin Lega): **las anotaciones cuentan como valores llenados.** Están colgadas de la
+  foto, y vaciar saca las fotos; no queda una flecha sin foto. Sin vaciar, la plantilla guarda las fotos con sus
+  anotaciones (una foto de referencia con las flechas de «poner la pantalla acá» es plantilla útil). No hay un modo «fotos
+  sí, anotaciones no»: para eso se borran a mano en la plantilla, que es una página.
+- **Los topes.** Una plantilla ya está dentro de los topes de la página (el anotador los hace cumplir), así que en la página
+  nueva no debería faltar lugar; si no entran (una plantilla que los pasó por otro camino), la foto llega limpia, la página
+  se crea igual y se avisa *Some photos came without their annotations: this page already has too many.* En el reporte del día
+  (sin la página a la vista) el aviso queda en la consola.
+- **Versiones viejas.** Nada nuevo en el contenido: una versión vieja abre la página creada, la edita y hasta saca una foto sin
+  tocar el mapa (prueba con la versión publicada y la anterior). **`min_app_version` no hace falta subirla.** Una versión vieja
+  que cree desde una plantilla no lleva las anotaciones (la foto llega limpia), como al pegar.
+- **Pruebas.** `src/templates/templateMarkup.test.ts` (14, con el servidor en memoria y el editor real): leer sin tocar la
+  plantilla, la huérfana, mismo proyecto con claves y campos idénticos (incluido un campo desconocido), la foto sin anotar
+  limpia, un solo ⌘Z y rehacer, lo escrito antes como otro paso, solo las fotos que quedaron, otro proyecto, el reporte del
+  día, dos dispositivos, el tope, guardar sin vaciar y vaciando, y las dos versiones viejas; en `ownHost.test.tsx` (2 más),
+  la ventana de verdad: *Use* de un proyecto y de otro, y el aviso del tope. Mutantes (sin llevar, sin el deshacer, sin el
+  paso único, otro proyecto que conserva, sin llevar al escribir sin la página, sin mirar el contenido, sin filtrar las
+  huérfanas): cada uno hace caer al menos una prueba.
+- **En el navegador** (Chromium de Playwright sin ventana, perfil temporal, la app real sobre el servidor en memoria, con fotos
+  de verdad dibujadas en un canvas): 22 de 22 controles. Un reporte con tres fotos anotadas (bloque, en línea y celda; 3
+  marcos y 4 formas) se guarda como plantilla sin vaciar (las 7 claves idénticas, el origen igual); una página nueva usa la
+  plantilla desde *More…* y recibe las mismas 7 claves y las tres fotos con sus flechas a la vista; Ctrl+Z desde el título
+  saca fotos y anotaciones juntas y Ctrl+Shift+Z las trae; guardada con *Clear filled-in values* (lo de siempre) no queda ni
+  foto ni anotación; desde otro proyecto, sin fotos ni anotaciones y con el aviso de 3 fotos; sin red, la página se crea
+  con las anotaciones y al volver la red las ve otro dispositivo; y en un teléfono de 375 px.
+
+**Decisiones tomadas sin Lega** (cambiables): las anotaciones cuentan como valores llenados (*Clear filled-in values* las
+saca junto con las fotos, sin un modo «fotos sí, anotaciones no»); entre proyectos no viajan (D136); el aviso del tope va
+en la ventana y en la consola solo en el reporte del día; el undo de usar una plantilla ahora mete bloques y anotaciones en
+un solo paso; sin migración y sin subir `min_app_version`.
+
+**Falta (Lega, con sesión real):** usar una plantilla con fotos del Drive anotadas en el iPhone y en la Mac (acá las fotos
+son de prueba, sin Drive), y mirar qué tal quedan las plantillas de fábrica si algún día llevan una foto de referencia.

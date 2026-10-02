@@ -828,6 +828,10 @@ editor en `src/ui/markupClipboardEditor.ts`, y lo engancha `PageEditor.tsx` (el 
 - **Desde una página que solo se puede ver:** el navegador copia por su cuenta (sin el formato del editor), así que no
   se llevan, como hasta ahora la foto tampoco viajaba como foto del Drive.
 
+**Con las plantillas** (v0.134): las anotaciones también viajan al crear una página desde una plantilla del mismo proyecto y al
+guardar una página como plantilla, con estas mismas reglas (`Doc_Plantillas.md`, "Cómo quedó (las anotaciones de las
+fotos)"); *Clear filled-in values* las saca junto con las fotos.
+
 **Versiones viejas:** lo que va al portapapeles no cambió. La versión publicada y la anterior (los esquemas de
 `src/ui/fixtures/`) pegan lo copiado en esta con la foto limpia y todo el texto, y abren y editan una página con lo
 pegado sin tocar el mapa. **`min_app_version` no hace falta subirla:** no hay tipos de bloque ni propiedades nuevas ni

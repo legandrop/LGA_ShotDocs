@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.134 :
+
+Plantillas con anotaciones de fotos (P.23 y P.20). Una foto anotada llegaba limpia a una página creada desde una
+plantilla, y a la plantilla guardada desde una página: copian los bloques, y las anotaciones (`photoMarkup`) no están en
+los bloques. Ahora la copia en memoria de la plantilla también toma, campo por campo, el marco y las formas de sus fotos, y
+`carryMarkup` (el de copiar y pegar, D46) las escribe con las mismas claves solo para las fotos que quedaron en la
+página, en el mismo paso de ⌘Z que los bloques; también en el reporte del día y en *Save as template…*. Entre proyectos
+no viajan (D136). *Clear filled-in values* las saca con las fotos (cuentan como valores llenados). Sin migración ni
+`min_app_version`: una versión vieja abre lo creado sin tocar el mapa.
+[ Las anotaciones de las fotos viajan con las plantillas: al usarlas y al guardar como plantilla ]
+
 v0.133 :
 
 Compactar (B.9), entrega 2: crear snapshots. Nadie armaba las copias resumidas que v0.127 sabe bajar. Nuevo
