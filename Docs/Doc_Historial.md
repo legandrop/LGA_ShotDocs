@@ -1,7 +1,7 @@
 # Historial de versiones de una página (P.18)
 
-**Estado: entregas 1 (v0.098), 2 (v0.103) y 3 (v0.106) implementadas; ver "Cómo quedó" de cada una, al final, que
-mandan sobre el diseño en lo que tocan. La migración de la entrega 1 (`20261007120000_historial.sql`) está aplicada
+**Estado: entregas 1 (v0.098), 2 (v0.103) y 3 (v0.106) implementadas, más los restos de las auditorías ("Lo que
+quedó de las entregas"); ver "Cómo quedó" de cada una, al final, que mandan sobre el diseño en lo que tocan. La migración de la entrega 1 (`20261007120000_historial.sql`) está aplicada
 desde v0.098; la de la entrega 3 (`20261011120000_versiones_con_nombre.sql`), probada en `begin … rollback` contra la
 base, SIN aplicar.** Pedido de Lega del 2026-10-01 (en el plan figuraba como fase 6). Toca la regla de no perder datos
 (restaurar es una edición) y los permisos (el historial muestra lo borrado), así que cada entrega va con sus pruebas y
@@ -1061,3 +1061,50 @@ en lo que toca:
 
 Mutantes de estas correcciones: 8 de 8 hacen fallar alguna prueba. Lo único sin prueba propia es que la pantalla
 principal llame a `useHistoryCachePruning` (una línea).
+
+## Lo que quedó de las entregas (después de v0.106)
+
+Manda sobre lo de arriba en lo que toca. Sin migración. Lo que habían dejado anotado la prueba al azar y las auditorías
+de las entregas 2 y 3:
+
+- **Una versión con dos bloques del mismo id se restaura** (lo que encontró la prueba 3; ya pasaba en v0.098). Dos
+  dispositivos que rehacen el mismo bloque a la vez dejan dos con el mismo id; el editor (la extensión `uniqueID` de
+  BlockNote) no los acepta y le cambia el id al recibir la edición, así que la página no quedaba igual a la versión y la
+  restauración se deshacía sola. Ahora `versionNode` (`src/ui/historyRestore.ts`), en su copia en memoria, le da un id
+  nuevo al repetido con `uniqueBlockIds`: el segundo en el orden del documento de Yjs (también adentro de los hijos); el
+  primero conserva el suyo y con él sus comentarios. La versión del historial no se toca. La prueba 3 ahora exige que
+  esas versiones se restauren (en las seis semillas hay tres) y compara la página con la versión salvo esos ids.
+- **O9. Al confirmar, una consulta empezada después de sincronizar.** `refreshRows(true)` espera la consulta de filas
+  que estuviera en curso (pudo empezar antes de `syncNow` y no ver una fila de otra persona) y pide otra. La consulta
+  siguiente arranca de lo último sumado aunque la pantalla todavía no se haya vuelto a dibujar.
+- **O7. La generación del servidor antes de usar lo guardado.** Con algo guardado y red, `loadHistory` lee
+  `workspace_settings.generation`; si no es la de lo guardado (restauraron una copia de seguridad y el dispositivo
+  todavía no se enteró), lo tira y baja todo, aunque el `id` de la última fila guardada coincida con otra (una copia que
+  vuelve atrás el contador de `page_updates`). Lo nuevo se guarda con la generación del servidor (`HistoryLoad.generation`,
+  que la pantalla usa para guardar lo que llegue después). Sin la tabla, la del dispositivo; otro error, se baja todo;
+  sin red, lo guardado como siempre. Es un pedido chico más al abrir el historial, solo si hay algo guardado.
+- ***Restored from…* y Ctrl/⌘+Z.** El resultado de restaurar trae `onUndone`: avisa (una vez) cuando el deshacer de
+  Yjs saca justo el paso de la restauración (`stack-item-popped` con ese paso), sea por el *Undo* del aviso o por el
+  teclado. La pantalla deja de lado la marca pendiente y saca el aviso; mira hasta que la marca queda puesta o se deja de
+  lado. Igual que con el *Undo* del aviso: si la restauración ya subió y quedó marcada, deshacerla no saca el rótulo; y
+  rehacerla después de deshacerla no la vuelve a marcar (es un rótulo: no se pierde nada).
+- **O2. Dos sangrías a la vez bajo el mismo bloque.** Dejan dos grupos de hijos, a veces con el mismo hijo en los dos.
+  La página los junta sin repetirlo (`repairBlocks`); la unión ahora también: un bloque de un grupo de más que repite a
+  uno de los anteriores (visible en las mismas versiones, el mismo id y el mismo contenido en cada una, `sameBlock`) no
+  se muestra otra vez. Solo presentación. Prueba con las filas del caso de la auditoría
+  (`src/sync/fixtures/historyDupGroups/`).
+- **M5 y M10:** `mergeRows` descarta las filas que ya estaban y también las repetidas dentro del lote; una prueba lo
+  mira. Otra elige la versión actual y hace llegar en un mismo lote una fila que la agranda y otra que abre una sesión
+  nueva: la elegida sigue elegida (sacar la búsqueda por la sesión que contiene el `seq` la hace fallar).
+
+**Lo que sigue anotado:** O3, renombrar pisa el nombre anterior sin rastro. Hacerlo desde la app como «sacar + nombrar»
+son dos pedidos (si el segundo falla, el nombre se pierde) y el nombre nuevo pasaría a ser de quien renombra (cambia quién
+lo puede tocar); hacerlo bien es una función nueva en la base, o sea una migración. No es contenido de la página: queda
+en el roadmap. También siguen la marca que se pierde si la app se cierra antes de que la restauración suba y no se abre
+ese historial en una semana, y medir en el iPhone.
+
+**Pruebas nuevas:** `historyRestore.test.ts` (2: la versión con ids repetidos, arriba y en los hijos; `onUndone` con
+Ctrl/⌘+Z, que no avisa por deshacer otra cosa ni dos veces), `historyPanel.test.tsx` (4: la consulta en curso al
+confirmar, M5, M10 y Ctrl/⌘+Z antes de que suba), `historyLoad.test.ts` (2: el contador vuelto atrás con el mismo id,
+y la generación que no se puede leer) y `historyDiff.test.ts` (1: O2). Cada una falla sin su arreglo (comprobado
+sacándolo); la de M10 y la de M5, con su mutante.

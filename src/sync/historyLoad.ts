@@ -14,10 +14,13 @@ export interface HistoryLoad {
   versions: PageVersionRow[] | null;
   /** Sin red: es lo guardado, bajado en este momento. `null` con red. */
   offlineAt: number | null;
+  /** La generación con que quedó guardado (la del servidor si se pudo leer): la usa quien guarda lo que llegue después. */
+  generation: number | null;
 }
 
 export interface LoadHistoryOptions {
-  remote: HistoryRemote & NamedVersionsRemote;
+  /** `fetchWorkspaceSettings`: la generación del servidor, para no usar lo guardado de antes de restaurar una copia. */
+  remote: HistoryRemote & NamedVersionsRemote & { fetchWorkspaceSettings?: () => Promise<{ generation: number } | null> };
   pageId: string;
   cache: HistoryCache | null;
   /** La generación del workspace que conoce el dispositivo (una copia de seguridad restaurada la cambia). */
@@ -61,24 +64,42 @@ export async function loadHistory(opts: LoadHistoryOptions): Promise<HistoryLoad
   const usable = saved && (saved.meta.generation === generation || generation === null) ? saved : null;
   const fromCache = (): HistoryLoad | null =>
     usable
-      ? { rows: usable.rows, emails: new Map(usable.meta.emails), versions: usable.meta.versions, offlineAt: usable.meta.savedAt }
+      ? { rows: usable.rows, emails: new Map(usable.meta.emails), versions: usable.meta.versions, offlineAt: usable.meta.savedAt, generation: usable.meta.generation }
       : null;
   if (!opts.online) return fromCache();
   try {
-    const loaded = await loadPageHistory(remote, pageId, opts.onProgress, opts.isCancelled, usable?.rows ?? []);
+    // Con algo guardado, la generación del SERVIDOR antes de usarlo (O7 de la auditoría de la entrega 3): el
+    // dispositivo se entera de una copia restaurada recién con su próxima sincronización, y una copia restaurada puede
+    // volver atrás el contador de `page_updates` (el `id` de la última guardada podría coincidir con otra fila). Si no se
+    // puede leer (la base sin la tabla), queda la que conoce el dispositivo; un error que no es de red, se baja todo.
+    let current = generation;
+    let trusted = usable;
+    if (usable && remote.fetchWorkspaceSettings) {
+      try {
+        const server = await remote.fetchWorkspaceSettings();
+        if (server) current = server.generation;
+      } catch (err) {
+        if (isNetworkError(err)) throw err;
+        current = null;
+        trusted = null;
+      }
+      if (current !== null && usable.meta.generation !== null && usable.meta.generation !== current) trusted = null;
+    }
+    const loaded = await loadPageHistory(remote, pageId, opts.onProgress, opts.isCancelled, trusted?.rows ?? []);
     let versions: PageVersionRow[] | null;
     try {
       versions = await fetchVersions(remote, pageId, opts.namedVersions);
     } catch (err) {
       if (!isNetworkError(err)) throw err;
-      versions = usable?.meta.versions ?? null;
+      versions = trusted?.meta.versions ?? null;
     }
+    const keep = current ?? generation;
     if (cache) {
       await cache
-        .save(pageId, { rows: loaded.rows, emails: loaded.emails, versions, generation, reset: loaded.reset || (!!saved && !usable) }, now())
+        .save(pageId, { rows: loaded.rows, emails: loaded.emails, versions, generation: keep, reset: loaded.reset || (!!saved && !trusted) }, now())
         .catch(() => undefined);
     }
-    return { rows: loaded.rows, emails: loaded.emails, versions, offlineAt: null };
+    return { rows: loaded.rows, emails: loaded.emails, versions, offlineAt: null, generation: keep };
   } catch (err) {
     if (deniedNow(err)) {
       await cache?.drop(pageId).catch(() => undefined);

@@ -162,9 +162,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   en Chrome y Edge y el botón "Carpeta…" del menú `/`. **Entrega 2 hecha (*Bajar todo*, rama `lega/carpetas-zip`):**
   zip sin comprimir con Zip64 escrito a medida que llega en Chrome y Edge, o el árbol en una carpeta; en memoria con
   tope en Firefox, Safari y los teléfonos (D24); nombres de Drive limpios para Windows y la Mac (`.`, `..`, punto al
-  final, `CON`…, a lo sumo 255 bytes) y cortes de 200 y 250 caracteres por grafema. Falta (BAJO): listar ~40 subcarpetas
-  por pedido (hoy una), Firefox sin tope por el service worker, *Retry missing*, los emojis compuestos que pierden el ZWJ
-  (O4 de la auditoría) y probar a mano en Safari, el iPhone y con el Drive real. Detalle en
+  final, `CON`…, a lo sumo 255 bytes) y cortes de 200 y 250 caracteres por grafema. *Retry missing*, el tope sin avance
+  de cada pedido (R1) y el ZWJ de los emojis compuestos en la app (O4), hechos (rama `lega/carpetas-restos`). Falta
+  (BAJO): listar ~40 subcarpetas por pedido (pide un cambio del portero: `/folder/list` con varias), el ZWJ en el
+  portero, Firefox sin tope por el service worker y probar a mano en Safari, el iPhone y con el Drive real. Detalle en
   `Doc_Carpetas.md`, "Cómo quedó" y "Cómo quedó (entrega 2)". Pendiente de los nombres (auditoría de D3, BAJO):
   - Mac y Windows: la marca de cada subcarpeta resume la ruta sin normalizar los acentos (la Mac da `í` en dos
     partes). Volver a soltar desde el otro sistema crea subcarpetas nuevas, con el mismo nombre, al lado de las de
@@ -272,23 +273,18 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   huérfano en su versión, el Worker con la página de respaldo, la diferencia solo de lo tocado y la lista que se
   actualiza sola. **Entrega 3 hecha (v0.106):** versiones con nombre (`page_versions`: nombrar, renombrar, quitar,
   *Only named versions*, *Restored from…*) y la caché `<base local>:history` con el historial sin red. Migración
-  `20261011120000_versiones_con_nombre.sql` aplicada (2026-10-02, `schema_version` 13). **Falta:** medir en el iPhone. De la entrega 3, para después: la marca *Restored from…* se pierde si la app se cierra antes de
-  que la restauración suba y nunca se vuelve a abrir el historial de esa página en una semana (es solo un rótulo); un
-  Ctrl/⌘+Z de la restauración (en vez del *Undo* del aviso) no deja de lado la marca; (O3) renombrar pisa el nombre
-  anterior sin rastro; (O7) cerrar la ventana de una copia restaurada que vuelve atrás el contador de `page_updates`
-  (leer la generación del servidor antes de usar la caché). Encontrado por la prueba al azar: una versión con dos bloques del mismo id no se puede
-  restaurar (se deshace sola, sin perder nada; `Doc_Historial.md`, entrega 2; ya pasaba en v0.098). Arreglo propuesto:
-  antes de restaurar, en la copia en memoria, darle un id nuevo al repetido (el segundo en el orden de Yjs), como hace el
-  editor. **De la auditoría de la entrega 2, para después:** (O2) dos sangrías a la vez bajo el mismo bloque dejan dos
-  grupos de hijos; la unión los junta sin descartar el hijo repetido (como `repairBlocks`) y lo muestra agregado (solo
-  presentación); (O9) al confirmar una restauración, `refreshRows` puede devolver una consulta empezada antes de
-  sincronizar: esperarla y pedir otra; (M5) ninguna prueba ve que `mergeRows` descarte una fila repetida; (M10) si en un
-  mismo lote crece la sesión elegida y aparece otra, la elegida puede saltar a la actual. Aparte, después: que lo borrado no llegue a quien solo ve la página (decisión 2;
+  `20261011120000_versiones_con_nombre.sql` aplicada (2026-10-02, `schema_version` 13). **Restos de las auditorías hechos (después de v0.106):** restaurar una versión con dos bloques del mismo id, la consulta
+  al confirmar (O9), la generación del servidor antes de la caché (O7), Ctrl/⌘+Z deja de lado *Restored from…*, el hijo
+  repetido de dos sangrías a la vez (O2) y las pruebas de M5 y M10 (`Doc_Historial.md`, "Lo que quedó de las entregas").
+  **Falta:** medir en el iPhone. Para después: la marca *Restored from…* se pierde si la app se cierra antes de que la
+  restauración suba y nunca se vuelve a abrir el historial de esa página en una semana (es solo un rótulo); (O3)
+  renombrar pisa el nombre anterior sin rastro (bien hecho pide una función nueva en la base, o sea una migración: desde
+  la app serían dos pedidos y el nombre cambiaría de dueño). Aparte, después: que lo borrado no llegue a quien solo ve la página (decisión 2;
   diseño en `Doc_Privacidad_Borrado.md`, B.18).
   Ojo: `npm run db:test` aplica las migraciones de verdad; esta se probó con un script en `begin … rollback`.
 - **P.19 Link público: *Anyone with the link*** (Lega, 2026-10-02): en *Share*, además de personas y correos, un link
   que cualquiera abre sin cuenta, con *Can view* (que siempre puede comentar) o *Can edit*; "debería estar seguro".
-  **Entregas 0 y 1 hechas (v0.0XX: *Can view*, migración sin aplicar; ver "Cómo quedó" en `Doc_Link_Publico.md`).** Para
+  **Entregas 0 y 1 hechas (v0.114: *Can view*, migración sin aplicar; ver "Cómo quedó" en `Doc_Link_Publico.md`).** Para
   publicarla: aplicar la migración, prender el interruptor de D14 y subir la mínima. Falta: el ícono del árbol para las
   páginas con link, el detalle *Can view link, created by…* para el equipo, y las entregas 2 y 3.
   **Observaciones de las auditorías que quedaron para después** (ninguna pierde datos ni abre el link): `set_public_link`
@@ -316,6 +312,58 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   `Doc_Fotos_En_Linea.md`, "Cámara". **Falta:** probarlo en un iPhone y un Android reales. **Para la app nativa**
   (Capacitor y la cuenta de Apple, ver "Cuando se termine esta app"): guardar en el carrete sin la hoja (y en un álbum
   propio), la cámara adentro de la app con varias tomas seguidas, y los metadatos de la toma.
+- **P.23 Plantillas (fase 3) y crear el reporte del día** (Lega, 2026-10-02; era el ítem 10 del grupo C, ya sin esperar
+  a Lega): *Pre-production Notes* (por escena), *On-Set Report* (por día) y *Shot Breakdown* (por plano) con lo que se
+  anota en supervisión de VFX (primera versión, Lega la ajusta), guardar cualquier página como plantilla, y en el reporte
+  en set un botón **New day report** que crea la página del día con fecha y locación ya puestas adentro de la carpeta de
+  reportes, sin red. **Diseño en `Doc_Plantillas.md`** (sin código; decisiones propuestas PL1 a PL10): una plantilla
+  propia es una página marcada en `settings` dentro de una carpeta *Templates* (sin tabla `templates` ni migración; los
+  permisos son los de la página), crear es copiar los bloques antes del párrafo vacío sin borrar nada, y la carpeta de
+  reportes es una página marcada (`dayReports`). Sin tipos ni propiedades nuevas en el editor. Auditado (aprobado con
+  cambios) y corregido: atajo ⌘⌥⇧N / Ctrl+Alt+Shift+N (⌘⌥N es de Chrome en la Mac), marcas que se recuperan solas,
+  plantillas a medio bajar, datos de set que faltaban y una sección *Internal* para lo que no debe ver un cliente.
+  Entregas: 0 (las tres plantillas en el código y una vista para que Lega las revise), 1 (crear desde una de fábrica),
+  2 (el reporte del día), 3 (plantillas propias). **Para después:** que la base fusione las claves de `pages.settings`
+  (`settings || patch`) en vez de reemplazar el objeto entero, con su migración: hoy dos cambios de ajustes a la vez
+  se pisan (`Doc_Plantillas.md`, sección 8).
+- **P.20 Anotar sobre las fotos** (Lega, 2026-10-02): flechas, círculos, rectángulos, texto y lápiz encima de una
+  foto de set sin tocar el original, cómodo para quien usa LGA FrameRev (mismas letras, colores y grosores).
+  **Diseño en `Doc_Anotar_Fotos.md`** (sin código; auditado: aprobado con condiciones, ya corregido; decisiones AN1 a AN11
+  propuestas): las anotaciones en un `Y.Map` del documento de la página, afuera del contenido, con una clave por forma
+  (`<archivo>/<forma>`, como "colapsar para todos"), así una versión vieja no las borra y dos sin red no se pisan; las de
+  una foto sacada se podan para que no lleguen a quien solo ve (D14); un SVG encima de la foto en la página, la celda, el carrete y el PDF; la copia con
+  anotaciones se arma en el dispositivo al bajar; anota quien edita la página. Entregas: 0 (prueba técnica), 1 (ver),
+  2 (anotar en la compu), 3 (dedo, y lápiz en el iPad), 4 (bajar, copiar y exportar a FrameRev), 5 (historial, copiar entre
+  páginas, buscar), 6 opcional (dibujar en un comentario).
+- **P.22 Exportar una página o un proyecto entero** (Lega, 2026-10-02): PDF y/o zip con las páginas y las fotos, para
+  entregarle al cliente o archivar un proyecto terminado. **Diseño en `Doc_Exportar.md`** (sin código; EX1 a EX15 a
+  confirmar por Lega; auditado con condiciones y corregido: ningún correo en el zip, vista JPEG de cada foto): un PDF para entregar (toda la rama en orden con un índice que dice la hoja de
+  cada página, cada página con su hoja y sus cortes de la fase 4, sin comentarios por defecto) y un zip para archivar
+  (una carpeta por página con `.html`, `.md`, los originales del Drive, los comentarios y los bloques en JSON para
+  volver; el zip de *Download all*). Lo exporta quien ve, solo su rama; nunca lo borrado (se exportan bloques, nunca el
+  documento Yjs) ni la papelera. Volver: *Import Shot Docs archive…*, siempre a un proyecto nuevo. Entregas: 0 (el editor
+  de exportación medido), 1 (PDF), 2 (zip), 3 (volver, con la migración de `imported_from`), 4 (carpetas de Drive,
+  reusar archivos, link público).
+- **P.21 Menciones en comentarios: *@persona*** (Lega, 2026-10-02): escribir `@` en un comentario, elegir a alguien y
+  que le llegue un aviso en la app; por correo cuando haya clave de Resend (C.12). **Diseño en `Doc_Menciones.md`** (sin
+  código ni migración; auditado y corregido; decisiones propuestas ME1 a ME10, ME10 espera a Lega): solo a quien ya
+  ve la página; un miembro ve al equipo y a los clientes que ya comentaron (ME10); el dueño y los admins la comparten
+  desde la mención (entrega 2); un invitado ve solo a quienes participan en los comentarios y a quien le compartió
+  algo; va después del link público (`schema_version` 15); el texto sigue plano (`@lega`) y quién es va en `comment_mentions`, así una versión vieja no rompe
+  nada; una campana con las no leídas que pregunta cada 60 segundos (sin Realtime); sin red con la cola de siempre;
+  los visitantes del link no mencionan; las menciones de Coda se ven como `@Nombre`. Entregas: 1 (base, `@`, campana,
+  sin red), 2 (compartir desde la mención, marcas en el árbol y en el ícono), 3 (correo, grupo C).
+- **P.24 Asistente con la clave de cada usuario y servidor MCP (fase 5)** (era C.11; 2026-10-02, ya sin esperar a
+  Lega). **Diseño en `Doc_Asistente.md`** (sin código; decisiones propuestas IA1 a IA10; auditado, corregido): la clave
+  solo en el dispositivo y por persona (IA1, D-06; el cifrado solo evita verla por accidente); el pedido directo del navegador al proveedor (Anthropic, OpenAI, Google
+  y compatibles con OpenAI, CORS probado); vista previa y aplicar como una edición que se deshace, sin aplicar si el
+  texto cambió mientras el modelo pensaba; aplicar pide Editar; un interruptor del dueño (*On*, *Local models only*,
+  *Off*). El MCP en el portero (IA2, D-07), con el OAuth del Supabase del workspace, el token cerrado de fábrica,
+  lectura de la base limpia de D14 y escritura opcional por proyecto con guarda, nunca en páginas con invitados sin un
+  permiso aparte; con páginas reales pide, casi seguro, el plan pago de Workers del dueño (US$ 5 por mes) o el MCP local. Entregas: A1 (texto elegido), A2
+  (página, formato, política), A3 (pie de foto), M0 (prueba técnica del MCP: OAuth de Supabase con el registro cerrado,
+  el rol del token, 10 ms de CPU), M1 (MCP de lectura; requiere el interruptor de D14), M2 (MCP que escribe), M3
+  (medir). Recortar, achicar y comprimir fotos no necesitan un modelo: van al roadmap de fotos.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
@@ -538,9 +586,8 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
 
 ### C. Esperan a Lega
 
-10. **Fase 3.** Plantillas: definir con Lega los campos de *Pre-production Notes*, *On-Set Report* y
-    *Shot Breakdown*.
-11. **Fase 5.** Asistente con la clave de cada usuario y MCP: Lega elige entre las opciones de D-06 y D-07.
+10. **Fase 3 (plantillas): pasó a P.23** (2026-10-02), con una primera versión de los campos para que Lega la ajuste.
+11. **Pasó a P.24** (2026-10-02): el asistente y el MCP ya no esperan a Lega; diseño en `Doc_Asistente.md`.
 12. **Correo automático de invitaciones** (el portero lo manda con Resend): hace falta una clave de Resend
     solo para enviar, cargada por Lega en el portero. Mientras tanto, la app copia el link.
 13. **Que la pantalla de Google diga "LGA Shot Docs"** (pedido de Lega). Hoy, al conectar Drive, Google

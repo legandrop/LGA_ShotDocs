@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
-import { PageHistory, yShape } from '../sync/history';
+import { PageHistory, yShape, type ContentShape } from '../sync/history';
 import { blocksOf, block, everyLetter, group, rowsOf, seeded, textOf } from '../sync/historyTesting';
 import { PageDocs as OldPageDocs } from '../sync/fixtures/mainDocs';
 import { openLocalDb } from '../sync/localDb';
@@ -45,6 +45,21 @@ const B = { id: 'user-b', email: 'b@test' };
 const C = { id: 'user-c', email: 'c@test' };
 const settle = () => new Promise((r) => setTimeout(r, 0));
 
+/**
+ * La página quedó como la versión: el mismo texto y los mismos nodos, y los mismos ids salvo los repetidos de la versión
+ * (el segundo de cada uno), que tienen uno nuevo, distinto de todos.
+ */
+function expectVersion(page: ContentShape, version: ContentShape, msg: string): void {
+  expect({ text: page.text, nodes: page.nodes, blocks: page.ids.length }, msg).toEqual({ text: version.text, nodes: version.nodes, blocks: version.ids.length });
+  const seen = new Set<string>();
+  version.ids.forEach((id, i) => {
+    if (seen.has(id)) expect(version.ids.includes(page.ids[i]), `${msg}: el repetido ${i} tiene un id nuevo`).toBe(false);
+    else expect(page.ids[i], `${msg}: el bloque ${i}`).toBe(id);
+    seen.add(id);
+  });
+  expect(new Set(page.ids).size, `${msg}: sin ids repetidos`).toBe(page.ids.length);
+}
+
 /** Un cambio al azar como los del editor (Yjs directo; cambiar el tipo, como y-prosemirror: rehacer con el mismo id). */
 function randomEdit(g: Y.XmlElement, rnd: () => number, tag: string, step: number): void {
   const containers = g
@@ -75,7 +90,7 @@ describe('al azar con tres dispositivos y restaurar (prueba 3)', () => {
     let undos = 0;
     let orphans = 0;
     let notices = 0;
-    let refused = 0;
+    let repeated = 0;
     for (const seed of [41, 42, 43, 44, 45, 46]) {
       const server = new FakeServer();
       let clock = Date.parse('2026-10-01T10:00:00Z');
@@ -111,17 +126,11 @@ describe('al azar con tres dispositivos y restaurar (prueba 3)', () => {
           undoManager(ed).stopCapturing();
           const outcome = restoreInEditor(view(ed), v);
           const ids = yShape(v).ids;
-          if (!outcome.ok && new Set(ids).size < ids.length) {
-            // Una versión con dos bloques del mismo id (dos dispositivos rehicieron el mismo bloque a la vez): el editor
-            // le cambia el id a uno al restaurarla, la comprobación final no da y la restauración se deshace sola
-            // ("Couldn't restore this version. Nothing changed."). Lo que importa acá: la página no cambió.
-            expect(outcome).toEqual({ ok: false, reason: 'failed' });
-            expect(yShape(docA), `semilla ${seed}, paso ${step}: no cambió nada`).toEqual(before);
-            refused++;
-            continue;
-          }
+          // Una versión con dos bloques del mismo id (dos dispositivos rehicieron el mismo bloque a la vez) también se
+          // restaura: el segundo, con un id nuevo (antes se deshacía sola).
+          if (new Set(ids).size < ids.length) repeated++;
           expect(outcome, `semilla ${seed}, paso ${step}`).toMatchObject({ ok: true });
-          expect(yShape(docA), `semilla ${seed}, paso ${step}: la página es la versión`).toEqual(yShape(v));
+          expectVersion(yShape(docA), yShape(v), `semilla ${seed}, paso ${step}: la página es la versión`);
           restores++;
           if (outcome.ok && rnd() < 0.35) {
             // Una versión igual a la página no cambia nada y su Undo no hace nada (O2 de la auditoría de la entrega 1).
@@ -227,6 +236,7 @@ describe('al azar con tres dispositivos y restaurar (prueba 3)', () => {
     }
     expect(restores, 'se restauró').toBeGreaterThan(4);
     expect(undos, 'se deshizo').toBeGreaterThan(0);
-    if (process.env.HIST_DEBUG) console.log({ restores, undos, orphans, notices, refused });
+    expect(repeated, 'se restauró una versión con ids repetidos').toBeGreaterThan(0);
+    if (process.env.HIST_DEBUG) console.log({ restores, undos, orphans, notices, repeated });
   });
 });

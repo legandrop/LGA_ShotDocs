@@ -1,6 +1,6 @@
 # Link público: «Anyone with the link»
 
-**Estado: entregas 0 y 1 implementadas (v0.0XX, *Can view*; migración sin aplicar, ver "Cómo quedó (entregas 0 y 1)"
+**Estado: entregas 0 y 1 implementadas (v0.114, *Can view*; migración sin aplicar, ver "Cómo quedó (entregas 0 y 1)"
 al final); la 2 (*Can edit*) sigue en diseño** (roadmap P.19; pedido de Lega del 2026-10-02). Corregido con la auditoría
 independiente del mismo día ("aprobado con condiciones"; ver "Correcciones de la auditoría", al final) y con las
 decisiones D29 a D31 (sección 9). Toca permisos, entrar sin cuenta y abuso: riesgo alto. Cada entrega va con sus pruebas
