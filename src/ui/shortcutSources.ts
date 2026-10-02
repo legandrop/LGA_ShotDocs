@@ -84,6 +84,7 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
     'SignOutDialog.tsx',
     'TemplateHost.tsx',
     'TemplateDialogs.tsx',
+    'RootReportDialog.tsx',
   ],
   listPick: ['ProjectSwitcher.tsx', 'ProjectSearch.tsx', 'DrivePasteMenu.tsx'],
   // La confirmación de "Replace all" (ProjectReplace.tsx): Esc la cierra sin cerrar el panel.
