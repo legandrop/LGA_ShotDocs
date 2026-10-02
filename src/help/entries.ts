@@ -111,7 +111,7 @@ const ASSISTANT = '0.118';
 /** El asistente, entrega A2 (la página entera, *Format as…*, la política del workspace): la versión la pone quien publica. */
 const ASSISTANT_A2 = '0.126';
 /** *Dictate to report* (Docs/Doc_Dictado.md, entrega V1): la versión la pone quien publica. */
-const DICTATION = '0.0XX';
+const DICTATION = '0.135';
 /** Las plantillas de fábrica (Docs/Doc_Plantillas.md, entregas 0 y 1): la versión se ajusta al publicar. */
 const TEMPLATES = '0.117';
 /** Las plantillas propias (Docs/Doc_Plantillas.md, entrega 3): la versión la pone quien publica. */
@@ -687,7 +687,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'print',
     title: 'help.export.title',
     text: 'help.export.text',
-    words: ['exportar', 'export', 'pdf', 'índice', 'contents', 'proyecto entero', 'whole project', 'entregar', 'cliente', 'client', 'reporte'],
+    words: ['exportar', 'export', 'pdf', 'índice', 'contents', 'proyecto entero', 'whole project', 'entregar', 'cliente', 'client', 'reporte', 'partes', 'parts', 'resolución', 'resolution', 'liviano', 'smaller file'],
     since: EXPORT_PDF,
   },
   {
