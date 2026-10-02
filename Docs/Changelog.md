@@ -19,6 +19,16 @@ publicada" comparaban contra una versión de hace meses. Se regeneró desde v0.1
 una foto, en una celda con solo fotos, iba a la celda de la izquierda: el primer renglón se medía comparando bordes de
 abajo con tolerancia de 2 px y daba justo 2. Ahora se mira si los renglones se superponen.
 [ Fixture del esquema publicado regenerado desde v0.107 y ↑ después de una foto en una celda ]
+v0.0XX :
+
+Las plantillas (fase 3) esperaban que Lega definiera sus campos, y en el set no había forma rápida de empezar el reporte
+del día. `Doc_Plantillas.md` propone una primera versión de *Pre-production Notes*, *On-Set Report* y *Shot Breakdown*
+con lo que anota un supervisor de VFX, armadas solo con bloques que ya existen. Una plantilla propia es una página
+marcada en una carpeta *Templates*: sin tabla ni migración, con los permisos de la página. Crear desde una plantilla
+copia los bloques sin borrar nada, también sin red. *New day report* crea la página del día con la fecha local y la
+locación del reporte anterior. Decisiones PL1 a PL10 y cuatro entregas. Una auditoría independiente (aprobado con
+cambios) cambió el atajo a Ctrl/⌘+Alt+Shift+N y sumó datos de set, una sección *Internal* y avisos sin red.
+[ Plantillas - diseño auditado de las tres plantillas, las propias como páginas y el reporte del día ]
 
 v0.108 :
 

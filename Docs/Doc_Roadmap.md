@@ -302,6 +302,20 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   `Doc_Fotos_En_Linea.md`, "Cámara". **Falta:** probarlo en un iPhone y un Android reales. **Para la app nativa**
   (Capacitor y la cuenta de Apple, ver "Cuando se termine esta app"): guardar en el carrete sin la hoja (y en un álbum
   propio), la cámara adentro de la app con varias tomas seguidas, y los metadatos de la toma.
+- **P.23 Plantillas (fase 3) y crear el reporte del día** (Lega, 2026-10-02; era el ítem 10 del grupo C, ya sin esperar
+  a Lega): *Pre-production Notes* (por escena), *On-Set Report* (por día) y *Shot Breakdown* (por plano) con lo que se
+  anota en supervisión de VFX (primera versión, Lega la ajusta), guardar cualquier página como plantilla, y en el reporte
+  en set un botón **New day report** que crea la página del día con fecha y locación ya puestas adentro de la carpeta de
+  reportes, sin red. **Diseño en `Doc_Plantillas.md`** (sin código; decisiones propuestas PL1 a PL10): una plantilla
+  propia es una página marcada en `settings` dentro de una carpeta *Templates* (sin tabla `templates` ni migración; los
+  permisos son los de la página), crear es copiar los bloques antes del párrafo vacío sin borrar nada, y la carpeta de
+  reportes es una página marcada (`dayReports`). Sin tipos ni propiedades nuevas en el editor. Auditado (aprobado con
+  cambios) y corregido: atajo ⌘⌥⇧N / Ctrl+Alt+Shift+N (⌘⌥N es de Chrome en la Mac), marcas que se recuperan solas,
+  plantillas a medio bajar, datos de set que faltaban y una sección *Internal* para lo que no debe ver un cliente.
+  Entregas: 0 (las tres plantillas en el código y una vista para que Lega las revise), 1 (crear desde una de fábrica),
+  2 (el reporte del día), 3 (plantillas propias). **Para después:** que la base fusione las claves de `pages.settings`
+  (`settings || patch`) en vez de reemplazar el objeto entero, con su migración: hoy dos cambios de ajustes a la vez
+  se pisan (`Doc_Plantillas.md`, sección 8).
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
@@ -524,8 +538,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
 
 ### C. Esperan a Lega
 
-10. **Fase 3.** Plantillas: definir con Lega los campos de *Pre-production Notes*, *On-Set Report* y
-    *Shot Breakdown*.
+10. **Fase 3 (plantillas): pasó a P.23** (2026-10-02), con una primera versión de los campos para que Lega la ajuste.
 11. **Fase 5.** Asistente con la clave de cada usuario y MCP: Lega elige entre las opciones de D-06 y D-07.
 12. **Correo automático de invitaciones** (el portero lo manda con Resend): hace falta una clave de Resend
     solo para enviar, cargada por Lega en el portero. Mientras tanto, la app copia el link.
