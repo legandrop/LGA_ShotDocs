@@ -1,5 +1,6 @@
 import { createElement, Fragment, useMemo, useSyncExternalStore, type ReactNode } from 'react';
 import { prefs, type Language } from '../prefs';
+import type { assistant } from './lazy/assistant';
 import type { carrete } from './lazy/carrete';
 import type { commentsPanel } from './lazy/commentsPanel';
 import type { drive } from './lazy/drive';
@@ -33,7 +34,8 @@ import type { Dict, Entry } from './types';
 // Question) son solo etiquetas.
 
 export type { Entry, Plural } from './types';
-type LazyStrings = typeof carrete &
+type LazyStrings = typeof assistant &
+  typeof carrete &
   typeof commentsPanel &
   typeof drive &
   typeof editor &
