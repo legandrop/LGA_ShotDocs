@@ -269,6 +269,32 @@ describe('reemplazar', () => {
     expect(await textOf(d, a)).toBe('|Planta|la Camera escondida|Afuera|otra Camera a la vista|');
   });
 
+  it('DH9: recién reemplazado, Ctrl+Z en el panel deshace el reemplazo y Ctrl+Shift+Z lo rehace; escribir en un campo lo devuelve al campo', async () => {
+    const { d, b } = await app();
+    await openReplace('camara', 'Camera');
+    act(() => replaceAllButton().click());
+    await until(() => panel()!.querySelector('.replace-confirm'), 'la confirmación');
+    const confirmButton = [...panel()!.querySelectorAll<HTMLButtonElement>('.replace-confirm button')].find((x) => x.textContent === 'Replace 4')!;
+    act(() => confirmButton.click());
+    await until(() => document.querySelector('.notice')?.textContent?.includes('4 replacements in 2 pages'), 'reemplazado');
+    // El foco queda en el campo del reemplazo.
+    expect(document.activeElement).toBe(replaceInput());
+    const undo = key(replaceInput(), { key: 'z', code: 'KeyZ', ctrlKey: true });
+    expect(undo.defaultPrevented).toBe(true);
+    await until(async () => (await textOf(d, b)).includes('cámaras'), 'deshecho desde el panel');
+    await until(() => document.querySelector('.notice')?.textContent?.includes('Undid “camara” → “Camera” in 2 pages'), 'el aviso');
+    // Mantener apretado no hace nada de más.
+    key(replaceInput(), { key: 'z', code: 'KeyZ', ctrlKey: true, repeat: true });
+    key(replaceInput(), { key: 'z', code: 'KeyZ', ctrlKey: true, shiftKey: true });
+    await until(async () => (await textOf(d, b)).includes('Cameras'), 'rehecho desde el panel');
+    // Escribir en el campo: Ctrl+Z vuelve a ser del campo (no toca las páginas).
+    type(replaceInput(), 'Camara');
+    const again = key(replaceInput(), { key: 'z', code: 'KeyZ', ctrlKey: true });
+    expect(again.defaultPrevented).toBe(false);
+    await wait(100);
+    expect(await textOf(d, b)).toBe('|sin nada|dos Cameras en B y una Camera más|');
+  });
+
   it('reemplazar una y dejar otra afuera (por sus caracteres)', async () => {
     const { d, b } = await app();
     await openReplace('camara', 'X');

@@ -294,6 +294,31 @@ describe('el reemplazo en la línea de tiempo (entrega 2)', () => {
     expect(timeline.peek(project, 'redo')).toBeNull();
   });
 
+  it('una página sin historia al reemplazar, y después escribís adentro de lo reemplazado: deshacer todo y rehacer todo, exactos', async () => {
+    const { app, runner, text, replaceAll, go, project, timeline } = await setup({ A: ['la cámara roja'], C: ['nada'] });
+    await go('C');
+    await replaceAll('camara', 'Camera');
+    // A no tenía historia: se reemplazó por las anclas. Ahora escribís adentro de "Camera".
+    await go('A');
+    const v = view(app.editor!);
+    let at = -1;
+    v.state.doc.descendants((n, p) => {
+      if (at < 0 && n.isText && n.text!.includes('Camera')) at = p + n.text!.indexOf('Camera') + 3;
+      return at < 0;
+    });
+    v.dispatch(v.state.tr.insertText('wk', at));
+    undoManager(app.editor!).stopCapturing();
+    const last = await text('A');
+    expect(last).toBe('la Camwkera roja');
+    while (timeline.peek(project, 'undo')) await runner.run('undo');
+    expect(await text('A')).toBe('la cámara roja');
+    // Deshacer el reemplazo por las anclas en orden entró en la pila de A: rehacerlo es el de Yjs y "wk" vuelve adentro.
+    while (timeline.peek(project, 'redo')) await runner.run('redo');
+    expect(await text('A')).toBe(last);
+    while (timeline.peek(project, 'undo')) await runner.run('undo');
+    expect(await text('A')).toBe('la cámara roja');
+  });
+
   it('el Undo del panel cuando el reemplazo ES lo último hace lo mismo que ⌘Z: se puede rehacer', async () => {
     const { timeline, text, replaceAll, engine, runner } = await setup({ A: ['la cámara'] });
     const op = await replaceAll('camara', 'Camera');
