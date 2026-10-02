@@ -869,7 +869,9 @@ Pedido anterior de Lega: miniaturas en las celdas. Sin tipos ni propiedades nuev
   mezcla fotos de celdas y de renglones, la barra de siempre (tamaños de la página), sin alinear (auditoría, O7).
 - **↑ desde el primer renglón de una celda con fotos** (`inlinePhotoEditor.ts`, `handleCellArrowUp`): va al final del
   texto de la celda de arriba. Antes iba a la celda de la izquierda: la miniatura hace alto el renglón y ProseMirror no
-  veía el cursor arriba de todo, así que la tecla quedaba al navegador (auditoría, O4).
+  veía el cursor arriba de todo, así que la tecla quedaba al navegador (auditoría, O4). Después de una foto también: el
+  primer renglón se reconoce porque el alto del cursor se superpone con el del principio del texto (comparar solo los
+  bordes de abajo fallaba por 2 px: 518 contra 516).
 - **Imprimir** (`printView.ts`): la copia fija el ancho de una foto sin ancho propio en el de su miniatura; en una celda,
   el ancho que da el alto de 96 px (lo lee de la pantalla), así el original que pone la impresión sale igual y no se
   deforma.
@@ -884,8 +886,8 @@ Nada nuevo en el documento: el mismo nodo, con la marca del renglón (`lgaStable
 celda (probado). La versión publicada de v0.083 a v0.092 (`fixtures/editorSchemaAnterior.ts`) abre una página con fotos
 en celdas **sin escribir nada** y, al escribir en esas celdas, no borra ninguna foto; las de v0.052 a v0.076 (sin
 `photo`) no la abren (el resguardo). Una versión de v0.078 a v0.104 la abre y la ve con las fotos grandes (como antes).
-Ojo: `fixtures/editorSchemaMain.ts` quedó de antes de `photo` (no es la `main` de hoy): montado sin el resguardo borra
-la foto de la celda, como cualquier versión sin `photo` (roadmap, B.20).
+La publicada hoy (`fixtures/editorSchemaMain.ts`, regenerada desde v0.107) también la abre sin escribir nada.
+`editorSchemaFixture.test.ts` falla si ese fixture queda distinto de `editorSchema.ts` sin declararlo.
 
 ### Lo medido
 
@@ -927,3 +929,46 @@ impresión), `inlinePhotoCreate.test.ts` y `codaInlinePhotos.test.ts` (las celda
 - El texto pegado a una miniatura queda a 8 px (el espacio de la foto) además de su espacio.
 - La barra de la foto, como en un renglón, puede quedar sobre la fila de arriba (O5).
 - Sin probar en Safari ni en el iPhone de verdad (el teléfono, emulado en Chromium).
+
+## Cámara: sacar una foto o filmar desde la página (P.25, v0.110)
+
+Pedido de Lega (2026-10-01): sacar una foto o filmar desde la app, que entre en el renglón y suba al Drive como
+cualquier foto, y poder guardarla en el carrete del teléfono.
+
+### Qué hace (`src/ui/camera.ts`)
+
+- **La cámara es otra fuente de archivos.** *Take photo* y *Record video* abren el selector del sistema con
+  `capture="environment"` (la cámara de atrás; `accept` `image/*` o `video/*`, una sola toma). Lo que vuelve entra por
+  el camino de "/Image" (`pickFiles`, `inlinePhotoCreate.ts`, que ahora acepta `capture` y un bloque de destino): en
+  el renglón, donde estaba el cursor, guardado primero en el dispositivo y subido por la cola de siempre (sin portero,
+  la foto a Supabase). Ningún tipo ni propiedad nueva: es una foto en línea como la pegada (probado con la versión
+  publicada, `camera.test.ts`).
+- **Dónde se ofrece:** en el menú "/", después de *Image*, y en el menú de la página (•••), arriba. Desde el menú de la
+  página, si la persona no puso el cursor en la página en esta visita, la foto va al final (en el renglón vacío del
+  final o en uno nuevo); si lo puso, donde estaba. *Record video* solo con portero (sin portero no se guardan videos).
+- **En la compu no se ofrece** (decisión propuesta, A): ahí `capture` no abre la cámara sino el mismo selector de
+  "/Image", así que sería una entrada repetida. Se ofrece con el puntero principal de toque (`pointer: coarse`, el
+  teléfono y la tableta; `deviceTraits().phone`). La otra opción (B: abrir la cámara de la compu con `getUserMedia` en
+  una ventana propia) es otro trabajo y nadie lo pidió.
+- ***Save to camera roll*** (*Guardar en Fotos*) en la barra de cualquier foto o video (en línea o bloque), después de
+  bajar: abre la hoja de compartir del sistema (`navigator.share({ files })`) con el original y su tipo, donde se elige
+  *Guardar imagen* o *Guardar video*. Solo en un dispositivo de toque y si el navegador comparte archivos (`canShare`);
+  nunca en un adjunto ni en una carpeta. El original del dispositivo se prepara apenas se elige la foto, así el toque
+  abre la hoja en el acto; uno que hay que bajar del Drive se baja con el toque y, si el navegador ya no deja abrir la
+  hoja (`NotAllowedError`: pide un toque reciente), avisa *The original is ready. Tap … again* y el siguiente toque la
+  abre. En castellano dice *Guardar en Fotos* y no "en el carrete": en la app "el carrete" es el visor de fotos.
+
+### Lo que queda para la app nativa
+
+Guardar en el carrete sin la hoja de compartir (y en un álbum propio), la cámara dentro de la app con varias tomas
+seguidas y los metadatos de la toma necesitan la app nativa (Capacitor) y la cuenta de Apple; ver P.25 en el roadmap.
+
+### Lo medido
+
+En Chromium con el arnés de la página real (servidor falso, sin login), teléfono emulado de 390 px y compu: 22 de 22
+comprobaciones. "/" ofrece *Take photo* y *Record video* después de *Image*; el selector pide la cámara de atrás, una
+sola toma; la foto entra al final del renglón del cursor (`sdmedia://`, ancho natural) sin dejar el "/take"; cerrar la
+cámara no cambia nada; *Save to camera roll* abre la hoja con el original (`drive50.png`, `image/png`, 43 830 bytes) en
+la foto en línea y en la foto-bloque; desde el menú de la página va al cursor o, sin cursor, a un renglón nuevo al final;
+sin portero solo la foto (a `sdfile://`); sin `canShare` no hay botón; en la compu no aparece nada. Sin errores en la
+consola. **Sin probar en un iPhone ni un Android reales** (la cámara y la hoja de compartir de verdad).

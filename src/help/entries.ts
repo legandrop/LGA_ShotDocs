@@ -102,6 +102,8 @@ const CELL_PHOTOS = '0.107';
 const UPDATE_APP = '0.097';
 /** *Download all* de una carpeta (P.9, entrega 2, Doc_Carpetas.md): la versión se pone al publicar, igual que en el changelog. */
 const FOLDER_ZIP = '0.105';
+/** Sacar una foto o filmar desde la página y guardar en Fotos (camera.ts): la versión se pone al publicar. */
+const CAMERA = '0.110';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -238,6 +240,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     since: BEFORE_HELP,
   },
   { id: 'photosPhone', section: 'photos', title: 'help.photosPhone.title', text: 'help.photosPhone.text', since: BEFORE_HELP },
+  {
+    id: 'photosCamera',
+    section: 'photos',
+    title: 'help.photosCamera.title',
+    text: 'help.photosCamera.text',
+    words: ['camera', 'cámara', 'camara', 'foto', 'filmar', 'video', 'record', 'carrete', 'camera roll', 'galería', 'fotos', 'guardar', 'save'],
+    since: CAMERA,
+  },
   { id: 'photosOffline', section: 'photos', title: 'help.photosOffline.title', text: 'help.photosOffline.text', since: BEFORE_HELP },
 
   // --- Adjuntos y links de Drive ---

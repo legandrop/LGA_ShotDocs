@@ -190,6 +190,11 @@ export const help = {
     en: "Tap a photo to see it full size; back on the page, tap it again for its bar and handles. Photos in a row can show side by side or one under the other: Images in a row, in the account menu.",
     es: "Tocá una foto para verla en grande; de vuelta en la página, tocala otra vez y aparecen su barra y sus tiradores. Las fotos en fila se pueden ver una al lado de la otra o apiladas: Fotos en fila, en el menú de la cuenta.",
   },
+  'help.photosCamera.title': { en: "Take a photo or record a video", es: "Sacar una foto o filmar" },
+  'help.photosCamera.text': {
+    en: "On the phone, type / and choose Take photo or Record video, or use the page menu (•••). The camera opens and what you shoot goes in the line, at the cursor (from the page menu without a cursor, at the end of the page), and uploads like any photo. To keep a copy on the phone, select the photo or video and tap Save to camera roll, then Save Image or Save Video in the share sheet. Videos need the workspace's Drive.",
+    es: "En el teléfono, escribí / y elegí Sacar una foto o Filmar un video, o usá el menú de la página (•••). Se abre la cámara y lo que saques va en el renglón, donde está el cursor (desde el menú de la página sin cursor, al final de la página), y sube como cualquier foto. Para guardar una copia en el teléfono, elegí la foto o el video y tocá Guardar en Fotos, y después Guardar imagen o Guardar video en la hoja de compartir. Los videos necesitan el Drive del workspace.",
+  },
   'help.photosOffline.title': { en: "Without a connection", es: "Sin conexión" },
   'help.photosOffline.text': {
     en: "Photos added offline are saved on this device and upload by themselves when you're back online; the page shows them right away.",

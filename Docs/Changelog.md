@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.111 :
 
 Restos del historial (P.18). Una versión con dos bloques del mismo id (dos dispositivos rehicieron el mismo bloque) no
 se podía restaurar: el editor cambiaba un id, la comprobación no daba y se deshacía sola; ahora, en la copia en memoria,
@@ -10,6 +10,26 @@ hacer pasar por buena la caché: se lee la generación del servidor antes de usa
 Ctrl/⌘+Z también deja de lado *Restored from…*. Dos sangrías a la vez bajo el mismo bloque ya no muestran el hijo
 repetido como agregado (O2). Pruebas nuevas, también de `mergeRows` (M5) y de la versión elegida que crece (M10).
 [ Historial - restos: restaurar con ids repetidos, la consulta al confirmar, la generación antes de la caché y Ctrl+Z ]
+
+v0.110 :
+
+No se podía sacar una foto ni filmar desde la página: había que salir de la app, sacarla y elegirla con "/Image", y
+no había cómo guardar en el teléfono una foto de la página. Pedido de Lega (P.25). En el teléfono, *Take photo* y
+*Record video* (el video, con portero) en el menú "/" y en el menú de la página abren la cámara con el selector del
+sistema (`capture`); lo sacado entra en el renglón por el camino de "/Image" y sube por la cola de siempre. *Save to
+camera roll* en la barra de cada foto o video abre la hoja de compartir con el original. En la compu no aparece nada.
+Sin tipos ni propiedades nuevas. Ayuda nueva; `Doc_Fotos_En_Linea.md`, "Cámara".
+[ Cámara - sacar una foto o filmar desde la página y Guardar en Fotos con la hoja de compartir ]
+
+v0.109 :
+
+El esquema "publicado" de las pruebas (`fixtures/editorSchemaMain.ts`) era el de v0.040: las pruebas de "la versión
+publicada" comparaban contra una versión de hace meses. Se regeneró desde v0.107; el viejo quedó como
+`editorSchemaSoloScript.ts` para las pruebas de lo que una versión sin preguntas, tarjetas, filas o Drive conserva, y
+`editorSchemaFixture.test.ts` falla si el fixture queda distinto del esquema sin declararlo. Y ↑ con el cursor después de
+una foto, en una celda con solo fotos, iba a la celda de la izquierda: el primer renglón se medía comparando bordes de
+abajo con tolerancia de 2 px y daba justo 2. Ahora se mira si los renglones se superponen.
+[ Fixture del esquema publicado regenerado desde v0.107 y ↑ después de una foto en una celda ]
 
 v0.108 :
 
