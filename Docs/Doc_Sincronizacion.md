@@ -1076,7 +1076,8 @@ Desde v0.021 hay dos protecciones para poder sumar tipos de bloque (y marcas) nu
   anteriores a v0.021, que no mandan versión). La app vieja lo ve, deja de subir contenido (queda en el
   dispositivo), y pide actualizar; al actualizar, sube todo. Desde v0.097 tampoco sube el árbol ni los comentarios ni
   baja contenido, y se actualiza sola (ver "Volver después de mucho tiempo sin red"). Desde v0.090 frena también la cola de archivos (ver
-  abajo, "La versión mínima y los archivos").
+  abajo, "La versión mínima y los archivos"), y desde v0.0XX la base frena también el árbol y los comentarios de las
+  versiones anteriores (ver abajo, "La versión mínima, el árbol y los comentarios").
 
 **Regla para un bloque nuevo:** antes de publicar la versión que lo trae, subir `min_app_version` a la
 primera versión con la guarda (0.021) o más, para que ninguna versión sin guarda pueda mandar el borrado.
@@ -1199,7 +1200,9 @@ quizás con `min_app_version` subida. Qué pasa, paso a paso:
    *A new version is available — reloading* sale recién cuando de verdad va a recargar. *Update now* espera a que la
    versión nueva tome el control antes de recargar (recargar antes abría otra vez la vieja desde la caché). Si el
    navegador **empezó a instalarla y no pudo** (el service worker nuevo pasa a `redundant`: un teléfono sin espacio,
-   una red que corta la descarga del precache), no se ofrece forzar, porque la causa sigue y forzar dejaría el
+   una red que corta la descarga del precache), no se ofrece forzar. Cada instalación se sigue desde que empieza
+   (`updatefound` del registro, desde v0.0XX): también la que empezó el navegador solo y la que falla antes de que
+   *Update now* la mire, que antes parecía un navegador que nunca empezó y ofrecía forzar, porque la causa sigue y forzar dejaría el
    dispositivo sin ninguna versión para abrir sin red: el estado dice que libere espacio o busque mejor conexión y
    vuelva a tocar *Update now*. Solo si el navegador **nunca empezó** a instalar nada y el servidor publica otra versión
    (lee `/index.html?version-check=…` sin caché; si el servidor redirige a `/`, `fetch` sigue la redirección), el estado
@@ -1216,11 +1219,12 @@ quizás con `min_app_version` subida. Qué pasa, paso a paso:
    faltan), las fotos (registro, miniatura, original al Drive y usos) y los comentarios. Lo de los demás se baja y se
    fusiona con Yjs: nada de los dos se pierde.
 
-**Las versiones anteriores a esta** (por ejemplo la v0.090) frenan solo el contenido y los archivos: con la mínima
-subida todavía suben los cambios del árbol y los comentarios (la base no los frena por versión) y bajan el contenido
-nuevo. No se pierde nada propio; lo único que puede pasar es que, si se edita con esa versión un bloque que otra más
-nueva marcó con una propiedad nueva, la propiedad se pierda (el texto no), que es lo que acepta la regla de "Cambios
-en el editor".
+**Las versiones anteriores a v0.097** (por ejemplo la v0.090) frenan solo el contenido y los archivos, y bajan el
+contenido nuevo. Los cambios del árbol y los comentarios los frena la base desde v0.0XX, pero solo con la mínima en
+v0.0XX o más (ver "La versión mínima, el árbol y los comentarios"): con una mínima menor todavía los suben. No se
+pierde nada propio; lo único que puede pasar es que, si se edita con esa versión un bloque que otra más nueva marcó
+con una propiedad nueva, la propiedad se pierda (el texto no), que es lo que acepta la regla de "Cambios en el
+editor".
 
 **Lo que garantiza la prueba** (`src/sync/offlineLargo.test.ts`, con la sincronización de la v0.090 copiada sin tocar
 en `fixtures/v090/`: motor, contenido, árbol, base local e imágenes; las colas de fotos y de comentarios son las de hoy,
@@ -1229,11 +1233,15 @@ borra renglones, agrega fotos, crea una página, mueve otra, renombra, comenta, 
 le cierra la app; B, con la versión nueva, edita las mismas páginas y otras, crea una con foto y comenta, y se sube la
 mínima. Al volver, la v0.090 avisa, no sube contenido ni fotos y conserva todo; al actualizar (el código de hoy sobre
 la misma base) sube todo, y A, B y un dispositivo nuevo quedan iguales al servidor, con todo lo de los dos, sin nada
-pendiente ni rechazado. Lo mismo sin subir la mínima (la v0.090 sube directo). Con la versión actual que queda vieja,
+pendiente ni rechazado. Lo mismo sin subir la mínima (la v0.090 sube directo), y con la mínima en v0.0XX y la base
+que frena el árbol y los comentarios (la v0.090 no sube nada, no marca nada rechazado, ni al cerrarla y abrirla, y al
+actualizar sale todo; `src/sync/writeVersion.test.ts` prueba además la carrera con la versión nueva, la base sin la
+migración y el 503 del cliente de Supabase). Con la versión actual que queda vieja,
 además, no sale ni se baja nada (fallaba antes de este cambio). Y variantes al azar (`OFFLINE_LARGO_SEEDS`, 6 en la
 suite; pasaron 40) con días, ediciones, borrados, agregados a un renglón, fotos, páginas nuevas, renombres, movimientos,
-cierres de la app y la mínima que sube o no, con la v0.090 y con la versión actual que queda vieja (esa además comenta y
-sigue trabajando con red antes de actualizar). `src/ui/appUpdate.test.ts` prueba la recarga, *Update now* y forzar.
+cierres de la app y la mínima que sube o no, con la v0.090 (también con la base que la frena: ahí A comenta) y con la
+versión actual que queda vieja (esa además comenta y sigue trabajando con red antes de actualizar; con la base que
+frena, pasaron 40). `src/ui/appUpdate.test.ts` prueba la recarga, *Update now*, la instalación que falla y forzar.
 
 **Qué no puede ver esta prueba** (los fixtures): copia el motor, el contenido, el árbol, la base local y las imágenes de
 la v0.090, pero usa los tipos, `remote.ts`, los permisos, los textos y las colas de fotos y de comentarios de hoy. Prueba
