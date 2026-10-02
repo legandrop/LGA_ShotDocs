@@ -6,7 +6,7 @@ Diseño del historial de versiones de una página, sin código (P.18, pedido de 
 cambió una página ni de volver atrás. `Doc_Historial.md` arma cada versión desde `page_updates`, que ya guarda autor
 (puesto por la base) y hora en cada fila: aplicando las filas en orden en un documento sin GC salen las 63 versiones
 de la página real más editada; con `Y.mergeUpdates` salían 26 con texto borrado de menos. Restaurar es una edición
-por el editor que conserva los ids, se deshace y no corre con cambios sin subir (prototipo con el editor real).
+por el editor que conserva los ids, se deshace y no corre con cambios sin subir.
 La auditoría encontró que lo escrito en algo que otro borra a la vez puede no llegar nunca al servidor (la subida
 se arma con GC); se propone armarla sin GC. Incluye permisos, la medición con 10 000 subidas, la migración en
 borrador, las pruebas, las entregas y cuatro preguntas para Lega.
