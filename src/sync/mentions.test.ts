@@ -244,7 +244,7 @@ describe('la cola', () => {
   it('una versión vieja (v0.098) que toma la cola saca las menciones sin mandarlas: la nueva las recupera de meta', async () => {
     const { server, brief } = await workspace();
     const dbName = `menciones-${crypto.randomUUID()}`;
-    const remote = new FakeRemote(server, '0.0XX', ANA);
+    const remote = new FakeRemote(server, '0.120', ANA);
     // La versión de hoy escribe sin red.
     let db = await openCommentsDb(commentsDbName(dbName));
     let queue = new CommentQueue(db, remote, ANA);

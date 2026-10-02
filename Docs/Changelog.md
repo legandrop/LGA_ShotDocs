@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.120 :
 
 Menciones en comentarios (P.21), entrega 1. No había forma de avisarle a alguien de un comentario: solo se veía
 abriendo la página. Nueva migración `20261015120000_menciones.sql` (`comment_mentions`, la regla de a quién se puede
