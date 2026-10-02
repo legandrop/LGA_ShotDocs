@@ -180,10 +180,19 @@ el ZWJ. Recorrido en Chromium con el mismo arnés: 22 de 22 (los tres destinos, 
     `MISSING_FILES.txt`, y si falta, lo reescribe.
   - Zip con selector: pide dónde guardar `Referencias (missing files).zip` (el clic es el gesto que pide Chrome; la
     lista se arma después) con la misma carpeta de arriba, para descomprimirlo encima del primero. Lleva siempre su
-    `MISSING_FILES.txt`, que reemplaza al viejo (si ya no falta nada, lo dice).
+    `MISSING_FILES.txt`, que reemplaza al viejo (si ya no falta nada, lo dice). **Cada ronda lleva su número**
+    (`(missing files 2).zip`, `3`…): cada una trae solo lo que faltó en la anterior, y con el mismo nombre aceptar
+    "reemplazar" perdía lo que trajo la anterior y la lista decía que no faltaba nada (B1 de la auditoría). Se
+    descomprimen encima del primero, en orden.
   - En memoria (Firefox, Safari, teléfonos): el botón aparece recién después de *Save*: el segundo zip reemplaza al
     primero en la memoria.
   - Se puede reintentar otra vez lo que siga fallando. Sin red, el clic dice que hace falta conexión.
+  - **Cancelar un reintento** vuelve al resultado de antes, con su *Retry missing* y el aviso "Retry cancelled…" (a una
+    carpeta, lo que ya bajó queda; la lista vieja sigue nombrándolo hasta el próximo reintento, que lo vuelve a
+    bajar). A una carpeta, un archivo que vuelve a fallar no borra uno que ya estaba en esa ruta (`createWritable`
+    lo deja como estaba): solo se borra el que se acababa de crear.
+  - **Doble clic:** el segundo clic de un doble clic (`event.detail` 2) no aprieta *Cancel*, que aparece en el mismo
+    lugar que *Retry missing* y que los botones de bajar.
 - **El ZWJ de los emojis compuestos (O4), en la app:** `cleanFileName` deja el U+200D cuando está entre dos emojis (antes
   un emoji, su selector de variante U+FE0F o su tono de piel; después, un emoji): una familia sigue siendo una en el
   nombre de la base, en la tarjeta y en el zip. Entre letras o suelto se sigue sacando (no se ve: dos nombres iguales a
@@ -197,7 +206,12 @@ la respuesta por padre (con el control `inTree` de cada una y el tope de CPU de 
 portero: su `cleanFileName` (`HIDDEN_CHARS` en `portero/src/core.ts`) lo sigue sacando, así que lo que sube y lo que
 lista el portero llega sin él; tiene que aplicar la misma regla que la app (y cambia la prueba de `driveFolderName`).
 Firefox por el service worker (sin tope) queda para otra entrega (D24). Los documentos de Google no se bajan como PDF
-(decisión 5). Probar a mano en Safari, el iPhone y con el Drive real (lista de la tanda). De la auditoría:
+(decisión 5). Probar a mano en Safari, el iPhone y con el Drive real (lista de la tanda). De la auditoría de
+`lega/carpetas-restos` (sin acción, BAJO): en un mismo zip la carpeta de arriba (de la tarjeta) conserva el ZWJ y lo de
+adentro (del listado del portero) no, hasta que cambie el portero; `within(stallMs, () => res.json())` no corta el
+cuerpo de un error que se cuelga (se suelta al cerrar la conexión); la fecha de `MISSING_FILES.txt` usa el formato del
+sistema y no el idioma de la app; en memoria, que Safari y el iPhone no reemplacen el segundo zip guardado (probar a
+mano). De la auditoría de la entrega 2:
 
 - **`APP_ORIGINS` mal puesto en el portero de un dueño (R2):** `/m/` falla por CORS y se saltea todo; si `/health` también
   falla, la bajada espera para siempre. Distinguir el error de CORS del corte de red.

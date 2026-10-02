@@ -83,6 +83,10 @@ type Phase =
       blobSaved?: boolean;
       /** Se pidió *Retry missing* sin red. */
       offlineNote?: boolean;
+      /** Cuántos *Retry missing* van (0: la bajada entera). Cada zip de reintento lleva su número. */
+      round: number;
+      /** Se canceló un *Retry missing*: se vuelve a este resultado (con su botón) y se avisa. */
+      cancelledNote?: boolean;
     }
   | { at: 'cancelled'; mode: Mode | null }
   | { at: 'failed'; reason: string };
@@ -100,9 +104,13 @@ interface Opened {
   crc: CrcWorkerPool;
 }
 
-/** El nombre del zip de *Retry missing*: se descomprime encima del primero. */
-export function retryZipName(root: string): string {
-  return `${root} (missing files).zip`;
+/**
+ * El nombre del zip de *Retry missing* número `round` (1, 2…): `Referencias (missing files).zip`, después
+ * `Referencias (missing files 2).zip`… Cada uno trae solo lo que faltó en el anterior: con el mismo nombre, aceptar
+ * "reemplazar" perdía lo que trajo el anterior. Se descomprimen encima del primero, en orden.
+ */
+export function retryZipName(root: string, round = 1): string {
+  return round > 1 ? `${root} (missing files ${round}).zip` : `${root} (missing files).zip`;
 }
 
 export function FolderDownloadDialog({ fileId, name, onClose }: { fileId: string; name: string; onClose: () => void }) {
@@ -237,7 +245,8 @@ export function FolderDownloadDialog({ fileId, name, onClose }: { fileId: string
    * Baja al destino ya abierto el plan entero o, con `retry`, lo que faltó de la bajada de `base` (*Retry missing*:
    * puede tener que volver a listar una subcarpeta).
    */
-  const run = async (mode: Mode, opened: Opened, base: DownloadPlan, zipName: string, retry: boolean) => {
+  const run = async (mode: Mode, opened: Opened, base: DownloadPlan, zipName: string, back: Extract<Phase, { at: 'done' }> | null) => {
+    const retry = !!back;
     const ctrl = new AbortController();
     abort.current = ctrl;
     setPhase({ at: 'running', plan: base, mode, progress: null, preparing: retry });
@@ -262,10 +271,12 @@ export function FolderDownloadDialog({ fileId, name, onClose }: { fileId: string
       );
       await opened.finish();
       missingOf.current.set(plan, result.missing);
-      setPhase({ at: 'done', plan, mode, result, blob: opened.sink ? opened.sink.blob() : null, saved: opened.saved, zipName, dir: opened.dir });
+      const round = back ? back.round + 1 : 0;
+      setPhase({ at: 'done', plan, mode, result, blob: opened.sink ? opened.sink.blob() : null, saved: opened.saved, zipName, dir: opened.dir, round });
     } catch (err) {
       await opened.discard();
-      if (isAbort(err)) setPhase({ at: 'cancelled', mode });
+      // Cancelar un reintento vuelve al resultado de antes, con su *Retry missing*.
+      if (isAbort(err)) setPhase(back ? { ...back, offlineNote: false, cancelledNote: true } : { at: 'cancelled', mode });
       else setPhase({ at: 'failed', reason: reasonOf(err, tr) });
     } finally {
       opened.crc.close();
@@ -275,7 +286,7 @@ export function FolderDownloadDialog({ fileId, name, onClose }: { fileId: string
   const start = async (plan: DownloadPlan, mode: Mode) => {
     const zipName = `${plan.root}.zip`;
     const opened = await openTarget(mode, plan.root, zipName, null);
-    if (opened) await run(mode, opened, plan, zipName, false);
+    if (opened) await run(mode, opened, plan, zipName, null);
   };
 
   /**
@@ -283,9 +294,9 @@ export function FolderDownloadDialog({ fileId, name, onClose }: { fileId: string
    * carpeta, en la misma; un zip, en uno nuevo (`Referencias (missing files).zip`) para descomprimir encima del primero.
    */
   const retryMissing = async (done: Extract<Phase, { at: 'done' }>) => {
-    const zipName = retryZipName(done.plan.root);
+    const zipName = retryZipName(done.plan.root, done.round + 1);
     const opened = await openTarget(done.mode, done.plan.root, zipName, done.dir);
-    if (opened) await run(done.mode, opened, done.plan, zipName, true);
+    if (opened) await run(done.mode, opened, done.plan, zipName, done);
   };
 
   const save = (blob: Blob, fileName: string) => {
@@ -365,7 +376,7 @@ export function FolderDownloadDialog({ fileId, name, onClose }: { fileId: string
   } else if (phase.at === 'running' && phase.preparing) {
     body = <p className="muted small">{tr('folders.zipRetryListing')}</p>;
     actions = (
-      <button className="button" onClick={() => abort.current?.abort()}>
+      <button className="button" onClick={(e) => e.detail < 2 && abort.current?.abort()}>
         {tr('common.cancel')}
       </button>
     );
@@ -391,7 +402,7 @@ export function FolderDownloadDialog({ fileId, name, onClose }: { fileId: string
       </>
     );
     actions = (
-      <button className="button" onClick={() => abort.current?.abort()}>
+      <button className="button" onClick={(e) => e.detail < 2 && abort.current?.abort()}>
         {tr('common.cancel')}
       </button>
     );
@@ -407,6 +418,7 @@ export function FolderDownloadDialog({ fileId, name, onClose }: { fileId: string
         </p>
         {result.missing.length > 0 && <p className="warn small">{tr('folders.zipMissing', { count: result.missing.length })}</p>}
         {done.offlineNote && <p className="muted small">{tr('folders.downloadAllOffline')}</p>}
+        {done.cancelledNote && <p className="muted small">{mode === 'dir' ? tr('folders.zipRetryCancelledDir') : tr('folders.zipRetryCancelled')}</p>}
       </>
     );
     actions = (
@@ -419,7 +431,7 @@ export function FolderDownloadDialog({ fileId, name, onClose }: { fileId: string
             className="button"
             data-tip={mode === 'dir' ? tr('folders.zipRetryTipDir') : tr('folders.zipRetryTipZip')}
             onClick={() => {
-              if (!online) setPhase({ ...done, offlineNote: true });
+              if (!online) setPhase({ ...done, offlineNote: true, cancelledNote: false });
               else void retryMissing(done);
             }}
           >
@@ -526,14 +538,19 @@ export function dirTarget(top: DirHandle): DownloadTarget {
       const cut = path.lastIndexOf('/');
       const dir = await dirOf(cut < 0 ? '' : path.slice(0, cut));
       const fileName = path.slice(cut + 1);
+      const existed = await dir.getFileHandle(fileName).then(
+        () => true,
+        () => false,
+      );
       const handle = await dir.getFileHandle(fileName, { create: true });
       const writable = await handle.createWritable();
       return {
         write: (c) => writable.write(c),
         close: () => writable.close(),
         abort: async () => {
+          // `abort` deja el archivo como estaba: si ya existía (lo trajo un reintento cancelado), no se borra.
           await writable.abort().catch(() => undefined);
-          await dir.removeEntry(fileName).catch(() => undefined);
+          if (!existed) await dir.removeEntry(fileName).catch(() => undefined);
         },
       };
     },

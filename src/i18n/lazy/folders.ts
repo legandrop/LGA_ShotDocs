@@ -218,8 +218,13 @@ export const folders = {
   'folders.zipRetry': { en: "Retry missing", es: "Reintentar lo que falta" },
   'folders.zipRetryTipDir': { en: "Only what failed, into the same folder", es: "Solo lo que falló, en la misma carpeta" },
   'folders.zipRetryTipZip': {
-    en: "Only what failed, in a second .zip: extract it over the first one",
-    es: "Solo lo que falló, en un segundo .zip: descomprimilo encima del primero",
+    en: "Only what failed, in a new .zip: extract each one over the first, in order",
+    es: "Solo lo que falló, en un .zip nuevo: descomprimí cada uno encima del primero, en orden",
+  },
+  'folders.zipRetryCancelled': { en: "Retry cancelled: nothing new was saved.", es: "Reintento cancelado: no se guardó nada nuevo." },
+  'folders.zipRetryCancelledDir': {
+    en: "Retry cancelled: what it already downloaded stays in the folder.",
+    es: "Reintento cancelado: lo que ya bajó queda en la carpeta.",
   },
   'folders.zipRetryListing': { en: "Looking again at what could not be opened…", es: "Mirando de nuevo lo que no se pudo abrir…" },
   'folders.zipCancelled': { en: "Cancelled: nothing was saved.", es: "Cancelado: no se guardó nada." },

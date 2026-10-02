@@ -822,3 +822,18 @@ describe('Download all: Retry missing', () => {
     await expect(planRetry(w.lister, 'carpeta-1', plan, plan.skipped, { signal: ctrl.signal })).rejects.toMatchObject({ name: 'AbortError' });
   });
 });
+
+describe('Download all: Retry missing no reintenta lo que no cambia', () => {
+  it('una subcarpeta en ciclo queda anotada sin su id: no se ofrece reintentarla', async () => {
+    // `A` tiene adentro una carpeta con su mismo id (un ciclo, como puede armarlo un acceso raro de Drive).
+    const lister: FolderLister = {
+      async folderList(_file, dir = null) {
+        if (dir === null) return { entries: [{ type: 'folder', id: 'A', name: 'A', modified: null }], nextPageToken: null };
+        return { entries: [{ type: 'folder', id: 'A', name: 'Otra vez A', modified: null }], nextPageToken: null };
+      },
+    };
+    const plan = await planFolder(lister, 'carpeta-1', 'X');
+    expect(plan.skipped).toEqual([{ path: 'A/Otra vez A/', reason: 'folder', detail: 'loop' }]);
+    expect(plan.skipped.some(canRetry)).toBe(false);
+  });
+});
