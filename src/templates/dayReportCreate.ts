@@ -140,7 +140,10 @@ export async function planDayReport(
   for (const r of reports) if (!last || r.date >= last.date) last = r;
   const facts = last ? await factsOf(last.id) : null;
   const lastIncomplete = last ? await deps.engine.isMissingContent(last.id).catch(() => false) : false;
-  const previousDay = facts?.day ?? last?.day ?? null;
+  // Si el de fecha más alta no tiene número (una página de la persona con fecha, "2026-10-04 Fotos de set"), el número
+  // más alto de los demás; si ninguno tiene, la cantidad (abajo).
+  const days = reports.map((r) => r.day).filter((d): d is number => d !== null);
+  const previousDay = facts?.day ?? last?.day ?? (days.length ? Math.max(...days) : null);
   return {
     parentId: target.parentId,
     projectId: target.projectId,

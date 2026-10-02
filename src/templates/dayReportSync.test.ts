@@ -402,6 +402,9 @@ describe('re-verificación: nunca se reusa una página de la persona (B1)', () =
     const DAY4 = new Date(2026, 9, 4, 8);
     const plan = await planDayReport(deps(a), { parentId: folder, projectId: a.tree.workspaceId }, { now: DAY4 });
     expect(plan.emptyReports).toEqual([]);
+    // El de fecha más alta no tiene número (una página de la persona): el día sale del número más alto (el 03 de la
+    // página con subpágina) + 1, no de contar páginas.
+    expect(plan.suggestion.day).toBe(4);
     // Siguen contando como páginas de ese día (el globito dice que ya existe y Enter las abre sin tocarlas).
     expect(reportsOn(plan, '2026-10-04').map((r) => r.id).sort()).toEqual([...mine].sort());
     const id = await createDayReport(deps(a), plan, { ...plan.suggestion, date: '2026-10-04' }, 'en', { canMark: true });
