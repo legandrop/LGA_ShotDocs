@@ -601,20 +601,34 @@ repartidos, el `colwidth` de siempre de las celdas) para entrar en una A4 vertic
   usar una plantilla; se recuerdan las últimas 50. En el teléfono la tira va debajo del rótulo y se desliza de costado.
 - **La ventana *Templates*** (*More…* y *Apply template…*): por ahora solo *Built-in*, con su descripción, *Preview* y
   *Use*. *Apply template…* está en el menú de la página para quien puede editarla; con contenido queda apagado con el
-  tooltip *Only on an empty page*. Desde la barra lateral, sobre una página que no está abierta, la abre y muestra la
-  ventana allá (`templatesUi.ts`). Una página con título también puede recibir una plantilla por el menú; el título
-  queda.
+  tooltip *Only on an empty page*. Desde la barra lateral, sobre una página que no está abierta, el menú no puede
+  saber si está vacía: el renglón queda habilitado (desvío de 4.1, que lo pide apagado), abre la página y, ya cargada,
+  muestra la ventana si está vacía o el aviso *Only on an empty page* si no (`templatesUi.ts`). Mientras la página se
+  baja, los *Use* dicen *The page is still loading*. Una página con título también puede recibir una plantilla por el
+  menú; el título queda y el foco va a la página.
 - **La copia:** `insertTemplate` agrega los bloques **antes del primer bloque** de la página con el editor visible (entra
   en su deshacer); el párrafo de la semilla queda al final y lo que otro dispositivo haya escrito a la vez queda debajo.
   Después, `template_id` va con un `update` de la cola del árbol (la página ya existe), y el foco al título si está
-  vacío. `copyTemplateDoc` (pasos 1 y 2 de 4.2 para una plantilla que es una página: copia en memoria,
+  vacío. El editor queda con el punto de escritura en el primer dato de la ficha (la 2.ª celda de la 1.ª fila de la
+  primera tabla), sin llevar el foco ni escribir nada: Enter en el título lleva ahí y no al párrafo vacío del pie
+  (corrección de la auditoría de `090d676`, O1). Recién elegida, Ctrl/⌘+Z en el título vacío saca la plantilla y
+  Ctrl/⌘+Shift+Z la devuelve, hasta que se escribe en el título o se sale de él; en cualquier otro momento el título
+  no deshace la página (`undoGuard.ts`). `copyTemplateDoc` (pasos 1 y 2 de 4.2 para una plantilla que es una página: copia en memoria,
   `findUnknownContent`, ids nuevos, colapsado remapeado) está escrito y probado con la prueba de la auditoría, pero
   todavía no lo usa la interfaz: lo usa la entrega 3, que suma el control de `update_seq` y PL10.
 - **`template_id`:** `PAGE_COLUMNS` lo baja, `NewPage` lo puede mandar (`tree.create(…, { templateId })`, para las
-  entregas 2 y 3) y `PagePatch` lo acepta.
+  entregas 2 y 3) y `PagePatch` lo acepta. La recuperación después de restaurar una copia de la base lo reenvía (solo
+  si hay uno, nunca para borrarlo). **Deshacer la plantilla deja `template_id`** y la tira no vuelve (se puede volver a
+  elegir con *Apply template…*): la entrega 2, que deduce la carpeta de reportes por páginas con `template_id` de
+  *On-Set Report* (6.2), tiene que contar solo las que tienen contenido.
 - **Pruebas:** `builtin.test.ts` (forma, idiomas, bloques conocidos, anchos, la versión publicada y la anterior abren
   cada plantilla sin escribir), `builtin.published.test.ts` (la `y-prosemirror` real de v0.052 a v0.075), `apply.test.ts`
   (vacía, deshacer, dos dispositivos sin red, y la copia de la auditoría), `sync.test.ts` (la prueba de aceptación con
   el servidor en memoria: con red, sin red y al volver; la marca de "creada acá") y `templateHost.test.tsx` (la tira, la
-  ventana y el menú en la página de verdad). La vista previa, en `practice.test.tsx`.
+  ventana y el menú en la página de verdad: Enter al primer dato, deshacer desde el título, las dos guardas de página
+  vacía, el foco con título y la barra lateral con una página con texto). La vista previa, en `practice.test.tsx`.
+- **Auditoría independiente sobre `d772721`** (2026-10-02): pasa con observaciones, sin bloqueantes. Corregidas la
+  prueba y los docs del punto de escritura, el foco con título, deshacer desde el título, la barra lateral con texto,
+  las pruebas de las guardas de vacía y `template_id` en la recuperación; al roadmap, *Exit* de la vista previa y el
+  aviso de ProseMirror al abrirla.
 - **Pendiente para Lega:** mirar las tres vistas previas en la computadora y en el iPhone (PL1) y decir qué cambiar.
