@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.102 :
 
 Quien solo podía ver o comentar una rama, y los invitados, leían enteras las páginas mandadas a la papelera dentro de
 ella: título, contenido, comentarios y archivos. La regla de permisos (`user_page_level`) miraba solo si el proyecto
@@ -11,6 +11,27 @@ funciones pasan a PL/pgSQL con una sola pasada por los padres: leer el árbol es
 app la página sale del árbol sin errores, y un comentario o una edición sin subir quedan rechazados con su texto
 hasta restaurarla.
 [ Papelera para lectores - Ver, Comentar e invitados no leen páginas en la papelera ]
+
+v0.101 :
+
+Con 300 corridas al azar, la prueba del aviso de B.16 decía que un dispositivo recibía texto ajeno (25 fallas en
+una corrida). Era suyo: cuando la reparación que va con lo bajado escribe, Yjs le cambia el número al documento, y la
+prueba solo conocía el primero. Detrás había un hueco real: la app anotaba como propio solo el número nuevo, y lo que
+copió la reparación (texto propio sin subir) podía desaparecer sin aviso. Ahora la app y la prueba anotan todos los
+números del documento; la prueba suma otra pestaña y compactar al abrir sin red. El aviso dice ahora *what you wrote
+or moved*: puede traer texto que este dispositivo movió o convirtió (D23).
+[ Aviso de lo borrado - todos los autores del documento son propios y la prueba al azar con 300 corridas ]
+
+v0.100 :
+
+Lo borrado de una página viajaba en las filas de `page_updates` a cualquiera que la puede ver, invitados incluidos, y
+las fotos sacadas se seguían abriendo (D14). Diseño, sin código, en `Doc_Privacidad_Borrado.md`, medido con filas
+reales y simulaciones y corregido con la auditoría: quien no edita (Ver, Comentar, invitados) baja siempre la última
+base limpia de la página, armada por el dispositivo de un editor con lo borrado como hueco (también al cerrar la app),
+nunca filas; al compartir se sube lo pendiente y se exige una base posterior; los usos sacados de fotos y archivos, y la
+papelera de archivos para invitados, dejan de darle permiso. La subida no cambia (D19) y los deltas quedan para más
+adelante (D20). Con la migración en borrador, las pruebas y una pregunta para Lega.
+[ Privacidad de lo borrado - diseño de la base limpia para quien no edita ]
 
 v0.099 :
 

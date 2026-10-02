@@ -372,15 +372,30 @@ que enterarse y tener su texto a mano:
   «abcde». Cada elemento se recorta por relojes (lo vivo propio menos lo nombrado) y el aviso dice «fghij».
 - **Lo propio:** solo lo de los autores de Yjs (`clientID`) que escribieron en la página **desde este dispositivo**,
   anotados en `meta` (`ownClient:<página>:<autor>`) en la misma transacción que su primera edición guardada, sin
-  leer nada antes. Así vale después de cerrar la app, de restaurar una copia o con `syncedSV` atrasado, y nunca toma
-  como propio lo de un tercero. Si no se sabe que algo es propio, no se avisa: mejor no avisar que avisar con texto
-  ajeno. Lo escrito con una versión anterior (que no anota) no avisa.
+  leer nada antes. Así vale después de cerrar la app, de restaurar una copia o con `syncedSV` atrasado. Si no se sabe
+  que algo es propio, no se avisa. Lo escrito con una versión anterior (que no anota) no avisa. **"Propio" es lo que
+  escribió el autor de Yjs del dispositivo, no lo que tecleó la persona** (D23): el editor reescribe con el número
+  del dispositivo lo que mueve o convierte (subir, sangrar o cambiar el tipo de un bloque) y la reparación copia, así
+  que el aviso puede traer texto que tecleó otro y este dispositivo movió. No se pierde nada: quien lo tecleó no
+  recibe aviso (su texto lo borró el movimiento, con nombre), y que lo reciba quien lo movió es la única forma de
+  recuperarlo. Por eso el aviso dice *what you wrote or moved*. Lo que nunca pasó por este dispositivo no se avisa.
+- **Un documento abierto puede tener varios autores** (v0.101). Yjs le cambia el número a un documento cuando una
+  transacción que aplica algo bajado también escribe con el número del documento: es la reparación de estructura que va
+  en la misma transacción que lo que llega (`applyToLive`). `applyUpdate` marca esa transacción como remota y Yjs, al
+  ver su propio número en una transacción remota, cree que otro lo usa y elige uno nuevo (avisa en la consola
+  *Changed the client-id…*). Lo que escribió la reparación es del número de antes, pero el `update` sale cuando ya
+  tiene el nuevo, y solo se anotaba ese: si era lo primero que el documento guardaba, lo que copió la reparación (por
+  ejemplo el texto propio, sin subir, que pasa a un bloque nuevo cuando dos cambian el tipo del mismo párrafo) no era
+  "propio" y, si otro lo borraba sin verlo, desaparecía sin aviso (el texto igual llegaba al servidor). Ahora se anotan
+  todos los números que tuvo el documento desde que se abrió (el del principio de cada transacción y el del final).
+  La prueba al azar, que solo conocía el número con que se abrió cada documento, tomaba como ajeno el aviso de lo que
+  el mismo dispositivo escribió después del cambio (semillas 2 y 88 con 120 pasos): el aviso era correcto.
 - **Dónde se guarda:** en `meta`, clave `removedWriting:<pageId>` (el texto, un renglón por bloque en el orden de la
   página, las fotos y los archivos por su nombre entre corchetes, la hora y los tramos de relojes; hasta 20 por
   página), **en la misma transacción que lo bajado**. Las versiones anteriores leen `meta` solo por clave: no les
   cambia nada.
-- **Qué ve:** en la página, un aviso amarillo (*Someone deleted a part of this page while you were writing in it…*)
-  con **Show what you wrote**, **Copy** (si el navegador no deja copiar, el texto queda a la vista) y **Dismiss**,
+- **Qué ve:** en la página, un aviso amarillo (*Someone deleted a part of this page while you were writing or moving
+  text in it…*) con **Show what you wrote or moved**, **Copy** (si el navegador no deja copiar, el texto queda a la vista) y **Dismiss**,
   que borra del dispositivo los avisos que se mostraron (uno que llegó mientras tanto queda; el texto sigue en el
   servidor). Si la página no está abierta, el estado de la
   sincronización lo dice con el título. **Download my unsynced changes** lleva el texto del aviso
@@ -451,7 +466,10 @@ se guarda como hueco: es una copia de algo que ya está en las filas, no texto q
   restaurar una copia, lo de un tercero no se avisa (sí a quien lo escribió); descartar borra solo lo que se mostró;
   el texto del aviso (orden, fotos por nombre, sin autores propios no avisa); el estado avisa solo con la página
   cerrada; y compactar en orden conserva el texto que una fila posterior trae como hueco (también al abrir con 70
-  filas propias más una fila hueco: falla si `loadInto` vuelve a `mergeUpdates`).
+  filas propias más una fila hueco: falla si `loadInto` vuelve a `mergeUpdates`). Desde v0.101, lo que copia la
+  reparación que vino con lo bajado (Yjs le cambia el autor al documento) también avisa: falla si se vuelve a anotar
+  solo el autor que tiene el documento al guardar; y lo que se escribe después con el número nuevo también (falla si
+  se anota solo el número con que se abrió el documento).
 - **`src/ui/collabRemovedWriting.test.ts`:** al azar con el editor real, tres dispositivos y uno de la versión
   publicada, escribiendo en párrafos, listas anidadas, celdas de tablas y secciones con el mapa de colapsar
   mientras otros borran bloques padres, tablas y secciones enteras; sin red, bajando antes de subir, respuestas que
@@ -460,7 +478,14 @@ se guarda como hueco: es una copia de algo que ya está en las filas, no texto q
   guardó con su texto esté en el servidor con su texto**, que todos terminen iguales al servidor (con el mapa de
   colapsar) y que cada aviso sea solo de lo propio y diga **exactamente las letras de sus tramos**, borradas en el
   servidor. En la suite, 12 corridas de 60 pasos (`REMOVED_SEEDS`, `REMOVED_STEPS`; pasaron 40 de 80). Con la subida
-  de antes fallan 29 de 30 corridas.
+  de antes fallan 29 de 30 corridas. Desde v0.101 lo propio de cada dispositivo son todos los autores que tuvieron sus
+  documentos (la prueba los anota en cada transacción) y no solo el número con que se abrió cada uno: con 300 corridas
+  de 200 pasos, la prueba de antes fallaba en 25 en una corrida (17 en otra: a 200 pasos no es del todo repetible) («was told about text it did not write», que era texto del mismo
+  dispositivo escrito después de que Yjs le cambió el número); ahora pasan las 300, y las semillas 2 y 88 con 120
+  pasos quedan como casos fijos (fallan si la prueba vuelve a mirar solo el primer número). Las corridas al azar
+  además vuelven a abrir la página, en la misma pestaña o en otra (otro `PageDocs` sobre la misma base), a veces
+  después de 70 filas sin red (al abrir se compactan): en 300 × 200, 2976 aperturas, 861 compactando, 67 cambios de
+  autor, ninguna letra propia fuera del servidor.
 - **`src/ui/RemovedWritingBanner.test.tsx`:** el aviso aparece con la página abierta, muestra, copia (y sin
   portapapeles deja el texto a la vista) y al cerrarlo se borra lo mostrado.
 
@@ -1175,10 +1200,10 @@ red y en el momento, no colas. Un header alto falso pasa: la mínima es una guar
 abrir, y sale con la cola de hoy al actualizar. Esa versión muestra el código `app_outdated` como error del comentario
 (no lo conoce); desde v0.099 sale en palabras.
 
-**Para que frene:** aplicar `20261008120000_version_minima_arbol.sql` (con copia de seguridad), publicar la v0.099 y,
+**Aplicada el 2026-10-02 con la v0.099, y la mínima subida a 0.099 ese día.** **Para que frene:** aplicar `20261008120000_version_minima_arbol.sql` (con copia de seguridad), publicar la v0.099 y,
 cuando Lega la tenga en sus dispositivos, subir `min_app_version` a 0.099 o más. 0.099 está escrito en
 `private.write_version_allowed` y en la prueba: quien publica pone el número real en los dos (la migración no corre
-con `0.099`) y `src/sync/writeVersion.test.ts` falla si no coincide con la entrada del changelog que nombra la
+con el número provisional) y `src/sync/writeVersion.test.ts` falla si no coincide con la entrada del changelog que nombra la
 migración. No sube `schema_version`: la app no necesita saber si la base la tiene.
 
 ## Volver después de mucho tiempo sin red

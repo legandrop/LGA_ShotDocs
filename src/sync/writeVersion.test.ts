@@ -316,7 +316,7 @@ describe('la migración', () => {
     const changelog = read('../../Docs/Changelog.md');
     const at = changelog.indexOf(`${MIGRATION}.sql`);
     expect(at).toBeGreaterThan(0);
-    // Mientras no se publica, la entrada es `v0.099 :` y el umbral también; quien publica pone el número en los tres.
+    // Mientras no se publica, la entrada y el umbral llevan el número provisional (0, dos ceros y XX); quien publica pone el número en los tres.
     const headers = [...changelog.slice(0, at).matchAll(/^v(\d+\.(?:\d{3}|0XX)) :$/gm)];
     const version = headers[headers.length - 1]?.[1];
     expect(version).toMatch(/^\d+\.(\d{3}|0XX)$/);

@@ -257,7 +257,8 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   `20261007120000_historial.sql` está **sin aplicar** (probada en `begin … rollback`). **Falta:** aplicarla (con copia
   de seguridad), las marcas por persona, el texto huérfano con el aviso a quien escribió (necesita la subida sin GC,
   en otra rama), nombrar versiones, la caché sin red, que la lista se actualice sola con el historial abierto (O3 de la
-  auditoría) y medir en el iPhone. Aparte, después: que lo borrado no llegue a quien solo ve la página (decisión 2).
+  auditoría) y medir en el iPhone. Aparte, después: que lo borrado no llegue a quien solo ve la página (decisión 2;
+  diseño en `Doc_Privacidad_Borrado.md`, B.18).
   Ojo: `npm run db:test` aplica las migraciones de verdad; esta se probó con un script en `begin … rollback`.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
@@ -441,7 +442,8 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
     siempre (lo encontró la auditoría del historial; decisión D15: arreglarlo ya). Ahora se arma sin GC y en orden,
     y quien escribió ve en la página un aviso con su texto para copiarlo. Sin migración. Falta: subir
     `min_app_version` a esta versión cuando se publique (las anteriores siguen subiendo con GC) y, con el historial,
-    decir quién borró. Ver `Doc_Sincronizacion.md`, "La subida sin GC".
+    decir quién borró. Ver `Doc_Sincronizacion.md`, "La subida sin GC". En v0.101, el aviso de lo que copió una
+    reparación cuando Yjs le cambia el número al documento, y la prueba al azar con 300 corridas de 200 pasos.
 17. **Hecho (v0.097): volver después de semanas sin red con una versión vieja.** Prueba con la sincronización de la
     v0.090 (`src/sync/offlineLargo.test.ts`): nada se pierde, con la mínima subida o sin ella. Desde esta versión, con
     la app vieja para el workspace no sale ni baja nada y la app instalada se actualiza sola. **Falta:** ver en el
@@ -455,11 +457,19 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
     la misma versión que corre, *Update now* sigue diciendo que falló en vez de recargar (cualquier instalación nueva
     lo borra; no pierde nada). Ver `Doc_Sincronizacion.md`, "La versión mínima, el árbol y los comentarios" y "Volver
     después de mucho tiempo sin red".
-18. **Hecho (v0.0XX): la papelera de páginas ya no se lee con Ver.** Ver, Comentar y los invitados leían enteras las
+18. **Que lo borrado no llegue a quien solo ve la página (D14). Diseño en `Doc_Privacidad_Borrado.md`, sin código.**
+    Hoy lo borrado viaja en las filas a cualquiera que ve la página (también invitados) y las fotos sacadas se siguen
+    abriendo. Entregas: (0) avisarlo al compartir y en la ayuda; (1) la base limpia: quien no edita baja siempre la
+    última base de la página (armada por un editor, con lo borrado como hueco), con `clean_reset_seq` al compartir, los
+    permisos de los usos sacados de archivos y el interruptor `clean_min_version`, antes de invitar al primer cliente de
+    verdad; (2) medir; (3) limpiar el dispositivo de quien deja de ver lo borrado; (4) deltas si hacen falta. La subida
+    no cambia (D19). Las páginas en la papelera ya no se leen con Ver (ítem 19, v0.102). Lega aceptó la demora del
+    cliente (D22, sección 13).
+19. **Hecho (v0.102): la papelera de páginas ya no se lee con Ver.** Ver, Comentar y los invitados leían enteras las
     páginas mandadas a la papelera (título, contenido, comentarios, archivos) si veían algo de arriba: la regla de
     permisos miraba solo si el proyecto estaba borrado (auditoría de D14). Ahora las ven solo quien edita sin ser
     invitado y el dueño; migración `20261009120000_papelera_lectores.sql`, con su prueba SQL y
-    `src/sync/trashReaders.test.ts`. **Falta:** aplicar la migración. Menores: un pase del portero ya entregado sigue
+    `src/sync/trashReaders.test.ts`. Migración aplicada el 2026-10-02. Menores: un pase del portero ya entregado sigue
     sirviendo hasta que vence (8 horas, igual que al sacar un permiso); una invitada con crear que manda una página a la
     papelera y la restaura antes de que suba lo primero recibe un rechazo en la segunda (la página queda en la
     papelera, la restaura el dueño; no se pierde nada). Ver `Doc_Supabase.md`, "La papelera de páginas y quién la ve".
