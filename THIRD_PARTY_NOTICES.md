@@ -51,6 +51,21 @@ The block editor.
 
 The packages are used unmodified. The app's own files are not under the MPL.
 
+## EFF Short Wordlist #1 — CC BY 3.0
+
+The word list the assistant uses to propose a passphrase when you sync your assistant key across your devices.
+
+| | |
+|---|---|
+| Work | "EFF's Short Wordlist #1" (`eff_short_wordlist_1.txt`), by the Electronic Frontier Foundation |
+| License | Creative Commons Attribution 3.0 United States (CC BY 3.0 US) |
+| Source | <https://www.eff.org/dice> and <https://www.eff.org/files/2016/09/08/eff_short_wordlist_1.txt> |
+| License text | <https://creativecommons.org/licenses/by/3.0/us/> |
+
+Changed: the dice numbers are dropped and the word "yo-yo" is left out (the list already has "yoyo", and the
+app separates the words of a passphrase with hyphens), so 1,295 words remain. The list is in
+`src/assistant/wordlist.ts`.
+
 ## Fonts — SIL Open Font License 1.1
 
 The fonts are served with the app, unmodified.

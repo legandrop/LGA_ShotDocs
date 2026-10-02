@@ -1,6 +1,6 @@
 # Deshacer en el orden en que editaste (P.26)
 
-**Estado: entregas 0 (v0.132: el límite de Yjs, arreglado con un parche; sección 16) y 1 (v0.0XX: la línea de tiempo
+**Estado: entregas 0 (v0.132: el límite de Yjs, arreglado con un parche; sección 16) y 1 (v0.140: la línea de tiempo
 con las páginas; sección 17) hechas; 2 y 3 en diseño.** Pedido de Lega
 del 2026-10-02, al responder cómo se deshace un reemplazo en todo el proyecto (una pregunta de su lista de decisiones;
 no es la D-10 de `Doc_Decisiones.md`). Se diseñó contra `main` v0.123
@@ -536,7 +536,7 @@ otra sesión (medido).
 ## 13. Entregas
 
 0. **Hecha (v0.132): el límite de Yjs de la sección 6 (B.21).** La causa, el parche y lo medido, en la sección 16.
-1. **Hecha (v0.0XX, sección 17): la línea de tiempo con las páginas.** La pila de cada página que sobrevive al cambiar de página (retener y pasar
+1. **Hecha (v0.140, sección 17): la línea de tiempo con las páginas.** La pila de cada página que sobrevive al cambiar de página (retener y pasar
    la pila sin el meta del editor viejo, 3.2), ⌘Z y ⌘⇧Z en orden entre páginas (DH2), fuera del editor, quienes llaman
    directo al deshacer (3.4), lo de fondo fuera de la pila, topes, ayuda y atajos. **Aceptación:** escribir en *A*, en
    *B* y en *A*; desde *C*, tres ⌘Z deshacen *A*, *B* y *A* en ese orden, cada uno con su página en pantalla, y tres ⌘⇧Z
@@ -693,7 +693,7 @@ restos), sin cruzarse con este. **No hace falta subir `min_app_version`.**
   trae; si no, rehacer el parche en los tres archivos y `npx patch-package yjs`. Las dos pruebas lo cubren. Conviene
   reportarlo a Yjs con los dos casos mínimos de 16.1.
 
-## 17. Entrega 1: cómo quedó (v0.0XX)
+## 17. Entrega 1: cómo quedó (v0.140)
 
 ### 17.1 Qué se hizo
 

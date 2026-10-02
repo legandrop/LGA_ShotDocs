@@ -467,7 +467,12 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   (sin aplicar; la aplica quien publica). **A2 implementada (v0.126):** *Summarize page* (*Insert at top* / *Insert
   below*), *Translate page* (*Replace page content* en su lugar o *Create translated subpage*), *Format as…* (viñetas,
   casillas, tabla, títulos) y la política del workspace en *Assistant…* para dueño y admins, con su migración
-  `20261017120000_asistente_politica_ventana.sql` (sin aplicar). Falta: A3 y el MCP (M0 a M3); lo que Lega prueba con
+  `20261017120000_asistente_politica_ventana.sql` (sin aplicar). **La clave sincronizada, S1 implementada (v0.138,
+  D72 → B, `Doc_Clave_Sincronizada.md`):** prender la copia cifrada con una frase, abrirla en otro dispositivo
+  (preguntando si cambia el destino), *Update* / *Replace synced key…*, *Stop syncing* y *Sign out other devices*; su
+  migración `20261023120000_clave_sincronizada.sql`, sin aplicar. Falta S2 (*Change passphrase…*, *Keep the key on this
+  device*, el aviso de "cambió en otro dispositivo", rechazar una copia más vieja, *Also sync in this workspace*) y medir
+  en el iPhone. Falta: A3 y el MCP (M0 a M3); lo que Lega prueba con
   sus claves está en "Cómo quedó A1" y "Cómo quedó A2". Quedó de A2 (chico): la política no se actualiza en vivo en un
   panel ya abierto (se lee al abrirlo); *Format as…* no conserva los colores de un bloque al que le cambia el texto, y
   cuando junta varios bloques en menos (renglones a una tabla) los comentarios de los que sobran quedan sin bloque;
@@ -505,7 +510,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   en la pila de Yjs de las páginas editadas en la sesión (arregla un resto que deja hoy deshacer el reemplazo y después
   lo escrito antes, también desde el *Undo* del panel) y por las anclas en las demás; ⌘⇧Z rehace todo, también el
   reemplazo. Dura lo que la pestaña; nada cambia en lo guardado. Entregas: 0 (hecha, v0.132: B.21), 1 (**hecha,
-  v0.0XX**: la línea de tiempo con las páginas; la memoria medida en Chromium con el editor real, unos 19 MB con 20
+  v0.140**: la línea de tiempo con las páginas; la memoria medida en Chromium con el editor real, unos 19 MB con 20
   páginas de 115 KB retenidas; falta medirla en el iPhone; `Doc_Deshacer.md`, sección 17), 2 (el reemplazo adentro, con
   el *Undo* del panel fuera de orden, C1, y DH9), 3 (anotar como un paso). Pendientes chicos de la auditoría de la
   entrega 1: pruebas para A5, A7 y A9 (`Doc_Deshacer.md`, 17.4; quedan cubiertos por el recorrido en el navegador, por
@@ -517,6 +522,14 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   report* con texto (escrito o dictado con el teclado del sistema), el mapa, el validador, la vista previa por cambio con
   casillas, *Apply* con la guarda y *Undo*, `ask` con botones, *Couldn't place* guardado en el dispositivo, permisos y
   política; falta que Lega mida la calidad con su clave (10.3) y pruebe el dictado del teclado en el editor del teléfono.
+  **V2 hecha (v0.139, sección 16):** la cola sin red (*Save for later*, *N voice notes to place* en el indicador con la
+  lista, ubicar de a una, *Insert as text*, *Discard* con confirmación); falta el número de notas en la ventana de salir
+  de la cuenta (después de S1). **V3 hecha (v0.139, sección 17):** el micrófono propio (pedazos de 1 s guardados, C4 y
+  C5, OpenAI, Gemini o compatible con pistas, *Voice* con la segunda clave, *Insert at cursor*, *Ask…*); falta que Lega
+  lo pruebe en su iPhone (instalada y en Safari) con OpenAI y con Gemini, y que la segunda clave siga a la clave
+  sincronizada cuando exista (D72, S1), y que salir con «olvidar la clave» también olvide la clave de voz y diga
+  cuántas notas quedan (O5 de su auditoría, con la tanda de S1). El reconocimiento del navegador quedó afuera (optativo
+  y apagado).
   **Diseño en `Doc_Dictado.md`** (decisiones propuestas DI1 a DI9): el dictado común queda en el teclado del sistema;
   un solo micrófono propio, *Dictate to report*, que graba
   en el dispositivo y transcribe con el proveedor de la persona (OpenAI o Gemini; el reconocimiento del navegador no
@@ -779,7 +792,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
    parche de B.21). Con dos personas editando la misma página, a veces `UndoManager.undo()` tira `TypeError` (`reading
    'client'`) en `redoItem`, cuando la copia del padre que tiene que volver ya fue recolectada (1 de 150 con dos editores
    reales; 24 de 3.000 en un modelo de párrafos); qué deja ese ⌘Z en pantalla no está medido. **Atrapada en la línea de
-   tiempo (P.26, entrega 1, v0.0XX):** el paso se descarta, se avisa y el ⌘Z se frena (probado simulando el error). En
+   tiempo (P.26, entrega 1, v0.140):** el paso se descarta, se avisa y el ⌘Z se frena (probado simulando el error). En
    900 corridas al azar de la línea de tiempo con el editor, también 300 con otra persona escribiendo y borrando texto,
    no apareció ninguna. Falta: medirla con dos editores borrando y deshaciendo bloques enteros, y ver si se arregla con
    el parche de Yjs o se reporta (`Doc_Deshacer.md`, 16.6 y 17).

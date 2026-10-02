@@ -32,7 +32,7 @@ its own project: a tree of pages you own.
   OpenAI-compatible service (OpenRouter, or a local model such as Ollama) and fix, improve, shorten, translate,
   rewrite or reshape what you select, or summarize and translate a whole page. You see a preview first; applying it is
   a regular edit: synced, versioned and undoable. The workspace owner can turn it off or allow only local models.
-- **Dictate to report.** Write or dictate (with your keyboard's microphone) an informal note on set, like “this shot
+- **Dictate to report.** Write or dictate (with the app's microphone or your keyboard's) an informal note on set, like “this shot
   was a 50 mm”, and the assistant places each piece where it goes in the report: the right row and column, the line
   after its label, the checkbox. You check every change before applying it, and nothing you said is lost.
 - **Offline first, nothing lost.** Every change is saved on your device first and synced when you are
@@ -157,8 +157,10 @@ In production (v0.049). What works today:
   a two-minute tour with Next walks through the app on a practice page that is never saved or synced; it can be
   replayed, and the practice page reopened, from the help.
 - Assistant (account menu → *Assistant…*): choose Anthropic, OpenAI, Google Gemini or an OpenAI-compatible service,
-  paste your API key and pick a model from your provider's list. The key is stored encrypted only on that device and
-  sent only to that provider. Select text and press Ctrl+Alt+J (⌘⌥J on a Mac), or use *Assistant* in the toolbar or the
+  paste your API key and pick a model from your provider's list. The key is stored encrypted on that device and sent
+  only to that provider. *Sync across my devices* encrypts it on the device with a six-word passphrase the app proposes
+  and stores only that encrypted copy in the workspace, so another device unlocks it with the passphrase; *Sign out
+  other devices* in the account menu is there for a lost device. Select text and press Ctrl+Alt+J (⌘⌥J on a Mac), or use *Assistant* in the toolbar or the
   page menu: *Fix spelling & grammar*, *Improve writing*, *Make shorter*, *Translate to…* or *Ask…*. The preview marks
   what changes word by word; *Apply* replaces it as one edit you undo with Ctrl+Z, and nothing is applied if the text
   changed while the assistant was working. Photos and links inside the selection stay. *Format as…* turns the selected
@@ -171,7 +173,13 @@ In production (v0.049). What works today:
   shown change by change, each with its checkbox and its place (*Setups & takes › 12 · 010 · 3 › Lens*). *Apply* applies
   the checked ones as one edit you undo with *Undo* or Ctrl+Z, and nothing is applied if those places changed meanwhile.
   If it is not clear which shot, it asks with a button per row. What it could not place, and what you unchecked, stays
-  under *Couldn't place* on that device until you add it to *Summary*, copy it or discard it.
+  under *Couldn't place* on that device until you add it to *Summary*, copy it or discard it. Without internet,
+  *Save for later* keeps the note on the device: *N voice notes to place*, under the sync status, lists them, and each
+  one is placed in its page with its preview, inserted as text at the end of the page, or discarded after asking.
+  The big microphone button records a voice note on the device (tap to start, tap to stop, up to 2 minutes) and your
+  provider turns it into text (OpenAI, Gemini or a compatible service, with the assistant's key or a second one in
+  *Voice*); then it is placed like a written note, or written where the cursor was with *Insert at cursor*. Without
+  internet the recording is saved and transcribed when you are back online.
 - Templates: a new empty page offers the three built-in ones, and *More…* lists them with your project's own templates
   and the ones from other projects you can see. *Save as template…* in the page menu copies a page to the project's
   *Templates* folder (optionally clearing the filled-in values); a template is a page you edit like any other, and new
