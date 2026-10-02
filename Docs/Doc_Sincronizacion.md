@@ -326,6 +326,128 @@ la página. Dos medidas, de dos guiones distintos (por eso los números no coinc
   - dejar afuera un tramo: fallan 6 pruebas. Con la comprobación interna de `buildUpload` puesta, ese error se
     ataja solo y sube todo.
 
+## La subida sin GC (B.16)
+
+**Qué pasaba.** Lo que alguien escribe adentro de un bloque que otro borra al mismo tiempo podía no llegar nunca al
+servidor. La subida se armaba en un `Y.Doc` con GC (*garbage collection*: Yjs cambia el contenido de lo borrado por
+un hueco que solo dice cuánto medía). Si el dispositivo bajaba el borrado del otro **antes** de subir lo suyo, su
+texto ya estaba borrado en ese documento (cuelga de un bloque borrado) y viajaba como hueco. En el documento final
+ese texto iba a quedar borrado igual, pero se perdía para siempre: no quedaba en ninguna fila de `page_updates`
+(ni en el historial que se diseña en `lega/historial`), solo en el IndexedDB de quien lo escribió. Pasaba con lo
+escrito entre la subida y la bajada de un mismo ciclo (el ciclo sube y después baja), y con todo lo de una página si
+su subida vencía o la app estaba por debajo de la versión mínima. Lo encontró la auditoría del diseño del historial;
+`src/sync/uploadNoGc.test.ts` lo reproduce (la fila de A llegaba sin el texto).
+
+**Cómo es ahora** (`readSaved` en `docs.ts` y `src/sync/removedWriting.ts`):
+
+- **La subida se arma en un documento sin GC**, descartable, con las filas guardadas aplicadas **de a una y en
+  orden** en una sola transacción (`applyRowsInOrder`). Sin GC, lo borrado conserva su texto; en orden, gana la
+  primera copia de cada elemento (la que se guardó al escribirlo) y nunca una posterior que lo traiga como hueco
+  (`Y.mergeUpdates` puede quedarse con el hueco: ver `Doc_Historial.md`, 3.2). Lo demás no cambia: el documento
+  abierto en el editor sigue con GC, lo guardado en IndexedDB es lo mismo (cada edición ya se guardaba con su texto)
+  y la subida lleva los mismos elementos y los mismos borrados (`buildUpload` de B.15, igual).
+- **Qué cambia en el servidor:** la fila de cada subida trae también el texto de lo propio que ya estaba borrado al
+  armarla: lo que otro borró mientras se escribía y **lo escrito y borrado entre dos subidas** (una subida cada
+  1,2 s de pausa). Lo segundo es una consecuencia, no el objetivo: el historial lo va a poder mostrar, y lo borrado
+  ya viaja a quien puede ver la página (`Doc_Historial.md`, pregunta 2). Ojo con eso: algo pegado y borrado en el
+  mismo segundo (una contraseña, por ejemplo) ahora llega siempre al servidor; antes llegaba solo si justo había una
+  subida en el medio.
+- **Tope:** si la subida sin GC pasa de 6 MB (`NO_GC_MAX_BYTES`; el servidor rechaza más de 8 MB) se vuelve a armar
+  con GC, como antes, y se avisa en la consola. Un rechazo dejaría toda la página sin subir. Solo puede pasar con una
+  página muy editada que vuelve a subir entera (después de restaurar una copia).
+
+**El aviso a quien escribió.** El borrado gana en todos lados (es lo de siempre en Yjs), pero quien escribió tiene
+que enterarse y tener su texto a mano:
+
+- **Cuándo.** Al bajar (`applyRemote`), si lo bajado trae borrados y la página tiene algo sin subir o se editó en
+  esta sesión, `findRemovedWriting` arma lo guardado sin GC y en orden, anota **lo propio vivo**, aplica lo bajado y
+  se queda con lo propio que quedó borrado **sin que el borrado lo nombre**. Quien borra un bloque nombra todo lo que
+  tenía adentro (Yjs anota cada elemento); lo que no nombra es lo que no había visto. Así el aviso sale solo cuando
+  se escribía y se borraba a la vez, nunca cuando el otro borró algo que tenía a la vista.
+- **Lo propio:** lo que el servidor no tiene (fuera de `syncedSV`) y lo de los autores de Yjs de cada apertura de la
+  página en esta sesión de la app (`ownClients`, solo en memoria). Lo segundo hace que el aviso no dependa de si la
+  subida llegó antes o después que el borrado; lo primero cubre lo que quedó sin subir al cerrar la app.
+- **Dónde se guarda:** en `meta`, clave `removedWriting:<pageId>` (el texto, un renglón por bloque en el orden de la
+  página, las fotos y los archivos por su nombre entre corchetes, la hora y los autores de Yjs; hasta 20 por
+  página), **en la misma transacción que lo bajado**. Las versiones anteriores leen `meta` solo por clave: no les
+  cambia nada.
+- **Qué ve:** en la página, un aviso amarillo (*Someone deleted a part of this page while you were writing in it…*)
+  con **Show what you wrote**, **Copy** (si el navegador no deja copiar, el texto queda a la vista) y **Dismiss**,
+  que lo borra del dispositivo (el texto sigue en el servidor). Si la página no está abierta, el estado de la
+  sincronización lo dice con el título. **Download my unsynced changes** lleva el texto del aviso
+  (`removedWriting`) y arma sus updates también sin GC y en orden, así el archivo trae ese texto. La ayuda tiene su
+  entrada (*When someone deletes what you were writing in*).
+- **Sin "by Ana":** las filas que se bajan no traen el autor (`pull_updates` devuelve `seq` y los bytes); sumarlo
+  pide una migración. Queda para el historial.
+
+**Cómo convive con lo demás:**
+
+- **B.15 (`syncedDS`), la generación y la versión guardia:** no cambian. GC o no, el documento tiene los mismos
+  borrados, y `buildUpload` corta igual.
+- **Versiones anteriores sobre la misma base:** siguen armando la subida con GC. Lo que una de ellas sube se pierde
+  igual que antes (con un borrado de otro ya bajado), y `syncedSV` avanza: esta versión ya no lo vuelve a subir. Se
+  cierra del todo subiendo `min_app_version` a esta versión cuando se publique (no es obligatorio: no rompe nada).
+- **y-prosemirror, su parche y el editor:** no se tocan. El documento abierto sigue con GC; no hay tipos de bloque
+  ni propiedades nuevas.
+- **Restaurar una copia** (`resetForRestore`): la subida entera ahora lleva todo lo borrado que el dispositivo tiene
+  con texto (ver los números); con el tope de arriba nunca se queda sin subir.
+- **Compactar** (`Doc_Compactar.md`, en `lega/compactar`): su snapshot ya se arma aplicando las filas en orden en un
+  `Y.Doc({ gc: false })`, así que conserva este texto. Con `Y.mergeUpdates` lo podía perder (una fila vieja que
+  vuelve a subir todo con huecos gana).
+- **Historial** (`Doc_Historial.md`, en `lega/historial`): es "la subida sin GC" de la entrega 2. Con esto, cada
+  elemento llega con su texto en su primera fila.
+
+**Números** (`src/ui/uploadNoGcMeasure.test.ts`, fuera de la suite: el editor real escribe letra por letra, cada
+letra es una fila guardada como en la app, y cada 20 letras se arma la subida de las dos formas con las mismas
+filas; las páginas reales, con las filas de `page_updates` leídas para el diseño del historial):
+
+| Página | Filas guardadas | Subidas: total con GC → sin GC | La subida que más creció | Armar cada subida, con GC → sin GC | Subida entera (restaurar), con GC → sin GC |
+|---|---|---|---|---|---|
+| Típica: 2000 letras, pocas correcciones | 1961 (55 KB) | 23,7 → 24,3 KB (+2 %) | ×1,42 | 10,3 → 1,2 ms | 15,6 → 19,9 KB |
+| Corregida: 5000 letras, muchas correcciones | 4591 (194 KB) | 124 → 140 KB (+13 %) | ×3,55 | 52 → 3,9 ms | 49 → 115 KB |
+| Muy editada: 20 000 letras, reescribe bloques | 17 542 (991 KB) | 1370 → 1497 KB (+9 %) | ×2,78 | 987 → 40 ms | 197 → 684 KB |
+| Real, 17 filas (`page_updates`) | 17 (6 KB) | — | — | 1,6 → 0,5 ms | 4,6 → 4,7 KB |
+| Real, la más editada: 63 filas | 63 (37 KB) | — | — | 3,9 → 2,2 ms | 8,6 → 12,4 KB |
+
+- **En IndexedDB no crece nada**: cada edición ya se guardaba con su texto. Lo que crece son las filas del servidor
+  (y lo que los demás dispositivos bajan): entre 2 y 13 % en estas sesiones.
+- **Armar la subida es más rápido**, no más lento: aplicar las filas en orden evita `Y.mergeUpdates` de todas, que
+  crece con la cantidad de filas (durante una sesión larga las filas se juntan; se compactan recién al volver a abrir
+  la página). En la sesión muy editada, de casi 1 s a 40 ms por subida.
+- **Memoria**: el documento sin GC es descartable (vive lo que dura la subida). Con la sesión muy editada ocupa unos
+  9 MB contra unos 4 MB con GC; en las páginas reales, por debajo de lo que se puede medir. El documento abierto en el
+  editor no cambia.
+- **La subida entera** (después de restaurar una copia) lleva todo lo borrado que el dispositivo tiene con texto:
+  hasta 3,5 veces más en la sesión muy editada, lejos del tope de 6 MB.
+
+**Límites conocidos** (raros; ninguno pierde nada que hoy no se pierda):
+
+- Un dispositivo que se abrió sin permiso de escritura, reparó la página solo en memoria y después recibió el
+  permiso guarda el documento entero desde el documento abierto (con GC). Si en ese momento tenía algo propio sin
+  subir adentro de algo que otro borró, ese guardado lo trae como hueco; las filas de antes siguen teniendo el texto,
+  pero la compactación local (`loadInto`, con `mergeUpdates`, más de 64 filas) podría quedarse con el hueco.
+- Si `syncedSV` quedó atrás para lo de otro (lo bajado no lo pudo avanzar en esa vuelta), lo de otro que este
+  dispositivo tenía y quien borró no, cuenta como propio: el aviso mostraría ese texto. No lo vieron 60 corridas al
+  azar con tres dispositivos.
+
+**Pruebas:**
+
+- **`src/sync/uploadNoGc.test.ts`:** el caso de la auditoría (fallaba antes del cambio: la fila llegaba sin el
+  texto), con el aviso solo para quien escribió y todos iguales al servidor; subido antes del borrado (también
+  avisa); el otro vio el texto y borró (no avisa); lo borrado por uno mismo (no avisa, y también sube); después de
+  cerrar la app; la versión publicada (`fixtures/mainDocs.ts`) sobre la misma base con el aviso guardado; el tope de
+  6 MB; *Download my unsynced changes*; y el texto del aviso (orden, fotos por nombre, nada ajeno).
+- **`src/ui/collabRemovedWriting.test.ts`:** al azar con el editor real, tres dispositivos y uno de la versión
+  publicada, escribiendo en párrafos, listas anidadas, celdas de tablas y secciones con el mapa de colapsar
+  mientras otros borran bloques padres, tablas y secciones enteras; sin red, bajando antes de subir, respuestas que
+  se pierden y la versión publicada sobre la misma base. Revisa letra por letra (por autor de Yjs: y-prosemirror
+  reusa letras iguales de al lado, así que una marca no siempre es un solo tramo) que **todo lo que un dispositivo
+  guardó con su texto esté en el servidor con su texto**, que todos terminen iguales al servidor (con el mapa de
+  colapsar) y que los avisos sean solo de lo propio. En la suite, 12 corridas de 60 pasos (`REMOVED_SEEDS`,
+  `REMOVED_STEPS`). Con la subida de antes fallan 29 de 30 corridas.
+- **`src/ui/RemovedWritingBanner.test.tsx`:** el aviso aparece con la página abierta, muestra, copia (y sin
+  portapapeles deja el texto a la vista) y al cerrarlo se borra.
+
 ## Árbol de páginas
 
 - Crear, renombrar, mover, mandar a la papelera y restaurar entran a una **cola de salida** en IndexedDB y

@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.093 :
+
+Lo que alguien escribía adentro de un bloque que otro borraba al mismo tiempo podía no llegar nunca al servidor: la
+subida se armaba en un `Y.Doc` con GC y, si el dispositivo bajaba el borrado antes de subir, ese texto viajaba como
+hueco y quedaba solo en su IndexedDB (lo encontró la auditoría del historial). Ahora la subida se arma sin GC,
+aplicando lo guardado fila por fila y en orden: el texto llega, borrado (también lo escrito y borrado entre dos
+subidas; con más de 6 MB se arma con GC, como antes). Y quien escribió se entera: la página muestra un aviso con lo
+que escribió ahí, para verlo, copiarlo o descartarlo; el estado lo dice si la página no está abierta, y *Download my
+unsynced changes* lo incluye. Sin migración.
+[ Subida sin GC - lo escrito en algo que otro borra a la vez llega al servidor y se avisa ]
+
 v0.092 :
 
 Subidas que se traban (lo que quedó de v0.068 y v0.070). Con el portero o Storage colgados para todos, la cola

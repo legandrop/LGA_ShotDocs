@@ -417,6 +417,12 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
     (lo midió el diseño de B.9). Ahora el dispositivo anota los que el servidor ya tiene (`syncedDS`, con la misma
     regla que `syncedSV`: nunca dice de más) y sube solo los demás; si algo no cierra, sube todos. Sin migración.
     Ver `Doc_Sincronizacion.md`, "Subir solo los borrados nuevos".
+16. **Hecho (v0.093): lo escrito adentro de algo que otro borra a la vez llega al servidor.** La subida se armaba
+    con GC: si el dispositivo bajaba el borrado antes de subir, ese texto viajaba como hueco y se perdía para
+    siempre (lo encontró la auditoría del historial; decisión D15: arreglarlo ya). Ahora se arma sin GC y en orden,
+    y quien escribió ve en la página un aviso con su texto para copiarlo. Sin migración. Falta: subir
+    `min_app_version` a esta versión cuando se publique (las anteriores siguen subiendo con GC) y, con el historial,
+    decir quién borró. Ver `Doc_Sincronizacion.md`, "La subida sin GC".
 
 ### C. Esperan a Lega
 
