@@ -826,3 +826,63 @@ cadena que siga valiendo, no ninguno.
 **Para prenderlos (entrega 3):** aplicar esta migración (con copia de seguridad), que el script de restaurar vacíe
 `page_snapshots` y `page_compaction`, deje `snapshot_seq` en 0 y no haga volver atrás `content_epoch`; la entrega 2
 publicada; y `update public.workspace_settings set snapshot_min_version = <versión de la entrega 2> where id`.
+
+## Cómo quedó la entrega 2 (CREAR snapshots)
+
+Implementada en v0.0XX. El dispositivo de quien edita arma los snapshots y los sube; **siguen apagados en la base**
+(`snapshot_min_version` nulo): con ellos apagados la app no pide nada nuevo (ni reservas ni snapshots) y se comporta
+como v0.129. Todo se prueba prendido con el servidor en memoria.
+
+**La app** (`src/sync/`):
+
+- `compact.ts` (nuevo): el núcleo (sección 3 y 4.4) y el paso de una página contra el servidor (`compactPage`). Arma
+  con la base y las filas exactas del servidor (`pull_page_updates`, seguidas, sin huecos: un salto saltea la página),
+  nunca con lo guardado en el dispositivo; comprueba por los dos caminos con lo pendiente (como tramos), el vector y los
+  borrados, absorber en los dos sentidos y **cada elemento unidad por unidad** (contenido, borrado, de quién cuelga y
+  entre quiénes se insertó; ve un snapshot con los mismos ids y otro texto, que las demás comparaciones no ven); cada
+  10 en promedio, contra todo desde cero (sección 4.4, punto 5; si no da igual, invalida la cadena de la base); sube,
+  baja la vuelta, compara la huella y confirma. Lo que no se puede compactar (más de 8 MB, una fila ilegible, un salto,
+  una comprobación que falla, una vuelta distinta) se avisa con `skip_page_compaction` (24 horas, con el motivo) y la
+  comprobación que falla se anota en la consola.
+- `engine.ts`: al final del ciclo, como mucho una página (sección 4.1): con los snapshots prendidos y esta versión en la
+  mínima o más, entre las que la persona ve con lo borrado (Editar o más y no invitada), fuera de la papelera, enteras
+  en el dispositivo y sin nada rechazado, con 100 filas o más después del snapshot vigente según el árbol; primero la
+  que más junta, hasta tres reservas por ciclo. Una reserva que la base no da no se vuelve a pedir hasta 50 filas más o
+  media hora; sin red, se reintenta en el ciclo siguiente (la reserva es de la misma persona y el mismo tramo da la misma
+  huella: la base devuelve el que ya estaba). Sus errores no cortan el ciclo.
+- `remote.ts`: `SupabaseRemote` implementa las seis funciones (`claim_page_compaction`, `push_page_snapshot`,
+  `pull_page_snapshot`, `confirm_page_snapshot`, `skip_page_compaction`, `invalidate_page_snapshot`).
+- `docs.ts`: **el rearmado (D110, O1 y O2, sección 12):** sin nada propio sin subir, la página se tira y se rearma con
+  lo del servidor (no se sube nada); con algo sin subir, espera a que suba. La época del árbol reinicia solo si es más
+  nueva que la anotada.
+
+**La base** (`supabase/migrations/20261020120000_compactar_crear.sql`, sin aplicar; no sube `schema_version`):
+`invalidate_page_snapshot` pide ver lo borrado (`sees_deleted`), como las demás (O3). Lo demás de la entrega 1 no
+cambia.
+
+**Pruebas:**
+
+- `compact.test.ts` (prueba 1): al azar con tres autores, formato, mapas, XML, subidas demoradas (lo pendiente) y un
+  dispositivo con GC que vuelve a subir todo; cada eslabón pasa la comprobación, es igual a todo desde cero, es
+  determinista y da los mismos bytes que armarlo de una vez (400 semillas: 1224 snapshots, 135 con algo pendiente, 0
+  falsas alarmas). Mutantes que se rechazan: le falta una fila, un borrado de más, una fila o un borrado pendiente, el
+  mismo id con otro texto, armado con `mergeUpdates`. El historial armado sobre el snapshot da cada versión igual que
+  las filas; con `mergeUpdates`, no.
+- `compactar.test.ts` (pruebas 2 y 3): cuándo compacta y cuándo no (apagados, sin la migración, versión menor,
+  Ver, invitado, papelera, rechazada, sin tenerla entera), una por ciclo, incremental en la misma cadena, lo que se
+  saltea, la comparación desde cero que invalida, reintentos (vuelta perdida, subida perdida, dos dispositivos a la vez,
+  `snapshot_mismatch`, `snapshot_exists`, una vuelta distinta), lo propio sin subir que no entra, el invitado que no
+  invalida, el cliente de verdad, y la corrida al azar (tres dispositivos que compactan, la versión publicada,
+  snapshots malos que se invalidan, sin red, respuestas perdidas, cerrar la app y restaurar una copia;
+  `COMPACT_DEVICE_SEEDS`): todos iguales al servidor, nada escrito se perdió y las cuentas no dicen de más.
+- `compactarEditor.test.ts` (prueba 4): con el editor real, fotos en línea, foto con su dirección, script y preguntas.
+- `snapshots.test.ts`: las de la invalidación ahora piden que el borrado de un snapshot malo no llegue a nadie (antes la
+  prueba borraba una palabra que ya estaba borrada y no lo veía), la espera con algo sin subir, la página abierta y el
+  árbol atrasado.
+- `supabase/tests/snapshots_permisos.sql`: el invitado con Editar ya no invalida. Mutantes en `informe.md` del frente.
+
+**Para prenderlos (entrega 3):** aplicar `20261020120000_compactar_crear.sql`; el script de restaurar (sección 9);
+**subir `min_app_version` a la versión de esta entrega** (O5: las versiones v0.127 a v0.129 leen snapshots y, al
+invalidarse uno, vuelven a subir la página entera: el O1); probar de punta a punta y medir en el iPhone (pruebas 7 y
+8, también cuánto tarda armar uno en el hilo principal); antes de restaurar una copia con los snapshots prendidos,
+invalidarlos (sección 16); recién ahí `snapshot_min_version`.

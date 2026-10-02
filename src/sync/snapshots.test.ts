@@ -664,15 +664,21 @@ describe('si un snapshot sale mal: la época de contenido', () => {
     server.online = false;
     await edit(c, page, add('propia'));
     server.online = true;
-    const rowsBefore = (server.updates.get(page) ?? []).length;
     await new FakeRemote(server, '1.000').invalidateSnapshot(id, 'test');
-    // Una bajada con la época nueva mientras hay algo sin subir: no se toca nada (ni lo guardado ni las cuentas).
+    // Otro escribe: la bajada que sigue trae una fila con la época nueva.
+    await edit(e1, page, add('ajena'));
+    await e1.engine.syncNow();
+    const rowsBefore = (server.updates.get(page) ?? []).length;
+    // Una bajada con la época nueva mientras hay algo sin subir: lo guardado no se tira ni se rearma; la fila nueva se
+    // guarda, pero sin anotar la época (así el rearmado se vuelve a intentar).
     const before = await stored(c, page);
     await c.docs.pullPage(page, c.remote, { contentEpoch: 1 });
     let s = await state(c, page);
     expect(s?.snapshotId).toBe(id);
     expect(s?.contentEpoch).toBe(0);
-    expect(await stored(c, page)).toEqual(before);
+    expect(s?.cursor).toBe(rowsBefore);
+    expect((await stored(c, page)).slice(0, before.length)).toEqual(before);
+    expect(await text(c, page)).toContain('ajena');
     expect(await c.docs.unsyncedPages()).toEqual([page]);
     // El ciclo: primero sube lo propio (sin el borrado del snapshot: las cuentas dicen que el servidor ya lo tiene) y
     // después, sin nada pendiente, rearma la página con lo del servidor.
@@ -752,6 +758,13 @@ describe('si un snapshot sale mal: la época de contenido', () => {
     await c.docs.pullPage(page, c.remote, { contentEpoch: 0 });
     expect(calls.flat()).toEqual([]);
     expect((await state(c, page))?.snapshotId).toBe(s2);
+    // El ciclo con ese árbol atrasado ni siquiera la pide.
+    calls.splice(0);
+    const tree = c.remote.fetchTree.bind(c.remote);
+    c.remote.fetchTree = async (ids, schema) => (await tree(ids, schema)).map((r) => (r.id === page ? { ...r, content_epoch: 0 } : r));
+    await c.engine.syncNow();
+    expect(calls).toHaveLength(0);
+    c.remote.fetchTree = tree;
     await c.engine.syncNow();
     expect((server.updates.get(page) ?? []).length).toBe(rows);
     expect(await text(c, page)).toBe(serverText(server, page));

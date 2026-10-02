@@ -339,22 +339,23 @@ describe('cuándo compacta el dispositivo', () => {
   it('ni una página en la papelera, ni una rechazada, ni una que el dispositivo no tiene entera', async () => {
     const { server, e1, page } = await setup();
     const k = await compactor(server);
-    // No la tiene entera: la bajada de esa página no llega.
+    await k.engine.syncNow();
+    expect(k.compactions).toHaveLength(1);
+    const claims = countClaims(k);
+    // No la tiene entera: hay filas nuevas y la bajada de esa página no llega.
+    await type(e1, page, 8, 'r');
     const pull = k.docs.pullPage.bind(k.docs);
     k.docs.pullPage = async (id, remote, opts) => (id === page ? 0 : pull(id, remote, opts));
-    const claims = countClaims(k);
     await k.engine.syncNow();
     expect(claims.n).toBe(0);
     k.docs.pullPage = pull;
+    await k.engine.syncNow();
+    expect(k.compactions).toHaveLength(2);
     // Rechazada.
-    await k.engine.syncNow();
-    expect(k.compactions).toHaveLength(1);
-    await type(e1, page, 8, 'r');
-    await k.engine.syncNow();
+    await type(e1, page, 8, 's');
     await updateDocState(k.db, page, (s) => {
       s.rejected = 'too large';
     });
-    await type(e1, page, 8, 's');
     const before = claims.n;
     await k.engine.syncNow();
     expect(claims.n).toBe(before);
@@ -519,6 +520,32 @@ describe('reintentos: nada se duplica y lo sin confirmar nunca se sirve', () => 
     expect(k.compactions.map((x) => x.outcome.kind)).toEqual(['confirmed']);
     expect(server.snapshots).toHaveLength(1);
     expect(server.snapshots[0].confirmedAt).not.toBeNull();
+  });
+
+  it('filas que vuelven a subir la página entera desde un dispositivo con GC: el snapshot conserva el texto borrado', async () => {
+    const { server, e1, page } = await setup({ edits: 6 });
+    // Un dispositivo con GC (una versión vieja, o después de restaurar una copia) sube el documento entero: lo borrado
+    // va como hueco. Armado con `mergeUpdates` se quedaría con esa copia y perdería el texto de las versiones del medio.
+    const gc = new Y.Doc();
+    for (const u of serverRows(server, page)) Y.applyUpdate(gc, u);
+    await new FakeRemote(server, '0.124').pushUpdate(page, crypto.randomUUID(), Y.encodeStateAsUpdate(gc));
+    gc.destroy();
+    await type(e1, page, 4, 'mas');
+    const k = await compactor(server);
+    await k.engine.syncNow();
+    expect(k.compactions.map((c) => c.outcome.kind)).toEqual(['confirmed']);
+    const [sn] = confirmed(server, page);
+    const fromRows = serverDoc(server, page);
+    const fromSnap = docFromUpdate(sn.state);
+    expect(compareDocs(fromRows, fromSnap)).toBeNull();
+    // "palabra1" (borrada por el que escribe) conserva su texto en el snapshot.
+    const deleted: string[] = [];
+    for (const structs of fromSnap.store.clients.values()) {
+      for (const st of structs) if (st instanceof Y.Item && st.deleted && st.content instanceof Y.ContentString) deleted.push(st.content.str);
+    }
+    expect(deleted.join('')).toContain('palabra1');
+    fromRows.destroy();
+    fromSnap.destroy();
   });
 
   it('la vuelta no coincide con lo que se subió: no se confirma ni se sirve', async () => {
