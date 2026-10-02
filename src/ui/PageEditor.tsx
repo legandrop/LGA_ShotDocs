@@ -23,6 +23,8 @@ import { porteroDownload, sharpenImages } from './sharpImages';
 import { attachMarkupOverlay } from './markupOverlay';
 import { PHOTO_MARKUP_MAP } from '../media/markup';
 import { startMarkupPrune } from '../media/markupPrune';
+import { clipScope } from '../media/markupClipboard';
+import { markupClipboardExtension, pasteWithMarkup } from './markupClipboardEditor';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { editorSchemaOptions, insertPageBreakForSlashMenu, SCRIPT_PROP, setVideosAccepted } from './editorSchema';
 import { dropTarget, insertFiles, isEmptyParagraph, isFilesTransfer, takeFiles, type FileEditor, type InsertAt } from './fileDrop';
@@ -332,7 +334,7 @@ export function BlockEditor({
    */
   marks?: HistoryMarksInput;
 }) {
-  const { docs, files, media, user, db, folders } = useServices();
+  const { docs, files, media, user, db, folders, tree: pageTree, workspace } = useServices();
   const scheme = useScheme();
   const tr = useT();
   const editorRef = useRef<{ removeBlocks: (ids: string[]) => unknown; transact: (fn: (tr: { setMeta: (k: string, v: unknown) => unknown }) => void) => void } | null>(null);
@@ -402,6 +404,13 @@ export function BlockEditor({
   // Pegar un link de Drive ofrece dejarlo como link, como texto o como tarjeta (paso 13, drivePaste.ts).
   const drivePaste = useMemo(() => createDrivePaste(), []);
 
+  // Copiar y pegar una foto con sus anotaciones (D46, markupClipboardEditor.ts): viajan solo dentro del mismo workspace
+  // y del mismo proyecto (en otro proyecto la foto se ve como "de otro proyecto" y sus notas no tendrían dónde verse).
+  // En la vista de una versión del historial se puede copiar (lleva las de esa versión), nunca pegar.
+  const markupScope = () => clipScope(workspace?.config?.localKey, pageTree?.get(pageId)?.workspace_id);
+  const markupScopeRef = useRef(markupScope);
+  markupScopeRef.current = markupScope;
+
   // Lo colapsado para vos (P.11, Docs/Doc_Colapsar.md): se guarda en la base local con una pausa, y lo que
   // falte se escribe al cerrar la página.
   const collapseSave = useMemo(() => collapseSaver(db, pageId), [db, pageId]);
@@ -433,7 +442,15 @@ export function BlockEditor({
       // inlinePhotoCreate.ts); con portero, cualquier otro archivo, un bloque debajo (fileDrop.ts).
       pasteHandler: (ctx) => {
         const dt = ctx.event.clipboardData;
-        if (!isFilesTransfer(dt)) return drivePaste.pasteHandler(ctx);
+        if (!isFilesTransfer(dt))
+          return pasteWithMarkup({
+            data: dt,
+            view: ctx.editor.prosemirrorView,
+            doc,
+            scope: markupScopeRef.current(),
+            run: () => drivePaste.pasteHandler(ctx),
+            onLimit: () => notify(t('editor.markupPasteTooMany')),
+          });
         const { files: taken, folders } = takeFiles(dt!);
         if (folders > 0) notify(t('editor.foldersNotSupported'));
         void addFiles(ctx.editor as unknown as PhotoEditor, taken, null, fileOptions(ctx.editor as unknown as FileEditor));
@@ -495,6 +512,7 @@ export function BlockEditor({
             : null,
         ),
         ...(marks ? [historyMarksExtension(marks)] : []),
+        markupClipboardExtension({ doc, scope: () => markupScopeRef.current() }),
       ],
     }),
     [doc],

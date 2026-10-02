@@ -318,6 +318,10 @@ export const editor = {
     en: "This file could not be saved on this device.",
     es: "No se pudo guardar este archivo en este dispositivo.",
   },
+  'editor.markupPasteTooMany': {
+    en: "A pasted photo came without its annotations: this page already has too many.",
+    es: "Una foto pegada llegó sin sus anotaciones: esta página ya tiene demasiadas.",
+  },
   'editor.pastedEmbedded': {
     en: "A pasted image stays embedded in the page: {reason}",
     es: "Una imagen pegada queda guardada dentro de la página: {reason}",

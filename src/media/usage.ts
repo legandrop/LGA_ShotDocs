@@ -12,15 +12,23 @@ import { mediaIdOf } from './queue';
  * usado (así nunca se lo da por quitado por no reconocer el bloque).
  */
 export function mediaIdsInDoc(doc: Y.Doc): Set<string> {
-  const ids = new Set<string>();
+  return new Set(mediaCountsInDoc(doc).keys());
+}
+
+/**
+ * Cuántas veces aparece cada `sdmedia://` en el contenido (la misma foto dos veces cuenta dos). Lo usa pegar una foto con
+ * sus anotaciones (D46) para saber qué fotos trajo de verdad el pegado: las que aparecen más veces que antes.
+ */
+export function mediaCountsInDoc(doc: Y.Doc): Map<string, number> {
+  const counts = new Map<string, number>();
   const stack: unknown[] = doc.getXmlFragment(CONTENT_FRAGMENT).toArray();
   while (stack.length > 0) {
     const item = stack.pop();
     if (!(item instanceof Y.XmlElement)) continue;
     const url = item.getAttribute('url') as unknown;
     const id = typeof url === 'string' ? mediaIdOf(url) : null;
-    if (id) ids.add(id);
+    if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
     stack.push(...item.toArray());
   }
-  return ids;
+  return counts;
 }

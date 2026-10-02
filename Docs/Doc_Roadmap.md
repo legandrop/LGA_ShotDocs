@@ -383,6 +383,12 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   palma no dibuja, el texto en una caja común con el teclado, tocar un tirador sin moverlo ya no cambia la forma. Falta
   a mano en un iPhone y un iPad reales: el teclado con el toque, el gesto de "atrás" desde el borde y el doble toque
   contra el dibujo, el Apple Pencil con la palma. De su auditoría quedan: un `pointercancel` del sistema (el gesto de «atrás», una llamada) descarta el trazo en curso, como en la compu (decidir si se guarda); la tira de herramientas no se desliza sola hasta la elegida al abrir. Sigue la entrega 4 (bajar y copiar con anotaciones).
+  **Copiar y pegar con las anotaciones hecho (v0.132, D46, parte de la entrega 5):** copiar o cortar una foto anotada y
+  pegarla en otra página del mismo proyecto le lleva sus formas (mismas claves, sin duplicar, un solo ⌘Z saca la foto y
+  sus flechas); a otro proyecto o workspace no viajan, y al portapapeles no va nada nuevo
+  (`src/media/markupClipboard.ts`, `src/ui/markupClipboardEditor.ts`). Falta a mano: ⌘C y ⌘V de verdad en Safari de la
+  Mac y en el iPhone. De la entrega 5 quedan el historial de las anotaciones, *Keep annotations?* al reemplazar y buscar
+  en sus textos.
   De la auditoría de la entrega 2 (`Doc_Anotar_Fotos.md`, "Correcciones de la auditoría de la entrega 2"), pendientes:
   una prueba que caiga si la condición «página sincronizada» de `PageEditor` (red, nada sin subir, nada sin bajar) que
   frena la poda se rompe (hoy, con `synced = async () => true`, la suite sigue en verde; la re-verificación lo comprobó en

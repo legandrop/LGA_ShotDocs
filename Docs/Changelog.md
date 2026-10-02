@@ -9,7 +9,12 @@ resto, y si las copias se habían juntado se borraban todas. Un parche a Yjs (`p
 13.6.33, `assertYjsPatched`) sigue la copia en todo su largo. Con texto: de 14 a 0 de 3.000 con algo de menos; con el
 editor real, de 68 de 300 con restos a 0. Borrando bloques enteros queda poco: 1 de 300 con una letra de menos (antes
 7). Sin cambios en lo guardado ni en `min_app_version`.
-[ Deshacer, entrega 0 (B.21): parche de Yjs para que deshacer no deje restos ni se lleve texto ]
+**Además, copiar y pegar una foto con sus anotaciones** (D46): las flechas son de cada página (`photoMarkup`), así que una
+foto anotada llegaba limpia a otra página. Ahora, al copiar, la app recuerda las formas de las fotos copiadas (y en sus
+otras pestañas, por `BroadcastChannel`); al pegar en una página del mismo proyecto las escribe en el mismo paso de ⌘Z,
+solo para las fotos que el pegado agregó. Al portapapeles no va nada nuevo; otro proyecto o una versión vieja reciben la
+foto limpia.
+[ Deshacer sin restos (parche de Yjs, B.21) y copiar y pegar una foto con sus anotaciones (D46) ]
 
 v0.131 :
 
