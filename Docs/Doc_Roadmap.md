@@ -162,9 +162,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   en Chrome y Edge y el botón "Carpeta…" del menú `/`. **Entrega 2 hecha (*Bajar todo*, rama `lega/carpetas-zip`):**
   zip sin comprimir con Zip64 escrito a medida que llega en Chrome y Edge, o el árbol en una carpeta; en memoria con
   tope en Firefox, Safari y los teléfonos (D24); nombres de Drive limpios para Windows y la Mac (`.`, `..`, punto al
-  final, `CON`…, a lo sumo 255 bytes) y cortes de 200 y 250 caracteres por grafema. Falta (BAJO): listar ~40 subcarpetas
-  por pedido (hoy una), Firefox sin tope por el service worker, *Retry missing*, los emojis compuestos que pierden el ZWJ
-  (O4 de la auditoría) y probar a mano en Safari, el iPhone y con el Drive real. Detalle en
+  final, `CON`…, a lo sumo 255 bytes) y cortes de 200 y 250 caracteres por grafema. *Retry missing*, el tope sin avance
+  de cada pedido (R1) y el ZWJ de los emojis compuestos en la app (O4), hechos (rama `lega/carpetas-restos`). Falta
+  (BAJO): listar ~40 subcarpetas por pedido (pide un cambio del portero: `/folder/list` con varias), el ZWJ en el
+  portero, Firefox sin tope por el service worker y probar a mano en Safari, el iPhone y con el Drive real. Detalle en
   `Doc_Carpetas.md`, "Cómo quedó" y "Cómo quedó (entrega 2)". Pendiente de los nombres (auditoría de D3, BAJO):
   - Mac y Windows: la marca de cada subcarpeta resume la ruta sin normalizar los acentos (la Mac da `í` en dos
     partes). Volver a soltar desde el otro sistema crea subcarpetas nuevas, con el mismo nombre, al lado de las de
