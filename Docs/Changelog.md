@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.108 :
+
+Compartir una página con alguien sin cuenta no existía: solo usuarios invitados. Faltaba un diseño seguro para
+«Anyone with the link» con el registro cerrado y el plan gratis. `Doc_Link_Publico.md` lo describe: una llave larga en
+el link que la base revisa en cada pedido, sin cuentas ni sesiones anónimas (D31); vale para esa página y lo de abajo,
+nunca lo de arriba; quien entra recibe la página pasada en limpio, sin historial ni papelera; topes de cantidad y de
+bytes por link y por día, guarda del tamaño de la base y nada indexable. *Can view* (que comenta) sale primero; *Can
+edit* (texto y archivos, sin tocar el árbol, D29) después; vencimiento opcional (D30). Dos auditorías independientes:
+la segunda dejó dos condiciones para programar la entrega 1 (topes de bytes de los comentarios y lecturas contadas).
+[ Link público - diseño de Anyone with the link, auditado ]
+
 v0.107 :
 
 Una foto no entraba en una celda de tabla: pegar, soltar, "/Image" y "Copy image" la ponían debajo (o arriba) de la
