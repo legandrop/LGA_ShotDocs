@@ -1,6 +1,6 @@
 import * as Y from 'yjs';
 import type { HistoryRemote } from './remote';
-import { CONTENT_FRAGMENT, normalizeStructure } from './structure';
+import { CONTENT_FRAGMENT, normalizeStructure, seedClientId, seedTextClientId } from './structure';
 import { RemoteError, REQUEST_TIMEOUT } from './types';
 
 // El historial de versiones de una página (P.18, Docs/Doc_Historial.md). Todo se arma en el dispositivo con las
@@ -124,26 +124,84 @@ function touchesContent(doc: Y.Doc, client: number, from: number, to: number): b
   return false;
 }
 
+/** Lo que una fila trajo por primera vez: tramos `[cliente, desde, hasta)` agregados y borrados. */
+export interface RowFresh {
+  ins: [number, number, number][];
+  del: [number, number, number][];
+}
+
+/**
+ * Texto huérfano (Docs/Doc_Historial.md, 5.4): lo que alguien escribió en algo que ya estaba borrado cuando su fila
+ * llegó (otro lo había borrado, o restauró una versión sin eso). Yjs lo integra ya borrado: no se ve en ninguna versión.
+ * Se muestra aparte, en la versión de la fila que lo trajo.
+ */
+export interface HistoryOrphan {
+  /** La fila que lo trajo (índice en `rows`). */
+  row: number;
+  text: string;
+  /** El bloque donde se escribió (su id), si se sabe. */
+  blockId: string | null;
+}
+
+interface Place {
+  /** Si él o algo de arriba se borró en una fila anterior a la que se está mirando. */
+  removed: boolean;
+  /** Si es del contenido de la página (no el mapa de colapsar). */
+  content: boolean;
+  blockId: string | null;
+}
+
+/** El id de un bloque aunque esté borrado (sin GC, el valor sigue en el documento). */
+function rawId(el: Y.XmlElement): string | null {
+  const item = el._map.get('id');
+  if (!item || item.content instanceof Y.ContentDeleted) return null;
+  const values = item.content.getContent();
+  const v = values[values.length - 1];
+  return v === undefined || v === null || v === '' ? null : String(v);
+}
+
 export class PageHistory {
   /** Las filas, en orden de `seq`. */
-  readonly rows: HistoryRow[];
+  readonly rows: HistoryRow[] = [];
   /** El documento del historial: todas las filas aplicadas en orden, sin GC. */
   readonly doc: Y.Doc;
-  readonly sessions: HistorySession[];
-  private readonly metas: RowMeta[];
+  sessions: HistorySession[] = [];
+  private readonly metas: RowMeta[] = [];
   private readonly inserts = new RangeIndex();
   private readonly deletes = new RangeIndex();
   /** Si la fila cambió algo del contenido que ninguna anterior traía. */
-  private readonly contributes: boolean[];
+  private readonly contributes: boolean[] = [];
+  /** Lo que trajo cada fila por primera vez (para la diferencia solo de lo tocado). */
+  readonly fresh: RowFresh[] = [];
   private readonly snapshots = new Map<number, Y.Snapshot>();
   /** Filas que esta versión de Yjs no pudo leer (las saltea: lo dice la pantalla). */
   readonly unreadable: number[] = [];
+  /** El texto huérfano, en orden de fila. */
+  readonly orphans: HistoryOrphan[] = [];
+  /** Los autores de Yjs de la semilla (estructura vacía, igual en todos los dispositivos: no se marca). */
+  readonly seedClients: ReadonlySet<number>;
+  private readonly gapMs: number;
 
-  constructor(rows: HistoryRow[], gapMs = SESSION_GAP_MS) {
-    this.rows = [...rows].sort((a, b) => a.seq - b.seq);
+  constructor(rows: readonly HistoryRow[], gapMs = SESSION_GAP_MS, pageId?: string) {
     this.doc = new Y.Doc({ gc: false });
-    this.metas = [];
-    for (const [i, row] of this.rows.entries()) {
+    this.gapMs = gapMs;
+    this.seedClients = new Set(pageId ? [seedClientId(pageId), seedTextClientId(pageId)] : []);
+    this.append(rows);
+  }
+
+  /**
+   * Suma filas nuevas (las de `seq` mayor al último que ya tiene; las demás se ignoran) y vuelve a armar las sesiones
+   * y los snapshots. Lo de antes no cambia: el documento solo crece y cada tramo sigue con la fila que lo trajo primero.
+   * Devuelve cuántas sumó.
+   */
+  append(rows: readonly HistoryRow[]): number {
+    const lastSeq = this.rows.length ? this.rows[this.rows.length - 1].seq : -Infinity;
+    const fresh = rows.filter((r) => r.seq > lastSeq).sort((a, b) => a.seq - b.seq);
+    if (fresh.length === 0 && this.rows.length > 0) return 0;
+    const start = this.rows.length;
+    for (const row of fresh) {
+      const i = this.rows.length;
+      this.rows.push(row);
       try {
         const { from, to } = Y.parseUpdateMeta(row.data);
         const { ds } = Y.decodeUpdate(row.data);
@@ -154,25 +212,117 @@ export class PageHistory {
         this.metas.push({ from: new Map(), to: new Map(), ds: Y.createDeleteSet() });
       }
     }
-    // Quién trajo cada tramo por primera vez, y si eso tocó el contenido.
-    this.contributes = this.metas.map((m, i) => {
+    // Quién trajo cada tramo por primera vez, si eso tocó el contenido, y el texto huérfano.
+    for (let i = start; i < this.metas.length; i++) {
+      const m = this.metas[i];
       let touched = false;
+      const got: RowFresh = { ins: [], del: [] };
       for (const [client, to] of m.to) {
         for (const [a, b] of this.inserts.add(client, m.from.get(client) ?? 0, to, i)) {
+          got.ins.push([client, a, b]);
           if (!touched && touchesContent(this.doc, client, a, b)) touched = true;
         }
       }
+      // Antes de sumar los borrados de esta fila: huérfano es lo que llegó a algo borrado por una fila ANTERIOR.
+      this.findOrphans(i, got.ins);
       for (const [client, items] of m.ds.clients) {
         for (const it of items) {
           for (const [a, b] of this.deletes.add(client, it.clock, it.clock + it.len, i)) {
+            got.del.push([client, a, b]);
             if (!touched && touchesContent(this.doc, client, a, b)) touched = true;
           }
         }
       }
-      return touched;
-    });
-    this.sessions = this.group(gapMs);
+      this.contributes.push(touched);
+      this.fresh.push(got);
+    }
+    this.sessions = this.group(this.gapMs);
+    this.snapshots.clear();
     this.buildSnapshots();
+    return fresh.length;
+  }
+
+  /** La fila (índice) que trajo ese elemento, o -1. */
+  insertRow(client: number, clock: number): number {
+    return this.inserts.find(client, clock);
+  }
+
+  /** La fila (índice) que trajo el borrado de ese elemento, o -1. */
+  deleteRow(client: number, clock: number): number {
+    return this.deletes.find(client, clock);
+  }
+
+  /** La sesión (índice) de una fila, o -1. */
+  sessionOfRow(row: number): number {
+    let lo = 0;
+    let hi = this.sessions.length - 1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      const s = this.sessions[mid];
+      if (row < s.first) hi = mid - 1;
+      else if (row > s.last) lo = mid + 1;
+      else return mid;
+    }
+    return -1;
+  }
+
+  /** El texto huérfano que llegó en la sesión `index`. */
+  orphansOf(index: number): HistoryOrphan[] {
+    const s = this.sessions[index];
+    return s ? this.orphans.filter((o) => o.row >= s.first && o.row <= s.last) : [];
+  }
+
+  /**
+   * El texto que trajo la fila `row` adentro de algo que una fila anterior ya había borrado (5.4). Se junta por texto
+   * de Yjs: lo escrito en el mismo renglón es un solo pedazo. Solo cuenta lo que llegó con letras (una fila con GC lo
+   * trae como hueco: ahí no hay nada que mostrar).
+   */
+  private findOrphans(row: number, ranges: [number, number, number][]): void {
+    const found = new Map<Y.AbstractType<unknown>, { text: string; blockId: string | null }>();
+    const cache = new Map<Y.AbstractType<unknown>, Place>();
+    const climb = (type: Y.AbstractType<unknown>): Place => {
+      const known = cache.get(type);
+      if (known) return known;
+      let out: Place;
+      const item = type._item;
+      if (!item) {
+        let content = false;
+        try {
+          content = !!type.doc && Y.findRootTypeKey(type) === CONTENT_FRAGMENT;
+        } catch {
+          content = false;
+        }
+        out = { removed: false, content, blockId: null };
+      } else {
+        const up = climb(item.parent as Y.AbstractType<unknown>);
+        const dr = this.deletes.find(item.id.client, item.id.clock);
+        // El bloque más cercano manda.
+        const own = type instanceof Y.XmlElement && type.nodeName === 'blockContainer' ? rawId(type) : null;
+        out = { removed: up.removed || (dr >= 0 && dr < row), content: up.content, blockId: own ?? up.blockId };
+      }
+      cache.set(type, out);
+      return out;
+    };
+    for (const [client, from, to] of ranges) {
+      const list = this.doc.store.clients.get(client);
+      if (!list || list.length === 0) continue;
+      const last = list[list.length - 1];
+      if (from >= last.id.clock + last.length) continue;
+      for (let i = Y.findIndexSS(list, Math.max(from, list[0].id.clock)); i < list.length && list[i].id.clock < to; i++) {
+        const s = list[i];
+        if (!(s instanceof Y.Item) || !(s.content instanceof Y.ContentString) || s.parentSub !== null) continue;
+        const parent = s.parent as Y.AbstractType<unknown>;
+        const where = climb(parent);
+        if (!where.content || !where.removed) continue;
+        // Solo la parte del elemento que está en el tramo (un elemento puede juntar letras de varias filas).
+        const piece = s.content.str.slice(Math.max(from, s.id.clock) - s.id.clock, Math.min(to, s.id.clock + s.length) - s.id.clock);
+        if (!piece) continue;
+        const entry = found.get(parent);
+        if (entry) entry.text += piece;
+        else found.set(parent, { text: piece, blockId: where.blockId });
+      }
+    }
+    for (const { text, blockId } of found.values()) this.orphans.push({ row, text, blockId });
   }
 
   private group(gapMs: number): HistorySession[] {
