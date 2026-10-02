@@ -419,7 +419,8 @@ clientes reales con un servidor que solo ofrece registro dinámico.
 
 Las de escritura y `add_comment`, sobre una página que ve un invitado (o alguien que no es miembro), **solo con el permiso
 aparte** de 9.2 (B3, 9.7); si no, responden *This page is shared with guests: writing to it was not allowed when this
-assistant was connected.*
+assistant was connected.* En `create_page` la regla se mira sobre la **página madre** (la nueva todavía no
+existe y heredaría lo que ve el invitado); si la madre es la raíz del proyecto, sobre si un invitado ve el proyecto.
 
 **La guarda de `replace_block_text`** compara con lo que el portero ve. Para quien edita es el estado actual (base y filas
 posteriores); para un invitado con Editar es la base limpia, que puede tener minutos de atraso (D14): la guarda puede pasar
@@ -638,7 +639,8 @@ La foto sale del Drive del dueño hacia el proveedor: confirmación por pedido (
     `db_pre_request`) no lee tablas ni llama a nada que no sea `mcp_*` (compartir, invitar, papelera, `pull_page_updates`,
     el historial, `mcp_grants`: rechazado); Storage con ese token, rechazado; niveles por herramienta; proyectos no
     elegidos; modo lectura no escribe; **no escribe ni comenta en una página que ve un invitado sin la casilla, y sí con
-    ella** (también si el invitado la ve por una de arriba); `assistant_policy`; topes por día; invitado y Ver reciben solo
+    ella** (también si el invitado la ve por una de arriba), y lo mismo con `create_page` debajo de una página que ve un
+    invitado (rechazado sin la casilla, permitido con ella); `assistant_policy`; topes por día; invitado y Ver reciben solo
     la base (mutante: devolver filas); **la papelera no aparece con un editor ni con el dueño** (mutante: usar solo
     `user_page_level`); lo de arriba no aparece; `expected_text` distinto no escribe; idempotencia de `mcp_push_update`;
     versión mínima.
@@ -656,7 +658,7 @@ La foto sale del Drive del dueño hacia el proveedor: confirmación por pedido (
 | **A3** | *Suggest caption* con la copia de 2048 px, con confirmación por pedido. Y al roadmap de fotos: recortar, achicar, comprimir | 1) Elegir una foto → *Suggest caption* → confirmar → *Apply*: el pie queda | Bajo |
 | **M0** | Prueba técnica, sin producto: prender el servidor OAuth de Supabase en un proyecto de prueba (no en Wanka); el login de un cliente MCP real con el registro cerrado y la pantalla de permiso de prueba (con el `ref` en la dirección); el hook que cambia el rol a `mcp_client` y si PostgREST lo acepta, y si no, el plan B cerrado de fábrica (`db_pre_request`, Storage, Realtime); **qué puede hacer un token OAuth en la API de Auth** (leer el usuario, cambiar correo o contraseña, cerrar sesiones); revocar una autorización; el parámetro `resource` y el registro de clientes; medir la CPU de leer y escribir en un Worker de prueba gratis con copias de las bases más grandes | Las respuestas y los tiempos, anotados acá. Con eso se elige: portero gratis (solo si entra), portero con el plan pago del dueño, o MCP local (9.9) | Bajo (no toca Wanka) |
 | **M1** | MCP de lectura: la migración (`mcp_grants`, `mcp_pull_page` con el filtro de la papelera, el rol o el plan B, los topes, `mcp_limits`), el hook, `/mcp`, la metadata y el rechazo de esos tokens en las demás rutas del portero, la pantalla de permiso y *Connected assistants*. Requiere el interruptor de D14 prendido y, según M0, el plan pago de Workers | 1) En un cliente MCP, agregar la dirección del portero como conector. 2) Entrar con el código, elegir *Read only* y un proyecto. 3) Pedir "listá las páginas del proyecto" y "resumí la página X". 4) Pedir una página de otro proyecto: no la encuentra. 5) *Disconnect* en la app → el cliente pierde el acceso | **Alto**: abre un camino nuevo a la base para un tercero |
-| **M2** | MCP que escribe: `mcp_push_update`, el escritor, las herramientas de escritura, la guarda, los topes de escritura y la regla de las páginas con invitados | 1) Reconectar con *Read and edit*. 2) "Agregá al final del reporte de hoy: lente 35 mm, T2.8". 3) Verlo en la app y en el historial con su nombre; Ctrl+Z en la app lo saca. 4) Pedirle que borre una página: no puede. 5) Pedirle que escriba en una página compartida con un invitado: no puede (la casilla está destildada) | **Alto**: escrituras de un tercero |
+| **M2** | MCP que escribe: `mcp_push_update`, el escritor, las herramientas de escritura, la guarda, los topes de escritura y la regla de las páginas con invitados | 1) Reconectar con *Read and edit*. 2) "Agregá al final del reporte de hoy: lente 35 mm, T2.8". 3) Verlo en la app y en el historial con su nombre; restaurar la versión anterior desde el historial lo saca (Ctrl+Z no: llega como una edición de otro). 4) Pedirle que borre una página: no puede. 5) Pedirle que escriba en una página compartida con un invitado: no puede (la casilla está destildada) | **Alto**: escrituras de un tercero |
 | **M3** | Medir uso y CPU reales, ajustar topes; el autor por bloque en `read_page`; decidir si suma borrar un bloque y una búsqueda en el contenido | — | Medio |
 
 Antes de cerrar cada entrega, la auditoría independiente de siempre (funcionalidad, permisos y RLS, no perder datos,
