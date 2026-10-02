@@ -15,6 +15,8 @@
 //   entran juntos en una hoja.
 // - Un párrafo con fotos en línea se parte entre renglones (cada renglón es una fila de fotos) aunque entre en una
 //   hoja: como las filas de fotos-bloque, que eran una unidad cada una.
+// - Un salto de hoja (un párrafo con `pageBreak`, editorSchema.ts): la unidad que sigue empieza una hoja nueva.
+//   Vacío no ocupa lugar en el papel (alto 0); varios seguidos cuentan como uno (no dejan hojas en blanco).
 
 export interface Unit {
   /** `header`, `title` o `b:<id del bloque>`. */
@@ -32,6 +34,8 @@ export interface Unit {
    * una, una unidad). Sin esto, un párrafo de tres filas de fotos que no entra en lo que queda pasaría entero.
    */
   breakable?: boolean;
+  /** Un salto de hoja: la próxima unidad con alto empieza una hoja nueva (aunque esta no tenga alto). */
+  breakAfter?: boolean;
 }
 
 export interface SheetBreak {
@@ -73,9 +77,19 @@ export function paginate(units: readonly Unit[], sheetHeight: number, tolerance 
     breaks.push({ index, key: u.key, offset, sheet: breaks.length + 2 });
   };
 
+  // Un salto de hoja pendiente: la próxima unidad con alto empieza hoja (si no la empieza ya).
+  let forced = false;
   for (let i = 0; i < units.length; i++) {
     const u = units[i];
-    if (!(u.height > 0)) continue;
+    if (!(u.height > 0)) {
+      if (u.breakAfter) forced = true;
+      continue;
+    }
+    if (forced) {
+      forced = false;
+      if (u.top > start + EPS) startAt(i, 0);
+    }
+    if (u.breakAfter) forced = true;
     const splits = (u.splits ?? []).filter((s) => s > EPS && s < u.height - EPS);
     // Más alta que una hoja (o un párrafo con fotos en línea) y con dónde partirla (renglones, filas): se parte.
     const tall = (u.height > keepHeight + EPS || u.breakable === true) && splits.length > 0;
@@ -117,6 +131,9 @@ export function paginate(units: readonly Unit[], sheetHeight: number, tolerance 
 /** Lo que se mide como unidad, en el orden del documento (el contenido de un bloque va antes que sus hijos). */
 export const UNIT_SELECTOR = '.page-header, .page-title, .bn-block-content';
 
+/** El contenido de un párrafo de salto de hoja (BlockNote pone `data-page-break` en el bloque que lo tiene). */
+export const PAGE_BREAK_SELECTOR = '.bn-block-content[data-content-type="paragraph"][data-page-break="true"]';
+
 /** La clave de una unidad de la vista (o de la página en pantalla). */
 export function unitKey(el: Element): string | null {
   if (el.classList.contains('page-header')) return 'header';
@@ -145,9 +162,12 @@ export function measureUnits(root: HTMLElement, sheetHeight: number): Measured {
     const key = unitKey(el);
     if (!key) continue;
     const r = el.getBoundingClientRect();
-    if (r.height <= 0) continue;
-    const marginTop = parseFloat(getComputedStyle(el).marginTop) || 0;
-    const unit: Unit = { key, top: r.top - origin - marginTop, height: r.height + marginTop };
+    // Un salto de hoja vacío no ocupa lugar en el papel (printView.ts lo esconde), pero cuenta igual.
+    const pageBreak = el.matches(PAGE_BREAK_SELECTOR);
+    if (r.height <= 0 && !pageBreak) continue;
+    const marginTop = r.height > 0 ? parseFloat(getComputedStyle(el).marginTop) || 0 : 0;
+    const unit: Unit = { key, top: r.top - origin - marginTop, height: r.height > 0 ? r.height + marginTop : 0 };
+    if (pageBreak) unit.breakAfter = true;
     if (el.matches('[data-content-type="heading"]')) unit.keepWithNext = true;
     // Con fotos en línea, se parte entre renglones aunque entre en una hoja (`breakable`).
     if (!el.querySelector('table') && el.querySelector('.bn-inline-content .sd-photo')) unit.breakable = true;

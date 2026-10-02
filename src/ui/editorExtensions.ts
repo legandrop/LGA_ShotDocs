@@ -1,8 +1,32 @@
-import { collapseExtension, headingBackspaceExtension, type CollapseOptions } from './collapseEditor';
+import { createExtension } from '@blocknote/core';
+import { collapseExtension, enterAfterCollapsedHeading, headingBackspaceExtension, type CollapseOptions } from './collapseEditor';
+import { deleteEmptyBreak, enterAtBreakStart, insertPageBreak, PAGE_BREAK_SHORTCUT, removeBreakBefore } from './editorSchema';
 import { findExtension } from './findEditor';
 import { inlinePhotoSpotsExtension } from './inlinePhotoCreate';
 import { inlinePhotoExtensions } from './inlinePhotoEditor';
 import { undoGuardExtension } from './undoGuard';
+
+/**
+ * El teclado del salto de hoja (Docs/Doc_Hojas_PDF.md). Cada tecla actúa solo en su caso y si no, sigue la del editor.
+ */
+export const pageBreakExtension = createExtension({
+  key: 'shotdocs-page-break',
+  keyboardShortcuts: {
+    // Ctrl+Enter (⌘↩ en la Mac): un salto de hoja donde está el cursor. Al final de un título colapsado, primero lo
+    // que hace Enter ahí (un renglón después de lo escondido, sin abrir la sección), y ese renglón pasa a ser el salto.
+    [PAGE_BREAK_SHORTCUT]: ({ editor }) => {
+      const view = editor.prosemirrorView;
+      if (view) enterAfterCollapsedHeading(view);
+      return insertPageBreak(editor);
+    },
+    // Retroceso al principio del bloque que sigue a un salto: saca el salto (no junta el texto con él).
+    Backspace: ({ editor }) => removeBreakBefore(editor),
+    // Enter al principio de un salto con texto: un renglón común arriba, sin duplicar el salto.
+    Enter: ({ editor }) => enterAtBreakStart(editor),
+    // Supr en un salto vacío: lo saca.
+    Delete: ({ editor }) => deleteEmptyBreak(editor),
+  },
+});
 
 /**
  * Las extensiones del editor de una página, en un solo lugar: las usan la página (PageEditor.tsx), la página de
@@ -19,6 +43,8 @@ export function pageEditorExtensions(collapse: CollapseOptions | null) {
     findExtension,
     // Cada borrado es un solo Ctrl+Z, y el deshacer del navegador nunca edita la página (undoGuard.ts).
     undoGuardExtension(),
+    // El salto de hoja: Ctrl/⌘+Enter lo pone y Retroceso justo después lo saca (antes que el Retroceso de los títulos).
+    pageBreakExtension,
     // Retroceso al principio de un título "sube la línea", en todos los navegadores (también sin colapsar).
     headingBackspaceExtension,
     ...(collapse ? [collapseExtension(collapse)] : []),

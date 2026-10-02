@@ -113,7 +113,7 @@ In production (v0.049). What works today:
   unless the owner or an admin ticks *Also send its files to the Google Drive trash*: then its whole folder goes to
   the Drive trash, and restoring the project within Google's 30 days brings it back.
 - Keyboard in the page tree: ↑ and ↓ open the previous or next page, → and ← expand and collapse (← on a page with nothing to collapse goes to its parent page).
-- Page breaks and PDF: pages with a paper size show where each sheet starts, and *Export PDF / Print* in the page menu prints exactly those sheets.
+- Page breaks and PDF: pages with a paper size show where each sheet starts, and *Export PDF / Print* in the page menu prints exactly those sheets. A manual page break (*Page break* in the / menu, or Ctrl+Enter, ⌘↩ on a Mac) makes what follows start on a new sheet, on screen and in the PDF.
 - English and Spanish: the whole interface in both languages, chosen in the account menu and saved in your account (Script is *Guion* in Spanish).
 - Available offline: mark a page (with its subpages) or a whole project from its menu, choose what to keep (large
   photos, original photos, attachments, videos) with the size of each, and it downloads everything needed to use it

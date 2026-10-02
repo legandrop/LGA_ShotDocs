@@ -190,7 +190,7 @@ reglas del principio de `Doc_Roadmap.md`.
    como plantilla.
 4. **Formato de página y PDF.** Cortes reales entre hojas y exportar a PDF igual a lo que se ve (sección
    10). La elección del tamaño y la vista como hoja ya están (v0.015); los cortes y el PDF también
-   (`Doc_Hojas_PDF.md`). Falta el bloque de salto de hoja.
+   (`Doc_Hojas_PDF.md`), y el salto de hoja (un párrafo con `pageBreak`).
 5. **Asistente.** Clave propia de cada usuario, revisar y editar textos, dar formato y ajustar imágenes,
    y acceso por MCP (sección 11).
 6. **Pulido.** Compresión de fotos de set en el dispositivo, historial de versiones, exportar e importar
@@ -224,7 +224,7 @@ En Notion y en Coda lo que se ve al editar no es lo que sale en el PDF. Acá sí
   parte entre renglones o filas, y una imagen nunca pasa del ancho ni del alto imprimible. La exportación a
   PDF es la impresión del navegador con la misma vista, la misma hoja (`@page`) y los mismos cortes; una
   página libre sale en A4. En el teléfono la página sigue libre, con las marcas antes de los mismos bloques.
-  **Falta:** el bloque de salto de hoja.
+  **Hecho después:** el salto de hoja, un párrafo con `pageBreak` (menú "/" o Ctrl/⌘+Enter; `Doc_Hojas_PDF.md`).
 
 ## 11. Asistente
 

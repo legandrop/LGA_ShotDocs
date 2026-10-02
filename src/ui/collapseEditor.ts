@@ -996,6 +996,17 @@ function enterAfter(view: EditorView): boolean {
 }
 
 /**
+ * Lo que hace Enter al final de un título colapsado (un renglón después de lo escondido, sin abrir la sección), para
+ * otra tecla que quiere lo mismo: Ctrl/⌘+Enter, que después convierte ese renglón en un salto de hoja
+ * (editorExtensions.ts). `false` si el cursor no está al final de un título colapsado.
+ */
+export function enterAfterCollapsedHeading(view: EditorView): boolean {
+  const found = collapsedHeadingAt(view.state);
+  if (!found || !view.state.selection.empty || found.offset !== found.text.content.size) return false;
+  return enterAfter(view);
+}
+
+/**
  * Supr al final de un renglón:
  * - en un título colapsado, no une lo escondido al título;
  * - si lo que sigue (el primer hijo, o el bloque de abajo) es un título colapsado que esconde algo: un renglón

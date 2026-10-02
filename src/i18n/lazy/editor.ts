@@ -171,6 +171,8 @@ export const editor = {
     en: "Photos and videos go in the line, at the cursor",
     es: "Las fotos y los videos van en el renglón, donde está el cursor",
   },
+  'editor.pageBreak': { en: "Page break", es: "Salto de hoja" },
+  'editor.pageBreakHint': { en: "What follows starts on a new sheet", es: "Lo que sigue empieza en una hoja nueva" },
   'editor.question': { en: "Question", es: "Pregunta" },
   'editor.questionHint': {
     en: "A question for the team or the client, answered in comments",
