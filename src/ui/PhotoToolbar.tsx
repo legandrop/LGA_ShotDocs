@@ -19,6 +19,7 @@ import {
   DownloadButton,
   RenameButton,
   ReplaceButton,
+  SaveToRollButton,
   Sectors,
   useMediaActions,
   useMediaKind,
@@ -244,6 +245,7 @@ export function PhotoToolbar() {
             <>
               <ViewButton url={choice.url} onView={() => choice.key && actions?.onView(choice.key)} />
               <DownloadButton url={choice.url} name={choice.name} />
+              <SaveToRollButton url={choice.url} name={choice.name} />
             </>
           ),
           <PhotoSizeButtons />,

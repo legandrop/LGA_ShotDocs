@@ -11,6 +11,25 @@ del tamaño de la base). Crear un link pide el interruptor de D14 (D33). En *Sha
 the link* (*Can view*), copiar, vencer, *Reset link* y el uso de hoy; quien abre el link entra sin cuenta, en modo
 liviano. El portero da pases de 2 horas al link. Ayuda nueva.
 [ Link público - Can view sin cuenta: migración, Share, la app del visitante y el portero ]
+v0.110 :
+
+No se podía sacar una foto ni filmar desde la página: había que salir de la app, sacarla y elegirla con "/Image", y
+no había cómo guardar en el teléfono una foto de la página. Pedido de Lega (P.25). En el teléfono, *Take photo* y
+*Record video* (el video, con portero) en el menú "/" y en el menú de la página abren la cámara con el selector del
+sistema (`capture`); lo sacado entra en el renglón por el camino de "/Image" y sube por la cola de siempre. *Save to
+camera roll* en la barra de cada foto o video abre la hoja de compartir con el original. En la compu no aparece nada.
+Sin tipos ni propiedades nuevas. Ayuda nueva; `Doc_Fotos_En_Linea.md`, "Cámara".
+[ Cámara - sacar una foto o filmar desde la página y Guardar en Fotos con la hoja de compartir ]
+
+v0.109 :
+
+El esquema "publicado" de las pruebas (`fixtures/editorSchemaMain.ts`) era el de v0.040: las pruebas de "la versión
+publicada" comparaban contra una versión de hace meses. Se regeneró desde v0.107; el viejo quedó como
+`editorSchemaSoloScript.ts` para las pruebas de lo que una versión sin preguntas, tarjetas, filas o Drive conserva, y
+`editorSchemaFixture.test.ts` falla si el fixture queda distinto del esquema sin declararlo. Y ↑ con el cursor después de
+una foto, en una celda con solo fotos, iba a la celda de la izquierda: el primer renglón se medía comparando bordes de
+abajo con tolerancia de 2 px y daba justo 2. Ahora se mira si los renglones se superponen.
+[ Fixture del esquema publicado regenerado desde v0.107 y ↑ después de una foto en una celda ]
 
 v0.108 :
 

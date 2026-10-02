@@ -7,6 +7,7 @@ import { useOffline, usePermissions, useServices, useSyncStatus, useTree } from 
 import { pageFormat, sizeLabel } from './pageFormat';
 import { ownSplit, splitEnabled } from './titles';
 import {
+  CameraIcon,
   HistoryIcon,
   CollapseAllIcon,
   DarkIcon,
@@ -27,11 +28,13 @@ import {
   StorageIcon,
   SystemIcon,
   TrashIcon,
+  VideoIcon,
 } from './icons';
 import { offlineSupported, openOffline, openStorage } from './SpaceHost';
 import { openHelp } from '../help/helpUi';
 import { isPhoneLayout } from './commentsUi';
 import { collapseControlFor } from './collapseControl';
+import { pageCameraFor } from './camera';
 import { notify } from './notice';
 import { replaceBlocksLeaving } from './replaceUi';
 import { usePendingCount } from './usePendingCount';
@@ -157,6 +160,8 @@ export function PageMenu(props: {
   const collapse = collapseControlFor(props.pageId);
   const counts = collapse?.counts() ?? { headings: 0, collapsed: 0 };
   const [asSeen, setAsSeen] = useState(printAsSeen);
+  // Sacar una foto o filmar (camera.ts): en el teléfono, con la página abierta y editable.
+  const camera = pageCameraFor(props.pageId);
 
   const item = (label: string, icon: ReactNode, action: () => void, danger = false, enabled = true) => (
     <button
@@ -176,6 +181,8 @@ export function PageMenu(props: {
   return (
     <div ref={ref} className="menu" role="menu" aria-label={tr('pageMenu.label')} style={props.position}>
       {props.onShare && item(tr('pageMenu.share'), <ShareIcon />, props.onShare)}
+      {camera?.kinds.includes('photo') && item(tr('camera.takePhoto'), <CameraIcon />, () => camera.open('photo'))}
+      {camera?.kinds.includes('video') && item(tr('camera.recordVideo'), <VideoIcon />, () => camera.open('video'))}
       {item(tr('pageMenu.newInside'), <PlusIcon />, props.onNewChild, false, canManage)}
       {item(tr('common.rename'), <RenameIcon />, props.onRename, false, canEdit)}
       {item(tr('pageMenu.move'), <MoveIcon />, props.onMove, false, canManage)}

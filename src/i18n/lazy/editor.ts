@@ -189,6 +189,29 @@ export const editor = {
     en: "Photos and videos go in the line, at the cursor",
     es: "Las fotos y los videos van en el renglón, donde está el cursor",
   },
+  // Sacar una foto o filmar y guardar en el carrete (camera.ts).
+  'camera.takePhotoHint': {
+    en: "Opens the camera; the photo goes in the line, at the cursor",
+    es: "Abre la cámara; la foto va en el renglón, donde está el cursor",
+  },
+  'camera.recordVideoHint': {
+    en: "Opens the camera; the video goes in the line, at the cursor",
+    es: "Abre la cámara; el video va en el renglón, donde está el cursor",
+  },
+  'camera.save': { en: "Save to camera roll", es: "Guardar en Fotos" },
+  'camera.saveVideo': { en: "Save video to camera roll", es: "Guardar el video en Fotos" },
+  'camera.saveTip': {
+    en: "Opens the share sheet: choose **Save Image** or **Save Video**",
+    es: "Abre la hoja de compartir: elegí **Guardar imagen** o **Guardar video**",
+  },
+  'camera.saveAgain': {
+    en: "The original is ready. Tap Save to camera roll again.",
+    es: "El original está listo. Tocá Guardar en Fotos otra vez.",
+  },
+  'camera.saveUnsupported': {
+    en: "This browser can't save this file to the camera roll. Use Download.",
+    es: "Este navegador no puede guardar este archivo en Fotos. Usá Descargar.",
+  },
   'editor.pageBreak': { en: "Page break", es: "Salto de hoja" },
   'editor.pageBreakHint': { en: "What follows starts on a new sheet", es: "Lo que sigue empieza en una hoja nueva" },
   'editor.question': { en: "Question", es: "Pregunta" },
