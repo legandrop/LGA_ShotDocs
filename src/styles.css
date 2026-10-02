@@ -3129,6 +3129,16 @@ svg.sd-markup text {
   max-height: var(--sd-cell-photo-h);
 }
 
+/* El alto elegido para las miniaturas de una tabla (D27 → B: 64, 96 o 160 px; cellThumbs.ts pone `data-thumb-height` en
+   el bloque de la tabla solo si no es 96). La vista de impresión y el PDF leen este alto de la pantalla. */
+.bn-editor [data-content-type='table'][data-thumb-height='64'] {
+  --sd-cell-photo-h: 64px;
+}
+
+.bn-editor [data-content-type='table'][data-thumb-height='160'] {
+  --sd-cell-photo-h: 160px;
+}
+
 /* Con ancho propio, la parte de la celda que tiene, sin agrandar la columna: sin esto, la tabla (de ancho automático)
    le daba a la columna lo que mide el original de la foto (hasta todo el ancho de la página) y "1/2" no era la mitad
    de nada que se viera. El ancho de la columna lo dan lo demás de la columna o el tirador de la columna. */

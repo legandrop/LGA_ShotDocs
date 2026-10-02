@@ -98,6 +98,8 @@ const REPLACE_PROJECT = '0.094';
 const REMOVED_WRITING = '0.095';
 /** Las fotos en las celdas de una tabla (Doc_Fotos_En_Linea.md, entrega 5): la versión se pone al publicar. */
 const CELL_PHOTOS = '0.107';
+/** El alto de las miniaturas de una tabla (Doc_Fotos_En_Linea.md, D27 → B): la versión se pone al publicar. */
+const CELL_THUMBS = '0.125';
 /** La que trajo "Update now" que espera la versión nueva y "Force the update" (Doc_Sincronizacion.md, "Volver después de mucho tiempo sin red"). */
 const UPDATE_APP = '0.097';
 /** *Download all* de una carpeta (P.9, entrega 2, Doc_Carpetas.md): la versión se pone al publicar, igual que en el changelog. */
@@ -291,6 +293,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.photosCells.text',
     words: ['tabla', 'table', 'celda', 'cell', 'miniatura', 'thumbnail'],
     since: CELL_PHOTOS,
+  },
+  {
+    id: 'photosCellsSize',
+    section: 'photos',
+    title: 'help.photosCellsSize.title',
+    text: 'help.photosCellsSize.text',
+    words: ['tabla', 'table', 'miniatura', 'thumbnail', 'tamaño', 'size', 'alto', 'height', 'chico', 'grande', 'small', 'large'],
+    since: CELL_THUMBS,
   },
   {
     id: 'carrete',

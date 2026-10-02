@@ -196,6 +196,11 @@ export const help = {
     en: "Paste, drop or choose photos with the cursor in a table cell and they go into that cell, as thumbnails as tall as a row, side by side. Their bar has Thumbnail and Full cell width, and their handles make them bigger inside the cell: for more, widen the column. They open full screen like any photo and come out the same in the PDF.",
     es: "Pegá, soltá o elegí fotos con el cursor en una celda de una tabla y entran en esa celda, como miniaturas del alto de una fila, una al lado de la otra. Su barra tiene Miniatura y Todo el ancho de la celda, y sus tiradores las agrandan dentro de la celda: para más, ensanchá la columna. Se abren en grande como cualquier foto y salen iguales en el PDF.",
   },
+  'help.photosCellsSize.title': { en: "Thumbnail size in a table", es: "El tamaño de las miniaturas de una tabla" },
+  'help.photosCellsSize.text': {
+    en: "Each table has its own thumbnail size: Small, Medium (the default) or Large. Pick it with Thumbnail size in the bar of a photo in the table, or click the table's dots. It changes every thumbnail of that table; photos you made bigger keep their size. The PDF shows them the same size.",
+    es: "Cada tabla tiene su tamaño de miniaturas: Chico, Mediano (el de fábrica) o Grande. Se elige con Tamaño de las miniaturas en la barra de una foto de la tabla, o con un clic en los puntos de la tabla. Cambia todas las miniaturas de esa tabla; las fotos que agrandaste mantienen su tamaño. El PDF las muestra del mismo tamaño.",
+  },
   'help.carrete.title': { en: "The full-screen viewer", es: "El carrete" },
   'help.carrete.text': {
     en: "Shows every photo, video and file of the page: {prev} {next} to go through them, {ends} to jump to the first or last, scroll or double-click to zoom, {close} to close. Download gets the original.",
