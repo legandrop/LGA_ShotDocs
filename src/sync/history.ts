@@ -141,6 +141,8 @@ export interface HistoryOrphan {
   text: string;
   /** El bloque donde se escribió (su id), si se sabe. */
   blockId: string | null;
+  /** Sus letras: tramos `[autor de Yjs, desde, hasta)`. */
+  ranges: [number, number, number][];
 }
 
 interface Place {
@@ -278,7 +280,7 @@ export class PageHistory {
    * trae como hueco: ahí no hay nada que mostrar).
    */
   private findOrphans(row: number, ranges: [number, number, number][]): void {
-    const found = new Map<Y.AbstractType<unknown>, { text: string; blockId: string | null }>();
+    const found = new Map<Y.AbstractType<unknown>, { text: string; blockId: string | null; ranges: [number, number, number][] }>();
     const cache = new Map<Y.AbstractType<unknown>, Place>();
     const climb = (type: Y.AbstractType<unknown>): Place => {
       const known = cache.get(type);
@@ -315,14 +317,17 @@ export class PageHistory {
         const where = climb(parent);
         if (!where.content || !where.removed) continue;
         // Solo la parte del elemento que está en el tramo (un elemento puede juntar letras de varias filas).
-        const piece = s.content.str.slice(Math.max(from, s.id.clock) - s.id.clock, Math.min(to, s.id.clock + s.length) - s.id.clock);
+        const a = Math.max(from, s.id.clock);
+        const b = Math.min(to, s.id.clock + s.length);
+        const piece = s.content.str.slice(a - s.id.clock, b - s.id.clock);
         if (!piece) continue;
-        const entry = found.get(parent);
-        if (entry) entry.text += piece;
-        else found.set(parent, { text: piece, blockId: where.blockId });
+        const entry = found.get(parent) ?? { text: '', blockId: where.blockId, ranges: [] };
+        entry.text += piece;
+        entry.ranges.push([client, a, b]);
+        found.set(parent, entry);
       }
     }
-    for (const { text, blockId } of found.values()) this.orphans.push({ row, text, blockId });
+    for (const { text, blockId, ranges } of found.values()) this.orphans.push({ row, text, blockId, ranges });
   }
 
   private group(gapMs: number): HistorySession[] {

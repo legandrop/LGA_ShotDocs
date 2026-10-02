@@ -346,7 +346,7 @@ class UnionBuilder {
     if ((st === 'add' && !old) || st === 'del') {
       const item = src._item!;
       if (!this.isSeed(item) && first) {
-        const row = st === 'add' ? this.h.insertRow(item.id.client, item.id.clock) : this.h.deleteRow(item.id.client, item.id.clock);
+        const row = st === 'add' ? this.h.insertRow(item.id.client, item.id.clock) : this.deleteRowOf(item);
         this.marks.push({ type: 'node', kind: st, at: this.at(first), row, block: true });
       }
     }
@@ -560,13 +560,28 @@ class UnionBuilder {
     // Algo agregado o borrado adentro de un bloque que sigue (una foto en línea, una fila): su propia marca.
     if (!isContent && st !== 'both' && st !== parentState && src.nodeName !== STABLE_GAPS && !this.isSeed(src._item)) {
       const item = src._item!;
-      const row = st === 'add' ? this.h.insertRow(item.id.client, item.id.clock) : this.h.deleteRow(item.id.client, item.id.clock);
+      const row = st === 'add' ? this.h.insertRow(item.id.client, item.id.clock) : this.deleteRowOf(item);
       this.marks.push({ type: 'node', kind: st, at: this.at(el), row, block: false });
     }
     return el;
   }
 
   /** El texto como era (o los dos juntos, con lo agregado y lo borrado marcado). */
+  /**
+   * La fila que borró algo: la de su propio borrado o, si no tiene (el texto de adentro de un bloque que llegó ya borrado
+   * con su padre, por ejemplo), la que borró lo más cercano de arriba entre las dos versiones.
+   */
+  private deleteRowOf(item: Y.Item | null, client = item?.id.client, clock = item?.id.clock): number {
+    const own = client === undefined || clock === undefined ? -1 : this.h.deleteRow(client, clock);
+    if (own >= 0) return own;
+    for (let t: Y.Item | null = item; t; t = (t.parent as AnyType)._item) {
+      if (visible(t, this.cur)) continue;
+      const row = this.h.deleteRow(t.id.client, t.id.clock);
+      if (row >= 0) return row;
+    }
+    return -1;
+  }
+
   private copyText(src: Y.XmlText, st: State, touched: boolean, out: Y.XmlText): void {
     type Op = { insert: unknown; attributes?: Attrs & { ychange?: { type: string; client: number; clock: number } } };
     const yc = (type: string, id: Y.ID) => ({ type, user: id.client, client: id.client, clock: id.clock });
@@ -597,7 +612,7 @@ class UnionBuilder {
       const kind = kindOf(op);
       const c = op.attributes?.ychange;
       if (kind && c && !this.h.seedClients.has(c.client)) {
-        const row = kind === 'add' ? this.h.insertRow(c.client, c.clock) : this.h.deleteRow(c.client, c.clock);
+        const row = kind === 'add' ? this.h.insertRow(c.client, c.clock) : this.deleteRowOf(src._item, c.client, c.clock);
         const p = pending[pending.length - 1];
         if (p && p.kind === kind && p.row === row && p.to === offset) p.to += len;
         else pending.push({ kind, from: offset, to: offset + len, row });
@@ -662,9 +677,29 @@ function containerOf(item: Y.Item, cache: Map<AnyType, Y.XmlElement | null>): Y.
   return found;
 }
 
-/** Los bloques que tocaron las filas `(from, to]` con lo que trajeron por primera vez (agregado o borrado). */
-export function touchedBlocks(h: PageHistory, fromRow: number, toRow: number): Set<AnyType> {
+/**
+ * Los bloques que tocaron las filas `(from, to]` con lo que trajeron por primera vez (agregado o borrado). Un bloque o un
+ * grupo de bloques agregado o borrado suma también todos los de adentro (un bloque que deja de verse porque se borró
+ * uno de arriba). `null`: alguna fila tocó el contenido fuera de un bloque (una raíz): va la diferencia completa.
+ */
+export function touchedBlocks(h: PageHistory, fromRow: number, toRow: number): Set<AnyType> | null {
   const out = new Set<AnyType>();
+  const inside = (t: AnyType) => {
+    for (const n of childItems(t)) {
+      const c = typeOf(n);
+      if (isElement(c, BLOCK)) out.add(c);
+      if (c instanceof Y.XmlElement) inside(c);
+    }
+  };
+  const isContent = (item: Y.Item) => {
+    let t = item.parent as AnyType | null;
+    while (t && t._item) t = t._item.parent as AnyType | null;
+    try {
+      return !!t && !!t.doc && Y.findRootTypeKey(t) === CONTENT_FRAGMENT;
+    } catch {
+      return false;
+    }
+  };
   const cache = new Map<AnyType, Y.XmlElement | null>();
   for (let r = fromRow + 1; r <= toRow; r++) {
     const fresh = h.fresh[r];
@@ -678,7 +713,11 @@ export function touchedBlocks(h: PageHistory, fromRow: number, toRow: number): S
         const s = list[i];
         if (!(s instanceof Y.Item)) continue;
         const c = containerOf(s, cache);
-        if (c) out.add(c);
+        if (c) {
+          out.add(c);
+          const own = s.content instanceof Y.ContentType ? s.content.type : null;
+          if (isElement(own, BLOCK) || isElement(own, GROUP)) inside(own);
+        } else if (isContent(s)) return null;
       }
     }
   }

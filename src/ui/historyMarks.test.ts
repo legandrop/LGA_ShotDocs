@@ -10,7 +10,8 @@ import { CONTENT_FRAGMENT } from '../sync/structure';
 import { editors, mountEditor, undoManager, unmountAll, view } from './collabHarness';
 import { schema } from './editorSchema';
 import { schema as mainSchema } from './fixtures/editorSchemaMain';
-import { historyMarksExtension, markDecorations, type HistoryMarksInput } from './historyMarks';
+import { cleanClipboard, historyMarksExtension, markDecorations, type HistoryMarksInput } from './historyMarks';
+import { TextSelection } from '@tiptap/pm/state';
 
 // Las marcas de "Show changes" (P.18, Docs/Doc_Historial.md, entrega 2) son DECORACIONES sobre el editor de solo
 // lectura que muestra la unión: no tocan el esquema ni el documento. Se prueban con el editor de hoy y con el de la
@@ -150,5 +151,77 @@ describe('las marcas de Show changes en el editor', () => {
     expect(tipped.getAttribute('data-tip')).toMatch(/^Bea · \d+$/);
     expect(tipped.getAttribute('style')).toContain('--hc: var(--hist-2)');
     expect(el.querySelector('.hist-label')?.textContent).toBe('Changed to Heading 2');
+  });
+});
+
+describe('copiar con Show changes prendido', () => {
+  it('copia lo elegido sin lo borrado y sin los estilos de las marcas: al pegarlo entra la versión limpia', async () => {
+    // Ana escribe; Bea cambia una palabra y borra un bloque entero.
+    const doc = new Y.Doc();
+    let who = 'ana';
+    // Cada persona, su sesión: las filas de una misma persona van seguidas (un minuto); entre personas, dos horas.
+    const rows: HistoryRow[] = [];
+    let clock = Date.parse('2026-10-01T10:00:00Z');
+    let last = '';
+    doc.on('update', (u: Uint8Array) => {
+      clock += who === last ? 60_000 : 2 * 60 * 60_000;
+      last = who;
+      rows.push({ id: rows.length + 1, seq: rows.length + 1, createdBy: who, createdAt: new Date(clock).toISOString(), data: u });
+    });
+    const ed = mountEditor(doc, 'A');
+    ed.replaceBlocks(ed.document, [
+      { type: 'paragraph', content: 'Plano de la mesa, con la cámara fija.' },
+      { type: 'paragraph', content: 'Nota de vestuario: camisa azul.' },
+      { type: 'paragraph', content: 'Clean plate al final.' },
+    ] as PartialBlock[]);
+    undoManager(ed).stopCapturing();
+    await settle();
+    who = 'bea';
+    ed.updateBlock(ed.document[0], { content: 'Plano de la mesa, con la cámara en mano.' });
+    ed.removeBlocks([ed.document[1]]);
+    undoManager(ed).stopCapturing();
+    await settle();
+    const h = new PageHistory(rows);
+    expect(h.sessions.length).toBe(2);
+    const c = versionChanges(h, 1);
+    expect(c.marks.some((m) => m.kind === 'del')).toBe(true);
+    const union = new Y.Doc();
+    Y.applyUpdate(union, c.update);
+    const input = inputFor(c.marks);
+    const viewer = BlockNoteEditor.create(
+      withCollaboration({
+        schema,
+        collaboration: { fragment: union.getXmlFragment(CONTENT_FRAGMENT), user: { name: 'v', color: '#000' } },
+        extensions: [historyMarksExtension(input)],
+      }) as never,
+    ) as unknown as BlockNoteEditor;
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    viewer.mount(el);
+    editors.push(viewer);
+    viewer.isEditable = false;
+    await settle();
+    // La unión muestra lo borrado (por eso hace falta limpiarlo al copiar).
+    expect(view(viewer).state.doc.textContent).toContain('fija');
+    expect(view(viewer).state.doc.textContent).toContain('Nota de vestuario');
+    // Se elige todo.
+    const v = view(viewer);
+    v.dispatch(v.state.tr.setSelection(TextSelection.create(v.state.doc, 1, v.state.doc.content.size - 1)));
+    const before = Y.encodeStateVector(union);
+    const out = cleanClipboard(viewer as never, v, input)!;
+    expect(out).not.toBeNull();
+    for (const text of [out.clipboardHTML, out.externalHTML, out.markdown]) {
+      expect(text).toContain('en mano');
+      expect(text).not.toContain('fija');
+      expect(text).not.toContain('Nota de vestuario');
+      expect(text).not.toContain('hist-');
+    }
+    // Pegado con el esquema de la app: sin tachado, subrayado ni colores de las marcas.
+    const pasted = JSON.stringify(BlockNoteEditor.create({ schema }).tryParseHTMLToBlocks(out.externalHTML));
+    expect(pasted).toContain('cámara en mano');
+    expect(pasted).not.toMatch(/strike|underline|rgb|color\(/);
+    expect(JSON.stringify(BlockNoteEditor.create({ schema }).tryParseHTMLToBlocks(out.clipboardHTML))).not.toContain('fija');
+    // La unión no se tocó.
+    expect(Y.encodeStateVector(union)).toEqual(before);
   });
 });

@@ -104,6 +104,15 @@ describe('el Worker y la página dan lo mismo', () => {
     onPage.destroy();
   });
 
+  it('cerrar el historial cierra el Worker (no queda ninguno corriendo)', async () => {
+    const worker = new FakeWorker();
+    const engine = createHistoryEngine(() => worker);
+    await engine.load(rows, 'p');
+    expect(worker.terminated).toBe(false);
+    engine.destroy();
+    expect(worker.terminated).toBe(true);
+  });
+
   it('una versión que ya no está en la lista se rechaza (no se inventa otra)', async () => {
     const engine = createHistoryEngine(() => new FakeWorker());
     await engine.load(rows, 'p');

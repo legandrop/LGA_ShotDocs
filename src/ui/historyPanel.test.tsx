@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-import { act } from 'react';
+import { act, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { prefs } from '../prefs';
 import { ServicesContext, type Services } from '../services';
 import { HISTORY_SCHEMA_VERSION, yShape, type HistoryRow } from '../sync/history';
+import { HistoryCore, type HistoryRequest } from '../sync/historyCore';
 import type { SupabaseRemote } from '../sync/remote';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
@@ -463,5 +464,215 @@ describe('entrega 2: Show changes, el texto huérfano y la lista que se actualiz
     await act(async () => (host.querySelectorAll('.history-session')[1] as HTMLButtonElement).click());
     await settle(300);
     expect(host.querySelector('.history-orphan')).toBeNull();
+  });
+});
+
+/** Tres sesiones: la dueña escribe dos bloques; Bea borra «dos » y el segundo bloque; la dueña agrega uno. */
+async function three() {
+  const server = new FakeServer();
+  let clock = Date.parse('2026-09-30T10:00:00Z');
+  server.now = () => clock;
+  server.settings = { ...(server.settings ?? { generation: 1, minAppVersion: null, mediaUrl: null, schemaVersion: 1 }), schemaVersion: HISTORY_SCHEMA_VERSION };
+  const a = await makeDevice(server, undefined, '0.021', {}, HISTORY_SCHEMA_VERSION);
+  devices.push(a);
+  const pageId = await a.tree.create(null, 'P');
+  await a.engine.syncNow();
+  await edit(a, pageId, (g) => g.insert(0, [block('x', 'Uno dos tres'), block('y', 'Se va entero')]));
+  await a.engine.syncNow();
+  clock += 60 * 60_000;
+  server.addMember('bea', 'member', 'bea@example.com');
+  const b = await makeDevice(server, undefined, '0.021', {}, HISTORY_SCHEMA_VERSION, { id: 'bea', email: 'bea@example.com' });
+  devices.push(b);
+  await b.engine.syncNow();
+  await edit(b, pageId, (g) => {
+    (((g.get(0) as Y.XmlElement).get(0) as Y.XmlElement).get(0) as Y.XmlText).delete(4, 4); // "dos "
+    g.delete(1, 1);
+  });
+  await b.engine.syncNow();
+  clock += 60 * 60_000;
+  await a.engine.syncNow();
+  await edit(a, pageId, (g) => g.insert(1, [block('z', 'Lo último')]));
+  await a.engine.syncNow();
+  return { server, a, b, pageId };
+}
+
+/** Un Worker de mentira con el mismo código que history.worker.ts (para ver que se crean y se cierran). */
+class CountingWorker {
+  static made: CountingWorker[] = [];
+  onmessage: ((event: { data: unknown }) => void) | null = null;
+  onerror: ((event: unknown) => void) | null = null;
+  terminated = false;
+  private core = new HistoryCore();
+  constructor() {
+    CountingWorker.made.push(this);
+    setTimeout(() => this.onmessage?.({ data: { ready: true } }), 0);
+  }
+  postMessage(message: unknown) {
+    const { id, req } = structuredClone(message) as { id: number; req: HistoryRequest };
+    setTimeout(() => {
+      if (this.terminated) return;
+      try {
+        this.onmessage?.({ data: structuredClone({ id, ok: true, reply: this.core.handle(req) }) });
+      } catch (err) {
+        this.onmessage?.({ data: { id, ok: false, error: (err as Error).message } });
+      }
+    }, 1);
+  }
+  terminate() {
+    this.terminated = true;
+  }
+}
+
+/** Un evento de copiar con un portapapeles en memoria (jsdom no tiene `ClipboardEvent`). */
+function copyEvent(data: Map<string, string>): Event {
+  const event = new Event('copy', { bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'clipboardData', {
+    value: { setData: (k: string, v: string) => data.set(k, v), clearData: () => data.clear(), getData: (k: string) => data.get(k) ?? '' },
+  });
+  return event;
+}
+
+describe('correcciones de la auditoría de la entrega 2', () => {
+  it('con StrictMode (como npm run dev) el historial carga, con un Worker por montaje, y al cerrar no queda ninguno abierto', async () => {
+    prefs.set({ language: 'en' });
+    const { a, pageId, server } = await setup();
+    const g = globalThis as { Worker?: unknown };
+    const saved = g.Worker;
+    g.Worker = CountingWorker;
+    CountingWorker.made = [];
+    try {
+      const host = document.createElement('div');
+      document.body.append(host);
+      const root = createRoot(host);
+      await act(async () =>
+        root.render(
+          <StrictMode>
+            <ServicesContext.Provider value={services(a, server.ownerId)}>
+              <HistoryPanel pageId={pageId} />
+            </ServicesContext.Provider>
+          </StrictMode>,
+        ),
+      );
+      for (let i = 0; i < 20 && !host.querySelector('.history-session'); i++) await settle(60);
+      expect(host.textContent).not.toContain('could not be loaded');
+      expect(host.querySelectorAll('.history-session').length).toBe(2);
+      expect(CountingWorker.made.length).toBeGreaterThan(0);
+      act(() => root.unmount());
+      expect(CountingWorker.made.every((w) => w.terminated)).toBe(true);
+    } finally {
+      g.Worker = saved;
+    }
+  });
+
+  it('restaurar con Show changes prendido manda la versión limpia (sin lo borrado de la unión) y nada escribe en la página', async () => {
+    prefs.set({ language: 'en' });
+    const { a, pageId, server } = await three();
+    const pageDoc = await a.docs.open(pageId);
+    let pageUpdates = 0;
+    pageDoc.on('update', () => pageUpdates++);
+    const rowsBefore = server.updates.get(pageId)!.length;
+    const asked: Y.Doc[] = [];
+    offs.push(
+      registerRestoreTarget(pageId, (version) => {
+        asked.push(version);
+        return { ok: true, undo: () => true, onEdit: () => () => undefined };
+      }),
+    );
+    const host = await mount(services(a, server.ownerId), pageId);
+    await act(async () => (host.querySelectorAll('.history-session')[1] as HTMLButtonElement).click());
+    await settle(400);
+    expect(host.querySelector<HTMLInputElement>('.history-changes input')!.checked).toBe(true);
+    // La unión muestra lo borrado...
+    expect(host.querySelector('.history-page')?.textContent).toContain('Se va entero');
+    await act(async () => host.querySelector<HTMLButtonElement>('.history-restore')!.click());
+    await settle(150);
+    const confirm = [...host.querySelectorAll<HTMLButtonElement>('.history-confirm button')].find((b) => b.textContent === 'Restore')!;
+    await act(async () => confirm.click());
+    await settle(300);
+    // ...pero a restaurar va la versión limpia.
+    expect(asked.length).toBe(1);
+    const v = asked[0].getXmlFragment(CONTENT_FRAGMENT).toString();
+    expect(v).not.toContain('Se va');
+    expect(v).not.toContain('dos');
+    expect(yShape(asked[0]).ids).toEqual(['x']);
+    expect(pageUpdates, 'el documento de la página no recibió nada').toBe(0);
+    expect(server.updates.get(pageId)!.length).toBe(rowsBefore);
+    expect(await a.docs.unsyncedPages()).toEqual([]);
+  });
+
+  it('copiar con Show changes prendido deja en el portapapeles la versión, sin lo borrado', async () => {
+    prefs.set({ language: 'en' });
+    const { a, pageId, server } = await three();
+    const host = await mount(services(a, server.ownerId), pageId);
+    await act(async () => (host.querySelectorAll('.history-session')[1] as HTMLButtonElement).click());
+    await settle(400);
+    const pm = host.querySelector<HTMLElement>('.history-page .ProseMirror')!;
+    expect(pm.textContent).toContain('Se va entero');
+    // Se elige todo lo de la versión (con la selección del navegador sobre el editor).
+    const range = document.createRange();
+    range.selectNodeContents(pm);
+    const sel = window.getSelection()!;
+    sel.removeAllRanges();
+    sel.addRange(range);
+    const data = new Map<string, string>();
+    const event = copyEvent(data);
+    await act(async () => void pm.dispatchEvent(event));
+    expect(event.defaultPrevented).toBe(true);
+    for (const kind of ['blocknote/html', 'text/html', 'text/plain']) {
+      expect(data.get(kind), kind).toContain('Uno tres');
+      expect(data.get(kind), kind).not.toContain('Se va');
+      expect(data.get(kind), kind).not.toContain('dos');
+    }
+  });
+
+  it('cuando llega una versión nueva arriba, la lista corrida no salta (se compensa lo que creció)', async () => {
+    prefs.set({ language: 'en' });
+    const { a, b, pageId, server } = await setup();
+    const host = await mount(services(a, server.ownerId), pageId);
+    const list = host.querySelector<HTMLElement>('.history-list')!;
+    // jsdom no mide: cada renglón, 50 px.
+    Object.defineProperty(list, 'scrollHeight', { get: () => 50 * list.querySelectorAll('.history-session').length, configurable: true });
+    // Una fila que crece la sesión actual (anota el alto) y la persona baja la lista.
+    server.now = () => Date.parse('2026-09-30T16:01:00Z');
+    await edit(b, pageId, (g) => g.insert(0, [block('m', 'Bea, un minuto después')]));
+    await b.engine.syncNow();
+    await act(async () => void (await a.engine.syncNow()));
+    await settle(300);
+    list.scrollTop = 30;
+    // Dos horas después, una sesión nueva arriba: 50 px más de lista.
+    server.now = () => Date.parse('2026-09-30T18:00:00Z');
+    await edit(b, pageId, (g) => g.insert(0, [block('n', 'Bea, más tarde')]));
+    await b.engine.syncNow();
+    await act(async () => void (await a.engine.syncNow()));
+    await settle(300);
+    expect(host.querySelectorAll('.history-session').length).toBe(3);
+    expect(list.scrollTop).toBe(80);
+  });
+});
+
+describe('en el teléfono, tocar una marca', () => {
+  it('muestra quién y cuándo en un aviso (no hay tooltip con el dedo); con el mouse, no', async () => {
+    prefs.set({ language: 'en' });
+    const { a, pageId, server } = await setup();
+    const notices: string[] = [];
+    const onNotice = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      notices.push(typeof detail === 'string' ? detail : String(detail?.message ?? ''));
+    };
+    window.addEventListener('shotdocs:notice', onNotice);
+    offs.push(() => window.removeEventListener('shotdocs:notice', onNotice));
+    const host = await mount(services(a, server.ownerId), pageId);
+    const mark = host.querySelector<HTMLElement>('.history-page .hist-add')!;
+    const tap = (pointerType: string) => {
+      const down = new Event('pointerdown', { bubbles: true });
+      Object.defineProperty(down, 'pointerType', { value: pointerType });
+      mark.dispatchEvent(down);
+      mark.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    };
+    await act(async () => tap('mouse'));
+    expect(notices).toEqual([]);
+    await act(async () => tap('touch'));
+    expect(notices.length).toBe(1);
+    expect(notices[0]).toContain('Added by bea@example.com');
   });
 });

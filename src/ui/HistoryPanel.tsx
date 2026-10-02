@@ -1,4 +1,17 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import type { BlockNoteEditor } from '@blocknote/core';
+import type { EditorView } from '@tiptap/pm/view';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ClipboardEvent as ReactClipboardEvent,
+  type CSSProperties,
+  type DragEvent as ReactDragEvent,
+  type MouseEvent as ReactMouseEvent,
+} from 'react';
 import * as Y from 'yjs';
 import { t, useT } from '../i18n';
 import '../i18n/lazy/history';
@@ -6,14 +19,14 @@ import { mediaIdsInDoc } from '../media/usage';
 import { isDeletedRow } from '../media/queue';
 import { ServicesContext, usePermissions, useServices, useSyncStatus, useTree } from '../services';
 import { loadPageHistory, MAX_RESTORE_BYTES, versionBytes, type HistoryOrphan, type HistoryRow, type HistorySession } from '../sync/history';
-import { createHistoryEngine } from '../sync/historyClient';
+import { createHistoryEngine, type HistoryEngine } from '../sync/historyClient';
 import type { HistorySummary } from '../sync/historyCore';
 import type { BlockKind, ChangeLabel, HistoryMark } from '../sync/historyDiff';
 import type { HistoryRemote, MediaRemote } from '../sync/remote';
 import { errorMessage, isNetworkError, RemoteError } from '../sync/types';
 import { Permissions } from '../sync/access';
 import { versionNode } from './historyRestore';
-import type { HistoryMarksInput, MarkLook } from './historyMarks';
+import { cleanClipboard, type HistoryMarksInput, type MarkLook } from './historyMarks';
 import { historyServices } from './historyServices';
 import { closeHistory, requestRestore } from './historyUi';
 import { dismissNotice, notify } from './notice';
@@ -167,14 +180,22 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
   };
   const previewServices = useMemo(() => historyServices(services), [services]);
   const historyRemote = remote as unknown as HistoryRemote & MediaRemote;
-  /** Donde se arma el historial (un Worker, o la página si no se puede): uno por historial abierto. */
-  const builder = useMemo(() => createHistoryEngine(), []);
-  useEffect(() => () => builder.destroy(), [builder]);
+  /**
+   * Donde se arma el historial (un Worker, o la página si no se puede): uno por historial abierto. Se crea en el efecto
+   * y se cierra al desmontar: con StrictMode (desarrollo) el efecto corre dos veces y cada vuelta tiene el suyo.
+   */
+  const [builder, setBuilder] = useState<HistoryEngine | null>(null);
+  useEffect(() => {
+    const made = createHistoryEngine();
+    setBuilder(made);
+    return () => made.destroy();
+  }, []);
   /** El `seq` de la última fila conocida cuando se mostró la confirmación de restaurar (O1). */
   const confirmSeq = useRef(0);
 
   // Bajar el historial (solo con red) y armarlo en el Worker.
   useEffect(() => {
+    if (!builder) return;
     let cancelled = false;
     if (!engine.getStatus().online) {
       setLoading({ state: 'offline' });
@@ -235,7 +256,7 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
   // El documento de la versión elegida (lo arma el Worker): en memoria, nunca se guarda ni se sube.
   const [picked, setPicked] = useState<{ key: string; doc: Y.Doc | null; orphans: HistoryOrphan[]; error: string | null } | null>(null);
   useEffect(() => {
-    if (!versionKey) return;
+    if (!versionKey || !builder) return;
     let live = true;
     builder.version(Number(versionKey)).then(
       ({ update, orphans }) => {
@@ -258,7 +279,7 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
   // Los cambios contra la versión anterior de la lista: la unión de las dos (otro documento en memoria) y sus marcas.
   const [changes, setChanges] = useState<{ key: string; doc: Y.Doc | null; marks: HistoryMark[] } | null>(null);
   useEffect(() => {
-    if (!changesKey || !showChanges) return;
+    if (!changesKey || !showChanges || !builder) return;
     let live = true;
     builder.changes(Number(changesKey.split(':')[0])).then(
       ({ update, marks }) => {
@@ -299,7 +320,9 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
   const tooBig = useMemo(() => (version ? versionBytes(version) > MAX_RESTORE_BYTES : false), [version]);
   // La ida y vuelta (Doc_Historial.md, 6.1): con el esquema del editor que muestra la versión (está desde que se
   // crea, antes de montarse). `null` mientras no se sabe.
+  const previewEditor = useRef<FindEditor | null>(null);
   const onPreviewEditor = useCallback((editor: FindEditor | null) => {
+    previewEditor.current = editor;
     const ed = editor as unknown as { pmSchema?: Schema; prosemirrorView?: { state: { schema: Schema } } } | null;
     const schema = ed?.pmSchema ?? ed?.prosemirrorView?.state.schema;
     if (schema) setPmSchema(schema);
@@ -404,7 +427,7 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
     if (refreshing.current) return refreshing.current;
     const run = (async () => {
       const known = readyRef.current;
-      if (!known) return null;
+      if (!known || !builder) return null;
       const fresh: HistoryRow[] = [];
       for (;;) {
         const after = fresh.length ? fresh[fresh.length - 1].seq : (known.rows[known.rows.length - 1]?.seq ?? 0);
@@ -536,6 +559,35 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
     }
   }
 
+  /**
+   * Copiar (o cortar, o arrastrar) con Show changes prendido: lo elegido sin lo marcado como borrado (historyMarks.ts,
+   * `cleanClipboard`), como lo copia BlockNote. Se atiende antes que el editor (que en solo lectura deja copiar al
+   * navegador, con lo tachado y sus estilos).
+   */
+  const onClipboard = (e: ReactClipboardEvent<HTMLElement> | ReactDragEvent<HTMLElement>) => {
+    const ed = previewEditor.current as unknown as (BlockNoteEditor<any, any, any> & { prosemirrorView?: EditorView }) | null;
+    const view = ed?.prosemirrorView;
+    const data = 'clipboardData' in e ? e.clipboardData : e.dataTransfer;
+    if (!union || !marksInput || !ed || !view || !data) return;
+    const out = cleanClipboard(ed, view, marksInput);
+    if (!out) return;
+    e.preventDefault();
+    e.stopPropagation();
+    data.clearData();
+    data.setData('blocknote/html', out.clipboardHTML);
+    data.setData('text/html', out.externalHTML);
+    data.setData('text/plain', out.markdown);
+  };
+
+  // En el teléfono no hay tooltip: tocar una marca muestra quién y cuándo en un aviso.
+  const lastPointer = useRef('mouse');
+  const onMarkTap = (e: ReactMouseEvent<HTMLElement>) => {
+    if (lastPointer.current === 'mouse' || !union) return;
+    const mark = (e.target as HTMLElement | null)?.closest?.('.hist-add, .hist-del, .hist-node, .hist-label');
+    const tip = mark?.getAttribute('data-tip');
+    if (tip) notify(tip);
+  };
+
   /** Copiar el texto huérfano (si el navegador no deja, queda a la vista para copiarlo a mano). */
   const copyOrphan = (text: string) => {
     if (!navigator.clipboard) {
@@ -618,7 +670,8 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
           {unsynced && <p className="banner">{tr('history.unsynced')}</p>}
           {(unknown || shapeOk === false) && <p className="banner">{tr('history.partial')}</p>}
           {current?.error && <p className="banner">{tr('history.versionFailed', { reason: current.error })}</p>}
-          {session && !current && <p className="muted history-version-loading">{tr('history.loadingVersion')}</p>}
+          {/* Mientras se arma la versión, o su unión con los cambios. */}
+          {session && (!current || waitingUnion) && <p className="muted history-version-loading">{tr('history.loadingVersion')}</p>}
           {/* El texto huérfano (Doc_Historial.md, 5.4): lo que alguien escribió en algo ya borrado, en la versión de su
               fila. No está en la página ni en ninguna versión: solo acá. */}
           {orphans.map((o, i) => {
@@ -647,6 +700,11 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
               }
               data-format={format.size}
               data-page-id={pageId}
+              onCopyCapture={onClipboard}
+              onCutCapture={onClipboard}
+              onDragStartCapture={onClipboard}
+              onPointerDown={(e) => (lastPointer.current = e.pointerType || 'mouse')}
+              onClick={onMarkTap}
             >
               <ServicesContext.Provider value={previewServices}>
                 <BlockEditor

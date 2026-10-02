@@ -1,3 +1,4 @@
+import { readdirSync, readFileSync } from 'node:fs';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { PageHistory, type HistoryRow } from './history';
@@ -324,5 +325,27 @@ describe('al azar con tres personas: filas con GC (la versión publicada) y sin 
     // El texto huérfano aparece en alguna corrida (si no, la prueba no prueba lo que dice).
     expect(orphansSeen).toBeGreaterThan(0);
     expect(cases).toBeGreaterThan(500);
+  });
+});
+
+describe('solo lo tocado: un bloque que deja de verse porque se borró algo de arriba', () => {
+  it('casos al azar guardados (dos raíces que se juntan, padres rehechos con sus hijos): igual que la completa', () => {
+    // Filas de corridas al azar de la auditoría en que la diferencia solo de lo tocado salía distinta de la completa:
+    // un bloque que deja de verse porque se borró uno de arriba (o la raíz vieja de una página con dos raíces) no se
+    // contaba como tocado. `i`: la versión; `cut`: el corte de sesiones con que se armó.
+    const dir = new URL('./fixtures/historyTouched/', import.meta.url);
+    const files = readdirSync(dir).filter((f) => f.endsWith('.json'));
+    expect(files.length).toBeGreaterThan(2);
+    for (const file of files) {
+      const saved = JSON.parse(readFileSync(new URL(file, dir), 'utf8')) as { i: number; cut?: number; rows: (Omit<HistoryRow, 'data'> & { data: string })[] };
+      const rows = saved.rows.map((r) => ({ ...r, data: new Uint8Array(Buffer.from(r.data, 'base64')) }));
+      const h = new PageHistory(rows, saved.cut);
+      const changed = versionChanges(h, saved.i, 'changed');
+      const all = versionChanges(h, saved.i, 'all');
+      const u1 = unionDoc(changed.update);
+      const u2 = unionDoc(all.update);
+      expect(visible(u1), file).toBe(visible(u2));
+      expect(readMarks(u1, changed.marks), file).toEqual(readMarks(u2, all.marks));
+    }
   });
 });

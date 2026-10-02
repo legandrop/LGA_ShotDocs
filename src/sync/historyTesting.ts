@@ -267,7 +267,10 @@ export function everyLetter(h: PageHistory): { checked: number; orphaned: number
         if (earliestAncestor < row) {
           // Huérfana: tiene que estar en el texto huérfano de la versión de su fila.
           const where = h.sessionOfRow(row);
-          if (!h.orphansOf(where).some((o) => o.row === row && o.text.includes((s.content as Y.ContentString).str[k]))) lost.push(`huérfana ${client}:${clock} (fila ${row})`);
+          // Por id: la letra está en los tramos del texto huérfano de su fila.
+          if (!h.orphansOf(where).some((o) => o.row === row && o.ranges.some(([c, a, b]) => c === client && clock >= a && clock < b))) {
+            lost.push(`huérfana ${client}:${clock} (fila ${row})`);
+          }
           orphaned++;
           continue;
         }

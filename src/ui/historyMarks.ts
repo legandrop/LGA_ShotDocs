@@ -1,7 +1,7 @@
-import { createExtension } from '@blocknote/core';
+import { createExtension, selectedFragmentToHTML, type BlockNoteEditor } from '@blocknote/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
-import { Plugin, PluginKey, type EditorState } from '@tiptap/pm/state';
-import { Decoration, DecorationSet } from '@tiptap/pm/view';
+import { EditorState, Plugin, PluginKey, TextSelection } from '@tiptap/pm/state';
+import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import { relativePositionToAbsolutePosition, ySyncPluginKey } from 'y-prosemirror';
 import * as Y from 'yjs';
 import type { HistoryMark } from '../sync/historyDiff';
@@ -111,4 +111,80 @@ export function historyMarksExtension(input: HistoryMarksInput) {
     },
   });
   return createExtension({ key: 'shotdocs-history-marks', prosemirrorPlugins: [plugin] });
+}
+
+// --- Copiar con Show changes prendido -------------------------------------------------------------------------------
+//
+// Lo que se muestra es la unión: lo borrado es texto de verdad del documento, tachado solo por las decoraciones. Copiar
+// tal cual se llevaría lo borrado (y el navegador, con un editor de solo lectura, copiaría los estilos de las marcas).
+// Copiar (y cortar o arrastrar, que en solo lectura es lo mismo) entrega lo elegido SIN lo marcado como borrado: se arma
+// un estado aparte, nunca despachado, sin esos tramos ni esos bloques, y se serializa como lo hace BlockNote.
+
+/** Lo elegido en el editor: el rango de la selección del navegador si está adentro del editor; si no, el del editor. */
+function chosenRange(view: EditorView): { from: number; to: number } | null {
+  const sel = typeof window !== 'undefined' ? window.getSelection() : null;
+  if (sel && !sel.isCollapsed && sel.anchorNode && sel.focusNode && view.dom.contains(sel.anchorNode) && view.dom.contains(sel.focusNode)) {
+    try {
+      const a = view.posAtDOM(sel.anchorNode, sel.anchorOffset);
+      const b = view.posAtDOM(sel.focusNode, sel.focusOffset);
+      if (a !== b) return { from: Math.min(a, b), to: Math.max(a, b) };
+    } catch {
+      // Una posición que el editor no conoce: se usa la suya.
+    }
+  }
+  const { from, to } = view.state.selection;
+  return from === to ? null : { from, to };
+}
+
+/** El estado del editor sin lo marcado como borrado, con lo elegido en el mismo lugar. `null` si no hay nada elegido. */
+export function withoutDeleted(view: EditorView, input: HistoryMarksInput): EditorState | null {
+  const state = view.state;
+  const binding = (ySyncPluginKey.getState(state) as { binding?: Binding } | undefined)?.binding;
+  const range = chosenRange(view);
+  if (!binding || !range) return null;
+  const doc = state.doc;
+  const cuts: [number, number][] = [];
+  for (const mark of input.marks) {
+    if (mark.kind !== 'del') continue;
+    if (mark.type === 'text') {
+      const from = place(binding, mark.from);
+      const to = place(binding, mark.to);
+      if (from !== null && to !== null && to > from) cuts.push([from, to]);
+      continue;
+    }
+    const at = place(binding, mark.at);
+    const node = at === null ? null : doc.nodeAt(at);
+    if (at === null || !node) continue;
+    if (mark.block) {
+      // El bloque entero, con sus hijos: el contenido está adentro de su `blockContainer`.
+      const $at = doc.resolve(at);
+      cuts.push($at.depth > 0 ? [$at.before(), $at.after()] : [at, at + node.nodeSize]);
+    } else cuts.push([at, at + node.nodeSize]);
+  }
+  const tr = state.tr;
+  // De atrás para adelante; lo que ya se fue con un bloque de afuera queda en cero.
+  for (const [from, to] of cuts.sort((x, y) => y[0] - x[0])) {
+    const a = tr.mapping.map(from, 1);
+    const b = tr.mapping.map(to, -1);
+    if (b > a) tr.deleteRange(a, b);
+  }
+  const from = tr.mapping.map(range.from, 1);
+  const to = tr.mapping.map(range.to, -1);
+  if (to <= from) return null;
+  return EditorState.create({ doc: tr.doc, selection: TextSelection.between(tr.doc.resolve(from), tr.doc.resolve(to)) });
+}
+
+/** Lo que va al portapapeles (los mismos tres formatos que BlockNote), sin lo borrado. `null`: no hay nada elegido. */
+export function cleanClipboard(editor: BlockNoteEditor<any, any, any>, view: EditorView, input: HistoryMarksInput) {
+  const clean = withoutDeleted(view, input);
+  if (!clean) return null;
+  // El editor de verdad sirve para serializar; el estado (lo elegido y el documento) es el limpio.
+  const shadow = new Proxy(view, {
+    get(target, prop) {
+      if (prop === 'state') return clean;
+      const value = Reflect.get(target, prop, target) as unknown;
+      return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value;
+    },
+  });
+  return selectedFragmentToHTML(shadow, editor);
 }
