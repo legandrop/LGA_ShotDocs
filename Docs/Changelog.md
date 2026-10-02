@@ -11,6 +11,18 @@ para Windows y la Mac, los repetidos por mayúsculas llevan « (2)», lo que fal
 cancelar. Los nombres se cortan en 200 o 250 caracteres por grafema, sin partir una bandera.
 [ Bajar todo - una carpeta de Drive entera como zip o a una carpeta, con sus nombres limpios ]
 
+v0.104 :
+
+Lo borrado de una página les llegaba con las filas a quien solo ve, comenta o es invitado, y las fotos sacadas se seguían
+abriendo (D14). Entregas 0 y 1 de `Doc_Privacidad_Borrado.md`: con el interruptor `clean_min_version` prendido, quien
+no ve lo borrado baja solo la última base limpia (la página con lo borrado como hueco), que arma el dispositivo de un
+editor a los 20 s de pausa, cada 2 minutos escribiendo y al pasar a segundo plano; sin base, la página dice que está en
+preparación. Compartir, invitar y mover suben antes lo pendiente y reinician la base. La migración
+`20261010120000_privacidad_borrado.sql` (sin aplicar) deja el interruptor apagado (no se prende por encima de la
+versión mínima) y ya cierra la columna `update`, los
+archivos sacados y la papelera de archivos para invitados. Línea al compartir y ayuda nuevas.
+[ Privacidad de lo borrado - quien no edita baja solo la base limpia, con el interruptor apagado ]
+
 v0.103 :
 
 El historial no mostraba qué cambió en cada versión ni quién (P.18, entrega 2). *Show changes*, prendido por defecto,

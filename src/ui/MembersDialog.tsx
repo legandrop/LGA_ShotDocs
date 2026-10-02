@@ -7,6 +7,7 @@ import { GRANT_LEVELS, LEVEL_LABELS, ROLE_LABELS, type GrantLevel, type Role } f
 import type { InvitationGrant, InvitationRow, MemberRow } from '../sync/remote';
 import { notify } from './notice';
 import { useCurrentProject } from './project';
+import { ShareGateNotes, UNSYNCED_BEFORE_SHARE, useShareGate } from './shareGate';
 import { teamErrorText } from './teamText';
 
 // "Members" en el menú de la cuenta (dueño y admins): quién está en el workspace, invitar, cambiar el rol y
@@ -68,6 +69,9 @@ export function MembersDialog({ onClose }: { onClose: () => void }) {
   const [level, setLevel] = useState<GrantLevel>('edit');
   const [manualLink, setManualLink] = useState<string | null>(null);
   const canGiveProject = perms.projectLevel(projectId) >= 4;
+  // Privacidad de lo borrado: con Ver, Comentar o a un invitado, lo del proyecto sube antes y se prepara después.
+  const gate = useShareGate();
+  const formReader = withProject && canGiveProject && (role === 'guest' || level === 'view' || level === 'comment');
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -106,17 +110,37 @@ export function MembersDialog({ onClose }: { onClose: () => void }) {
 
   async function invite(e: FormEvent) {
     e.preventDefault();
+    await send(false);
+  }
+
+  /** Invita; `anyway`: sin esperar a que suba lo pendiente (el aviso de shareGate.tsx). */
+  async function send(anyway: boolean) {
     const address = email.trim().toLowerCase();
     if (!address) return;
     const grants: InvitationGrant[] = withProject && canGiveProject ? [{ project_id: projectId, level }] : [];
-    // Sin nada que espere antes: el portapapeles se pide en el mismo gesto.
+    const reader = formReader;
+    const scope = { projectId };
+    if (anyway) gate.clearBlocked();
+    // Sin nada que espere antes del pedido del portapapeles: se pide en el mismo gesto (el link llega después).
     const copying = inviteAndCopy(
-      remote.createInvitation(address, role, grants).then(() => makeLink(grants.length ? projectId : undefined)),
+      (anyway ? Promise.resolve(true) : gate.ready(scope, reader, () => void send(false), () => void send(true)))
+        .then((ok) => {
+          if (!ok) throw UNSYNCED_BEFORE_SHARE;
+          return remote.createInvitation(address, role, grants);
+        })
+        .then(() => makeLink(grants.length ? projectId : undefined)),
     );
     await run('invite', async () => {
-      const manual = await copying;
+      let manual: string | null;
+      try {
+        manual = await copying;
+      } catch (err) {
+        if (err === UNSYNCED_BEFORE_SHARE) return;
+        throw err;
+      }
       setEmail('');
       setManualLink(manual);
+      gate.after(scope, reader, address);
     });
   }
 
@@ -183,6 +207,7 @@ export function MembersDialog({ onClose }: { onClose: () => void }) {
               <input readOnly value={manualLink} onFocus={(e) => e.currentTarget.select()} aria-label={tr('team.inviteLink')} />
             </div>
           )}
+          <ShareGateNotes gate={gate} reader={formReader || gate.blocked !== null} />
         </form>
 
         {error && <p className="error">{error}</p>}

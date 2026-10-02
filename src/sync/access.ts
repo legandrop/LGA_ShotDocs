@@ -331,10 +331,12 @@ export class Permissions {
 
   /**
    * La pestaña Archivos de la papelera (paso 11, `private.can_see_file_trash`): "Edit & create pages" sobre
-   * el proyecto entero, o dueño o admin con algún permiso sobre él. Sin datos, se le pregunta a la base.
+   * el proyecto entero, o dueño o admin con algún permiso sobre él; nunca un invitado (son los nombres de lo
+   * sacado, Doc_Privacidad_Borrado.md). Sin datos, se le pregunta a la base.
    */
   canSeeFileTrash(projectId: string): boolean {
     if (!this.access) return true;
+    if (this.role === 'guest') return false;
     const level = this.projectLevel(projectId);
     return level >= LEVEL_EDIT_PAGES || ((this.role === 'owner' || this.role === 'admin') && level >= LEVEL_VIEW);
   }

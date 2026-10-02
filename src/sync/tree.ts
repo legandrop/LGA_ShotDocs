@@ -1,5 +1,6 @@
 import { generateKeyBetween } from 'fractional-indexing';
 import { t } from '../i18n';
+import { contentGap, serverSeqFor } from './clean';
 import { GENERATION_KEY, type LocalDb } from './localDb';
 import type { FailedOp, PagePatch, PageRow, PageSettings, ProjectRow, QueuedOp, TreeOp } from './types';
 
@@ -90,6 +91,12 @@ export class PageTree {
   /** Se llama cuando entra un cambio local a la cola. */
   onQueued?: () => void;
 
+  /**
+   * Si a este dispositivo la página le llega como base limpia y no como filas (Docs/Doc_Privacidad_Borrado.md): lo
+   * pone la sincronización según el interruptor del workspace y los permisos. Sin él, todas llegan como filas.
+   */
+  baseReader: ((pageId: string) => boolean) | null = null;
+
   constructor(
     private readonly db: LocalDb,
     /** El primer proyecto del usuario: ahí va una página nueva sin padre si no se indica otro. */
@@ -134,6 +141,16 @@ export class PageTree {
 
   get(id: string): PageRow | undefined {
     return this.view.get(id);
+  }
+
+  /** Hasta qué `seq` del contenido de la página puede llegar este dispositivo (`serverSeqFor`, clean.ts). */
+  serverSeq(row: PageRow): number {
+    return serverSeqFor(row, this.baseReader?.(row.id) ?? false);
+  }
+
+  /** Lo que le falta a la página con este cursor: `missing`, `preparing` o `null` (`contentGap`, clean.ts). */
+  contentGap(row: PageRow, cursor: number): 'missing' | 'preparing' | null {
+    return contentGap(row, this.baseReader?.(row.id) ?? false, cursor);
   }
 
   /** Los proyectos, del más viejo al más nuevo. */
