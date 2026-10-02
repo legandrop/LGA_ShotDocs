@@ -128,6 +128,25 @@ function useImageLoads(dom: Element | null | undefined): void {
   }, [dom]);
 }
 
+/** Los nombres de los tamaños rápidos en una celda: una parte de la celda, no de la página. */
+const CELL_SIZE_LABELS: Record<number, 'cellSize.full' | 'cellSize.half' | 'cellSize.third' | 'cellSize.quarter'> = {
+  [1]: 'cellSize.full',
+  [1 / 2]: 'cellSize.half',
+  [1 / 3]: 'cellSize.third',
+  [1 / 4]: 'cellSize.quarter',
+};
+
+/** Una miniatura en una fila de tabla: la foto chica entre las dos líneas de la fila. */
+function ThumbIcon() {
+  return (
+    <svg width={18} height={18} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round" aria-hidden="true">
+      <path d="M2 4.5h16M2 15.5h16" />
+      <path d="M4 7h6v6H4z" />
+      <path d="M12.5 10h4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 /** Los tamaños rápidos y "Arrange in rows" para las fotos en línea de la selección (D-24: los tamaños primero). */
 export function PhotoSizeButtons() {
   const editor = useBlockNoteEditor();
@@ -146,15 +165,31 @@ export function PhotoSizeButtons() {
       : many
         ? tr('photoSize.arrangeSelected')
         : tr('imageSize.arrangeHint');
+  // En una celda (entrega 5), el ancho es una parte de la celda, y la primera opción vuelve a la miniatura del alto de
+  // una fila (`w = 0`, con lo que entran).
+  const cell = choice.inTable;
   return (
     <>
+      {cell && (
+        <BarButton
+          test="photoSize-thumb"
+          label={tr('cellSize.thumb')}
+          tip={`**${tr('cellSize.thumb')}**\n${tr(many ? 'photoTip.thumbAll' : 'photoTip.thumb')}`}
+          icon={<ThumbIcon />}
+          selected={choice.widths.every((w) => w === 0)}
+          onClick={() => {
+            setPhotoWidths(view, choice.positions, 0);
+            view.focus();
+          }}
+        />
+      )}
       {ROW_PRESETS.map((f) => (
         <BarButton
           key={f}
           className="image-size-button"
           test={`photoSize-${SIZE_LABELS[f].text}`}
-          label={tr(SIZE_LABELS[f].tip)}
-          tip={`**${tr(SIZE_LABELS[f].tip)}**\n${many ? tr('photoTip.sizeAll') : tr('photoTip.size')}`}
+          label={tr(cell ? CELL_SIZE_LABELS[f] : SIZE_LABELS[f].tip)}
+          tip={`**${tr(cell ? CELL_SIZE_LABELS[f] : SIZE_LABELS[f].tip)}**\n${tr(cell ? (many ? 'photoTip.sizeCellAll' : 'photoTip.sizeCell') : many ? 'photoTip.sizeAll' : 'photoTip.size')}`}
           selected={choice.widths.every((w) => Math.abs(w - f) < 1e-4)}
           onClick={() => {
             setPhotoWidths(view, choice.positions, f);

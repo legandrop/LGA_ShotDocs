@@ -208,6 +208,66 @@ describe('la barra, por sectores (D-24)', () => {
   });
 });
 
+describe('la barra de una foto en una celda de tabla (entrega 5)', () => {
+  async function inCell() {
+    const m = await mount();
+    await act(async () => {
+      m.editor.replaceBlocks(m.editor.document, [
+        {
+          id: 'tb',
+          type: 'table',
+          content: { type: 'tableContent', rows: [{ cells: [[ph('C1', 0), ph('C2', 0)], [{ type: 'text', text: 'nota', styles: {} }]] }] },
+        },
+      ] as never);
+    });
+    return m;
+  }
+  const widths = (e: BlockNoteEditor) => {
+    const out: number[] = [];
+    view(e).state.doc.descendants((n) => {
+      if (n.type.name === PHOTO) out.push(Number(n.attrs.w));
+      return true;
+    });
+    return out;
+  };
+
+  it('miniatura y los tamaños de la celda (no de la página); sin alinear (la tabla no se alinea)', async () => {
+    const { editor } = await inCell();
+    await choosePhoto(editor, 'C1');
+    expect(bar(INLINE)).toEqual([
+      'View full screen',
+      'Download image',
+      '|',
+      'Thumbnail',
+      'Full cell width',
+      'Half the cell width',
+      'A third of the cell width',
+      'A quarter of the cell width',
+      'Arrange in rows',
+      '|',
+      'Comment',
+      '|',
+      'Replace image',
+      'Rename image',
+      'Delete image',
+    ]);
+    const thumb = document.querySelector(`${INLINE} [aria-label="Thumbnail"]`)!;
+    expect(thumb.getAttribute('aria-pressed')).toBe('true');
+    expect(thumb.getAttribute('data-tip')).toMatch(/table row/);
+    expect(thumb.hasAttribute('title')).toBe(false);
+  });
+
+  it('1/2 la pasa a la mitad de la celda y Miniatura la vuelve a miniatura', async () => {
+    const { editor } = await inCell();
+    await choosePhoto(editor, 'C2');
+    await click(INLINE, 'Half the cell width');
+    expect(widths(editor)).toEqual([0, 0.5]);
+    await choosePhoto(editor, 'C2');
+    await click(INLINE, 'Thumbnail');
+    expect(widths(editor)).toEqual([0, 0]);
+  });
+});
+
 describe('lo que hace cada botón de la foto en línea', () => {
   it('borrar: la elegida (un solo cambio)', async () => {
     const { editor } = await mount();

@@ -471,6 +471,34 @@ describe('las fotos en la vista de impresión', () => {
     }
   });
 
+  it('una foto en línea sin ancho propio: en el renglón, su ancho natural; en una celda, el de la miniatura del alto de una fila', () => {
+    const article = document.createElement('article');
+    article.className = 'page sheet';
+    const photo = (name: string) =>
+      `<span class="sd-photo" data-url="sdmedia://${name}" data-w="0"><img class="bn-visual-media" src="blob:${name}"></span>`;
+    article.innerHTML = `<div class="editor-host"><div class="bn-container"><div class="bn-editor">
+      <div class="bn-block-outer"><div class="bn-block-content" data-content-type="paragraph"><p class="bn-inline-content">${photo('p')}</p></div></div>
+      <div class="bn-block-outer"><div class="bn-block-content" data-content-type="table"><table class="bn-inline-content"><tbody><tr>
+        <td><p>${photo('c')}</p></td><td><p>${photo('v')}</p></td></tr></tbody></table></div></div></div></div></div>`;
+    document.body.append(article);
+    cleanups.push(() => article.remove());
+    const sizes: Record<string, [number, number]> = { p: [480, 320], c: [480, 320], v: [320, 480] };
+    for (const img of article.querySelectorAll<HTMLImageElement>('img.bn-visual-media')) {
+      const [w, h] = sizes[img.getAttribute('src')!.slice(5)];
+      Object.defineProperty(img, 'naturalWidth', { value: w });
+      Object.defineProperty(img, 'naturalHeight', { value: h });
+      // En pantalla, el tope de alto de las celdas (styles.css, "Fotos en las celdas"; jsdom no lee la hoja de estilos).
+      if (img.closest('td')) img.style.maxHeight = '96px';
+    }
+    const view = buildPrintView(article, { size: 'A4', landscape: false }, 'output');
+    const width = (name: string) => view.root.querySelector<HTMLImageElement>(`.sd-photo[data-url="sdmedia://${name}"] > img`)!.style.width;
+    expect(width('p')).toBe('480px');
+    // 96 px de alto: 144 × 96 la apaisada, 64 × 96 la vertical (el original, más grande, sale igual).
+    expect(width('c')).toBe('144px');
+    expect(width('v')).toBe('64px');
+    view.root.remove();
+  });
+
   it('cambiar la miniatura por el original no cambia el ancho (ni, con la proporción fija, el alto)', () => {
     const view = buildPrintView(photoPage(1122, 'fit-content'), { size: 'A3', landscape: false }, 'output');
     const img = view.root.querySelector<HTMLImageElement>('img.bn-visual-media')!;
