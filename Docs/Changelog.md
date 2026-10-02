@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.097 :
 
 Faltaba probar semanas sin red con una versión vieja (un rodaje con la v0.090 mientras se publican otras). Prueba
 nueva con la sincronización de la v0.090 copiada tal cual: con la mínima subida avisa, no sube contenido ni fotos y no
@@ -11,6 +11,17 @@ actualizar (las páginas que cambiaron se ven en solo lectura, con aviso). Y la 
 versión nueva: ahora la busca, recarga sola (también si llegó antes de entrar), *Update now* espera a que llegue y, si
 el navegador nunca empezó a instalarla, ofrece forzarla (con red y lugar libre; lo guardado queda).
 [ Volver sin red - prueba de semanas offline con la v0.090, la versión vieja no sube ni baja nada y se actualiza sola ]
+
+v0.096 :
+
+Detalles del salto de hoja. Pegar en un renglón de salto algo que traía saltos los perdía: v0.093 dejaba uno solo,
+sin distinguir los pegados del heredado. Ahora se anota qué bloques eran saltos al pegar y se conservan; el del
+renglón sigue al final, sin duplicarse (con un Script al final, en un renglón debajo). Ctrl/⌘+Enter en el medio de
+un título colapsado, o con una selección que empieza ahí, lo partía y abría la sección: ahora el salto va después de
+lo escondido, como al final. Supr en un salto vacío último hijo de un bloque subía el de abajo adentro del salto:
+ahora saca el salto y lo de abajo no se mueve. Cada caso se deshace en un paso. Roadmap: Apple Developer y
+Microsoft Store para cuando la app esté terminada.
+[ Salto de hoja - pegar conserva los saltos pegados, Ctrl/⌘+Enter en un título colapsado y Supr en un último hijo ]
 
 v0.095 :
 

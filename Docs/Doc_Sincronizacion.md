@@ -1074,7 +1074,7 @@ Desde v0.021 hay dos protecciones para poder sumar tipos de bloque (y marcas) nu
 - **La versión mínima del workspace** (`workspace_settings.min_app_version`). Cada subida de contenido
   lleva la versión de la app, y el servidor rechaza las de una versión menor (también las de versiones
   anteriores a v0.021, que no mandan versión). La app vieja lo ve, deja de subir contenido (queda en el
-  dispositivo), y pide actualizar; al actualizar, sube todo. Desde v0.0XX tampoco sube el árbol ni los comentarios ni
+  dispositivo), y pide actualizar; al actualizar, sube todo. Desde v0.097 tampoco sube el árbol ni los comentarios ni
   baja contenido, y se actualiza sola (ver "Volver después de mucho tiempo sin red"). Desde v0.090 frena también la cola de archivos (ver
   abajo, "La versión mínima y los archivos").
 

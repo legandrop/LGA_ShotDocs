@@ -89,7 +89,7 @@ const REPLACE_PROJECT = '0.094';
 /** El aviso de lo que escribiste en algo que otro borró (roadmap B.16, Doc_Sincronizacion.md): la versión se pone al publicar. */
 const REMOVED_WRITING = '0.095';
 /** La que trajo "Update now" que espera la versión nueva y "Force the update" (Doc_Sincronizacion.md, "Volver después de mucho tiempo sin red"). */
-const UPDATE_APP = '0.0XX';
+const UPDATE_APP = '0.097';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---

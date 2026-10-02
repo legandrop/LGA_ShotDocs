@@ -431,7 +431,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
     y quien escribió ve en la página un aviso con su texto para copiarlo. Sin migración. Falta: subir
     `min_app_version` a esta versión cuando se publique (las anteriores siguen subiendo con GC) y, con el historial,
     decir quién borró. Ver `Doc_Sincronizacion.md`, "La subida sin GC".
-17. **Hecho (v0.0XX): volver después de semanas sin red con una versión vieja.** Prueba con la sincronización de la
+17. **Hecho (v0.097): volver después de semanas sin red con una versión vieja.** Prueba con la sincronización de la
     v0.090 (`src/sync/offlineLargo.test.ts`): nada se pierde, con la mínima subida o sin ella. Desde esta versión, con
     la app vieja para el workspace no sale ni baja nada y la app instalada se actualiza sola. **Falta:** ver en el
     iPhone (Safari, app instalada) que se actualiza sola al volver la red (solo se midió Chromium); y la base no frena
@@ -461,3 +461,14 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   otra página se registra el archivo también para la nueva (pasos 6 y 9), así quien ve solo esa página
   la ve.
 - D-05 (hosting para trabajos pagos): decidido, Cloudflare.
+
+## Cuando se termine esta app
+
+Pedido de Lega (2026-10-01), para cuando la app esté terminada:
+
+- **Apple Developer Program** (USD 99 por año): hace falta para la app nativa de iPhone y Mac, para probarla con
+  TestFlight y para guardar en el carrete del iPhone.
+- **Microsoft Store**: para que las apps de Windows no salgan como virus. Lo que se publica en la Store lo firma
+  Microsoft; un instalador propio fuera de la Store necesita además un certificado de firma (por ejemplo, Azure
+  Trusted Signing).
+- Google Play, no.
