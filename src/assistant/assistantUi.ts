@@ -12,7 +12,7 @@ interface AssistantUiState {
   /** La ventana de ajustes (proveedor, clave, modelo). */
   settings: boolean;
   /** Salir de la cuenta con una clave del asistente guardada: la ventana con la casilla de olvidarla. */
-  signOut: { email: string; run: () => Promise<unknown> } | null;
+  signOut: { email: string; workspace?: string; run: () => Promise<unknown> } | null;
   /** *Sign out other devices* (Docs/Doc_Clave_Sincronizada.md, S1): la confirmación, con el nombre del workspace. */
   signOutOthers: { workspace: string; run: () => Promise<{ error: unknown }> } | null;
 }
@@ -62,8 +62,8 @@ export function closeAssistantSettings(): void {
  * Salir con una clave guardada (Docs/Doc_Asistente.md, sección 4): la ventana de salir suma la casilla *Also forget my
  * assistant key on this device*, destildada. `run` sale de la cuenta.
  */
-export function askSignOut(email: string, run: () => Promise<unknown>): void {
-  set({ signOut: { email, run } });
+export function askSignOut(email: string, run: () => Promise<unknown>, workspace?: string): void {
+  set({ signOut: { email, workspace, run } });
 }
 
 export function closeSignOut(): void {

@@ -49,7 +49,7 @@ export function AssistantHost() {
           <AssistantSettings />
         </Part>
       )}
-      {signOut && <SignOutDialog email={signOut.email} run={signOut.run} />}
+      {signOut && <SignOutDialog email={signOut.email} workspace={signOut.workspace} run={signOut.run} />}
       {signOutOthers && <SignOutOthersDialog workspace={signOutOthers.workspace} run={signOutOthers.run} />}
     </>
   );

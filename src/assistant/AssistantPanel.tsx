@@ -20,6 +20,7 @@ import { buildRequest, EDIT_ONLY, LANGUAGES, PAGE_ACTIONS, type Action } from '.
 import { complete, isLocalProvider, PROVIDER_NAMES, type Usage } from './providers';
 import './assistant.css';
 import { errorText } from './errorText';
+import { isKeyRejected, SyncedKeyHint } from './SyncedKeyHint';
 import { AskMic } from '../dictation/AskMic';
 
 // El panel del asistente (Docs/Doc_Asistente.md, entregas A1 y A2, secciones 6 y 11): las acciones sobre lo elegido,
@@ -45,7 +46,7 @@ type Phase =
   | { kind: 'idle'; note?: string }
   | { kind: 'running'; action: Action; text: string }
   /** `retake`: lo elegido cambió; *Try again* pide sobre lo que hay hoy en el mismo lugar. */
-  | { kind: 'error'; action: Action; message: string; text?: string; retake?: boolean }
+  | { kind: 'error'; action: Action; message: string; text?: string; retake?: boolean; keyRejected?: boolean }
   | { kind: 'preview'; action: Action; result: Result; warnings: string[] }
   /** Creando la subpágina traducida (sin red, igual: es local). */
   | { kind: 'busy'; action: Action };
@@ -439,7 +440,7 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
         setPhase({ kind: 'preview', action: next.action, result, warnings: warningsOf(next, result, tr) });
       } catch (err) {
         if (abort.current !== controller) return;
-        setPhase({ kind: 'error', action: next.action, message: errorText(err, providerName, tr) });
+        setPhase({ kind: 'error', action: next.action, message: errorText(err, providerName, tr), keyRejected: isKeyRejected(err) });
       }
     },
     [settings, config, busy, target, language, formatTarget, instruction, user.email, tr, providerName, canEdit, tree, pageId],
@@ -818,6 +819,7 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
                     </button>
                   )}
                   {phase.text && <button onClick={copy}>{tr('assistant.copy')}</button>}
+                  <SyncedKeyHint show={!!phase.keyRejected} />
                   <button className="link" onClick={discard}>
                     {tr('assistant.back')}
                   </button>
