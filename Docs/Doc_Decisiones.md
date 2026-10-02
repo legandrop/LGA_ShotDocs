@@ -256,12 +256,16 @@ cosa.
   **Propuesta (2026-10-02, `Doc_Asistente.md`, IA1):** solo en el dispositivo, nunca en un servidor; se guarda cifrada,
   pero el cifrado solo evita verla en claro por accidente (quien usa ese navegador o un script de la app la puede usar),
   así que se recomienda un tope de gasto en el proveedor; el pedido va directo al proveedor (IA3).
+  **Lega (2026-10-02, D72 → B):** además, una copia sincronizada entre sus dispositivos, cifrada con una frase que solo
+  sabe la persona; diseño en `Doc_Clave_Sincronizada.md` (CS1 a CS9, propuestas).
 - **D-07 · MCP.** Opción indicada: un servidor MCP en el portero de Cloudflare del workspace, que entra
   con la sesión del usuario y edita con sus permisos. Se hace en la fase 5, después del asistente de la
   app.
   **Propuesta (2026-10-02, `Doc_Asistente.md`, IA2):** en el portero, con el OAuth del Supabase del workspace, el token
   cerrado de fábrica y la base limpia de D14; con páginas reales pide, casi seguro, el plan pago de Workers del dueño
   (US$ 5 por mes); antes, la prueba técnica M0; si no, un MCP local.
+  **Lega (2026-10-02, D77):** además de leer y escribir, mover y mandar a la papelera con confirmación explícita de la
+  persona; compartir e invitar, nunca (`Doc_Asistente.md` 9.3 bis, IA11).
 - **D-08 · Formato por defecto de un proyecto nuevo.** Opción indicada: libre. El formato no se guarda
   en el proyecto: se fija por proyecto en sus páginas raíz y lo heredan las de abajo
   (`pages.settings.format`, `Plan_ShotDocs.md`, sección 10).

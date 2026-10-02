@@ -1,5 +1,18 @@
 # Changelog — LGA Shot Docs
 
+v0.131 :
+
+Dos cosas del asistente y las menciones. **Arreglos de las menciones, entrega 2:** compartir desde la mención por
+`useShareGate` no tenía prueba (2 mutantes vivos); ahora 5 pruebas y los 9 mutantes mueren, lo que faltaba para prender
+la privacidad de lo borrado. La lista del `@` no volvía tras Esc o *Cancel* (el campo olvidaba la posición y enfocarlo
+por código no la relee): `cancelAsk` la vuelve a leer. La pregunta aclara que se comparte en el acto. **Diseño, sin
+código, de la clave del asistente en todos tus dispositivos** (D72 → B, `Doc_Clave_Sincronizada.md`, CS1 a CS9): una
+copia cifrada en el dispositivo con una frase de seis palabras (PBKDF2 y AES-256-GCM) que solo lee la persona; para un
+dispositivo perdido, *Sign out other devices* y frase nueva. **Mover y borrar por el MCP con confirmación** (D77,
+`Doc_Asistente.md` 9.3 bis, IA11): solo proponen, se hacen con el sí de la persona, nunca cambian quién ve algo y tienen
+*Undo*; compartir e invitar, nunca. Sin migración.
+[ Arreglos de las menciones y el diseño de la clave del asistente sincronizada (D72) y de mover y borrar por el MCP (D77) ]
+
 v0.130 :
 
 Buscar dentro de secciones colapsadas (D11) y el reporte de set en la raíz (D82), dos pedidos de Lega del 2026-10-02.

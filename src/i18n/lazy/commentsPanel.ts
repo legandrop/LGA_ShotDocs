@@ -16,6 +16,10 @@ export const commentsPanel = {
     en: "{name} can't see this page. Share it with them (Comment) and mention them?",
     es: "{name} no ve esta página. ¿Compartírsela con Comentar y mencionarle?",
   },
+  'mentions.shareNow': {
+    en: "It's shared as soon as you choose Share and mention, even if you don't send the comment.",
+    es: "Se comparte en cuanto tocás Compartir y mencionar, aunque después no mandes el comentario.",
+  },
   'mentions.shareAndMention': { en: "Share and mention", es: "Compartir y mencionar" },
   'mentions.sharing': { en: "Sharing…", es: "Compartiendo…" },
   'mentions.shareOffline': { en: "Sharing needs a connection.", es: "Para compartir hace falta conexión." },
