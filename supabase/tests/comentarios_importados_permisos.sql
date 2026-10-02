@@ -235,6 +235,19 @@ begin
     $q$select public.import_comment(gen_random_uuid(), '00000000-0000-4000-8000-000000000eb2', null, null, 'x',
          '2026-01-01T10:00:00Z', null, 'otra', 'Persona Externa', null)$q$,
     '23514', 'un origen que no se conoce');
+  -- Desde 20261026120000_comentarios_archivo.sql, `'shotdocs'` (un archivo exportado que vuelve, Doc_Exportar.md 3) sí.
+  -- En un bloque que se deshace solo (la excepción del final), así no cambia las cuentas de más abajo.
+  begin
+    perform public.import_comment('00000000-0000-4000-8000-000000000f0a', '00000000-0000-4000-8000-000000000eb2', null,
+      null, 'Vuelve del archivo.', '2026-01-03T09:00:00Z', null, 'shotdocs', 'Persona Externa', null);
+    assert exists (select 1 from public.comments_view where id = '00000000-0000-4000-8000-000000000f0a'
+                   and imported_from = 'shotdocs' and imported_author_email is null), 'el origen shotdocs no entró';
+    raise exception 'shotdocs_ok';
+  exception when others then
+    if sqlerrm <> 'shotdocs_ok' then
+      raise;
+    end if;
+  end;
   perform pg_temp.expect_error(
     $q$select public.import_comment(gen_random_uuid(), '00000000-0000-4000-8000-000000000eb2', 'mal bloque', null,
          'x', '2026-01-01T10:00:00Z', null, 'coda', 'Persona Externa', null)$q$,
