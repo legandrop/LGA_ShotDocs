@@ -18,6 +18,13 @@ export const MARKUP_FONT = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI'
 /** El alto de un renglón de texto, en tamaños de letra. */
 const LINE_HEIGHT = 1.25;
 
+/**
+ * Las letras que se dibujan, como mucho, en una foto (sumando todos sus textos). El mapa es entrada no confiable: con
+ * 2000 formas de 2000 letras, sin este tope, cada cambio armaba millones de letras (auditoría B1). Una foto anotada a
+ * mano no se acerca: lo que pasa del tope no se dibuja (queda guardado).
+ */
+export const MAX_DRAWN_CHARS = 20_000;
+
 export interface MarkupDrawOptions {
   /**
    * El grosor mínimo de un trazo, en unidades del marco (lo que mide 1 px de pantalla): una foto chica (la miniatura
@@ -49,7 +56,7 @@ export function drawMarkup(svg: SVGSVGElement, photo: PhotoMarkup, options: Mark
   svg.setAttribute('viewBox', `0 0 ${n(w)} ${n(h)}`);
   svg.setAttribute('data-file-id', photo.fileId);
   const unit = Math.max(w, h) / REFERENCE_SIDE;
-  const ctx: Ctx = { unit, minStroke: options.minStroke ?? 0, measure: options.measure ?? defaultMeasure() };
+  const ctx: Ctx = { unit, minStroke: options.minStroke ?? 0, measure: options.measure ?? defaultMeasure(), chars: MAX_DRAWN_CHARS };
   const out: SVGElement[] = [];
   for (const shape of photo.shapes) {
     const g = drawShape(shape, ctx);
@@ -62,6 +69,8 @@ interface Ctx {
   unit: number;
   minStroke: number;
   measure: ((text: string, font: string) => number) | null;
+  /** Las letras que todavía se pueden dibujar en esta foto (`MAX_DRAWN_CHARS`). */
+  chars: number;
 }
 
 /** El grosor con que se dibuja (nunca por debajo del mínimo de pantalla, salvo 0: sin trazo). */
@@ -244,24 +253,60 @@ export function numberInk(fillColor: string): string {
 
 const fontOf = (size: number, bold: boolean, italic: boolean) => `${italic ? 'italic ' : ''}${bold ? 'bold ' : ''}${size}px ${MARKUP_FONT}`;
 
-/** Corta el texto en renglones: los saltos que tiene y, si hay con qué medir, el ancho de la caja. */
-export function wrapLines(text: string, width: number | null, font: string, measure: Ctx['measure']): string[] {
+/**
+ * Corta el texto en renglones: los saltos que tiene y, si hay con qué medir, el ancho de la caja. Lineal en el largo
+ * del texto (auditoría B1: medir `renglón + palabra` en cada palabra era cuadrático y un mapa con textos largos colgaba
+ * la página): cada palabra distinta se mide una sola vez y el ancho del renglón es la suma. Corta en `maxLines`
+ * renglones (los que no entran en la caja no se ven: se recortan igual).
+ */
+export function wrapLines(text: string, width: number | null, font: string, measure: Ctx['measure'], maxLines = Infinity): string[] {
   const out: string[] = [];
+  const widths = new Map<string, number>();
+  const widthOf = (word: string, m: NonNullable<Ctx['measure']>) => {
+    let w = widths.get(word);
+    if (w === undefined) {
+      w = m(word, font);
+      widths.set(word, w);
+    }
+    return w;
+  };
   for (const para of text.split(/\r\n|\r|\n/)) {
+    if (out.length >= maxLines) break;
     if (!measure || !width || width <= 0) {
       out.push(para);
       continue;
     }
     let line = '';
+    let lineWidth = 0;
+    // `split` con el grupo alterna palabra y espacio: una palabra nunca empieza con espacio.
     for (const word of para.split(/(\s+)/)) {
-      const next = line + word;
-      if (line && !/^\s+$/.test(word) && measure(next, font) > width) {
+      if (!word) continue;
+      const w = widthOf(word, measure);
+      if (line && !/^\s/.test(word) && lineWidth + w > width) {
         out.push(line.trimEnd());
-        line = word.trimStart();
-      } else line = next;
+        if (out.length >= maxLines) return out;
+        line = word;
+        lineWidth = w;
+      } else {
+        line += word;
+        lineWidth += w;
+      }
     }
     out.push(line);
   }
+  return out;
+}
+
+/** El texto que todavía entra en el tope de letras de la foto (sin partir un emoji en dos); lo descuenta del tope. */
+function budget(text: string, ctx: Ctx): string {
+  let out = text;
+  if (out.length > ctx.chars) {
+    out = out.slice(0, Math.max(0, ctx.chars));
+    // Una mitad de un par sustituto suelta al final se saca.
+    const last = out.charCodeAt(out.length - 1);
+    if (last >= 0xd800 && last <= 0xdbff) out = out.slice(0, -1);
+  }
+  ctx.chars -= out.length;
   return out;
 }
 
@@ -275,8 +320,14 @@ function defaultMeasure(): Ctx['measure'] {
     if (typeof OffscreenCanvas === 'function') {
       const c = new OffscreenCanvas(1, 1).getContext('2d');
       if (c) {
+        // La letra se pone una vez por texto (todas las palabras de un texto llegan con la misma): parsearla en cada
+        // medida costaba más que medir.
+        let current = '';
         measurer = (text, font) => {
-          c.font = font;
+          if (font !== current) {
+            c.font = font;
+            current = font;
+          }
           return c.measureText(text).width;
         };
       }
@@ -302,7 +353,9 @@ function drawText(s: TextShape, ctx: Ctx): SVGGElement {
   const font = fontOf(s.fontSize, s.bold, s.italic);
   const pad = boxed ? s.padding : 0;
   const inner = boxed ? boxed.w - 2 * pad : null;
-  const lines = wrapLines(s.text, inner, font, ctx.measure);
+  // Solo los renglones que entran en la caja (uno más, por las letras que bajan del renglón): los demás se recortan.
+  const maxLines = boxed ? Math.max(1, Math.ceil((boxed.h - pad) / (s.fontSize * LINE_HEIGHT)) + 1) : Infinity;
+  const lines = wrapLines(budget(s.text, ctx), inner, font, ctx.measure, maxLines);
   const anchor = s.alignment === 1 ? 'middle' : s.alignment === 2 ? 'end' : 'start';
   const x0 = boxed ? (s.alignment === 1 ? boxed.x + boxed.w / 2 : s.alignment === 2 ? boxed.x + boxed.w - pad : boxed.x + pad) : 0;
   const y0 = (boxed ? boxed.y + pad : 0) + s.fontSize;

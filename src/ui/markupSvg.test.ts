@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import { readShape, type MarkupFrame, type MarkupShape, type PhotoMarkup } from '../media/markup';
-import { contrastInk, createMarkupSvg, drawMarkup, headHalfWidth, headLength, numberInk, wrapLines } from './markupSvg';
+import { contrastInk, createMarkupSvg, drawMarkup, headHalfWidth, headLength, MAX_DRAWN_CHARS, numberInk, wrapLines } from './markupSvg';
 
 // El dibujo de cada forma (Docs/Doc_Anotar_Fotos.md, sección 4): las cuentas de FrameRev a la escala del marco.
 
@@ -80,6 +80,60 @@ describe('texto y número', () => {
     expect(wrapLines('borrar el poste de luz', 100, '', measure)).toEqual(['borrar el', 'poste de', 'luz']);
     const svg = draw({ type: 'text', text: 'borrar el poste\nde luz', rectX: 0, rectY: 0, rectW: 100, rectH: 400, fontSize: 20 }, { measure });
     expect([...svg.querySelectorAll('tspan')].map((t) => t.textContent)).toEqual(['borrar el', 'poste', 'de luz']);
+  });
+
+  it('cortar en renglones es lineal: cada palabra se mide una vez, aunque la caja sea ancha (auditoría B1)', () => {
+    // Una medida que cuenta cuántas letras le pasan. Antes se medía `renglón + palabra` en cada palabra: con una caja
+    // que nunca corta, 2000 letras medían ~1 000 000 letras (y 200 textos así congelaban la página 10 s por cambio).
+    let letters = 0;
+    const measure = (t: string) => {
+      letters += t.length;
+      return t.length * 10;
+    };
+    // Palabras todas distintas: ninguna se ahorra por repetida.
+    const words = Array.from({ length: 450 }, (_, i) => `w${i}`).join(' ');
+    expect(words.length).toBeGreaterThan(1900);
+    expect(wrapLines(words, 1e9, '', measure)).toEqual([words]);
+    expect(letters).toBeLessThanOrEqual(words.length);
+    // La misma palabra repetida se mide una sola vez.
+    letters = 0;
+    expect(wrapLines('a '.repeat(1000), 1e9, '', measure)).toHaveLength(1);
+    expect(letters).toBeLessThanOrEqual(2);
+    // Caja angosta: el mismo resultado que medir el renglón entero, y también lineal.
+    letters = 0;
+    const narrow = wrapLines(words, 200, '', measure);
+    expect(narrow.every((line) => line.length * 10 <= 200 || !line.includes(' '))).toBe(true);
+    expect(narrow.join(' ')).toBe(words);
+    expect(letters).toBeLessThanOrEqual(words.length);
+  });
+
+  it('solo los renglones que entran en la caja; y un tope de letras por foto', () => {
+    let letters = 0;
+    const measure = (t: string) => {
+      letters += t.length;
+      return t.length * 10;
+    };
+    const words = Array.from({ length: 450 }, (_, i) => `w${i}`).join(' ');
+    // Caja de 100 de ancho y 50 de alto con letra de 20 (renglón de 25): entran 2 renglones (más uno de margen).
+    const svg = draw({ type: 'text', text: words, rectX: 0, rectY: 0, rectW: 100, rectH: 50, fontSize: 20 }, { measure });
+    expect(svg.querySelectorAll('tspan').length).toBeLessThanOrEqual(3);
+    expect(letters).toBeLessThan(100);
+    // 2000 textos de 2000 letras (los topes del mapa): se dibujan a lo sumo MAX_DRAWN_CHARS letras en la foto.
+    const big = 'a '.repeat(1000);
+    const shapes = Array.from({ length: 2000 }, (_, i) => readShape(`t${i}`, { type: 'text', text: big }, FRAME) as MarkupShape);
+    const many = createMarkupSvg();
+    drawMarkup(many, { fileId: '6f1c2a4e-0b7d-4c8e-9f10-112233445566', frame: FRAME, shapes, newer: false });
+    const drawnChars = [...many.querySelectorAll('tspan')].reduce((sum, t) => sum + (t.textContent ?? '').length, 0);
+    expect(drawnChars).toBe(MAX_DRAWN_CHARS);
+    // Un emoji en el borde del tope no se parte en dos.
+    const emoji = readShape('e', { type: 'text', text: '😀'.repeat(1000) }, FRAME) as MarkupShape;
+    // Nueve textos de 2000 letras (el tope de un texto) y uno de 1999: queda una sola letra, y el emoji ocupa dos.
+    const pads = Array.from({ length: 10 }, (_, i) => readShape(`p${i}`, { type: 'text', text: 'x'.repeat(i < 9 ? 2000 : 1999) }, FRAME) as MarkupShape);
+    const cut = createMarkupSvg();
+    drawMarkup(cut, { fileId: '6f1c2a4e-0b7d-4c8e-9f10-112233445566', frame: FRAME, shapes: [...pads, emoji], newer: false });
+    const texts = cut.querySelectorAll('text');
+    expect(texts[9].textContent).toHaveLength(1999);
+    expect(texts[10].textContent).toBe('');
   });
 
   it('el número: un círculo relleno con su número; sin caja, del doble de la letra', () => {
