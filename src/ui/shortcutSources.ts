@@ -7,6 +7,7 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
   search: ['Workspace.tsx', 'projectSearchUi.ts'],
   find: ['PageEditor.tsx', 'findUi.ts'],
   print: ['printPage.ts'],
+  history: ['Workspace.tsx', 'historyUi.ts'],
   titleEnter: ['PageView.tsx', 'PracticeView.tsx'],
   comment: ['EditorComments.tsx', 'commentsUi.ts'],
   selectAll: ['collapseEditor.ts'],
@@ -48,6 +49,7 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
     'FolderDialog.tsx',
     'InstallDialog.tsx',
     'OfflinePart.tsx',
+    'HistoryPanel.tsx',
   ],
   listPick: ['ProjectSwitcher.tsx', 'ProjectSearch.tsx', 'DrivePasteMenu.tsx'],
   // La confirmación de "Replace all" (ProjectReplace.tsx): Esc la cierra sin cerrar el panel.

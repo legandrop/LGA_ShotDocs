@@ -248,6 +248,17 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   días. La ventana muestra los pasos con dibujos para iPhone, Android y computadora, con *Install* directo donde
   el navegador lo ofrece. Ver `Doc_Instalar.md`. Su entrada en la ayuda está desde v0.082 (P.13). Falta: probarlo en un iPhone y un Android reales, y a futuro las capturas del manifiesto (`screenshots`) y la
   pantalla de arranque del iPhone.
+- **P.18 Historial de versiones de una página, como el de Google Docs** (Lega, 2026-10-01; era la fase 6): ver quién
+  cambió la página y cuándo, cada versión con lo agregado y lo borrado en el color de cada persona, y volver a una
+  versión anterior. **Diseño en `Doc_Historial.md`** (auditado; las cuatro preguntas, decididas el 2026-10-01): las
+  versiones salen de `page_updates` aplicadas en orden (sin guardar nada nuevo; cada fila ya tiene autor y hora
+  puestos por la base) y restaurar es una edición por el editor que se deshace. **Entrega 1 hecha (v0.098):** la lista
+  por sesión con quién y cuándo, ver una versión y restaurarla (Ctrl/⌘+Alt+Shift+H); la migración
+  `20261007120000_historial.sql` está **sin aplicar** (probada en `begin … rollback`). **Falta:** aplicarla (con copia
+  de seguridad), las marcas por persona, el texto huérfano con el aviso a quien escribió (necesita la subida sin GC,
+  en otra rama), nombrar versiones, la caché sin red, que la lista se actualice sola con el historial abierto (O3 de la
+  auditoría) y medir en el iPhone. Aparte, después: que lo borrado no llegue a quien solo ve la página (decisión 2).
+  Ojo: `npm run db:test` aplica las migraciones de verdad; esta se probó con un script en `begin … rollback`.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.

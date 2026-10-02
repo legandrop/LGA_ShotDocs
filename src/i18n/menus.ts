@@ -15,6 +15,7 @@ export const menus = {
     es: "Sin las secciones colapsadas.\nLas hojas no coinciden con las marcas de la pantalla.",
   },
   'pageMenu.collapseAll': { en: "Collapse all", es: "Colapsar todo" },
+  'pageMenu.history': { en: "Version history", es: "Historial de versiones" },
   'pageMenu.expandAll': { en: "Expand all", es: "Abrir todo" },
   'pageMenu.printTip': {
     en: "Opens the print dialog with this page size.\nChoose **Save as PDF** to export.",

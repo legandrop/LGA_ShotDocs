@@ -35,7 +35,7 @@ export const help = {
   'help.section.find': { en: "Find and replace", es: "Buscar y reemplazar" },
   'help.section.collapse': { en: "Collapsing sections", es: "Colapsar secciones" },
   'help.section.sharing': { en: "Sharing and members", es: "Compartir y miembros" },
-  'help.section.trash': { en: "Trash", es: "Papelera" },
+  'help.section.trash': { en: "Trash and history", es: "Papelera e historial" },
   'help.section.sync': { en: "Offline and syncing", es: "Sin red y sincronización" },
   'help.section.print': { en: "Sheets, PDF and printing", es: "Hojas, PDF e impresión" },
   'help.section.prefs': { en: "Preferences", es: "Preferencias" },
@@ -290,6 +290,11 @@ export const help = {
   },
 
   // --- Papelera ---
+  'help.history.title': { en: "Version history", es: "Historial de versiones" },
+  'help.history.text': {
+    en: "In the page menu, Version history ({open}) lists who changed the page and when, grouped by editing session, in your local time (the time a change reached the server: what was written offline shows when it synced). Choose a version to see the page as it was; select and copy any part of it. Restore this version makes the page look like that again as a new change: nothing is lost, the version you had stays in the history and you undo it with {undo}. Restoring needs a connection and the page synced. Anyone who can edit the page sees its history; guests don't.",
+    es: "En el menú de la página, Historial de versiones ({open}) muestra quién cambió la página y cuándo, agrupado por sesión de edición, en tu hora (la hora en que el cambio llegó al servidor: lo escrito sin conexión figura cuando se sincronizó). Elegí una versión para ver la página como era; podés elegir y copiar cualquier parte. Restaurar esta versión deja la página otra vez así, como un cambio nuevo: no se pierde nada, la versión que tenías queda en el historial y se deshace con {undo}. Restaurar pide conexión y la página sincronizada. Ven el historial quienes pueden editar la página; los invitados, no.",
+  },
   'help.trash.title': { en: "Trash", es: "Papelera" },
   'help.trash.text': {
     en: "Sending a page to the Trash, at the bottom of the sidebar, takes its subpages with it; Restore brings everything back where it was. With Google Drive connected, its Files tab lists the photos and files no page uses anymore (the owner and admins manage it).",
@@ -368,6 +373,7 @@ export const help = {
   'shortcut.search': { en: "Search the project (and its projects list)", es: "Buscar en el proyecto (y la lista de proyectos)" },
   'shortcut.find': { en: "Find and replace in the page", es: "Buscar y reemplazar en la página" },
   'shortcut.print': { en: "Export PDF / print the page", es: "Exportar PDF / imprimir la página" },
+  'shortcut.history': { en: "Version history of the page", es: "Historial de versiones de la página" },
   'shortcut.titleEnter': { en: "From the title, go to the text", es: "Desde el título, pasar al texto" },
   'shortcut.comment': { en: "Comment on the block", es: "Comentar el bloque" },
   'shortcut.question': { en: "Question", es: "Pregunta" },

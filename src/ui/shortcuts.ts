@@ -47,6 +47,8 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'search', keys: ['Mod-k'], place: 'global', owner: 'app', source: 'window' },
   { id: 'find', keys: ['Mod-f'], place: 'global', owner: 'app', source: 'window' },
   { id: 'print', keys: ['Mod-p'], place: 'global', owner: 'app', source: 'window' },
+  // El historial de versiones de la página (P.18, Docs/Doc_Historial.md), el mismo de Google Docs.
+  { id: 'history', keys: ['Mod-Alt-Shift-h'], place: 'global', owner: 'app', source: 'window' },
   { id: 'titleEnter', keys: ['Enter'], place: 'global', context: 'title', owner: 'app', source: 'dom' },
 
   // --- Editor: lo de la app ---

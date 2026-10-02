@@ -67,6 +67,8 @@ import { selectedPhotoKey, spacePhotoKey } from './inlinePhotoEditor';
 import { shortcutLabel, slashBadge } from './shortcuts';
 import { closeFindBar, isFindShortcut, openFindBar, openFindBarAt, takesFindShortcut } from './findUi';
 import { searchSession } from './projectSearchUi';
+import { registerRestoreTarget } from './historyUi';
+import { restoreInEditor } from './historyRestore';
 import { RemovedWritingBanner } from './RemovedWritingBanner';
 
 // El carrete se baja aparte, la primera vez que se abre (roadmap B.4).
@@ -272,6 +274,7 @@ export function BlockEditor({
   onEditor,
   onBroken,
   filesNotice,
+  preview = false,
 }: {
   doc: Y.Doc;
   /** Lo colapsado para vos (P.11): se actualiza en el lugar, así un editor que se vuelve a crear lo conserva. */
@@ -289,6 +292,11 @@ export function BlockEditor({
    * corrección 13).
    */
   filesNotice?: string;
+  /**
+   * Una versión del historial (P.18, HistoryPanel.tsx): en solo lectura, sobre un documento en memoria. No se anota
+   * como el editor de la página (colapsar desde el menú, los bloques de los comentarios) ni muestra comentarios.
+   */
+  preview?: boolean;
 }) {
   const { docs, files, media, user, db, folders } = useServices();
   const scheme = useScheme();
@@ -451,7 +459,7 @@ export function BlockEditor({
 
   // El menú de la página ("Colapsar todo / Abrir todo") y "Ir al bloque" de los comentarios llegan acá.
   useEffect(() => {
-    if (!canCollapse) return;
+    if (!canCollapse || preview) return;
     return setCollapseControl({
       pageId,
       counts: () => headingCounts(editor.prosemirrorState),
@@ -464,7 +472,7 @@ export function BlockEditor({
         return view ? revealBlock(view, blockId) : false;
       },
     });
-  }, [editor, pageId, canCollapse]);
+  }, [editor, pageId, canCollapse, preview]);
 
   editorRef.current = editor as unknown as NonNullable<typeof editorRef.current>;
   editableRef.current = editable;
@@ -480,6 +488,17 @@ export function BlockEditor({
       }),
     [docs, editor, pageId, onBroken],
   );
+
+  // El historial de versiones (P.18, Docs/Doc_Historial.md, sección 6): restaurar es una edición por este editor, solo
+  // mientras se pueda editar (y la página esté completa: `editable` ya lo dice).
+  useEffect(() => {
+    if (!editable) return;
+    return registerRestoreTarget(pageId, (version) => {
+      const view = editor.prosemirrorView;
+      if (!view) return { ok: false, reason: 'notEditable' };
+      return restoreInEditor(view, version, (fn) => editor.onChange(() => fn(), false));
+    });
+  }, [editor, pageId, editable]);
 
   // La barra de buscar (arriba, en PageEditor) usa este editor mientras esté montado.
   useEffect(() => {
@@ -667,7 +686,7 @@ export function BlockEditor({
   );
 
   // Comentarios (paso 10): el panel sabe qué dice cada bloque; el margen se dibuja sobre el editor.
-  useBlockSourceRegistration(editor, pageId);
+  useBlockSourceRegistration(editor, pageId, !preview);
   const host = useRef<HTMLDivElement>(null);
 
   // Sin portero, pegar o soltar un archivo que no es una imagen haría que el editor intente crear un bloque
@@ -998,7 +1017,7 @@ export function BlockEditor({
         <BlockSideMenuController />
       </BlockNoteView>
       </MediaActionsContext.Provider>
-      <CommentMargin editor={editor} pageId={pageId} canComment={canComment} host={host} />
+      {!preview && <CommentMargin editor={editor} pageId={pageId} canComment={canComment} host={host} />}
       {/* El triángulo de cada título (P.11): una capa encima, como el margen. */}
       {canCollapse && <CollapseToggles editor={editor} host={host} editable={editable} canShare={canShare} />}
       {/* Dónde empieza cada hoja (solo una capa encima; roadmap B.7). */}

@@ -6,6 +6,7 @@ import type { drive } from './lazy/drive';
 import type { editor } from './lazy/editor';
 import type { help } from './lazy/help';
 import type { folders } from './lazy/folders';
+import type { history } from './lazy/history';
 import type { importCoda } from './lazy/importCoda';
 import type { installDialog } from './lazy/install';
 import type { offline } from './lazy/offline';
@@ -38,6 +39,7 @@ type LazyStrings = typeof carrete &
   typeof editor &
   typeof help &
   typeof folders &
+  typeof history &
   typeof importCoda &
   typeof installDialog &
   typeof offline &

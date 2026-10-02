@@ -37,6 +37,7 @@ import { openPractice } from '../tutorial/practiceUi';
 import { TourHost } from '../tutorial/TourHost';
 import { startTour } from '../tutorial/tourState';
 import { setNavOpen, useNavOpen } from './navStore';
+import { canSeeHistory, closeHistory, historyOpen, isHistoryShortcut, openHistory, useHistoryUi } from './historyUi';
 import { lazyPart, Part, preloadWhenIdle, watchPendingWrites } from './lazyPart';
 import { startAppUpdates, stopAppUpdates } from './appUpdate';
 import { focusTitle, PageView, preloadPageParts } from './PageView';
@@ -52,6 +53,8 @@ import { errorMessage } from '../sync/types';
 
 // La página de práctica (P.13, Docs/Doc_Tutorial.md): se baja aparte, con sus plantillas y sus textos.
 const PracticeView = lazyPart(() => import('../tutorial/PracticeView').then((m) => m.PracticeView));
+// El historial de versiones (P.18, Docs/Doc_Historial.md): se baja aparte, la primera vez que se abre.
+const HistoryPanel = lazyPart(() => import('./HistoryPanel').then((m) => m.HistoryPanel));
 
 // Versiones anteriores recordaban una sola última página; se sigue leyendo como respaldo.
 const LEGACY_LAST_PAGE_KEY = 'shotdocs-last-page';
@@ -180,6 +183,7 @@ export function Shell() {
   const [sharing, setSharing] = useState<ShareTarget | null>(null);
   const [notice, dismissNotice, noticeAction] = useNotice();
   const perms = usePermissions();
+  const status = useSyncStatus();
   // "Importar de Coda" es solo de la cuenta de Lega (codaOwner.ts): para los demás el diálogo ni se monta.
   const codaOwner = useCodaOwner();
   const tr = useT();
@@ -223,6 +227,22 @@ export function Shell() {
     const message = takeArrivalNotice();
     if (message) notify(message);
   }, []);
+
+  // El historial de versiones de la página abierta (P.18): Ctrl+Alt+Shift+H (⌘⌥⇧H en la Mac), como en Google Docs. Solo
+  // quien lo puede ver (canSeeHistory); con el historial abierto, lo cierra. Al cambiar de página se cierra.
+  const historyPage = route.name === 'page' && tree.get(route.id) ? route.id : null;
+  const historyAllowed = !!historyPage && canSeeHistory(perms, historyPage, status.schemaVersion);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.isComposing || e.keyCode === 229 || !isHistoryShortcut(e)) return;
+      e.preventDefault();
+      if (historyOpen()) closeHistory();
+      else if (historyPage && historyAllowed) openHistory(historyPage);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [historyPage, historyAllowed]);
+  useEffect(() => closeHistory, [historyPage]);
 
   // Lo que todavía no llegó a IndexedDB se perdería al cerrar: el navegador pide confirmación. Lo mismo
   // espera la recarga que sigue a publicar una versión nueva (lazyPart.tsx). Una importación de Coda en
@@ -391,6 +411,7 @@ export function Shell() {
           onMove={() => setMoving(pageId)}
           onFormat={() => setFormatting(pageId)}
           onShare={perms.canSharePage(pageId) ? () => setSharing({ pageId }) : undefined}
+          onHistory={historyAllowed ? () => openHistory(pageId) : undefined}
           onTrash={async () => {
             // Primero se manda a la papelera y después se sale: si no, el inicio vuelve a la última página.
             await tree.trash(pageId);
@@ -415,6 +436,7 @@ export function Shell() {
       {/* "Available offline", "Storage on this device" y el aviso del tope (P.10). */}
       <SpaceHost />
       <HelpHost />
+      <HistoryHost />
       <TourHost />
       <InstallHost />
       <ReplaceProgressHost />
@@ -438,6 +460,17 @@ export function Shell() {
         </div>
       )}
     </div>
+  );
+}
+
+/** El historial de versiones (P.18): a pantalla entera, encima de la página (que sigue montada: restaurar la usa). */
+function HistoryHost() {
+  const { pageId } = useHistoryUi();
+  if (!pageId) return null;
+  return (
+    <Part onClose={closeHistory}>
+      <HistoryPanel key={pageId} pageId={pageId} />
+    </Part>
   );
 }
 

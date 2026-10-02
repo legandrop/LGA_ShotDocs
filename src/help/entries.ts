@@ -84,6 +84,8 @@ const PAGE_BREAK = '0.093';
  * La vista previa de los PDF adjuntos y los adjuntos en el carrete (Doc_Adjuntos.md, entrega 2).
  */
 const ATTACH_PREVIEW = '0.091';
+/** El historial de versiones de una página (P.18, Docs/Doc_Historial.md, entrega 1). */
+const HISTORY = '0.098';
 /** Reemplazar en todo el proyecto (Doc_Buscar.md, "Reemplazar en el proyecto"). */
 const REPLACE_PROJECT = '0.094';
 /** El aviso de lo que escribiste en algo que otro borró (roadmap B.16, Doc_Sincronizacion.md): la versión se pone al publicar. */
@@ -349,6 +351,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
 
   // --- Papelera ---
   { id: 'trash', section: 'trash', title: 'help.trash.title', text: 'help.trash.text', since: BEFORE_HELP },
+  {
+    id: 'history',
+    section: 'trash',
+    title: 'help.history.title',
+    text: 'help.history.text',
+    keys: { open: 'history', undo: 'undo' },
+    words: ['historial', 'versiones', 'versión', 'restaurar', 'revisiones', 'history', 'versions', 'restore', 'revisions', 'quién cambió'],
+    since: HISTORY,
+  },
 
   // --- Sin red ---
   { id: 'syncStatus', section: 'sync', title: 'help.syncStatus.title', text: 'help.syncStatus.text', showMe: 'sync', since: BEFORE_HELP },
