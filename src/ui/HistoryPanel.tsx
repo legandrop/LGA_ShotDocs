@@ -266,6 +266,8 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
   /** Restaurar (Doc_Historial.md, sección 6.1): sincronizar, comprobar de nuevo y pedírselo al editor de la página. */
   async function restore() {
     if (!version || !session) return;
+    // La cuenta de fotos de la confirmación sirve también si hay que volver a preguntar (O1).
+    const photos = confirm?.photos ?? 0;
     setConfirm(null);
     setBusy(true);
     setMessage(tr('history.syncing'));
@@ -287,7 +289,7 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
           setLoading({ state: 'ready', history: new PageHistory(rows), emails: await historyRemote.pageHistoryAuthors(pageId).then((list) => new Map(list.map((a) => [a.user_id, a.email])), () => ready.emails) });
           const other = fresh.filter((row) => row.createdBy !== user.id).pop()!.createdBy;
           setMessage(null);
-          setConfirm({ photos: 0, others: nameOf(other) });
+          setConfirm({ photos, others: nameOf(other) });
           return;
         }
       }
@@ -310,8 +312,9 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
       }
       const outcome = requestRestore(pageId, version);
       if (!outcome.ok) {
-        const reason: Blocker = outcome.reason === 'shape' ? 'history.why.shape' : 'history.why.notOpen';
-        setMessage(tr('history.restoreFailed', { reason: blockerText[reason] }));
+        // `failed`: el editor lo intentó y lo deshizo (la comprobación final no dio): la página quedó como estaba.
+        if (outcome.reason === 'failed') setMessage(tr('history.restoreUnchanged'));
+        else setMessage(tr('history.restoreFailed', { reason: blockerText[outcome.reason === 'shape' ? 'history.why.shape' : 'history.why.notOpen'] }));
         return;
       }
       const key = `history:${pageId}:${session.seq}:${Date.now()}`;

@@ -110,6 +110,10 @@ export const history = {
   'history.undo': { en: "Undo", es: "Deshacer" },
   'history.undone': { en: "Restore undone.", es: "Se deshizo la restauración." },
   'history.restoreFailed': { en: "Could not restore: {reason}", es: "No se pudo restaurar: {reason}" },
+  'history.restoreUnchanged': {
+    en: "Couldn't restore this version. Nothing changed.",
+    es: "No se pudo restaurar esta versión. No cambió nada.",
+  },
 } satisfies Dict;
 
 // Se suma al diccionario cuando se carga la parte que lo usa (viaja con ella, no en la primera carga).

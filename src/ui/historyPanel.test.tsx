@@ -120,7 +120,10 @@ async function edit(d: Device, pageId: string, fn: (g: Y.XmlElement) => void): P
 }
 
 /** Una página con dos sesiones: una de la dueña y, una hora después, una de Bea. */
-async function setup({ team = false } = {}) {
+/** Un archivo del Drive ya mandado a la papelera de Drive, usado en la primera versión (con `photo`). */
+const TRASHED_FILE = '00000000-0000-4000-8000-0000000f0001';
+
+async function setup({ team = false, photo = false } = {}) {
   const server = new FakeServer();
   if (team) server.enableTeam();
   let clock = Date.parse('2026-09-30T15:00:00Z');
@@ -130,8 +133,34 @@ async function setup({ team = false } = {}) {
   devices.push(a);
   const pageId = await a.tree.create(null, 'P');
   await a.engine.syncNow();
-  await edit(a, pageId, (g) => g.insert(0, [block('x', 'Primera versión')]));
+  await edit(a, pageId, (g) => {
+    g.insert(0, [block('x', 'Primera versión')]);
+    if (photo) {
+      const bc = new Y.XmlElement('blockContainer');
+      bc.setAttribute('id', 'img');
+      const image = new Y.XmlElement('image');
+      image.setAttribute('url', `sdmedia://${TRASHED_FILE}`);
+      bc.insert(0, [image]);
+      g.insert(1, [bc]);
+    }
+  });
   await a.engine.syncNow();
+  if (photo) {
+    server.mediaFiles.set(TRASHED_FILE, {
+      id: TRASHED_FILE,
+      name: 'IMG_0001.JPG',
+      mime: 'image/jpeg',
+      width: 10,
+      height: 10,
+      duration: null,
+      thumb_at: null,
+      drive_id: 'd1',
+      size: 1000,
+      project_id: server.workspaceId,
+      purged_at: '2026-09-30T15:30:00Z',
+      drive_trashed_at: '2026-09-30T15:31:00Z',
+    });
+  }
   clock += 60 * 60_000;
   server.addMember('bea', 'member', 'bea@example.com');
   if (team) server.grant('bea', { projectId: server.workspaceId }, 'edit');
@@ -296,9 +325,9 @@ describe('la pantalla del historial', () => {
     expect(document.activeElement).toBe(page);
   });
 
-  it('si otra persona cambió la página mientras el historial estaba abierto, al confirmar vuelve a preguntar con el aviso', async () => {
+  it('si otra persona cambió la página mientras el historial estaba abierto, al confirmar vuelve a preguntar con el aviso (y la cuenta de fotos)', async () => {
     prefs.set({ language: 'en' });
-    const { a, b, pageId, server } = await setup();
+    const { a, b, pageId, server } = await setup({ photo: true });
     const asked: Y.Doc[] = [];
     offs.push(
       registerRestoreTarget(pageId, (version) => {
@@ -312,6 +341,7 @@ describe('la pantalla del historial', () => {
     await act(async () => host.querySelector<HTMLButtonElement>('.history-restore')!.click());
     await settle(100);
     expect(host.querySelector('.history-confirm')?.textContent).not.toContain('could be left out');
+    expect(host.querySelector('.history-confirm')?.textContent).toContain('1 photo or file in this version was deleted from Google Drive');
     // Bea escribe mientras tanto (desde su dispositivo).
     await edit(b, pageId, (g) => g.insert(0, [block('z', 'Bea, recién')]));
     await b.engine.syncNow();
@@ -320,12 +350,29 @@ describe('la pantalla del historial', () => {
     await settle(300);
     expect(asked.length).toBe(0);
     expect(host.querySelector('.history-confirm')?.textContent).toContain('bea@example.com changed this page in the last 2 minutes');
+    // La segunda confirmación conserva la cuenta de fotos de la primera.
+    expect(host.querySelector('.history-confirm')?.textContent).toContain('1 photo or file in this version was deleted from Google Drive');
     // La versión actual ya trae lo de Bea (la última sesión, con su correo).
     expect(host.querySelectorAll('.history-session')[0].textContent).toContain('bea@example.com');
     // Ahora sí: confirmar de nuevo restaura.
     await act(async () => confirm().click());
     await settle(300);
     expect(asked.length).toBe(1);
+  });
+
+  it('una restauración que el editor intenta y deshace (no quedó igual a la versión) dice que no cambió nada', async () => {
+    prefs.set({ language: 'en' });
+    const { a, pageId, server } = await setup();
+    offs.push(registerRestoreTarget(pageId, () => ({ ok: false, reason: 'failed' })));
+    const host = await mount(services(a, server.ownerId), pageId);
+    await act(async () => (host.querySelectorAll('.history-session')[1] as HTMLButtonElement).click());
+    await settle(300);
+    await act(async () => host.querySelector<HTMLButtonElement>('.history-restore')!.click());
+    await settle(100);
+    const confirm = [...host.querySelectorAll<HTMLButtonElement>('.history-confirm button')].find((x) => x.textContent === 'Restore')!;
+    await act(async () => confirm.click());
+    await settle(200);
+    expect(host.querySelector('.history-message')?.textContent).toBe("Couldn't restore this version. Nothing changed.");
   });
 });
 
