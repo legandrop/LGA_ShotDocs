@@ -1,7 +1,9 @@
+// Copia de la versión publicada v0.098 (commit ff5a7bd) de src/sync/comments.ts, para probar que la cola de
+// comentarios publicada no marca nada rechazado ni pierde nada cuando la base frena los comentarios por versión (B.17;
+// src/sync/offlineLargo.test.ts). No se toca, salvo los caminos de los imports.
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import { errorMessage, isNetworkError, isPermanent } from './types';
-import { APP_OUTDATED } from './remote';
-import { localize, stored, t } from '../i18n';
+import { errorMessage, isNetworkError, isPermanent } from '../../types';
+import { localize, stored, t } from '../../../i18n';
 
 // Comentarios y preguntas (paso 10 de Docs/Plan_Workspaces.md; Docs/Doc_Sincronizacion.md, "Comentarios y
 // preguntas"). Viven en una tabla propia de la base, anclados al id de un bloque de la página (o a la página
@@ -256,8 +258,6 @@ export function commentErrorText(error: string, kind?: CommentOp['kind']): strin
       return stored('commentError.importInvalid');
     case 'not_authenticated':
       return stored('commentError.signedOut');
-    case APP_OUTDATED:
-      return stored('commentError.outdated');
     default:
       return error;
   }
@@ -325,8 +325,6 @@ export class CommentQueue {
   onQueued?: () => void;
   /** Cambió lo que cuenta el estado (pendientes, rechazados, error). */
   onChange?: () => void;
-  /** La base rechazó un cambio por la versión mínima del workspace (`app_outdated`): se ve el aviso de actualizar. */
-  onOutdated?: () => void;
 
   private ops: QueuedCommentOp[] = [];
   private readonly rows = new Map<string, Map<string, CommentRow>>();
@@ -757,12 +755,6 @@ export class CommentQueue {
       try {
         await this.send(entry.op);
       } catch (err) {
-        if (errorMessage(err) === APP_OUTDATED) {
-          // La base frena los comentarios por versión (B.17) y subieron la mínima entre la consulta y el pedido: este y
-          // los que siguen quedan en la cola, sin error ni rechazo, y salen al actualizar. El motor muestra el aviso.
-          this.onOutdated?.();
-          return;
-        }
         if (!isPermanent(err)) throw err;
         await this.fail(entry, commentErrorText(errorMessage(err), entry.op.kind));
         continue;

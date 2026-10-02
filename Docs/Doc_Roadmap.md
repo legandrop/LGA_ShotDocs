@@ -259,7 +259,8 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   huérfano en su versión, el Worker con la página de respaldo, la diferencia solo de lo tocado y la lista que se
   actualiza sola. **Falta:** aplicar la migración (con copia de seguridad), la entrega 3 (nombrar versiones, la caché
   sin red) y medir en el iPhone. Encontrado por la prueba al azar: una versión con dos bloques del mismo id no se puede
-  restaurar (se deshace sola, sin perder nada; `Doc_Historial.md`, entrega 2). Aparte, después: que lo borrado no llegue a quien solo ve la página (decisión 2).
+  restaurar (se deshace sola, sin perder nada; `Doc_Historial.md`, entrega 2). Aparte, después: que lo borrado no llegue a quien solo ve la página (decisión 2;
+  diseño en `Doc_Privacidad_Borrado.md`, B.18).
   Ojo: `npm run db:test` aplica las migraciones de verdad; esta se probó con un script en `begin … rollback`.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
@@ -447,10 +448,24 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
 17. **Hecho (v0.097): volver después de semanas sin red con una versión vieja.** Prueba con la sincronización de la
     v0.090 (`src/sync/offlineLargo.test.ts`): nada se pierde, con la mínima subida o sin ella. Desde esta versión, con
     la app vieja para el workspace no sale ni baja nada y la app instalada se actualiza sola. **Falta:** ver en el
-    iPhone (Safari, app instalada) que se actualiza sola al volver la red (solo se midió Chromium); y la base no frena
-    por versión los cambios del árbol ni los comentarios (las versiones anteriores a esta los siguen subiendo con la
-    mínima subida): si alguna vez hace falta, una migración como la de archivos. Ver `Doc_Sincronizacion.md`, "Volver
+    iPhone (Safari, app instalada) que se actualiza sola al volver la red (solo se midió Chromium). **Hecho (v0.099):**
+    la base frena por versión los cambios del árbol y los comentarios (header `x-shotdocs-version`, migración
+    `20261008120000_version_minima_arbol.sql`, rechazo 503 que ninguna versión marca como rechazado) y *Update now*
+    sigue cada instalación desde `updatefound`; archivar, borrar y restaurar proyectos también frenan. **Falta:**
+    aplicar la migración, publicar y, cuando Lega tenga esta versión en sus dispositivos, subir `min_app_version` a
+    ella; compartir, invitar y la papelera de archivos siguen sin versión; un workspace autohospedado necesita CORS que
+    acepte `x-shotdocs-version`. Menor (auditoría, O6): si una instalación falló y después el servidor vuelve a publicar
+    la misma versión que corre, *Update now* sigue diciendo que falló en vez de recargar (cualquier instalación nueva
+    lo borra; no pierde nada). Ver `Doc_Sincronizacion.md`, "La versión mínima, el árbol y los comentarios" y "Volver
     después de mucho tiempo sin red".
+18. **Que lo borrado no llegue a quien solo ve la página (D14). Diseño en `Doc_Privacidad_Borrado.md`, sin código.**
+    Hoy lo borrado viaja en las filas a cualquiera que ve la página (también invitados) y las fotos sacadas se siguen
+    abriendo. Entregas: (0) avisarlo al compartir y en la ayuda; (1) la base limpia: quien no edita baja siempre la
+    última base de la página (armada por un editor, con lo borrado como hueco), con `clean_reset_seq` al compartir, los
+    permisos de los usos sacados de archivos y el interruptor `clean_min_version`, antes de invitar al primer cliente de
+    verdad; (2) medir; (3) limpiar el dispositivo de quien deja de ver lo borrado; (4) deltas si hacen falta. La subida
+    no cambia (D19). Depende del frente de las páginas en la papelera legibles con Ver. Pregunta para Lega: aceptar la
+    demora del cliente (sección 13).
 
 ### C. Esperan a Lega
 

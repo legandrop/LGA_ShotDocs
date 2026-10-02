@@ -11,6 +11,28 @@ que alguien escribió en algo ya borrado se ve aparte, en su versión, con **Cop
 unos 10 ms. La lista se actualiza sola con el historial abierto, sin perder la versión elegida.
 [ Historial - los cambios marcados por persona, el texto huérfano, el Worker y la lista que se actualiza sola ]
 
+v0.100 :
+
+Lo borrado de una página viajaba en las filas de `page_updates` a cualquiera que la puede ver, invitados incluidos, y
+las fotos sacadas se seguían abriendo (D14). Diseño, sin código, en `Doc_Privacidad_Borrado.md`, medido con filas
+reales y simulaciones y corregido con la auditoría: quien no edita (Ver, Comentar, invitados) baja siempre la última
+base limpia de la página, armada por el dispositivo de un editor con lo borrado como hueco (también al cerrar la app),
+nunca filas; al compartir se sube lo pendiente y se exige una base posterior; los usos sacados de fotos y archivos, y la
+papelera de archivos para invitados, dejan de darle permiso. La subida no cambia (D19) y los deltas quedan para más
+adelante (D20). Con la migración en borrador, las pruebas y una pregunta para Lega.
+[ Privacidad de lo borrado - diseño de la base limpia para quien no edita ]
+
+v0.099 :
+
+Una versión anterior a v0.097 abierta seguía subiendo cambios del árbol y comentarios aunque el workspace pidiera una
+más nueva: la base no sabía qué versión escribía (B.17). Ahora la app manda su versión en el header
+`x-shotdocs-version` y la migración `20261008120000_version_minima_arbol.sql` (sin aplicar) la mira en `pages`,
+`workspaces`, los comentarios y archivar, borrar y restaurar proyectos; sin header rechaza solo con la mínima en esta
+versión o más. El rechazo es un 503 `app_outdated` que todas las versiones reintentan: el cambio queda en su cola, no
+en rechazados (donde se podía descartar), y sale al actualizar. Si suben la mínima a mitad de una subida, la app nueva
+lo deja en la cola y avisa en palabras. *Update now* anota con `updatefound` toda instalación que falla.
+[ Versión mínima en el árbol, los comentarios y los proyectos - header con la versión, 503 que no se pierde ]
+
 v0.098 :
 
 No había forma de ver quién cambió una página ni de volver atrás (P.18). Diseño en `Doc_Historial.md` (auditado, con las

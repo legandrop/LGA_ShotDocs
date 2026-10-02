@@ -48,6 +48,10 @@ export const comments = {
     en: "Importing comments needs permission to edit and create pages here.",
     es: "Importar comentarios pide permiso para editar y crear páginas acá.",
   },
+  'commentError.outdated': {
+    en: "This workspace needs a newer version of the app: it is sent after updating.",
+    es: "Este workspace necesita una versión más nueva de la app: se manda al actualizar.",
+  },
   'commentError.importInvalid': {
     en: "The imported comment has an invalid date.",
     es: "El comentario importado tiene una fecha inválida.",
