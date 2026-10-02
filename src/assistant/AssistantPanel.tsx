@@ -95,10 +95,20 @@ function Unit({ u }: { u: { text: string; marks: string[]; link: number | null; 
 
 /** Lo de antes y lo de después de un pedazo, con lo sacado tachado y lo agregado subrayado (por palabras). */
 function PieceDiff({ before, after }: { before: OldUnit[]; after: NewUnit[] }) {
-  const hunks = diffKeys(
+  // Para leer, dos cambios separados solo por un espacio se muestran juntos ("el kamara" → "La cámara"); aplicar
+  // igual deja ese espacio como estaba.
+  const hunks: { a0: number; a1: number; b0: number; b1: number }[] = [];
+  const space = (u: { text: string }) => u.text.trim() === '' && u.text !== '\n';
+  for (const h of diffKeys(
     before.map((u) => u.key),
     after.map((u) => u.key),
-  );
+  )) {
+    const prev = hunks[hunks.length - 1];
+    if (prev && before.slice(prev.a1, h.a0).every(space) && after.slice(prev.b1, h.b0).every(space)) {
+      prev.a1 = h.a1;
+      prev.b1 = h.b1;
+    } else hunks.push({ ...h });
+  }
   const out: ReactNode[] = [];
   const asView = (u: NewUnit) => {
     const first = u.atoms[0];
@@ -342,7 +352,7 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
                 {notice}
               </p>
             )}
-            {!canEdit && perms.known && <p className="assistant-notice">{tr('assistant.readOnly')}</p>}
+            {!canEdit && (perms.known || target?.editable() === false) && <p className="assistant-notice">{tr('assistant.readOnly')}</p>}
             {phase.kind === 'idle' && (
               <div className="assistant-actions">
                 {ACTIONS.filter((a) => a !== 'translate' && a !== 'ask').map((a) => (

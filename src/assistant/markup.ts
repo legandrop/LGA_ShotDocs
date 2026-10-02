@@ -283,6 +283,9 @@ function pieceMarkdown(units: OldUnit[]): string {
   return out;
 }
 
+/** Un espacio o un salto de renglón (lo que no viaja en las puntas de un pedazo). */
+const blank = (u: OldUnit) => u.atom === 'br' || (!u.atom && /^\s+$/.test(u.text));
+
 /** El texto legible de unas unidades (sin formato; las fotos no se ven). */
 const plainOf = (units: { text: string }[]) => units.map((u) => u.text).join('');
 
@@ -328,7 +331,13 @@ export function collectBetween(doc: PMNode, from: number, to: number): Selected 
       const units = oldUnits(doc, start, end, photos, links, counter);
       // Un renglón vacío, con solo espacios o solo fotos no viaja: no hay texto que cambiar.
       if (units.every((u) => u.atom || /^\s*$/.test(u.text))) return false;
-      pieces.push({ kind: 'text', from: start, to: end, blockId: blockIdAt(doc, pos), prefix: name === 'tableParagraph' ? '' : prefixOf(node), units });
+      // Los espacios y saltos de renglón de las puntas no viajan (el modelo los perdería): quedan como están.
+      let i0 = 0;
+      let i1 = units.length;
+      while (i0 < i1 && blank(units[i0])) i0++;
+      while (i1 > i0 && blank(units[i1 - 1])) i1--;
+      const kept = units.slice(i0, i1);
+      pieces.push({ kind: 'text', from: kept[0].from, to: kept[kept.length - 1].to, blockId: blockIdAt(doc, pos), prefix: name === 'tableParagraph' ? '' : prefixOf(node), units: kept });
       return false;
     }
     // Lo que no es texto: el bloque entero, como marca.
@@ -344,6 +353,9 @@ export function collectBetween(doc: PMNode, from: number, to: number): Selected 
   // Se vuelven a numerar las marcas de bloque que quedaron.
   let n = 0;
   for (const p of pieces) if (p.kind === 'block') p.marker = ++n;
+  // Un link que quedó solo en un espacio de una punta no viaja.
+  const used = new Set(pieces.flatMap((p) => (p.kind === 'text' ? p.units.map((u) => u.link) : [])));
+  for (const k of [...links.keys()]) if (!used.has(k)) links.delete(k);
   const chars = pieces.reduce((sum, p) => sum + (p.kind === 'text' ? plainOf(p.units).length : 0), 0);
   if (chars > MAX_CHARS) return 'tooLong';
   const markdown = pieces
@@ -523,7 +535,8 @@ export function newUnits(atoms: Atom[]): NewUnit[] {
 export function parseAnswer(answer: string, selected: Selected): Parsed | ParseError {
   const clean = cleanAnswer(answer);
   if (!clean) return 'empty';
-  const raw = clean.split(/\n[ \t]*\n+/).map((b) => b.replace(/^\n+|\n+$/g, ''));
+  // Sin los espacios de las puntas de cada bloque (lo de las puntas no se mandó y no se toca).
+  const raw = clean.split(/\n[ \t]*\n+/).map((b) => b.replace(/^\s+|\s+$/g, ''));
   if (raw.length !== selected.pieces.length) return 'structure';
   const known = { photos: new Set(selected.photos.keys()), links: new Set(selected.links.keys()) };
   const seen = { photos: new Map<number, number>(), links: new Map<number, number>(), blocks: 0, linksRemoved: false };
