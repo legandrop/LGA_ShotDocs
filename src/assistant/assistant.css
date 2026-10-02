@@ -230,9 +230,8 @@
   padding: 8px 14px calc(8px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--border-soft);
   color: var(--faint);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* El modelo y los tokens pueden no entrar en un renglón: siguen abajo, sin cortarse. */
+  overflow-wrap: anywhere;
 }
 
 /* Lo elegido en la página mientras se ve la sugerencia (la API de resaltados: sin tocar el documento). */
@@ -285,6 +284,24 @@
 .assistant-field input,
 .assistant-field select {
   width: 100%;
+}
+
+/* Los select con el mismo alto y borde que los campos de texto. */
+.assistant-field select,
+.assistant-row select {
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.assistant-settings .modal-actions {
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .assistant-settings .modal-actions .danger {
