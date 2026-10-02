@@ -88,8 +88,11 @@ export interface ReplaceMeta {
  */
 export interface ReplaceHistory {
   beginReplace(opId: string, projectId: string): void;
-  /** Corre `write` una vez; devuelve si entró en la pila de la página. */
-  writeReplace(pageId: string, doc: Y.Doc, opId: string, origin: symbol, write: () => void): boolean;
+  /**
+   * Corre `write` una vez; devuelve si entró en la pila de la página. `undo` / `redo`: lo que escriben las anclas al
+   * deshacer (o rehacer) en orden, en una página que ahora tiene historia, entra como lo contrario.
+   */
+  writeReplace(pageId: string, doc: Y.Doc, opId: string, origin: symbol, write: () => void, as?: 'new' | 'undo' | 'redo'): boolean;
   endReplace(opId: string, saved: SavedOp | null): void;
   popReplace(pageId: string, doc: Y.Doc, opId: string, kind: 'undo' | 'redo', keep: boolean): 'done' | 'nothing' | 'failed' | 'none';
   settleReplace(opId: string, kind: 'undo' | 'redo', pages: string[], keep: boolean): void;
@@ -589,7 +592,10 @@ export class ProjectReplace {
                   }
                 });
                 if (!undo.outcomes.includes('undone')) return {};
-                docs.applyLocal(pageId, doc, ORIGIN_REPLACE, undo.apply);
+                const write = () => docs.applyLocal(pageId, doc, ORIGIN_REPLACE, undo.apply);
+                // En orden, en una página que ahora tiene historia: entra en su pila (para rehacer con Yjs).
+                if (history && inOrder) history.writeReplace(pageId, doc, opId, ORIGIN_REPLACE, write, 'undo');
+                else write();
                 return { written: true, undone: true };
               });
             } catch (err) {
@@ -681,7 +687,7 @@ export class ProjectReplace {
                 // Lo que ya estaba hecho cuenta como hecho (su registro vuelve igual).
                 if (redo.outcomes.every((o) => o === 'changed')) return {};
                 if (!redo.outcomes.includes('redone')) return { redone: true };
-                docs.applyLocal(pageId, doc, ORIGIN_REPLACE, redo.apply);
+                history.writeReplace(pageId, doc, opId, ORIGIN_REPLACE, () => docs.applyLocal(pageId, doc, ORIGIN_REPLACE, redo.apply), 'redo');
                 return { written: true, redone: true };
               });
             } catch (err) {

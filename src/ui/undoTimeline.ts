@@ -423,40 +423,54 @@ export class UndoTimeline {
    * historia en la sesión, lo que escribe entra como un paso propio de su pila de Yjs (cortado antes y después: si no,
    * se pega a lo escrito medio segundo antes). Devuelve si entró en la pila.
    */
-  writeReplace(pageId: string, doc: Y.Doc, opId: string, origin: symbol, write: () => void): boolean {
+  writeReplace(pageId: string, doc: Y.Doc, opId: string, origin: symbol, write: () => void, as: 'new' | StepKind = 'new'): boolean {
     const entry = this.replaces.get(opId);
     const h = this.pages.get(pageId);
-    if (!entry || entry.where !== 'pending' || !h || h.doc !== doc) {
+    if (!entry || entry.where !== (as === 'new' ? 'pending' : as) || !h || h.doc !== doc) {
       write();
       return false;
     }
+    // `undo` / `redo`: quien reemplaza deshace (o rehace) esta página por las anclas, en orden, y la página ahora tiene
+    // historia. Lo que escribe entra en la pila como lo contrario (para rehacer, o para deshacer otra vez), igual que un
+    // deshacer de Yjs: así lo que se rehaga después alrededor sigue a estas letras y no a las de antes (las anclas
+    // escriben letras nuevas). Sin borrar nada para rehacer (Yjs no borra con `undoing` / `redoing`).
     const temp = !h.um;
     const um = h.um ?? tempManager(doc);
-    const before = um.undoStack.length;
+    const target = () => (as === 'undo' ? um.redoStack : um.undoStack);
+    const before = target().length;
     um.stopCapturing();
     um.trackedOrigins.add(origin);
+    if (as === 'undo') um.undoing = true;
+    if (as === 'redo') um.redoing = true;
     try {
       write();
     } finally {
+      um.undoing = false;
+      um.redoing = false;
       um.trackedOrigins.delete(origin);
       um.stopCapturing();
     }
-    const item = um.undoStack.length > before ? um.undoStack[um.undoStack.length - 1] : null;
+    const stack = target();
+    const item = stack.length > before ? stack[stack.length - 1] : null;
     if (temp) {
       um.undoStack = [];
       um.redoStack = [];
       um.destroy();
       if (item) {
-        // Algo nuevo en esta página: lo de rehacer de acá se va (en las demás lo borró `beginReplace`).
-        h.undo.push(item);
-        h.redo = [];
-        this.order.set(item, ++this.counter);
+        if (as === 'undo') h.redo.push(item);
+        else h.undo.push(item);
+        if (as === 'new') {
+          // Algo nuevo en esta página: lo de rehacer de acá se va (en las demás lo borró `beginReplace`).
+          h.redo = [];
+          this.order.set(item, ++this.counter);
+        }
         this.retain(h);
       }
     }
     if (!item) return false;
     this.tagged.set(item, entry);
     entry.items.set(pageId, item);
+    if (as !== 'new') this.order.set(item, entry.seq);
     return true;
   }
 
