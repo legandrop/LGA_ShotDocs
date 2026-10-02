@@ -328,7 +328,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   volver; el zip de *Download all*). Lo exporta quien ve, solo su rama; nunca lo borrado (se exportan bloques, nunca el
   documento Yjs) ni la papelera. Volver: *Import Shot Docs archive…*, siempre a un proyecto nuevo. Entregas: 0 (el editor
   de exportación medido), 1 (PDF), 2 (zip), 3 (volver, con la migración de `imported_from`), 4 (carpetas de Drive,
-  reusar archivos, link público). **Entrega 0 hecha (v0.113):** el editor de exportación en `src/export/`
+  reusar archivos, link público). **Entrega 0 hecha (v0.0XX):** el editor de exportación en `src/export/`
   (sin interfaz), medido con 300 páginas y 2219 fotos en Chromium: 14,5 a 38,9 s, nada guardado cambia y las hojas de
   las 300 iguales a las marcas de la pantalla. Sigue la entrega 1 (PDF).
 - **P.21 Menciones en comentarios: *@persona*** (Lega, 2026-10-02): escribir `@` en un comentario, elegir a alguien y

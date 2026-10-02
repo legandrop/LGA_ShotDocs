@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.113 :
+v0.0XX :
 
 Exportar (P.22), entrega 0. El PDF y el zip de una rama necesitan dibujar cada página fuera de la pantalla con el
 esquema real, y no se sabía si eso respetaba los cortes ni cuánto tardaba. Nuevo en `src/export/`: un editor de

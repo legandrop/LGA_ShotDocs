@@ -1,6 +1,6 @@
 # Exportar una página o un proyecto entero (P.22)
 
-**Estado: diseño; entrega 0 hecha (v0.113), sin interfaz todavía** (roadmap P.22; pedido de Lega del 2026-10-02). Se
+**Estado: diseño; entrega 0 hecha (v0.0XX), sin interfaz todavía** (roadmap P.22; pedido de Lega del 2026-10-02). Se
 diseñó contra `main` v0.108. La entrega 0 (el editor de exportación medido con 300 páginas) está en "Cómo quedó la
 entrega 0", al final. Las decisiones EX1 a EX15 (sección 11) son propuestas con la recomendación tomada: Lega no estaba y quedan a
 confirmar. Lo medido está en un prototipo fuera del repo ("Cómo se midió", al final). **Auditado el 2026-10-02
@@ -725,7 +725,7 @@ quedó aplicado en el texto de arriba; esta tabla dice dónde.
 | (5) de las comprobaciones · BlockNote tira sin avisar una propiedad desconocida; ids de bloque repetidos en un JSON a mano | Las dos se anotan al importar; el repetido recibe un id nuevo (sección 3) |
 | Medidas: el tiempo es solo `page.pdf` y el índice del prototipo no lleva números | Aclarado en "En corto", la sección 5 y "Cómo se midió" |
 
-## Cómo quedó la entrega 0 (v0.113)
+## Cómo quedó la entrega 0 (v0.0XX)
 
 **Qué hay.** El editor de exportación y su medición, en archivos nuevos de `src/export/`, sin nada que vea un usuario
 (ni menú ni ruta de la app):
@@ -789,7 +789,7 @@ rápido que abrir cada página.
    imprimir las decodifica todas y eso lo mide la entrega 1 (sección 5).
 5. **Las tarjetas de Drive** se dibujan igual en el editor de exportación (la copia lleva la tarjeta y el link, sin el
    reproductor) y su `iframe` es `loading="lazy"` y está afuera de la pantalla, así que no se carga.
-6. **Lo que no se midió:** la base local fue `fake-indexeddb` (en memoria), no el IndexedDB del navegador (leer la copia
-   fue el 18 % del tiempo: con el de verdad puede ser más lento; la entrega 1 lo mide en la app); el iPhone (WebKit) y
+6. **Lo que no se midió:** (la base local de la medición fue el IndexedDB de Chromium, no uno en memoria, como comprobó
+   la auditoría; leer la copia fue el 18 % del tiempo) el iPhone (WebKit) y
    Firefox, a mano en la entrega 1; videos y adjuntos (necesitan el portero y la vista previa de PDF; se dibujan con el
    mismo bloque `image` y la misma marca que la página).
