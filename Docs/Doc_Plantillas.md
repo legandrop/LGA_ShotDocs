@@ -642,8 +642,9 @@ el formato de hoja. Todo es local: leer los reportes de la carpeta, crear la pá
 contenido (IndexedDB primero).
 
 - **Dónde está el código.** `src/templates/dayReport.ts` va en la primera carga y no arrastra el editor: la fecha local,
-  el título (`2026-10-02 | Day 06`, `Día 06`), los rótulos de la ficha en los dos idiomas (6.4), leer y llenar la ficha
-  por rótulo, cuál es la carpeta de reportes y el atajo (`isDayReportShortcut`). `dayReportCreate.ts` (con el globito):
+  el título (`2026-10-02 | Day 06`, `Día 06`), cuál es la carpeta de reportes y el atajo (`isDayReportShortcut`).
+  `dayReportFacts.ts`: los rótulos de la ficha en los dos idiomas (6.4), leer y llenar la ficha por rótulo.
+  `dayReportCreate.ts` (los dos, con el globito):
   leer los reportes de la carpeta (`planDayReport`), dónde va (`placeBefore`) y crear (`createDayReport`, que escribe
   el contenido como `writePage`: documento con la semilla, editor sin pantalla, bloques **antes** del párrafo vacío).
   `dayReportUi.tsx`: el botón arriba a la derecha del título (en la fila del encabezado), el atajo y los pedidos del
