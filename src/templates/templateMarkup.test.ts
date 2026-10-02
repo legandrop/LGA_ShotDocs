@@ -216,6 +216,31 @@ describe('usar una plantilla propia: las anotaciones viajan con sus fotos', () =
     a.docs.close(page);
   });
 
+  it('lo escrito antes es otro paso de deshacer, y solo viajan las anotaciones de las fotos que quedaron en la página', async () => {
+    const server = new FakeServer();
+    const a = await device(server);
+    await sync(a);
+    const home = a.tree.workspaceId;
+    const page = await a.tree.create(null, '', home);
+    const doc = await a.docs.open(page, { seed: true });
+    const editor = mountOn(doc);
+    await tick();
+    editor.insertBlocks([{ type: 'paragraph', content: 'Escrito antes' }] as never, editor.document[0].id, 'before');
+    // Anotaciones de la 2 (que está en los bloques) y de la 9 (que no): la 9 no se lleva nada.
+    const photo = (n: number) => ({ fileId: ID(n), frame: { v: 1, ...FRAME }, shapes: [['a', { type: 'arrow', zValue: 1 }]] as [string, Record<string, unknown>][] });
+    const carried = insertTemplateCopy(editor as never, doc, { blocks: PHOTO_BLOCKS, collapsed: [], markup: [photo(2), photo(9)] });
+    await tick();
+    expect(carried?.written).toEqual([ID(2)]);
+    expect(carried?.skipped).toEqual([{ fileId: ID(9), reason: 'notInContent' }]);
+    expect(Object.keys(mapOf(doc).toJSON()).sort()).toEqual([ID(2), `${ID(2)}/a`]);
+    undoManager(editor).undo();
+    await tick();
+    expect(mapOf(doc).size).toBe(0);
+    expect(mediaIdsInDoc(doc).size).toBe(0);
+    expect(JSON.stringify(doc.getXmlFragment(CONTENT_FRAGMENT).toJSON())).toContain('Escrito antes');
+    a.docs.close(page);
+  });
+
   it('D136: de otro proyecto no viajan (las fotos tampoco), y la plantilla queda con las suyas', async () => {
     const server = new FakeServer();
     const a = await device(server);
