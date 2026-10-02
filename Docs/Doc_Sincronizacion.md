@@ -359,21 +359,28 @@ su subida vencía o la app estaba por debajo de la versión mínima. Lo encontr�
 **El aviso a quien escribió.** El borrado gana en todos lados (es lo de siempre en Yjs), pero quien escribió tiene
 que enterarse y tener su texto a mano:
 
-- **Cuándo.** Al bajar (`applyRemote`), si lo bajado trae borrados y la página tiene algo sin subir o se editó en
-  esta sesión, `findRemovedWriting` arma lo guardado sin GC y en orden, anota **lo propio vivo**, aplica lo bajado y
-  se queda con lo propio que quedó borrado **sin que el borrado lo nombre**. Quien borra un bloque nombra todo lo que
-  tenía adentro (Yjs anota cada elemento); lo que no nombra es lo que no había visto. Así el aviso sale solo cuando
-  se escribía y se borraba a la vez, nunca cuando el otro borró algo que tenía a la vista.
-- **Lo propio:** lo que el servidor no tiene (fuera de `syncedSV`) y lo de los autores de Yjs de cada apertura de la
-  página en esta sesión de la app (`ownClients`, solo en memoria). Lo segundo hace que el aviso no dependa de si la
-  subida llegó antes o después que el borrado; lo primero cubre lo que quedó sin subir al cerrar la app.
+- **Cuándo.** Al bajar (`applyRemote`; `pullPage` primero espera que lo escrito quede guardado), si lo bajado trae
+  borrados y la página tiene algo sin subir o se editó en esta sesión, `findRemovedWriting` arma lo guardado sin GC
+  y en orden, anota **lo propio vivo**, aplica lo bajado y se queda con lo propio que quedó borrado **sin que el
+  borrado lo nombre**. Quien borra un bloque nombra todo lo que tenía adentro (Yjs anota cada elemento); lo que no
+  nombra es lo que no había visto. Así el aviso sale solo cuando se escribía y se borraba a la vez, nunca cuando el
+  otro borró algo que tenía a la vista.
+- **Letra por letra.** Yjs junta en un solo elemento lo que un autor escribe seguido: si A escribe «abcde», sube, B lo
+  ve, A sigue con «fghij» sin subir y B borra el bloque, el elemento es «abcdefghij» pero el borrado de B nombra solo
+  «abcde». Cada elemento se recorta por relojes (lo vivo propio menos lo nombrado) y el aviso dice «fghij».
+- **Lo propio:** solo lo de los autores de Yjs (`clientID`) que escribieron en la página **desde este dispositivo**,
+  anotados en `meta` (`ownClient:<página>:<autor>`) en la misma transacción que su primera edición guardada, sin
+  leer nada antes. Así vale después de cerrar la app, de restaurar una copia o con `syncedSV` atrasado, y nunca toma
+  como propio lo de un tercero. Si no se sabe que algo es propio, no se avisa: mejor no avisar que avisar con texto
+  ajeno. Lo escrito con una versión anterior (que no anota) no avisa.
 - **Dónde se guarda:** en `meta`, clave `removedWriting:<pageId>` (el texto, un renglón por bloque en el orden de la
-  página, las fotos y los archivos por su nombre entre corchetes, la hora y los autores de Yjs; hasta 20 por
+  página, las fotos y los archivos por su nombre entre corchetes, la hora y los tramos de relojes; hasta 20 por
   página), **en la misma transacción que lo bajado**. Las versiones anteriores leen `meta` solo por clave: no les
   cambia nada.
 - **Qué ve:** en la página, un aviso amarillo (*Someone deleted a part of this page while you were writing in it…*)
   con **Show what you wrote**, **Copy** (si el navegador no deja copiar, el texto queda a la vista) y **Dismiss**,
-  que lo borra del dispositivo (el texto sigue en el servidor). Si la página no está abierta, el estado de la
+  que borra del dispositivo los avisos que se mostraron (uno que llegó mientras tanto queda; el texto sigue en el
+  servidor). Si la página no está abierta, el estado de la
   sincronización lo dice con el título. **Download my unsynced changes** lleva el texto del aviso
   (`removedWriting`) y arma sus updates también sin GC y en orden, así el archivo trae ese texto. La ayuda tiene su
   entrada (*When someone deletes what you were writing in*).
@@ -391,9 +398,15 @@ que enterarse y tener su texto a mano:
   ni propiedades nuevas.
 - **Restaurar una copia** (`resetForRestore`): la subida entera ahora lleva todo lo borrado que el dispositivo tiene
   con texto (ver los números); con el tope de arriba nunca se queda sin subir.
-- **Compactar** (`Doc_Compactar.md`, en `lega/compactar`): su snapshot ya se arma aplicando las filas en orden en un
-  `Y.Doc({ gc: false })`, así que conserva este texto. Con `Y.mergeUpdates` lo podía perder (una fila vieja que
-  vuelve a subir todo con huecos gana).
+- **Compactar en el servidor** (`Doc_Compactar.md`, en `lega/compactar`): su snapshot ya se arma aplicando las filas
+  en orden en un `Y.Doc({ gc: false })`, así que conserva este texto. Con `Y.mergeUpdates` lo podía perder (una fila
+  vieja que vuelve a subir todo con huecos gana).
+- **Compactar en el dispositivo** (`loadInto`, con más de 64 filas al abrir; también la búsqueda del proyecto): ahora
+  igual, en orden y sin GC (`mergeRowsInOrder`), por la misma razón.
+- **La reparación solo en memoria** (quien abrió sin permiso de escritura y después lo recibe): con la primera
+  edición guardaba el documento abierto entero, con GC, y lo borrado en memoria iba como hueco. Ahora guarda solo lo
+  que el documento tiene además de lo que se cargó de IndexedDB (`loadedSV`): lo cargado ya está en las filas con su
+  texto.
 - **Historial** (`Doc_Historial.md`, en `lega/historial`): es "la subida sin GC" de la entrega 2. Con esto, cada
   elemento llega con su texto en su primera fila.
 
@@ -419,16 +432,12 @@ filas; las páginas reales, con las filas de `page_updates` leídas para el dise
   editor no cambia.
 - **La subida entera** (después de restaurar una copia) lleva todo lo borrado que el dispositivo tiene con texto:
   hasta 3,5 veces más en la sesión muy editada, lejos del tope de 6 MB.
+- **La auditoría**, con otro guion, midió de +2 a +20 % por subida y hasta ×8 la subida entera después de restaurar
+  una copia. Mismo orden de magnitud: lo que crece es lo escrito y borrado entre dos subidas.
 
-**Límites conocidos** (raros; ninguno pierde nada que hoy no se pierda):
-
-- Un dispositivo que se abrió sin permiso de escritura, reparó la página solo en memoria y después recibió el
-  permiso guarda el documento entero desde el documento abierto (con GC). Si en ese momento tenía algo propio sin
-  subir adentro de algo que otro borró, ese guardado lo trae como hueco; las filas de antes siguen teniendo el texto,
-  pero la compactación local (`loadInto`, con `mergeUpdates`, más de 64 filas) podría quedarse con el hueco.
-- Si `syncedSV` quedó atrás para lo de otro (lo bajado no lo pudo avanzar en esa vuelta), lo de otro que este
-  dispositivo tenía y quien borró no, cuenta como propio: el aviso mostraría ese texto. No lo vieron 60 corridas al
-  azar con tres dispositivos.
+**Límites conocidos:** lo escrito con una versión anterior de la app no avisa (no anota sus autores), y lo que ella
+sube desde la misma base va con GC (ver arriba). Una reparación hecha solo en memoria que después se borra en memoria
+se guarda como hueco: es una copia de algo que ya está en las filas, no texto que alguien escribió.
 
 **Pruebas:**
 
@@ -436,17 +445,21 @@ filas; las páginas reales, con las filas de `page_updates` leídas para el dise
   texto), con el aviso solo para quien escribió y todos iguales al servidor; subido antes del borrado (también
   avisa); el otro vio el texto y borró (no avisa); lo borrado por uno mismo (no avisa, y también sube); después de
   cerrar la app; la versión publicada (`fixtures/mainDocs.ts`) sobre la misma base con el aviso guardado; el tope de
-  6 MB; *Download my unsynced changes*; y el texto del aviso (orden, fotos por nombre, nada ajeno).
+  6 MB; *Download my unsynced changes*; «abcde» visto y «fghij» sin subir (el aviso dice solo «fghij»); después de
+  restaurar una copia, lo de un tercero no se avisa (sí a quien lo escribió); descartar borra solo lo que se mostró;
+  el texto del aviso (orden, fotos por nombre, sin autores propios no avisa); y compactar en orden conserva el texto
+  que una fila posterior trae como hueco.
 - **`src/ui/collabRemovedWriting.test.ts`:** al azar con el editor real, tres dispositivos y uno de la versión
   publicada, escribiendo en párrafos, listas anidadas, celdas de tablas y secciones con el mapa de colapsar
   mientras otros borran bloques padres, tablas y secciones enteras; sin red, bajando antes de subir, respuestas que
   se pierden y la versión publicada sobre la misma base. Revisa letra por letra (por autor de Yjs: y-prosemirror
   reusa letras iguales de al lado, así que una marca no siempre es un solo tramo) que **todo lo que un dispositivo
   guardó con su texto esté en el servidor con su texto**, que todos terminen iguales al servidor (con el mapa de
-  colapsar) y que los avisos sean solo de lo propio. En la suite, 12 corridas de 60 pasos (`REMOVED_SEEDS`,
-  `REMOVED_STEPS`). Con la subida de antes fallan 29 de 30 corridas.
+  colapsar) y que cada aviso sea solo de lo propio y diga **exactamente las letras de sus tramos**, borradas en el
+  servidor. En la suite, 12 corridas de 60 pasos (`REMOVED_SEEDS`, `REMOVED_STEPS`; pasaron 40 de 80). Con la subida
+  de antes fallan 29 de 30 corridas.
 - **`src/ui/RemovedWritingBanner.test.tsx`:** el aviso aparece con la página abierta, muestra, copia (y sin
-  portapapeles deja el texto a la vista) y al cerrarlo se borra.
+  portapapeles deja el texto a la vista) y al cerrarlo se borra lo mostrado.
 
 ## Árbol de páginas
 

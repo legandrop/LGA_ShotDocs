@@ -7,7 +7,7 @@ import { notify } from './notice';
 /** Lo que el aviso necesita de `PageDocs` (B.16). */
 export interface RemovedWritingSource {
   removedWriting(pageId: string): Promise<RemovedWriting[]>;
-  dismissRemovedWriting(pageId: string): Promise<void>;
+  dismissRemovedWriting(pageId: string, shown: RemovedWriting[]): Promise<void>;
   subscribeRemovedWriting(fn: (pageId: string) => void): () => void;
 }
 
@@ -58,9 +58,14 @@ export function RemovedWritingBanner({ docs, pageId }: { docs: RemovedWritingSou
     );
   };
   const dismiss = () => {
+    // Solo los que se mostraron: si llegó otro mientras tanto, queda (y se vuelve a leer).
+    const shown = notes;
     setNotes([]);
     setOpen(false);
-    void docs.dismissRemovedWriting(pageId).catch(() => undefined);
+    void docs.dismissRemovedWriting(pageId, shown).then(
+      () => docs.removedWriting(pageId).then(setNotes),
+      () => undefined,
+    );
   };
   return (
     <div className="banner removed-writing" role="status">

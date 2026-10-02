@@ -281,9 +281,30 @@ async function run(seed: number): Promise<{ problem: string | null; typed: numbe
     local.destroy();
     const notes = await s.d.docs.removedWriting(pageId);
     noticed += notes.length;
-    const foreign = notes.flatMap((n) => n.clients ?? []).filter((c) => !s.clients.has(c));
-    if (foreign.length > 0) errors.push(`${s.name} was told about text it did not write (${foreign.join(',')})`);
-    if (notes.some((n) => !n.text.trim())) errors.push(`${s.name} got an empty notice`);
+    for (const n of notes) {
+      const ranges = n.ranges ?? [];
+      const foreign = ranges.map(([c]) => c).filter((c) => !s.clients.has(c));
+      if (foreign.length > 0) errors.push(`${s.name} was told about text it did not write (${foreign.join(',')})`);
+      if (!n.text.trim()) errors.push(`${s.name} got an empty notice`);
+      // El texto del aviso son exactamente las letras de sus tramos, que en el servidor están borradas.
+      // (Lo que la versión publicada subió desde la misma base llega como hueco: esas letras no se pueden comparar.)
+      const letters: string[] = [];
+      let holes = false;
+      for (const [client, from, to] of ranges) {
+        const structs = (fromServer.store.clients.get(client) ?? []) as (Y.Item | Y.GC)[];
+        for (let clock = from; clock < to; clock++) {
+          const there = structAt(structs, clock);
+          if (there instanceof Y.Item && !there.deleted) errors.push(`${s.name}: a noticed letter is not deleted on the server`);
+          else if (!(there instanceof Y.Item)) holes = true;
+          else if (there.content instanceof Y.ContentString) letters.push(there.content.str[clock - there.id.clock]);
+        }
+      }
+      if (holes && !ranges.every(([c]) => s.exempt.has(c))) errors.push(`${s.name}: a noticed letter is a hole on the server`);
+      const shown = n.text.replace(/\n/g, '').split('');
+      if (!holes && shown.sort().join('') !== letters.sort().join('')) {
+        errors.push(`${s.name}: notice text ${JSON.stringify(n.text)} is not its letters (${JSON.stringify(letters.join(''))})`);
+      }
+    }
   }
   for (const e of editors.splice(0)) e.unmount();
   for (const s of sides) s.d.docs.close(pageId);

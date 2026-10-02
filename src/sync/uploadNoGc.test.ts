@@ -4,7 +4,7 @@ import { NO_GC_MAX_BYTES } from './docs';
 import { PageDocs as MainPageDocs } from './fixtures/mainDocs';
 import { fromBase64 } from '../lib/base64';
 import { exportUnsynced } from './unsynced';
-import { applyRowsInOrder, findRemovedWriting } from './removedWriting';
+import { applyRowsInOrder, findRemovedWriting, mergeRowsInOrder } from './removedWriting';
 import { CONTENT_FRAGMENT, normalizeStructure, seedIfEmpty } from './structure';
 import { FakeRemote, FakeServer, makeDevice, type Device } from './testing';
 
@@ -151,8 +151,67 @@ describe('B.16: lo escrito adentro de algo que otro borra llega al servidor', ()
     expect(await b.docs.removedWriting(pageId)).toEqual([]);
     expect(await c.docs.removedWriting(pageId)).toEqual([]);
     // Visto: se va.
-    await a.docs.dismissRemovedWriting(pageId);
+    await a.docs.dismissRemovedWriting(pageId, notes);
     expect(await a.docs.removedWriting(pageId)).toEqual([]);
+  });
+
+  it('A escribe «abcde», sube y B lo ve; A sigue con «fghij» sin subir; B borra el bloque: el aviso dice solo «fghij»', async () => {
+    const server = new FakeServer();
+    const { a, b, pageId } = await twoBlocks(server);
+    // Un solo documento abierto (un solo autor de Yjs): Yjs junta las dos tandas en un elemento.
+    const doc = await a.docs.open(pageId);
+    textOf(doc, 'b2')!.insert(7, 'abcde');
+    await a.docs.flush(pageId);
+    await a.docs.pushPage(pageId, a.remote);
+    await b.engine.syncNow();
+    textOf(doc, 'b2')!.insert(12, 'fghij');
+    await a.docs.flush(pageId);
+    await edit(b, pageId, (d) => root(d).delete(1, 1));
+    await b.engine.syncNow();
+    await a.docs.pullPage(pageId, a.remote);
+    expect((await a.docs.removedWriting(pageId)).map((n) => n.text)).toEqual(['fghij']);
+    a.docs.close(pageId);
+    await a.engine.syncNow();
+    expect(serverText(server, pageId)).toContain('fghij');
+  });
+
+  it('después de restaurar una copia, lo de un tercero que quien borró no tenía no se avisa como propio', async () => {
+    const server = new FakeServer();
+    const { a, b, pageId } = await twoBlocks(server);
+    const c = await device(server);
+    await c.engine.syncNow();
+    await edit(c, pageId, (d) => textOf(d, 'b2')!.insert(0, 'DE-C '));
+    await c.engine.syncNow();
+    await a.engine.syncNow();
+    // A restaura (todo vuelve a subir y bajar): para `syncedSV`, nada es del servidor.
+    await a.docs.resetForRestore();
+    // B borra el bloque sin haber visto lo de C.
+    await edit(b, pageId, (d) => root(d).delete(1, 1));
+    await b.engine.syncNow();
+    await a.docs.pullPage(pageId, a.remote);
+    expect(await a.docs.removedWriting(pageId)).toEqual([]);
+    // C, que lo escribió, sí se entera.
+    await c.engine.syncNow();
+    expect((await c.docs.removedWriting(pageId)).map((n) => n.text)).toEqual(['DE-C ']);
+  });
+
+  it('descartar el aviso borra solo los que se mostraron', async () => {
+    const server = new FakeServer();
+    const { a, b, pageId } = await twoBlocks(server);
+    await edit(a, pageId, (d) => textOf(d, 'b2')!.insert(0, 'UNO '));
+    await edit(b, pageId, (d) => root(d).delete(1, 1));
+    await b.engine.syncNow();
+    await a.docs.pullPage(pageId, a.remote);
+    const shown = await a.docs.removedWriting(pageId);
+    expect(shown.map((n) => n.text)).toEqual(['UNO ']);
+    // Llega otro mientras el aviso está a la vista.
+    await edit(a, pageId, (d) => textOf(d, 'b1')!.insert(0, 'DOS '));
+    await edit(b, pageId, (d) => root(d).delete(0, 1));
+    await b.engine.syncNow();
+    await a.docs.pullPage(pageId, a.remote);
+    expect((await a.docs.removedWriting(pageId)).map((n) => n.text)).toEqual(['UNO ', 'DOS ']);
+    await a.docs.dismissRemovedWriting(pageId, shown);
+    expect((await a.docs.removedWriting(pageId)).map((n) => n.text)).toEqual(['DOS ']);
   });
 
   it('si A ya había subido, el texto está en el servidor y A también se entera (lo escribió en esta sesión)', async () => {
@@ -330,9 +389,11 @@ describe('B.16: el texto del aviso', () => {
     // El servidor borra el padre (sin haber visto nada de lo de arriba).
     (server.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement).delete(0, 1);
     const incoming = Y.encodeStateAsUpdate(server, syncedSV);
-    const found = findRemovedWriting(rows, syncedSV, incoming);
+    const found = findRemovedWriting(rows, incoming, new Set([local.clientID]));
     expect(found?.text).toBe(' primero\nsegundo \n[toma.jpg]');
-    expect(found?.clients).toEqual([local.clientID]);
+    expect(new Set(found?.ranges.map(([client]) => client))).toEqual(new Set([local.clientID]));
+    // Sin saber qué autores son propios, no se avisa.
+    expect(findRemovedWriting(rows, incoming, new Set())).toBeNull();
   });
 
   it('sin nada propio vivo, o con todo nombrado en el borrado, no hay aviso', () => {
@@ -340,9 +401,29 @@ describe('B.16: el texto del aviso', () => {
     const syncedSV = Y.encodeStateVector(local);
     (server.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement).delete(0, 1);
     const incoming = Y.encodeStateAsUpdate(server, syncedSV);
-    expect(findRemovedWriting(rows, syncedSV, incoming)).toBeNull();
-    // Sin `syncedSV` todo parece propio, y lo mismo con `own`; pero el borrado nombra todo lo que borra: tampoco.
-    expect(findRemovedWriting(rows, undefined, incoming)).toBeNull();
-    expect(findRemovedWriting(rows, syncedSV, incoming, new Set([server.clientID]))).toBeNull();
+    expect(findRemovedWriting(rows, incoming, new Set([local.clientID]))).toBeNull();
+    // Aunque todo lo de antes fuera propio: el borrado nombra todo lo que borra, así que tampoco.
+    expect(findRemovedWriting(rows, incoming, new Set([server.clientID]))).toBeNull();
+  });
+});
+
+describe('B.16: compactar lo guardado en orden', () => {
+  it('si dos filas traen el mismo texto, una con letras y otra como hueco, queda el de la primera', () => {
+    const doc = new Y.Doc();
+    const group = new Y.XmlElement('blockGroup');
+    group.insert(0, [block('b1', 'Queda'), block('b2', 'HUECO')]);
+    doc.getXmlFragment(CONTENT_FRAGMENT).insert(0, [group]);
+    const first = Y.encodeStateAsUpdate(doc);
+    // Otra copia, armada con GC después de borrar el bloque: trae esas letras como hueco.
+    const collected = new Y.Doc();
+    Y.applyUpdate(collected, first);
+    root(collected).delete(1, 1);
+    const second = Y.encodeStateAsUpdate(collected);
+    expect(rowText(second)).not.toContain('HUECO');
+    expect(rowText(mergeRowsInOrder([first, second]))).toContain('HUECO');
+    // El documento que arma es el mismo.
+    const a = new Y.Doc();
+    Y.applyUpdate(a, mergeRowsInOrder([first, second]));
+    expect(a.getXmlFragment(CONTENT_FRAGMENT).toString()).toBe(collected.getXmlFragment(CONTENT_FRAGMENT).toString());
   });
 });
