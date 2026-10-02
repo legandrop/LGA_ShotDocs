@@ -171,6 +171,33 @@ describe('el panel', () => {
     const { host } = await setup({ key: false });
     expect(host.textContent).toContain('Set up the assistant');
     expect(button(host, 'Fix spelling & grammar')).toBeUndefined();
+    // Sin copia sincronizada (el cliente de prueba no tiene la tabla): no ofrece abrirla.
+    expect(button(host, 'Unlock your synced key')).toBeUndefined();
+  });
+
+  it('sin clave y con una copia sincronizada en este workspace: ofrece abrirla (Doc_Clave_Sincronizada.md, 9)', async () => {
+    const asked: unknown[] = [];
+    const copy = (has: boolean) => ({
+      auth: {},
+      from: (table: string) => ({
+        select: () => ({
+          eq: (column: string, value: unknown) => {
+            asked.push([table, column, value]);
+            return { maybeSingle: async () => ({ data: has ? { format: 1, generation: 1, updated_at: '2026-10-02T12:00:00Z' } : null, error: null }) };
+          },
+          maybeSingle: async () => ({ data: null, error: null }),
+        }),
+      }),
+    });
+    const { host, device } = await setup({ key: false, client: copy(true) });
+    for (let i = 0; i < 20 && !button(host, 'Unlock your synced key'); i++) await wait(30);
+    expect(button(host, 'Unlock your synced key')).toBeTruthy();
+    expect(asked).toContainEqual(['assistant_key_sync', 'user_id', device.remote.userId]);
+    // Con la clave en este dispositivo no se pregunta nada.
+    asked.length = 0;
+    await setup({ client: copy(true) });
+    await wait(80);
+    expect(asked).toEqual([]);
   });
 
   it('Fix → vista previa por palabras → Apply: la página cambia y queda un aviso para deshacer; los tokens del proveedor', async () => {

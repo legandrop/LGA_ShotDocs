@@ -13,9 +13,11 @@ interface AssistantUiState {
   settings: boolean;
   /** Salir de la cuenta con una clave del asistente guardada: la ventana con la casilla de olvidarla. */
   signOut: { email: string; run: () => Promise<unknown> } | null;
+  /** *Sign out other devices* (Docs/Doc_Clave_Sincronizada.md, S1): la confirmación, con el nombre del workspace. */
+  signOutOthers: { workspace: string; run: () => Promise<{ error: unknown }> } | null;
 }
 
-let state: AssistantUiState = { pageId: null, settings: false, signOut: null };
+let state: AssistantUiState = { pageId: null, settings: false, signOut: null, signOutOthers: null };
 const listeners = new Set<() => void>();
 
 function set(next: Partial<AssistantUiState>): void {
@@ -66,6 +68,18 @@ export function askSignOut(email: string, run: () => Promise<unknown>): void {
 
 export function closeSignOut(): void {
   if (state.signOut) set({ signOut: null });
+}
+
+/**
+ * *Sign out other devices*: cierra la sesión de la persona en sus otros dispositivos de este workspace (para un
+ * dispositivo perdido, antes de cambiar la clave). `run` llama `signOut({ scope: 'others' })` del cliente del workspace.
+ */
+export function askSignOutOthers(workspace: string, run: () => Promise<{ error: unknown }>): void {
+  set({ signOutOthers: { workspace, run } });
+}
+
+export function closeSignOutOthers(): void {
+  if (state.signOutOthers) set({ signOutOthers: null });
 }
 
 /**

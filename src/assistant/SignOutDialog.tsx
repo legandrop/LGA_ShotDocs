@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useT } from '../i18n';
 import { closeSignOut } from './assistantUi';
-import { forgetKey } from './keyStore';
+import { forgetKey, loadSettings } from './keyStore';
 
 /**
  * Salir de la cuenta con una clave del asistente guardada en este dispositivo (Docs/Doc_Asistente.md, sección 4): la
@@ -13,6 +13,18 @@ export function SignOutDialog({ email, run }: { email: string; run: () => Promis
   const tr = useT();
   const [forget, setForget] = useState(false);
   const [busy, setBusy] = useState(false);
+  /** Si la clave vino de una copia sincronizada (o se subió a una): la ayuda de la casilla lo suma. */
+  const [synced, setSynced] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    void loadSettings(email)
+      .then((s) => live && setSynced(!!s?.sync))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [email]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && closeSignOut();
@@ -38,7 +50,10 @@ export function SignOutDialog({ email, run }: { email: string; run: () => Promis
         <label className="folder-check">
           <input type="checkbox" checked={forget} onChange={(e) => setForget(e.target.checked)} /> {tr('account.forgetAssistantKey')}
         </label>
-        <p className="muted small">{tr('account.forgetAssistantKeyHint')}</p>
+        <p className="muted small">
+          {tr('account.forgetAssistantKeyHint')}
+          {synced && <> {tr('account.forgetAssistantKeySynced')}</>}
+        </p>
         <div className="modal-actions">
           <button className="link" onClick={closeSignOut}>
             {tr('common.cancel')}

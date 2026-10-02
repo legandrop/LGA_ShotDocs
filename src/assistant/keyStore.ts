@@ -30,6 +30,29 @@ export interface AssistantRecord {
   savedAt: number;
   /** El último idioma de *Translate to…*. */
   translateTo?: string;
+  /**
+   * De qué copia sincronizada vino la clave o a cuál se subió (Docs/Doc_Clave_Sincronizada.md, sección 6). Campo
+   * opcional adentro del registro de siempre: la base sigue en la versión 1 (una versión vieja de la app la abre con
+   * `openDB(…, 1)`), y una versión vieja que guarda ajustes rehace el registro sin este campo, sin perder la clave.
+   */
+  sync?: KeySyncInfo;
+}
+
+/** La copia sincronizada de la que vino la clave de este dispositivo (o a la que se subió). */
+export interface KeySyncInfo {
+  /** El workspace de la copia (su clave local o su dirección, como la política). */
+  ref: string;
+  /** Su nombre, para mostrar. */
+  name?: string;
+  /** El id de la persona en el Supabase de ese workspace. */
+  userId: string;
+  /** La generación de la copia que se abrió o se escribió. */
+  generation: number;
+  /** El `savedAt` de adentro del sobre (autenticado). */
+  savedAt: number;
+  unlockedAt: number;
+  /** La clave o el destino de este dispositivo cambiaron después: *Update synced key* sube la de ahora. */
+  localChanged?: boolean;
 }
 
 /** Lo que ve la app de los ajustes: todo menos la clave. */
@@ -138,9 +161,14 @@ export async function saveSettings(
   email: string,
   settings: { provider: ProviderId; baseUrl?: string; model: string; models: ModelInfo[] },
   apiKey?: string,
+  options: { sync?: KeySyncInfo | null } = {},
 ): Promise<AssistantSettings> {
   const d = await db();
   const prev = await d.get('keys', norm(email));
+  // La copia sincronizada de la que vino la clave: se conserva, pero si cambian la clave o el destino queda marcada
+  // como distinta de la de este dispositivo (la sección de sincronizar ofrece *Update synced key*).
+  let sync = options.sync === undefined ? prev?.sync : (options.sync ?? undefined);
+  if (options.sync === undefined && sync && (apiKey !== undefined || !sameDestination(prev!, settings))) sync = { ...sync, localChanged: true };
   let iv = prev?.iv ?? null;
   let cipher = prev?.cipher ?? null;
   if (apiKey === undefined && prev && !sameDestination(prev, settings)) {
@@ -166,9 +194,26 @@ export async function saveSettings(
     cipher,
     savedAt: Date.now(),
     translateTo: prev?.translateTo,
+    ...(sync ? { sync } : {}),
   };
   await d.put('keys', record);
   return settingsOf(record);
+}
+
+/** Anota (o saca, con `null`) de qué copia sincronizada es la clave de este dispositivo, sin tocar la clave. */
+export async function setSyncInfo(email: string, sync: KeySyncInfo | null): Promise<AssistantSettings | null> {
+  const d = await db();
+  const tx = d.transaction('keys', 'readwrite');
+  const prev = await tx.store.get(norm(email));
+  if (!prev) {
+    await tx.done;
+    return null;
+  }
+  const { sync: _old, ...rest } = prev;
+  const next: AssistantRecord = sync ? { ...rest, sync } : rest;
+  await tx.store.put(next);
+  await tx.done;
+  return settingsOf(next);
 }
 
 /** Recuerda el último idioma de *Translate to…*. */
