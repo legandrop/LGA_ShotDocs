@@ -166,8 +166,8 @@ export const help = {
   },
   'help.undo.title': { en: "Undo", es: "Deshacer" },
   'help.undo.text': {
-    en: "{undo} undoes, {redo} redoes. Deleting blocks, a section or the whole page is always a single undo step.",
-    es: "{undo} deshace, {redo} rehace. Borrar bloques, una sección o la página entera es siempre un solo paso de deshacer.",
+    en: "{undo} undoes, {redo} redoes, in the order you edited across the whole project: if your last change was on another page, the app takes you there and undoes it in view (Back returns you). It keeps working after you switch pages, until you reload. Deleting blocks, a section or the whole page is always a single undo step. Renaming, moving or trashing pages isn't undone this way.",
+    es: "{undo} deshace, {redo} rehace, en el orden en que editaste en todo el proyecto: si lo último fue en otra página, la app te lleva y lo deshace a la vista (Volver te devuelve). Sigue andando después de cambiar de página, hasta que recargues. Borrar bloques, una sección o la página entera es siempre un solo paso de deshacer. Renombrar, mover o mandar páginas a la papelera no se deshace así.",
   },
 
   // --- Fotos y videos ---

@@ -19,6 +19,7 @@ import { isHistoryShortcut } from './historyUi';
 import { isDayReportShortcut } from '../templates/dayReport';
 import { isAssistantShortcut } from '../assistant/assistantUi';
 import { isSearchShortcut } from './projectSearchUi';
+import { isRedoShortcut, isUndoShortcut } from './undoTimelineUi';
 import { SHORTCUT_FILES, SHORTCUT_RULES } from './shortcutSources';
 import { keyLabel, shortcut, shortcutLabel, SHORTCUT_PLACES, SHORTCUTS, slashBadge, type Shortcut } from './shortcuts';
 
@@ -208,6 +209,9 @@ const FUNCTIONS: Record<string, { fn: Fn; id: string; keys?: string[] }> = {
   // F3 / Shift+F3 y Ctrl/⌘+G (con Shift, la anterior): la barra decide la dirección con Shift.
   isStepShortcut: { fn: isStepShortcut as Fn, id: 'findNext', keys: ['F3', 'Mod-g', 'Shift-F3', 'Mod-Shift-g'] },
   isSelectAllKey: { fn: isSelectAllKey as Fn, id: 'selectAll' },
+  // Deshacer y rehacer en el orden en que editaste (P.26): la línea de tiempo los toma en `window`.
+  isUndoShortcut: { fn: isUndoShortcut as Fn, id: 'undo' },
+  isRedoShortcut: { fn: isRedoShortcut as Fn, id: 'redo' },
 };
 
 /** Un evento de teclado sintético para esas teclas, en la Mac (⌘) o en Windows (Ctrl). */
