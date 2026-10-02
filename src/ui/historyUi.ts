@@ -61,8 +61,11 @@ export function isHistoryShortcut(
 
 /** Lo que devuelve el editor al pedirle restaurar. */
 export type RestoreOutcome =
-  /** `undo`: deshace la restauración si sigue siendo lo último; `onEdit`: avisa la próxima edición de la página. */
-  | { ok: true; undo: () => boolean; onEdit: (fn: () => void) => () => void; trace?: RestoreTrace }
+  /**
+   * `undo`: deshace la restauración si sigue siendo lo último; `onEdit`: avisa la próxima edición de la página;
+   * `onUndone`: avisa cuando se deshace la restauración, por el **Undo** del aviso o con Ctrl/⌘+Z (una vez).
+   */
+  | { ok: true; undo: () => boolean; onEdit: (fn: () => void) => () => void; onUndone?: (fn: () => void) => () => void; trace?: RestoreTrace }
   /** `shape`: la versión no pasó la ida y vuelta (algo que el editor no puede armar); `notEditable`: sin editor. */
   | { ok: false; reason: 'shape' | 'notEditable' | 'failed' };
 

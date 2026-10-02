@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.113 :
 
 Lo que quedó de *Download all* (P.9). Un portero que dejaba de contestar sin cortar la conexión dejaba la barra quieta:
 no había tope de lectura. Ahora cada pedido tiene uno sin avance (30 s hasta la respuesta o entre pedazos); pasado,
@@ -10,6 +10,29 @@ se abrieron; a una carpeta escribe en la misma (y borra la lista vieja si ya no 
 a uno numerado (`<carpeta> (missing files).zip`, `(missing files 2).zip`…), para descomprimir encima del primero.
 Los nombres limpios de la app sacaban el ZWJ de los emojis compuestos (O4): ahora se queda entre dos emojis.
 [ Bajar todo - Retry missing, el tope sin avance y el ZWJ de los emojis ]
+
+v0.112 :
+
+Cinco pedidos de Lega del 2026-10-02 no tenían diseño. Se publican los cinco, sin código, cada uno auditado por
+separado, corregido y re-verificado: `Doc_Plantillas.md` (P.23: las tres plantillas de supervisión, las propias como
+páginas marcadas y *New day report*; PL1-PL10), `Doc_Anotar_Fotos.md` (P.20: anotaciones al estilo de FrameRev en un
+mapa del documento, afuera del contenido, y la poda de las de una foto sacada; AN1-AN11), `Doc_Exportar.md` (P.22: el
+PDF con índice de una rama o un proyecto y el zip para archivar y volver, sin correos; EX1-EX15), `Doc_Menciones.md`
+(P.21: *@persona* con `comment_mentions` y la campana; ME1-ME10) y `Doc_Asistente.md` (P.24: la clave de cada persona
+en su dispositivo, aplicar como edición que se deshace y el MCP en el portero, sin escribir en páginas con invitados,
+ni siquiera creando una subpágina; IA1-IA10). Las decisiones quedan propuestas para que Lega las cambie.
+[ Diseños - plantillas, anotar fotos, exportar, menciones y asistente, auditados ]
+
+v0.111 :
+
+Restos del historial (P.18). Una versión con dos bloques del mismo id (dos dispositivos rehicieron el mismo bloque) no
+se podía restaurar: el editor cambiaba un id, la comprobación no daba y se deshacía sola; ahora, en la copia en memoria,
+el segundo recibe un id nuevo antes de restaurar. Al confirmar, la consulta de filas en curso pudo empezar antes de
+sincronizar: se espera y se pide otra (O9). Una copia restaurada que vuelve atrás el contador de `page_updates` podía
+hacer pasar por buena la caché: se lee la generación del servidor antes de usarla (O7). Deshacer la restauración con
+Ctrl/⌘+Z también deja de lado *Restored from…*. Dos sangrías a la vez bajo el mismo bloque ya no muestran el hijo
+repetido como agregado (O2). Pruebas nuevas, también de `mergeRows` (M5) y de la versión elegida que crece (M10).
+[ Historial - restos: restaurar con ids repetidos, la consulta al confirmar, la generación antes de la caché y Ctrl+Z ]
 
 v0.110 :
 
@@ -30,7 +53,6 @@ publicada" comparaban contra una versión de hace meses. Se regeneró desde v0.1
 una foto, en una celda con solo fotos, iba a la celda de la izquierda: el primer renglón se medía comparando bordes de
 abajo con tolerancia de 2 px y daba justo 2. Ahora se mira si los renglones se superponen.
 [ Fixture del esquema publicado regenerado desde v0.107 y ↑ después de una foto en una celda ]
-
 v0.108 :
 
 Compartir una página con alguien sin cuenta no existía: solo usuarios invitados. Faltaba un diseño seguro para
