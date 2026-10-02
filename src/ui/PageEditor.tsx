@@ -447,19 +447,19 @@ export function BlockEditor({
       // Las extensiones de la página (editorExtensions.ts): fotos en línea, buscar, deshacer, títulos y colapsar.
       extensions: [
         ...pageEditorExtensions(
-        canCollapse
-          ? {
-              initial: collapse,
-              // Lo colapsado para todos, en el mismo documento que el contenido (entrega 2).
-              shared: doc.getMap(SHARED_COLLAPSE_MAP),
-              canShare: () => canShareRef.current,
-              save: (records: ReadonlyMap<string, HeadingRecord>) => {
-                collapse.clear();
-                for (const [id, r] of records) collapse.set(id, r);
-                collapseSave.save(records);
-              },
-            }
-          : null,
+          canCollapse
+            ? {
+                initial: collapse,
+                // Lo colapsado para todos, en el mismo documento que el contenido (entrega 2).
+                shared: doc.getMap(SHARED_COLLAPSE_MAP),
+                canShare: () => canShareRef.current,
+                save: (records: ReadonlyMap<string, HeadingRecord>) => {
+                  collapse.clear();
+                  for (const [id, r] of records) collapse.set(id, r);
+                  collapseSave.save(records);
+                },
+              }
+            : null,
         ),
         ...(marks ? [historyMarksExtension(marks)] : []),
       ],
