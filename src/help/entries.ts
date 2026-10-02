@@ -377,7 +377,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'sync',
     title: 'help.removedWriting.title',
     text: 'help.removedWriting.text',
-    words: ['borrado', 'borró', 'deleted', 'perdí', 'lost', 'a la vez', 'same time', 'recuperar', 'recover'],
+    words: ['borrado', 'borró', 'deleted', 'perdí', 'lost', 'a la vez', 'same time', 'recuperar', 'recover', 'moviste', 'moved'],
     since: REMOVED_WRITING,
   },
   {
