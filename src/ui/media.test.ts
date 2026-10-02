@@ -6,10 +6,11 @@ import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { schema, setVideosAccepted } from './editorSchema';
 import { schema as mainSchema } from './fixtures/editorSchemaMain';
+import { schema as soloScriptSchema } from './fixtures/editorSchemaSoloScript';
 import { findUnknownContent, knownContent } from './unknownContent';
 
-// Una foto o un video del Drive es un bloque `image` con `url: "sdmedia://<id>"` (paso 6 del plan). La
-// versión publicada (el esquema de `main`) no conoce esa dirección: tiene que mostrar una imagen rota y
+// Una foto o un video del Drive es un bloque `image` con `url: "sdmedia://<id>"` (paso 6 del plan). Una
+// versión sin el Drive (la publicada hasta v0.040, fixtures/editorSchemaSoloScript.ts) no conoce esa dirección: tiene que mostrar una imagen rota y
 // conservarla, nunca borrar el bloque.
 
 const editors: BlockNoteEditor[] = [];
@@ -59,7 +60,7 @@ function newPage(): { doc: Y.Doc; editor: BlockNoteEditor } {
   return { doc, editor };
 }
 
-describe('sdmedia:// con el editor de la versión publicada (main)', () => {
+describe('sdmedia:// con el editor de una versión que no lo conoce (hasta v0.040)', () => {
   it('lo abre sin borrarlo y conserva la dirección aunque se edite otro bloque', async () => {
     const { doc, editor } = newPage();
     await tick();
@@ -69,7 +70,7 @@ describe('sdmedia:// con el editor de la versión publicada (main)', () => {
     const updates: Uint8Array[] = [];
     docOld.on('update', (u: Uint8Array) => updates.push(u));
     const resolved: string[] = [];
-    const old = mount(docOld, mainSchema, resolved);
+    const old = mount(docOld, soloScriptSchema, resolved);
     await tick();
     expect(summary(old)).toEqual(['paragraph Plano 12, toma 3.', `image ${VIDEO}`, `image ${PHOTO}`, 'paragraph Nota.']);
     // La muestra como una imagen (rota) con esa dirección.
@@ -92,17 +93,25 @@ describe('sdmedia:// con el editor de la versión publicada (main)', () => {
     expect((editor.document[1].props as { name: string }).name).toBe('IMG_0666.MOV');
   });
 
-  it('la guarda contra lo desconocido de la versión publicada no lo bloquea', async () => {
+  it('la guarda contra lo desconocido de la versión publicada y de la vieja no lo bloquea', async () => {
     const { doc } = newPage();
     await tick();
-    const probe = BlockNoteEditor.create({ schema: mainSchema });
-    const mainNames = { nodes: new Set(Object.keys(probe.pmSchema.nodes)), marks: new Set(Object.keys(probe.pmSchema.marks)) };
+    const namesOf = (s: unknown) => {
+      const probe = BlockNoteEditor.create({ schema: s as typeof schema });
+      return { nodes: new Set(Object.keys(probe.pmSchema.nodes)), marks: new Set(Object.keys(probe.pmSchema.marks)) };
+    };
+    const mainNames = namesOf(mainSchema);
+    const oldNames = namesOf(soloScriptSchema);
     expect(findUnknownContent(doc, mainNames)).toBeNull();
+    expect(findUnknownContent(doc, oldNames)).toBeNull();
     expect(findUnknownContent(doc)).toBeNull();
-    // El esquema de esta versión tiene los mismos bloques y marcas que el publicado, más la foto en línea (el
-    // único nodo nuevo, inlinePhoto.ts: la versión publicada no abre una página que la tenga, unknownContent.ts).
-    expect([...knownContent().nodes, 'doc', 'text'].sort()).toEqual([...mainNames.nodes, 'photo'].sort());
+    // Ningún bloque, nodo ni marca nuevos respecto de la versión publicada (que ya tiene la foto en línea).
+    expect([...knownContent().nodes, 'doc', 'text'].sort()).toEqual([...mainNames.nodes].sort());
     expect([...knownContent().marks].sort()).toEqual([...mainNames.marks].sort());
+    // Desde v0.040, el único nodo nuevo es la foto en línea (inlinePhoto.ts: una versión sin ella no abre una página que
+    // la tenga, unknownContent.ts).
+    expect([...knownContent().nodes, 'doc', 'text'].sort()).toEqual([...oldNames.nodes, 'photo'].sort());
+    expect([...knownContent().marks].sort()).toEqual([...oldNames.marks].sort());
   });
 
   it('el bloque image acepta videos solo con portero, y sigue siendo image', () => {

@@ -104,8 +104,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   (entrega 5)". Queda: probar en Safari y el iPhone, y con una exportación de Coda que tenga fotos en tablas de página;
   a decidir, si el alto de la miniatura (96 px) se puede elegir. Para después (auditoría): pegar solo `text/html` de una
   fila con fotos las pierde (O1); una tabla de Google Docs o Excel con imágenes llega sin ellas (O2); la papelera de
-  archivos al borrar una fila con fotos, a probar con la base real (O5); ↑ con el cursor después de una foto, en una
-  celda que solo tiene fotos, va a la celda de la izquierda (O4: `onFirstLine` compara con tolerancia `< 2` y da justo 2).
+  archivos al borrar una fila con fotos, a probar con la base real (O5); ↑ con el cursor al principio de un segundo
+  renglón de una celda que empieza con una miniatura (bajó porque no entraba al lado del texto) va a la celda de la
+  izquierda en vez de al renglón de arriba: lo hace el navegador, también antes de la corrección de O4 (medido en
+  Chromium con "Texto [foto] y más texto" en una columna angosta).
   **Queda:**
   - Probar en Safari y en el iPhone: pegar, soltar, "/Image" con la cámara, la barra con el dedo, la composición
     (sin tecla previa entre dos fotos duplica el primer carácter en Chromium). Medir la decoración de filas con un doc
@@ -508,12 +510,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
     papelera y la restaura antes de que suba lo primero recibe un rechazo en la segunda (la página queda en la
     papelera, la restaura el dueño; no se pierde nada). Ver `Doc_Supabase.md`, "La papelera de páginas y quién la ve".
 
-20. **El esquema "publicado" de las pruebas está desactualizado (nivel medio).** Lo encontró la auditoría de la entrega 5
-   de fotos en línea (O8). `src/ui/fixtures/editorSchemaMain.ts` dice ser la copia de `editorSchema.ts` de la versión
-   publicada y que se reemplaza al publicar, pero es de antes de `photo` (último cambio en `62246db`): las pruebas de
-   "versión publicada" de los ~10 archivos que lo usan no prueban la versión publicada de hoy (montado sin el
-   resguardo, borra una foto en línea). Regenerarlo desde `main` y revisar qué pruebas cambian; sumar al cierre de cada
-   publicación el paso de reemplazarlo.
+20. **El esquema publicado de las pruebas (lo que quedó de B.20, v0.109).** `src/ui/fixtures/editorSchemaMain.ts` se
+   regeneró desde v0.107 y `editorSchemaFixture.test.ts` avisa si queda distinto de `editorSchema.ts`. Queda: la prueba
+   no ve un atributo nuevo del nodo `photo` (el fixture usa el de hoy), y nada avisa si nadie lo regenera después de
+   publicar un cambio del esquema: al publicar una versión que cambia `editorSchema.ts`, regenerarlo.
 
 ### C. Esperan a Lega
 

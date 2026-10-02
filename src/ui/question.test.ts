@@ -6,10 +6,11 @@ import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { paragraphProps, QUESTION_PROP, schema, SCRIPT_PROP } from './editorSchema';
 import { schema as mainSchema } from './fixtures/editorSchemaMain';
+import { schema as soloScriptSchema } from './fixtures/editorSchemaSoloScript';
 import { findUnknownContent, knownContent } from './unknownContent';
 
-// Preguntas (paso 10): un párrafo con `question: true`, nunca un tipo de bloque nuevo. La versión publicada
-// (el esquema de `main`, copiado en fixtures/) no conoce la propiedad: tiene que abrir la página, mostrar el
+// Preguntas (paso 10): un párrafo con `question: true`, nunca un tipo de bloque nuevo. Una versión sin preguntas
+// (la publicada hasta v0.040, fixtures/editorSchemaSoloScript.ts) no conoce la propiedad: tiene que abrir la página, mostrar el
 // texto y no borrar el párrafo; si edita esa línea, se pierde solo la marca (el texto y el id del bloque,
 // al que están anclados los comentarios, quedan).
 
@@ -53,21 +54,21 @@ function newPage(): { doc: Y.Doc; editor: BlockNoteEditor } {
   return { doc, editor };
 }
 
-function openInMain(doc: Y.Doc): { old: BlockNoteEditor; updates: Uint8Array[] } {
+function openInOld(doc: Y.Doc): { old: BlockNoteEditor; updates: Uint8Array[] } {
   const docOld = new Y.Doc();
   Y.applyUpdate(docOld, Y.encodeStateAsUpdate(doc));
   const updates: Uint8Array[] = [];
   docOld.on('update', (u: Uint8Array) => updates.push(u));
-  return { old: mount(docOld, mainSchema), updates };
+  return { old: mount(docOld, soloScriptSchema), updates };
 }
 
-describe('preguntas con el editor de la versión publicada (main)', () => {
+describe('preguntas con el editor de una versión que no las conoce (hasta v0.040)', () => {
   it('abre la página, muestra la pregunta como párrafo y no borra nada al editar otro bloque', async () => {
     const { doc, editor } = newPage();
     await tick();
     const questionId = editor.document[1].id;
 
-    const { old, updates } = openInMain(doc);
+    const { old, updates } = openInOld(doc);
     await tick();
     expect(old.document.map((b) => b.type)).toEqual(['paragraph', 'paragraph', 'paragraph']);
     expect(texts(old)).toEqual(['Brief del spot.', '¿Se filma de noche?', 'Nota.']);
@@ -83,12 +84,12 @@ describe('preguntas con el editor de la versión publicada (main)', () => {
     expect(kinds(editor)).toEqual(['paragraph', 'question', 'paragraph']);
   });
 
-  it('si la versión publicada edita la pregunta, queda el texto y el id del bloque (se pierde solo la marca)', async () => {
+  it('si la versión vieja edita la pregunta, queda el texto y el id del bloque (se pierde solo la marca)', async () => {
     const { doc, editor } = newPage();
     await tick();
     const questionId = editor.document[1].id;
 
-    const { old, updates } = openInMain(doc);
+    const { old, updates } = openInOld(doc);
     await tick();
     old.setTextCursorPosition(old.document[1], 'end');
     old.insertInlineContent(' ¿Y con lluvia?');
@@ -101,17 +102,25 @@ describe('preguntas con el editor de la versión publicada (main)', () => {
     expect(editor.document).toHaveLength(3);
   });
 
-  it('la guarda contra lo desconocido de la versión publicada no la bloquea', async () => {
+  it('la guarda contra lo desconocido de la versión publicada y de la vieja no la bloquea', async () => {
     const { doc } = newPage();
     await tick();
-    const probe = BlockNoteEditor.create({ schema: mainSchema });
-    const mainNames = { nodes: new Set(Object.keys(probe.pmSchema.nodes)), marks: new Set(Object.keys(probe.pmSchema.marks)) };
+    const namesOf = (s: unknown) => {
+      const probe = BlockNoteEditor.create({ schema: s as typeof schema });
+      return { nodes: new Set(Object.keys(probe.pmSchema.nodes)), marks: new Set(Object.keys(probe.pmSchema.marks)) };
+    };
+    const mainNames = namesOf(mainSchema);
+    const oldNames = namesOf(soloScriptSchema);
     expect(findUnknownContent(doc, mainNames)).toBeNull();
+    expect(findUnknownContent(doc, oldNames)).toBeNull();
     expect(findUnknownContent(doc)).toBeNull();
-    // Ningún bloque ni marca nuevos: los mismos nombres que la versión publicada, más la foto en línea (el único
-    // nodo nuevo, inlinePhoto.ts: la versión publicada no abre una página que la tenga, unknownContent.ts).
-    expect([...knownContent().nodes, 'doc', 'text'].sort()).toEqual([...mainNames.nodes, 'photo'].sort());
+    // Ningún bloque, nodo ni marca nuevos respecto de la versión publicada (que ya tiene la foto en línea).
+    expect([...knownContent().nodes, 'doc', 'text'].sort()).toEqual([...mainNames.nodes].sort());
     expect([...knownContent().marks].sort()).toEqual([...mainNames.marks].sort());
+    // Desde v0.040, el único nodo nuevo es la foto en línea (inlinePhoto.ts: una versión sin ella no abre una página que
+    // la tenga, unknownContent.ts).
+    expect([...knownContent().nodes, 'doc', 'text'].sort()).toEqual([...oldNames.nodes, 'photo'].sort());
+    expect([...knownContent().marks].sort()).toEqual([...oldNames.marks].sort());
     expect(Object.keys(schema.blockSpecs).sort()).toEqual(Object.keys(mainSchema.blockSpecs).sort());
   });
 });

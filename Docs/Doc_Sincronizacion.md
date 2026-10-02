@@ -1357,8 +1357,8 @@ opción), `ui/DrivePasteMenu.tsx` (el menú), `ui/driveCard.ts` (la tarjeta) y `
 - **Una versión vieja** (sin la propiedad) muestra el párrafo con el link. Si edita esa línea, la propiedad
   se pierde y quedan el texto, el link y el id del bloque; si pega una tarjeta copiada
   (`drive-card-line`), queda un párrafo con el link. La guarda de `ui/unknownContent.ts` revisa tipos y
-  marcas, no propiedades, así que no la bloquea. Lo prueban `ui/driveCard.test.ts` con el esquema de `main`
-  (`ui/fixtures/editorSchemaMain.ts`), `ui/driveLinks.test.ts` y `ui/DrivePasteMenu.test.tsx`.
+  marcas, no propiedades, así que no la bloquea. Lo prueban `ui/driveCard.test.ts` con un esquema anterior a las tarjetas
+  (`ui/fixtures/editorSchemaSoloScript.ts`), `ui/driveLinks.test.ts` y `ui/DrivePasteMenu.test.tsx`.
 - **El fixture se actualiza en cada publicación:** `ui/fixtures/editorSchemaMain.ts` es la copia del
   `ui/editorSchema.ts` de `main`. Al publicar, se reemplaza por el de la nueva `main` (entonces ya con
   `driveCard`), para que las pruebas sigan comparando contra la versión publicada.
