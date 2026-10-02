@@ -1113,6 +1113,59 @@ el pedido una vez con versión. El portero no recibe la versión: una versión v
 original, que no cambia nada de lo que la base sabe del archivo. Un HEIC que una versión anterior a v0.075 guardó
 sin la marca de convertir se registra tal cual cuando la app se actualiza: el freno lo demora, no lo convierte.
 
+### La versión mínima, el árbol y los comentarios (B.17, v0.0XX)
+
+Desde v0.097 la app se frena sola, pero una versión anterior abierta seguía subiendo los cambios del árbol (crear,
+renombrar, mover, papelera, formato, ícono, proyectos nuevos y sus nombres) y los comentarios aunque estuviera por
+debajo de la mínima: la base no sabía qué versión los mandaba.
+
+**Cómo escribe hoy la app** (relevado en `remote.ts` y `commentsRemote.ts`): el árbol va **directo a las tablas** con
+Row Level Security (`pages`: `upsert` al crear, `update` con el cambio; `workspaces`: `upsert` al crear un proyecto,
+`update` al renombrarlo). Los comentarios van por **funciones** `security definer` (`add_comment`, `import_comment`,
+`edit_comment`, `delete_comment`, `resolve_thread`), que son las únicas que escriben `comments`.
+
+**Opciones que se miraron:**
+
+1. *Funciones nuevas con `p_app_version`* (como los archivos): pasar todo el árbol a funciones (crear página, cambiar
+   página con cualquier combinación de campos, crear y renombrar proyecto) que repitan los permisos y los triggers de
+   las políticas, y cerrar la escritura directa a quien no las usa. Es reescribir la escritura del árbol y duplicar los
+   permisos en otro lado: mucho riesgo para lo que se gana.
+2. *Un header con la versión*: la app nueva manda `x-shotdocs-version` en cada pedido a la base (opción `global.headers`
+   del cliente de Supabase; PostgREST lo deja en `current_setting('request.headers')`). Una política **restrictiva**
+   de `insert` y `update` en `pages` y `workspaces` y un trigger en `comments` lo miran. No cambia ninguna firma ni
+   ningún cuerpo de función, no toca los permisos que ya hay y no depende de nada central (cada base lo hace sola).
+3. *Una columna con la versión en cada fila*: obliga a migrar antes que la app (una base sin la columna rechaza el
+   pedido) y ensucia las tablas.
+
+**Elegida: la 2.** Es la más chica y la base sin la migración ignora el header. La regla es la misma que la de
+archivos: con header, se compara su versión con la mínima (`private.app_version_allowed`); sin header (solo lo
+mandan las versiones desde v0.0XX), se rechaza **solo cuando la mínima es 0.0XX o más**, porque con una mínima menor
+quien llama puede ser una versión permitida (la v0.098 publicada no manda header). Lo hacen
+`private.write_version_allowed()` y `private.require_write_version()`.
+
+**Cómo se rechaza, para no perder nada:** con un error de PostgREST de estado **503** (`raise sqlstate 'PGRST'`) y
+mensaje `app_outdated`. Todas las versiones publicadas tratan un 503 como pasajero: el cambio del árbol **queda en su
+cola** (la ronda se corta ahí y se reintenta en la próxima) y el comentario **queda pendiente**; nada pasa a la lista
+de rechazados, donde la versión vieja ofrecería *descartarlo*. Al actualizar, la versión nueva lo sube en el orden de
+siempre. Con un 400 (como `push_page_update`) la versión vieja lo marcaba rechazado y un renombre o un movimiento
+quedaban a un clic de perderse. Un comentario o una página ya rechazados por otra razón no cambian.
+
+**La versión nueva:** si la base contesta `app_outdated` a un cambio del árbol (subieron la mínima entre la consulta y
+el pedido), el cambio queda en la cola, la ronda se corta y se ve el aviso de actualizar (`status.outdated`); en la
+cola de comentarios, el comentario queda pendiente y la vuelta se corta sin error. Al abrir, vuelve a poner en la cola
+los cambios del árbol que una versión anterior dejó rechazados con `app_outdated` (por si alguna base contestó con
+otro estado). El servidor en memoria (`src/sync/testing.ts`) sigue la misma regla (`FakeServer.writeVersionSince`,
+`FakeRemote.versionHeader`).
+
+**Qué no frena:** las funciones de proyectos (archivar, borrar, restaurar), compartir e invitar, y la papelera de
+archivos, que van por funciones sin versión; son acciones con red y en el momento, no colas.
+
+**Para que frene:** aplicar `20261008120000_version_minima_arbol.sql` (con copia de seguridad), publicar la v0.0XX y,
+cuando Lega la tenga en sus dispositivos, subir `min_app_version` a 0.0XX o más. 0.0XX está escrito en
+`private.write_version_allowed` y en la prueba: quien publica pone el número real en los dos (la migración no corre
+con `0.0XX`) y `src/sync/writeVersion.test.ts` falla si no coincide con la entrada del changelog que nombra la
+migración. No sube `schema_version`: la app no necesita saber si la base la tiene.
+
 ## Volver después de mucho tiempo sin red
 
 El caso: alguien trabaja semanas sin red con una versión de la app (un rodaje) y mientras tanto se publican otras,
