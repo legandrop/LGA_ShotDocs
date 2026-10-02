@@ -1,15 +1,18 @@
 # Changelog — LGA Shot Docs
 
-v0.127 :
+v0.128 :
 
-Las carpetas que se sueltan en una página llegaban al Drive del dueño con espacios (`Día 2 - Puerto`), a diferencia de
-todas las demás que crea la app. Era la regla de v0.089 (D3, 2026-10-01); Lega decidió el 2026-10-02 que ninguna
-carpeta del Drive lleve espacios, nunca (D3 → B). `driveFolderName` del portero vuelve a pasar cada tramo de
-espacios a un `_` (`Día_2_-_Puerto`, también en las subcarpetas) y conserva lo que ya protegía: sin controles,
-marcas de dirección ni ancho cero, el ZWJ solo entre emojis (v0.119), corte de 200 por grafema, `Folder` si queda
-vacío. En la app, la tarjeta sigue con el nombre del usuario. Lo ya subido no se renombra y se encuentra por su
-marca, así que volver a soltarla no duplica nada. Pruebas con una subida de v0.089 a v0.127 retomada.
-[ Carpetas - las que suelta el usuario van al Drive sin espacios, con guiones bajos (D3 → B) ]
+Carpetas con guiones bajos (D3 → B) y dos diseños. Las carpetas que se sueltan en una página llegaban al Drive del dueño
+con espacios (`Día 2 - Puerto`), por la regla de v0.089; Lega decidió que ninguna carpeta del Drive lleve espacios.
+`driveFolderName` del portero vuelve a pasar cada tramo de espacios a `_`, también en subcarpetas, y conserva lo que ya
+protegía (controles, ZWJ entre emojis, corte por grafema); lo ya subido no se renombra y se encuentra por su marca.
+Diseños sin código, auditados y corregidos: **⌘Z en el orden en que editaste** (P.26, `Doc_Deshacer.md`: una línea de
+tiempo por proyecto arriba de las pilas de Yjs, con el reemplazo del proyecto adentro; antes, investigar B.21) y el
+**dictado al reporte** (P.27, `Doc_Dictado.md`: micrófono propio que transcribe con el proveedor de la persona y una
+lista de cambios con fila y columna que valida la app, con vista previa y deshacer).
+[ Carpetas con guiones bajos (D3 → B) y los diseños de deshacer y dictado ]
+
+v0.127 :
 
 Compactar (B.9), entrega 1: leer snapshots. Un dispositivo nuevo baja todas las filas de cada página, y una página muy
 editada llega a miles. Nueva migración `20261019120000_compactar_leer.sql` (`schema_version` 17, snapshots apagados):

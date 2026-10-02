@@ -446,6 +446,28 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   (página, formato, política), A3 (pie de foto), M0 (prueba técnica del MCP: OAuth de Supabase con el registro cerrado,
   el rol del token, 10 ms de CPU), M1 (MCP de lectura; requiere el interruptor de D14), M2 (MCP que escribe), M3
   (medir). Recortar, achicar y comprimir fotos no necesitan un modelo: van al roadmap de fotos.
+- **P.26 ⌘Z en el orden en que editaste** (Lega, 2026-10-02, al responder cómo se deshace un reemplazo en todo el
+  proyecto): ⌘Z deshace lo último que hiciste aunque haya sido en otra página, y un *Replace all in project* se deshace
+  entero en ese orden. **Diseño en `Doc_Deshacer.md`** (sin código; auditado y corregido; decisiones propuestas DH1 a
+  DH10): una línea de tiempo por proyecto y por pestaña
+  arriba de las pilas de Yjs de cada página, que sobreviven al cambiar de página (el documento retenido y la pila pasada
+  al editor nuevo, sin parchear y-prosemirror); ⌘Z en otra página te lleva y lo deshace a la vista; el reemplazo entra
+  en la pila de Yjs de las páginas editadas en la sesión (arregla un resto que deja hoy deshacer el reemplazo y después
+  lo escrito antes, también desde el *Undo* del panel) y por las anclas en las demás; ⌘⇧Z rehace todo, también el
+  reemplazo. Dura lo que la pestaña; nada cambia en lo guardado. Entregas: 0 (condición: B.21, el límite de Yjs), 1 (la
+  línea de tiempo con las páginas, con la memoria medida con el editor real), 2 (el reemplazo adentro), 3 (anotar como un
+  paso). Botones de deshacer en el teléfono y el árbol (mover, crear, papelera) quedan afuera (DH1, DH8).
+- **P.27 Dictado por voz y notas informales que se ubican en el reporte** (Lega, 2026-10-02): dictar en toda la app,
+  sobre todo en el teléfono, y que la IA pase «este plano se filmó con un 50 mm, anotalo donde corresponda» a la celda
+  *Lens* de la fila de ese plano en el *On-Set Report*. **Diseño en `Doc_Dictado.md`** (sin código; decisiones propuestas
+  DI1 a DI9): el dictado común queda en el teclado del sistema; un solo micrófono propio, *Dictate to report*, que graba
+  en el dispositivo y transcribe con el proveedor de la persona (OpenAI o Gemini; el reconocimiento del navegador no
+  existe en la app instalada del iPhone); la página va como un mapa con direcciones y vuelve una lista de cambios
+  validada, con vista previa, *Apply* con la guarda y un deshacer; «este plano» por lo dicho, el cursor o el plano
+  activo, y si no, pregunta; sin red, una cola de notas que nunca se borra sola; sin tipos de bloque nuevos. Entregas:
+  V1 (texto dictado con el teclado → ubicar; requiere A2 de P.24 en `main`), V2 (la cola sin red), V3 (el micrófono
+  propio, guantes y ruido), V4 (plano activo, correcciones, la página del plano, el botón de acción del iPhone).
+  Queda para medir: transcripción adentro del teléfono (Whisper en WebAssembly), sin red y privada.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
@@ -674,6 +696,14 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
    regeneró desde v0.107 y `editorSchemaFixture.test.ts` avisa si queda distinto de `editorSchema.ts`. Queda: la prueba
    no ve un atributo nuevo del nodo `photo` (el fixture usa el de hoy), y nada avisa si nadie lo regenera después de
    publicar un cambio del esquema: al publicar una versión que cambia `editorSchema.ts`, regenerarlo.
+
+21. **Restos del deshacer de Yjs (medido al diseñar P.26, `Doc_Deshacer.md`, sección 6).** Si algo que un deshacer
+   volvió a poner se parte escribiendo en el medio, deshacer más atrás deja restos y a veces se lleva un pedazo de texto
+   (un deshacer borró "ám" de "cámara"): en una página sola, con el ⌘Z de hoy, 14 de 3.000 corridas al azar terminan con
+   algo de menos (queda en el historial), igual con y sin la línea de tiempo de P.26. Es de `UndoManager` de Yjs (sigue
+   la copia vuelta a poner solo hasta el primer corte). **Condición de la entrega 1 de P.26** (con P.26 se deshace más
+   lejos): investigar si se corrige con un parche (como los de y-prosemirror) o se reporta arriba, y decidir antes de
+   publicar.
 
 ### C. Esperan a Lega
 
