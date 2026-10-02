@@ -351,6 +351,29 @@ describe('solo lo tocado: un bloque que deja de verse porque se borró algo de a
   });
 });
 
+describe('dos sangrías a la vez bajo el mismo bloque (O2 de la auditoría de la entrega 2)', () => {
+  it('dejan dos grupos de hijos con el mismo hijo: la unión lo muestra una vez, como la versión (repairBlocks)', () => {
+    // Filas de una corrida al azar de la auditoría: en la versión 25, el bloque «s250-1» tiene dos grupos de hijos con
+    // el mismo «s250-7» (y su hijo); la versión (reparada) lo tiene una vez y la unión lo mostraba dos (uno, agregado).
+    const saved = JSON.parse(readFileSync(new URL('./fixtures/historyDupGroups/semilla_250-v25.json', import.meta.url), 'utf8')) as {
+      i: number;
+      cut?: number;
+      rows: (Omit<HistoryRow, 'data'> & { data: string })[];
+    };
+    const rows = saved.rows.map((r) => ({ ...r, data: new Uint8Array(Buffer.from(r.data, 'base64')) }));
+    const h = new PageHistory(rows, saved.cut);
+    const i = saved.i;
+    for (const scope of ['changed', 'all'] as const) {
+      const c = versionChanges(h, i, scope);
+      const u = unionDoc(c.update);
+      expect(withoutMarks(u, c.marks, 'del'), `${scope}: sin lo borrado`).toEqual(blocksOf(h.version(i)));
+      expect(withoutMarks(u, c.marks, 'add').sort(), `${scope}: sin lo agregado`).toEqual(blocksOf(h.version(i - 1)).sort());
+      expect(blocksOf(u).filter((b) => b.startsWith('s250-7:')).length, scope).toBe(1);
+      u.destroy();
+    }
+  });
+});
+
 describe('quién borró lo de adentro de un bloque borrado', () => {
   it('si una fila borra solo el bloque de arriba, lo de adentro lleva la fila (y la persona) que lo borró', () => {
     // Un bloque con un hijo sangrado. La segunda fila borra SOLO el elemento del padre (sin los de adentro en su lista
