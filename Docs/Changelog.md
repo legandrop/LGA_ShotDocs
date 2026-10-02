@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+La clave del asistente sincronizada, entrega S2 (P.24, `Doc_Clave_Sincronizada.md`). Faltaba cambiar la frase, abrir
+la copia en una computadora prestada sin guardarla, sincronizar en un segundo workspace y llevar la clave de *Voice*; un
+dispositivo aceptaba una copia más vieja repuesta en la base, y con la copia cambiada en otro ofrecía *Choose a new
+passphrase…*, que la pisaba con la clave vieja. Ahora: *Change passphrase…* vuelve a cifrar la copia (abriéndola antes);
+*Keep the key on this device* destildada deja la clave solo en la pestaña; el `savedAt` del sobre rechaza una copia más
+vieja; *Also sync in this workspace…*; la clave de *Voice* viaja en el mismo sobre; el error de clave rechazada suma
+*Enter your passphrase to update it here*; la ventana de salir cuenta las notas de voz. Sin migración.
+[ Clave sincronizada S2 - cambiar la frase, solo en esta pestaña, copia más vieja, otros workspaces, la clave de Voice y las notas de voz al salir ]
+
 v0.139 :
 
 **Dictar al reporte, entregas V2 y V3** (P.27): sin red, *Save for later* solo dejaba la nota en el borrador de su

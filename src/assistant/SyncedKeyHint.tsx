@@ -42,7 +42,7 @@ export function SyncedKeyHint({ show }: { show: boolean }) {
 
   if (!show || !offer) return null;
   return (
-    <button type="button" className="primary" onClick={openAssistantSettings}>
+    <button type="button" onClick={openAssistantSettings}>
       {tr(offer === 'update' ? 'assistant.sync.updateHere' : 'assistant.unlockSynced')}
     </button>
   );

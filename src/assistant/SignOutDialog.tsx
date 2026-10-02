@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useT } from '../i18n';
 import { discardVoiceNotes, voiceLeftovers } from '../dictation/leftovers';
 import { forgetVoiceKey } from '../dictation/voiceSettings';
+import './assistant.css';
 import { closeSignOut } from './assistantUi';
 import { forgetKey, loadSettings } from './keyStore';
 
@@ -81,7 +82,7 @@ export function SignOutDialog({ email, workspace, run }: { email: string; worksp
         )}
         {left.notes > 0 && workspace && (
           <>
-            <p className="voice-notes-left">{tr('account.voiceNotesLeft', { count: left.notes })}</p>
+            <p className="signout-notes">{tr('account.voiceNotesLeft', { count: left.notes })}</p>
             <label className="folder-check">
               <input type="checkbox" checked={discard} onChange={(e) => setDiscard(e.target.checked)} /> {tr('account.discardVoiceNotes')}
             </label>
