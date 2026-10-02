@@ -5,7 +5,7 @@ proyecto (Ctrl/⌘+K); ajustes de v0.057 (lo que encontró Lega probando); entre
 todo el proyecto**. "Correcciones de la auditoría" manda
 sobre lo de arriba, y "Cómo quedó (entrega 1)", "Cómo quedó (entrega 2)" y "Ajustes de v0.057", al final, sobre
 todo lo demás (el último, sobre los otros dos). "Reemplazar en el proyecto (diseño)", lo último, manda sobre la
-sección 11, y su "Cómo quedó (entrega 3)", al final de todo, sobre su diseño. **"Abrir al buscar (D11, v0.0XX)", lo
+sección 11, y su "Cómo quedó (entrega 3)", al final de todo, sobre su diseño. **"Abrir al buscar (D11, v0.130)", lo
 último de todo, manda sobre lo que dice más arriba de las secciones colapsadas** (que solo se abría la de la
 coincidencia actual). Lo pidió Lega (urgente, 2026-09-30): "dos lupas: una a la izquierda del
 + de páginas, que busca en todo el proyecto y te lleva al lugar; otra a la izquierda de los comentarios, que
@@ -1349,7 +1349,7 @@ colapsada lleva en su renglón "in a collapsed section" (`engine.hiddenOf`, la m
 aviso dice cuántas de las cambiadas estaban escondidas (también al reemplazar una sola con el reemplazo vacío); los
 números del avance con `tabular-nums` (*Stop* no se corre); y la prueba de "an" contra una ñ descompuesta.
 
-## Abrir al buscar (D11, cambiada por Lega el 2026-10-02; v0.0XX)
+## Abrir al buscar (D11, cambiada por Lega el 2026-10-02; v0.130)
 
 **Lo que decidió Lega.** Reemplazar texto escondido en secciones colapsadas: **A** (se reemplaza, como ya estaba) **y
 además**, al buscar, **las secciones colapsadas se abren** para mostrar lo encontrado, en la barra de la página y en la

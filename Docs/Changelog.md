@@ -1,15 +1,16 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.130 :
 
-Buscar dentro de secciones colapsadas (D11, cambiada por Lega el 2026-10-02). Las coincidencias escondidas solo se veían
-al ir una por una, y esa sección quedaba abierta para siempre. Ahora, al buscar en la página (y al abrir un resultado de la
-búsqueda del proyecto), se abren todas las secciones colapsadas que esconden coincidencias y vuelven a cerrarse al cerrar
-la barra o si lo buscado ya no está ahí; la barra cuenta cuántas abrió. Es solo la vista de este dispositivo: va por los
-registros de "abrir para vos" de P.11 y no escribe el Y.Doc ni lo colapsado para todos ni el dispositivo (`persistable`).
-Lo que la persona toca (el triángulo) o donde queda la selección (Esc) se conserva; ir a una coincidencia siempre la
-muestra. El aviso de la barra cuenta lo cierto (abiertas, cerradas a mano, listas plegables) y lo que pasa a ser de la persona se guarda como suyo. Reemplazar sigue igual. Sin migración ni `min_app_version`.
-[ Buscar con secciones colapsadas (D11) - se abren las que esconden coincidencias, solo a la vista, y se cierran al terminar ]
+Buscar dentro de secciones colapsadas (D11) y el reporte de set en la raíz (D82), dos pedidos de Lega del 2026-10-02.
+**Buscar**: las coincidencias escondidas en una sección colapsada solo se veían al ir una por una y esa sección quedaba
+abierta para siempre. Ahora buscar en la página (o abrir un resultado del proyecto) abre todas las secciones que esconden
+coincidencias y las vuelve a cerrar al terminar; es solo la vista de este dispositivo (los registros de "abrir para vos"
+de P.11), no escribe el Y.Doc. **Reporte en la raíz**: *On-Set Report* en una página de la raíz creaba la plantilla común
+sin "ayer" que copiar ni días que numerar. Ahora ofrece la carpeta de reportes que ya tenga el proyecto o crear una
+(*On-Set Reports*), mueve la página adentro y la llena como `2026-10-02 | Day 01`; si la página cambió o falta permiso,
+no escribe nada (`dayReportRoot.ts`, `RootReportDialog.tsx`). Sin migración ni `min_app_version`.
+[ Buscar con secciones colapsadas (D11) y el reporte de set en la raíz (D82) ]
 
 v0.129 :
 
@@ -70,7 +71,7 @@ see this page* y elegir una pregunta *Share and mention*, por el mismo paso prev
 árbol (hueco en la madre plegada) y el número en el título de la pestaña y en el ícono de la app instalada.
 [ Menciones, entrega 2 - compartir desde la mención, el punto del árbol y el número en la pestaña y el ícono ]
 
-v0.0XX :
+v0.124 :
 
 No se podía guardar una página como plantilla ni cambiar las de fábrica (P.23, entrega 3 de `Doc_Plantillas.md`). Ahora
 *Save as template…* (menú ⋯) copia la página a la carpeta *Templates* del proyecto, sin tocarla, con nombre, descripción

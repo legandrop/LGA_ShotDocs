@@ -1089,7 +1089,7 @@ con deshacer y arrastrada, las lleva todas, sin perder ni duplicar ninguna, tamb
 
 **Pendiente:** probar a mano en Safari, Firefox y el iPhone (el arrastre y el teclado).
 
-## Buscar abre las secciones colapsadas (D11, v0.0XX)
+## Buscar abre las secciones colapsadas (D11, v0.130)
 
 Decisión de Lega (2026-10-02): al buscar en la página, las secciones colapsadas que esconden coincidencias se abren
 **solo a la vista y en este dispositivo**, y se vuelven a colapsar al terminar la búsqueda, salvo lo que la persona tocó o
