@@ -1,0 +1,589 @@
+# Historial de versiones de una página (P.18)
+
+**Estado: diseño, sin implementar** (pedido de Lega del 2026-10-01; en el plan figuraba como fase 6). Toca la
+regla de no perder datos (restaurar es una edición) y los permisos (el historial muestra lo borrado), así que cada
+entrega va con sus pruebas y su auditoría. La migración de abajo es un borrador: nada está aplicado.
+
+## En corto
+
+- **Qué pide Lega:** como en Google Docs. Desde la página, ver quién la cambió y cuándo, ver cada versión con lo
+  agregado y lo borrado marcado con el color de cada persona, y volver a una versión anterior.
+- **No hace falta guardar nada nuevo para armar las versiones.** `page_updates` ya es solo agregado y cada fila
+  tiene su autor (`created_by`, lo pone la base con `auth.uid()`: el dispositivo no lo puede elegir) y su hora
+  (`created_at`). Aplicando las filas **en orden** en un `Y.Doc({ gc: false })` sale el documento en cualquier
+  punto; el vector y los borrados de cada fila dan un `Y.snapshot` por versión sin integrar nada. Medido con las
+  filas reales: las 63 versiones de la página más editada, iguales a aplicar las filas hasta ahí.
+- **Una trampa medida:** armar el documento con `Y.mergeUpdates` de las filas (como el snapshot del diseño de
+  compactar) **pierde texto borrado**: 26 de las 63 versiones de esa página salen distintas. Algunas filas viejas
+  vuelven a subir el documento entero desde un dispositivo con GC, con lo borrado ya recolectado, y `mergeUpdates`
+  se queda con esa copia. Aplicando en orden, gana la primera, que tiene el texto. Por eso el historial se arma
+  siempre aplicando filas en orden (sección 4.2), y el diseño de compactar tiene que cambiar si sus snapshots van a
+  servir de punto de partida (sección 12).
+- **Quién hizo cada cambio:** el autor de cada letra es el de la primera fila que la trae; el de cada borrado, el
+  de la primera fila que lo trae. Sale de las filas, con el autor que puso la base. No se usa `PermanentUserData`
+  de Yjs (lo escribe el dispositivo, adentro del documento, y las versiones viejas no lo escriben).
+- **Restaurar es una edición nueva por el editor** (la misma vía que escribir): deja la página como estaba en esa
+  versión, no borra historia, se deshace con Ctrl/⌘+Z y queda como una versión más. Prototipo con el editor real:
+  conserva los ids de los bloques (los comentarios vuelven a su lugar), no toca lo que no cambió, se deshace y
+  rehace, la versión publicada abre el resultado igual, y 400 bloques se restauran en 19 ms.
+- **Lo que hay que cuidar al restaurar:** solo con red y con la página sincronizada (si no, lo propio sin subir se
+  revertiría antes de llegar al servidor y no quedaría en ninguna versión), y lo que otro escribe a la vez en un
+  bloque que la restauración quita: sale de la página **y no aparece en ninguna versión** (medido). El historial
+  lo detecta y lo muestra aparte ("texto huérfano", sección 5.4).
+- **Permisos:** propuesto, quien puede editar la página (nivel 3 o más). Ojo: lo borrado **ya** llega hoy a
+  cualquiera que ve la página, invitados incluidos, porque viaja en las filas que baja para sincronizar (sección 7).
+- **Rendimiento:** con 10 000 subidas (después de B.15, 900 KB de filas) armar todo lleva unos 270 ms en una PC y
+  abrir una versión 31 ms; la diferencia por persona de una sesión larga, 0,3 a 1,2 s. En el teléfono, estimado
+  de 3 a 5 veces más. Se calcula en el dispositivo, en un Worker, con caché.
+- **Primera entrega (chica y útil):** la lista de versiones con quién y cuándo, ver una versión tal como era y
+  restaurarla. Las marcas de colores, nombrar versiones y el historial sin red, después.
+
+## Reglas que no se rompen
+
+1. **El historial nunca escribe ni borra filas.** Lee `page_updates` como está; restaurar es una edición más que
+   sube por `push_page_update`.
+2. **Restaurar nunca pierde nada.** Lo que había antes de restaurar es una versión del historial y se puede volver
+   a ella; restaurar no corre con cambios propios sin subir; lo que otro escribe a la vez queda a la vista.
+3. **Nada de tipos de bloque ni marcas nuevas.** Las marcas de colores son decoraciones de un visor de solo
+   lectura; restaurar escribe por el editor de la app, con su esquema.
+4. **El historial no muestra nada que la persona no pueda ver hoy:** solo la página donde está, sus fotos según los
+   permisos de hoy, los links internos con el título que le corresponde.
+5. **Las versiones viejas de la app siguen andando** sin saber nada del historial.
+
+## 1. Lo que ve la persona
+
+### 1.1 Dónde se abre
+
+- **Computadora:** en el menú de la página (⋯ de la barra de arriba), **Version history**, debajo de *Export PDF /
+  Print*; atajo **Ctrl+Alt+Shift+H** (⌘⌥⇧H en la Mac, nunca Ctrl), el mismo de Google Docs, a confirmar contra el
+  registro de atajos (`src/ui/shortcuts.ts`). La página pasa a **modo historial**: el contenido muestra la versión
+  elegida, de solo lectura, y a la derecha (donde va el panel de comentarios, que se cierra) la lista de
+  versiones. Arriba, una barra: la fecha de la versión, **Restore this version**, **Show changes** (casilla) y
+  **Back to the page** (también Escape).
+- **Teléfono:** el mismo ítem del menú abre una pantalla entera con la lista. Tocar una versión la abre a pantalla
+  entera, con la barra de arriba: volver, la fecha, **Restore** y ⋯ (*Name this version*, *Show changes*). Las
+  flechas de la barra (o deslizar) pasan a la versión anterior y la siguiente.
+- Solo aparece si la persona puede editar la página (sección 7) y la base tiene la migración (sección 9); si no,
+  no está el ítem.
+
+### 1.2 La lista de versiones
+
+- **Agrupada por día** (*Today*, *Yesterday*, el día de la semana en los últimos 7, después la fecha) y, adentro,
+  **por sesión de edición**: subidas seguidas con menos de **30 minutos** entre una y otra. En la página más
+  editada de la base (63 subidas en dos días) eso da 8 sesiones; con 5 minutos, 11; con 60, 7.
+- Cada renglón: la hora en **hora local** del dispositivo (`Intl.DateTimeFormat`, 24 h o 12 h según el idioma),
+  los nombres de quienes editaron en esa sesión con un punto de su color (el correo, como en los comentarios, y
+  *You* para uno mismo), y el nombre de la versión si tiene (entrega 3). La primera es *Current version*.
+- Una sesión larga se despliega en sus partes (cortes de 2 minutos), como "expandir" en Google Docs.
+- Arriba de todo, si el dispositivo tiene cambios de esta página sin subir: *Changes on this device not synced
+  yet* (no se puede restaurar a ella ni desde ella; ver 3.2).
+- Un filtro *Only named versions* (entrega 3).
+- **La hora es la de llegada al servidor**, no la de la edición: lo escrito sin red figura a la hora en que subió.
+  Se dice en la ayuda. Guardar la hora del dispositivo queda para más adelante (sección 13).
+
+### 1.3 Ver una versión
+
+- La página como era al final de esa sesión, con el editor de la app en solo lectura (mismo esquema, mismas
+  fotos, mismo Script, preguntas y tarjetas de Drive), sin la barra de formato ni el menú del bloque.
+- **Show changes** (prendido por defecto, entrega 2): contra la versión anterior de la lista,
+  - lo agregado, subrayado con un fondo suave del color de quien lo escribió;
+  - lo borrado, tachado en el color de quien lo borró, en el lugar donde estaba;
+  - un bloque agregado o borrado entero, con una barra de su color a la izquierda (y el borrado, atenuado);
+  - un bloque que cambió de tipo o de propiedades (párrafo a título, Script, color): un rótulo chico en el margen,
+    *Changed to Heading 2*, en vez de mostrarlo borrado y agregado (sección 5.3);
+  - al pasar el mouse (o tocar) sobre una marca: quién y cuándo (*Ana · 14:05*), con `data-tip`.
+- Con **Show changes** apagado se ve la versión limpia, igual que se veía.
+- **Colores:** una paleta de 8 colores que se leen en el tema claro y en el oscuro, asignados por orden de
+  aparición en el historial de la página (la primera persona que editó, el primero): estable en esa página y sin
+  repetidos hasta 8 personas. Las marcas no usan solo el color: subrayado y tachado se distinguen sin él.
+- **Hojas (A4…):** la vista usa el formato de hoja de hoy (el formato vive en `pages.settings`, no tiene
+  historial). Con los cambios apagados, la hoja y las marcas de corte como en la página. Con los cambios
+  prendidos, la hoja sin las marcas de corte: lo borrado ocupa lugar y cortaría en otro lado.
+- **Fotos en línea y foto-bloque:** con la miniatura de siempre (`MediaQueue.resolve`); una foto agregada, con un
+  contorno de su color; una borrada, atenuada y tachada; una que hoy está en la papelera de Drive, como hoy en la
+  página (*File deleted (in the Drive trash)*).
+- **Secciones colapsadas:** en el historial todo se ve abierto (el colapsar es una vista, no contenido). Un cambio
+  que solo colapsó o abrió secciones para todos (el `Y.Map` `collapsedHeadings`) no arma una versión propia en la
+  lista: se suma a la sesión en que cayó.
+- **Comentarios:** no tienen historial (viven en su tabla, no en el documento): en modo historial el panel y las
+  marcas del margen no se muestran.
+- **Copiar un pedazo:** seleccionar en la versión y Ctrl/⌘+C copia como en la página (con formato y fotos); en el
+  margen de cada bloque, **Copy block**. Se pega en la página de siempre: las fotos `sdmedia://` vuelven a contar
+  como usadas (`link_page_file`); una que estaba en la papelera de archivos sale sola de ella.
+
+### 1.4 Restaurar
+
+- **Restore this version** pide confirmación: *The page will look like this version. Nothing is lost: the current
+  version stays in the history and you can undo.* Si la versión tiene fotos que hoy están en la papelera de Drive,
+  la confirmación las cuenta: *2 photos in this version were deleted from Google Drive; they will show as deleted
+  until the owner restores them from the Drive trash (30 days).*
+- Después: se cierra el modo historial, la página queda como la versión y aparece un aviso con **Undo** (además
+  de Ctrl/⌘+Z). La lista suma *Restored from Sep 30, 14:05* (entrega 3; en la 1, la versión nueva sin rótulo).
+- **Botón apagado, con el motivo** (`data-tip`), si: no hay red; la página tiene cambios sin subir (*Sync this
+  page first*: un toque sincroniza y lo vuelve a habilitar); falta bajar algo de la página; la versión tiene algo
+  que esta versión de la app no conoce; la app está por debajo de la versión mínima; la persona no puede editar.
+
+### 1.5 Ayuda, atajos y tutorial
+
+En la misma tanda que cada entrega (regla de P.13): la entrada en la ayuda (dónde se abre, qué muestra, que la hora
+es la de subida, qué hace restaurar, que se deshace), el atajo en `src/ui/shortcuts.ts` y, si el tutorial muestra
+el menú de la página, su paso. Textos en inglés con su traducción en `src/i18n/`.
+
+## 2. Qué hay hoy en la base (medido el 2026-10-01, solo lectura)
+
+| Qué | Valor |
+|---|---|
+| Filas en `page_updates` | 826, en 720 páginas |
+| Bytes de los updates | 18,99 MB; la tabla ocupa 7,06 MB (Postgres comprime) |
+| Filas sin autor (`created_by` nulo) | **0** |
+| Personas distintas que subieron algo | 2; ninguna página tiene más de una |
+| Páginas con 1 a 9 filas | 718; una con 17 y una con 63 (37,7 KB, del 29-09 al 30-09) |
+| Filas que vuelven a subir a un autor de Yjs desde el reloj 0 (en la de 63) | 4: subidas viejas del documento entero |
+
+- **Cada fila ya tiene lo necesario:** `created_by uuid default auth.uid()` y `created_at default now()`.
+  `push_page_update` (security definer) no recibe el autor: el `insert` no lo nombra y lo pone la base con la sesión
+  de quien llama. La API no deja insertar en la tabla (sin `grant insert`). Así que el autor **no lo puede
+  falsear el dispositivo**, y lo viejo ya lo tiene: no hace falta columna nueva ni rellenar nada.
+- `created_by` es `on delete set null`: si se borra la cuenta de alguien, sus cambios quedan como *Former member*.
+- `created_at` es la hora del pedido de subida (sección 1.2).
+- La política `page_updates_select` deja leer las filas a quien ve la página (nivel 1), y `pull_page_updates` las
+  sirve a ese mismo nivel, con lo borrado adentro (sección 7).
+
+## 3. Cómo se arma
+
+### 3.1 Las piezas
+
+| Pieza | Qué es | De dónde sale |
+|---|---|---|
+| **El documento del historial** | Un `Y.Doc({ gc: false })` con todas las filas aplicadas de a una, en orden de `seq` | `page_history` (sección 9) |
+| **Metadatos por fila** | Hasta qué reloj llega cada autor de Yjs (`Y.parseUpdateMeta`) y qué borra (`Y.decodeUpdate(u).ds`) | Las mismas filas, sin integrarlas |
+| **Una versión** | `Y.snapshot` = (vector, borrados) acumulados hasta la última fila de la sesión | Los metadatos |
+| **El contenido de una versión** | `Y.createDocFromSnapshot(docHistorial, snapshot)` | Las dos de arriba |
+| **Los autores** | Para cada tramo de relojes, la primera fila que lo trae y su `created_by` | Los metadatos y las filas |
+
+**¿Hace falta guardar snapshots con nombre?** No. Con `page_updates` entera, cualquier versión se reconstruye
+desde las filas. Guardar `Y.snapshot` en la base no ahorra nada (se calcula en milisegundos de las filas) y una
+"versión con nombre" es solo un nombre apuntando a un `seq` (sección 9, `page_versions`, sin contenido). El plan
+viejo tenía `page_versions.state BYTEA`: no hace falta.
+
+### 3.2 GC: dónde está prendido y por qué no importa (salvo en un caso)
+
+- **La app crea sus `Y.Doc` con GC prendido** (`new Y.Doc()` en `docs.ts`, el valor por defecto): al borrar, Yjs
+  cambia el contenido por un hueco. Cada subida es `encodeStateAsUpdate(doc, syncedSV)` de ese documento: lleva
+  lo nuevo, con el texto que todavía no se borró.
+- **Por eso cada fila tiene el texto que existía al subirla.** Lo escrito y borrado entre dos subidas (1,2 s de
+  pausa) nunca llega al servidor: el historial tiene la resolución de las subidas, como Google Docs tiene la suya.
+- **No hay que apagar el GC de la app**: el historial arma su propio documento sin GC desde las filas.
+- **El caso que importa: las filas que vuelven a subir todo.** Una versión vieja de la app (y cualquier dispositivo
+  después de restaurar una copia de seguridad, `resetForRestore`) sube el documento entero, armado con GC: lo que
+  ya se había borrado viaja como hueco. Aplicando en orden no molesta (Yjs saltea lo que ya tiene, y la primera
+  fila trajo el texto). **Con `Y.mergeUpdates` sí:** la mezcla se queda con el hueco. Medido en la página de 63
+  filas:
+
+| Cómo se arma el documento completo | Versiones iguales a aplicar las filas hasta ahí | Bloques (`ContentType`) / huecos (`GC`) |
+|---|---|---|
+| Aplicando las filas de a una, en orden | **63 de 63** | 110 / 14 |
+| `Y.mergeUpdates` de todas | **37 de 63** | 95 / 86 |
+| `mergeUpdates` incremental de a 10 (como compactar) | (igual de mal) | 98 / 89 |
+
+  El documento de hoy sale igual por los tres caminos; lo que se pierde son versiones del medio. En la simulación
+  (filas sin subidas enteras) `mergeUpdates` no falla: el problema aparece solo con las filas reales.
+
+- **Lo propio sin subir, al restaurar:** si la persona escribió algo que todavía no subió y restaura, el editor lo
+  borra antes de subirlo y, con GC, sube como hueco: **no quedaría en ninguna versión**. Por eso restaurar exige la
+  página sincronizada (1.4 y 6.1).
+
+### 3.3 Una versión sin integrar todo de nuevo
+
+Aplicar las filas y sacar `Y.snapshot` después de cada una cuesta lo mismo que armar el documento, pero guardar un
+snapshot por fila no: con 10 000 filas fueron 622 ms y 304 MB de memoria. En cambio:
+
+1. Los metadatos de cada fila (`parseUpdateMeta` + el delete set), sin integrar: 43 ms para 10 000 filas.
+2. El snapshot **solo al final de cada sesión**: el vector es el máximo acumulado por autor y los borrados la unión
+   acumulada (`Y.mergeDeleteSets`). 23 ms para las 167 sesiones de 10 000 filas.
+3. El documento del historial, aplicando todas las filas una vez: 180 ms.
+4. Abrir una versión: `Y.createDocFromSnapshot` (31 ms con 10 000 filas; 0,7 ms en la página real).
+
+Comprobado: el snapshot armado con los metadatos da el mismo contenido que `Y.snapshot` aplicando de a una en las 63
+versiones de la página real (en la de 17 filas, un snapshot no es idéntico a `Y.snapshot`, con el mismo contenido) y en las
+muestras de la simulación.
+
+**Lo pendiente:** si una fila depende de algo que no llegó (raro en el servidor, ver `Doc_Compactar.md` 4.4), el
+vector armado con metadatos la cuenta antes de que se integre. En esa versión se vería un poco antes; nunca se
+pierde nada. Se compara en las pruebas.
+
+### 3.4 Sesiones
+
+Se ordenan las filas por `seq` y se corta donde hay más de 30 minutos entre una y la siguiente. Una sesión puede
+tener varias personas (dos editando a la vez): se listan todas. La versión de la sesión es el estado después de
+su última fila.
+
+## 4. Quién hizo cada cambio
+
+### 4.1 Las dos opciones
+
+| | **Desde las filas** (elegida) | `PermanentUserData` de Yjs |
+|---|---|---|
+| Quién dice el autor | La base (`created_by` = `auth.uid()`) | El dispositivo, escribiendo su nombre en un `Y.Map` adentro del documento |
+| Se puede falsear | No | Sí: cualquiera que edita escribe lo que quiera |
+| Lo viejo | Ya tiene autor (0 filas sin autor) | Las 826 filas de hoy no lo tienen; las versiones viejas de la app nunca lo escriben |
+| Peso | Nada nuevo | Una entrada por cada apertura de página (cada una es un autor de Yjs nuevo), más los borrados de cada uno, para siempre en el documento |
+| Cambia el documento | No | Sí: un tipo raíz nuevo que viaja en cada subida |
+
+### 4.2 Cómo se calcula
+
+- **Lo agregado:** cada fila trae tramos de relojes `[desde, hasta)` por autor de Yjs. Se recorren las filas en
+  orden y cada tramo que todavía no tiene dueño queda con la fila que lo trajo; una letra es de quien subió la
+  primera fila que la trae. Las subidas enteras de después no cambian nada (sus tramos ya tienen dueño).
+- **Lo borrado:** igual con los tramos del delete set de cada fila: el borrado es de quien subió la primera fila
+  que lo trae. Las filas viejas (antes de B.15) repiten todos los borrados, pero la primera manda.
+- **La semilla** (la raíz inicial, con un autor de Yjs fijo que sale del id de la página): la sube quien hizo la
+  primera edición, y figura como suya; no se marca (es estructura vacía).
+- En la página real: 1864 letras visibles, todas con autor. En la simulación con dos personas: todas con autor.
+- **Lo que no cubre:** si una copia de seguridad se restaura y un dispositivo sube de nuevo el documento entero
+  antes que el autor original, lo que se perdió con la restauración queda a nombre de quien lo volvió a subir. Es
+  raro y no cambia el contenido.
+- **Dos personas en la misma sesión de Yjs** no existen: cada autor de Yjs es una apertura de página de un
+  dispositivo con una sesión.
+
+## 5. La diferencia entre dos versiones
+
+### 5.1 Las opciones
+
+- **Yjs puro** (`XmlText.toDelta(snapshot, prevSnapshot, computeYChange)`): devuelve el texto de las dos versiones
+  juntas, con cada tramo marcado como agregado o borrado y el id de Yjs del que sale el autor. Exacto letra por
+  letra, y respeta lo que pasó de verdad (no adivina).
+- **Comparar bloques por id** (el `id` de cada bloque de BlockNote) y, adentro, el texto con un algoritmo de
+  diferencias: ve un cambio de tipo como un cambio, pero adivina dentro del texto y no sabe quién.
+- **Elegida: Yjs, y los bloques por id para lo que y-prosemirror rehace.** y-prosemirror hace algunos cambios
+  borrando el bloque y creándolo de nuevo con el mismo id (cambiar el tipo, sangrar, mover, unir;
+  `Doc_Colaboracion.md`): con Yjs puro, cambiar un párrafo a título se vería como todo el texto borrado y vuelto a
+  escribir. Así que primero se aparean, en el rango de la versión, los bloques borrados y agregados con el mismo
+  id; esos se muestran como **un bloque que cambió** (el rótulo del tipo o la propiedad) y su texto se compara
+  letra por letra (diferencia de texto), atribuido a quien rehízo el bloque. Todo lo demás, con Yjs.
+
+### 5.2 Cómo se muestra sin tocar el esquema
+
+y-prosemirror sabe dibujar una diferencia de snapshots, pero necesita una marca `ychange` en el esquema, y la regla
+es no sumar marcas. En su lugar:
+
+1. Se arma la **unión** de las dos versiones: los bloques visibles en alguna de las dos, en orden de documento
+   (`Y.typeListToArraySnapshot` con cada snapshot, recorriendo la lista enlazada), y el texto de cada uno con
+   `toDelta` (que incluye lo borrado).
+2. Se convierte a bloques de BlockNote (lo borrado como texto común) y se anotan aparte los tramos: bloque, desde,
+   hasta, agregado o borrado, persona.
+3. Se muestra en un **editor de solo lectura sin Yjs** (no está ligado a ningún documento: no puede escribir nada),
+   con un plugin de decoraciones de ProseMirror que pinta los tramos, como ya hacen las filas de fotos y las marcas
+   de hoja.
+
+El documento del historial nunca se monta en el editor de la página ni se sube.
+
+### 5.3 Medido
+
+| | Página real (63 filas) | Simulación, 2000 subidas | Simulación, 10 000 subidas |
+|---|---|---|---|
+| Filas | 37,7 KB | 175 KB | 901 KB |
+| Metadatos + snapshots por sesión + documento + autores | 15 ms | 70 ms | 270 ms |
+| Abrir una versión | 0,7 a 2 ms | 4,6 ms | 31 ms |
+| Diferencia por persona, todo el documento | 0,5 ms | 38 ms | 1,16 s |
+| Diferencia solo de lo que cambió | 0,3 ms | 22 ms | 0,30 s |
+
+- La simulación: dos personas con el patrón de subida de la app después de B.15 (una subida por pausa, solo lo
+  nuevo, un autor de Yjs nuevo cada 60 subidas, a veces las dos a la vez, cambios de tipo como los hace
+  y-prosemirror), con pausas de una hora entre sesiones y el corte de 30 minutos. Los tiempos son de una PC con Node 20.
+- "Solo lo que cambió": se buscan los items creados o borrados entre los dos snapshots y se diferencian solo esos
+  bloques. En el prototipo da las mismas cuentas que la diferencia completa en 16 de 21 versiones; en las otras, 1
+  a 5 letras borradas de diferencia (bloques borrados con su texto adentro). Se ajusta en la implementación con una
+  prueba que lo compara contra el cálculo completo; mientras no dé igual, va el completo.
+
+### 5.4 Texto huérfano: lo que otro escribió en algo que ya estaba borrado
+
+Si A borra un bloque (o restaura una versión que no lo tiene) y B, sin verlo, escribe en ese bloque, lo de B llega
+a un bloque borrado: Yjs lo integra ya borrado. **No se ve en la página ni en ninguna versión** (medido en el
+prototipo: el item de B queda borrado, con el padre borrado). Las filas sí lo tienen. El historial lo detecta (un
+item cuya fila es posterior al borrado de su bloque) y lo muestra en la versión donde llegó, en una franja aparte:
+*Ana wrote in a part that had been removed* con el texto y **Copy**. Es el mismo caso de la tabla de
+`Doc_Colaboracion.md` ("A borra, B escribe a la vez"); el historial es el primer lugar donde se puede recuperar.
+Entrega 2.
+
+## 6. Restaurar sin perder datos
+
+### 6.1 Cómo
+
+1. **Antes:** con red, se sincroniza la página (subir lo pendiente y bajar lo nuevo). Si queda algo sin subir o
+   sin bajar, no se restaura (1.4). Se vuelve a armar la versión con lo último del servidor.
+2. **Se arma la versión en memoria:** `createDocFromSnapshot`, después la reparación de estructura **solo en
+   memoria** (`normalizeStructure(…, 'repair')`, para una versión de antes de la semilla con dos raíces) y la guarda
+   contra lo desconocido (`findUnknownContent`): si la versión trae algo que este esquema no conoce, no se ofrece
+   restaurar.
+3. **Se escribe por el editor:** `yXmlFragmentToProseMirrorRootNode` con el esquema del editor y **una sola
+   transacción** de ProseMirror que reemplaza el contenido de la página
+   (`tr.replaceWith(0, doc.content.size, version.content)`), con `stopCapturing()` del `UndoManager` antes y
+   después. y-prosemirror (con sus parches, también el de los huecos de las fotos en línea) la pasa a Yjs como
+   pasa cualquier edición: compara con lo que hay y cambia lo necesario. Se guarda en el dispositivo y sube como
+   una edición más.
+4. **Lo que no se toca:** el `Y.Map` de colapsar para todos (es una vista; un título que vuelve recupera su estado
+   si su id sigue ahí), el título de la página, el ícono y el formato (no viven en el documento).
+
+**Por qué por el editor y no escribiendo Yjs directo:** es la misma vía que escribir, así que lo que guarda es lo
+que el editor y sus parches esperan (las versiones viejas lo abren igual), entra en el deshacer del editor, y lo que
+no cambió no se toca. Escribir Yjs a mano copiaría estructuras viejas tal cual (por ejemplo, huecos de fotos en
+línea de antes de los huecos estables) y no se desharía con Ctrl+Z.
+
+### 6.2 Medido con el editor real (prototipo en jsdom, esquema de la app)
+
+| Caso | Resultado |
+|---|---|
+| Escribir, borrar un bloque, cambiar un tipo y agregar uno; restaurar la versión de antes | El texto y los **ids de los bloques**, iguales a la versión; el bloque que no cambió sigue siendo **el mismo item de Yjs** |
+| Ctrl/⌘+Z después de restaurar | Vuelve a como estaba antes, en un paso; Ctrl/⌘+Shift+Z la vuelve a restaurar |
+| La versión publicada (`fixtures/editorSchemaMain.ts`) abre lo restaurado | Igual, sin borrar nada |
+| B escribe en un bloque que la versión conserva mientras A restaura | Lo de B queda, en los dos |
+| B escribe en un bloque que la versión no tiene mientras A restaura | Sale de la página en los dos y no aparece en ninguna versión (5.4) |
+| 400 bloques, 58 cambiados | 19 ms; la restauración sumó 12 structs en el caso chico (74 a 86) |
+
+### 6.3 Cada caso
+
+- **Nunca borra historia:** sube filas nuevas; las de antes siguen. La versión de antes de restaurar es la primera
+  de la lista y se puede restaurar.
+- **Deshacer:** Ctrl/⌘+Z y el **Undo** del aviso (que llama al mismo `UndoManager`).
+- **Con otro editando a la vez:** lo que escribe en bloques que la versión conserva queda. Lo que escribe en bloques
+  que la versión quita es el caso de 5.4. Para achicarlo: si en los últimos 2 minutos llegaron filas de otra
+  persona, la confirmación lo dice (*Ana edited this page 1 minute ago; what she is writing now could be lost from
+  the page*). Y después de restaurar, durante 2 minutos, si llega algo de otro que cae en lo quitado, la app avisa
+  en la página con **Show** (abre el historial en ese texto huérfano). Entrega 2.
+- **Comentarios:** se anclan al id del bloque, y restaurar conserva los ids; un hilo de un bloque que la versión
+  trae de vuelta deja de decir "el bloque ya no está". Uno de un bloque que la versión no tiene pasa a decirlo,
+  como al borrar el bloque a mano.
+- **Fotos de la versión que están en la papelera:**
+  - en la papelera de archivos de la app (`files.trashed_at`, sin mandar a Drive): restaurar las vuelve a usar
+    (`link_page_file` en la próxima sincronización) y la base las saca de la papelera sola. Nada que hacer.
+  - mandadas a la papelera de Drive (`purged_at` / `drive_trashed_at`): la app no las trae de vuelta ("pedirlo es
+    definitivo para la app", `Doc_Sincronizacion.md`). La confirmación lo dice (1.4) y se ven como borradas.
+    Recuperarlas desde el historial (el portero las saca de la papelera de Drive) queda para más adelante.
+  - imágenes viejas `sdfile://` (Supabase): no se borran nunca; vuelven a verse.
+- **Versiones viejas de la app:** lo restaurado es una edición común con el esquema de siempre; una pestaña vieja la
+  recibe como cualquier cambio. No hace falta subir `min_app_version`.
+- **Una página en la papelera:** no se abre el historial; primero se restaura la página.
+- **Sin permiso de edición, o con la app por debajo de la mínima:** no se ofrece (el servidor lo rechazaría:
+  `push_page_update` pide nivel 3 y la versión).
+
+## 7. Permisos
+
+- **Quién ve el historial, propuesto: quien puede editar la página** (nivel 3 o más: Editar, Editar y crear
+  páginas, el dueño y los admins con permiso), como en Google Docs, donde quien solo ve o comenta no tiene
+  historial. **Los invitados (`guest`), aunque tengan Editar, no**, hasta que Lega diga (pregunta 1). Lo comprueban
+  las funciones nuevas en la base (`page_history`, `page_history_authors`) con `private.page_level`, que ya da 0 en
+  un proyecto borrado.
+- **Restaurar:** lo mismo que editar (nivel 3), porque es una edición.
+- **Solo esta página:** el historial de P son las filas de P. Una página que se movió adentro de una compartida
+  muestra todo su historial a quien hoy la puede editar, también lo de antes de compartirla (como Google Docs).
+- **Nada de afuera:** las fotos se resuelven con los permisos de hoy (`can_view_file`: una de otro proyecto se ve
+  como *Photo from another project*); un link interno a una página sin acceso, sin título, como en la página; los
+  nombres, solo de quienes subieron algo a esta página (`page_history_authors`), con la misma regla que los
+  comentarios (`comment_authors`).
+- **Lo que ya pasa hoy y el historial no cambia (importante):** lo borrado de una página **ya llega** a cualquiera
+  que la ve, invitados incluidos: `pull_page_updates` le sirve todas las filas para que su dispositivo arme el
+  documento, y las filas tienen el texto tal como se subió, también lo que después se borró. No se ve en la app,
+  pero está en su dispositivo y en la red. Ejemplo: una nota interna escrita y borrada antes de compartir la página
+  con un cliente le llega al cliente. El permiso del historial es una barrera **de la interfaz**, no de los datos.
+  Cerrarlo de verdad es otro trabajo (pregunta 2): que quien no edita baje, en vez de las filas viejas, un snapshot
+  con GC que arme un editor (con los controles del diseño de compactar).
+
+## 8. Rendimiento y dónde se calcula
+
+- **Todo en el dispositivo**, en un **Web Worker** (Yjs anda igual ahí): bajar, aplicar, metadatos, snapshots,
+  autores y diferencias. La pantalla recibe la lista y, al elegir una versión, sus bloques y sus tramos.
+- **Qué se baja:** las filas con autor y hora (`page_history`, de a 500, con el mismo tope de tiempo y la misma
+  reducción del lote que la bajada de hoy) y los correos de los autores. Después de B.15 una fila pesa unos 90 B
+  de promedio (10 000 subidas, 900 KB). Las filas viejas, con todos los borrados repetidos, pesan más (la
+  simulación de compactar daba 61 MB a las 10 000), pero hoy ninguna página pasa de 63 filas.
+- **Una página con 10 000 subidas en el teléfono:** en la PC, 270 ms para armar todo, 31 ms por versión y de 0,3 a
+  1,2 s por diferencia de una sesión larga, con 38 MB de memoria; en un teléfono, estimado de 3 a 5 veces (a medir
+  en el iPhone en la entrega 1). Bajar 900 KB: unos 4 s con 250 KB/s. Se muestra la lista apenas llegan los
+  metadatos y las versiones se arman cuando se piden.
+- **Caché** (entrega 3): una base aparte, `<base local>:history` (como `:media` y `:comments`: la de siempre no
+  cambia de versión), con, por página, hasta qué `seq` llegó, el documento del historial (`encodeStateAsUpdate` de
+  un documento sin GC armado en orden: conserva lo borrado) y los metadatos por fila. La próxima vez baja solo lo
+  posterior. Tope de 50 MB, se liberan las páginas menos abiertas; se borra junto con la base local.
+- **Lo que no se usa:** la base local de la página (`docUpdates`). Mezcla lo propio sin subir con lo bajado y se
+  compacta con `mergeUpdates` al pasar de 64 filas: no es un historial.
+
+## 9. Migración (borrador, sin aplicar)
+
+Va como `supabase/migrations/<fecha>_historial.sql`, con su prueba `supabase/tests/historial_permisos.sql`. No toca
+`page_updates`, `push_page_update` ni `pull_page_updates`. Lleva su constante opcional en la app
+(`HISTORY_SCHEMA_VERSION`, como la de comentarios): con la base sin migrar, el ítem del menú no aparece y no hay
+aviso.
+
+```sql
+-- Historial de una página: las filas de page_updates con autor y hora. Solo a quien puede editar la página.
+create function public.page_history(p_page_id uuid, p_after_seq bigint, p_limit int default 500)
+returns table (seq bigint, created_by uuid, created_at timestamptz, update text)
+language plpgsql stable security definer set search_path = '' as $$
+begin
+  if private.page_level(p_page_id) < 3 or private.history_denied_for_guest(p_page_id) then
+    raise exception 'page_not_found' using errcode = 'P0002';
+  end if;
+  return query
+    select u.seq, u.created_by, u.created_at, translate(encode(u.update, 'base64'), E'\n', '')
+    from public.page_updates u
+    where u.page_id = p_page_id and u.seq > p_after_seq
+    order by u.seq
+    limit least(greatest(p_limit, 1), 1000);
+end; $$;
+
+-- Quiénes subieron algo a esta página, con su correo (también si ya no son miembros).
+create function public.page_history_authors(p_page_id uuid)
+returns table (user_id uuid, email text) ...;   -- misma comprobación que page_history
+
+-- Invitados: sin historial hasta que Lega diga (pregunta 1). Si dice que sí, esta función devuelve false.
+create function private.history_denied_for_guest(p uuid) returns boolean ...;   -- private.workspace_role(<workspace de la página>) = 'guest'
+revoke all on function private.history_denied_for_guest(uuid) from public, anon, authenticated;
+
+-- Versiones con nombre (entrega 3): un nombre que apunta a un seq. Sin contenido: se arma de las filas.
+create table public.page_versions (
+  id                uuid primary key,                       -- lo crea el dispositivo: reintentar no duplica
+  page_id           uuid not null references public.pages (id) on delete cascade,
+  seq               bigint not null check (seq > 0),
+  label             text not null check (char_length(label) between 1 and 100),
+  kind              text not null default 'named' check (kind in ('named', 'restore')),
+  restored_from_seq bigint,                                  -- kind = 'restore': de qué versión
+  created_by        uuid default auth.uid() references auth.users (id) on delete set null,
+  created_at        timestamptz not null default now(),
+  removed_at        timestamptz,                             -- quitar el nombre: nunca borrado duro
+  removed_by        uuid
+);
+create index page_versions_page_idx on public.page_versions (page_id, seq);
+alter table public.page_versions enable row level security;
+revoke all on public.page_versions from anon, authenticated;   -- todo por funciones
+-- list_page_versions(page), name_page_version(id, page, seq, label) (seq <= pages.update_seq),
+-- rename_page_version(id, label) (quien la nombró o nivel 4), remove_page_version(id) (removed_at):
+-- todas con la comprobación de page_history; revoke de public y anon, grant execute a authenticated.
+
+update public.workspace_settings set schema_version = <la que siga> where id and schema_version < <la que siga>;
+notify pgrst, 'reload schema';
+```
+
+## 10. Versiones viejas de la app, compactar y sin red
+
+- **Versiones viejas:** no saben nada del historial; sus subidas son filas con autor como cualquiera, y una
+  restauración les llega como una edición común (probado con el esquema publicado). No hace falta subir
+  `min_app_version`: no hay propiedades ni tipos nuevos.
+- **Compactar** (`Doc_Compactar.md`, rama `lega/compactar`): el historial depende de su regla 1, **nunca se borra
+  una fila de `page_updates`**. No usa los snapshots: arma desde las filas. Lo que este diseño encontró y le toca a
+  ese: sección 12.
+- **Sin red:**
+  - Entrega 1: el historial pide red; sin ella, *Version history needs a connection*.
+  - Con la caché (entrega 3): se ve el historial hasta lo último que el dispositivo bajó, con el aviso *Offline:
+    showing the history up to <hora>*, más *Changes on this device not synced yet*. Restaurar, no (pide red y la
+    página al día).
+
+## 11. Plan de pruebas
+
+1. **El núcleo** (`src/sync/history.test.ts`, el prototipo pasado a vitest):
+   - con filas al azar de tres dispositivos (con GC, como la app), subidas enteras de un dispositivo viejo y
+     restauraciones: cada versión armada (metadatos + `createDocFromSnapshot`) es igual a aplicar las filas hasta
+     ahí;
+   - **mutante:** armar el documento con `mergeUpdates` tiene que fallar con las filas que vuelven a subir todo
+     (el caso medido en la página real);
+   - autores: cada letra visible y cada borrado con el autor de la fila que lo trajo, en guiones donde se sabe
+     quién hizo qué; la semilla; subidas enteras repetidas que no cambian el autor;
+   - sesiones (cortes de 30 min y 2 min), lo pendiente, una página vacía, una con solo la semilla, una vieja con
+     dos raíces;
+   - la diferencia "solo de lo que cambió" igual a la completa en 500 casos al azar; cambios de tipo apareados por
+     id; texto huérfano detectado.
+2. **Con el editor real** (`src/ui/history.test.ts`, jsdom): los casos del prototipo (6.2), más fotos en línea y
+   foto-bloque, Script, preguntas, tarjetas de Drive, el mapa de colapsar intacto, una versión con algo
+   desconocido que no se deja restaurar, una con dos raíces reparada solo en memoria, y la versión publicada que
+   abre lo restaurado (`fixtures/editorSchemaMain.ts`).
+3. **Al azar con dos dispositivos y restaurar** (`PageDocs` y el servidor en memoria de `src/sync/testing.ts`):
+   dos dispositivos escriben, borran, cambian tipos, se quedan sin red y vuelven; uno restaura versiones al azar,
+   a veces deshace. En cada paso: restaurar no corre con algo pendiente; después de restaurar y sincronizar, la
+   página es la versión más lo que el otro escribió en lo que la versión conserva; **toda letra escrita y subida
+   aparece visible en alguna versión o en la lista de texto huérfano**; deshacer vuelve a lo de antes; al final
+   todos iguales y al servidor no le falta nada. Con la versión publicada (`fixtures/publishedDocs.ts`) como uno de
+   los dispositivos.
+4. **Permisos en SQL** (`supabase/tests/historial_permisos.sql`, en una transacción que se deshace): niveles 1 y 2
+   no pueden pedir el historial ni los autores; 3 y 4 sí; un invitado no (según la pregunta 1); un proyecto borrado
+   da 0; los correos son solo de quienes subieron a esa página; `page_versions` no se lee ni escribe directo;
+   nombrar pide 3 y un `seq` de esa página; quitar el nombre no borra la fila; `pull_page_updates` sigue igual.
+5. **Rendimiento:** la simulación de 2000 y 10 000 subidas en la PC y en el iPhone (en una página de prueba de un
+   proyecto de prueba): abrir la lista, una versión y su diferencia, con tiempos tope.
+6. **Sin red** (entrega 3): la caché se lee sin red, restaurar queda apagado, la caché se borra con la base.
+7. **De punta a punta** (Playwright contra la base, lista para Lega): dos navegadores editan la misma página, el
+   historial muestra los dos colores, uno restaura, el otro ve el resultado y lo deshace.
+
+## 12. Lo que toca a otros diseños
+
+- **Compactar (`Doc_Compactar.md`):** dice que el snapshot (`Y.mergeUpdates` de las filas) "es exactamente lo mismo
+  que las filas que cubre" y que "sirve de punto de partida para armar versiones". Para bajar es cierto (el
+  documento de hoy sale igual), **para el historial no**: con las filas reales, 26 de 63 versiones salen con texto
+  borrado de menos (3.2). Si se quiere que un snapshot sirva al historial, armarlo **aplicando las filas en orden
+  en un `Y.Doc({ gc: false })` y `encodeStateAsUpdate`** (gana la primera copia de cada item, la que tiene el
+  texto), y que la comprobación de dos caminos compare también el contenido de lo borrado. Si no, el historial
+  sigue leyendo filas y no cambia nada (pregunta 4).
+- **Colaboración:** el texto huérfano (5.4) es la primera forma de recuperar lo que hoy se pierde cuando dos
+  cambian el mismo bloque a la vez.
+- **Papelera de archivos:** restaurar una versión con fotos de la papelera de la app las saca solas (6.3).
+
+## 13. Riesgos
+
+| Riesgo | Qué lo cubre |
+|---|---|
+| Armar versiones con `mergeUpdates` pierde texto borrado | Siempre aplicar filas en orden; la prueba mutante (11.1) |
+| Restaurar con cambios propios sin subir los saca del historial | Restaurar exige red y la página sincronizada |
+| Lo que otro escribe en un bloque que la restauración quita no se ve en ninguna versión | El texto huérfano en el historial, el aviso antes de restaurar y el aviso después (5.4, 6.3) |
+| El permiso del historial no protege lo borrado: ya llega a quien ve | Dicho en la sección 7; ítem aparte (pregunta 2) |
+| La hora es la de subida: lo escrito sin red aparece más tarde | Dicho en la ayuda; la hora del dispositivo, más adelante |
+| Una página con miles de filas viejas (antes de B.15) pesa mucho para bajar | Hoy ninguna pasa de 63; bajar de a 500 con progreso y caché |
+| Una versión con algo que esta app no conoce | La guarda no deja restaurarla; se ve como en la página (aviso) |
+| Una restauración enorme desde un teléfono | Una sola transacción (19 ms con 400 bloques en la PC); medir en el iPhone |
+| Una copia de seguridad restaurada deja huecos en el historial | Lo que vuelven a subir los dispositivos queda con su hora nueva; se dice en la ayuda |
+| Fotos mandadas a la papelera de Drive no vuelven al restaurar | La confirmación lo dice; traerlas desde Drive, más adelante |
+
+## 14. Entregas
+
+1. **Quién y cuándo, y restaurar.** La migración (`page_history`, `page_history_authors`; sin `page_versions`
+   todavía), el ítem del menú y el atajo, la lista por día y sesión con hora local, nombres y colores, la versión
+   tal como era (sin marcas; con hojas y fotos), **Restore this version** con su confirmación, sus condiciones y
+   el aviso con **Undo**, copiar con la selección, la ayuda. Pruebas 1 (sin la diferencia), 2, 3 y 4, y la medición
+   en el iPhone. Copia de seguridad antes de migrar.
+2. **Los cambios marcados por persona.** **Show changes** con la unión y las decoraciones, los bloques apareados
+   por id, el texto huérfano, los avisos de restaurar con otro editando, el Worker y la diferencia "solo de lo que
+   cambió". Prueba 1 completa.
+3. **Nombrar y sin red.** `page_versions` (nombrar, renombrar, quitar el nombre, *Restored from…*, *Only named
+   versions*), la caché `<base local>:history` y el historial sin red. Pruebas 4 (completa) y 6.
+4. **Más adelante:** la hora del dispositivo para lo escrito sin red (una columna nueva que mande el dispositivo,
+   solo informativa); historial del título, el ícono y el formato (hoy se pisan en `pages`); traer fotos desde la
+   papelera de Drive al restaurar; que quien no edita no reciba lo borrado (pregunta 2).
+
+Antes de cerrar cada entrega, la auditoría de siempre (funcionalidad, permisos y RLS, no perder datos, docs).
+
+## 15. Preguntas para Lega
+
+1. **¿Quién ve el historial?** Recomendación: **quien puede editar la página** (nivel 3 o más), el dueño y los
+   admins; **los invitados no**, aunque tengan Editar, hasta que lo pidas. Es como Google Docs y no muestra a un
+   cliente las notas internas borradas (en la pantalla: ver la pregunta 2).
+2. **Lo borrado ya llega hoy al dispositivo de quien ve la página, invitados incluidos** (viaja en las filas que se
+   bajan para sincronizar). ¿Se encara como ítem aparte? Recomendación: **sí, como ítem B del roadmap, después de
+   la primera entrega del historial**; no la bloquea, y mientras tanto conviene no dejar notas internas borradas en
+   páginas que se van a compartir con clientes.
+3. **¿Restaurar solo con red y con la página sincronizada?** Recomendación: **sí**. Sin eso, lo escrito sin subir
+   se perdería del historial al restaurar.
+4. **¿Ajustar el diseño de compactar para que sus snapshots conserven lo borrado** (aplicar en orden en vez de
+   `mergeUpdates`)? Recomendación: **sí, antes de implementar compactar**; cuesta lo mismo y deja la puerta abierta
+   para que el historial arranque de un snapshot en páginas enormes.
+
+## Cómo se midió
+
+- **La base:** consultas de solo lectura por la Management API (`begin read only` … `rollback`, el cliente de
+  `scripts/lib/management.mjs` en modo dry-run): filas, bytes, autores, horas, filas por página. Para las dos
+  páginas con más filas se bajaron sus filas a la carpeta de trabajo (fuera del repo) y se armaron con Yjs 13.6.33;
+  no se imprimió ni se guardó en el repo ningún contenido, solo huellas y conteos.
+- **El prototipo del núcleo** (Node 20): las versiones de cada fila por los dos caminos (aplicar en orden, y
+  metadatos + `createDocFromSnapshot`), con `mergeUpdates` como tercer camino; autores por tramos; sesiones; la
+  diferencia por persona con `toDelta`.
+- **La simulación:** dos personas con el patrón de subida de la app después de B.15, 500 a 10 000 subidas, una
+  semilla fija.
+- **Restaurar:** una prueba de vitest en jsdom con el editor de la app (`collabHarness`), no versionada: los cinco
+  casos de 6.2.
