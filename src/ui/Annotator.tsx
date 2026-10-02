@@ -234,6 +234,8 @@ export function Annotator({ doc, fileId, name, item, loader, onClose }: Annotato
   const boxRef = useRef<HTMLDivElement>(null);
   const shapesRef = useRef<SVGSVGElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
+  /** Lo último escrito en el texto que se edita. */
+  const typed = useRef<string | null>(null);
   const drag = useRef<Drag | null>(null);
   const undo = useRef<Y.UndoManager | null>(null);
   const spaceHeld = useRef(false);
@@ -387,6 +389,23 @@ export function Annotator({ doc, fileId, name, item, loader, onClose }: Annotato
     [doc, origin, readOnly, remeasure],
   );
 
+  /**
+   * Solo los campos que de verdad cambian: escribir un valor igual deja un hueco más para siempre en la base limpia
+   * (sección 10), por ejemplo al tocar el mismo color dos veces.
+   */
+  const changed = (id: string, fields: ShapeFields): ShapeFields => {
+    const raw = map.get(`${fileId}/${id}`);
+    if (!(raw instanceof Y.Map)) return {};
+    const out: ShapeFields = {};
+    for (const [k, v] of Object.entries(fields)) if (JSON.stringify(raw.get(k)) !== JSON.stringify(v)) out[k] = v;
+    return out;
+  };
+  /** Cambia los campos de varias formas en un solo paso de deshacer (nada, si nada cambia). */
+  const update = (edits: [string, ShapeFields][]) => {
+    const real = edits.map(([id, f]) => [id, changed(id, f)] as const).filter(([, f]) => Object.keys(f).length > 0);
+    if (real.length > 0) write(() => real.forEach(([id, f]) => updateShape(doc, fileId, id, f)));
+  };
+
   const persist = (next: AnnotatorPrefs) => {
     prefsRef.current = next;
     setPrefs(next);
@@ -412,14 +431,17 @@ export function Annotator({ doc, fileId, name, item, loader, onClose }: Annotato
 
   /** Termina el texto que se está escribiendo: lo guarda (vacío, borra el que había). */
   const commitText = () => {
-    const t = textRef.current ? { ...text!, value: textRef.current.value } : text;
+    // Lo escrito: del campo, o lo último que se escribió (al cerrarse solo, el campo ya no está).
+    const typedNow = textRef.current?.value ?? typed.current;
+    const t = text && typedNow !== null ? { ...text, value: typedNow } : text;
+    typed.current = null;
     setText(null);
     if (!t || !frame) return;
     const value = t.value.replace(/\s+$/, '');
     if (t.id) {
       const was = byId.get(t.id);
       if (!value.trim()) write(() => deleteShape(doc, fileId, t.id!));
-      else if (was?.type === 'text' && was.text !== value) write(() => updateShape(doc, fileId, t.id!, textEdit(value, was.fontSize, measure, `${was.fontSize}px ${MARKUP_FONT}`)));
+      else if (was?.type === 'text' && was.text !== value) update([[t.id, textEdit(value, was.fontSize, measure, `${was.fontSize}px ${MARKUP_FONT}`)]]);
       return;
     }
     if (!value.trim()) return;
@@ -427,6 +449,11 @@ export function Annotator({ doc, fileId, name, item, loader, onClose }: Annotato
     const fontSize = toFrame(style.fontSize, frame);
     add(textShape(t.at, value, style, frame, topZ(shapes), measure, `${fontSize}px ${MARKUP_FONT}`));
   };
+
+  // Si el anotador se cierra solo (cambió el permiso, se fue de la página) con un texto a medio escribir, se guarda.
+  const commitOnExit = useRef<(() => void) | null>(null);
+  commitOnExit.current = text ? commitText : null;
+  useEffect(() => () => commitOnExit.current?.(), []);
 
   const close = () => {
     if (text) commitText();
@@ -465,12 +492,7 @@ export function Annotator({ doc, fileId, name, item, loader, onClose }: Annotato
     if (selected.length === 0 || !frame || !canEdit) return;
     if (commit) {
       setPatches(new Map());
-      write(() => {
-        for (const s of selected) {
-          const fields = restyleFields(s, patch, frame);
-          if (Object.keys(fields).length > 0) updateShape(doc, fileId, s.id, fields);
-        }
-      });
+      update(selected.map((s) => [s.id, restyleFields(s, patch, frame)]));
     } else {
       const next = new Map(patches);
       for (const s of selected) next.set(s.id, { ...(next.get(s.id) ?? {}), ...restyleFields(s, patch, frame) });
@@ -743,13 +765,13 @@ export function Annotator({ doc, fileId, name, item, loader, onClose }: Annotato
         const dy = d.current.y - d.start.y;
         if (moved(d.start, d.current, slop)) {
           const list = d.ids.map((id) => byId.get(id)).filter((s): s is MarkupShape => !!s);
-          write(() => list.forEach((s) => updateShape(doc, fileId, s.id, moveFields(s, dx, dy))));
+          update(list.map((s) => [s.id, moveFields(s, dx, dy)]));
         } else if (d.ids.length > 1) setSelection([d.hit]);
         break;
       }
       case 'handle': {
         const s = byId.get(d.id);
-        if (s) write(() => updateShape(doc, fileId, s.id, handleFields(s, d.handle, d.current, { shift: d.shift, alt: false })));
+        if (s) update([[s.id, handleFields(s, d.handle, d.current, { shift: d.shift, alt: false })]]);
         break;
       }
       case 'band': {
@@ -1043,6 +1065,7 @@ export function Annotator({ doc, fileId, name, item, loader, onClose }: Annotato
                 }}
                 onInput={(e) => {
                   const el = e.currentTarget;
+                  typed.current = el.value;
                   el.rows = Math.max(1, el.value.split('\n').length);
                   el.style.width = `${Math.max(4, ...el.value.split('\n').map((l) => l.length + 2))}ch`;
                 }}
@@ -1059,7 +1082,7 @@ export function Annotator({ doc, fileId, name, item, loader, onClose }: Annotato
                   const id = numberEdit.id;
                   setNumberEdit(null);
                   const n = Number(value);
-                  if (Number.isFinite(n) && byId.get(id)) write(() => updateShape(doc, fileId, id, { number: Math.trunc(Math.max(-99999, Math.min(99999, n))) }));
+                  if (Number.isFinite(n) && byId.get(id)) update([[id, { number: Math.trunc(Math.max(-99999, Math.min(99999, n))) }]]);
                 }}
               />
             )}
@@ -1145,6 +1168,7 @@ function StyleStrip({
         onChange={(e) => onChange({ [key]: Number(e.currentTarget.value) }, false)}
         onPointerUp={(e) => onChange({ [key]: Number(e.currentTarget.value) }, true)}
         onKeyUp={(e) => onChange({ [key]: Number(e.currentTarget.value) }, true)}
+        onBlur={(e) => onChange({ [key]: Number(e.currentTarget.value) }, true)}
       />
     </label>
   );

@@ -234,6 +234,38 @@ describe('el anotador', () => {
     expect(shapes(doc).filter((s) => s.type === 'numbered_marker').map((s) => (s.type === 'numbered_marker' ? s.number : 0))).toEqual([1, 2]);
   });
 
+  it('cambiar el color de lo elegido escribe solo el color, y tocar el mismo color otra vez no escribe nada', async () => {
+    const doc = new Y.Doc();
+    writeFrame(doc, ID, FRAME.w, FRAME.h);
+    addShape(doc, ID, 'l', { type: 'line', zValue: 1, posX: 400, posY: 400, startX: 0, startY: 0, endX: 2000, endY: 0, strokeColor: '#85DC53' });
+    const { el, stage } = await open(doc);
+    key('v');
+    pointer(stage, 'pointerdown', 300, 100);
+    pointer(stage, 'pointerup', 300, 100);
+    const updates: Uint8Array[] = [];
+    doc.on('update', (u: Uint8Array) => updates.push(u));
+    const red = () => el.querySelector<HTMLButtonElement>('.annotator-swatch[aria-label="Color #FF3B30"]')!;
+    act(() => red().click());
+    act(() => red().click());
+    expect(updates.length).toBe(1);
+    const raw = map(doc).get(`${ID}/l`) as Y.Map<unknown>;
+    expect(raw.get('strokeColor')).toBe('#FF3B30');
+    expect(raw.get('posX')).toBe(400);
+  });
+
+  it('un texto a medio escribir se guarda si el anotador se cierra solo (cambió el permiso, se fue de la página)', async () => {
+    const doc = new Y.Doc();
+    writeFrame(doc, ID, FRAME.w, FRAME.h);
+    const { el, stage } = await open(doc);
+    key('t');
+    pointer(stage, 'pointerdown', 50, 50);
+    const area = el.querySelector<HTMLTextAreaElement>('.annotator-text')!;
+    area.value = 'Plano 12';
+    act(() => area.dispatchEvent(new Event('input', { bubbles: true })));
+    for (const r of roots.splice(0)) act(() => r.unmount());
+    expect(shapes(doc).map((s) => (s.type === 'text' ? s.text : s.type))).toEqual(['Plano 12']);
+  });
+
   it('un marco de una versión más nueva del formato: solo lectura (no se dibuja ni se borra nada)', async () => {
     const doc = new Y.Doc();
     map(doc).set(ID, { v: 2, w: FRAME.w, h: FRAME.h });
