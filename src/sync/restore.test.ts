@@ -194,6 +194,10 @@ describe('restaurar una copia de seguridad', () => {
 
     // Después de la copia: una plantilla elegida en la página que ya estaba y una página nueva hecha con otra.
     const plantilla = '5d1b7a0e-3c4f-4e8a-9b21-0f6c2a7d1e02';
+    // La recuperación reenvía lo que es más nuevo que la copia (`updated_at` estrictamente mayor): el cambio tiene que
+    // caer en un milisegundo posterior al de la fila copiada, que en memoria puede ser el mismo.
+    const copiedAt = Date.parse(server.pages.get(before)!.updated_at);
+    while (Date.now() <= copiedAt) await new Promise((r) => setTimeout(r, 1));
     await a.tree.setPatch(before, { template_id: plantilla });
     const after = await a.tree.create(null, '', undefined, { templateId: plantilla });
     await a.engine.syncNow();
