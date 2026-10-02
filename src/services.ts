@@ -11,7 +11,7 @@ import { FolderUploads, foldersDbName, openFoldersDb, type FolderPortero, type F
 import type { ProjectDrive } from './media/projectDrive';
 import { notify } from './ui/notice';
 import { acceptInvitationsQuietly, AccessStore, Permissions } from './sync/access';
-import { CommentQueue, commentsDbName, openCommentsDb, type CommentsDb } from './sync/comments';
+import { CommentQueue, commentsDbName, openCommentsDb, type CommentRemote, type CommentsDb } from './sync/comments';
 import { SupabaseCommentRemote } from './sync/commentsRemote';
 import { PageDocs } from './sync/docs';
 import { SyncEngine, type SyncStatus } from './sync/engine';
@@ -201,8 +201,18 @@ function acquireTabLock(
   });
 }
 
-/** Abre la base local del usuario y arranca la sincronización. */
-export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boot {
+/**
+ * Un link público (Docs/Doc_Link_Publico.md): el servidor visto por `plink_*`, los comentarios con nombre y los headers
+ * del link para el portero. Con esto la app arranca igual que con una cuenta, en modo liviano (P12).
+ */
+export interface LinkBoot {
+  remote: SupabaseRemote;
+  comments: CommentRemote;
+  porteroHeaders: Record<string, string>;
+}
+
+/** Abre la base local del usuario y arranca la sincronización. `link`: abre un link público en vez de una cuenta. */
+export function useBootServices(workspace: ActiveWorkspace, user: AuthUser, link?: LinkBoot): Boot {
   const [boot, setBoot] = useState<Boot>({ state: 'loading' });
   const [attempt, setAttempt] = useState(0);
 
@@ -229,7 +239,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
       if (cancelled) return releaseLock();
       const db = await openLocalDb(dbName);
       if (cancelled) return db.close();
-      const remote = new SupabaseRemote(workspace.client, __APP_VERSION__);
+      const remote = link?.remote ?? new SupabaseRemote(workspace.client, __APP_VERSION__);
       let workspaceId = (await db.get('meta', 'workspaceId')) as string | undefined;
       const firstLoad = !workspaceId;
       // Las invitaciones se aplican al entrar, antes de buscar el primer proyecto (lo compartido tiene que
@@ -294,7 +304,8 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
       // "Available offline" se arma después (necesita la cola): la cola le avisa por acá qué se usó y qué no entró.
       let offline: OfflineManager | null = null;
       const media = new MediaQueue(mediaDb, remote, {
-        portero: (url) => new Portero(url, { token: sessionToken(workspace.client) }),
+        portero: (url) =>
+          new Portero(url, link ? { link: link.porteroHeaders } : { token: sessionToken(workspace.client) }),
         projectOf: (pageId) => tree.get(pageId)?.workspace_id,
         unavailable: mediaProblem,
         // Se pegó una foto o un video de otro proyecto (papelera de archivos, paso 11).
@@ -326,7 +337,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
       } catch (err) {
         commentsProblem = stored('boot.commentsStorage', { reason: errorMessage(err) });
       }
-      const comments = new CommentQueue(commentsDb, new SupabaseCommentRemote(workspace.client), user.id, {
+      const comments = new CommentQueue(commentsDb, link?.comments ?? new SupabaseCommentRemote(workspace.client), user.id, {
         unavailable: commentsProblem,
       });
       await comments.load().catch(() => undefined);
@@ -339,6 +350,8 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
         access,
         comments,
         sizes,
+        // El modo link (P12): un ciclo cada 30 s y solo las páginas que ya se bajaron o están abiertas.
+        ...(link ? { intervalMs: 30_000, pullOnly: (id: string, cursor: number) => cursor > 0 || !!docs.peek(id) } : {}),
       });
       const traits = deviceTraits();
       offline = new OfflineManager({
@@ -443,7 +456,8 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
           sizes,
           offline: offlineManager,
           shutdown,
-          firstLoad,
+          // La recorrida no arranca sola con un link (muestra lo del equipo); la ayuda sí está.
+          firstLoad: link ? false : firstLoad,
         },
       });
     })().catch((err) => {
@@ -456,7 +470,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
       if (cleanup) cleanup();
       else releaseLock?.();
     };
-  }, [workspace, user, attempt]);
+  }, [workspace, user, attempt, link]);
 
   useEffect(() => {
     if (boot.state !== 'error' && boot.state !== 'empty') return;

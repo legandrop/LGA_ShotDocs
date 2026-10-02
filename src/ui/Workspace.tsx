@@ -6,8 +6,10 @@ import { importingElsewhere, importJobFor, useImportJob } from '../import/import
 import { clearInviteTarget, pendingInviteTarget, takeArrivalNotice } from '../invite';
 import { prefs } from '../prefs';
 import { navigate, pagePath, useRoute } from '../router';
+import { useLinkMode } from '../linkMode';
 import {
   ServicesContext,
+  type LinkBoot,
   useBootServices,
   usePermissions,
   useRemoved,
@@ -60,10 +62,10 @@ const HistoryPanel = lazyPart(() => import('./HistoryPanel').then((m) => m.Histo
 // Versiones anteriores recordaban una sola última página; se sigue leyendo como respaldo.
 const LEGACY_LAST_PAGE_KEY = 'shotdocs-last-page';
 
-export function Workspace({ user }: { user: AuthUser }) {
+export function Workspace({ user, link }: { user: AuthUser; link?: LinkBoot }) {
   const workspace = useWorkspace();
   const { client } = workspace;
-  const boot = useBootServices(workspace, user);
+  const boot = useBootServices(workspace, user, link);
   const tr = useT();
 
   // La búsqueda del proyecto es de esta instancia de servicios: al cerrar sesión o cambiar de workspace se
@@ -72,10 +74,12 @@ export function Workspace({ user }: { user: AuthUser }) {
   useEffect(() => (readyServices ? () => disposeSearchSession(readyServices) : undefined), [readyServices]);
 
   // Las preferencias de la cuenta (tema, fuente…) se bajan al entrar y se suben cuando cambian.
+  // Con un link público no hay cuenta: las preferencias quedan las del dispositivo.
   useEffect(() => {
+    if (link) return;
     void prefs.attach(client, user.id);
     return () => prefs.detach();
-  }, [client, user.id]);
+  }, [client, user.id, link]);
 
   if (boot.state === 'loading') return <main className="center-screen muted">{tr('shell.opening')}</main>;
   if (boot.state === 'busy') {
@@ -307,9 +311,15 @@ export function Shell() {
   // Cada proyecto recuerda su última página abierta; el inicio vuelve a la del proyecto abierto.
   const projectId = useCurrentProject();
   const revision = tree.getRevision();
+  const linkMode = useLinkMode();
   useEffect(() => {
     if (route.name === 'page') rememberPage(keys, tree, user.id, route.id);
     if (route.name !== 'home') return;
+    // Con un link público, el inicio es la página compartida (P10: nada de proyectos).
+    if (linkMode && tree.get(linkMode.pageId)) {
+      navigate(pagePath(linkMode.pageId), true);
+      return;
+    }
     let last = lastPageOf(keys, projectId);
     if (!last) {
       try {
@@ -320,7 +330,7 @@ export function Shell() {
     }
     const page = last ? tree.get(last) : undefined;
     if (page && page.workspace_id === projectId && !tree.isTrashed(page.id)) navigate(pagePath(page.id), true);
-  }, [route, tree, revision, projectId, user.id, keys]);
+  }, [route, tree, revision, projectId, user.id, keys, linkMode]);
 
   const pageId = route.name === 'page' && tree.get(route.id) ? route.id : null;
   const crumbs = pageId ? tree.ancestors(pageId) : [];

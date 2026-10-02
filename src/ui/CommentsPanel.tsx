@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { locale, localize, t as current, useT, type Translate } from '../i18n';
 import '../i18n/lazy/commentsPanel';
+import { setVisitorName, useLinkMode, useVisitorName } from '../linkMode';
 import { useServices, useSyncStatus } from '../services';
 import { CommentInvalid, MAX_COMMENT_LENGTH, type CommentThread, type CommentView } from '../sync/comments';
 import { errorMessage } from '../sync/types';
@@ -64,6 +65,7 @@ function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarg
   const [focused, setFocused] = useState<string | null>(null);
   const ref = useRef<HTMLElement>(null);
   const tr = useT();
+  const link = useLinkMode();
 
   const open = sortThreads(threads.filter((t) => !t.resolved), source);
   const resolved = sortThreads(threads.filter((t) => t.resolved), source);
@@ -159,7 +161,8 @@ function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarg
             <p className="comments-note warn">{tr('comments.schemaBehind')}</p>
           )}
           {comments.unavailable && <p className="comments-note warn">{tr('comments.readOnlyDevice', { reason: localize(comments.unavailable) })}</p>}
-          {!canComment && !comments.unavailable && level > 0 && (
+          {link && level >= 2 && <VisitorName />}
+          {!canComment && !comments.unavailable && level > 0 && !(link && level >= 2) && (
             <p className="comments-note">{tr('comments.readOnly')}</p>
           )}
           {comments.pullError(pageId) && status.online && (
@@ -308,6 +311,7 @@ function Thread({
   const ref = useRef<HTMLElement>(null);
   const question = thread.blockId ? !!source?.describe(thread.blockId)?.question : false;
   const tr = useT();
+  const link = useLinkMode();
 
   useLayoutEffect(() => {
     if (focused) ref.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
@@ -350,9 +354,11 @@ function Thread({
                 {question ? tr('comments.answer') : tr('comments.reply')}
               </button>
             )}
-            <button className="link" onClick={() => resolve(!thread.resolved)}>
-              {thread.resolved ? tr('comments.reopen') : tr('comments.resolve')}
-            </button>
+            {!link && (
+              <button className="link" onClick={() => resolve(!thread.resolved)}>
+                {thread.resolved ? tr('comments.reopen') : tr('comments.resolve')}
+              </button>
+            )}
           </div>
         )
       )}
@@ -396,7 +402,12 @@ function Comment({ comment, me, canComment, canDeleteAny }: { comment: CommentVi
   return (
     <div className={`comment${comment.pending ? ' pending' : ''}`}>
       <div className="comment-meta">
-        {comment.importedAuthor ? (
+        {comment.linkAuthor ? (
+          // Escrito con un link público: el nombre que escribió, siempre con "(via link)" (nadie se hace pasar por el equipo).
+          <strong className="comment-author comment-via-link" data-tip-overflow>
+            {comment.linkAuthor} <span className="comment-via">{tr('link.viaLink')}</span>
+          </strong>
+        ) : comment.importedAuthor ? (
           // De afuera (importado, sin cuenta en la app): el nombre de la herramienta de origen y su correo.
           <strong className="comment-author" data-tip={comment.importedAuthorEmail ?? undefined} data-tip-plain data-tip-overflow>
             {comment.importedAuthor}
@@ -669,4 +680,53 @@ export function when(iso: string, now = Date.now(), tr: Translate = current): st
   const f = formatsFor(tr.lang);
   if (d.toDateString() === today.toDateString()) return f.time.format(d);
   return d.getFullYear() === today.getFullYear() ? f.day.format(d) : f.year.format(d);
+}
+
+/** El nombre con el que comenta el visitante de un link (P8): lo pide la primera vez y se puede cambiar. */
+function VisitorName() {
+  const link = useLinkMode();
+  const name = useVisitorName();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(name);
+  const tr = useT();
+  if (!link) return null;
+  if (name && !editing) {
+    return (
+      <p className="comments-note link-name">
+        {tr('link.commentingAs', { name })}{' '}
+        <button
+          className="link"
+          onClick={() => {
+            setValue(name);
+            setEditing(true);
+          }}
+        >
+          {tr('link.changeName')}
+        </button>
+      </p>
+    );
+  }
+  return (
+    <form
+      className="comments-note link-name"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!value.trim()) return;
+        setVisitorName(link.entry.id, value);
+        setEditing(false);
+      }}
+    >
+      <span>{tr('link.namePrompt')}</span>
+      <input
+        aria-label={tr('link.yourName')}
+        placeholder={tr('link.yourName')}
+        maxLength={60}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+      />
+      <button className="primary" disabled={!value.trim()}>
+        {tr('link.saveName')}
+      </button>
+    </form>
+  );
 }

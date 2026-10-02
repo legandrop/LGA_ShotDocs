@@ -1,6 +1,7 @@
 # Link público: «Anyone with the link»
 
-**Estado: diseño, sin código ni migración** (roadmap P.19; pedido de Lega del 2026-10-02). Corregido con la auditoría
+**Estado: entregas 0 y 1 implementadas (v0.114, *Can view*; migración sin aplicar, ver "Cómo quedó (entregas 0 y 1)"
+al final); la 2 (*Can edit*) sigue en diseño** (roadmap P.19; pedido de Lega del 2026-10-02). Corregido con la auditoría
 independiente del mismo día ("aprobado con condiciones"; ver "Correcciones de la auditoría", al final) y con las
 decisiones D29 a D31 (sección 9). Toca permisos, entrar sin cuenta y abuso: riesgo alto. Cada entrega va con sus pruebas
 de permisos (casos negativos y mutantes) y su auditoría independiente. Lo medido está en prototipos fuera del repo
@@ -948,6 +949,117 @@ entrega 0). Lo que encontró va así:
   otra cosa), N4 (un link puede llevar una página a más de 8 MB de contenido válido y frenar su base limpia: tope por
   página para lo que entra por links), N5 (la cuarentena prueba también `checkCleanBase`) y la idempotencia por
   `client_update_id` antes de los topes.
+
+## Cómo quedó (entregas 0 y 1)
+
+### Entrega 0: la base real (2026-10-02)
+
+Con `curl` (en `fetch` de Node, con los headers que manda supabase-js: `apikey` y `Authorization` con la clave
+publicable, `X-Client-Info`, `x-shotdocs-version`, `x-shotdocs-link`, `x-shotdocs-device`), una función, dos objetos y
+tres políticas de prueba sobre `thumbs` (`zz_plink_probe*`), sacados al terminar (verificado: 0 objetos, 0 políticas, 0
+funciones). Sin usuarios ni login.
+
+| Prueba | Respuesta |
+|---|---|
+| RPC por `POST` con el header | 200; la función lee `x-shotdocs-link`, `x-shotdocs-device` y `x-shotdocs-version`; rol `anon`, `auth.uid()` nulo |
+| Subir a `thumbs` con el token (política de `insert` que mira el header) / sin header | 200 / 400 (*new row violates row-level security policy*): el header llega a las políticas de Storage |
+| `GET` de la miniatura con el token, tres veces | 200 `MISS`, 200 `HIT`, 200 `HIT` (`cache-control: public, max-age=3600`) |
+| El mismo `GET` sin header, con un token válido de otro link, con uno al azar, solo con `apikey` | 400 `BYPASS` las cuatro veces |
+| Revocar el token (la política pasa a otro) y repetir el `GET` con el viejo, dos veces | 400 `BYPASS` las dos |
+| El token nuevo, sobre el objeto que estaba en caché | 200 `HIT` |
+| `createSignedUrls` con el token / revocado / sin header (plan B) | firma solo lo que la política deja; lo demás, *Either the object does not exist or you do not have access to it* |
+
+**Conclusión: plan A.** La caché de Storage (*Smart CDN*) es por objeto, pero cada pedido pasa por la política: un
+`HIT` solo se sirve a quien la política deja, y un token revocado da 400 en el acto aunque el objeto siga en caché. La
+política de `thumbs` para `anon` quedó en la migración. **Lo que no se pudo comprobar:** qué headers guardan los
+registros de la API (el endpoint de registros de la Management API responde 410). La respuesta lleva
+`cache-control: public`: un proxy compartido que abra el HTTPS (una red corporativa) podría guardar una miniatura;
+acotado (son miniaturas de la rama) y anotado para la entrega 3.
+
+**Tiempos en la base real** (en `begin … rollback`, con la rama más grande de los proyectos de Lega, 35 páginas, y 1923
+objetos en `thumbs`): `current_plink` 0,98 ms; `plink_page_level` de la hoja más profunda 0,80 ms (el `user_page_level`
+de la misma hoja, 0,08 ms); `plink_tree` 17,8 ms; listar `thumbs` con el link 29 ms (32 objetos) y sin header 0,46 ms
+(0); una miniatura por nombre 6,1 ms; `plink_tree` con un token al azar 0,10 ms y sin header 0,07 ms; `db_bytes` 4,7 ms
+la primera vez (45 MB, todas las bases) y 0,11 ms recordado.
+
+**`noindex`:** `public/_headers` suma `X-Robots-Tag: noindex, nofollow` y `Referrer-Policy:
+strict-origin-when-cross-origin` para toda la app, `public/robots.txt` con `Disallow: /`, e `index.html` la etiqueta
+`robots`.
+
+### Entrega 1: *Can view*
+
+- **Migración `20261012120000_link_publico.sql` (sin aplicar):** `public_links`, `public_link_usage`,
+  `public_link_usage_all`, `private.db_guard` y `workspace_settings.link_limits` (vacío: valen los topes por defecto de
+  `private.plink_limit`); `comments.plink_id`, `plink_author` y `plink_device_hash`; la regla única
+  `private.user_can_share_page` (que `can_share` llama, ahora también "nunca un invitado": un dueño de proyecto pasado a
+  invitado deja de compartir); `remove_member` revoca los links de quien se va; las funciones del visitante
+  `plink_open`, `plink_tree`, `plink_pull_page`, `plink_media_files`, `plink_media_file`, `plink_list_comments`,
+  `plink_add_comment`, `plink_edit_comment` y `plink_delete_comment` (solo `anon`, por `POST`; todas `VOLATILE`); las de quien comparte `create_public_link`, `set_public_link`, `reset_public_link`,
+  `revoke_public_link`, `get_public_link`, `public_link_pages` y `delete_public_link_comments`; la política
+  `thumbs_select_link`; `has_plain_readers` y `clean_work` cuentan los links; `list_comments` y `comments_view` suman
+  `plink_id` y `plink_author` al final; `rls_auto_enable` sin `execute` para `anon`; `schema_version` 14.
+- **N1 (bytes de los comentarios):** cada comentario y cada edición pasan por la guarda `db_bytes()` (todas las bases,
+  como mide Supabase; 350 MB), 1 MB por link y día (`comment_bytes`) y 10 MB de por vida (`life_comment_bytes`).
+- **N2 (lecturas contadas):** `plink_tree` recibe la firma de lo último que bajó y, si el árbol no cambió, no devuelve ni
+  cuenta nada; si cambió, cuenta sus bytes como una bajada (`pull`). `plink_list_comments` cuenta sus bytes cuando
+  devuelve algo. Las bajadas de todos los links tienen además un tope mensual (`all_month_pull_bytes`, 2 GB de los 5
+  del plan). `plink_media_files` (las filas de los archivos, hasta 200 por pedido) cuenta como una bajada (ver las
+  correcciones de la auditoría, abajo). Para el visitante, `update_seq` es `clean_seq` (o 1, "en preparación"): el árbol no cambia con cada tecla
+  de un editor.
+- **D33:** `create_public_link` y `reset_public_link` dan `clean_off` con el interruptor de D14 apagado; *Share* muestra
+  *Anyone with the link* apagado con la línea que lo explica.
+- **La app:** `src/linkMode.ts` (el link en la dirección, lo guardado en el dispositivo con un id de dispositivo por
+  link, el cliente sin sesión con los headers), `src/sync/linkRemote.ts` (el servidor visto por `plink_*`: el visitante
+  es un invitado con Comentar sobre la página del link) y `src/ui/LinkApp.tsx` (abrir, "este link ya no anda", el tope
+  del día, el cartel con el dominio). En *Share*, `src/ui/LinkShare.tsx` (*General access*). El motor suma dos opciones
+  (`intervalMs` y `pullOnly`, el modo liviano: solo se bajan las páginas ya bajadas o abiertas, un ciclo cada 30 s) y
+  `sharpImages` no baja originales en modo link. Los comentarios del link se ven con *(via link)*; el visitante escribe
+  su nombre una vez y no resuelve hilos.
+- **El portero:** con `x-shotdocs-link` acepta solo `POST /pass`, `POST /verify`, `POST /folder/list` y
+  `GET /drive/status` (lo demás, `403 link_denied`), pregunta `plink_media_file` con la clave publicable y el header,
+  nunca reenvía un `Authorization` y da pases de 2 horas (también en `/folder/list`). CORS acepta los dos headers.
+- **Pruebas:** `supabase/tests/link_publico_permisos.sql` (en `begin … rollback` contra la base real: pasa) y 48
+  mutantes de la migración, 45 detectados; los 3 que no, son equivalentes: el chequeo de forma del token (la huella igual
+  rechaza), la guarda del token en la política (rendimiento) y el proyecto borrado (`user_can_share_page` ya da falso).
+  Las 19 pruebas SQL de antes pasan con la migración (dos ajustes: la cuenta de políticas de `thumbs` y
+  `comments_view`). `src/sync/linkMode.test.ts` (el visitante con el motor de verdad: solo la rama, solo bases, modo
+  liviano, comentarios con nombre, revocar, el creador que deja de compartir) y `portero/src/core.test.ts` (4 casos del
+  link).
+- **Decisiones propuestas** (el detalle, en el informe de la entrega): P14 simplificado (un `#link=` abre siempre el
+  modo link, sin mirar si hay una sesión: nunca mezcla permisos); los links guardados viven en su propia lista
+  (`shotdocs-links`) y no en el selector de workspaces; el ícono del árbol para las páginas con link y el detalle
+  *Can view link, created by…* para el equipo quedan para después (la función `public_link_pages` ya está).
+- **Para publicar:** aplicar la migración (con la copia de seguridad), prender el interruptor de D14 y subir
+  `min_app_version` a esta versión (recomendado: la publicada muestra un comentario de un link como de una cuenta
+  borrada y no tiene *General access*; no se pierde nada).
+
+### Correcciones de la auditoría (entregas 0 y 1)
+
+Dos auditorías independientes (base y portero; app y motor) dijeron «no pasa»; se corrigió en una ronda:
+
+- **Reset link (base, B1):** `reset_public_link` no reiniciaba la rama (`clean_reset`, como crear): quien recibía el link
+  nuevo bajaba la base armada antes de que el editor borrara algo. Ahora la reinicia. Prueba en
+  `link_publico_permisos.sql` (el editor sube una fila después de la base y resetea: el link nuevo no baja nada).
+- **`plink_media_files` (base, B2):** calculaba la rama una vez por archivo y no contaba. Con 200 ids en una rama de 36
+  páginas, medido en rollback sobre la base real: **614-658 ms antes, 8-15 ms ahora**. Calcula la rama una vez
+  (`materialized`) y cuenta como una bajada (`pull`: un pedido y los bytes devueltos; se ve en los topes y en el contador
+  de *Share*). Pasó a `VOLATILE`. El tiempo no se puede probar en el SQL de pruebas: se midió con
+  `link-impl/corr/perf.mjs` (fuera del repo); la prueba cuida que cuente, que dé solo lo de la rama y el tope de 200.
+- **Abrir sin red (app, B1):** `LinkApp` pedía `plink_open` antes de montar la página, y sin red mostraba «Could not open
+  your workspace». Ahora la entrada guardada recuerda el id del link y de la página (`linkId`, `pageId`): si `plink_open`
+  falla por red (o tarda más de 2 s) se muestra lo guardado, con el aviso *Couldn't reach the server…*, y el motor sigue
+  intentando; el aviso se va cuando contesta. Con red, `plink_open` manda: un link revocado o vencido se corta sin mostrar
+  nada. La primera vez sin red tiene su propio texto. Pruebas en `src/ui/linkApp.test.tsx`.
+- **El cliente del link nunca usa una sesión (app, B2):** `src/linkSession.test.ts` guarda sesiones de cuenta en las tres
+  claves posibles del navegador y comprueba que ningún pedido del cliente del link (RPC y Storage) las lleva ni las toca.
+- **Recargar sigue en el link (app, O1):** el `#link=` se borra de la barra, así que recargar en un dispositivo con un
+  workspace abría ese workspace. Ahora la pestaña recuerda su link (`sessionStorage`) y recargar o restaurar la pestaña
+  sigue en el link; escribir la dirección o abrir otra pestaña abre la cuenta como siempre (`navigation type`).
+- **Pruebas que faltaban:** las guardas de `set`, `reset` y `revoke` (sin permiso, Comentar, Editar, miembro común con 4,
+  invitado), `clean_off` en *Reset*, y `plink_list_comments` solo de la rama. El nombre del visitante saca también U+061C,
+  U+2028 y U+2029 (base y app, como el portero). 14 mutantes nuevos de la base y 9 de la app, todos detectados salvo uno
+  equivalente.
+- **Al roadmap:** el resto de las observaciones (ver `Doc_Roadmap.md`).
 
 ## Cómo se midió
 
