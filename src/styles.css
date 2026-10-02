@@ -2459,6 +2459,64 @@ code {
   border: 1px dashed var(--sheet-break);
 }
 
+/* El salto de hoja (un párrafo con `pageBreak`, editorSchema.ts; Docs/Doc_Hojas_PDF.md): una línea punteada con
+   "Page break" debajo del texto; vacío, la línea pasa por el renglón. El rótulo sale de `--sd-page-break-label`
+   (PageEditor.tsx, en el idioma de la app) y tapa el texto de ayuda de BlockNote. Una versión vieja de la app no
+   pone el atributo y ve un párrafo común. */
+.bn-container .bn-block-content[data-content-type='paragraph'][data-page-break='true'] {
+  position: relative;
+  padding-bottom: 22px;
+}
+
+.bn-container .bn-block-content[data-content-type='paragraph'][data-page-break='true']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 10px;
+  height: 0;
+  border-top: 1px dashed var(--faint-2, var(--sheet-break));
+  pointer-events: none;
+}
+
+.bn-container .bn-block-content[data-content-type='paragraph'][data-page-break='true']::after {
+  content: var(--sd-page-break-label, 'Page break') !important;
+  position: absolute;
+  left: 50%;
+  bottom: 2px;
+  margin: 0;
+  padding: 0 8px;
+  transform: translateX(-50%);
+  background: var(--bg);
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-style: normal;
+  line-height: 16px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.bn-container .bn-block-content[data-content-type='paragraph'][data-page-break='true']:has(.ProseMirror-trailingBreak:only-child) {
+  padding-bottom: 0;
+}
+
+.bn-container .bn-block-content[data-content-type='paragraph'][data-page-break='true']:has(.ProseMirror-trailingBreak:only-child)::before {
+  bottom: 50%;
+}
+
+.bn-container .bn-block-content[data-content-type='paragraph'][data-page-break='true']:has(.ProseMirror-trailingBreak:only-child)::after {
+  bottom: calc(50% - 8px);
+}
+
+/* En una página libre no hay hojas en pantalla: la línea va más tenue (cuenta solo al imprimir, en A4). */
+.page:not(.sheet) .bn-container .bn-block-content[data-content-type='paragraph'][data-page-break='true']::before,
+.page:not(.sheet) .bn-container .bn-block-content[data-content-type='paragraph'][data-page-break='true']::after {
+  opacity: 0.55;
+}
+
 /* La vista de impresión (printView.ts): afuera de la pantalla, con el ancho del área de texto de la hoja.
    Las reglas de adentro valen igual en pantalla (donde se mide) y al imprimir, así los cortes coinciden;
    por eso no dependen del ancho de la ventana (las del teléfono se pisan acá). */
@@ -2608,6 +2666,20 @@ code {
 
 .print-view .sheet-keep {
   break-inside: avoid;
+}
+
+/* En el papel, el salto no se ve: con texto es un párrafo común; vacío no ocupa lugar (printView.ts). */
+.print-view .bn-container .bn-block-content[data-content-type='paragraph'][data-page-break='true'] {
+  padding-bottom: 0;
+}
+
+.print-view .bn-container .bn-block-content[data-content-type='paragraph'][data-page-break='true']::before,
+.print-view .bn-container .bn-block-content[data-content-type='paragraph'][data-page-break='true']::after {
+  content: none !important;
+}
+
+.print-view .print-page-break-empty {
+  display: none !important;
 }
 
 .print-view .sheet-break-before {

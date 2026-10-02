@@ -120,8 +120,8 @@ export const help = {
   // --- Escribir ---
   'help.slash.title': { en: "The / menu", es: "El menú /" },
   'help.slash.text': {
-    en: "Type / on an empty line to add headings, lists, checklists, a table, a quote, code, a divider, an image, Script or a question. Keep typing to filter; ↑ ↓ and Enter pick, Esc closes.",
-    es: "Escribí / en un renglón vacío para sumar títulos, listas, casillas, una tabla, una cita, código, un divisor, una foto, Script o una pregunta. Seguí escribiendo para filtrar; ↑ ↓ y Enter eligen, Esc cierra.",
+    en: "Type / on an empty line to add headings, lists, checklists, a table, a quote, code, a divider, an image, Script, a question or a page break. Keep typing to filter; ↑ ↓ and Enter pick, Esc closes.",
+    es: "Escribí / en un renglón vacío para sumar títulos, listas, casillas, una tabla, una cita, código, un divisor, una foto, Script, una pregunta o un salto de hoja. Seguí escribiendo para filtrar; ↑ ↓ y Enter eligen, Esc cierra.",
   },
   'help.blocks.title': { en: "Moving blocks", es: "Mover bloques" },
   'help.blocks.text': {
@@ -324,6 +324,11 @@ export const help = {
     en: "A page can be free or have a sheet size (A5, A4, A3, Letter) in ⋯ › Page size, for the page or its whole branch. Marks show where each sheet ends, and what you see is what the PDF looks like.",
     es: "Una página puede ser libre o tener tamaño de hoja (A5, A4, A3, Carta) en ⋯ › Tamaño de hoja, para la página o toda su rama. Unas marcas muestran dónde termina cada hoja, y lo que ves es lo que sale en el PDF.",
   },
+  'help.pageBreak.title': { en: "Page break", es: "Salto de hoja" },
+  'help.pageBreak.text': {
+    en: "{pageBreak} or / Page break makes what follows start on a new sheet, in the Page marks and in the PDF. It shows as a dashed line; Backspace right after it removes it. On a free page it only counts when printing.",
+    es: "{pageBreak} o / Salto de hoja hace que lo que sigue empiece en una hoja nueva, en las marcas de hoja y en el PDF. Se ve como una línea punteada; Retroceso justo después lo saca. En una página libre cuenta solo al imprimir.",
+  },
   'help.pdf.title': { en: "PDF and printing", es: "PDF e impresión" },
   'help.pdf.text': {
     en: "{print} or ⋯ › Export PDF / Print opens the browser's print dialog with the same sheet breaks you see; choose Save as PDF there.",
@@ -357,6 +362,7 @@ export const help = {
   'shortcut.comment': { en: "Comment on the block", es: "Comentar el bloque" },
   'shortcut.question': { en: "Question", es: "Pregunta" },
   'shortcut.script': { en: "Script (screenplay)", es: "Script (guion)" },
+  'shortcut.pageBreak': { en: "Page break: what follows starts on a new sheet", es: "Salto de hoja: lo que sigue empieza en una hoja nueva" },
   'shortcut.scriptEnter': {
     en: "In a Script line: keep writing Script (on an empty line, back to normal text)",
     es: "En una línea de Script: seguir en Script (en una vacía, volver al texto común)",
