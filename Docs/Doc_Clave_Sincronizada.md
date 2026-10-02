@@ -4,7 +4,7 @@
 sincronizada entre tus dispositivos, cifrada con una frase que solo sabés vos"). Reemplaza la parte de IA1 de
 `Doc_Asistente.md` que decía "se carga una vez por dispositivo"; todo lo demás de la sección 4 de ese documento (la
 clave local, *Forget key*, la casilla al salir) sigue igual. Diseñado contra `main` v0.129. Las decisiones están
-propuestas (CS1 a CS8, sección 14) y valen hasta que Lega diga otra cosa. Los tiempos están medidos en esta PC (sección
+propuestas (CS1 a CS9, sección 14) y valen hasta que Lega diga otra cosa. Los tiempos están medidos en esta PC (sección
 4.1 y "Cómo se midió"); los del iPhone son estimados y se miden en la entrega S1.
 
 ## En corto
@@ -30,9 +30,16 @@ propuestas (CS1 a CS8, sección 14) y valen hasta que Lega diga otra cosa. Los t
   frase nueva; los dispositivos que ya la tenían siguen andando.
 - **Lo que no protege, dicho claro:** la copia **en cada dispositivo** queda como hoy (cifrada con la llave del
   dispositivo, sin frase): quien use ese navegador con la sesión abierta, o un script dentro de la app, la puede usar.
-  Si se pierde un dispositivo, lo único que corta de verdad es **cambiar la clave en el proveedor** y actualizar la
-  copia. Y una frase que se filtra no se "des-filtra": las copias de seguridad del dueño guardan la versión vieja
-  cifrada; por eso, ante la duda, se cambia la clave en el proveedor.
+  Y ese dispositivo probablemente también tenga **la frase** en su gestor de contraseñas. Si se pierde un dispositivo,
+  el orden es: **cerrar la sesión de los otros dispositivos** (*Sign out other devices*, nuevo en S1), **una frase
+  nueva**, **una clave nueva en el proveedor** y recién ahí actualizar la copia (sección 3). Sin los dos primeros pasos,
+  la sincronización le entregaría la clave nueva al dispositivo perdido. Y una frase que se filtra no se "des-filtra":
+  las copias de seguridad del dueño guardan la versión vieja cifrada; por eso, ante la duda, se cambia la clave en el
+  proveedor.
+- **Una copia que cambia a dónde va la clave no se adopta en silencio** (S1): al abrirla, la app muestra el proveedor,
+  el host y los últimos cuatro caracteres de la clave, y si el destino no es el que el dispositivo ya usaba, pregunta
+  *Your synced key now goes to <host>. Use it?*. Así quien tenga la sesión y la frase no puede desviar el texto de las
+  páginas a un servidor suyo sin que se vea.
 - **Entregas:** S1 (prender, desbloquear y dejar de sincronizar) y S2 (mantener al día entre dispositivos, cambiar la
   frase, *Keep the key on this device*, varios workspaces). Sin tipos de bloque nuevos, sin tocar el editor, sin subir
   `min_app_version`.
@@ -51,6 +58,12 @@ propuestas (CS1 a CS8, sección 14) y valen hasta que Lega diga otra cosa. Los t
    podría cambiar la dirección a un servidor suyo y la app le mandaría la clave.
 5. **Nunca se pierde la clave local por la sincronización.** Desbloquear, actualizar o dejar de sincronizar no borran
    la clave que el dispositivo ya tenía, salvo que la persona lo pida (*Forget key*).
+6. **Nunca se adopta en silencio un destino nuevo.** Un sobre válido lo puede armar cualquiera que sepa la frase (el
+   cifrado autenticado prueba que lo armó alguien con la frase, no que lo armó la persona): si cambia el proveedor o la
+   dirección respecto de lo que el dispositivo usa, se pregunta (sección 2).
+7. **Nunca se vuelve a cifrar con una frase sin comprobarla.** *Update synced key*, *Replace synced key…*, *Change
+   passphrase…* y *Also sync in this workspace* abren primero la copia actual con la frase escrita (o, si no hay copia,
+   la piden dos veces); si no abre, no escriben nada. Así un error de tipeo no deja una copia que nadie puede abrir.
 
 ## 1. Qué hay hoy
 
@@ -72,14 +85,18 @@ propuestas (CS1 a CS8, sección 14) y valen hasta que Lega diga otra cosa. Los t
 2. La ventana muestra una frase de seis palabras (*Your passphrase*), con *Copy* y *New one*, y el texto: *Save it in
    your password manager. You'll need it once on each new device. If you lose it, nobody can recover it: you'll paste
    your API key again.* Debajo, *Use my own passphrase instead*.
-3. Para seguir, la persona confirma: *I saved my passphrase* (casilla) → *Turn on sync*. La app cifra y sube; dice
-   *Your key is synced in <workspace>.*
+3. Para seguir, la persona confirma: *I saved my passphrase* (casilla) → *Turn on sync*. La ventana es un formulario
+   (4.4): al tocar *Turn on sync* el navegador ofrece guardar la frase en su gestor de contraseñas. La app cifra y
+   sube; dice *Your key is synced in <workspace>.*
 
 **Desbloquear en otro dispositivo** (el iPhone, sin clave cargada):
 
 1. *Assistant…* (o el panel, que hoy dice *Set up the assistant*) muestra *Your key is synced. Enter your passphrase to
    use it on this device.*, el campo de la frase (el gestor de contraseñas la ofrece) y *Unlock*.
-2. Con la frase correcta: la clave queda en el dispositivo como hoy (cifrada con la llave del dispositivo) y el panel
+2. Con la frase correcta, la app muestra a dónde va la clave antes de guardarla: *Unlocked: Anthropic key ending in
+   …a1B2.* (o *OpenAI-compatible at openrouter.ai, key ending in …*). Si el dispositivo ya tenía una clave con **otro**
+   proveedor o **otra** dirección, pregunta *Your synced key now goes to <host>. Use it?* con el host completo, *Use it*
+   / *Keep my current key*. La clave queda en el dispositivo como hoy (cifrada con la llave del dispositivo) y el panel
    anda. Con una equivocada: *That passphrase doesn't open your synced key.* Sin red: *Unlocking needs internet.*
 3. Debajo de la frase, *Keep the key on this device* (tildada; S2). Destildada, la clave queda solo en la memoria de esa
    pestaña: al recargar se vuelve a pedir la frase. Para una computadora prestada.
@@ -97,7 +114,8 @@ Quién puede intentar qué, qué ve y qué lo frena:
 | El mismo dueño | Puede escribir en su base | Cambiar la dirección para que la clave vaya a su servidor | La dirección y el proveedor van cifrados (regla 4) |
 | El mismo dueño | — | Bajar las vueltas o cambiar el algoritmo en la fila | La fila no trae parámetros: los pone la app por versión (regla 3); una versión desconocida no se abre |
 | El mismo dueño | — | Cambiar la sal, el iv o el id para que "abra" otra cosa | La cabecera va atada al cifrado (AAD): cualquier cambio da "no abre" |
-| El mismo dueño | — | Volver a poner una fila vieja (una clave anterior) o borrar la fila | No se puede impedir. Daño: el dispositivo nuevo abre una clave vieja (que, si se cambió en el proveedor, da *Key doesn't work*) o no encuentra la copia. No filtra nada |
+| El mismo dueño | — | Volver a poner una fila vieja (una clave anterior) o borrar la fila | Para un dispositivo nuevo no se puede impedir (la AAD no ata `generation`): abre una clave vieja, que si se cambió en el proveedor da *Key doesn't work*, o no encuentra la copia. No filtra nada. Un dispositivo que ya abrió una vez guarda el `savedAt` de **adentro** del sobre (autenticado) y rechaza uno más viejo: *This synced copy is older than the one on this device.* (S2). Si la fila vieja cambia el destino, además se pregunta (regla 6) |
+| El mismo dueño | Puede insertar con su clave de servicio una fila a nombre de la persona en **su** workspace | Que la persona, al ver *Your key is synced…* y no poder abrirla, use *Forgot it?* y suba su clave a esa base | La frase no abre una fila ajena (no filtra). El estado "copia sin clave" muestra la fecha de la copia; si el dispositivo sabe que la copia de la persona está en **otro** workspace (`sync.ref`), dice *Your key is synced in <otro>.* y no ofrece *Forgot it?* ahí. Subir la clave a esa base sigue siendo una decisión de la persona (CS2) |
 | El mismo dueño | Los registros de la API de su Supabase | Saber cuándo un dispositivo nuevo pidió la fila | No se oculta. Es poco: no ve la frase ni si abrió |
 | **Quien roba la base** (o una copia de seguridad) | Lo mismo que el dueño, de todas las personas | Lo mismo: adivinar sin conexión, una persona por vez (cada fila tiene su sal) | Igual que arriba |
 | **Las copias de seguridad del dueño** (`z_shotdocs_backup`, cuatro por día) | Las versiones viejas del bloque cifrado, por el tiempo que se guarden | Abrir una copia vieja con una frase vieja que se filtró | Cambiar la frase no borra las copias viejas: si la frase se filtra, **se cambia la clave en el proveedor** (la vieja deja de servir). La ayuda lo dice |
@@ -105,6 +123,7 @@ Quién puede intentar qué, qué ve y qué lo frena:
 | **Un cliente MCP conectado** (un tercero con un token de la persona, `Doc_Asistente.md` 9.2) | Nada | Leer la fila y adivinar la frase | El token cerrado de fábrica (rol propio o `db_pre_request`) y además la política exige `client_id` vacío |
 | **El portero** | Nada | — | Nunca la pide ni la recibe |
 | **Quien usa el dispositivo** con la sesión abierta | La clave local (como hoy) | Usarla | Lo mismo que hoy: *Forget key*, la casilla al salir, *Keep the key on this device* destildada en una computadora prestada, el tope de gasto en el proveedor |
+| **Quien tiene un dispositivo perdido o robado**, con la sesión abierta y la frase en el gestor de contraseñas | La clave local, la sesión y la frase | (a) Recibir la clave nueva cuando la persona la cambie; (b) armar un sobre válido con la misma frase, con **su** clave y **su** dirección, para que los otros dispositivos de la persona le manden el texto de las páginas | (a) *Sign out other devices* y frase nueva **antes** de actualizar la copia (casos de abajo); (b) la regla 6: la app nunca adopta en silencio un destino distinto y muestra siempre el host y el final de la clave. Límite: el token de acceso del dispositivo perdido sigue sirviendo hasta que vence (1 hora de fábrica en Supabase) |
 | **Un script dentro de la app** (una dependencia comprometida, algo inyectado) | Lo que se escribe en la página, también la frase al desbloquear | Leer la frase o la clave | Lo mismo que hoy (`Doc_Asistente.md` 10.4): la CSP, ningún script de afuera salvo el selector de Google. La frase no lo empeora: ese script ya podía usar la clave |
 | **Quien publica la app** (Lega, o quien sirva una copia propia) | El código que corre | Cambiar el código para mandar la frase a otro lado | Es la misma confianza que ya pide la app (`Plan_Workspaces.md`, sección 1). No se resuelve acá |
 
@@ -123,9 +142,22 @@ Quién puede intentar qué, qué ve y qué lo frena:
 - **Cerrar sesión.** Como hoy: la casilla *Also forget my assistant key on this device* saca la clave **del
   dispositivo**; la copia sincronizada sigue en el workspace (protegida por la frase). El texto de la casilla lo suma.
 - **Dispositivo perdido o robado.** La copia de ese dispositivo no tiene frase: quien lo desbloquee con la sesión
-  abierta la puede usar. El remedio es el del proveedor: **crear una clave nueva y borrar la vieja en su consola**,
-  pegarla en *Assistant…* y *Update synced key* (pide la frase). Los demás dispositivos, al fallar la vieja, ven *Your
-  synced key changed on another device. Enter your passphrase to update it here.* (S2). La ayuda lo explica paso a paso.
+  abierta la puede usar, y probablemente tenga **también la frase** (el gestor de contraseñas del navegador o del
+  sistema la autocompleta en ese mismo sitio). Por eso el orden importa:
+  1. **Cerrar la sesión de los otros dispositivos** en el workspace de la copia: *Sign out other devices* en el menú de
+     la cuenta (nuevo en S1; `signOut({ scope: 'others' })` de supabase-js, que revoca los refresh tokens de las otras
+     sesiones de esa cuenta). Hoy la app solo cierra la sesión local. Límite: el token de acceso que el dispositivo
+     perdido ya tiene sigue sirviendo hasta que vence (1 hora de fábrica). Las sesiones son por workspace: en otros
+     workspaces hay que repetirlo (para la clave alcanza el de la copia).
+  2. **Sacar el dispositivo del gestor de contraseñas** (la cuenta de Apple o de Google), o directamente **elegir una
+     frase nueva** generada: *Replace synced key…* pide la frase actual (para abrir la copia, regla 7), la clave nueva y
+     una frase nueva, en un solo paso.
+  3. **Crear una clave nueva y borrar la vieja en la consola del proveedor.**
+  4. Con eso, *Replace synced key…* (del paso 2). Los demás dispositivos, al fallar la vieja, ven *Your synced key
+     changed on another device. Enter your passphrase to update it here.* (S2) y se les pone la frase nueva.
+
+  Si el dispositivo perdido llegara a pisar la copia antes del paso 1 con un destino suyo, los otros dispositivos lo
+  ven (regla 6). La ayuda lo explica paso a paso.
 - **Sacan a la persona del workspace.** Su fila queda hasta que el dueño borre su cuenta de ese Supabase (se borra con
   ella, `on delete cascade`). No le sirve a nadie sin la frase.
 
@@ -182,11 +214,15 @@ como versión 2 sin romper nada (CS3).
 ### 4.3 El sobre
 
 - **La frase**, normalizada (NFKC: una tilde escrita de dos maneras da lo mismo, probado), recortados los espacios de
-  las puntas. **La sal:** 16 bytes al azar, nueva en cada cifrado. **La llave:** PBKDF2-SHA256, 1 000 000 de vueltas,
+  las puntas. Si tiene la forma de la generada (seis palabras de letras separadas por guiones o espacios), se pasa a
+  minúsculas y los espacios a guiones antes de derivar: el teclado del iPhone pone mayúscula a la primera letra y, sin
+  esto, `Gift-zebra-…` no abre (lo encontró la auditoría). Una frase propia se usa tal cual. **La sal:** 16 bytes al azar, nueva en cada cifrado. **La llave:** PBKDF2-SHA256, 1 000 000 de vueltas,
   AES-GCM de 256 bits, **no exportable**, que se usa y se suelta (nunca se guarda).
 - **Lo cifrado** (JSON): `{ provider, baseUrl, model, apiKey, savedAt }`, **relleno a 1 024 bytes** con espacios al
   final. Sin relleno el largo delata el proveedor (una clave de Gemini mide 39 caracteres; una de OpenAI, más de 150).
-  Una dirección de más de 300 caracteres no se acepta (*That Base URL is too long to sync.*).
+  La regla se mide **en bytes UTF-8 del JSON, no en caracteres**: si pasa de 1 024 no se sincroniza (*This key or Base
+  URL is too long to sync.*). El peor caso que armó la auditoría (dirección de 300 caracteres con tildes, modelo de 120,
+  clave de 200) da 716 bytes. La lista de modelos no viaja en el sobre (se vuelve a pedir al proveedor).
 - **AES-256-GCM** con un iv de 12 bytes al azar y, como datos adicionales (AAD), la cabecera
   `{"v":1,"kdf":"pbkdf2-sha256","iter":1000000,"salt":"<sal>","uid":"<id de la persona en ese Supabase>"}`, armada por
   la app con sus constantes y los datos de la fila. Si el dueño cambia la sal, el id o la versión, el cifrado no abre;
@@ -201,12 +237,18 @@ como versión 2 sin romper nada (CS3).
 ### 4.4 La frase que propone la app
 
 - Seis palabras al azar (`crypto.getRandomValues`, sin sesgo: se descarta lo que no entra parejo) de la **lista corta
-  de la EFF** (1 296 palabras en inglés, cortas y sin parecidos; licencia CC BY 3.0, se suma a
-  `THIRD_PARTY_NOTICES.md`; unos 8 KB en la parte que se baja con el asistente). Separadas por guiones:
-  `vapor-lunar-tile-anchor-sprout-yarn`.
-- *New one* propone otra. *Copy* la copia. El campo es de contraseña con `autocomplete="new-password"` y un usuario
-  oculto *Shot Docs assistant key*, para que el gestor de contraseñas la guarde con un nombre propio (la app entra con
-  código, así que es la única "contraseña" del sitio).
+  1 de la EFF** (*EFF's Short Wordlist #1*: 1 296 palabras en inglés de 3 a 5 letras, sin parecidos; licencia CC BY
+  3.0, se suma a `THIRD_PARTY_NOTICES.md`; unos 8 KB en la parte que se baja con el asistente). En minúsculas,
+  separadas por guiones: seis palabras de 3 a 5 letras (el ejemplo real sale de la lista al implementar; no se inventa
+  uno acá).
+- *New one* propone otra. **Guardar en el gestor es lo recomendado**: la ventana es un formulario con un usuario oculto
+  *Shot Docs assistant key* y el campo con `autocomplete="new-password"`; al tocar *Turn on sync* se envía (sin salir de
+  la página), y así el navegador ofrece guardarla con nombre propio (la app entra con código, así que es la única
+  "contraseña" del sitio). *Copy* existe, con el aviso *Copied passphrases can stay in your clipboard history.* (el
+  historial de Windows, Win+V, y el portapapeles universal de Apple la guardan).
+- **Los campos de la frase** son `input` **no controlados** (se leen por `ref` al tocar el botón y se vacían): un campo
+  controlado por React dejaría la frase en su estado, visible en sus herramientas. Llevan `autocapitalize="none"`,
+  `autocorrect="off"` y `spellcheck="false"`.
 - **Una propia** (*Use my own passphrase instead*): 20 caracteres o más y al menos cuatro palabras; dos veces para
   confirmar; aviso fijo: *A passphrase you make up is much easier to guess than a generated one. Anyone who gets a copy
   of this workspace's database could try.* No se mide "la fuerza" con una biblioteca (pesaría cientos de KB): la regla
@@ -273,14 +315,15 @@ create trigger assistant_key_sync_touch before update on public.assistant_key_sy
 
 - La base `shotdocs-assistant` **sigue en la versión 1**: una versión vieja de la app la abre con `openDB(…, 1)`, y si
   la nueva la subiera a 2, la vieja fallaría con `VersionError` y se quedaría sin asistente en ese dispositivo. Lo nuevo
-  va **adentro del registro de siempre**, en campos opcionales: `sync?: { ref, userId, generation, unlockedAt }` (de qué
-  workspace y qué versión de la copia vino la clave).
+  va **adentro del registro de siempre**, en campos opcionales: `sync?: { ref, userId, generation, savedAt, unlockedAt }` (de
+  qué workspace y qué versión de la copia vino la clave; `savedAt` es el de **adentro** del sobre, autenticado, para
+  rechazar una copia más vieja, O3 de la auditoría).
 - Al desbloquear, la clave se guarda como hoy (`saveSettings` con la llave del dispositivo) y se anota `sync`. Con *Keep
   the key on this device* destildada (S2), la clave queda en una variable del módulo del asistente, solo en esa pestaña,
   y nada se escribe en la base (ni `sync`): al recargar no está. Es la única excepción a "la clave no queda en ninguna
   variable" de `Doc_Asistente.md` sección 4: una variable del módulo (nunca `window` ni el estado de React), que un
   script dentro de la app podría leer igual que hoy puede usar la clave guardada; no agrega exposición.
-- La frase vive en el campo hasta tocar *Unlock*; se pasa a la derivación y se vacía el campo. La llave derivada se usa
+- La frase vive en el campo (no controlado, 4.4) hasta tocar *Unlock*; se pasa a la derivación y se vacía el campo. La llave derivada se usa
   para abrir o cerrar y se suelta. **Nunca** se guarda ni la frase ni la llave derivada (CS6).
 
 ## 7. Dos dispositivos a la vez
@@ -291,7 +334,8 @@ create trigger assistant_key_sync_touch before update on public.assistant_key_sy
 - **Saber que cambió** (S2): al abrir *Assistant…* o el panel con red, una consulta de `generation` (una fila chica, sin
   el cifrado). Si es mayor que `sync.generation` del dispositivo, la ventana dice *Your synced key changed on another
   device. Enter your passphrase to update it here.*; hasta que la persona lo haga, la clave local sigue andando (regla
-  5). Si la clave local da *Key doesn't work* (401) y hay una copia más nueva, el error suma ese mismo botón.
+  5). Al abrirla: si su `savedAt` es **menor** que el de `sync.savedAt`, no se adopta (*This synced copy is older than
+  the one on this device.*); si cambia el destino, se pregunta (regla 6). Si la clave local da *Key doesn't work* (401) y hay una copia más nueva, el error suma ese mismo botón.
 
 ## 8. Versiones viejas
 
@@ -312,8 +356,12 @@ En *Assistant…*, debajo de *Forget key*, una sección **Sync across my devices
 |---|---|
 | Sin clave guardada y sin copia | *Save a key first to sync it across your devices.* |
 | Con clave, sin copia | *Your key is only on this device.* · *Turn on sync…* |
-| Con copia, abierta en este dispositivo | *Synced in <workspace> · updated <fecha>.* · *Update synced key* (si la clave local es otra) · *Change passphrase…* (S2) · *Stop syncing* |
-| Con copia, sin clave en este dispositivo | *Your key is synced. Enter your passphrase to use it on this device.* · campo *Passphrase* con *Paste* · *Keep the key on this device* (S2) · *Unlock* · *Forgot it? Paste your API key again and choose a new passphrase.* |
+| Con copia, abierta en este dispositivo | *Synced in <workspace> · updated <fecha>.* · *Update synced key* (si la clave local es otra; pide la frase y abre la copia antes, regla 7) · *Replace synced key…* (clave y frase nuevas, para un dispositivo perdido) · *Change passphrase…* (S2) · *Stop syncing* |
+| Con copia, sin clave en este dispositivo | *Your key is synced (saved <fecha>). Enter your passphrase to use it on this device.* · campo *Passphrase* con *Paste* · *Keep the key on this device* (S2) · *Unlock* · *Forgot it? Paste your API key again and choose a new passphrase.* |
+| Con copia en este workspace, pero el dispositivo sabe que la de la persona está en **otro** (`sync.ref`) | *Your key is synced in <otro>.* · *Unlock* (por si la persona sí la puso acá); **sin** *Forgot it?* |
+| Al abrir una copia | *Unlocked: <provider> key ending in …<4>.* (con el host en uno compatible) |
+| La copia abierta cambia el destino | *Your synced key now goes to <host>. Use it?* · *Use it* / *Keep my current key* |
+| La copia abierta es más vieja que la del dispositivo (S2) | *This synced copy is older than the one on this device.* (no se adopta) |
 | La copia cambió en otro dispositivo (S2) | *Your synced key changed on another device. Enter your passphrase to update it here.* |
 | Sin red | *Syncing your key needs internet.* (los botones apagados) |
 | Base sin la tabla | *This workspace's database needs an update to sync your key.* |
@@ -327,6 +375,10 @@ En *Assistant…*, debajo de *Forget key*, una sección **Sync across my devices
 - **El texto de siempre** (*Your key stays on this device and is sent only to <provider>.*) pasa a *Your key is sent
   only to <provider>. With sync on, an encrypted copy is stored in <workspace>.* cuando hay copia.
 - **El panel sin clave:** *Set up the assistant* suma *Unlock your synced key* si hay copia.
+- **Menú de la cuenta: *Sign out other devices*** (S1): *Sign out of <workspace> on all your other devices? They'll need
+  a new code to get back in. A device that is already open can keep working for up to an hour.* · *Sign out others* /
+  *Cancel*. Llama `signOut({ scope: 'others' })` del cliente del workspace. No depende del asistente: sirve para
+  cualquier dispositivo perdido.
 - **La ventana de salir:** la ayuda de la casilla suma *Your synced copy stays in this workspace, protected by your
   passphrase.* si hay copia.
 - Tooltips con `data-tip` solo donde agregan algo (en *Keep the key on this device*: *Off on a borrowed computer: the
@@ -335,8 +387,10 @@ En *Assistant…*, debajo de *Forget key*, una sección **Sync across my devices
 ## 10. Ayuda
 
 Una entrada nueva en "Writing", *Sync your assistant key*, en los dos idiomas: qué hace, dónde queda la copia y quién
-la ve (cifrada), por qué la frase generada, qué pasa si se olvida, qué hacer si se pierde un dispositivo o se filtra la
-frase (cambiar la clave en el proveedor) y *Keep the key on this device* en una computadora prestada. La entrada *Your
+la ve (cifrada), por qué la frase generada, guardarla en el gestor mejor que copiarla, qué pasa si se olvida, qué hacer
+si se filtra la frase (cambiar la clave en el proveedor) y *Keep the key on this device* en una computadora prestada.
+**Si perdiste un dispositivo**, los cuatro pasos en orden (sección 3): *Sign out other devices*, sacarlo del gestor o
+elegir una frase nueva, clave nueva en el proveedor, *Replace synced key…*. La entrada *Your
 assistant key* de A1 cambia su frase "se carga en cada dispositivo".
 
 ## 11. Pruebas
@@ -346,7 +400,9 @@ assistant key* de A1 cambia su frase "se carga en cada dispositivo".
 1. El sobre: ida y vuelta; un vector fijo de PBKDF2-SHA256 (de RFC 7914, sección 11, con sus vueltas) para atar la
    derivación; frase equivocada, sal, iv, id, versión y un byte del cifrado cambiados → no abre; una versión
    desconocida → el mensaje de "versión más nueva"; NFKC y espacios de las puntas; el relleno da siempre 1 388
-   caracteres (con una clave de Gemini y una de OpenAI); una dirección de más de 300 caracteres se rechaza.
+   caracteres (con una clave de Gemini y una de OpenAI); un JSON de más de 1 024 **bytes** se rechaza (con una dirección
+   con tildes que entra en caracteres y no en bytes); la frase generada con mayúscula inicial o con espacios abre igual,
+   y una propia no se toca.
 2. **Mutante del servidor que manda:** una fila con `iter` o `kdf` agregados, o con otra versión, no cambia lo que usa
    la app (las constantes); un mutante que lea las vueltas de la fila tiene que hacer fallar la prueba.
 3. **Mutante de la dirección en claro:** una fila con un `baseUrl` agregado no cambia a dónde va la clave.
@@ -359,14 +415,22 @@ assistant key* de A1 cambia su frase "se carga en cada dispositivo".
    desbloquear anda y lee la clave; un registro sin `sync` (escrito por la versión vieja) sigue andando; *Keep the key
    on this device* destildada no escribe nada en IndexedDB y al "recargar" (módulo nuevo) no hay clave.
 7. Dos dispositivos: con el servidor falso, dos `update` con la misma `generation` → el segundo no pisa y muestra el
-   aviso; el aviso de "cambió en otro dispositivo"; el 401 con una copia más nueva suma el botón.
+   aviso; el aviso de "cambió en otro dispositivo"; el 401 con una copia más nueva suma el botón. **Regla 7:** *Update
+   synced key*, *Replace synced key…*, *Change passphrase…* y *Also sync in this workspace* con una frase que no abre la
+   copia actual no escriben nada (mutante: cifrar sin abrir antes). **Copia más vieja:** una copia con `savedAt` menor que
+   `sync.savedAt` no se adopta.
 8. La interfaz: cada fila de la tabla de la sección 9 (con y sin red, sin la tabla, política *Off*), el panel sin clave
    con copia, la ventana de salir con copia.
 9. Ayuda: la entrada nueva en los dos idiomas (la prueba de siempre de `src/help/`).
+10. **Regla 6, destino nuevo:** una copia válida, armada con la frase de la persona pero con otro proveedor
+   u otra dirección que los del dispositivo, no se adopta sin *Use it* (mutante: adoptar en silencio); al abrir se
+   muestran el host y los últimos cuatro caracteres; un dispositivo sin clave previa muestra igual el destino.
+   *Sign out other devices* llama `signOut({ scope: 'others' })` del cliente del workspace (cliente falso). El estado con
+   `sync.ref` de otro workspace no ofrece *Forgot it?*.
 
 **SQL (`supabase/tests/`, en `begin … rollback`):**
 
-10. La persona lee, crea, cambia y borra su fila; otra persona (miembro, admin, el dueño con su sesión de la app) no la
+11. La persona lee, crea, cambia y borra su fila; otra persona (miembro, admin, el dueño con su sesión de la app) no la
     ve ni la cambia; `anon` nada; un JWT con `client_id` nada (ni la suya); no se puede cambiar `user_id` ni escribir
     `generation`; los `check` de largo y de versión; el trigger sube `generation`. Mutantes: sacar la condición de
     `client_id`, sacar la de `user_id`, dar `update` a todas las columnas: cada uno tiene que hacer fallar una prueba.
@@ -378,20 +442,26 @@ dispositivos"): prender en uno, desbloquear en el otro, frase equivocada, *Stop 
 
 | | Qué | Criterio de aceptación | Riesgo |
 |---|---|---|---|
-| **S1** | La migración con sus pruebas SQL; el sobre (`src/assistant/keySync.ts`) con la frase generada y la propia; en *Assistant…*: *Turn on sync…*, *Unlock*, *Update synced key* (con la escritura condicional por `generation` de la sección 7, para no pisar otro dispositivo), *Stop syncing*, los estados sin red, sin tabla y con *Off*; el panel sin clave con *Unlock your synced key*; la casilla de salir; la ayuda; la lista de la EFF con su aviso de licencia; la medición en el iPhone (sección 4.1) | Pruebas 1 a 6, 8, 9 y 10 y la parte de la prueba 7 que no pisa otro dispositivo, en verde, con sus mutantes muertos; el recorrido en Chromium; ningún texto en claro en la red ni en lo guardado; la auditoría independiente (nivel alto: seguridad de un secreto) | **Alto**: un secreto de la persona en la base de otro |
-| **S2** | *Change passphrase…*, *Keep the key on this device*, el aviso de "cambió en otro dispositivo" y el botón en el 401, *Also sync in this workspace* | Pruebas 6 y 7 completas; el recorrido con dos dispositivos | Medio |
+| **S1** | La migración con sus pruebas SQL; el sobre (`src/assistant/keySync.ts`) con la frase generada y la propia; en *Assistant…*: *Turn on sync…*, *Unlock* (mostrando el destino y **preguntando si cambia**, regla 6), *Update synced key* y *Replace synced key…* (abriendo antes la copia, regla 7, y con la escritura condicional por `generation` de la sección 7), *Stop syncing*, los estados sin red, sin tabla, con *Off* y con la copia en otro workspace; **_Sign out other devices_ en el menú de la cuenta**; el panel sin clave con *Unlock your synced key*; la casilla de salir; la ayuda con los pasos del dispositivo perdido; la lista de la EFF con su aviso de licencia; los campos no controlados; la medición en el iPhone (sección 4.1) | Pruebas 1 a 6 y 8 a 11, y de la 7 la escritura condicional y la regla 7 para *Update* y *Replace*, en verde, con sus mutantes muertos; el recorrido en Chromium; ningún texto en claro en la red ni en lo guardado; la auditoría independiente (nivel alto: seguridad de un secreto) | **Alto**: un secreto de la persona en la base de otro |
+| **S2** | *Change passphrase…*, *Keep the key on this device*, el aviso de "cambió en otro dispositivo" y el botón en el 401, rechazar una copia más vieja (`savedAt`), *Also sync in this workspace* | Pruebas 6 y 7 completas; el recorrido con dos dispositivos | Medio |
 
 **Recorrido de Lega (S1)**, con su clave de verdad y la migración aplicada en Wanka:
 
-1. En la PC: *Assistant…* → la clave guardada → *Sync across my devices* → *Turn on sync…* → *Copy* → guardarla en el
-   gestor de contraseñas → *I saved my passphrase* → *Turn on sync*: dice *Your key is synced in Wanka.*
-2. En el iPhone (sin clave cargada): *Assistant…* → *Your key is synced…* → pegar la frase → *Unlock*: tarda menos de un
-   segundo y el panel corrige un texto.
+1. En la PC: *Assistant…* → la clave guardada → *Sync across my devices* → *Turn on sync…* → *I saved my passphrase* →
+   *Turn on sync* → el navegador ofrece guardar la frase: *Save*. Dice *Your key is synced in Wanka.*
+2. En el iPhone (sin clave cargada): *Assistant…* → *Your key is synced…* → pegar la frase → *Unlock*: tarda menos de 1,5 s
+   (el umbral de la sección 4.1), dice *Unlocked: Anthropic key ending in …* y el panel corrige un texto.
 3. En el iPhone, *Forget key*; *Unlock* con una frase equivocada: *That passphrase doesn't open your synced key.*; con la
    buena, abre.
 4. Modo avión: la sección dice *Syncing your key needs internet.* y sus botones quedan apagados; al volver la red, el
    panel usa la clave ya abierta sin pedir nada.
 5. En la PC: *Stop syncing* → *Delete copy*. En el iPhone, después de *Forget key*, *Assistant…* ya no ofrece *Unlock*.
+6. Dispositivo perdido (simulado con la Mac): en la PC, menú de la cuenta → *Sign out other devices* → *Sign out
+   others*; en la Mac, al rato (o al recargar después de una hora), la app pide el código otra vez. En la PC, *Replace
+   synced key…* con la frase actual, una clave nueva y una frase nueva; en el iPhone, *Unlock* con la frase nueva.
+7. Destino nuevo: en la PC, guardar una clave de otro proveedor y *Update synced key*; en el iPhone (que tenía la de
+   Anthropic), al abrir la copia pregunta *Your synced key now goes to <host>. Use it?*; *Keep my current key* deja la
+   de antes.
 
 **Recorrido de Lega (S2):** cambiar la clave en la consola del proveedor, pegarla en la PC y *Update synced key*; en el
 iPhone, el panel da *Key doesn't work* con *Enter your passphrase to update it here* → frase → anda. *Change
@@ -405,8 +475,13 @@ destildada → anda; recargar → pide la frase.
 | El dueño de un workspace (o quien robe la base) adivina la frase | La frase generada de 62 bits, PBKDF2 de 1 000 000 de vueltas, el aviso de la frase propia (4.2) |
 | El dueño redirige la clave a su servidor | Proveedor y dirección cifrados (regla 4); prueba 3 |
 | El dueño baja la protección en la fila | Parámetros fijos por versión en la app (regla 3); prueba 2 |
-| La frase o la clave quedan en algún lado | Nunca se guardan; prueba 5 busca en red, IndexedDB, `localStorage` y consola |
-| Un cliente MCP lee la fila | La política exige `client_id` vacío, además del token cerrado de fábrica; prueba 10 |
+| La frase o la clave quedan en algún lado | Nunca se guardan; campos no controlados; prueba 5 busca en red, IndexedDB, `localStorage` y consola |
+| Dispositivo perdido con la sesión y la frase en su gestor: recibe la clave nueva | *Sign out other devices* y frase nueva antes de *Replace synced key…* (sección 3), la ayuda paso a paso; límite: hasta una hora con el token de acceso vigente |
+| Quien tiene la sesión y la frase arma un sobre con su clave y su dirección para recibir el texto de las páginas | Regla 6: nunca se adopta un destino nuevo en silencio; se muestran el host y el final de la clave; prueba 10 |
+| Una copia vieja repuesta por el dueño | `savedAt` autenticado en el dispositivo que ya abrió (S2); para uno nuevo, sin filtración |
+| Una fila plantada por un dueño ajeno lleva a subir la clave a su base | La fecha de la copia y *Your key is synced in <otro>* sin *Forgot it?* (sección 9) |
+| Un error de tipeo deja una copia que nadie abre | Regla 7: se abre la copia actual con la frase antes de volver a cifrar; prueba 7 |
+| Un cliente MCP lee la fila | La política exige `client_id` vacío, además del token cerrado de fábrica; prueba 11 |
 | Una versión vieja se queda sin asistente | La base local no sube de versión; prueba 6 |
 | Dos dispositivos se pisan | `generation` y la escritura condicional (7); prueba 7 |
 | La persona olvida la frase | Se vuelve a pegar la clave; la clave local de cada dispositivo no se toca |
@@ -523,19 +598,54 @@ que la persona pidió borrar no debería quedar.
 Las copias de seguridad del dueño la guardan por su tiempo, y la ayuda lo dice.
 **Si preferís otra:** B no protege nada y deja un secreto viejo a mano.
 
+### CS9 · El dueño del workspace ve que la copia existe
+
+**Qué pasaba:** la copia vive en la base del dueño del workspace. Aunque no pueda leerla, el dueño ve en su base que la
+persona tiene una copia, cuándo cambió y, en los registros de su Supabase, desde qué dirección IP se pidió. Ejemplo:
+Lega sincroniza en el workspace de un cliente; el cliente ve que Lega usa el asistente y el día que cambió la clave.
+**Las opciones:**
+- **A:** aceptarlo y decirlo en la ventana y en la ayuda (*<workspace> stores only the encrypted copy and can't read
+  it.*); con CS2, la copia está solo donde la persona eligió.
+- **B:** esconderlo: copias falsas para todos, o guardar la copia fuera del Supabase del workspace.
+
+**Elegí A** porque lo que se ve es poco (que existe y cuándo cambió; nunca el proveedor, ni la dirección, ni la clave,
+gracias al relleno) y la persona elige dónde ponerla. B pide un servidor fuera de la isla del workspace o llenar todas
+las bases de filas falsas, para esconder un dato que casi no dice nada.
+**Si preferís otra:** si en algún workspace no querés que se vea ni eso, no la sincronices ahí (CS2): con una copia en
+el tuyo alcanza.
+
 **Las obvias** (valen salvo que digas otra cosa): con la política *Off* no se puede prender en ese workspace, pero sí
 abrir o borrar una copia que exista; el modelo elegido viaja en la copia solo como valor inicial (después cada
 dispositivo elige el suyo); no se sube `min_app_version`; la base local no sube de versión.
 
-## 15. Lo que valida Lega y lo que no se pudo comprobar
+## 15. Lo que se mide en S1 y lo que no se pudo comprobar
 
-- **Medir en su iPhone** cuánto tarda abrir (S1 trae una página de prueba). Si pasa de 1,5 s, se usa 600 000 vueltas.
+- **Medir en el iPhone de Lega** cuánto tarda abrir (S1 trae una página de prueba). Si pasa de 1,5 s, se usan 600 000
+  vueltas.
 - **Que el gestor de contraseñas** (el llavero de iCloud, el de Chrome) ofrezca la frase en el campo *Passphrase* del
-  iPhone y de la PC.
-- Las decisiones CS1 a CS8, sobre todo CS2 (solo donde la prendés) y CS4 (frase generada de fábrica).
-- Que acepte que el dueño de un workspace **ve que existe la copia y cuándo cambió**, aunque no la pueda leer.
+  iPhone y de la PC, y que guardarla con el formulario de *Turn on sync* funcione.
+- CS1 a CS9 quedaron decididas sin preguntar (Lega pidió no preguntar); se cambian si Lega dice otra cosa.
 - No se midió: el iPhone real; cuántos intentos por segundo hace una placa de video (es una estimación de números
-  públicos de `hashcat`).
+  públicos de `hashcat`); que `signOut({ scope: 'others' })` corte de verdad un dispositivo con la app abierta (se ve en
+  el recorrido de S1, paso 6).
+
+## Correcciones de la auditoría (2026-10-02)
+
+La auditoría independiente (nivel alto) dio "no aprobado" por un bloqueante de este documento (B2) y otro del MCP (B1,
+en `Doc_Asistente.md`). El núcleo criptográfico, la tabla y su RLS (probados en `begin … rollback`) y lo de IndexedDB
+quedaron confirmados. Corregido acá:
+
+| Hallazgo | Corrección |
+|---|---|
+| **B2.** Un dispositivo perdido (con la sesión y la frase en su gestor) recibía la clave nueva al actualizar la copia; y con la frase podía armar un sobre con su dirección para recibir el texto de las páginas | "En corto", reglas 6 y 7, sección 3 (fila nueva y los cuatro pasos), *Sign out other devices* y *Replace synced key…* en S1, preguntar antes de adoptar un destino distinto y mostrar siempre host y final de la clave (2, 9), ayuda, pruebas 10 y 7, riesgos, recorrido de S1 pasos 6 y 7 |
+| O3. Una copia vieja repuesta por el dueño abre | `savedAt` de adentro del sobre guardado en `sync` y rechazo de una más vieja (S2; 3, 6, 7, prueba 7) |
+| O4. Actualizar con una frase mal tipeada dejaba una copia que nadie abre | Regla 7: abrir antes la copia con la frase; prueba 7 |
+| O7. La mayúscula del teclado del iPhone no abría la frase generada | 4.3 y 4.4: minúsculas y guiones si tiene la forma de la generada; `autocapitalize="none"`; prueba 1 |
+| O8. El relleno se medía en caracteres | 4.3: `bytes(JSON) ≤ 1 024`; prueba 1 |
+| O9. La frase en el estado de React y en el portapapeles | 4.4 y 6: campos no controlados; guardar con el formulario del gestor antes que *Copy*, con aviso |
+| O10. Una fila plantada por un dueño ajeno | 3 y 9: la fecha de la copia y *Your key is synced in <otro>* sin *Forgot it?* |
+| O12. "Menos de un segundo" contra el umbral de 1,5 s; el ejemplo de la frase no era de la lista | Recorrido unificado a 1,5 s; la lista es la corta 1 de la EFF (3 a 5 letras), sin ejemplo inventado |
+| Decisiones que quedaban para Lega | CS2, CS4 y CS9 decididas (Lega pidió no preguntar) |
 
 ## Cómo se midió
 

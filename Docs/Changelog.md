@@ -2,14 +2,13 @@
 
 v0.0XX :
 
-Diseño, sin código: **la clave del asistente en todos tus dispositivos** (D72 → B) y **mover y borrar por el MCP con
-confirmación** (D77). La clave vivía solo en cada dispositivo y había que pegarla en cada uno. `Doc_Clave_Sincronizada.md`
-(CS1 a CS8): una copia cifrada en el dispositivo con una frase de seis palabras que propone la app (PBKDF2-SHA256 de
-1 000 000 de vueltas, medido en 0,1 s en Chromium, y AES-256-GCM con la cabecera atada y relleno), guardada en la tabla
-`assistant_key_sync` del workspace donde se prende, que solo lee la persona; modelo de amenazas, versiones viejas,
-pruebas y entregas S1 y S2. En `Doc_Asistente.md` (9.3 bis, IA11): `move_page`, `trash_page` y `delete_blocks` solo
-proponen con una frase armada por el portero y `confirm_action` hace eso, una vez, con el sí de la persona; compartir e
-invitar, nunca.
+Diseño, sin código, auditado y corregido: **la clave del asistente en todos tus dispositivos** (D72 → B) y **mover y
+borrar por el MCP con confirmación** (D77). La clave vivía solo en cada dispositivo. `Doc_Clave_Sincronizada.md` (CS1 a
+CS9): una copia cifrada en el dispositivo con una frase de seis palabras (PBKDF2-SHA256 de 1 000 000 de vueltas,
+medido, y AES-256-GCM con la cabecera atada y relleno) en la tabla `assistant_key_sync`, que solo lee la persona; para
+un dispositivo perdido, *Sign out other devices* y frase nueva, y nunca se adopta en silencio otro destino. En
+`Doc_Asistente.md` (9.3 bis, IA11): `move_page`, `trash_page` y `delete_blocks` solo proponen; `confirm_action` lo hace
+una vez con el sí de la persona, nunca cambia quién ve algo y tiene *Undo*; compartir e invitar, nunca.
 [ Diseño de la clave del asistente sincronizada (D72) y de mover y borrar por el MCP con confirmación (D77) ]
 
 v0.129 :

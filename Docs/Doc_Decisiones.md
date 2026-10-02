@@ -257,7 +257,7 @@ cosa.
   pero el cifrado solo evita verla en claro por accidente (quien usa ese navegador o un script de la app la puede usar),
   así que se recomienda un tope de gasto en el proveedor; el pedido va directo al proveedor (IA3).
   **Lega (2026-10-02, D72 → B):** además, una copia sincronizada entre sus dispositivos, cifrada con una frase que solo
-  sabe la persona; diseño en `Doc_Clave_Sincronizada.md` (CS1 a CS8, propuestas).
+  sabe la persona; diseño en `Doc_Clave_Sincronizada.md` (CS1 a CS9, propuestas).
 - **D-07 · MCP.** Opción indicada: un servidor MCP en el portero de Cloudflare del workspace, que entra
   con la sesión del usuario y edita con sus permisos. Se hace en la fase 5, después del asistente de la
   app.
