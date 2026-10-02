@@ -609,4 +609,15 @@ el texto se corta en renglones solo donde el navegador puede medir (`OffscreenCa
 desconocido no se dibuja ni se borra; se dibujan como mucho 2000 formas por foto (las de más arriba) y las coordenadas se
 acotan a 4 veces el lado de la foto.
 
+**Después de la auditoría de las entregas 0 y 1 (2026-10-02).** Bloqueante B1: cortar un texto en renglones medía
+`renglón + palabra` en cada palabra, cuadrático en el largo; 200 textos de 2000 letras (un mapa de 477 KB) congelaban la
+página unos 6 a 11 s al abrir y en cada cambio de esa foto. Ahora `wrapLines` mide cada palabra distinta una sola vez y
+suma, pone la letra una vez por texto, corta cuando los renglones ya no entran en la caja, y una foto dibuja como mucho
+20 000 letras (`MAX_DRAWN_CHARS`; lo de más queda guardado). Medido en Chromium con el arnés de la auditoría: 200 textos,
+de 7,2 s a 17 ms la primera vez y de 6,1 s a 12 ms por cambio; 2000 textos (4,5 MB), 72 ms y 89 ms. Un texto de 2000
+letras en caja ancha pasó de medir 1 001 999 letras a 2. Las pruebas cuentan las letras medidas y caen con el código
+anterior. También: no se dibuja sobre la tarjeta de la cola (sin copia en el dispositivo, borrada, de otro proyecto) ni
+sobre una imagen que no cargó, en la página y en el carrete (O1); el ojo dice si está apretado (`aria-pressed`, O5). El
+grosor mínimo de pantalla que queda en el PDF (O2) pasó al roadmap.
+
 **Falta para publicar:** subir `workspace_settings.min_app_version` a esta versión (AN10) antes de la entrega 2.
