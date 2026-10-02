@@ -4,7 +4,7 @@
 // Acá: dónde entra, el carrete, los archivos de la página, la forma guardada y las versiones publicadas.
 import { BlockNoteEditor, type PartialBlock } from '@blocknote/core';
 import { withCollaboration } from '@blocknote/core/yjs';
-import { CellSelection } from 'prosemirror-tables';
+import { CellSelection } from '@tiptap/pm/tables';
 import { TextSelection } from '@tiptap/pm/state';
 import { afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
@@ -16,7 +16,7 @@ import { schema } from './editorSchema';
 import { schema as previousPublished } from './fixtures/editorSchemaAnterior';
 import { PHOTO } from './inlinePhoto';
 import { addFiles, CELL_PHOTO_WIDTH, canHostPhoto, dropPos, inlinePhotoSpotsExtension, inTableCell, pasteSpot, type AddFilesOptions, type PhotoEditor } from './inlinePhotoCreate';
-import { decorateRows, photoKeyAtPos } from './inlinePhotoEditor';
+import { cellAboveEnd, decorateRows, handleCellArrowUp, photoKeyAtPos } from './inlinePhotoEditor';
 import { brokenGaps, previousSchema, storedPhotos } from './photoHarness';
 import { findUnknownContent, knownContent } from './unknownContent';
 
@@ -234,6 +234,44 @@ describe('lo que se ve y se usa', () => {
     // Las dos de 1/2 de la celda (fila de dos) y las dos de los párrafos (una por renglón); las miniaturas, nada.
     expect(sized.filter((a) => a.style?.includes('--row-n: 2'))).toHaveLength(2);
     expect(sized).toHaveLength(4);
+  });
+});
+
+describe('↑ desde el primer renglón de una celda con fotos (auditoría de la entrega 5, O4)', () => {
+  /** Una tabla de 2 × 2: la celda de abajo a la derecha con texto y una miniatura (su renglón, alto). */
+  const twoRows = () => page([[[text('a')], [text('arriba')]], [[text('b')], [text('Texto '), sdPhoto(5), text(' más')]]]);
+  const press = (E: BlockNoteEditor) => {
+    const event = new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true });
+    return { handled: handleCellArrowUp(viewOf(E), event), prevented: event.defaultPrevented };
+  };
+  /** jsdom no dibuja: todo el texto en un renglón (el mismo borde de abajo), o el cursor en un segundo renglón. */
+  const lines = (E: BlockNoteEditor, secondLineFrom: number | null) => {
+    viewOf(E).coordsAtPos = ((pos: number) => {
+      const bottom = secondLineFrom !== null && pos >= secondLineFrom ? 140 : 100;
+      return { top: bottom - 20, bottom, left: 0, right: 0 };
+    }) as never;
+  };
+
+  it('va al final del texto de la celda de arriba (no a la de la izquierda)', () => {
+    const E = mountCreating(twoRows());
+    lines(E, null);
+    caret(E, cellPos(E, 1, 1));
+    expect(press(E)).toEqual({ handled: true, prevented: true });
+    expect(viewOf(E).state.selection.from).toBe(cellPos(E, 0, 1, -1));
+    expect(cellAboveEnd(viewOf(E).state.doc, cellPos(E, 1, 1))).toBe(cellPos(E, 0, 1, -1));
+  });
+
+  it('en un segundo renglón de la celda, en la primera fila o en una celda sin fotos, sigue lo de siempre', () => {
+    const E = mountCreating(twoRows());
+    lines(E, cellPos(E, 1, 1, 3));
+    caret(E, cellPos(E, 1, 1, -1));
+    expect(press(E).handled).toBe(false);
+    lines(E, null);
+    caret(E, cellPos(E, 0, 1));
+    expect(press(E).handled).toBe(false);
+    caret(E, cellPos(E, 1, 0));
+    expect(press(E).handled).toBe(false);
+    expect(cellAboveEnd(viewOf(E).state.doc, cellPos(E, 0, 1))).toBeNull();
   });
 });
 
