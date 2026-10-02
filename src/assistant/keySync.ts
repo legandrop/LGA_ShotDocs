@@ -30,8 +30,22 @@ export interface KeyPayload {
   baseUrl?: string;
   model: string;
   apiKey: string;
-  /** Cuándo se armó este sobre (autenticado: está adentro). */
+  /** Cuándo se armó este sobre (autenticado: está adentro). Un dispositivo que ya abrió uno rechaza uno más viejo (S2). */
   savedAt: number;
+  /**
+   * La segunda clave, solo para transcribir (ventana *Voice*, Doc_Dictado.md 7), si la persona tiene una. Opcional: una
+   * versión de la app que no la conoce la ignora al abrir (y al actualizar la copia la deja afuera, sin perder nada en
+   * los dispositivos).
+   */
+  voice?: VoicePayload;
+}
+
+/** La clave de *Voice* adentro del sobre: a dónde va y la clave. Anthropic no transcribe. */
+export interface VoicePayload {
+  provider: Exclude<ProviderId, 'anthropic'>;
+  baseUrl?: string;
+  model: string;
+  apiKey: string;
 }
 
 /** Lo que se guarda en la fila (las columnas que escribe la app). */
@@ -48,7 +62,9 @@ export type KeySyncProblem =
   /** La copia la guardó una versión más nueva de la app (otro formato). */
   | 'newer'
   /** La clave o la dirección no entran en 1 024 bytes. */
-  | 'tooLong';
+  | 'tooLong'
+  /** La copia es más vieja que la que este dispositivo ya abrió o subió (`savedAt` de adentro del sobre). */
+  | 'older';
 
 /** Un error del sobre. El mensaje nunca lleva la frase ni la clave. */
 export class KeySyncError extends Error {
@@ -141,6 +157,16 @@ export function padPayload(payload: KeyPayload): Uint8Array | null {
     model: payload.model,
     apiKey: payload.apiKey,
     savedAt: payload.savedAt,
+    ...(payload.voice
+      ? {
+          voice: {
+            provider: payload.voice.provider,
+            ...(payload.voice.provider === 'compatible' && payload.voice.baseUrl ? { baseUrl: payload.voice.baseUrl } : {}),
+            model: payload.voice.model,
+            apiKey: payload.voice.apiKey,
+          },
+        }
+      : {}),
   });
   const bytes = new TextEncoder().encode(json);
   if (bytes.length > PADDED_BYTES) return null;
@@ -171,6 +197,19 @@ export async function sealKey(payload: KeyPayload, passphrase: string, userId: s
   return { format: FORMAT, salt, iv: toB64(ivBytes), ciphertext: toB64(new Uint8Array(cipher)) };
 }
 
+function validVoice(v: unknown): v is VoicePayload {
+  if (!v || typeof v !== 'object') return false;
+  const p = v as Record<string, unknown>;
+  return (
+    typeof p.provider === 'string' &&
+    p.provider !== 'anthropic' &&
+    (PROVIDERS as readonly string[]).includes(p.provider) &&
+    (p.baseUrl === undefined || typeof p.baseUrl === 'string') &&
+    typeof p.model === 'string' &&
+    typeof p.apiKey === 'string'
+  );
+}
+
 function validPayload(v: unknown): v is KeyPayload {
   if (!v || typeof v !== 'object') return false;
   const p = v as Record<string, unknown>;
@@ -181,7 +220,8 @@ function validPayload(v: unknown): v is KeyPayload {
     typeof p.model === 'string' &&
     typeof p.apiKey === 'string' &&
     typeof p.savedAt === 'number' &&
-    Number.isFinite(p.savedAt)
+    Number.isFinite(p.savedAt) &&
+    (p.voice === undefined || validVoice(p.voice))
   );
 }
 
@@ -225,7 +265,28 @@ export async function openKey(row: { format: unknown; salt: unknown; iv: unknown
     model: parsed.model,
     apiKey: parsed.apiKey,
     savedAt: parsed.savedAt,
+    ...(parsed.voice
+      ? {
+          voice: {
+            provider: parsed.voice.provider,
+            baseUrl: parsed.voice.provider === 'compatible' ? parsed.voice.baseUrl : undefined,
+            model: parsed.voice.model,
+            apiKey: parsed.voice.apiKey,
+          },
+        }
+      : {}),
   };
+}
+
+/**
+ * El `savedAt` de un sobre nuevo: la hora del dispositivo, pero siempre después de los que ya se conocen (la copia que
+ * se abrió, la que anotó este dispositivo). Así un reloj atrasado no hace que los otros dispositivos rechacen la copia
+ * nueva como "más vieja".
+ */
+export function nextSavedAt(now: number, ...known: (number | undefined)[]): number {
+  let at = now;
+  for (const k of known) if (typeof k === 'number' && Number.isFinite(k) && k >= at) at = k + 1;
+  return at;
 }
 
 /** Los últimos cuatro caracteres de la clave, para mostrar a dónde va sin mostrarla. */
