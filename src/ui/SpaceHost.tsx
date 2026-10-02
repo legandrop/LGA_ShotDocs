@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { t, useT } from '../i18n';
+import { t, useT, type Translate } from '../i18n';
 import { formatSize } from '../media/fileTrash';
-import type { MarkView } from '../media/offline';
+import type { FreeReport, MarkView, OwnSkip } from '../media/offline';
 import { useOffline, useServices } from '../services';
 import { OfflineMarkIcon } from './icons';
 import { OfflineDialog, StorageDialog } from './lazyDialogs';
@@ -31,6 +31,31 @@ export function openOffline(target: 'page' | 'project', id: string): void {
 /** Abre "Storage on this device". */
 export function openStorage(): void {
   window.dispatchEvent(new CustomEvent<Request>(OPEN, { detail: { kind: 'storage' } }));
+}
+
+/** Por qué quedó un original propio, en el orden en que se dice. */
+const SKIPS: [OwnSkip, Parameters<Translate>[0]][] = [
+  ['offline', 'space.skip.offline'],
+  ['server', 'space.skip.server'],
+  ['notInDrive', 'space.skip.notInDrive'],
+  ['trash', 'space.skip.trash'],
+  ['mismatch', 'space.skip.mismatch'],
+  ['changed', 'space.skip.changed'],
+  ['noAnswer', 'space.skip.noAnswer'],
+];
+
+/**
+ * Lo que dice *Free up* al terminar: cuánto se liberó y, si algún original agregado en este dispositivo quedó, cuántos y
+ * por qué ("2 files stayed on this device: not in Drive (1), no connection (1).").
+ */
+export function freedText(report: FreeReport, tr: Translate): string {
+  const freed = tr('space.freed', { size: formatSize(report.freed, tr.lang) });
+  const count = SKIPS.reduce((n, [why]) => n + (report.skipped[why] ?? 0), 0);
+  if (count === 0) return freed;
+  const reasons = SKIPS.filter(([why]) => report.skipped[why])
+    .map(([why, key]) => `${tr(key)} (${report.skipped[why]})`)
+    .join(', ');
+  return `${freed} ${tr('space.keptSome', { count, reasons })}`;
 }
 
 /**
@@ -66,8 +91,9 @@ export function SpaceHost() {
     if (!prompt) return;
     setFreeing(true);
     try {
-      const freed = await offline.freeUp(prompt.reason === 'limit' ? 'over' : 'all');
-      notify(t('space.freed', { size: formatSize(freed, tr.lang) }));
+      await offline.freeUp(prompt.reason === 'limit' ? 'over' : prompt.reason === 'room' ? 'room' : 'all');
+      const report = offline.getSnapshot().report;
+      if (report) notify(freedText(report, tr));
     } finally {
       setFreeing(false);
     }
@@ -102,11 +128,25 @@ export function SpaceHost() {
     <>
       {unsaved && (
         <div className="notice space-notice unsaved-notice" role="alert">
-          <span>{tr('space.unsaved', { name: unsaved.name || '—', size: formatSize(unsaved.size, tr.lang) })}</span>
+          <span>
+            {tr('space.unsaved', { name: unsaved.name || '—', size: formatSize(unsaved.size, tr.lang) })}
+            {prompt?.reason === 'room' && (
+              <>
+                <br />
+                {tr('space.promptRoomShort', { free: formatSize(prompt.free, tr.lang) })}
+              </>
+            )}
+          </span>
           <span className="space-notice-actions">
             <button className="primary" onClick={() => void saveUnsaved(0)}>
               {tr('space.saveFile')}
             </button>
+            {prompt?.reason === 'room' && (
+              // Los originales agregados acá que ya están en Drive (nunca se liberan sin este sí: sección 5.7).
+              <button className="secondary" style={{ whiteSpace: 'nowrap' }} disabled={freeing} onClick={() => void free()}>
+                {tr('space.freeRoom', { size: formatSize(prompt.free, tr.lang) })}
+              </button>
+            )}
             <button className="link" onClick={() => offline.takeUnsaved(0)}>
               {tr('space.discardFile')}
             </button>
@@ -128,7 +168,9 @@ export function SpaceHost() {
                   limit: formatSize(prompt.limit, tr.lang),
                   free: formatSize(prompt.free, tr.lang),
                 })
-              : tr('space.promptMark', { free: formatSize(prompt.free, tr.lang) })}
+              : prompt.reason === 'room'
+                ? tr('space.promptRoom', { free: formatSize(prompt.free, tr.lang) })
+                : tr('space.promptMark', { free: formatSize(prompt.free, tr.lang) })}
           </span>
           <span className="space-notice-actions">
             <button className="primary" disabled={freeing} onClick={() => void free()}>

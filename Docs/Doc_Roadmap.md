@@ -47,6 +47,12 @@ Lega.
    hechos y publicados** (v0.031 a v0.041, migraciones aplicadas en Wanka el 2026-09-30). Absorbe la vieja fase 2 (compartir un proyecto, una
    página o una subpágina con usuarios y con links legibles, D-13) y los que figuran abajo en "Resueltos
    adentro del plan".
+2. **La marca de un archivo en Drive, atada a su workspace** (auditoría de P.10, entrega 2, O4). El portero busca un
+   archivo de la app por su marca `sdFile` (el id) y el peso. Si una misma cuenta de Google y el mismo cliente OAuth
+   sirvieran a dos workspaces, un editor del B que conozca el id y el peso de un archivo del A podría registrarlo en B
+   y el portero de B lo enlazaría. Hoy hay un solo workspace por Drive. Antes de que dos workspaces compartan cuenta de
+   Google: sumar `sdWorkspace` a `appProperties` al subir y exigirlo en la búsqueda (o buscar solo adentro de la
+   carpeta del proyecto).
 
 ### P. Pedidos de Lega (2026-09-30), en este orden
 
@@ -182,9 +188,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   elegible, de fábrica 2 GB por workspace en cada dispositivo (pasado el tope, un aviso ofrece liberar las copias ya
   confirmadas en el Drive que hace más que no se abren, y se liberan recién con el sí; la miniatura queda), marcar una página o un proyecto para usarlo sin red (con una ventana de casillas y
   pesos), y "Espacio en este dispositivo" en el menú de la cuenta. **Diseño en `Doc_Copias_Locales.md`**
-  (rehecho con D-25; auditado y aprobado). **Entregas 0 y 1 implementadas** (v0.083, rama `lega/espacio-offline`);
-  falta la entrega 2 (liberar los originales agregados en el dispositivo, con su auditoría) y la medición del iPhone
-  casi lleno (sección 9.1).
+  (rehecho con D-25; auditado y aprobado). **Entregas 0 y 1 implementadas** (v0.083); **entrega 2 implementada**
+  (v0.140: liberar los originales agregados en el dispositivo con la base y Drive confirmando el mismo archivo, el
+  relink sin bytes y la búsqueda del portero por la marca; riesgo alto, con su auditoría antes de publicar). Falta la
+  medición del iPhone casi lleno (sección 9.1, la hace Lega) y la entrega 3 (*Drive folders* con P.9 y compartir un
+  archivo sin copia).
 - **P.11 Colapsar secciones por sus títulos, como en Coda** (Lega, 2026-09-30): cualquier título (H1, H2, H3…)
   se colapsa con un triángulo lleno a su izquierda (apunta a la derecha colapsado, abajo abierto). Colapsar un
   título esconde todo lo que sigue hasta el próximo título de su nivel o mayor (un H1 esconde sus H2 y H3, que
