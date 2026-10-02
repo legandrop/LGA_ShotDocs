@@ -1,6 +1,6 @@
 # Asistente con la clave de cada usuario y servidor MCP (fase 5)
 
-**Estado: diseño, sin código ni migración** (roadmap P.24; pedido de Lega del 2026-10-02, que decide entre las opciones
+**Estado: entrega A1 implementada (v0.113, ver "Cómo quedó A1" al final; su migración, sin aplicar); A2, A3 y el MCP, en diseño** (roadmap P.24; pedido de Lega del 2026-10-02, que decide entre las opciones
 de D-06 y D-07 y lo deja listo para programar por entregas). Las decisiones están propuestas (IA1 a IA10, sección 15) y
 valen hasta que Lega diga otra cosa. Se diseñó contra `main` v0.108. Precios, límites y CORS verificados el 2026-10-02
 en las páginas oficiales (sección 3, con la fuente de cada número); lo medido está en "Cómo se midió", al final.
@@ -936,3 +936,91 @@ MCP (IA2, IA10) con tres bloqueantes. Todo se corrigió en este documento:
 | O15. El tope propio de Anthropic responde 400, no 429 | 3.3 y prueba 1 |
 | O16. `main` ya usa la v0.109 | La entrada del changelog va como `v0.112 :`, se numera al juntar |
 | Faltaba la tabla de riesgos que pedía el encargo | Sección 14 bis |
+
+## Cómo quedó A1 (v0.113)
+
+Implementada en `src/assistant/` (se baja aparte, la primera vez que se abre el panel o los ajustes: unos 44 KB más
+5 KB, sin tocar el paquete principal salvo el atajo, el host del panel y la ventana de salir). Migración
+`20261014120000_asistente_politica.sql` **sin aplicar** (la aplica quien publica, con su copia de seguridad).
+
+### Qué hay
+
+- **Ajustes** (menú de la cuenta → *Assistant…*, `AssistantSettings.tsx`): *Provider* (Anthropic, OpenAI, Google
+  Gemini, OpenAI-compatible), *API key* con *Paste*, *Base URL* (solo compatible), *Model* (la lista del proveedor, con
+  la preelección por nombre de 3.4; también se puede escribir), *Test* (pide la lista de modelos: *Key works.* o el
+  error), *Save* y *Forget key*. El texto de que la clave queda en el dispositivo, el link al tope de gasto de cada
+  proveedor y, con Gemini, el aviso del nivel gratis.
+- **La clave** (`keyStore.ts`): IndexedDB `shotdocs-assistant`, un registro por correo, cifrada con AES-GCM y una llave
+  no exportable del dispositivo (sección 4). Se descifra en la llamada al proveedor y no queda en el estado de React.
+  Al salir de la cuenta (menú de la cuenta) con una clave guardada, la ventana de salir suma *Also forget my assistant
+  key on this device*, destildada.
+- **Los proveedores** (`providers.ts`): `fetch` propio, respuesta por partes, *Stop*, uso de tokens, cortada por largo y
+  los errores de 3.3 (401, 403, 429 con los segundos solo si se pueden leer, el tope del nivel de Anthropic y el propio,
+  modelo, servidor, red). `anthropic-dangerous-direct-browser-access` en todo pedido a Anthropic; `store: false` en
+  OpenAI; en Gemini, sin lo que el modelo "pensó". La clave se saca de todo mensaje de error (`redact`).
+- **El panel** (`AssistantPanel.tsx`; a la derecha y en pantallas anchas la página se corre; en el teléfono, una hoja
+  desde abajo): *Fix spelling & grammar*, *Improve writing*, *Make shorter*, *Translate to…* (doce idiomas, recuerda el
+  último) y *Ask…*; la respuesta llega como texto; la vista previa marca por palabras lo sacado y lo agregado (sin
+  imágenes ni links de verdad: nada pide nada afuera) y avisa los links sacados y un largo muy distinto; *Apply*
+  (Ctrl/⌘+Enter con el foco en el panel), *Discard* (Esc), *Try again*, *Copy*, *Stop*; abajo, proveedor, modelo y
+  tokens. Se abre con Ctrl/⌘+Alt+J (registro `assistant`), con el botón *Assistant* de la barra de formato (sin red, su
+  tooltip dice que necesita internet) y con *Assistant* del menú de la página.
+- **Qué se manda** (`markup.ts`, `prompt.ts`): lo elegido (o el párrafo del cursor), hasta 60 000 caracteres, como el
+  Markdown acotado de 6.2 entre `<user_content>`, con las marcas `⟦photo:N⟧`, `⟦link:N⟧…⟦/link⟧` y `⟦block:N⟧`. Nada
+  más: ni el título, ni el workspace, ni correos, ni el resto de la página, ni direcciones de fotos o links.
+- **Aplicar** (`apply.ts`): la foto de lo elegido (su contenido tal cual y dos anclas `RelativePosition`) se compara al
+  aplicar; si cambió algo adentro (texto o formato) o el bloque ya no está, no se aplica nada y lo dice, con *Try again*
+  sobre lo que hay hoy en el mismo lugar. Si no cambió, se reemplazan solo los tramos de palabras distintos, cada uno en
+  su transacción y todos en un paso de deshacer (`asOneUndoStep`), y al final se comprueba que quedó lo pedido (si no,
+  se deshace). Cada bloque conserva su id, su tipo y sus propiedades; una foto en línea que sigue en su lugar no se toca
+  (el mismo elemento de Yjs); un link conserva su dirección. El permiso se mira al abrir y otra vez al aplicar.
+- **Permisos, política y sin red:** sin Editar, *Fix*, *Improve* y *Shorter* quedan apagados y *Translate* y *Ask*
+  terminan en *Copy*. La política del dueño (`assistant_policy`) se lee de la fila de `workspace_settings` al abrir el
+  panel (y se recuerda por workspace para usarla sin red): *Off* apaga todo y *Local models only* deja solo una dirección
+  local. Sin red, el panel y el botón dicen *The assistant needs internet*, salvo un modelo local.
+- **CSP** en `public/_headers` (10.4): `script-src 'self' 'wasm-unsafe-eval'` más el hash del script del tema de
+  `index.html` (`src/csp.test.ts` avisa si ese script cambia sin cambiar el hash), `object-src 'none'`, `base-uri`,
+  `form-action` y `frame-ancestors 'self'`; las conexiones, imágenes y videos quedan abiertos (cada workspace tiene su
+  Supabase y su portero, y cada persona su proveedor, también uno local por http).
+- **Ayuda:** *Assistant* y *Your assistant key* en "Writing", con los atajos `assistant` y `assistantApply`.
+
+### Decisiones al implementar
+
+- **A1 nunca cambia la forma:** cada pedazo vuelve a su bloque, que conserva su tipo (el prefijo `# `, `- `, `[ ] ` viaja
+  solo como contexto). Si la respuesta trae otra cantidad de bloques, no se aplica (*The suggestion changed how the text
+  is split into paragraphs*, con *Copy*): cambiar la forma es *Format as…* (A2).
+- **Los espacios y saltos de renglón de las puntas de lo elegido no viajan** (el modelo los perdería y se borrarían).
+- **Lo que no es texto en el medio** (foto-bloque, tabla, código, divisor) va como `⟦block:N⟧` y tiene que volver en su
+  lugar; una tabla se edita solo si lo elegido está en una sola celda.
+- **La migración no sube `schema_version`:** la app no necesita saber si la columna está, y subirlo antes que las
+  migraciones con números anteriores (link público, menciones) haría creer a la app que ya están.
+- **La ventana de salir con la casilla** está en el menú de la cuenta (la salida de siempre); las otras salidas (sin
+  proyectos, el error del arranque) siguen sin ella.
+- **⌘⌥J en la Mac** es también el atajo de la consola de Chrome; con el foco en la app lo toma la app (como las
+  herramientas que bloquean F12). Lega lo prueba en la Mac.
+
+### Cómo se probó
+
+- **Pruebas nuevas (vitest):** `markup.test.ts` (14: lo que se manda, las marcas, el escape, la ida y vuelta, las
+  validaciones de 6.4, los links nuevos), `apply.test.ts` (12, con el editor real: un paso de deshacer también
+  escribiendo justo antes, el bloque con Script y color, la foto en línea que es el mismo elemento de Yjs, la guarda con
+  otro escribiendo adentro y afuera, el bloque borrado, el permiso, lo escrito sin red que llega después, y el esquema
+  publicado `editorSchemaMain` abriendo lo aplicado), `providers.test.ts` (14), `keyStore.test.ts` (5), `panel.test.tsx`
+  (12: el recorrido del panel, sin clave, sin Editar, el permiso perdido antes de aplicar, sin red, la política, lo que
+  se manda y que la vista previa no pide nada afuera) y `src/csp.test.ts` (4). Más el registro de atajos y la ayuda.
+- **Mutantes** de la guarda y del permiso de aplicar: 9 de 10 mueren; vive solo el de sacar la comparación de largo de la
+  guarda, que es redundante con la del contenido (dos tramos de distinto largo nunca tienen el mismo contenido).
+- **SQL:** la migración y las 20 pruebas de `supabase/tests/` en `begin … rollback` contra la base (todas `ok`, la base
+  sigue en la versión 13 y sin la columna); 5 mutantes de la migración mueren.
+- **Recorrido de aceptación en Chromium** (el arnés con la app real sobre el servidor en memoria, sin login, y un
+  proveedor falso local que imita a los tres; pasos 1 a 7 de la sección 14 en la compu y 1, 2, 4 y 6 en el teléfono, más
+  salir con la casilla): 37 de 37; con la CSP puesta, 41 de 41, más una foto HEIC convertida, un PDF dibujado, la
+  recorrida de 10 pasos y el build publicado con el tema claro y oscuro, sin ninguna violación.
+
+### Lo que falta y lo que prueba Lega
+
+- Falta: A2 (página, *Format as…*, la ventana de la política), A3 (pie de foto) y el MCP (M0 a M3). Un modelo local
+  (Ollama o LM Studio) desde la app publicada en `https://` no se probó (la protección de redes privadas de Chrome puede
+  pedir un header más).
+- Lega, con sus claves: los pasos 1 a 7 de la sección 14 con Anthropic, OpenAI y Gemini de verdad, en la compu y en el
+  iPhone, y el atajo ⌘⌥J en la Mac.
