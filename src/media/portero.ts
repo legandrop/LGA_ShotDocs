@@ -120,6 +120,21 @@ export interface FolderListing {
   nextPageToken: string | null;
 }
 
+/** Cuántas subcarpetas lista de una vez `POST /folder/list` con `dirs` (el mismo tope que el portero). */
+export const FOLDER_LIST_DIRS = 40;
+
+/**
+ * Lo que responde `POST /folder/list` con `dirs`: por cada subcarpeta aceptada, lo suyo en esta página; las que no
+ * se pueden listar con su código (`not_found`); las que no entraron en el tope de llamados a Drive del pedido
+ * (`later`, se piden de nuevo) y cómo seguir (`nextPageToken`, con las mismas de `lists`).
+ */
+export interface FolderListingMany {
+  lists: Record<string, FolderEntry[]>;
+  failed: Record<string, string>;
+  later: string[];
+  nextPageToken: string | null;
+}
+
 /** Lo que responde `POST /verify` por archivo (portero/src/core.ts). */
 export type VerifyResult =
   | { driveId: string; size: number; trashed: boolean; marked: boolean; md5: string | null }
@@ -506,6 +521,18 @@ export class Portero {
   /** Lo que hay ahora en la carpeta (o en la subcarpeta `dir`), con un pase por archivo. */
   folderList(file: string, dir: string | null = null, pageToken: string | null = null): Promise<FolderListing> {
     return this.request<FolderListing>('POST', '/folder/list', { json: { file, dir, pageToken }, stallMs: CONTROL_TIMEOUT_MS });
+  }
+
+  /**
+   * Lo de varias subcarpetas (hasta `FOLDER_LIST_DIRS`) en un solo pedido, con un pase por archivo: lo que usa el
+   * recorrido de *Download all*. Las páginas siguen con el mismo `dirs` y el `nextPageToken` (solo las que
+   * vinieron en `lists`). `null` si el portero es anterior a esto (contesta como si fuera `dir`, sin `lists`): hay
+   * que listar de a una.
+   */
+  async folderListDirs(file: string, dirs: string[], pageToken: string | null = null): Promise<FolderListingMany | null> {
+    const body = await this.request<Partial<FolderListingMany>>('POST', '/folder/list', { json: { file, dirs, pageToken }, stallMs: CONTROL_TIMEOUT_MS });
+    if (!body.lists || typeof body.lists !== 'object') return null;
+    return { lists: body.lists, failed: body.failed ?? {}, later: body.later ?? [], nextPageToken: body.nextPageToken ?? null };
   }
 
   /** Lo que necesita el selector de carpetas de Google (solo el dueño; 404 si el portero no tiene la clave). */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BlobSink, canRetry, MemoryCapExceeded, MISSING_NAME, planFolder, planRetry, refreshPass, runDownload, type DownloadPlan, type FileOut, type FolderLister, type MissingItem } from './folderZip';
-import { PorteroError, type FolderEntry, type FolderListing } from './portero';
+import { PorteroError, type FolderEntry, type FolderListing, type FolderListingMany } from './portero';
 import { concat, hasPython, pythonReadZip, text } from '../test/zipCheck';
 
 // "Download all" (P.9, entrega 2, Docs/Doc_Carpetas.md, sección 9): recorrer la carpeta con `/folder/list` y bajar
@@ -54,6 +54,46 @@ function world(tree: Tree, opts: { page?: number } = {}) {
       return { entries: all.slice(from, from + page), nextPageToken: from + page < all.length ? String(from + page) : null };
     },
   };
+  /**
+   * El mismo Drive detrás de un portero que lista varias subcarpetas por pedido (`folderListDirs`, como
+   * portero/src/core.ts): `page` cosas en total por pedido, agrupadas por padre; `cap` subcarpetas por pedido (el
+   * resto vuelve en `later`); `old`: un portero anterior (no devuelve `lists`); `err`: el código del error de
+   * ese pedido (el número de pedido, desde 1), o `null`.
+   */
+  const cfg: { page: number; cap: number; old: boolean; err: (n: number, ids: string[], token: string | null) => string | null } = {
+    page: 100,
+    cap: Infinity,
+    old: false,
+    err: () => null,
+  };
+  const manyLog: { ids: string[]; token: string | null }[] = [];
+  const listerDirs: FolderLister = {
+    folderList: lister.folderList,
+    async folderListDirs(file, ids, token = null): Promise<FolderListingMany | null> {
+      expect(file).toBe('carpeta-1');
+      manyLog.push({ ids, token });
+      expect(ids.length).toBeGreaterThan(0);
+      expect(ids.length).toBeLessThanOrEqual(40);
+      const code = cfg.err(manyLog.length, ids, token);
+      if (code) throw new PorteroError('boom', code === 'rate' ? 503 : 502, code === 'rate', code);
+      if (cfg.old) return null;
+      const failed: Record<string, string> = {};
+      const later: string[] = [];
+      let accepted: string[] = [];
+      if (!token) {
+        for (const id of ids) {
+          if (failList.has(id) || !dirs.has(id)) failed[id] = 'not_found';
+          else if (accepted.length >= cfg.cap) later.push(id);
+          else accepted.push(id);
+        }
+      } else accepted = ids;
+      const flat = accepted.flatMap((id) => dirs.get(id)!.map((e) => [id, e] as const));
+      const from = Number(token ?? 0);
+      const lists: Record<string, FolderEntry[]> = Object.fromEntries(accepted.map((id) => [id, []]));
+      for (const [id, e] of flat.slice(from, from + cfg.page)) lists[id]!.push(e);
+      return { lists, failed, later, nextPageToken: from + cfg.page < flat.length ? String(from + cfg.page) : null };
+    },
+  };
   const requests: { id: string; range: string | null; offline: boolean }[] = [];
   /** Sin internet (el wifi conectado, el navegador dice que hay red): todo pedido falla como `fetch`. */
   let down: (() => boolean) | null = null;
@@ -88,6 +128,9 @@ function world(tree: Tree, opts: { page?: number } = {}) {
   }) as typeof fetch;
   return {
     lister,
+    listerDirs,
+    cfg,
+    manyLog,
     fetcher,
     files,
     listed,
@@ -835,5 +878,190 @@ describe('Download all: Retry missing no reintenta lo que no cambia', () => {
     const plan = await planFolder(lister, 'carpeta-1', 'X');
     expect(plan.skipped).toEqual([{ path: 'A/Otra vez A/', reason: 'folder', detail: 'loop' }]);
     expect(plan.skipped.some(canRetry)).toBe(false);
+  });
+});
+
+describe('Download all: varias subcarpetas por pedido (dirs)', () => {
+  const summary = (plan: DownloadPlan) => ({
+    dirs: plan.dirs.map((d) => d.path),
+    files: plan.files.map((f) => `${f.path}|${f.id}|${f.dirId}|${f.size}`),
+    skipped: plan.skipped,
+    bytes: plan.bytes,
+  });
+  /** Lo mismo con un portero de a una por pedido: lo que tiene que salir igual. */
+  const legacy = (tree: Tree, setup: (w: ReturnType<typeof world>) => void = () => undefined) => {
+    const w = world(tree);
+    setup(w);
+    return planFolder(w.lister, 'carpeta-1', 'Referencias', { wait: noWait }).then(summary);
+  };
+  const BIG: Tree = Object.fromEntries(Array.from({ length: 500 }, (_, i) => [`d${String(i).padStart(3, '0')}`, { 'a.txt': 'x', 'b.txt': 'yy' }]));
+
+  it('arma el mismo plan que de a una por pedido (subcarpetas, vacías, lo que no se baja, nombres)', async () => {
+    const w = world(TREE, { page: 2 });
+    const seen: { files: number; bytes: number; folders: number }[] = [];
+    const plan = await planFolder(w.listerDirs, 'carpeta-1', 'Referencias', { wait: noWait, onProgress: (p) => seen.push(p) });
+    expect(summary(plan).dirs).toEqual(['Fotos', 'Fotos/Dia 2', 'Notas', 'Vacia']);
+    expect(plan.files).toHaveLength(7);
+    // Los ids de archivo no coinciden entre mundos (se numeran al armarlos): se compara la forma.
+    const flat = (p: ReturnType<typeof summary>) => ({ ...p, files: p.files.map((f) => f.split('|')[0]) });
+    expect(flat(summary(plan))).toEqual(flat(await legacy(TREE)));
+    expect(seen.at(-1)).toEqual({ folders: 4, files: 7, bytes: plan.bytes });
+    // La raíz, de a una (no conoce su id); las subcarpetas por dirs.
+    expect(w.listed.filter((d) => d === null).length).toBeGreaterThan(0);
+    expect(w.manyLog.length).toBeGreaterThan(0);
+    expect(w.manyLog.every((c) => c.ids.length <= 40)).toBe(true);
+  });
+
+  it('una carpeta con 500 subcarpetas pasa de 505 pedidos a 18 (la raíz en 5 páginas y las subcarpetas en 13 de 40), con todos sus archivos', async () => {
+    const one = world(BIG);
+    const planOne = await planFolder(one.lister, 'carpeta-1', 'R', { wait: noWait });
+    // De a una: las 5 páginas de la raíz (100 por página) y un pedido por subcarpeta.
+    expect(one.listed).toHaveLength(5 + 500);
+
+    const w = world(BIG);
+    const plan = await planFolder(w.listerDirs, 'carpeta-1', 'R', { wait: noWait });
+    expect(w.listed).toHaveLength(5); // solo las páginas de la raíz (no se conoce su id)
+    expect(w.manyLog).toHaveLength(13);
+    expect(w.manyLog.map((c) => c.ids.length).sort((x, y) => y - x)).toEqual([...Array(12).fill(40), 20]);
+    expect(plan.files).toHaveLength(1000);
+    expect(plan.dirs).toHaveLength(500);
+    expect(plan.bytes).toBe(planOne.bytes);
+    expect(plan.files.map((f) => f.path)).toEqual(planOne.files.map((f) => f.path));
+  });
+
+  it('un pedido trae a lo sumo "page" cosas en total: se sigue con el nextPageToken y nada se repite ni se pierde', async () => {
+    const w = world(BIG);
+    w.cfg.page = 30; // 40 subcarpetas x 2 archivos = 80: tres páginas por pedido
+    const plan = await planFolder(w.listerDirs, 'carpeta-1', 'R', { wait: noWait });
+    expect(plan.files).toHaveLength(1000);
+    expect(new Set(plan.files.map((f) => f.id)).size).toBe(1000);
+    // Los pedidos con token repiten las mismas subcarpetas de su primer pedido (la consulta no cambia).
+    const starts = w.manyLog.filter((c) => c.token === null).map((c) => c.ids.join());
+    for (const c of w.manyLog.filter((c) => c.token !== null)) expect(starts).toContain(c.ids.join());
+    // 12 pedidos de 80 cosas (3 páginas de 30) y uno de 40 (2 páginas).
+    expect(w.manyLog).toHaveLength(12 * 3 + 2);
+  });
+
+  it('las que no se pueden listar quedan anotadas (con su id para Retry missing) y las demás siguen', async () => {
+    const w = world(TREE);
+    w.failList.add(w.idOf('Notas'));
+    const plan = await planFolder(w.listerDirs, 'carpeta-1', 'R', { wait: noWait });
+    expect(plan.files.map((f) => f.path)).toEqual(['Fotos/Dia 2/a.jpg', 'Fotos/Dia 2/B.jpg', 'Fotos/b.jpg', 'Fotos/portada.png', 'leeme.txt']);
+    expect(plan.skipped[0]).toEqual({ path: 'Notas/', reason: 'folder', detail: 'not_found', dirId: w.idOf('Notas') });
+    expect(plan.dirs.map((d) => d.path)).toContain('Notas');
+  });
+
+  it('las que el portero deja para después (el tope de llamados a Drive) se piden de nuevo, hasta que no queda ninguna', async () => {
+    const w = world(BIG);
+    w.cfg.cap = 25;
+    const plan = await planFolder(w.listerDirs, 'carpeta-1', 'R', { wait: noWait });
+    expect(plan.files).toHaveLength(1000);
+    expect(plan.skipped).toEqual([]);
+    expect(new Set(plan.dirs.map((d) => d.path)).size).toBe(500);
+    // Cada pedido avanzó (25 de 40; después las 15 que quedaron junto a otras).
+    expect(w.manyLog.length).toBeGreaterThan(13);
+    expect(w.manyLog.length).toBeLessThan(40);
+  });
+
+  it('un portero que nunca avanza (todo para después): anota cada una con "later" y termina', async () => {
+    const w = world(TREE);
+    w.cfg.cap = 0;
+    const plan = await planFolder(w.listerDirs, 'carpeta-1', 'R', { wait: noWait });
+    expect(plan.skipped.filter((m) => m.reason === 'folder').map((m) => [m.path, m.detail])).toEqual([
+      ['Fotos/', 'later'],
+      ['Notas/', 'later'],
+      ['Vacia/', 'later'],
+    ]);
+    expect(plan.skipped.filter((m) => m.reason === 'folder').every((m) => m.dirId)).toBe(true);
+    expect(w.manyLog.length).toBeLessThan(20);
+  });
+
+  it('un error a mitad (de un pedido o de una página siguiente): se descarta lo recibido y se listan de a una; el plan sale igual y sin repetidos', async () => {
+    for (const failAt of [1, 2, 3]) {
+      const w = world(TREE, { page: 3 });
+      w.cfg.page = 3;
+      w.cfg.err = (n) => (n === failAt ? 'drive_failed' : null);
+      const seen: { files: number; bytes: number }[] = [];
+      const plan = await planFolder(w.listerDirs, 'carpeta-1', 'R', { wait: noWait, onProgress: (p) => seen.push(p) });
+      const ok = world(TREE);
+      const expected = await planFolder(ok.lister, 'carpeta-1', 'R', { wait: noWait });
+      expect(plan.files.map((f) => f.path)).toEqual(expected.files.map((f) => f.path));
+      expect(plan.dirs.map((d) => d.path)).toEqual(expected.dirs.map((d) => d.path));
+      expect(plan.skipped).toEqual(expected.skipped);
+      // El avance nunca cuenta lo descartado: termina en lo que hay.
+      expect(seen.at(-1)).toMatchObject({ files: plan.files.length, bytes: plan.bytes });
+      // Después del error, de a una (las subcarpetas que quedaban en ese pedido).
+      expect(w.listed.length).toBeGreaterThan(1);
+    }
+  });
+
+  it('Drive que pide ir más despacio: espera y repite el mismo pedido; si no cede, las anota con "rate"', async () => {
+    const w = world(TREE);
+    w.cfg.err = (n) => (n === 1 ? 'rate' : null);
+    const waits: number[] = [];
+    const plan = await planFolder(w.listerDirs, 'carpeta-1', 'R', { wait: async (ms) => void waits.push(ms) });
+    expect(waits).toEqual([5000]);
+    expect(plan.files).toHaveLength(7);
+
+    const stuck = world(TREE);
+    stuck.cfg.err = () => 'rate';
+    const waits2: number[] = [];
+    const plan2 = await planFolder(stuck.listerDirs, 'carpeta-1', 'R', { wait: async (ms) => void waits2.push(ms) });
+    expect(plan2.skipped.filter((m) => m.reason === 'folder').map((m) => m.detail)).toEqual(['rate', 'rate', 'rate']);
+    expect(waits2).toEqual([5000, 10000, 20000, 40000]);
+  });
+
+  it('un portero anterior (sin dirs): una sola prueba, se acuerda y lista de a una sin romper nada', async () => {
+    const w = world(TREE);
+    w.cfg.old = true;
+    const plan = await planFolder(w.listerDirs, 'carpeta-1', 'R', { wait: noWait });
+    expect(w.manyLog).toHaveLength(1);
+    expect(plan.files).toHaveLength(7);
+    expect(plan.skipped.map((m) => m.reason)).toEqual(['shortcut', 'google']);
+    expect(plan.dirs.map((d) => d.path)).toEqual(['Fotos', 'Fotos/Dia 2', 'Notas', 'Vacia']);
+    // Sin el método (una app que no sabe de dirs, o un cliente de mentira): lo de siempre.
+    const plain = world(TREE);
+    expect(summary(await planFolder(plain.lister, 'carpeta-1', 'R', { wait: noWait })).files).toHaveLength(7);
+    expect(plain.manyLog).toHaveLength(0);
+  });
+
+  it('cancelar corta el listado (AbortError) y no se confunde con un error para probar de a una', async () => {
+    const w = world(BIG);
+    const ctrl = new AbortController();
+    w.cfg.err = (n) => {
+      if (n === 2) ctrl.abort();
+      return null;
+    };
+    await expect(planFolder(w.listerDirs, 'carpeta-1', 'R', { wait: noWait, signal: ctrl.signal })).rejects.toMatchObject({ name: 'AbortError' });
+    // Nada de probar de a una después de cancelar: solo las páginas de la raíz.
+    expect(w.listed).toHaveLength(5);
+  });
+
+  it('un ciclo (la misma subcarpeta dos veces) y la profundidad se siguen cortando', async () => {
+    const w = world({ A: { 'x.txt': '1' } });
+    // La subcarpeta A aparece de nuevo adentro de sí misma.
+    const a = w.idOf('A');
+    const entries = [{ type: 'folder', id: a, name: 'otra', modified: null }, { type: 'file', id: 'x1', name: 'x.txt', mime: 'text/plain', size: 1, modified: null, url: 'https://portero.test/m/x1', thumb: null }] as FolderEntry[];
+    const inner = w.listerDirs.folderListDirs!;
+    w.listerDirs.folderListDirs = async (file, ids, token) => {
+      const res = await inner(file, ids, token);
+      return res && res.lists[a] ? { ...res, lists: { ...res.lists, [a]: entries } } : res;
+    };
+    const plan = await planFolder(w.listerDirs, 'carpeta-1', 'R', { wait: noWait });
+    expect(plan.skipped).toEqual([{ path: 'A/otra/', reason: 'folder', detail: 'loop' }]);
+  });
+
+  it('Retry missing: la subcarpeta que no se listó se vuelve a listar y sus subcarpetas, con dirs', async () => {
+    const w = world({ Notas: { Sub: { 'a.txt': 'x' }, 'guion.txt': 'g' }, 'leeme.txt': 'h' });
+    w.failList.add(w.idOf('Notas'));
+    const plan = await planFolder(w.listerDirs, 'carpeta-1', 'Referencias', { wait: noWait });
+    const first = await zipOf(plan, w);
+    w.failList.clear();
+    const before = w.manyLog.length;
+    const retry = await planRetry(w.listerDirs, 'carpeta-1', plan, first.result.missing, { wait: noWait });
+    expect(retry.files.map((f) => f.path)).toEqual(['Notas/Sub/a.txt', 'Notas/guion.txt']);
+    expect(retry.dirs.map((d) => d.path)).toEqual(['Notas', 'Notas/Sub']);
+    // La subcarpeta de Notas, por dirs (Notas misma, de a una, como la raíz).
+    expect(w.manyLog.length - before).toBe(1);
   });
 });

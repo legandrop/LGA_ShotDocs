@@ -74,6 +74,7 @@ try {
   for (let i = 1; i <= 2; i++) await expect(`estado sin sesión #${i}`, 'GET', '/drive/status', 401);
   await expect('carpeta sin sesión', 'POST', '/folder/list', 401, { body: '{}', headers: { 'Content-Type': 'application/json' } });
   await expect('preflight', 'OPTIONS', '/folder/list', 204, { headers: { Origin: vars.APP_ORIGINS, 'Access-Control-Request-Method': 'POST' } });
+  await expect('carpeta (varias subcarpetas) sin sesión', 'POST', '/folder/list', 401, { body: '{"file":"x","dirs":["a"]}', headers: { 'Content-Type': 'application/json' } });
   // "Available offline" (Doc_Copias_Locales.md): `?offline=1` y `Range` en `/m/`, y `/verify`.
   await expect('pase inválido con ?offline=1 y Range', 'GET', '/m/abc.def?offline=1', 403, { headers: { Range: 'bytes=0-16777215' } });
   await expect('verify sin sesión', 'POST', '/verify', 401, { body: '{"files":[]}', headers: { 'Content-Type': 'application/json' } });
