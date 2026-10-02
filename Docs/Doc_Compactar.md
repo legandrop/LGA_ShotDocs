@@ -1,9 +1,10 @@
 # Compactar el contenido en el servidor (`page_snapshots`)
 
-**Estado: entregas 1 y 2 implementadas (LEER snapshots, v0.127, migración `20261019120000_compactar_leer.sql`,
-aplicada y con los snapshots apagados; CREARLOS en el dispositivo, v0.133, migración `20261020120000_compactar_crear.sql`,
-sin aplicar; ver "Cómo quedó la entrega 1" y "Cómo quedó la entrega 2", al final). La entrega 3 (prenderlos), sin
-implementar** (roadmap B.9, diseño del 2026-10-01). Toca la regla de no perder datos, así que va con
+**Estado: entregas 1, 2 y 3 implementadas (LEER snapshots, v0.127, migración `20261019120000_compactar_leer.sql`;
+CREARLOS en el dispositivo, v0.133, migración `20261020120000_compactar_crear.sql`; dejarlos LISTOS PARA PRENDER,
+v0.137, migración `20261025120000_compactar_prender.sql`; ver "Cómo quedó la entrega 1", "… 2" y "… 3", al final).
+Siguen apagados: el interruptor está listo y se prende con un SQL después de la prueba de punta a punta y la medición
+en el iPhone que hace Lega** (roadmap B.9, diseño del 2026-10-01). Toca la regla de no perder datos, así que va con
 pruebas antes de cualquier código que escriba en la base. **Revisado el 2026-10-01 con el diseño del historial
 (`Doc_Historial.md`, decisión de Lega):** el snapshot se arma aplicando las filas en orden, no con
 `Y.mergeUpdates`, para que conserve lo borrado (sección 3). Nada de esto está aplicado: la migración de abajo es un
@@ -672,11 +673,12 @@ Antes de escribir en la base, en este orden:
 | Un snapshot enorme que no baja en una red mala | Hasta 8 MB, con el tope de tiempo del lote de a uno (pensado para 8 MB); si es más grande, no se compacta |
 | Yjs 14 (B.10) cambia el formato | Apagar o invalidar antes de esa migración |
 | Las versiones viejas siguen bajando todo | Es lento pero correcto; desaparece cuando se actualizan |
-| Restaurar una copia con un snapshot malo todavía sin invalidar | Quien aplicó un snapshot de la página, al restaurar (`resetForRestore`), cambia lo guardado por sus elementos sin borrados y sube eso (auditoría de la entrega 2, O-B): lo que el snapshot borró de más no llega a nadie. Lo que queda: un borrado legítimo que la copia perdió y que ese dispositivo tenía puede volver a aparecer (sobra texto, no falta). Antes de restaurar con los snapshots prendidos, igual conviene invalidarlos (entrega 3) |
-| Un snapshot base que se corrompió en la base (bytes rotos) | Se sirve igual: cada dispositivo nuevo lo baja, no lo puede leer y cae a las filas; el compactador saltea la página 24 horas cada vez. No se pierde nada. No se invalida porque "ilegible" también puede ser "armado por una versión más nueva": separarlo pide que `pull_page_snapshot` devuelva la huella guardada (otra migración; roadmap, entrega 3, auditoría de la entrega 2, O-D) |
-| Compactar una página grande frena el ciclo de sincronización | Lo escrito ya está guardado en el dispositivo y sube en el ciclo siguiente; medirlo en el iPhone en la entrega 3 y, si tarda, compactar fuera del ciclo o con un tope de tiempo (auditoría de la entrega 2, O-C) |
+| Restaurar una copia con un snapshot malo todavía sin invalidar | Quien aplicó un snapshot de la página, al restaurar (`resetForRestore`), cambia lo guardado por sus elementos sin borrados y sube eso (auditoría de la entrega 2, O-B): lo que el snapshot borró de más no llega a nadie. Lo que queda: un borrado legítimo que la copia perdió y que ese dispositivo tenía puede volver a aparecer (sobra texto, no falta). Desde la entrega 3 el script de restaurar empieza por anularlos todos (D142): la época sube, así que también un dispositivo que baja antes de ver la generación nueva se rearma sin subir el borrado malo |
+| Un snapshot que se corrompió en la base (bytes rotos, o legibles pero distintos) | Desde la entrega 3 (O-D) la base manda la huella guardada con el snapshot: el dispositivo la compara antes de aplicarlo, no aplica uno que no coincide (aunque se pueda leer), lo invalida (quien ve lo borrado) y baja las filas. Quien compacta compara la base con su huella y, si no coincide, invalida la cadena. Uno ilegible con la huella bien es de una versión más nueva: no se toca |
+| Compactar una página grande frena el ciclo de sincronización | Medido en la entrega 3 (O-C, "Cómo quedó la entrega 3"): con la CPU frenada ×6, la primera compactación de una página de 5000 subidas tarda unos 10 s y una de cada diez (desde cero) unos 5; el ciclo espera, pero lo escrito ya está guardado y sube en el ciclo siguiente. La pantalla no se traba: armar devuelve el control cada 30 ms; lo único de un tirón es la comparación (hasta 0,35 s). Falta medirlo en el iPhone |
 | Un borrado propio sin subir igual a uno que trajo un snapshot malo | Al rearmarse no sube y la palabra vuelve a aparecer (no se pierde texto: reaparece lo borrado). Necesita que el snapshot malo borre exactamente lo mismo |
-| Armar un snapshot cuesta CPU en el dispositivo (segundos en una página de miles de filas) | Una página por ciclo, de a tramos (el anterior más la cola), devolviendo el control cada 50 filas; en el hilo principal. Medir en el iPhone en la entrega 3 (prueba 8) y, si hace falta, pasarlo a un Worker como el historial |
+| Armar un snapshot cuesta CPU en el dispositivo (segundos en una página de miles de filas) | Una página por ciclo, de a tramos (el anterior más la cola), devolviendo el control cada 50 filas o cada 30 ms (entrega 3); en el hilo principal (D143). Si en el iPhone la comparación pasa de unos 200 ms, pasarlo a un Worker como el historial |
+| Subir `snapshot_min_version` para dejar afuera una versión con errores no rearma los dispositivos que ya aplicaron uno de sus snapshots (la época no cambia) | Antes de subirla, invalidar esas cadenas con el SQL de "Cómo quedó la entrega 3" (la época sube y esos dispositivos se rearman) |
 
 ## 17. Entregas
 
@@ -686,10 +688,10 @@ Antes de escribir en la base, en este orden:
    migrar.
 2. **Crear snapshots** (hecha, v0.133): `compact.ts`, el paso en el ciclo, la confirmación, la invalidación y el
    rearmado por `content_epoch` (D110); las pruebas 1, 3 completas y 4. Se publica con los snapshots apagados.
-3. **Prenderlos**: antes, el cambio del script de restaurar (vaciar `page_snapshots`, `content_epoch` que no vuelve
-   atrás; repo privado, con su prueba 6). Probar de punta a punta en un proyecto de prueba (7) y medir (8); después
-   `snapshot_min_version` a la versión de la entrega 2 en Wanka. Mirar los snapshots inválidos y las páginas
-   salteadas (`compaction_skip_why`) la primera semana.
+3. **Prenderlos** (hecha la parte de código, v0.137; ver "Cómo quedó la entrega 3"): el script de restaurar (D142),
+   la marca del rearmado guardada (R-1), la huella (O-D), lo medido (O-C) y la bajada sin versión sin snapshots.
+   Falta lo de Lega: probar de punta a punta en un proyecto de prueba (7) y medir en el iPhone (8); después el SQL
+   de prender. Mirar los snapshots inválidos y las páginas salteadas (`page_compaction.skip_why`) la primera semana.
 4. **Más adelante**: `verifyHistory` sobre el snapshot.
 
 Antes de cerrar cada entrega, la auditoría de siempre (funcionalidad, permisos y RLS, no perder datos, docs).
@@ -906,3 +908,105 @@ borrados y sube lo que el servidor no tiene), O-B (lo mismo al restaurar una cop
 que manda al invalidar). O-C y O-D, a la entrega 3 (arriba). Con sus pruebas: las dos de la auditoría para O-A, una de
 restaurar con un snapshot malo, la de la espera que olvida `syncedSV` y la del aviso que no se repite; la corrida al
 azar ahora mezcla restaurar con snapshots malos; 8 mutantes de las correcciones, los 8 detectados.
+
+## Cómo quedó la entrega 3 (LISTOS PARA PRENDER)
+
+Implementada en v0.137. Todo lo que hacía falta del lado del código para prenderlos está hecho; **siguen apagados**
+(`snapshot_min_version` nulo) hasta que Lega pruebe de punta a punta con sesión y mida en el iPhone (pruebas 7 y 8, que
+piden login). Con ellos apagados la app hace exactamente los mismos pedidos que v0.133.
+
+**Lo corregido de la re-verificación de la entrega 2:**
+
+- **R-1 (la marca del rearmado vivía solo en memoria).** Si la app se cerraba entre el rearmado y el final de la bajada,
+  lo escrito al lado de un elemento que trajo un snapshot malo quedaba invisible para los demás. Ahora es
+  `DocState.rebuilt`, guardada en la misma transacción que el rearmado (`resetContent`, `keepElementsForRestore`) y
+  borrada en la misma que marca la subida (`settleRebuild`). El ciclo baja también las páginas marcadas aunque estén al
+  día, así se termina aunque la app se haya cerrado con la bajada ya completa.
+- **R-2 (cada bajada en espera volvía a subir la página entera).** Con algo sin subir, la espera olvida `syncedSV` una
+  sola vez por época (`DocState.forgotSyncedForEpoch`): la subida siguiente lleva todos los elementos, las demás solo lo
+  nuevo. Medido con la prueba de la auditoría: antes 521, 544 y 567 bytes; ahora una fila grande y dos chicas. Si
+  igual quedara algo, el rearmado lo sube al terminar (R-1).
+
+**O-D, la huella** (migración `20261025120000_compactar_prender.sql`, no sube `schema_version`):
+
+- `pull_page_content(page, after, limit, app_version)` (nueva, la que usa esta versión): lo de la entrega 1, solo a
+  una versión que la base permite (`app_version_allowed`) y con la huella guardada del snapshot (`sha256`, hex) en su
+  fila. El dispositivo la compara **antes de aplicarlo**: si no coincide (bytes rotos, o legibles pero distintos), no
+  guarda nada del lote, lo invalida (la base deja a quien ve lo borrado; para los demás es un error que no corta nada)
+  y baja las filas. Uno ilegible con la huella bien lo armó una versión más nueva: filas, sin invalidar.
+- `pull_page_snapshot_checked(id)`: la base de quien compacta con su huella (los controles de `pull_page_snapshot`, que
+  llama). Si no coincide, invalida la cadena y la próxima compactación arranca desde la fila 1 (antes salteaba la página
+  24 horas cada día).
+- Sin la migración, la app no encuentra la función (PGRST202) y baja filas por `pull_page_updates`; quien compacta baja
+  la base sin huella, como antes.
+
+**Las versiones v0.127 a v0.133** llaman a `pull_page_content` sin versión. La migración cambia esa función para que
+**nunca sirva un snapshot** (las filas de `pull_page_updates` con la época): sus caminos con O1 (v0.127 a v0.129) y con
+la marca en memoria (v0.133) no se pueden activar, aunque los snapshots se prendan sin subir la versión mínima.
+
+**D142, restaurar** (`backup/scripts/restaurar_mismo_proyecto.sql` del repo privado, pasos 0b y 2c): empieza por anular
+todas las cadenas válidas (la época de su página sube uno, calculada sobre la de hoy) y, después de cargar la copia,
+vacía `page_snapshots` y `page_compaction`, deja `snapshot_seq` en 0 y pone la época mayor entre la de la copia y la de
+hoy. Un dispositivo que aplicó uno malo se rearma aunque baje antes de ver la generación nueva.
+
+**O-C, medido** (`buildDocAsync` y `compareDocs` de la app en el Chromium de Playwright, con la CPU frenada por CDP;
+una historia generada de párrafos, palabras y borrados con un autor nuevo cada 60 subidas, filas con todos los
+borrados como las de antes de B.15; ms):
+
+| Caso | ×1 | ×4 | ×6 | Tarea más larga ×6 |
+|---|---|---|---|---|
+| Primera, 2000 subidas (1,1 MB de filas, snapshot 48 KB) | 250 | 1400 | 3000 | 175 (la comparación) |
+| Primera, 5000 subidas (8,1 MB, snapshot 123 KB) | 450 | 4900 | 10 300 | 350 (la comparación) |
+| Incremental, 200 sobre 1800, con la comparación desde cero | 320 | 1400 | 1500 | 110 |
+| Incremental, 300 sobre 4700, con la comparación desde cero | 630 | 5600 | 4500 | 245 |
+
+Antes de esta entrega, armar devolvía el control cada 50 filas y con filas pesadas cada tramo era una tarea larga (a ×6
+y 5000 subidas, entre 43 y 69 tareas de más de 50 ms). Ahora devuelve el control cada 50 filas o cada 30 ms, con un
+mensaje (`MessageChannel`, sin la espera mínima de `setTimeout`): ya no quedan tareas largas al armar, y lo único de un
+tirón es la comparación. **D143 sigue en A** (hilo principal): pasarlo a un Worker solo si en el iPhone la comparación
+pasa de unos 200 ms. El ciclo espera a la compactación (hasta unos 10 s a ×6 en la primera de una página enorme); lo
+escrito ya está guardado y sube en el ciclo siguiente.
+
+**El interruptor (decisión de esta entrega): listo y apagado.** Para prenderlos, cuando estén las pruebas 7 y 8 (la
+versión de esta entrega en lugar de `X`):
+
+```sql
+update public.workspace_settings
+set snapshot_min_version = X,
+    min_app_version = greatest(coalesce(min_app_version, 0), X)  -- O5: una pestaña vieja en el mismo navegador
+where id;
+```
+
+Apagarlos: `snapshot_min_version = null` (desde el próximo pedido, todos bajan filas). **Dejar afuera una versión con
+errores** (la `Y`): primero invalidar sus cadenas, así los dispositivos que ya aplicaron uno se rearman (subir la mínima
+sola deja de servirlas pero no cambia la época):
+
+```sql
+select private.invalidate_snapshot_chain(c.page_id, c.chain_id, 'version')
+from (select distinct page_id, chain_id from public.page_snapshots
+      where invalid_at is null and chain_min_version < Y) c;
+update public.workspace_settings set snapshot_min_version = Y where id;
+```
+
+**Pruebas:**
+
+- `src/sync/compactarPrender.test.ts` (22): R-1 con la app cerrada a mitad de la bajada (AUD-R4), con la bajada ya
+  completa y a mitad de mirar qué subir, la marca que se borra, restaurar que la guarda; R-2 con tres bajadas en espera (AUD-R1) y una época nueva;
+  O-D con un snapshot legible pero distinto, uno roto, uno de una versión más nueva, quien no puede invalidar, la base
+  corrupta de quien compacta y una base sin la migración; la versión v0.127 a v0.133 que nunca recibe un snapshot y la
+  versión mínima; D142 en el servidor en memoria y con un dispositivo que baja antes de ver la generación; **dos
+  dispositivos** (la versión publicada v0.100 y uno nuevo) que escriben sin red mientras quien compacta detecta una
+  copia mala desde cero (tres semillas: un borrado de más, un elemento de más, y un borrado legítimo sin subir): todo lo
+  escrito llega, el borrado malo no, y todos (también uno nuevo) muestran lo mismo que las filas del servidor; el
+  cliente de verdad (manda la versión, lee la huella, la vuelta sin la migración).
+- `supabase/tests/snapshots_permisos.sql`: la de tres argumentos igual a `pull_page_updates` para todos (también con
+  snapshot y cola), la huella solo en la fila del snapshot, la versión que no alcanza, `pull_page_snapshot_checked` con
+  sus rechazos y los permisos de `anon`. Corrida en `begin … rollback` contra la base con la migración; las otras 24
+  pruebas de `supabase/tests/` pasan con ella. **11 mutantes de la migración, 10 detectados** (el que vive, sacar
+  `can_view_page` de la de tres argumentos, es equivalente: `pull_page_updates` lo controla igual).
+- El bloque del script de restaurar, sacado tal cual del script y corrido en `begin … rollback` contra la base (no hay
+  Postgres local para `test_local.sh`): **7 mutantes, los 7 detectados**.
+- `snapshots.test.ts`: restaurar sube la época de las páginas con una cadena válida. Las corridas al azar de las
+  entregas 1 y 2 (ahora con la huella) pasan con 60 semillas cada una.
+- **19 mutantes de la app y del servidor en memoria, los 19 detectados** (R-1, R-2, O-D, el cliente, la de tres
+  argumentos y D142; uno, sacar la marca antes de mirar, lo mata la prueba de cerrar la app a mitad de mirar).

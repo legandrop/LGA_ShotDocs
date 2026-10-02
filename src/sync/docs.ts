@@ -1,6 +1,6 @@
 import * as Y from 'yjs';
 import { t } from '../i18n';
-import { buildCleanBase, checkCleanBase, coversLocal } from './clean';
+import { buildCleanBase, checkCleanBase, coversLocal, sha256Hex } from './clean';
 import { buildUpload, encodeRanges, rangesOf, unionRanges, type DeleteRanges } from './deleteSets';
 import {
   DIRTY_PREFIX,
@@ -15,7 +15,7 @@ import {
   type DocState,
   type LocalDb,
 } from './localDb';
-import { APP_OUTDATED, type Remote } from './remote';
+import { APP_OUTDATED, type Remote, type SnapshotsRemote } from './remote';
 import {
   applyRowsInOrder,
   clientOfKey,
@@ -163,13 +163,6 @@ export class PageDocs {
    * que esta versión no puede leer (Docs/Doc_Compactar.md, sección 5). Hasta que se vuelva a abrir la app.
    */
   private readonly rowsOnly = new Set<string>();
-  /**
-   * Páginas rearmadas con sus elementos sin borrados (`resetContent`, `resetForRestore` con un snapshot aplicado) que
-   * todavía no terminaron de bajar: al terminar, `settleRebuild` mira si hay algo para subir. Mientras tanto no se avisa
-   * de lo propio borrado por lo que baja (B.16): son los borrados de siempre que vuelven a llegar.
-   */
-  private readonly rebuilt = new Set<string>();
-
   constructor(
     private readonly db: LocalDb,
     private readonly options: PageDocsOptions = {},
@@ -372,27 +365,34 @@ export class PageDocs {
           // Los snapshots de antes de restaurar ya no cuentan (Docs/Doc_Compactar.md, sección 9).
           s.snapshotId = undefined;
           s.contentEpoch = undefined;
+          s.forgotSyncedForEpoch = undefined;
+          // `rebuilt` queda como lo dejó `keepElementsForRestore` (o como estaba): lo termina la próxima bajada.
         }),
       );
     }
     return states.length;
   }
 
-  /** `resetForRestore` de una página con un snapshot aplicado: lo guardado pasa a ser sus elementos, sin borrados. */
+  /**
+   * `resetForRestore` de una página con un snapshot aplicado: lo guardado pasa a ser sus elementos, sin borrados, y la
+   * marca `rebuilt` queda guardada en la misma transacción (R-1).
+   */
   private async keepElementsForRestore(pageId: string): Promise<void> {
-    const tx = this.db.transaction('docUpdates', 'readwrite');
-    const index = tx.store.index('pageId');
-    const [keys, rows] = await Promise.all([index.getAllKeys(pageId), index.getAll(pageId)]);
+    const tx = this.db.transaction(['docUpdates', 'docState'], 'readwrite');
+    const index = tx.objectStore('docUpdates').index('pageId');
+    const [keys, rows, stored] = await Promise.all([index.getAllKeys(pageId), index.getAll(pageId), tx.objectStore('docState').get(pageId)]);
     // Sin ningún await en el medio: la transacción sigue abierta mientras se arma.
     const keep = elementsOnly(rows.map((r) => r.data));
     if (keep === 'failed' || keep === null) {
       await tx.done;
       return;
     }
-    await Promise.all(keys.map((k) => tx.store.delete(k)));
-    await tx.store.add({ pageId, data: keep });
+    await Promise.all(keys.map((k) => tx.objectStore('docUpdates').delete(k)));
+    await tx.objectStore('docUpdates').add({ pageId, data: keep });
+    const state = stored ?? emptyDocState(pageId);
+    state.rebuilt = true;
+    await tx.objectStore('docState').put(state);
     await tx.done;
-    this.rebuilt.add(pageId);
   }
 
   /**
@@ -729,9 +729,20 @@ export class PageDocs {
         if (updates.length === 0) break;
         const result = await this.applyRemote(pageId, updates);
         if (result === 'snapshot_unreadable') {
-          // No se guardó nada ni se movió el cursor: la página se vuelve a pedir en filas sueltas, como siempre.
+          // No se guardó nada ni se movió el cursor: la página se vuelve a pedir en filas sueltas, como siempre. Con la
+          // huella bien (o sin huella), lo armó una versión más nueva: no se toca.
           console.warn(`Página ${pageId}: no se pudo leer un snapshot del servidor; se bajan las filas.`);
           this.rowsOnly.add(pageId);
+          continue;
+        }
+        if (result === 'snapshot_corrupt') {
+          // La copia no coincide con la huella que guardó la base (O-D): no se aplicó nada. Se invalida su cadena (la base
+          // deja que lo haga quien ve lo borrado; para los demás es un error que no corta nada) y se bajan las filas.
+          const id = updates.find((u) => u.snapshotId)?.snapshotId;
+          console.error(`Página ${pageId}: un snapshot del servidor no coincide con su huella; se invalida y se bajan las filas.`);
+          this.rowsOnly.add(pageId);
+          const invalidate = (remote as Partial<Pick<SnapshotsRemote, 'invalidateSnapshot'>>).invalidateSnapshot;
+          if (id && invalidate) await invalidate.call(remote, id, 'corrupt: sha256').catch(() => false);
           continue;
         }
         if (result === 'reset') {
@@ -741,8 +752,10 @@ export class PageDocs {
         total += updates.length;
         if (updates.length < batch) break;
       }
-      // Rearmada (con lo que se conservó del snapshot malo): con todo bajado, se sube lo que el servidor no tiene.
-      if (this.rebuilt.has(pageId)) await this.settleRebuild(pageId);
+      // Rearmada (con lo que se conservó del snapshot malo): con todo bajado, se sube lo que el servidor no tiene. La marca
+      // está guardada (R-1): si la app se cerró a mitad de la bajada, esto corre en la próxima (el ciclo baja las páginas
+      // marcadas aunque estén al día).
+      if ((await this.db.get('docState', pageId))?.rebuilt) await this.settleRebuild(pageId);
       return total;
     });
   }
@@ -779,9 +792,12 @@ export class PageDocs {
     ]);
     const state = stored ?? emptyDocState(pageId);
     if (dirty !== undefined || state.pending || state.rejected || hasUnsyncedContent(state, false)) {
-      if (!state.rejected && (state.syncedSV !== undefined || state.pending)) {
+      // Una sola vez por época (R-2): la subida que sigue lleva todos los elementos de la página; las siguientes, solo lo
+      // nuevo. Si igual quedara algo, el rearmado lo sube al terminar de bajar (`settleRebuild`).
+      if (!state.rejected && state.forgotSyncedForEpoch !== epoch && (state.syncedSV !== undefined || state.pending)) {
         state.syncedSV = undefined;
         state.pending = undefined;
+        state.forgotSyncedForEpoch = epoch;
         await tx.objectStore('docState').put(state);
       }
       await tx.done;
@@ -812,9 +828,12 @@ export class PageDocs {
     // Lo ilegible se vuelve a anotar si sigue ahí al bajar de nuevo.
     state.unreadable = undefined;
     state.lastError = undefined;
+    state.forgotSyncedForEpoch = undefined;
+    // En la misma transacción que el rearmado (R-1): si la app se cierra antes de terminar de bajar, la marca sigue ahí.
+    if (keep) state.rebuilt = true;
+    else delete state.rebuilt;
     await tx.objectStore('docState').put(state);
     await tx.done;
-    if (keep) this.rebuilt.add(pageId);
     console.warn(`Página ${pageId}: se invalidó un snapshot que este dispositivo usó; se rearma con lo del servidor.`);
     const live = this.live.get(pageId);
     if (live) {
@@ -831,7 +850,6 @@ export class PageDocs {
    * subir. La subida lleva solo eso: los borrados guardados son los que bajaron. Si no tiene nada de más, no sale nada.
    */
   private async settleRebuild(pageId: string): Promise<void> {
-    this.rebuilt.delete(pageId);
     const saved = await this.readSaved(pageId, { keepDeleted: true });
     let extra: boolean;
     try {
@@ -841,10 +859,16 @@ export class PageDocs {
     } finally {
       saved.doc.destroy();
     }
-    if (!extra) return;
-    const tx = this.db.transaction('meta', 'readwrite');
-    await tx.store.put(crypto.randomUUID(), dirtyKey(pageId));
+    // La marca de subir y el fin del rearmado en la misma transacción (R-1): nunca queda una sin la otra.
+    const tx = this.db.transaction(['meta', 'docState'], 'readwrite');
+    const stored = await tx.objectStore('docState').get(pageId);
+    if (extra) await tx.objectStore('meta').put(crypto.randomUUID(), dirtyKey(pageId));
+    if (stored?.rebuilt) {
+      delete stored.rebuilt;
+      await tx.objectStore('docState').put(stored);
+    }
     await tx.done;
+    if (!extra) return;
     console.warn(`Página ${pageId}: lo rearmado tiene algo que el servidor no; se sube.`);
     this.track(pageId, this.bumpVersion(pageId));
     for (const fn of this.localChangeListeners) {
@@ -864,7 +888,15 @@ export class PageDocs {
    * reenvía lo bajado, y lo propio sin confirmar sigue quedando afuera del vector, o sea, adentro de lo que
    * falta subir.
    */
-  private async applyRemote(pageId: string, updates: RemoteUpdate[]): Promise<'ok' | 'reset' | 'snapshot_unreadable'> {
+  private async applyRemote(
+    pageId: string,
+    updates: RemoteUpdate[],
+  ): Promise<'ok' | 'reset' | 'snapshot_unreadable' | 'snapshot_corrupt'> {
+    // Un snapshot con la huella que guardó la base (entrega 3, O-D) se comprueba antes de nada: si no coincide, la copia
+    // se corrompió en la base (o en el camino) y no se guarda nada de este lote, aunque se pueda leer.
+    for (const u of updates) {
+      if (u.snapshotId && u.snapshotSha256 !== undefined && (await sha256Hex(u.data)) !== u.snapshotSha256) return 'snapshot_corrupt';
+    }
     const decoded: ReturnType<typeof Y.decodeUpdate>[] = [];
     let snapshotUnreadable = false;
     const valid = updates.filter((u) => {
@@ -1104,7 +1136,7 @@ export class PageDocs {
         meta.getAllKeys(ownClientRange(pageId)),
       ]);
       // Rearmada: lo que baja vuelve a borrar lo que ya estaba borrado (no es de otro que borró lo que se escribía).
-      if (this.rebuilt.has(pageId)) {
+      if (state?.rebuilt) {
         await tx.done;
         return null;
       }

@@ -609,15 +609,16 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
    `invalidate_page_snapshot` con `sees_deleted` (O3, migración `20261020120000_compactar_crear.sql`, aplicada en v0.133).
    De su auditoría, corregido antes de publicarla: el rearmado conserva los elementos sin sus borrados (O-A: tirarlos
    dejaba invisible lo escrito al lado de un elemento de un snapshot malo), lo mismo al restaurar una copia (O-B).
-   **Falta la entrega 3 (prenderlos):** el script de restaurar, subir `min_app_version` a la
-   versión de la entrega 2 (O5), probar de punta a punta, medir en el iPhone (también armar uno en el hilo principal y
-   cuánto frena el ciclo, O-C: si tarda, compactar fuera del ciclo o con tope), separar un snapshot corrupto de uno de
-   una versión más nueva (O-D: hoy uno roto se sigue sirviendo y cada dispositivo nuevo cae a las filas; hace falta que
-   `pull_page_snapshot` devuelva la huella, otra migración) y `snapshot_min_version`. También, de la re-verificación de
-   la entrega 2: **R-1** (medio) la marca de página rearmada vive solo en memoria; si la app se cierra a mitad del
-   rearmado, lo escrito al lado del elemento de más queda invisible para los demás: guardarla en `docState` (la prueba
-   AUD-R4 de la auditoría lo muestra); **R-2** (bajo) cada bajada que encuentra algo sin subir vuelve a subir la página
-   entera. Hoy no es urgente: ninguna página lo necesita.
+   **Entrega 3 hecha (v0.137): listos para prender, siguen apagados.** La marca del rearmado se guarda (R-1) y la
+   espera olvida `syncedSV` una vez por época (R-2); la base manda la huella de cada snapshot y el dispositivo no aplica
+   uno que no coincide: lo invalida, y quien compacta invalida una base corrupta (O-D); `pull_page_content` sin versión
+   (v0.127 a v0.133) ya no sirve snapshots (migración `20261025120000_compactar_prender.sql`, sin aplicar); el script de
+   restaurar empieza por anularlos (D142); armar devuelve el control cada 30 ms, medido con la CPU frenada ×4 y ×6
+   (O-C). **Falta (Lega):** la prueba de punta a punta con sesión y la medición en el iPhone (pruebas 7 y 8 de
+   `Doc_Compactar.md`); después, el SQL de prender que está en "Cómo quedó la entrega 3" (sube también
+   `min_app_version`). Hoy no es urgente: ninguna página lo necesita.
+   De su auditoría (BAJO): si una bajada se corta por más de 3 reinicios de época, igual corre el paso que sube lo que
+   sobra del rearmado (`settleRebuild`); hace falta que la época cambie 4 veces en una sola bajada y no se pierde nada.
 
 10. **Hecho lo principal: editar a la vez sin perder texto (v0.052).** Dos parches a y-prosemirror (el editor
    que se quedaba con lo de antes y deshacía cambios de otros; dos personas en el mismo párrafo vacío), la
