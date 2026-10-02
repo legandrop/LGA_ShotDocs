@@ -996,13 +996,14 @@ export class SyncEngine {
     const known = access?.get() ?? null;
     const perms = access && known ? new Permissions(this.tree, known, access.userId) : null;
     const now = Date.now();
+    const minRows = this.options.compact?.minRows ?? SNAPSHOT_MIN_ROWS;
     const candidates: { id: string; rows: number }[] = [];
     for (const [pageId, state] of await this.docs.states()) {
       const row = this.tree.get(pageId);
       if (!row || row.deleted_at || this.tree.isTrashed(pageId) || this.tree.hasUnsentCreate(pageId)) continue;
       if (state.rejected || state.cursor !== row.update_seq) continue;
       const rows = row.update_seq - (row.snapshot_seq ?? 0);
-      if (rows < SNAPSHOT_MIN_ROWS) continue;
+      if (rows < minRows) continue;
       // Ve lo borrado: Editar o más y no invitada (como la base, `sees_deleted`). Sin datos de permisos, decide la base.
       if (perms && !(perms.pageLevel(pageId) >= LEVEL_EDIT && perms.role !== 'guest')) continue;
       const asked = this.compactAsked.get(pageId);
@@ -1025,12 +1026,16 @@ export class SyncEngine {
         try {
           outcome = await compactPage(remote, id, claim, this.options.compact);
         } catch (err) {
-          // Sin red: la reserva vence sola y se vuelve a intentar en un rato.
-          this.compactAsked.set(id, { seq, at: Date.now() });
+          // Sin red (o un error de la base): se vuelve a intentar en el próximo ciclo. La reserva es de esta persona,
+          // así que la vuelve a tomar; el mismo tramo sobre la misma base da la misma huella y la base devuelve el que ya
+          // estaba (reintentar no duplica).
+          if (!isNetworkError(err) && !isTimeout(err)) this.compactAsked.set(id, { seq, at: Date.now() });
           throw err;
         }
-        if (outcome.kind !== 'confirmed') this.compactAsked.set(id, { seq, at: Date.now() });
-        else this.compactAsked.delete(id);
+        // Después de confirmar, de una carrera (`stale`: cambió la base) o de invalidar una cadena mala, se puede volver a
+        // pedir enseguida (la base decide); lo demás espera (salteada, otra versión ya la armó, huellas distintas).
+        if (outcome.kind === 'confirmed' || outcome.kind === 'stale' || outcome.kind === 'invalidated') this.compactAsked.delete(id);
+        else this.compactAsked.set(id, { seq, at: Date.now() });
         this.options.onCompacted?.(id, outcome);
         return outcome;
       }

@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto';
 import { wrap } from 'idb';
 import { mediaDbName, openMediaDb, type MediaDb } from '../media/mediaDb';
+import type { CompactOptions, CompactOutcome } from './compact';
 import { AccessStore, levelValue, parseAccess, Permissions, type AccessSnapshot, type GrantLevel, type Role } from './access';
 import { Portero, type PartSender } from '../media/portero';
 import type { Probe } from '../media/probe';
@@ -2817,6 +2818,8 @@ export interface Device {
   mentions: MentionsInbox;
   sizes: ProjectSizes;
   offline: OfflineManager;
+  /** Lo que compactó el motor de este dispositivo (compactar, entrega 2), en orden. */
+  compactions: { pageId: string; outcome: CompactOutcome }[];
 }
 
 /** Un dispositivo con su propia base local. Reusar `dbName` simula cerrar y volver a abrir la app. */
@@ -2828,6 +2831,8 @@ export async function makeDevice(
   schemaVersion?: number,
   /** La persona que usa el dispositivo; por defecto, el dueño del workspace. */
   user: { id?: string; email?: string } = {},
+  /** Compactar (Docs/Doc_Compactar.md): las opciones del compactador. Cada compactación queda en `compactions`. */
+  compact?: CompactOptions,
 ): Promise<Device> {
   const db = await openLocalDb(dbName);
   const remote = new FakeRemote(server, appVersion, user.id, user.email);
@@ -2885,7 +2890,17 @@ export async function makeDevice(
     },
   });
   await sizes.load();
-  const engine = new SyncEngine(remote, tree, docs, files, { appVersion, schemaVersion, media, access, comments, sizes });
+  const compactions: { pageId: string; outcome: CompactOutcome }[] = [];
+  const engine = new SyncEngine(remote, tree, docs, files, {
+    appVersion,
+    schemaVersion,
+    media,
+    access,
+    comments,
+    sizes,
+    compact,
+    onCompacted: (pageId, outcome) => compactions.push({ pageId, outcome }),
+  });
   const offline = new OfflineManager({
     db: server.mediaDbFails ? null : mediaDb,
     media,
@@ -2903,7 +2918,7 @@ export async function makeDevice(
   });
   await offline.load();
   offlineRef = offline;
-  return { db, tree, docs, files, media, mediaDb, engine, remote, access, comments, commentsDb, mentions, sizes, offline };
+  return { db, tree, docs, files, media, mediaDb, engine, remote, access, comments, commentsDb, mentions, sizes, offline, compactions };
 }
 
 /** Lo que se corta al matar la app (un dispositivo, o la versión publicada sin motor). */

@@ -279,6 +279,8 @@ export type CompactOutcome =
 export interface CompactOptions {
   /** Cada cuántos snapshots se compara contra todo desde cero (1: siempre; las pruebas). Por defecto, 10. */
   fullCheckEvery?: number;
+  /** La pista del árbol (`SNAPSHOT_MIN_ROWS`); las pruebas la achican junto con la del servidor en memoria. */
+  minRows?: number;
   /**
    * Para las pruebas mutantes: cambia el snapshot armado antes de comprobarlo (un error del compactador). La
    * comprobación tiene que frenarlo.
