@@ -1076,7 +1076,7 @@ Desde v0.021 hay dos protecciones para poder sumar tipos de bloque (y marcas) nu
   anteriores a v0.021, que no mandan versión). La app vieja lo ve, deja de subir contenido (queda en el
   dispositivo), y pide actualizar; al actualizar, sube todo. Desde v0.097 tampoco sube el árbol ni los comentarios ni
   baja contenido, y se actualiza sola (ver "Volver después de mucho tiempo sin red"). Desde v0.090 frena también la cola de archivos (ver
-  abajo, "La versión mínima y los archivos"), y desde v0.0XX la base frena también el árbol y los comentarios de las
+  abajo, "La versión mínima y los archivos"), y desde v0.099 la base frena también el árbol y los comentarios de las
   versiones anteriores (ver abajo, "La versión mínima, el árbol y los comentarios").
 
 **Regla para un bloque nuevo:** antes de publicar la versión que lo trae, subir `min_app_version` a la
@@ -1114,7 +1114,7 @@ el pedido una vez con versión. El portero no recibe la versión: una versión v
 original, que no cambia nada de lo que la base sabe del archivo. Un HEIC que una versión anterior a v0.075 guardó
 sin la marca de convertir se registra tal cual cuando la app se actualiza: el freno lo demora, no lo convierte.
 
-### La versión mínima, el árbol y los comentarios (B.17, v0.0XX)
+### La versión mínima, el árbol y los comentarios (B.17, v0.099)
 
 Desde v0.097 la app se frena sola, pero una versión anterior abierta seguía subiendo los cambios del árbol (crear,
 renombrar, mover, papelera, formato, ícono, proyectos nuevos y sus nombres) y los comentarios aunque estuviera por
@@ -1140,7 +1140,7 @@ Row Level Security (`pages`: `upsert` al crear, `update` con el cambio; `workspa
 
 **Elegida: la 2.** Es la más chica y la base sin la migración ignora el header. La regla es la misma que la de
 archivos: con header, se compara su versión con la mínima (`private.app_version_allowed`); sin header (solo lo
-mandan las versiones desde v0.0XX), se rechaza **solo cuando la mínima es 0.0XX o más**, porque con una mínima menor
+mandan las versiones desde v0.099), se rechaza **solo cuando la mínima es 0.099 o más**, porque con una mínima menor
 quien llama puede ser una versión permitida (la v0.098 publicada no manda header). Lo hacen
 `private.write_version_allowed()` y `private.require_write_version()`. Las funciones de proyectos que usa la app
 (`set_project_archived`, `delete_project`, `restore_project`) no pasan por las políticas: lo miran adentro, después
@@ -1173,12 +1173,12 @@ red y en el momento, no colas. Un header alto falso pasa: la mínima es una guar
 **Las colas publicadas:** `src/sync/offlineLargo.test.ts` prueba la cola de comentarios de la v0.098 copiada sin tocar
 (`src/sync/fixtures/v098/comments.ts`): con el 503 el comentario queda pendiente, sin rechazados, también al cerrar y
 abrir, y sale con la cola de hoy al actualizar. Esa versión muestra el código `app_outdated` como error del comentario
-(no lo conoce); desde v0.0XX sale en palabras.
+(no lo conoce); desde v0.099 sale en palabras.
 
-**Para que frene:** aplicar `20261008120000_version_minima_arbol.sql` (con copia de seguridad), publicar la v0.0XX y,
-cuando Lega la tenga en sus dispositivos, subir `min_app_version` a 0.0XX o más. 0.0XX está escrito en
+**Para que frene:** aplicar `20261008120000_version_minima_arbol.sql` (con copia de seguridad), publicar la v0.099 y,
+cuando Lega la tenga en sus dispositivos, subir `min_app_version` a 0.099 o más. 0.099 está escrito en
 `private.write_version_allowed` y en la prueba: quien publica pone el número real en los dos (la migración no corre
-con `0.0XX`) y `src/sync/writeVersion.test.ts` falla si no coincide con la entrada del changelog que nombra la
+con `0.099`) y `src/sync/writeVersion.test.ts` falla si no coincide con la entrada del changelog que nombra la
 migración. No sube `schema_version`: la app no necesita saber si la base la tiene.
 
 ## Volver después de mucho tiempo sin red
@@ -1216,7 +1216,7 @@ quizás con `min_app_version` subida. Qué pasa, paso a paso:
    navegador **empezó a instalarla y no pudo** (el service worker nuevo pasa a `redundant`: un teléfono sin espacio,
    una red que corta la descarga del precache), no se ofrece forzar, porque la causa sigue y forzar dejaría el
    dispositivo sin ninguna versión para abrir sin red: el estado dice que libere espacio o busque mejor conexión y
-   vuelva a tocar *Update now*. Cada instalación se sigue desde que empieza (`updatefound`, desde v0.0XX): también la
+   vuelva a tocar *Update now*. Cada instalación se sigue desde que empieza (`updatefound`, desde v0.099): también la
    que empezó el navegador solo y la que falla antes de que *Update now* la mire, que antes parecía un navegador que
    nunca empezó a instalar y ofrecía forzar. Solo si el navegador **nunca empezó** a instalar nada y el servidor publica otra versión
    (lee `/index.html?version-check=…` sin caché; si el servidor redirige a `/`, `fetch` sigue la redirección), el estado
@@ -1234,8 +1234,8 @@ quizás con `min_app_version` subida. Qué pasa, paso a paso:
    fusiona con Yjs: nada de los dos se pierde.
 
 **Las versiones anteriores a v0.097** (por ejemplo la v0.090) frenan solo el contenido y los archivos, y bajan el
-contenido nuevo. Los cambios del árbol y los comentarios los frena la base desde v0.0XX, pero solo con la mínima en
-v0.0XX o más (ver "La versión mínima, el árbol y los comentarios"): con una mínima menor todavía los suben. No se
+contenido nuevo. Los cambios del árbol y los comentarios los frena la base desde v0.099, pero solo con la mínima en
+v0.099 o más (ver "La versión mínima, el árbol y los comentarios"): con una mínima menor todavía los suben. No se
 pierde nada propio; lo único que puede pasar es que, si se edita con esa versión un bloque que otra más nueva marcó
 con una propiedad nueva, la propiedad se pierda (el texto no), que es lo que acepta la regla de "Cambios en el
 editor".
@@ -1247,7 +1247,7 @@ borra renglones, agrega fotos, crea una página, mueve otra, renombra, comenta, 
 le cierra la app; B, con la versión nueva, edita las mismas páginas y otras, crea una con foto y comenta, y se sube la
 mínima. Al volver, la v0.090 avisa, no sube contenido ni fotos y conserva todo; al actualizar (el código de hoy sobre
 la misma base) sube todo, y A, B y un dispositivo nuevo quedan iguales al servidor, con todo lo de los dos, sin nada
-pendiente ni rechazado. Lo mismo sin subir la mínima (la v0.090 sube directo), y con la mínima en v0.0XX y la base
+pendiente ni rechazado. Lo mismo sin subir la mínima (la v0.090 sube directo), y con la mínima en v0.099 y la base
 que frena el árbol y los comentarios (la v0.090 no sube nada, no marca nada rechazado, ni al cerrarla y abrirla, y al
 actualizar sale todo; `src/sync/writeVersion.test.ts` prueba además la carrera con la versión nueva, la base sin la
 migración y el 503 del cliente de Supabase). Con la versión actual que queda vieja,

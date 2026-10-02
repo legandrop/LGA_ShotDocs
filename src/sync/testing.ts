@@ -803,7 +803,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
   readonly email: string;
 
   /**
-   * Si los pedidos llevan el header con la versión (`x-shotdocs-version`), como el cliente de la app desde v0.0XX
+   * Si los pedidos llevan el header con la versión (`x-shotdocs-version`), como el cliente de la app desde v0.099
    * (`appVersionHeaders` en workspace.ts; sin versión, ninguno). `false`: una versión anterior.
    */
   versionHeader = true;

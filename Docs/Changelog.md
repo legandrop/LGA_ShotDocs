@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.099 :
 
 Una versión anterior a v0.097 abierta seguía subiendo cambios del árbol y comentarios aunque el workspace pidiera una
 más nueva: la base no sabía qué versión escribía (B.17). Ahora la app manda su versión en el header

@@ -1,11 +1,11 @@
 -- Pruebas de la versión mínima en el árbol y los comentarios (20261008120000_version_minima_arbol.sql): la escritura
 -- directa de `pages` y `workspaces`, las funciones de comentarios y las de archivar, borrar y restaurar proyectos miran
 -- el header `x-shotdocs-version`; sin header
--- (versiones anteriores a 0.0XX) se rechaza solo con una mínima de 0.0XX o más. El rechazo es el error de PostgREST
+-- (versiones anteriores a 0.099) se rechaza solo con una mínima de 0.099 o más. El rechazo es el error de PostgREST
 -- con estado 503 y mensaje `app_outdated`, y no escribe nada. Leer sigue andando. Corre dentro de una transacción que
 -- se deshace al final: no deja usuarios ni datos. Si todo pasa, devuelve una fila con result = 'ok'.
 --
--- OJO: 0.0XX es el mismo número que en la migración (quien publica lo cambia en los dos).
+-- OJO: 0.099 es el mismo número que en la migración (quien publica lo cambia en los dos).
 
 begin;
 
@@ -126,11 +126,11 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------------------------------
--- Mínima menor a 0.0XX: con header se compara; sin header anda (quien llama puede ser una versión permitida, como la
+-- Mínima menor a 0.099: con header se compara; sin header anda (quien llama puede ser una versión permitida, como la
 -- v0.098 publicada).
 -- ---------------------------------------------------------------------------------------------------
 select pg_temp.as_console();
-update public.workspace_settings set min_app_version = 0.0XX - 0.001;
+update public.workspace_settings set min_app_version = 0.099 - 0.001;
 select pg_temp.as_user('00000000-0000-4000-8000-00000000a0a1', '0.001');
 do $$
 declare
@@ -167,10 +167,10 @@ $$;
 select pg_temp.as_console();
 do $$
 begin
-  assert (select min_app_version from public.workspace_settings where id) = 0.0XX - 0.001, 'mínima menor: no quedó';
+  assert (select min_app_version from public.workspace_settings where id) = 0.099 - 0.001, 'mínima menor: no quedó';
 end;
 $$;
-select pg_temp.as_user('00000000-0000-4000-8000-00000000a0a1', (select (0.0XX - 0.001)::text));
+select pg_temp.as_user('00000000-0000-4000-8000-00000000a0a1', (select (0.099 - 0.001)::text));
 do $$
 begin
   assert private.write_version_allowed(), 'mínima menor: la mínima con header no pasa';
@@ -179,10 +179,10 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------------------------------
--- Mínima 0.0XX o más: sin header (versiones anteriores) y con un header menor o ilegible no se escribe nada. Leer sí.
+-- Mínima 0.099 o más: sin header (versiones anteriores) y con un header menor o ilegible no se escribe nada. Leer sí.
 -- ---------------------------------------------------------------------------------------------------
 select pg_temp.as_console();
-update public.workspace_settings set min_app_version = 0.0XX;
+update public.workspace_settings set min_app_version = 0.099;
 do $$
 declare
   ws constant uuid := '00000000-0000-4000-8000-00000000a0e1';
@@ -191,52 +191,52 @@ declare
   v  text;
   before text;
 begin
-  foreach v in array array[null, '', '   ', '0.001', 'abc', (0.0XX - 0.001)::text] loop
+  foreach v in array array[null, '', '   ', '0.001', 'abc', (0.099 - 0.001)::text] loop
     perform pg_temp.as_user('00000000-0000-4000-8000-00000000a0a1', v);
     before := pg_temp.snapshot();
-    assert not private.write_version_allowed(), 'mínima 0.0XX: pasa con ' || coalesce(quote_literal(v), 'sin header');
+    assert not private.write_version_allowed(), 'mínima 0.099: pasa con ' || coalesce(quote_literal(v), 'sin header');
     perform pg_temp.expect_outdated(format('insert into public.pages (id, workspace_id, title, sort_key) values (%L, %L, %L, %L)',
-      '00000000-0000-4000-8000-00000000a1d3', ws, 'vieja', 'c0'), 'mínima 0.0XX: crea una página con ' || coalesce(quote_literal(v), 'sin header'));
+      '00000000-0000-4000-8000-00000000a1d3', ws, 'vieja', 'c0'), 'mínima 0.099: crea una página con ' || coalesce(quote_literal(v), 'sin header'));
     -- Reintentar una creación que ya está (`upsert` sin pisar) también se rechaza: la política mira la fila propuesta.
     perform pg_temp.expect_outdated(format('insert into public.pages (id, workspace_id, title, sort_key) values (%L, %L, %L, %L) on conflict (id) do nothing',
-      p2, ws, 'p2', 'a1'), 'mínima 0.0XX: reintenta crear una página que ya está');
-    perform pg_temp.expect_outdated(format('update public.pages set title = %L where id = %L', 'vieja', p1), 'mínima 0.0XX: renombra');
-    perform pg_temp.expect_outdated(format('update public.pages set parent_id = %L, sort_key = %L where id = %L', p2, 'z0', p1), 'mínima 0.0XX: mueve');
-    perform pg_temp.expect_outdated(format('update public.pages set deleted_at = now() where id = %L', p1), 'mínima 0.0XX: manda a la papelera');
-    perform pg_temp.expect_outdated(format('update public.pages set icon = %L, settings = %L where id = %L', 'z', '{"paper":"A4"}', p1), 'mínima 0.0XX: cambia ícono y formato');
+      p2, ws, 'p2', 'a1'), 'mínima 0.099: reintenta crear una página que ya está');
+    perform pg_temp.expect_outdated(format('update public.pages set title = %L where id = %L', 'vieja', p1), 'mínima 0.099: renombra');
+    perform pg_temp.expect_outdated(format('update public.pages set parent_id = %L, sort_key = %L where id = %L', p2, 'z0', p1), 'mínima 0.099: mueve');
+    perform pg_temp.expect_outdated(format('update public.pages set deleted_at = now() where id = %L', p1), 'mínima 0.099: manda a la papelera');
+    perform pg_temp.expect_outdated(format('update public.pages set icon = %L, settings = %L where id = %L', 'z', '{"paper":"A4"}', p1), 'mínima 0.099: cambia ícono y formato');
     perform pg_temp.expect_outdated(format('insert into public.workspaces (id, name) values (%L, %L)',
-      '00000000-0000-4000-8000-00000000a0e2', 'Q'), 'mínima 0.0XX: crea un proyecto');
-    perform pg_temp.expect_outdated(format('update public.workspaces set name = %L where id = %L', 'viejo', ws), 'mínima 0.0XX: renombra el proyecto');
+      '00000000-0000-4000-8000-00000000a0e2', 'Q'), 'mínima 0.099: crea un proyecto');
+    perform pg_temp.expect_outdated(format('update public.workspaces set name = %L where id = %L', 'viejo', ws), 'mínima 0.099: renombra el proyecto');
     perform pg_temp.expect_outdated(format('select public.add_comment(%L, %L, null, null, %L)',
-      '00000000-0000-4000-8000-00000000a1c3', p1, 'vieja'), 'mínima 0.0XX: comenta');
+      '00000000-0000-4000-8000-00000000a1c3', p1, 'vieja'), 'mínima 0.099: comenta');
     perform pg_temp.expect_outdated(format('select public.add_comment(%L, %L, null, %L, %L)',
-      '00000000-0000-4000-8000-00000000a1c4', p1, '00000000-0000-4000-8000-00000000a0c1', 'respuesta'), 'mínima 0.0XX: responde');
+      '00000000-0000-4000-8000-00000000a1c4', p1, '00000000-0000-4000-8000-00000000a0c1', 'respuesta'), 'mínima 0.099: responde');
     perform pg_temp.expect_outdated(format('select public.edit_comment(%L, %L)',
-      '00000000-0000-4000-8000-00000000a1c1', 'editado viejo'), 'mínima 0.0XX: edita un comentario');
+      '00000000-0000-4000-8000-00000000a1c1', 'editado viejo'), 'mínima 0.099: edita un comentario');
     perform pg_temp.expect_outdated(format('select public.delete_comment(%L)', '00000000-0000-4000-8000-00000000a1c1'),
-      'mínima 0.0XX: borra un comentario');
+      'mínima 0.099: borra un comentario');
     perform pg_temp.expect_outdated(format('select public.resolve_thread(%L, false)', '00000000-0000-4000-8000-00000000a0c1'),
-      'mínima 0.0XX: vuelve a abrir un hilo');
+      'mínima 0.099: vuelve a abrir un hilo');
     perform pg_temp.expect_outdated(format('select public.import_comment(%L, %L, null, null, %L, now(), null, %L, null, null)',
-      '00000000-0000-4000-8000-00000000a1c5', p1, 'importado', 'coda'), 'mínima 0.0XX: importa un comentario');
+      '00000000-0000-4000-8000-00000000a1c5', p1, 'importado', 'coda'), 'mínima 0.099: importa un comentario');
     -- Las funciones de proyectos (no pasan por las políticas): archivar, borrar y restaurar tampoco.
     perform pg_temp.expect_outdated(format('select public.set_project_archived(%L, true)', '00000000-0000-4000-8000-00000000a0e3'),
-      'mínima 0.0XX: archiva un proyecto');
+      'mínima 0.099: archiva un proyecto');
     perform pg_temp.expect_outdated(format('select public.delete_project(%L)', '00000000-0000-4000-8000-00000000a0e3'),
-      'mínima 0.0XX: borra un proyecto');
+      'mínima 0.099: borra un proyecto');
     perform pg_temp.expect_outdated(format('select public.restore_project(%L)', '00000000-0000-4000-8000-00000000a0e4'),
-      'mínima 0.0XX: restaura un proyecto');
+      'mínima 0.099: restaura un proyecto');
     perform pg_temp.expect_outdated(format('select public.restore_project(%L, true)', '00000000-0000-4000-8000-00000000a0e4'),
-      'mínima 0.0XX: restaura un proyecto sin su carpeta');
+      'mínima 0.099: restaura un proyecto sin su carpeta');
     -- Repetir lo que ya está hecho no escribe y anda: desarchivar uno activo, borrar uno borrado, restaurar uno activo.
     perform public.set_project_archived('00000000-0000-4000-8000-00000000a0e3', false);
     perform public.delete_project('00000000-0000-4000-8000-00000000a0e4');
     perform public.restore_project('00000000-0000-4000-8000-00000000a0e3');
-    assert pg_temp.projects() = 'R:-:-|R2:-:borrado', 'mínima 0.0XX: los proyectos cambiaron con ' || coalesce(quote_literal(v), 'sin header') || ': ' || pg_temp.projects();
-    assert pg_temp.snapshot() = before, 'mínima 0.0XX: lo rechazado escribió algo con ' || coalesce(quote_literal(v), 'sin header');
+    assert pg_temp.projects() = 'R:-:-|R2:-:borrado', 'mínima 0.099: los proyectos cambiaron con ' || coalesce(quote_literal(v), 'sin header') || ': ' || pg_temp.projects();
+    assert pg_temp.snapshot() = before, 'mínima 0.099: lo rechazado escribió algo con ' || coalesce(quote_literal(v), 'sin header');
     -- Leer sigue andando: la versión vieja baja el árbol y los comentarios.
-    assert (select count(*) from public.pages where workspace_id = ws) = 3, 'mínima 0.0XX: no lee el árbol';
-    assert (select count(*) from public.list_comments(p1, null)) >= 2, 'mínima 0.0XX: no lee los comentarios';
+    assert (select count(*) from public.pages where workspace_id = ws) = 3, 'mínima 0.099: no lee el árbol';
+    assert (select count(*) from public.list_comments(p1, null)) >= 2, 'mínima 0.099: no lee los comentarios';
     -- Lo que ya está hecho no escribe nada y no se rechaza (el reintento de algo que ya llegó).
     perform public.edit_comment('00000000-0000-4000-8000-00000000a1c1', 'editado sin header');
     perform public.resolve_thread('00000000-0000-4000-8000-00000000a0c1', true);
@@ -252,9 +252,9 @@ declare
   p2 constant uuid := '00000000-0000-4000-8000-00000000a0d2';
   v  text;
 begin
-  foreach v in array array[(0.0XX)::text, '1.2'] loop
+  foreach v in array array[(0.099)::text, '1.2'] loop
     perform pg_temp.as_user('00000000-0000-4000-8000-00000000a0a1', v);
-    assert private.write_version_allowed(), 'mínima 0.0XX: no pasa ' || v;
+    assert private.write_version_allowed(), 'mínima 0.099: no pasa ' || v;
     insert into public.pages (id, workspace_id, title, sort_key) values ('00000000-0000-4000-8000-00000000a1d3', ws, 'nueva ' || v, 'c0')
       on conflict (id) do nothing;
     update public.pages set title = 'p1 ' || v, parent_id = p2, sort_key = 'z0', icon = 'i', settings = '{"paper":"A4"}' where id = p1;
@@ -267,23 +267,23 @@ begin
     perform public.edit_comment('00000000-0000-4000-8000-00000000a1c1', 'editado ' || v);
     perform public.resolve_thread('00000000-0000-4000-8000-00000000a0c1', v = '1.2');
     perform public.import_comment('00000000-0000-4000-8000-00000000a1c5', p1, null, null, 'importado', '2026-01-01T00:00:00Z', null, 'coda', null, null);
-    assert (select title from public.pages where id = p1) = 'p1 ' || v, 'mínima 0.0XX: no renombró con ' || v;
-    assert (select name from public.workspaces where id = ws) = 'P ' || v, 'mínima 0.0XX: no renombró el proyecto con ' || v;
-    assert (select body from public.comments_view where id = '00000000-0000-4000-8000-00000000a1c1') = 'editado ' || v, 'mínima 0.0XX: no editó con ' || v;
+    assert (select title from public.pages where id = p1) = 'p1 ' || v, 'mínima 0.099: no renombró con ' || v;
+    assert (select name from public.workspaces where id = ws) = 'P ' || v, 'mínima 0.099: no renombró el proyecto con ' || v;
+    assert (select body from public.comments_view where id = '00000000-0000-4000-8000-00000000a1c1') = 'editado ' || v, 'mínima 0.099: no editó con ' || v;
   end loop;
   perform public.delete_comment('00000000-0000-4000-8000-00000000a1c3');
   -- Proyectos, con header: archivar y desarchivar, borrar y restaurar.
   perform public.set_project_archived('00000000-0000-4000-8000-00000000a0e3', true);
-  assert pg_temp.projects() = 'R:archivado:-|R2:-:borrado', 'mínima 0.0XX: no archivó: ' || pg_temp.projects();
+  assert pg_temp.projects() = 'R:archivado:-|R2:-:borrado', 'mínima 0.099: no archivó: ' || pg_temp.projects();
   perform public.set_project_archived('00000000-0000-4000-8000-00000000a0e3', false);
   perform public.delete_project('00000000-0000-4000-8000-00000000a0e3');
-  assert pg_temp.projects() = 'R:-:borrado|R2:-:borrado', 'mínima 0.0XX: no borró el proyecto: ' || pg_temp.projects();
+  assert pg_temp.projects() = 'R:-:borrado|R2:-:borrado', 'mínima 0.099: no borró el proyecto: ' || pg_temp.projects();
   perform public.restore_project('00000000-0000-4000-8000-00000000a0e3');
   perform public.restore_project('00000000-0000-4000-8000-00000000a0e4');
-  assert pg_temp.projects() = 'R:-:-|R2:-:-', 'mínima 0.0XX: no restauró: ' || pg_temp.projects();
-  assert (select count(*) from public.pages where workspace_id = ws) = 4, 'mínima 0.0XX: crear duplicó o no creó';
-  assert (select count(*) from public.comments where page_id = p1) = 5, 'mínima 0.0XX: comentar duplicó o no comentó';
-  assert (select deleted_at is not null from public.comments where id = '00000000-0000-4000-8000-00000000a1c3'), 'mínima 0.0XX: no borró';
+  assert pg_temp.projects() = 'R:-:-|R2:-:-', 'mínima 0.099: no restauró: ' || pg_temp.projects();
+  assert (select count(*) from public.pages where workspace_id = ws) = 4, 'mínima 0.099: crear duplicó o no creó';
+  assert (select count(*) from public.comments where page_id = p1) = 5, 'mínima 0.099: comentar duplicó o no comentó';
+  assert (select deleted_at is not null from public.comments where id = '00000000-0000-4000-8000-00000000a1c3'), 'mínima 0.099: no borró';
 end;
 $$;
 

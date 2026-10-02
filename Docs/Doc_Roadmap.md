@@ -445,7 +445,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
 17. **Hecho (v0.097): volver después de semanas sin red con una versión vieja.** Prueba con la sincronización de la
     v0.090 (`src/sync/offlineLargo.test.ts`): nada se pierde, con la mínima subida o sin ella. Desde esta versión, con
     la app vieja para el workspace no sale ni baja nada y la app instalada se actualiza sola. **Falta:** ver en el
-    iPhone (Safari, app instalada) que se actualiza sola al volver la red (solo se midió Chromium). **Hecho (v0.0XX):**
+    iPhone (Safari, app instalada) que se actualiza sola al volver la red (solo se midió Chromium). **Hecho (v0.099):**
     la base frena por versión los cambios del árbol y los comentarios (header `x-shotdocs-version`, migración
     `20261008120000_version_minima_arbol.sql`, rechazo 503 que ninguna versión marca como rechazado) y *Update now*
     sigue cada instalación desde `updatefound`; archivar, borrar y restaurar proyectos también frenan. **Falta:**

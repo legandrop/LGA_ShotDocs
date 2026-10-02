@@ -1,4 +1,4 @@
--- LGA Shot Docs · la versión mínima de la app también frena los cambios del árbol y los comentarios (B.17, v0.0XX;
+-- LGA Shot Docs · la versión mínima de la app también frena los cambios del árbol y los comentarios (B.17, v0.099;
 -- Docs/Doc_Sincronizacion.md, "La versión mínima, el árbol y los comentarios").
 --
 -- Hasta acá `workspace_settings.min_app_version` frenaba el contenido (`push_page_update`) y la cola de archivos
@@ -7,10 +7,10 @@
 -- `edit_comment`, `delete_comment`, `resolve_thread`): una versión anterior a v0.097 abierta seguía creando,
 -- renombrando, moviendo y mandando a la papelera páginas, y comentando, aunque el workspace pidiera una más nueva.
 --
--- Desde v0.0XX la app manda su versión en el header `x-shotdocs-version` de cada pedido (PostgREST lo deja en
+-- Desde v0.099 la app manda su versión en el header `x-shotdocs-version` de cada pedido (PostgREST lo deja en
 -- `request.headers`). Las versiones anteriores no lo mandan. La regla es la de los archivos:
 --   - Con header, se compara con la mínima (`private.app_version_allowed`).
---   - Sin header, se rechaza solo con una mínima de 0.0XX o más: quien llama es seguro más viejo. Con una mínima
+--   - Sin header, se rechaza solo con una mínima de 0.099 o más: quien llama es seguro más viejo. Con una mínima
 --     menor (o sin mínima) anda como siempre, porque quien llama puede ser una versión permitida (la v0.098 no manda
 --     el header).
 -- Lo miran dos políticas restrictivas (insert y update) en `pages` y en `workspaces`, que solo alcanzan a la escritura
@@ -23,9 +23,9 @@
 -- actualiza. Con un 400 la versión vieja los pasaba a la lista de rechazados, donde un renombre o un movimiento se
 -- podían descartar con un clic.
 --
--- OJO: 0.0XX es la primera versión que manda el header. Quien publica pone el número real acá
+-- OJO: 0.099 es la primera versión que manda el header. Quien publica pone el número real acá
 -- (`private.write_version_allowed`) y en supabase/tests/version_minima_arbol_permisos.sql antes de aplicar
--- (src/sync/writeVersion.test.ts lo compara con la entrada del changelog que nombra esta migración). Con `0.0XX` la
+-- (src/sync/writeVersion.test.ts lo compara con la entrada del changelog que nombra esta migración). Con `0.099` la
 -- migración no corre. Un número más bajo que la versión real rechazaría versiones permitidas.
 --
 -- Compatible con la app y el portero publicados: no cambia firmas, datos ni los permisos de siempre, y no sube
@@ -40,7 +40,7 @@ as $$
 $$;
 
 -- ¿Este pedido puede escribir el árbol o los comentarios? Con header, la regla del contenido; sin header (versiones
--- anteriores a 0.0XX), sí, salvo que la mínima sea 0.0XX o más.
+-- anteriores a 0.099), sí, salvo que la mínima sea 0.099 o más.
 create function private.write_version_allowed()
 returns boolean
 language sql stable security definer set search_path = ''
@@ -48,7 +48,7 @@ as $$
   select case
     when private.request_app_version() is not null then private.app_version_allowed(private.request_app_version())
     else not exists (
-      select 1 from public.workspace_settings s where s.id and s.min_app_version >= 0.0XX)
+      select 1 from public.workspace_settings s where s.id and s.min_app_version >= 0.099)
   end;
 $$;
 
