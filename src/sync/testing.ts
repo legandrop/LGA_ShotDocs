@@ -15,6 +15,9 @@ import {
   PROJECT_DRIVE_SCHEMA_VERSION,
   PROJECT_STATES_SCHEMA_VERSION,
   type AccessRow,
+  type CleanPushResult,
+  type CleanWorkRow,
+  type NewCleanBase,
   type InvitationGrant,
   type InvitationRow,
   type LinkResult,
@@ -38,6 +41,7 @@ import {
   type ImportedComment,
   type NewComment,
 } from './comments';
+import { CLEAN_SCHEMA_VERSION } from './clean';
 import { normalizeStructure, seedIfEmpty } from './structure';
 import { PageTree } from './tree';
 import {
@@ -90,6 +94,8 @@ export class FakeServer {
   sizes: ProjectSizeRow[] | null = null;
   /** Cuántas veces se pidió `project_sizes`. */
   sizesCalls = 0;
+  /** Cuántas veces se pidió `clean_work`. */
+  cleanWorkCalls = 0;
   readonly pages = new Map<string, PageRow>();
   /**
    * Las filas de `page_updates` de cada página. `id`, `createdBy` y `createdAt` los pone el servidor al subir (como la
@@ -137,6 +143,93 @@ export class FakeServer {
   rejectProjects = false;
   /** Para darle a cada restauración una generación nunca usada. */
   static generations = 100;
+
+  // --- privacidad de lo borrado (20261010120000_privacidad_borrado.sql) ---------------------------------------
+  /** `page_clean_bases`: la base vigente de cada página (una por página). */
+  readonly cleanBases = new Map<string, { id: string; toSeq: number; lastUpdateId: number; state: Uint8Array; createdBy: string }>();
+  /** `pages.clean_seq`, `clean_at` y `clean_reset_seq` (aparte de `PageRow`: el árbol los trae solo desde la versión 12). */
+  readonly cleanMeta = new Map<string, { seq: number; at: number | null; reset: number }>();
+  /**
+   * Mutantes del servidor para las pruebas (tienen que dar fugas): `raw` le sirve filas a todos; `noreset` no mira
+   * `clean_reset_seq` (ni al servir ni al aceptar); `noshare` no reinicia al compartir ni al invitar.
+   */
+  cleanMutant: null | 'raw' | 'noreset' | 'noshare' = null;
+  /** Lo que respondió `push_clean_base`, en orden (para las pruebas). */
+  readonly cleanPushes: { pageId: string; toSeq: number; result: string; by: string }[] = [];
+
+  /** Prende el interruptor (`clean_min_version`) con la base en la versión 12. Llamarlo después de los otros `enable`. */
+  enableClean(minVersion = 0.001): void {
+    this.settings = {
+      ...(this.settings ?? { generation: 1, minAppVersion: null, mediaUrl: null, schemaVersion: 1 }),
+      schemaVersion: Math.max(this.settings?.schemaVersion ?? 1, CLEAN_SCHEMA_VERSION),
+      cleanMinVersion: minVersion,
+    };
+  }
+
+  /** El interruptor está prendido (y la base lo tiene). */
+  cleanOn(): boolean {
+    return (this.settings?.schemaVersion ?? 0) >= CLEAN_SCHEMA_VERSION && this.settings?.cleanMinVersion != null;
+  }
+
+  meta(pageId: string): { seq: number; at: number | null; reset: number } {
+    let m = this.cleanMeta.get(pageId);
+    if (!m) {
+      m = { seq: 0, at: null, reset: 0 };
+      this.cleanMeta.set(pageId, m);
+    }
+    return m;
+  }
+
+  /** `private.sees_deleted`: Editar o más y no invitado. Sin las reglas del equipo, todos (el dueño). */
+  seesDeleted(uid: string, pageId: string): boolean {
+    return !this.team || (this.pageLevel(uid, pageId) >= 3 && this.role(uid) !== 'guest');
+  }
+
+  /** `private.has_plain_readers`: alguien activo con Ver o Comentar, o un invitado con cualquier nivel. */
+  hasPlainReaders(pageId: string): boolean {
+    if (!this.team) return false;
+    for (const [uid, m] of this.members) {
+      if (m.removed_at) continue;
+      const level = this.pageLevel(uid, pageId);
+      if ((m.role === 'guest' && level >= 1) || (m.role !== 'guest' && level >= 1 && level <= 2)) return true;
+    }
+    return false;
+  }
+
+  /** `private.current_clean_base`. */
+  currentBase(pageId: string): { id: string; toSeq: number; lastUpdateId: number; state: Uint8Array } | null {
+    const b = this.cleanBases.get(pageId);
+    const page = this.pages.get(pageId);
+    if (!b || !page) return null;
+    if ((this.cleanMutant !== 'noreset' && b.toSeq < this.meta(pageId).reset) || b.toSeq > page.update_seq) return null;
+    const row = (this.updates.get(pageId) ?? []).find((u) => u.seq === b.toSeq);
+    return row && (row.id ?? row.seq) === b.lastUpdateId ? b : null;
+  }
+
+  /** `private.clean_reset`: la página y su rama, o todo el proyecto. */
+  cleanReset(target: { projectId: string } | { pageId: string }): void {
+    if (this.cleanMutant === 'noshare') return;
+    const ids =
+      'projectId' in target
+        ? [...this.pages.values()].filter((p) => p.workspace_id === target.projectId).map((p) => p.id)
+        : this.branch(target.pageId);
+    for (const id of ids) {
+      const page = this.pages.get(id);
+      if (!page) continue;
+      const m = this.meta(id);
+      m.reset = page.update_seq;
+      if (m.seq < page.update_seq) m.seq = 0;
+    }
+  }
+
+  /** La página y las de adentro. */
+  branch(pageId: string): string[] {
+    const out = [pageId];
+    for (let i = 0; i < out.length; i++) {
+      for (const p of this.pages.values()) if (p.parent_id === out[i] && !out.includes(p.id)) out.push(p.id);
+    }
+    return out;
+  }
   /** `workspace_settings`; `null` simula una base sin esa migración. */
   settings: WorkspaceSettings | null = { generation: 1, minAppVersion: null, schemaVersion: 1, mediaUrl: null };
   /**
@@ -339,10 +432,11 @@ export class FakeServer {
     for (const id of this.mediaFiles.keys()) this.refreshFileTrash(id);
   }
 
-  /** `private.can_see_file_trash`. Sin las reglas del equipo, solo el dueño. */
+  /** `private.can_see_file_trash`. Sin las reglas del equipo, solo el dueño. Nunca un invitado (privacidad de lo borrado). */
   canSeeFileTrash(uid: string, projectId: string): boolean {
     if (!this.team) return uid === this.ownerId;
     const role = this.role(uid);
+    if (role === 'guest') return false;
     return this.projectLevel(uid, projectId) >= 4 || ((role === 'owner' || role === 'admin') && this.projectLevel(uid, projectId) >= 1);
   }
 
@@ -405,8 +499,19 @@ export class FakeServer {
       for (const [id, t] of thumbs) this.thumbs.set(id, t);
       // Como scripts/restore.sh: un valor que no se usó nunca, aunque la copia traiga uno viejo.
       if (this.settings) this.settings = { ...this.settings, generation: ++FakeServer.generations };
+      // Como tiene que hacer el script de restaurar desde la privacidad de lo borrado (requisito para prender el
+      // interruptor): sin bases, y las que vengan tienen que llegar a lo restaurado. Sin el script (`keepCleanBases`),
+      // las bases quedan y la vigencia mira el id de su fila final.
+      if (!this.keepCleanBasesOnRestore) {
+        this.cleanBases.clear();
+        this.cleanMeta.clear();
+        for (const p of this.pages.values()) this.meta(p.id).reset = p.update_seq;
+      }
     };
   }
+
+  /** Restaurar sin el paso del script que vacía las bases (para probar la vigencia por el id de la fila final). */
+  keepCleanBasesOnRestore = false;
 
   check(): void {
     if (!this.online) throw new RemoteError('Failed to fetch', false, undefined, true);
@@ -878,13 +983,15 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     return null;
   }
 
-  async fetchTree(projectIds: string[]): Promise<PageRow[]> {
+  async fetchTree(projectIds: string[], schemaVersion?: number | null): Promise<PageRow[]> {
     this.server.check();
     const ids = new Set(projectIds);
+    // `clean_seq`, como pide la columna la app: con la versión 12 o más (y si la base la tiene).
+    const clean = (schemaVersion ?? 0) >= CLEAN_SCHEMA_VERSION && (this.server.settings?.schemaVersion ?? 0) >= CLEAN_SCHEMA_VERSION;
     return [...this.server.pages.values()]
       .filter((p) => ids.has(p.workspace_id) && !this.server.projectDeleted(p.workspace_id))
       .filter((p) => !this.team || this.server.projectLevel(this.userId, p.workspace_id) >= 1 || this.server.pageLevel(this.userId, p.id) >= 1)
-      .map((p) => ({ ...p }));
+      .map((p) => (clean ? { ...p, clean_seq: this.server.cleanMeta.get(p.id)?.seq ?? 0 } : { ...p }));
   }
 
   /** Las versiones de la base que pasó la app a `fetchProjects`, en orden. */
@@ -1095,6 +1202,10 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     // La política de la versión mira la fila nueva, después de los triggers (como en la base).
     this.checkWriteVersion();
     this.server.pages.set(id, { ...page, ...patch, updated_at: new Date().toISOString() });
+    // `pages_clean_move`: mover a una rama con lectores reinicia la página y su rama.
+    if (patch.parent_id !== undefined && patch.parent_id !== page.parent_id && this.server.hasPlainReaders(id)) {
+      this.server.cleanReset({ pageId: id });
+    }
     // Los triggers de la papelera de archivos: la página entró, salió o se movió de la papelera de páginas.
     if (patch.deleted_at !== undefined || patch.parent_id !== undefined) this.server.refreshAllFileTrash();
   }
@@ -1138,10 +1249,87 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     ) {
       throw new RemoteError('page_not_found', true, 'P0002');
     }
+    // Con el interruptor prendido, quien no ve lo borrado recibe solo la base vigente (o nada).
+    if (this.server.cleanOn() && !this.server.seesDeleted(this.userId, pageId) && this.server.cleanMutant !== 'raw') {
+      const base = this.server.currentBase(pageId);
+      return base && base.toSeq > afterSeq ? [{ seq: base.toSeq, data: base.state.slice() }] : [];
+    }
     return (this.server.updates.get(pageId) ?? [])
       .filter((u) => u.seq > afterSeq)
       .slice(0, limit)
       .map((u) => ({ seq: u.seq, data: u.data.slice() }));
+  }
+
+  /** Como `private.clean_version_allowed`. */
+  private cleanVersionAllowed(): boolean {
+    const min = this.server.settings?.minAppVersion;
+    const clean = this.server.settings?.cleanMinVersion;
+    if (!this.server.cleanOn() || clean == null) return false;
+    if (!/^\d{1,4}(\.\d{1,3})?$/.test(this.appVersion)) return false;
+    const v = Number(this.appVersion);
+    return v >= clean && (min == null || v >= min);
+  }
+
+  /** `clean_work` (la cadencia de la sección 4.1 del doc, con el reloj del servidor). */
+  async cleanWork({ pages, urgent = false }: { pages?: string[]; urgent?: boolean } = {}): Promise<CleanWorkRow[]> {
+    this.server.check();
+    this.server.cleanWorkCalls++;
+    if ((this.team && !this.server.role(this.userId)) || !this.cleanVersionAllowed()) return [];
+    const now = this.server.now();
+    const out: CleanWorkRow[] = [];
+    for (const page of this.server.pages.values()) {
+      if (pages && !pages.includes(page.id)) continue;
+      if (page.update_seq === 0 || this.server.pageInDeletedProject(page.id)) continue;
+      const base = this.server.currentBase(page.id);
+      const m = this.server.meta(page.id);
+      if (base && page.update_seq <= m.seq) continue;
+      const last = (this.server.updates.get(page.id) ?? []).find((u) => u.seq === page.update_seq);
+      if (!last) continue;
+      const f = Math.max(1, (this.server.cleanBases.get(page.id)?.state.length ?? 0) / 102400);
+      const lastAt = last.createdAt ? Date.parse(last.createdAt) : 0;
+      const due = !base || urgent || lastAt < now - 20_000 * f || m.at === null || m.at < now - 120_000 * f;
+      if (!due || !this.server.seesDeleted(this.userId, page.id) || !this.server.hasPlainReaders(page.id)) continue;
+      out.push({ page_id: page.id, update_seq: page.update_seq, last_update_id: last.id ?? last.seq, clean_seq: m.seq, base_bytes: 0 });
+    }
+    return out.slice(0, 50);
+  }
+
+  /** `push_clean_base`, con las mismas comprobaciones y respuestas. */
+  async pushCleanBase(b: NewCleanBase): Promise<CleanPushResult> {
+    this.server.check();
+    const page = this.server.pages.get(b.pageId);
+    const done = (result: CleanPushResult) => {
+      this.server.cleanPushes.push({ pageId: b.pageId, toSeq: b.toSeq, result, by: this.userId });
+      return result;
+    };
+    if (!page || this.server.pageInDeletedProject(b.pageId) || (this.team && this.server.pageLevel(this.userId, b.pageId) < 1)) {
+      throw new RemoteError('page_not_found', true, 'P0002');
+    }
+    if (!this.server.seesDeleted(this.userId, b.pageId)) throw this.denied('not_allowed');
+    if (!this.server.cleanOn()) throw new RemoteError('clean_off', true, 'P0001');
+    if (!this.cleanVersionAllowed()) throw new RemoteError('app_outdated', true, 'P0001');
+    const current = this.server.cleanBases.get(b.pageId);
+    if (current?.id === b.id) return done('ok');
+    if (b.state.length === 0 || b.state.length > 8 * 1024 * 1024) throw new RemoteError('state_size_invalid', true, '22023');
+    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', b.state as Uint8Array<ArrayBuffer>));
+    if ([...digest].map((x) => x.toString(16).padStart(2, '0')).join('') !== b.sha256) {
+      throw new RemoteError('sha256_mismatch', true, '22023');
+    }
+    const row = (this.server.updates.get(b.pageId) ?? []).find((u) => u.seq === b.toSeq);
+    if (b.toSeq < 1 || b.toSeq > page.update_seq || !row || (row.id ?? row.seq) !== b.lastUpdateId) {
+      throw new RemoteError('clean_row_mismatch', true, 'P0001');
+    }
+    const m = this.server.meta(b.pageId);
+    if (b.toSeq < m.reset && this.server.cleanMutant !== 'noreset') return done('clean_stale');
+    const vigente = this.server.currentBase(b.pageId);
+    if (vigente && b.toSeq <= vigente.toSeq) {
+      m.seq = vigente.toSeq;
+      return done('clean_old');
+    }
+    this.server.cleanBases.set(b.pageId, { id: b.id, toSeq: b.toSeq, lastUpdateId: b.lastUpdateId, state: b.state.slice(), createdBy: this.userId });
+    m.seq = b.toSeq;
+    m.at = this.server.now();
+    return done('ok');
   }
 
   /** `page_history` (20261007120000_historial.sql): nivel 3 o más, no invitado, no en la papelera. */
@@ -1270,6 +1458,12 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
       const level = 'project_id' in g ? this.server.projectLevel(this.userId, g.project_id) : this.server.pageLevel(this.userId, g.page_id);
       if (level < 4) throw this.denied('grant_not_allowed');
     }
+    // Al invitar (no al aceptar): a un invitado, o con Ver o Comentar, lo alcanzado empieza de una base nueva.
+    for (const g of grants) {
+      if (role === 'guest' || g.level === 'view' || g.level === 'comment') {
+        this.server.cleanReset('project_id' in g ? { projectId: g.project_id } : { pageId: g.page_id });
+      }
+    }
     const em = email.trim().toLowerCase();
     const live = this.server.invitations.find((i) => i.email === em && !i.used_at && !i.revoked_at);
     if (live) {
@@ -1339,7 +1533,10 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     this.server.check();
     if (!this.canShare(target)) throw this.denied('not_allowed');
     if (!this.server.role(userId)) throw new RemoteError('member_not_found', true, 'P0002');
-    return this.server.grant(userId, target, level);
+    const id = this.server.grant(userId, target, level);
+    // Con Ver, Comentar o a un invitado, lo alcanzado empieza de una base nueva.
+    if (level === 'view' || level === 'comment' || this.server.role(userId) === 'guest') this.server.cleanReset(target);
+    return id;
   }
 
   async unshare(grantId: string): Promise<void> {
@@ -1558,6 +1755,8 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     for (const pageId of new Set(pageIds)) {
       if (!this.server.pages.has(pageId) || this.server.pageInDeletedProject(pageId)) continue;
       if (this.team && this.server.pageLevel(this.userId, pageId) < 1) continue;
+      // Los usos sacados, solo a quien ve lo borrado de la página.
+      const seesRemoved = this.server.seesDeleted(this.userId, pageId);
       for (const [set, removed, foreign] of [
         [this.server.pageFiles, false, false],
         [this.server.removedPageFiles, true, false],
@@ -1565,7 +1764,9 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
       ] as const) {
         for (const key of set) {
           const [p, f] = key.split(':');
-          if (p === pageId) rows.push({ page_id: p, file_id: f, removed_at: removed ? new Date().toISOString() : null, is_foreign: foreign });
+          if (p === pageId && (!removed || seesRemoved)) {
+            rows.push({ page_id: p, file_id: f, removed_at: removed ? new Date().toISOString() : null, is_foreign: foreign });
+          }
         }
       }
     }

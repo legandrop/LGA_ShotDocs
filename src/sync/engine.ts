@@ -3,7 +3,8 @@ import { stored as t } from '../i18n';
 import type { MediaQueue, MediaStatus } from '../media/queue';
 import { mediaIdsInDoc } from '../media/usage';
 import * as Y from 'yjs';
-import { Permissions, TEAM_SCHEMA_VERSION, type AccessStore } from './access';
+import { LEVEL_EDIT, Permissions, TEAM_SCHEMA_VERSION, type AccessStore } from './access';
+import { CLEAN_PER_ROUND, CLEAN_SCHEMA_VERSION, sha256Hex } from './clean';
 import type { CommentQueue } from './comments';
 import type { PageDocs } from './docs';
 import type { PageFiles } from './files';
@@ -70,11 +71,19 @@ export interface SyncStatus {
   schemaBehind: [number, number] | null;
   /** La versión de la base del workspace (`workspace_settings.schema_version`); `null` hasta saberla. */
   schemaVersion: number | null;
+  /**
+   * El interruptor de la privacidad de lo borrado está prendido y la base lo tiene (Docs/Doc_Privacidad_Borrado.md):
+   * quien no ve lo borrado baja solo bases limpias, que arman los dispositivos de quien edita.
+   */
+  cleanOn: boolean;
   lastError: string | null;
   lastSyncAt: number | null;
 }
 
 const INTERVAL_MS = 10_000;
+/** Sin actividad (subir o bajar contenido) en este rato, `clean_work` se pregunta cada `CLEAN_IDLE_MS`, no en cada ciclo. */
+const CLEAN_ACTIVE_MS = 5 * 60_000;
+const CLEAN_IDLE_MS = 2 * 60_000;
 const DEBOUNCE_MS = 1_200;
 const PULL_CONCURRENCY = 4;
 
@@ -117,6 +126,7 @@ export class SyncEngine {
     outdated: false,
     schemaBehind: null,
     schemaVersion: null,
+    cleanOn: false,
     lastError: null,
     lastSyncAt: null,
   };
@@ -138,6 +148,13 @@ export class SyncEngine {
   private readonly usesAsked = new Set<string>();
   /** Ya se sabe, en esta apertura, si esta versión es más vieja que la mínima del workspace (`status.outdated`). */
   private versionKnown = false;
+  /** La versión desde la que se arman bases limpias (`clean_min_version`), o `null`: el interruptor está apagado. */
+  private cleanMin: number | null = null;
+  /** La última vez que este dispositivo subió o bajó contenido, y la última que preguntó qué bases armar. */
+  private lastActivityAt = 0;
+  private lastCleanAt = 0;
+  /** La app pasó a segundo plano: el próximo ciclo arma las bases sin esperar la cadencia. */
+  private urgentClean = false;
 
   constructor(
     private readonly remote: Remote,
@@ -158,6 +175,9 @@ export class SyncEngine {
   ) {
     const poke = () => this.poke();
     tree.onQueued = poke;
+    // Qué páginas le llegan a este dispositivo como base limpia (con el interruptor prendido y sin ver lo borrado).
+    tree.baseReader = (pageId) => this.isBaseReader(pageId);
+    docs.isBaseReader = (pageId) => this.isBaseReader(pageId);
     files.onQueued = poke;
     if (options.media) {
       options.media.onQueued = poke;
@@ -220,6 +240,13 @@ export class SyncEngine {
       if (typeof document === 'undefined' || document.visibilityState === 'visible') void this.syncNow();
     };
     const onOffline = () => this.patch({ online: false });
+    // Al pasar a segundo plano (cerrar la pestaña, bloquear el iPhone, cambiar de app) se sube lo pendiente y se arman
+    // las bases de las páginas con lectores, sin esperar (Docs/Doc_Privacidad_Borrado.md, 4.1). Si el navegador corta
+    // la app antes, la arma el próximo editor que sincronice.
+    const onHide = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') return;
+      void this.appHidden();
+    };
     // Volvió la red: la cola de archivos deja de esperar al portero o a Storage y prueba enseguida.
     const onOnline = () => {
       this.options.media?.networkBack();
@@ -230,11 +257,15 @@ export class SyncEngine {
       window.addEventListener('online', onOnline);
       window.addEventListener('focus', onWake);
       document.addEventListener('visibilitychange', onWake);
+      document.addEventListener('visibilitychange', onHide);
+      window.addEventListener('pagehide', onHide);
       this.cleanups.push(() => {
         window.removeEventListener('offline', onOffline);
         window.removeEventListener('online', onOnline);
         window.removeEventListener('focus', onWake);
         document.removeEventListener('visibilitychange', onWake);
+        document.removeEventListener('visibilitychange', onHide);
+        window.removeEventListener('pagehide', onHide);
       });
     }
     this.interval = setInterval(onWake, INTERVAL_MS);
@@ -296,11 +327,45 @@ export class SyncEngine {
     return this.options.media?.run((pageId) => this.tree.hasUnsentCreate(pageId)) ?? Promise.resolve();
   }
 
-  /** El servidor tiene contenido de la página que este dispositivo todavía no bajó. */
+  /**
+   * La app pasó a segundo plano: con el interruptor prendido, un ciclo ya, que sube lo pendiente y arma las bases de
+   * las páginas con lectores sin esperar la cadencia. Devuelve ese ciclo.
+   */
+  appHidden(): Promise<void> {
+    if (!this.status.cleanOn || this.stopped) return Promise.resolve();
+    this.urgentClean = true;
+    return this.syncNow();
+  }
+
+  /**
+   * El servidor tiene contenido de la página que este dispositivo todavía no bajó, o la página está "en preparación"
+   * (tiene contenido y ningún editor armó todavía la base que le toca a este dispositivo): en los dos casos se abre en
+   * solo lectura y sin semilla.
+   */
   async isMissingContent(pageId: string): Promise<boolean> {
-    const serverSeq = this.tree.get(pageId)?.update_seq ?? 0;
+    return (await this.contentGap(pageId)) !== null;
+  }
+
+  /** Lo que le falta a la página en este dispositivo: `missing`, `preparing` o `null` (ver `contentGap` en clean.ts). */
+  async contentGap(pageId: string): Promise<'missing' | 'preparing' | null> {
+    const row = this.tree.get(pageId);
+    if (!row || this.tree.hasUnsentCreate(pageId)) return null;
     const cursor = (await this.docs.states()).get(pageId)?.cursor ?? 0;
-    return serverSeq > cursor && !this.tree.hasUnsentCreate(pageId);
+    return this.tree.contentGap(row, cursor);
+  }
+
+  /**
+   * Si a este dispositivo la página le llega como base limpia: el interruptor está prendido (y la base lo tiene) y la
+   * persona no ve lo borrado (menos que Editar, o invitada: el criterio del historial, D13). Sin datos de permisos,
+   * como quien edita (el servidor decide igual: si manda bases, el cursor queda en la base y se vuelve a pedir).
+   */
+  isBaseReader(pageId: string): boolean {
+    if (!this.status.cleanOn) return false;
+    const access = this.options.access;
+    const snapshot = access?.get() ?? null;
+    if (!access || !snapshot) return false;
+    const perms = new Permissions(this.tree, snapshot, access.userId);
+    return !(perms.pageLevel(pageId) >= LEVEL_EDIT && perms.role !== 'guest');
   }
 
   /**
@@ -398,7 +463,7 @@ export class SyncEngine {
       // Primero los proyectos y después sus páginas: nunca llega una página de un proyecto desconocido.
       const projects = await this.remote.fetchProjects(this.status.schemaVersion);
       halt();
-      const rows = await this.remote.fetchTree(projects.map((p) => p.id));
+      const rows = await this.remote.fetchTree(projects.map((p) => p.id), this.status.schemaVersion);
       halt();
       await this.tree.setSnapshot(rows, projects);
 
@@ -409,7 +474,7 @@ export class SyncEngine {
         halt();
         if (this.tree.hasUnsentCreate(pageId) || states.get(pageId)?.rejected) continue;
         try {
-          await this.docs.pushPage(pageId, this.remote);
+          if ((await this.docs.pushPage(pageId, this.remote)) === 'pushed') this.lastActivityAt = Date.now();
         } catch (err) {
           // Muy lenta para esta página (venció el tope): se sigue con las demás y se reintenta en la
           // próxima vuelta. No es un rechazo.
@@ -435,9 +500,14 @@ export class SyncEngine {
       // propio sigue editable; lo nuevo de los demás llega con la versión nueva. El árbol sí se baja (títulos y
       // lugares: no los toca ningún editor). `status.outdated` y no `outdated`: la base puede haber rechazado una
       // subida en este mismo ciclo (subieron la mínima entre la consulta y la subida).
-      const stale = this.status.outdated ? [] : rows.filter((r) => r.update_seq > (cursors.get(r.id)?.cursor ?? 0)).map((r) => r.id);
+      // Hasta `serverSeq`: las filas, o la base limpia para quien no ve lo borrado (Docs/Doc_Privacidad_Borrado.md).
+      const stale = this.status.outdated
+        ? []
+        : rows.filter((r) => this.tree.serverSeq(r) > (cursors.get(r.id)?.cursor ?? 0)).map((r) => r.id);
       await runPool(stale, PULL_CONCURRENCY, (id) =>
-        this.docs.pullPage(id, this.remote).catch((err) => {
+        this.docs.pullPage(id, this.remote).then((n) => {
+          if (n > 0) this.lastActivityAt = Date.now();
+        }, (err) => {
           // Lo mismo al bajar: esta página se reintenta en la próxima vuelta y las demás siguen.
           if (isTimeout(err)) {
             contentError = REQUEST_TIMEOUT;
@@ -452,6 +522,10 @@ export class SyncEngine {
       // Qué fotos y videos usa cada página (papelera de archivos): después de subir y bajar el contenido,
       // así se compara con documentos al día. Un error acá no corta la sincronización del texto.
       await this.reconcileMedia().catch(() => undefined);
+
+      halt();
+      // Las bases limpias de las páginas con lectores (sus errores no cortan el ciclo: las arma el próximo).
+      if (!this.status.outdated) await this.buildCleanBases().catch(() => undefined);
 
       halt();
       // Las imágenes sin portero (`sdfile://`) tampoco salen con la app vieja para este workspace.
@@ -492,6 +566,9 @@ export class SyncEngine {
     this.options.sizes?.configure(settings?.schemaVersion ?? 0);
     // La usan `fetchProjects` (las columnas que pide) y la interfaz (archivar y borrar, P.14).
     if ((settings?.schemaVersion ?? 0) !== this.status.schemaVersion) this.patch({ schemaVersion: settings?.schemaVersion ?? 0 });
+    // El interruptor de la privacidad de lo borrado: solo con la base en la versión 12 o más.
+    this.cleanMin = settings && settings.schemaVersion >= CLEAN_SCHEMA_VERSION ? (settings.cleanMinVersion ?? null) : null;
+    if ((this.cleanMin !== null) !== this.status.cleanOn) this.patch({ cleanOn: this.cleanMin !== null });
     this.versionKnown = true;
     if (!settings) {
       this.patch({ outdated: false });
@@ -542,7 +619,7 @@ export class SyncEngine {
     }
     {
       const projects = await this.remote.fetchProjects(settings.schemaVersion);
-      const rows = await this.remote.fetchTree(projects.map((p) => p.id));
+      const rows = await this.remote.fetchTree(projects.map((p) => p.id), settings.schemaVersion);
       // Con permisos conocidos, lo que la persona ya no puede crear no vuelve a la cola (se avisa abajo).
       const access = this.options.access;
       const perms = access?.get() ? new Permissions(this.tree, access.get(), access.userId) : null;
@@ -724,6 +801,12 @@ export class SyncEngine {
     for (const op of this.tree.pendingOps()) {
       if (this.stopped) return;
       try {
+        // Mover una página puede dejarla adentro de una rama con lectores (la base la reinicia en ese momento): antes,
+        // lo pendiente de la página y de su rama tiene que estar en el servidor (Docs/Doc_Privacidad_Borrado.md, 4.2).
+        // Si no se puede subir (sin red), el cambio espera en la cola con los que vienen después, en orden.
+        if (this.status.cleanOn && op.op.kind === 'update' && op.op.patch.parent_id !== undefined) {
+          await this.uploadPagesFirst(this.branchOf(op.op.id), { throwOnNetwork: true });
+        }
         await this.applyOp(op);
         await this.tree.ackOp(op);
       } catch (err) {
@@ -737,6 +820,108 @@ export class SyncEngine {
         if (!isPermanent(err)) throw err;
         await this.tree.failOp(op, errorMessage(err));
       }
+    }
+  }
+
+  /** La página y todas las de adentro (en el árbol que ve el dispositivo). */
+  branchOf(pageId: string): string[] {
+    const out: string[] = [];
+    const walk = (id: string) => {
+      out.push(id);
+      for (const child of this.tree.children(id)) walk(child.id);
+    };
+    walk(pageId);
+    return out;
+  }
+
+  /**
+   * Antes de compartir, invitar o mover (Docs/Doc_Privacidad_Borrado.md, 4.2, R1): sube lo pendiente de estas páginas y
+   * devuelve si el servidor lo confirmó todo. Con el interruptor apagado no hace falta (devuelve `true`). Una página que
+   * el servidor todavía no tiene no cuenta (no tiene nada que una base pueda llevar).
+   */
+  async uploadPagesFirst(pageIds: string[], { throwOnNetwork = false }: { throwOnNetwork?: boolean } = {}): Promise<boolean> {
+    if (!this.status.cleanOn || this.stopped) return true;
+    const wanted = new Set(pageIds);
+    const pending = async () =>
+      (await this.docs.unsyncedPages()).filter((id) => wanted.has(id) && !this.tree.hasUnsentCreate(id));
+    for (const pageId of await pending()) {
+      try {
+        if ((await this.docs.pushPage(pageId, this.remote)) === 'pushed') this.lastActivityAt = Date.now();
+      } catch (err) {
+        // Un rechazo para siempre (por ejemplo, por tamaño) no se arregla esperando: se sigue con lo demás.
+        if (throwOnNetwork && !isPermanent(err)) throw err;
+      }
+    }
+    return (await pending()).length === 0;
+  }
+
+  /**
+   * Arma enseguida las bases de estas páginas (después de compartir, invitar o mover), con progreso: primero una vuelta
+   * de sincronización para tener las páginas al día. Lo que no se pueda armar acá lo arma el próximo editor que
+   * sincronice. Nunca tira.
+   */
+  async prepareBases(pageIds: string[], onProgress?: (done: number, total: number) => void): Promise<void> {
+    if (!this.status.cleanOn || this.stopped) return;
+    try {
+      await this.syncNow();
+      await this.buildCleanBases({ pages: pageIds, urgent: true, all: true, onProgress });
+    } catch {
+      // Lo arma el próximo editor.
+    }
+  }
+
+  /**
+   * Arma y sube las bases limpias que pide la base (`clean_work`): solo con el interruptor prendido, una versión que
+   * alcanza y, salvo que sea urgente, si este dispositivo subió o bajó algo hace poco (o cada 2 minutos). Solo las
+   * páginas que este dispositivo tiene al día; como mucho `CLEAN_PER_ROUND` por vuelta (`all`: todas las pedidas).
+   */
+  private async buildCleanBases(
+    { pages, urgent = false, all = false, onProgress }: { pages?: string[]; urgent?: boolean; all?: boolean; onProgress?: (done: number, total: number) => void } = {},
+  ): Promise<void> {
+    if (this.cleanMin === null || this.stopped || this.removed) return;
+    const version = Number(this.options.appVersion);
+    if (!(Number.isFinite(version) && version >= this.cleanMin)) return;
+    const now = Date.now();
+    const wasUrgent = this.urgentClean;
+    const due = urgent || wasUrgent || now - this.lastActivityAt < CLEAN_ACTIVE_MS || now - this.lastCleanAt >= CLEAN_IDLE_MS;
+    if (!due) return;
+    this.urgentClean = false;
+    this.lastCleanAt = now;
+    let work;
+    try {
+      work = await this.remote.cleanWork({ pages, urgent: urgent || wasUrgent });
+    } catch (err) {
+      if (wasUrgent) this.urgentClean = true;
+      throw err;
+    }
+    const states = await this.docs.states();
+    const unsynced = new Set(await this.docs.unsyncedPages());
+    // Solo las que el dispositivo tiene exactamente como el servidor (sin nada propio sin subir).
+    const ready = work.filter((w) => states.get(w.page_id)?.cursor === w.update_seq && !unsynced.has(w.page_id));
+    const list = all ? ready : ready.slice(0, CLEAN_PER_ROUND);
+    let done = 0;
+    onProgress?.(0, list.length);
+    for (const w of list) {
+      if (this.stopped) return;
+      try {
+        const built = await this.docs.buildCleanBase(w.page_id, w.update_seq);
+        if ('base' in built) {
+          await this.remote.pushCleanBase({
+            id: crypto.randomUUID(),
+            pageId: w.page_id,
+            toSeq: w.update_seq,
+            lastUpdateId: w.last_update_id,
+            state: built.base,
+            sha256: await sha256Hex(built.base),
+          });
+        } else if (built.skip.startsWith('check')) {
+          console.warn(`Page ${w.page_id}: the clean copy did not pass its check (${built.skip}); not uploaded.`);
+        }
+      } catch (err) {
+        // Sin red se corta la vuelta; otro error es de esta página: se sigue con las demás.
+        if (isNetworkError(err)) throw err;
+      }
+      onProgress?.(++done, list.length);
     }
   }
 
