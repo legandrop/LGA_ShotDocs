@@ -163,6 +163,12 @@ export class PageDocs {
    * que esta versión no puede leer (Docs/Doc_Compactar.md, sección 5). Hasta que se vuelva a abrir la app.
    */
   private readonly rowsOnly = new Set<string>();
+  /**
+   * Páginas rearmadas con sus elementos sin borrados (`resetContent`, `resetForRestore` con un snapshot aplicado) que
+   * todavía no terminaron de bajar: al terminar, `settleRebuild` mira si hay algo para subir. Mientras tanto no se avisa
+   * de lo propio borrado por lo que baja (B.16): son los borrados de siempre que vuelven a llegar.
+   */
+  private readonly rebuilt = new Set<string>();
 
   constructor(
     private readonly db: LocalDb,
@@ -346,6 +352,10 @@ export class PageDocs {
     await this.flush();
     const states = await this.db.getAll('docState');
     for (const state of states) {
+      // Con un snapshot aplicado, lo guardado puede traer un borrado de un snapshot malo que nadie invalidó: se sube con
+      // sus elementos y sin sus borrados (Docs/Doc_Compactar.md, sección 16; auditoría de la entrega 2, O-B). Puede
+      // reaparecer un borrado legítimo que la copia perdió; no se pierde texto.
+      if (state.snapshotId !== undefined) await this.withLock(state.pageId, () => this.keepElementsForRestore(state.pageId));
       await this.withLock(state.pageId, () =>
         updateDocState(this.db, state.pageId, (s) => {
           s.cursor = 0;
@@ -366,6 +376,23 @@ export class PageDocs {
       );
     }
     return states.length;
+  }
+
+  /** `resetForRestore` de una página con un snapshot aplicado: lo guardado pasa a ser sus elementos, sin borrados. */
+  private async keepElementsForRestore(pageId: string): Promise<void> {
+    const tx = this.db.transaction('docUpdates', 'readwrite');
+    const index = tx.store.index('pageId');
+    const [keys, rows] = await Promise.all([index.getAllKeys(pageId), index.getAll(pageId)]);
+    // Sin ningún await en el medio: la transacción sigue abierta mientras se arma.
+    const keep = elementsOnly(rows.map((r) => r.data));
+    if (keep === 'failed' || keep === null) {
+      await tx.done;
+      return;
+    }
+    await Promise.all(keys.map((k) => tx.store.delete(k)));
+    await tx.store.add({ pageId, data: keep });
+    await tx.done;
+    this.rebuilt.add(pageId);
   }
 
   /**
@@ -714,6 +741,8 @@ export class PageDocs {
         total += updates.length;
         if (updates.length < batch) break;
       }
+      // Rearmada (con lo que se conservó del snapshot malo): con todo bajado, se sube lo que el servidor no tiene.
+      if (this.rebuilt.has(pageId)) await this.settleRebuild(pageId);
       return total;
     });
   }
@@ -721,30 +750,59 @@ export class PageDocs {
   /**
    * Un snapshot que este dispositivo aplicó dejó de valer (se invalidó su cadena: cambió la época de contenido de la
    * página, Docs/Doc_Compactar.md, sección 12). Si la página no tiene nada sin subir (ni en memoria, ni marca, ni envío,
-   * ni versión sin confirmar, ni rechazo), **se tira lo guardado y se rearma con lo del servidor** (D110), en una sola
-   * transacción: filas locales, cursor, `syncedSV`, `syncedDS` y el snapshot. Todo lo que tenía ya está en el servidor,
-   * salvo lo que trajo el snapshot malo (un borrado o un elemento que las filas no tienen), que así no vuelve a subir y no
-   * llega a nadie. La página abierta se vuelve a armar desde lo guardado (`stale` y el aviso).
+   * ni versión sin confirmar, ni rechazo), **se rearma con lo del servidor** (D110), en una sola transacción: lo guardado
+   * se cambia por **sus elementos sin ningún borrado** (`elementsOnly`), y se olvidan el cursor, `syncedSV`, `syncedDS` y
+   * el snapshot. Lo que trajo un snapshot malo se resuelve así:
    *
-   * Con algo sin subir, no se toca nada (`deferred`): lo propio sube primero, con las cuentas de siempre (que no dejan
-   * subir lo que trajo el snapshot: el servidor ya lo "tiene" según ellas), y el reinicio se hace en la próxima bajada.
-   * Antes (v0.127) se borraban las cuentas y la página volvía a subir entera: el borrado de un snapshot malo llegaba a
-   * todos (auditoría de la entrega 1, O1).
+   * - un **borrado** que las filas no tienen no queda (lo guardado ya no trae borrados; los que valen llegan con las
+   *   filas), así que no sube ni llega a nadie;
+   * - un **elemento** que las filas no tienen se conserva, y con él lo propio que se escribió colgado de él: después de
+   *   bajar, si lo guardado tiene algo que el servidor no, se marca para subir (`settleRebuild`; auditoría de la entrega
+   *   2, O-A: si se tirara, lo escrito al lado quedaría invisible en todos). Ante la duda, sobra texto y no falta.
+   *
+   * La página abierta se vuelve a armar desde lo guardado (`stale` y el aviso).
+   *
+   * Con algo sin subir, no se rearma todavía (`deferred`): se olvida solo `syncedSV` (y el envío armado contra él), así
+   * lo propio sube primero con todos sus elementos (también lo que colgaba de un elemento del snapshot), mientras
+   * `syncedDS` sigue sin dejar subir los borrados que trajo el snapshot. El rearmado va en la bajada siguiente.
+   * Antes (v0.127) se borraban las dos cuentas y la página volvía a subir entera: el borrado de un snapshot malo llegaba
+   * a todos (auditoría de la entrega 1, O1).
    */
   private async resetContent(pageId: string, epoch: number): Promise<'rebuilt' | 'deferred'> {
     if (!this.isSaved(pageId)) return 'deferred';
     const tx = this.db.transaction(['docUpdates', 'docState', 'meta'], 'readwrite');
-    const [stored, dirty, keys] = await Promise.all([
+    const [stored, dirty, keys, rows] = await Promise.all([
       tx.objectStore('docState').get(pageId),
       tx.objectStore('meta').get(dirtyKey(pageId)),
       tx.objectStore('docUpdates').index('pageId').getAllKeys(pageId),
+      tx.objectStore('docUpdates').index('pageId').getAll(pageId),
     ]);
     const state = stored ?? emptyDocState(pageId);
     if (dirty !== undefined || state.pending || state.rejected || hasUnsyncedContent(state, false)) {
+      if (!state.rejected && (state.syncedSV !== undefined || state.pending)) {
+        state.syncedSV = undefined;
+        state.pending = undefined;
+        await tx.objectStore('docState').put(state);
+      }
       await tx.done;
       return 'deferred';
     }
+    // Sin ningún await en el medio: la transacción sigue abierta mientras se arma.
+    const keep = elementsOnly(rows.map((r) => r.data));
+    if (keep === 'failed') {
+      // No se pudieron separar los elementos de los borrados (no pasa nunca): no se tira nada. Se olvida `syncedSV`
+      // (los elementos suben) y se conserva `syncedDS` (los borrados del snapshot no); esta página queda con lo suyo.
+      state.syncedSV = undefined;
+      state.snapshotId = undefined;
+      state.contentEpoch = epoch;
+      await tx.objectStore('docState').put(state);
+      await tx.objectStore('meta').put(crypto.randomUUID(), dirtyKey(pageId));
+      await tx.done;
+      console.warn(`Página ${pageId}: se invalidó un snapshot que este dispositivo usó y no se pudo rearmar; se sube lo suyo.`);
+      return 'deferred';
+    }
     await Promise.all(keys.map((k) => tx.objectStore('docUpdates').delete(k)));
+    if (keep) await tx.objectStore('docUpdates').add({ pageId, data: keep });
     state.cursor = 0;
     state.syncedSV = undefined;
     state.syncedDS = undefined;
@@ -756,6 +814,7 @@ export class PageDocs {
     state.lastError = undefined;
     await tx.objectStore('docState').put(state);
     await tx.done;
+    if (keep) this.rebuilt.add(pageId);
     console.warn(`Página ${pageId}: se invalidó un snapshot que este dispositivo usó; se rearma con lo del servidor.`);
     const live = this.live.get(pageId);
     if (live) {
@@ -764,6 +823,37 @@ export class PageDocs {
       for (const fn of this.unsupportedListeners) fn(pageId);
     }
     return 'rebuilt';
+  }
+
+  /**
+   * Después de bajar una página rearmada (`resetContent`, o restaurada con un snapshot aplicado): si lo guardado tiene
+   * elementos que el servidor no (lo que trajo un snapshot malo y lo que se escribió colgado de eso), se marca para
+   * subir. La subida lleva solo eso: los borrados guardados son los que bajaron. Si no tiene nada de más, no sale nada.
+   */
+  private async settleRebuild(pageId: string): Promise<void> {
+    this.rebuilt.delete(pageId);
+    const saved = await this.readSaved(pageId, { keepDeleted: true });
+    let extra: boolean;
+    try {
+      const synced = saved.state.syncedSV ? Y.decodeStateVector(saved.state.syncedSV) : new Map<number, number>();
+      const local = Y.decodeStateVector(Y.encodeStateVector(saved.doc));
+      extra = saved.doc.store.pendingStructs !== null || [...local].some(([client, clock]) => clock > (synced.get(client) ?? 0));
+    } finally {
+      saved.doc.destroy();
+    }
+    if (!extra) return;
+    const tx = this.db.transaction('meta', 'readwrite');
+    await tx.store.put(crypto.randomUUID(), dirtyKey(pageId));
+    await tx.done;
+    console.warn(`Página ${pageId}: lo rearmado tiene algo que el servidor no; se sube.`);
+    this.track(pageId, this.bumpVersion(pageId));
+    for (const fn of this.localChangeListeners) {
+      try {
+        fn(pageId);
+      } catch (err) {
+        console.error('local change listener failed', err);
+      }
+    }
   }
 
   /**
@@ -1013,6 +1103,11 @@ export class PageDocs {
         meta.get(dirtyKey(pageId)),
         meta.getAllKeys(ownClientRange(pageId)),
       ]);
+      // Rearmada: lo que baja vuelve a borrar lo que ya estaba borrado (no es de otro que borró lo que se escribía).
+      if (this.rebuilt.has(pageId)) {
+        await tx.done;
+        return null;
+      }
       // Nada sin subir y nada escrito en esta sesión, o ningún autor propio: no hay qué mirar (lo común).
       const recent = hasUnsyncedContent(state ?? emptyDocState(pageId), dirty !== undefined) || this.wroteHere(pageId);
       if (!recent || ownKeys.length === 0) {
@@ -1470,6 +1565,34 @@ function addKnownDeletes(state: DocState, generation: number, more: DeleteRanges
   const known = knownDeletes(state, generation);
   state.syncedDS = encodeRanges(known ? unionRanges(rangesOf(known), more) : more);
   state.syncedDSGeneration = generation;
+}
+
+/**
+ * Las filas guardadas de una página como un solo update con **todos sus elementos y ningún borrado** (en orden y sin
+ * GC: con el texto de lo borrado). `null` si no hay elementos; `'failed'` si no se pudieron separar (no pasa nunca:
+ * `buildUpload` y, si no, `Y.createDocFromSnapshot`).
+ */
+export function elementsOnly(rows: Uint8Array[]): Uint8Array | null | 'failed' {
+  if (rows.length === 0) return null;
+  const doc = new Y.Doc({ gc: false });
+  try {
+    applyRowsInOrder(doc, rows);
+    if (Y.encodeStateVector(doc).length <= 1 && !doc.store.pendingStructs) return null;
+    const all = rangesOf(Y.encodeStateAsUpdate(doc));
+    const built = buildUpload(doc, undefined, encodeRanges(all));
+    if (rangesOf(built.update).size === 0) return built.update;
+    const copy = Y.createDocFromSnapshot(doc, Y.createSnapshot(Y.createDeleteSet(), Y.decodeStateVector(Y.encodeStateVector(doc))));
+    try {
+      const out = Y.encodeStateAsUpdate(copy);
+      return rangesOf(out).size === 0 ? out : 'failed';
+    } finally {
+      copy.destroy();
+    }
+  } catch {
+    return 'failed';
+  } finally {
+    doc.destroy();
+  }
 }
 
 /** Los mismos bytes (o los dos sin nada). */

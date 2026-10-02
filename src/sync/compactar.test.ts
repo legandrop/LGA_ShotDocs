@@ -677,6 +677,113 @@ describe('reintentos: nada se duplica y lo sin confirmar nunca se sirve', () => 
   });
 });
 
+/** ¿Alguna fila del servidor trae este texto (aunque no se vea)? */
+function inRows(server: FakeServer, pageId: string, s: string): boolean {
+  return serverRows(server, pageId).some((u) =>
+    Y.decodeUpdate(u).structs.some((st) => st instanceof Y.Item && st.content instanceof Y.ContentString && st.content.str.includes(s)),
+  );
+}
+
+describe('D110 con un snapshot malo que trae un elemento de más (auditoría de la entrega 2, O-A)', () => {
+  it('lo escrito sin red al lado del elemento fantasma (rama que espera) sigue visible en el servidor y en todos', async () => {
+    const { server, e1, page } = await setup({ edits: 9 });
+    const b = await device(server);
+    await b.engine.syncNow();
+    // El snapshot malo: las filas + "FANTASMA" (un elemento que ninguna fila tiene, de otro autor de Yjs).
+    const bad = await badSnapshot(server, page, (tail, doc) => {
+      for (const u of tail) Y.applyUpdate(doc, u.data);
+      const t = doc.getText('t');
+      t.insert(t.toString().indexOf('palabra4 '), 'FANTASMA ');
+      return [];
+    });
+    const c = await device(server);
+    await c.engine.syncNow();
+    expect((await state(c, page))?.snapshotId).toBe(bad);
+    expect(await text(c, page)).toContain('FANTASMA');
+    // c escribe sin red, justo después del fantasma.
+    server.online = false;
+    await edit(c, page, (t) => t.insert(t.toString().indexOf('FANTASMA ') + 9, 'MIO '));
+    server.online = true;
+    expect(await text(c, page)).toContain('FANTASMA MIO');
+    await new FakeRemote(server, '1.000').invalidateSnapshot(bad, 'test');
+    await edit(e1, page, add('ajena'));
+    await e1.engine.syncNow();
+    for (let i = 0; i < 4; i++) await c.engine.syncNow();
+    await b.engine.syncNow();
+    await e1.engine.syncNow();
+    // Lo que escribió c tiene que verse en algún lado.
+    const visible = { server: serverText(server, page), c: await text(c, page), b: await text(b, page), e1: await text(e1, page) };
+    expect(visible.server).toContain('MIO');
+    expect(visible.c).toContain('MIO');
+    expect(visible.b).toContain('MIO');
+    expect(visible.e1).toContain('MIO');
+    for (const d of [b, c, e1]) expect(await text(d, page)).toBe(visible.server);
+  });
+
+  it('lo escrito con red al lado del elemento fantasma (ya subido; rama que rearma) sigue visible en todos', async () => {
+    const { server, e1, page } = await setup({ edits: 9 });
+    const bad = await badSnapshot(server, page, (tail, doc) => {
+      for (const u of tail) Y.applyUpdate(doc, u.data);
+      const t = doc.getText('t');
+      t.insert(t.toString().indexOf('palabra4 '), 'FANTASMA ');
+      return [];
+    });
+    const c = await device(server);
+    await c.engine.syncNow();
+    expect((await state(c, page))?.snapshotId).toBe(bad);
+    await edit(c, page, (t) => t.insert(t.toString().indexOf('FANTASMA ') + 9, 'MIO '));
+    await c.engine.syncNow();
+    expect(inRows(server, page, 'MIO')).toBe(true);
+    await e1.engine.syncNow();
+    expect(await text(e1, page)).not.toContain('MIO');
+    await new FakeRemote(server, '1.000').invalidateSnapshot(bad, 'test');
+    for (let i = 0; i < 3; i++) await c.engine.syncNow();
+    await e1.engine.syncNow();
+    const visible = { server: serverText(server, page), c: await text(c, page), e1: await text(e1, page) };
+    expect(inRows(server, page, 'MIO')).toBe(true);
+    expect(visible.c).toContain('MIO');
+    expect(visible.server).toContain('MIO');
+    expect(visible.e1).toContain('MIO');
+    expect(visible.c).toBe(visible.server);
+    // Sobra texto antes que falte: el elemento del snapshot malo queda en todos (los borrados malos, no).
+    expect(visible.server).toContain('FANTASMA');
+    await expectSound(c, server, page);
+    await expectNothingMissing(c, server, page);
+  });
+});
+
+describe('restaurar una copia de la base con un snapshot malo sin invalidar (auditoría de la entrega 2, O-B)', () => {
+  it('quien lo aplicó vuelve a subir sus elementos sin sus borrados: lo que el snapshot borró de más no llega a nadie', async () => {
+    const { server, e1, page } = await setup({ edits: 6 });
+    await badSnapshot(server, page, (tail, doc) => {
+      for (const u of tail) Y.applyUpdate(doc, u.data);
+      const t = doc.getText('t');
+      t.delete(t.toString().indexOf('palabra3 '), 9);
+      return [];
+    });
+    const c = await device(server);
+    await c.engine.syncNow();
+    expect(await text(c, page)).not.toContain('palabra3');
+    const restore = server.backup();
+    // Lo escrito después de la copia: vuelve a subir desde quien lo tiene.
+    await edit(e1, page, add('despues'));
+    await e1.engine.syncNow();
+    await c.engine.syncNow();
+    restore();
+    for (let i = 0; i < 3; i++) {
+      await c.engine.syncNow();
+      await e1.engine.syncNow();
+    }
+    const expected = serverText(server, page);
+    expect(expected).toContain('palabra3');
+    expect(expected).toContain('despues');
+    expect(await text(c, page)).toBe(expected);
+    expect(await text(e1, page)).toBe(expected);
+    await expectSound(c, server, page);
+    await expectNothingMissing(e1, server, page);
+  });
+});
+
 // --- al azar -----------------------------------------------------------------------------------------------------
 
 function rng(seed: number): () => number {
@@ -936,7 +1043,11 @@ describe('SupabaseRemote: las funciones de quien compacta', () => {
     expect(calls[1].body).toEqual({
       p_page_id: 'p', p_base_id: null, p_up_to_seq: 120, p_last_update_id: 9001, p_state: 'AQID', p_sv: 'AA==', p_sha256: 'ab', p_app_version: '1.000',
     });
+    expect(calls[2].body).toEqual({ p_id: 'snap-1' });
     expect(calls[3].body).toEqual({ p_id: 'snap-1', p_sha256: 'ab' });
+    expect(calls[4].body).toEqual({ p_page_id: 'p', p_reason: 'too large' });
+    // Lo que usa la comparación desde cero para invalidar una cadena mala (auditoría de la entrega 2, O-E).
+    expect(calls[5].body).toEqual({ p_id: 'snap-1', p_reason: 'x' });
   });
 
   it('sin tramo, una base sin la migración y una respuesta rara', async () => {
