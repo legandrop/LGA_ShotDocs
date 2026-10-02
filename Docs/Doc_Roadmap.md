@@ -297,6 +297,58 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   `Doc_Fotos_En_Linea.md`, "Cámara". **Falta:** probarlo en un iPhone y un Android reales. **Para la app nativa**
   (Capacitor y la cuenta de Apple, ver "Cuando se termine esta app"): guardar en el carrete sin la hoja (y en un álbum
   propio), la cámara adentro de la app con varias tomas seguidas, y los metadatos de la toma.
+- **P.23 Plantillas (fase 3) y crear el reporte del día** (Lega, 2026-10-02; era el ítem 10 del grupo C, ya sin esperar
+  a Lega): *Pre-production Notes* (por escena), *On-Set Report* (por día) y *Shot Breakdown* (por plano) con lo que se
+  anota en supervisión de VFX (primera versión, Lega la ajusta), guardar cualquier página como plantilla, y en el reporte
+  en set un botón **New day report** que crea la página del día con fecha y locación ya puestas adentro de la carpeta de
+  reportes, sin red. **Diseño en `Doc_Plantillas.md`** (sin código; decisiones propuestas PL1 a PL10): una plantilla
+  propia es una página marcada en `settings` dentro de una carpeta *Templates* (sin tabla `templates` ni migración; los
+  permisos son los de la página), crear es copiar los bloques antes del párrafo vacío sin borrar nada, y la carpeta de
+  reportes es una página marcada (`dayReports`). Sin tipos ni propiedades nuevas en el editor. Auditado (aprobado con
+  cambios) y corregido: atajo ⌘⌥⇧N / Ctrl+Alt+Shift+N (⌘⌥N es de Chrome en la Mac), marcas que se recuperan solas,
+  plantillas a medio bajar, datos de set que faltaban y una sección *Internal* para lo que no debe ver un cliente.
+  Entregas: 0 (las tres plantillas en el código y una vista para que Lega las revise), 1 (crear desde una de fábrica),
+  2 (el reporte del día), 3 (plantillas propias). **Para después:** que la base fusione las claves de `pages.settings`
+  (`settings || patch`) en vez de reemplazar el objeto entero, con su migración: hoy dos cambios de ajustes a la vez
+  se pisan (`Doc_Plantillas.md`, sección 8).
+- **P.20 Anotar sobre las fotos** (Lega, 2026-10-02): flechas, círculos, rectángulos, texto y lápiz encima de una
+  foto de set sin tocar el original, cómodo para quien usa LGA FrameRev (mismas letras, colores y grosores).
+  **Diseño en `Doc_Anotar_Fotos.md`** (sin código; auditado: aprobado con condiciones, ya corregido; decisiones AN1 a AN11
+  propuestas): las anotaciones en un `Y.Map` del documento de la página, afuera del contenido, con una clave por forma
+  (`<archivo>/<forma>`, como "colapsar para todos"), así una versión vieja no las borra y dos sin red no se pisan; las de
+  una foto sacada se podan para que no lleguen a quien solo ve (D14); un SVG encima de la foto en la página, la celda, el carrete y el PDF; la copia con
+  anotaciones se arma en el dispositivo al bajar; anota quien edita la página. Entregas: 0 (prueba técnica), 1 (ver),
+  2 (anotar en la compu), 3 (dedo, y lápiz en el iPad), 4 (bajar, copiar y exportar a FrameRev), 5 (historial, copiar entre
+  páginas, buscar), 6 opcional (dibujar en un comentario).
+- **P.22 Exportar una página o un proyecto entero** (Lega, 2026-10-02): PDF y/o zip con las páginas y las fotos, para
+  entregarle al cliente o archivar un proyecto terminado. **Diseño en `Doc_Exportar.md`** (sin código; EX1 a EX15 a
+  confirmar por Lega; auditado con condiciones y corregido: ningún correo en el zip, vista JPEG de cada foto): un PDF para entregar (toda la rama en orden con un índice que dice la hoja de
+  cada página, cada página con su hoja y sus cortes de la fase 4, sin comentarios por defecto) y un zip para archivar
+  (una carpeta por página con `.html`, `.md`, los originales del Drive, los comentarios y los bloques en JSON para
+  volver; el zip de *Download all*). Lo exporta quien ve, solo su rama; nunca lo borrado (se exportan bloques, nunca el
+  documento Yjs) ni la papelera. Volver: *Import Shot Docs archive…*, siempre a un proyecto nuevo. Entregas: 0 (el editor
+  de exportación medido), 1 (PDF), 2 (zip), 3 (volver, con la migración de `imported_from`), 4 (carpetas de Drive,
+  reusar archivos, link público).
+- **P.21 Menciones en comentarios: *@persona*** (Lega, 2026-10-02): escribir `@` en un comentario, elegir a alguien y
+  que le llegue un aviso en la app; por correo cuando haya clave de Resend (C.12). **Diseño en `Doc_Menciones.md`** (sin
+  código ni migración; auditado y corregido; decisiones propuestas ME1 a ME10, ME10 espera a Lega): solo a quien ya
+  ve la página; un miembro ve al equipo y a los clientes que ya comentaron (ME10); el dueño y los admins la comparten
+  desde la mención (entrega 2); un invitado ve solo a quienes participan en los comentarios y a quien le compartió
+  algo; va después del link público (`schema_version` 15); el texto sigue plano (`@lega`) y quién es va en `comment_mentions`, así una versión vieja no rompe
+  nada; una campana con las no leídas que pregunta cada 60 segundos (sin Realtime); sin red con la cola de siempre;
+  los visitantes del link no mencionan; las menciones de Coda se ven como `@Nombre`. Entregas: 1 (base, `@`, campana,
+  sin red), 2 (compartir desde la mención, marcas en el árbol y en el ícono), 3 (correo, grupo C).
+- **P.24 Asistente con la clave de cada usuario y servidor MCP (fase 5)** (era C.11; 2026-10-02, ya sin esperar a
+  Lega). **Diseño en `Doc_Asistente.md`** (sin código; decisiones propuestas IA1 a IA10; auditado, corregido): la clave
+  solo en el dispositivo y por persona (IA1, D-06; el cifrado solo evita verla por accidente); el pedido directo del navegador al proveedor (Anthropic, OpenAI, Google
+  y compatibles con OpenAI, CORS probado); vista previa y aplicar como una edición que se deshace, sin aplicar si el
+  texto cambió mientras el modelo pensaba; aplicar pide Editar; un interruptor del dueño (*On*, *Local models only*,
+  *Off*). El MCP en el portero (IA2, D-07), con el OAuth del Supabase del workspace, el token cerrado de fábrica,
+  lectura de la base limpia de D14 y escritura opcional por proyecto con guarda, nunca en páginas con invitados sin un
+  permiso aparte; con páginas reales pide, casi seguro, el plan pago de Workers del dueño (US$ 5 por mes) o el MCP local. Entregas: A1 (texto elegido), A2
+  (página, formato, política), A3 (pie de foto), M0 (prueba técnica del MCP: OAuth de Supabase con el registro cerrado,
+  el rol del token, 10 ms de CPU), M1 (MCP de lectura; requiere el interruptor de D14), M2 (MCP que escribe), M3
+  (medir). Recortar, achicar y comprimir fotos no necesitan un modelo: van al roadmap de fotos.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
@@ -519,9 +571,8 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
 
 ### C. Esperan a Lega
 
-10. **Fase 3.** Plantillas: definir con Lega los campos de *Pre-production Notes*, *On-Set Report* y
-    *Shot Breakdown*.
-11. **Fase 5.** Asistente con la clave de cada usuario y MCP: Lega elige entre las opciones de D-06 y D-07.
+10. **Fase 3 (plantillas): pasó a P.23** (2026-10-02), con una primera versión de los campos para que Lega la ajuste.
+11. **Pasó a P.24** (2026-10-02): el asistente y el MCP ya no esperan a Lega; diseño en `Doc_Asistente.md`.
 12. **Correo automático de invitaciones** (el portero lo manda con Resend): hace falta una clave de Resend
     solo para enviar, cargada por Lega en el portero. Mientras tanto, la app copia el link.
 13. **Que la pantalla de Google diga "LGA Shot Docs"** (pedido de Lega). Hoy, al conectar Drive, Google

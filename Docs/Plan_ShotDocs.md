@@ -70,7 +70,6 @@ Falta:
 ```
 page_snapshots (page_id, state BYTEA, up_to_seq, created_at)                 -- compactar en el servidor
 page_versions  (id, page_id, state BYTEA, label, created_by, created_at)     -- historial (fase 6)
-templates      (id, workspace_id, name, description, content BYTEA, created_at, updated_at)   -- fase 3
 members, grants, invitations                                  -- equipo y permisos (Plan_Workspaces)
 ```
 
@@ -144,7 +143,9 @@ a sus ramas hermanas.
   cambiar la plantilla después no toca las páginas ya creadas.
 - Cualquier página se puede guardar como plantilla.
 - Plantillas iniciales: *Pre-production Notes* (por escena), *On-Set Report* (por día de rodaje) y *Shot
-  Breakdown*. Sus campos se definen con Lega antes de la fase 3.
+  Breakdown*.
+- **Diseño en `Doc_Plantillas.md`** (P.23): el contenido de las tres, las plantillas propias como páginas marcadas
+  (reemplaza la tabla `templates` que figuraba en la sección 4) y el botón para crear el reporte del día.
 
 ## 8. Autohosteo
 
@@ -239,6 +240,7 @@ En Notion y en Coda lo que se ve al editar no es lo que sale en el PDF. Acá sí
   editar.
 - **MCP.** Además del asistente de la app, un servidor MCP para que un cliente externo lea y edite las
   páginas con los permisos del usuario (D-07).
+- **Diseño:** `Doc_Asistente.md` (P.24, 2026-10-02), con las decisiones IA1 a IA10.
 
 ## 12. Preguntas abiertas
 
