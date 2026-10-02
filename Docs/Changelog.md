@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.104 :
 
 Lo borrado de una página les llegaba con las filas a quien solo ve, comenta o es invitado, y las fotos sacadas se seguían
 abriendo (D14). Entregas 0 y 1 de `Doc_Privacidad_Borrado.md`: con el interruptor `clean_min_version` prendido, quien

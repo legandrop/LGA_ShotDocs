@@ -1,6 +1,6 @@
 # Privacidad de lo borrado (D14)
 
-**Estado: entregas 0 y 1 implementadas (v0.0XX), con la migración `20261010120000_privacidad_borrado.sql` sin aplicar
+**Estado: entregas 0 y 1 implementadas (v0.104), con la migración `20261010120000_privacidad_borrado.sql` aplicada (2026-10-02)
 y el interruptor apagado** (roadmap B.18; diseño del 2026-10-02, revisado el mismo día con la auditoría independiente:
 ver "Correcciones de la auditoría"; lo implementado y lo que cambió al implementar, en "Cómo quedó (entregas 0 y 1)",
 al final). Toca los permisos (quién recibe qué bytes de
@@ -721,8 +721,8 @@ guardó en el repo contenido de la base.
 
 ## Cómo quedó (entregas 0 y 1)
 
-Implementado en v0.0XX. La migración `20261010120000_privacidad_borrado.sql` está **sin aplicar** (probada en
-`begin … rollback` contra la base real, encima de la papelera para lectores ya aplicada) y deja el interruptor
+Implementado en v0.104. La migración `20261010120000_privacidad_borrado.sql` está **aplicada** desde el 2026-10-02 (antes,
+probada en `begin … rollback` contra la base real, encima de la papelera para lectores) y deja el interruptor
 **apagado**: con él apagado todo baja como antes; desde que se aplica valen la columna `update` cerrada, los permisos de
 los archivos sacados y la papelera de archivos sin invitados.
 

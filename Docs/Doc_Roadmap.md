@@ -465,8 +465,8 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
     la misma versión que corre, *Update now* sigue diciendo que falló en vez de recargar (cualquier instalación nueva
     lo borra; no pierde nada). Ver `Doc_Sincronizacion.md`, "La versión mínima, el árbol y los comentarios" y "Volver
     después de mucho tiempo sin red".
-18. **Que lo borrado no llegue a quien solo ve la página (D14). Entregas 0 y 1 hechas (v0.0XX), migración
-    `20261010120000_privacidad_borrado.sql` sin aplicar e interruptor apagado.** Quien no edita baja siempre la última
+18. **Que lo borrado no llegue a quien solo ve la página (D14). Entregas 0 y 1 hechas (v0.104), migración
+    `20261010120000_privacidad_borrado.sql` aplicada e interruptor apagado.** Quien no edita baja siempre la última
     base limpia (armada por un editor, con lo borrado como hueco), con `clean_reset_seq` al compartir, invitar y mover,
     los permisos de los usos sacados de archivos, la columna `update` cerrada y la línea al compartir y la ayuda.
     **Falta para prenderlo** (antes de invitar al primer cliente de verdad): aplicar la migración, el cambio del script

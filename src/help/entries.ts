@@ -85,7 +85,7 @@ const PAGE_BREAK = '0.093';
  */
 const ATTACH_PREVIEW = '0.091';
 /** Quién ve lo borrado (Docs/Doc_Privacidad_Borrado.md, entregas 0 y 1): la versión se pone al publicar. */
-const DELETED_PRIVACY = '0.0XX';
+const DELETED_PRIVACY = '0.104';
 /** El historial de versiones de una página (P.18, Docs/Doc_Historial.md, entrega 1). */
 const HISTORY = '0.098';
 /** Los cambios marcados por persona en el historial (entrega 2; la versión la pone quien publica). */

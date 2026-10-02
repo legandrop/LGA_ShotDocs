@@ -101,7 +101,7 @@ papelera antes de compartirle la rama.
 
 ### Lo borrado y quién lo recibe (bases limpias)
 
-Migración `20261010120000_privacidad_borrado.sql` (sin aplicar; diseño y cómo quedó en `Doc_Privacidad_Borrado.md`).
+Migración `20261010120000_privacidad_borrado.sql` (aplicada el 2026-10-02, interruptor apagado; diseño y cómo quedó en `Doc_Privacidad_Borrado.md`).
 Recibe lo borrado de una página quien ve su historial (`private.sees_deleted`: nivel 3 o más y no invitado). Con el
 interruptor `workspace_settings.clean_min_version` prendido, a los demás (Ver, Comentar, invitados) `pull_page_updates`
 les da solo la **base limpia** vigente (`page_clean_bases`, una por página, la arma y sube un editor con
