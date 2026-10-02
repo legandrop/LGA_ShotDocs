@@ -81,6 +81,7 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
     'HistoryPanel.tsx',
     'ExportDialog.tsx',
     'AssistantPanel.tsx',
+    'CaptionSection.tsx',
     'DictationPanel.tsx',
     'VoiceSettingsDialog.tsx',
     'AssistantSettings.tsx',
@@ -94,7 +95,7 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
   // La confirmación de "Replace all" (ProjectReplace.tsx): Esc la cierra sin cerrar el panel.
   listClose: ['ProjectSwitcher.tsx', 'ProjectSearch.tsx', 'DrivePasteMenu.tsx', 'ProjectReplace.tsx'],
   versionName: ['HistoryPanel.tsx'],
-  assistantApply: ['AssistantPanel.tsx', 'DictationPanel.tsx'],
+  assistantApply: ['AssistantPanel.tsx', 'CaptionSection.tsx', 'DictationPanel.tsx'],
   dictationPlace: ['DictationPanel.tsx'],
   tabsMove: ['InstallDialog.tsx'],
   tourNext: ['TourLayer.tsx'],
