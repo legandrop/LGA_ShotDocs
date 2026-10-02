@@ -3,9 +3,14 @@ import type { Node as PMNode } from '@tiptap/pm/model';
 import { TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state';
 import { yXmlFragmentToBlocks } from '@blocknote/core/yjs';
 import * as Y from 'yjs';
+import { PHOTO_MARKUP_MAP } from '../media/markup';
+import { carryMarkup, snapshotMarkup, type CarryResult, type CopiedPhoto } from '../media/markupClipboard';
+import { mediaIdsInDoc } from '../media/usage';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { SHARED_COLLAPSE_MAP } from '../ui/collapseEditor';
 import { schema } from '../ui/editorSchema';
+import { trackMarkupInUndo } from '../ui/markupClipboardEditor';
+import { asOneUndoStep } from '../ui/undoGuard';
 import { findUnknownContent } from '../ui/unknownContent';
 import type { TemplateBlock } from './builtin';
 
@@ -120,7 +125,8 @@ function cursorToStart(editor: TemplateEditor, blockId: string): void {
 // Lo usan las plantillas propias (entrega 3): se lee una COPIA en memoria del documento de la plantilla (nunca se monta
 // un editor sobre ella, que le escribiría arreglos), se corta si tiene algo que esta versión no conoce, y los bloques
 // salen con ids nuevos. Los comentarios y las respuestas a las preguntas quedan en la plantilla (son de sus bloques);
-// el "colapsado para todos" se copia con los ids nuevos.
+// el "colapsado para todos" se copia con los ids nuevos. Las anotaciones de las fotos (`photoMarkup`, P.20) se leen de la
+// misma copia y viajan con sus fotos (D46: mismas reglas que copiar y pegar; Doc_Plantillas.md, "Anotaciones").
 
 interface CopiedBlock {
   id: string;
@@ -131,7 +137,7 @@ interface CopiedBlock {
 }
 
 export type TemplateCopy =
-  | { ok: true; blocks: TemplateBlock[]; collapsed: string[] }
+  | { ok: true; blocks: TemplateBlock[]; collapsed: string[]; markup: CopiedPhoto[] }
   /** Hecha con una versión más nueva de la app: copiarla perdería lo que esta no conoce. */
   | { ok: false; unknown: string };
 
@@ -163,18 +169,49 @@ export function copyTemplateDoc(template: Y.Doc): TemplateCopy {
     const collapsed = [...memory.getMap(SHARED_COLLAPSE_MAP).entries()]
       .filter(([, v]) => v === true)
       .flatMap(([k]) => (ids.has(k) ? [ids.get(k)!] : []));
-    return { ok: true, blocks: renewed as unknown as TemplateBlock[], collapsed };
+    // Las anotaciones de las fotos que tiene la plantilla, campo por campo (las claves son del archivo, no del bloque:
+    // los ids nuevos de los bloques no las tocan). Quien usa la copia se queda con las de las fotos que de verdad lleva.
+    const markup = snapshotMarkup(memory.getMap<unknown>(PHOTO_MARKUP_MAP), mediaIdsInDoc(memory));
+    return { ok: true, blocks: renewed as unknown as TemplateBlock[], collapsed, markup };
   } finally {
     memory.destroy();
   }
 }
 
-/** Agrega una copia (`copyTemplateDoc`) a la página: los bloques antes del primero y el colapsado para todos. */
-export function insertTemplateCopy(editor: TemplateEditor, doc: Y.Doc, copy: Extract<TemplateCopy, { ok: true }>): void {
-  insertTemplate(editor, copy.blocks);
-  if (copy.collapsed.length === 0) return;
-  const shared = doc.getMap(SHARED_COLLAPSE_MAP);
-  doc.transact(() => {
-    for (const id of copy.collapsed) shared.set(id, true);
-  });
+/** Lo que agrega `insertTemplateCopy`: los bloques, el colapsado y las anotaciones de sus fotos (si las hay). */
+export interface TemplateInsert {
+  blocks: TemplateBlock[];
+  collapsed: string[];
+  markup?: CopiedPhoto[];
+}
+
+/**
+ * Agrega una copia (`copyTemplateDoc`) a la página: los bloques antes del primero, el colapsado para todos y las
+ * anotaciones de sus fotos (las del mapa `photoMarkup`, con las mismas claves: la foto es la misma). Las anotaciones se
+ * escriben solo para las fotos que quedaron en el contenido, y junto con los bloques son UN paso de deshacer. Si algo
+ * falla al escribirlas, los bloques ya están: las fotos quedan limpias, nunca se corta. Devuelve lo que se llevó (o `null`
+ * si no había nada que llevar) para avisar si algo no entró por los topes.
+ */
+export function insertTemplateCopy(editor: TemplateEditor, doc: Y.Doc, copy: TemplateInsert): CarryResult | null {
+  const markup = copy.markup ?? [];
+  const write = (): CarryResult | null => {
+    insertTemplate(editor, copy.blocks);
+    if (copy.collapsed.length > 0) {
+      const shared = doc.getMap(SHARED_COLLAPSE_MAP);
+      doc.transact(() => {
+        for (const id of copy.collapsed) shared.set(id, true);
+      });
+    }
+    if (markup.length === 0) return null;
+    try {
+      return carryMarkup(doc, markup, mediaIdsInDoc(doc));
+    } catch (err) {
+      console.warn('[anotaciones] no se pudieron copiar las anotaciones de la plantilla', err);
+      return null;
+    }
+  };
+  const state = markup.length > 0 ? editor.prosemirrorView?.state : undefined;
+  if (!state) return write();
+  trackMarkupInUndo(state, doc);
+  return asOneUndoStep(state, write);
 }

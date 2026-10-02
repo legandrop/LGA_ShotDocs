@@ -32,6 +32,9 @@ its own project: a tree of pages you own.
   OpenAI-compatible service (OpenRouter, or a local model such as Ollama) and fix, improve, shorten, translate,
   rewrite or reshape what you select, or summarize and translate a whole page. You see a preview first; applying it is
   a regular edit: synced, versioned and undoable. The workspace owner can turn it off or allow only local models.
+- **Dictate to report.** Write or dictate (with your keyboard's microphone) an informal note on set, like “this shot
+  was a 50 mm”, and the assistant places each piece where it goes in the report: the right row and column, the line
+  after its label, the checkbox. You check every change before applying it, and nothing you said is lost.
 - **Offline first, nothing lost.** Every change is saved on your device first and synced when you are
   back online. Edits made offline on two devices are merged, never overwritten.
 - **Share a branch, never the tree.** Inside a workspace, people get a role and a permission on a
@@ -141,7 +144,7 @@ In production (v0.049). What works today:
   the Drive trash, and restoring the project within Google's 30 days brings it back.
 - Keyboard in the page tree: ↑ and ↓ open the previous or next page, → and ← expand and collapse (← on a page with nothing to collapse goes to its parent page).
 - Page breaks and PDF: pages with a paper size show where each sheet starts, and *Export PDF / Print* in the page menu prints exactly those sheets. A manual page break (*Page break* in the / menu, or Ctrl+Enter, ⌘↩ on a Mac) makes what follows start on a new sheet, on screen and in the PDF.
-- Export a branch or a whole project as one PDF: *Export…* in the page menu (the page and the pages inside) or *Export project…* in the project list. It starts with a contents page that links to each page and says on which PDF page it starts, every page keeps its own paper size (in Chrome or Edge on a computer), photos keep their annotations and are scaled to their printed size, and comments can be included with names but never email addresses. Pages in the trash are never included, and a guest exports only what they can see.
+- Export a branch or a whole project as PDF: *Export…* in the page menu (the page and the pages inside) or *Export project…* in the project list. It starts with a contents page that links to each page and says on which PDF page it starts, every page keeps its own paper size (in Chrome or Edge on a computer), photos keep their annotations and go as they were taken, at full resolution (tick *Smaller file* for a lighter PDF with photos scaled to their printed size), and comments can be included with names but never email addresses. If it is too much for one PDF on the device, it comes out in parts (*Part 1*, *Part 2*…), split between pages, and at the end any page that could not be exported is listed with a link and *Export again*. Pages in the trash are never included, and a guest exports only what they can see.
 - Export a branch or a whole project as a zip to archive it: a folder for each page with the page as a web page that opens in any browser without a connection, its text as Markdown, a JPEG of every photo (also iPhone HEIC photos), the original photos, attachments and videos from Drive if you tick them, and the comments with names but never email addresses. It also keeps the blocks and the page tree for importing it back later. On Chrome and Edge on a computer it is written as it is made (or into a folder); in other browsers it is built in memory. Only the workspace owner and admins can export a zip, and only from a computer.
 - English and Spanish: the whole interface in both languages, chosen in the account menu and saved in your account (Script is *Guion* in Spanish).
 - Available offline: mark a page (with its subpages) or a whole project from its menu, choose what to keep (large
@@ -162,6 +165,13 @@ In production (v0.049). What works today:
   lines into a bulleted list, a checklist, a table or headings. *Summarize page* adds a summary at the top or below the
   cursor, and *Translate page* replaces the text of every block in place or creates a translated subpage. The owner
   and the admins choose, in *Assistant…*, whether the workspace allows the assistant, only local models, or none.
+- Dictate to report (the microphone in the page bar, the round button on the phone, the page menu or Ctrl+Alt+Shift+D,
+  ⌘⌥⇧D on a Mac): write the note or dictate it with your keyboard's microphone and choose *Place*. The open page goes to
+  your provider as a map of its tables, rows, labeled lines and checkboxes; the answer is checked against that map and
+  shown change by change, each with its checkbox and its place (*Setups & takes › 12 · 010 · 3 › Lens*). *Apply* applies
+  the checked ones as one edit you undo with *Undo* or Ctrl+Z, and nothing is applied if those places changed meanwhile.
+  If it is not clear which shot, it asks with a button per row. What it could not place, and what you unchecked, stays
+  under *Couldn't place* on that device until you add it to *Summary*, copy it or discard it.
 - Templates: a new empty page offers the three built-in ones, and *More…* lists them with your project's own templates
   and the ones from other projects you can see. *Save as template…* in the page menu copies a page to the project's
   *Templates* folder (optionally clearing the filled-in values); a template is a page you edit like any other, and new
