@@ -2700,6 +2700,142 @@ code {
   break-before: page;
 }
 
+/* Exportar una rama o un proyecto como PDF (P.22, src/export/exportPdf.ts): el índice y todas las páginas en una sola
+   vista, cada una con su hoja (`page:` y `@page sd-…` puestos al imprimir). Afuera de la pantalla hasta imprimir. */
+.sd-export-book {
+  position: fixed;
+  top: 0;
+  left: -100000px;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* El libro solo se imprime cuando lo pone `printBook` (`sd-export-printing`): el Imprimir del navegador mientras la
+   ventana arma o tiene el PDF listo imprime la página de siempre, sin el libro encima. */
+@media print {
+  html.sd-printing:not(.sd-export-printing) .sd-export-book {
+    display: none !important;
+  }
+}
+
+/* Cada página empieza en una hoja nueva (las hojas de adentro las ponen los saltos calculados). */
+.sd-export-book > .print-view + .print-view {
+  break-before: page;
+}
+
+.print-view .sd-export-note {
+  margin: 0 0 10px;
+  padding: 6px 10px;
+  border-left: 3px solid #b8b3a8;
+  background: #f6f4ef;
+  color: #5e5a52;
+  font-size: 12px;
+}
+
+.print-view .sd-export-index-title {
+  margin: 0 0 6px;
+  font-family: var(--title-font);
+  font-size: var(--title-size);
+  line-height: var(--title-leading);
+  font-weight: var(--title-weight);
+  white-space: pre-wrap;
+}
+
+.print-view .sd-export-index-meta {
+  margin: 0 0 18px;
+  color: #6b665d;
+  font-size: 12px;
+}
+
+.print-view .sd-export-index-label {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #5e5a52;
+}
+
+/* Un renglón por página: un solo renglón siempre (así el índice se pagina igual en la pantalla y en el papel). */
+.print-view .sd-export-row {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  padding: 3px 0 3px calc(var(--depth, 0) * 18px);
+  color: #1b1a17;
+  text-decoration: none;
+  font-size: 13px;
+  line-height: 18px;
+  border-bottom: 1px dotted #e4e0d8;
+}
+
+.print-view .sd-export-row-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.print-view .sd-export-row-sheet {
+  flex: none;
+  color: #5e5a52;
+  font-variant-numeric: tabular-nums;
+}
+
+.print-view .sd-export-comments {
+  margin-top: 28px;
+  padding-top: 4px;
+  border-top: 1px solid #e4e0d8;
+  font-size: 12px;
+}
+
+.print-view .sd-export-comments-title {
+  margin: 8px 0 6px;
+  font-size: 14px;
+}
+
+.print-view .sd-export-thread {
+  margin: 0 0 8px;
+}
+
+.print-view .sd-export-comment {
+  padding: 4px 0 4px 10px;
+  border-left: 2px solid #e4e0d8;
+}
+
+.print-view .sd-export-comment.reply {
+  margin-left: 14px;
+}
+
+.print-view .sd-export-comment p {
+  margin: 0 0 2px;
+  white-space: pre-wrap;
+}
+
+.print-view .sd-export-anchor {
+  color: #5e5a52;
+  font-style: italic;
+}
+
+.print-view .sd-export-resolved {
+  font-style: normal;
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: #e8efe5;
+  color: #3a5a32;
+}
+
+.print-view .sd-export-comment-meta {
+  color: #6b665d;
+}
+
+.print-view .sd-export-comment-body.deleted {
+  color: #8a857b;
+  font-style: italic;
+}
+
 @media print {
   html.sd-printing,
   html.sd-printing body,
@@ -5867,6 +6003,77 @@ ins.replace-new {
   margin: -6px 0 0;
 }
 
+.export-dialog {
+  width: min(520px, 100%);
+  max-height: 82vh;
+  overflow-y: auto;
+}
+
+.export-dialog p {
+  margin: 0;
+}
+
+.export-what {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.export-what label,
+.export-options label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+/* La regla general `input { width: 100% }` estiraba cada círculo y casilla a todo el ancho (auditoría B3). */
+.export-what input,
+.export-options input {
+  flex: none;
+  width: auto;
+  margin: 0;
+}
+
+.export-format {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.export-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+
+.export-too-big ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.export-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.export-progress progress {
+  width: 100%;
+}
+
+.export-dialog .modal-actions {
+  gap: 8px;
+}
+
 .offline-rows {
   display: flex;
   flex-direction: column;
@@ -7054,4 +7261,304 @@ button.folder-row-main:hover {
   left: 50%;
   transform: translateX(-50%);
   z-index: 50;
+}
+
+/* --- El anotador de fotos (P.20, entrega 2; Annotator.tsx): a pantalla completa y oscuro, como el carrete. --- */
+.annotator {
+  --annotator-text: #ece9e2;
+  --annotator-muted: #b3ada3;
+  --annotator-hover: rgba(255, 255, 255, 0.14);
+  --annotator-on: rgba(232, 178, 58, 0.28);
+  position: fixed;
+  inset: 0;
+  z-index: 96;
+  display: flex;
+  flex-direction: column;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  background: rgb(12, 12, 11);
+  color: var(--annotator-text);
+  font-size: 13px;
+  -webkit-user-select: none;
+  user-select: none;
+  outline: none;
+}
+
+.annotator :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.annotator-bar,
+.annotator-props {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+}
+
+.annotator-bar {
+  min-height: 52px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.annotator-props {
+  min-height: 46px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.annotator-tools {
+  display: flex;
+  gap: 2px;
+}
+
+.annotator-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--annotator-text);
+  cursor: pointer;
+}
+
+.annotator-btn:hover:not(:disabled) {
+  background: var(--annotator-hover);
+}
+
+.annotator-btn[aria-pressed='true'] {
+  background: var(--annotator-on);
+  color: #fff;
+}
+
+.annotator-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.annotator-sep {
+  width: 1px;
+  height: 24px;
+  margin: 0 6px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.annotator-name {
+  flex: 1;
+  min-width: 60px;
+  overflow: hidden;
+  margin-left: 8px;
+  color: var(--annotator-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.annotator-status {
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(232, 178, 58, 0.18);
+  color: #f4d48a;
+}
+
+.annotator-done {
+  height: 36px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 18px;
+  background: var(--accent);
+  color: #1b1a17;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.annotator-hint {
+  color: var(--annotator-muted);
+}
+
+.annotator-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+}
+
+.annotator-colors {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.annotator-swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.annotator-swatch[aria-pressed='true'] {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.annotator-custom input {
+  width: 26px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.annotator-field,
+.annotator-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--annotator-muted);
+  white-space: nowrap;
+}
+
+.annotator-field input[type='range'] {
+  width: 110px;
+  accent-color: var(--accent);
+}
+
+.annotator-check input {
+  accent-color: var(--accent);
+}
+
+.annotator-number-field {
+  width: 56px;
+  padding: 3px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--annotator-text);
+  font: inherit;
+}
+
+.annotator-stage {
+  position: relative;
+  display: grid;
+  flex: 1;
+  place-items: center;
+  min-height: 0;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.annotator-box {
+  position: relative;
+  transform-origin: center;
+  will-change: transform;
+}
+
+.annotator-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  -webkit-user-drag: none;
+}
+
+.annotator-photo + .annotator-photo:not([data-shown]) {
+  opacity: 0;
+}
+
+.annotator-shapes,
+.annotator-ui {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.annotator-ui rect,
+.annotator-ui circle {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.annotator-selection {
+  stroke: #fff;
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+
+.annotator-ui .annotator-handle {
+  fill: #fff;
+  stroke: #1b1a17;
+  stroke-width: 1;
+}
+
+.annotator-band {
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.annotator-ui .annotator-band {
+  fill: rgba(232, 178, 58, 0.08);
+}
+
+.annotator-brush {
+  stroke: #fff;
+  stroke-width: 1;
+  mix-blend-mode: difference;
+}
+
+.annotator-text {
+  position: absolute;
+  min-width: 4ch;
+  margin: 0;
+  padding: 0;
+  border: 1px dashed rgba(255, 255, 255, 0.7);
+  outline: none;
+  background: transparent;
+  line-height: 1.25;
+  white-space: pre;
+  overflow: hidden;
+  resize: none;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.annotator-text::placeholder {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 13px;
+}
+
+.annotator-number {
+  position: absolute;
+  transform: translate(-50%, -50%);
+}
+
+.annotator-number input {
+  width: 64px;
+  padding: 3px 6px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: #1b1a17;
+  color: #fff;
+  font: inherit;
+}
+
+.annotator-loading {
+  color: var(--annotator-muted);
+}
+
+@media (max-width: 520px) {
+  .annotator-name {
+    display: none;
+  }
 }

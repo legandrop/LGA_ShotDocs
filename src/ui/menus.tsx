@@ -14,6 +14,7 @@ import {
   CollapseAllIcon,
   DarkIcon,
   ExpandAllIcon,
+  ExportIcon,
   DriveIcon,
   HelpIcon,
   InstallIcon,
@@ -36,7 +37,9 @@ import {
 import { requestTemplates, templateTargetFor } from '../templates/templatesUi';
 import { isDayReportFolder, isReportPage } from '../templates/dayReport';
 import { requestDayReport, useDayReportFolder } from '../templates/dayReportUi';
+import { openSaveTemplate, useSaveTemplateOffer } from '../templates/ownTemplatesUi';
 import { offlineSupported, openOffline, openStorage } from './SpaceHost';
+import { openExport } from './ExportHost';
 import { openHelp } from '../help/helpUi';
 import { isPhoneLayout } from './commentsUi';
 import { collapseControlFor } from './collapseControl';
@@ -181,7 +184,9 @@ export function PageMenu(props: {
   const isReportFolder = isDayReportFolder(tree, props.pageId);
   // En un reporte no se ofrece marcarlo como carpeta (casi nadie lo quiere y suma un renglón en cada reporte).
   const thisRow = tree.get(props.pageId);
-  const offerReportFolder = isReportFolder || !(thisRow && isReportPage(thisRow));
+  const offerReportFolder = isReportFolder || !(thisRow && isReportPage(thisRow, tree));
+  // Las plantillas propias (Doc_Plantillas.md, 5.1): guardar esta página como plantilla (una copia en *Templates*).
+  const saveOffer = useSaveTemplateOffer(props.pageId);
 
   const item = (label: string, icon: ReactNode, action: () => void, danger = false, enabled = true) => (
     <button
@@ -221,6 +226,22 @@ export function PageMenu(props: {
           {tr('pageMenu.applyTemplate')}
         </button>
       )}
+      {saveOffer.save && (
+        <button
+          role="menuitem"
+          aria-disabled={saveOffer.blocked || undefined}
+          data-tip={saveOffer.blocked ? tr('pageMenu.saveAsTemplateBlocked') : undefined}
+          onClick={() => {
+            if (saveOffer.blocked) return;
+            props.onClose();
+            openSaveTemplate(props.pageId);
+          }}
+        >
+          <TemplateIcon />
+          {tr('pageMenu.saveAsTemplate')}
+        </button>
+      )}
+      {saveOffer.reuse && item(tr('pageMenu.useAsTemplate'), <TemplateIcon />, () => void tree.setSetting(props.pageId, 'template', {}))}
       {reportFolder &&
         item(tr('dayReport.new'), <DayReportIcon />, () => requestDayReport(props.pageId))}
       <button
@@ -251,6 +272,18 @@ export function PageMenu(props: {
       >
         <PrintIcon />
         {tr('pageMenu.print')}
+      </button>
+      {/* Un solo PDF con esta página y las de adentro, con índice (P.22, Docs/Doc_Exportar.md). Quien ve, exporta. */}
+      <button
+        role="menuitem"
+        data-tip={tr('pageMenu.exportTip')}
+        onClick={() => {
+          props.onClose();
+          openExport('page', props.pageId);
+        }}
+      >
+        <ExportIcon />
+        {tr('pageMenu.export')}
       </button>
       {/* El asistente (Docs/Doc_Asistente.md, A1): corregir, mejorar, acortar o traducir lo elegido. */}
       {props.onAssistant && (

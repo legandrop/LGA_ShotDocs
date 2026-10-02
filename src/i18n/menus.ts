@@ -12,6 +12,13 @@ export const menus = {
   'pageMenu.move': { en: "Move to…", es: "Mover a…" },
   'pageMenu.pageSize': { en: "Page size", es: "Tamaño de hoja" },
   'pageMenu.print': { en: "Export PDF / Print", es: "Exportar PDF / Imprimir" },
+  // Exportar una rama o un proyecto (P.22, Docs/Doc_Exportar.md): la ventana se baja aparte.
+  'pageMenu.export': { en: "Export…", es: "Exportar…" },
+  'pageMenu.exportTip': {
+    en: "One PDF with this page and the pages inside, with a contents page.",
+    es: "Un solo PDF con esta página y las de adentro, con un índice.",
+  },
+  'project.export': { en: "Export project…", es: "Exportar proyecto…" },
   'pageMenu.printAsSeen': { en: "Print as shown", es: "Imprimir como se ve" },
   'pageMenu.printAsSeenTip': {
     en: "Leaves out collapsed sections.\nThe pages won't match the page marks on screen.",
@@ -23,6 +30,20 @@ export const menus = {
   // Las plantillas (Docs/Doc_Plantillas.md, 4.1): la ventana se baja con el editor.
   'pageMenu.applyTemplate': { en: "Apply template…", es: "Aplicar plantilla…" },
   'pageMenu.applyTemplateEmpty': { en: "Only on an empty page", es: "Solo en una página vacía" },
+  // Las plantillas propias (entrega 3): guardar una página como plantilla y la franja de una plantilla.
+  'pageMenu.saveAsTemplate': { en: "Save as template…", es: "Guardar como plantilla…" },
+  'pageMenu.saveAsTemplateBlocked': {
+    en: "Needs permission to create pages in Templates",
+    es: "Hace falta permiso para crear páginas en Plantillas",
+  },
+  'pageMenu.useAsTemplate': { en: "Use as template", es: "Usar como plantilla" },
+  'templateBanner.text': {
+    en: "Template — new pages get a copy; pages already created don't change.",
+    es: "Plantilla: las páginas nuevas reciben una copia; las ya creadas no cambian.",
+  },
+  'templateBanner.settings': { en: "Template settings…", es: "Ajustes de la plantilla…" },
+  'templateBanner.stop': { en: "Stop using as template", es: "Dejar de usar como plantilla" },
+  'templateBanner.dayReport': { en: "Day reports", es: "Reportes del día" },
   // El reporte del día (Docs/Doc_Plantillas.md, sección 6): el botón arriba del título y el menú de la página.
   'dayReport.new': { en: "New day report", es: "Nuevo reporte del día" },
   'pageMenu.useForDayReports': { en: "Use for day reports", es: "Usar para reportes del día" },

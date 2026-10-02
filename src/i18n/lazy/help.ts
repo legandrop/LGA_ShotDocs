@@ -47,6 +47,7 @@ export const help = {
   'help.place.markdown': { en: "Typed at the start of a line", es: "Escrito al principio de un renglón" },
   'help.place.photos': { en: "Photos", es: "Fotos" },
   'help.place.carrete': { en: "Full-screen viewer", es: "Carrete (pantalla completa)" },
+  'help.place.annotate': { en: "Annotating a photo", es: "Anotando una foto" },
   'help.place.find': { en: "Find bar", es: "Barra de buscar" },
   'help.place.comments': { en: "Comments", es: "Comentarios" },
   'help.place.tree': { en: "Page tree and sidebar", es: "Árbol de páginas y barra lateral" },
@@ -98,6 +99,11 @@ export const help = {
   'help.templates.text': {
     en: "A new empty page offers Start from a template: Pre-production Notes (one page per scene), On-Set Report (one per shoot day) or Shot Breakdown (one per VFX shot). More… describes each one and has Preview, to try it without saving anything. Keep writing and the strip goes away. Pick one, type the page name and {enter} takes you to its first field; {undo} takes it all back. Apply template… in the ⋯ menu does the same on any empty page. The page gets a copy in the app's language. Internal — remove before sharing holds bids and vendors: delete that section before sharing the page with a client.",
     es: "Una página nueva vacía ofrece Empezar con una plantilla: Notas de preproducción (una página por escena), Reporte de rodaje (una por día de rodaje) o Desglose de plano (una por plano de VFX). Más… cuenta qué trae cada una y tiene Ver, para probarla sin guardar nada. Si seguís escribiendo, la tira se va. Elegí una, escribí el nombre de la página y {enter} te lleva a su primer dato; {undo} la saca entera. Aplicar plantilla…, en el menú ⋯, hace lo mismo en cualquier página vacía. La página recibe una copia en el idioma de la app. Interno — borrar antes de compartir tiene cotizaciones y proveedores: borrá esa sección antes de compartir la página con un cliente.",
+  },
+  'help.ownTemplates.title': { en: "Your own templates", es: "Plantillas propias" },
+  'help.ownTemplates.text': {
+    en: "Save as template… in the ⋯ menu copies a page to the project's Templates folder (it's created the first time), with a name and a description; the page itself doesn't change. Clear filled-in values empties the tables (keeps headers and row labels), unchecks the checkboxes and leaves out photos and files. A template is a page: open it and write to change it. New pages get a copy, so pages already made don't change. Above its title, Template settings… has the description and Use for day reports, and Stop using as template turns it back into a normal page. Customize, next to each built-in one in Templates, makes your own copy to change. Templates lists this project's templates and the ones from other projects you can see; one from another project comes without its photos and files. With Use for day reports, New day report uses it, and lets you pick when there's more than one. Whoever sees the Templates folder sees its templates: share it with your team, not with clients.",
+    es: "Guardar como plantilla…, en el menú ⋯, copia una página a la carpeta Plantillas del proyecto (se crea la primera vez), con un nombre y una descripción; la página no cambia. Vaciar lo completado vacía las tablas (deja encabezados y rótulos), desmarca las casillas y no copia fotos ni archivos. Una plantilla es una página: abrila y escribí para cambiarla. Las páginas nuevas reciben una copia, así que las ya hechas no cambian. Arriba de su título, Ajustes de la plantilla… tiene la descripción y Usar para reportes del día, y Dejar de usar como plantilla la vuelve una página común. Personalizar, al lado de cada una de fábrica en Plantillas, hace una copia tuya para cambiarla. Plantillas muestra las de este proyecto y las de otros proyectos que ves; una de otro proyecto llega sin sus fotos ni archivos. Con Usar para reportes del día, Nuevo reporte del día la usa, y deja elegir cuando hay más de una. Quien ve la carpeta Plantillas ve sus plantillas: compartila con tu equipo, no con clientes.",
   },
   'help.dayReports.title': { en: "Day reports", es: "Reportes del día" },
   'help.dayReports.text': {
@@ -199,6 +205,11 @@ export const help = {
   'help.photosMarkup.text': {
     en: "A photo can carry annotations drawn on top (arrows, circles, text, numbers, freehand strokes): they show on the page, in a table cell, in the full-screen viewer and in the PDF, and the original never changes. In the viewer, Hide annotations shows the clean photo just for you (nothing is saved). The same photo twice on a page shares its annotations; on another page it shows clean.",
     es: "Una foto puede llevar anotaciones dibujadas encima (flechas, círculos, texto, números, trazos a mano): se ven en la página, en una celda de una tabla, en el carrete y en el PDF, y el original nunca cambia. En el carrete, Ocultar anotaciones muestra la foto limpia solo para vos (no se guarda nada). La misma foto dos veces en una página comparte sus anotaciones; en otra página sale limpia.",
+  },
+  'help.photosAnnotate.title': { en: "Annotate a photo", es: "Anotar una foto" },
+  'help.photosAnnotate.text': {
+    en: "If you can edit the page, select a photo from Drive and choose Annotate in its bar, or press {viewer} in the full-screen viewer. The tools and their letters are the ones in LGA FrameRev: V Select, R Rectangle, E Ellipse, A Arrow, L Line, P Pencil, M Marker, T Text, N Number. Shift draws a square, a circle or 45° lines; Alt (⌥ on the Mac) draws from the center. {width} make the selected shape under the pointer (or the next one) thinner or thicker, {next} always the next one; thickness counts pixels with the photo's long side at 1920. Each tool remembers its color and thickness on this device. Every shape is saved as you release it, also offline; {undo} only undoes what you did on this photo. {close} deselects, and with nothing selected closes. Whoever has the page open sees each shape appear. If you take an annotated photo out of the page, its annotations are cleared after 10 minutes with the page open (bringing the photo back later shows it clean).",
+    es: "Si podés editar la página, elegí una foto del Drive y tocá Anotar en su barra, o apretá {viewer} en el carrete. Las herramientas y sus letras son las de LGA FrameRev: V Elegir, R Rectángulo, E Elipse, A Flecha, L Línea, P Lápiz, M Marcador, T Texto, N Número. Shift dibuja un cuadrado, un círculo o líneas a 45°; Alt (⌥ en la Mac) dibuja desde el centro. {width} hacen más fina o más gruesa la forma elegida bajo el cursor (o la próxima), {next} siempre la próxima; el grosor cuenta píxeles con el lado largo de la foto a 1920. Cada herramienta recuerda su color y su grosor en este dispositivo. Cada forma se guarda apenas la soltás, también sin conexión; {undo} deshace solo lo que hiciste en esta foto. {close} deja de elegir, y sin nada elegido cierra. Quien tiene la página abierta ve aparecer cada forma. Si sacás una foto anotada de la página, sus anotaciones se borran a los 10 minutos con la página abierta (si después la foto vuelve, vuelve limpia).",
   },
   'help.photosPhone.title': { en: "On the phone", es: "En el teléfono" },
   'help.photosPhone.text': {
@@ -422,6 +433,11 @@ export const help = {
     en: "{pageBreak} or / Page break makes what follows start on a new sheet, in the Page marks and in the PDF. It shows as a dashed line; Backspace right after it removes it. On a free page it only counts when printing.",
     es: "{pageBreak} o / Salto de hoja hace que lo que sigue empiece en una hoja nueva, en las marcas de hoja y en el PDF. Se ve como una línea punteada; Retroceso justo después lo saca. En una página libre cuenta solo al imprimir.",
   },
+  'help.export.title': { en: "Export pages and projects as one PDF", es: "Exportar páginas y proyectos en un solo PDF" },
+  'help.export.text': {
+    en: "⋯ › Export… makes one PDF with the page and the pages inside it; in the project list, Export project… does the whole project. It starts with a contents page that links to each page and says on which PDF page it starts; every page keeps its page size (in Chrome or Edge on a computer). Comments are left out unless you tick Comments, and they show names, never email addresses. Pages in the trash are never included. In the print dialog choose Save as PDF and leave margins and scale as they are.",
+    es: "⋯ › Exportar… arma un solo PDF con la página y las de adentro; en la lista de proyectos, Exportar proyecto… hace el proyecto entero. Empieza con un índice que lleva a cada página y dice en qué hoja empieza; cada página sale con su tamaño de hoja (en Chrome o Edge en una computadora). Los comentarios no van salvo que tildes Comentarios, y llevan nombres, nunca correos. Lo que está en la papelera no sale nunca. En el diálogo de imprimir elegí Guardar como PDF y dejá los márgenes y la escala como están.",
+  },
   'help.pdf.title': { en: "PDF and printing", es: "PDF e impresión" },
   'help.pdf.text': {
     en: "{print} or ⋯ › Export PDF / Print opens the browser's print dialog with the same sheet breaks you see; choose Save as PDF there.",
@@ -524,6 +540,28 @@ export const help = {
   'shortcut.carreteNext': { en: "Next", es: "Siguiente" },
   'shortcut.carreteEnds': { en: "First / last", es: "Primera / última" },
   'shortcut.carreteClose': { en: "Close", es: "Cerrar" },
+  'shortcut.carreteAnnotate': { en: "Annotate the photo (if you can edit the page)", es: "Anotar la foto (si podés editar la página)" },
+  'shortcut.annotateSelect': { en: "Select and move shapes", es: "Elegir y mover formas" },
+  'shortcut.annotateRectangle': { en: "Rectangle", es: "Rectángulo" },
+  'shortcut.annotateEllipse': { en: "Ellipse", es: "Elipse" },
+  'shortcut.annotateArrow': { en: "Arrow", es: "Flecha" },
+  'shortcut.annotateLine': { en: "Line", es: "Línea" },
+  'shortcut.annotatePencil': { en: "Pencil", es: "Lápiz" },
+  'shortcut.annotateMarker': { en: "Marker", es: "Marcador" },
+  'shortcut.annotateText': { en: "Text", es: "Texto" },
+  'shortcut.annotateNumber': { en: "Number (each click, the next one)", es: "Número (cada clic, el siguiente)" },
+  'shortcut.annotateWidth': {
+    en: "Thinner / thicker: the selected shape under the pointer, or the next one",
+    es: "Más fino / más grueso: la forma elegida bajo el cursor, o la próxima",
+  },
+  'shortcut.annotateWidthNext': { en: "Thinner / thicker, always the next shape", es: "Más fino / más grueso, siempre la próxima forma" },
+  'shortcut.annotateUndo': { en: "Undo (only on this photo)", es: "Deshacer (solo en esta foto)" },
+  'shortcut.annotateRedo': { en: "Redo", es: "Rehacer" },
+  'shortcut.annotateDelete': { en: "Delete the selected shapes", es: "Borrar las formas elegidas" },
+  'shortcut.annotateEscape': { en: "Deselect; with nothing selected, close", es: "Dejar de elegir; sin nada elegido, cerrar" },
+  'shortcut.annotateFit': { en: "Fit the whole photo", es: "Encuadrar la foto entera" },
+  'shortcut.annotatePan': { en: "Hold and drag to move the zoomed photo", es: "Mantener y arrastrar para mover la foto ampliada" },
+  'shortcut.annotateSave': { en: "Nothing to save: every shape is saved as you draw it", es: "Nada que guardar: cada forma se guarda apenas la dibujás" },
   'shortcut.findNext': { en: "Next match", es: "Coincidencia siguiente" },
   'shortcut.findPrev': { en: "Previous match", es: "Coincidencia anterior" },
   'shortcut.findClose': { en: "Close the bar (the match stays selected)", es: "Cerrar la barra (queda elegida la coincidencia)" },

@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.125 :
 
 Menciones en comentarios (P.21), entrega 2. Para mencionar a alguien que no veía la página había que ir a *Share*,
 compartirla y volver, y sin abrir la campana no se veía que había menciones. Nueva migración
@@ -10,6 +10,40 @@ sin tocar a quien ya la ve; pruebas en rollback y 19 mutantes. En la app, esas p
 see this page* y elegir una pregunta *Share and mention*, por el mismo paso previo que *Share*. Además, un punto en el
 árbol (hueco en la madre plegada) y el número en el título de la pestaña y en el ícono de la app instalada.
 [ Menciones, entrega 2 - compartir desde la mención, el punto del árbol y el número en la pestaña y el ícono ]
+
+v0.124 :
+
+No se podía guardar una página como plantilla ni cambiar las de fábrica (P.23, entrega 3 de `Doc_Plantillas.md`). Ahora
+*Save as template…* (menú ⋯) copia la página a la carpeta *Templates* del proyecto, sin tocarla, con nombre, descripción
+y *Clear filled-in values* (vacía tablas y casillas, deja rótulos, saca fotos). Una plantilla es una página marcada
+(`settings.template`, sin migración): se edita escribiendo, con una franja arriba (*Template settings…*, *Stop using as
+template*). La ventana *Templates* suma las del proyecto, las de otros proyectos (sin sus fotos, con aviso) y
+*Customize*; una a medio bajar nunca se copia (*Wait*, *Use built-in*). *New day report* usa la plantilla de la carpeta y
+deja elegir entre varias; si no la ve, usa la de fábrica y avisa.
+[ Plantillas propias - guardar como plantilla, la carpeta Templates, editar, personalizar y usarlas en el reporte del día ]
+
+v0.123 :
+
+Anotar fotos en la compu (P.20, entrega 2 de `Doc_Anotar_Fotos.md`). Las anotaciones se veían pero no había con qué
+dibujarlas. Nuevo `src/ui/Annotator.tsx`, a pantalla completa: las nueve herramientas con las letras de FrameRev,
+Shift y Alt, colores y grosor contra 1920 px. Se abre con *Annotate* en la barra de
+la foto o A en el carrete, solo con permiso de editar. Escribe al soltar en el mapa `photoMarkup` (una clave por
+forma, solo los campos que cambian; el marco nuevo, con la medida del archivo), deshace solo lo propio de esa foto y
+apaga las herramientas de crear al tope en bytes. La poda saca, con la página sincronizada, las anotaciones de una foto
+que lleva 10 minutos afuera. El PDF dibuja con el grosor mínimo de la hoja. Pruebas con dos editores a la vez, sin red,
+la versión publicada y un mapa malicioso. Auditada: corregidos el marco y la poda sin red.
+[ Anotar fotos, entrega 2 - el anotador en la compu, los topes, la poda y el grosor del PDF ]
+
+v0.122 :
+
+Exportar (P.22), entrega 1: el PDF de una rama o de un proyecto. Para entregarle un reporte al cliente había que
+imprimir página por página. Nuevo: *Export…* en el menú de la página y *Export project…* en el selector arman un solo
+PDF con un índice que lleva a cada página y dice su hoja, cada página con su tamaño de hoja (Chrome y Edge; en los demás,
+todo con la de la raíz, avisado), las fotos con sus anotaciones y achicadas a su ancho impreso en Workers, comentarios
+opcionales (bajados antes, con nombres y nunca correos) y topes de páginas y de píxeles según la memoria. 300 páginas
+salen en unos 30 s con 1621 hojas, cada página en la hoja que dice el índice. Un salto de hoja vacío cortaba la primera
+hoja de la página: se pagina en el orden del documento.
+[ Exportar, entrega 1 - el PDF de una rama o un proyecto con índice, hojas con nombre, anotaciones y comentarios ]
 
 v0.121 :
 

@@ -39,6 +39,8 @@ su auditoría. Lo medido está en prototipos fuera del repo (sección "Cómo se 
 - **Lo que no garantiza:** lo que un dispositivo ya bajó no se puede "desbajar"; los largos de lo borrado y los nombres
   de los atributos pisados viajan (no el contenido); las imágenes viejas `sdfile://` (bucket `page-files`, workspaces sin
   portero) siguen enteras; las páginas en la papelera (arreglado en v0.102: ya no se leen con Ver); y quien edita ve todo, por diseño (D13).
+  Las anotaciones de una foto sacada de la página (`Doc_Anotar_Fotos.md`, AN11) se podan solo cuando alguien que edita
+  tiene la página abierta 10 minutos: si nadie la abre, siguen en la última base.
 - **La subida no cambia (D19).** El "GC selectivo" de la primera versión (que lo tecleado y borrado antes de subir no
   saliera del dispositivo) se descartó: la auditoría mostró que pierde texto que D15 manda conservar (entre 61 y 118
   letras con el editor real y 100 semillas), y con la base limpia los lectores quedan protegidos igual.

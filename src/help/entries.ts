@@ -108,16 +108,22 @@ const CAMERA = '0.110';
 const ASSISTANT = '0.118';
 /** Las plantillas de fábrica (Docs/Doc_Plantillas.md, entregas 0 y 1): la versión se ajusta al publicar. */
 const TEMPLATES = '0.117';
+/** Las plantillas propias (Docs/Doc_Plantillas.md, entrega 3): la versión la pone quien publica. */
+const OWN_TEMPLATES = '0.124';
 /** El reporte del día (Docs/Doc_Plantillas.md, entrega 2): la versión la pone quien publica. */
 const DAY_REPORTS = '0.121';
 /** El link público, *Can view* (Doc_Link_Publico.md, entrega 1): la versión se pone al publicar, igual que en el changelog. */
 const PUBLIC_LINK = '0.111';
+/** Exportar una rama o un proyecto como PDF (P.22, Doc_Exportar.md, entrega 1): la versión se pone al publicar. */
+const EXPORT_PDF = '0.122';
 /** Las menciones en comentarios (P.21, Doc_Menciones.md, entrega 1): la versión se pone al publicar, igual que en el changelog. */
 const MENTIONS = '0.120';
 /** Menciones, entrega 2: compartir desde la mención, el punto del árbol y el número afuera (la versión la pone quien publica). */
-const MENTIONS_SHARE = '0.0XX';
+const MENTIONS_SHARE = '0.125';
 /** Ver las anotaciones de las fotos (P.20, Doc_Anotar_Fotos.md, entrega 1): la versión se pone al publicar. */
 const PHOTO_MARKUP = '0.116';
+/** Anotar las fotos en la compu (P.20, entrega 2). El número lo pone quien publica. */
+const ANNOTATE = '0.123';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -156,6 +162,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     keys: { enter: 'titleEnter', undo: 'undo' },
     words: ['template', 'plantilla', 'report', 'reporte', 'on-set', 'rodaje', 'breakdown', 'desglose', 'preproducción', 'pre-production', 'apply', 'aplicar'],
     since: TEMPLATES,
+  },
+  {
+    id: 'ownTemplates',
+    section: 'pages',
+    title: 'help.ownTemplates.title',
+    text: 'help.ownTemplates.text',
+    words: ['template', 'plantilla', 'save as template', 'guardar como plantilla', 'customize', 'personalizar', 'templates folder', 'carpeta plantillas', 'clear', 'vaciar'],
+    since: OWN_TEMPLATES,
   },
   {
     id: 'dayReports',
@@ -295,6 +309,31 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.photosMarkup.text',
     words: ['annotate', 'annotations', 'anotar', 'anotaciones', 'flecha', 'arrow', 'dibujo', 'drawing', 'framerev', 'hide', 'ocultar'],
     since: PHOTO_MARKUP,
+  },
+  {
+    id: 'photosAnnotate',
+    section: 'photos',
+    title: 'help.photosAnnotate.title',
+    text: 'help.photosAnnotate.text',
+    keys: { viewer: 'carreteAnnotate', width: 'annotateWidth', next: 'annotateWidthNext', undo: 'annotateUndo', close: 'annotateEscape' },
+    more: [
+      'annotateSelect',
+      'annotateRectangle',
+      'annotateEllipse',
+      'annotateArrow',
+      'annotateLine',
+      'annotatePencil',
+      'annotateMarker',
+      'annotateText',
+      'annotateNumber',
+      'annotateRedo',
+      'annotateDelete',
+      'annotateFit',
+      'annotatePan',
+      'annotateSave',
+    ],
+    words: ['annotate', 'anotar', 'flecha', 'arrow', 'círculo', 'circle', 'texto', 'lápiz', 'pencil', 'marker', 'marcador', 'número', 'framerev', 'dibujar', 'draw'],
+    since: ANNOTATE,
   },
   { id: 'photosPhone', section: 'photos', title: 'help.photosPhone.title', text: 'help.photosPhone.text', since: BEFORE_HELP },
   {
@@ -562,6 +601,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     since: PAGE_BREAK,
   },
   { id: 'pdf', section: 'print', title: 'help.pdf.title', text: 'help.pdf.text', keys: { print: 'print' }, showMe: 'page-menu', since: BEFORE_HELP },
+  {
+    id: 'export',
+    section: 'print',
+    title: 'help.export.title',
+    text: 'help.export.text',
+    words: ['exportar', 'export', 'pdf', 'índice', 'contents', 'proyecto entero', 'whole project', 'entregar', 'cliente', 'client', 'reporte'],
+    since: EXPORT_PDF,
+  },
 
   // --- Preferencias ---
   { id: 'prefs', section: 'prefs', title: 'help.prefs.title', text: 'help.prefs.text', since: BEFORE_HELP },

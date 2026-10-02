@@ -47,6 +47,47 @@ export function minStrokeFor(frame: { w: number; h: number }, box: { width: numb
   return scale > 0 ? 1 / scale : 0;
 }
 
+/** Las anotaciones de las páginas abiertas (para redibujar la copia de impresión con su caja de papel). */
+const live = new Set<{ photos: () => Map<string, PhotoMarkup> }>();
+
+/**
+ * Redibuja las anotaciones de la vista de impresión (printView.ts, ya agregada al documento) con el grosor mínimo de
+ * su caja impresa (roadmap, auditoría O2): la copia del editor trae el `<svg>` dibujado con el mínimo de la caja en
+ * PANTALLA (en un teléfono, la foto chica: un trazo fino salía más grueso en papel). También dibuja las fotos que en
+ * pantalla no tenían dibujo porque la imagen no había cargado (la impresión pone la grande). Lee todas las cajas
+ * primero y después dibuja.
+ */
+export function fitPrintedMarkup(root: HTMLElement): void {
+  if (live.size === 0) return;
+  const lookup = (id: string): PhotoMarkup | undefined => {
+    for (const source of live) {
+      const photo = source.photos().get(id);
+      if (photo) return photo;
+    }
+    return undefined;
+  };
+  const jobs: { svg: SVGSVGElement; photo: PhotoMarkup; host: Element }[] = [];
+  for (const img of root.querySelectorAll<HTMLImageElement>(PHOTO_IMGS)) {
+    const host = img.parentElement;
+    if (!host) continue;
+    const fileId = mediaIdOf(urlOf(img));
+    const photo = fileId ? lookup(fileId) : undefined;
+    let svg = svgIn(host);
+    // La tarjeta de la cola (sin copia, borrada) no lleva dibujo, como en pantalla.
+    if (!photo || img.src.startsWith('data:image/svg')) {
+      svg?.remove();
+      continue;
+    }
+    if (!svg) {
+      svg = createMarkupSvg();
+      img.after(svg);
+    }
+    jobs.push({ svg, photo, host });
+  }
+  const boxes = jobs.map((job) => job.host.getBoundingClientRect());
+  jobs.forEach((job, i) => drawMarkup(job.svg, job.photo, { minStroke: minStrokeFor(job.photo.frame, boxes[i]) }));
+}
+
 export interface MarkupOverlay {
   /** Pone al día todas las fotos ya (sin esperar al próximo turno). Lo usan las pruebas. */
   flush(): void;
@@ -149,11 +190,14 @@ export function attachMarkupOverlay(root: HTMLElement, map: Y.Map<unknown>): Mar
       })
     : null;
 
+  const source = { photos: () => photos };
+  live.add(source);
   scan();
   return {
     flush: scan,
     stop() {
       stopped = true;
+      live.delete(source);
       map.unobserveDeep(onChange);
       mutations?.disconnect();
       resizes?.disconnect();

@@ -4,6 +4,7 @@ import { usePrefs } from '../prefs';
 import { navigate, pagePath } from '../router';
 import { usePermissions, useSyncStatus, useTree } from '../services';
 import { DayReportButton } from '../templates/dayReportUi';
+import { TemplateBanner } from '../templates/ownTemplatesUi';
 import { disarmTitleUndo, titleUndoFor } from '../templates/templatesUi';
 import { clearCommentsTarget, closeComments, useCommentsUi } from './commentsUi';
 import { isLetter, modPressed } from './findUi';
@@ -85,6 +86,8 @@ export function PageView({ id }: { id: string }) {
           )}
         </div>
       )}
+      {/* Una plantilla propia (Docs/Doc_Plantillas.md, 5.2): qué es y sus ajustes. */}
+      <TemplateBanner pageId={id} />
       <PageHeader id={id} editable={perms.canEditPage(id)} />
       <TitleInput id={id} title={page.title} readOnly={!perms.canEditPage(id)} />
       <Part fallback={<EditorSkeleton />}>
