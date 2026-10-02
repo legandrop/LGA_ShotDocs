@@ -116,7 +116,7 @@ export function useOffline(): OfflineSnapshot {
   return useSyncExternalStore(offline?.subscribe ?? noSubscribe, offline?.getSnapshot ?? emptyOffline);
 }
 
-const EMPTY_OFFLINE: OfflineSnapshot = { loaded: false, marks: [], limit: null, usage: null, prompt: null, active: null, unsaved: [] };
+const EMPTY_OFFLINE: OfflineSnapshot = { loaded: false, marks: [], limit: null, usage: null, prompt: null, active: null, unsaved: [], report: null };
 const emptyOffline = () => EMPTY_OFFLINE;
 const noSubscribe = () => () => undefined;
 

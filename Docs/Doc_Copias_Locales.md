@@ -1,8 +1,8 @@
 # Espacio en el dispositivo y "Available offline" (P.10)
 
-Estado: **entregas 0 (portero) y 1 (Available offline, el tope con aviso y el espacio en el dispositivo)
-implementadas en la rama `lega/espacio-offline`, sin publicar** (ver "Cómo quedó (entregas 0 y 1)", al final). La
-entrega 2 (liberar originales propios) sigue en diseño. Lo que sigue es el diseño: auditado ("aprobado con cambios", 3 bloqueantes y 21 observaciones) y
+Estado: **entregas 0 (portero), 1 (Available offline, el tope con aviso y el espacio en el dispositivo) y 2 (liberar
+los originales agregados en el dispositivo) implementadas** (ver "Cómo quedó (entregas 0 y 1)" y "Cómo quedó la entrega
+2", al final). Falta la medición del iPhone casi lleno (sección 9.1), que hace Lega. Lo que sigue es el diseño: auditado ("aprobado con cambios", 3 bloqueantes y 21 observaciones) y
 corregido**: lo que cambió por la auditoría está en el cuerpo y se lista en "Correcciones de la auditoría", al
 final; la re-verificación dejó dos bloqueantes nuevos, N1 y N2, también corregidos. Después llegaron las respuestas
 de Lega a las propuestas (tope elegible, avisar antes de liberar, permiso quitado): están en "Qué se pide" y en el
@@ -1064,3 +1064,80 @@ línea), conservando lo de los dos lados. En el portero, `features` anuncia `ver
 `folders`, y los errores nuevos de `main` (`is_folder`) conviven con los códigos de esta rama. Pruebas, `tsc`, build, el
 smoke del portero (con `/verify` y `?offline=1`) y el recorrido en Chromium, en verde después de unir. Lo que sigue
 pendiente: la medición del iPhone (sección 9.1) y la entrega 2.
+
+## Cómo quedó la entrega 2
+
+**Qué hace:** los originales agregados en este dispositivo (`blobs[<id>]`) se liberan con el sí de la persona, como
+pide la sección 5. Lo ofrecen el aviso del tope (*Free up*), *Free up space* de *Storage on this device* y, cuando un
+archivo nuevo no entró, el aviso de ese archivo (*Free up N MB*). Queda la miniatura, el registro (con `freedAt` y
+`md5`), los usos y la página igual; el original se abre por el portero (carrete, adjuntos, nítidas de la página) y, sin
+red, el carrete agrega "The copy on this device was freed to save space; it's in Drive".
+
+**Código:**
+
+- `src/media/ownFree.ts`: `freeOwn`, la **única** función que borra `blobs[<id>]` (con la clave del registro tal cual,
+  nunca una armada); repite adentro de su transacción (`files`, `blobs`, `meta`) todo lo del dispositivo: subido y
+  confirmado (`pending: 0`, `driveId`), sin `uploadId`, sin HEIC por convertir ni detenido, no liberado antes, 14 días
+  desde `uploadedAt` (o desde `space:rollout` para lo anterior), `marksRev` igual, ninguna marca que lo pida (opción A)
+  y el mismo id de Drive, peso y MD5 que se comprobaron afuera. `ownBlock` es la parte del dispositivo; `ensureMd5`
+  calcula el MD5 una vez y lo guarda en el registro.
+- `src/media/md5.ts`: MD5 de la RFC 1321 por tramos de 8 MiB (el navegador no lo trae), probado contra el de Node.
+- `src/media/offline.ts`: `usage().own` (lo que se puede ofrecer, lo de menos de 14 días, y lo retenido sin red o con un
+  portero sin `verify`), `freeOwnUpTo` (de a 15: la base, el MD5, `/verify`, recién ahí `freeOwn`), el aviso `room`
+  y el reporte del último *Free up* con los motivos de lo que no se liberó.
+- `src/media/queue.ts`: si a un original liberado lo vuelve a la cola una restauración de la base, se sube la copia
+  bajada entera si la hay; si no, `relinkFreed` pide `POST /upload` con `only: 'known'` (sin bytes) y, con un portero sin
+  `known` o que no lo encuentra, se detiene con "The copy on this device was freed and the media server doesn't remember
+  this file". `source()` dice `freed`; las nítidas de un original liberado se bajan como las de otro dispositivo.
+- `portero/src/core.ts`: antes de abrir una subida y antes de responder `unknown` a `only: 'known'`, busca en Drive el
+  archivo con la marca `sdFile` de ese id, fuera de la papelera y con el mismo peso (`findMarked`, un pedido); si Drive
+  no contesta la búsqueda, responde 502 y no abre nada.
+
+**Decisiones tomadas en la implementación** (sin Lega, lo más seguro):
+
+1. **Orden:** primero lo que se rehace o se vuelve a bajar sin comprobar nada (nítidas y copias bajadas, como en la
+   entrega 1) y recién después los originales propios, cada grupo del que hace más que no se abre. La sección 5.2
+   hablaba de un solo orden; separarlos evita calcular MD5 y pedir `/verify` cuando con las copias alcanza.
+2. **La ventana de "Available offline"** ("Free up … and make available offline") libera solo copias y nítidas: un
+   original propio puede ser justo lo que la marca nueva va a pedir. Los originales se liberan desde *Storage on this
+   device* o el aviso del tope.
+3. **Un original que Drive ya no tiene** (`drive_missing` en `/verify`) no se libera ni se marca `gone` (`gone` es de
+   las copias bajadas): queda como estaba y el reporte dice "not in Drive".
+4. **Lo que está en una papelera** (la de la app o la de Drive) no se libera nunca, tampoco a mano: la sección 6
+   proponía una opción a mano con un segundo aviso; quedó afuera (puede ser la última copia fuera de una papelera).
+5. **HEIC:** frena `heic` en `pending` o `sent` (por convertir); `failed` es un estado final (se subió como HEIC) y no
+   frena.
+6. **El aviso de un archivo que no entró** ofrece los originales ya en Drive dentro del mismo aviso del archivo; al
+   liberar, el archivo no se agrega solo (no se sabe dónde iba en la página): se guarda con *Save…* o se agrega de
+   nuevo.
+7. **El portero busca por la marca también antes de abrir una subida** (no solo en `only: 'known'`): evita que un
+   archivo quede dos veces en Drive. Si Drive rechaza o no contesta la búsqueda, **la subida sigue como antes** (corregido
+   por la auditoría, O5: una subida cortada por la búsqueda es peor que un duplicado); `only: 'known'` responde 502 (la
+   app vuelve a preguntar), nunca `unknown`.
+8. **La fecha de uso de un original propio** va en `copy:<id>` (una entrada solo con `usedAt`), y `dropCopy` ya no
+   borra una entrada en la que no había nada que borrar.
+9. **El MD5 se calcula solo de lo que hace falta** para llegar al objetivo (cada lote de 15 se arma con lo justo), una
+   vez por archivo.
+10. **La coincidencia por la marca** pide el mismo peso y que esté fuera de la papelera de Drive; si hubiera dos, la
+    primera (una subida de Drive recién crea el archivo al terminar, así que uno marcado está entero).
+
+**Correcciones de la auditoría (aprobada con observaciones):** O1, la prueba de que la ventana de marcar libera solo
+copias; O2, un archivo que se abre mientras se comprueba (el MD5 o `/verify` tardan) ya no se libera; O5, la búsqueda
+por la marca que falla en Drive no corta la subida; O6, los textos dicen "archivos" (también se liberan adjuntos); O7,
+el aviso del archivo que no entró no repite "no hay lugar"; O8, la decisión 10. O3 (sin `uploadedAt` cuenta desde el
+estreno: solo pasa con una pestaña anterior a v0.083, y Drive igual confirma el MD5) queda así. O4 (la marca atada al
+workspace) va al roadmap, sección A.
+
+**Lo que quedó afuera:** liberar a mano lo que está en una papelera (decisión 4), *Share* de un original liberado sin
+bajarlo (entrega 3, sección 5.4) y el aviso al reconectar Drive con otra cuenta (Riesgos). La medición del iPhone casi
+lleno (sección 9.1) sigue pendiente, con los pasos de "Cómo quedó (entregas 0 y 1)".
+
+**Pruebas:** `src/media/ownFree.test.ts` (liberar con el sí y nada sin él; 14 días y el estreno; sin red; un portero
+sin `verify`; lo que espera subir, detenido, a medias o HEIC por convertir; lo que pide una marca; lo abierto en la
+sesión; la base con otro id o en una papelera; Drive con otro MD5, otro peso, sin la marca, en su papelera, sin MD5,
+sin el archivo o sin permiso; `/verify` sin respuesta; `freeOwn` con cada cosa que cambia entre la comprobación y el
+borrado y con una marca leída en su transacción; hacer lugar para un archivo nuevo sin tocar originales y ofrecerlos
+después; el relink sin bytes, con un portero que no lo encuentra y con uno sin `known`; subir la copia bajada),
+`src/media/md5.test.ts`, `src/ui/offlineUi.test.tsx` (el diálogo, el aviso del archivo que no entró, el texto de lo que
+quedó y el carrete) y `portero/src/core.test.ts` (la búsqueda por la marca, con otro peso, en la papelera, de otro
+archivo y con Drive que no contesta).

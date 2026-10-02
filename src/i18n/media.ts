@@ -70,6 +70,10 @@ export const media = {
     en: "The original file is missing on this device.",
     es: "El archivo original ya no está en este dispositivo.",
   },
+  'queue.freedUnknown': {
+    en: "The copy on this device was freed and the media server doesn't remember this file. It's in the owner's Google Drive: ask them.",
+    es: "La copia de este dispositivo se liberó y el servidor de archivos no recuerda este archivo. Está en el Google Drive del dueño: pedíselo.",
+  },
   'queue.unknownToServer': {
     en: "The media server does not know this file reached Google Drive. Retry uploads it again.",
     es: "El servidor de archivos no sabe que este archivo llegó a Google Drive. Reintentar lo vuelve a subir.",

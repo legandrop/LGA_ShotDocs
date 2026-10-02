@@ -506,6 +506,23 @@ export class Portero {
   }
 
   /**
+   * Vuelve a enlazar un archivo de la app cuya copia del dispositivo se liberó, **sin mandar bytes** (`POST /upload`
+   * con `only: 'known'`, Doc_Copias_Locales.md, sección 7): si el portero recuerda la subida o encuentra el archivo
+   * en Drive por su marca, le avisa a la base y responde el archivo; si no, `null`. Solo con un portero que anuncia
+   * `known` (uno anterior ignoraría `only` y abriría una subida): si igual responde una subida, también `null`.
+   */
+  async relink(file: AppFile & { name: string; mime: string; size: number }): Promise<UploadResult | null> {
+    const started = await this.request<{ uploadId?: string; status?: string } & Partial<ChunkAnswer>>('POST', '/upload', {
+      json: { file: file.id, name: file.name || 'file', mime: file.mime || 'application/octet-stream', size: file.size, day: file.day, only: 'known' },
+      stallMs: CONTROL_TIMEOUT_MS,
+    });
+    if (started.status === 'done' && started.file) {
+      return { ...started.file, ...(started.linked === undefined ? {} : { linked: started.linked }) };
+    }
+    return null;
+  }
+
+  /**
    * Carpetas (P.9): crea la carpeta en Drive (la primera vez) y las subcarpetas `dirs` (rutas relativas, primero las
    * de arriba, hasta 30). `parents`: los ids de las de arriba que se crearon en pedidos anteriores.
    */

@@ -11,6 +11,38 @@ export const shell = {
   'replace.bar': { en: "Replacing… {done} of {total} pages", es: "Reemplazando… {done} de {total} páginas" },
   'replace.barUndo': { en: "Undoing… {done} of {total} pages", es: "Deshaciendo… {done} de {total} páginas" },
   'replace.barStop': { en: "Stop", es: "Parar" },
+  // Deshacer en el orden en que editaste (P.26, Docs/Doc_Deshacer.md, sección 8): los avisos de ⌘Z y ⌘⇧Z.
+  'undo.doneIn': { en: "Undone in “{page}”", es: "Deshecho en “{page}”" },
+  'undo.redoneIn': { en: "Redone in “{page}”", es: "Rehecho en “{page}”" },
+  'undo.back': { en: "Back", es: "Volver" },
+  'undo.nothingThere': {
+    en: "Nothing to undo there: someone else already changed it. {undo} again for the previous change.",
+    es: "No hay nada para deshacer ahí: otra persona ya lo cambió. {undo} otra vez para el cambio anterior.",
+  },
+  'undo.nothingThereRedo': {
+    en: "Nothing to redo there: someone else already changed it. {redo} again for the next change.",
+    es: "No hay nada para rehacer ahí: otra persona ya lo cambió. {redo} otra vez para el cambio siguiente.",
+  },
+  'undo.lost': {
+    en: "Older changes in “{page}” can't be undone (the page was reloaded).",
+    es: "Los cambios anteriores en “{page}” no se pueden deshacer (la página se volvió a cargar).",
+  },
+  'undo.limit': {
+    en: "Older changes can't be undone: undo keeps your last {pages} pages and {steps} changes in this tab.",
+    es: "Los cambios anteriores no se pueden deshacer: deshacer guarda tus últimas {pages} páginas y {steps} cambios en esta pestaña.",
+  },
+  'undo.cant': {
+    en: "Can't undo in “{page}”: {reason}. {undo} again for the previous change.",
+    es: "No se puede deshacer en “{page}”: {reason}. {undo} otra vez para el cambio anterior.",
+  },
+  'undo.cantRedo': {
+    en: "Can't redo in “{page}”: {reason}. {redo} again for the next change.",
+    es: "No se puede rehacer en “{page}”: {reason}. {redo} otra vez para el cambio siguiente.",
+  },
+  'undo.reason.trash': { en: "it's in the trash", es: "está en la papelera" },
+  'undo.reason.deleted': { en: "it was deleted", es: "se borró" },
+  'undo.reason.noEdit': { en: "you can no longer edit it", es: "ya no la podés editar" },
+  'undo.reason.loading': { en: "the page didn't open in time", es: "la página no terminó de abrir" },
   'shell.opening': { en: "Opening your workspace…", es: "Abriendo tu workspace…" },
   'shell.busy.title': { en: "Already open in another window", es: "Ya está abierta en otra ventana" },
   'shell.busy.text': {
@@ -33,6 +65,10 @@ export const shell = {
   // *Dictate to report* (Docs/Doc_Dictado.md): el botón de la barra y el redondo del teléfono.
   'shell.dictate': { en: "Dictate to report", es: "Dictar al reporte" },
   'shell.dictateTip': { en: "Dictate to report ({shortcut})", es: "Dictar al reporte ({shortcut})" },
+  'shell.dictateSaved': {
+    en: { one: "Dictate to report · {count} saved note", other: "Dictate to report · {count} saved notes" },
+    es: { one: "Dictar al reporte · {count} nota guardada", other: "Dictar al reporte · {count} notas guardadas" },
+  },
   'shell.location': { en: "Location", es: "Ubicación" },
   'home.thisProject': { en: "This project", es: "Este proyecto" },
   'home.empty': { en: "{name} is empty", es: "{name} está vacío" },

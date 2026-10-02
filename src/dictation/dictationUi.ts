@@ -52,3 +52,45 @@ export function isDictateShortcut(
   if (e.getModifierState?.('AltGraph')) return false;
   return modPressed(e, mac) && e.altKey && e.shiftKey && isLetter(e, 'd');
 }
+
+// --- Abrir una nota de la cola (entrega V2) ---------------------------------------------------------------------------
+
+/** Una nota de la cola que la persona pidió ubicar: la hoja la toma cuando se abre en su página. */
+export interface QueuedRequest {
+  pageId: string;
+  noteId: string;
+}
+
+let request: QueuedRequest | null = null;
+const requestListeners = new Set<() => void>();
+
+function setRequest(next: QueuedRequest | null): void {
+  request = next;
+  for (const fn of requestListeners) fn();
+}
+
+/**
+ * Pide abrir la hoja en la página de una nota de la cola, con esa nota cargada. La página tiene que estar abierta (o
+ * abrirse enseguida): la hoja se abre cuando su editor se anota (DictationHost).
+ */
+export function requestQueuedNote(pageId: string, noteId: string): void {
+  setRequest({ pageId, noteId });
+}
+
+/** La hoja de esa página toma el pedido (y lo borra). */
+export function takeQueuedRequest(pageId: string): string | null {
+  if (request?.pageId !== pageId) return null;
+  const id = request.noteId;
+  setRequest(null);
+  return id;
+}
+
+export function useQueuedRequest(): QueuedRequest | null {
+  return useSyncExternalStore(
+    (fn) => {
+      requestListeners.add(fn);
+      return () => requestListeners.delete(fn);
+    },
+    () => request,
+  );
+}

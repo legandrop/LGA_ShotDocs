@@ -2,7 +2,7 @@
 
 **Estado: entregas 0 (v0.115), 1 (v0.122: el PDF de una rama o de un proyecto), 2 (v0.129: el zip), 1b (v0.134: los
 cambios de Lega al PDF, D84, D85 y D88: fotos en resolución completa, el PDF en partes y la lista de las que fallaron)
-y 3 (v0.0XX: volver a Shot Docs desde el zip, con su migración sin aplicar) hechas; la 4, pendiente** (roadmap P.22;
+y 3 (v0.141: volver a Shot Docs desde el zip, con su migración sin aplicar) hechas; la 4, pendiente** (roadmap P.22;
 pedido de Lega del 2026-10-02). Se diseñó contra `main` v0.108. Cómo quedaron, al final:
 "Cómo quedó la entrega 0" (el editor de exportación medido con 300 páginas), "Cómo quedó la entrega 1" (el PDF, medido
 con la impresión real de Chrome y Edge) y "Cómo quedó la entrega 2" (el zip, abierto con `file://` en Chromium y
@@ -1080,7 +1080,7 @@ el portero de verdad (tiempo de bajada y pedidos al Worker: unos dos por foto), 
   saca cualquiera que vea (el zip, solo dueño y admins). Con D85 ese PDF lleva las fotos en su resolución original.
 - **O10 y O11** (el margen de 500 MB en una compu de 8 GB; Safari y Firefox sin medir) quedan para la prueba a mano.
 
-## Cómo quedó la entrega 3 (v0.0XX: volver a Shot Docs desde el zip)
+## Cómo quedó la entrega 3 (v0.141: volver a Shot Docs desde el zip)
 
 **Qué ve el usuario.** En el selector de proyectos, **dueño y admins** (los que crean proyectos) tienen *Import Shot
 Docs archive…*, al lado de *New project*. La ventana pide el zip con un selector de archivo común (anda también en el

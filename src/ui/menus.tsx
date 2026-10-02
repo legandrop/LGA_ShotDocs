@@ -51,7 +51,7 @@ import { usePendingCount } from './usePendingCount';
 import { LegalLinks } from './Legal';
 import { openInstallDialog, useInstallState } from './install';
 import { shortcutLabel } from './shortcuts';
-import { askSignOut, openAssistantSettings } from '../assistant/assistantUi';
+import { askSignOut, askSignOutOthers, openAssistantSettings } from '../assistant/assistantUi';
 import { hasAssistantKey } from '../assistant/keyStore';
 
 /**
@@ -120,6 +120,16 @@ export function useFloating(
     el.addEventListener('keydown', onKey);
     return () => el.removeEventListener('keydown', onKey);
   }, [ref, arrows]);
+}
+
+/** El nombre del workspace para mostrar: el suyo o, si no tiene, el host de su dirección (como la lista de workspaces). */
+function workspaceLabel(config: { name?: string; url?: string } | undefined): string {
+  if (config?.name) return config.name;
+  try {
+    return new URL(config?.url ?? '').host;
+  } catch {
+    return config?.url ?? '';
+  }
 }
 
 function items(el: HTMLElement): HTMLElement[] {
@@ -460,7 +470,7 @@ export function AccountMenu({
   onMembers?: () => void;
 }) {
   const perms = usePermissions();
-  const { user, docs, client, tree, mediaDb } = useServices();
+  const { user, docs, client, tree, mediaDb, workspace } = useServices();
   const status = useSyncStatus();
   const pending = usePendingCount();
   const isOwner = !!status.mediaUrl && !!status.ownerId && status.ownerId === user.id;
@@ -634,6 +644,17 @@ export function AccountMenu({
           {tr('install.menu')}
         </button>
       )}
+      {/* Para un dispositivo perdido (Docs/Doc_Clave_Sincronizada.md, S1): esta sesión sigue, las otras se cierran. */}
+      <button
+        className="menu-row"
+        onClick={() => {
+          onClose();
+          askSignOutOthers(workspaceLabel(workspace?.config), () => client.auth.signOut({ scope: 'others' }));
+        }}
+      >
+        <SignOutIcon />
+        {tr('account.signOutOthers')}
+      </button>
       <button className="menu-row" onClick={() => void signOut()}>
         <SignOutIcon />
         {tr('common.signOut')}

@@ -4,6 +4,7 @@ import { mediaDbName, openMediaDb, type MediaDb } from '../media/mediaDb';
 import type { CompactOptions, CompactOutcome } from './compact';
 import { AccessStore, levelValue, parseAccess, Permissions, type AccessSnapshot, type GrantLevel, type Role } from './access';
 import { Portero, type PartSender } from '../media/portero';
+import { Md5 } from '../media/md5';
 import type { Probe } from '../media/probe';
 import { OfflineManager } from '../media/offline';
 import { ProjectSizes } from '../media/projectSizes';
@@ -910,6 +911,14 @@ export class FakePortero {
   driveDisconnected = false;
   /** Lo que dice que entiende (`/drive/status`): el de la entrega 0 de P.10. Vacío: un portero anterior. */
   features: string[] = ['verify', 'known', 'offline', 'codes'];
+  /** `/verify` no contesta (se cortó la red justo ahí). */
+  failVerify = false;
+  /** Lo que pasa mientras `/verify` pregunta (una carrera con el dispositivo). */
+  beforeVerify: (() => unknown) | null = null;
+  /** Drive no da el MD5 en `/verify` (pasa con algunos archivos). */
+  noMd5 = false;
+  /** El portero no encuentra nada por la marca (lo que subió se perdió del todo): `only: 'known'` responde `unknown`. */
+  forgetMarks = false;
   /** Archivos que la persona ya no puede ver (`not_found`): un permiso quitado. */
   readonly hidden = new Set<string>();
   /** Pases (ids de Drive) que la próxima vez responden como vencidos. */
@@ -958,12 +967,17 @@ export class FakePortero {
       if (media.drive_id) {
         return json({ status: 'done', file: { id: media.drive_id, name: media.name, mimeType: media.mime, size: media.size } });
       }
-      // Ya está en Drive pero la base no se enteró: se le avisa ahora.
-      const stored = [...this.drive].find(([, d]) => d.file === id);
+      // Ya está en Drive pero la base no se enteró (o, desde la entrega 2 de P.10, el portero lo encuentra por su
+      // marca `sdFile`, fuera de la papelera de Drive y con el mismo peso): se le avisa ahora.
+      const stored = this.forgetMarks
+        ? undefined
+        : [...this.drive].find(([driveId, d]) => d.file === id && d.data.length === media.size && !this.driveTrash.has(driveId));
       if (stored) {
         const linked = this.link(id, stored[0]);
         return json({ status: 'done', file: { id: stored[0], name: media.name, mimeType: media.mime, size: media.size }, linked });
       }
+      // `only: 'known'`: el portero no lo recuerda ni lo encuentra; no abre nada.
+      if (body?.only === 'known') return json({ status: 'unknown' });
       const uploadId = `up-${this.next++}`;
       this.uploads.set(uploadId, { file: id, size: media.size, data: new Uint8Array(media.size), received: 0 });
       return json({ uploadId, folder: `LGA_ShotDocs/${this.server.projects.get(media.project_id)?.name}/${body.day}` });
@@ -1068,6 +1082,8 @@ export class FakePortero {
       return json({ connected: true, broken: null, email: null, isOwner: true, folder: null, picker: false, features: this.features });
     }
     if (method === 'POST' && url.pathname === '/verify') {
+      if (this.failVerify) throw new TypeError('Failed to fetch');
+      await this.beforeVerify?.();
       const results: Record<string, unknown> = {};
       for (const id of (body?.files as string[]) ?? []) {
         const media = this.server.mediaFiles.get(id);
@@ -1076,7 +1092,13 @@ export class FakePortero {
         else if (!this.drive.has(media.drive_id)) results[id] = { error: 'missing', code: 'drive_missing' };
         else {
           const d = this.drive.get(media.drive_id)!;
-          results[id] = { driveId: media.drive_id, size: d.data.length, trashed: this.driveTrash.has(media.drive_id), marked: d.file === id, md5: null };
+          results[id] = {
+            driveId: media.drive_id,
+            size: d.data.length,
+            trashed: this.driveTrash.has(media.drive_id),
+            marked: d.file === id,
+            md5: this.noMd5 ? null : new Md5().update(d.data).digest(),
+          };
         }
       }
       return json({ results });

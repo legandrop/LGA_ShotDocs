@@ -4,6 +4,7 @@ import type { annotator } from './lazy/annotator';
 import type { assistant } from './lazy/assistant';
 import type { carrete } from './lazy/carrete';
 import type { commentsPanel } from './lazy/commentsPanel';
+import type { dictation } from './lazy/dictation';
 import type { drive } from './lazy/drive';
 import type { editor } from './lazy/editor';
 import type { exportPdf } from './lazy/exportPdf';
@@ -43,6 +44,7 @@ type LazyStrings = typeof annotator &
   typeof assistant &
   typeof carrete &
   typeof commentsPanel &
+  typeof dictation &
   typeof drive &
   typeof editor &
   typeof exportPdf &

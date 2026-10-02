@@ -145,6 +145,8 @@ export async function insertFiles(
         if (editor.transact) {
           editor.transact((tr) => {
             tr.setMeta(BACKGROUND_META, true);
+            // Lo hizo la app, no la persona: no entra en la pila de deshacer (P.26, Doc_Deshacer.md, 3.4).
+            tr.setMeta('addToHistory', false);
             update();
           });
         } else update();

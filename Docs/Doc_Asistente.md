@@ -1,8 +1,8 @@
 # Asistente con la clave de cada usuario y servidor MCP (fase 5)
 
 **Estado: entregas A1 (v0.118) y A2 (v0.126) implementadas (ver "Cómo quedó A1" y "Cómo quedó A2" al final; la
-migración de A2, sin aplicar); A3, el MCP y la clave sincronizada (D72 → B, `Doc_Clave_Sincronizada.md`), en
-diseño** (roadmap P.24; pedido de Lega del 2026-10-02, que decide entre las opciones
+migración de A2, sin aplicar); la clave sincronizada (D72 → B, `Doc_Clave_Sincronizada.md`), entrega S1 implementada
+(v0.138); A3, el MCP y la entrega S2 de la clave sincronizada, en diseño** (roadmap P.24; pedido de Lega del 2026-10-02, que decide entre las opciones
 de D-06 y D-07 y lo deja listo para programar por entregas). Las decisiones están propuestas (IA1 a IA11, sección 15; IA1 e IA10 cambiadas por Lega, D72 y D77) y
 valen hasta que Lega diga otra cosa. Se diseñó contra `main` v0.108. Precios, límites y CORS verificados el 2026-10-02
 en las páginas oficiales (sección 3, con la fuente de cada número); lo medido está en "Cómo se midió", al final.

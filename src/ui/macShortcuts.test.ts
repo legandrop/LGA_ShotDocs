@@ -3,6 +3,7 @@ import { isCommentShortcut, isSendShortcut } from './commentsUi';
 import { isFindShortcut } from './findUi';
 import { isPrintShortcut } from './printPage';
 import { isSearchShortcut } from './projectSearchUi';
+import { isRedoShortcut, isUndoShortcut } from './undoTimelineUi';
 
 // Regla del repo: en la Mac, siempre ⌘ y nunca Ctrl (Ctrl+clic y Ctrl+tecla son otra cosa ahí); en Windows y
 // Linux, Ctrl y nunca la tecla de Windows.
@@ -40,6 +41,22 @@ describe('los atajos con Ctrl/⌘', () => {
     expect(isSendShortcut({ ...ctrl, key: 'Enter' }, false)).toBe(true);
     expect(isSendShortcut({ ...cmd, key: 'Enter' }, false)).toBe(false);
     expect(isSendShortcut({ ...none, key: 'Enter' }, false)).toBe(false);
+  });
+
+  it('deshacer y rehacer en el orden en que editaste (⌘Z, ⌘⇧Z y ⌘Y / Ctrl+Z, Ctrl+Shift+Z y Ctrl+Y)', () => {
+    expect(isUndoShortcut({ ...cmd, key: 'z' }, true)).toBe(true);
+    expect(isUndoShortcut({ ...ctrl, key: 'z' }, true)).toBe(false);
+    expect(isUndoShortcut({ ...ctrl, key: 'z' }, false)).toBe(true);
+    expect(isUndoShortcut({ ...cmd, key: 'z' }, false)).toBe(false);
+    expect(isUndoShortcut({ ...cmd, shiftKey: true, key: 'Z' }, true)).toBe(false);
+    expect(isRedoShortcut({ ...cmd, shiftKey: true, key: 'Z' }, true)).toBe(true);
+    expect(isRedoShortcut({ ...cmd, key: 'y' }, true)).toBe(true);
+    expect(isRedoShortcut({ ...ctrl, shiftKey: true, key: 'Z' }, true)).toBe(false);
+    expect(isRedoShortcut({ ...ctrl, key: 'y' }, false)).toBe(true);
+    expect(isRedoShortcut({ ...ctrl, shiftKey: true, key: 'y' }, false)).toBe(false);
+    expect(isRedoShortcut({ ...ctrl, altKey: true, key: 'z' }, false)).toBe(false);
+    // Un teclado ruso: la tecla de la Z.
+    expect(isUndoShortcut({ ...ctrl, key: 'я', code: 'KeyZ' }, false)).toBe(true);
   });
 
   it('imprimir (⌘P / Ctrl+P), sin Alt ni Shift', () => {
