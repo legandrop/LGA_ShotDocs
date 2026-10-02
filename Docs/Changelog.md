@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.136 :
+
+**Dictar al reporte, entrega V2** (P.27): sin red, *Save for later* solo dejaba la nota en el borrador de su página y
+no había forma de juntar varias ni de verlas desde otra página. Ahora *Save for later* pasa la nota a una cola del
+dispositivo (el almacén `notes` de `shotdocs-dictation`, sin subir la versión de la base) y recién con la escritura
+confirmada vacía el campo. El indicador de sincronización suma *N voice notes to place* con la lista (abrir en su
+página, copiar, descartar con confirmación), el botón del teléfono cuenta las de la página y la hoja las ubica de a una,
+con su vista previa, o las pega como texto al final. Al aplicar, la nota pasa al borrador (*Your note*) antes de salir
+de la cola; *Undo* la devuelve. Nunca se borra sola.
+[ Dictar al reporte V2 - la cola de notas sin red: guardar para después, el aviso con la lista, ubicar de a una o insertar como texto ]
+
 v0.135 :
 
 **Dictar al reporte** (P.27, entrega V1): pasar una nota informal del set a su lugar en el reporte no tenía forma;

@@ -177,4 +177,20 @@ export const sync = {
     en: "the storage for comments could not be opened ({reason}). Reopening the app tries again.",
     es: "no se pudo abrir el almacenamiento de los comentarios ({reason}). Al volver a abrir la app se intenta de nuevo.",
   },
+  // Las notas de *Dictate to report* guardadas en el dispositivo (Docs/Doc_Dictado.md, 8; entrega V2).
+  'sync.voiceNotes': {
+    en: { one: "{count} voice note to place", other: "{count} voice notes to place" },
+    es: { one: "{count} nota de voz para ubicar", other: "{count} notas de voz para ubicar" },
+  },
+  'sync.voiceNotesTitle': { en: "Voice notes to place", es: "Notas de voz para ubicar" },
+  'sync.voiceNotesHint': {
+    en: "Saved on this device. Open each one in its page to place it with a preview, or add it as text. They are never deleted on their own.",
+    es: "Guardadas en este dispositivo. Abrí cada una en su página para ubicarla con vista previa, o agregala como texto. Nunca se borran solas.",
+  },
+  'sync.voiceNotePageGone': { en: "{title} (not available)", es: "{title} (no disponible)" },
+  'sync.voiceNoteAudio': { en: "Recording, not transcribed yet", es: "Grabación, todavía sin transcribir" },
+  'sync.voiceNoteFailed': { en: "Recording that couldn't be transcribed", es: "Grabación que no se pudo transcribir" },
+  'sync.voiceNoteOpen': { en: "Open", es: "Abrir" },
+  'sync.voiceNoteKeep': { en: "Keep", es: "Conservar" },
+  'sync.voiceNoteDiscardQ': { en: "Discard this note? It can't be undone.", es: "¿Descartar esta nota? No se puede deshacer." },
 } satisfies Dict;

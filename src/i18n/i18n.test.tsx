@@ -16,6 +16,7 @@ import { annotator } from './lazy/annotator';
 import { assistant } from './lazy/assistant';
 import { carrete } from './lazy/carrete';
 import { commentsPanel } from './lazy/commentsPanel';
+import { dictation } from './lazy/dictation';
 import { drive } from './lazy/drive';
 import { editor } from './lazy/editor';
 import { exportPdf } from './lazy/exportPdf';
@@ -33,7 +34,7 @@ import { tutorial } from './lazy/tutorial';
 import { parts, strings } from './strings';
 
 /** Las partes que viajan con lo que se baja aparte (ver `register` en index.ts). */
-const LAZY = { annotator, assistant, carrete, commentsPanel, drive, editor, exportPdf, folders, help, history, importCoda, install: installDialog, offline, projectStates, search, teamDialogs, templates, tutorial };
+const LAZY = { annotator, assistant, carrete, commentsPanel, dictation, drive, editor, exportPdf, folders, help, history, importCoda, install: installDialog, offline, projectStates, search, teamDialogs, templates, tutorial };
 const ALL_PARTS: Record<string, Record<string, { en: Entry; es: Entry }>> = { ...parts, ...LAZY };
 const ALL = Object.assign({}, ...Object.values(ALL_PARTS)) as Record<Key, { en: Entry; es: Entry }>;
 

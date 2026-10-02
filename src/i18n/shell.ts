@@ -33,6 +33,10 @@ export const shell = {
   // *Dictate to report* (Docs/Doc_Dictado.md): el botón de la barra y el redondo del teléfono.
   'shell.dictate': { en: "Dictate to report", es: "Dictar al reporte" },
   'shell.dictateTip': { en: "Dictate to report ({shortcut})", es: "Dictar al reporte ({shortcut})" },
+  'shell.dictateSaved': {
+    en: { one: "Dictate to report · {count} saved note", other: "Dictate to report · {count} saved notes" },
+    es: { one: "Dictar al reporte · {count} nota guardada", other: "Dictar al reporte · {count} notas guardadas" },
+  },
   'shell.location': { en: "Location", es: "Ubicación" },
   'home.thisProject': { en: "This project", es: "Este proyecto" },
   'home.empty': { en: "{name} is empty", es: "{name} está vacío" },

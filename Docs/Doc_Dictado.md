@@ -1,7 +1,7 @@
 # Dictado por voz y notas informales que se ubican en el reporte
 
-**Estado: entrega V1 implementada (v0.135)**; V2 a V4, diseño. Cómo quedó V1 y lo que cambió al implementarla: sección
-15, al final. Roadmap P.27; pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.123, con el
+**Estado: entregas V1 (v0.135) y V2 (v0.136) implementadas**; V3 y V4, diseño. Cómo quedaron V1 y V2 y lo que cambió
+al implementarlas: secciones 15 y 16, al final. Roadmap P.27; pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.123, con el
 asistente A1 publicado (v0.118) y A2 terminado en su rama (`lega/asistente-a2`, en auditoría). Las decisiones están
 propuestas (DI1 a DI9, sección 13) y valen hasta que Lega diga otra cosa. Lo medido está en "Cómo se midió", al final;
 los precios y el CORS se verificaron el 2026-10-02 en las páginas oficiales y con pedidos sin clave. **Auditado el mismo
@@ -884,3 +884,43 @@ es equivalente (`applyChanges` también mira el permiso).
 **Lo que prueba Lega** (no se puede acá): la calidad con una clave real (10.3), el dictado del teclado dentro de una
 celda y de un comentario en el iPhone y en Android, y Ctrl+Alt+Shift+D / ⌘⌥⇧D en navegadores
 reales (en Firefox para la Mac, Option puede llegar como AltGraph y el atajo no andaría).
+
+## 16. Cómo quedó V2 (v0.136)
+
+**Qué hay.** *Save for later* (sin red, o después de un pedido que falló) pasa la nota del campo a la cola del
+dispositivo y dice *Saved. It will be placed when you're back online*; el campo se vacía solo cuando la cola confirmó
+la escritura (si falla: *The note couldn't be saved on this device. It's still in the field.*). Las notas se ven en
+tres lugares: el aviso *N voice notes to place* debajo del indicador de sincronización (en el teléfono, dentro del menú
+lateral) con la lista de todas (página, hora, texto; *Open*, *Copy text*, *Discard* con confirmación), el número sobre
+el botón redondo del teléfono (las de esa página) y *Saved notes* en la hoja (las de esa página, con *Open*). Una nota
+abierta en la hoja muestra *Place* (con red y la política que lo deje; Ctrl/⌘+Enter), *Insert as text* (párrafo al final
+de la página, como *Add to Summary* sin *Summary*), *Copy* y *Discard* (pregunta). Ubicarla es el recorrido de V1 contra
+la página como está en ese momento, de a una.
+
+**Archivos.** `dictationDb.ts` (la base `shotdocs-dictation`, la misma versión 1), `queue.ts` (la cola, sus avisos entre
+pestañas con `BroadcastChannel` y `useQueuedNotes`), `VoiceNotes.tsx` (el aviso y la lista, en la primera carga),
+`dictationUi.ts` (el pedido de abrir una nota en su página: la hoja se abre cuando el editor de esa página se anota) y
+la hoja. Textos nuevos de la hoja en `src/i18n/lazy/dictation.ts`; los del aviso, en `sync.ts`. Ayuda: *Notes saved for
+later*.
+
+**Lo que cambió al implementar:**
+
+- **Una sola base, sin subir la versión.** Las notas (`n:<id>`) y los pedazos de audio de V3 (`c:<id>:<número>`) van en
+  el mismo almacén `notes`, separados por el prefijo de la clave: una pestaña de V1 abierta sigue abriendo la base. Los
+  pedazos se guardan como `ArrayBuffer` (un `Blob` en IndexedDB falló en Safari viejos).
+- **La nota sale de la cola al aplicar, no con *Done*:** primero se guarda en el borrador de su página (*Your note* y lo
+  que quedó en *Couldn't place*, el mecanismo de V1 que ya dura hasta *Done*) y recién confirmado eso se saca de la cola;
+  si guardar falla, sigue en la cola. Así la nota vive en un solo lugar. *Undo* la devuelve a la cola (en orden con la
+  escritura de *Apply*: no se pueden cruzar).
+- ***Insert as text* también sin red o con la política en *Off*:** no manda nada afuera del dispositivo. *Place* sí
+  respeta las dos cosas.
+- **Salir de la cuenta** no borra la cola (es por correo: vuelve al entrar con el mismo). El número en la ventana de
+  salir y la casilla para borrarlas quedan para cuando cierre la clave sincronizada (S1), que reescribe esa ventana.
+- El estado *transcribed* se llama `ready` (una nota escrita nace lista); `recording` y `failed` son de V3.
+
+**Pruebas.** 9 de Vitest en `queue.test.tsx` (la cola, el recorrido de aceptación con recargar y volver la red,
+*Discard* con confirmación, la escritura que falla, *Insert as text* que no pudo escribir, la política al volver la red,
+sin Editar, el aviso con su lista y el pedido de abrir). Recorrido en Chromium y en WebKit de Playwright, sin login y
+con el proveedor falso: 24 de 24 en cada uno (las tres pruebas de aceptación, recargar, teléfono de 390 px). Mutantes de
+las guardas de la cola: 10 de 11 mueren; el que vive (Ctrl+Enter sin mirar la política) es equivalente: *Place* vuelve a
+pedir la política antes de mandar.

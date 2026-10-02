@@ -168,7 +168,9 @@ In production (v0.049). What works today:
   shown change by change, each with its checkbox and its place (*Setups & takes › 12 · 010 · 3 › Lens*). *Apply* applies
   the checked ones as one edit you undo with *Undo* or Ctrl+Z, and nothing is applied if those places changed meanwhile.
   If it is not clear which shot, it asks with a button per row. What it could not place, and what you unchecked, stays
-  under *Couldn't place* on that device until you add it to *Summary*, copy it or discard it.
+  under *Couldn't place* on that device until you add it to *Summary*, copy it or discard it. Without internet,
+  *Save for later* keeps the note on the device: *N voice notes to place*, under the sync status, lists them, and each
+  one is placed in its page with its preview, inserted as text at the end of the page, or discarded after asking.
 - Templates: a new empty page offers the three built-in ones, and *More…* lists them with your project's own templates
   and the ones from other projects you can see. *Save as template…* in the page menu copies a page to the project's
   *Templates* folder (optionally clearing the filled-in values); a template is a page you edit like any other, and new
