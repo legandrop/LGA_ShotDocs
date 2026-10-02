@@ -207,7 +207,28 @@ export function restoreInEditor(
   // La huella de la restauración (su paso de deshacer): con ella se reconoce la fila que la sube (*Restored from…*).
   const step = undo?.undoStack[size - 1];
   const trace = step ? traceFromSets(step.insertions, step.deletions) : undefined;
-  return { ok: true, undo: () => undoRestore(view, size), onEdit, trace };
+  return { ok: true, undo: () => undoRestore(view, size), onEdit, onUndone: (fn) => onStepUndone(undo, step, fn), trace };
+}
+
+interface PoppedEvent {
+  stackItem: unknown;
+  type: 'undo' | 'redo';
+}
+
+/**
+ * Avisa (una vez) cuando se deshace ese paso: el **Undo** del aviso o Ctrl/⌘+Z, que es el mismo deshacer de Yjs. Así
+ * la marca *Restored from…* se deja de lado también con el teclado. Devuelve cómo dejar de mirar.
+ */
+function onStepUndone(undo: Y.UndoManager | null, step: unknown, fn: () => void): () => void {
+  if (!undo || !step) return () => undefined;
+  const handler = (e: PoppedEvent) => {
+    if (e.type !== 'undo' || e.stackItem !== step) return;
+    off();
+    fn();
+  };
+  const off = () => undo.off('stack-item-popped', handler as never);
+  undo.on('stack-item-popped', handler as never);
+  return off;
 }
 
 /** Deshace la restauración (el aviso con **Undo**): solo si lo último del deshacer sigue siendo ella. */

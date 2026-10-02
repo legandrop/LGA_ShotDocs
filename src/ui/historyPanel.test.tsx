@@ -1021,6 +1021,53 @@ describe('entrega 3: Restored from…', () => {
   });
 });
 
+describe('Restored from… y Ctrl/⌘+Z', () => {
+  it('deshacer la restauración con el teclado (no con el Undo del aviso) antes de que suba también deja de lado la marca', async () => {
+    prefs.set({ language: 'en' });
+    const { a, pageId, server } = await setupNamed();
+    const live = await a.docs.open(pageId);
+    offs.push(() => a.docs.close(pageId));
+    let undone: (() => void) | null = null;
+    let watching = 0;
+    offs.push(
+      registerRestoreTarget(pageId, () => {
+        const was = Y.getState(live.store, live.clientID);
+        live.transact(() => (live.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement).insert(0, [block('r', 'Restaurada')]), 'test');
+        const now = Y.getState(live.store, live.clientID);
+        const trace = traceFromSets({ clients: new Map([[live.clientID, [{ clock: was, len: now - was }]]]) }, { clients: new Map() });
+        // Como el editor: avisa cuando ese paso se deshace (acá lo dispara la prueba, como un Ctrl/⌘+Z).
+        const onUndone = (fn: () => void) => {
+          undone = fn;
+          watching++;
+          return () => {
+            watching--;
+          };
+        };
+        return { ok: true, undo: () => true, onEdit: () => () => undefined, onUndone, trace };
+      }),
+    );
+    server.now = () => Date.parse('2026-09-30T17:40:00Z');
+    const host = await mount(services(a, server.ownerId), pageId);
+    await act(async () => (host.querySelectorAll('.history-session')[2] as HTMLButtonElement).click());
+    await settle(300);
+    await act(async () => host.querySelector<HTMLButtonElement>('.history-restore')!.click());
+    await settle(100);
+    const confirm = [...host.querySelectorAll<HTMLButtonElement>('.history-confirm button')].find((x) => x.textContent === 'Restore')!;
+    await act(async () => confirm.click());
+    for (let i = 0; i < 50 && !undone; i++) await settle(5);
+    expect(undone).not.toBeNull();
+    expect(watching).toBe(1);
+    // Ctrl/⌘+Z antes de que suba; después sube lo que haya quedado (la fila trae la restauración y el deshacer).
+    await act(async () => undone!());
+    await a.docs.flush(pageId);
+    await act(async () => void (await a.engine.syncNow()));
+    await settle(1000);
+    expect(server.versions.some((v) => v.kind === 'restore')).toBe(false);
+    // Dejada de lado, ya no se mira el deshacer.
+    expect(watching).toBe(0);
+  });
+});
+
 describe('entrega 3: sin red, con lo guardado en el dispositivo', () => {
   it('muestra el historial hasta lo último bajado, con el aviso; restaurar y nombrar quedan apagados; al volver la red, se baja lo nuevo', async () => {
     prefs.set({ language: 'en' });

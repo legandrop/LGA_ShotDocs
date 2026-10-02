@@ -154,6 +154,41 @@ describe('restaurar por el editor', () => {
     expect(yText(doc)).toBe(now);
   });
 
+  it('onUndone avisa una vez cuando Ctrl/⌘+Z deshace la restauración, no cuando deshace otra cosa', async () => {
+    const doc = new Y.Doc();
+    const ed = mountEditor(doc, 'A');
+    const rec = recorder(doc);
+    ed.replaceBlocks(ed.document, [{ type: 'paragraph', content: 'Uno.' }]);
+    undoManager(ed).stopCapturing();
+    const v = rec.history().version(rec.history().sessions.length - 1);
+    ed.updateBlock(ed.document[0], { content: 'Uno. Dos.' });
+    undoManager(ed).stopCapturing();
+    const outcome = restoreInEditor(view(ed), v);
+    expect(outcome.ok && !!outcome.onUndone).toBe(true);
+    let calls = 0;
+    const stop = outcome.ok ? outcome.onUndone!(() => calls++) : () => undefined;
+    // Algo escrito después: el primer Ctrl/⌘+Z deshace eso, no la restauración.
+    ed.insertBlocks([{ type: 'paragraph', content: 'Después.' }], ed.document[0], 'after');
+    undoManager(ed).stopCapturing();
+    undoManager(ed).undo();
+    expect(calls).toBe(0);
+    // El segundo, la restauración.
+    undoManager(ed).undo();
+    expect(yText(doc)).toBe('Uno. Dos.');
+    expect(calls).toBe(1);
+    // Rehacer y deshacer de nuevo no vuelve a avisar (ya avisó).
+    undoManager(ed).redo();
+    undoManager(ed).undo();
+    expect(calls).toBe(1);
+    stop();
+    // Dejar de mirar antes: no avisa.
+    const again = restoreInEditor(view(ed), v);
+    let later = 0;
+    if (again.ok) again.onUndone!(() => later++)();
+    undoManager(ed).undo();
+    expect(later).toBe(0);
+  });
+
   it('una versión con un bloque que el editor no puede armar no se restaura (y la página no cambia)', () => {
     // Una versión rota: un bloque de imagen con texto adentro (el esquema no lo acepta; y-prosemirror lo tiraría).
     const broken = new Y.Doc();

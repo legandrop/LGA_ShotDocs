@@ -801,6 +801,15 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
         dismissNotice(key);
         off();
       });
+      // Deshecha con Ctrl/⌘+Z (no con el aviso), lo mismo: la marca se deja de lado. Se mira hasta que queda marcada
+      // (o se deja de lado); después, deshacer ya no cambia el rótulo.
+      if (mark && outcome.onUndone) {
+        const stop = outcome.onUndone(() => {
+          dismissNotice(key);
+          void mark.cancel();
+        });
+        void mark.done.then(stop);
+      }
     } catch (err) {
       setMessage(tr('history.restoreFailed', { reason: errorMessage(err) }));
     } finally {
