@@ -866,14 +866,19 @@ prueba abre lo aplicado con el esquema publicado (`editorSchemaMain`) y no cambi
   assistant* mira también el setup cuando la nota lo dice pegado al plano («12_010 setup 4», «12_010_4»); en las filas
   vacías, si la nota le puso la *Slate* a una, lo que vaya a otra fila vacía sin *Slate* va a *Couldn't place*; lo
   deshecho con *Undo* sale de `RECENT`.
+- **Re-verificación (N1 a N3):** después de *Apply*, los botones que aparecen (*Done* primero, *Undo* al final) no toman
+  un toque en los primeros 600 ms, así un doble toque en *Apply* no deshace lo aplicado; varios `appendText` al mismo
+  lugar se aceptan y quedan en el orden de la respuesta, cada uno debajo del anterior (escribir y agregar en el mismo
+  lugar sigue sin aceptarse); la vuelta atrás de un *Apply* a medias saca de rehacer solo lo que dejan sus propios
+  pasos, aunque antes hubiera algo para rehacer.
 
-**Pruebas.** 66 de Vitest en `src/dictation/` (el mapa, el validador, aplicar con el editor real y con dos editores sin
+**Pruebas.** 69 de Vitest en `src/dictation/` (el mapa, el validador, aplicar con el editor real y con dos editores sin
 red, la hoja con un proveedor simulado y dónde aparece) más las del registro de atajos y la ayuda. Recorrido en Chromium
-sin login con un proveedor falso local: 41 de 41 (R1, R2, R7, *ask*, solo ver, *Off*, sin red, teléfono de 390 px y
+sin login con un proveedor falso local: 42 de 42 (R1, R2, R7, *ask*, solo ver, *Off*, sin red, teléfono de 390 px y
 castellano). Mutantes del autor: 13 de 14 mueren; el que vive, insertar la fila con `updateBlock` de la tabla, es
 equivalente hoy: y-prosemirror compara las filas iguales y no las rehace, así que lo que otro escribe sin red en otra
 fila queda igual (la prueba lo comprueba); se deja la inserción como un nodo, que no depende de ese diff. Mutantes de la
-auditoría y de sus correcciones: 24 de 25; el que vive, Ctrl+Enter sin permiso, es equivalente (`applyChanges` también
+auditoría y de sus correcciones: 24 de 25, y los 4 de la re-verificación mueren; el que vive, Ctrl+Enter sin permiso, es equivalente (`applyChanges` también
 mira el permiso).
 
 **Lo que prueba Lega** (no se puede acá): la calidad con una clave real (10.3), el dictado del teclado dentro de una
