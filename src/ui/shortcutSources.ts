@@ -51,6 +51,7 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
     'InstallDialog.tsx',
     'OfflinePart.tsx',
     'HistoryPanel.tsx',
+    'ExportDialog.tsx',
   ],
   listPick: ['ProjectSwitcher.tsx', 'ProjectSearch.tsx', 'DrivePasteMenu.tsx'],
   // La confirmación de "Replace all" (ProjectReplace.tsx): Esc la cierra sin cerrar el panel.

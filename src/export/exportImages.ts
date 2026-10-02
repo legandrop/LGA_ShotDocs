@@ -59,6 +59,14 @@ export interface Resizer {
   open(blob: Blob): Promise<Decoded | null>;
 }
 
+/** Dibuja la imagen achicada sobre blanco: una PNG con transparencia no sale negra en el JPEG. */
+function paint(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, bitmap: ImageBitmap, width: number, height: number): void {
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(bitmap, 0, 0, width, height);
+}
+
 /** El de verdad. */
 export const browserResizer: Resizer = {
   async open(blob) {
@@ -73,16 +81,26 @@ export const browserResizer: Resizer = {
       width: bitmap.width,
       height: bitmap.height,
       async draw(width, height) {
+        // `OffscreenCanvas.convertToBlob` donde está: el `toBlob` de un canvas común espera un momento libre del hilo
+        // principal y, ocupado armando el PDF, tardaba 1 s por foto (medido en Chrome).
+        if (typeof OffscreenCanvas === 'function') {
+          try {
+            const canvas = new OffscreenCanvas(width, height);
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              paint(ctx, bitmap, width, height);
+              return await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.9 });
+            }
+          } catch {
+            // Sigue con el canvas común.
+          }
+        }
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         if (!ctx) return null;
-        // El papel es blanco: una PNG con transparencia no sale negra en el JPEG.
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, width, height);
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(bitmap, 0, 0, width, height);
+        paint(ctx, bitmap, width, height);
         const out = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
         // Suelta la memoria del canvas enseguida (con cientos de fotos, el recolector llega tarde).
         canvas.width = 0;
@@ -111,6 +129,8 @@ export interface ShrinkResult {
   shrunk: number;
   /** Fotos que quedaron como estaban (ya chicas, o el navegador no las abre). */
   kept: number;
+  /** Milisegundos sumados de cada paso (traer la imagen, abrirla, achicarla), para medir. */
+  ms: { best: number; open: number; draw: number };
 }
 
 /** Las imágenes de una foto, un video o un adjunto de la vista (no las de las tarjetas de Drive: son de afuera). */
@@ -131,7 +151,7 @@ export async function shrinkImages(
   options: { source?: ImageSource | null; budget: PixelBudget; resizer?: Resizer; signal?: AbortSignal; parallel?: number },
 ): Promise<ShrinkResult> {
   const resizer = options.resizer ?? browserResizer;
-  const out: ShrinkResult = { urls: [], shrunk: 0, kept: 0 };
+  const out: ShrinkResult = { urls: [], shrunk: 0, kept: 0, ms: { best: 0, open: 0, draw: 0 } };
   // Primero se mide todo (sin esperar nada en el medio: la vista no se vuelve a armar entre una foto y otra).
   const jobs: { img: HTMLImageElement; src: string; cssWidth: number; id: string | null }[] = [];
   for (const img of root.querySelectorAll<HTMLImageElement>(MEDIA_IMG)) {
@@ -150,10 +170,15 @@ export async function shrinkImages(
   };
   const one = async ({ img, src, cssWidth, id }: (typeof jobs)[number]) => {
     let blob: Blob | null = null;
+    const t0 = performance.now();
     if (id && options.source) blob = await options.source.best(id).catch(() => null);
     const fromSource = !!blob;
     if (!blob && (src.startsWith('blob:') || src.startsWith('data:'))) blob = await fetchBlob(src);
+    const t1 = performance.now();
     const decoded = blob ? await resizer.open(blob) : null;
+    const t2 = performance.now();
+    out.ms.best += t1 - t0;
+    out.ms.open += t2 - t1;
     if (!blob || !decoded) return keep(img);
     try {
       const natural = { width: decoded.width, height: decoded.height };
@@ -166,7 +191,9 @@ export async function shrinkImages(
       }
       // Se cuenta antes de dibujar: pasado el tope, no se gasta memoria en una foto más.
       options.budget.add(target.width, target.height);
+      const t3 = performance.now();
       const small = target.width >= natural.width && PASS_THROUGH.has(blob.type) ? blob : await decoded.draw(target.width, target.height);
+      out.ms.draw += performance.now() - t3;
       if (!small) {
         out.kept++;
         return;

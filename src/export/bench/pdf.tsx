@@ -110,6 +110,9 @@ async function run() {
   if (trashedSpec) await d.tree.trash(ids.get(trashedSpec.key)!);
   await d.engine.syncNow();
   await d.comments.run();
+  // Que la cola de fotos termine de hacer miniaturas y subir (si no, exportar compite con ella y se mide eso).
+  await d.media.idle();
+  await d.engine.syncNow();
   const setupMs = performance.now() - t0;
   log(`proyecto: ${specs.length} páginas, ${photos} fotos, ${Math.round(setupMs / 1000)} s`);
 
@@ -126,19 +129,37 @@ async function run() {
   const heapBefore = heap();
   const te = performance.now();
   const editor = await ExportEditor.create({ resolveFileUrl: (url, pageId) => d.media.resolve(url, pageId), media: d.media });
+  const images = deviceImages(d.media);
+  /** Lo que tardó en llegar cada foto del dispositivo (el original, de IndexedDB). */
+  const bestMs: number[] = [];
   let book: PdfBook;
+  /** Los milisegundos desde el comienzo cada 25 páginas (si crece, cada página tarda más que la anterior). */
+  const marks: number[] = [];
   try {
     book = await buildPdf({
       title,
       plan,
       source: d.docs,
       editor,
-      images: deviceImages(d.media),
+      images: {
+        best: async (id) => {
+          const t = performance.now();
+          try {
+            return await images.best(id);
+          } finally {
+            bestMs.push(Math.round(performance.now() - t));
+          }
+        },
+      },
       comments: COMMENTS ? appComments(d.comments, d.commentsDb, { id: d.remote.userId, email: 'lega.supervisor@wanka.test' }) : null,
       named: NAMED,
       limits: PIXELS ? { ...PDF_LIMITS.desktop, pixels: PIXELS } : PDF_LIMITS.desktop,
       lastSync: d.engine.getStatus().lastSyncAt,
-      onProgress: (p) => p.done % 25 === 0 && log(`página ${p.done}/${p.total}`),
+      onProgress: (p) => {
+        if (p.done % 25 !== 0 && p.done >= 30) return;
+        marks.push(Math.round(performance.now() - te));
+        log(`página ${p.done}/${p.total}`);
+      },
     });
   } finally {
     editor.destroy();
@@ -162,6 +183,9 @@ async function run() {
     sheets: book.sheets,
     indexSheets: book.indexSheets,
     buildMs: Math.round(buildMs),
+    marks,
+    pageMs: book.pages.slice(0, 20).map((p) => (p.ms ? Object.fromEntries(Object.entries(p.ms).map(([k, v]) => [k, Math.round(v)])) : null)),
+    bestMs: { first: bestMs.slice(0, 40), sum: bestMs.reduce((a, b) => a + b, 0), n: bestMs.length },
     heapMB: heapBefore !== null && heapAfter !== null ? { before: Math.round(heapBefore / 1e6), after: Math.round(heapAfter / 1e6) } : null,
     pixelsM: Math.round(book.pixels / 1e5) / 10,
     images: book.root.querySelectorAll('img').length,

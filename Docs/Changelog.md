@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+Exportar (P.22), entrega 1: el PDF de una rama o de un proyecto. Para entregarle un reporte al cliente había que
+imprimir página por página. Nuevo: *Export…* en el menú de la página y *Export project…* en el selector arman un solo
+PDF con un índice que lleva a cada página y dice su hoja, cada página con su tamaño de hoja (Chrome y Edge; en los demás,
+todo con la de la raíz, avisado), fotos achicadas a su ancho impreso, comentarios opcionales con nombres y nunca
+correos, y topes de páginas y píxeles. Medido con la impresión real de Chrome y Edge: 300 páginas, 1618 hojas, todas
+del tamaño y en la hoja que dice el índice. La primera medición encontró que un salto de hoja vacío cortaba la primera
+hoja de la página: se pagina en el orden del documento. Resueltas las observaciones de la entrega 0.
+[ Exportar, entrega 1 - el PDF de una rama o un proyecto con índice, hojas con nombre y fotos achicadas ]
+
 v0.115 :
 
 Exportar (P.22), entrega 0. El PDF y el zip de una rama necesitan dibujar cada página fuera de la pantalla con el

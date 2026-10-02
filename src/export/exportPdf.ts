@@ -78,6 +78,8 @@ export interface BookPage {
   failed: boolean;
   /** Fotos que no llegaron a tiempo (pueden salir en blanco). */
   imagesTimedOut: boolean;
+  /** Milisegundos: leer y dibujar en el editor (por paso) y achicar las fotos (para medir). */
+  ms?: ExportedPage['ms'] & { photos: number; load: number };
 }
 
 export interface PdfBook {
@@ -267,10 +269,13 @@ export async function buildPdf(options: BuildOptions): Promise<PdfBook> {
           const section = commentsSection(await options.comments.threads(page.id), content.blocks, options.comments);
           if (section) view.page.append(section);
         }
+        const t0 = performance.now();
         const shrunk = await shrinkImages(view.root, { source: options.images, budget, resizer: options.resizer, signal: options.signal });
         urls.push(...shrunk.urls);
+        const t1 = performance.now();
         if (shrunk.shrunk > 0) await imagesLoaded(view.root, 6000);
-        place(view, page, { outdated, unknown, failed: false, imagesTimedOut: out.imagesTimedOut });
+        const ms = { ...out.ms, photos: t1 - t0, load: performance.now() - t1, ...Object.fromEntries(Object.entries(shrunk.ms).map(([k, v]) => [`photo_${k}`, v])) };
+        place(view, page, { outdated, unknown, failed: false, imagesTimedOut: out.imagesTimedOut, ms });
       },
       onFailed: (page) => {
         const view = plainView(page.format, 'sd-export-failed');
