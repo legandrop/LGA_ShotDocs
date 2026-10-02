@@ -576,16 +576,24 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
    `Doc_Compactar.md`** (auditado): el snapshot se arma aplicando las filas en orden en un `Y.Doc`
    sin GC (conserva lo borrado, D16), lo arma y lo comprueba el dispositivo de quien edita (D5), la base lo sirve
    solo confirmado y válido, y `page_updates` no pierde nunca una fila (D4). **Entrega 1 hecha (v0.127): leer
-   snapshots** (la migración `20261019120000_compactar_leer.sql`, sin aplicar y con los snapshots apagados;
-   `pull_page_content`, la época de contenido y el reinicio de una página cuyo snapshot se invalidó). **Falta:** la
-   entrega 2 (armarlos en el dispositivo, `compact.ts`, con la prueba 1 y la del editor real) y la 3 (el script de
-   restaurar, probar de punta a punta, medir y prender `snapshot_min_version`). Hoy no es urgente: ninguna página lo
-   necesita. **De la auditoría de la entrega 1 (antes de prender):** (O1, medio-alto) al invalidar, `resetContent` de
-   `docs.ts` sube la página entera y propaga a todos el borrado de un snapshot malo: una página sin nada pendiente tiene
-   que descartar lo local y rearmarse con las filas del servidor (como `replace` de la base limpia); (O2) con snapshots
-   prendidos, que el reinicio lo decida solo la época de la respuesta, no la del árbol (hoy un árbol atrasado provoca una
-   subida entera de más); (O3) `invalidate_page_snapshot` pide `can_edit_page`: pedir `sees_deleted` como las demás; (O5)
-   al prender, subir `min_app_version` a la versión de lectura auditada en ese momento.
+   snapshots** (la migración `20261019120000_compactar_leer.sql`, aplicada y con los snapshots apagados;
+   `pull_page_content`, la época de contenido y el reinicio de una página cuyo snapshot se invalidó). **Entrega 2 hecha
+   (v0.133): crearlos** (`compact.ts`: el dispositivo de quien edita arma, comprueba por los dos caminos y unidad por
+   unidad, cada 10 contra todo desde cero, sube, baja la vuelta y confirma; una página por ciclo), con lo de la
+   auditoría de la entrega 1: el rearmado de D110 (O1: sin nada sin subir, la página se rearma con lo del servidor y el
+   borrado de un snapshot malo no llega a nadie), la época del árbol que reinicia solo si es más nueva (O2) y
+   `invalidate_page_snapshot` con `sees_deleted` (O3, migración `20261020120000_compactar_crear.sql`, aplicada en v0.133).
+   De su auditoría, corregido antes de publicarla: el rearmado conserva los elementos sin sus borrados (O-A: tirarlos
+   dejaba invisible lo escrito al lado de un elemento de un snapshot malo), lo mismo al restaurar una copia (O-B).
+   **Falta la entrega 3 (prenderlos):** el script de restaurar, subir `min_app_version` a la
+   versión de la entrega 2 (O5), probar de punta a punta, medir en el iPhone (también armar uno en el hilo principal y
+   cuánto frena el ciclo, O-C: si tarda, compactar fuera del ciclo o con tope), separar un snapshot corrupto de uno de
+   una versión más nueva (O-D: hoy uno roto se sigue sirviendo y cada dispositivo nuevo cae a las filas; hace falta que
+   `pull_page_snapshot` devuelva la huella, otra migración) y `snapshot_min_version`. También, de la re-verificación de
+   la entrega 2: **R-1** (medio) la marca de página rearmada vive solo en memoria; si la app se cierra a mitad del
+   rearmado, lo escrito al lado del elemento de más queda invisible para los demás: guardarla en `docState` (la prueba
+   AUD-R4 de la auditoría lo muestra); **R-2** (bajo) cada bajada que encuentra algo sin subir vuelve a subir la página
+   entera. Hoy no es urgente: ninguna página lo necesita.
 
 10. **Hecho lo principal: editar a la vez sin perder texto (v0.052).** Dos parches a y-prosemirror (el editor
    que se quedaba con lo de antes y deshacía cambios de otros; dos personas en el mismo párrafo vacío), la

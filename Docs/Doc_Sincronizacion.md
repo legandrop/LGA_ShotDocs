@@ -491,7 +491,8 @@ se guarda como hueco: es una copia de algo que ya está en las filas, no texto q
 
 ## Bajar con snapshots (compactar, B.9)
 
-Entrega 1 de `Doc_Compactar.md` (v0.127): la app sabe bajar snapshots, nadie los arma todavía.
+Entregas 1 y 2 de `Doc_Compactar.md` (v0.127: la app sabe bajar snapshots; v0.133: el dispositivo de quien edita los
+arma). Siguen apagados en la base hasta la entrega 3.
 
 - **El pedido.** `PageDocs.pullPage` baja con `remote.pullContent`: con los snapshots prendidos y la base en la versión
   17, `pull_page_content`; si no (apagados, una base sin la función), el mismo `pull_page_updates` de siempre. Un
@@ -502,10 +503,18 @@ Entrega 1 de `Doc_Compactar.md` (v0.127): la app sabe bajar snapshots, nadie los
   la página que vino en la misma respuesta, en la misma transacción que lo guardado.
 - **Un snapshot ilegible** (de una versión más nueva) no se saltea como una fila: no se guarda nada del lote, el
   cursor no se mueve y esa página baja en filas sueltas hasta que se vuelve a abrir la app.
-- **Si se invalida** (la época del árbol o la de la respuesta es otra y el dispositivo aplicó un snapshot de esa
-  página): cursor a 0, sin `syncedSV`, `syncedDS` ni envío pendiente; la página se vuelve a bajar (Yjs no duplica) y,
-  si la persona puede escribir, vuelve a subir entera una vez. Lo guardado no se toca. El ciclo baja también las
-  páginas al día cuya época cambió.
+- **Si se invalida** (el dispositivo aplicó un snapshot de esa página y la época de la respuesta es otra, o la del
+  árbol es más nueva que la anotada; un árbol atrasado no reinicia nada): **desde la entrega 2 (D110)**, sin nada propio
+  sin subir, lo guardado pasa a ser sus elementos sin ningún borrado (en una sola transacción, con el cursor,
+  `syncedSV`, `syncedDS` y el snapshot) y la página baja las filas del servidor: un borrado de más del snapshot no
+  llega a nadie, y un elemento de más se conserva y, si el servidor no lo tiene, sube con lo escrito al lado (sobra
+  texto antes que falte). Si está abierta, se vuelve a abrir. Con algo sin subir, olvida `syncedSV` y espera: lo propio
+  sube primero con todos sus elementos (`syncedDS` no deja subir los borrados del snapshot) y el rearmado va en la
+  bajada siguiente. Restaurar una copia hace lo mismo con las páginas que aplicaron un snapshot. (En v0.127 a v0.129 la página volvía a subir entera.) El ciclo baja
+  también las páginas al día cuya época cambió.
+- **Armar snapshots** (entrega 2, `compact.ts`): al final del ciclo, como mucho una página, con los snapshots prendidos
+  y una versión que alcanza; sale de las filas del servidor, nunca de lo guardado. Ver `Doc_Compactar.md`, "Cómo quedó
+  la entrega 2".
 - Restaurar una copia (`resetForRestore`) borra también los dos campos. Las versiones anteriores de la app los
   conservan sin mirarlos y siguen bajando con `pull_page_updates`.
 
