@@ -141,7 +141,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'pages',
     title: 'help.templates.title',
     text: 'help.templates.text',
-    keys: { undo: 'undo' },
+    keys: { enter: 'titleEnter', undo: 'undo' },
     words: ['template', 'plantilla', 'report', 'reporte', 'on-set', 'rodaje', 'breakdown', 'desglose', 'preproducción', 'pre-production', 'apply', 'aplicar'],
     since: TEMPLATES,
   },
