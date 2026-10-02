@@ -521,6 +521,44 @@ describe('reintentos: nada se duplica y lo sin confirmar nunca se sirve', () => 
     expect(server.snapshots[0].confirmedAt).not.toBeNull();
   });
 
+  it('la vuelta no coincide con lo que se subió: no se confirma ni se sirve', async () => {
+    const { server, page } = await setup();
+    const k = await compactor(server);
+    const orig = k.remote.pullSnapshot.bind(k.remote);
+    k.remote.pullSnapshot = async (id) => {
+      const got = await orig(id);
+      got[got.length - 1] ^= 1;
+      return got;
+    };
+    const errors: unknown[] = [];
+    const log = console.error;
+    console.error = (...args: unknown[]) => errors.push(args);
+    try {
+      await k.engine.syncNow();
+    } finally {
+      console.error = log;
+    }
+    expect(k.compactions.map((x) => x.outcome)).toEqual([{ kind: 'skipped', reason: 'check: round trip' }]);
+    expect(errors).toHaveLength(1);
+    expect(server.snapshots.every((x) => x.confirmedAt === null)).toBe(true);
+    expect(server.currentSnapshot(page)).toBeNull();
+  });
+
+  it('un invitado con Editar no invalida (no ve lo borrado; auditoría de la entrega 1, O3); un miembro con Editar sí', async () => {
+    const { server, page } = await setup({ team: true });
+    const k = await compactor(server);
+    await k.engine.syncNow();
+    const [sn] = confirmed(server, page);
+    server.addMember('g', 'guest');
+    server.grant('g', { pageId: page }, 'edit');
+    await expect(new FakeRemote(server, '1.000', 'g').invalidateSnapshot(sn.id, 'x')).rejects.toThrow('not_allowed');
+    expect(server.smeta(page).epoch).toBe(0);
+    server.addMember('e', 'member');
+    server.grant('e', { pageId: page }, 'edit');
+    expect(await new FakeRemote(server, '1.000', 'e').invalidateSnapshot(sn.id, 'x')).toBe(true);
+    expect(server.smeta(page).epoch).toBe(1);
+  });
+
   it('la respuesta de la subida se pierde: el reintento no duplica', async () => {
     const { server, page } = await setup();
     const k = await compactor(server);
