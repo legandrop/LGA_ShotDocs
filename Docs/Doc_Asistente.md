@@ -1,6 +1,6 @@
 # Asistente con la clave de cada usuario y servidor MCP (fase 5)
 
-**Estado: entregas A1 (v0.118) y A2 (v0.0XX) implementadas (ver "Cómo quedó A1" y "Cómo quedó A2" al final; la
+**Estado: entregas A1 (v0.118) y A2 (v0.126) implementadas (ver "Cómo quedó A1" y "Cómo quedó A2" al final; la
 migración de A2, sin aplicar); A3 y el MCP, en diseño** (roadmap P.24; pedido de Lega del 2026-10-02, que decide entre las opciones
 de D-06 y D-07 y lo deja listo para programar por entregas). Las decisiones están propuestas (IA1 a IA10, sección 15) y
 valen hasta que Lega diga otra cosa. Se diseñó contra `main` v0.108. Precios, límites y CORS verificados el 2026-10-02
@@ -1064,7 +1064,7 @@ una clave sin prefijo conocido en un error.
   esté cargada `GOOGLE_API_KEY`, abrir el selector de carpetas de Drive en la app publicada sin errores de CSP en la
   consola.
 
-## Cómo quedó A2 (v0.0XX)
+## Cómo quedó A2 (v0.126)
 
 Implementada en `src/assistant/` (la misma parte que se baja al abrir el panel: pasa de unos 44 KB a 68 KB sin
 comprimir, 23 KB comprimida, porque suma el conversor de Markdown con forma y el camino de crear una página con
