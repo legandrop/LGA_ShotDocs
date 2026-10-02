@@ -5,6 +5,8 @@ import * as Y from 'yjs';
 import { sameShape, yShape, type ContentShape } from '../sync/history';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import type { RestoreOutcome } from './historyUi';
+import { asOneUndoStep } from './undoGuard';
+import { BACKGROUND_META } from './editorMeta';
 
 // Restaurar una versión del historial (P.18, Docs/Doc_Historial.md, sección 6): una edición nueva POR EL EDITOR, la
 // misma vía que escribir. Una sola transacción de ProseMirror reemplaza el contenido de la página; y-prosemirror (con
@@ -147,12 +149,19 @@ export function restoreInEditor(
   const undo = editorUndo(view);
   try {
     // Un paso propio de deshacer: ni se junta con lo escrito antes ni con lo que se escriba después.
-    undo?.stopCapturing();
+    const before = undo?.undoStack.length ?? 0;
     const steps = restoreSteps(view.state.doc, node);
-    if (!steps) view.dispatch(view.state.tr.replaceWith(0, view.state.doc.content.size, node.content));
-    // Seguidas y sin cortar el deshacer: juntas son un solo paso de Ctrl/⌘+Z.
-    else for (const step of steps) view.dispatch(view.state.tr.replaceWith(step.from, step.to, step.blocks));
-    undo?.stopCapturing();
+    if (steps && steps.length === 0) return { ok: true, undo: () => false, onEdit };
+    asOneUndoStep(view.state, () => {
+      if (!steps) view.dispatch(view.state.tr.replaceWith(0, view.state.doc.content.size, node.content).setMeta(BACKGROUND_META, true));
+      else for (const step of steps) view.dispatch(view.state.tr.replaceWith(step.from, step.to, step.blocks).setMeta(BACKGROUND_META, true));
+    });
+    // Al final la página tiene que ser la versión, con un solo paso de deshacer. Si no (un plugin descartó parte, por
+    // ejemplo), se deshace lo que haya quedado y no se avisa "restaurada".
+    if (!view.state.doc.eq(node) || (undo && undo.undoStack.length !== before + 1)) {
+      while (undo && undo.undoStack.length > before) undo.undo();
+      return { ok: false, reason: 'failed' };
+    }
   } catch {
     return { ok: false, reason: 'failed' };
   }

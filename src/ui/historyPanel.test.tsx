@@ -5,12 +5,12 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { prefs } from '../prefs';
 import { ServicesContext, type Services } from '../services';
-import { HISTORY_SCHEMA_VERSION, yShape } from '../sync/history';
+import { HISTORY_SCHEMA_VERSION, yShape, type HistoryRow } from '../sync/history';
 import type { SupabaseRemote } from '../sync/remote';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
-import { HistoryPanel } from './HistoryPanel';
+import { HistoryPanel, recentOther } from './HistoryPanel';
 import { canSeeHistory, closeHistory, registerRestoreTarget } from './historyUi';
 
 // La pantalla del historial (P.18, Docs/Doc_Historial.md, entrega 1) montada contra el servidor en memoria: la lista
@@ -86,9 +86,9 @@ function services(d: Device, userId: string): Services {
 
 const settle = (ms = 40) => act(async () => new Promise((r) => setTimeout(r, ms)));
 
-async function mount(value: Services, pageId: string): Promise<HTMLElement> {
+async function mount(value: Services, pageId: string, parent: HTMLElement = document.body): Promise<HTMLElement> {
   const host = document.createElement('div');
-  document.body.append(host);
+  parent.append(host);
   const root = createRoot(host);
   roots.push(root);
   await act(async () => root.render(<ServicesContext.Provider value={value}><HistoryPanel pageId={pageId} /></ServicesContext.Provider>));
@@ -215,6 +215,8 @@ describe('la pantalla del historial', () => {
     const button = host.querySelector<HTMLButtonElement>('.history-restore')!;
     expect(button.disabled).toBe(true);
     expect(button.getAttribute('data-tip')).toContain("aren't synced yet");
+    // En el teléfono no hay tooltip: el motivo va también en una línea (la muestra el CSS en pantalla angosta).
+    expect(host.querySelector('.history-why')?.textContent).toContain("aren't synced yet");
   });
 
   it('restaurar: confirma, sincroniza, se lo pide al editor de la página con la versión elegida y deja el aviso con Undo', async () => {
@@ -269,5 +271,71 @@ describe('la pantalla del historial', () => {
     await act(async () => confirm.click());
     await settle(200);
     expect(host.querySelector('.history-message')?.textContent).toContain("The page isn't open for editing on this device");
+  });
+
+  it('mientras está abierto, el teclado no llega a la página: el foco va al historial y lo demás queda inert; al cerrar, vuelve', async () => {
+    prefs.set({ language: 'en' });
+    const { a, pageId, server } = await setup();
+    // Como la app: la página (un editor con el foco) y el historial, hermanos adentro de `.shell`.
+    const shell = document.createElement('div');
+    shell.className = 'shell';
+    const page = document.createElement('div');
+    page.contentEditable = 'true';
+    page.tabIndex = 0;
+    shell.append(page);
+    document.body.append(shell);
+    page.focus();
+    expect(document.activeElement).toBe(page);
+    const host = await mount(services(a, server.ownerId), pageId, shell);
+    const screen = host.querySelector('.history-screen')!;
+    expect(screen.contains(document.activeElement)).toBe(true);
+    expect(page.hasAttribute('inert')).toBe(true);
+    expect(host.hasAttribute('inert')).toBe(false);
+    act(() => roots.pop()!.unmount());
+    expect(page.hasAttribute('inert')).toBe(false);
+    expect(document.activeElement).toBe(page);
+  });
+
+  it('si otra persona cambió la página mientras el historial estaba abierto, al confirmar vuelve a preguntar con el aviso', async () => {
+    prefs.set({ language: 'en' });
+    const { a, b, pageId, server } = await setup();
+    const asked: Y.Doc[] = [];
+    offs.push(
+      registerRestoreTarget(pageId, (version) => {
+        asked.push(version);
+        return { ok: true, undo: () => true, onEdit: () => () => undefined };
+      }),
+    );
+    const host = await mount(services(a, server.ownerId), pageId);
+    await act(async () => (host.querySelectorAll('.history-session')[1] as HTMLButtonElement).click());
+    await settle(300);
+    await act(async () => host.querySelector<HTMLButtonElement>('.history-restore')!.click());
+    await settle(100);
+    expect(host.querySelector('.history-confirm')?.textContent).not.toContain('could be left out');
+    // Bea escribe mientras tanto (desde su dispositivo).
+    await edit(b, pageId, (g) => g.insert(0, [block('z', 'Bea, recién')]));
+    await b.engine.syncNow();
+    const confirm = () => [...host.querySelectorAll<HTMLButtonElement>('.history-confirm button')].find((x) => x.textContent === 'Restore')!;
+    await act(async () => confirm().click());
+    await settle(300);
+    expect(asked.length).toBe(0);
+    expect(host.querySelector('.history-confirm')?.textContent).toContain('bea@example.com changed this page in the last 2 minutes');
+    // La versión actual ya trae lo de Bea (la última sesión, con su correo).
+    expect(host.querySelectorAll('.history-session')[0].textContent).toContain('bea@example.com');
+    // Ahora sí: confirmar de nuevo restaura.
+    await act(async () => confirm().click());
+    await settle(300);
+    expect(asked.length).toBe(1);
+  });
+});
+
+describe('quién cambió la página hace poco', () => {
+  const row = (seq: number, by: string, at: string): HistoryRow => ({ id: seq, seq, createdBy: by, createdAt: at, data: new Uint8Array() });
+  it('otra persona en los últimos 2 minutos; uno mismo o algo más viejo, no', () => {
+    const now = Date.parse('2026-10-01T10:02:00Z');
+    expect(recentOther([row(1, 'ana', '2026-10-01T10:00:30Z'), row(2, 'yo', '2026-10-01T10:01:00Z')], 'yo', now)).toBe('ana');
+    expect(recentOther([row(1, 'ana', '2026-10-01T09:59:00Z'), row(2, 'yo', '2026-10-01T10:01:00Z')], 'yo', now)).toBeUndefined();
+    expect(recentOther([row(1, 'yo', '2026-10-01T10:01:00Z')], 'yo', now)).toBeUndefined();
+    expect(recentOther([], 'yo', now)).toBeUndefined();
   });
 });

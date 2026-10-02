@@ -5,7 +5,7 @@ import '../i18n/lazy/history';
 import { mediaIdsInDoc } from '../media/usage';
 import { isDeletedRow } from '../media/queue';
 import { ServicesContext, usePermissions, useServices, useSyncStatus, useTree } from '../services';
-import { loadPageHistory, MAX_RESTORE_BYTES, PageHistory, versionBytes, type HistorySession } from '../sync/history';
+import { loadPageHistory, MAX_RESTORE_BYTES, PageHistory, versionBytes, type HistoryRow, type HistorySession } from '../sync/history';
 import type { HistoryRemote, MediaRemote } from '../sync/remote';
 import { errorMessage, isNetworkError, RemoteError } from '../sync/types';
 import { Permissions } from '../sync/access';
@@ -67,6 +67,20 @@ function timeLabel(iso: string, lang: string): string {
 /** La fecha y la hora de una versión, para el aviso y la barra. */
 export function whenLabel(iso: string, lang: string): string {
   return `${dayLabel(iso, lang)}, ${timeLabel(iso, lang)}`;
+}
+
+/**
+ * Quién (que no sea `me`) cambió la página en los últimos 2 minutos (con el reloj del dispositivo; `undefined` si nadie).
+ * Es el aviso de antes de confirmar; lo que de verdad ataja es volver a mirar el servidor al confirmar (`restore`): si
+ * llegó algo de otra persona desde que se abrió el historial, se vuelve a preguntar.
+ */
+export function recentOther(rows: readonly HistoryRow[], me: string, now = Date.now()): string | null | undefined {
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const row = rows[i];
+    if (now - Date.parse(row.createdAt) >= RECENT_OTHERS_MS) break;
+    if (row.createdBy !== me) return row.createdBy;
+  }
+  return undefined;
 }
 
 export function HistoryPanel({ pageId }: { pageId: string }) {
@@ -200,6 +214,23 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
     'history.why.notOpen': tr('history.why.notOpen'),
   };
 
+  // Mientras está abierto, el teclado no puede llegar a la página escondida (B3 de la auditoría): el foco pasa a la
+  // pantalla del historial y lo demás de la app queda `inert`. Al cerrar, todo vuelve y el foco a donde estaba.
+  const screenRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const screen = screenRef.current;
+    if (!screen) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const shell = screen.closest('.shell') ?? document.body;
+    const hidden = [...shell.children].filter((el): el is HTMLElement => el instanceof HTMLElement && !el.contains(screen) && !el.hasAttribute('inert'));
+    for (const el of hidden) el.setAttribute('inert', '');
+    screen.focus({ preventScroll: true });
+    return () => {
+      for (const el of hidden) el.removeAttribute('inert');
+      if (previous?.isConnected) previous.focus({ preventScroll: true });
+    };
+  }, []);
+
   // Escape cierra (primero la confirmación).
   const confirmRef = useRef(confirm);
   confirmRef.current = confirm;
@@ -228,8 +259,7 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
         photos = 0;
       }
     }
-    const recent = ready.history.rows.filter((r) => r.createdBy !== user.id && Date.now() - Date.parse(r.createdAt) < RECENT_OTHERS_MS);
-    const other = recent.length ? recent[recent.length - 1].createdBy : undefined;
+    const other = recentOther(ready.history.rows, user.id);
     setConfirm({ photos, others: other === undefined ? null : nameOf(other) });
   }
 
@@ -241,6 +271,26 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
     setMessage(tr('history.syncing'));
     try {
       await engine.syncNow();
+      // Lo que llegó al servidor desde que se abrió el historial (O1 de la auditoría): si otra persona cambió la página
+      // mientras tanto, se suma a la lista y se vuelve a preguntar, con el aviso de quién.
+      if (ready) {
+        const known = ready.history.rows;
+        const fresh: HistoryRow[] = [];
+        for (;;) {
+          const after = fresh.length ? fresh[fresh.length - 1].seq : (known[known.length - 1]?.seq ?? 0);
+          const batch = await historyRemote.pageHistory(pageId, after, 500);
+          fresh.push(...batch);
+          if (batch.length < 500) break;
+        }
+        if (fresh.some((row) => row.createdBy !== user.id)) {
+          const rows = [...known, ...fresh];
+          setLoading({ state: 'ready', history: new PageHistory(rows), emails: await historyRemote.pageHistoryAuthors(pageId).then((list) => new Map(list.map((a) => [a.user_id, a.email])), () => ready.emails) });
+          const other = fresh.filter((row) => row.createdBy !== user.id).pop()!.createdBy;
+          setMessage(null);
+          setConfirm({ photos: 0, others: nameOf(other) });
+          return;
+        }
+      }
       const [pages, stillMissing] = await Promise.all([docs.unsyncedPages(), engine.isMissingContent(pageId)]);
       const why: Blocker | null = !engine.getStatus().online
         ? 'history.why.offline'
@@ -301,7 +351,7 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
   );
 
   return (
-    <div className={`history-screen pane-${pane}`} role="dialog" aria-modal="true" aria-label={tr('history.title')}>
+    <div ref={screenRef} tabIndex={-1} className={`history-screen pane-${pane}`} role="dialog" aria-modal="true" aria-label={tr('history.title')}>
       <header className="history-bar">
         <button
           className="link history-back"
@@ -319,6 +369,8 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
         </h1>
         {restoreButton}
       </header>
+      {/* En el teléfono no hay tooltip: el motivo de que no se pueda restaurar, en una línea (O4 de la auditoría). */}
+      {session && !isCurrent && blocker && !message && <p className="history-why">{blockerText[blocker]}</p>}
       {message && (
         <p className="history-message" role="status">
           {message}

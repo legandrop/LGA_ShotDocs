@@ -23,6 +23,10 @@
   --hist-8: #b4bcc6;
 }
 
+.history-screen:focus {
+  outline: none;
+}
+
 .history-screen {
   position: fixed;
   inset: 0;
@@ -68,7 +72,8 @@
 }
 
 .history-narrow,
-.history-back-list {
+.history-back-list,
+.history-why {
   display: none;
 }
 
@@ -207,6 +212,15 @@
 
   .history-wide {
     display: none;
+  }
+
+  .history-screen.pane-version .history-why {
+    display: block;
+    margin: 0;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 13px;
   }
 
   .history-narrow {

@@ -814,3 +814,25 @@ diccionario.
 **Lo que falta (entregas 2 y 3):** los cambios marcados por persona (*Show changes*), el texto huérfano y el aviso en el
 dispositivo de quien escribió (con la subida sin GC de la otra rama), el Worker y la diferencia solo de lo tocado,
 nombrar versiones (`page_versions`), *Restored from…* en la lista, la caché y el historial sin red, y medir en el iPhone.
+
+## Correcciones de la auditoría de la entrega 1
+
+Una auditoría independiente de la entrega 1 encontró tres bloqueantes en restaurar y la pantalla (la migración y los
+permisos, bien). Corregidos; manda sobre "Cómo quedó (entrega 1)" en lo que toca:
+
+| Hallazgo | Corrección |
+|---|---|
+| **B1.** Con secciones colapsadas, restaurar no hacía nada (o la mitad) y avisaba "Restored": colapsar (`collapseEditor.ts`, `hiddenLost`) descarta una transacción propia que borra bloques escondidos | Cada tramo va con `BACKGROUND_META` (colapsar no la descarta). Al final se comprueba que la página es la versión y que el deshacer creció en un paso; si no, se deshace lo que quedó y no se avisa "Restored" (`failed`) |
+| **B2.** Con dos o más tramos que sacan bloques, el *Undo* del aviso deshacía solo una parte: la guarda del deshacer (`undoGuard.ts`) corta la pila en cada transacción que saca bloques | Los tramos van adentro de `asOneUndoStep`: un solo paso, también para Ctrl/⌘+Z |
+| **B3.** Con el historial abierto por el atajo, el teclado seguía escribiendo en la página escondida (también Ctrl+A y Retroceso) | Al abrir, el foco pasa a la pantalla del historial y lo demás de la app queda `inert`; al cerrar, todo vuelve y el foco a donde estaba |
+| O1. "Otra persona cambió la página" se miraba solo con lo bajado al abrir | Al confirmar, después de sincronizar, se piden las filas nuevas: si hay de otra persona, la lista se actualiza y se vuelve a preguntar con el aviso. El aviso de antes usa el reloj del dispositivo |
+| O2. Restaurar una versión igual a la actual dejaba un *Undo* que deshacía otra cosa | Sin tramos, no se toca nada y el *Undo* no hace nada (B2) |
+| O4. En el teléfono, el motivo de *Restore* apagado no se veía (solo tooltip) | En pantalla angosta, una línea debajo de la barra |
+| O3. La lista no se actualiza sola con el historial abierto | Al roadmap (se actualiza al confirmar, O1) |
+| O5. `npm run db:test` (`scripts/db-migrate.mjs --test`) aplica lo pendiente DE VERDAD antes de correr las pruebas | Para probar una migración sin aplicarla, un script propio con `begin … rollback` (como se hizo acá); nunca `db:test` |
+
+Pruebas nuevas: `src/ui/historyRestorePage.test.ts` (las 6 de la auditoría, con las extensiones reales de la página:
+sección colapsada, el mismo caso sin colapsar, dos tramos con *Undo* en un paso, versión igual a la actual, salto de hoja
+y tabla, otro escribiendo en una sección colapsada) y en `historyPanel.test.tsx` el foco y `inert` (B3), el aviso al
+confirmar (O1), `recentOther` y la línea del motivo (O4). Sacar `inert` o la nueva consulta al confirmar hace fallar su
+prueba. Suite: 2184 pasan.
