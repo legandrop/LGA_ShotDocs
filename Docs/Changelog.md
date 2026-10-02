@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+Lo borrado de una página viajaba en las filas de `page_updates` a cualquiera que la puede ver, invitados incluidos, y
+desde v0.095 también lo tecleado y borrado antes de subir (D14). Diseño, sin código, en `Doc_Privacidad_Borrado.md`:
+medido con filas reales y simulaciones, propone una subida con GC selectivo (lo que uno borra antes de subir no sale
+del dispositivo; lo de D15 sigue llegando) y una cadena limpia, base y deltas con lo borrado como hueco armados por un
+editor, que `pull_page_updates` sirve a Ver, Comentar e invitados. Con la migración en borrador, las pruebas, las
+entregas y una pregunta para Lega.
+[ Privacidad de lo borrado - diseño de la subida con GC selectivo y la cadena limpia para quien no edita ]
+
 v0.098 :
 
 No había forma de ver quién cambió una página ni de volver atrás (P.18). Diseño en `Doc_Historial.md` (auditado, con las

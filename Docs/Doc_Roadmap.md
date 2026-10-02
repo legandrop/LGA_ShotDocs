@@ -257,7 +257,8 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   `20261007120000_historial.sql` está **sin aplicar** (probada en `begin … rollback`). **Falta:** aplicarla (con copia
   de seguridad), las marcas por persona, el texto huérfano con el aviso a quien escribió (necesita la subida sin GC,
   en otra rama), nombrar versiones, la caché sin red, que la lista se actualice sola con el historial abierto (O3 de la
-  auditoría) y medir en el iPhone. Aparte, después: que lo borrado no llegue a quien solo ve la página (decisión 2).
+  auditoría) y medir en el iPhone. Aparte, después: que lo borrado no llegue a quien solo ve la página (decisión 2;
+  diseño en `Doc_Privacidad_Borrado.md`, B.18).
   Ojo: `npm run db:test` aplica las migraciones de verdad; esta se probó con un script en `begin … rollback`.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
@@ -449,6 +450,14 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
     por versión los cambios del árbol ni los comentarios (las versiones anteriores a esta los siguen subiendo con la
     mínima subida): si alguna vez hace falta, una migración como la de archivos. Ver `Doc_Sincronizacion.md`, "Volver
     después de mucho tiempo sin red".
+18. **Que lo borrado no llegue a quien solo ve la página (D14). Diseño en `Doc_Privacidad_Borrado.md`, sin código.**
+    Hoy lo borrado viaja en las filas a cualquiera que ve la página (también invitados), y desde v0.095 también lo
+    tecleado y borrado antes de subir. Entregas: (0) avisarlo al compartir y en la ayuda; (1) subida con GC selectivo:
+    lo que uno borra antes de subir no sale del dispositivo, lo de D15 sigue llegando (solo app); (2) la cadena limpia
+    (base y deltas con lo borrado como hueco, la arma un editor) para Ver, Comentar e invitados, con la migración y el
+    interruptor `clean_min_version`, antes de invitar al primer cliente de verdad; (3) limpiar el dispositivo de quien
+    deja de ver lo borrado. Pregunta para Lega: aceptar que el cliente vea los cambios con unos segundos o minutos de
+    demora (sección 13).
 
 ### C. Esperan a Lega
 
