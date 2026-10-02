@@ -790,8 +790,9 @@ rápido que abrir cada página.
    imprimir las decodifica todas y eso lo mide la entrega 1 (sección 5).
 5. **Las tarjetas de Drive** se dibujan igual en el editor de exportación (la copia lleva la tarjeta y el link, sin el
    reproductor) y su `iframe` es `loading="lazy"` y está afuera de la pantalla, así que no se carga.
-6. **Lo que no se midió:** (la base local de la medición fue el IndexedDB de Chromium, no uno en memoria, como comprobó
-   la auditoría; leer la copia fue el 18 % del tiempo) el iPhone (WebKit) y
+6. **Lo que no se midió:** (corregido en la auditoría de la entrega 1: la base local de la medición fue `fake-indexeddb`,
+   que `src/sync/testing.ts` pone también en el arnés del navegador, no el IndexedDB de Chromium; los 14,5 s son una cota
+   pesimista; leer la copia fue el 18 % del tiempo) el iPhone (WebKit) y
    Firefox, a mano en la entrega 1; videos y adjuntos (necesitan el portero y la vista previa de PDF; se dibujan con el
    mismo bloque `image` y la misma marca que la página).
 
@@ -813,17 +814,25 @@ abrir ese PDF. La ayuda suma *Export pages and projects as one PDF*; sin atajos 
   nunca), los comentarios y las fotos achicadas; la vuelve a paginar (`paginateExport`, las unidades de siempre más las
   de la exportación, **en el orden del documento**) y la pone con su hoja de CSS (`page: sd-A4`, `@page sd-A4 {…}`). El
   índice se pagina al final con la hoja de la raíz y recién ahí lleva los números. `printBook` pone las reglas `@page`,
-  la clase `sd-printing` y el nombre del PDF (título de la raíz y fecha), y lo deja todo como estaba al cerrar el diálogo.
+  las clases `sd-printing` y `sd-export-printing` (sin esta, el libro no se imprime: el Imprimir del navegador mientras
+  la ventana arma imprime la página de siempre) y el nombre del PDF (título de la raíz y fecha), y lo deja todo como
+  estaba al cerrar el diálogo. Las anotaciones de las fotos (P.20) se dibujan en el editor de exportación con el mismo
+  `attachMarkupOverlay` de la página, desde el mapa `photoMarkup` de la copia, antes de copiar la vista.
 - `exportImages.ts`: cada foto, la mejor del dispositivo (original, nítida de 2048 o la miniatura que se ve; con *Sharp
   photos*, la nítida pedida al Drive por el portero, hasta 1000), abierta una vez y achicada a su ancho impreso a
-  200 ppp (tope 2400 px), de a cuatro a la vez, con `OffscreenCanvas` donde está. El tope cuenta los píxeles ya achicados.
-- `exportComments.ts`: los hilos guardados en el dispositivo más lo que la cola tiene sin subir; el autor por nombre (la
-  parte del correo antes de la `@`; el importado y el del link, tal cual), nunca un correo; "(deleted comment)" arriba de
-  un hilo con el primero borrado.
+  200 ppp (tope 2400 px), de a cuatro a la vez **en Workers** (`resize.worker.ts`, `OffscreenCanvas`; donde no hay, en
+  el hilo principal). El tope cuenta los píxeles ya achicados.
+- `exportComments.ts`: con *Comments*, antes de dibujar baja los comentarios de cada página del plan (`comments.refresh`,
+  lo mismo que abrir la página; "Fetching comments: page N of M", cancelable), así salen los de los demás en las páginas
+  que el dispositivo no abrió; sin red, salen los del dispositivo y el índice y la ventana lo dicen. Después, los hilos
+  guardados más lo que la cola tiene sin subir; el autor por nombre (la parte del correo antes de la `@`, también si
+  alguien escribió su correo como nombre en el link público), nunca un correo; "(deleted comment)" arriba de un hilo
+  con el primero borrado.
 - `printSupport.ts`: la lista medida (Chrome y Edge de computadora, por `userAgentData` o el `userAgent`) y si es un
   táctil (puntero grueso o teléfono; una computadora con pantalla táctil no cuenta).
 - `exportPages.ts`: una página que no se puede leer o dibujar se saltea con su aviso en el PDF y siguen las demás.
-- `bench/pdf.tsx` + `pdf.html`: la medición con la impresión real (abajo).
+- `bench/pdf.tsx` + `pdf.html`: el arnés de la medición (espera a que la cola de fotos no tenga subidas pendientes;
+  ojo: corre sobre `fake-indexeddb`, ver abajo).
 
 **Las observaciones de la auditoría de la entrega 0:** O3, una foto que no carga ya no se espera dos veces (si las del
 editor vencieron, las de la copia no se esperan) y después de tres páginas seguidas con vencimiento la espera baja a 1 s
@@ -835,35 +844,36 @@ página con contenido de una versión más nueva sale con "Part of this page nee
 la ventana lo cuenta; una página que falla se saltea marcada. O7, la quinta rama del proyecto de prueba es libre (sale
 en A4).
 
-**Medido con `window.print()` y *Save as PDF* reales** (Chrome 154.0.8037.93 y Edge 154.0.4258.48 instalados en
-Windows, perfil nuevo, servidor falso de `src/sync/testing.ts`, sin login; el PDF se leyó con pdf.js). Chrome con
-`--kiosk-printing` y *Save as PDF* como destino guarda el PDF solo; Edge no (cancela el "Guardar como" que abre siempre
-para el PDF), así que de Edge se leyó el documento entero que arma su diálogo para la vista previa de *Save as PDF*, el
-mismo trabajo de impresión.
+**Primera medición (con la impresión real, antes de la regla de no abrir navegadores instalados):** Chrome 154 con
+`--kiosk-printing` y Edge 154 (el documento de la vista previa de *Save as PDF*) imprimieron el proyecto de 300 páginas
+(299 sin la de la papelera, 2219 fotos, comentarios en 43): **1618 hojas de 1618** que dice la app, ninguna de otro
+tamaño que su página, el título de las 299 en la hoja que dice el índice y los 299 links del índice a esa hoja; PDF de
+56,5 MB, 882 millones de píxeles, memoria del navegador de 3,6 GB (4,7 GB en Edge con la vista previa); ningún correo,
+nada guardado cambiado. También una rama (67 de 67 hojas) y todo con la hoja de la raíz (272 de 272 en A4). Esa
+medición encontró un error: la paginación ordenaba las unidades por altura y un salto de hoja vacío (mide 0) quedaba
+arriba de todo; la página empezaba con su encabezado solo en una hoja. Se ordena por el documento, con su prueba.
+**Desde entonces solo se mide con el Chromium de Playwright sin ventana y `page.pdf`.**
 
-| Prueba | Chrome | Edge |
-|---|---|---|
-| Proyecto de 300 páginas (299 sin la de la papelera), 2219 fotos, comentarios en 43 páginas | 1618 hojas de 1618 que dice la app | 1618 de 1618 |
-| Tamaño de cada hoja contra la de su página (A4, A5 horizontal, Carta, A3 horizontal; la rama libre en A4) | 0 distintas | 0 distintas |
-| El título de cada página en la hoja que dice el índice | 299 de 299 | 299 de 299 |
-| Links del índice que llevan a la hoja donde empieza la página | 299 de 299 (826 links internos en todo el PDF) | 299 de 299 |
-| Armar el PDF / abrir y guardar | 197 s / 25 s | 208 s / 33 s |
-| PDF / píxeles de fotos / memoria de los procesos del navegador (pico) | 56,5 MB / 882 millones / 3,6 GB | 56,5 MB / 882 millones / 4,7 GB (con la vista previa) |
-| Correos en el PDF, páginas o comentarios guardados cambiados, cambios del árbol en cola | 0 / 0 / 0 | 0 / 0 / 0 |
-| Rama de 11 páginas (Chrome) | 67 hojas de 67, 11 de 11, sin el nombre del proyecto | — |
-| Todo con la hoja de la raíz (`named=0`, lo que hace un navegador fuera de la lista), 60 páginas | 272 hojas A4 de 272, 59 de 59 | — |
+**El tiempo (corregido por la auditoría de la entrega 1).** Los "197 s" de la primera medición eran del arnés, no de
+exportar: (1) `media.idle()` espera las miniaturas, no las subidas, y al empezar quedaban 2187 de 2219 fotos subiéndose
+al servidor falso, en el mismo hilo; (2) `src/sync/testing.ts` importa `fake-indexeddb/auto`, que reemplaza también en
+el navegador el IndexedDB por uno en JavaScript. Con el IndexedDB del navegador y la cola quieta la auditoría midió
+39 a 54 s (mediana 49 s), el 75-80 % en achicar fotos en el hilo principal. **Con el achique en Workers** (esta entrega)
+y *Comments* tildada (bajar los comentarios de las 300 páginas incluido): **32,8 y 29,3 s**, con 15,1 y 13,2 s de CPU
+del hilo principal (antes, ~44 s), 1621 hojas, 882 millones de píxeles (Chromium de Playwright sin ventana,
+`correcciones/perf-desglose.mjs` de la auditoría con `NATIVE_IDB=1`). Objetivo: menos de 60 s.
 
-Los 197 s son casi todos de las primeras páginas: en el arnés, mientras la cola de fotos sigue procesando las 2219
-fotos recién agregadas, cada foto grande tarda ~1 s en achicarse; pasadas esas páginas, ~100 ms por página (60
-páginas: 11,6 s). Aislado, abrir y achicar una foto de 1600 px son ~15 ms. **La primera medición encontró un error:**
-la paginación ordenaba las unidades por altura y un salto de hoja vacío (mide 0) quedaba arriba de todo; la página
-empezaba con su encabezado solo en una hoja (3 de 12 títulos en otra hoja). Se ordena por el documento, con su prueba.
+**El recorrido de la auditoría, repetido después de las correcciones** (la app de verdad sobre el servidor falso,
+Chromium sin ventana, PDF con `page.pdf`): **45 de 45 pasos bien**: la ventana con los círculos y las casillas en su
+línea (computadora y teléfono), los comentarios de otra persona en una página que el dispositivo no abrió salen en el
+PDF, ninguno se pierde ni cambia (solo se suman los del servidor), Ctrl+P mientras arma no imprime el libro, el índice
+cierto en los 6 PDFs (rama, proyecto, invitado, fuera de la lista, teléfono, Mac), *Cancel* sin dejar nada.
 
-**El tope de píxeles** pasó de 800 a 1000 millones en la computadora: el proyecto de 300 páginas son 882 millones y la
-memoria llega a 3,6 GB (4,7 GB en Edge con la vista previa); con 800 cortaba ese proyecto. El tope se descubre mientras
-arma (no antes): la ventana lo dice y ofrece las ramas de primer nivel. En el teléfono queda en 50 millones y 60
-páginas, sin medir.
+**Los topes.** Computadora: 500 páginas y 1000 millones de píxeles (el proyecto de 300 páginas son 882 millones);
+**con menos de 8 GB según `navigator.deviceMemory` (Chrome y Edge), 400 millones**: el diálogo de imprimir decodifica
+todas las fotos a la vez (1000 millones son unos 4 GB). El tope de píxeles se descubre mientras arma: la ventana lo dice
+y ofrece las ramas de primer nivel. Teléfono: 60 páginas y 50 millones, sin medir.
 
-**Lo que no se midió (para Lega, a mano):** Safari de la Mac, Firefox, el iPhone y el iPad (hojas mezcladas, memoria,
-el toque para abrir el diálogo), el diálogo de Chrome con *Save as PDF* elegido a mano (el kiosco usa el mismo trabajo
-de impresión), *Sharp photos* con el portero real y videos y adjuntos con su tarjeta.
+**Lo que no se midió (para Lega, a mano):** Chrome y Edge guardando de verdad con *Save as PDF*, Safari de la Mac,
+Firefox, el iPhone y el iPad (hojas mezcladas, memoria, el toque para abrir el diálogo), una compu de 8 GB con el
+proyecto más grande, *Sharp photos* con el portero real, las anotaciones en el PDF con fotos reales, videos y adjuntos.

@@ -112,6 +112,13 @@ async function run() {
   await d.comments.run();
   // Que la cola de fotos termine de hacer miniaturas y subir (si no, exportar compite con ella y se mide eso).
   await d.media.idle();
+  // `idle()` espera las miniaturas, no las subidas: en el servidor falso subir es CPU del mismo hilo y se mediría eso
+  // (auditoría de la entrega 1). Un proyecto real ya sincronizado no tiene subidas pendientes.
+  for (let quiet = 0; quiet < 3; ) {
+    await d.engine.syncMedia();
+    quiet = (await d.media.status()).pending === 0 ? quiet + 1 : 0;
+    await new Promise((r) => setTimeout(r, 200));
+  }
   await d.engine.syncNow();
   const setupMs = performance.now() - t0;
   log(`proyecto: ${specs.length} páginas, ${photos} fotos, ${Math.round(setupMs / 1000)} s`);
