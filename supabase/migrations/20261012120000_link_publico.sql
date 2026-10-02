@@ -567,12 +567,17 @@ begin
 end;
 $$;
 
--- Los archivos que el link ve (las filas que la app guarda para mostrar fotos y videos): solo lo que pide y ve.
+-- Los archivos que el link ve (las filas que la app guarda para mostrar fotos y videos): solo lo que pide y ve. La rama
+-- se calcula UNA vez por pedido (no una por archivo: con 200 ids costaba medio segundo de la base) y cuenta como una
+-- bajada (`pull`: una vez y los bytes de lo devuelto, para los topes y el contador de Share). VOLATILE: escribe la
+-- cuenta.
 create function public.plink_media_files(p_ids uuid[])
 returns table (id uuid, name text, mime text, size bigint, width int, height int, duration real,
                thumb_at timestamptz, drive_id text)
-language plpgsql stable security definer set search_path = ''
+language plpgsql volatile security definer set search_path = ''
 as $$
+declare
+  out_rows jsonb;
 begin
   if (private.current_plink()).id is null then
     raise exception 'link_not_found' using errcode = 'P0002';
@@ -580,10 +585,22 @@ begin
   if coalesce(array_length(p_ids, 1), 0) > 200 then
     raise exception 'too_many_files' using errcode = '22023';
   end if;
+  with br as materialized (select b as page_id from private.plink_branch() b)
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'id', f.id, 'name', f.name, 'mime', f.mime, 'size', f.size, 'width', f.width, 'height', f.height,
+           'duration', f.duration, 'thumb_at', f.thumb_at, 'drive_id', f.drive_id) order by f.id), '[]'::jsonb)
+  into out_rows
+  from public.files f
+  where f.id = any (p_ids)
+    and exists (
+      select 1 from public.page_files pf
+      where pf.file_id = f.id and pf.removed_at is null and not pf.is_foreign
+        and pf.page_id in (select br.page_id from br));
+  perform private.plink_count('pull', 1, octet_length(out_rows::text));
   return query
-    select f.id, f.name, f.mime, f.size, f.width, f.height, f.duration, f.thumb_at, f.drive_id
-    from public.files f
-    where f.id = any (p_ids) and private.plink_file_level(f.id) >= 1;
+    select (r ->> 'id')::uuid, r ->> 'name', r ->> 'mime', (r ->> 'size')::bigint, (r ->> 'width')::int,
+           (r ->> 'height')::int, (r ->> 'duration')::real, (r ->> 'thumb_at')::timestamptz, r ->> 'drive_id'
+    from jsonb_array_elements(out_rows) r;
 end;
 $$;
 
@@ -725,7 +742,7 @@ begin
     raise exception 'page_not_found' using errcode = 'P0002';
   end if;
   if name is null or char_length(name) not between 1 and 60
-     or name ~ '[[:cntrl:]\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]' then
+     or name ~ '[[:cntrl:]\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2069\ufeff]' then
     raise exception 'author_invalid' using errcode = '22023';
   end if;
   if p_thread_id is not null then
@@ -1013,6 +1030,9 @@ begin
   values (p_new_id, p_page, t, extensions.digest(t, 'sha256'), old.level, auth.uid(),
           case when old.expires_at > now() then old.expires_at end)
   returning * into l;
+  -- Como crear: el link nuevo no recibe una base armada antes de lo que se borró después (el reset es justo para
+  -- cuando un link se escapó y se limpió la página).
+  perform private.clean_reset(null, p_page);
   return private.public_link_json(l);
 end;
 $$;

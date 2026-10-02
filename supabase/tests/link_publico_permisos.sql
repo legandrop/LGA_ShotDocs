@@ -359,11 +359,11 @@ begin
   assert not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
                      where n.nspname = 'public' and p.proname like 'plink\_%' and has_function_privilege('authenticated', p.oid, 'execute')),
     'authenticated ejecuta plink_*';
-  -- Las que cuentan son VOLATILE (PostgREST corre las STABLE en solo lectura y contar fallaría); la única STABLE, la que no cuenta.
+  -- Todas cuentan, así que todas son VOLATILE (PostgREST corre las STABLE en solo lectura y contar fallaría).
   assert (select string_agg(p.proname || ':' || p.provolatile::text, ',' order by p.proname)
           from pg_proc p join pg_namespace n on n.oid = p.pronamespace
           where n.nspname = 'public' and p.proname like 'plink\_%')
-       = 'plink_add_comment:v,plink_delete_comment:v,plink_edit_comment:v,plink_list_comments:v,plink_media_file:v,plink_media_files:s,plink_open:v,plink_pull_page:v,plink_tree:v',
+       = 'plink_add_comment:v,plink_delete_comment:v,plink_edit_comment:v,plink_list_comments:v,plink_media_file:v,plink_media_files:v,plink_open:v,plink_pull_page:v,plink_tree:v',
     'volatilidad de plink_*';
 end;
 $$;
@@ -493,6 +493,7 @@ do $$
 declare
   j json;
   n bigint;
+  b bigint;
 begin
   perform pg_temp.as_anon(pg_temp.tok('S'));
   n := pg_temp.used('S', 'pass');
@@ -507,6 +508,20 @@ begin
   assert pg_temp.used('S', 'pass') = n + 1, 'los pases negados cuentan';
   assert (select string_agg(f.name, ',') from public.plink_media_files(array[pg_temp.u('d1f1'), pg_temp.u('d1f2'), pg_temp.u('d1f3'), pg_temp.u('d1f4'), pg_temp.u('d1f5')]) f) = 'activo.jpg',
     'plink_media_files da otros archivos';
+  -- Cuenta como una bajada (los topes y el contador de Share la ven): una vez y los bytes de lo devuelto, también si
+  -- no devuelve nada; sin token, no.
+  n := pg_temp.used('S', 'pull');
+  b := pg_temp.used_bytes('S', 'pull');
+  perform public.plink_media_files(array[pg_temp.u('d1f1')]);
+  assert pg_temp.used('S', 'pull') = n + 1 and pg_temp.used_bytes('S', 'pull') > b + 50, 'plink_media_files no cuenta';
+  perform public.plink_media_files(array[pg_temp.u('d1f3')]);
+  assert pg_temp.used('S', 'pull') = n + 2, 'plink_media_files sin resultados no cuenta';
+  perform pg_temp.as_anon(null);
+  perform pg_temp.expect_error(format('select * from public.plink_media_files(array[%L::uuid])', pg_temp.u('d1f1')),
+    'link_not_found', 'plink_media_files sin token');
+  perform pg_temp.as_anon(pg_temp.tok('S'));
+  perform pg_temp.expect_error(format('select * from public.plink_media_files(array_fill(%L::uuid, array[201]))', pg_temp.u('d1f1')),
+    'too_many_files', 'plink_media_files con 201 ids');
   -- La política de thumbs: con el link, solo f1; sin header, nada; con otro token, nada.
   assert (select string_agg(o.name, ',') from storage.objects o where o.bucket_id = 'thumbs' and o.name like '00000000-0000-4000-8000-00000000d1f%')
        = pg_temp.u('d1f1') || '.jpg', 'thumbs con el link';
@@ -562,6 +577,13 @@ begin
     'author_invalid', 'comenta con una marca de dirección');
   perform pg_temp.expect_error(format('select public.plink_add_comment(%L, %L, null, null, %L, %L)', pg_temp.u('d1c5'), pg_temp.u('d1b2'), 'x', 'Ana' || chr(10)),
     'author_invalid', 'comenta con un salto de línea en el nombre');
+  -- Las mismas marcas que limpia el portero: dirección árabe (U+061C) y los separadores de línea y de párrafo.
+  perform pg_temp.expect_error(format('select public.plink_add_comment(%L, %L, null, null, %L, %L)', pg_temp.u('d1c5'), pg_temp.u('d1b2'), 'x', 'Ana' || chr(1564)),
+    'author_invalid', 'comenta con U+061C en el nombre');
+  perform pg_temp.expect_error(format('select public.plink_add_comment(%L, %L, null, null, %L, %L)', pg_temp.u('d1c5'), pg_temp.u('d1b2'), 'x', 'Ana' || chr(8232) || 'Z'),
+    'author_invalid', 'comenta con U+2028 en el nombre');
+  perform pg_temp.expect_error(format('select public.plink_add_comment(%L, %L, null, null, %L, %L)', pg_temp.u('d1c5'), pg_temp.u('d1b2'), 'x', 'Ana' || chr(8233) || 'Z'),
+    'author_invalid', 'comenta con U+2029 en el nombre');
   -- Lo que ve: nombres, ningún correo, ningún id de persona.
   select jsonb_agg(to_jsonb(c)) into j from public.plink_list_comments(pg_temp.u('d1b2')) c;
   assert j::text !~ '@', 'plink_list_comments trae un correo';
@@ -569,6 +591,13 @@ begin
   assert (select string_agg(x ->> 'author_name' || '/' || (x ->> 'author_kind') || '/' || (x ->> 'mine'), ',' order by x ->> 'body')
           from jsonb_array_elements(j) x)
        = 'lp-a/team/false,Ana/link/true,Pepe Coda/imported/false,Ana/link/true', format('autores (dio %s)', j);
+  -- Leer comentarios: solo de la rama; arriba, al costado, otro proyecto, la papelera y sin token no.
+  perform pg_temp.expect_error(format('select * from public.plink_list_comments(%L)', pg_temp.u('d1b1')), 'page_not_found', 'lee los comentarios de la de arriba');
+  perform pg_temp.expect_error(format('select * from public.plink_list_comments(%L)', pg_temp.u('d1b7')), 'page_not_found', 'lee los comentarios de la hermana');
+  perform pg_temp.expect_error(format('select * from public.plink_list_comments(%L)', pg_temp.u('d1b9')), 'page_not_found', 'lee los comentarios de otro proyecto');
+  perform pg_temp.expect_error(format('select * from public.plink_list_comments(%L)', pg_temp.u('d1b5')), 'page_not_found', 'lee los comentarios de una en la papelera');
+  perform pg_temp.as_anon(null, d1);
+  perform pg_temp.expect_error(format('select * from public.plink_list_comments(%L)', pg_temp.u('d1b2')), 'link_not_found', 'lee comentarios sin token');
   -- Otro dispositivo: no son suyos, no los edita ni los borra.
   perform pg_temp.as_anon(pg_temp.tok('S'), d2);
   assert not exists (select 1 from public.plink_list_comments(pg_temp.u('d1b2')) c where c.mine), 'otro dispositivo los ve como suyos';
@@ -711,9 +740,51 @@ begin
   perform pg_temp.as_user('d1a1');
   perform public.set_public_link(pg_temp.u('d1b2'), 'comment', null);
   assert pg_temp.tree(old) = 'H,N,S', 'sin vencimiento no vuelve';
-  -- Reset: el viejo deja de andar en el acto; reintentar no crea un tercero.
+  -- Quién cambia, resetea o revoca: lo mismo que crear (nadie sin 4, ni con 4 si no es admin/dueño del proyecto, ni
+  -- un invitado; sin permiso, ni se entera de que la página existe). Y Reset pide el interruptor de D14 (D33).
+  declare
+    who text;
+    fn  text;
+    st  text;
+  begin
+    foreach who in array array['d1a8:page_not_found', 'd1a7:not_allowed', 'd1a6:not_allowed', 'd1a4:not_allowed', 'd1a5:not_allowed'] loop
+      perform pg_temp.as_user(split_part(who, ':', 1));
+      foreach fn in array array['set', 'reset', 'revoke'] loop
+        st := case fn
+          when 'set' then format('select public.set_public_link(%L, %L, null)', pg_temp.u('d1b2'), 'comment')
+          when 'reset' then format('select public.reset_public_link(%L, %L)', pg_temp.u('d1b2'), pg_temp.u('d1cd'))
+          else format('select public.revoke_public_link(%L)', pg_temp.u('d1b2')) end;
+        perform pg_temp.expect_error(st, split_part(who, ':', 2), format('%s con %s', fn, split_part(who, ':', 1)));
+      end loop;
+    end loop;
+    perform pg_temp.as_postgres();
+    assert (select count(*) from public.public_links where page_id = pg_temp.u('d1b2') and revoked_at is null) = 1,
+      'alguien sin permiso tocó el link de S';
+    assert pg_temp.tree(old) = 'H,N,S', 'alguien sin permiso cortó el link de S';
+    update public.workspace_settings set clean_min_version = null where id;
+    perform pg_temp.as_user('d1a1');
+    perform pg_temp.expect_error(format('select public.reset_public_link(%L, %L)', pg_temp.u('d1b2'), pg_temp.u('d1cd')),
+      'clean_off', 'resetea con el interruptor apagado');
+    perform pg_temp.as_postgres();
+    update public.workspace_settings set clean_min_version = 0.5 where id;
+    assert pg_temp.tree(old) = 'H,N,S', 'el reset rechazado cortó el link';
+  end;
+  -- Reset: el viejo deja de andar en el acto; reintentar no crea un tercero. Y el link nuevo no recibe la base armada
+  -- antes de que el editor borrara algo (como crear): la base de S llega a la fila 2 y la fila 3 se sube después.
+  perform pg_temp.as_user('d1a1');
+  perform public.push_page_update(pg_temp.u('d1b2'), pg_temp.u('d104'), 'BA==', '9.999');
+  perform pg_temp.as_anon(old);
+  assert (select count(*) from public.plink_pull_page(pg_temp.u('d1b2'), 0)) = 1, 'control: el link viejo no baja la base';
   perform pg_temp.as_user('d1a2');
   j := public.reset_public_link(pg_temp.u('d1b2'), pg_temp.u('d1ca'));
+  perform pg_temp.as_postgres();
+  assert (select clean_reset_seq from public.pages where id = pg_temp.u('d1b2')) = 3, 'reset no reinicia S';
+  assert (select clean_reset_seq from public.pages where id = pg_temp.u('d1b3')) = (select update_seq from public.pages where id = pg_temp.u('d1b3')),
+    'reset no reinicia la hija';
+  perform pg_temp.as_anon(j ->> 'token');
+  assert (select count(*) from public.plink_pull_page(pg_temp.u('d1b2'), 0)) = 0, 'el link nuevo baja la base de antes del borrado';
+  assert (select t.clean_seq from public.plink_tree() t where t.id = pg_temp.u('d1b2')) = 0, 'el árbol del link nuevo dice que la base está al día';
+  perform pg_temp.as_user('d1a2');
   assert j ->> 'token' <> old, 'reset no cambia el token';
   assert public.reset_public_link(pg_temp.u('d1b2'), pg_temp.u('d1ca')) ->> 'token' = j ->> 'token', 'reset reintentado crea otro';
   perform pg_temp.save('S', j);
