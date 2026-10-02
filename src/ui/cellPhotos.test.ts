@@ -274,6 +274,36 @@ describe('↑ desde el primer renglón de una celda con fotos (auditoría de la 
     expect(press(E).handled).toBe(false);
     expect(cellAboveEnd(viewOf(E).state.doc, cellPos(E, 0, 1))).toBeNull();
   });
+
+  // Las medidas de Chromium (reverificación de la auditoría): en una celda con solo miniaturas, el principio del texto
+  // mide lo que la foto (420 a 516) y el cursor después de la última termina 2 px más abajo (498 a 518).
+  const onlyPhotos = () => page([[[text('a')], [text('arriba')]], [[text('b')], [sdPhoto(5), sdPhoto(6)]]]);
+  const measured = (E: BlockNoteEditor, wrapsFrom: number | null) => {
+    const start = cellPos(E, 1, 1);
+    viewOf(E).coordsAtPos = ((pos: number) => {
+      if (wrapsFrom !== null && pos >= wrapsFrom) return { top: 520, bottom: 616, left: 0, right: 0 };
+      return pos === start ? { top: 420, bottom: 516, left: 0, right: 0 } : { top: 498, bottom: 518, left: 0, right: 0 };
+    }) as never;
+  };
+
+  it('con el cursor después de la última foto de una celda con solo fotos, va a la celda de arriba', () => {
+    const E = mountCreating(onlyPhotos());
+    measured(E, null);
+    caret(E, cellPos(E, 1, 1, -1));
+    expect(press(E)).toEqual({ handled: true, prevented: true });
+    expect(viewOf(E).state.selection.from).toBe(cellPos(E, 0, 1, -1));
+  });
+
+  it('después de una miniatura que bajó de renglón (pantalla angosta), sigue lo de siempre: se queda en la celda', () => {
+    const E = mountCreating(onlyPhotos());
+    // La segunda foto bajó: lo que está después de ella, en el segundo renglón.
+    measured(E, cellPos(E, 1, 1, 2));
+    caret(E, cellPos(E, 1, 1, -1));
+    expect(press(E).handled).toBe(false);
+    // Entre las dos, en el primer renglón: va arriba.
+    caret(E, cellPos(E, 1, 1, 1));
+    expect(press(E).handled).toBe(true);
+  });
 });
 
 describe('versiones publicadas', () => {

@@ -267,11 +267,18 @@ export function cellAboveEnd(doc: PMNode, pos: number): number | null {
   return null;
 }
 
-/** El cursor está en el primer renglón visual de su texto (mismo borde de abajo que el principio del texto). */
+/**
+ * El cursor está en el primer renglón visual de su texto: su alto se superpone (más de 2 px) con el del principio del
+ * texto. Comparar solo los bordes de abajo fallaba después de una miniatura: el cursor de texto termina 2 px más abajo
+ * que la foto (518 contra 516, medido en Chromium) y ↑ iba a la celda de la izquierda. Un renglón de abajo empieza
+ * donde termina el de arriba: no se superponen.
+ */
 function onFirstLine(view: EditorView, pos: number): boolean {
   const $pos = view.state.doc.resolve(pos);
   try {
-    return Math.abs(view.coordsAtPos(pos).bottom - view.coordsAtPos($pos.start()).bottom) < 2;
+    const caret = view.coordsAtPos(pos);
+    const start = view.coordsAtPos($pos.start());
+    return Math.min(caret.bottom, start.bottom) - Math.max(caret.top, start.top) > 2;
   } catch {
     return false;
   }
