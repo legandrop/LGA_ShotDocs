@@ -287,6 +287,32 @@ describe('R-1: la marca del rearmado se guarda con el rearmado', () => {
     await expectSound(c2, server, page);
   });
 
+  it('la app se cierra a mitad de mirar qué subir (settleRebuild): la marca sigue y la próxima vez sube lo que falta', async () => {
+    const { server, e1, page } = await setup({ edits: 9 });
+    const bad = await plantSnapshot(server, page, ghost('palabra3'));
+    const dbName = crypto.randomUUID();
+    const c = await device(server, { dbName });
+    await c.engine.syncNow();
+    await edit(c, page, (t) => t.insert(t.toString().indexOf('FANTASMA ') + 9, 'MIO '));
+    await c.engine.syncNow();
+    await new FakeRemote(server, '1.000').invalidateSnapshot(bad, 'test');
+    // `settleRebuild` empieza (leyendo lo guardado) y la app se cierra ahí.
+    const docs = c.docs as unknown as { readSaved: (...a: unknown[]) => Promise<unknown> };
+    docs.readSaved = async () => {
+      throw new Error('cerrada');
+    };
+    await c.docs.pullPage(page, c.remote, { contentEpoch: server.smeta(page).epoch }).catch(() => undefined);
+    expect((await state(c, page))?.rebuilt).toBe(true);
+    closeDevice(c);
+    const c2 = await device(server, { dbName });
+    for (let i = 0; i < 2; i++) await c2.engine.syncNow();
+    await e1.engine.syncNow();
+    expect(serverText(server, page)).toContain('FANTASMA MIO');
+    expect(await text(e1, page)).toBe(serverText(server, page));
+    expect(await text(c2, page)).toBe(serverText(server, page));
+    await expectNothingMissing(c2, server, page);
+  });
+
   it('una página rearmada sin nada de más: la marca se borra y no sube nada', async () => {
     const { server, page } = await setup({ edits: 9 });
     const bad = await plantSnapshot(server, page, dropWord('palabra3'));
