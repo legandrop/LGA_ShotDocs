@@ -568,33 +568,36 @@ update public.workspaces set deleted_at = null where id = pg_temp.u('c1e0');
 -- puede armar (papelera, proyecto borrado) o que arma otro editor no tapen a las demás
 -- ---------------------------------------------------------------------------------------------------
 -- Personas: o (creó V, W e Y), vr (Ver sobre la página A de V), gs (invitado, Editar solo sobre S de V), ey (Editar
--- sobre Y y nada más), vw (Ver W y Ver Y).
+-- sobre Y y nada más), vw (Ver W y Ver Y), ew (Editar solo sobre la página L2 de W).
 insert into auth.users (id, email, aud, role) values
   (pg_temp.u('c2a0'), 'pb-o@test.invalid', 'authenticated', 'authenticated'),
   (pg_temp.u('c2a1'), 'pb-vr@test.invalid', 'authenticated', 'authenticated'),
   (pg_temp.u('c2a2'), 'pb-gs@test.invalid', 'authenticated', 'authenticated'),
   (pg_temp.u('c2a3'), 'pb-ey@test.invalid', 'authenticated', 'authenticated'),
-  (pg_temp.u('c2a4'), 'pb-vw@test.invalid', 'authenticated', 'authenticated');
+  (pg_temp.u('c2a4'), 'pb-vw@test.invalid', 'authenticated', 'authenticated'),
+  (pg_temp.u('c2a5'), 'pb-ew@test.invalid', 'authenticated', 'authenticated');
 insert into public.members (user_id, role) values
   (pg_temp.u('c2a0'), 'member'), (pg_temp.u('c2a1'), 'member'), (pg_temp.u('c2a2'), 'guest'),
-  (pg_temp.u('c2a3'), 'member'), (pg_temp.u('c2a4'), 'member');
+  (pg_temp.u('c2a3'), 'member'), (pg_temp.u('c2a4'), 'member'), (pg_temp.u('c2a5'), 'member');
 insert into public.workspaces (id, owner_id, name) values
   (pg_temp.u('c2e0'), pg_temp.u('c2a0'), 'V'),
   (pg_temp.u('c2e1'), pg_temp.u('c2a0'), 'W'),
   (pg_temp.u('c2e2'), pg_temp.u('c2a0'), 'Y');
--- V: A › A1, S. Y: L. W: XP (sus 221 hijas se crean más abajo).
+-- V: A › A1, S. Y: L. W: L2, XP (sus 221 hijas se crean más abajo).
 insert into public.pages (id, workspace_id, parent_id, title, sort_key) values
   (pg_temp.u('c2b0'), pg_temp.u('c2e0'), null, 'A', 'a0'),
   (pg_temp.u('c2b1'), pg_temp.u('c2e0'), pg_temp.u('c2b0'), 'A1', 'a1'),
   (pg_temp.u('c2b2'), pg_temp.u('c2e0'), null, 'S', 'a2'),
   (pg_temp.u('c2b3'), pg_temp.u('c2e2'), null, 'L', 'a0'),
-  (pg_temp.u('c2b4'), pg_temp.u('c2e1'), null, 'XP', 'a0');
+  (pg_temp.u('c2b4'), pg_temp.u('c2e1'), null, 'XP', 'a0'),
+  (pg_temp.u('c2b5'), pg_temp.u('c2e1'), null, 'L2', 'a1');
 insert into public.grants (user_id, project_id, page_id, level) values
   (pg_temp.u('c2a1'), null, pg_temp.u('c2b0'), 'view'),
   (pg_temp.u('c2a2'), null, pg_temp.u('c2b2'), 'edit'),
   (pg_temp.u('c2a3'), pg_temp.u('c2e2'), null, 'edit'),
   (pg_temp.u('c2a4'), pg_temp.u('c2e1'), null, 'view'),
-  (pg_temp.u('c2a4'), pg_temp.u('c2e2'), null, 'view');
+  (pg_temp.u('c2a4'), pg_temp.u('c2e2'), null, 'view'),
+  (pg_temp.u('c2a5'), null, pg_temp.u('c2b5'), 'edit');
 select pg_temp.as_user('c2a0');
 select public.push_page_update(pg_temp.u('c2b0'), pg_temp.u('c201'), 'AQ==', '9.999');
 select public.push_page_update(pg_temp.u('c2b1'), pg_temp.u('c202'), 'Ag==', '9.999');
@@ -602,6 +605,8 @@ select public.push_page_update(pg_temp.u('c2b1'), pg_temp.u('c203'), 'Aw==', '9.
 select public.push_page_update(pg_temp.u('c2b2'), pg_temp.u('c204'), 'BA==', '9.999');
 select public.push_page_update(pg_temp.u('c2b3'), pg_temp.u('c205'), 'BQ==', '9.999');
 select public.push_page_update(pg_temp.u('c2b3'), pg_temp.u('c206'), 'Bg==', '9.999');
+select public.push_page_update(pg_temp.u('c2b5'), pg_temp.u('c208'), 'DQ==', '9.999');
+select public.push_page_update(pg_temp.u('c2b5'), pg_temp.u('c209'), 'Dg==', '9.999');
 select pg_temp.as_postgres();
 
 -- La hija de una página compartida con Ver se arma, y su lector baja solo la base.
@@ -651,16 +656,21 @@ begin
                                     gen_random_uuid(), 'Cw==', '9.999');
   end loop;
   assert pg_temp.push_base('c2d2', 'c2b3', 1, 'AQIDCQ==') = 'ok', 'no acepta la base de L';
+  assert pg_temp.push_base('c2d3', 'c2b5', 1, 'AQIDCg==') = 'ok', 'no acepta la base de L2';
 end;
 $$;
 select pg_temp.as_postgres();
-update public.page_updates set created_at = now() - interval '30 seconds' where page_id = pg_temp.u('c2b3');
+update public.page_updates set created_at = now() - interval '30 seconds' where page_id in (pg_temp.u('c2b3'), pg_temp.u('c2b5'));
 do $$
 begin
   -- ey edita Y y no ve W: las 222 de W (sin base, las arma o) no le tapan L.
   perform pg_temp.as_user('c2a3');
   assert pg_temp.in_work('c2b3'), 'con 222 páginas que arma otro editor, clean_work no le devuelve L a ey';
   assert not pg_temp.in_work('c2b4'), 'clean_work le pide a ey una página que no ve';
+  -- ew edita solo L2, en el mismo proyecto que las 222: no las puede armar y no le tapan L2.
+  perform pg_temp.as_user('c2a5');
+  assert pg_temp.in_work('c2b5'), 'con 222 páginas del mismo proyecto que no puede armar, clean_work no le devuelve L2 a ew';
+  assert (select count(*) from public.clean_work('1.000')) = 1, 'clean_work le pide a ew páginas que no edita';
   -- XP a la papelera (sus hijas cuelgan de ella): nadie que no edite las ve, nadie las arma, y no tapan L.
   perform pg_temp.as_postgres();
   update public.pages set deleted_at = now() where id = pg_temp.u('c2b4');
