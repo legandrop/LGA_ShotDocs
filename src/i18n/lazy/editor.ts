@@ -23,6 +23,14 @@ export const editor = {
     en: { one: "{count} in collapsed sections", other: "{count} in collapsed sections" },
     es: { one: "{count} en secciones colapsadas", other: "{count} en secciones colapsadas" },
   },
+  'find.hiddenToggles': {
+    en: { one: "{count} in closed toggle lists", other: "{count} in closed toggle lists" },
+    es: { one: "{count} en listas plegables cerradas", other: "{count} en listas plegables cerradas" },
+  },
+  'find.opened': {
+    en: { one: "{count} collapsed section opened for the search", other: "{count} collapsed sections opened for the search" },
+    es: { one: "{count} sección colapsada abierta por la búsqueda", other: "{count} secciones colapsadas abiertas por la búsqueda" },
+  },
   'find.replace': { en: "Replace", es: "Reemplazar" },
   'find.replaceAll': { en: "Replace all", es: "Reemplazar todo" },
   'find.replaceTip': { en: "Replace this one and go to the next (Enter)", es: "Reemplazar esta y pasar a la siguiente (Enter)" },

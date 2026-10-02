@@ -2,7 +2,7 @@
 
 **Estado: entregas 1 y 2 programadas.** La migración de la entrega 1 (`20261015120000_menciones.sql`, `schema_version`
 15) ya está en la base de Wanka; la de la entrega 2 (`20261016120000_menciones_e2.sql`, `schema_version` 16), sin
-aplicar (ver «Cómo quedó la entrega 1» y «Cómo quedó la entrega 2», abajo). La entrega 3 (correo) sigue en diseño. Roadmap P.21; pedido de Lega del 2026-10-02.
+aplicar (ver «Cómo quedó la entrega 1» y «Cómo quedó la entrega 2», abajo; v0.131 cerró las observaciones de su auditoría). La entrega 3 (correo) sigue en diseño. Roadmap P.21; pedido de Lega del 2026-10-02.
 El diseño de abajo es el de partida: Se diseñó contra `main`
 v0.108, con la base en `schema_version` 13 y `min_app_version` 0.104. Toca permisos y la privacidad de quién ve a
 quién: cada entrega va con sus pruebas de permisos (casos negativos y mutantes) y su auditoría independiente. Las
@@ -104,6 +104,18 @@ auditoría», al final. **Va después del link público** (su migración sube a 
   suma el punto del árbol y el número.
 - **No hace falta subir `min_app_version`**: la entrega 1 publicada ya descarta las filas `has_access = false` y no
   llama a `share_for_mention`; nada de lo que ella usa cambia.
+
+### Arreglos de la auditoría de la entrega 2 (v0.131)
+
+La auditoría de la entrega 2 la aprobó con cinco observaciones; ninguna perdía datos ni daba acceso de más.
+
+| Observación | Qué se hizo |
+|---|---|
+| **O1** La integración de `MentionShare` con `useShareGate` no tenía prueba: sacar `gate.ready` o `gate.after` no hacía caer nada | 5 pruebas en `src/ui/mentionsShare.test.tsx` con la privacidad de lo borrado prendida y apagada: lo pendiente de la página sube **antes** de `share_for_mention` (se mide en el momento de la llamada), las bases de la página y de su rama se arman **después**, sin poder subir queda el aviso con *Retry* y no se comparte, *Share anyway* comparte sin volver a pedir lo pendiente, *Retry* vuelve a intentar, y apagada no se pide ni se arma nada. 9 mutantes de `MentionShare.tsx` (sacar `ready`, sacar `after`, ignorar su resultado, tratarlo como no lector, *Share anyway* que no saltea el paso, que pide de nuevo, otro alcance, `after` antes de compartir): mueren los 9, también los 2 que vivían |
+| **O2** Tras Esc o *Cancel* en la pregunta, la lista del `@` no volvía hasta tocar el campo | Causa: el foco pasa al botón de la pregunta, el `onBlur` del campo olvida la posición (`caret = null`) y enfocar por código no avisa que cambió la selección. `cancelAsk` vuelve a leerla (`setCaret(selectionStart)`). Prueba en jsdom (que tapa el aviso de selección que Chromium no manda) y el recorrido en Chromium sin ventana: antes la lista quedaba vacía, ahora vuelve con *pedro* en gris |
+| **O3** Se puede compartir desde la mención en un proyecto archivado | Se deja: hace lo mismo que *Share*, y archivar no saca permisos |
+| **O4** `share_for_mention` no mira la versión mínima | Se deja, sin migración: `public.share` tampoco la mira, la versión mínima protege el contenido (la cola de páginas y archivos, el árbol), no los permisos, y solo la llama la app nueva, que ya se bloquea sola si está desactualizada |
+| **O5** Compartir pasa antes de mandar el comentario: si se descarta, la persona queda con Comentar y sin mención | Se aclara en la pregunta («Se comparte en cuanto tocás *Share and mention*, aunque después no mandes el comentario») y en la ayuda; el diseño sigue siendo «en un paso» |
 
 ## Reglas que no se rompen
 
@@ -761,6 +773,9 @@ en `set_comment_mentions` (6); sacar la validación del rótulo en el primer buc
 - La cola: borrar un comentario sin subir se lleva su `mentions` y su copia en `meta`; `comment_not_found` y
   `comment_deleted` sobre `mentions` se descartan sin error a la vista y sin volver a la cola.
 - Candidatos sin red: la lista guardada; sin lista guardada, los autores conocidos.
+- **Compartir desde la mención** (`src/ui/mentionsShare.test.tsx`): la lista con la parte de afuera, la pregunta, Esc y
+  *Cancel* (también con la lista que vuelve tras un rato con el foco en la pregunta), el error de la base, y con
+  `useShareGate`: privacidad prendida (sube antes, arma después, aviso con *Retry* / *Share anyway*) y apagada.
 - El registro de atajos y la ayuda: las pruebas que ya existen (`src/ui/shortcuts.test.ts`, `src/help/help.test.tsx`)
   pasan con las teclas y la entrada nuevas.
 

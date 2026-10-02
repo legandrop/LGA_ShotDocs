@@ -213,7 +213,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   (diseño)" y "Cómo quedó (entrega 3)"): la flecha en Ctrl/⌘+K, vista previa, una, la página o todas con confirmación,
   escrito en el Y.Doc de cada página que se puede editar y está completa, y *Undo* de todo lo que siga igual (también
   sin red y después de cerrar la app). Falta probarlo a mano en Safari, el iPhone y Firefox. Queda para después:
-  reemplazar en los títulos, pies y nombres; la papelera, todos los proyectos y los comentarios. Lo pedido: dos lupas. **En el proyecto:** una lupa a la izquierda del "+" de
+  reemplazar en los títulos, pies y nombres; la papelera, todos los proyectos y los comentarios. **D11 (v0.130): al buscar, las
+  secciones colapsadas se abren para mostrar lo encontrado** (solo en este dispositivo y a la vista; se vuelven a cerrar al
+  terminar; `Doc_Buscar.md`, "Abrir al buscar"). Queda para después: abrir también las listas plegables cerradas.
+  Lo pedido: dos lupas. **En el proyecto:** una lupa a la izquierda del "+" de
   páginas en la barra lateral, que busca en todas las páginas del proyecto que la persona puede ver (títulos y
   contenido) y lleva al lugar. **En la página:** una lupa a la izquierda del ícono de comentarios, que busca en
   la página abierta, también adentro de las secciones colapsadas (P.11: el resultado abre la sección). A pensar
@@ -337,7 +340,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   lo que se copia del día anterior, "ya existe" y el orden, sin red. **Entrega 3 hecha** (v0.124): plantillas propias
   (*Save as template…* con *Clear filled-in values*, la carpeta *Templates*, la franja con *Template settings…* y *Stop
   using as template*, *Customize*, las de otros proyectos sin sus fotos, *Wait* / *Use built-in* a medio bajar y el
-  selector de plantilla del globito, con el aviso de O4). **Falta** que Lega revise el contenido de las tres (PL1) y
+  selector de plantilla del globito, con el aviso de O4). **D82 hecha** (v0.130): *On-Set Report* en la raíz del proyecto
+  ofrece crear o elegir la carpeta de reportes y mueve ahí la página (ya no sale como plantilla común). Quedan dos
+  sorpresas anotadas por la auditoría: *Apply template…* en una página de la raíz con subpáginas las mueve con la página, y
+  la ventana no avisa si la carpeta elegida ya tiene el reporte de hoy (mostrar el *already exists* con *Open*). **Falta** que Lega revise el contenido de las tres (PL1) y
   pruebe el atajo en Firefox y Safari de la Mac y con un teclado latinoamericano físico. Quedan para después la marca
   *2 reports for…* en la barra lateral con la papelera ofrecida para el repetido sin tocar (O6), y en *Buscar en el
   proyecto* la marca *Template* con *Replace all* que saltee las plantillas salvo *Include templates* (O9, va con la
@@ -433,11 +439,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   nada; una campana con las no leídas que pregunta cada 60 segundos (sin Realtime); sin red con la cola de siempre;
   los visitantes del link no mencionan; las menciones de Coda se ven como `@Nombre`. Entregas: 1 (base, `@`, campana,
   sin red), 2 (compartir desde la mención, marcas en el árbol y en el ícono), 3 (correo, grupo C).
-  De la auditoría de la entrega 2 (ninguna pierde datos ni da acceso de más): falta una prueba que caiga si se saca el paso
-  previo de compartir (`useShareGate`), antes de prender D14 (O1); después de Esc o *Cancel* en la pregunta de compartir,
-  la lista del `@` no vuelve hasta tocar el campo (O2); se puede compartir desde la mención en un proyecto archivado, como
-  con *Share* (O3); no mira la versión mínima de la app de quien recibe (O4); si se descarta el comentario después de
-  compartir, la persona queda con acceso y sin mención (O5).
+  De la auditoría de la entrega 2 (ninguna pierde datos ni da acceso de más), **resuelto en v0.131:** la prueba de
+  compartir con `useShareGate` (O1, ya se puede prender D14), la lista del `@` tras Esc o *Cancel* (O2) y la pregunta
+  que aclara que se comparte en el acto (O5). Se dejan, con su motivo: compartir desde la mención en un proyecto
+  archivado, como con *Share* (O3), y que `share_for_mention` no mire la versión mínima, como `public.share` (O4).
 - **P.24 Asistente con la clave de cada usuario y servidor MCP (fase 5)** (era C.11; 2026-10-02, ya sin esperar a
   Lega). **A1 implementada (v0.118):** ajustes con los cuatro proveedores y la clave en el dispositivo, el panel con *Fix*,
   *Improve*, *Shorter*, *Translate to…* y *Ask…* sobre lo elegido, vista previa por palabras, *Apply* con un deshacer y
@@ -463,7 +468,17 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   permiso aparte; con páginas reales pide, casi seguro, el plan pago de Workers del dueño (US$ 5 por mes) o el MCP local. Entregas: A1 (texto elegido), A2
   (página, formato, política), A3 (pie de foto), M0 (prueba técnica del MCP: OAuth de Supabase con el registro cerrado,
   el rol del token, 10 ms de CPU), M1 (MCP de lectura; requiere el interruptor de D14), M2 (MCP que escribe), M3
-  (medir). Recortar, achicar y comprimir fotos no necesitan un modelo: van al roadmap de fotos.
+  (medir). Recortar, achicar y comprimir fotos no necesitan un modelo: van al roadmap de fotos. **La clave en todos tus
+  dispositivos (D72 → B, Lega 2026-10-02): diseño en `Doc_Clave_Sincronizada.md`** (sin código; auditado y corregido;
+  decisiones CS1 a CS9): una copia cifrada en el dispositivo con una frase de seis palabras que propone la app (PBKDF2-SHA256 de
+  1 000 000 de vueltas y AES-256-GCM, medidos), guardada en una tabla propia del Supabase del workspace donde la persona
+  la prende, que solo ella lee; el dueño ve que existe, no qué es. Entregas S1 (prender, desbloquear, dejar de
+  sincronizar, *Sign out other devices*, preguntar si cambia a dónde va la clave; riesgo alto, con auditoría) y S2
+  (cambiar la frase, aviso entre dispositivos, copia más vieja, computadora prestada). **D77 (Lega):** el MCP también
+  mueve y manda a la papelera, siempre con la confirmación de la persona y una casilla al conectar (dos pasos, la
+  pregunta directa del cliente si la tiene, *Undo* a un clic; `Doc_Asistente.md` 9.3 bis, IA11), y nunca cambia quién
+  ve algo; compartir e invitar, nunca. Va en M2. Al roadmap, sin diseño: que una sesión robada no pueda seguir una hora
+  con su token de acceso (acortar su vida en Supabase cuesta más pedidos de refresco; para decidir con M0).
 - **P.26 ⌘Z en el orden en que editaste** (Lega, 2026-10-02, al responder cómo se deshace un reemplazo en todo el
   proyecto): ⌘Z deshace lo último que hiciste aunque haya sido en otra página, y un *Replace all in project* se deshace
   entero en ese orden. **Diseño en `Doc_Deshacer.md`** (sin código; auditado y corregido; decisiones propuestas DH1 a

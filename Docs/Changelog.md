@@ -11,6 +11,31 @@ pegado. Al portapapeles no va nada nuevo; otro proyecto recibe la foto sin anota
 limpia. Sin tipos ni propiedades nuevas: `min_app_version` no cambia.
 [ Copiar y pegar una foto con sus anotaciones (D46) ]
 
+v0.131 :
+
+Dos cosas del asistente y las menciones. **Arreglos de las menciones, entrega 2:** compartir desde la mención por
+`useShareGate` no tenía prueba (2 mutantes vivos); ahora 5 pruebas y los 9 mutantes mueren, lo que faltaba para prender
+la privacidad de lo borrado. La lista del `@` no volvía tras Esc o *Cancel* (el campo olvidaba la posición y enfocarlo
+por código no la relee): `cancelAsk` la vuelve a leer. La pregunta aclara que se comparte en el acto. **Diseño, sin
+código, de la clave del asistente en todos tus dispositivos** (D72 → B, `Doc_Clave_Sincronizada.md`, CS1 a CS9): una
+copia cifrada en el dispositivo con una frase de seis palabras (PBKDF2 y AES-256-GCM) que solo lee la persona; para un
+dispositivo perdido, *Sign out other devices* y frase nueva. **Mover y borrar por el MCP con confirmación** (D77,
+`Doc_Asistente.md` 9.3 bis, IA11): solo proponen, se hacen con el sí de la persona, nunca cambian quién ve algo y tienen
+*Undo*; compartir e invitar, nunca. Sin migración.
+[ Arreglos de las menciones y el diseño de la clave del asistente sincronizada (D72) y de mover y borrar por el MCP (D77) ]
+
+v0.130 :
+
+Buscar dentro de secciones colapsadas (D11) y el reporte de set en la raíz (D82), dos pedidos de Lega del 2026-10-02.
+**Buscar**: las coincidencias escondidas en una sección colapsada solo se veían al ir una por una y esa sección quedaba
+abierta para siempre. Ahora buscar en la página (o abrir un resultado del proyecto) abre todas las secciones que esconden
+coincidencias y las vuelve a cerrar al terminar; es solo la vista de este dispositivo (los registros de "abrir para vos"
+de P.11), no escribe el Y.Doc. **Reporte en la raíz**: *On-Set Report* en una página de la raíz creaba la plantilla común
+sin "ayer" que copiar ni días que numerar. Ahora ofrece la carpeta de reportes que ya tenga el proyecto o crear una
+(*On-Set Reports*), mueve la página adentro y la llena como `2026-10-02 | Day 01`; si la página cambió o falta permiso,
+no escribe nada (`dayReportRoot.ts`, `RootReportDialog.tsx`). Sin migración ni `min_app_version`.
+[ Buscar con secciones colapsadas (D11) y el reporte de set en la raíz (D82) ]
+
 v0.129 :
 
 Tres entregas de fotos y exportar. **El zip para archivar** (P.22, entrega 2): guardar un proyecto fuera de la app no
