@@ -105,6 +105,10 @@ In production (v0.049). What works today:
   colors and thickness of LGA FrameRev. The original never changes; annotations show on the page, in table cells, in
   the viewer and in the PDF, are saved as you draw (also offline) and appear live for everyone editing the page. Only
   people who can edit the page annotate.
+- Annotate photos on a phone or an iPad: the tools sit in a strip at the bottom and the color dot opens the colors and
+  thickness; one finger draws, two fingers zoom and move the photo without drawing, and text is typed in a regular box
+  with the phone keyboard. Once you use a pencil (Apple Pencil on the iPad), only the pencil draws and your finger moves
+  the photo, like in Notes.
 - iPhone photos (HEIC) are converted to JPEG on your device when you add them to a page, so every browser
   shows them; the converter is downloaded only the first time it is needed.
 - Attach any file (PDF, zip, anything): drop or paste it, it goes to the owner's Drive and shows as a card;

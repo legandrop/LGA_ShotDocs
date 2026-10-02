@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+Anotar fotos con el dedo y con el lápiz (P.20, entrega 3 de `Doc_Anotar_Fotos.md`). En el teléfono el anotador era el
+de la compu: barra chica arriba, un dedo dibujaba y no había cómo ampliar; el iPad no distinguía el lápiz. Ahora, en
+pantallas táctiles, las herramientas van en una tira abajo y el estilo en una hoja que abre el punto de color; dos
+dedos amplían y mueven sin dibujar (lo del primer dedo se descarta: se escribe al soltar); el lápiz prende *Only the
+pencil draws* y el dedo mueve, la palma no dibuja; el texto se escribe en una caja común que abre el teclado en el
+toque. Tocar un tirador sin moverlo cambiaba la forma: ya no. Probado con iPhone e iPad emulados y WebKit.
+[ Anotar fotos, entrega 3 - el dedo, dos dedos para ampliar, el lápiz del iPad, la tira, la hoja y el texto del teléfono ]
+
 v0.123 :
 
 Anotar fotos en la compu (P.20, entrega 2 de `Doc_Anotar_Fotos.md`). Las anotaciones se veían pero no había con qué
