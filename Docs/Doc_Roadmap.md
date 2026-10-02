@@ -343,7 +343,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   selector de plantilla del globito, con el aviso de O4). **D82 hecha** (v0.130): *On-Set Report* en la raíz del proyecto
   ofrece crear o elegir la carpeta de reportes y mueve ahí la página (ya no sale como plantilla común). Quedan dos
   sorpresas anotadas por la auditoría: *Apply template…* en una página de la raíz con subpáginas las mueve con la página, y
-  la ventana no avisa si la carpeta elegida ya tiene el reporte de hoy (mostrar el *already exists* con *Open*). **Falta** que Lega revise el contenido de las tres (PL1) y
+  la ventana no avisa si la carpeta elegida ya tiene el reporte de hoy (mostrar el *already exists* con *Open*).
+  **Las anotaciones de las fotos viajan con la plantilla (v0.136, D46 aplicado a las plantillas):** al usarla (también el
+  reporte del día) y al guardar como plantilla, mismas reglas que copiar y pegar; *Clear filled-in values* las saca con las
+  fotos; entre proyectos no viajan (`Doc_Plantillas.md`, "Cómo quedó (las anotaciones de las fotos)"). Falta a mano: usar
+  una plantilla con fotos anotadas en la Mac y en el iPhone. De su auditoría (BAJO): en el reporte del día, si las anotaciones
+  no entran por los topes, el aviso queda solo en la consola (llevarlo a la pantalla, como al usar una plantilla); dos
+  guardas dobles (si se saca una capa la otra filtra igual) no tienen una prueba por capa. **Falta** que Lega revise el contenido de las tres (PL1) y
   pruebe el atajo en Firefox y Safari de la Mac y con un teclado latinoamericano físico. Quedan para después la marca
   *2 reports for…* en la barra lateral con la papelera ofrecida para el repetido sin tocar (O6), y en *Buscar en el
   proyecto* la marca *Template* con *Replace all* que saltee las plantillas salvo *Include templates* (O9, va con la
@@ -387,7 +393,8 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   pegarla en otra página del mismo proyecto le lleva sus formas (mismas claves, sin duplicar, un solo ⌘Z saca la foto y
   sus flechas); a otro proyecto o workspace no viajan, y al portapapeles no va nada nuevo
   (`src/media/markupClipboard.ts`, `src/ui/markupClipboardEditor.ts`). Falta a mano: ⌘C y ⌘V de verdad en Safari de la
-  Mac y en el iPhone. De la entrega 5 quedan el historial de las anotaciones, *Keep annotations?* al reemplazar y buscar
+  Mac y en el iPhone. **Con plantillas (v0.136):** las anotaciones también viajan al usar una plantilla del mismo proyecto y al
+  guardar como plantilla (*Clear filled-in values* las saca con las fotos). De la entrega 5 quedan el historial de las anotaciones, *Keep annotations?* al reemplazar y buscar
   en sus textos.
   De la auditoría de la entrega 2 (`Doc_Anotar_Fotos.md`, "Correcciones de la auditoría de la entrega 2"), pendientes:
   una prueba que caiga si la condición «página sincronizada» de `PageEditor` (red, nada sin subir, nada sin bajar) que

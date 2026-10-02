@@ -138,6 +138,18 @@ function undoManagerOf(state: EditorState): Y.UndoManager | null {
   return (yUndoPluginKey.getState(state as never) as { undoManager?: Y.UndoManager } | undefined)?.undoManager ?? null;
 }
 
+/**
+ * Hace que el deshacer de la página (⌘/Ctrl+Z) siga también el mapa de las anotaciones, pero solo lo escrito con el origen
+ * de `carryMarkup` (el anotador y la poda tienen los suyos y no entran). Lo usan el pegado y las plantillas (que escriben
+ * las anotaciones junto con el contenido, en un solo paso).
+ */
+export function trackMarkupInUndo(state: EditorState, doc: Y.Doc): void {
+  const um = undoManagerOf(state);
+  if (!um) return;
+  um.addToScope(doc.getMap<unknown>(PHOTO_MARKUP_MAP));
+  um.trackedOrigins.add(MARKUP_PASTE_ORIGIN);
+}
+
 export interface PasteWithMarkup {
   data: Pick<DataTransfer, 'getData'> | null | undefined;
   view: EditorView | null | undefined;
@@ -157,11 +169,7 @@ export interface PasteWithMarkup {
 export function pasteWithMarkup(p: PasteWithMarkup): boolean | undefined {
   const clip = p.view ? clipFor(p.data, p.scope) : null;
   if (!clip || !p.view) return p.run();
-  const um = undoManagerOf(p.view.state);
-  if (um) {
-    um.addToScope(p.doc.getMap<unknown>(PHOTO_MARKUP_MAP));
-    um.trackedOrigins.add(MARKUP_PASTE_ORIGIN);
-  }
+  trackMarkupInUndo(p.view.state, p.doc);
   let result: CarryResult | null = null;
   const before = mediaCountsInDoc(p.doc);
   const handled = asOneUndoStep(p.view.state, () => {
