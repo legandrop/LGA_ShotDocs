@@ -42,7 +42,7 @@ export function CommentsToggle({ pageId }: { pageId: string }) {
     <button
       className={`icon-button comments-toggle${openThreads > 0 ? ' has-count' : ''}`}
       data-tour="comments"
-      aria-label={mentioned ? `${label}, ${tr('comments.mentionedHere')}` : label}
+      aria-label={mentioned ? `${label}. ${tr('comments.mentionedHere')}` : label}
       data-tip={mentioned ? tr('comments.mentionedHere') : undefined}
       aria-pressed={open}
       onClick={toggleComments}

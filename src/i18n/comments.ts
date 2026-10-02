@@ -121,7 +121,7 @@ export const comments = {
   'mentions.inTrash': { en: "In trash", es: "En la papelera" },
   'mentions.someone': { en: "Someone", es: "Alguien" },
   'mentions.unreadDot': { en: "Unread", es: "Sin leer" },
-  'comments.mentionedHere': { en: "you were mentioned here", es: "te mencionaron acá" },
+  'comments.mentionedHere': { en: "You were mentioned here", es: "Te mencionaron acá" },
   'commentError.mentionsInvalid': {
     en: "The mentions in this comment are not valid.",
     es: "Las menciones de este comentario no son válidas.",

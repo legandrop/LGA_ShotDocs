@@ -684,6 +684,10 @@ function Composer({
   const full = active.length >= MAX_MENTIONS;
   const matches = listOpen && !full ? matchCandidates(candidates.list, query.query, new Set(active.map((m) => m.userId)), user.id) : [];
   useEffect(() => setChoice(0), [query?.query, query?.start]);
+  // Cerrada con Esc: vuelve a abrir en cuanto ese `@` ya no está (se borró o se movió el cursor a otro lado).
+  useEffect(() => {
+    if (closedAt !== null && query?.start !== closedAt) setClosedAt(null);
+  }, [closedAt, query?.start]);
 
   const pick = (c: MentionCandidate) => {
     if (!query || caret === null) return;

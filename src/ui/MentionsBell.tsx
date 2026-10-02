@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
 import { locale, useT } from '../i18n';
 import { useLinkMode } from '../linkMode';
 import { navigate, pagePath } from '../router';
@@ -52,7 +53,8 @@ export function MentionsBell() {
         <BellIcon />
         {inbox.unread > 0 && <span className="comments-toggle-count mentions-count">{count}</span>}
       </button>
-      {open && <MentionsPanel anchor={anchor} onClose={() => setOpen(false)} />}
+      {/* Afuera de la barra de arriba: `.topbar` arma su propio apilado y el panel de comentarios lo taparía. */}
+      {open && createPortal(<MentionsPanel anchor={anchor} onClose={() => setOpen(false)} />, document.body)}
     </>
   );
 }
@@ -67,7 +69,7 @@ function BellIcon({ size = 19 }: { size?: number }) {
 }
 
 function MentionsPanel({ anchor, onClose }: { anchor: HTMLElement | null; onClose: () => void }) {
-  const { mentions, user } = useServices();
+  const { mentions, user, comments } = useServices();
   const inbox = useInbox();
   const status = useSyncStatus();
   const tree = useTree();
@@ -88,6 +90,8 @@ function MentionsPanel({ anchor, onClose }: { anchor: HTMLElement | null; onClos
     onClose();
     void mentions?.markRead([item.id]);
     navigate(pagePath(item.pageId));
+    // Si la página ya estaba abierta, sus comentarios se bajan cada ~10 s: se piden ya, así el hilo nuevo está.
+    void comments.refresh(item.pageId);
     showComments({ kind: 'thread', threadId: item.threadId ?? item.commentId, resolved: item.resolved }, item.pageId);
   };
 

@@ -368,6 +368,11 @@ begin
     jsonb_build_array(pg_temp.m('00000000-0000-4000-8000-000000000e04', repeat('a', 65))))$q$, 'mentions_invalid', 'caso 6: rótulo de 65');
   perform pg_temp.expect_error($q$select public.set_comment_mentions('00000000-0000-4000-8000-000000000d01',
     jsonb_build_array(pg_temp.m('00000000-0000-4000-8000-000000000e04', 'a@b')))$q$, 'mentions_invalid', 'caso 6: rótulo con @');
+  -- Caracteres invisibles (los mismos que rechaza `plink_add_comment` en el nombre): un rótulo no se disfraza de otro.
+  perform pg_temp.expect_error($q$select public.set_comment_mentions('00000000-0000-4000-8000-000000000d01',
+    jsonb_build_array(pg_temp.m('00000000-0000-4000-8000-000000000e04', 'mn' || chr(8203) || 'mv')))$q$, 'mentions_invalid', 'caso 6: rótulo con ancho cero');
+  perform pg_temp.expect_error($q$select public.set_comment_mentions('00000000-0000-4000-8000-000000000d01',
+    jsonb_build_array(pg_temp.m('00000000-0000-4000-8000-000000000e04', 'mn' || chr(8238) || 'mv')))$q$, 'mentions_invalid', 'caso 6: rótulo con cambio de dirección');
   -- Uno que no existe.
   perform pg_temp.expect_error($q$select public.set_comment_mentions(gen_random_uuid(), '[]'::jsonb)$q$,
     'comment_not_found', 'caso 6: comentario que no existe');
@@ -738,6 +743,11 @@ begin
   assert not has_function_privilege('anon', 'public.comment_authors(uuid)', 'execute'), 'caso 13: anon ve autores';
   assert not has_function_privilege('authenticated', 'private.mention_allowed(uuid, uuid, uuid)', 'execute'), 'caso 13: la regla se llama desde la API';
   assert not has_function_privilege('authenticated', 'private.mention_label(text)', 'execute'), 'caso 13: el rótulo se llama desde la API';
+  assert private.mention_label('je' || chr(8203) || 'fa' || chr(65279) || '@x.com') = 'jefa', 'caso 6: el rótulo propuesto deja invisibles';
+  -- La tabla tampoco los acepta (por si alguien escribiera sin la función).
+  perform pg_temp.expect_error($q$insert into public.comment_mentions (comment_id, page_id, user_id, label) values
+    ('00000000-0000-4000-8000-000000000d01', '00000000-0000-4000-8000-000000000eb2', '00000000-0000-4000-8000-000000000e02', 'a' || chr(8288) || 'b')$q$,
+    '23514', 'caso 6: la tabla acepta un rótulo con un invisible');
   assert not has_function_privilege('anon', 'private.comment_mentions_json(uuid)', 'execute'), 'caso 13: anon lee menciones por la función de la vista';
 end;
 $$;

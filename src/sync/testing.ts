@@ -41,6 +41,7 @@ import {
   type CommentsDb,
   type ImportedComment,
   type NewComment,
+  cleanLabel,
   labelForEmail,
   MENTIONS_SCHEMA_VERSION,
 } from './comments';
@@ -318,6 +319,8 @@ export class FakeServer {
   readonly commentCalls: string[] = [];
   /** Funciones de comentarios que hacen su trabajo y después pierden la respuesta, una vez cada una. */
   readonly loseCommentResponse = new Set<'add' | 'edit' | 'delete' | 'resolve' | 'import' | 'mentions'>();
+  /** Funciones de comentarios que fallan una vez como un 500, por el comienzo de su nombre. */
+  readonly failCommentOnce = new Set<string>();
   /** La base tiene las menciones (versión 15, 20261015120000_menciones.sql). */
   mentionsEnabled = false;
   /** `comment_mentions`, con las filas sacadas (`removed_at`): nada se borra. */
@@ -1985,6 +1988,13 @@ export class FakeRemote
     this.server.check();
     this.server.commentCalls.push(name);
     if (this.server.commentsServerError) throw new RemoteError('Internal Server Error', false, '500');
+    // Una función que falla una vez como un 500 (se arregla sola), por el comienzo de su nombre (`edit`, `set_comment_mentions`).
+    for (const prefix of this.server.failCommentOnce) {
+      if (name.startsWith(prefix)) {
+        this.server.failCommentOnce.delete(prefix);
+        throw new RemoteError('Internal Server Error', false, '500');
+      }
+    }
   }
 
   private lostCommentResponse(name: 'add' | 'edit' | 'delete' | 'resolve' | 'import' | 'mentions'): void {
@@ -2238,7 +2248,8 @@ export class FakeRemote
         !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(m.user_id ?? '') ||
         label.length < 1 ||
         label.length > 64 ||
-        /[\s@]/u.test(label)
+        // Los mismos caracteres que rechaza la base (también los invisibles).
+        label !== cleanLabel(label)
       ) {
         throw invalid();
       }

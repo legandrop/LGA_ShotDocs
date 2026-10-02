@@ -723,7 +723,7 @@ export class CommentQueue {
       if (!drop.has(e.seq!)) continue;
       await store.delete(e.seq!);
       if (e.op.kind === 'import') await tx.objectStore('meta').delete(IMPORT_KEY + e.op.id);
-      if (e.op.kind === 'mentions') await tx.objectStore('meta').delete(MENTIONS_KEY + e.op.id);
+      if (e.op.kind === 'mentions') await forgetCopy(tx.objectStore('meta'), e.op);
     }
     await tx.done;
     await this.reloadOps();
@@ -875,6 +875,11 @@ export class CommentQueue {
       try {
         result = await this.send(entry.op);
       } catch (err) {
+        if (entry.op.kind === 'mentions' && isMissingFunction(err) && this.mentionsReady) {
+          // La base dice que tiene menciones (versión 15) pero la API todavía no ve la función (recarga su caché
+          // después de migrar): es pasajero, se reintenta en la próxima vuelta.
+          throw new RemoteError(errorMessage(err), false, 'PGRST202');
+        }
         if (entry.op.kind === 'mentions' && isGoneForMentions(err)) {
           // El comentario ya no está o no se ve (o la base no tiene menciones): no hay nada que arreglar a mano.
           await this.forget(entry);
@@ -902,7 +907,7 @@ export class CommentQueue {
     if (!this.db) return;
     const tx = this.db.transaction(['outbox', 'meta'], 'readwrite');
     await tx.objectStore('outbox').delete(entry.seq!);
-    await tx.objectStore('meta').delete(MENTIONS_KEY + entry.op.id);
+    if (entry.op.kind === 'mentions') await forgetCopy(tx.objectStore('meta'), entry.op);
     await tx.done;
     this.ops = this.ops.filter((o) => o.seq !== entry.seq);
     this.changed();
@@ -986,7 +991,7 @@ export class CommentQueue {
       const kept = op.mentions.filter((m) => accepted.has(m.userId));
       const dropped = op.mentions.filter((m) => !accepted.has(m.userId)).map((m) => m.label);
       next = current && !current.deleted_at ? { ...current, mentions: toRows(kept) } : null;
-      await meta.delete(MENTIONS_KEY + op.id);
+      await forgetCopy(meta, op);
       if (dropped.length > 0) await meta.put(dropped, UNNOTIFIED_KEY + op.id);
       else await meta.delete(UNNOTIFIED_KEY + op.id);
       if (dropped.length > 0) this.unnotified.set(op.id, dropped);
@@ -1433,10 +1438,13 @@ function applyOp(row: CommentRow | undefined, op: CommentOp, userId: string): Co
 
 // --- Menciones ------------------------------------------------------------------------------------------------
 
-/** El rótulo de una mención como lo acepta la base: sin espacios, controles, comillas ni @, hasta 64. */
+/**
+ * El rótulo de una mención como lo acepta la base: sin espacios, controles, comillas, @ ni los caracteres invisibles
+ * que la base rechaza (los mismos que en el nombre de un visitante del link), hasta 64.
+ */
 export function cleanLabel(label: string): string {
-  // eslint-disable-next-line no-control-regex
-  return label.replace(/[\s\u0000-\u001f\u007f"@]/gu, '').slice(0, 64);
+  // eslint-disable-next-line no-control-regex, no-misleading-character-class
+  return label.replace(/[\s\u0000-\u001f\u007f"@\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2069\ufeff]/gu, '').slice(0, 64);
 }
 
 /** El rótulo que propone la lista para un correo (como `private.mention_label` de la base). */
@@ -1467,10 +1475,31 @@ function sameMentions(rows: { user_id: string }[], mentions: MentionRef[], me: s
 /** Un rechazo de unas menciones que no tiene arreglo a mano: el comentario no está, se borró, o la base no las tiene. */
 function isGoneForMentions(err: unknown): boolean {
   const message = errorMessage(err);
-  return (
-    (isPermanent(err) && (message === 'comment_not_found' || message === 'comment_deleted')) ||
-    (err instanceof RemoteError && err.code === 'PGRST202')
-  );
+  return (isPermanent(err) && (message === 'comment_not_found' || message === 'comment_deleted')) || isMissingFunction(err);
+}
+
+/** La API no tiene la función (base sin migrar, o caché de la API todavía sin recargar). */
+function isMissingFunction(err: unknown): boolean {
+  return err instanceof RemoteError && err.code === 'PGRST202';
+}
+
+/**
+ * Olvida la copia en `meta` de unas menciones solo si es la de esta operación (mismo momento y mismo conjunto): si
+ * mientras tanto se guardaron otras más nuevas del mismo comentario, esa copia queda (es la que recupera una versión
+ * vieja que saque la cola).
+ */
+async function forgetCopy(
+  meta: { get(key: string): Promise<unknown>; delete(key: string): Promise<void> },
+  op: Extract<CommentOp, { kind: 'mentions' }>,
+): Promise<void> {
+  const saved = (await meta.get(MENTIONS_KEY + op.id)) as CommentOp | undefined;
+  if (!saved || (saved.kind === 'mentions' && saved.at === op.at && sameMentionList(saved.mentions, op.mentions))) {
+    await meta.delete(MENTIONS_KEY + op.id);
+  }
+}
+
+function sameMentionList(a: MentionRef[], b: MentionRef[]): boolean {
+  return a.length === b.length && a.every((m, i) => m.userId === b[i].userId && m.label === b[i].label);
 }
 
 function byDate(a: { createdAt: string; id: string }, b: { createdAt: string; id: string }): number {

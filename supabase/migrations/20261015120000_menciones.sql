@@ -22,7 +22,7 @@ create table public.comment_mentions (
   page_id      uuid not null references public.pages (id),
   user_id      uuid not null references auth.users (id) on delete cascade,
   mentioned_by uuid references auth.users (id) on delete set null,
-  label        text not null check (char_length(label) between 1 and 64 and label !~ '[[:space:][:cntrl:]@]'),
+  label        text not null check (char_length(label) between 1 and 64 and label !~ '[[:space:][:cntrl:]@\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2069\ufeff]'),
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now(),
   removed_at   timestamptz,                       -- se sacó del comentario al editarlo
@@ -82,7 +82,7 @@ create function private.mention_label(email text)
 returns text
 language sql immutable set search_path = ''
 as $$
-  select coalesce(nullif(left(regexp_replace(split_part(email, '@', 1), '[[:space:][:cntrl:]"@]', '', 'g'), 64), ''),
+  select coalesce(nullif(left(regexp_replace(split_part(email, '@', 1), '[[:space:][:cntrl:]"@\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2069\ufeff]', '', 'g'), 64), ''),
                   'user');
 $$;
 revoke all on function private.mention_label(text) from public, anon, authenticated;
@@ -134,13 +134,14 @@ begin
      or length(p_mentions::text) > 4000 then
     raise exception 'mentions_invalid' using errcode = '22023';
   end if;
-  -- La forma de cada una, también el rótulo (1 a 64, sin espacios, controles ni @), antes de escribir nada.
+  -- La forma de cada una, también el rótulo (1 a 64, sin espacios, controles, @ ni los caracteres invisibles que
+  -- `plink_add_comment` rechaza en el nombre: un rótulo no se disfraza de otro), antes de escribir nada.
   for e in select x from jsonb_array_elements(p_mentions) x loop
     if jsonb_typeof(e) <> 'object' or (select count(*) from jsonb_object_keys(e)) <> 2
        or coalesce(e ->> 'user_id', '') !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
        or jsonb_typeof(e -> 'label') is distinct from 'string'
        or char_length(btrim(e ->> 'label')) not between 1 and 64
-       or btrim(e ->> 'label') ~ '[[:space:][:cntrl:]@]' then
+       or btrim(e ->> 'label') ~ '[[:space:][:cntrl:]@\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2069\ufeff]' then
       raise exception 'mentions_invalid' using errcode = '22023';
     end if;
     wanted := wanted || (e ->> 'user_id')::uuid;

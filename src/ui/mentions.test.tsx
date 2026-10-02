@@ -3,7 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ServicesContext, type Services } from '../services';
-import type { MentionRef } from '../sync/comments';
+import { cleanLabel, labelForEmail, type MentionRef } from '../sync/comments';
 import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
@@ -158,6 +158,15 @@ describe('el texto de las menciones', () => {
     expect(activeMentions('borré la mención', [beto])).toEqual([]);
   });
 
+  it('el rótulo saca espacios, @ y los caracteres invisibles que la base rechaza (O5)', () => {
+    const zw = String.fromCharCode(0x200b);
+    const rtl = String.fromCharCode(0x202e);
+    const bom = String.fromCharCode(0xfeff);
+    expect(cleanLabel(`je${zw}fa`)).toBe('jefa');
+    expect(cleanLabel(`a${rtl}b${bom}c d@e`)).toBe('abcde');
+    expect(labelForEmail(`ana${zw}@wanka.tv`)).toBe('ana');
+  });
+
   it('pinta cada mención activa (gana el rótulo más largo) y las de Coda como @Nombre', () => {
     const anaPerez = { userId: ANA, label: 'ana.perez' };
     const ana = { userId: CLIENTA, label: 'ana' };
@@ -232,6 +241,22 @@ describe('el campo de un comentario', () => {
     expect(host.querySelector('.comment-body .mention')).toBeNull();
   });
 
+  it('después de Esc, borrar el @ y escribirlo de nuevo en el mismo lugar vuelve a abrir la lista (O1)', async () => {
+    const { brief, device } = await workspace();
+    const ana = await device(ANA);
+    const host = await mount(services(ana, ANA), <Panel pageId={brief} />);
+    await act(async () => showComments({ kind: 'new', blockId: null }));
+    await wait();
+    const textarea = host.querySelector<HTMLTextAreaElement>('textarea')!;
+    await typeIn(textarea, 'hola @b');
+    expect(host.querySelector('.mention-list')).not.toBeNull();
+    await key(textarea, 'Escape');
+    expect(host.querySelector('.mention-list')).toBeNull();
+    await typeIn(textarea, 'hola ');
+    await typeIn(textarea, 'hola @');
+    expect(host.querySelector('.mention-list')).not.toBeNull();
+  });
+
   it('sin menciones en la base (versión 14) el @ no abre nada', async () => {
     const { brief, device } = await workspace({ mentions: false });
     const ana = await device(ANA);
@@ -304,6 +329,7 @@ describe('la campana', () => {
     expect(bell.querySelector('.mentions-count')?.textContent).toBe('1');
     expect(bell.getAttribute('data-tip')).toBe('Mentions · 1 unread');
     expect(host.querySelector('.comments-toggle .mention-dot')).not.toBeNull();
+    expect(host.querySelector('.comments-toggle')?.getAttribute('data-tip')).toBe('You were mentioned here');
 
     await act(async () => bell.click());
     await wait();
@@ -318,6 +344,60 @@ describe('la campana', () => {
     expect(host.querySelector('.comments-toggle .mention-dot')).toBeNull();
     expect(server.mentions[0].read_at).not.toBeNull();
     void thread;
+  });
+
+  it('la lista se dibuja afuera de la barra de arriba, así el panel de comentarios no la tapa (B1)', async () => {
+    const { brief, device } = await workspace();
+    const ana = await device(ANA);
+    await ana.comments.add(brief, null, '@beto', null, [beto]);
+    await ana.engine.syncNow();
+    const b = await device(BETO);
+    await act(async () => {
+      await b.mentions.poll();
+    });
+    const host = await mount(
+      services(b, BETO),
+      <>
+        <header className="topbar">
+          <MentionsBell />
+        </header>
+        <Panel pageId={brief} />
+      </>,
+    );
+    await act(async () => showComments(null));
+    await act(async () => host.querySelector<HTMLButtonElement>('.mentions-bell')!.click());
+    await wait();
+    const panel = document.querySelector('.mentions-panel')!;
+    expect(panel).not.toBeNull();
+    expect(panel.closest('.topbar')).toBeNull();
+    expect(panel.parentElement).toBe(document.body);
+  });
+
+  it('abrir una mención de la página que ya está abierta baja sus comentarios en el acto (O2)', async () => {
+    const { brief, device } = await workspace();
+    const ana = await device(ANA);
+    const b = await device(BETO);
+    const host = await mount(
+      services(b, BETO),
+      <>
+        <MentionsBell />
+        <Panel pageId={brief} />
+      </>,
+    );
+    await act(async () => showComments(null));
+    await wait();
+    // Llega una mención nueva en la página abierta; la app de Beto todavía no bajó sus comentarios.
+    await ana.comments.add(brief, null, '@beto recién llegado', null, [beto]);
+    await ana.engine.syncNow();
+    await act(async () => {
+      await b.mentions.poll();
+    });
+    expect(host.textContent).not.toContain('recién llegado');
+    await act(async () => host.querySelector<HTMLButtonElement>('.mentions-bell')!.click());
+    await wait();
+    await act(async () => document.querySelector<HTMLButtonElement>('.mention-item')!.click());
+    await wait();
+    expect(host.querySelector('.comments-panel')?.textContent).toContain('recién llegado');
   });
 
   it('cuenta 9+ desde 10, Mark all as read las marca todas, y vacía dice que no hay', async () => {

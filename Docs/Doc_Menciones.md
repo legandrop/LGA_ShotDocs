@@ -42,7 +42,7 @@ auditoría», al final. **Va después del link público** (su migración sube a 
   respecto del borrador (`20261013…` → `20261015…`) porque va después de `20261014120000_asistente_politica.sql`.
 - **Las pruebas de permisos** (`supabase/tests/menciones_permisos.sql`) cubren los 18 casos de la sección 8.1 con 10
   cuentas falsas creadas dentro de la transacción. Corridas contra la base real dentro de `begin … rollback` (nunca con
-  `db:test`), con 27 mutantes de la migración: los 27 hacen caer la prueba. Las otras 21 pruebas del repo, corridas sobre esta migración (también en rollback), siguen pasando.
+  `db:test`), con 30 mutantes de la migración (27 de la entrega y 3 de la corrección O5): los 30 hacen caer la prueba. Las otras 21 pruebas del repo, corridas sobre esta migración (también en rollback), siguen pasando.
 - **La app** detecta la base con `MENTIONS_SCHEMA_VERSION = 15` (`src/sync/comments.ts`): con la base en 14, el `@` es
   texto, no hay lista ni campana y no sale ninguna operación nueva. La cola suma la operación `mentions` (en la misma
   transacción que el alta o la edición, con su copia en `meta` `mentions:<id>` y su recuperación al abrir); las de un
@@ -993,3 +993,21 @@ Auditoría independiente: «aprobado con condiciones», 60 casos en la base real
 | O11 A quien sacan del workspace la campana le da vacío, no `gone` | Anotado: lo borra la limpieza de siempre al sacarlo |
 | ME5 aprobada con condición (O2, O3) | Hecho en la sección 5.1 |
 | No verificado por la auditoría: la rama de `invitations.invited_by` | Caso 18 de las pruebas 8.1 |
+
+## Auditoría de la entrega 1 (2026-10-02) y sus correcciones
+
+Auditoría independiente: «no aprobado» por un bloqueante de interfaz; la base, los permisos, la cola y las versiones
+cruzadas pasaron. Corregido en la misma rama, cada arreglo con una prueba que cae sin él:
+
+| Hallazgo | Corrección |
+|---|---|
+| **B1** La lista de la campana se dibujaba adentro de `.topbar` (que arma su propio apilado): el panel de comentarios la tapaba y *Mark all as read* quedaba inalcanzable | La lista va a `document.body` con un portal (como `ProjectSwitcher`); en el navegador, los tres puntos de la lista dan la campana y la hoja del teléfono sigue abajo |
+| O1 Después de Esc, la lista no volvía a abrirse en esa posición | Se olvida la posición cerrada en cuanto ese `@` ya no está |
+| O2 Abrir una mención de la página abierta: el hilo aparecía con la bajada siguiente (16,6 s) | Abrir una mención pide los comentarios de esa página en el acto (530 ms medidos) |
+| O3 La confirmación de unas menciones borraba la copia en `meta` de otras más nuevas del mismo comentario | La copia se borra solo si es la de esa operación (mismo momento y mismo conjunto); también al descartar y al olvidar |
+| O4 `PGRST202` con la base en 15 (la API sin recargar su caché) descartaba la mención | Con `mentionsReady`, es pasajero: queda en la cola y se reintenta |
+| O5 El rótulo aceptaba caracteres invisibles | La base (el primer bucle, la tabla y `mention_label`) y la app rechazan los mismos que `plink_add_comment` en el nombre |
+| O6 Un comentario con mención cuenta como 2 cambios sin subir | Al roadmap (cosmético) |
+| O7 «you were mentioned here» en minúscula como tooltip | «You were mentioned here» |
+| O8 Las sin leer de una página en la papelera cuentan para quien edita | Es el diseño (*In trash*); sin cambios |
+

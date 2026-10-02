@@ -14,6 +14,7 @@ const ANA = '00000000-0000-4000-8000-0000000000a1';
 const BETO = '00000000-0000-4000-8000-0000000000a2';
 const CLIENTA = '00000000-0000-4000-8000-0000000000a3';
 const NADIE = '00000000-0000-4000-8000-0000000000a4';
+const CLIENTA2 = '00000000-0000-4000-8000-0000000000a5';
 
 const devices: Device[] = [];
 async function device(server: FakeServer, user?: { id: string }, dbName?: string): Promise<Device> {
@@ -176,6 +177,41 @@ describe('la cola', () => {
     expect(ana.engine.getStatus()).toMatchObject({ pendingComments: 0, failedComments: 0 });
     expect(await ana.commentsDb.get('meta', `mentions:${id}`)).toBeUndefined();
     expect(server.mentions).toHaveLength(0);
+  });
+
+  it('la confirmación de unas menciones no borra la copia en meta de otras más nuevas del mismo comentario (O3)', async () => {
+    const { server, ana, brief } = await workspace();
+    server.addMember(CLIENTA2, 'member', 'carla@wanka.tv');
+    server.grant(CLIENTA2, { pageId: brief }, 'comment');
+    const stop = ana.comments.watch(brief);
+    // La respuesta de las primeras menciones se pierde: quedan en la cola, ya intentadas.
+    server.loseCommentResponse.add('mentions');
+    const id = await ana.comments.add(brief, null, '@beto', null, [beto]);
+    await ana.engine.syncNow();
+    // Una edición suma a Carla: unas menciones nuevas, con su copia en meta.
+    await ana.comments.edit(brief, id, '@beto y @carla', [beto, { userId: CLIENTA2, label: 'carla' }]);
+    // Se confirman las primeras y la edición falla (pasajero): las nuevas no salen en esta vuelta.
+    server.failCommentOnce.add('edit');
+    await ana.engine.syncNow();
+    const copy = (await ana.commentsDb.get('meta', `mentions:${id}`)) as { mentions: MentionRef[] } | undefined;
+    expect(copy?.mentions.map((m) => m.label)).toEqual(['beto', 'carla']);
+    await ana.engine.syncNow();
+    expect(server.mentions.filter((m) => !m.removed_at).map((m) => m.user_id).sort()).toEqual([BETO, CLIENTA2].sort());
+    expect(await ana.commentsDb.get('meta', `mentions:${id}`)).toBeUndefined();
+    stop();
+  });
+
+  it('PGRST202 con la base en la versión 15 es pasajero: las menciones esperan y salen cuando la API ve la función (O4)', async () => {
+    const { server, ana, brief } = await workspace();
+    // La base ya dice 15 pero la API todavía no recargó su caché.
+    server.mentionsEnabled = false;
+    await ana.comments.add(brief, null, '@beto', null, [beto]);
+    await ana.engine.syncNow();
+    expect(ana.engine.getStatus()).toMatchObject({ pendingComments: 1, failedComments: 0 });
+    server.mentionsEnabled = true;
+    await ana.engine.syncNow();
+    expect(ana.engine.getStatus()).toMatchObject({ pendingComments: 0, failedComments: 0 });
+    expect(server.mentions).toMatchObject([{ user_id: BETO }]);
   });
 
   it('las menciones de un alta rechazada esperan con ella y salen al reintentar', async () => {
