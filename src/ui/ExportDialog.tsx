@@ -25,7 +25,7 @@ import { navigate, pagePath } from '../router';
 // vista queda armada mientras la ventana está abierta (se puede volver a abrir el diálogo) y se suelta al cerrarla.
 // Exportar nunca escribe nada: lee copias de lo guardado en el dispositivo.
 //
-// Entrega 3 (Lega 2026-10-02): las fotos van en resolución completa salvo con *Smaller file* (D85); si lo elegido no
+// Entrega 1b (Lega 2026-10-02): las fotos van en resolución completa salvo con *Smaller file* (D85); si lo elegido no
 // entra en un PDF de este dispositivo, sale en partes, una por vez (D84: la siguiente se arma al pedirla, soltando la
 // anterior); y al terminar, la lista de las páginas que fallaron, cada una con su link y *Export again* (D88).
 
@@ -395,8 +395,11 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
               <button onClick={props.onClose}>{tr('common.close')}</button>
               {phase.book.to < phase.book.total ? (
                 <>
-                  <button onClick={() => openPrint(phase.book)}>{tr('exportDialog.print')}</button>
-                  <button className="primary" onClick={() => void run(phase.book.to, (phase.book.part ?? 1) + 1)}>
+                  {/* En un táctil el diálogo no se abrió solo: lo primero es abrirlo y guardar esta parte. */}
+                  <button className={touch ? 'primary' : ''} onClick={() => openPrint(phase.book)}>
+                    {tr('exportDialog.print')}
+                  </button>
+                  <button className={touch ? '' : 'primary'} onClick={() => void run(phase.book.to, (phase.book.part ?? 1) + 1)}>
                     {tr('exportDialog.nextPart', { part: (phase.book.part ?? 1) + 1 })}
                   </button>
                 </>

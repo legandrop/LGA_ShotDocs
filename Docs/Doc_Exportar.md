@@ -1,10 +1,14 @@
 # Exportar una página o un proyecto entero (P.22)
 
-**Estado: entregas 0 (v0.115), 1 (v0.122: el PDF de una rama o de un proyecto) y 2 (v0.129: el zip) hechas; volver,
-pendiente** (roadmap P.22; pedido de Lega del 2026-10-02). Se diseñó contra `main` v0.108. Cómo quedaron, al final:
+**Estado: entregas 0 (v0.115), 1 (v0.122: el PDF de una rama o de un proyecto), 2 (v0.129: el zip) y 1b (v0.0XX: los
+cambios de Lega al PDF, D84, D85 y D88: fotos en resolución completa, el PDF en partes y la lista de las que fallaron)
+hechas; volver, pendiente** (roadmap P.22; pedido de Lega del 2026-10-02). Se diseñó contra `main` v0.108. Cómo quedaron, al final:
 "Cómo quedó la entrega 0" (el editor de exportación medido con 300 páginas), "Cómo quedó la entrega 1" (el PDF, medido
 con la impresión real de Chrome y Edge) y "Cómo quedó la entrega 2" (el zip, abierto con `file://` en Chromium y
-Firefox). **Cambiado por Lega (2026-10-02):** el zip lo exportan solo el dueño y los admins (D60), nunca desde un
+Firefox), y "Cómo quedó la entrega 1b" (las fotos originales y las partes, medido con `page.pdf`). **Cambiado por Lega
+(2026-10-02):** el PDF lleva las fotos como se tomaron, en resolución completa, con *Smaller file* para achicarlas
+(D85); si no entra en un PDF del dispositivo, sale en varios por páginas enteras (D84, en vez de ofrecer ramas); y al
+terminar lista las páginas que fallaron con su link y *Export again* (D88). El zip lo exportan solo el dueño y los admins (D60), nunca desde un
 teléfono o una tableta (D63), y el `.md` lleva rutas relativas que cualquier visor de Markdown abre (D57). Las decisiones EX1 a EX15 (sección 11) son propuestas con la recomendación tomada: Lega no estaba y quedan a
 confirmar. Lo medido está en un prototipo fuera del repo ("Cómo se midió", al final). **Auditado el 2026-10-02
 ("aprobado con condiciones") y corregido:** los dos bloqueantes (ningún correo en el zip, la vista JPEG en el HTML) y
@@ -396,7 +400,8 @@ provisorios (constantes, a ajustar con lo medido en la entrega 1):
 | Teléfono o tableta | 60 | 50 millones (unas 300 miniaturas de 480 px) | 100 |
 
 Pasado un tope, la ventana lo dice antes de empezar y ofrece exportar una rama (las de primer nivel, con su peso) o el
-zip. El tope de hoy del PDF de una página en un táctil (12 originales o 60 MB) se reemplaza por el de píxeles para los
+zip. **Reemplazado en la entrega 1b (D84, Lega):** pasado un tope, el PDF sale en partes por páginas enteras; con las
+fotos originales manda además un tope de peso ("Cómo quedó la entrega 1b"). El tope de hoy del PDF de una página en un táctil (12 originales o 60 MB) se reemplaza por el de píxeles para los
 originales achicados, porque lo que pesa en la vista es lo decodificado y no el archivo. En el iPhone (WebKit) nada de
 esto está medido: se mide a mano en la entrega 1 antes de fijar los números.
 
@@ -982,3 +987,64 @@ un zip de más de 1 GB en Firefox (el tope).
   tiene que escribirlas al crear el proyecto nuevo, cambiando los ids viejos por los nuevos; hasta que exista, la prueba
   es que el manifest las lleve, en el proyecto entero y en una rama.
 
+## Cómo quedó la entrega 1b (v0.0XX: los cambios de Lega al PDF, D84, D85 y D88)
+
+**Qué ve el usuario.** En la ventana *Export*, la casilla *Sharp photos* se reemplaza por *Smaller file (lower-resolution
+photos)*, destildada (D85): sin tildar, cada foto va como se tomó, en resolución completa; tildada, achicada a su ancho
+impreso a 200 ppp (lo de la entrega 1, con la nítida de 2048 pedida al Drive si hace falta). Sin red, la ventana avisa que
+las fotos cuyo original no está en el dispositivo van en menor resolución. Ya no hay "demasiadas páginas o fotos,
+exportá una rama": si lo elegido pasa un tope, el PDF sale **en partes** (D84): "Part 1 ready: pages 1 to 33 of 300 ·
+120 PDF pages", el diálogo de imprimir con el nombre `<título> <fecha> Part 1`, y *Prepare part 2*, que arma la siguiente
+soltando la anterior ("Save this part first"); en la última, "This is the last part". El índice de cada parte dice
+"Part 2 · pages 34 to 55 of 300" y solo lleva sus páginas; un link a una página de otra parte queda como texto. Al
+terminar (la última parte o el único PDF), **la lista de las páginas que fallaron** (D88), juntas de todas las partes:
+el título como link (cierra la ventana y abre la página; con Ctrl/⌘ o la rueda, en otra pestaña) y *Export again*, que
+la exporta sola en un PDF aparte y la saca de la lista si sale bien. La ayuda (*Export pages and projects as one PDF*)
+lo cuenta; sin atajos nuevos.
+
+**Cómo está hecho:**
+
+- `exportImages.ts`: con `full`, cada foto pide su original (`ImageSource.original`: el del dispositivo, o bajado
+  entero del Drive por el portero con `porteroDownload`; nunca de un video ni de un adjunto, y nunca se guarda).
+  `jpegInfo` lee la cabecera (medidas, giro de EXIF, canales) sin decodificar: un JPEG derecho de 1 o 3 canales entra
+  **tal cual** (como `image/jpeg`); uno girado, CMYK, una PNG o un WebP se pasan a JPEG del mismo tamaño, ya derecho, en
+  los Workers; un HEIC que el navegador no abre, con el convertidor de la app (`heicConvert`). La foto sin original a
+  mano (sin red) sale achicada como antes y se cuenta (`lowRes`). `PixelBudget` cuenta píxeles y peso. Si se pasa el
+  tope, `shrinkImages` deja cada foto con la imagen de antes, suelta sus `blob:` y tira el error.
+- `exportPdf.ts`: `buildPdf` arma **una parte**: desde `from`, hasta el tope de páginas o hasta que las fotos de una
+  página no entran en lo que le queda a la parte (esa página va primera en la siguiente: nunca se parte una página).
+  Una página que sola no entra en resolución completa sale con las fotos achicadas y avisada arriba del título; si ni
+  así, se saltea marcada ("too many photos for one PDF"). El libro dice `from`, `to`, `total`, `part` (o `null` si
+  entró todo) y `bytes`. Los comentarios se bajan una vez para todas las partes (`appComments` recuerda lo bajado y
+  `stale` dice cuáles quedaron con lo del dispositivo).
+- `exportPages.ts`: `onPage` puede devolver `'stop'`. `ExportDialog.tsx`: las partes, *Smaller file*, la lista de las
+  que fallaron. `bench/parts.tsx` + `parts.html`: el arnés de la medición (solo con el servidor de desarrollo).
+
+**Por qué los originales se pasan antes a JPEG (medido en Chromium 153 sin ventana, `page.pdf`, página suelta con
+fotos de 4032 × 3024).** 300 JPEG derechos: el PDF pesa lo mismo que las fotos (280 MB: Chrome los copia sin
+decodificar), `page.pdf` tarda 3,8 s y la memoria sube 0,46 GB con 3658 millones de píxeles: **manda el peso, no los
+píxeles**. Con perfil de color (Adobe RGB, como el Display P3 del iPhone), igual. Pero 20 JPEG con el giro de EXIF de
+una foto vertical: el PDF pesa 123 MB en vez de 19 y tarda 9,8 s (Chrome decodifica y vuelve a codificar cada una); 20
+PNG, 12,8 s. Por eso esas se pasan antes a JPEG derecho en los Workers, en paralelo.
+
+**El proyecto de 300 páginas con originales** (300 páginas, 2219 fotos de 4032 × 3024 de 3,75 MB con ruido, una de cada
+cuatro giradas; servidor falso, IndexedDB del navegador, Chromium 153 sin ventana, `page.pdf` por parte):
+
+| Tope de peso por parte | Partes | Armar + PDF por parte | Todo | Memoria sobre la app quieta (pico) |
+|---|---|---|---|---|
+| 800 MB (el primer valor) | 11 de ~780 MB | 7 a 11 s + 7 a 10 s | 188 s | +3,0 a +4,6 GB |
+| 500 MB (80 páginas) | 5 de ~500 MB | 6 a 7 s + 6 a 7 s | 57 s | +2,0 a +2,9 GB |
+| 400 MB (80 páginas) | 6 de ~390 MB | 3 a 5 s + 3 a 4 s | 47 s | +0,9 a +2,7 GB |
+| *Smaller file* (80 páginas) | 1 de 13 MB | 6,3 s + 2,4 s | 10 s | +0,3 GB |
+
+Lo de la parte anterior tarda en soltarse (la memoria de la segunda parte en adelante es más alta que la de la primera,
+pero no crece parte tras parte). En ninguna corrida cambió nada guardado (300 de 300 iguales, byte por byte), ninguna
+foto salió en menor resolución y ninguna página falló. **Los topes quedan (D84, con la memoria):** por parte, 500 MB y
+2000 millones de píxeles en una computadora (unas 130 fotos de teléfono), 200 MB y 800 millones con menos de 8 GB, y
+60 MB y 150 millones en un teléfono o una tableta (sin medir); más el de páginas de siempre (500 y 60). El navegador
+no distingue una compu de 8 GB de una de 32 (`deviceMemory` llega a 8): 500 MB deja margen en la de 8. El proyecto de
+prueba sale en unas 17 partes; con *Smaller file*, en una.
+
+**Lo que no se midió (para Lega, a mano):** el diálogo de imprimir de verdad con *Save as PDF* y su vista previa con
+una parte de 500 MB (Chrome y Edge, también en una compu de 8 GB), originales reales de iPhone (HEIC y JPEG con P3) por
+el portero de verdad (tiempo de bajada y pedidos al Worker: unos dos por foto), Safari, Firefox y el iPhone con partes.

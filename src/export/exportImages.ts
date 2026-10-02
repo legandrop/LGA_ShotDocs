@@ -10,7 +10,7 @@ import { ORIGINAL_MAX_SIDE } from '../ui/printPage';
 // el diseño: con fuente de 2048 px la vista suma 368 MB y el PDF 30 MB; achicada, 261 MB y 6 MB. Lo que cuenta para el
 // tope es lo decodificado (ancho × alto de cada foto ya achicada), no la cantidad de fotos.
 //
-// Desde la entrega 3 (D85, Lega 2026-10-02) las fotos van por defecto como se tomaron, en resolución completa: el
+// Desde la entrega 1b (D85, Lega 2026-10-02) las fotos van por defecto como se tomaron, en resolución completa: el
 // ORIGINAL (del dispositivo o bajado del Drive por el portero), sin achicar. Un JPEG derecho entra tal cual al PDF
 // (Chrome lo copia sin decodificarlo: medido, el PDF pesa lo mismo que los JPEG y la memoria no crece con los
 // píxeles); uno girado por EXIF, una PNG o un HEIC se pasan antes a JPEG del mismo tamaño en un Worker (Chrome los

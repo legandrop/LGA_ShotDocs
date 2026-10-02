@@ -51,7 +51,7 @@ export function deviceLimits(touch: boolean, memoryGb: number | undefined = type
 }
 
 /** Los topes de una computadora con menos de 8 GB. */
-export const SMALL_DESKTOP = { pixels: 400_000_000, fullPixels: 1_200_000_000, bytes: 300_000_000 };
+export const SMALL_DESKTOP = { pixels: 400_000_000, fullPixels: 800_000_000, bytes: 200_000_000 };
 /** El tope de píxeles (fotos achicadas) de una computadora con menos de 8 GB. */
 export const SMALL_DESKTOP_PIXELS = SMALL_DESKTOP.pixels;
 
@@ -59,11 +59,13 @@ export const PDF_LIMITS: { desktop: PdfLimits; touch: PdfLimits } = {
   // Medido en Chrome con la impresión real (entrega 1): 300 páginas con 2219 fotos son 882 millones de píxeles y los
   // procesos del navegador llegan a 3,3 GB mientras arma el PDF. El tope deja pasar ese proyecto y corta antes de
   // los 4 GB.
-  // Con los originales (entrega 3, medido con `page.pdf` de Chromium): 300 fotos de 4032 × 3024 (3658 millones de
-  // píxeles, 280 MB) suben la memoria 0,46 GB; manda el peso, no los píxeles. El diálogo de imprimir de verdad tiene
-  // además la vista previa (sin medir): por eso 800 MB y 3000 millones por parte (unas 250 fotos de teléfono).
-  desktop: { pages: 500, pixels: 1_000_000_000, sharp: 1000, fullPixels: 3_000_000_000, bytes: 800_000_000 },
-  // Teléfono o tableta: sin medir (WebKit). Unas 12 fotos de teléfono por parte.
+  // Con los originales (entrega 1b, medido con `page.pdf` de Chromium, Docs/Doc_Exportar.md): un JPEG entra tal cual al
+  // PDF y la memoria sigue al peso, no a los píxeles. El proyecto de 300 páginas con fotos de teléfono (3,75 MB) en
+  // partes de 800 MB llegó a 3 a 4,6 GB por encima de la app quieta; en partes de 400 MB, 0,9 a 2,7 GB (lo de la parte
+  // anterior tarda en soltarse). 500 MB (unas 130 fotos de teléfono por parte) deja margen en una compu de 8 GB, que
+  // el navegador no distingue de una de 32. El diálogo de imprimir de verdad suma la vista previa (sin medir).
+  desktop: { pages: 500, pixels: 1_000_000_000, sharp: 1000, fullPixels: 2_000_000_000, bytes: 500_000_000 },
+  // Teléfono o tableta: sin medir (WebKit). Unas 15 fotos de teléfono por parte.
   touch: { pages: 60, pixels: 50_000_000, sharp: 100, fullPixels: 150_000_000, bytes: 60_000_000 },
 };
 

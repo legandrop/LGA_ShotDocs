@@ -13,7 +13,7 @@ import { exportPlan } from './exportPages';
 import { anchorId, buildPdf, deviceLimits, PDF_LIMITS, SMALL_DESKTOP, type BuildOptions, type PdfLimits } from './exportPdf';
 import { writeBlocks } from './testProject';
 
-// Exportar, entrega 3 (Docs/Doc_Exportar.md, "Cómo quedó la entrega 3"; D84, D85 y D88 cambiadas por Lega el
+// Exportar, entrega 1b (Docs/Doc_Exportar.md, "Cómo quedó la entrega 1b"; D84, D85 y D88 cambiadas por Lega el
 // 2026-10-02): las fotos en resolución completa (el original tal cual o pasado a JPEG del mismo tamaño), el PDF en
 // partes por páginas enteras cuando no entra en uno, y la lista de las páginas que fallaron con *Export again*. Sin el
 // navegador (jsdom no mide ni carga imágenes): el tamaño de cada foto en la hoja se fija a mano y el achicador es falso.
@@ -141,7 +141,7 @@ function stubUrls() {
   return revoked;
 }
 
-describe('exportar E3: la cabecera de un JPEG', () => {
+describe('exportar 1b: la cabecera de un JPEG', () => {
   it('lee las medidas, el giro de EXIF (los dos órdenes de bytes) y los canales, sin decodificar', () => {
     expect(jpegInfo(jpeg(4032, 3024))).toEqual({ width: 4032, height: 3024, orientation: 1, components: 3 });
     expect(jpegInfo(jpeg(4032, 3024, { orientation: 6 }))).toEqual({ width: 4032, height: 3024, orientation: 6, components: 3 });
@@ -153,7 +153,7 @@ describe('exportar E3: la cabecera de un JPEG', () => {
   });
 });
 
-describe('exportar E3: las fotos en resolución completa (D85)', () => {
+describe('exportar 1b: las fotos en resolución completa (D85)', () => {
   it('un JPEG derecho entra tal cual (sin dibujarlo), y cuenta sus píxeles y su peso', async () => {
     stubUrls();
     const root = viewWithPhotos(2);
@@ -339,7 +339,7 @@ async function allParts(device: Device, plan: BuildOptions['plan'], extra: Parti
   return parts;
 }
 
-describe('exportar E3: el PDF en partes (D84)', () => {
+describe('exportar 1b: el PDF en partes (D84)', () => {
   it('si entra todo, un solo PDF sin partes', async () => {
     stubUrls();
     photosHaveWidth();
@@ -482,7 +482,7 @@ async function waitFor(host: HTMLElement, text: string | RegExp) {
   expect(host.textContent).toMatch(text);
 }
 
-describe('exportar E3: la ventana', () => {
+describe('exportar 1b: la ventana', () => {
   it('*Smaller file* reemplaza a *Sharp photos* y arranca destildada', async () => {
     const server = new FakeServer();
     server.enableMedia();
