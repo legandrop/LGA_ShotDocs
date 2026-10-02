@@ -5208,6 +5208,240 @@ mark.search-hit {
   }
 }
 
+/* Reemplazar en todo el proyecto (Docs/Doc_Buscar.md, "Reemplazar en el proyecto"): la flecha del campo, el
+   renglón del reemplazo, la lista de cambios con la vista previa y la confirmación (adentro del panel). */
+.search-panel {
+  position: relative;
+}
+
+.search-field .search-replace-toggle {
+  margin-left: -8px;
+}
+
+.search-replace-toggle svg {
+  transition: transform 0.15s ease;
+}
+
+.search-replace-toggle.on svg {
+  transform: rotate(90deg);
+}
+
+.replace-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  padding: 6px 8px 6px 44px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.replace-input {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  font-size: 14px;
+}
+
+.replace-recent {
+  list-style: none;
+  margin: 6px 10px;
+  padding: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.replace-recent-item {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+/* Los números del avance con el mismo ancho: Stop no se corre mientras cuentan. */
+.replace-progress,
+.notice.replace-progress-bar {
+  font-variant-numeric: tabular-nums;
+}
+
+.replace-hidden-mark {
+  font-size: 12px;
+}
+
+.replace-progress {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  margin: 8px 10px;
+  font-size: 13px;
+}
+
+.replace-summary {
+  margin: 8px 10px 4px;
+  font-size: 12px;
+}
+
+.replace-page {
+  margin-top: 6px;
+}
+
+.replace-page-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 2px 0;
+}
+
+.replace-page-go,
+.replace-match-go {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  padding: 6px 10px;
+  border-radius: 8px;
+  text-align: left;
+  color: var(--text);
+  font-weight: normal;
+}
+
+.replace-page-go:hover,
+.replace-match-go:hover {
+  background: var(--hover);
+}
+
+.replace-page-go svg {
+  flex: none;
+  color: var(--muted-2);
+}
+
+.replace-count {
+  flex: none;
+  min-width: 20px;
+  color: var(--muted-2);
+  font-size: 12px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.replace-block {
+  flex: none;
+  font-size: 12px;
+}
+
+.replace-matches {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.replace-match {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 4px;
+}
+
+.replace-match-go {
+  display: block;
+  padding: 4px 10px 4px 36px;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+del.replace-old {
+  border-radius: 2px;
+  background: var(--find-hit);
+  color: inherit;
+}
+
+ins.replace-new {
+  margin-left: 2px;
+  padding: 0 1px;
+  border-radius: 2px;
+  background: var(--accent-soft, var(--hover));
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.replace-more {
+  padding: 2px 10px 2px 36px;
+  font-size: 12px;
+}
+
+.replace-show-more {
+  display: block;
+  margin: 8px auto;
+}
+
+/* Los botones de cada renglón: a la vista con el mouse encima (o el foco); en pantallas táctiles, siempre. */
+.replace-match > .find-text-button,
+.replace-match > .find-button,
+.replace-page-head > .find-text-button,
+.replace-page-head > .find-button {
+  opacity: 0;
+}
+
+.replace-match:hover > button,
+.replace-match:focus-within > button,
+.replace-page-head:hover > button,
+.replace-page-head:focus-within > button {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .replace-match > button,
+  .replace-page-head > button {
+    opacity: 1;
+  }
+}
+
+/* El avance con el panel cerrado: encima del aviso común, si hay uno. */
+.notice.replace-progress-bar {
+  bottom: calc(76px + env(safe-area-inset-bottom));
+}
+
+.replace-confirm-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: var(--scrim);
+}
+
+.replace-confirm p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.replace-confirm-what {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.replace-confirm-check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.replace-confirm .modal-actions {
+  gap: 8px;
+}
+
+@media (max-width: 760px) {
+  .replace-row {
+    padding-left: 8px;
+  }
+}
+
 /* Un proyecto archivado abierto (P.14): la marca en su inicio. */
 .archived-note {
   display: flex;

@@ -84,6 +84,8 @@ const PAGE_BREAK = '0.093';
  * La vista previa de los PDF adjuntos y los adjuntos en el carrete (Doc_Adjuntos.md, entrega 2).
  */
 const ATTACH_PREVIEW = '0.091';
+/** Reemplazar en todo el proyecto (Doc_Buscar.md, "Reemplazar en el proyecto"). */
+const REPLACE_PROJECT = '0.094';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -304,6 +306,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
     keys: { search: 'search' },
     more: ['listPick', 'listClose'],
     since: BEFORE_HELP,
+  },
+  {
+    id: 'replaceProject',
+    section: 'find',
+    title: 'help.replaceProject.title',
+    text: 'help.replaceProject.text',
+    keys: { search: 'search', undo: 'undo' },
+    words: ['replace all', 'reemplazar todo', 'find and replace', 'buscar y reemplazar'],
+    since: REPLACE_PROJECT,
   },
 
   // --- Colapsar ---

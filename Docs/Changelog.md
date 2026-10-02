@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.094 :
+
+Faltaba reemplazar en todo el proyecto: cambiar un nombre en cincuenta páginas era abrirlas de a una. Ahora la
+flecha del panel de Ctrl/⌘+K despliega el reemplazo: lista cada coincidencia con lo de antes tachado y lo nuevo
+al lado, y reemplaza una, una página o todas, con una confirmación que dice cuántos cambios, en cuántas páginas y
+cuántos escondidos en secciones colapsadas (borrarlos pide su casilla). Escribe en el Y.Doc de cada página que se
+puede editar y está completa, sin editor, por el mismo camino que cualquier edición; antes guarda un registro, y
+*Undo* vuelve a poner lo que nadie cambió después, también sin red o tras cerrar la app. Diseño auditado (la
+protección del editor abierto, el guardado comprobado, los permisos conocidos). Pruebas al azar con dos
+dispositivos: nada del otro se pierde. Al buscar, la ñ pasa a ser otra letra (D12). Ayuda nueva.
+[ Reemplazar en el proyecto - vista previa, confirmación y deshacer en todas las páginas ]
+
 v0.093 :
 
 En una página con tamaño de hoja no había forma de forzar que algo empiece en una hoja nueva: los cortes eran

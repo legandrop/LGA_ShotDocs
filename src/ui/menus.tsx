@@ -32,6 +32,7 @@ import { openHelp } from '../help/helpUi';
 import { isPhoneLayout } from './commentsUi';
 import { collapseControlFor } from './collapseControl';
 import { notify } from './notice';
+import { replaceBlocksLeaving } from './replaceUi';
 import { usePendingCount } from './usePendingCount';
 import { LegalLinks } from './Legal';
 import { openInstallDialog, useInstallState } from './install';
@@ -329,6 +330,7 @@ export function AccountMenu({
   useFloating(ref, onClose, anchor);
 
   async function signOut() {
+    if (replaceBlocksLeaving()) return;
     if (importJobFor(tree).get().running) {
       alert(t('import.running'));
       return;

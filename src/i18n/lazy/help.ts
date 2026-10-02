@@ -246,8 +246,13 @@ export const help = {
   },
   'help.findProject.title': { en: "Search the whole project", es: "Buscar en todo el proyecto" },
   'help.findProject.text': {
-    en: "{search} or the magnifying glass next to + searches the titles and text of every page in the project, offline too, and takes you to the exact spot. It also lists matching projects.",
-    es: "{search} o la lupa al lado del + buscan en los títulos y el texto de todas las páginas del proyecto, también sin red, y te llevan al lugar exacto. También muestran los proyectos que coinciden.",
+    en: "{search} or the magnifying glass next to + searches the titles and text of every page in the project, offline too, and takes you to the exact spot. It also lists matching projects. The arrow left of the field opens Replace.",
+    es: "{search} o la lupa al lado del + buscan en los títulos y el texto de todas las páginas del proyecto, también sin red, y te llevan al lugar exacto. También muestran los proyectos que coinciden. La flecha a la izquierda del campo despliega Reemplazar.",
+  },
+  'help.replaceProject.title': { en: "Replace in the whole project", es: "Reemplazar en todo el proyecto" },
+  'help.replaceProject.text': {
+    en: "Open {search} and use the arrow left of the field (if you can edit pages). Accents don't matter (camara finds cámara) unless you turn on Aa, but ñ is its own letter (ano doesn't find año). Each match shows the old text crossed out and the new one next to it; replace one, a whole page or all of them. Replace all asks first how many changes in how many pages, and says how many are in collapsed sections (deleting those needs its checkbox). Page titles, captions and file names don't change, and neither do pages you can only view or that aren't downloaded yet. Undo, in the notice or in the panel, puts back everything that wasn't changed afterwards; it works offline and after closing the app, on the device where you replaced. {undo} in the page doesn't undo it.",
+    es: "Abrí {search} y usá la flecha a la izquierda del campo (si podés editar páginas). Las tildes no cuentan (camara encuentra cámara) salvo con Aa, pero la ñ es otra letra (ano no encuentra año). Cada coincidencia muestra lo de antes tachado y lo nuevo al lado; reemplazá una, una página entera o todas. Reemplazar todo pregunta antes cuántos cambios en cuántas páginas, y dice cuántas están en secciones colapsadas (borrarlas pide su casilla). No cambian los títulos de las páginas, los pies ni los nombres de archivo, ni las páginas que solo podés ver o que todavía no bajaron. Deshacer, en el aviso o en el panel, vuelve a poner todo lo que nadie cambió después; anda sin red y después de cerrar la app, en el dispositivo donde reemplazaste. {undo} en la página no lo deshace.",
   },
 
   // --- Colapsar ---
