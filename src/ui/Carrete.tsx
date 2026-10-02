@@ -33,7 +33,7 @@ import {
 } from './carreteModel';
 import { downloadProps, isOffline, type AttachmentView, type CarreteLoader, type Full } from './carreteLoader';
 import { CarreteMarkup, useHasMarkup } from './CarreteMarkup';
-import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, DownloadIcon, MarkupIcon, MarkupOffIcon, OpenIcon } from './icons';
+import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, DownloadIcon, EyeIcon, EyeOffIcon, OpenIcon } from './icons';
 import { shortcutLabel } from './shortcuts';
 
 // El carrete (paso 7 de Docs/Plan_Workspaces.md; Docs/Doc_Carrete.md): todas las fotos y videos de la
@@ -758,7 +758,7 @@ export function Carrete({ items, start, loader, online, onClose, markup = null }
             aria-label={tr(markupHidden ? 'carrete.showMarkup' : 'carrete.hideMarkup')}
             onClick={() => setMarkupHidden((h) => !h)}
           >
-            {markupHidden ? <MarkupIcon size={20} /> : <MarkupOffIcon size={20} />}
+            {markupHidden ? <EyeIcon size={20} /> : <EyeOffIcon size={20} />}
             <span className="carrete-btn-label">{tr(markupHidden ? 'carrete.showMarkup' : 'carrete.hideMarkup')}</span>
           </button>
         )}
@@ -788,7 +788,7 @@ export function Carrete({ items, start, loader, online, onClose, markup = null }
         {/* Con las anotaciones ocultas, una marca chica en la esquina avisa que la foto las tiene (AN9). */}
         {annotated && markupHidden && (
           <span className="carrete-markup-mark" role="img" aria-label={tr('carrete.markupHidden')}>
-            <MarkupOffIcon size={16} />
+            <EyeOffIcon size={16} />
           </span>
         )}
 
