@@ -247,8 +247,9 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   versión anterior. **Diseño en `Doc_Historial.md`** (sin implementar): las versiones salen de `page_updates`
   aplicadas en orden (sin guardar nada nuevo; cada fila ya tiene autor y hora puestos por la base), restaurar es
   una edición por el editor que se deshace, y la primera entrega es la lista con quién y cuándo, ver una versión y
-  restaurarla. Tiene cuatro preguntas para Lega (quién lo ve, lo borrado que ya llega a quien ve, restaurar solo
-  con red, y un ajuste al diseño de compactar).
+  restaurarla. Auditado. Encontró que lo que alguien escribe en algo que otro borra a la vez puede no llegar nunca
+  al servidor (la subida se arma con GC): propone armarla sin GC, como ítem aparte. Tiene cuatro preguntas para
+  Lega (quién lo ve, lo borrado que ya llega a quien ve, la subida sin GC y un ajuste al diseño de compactar).
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
