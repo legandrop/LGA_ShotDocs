@@ -164,6 +164,7 @@ export function ImportArchiveDialog() {
                 </p>
                 {weight.previews > 0 && <p className="muted">{tr('importArchive.foundPreviews', { count: weight.previews })}</p>}
                 {weight.missing > 0 && <p className="muted">{tr('importArchive.foundMissing', { count: weight.missing })}</p>}
+                {weight.tooBig > 0 && <p className="error">{tr('importArchive.foundTooBig', { count: weight.tooBig })}</p>}
                 {needsDrive && <p className="error">{tr('importArchive.needsDrive')}</p>}
                 {free !== null &&
                   (noRoom ? (

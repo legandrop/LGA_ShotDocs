@@ -134,6 +134,18 @@ export const importArchive = {
   },
   'importArchive.note.noContent': { en: "its content is not in the archive (it failed when exporting); the page was created empty", es: "su contenido no está en el archivo (falló al exportar); la página se creó vacía" },
   'importArchive.note.badPageJson': { en: "its content in the archive can't be read", es: "no se puede leer su contenido en el archivo" },
+  'importArchive.note.recompressed': {
+    en: "{name} was compressed again (unzipped and zipped) and is too large to read here; it didn't come back. Import the zip Shot Docs made, without unzipping it",
+    es: "{name} se volvió a comprimir (se descomprimió y se comprimió otra vez) y es demasiado grande para leerlo acá; no volvió. Importá el zip que armó Shot Docs, sin descomprimirlo",
+  },
+  'importArchive.note.recompressedTotal': {
+    en: "the zip was compressed again and this much can't be unpacked at once; choose the same zip again and Resume, or import the zip Shot Docs made",
+    es: "el zip se volvió a comprimir y no se puede descomprimir tanto de una vez; elegí el mismo zip otra vez y Seguir, o importá el zip que armó Shot Docs",
+  },
+  'importArchive.foundTooBig': {
+    en: { one: "{count} file was compressed again and is too large to read here: import the zip Shot Docs made, without unzipping it.", other: "{count} files were compressed again and are too large to read here: import the zip Shot Docs made, without unzipping it." },
+    es: { one: "{count} archivo se volvió a comprimir y es demasiado grande para leerlo acá: importá el zip que armó Shot Docs, sin descomprimirlo.", other: "{count} archivos se volvieron a comprimir y son demasiado grandes para leerlos acá: importá el zip que armó Shot Docs, sin descomprimirlo." },
+  },
   'importArchive.note.damagedFile': { en: "{path} is damaged in the zip", es: "{path} está dañado en el zip" },
   'importArchive.note.incomplete': { en: "it may have been out of date on the device that exported it", es: "puede que estuviera desactualizada en el dispositivo que la exportó" },
   'importArchive.note.preview': { en: "{name} came back from its preview (the original was not in the archive)", es: "{name} volvió desde su vista (el original no estaba en el archivo)" },
@@ -193,6 +205,10 @@ export const importArchive = {
   'importArchive.block.outsideLink': {
     en: { one: "{count} link to a page outside the archive became text", other: "{count} links to pages outside the archive became text" },
     es: { one: "{count} link a una página de afuera del archivo quedó como texto", other: "{count} links a páginas de afuera del archivo quedaron como texto" },
+  },
+  'importArchive.block.externalImage': {
+    en: { one: "{count} image loads from another site ({list}); that site can tell when the page is opened", other: "{count} images load from other sites ({list}); those sites can tell when the page is opened" },
+    es: { one: "{count} imagen se carga de otro sitio ({list}); ese sitio puede saber cuándo se abre la página", other: "{count} imágenes se cargan de otros sitios ({list}); esos sitios pueden saber cuándo se abre la página" },
   },
   'importArchive.block.duplicateId': {
     en: { one: "{count} repeated block id got a new one", other: "{count} repeated block ids got new ones" },

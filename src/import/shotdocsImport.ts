@@ -76,6 +76,7 @@ const BLOCK_NOTES = {
   badUrl: 'importArchive.block.badUrl',
   badLink: 'importArchive.block.badLink',
   outsideLink: 'importArchive.block.outsideLink',
+  externalImage: 'importArchive.block.externalImage',
   duplicateId: 'importArchive.block.duplicateId',
   tooDeep: 'importArchive.block.tooDeep',
   tooMany: 'importArchive.block.tooMany',
@@ -266,18 +267,26 @@ export async function openArchive(source: ArchiveSource): Promise<ShotDocsArchiv
 
 /** Qué se va a guardar de un archivo: el original, la vista JPEG (una foto sin original) o nada. */
 function chosenBlob(archive: ShotDocsArchive, f: ArchiveFileEntry): { path: string; preview: boolean } | null {
-  if (f.original && archive.source.has(f.original)) return { path: f.original, preview: false };
-  if (f.kind === 'image' && f.view && archive.source.has(f.view)) return { path: f.view, preview: true };
+  const usable = (path: string | null): path is string => !!path && archive.source.has(path) && !archive.source.tooBig(path);
+  if (usable(f.original)) return { path: f.original, preview: false };
+  if (f.kind === 'image' && usable(f.view)) return { path: f.view, preview: true };
   return null;
 }
 
+/** El original está en el zip pero vuelto a comprimir y más grande que el tope: no se lee (O2 de la auditoría). */
+function recompressed(archive: ShotDocsArchive, f: ArchiveFileEntry): boolean {
+  return !!f.original && archive.source.has(f.original) && archive.source.tooBig(f.original);
+}
+
 /** Cuántos archivos se van a guardar en el dispositivo y cuánto pesan (para el espacio, antes de empezar). */
-export function archiveWeight(archive: ShotDocsArchive): { files: number; bytes: number; previews: number; missing: number } {
+export function archiveWeight(archive: ShotDocsArchive): { files: number; bytes: number; previews: number; missing: number; tooBig: number } {
   let files = 0;
   let bytes = 0;
   let previews = 0;
   let missing = 0;
+  let tooBig = 0;
   for (const f of archive.manifest.files) {
+    if (recompressed(archive, f)) tooBig++;
     const got = chosenBlob(archive, f);
     if (!got) {
       missing++;
@@ -287,7 +296,7 @@ export function archiveWeight(archive: ShotDocsArchive): { files: number; bytes:
     if (got.preview) previews++;
     bytes += archive.source.size(got.path);
   }
-  return { files, bytes, previews, missing };
+  return { files, bytes, previews, missing, tooBig };
 }
 
 // --- Comentarios ---------------------------------------------------------------------------------------------------
@@ -714,6 +723,7 @@ export async function importArchive(
           parsed = JSON.parse(await source.text(p.json, MAX_PAGE_JSON_BYTES));
         } catch (err) {
           if (err instanceof ZipReadError && err.code === 'crc') throw new Error(t('importArchive.note.damagedFile', { path: p.json }));
+          if (err instanceof ZipReadError && err.code === 'tooBig') throw new Error(t('importArchive.note.recompressedTotal'));
           throw new Error(t('importArchive.note.badPageJson'));
         }
         if (!isObj(parsed) || (typeof parsed.id === 'string' && parsed.id.toLowerCase() !== p.id)) throw new Error(t('importArchive.note.badPageJson'));
@@ -728,6 +738,7 @@ export async function importArchive(
       for (const oldId of mediaIdsInBlocks(rawBlocks)) {
         if (state.media[oldId]) continue;
         const f = filesById.get(oldId);
+        if (f && recompressed(archive, f)) pageNotes.push(t('importArchive.note.recompressed', { name: f.name }));
         const got = f ? chosenBlob(archive, f) : null;
         if (!f || !got) continue;
         try {
@@ -743,7 +754,14 @@ export async function importArchive(
           }
         } catch (err) {
           complete = false;
-          const why = err instanceof ZipReadError ? t('importArchive.note.damagedFile', { path: got.path }) : err instanceof Error ? err.message : String(err);
+          const why =
+            err instanceof ZipReadError && err.code === 'tooBig'
+              ? t('importArchive.note.recompressedTotal')
+              : err instanceof ZipReadError
+                ? t('importArchive.note.damagedFile', { path: got.path })
+                : err instanceof Error
+                  ? err.message
+                  : String(err);
           pageNotes.push(`${f.name}: ${why}`);
         }
       }

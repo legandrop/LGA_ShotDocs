@@ -41,6 +41,7 @@ export type NoteKey =
   | 'badUrl'
   | 'badLink'
   | 'outsideLink'
+  | 'externalImage'
   | 'duplicateId'
   | 'tooDeep'
   | 'tooMany';
@@ -72,8 +73,21 @@ const asArray = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 /** El tipo que espera una propiedad (`'string'`, `'number'`, `'boolean'`). */
 const propType = (spec: PropSpec): string => spec.type ?? typeof spec.default;
 
+/** Los colores del editor (los de BlockNote): un color es uno de estos nombres, nunca otro texto (O5 de la auditoría). */
+export const COLORS = ['default', 'gray', 'brown', 'red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink'];
+const COLOR_PROPS = new Set(['textColor', 'backgroundColor']);
+
+const hostOf = (url: string): string => {
+  try {
+    return new URL(url).host.slice(0, 60);
+  } catch {
+    return url.slice(0, 60);
+  }
+};
+
 /** Una propiedad acorde a su especificación; `undefined` si no. */
-function propValue(spec: PropSpec, value: unknown): unknown {
+function propValue(spec: PropSpec, value: unknown, name = ''): unknown {
+  if (COLOR_PROPS.has(name) && !COLORS.includes(value as string)) return undefined;
   if (typeof value !== propType(spec)) return undefined;
   if (typeof value === 'number' && !Number.isFinite(value)) return undefined;
   if (spec.values && !spec.values.includes(value)) return undefined;
@@ -93,7 +107,11 @@ function fixUrl(url: string, name: string, ctx: BlockContext): UrlFix {
     ctx.note('missingFile', name || url.slice(MEDIA_SCHEME.length, MEDIA_SCHEME.length + 36));
     return { kind: 'missing', name };
   }
-  if (/^https?:\/\//i.test(url) && url.length <= 4000) return { kind: 'keep', url };
+  if (/^https?:\/\//i.test(url) && url.length <= 4000) {
+    // Queda (la app ya muestra imágenes de otros sitios), pero se avisa: el sitio se entera de cuándo se abre la página.
+    ctx.note('externalImage', hostOf(url));
+    return { kind: 'keep', url };
+  }
   ctx.note('badUrl', url.slice(0, 60));
   return { kind: 'drop' };
 }
@@ -116,11 +134,10 @@ function fixHref(href: unknown, ctx: BlockContext): string | null {
   if (pageId) {
     const now = ctx.page(pageId);
     if (now) return pagePath(now);
-    // Una página de afuera del archivo (o un `/p/` de otro workspace) nunca queda como link: su texto.
-    if (/^\s*\//.test(href)) {
-      ctx.note('outsideLink');
-      return null;
-    }
+    // Una página de afuera del archivo (de otro proyecto u otro workspace) nunca queda como link, con la dirección
+    // que sea (`/p/<id>` o `https://<la app>/p/<id>`): su texto (O3 de la auditoría).
+    ctx.note('outsideLink');
+    return null;
   }
   if (/^\s*(https?:|mailto:)/i.test(href)) return href.trim();
   ctx.note('badLink', href.slice(0, 60));
@@ -137,7 +154,7 @@ function cleanStyles(styles: unknown, ctx: BlockContext): Loose {
       ctx.note('unknownProp', `style ${k}`);
       continue;
     }
-    if (spec.propSchema === 'boolean' ? v === true : typeof v === 'string' && v.length <= 64) out[k] = v;
+    if (spec.propSchema === 'boolean' ? v === true : typeof v === 'string' && (COLOR_PROPS.has(k) ? COLORS.includes(v) : v.length <= 64)) out[k] = v;
     else if (!(spec.propSchema === 'boolean' && v === false)) ctx.note('badProp', `style ${k}`);
   }
   return out;
@@ -253,7 +270,7 @@ function cleanTable(content: unknown, ctx: BlockContext): Loose | null {
         const ok =
           t === 'number'
             ? typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 1000
-            : typeof v === 'string' && v.length <= 64 && (k !== 'textAlignment' || ALIGN.includes(v));
+            : typeof v === 'string' && (k === 'textAlignment' ? ALIGN.includes(v) : COLORS.includes(v));
         if (ok) props[k] = v;
         else ctx.note('badProp', `tableCell.${k}`);
       }
@@ -316,7 +333,7 @@ export function cleanArchiveBlocks(raw: unknown, ctx: BlockContext): PartialBloc
           ctx.note('unknownProp', `${type}.${k}`);
           continue;
         }
-        const ok = propValue(p, v);
+        const ok = propValue(p, v, k);
         if (ok === undefined) {
           if (v !== undefined && v !== null) ctx.note('badProp', `${type}.${k}`);
         } else props[k] = ok;

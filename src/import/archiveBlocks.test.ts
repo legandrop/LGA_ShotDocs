@@ -111,9 +111,44 @@ describe('volver a Shot Docs: los bloques del archivo', () => {
     expect(blocks[1]).toMatchObject({ type: 'paragraph', content: [text('[malo.png]')] });
     expect(blocks[2].props).toEqual({ url: 'https://photos.test/a.jpg', name: 'a.jpg' });
     expect(blocks[3]).toMatchObject({ type: 'paragraph', content: [] });
-    expect(keys().sort()).toEqual(['badLink', 'badLink', 'badUrl', 'badUrl', 'outsideLink'].sort());
+    expect(keys().sort()).toEqual(['badLink', 'badLink', 'badUrl', 'badUrl', 'externalImage', 'outsideLink'].sort());
     expect(archivePageLink(`/p/${OLD_PAGE.toUpperCase()}#x`)).toBe(OLD_PAGE);
     expect(archivePageLink('/p/nada')).toBeNull();
+  });
+
+  it('un link absoluto de la app a una página de afuera queda como texto; una imagen de otro sitio queda avisada (O3, O4)', () => {
+    const { c, notes } = ctx();
+    const blocks = cleanArchiveBlocks(
+      [
+        { id: 'a', type: 'paragraph', content: [{ type: 'link', href: `https://shotdocs.lega.com.ar/p/${OUT_PAGE}`, content: [text('secreto')] }, { type: 'link', href: `http://localhost:5173/p/${OUT_PAGE}?x=1`, content: [text('otro')] }] },
+        { id: 'b', type: 'image', props: { url: 'https://tracker.example.com/pixel.gif', name: 'pixel.gif' } },
+      ],
+      c,
+    );
+    expect(blocks[0].content).toEqual([text('secreto'), text('otro')]);
+    expect(JSON.stringify(blocks)).not.toContain(OUT_PAGE);
+    expect(blocks[1].props).toMatchObject({ url: 'https://tracker.example.com/pixel.gif' });
+    expect(notes).toEqual([['outsideLink', undefined], ['outsideLink', undefined], ['externalImage', 'tracker.example.com']]);
+  });
+
+  it('los colores, solo los del editor: un texto cualquiera en un color se saca, anotado (O5)', () => {
+    const { c, keys } = ctx();
+    const blocks = cleanArchiveBlocks(
+      [
+        { id: 'a', type: 'paragraph', props: { textColor: 'red', backgroundColor: '<b>' }, content: [text('x', { textColor: 'blue', backgroundColor: 'url(javascript:1)' })] },
+        {
+          id: 't',
+          type: 'table',
+          content: { type: 'tableContent', rows: [{ cells: [{ type: 'tableCell', props: { backgroundColor: 'yellow', textColor: '#ff0000' }, content: [] }] }] },
+        },
+      ],
+      c,
+    );
+    expect(blocks[0].props).toEqual({ textColor: 'red' });
+    expect(blocks[0].content).toEqual([text('x', { textColor: 'blue' })]);
+    const cell = (blocks[1].content as { rows: { cells: { props: unknown }[] }[] }).rows[0].cells[0];
+    expect(cell.props).toEqual({ backgroundColor: 'yellow' });
+    expect(keys()).toEqual(['badProp', 'badProp', 'badProp']);
   });
 
   it('los ids se conservan; uno repetido o raro recibe uno nuevo, anotado', () => {

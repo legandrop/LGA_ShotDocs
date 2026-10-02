@@ -1195,3 +1195,24 @@ zip grande desde Archivos); la migración aplicada y su prueba SQL.
   copia abajo. Si el editor no acepta los bloques de una página (un zip armado a mano), va su texto en párrafos, anotado.
 - **EX22 · La carpeta descomprimida.** Además del zip, *Choose unzipped folder* en una computadora (el diseño lo
   preveía para Chrome y Edge; anda en todos los de escritorio con `webkitdirectory`).
+
+### Correcciones de la auditoría de la entrega 3 (O1 a O6)
+
+- **O1 · El arnés de Playwright quedó versionado** (`.zz-pw/`): sacado del repo.
+- **O2 · Una entrada *deflate* se descomprimía entera en memoria** (un zip vuelto a comprimir: 1 GB subía el navegador
+  +2,15 GB, y un zip de 1 MB que dice 4 GB colgaba la pestaña). Ahora `zipReader.ts` arma el `Blob` a medida que
+  llega, corta en el pedazo que pasa lo declarado y tiene topes que mira antes de leer: 256 MB por archivo y 4 GB por
+  zip abierto (`MAX_DEFLATE_ENTRY`, `MAX_DEFLATE_TOTAL`). Lo que pasa el tope no se lee: la ventana lo cuenta antes de
+  empezar ("compressed again… import the zip Shot Docs made"), la foto vuelve desde su vista y un video o un adjunto
+  queda con su nombre, avisados. Medido en Chromium sin ventana (`inflate.html`): una entrada de 248 MB, +473 MB; una de
+  1 GB, rechazada sin leerla (+0). Chromium igual guarda el `Blob` en memoria (1 GB con el `Blob` armado a medida: +1,5
+  GB), por eso el tope.
+- **O3 · Un link absoluto de la app a una página de afuera** (`https://<la app>/p/<id>`) quedaba vivo: ahora queda su
+  texto, como el relativo.
+- **O4 · Una imagen de otro sitio** queda (la app las muestra), pero va en la lista del final con su sitio.
+- **O5 · Los colores** (`textColor`, `backgroundColor`, en bloques, celdas y estilos) solo los del editor; otro texto
+  se saca, anotado.
+- **O6 · Tres mutantes vivos**: el corte de una bomba en un archivo (la prueba mira que corte a mitad, no al final) y
+  las marcas de plantilla y de reportes que apuntan a otro proyecto (se descartan; las de adentro van a la página
+  nueva). Probados con su mutante: los cinco fallan.
+- O7 (una página dañada crea igual el proyecto, con esa página avisada y para seguir) queda como está: lo válido entra.

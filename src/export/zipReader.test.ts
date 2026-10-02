@@ -144,6 +144,32 @@ describe('volver a Shot Docs: leer el zip', () => {
     await expect(src.blob('bomba.json')).rejects.toBeInstanceOf(ZipReadError);
   });
 
+  it('una bomba se corta en el pedazo que pasa lo declarado, no al final (dice 100 bytes y trae 50 MB)', async () => {
+    const big = new Uint8Array(50_000_000);
+    const src = await openZip(await handZip([{ name: 'Files/video.mov', data: big, method: 8, size: 100 }]));
+    // `damaged` es el corte a mitad; si se descomprimiera todo, el error sería el del final (`crc`).
+    await expect(src.blob('Files/video.mov')).rejects.toMatchObject({ code: 'damaged' });
+  });
+
+  it('topes del deflate (O2): uno que dice pesar más que el tope no se lee y se sabe antes; el total por zip también', async () => {
+    const d = new Uint8Array(3000).fill(7);
+    // Lo que dice el índice: 4 GB (un zip de 1 MB armado para colgar la pestaña).
+    const lying = await openZip(await handZip([{ name: 'grande.mov', data: d, method: 8, size: 4_000_000_000 }, { name: 'chico.txt', data: d, method: 8 }]));
+    expect(lying.tooBig('grande.mov')).toBe(true);
+    expect(lying.tooBig('chico.txt')).toBe(false);
+    await expect(lying.blob('grande.mov')).rejects.toMatchObject({ code: 'tooBig' });
+    expect((await lying.blob('chico.txt')).size).toBe(3000);
+    // Con topes chicos: por archivo, y en total (dos de 3000 con un total de 5000: el segundo no entra).
+    const capped = await openZip(await handZip([{ name: 'a.bin', data: d, method: 8 }, { name: 'b.bin', data: d, method: 8 }, { name: 'c.bin', data: d }]), { maxDeflateEntry: 4000, maxDeflateTotal: 5000 });
+    expect((await capped.blob('a.bin')).size).toBe(3000);
+    await expect(capped.blob('b.bin')).rejects.toMatchObject({ code: 'tooBig' });
+    // Lo que va sin comprimir no cuenta (es un pedazo del mismo archivo, sin memoria).
+    expect((await capped.blob('c.bin')).size).toBe(3000);
+    const small = await openZip(await handZip([{ name: 'x.bin', data: d, method: 8 }]), { maxDeflateEntry: 1000 });
+    expect(small.tooBig('x.bin')).toBe(true);
+    await expect(small.text('x.bin', 10_000)).rejects.toMatchObject({ code: 'tooBig' });
+  });
+
   it('los nombres peligrosos, cifrados, con otro método o repetidos no se ofrecen y quedan anotados', async () => {
     const d = enc.encode('x');
     const src = await openZip(

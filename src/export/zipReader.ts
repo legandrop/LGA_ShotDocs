@@ -20,6 +20,11 @@ export interface ArchiveSource {
   text(path: string, maxBytes: number): Promise<string>;
   /** El archivo entero, comprobado; con `type`, ese tipo. */
   blob(path: string, type?: string): Promise<Blob>;
+  /**
+   * El archivo no se va a poder leer por su tamaño: un *deflate* (un zip vuelto a comprimir) más grande que el tope por
+   * archivo. Se sabe sin leerlo (lo dice el índice).
+   */
+  tooBig(path: string): boolean;
   /** Lo que se dejó afuera, con su motivo. */
   skipped: SkippedEntry[];
 }
@@ -55,6 +60,20 @@ export const MAX_ENTRIES = 300_000;
 export const MAX_CENTRAL_BYTES = 96 * 1024 * 1024;
 /** De a cuánto se lee para el CRC. */
 const CHUNK = 4 * 1024 * 1024;
+/**
+ * Topes de lo que se descomprime (*deflate*: un zip que alguien volvió a comprimir; el de la app va sin comprimir y no
+ * los usa). Por archivo y en total por zip abierto: lo descomprimido se arma como un `Blob` a medida que llega, pero
+ * Chromium igual lo tiene en memoria (medido: una entrada de 1 GB sube +1,5 GB el navegador; antes, juntando los
+ * pedazos, +2,15 GB). Con 256 MB por archivo el pico queda en unos cientos de MB; lo que pasa el tope (un video grande
+ * recomprimido, o un zip de 1 MB que dice 4 GB) se rechaza con su aviso antes de leerlo.
+ */
+export const MAX_DEFLATE_ENTRY = 256 * 1024 ** 2;
+export const MAX_DEFLATE_TOTAL = 4 * 1024 ** 3;
+
+export interface ZipLimits {
+  maxDeflateEntry?: number;
+  maxDeflateTotal?: number;
+}
 
 interface Entry {
   name: string;
@@ -96,7 +115,10 @@ async function bytesOf(blob: Blob, from: number, to: number): Promise<Uint8Array
 const utf8 = new TextDecoder('utf-8');
 
 /** Lee el índice de un zip. Un archivo que no es zip, o cortado (sin el final), es un error. */
-export async function openZip(blob: Blob): Promise<ArchiveSource> {
+export async function openZip(blob: Blob, limits: ZipLimits = {}): Promise<ArchiveSource> {
+  const maxEntry = limits.maxDeflateEntry ?? MAX_DEFLATE_ENTRY;
+  const maxTotal = limits.maxDeflateTotal ?? MAX_DEFLATE_TOTAL;
+  let inflated = 0;
   if (blob.size < 22) throw new ZipReadError('notZip');
   // El final del directorio está en los últimos 22 bytes más el comentario (hasta 65 535).
   const tailFrom = Math.max(0, blob.size - (22 + U16 + 20));
@@ -229,25 +251,39 @@ export async function openZip(blob: Blob): Promise<ArchiveSource> {
       if (crc !== e.crc) throw new ZipReadError('crc', e.name);
       return type ? data.slice(0, data.size, type) : data;
     }
-    const parts: Uint8Array[] = [];
+    // *Deflate*: con tope por archivo y por zip, que se miran ANTES de leer (lo que dice el índice) y se cuidan mientras
+    // se descomprime: lo que pasa de lo declarado se corta en ese pedazo (una bomba: dice 1 KB y descomprime 10 GB).
+    if (e.size > maxEntry || inflated + e.size > maxTotal) throw new ZipReadError('tooBig', e.name);
+    inflated += e.size;
     let total = 0;
-    const reader = data.stream().pipeThrough(new DecompressionStream('deflate-raw')).getReader();
+    let failure: ZipReadError | null = null;
+    const check = new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, ctl) {
+        total += chunk.length;
+        if (total > e.size) {
+          failure = new ZipReadError('damaged', e.name);
+          ctl.error(failure);
+          return;
+        }
+        crc = crc32Update(crc, chunk);
+        ctl.enqueue(chunk);
+      },
+      flush(ctl) {
+        if (total !== e.size || crc !== e.crc) {
+          failure = new ZipReadError('crc', e.name);
+          ctl.error(failure);
+        }
+      },
+    });
     try {
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        total += value.length;
-        // Un zip armado para inflar de más (dice 1 KB y descomprime 10 GB) se corta acá.
-        if (total > e.size || total > max) throw new ZipReadError(total > max ? 'tooBig' : 'damaged', e.name);
-        crc = crc32Update(crc, value);
-        parts.push(value);
-      }
+      // Un `Blob` armado por el navegador a medida que llega (lo grande va al disco), nunca una lista de pedazos en memoria.
+      const out = await new Response(data.stream().pipeThrough(new DecompressionStream('deflate-raw')).pipeThrough(check) as ReadableStream<Uint8Array>).blob();
+      if (failure) throw failure;
+      return out.slice(0, out.size, type || '');
     } catch (err) {
-      await reader.cancel().catch(() => undefined);
-      throw err instanceof ZipReadError ? err : new ZipReadError('damaged', e.name);
+      inflated -= e.size;
+      throw failure ?? (err instanceof ZipReadError ? err : new ZipReadError('damaged', e.name));
     }
-    if (total !== e.size || crc !== e.crc) throw new ZipReadError('crc', e.name);
-    return new Blob(parts as BlobPart[], type ? { type } : undefined);
   };
 
   return {
@@ -257,6 +293,10 @@ export async function openZip(blob: Blob): Promise<ArchiveSource> {
     size: (p) => entries.get(p)?.size ?? 0,
     text: async (p, maxBytes) => utf8.decode(new Uint8Array(await (await read(get(p), maxBytes, '')).arrayBuffer())),
     blob: (p, type) => read(get(p), Number.MAX_SAFE_INTEGER, type ?? ''),
+    tooBig: (p) => {
+      const e = entries.get(p);
+      return !!e && e.method === 8 && e.size > maxEntry;
+    },
   };
 }
 
@@ -293,6 +333,7 @@ export function folderSource(files: Iterable<File>): ArchiveSource {
       const f = get(p);
       return type ? f.slice(0, f.size, type) : f;
     },
+    tooBig: () => false,
   };
 }
 
@@ -307,5 +348,6 @@ export function subSource(source: ArchiveSource, prefix: string): ArchiveSource 
     size: (p) => source.size(full(p)),
     text: (p, max) => source.text(full(p), max),
     blob: (p, type) => source.blob(full(p), type),
+    tooBig: (p) => source.tooBig(full(p)),
   };
 }

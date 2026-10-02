@@ -607,6 +607,9 @@ describe('volver a Shot Docs: cortes, la base y los zips hostiles', () => {
           page(P(1), null, 'Uno otra vez', ''),
           { id: 'no-es-uuid', title: 'Mala' },
           page(P(4), null, 'Cuatro', '_shotdocs/pages/4.json'),
+          // Marcas de plantilla que apuntan a páginas de afuera del archivo (otro proyecto): no se escriben (O6).
+          { ...page(P(5), null, 'Ajena', ''), templateId: w.tpl, settings: { dayReports: { template: w.tpl }, split: true } },
+          { ...page(P(6), null, 'Propia', ''), templateId: P(1), settings: { dayReports: { template: P(1) } } },
         ],
         files: [{ id: P(9), name: '../../evil.exe', mime: 'application/x-msdownload', kind: 'file', size: 3, original: '../evil.exe', view: null }],
       }),
@@ -615,12 +618,19 @@ describe('volver a Shot Docs: cortes, la base y los zips hostiles', () => {
     };
     const src = folderSource(Object.entries(files).map(([p, text]) => Object.assign(new NodeFile([text], p.split('/').pop()!), { webkitRelativePath: `X/${p}` }) as unknown as File));
     const archive = await openArchive(src);
-    expect(archive.manifest.pages.map((p) => p.title)).toEqual(['Uno', 'Dos', 'Tres', 'Cuatro']);
+    expect(archive.manifest.pages.map((p) => p.title)).toEqual(['Uno', 'Dos', 'Tres', 'Cuatro', 'Ajena', 'Propia']);
     expect(archiveWeight(archive)).toMatchObject({ files: 0, missing: 1 });
     const result = await importArchive(archive, deps(w.a));
     // Las cuatro páginas están (Dos y Tres, en círculo, quedan una arriba), la de JSON roto creada y anotada.
     const pages = allPages(w.a, result.projectId);
-    expect(pages.map((p) => p.title).sort()).toEqual(['Cuatro', 'Dos', 'Tres', 'Uno']);
+    expect(pages.map((p) => p.title).sort()).toEqual(['Ajena', 'Cuatro', 'Dos', 'Propia', 'Tres', 'Uno']);
+    const ajena = pages.find((p) => p.title === 'Ajena')!;
+    expect(ajena.template_id ?? null).toBeNull();
+    expect(ajena.settings).toEqual({ dayReports: {}, split: true });
+    const propia = pages.find((p) => p.title === 'Propia')!;
+    const uno = pages.find((p) => p.title === 'Uno')!.id;
+    expect(propia.template_id).toBe(uno);
+    expect(propia.settings).toEqual({ dayReports: { template: uno } });
     expect(result.problems.some((p) => p.startsWith('Cuatro:'))).toBe(true);
     expect(result.problems.some((p) => p.includes('appears twice'))).toBe(true);
     expect(result.problems.some((p) => p.includes('page 5 of the manifest'))).toBe(true);
@@ -630,6 +640,25 @@ describe('volver a Shot Docs: cortes, la base y los zips hostiles', () => {
     expect(await w.a.mediaDb.getAll('files')).toHaveLength(5);
     // Cuatro quedó para reintentar; nada de esto pisa ni toca el proyecto original.
     expect(result.resumable).toBe(true);
+  });
+
+  it('un original vuelto a comprimir y más grande que el tope: la foto vuelve desde su vista y el video queda con su nombre, avisados (O2)', async () => {
+    const w = await world();
+    const archive = await openArchive(await openZip(await zipOf(w, w.a)));
+    const originalOf = (name: string) => archive.manifest.files.find((f) => f.name === name)!.original!;
+    const big = new Set([originalOf('IMG_0412.JPG'), originalOf('clip 001.mov')]);
+    // El zip dice que esos dos son *deflate* de más de 1 GB (lo que hace `tooBig` con el índice de verdad: zipReader.test.ts).
+    const source = { ...archive.source, tooBig: (p: string) => big.has(p) };
+    const limited: ShotDocsArchive = { ...archive, source };
+    expect(archiveWeight(limited)).toMatchObject({ tooBig: 2, previews: 1, missing: 1 });
+    const result = await importArchive(limited, deps(w.a));
+    expect(result.problems.some((p) => p.startsWith('Escena 1:') && p.includes('IMG_0412.JPG was compressed again'))).toBe(true);
+    expect(result.problems.some((p) => p.startsWith('Escena 2:') && p.includes('clip 001.mov was compressed again'))).toBe(true);
+    const scene2 = allPages(w.a, result.projectId).find((p) => p.title === 'Escena 2')!.id;
+    expect(JSON.stringify((await pageState(w.a, scene2)).blocks)).toContain(`clip 001.mov ${NOT_IN_ARCHIVE}`);
+    const scene = allPages(w.a, result.projectId).find((p) => p.title === 'Escena 1')!.id;
+    expect(JSON.stringify((await pageState(w.a, scene)).blocks)).toContain('sdmedia://IMG_0412.jpg');
+    expect(result.resumable).toBe(false);
   });
 
   it('sin lugar para un archivo: la página queda para seguir y el resto entra', async () => {
