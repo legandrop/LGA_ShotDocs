@@ -332,10 +332,18 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   2 (el reporte del día), 3 (plantillas propias). **Entregas 0 y 1 hechas** (v0.117): la vista previa
   (`/practice?template=on-set`), la tira de la página nueva, *More…* y *Apply template…*. **Entrega 2 hecha**
   (v0.121): *New day report* (botón, globito, menú ⋯ y Ctrl/⌘+Alt+Shift+N), la carpeta de reportes marcada o deducida,
-  lo que se copia del día anterior, "ya existe" y el orden, sin red. **Falta** que Lega revise el contenido de las tres
-  (PL1) y pruebe el atajo en Firefox y Safari de la Mac y con un teclado latinoamericano físico, y la entrega 3. De la
-  sección 6 quedaron para después el selector de plantilla del globito (con las propias, entrega 3) y la marca *2
-  reports for…* en la barra lateral con la papelera ofrecida para el repetido sin tocar (O6). Quedó de la auditoría de
+  lo que se copia del día anterior, "ya existe" y el orden, sin red. **Entrega 3 hecha** (v0.124): plantillas propias
+  (*Save as template…* con *Clear filled-in values*, la carpeta *Templates*, la franja con *Template settings…* y *Stop
+  using as template*, *Customize*, las de otros proyectos sin sus fotos, *Wait* / *Use built-in* a medio bajar y el
+  selector de plantilla del globito, con el aviso de O4). **Falta** que Lega revise el contenido de las tres (PL1) y
+  pruebe el atajo en Firefox y Safari de la Mac y con un teclado latinoamericano físico. Quedan para después la marca
+  *2 reports for…* en la barra lateral con la papelera ofrecida para el repetido sin tocar (O6), y en *Buscar en el
+  proyecto* la marca *Template* con *Replace all* que saltee las plantillas salvo *Include templates* (O9, va con la
+  búsqueda). De la auditoría de la entrega 3 (ninguna pierde contenido): dos dispositivos sin red que guardan su primera
+  plantilla crean dos carpetas *Templates* (O1); *Template settings* en un dispositivo y un cambio de formato en otro a la vez
+  pisan la descripción, la limitación conocida de `settings` (O2); guardar un reporte con *Use for day reports* cambia la
+  plantilla de la carpeta para todo el equipo (O3, decidido así: D94); un invitado con *Edit & create pages* guarda
+  plantillas, como permite la base (O4). Quedó de la auditoría de
   la entrega 1: *Exit* de la vista previa abierta desde la ventana va al inicio y no a la página donde se elegía
   (Atrás sí vuelve); y un aviso de ProseMirror en la consola al abrir la vista previa (sin efecto visible). De la
   auditoría de la entrega 2 (las demás observaciones, corregidas): un invitado con *Edit & create pages* crea reportes,
