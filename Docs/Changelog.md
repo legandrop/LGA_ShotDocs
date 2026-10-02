@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.109 :
+v0.0XX :
 
 No había forma de anotar una foto de set (flechas, círculos, texto, lápiz) sin editarla afuera. `Doc_Anotar_Fotos.md`
 diseña P.20 tomando de referencia LGA FrameRev: las mismas letras de herramienta, el verde y los grosores por defecto,
