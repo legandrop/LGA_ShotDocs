@@ -6,7 +6,7 @@ import { navigate } from '../router';
 import { useTree } from '../services';
 import { notify } from '../ui/notice';
 import { focusTitle } from '../ui/PageView';
-import { insertTemplate, isEmptyPage, type TemplateEditor } from './apply';
+import { insertTemplate, isEmptyPage, placeAtFirstDatum, type TemplateEditor } from './apply';
 import { BUILTIN_IDS, BUILTIN_KINDS, BUILTIN_SLUGS, builtinBlocks, builtinTexts, type BuiltinKind } from './builtin';
 import { armTitleUndo, registerTemplateTarget, takeTemplatesRequest } from './templatesUi';
 import './templates.css';
@@ -120,7 +120,16 @@ export function TemplateHost({ pageId, doc, editor, editable, complete }: Props)
       // El título, vacío y con el foco (sección 4.2, paso 5): lo que falta es nombrar la página. Mientras no se
       // escriba ahí, Ctrl/⌘+Z en el título saca la plantilla (y Ctrl/⌘+Shift+Z la devuelve).
       titleUndo.current?.();
-      titleUndo.current = armTitleUndo(pageId, (redo) => (redo ? pageEditor.redo?.() : pageEditor.undo?.()));
+      titleUndo.current = armTitleUndo(pageId, (redo) => {
+        if (!redo) {
+          pageEditor.undo?.();
+          return;
+        }
+        pageEditor.redo?.();
+        // Rehacer devuelve la selección que guardó el deshacer (el pie, o el rótulo de la ficha tras dos vueltas):
+        // Enter en el título tiene que seguir llevando al primer dato.
+        placeAtFirstDatum(pageEditor);
+      });
       focusTitle();
     },
     [doc, tree, pageId, tr.lang],

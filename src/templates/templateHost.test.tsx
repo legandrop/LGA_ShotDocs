@@ -232,6 +232,9 @@ describe('la tira de la página vacía', () => {
     await wait(50);
     expect(isEmptyPage(doc)).toBe(false);
 
+    // Rehacer deja el punto de escritura otra vez en el primer dato (no donde lo guardó el deshacer).
+    expect(cellOfCursor(pageView(host))).toEqual({ row: 0, cell: 1 });
+
     // Después de salir del título, Ctrl/⌘+Z ahí vuelve a ser del título y no toca la página (undoGuard.ts).
     act(() => title.blur());
     act(() => title.focus());
@@ -239,6 +242,40 @@ describe('la tira de la página vacía', () => {
     await wait(50);
     expect(isEmptyPage(doc)).toBe(false);
     device.docs.close(page);
+  });
+
+  it('deshacer y rehacer desde el título, dos vueltas (con Ctrl/⌘+Shift+Z y con Ctrl/⌘+Y): Enter y escribir caen en el primer dato', async () => {
+    for (const kind of ['shot', 'onset'] as const) {
+      const { device } = await setup();
+      const page = await device.tree.create(null, '');
+      const host = await open(device, page);
+      click(host.querySelector(`.template-strip [data-template="${kind}"]`));
+      await wait(100);
+      const doc = await device.docs.open(page);
+      const title = host.querySelector<HTMLTextAreaElement>('.page-title')!;
+      for (const redo of [mod({ shiftKey: true, key: 'z' }), mod({ key: 'y' })]) {
+        key(title, 'z', mod());
+        await wait(50);
+        expect(isEmptyPage(doc), kind).toBe(true);
+        key(title, String(redo.key), redo);
+        await wait(50);
+        expect(isEmptyPage(doc), kind).toBe(false);
+      }
+      expect(document.activeElement).toBe(title);
+      key(title, 'Enter');
+      await wait(50);
+      const view = pageView(host);
+      expect(cellOfCursor(view), kind).toEqual({ row: 0, cell: 1 });
+      // Lo escrito va al valor del primer dato, nunca al rótulo de la fila.
+      act(() => view.dispatch(view.state.tr.insertText('XYZ')));
+      await wait(50);
+      const firstRow = view.state.doc.textBetween(0, view.state.doc.content.size, '|').split('|');
+      expect(firstRow.some((t) => t.startsWith('XYZ') && t.length > 3), kind).toBe(false);
+      expect(firstRow, kind).toContain('XYZ');
+      device.docs.close(page);
+      unmountAll();
+      for (const r of roots.splice(0)) act(() => r.unmount());
+    }
   });
 
   it('si llega texto justo al elegir, no agrega la plantilla (se vuelve a mirar si está vacía al aplicar)', async () => {

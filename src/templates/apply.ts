@@ -55,6 +55,15 @@ export function insertTemplate(editor: TemplateEditor, blocks: TemplateBlock[]):
 }
 
 /**
+ * Vuelve a poner el cursor en el primer dato de la ficha (el primer bloque de la página, donde quedó la plantilla).
+ * Lo usa rehacer desde el título: el deshacer de Yjs devuelve la selección que había guardado, no esta.
+ */
+export function placeAtFirstDatum(editor: TemplateEditor): void {
+  const first = editor.document[0];
+  if (first) cursorToStart(editor, first.id);
+}
+
+/**
  * Pone el cursor (sin llevar el foco) en el primer renglón escribible del bloque: en una tabla, la segunda celda de
  * la primera fila (el valor del primer dato de una ficha) o la primera si hay una sola. Solo cambia la selección.
  */
