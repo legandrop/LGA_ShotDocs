@@ -33,7 +33,16 @@ export function openStorage(): void {
   window.dispatchEvent(new CustomEvent<Request>(OPEN, { detail: { kind: 'storage' } }));
 }
 
-const SKIPS: OwnSkip[] = ['offline', 'server', 'notInDrive', 'trash', 'mismatch', 'changed', 'noAnswer'];
+/** Por qué quedó un original propio, en el orden en que se dice. */
+const SKIPS: [OwnSkip, Parameters<Translate>[0]][] = [
+  ['offline', 'space.skip.offline'],
+  ['server', 'space.skip.server'],
+  ['notInDrive', 'space.skip.notInDrive'],
+  ['trash', 'space.skip.trash'],
+  ['mismatch', 'space.skip.mismatch'],
+  ['changed', 'space.skip.changed'],
+  ['noAnswer', 'space.skip.noAnswer'],
+];
 
 /**
  * Lo que dice *Free up* al terminar: cuánto se liberó y, si algún original agregado en este dispositivo quedó, cuántos y
@@ -41,10 +50,10 @@ const SKIPS: OwnSkip[] = ['offline', 'server', 'notInDrive', 'trash', 'mismatch'
  */
 export function freedText(report: FreeReport, tr: Translate): string {
   const freed = tr('space.freed', { size: formatSize(report.freed, tr.lang) });
-  const count = SKIPS.reduce((n, why) => n + (report.skipped[why] ?? 0), 0);
+  const count = SKIPS.reduce((n, [why]) => n + (report.skipped[why] ?? 0), 0);
   if (count === 0) return freed;
-  const reasons = SKIPS.filter((why) => report.skipped[why])
-    .map((why) => `${tr(`space.skip.${why}`)} (${report.skipped[why]})`)
+  const reasons = SKIPS.filter(([why]) => report.skipped[why])
+    .map(([why, key]) => `${tr(key)} (${report.skipped[why]})`)
     .join(', ');
   return `${freed} ${tr('space.keptSome', { count, reasons })}`;
 }

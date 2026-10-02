@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+Copias locales, entrega 2 (P.10, D-25). Las fotos y los videos agregados en un dispositivo ocupaban lugar para siempre:
+la entrega 1 no los liberaba. Ahora *Free up* (aviso del tope, *Storage on this device* o un archivo nuevo que no
+entró) los libera con el sí de la persona, con red y un portero con `/verify`, subidos hace 14 días o más, sin marca
+que los pida y con la base y Drive confirmando el mismo archivo (id, peso, marca y MD5). `freeOwn`, la única que borra
+un original, repite todo en su transacción; queda la miniatura y lo que no se libera se dice con su motivo. Si una
+restauración lo vuelve a la cola, se enlaza sin bytes: el portero lo busca por la marca `sdFile`, también antes de
+abrir una subida. Hacer lugar sin preguntar nunca toca un original.
+[ Copias locales, entrega 2 - liberar los originales agregados en el dispositivo, con Drive confirmado y el sí de la persona ]
+
 v0.133 :
 
 Compactar (B.9), entrega 2: crear snapshots. Nadie armaba las copias resumidas que v0.127 sabe bajar. Nuevo
