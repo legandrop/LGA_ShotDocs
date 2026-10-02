@@ -47,8 +47,8 @@ su auditoría. Lo medido está en prototipos fuera del repo (sección "Cómo se 
   página abierta. Una página de 10 000 subidas (555 KB): 44,6 MB, porque las esperas escalan con el tamaño. En la red,
   hasta un tercio más si la respuesta no va comprimida (base64). Armar una base: 0,2 a 3 ms (incremental). Sin servicios nuevos: entra en el plan gratis de Supabase. Los deltas quedan como mejora si se mide
   que hacen falta.
-- **Una pregunta para Lega** (sección 13): aceptar esa demora y esa garantía en vez de que el cliente vea letra por
-  letra. Recomendación: sí.
+- **Lega aceptó esa demora y esa garantía** en vez de que el cliente vea letra por letra (D22, 2026-10-02; la
+  pregunta, en la sección 13).
 
 **En términos simples:** hoy, si escribís una nota interna en una página y la borrás, el texto sigue viajando dentro de
 la página a cualquiera que la pueda ver, también a un cliente invitado; no lo ve en la pantalla, pero está en su
@@ -611,21 +611,21 @@ Antes de cerrar cada entrega, la auditoría de siempre (funcionalidad, permisos 
 | El lector espera a que un editor abra la app | La demora está acotada mientras alguien edita; la base al pasar a segundo plano; "en preparación" lo dice; al compartir se arman las bases enseguida |
 | Un borrado en la cola de quien comparte | Compartir, invitar y mover suben antes lo pendiente (R1) |
 | Páginas grandes muy editadas con lectores en vivo gastan egress | La cadencia por tamaño; medir (entrega 2) y, si hace falta, deltas (entrega 4) |
-| Una versión vieja como lector, sin entender `clean_seq` | El interruptor solo con `min_app_version` en la versión nueva |
-| `has_plain_readers` caro en cada ciclo | Se pide solo si el dispositivo subió o bajó algo, o cada 2 minutos; solo entre quienes tienen permisos sobre la rama |
+| Una versión vieja como lector, sin entender `clean_seq` | El interruptor solo con `min_app_version` en la versión nueva: la base no deja prenderlo por encima de la mínima (ni bajar la mínima por debajo de él) |
+| `has_plain_readers` caro en cada ciclo | Se pide solo si el dispositivo subió o bajó algo, o cada 2 minutos; solo en los proyectos donde la sesión edita algo, sin la papelera ni los proyectos borrados, y se mira de a una hasta juntar 50 (medido en `begin … rollback`: 77 ms con 720 páginas, 300 en la papelera y 420 sin base; 1 ms para un editor de otro proyecto) |
 | Restaurar una copia revive una base | El script vacía `page_clean_bases` (requisito para prender) y la vigencia mira el `id` de la fila final |
 | El rearmado del dispositivo o el reemplazo por la base pierde algo sin subir | Solo sin nada sin subir; prueba 3 |
 | Un editor malintencionado | Mismo poder que editando; la próxima base de otro editor la reemplaza |
 
 ## 12. Decisiones
 
-- **D19 (coordinador, 2026-10-02): se saca la entrega del "GC selectivo".** D15 queda como está: la subida no descarta
+- **D19 (2026-10-02): se saca la entrega del "GC selectivo".** D15 queda como está: la subida no descarta
   lo borrado. Motivo: el bloqueante 1 de la auditoría (pierde texto huérfano por la compactación al abrir y por
   `ORIGIN_REPAIR`: entre 61 y 118 letras con el editor real y 100 semillas) y que con la base limpia los lectores quedan
   protegidos igual (P7 corre con la subida de hoy: 0 fugas). Queda como alternativa descartada (sección 3, G). Si algún
   día se quisiera, "lo borré yo a propósito" tendría que anotarse al guardar (una clave de `meta` por página que
   compactar no toque), no deducirse de los delete sets guardados.
-- **D20 (coordinador, 2026-10-02, evaluado acá): "solo bases" es la entrega principal; los deltas, mejora futura.**
+- **D20 (2026-10-02, evaluado acá): "solo bases" es la entrega principal; los deltas, mejora futura.**
   Cubre el escenario real (el primer cliente invitado, pasos 9 y 10 de `Plan_Workspaces.md`: páginas de decenas de KB)
   con 5,2 MB por día en un reporte de 2000 subidas, y resuelve el bloqueante 4 (teléfono nuevo: 0 de 4988 textos ya
   borrados, contra 5058 de 10 429 con deltas) sacando el encadenado.
@@ -638,12 +638,16 @@ Antes de cerrar cada entrega, la auditoría de siempre (funcionalidad, permisos 
   parámetro de `clean_work`; se ajusta con lo que mida la entrega 2.
 - **Compartir, invitar y mover suben antes lo pendiente** de las páginas alcanzadas (R1); si no se confirma, avisan.
 - **Al dejar de ver lo borrado, el dispositivo rearma lo suyo** cuando no tiene nada sin subir (entrega 3).
-- **Al implementar (ejecutor, 2026-10-02; ver "Cómo quedó"):** la base se arma de cero cada vez (no incremental);
+- **D22 (Lega, 2026-10-02): se acepta la demora y la garantía de la sección 13.** Quien no edita recibe la página
+  como estaba en la última base, no letra por letra.
+- **Al implementar (2026-10-02; ver "Cómo quedó"):** la base se arma de cero cada vez (no incremental);
   `clean_work` se pregunta en cada ciclo mientras hubo actividad en los últimos 5 minutos y cada 2 minutos si no; mover
   sube lo pendiente desde la cola del árbol, sin ventana; un admin con solo Ver sigue viendo la papelera de archivos
   pero no las miniaturas ni los originales de lo sacado; la base reemplaza lo guardado solo si lo cubre entero.
 
-## 13. Pregunta para Lega
+## 13. La pregunta para Lega (contestada: D22)
+
+Lega aceptó (D22, 2026-10-02). Queda la pregunta como se hizo, porque explica qué recibe el cliente:
 
 1. **¿Aceptás que quien solo ve o comenta (y los invitados) reciba la página como estaba la última vez que la app de
    un editor la "pasó en limpio", en vez de letra por letra?** La app de quien edita la pasa en limpio unos 20 segundos
@@ -662,7 +666,7 @@ Antes de cerrar cada entrega, la auditoría de siempre (funcionalidad, permisos 
      siempre).
 
    La alternativa, mandarle las ediciones al momento, le haría llegar todo lo escrito y borrado, como hoy.
-   **Recomendación: aceptar.**
+   **Lega aceptó (D22, 2026-10-02).**
 
 ## Correcciones de la auditoría (2026-10-02)
 
@@ -688,11 +692,11 @@ arriba:
 | Re-verificación R2 / C2: `trashed_files` le daba a un invitado con "Editar y crear" los nombres de lo sacado | `can_see_file_trash` sin invitados (migración, punto 8; prueba 5) |
 | Re-verificación C3: la cadencia escrita no daba los 45 MB de P8; base64 | Las dos esperas escalan con el tamaño (4.1); 4.5 explica cómo lo modela P8 y suma el tercio del base64 |
 | Re-verificación C4: dos frases de la pregunta no eran ciertas ("nunca", el teléfono nuevo) | Pregunta reescrita (1 de cada 12; el corte antes de armar la base); base al pasar a segundo plano (4.1); páginas de más de 100 KB |
-| Fuera de alcance: páginas en la papelera legibles con Ver; `collabRemovedWriting` con 100 semillas | Frentes aparte del coordinador; nombrados como dependencias (secciones 5, 6 y 10) |
+| Fuera de alcance: páginas en la papelera legibles con Ver; `collabRemovedWriting` con 100 semillas | Frentes aparte; nombrados como dependencias (secciones 5, 6 y 10) |
 
 ## Cómo se midió
 
-Prototipos en Node 20 con Yjs 13.6.33 (el de la app), fuera del repo, en la carpeta de trabajo de la sesión
+Prototipos en Node 20 con Yjs 13.6.33 (el de la app), fuera del repo, en una carpeta de trabajo
 (`privacidad/`, con sus resultados en `res_*.txt`; los de la auditoría, en `audit-privacidad/`). No se imprimió ni se
 guardó en el repo contenido de la base.
 
@@ -746,16 +750,16 @@ reglas y mutantes (`cleanMutant`).
 
 **Pruebas:** `supabase/tests/privacidad_borrado_permisos.sql` (apagado y prendido, quién baja qué, la columna, la forma
 de `push_clean_base` con cada rechazo, `clean_work` y su cadencia, compartir, invitar y mover, la copia restaurada,
-`has_plain_readers`, los archivos y la papelera de archivos, el proyecto borrado; 18 de 18 mutantes de la migración la
-hacen fallar); las 18 pruebas de `supabase/tests/` pasan con la migración (cambiaron, a propósito, tres expectativas de
+`has_plain_readers`, los archivos y la papelera de archivos, el proyecto borrado, qué pide `clean_work` con más de 200
+páginas que nadie arma, y el tope del interruptor; las 33 mutantes de la migración la hacen fallar); las 18 pruebas de `supabase/tests/` pasan con la migración (cambiaron, a propósito, tres expectativas de
 `historial_permisos.sql` y `papelera_archivos_permisos.sql`: la columna `update` y los archivos sacados para quien
-solo ve). `src/sync/clean.test.ts` (prueba 1: 26 casos con el motor de verdad, incluida la versión publicada v0.100
+solo ve). `src/sync/clean.test.ts` (prueba 1: 28 casos con el motor de verdad, incluida la versión publicada v0.100
 copiada en `src/sync/fixtures/v100/docs.ts`, y la corrida al azar de 20 semillas × 80 pasos sin fugas, con las mutantes
 `raw` y `nogc` que dan fugas y `noreset` y `noshare` en un caso fijo); `src/ui/cleanEditor.test.ts` (prueba 2, editor
 real, también con el esquema anterior); `src/ui/team.test.tsx` (la ventana de compartir). La prueba 7 (de punta a
 punta con usuarios de verdad) está escrita para la carpeta privada de pruebas y no se corrió: pide usuarios reales.
 
-**Lo que cambió al implementar** (decisiones del ejecutor; el diseño de arriba manda en lo demás):
+**Lo que cambió al implementar** (el diseño de arriba manda en lo demás):
 
 - **La base se arma de cero cada vez**, no incremental: no hay un documento más que mantener al día con la compactación
   y los reemplazos; el costo medido es de milisegundos (73 ms la de 10 000 subidas) y se arma como mucho cada 20 s × f.
@@ -776,10 +780,31 @@ punta con usuarios de verdad) está escrita para la carpeta privada de pruebas y
 - **`private.sees_deleted` se puede ejecutar como `authenticated`** (la usa la política de `page_files`).
 - **El borrado en la cola de otro editor** al compartir no se cubre (sección 6).
 
+**Correcciones de la auditoría de la implementación (2026-10-02):**
+
+- **`clean_work` cortaba en 200 páginas antes de mirar quién puede armar cada una** (bloqueante). Las que nadie arma
+  (en la papelera, de un proyecto borrado) o que arma otro editor no tienen base y quedaban siempre primeras: con más
+  de 200, ningún editor recibía las demás y los lectores se quedaban con una base vieja o "en preparación" para
+  siempre. Ahora junta solo páginas vivas de proyectos vivos donde la sesión edita algo, y las recorre en orden
+  mirando cada una (`sees_deleted`, `has_plain_readers`) hasta juntar 50. Prueba SQL con 222 páginas en los tres
+  casos y con un editor de una sola página del proyecto; fallan con la versión anterior.
+- **El interruptor no puede quedar por encima de `min_app_version`** (un `check` en `workspace_settings`): prenderlo
+  sin subir antes la mínima, o bajar la mínima con él prendido, da error.
+- **El dispositivo no le ofrece a un invitado la pestaña Archivos de la papelera** (ni el peso en Drive del selector
+  de proyectos), como la base.
+- **Preparar después de compartir pide de a 50** hasta armar todas las páginas alcanzadas (antes armaba como mucho las
+  50 primeras; el resto lo armaban los ciclos siguientes).
+- **"Cubre lo guardado" no reemplaza lo guardado que tiene piezas pendientes** (las que esperan algo que no llegó):
+  no cuentan en el vector de estado y reemplazarlo las tiraría. No se encontró cómo llega un lector a tenerlas (las
+  bases se comprueban enteras antes de subir y lo propio sale de lo guardado); la guarda no cuesta nada y tiene su
+  prueba.
+- **La prueba SQL suma** las hijas de una página compartida con Ver, la página que solo ve un invitado con Editar,
+  `clean_seq` en 0 al reiniciar el proyecto, una base que llega más allá de `update_seq` y una página sin lectores.
+
 **Para prender el interruptor** (antes de invitar al primer cliente de verdad): aplicar la migración (con copia de
 seguridad); que el script de restaurar del repo de copias vacíe `page_clean_bases` y deje `clean_seq` en 0 y
-`clean_reset_seq` en el `update_seq` restaurado; publicar esta versión y subir `min_app_version` a ella; correr la prueba
-7; y recién ahí `update public.workspace_settings set clean_min_version = <esta versión> where id`.
+`clean_reset_seq` en el `update_seq` restaurado; publicar esta versión y subir `min_app_version` a ella (la base no deja prender el interruptor
+antes); correr la prueba 7; y recién ahí `update public.workspace_settings set clean_min_version = <esta versión> where id`.
 
 **Queda para después:** la entrega 2 (medir), la 3 (rearmar lo guardado al dejar de ver lo borrado), la 4 (deltas);
 `pull_page_content` y `pull_page_snapshot` de `Doc_Compactar.md` tienen que pedir `sees_deleted` cuando se implementen;

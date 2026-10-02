@@ -1384,7 +1384,8 @@ búsqueda y el reemplazo del proyecto. Sin base todavía, la página está "en p
   dos comprobaciones, como mucho 20 por vuelta. Al pasar a segundo plano (`appHidden`), sin esperar. Sus errores no
   cortan el ciclo.
 - **Compartir, invitar y mover** suben antes lo pendiente de las páginas alcanzadas (`uploadPagesFirst`; mover, desde
-  la cola del árbol) y después arman las bases enseguida (`prepareBases`).
+  la cola del árbol) y después arman las bases enseguida (`prepareBases`, que pide de a 50 a `clean_work` hasta que no
+  queda ninguna).
 - **Un invitado con Editar** sube sus filas como siempre; su cursor queda por delante de la base y baja la siguiente.
 - **La subida no cambia** (D15, D19).
 

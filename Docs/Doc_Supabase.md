@@ -116,7 +116,11 @@ y el portero); la papelera de archivos (`trashed_files`) no responde a invitados
 
 - **Prenderlo:** el script de restaurar del repo de copias tiene que vaciar `page_clean_bases` y dejar `clean_seq` en
   0 y `clean_reset_seq` en el `update_seq` restaurado; `min_app_version` en la versión que trae las bases; copia de
-  seguridad; y `update public.workspace_settings set clean_min_version = <esa versión> where id`.
+  seguridad; y `update public.workspace_settings set clean_min_version = <esa versión> where id`. El `check`
+  `workspace_settings_clean_min_le_min_app` no deja prenderlo por encima de `min_app_version` (ni sin ella), ni bajar la
+  mínima por debajo de él.
+- **`clean_work`** junta solo páginas vivas de proyectos vivos alcanzadas por un permiso de lector, de los proyectos
+  donde la sesión edita algo, y mira cada una (`sees_deleted`, `has_plain_readers`) antes de contarla en las 50.
 - **Apagarlo** (`clean_min_version = null`) vuelve a servir filas a todos. No se borra nada en ningún sentido: las
   bases son copias derivadas.
 - **Pruebas:** `supabase/tests/privacidad_borrado_permisos.sql` (corrida en `begin … rollback`).
