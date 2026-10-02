@@ -934,5 +934,5 @@ MCP (IA2, IA10) con tres bloqueantes. Todo se corrigió en este documento:
 | O13. *Format as…* con ediciones simultáneas sin red deja lo del otro solo en el historial | 6.3 (cambiar solo el tipo cuando se puede), 6.5, "En corto", IA4 y prueba 6 |
 | O14. La guarda de un invitado compara contra la base atrasada | 9.3 |
 | O15. El tope propio de Anthropic responde 400, no 429 | 3.3 y prueba 1 |
-| O16. `main` ya usa la v0.109 | La entrada del changelog va como `v0.0XX :`, se numera al juntar |
+| O16. `main` ya usa la v0.109 | La entrada del changelog va como `v0.112 :`, se numera al juntar |
 | Faltaba la tabla de riesgos que pedía el encargo | Sección 14 bis |

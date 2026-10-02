@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.112 :
 
 Cinco pedidos de Lega del 2026-10-02 no tenían diseño. Se publican los cinco, sin código, cada uno auditado por
 separado, corregido y re-verificado: `Doc_Plantillas.md` (P.23: las tres plantillas de supervisión, las propias como
@@ -11,6 +11,17 @@ PDF con índice de una rama o un proyecto y el zip para archivar y volver, sin c
 en su dispositivo, aplicar como edición que se deshace y el MCP en el portero, sin escribir en páginas con invitados,
 ni siquiera creando una subpágina; IA1-IA10). Las decisiones quedan propuestas para que Lega las cambie.
 [ Diseños - plantillas, anotar fotos, exportar, menciones y asistente, auditados ]
+
+v0.111 :
+
+Restos del historial (P.18). Una versión con dos bloques del mismo id (dos dispositivos rehicieron el mismo bloque) no
+se podía restaurar: el editor cambiaba un id, la comprobación no daba y se deshacía sola; ahora, en la copia en memoria,
+el segundo recibe un id nuevo antes de restaurar. Al confirmar, la consulta de filas en curso pudo empezar antes de
+sincronizar: se espera y se pide otra (O9). Una copia restaurada que vuelve atrás el contador de `page_updates` podía
+hacer pasar por buena la caché: se lee la generación del servidor antes de usarla (O7). Deshacer la restauración con
+Ctrl/⌘+Z también deja de lado *Restored from…*. Dos sangrías a la vez bajo el mismo bloque ya no muestran el hijo
+repetido como agregado (O2). Pruebas nuevas, también de `mergeRows` (M5) y de la versión elegida que crece (M10).
+[ Historial - restos: restaurar con ids repetidos, la consulta al confirmar, la generación antes de la caché y Ctrl+Z ]
 
 v0.110 :
 

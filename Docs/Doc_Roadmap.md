@@ -272,18 +272,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   huérfano en su versión, el Worker con la página de respaldo, la diferencia solo de lo tocado y la lista que se
   actualiza sola. **Entrega 3 hecha (v0.106):** versiones con nombre (`page_versions`: nombrar, renombrar, quitar,
   *Only named versions*, *Restored from…*) y la caché `<base local>:history` con el historial sin red. Migración
-  `20261011120000_versiones_con_nombre.sql` aplicada (2026-10-02, `schema_version` 13). **Falta:** medir en el iPhone. De la entrega 3, para después: la marca *Restored from…* se pierde si la app se cierra antes de
-  que la restauración suba y nunca se vuelve a abrir el historial de esa página en una semana (es solo un rótulo); un
-  Ctrl/⌘+Z de la restauración (en vez del *Undo* del aviso) no deja de lado la marca; (O3) renombrar pisa el nombre
-  anterior sin rastro; (O7) cerrar la ventana de una copia restaurada que vuelve atrás el contador de `page_updates`
-  (leer la generación del servidor antes de usar la caché). Encontrado por la prueba al azar: una versión con dos bloques del mismo id no se puede
-  restaurar (se deshace sola, sin perder nada; `Doc_Historial.md`, entrega 2; ya pasaba en v0.098). Arreglo propuesto:
-  antes de restaurar, en la copia en memoria, darle un id nuevo al repetido (el segundo en el orden de Yjs), como hace el
-  editor. **De la auditoría de la entrega 2, para después:** (O2) dos sangrías a la vez bajo el mismo bloque dejan dos
-  grupos de hijos; la unión los junta sin descartar el hijo repetido (como `repairBlocks`) y lo muestra agregado (solo
-  presentación); (O9) al confirmar una restauración, `refreshRows` puede devolver una consulta empezada antes de
-  sincronizar: esperarla y pedir otra; (M5) ninguna prueba ve que `mergeRows` descarte una fila repetida; (M10) si en un
-  mismo lote crece la sesión elegida y aparece otra, la elegida puede saltar a la actual. Aparte, después: que lo borrado no llegue a quien solo ve la página (decisión 2;
+  `20261011120000_versiones_con_nombre.sql` aplicada (2026-10-02, `schema_version` 13). **Restos de las auditorías hechos (después de v0.106):** restaurar una versión con dos bloques del mismo id, la consulta
+  al confirmar (O9), la generación del servidor antes de la caché (O7), Ctrl/⌘+Z deja de lado *Restored from…*, el hijo
+  repetido de dos sangrías a la vez (O2) y las pruebas de M5 y M10 (`Doc_Historial.md`, "Lo que quedó de las entregas").
+  **Falta:** medir en el iPhone. Para después: la marca *Restored from…* se pierde si la app se cierra antes de que la
+  restauración suba y nunca se vuelve a abrir el historial de esa página en una semana (es solo un rótulo); (O3)
+  renombrar pisa el nombre anterior sin rastro (bien hecho pide una función nueva en la base, o sea una migración: desde
+  la app serían dos pedidos y el nombre cambiaría de dueño). Aparte, después: que lo borrado no llegue a quien solo ve la página (decisión 2;
   diseño en `Doc_Privacidad_Borrado.md`, B.18).
   Ojo: `npm run db:test` aplica las migraciones de verdad; esta se probó con un script en `begin … rollback`.
 - **P.19 Link público: *Anyone with the link*** (Lega, 2026-10-02): en *Share*, además de personas y correos, un link
