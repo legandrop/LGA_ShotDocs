@@ -562,6 +562,11 @@ export class FakeServer {
       if (g.user_id !== uid) continue;
       if (g.project_id === page.workspace_id || (g.page_id && chain.has(g.page_id))) level = Math.max(level, levelValue(g.level));
     }
+    // La papelera de páginas (20261009120000_papelera_lectores.sql): en la papelera (ella o una de arriba) solo
+    // quien puede editar y no es invitado. Como `user_page_level_any`, `ignoreDeleted` no la mira.
+    if (!ignoreDeleted && level > 0 && (level < 3 || this.role(uid) === 'guest')) {
+      for (const id of chain) if (this.pages.get(id)?.deleted_at) return 0;
+    }
     return level;
   }
 
@@ -990,7 +995,8 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     const clean = (schemaVersion ?? 0) >= CLEAN_SCHEMA_VERSION && (this.server.settings?.schemaVersion ?? 0) >= CLEAN_SCHEMA_VERSION;
     return [...this.server.pages.values()]
       .filter((p) => ids.has(p.workspace_id) && !this.server.projectDeleted(p.workspace_id))
-      .filter((p) => !this.team || this.server.projectLevel(this.userId, p.workspace_id) >= 1 || this.server.pageLevel(this.userId, p.id) >= 1)
+      // `can_view_page_row`: el nivel de la página ya cuenta el del proyecto, el del dueño, los de arriba y la papelera.
+      .filter((p) => !this.team || this.server.pageLevel(this.userId, p.id) >= 1)
       .map((p) => (clean ? { ...p, clean_seq: this.server.cleanMeta.get(p.id)?.seq ?? 0 } : { ...p }));
   }
 

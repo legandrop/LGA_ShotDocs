@@ -34,6 +34,8 @@ export const REMOVED_WRITING_KEEP = 20;
  * autor, `ownClient:<página>:<autor>`, que se pone en la misma transacción que su primera edición guardada (sin
  * leer nada antes). Así "lo propio" se sabe también después de cerrar la app o de restaurar una copia, sin
  * suponer nada por lo que el servidor tiene. Las versiones anteriores no las ponen: lo escrito con ellas no avisa.
+ * Un documento abierto puede tener varios autores: Yjs le cambia el número cuando la reparación que va con lo bajado
+ * escribe (docs.ts, `open`, anota todos).
  */
 export const OWN_CLIENT_PREFIX = 'ownClient:';
 export function ownClientKey(pageId: string, client: number): string {

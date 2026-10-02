@@ -209,10 +209,10 @@ export const editor = {
   },
   'editor.updateApp': { en: "Update the app", es: "Actualizar la app" },
   'removedWriting.text': {
-    en: "Someone deleted a part of this page while you were writing in it, and what you wrote there went with it. You can copy it from here.",
-    es: "Alguien borró una parte de esta página mientras escribías en ella, y lo que escribiste ahí se fue con esa parte. Podés copiarlo desde acá.",
+    en: "Someone deleted a part of this page while you were writing or moving text in it, and what you wrote or moved there went with it. You can copy it from here.",
+    es: "Alguien borró una parte de esta página mientras escribías o movías texto en ella, y lo que escribiste o moviste ahí se fue con esa parte. Podés copiarlo desde acá.",
   },
-  'removedWriting.show': { en: "Show what you wrote", es: "Ver lo que escribiste" },
+  'removedWriting.show': { en: "Show what you wrote or moved", es: "Ver lo que escribiste o moviste" },
   'removedWriting.hide': { en: "Hide", es: "Ocultar" },
   'removedWriting.copy': { en: "Copy", es: "Copiar" },
   'removedWriting.dismiss': { en: "Dismiss", es: "Descartar aviso" },

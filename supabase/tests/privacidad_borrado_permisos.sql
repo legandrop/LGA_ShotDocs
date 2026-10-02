@@ -7,8 +7,8 @@
 
 begin;
 
--- Sin versión mínima: la prueba escribe el árbol por la API sin el header de la versión.
-update public.workspace_settings set min_app_version = null, clean_min_version = null where id;
+-- El interruptor empieza apagado (la prueba lo prende más abajo).
+update public.workspace_settings set clean_min_version = null where id;
 
 create function pg_temp.u(s text) returns uuid language sql immutable as $$
   select ('00000000-0000-4000-8000-00000000' || s)::uuid;
@@ -17,7 +17,9 @@ $$;
 create function pg_temp.as_user(s text) returns void language sql as $$
   select set_config('role', 'authenticated', true),
          set_config('request.jwt.claims',
-                    json_build_object('sub', pg_temp.u(s), 'role', 'authenticated')::text, true);
+                    json_build_object('sub', pg_temp.u(s), 'role', 'authenticated')::text, true),
+         -- Como la app desde v0.099: con la versión en el header (la base frena el árbol sin él).
+         set_config('request.headers', '{"x-shotdocs-version": "9.999"}', true);
 $$;
 
 create function pg_temp.as_postgres() returns void language sql as $$

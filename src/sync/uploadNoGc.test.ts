@@ -347,6 +347,144 @@ describe('B.16: lo escrito adentro de algo que otro borra llega al servidor', ()
     old.dispose();
   });
 
+  it('lo que copió la reparación que vino con lo bajado (Yjs le cambia el autor al documento) también avisa', async () => {
+    // Una reparación de estructura que va en la misma transacción que lo bajado (`applyToLive`) escribe con el
+    // autor del documento abierto, pero `applyUpdate` marca la transacción como remota y Yjs, al ver que su autor
+    // escribió en una transacción remota, le pone otro número al documento. El `update` de esa transacción sale
+    // con el número nuevo: si solo se anotaba ese, lo que copió la reparación no era "propio" y no avisaba.
+    const server = new FakeServer();
+    const a = await device(server);
+    const b = await device(server);
+    const c = await device(server);
+    const pageId = await a.tree.create(null, 'P');
+    // b1 con un hijo b2.
+    await edit(a, pageId, (doc) => {
+      const group = new Y.XmlElement('blockGroup');
+      const parent = block('b1', 'Primero');
+      const children = new Y.XmlElement('blockGroup');
+      children.insert(0, [block('b2', 'Segundo')]);
+      parent.insert(1, [children]);
+      group.insert(0, [parent]);
+      doc.getXmlFragment(CONTENT_FRAGMENT).insert(0, [group]);
+    });
+    await a.engine.syncNow();
+    await b.engine.syncNow();
+    await c.engine.syncNow();
+    const b2 = (doc: Y.Doc) => ((root(doc).get(0) as Y.XmlElement).get(1) as Y.XmlElement).get(0) as Y.XmlElement;
+    // A y C cambian a la vez el tipo de b2 (se borra el párrafo y entra otro contenido); C además escribe y no sube.
+    // Con A de autor 1 y C de un número alto, el contenido de A queda primero y la reparación copia el de C.
+    const typeChange = (doc: Y.Doc, client: number, name: string, text: string) => {
+      doc.clientID = client;
+      const content = new Y.XmlElement(name);
+      const t = new Y.XmlText();
+      t.insert(0, text);
+      content.insert(0, [t]);
+      doc.transact(() => {
+        b2(doc).delete(0, 1);
+        b2(doc).insert(0, [content]);
+      });
+    };
+    await edit(c, pageId, (doc) => typeChange(doc, 0xfffffff0, 'heading', 'Segundo DE-C'));
+    await edit(a, pageId, (doc) => typeChange(doc, 1, 'bulletListItem', 'Segundo'));
+    await a.engine.syncNow();
+    await b.engine.syncNow();
+    // C abre la página (un autor nuevo, sin nada guardado todavía) y baja lo de A: b2 queda con dos contenidos, la
+    // reparación deja el de A y pasa el de C a un bloque nuevo debajo, copiado por este documento.
+    const doc = await c.docs.open(pageId);
+    const opened = doc.clientID;
+    await c.docs.pullPage(pageId, c.remote);
+    await c.docs.flush(pageId);
+    expect(doc.clientID).not.toBe(opened);
+    expect(doc.getXmlFragment(CONTENT_FRAGMENT).toString()).toContain('Segundo DE-C');
+    // B, que no vio la copia, borra b1 con sus hijos.
+    await edit(b, pageId, (d) => root(d).delete(0, 1));
+    await b.engine.syncNow();
+    await c.docs.pullPage(pageId, c.remote);
+    expect((await c.docs.removedWriting(pageId)).map((n) => n.text)).toEqual(['Segundo DE-C']);
+    c.docs.close(pageId);
+    await c.engine.syncNow();
+    expect(serverText(server, pageId)).toContain('Segundo DE-C');
+    // Los avisos de A y B no traen nada de C.
+    expect(await a.docs.removedWriting(pageId)).toEqual([]);
+    expect(await b.docs.removedWriting(pageId)).toEqual([]);
+  });
+
+  it('lo escrito con el número nuevo, después de la reparación que vino con lo bajado, también avisa', async () => {
+    // Como la anterior, y además C escribe en la copia después de que Yjs le cambió el número al documento: lo que
+    // escribe con el número nuevo también es propio (falla si se anota solo el número con que se abrió el documento).
+    const server = new FakeServer();
+    const a = await device(server);
+    const b = await device(server);
+    const c = await device(server);
+    const pageId = await a.tree.create(null, 'P');
+    // b1 con un hijo b2.
+    await edit(a, pageId, (doc) => {
+      const group = new Y.XmlElement('blockGroup');
+      const parent = block('b1', 'Primero');
+      const children = new Y.XmlElement('blockGroup');
+      children.insert(0, [block('b2', 'Segundo')]);
+      parent.insert(1, [children]);
+      group.insert(0, [parent]);
+      doc.getXmlFragment(CONTENT_FRAGMENT).insert(0, [group]);
+    });
+    await a.engine.syncNow();
+    await b.engine.syncNow();
+    await c.engine.syncNow();
+    const b2 = (doc: Y.Doc) => ((root(doc).get(0) as Y.XmlElement).get(1) as Y.XmlElement).get(0) as Y.XmlElement;
+    // A y C cambian a la vez el tipo de b2 (se borra el párrafo y entra otro contenido); C además escribe y no sube.
+    // Con A de autor 1 y C de un número alto, el contenido de A queda primero y la reparación copia el de C.
+    const typeChange = (doc: Y.Doc, client: number, name: string, text: string) => {
+      doc.clientID = client;
+      const content = new Y.XmlElement(name);
+      const t = new Y.XmlText();
+      t.insert(0, text);
+      content.insert(0, [t]);
+      doc.transact(() => {
+        b2(doc).delete(0, 1);
+        b2(doc).insert(0, [content]);
+      });
+    };
+    await edit(c, pageId, (doc) => typeChange(doc, 0xfffffff0, 'heading', 'Segundo DE-C'));
+    await edit(a, pageId, (doc) => typeChange(doc, 1, 'bulletListItem', 'Segundo'));
+    await a.engine.syncNow();
+    await b.engine.syncNow();
+    // C abre la página (un autor nuevo, sin nada guardado todavía) y baja lo de A: b2 queda con dos contenidos, la
+    // reparación deja el de A y pasa el de C a un bloque nuevo debajo, copiado por este documento.
+    const doc = await c.docs.open(pageId);
+    const opened = doc.clientID;
+    await c.docs.pullPage(pageId, c.remote);
+    await c.docs.flush(pageId);
+    expect(doc.clientID).not.toBe(opened);
+    expect(doc.getXmlFragment(CONTENT_FRAGMENT).toString()).toContain('Segundo DE-C');
+    const copied = (t: Y.XmlElement | Y.XmlFragment): Y.XmlText | null => {
+      for (const child of t.toArray()) {
+        if (child instanceof Y.XmlText && child.toString().includes('Segundo DE-C')) return child;
+        if (child instanceof Y.XmlElement) {
+          const found = copied(child);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+    const text = copied(doc.getXmlFragment(CONTENT_FRAGMENT))!;
+    const renewed = doc.clientID;
+    text.insert(text.length, ' MAS');
+    await c.docs.flush(pageId);
+    expect(doc.clientID).toBe(renewed);
+    // B, que no vio la copia, borra b1 con sus hijos.
+    await edit(b, pageId, (d) => root(d).delete(0, 1));
+    await b.engine.syncNow();
+    await c.docs.pullPage(pageId, c.remote);
+    expect((await c.docs.removedWriting(pageId)).map((n) => n.text)).toEqual(['Segundo DE-C MAS']);
+    c.docs.close(pageId);
+    await c.engine.syncNow();
+    expect(serverText(server, pageId)).toContain('Segundo DE-C');
+    expect(serverText(server, pageId)).toContain(' MAS');
+    // Los avisos de A y B no traen nada de C.
+    expect(await a.docs.removedWriting(pageId)).toEqual([]);
+    expect(await b.docs.removedWriting(pageId)).toEqual([]);
+  });
+
   it('una subida sin GC demasiado grande se arma con GC, como antes (nunca se queda sin subir)', async () => {
     const server = new FakeServer();
     const a = await device(server);

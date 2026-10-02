@@ -189,7 +189,15 @@ export class PageDocs {
           created.guarded = true;
           await this.armGuard(pageId);
         }
+        // Los autores de Yjs que tuvo este documento (B.16, `ownClientKey`). Yjs le cambia el autor a un documento
+        // abierto cuando una transacción que aplica algo bajado también escribe (la reparación que va con lo que
+        // llega, `applyToLive`): `applyUpdate` marca la transacción como remota y Yjs cree que otro usa su número.
+        // Lo que esa transacción escribió es del autor de antes y el `update` sale cuando ya tiene el nuevo: se
+        // anotan los dos, y los de cada transacción desde que se abrió.
+        const authors = new Set<number>([doc.clientID]);
+        doc.on('beforeTransaction', () => authors.add(doc.clientID));
         doc.on('update', (update: Uint8Array, origin: unknown) => {
+          authors.add(doc.clientID);
           if (origin === ORIGIN_SEED) {
             created.unsavedSeed = update;
             return;
@@ -207,13 +215,13 @@ export class PageDocs {
             // en memoria va como hueco; lo cargado ya está en las filas con su texto (B.16).
             created.repairedInMemory = false;
             created.unsavedSeed = undefined;
-            this.persistLocal(pageId, [Y.encodeStateAsUpdate(doc, created.loadedSV)], doc.clientID);
+            this.persistLocal(pageId, [Y.encodeStateAsUpdate(doc, created.loadedSV)], authors);
             return;
           }
           const seed = created.unsavedSeed;
           created.unsavedSeed = undefined;
           // La semilla va primero y en el mismo lote: se guardan en la misma transacción.
-          this.persistLocal(pageId, seed ? [seed, update] : [update], doc.clientID);
+          this.persistLocal(pageId, seed ? [seed, update] : [update], authors);
         });
         if (!writable) {
           // Solo en memoria (origen que no se guarda): la vista queda bien y no sale ningún cambio.
@@ -1036,9 +1044,10 @@ export class PageDocs {
    * cierre en ese rato perdía el final de lo escrito (el navegador aborta las transacciones sin confirmar
    * de una página que se va), aunque el estado ya dijera "saved on this device".
    */
-  private persistLocal(pageId: string, updates: Uint8Array[], client?: number): void {
+  private persistLocal(pageId: string, updates: Uint8Array[], clients: Iterable<number> = []): void {
     this.written.add(pageId);
-    if (client !== undefined && !this.recordedClients.has(`${pageId}:${client}`)) {
+    for (const client of clients) {
+      if (this.recordedClients.has(`${pageId}:${client}`)) continue;
       const pending = this.unrecordedClients.get(pageId) ?? new Set<number>();
       pending.add(client);
       this.unrecordedClients.set(pageId, pending);
