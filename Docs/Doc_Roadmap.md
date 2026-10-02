@@ -293,6 +293,14 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   Depende del interruptor de la privacidad de lo borrado (B.18) prendido en Wanka. Entregas: 0 (prueba de los headers y
   de la caché de miniaturas en la base real, y `noindex`), 1 (*Can view*), 2 (*Can edit*, con topes por bytes y la
   cuarentena de filas malas; se vuelve a auditar ese diseño antes de programarla), 3 (medir y ajustar los topes).
+- **P.21 Menciones en comentarios: *@persona*** (Lega, 2026-10-02): escribir `@` en un comentario, elegir a alguien y
+  que le llegue un aviso en la app; por correo cuando haya clave de Resend (C.12). **Diseño en `Doc_Menciones.md`** (sin
+  código ni migración; decisiones propuestas ME1 a ME9): solo a quien ya ve la página, y quien puede compartirla la
+  comparte desde la mención (entrega 2); un invitado ve solo a quienes participan en los comentarios y a quien le
+  compartió algo; el texto sigue plano (`@lega`) y quién es va en `comment_mentions`, así una versión vieja no rompe
+  nada; una campana con las no leídas que pregunta cada 60 segundos (sin Realtime); sin red con la cola de siempre;
+  los visitantes del link no mencionan; las menciones de Coda se ven como `@Nombre`. Entregas: 1 (base, `@`, campana,
+  sin red), 2 (compartir desde la mención, marcas en el árbol y en el ícono), 3 (correo, grupo C).
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.

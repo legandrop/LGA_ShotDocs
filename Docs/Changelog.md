@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+Mencionar a alguien en un comentario no existía: nadie se enteraba de un comentario en una página que no tenía
+abierta. `Doc_Menciones.md` diseña *@persona* (P.21): solo a quien ya ve la página (quien puede compartirla, la comparte
+desde la mención); un invitado ve solo a quienes participan en esos comentarios y a quien le compartió algo; el texto
+sigue plano y quién es va en la tabla `comment_mentions`, así una versión vieja ve `@lega` sin perder nada; una campana
+con las no leídas que pregunta cada 60 segundos; sin red con la cola de siempre; los visitantes del link no mencionan.
+Correo, después (grupo C). Decisiones propuestas ME1 a ME9; la migración en borrador compila en una transacción deshecha.
+[ Menciones - diseño de @persona en comentarios, con la campana y sin red ]
+
 v0.108 :
 
 Compartir una página con alguien sin cuenta no existía: solo usuarios invitados. Faltaba un diseño seguro para
