@@ -234,7 +234,7 @@ describe('el panel', () => {
     const { host, ed } = await setup();
     provider('La cámara se movió en la toma 3');
     selectAll(ed, 'p', 0, 31);
-    const fix = button(host, 'Fix spelling & grammar');
+    const fix = button(host, 'Fix spelling & grammar')!;
     fix.focus();
     await click(fix);
     for (let i = 0; i < 20 && !button(host, 'Apply'); i++) await wait(30);
