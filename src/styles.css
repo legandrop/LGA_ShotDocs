@@ -6061,6 +6061,33 @@ ins.replace-new {
   gap: 8px 18px;
 }
 
+/* El zip (P.22, entrega 2, ExportZip.tsx): las casillas en columna, cada una con su peso a la derecha. */
+.export-zip-options {
+  flex-direction: column;
+  gap: 6px;
+}
+
+.export-zip-options label > .muted {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.export-dialog .small {
+  font-size: 12px;
+}
+
+.export-dialog .warn {
+  color: var(--warn);
+}
+
+.export-zip-missing ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  max-height: 160px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+
 .export-too-big ul {
   margin: 6px 0 0;
   padding-left: 18px;

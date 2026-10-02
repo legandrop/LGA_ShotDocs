@@ -2,27 +2,14 @@
 
 v0.0XX :
 
-Anotar fotos con el dedo y con el lápiz (P.20, entrega 3 de `Doc_Anotar_Fotos.md`). En el teléfono el anotador era el
-de la compu: barra chica arriba, un dedo dibujaba y no había cómo ampliar; el iPad no distinguía el lápiz. Ahora, en
-pantallas táctiles, las herramientas van en una tira abajo y el estilo en una hoja que abre el punto de color; dos
-dedos amplían y mueven sin dibujar (lo del primer dedo se descarta: se escribe al soltar); el lápiz prende *Only the
-pencil draws* y el dedo mueve, la palma no dibuja; el texto se escribe en una caja común que abre el teclado en el
-toque. Tocar un tirador sin moverlo cambiaba la forma: ya no. Auditada: lo escrito ya no se pierde si la pantalla cambia con la caja abierta, y una forma chica se mueve con el dedo.
-[ Anotar fotos, entrega 3 - el dedo, dos dedos para ampliar, el lápiz del iPad, la tira, la hoja y el texto del teléfono ]
-
-v0.126 :
-
-Asistente, entrega A2 (P.24): el asistente solo trabajaba sobre lo elegido y la política del workspace no tenía cómo
-cambiarse. El panel suma *Summarize page* (*Insert at top* / *Insert below*), *Translate page* (*Replace page content*,
-que traduce cada bloque en su lugar con el reemplazo de A1, o *Create translated subpage*, por `tree.create` y
-`writeNewPage`) y *Format as…* (viñetas, casillas, tabla, títulos; solo bloques que ya existen, un deshacer, la guarda
-más el tipo de cada bloque, sin partir bloques con hijos; no aplica si la respuesta deja afuera palabras de lo
-elegido y subraya las que agrega). Medido: cambiar el tipo rehace el texto en Yjs, así que lo
-escrito a la vez sin red queda en el historial; el diseño quedó corregido. Migración
-`20261017120000_asistente_politica_ventana.sql` (sin aplicar): `set_assistant_policy` para dueño y admins, con la
-sección *This workspace* en *Assistant…*.
-[ Asistente A2 - resumir y traducir la página, Format as… y la política del workspace ]
-
+Exportar (P.22), entrega 2: el zip para archivar. Guardar un proyecto terminado fuera de la app no tenía forma. Nuevo:
+*Zip — to archive* en *Export…* arma una carpeta por página con su `.html` (sin red ni JavaScript), su `.md` con rutas
+relativas, una vista JPEG de cada foto (también HEIC), los originales elegidos (del dispositivo o por el portero, una vez
+aunque estén en dos páginas), los comentarios sin correos, el JSON para volver (con las marcas de plantilla) y
+`MISSING_FILES.txt`. Nunca sale lo borrado, la papelera ni lo de afuera de la rama. Los nombres se acortan para que
+ninguna ruta pase 180 caracteres al descomprimir en Descargas (el Explorador no abre más de 260). Solo dueño y admins,
+desde una computadora. Probado con `file://` sin red en Chromium y Firefox.
+[ Exportar, entrega 2 - el zip con HTML, Markdown, JSON, vistas JPEG, originales y la lista de lo que falta ]
 v0.125 :
 
 Menciones en comentarios (P.21), entrega 2. Para mencionar a alguien que no veía la página había que ir a *Share*,
