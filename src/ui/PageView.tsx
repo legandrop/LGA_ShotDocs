@@ -4,6 +4,7 @@ import { usePrefs } from '../prefs';
 import { navigate, pagePath } from '../router';
 import { usePermissions, useSyncStatus, useTree } from '../services';
 import { DayReportButton } from '../templates/dayReportUi';
+import { TemplateBanner } from '../templates/ownTemplatesUi';
 import { disarmTitleUndo, titleUndoFor } from '../templates/templatesUi';
 import { clearCommentsTarget, closeComments, useCommentsUi } from './commentsUi';
 import { isLetter, modPressed } from './findUi';
@@ -12,6 +13,7 @@ import { lazyPart, Part } from './lazyPart';
 import { useFloating } from './menus';
 import { pageFormat, sheetSize, SHEET_MARGIN_MM, mm } from './pageFormat';
 import { headerLevels, headerPages, ownHeader } from './titles';
+import { setDocumentTitle } from './titleBadge';
 
 const FOCUS_TITLE = 'shotdocs:focus-title';
 
@@ -40,7 +42,8 @@ export function PageView({ id }: { id: string }) {
   const tr = useT();
 
   useEffect(() => {
-    document.title = page ? `${page.title || tr('common.untitled')} · Shot Docs` : 'LGA Shot Docs';
+    // Con el número de menciones sin leer adelante, si hay (titleBadge.ts).
+    setDocumentTitle(page ? `${page.title || tr('common.untitled')} · Shot Docs` : 'LGA Shot Docs');
   }, [page, tr]);
 
   if (!page) {
@@ -83,6 +86,8 @@ export function PageView({ id }: { id: string }) {
           )}
         </div>
       )}
+      {/* Una plantilla propia (Docs/Doc_Plantillas.md, 5.2): qué es y sus ajustes. */}
+      <TemplateBanner pageId={id} />
       <PageHeader id={id} editable={perms.canEditPage(id)} />
       <TitleInput id={id} title={page.title} readOnly={!perms.canEditPage(id)} />
       <Part fallback={<EditorSkeleton />}>
