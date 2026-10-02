@@ -416,8 +416,17 @@
   border-color: var(--accent);
 }
 
-.assistant-policy-option input {
-  margin-top: 3px;
+/* Un radio, no un campo: sin el ancho ni el borde de los campos de la ventana. */
+.assistant-policy-option input[type='radio'] {
+  flex: none;
+  width: auto;
+  height: auto;
+  margin: 3px 0 0;
+  padding: 0;
+  border: none;
+  box-shadow: none;
+  background: none;
+  accent-color: var(--accent);
 }
 
 .assistant-policy-option > span {

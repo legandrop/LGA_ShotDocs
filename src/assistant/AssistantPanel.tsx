@@ -171,10 +171,18 @@ function PieceDiff({ before, after }: { before: OldUnit[]; after: NewUnit[] }) {
   return <p className="assistant-diff-block">{out}</p>;
 }
 
-/** Lo nuevo de un pedazo, sin la diferencia (una traducción entera sería todo tachado y todo agregado). */
-function NewText({ units }: { units: NewUnit[] }) {
+/**
+ * Lo nuevo de un pedazo, sin la diferencia (una traducción entera sería todo tachado y todo agregado), con la forma de
+ * su bloque (el prefijo que viajó como contexto: el tipo no cambia).
+ */
+function NewText({ units, prefix }: { units: NewUnit[]; prefix: string }) {
+  const p = prefix.trim();
+  const heading = /^#+$/.test(p) ? Math.min(3, p.length) : 0;
+  const lead = p === '-' ? '•' : /^\d/.test(p) ? '#' : p === '[ ]' ? '☐' : p === '[x]' ? '☑' : null;
+  const cls = `assistant-diff-block${heading ? ` md-heading md-h${heading}` : ''}${p === '>' ? ' md-quote' : ''}`;
   return (
-    <p className="assistant-diff-block">
+    <p className={cls}>
+      {lead && <span className="assistant-lead">{lead}</span>}
       {units.map((u, n) => (
         <Unit key={n} u={asView(u)} />
       ))}
@@ -610,7 +618,7 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
               <span className="assistant-chip">{tr('assistant.blockChip')}</span>
             </p>
           ) : (
-            <NewText key={i} units={result.parsed.blocks[i] ?? []} />
+            <NewText key={i} units={result.parsed.blocks[i] ?? []} prefix={piece.prefix} />
           ),
         ),
       ];
