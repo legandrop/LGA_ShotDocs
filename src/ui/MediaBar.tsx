@@ -11,7 +11,7 @@ import { carreteSourceOf } from './carreteModel';
 import { isOffline, startDownload } from './carreteLoader';
 import { commentOnBlock } from './commentsUi';
 import { shortcutLabel } from './shortcuts';
-import { AlignCenterIcon, AlignLeftIcon, AlignRightIcon, CommentIcon, DownloadIcon, RenameIcon, ReplaceIcon, ShareIcon, TrashIcon } from './icons';
+import { AlignCenterIcon, AlignLeftIcon, AlignRightIcon, AnnotateIcon, CommentIcon, DownloadIcon, RenameIcon, ReplaceIcon, ShareIcon, TrashIcon } from './icons';
 import { canShareFiles, saveToRollOffered, shareFile, shareFileOf, touchDevice } from './camera';
 import { porteroDownload } from './sharpImages';
 import { ImageSizeButtons, OriginalDownloadButton, ViewIcon } from './MediaToolbarButtons';
@@ -37,6 +37,8 @@ export interface MediaActions {
   onView: (key: string) => void;
   /** *Download all* de la carpeta de ese bloque (P.9, entrega 2): abre su visor con la descarga. */
   onDownloadAll?: (blockId: string) => void;
+  /** Abre el anotador en esa foto del Drive (P.20, entrega 2); sin esto (no se puede editar), no hay *Annotate*. */
+  onAnnotate?: (url: string, name: string) => void;
 }
 
 export const MediaActionsContext = createContext<MediaActions | null>(null);
@@ -86,6 +88,19 @@ export function ViewButton({ url, attachment = false, onView }: { url: string | 
   const name = attachment ? tr('attachment.open') : tr('mediaButton.view');
   const tip = attachment ? `**${name}**\n${tr('attachment.openTip')}` : `**${name}**\n${tr('photoTip.view')}\n${tr('mediaButton.space')}`;
   return <BarButton label={name} tip={tip} icon={<ViewIcon />} test="mediaView" onClick={onView} />;
+}
+
+/**
+ * *Annotate* (P.20, Docs/Doc_Anotar_Fotos.md): solo una foto del Drive (`sdmedia://`; no videos ni adjuntos) y solo con
+ * la página editable (sin `onAnnotate`, no está).
+ */
+export function AnnotateButton({ url, name, kind }: { url: string | null; name: string; kind: MediaKind }) {
+  const actions = useMediaActions();
+  const tr = useT();
+  if (!url || kind !== 'image' || !mediaIdOf(url) || !actions?.onAnnotate) return null;
+  const label = tr('photoBar.annotate');
+  return <BarButton label={label} tip={`**${label}**
+${tr('photoTip.annotate')}`} icon={<AnnotateIcon size={18} />} test="mediaAnnotate" onClick={() => actions.onAnnotate!(url, name)} />;
 }
 
 /**
@@ -342,6 +357,7 @@ export function ImageBlockBar() {
               <ViewButton url={block.url} attachment={attachment} onView={() => actions?.onView(block.id)} />
               <DownloadButton url={block.url} name={block.name} blockId={block.id} />
               {!attachment && <SaveToRollButton url={block.url} name={block.name} />}
+              {!attachment && <AnnotateButton url={block.url} name={block.name} kind={kind} />}
             </>
           ),
           !attachment && <ImageSizeButtons />,

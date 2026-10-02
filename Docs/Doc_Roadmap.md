@@ -332,14 +332,18 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   2 (el reporte del día), 3 (plantillas propias). **Entregas 0 y 1 hechas** (v0.117): la vista previa
   (`/practice?template=on-set`), la tira de la página nueva, *More…* y *Apply template…*. **Entrega 2 hecha**
   (v0.121): *New day report* (botón, globito, menú ⋯ y Ctrl/⌘+Alt+Shift+N), la carpeta de reportes marcada o deducida,
-  lo que se copia del día anterior, "ya existe" y el orden, sin red. **Entrega 3 hecha** (v0.0XX): plantillas propias
+  lo que se copia del día anterior, "ya existe" y el orden, sin red. **Entrega 3 hecha** (v0.124): plantillas propias
   (*Save as template…* con *Clear filled-in values*, la carpeta *Templates*, la franja con *Template settings…* y *Stop
   using as template*, *Customize*, las de otros proyectos sin sus fotos, *Wait* / *Use built-in* a medio bajar y el
   selector de plantilla del globito, con el aviso de O4). **Falta** que Lega revise el contenido de las tres (PL1) y
   pruebe el atajo en Firefox y Safari de la Mac y con un teclado latinoamericano físico. Quedan para después la marca
   *2 reports for…* en la barra lateral con la papelera ofrecida para el repetido sin tocar (O6), y en *Buscar en el
   proyecto* la marca *Template* con *Replace all* que saltee las plantillas salvo *Include templates* (O9, va con la
-  búsqueda). Quedó de la auditoría de
+  búsqueda). De la auditoría de la entrega 3 (ninguna pierde contenido): dos dispositivos sin red que guardan su primera
+  plantilla crean dos carpetas *Templates* (O1); *Template settings* en un dispositivo y un cambio de formato en otro a la vez
+  pisan la descripción, la limitación conocida de `settings` (O2); guardar un reporte con *Use for day reports* cambia la
+  plantilla de la carpeta para todo el equipo (O3, decidido así: D94); un invitado con *Edit & create pages* guarda
+  plantillas, como permite la base (O4). Quedó de la auditoría de
   la entrega 1: *Exit* de la vista previa abierta desde la ventana va al inicio y no a la página donde se elegía
   (Atrás sí vuelve); y un aviso de ProseMirror en la consola al abrir la vista previa (sin efecto visible). De la
   auditoría de la entrega 2 (las demás observaciones, corregidas): un invitado con *Edit & create pages* crea reportes,
@@ -359,12 +363,20 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   páginas, buscar), 6 opcional (dibujar en un comentario).
   **Entregas 0 y 1 hechas (v0.116):** el mapa `photoMarkup` y su lectura segura (`src/media/markup.ts`), las pruebas de
   versiones publicadas, base limpia, historial y carrera, y el dibujo encima de la foto en línea, la de una celda, la
-  foto-bloque, el carrete (*Hide annotations*) y el PDF. Falta: subir `min_app_version` a esta versión al publicarla
-  (AN10) y la entrega 2 (el anotador, con la poda de AN11); medir el dedo a 60 y 120 Hz y las fotos HEIC de un iPhone
-  real (entrega 0, no se pudo sin teléfono).
-  Del PDF (auditoría O2): el grosor mínimo de 1 px se calcula con la caja en pantalla y la vista de impresión copia el
-  `<svg>` tal cual, así un trazo fino sale más grueso en papel (y una foto que en pantalla no cargó sale sin dibujo);
-  redibujar cada `svg.sd-markup` de la copia con el mínimo de su caja impresa, antes de la entrega 2.
+  foto-bloque, el carrete (*Hide annotations*) y el PDF.
+  **Entrega 2 hecha (v0.123):** el anotador en la compu (`src/ui/Annotator.tsx`): las nueve herramientas con las letras
+  de FrameRev, Shift y Alt, colores y grosor contra 1920 px, estilo por herramienta, deshacer propio por foto, escribir
+  al soltar, topes en bytes y la poda de AN11; *Annotate* en la barra de la foto y A en el carrete; el PDF con el
+  grosor mínimo de su caja impresa (la observación O2). Falta: que `min_app_version` esté en 0.116 o más al publicarla
+  (AN10); probar ⌘[ y ⌘] en Safari y Chrome de una Mac; la entrega 3 (el dedo y el lápiz del iPad), y medir el dedo a 60
+  y 120 Hz y las fotos HEIC de un iPhone real (entrega 0, no se pudo sin teléfono).
+  De la auditoría de la entrega 2 (`Doc_Anotar_Fotos.md`, "Correcciones de la auditoría de la entrega 2"), pendientes:
+  una prueba que caiga si la condición «página sincronizada» de `PageEditor` (red, nada sin subir, nada sin bajar) que
+  frena la poda se rompe (hoy, con `synced = async () => true`, la suite sigue en verde; la re-verificación lo comprobó en
+  el navegador); una prueba que caiga si `PageEditor` ofrece *Annotate* sin poder editar; un marco ilegible lo pisa la primera forma
+  (revisar el día que cambie `v`); una forma con grosor 0 y sin relleno no se ve pero se puede elegir (sirve para
+  borrarla; decidir); en el teléfono el anotador abre y un dedo dibuja sin pellizco: decidir si se esconde en pantallas
+  táctiles hasta la entrega 3; un workspace sin la migración del equipo no conoce los permisos y nunca poda.
 - **P.22 Exportar una página o un proyecto entero** (Lega, 2026-10-02): PDF y/o zip con las páginas y las fotos, para
   entregarle al cliente o archivar un proyecto terminado. **Diseño en `Doc_Exportar.md`** (sin código; EX1 a EX15 a
   confirmar por Lega; auditado con condiciones y corregido: ningún correo en el zip, vista JPEG de cada foto): un PDF para entregar (toda la rama en orden con un índice que dice la hoja de
@@ -375,11 +387,19 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   de exportación medido), 1 (PDF), 2 (zip), 3 (volver, con la migración de `imported_from`), 4 (carpetas de Drive,
   reusar archivos, link público). **Entrega 0 hecha (v0.115):** el editor de exportación en `src/export/`
   (sin interfaz), medido con 300 páginas y 2219 fotos en Chromium: 14,5 a 38,9 s, nada guardado cambia y las hojas de
-  las 300 iguales a las marcas de la pantalla. Sigue la entrega 1 (PDF), con lo que dejó la auditoría de la 0: una foto
-  que no carga cuesta 14 s por página (dos esperas que se suman: una sola, más corta); el editor acumula el deshacer
-  y retiene las páginas anteriores (~0,4 MB cada 100: apagar el historial); exportar una rama sola corta distinto que la
-  pantalla en 8 de 25 casos (pierde el renglón de encabezado); una marca de texto desconocida borra ese texto en la
-  copia y el aviso no lo usa nadie; el proyecto de prueba no tiene páginas de hoja libre.
+  las 300 iguales a las marcas de la pantalla. **Entrega 1 hecha (v0.122): el PDF de una rama o de un proyecto**
+  (*Export…* en el menú de la página, *Export project…* en el selector): índice con la hoja de cada página y links
+  internos, cada página con su hoja (Chrome y Edge de computadora; los demás, todo con la hoja de la raíz y avisado),
+  fotos con sus anotaciones y achicadas a su ancho impreso en Workers, comentarios opcionales bajados antes y sin
+  correos, topes de páginas y de píxeles (menos con menos de 8 GB). 300 páginas en ~30 s (Chromium sin ventana);
+  resueltas O3 a O7 de la auditoría de la 0 y los tres bloqueantes y O1 a O7 de la auditoría de la 1. Falta a mano:
+  Safari, Firefox, el iPhone, una compu de 8 GB y guardar de verdad en Chrome y Edge (`Doc_Exportar.md`, "Cómo quedó
+  la entrega 1"). Sigue la entrega 2 (zip).
+  Observaciones de la re-verificación de la entrega 1: (R1) el Imprimir del menú del navegador mientras se arma el PDF
+  puede llevar la vista de la página en curso: sacar `print-output` a esa vista hasta `place()`; (R2) la prueba de la
+  vuelta al achicador del hilo principal no distingue la mutación: hacerlo inyectable en `workerResizer`; (R3) con
+  *Comments* tildada se hace un pedido por página, en fila: medirlo contra Supabase con 300 páginas y, si pesa, pedir de
+  a varias.
 - **P.21 Menciones en comentarios: *@persona*** (Lega, 2026-10-02): escribir `@` en un comentario, elegir a alguien y
   que le llegue un aviso en la app; por correo cuando haya clave de Resend (C.12). **Entrega 1 programada (v0.120;
   migración `20261015120000_menciones.sql` sin aplicar):** el `@` con la lista, el pintado, la cola, la campana y el

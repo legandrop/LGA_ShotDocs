@@ -19,3 +19,5 @@ export const StorageDialog = lazyPart(() => import('./OfflinePart').then((m) => 
 export const LookForFilesButton = lazyPart(() => import('./ProjectStatesPart').then((m) => m.LookForFilesButton));
 // Los pasos para instalar la app (Doc_Instalar.md).
 export const InstallDialog = lazyPart(() => import('./InstallDialog').then((m) => m.InstallDialog));
+// Exportar una rama o un proyecto como PDF (P.22, Docs/Doc_Exportar.md).
+export const ExportDialog = lazyPart(() => import('./ExportDialog').then((m) => m.ExportDialog));

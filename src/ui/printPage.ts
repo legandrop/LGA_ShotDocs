@@ -196,7 +196,8 @@ export function isPrintShortcut(
  */
 export function installPrintShortcuts(current: () => { pageId: string; format: Format; media?: PrintMedia | null } | null): () => void {
   const onBefore = () => {
-    if (active?.restore) return;
+    // Ya hay algo listo para imprimir: esta página, o el PDF de una rama (src/export/exportPdf.ts).
+    if (active?.restore || document.documentElement.classList.contains('sd-printing')) return;
     const page = current();
     const article = page && findPageArticle(page.pageId);
     if (!page || !article?.querySelector('.bn-editor')) return;
@@ -207,7 +208,8 @@ export function installPrintShortcuts(current: () => { pageId: string; format: F
     }
   };
   const onKey = (e: KeyboardEvent) => {
-    if (!isPrintShortcut(e)) return;
+    // Con el PDF de una rama abierto, Ctrl/⌘+P lo maneja su ventana (ExportDialog.tsx).
+    if (!isPrintShortcut(e) || e.defaultPrevented) return;
     const page = current();
     if (!page) return;
     e.preventDefault();

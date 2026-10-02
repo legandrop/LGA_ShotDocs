@@ -1,3 +1,4 @@
+import { fitPrintedMarkup } from './markupOverlay';
 import { t } from '../i18n';
 import { thumbSize } from './sharpMarks';
 import type { PageFormat, PrintGeometry } from './pageFormat';
@@ -146,6 +147,8 @@ export function buildPrintView(
   document.body.append(root);
   try {
     fitWideTables(root, geometry.contentWidth);
+    // Las anotaciones de las fotos con el grosor mínimo de su caja en papel (P.20; markupOverlay.ts).
+    if (kind === 'output') fitPrintedMarkup(root);
   } catch (err) {
     root.remove();
     throw err;

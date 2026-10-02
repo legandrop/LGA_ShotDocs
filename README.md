@@ -100,6 +100,11 @@ In production (v0.049). What works today:
   (full, 1/2, 1/3, 1/4 of the page) put photos and videos side by side, *Arrange in rows* lays out a run of
   photos in rows of equal height, and on the phone each account chooses rows or stacked. The PDF keeps the
   rows and breaks sheets where the page shows them. Photos added before v0.078 keep working this way.
+- Annotate photos on a computer: *Annotate* in a photo's toolbar (or A in the full-screen viewer) draws arrows,
+  ellipses, rectangles, lines, pencil and marker strokes, text and numbered markers on top, with the tools, letters,
+  colors and thickness of LGA FrameRev. The original never changes; annotations show on the page, in table cells, in
+  the viewer and in the PDF, are saved as you draw (also offline) and appear live for everyone editing the page. Only
+  people who can edit the page annotate.
 - iPhone photos (HEIC) are converted to JPEG on your device when you add them to a page, so every browser
   shows them; the converter is downloaded only the first time it is needed.
 - Attach any file (PDF, zip, anything): drop or paste it, it goes to the owner's Drive and shows as a card;
@@ -123,6 +128,7 @@ In production (v0.049). What works today:
   the Drive trash, and restoring the project within Google's 30 days brings it back.
 - Keyboard in the page tree: ↑ and ↓ open the previous or next page, → and ← expand and collapse (← on a page with nothing to collapse goes to its parent page).
 - Page breaks and PDF: pages with a paper size show where each sheet starts, and *Export PDF / Print* in the page menu prints exactly those sheets. A manual page break (*Page break* in the / menu, or Ctrl+Enter, ⌘↩ on a Mac) makes what follows start on a new sheet, on screen and in the PDF.
+- Export a branch or a whole project as one PDF: *Export…* in the page menu (the page and the pages inside) or *Export project…* in the project list. It starts with a contents page that links to each page and says on which PDF page it starts, every page keeps its own paper size (in Chrome or Edge on a computer), photos keep their annotations and are scaled to their printed size, and comments can be included with names but never email addresses. Pages in the trash are never included, and a guest exports only what they can see.
 - English and Spanish: the whole interface in both languages, chosen in the account menu and saved in your account (Script is *Guion* in Spanish).
 - Available offline: mark a page (with its subpages) or a whole project from its menu, choose what to keep (large
   photos, original photos, attachments, videos) with the size of each, and it downloads everything needed to use it

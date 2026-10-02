@@ -269,6 +269,7 @@ describe('selector en el teléfono', () => {
     const sheet = document.querySelector('.project-row.opened .project-sheet')!;
     expect([...sheet.querySelectorAll('button')].map((b) => b.textContent?.trim())).toEqual([
       // "Available offline" (P.10) no aparece: jsdom no tiene Web Locks (sin ellos, la opción no se ofrece).
+      'Export project…',
       'Rename',
       'Share “Bosque Negro”…',
       'Archive',

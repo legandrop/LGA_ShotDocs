@@ -84,6 +84,8 @@ describe('exportar: las páginas', () => {
     // Las hojas de las ramas: A4, A5 horizontal, Carta, A3 horizontal, A4.
     expect(plan.find((p) => p.id === ids.get('2.1'))?.format).toEqual({ size: 'A5', landscape: true });
     expect(plan.find((p) => p.id === ids.get('4.1'))?.format).toEqual({ size: 'A3', landscape: true });
+    // La última rama es libre (como la mayoría de un proyecto real): sale en A4, como el PDF de siempre.
+    expect(plan.find((p) => p.id === ids.get('5'))?.format).toEqual({ size: 'free', landscape: false });
 
     // Una rama: sus páginas y nada más; el encabezado empieza en la raíz exportada.
     const nested = specs.find((s) => s.key.split('.').length === 3)!;
