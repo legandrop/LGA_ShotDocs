@@ -18,6 +18,7 @@ import '../i18n/lazy/editor';
 import { selectWholeBlock } from './blockHandle';
 import { headingItems } from './collapseMenus';
 import { CommentToolbarButton, paragraphVariantItems } from './EditorComments';
+import { AssistantToolbarButton } from '../assistant/AssistantButton';
 import { SCRIPT_PROP } from './editorSchema';
 import { ScriptIcon } from './icons';
 import { ImageBlockBar, useChosenImageBlock } from './MediaBar';
@@ -204,6 +205,8 @@ export function PageFormattingToolbar({ items, canComment }: { items: BlockTypeS
       )}
       {photos === 'mixed' && <PhotoSizeButtons key="photoSizeButtons" />}
       {canComment && <CommentToolbarButton key="comment" />}
+      {/* El asistente (Docs/Doc_Asistente.md, A1): sobre lo elegido. */}
+      <AssistantToolbarButton key="assistant" />
     </FormattingToolbar>
   );
 }

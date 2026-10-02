@@ -11,6 +11,29 @@ se marca sola con el primer *On-Set Report* adentro (`settings.dayReports`, sin 
 red. Pruebas con la versión publicada, sin red y en Chromium; ayuda.
 [ Reporte del día - el botón New day report, la carpeta de reportes y lo que se copia de ayer ]
 
+v0.119 :
+
+*Download all* y *Retry missing* listaban una subcarpeta por pedido: una carpeta con 500 subcarpetas eran 505 pedidos al
+portero (el diseño decía ~40 por pedido). `POST /folder/list` acepta `dirs` (hasta 40 ids; `dir` sigue igual para el
+visor y las apps viejas): una sola consulta a Drive con `or` entre padres, agrupada por padre, con el control de árbol
+de cada una, el tope de llamados a Drive (las que no entran vuelven en `later`) y el mismo tope de 100 pases por
+pedido. La app toma 40 de la cola por pedido (505 pasan a 18); si el portero es anterior, o un pedido falla a mitad,
+lista de a una sin perder nada. Además el portero conserva el ZWJ de los emojis compuestos (una familia en el nombre de
+un archivo o carpeta) con la misma regla que la app; una prueba compara las dos.
+[ Carpetas - el portero lista varias subcarpetas por pedido y conserva el ZWJ; Download all usa 40 por pedido ]
+
+v0.118 :
+
+No había asistente (P.24, entrega A1 de `Doc_Asistente.md`). Menú de la cuenta → *Assistant…*: Anthropic, OpenAI,
+Gemini o uno compatible (OpenRouter, Ollama), la clave cifrada solo en el dispositivo y solo para la dirección con que
+se guardó. Sobre lo elegido (Ctrl/⌘+Alt+J, la barra o el menú de la página): *Fix*, *Improve*, *Shorter*, *Translate
+to…* y *Ask…*, directo del navegador al proveedor. La vista previa marca por palabras; *Apply* reemplaza solo lo que
+cambió en un paso de deshacer y no aplica si el texto cambió mientras pensaba. Fotos, links y bloques viajan como marcas
+que tienen que volver bien cerradas; aplicar pide Editar. Tras la auditoría: la CSP de `public/_headers` deja el
+selector de carpetas de Google, los modelos que razonan tienen margen de tokens, 20 000 caracteres por pedido y el foco
+vuelve al panel. Migración `assistant_policy` (de fábrica `on`), sin aplicar.
+[ Asistente A1 - corregir, mejorar, acortar y traducir lo elegido con la clave de cada uno, vista previa y aplicar con deshacer ]
+
 v0.117 :
 
 No había plantillas: cada reporte o ficha de plano se armaba a mano (P.23, entregas 0 y 1 de `Doc_Plantillas.md`).

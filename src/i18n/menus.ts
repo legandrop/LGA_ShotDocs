@@ -19,6 +19,7 @@ export const menus = {
   },
   'pageMenu.collapseAll': { en: "Collapse all", es: "Colapsar todo" },
   'pageMenu.history': { en: "Version history", es: "Historial de versiones" },
+  'pageMenu.assistant': { en: "Assistant", es: "Asistente" },
   // Las plantillas (Docs/Doc_Plantillas.md, 4.1): la ventana se baja con el editor.
   'pageMenu.applyTemplate': { en: "Apply template…", es: "Aplicar plantilla…" },
   'pageMenu.applyTemplateEmpty': { en: "Only on an empty page", es: "Solo en una página vacía" },
@@ -76,6 +77,12 @@ export const menus = {
   'account.signOutUnsaved': {
     en: "Some of your latest edits are not saved on this device yet. Wait until the red warning goes away, then sign out.",
     es: "Algunos de tus últimos cambios todavía no se guardaron en este dispositivo. Esperá a que se vaya el aviso rojo y después cerrá la sesión.",
+  },
+  'account.assistant': { en: "Assistant…", es: "Asistente…" },
+  'account.forgetAssistantKey': { en: "Also forget my assistant key on this device", es: "Olvidar también mi clave del asistente en este dispositivo" },
+  'account.forgetAssistantKeyHint': {
+    en: "On a shared computer, check it: otherwise whoever uses this browser next could use your key.",
+    es: "En una computadora compartida, tildala: si no, quien use este navegador después podría usar tu clave.",
   },
   'account.signOutPending': {
     en: { one: "{count} change is not uploaded yet. It stays saved on this device and uploads the next time you sign in with this account. Sign out anyway?", other: "{count} changes are not uploaded yet. They stay saved on this device and upload the next time you sign in with this account. Sign out anyway?" },
