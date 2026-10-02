@@ -529,7 +529,7 @@ function ReplaceProgressHost() {
   if (!progress || search.isOpen()) return null;
   return (
     <div className="notice replace-progress-bar" role="status">
-      <span>{tr(progress.kind === 'undo' ? 'replace.barUndo' : 'replace.bar', { done: progress.done, total: progress.total })}</span>
+      <span>{tr(progress.kind === 'undo' ? 'replace.barUndo' : progress.kind === 'redo' ? 'replace.barRedo' : 'replace.bar', { done: progress.done, total: progress.total })}</span>
       {progress.kind === 'replace' && (
         <button className="link" onClick={() => session.engine.stop()}>
           {tr('replace.barStop')}

@@ -7,7 +7,7 @@ import { usePermissions, useSyncStatus, useTree } from '../services';
 import { CloseIcon, PageIcon } from './icons';
 import { notify } from './notice';
 import type { ResultRequest } from './projectSearchUi';
-import { useReplaceSession, type ReplaceSession } from './replaceUi';
+import { undoReplace, useReplaceSession, type ReplaceSession } from './replaceUi';
 
 // Reemplazar en todo el proyecto (Docs/Doc_Buscar.md, "Reemplazar en el proyecto (diseño)" y "Cómo quedó (entrega
 // 3)"): el renglón del reemplazo (campo, *Aa*, palabra entera, *Replace all*), la lista de cambios por página con
@@ -75,18 +75,17 @@ export function reportRun(session: ReplaceSession, result: RunResult): void {
   const notTouched = Object.values(result.blocked).reduce((n, v) => n + (v ?? 0), 0);
   if (notTouched > 0) parts.push(t('replace.pagesSkipped', { count: notTouched }));
   const opId = result.opId;
+  // Recién reemplazado: ⌘Z en el panel lo deshace hasta que se escriba en un campo (DH9).
+  if (opId && result.replaced > 0) session.arm(opId);
   notify(parts.join(' · '), opId && result.replaced > 0 ? { label: t('replace.undo'), run: () => void undoOp(session, opId) } : undefined);
 }
 
-/** Deshace un reemplazo y avisa cómo quedó. */
-export async function undoOp(session: ReplaceSession, opId: string): Promise<UndoResult> {
-  const result = await session.engine.undo(opId);
-  const parts = [t('replace.undone', { count: result.undone })];
-  if (result.changed > 0) parts.push(t('replace.undoChanged', { count: result.changed }));
-  if (result.remaining > 0) parts.push(t('replace.undoRemaining', { count: result.remaining }));
-  if (result.unsaved) parts.push(t('replace.unsaved'));
-  notify(parts.join(' · '));
-  return result;
+/**
+ * Deshace un reemplazo y avisa cómo quedó: si es lo último que hiciste, como ⌘Z (se puede rehacer); si no, fuera de
+ * orden (DH10). Ver `undoReplace` (replaceUi.ts).
+ */
+export function undoOp(session: ReplaceSession, opId: string): Promise<UndoResult> {
+  return undoReplace(session, opId);
 }
 
 interface Props {
@@ -356,7 +355,10 @@ export function ReplaceResults({ index, projectId, searched, indexRevision, onGo
         {progress && (
           <div className="replace-progress" role="status">
             <span>
-              {tr(progress.kind === 'undo' ? 'replace.undoing' : 'replace.progress', { done: progress.done, total: progress.total })}
+              {tr(progress.kind === 'undo' ? 'replace.undoing' : progress.kind === 'redo' ? 'replace.redoing' : 'replace.progress', {
+                done: progress.done,
+                total: progress.total,
+              })}
             </span>
             {progress.kind === 'replace' && (
               <button className="link" onClick={() => engine.stop()}>

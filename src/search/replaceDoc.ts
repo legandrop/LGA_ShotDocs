@@ -402,6 +402,57 @@ export function planUndo(doc: Y.Doc, records: EditRecord[]): { outcomes: UndoOut
   };
 }
 
+/** Cómo quedó rehacer un cambio: hecho, ya estaba hecho (lo nuevo sigue ahí) u otro cambió lo de antes. */
+export type RedoOutcome = 'redone' | 'already' | 'changed';
+
+/**
+ * Rehacer con las anclas (Docs/Doc_Deshacer.md, 3.3; el espejo de `undoStep`): vuelve a poner lo nuevo solo donde entre
+ * las anclas sigue exactamente lo de antes (lo que dejó el deshacer). Lo de antes nunca está vacío (una coincidencia
+ * tiene al menos una letra), así que no hace falta mirar los vecinos como al deshacer un borrado.
+ */
+function redoStep(doc: Y.Doc, record: EditRecord): { outcome: RedoOutcome; run?: () => void } {
+  let left: Y.AbsolutePosition | null;
+  let right: Y.AbsolutePosition | null;
+  try {
+    left = Y.createAbsolutePositionFromRelativePosition(Y.createRelativePositionFromJSON(record.left), doc);
+    right = Y.createAbsolutePositionFromRelativePosition(Y.createRelativePositionFromJSON(record.right), doc);
+  } catch {
+    return { outcome: 'changed' };
+  }
+  if (!left || !right || left.type !== right.type || !(left.type instanceof Y.XmlText) || left.type._item?.deleted) return { outcome: 'changed' };
+  const t = left.type;
+  const a = left.index;
+  const b = right.index;
+  if (b < a) return { outcome: 'changed' };
+  const span = runsBetween(deltaOf(t), a, b);
+  if (record.oldRuns.length === 0 || !sameRuns(span, record.oldRuns)) {
+    const isNew = record.newRuns.length > 0 ? sameRuns(span, record.newRuns) : a === b;
+    return { outcome: isNew ? 'already' : 'changed' };
+  }
+  return {
+    outcome: 'redone',
+    run: () => {
+      t.delete(a, b - a);
+      let at = a;
+      for (const run of record.newRuns) {
+        t.insert(at, run.text, { ...run.attrs });
+        at += run.text.length;
+      }
+    },
+  };
+}
+
+/** Mira qué se puede rehacer (sin escribir) y devuelve, por cambio, el resultado y una función que lo escribe. */
+export function planRedo(doc: Y.Doc, records: EditRecord[]): { outcomes: RedoOutcome[]; apply: () => void } {
+  const steps = records.map((r) => redoStep(doc, r));
+  return {
+    outcomes: steps.map((s) => s.outcome),
+    apply: () => {
+      for (let i = steps.length - 1; i >= 0; i--) steps[i].run?.();
+    },
+  };
+}
+
 // --- Lo escondido ---------------------------------------------------------------------------------------------
 
 /** El mapa de la página con lo colapsado para todos (el mismo nombre que `SHARED_COLLAPSE_MAP` de collapseEditor.ts). */

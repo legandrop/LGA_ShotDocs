@@ -10,6 +10,7 @@ import {
   applyPlan,
   hiddenBlocks,
   planCount,
+  planRedo,
   planReplace,
   planUndo,
   recordsOf,
@@ -80,10 +81,34 @@ export interface ReplaceMeta {
   keys(prefix: string): Promise<string[]>;
 }
 
+/**
+ * La línea de tiempo de deshacer (ui/undoTimeline.ts), vista desde el reemplazo (Docs/Doc_Deshacer.md, 3.3; entrega 2).
+ * En las páginas con historia en la sesión, lo escrito entra como un paso de la pila de Yjs de la página y se deshace
+ * y rehace con ella (`popReplace`); en las demás (`none`), con las anclas del registro.
+ */
+export interface ReplaceHistory {
+  beginReplace(opId: string, projectId: string): void;
+  /** Corre `write` una vez; devuelve si entró en la pila de la página. */
+  writeReplace(pageId: string, doc: Y.Doc, opId: string, origin: symbol, write: () => void): boolean;
+  endReplace(opId: string, saved: SavedOp | null): void;
+  popReplace(pageId: string, doc: Y.Doc, opId: string, kind: 'undo' | 'redo', keep: boolean): 'done' | 'nothing' | 'failed' | 'none';
+  settleReplace(opId: string, kind: 'undo' | 'redo', pages: string[], keep: boolean): void;
+  replaceSaved(opId: string): unknown;
+  replacePages(opId: string): string[];
+}
+
+/** Lo que se guarda en memoria de un reemplazo para rehacerlo (y para deshacerlo si ya no está en `meta`). */
+export interface SavedOp {
+  header: OpHeader;
+  records: Record<string, EditRecord[]>;
+}
+
 export interface ReplaceDeps {
   tree: ReplaceTree;
   docs: ReplaceDocs;
   meta: ReplaceMeta;
+  /** La línea de tiempo de deshacer (sin ella, como antes: solo las anclas y sin rehacer). */
+  history?: ReplaceHistory;
   /** Los permisos de la persona ahora (se piden cada vez: pueden cambiar mientras corre). */
   perms: () => { known: boolean; canEditPage(pageId: string): boolean };
   online: () => boolean;
@@ -183,6 +208,8 @@ export interface UndoResult {
   undone: number;
   changed: number;
   notApplied: number;
+  /** Páginas donde se deshizo algo. */
+  pages: number;
   /** Páginas que hoy no se pudieron tocar (quedan en el registro: *Undo the rest*). */
   remaining: number;
   unsaved: boolean;
@@ -190,8 +217,18 @@ export interface UndoResult {
   changedAt: { pageId: string; blockId: string }[];
 }
 
+export interface RedoResult {
+  redone: number;
+  changed: number;
+  /** Páginas donde se rehízo. */
+  pages: number;
+  /** Páginas que hoy no se pudieron tocar. */
+  remaining: number;
+  unsaved: boolean;
+}
+
 export interface Progress {
-  kind: 'replace' | 'undo';
+  kind: 'replace' | 'undo' | 'redo';
   done: number;
   total: number;
 }
@@ -378,6 +415,10 @@ export class ProjectReplace {
     const block = (reason: PageBlock) => {
       result.blocked[reason] = (result.blocked[reason] ?? 0) + 1;
     };
+    const history = this.deps.history;
+    // Lo escrito en cada página (para rehacer y para deshacer si el registro ya no está en `meta`).
+    const written: Record<string, EditRecord[]> = {};
+    let begun = false;
     try {
       await meta.put(headerKey(opId), header);
       result.opId = opId;
@@ -420,7 +461,15 @@ export class ProjectReplace {
                 // Otra vez, sin esperar nada entre esto y escribir: el editor abierto pudo escribir mientras tanto.
                 const again = planOf();
                 if (sameRecords(recordsOf(again), records)) {
-                  docs.applyLocal(pageId, doc, ORIGIN_REPLACE, () => applyPlan(again));
+                  const write = () => docs.applyLocal(pageId, doc, ORIGIN_REPLACE, () => applyPlan(again));
+                  if (history) {
+                    // Algo nuevo: lo que había para rehacer se va (con el primer cambio, no antes).
+                    if (!begun) history.beginReplace(opId, request.projectId);
+                    begun = true;
+                    // En una página con historia en la sesión, entra además en su pila de Yjs (Doc_Deshacer.md, 3.3).
+                    history.writeReplace(pageId, doc, opId, ORIGIN_REPLACE, write);
+                  } else write();
+                  written[pageId] = records;
                   const hidden = again.matches.filter((m) => m.hidden && !m.skip).length;
                   return { count: planCount(again), written: true, hidden };
                 }
@@ -470,6 +519,8 @@ export class ProjectReplace {
         await this.prune(request.projectId, opId, header.scope ?? 'all');
       }
     } finally {
+      // Entra en la línea de tiempo como un paso (si cambió algo).
+      if (begun) history?.endReplace(opId, result.opId && result.replaced > 0 ? { header: { ...header, pages: [...header.pages] }, records: written } : null);
       this.progress = null;
       this.current = null;
       this.stopRequested = false;
@@ -480,29 +531,53 @@ export class ProjectReplace {
 
   // --- Deshacer ----------------------------------------------------------------------------------------------
 
-  async undo(opId: string): Promise<UndoResult> {
-    const result: UndoResult = { undone: 0, changed: 0, notApplied: 0, remaining: 0, unsaved: false, changedAt: [] };
+  /**
+   * Deshace un reemplazo. `inOrder`: es el próximo ⌘Z de la línea de tiempo (⌘Z, o *Undo* cuando es lo último): queda
+   * para rehacer. Si no (*Undo* del aviso o del panel cuando ya no es lo último, DH10), en las páginas con historia se
+   * deshace igual su paso de la pila (aunque no sea el de arriba) y no queda para rehacer.
+   */
+  async undo(opId: string, { inOrder = false }: { inOrder?: boolean } = {}): Promise<UndoResult> {
+    const result: UndoResult = { undone: 0, changed: 0, notApplied: 0, pages: 0, remaining: 0, unsaved: false, changedAt: [] };
     if (this.progress) return result;
-    const { docs, meta } = this.deps;
-    const header = (await meta.get(headerKey(opId))) as OpHeader | undefined;
+    const { docs, meta, history } = this.deps;
+    const stored = (await meta.get(headerKey(opId))) as OpHeader | undefined;
+    // Uno que ya no está en `meta` (quedó fuera de los últimos 5) pero sigue en la línea de tiempo: con lo guardado ahí.
+    const saved = stored ? null : ((history?.replaceSaved(opId) ?? null) as SavedOp | null);
+    const header = stored ?? saved?.header;
     if (!header) return result;
+    const undonePages: string[] = [];
     this.stopRequested = false;
     this.progress = { kind: 'undo', done: 0, total: header.pages.length };
     this.current = opId;
     this.changed();
     try {
       for (const pageId of header.pages) {
-        const record = (await meta.get(pageKey(opId, pageId))) as PageRecord | undefined;
+        const record = saved
+          ? saved.records[pageId] && { pageId, edits: saved.records[pageId], applied: true }
+          : ((await meta.get(pageKey(opId, pageId))) as PageRecord | undefined);
         if (record) {
           const block = await this.blockOf(pageId, header.projectId);
           if (block) {
             result.remaining++;
           } else {
-            let outcome: { block?: PageBlock; written?: boolean };
+            let outcome: { block?: PageBlock; written?: boolean; undone?: boolean };
             try {
               outcome = await docs.edit(pageId, async (doc) => {
                 const late = (await this.blockOf(pageId, header.projectId)) ?? this.docBlock(pageId, doc);
                 if (late) return { block: late };
+                // Con historia en la sesión: el paso de su pila de Yjs (vuelven las mismas letras; Doc_Deshacer.md, 3.3).
+                const via = history?.popReplace(pageId, doc, opId, 'undo', inOrder) ?? 'none';
+                if (via !== 'none') {
+                  const n = record.edits.reduce((s, e) => s + e.count, 0);
+                  if (via === 'done') {
+                    result.undone += n;
+                    return { written: true, undone: true };
+                  }
+                  // Nada que deshacer ahí (otro ya lo cambió todo) o Yjs no pudo: queda como está.
+                  result.changed += n;
+                  for (const e of record.edits) result.changedAt.push({ pageId, blockId: e.blockId });
+                  return {};
+                }
                 const undo = planUndo(doc, record.edits);
                 undo.outcomes.forEach((o, i) => {
                   const n = record.edits[i].count;
@@ -515,7 +590,7 @@ export class ProjectReplace {
                 });
                 if (!undo.outcomes.includes('undone')) return {};
                 docs.applyLocal(pageId, doc, ORIGIN_REPLACE, undo.apply);
-                return { written: true };
+                return { written: true, undone: true };
               });
             } catch (err) {
               console.warn(`Undo replace failed on page ${pageId}`, err);
@@ -524,6 +599,10 @@ export class ProjectReplace {
             if (outcome.block) {
               result.remaining++;
             } else {
+              if (outcome.undone) {
+                undonePages.push(pageId);
+                result.pages++;
+              }
               if (outcome.written) {
                 await docs.flush(pageId);
                 if (!docs.isSaved(pageId)) {
@@ -545,6 +624,95 @@ export class ProjectReplace {
       else await meta.put(headerKey(opId), { ...header, status: 'partial' } satisfies OpHeader);
       result.remaining = Math.max(result.remaining, left);
     } finally {
+      // En orden: pasa a rehacer con las páginas deshechas. Fuera de orden: sale de la línea de tiempo.
+      history?.settleReplace(opId, 'undo', undonePages, inOrder);
+      this.progress = null;
+      this.current = null;
+      this.changed();
+    }
+    return result;
+  }
+
+  /**
+   * Rehace un reemplazo deshecho con ⌘Z (⌘⇧Z o *Redo* del aviso): en las páginas con historia, la pila de Yjs; en las
+   * demás, `planRedo` (lo nuevo vuelve solo donde entre las anclas sigue exactamente lo de antes). Vuelve a escribir su
+   * registro en `meta`, igual que al reemplazar.
+   */
+  async redo(opId: string): Promise<RedoResult> {
+    const result: RedoResult = { redone: 0, changed: 0, pages: 0, remaining: 0, unsaved: false };
+    const { docs, meta, history } = this.deps;
+    const saved = (history?.replaceSaved(opId) ?? null) as SavedOp | null;
+    if (this.progress || !history || !saved) return result;
+    const { header } = saved;
+    const pages = history.replacePages(opId);
+    const redonePages: string[] = [];
+    this.stopRequested = false;
+    this.progress = { kind: 'redo', done: 0, total: pages.length };
+    this.current = opId;
+    this.changed();
+    try {
+      for (const pageId of pages) {
+        const edits = saved.records[pageId];
+        if (edits) {
+          const block = await this.blockOf(pageId, header.projectId);
+          if (block) {
+            result.remaining++;
+          } else {
+            let outcome: { block?: PageBlock; written?: boolean; redone?: boolean };
+            try {
+              outcome = await docs.edit(pageId, async (doc) => {
+                const late = (await this.blockOf(pageId, header.projectId)) ?? this.docBlock(pageId, doc);
+                if (late) return { block: late };
+                const via = history.popReplace(pageId, doc, opId, 'redo', true);
+                if (via !== 'none') {
+                  const n = edits.reduce((s, e) => s + e.count, 0);
+                  if (via === 'done') {
+                    result.redone += n;
+                    return { written: true, redone: true };
+                  }
+                  result.changed += n;
+                  return {};
+                }
+                const redo = planRedo(doc, edits);
+                redo.outcomes.forEach((o, i) => {
+                  if (o === 'changed') result.changed += edits[i].count;
+                  else result.redone += edits[i].count;
+                });
+                // Lo que ya estaba hecho cuenta como hecho (su registro vuelve igual).
+                if (redo.outcomes.every((o) => o === 'changed')) return {};
+                if (!redo.outcomes.includes('redone')) return { redone: true };
+                docs.applyLocal(pageId, doc, ORIGIN_REPLACE, redo.apply);
+                return { written: true, redone: true };
+              });
+            } catch (err) {
+              console.warn(`Redo replace failed on page ${pageId}`, err);
+              outcome = { block: 'error' };
+            }
+            if (outcome.block) {
+              result.remaining++;
+            } else if (outcome.redone) {
+              if (outcome.written) {
+                await docs.flush(pageId);
+                if (!docs.isSaved(pageId)) {
+                  result.unsaved = true;
+                  result.remaining++;
+                  break;
+                }
+              }
+              await meta.put(pageKey(opId, pageId), { pageId, edits, applied: true } satisfies PageRecord);
+              redonePages.push(pageId);
+              result.pages++;
+            }
+          }
+        }
+        this.progress = { kind: 'redo', done: this.progress.done + 1, total: this.progress.total };
+        this.changed();
+        await nextTask();
+      }
+      // El encabezado vuelve (con *Undo* en el panel), con las páginas de siempre: las que no tienen su registro se saltean.
+      if (redonePages.length > 0) await meta.put(headerKey(opId), { ...header, status: header.status === 'running' ? 'stopped' : header.status } satisfies OpHeader);
+    } finally {
+      history.settleReplace(opId, 'redo', redonePages, true);
       this.progress = null;
       this.current = null;
       this.changed();

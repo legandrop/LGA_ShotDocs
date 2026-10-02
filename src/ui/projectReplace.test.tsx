@@ -258,9 +258,15 @@ describe('reemplazar', () => {
     const undo = [...document.querySelectorAll<HTMLButtonElement>('.notice button')].find((x) => x.textContent === 'Undo')!;
     act(() => undo.click());
     await until(async () => (await textOf(d, b)).includes('cámaras'), 'deshecho');
-    await until(() => document.querySelector('.notice')?.textContent?.includes('Undid 4 replacements'), 'el aviso de deshacer');
+    // Es lo último que hiciste: como ⌘Z (P.26, entrega 2), con *Redo*.
+    await until(() => document.querySelector('.notice')?.textContent?.includes('Undid “camara” → “Camera” in 2 pages'), 'el aviso de deshacer');
     expect(await textOf(d, a)).toBe('|Planta|la cámara escondida|Afuera|otra cámara a la vista|');
     expect(replaceSession(services(d)).engine.isRunning()).toBe(false);
+    const redo = [...document.querySelectorAll<HTMLButtonElement>('.notice button')].find((x) => x.textContent === 'Redo')!;
+    act(() => redo.click());
+    await until(async () => (await textOf(d, b)) === '|sin nada|dos Cameras en B y una Camera más|', 'rehecho');
+    await until(() => document.querySelector('.notice')?.textContent?.includes('Redid “camara” → “Camera” in 2 pages'), 'el aviso de rehacer');
+    expect(await textOf(d, a)).toBe('|Planta|la Camera escondida|Afuera|otra Camera a la vista|');
   });
 
   it('reemplazar una y dejar otra afuera (por sus caracteres)', async () => {
