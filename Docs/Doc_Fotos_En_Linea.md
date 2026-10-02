@@ -925,10 +925,46 @@ impresión), `inlinePhotoCreate.test.ts` y `codaInlinePhotos.test.ts` (las celda
     `<img>` de las celdas a fotos en línea con `w = 0`, guardando el archivo como "Copy image".
   - O5: la papelera de archivos al borrar una fila o columna con fotos no se pudo comprobar sin la base real
     (`mediaIdsInDoc` deja de contarlas y Ctrl+Z las vuelve a contar; la desvinculación es del motor, sin cambios).
-- El alto de la miniatura es fijo (96 px); no hay opción para cambiarlo.
+- El alto de la miniatura era fijo (96 px); desde v0.125 se elige por tabla (ver "Alto de las miniaturas (D27 → B)").
 - El texto pegado a una miniatura queda a 8 px (el espacio de la foto) además de su espacio.
 - La barra de la foto, como en un renglón, puede quedar sobre la fila de arriba (O5).
 - Sin probar en Safari ni en el iPhone de verdad (el teléfono, emulado en Chromium).
+
+## Alto de las miniaturas (D27 → B)
+
+**D27 cambiada por Lega (2026-10-02): B**, poder elegir el alto de la miniatura (antes, A: fijo en 96 px). Vio las tres
+opciones armadas con el editor real (el ejemplo con A, B a 64 y 160 px, C y su variante) y eligió B.
+
+### Diseño (decisiones D96 a D99)
+
+- **D96 · Dónde se elige: por tabla.** Un alto para todas las miniaturas de esa tabla, desde la barra de la tabla (los
+  puntos del bloque: la barra de formato con la tabla entera elegida) y desde la barra de una foto en una celda
+  (*Thumbnail size: Small / Medium / Large*). Por qué: una tabla de referencias se lee pareja, fila por fila; un alto por
+  foto daría filas desparejas y un clic por foto. Una foto agrandada a mano (con ancho propio, `w > 0`: el tirador o
+  *Full cell width*) conserva su tamaño: es una parte de la celda, no una miniatura.
+- **D97 · Qué altos: 64, 96 y 160 px** (*Small*, *Medium*, *Large*), sin tirador libre. Tres alcanzan para una tabla
+  (64: una lista larga de planos; 96: lo de hoy; 160: referencias para mirar), son fáciles de nombrar en la barra y se
+  imprimen parejos; un alto libre por tabla obligaría a un tirador nuevo y a medidas que no se repiten entre tablas.
+- **D98 · De fábrica, 96** (como hasta ahora). Se guarda como **propiedad de la tabla** que ya existe
+  (`thumbHeight`, en px, en el nodo `table`), no un tipo nuevo. Una versión vieja no la conoce: abre la página sin
+  escribir nada y muestra 96; si edita esa tabla, y-prosemirror le saca la propiedad y la tabla vuelve a 96, sin perder
+  ninguna foto ni texto (lo prueba el editor publicado, `fixtures/editorSchemaMain.ts`). Un valor que no sea 64, 96 o 160
+  (de una versión futura o puesto a mano) se muestra como 96.
+- **D99 · En el PDF, el mismo alto que en pantalla.** La vista de impresión (*Export PDF / Print*) y el PDF de exportar
+  (`src/export`, que arma la misma vista) leen el alto de la miniatura de la pantalla (`printView.ts`,
+  `inlineNaturalWidth`), así que una tabla en *Large* sale con miniaturas de 160 px en la misma escala con que hoy salen
+  las de 96. No hace falta tocar `src/export`.
+
+### Cómo se hace
+
+- **El esquema** (`editorSchema.ts`): la tabla de BlockNote con una propiedad más. BlockNote no crea el atributo del
+  nodo desde la lista de propiedades de la tabla (el color del texto lo agrega una extensión aparte), así que el atributo
+  va con una extensión global para `table`, como el color: se lee y se escribe en el HTML como `data-thumb-height`
+  (copiar y pegar una tabla dentro de la app lo conserva) y solo cuando no es 96.
+- **Cómo se ve:** el nodo de la tabla de BlockNote (`TableView`) no vuelve a dibujar sus atributos al cambiar (solo el
+  color); por eso el alto llega a la pantalla con una decoración del nodo (`data-thumb-height` sobre el bloque), que
+  ProseMirror sí actualiza, y `styles.css` cambia `--sd-cell-photo-h` en esa tabla.
+- **Cambiarlo** es un solo paso de deshacer y no toca las fotos (solo el atributo de la tabla).
 
 ## Cámara: sacar una foto o filmar desde la página (P.25, v0.110)
 
