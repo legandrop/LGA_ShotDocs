@@ -489,6 +489,26 @@ se guarda como hueco: es una copia de algo que ya está en las filas, no texto q
 - **`src/ui/RemovedWritingBanner.test.tsx`:** el aviso aparece con la página abierta, muestra, copia (y sin
   portapapeles deja el texto a la vista) y al cerrarlo se borra lo mostrado.
 
+## Bajar con snapshots (compactar, B.9)
+
+Entrega 1 de `Doc_Compactar.md` (v0.127): la app sabe bajar snapshots, nadie los arma todavía.
+
+- **El pedido.** `PageDocs.pullPage` baja con `remote.pullContent`: con los snapshots prendidos y la base en la versión
+  17, `pull_page_content`; si no (apagados, una base sin la función), el mismo `pull_page_updates` de siempre. Un
+  snapshot llega como la primera fila de la respuesta, con `seq` = la última fila que junta y su `snapshotId`; para
+  `applyRemote` es un update más (lo guarda con el cursor, avanza `syncedSV` con `serverReach` y suma sus borrados a
+  `syncedDS`).
+- **Lo que se anota** (`DocState.snapshotId` y `contentEpoch`): el último snapshot aplicado y la época de contenido de
+  la página que vino en la misma respuesta, en la misma transacción que lo guardado.
+- **Un snapshot ilegible** (de una versión más nueva) no se saltea como una fila: no se guarda nada del lote, el
+  cursor no se mueve y esa página baja en filas sueltas hasta que se vuelve a abrir la app.
+- **Si se invalida** (la época del árbol o la de la respuesta es otra y el dispositivo aplicó un snapshot de esa
+  página): cursor a 0, sin `syncedSV`, `syncedDS` ni envío pendiente; la página se vuelve a bajar (Yjs no duplica) y,
+  si la persona puede escribir, vuelve a subir entera una vez. Lo guardado no se toca. El ciclo baja también las
+  páginas al día cuya época cambió.
+- Restaurar una copia (`resetForRestore`) borra también los dos campos. Las versiones anteriores de la app los
+  conservan sin mirarlos y siguen bajando con `pull_page_updates`.
+
 ## Árbol de páginas
 
 - Crear, renombrar, mover, mandar a la papelera y restaurar entran a una **cola de salida** en IndexedDB y

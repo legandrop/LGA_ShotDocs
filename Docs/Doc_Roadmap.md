@@ -518,10 +518,19 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
    castellano y las plantillas, que todavía no existen (fase 3), con su nombre en cada idioma.
 9. **Compactar en el servidor** los updates de contenido (`page_snapshots`). Toca la regla de no perder
    datos: un snapshot nunca borra nada hasta estar confirmado, con pruebas antes. **Diseño en
-   `Doc_Compactar.md`** (auditado, sin implementar): el snapshot se arma aplicando las filas en orden en un `Y.Doc`
+   `Doc_Compactar.md`** (auditado): el snapshot se arma aplicando las filas en orden en un `Y.Doc`
    sin GC (conserva lo borrado, D16), lo arma y lo comprueba el dispositivo de quien edita (D5), la base lo sirve
-   solo confirmado y válido, y `page_updates` no pierde nunca una fila (D4). Hoy no es urgente: ninguna página lo
-   necesita.
+   solo confirmado y válido, y `page_updates` no pierde nunca una fila (D4). **Entrega 1 hecha (v0.127): leer
+   snapshots** (la migración `20261019120000_compactar_leer.sql`, sin aplicar y con los snapshots apagados;
+   `pull_page_content`, la época de contenido y el reinicio de una página cuyo snapshot se invalidó). **Falta:** la
+   entrega 2 (armarlos en el dispositivo, `compact.ts`, con la prueba 1 y la del editor real) y la 3 (el script de
+   restaurar, probar de punta a punta, medir y prender `snapshot_min_version`). Hoy no es urgente: ninguna página lo
+   necesita. **De la auditoría de la entrega 1 (antes de prender):** (O1, medio-alto) al invalidar, `resetContent` de
+   `docs.ts` sube la página entera y propaga a todos el borrado de un snapshot malo: una página sin nada pendiente tiene
+   que descartar lo local y rearmarse con las filas del servidor (como `replace` de la base limpia); (O2) con snapshots
+   prendidos, que el reinicio lo decida solo la época de la respuesta, no la del árbol (hoy un árbol atrasado provoca una
+   subida entera de más); (O3) `invalidate_page_snapshot` pide `can_edit_page`: pedir `sees_deleted` como las demás; (O5)
+   al prender, subir `min_app_version` a la versión de lectura auditada en ese momento.
 
 10. **Hecho lo principal: editar a la vez sin perder texto (v0.052).** Dos parches a y-prosemirror (el editor
    que se quedaba con lo de antes y deshacía cambios de otros; dos personas en el mismo párrafo vacío), la

@@ -175,6 +175,11 @@ export class LinkRemote extends SupabaseRemote {
     return (rows ?? []).map((r) => ({ seq: Number(r.seq), data: fromBase64(r.update) }));
   }
 
+  /** El visitante baja siempre por `plink_pull_page` (la base limpia), nunca snapshots (Docs/Doc_Compactar.md, sección 5). */
+  override async pullContent(pageId: string, afterSeq: number): Promise<RemoteUpdate[]> {
+    return this.pullUpdates(pageId, afterSeq);
+  }
+
   override async fetchMyAccess(): Promise<AccessSnapshot | null> {
     const info = await this.open();
     // Como un invitado con Comentar sobre la página del link (P4): la app oculta todo lo que no es para él.
