@@ -406,7 +406,8 @@ export class MentionsInbox {
     return this.candidates.has(pageId);
   }
 
-  private refreshCandidates(pageId: string): Promise<void> {
+  /** Pide la lista del `@` de la página ya (si hay red); la que esté en curso se comparte. */
+  refreshCandidates(pageId: string): Promise<void> {
     if (this.options.online && !this.options.online()) return Promise.resolve();
     let running = this.fetching.get(pageId);
     if (running) return running;
