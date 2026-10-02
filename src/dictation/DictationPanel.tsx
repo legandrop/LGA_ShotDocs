@@ -359,8 +359,7 @@ export function DictationPanel({ pageId }: { pageId: string }) {
     }
     // Deshecho: la nota vuelve al campo y lo que había agregado a *Couldn't place* sale (no se pierde nada).
     const nextPending = pending.filter((p) => !phase.added.includes(p.id));
-    const nextText = text.trim() ? `${phase.note}
-${text}` : phase.note;
+    const nextText = text.trim() ? `${phase.note}\n${text}` : phase.note;
     setApplied('');
     // Lo deshecho ya no es una corrección posible: sale de lo reciente.
     recentByPage.set(pageId, (recentByPage.get(pageId) ?? []).filter((r) => r.at !== phase.at));
