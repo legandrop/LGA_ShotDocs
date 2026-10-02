@@ -210,7 +210,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
       <FindBar editor={findEditor} editable={opening.complete && canEdit} complete={opening.complete} pageId={pageId} />
       {!opening.complete && (
         <p className="muted editor-missing">
-          {status.online ? tr('editor.missingOnline') : tr('editor.missingOffline')}
+          {status.outdated ? tr('editor.missingOutdated') : status.online ? tr('editor.missingOnline') : tr('editor.missingOffline')}
         </p>
       )}
       {!canEdit && perms.known && (

@@ -8,7 +8,9 @@ red y rechazados), `restore.test.ts` (la generación al restaurar una copia y la
 workspace, y el aviso de base vieja), `src/workspace.test.ts` (los nombres de lo guardado en el
 dispositivo), `src/workspaces.test.ts` (la lista de workspaces del dispositivo, los nombres de Wanka, los
 links de invitación, cambiar y quitar) con sus pantallas montadas en `src/ui/workspaces.test.tsx`,
-`src/ui/unknownContent.test.ts` (la guarda del editor contra lo desconocido),
+`src/ui/unknownContent.test.ts` (la guarda del editor contra lo desconocido), `offlineLargo.test.ts` (semanas
+sin red con la v0.090 y la versión mínima, ver "Volver después de mucho tiempo sin red") con
+`src/ui/appUpdate.test.ts`,
 `src/media/queue.test.ts` (la cola de fotos y videos), `src/ui/media.test.ts` (`sdmedia://` con el
 editor de la versión publicada) y `team.test.ts` (permisos en el dispositivo, solo lectura, rechazos,
 invitaciones, la señal de que sacaron a alguien y el archivo con lo que no se subió), con las pantallas
@@ -936,7 +938,8 @@ Desde v0.021 hay dos protecciones para poder sumar tipos de bloque (y marcas) nu
 - **La versión mínima del workspace** (`workspace_settings.min_app_version`). Cada subida de contenido
   lleva la versión de la app, y el servidor rechaza las de una versión menor (también las de versiones
   anteriores a v0.021, que no mandan versión). La app vieja lo ve, deja de subir contenido (queda en el
-  dispositivo), y pide actualizar; al actualizar, sube todo. Desde v0.090 frena también la cola de archivos (ver
+  dispositivo), y pide actualizar; al actualizar, sube todo. Desde v0.0XX tampoco sube el árbol ni los comentarios ni
+  baja contenido, y se actualiza sola (ver "Volver después de mucho tiempo sin red"). Desde v0.090 frena también la cola de archivos (ver
   abajo, "La versión mínima y los archivos").
 
 **Regla para un bloque nuevo:** antes de publicar la versión que lo trae, subir `min_app_version` a la
@@ -973,6 +976,61 @@ abrió antes de la migración (usa la función de siempre por 10 minutos) y la b
 el pedido una vez con versión. El portero no recibe la versión: una versión vieja con un archivo ya registrado puede terminar de subir su
 original, que no cambia nada de lo que la base sabe del archivo. Un HEIC que una versión anterior a v0.075 guardó
 sin la marca de convertir se registra tal cual cuando la app se actualiza: el freno lo demora, no lo convierte.
+
+## Volver después de mucho tiempo sin red
+
+El caso: alguien trabaja semanas sin red con una versión de la app (un rodaje) y mientras tanto se publican otras,
+quizás con `min_app_version` subida. Qué pasa, paso a paso:
+
+1. **Sin red.** Todo queda en el dispositivo: el contenido en IndexedDB (`docUpdates` y la marca de sin subir), los
+   cambios del árbol en su cola (`ops`), las fotos en `<base local>:media` y los comentarios en su base. Nada vence con
+   el tiempo, y cerrar la app (o que el sistema la mate) no pierde nada: al abrirla sigue igual.
+2. **Vuelve la red con la versión vieja.** El primer ciclo lee los ajustes del workspace antes que nada. Si la mínima es
+   más alta que la versión, la app queda "vieja" (`status.outdated`, el aviso *Update the app* con lo pendiente):
+   - **no sale nada del dispositivo:** ni el árbol, ni el contenido, ni las imágenes, ni las fotos y videos, ni los
+     comentarios; todo sigue en sus colas, contado como pendiente y sin marcarse como error;
+   - **no se baja contenido** (sí el árbol): lo escrito con una versión más nueva puede tener una propiedad que el
+     editor viejo no conoce y que sacaría al editar ese bloque, y ese cambio saldría al actualizar. Las páginas que
+     nadie más cambió siguen editables; las que cambiaron en el servidor se abren en solo lectura, con un aviso de
+     actualizar (*This page has newer changes…*), como una página a medio bajar. Si una página se abre antes de que
+     termine el primer ciclo, la app pregunta la versión antes de bajarla (`prefetchPage`).
+   Sin la mínima subida, la versión vieja sube todo directo, como cualquier vuelta de red.
+3. **La app se actualiza.** El navegador busca el service worker nuevo al abrir la app y, en Chromium, también unos
+   segundos después de volver la red (medido con la app instalada en un Chromium sin interfaz). Además, con la app vieja
+   para el workspace, la app se lo pide (`registration.update()`) apenas lo sabe y al volver la red, y cuando la
+   versión nueva toma el control **recarga sola una vez**, con las protecciones de la recarga por versión nueva
+   (espera a que lo escrito esté guardado, nunca encima de un comentario sin mandar ni en bucle). *Update now* espera
+   a que la versión nueva tome el control antes de recargar: recargar antes abría otra vez la vieja desde la caché.
+   Código: `src/ui/appUpdate.ts`.
+4. **La versión nueva abre la misma base local** (mismo nombre y misma versión de IndexedDB; lo nuevo de cada versión
+   son campos opcionales, ver "La misma base con una versión anterior de la app") y sube todo en el orden de siempre:
+   el árbol (una página existe antes que su contenido), el contenido (la diferencia con `syncedSV` y los borrados que
+   faltan), las fotos (registro, miniatura, original al Drive y usos) y los comentarios. Lo de los demás se baja y se
+   fusiona con Yjs: nada de los dos se pierde.
+
+**Las versiones anteriores a esta** (por ejemplo la v0.090) frenan solo el contenido y los archivos: con la mínima
+subida todavía suben los cambios del árbol y los comentarios (la base no los frena por versión) y bajan el contenido
+nuevo. No se pierde nada propio; lo único que puede pasar es que, si se edita con esa versión un bloque que otra más
+nueva marcó con una propiedad nueva, la propiedad se pierda (el texto no), que es lo que acepta la regla de "Cambios
+en el editor".
+
+**Lo que garantiza la prueba** (`src/sync/offlineLargo.test.ts`, con la sincronización de la v0.090 copiada sin tocar
+en `fixtures/v090/`: motor, contenido, árbol, base local e imágenes; las colas de fotos y de comentarios son las de hoy,
+cuya base no cambió de versión desde la v0.090): dos semanas de reloj simulado, A con la v0.090 y sin red escribe,
+borra renglones, agrega fotos, crea una página, mueve otra, renombra, comenta, intenta sincronizar sin red y el sistema
+le cierra la app; B, con la versión nueva, edita las mismas páginas y otras, crea una con foto y comenta, y se sube la
+mínima. Al volver, la v0.090 avisa, no sube contenido ni fotos y conserva todo; al actualizar (el código de hoy sobre
+la misma base) sube todo, y A, B y un dispositivo nuevo quedan iguales al servidor, con todo lo de los dos, sin nada
+pendiente ni rechazado. Lo mismo sin subir la mínima (la v0.090 sube directo). Con la versión actual que queda vieja,
+además, no sale ni se baja nada (fallaba antes de este cambio). Y variantes al azar (`OFFLINE_LARGO_SEEDS`, 6 en la
+suite; pasaron 40) con días, ediciones, borrados, agregados a un renglón, fotos, páginas nuevas, renombres, movimientos,
+cierres de la app y la mínima que sube o no. `src/ui/appUpdate.test.ts` prueba la recarga y *Update now*.
+
+**Lo que no cubre:** el service worker en Safari del iPhone (solo se midió Chromium); la conexión con Drive en modo
+Testing de Google vence a los 7 días, y entonces los originales esperan en la cola (sin perderse) hasta reconectar Drive;
+una sesión que no se pudiera renovar pide entrar de nuevo (lo del dispositivo queda en su base); y en un iPhone, Safari
+puede borrar los datos de una web **no instalada** que no se abre en 7 días: instalada no, y la app pide almacenamiento
+persistente.
 
 ## Links de Drive
 
