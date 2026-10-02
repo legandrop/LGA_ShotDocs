@@ -96,7 +96,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   renglón que ocupaba en Coda (624 px = todo el renglón); las fotos de una ficha, juntas. Medido con una copia
   parcial de ERSO contra el HTML de Coda: las mismas filas, ±1 % de ancho. Sin el recorte de Coda (101 fotos de
   ERSO). Para la importación definitiva de ERSO hay que volver a correr `--convert-only`.
-  **Entrega 5 hecha (v0.0XX): fotos en las celdas de una tabla.** Pegar, soltar, "/Image" y "Copy image" con el cursor en
+  **Entrega 5 hecha (v0.107): fotos en las celdas de una tabla.** Pegar, soltar, "/Image" y "Copy image" con el cursor en
   una celda ponen la foto en la celda, como miniatura de 96 px de alto (`w = 0`); soltar en el relleno de una celda, al
   final de su texto; la barra ofrece *Thumbnail* y *Full cell width* (D32), sin alinear; ↑ desde una celda con fotos va
   a la de arriba; imprimir las deja igual; importar de Coda deja las fotos de una celda en la celda. Sin tipos ni
@@ -264,11 +264,16 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   versiones salen de `page_updates` aplicadas en orden (sin guardar nada nuevo; cada fila ya tiene autor y hora
   puestos por la base) y restaurar es una edición por el editor que se deshace. **Entrega 1 hecha (v0.098):** la lista
   por sesión con quién y cuándo, ver una versión y restaurarla (Ctrl/⌘+Alt+Shift+H); la migración
-  `20261007120000_historial.sql` está **sin aplicar** (probada en `begin … rollback`). **Entrega 2 hecha (v0.103):**
+  `20261007120000_historial.sql`, aplicada desde v0.098. **Entrega 2 hecha (v0.103):**
   *Show changes* con lo agregado y lo borrado por persona (decoraciones, bloques rehechos apareados por id), el texto
   huérfano en su versión, el Worker con la página de respaldo, la diferencia solo de lo tocado y la lista que se
-  actualiza sola. **Falta:** aplicar la migración (con copia de seguridad), la entrega 3 (nombrar versiones, la caché
-  sin red) y medir en el iPhone. Encontrado por la prueba al azar: una versión con dos bloques del mismo id no se puede
+  actualiza sola. **Entrega 3 hecha (v0.106):** versiones con nombre (`page_versions`: nombrar, renombrar, quitar,
+  *Only named versions*, *Restored from…*) y la caché `<base local>:history` con el historial sin red. Migración
+  `20261011120000_versiones_con_nombre.sql` aplicada (2026-10-02, `schema_version` 13). **Falta:** medir en el iPhone. De la entrega 3, para después: la marca *Restored from…* se pierde si la app se cierra antes de
+  que la restauración suba y nunca se vuelve a abrir el historial de esa página en una semana (es solo un rótulo); un
+  Ctrl/⌘+Z de la restauración (en vez del *Undo* del aviso) no deja de lado la marca; (O3) renombrar pisa el nombre
+  anterior sin rastro; (O7) cerrar la ventana de una copia restaurada que vuelve atrás el contador de `page_updates`
+  (leer la generación del servidor antes de usar la caché). Encontrado por la prueba al azar: una versión con dos bloques del mismo id no se puede
   restaurar (se deshace sola, sin perder nada; `Doc_Historial.md`, entrega 2; ya pasaba en v0.098). Arreglo propuesto:
   antes de restaurar, en la copia en memoria, darle un id nuevo al repetido (el segundo en el orden de Yjs), como hace el
   editor. **De la auditoría de la entrega 2, para después:** (O2) dos sangrías a la vez bajo el mismo bloque dejan dos

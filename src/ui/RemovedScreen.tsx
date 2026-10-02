@@ -7,6 +7,7 @@ import { formatSize } from '../media/fileTrash';
 import type { MediaRecord } from '../media/mediaDb';
 import { mediaDbName } from '../media/mediaDb';
 import { commentsDbName } from '../sync/comments';
+import { deleteHistoryCache } from '../sync/historyCache';
 import { foldersDbName } from '../media/folderUpload';
 import { useServices, useSyncStatus } from '../services';
 import { unsyncedSummary, type UnsyncedSummary } from '../sync/unsynced';
@@ -51,6 +52,8 @@ export async function deleteWorkspaceDatabases(dbName: string, keepMedia = false
   await deleteDatabase(commentsDbName(dbName));
   // La lista de trabajo de las carpetas (sin bytes: las carpetas siguen en el disco de quien las soltó).
   await deleteDatabase(foldersDbName(dbName));
+  // La caché del historial de versiones (una copia de lo que está en el servidor).
+  await deleteHistoryCache(dbName);
 }
 
 /**

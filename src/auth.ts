@@ -1,6 +1,7 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { useEffect, useState } from 'react';
 import type { WorkspaceConfig } from './workspace';
+import { deleteHistoryCache } from './sync/historyCache';
 
 export interface AuthUser {
   id: string;
@@ -11,6 +12,17 @@ export type AuthState =
   | { status: 'loading' }
   | { status: 'signedOut' }
   | { status: 'signedIn'; user: AuthUser };
+
+/** El id del último usuario que entró en este workspace (aunque la sesión ya no esté). */
+function lastUserId(ws: WorkspaceConfig): string | null {
+  try {
+    const raw = localStorage.getItem(ws.storage.lastUser);
+    const id = raw ? (JSON.parse(raw) as Partial<AuthUser>).id : null;
+    return typeof id === 'string' && id ? id : null;
+  } catch {
+    return null;
+  }
+}
 
 function readLastUser(ws: WorkspaceConfig): AuthUser | null {
   try {
@@ -47,6 +59,11 @@ export function useAuth(ws: WorkspaceConfig, client: SupabaseClient): AuthState 
           prev.status === 'signedIn' && prev.user.id === user.id ? prev : { status: 'signedIn', user },
         );
       } else if (event === 'SIGNED_OUT') {
+        // La caché del historial de versiones (quién y cuándo de cada cambio) no queda en el dispositivo de una cuenta
+        // que salió; la base local sí (puede tener cambios sin subir). Es una copia: se vuelve a bajar.
+        // (Supabase ya borró la sesión: el usuario sale del último guardado, que se borra acá abajo.)
+        const last = lastUserId(ws);
+        if (last) void deleteHistoryCache(ws.storage.db(last)).catch(() => undefined);
         try {
           localStorage.removeItem(ws.storage.lastUser);
         } catch {

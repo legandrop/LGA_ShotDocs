@@ -2,7 +2,7 @@
 
 Estado: **entregas 0 (prototipo), 1 (v0.076: el nodo, los huecos estables, lo que se ve y se toca), 2 (v0.078:
 crear, dar tamaño, acomodar las elegidas, hojas y PDF), 3 (v0.078: convertir las fotos-bloque de una página, escondida por D-26) y 4
-(v0.078: importar de Coda con los renglones) y 5 (v0.0XX: fotos en las celdas de una tabla) hechas**
+(v0.078: importar de Coda con los renglones) y 5 (v0.107: fotos en las celdas de una tabla) hechas**
 (2026-10-02; ver "Cómo quedó" de cada una; las "Correcciones de la auditoría", más abajo,
 mandan sobre el diseño de arriba, y la entrega 2 trae propuestas nuevas, marcadas). Pedido de Lega del
 2026-10-01, con sus palabras: las

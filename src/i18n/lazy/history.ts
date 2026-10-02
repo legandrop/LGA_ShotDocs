@@ -152,6 +152,32 @@ export const history = {
     en: "Couldn't copy: select the text and copy it by hand.",
     es: "No se pudo copiar: elegí el texto y copialo a mano.",
   },
+  'history.offlineSaved': {
+    en: "Offline: showing the history up to {when}, the last time it was downloaded.",
+    es: "Sin conexión: se ve el historial hasta {when}, la última vez que se bajó.",
+  },
+  'history.onlyNamed': { en: "Only named versions", es: "Solo versiones con nombre" },
+  'history.noNamed': { en: "No named versions yet.", es: "Todavía no hay versiones con nombre." },
+  'history.versionActions': { en: "Version actions", es: "Acciones de la versión" },
+  'history.nameVersion': { en: "Name this version", es: "Ponerle nombre a esta versión" },
+  'history.renameVersion': { en: "Rename", es: "Cambiar el nombre" },
+  'history.removeName': { en: "Remove name", es: "Quitar el nombre" },
+  'history.namePlaceholder': { en: "Version name", es: "Nombre de la versión" },
+  'history.nameOffline': {
+    en: "Naming versions needs a connection.",
+    es: "Para ponerle nombre a una versión hace falta conexión.",
+  },
+  'history.nameNotAllowed': {
+    en: "Only who named it, or someone who can edit and create pages here, can change that name.",
+    es: "Ese nombre lo cambia solo quien lo puso, o quien puede editar y crear páginas acá.",
+  },
+  'history.nameFailed': { en: "Couldn't save the name: {reason}", es: "No se pudo guardar el nombre: {reason}" },
+  'history.nameChanged': {
+    en: "The names changed on another device: this is how they are now.",
+    es: "Los nombres cambiaron en otro dispositivo: así están ahora.",
+  },
+  'history.restoredFrom': { en: "Restored from {date}", es: "Restaurada desde {date}" },
+  'history.restoredPlain': { en: "Restored from an earlier version", es: "Restaurada desde una versión anterior" },
 } satisfies Dict;
 
 // Se suma al diccionario cuando se carga la parte que lo usa (viaja con ella, no en la primera carga).

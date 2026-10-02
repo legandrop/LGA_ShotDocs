@@ -172,7 +172,7 @@ BlockNote convierte texto, títulos, listas, checklists, tablas, citas y código
   del texto de un ítem (un salto de línea) quedan igual. Vale en párrafos, ítems de lista, títulos y citas; un
   título con solo fotos pasa a ser un párrafo (un título vacío cortaría el guion). Un **adjunto** (PDF, zip…)
   sigue siendo un bloque `image` (la tarjeta). Las fotos de las **celdas de una tabla** que queda como tabla (modo
-  `table`) quedan en su celda, como miniaturas del alto de una fila (desde v0.0XX, entrega 5 de
+  `table`) quedan en su celda, como miniaturas del alto de una fila (desde v0.107, entrega 5 de
   `Doc_Fotos_En_Linea.md`; antes iban debajo de la tabla); un adjunto de una celda sigue yendo debajo. Se sacan el espacio de ancho
   cero y el carácter de objeto (U+FFFC) que Coda deja al lado de una foto, y los espacios sueltos entre fotos.
   **Una foto recortada en Coda se ve entera**: el recorte (`data-docx-crop`) no se trae (101 de 6129 fotos en ERSO;

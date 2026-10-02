@@ -152,6 +152,8 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'menusClose', keys: ['Escape'], place: 'menus', owner: 'app', source: 'dom' },
   { id: 'listPick', keys: ['ArrowUp', 'ArrowDown', 'Enter'], place: 'menus', context: 'list', owner: 'app', source: 'dom' },
   { id: 'listClose', keys: ['Escape'], place: 'menus', context: 'list', owner: 'app', source: 'dom' },
+  // El nombre de una versión del historial (Docs/Doc_Historial.md, entrega 3): guardar o dejar como estaba.
+  { id: 'versionName', keys: ['Enter', 'Escape'], place: 'menus', context: 'versionName', owner: 'app', source: 'dom' },
   // Las pestañas de una ventana (Install app: iPhone, Android, computadora).
   { id: 'tabsMove', keys: ['ArrowLeft', 'ArrowRight', 'Home', 'End'], place: 'menus', context: 'tabs', owner: 'app', source: 'dom' },
 

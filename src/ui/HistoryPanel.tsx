@@ -11,6 +11,7 @@ import {
   type CSSProperties,
   type DragEvent as ReactDragEvent,
   type MouseEvent as ReactMouseEvent,
+  type ReactNode,
 } from 'react';
 import * as Y from 'yjs';
 import { t, useT } from '../i18n';
@@ -18,15 +19,27 @@ import '../i18n/lazy/history';
 import { mediaIdsInDoc } from '../media/usage';
 import { isDeletedRow } from '../media/queue';
 import { ServicesContext, usePermissions, useServices, useSyncStatus, useTree } from '../services';
-import { loadPageHistory, MAX_RESTORE_BYTES, versionBytes, type HistoryOrphan, type HistoryRow, type HistorySession } from '../sync/history';
+import {
+  MAX_RESTORE_BYTES,
+  NAMED_VERSIONS_SCHEMA_VERSION,
+  versionBreaks,
+  versionBytes,
+  type HistoryOrphan,
+  type HistoryRow,
+  type HistorySession,
+  type PageVersionRow,
+} from '../sync/history';
+import { historyCacheFor, type HistoryCache } from '../sync/historyCache';
 import { createHistoryEngine, type HistoryEngine } from '../sync/historyClient';
+import { fetchVersions, loadHistory, markRestoreLater, settleRestores } from '../sync/historyLoad';
 import type { HistorySummary } from '../sync/historyCore';
 import type { BlockKind, ChangeLabel, HistoryMark } from '../sync/historyDiff';
-import type { HistoryRemote, MediaRemote } from '../sync/remote';
+import type { HistoryRemote, MediaRemote, NamedVersionsRemote } from '../sync/remote';
 import { errorMessage, isNetworkError, RemoteError } from '../sync/types';
 import { Permissions } from '../sync/access';
 import { versionNode } from './historyRestore';
 import { cleanClipboard, type HistoryMarksInput, type MarkLook } from './historyMarks';
+import { MoreIcon } from './icons';
 import { historyServices } from './historyServices';
 import { closeHistory, requestRestore } from './historyUi';
 import { dismissNotice, notify } from './notice';
@@ -44,8 +57,13 @@ import './history.css';
 // persona (decoraciones, historyMarks.ts); el texto huérfano va en una franja aparte; el historial se arma en un Worker
 // (historyClient.ts) y la lista se actualiza sola cuando llegan cambios nuevos.
 //
-// Todo se calcula en el dispositivo, con las filas de `page_history`. Nada de esta pantalla escribe en la base local, en
-// el servidor ni en el Drive: lo único que escribe es restaurar, y lo hace el editor de la página.
+// Entrega 3: versiones con nombre (nombrar, renombrar, sacar el nombre; *Only named versions*; *Restored from…* después
+// de restaurar; `page_versions`, solo con la base migrada) y la caché (historyCache.ts): se baja solo lo nuevo y sin red
+// se ve lo último bajado, con su aviso; restaurar y nombrar piden red.
+//
+// Todo se calcula en el dispositivo, con las filas de `page_history`. Nada de esta pantalla escribe en la base local de
+// la página, en el servidor ni en el Drive, salvo los nombres de versión (`page_versions`, no el contenido) y la caché
+// del historial: lo único que escribe en la página es restaurar, y lo hace el editor de la página.
 
 /** Cuánto antes de restaurar se avisa que otra persona estuvo editando. */
 const RECENT_OTHERS_MS = 2 * 60_000;
@@ -56,6 +74,20 @@ interface Ready {
   rows: HistoryRow[];
   emails: Map<string, string>;
   summary: HistorySummary;
+  /** Los nombres y las marcas de restauración; `null` si la base no los tiene: no se ofrece nombrar. */
+  versions: PageVersionRow[] | null;
+  /** Sin red: lo guardado en el dispositivo, bajado en ese momento. */
+  offlineAt: number | null;
+}
+
+/** Nombrar o renombrar: la versión (por el `seq` de su última fila), el nombre que había y lo escrito. */
+interface NameEdit {
+  seq: number;
+  /** El nombre que se cambia, o `null` para uno nuevo. */
+  versionId: string | null;
+  /** El id del nombre nuevo (lo crea el dispositivo: reintentar no duplica). */
+  newId: string;
+  value: string;
 }
 
 type Loading =
@@ -118,6 +150,23 @@ export function mergeRows(known: readonly HistoryRow[], fresh: readonly HistoryR
 
 /** Show changes queda como lo dejó la persona mientras la app está abierta (prendido por defecto). */
 let showChangesMemory = true;
+/** Only named versions, igual (apagado por defecto). */
+let onlyNamedMemory = false;
+
+/** Los nombres y las marcas en orden de fila. */
+const bySeq = (a: PageVersionRow, b: PageVersionRow) => a.seq - b.seq || a.createdAt.localeCompare(b.createdAt);
+
+/** El nombre de la versión de una sesión (el primero, si hubiera más de uno) y las restauraciones que trae. */
+export function sessionLabels(
+  session: HistorySession,
+  rows: readonly HistoryRow[],
+  versions: readonly PageVersionRow[] | null,
+): { named: PageVersionRow | null; restores: PageVersionRow[] } {
+  if (!versions?.length) return { named: null, restores: [] };
+  const from = rows[session.first]?.seq ?? session.seq;
+  const inside = versions.filter((v) => v.seq >= from && v.seq <= session.seq);
+  return { named: inside.find((v) => v.kind === 'named') ?? null, restores: inside.filter((v) => v.kind === 'restore') };
+}
 
 function dayLabel(iso: string, lang: string, now = new Date()): string {
   const d = new Date(iso);
@@ -138,6 +187,13 @@ export function whenLabel(iso: string, lang: string): string {
   return `${dayLabel(iso, lang)}, ${timeLabel(iso, lang)}`;
 }
 
+/** Lo mismo en medio de una frase ("Restored from yesterday, 14:05"): hoy y ayer en minúscula. */
+export function whenInline(iso: string, lang: string): string {
+  const day = dayLabel(iso, lang);
+  const lower = day === t('history.today') || day === t('history.yesterday') ? day.charAt(0).toLocaleLowerCase(lang) + day.slice(1) : day;
+  return `${lower}, ${timeLabel(iso, lang)}`;
+}
+
 /**
  * Quién (que no sea `me`) cambió la página en los últimos 2 minutos (con el reloj del dispositivo; `undefined` si nadie).
  * Es el aviso de antes de confirmar; lo que de verdad ataja es volver a mirar el servidor al confirmar (`restore`): si
@@ -154,7 +210,7 @@ export function recentOther(rows: readonly HistoryRow[], me: string, now = Date.
 
 export function HistoryPanel({ pageId }: { pageId: string }) {
   const services = useServices();
-  const { remote, engine, docs, user } = services;
+  const { remote, engine, docs, user, dbName } = services;
   const status = useSyncStatus();
   const perms = usePermissions();
   const tree = useTree();
@@ -179,7 +235,20 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
     setShowChangesState(on);
   };
   const previewServices = useMemo(() => historyServices(services), [services]);
-  const historyRemote = remote as unknown as HistoryRemote & MediaRemote;
+  const historyRemote = remote as unknown as HistoryRemote & MediaRemote & NamedVersionsRemote;
+  const [onlyNamed, setOnlyNamedState] = useState(onlyNamedMemory);
+  const setOnlyNamed = (on: boolean) => {
+    onlyNamedMemory = on;
+    setOnlyNamedState(on);
+  };
+  /** Nombrar o renombrar una versión (el campo en la lista). */
+  const [editing, setEditing] = useState<NameEdit | null>(null);
+  /** El menú de una versión (por el `seq` de su última fila). */
+  const [menuFor, setMenuFor] = useState<number | null>(null);
+  const [naming, setNaming] = useState(false);
+  /** La caché del historial y la generación con que se guardó lo que se muestra. */
+  const cacheRef = useRef<HistoryCache | null>(null);
+  const generationRef = useRef<number | null>(null);
   /**
    * Donde se arma el historial (un Worker, o la página si no se puede): uno por historial abierto. Se crea en el efecto
    * y se cierra al desmontar: con StrictMode (desarrollo) el efecto corre dos veces y cada vuelta tiene el suyo.
@@ -193,39 +262,87 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
   /** El `seq` de la última fila conocida cuando se mostró la confirmación de restaurar (O1). */
   const confirmSeq = useRef(0);
 
-  // Bajar el historial (solo con red) y armarlo en el Worker.
+  /**
+   * Cómo estaba la red cuando el historial quedó sin conexión: con el dispositivo sin red, se vuelve a pedir cuando
+   * vuelve; con red pero sin respuesta del servidor, recién después de una sincronización (no en cada vuelta).
+   */
+  const offlineMark = useRef<{ online: boolean; sync: number | null } | null>(null);
+  const markOffline = () => {
+    const st = engine.getStatus();
+    offlineMark.current = { online: st.online, sync: st.lastSyncAt };
+  };
+
+  // Bajar el historial (lo guardado en el dispositivo más lo nuevo; sin red, lo guardado) y armarlo en el Worker.
+  const servicesTree = services.tree;
   useEffect(() => {
     if (!builder) return;
     let cancelled = false;
-    if (!engine.getStatus().online) {
-      setLoading({ state: 'offline' });
-      return;
-    }
     setLoading({ state: 'loading', count: 0 });
-    loadPageHistory(historyRemote, pageId, (count) => !cancelled && setLoading({ state: 'loading', count }), () => cancelled)
-      .then(async ({ rows, emails }) => ({ rows, emails, summary: await builder.load(rows, pageId) }))
-      .then(
-        ({ rows, emails, summary }) => {
-          if (!cancelled) setLoading({ state: 'ready', rows, emails, summary });
+    (async () => {
+      const cache = await historyCacheFor(dbName);
+      const generation = (await servicesTree.knownGeneration().catch(() => undefined)) ?? null;
+      cacheRef.current = cache;
+      generationRef.current = generation;
+      const status0 = engine.getStatus();
+      const loaded = await loadHistory({
+        remote: historyRemote,
+        pageId,
+        cache,
+        generation,
+        online: status0.online,
+        namedVersions: (status0.schemaVersion ?? 0) >= NAMED_VERSIONS_SCHEMA_VERSION,
+        onProgress: (count) => !cancelled && setLoading({ state: 'loading', count }),
+        isCancelled: () => cancelled,
+      });
+      if (!loaded) return null;
+      let versions = loaded.versions;
+      // Las restauraciones de antes cuya marca no llegó a guardarse ("Restored from…").
+      if (versions && loaded.offlineAt === null) {
+        const marked = await settleRestores(historyRemote, cache, pageId, loaded.rows).catch(() => []);
+        if (marked.length) {
+          versions = [...versions.filter((v) => !marked.some((m) => m.id === v.id)), ...marked].sort(bySeq);
+          void cache?.saveVersions(pageId, versions).catch(() => undefined);
+        }
+      }
+      void cache?.touch(pageId).catch(() => undefined);
+      let summary = await builder.load(loaded.rows, pageId);
+      if (versions?.length) {
+        const b = versionBreaks(versions);
+        summary = await builder.breaks(b.after, b.before);
+      }
+      return { ...loaded, versions, summary };
+    })().then(
+        (got) => {
+          if (cancelled) return;
+          if (!got || got.offlineAt !== null) markOffline();
+          if (!got) setLoading({ state: 'offline' });
+          else setLoading({ state: 'ready', rows: got.rows, emails: got.emails, summary: got.summary, versions: got.versions, offlineAt: got.offlineAt });
         },
         (err: unknown) => {
           if (cancelled) return;
           if (err instanceof RemoteError && err.message === 'page_not_found') setLoading({ state: 'denied' });
           else if (err instanceof RemoteError && err.message === 'page_in_trash') setLoading({ state: 'trash' });
-          else if (isNetworkError(err)) setLoading({ state: 'offline' });
+          else if (isNetworkError(err)) {
+            markOffline();
+            setLoading({ state: 'offline' });
+          }
           else setLoading({ state: 'failed', reason: errorMessage(err) });
         },
       );
     return () => {
       cancelled = true;
     };
-  }, [historyRemote, engine, builder, pageId, attempt]);
+  }, [historyRemote, engine, builder, pageId, attempt, dbName, servicesTree]);
 
-  // Volver la red reintenta si estaba sin red (lo ya bajado no se vuelve a pedir); lo demás, con "Reintentar".
-  const waitingNetwork = loading.state === 'offline';
+  // Volver la red reintenta si estaba sin red o mostrando lo guardado (lo ya bajado no se vuelve a pedir); lo demás,
+  // con "Reintentar".
+  const waitingNetwork = loading.state === 'offline' || (loading.state === 'ready' && loading.offlineAt !== null);
   useEffect(() => {
-    if (waitingNetwork && status.online) setAttempt((n) => n + 1);
-  }, [waitingNetwork, status.online]);
+    if (!waitingNetwork || !status.online) return;
+    const was = offlineMark.current;
+    if (was && was.online && was.sync === status.lastSyncAt) return;
+    setAttempt((n) => n + 1);
+  }, [waitingNetwork, status.online, status.lastSyncAt]);
 
   // Lo de este dispositivo que todavía no subió no está en el historial (y restaurar lo pide subido).
   useEffect(() => {
@@ -250,6 +367,7 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
   }, [sessions, chosen, ready]);
   const session: HistorySession | null = index >= 0 ? sessions[index] : null;
   const isCurrent = index === sessions.length - 1;
+  const chosenName = session && ready ? (sessionLabels(session, ready.rows, ready.versions).named?.label ?? null) : null;
   const versionKey = session ? String(session.seq) : '';
   const changesKey = session ? `${session.seq}:${index > 0 ? sessions[index - 1].seq : 0}` : '';
 
@@ -363,7 +481,8 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
   }, [union, rows, nameOf, colorOf, lang, tr]);
 
   const blocker: Blocker | null = (() => {
-    if (!status.online) return 'history.why.offline';
+    // Mostrando lo guardado (sin respuesta del servidor): restaurar pide la página al día.
+    if (!status.online || ready?.offlineAt != null) return 'history.why.offline';
     if (!perms.canEditPage(pageId)) return 'history.why.cantEdit';
     if (status.outdated) return 'history.why.outdated';
     if (unknown) return 'history.why.unknown';
@@ -405,12 +524,15 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
   // Escape cierra (primero la confirmación).
   const confirmRef = useRef(confirm);
   confirmRef.current = confirm;
+  const menuRef = useRef(menuFor);
+  menuRef.current = menuFor;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented) return;
       if (document.querySelector('.carrete')) return;
       e.preventDefault();
       if (confirmRef.current) setConfirm(null);
+      else if (menuRef.current !== null) setMenuFor(null);
       else closeHistory();
     };
     window.addEventListener('keydown', onKey);
@@ -446,7 +568,13 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
             () => known.emails,
           )
         : known.emails;
-      setLoading({ state: 'ready', rows: all, emails: mails, summary });
+      setLoading((cur) => (cur.state === 'ready' ? { ...cur, rows: all, emails: mails, summary } : cur));
+      const cache = cacheRef.current;
+      if (cache) {
+        void cache
+          .save(pageId, { rows: all, emails: mails, versions: readyRef.current?.versions ?? null, generation: generationRef.current })
+          .catch(() => undefined);
+      }
       return all;
     })().finally(() => {
       refreshing.current = null;
@@ -455,11 +583,101 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
     return run;
   }, [historyRemote, pageId, builder]);
   const isReady = !!ready;
+  const showingSaved = loading.state === 'ready' && loading.offlineAt !== null;
   useEffect(() => {
-    if (!isReady || !status.online || busy) return;
+    if (!isReady || !status.online || busy || showingSaved) return;
     // Un error acá no importa: la lista sigue como estaba y se vuelve a probar con la próxima sincronización.
     refreshRows().catch(() => undefined);
-  }, [isReady, status.lastSyncAt, status.online, busy, refreshRows]);
+  }, [isReady, status.lastSyncAt, status.online, busy, showingSaved, refreshRows]);
+
+  // --- Versiones con nombre --------------------------------------------------------------------------------------
+
+  const versions = ready?.versions ?? null;
+  /** Se ofrece nombrar solo con la base migrada (la lista de nombres llegó). */
+  const namesSupported = versions !== null;
+  /** Nombrar, renombrar y sacar piden red (y no estar mostrando lo guardado). */
+  const namesOnline = status.online && !showingSaved;
+  /** Puede cambiar o sacar ese nombre: quien lo puso o nivel 4 sobre la página (la base lo vuelve a mirar). */
+  const canManageName = (v: PageVersionRow) => v.createdBy === user.id || perms.pageLevel(pageId) >= 4;
+
+  /** Cambia los nombres: los cortes de las sesiones, la lista y lo guardado. */
+  const applyVersions = useCallback(
+    async (next: PageVersionRow[] | null) => {
+      if (!builder) return;
+      const sorted = next ? [...next].sort(bySeq) : null;
+      const b = versionBreaks(sorted ?? []);
+      const summary = await builder.breaks(b.after, b.before);
+      setLoading((cur) => (cur.state === 'ready' ? { ...cur, summary, versions: sorted } : cur));
+      void cacheRef.current?.saveVersions(pageId, sorted).catch(() => undefined);
+    },
+    [builder, pageId],
+  );
+
+  /** El motivo de un error al nombrar, para la línea de aviso. */
+  const nameError = (err: unknown): string => {
+    if (isNetworkError(err)) return tr('history.nameOffline');
+    if (err instanceof RemoteError && err.message === 'app_outdated') return tr('history.why.outdated');
+    if (err instanceof RemoteError && err.message === 'not_allowed') return tr('history.nameNotAllowed');
+    return tr('history.nameFailed', { reason: errorMessage(err) });
+  };
+
+  async function saveName(edit: NameEdit) {
+    const label = edit.value.replace(/\s+/g, ' ').trim().slice(0, 100);
+    const before = versions?.find((v) => v.id === edit.versionId) ?? null;
+    if (!label || label === before?.label) {
+      setEditing(null);
+      return;
+    }
+    setNaming(true);
+    setMessage(null);
+    try {
+      const row = edit.versionId
+        ? await historyRemote.renamePageVersion(edit.versionId, label)
+        : await historyRemote.namePageVersion(edit.newId, pageId, edit.seq, label);
+      await applyVersions([...(readyRef.current?.versions ?? []).filter((v) => v.id !== row.id), row]);
+      setEditing(null);
+    } catch (err) {
+      if (err instanceof RemoteError && (err.message === 'version_named' || err.message === 'version_not_found')) {
+        // Otro dispositivo la nombró (o le sacó el nombre) mientras tanto: la lista como está en el servidor.
+        const fresh = await fetchVersions(historyRemote, pageId, true).catch(() => null);
+        if (fresh) await applyVersions(fresh);
+        setEditing(null);
+        setMessage(tr('history.nameChanged'));
+      } else {
+        setMessage(nameError(err));
+      }
+    } finally {
+      setNaming(false);
+    }
+  }
+
+  async function removeName(v: PageVersionRow) {
+    setMenuFor(null);
+    setNaming(true);
+    setMessage(null);
+    try {
+      await historyRemote.removePageVersion(v.id);
+      await applyVersions((readyRef.current?.versions ?? []).filter((x) => x.id !== v.id));
+    } catch (err) {
+      setMessage(nameError(err));
+    } finally {
+      setNaming(false);
+    }
+  }
+
+  // El menú de una versión se cierra al tocar afuera.
+  useEffect(() => {
+    if (menuFor === null) return;
+    const onDown = (e: PointerEvent) => {
+      const el = e.target as Element | null;
+      if (!el?.closest?.('.history-menu, .history-more')) setMenuFor(null);
+    };
+    document.addEventListener('pointerdown', onDown, true);
+    return () => document.removeEventListener('pointerdown', onDown, true);
+  }, [menuFor]);
+
+  /** La fecha de una versión por el `seq` de su última fila (para "Restored from…"). */
+  const rowTimes = useMemo(() => new Map((rows ?? []).map((r) => [r.seq, r.createdAt])), [rows]);
 
   // La lista no salta cuando llegan versiones nuevas arriba: si la persona bajó, sigue viendo lo mismo.
   const listRef = useRef<HTMLElement>(null);
@@ -502,8 +720,10 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
       await engine.syncNow();
       // Lo que llegó al servidor desde que se mostró la confirmación (O1 de la auditoría; la lista se pudo actualizar
       // sola mientras tanto, O3): si otra persona cambió la página, se vuelve a preguntar con el aviso de quién.
+      let afterSeq = ready?.rows[ready.rows.length - 1]?.seq ?? 0;
       if (ready) {
         const all = (await refreshRows()) ?? ready.rows;
+        afterSeq = all[all.length - 1]?.seq ?? 0;
         const since = all.filter((row) => row.seq > confirmSeq.current);
         const others = since.filter((row) => row.createdBy !== user.id);
         if (others.length > 0) {
@@ -539,12 +759,26 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
       }
       const key = `history:${pageId}:${session.seq}:${Date.now()}`;
       const date = whenLabel(session.end, lang);
+      // "Restored from…" en la lista: la marca se guarda cuando la restauración llega al servidor (historyLoad.ts).
+      // Sin huella (no cambió nada) no hay marca.
+      const trace = outcome.trace;
+      const mark =
+        namesSupported && trace && (trace.ins.length > 0 || trace.del.length > 0)
+          ? markRestoreLater(
+              { remote: historyRemote, cache: cacheRef.current, engine, docs },
+              { id: crypto.randomUUID(), pageId, userId: user.id, fromSeq: session.seq, afterSeq, at: Date.now(), trace },
+            )
+          : null;
       closeHistory();
       notify(t('history.restored', { date }), {
         key,
         label: t('history.undo'),
         run: () => {
-          if (outcome.undo()) notify(t('history.undone'));
+          if (outcome.undo()) {
+            notify(t('history.undone'));
+            // Deshecha antes de marcarla: no se marca (la fila que suba puede traer la restauración y el deshacer).
+            void mark?.cancel();
+          }
         },
       });
       // El **Undo** del aviso deshace solo la restauración: con la próxima edición, el aviso se va.
@@ -629,6 +863,7 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
         </button>
         <h1 className="history-title">
           <span className="history-heading">{tr('history.title')}</span>
+          {session && chosenName && <span className="history-version-name">{chosenName}</span>}
           {session && <span className="history-when">{whenLabel(session.end, lang)}</span>}
         </h1>
         {session && (
@@ -667,6 +902,9 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
           )}
           {ready && sessions.length === 0 && <p className="muted history-state">{tr('history.empty')}</p>}
           {ready && ready.summary.unreadable > 0 && <p className="banner">{tr('history.unreadable', { count: ready.summary.unreadable })}</p>}
+          {ready?.offlineAt != null && (
+            <p className="banner history-offline-saved">{tr('history.offlineSaved', { when: whenInline(new Date(ready.offlineAt).toISOString(), lang) })}</p>
+          )}
           {unsynced && <p className="banner">{tr('history.unsynced')}</p>}
           {(unknown || shapeOk === false) && <p className="banner">{tr('history.partial')}</p>}
           {current?.error && <p className="banner">{tr('history.versionFailed', { reason: current.error })}</p>}
@@ -724,17 +962,108 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
           )}
         </section>
         <aside className="history-list" aria-label={tr('history.versions')} ref={listRef}>
+          {/* En el teléfono la lista va sola (sin la versión): el aviso de lo guardado va también acá. */}
+          {ready?.offlineAt != null && (
+            <p className="banner history-offline-list">{tr('history.offlineSaved', { when: whenInline(new Date(ready.offlineAt).toISOString(), lang) })}</p>
+          )}
+          {namesSupported && sessions.length > 0 && (
+            <label className="history-filter">
+              <input type="checkbox" checked={onlyNamed} onChange={(e) => setOnlyNamed(e.target.checked)} />
+              {tr('history.onlyNamed')}
+            </label>
+          )}
+          {namesSupported && onlyNamed && !versions?.some((v) => v.kind === 'named') && sessions.length > 0 && (
+            <p className="muted history-no-named">{tr('history.noNamed')}</p>
+          )}
           <SessionList
             sessions={sessions}
             index={index}
             lang={lang}
             nameOf={nameOf}
             colorOf={colorOf}
+            labelsOf={(s) => {
+              const { named, restores } = sessionLabels(s, ready?.rows ?? [], versions);
+              return {
+                name: named?.label ?? null,
+                restored: restores.map((r) => {
+                  const at = r.restoredFromSeq === null ? undefined : rowTimes.get(r.restoredFromSeq);
+                  return at ? tr('history.restoredFrom', { date: whenInline(at, lang) }) : tr('history.restoredPlain');
+                }),
+              };
+            }}
+            onlyNamed={namesSupported && onlyNamed}
             onPick={(i) => {
               setChosen(sessions[i].seq);
               setMessage(null);
               setPane('version');
             }}
+            actions={
+              namesSupported
+                ? (s) => {
+                    const { named } = sessionLabels(s, ready?.rows ?? [], versions);
+                    // Un nombre ajeno sin nivel 4: nada que hacer.
+                    if (named && !canManageName(named)) return null;
+                    const open = menuFor === s.seq;
+                    const edit = editing && editing.seq === s.seq ? editing : null;
+                    return (
+                      <>
+                        {!edit && (
+                          <button
+                            className="icon-button history-more"
+                            aria-label={tr('history.versionActions')}
+                            aria-haspopup="menu"
+                            aria-expanded={open}
+                            disabled={!namesOnline || naming}
+                            data-tip={!namesOnline ? tr('history.nameOffline') : undefined}
+                            onClick={() => setMenuFor(open ? null : s.seq)}
+                          >
+                            <MoreIcon size={16} />
+                          </button>
+                        )}
+                        {open && (
+                          <div className="history-menu" role="menu">
+                            {!named ? (
+                              <button
+                                role="menuitem"
+                                onClick={() => {
+                                  setMenuFor(null);
+                                  setEditing({ seq: s.seq, versionId: null, newId: crypto.randomUUID(), value: '' });
+                                }}
+                              >
+                                {tr('history.nameVersion')}
+                              </button>
+                            ) : (
+                              <>
+                                <button
+                                  role="menuitem"
+                                  onClick={() => {
+                                    setMenuFor(null);
+                                    setEditing({ seq: s.seq, versionId: named.id, newId: crypto.randomUUID(), value: named.label ?? '' });
+                                  }}
+                                >
+                                  {tr('history.renameVersion')}
+                                </button>
+                                <button role="menuitem" onClick={() => void removeName(named)}>
+                                  {tr('history.removeName')}
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                        {edit && (
+                          <NameField
+                            edit={edit}
+                            busy={naming}
+                            onChange={(value) => setEditing({ ...edit, value })}
+                            onSave={() => void saveName(edit)}
+                            onCancel={() => setEditing(null)}
+                          />
+                        )}
+                      </>
+                    );
+                  }
+                : undefined
+            }
           />
         </aside>
       </div>
@@ -760,6 +1089,51 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
   );
 }
 
+/** El campo para nombrar o renombrar una versión: Enter guarda, Escape deja como estaba, salir del campo guarda. */
+function NameField({
+  edit,
+  busy,
+  onChange,
+  onSave,
+  onCancel,
+}: {
+  edit: NameEdit;
+  busy: boolean;
+  onChange: (value: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  const tr = useT();
+  const cancelled = useRef(false);
+  return (
+    <input
+      className="history-name-input"
+      autoFocus
+      maxLength={100}
+      value={edit.value}
+      disabled={busy}
+      placeholder={tr('history.namePlaceholder')}
+      aria-label={edit.versionId ? tr('history.renameVersion') : tr('history.nameVersion')}
+      onChange={(e) => onChange(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          onSave();
+        } else if (e.key === 'Escape') {
+          // Que el historial no se cierre: solo se deja de nombrar.
+          e.preventDefault();
+          e.stopPropagation();
+          cancelled.current = true;
+          onCancel();
+        }
+      }}
+      onBlur={() => {
+        if (!cancelled.current && !busy) onSave();
+      }}
+    />
+  );
+}
+
 /** La lista de versiones: por día y, adentro, una por sesión de edición (la más nueva arriba). */
 function SessionList({
   sessions,
@@ -767,34 +1141,52 @@ function SessionList({
   lang,
   nameOf,
   colorOf,
+  labelsOf,
+  onlyNamed,
   onPick,
+  actions,
 }: {
   sessions: HistorySession[];
   index: number;
   lang: string;
   nameOf: (id: string | null) => string;
   colorOf: (id: string | null) => string;
+  /** El nombre de la versión y sus "Restored from…". */
+  labelsOf: (s: HistorySession) => { name: string | null; restored: string[] };
+  /** Solo las que tienen nombre (y la actual). */
+  onlyNamed: boolean;
   onPick: (index: number) => void;
+  /** El botón de acciones de cada versión (nombrar…), si se ofrece. */
+  actions?: (s: HistorySession) => ReactNode;
 }) {
   const tr = useT();
-  const order = sessions.map((s, i) => ({ s, i })).reverse();
+  const order = sessions
+    .map((s, i) => ({ s, i, labels: labelsOf(s) }))
+    .filter(({ i, labels }) => !onlyNamed || labels.name !== null || i === sessions.length - 1)
+    .reverse();
   let lastDay = '';
   return (
     <ol className="history-sessions">
-      {order.map(({ s, i }) => {
+      {order.map(({ s, i, labels }) => {
         const day = dayLabel(s.end, lang);
         const header = day !== lastDay;
         lastDay = day;
         return (
           // La clave es la primera fila de la sesión: una sesión que crece con filas nuevas sigue siendo el mismo
           // renglón (no se vuelve a crear).
-          <li key={s.first}>
+          <li key={s.first} className="history-session-row">
             {header && <h2 className="history-day">{day}</h2>}
             <button className="history-session" aria-current={i === index ? 'true' : undefined} onClick={() => onPick(i)}>
+              {labels.name && <span className="history-name">{labels.name}</span>}
               <span className="history-time" data-tip={tr('history.serverTimeTip')}>
                 {timeLabel(s.end, lang)}
               </span>
               {i === sessions.length - 1 && <span className="history-current">{tr('history.current')}</span>}
+              {labels.restored.map((text, k) => (
+                <span key={k} className="history-restored">
+                  {text}
+                </span>
+              ))}
               <span className="history-people">
                 {s.authors.map((a) => (
                   <span key={a ?? 'former'} className="history-person">
@@ -804,6 +1196,7 @@ function SessionList({
                 ))}
               </span>
             </button>
+            {actions?.(s)}
           </li>
         );
       })}
