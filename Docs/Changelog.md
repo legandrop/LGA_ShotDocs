@@ -5,9 +5,10 @@ v0.109 :
 No había forma de anotar una foto de set (flechas, círculos, texto, lápiz) sin editarla afuera. `Doc_Anotar_Fotos.md`
 diseña P.20 tomando de referencia LGA FrameRev: las mismas letras de herramienta, el verde y los grosores por defecto,
 Shift y Alt, y los nombres de campo de su `.frproj`. Las anotaciones van en un mapa del documento de la página, afuera
-del contenido y por archivo, como "colapsar para todos": se guardan sin red, se fusionan entre dos, entran al historial
-y una versión vieja no las borra. Se dibujan encima de la foto en la página, el carrete y el PDF; el original no se toca
-y la copia anotada se arma al bajar. Diez decisiones propuestas (AN1 a AN10) y seis entregas. Sin código.
+del contenido, con una clave por forma: se guardan sin red, dos a la vez no se pisan, entran al historial y una versión
+vieja no las borra; las de una foto sacada se podan para que no lleguen a quien solo ve. Se dibujan encima de la foto en
+la página, el carrete y el PDF; la copia anotada se arma al bajar. Auditado y corregido; once decisiones propuestas
+(AN1 a AN11) y seis entregas. Sin código.
 [ Anotar fotos - diseño: anotaciones en el documento de la página, al estilo de FrameRev ]
 
 v0.108 :
