@@ -6,6 +6,7 @@ import type { carrete } from './lazy/carrete';
 import type { commentsPanel } from './lazy/commentsPanel';
 import type { drive } from './lazy/drive';
 import type { editor } from './lazy/editor';
+import type { exportPdf } from './lazy/exportPdf';
 import type { help } from './lazy/help';
 import type { folders } from './lazy/folders';
 import type { history } from './lazy/history';
@@ -42,6 +43,7 @@ type LazyStrings = typeof annotator &
   typeof commentsPanel &
   typeof drive &
   typeof editor &
+  typeof exportPdf &
   typeof help &
   typeof folders &
   typeof history &

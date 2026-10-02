@@ -1,6 +1,6 @@
 # Anotar sobre las fotos (P.20)
 
-**Estado: entregas 0, 1 y 2 hechas (v0.116: el mapa, sus pruebas y ver las anotaciones; v0.0XX: el anotador en la
+**Estado: entregas 0, 1 y 2 hechas (v0.116: el mapa, sus pruebas y ver las anotaciones; v0.123: el anotador en la
 compu y la poda; ver "Cómo quedó" al final); el dedo y el lápiz (entrega 3) siguen en diseño.** Pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.108. Las decisiones
 (AN1 a AN11, sección 12) son propuestas con la recomendación elegida: el número final lo pone quien las cierre con Lega.
 Auditado el 2026-10-02 (aprobado con condiciones): las correcciones ya están en el texto y resumidas al final
@@ -622,7 +622,7 @@ grosor mínimo de pantalla que queda en el PDF (O2) pasó al roadmap.
 
 **Falta para publicar:** subir `workspace_settings.min_app_version` a esta versión (AN10) antes de la entrega 2.
 
-## Cómo quedó la entrega 2 (anotar en la compu, v0.0XX)
+## Cómo quedó la entrega 2 (anotar en la compu, v0.123)
 
 **El anotador** (`src/ui/Annotator.tsx`, se baja aparte como el carrete y solo lo abre quien puede editar la página):
 

@@ -2700,6 +2700,142 @@ code {
   break-before: page;
 }
 
+/* Exportar una rama o un proyecto como PDF (P.22, src/export/exportPdf.ts): el índice y todas las páginas en una sola
+   vista, cada una con su hoja (`page:` y `@page sd-…` puestos al imprimir). Afuera de la pantalla hasta imprimir. */
+.sd-export-book {
+  position: fixed;
+  top: 0;
+  left: -100000px;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* El libro solo se imprime cuando lo pone `printBook` (`sd-export-printing`): el Imprimir del navegador mientras la
+   ventana arma o tiene el PDF listo imprime la página de siempre, sin el libro encima. */
+@media print {
+  html.sd-printing:not(.sd-export-printing) .sd-export-book {
+    display: none !important;
+  }
+}
+
+/* Cada página empieza en una hoja nueva (las hojas de adentro las ponen los saltos calculados). */
+.sd-export-book > .print-view + .print-view {
+  break-before: page;
+}
+
+.print-view .sd-export-note {
+  margin: 0 0 10px;
+  padding: 6px 10px;
+  border-left: 3px solid #b8b3a8;
+  background: #f6f4ef;
+  color: #5e5a52;
+  font-size: 12px;
+}
+
+.print-view .sd-export-index-title {
+  margin: 0 0 6px;
+  font-family: var(--title-font);
+  font-size: var(--title-size);
+  line-height: var(--title-leading);
+  font-weight: var(--title-weight);
+  white-space: pre-wrap;
+}
+
+.print-view .sd-export-index-meta {
+  margin: 0 0 18px;
+  color: #6b665d;
+  font-size: 12px;
+}
+
+.print-view .sd-export-index-label {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #5e5a52;
+}
+
+/* Un renglón por página: un solo renglón siempre (así el índice se pagina igual en la pantalla y en el papel). */
+.print-view .sd-export-row {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  padding: 3px 0 3px calc(var(--depth, 0) * 18px);
+  color: #1b1a17;
+  text-decoration: none;
+  font-size: 13px;
+  line-height: 18px;
+  border-bottom: 1px dotted #e4e0d8;
+}
+
+.print-view .sd-export-row-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.print-view .sd-export-row-sheet {
+  flex: none;
+  color: #5e5a52;
+  font-variant-numeric: tabular-nums;
+}
+
+.print-view .sd-export-comments {
+  margin-top: 28px;
+  padding-top: 4px;
+  border-top: 1px solid #e4e0d8;
+  font-size: 12px;
+}
+
+.print-view .sd-export-comments-title {
+  margin: 8px 0 6px;
+  font-size: 14px;
+}
+
+.print-view .sd-export-thread {
+  margin: 0 0 8px;
+}
+
+.print-view .sd-export-comment {
+  padding: 4px 0 4px 10px;
+  border-left: 2px solid #e4e0d8;
+}
+
+.print-view .sd-export-comment.reply {
+  margin-left: 14px;
+}
+
+.print-view .sd-export-comment p {
+  margin: 0 0 2px;
+  white-space: pre-wrap;
+}
+
+.print-view .sd-export-anchor {
+  color: #5e5a52;
+  font-style: italic;
+}
+
+.print-view .sd-export-resolved {
+  font-style: normal;
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: #e8efe5;
+  color: #3a5a32;
+}
+
+.print-view .sd-export-comment-meta {
+  color: #6b665d;
+}
+
+.print-view .sd-export-comment-body.deleted {
+  color: #8a857b;
+  font-style: italic;
+}
+
 @media print {
   html.sd-printing,
   html.sd-printing body,
@@ -5822,6 +5958,77 @@ ins.replace-new {
 
 .offline-subtitle {
   margin: -6px 0 0;
+}
+
+.export-dialog {
+  width: min(520px, 100%);
+  max-height: 82vh;
+  overflow-y: auto;
+}
+
+.export-dialog p {
+  margin: 0;
+}
+
+.export-what {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.export-what label,
+.export-options label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+/* La regla general `input { width: 100% }` estiraba cada círculo y casilla a todo el ancho (auditoría B3). */
+.export-what input,
+.export-options input {
+  flex: none;
+  width: auto;
+  margin: 0;
+}
+
+.export-format {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.export-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+
+.export-too-big ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.export-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.export-progress progress {
+  width: 100%;
+}
+
+.export-dialog .modal-actions {
+  gap: 8px;
 }
 
 .offline-rows {

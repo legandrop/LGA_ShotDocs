@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.123 :
 
 Anotar fotos en la compu (P.20, entrega 2 de `Doc_Anotar_Fotos.md`). Las anotaciones se veían pero no había con qué
 dibujarlas. Nuevo `src/ui/Annotator.tsx`, a pantalla completa: las nueve herramientas con las letras de FrameRev,
@@ -11,6 +11,17 @@ apaga las herramientas de crear al tope en bytes. La poda saca, con la página s
 que lleva 10 minutos afuera. El PDF dibuja con el grosor mínimo de la hoja. Pruebas con dos editores a la vez, sin red,
 la versión publicada y un mapa malicioso. Auditada: corregidos el marco y la poda sin red.
 [ Anotar fotos, entrega 2 - el anotador en la compu, los topes, la poda y el grosor del PDF ]
+
+v0.122 :
+
+Exportar (P.22), entrega 1: el PDF de una rama o de un proyecto. Para entregarle un reporte al cliente había que
+imprimir página por página. Nuevo: *Export…* en el menú de la página y *Export project…* en el selector arman un solo
+PDF con un índice que lleva a cada página y dice su hoja, cada página con su tamaño de hoja (Chrome y Edge; en los demás,
+todo con la de la raíz, avisado), las fotos con sus anotaciones y achicadas a su ancho impreso en Workers, comentarios
+opcionales (bajados antes, con nombres y nunca correos) y topes de páginas y de píxeles según la memoria. 300 páginas
+salen en unos 30 s con 1621 hojas, cada página en la hoja que dice el índice. Un salto de hoja vacío cortaba la primera
+hoja de la página: se pagina en el orden del documento.
+[ Exportar, entrega 1 - el PDF de una rama o un proyecto con índice, hojas con nombre, anotaciones y comentarios ]
 
 v0.121 :
 

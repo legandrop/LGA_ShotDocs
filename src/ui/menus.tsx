@@ -14,6 +14,7 @@ import {
   CollapseAllIcon,
   DarkIcon,
   ExpandAllIcon,
+  ExportIcon,
   DriveIcon,
   HelpIcon,
   InstallIcon,
@@ -37,6 +38,7 @@ import { requestTemplates, templateTargetFor } from '../templates/templatesUi';
 import { isDayReportFolder, isReportPage } from '../templates/dayReport';
 import { requestDayReport, useDayReportFolder } from '../templates/dayReportUi';
 import { offlineSupported, openOffline, openStorage } from './SpaceHost';
+import { openExport } from './ExportHost';
 import { openHelp } from '../help/helpUi';
 import { isPhoneLayout } from './commentsUi';
 import { collapseControlFor } from './collapseControl';
@@ -251,6 +253,18 @@ export function PageMenu(props: {
       >
         <PrintIcon />
         {tr('pageMenu.print')}
+      </button>
+      {/* Un solo PDF con esta página y las de adentro, con índice (P.22, Docs/Doc_Exportar.md). Quien ve, exporta. */}
+      <button
+        role="menuitem"
+        data-tip={tr('pageMenu.exportTip')}
+        onClick={() => {
+          props.onClose();
+          openExport('page', props.pageId);
+        }}
+      >
+        <ExportIcon />
+        {tr('pageMenu.export')}
       </button>
       {/* El asistente (Docs/Doc_Asistente.md, A1): corregir, mejorar, acortar o traducir lo elegido. */}
       {props.onAssistant && (

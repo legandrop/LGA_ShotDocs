@@ -50,6 +50,7 @@ import { Sidebar } from './Sidebar';
 import { SidebarResizer } from './SidebarResizer';
 import { SyncIcon } from './SyncBadge';
 import { SpaceHost } from './SpaceHost';
+import { ExportHost } from './ExportHost';
 import { TrashView } from './TrashView';
 import { AssistantHost } from '../assistant/AssistantHost';
 import { openAssistant } from '../assistant/assistantUi';
@@ -454,6 +455,7 @@ export function Shell() {
       {codaOwner && <ImportCodaHost />}
       {/* "Available offline", "Storage on this device" y el aviso del tope (P.10). */}
       <SpaceHost />
+      <ExportHost />
       <HelpHost />
       <HistoryHost />
       {/* El asistente (Docs/Doc_Asistente.md, A1): su atajo, el panel y los ajustes. */}
