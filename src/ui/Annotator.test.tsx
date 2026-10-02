@@ -266,6 +266,24 @@ describe('el anotador', () => {
     expect(shapes(doc).map((s) => (s.type === 'text' ? s.text : s.type))).toEqual(['Plano 12']);
   });
 
+  it('Done con un texto a medio escribir lo guarda una sola vez', async () => {
+    const doc = new Y.Doc();
+    writeFrame(doc, ID, FRAME.w, FRAME.h);
+    const { el, stage, onClose } = await open(doc);
+    key('t');
+    pointer(stage, 'pointerdown', 50, 50);
+    const area = el.querySelector<HTMLTextAreaElement>('.annotator-text')!;
+    area.value = 'Una vez';
+    act(() => area.dispatchEvent(new Event('input', { bubbles: true })));
+    // Como la página: cerrar desmonta el anotador en la misma tanda (sin volver a dibujarlo antes).
+    act(() => {
+      el.querySelector<HTMLButtonElement>('.annotator-done')!.click();
+      for (const r of roots.splice(0)) r.unmount();
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(shapes(doc).length).toBe(1);
+  });
+
   it('un marco de una versión más nueva del formato: solo lectura (no se dibuja ni se borra nada)', async () => {
     const doc = new Y.Doc();
     map(doc).set(ID, { v: 2, w: FRAME.w, h: FRAME.h });

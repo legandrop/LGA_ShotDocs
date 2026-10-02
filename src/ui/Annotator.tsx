@@ -236,6 +236,8 @@ export function Annotator({ doc, fileId, name, item, loader, onClose }: Annotato
   const textRef = useRef<HTMLTextAreaElement>(null);
   /** Lo último escrito en el texto que se edita. */
   const typed = useRef<string | null>(null);
+  /** Guardar el texto a medio escribir si el anotador se desmonta (ver `commitText`). */
+  const commitOnExit = useRef<(() => void) | null>(null);
   const drag = useRef<Drag | null>(null);
   const undo = useRef<Y.UndoManager | null>(null);
   const spaceHeld = useRef(false);
@@ -435,6 +437,8 @@ export function Annotator({ doc, fileId, name, item, loader, onClose }: Annotato
     const typedNow = textRef.current?.value ?? typed.current;
     const t = text && typedNow !== null ? { ...text, value: typedNow } : text;
     typed.current = null;
+    // Una sola vez: cerrar con *Done* o Esc no lo vuelve a guardar al desmontarse.
+    commitOnExit.current = null;
     setText(null);
     if (!t || !frame) return;
     const value = t.value.replace(/\s+$/, '');
@@ -451,7 +455,6 @@ export function Annotator({ doc, fileId, name, item, loader, onClose }: Annotato
   };
 
   // Si el anotador se cierra solo (cambió el permiso, se fue de la página) con un texto a medio escribir, se guarda.
-  const commitOnExit = useRef<(() => void) | null>(null);
   commitOnExit.current = text ? commitText : null;
   useEffect(() => () => commitOnExit.current?.(), []);
 
