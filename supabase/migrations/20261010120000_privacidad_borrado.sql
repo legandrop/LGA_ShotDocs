@@ -197,64 +197,95 @@ $$;
 -- 2 minutos × f (se sigue escribiendo), con f = max(1, tamaño de la base / 100 KB). `p_urgent` (la app pasa a
 -- segundo plano, o se acaba de compartir) no espera. `p_pages` limita a esas páginas.
 -- Primero se juntan las páginas que alcanza algún permiso de lector (cero si no hay ninguno: lo de todos los días
--- mientras nadie comparte con Ver, Comentar o un invitado) y después se mira cada una.
+-- mientras nadie comparte con Ver, Comentar o un invitado), solo de los proyectos donde la sesión puede editar algo, y
+-- sin las de la papelera (ellas o una de arriba) ni las de un proyecto borrado: nadie que no edite las ve, así que
+-- nadie les arma base. Después se recorren en orden y se mira cada una (¿la sesión ve lo borrado?, ¿tiene lectores?)
+-- hasta juntar 50: las que esta sesión no puede armar no ocupan lugar. Si se cortara antes de mirarlas, las que nunca
+-- se arman (no tienen base) quedarían siempre primeras y taparían a las demás.
 create function public.clean_work(p_app_version text, p_pages uuid[] default null, p_urgent boolean default false)
 returns table (page_id uuid, update_seq bigint, last_update_id bigint, clean_seq bigint, base_bytes int)
 language plpgsql stable security definer set search_path = ''
 as $$
+declare
+  me uuid := auth.uid();
+  r  record;
+  n  int := 0;
 begin
-  if private.workspace_role() is null or not private.clean_version_allowed(p_app_version) then
+  if private.workspace_role() is null or private.history_denied_for_guest()
+     or not private.clean_version_allowed(p_app_version) then
     return;
   end if;
-  return query
+  for r in
     with recursive reader_grants as (
       select g.project_id, g.page_id
       from public.grants g
       join public.members m on m.user_id = g.user_id and m.removed_at is null
       where g.revoked_at is null and (g.level in ('view', 'comment') or m.role = 'guest')
     ),
-    sub (id, depth) as (
-      select rg.page_id, 0 from reader_grants rg where rg.page_id is not null
-      union all
-      select pg.id, s.depth + 1
-      from public.pages pg
-      join sub s on pg.parent_id = s.id
-      where s.depth < 10000
-    ),
-    reach as (
-      select pg.id from public.pages pg
-      where pg.workspace_id in (select rg.project_id from reader_grants rg where rg.project_id is not null)
+    -- Los proyectos donde la sesión puede editar algo (lo creó, o tiene Editar sobre él o sobre una de sus páginas).
+    mine (ws) as (
+      select w.id from public.workspaces w where w.owner_id = me
       union
-      select s.id from sub s
+      select coalesce(g.project_id, gp.workspace_id)
+      from public.grants g
+      left join public.pages gp on gp.id = g.page_id
+      where g.user_id = me and g.revoked_at is null and g.level in ('edit', 'edit_pages')
+    ),
+    -- Las raíces de los proyectos compartidos enteros y las páginas compartidas una por una, vivas, y lo que cuelga
+    -- de ellas sin pasar por la papelera. `union` (no `union all`): cada página una vez, y termina aunque hubiera un
+    -- ciclo.
+    reach (id) as (
+      select pg.id
+      from public.pages pg
+      join public.workspaces w on w.id = pg.workspace_id and w.deleted_at is null
+      where pg.parent_id is null and pg.deleted_at is null
+        and pg.workspace_id in (select rg.project_id from reader_grants rg where rg.project_id is not null)
+        and pg.workspace_id in (select mi.ws from mine mi)
+      union
+      select pg.id
+      from public.pages pg
+      join public.workspaces w on w.id = pg.workspace_id and w.deleted_at is null
+      where pg.id in (select rg.page_id from reader_grants rg where rg.page_id is not null)
+        and pg.workspace_id in (select mi.ws from mine mi)
+        and not private.page_in_trash(pg.id)
+      union
+      select pg.id
+      from public.pages pg
+      join reach rc on pg.parent_id = rc.id
+      where pg.deleted_at is null
     ),
     cand as (
       select pg.id, pg.update_seq, pg.clean_seq, pg.clean_at, u.id as last_id, u.created_at as last_at,
              cb.page_id is not null as has_base, coalesce(octet_length(b.state), 0) as bytes
       from public.pages pg
-      join reach r on r.id = pg.id
+      join reach rc on rc.id = pg.id
       join public.page_updates u on u.page_id = pg.id and u.seq = pg.update_seq
       left join lateral (select (private.current_clean_base(pg.id)).page_id) cb (page_id) on true
       left join public.page_clean_bases b on b.page_id = pg.id
       where pg.update_seq > 0
         and (p_pages is null or pg.id = any (p_pages))
         and (cb.page_id is null or pg.update_seq > pg.clean_seq)
-    ),
-    due as (
-      select c.*
-      from cand c
-      where not c.has_base
-         or coalesce(p_urgent, false)
-         or c.last_at < now() - make_interval(secs => 20 * greatest(1, c.bytes / 102400.0))
-         or c.clean_at is null
-         or c.clean_at < now() - make_interval(secs => 120 * greatest(1, c.bytes / 102400.0))
-      order by c.has_base, c.clean_at nulls first, c.id
-      limit 200
     )
-    select d.id, d.update_seq, d.last_id, d.clean_seq, d.bytes::int
-    from due d
-    where private.sees_deleted(d.id) and private.has_plain_readers(d.id)
-    order by d.has_base, d.clean_at nulls first, d.id
-    limit 50;
+    select c.*
+    from cand c
+    where not c.has_base
+       or coalesce(p_urgent, false)
+       or c.last_at < now() - make_interval(secs => 20 * greatest(1, c.bytes / 102400.0))
+       or c.clean_at is null
+       or c.clean_at < now() - make_interval(secs => 120 * greatest(1, c.bytes / 102400.0))
+    order by c.has_base, c.clean_at nulls first, c.id
+  loop
+    if private.sees_deleted(r.id) and private.has_plain_readers(r.id) then
+      page_id := r.id;
+      update_seq := r.update_seq;
+      last_update_id := r.last_id;
+      clean_seq := r.clean_seq;
+      base_bytes := r.bytes::int;
+      return next;
+      n := n + 1;
+      exit when n >= 50;
+    end if;
+  end loop;
 end;
 $$;
 

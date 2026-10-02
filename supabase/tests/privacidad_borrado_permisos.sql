@@ -81,6 +81,11 @@ create function pg_temp.reset_seq(page text) returns bigint language sql securit
   select pg.clean_reset_seq from public.pages pg where pg.id = pg_temp.u(page);
 $$;
 
+-- ¿`clean_work` le pide a la sesión armar esta página?
+create function pg_temp.in_work(page text) returns boolean language sql as $$
+  select exists (select 1 from public.clean_work('1.000') w where w.page_id = pg_temp.u(page));
+$$;
+
 -- Personas: a (creó P y Q), e (Editar P), ep (Editar y crear P), c (Comentar P), v (Ver P), g (invitado, Editar P),
 -- gp (invitado, Editar y crear P), ad (admin, Editar y crear P), x (sin permiso), vq (Ver QR), nw (para compartir
 -- después), ge (miembro con Editar sobre QR, que después pasa a invitado).
@@ -338,6 +343,15 @@ begin
   assert pg_temp.pulled('c1b0') = '', 'sirve una base cuya fila final cambió de id';
   perform pg_temp.as_postgres();
   update public.page_clean_bases set last_update_id = pg_temp.row_id('c1b0', 2) where page_id = pg_temp.u('c1b0');
+  -- Una copia que vuelve `update_seq` atrás dejando la fila: la base llega más allá de la página y tampoco se sirve.
+  update public.pages set update_seq = 1 where id = pg_temp.u('c1b0');
+  perform pg_temp.as_user('c1a4');
+  assert pg_temp.pulled('c1b0') = '', 'sirve una base que llega más allá de update_seq';
+  perform pg_temp.as_postgres();
+  update public.pages set update_seq = 3 where id = pg_temp.u('c1b0');
+  perform pg_temp.as_user('c1a4');
+  assert pg_temp.pulled('c1b0') = '2:AQID', 'la base no vuelve con update_seq';
+  perform pg_temp.as_postgres();
 end;
 $$;
 
@@ -414,12 +428,22 @@ end;
 $$;
 select pg_temp.as_postgres();
 update public.pages set clean_reset_seq = 0 where id = pg_temp.u('c1b5');
+-- QR con una base en 1 y una fila más (2): al reiniciar el proyecto, la base ya no llega y `clean_seq` vuelve a 0.
+select pg_temp.as_user('c1a0');
+select public.push_page_update(pg_temp.u('c1b3'), pg_temp.u('c10c'), 'DA==', '9.999');
 select pg_temp.as_user('c1a7');
+do $$
+begin
+  assert pg_temp.push_base('c1d4', 'c1b3', 1, 'AQIH') = 'ok', 'no acepta la base de QR';
+  assert pg_temp.clean_seq('c1b3') = 1, 'clean_seq de QR no es 1';
+end;
+$$;
 select public.create_invitation('pb-new3@test.invalid', 'member', jsonb_build_array(jsonb_build_object('project_id', pg_temp.u('c1e1'), 'level', 'view')));
 do $$
 begin
-  assert pg_temp.reset_seq('c1b5') = 1 and pg_temp.reset_seq('c1b3') = 1 and pg_temp.reset_seq('c1b4') = 1,
+  assert pg_temp.reset_seq('c1b5') = 1 and pg_temp.reset_seq('c1b3') = 2 and pg_temp.reset_seq('c1b4') = 1,
     'invitar con Ver al proyecto no reinicia todas sus páginas';
+  assert pg_temp.clean_seq('c1b3') = 0, 'reiniciar el proyecto deja clean_seq en una base que ya no llega';
   perform pg_temp.as_postgres();
   update public.pages set clean_reset_seq = 0 where workspace_id = pg_temp.u('c1e1');
 end;
@@ -507,6 +531,128 @@ begin
 end;
 $$;
 update public.workspaces set deleted_at = null where id = pg_temp.u('c1e0');
+
+-- ---------------------------------------------------------------------------------------------------
+-- Qué pide armar clean_work: hijas de una página compartida, páginas que solo ve un invitado, y que las que nadie
+-- puede armar (papelera, proyecto borrado) o que arma otro editor no tapen a las demás
+-- ---------------------------------------------------------------------------------------------------
+-- Personas: o (creó V, W e Y), vr (Ver sobre la página A de V), gs (invitado, Editar solo sobre S de V), ey (Editar
+-- sobre Y y nada más), vw (Ver W y Ver Y).
+insert into auth.users (id, email, aud, role) values
+  (pg_temp.u('c2a0'), 'pb-o@test.invalid', 'authenticated', 'authenticated'),
+  (pg_temp.u('c2a1'), 'pb-vr@test.invalid', 'authenticated', 'authenticated'),
+  (pg_temp.u('c2a2'), 'pb-gs@test.invalid', 'authenticated', 'authenticated'),
+  (pg_temp.u('c2a3'), 'pb-ey@test.invalid', 'authenticated', 'authenticated'),
+  (pg_temp.u('c2a4'), 'pb-vw@test.invalid', 'authenticated', 'authenticated');
+insert into public.members (user_id, role) values
+  (pg_temp.u('c2a0'), 'member'), (pg_temp.u('c2a1'), 'member'), (pg_temp.u('c2a2'), 'guest'),
+  (pg_temp.u('c2a3'), 'member'), (pg_temp.u('c2a4'), 'member');
+insert into public.workspaces (id, owner_id, name) values
+  (pg_temp.u('c2e0'), pg_temp.u('c2a0'), 'V'),
+  (pg_temp.u('c2e1'), pg_temp.u('c2a0'), 'W'),
+  (pg_temp.u('c2e2'), pg_temp.u('c2a0'), 'Y');
+-- V: A › A1, S. Y: L. W: XP (sus 221 hijas se crean más abajo).
+insert into public.pages (id, workspace_id, parent_id, title, sort_key) values
+  (pg_temp.u('c2b0'), pg_temp.u('c2e0'), null, 'A', 'a0'),
+  (pg_temp.u('c2b1'), pg_temp.u('c2e0'), pg_temp.u('c2b0'), 'A1', 'a1'),
+  (pg_temp.u('c2b2'), pg_temp.u('c2e0'), null, 'S', 'a2'),
+  (pg_temp.u('c2b3'), pg_temp.u('c2e2'), null, 'L', 'a0'),
+  (pg_temp.u('c2b4'), pg_temp.u('c2e1'), null, 'XP', 'a0');
+insert into public.grants (user_id, project_id, page_id, level) values
+  (pg_temp.u('c2a1'), null, pg_temp.u('c2b0'), 'view'),
+  (pg_temp.u('c2a2'), null, pg_temp.u('c2b2'), 'edit'),
+  (pg_temp.u('c2a3'), pg_temp.u('c2e2'), null, 'edit'),
+  (pg_temp.u('c2a4'), pg_temp.u('c2e1'), null, 'view'),
+  (pg_temp.u('c2a4'), pg_temp.u('c2e2'), null, 'view');
+select pg_temp.as_user('c2a0');
+select public.push_page_update(pg_temp.u('c2b0'), pg_temp.u('c201'), 'AQ==', '9.999');
+select public.push_page_update(pg_temp.u('c2b1'), pg_temp.u('c202'), 'Ag==', '9.999');
+select public.push_page_update(pg_temp.u('c2b1'), pg_temp.u('c203'), 'Aw==', '9.999');
+select public.push_page_update(pg_temp.u('c2b2'), pg_temp.u('c204'), 'BA==', '9.999');
+select public.push_page_update(pg_temp.u('c2b3'), pg_temp.u('c205'), 'BQ==', '9.999');
+select public.push_page_update(pg_temp.u('c2b3'), pg_temp.u('c206'), 'Bg==', '9.999');
+select pg_temp.as_postgres();
+
+-- La hija de una página compartida con Ver se arma, y su lector baja solo la base.
+do $$
+begin
+  assert private.has_plain_readers(pg_temp.u('c2b1')), 'A1: el lector de la página de arriba no cuenta';
+  perform pg_temp.as_user('c2a1');
+  assert pg_temp.pulled('c2b1') = '', 'vr baja filas de A1 sin base';
+  perform pg_temp.as_user('c2a0');
+  assert pg_temp.in_work('c2b1'), 'clean_work no devuelve A1 (hija de una página compartida con Ver)';
+  assert pg_temp.push_base('c2d0', 'c2b1', 2, 'AQIDCA==') = 'ok', 'no acepta la base de A1';
+  perform pg_temp.as_user('c2a1');
+  assert pg_temp.pulled('c2b1') = '2:AQIDCA==', 'vr no baja solo la base de A1';
+  perform pg_temp.as_postgres();
+end;
+$$;
+
+-- Una página que solo ve un invitado con Editar se arma; el invitado no baja filas, sube las suyas y no arma.
+do $$
+begin
+  assert private.has_plain_readers(pg_temp.u('c2b2')), 'S: el invitado con Editar no cuenta';
+  perform pg_temp.as_user('c2a0');
+  assert pg_temp.in_work('c2b2'), 'clean_work no devuelve S (solo la ve un invitado con Editar)';
+  perform pg_temp.as_user('c2a2');
+  assert pg_temp.pulled('c2b2') = '', 'el invitado con Editar baja filas';
+  assert public.push_page_update(pg_temp.u('c2b2'), pg_temp.u('c207'), 'CQ==', '9.999') = 2, 'el invitado no sube';
+  perform pg_temp.expect_error($q$select pg_temp.push_base('c2d1', 'c2b2', 2, 'AQI=')$q$, 'not_allowed', 'el invitado arma');
+  assert (select count(*) from public.clean_work('1.000')) = 0, 'clean_work le da páginas al invitado';
+  perform pg_temp.as_postgres();
+end;
+$$;
+
+-- L (en Y) tiene una base en 1 y una fila después, de hace 30 s: le toca armar. W tiene XP y 221 hijas con una fila
+-- cada una y sin base, compartidas con Ver: más que el corte de 200 que tenía la primera versión de clean_work.
+insert into public.pages (id, workspace_id, parent_id, title, sort_key)
+  select ('00000000-0000-4000-8000-0000000' || lpad(to_hex(49152 + i), 5, '0'))::uuid, pg_temp.u('c2e1'),
+         pg_temp.u('c2b4'), 'X' || i, 'b' || lpad(i::text, 4, '0')
+  from generate_series(0, 220) i;
+select pg_temp.as_user('c2a0');
+do $$
+declare
+  i int;
+begin
+  perform public.push_page_update(pg_temp.u('c2b4'), gen_random_uuid(), 'Cg==', '9.999');
+  for i in 0..220 loop
+    perform public.push_page_update(('00000000-0000-4000-8000-0000000' || lpad(to_hex(49152 + i), 5, '0'))::uuid,
+                                    gen_random_uuid(), 'Cw==', '9.999');
+  end loop;
+  assert pg_temp.push_base('c2d2', 'c2b3', 1, 'AQIDCQ==') = 'ok', 'no acepta la base de L';
+end;
+$$;
+select pg_temp.as_postgres();
+update public.page_updates set created_at = now() - interval '30 seconds' where page_id = pg_temp.u('c2b3');
+do $$
+begin
+  -- ey edita Y y no ve W: las 222 de W (sin base, las arma o) no le tapan L.
+  perform pg_temp.as_user('c2a3');
+  assert pg_temp.in_work('c2b3'), 'con 222 páginas que arma otro editor, clean_work no le devuelve L a ey';
+  assert not pg_temp.in_work('c2b4'), 'clean_work le pide a ey una página que no ve';
+  -- XP a la papelera (sus hijas cuelgan de ella): nadie que no edite las ve, nadie las arma, y no tapan L.
+  perform pg_temp.as_postgres();
+  update public.pages set deleted_at = now() where id = pg_temp.u('c2b4');
+  perform pg_temp.as_user('c2a0');
+  assert pg_temp.in_work('c2b3'), 'con 222 páginas en la papelera de un proyecto compartido, clean_work no devuelve L';
+  assert not pg_temp.in_work('c2b4'), 'clean_work pide armar una página en la papelera';
+  assert not pg_temp.in_work('c000'), 'clean_work pide armar una hija de una página en la papelera';
+  -- Fuera de la papelera, con el proyecto W borrado: lo mismo.
+  perform pg_temp.as_postgres();
+  update public.pages set deleted_at = null where id = pg_temp.u('c2b4');
+  update public.workspaces set deleted_at = now() where id = pg_temp.u('c2e1');
+  perform pg_temp.as_user('c2a0');
+  assert pg_temp.in_work('c2b3'), 'con 222 páginas de un proyecto borrado, clean_work no devuelve L';
+  assert not pg_temp.in_work('c2b4'), 'clean_work pide armar una página de un proyecto borrado';
+  perform pg_temp.as_postgres();
+  update public.workspaces set deleted_at = null where id = pg_temp.u('c2e1');
+  -- Con W vivo, o arma sus páginas sin base (de a 50, primero las que no tienen base).
+  perform pg_temp.as_user('c2a0');
+  assert (select count(*) from public.clean_work('1.000')) = 50, 'clean_work no devuelve 50';
+  assert pg_temp.in_work('c000'), 'clean_work no devuelve las hijas de XP con W vivo';
+  perform pg_temp.as_postgres();
+end;
+$$;
 
 -- Nada se borró: las filas de R siguen enteras.
 do $$
