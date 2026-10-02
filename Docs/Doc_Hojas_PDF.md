@@ -249,13 +249,14 @@ de cortes").
   medio y al final de un salto con texto, Supr en un salto vacío, Ctrl+Enter con una selección, en una casilla y al
   final de un título colapsado (la sección sigue colapsada), deshacer en un paso, mover una sección colapsada con un
   salto adentro, y pegar adentro de un salto (texto, varios párrafos, un título al final, sobre el texto elegido).
-- En Chromium, con la página real sobre el servidor en memoria (sin login), 29 de 29: la línea; las marcas
+- En Chromium, con la página real sobre el servidor en memoria (sin login), 31 de 31: la línea; las marcas
   "Page 2" y "Page 3" antes de los bloques que siguen a cada salto; el PDF (`page.pdf`) con 3 hojas que empiezan
   donde marca la pantalla y sin el rótulo; Ctrl+Enter en el medio de un párrafo (4 hojas) y un solo Ctrl+Z; "/page
   br" + Enter; Retroceso; escribir en el salto (el texto sale al pie de la hoja 1); copiar y pegar; el teléfono
   (las mismas marcas y el mismo PDF); la página libre (sin marcas, línea tenue, PDF A4 con los saltos); una sección
   colapsada ("Page 3 inside", el PDF con todo abierto da 3 hojas, "como se ve" 2). Ctrl+Enter en un bloque de código
-  (no pone salto ni toca el código). Y el rótulo en castellano, en oscuro.
+  (no pone salto ni toca el código), Enter al principio de un salto con texto (las mismas hojas) y Supr en un
+  salto vacío (lo saca). Y el rótulo en castellano, en oscuro.
 
 ## Pendiente
 
