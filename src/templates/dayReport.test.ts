@@ -11,16 +11,14 @@ import {
   dayName,
   dayReportFolderOf,
   dayReportsMark,
-  factKeyOf,
-  fillReport,
   firstNumber,
   isDayReportFolder,
   isDayReportShortcut,
   isValidDate,
   localDate,
-  readFacts,
   reportTitle,
 } from './dayReport';
+import { factKeyOf, fillReport, readFacts } from './dayReportFacts';
 
 // El reporte del día (Docs/Doc_Plantillas.md, sección 6): la fecha local, el nombre, los rótulos en los dos idiomas, lo
 // que se copia del reporte anterior, la carpeta de reportes (marcada, deducida, dejada a mano) y el atajo.

@@ -12,7 +12,8 @@ import { schema as publishedSchema } from '../ui/fixtures/editorSchemaMain';
 import { findUnknownContent } from '../ui/unknownContent';
 import { insertTemplate, isEmptyPage } from './apply';
 import { BUILTIN_ONSET } from './builtinIds';
-import { dayReportsMark, isDayReportFolder, readFacts, reportTitle } from './dayReport';
+import { dayReportsMark, isDayReportFolder, reportTitle } from './dayReport';
+import { readFacts } from './dayReportFacts';
 import { createDayReport, markReportFolder, planDayReport, placeBefore, reportBlocks, reportsOn } from './dayReportCreate';
 
 // La prueba de aceptación de la entrega 2 (Docs/Doc_Plantillas.md, sección 11) con el servidor en memoria: en una

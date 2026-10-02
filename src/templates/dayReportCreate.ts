@@ -9,7 +9,8 @@ import { editorSchemaOptions, schema } from '../ui/editorSchema';
 import { findUnknownContent } from '../ui/unknownContent';
 import { builtinBlocks, type TemplateBlock } from './builtin';
 import { BUILTIN_ONSET } from './builtinIds';
-import { dateAtStart, dayInTitle, dayReportsMark, fillReport, localDate, readFacts, reportTitle, type ReportFacts } from './dayReport';
+import { dateAtStart, dayInTitle, dayReportsMark, localDate, reportTitle } from './dayReport';
+import { fillReport, readFacts, type ReportFacts } from './dayReportFacts';
 
 // Crear el reporte del día (Docs/Doc_Plantillas.md, 6.3 a 6.6): leer los reportes de la carpeta (todo está en el
 // dispositivo: anda sin red), proponer la fecha, el día y la locación, y crear la página con la plantilla llena. La
