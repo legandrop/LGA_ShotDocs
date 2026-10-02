@@ -626,8 +626,8 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
             return (
               <div key={`${o.row}:${i}`} className="history-orphan" style={{ '--hc': colorOf(who) } as CSSProperties}>
                 <p className="history-orphan-who">{tr('history.orphan', { name: nameOf(who) })}</p>
-                <blockquote className="history-orphan-text">{o.text}</blockquote>
-                <button className="link" onClick={() => copyOrphan(o.text)}>
+                <blockquote className="history-orphan-text">{o.text.trim()}</blockquote>
+                <button className="link" onClick={() => copyOrphan(o.text.trim())}>
                   {tr('history.copy')}
                 </button>
               </div>

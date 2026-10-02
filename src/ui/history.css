@@ -321,16 +321,17 @@
   opacity: 0.55;
 }
 
-/* Un bloque que cambió de tipo, de formato o de lugar: la barra punteada y el rótulo, chico, arriba a la derecha. */
+/* Un bloque que cambió de tipo, de formato o de lugar: una barra fina y el rótulo, chico, al final del renglón (en un
+   bloque sin texto, como una imagen, arriba a la derecha). */
 .history-page .hist-node-change.hist-block {
   box-shadow: -10px 0 0 -8px var(--hc);
 }
 
+.history-page .hist-label,
 .history-page [data-hist-label]::after {
-  content: attr(data-hist-label);
-  position: absolute;
-  top: -2px;
-  right: 0;
+  display: inline-block;
+  margin-left: 10px;
+  vertical-align: 0.15em;
   padding: 0 6px;
   border-radius: 4px;
   font: 500 11px/18px var(--font-ui, system-ui, sans-serif);
@@ -339,8 +340,16 @@
   color: var(--hc);
   background: var(--bg);
   border: 1px solid color-mix(in srgb, var(--hc) 45%, transparent);
-  pointer-events: none;
   white-space: nowrap;
+  user-select: none;
+}
+
+.history-page [data-hist-label]::after {
+  content: attr(data-hist-label);
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  pointer-events: none;
 }
 
 /* Con los cambios, la hoja sin las marcas de corte (lo borrado ocupa lugar y cortaría en otro lado). */
@@ -370,8 +379,8 @@
   margin: 0 0 6px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  color: var(--hc);
-  text-decoration: line-through 1px var(--hc);
+  color: var(--text);
+  font-style: italic;
 }
 
 @media (max-width: 760px) {
@@ -383,4 +392,5 @@
     margin-left: 12px;
     margin-right: 12px;
   }
+
 }

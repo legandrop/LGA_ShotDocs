@@ -64,7 +64,31 @@ export function markDecorations(state: EditorState, input: HistoryMarksInput): D
       const node = at === null ? null : doc.nodeAt(at);
       if (at === null || !node) continue;
       const cls = `hist-node hist-node-${mark.kind}${mark.block ? ' hist-block' : ''}`;
-      decorations.push(Decoration.node(at, at + node.nodeSize, { ...attrs, class: cls, ...(look.label ? { 'data-hist-label': look.label } : {}) }));
+      // El rótulo de un bloque con texto va al final de su renglón (no tapa nada ni se sale de la hoja); el de uno sin
+      // texto (una imagen, una tabla), arriba a la derecha.
+      const inline = !!look.label && node.isTextblock;
+      decorations.push(
+        Decoration.node(at, at + node.nodeSize, { ...attrs, class: cls, ...(look.label && !inline ? { 'data-hist-label': look.label } : {}) }),
+      );
+      if (inline) {
+        const label = look.label!;
+        decorations.push(
+          Decoration.widget(
+            at + node.nodeSize - 1,
+            () => {
+              const span = document.createElement('span');
+              span.className = 'hist-label';
+              span.contentEditable = 'false';
+              span.setAttribute('style', `--hc: ${look.color}`);
+              span.setAttribute('data-tip', look.tip);
+              span.setAttribute('data-tip-plain', '');
+              span.textContent = label;
+              return span;
+            },
+            { side: 1, ignoreSelection: true, key: `hist-label:${at}:${label}` },
+          ),
+        );
+      }
     }
   }
   return DecorationSet.create(doc, decorations);

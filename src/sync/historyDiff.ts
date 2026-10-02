@@ -9,11 +9,11 @@ import { CONTENT_FRAGMENT, normalizeStructure } from './structure';
 // cuándo). La pantalla lo muestra con el editor de solo lectura y pinta las marcas con decoraciones: el esquema no
 // cambia (nada de marcas ni tipos nuevos) y el documento del historial no se toca (solo se recorre).
 //
-// - Lo agregado y lo borrado salen de Yjs (`toDelta` con los dos snapshots): exacto, letra por letra, sin adivinar.
+// - Lo agregado y lo borrado salen de Yjs (`toDelta` con los dos snapshots): exacto, sin adivinar.
 // - **Bloques apareados por id:** y-prosemirror rehace algunos bloques (los borra y los crea de nuevo con el mismo id:
 //   cambiar el tipo, sangrar, mover, unir). Con Yjs puro se vería todo el texto borrado y vuelto a escribir. Un bloque
 //   borrado y uno agregado con el mismo id entre las dos versiones se muestran como UN bloque que cambió (el rótulo
-//   del tipo, o "se movió"), y su texto se compara letra por letra (diferencia de texto). Lo mismo con el contenido de
+//   del tipo, o "se movió"), y su texto se compara por palabras (diferencia de texto). Lo mismo con el contenido de
 //   un bloque que se cambió en el lugar (el bloque queda y su párrafo pasa a título).
 // - **Solo lo que cambió:** con `scope = 'changed'` (lo de la app) la diferencia con los dos snapshots se calcula
 //   solo en los bloques que tocó alguna fila del medio (lo que agregaron o borraron por primera vez); el resto se copia
@@ -90,7 +90,7 @@ const BLOCK = 'blockContainer';
 const GROUP = 'blockGroup';
 /** El renglón de los huecos estables de las fotos en línea (no es un nodo del editor; history.ts lo compara). */
 const STABLE_GAPS = 'lgaStableGaps';
-/** Lo más largo que se compara letra por letra (la tabla es largo × largo). */
+/** Lo más largo que se compara palabra por palabra (la tabla es largo × largo). */
 const MAX_DIFF_CELLS = 4_000_000;
 
 const visible = (item: Y.Item, s: Y.Snapshot) => (s.sv.get(item.id.client) ?? 0) > item.id.clock && !Y.isDeleted(s.ds, item.id);
@@ -126,50 +126,63 @@ export function blockKind(nodeName: string, attrs: Attrs): BlockKind {
 
 const sameKind = (a: BlockKind, b: BlockKind) => a.type === b.type && a.level === b.level && a.prop === b.prop;
 
-/** Lo que dice cada letra: `=` igual, `+` agregada, `-` borrada (la diferencia de dos textos, LCS). */
+/** Las palabras, los espacios y cada signo (una letra fuera del plano básico, entera). Juntas, dan el texto. */
+function tokens(s: string): string[] {
+  return s.match(/[\p{L}\p{N}\p{M}_]+|\s+|[^\p{L}\p{N}\p{M}_\s]/gu) ?? [];
+}
+
+/**
+ * Lo que dice cada letra: `=` igual, `+` agregada, `-` borrada. La diferencia se calcula por palabras (la subsecuencia
+ * común más larga): "fija" → "en mano" se lee como una palabra borrada y dos agregadas, no como letras sueltas.
+ */
 export function diffText(a: string, b: string): ('=' | '+' | '-')[] {
+  const ta = tokens(a);
+  const tb = tokens(b);
   let start = 0;
-  while (start < a.length && start < b.length && a[start] === b[start]) start++;
-  let endA = a.length;
-  let endB = b.length;
-  while (endA > start && endB > start && a[endA - 1] === b[endB - 1]) {
+  while (start < ta.length && start < tb.length && ta[start] === tb[start]) start++;
+  let endA = ta.length;
+  let endB = tb.length;
+  while (endA > start && endB > start && ta[endA - 1] === tb[endB - 1]) {
     endA--;
     endB--;
   }
   const out: ('=' | '+' | '-')[] = [];
-  for (let i = 0; i < start; i++) out.push('=');
+  const put = (op: '=' | '+' | '-', token: string) => {
+    for (let k = 0; k < token.length; k++) out.push(op);
+  };
+  for (let i = 0; i < start; i++) put('=', ta[i]);
   const n = endA - start;
   const m = endB - start;
   if (n > 0 && m > 0 && n * m <= MAX_DIFF_CELLS) {
-    // La tabla de la subsecuencia común más larga, de atrás para adelante (una fila por letra de `a`).
+    // La tabla de la subsecuencia común más larga, de atrás para adelante (una fila por palabra de `a`).
     const len: Uint32Array[] = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
     for (let i = n - 1; i >= 0; i--) {
       for (let j = m - 1; j >= 0; j--) {
-        len[i][j] = a[start + i] === b[start + j] ? len[i + 1][j + 1] + 1 : Math.max(len[i + 1][j], len[i][j + 1]);
+        len[i][j] = ta[start + i] === tb[start + j] ? len[i + 1][j + 1] + 1 : Math.max(len[i + 1][j], len[i][j + 1]);
       }
     }
     let i = 0;
     let j = 0;
     while (i < n && j < m) {
-      if (a[start + i] === b[start + j]) {
-        out.push('=');
+      if (ta[start + i] === tb[start + j]) {
+        put('=', ta[start + i]);
         i++;
         j++;
       } else if (len[i + 1][j] >= len[i][j + 1]) {
-        out.push('-');
+        put('-', ta[start + i]);
         i++;
       } else {
-        out.push('+');
+        put('+', tb[start + j]);
         j++;
       }
     }
-    for (; i < n; i++) out.push('-');
-    for (; j < m; j++) out.push('+');
+    for (; i < n; i++) put('-', ta[start + i]);
+    for (; j < m; j++) put('+', tb[start + j]);
   } else {
-    for (let i = 0; i < n; i++) out.push('-');
-    for (let j = 0; j < m; j++) out.push('+');
+    for (let i = start; i < endA; i++) put('-', ta[i]);
+    for (let j = start; j < endB; j++) put('+', tb[j]);
   }
-  for (let i = endA; i < a.length; i++) out.push('=');
+  for (let i = endA; i < ta.length; i++) put('=', ta[i]);
   return out;
 }
 
@@ -384,7 +397,7 @@ class UnionBuilder {
   }
 
   /**
-   * Un contenido rehecho: se arma el nuevo y su texto se compara letra por letra con el del viejo (las letras nuevas,
+   * Un contenido rehecho: se arma el nuevo y su texto se compara por palabras con el del viejo (las letras nuevas,
    * con la fila de cada una; las que se fueron, con la que las borró). Si la forma no es la misma (otra cantidad de
    * textos), lo nuevo va entero como agregado.
    */

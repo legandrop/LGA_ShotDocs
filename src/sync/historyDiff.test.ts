@@ -133,7 +133,7 @@ describe('lo agregado y lo borrado, por persona', () => {
     checkUnions(h, rows, 'guion');
   });
 
-  it('un bloque que y-prosemirror rehace con el mismo id (cambiar el tipo) es UN bloque que cambió, con su texto letra por letra', async () => {
+  it('un bloque que y-prosemirror rehace con el mismo id (cambiar el tipo) es UN bloque que cambió, con su texto comparado por palabras', async () => {
     const { server, a, b, pageId, tick } = await setup();
     await edit(a, pageId, (_d, g) => g.insert(0, [block('x', 'Escena 64'), block('y', 'Otro')]));
     await a.engine.syncNow();
@@ -210,6 +210,10 @@ describe('texto huérfano (5.4)', () => {
 describe('la diferencia de dos textos', () => {
   it('lo igual, lo agregado y lo borrado', () => {
     expect(diffText('Hola mundo', 'Hola lindo mundo').join('')).toBe('=====++++++=====');
+    // Por palabras: "fija" se borra entera y "en mano" se agrega entera (no letras sueltas).
+    expect(diffText('cámara fija.', 'cámara en mano.').join('')).toBe('=======----+++++++=');
+    // Un emoji (dos unidades de UTF-16) no se parte.
+    expect(diffText('a 😀', 'a 😃').join('')).toBe('==--++');
     expect(diffText('abc', '').join('')).toBe('---');
     expect(diffText('', 'ab').join('')).toBe('++');
   });
