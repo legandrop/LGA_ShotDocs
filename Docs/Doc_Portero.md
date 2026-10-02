@@ -179,12 +179,15 @@ caché del arranque (también el `206`):
   `<img>`). Otro origen no queda habilitado. El preflight (`OPTIONS`) deja pasar `Range`. Lo necesita la app
   para bajar el original con `fetch` y hacer la imagen nítida de la página (`Doc_Imagenes.md`, "Calidad en la
   página"); el `<img>`, el `<video>` y el carrete no mandan `Origin` y salen igual que antes, así que las
-  versiones anteriores de la app no cambian. Con un portero anterior, esa bajada falla (CORS) y la página
+  versiones anteriores de la app no cambian. *Download all* de una carpeta (P.9, entrega 2, `Doc_Carpetas.md`) baja cada
+  archivo de la lista con `fetch` por este mismo camino (también `/t/`), sin nada nuevo en el portero: el pase es la
+  credencial. Con un portero anterior, esa bajada falla (CORS) y la página
   sigue con la miniatura; la app deja de intentar un rato (ver `Doc_Imagenes.md`).
 - `Content-Disposition`: `inline` o `attachment` con `filename="…"` en ASCII (lo que no es ASCII, las
   comillas y las barras, `_`) y `filename*=UTF-8''…` (RFC 5987, también con `'()*` codificados). Al nombre se
   le sacan los controles y las marcas de dirección (U+202A–U+202E, U+2066–U+2069, U+200E, U+200F, U+061C:
-  con U+202E, `gpj.exe` se lee `exe.jpg`). Un pase viejo, sin nombre: `inline` o `attachment` solos.
+  con U+202E, `gpj.exe` se lee `exe.jpg`). Un nombre de más de 255 caracteres se corta antes de la extensión y por
+  grafema (`cutText`: nunca media bandera ni un emoji sin su tono), igual que el de las carpetas (200). Un pase viejo, sin nombre: `inline` o `attachment` solos.
 - Siempre `X-Content-Type-Options: nosniff` y `Referrer-Policy: no-referrer` (el pase no se filtra desde
   los links de un PDF), y `Content-Security-Policy: sandbox` **menos en el PDF que se muestra**: el visor de
   PDF del navegador no carga en un documento con `sandbox`. Ese va sin CSP, con `nosniff`. No lleva
@@ -484,7 +487,8 @@ node scripts/portero-smoke.mjs
 
 Levanta el portero con `wrangler dev` (local: `workerd` y el Durable Object en una carpeta temporal, sin cuenta
 de Cloudflare ni red; la primera vez `npx` baja `wrangler`) y le manda varios pedidos seguidos (pases inválidos que
-leen el Durable Object, el estado sin sesión, un listado de carpeta sin sesión, el preflight, la salud). Falla si
+leen el Durable Object, el estado sin sesión, un listado de carpeta sin sesión, el preflight, un pase desde el origen
+de la app (con CORS) y desde otro (sin), la salud). Falla si
 alguno da otra cosa, por ejemplo un `500`: así se vio que guardar el stub del Durable Object entre pedidos rompe
 todo desde el segundo pedido ("Cannot perform I/O on behalf of a different request"). `PORTERO_SMOKE_PORT` cambia
 el puerto (4198) y `PORTERO_SMOKE_WRANGLER` la versión (`wrangler@4.146.0`, que conoce la `compatibility_date` del portero: si se sube esa fecha, subir también esta versión).

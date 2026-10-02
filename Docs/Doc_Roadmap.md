@@ -147,12 +147,12 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   portero), la tarjeta, el visor con el carrete y bajar uno, retomar volviendo a soltarla, y el portero con la
   regla de no salir del árbol. Las carpetas soltadas conservan su nombre en el Drive (D3, 2026-10-01). Falta: que Lega decida `drive.readonly` (ver lo agregado a mano en Drive), probar
   la subida directa a Google con el Drive real, "Agregar a esta carpeta", la cuadrícula, la lista sin red, "Seguir"
-  en Chrome y Edge, el botón "Carpeta…" del menú `/` y *Bajar todo* (entrega 2). Detalle en `Doc_Carpetas.md`,
-  "Cómo quedó". Pendientes de los nombres (auditoría de D3, todos BAJOS y previos al cambio):
-  - *Bajar todo* como zip tiene que limpiar cada nombre que viene de Drive: `.` y `..`, y los que terminan en punto
-    (Windows no los acepta). Vale aunque la app no los cree: el dueño puede renombrar en Drive a lo que quiera.
-  - El corte de 200 caracteres va por punto de código: en un nombre muy largo puede partir una bandera o sacar un tono
-    de piel. Cortar por grafema (`Intl.Segmenter`, existe en Workers) lo resuelve.
+  en Chrome y Edge y el botón "Carpeta…" del menú `/`. **Entrega 2 hecha (*Bajar todo*, rama `lega/carpetas-zip`):**
+  zip sin comprimir con Zip64 escrito a medida que llega en Chrome y Edge, o el árbol en una carpeta; en memoria con
+  tope en Firefox, Safari y los teléfonos (D24); nombres de Drive limpios para Windows y la Mac (`.`, `..`, punto al
+  final, `CON`…) y cortes de 200 y 250 caracteres por grafema. Falta (BAJO): listar ~40 subcarpetas por pedido (hoy una),
+  Firefox sin tope por el service worker, y probar a mano en Safari, el iPhone y con el Drive real. Detalle en
+  `Doc_Carpetas.md`, "Cómo quedó" y "Cómo quedó (entrega 2)". Pendiente de los nombres (auditoría de D3, BAJO):
   - Mac y Windows: la marca de cada subcarpeta resume la ruta sin normalizar los acentos (la Mac da `í` en dos
     partes). Volver a soltar desde el otro sistema crea subcarpetas nuevas, con el mismo nombre, al lado de las de
     antes. Normalizarla cambiaría la marca de lo ya subido: hay que pensarlo (por ejemplo, buscar por las dos formas).
