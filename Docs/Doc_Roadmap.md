@@ -403,7 +403,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
 - **P.21 Menciones en comentarios: *@persona*** (Lega, 2026-10-02): escribir `@` en un comentario, elegir a alguien y
   que le llegue un aviso en la app; por correo cuando haya clave de Resend (C.12). **Entrega 1 programada (v0.120;
   migración `20261015120000_menciones.sql` sin aplicar):** el `@` con la lista, el pintado, la cola, la campana y el
-  punto en el botón de comentarios; auditada y corregida. Faltan las entregas 2 y 3, y un detalle cosmético (O6 de la
+  punto en el botón de comentarios; auditada y corregida. **Entrega 2 programada (v0.125; migración
+  `20261016120000_menciones_e2.sql` sin aplicar, `schema_version` 16):** compartir desde la mención (dueño y admins que
+  pueden compartir la página, con Comentar y solo esa página), el punto en el árbol y el número en el título de la
+  pestaña y en el ícono de la app. Falta la entrega 3 (correo), y un detalle cosmético (O6 de la
   auditoría): un comentario con mención cuenta como 2 cambios sin subir (alta y menciones). **Diseño en `Doc_Menciones.md`** (auditado y
   corregido; decisiones propuestas ME1 a ME10, ME10 espera a Lega): solo a quien ya
   ve la página; un miembro ve al equipo y a los clientes que ya comentaron (ME10); el dueño y los admins la comparten
@@ -412,6 +415,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   nada; una campana con las no leídas que pregunta cada 60 segundos (sin Realtime); sin red con la cola de siempre;
   los visitantes del link no mencionan; las menciones de Coda se ven como `@Nombre`. Entregas: 1 (base, `@`, campana,
   sin red), 2 (compartir desde la mención, marcas en el árbol y en el ícono), 3 (correo, grupo C).
+  De la auditoría de la entrega 2 (ninguna pierde datos ni da acceso de más): falta una prueba que caiga si se saca el paso
+  previo de compartir (`useShareGate`), antes de prender D14 (O1); después de Esc o *Cancel* en la pregunta de compartir,
+  la lista del `@` no vuelve hasta tocar el campo (O2); se puede compartir desde la mención en un proyecto archivado, como
+  con *Share* (O3); no mira la versión mínima de la app de quien recibe (O4); si se descarta el comentario después de
+  compartir, la persona queda con acceso y sin mención (O5).
 - **P.24 Asistente con la clave de cada usuario y servidor MCP (fase 5)** (era C.11; 2026-10-02, ya sin esperar a
   Lega). **A1 implementada (v0.118):** ajustes con los cuatro proveedores y la clave en el dispositivo, el panel con *Fix*,
   *Improve*, *Shorter*, *Translate to…* y *Ask…* sobre lo elegido, vista previa por palabras, *Apply* con un deshacer y

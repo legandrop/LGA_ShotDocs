@@ -118,6 +118,8 @@ const PUBLIC_LINK = '0.111';
 const EXPORT_PDF = '0.122';
 /** Las menciones en comentarios (P.21, Doc_Menciones.md, entrega 1): la versión se pone al publicar, igual que en el changelog. */
 const MENTIONS = '0.120';
+/** Menciones, entrega 2: compartir desde la mención, el punto del árbol y el número afuera (la versión la pone quien publica). */
+const MENTIONS_SHARE = '0.125';
 /** Ver las anotaciones de las fotos (P.20, Doc_Anotar_Fotos.md, entrega 1): la versión se pone al publicar. */
 const PHOTO_MARKUP = '0.116';
 /** Anotar las fotos en la compu (P.20, entrega 2). El número lo pone quien publica. */
@@ -431,6 +433,16 @@ export const HELP_ENTRIES: HelpEntry[] = [
     keys: { pick: 'mentionPick', close: 'mentionClose' },
     words: ['@', 'mention', 'mencionar', 'mención', 'campana', 'bell', 'notification', 'aviso', 'unread', 'sin leer'],
     since: MENTIONS,
+  },
+  {
+    id: 'mentionsShare',
+    section: 'comments',
+    title: 'help.mentionsShare.title',
+    text: 'help.mentionsShare.text',
+    keys: { cancel: 'mentionShareCancel' },
+    words: ['@', 'mention', 'mencionar', 'share', 'compartir', 'access', 'acceso'],
+    when: 'admin',
+    since: MENTIONS_SHARE,
   },
   { id: 'questions', section: 'comments', title: 'help.questions.title', text: 'help.questions.text', keys: { question: 'question' }, since: BEFORE_HELP },
 

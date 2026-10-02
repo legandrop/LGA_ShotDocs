@@ -24,6 +24,7 @@ const MESSAGES: Record<string, Key> = {
   page_trash_denied: 'teamError.pageTrashDenied',
   page_edit_denied: 'teamError.pageEditDenied',
   page_not_found: 'teamError.pageNotFound',
+  page_in_trash: 'teamError.pageInTrash',
   project_not_found: 'teamError.projectNotFound',
 };
 

@@ -275,8 +275,13 @@ export const help = {
   },
   'help.mentions.title': { en: "Mention someone in a comment", es: "Mencionar a alguien en un comentario" },
   'help.mentions.text': {
-    en: "In a comment, type @ and pick someone who can see the page: they get a notice in the bell at the top, with the number of unread mentions. {pick} choose from the list, {close} closes it without erasing what you wrote. Deleting the @name before sending removes the mention. A dot on the comments button means someone mentioned you on that page.",
-    es: "En un comentario, escribí @ y elegí a alguien que vea la página: le llega un aviso en la campana de arriba, con el número de menciones sin leer. {pick} eligen de la lista, {close} la cierra sin borrar lo escrito. Borrar el @nombre antes de mandar saca la mención. Un punto en el botón de comentarios quiere decir que te mencionaron en esa página.",
+    en: "In a comment, type @ and pick someone who can see the page: they get a notice in the bell at the top, with the number of unread mentions. {pick} choose from the list, {close} closes it without erasing what you wrote. Deleting the @name before sending removes the mention. A dot on the comments button and in the page tree means someone mentioned you on that page; the number also shows in the tab title and on the installed app's icon.",
+    es: "En un comentario, escribí @ y elegí a alguien que vea la página: le llega un aviso en la campana de arriba, con el número de menciones sin leer. {pick} eligen de la lista, {close} la cierra sin borrar lo escrito. Borrar el @nombre antes de mandar saca la mención. Un punto en el botón de comentarios y en el árbol de páginas quiere decir que te mencionaron en esa página; el número también aparece en el título de la pestaña y en el ícono de la app instalada.",
+  },
+  'help.mentionsShare.title': { en: "Mention someone who can't see the page", es: "Mencionar a alguien que no ve la página" },
+  'help.mentionsShare.text': {
+    en: "If you're the owner or an admin and can share the page, the @ list also shows, in gray under “Can't see this page”, people who can't see it. Pick one and choose Share and mention: the page is shared with them with Comment (only that page and the ones inside it) and they're mentioned. It needs a connection. {cancel} closes the question without sharing.",
+    es: "Si sos dueño o admin y podés compartir la página, la lista del @ también muestra, en gris bajo «No ven esta página», a quienes no la ven. Elegí a alguien y tocá Compartir y mencionar: se le comparte la página con Comentar (solo esa página y las de adentro) y queda mencionado. Pide conexión. {cancel} cierra la pregunta sin compartir.",
   },
   'help.questions.title': { en: "Questions", es: "Preguntas" },
   'help.questions.text': {
@@ -586,6 +591,10 @@ export const help = {
   'shortcut.mentionClose': {
     en: "Close the @ list without erasing what you wrote",
     es: "Cerrar la lista del @ sin borrar lo escrito",
+  },
+  'shortcut.mentionShareCancel': {
+    en: "Close the question to share the page with someone you mention, without sharing",
+    es: "Cerrar la pregunta de compartir la página con quien mencionás, sin compartir",
   },
   'shortcut.versionName': {
     en: "Naming a version in the history: save / leave it as it was",
