@@ -81,20 +81,24 @@ let previous: Promise<unknown> = Promise.resolve();
 /**
  * La vista previa del adjunto: un JPEG de lado mayor `THUMB_SIDE` (como la miniatura de una foto), o `null` si no
  * tiene (no es un PDF, es muy grande, está dañado o tiene contraseña, o tardó demasiado). Tira `PreviewUnavailable`
- * si pdf.js no se pudo cargar. El archivo de la persona no se toca. De a una por vez.
+ * si pdf.js no se pudo cargar (antes de `onStart`). El archivo de la persona no se toca. De a una por vez; `onStart`
+ * se llama en su turno, con pdf.js ya bajado, justo antes de dibujar.
  */
-export function attachmentPreview(file: Blob, mime: string, name: string): Promise<Blob | null> {
+export function attachmentPreview(file: Blob, mime: string, name: string, onStart?: () => Promise<boolean>): Promise<Blob | null> {
   if (typeof document === 'undefined' || !previewable(mime, name, file.size)) return Promise.resolve(null);
   const run = previous.then(
-    () => makePreview(file, name),
-    () => makePreview(file, name),
+    () => makePreview(file, name, onStart),
+    () => makePreview(file, name, onStart),
   );
   previous = run.catch(() => undefined);
   return run;
 }
 
-async function makePreview(file: Blob, name: string): Promise<Blob | null> {
+async function makePreview(file: Blob, name: string, onStart?: () => Promise<boolean>): Promise<Blob | null> {
   const lib = await loadPdfLib();
+  // En su turno y con pdf.js listo, justo antes de dibujar: quien llama anota que empieza (la cola lo usa para no
+  // volver a probar un PDF que cerró la pestaña). `false`: ya no hace falta.
+  if (onStart && !(await onStart())) return null;
   let canvas: HTMLCanvasElement | null = null;
   try {
     const data = new Uint8Array(await file.arrayBuffer());

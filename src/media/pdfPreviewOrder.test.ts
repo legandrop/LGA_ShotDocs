@@ -54,6 +54,32 @@ describe('attachmentPreview', () => {
     expect(maxActive).toBe(1);
   });
 
+  it('onStart se llama en el turno de cada uno, justo antes de dibujar (no al entrar en la fila)', async () => {
+    vi.stubGlobal('fetch', async () => script());
+    const { attachmentPreview } = await import('./pdfPreview');
+    const events: string[] = [];
+    const start = (n: string) => async () => {
+      events.push(`empieza ${n} (dibujando: ${active})`);
+      return true;
+    };
+    await Promise.all(['a', 'b', 'c'].map((n) => attachmentPreview(pdf(), 'application/pdf', `${n}.pdf`, start(n))));
+    // Cada uno avisa cuando el anterior ya terminó (nadie dibujando).
+    expect(events).toEqual(['empieza a (dibujando: 0)', 'empieza b (dibujando: 0)', 'empieza c (dibujando: 0)']);
+  });
+
+  it('si pdf.js no se pudo bajar, onStart no se llama; si onStart dice que no, no se dibuja', async () => {
+    vi.stubGlobal('fetch', async () => {
+      throw new TypeError('Failed to fetch');
+    });
+    const { attachmentPreview, PreviewUnavailable } = await import('./pdfPreview');
+    const onStart = vi.fn(async () => true);
+    await expect(attachmentPreview(pdf(), 'application/pdf', 'a.pdf', onStart)).rejects.toBeInstanceOf(PreviewUnavailable);
+    expect(onStart).not.toHaveBeenCalled();
+    vi.stubGlobal('fetch', async () => script());
+    expect(await attachmentPreview(pdf(), 'application/pdf', 'b.pdf', async () => false)).toBeNull();
+    expect(maxActive).toBe(0);
+  });
+
   it('el Worker que vuelve como la página de la app (200 text/html, una pestaña vieja después de publicar): PreviewUnavailable', async () => {
     vi.stubGlobal('fetch', async () => new Response('<!doctype html>', { headers: { 'Content-Type': 'text/html; charset=utf-8' } }));
     const { attachmentPreview, PreviewUnavailable } = await import('./pdfPreview');

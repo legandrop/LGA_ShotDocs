@@ -157,7 +157,7 @@ export class FakeServer {
    * La vista previa de un adjunto (Docs/Doc_Adjuntos.md, entrega 2). Por defecto ninguna (node no tiene canvas);
    * las pruebas ponen `fakePreview` o una que tira `PreviewUnavailable`.
    */
-  preview: (file: Blob, mime: string, name: string) => Promise<Blob | null> = async () => null;
+  preview: (file: Blob, mime: string, name: string, onStart?: () => Promise<boolean>) => Promise<Blob | null> = async () => null;
   /** `comments`, con el texto aunque se haya borrado (como la tabla; la vista lo devuelve vacío). */
   readonly comments = new Map<string, StoredComment>();
   /** La base tiene `import_comment` (versión 8); apagado, la función no existe (PGRST202). */
@@ -1685,8 +1685,10 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
  * no (como en Chrome de Windows).
  */
 /** Una vista previa de mentira para un PDF (un JPEG corto que dice de qué archivo es); nada para lo demás. */
-export async function fakePreview(_file: Blob, mime: string, name: string): Promise<Blob | null> {
+export async function fakePreview(_file: Blob, mime: string, name: string, onStart?: () => Promise<boolean>): Promise<Blob | null> {
   if (mime !== 'application/pdf') return null;
+  // Como la de verdad: avisa que empieza a dibujar.
+  if (onStart && !(await onStart())) return null;
   return new Blob([new Uint8Array([0xff, 0xd8, 0xff]), new TextEncoder().encode(`preview:${name}`)], { type: 'image/jpeg' });
 }
 
@@ -1777,7 +1779,7 @@ export async function makeDevice(
     projectOf: (pageId) => tree.get(pageId)?.workspace_id,
     onForeignFile: (name) => server.foreignNotices.push(name),
     probe: (file, mime) => server.probe(file, mime),
-    preview: (file, mime, name) => server.preview(file, mime, name),
+    preview: (file, mime, name, onStart) => server.preview(file, mime, name, onStart),
     playMark: async (thumb) => thumb,
     viewImage: fakeViewImage,
     convertHeic: (file) => server.convertHeic(file),

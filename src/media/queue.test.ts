@@ -1788,15 +1788,16 @@ describe('adjuntos: vista previa (Docs/Doc_Adjuntos.md, entrega 2)', () => {
     await sync(a);
     let calls = 0;
     // El navegador cierra la pestaña acá (memoria, en el iPhone): la vista previa nunca termina.
-    server.preview = () => {
+    server.preview = async (_f, _m, _n, onStart) => {
       calls++;
+      await onStart?.();
       return new Promise(() => undefined);
     };
     const url = await a.media.add(page, makeFile(4096, 'pesado.pdf', 'application/pdf'));
     const id = mediaIdOf(url)!;
     await vi.waitFor(() => expect(calls).toBe(1));
     // La marca quedó antes de dibujar, sin terminar.
-    expect(await a.mediaDb.get('files', id)).toMatchObject({ probed: false, previewTried: true, registered: false });
+    await vi.waitFor(async () => expect(await a.mediaDb.get('files', id)).toMatchObject({ probed: false, previewTried: true, registered: false }));
     a.engine.stop();
 
     // Se vuelve a abrir la app (la misma base del dispositivo), varias veces.
@@ -1809,6 +1810,77 @@ describe('adjuntos: vista previa (Docs/Doc_Adjuntos.md, entrega 2)', () => {
     expect(await a.mediaDb.get('files', id)).toMatchObject({ probed: true, previewTried: true, thumb: 'none', registered: true, pending: 0 });
     expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
     expect(server.thumbs.has(id)).toBe(false);
+  });
+
+  it('la app se cierra con tres PDF en fila: solo el que se estaba dibujando queda sin vista previa', async () => {
+    const server = new FakeServer();
+    server.enableMedia();
+    const name = crypto.randomUUID();
+    const a = await device(server, name);
+    const page = await a.tree.create(null, 'Día 3');
+    await sync(a);
+    // De a una, como la de verdad: cada una avisa que empieza en su turno; la primera se queda dibujando y la app se
+    // cierra (las otras dos esperan su turno).
+    let started = 0;
+    let chain: Promise<unknown> = Promise.resolve();
+    server.preview = (_f, _m, _n, onStart) => {
+      const run = chain.then(async () => {
+        started++;
+        await onStart?.();
+        return new Promise<Blob | null>(() => undefined);
+      });
+      chain = run.catch(() => undefined);
+      return run;
+    };
+    const ids: string[] = [];
+    for (const n of ['a.pdf', 'b.pdf', 'c.pdf']) ids.push(mediaIdOf(await a.media.add(page, makeFile(4096, n, 'application/pdf')))!);
+    await vi.waitFor(async () => expect((await a.mediaDb.get('files', ids[0]))?.previewTried).toBe(true));
+    expect(started).toBe(1);
+    expect((await a.mediaDb.get('files', ids[1]))?.previewTried).toBeUndefined();
+    expect((await a.mediaDb.get('files', ids[2]))?.previewTried).toBeUndefined();
+    a.engine.stop();
+
+    // Se vuelve a abrir con pdf.js andando: b y c tienen vista previa; a queda con el ícono; los tres suben.
+    let calls = 0;
+    server.preview = async (f, m, n, onStart) => {
+      calls++;
+      return fakePreview(f, m, n, onStart);
+    };
+    const again = await device(server, name);
+    await sync(again);
+    expect(calls).toBe(2);
+    const after = await Promise.all(ids.map((id) => again.mediaDb.get('files', id)));
+    expect(after.map((r) => r?.thumb)).toEqual(['none', 'done', 'done']);
+    expect(after.every((r) => r?.pending === 0 && r?.previewTried === true)).toBe(true);
+    expect(cardText(await again.media.resolve(MEDIA_SCHEME + ids[0]))).toContain('height="96"');
+    expect(cardText(await again.media.resolve(MEDIA_SCHEME + ids[1]))).toContain('height="268"');
+  });
+
+  it('al hacerla después, si pdf.js no se pudo bajar no queda marcada y se prueba la próxima vez', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    const url = await a.media.add(page, makeFile(2048, 'viejo.pdf', 'application/pdf'));
+    const id = mediaIdOf(url)!;
+    await sync(a);
+    const old = (await a.mediaDb.get('files', id))!;
+    delete old.previewTried;
+    await a.mediaDb.put('files', old);
+
+    let calls = 0;
+    server.preview = async () => {
+      calls++;
+      throw new PreviewUnavailable('sin red');
+    };
+    await a.media.resolve(url);
+    await vi.waitFor(() => expect(calls).toBe(1));
+    await new Promise((r) => setTimeout(r, 20));
+    expect((await a.mediaDb.get('files', id))?.previewTried).toBeUndefined();
+    // La próxima vez que se muestra (otra sesión), con pdf.js andando, se hace.
+    server.preview = fakePreview;
+    // La tarjeta se vuelve a dibujar (como cuando cambia algo del archivo).
+    (a.media as unknown as { thumbReady(id: string): void }).thumbReady(id);
+    await a.media.resolve(url);
+    await vi.waitFor(async () => expect(await a.mediaDb.get('files', id)).toMatchObject({ thumb: 'done', previewTried: true }));
   });
 
   it('lo mismo al hacerla después (un PDF de antes): si la pestaña se cierra, no se vuelve a probar', async () => {
@@ -1826,13 +1898,14 @@ describe('adjuntos: vista previa (Docs/Doc_Adjuntos.md, entrega 2)', () => {
     await a.mediaDb.put('files', old);
 
     let calls = 0;
-    server.preview = () => {
+    server.preview = async (_f, _m, _n, onStart) => {
       calls++;
+      await onStart?.();
       return new Promise(() => undefined);
     };
     await a.media.resolve(url);
     await vi.waitFor(() => expect(calls).toBe(1));
-    expect((await a.mediaDb.get('files', id))?.previewTried).toBe(true);
+    await vi.waitFor(async () => expect((await a.mediaDb.get('files', id))?.previewTried).toBe(true));
     a.engine.stop();
 
     const again = await device(server, name);

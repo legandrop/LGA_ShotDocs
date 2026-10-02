@@ -474,6 +474,18 @@ describe('carrete: un adjunto en grande (Docs/Doc_Adjuntos.md, entrega 2)', () =
     opened.mockRestore();
   });
 
+  it('si la lista cambia con el carrete abierto (sale una carpeta), se sigue en el mismo elemento', async () => {
+    const { loader } = filesLoader();
+    const { rerender } = await open({ items: withFiles, start: 2, loader });
+    expect(counter()).toBe('3 / 3');
+    expect(document.querySelector('.carrete-name')?.textContent).toBe('todo.zip');
+    // La foto del principio resultó ser otra cosa y sale de la lista: el zip sigue a la vista.
+    await rerender({ items: withFiles.slice(1) });
+    await settle();
+    expect(counter()).toBe('2 / 2');
+    expect(document.querySelector('.carrete-name')?.textContent).toBe('todo.zip');
+  });
+
   it('un zip: la tarjeta y solo Download; se llega pasando desde una foto', async () => {
     const { loader } = filesLoader();
     await open({ items: withFiles, start: 0, loader });

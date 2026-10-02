@@ -201,6 +201,44 @@ describe('carrete: qué entra (adjuntos sí, carpetas no)', () => {
     expect(asked).toHaveLength(1);
   });
 
+  it('con una red que no contesta abre enseguida con lo que sabe, y si la respuesta llega después avisa la lista nueva', async () => {
+    const infos = new Map<string, { mime: string }>([[PHOTO.slice(10), { mime: 'image/jpeg' }]]);
+    let answer: () => void = () => undefined;
+    const media = {
+      fileInfo: (id: string) => infos.get(id) ?? null,
+      isFolder: (id: string) => infos.get(id)?.mime === 'inode/directory',
+      learnInfo: () =>
+        new Promise<void>((r) => {
+          answer = () => {
+            infos.set(PDF.slice(10), { mime: 'application/pdf' });
+            infos.set(FOLDER.slice(10), { mime: 'inode/directory' });
+            r();
+          };
+        }),
+    };
+    const late: string[][] = [];
+    const t0 = Date.now();
+    const items = await carreteItemsOf(page, media, { waitMs: 50, online: true, onLate: (next) => late.push(next.map((i) => i.blockId)) });
+    expect(Date.now() - t0).toBeLessThan(1000);
+    expect(items.map((i) => i.blockId)).toEqual(['f', 'p', 'c']);
+    answer();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(late).toEqual([['f', 'p']]);
+  });
+
+  it('sin red no pregunta: abre en el acto con lo que sabe', async () => {
+    let asked = 0;
+    const media = {
+      fileInfo: () => null,
+      isFolder: () => false,
+      learnInfo: async () => {
+        asked++;
+      },
+    };
+    expect((await carreteItemsOf(page, media, { online: false })).map((i) => i.blockId)).toEqual(['f', 'p', 'c']);
+    expect(asked).toBe(0);
+  });
+
   it('sin red y sin saber qué es: entra (como antes), no se pierde nada de la página', async () => {
     const media = { fileInfo: () => null, isFolder: () => false, learnInfo: async () => undefined };
     expect((await carreteItemsOf(page, media)).map((i) => i.blockId)).toEqual(['f', 'p', 'c']);

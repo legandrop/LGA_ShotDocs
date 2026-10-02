@@ -238,7 +238,7 @@ export interface MediaQueueOptions {
    * La vista previa de un adjunto (la primera página de un PDF, `pdfPreview.ts`), o `null` si no tiene. Tira
    * `PreviewUnavailable` si el lector no se pudo cargar (se prueba otra vez más tarde).
    */
-  preview?: (file: Blob, mime: string, name: string) => Promise<Blob | null>;
+  preview?: (file: Blob, mime: string, name: string, onStart?: () => Promise<boolean>) => Promise<Blob | null>;
   playMark?: (thumb: Blob) => Promise<Blob>;
   /** La imagen para la página cuando la miniatura queda chica (ver `MediaQueue.view`), de lado mayor `side`. */
   viewImage?: (file: Blob, mime: string, side: number) => Promise<Blob | null>;
@@ -464,7 +464,7 @@ export class MediaQueue {
   private persistAsked = false;
   private readonly thumbListeners = new Set<(id: string) => void>();
   private readonly probe: (file: Blob, mime: string) => Promise<Probe>;
-  private readonly preview: (file: Blob, mime: string, name: string) => Promise<Blob | null>;
+  private readonly preview: (file: Blob, mime: string, name: string, onStart?: () => Promise<boolean>) => Promise<Blob | null>;
   /** Las vistas previas que se están haciendo tarde (`backfillPreview`), una vez por archivo y por sesión. */
   private readonly previewing = new Set<string>();
   /** Los adjuntos cuya tarjeta ya se mostró con vista previa (no hace falta volver a dibujarla cuando llega). */
@@ -888,15 +888,17 @@ export class MediaQueue {
     let previewTried = false;
     if (blob && kind !== 'file') probe = await this.probe(blob, record.mime).catch(() => none);
     else if (blob && previewable(record.mime, record.name, record.size)) {
-      // La marca va ANTES de dibujar: si el navegador cierra la pestaña mientras pdf.js dibuja (memoria, en el
-      // iPhone), al volver a abrir la app la marca está sin terminar (`probed: false`) y la vista previa se saltea:
-      // queda el ícono y el archivo se registra y se sube. Sin esto, cada apertura volvería a cerrar la pestaña.
+      // La marca va justo ANTES de dibujar, en el turno de este PDF y con pdf.js ya bajado (`onStart`): si el
+      // navegador cierra la pestaña mientras pdf.js dibuja (memoria, en el iPhone), al volver a abrir la app la marca
+      // está sin terminar (`probed: false`) y la vista previa se saltea: queda el ícono y el archivo se registra y se
+      // sube. Sin esto, cada apertura volvería a cerrar la pestaña. Los PDF que esperaban su turno no quedan marcados.
       previewTried = true;
-      if (!record.previewTried && (await this.markPreviewTried(id, true))) {
+      if (!record.previewTried) {
         try {
-          probe = { ...none, thumb: await this.preview(blob, record.mime, record.name) };
+          probe = { ...none, thumb: await this.preview(blob, record.mime, record.name, () => this.markPreviewTried(id)) };
         } catch (err) {
-          // pdf.js no se pudo bajar (sin red la primera vez): se prueba más tarde, al mostrarlo (`backfillPreview`).
+          // pdf.js no se pudo bajar (sin red la primera vez; no se llegó a marcar): se prueba más tarde, al mostrarlo
+          // (`backfillPreview`).
           if (err instanceof PreviewUnavailable) previewTried = false;
         }
       }
@@ -921,13 +923,13 @@ export class MediaQueue {
   }
 
   /**
-   * Anota (o borra) en el registro del dispositivo que se está probando la vista previa, antes de dibujarla (ver
-   * `probeNow` y `backfillPreview`). `false` si el registro ya no está.
+   * Anota en el registro del dispositivo que se empieza a dibujar la vista previa (ver `probeNow` y
+   * `backfillPreview`). `false` si el registro ya no está (entonces no se dibuja).
    */
-  private async markPreviewTried(id: string, tried: boolean): Promise<boolean> {
+  private async markPreviewTried(id: string): Promise<boolean> {
     const tx = this.store.transaction('files', 'readwrite');
     const current = await tx.store.get(id);
-    if (current) await tx.store.put({ ...current, previewTried: tried || undefined });
+    if (current) await tx.store.put({ ...current, previewTried: true });
     await tx.done;
     return !!current;
   }
@@ -2187,19 +2189,15 @@ export class MediaQueue {
       if (!uploadOnly) {
         const blob = await db.get('blobs', id);
         if (!blob) return;
-        // La marca va antes de dibujar (como en `probeNow`): si la pestaña se cierra en el medio, no se vuelve a probar.
-        if (!(await this.markPreviewTried(id, true))) return;
+        // La marca va justo antes de dibujar (como en `probeNow`): si la pestaña se cierra en el medio, no se vuelve
+        // a probar. Si pdf.js no se pudo bajar, no se llegó a marcar y se prueba la próxima vez que se muestre.
         let thumb: Blob | null;
         try {
-          thumb = await this.preview(blob, own.mime, own.name);
+          thumb = await this.preview(blob, own.mime, own.name, () => this.markPreviewTried(id));
         } catch (err) {
           retry = err instanceof PreviewUnavailable;
-          if (!retry) thumb = null;
-          else {
-            // pdf.js no estaba: se borra la marca para probar otra vez.
-            await this.markPreviewTried(id, false);
-            return;
-          }
+          if (retry) return;
+          thumb = null;
         }
         const tx = db.transaction(['files', 'thumbs'], 'readwrite');
         const current = await tx.objectStore('files').get(id);
@@ -2216,14 +2214,20 @@ export class MediaQueue {
         this.thumbReady(id);
       }
       if (record.thumb !== 'local' || !record.registered || record.pending !== 0) return;
+      // Con una versión más vieja que la mínima no sale nada de archivos (`outdatedNow`): queda para después.
+      if (this.outdatedNow) {
+        retry = true;
+        return;
+      }
       const thumb = await db.get('thumbs', id);
       if (!thumb) return;
       try {
         await this.remote.uploadThumb(id, thumb);
         await this.remote.setFileThumb(id);
         await this.patch(id, { thumb: 'done' });
-      } catch {
+      } catch (err) {
         // Sin red o sin permiso: queda en el dispositivo y se prueba en otra sesión.
+        if (classify(err) === 'outdated') this.markOutdated();
         retry = true;
       }
     } catch {

@@ -141,7 +141,18 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
   const historyToken = useRef(`carrete-${Math.random().toString(36).slice(2)}`);
   const closing = useRef(false);
 
-  const item = items[index];
+  // La lista puede cambiar con el carrete abierto (llegó la respuesta de qué era un archivo: una carpeta sale). Se
+  // sigue en el mismo elemento; si era el que salió, en el que quedó en su lugar.
+  const shownItems = useRef(items);
+  if (shownItems.current !== items) {
+    const was = shownItems.current[index]?.key;
+    shownItems.current = items;
+    const at = items.findIndex((it) => it.key === was);
+    const next = at >= 0 ? at : Math.min(index, Math.max(0, items.length - 1));
+    if (next !== index) setIndex(next);
+  }
+
+  const item = items[Math.min(index, items.length - 1)];
   const view = settled((item && views[item.url]) ?? EMPTY_VIEW);
   const fit = view.natural ? fitSize(view.natural, stage) : null;
   const zoomable = view.kind === 'image' && !!view.preview;

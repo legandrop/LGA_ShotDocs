@@ -864,9 +864,14 @@ export function BlockEditor({
     // a dibujar), se averigua antes de abrir (`carreteItemsOf`); casi siempre ya se sabe y abre en el acto.
     const blocks = editor.document as unknown as BlockLike[];
     if (startIndex(collectCarrete(blocks, (id) => media.isFolder(id)), key) < 0) return false;
-    void carreteItemsOf(blocks, media).then((items) => {
+    // Con una red que no contesta se espera como mucho 1,5 s y se abre con lo que se sabe; si la respuesta llega
+    // después y saca algo (una carpeta), el carrete abierto se actualiza.
+    const loader = createCarreteLoader({ media, files });
+    void carreteItemsOf(blocks, media, {
+      onLate: (items) => setCarrete((open) => (open && open.loader === loader ? { ...open, items } : open)),
+    }).then((items) => {
       const start = startIndex(items, key);
-      if (start >= 0) setCarrete({ items, start, loader: createCarreteLoader({ media, files }) });
+      if (start >= 0) setCarrete({ items, start, loader });
     });
     return true;
   };
