@@ -7,6 +7,7 @@ import { NodeSelection, TextSelection } from '@tiptap/pm/state';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { closeAssistant, registerAssistantTarget, useAssistantUi } from '../assistant/assistantUi';
 import { t } from '../i18n';
 import { ServicesContext } from '../services';
 import { editorSchemaOptions } from './editorSchema';
@@ -146,6 +147,21 @@ async function click(selector: string, label: string) {
   await act(async () => {
     btn.click();
   });
+}
+
+/** El estado del asistente (lo que pidió la barra), leído con un componente de prueba que no hace falta: el módulo lo guarda. */
+let lastUi: ReturnType<typeof import('../assistant/assistantUi').useAssistantUi> | null = null;
+const assistantUiState = () => {
+  lastUi = null;
+  const el = document.createElement('div');
+  const r = createRoot(el);
+  act(() => r.render(<UiProbe />));
+  act(() => r.unmount());
+  return lastUi!;
+};
+function UiProbe() {
+  lastUi = useAssistantUi();
+  return null;
 }
 
 const BLOCK = '.sd-media-bar:not(.sd-photo-toolbar)';
@@ -490,5 +506,34 @@ describe('lo que hace cada botón de la foto-bloque', () => {
     await chooseBlock(editor);
     await click(BLOCK, 'Delete image');
     expect(editor.getBlock('img')).toBeUndefined();
+  });
+});
+
+describe('Suggest caption (el asistente, entrega A3)', () => {
+  it('con el editor de la página abierta: en la barra de la foto en línea y de la foto-bloque; abre el panel con esa foto', async () => {
+    const { editor } = await mount();
+    const off = registerAssistantTarget({ pageId: 'pg', view: () => view(editor), editable: () => true });
+    try {
+      await choosePhoto(editor, 'F2');
+      expect(bar(INLINE).slice(0, 4)).toEqual(['View full screen', 'Download image', 'Suggest caption', '|']);
+      const tip = document.querySelector(`${INLINE} button[aria-label="Suggest caption"]`)?.getAttribute('data-tip') ?? '';
+      expect(tip).toContain('looks at the photo');
+      await click(INLINE, 'Suggest caption');
+      expect(assistantUiState().pageId).toBe('pg');
+      expect(assistantUiState().caption?.ref).toEqual({ kind: 'inline', blockId: 'p', index: 1, url: url('F2'), name: 'F2' });
+      await chooseBlock(editor);
+      expect(bar(BLOCK).slice(0, 4)).toEqual(['View full screen', 'Download image', 'Suggest caption', '|']);
+      await click(BLOCK, 'Suggest caption');
+      expect(assistantUiState().caption?.ref).toEqual({ kind: 'block', blockId: 'img', index: 0, url: url('B1'), name: 'B1' });
+    } finally {
+      off();
+      closeAssistant();
+    }
+  });
+
+  it('sin el editor de la página anotado (el historial, la práctica): no aparece', async () => {
+    const { editor } = await mount();
+    await choosePhoto(editor, 'F2');
+    expect(bar(INLINE)).not.toContain('Suggest caption');
   });
 });
