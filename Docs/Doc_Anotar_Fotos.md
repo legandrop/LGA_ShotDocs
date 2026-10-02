@@ -652,9 +652,11 @@ grosor mínimo de pantalla que queda en el PDF (O2) pasó al roadmap.
   pantalla), relativo a su primer punto y redondeado al píxel del marco, con el tope de 5000 puntos.
 - **Deshacer propio:** un `Y.UndoManager` sobre el mapa con el origen `sd-markup:<fileId>`, uno por sesión del
   anotador: lo de otro editor (llega por la red) y lo de otra foto no se deshacen. La poda tiene su propio origen.
-- **El marco:** si la foto no tenía anotaciones, el de la primera forma es la medida de la foto que se ve (el original
-  si ya está; si no, la vista previa: AN7 es relativo al lado largo, así que el dibujo es el mismo). Nunca se reescribe.
-  Un marco con `v` mayor abre en solo lectura (*Update the app to edit these annotations*).
+- **El marco:** si la foto no tenía anotaciones, el de la primera forma es la **medida del archivo**
+  (`files.width/height`, ya girada, del registro del dispositivo, también sin red: `MediaQueue.dimensions`) o, si no
+  se sabe, la del original cargado; **nunca la de la vista previa** (corrección B1). Sin ninguna de las dos, se ve la
+  foto y las herramientas de crear se apagan (*connect to the internet to annotate this photo for the first time*).
+  Nunca se reescribe. Un marco con `v` mayor abre en solo lectura (*Update the app to edit these annotations*).
 - **Topes en bytes codificados** (`src/media/markupLimits.ts`, sección 10): por foto, el contenido vivo de sus claves
   (96 KB); por página, el de todas (512 KB); la base de la página con GC (2,5 MB). Se miden al abrir y después de cada
   escritura (6 ms con una foto llena); al 80 % se avisa y al tope las herramientas de crear se apagan (elegir, mover y
@@ -663,9 +665,10 @@ grosor mínimo de pantalla que queda en el PDF (O2) pasó al roadmap.
 - **Sin red:** anota igual (todo va al documento de la página en el dispositivo) y sube al volver. Sin nada de la foto en
   el dispositivo, el anotador lo dice (*This photo isn't on this device yet*) y las herramientas de crear se apagan.
 
-**La poda (AN11)** (`src/media/markupPrune.ts`, la arranca `PageEditor.tsx`): con la página editable (que ya exige la
-página entera bajada), los permisos conocidos y fuera de la vista de una versión, mira al abrir y cada minuto qué fotos
-anotadas no están en el contenido; anota desde cuándo con el reloj del dispositivo y poda las que llevan 10 minutos
+**La poda (AN11)** (`src/media/markupPrune.ts`, `startMarkupPrune`, la arranca `PageEditor.tsx`): con la página
+editable (que ya exige la página entera bajada), los permisos conocidos, fuera de la vista de una versión y **con la
+página sincronizada** (con red, nada propio sin subir y nada del servidor sin bajar; corrección B2: si no, se olvida lo
+contado y los 10 minutos vuelven a empezar), mira al abrir y cada minuto qué fotos anotadas no están en el contenido; anota desde cuándo con el reloj del dispositivo y poda las que llevan 10 minutos
 afuera (una transacción con su propio origen, `sd-markup-prune`). Una foto que vuelve (pegar, deshacer) deja de
 contar. No se arma junto con la base limpia: la base sale de las filas guardadas con el candado de la página y se salta
 si hay algo sin subir; la poda es una edición más que sube después. Lo que otro anotó sin red sobre la foto podada
@@ -708,3 +711,16 @@ tiradores.
 poda a los 10 minutos con la base limpia real; el anotador con una foto real del Drive (portero) y sin red con la
 miniatura. **Para publicar:** `workspace_settings.min_app_version` tiene que estar en 0.116 o más (AN10: la versión que
 dibuja las anotaciones); esta entrega no suma tipos de bloque ni propiedades, así que no hace falta subirla a esta.
+
+### Correcciones de la auditoría de la entrega 2 (2026-10-02)
+
+Auditoría independiente: **no aprobado**, con dos bloqueantes de arreglo chico. Lo que pedía y dónde quedó:
+
+| Hallazgo | Corrección |
+|---|---|
+| **B1** Dos que anotan por primera vez la misma foto a la vez, uno con el original y otro con la miniatura (sin red): el marco salía de lo que se veía, gana uno, y las formas del otro quedaban corridas y 2,5 veces más chicas | El marco de la primera forma es la medida del archivo (`MediaQueue.dimensions`: registro del dispositivo o la base) o la del original cargado; nunca la de la vista previa. Sin medida, no se crea nada (con aviso). Pruebas: dos anotadores sin red, uno con la miniatura, terminan con cada forma donde se dibujó (falla con el código anterior); sin medida no se escribe nada; la medida del registro sin red |
+| **B2** La poda corría sin red: un dispositivo sin red podaba las anotaciones de una foto que otro había vuelto a poner (mover, deshacer, cortar y pegar) | `startMarkupPrune` cuenta y poda solo con la página sincronizada (con red, nada sin subir ni sin bajar) y olvida lo contado si deja de estarlo. Pruebas con el editor de verdad: el caso de la auditoría queda con la foto y sus anotaciones; con red poda a los 10 minutos y un corte en el medio reinicia la cuenta; las compuertas (editar, permisos conocidos, historial) |
+| O1 La prueba del peso fallaba al azar (4 de 25: el `clientID` al azar cambiaba la cuenta) | `clientID` fijo al medir (12 de 12) |
+| O3 Ctrl+[ sin prueba que caiga | Prueba de que se frena (`defaultPrevented`) y de que una letra en el campo del grosor no cambia la herramienta |
+| O5 Un texto que otro borra mientras se edita se perdía | Se vuelve a crear con lo escrito, en el mismo lugar y con su letra (con prueba) |
+| O2, O3 (*Annotate* de `PageEditor` sin prueba), O4, O6, O7, O8, O9 | Al roadmap (P.20) |

@@ -374,6 +374,46 @@ describe('el anotador', () => {
     });
   });
 
+  it('un texto que otro borra mientras se edita no se pierde: al terminar se crea de nuevo, con lo escrito', async () => {
+    const doc = new Y.Doc();
+    writeFrame(doc, ID, FRAME.w, FRAME.h);
+    addShape(doc, ID, 't', { type: 'text', zValue: 1, posX: 400, posY: 400, rectX: 0, rectY: 0, rectW: 1200, rectH: 200, padding: 10, text: 'Borrar', fontSize: 90 });
+    const { el, stage } = await open(doc);
+    key('v');
+    act(() => stage.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: 150, clientY: 125 })));
+    const area = el.querySelector<HTMLTextAreaElement>('.annotator-text')!;
+    expect(area.value).toBe('Borrar');
+    area.value = 'Borrar el cable';
+    act(() => area.dispatchEvent(new Event('input', { bubbles: true })));
+    // Otro lo borra (llega por la red).
+    const remote = new Y.Doc();
+    Y.applyUpdate(remote, Y.encodeStateAsUpdate(doc));
+    remote.getMap(PHOTO_MARKUP_MAP).delete(`${ID}/t`);
+    act(() => Y.applyUpdate(doc, Y.encodeStateAsUpdate(remote, Y.encodeStateVector(doc)), 'remote'));
+    key('Escape');
+    const texts = shapes(doc).filter((x) => x.type === 'text');
+    expect(texts.map((x) => (x.type === 'text' ? [x.text, x.fontSize, x.posX + x.padding] : []))).toEqual([['Borrar el cable', 90, 410]]);
+  });
+
+  it('Ctrl+[ y Ctrl+] se frenan (en la Mac, ⌘[ es "atrás"); una letra del grosor escrita no cambia la herramienta', async () => {
+    const doc = new Y.Doc();
+    writeFrame(doc, ID, FRAME.w, FRAME.h);
+    const { el } = await open(doc);
+    const e = new KeyboardEvent('keydown', { key: '[', ctrlKey: true, bubbles: true, cancelable: true });
+    act(() => {
+      window.dispatchEvent(e);
+    });
+    expect(e.defaultPrevented).toBe(true);
+    const field = el.querySelector<HTMLInputElement>('.annotator-number-field')!;
+    field.focus();
+    const r = new KeyboardEvent('keydown', { key: 'r', bubbles: true, cancelable: true });
+    act(() => {
+      field.dispatchEvent(r);
+    });
+    expect(r.defaultPrevented).toBe(false);
+    expect(el.querySelector('[data-tool="rectangle"]')!.getAttribute('aria-pressed')).toBe('false');
+  });
+
   it('un marco de una versión más nueva del formato: solo lectura (no se dibuja ni se borra nada)', async () => {
     const doc = new Y.Doc();
     map(doc).set(ID, { v: 2, w: FRAME.w, h: FRAME.h });

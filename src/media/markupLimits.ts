@@ -36,6 +36,8 @@ function copyInto(target: Y.Map<unknown>, key: string, value: unknown): void {
 /** Lo que pesan, codificadas, las claves vivas del mapa que cumplen `keep`. */
 function liveBytes(map: Y.Map<unknown>, keep: (key: string) => boolean): number {
   const doc = new Y.Doc();
+  // Un `clientID` fijo: con uno al azar el largo de su número cambiaba la cuenta (±4 %) y la prueba fallaba a veces.
+  doc.clientID = 1;
   const target = doc.getMap<unknown>(PHOTO_MARKUP_MAP);
   let any = false;
   doc.transact(() => {

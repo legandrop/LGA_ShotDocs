@@ -362,6 +362,12 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   grosor mínimo de su caja impresa (la observación O2). Falta: que `min_app_version` esté en 0.116 o más al publicarla
   (AN10); probar ⌘[ y ⌘] en Safari y Chrome de una Mac; la entrega 3 (el dedo y el lápiz del iPad), y medir el dedo a 60
   y 120 Hz y las fotos HEIC de un iPhone real (entrega 0, no se pudo sin teléfono).
+  De la auditoría de la entrega 2 (`Doc_Anotar_Fotos.md`, "Correcciones de la auditoría de la entrega 2"), pendientes:
+  numerar `v0.0XX` en los 7 lugares al publicar (con `v0.0XX` arriba del changelog el build lee la versión `0.0`); una
+  prueba que caiga si `PageEditor` ofrece *Annotate* sin poder editar; un marco ilegible lo pisa la primera forma
+  (revisar el día que cambie `v`); una forma con grosor 0 y sin relleno no se ve pero se puede elegir (sirve para
+  borrarla; decidir); en el teléfono el anotador abre y un dedo dibuja sin pellizco: decidir si se esconde en pantallas
+  táctiles hasta la entrega 3; un workspace sin la migración del equipo no conoce los permisos y nunca poda.
 - **P.22 Exportar una página o un proyecto entero** (Lega, 2026-10-02): PDF y/o zip con las páginas y las fotos, para
   entregarle al cliente o archivar un proyecto terminado. **Diseño en `Doc_Exportar.md`** (sin código; EX1 a EX15 a
   confirmar por Lega; auditado con condiciones y corregido: ningún correo en el zip, vista JPEG de cada foto): un PDF para entregar (toda la rama en orden con un índice que dice la hoja de

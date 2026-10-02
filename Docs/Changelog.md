@@ -4,11 +4,12 @@ v0.0XX :
 
 Anotar fotos en la compu (P.20, entrega 2 de `Doc_Anotar_Fotos.md`). Las anotaciones se veían pero no había con qué
 dibujarlas. Nuevo `src/ui/Annotator.tsx`, a pantalla completa: las nueve herramientas con las letras de FrameRev,
-Shift y Alt, colores, grosor contra 1920 px y estilo recordado por herramienta. Se abre con *Annotate* en la barra de
+Shift y Alt, colores y grosor contra 1920 px. Se abre con *Annotate* en la barra de
 la foto o A en el carrete, solo con permiso de editar. Escribe al soltar en el mapa `photoMarkup` (una clave por
-forma, solo los campos que cambian), deshace solo lo propio de esa foto y apaga las herramientas de crear al tope en
-bytes. La poda saca las anotaciones de una foto que lleva 10 minutos fuera de la página. El PDF dibuja con el grosor
-mínimo de la hoja. Pruebas con dos editores a la vez, sin red, la versión publicada y un mapa malicioso; ayuda y atajos.
+forma, solo los campos que cambian; el marco nuevo, con la medida del archivo), deshace solo lo propio de esa foto y
+apaga las herramientas de crear al tope en bytes. La poda saca, con la página sincronizada, las anotaciones de una foto
+que lleva 10 minutos afuera. El PDF dibuja con el grosor mínimo de la hoja. Pruebas con dos editores a la vez, sin red,
+la versión publicada y un mapa malicioso. Auditada: corregidos el marco y la poda sin red.
 [ Anotar fotos, entrega 2 - el anotador en la compu, los topes, la poda y el grosor del PDF ]
 
 v0.121 :

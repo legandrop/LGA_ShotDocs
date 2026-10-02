@@ -44,6 +44,7 @@ import {
   shapeBounds,
   shapesInRect,
   simplify,
+  styleFields,
   SLIDER_MAX_WIDTH,
   strokeShape,
   styleOfShape,
@@ -158,6 +159,8 @@ interface TextEditing {
   /** Dónde empieza la primera letra (en el marco). */
   at: Point;
   value: string;
+  /** El texto al empezar (para no volver a crear uno que otro borró si no se cambió nada). */
+  original: string;
   fontSize: number;
   color: string;
   fill: boolean;
@@ -482,12 +485,28 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
     setText(null);
     if (!t || !frame) return;
     const value = t.value.replace(/\s+$/, '');
-    if (t.id) {
-      const was = byId.get(t.id);
+    // Lo que se editaba sigue ahí: se cambia. Si otro lo borró mientras tanto, lo escrito no se pierde: se crea de nuevo.
+    const was = t.id ? byId.get(t.id) : undefined;
+    if (t.id && map.get(`${fileId}/${t.id}`) instanceof Y.Map) {
       if (!value.trim()) write(() => deleteShape(doc, fileId, t.id!));
       else if (was?.type === 'text' && was.text !== value) update([[t.id, textEdit(value, was.fontSize, measure, `${was.fontSize}px ${MARKUP_FONT}`)]]);
       return;
     }
+    if (t.id && value.trim() && value !== t.original) {
+      const font = `${t.fontSize}px ${MARKUP_FONT}`;
+      const box = textEdit(value, t.fontSize, measure, font);
+      add({
+        ...styleFields('text', { ...prefsRef.current.styles.text, color: t.color, fill: t.fill }, frame),
+        ...box,
+        type: 'text',
+        zValue: topZ(shapes),
+        posX: t.at.x - (box.padding as number),
+        posY: t.at.y - (box.padding as number),
+        fontSize: t.fontSize,
+      });
+      return;
+    }
+    if (t.id) return;
     if (!value.trim()) return;
     const style = prefsRef.current.styles.text;
     const fontSize = toFrame(style.fontSize, frame);
@@ -722,7 +741,7 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
       if (hit?.type === 'text') startTextEdit(hit);
       else {
         const style = prefs.styles.text;
-        setText({ id: null, at: p, value: '', fontSize: toFrame(style.fontSize, frame), color: style.color, fill: style.fill });
+        setText({ id: null, at: p, value: '', original: '', fontSize: toFrame(style.fontSize, frame), color: style.color, fill: style.fill });
       }
       return;
     }
@@ -837,6 +856,7 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
       id: s.id,
       at: { x: s.posX + (s.rect?.x ?? 0) + pad, y: s.posY + (s.rect?.y ?? 0) + pad },
       value: s.text,
+      original: s.text,
       fontSize: s.fontSize,
       color: s.strokeColor,
       fill: s.fillMode === 3 || s.fillMode === 2,
