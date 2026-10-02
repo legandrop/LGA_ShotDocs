@@ -298,6 +298,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   **Entregas 0 y 1 hechas (v0.114: *Can view*, migración sin aplicar; ver "Cómo quedó" en `Doc_Link_Publico.md`).** Para
   publicarla: aplicar la migración, prender el interruptor de D14 y subir la mínima. Falta: el ícono del árbol para las
   páginas con link, el detalle *Can view link, created by…* para el equipo, y las entregas 2 y 3.
+  **Entrega 2 rediseñada (2026-10-02, sin código):** lo que escribe un link espera en una sala
+  (`public_link_updates`) y entra a `page_updates` cuando el dispositivo de un editor lo prueba (`plink_admit`); partida
+  en 2a (texto), 2b (archivos) y 2c (lo apartado a la vista); propuestas LE1 a LE13. Falta su auditoría antes de
+  programarla (`Doc_Link_Publico.md`, "Entrega 2: *Can edit* (rediseño 2026-10-02)").
   **Observaciones de las auditorías que quedaron para después** (ninguna pierde datos ni abre el link): `set_public_link`
   revive un link vencido con la base de antes (le falta el `clean_reset`); en el visitante, *Open my workspace* desde la
   cabecera del link, pruebas de las guardas de la interfaz (*Resolve*, papelera, preferencias, cartel del dominio,
