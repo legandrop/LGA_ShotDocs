@@ -13,6 +13,8 @@
 // Mandar un archivo de la papelera de la app a la papelera de Drive (`/trash`) lo decide la base
 // (`purge_file`): solo el dueño y los admins. Nunca se borra nada en Drive: solo se manda a su papelera.
 
+import { handleMcp, isMcpPath, tokenClientId } from './mcp';
+
 export interface Env {
   /** Dirección y clave publicable del Supabase del workspace (las dos son públicas). */
   SUPABASE_URL: string;
@@ -28,6 +30,13 @@ export interface Env {
    * P.14 (Doc_Portero.md). Apagado (sin la variable) en el día a día.
    */
   TEST_MODES?: string;
+  /**
+   * `1` prende el servidor MCP de la prueba técnica M0 (`/mcp` y su metadata, mcp.ts; Doc_Asistente.md, "Cómo quedó
+   * M0"). Apagado (sin la variable) el portero hace exactamente lo de antes con esas rutas.
+   */
+  MCP_M0?: string;
+  /** Hasta cuántos KB de página lee el MCP (de fábrica 16, el plan gratis de Workers; mcp.ts). */
+  MCP_MAX_PAGE_KB?: string;
 }
 
 /** Lo que el portero guarda (la conexión con Drive, las subidas en curso). Ver index.ts. */
@@ -594,6 +603,10 @@ export class Portero {
       // La miniatura de un archivo de una carpeta (P.9), con el mismo pase que el archivo.
       const thumb = /^\/t\/([^/]+)$/.exec(path)?.[1];
       if (thumb && (req.method === 'GET' || req.method === 'HEAD')) return withMediaCors(await this.thumbnail(req, thumb), req, this.env);
+      // El servidor MCP (prueba técnica M0), solo con su interruptor prendido: valida su propio token (mcp.ts).
+      if (this.env.MCP_M0 === '1' && isMcpPath(path)) {
+        return await handleMcp(req, this.env, { http: this.http, stateSecret: () => this.mcpStateSecret() });
+      }
 
       const who = await this.whoami(req);
       // Con un link público, solo lo de ver (nunca lo del dueño, subir ni la papelera).
@@ -663,6 +676,10 @@ export class Portero {
     }
     const auth = req.headers.get('Authorization') ?? '';
     if (!/^Bearer \S+$/.test(auth)) throw new HttpError(401, 'Sign in to the app first.');
+    // El token de un asistente conectado por MCP (lo tiene un tercero) solo sirve en `/mcp`: nunca para pases,
+    // subidas, carpetas ni la papelera. Las sesiones de la app no traen `client_id`. Vale con el MCP prendido o no
+    // (Doc_Asistente.md, 9.2, plan B, punto 3).
+    if (tokenClientId(auth) !== null) throw new HttpError(403, 'This sign-in is for an assistant connection and only works with it.', 'assistant_token');
     const res = await this.rpc(auth, 'media_whoami', {});
     if (res.status === 401 || res.status === 403) throw new HttpError(401, 'Your session expired: sign in again.');
     if (!res.ok) throw new HttpError(502, `The workspace did not answer (${res.status}).`);
@@ -2262,6 +2279,16 @@ export class Portero {
   }
 
   // --- ver (con un pase firmado, por partes) --------------------------------------------------------
+
+  /** El secreto de las confirmaciones del MCP (`requestState`, mcp.ts): aparte del de los pases. */
+  private async mcpStateSecret(): Promise<string> {
+    let secret = await this.store.get<string>('mcpStateSecret');
+    if (!secret) {
+      secret = randomId(32);
+      await this.store.put('mcpStateSecret', secret);
+    }
+    return secret;
+  }
 
   private async secret(): Promise<string> {
     // Una vez por pedido: un listado de una carpeta firma un pase por archivo.
