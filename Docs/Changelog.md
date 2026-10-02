@@ -12,6 +12,22 @@ La época del árbol reinicia solo si es más nueva; `invalidate_page_snapshot` 
 `20261020120000_compactar_crear.sql`, sin aplicar). Siguen apagados.
 [ Compactar, entrega 2 - armar las copias resumidas en el dispositivo (apagadas) y rearmar sin propagar el borrado de una mala ]
 
+v0.132 :
+
+Deshacer, entrega 0 (B.21, `Doc_Deshacer.md`, sección 16). Deshacer lo escrito dejaba restos ("la ía" en vez de "la ")
+y a veces se llevaba texto de antes (un ⌘Z borró "ám" de "cámara"). La causa estaba en Yjs: deshacer un borrado escribe
+copias, y el deshacer siguiente seguía la copia solo hasta su primer corte: si se había escrito en el medio quedaba el
+resto, y si las copias se habían juntado se borraban todas. Un parche a Yjs (`patches/yjs+13.6.33.patch`, Yjs fijo en
+13.6.33, `assertYjsPatched`) sigue la copia en todo su largo. Con texto: de 14 a 0 de 3.000 con algo de menos; con el
+editor real, de 68 de 300 con restos a 0. Borrando bloques enteros queda poco: 1 de 300 con una letra de menos (antes
+7). Sin cambios en lo guardado ni en `min_app_version`.
+**Además, copiar y pegar una foto con sus anotaciones** (D46): las flechas son de cada página (`photoMarkup`), así que una
+foto anotada llegaba limpia a otra página. Ahora, al copiar, la app recuerda las formas de las fotos copiadas (y en sus
+otras pestañas, por `BroadcastChannel`); al pegar en una página del mismo proyecto las escribe en el mismo paso de ⌘Z,
+solo para las fotos que el pegado agregó. Al portapapeles no va nada nuevo; otro proyecto o una versión vieja reciben la
+foto limpia.
+[ Deshacer sin restos (parche de Yjs, B.21) y copiar y pegar una foto con sus anotaciones (D46) ]
+
 v0.131 :
 
 Dos cosas del asistente y las menciones. **Arreglos de las menciones, entrega 2:** compartir desde la mención por

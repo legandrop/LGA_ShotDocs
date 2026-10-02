@@ -132,6 +132,8 @@ const PHOTO_MARKUP = '0.116';
 const ANNOTATE = '0.123';
 /** Anotar con el dedo y con el lápiz (P.20, entrega 3). El número lo pone quien publica. */
 const ANNOTATE_TOUCH = '0.129';
+/** Copiar y pegar una foto con sus anotaciones (P.20, D46). El número lo pone quien publica. */
+const ANNOTATE_COPY = '0.132';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -385,6 +387,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.photosAnnotateTouch.text',
     words: ['annotate', 'anotar', 'dedo', 'finger', 'pellizco', 'pinch', 'zoom', 'ampliar', 'lápiz', 'pencil', 'apple pencil', 'ipad', 'iphone', 'teléfono', 'phone', 'touch'],
     since: ANNOTATE_TOUCH,
+  },
+  {
+    id: 'photosAnnotateCopy',
+    section: 'photos',
+    title: 'help.photosAnnotateCopy.title',
+    text: 'help.photosAnnotateCopy.text',
+    keys: { paste: 'pasteFiles', undo: 'undo' },
+    words: ['copy', 'copiar', 'paste', 'pegar', 'cut', 'cortar', 'annotations', 'anotaciones', 'flechas', 'arrows', 'otra página', 'another page'],
+    since: ANNOTATE_COPY,
   },
   { id: 'photosPhone', section: 'photos', title: 'help.photosPhone.title', text: 'help.photosPhone.text', since: BEFORE_HELP },
   {
