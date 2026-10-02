@@ -32,6 +32,7 @@ import { PorteroError, type VerifyResult } from './portero';
 import type { MediaQueue } from './queue';
 import { mediaIdsInDoc } from './usage';
 import type * as Y from 'yjs';
+import { treeContentGap, treeServerSeq } from '../sync/clean';
 
 // "Available offline" y el tope del espacio en el dispositivo (Docs/Doc_Copias_Locales.md, D-25). Esta entrega
 // (la 1) baja y mantiene al día lo marcado, y libera **solo** copias bajadas y nítidas, siempre después de un
@@ -167,6 +168,9 @@ export interface OfflineDeps {
     project(id: string): ProjectRow | undefined;
     projects(): ProjectRow[];
     hasUnsentCreate(pageId: string): boolean;
+    /** Hasta dónde llega el contenido para este dispositivo (privacidad de lo borrado); sin él, `update_seq`. */
+    serverSeq?(row: PageRow): number;
+    contentGap?(row: PageRow, cursor: number): 'missing' | 'preparing' | null;
   };
   docs: {
     states(): Promise<Map<string, DocState>>;
@@ -799,12 +803,16 @@ export class OfflineManager {
       const row = tree.get(pageId);
       if (!row) continue;
       const state = states.get(pageId);
-      // Una página sin contenido en el servidor (`update_seq` 0) que nunca se abrió no tiene nada que bajar.
-      const complete = (state ? state.cursor >= row.update_seq : row.update_seq === 0) && !state?.unreadable;
+      // Una página sin contenido en el servidor (`update_seq` 0) que nunca se abrió no tiene nada que bajar. Hasta dónde
+      // llega el contenido para este dispositivo: las filas, o la base limpia si no ve lo borrado (`serverSeq`); una
+      // página "en preparación" (sin base todavía) espera.
+      const seq = treeServerSeq(tree, row);
+      const complete =
+        (state ? state.cursor >= seq : seq === 0) && !state?.unreadable && treeContentGap(tree, row, state?.cursor ?? 0) === null;
       const local = tree.hasUnsentCreate(pageId);
-      if (mark && (complete || local) && mark.pages[pageId] === row.update_seq) {
+      if (mark && (complete || local) && mark.pages[pageId] === seq) {
         // Ya leída con este contenido: queda lo que había.
-        pagesRead[pageId] = row.update_seq;
+        pagesRead[pageId] = seq;
         continue;
       }
       let ids: Set<string> | null = null;
@@ -836,7 +844,7 @@ export class OfflineManager {
           if (rest.length === 0) delete files[id];
           else files[id] = { ...f, pages: rest };
         }
-        pagesRead[pageId] = row.update_seq;
+        pagesRead[pageId] = seq;
       }
       for (const id of ids ?? []) {
         const f = files[id];

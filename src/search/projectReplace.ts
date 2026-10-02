@@ -5,6 +5,7 @@ import type { PageRow } from '../sync/types';
 import { COLLAPSE_PREFIX } from '../ui/collapseStore';
 import { findUnknownContent } from '../ui/unknownContent';
 import type { SearchOptions } from './normalize';
+import { treeContentGap } from '../sync/clean';
 import {
   applyPlan,
   hiddenBlocks,
@@ -58,6 +59,8 @@ export interface ReplaceTree {
   get(id: string): PageRow | undefined;
   isTrashed(id: string): boolean;
   hasUnsentCreate(pageId: string): boolean;
+  /** "Al día" para este dispositivo (privacidad de lo borrado); sin él, con `update_seq`. */
+  contentGap?(row: PageRow, cursor: number): 'missing' | 'preparing' | null;
 }
 
 export interface ReplaceDocs {
@@ -250,7 +253,8 @@ export class ProjectReplace {
     if (!perms.known) return 'permsUnknown';
     if (!perms.canEditPage(pageId)) return 'viewOnly';
     const state = await docs.stateOf(pageId);
-    if (row.update_seq > (state?.cursor ?? 0) && !tree.hasUnsentCreate(pageId)) return 'missing';
+    // Lo que falta bajar, o "en preparación" (un invitado con Editar sin base limpia todavía).
+    if (treeContentGap(tree, row, state?.cursor ?? 0) !== null && !tree.hasUnsentCreate(pageId)) return 'missing';
     if (state?.unreadable) return 'unreadable';
     if (state?.rejected) return 'rejected';
     return null;

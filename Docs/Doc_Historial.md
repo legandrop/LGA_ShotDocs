@@ -436,6 +436,9 @@ comprobaciones en cada caso (sección 11).
 
 ## 7. Permisos
 
+(Desde la privacidad de lo borrado, `Doc_Privacidad_Borrado.md`, el mismo criterio decide quién recibe lo borrado:
+`private.sees_deleted`. La columna `update` de `page_updates` tampoco se lee directo desde la API.)
+
 - **Quién ve el historial, propuesto: quien puede editar la página** (nivel 3 o más: Editar, Editar y crear
   páginas, el dueño y los admins con permiso), como en Google Docs, donde quien solo ve o comenta no tiene
   historial. **Los invitados (`guest`), aunque tengan Editar, no**, hasta que Lega diga (pregunta 1). Lo comprueban

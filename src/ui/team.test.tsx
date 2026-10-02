@@ -189,6 +189,49 @@ describe('pantallas del equipo', () => {
     expect(host.textContent).toContain('bea@test');
   });
 
+  it('Share con Ver: la línea de lo borrado, y con algo sin subir avisa con Retry y Share anyway (privacidad de lo borrado)', async () => {
+    const { server, device, page, userId } = await teamDevice();
+    server.addMember('bea', 'member', 'bea@test');
+    const pick = (host: HTMLElement, level: string) => {
+      const select = host.querySelector('select[aria-label="Access"]') as HTMLSelectElement;
+      act(() => {
+        Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!.call(select, level);
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    };
+    // Con el interruptor apagado: la línea de lo que pasa hoy.
+    const off = await mount(services(device, userId), <ShareDialog target={{ pageId: page }} onClose={() => undefined} />);
+    type(off.querySelector('input[type="email"]') as HTMLInputElement, 'bea@test');
+    pick(off, 'view');
+    expect(off.textContent).toContain('Text and photos deleted from these pages can still reach the people you share them with.');
+    act(() => roots.pop()!.unmount());
+
+    // Prendido, con una edición que el servidor no acepta (queda sin subir).
+    server.enableClean(0.001);
+    await device.engine.syncNow();
+    const doc = await device.docs.open(page);
+    doc.getText('t').insert(0, 'nota');
+    await device.docs.flush(page);
+    device.docs.close(page);
+    server.maxUpdateBytes = 0;
+    const host = await mount(services(device, userId), <ShareDialog target={{ pageId: page }} onClose={() => undefined} />);
+    type(host.querySelector('input[type="email"]') as HTMLInputElement, 'bea@test');
+    pick(host, 'view');
+    expect(host.textContent).toContain("They'll get the page as it is when the editors' apps refresh it");
+    await act(async () => {
+      (host.querySelector('form') as HTMLFormElement).requestSubmit();
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    expect(host.textContent).toContain('There are unsynced changes on these pages');
+    expect(server.grants.find((g) => g.user_id === 'bea')).toBeUndefined();
+    await act(async () => {
+      [...host.querySelectorAll('button')].find((b) => b.textContent === 'Share anyway')!.click();
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    expect(server.grants.find((g) => g.user_id === 'bea')).toMatchObject({ page_id: page, level: 'view' });
+    expect(server.meta(page).reset).toBe(server.pages.get(page)!.update_seq);
+  });
+
   it('la pantalla de sacado ofrece bajar lo pendiente y no borra nada hasta que se elige', async () => {
     const { server, device, page } = await teamDevice('ana');
     await device.docs.open(page).then((doc) => doc.getText('t').insert(0, 'x'));

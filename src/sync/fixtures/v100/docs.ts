@@ -1,7 +1,9 @@
+// Copia de la versión publicada v0.100 (commit e9d19ca) de src/sync/docs.ts, para probar que con la privacidad de lo
+// borrado aplicada esa versión sigue andando: con el interruptor apagado como hoy, y como editora con el interruptor
+// prendido (src/sync/clean.test.ts). No se toca, salvo los caminos de los imports.
 import * as Y from 'yjs';
-import { t } from '../i18n';
-import { buildCleanBase, checkCleanBase, coversLocal } from './clean';
-import { buildUpload, encodeRanges, rangesOf, unionRanges, type DeleteRanges } from './deleteSets';
+import { t } from '../../../i18n';
+import { buildUpload, encodeRanges, rangesOf, unionRanges, type DeleteRanges } from '../../deleteSets';
 import {
   DIRTY_PREFIX,
   dirtyKey,
@@ -14,8 +16,8 @@ import {
   updateDocState,
   type DocState,
   type LocalDb,
-} from './localDb';
-import { APP_OUTDATED, type Remote } from './remote';
+} from '../../localDb';
+import { APP_OUTDATED, type Remote } from '../../remote';
 import {
   applyRowsInOrder,
   clientOfKey,
@@ -26,8 +28,8 @@ import {
   REMOVED_WRITING_KEEP,
   removedWritingKey,
   type RemovedWriting,
-} from './removedWriting';
-import { errorMessage, isPermanent, isTimeout, type RemoteUpdate } from './types';
+} from '../../removedWriting';
+import { errorMessage, isPermanent, isTimeout, type RemoteUpdate } from '../../types';
 
 export const ORIGIN_LOAD = Symbol('load');
 export const ORIGIN_REMOTE = Symbol('remote');
@@ -142,11 +144,6 @@ export class PageDocs {
   onWriteError?: (message: string | null) => void;
   /** Problemas que no son de escritura local, por ejemplo un update ilegible del servidor. */
   onWarning?: (message: string) => void;
-  /**
-   * Si a este dispositivo la página le llega como base limpia (Docs/Doc_Privacidad_Borrado.md, 4.3): lo pone la
-   * sincronización. Una base que cubre lo guardado lo reemplaza (ver `applyRemote`).
-   */
-  isBaseReader?: (pageId: string) => boolean;
   private readonly unsupportedListeners = new Set<(pageId: string) => void>();
   private readonly renderFailedListeners = new Set<(pageId: string) => void>();
   private readonly removedWritingListeners = new Set<(pageId: string) => void>();
@@ -189,15 +186,7 @@ export class PageDocs {
           created.guarded = true;
           await this.armGuard(pageId);
         }
-        // Los autores de Yjs que tuvo este documento (B.16, `ownClientKey`). Yjs le cambia el autor a un documento
-        // abierto cuando una transacción que aplica algo bajado también escribe (la reparación que va con lo que
-        // llega, `applyToLive`): `applyUpdate` marca la transacción como remota y Yjs cree que otro usa su número.
-        // Lo que esa transacción escribió es del autor de antes y el `update` sale cuando ya tiene el nuevo: se
-        // anotan los dos, y los de cada transacción desde que se abrió.
-        const authors = new Set<number>([doc.clientID]);
-        doc.on('beforeTransaction', () => authors.add(doc.clientID));
         doc.on('update', (update: Uint8Array, origin: unknown) => {
-          authors.add(doc.clientID);
           if (origin === ORIGIN_SEED) {
             created.unsavedSeed = update;
             return;
@@ -215,13 +204,13 @@ export class PageDocs {
             // en memoria va como hueco; lo cargado ya está en las filas con su texto (B.16).
             created.repairedInMemory = false;
             created.unsavedSeed = undefined;
-            this.persistLocal(pageId, [Y.encodeStateAsUpdate(doc, created.loadedSV)], authors);
+            this.persistLocal(pageId, [Y.encodeStateAsUpdate(doc, created.loadedSV)], doc.clientID);
             return;
           }
           const seed = created.unsavedSeed;
           created.unsavedSeed = undefined;
           // La semilla va primero y en el mismo lote: se guardan en la misma transacción.
-          this.persistLocal(pageId, seed ? [seed, update] : [update], authors);
+          this.persistLocal(pageId, seed ? [seed, update] : [update], doc.clientID);
         });
         if (!writable) {
           // Solo en memoria (origen que no se guarda): la vista queda bien y no sale ningún cambio.
@@ -724,11 +713,6 @@ export class PageDocs {
     // Lo propio sin subir que lo bajado deja borrado (B.16): también afuera, y solo si lo bajado trae borrados y
     // la página tiene algo sin subir (lo común es que no: no se arma nada).
     const removed = merged && deletes && deletes.pulled.size > 0 ? await this.inspectRemovedWriting(pageId, merged) : null;
-    // Una base limpia que cubre lo guardado lo reemplaza (es la página entera): así no se juntan bases en el dispositivo
-    // ni queda el texto borrado que traían las filas de antes. Solo sin nada sin subir; también afuera.
-    const replace = merged && valid.length === 1 && updates.length === 1 && this.isBaseReader?.(pageId)
-      ? await this.replaceableRows(pageId, merged)
-      : null;
 
     const tx = this.db.transaction(['docUpdates', 'docState', 'meta'], 'readwrite');
     const [stored, generation] = await Promise.all([
@@ -750,18 +734,6 @@ export class PageDocs {
         }
       }
       await tx.objectStore('docUpdates').add({ pageId, data: merged });
-      if (replace) {
-        // Lo guardado no cambió desde que se miró (las mismas filas, sin marca de ediciones sin subir ni envío
-        // pendiente): se reemplaza en esta misma transacción. Si cambió, la base queda sumada como una fila más.
-        const [keys, dirtyNow] = await Promise.all([
-          tx.objectStore('docUpdates').index('pageId').getAllKeys(pageId),
-          tx.objectStore('meta').get(dirtyKey(pageId)),
-        ]);
-        const same = replace.keys.every((k) => keys.some((x) => x === k)) && keys.length === replace.keys.length + 1;
-        if (same && dirtyNow === undefined && !state.pending && !hasUnsyncedContent(state, false)) {
-          await Promise.all(replace.keys.map((k) => tx.objectStore('docUpdates').delete(k)));
-        }
-      }
       // Los borrados que mandó el servidor ya los tiene (B.15): la próxima subida no los repite. No depende de
       // lo que el dispositivo integró: un borrado de más en la cuenta no cambia lo que hay que subir. Si la cuenta
       // o la generación cambiaron desde que se preparó, se vuelve a hacer acá (no pasa casi nunca).
@@ -812,56 +784,6 @@ export class PageDocs {
         }
       }
     }
-  }
-
-  /**
-   * Las filas guardadas de la página que una base limpia que llega puede reemplazar: todas, si no hay nada sin subir
-   * (ni en memoria) y la base cubre lo guardado (`coversLocal`). Si no, `null`. Lee en una transacción de solo lectura.
-   */
-  private async replaceableRows(pageId: string, incoming: Uint8Array): Promise<{ keys: number[] } | null> {
-    if (!this.isSaved(pageId)) return null;
-    const tx = this.db.transaction(['docUpdates', 'docState', 'meta'], 'readonly');
-    const [state, dirty, keys, rows] = await Promise.all([
-      tx.objectStore('docState').get(pageId),
-      tx.objectStore('meta').get(dirtyKey(pageId)),
-      tx.objectStore('docUpdates').index('pageId').getAllKeys(pageId),
-      tx.objectStore('docUpdates').index('pageId').getAll(pageId),
-    ]);
-    await tx.done;
-    if (dirty !== undefined || state?.pending || (state && hasUnsyncedContent(state, false))) return null;
-    if (keys.length === 0 || !coversLocal(rows.map((r) => r.data), incoming)) return null;
-    return { keys };
-  }
-
-  /**
-   * Arma la base limpia de la página desde lo guardado en el dispositivo (Docs/Doc_Privacidad_Borrado.md, 4.1), solo si
-   * lo guardado es exactamente lo del servidor hasta `seq`: el cursor llegó ahí, no hay nada sin subir (ni en memoria,
-   * ni un envío en vuelo), nada ilegible ni rechazado. Pasa las dos comprobaciones (`checkCleanBase`). Devuelve la base,
-   * o por qué no se armó. Con el candado de la página: nada se baja ni se sube en el medio.
-   */
-  buildCleanBase(pageId: string, seq: number): Promise<{ base: Uint8Array } | { skip: string }> {
-    return this.withLock(pageId, async () => {
-      await this.flush(pageId);
-      if (!this.isSaved(pageId)) return { skip: 'unsaved' };
-      // Las filas, el estado y la marca en la misma transacción: lo que se arma es lo que se comprobó.
-      const tx = this.db.transaction(['docUpdates', 'docState', 'meta'], 'readonly');
-      const [rows, state, dirty] = await Promise.all([
-        tx.objectStore('docUpdates').index('pageId').getAll(pageId),
-        tx.objectStore('docState').get(pageId),
-        tx.objectStore('meta').get(dirtyKey(pageId)),
-      ]);
-      await tx.done;
-      if (!state || state.cursor !== seq) return { skip: 'not current' };
-      if (dirty !== undefined || state.pending || hasUnsyncedContent(state, false)) return { skip: 'unsynced' };
-      if (state.unreadable || state.rejected) return { skip: 'unreadable' };
-      const built = buildCleanBase(rows.map((r) => r.data));
-      try {
-        const problem = checkCleanBase(built.base, built.doc);
-        return problem ? { skip: `check: ${problem}` } : { base: built.base };
-      } finally {
-        built.doc.destroy();
-      }
-    });
   }
 
   /**
@@ -1044,10 +966,9 @@ export class PageDocs {
    * cierre en ese rato perdía el final de lo escrito (el navegador aborta las transacciones sin confirmar
    * de una página que se va), aunque el estado ya dijera "saved on this device".
    */
-  private persistLocal(pageId: string, updates: Uint8Array[], clients: Iterable<number> = []): void {
+  private persistLocal(pageId: string, updates: Uint8Array[], client?: number): void {
     this.written.add(pageId);
-    for (const client of clients) {
-      if (this.recordedClients.has(`${pageId}:${client}`)) continue;
+    if (client !== undefined && !this.recordedClients.has(`${pageId}:${client}`)) {
       const pending = this.unrecordedClients.get(pageId) ?? new Set<number>();
       pending.add(client);
       this.unrecordedClients.set(pageId, pending);
