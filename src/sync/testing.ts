@@ -1402,7 +1402,8 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
       .map((f) => ({ id: f.id, name: f.name, trashed_at: f.trashed_at! }));
   }
 
-  async uploadThumb(fileId: string, data: Blob): Promise<void> {
+  // `_stalledBefore`: el tope lo pone el cliente de verdad (`thumbUploadLimit`); acá no hay tope.
+  async uploadThumb(fileId: string, data: Blob, _stalledBefore?: number): Promise<void> {
     this.server.check();
     this.server.mediaCalls.push(`thumb ${fileId}`);
     if (!this.server.mediaFiles.has(fileId)) throw new RemoteError('new row violates row-level security policy', true, '42501');

@@ -289,6 +289,13 @@ export function isNetworkError(err: unknown): boolean {
 /** La consulta venció su tope de tiempo (ver `timed` en remote.ts). Cuenta como sin red: se reintenta. */
 export const REQUEST_TIMEOUT = 'request_timeout';
 
+/**
+ * Cuántos archivos distintos seguidos tienen que trabarse (vencer su tope sin avanzar) para que una pasada deje de
+ * subir: con el servidor colgado para todos, cada uno esperaría su tope entero (un minuto o más). Uno solo no
+ * alcanza: puede estar colgado solo ese, y cortar haría que la pasada siguiente empezara otra vez por él.
+ */
+export const STALLS_TO_CLOSE_ROUND = 2;
+
 /** Una consulta que venció su tope (o se cortó): la red anda, pero muy lenta para lo que se pidió. */
 export function isTimeout(err: unknown): boolean {
   return err instanceof RemoteError && (err.code === REQUEST_TIMEOUT || /^(AbortError|TimeoutError)\b/.test(err.message));

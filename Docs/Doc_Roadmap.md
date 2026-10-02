@@ -328,26 +328,27 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
 
 11. **Subidas que se traban: lo que quedó de v0.068** (`Doc_Portero.md`, "Subidas que se traban"). La app
    corta los pedidos al portero que dejan de moverse (y, desde v0.070, los de la miniatura a Storage) y
-   sigue con los demás archivos. **Falta:**
-   - **Probarlo en Safari de iPhone y con una red lenta de verdad.** Está probado a mano en Chromium contra
-     un servidor local; el aviso de bytes que salen (`XMLHttpRequest`) puede portarse distinto en Safari,
-     con HTTP/2 y a través de Cloudflare.
-   - **Cerrar la vuelta de la cola como sin conexión** después de 2 o 3 trabadas seguidas de archivos
-     distintos: hoy, con el portero colgado para todos, gasta un minuto por archivo. Lo mismo con Storage
-     colgado para todos: de 30 a 62 s por archivo en cada vuelta, lo que tarda en vencer su miniatura.
-   - **La miniatura (lo que quedó de v0.070,** `Doc_Sincronizacion.md`, "Cada consulta a la base tiene un
-     tope de tiempo"**).** El tope de la subida no crece entre reintentos: una miniatura de 500 KB con
-     menos de unos 8 KB/s vence siempre (agrandarlo con las fallas seguidas, como `stalledBefore` en el
-     portero). Las subidas cortadas quedan sueltas y se acumulan si Storage está colgado para todos (subir
-     con un `fetch` propio que acepte una señal de corte). Y `uploadFile` y `downloadFile` del bucket
-     `page-files` (un workspace sin portero) siguen sin tope.
-   - **Recordar el plazo que funcionó.** Detrás de un antivirus o un proxy que recibe el cuerpo de golpe,
-     cada archivo vuelve a empezar con el plazo corto y se traba una o más veces antes de pasar.
-   - **Casos raros en que espera o reintenta de más** (no pierden ni duplican): una pestaña tan frenada
-     que el vigilante mira menos de una vez cada 90 s no corta nunca mientras dure (descontar a lo sumo uno
-     o dos huecos seguidos sin movimiento); si el equipo se suspende mientras sale el cuerpo, la espera de
-     la respuesta queda hasta 120 s más larga; y una subida que el portero pierde en cada vuelta reintenta
-     siempre a los 10 s en vez de espaciarse (comparar contra el máximo confirmado del intento).
+   sigue con los demás archivos. **Hecho en v0.092:** a la segunda trabada seguida de archivos distintos sin
+   avance, la vuelta deja de subir archivos y la cola espera antes de volver a probar (10 s, 20 s… hasta 10
+   minutos; `Doc_Portero.md`, "Colgado para todos"), también con Storage colgado; la miniatura se sube con la
+   señal de corte (ya no quedan subidas sueltas) y su tope crece con las fallas seguidas; `uploadFile` y
+   `downloadFile` de `page-files` tienen tope y una que vence no frena a las demás; el portero recuerda el plazo
+   de una respuesta lenta (un proxy que recibe el cuerpo de golpe); el vigilante descuenta a lo sumo dos huecos
+   seguidos, no estira la espera por una suspensión mientras sale el cuerpo, y volver a mandar lo que una subida
+   perdida ya tenía no cuenta como avance. Probado con relojes simulados y en Chromium contra un portero y un
+   Storage locales que se cuelgan. **Falta:**
+   - **Probarlo en Safari de iPhone y con una red lenta de verdad** (lo hace Lega). El aviso de bytes que salen
+     (`XMLHttpRequest`) puede portarse distinto en Safari, con HTTP/2 y a través de Cloudflare; y que cortar la
+     subida de una miniatura (la señal en el `fetch` del cliente de Supabase) la corte de verdad en Safari.
+   - **Las carpetas (P.9) no cierran la vuelta:** con el portero colgado para todos, cada archivo de una carpeta
+     se traba hasta sus 5 intentos y queda con su error hasta *Retry*. Y mientras la cola de archivos espera,
+     tampoco registra archivos nuevos ni sube sus miniaturas (como sin conexión).
+   - **La bajada de `page-files` espera hasta 27 minutos** aunque la imagen sea chica (no se sabe cuánto pesa
+     antes de pedirla).
+   - **`page-files` con Storage colgado para todos** (solo workspaces sin portero): `PageFiles.pushPending` corre
+     dentro del ciclo del motor y no tiene la espera de la cola, así que cada ciclo espera hasta dos topes
+     (`storageTimeout`, hasta unos 27 minutos cada uno con una imagen de 25 MB) antes de los comentarios. El texto
+     de las páginas ya salió antes en ese ciclo y nada se pierde.
 12. **Importar de Coda, direcciones sueltas: lo que quedó de v0.069** (`Doc_Importar_Coda.md`, "Direcciones
     sueltas"). **Falta:**
     - **Hecho (v0.071 y v0.087): el anclaje de un comentario** pegado a un renglón con direcciones: un último

@@ -36,6 +36,20 @@ export const STALL_CHECK_MS = 5_000;
  * correr los temporizadores una vez por minuto, y ahí el vigilante tiene que seguir cortando.
  */
 export const FROZEN_GAP_MS = 90_000;
+/**
+ * Cuántos huecos seguidos sin movimiento se descuentan como suspensión. Una pestaña tan frenada que el vigilante
+ * mira menos de una vez cada `FROZEN_GAP_MS` haría que todos los huecos parecieran una suspensión y el pedido no se
+ * cortaría nunca mientras dure: después de dos seguidos, el tiempo cuenta. Un movimiento vuelve a dar los dos.
+ */
+export const FROZEN_DISCOUNTS = 2;
+/**
+ * Desde esta espera de la respuesta de una parte (con el cuerpo ya afuera) se recuerda cuánto tardó (ver
+ * `Portero.learn`). Una respuesta normal tarda segundos; un minuto es un proxy o un antivirus que se quedó con el
+ * cuerpo y lo sube despacio.
+ */
+export const LEARN_FROM_MS = 60_000;
+/** Lo más chico que tiene que ser una parte para aprender (o olvidar) de su respuesta (ver `Portero.learn`). */
+export const LEARN_MIN_BYTES = 1024 * 1024;
 /** Una red lenta: la misma con la que se calculan los topes de las consultas a la base (`remote.ts`). */
 const SLOW_BYTES_PER_SECOND = 16 * 1024;
 
@@ -47,9 +61,13 @@ const SLOW_BYTES_PER_SECOND = 16 * 1024;
  * el mismo lugar. El techo es lo que tardaría la parte entera con una red lenta: más que eso es un pedido
  * colgado, y la cola no lo espera (8 MiB: unos 10 minutos y medio; una foto de 3 MB: 5).
  */
-export function answerLimit(bytes: number, stalledBefore = 0): number {
+export function answerLimit(bytes: number, stalledBefore = 0, learnedRate: number | null = null): number {
   const slowest = STALL_MS + Math.ceil((bytes / SLOW_BYTES_PER_SECOND) * 1000);
-  return Math.min(STALL_MS * (1 + Math.max(0, stalledBefore)), slowest);
+  let limit = STALL_MS * (1 + Math.max(0, stalledBefore));
+  // Lo que tardó en contestar una parte anterior detrás del mismo proxy (`learnedRate`, bytes por segundo): esta
+  // tendría que tardar lo mismo por byte, y se le da eso más el plazo de siempre. Nunca más que el techo.
+  if (learnedRate && learnedRate > 0) limit = Math.max(limit, STALL_MS + Math.ceil((bytes / learnedRate) * 1000));
+  return Math.min(limit, slowest);
 }
 
 export interface DriveStatus {
@@ -370,6 +388,11 @@ interface Watch {
   readonly stalled: boolean;
   /** Salieron más bytes del cuerpo; `done`: ya salió entero y solo falta la respuesta. */
   moved(done: boolean): void;
+  /**
+   * El tiempo que no contó por estar suspendido el equipo (o congelada la pestaña) después de que el cuerpo
+   * terminó de salir: no es tiempo de la respuesta (ver `learn`).
+   */
+  readonly answerFrozen: number;
   stop(): void;
 }
 
@@ -400,6 +423,11 @@ export class Portero {
   private readonly wait: (ms: number, signal?: AbortSignal) => Promise<void>;
   private readonly send: PartSender | null;
   private readonly now: () => number;
+  /**
+   * Lo que se aprendió de las respuestas lentas (ver `learn`): a qué velocidad llegó al portero, en bytes por
+   * segundo, la última parte que tardó en contestar con el cuerpo ya afuera. `null`: ninguna tardó.
+   */
+  private slowAnswerRate: number | null = null;
 
   constructor(
     readonly baseUrl: string,
@@ -662,8 +690,26 @@ export class Portero {
       // eso solo se sabe con `send`: sin él queda como antes (sin tope), porque un tope por tiempo cortaría
       // también las partes que van lentas pero bien.
       stallMs: body ? (this.send ? STALL_MS : undefined) : CONTROL_TIMEOUT_MS,
-      answerMs: body ? answerLimit(body.size, stalledBefore) : undefined,
+      answerMs: body ? answerLimit(body.size, stalledBefore, this.slowAnswerRate) : undefined,
     });
+  }
+
+  /**
+   * Recordar el plazo que funcionó. Detrás de un antivirus o un proxy que reciben el cuerpo de golpe, el navegador
+   * da la parte por enviada al instante y la respuesta llega cuando el proxy terminó de subirla: minutos. Sin
+   * recordarlo, cada archivo nuevo empezaba con el plazo corto y se trababa una o más veces antes de pasar. Con una
+   * espera larga (`LEARN_FROM_MS` o más) se anota a qué velocidad llegó, y el plazo de las partes siguientes sale de
+   * ahí (`answerLimit`, con el mismo techo); solo de partes de 1 MiB o más (`LEARN_MIN_BYTES`). Una respuesta rápida
+   * de una de esas lo olvida: ya no hay nada en el medio que demore. Vale para este cliente (la sesión): al recargar se vuelve a aprender.
+   */
+  private learn(bytes: number, waitMs: number): void {
+    // Sin una medida que tenga sentido (el descuento de una suspensión cayó después de que salió el cuerpo), nada.
+    if (!(waitMs > 0)) return;
+    // Solo de partes de 1 MiB o más: en una chica casi todo es la espera fija (Drive lento un rato, no un proxy), y
+    // escalada a una parte de 8 MiB daría un plazo de minutos que no hace falta.
+    if (bytes < LEARN_MIN_BYTES) return;
+    if (waitMs >= LEARN_FROM_MS) this.slowAnswerRate = bytes / (waitMs / 1000);
+    else this.slowAnswerRate = null;
   }
 
   /**
@@ -681,12 +727,35 @@ export class Portero {
     if (outer?.aborted) cancel();
     else outer?.addEventListener('abort', cancel, { once: true });
     let lastLook = startedAt;
+    // Los huecos descontados seguidos sin que el pedido se moviera; cuándo terminó de salir el cuerpo; y el tiempo
+    // descontado que cae antes (`bodyFrozen`) y después (`answerFrozen`) de eso.
+    let frozenInRow = 0;
+    let doneAt: number | null = null;
+    let bodyFrozen = 0;
+    let answerFrozen = 0;
+    // Con el cuerpo entero afuera ya no hay bytes que avisen. A la respuesta se le da su plazo más lo que tardó en
+    // salir el cuerpo: parte de lo "enviado" puede seguir en camino, y con una red lenta (el cuerpo tardó mucho) eso
+    // también tarda más. Ese extra es a lo sumo otro `limitMs`, para que un pedido colgado justo ahí no tenga a la
+    // cola esperando tanto como tardó la parte. El tiempo que el equipo estuvo suspendido no es tiempo del cuerpo:
+    // no estira la espera (aunque el vigilante lo descuente recién después de que el cuerpo terminó de salir).
+    const settle = () => {
+      if (doneAt !== null) patience = answerMs + Math.min(Math.max(0, doneAt - startedAt - bodyFrozen), limitMs);
+    };
     const timer = setInterval(() => {
       const now = this.now();
+      const gap = now - lastLook;
       // El vigilante estuvo sin mirar mucho más de lo que tarda entre dos miradas: el equipo estuvo
       // suspendido o la pestaña congelada. Ese tiempo no dice nada del pedido (tampoco él pudo moverse), así
-      // que no cuenta: si quedó muerto, se corta cuando pase el plazo desde ahora.
-      if (now - lastLook > FROZEN_GAP_MS) lastMove = Math.min(now, lastMove + (now - lastLook));
+      // que no cuenta: si quedó muerto, se corta cuando pase el plazo desde ahora. A lo sumo dos huecos
+      // seguidos (`FROZEN_DISCOUNTS`): una pestaña que mira siempre así de espaciado igual tiene que cortar.
+      if (gap > FROZEN_GAP_MS && frozenInRow < FROZEN_DISCOUNTS) {
+        frozenInRow++;
+        const beforeBody = doneAt === null ? gap : Math.min(gap, Math.max(0, doneAt - lastLook));
+        bodyFrozen += beforeBody;
+        answerFrozen += gap - beforeBody;
+        lastMove = Math.min(now, lastMove + gap);
+        settle();
+      }
       lastLook = now;
       if (now - lastMove < patience) return;
       stalled = true;
@@ -697,13 +766,16 @@ export class Portero {
       get stalled() {
         return stalled;
       },
+      get answerFrozen() {
+        return answerFrozen;
+      },
       moved: (done) => {
         lastMove = this.now();
-        // Con el cuerpo entero afuera ya no hay bytes que avisen. A la respuesta se le da su plazo más lo
-        // que tardó en salir el cuerpo: parte de lo "enviado" puede seguir en camino, y con una red lenta
-        // (el cuerpo tardó mucho) eso también tarda más. Ese extra es a lo sumo otro `limitMs`, para que un
-        // pedido colgado justo ahí no tenga a la cola esperando tanto como tardó la parte.
-        if (done) patience = answerMs + Math.min(lastMove - startedAt, limitMs);
+        frozenInRow = 0;
+        if (done && doneAt === null) {
+          doneAt = lastMove;
+          settle();
+        }
       },
       stop: () => {
         clearInterval(timer);
@@ -749,13 +821,18 @@ export class Portero {
         const part = init.body;
         if (part && this.send) {
           let out = 0;
+          // Cuándo terminó de salir el cuerpo (para `learn`).
+          let outAt: number | null = null;
           const onSent = (bytes: number) => {
             // Solo cuenta lo que avanza: un aviso repetido con la misma cantidad no es movimiento.
             if (bytes <= out) return;
             out = bytes;
+            if (bytes >= part.size && outAt === null) outAt = this.now();
             watch?.moved(bytes >= part.size);
           };
           res = await untilAborted(this.send(url, { method, headers, body: part, signal, onSent }), signal);
+          // Cuánto tardó la respuesta con el cuerpo ya afuera, sin el tiempo suspendido.
+          if (res.ok && outAt !== null) this.learn(part.size, this.now() - outAt - (watch?.answerFrozen ?? 0));
         } else {
           res = await untilAborted(this.http(url, { method, headers, body, signal }), signal);
         }
