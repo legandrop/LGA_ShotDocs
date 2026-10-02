@@ -50,6 +50,8 @@ import { SidebarResizer } from './SidebarResizer';
 import { SyncIcon } from './SyncBadge';
 import { SpaceHost } from './SpaceHost';
 import { TrashView } from './TrashView';
+import { AssistantHost } from '../assistant/AssistantHost';
+import { openAssistant } from '../assistant/assistantUi';
 import { downloadUnsynced } from './unsyncedDownload';
 import { usePendingCount } from './usePendingCount';
 import { errorMessage } from '../sync/types';
@@ -425,6 +427,7 @@ export function Shell() {
           onFormat={() => setFormatting(pageId)}
           onShare={perms.canSharePage(pageId) ? () => setSharing({ pageId }) : undefined}
           onHistory={historyAllowed ? () => openHistory(pageId) : undefined}
+          onAssistant={() => void openAssistant()}
           onTrash={async () => {
             // Primero se manda a la papelera y después se sale: si no, el inicio vuelve a la última página.
             await tree.trash(pageId);
@@ -450,6 +453,8 @@ export function Shell() {
       <SpaceHost />
       <HelpHost />
       <HistoryHost />
+      {/* El asistente (Docs/Doc_Asistente.md, A1): su atajo, el panel y los ajustes. */}
+      <AssistantHost />
       <TourHost />
       <InstallHost />
       <ReplaceProgressHost />

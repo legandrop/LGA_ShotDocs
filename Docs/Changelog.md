@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.118 :
+
+No había asistente (P.24, entrega A1 de `Doc_Asistente.md`). Menú de la cuenta → *Assistant…*: Anthropic, OpenAI,
+Gemini o uno compatible (OpenRouter, Ollama), la clave cifrada solo en el dispositivo y solo para la dirección con que
+se guardó. Sobre lo elegido (Ctrl/⌘+Alt+J, la barra o el menú de la página): *Fix*, *Improve*, *Shorter*, *Translate
+to…* y *Ask…*, directo del navegador al proveedor. La vista previa marca por palabras; *Apply* reemplaza solo lo que
+cambió en un paso de deshacer y no aplica si el texto cambió mientras pensaba. Fotos, links y bloques viajan como marcas
+que tienen que volver bien cerradas; aplicar pide Editar. Tras la auditoría: la CSP de `public/_headers` deja el
+selector de carpetas de Google, los modelos que razonan tienen margen de tokens, 20 000 caracteres por pedido y el foco
+vuelve al panel. Migración `assistant_policy` (de fábrica `on`), sin aplicar.
+[ Asistente A1 - corregir, mejorar, acortar y traducir lo elegido con la clave de cada uno, vista previa y aplicar con deshacer ]
+
 v0.117 :
 
 No había plantillas: cada reporte o ficha de plano se armaba a mano (P.23, entregas 0 y 1 de `Doc_Plantillas.md`).
