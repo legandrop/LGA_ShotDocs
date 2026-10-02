@@ -44,49 +44,53 @@ export interface ImageSource {
   best(id: string): Promise<Blob | null>;
 }
 
+/** Una imagen abierta: sus medidas y cómo dibujarla más chica. Se cierra siempre (`close`). */
+export interface Decoded {
+  width: number;
+  height: number;
+  /** La imagen achicada a `width` × `height` (JPEG), o `null`. */
+  draw(width: number, height: number): Promise<Blob | null>;
+  close(): void;
+}
+
 /** Lo que hace falta para achicar: en el navegador, `createImageBitmap` y un canvas (en las pruebas, uno falso). */
 export interface Resizer {
-  /** Las medidas de la imagen, o `null` si el navegador no la abre (un HEIC en Chrome). */
-  size(blob: Blob): Promise<{ width: number; height: number } | null>;
-  /** La imagen achicada a `width` × `height` (JPEG), o `null`. */
-  resize(blob: Blob, width: number, height: number): Promise<Blob | null>;
+  /** La imagen abierta (se decodifica una sola vez), o `null` si el navegador no la abre (un HEIC en Chrome). */
+  open(blob: Blob): Promise<Decoded | null>;
 }
 
 /** El de verdad. */
 export const browserResizer: Resizer = {
-  async size(blob) {
-    if (typeof createImageBitmap !== 'function') return null;
-    try {
-      const bitmap = await createImageBitmap(blob);
-      const out = { width: bitmap.width, height: bitmap.height };
-      bitmap.close();
-      return out;
-    } catch {
-      return null;
-    }
-  },
-  async resize(blob, width, height) {
+  async open(blob) {
     if (typeof createImageBitmap !== 'function') return null;
     let bitmap: ImageBitmap;
     try {
-      bitmap = await createImageBitmap(blob, { resizeWidth: width, resizeHeight: height, resizeQuality: 'high' });
+      bitmap = await createImageBitmap(blob);
     } catch {
       return null;
     }
-    try {
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return null;
-      // El papel es blanco: una PNG con transparencia no sale negra en el JPEG.
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, width, height);
-      ctx.drawImage(bitmap, 0, 0, width, height);
-      return await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
-    } finally {
-      bitmap.close();
-    }
+    return {
+      width: bitmap.width,
+      height: bitmap.height,
+      async draw(width, height) {
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return null;
+        // El papel es blanco: una PNG con transparencia no sale negra en el JPEG.
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(bitmap, 0, 0, width, height);
+        const out = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+        // Suelta la memoria del canvas enseguida (con cientos de fotos, el recolector llega tarde).
+        canvas.width = 0;
+        canvas.height = 0;
+        return out;
+      },
+      close: () => bitmap.close(),
+    };
   },
 };
 
@@ -124,49 +128,73 @@ function vector(src: string): boolean {
  */
 export async function shrinkImages(
   root: HTMLElement,
-  options: { source?: ImageSource | null; budget: PixelBudget; resizer?: Resizer; signal?: AbortSignal },
+  options: { source?: ImageSource | null; budget: PixelBudget; resizer?: Resizer; signal?: AbortSignal; parallel?: number },
 ): Promise<ShrinkResult> {
   const resizer = options.resizer ?? browserResizer;
   const out: ShrinkResult = { urls: [], shrunk: 0, kept: 0 };
+  // Primero se mide todo (sin esperar nada en el medio: la vista no se vuelve a armar entre una foto y otra).
+  const jobs: { img: HTMLImageElement; src: string; cssWidth: number; id: string | null }[] = [];
   for (const img of root.querySelectorAll<HTMLImageElement>(MEDIA_IMG)) {
-    if (options.signal?.aborted) return out;
     const src = img.getAttribute('src') ?? '';
     if (!src || vector(src) || img.closest('.drive-card')) continue;
     const cssWidth = img.getBoundingClientRect().width;
     if (!(cssWidth > 0)) continue;
     // La proporción de lo que se ve, fija: la imagen nueva no cambia el alto.
     if (!img.style.aspectRatio && img.naturalWidth > 0 && img.naturalHeight > 0) img.style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight}`;
-    const id = mediaIdOf(img.closest('[data-url]')?.getAttribute('data-url'));
+    jobs.push({ img, src, cssWidth, id: mediaIdOf(img.closest('[data-url]')?.getAttribute('data-url')) });
+  }
+  const keep = (img: HTMLImageElement) => {
+    // No se puede leer (una imagen de afuera, un formato que el navegador no abre): queda la que se ve.
+    if (img.naturalWidth > 0) options.budget.add(img.naturalWidth, img.naturalHeight);
+    out.kept++;
+  };
+  const one = async ({ img, src, cssWidth, id }: (typeof jobs)[number]) => {
     let blob: Blob | null = null;
     if (id && options.source) blob = await options.source.best(id).catch(() => null);
     const fromSource = !!blob;
     if (!blob && (src.startsWith('blob:') || src.startsWith('data:'))) blob = await fetchBlob(src);
-    const natural = blob ? await resizer.size(blob) : null;
-    if (!blob || !natural) {
-      // No se puede leer (una imagen de afuera, un formato que el navegador no abre): queda la que se ve.
-      if (img.naturalWidth > 0) options.budget.add(img.naturalWidth, img.naturalHeight);
-      out.kept++;
-      continue;
+    const decoded = blob ? await resizer.open(blob) : null;
+    if (!blob || !decoded) return keep(img);
+    try {
+      const natural = { width: decoded.width, height: decoded.height };
+      const target = printSize(cssWidth, natural);
+      if (target.width >= natural.width && !fromSource) {
+        // La que ya se ve es chica: queda.
+        options.budget.add(natural.width, natural.height);
+        out.kept++;
+        return;
+      }
+      // Se cuenta antes de dibujar: pasado el tope, no se gasta memoria en una foto más.
+      options.budget.add(target.width, target.height);
+      const small = target.width >= natural.width && PASS_THROUGH.has(blob.type) ? blob : await decoded.draw(target.width, target.height);
+      if (!small) {
+        out.kept++;
+        return;
+      }
+      if (options.signal?.aborted) return;
+      const url = URL.createObjectURL(small);
+      out.urls.push(url);
+      img.src = url;
+      out.shrunk++;
+    } finally {
+      decoded.close();
     }
-    const target = printSize(cssWidth, natural);
-    if (target.width >= natural.width && !fromSource) {
-      // La que ya se ve es chica: queda.
-      options.budget.add(natural.width, natural.height);
-      out.kept++;
-      continue;
+  };
+  // De a varias a la vez: decodificar y codificar no usan el hilo principal todo el tiempo.
+  let next = 0;
+  let failed = false;
+  const worker = async () => {
+    while (next < jobs.length && !failed && !options.signal?.aborted) {
+      try {
+        await one(jobs[next++]);
+      } catch (err) {
+        // El tope (u otro error): las demás no empiezan otra foto.
+        failed = true;
+        throw err;
+      }
     }
-    const small = target.width >= natural.width && PASS_THROUGH.has(blob.type) ? blob : await resizer.resize(blob, target.width, target.height);
-    if (!small) {
-      if (img.naturalWidth > 0) options.budget.add(img.naturalWidth, img.naturalHeight);
-      out.kept++;
-      continue;
-    }
-    options.budget.add(target.width, target.height);
-    const url = URL.createObjectURL(small);
-    out.urls.push(url);
-    img.src = url;
-    out.shrunk++;
-  }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(options.parallel ?? 4, jobs.length)) }, worker));
   return out;
 }
 

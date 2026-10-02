@@ -12,7 +12,7 @@
 // solo; el script de afuera lo lee con pdf.js y lo compara con `window.__pdf` (las hojas de cada página).
 //
 // Parámetros: `pages`, `photos`, `scope=project|branch` (la rama: la segunda de primer nivel), `comments=0|1`,
-// `named=auto|0|1` (las hojas con nombre: lo que diga la lista de navegadores, o forzado).
+// `named=auto|0|1` (las hojas con nombre: lo que diga la lista de navegadores, o forzado), `pixels=<millones>` (el tope).
 import '@blocknote/core/fonts/inter.css';
 import '@blocknote/mantine/style.css';
 import '../../ui/drive.css';
@@ -40,6 +40,8 @@ const SCOPE = q.get('scope') === 'branch' ? 'branch' : 'project';
 const COMMENTS = q.get('comments') !== '0';
 const NAMED = q.get('named') === '1' ? true : q.get('named') === '0' ? false : keepsPageSizes();
 const PRINT = q.get('print') === '1';
+/** El tope de píxeles de fotos, en millones (para medir dónde está el límite de verdad). */
+const PIXELS = q.get('pixels') ? Number(q.get('pixels')) * 1e6 : null;
 
 prefs.init();
 document.documentElement.dataset.theme = 'light';
@@ -134,7 +136,7 @@ async function run() {
       images: deviceImages(d.media),
       comments: COMMENTS ? appComments(d.comments, d.commentsDb, { id: d.remote.userId, email: 'lega.supervisor@wanka.test' }) : null,
       named: NAMED,
-      limits: PDF_LIMITS.desktop,
+      limits: PIXELS ? { ...PDF_LIMITS.desktop, pixels: PIXELS } : PDF_LIMITS.desktop,
       lastSync: d.engine.getStatus().lastSyncAt,
       onProgress: (p) => p.done % 25 === 0 && log(`página ${p.done}/${p.total}`),
     });

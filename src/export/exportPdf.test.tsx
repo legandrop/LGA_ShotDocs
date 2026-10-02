@@ -136,13 +136,18 @@ describe('exportar PDF: las fotos', () => {
   /** Un achicador falso: las medidas salen del tipo (`image/x-<ancho>x<alto>`). */
   const fake: Resizer & { calls: [number, number][] } = {
     calls: [],
-    async size(blob) {
+    async open(blob) {
       const m = /x-(\d+)x(\d+)/.exec(blob.type);
-      return m ? { width: Number(m[1]), height: Number(m[2]) } : null;
-    },
-    async resize(_blob, width, height) {
-      this.calls.push([width, height]);
-      return new Blob(['jpeg'], { type: 'image/jpeg' });
+      if (!m) return null;
+      return {
+        width: Number(m[1]),
+        height: Number(m[2]),
+        draw: async (width: number, height: number) => {
+          fake.calls.push([width, height]);
+          return new Blob(['jpeg'], { type: 'image/jpeg' });
+        },
+        close: () => undefined,
+      };
     },
   };
 
@@ -175,7 +180,7 @@ describe('exportar PDF: las fotos', () => {
     });
     expect(asked).toHaveLength(2);
     expect(out.shrunk).toBe(2);
-    expect(fake.calls).toEqual([
+    expect(fake.calls.sort((a, b) => a[0] - b[0])).toEqual([
       [334, 251],
       [1334, 1001],
     ]);

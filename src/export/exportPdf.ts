@@ -34,7 +34,10 @@ export interface PdfLimits {
 }
 
 export const PDF_LIMITS: { desktop: PdfLimits; touch: PdfLimits } = {
-  desktop: { pages: 500, pixels: 800_000_000, sharp: 1000 },
+  // Medido en Chrome con la impresión real (entrega 1): 300 páginas con 2219 fotos son 882 millones de píxeles y los
+  // procesos del navegador llegan a 3,3 GB mientras arma el PDF. El tope deja pasar ese proyecto y corta antes de
+  // los 4 GB.
+  desktop: { pages: 500, pixels: 1_000_000_000, sharp: 1000 },
   touch: { pages: 60, pixels: 50_000_000, sharp: 100 },
 };
 
