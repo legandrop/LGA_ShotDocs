@@ -1076,7 +1076,8 @@ Desde v0.021 hay dos protecciones para poder sumar tipos de bloque (y marcas) nu
   anteriores a v0.021, que no mandan versión). La app vieja lo ve, deja de subir contenido (queda en el
   dispositivo), y pide actualizar; al actualizar, sube todo. Desde v0.097 tampoco sube el árbol ni los comentarios ni
   baja contenido, y se actualiza sola (ver "Volver después de mucho tiempo sin red"). Desde v0.090 frena también la cola de archivos (ver
-  abajo, "La versión mínima y los archivos").
+  abajo, "La versión mínima y los archivos"), y desde v0.099 la base frena también el árbol y los comentarios de las
+  versiones anteriores (ver abajo, "La versión mínima, el árbol y los comentarios").
 
 **Regla para un bloque nuevo:** antes de publicar la versión que lo trae, subir `min_app_version` a la
 primera versión con la guarda (0.021) o más, para que ninguna versión sin guarda pueda mandar el borrado.
@@ -1113,6 +1114,73 @@ el pedido una vez con versión. El portero no recibe la versión: una versión v
 original, que no cambia nada de lo que la base sabe del archivo. Un HEIC que una versión anterior a v0.075 guardó
 sin la marca de convertir se registra tal cual cuando la app se actualiza: el freno lo demora, no lo convierte.
 
+### La versión mínima, el árbol y los comentarios (B.17, v0.099)
+
+Desde v0.097 la app se frena sola, pero una versión anterior abierta seguía subiendo los cambios del árbol (crear,
+renombrar, mover, papelera, formato, ícono, proyectos nuevos y sus nombres) y los comentarios aunque estuviera por
+debajo de la mínima: la base no sabía qué versión los mandaba.
+
+**Cómo escribe hoy la app** (relevado en `remote.ts` y `commentsRemote.ts`): el árbol va **directo a las tablas** con
+Row Level Security (`pages`: `upsert` al crear, `update` con el cambio; `workspaces`: `upsert` al crear un proyecto,
+`update` al renombrarlo). Los comentarios van por **funciones** `security definer` (`add_comment`, `import_comment`,
+`edit_comment`, `delete_comment`, `resolve_thread`), que son las únicas que escriben `comments`.
+
+**Opciones que se miraron:**
+
+1. *Funciones nuevas con `p_app_version`* (como los archivos): pasar todo el árbol a funciones (crear página, cambiar
+   página con cualquier combinación de campos, crear y renombrar proyecto) que repitan los permisos y los triggers de
+   las políticas, y cerrar la escritura directa a quien no las usa. Es reescribir la escritura del árbol y duplicar los
+   permisos en otro lado: mucho riesgo para lo que se gana.
+2. *Un header con la versión*: la app nueva manda `x-shotdocs-version` en cada pedido a la base (opción `global.headers`
+   del cliente de Supabase; PostgREST lo deja en `current_setting('request.headers')`). Una política **restrictiva**
+   de `insert` y `update` en `pages` y `workspaces` y un trigger en `comments` lo miran. No cambia ninguna firma ni
+   ningún cuerpo de función, no toca los permisos que ya hay y no depende de nada central (cada base lo hace sola).
+3. *Una columna con la versión en cada fila*: obliga a migrar antes que la app (una base sin la columna rechaza el
+   pedido) y ensucia las tablas.
+
+**Elegida: la 2.** Es la más chica y la base sin la migración ignora el header. La regla es la misma que la de
+archivos: con header, se compara su versión con la mínima (`private.app_version_allowed`); sin header (solo lo
+mandan las versiones desde v0.099), se rechaza **solo cuando la mínima es 0.099 o más**, porque con una mínima menor
+quien llama puede ser una versión permitida (la v0.098 publicada no manda header). Lo hacen
+`private.write_version_allowed()` y `private.require_write_version()`. Las funciones de proyectos que usa la app
+(`set_project_archived`, `delete_project`, `restore_project`) no pasan por las políticas: lo miran adentro, después
+de los permisos y solo cuando van a escribir (`private.require_session_write_version()`, que como el trigger mira
+solo los pedidos de una sesión de la app).
+
+**Cómo se rechaza, para no perder nada:** con un error de PostgREST de estado **503** (`raise sqlstate 'PGRST'`) y
+mensaje `app_outdated`. Todas las versiones publicadas tratan un 503 como pasajero: el cambio del árbol **queda en su
+cola** (la ronda se corta ahí y se reintenta en la próxima) y el comentario **queda pendiente**; nada pasa a la lista
+de rechazados, donde la versión vieja ofrecería *descartarlo*. Al actualizar, la versión nueva lo sube en el orden de
+siempre. Con un 400 (como `push_page_update`) la versión vieja lo marcaba rechazado y un renombre o un movimiento
+quedaban a un clic de perderse. Un comentario o una página ya rechazados por otra razón no cambian.
+
+**La versión nueva:** si la base contesta `app_outdated` a un cambio del árbol (subieron la mínima entre la consulta y
+el pedido), el cambio queda en la cola, la ronda se corta y se ve el aviso de actualizar (`status.outdated`); en la
+cola de comentarios, el comentario queda pendiente y la vuelta se corta sin error. Archivar, borrar o restaurar un
+proyecto, o crear el primero, dicen *This workspace needs a newer version of the app…* en vez del código. Al abrir,
+vuelve a poner en la cola
+los cambios del árbol que una versión anterior dejó rechazados con `app_outdated` (por si alguna base contestó con
+otro estado). El servidor en memoria (`src/sync/testing.ts`) sigue la misma regla (`FakeServer.writeVersionSince`,
+`FakeRemote.versionHeader`).
+
+**Qué no frena:** compartir e invitar y la papelera de archivos, que van por funciones sin versión; son acciones con
+red y en el momento, no colas. Un header alto falso pasa: la mínima es una guarda de compatibilidad, no de seguridad
+(quien puede editar puede escribir igual por la API), y una app vieja de verdad no manda el header.
+
+**Otros workspaces (D-18):** el CORS de la base tiene que aceptar el header `x-shotdocs-version` (ver
+`Doc_Supabase.md`); si no, el navegador corta todos los pedidos de la app (nada se pierde: queda en el dispositivo).
+
+**Las colas publicadas:** `src/sync/offlineLargo.test.ts` prueba la cola de comentarios de la v0.098 copiada sin tocar
+(`src/sync/fixtures/v098/comments.ts`): con el 503 el comentario queda pendiente, sin rechazados, también al cerrar y
+abrir, y sale con la cola de hoy al actualizar. Esa versión muestra el código `app_outdated` como error del comentario
+(no lo conoce); desde v0.099 sale en palabras.
+
+**Aplicada el 2026-10-02 con la v0.099, y la mínima subida a 0.099 ese día.** **Para que frene:** aplicar `20261008120000_version_minima_arbol.sql` (con copia de seguridad), publicar la v0.099 y,
+cuando Lega la tenga en sus dispositivos, subir `min_app_version` a 0.099 o más. 0.099 está escrito en
+`private.write_version_allowed` y en la prueba: quien publica pone el número real en los dos (la migración no corre
+con el número provisional) y `src/sync/writeVersion.test.ts` falla si no coincide con la entrada del changelog que nombra la
+migración. No sube `schema_version`: la app no necesita saber si la base la tiene.
+
 ## Volver después de mucho tiempo sin red
 
 El caso: alguien trabaja semanas sin red con una versión de la app (un rodaje) y mientras tanto se publican otras,
@@ -1148,7 +1216,9 @@ quizás con `min_app_version` subida. Qué pasa, paso a paso:
    navegador **empezó a instalarla y no pudo** (el service worker nuevo pasa a `redundant`: un teléfono sin espacio,
    una red que corta la descarga del precache), no se ofrece forzar, porque la causa sigue y forzar dejaría el
    dispositivo sin ninguna versión para abrir sin red: el estado dice que libere espacio o busque mejor conexión y
-   vuelva a tocar *Update now*. Solo si el navegador **nunca empezó** a instalar nada y el servidor publica otra versión
+   vuelva a tocar *Update now*. Cada instalación se sigue desde que empieza (`updatefound`, desde v0.099): también la
+   que empezó el navegador solo y la que falla antes de que *Update now* la mire, que antes parecía un navegador que
+   nunca empezó a instalar y ofrecía forzar. Solo si el navegador **nunca empezó** a instalar nada y el servidor publica otra versión
    (lee `/index.html?version-check=…` sin caché; si el servidor redirige a `/`, `fetch` sigue la redirección), el estado
    ofrece **Force the update**: saca el service worker y recarga desde el servidor, sin tocar lo guardado en el
    dispositivo. Antes exige todo guardado, red (comprobada leyendo la versión publicada justo antes) y lugar libre en
@@ -1163,11 +1233,12 @@ quizás con `min_app_version` subida. Qué pasa, paso a paso:
    faltan), las fotos (registro, miniatura, original al Drive y usos) y los comentarios. Lo de los demás se baja y se
    fusiona con Yjs: nada de los dos se pierde.
 
-**Las versiones anteriores a esta** (por ejemplo la v0.090) frenan solo el contenido y los archivos: con la mínima
-subida todavía suben los cambios del árbol y los comentarios (la base no los frena por versión) y bajan el contenido
-nuevo. No se pierde nada propio; lo único que puede pasar es que, si se edita con esa versión un bloque que otra más
-nueva marcó con una propiedad nueva, la propiedad se pierda (el texto no), que es lo que acepta la regla de "Cambios
-en el editor".
+**Las versiones anteriores a v0.097** (por ejemplo la v0.090) frenan solo el contenido y los archivos, y bajan el
+contenido nuevo. Los cambios del árbol y los comentarios los frena la base desde v0.099, pero solo con la mínima en
+v0.099 o más (ver "La versión mínima, el árbol y los comentarios"): con una mínima menor todavía los suben. No se
+pierde nada propio; lo único que puede pasar es que, si se edita con esa versión un bloque que otra más nueva marcó
+con una propiedad nueva, la propiedad se pierda (el texto no), que es lo que acepta la regla de "Cambios en el
+editor".
 
 **Lo que garantiza la prueba** (`src/sync/offlineLargo.test.ts`, con la sincronización de la v0.090 copiada sin tocar
 en `fixtures/v090/`: motor, contenido, árbol, base local e imágenes; las colas de fotos y de comentarios son las de hoy,
@@ -1176,11 +1247,15 @@ borra renglones, agrega fotos, crea una página, mueve otra, renombra, comenta, 
 le cierra la app; B, con la versión nueva, edita las mismas páginas y otras, crea una con foto y comenta, y se sube la
 mínima. Al volver, la v0.090 avisa, no sube contenido ni fotos y conserva todo; al actualizar (el código de hoy sobre
 la misma base) sube todo, y A, B y un dispositivo nuevo quedan iguales al servidor, con todo lo de los dos, sin nada
-pendiente ni rechazado. Lo mismo sin subir la mínima (la v0.090 sube directo). Con la versión actual que queda vieja,
+pendiente ni rechazado. Lo mismo sin subir la mínima (la v0.090 sube directo), y con la mínima en v0.099 y la base
+que frena el árbol y los comentarios (la v0.090 no sube nada, no marca nada rechazado, ni al cerrarla y abrirla, y al
+actualizar sale todo; `src/sync/writeVersion.test.ts` prueba además la carrera con la versión nueva, la base sin la
+migración y el 503 del cliente de Supabase). Con la versión actual que queda vieja,
 además, no sale ni se baja nada (fallaba antes de este cambio). Y variantes al azar (`OFFLINE_LARGO_SEEDS`, 6 en la
 suite; pasaron 40) con días, ediciones, borrados, agregados a un renglón, fotos, páginas nuevas, renombres, movimientos,
-cierres de la app y la mínima que sube o no, con la v0.090 y con la versión actual que queda vieja (esa además comenta y
-sigue trabajando con red antes de actualizar). `src/ui/appUpdate.test.ts` prueba la recarga, *Update now* y forzar.
+cierres de la app y la mínima que sube o no, con la v0.090 (también con la base que la frena: ahí A comenta) y con la
+versión actual que queda vieja (esa además comenta y sigue trabajando con red antes de actualizar; con la base que
+frena, pasaron 40). `src/ui/appUpdate.test.ts` prueba la recarga, *Update now*, la instalación que falla y forzar.
 
 **Qué no puede ver esta prueba** (los fixtures): copia el motor, el contenido, el árbol, la base local y las imágenes de
 la v0.090, pero usa los tipos, `remote.ts`, los permisos, los textos y las colas de fotos y de comentarios de hoy. Prueba

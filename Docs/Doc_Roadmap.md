@@ -446,9 +446,15 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
 17. **Hecho (v0.097): volver después de semanas sin red con una versión vieja.** Prueba con la sincronización de la
     v0.090 (`src/sync/offlineLargo.test.ts`): nada se pierde, con la mínima subida o sin ella. Desde esta versión, con
     la app vieja para el workspace no sale ni baja nada y la app instalada se actualiza sola. **Falta:** ver en el
-    iPhone (Safari, app instalada) que se actualiza sola al volver la red (solo se midió Chromium); y la base no frena
-    por versión los cambios del árbol ni los comentarios (las versiones anteriores a esta los siguen subiendo con la
-    mínima subida): si alguna vez hace falta, una migración como la de archivos. Ver `Doc_Sincronizacion.md`, "Volver
+    iPhone (Safari, app instalada) que se actualiza sola al volver la red (solo se midió Chromium). **Hecho (v0.099):**
+    la base frena por versión los cambios del árbol y los comentarios (header `x-shotdocs-version`, migración
+    `20261008120000_version_minima_arbol.sql`, rechazo 503 que ninguna versión marca como rechazado) y *Update now*
+    sigue cada instalación desde `updatefound`; archivar, borrar y restaurar proyectos también frenan. **Falta:**
+    aplicar la migración, publicar y, cuando Lega tenga esta versión en sus dispositivos, subir `min_app_version` a
+    ella; compartir, invitar y la papelera de archivos siguen sin versión; un workspace autohospedado necesita CORS que
+    acepte `x-shotdocs-version`. Menor (auditoría, O6): si una instalación falló y después el servidor vuelve a publicar
+    la misma versión que corre, *Update now* sigue diciendo que falló en vez de recargar (cualquier instalación nueva
+    lo borra; no pierde nada). Ver `Doc_Sincronizacion.md`, "La versión mínima, el árbol y los comentarios" y "Volver
     después de mucho tiempo sin red".
 18. **Que lo borrado no llegue a quien solo ve la página (D14). Diseño en `Doc_Privacidad_Borrado.md`, sin código.**
     Hoy lo borrado viaja en las filas a cualquiera que ve la página (también invitados) y las fotos sacadas se siguen
