@@ -966,6 +966,49 @@ opciones armadas con el editor real (el ejemplo con A, B a 64 y 160 px, C y su v
   ProseMirror sí actualiza, y `styles.css` cambia `--sd-cell-photo-h` en esa tabla.
 - **Cambiarlo** es un solo paso de deshacer y no toca las fotos (solo el atributo de la tabla).
 
+### Cómo quedó (v0.125)
+
+- **`src/ui/cellThumbs.ts`:** la propiedad (`thumbHeight`, de fábrica 96), su atributo global de `table`, la decoración
+  y `setThumbHeight` (las tablas de las fotos elegidas, en una transacción). `editorSchema.ts` le suma a la tabla de
+  BlockNote la propiedad y la extensión; `styles.css` cambia `--sd-cell-photo-h` por `data-thumb-height`.
+- **`src/ui/CellThumbsMenu.tsx`:** *Thumbnail size / Tamaño de las miniaturas*, un botón de la barra con su menú
+  (*Small, Medium, Large / Chico, Mediano, Grande*, el actual con el tilde). Va en la barra de una foto de una celda,
+  después de *Full cell width*, y en la barra de formato con la tabla elegida entera (sus puntos), al lado de los colores
+  del bloque, solo si la tabla tiene alguna foto (en una tabla sin fotos no hay nada que cambiar). El tooltip dice lo
+  que el nombre no dice: vale para toda la tabla y las agrandadas no cambian. *Thumbnail* ahora dice "Back to the table's
+  thumbnail size".
+- **Ayuda:** entrada nueva *Thumbnail size in a table / El tamaño de las miniaturas de una tabla*. Sin atajos.
+- **Versiones viejas (medido):** la publicada (`fixtures/editorSchemaMain.ts`) y la de v0.083 a v0.092 abren una página
+  con una tabla en 160 sin escribir nada; al escribir en una celda, y-prosemirror le saca a esa tabla la propiedad (los
+  atributos que su esquema no tiene) y vuelve a 96, con todas sus fotos (también la agrandada) y su texto, sin romper
+  los huecos estables. Abiertas las dos a la vez, la vieja recibe el cambio de alto sin escribir nada; si después edita
+  esa tabla, esa tabla vuelve a 96 también en la nueva (la otra tabla conserva el suyo). Esta versión abre una página de
+  la publicada (tablas sin la propiedad) sin escribir nada, con 96.
+- **`min_app_version`:** no hace falta subirlo. Lo único que pierde una versión vieja que edita la tabla es el alto (un
+  ajuste visual que se vuelve a elegir con un clic); ninguna foto ni texto.
+
+| Caso (Chromium sin ventana, la página real sobre el servidor en memoria, sin login) | Resultado |
+|---|---|
+| De fábrica | 4 miniaturas de 96 px de alto; el bloque sin `data-thumb-height` |
+| Barra de una foto de la celda → *Thumbnail size* | después de *Full cell width*; menú *Small, Medium* (con el tilde), *Large*; tooltip "For every thumbnail in this table…" |
+| *Large* | las 4 de 160 px de alto (256, 90, 160 y 284 px de ancho); la agrandada (`w = 0,5`) sigue en 199 × 133; guardado: 160 en esa tabla, nada en la otra; la foto sigue elegida |
+| Ctrl+Z / Ctrl+Shift+Z | 96 en un paso / 160 otra vez |
+| Tabla elegida con sus puntos → *Small* | el menú marca *Large*; las 4 de 64 px; en la tabla sin fotos, el botón no está |
+| Alto de la tabla de prueba (4 filas) | 354 px en *Small*, 418 en *Medium*, 714 en *Large* |
+| Vista de impresión (*Export PDF / Print*, A4) en *Large* | los mismos tamaños que en pantalla (160 px de alto) |
+| PDF de exportar (`src/export`, el libro armado) | 160 px de alto (`max-height: 160px`) |
+| Teléfono (390 px) en *Large* | hasta 160 px de alto, con tope en el ancho de la celda (una apaisada, 218 × 136); la página no se desborda |
+| Consola | sin errores de la app |
+
+Pruebas en el repo: `src/ui/cellThumbs.test.ts` (el valor, cambiarlo sin tocar las fotos, lo que se ve, deshacer y
+rehacer, abrir una tabla con el alto, copiar y pegar, dos a la vez, y las dos versiones publicadas), casos nuevos en
+`mediaBar.test.tsx` (el menú en la barra de la foto y en la de la tabla elegida, sin fotos y en solo lectura) y la línea
+de `editorSchemaFixture.test.ts` (`NUEVO_SIN_PUBLICAR`: `atributo table.thumbHeight = 96`; al publicar se regenera el
+fixture y se vacía).
+
+**Límites:** en el teléfono una apaisada en *Large* puede quedar más baja que las demás (tope en el ancho de la celda,
+como ya pasaba con 96 en una celda angosta). Sin probar en Safari ni en el iPhone de verdad.
+
 ## Cámara: sacar una foto o filmar desde la página (P.25, v0.110)
 
 Pedido de Lega (2026-10-01): sacar una foto o filmar desde la app, que entre en el renglón y suba al Drive como

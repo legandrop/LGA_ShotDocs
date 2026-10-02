@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.125 :
+
+El alto de las miniaturas de una tabla era fijo (96 px) y en una tabla de referencias se veían chicas o, en una lista
+larga de planos, ocupaban de más (D27, cambiada por Lega a B). Ahora cada tabla tiene su alto: *Thumbnail size* con
+*Small*, *Medium* y *Large* (64, 96 y 160 px), en la barra de una foto de la celda y en la de la tabla elegida con sus
+puntos; las fotos agrandadas a mano conservan su tamaño. Se guarda como propiedad de la tabla (`thumbHeight`, no un
+tipo nuevo; una decoración la lleva a la pantalla porque la vista de la tabla de BlockNote no redibuja sus atributos).
+La versión publicada la ignora y, si edita la tabla, vuelve a 96 sin perder fotos ni texto (probado). La impresión y el
+PDF de exportar salen con el mismo alto.
+[ Fotos en celdas, alto de las miniaturas - Thumbnail size por tabla: Small, Medium y Large ]
+
 v0.124 :
 
 No se podía guardar una página como plantilla ni cambiar las de fábrica (P.23, entrega 3 de `Doc_Plantillas.md`). Ahora
