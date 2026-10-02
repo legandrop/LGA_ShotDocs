@@ -574,6 +574,33 @@ describe('carrete: anotaciones (P.20, Docs/Doc_Anotar_Fotos.md, AN9)', () => {
     expect(current().querySelector('svg.sd-markup')).toBeNull();
   });
 
+  it('Annotate (y la tecla A) solo con quien deja anotar, y solo en una foto del Drive: avisa cuál y cierra', async () => {
+    const onAnnotate = vi.fn();
+    const { onClose } = await open({ onAnnotate });
+    expect(button('Annotate')).not.toBeNull();
+    expect(button('Annotate').getAttribute('data-tip')).toBe('**Keyboard:** A');
+    await key('a');
+    expect(onAnnotate).toHaveBeenCalledTimes(1);
+    expect(onAnnotate.mock.calls[0][0]).toMatchObject({ mediaId: FILE_A, source: 'media' });
+    // Se cierra (quien lo abrió abre el anotador cuando terminó de cerrarse).
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('sin permiso de editar (sin onAnnotate) no hay Annotate y la A no hace nada; en un video, tampoco', async () => {
+    await open();
+    expect(button('Annotate')).toBeNull();
+    await key('a');
+    expect(document.querySelector('.carrete')).not.toBeNull();
+    act(() => root?.unmount());
+    root = null;
+    document.body.innerHTML = '';
+    const onAnnotate = vi.fn();
+    await open({ start: 1, onAnnotate });
+    expect(button('Annotate')).toBeNull();
+    await key('a');
+    expect(onAnnotate).not.toHaveBeenCalled();
+  });
+
   it('sin el mapa (las fotos de una carpeta) no hay anotaciones ni botón', async () => {
     vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1000);
     await open();

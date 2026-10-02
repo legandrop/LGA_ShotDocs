@@ -194,6 +194,21 @@ export const EyeOffIcon = icon('M2.5 10s2.75-5 7.5-5 7.5 5 7.5 5-2.75 5-7.5 5-7.
 export const CameraIcon = icon('M3 7a1 1 0 0 1 1-1h2.5l1.25-2h4.5l1.25 2H16a1 1 0 0 1 1 1v8.25a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1zM10 8.25a3 3 0 1 1 0 6 3 3 0 0 1 0-6z');
 // Filmar: una cámara de video.
 export const VideoIcon = icon('M3.5 6h8.75a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H3.5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1zM13.25 9l4.25-2.5v7L13.25 11');
+
+// El anotador de fotos (P.20, entrega 2): anotar (un lápiz sobre una foto) y las nueve herramientas de FrameRev.
+export const AnnotateIcon = icon('M3.25 5.25h9.5M3.25 5.25v10h6M3.25 12.5l3.5-3.5 2.5 2.5M16.5 8.5l-6.25 6.25-2.5.75.75-2.5 6.25-6.25z');
+export const SelectToolIcon = icon('M5 3.5l9.5 6.25-4.25.75 2.5 4.75-1.75.9-2.5-4.75-3.5 2.6z');
+export const RectToolIcon = icon('M3.75 5.25h12.5v9.5H3.75z');
+export const EllipseToolIcon = icon('M10 4.75c3.6 0 6.5 2.35 6.5 5.25s-2.9 5.25-6.5 5.25S3.5 12.9 3.5 10 6.4 4.75 10 4.75z');
+export const ArrowToolIcon = icon('M4 16L15.5 4.5M9.5 4.5h6v6');
+export const LineToolIcon = icon('M4 16L16 4');
+export const PencilToolIcon = icon('M13.25 3.75l3 3-9 9-3.75.75.75-3.75zM11.5 5.5l3 3');
+export const MarkerToolIcon = icon('M12 3.5l4.5 4.5-6.5 6.5H5.5v-4.5zM5.5 14.5L3.5 16.5h4.5');
+export const TextToolIcon = icon('M4.5 5.5V4h11v1.5M10 4v12M7.75 16h4.5');
+export const NumberToolIcon = icon('M10 3.25a6.75 6.75 0 1 1 0 13.5 6.75 6.75 0 0 1 0-13.5zM9 7.75l1.5-1v6.5M8.75 13.25h3.5');
+export const UndoIcon = icon('M7.5 5L4 8.5 7.5 12M4.5 8.5h7.25a4 4 0 0 1 0 8H9');
+export const RedoIcon = icon('M12.5 5L16 8.5 12.5 12M15.5 8.5H8.25a4 4 0 0 0 0 8H11');
+export const FitIcon = icon('M3.5 7.5v-4h4M16.5 7.5v-4h-4M3.5 12.5v4h4M16.5 12.5v4h-4M7 7h6v6H7z');
 // El asistente (Docs/Doc_Asistente.md): un destello.
 export const AssistantIcon = icon('M9 3.25l1.35 3.9 3.9 1.35-3.9 1.35L9 13.75l-1.35-3.9-3.9-1.35 3.9-1.35zM14.75 12l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z');
 // Los ajustes del asistente: dos reguladores.

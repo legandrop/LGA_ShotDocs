@@ -355,12 +355,20 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   páginas, buscar), 6 opcional (dibujar en un comentario).
   **Entregas 0 y 1 hechas (v0.116):** el mapa `photoMarkup` y su lectura segura (`src/media/markup.ts`), las pruebas de
   versiones publicadas, base limpia, historial y carrera, y el dibujo encima de la foto en línea, la de una celda, la
-  foto-bloque, el carrete (*Hide annotations*) y el PDF. Falta: subir `min_app_version` a esta versión al publicarla
-  (AN10) y la entrega 2 (el anotador, con la poda de AN11); medir el dedo a 60 y 120 Hz y las fotos HEIC de un iPhone
-  real (entrega 0, no se pudo sin teléfono).
-  Del PDF (auditoría O2): el grosor mínimo de 1 px se calcula con la caja en pantalla y la vista de impresión copia el
-  `<svg>` tal cual, así un trazo fino sale más grueso en papel (y una foto que en pantalla no cargó sale sin dibujo);
-  redibujar cada `svg.sd-markup` de la copia con el mínimo de su caja impresa, antes de la entrega 2.
+  foto-bloque, el carrete (*Hide annotations*) y el PDF.
+  **Entrega 2 hecha (v0.123):** el anotador en la compu (`src/ui/Annotator.tsx`): las nueve herramientas con las letras
+  de FrameRev, Shift y Alt, colores y grosor contra 1920 px, estilo por herramienta, deshacer propio por foto, escribir
+  al soltar, topes en bytes y la poda de AN11; *Annotate* en la barra de la foto y A en el carrete; el PDF con el
+  grosor mínimo de su caja impresa (la observación O2). Falta: que `min_app_version` esté en 0.116 o más al publicarla
+  (AN10); probar ⌘[ y ⌘] en Safari y Chrome de una Mac; la entrega 3 (el dedo y el lápiz del iPad), y medir el dedo a 60
+  y 120 Hz y las fotos HEIC de un iPhone real (entrega 0, no se pudo sin teléfono).
+  De la auditoría de la entrega 2 (`Doc_Anotar_Fotos.md`, "Correcciones de la auditoría de la entrega 2"), pendientes:
+  una prueba que caiga si la condición «página sincronizada» de `PageEditor` (red, nada sin subir, nada sin bajar) que
+  frena la poda se rompe (hoy, con `synced = async () => true`, la suite sigue en verde; la re-verificación lo comprobó en
+  el navegador); una prueba que caiga si `PageEditor` ofrece *Annotate* sin poder editar; un marco ilegible lo pisa la primera forma
+  (revisar el día que cambie `v`); una forma con grosor 0 y sin relleno no se ve pero se puede elegir (sirve para
+  borrarla; decidir); en el teléfono el anotador abre y un dedo dibuja sin pellizco: decidir si se esconde en pantallas
+  táctiles hasta la entrega 3; un workspace sin la migración del equipo no conoce los permisos y nunca poda.
 - **P.22 Exportar una página o un proyecto entero** (Lega, 2026-10-02): PDF y/o zip con las páginas y las fotos, para
   entregarle al cliente o archivar un proyecto terminado. **Diseño en `Doc_Exportar.md`** (sin código; EX1 a EX15 a
   confirmar por Lega; auditado con condiciones y corregido: ningún correo en el zip, vista JPEG de cada foto): un PDF para entregar (toda la rama en orden con un índice que dice la hoja de
