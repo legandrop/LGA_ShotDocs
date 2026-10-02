@@ -115,7 +115,12 @@ alter table public.pages
 
 alter table public.workspace_settings
   -- El interruptor: null, apagado (todos bajan filas). Con un número, la versión mínima de la app que arma bases.
-  add column clean_min_version numeric(8, 3) check (clean_min_version >= 0);
+  add column clean_min_version numeric(8, 3) check (clean_min_version >= 0),
+  -- Prendido, no puede pasar de la mínima de la app: toda versión que entra entiende la base. Si no, una versión
+  -- vieja que solo ve recibiría la base sin entender `clean_seq` y dejaría la página "a medio bajar". Vale también al
+  -- revés: con el interruptor prendido, la mínima no baja de él.
+  add constraint workspace_settings_clean_min_le_min_app
+    check (clean_min_version is null or (min_app_version is not null and clean_min_version <= min_app_version));
 
 create function private.clean_min_version()
 returns numeric

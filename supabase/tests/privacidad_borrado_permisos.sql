@@ -10,6 +10,37 @@ begin;
 -- El interruptor empieza apagado (la prueba lo prende más abajo).
 update public.workspace_settings set clean_min_version = null where id;
 
+-- El interruptor no se prende por encima de la mínima de la app, ni sin mínima; y prendido, la mínima no baja de él.
+do $$
+declare
+  min_before numeric := (select min_app_version from public.workspace_settings where id);
+begin
+  update public.workspace_settings set min_app_version = 0.4 where id;
+  begin
+    update public.workspace_settings set clean_min_version = 0.5 where id;
+    raise exception 'FALLA: prende el interruptor por encima de la mínima';
+  exception when check_violation then null;
+  end;
+  update public.workspace_settings set min_app_version = null where id;
+  begin
+    update public.workspace_settings set clean_min_version = 0.5 where id;
+    raise exception 'FALLA: prende el interruptor sin mínima';
+  exception when check_violation then null;
+  end;
+  update public.workspace_settings set min_app_version = 0.5 where id;
+  update public.workspace_settings set clean_min_version = 0.5 where id;
+  assert (select clean_min_version from public.workspace_settings where id) = 0.5, 'no prende con la mínima igual';
+  update public.workspace_settings set min_app_version = 0.6 where id;
+  begin
+    update public.workspace_settings set min_app_version = 0.4 where id;
+    raise exception 'FALLA: baja la mínima por debajo del interruptor';
+  exception when check_violation then null;
+  end;
+  update public.workspace_settings set clean_min_version = null where id;
+  update public.workspace_settings set min_app_version = min_before where id;
+end;
+$$;
+
 create function pg_temp.u(s text) returns uuid language sql immutable as $$
   select ('00000000-0000-4000-8000-00000000' || s)::uuid;
 $$;
@@ -192,7 +223,7 @@ $$;
 -- ---------------------------------------------------------------------------------------------------
 -- Prendido, sin base: quien no ve lo borrado no baja nada; quien lo ve, las filas
 -- ---------------------------------------------------------------------------------------------------
-update public.workspace_settings set clean_min_version = 0.5 where id;
+update public.workspace_settings set min_app_version = greatest(coalesce(min_app_version, 0), 0.5), clean_min_version = 0.5 where id;
 do $$
 declare
   s text;
