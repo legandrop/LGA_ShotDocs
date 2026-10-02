@@ -806,3 +806,7 @@ existía con ese precio); la guarda por operación y la foto nueva después de *
 assistant* en amarillo (5.5); V1 puede arrancar sobre A1 si A2 se demora (11); la política se mira al mandar y salir de
 la cuenta no borra notas en silencio (8); Ctrl/⌘+Enter en la hoja (6); el audio va sin cifrar en el dispositivo (7); el
 roadmap pasó a P.27 (P.26 es el diseño de deshacer).
+
+**Notas de la re-verificación, para V1:** las filas vacías tienen todas el mismo rótulo (vacío), así que comparar rótulos
+no las distingue: el validador agrupa los cambios por la *Slate* que escribe la nota y la vista previa muestra el destino
+como *row 3 (new: 12 · 010 · 4)*.
