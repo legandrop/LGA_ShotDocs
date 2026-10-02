@@ -976,7 +976,7 @@ Manda sobre lo de arriba en lo que toca. **Versiones con nombre, *Restored from�
 único parcial para que una versión tenga un solo nombre vigente. Sin acceso directo (RLS sin políticas, `revoke all`).
 Funciones: `list_page_versions`, `name_page_version`, `rename_page_version`, `remove_page_version` y
 `mark_page_restored`, todas con `private.check_history` (nivel 3, no invitado, no en la papelera, también una de arriba,
-con la regla de v0.102). **Decisión tomada (sin Lega):** nombrar, cualquiera que ve el historial; renombrar y quitar,
+con la regla de v0.102). **Decisión a confirmar con Lega:** nombrar, cualquiera que ve el historial; renombrar y quitar,
 quien lo puso o nivel 4 sobre la página (lo del borrador de la sección 9), porque un nombre lo usa quien lo puso para
 encontrar esa versión; la marca de restauración, solo sobre una fila que subió quien llama, y no se renombra ni se
 quita. Las que escriben miran la versión mínima de B.17 antes de escribir (repetir lo ya hecho no escribe y anda). Un
