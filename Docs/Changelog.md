@@ -2,25 +2,37 @@
 
 v0.0XX :
 
-**Dictar al reporte, entrega V3** (P.27): el único micrófono era el del teclado, que no entiende bien la jerga mezclada
-y obliga a tocar un campo. *Dictate to report* suma un botón de 72 px: graba en pedazos de 1 s que se guardan como una
-nota de la cola (*Recording* recién con el primer pedazo confirmado, C5; `ended` y `pagehide` cortan y guardan), con
-nivel, tope de 2 minutos y la pantalla despierta. Transcribe con OpenAI, Gemini o un compatible y las pistas de la
-página (WebM primero, extensión, mp4 como `audio/m4a` a Gemini y plan B a WAV, C4), y ubica. *Voice* usa la clave del
-asistente o una segunda, cifrada en `shotdocs-dictation`; *Insert at cursor*; micrófono en *Ask…*; sin red se guarda y
-se transcribe sola al volver.
-[ Dictar al reporte V3 - el micrófono propio: grabar por pedazos, transcribir con la clave de la persona, Voz e insertar donde se escribía ]
+**Dictar al reporte, entregas V2 y V3** (P.27): sin red, *Save for later* solo dejaba la nota en el borrador de su
+página, y el único micrófono era el del teclado, que obliga a tocar un campo. V2: *Save for later* pasa la nota a una
+cola del dispositivo (`shotdocs-dictation`, sin subir su versión) y vacía el campo recién con la escritura confirmada;
+el indicador de sincronización suma *N voice notes to place* con la lista, y la hoja las ubica de a una con su vista
+previa o las pega como texto. Nunca se borra sola. V3: un botón de 72 px graba pedazos de 1 s en la cola (*Recording*
+recién con el primero guardado; `ended` y `pagehide` cortan y guardan), con nivel, tope de 2 minutos y pantalla
+despierta; transcribe con OpenAI, Gemini o un compatible (WebM primero, plan B a WAV) y ubica. *Voice* usa la clave del
+asistente o una segunda cifrada; *Insert at cursor*; micrófono en *Ask…*.
+[ Dictar al reporte V2 y V3 - la cola sin red y el micrófono propio: grabar por pedazos, transcribir con la clave de la persona e insertar donde se escribía ]
 
-v0.0XX :
+v0.137 :
 
-**Dictar al reporte, entrega V2** (P.27): sin red, *Save for later* solo dejaba la nota en el borrador de su página y
-no había forma de juntar varias ni de verlas desde otra página. Ahora *Save for later* pasa la nota a una cola del
-dispositivo (el almacén `notes` de `shotdocs-dictation`, sin subir la versión de la base) y recién con la escritura
-confirmada vacía el campo. El indicador de sincronización suma *N voice notes to place* con la lista (abrir en su
-página, copiar, descartar con confirmación), el botón del teléfono cuenta las de la página y la hoja las ubica de a una,
-con su vista previa, o las pega como texto al final. Al aplicar, la nota pasa al borrador (*Your note*) antes de salir
-de la cola; *Undo* la devuelve. Nunca se borra sola.
-[ Dictar al reporte V2 - la cola de notas sin red: guardar para después, el aviso con la lista, ubicar de a una o insertar como texto ]
+Compactar (B.9), entrega 3: listos para prender (siguen apagados). Faltaba lo que la re-verificación de la entrega 2
+pedía antes: la marca del rearmado vivía en memoria y, si la app se cerraba a mitad, lo escrito junto a un elemento de un
+snapshot malo quedaba invisible; ahora se guarda con el rearmado (R-1). La espera ya no sube la página entera en cada
+bajada (R-2). La base manda la huella de cada snapshot y el dispositivo no aplica uno que no coincide: lo invalida (O-D).
+`pull_page_content` sin versión (v0.127 a v0.133) deja de servir snapshots (migración
+`20261025120000_compactar_prender.sql`, sin aplicar). Restaurar empieza por anularlos (D142). Armar devuelve el control
+cada 30 ms (O-C, medido con la CPU frenada). El SQL para prenderlos queda en `Doc_Compactar.md`.
+[ Compactar, entrega 3 - listos para prender: marca del rearmado guardada, huella del snapshot y versiones viejas sin snapshots ]
+
+v0.136 :
+
+Plantillas con anotaciones de fotos (P.23 y P.20). Una foto anotada llegaba limpia a una página creada desde una
+plantilla, y a la plantilla guardada desde una página: copian los bloques, y las anotaciones (`photoMarkup`) no están en
+los bloques. Ahora la copia en memoria de la plantilla también toma, campo por campo, el marco y las formas de sus fotos, y
+`carryMarkup` (el de copiar y pegar, D46) las escribe con las mismas claves solo para las fotos que quedaron en la
+página, en el mismo paso de ⌘Z que los bloques; también en el reporte del día y en *Save as template…*. Entre proyectos
+no viajan (D136). *Clear filled-in values* las saca con las fotos (cuentan como valores llenados). Sin migración ni
+`min_app_version`: una versión vieja abre lo creado sin tocar el mapa.
+[ Las anotaciones de las fotos viajan con las plantillas: al usarlas y al guardar como plantilla ]
 
 v0.135 :
 

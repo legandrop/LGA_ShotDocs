@@ -147,14 +147,18 @@ Deja los snapshots **apagados** (`workspace_settings.snapshot_min_version` nulo)
   página): `select public.invalidate_page_snapshot('<id>', '<motivo>')` con una sesión que edita la página, o desde el
   SQL Editor `select private.invalidate_snapshot_chain(page_id, chain_id, '<motivo>') from public.page_snapshots where
   id = '<id>'`. **Apagar todo:** `snapshot_min_version = null`.
-- **Prenderlos** (entrega 3): el script de restaurar del repo de copias tiene que vaciar `page_snapshots` y
-  `page_compaction`, dejar `snapshot_seq` en 0 y no hacer volver atrás `content_epoch`; recién ahí
-  `update public.workspace_settings set snapshot_min_version = <versión> where id`.
+- **Prenderlos** (entrega 3, listo desde v0.137): el script de restaurar del repo de copias ya los anula y los vacía
+  (D142). Después de la prueba de punta a punta y la medición en el iPhone, el SQL de "Cómo quedó la entrega 3" en
+  `Doc_Compactar.md` (sube `snapshot_min_version` y `min_app_version` a esa versión).
 - **Pruebas:** `supabase/tests/snapshots_permisos.sql` (corrida en `begin … rollback`).
 - **Entrega 2** (`20261020120000_compactar_crear.sql`, aplicada en v0.133, no sube `schema_version`): la app arma los
   snapshots con las mismas funciones; la migración solo hace que `invalidate_page_snapshot` pida ver lo borrado
   (`sees_deleted`), como las demás: un invitado con Editar ya no invalida. Invalidar a mano sigue igual, con una sesión
   que ve lo borrado o desde el SQL Editor.
+- **Entrega 3** (`20261025120000_compactar_prender.sql`, sin aplicar, no sube `schema_version`): `pull_page_content`
+  sin versión (v0.127 a v0.133) ya no sirve snapshots, solo filas con la época; la de con versión
+  (`p_app_version`) los sirve con su huella (`sha256`, hex) a una versión permitida, y `pull_page_snapshot_checked`
+  le da a quien compacta la base con su huella. Sin la migración, la app baja filas.
 
 ### Aplicar las migraciones
 

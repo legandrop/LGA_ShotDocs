@@ -343,7 +343,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   selector de plantilla del globito, con el aviso de O4). **D82 hecha** (v0.130): *On-Set Report* en la raíz del proyecto
   ofrece crear o elegir la carpeta de reportes y mueve ahí la página (ya no sale como plantilla común). Quedan dos
   sorpresas anotadas por la auditoría: *Apply template…* en una página de la raíz con subpáginas las mueve con la página, y
-  la ventana no avisa si la carpeta elegida ya tiene el reporte de hoy (mostrar el *already exists* con *Open*). **Falta** que Lega revise el contenido de las tres (PL1) y
+  la ventana no avisa si la carpeta elegida ya tiene el reporte de hoy (mostrar el *already exists* con *Open*).
+  **Las anotaciones de las fotos viajan con la plantilla (v0.136, D46 aplicado a las plantillas):** al usarla (también el
+  reporte del día) y al guardar como plantilla, mismas reglas que copiar y pegar; *Clear filled-in values* las saca con las
+  fotos; entre proyectos no viajan (`Doc_Plantillas.md`, "Cómo quedó (las anotaciones de las fotos)"). Falta a mano: usar
+  una plantilla con fotos anotadas en la Mac y en el iPhone. De su auditoría (BAJO): en el reporte del día, si las anotaciones
+  no entran por los topes, el aviso queda solo en la consola (llevarlo a la pantalla, como al usar una plantilla); dos
+  guardas dobles (si se saca una capa la otra filtra igual) no tienen una prueba por capa. **Falta** que Lega revise el contenido de las tres (PL1) y
   pruebe el atajo en Firefox y Safari de la Mac y con un teclado latinoamericano físico. Quedan para después la marca
   *2 reports for…* en la barra lateral con la papelera ofrecida para el repetido sin tocar (O6), y en *Buscar en el
   proyecto* la marca *Template* con *Replace all* que saltee las plantillas salvo *Include templates* (O9, va con la
@@ -387,7 +393,8 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   pegarla en otra página del mismo proyecto le lleva sus formas (mismas claves, sin duplicar, un solo ⌘Z saca la foto y
   sus flechas); a otro proyecto o workspace no viajan, y al portapapeles no va nada nuevo
   (`src/media/markupClipboard.ts`, `src/ui/markupClipboardEditor.ts`). Falta a mano: ⌘C y ⌘V de verdad en Safari de la
-  Mac y en el iPhone. De la entrega 5 quedan el historial de las anotaciones, *Keep annotations?* al reemplazar y buscar
+  Mac y en el iPhone. **Con plantillas (v0.136):** las anotaciones también viajan al usar una plantilla del mismo proyecto y al
+  guardar como plantilla (*Clear filled-in values* las saca con las fotos). De la entrega 5 quedan el historial de las anotaciones, *Keep annotations?* al reemplazar y buscar
   en sus textos.
   De la auditoría de la entrega 2 (`Doc_Anotar_Fotos.md`, "Correcciones de la auditoría de la entrega 2"), pendientes:
   una prueba que caiga si la condición «página sincronizada» de `PageEditor` (red, nada sin subir, nada sin bajar) que
@@ -608,15 +615,16 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
    `invalidate_page_snapshot` con `sees_deleted` (O3, migración `20261020120000_compactar_crear.sql`, aplicada en v0.133).
    De su auditoría, corregido antes de publicarla: el rearmado conserva los elementos sin sus borrados (O-A: tirarlos
    dejaba invisible lo escrito al lado de un elemento de un snapshot malo), lo mismo al restaurar una copia (O-B).
-   **Falta la entrega 3 (prenderlos):** el script de restaurar, subir `min_app_version` a la
-   versión de la entrega 2 (O5), probar de punta a punta, medir en el iPhone (también armar uno en el hilo principal y
-   cuánto frena el ciclo, O-C: si tarda, compactar fuera del ciclo o con tope), separar un snapshot corrupto de uno de
-   una versión más nueva (O-D: hoy uno roto se sigue sirviendo y cada dispositivo nuevo cae a las filas; hace falta que
-   `pull_page_snapshot` devuelva la huella, otra migración) y `snapshot_min_version`. También, de la re-verificación de
-   la entrega 2: **R-1** (medio) la marca de página rearmada vive solo en memoria; si la app se cierra a mitad del
-   rearmado, lo escrito al lado del elemento de más queda invisible para los demás: guardarla en `docState` (la prueba
-   AUD-R4 de la auditoría lo muestra); **R-2** (bajo) cada bajada que encuentra algo sin subir vuelve a subir la página
-   entera. Hoy no es urgente: ninguna página lo necesita.
+   **Entrega 3 hecha (v0.137): listos para prender, siguen apagados.** La marca del rearmado se guarda (R-1) y la
+   espera olvida `syncedSV` una vez por época (R-2); la base manda la huella de cada snapshot y el dispositivo no aplica
+   uno que no coincide: lo invalida, y quien compacta invalida una base corrupta (O-D); `pull_page_content` sin versión
+   (v0.127 a v0.133) ya no sirve snapshots (migración `20261025120000_compactar_prender.sql`, sin aplicar); el script de
+   restaurar empieza por anularlos (D142); armar devuelve el control cada 30 ms, medido con la CPU frenada ×4 y ×6
+   (O-C). **Falta (Lega):** la prueba de punta a punta con sesión y la medición en el iPhone (pruebas 7 y 8 de
+   `Doc_Compactar.md`); después, el SQL de prender que está en "Cómo quedó la entrega 3" (sube también
+   `min_app_version`). Hoy no es urgente: ninguna página lo necesita.
+   De su auditoría (BAJO): si una bajada se corta por más de 3 reinicios de época, igual corre el paso que sube lo que
+   sobra del rearmado (`settleRebuild`); hace falta que la época cambie 4 veces en una sola bajada y no se pierde nada.
 
 10. **Hecho lo principal: editar a la vez sin perder texto (v0.052).** Dos parches a y-prosemirror (el editor
    que se quedaba con lo de antes y deshacía cambios de otros; dos personas en el mismo párrafo vacío), la

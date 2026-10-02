@@ -503,6 +503,10 @@ arma). Siguen apagados en la base hasta la entrega 3.
   la página que vino en la misma respuesta, en la misma transacción que lo guardado.
 - **Un snapshot ilegible** (de una versión más nueva) no se saltea como una fila: no se guarda nada del lote, el
   cursor no se mueve y esa página baja en filas sueltas hasta que se vuelve a abrir la app.
+- **La huella** (entrega 3, O-D): desde la entrega 3 la app pide `pull_page_content` con su versión y la base manda la
+  huella guardada del snapshot; si no coincide con lo que llegó (aunque se pueda leer), no se guarda nada del lote, se
+  invalida (si la sesión ve lo borrado) y la página baja en filas. La de sin versión (v0.127 a v0.133) ya no sirve
+  snapshots.
 - **Si se invalida** (el dispositivo aplicó un snapshot de esa página y la época de la respuesta es otra, o la del
   árbol es más nueva que la anotada; un árbol atrasado no reinicia nada): **desde la entrega 2 (D110)**, sin nada propio
   sin subir, lo guardado pasa a ser sus elementos sin ningún borrado (en una sola transacción, con el cursor,
@@ -510,8 +514,11 @@ arma). Siguen apagados en la base hasta la entrega 3.
   llega a nadie, y un elemento de más se conserva y, si el servidor no lo tiene, sube con lo escrito al lado (sobra
   texto antes que falte). Si está abierta, se vuelve a abrir. Con algo sin subir, olvida `syncedSV` y espera: lo propio
   sube primero con todos sus elementos (`syncedDS` no deja subir los borrados del snapshot) y el rearmado va en la
-  bajada siguiente. Restaurar una copia hace lo mismo con las páginas que aplicaron un snapshot. (En v0.127 a v0.129 la página volvía a subir entera.) El ciclo baja
-  también las páginas al día cuya época cambió.
+  bajada siguiente; olvida `syncedSV` una sola vez por época (`forgotSyncedForEpoch`, entrega 3, R-2). Restaurar una
+  copia hace lo mismo con las páginas que aplicaron un snapshot. (En v0.127 a v0.129 la página volvía a subir entera.)
+  La marca del rearmado (`DocState.rebuilt`) se guarda con él y se borra cuando se marca la subida (entrega 3, R-1): si
+  la app se cierra a mitad, la próxima bajada lo termina. El ciclo baja también las páginas al día cuya época cambió y
+  las que tienen esa marca.
 - **Armar snapshots** (entrega 2, `compact.ts`): al final del ciclo, como mucho una página, con los snapshots prendidos
   y una versión que alcanza; sale de las filas del servidor, nunca de lo guardado. Ver `Doc_Compactar.md`, "Cómo quedó
   la entrega 2".

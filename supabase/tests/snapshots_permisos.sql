@@ -1,5 +1,5 @@
--- Pruebas de los snapshots de compactar, entregas 1 y 2 (20261019120000_compactar_leer.sql y
--- 20261020120000_compactar_crear.sql, Docs/Doc_Compactar.md, sección 15,
+-- Pruebas de los snapshots de compactar, entregas 1 a 3 (20261019120000_compactar_leer.sql,
+-- 20261020120000_compactar_crear.sql y 20261025120000_compactar_prender.sql, Docs/Doc_Compactar.md, sección 15,
 -- prueba 5). Con los snapshots apagados, o sin ninguno, `pull_page_content` devuelve lo mismo que `pull_page_updates`;
 -- un snapshot se sirve solo confirmado y válido, y solo a quien ve lo borrado (nunca a Ver, Comentar ni a un invitado,
 -- tampoco con la privacidad de lo borrado prendida); nadie lee las tablas directo; reservar, subir, confirmar, saltear
@@ -47,6 +47,13 @@ $$;
 create function pg_temp.content(page text, after bigint default 0, lim int default 200) returns text language sql as $$
   select coalesce(string_agg(r.seq || ':' || r.update || case when r.snapshot_id is not null then ':s' else '' end
                              || ':' || r.content_epoch, ',' order by r.seq), '')
+  from public.pull_page_content(pg_temp.u(page), after, lim, '9.999') r;
+$$;
+
+-- Lo mismo con la de tres argumentos (la llaman v0.127 a v0.133; desde la entrega 3 nunca sirve un snapshot).
+create function pg_temp.content_legacy(page text, after bigint default 0, lim int default 200) returns text language sql as $$
+  select coalesce(string_agg(r.seq || ':' || r.update || case when r.snapshot_id is not null then ':s' else '' end
+                             || ':' || r.content_epoch, ',' order by r.seq), '')
   from public.pull_page_content(pg_temp.u(page), after, lim) r;
 $$;
 
@@ -67,7 +74,7 @@ $$;
 
 -- ¿Lo que baja la sesión empieza con un snapshot? Devuelve su `seq`, o null.
 create function pg_temp.snap_served(page text, after bigint default 0) returns bigint language sql as $$
-  select r.seq from public.pull_page_content(pg_temp.u(page), after) r where r.snapshot_id is not null;
+  select r.seq from public.pull_page_content(pg_temp.u(page), after, 200, '9.999') r where r.snapshot_id is not null;
 $$;
 
 -- El id de la fila `seq` de la página (la columna `id` se lee desde la API).
@@ -446,6 +453,72 @@ begin
 end;
 $$;
 
+-- ---------------------------------------------------------------------------------------------------
+-- Entrega 3: la de tres argumentos nunca sirve un snapshot; la de con versión, con su huella y solo a una versión
+-- permitida; pull_page_snapshot_checked con los controles de pull_page_snapshot y la huella guardada
+-- ---------------------------------------------------------------------------------------------------
+create temp table min_before as select min_app_version as v from public.workspace_settings where id;
+grant all on min_before to authenticated;
+do $$
+declare
+  s  text;
+  s1 uuid := (select id from ids where name = 's1');
+begin
+  foreach s in array array['d1a0', 'd1a1', 'd1a2', 'd1a3', 'd1a4', 'd1a5'] loop
+    perform pg_temp.as_user(s);
+    assert pg_temp.content_legacy('d1b0') = pg_temp.updates_as_content('d1b0'),
+      s || ': la de tres argumentos no baja lo mismo que pull_page_updates (' || left(pg_temp.content_legacy('d1b0'), 60) || ')';
+    assert not exists (select 1 from public.pull_page_content(pg_temp.u('d1b0'), 0, 200) r where r.snapshot_id is not null),
+      s || ': la de tres argumentos sirve un snapshot';
+    assert not exists (select 1 from public.pull_page_content(pg_temp.u('d1b0'), 0, 1) r where r.snapshot_id is not null),
+      s || ': la de tres argumentos sirve un snapshot con lote de uno';
+  end loop;
+  -- La huella: en la fila del snapshot, la guardada; en las filas, nada.
+  perform pg_temp.as_user('d1a1');
+  assert (select r.sha256 from public.pull_page_content(pg_temp.u('d1b0'), 0, 200, '9.999') r where r.snapshot_id is not null)
+         = pg_temp.sha('AQID'), 'la huella del snapshot no es la guardada';
+  assert (select count(*) from public.pull_page_content(pg_temp.u('d1b0'), 0, 200, '9.999') r) = 1, 'R: no es solo el snapshot';
+  assert not exists (select 1 from public.pull_page_content(pg_temp.u('d1b1'), 0, 200, '9.999') r where r.sha256 is not null),
+    'una fila trae huella';
+  -- pull_page_snapshot_checked: el vigente con su huella; los mismos rechazos que pull_page_snapshot.
+  assert (select c.state from public.pull_page_snapshot_checked(s1) c) = 'AQID', 'checked: no baja el vigente';
+  assert (select c.sha256 from public.pull_page_snapshot_checked(s1) c) = pg_temp.sha('AQID'), 'checked: otra huella';
+  perform pg_temp.as_user('d1a4');
+  perform pg_temp.expect_error(format('select * from public.pull_page_snapshot_checked(%L)', s1), 'not_allowed', 'v baja checked');
+  perform pg_temp.as_user('d1a5');
+  perform pg_temp.expect_error(format('select * from public.pull_page_snapshot_checked(%L)', s1), 'not_allowed', 'g baja checked');
+  perform pg_temp.as_user('d1a6');
+  perform pg_temp.expect_error(format('select * from public.pull_page_snapshot_checked(%L)', s1), 'snapshot_not_found', 'x baja checked');
+  perform pg_temp.as_user('d1a7');
+  perform pg_temp.expect_error(format('select * from public.pull_page_snapshot_checked(%L)', s1), 'snapshot_not_found', 'ek baja checked');
+  perform pg_temp.as_user('d1a1');
+  perform pg_temp.expect_error(format('select * from public.pull_page_snapshot_checked(%L)', gen_random_uuid()), 'snapshot_not_found',
+                               'checked de uno que no existe');
+  -- Con una versión mínima por encima: la que no alcanza (o ninguna) baja filas; la que alcanza, el snapshot.
+  perform pg_temp.as_postgres();
+  update public.workspace_settings set min_app_version = 5 where id;
+  perform pg_temp.as_user('d1a1');
+  assert not exists (select 1 from public.pull_page_content(pg_temp.u('d1b0'), 0, 200, '1.000') r where r.snapshot_id is not null),
+    'una versión que no alcanza recibe el snapshot';
+  assert not exists (select 1 from public.pull_page_content(pg_temp.u('d1b0'), 0, 200, null) r where r.snapshot_id is not null),
+    'sin versión recibe el snapshot';
+  assert not exists (select 1 from public.pull_page_content(pg_temp.u('d1b0'), 0, 200, 'abc') r where r.snapshot_id is not null),
+    'una versión ilegible recibe el snapshot';
+  assert (select string_agg(r.seq || ':' || r.update || ':' || r.content_epoch, ',' order by r.seq)
+          from public.pull_page_content(pg_temp.u('d1b0'), 0, 200, '1.000') r) = pg_temp.updates_as_content('d1b0'),
+    'una versión que no alcanza no baja lo de siempre';
+  assert pg_temp.snap_served('d1b0') = 120, 'la versión que alcanza no recibe el snapshot';
+  perform pg_temp.as_postgres();
+  update public.workspace_settings set min_app_version = (select v from min_before) where id;
+  -- Permisos: authenticated ejecuta, anon no.
+  assert has_function_privilege('authenticated', 'public.pull_page_content(uuid,bigint,int,text)', 'execute'), 'authenticated no ejecuta la de versión';
+  assert has_function_privilege('authenticated', 'public.pull_page_snapshot_checked(uuid)', 'execute'), 'authenticated no ejecuta checked';
+  assert not has_function_privilege('anon', 'public.pull_page_content(uuid,bigint,int,text)', 'execute'), 'anon ejecuta la de versión';
+  assert not has_function_privilege('anon', 'public.pull_page_content(uuid,bigint,int)', 'execute'), 'anon ejecuta la de siempre';
+  assert not has_function_privilege('anon', 'public.pull_page_snapshot_checked(uuid)', 'execute'), 'anon ejecuta checked';
+end;
+$$;
+
 -- Con la privacidad de lo borrado prendida (D14): quien no la ve recibe la base limpia (o nada), nunca el snapshot.
 update public.workspace_settings set min_app_version = greatest(coalesce(min_app_version, 0), 0.5), clean_min_version = 0.5 where id;
 do $$
@@ -487,6 +560,12 @@ begin
   assert pg_temp.content('d1b0', 0, 2) = '120:AQID:s:0,121:BQ==:0', 'lote de dos';
   assert pg_temp.content('d1b0', 120) = '121:BQ==:0,122:Bg==:0', 'con el cursor en el snapshot no baja la cola';
   assert pg_temp.content('d1b0', 121) = '122:Bg==:0', 'con el cursor en 121';
+  -- La huella va solo en la fila del snapshot (entrega 3).
+  assert (select string_agg(r.seq || ':' || coalesce(r.sha256, '-'), ',' order by r.seq)
+          from public.pull_page_content(pg_temp.u('d1b0'), 0, 200, '9.999') r) = '120:' || pg_temp.sha('AQID') || ',121:-,122:-',
+    'la huella no va solo en la fila del snapshot';
+  -- La de tres argumentos, tampoco acá: las 122 filas.
+  assert pg_temp.content_legacy('d1b0') = pg_temp.updates_as_content('d1b0'), 'la de tres argumentos sirve el snapshot con cola';
   -- Lo que hay después de la página entera no cambia con un snapshot (pull_page_updates sigue igual).
   assert (select count(*) from public.pull_page_updates(pg_temp.u('d1b0'), 0, 1000)) = 122, 'pull_page_updates cambió';
   perform pg_temp.as_postgres();

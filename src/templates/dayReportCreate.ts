@@ -1,6 +1,8 @@
 import { BlockNoteEditor } from '@blocknote/core';
 import { withCollaboration, yXmlFragmentToBlocks } from '@blocknote/core/yjs';
 import type * as Y from 'yjs';
+import { carryMarkup, type CopiedPhoto } from '../media/markupClipboard';
+import { mediaIdsInDoc } from '../media/usage';
 import type { PageDocs } from '../sync/docs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import type { PageTree } from '../sync/tree';
@@ -32,6 +34,8 @@ export interface ReportTemplate {
   id: string;
   blocks: TemplateBlock[];
   collapsed: string[];
+  /** Las anotaciones de las fotos de la plantilla (P.20, D46); vacío si es de otro proyecto o no tiene. */
+  markup?: CopiedPhoto[];
   /** Fotos y archivos que no se copiaron por ser de otro proyecto (PL10). */
   removed: number;
 }
@@ -98,7 +102,7 @@ export async function resolveReportTemplate(
   if (!isTemplatePage(deps.tree, templateId)) return { template: null, notice: 'gone' };
   const read = await readOwnTemplate(deps, templateId, projectId, { wait: 2000 });
   if (read.status !== 'ok') return { template: null, notice: read.status };
-  return { template: { id: templateId, blocks: read.blocks, collapsed: read.collapsed, removed: read.removed }, notice: null };
+  return { template: { id: templateId, blocks: read.blocks, collapsed: read.collapsed, markup: read.markup, removed: read.removed }, notice: null };
 }
 
 /** Cuántos documentos se leen como mucho buscando la fila *Date* de páginas sin fecha en el título. */
@@ -332,7 +336,7 @@ export async function createDayReport(
     id = await tree.create(plan.parentId, title, plan.projectId, { templateId, before: placeBefore(plan, input.date) });
   }
   try {
-    await writeNewPage(deps.docs, id, blocks, template?.collapsed ?? []);
+    await writeNewPage(deps.docs, id, blocks, template?.collapsed ?? [], template?.markup ?? []);
   } catch (err) {
     throw new DayReportWriteError(id, err);
   }
@@ -351,6 +355,8 @@ export async function writeNewPage(
   blocks: TemplateBlock[],
   /** Los títulos colapsados para todos de una plantilla propia (con los ids que traen `blocks`). */
   collapsed: string[] = [],
+  /** Las anotaciones de las fotos de la plantilla (mismas claves): se escriben solo para las fotos que quedaron en `blocks`. */
+  markup: CopiedPhoto[] = [],
 ): Promise<void> {
   const doc = await docs.open(pageId, { seed: true });
   try {
@@ -380,6 +386,16 @@ export async function writeNewPage(
         doc.transact(() => {
           for (const id of collapsed) shared.set(id, true);
         });
+      }
+      if (markup.length) {
+        // Solo las fotos que de verdad quedaron en la página. Si algo falla, la página ya tiene sus bloques: las fotos
+        // quedan limpias, nunca se corta la creación.
+        try {
+          const result = carryMarkup(doc, markup, mediaIdsInDoc(doc));
+          if (result.skipped.length) console.warn('[anotaciones] anotaciones de la plantilla que no entraron', result.skipped);
+        } catch (err) {
+          console.warn('[anotaciones] no se pudieron copiar las anotaciones de la plantilla', err);
+        }
       }
       await docs.flush(pageId);
     } finally {
