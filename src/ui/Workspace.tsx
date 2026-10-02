@@ -50,6 +50,7 @@ import { Sidebar } from './Sidebar';
 import { SidebarResizer } from './SidebarResizer';
 import { SyncIcon } from './SyncBadge';
 import { SpaceHost } from './SpaceHost';
+import { OwnTemplatesHost } from '../templates/ownTemplatesUi';
 import { ExportHost } from './ExportHost';
 import { TrashView } from './TrashView';
 import { AssistantHost } from '../assistant/AssistantHost';
@@ -463,6 +464,8 @@ export function Shell() {
       <TourHost />
       <InstallHost />
       <ReplaceProgressHost />
+      {/* *Save as template* y *Template settings* (Docs/Doc_Plantillas.md, entrega 3). */}
+      <OwnTemplatesHost />
       {notice && (
         <div className="notice" role="status">
           <span>{notice}</span>

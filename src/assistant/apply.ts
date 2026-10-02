@@ -49,7 +49,8 @@ export function retakeSnapshot(state: EditorState, previous: Snapshot): Snapshot
   return snapshotOf(state, collectBetween(state.doc, range.from, range.to));
 }
 
-function snapshotOf(state: EditorState, selected: Selected | 'empty' | 'tooLong'): Snapshot | 'empty' | 'tooLong' {
+/** La foto de unos pedazos ya juntados (lo elegido, la página entera o los bloques de *Format as…*). */
+export function snapshotOf(state: EditorState, selected: Selected | 'empty' | 'tooLong'): Snapshot | 'empty' | 'tooLong' {
   if (typeof selected === 'string') return selected;
   const binding = bindingOf(state);
   let anchors: Snapshot['anchors'] = null;
@@ -182,4 +183,21 @@ export function applySuggestion(view: EditorView, snapshot: Snapshot, parsed: Pa
     return { ok: false, reason: 'failed' };
   }
   return { ok: true, changed };
+}
+
+/**
+ * Lo nuevo aplicado sobre una copia del documento, sin editor ni Yjs (la transacción no se despacha): la subpágina
+ * traducida de *Translate page* (entrega A2). `null` si lo elegido cambió desde que se pidió (la misma guarda que aplicar).
+ */
+export function appliedDoc(state: EditorState, snapshot: Snapshot, parsed: Parsed): PMNode | null {
+  const shift = unchangedShift(state, snapshot);
+  if (shift === null) return null;
+  const tr = state.tr;
+  const { selected } = snapshot;
+  for (const [i, piece] of [...selected.pieces.entries()].reverse()) {
+    const units = parsed.blocks[i];
+    if (piece.kind !== 'text' || !units) continue;
+    for (const step of pieceSteps(state, piece, units, selected, shift)) tr.replaceWith(step.from, step.to, step.nodes);
+  }
+  return tr.doc;
 }

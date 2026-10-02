@@ -72,7 +72,8 @@ function cutRemote(remote: FakeRemote, net: Net): FakeRemote {
       const value = Reflect.get(target, prop, target) as unknown;
       if (typeof value !== 'function') return value;
       return (...args: unknown[]) =>
-        net.down || (net.noPulls && prop === 'pullUpdates')
+        // Bajar contenido: `pullUpdates` y, desde compactar (entrega 1), `pullContent`, que la app usa primero.
+        net.down || (net.noPulls && (prop === 'pullUpdates' || prop === 'pullContent'))
           ? Promise.reject(new RemoteError('Failed to fetch', false, undefined, true))
           : (value as (...a: unknown[]) => unknown).apply(target, args);
     },

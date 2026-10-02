@@ -156,3 +156,24 @@
 .template-preview-picker .segmented button {
   white-space: nowrap;
 }
+
+/* Las plantillas propias (entrega 3): el nombre de cada otro proyecto y el aviso de una que no terminó de bajar. */
+.templates-project-name {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.templates-waiting {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--warn-border);
+  border-radius: 8px;
+  background: var(--warn-bg);
+  color: var(--warn);
+}

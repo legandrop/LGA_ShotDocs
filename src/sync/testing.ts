@@ -14,7 +14,12 @@ import { openLocalDb, type LocalDb } from './localDb';
 import {
   PROJECT_DRIVE_SCHEMA_VERSION,
   PROJECT_STATES_SCHEMA_VERSION,
+  SNAPSHOT_SCHEMA_VERSION,
   type AccessRow,
+  type CompactionClaim,
+  type NewSnapshot,
+  type SnapshotPushResult,
+  type SnapshotsRemote,
   type CleanPushResult,
   type CleanWorkRow,
   type NewCleanBase,
@@ -75,6 +80,32 @@ import {
  * número, o a uno más bajo, para ver cada caso.
  */
 export const WRITE_VERSION_SINCE = 0.099;
+
+/** Una fila de `page_snapshots` en el servidor en memoria (20261019120000_compactar_leer.sql). */
+export interface StoredSnapshot {
+  id: string;
+  pageId: string;
+  upToSeq: number;
+  lastUpdateId: number;
+  baseId: string | null;
+  chainId: string;
+  chainMinVersion: number;
+  state: Uint8Array;
+  sv: Uint8Array;
+  sha256: string;
+  appVersion: number;
+  createdBy: string;
+  createdAt: number;
+  confirmedAt: number | null;
+  invalidAt: number | null;
+  invalidReason: string | null;
+}
+
+/** La huella SHA-256 en hexadecimal (como `encode(digest(...), 'hex')` en la base). */
+export async function sha256Hex(data: Uint8Array): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', data as Uint8Array<ArrayBuffer>));
+  return [...digest].map((x) => x.toString(16).padStart(2, '0')).join('');
+}
 
 /** Una fila de `comments` en el servidor en memoria: con el texto aunque se haya borrado, como la tabla. */
 type StoredComment = CommentRow & { body: string; updated_at?: string };
@@ -170,6 +201,95 @@ export class FakeServer {
   cleanMutant: null | 'raw' | 'noreset' | 'noshare' = null;
   /** Lo que respondió `push_clean_base`, en orden (para las pruebas). */
   readonly cleanPushes: { pageId: string; toSeq: number; result: string; by: string }[] = [];
+
+  // --- compactar: los snapshots (20261019120000_compactar_leer.sql, Docs/Doc_Compactar.md) -----------------------
+  /** `page_snapshots`, en el orden en que se subieron. */
+  readonly snapshots: StoredSnapshot[] = [];
+  /** `pages.snapshot_seq` y `pages.content_epoch` (aparte de `PageRow`: el árbol los trae solo desde la versión 17). */
+  readonly snapshotMeta = new Map<string, { seq: number; epoch: number }>();
+  /** `page_compaction`: la reserva y el "no reintentar". */
+  readonly compaction = new Map<string, { claimAt: number | null; claimBy: string | null; skipUntil: number | null; skipWhy: string | null }>();
+  /** Lo que pide `claim_page_compaction` (100 filas y 64 KB de cola en la base; las pruebas lo achican). */
+  snapshotMinRows = 100;
+  snapshotMinTailBytes = 65536;
+  /** Como una base que dice la versión 17 pero no tiene `pull_page_content` (PGRST202). */
+  pullContentMissing = false;
+  /** Los pedidos de contenido que llegaron, en orden (`pull_page_updates` o `pull_page_content`). */
+  readonly contentCalls: string[] = [];
+  /** Cuántos snapshots sirvió `pull_page_content` (para las pruebas al azar). */
+  snapshotsServed = 0;
+  /** Restaurar sin el paso del script que vacía `page_snapshots` (la vigencia mira el id de la fila final). */
+  keepSnapshotsOnRestore = false;
+
+  /** Prende los snapshots (`snapshot_min_version`) con la base en la versión 17. Llamarlo después de los otros `enable`. */
+  enableSnapshots(minVersion = 0.001): void {
+    this.settings = {
+      ...(this.settings ?? { generation: 1, minAppVersion: null, mediaUrl: null, schemaVersion: 1 }),
+      schemaVersion: Math.max(this.settings?.schemaVersion ?? 1, SNAPSHOT_SCHEMA_VERSION),
+      snapshotMinVersion: minVersion,
+    };
+  }
+
+  /** La base en la versión 17 con los snapshots apagados (la migración aplicada, como queda al publicarla). */
+  migrateSnapshots(): void {
+    this.settings = {
+      ...(this.settings ?? { generation: 1, minAppVersion: null, mediaUrl: null, schemaVersion: 1 }),
+      schemaVersion: Math.max(this.settings?.schemaVersion ?? 1, SNAPSHOT_SCHEMA_VERSION),
+      snapshotMinVersion: this.settings?.snapshotMinVersion ?? null,
+    };
+  }
+
+  snapshotsMigrated(): boolean {
+    return (this.settings?.schemaVersion ?? 0) >= SNAPSHOT_SCHEMA_VERSION;
+  }
+
+  snapshotsOn(): boolean {
+    return this.snapshotsMigrated() && this.settings?.snapshotMinVersion != null;
+  }
+
+  smeta(pageId: string): { seq: number; epoch: number } {
+    let m = this.snapshotMeta.get(pageId);
+    if (!m) {
+      m = { seq: 0, epoch: 0 };
+      this.snapshotMeta.set(pageId, m);
+    }
+    return m;
+  }
+
+  /** `private.current_snapshot`: confirmado, no invalidado, su fila final igual y la cadena de una versión permitida. */
+  currentSnapshot(pageId: string): StoredSnapshot | null {
+    const page = this.pages.get(pageId);
+    const min = this.settings?.snapshotMinVersion;
+    if (!page || !this.snapshotsOn() || min == null) return null;
+    const rows = this.updates.get(pageId) ?? [];
+    let best: StoredSnapshot | null = null;
+    for (const sn of this.snapshots) {
+      if (sn.pageId !== pageId || sn.confirmedAt === null || sn.invalidAt !== null) continue;
+      if (sn.chainMinVersion < min || sn.upToSeq > page.update_seq) continue;
+      const row = rows.find((u) => u.seq === sn.upToSeq);
+      if (!row || (row.id ?? row.seq) !== sn.lastUpdateId) continue;
+      if (!best || sn.upToSeq > best.upToSeq) best = sn;
+    }
+    return best;
+  }
+
+  /** `private.invalidate_snapshot_chain`: toda la cadena; `snapshot_seq` a 0 y la época sube. */
+  invalidateChain(pageId: string, chainId: string, reason: string): number {
+    let n = 0;
+    for (const sn of this.snapshots) {
+      if (sn.chainId !== chainId || sn.invalidAt !== null) continue;
+      sn.invalidAt = this.now();
+      sn.invalidReason = reason;
+      n++;
+    }
+    if (n > 0) {
+      const m = this.smeta(pageId);
+      m.seq = 0;
+      m.epoch += 1;
+    }
+    return n;
+  }
+
 
   /** Prende el interruptor (`clean_min_version`) con la base en la versión 12. Llamarlo después de los otros `enable`. */
   enableClean(minVersion = 0.001): void {
@@ -323,6 +443,10 @@ export class FakeServer {
   readonly failCommentOnce = new Set<string>();
   /** La base tiene las menciones (versión 15, 20261015120000_menciones.sql). */
   mentionsEnabled = false;
+  /** La entrega 2: filas sin acceso y `share_for_mention` (versión 16, 20261016120000_menciones_e2.sql). */
+  mentionSharingEnabled = false;
+  /** Las llamadas a `share_for_mention` (`<página> <persona>`). */
+  readonly mentionShares: string[] = [];
   /** `comment_mentions`, con las filas sacadas (`removed_at`): nada se borra. */
   readonly mentions: {
     id: string;
@@ -410,6 +534,23 @@ export class FakeServer {
     this.listCommentsEnabled = true;
     this.mentionsEnabled = true;
     this.settings = { ...this.settings!, schemaVersion: MENTIONS_SCHEMA_VERSION };
+  }
+
+  /** La entrega 2 de las menciones (ME2): la base en la versión 16. */
+  enableMentionSharing(): void {
+    this.enableMentions();
+    this.mentionSharingEnabled = true;
+    this.settings = { ...this.settings!, schemaVersion: 16 };
+  }
+
+  /** `private.page_in_trash`: ella o una de arriba en la papelera. */
+  pageInTrash(pageId: string): boolean {
+    const seen = new Set<string>();
+    for (let cur: string | null = pageId; cur && !seen.has(cur); cur = this.pages.get(cur)?.parent_id ?? null) {
+      seen.add(cur);
+      if (this.pages.get(cur)?.deleted_at) return true;
+    }
+    return false;
   }
 
   /** `private.mention_allowed` (Docs/Doc_Menciones.md, sección 4). */
@@ -573,6 +714,13 @@ export class FakeServer {
         this.cleanBases.clear();
         this.cleanMeta.clear();
         for (const p of this.pages.values()) this.meta(p.id).reset = p.update_seq;
+      }
+      // Como tiene que hacer el script de restaurar antes de prender los snapshots (Docs/Doc_Compactar.md, sección 9):
+      // `page_snapshots` vacía, `snapshot_seq` en 0 y la época de contenido que nunca vuelve atrás (la de hoy se queda).
+      if (!this.keepSnapshotsOnRestore) {
+        this.snapshots.splice(0);
+        this.compaction.clear();
+        for (const m of this.snapshotMeta.values()) m.seq = 0;
       }
     };
   }
@@ -975,7 +1123,16 @@ const pageNotFound = () => new RemoteError('page_not_found', true, 'P0002');
 const fileNotFound = () => new RemoteError('file_not_found', true, 'P0002');
 
 export class FakeRemote
-  implements Remote, MediaRemote, TeamRemote, CommentRemote, MentionsRemote, ProjectStatesRemote, HistoryRemote, NamedVersionsRemote
+  implements
+    Remote,
+    MediaRemote,
+    TeamRemote,
+    CommentRemote,
+    MentionsRemote,
+    ProjectStatesRemote,
+    HistoryRemote,
+    NamedVersionsRemote,
+    SnapshotsRemote
 {
   /** La sesión: por defecto, el dueño del workspace. */
   readonly userId: string;
@@ -1029,8 +1186,14 @@ export class FakeRemote
     if (!allowed) throw new RemoteError('app_outdated', false, 'P0001');
   }
 
+  /** Como el cliente de verdad: los snapshots prendidos según los últimos ajustes leídos (`SupabaseRemote.snapshotsOn`). */
+  private snapshotsOn = false;
+  /** Como el cliente de verdad: cuándo vio que faltaba `pull_page_content`. */
+  private pullContentMissingAt = 0;
+
   async fetchWorkspaceSettings(): Promise<WorkspaceSettings | null> {
     this.server.check();
+    this.snapshotsOn = this.server.snapshotsOn();
     return this.server.settings && { ...this.server.settings };
   }
 
@@ -1062,11 +1225,17 @@ export class FakeRemote
     const ids = new Set(projectIds);
     // `clean_seq`, como pide la columna la app: con la versión 12 o más (y si la base la tiene).
     const clean = (schemaVersion ?? 0) >= CLEAN_SCHEMA_VERSION && (this.server.settings?.schemaVersion ?? 0) >= CLEAN_SCHEMA_VERSION;
+    // `snapshot_seq` y `content_epoch`: con la versión 17 o más (y si la base las tiene).
+    const snap = (schemaVersion ?? 0) >= SNAPSHOT_SCHEMA_VERSION && this.server.snapshotsMigrated();
     return [...this.server.pages.values()]
       .filter((p) => ids.has(p.workspace_id) && !this.server.projectDeleted(p.workspace_id))
       // `can_view_page_row`: el nivel de la página ya cuenta el del proyecto, el del dueño, los de arriba y la papelera.
       .filter((p) => !this.team || this.server.pageLevel(this.userId, p.id) >= 1)
-      .map((p) => (clean ? { ...p, clean_seq: this.server.cleanMeta.get(p.id)?.seq ?? 0 } : { ...p }));
+      .map((p) => ({
+        ...p,
+        ...(clean ? { clean_seq: this.server.cleanMeta.get(p.id)?.seq ?? 0 } : {}),
+        ...(snap ? { snapshot_seq: this.server.smeta(p.id).seq, content_epoch: this.server.smeta(p.id).epoch } : {}),
+      }));
   }
 
   /** Las versiones de la base que pasó la app a `fetchProjects`, en orden. */
@@ -1317,6 +1486,12 @@ export class FakeRemote
 
   async pullUpdates(pageId: string, afterSeq: number, limit: number): Promise<RemoteUpdate[]> {
     this.server.check();
+    this.server.contentCalls.push('pull_page_updates');
+    return this.serveUpdates(pageId, afterSeq, limit);
+  }
+
+  /** `pull_page_updates` en la base (sin anotar el pedido: `pull_page_content` lo llama por dentro). */
+  private serveUpdates(pageId: string, afterSeq: number, limit: number): RemoteUpdate[] {
     if (
       !this.server.pages.has(pageId) ||
       this.server.pageInDeletedProject(pageId) ||
@@ -1331,8 +1506,185 @@ export class FakeRemote
     }
     return (this.server.updates.get(pageId) ?? [])
       .filter((u) => u.seq > afterSeq)
-      .slice(0, limit)
+      .slice(0, Math.min(Math.max(limit, 1), 1000))
       .map((u) => ({ seq: u.seq, data: u.data.slice() }));
+  }
+
+  // --- compactar: los snapshots (20261019120000_compactar_leer.sql) ------------------------------------------------
+
+  /**
+   * Como `SupabaseRemote.pullContent`: apagados (según los últimos ajustes leídos) o sin la función, `pullUpdates`; si
+   * no, `pull_page_content` con las mismas reglas que la base.
+   */
+  async pullContent(pageId: string, afterSeq: number, limit: number): Promise<RemoteUpdate[]> {
+    if (!this.snapshotsOn || Date.now() - this.pullContentMissingAt < 10 * 60_000) return this.pullUpdates(pageId, afterSeq, limit);
+    this.server.check();
+    if (this.server.pullContentMissing || !this.server.snapshotsMigrated()) {
+      this.pullContentMissingAt = Date.now();
+      return this.pullUpdates(pageId, afterSeq, limit);
+    }
+    this.server.contentCalls.push('pull_page_content');
+    const lim = Math.min(Math.max(limit, 1), 1000);
+    // `pull_page_updates` mira el permiso de ver y tira `page_not_found` igual que `pull_page_content`.
+    const epoch = this.server.pages.has(pageId) ? this.server.smeta(pageId).epoch : 0;
+    const withEpoch = (rows: RemoteUpdate[]) => rows.map((r) => ({ ...r, contentEpoch: epoch }));
+    if (!this.server.pages.has(pageId) || this.server.pageInDeletedProject(pageId) || (this.team && this.server.pageLevel(this.userId, pageId) < 1)) {
+      throw new RemoteError('page_not_found', true, 'P0002');
+    }
+    if (!this.server.seesDeleted(this.userId, pageId)) return withEpoch(this.serveUpdates(pageId, afterSeq, lim));
+    const sn = this.server.currentSnapshot(pageId);
+    const rows = this.server.updates.get(pageId) ?? [];
+    const replaced = rows.filter((u) => u.seq > afterSeq && u.seq <= (sn?.upToSeq ?? 0)).reduce((n, u) => n + u.data.length, 0);
+    if (!sn || sn.upToSeq <= afterSeq || sn.state.length >= replaced) return withEpoch(this.serveUpdates(pageId, afterSeq, lim));
+    this.server.snapshotsServed++;
+    const out: RemoteUpdate[] = [{ seq: sn.upToSeq, data: sn.state.slice(), snapshotId: sn.id }];
+    if (lim > 1) out.push(...rows.filter((u) => u.seq > sn.upToSeq).slice(0, lim - 1).map((u) => ({ seq: u.seq, data: u.data.slice() })));
+    return withEpoch(out);
+  }
+
+  /** Como `private.snapshots_allowed`. */
+  private snapshotsAllowed(): boolean {
+    const min = this.server.settings?.minAppVersion;
+    const snap = this.server.settings?.snapshotMinVersion;
+    if (!this.server.snapshotsOn() || snap == null) return false;
+    if (!/^\d{1,4}(\.\d{1,3})?$/.test(this.appVersion)) return false;
+    const v = Number(this.appVersion);
+    return v >= snap && (min == null || v >= min);
+  }
+
+  /** Ver la página (`can_view_page`), o `page_not_found`. */
+  private snapshotView(pageId: string): void {
+    this.server.check();
+    if (!this.server.snapshotsMigrated()) throw new RemoteError('Could not find the function', true, 'PGRST202');
+    if (!this.server.pages.has(pageId) || this.server.pageInDeletedProject(pageId) || (this.team && this.server.pageLevel(this.userId, pageId) < 1)) {
+      throw new RemoteError('page_not_found', true, 'P0002');
+    }
+  }
+
+  /** Un snapshot que la sesión ve (su página), o `snapshot_not_found`. */
+  private snapshotById(id: string): StoredSnapshot {
+    this.server.check();
+    if (!this.server.snapshotsMigrated()) throw new RemoteError('Could not find the function', true, 'PGRST202');
+    const sn = this.server.snapshots.find((x) => x.id === id);
+    if (!sn || this.server.pageInDeletedProject(sn.pageId) || (this.team && this.server.pageLevel(this.userId, sn.pageId) < 1)) {
+      throw new RemoteError('snapshot_not_found', true, 'P0002');
+    }
+    return sn;
+  }
+
+  async claimCompaction(pageId: string): Promise<CompactionClaim | null> {
+    this.snapshotView(pageId);
+    const page = this.server.pages.get(pageId)!;
+    if (!this.server.seesDeleted(this.userId, pageId) || !this.snapshotsAllowed() || this.server.pageInTrash(pageId)) return null;
+    const now = this.server.now();
+    const c = this.server.compaction.get(pageId);
+    if (c?.skipUntil != null && c.skipUntil > now) return null;
+    if (c?.claimAt != null && c.claimAt > now - 10 * 60_000 && c.claimBy !== this.userId) return null;
+    const cur = this.server.currentSnapshot(pageId);
+    const baseSeq = cur?.upToSeq ?? 0;
+    const top = page.update_seq;
+    if (top - baseSeq < this.server.snapshotMinRows) return null;
+    const rows = this.server.updates.get(pageId) ?? [];
+    const tail = rows.filter((u) => u.seq > baseSeq && u.seq <= top).reduce((n, u) => n + u.data.length, 0);
+    if (tail < this.server.snapshotMinTailBytes || tail < (cur?.state.length ?? 0) / 2) return null;
+    const last = rows.find((u) => u.seq === top);
+    if (!last) return null;
+    this.server.compaction.set(pageId, { skipUntil: null, skipWhy: null, ...c, claimAt: now, claimBy: this.userId });
+    return { baseId: cur?.id ?? null, baseSeq, upToSeq: top, lastUpdateId: last.id ?? last.seq };
+  }
+
+  async pushSnapshot(n: NewSnapshot): Promise<SnapshotPushResult> {
+    this.snapshotView(n.pageId);
+    const page = this.server.pages.get(n.pageId)!;
+    if (!this.server.seesDeleted(this.userId, n.pageId)) throw this.denied('not_allowed');
+    if (this.server.settings?.snapshotMinVersion == null) throw new RemoteError('snapshot_off', true, 'P0001');
+    if (!this.snapshotsAllowed()) throw new RemoteError('app_outdated', true, 'P0001');
+    if (n.state.length === 0 || n.state.length > 8 * 1024 * 1024) throw new RemoteError('state_size_invalid', true, '22023');
+    if ((await sha256Hex(n.state)) !== n.sha256) throw new RemoteError('sha256_mismatch', true, '22023');
+    const row = (this.server.updates.get(n.pageId) ?? []).find((u) => u.seq === n.upToSeq);
+    if (n.upToSeq < 1 || n.upToSeq > page.update_seq || !row || (row.id ?? row.seq) !== n.lastUpdateId) {
+      throw new RemoteError('snapshot_row_mismatch', true, 'P0001');
+    }
+    const ver = Number(this.appVersion);
+    const other = this.server.snapshots.find((x) => x.pageId === n.pageId && x.upToSeq === n.upToSeq && x.invalidAt === null);
+    const now = this.server.now();
+    const make = (base: StoredSnapshot | null, invalid: boolean): StoredSnapshot => {
+      const id = crypto.randomUUID();
+      return {
+        id, pageId: n.pageId, upToSeq: n.upToSeq, lastUpdateId: n.lastUpdateId, baseId: n.baseId,
+        chainId: invalid ? id : base?.chainId ?? id,
+        chainMinVersion: invalid ? ver : Math.min(base?.chainMinVersion ?? ver, ver),
+        state: n.state.slice(), sv: n.sv.slice(), sha256: n.sha256, appVersion: ver, createdBy: this.userId, createdAt: now,
+        confirmedAt: null, invalidAt: invalid ? now : null, invalidReason: invalid ? 'snapshot_mismatch' : null,
+      };
+    };
+    if (other) {
+      if (other.baseId === n.baseId && other.sha256 === n.sha256) return { id: other.id, result: 'ok' };
+      if (other.baseId === n.baseId && other.appVersion === ver) {
+        const bad = make(null, true);
+        this.server.snapshots.push(bad);
+        this.server.invalidateChain(n.pageId, other.chainId, 'snapshot_mismatch');
+        return { id: bad.id, result: 'snapshot_mismatch' };
+      }
+      return { id: other.id, result: 'snapshot_exists' };
+    }
+    const cur = this.server.currentSnapshot(n.pageId);
+    if ((cur?.id ?? null) !== n.baseId || n.upToSeq <= (cur?.upToSeq ?? 0)) throw new RemoteError('snapshot_base_stale', true, 'P0001');
+    const sn = make(cur, false);
+    this.server.snapshots.push(sn);
+    return { id: sn.id, result: 'ok' };
+  }
+
+  async pullSnapshot(id: string): Promise<Uint8Array> {
+    const sn = this.snapshotById(id);
+    if (!this.server.seesDeleted(this.userId, sn.pageId)) throw this.denied('not_allowed');
+    if (sn.invalidAt !== null) throw new RemoteError('snapshot_not_found', true, 'P0002');
+    if (sn.confirmedAt === null ? sn.createdBy !== this.userId : this.server.currentSnapshot(sn.pageId)?.id !== sn.id) {
+      throw new RemoteError('snapshot_not_found', true, 'P0002');
+    }
+    return sn.state.slice();
+  }
+
+  async confirmSnapshot(id: string, sha256: string): Promise<boolean> {
+    const sn = this.snapshotById(id);
+    if (!this.server.seesDeleted(this.userId, sn.pageId) || sn.createdBy !== this.userId) throw this.denied('not_allowed');
+    const min = this.server.settings?.snapshotMinVersion;
+    if (min == null) throw new RemoteError('snapshot_off', true, 'P0001');
+    if (sha256 !== sn.sha256) throw new RemoteError('sha256_mismatch', true, '22023');
+    if (sn.invalidAt !== null) return false;
+    if (sn.confirmedAt !== null) return true;
+    const page = this.server.pages.get(sn.pageId)!;
+    const cur = this.server.currentSnapshot(sn.pageId);
+    const row = (this.server.updates.get(sn.pageId) ?? []).find((u) => u.seq === sn.upToSeq);
+    if ((cur?.id ?? null) !== sn.baseId || sn.upToSeq <= (cur?.upToSeq ?? 0) || sn.upToSeq > page.update_seq) return false;
+    if (!row || (row.id ?? row.seq) !== sn.lastUpdateId || sn.chainMinVersion < min) return false;
+    const now = this.server.now();
+    sn.confirmedAt = now;
+    this.server.smeta(sn.pageId).seq = sn.upToSeq;
+    const c = this.server.compaction.get(sn.pageId);
+    if (c) Object.assign(c, { claimAt: null, claimBy: null });
+    // La limpieza: quedan este y su base.
+    const baseSeq = cur?.upToSeq ?? sn.upToSeq;
+    const drop = (x: StoredSnapshot) =>
+      x.pageId === sn.pageId && x.id !== sn.id && x.id !== cur?.id &&
+      ((x.confirmedAt !== null && x.invalidAt === null && x.upToSeq < baseSeq) ||
+        (x.confirmedAt === null && x.invalidAt === null && x.createdAt < now - 86_400_000) ||
+        (x.invalidAt !== null && x.invalidAt < now - 30 * 86_400_000));
+    const keep = this.server.snapshots.filter((x) => !drop(x));
+    this.server.snapshots.splice(0, this.server.snapshots.length, ...keep);
+    return true;
+  }
+
+  async skipCompaction(pageId: string, reason: string): Promise<void> {
+    this.snapshotView(pageId);
+    if (!this.server.seesDeleted(this.userId, pageId)) throw this.denied('not_allowed');
+    this.server.compaction.set(pageId, { claimAt: null, claimBy: null, skipUntil: this.server.now() + 86_400_000, skipWhy: reason.slice(0, 500) });
+  }
+
+  async invalidateSnapshot(id: string, reason: string): Promise<boolean> {
+    const sn = this.snapshotById(id);
+    if (this.team && this.server.pageLevel(this.userId, sn.pageId) < 3) throw this.denied('not_allowed');
+    return this.server.invalidateChain(sn.pageId, sn.chainId, reason.slice(0, 500)) > 0;
   }
 
   /** Como `private.clean_version_allowed`. */
@@ -2309,10 +2661,43 @@ export class FakeRemote
     const lvl = this.commentLevel(pageId);
     if (lvl < 1 || !this.member) throw new RemoteError('page_not_found', true, 'P0002');
     if (lvl < 2) throw new RemoteError('comment_denied', true, '42501');
-    return [...this.server.members]
+    const inside: MentionCandidate[] = [...this.server.members]
       .filter(([id, m]) => !m.removed_at && this.server.mentionAllowed(pageId, this.userId, id))
       .map(([id, m]) => ({ userId: id, email: m.email, label: labelForEmail(m.email) }))
       .sort((a, b) => (a.email < b.email ? -1 : 1));
+    // ME2 (20261016120000_menciones_e2.sql): solo el dueño y los admins que pueden compartir la página, fuera de la
+    // papelera, reciben a quienes no la ven.
+    if (!this.mentionOutsidersAllowed(pageId)) return inside;
+    const outside: MentionCandidate[] = [...this.server.members]
+      .filter(([id, m]) => !m.removed_at && id !== this.userId && this.server.pageLevel(id, pageId) < 1)
+      .map(([id, m]) => ({ userId: id, email: m.email, label: labelForEmail(m.email), hasAccess: false as const }))
+      .sort((a, b) => (a.email < b.email ? -1 : 1));
+    return [...inside, ...outside];
+  }
+
+  private mentionOutsidersAllowed(pageId: string): boolean {
+    const role = this.server.role(this.userId);
+    return (
+      this.server.mentionSharingEnabled &&
+      (role === 'owner' || role === 'admin') &&
+      this.canShare({ pageId }) &&
+      !this.server.pageInTrash(pageId)
+    );
+  }
+
+  /** `share_for_mention`: *Can comment* sobre esa página, con las mismas reglas que la base. */
+  async shareForMention(pageId: string, userId: string): Promise<boolean> {
+    this.mentionsCheck(`share_for_mention ${pageId}`);
+    if (!this.server.mentionSharingEnabled) throw new RemoteError('Could not find the function public.share_for_mention', true, 'PGRST202');
+    if (this.commentLevel(pageId) < 1 || !this.member) throw new RemoteError('page_not_found', true, 'P0002');
+    const role = this.server.role(this.userId);
+    if ((role !== 'owner' && role !== 'admin') || !this.canShare({ pageId })) throw this.denied('not_allowed');
+    if (this.server.pageInTrash(pageId)) throw this.denied('page_in_trash');
+    if (!this.server.role(userId)) throw new RemoteError('member_not_found', true, 'P0002');
+    this.server.mentionShares.push(`${pageId} ${userId}`);
+    if (userId === this.userId || this.server.pageLevel(userId, pageId) >= 1) return false;
+    await this.share(userId, { pageId }, 'comment');
+    return true;
   }
 
   /** Lo que `mentions_inbox` y `mentions_index` dan por ido. */

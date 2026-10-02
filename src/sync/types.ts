@@ -15,6 +15,17 @@ export interface PageRow {
    */
   clean_seq?: number;
   /**
+   * El `up_to_seq` del snapshot vigente (0: ninguno; Docs/Doc_Compactar.md). Solo una pista: la base decide con el
+   * snapshot vigente de verdad. Ausente con una base anterior a la versión 17 y en las copias de versiones anteriores.
+   */
+  snapshot_seq?: number;
+  /**
+   * La época de contenido de la página: sube cada vez que se invalida una cadena de snapshots. Si un dispositivo aplicó
+   * un snapshot de la página y ve otra época, la vuelve a bajar (Docs/Doc_Compactar.md, sección 12). Ausente con una
+   * base anterior a la versión 17.
+   */
+  content_epoch?: number;
+  /**
    * De qué plantilla salió (Docs/Doc_Plantillas.md, sección 7): el uuid de una de fábrica o el id de la página
    * plantilla. Informativo, nunca da permisos. Ausente en las copias guardadas por versiones anteriores de la app.
    */
@@ -41,6 +52,13 @@ export interface PageSettings {
    * dice que se dejó de usar a mano y gana sobre lo que se deduce de los reportes de adentro.
    */
   dayReports?: { template?: string } | false;
+  /**
+   * La página es una plantilla propia (Docs/Doc_Plantillas.md, 3 y 5): su descripción y si sirve para el reporte del
+   * día. No se hereda. `false`: se dejó de usar a mano (gana sobre lo que se deduce de la carpeta *Templates*).
+   */
+  template?: { description?: string; dayReport?: true } | false;
+  /** La carpeta *Templates* del proyecto (una página raíz). No se hereda. */
+  templatesFolder?: true;
 }
 
 export type PagePatch = Partial<Pick<PageRow, 'title' | 'icon' | 'parent_id' | 'sort_key' | 'deleted_at' | 'settings' | 'template_id'>>;
@@ -181,6 +199,11 @@ export interface WorkspaceSettings {
    * bajan las filas); con un número, quien no ve lo borrado baja solo bases, y las arman las versiones desde esa.
    */
   cleanMinVersion?: number | null;
+  /**
+   * El interruptor de los snapshots de compactar (`snapshot_min_version`, versión 17 de la base): `null`, apagados (todos
+   * bajan con `pull_page_updates`, como siempre); con un número, se baja con `pull_page_content`.
+   */
+  snapshotMinVersion?: number | null;
 }
 
 /** Un archivo nuevo para `register_file` (el proyecto sale de la página). */
@@ -286,6 +309,13 @@ export interface DueFileRow {
 export interface RemoteUpdate {
   seq: number;
   data: Uint8Array;
+  /**
+   * Si esta fila es un snapshot (`pull_page_content`): su id. Junta las filas `1..seq` del servidor; para el dispositivo es
+   * un update más, salvo que si no se puede leer no se guarda nada del lote (Docs/Doc_Compactar.md, sección 5).
+   */
+  snapshotId?: string;
+  /** La época de contenido de la página, leída en la misma consulta (`pull_page_content`). */
+  contentEpoch?: number;
 }
 
 /** `permanent`: reintentar no va a cambiar el resultado (permisos, ciclo, datos inválidos). */
