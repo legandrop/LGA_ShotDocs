@@ -97,6 +97,9 @@ export interface LinkEntry {
   name: string;
   /** El título de la página compartida, guardado al abrir (para la lista y el cartel). */
   title: string;
+  /** El id del link en la base y la página compartida, guardados al abrir: con eso se vuelve a abrir sin red. */
+  linkId: string;
+  pageId: string;
   openedAt: number;
 }
 
@@ -132,7 +135,7 @@ export function readLinks(store: KeyValueStore = browserStore()): LinkList {
   try {
     const raw = store.getItem(LINKS_KEY);
     const data = raw ? (JSON.parse(raw) as Partial<LinkList>) : null;
-    const links = Array.isArray(data?.links) ? data.links.filter(validEntry).map((l) => ({ ...l, name: l.name ?? '', title: l.title ?? '' })) : [];
+    const links = Array.isArray(data?.links) ? data.links.filter(validEntry).map((l) => ({ ...l, name: l.name ?? '', title: l.title ?? '', linkId: l.linkId ?? '', pageId: l.pageId ?? '' })) : [];
     const active = typeof data?.active === 'string' && links.some((l) => l.id === data.active) ? data.active : null;
     return { active, links };
   } catch {
@@ -162,6 +165,8 @@ export function rememberLink(payload: LinkPayload, store: KeyValueStore = browse
       device: randomId(32),
       name: '',
       title: '',
+      linkId: '',
+      pageId: '',
       openedAt: Date.now(),
     };
     list.links.push(entry);
@@ -177,8 +182,8 @@ export function activeLink(store: KeyValueStore = browserStore()): LinkEntry | n
   return list.links.find((l) => l.id === list.active) ?? null;
 }
 
-/** Cambia algo de un link guardado (el nombre del visitante, el título). */
-export function updateLink(id: string, patch: Partial<Pick<LinkEntry, 'name' | 'title'>>, store: KeyValueStore = browserStore()): LinkEntry | null {
+/** Cambia algo de un link guardado (el nombre del visitante, el título, el id del link y de la página). */
+export function updateLink(id: string, patch: Partial<Pick<LinkEntry, 'name' | 'title' | 'linkId' | 'pageId'>>, store: KeyValueStore = browserStore()): LinkEntry | null {
   const list = readLinks(store);
   const entry = list.links.find((l) => l.id === id);
   if (!entry) return null;
@@ -191,12 +196,67 @@ export function updateLink(id: string, patch: Partial<Pick<LinkEntry, 'name' | '
 export function leaveLinks(store: KeyValueStore = browserStore()): void {
   const list = readLinks(store);
   writeLinks({ ...list, active: null }, store);
+  setTabLink(null);
+}
+
+// --- El link de esta pestaña ---------------------------------------------------------------------------------------
+
+const TAB_LINK_KEY = 'shotdocs-tab-link';
+
+function tabStore(): KeyValueStore | null {
+  try {
+    return typeof sessionStorage === 'undefined' ? null : sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Recuerda qué link tiene abierta esta pestaña (`sessionStorage`: no pasa a otras pestañas ni sobrevive a cerrarla). El
+ * `#link=` se borra de la barra al abrir, así que sin esto recargar la página (o que el teléfono recargue una pestaña de
+ * fondo) en un dispositivo con un workspace abriría ese workspace y sacaría al visitante del link.
+ */
+export function setTabLink(id: string | null, store: KeyValueStore | null = tabStore()): void {
+  try {
+    if (!store) return;
+    if (id) store.setItem(TAB_LINK_KEY, id);
+    else store.removeItem(TAB_LINK_KEY);
+  } catch {
+    // Sin almacenamiento de pestaña: recargar vuelve al comienzo de siempre.
+  }
+}
+
+/**
+ * El link que esta pestaña tenía abierto, si se la recarga (o se la restaura). Tipear la dirección de la app (`navigate`)
+ * abre la cuenta como siempre: solo vale con `reload` o `back_forward` (o si el navegador no lo dice).
+ */
+export function tabLink(
+  list: LinkList = readLinks(),
+  store: KeyValueStore | null = tabStore(),
+  navigation: string | null = navigationType(),
+): LinkEntry | null {
+  try {
+    if (!store || navigation === 'navigate' || navigation === 'prerender') return null;
+    const id = store.getItem(TAB_LINK_KEY);
+    return (id && list.links.find((l) => l.id === id)) || null;
+  } catch {
+    return null;
+  }
+}
+
+function navigationType(): string | null {
+  try {
+    const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+    return nav?.type ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** El nombre que escribe el visitante: 1 a 60 caracteres, sin controles ni marcas de dirección (como la base). */
 export function cleanVisitorName(raw: string): string {
   // eslint-disable-next-line no-control-regex
-  return raw.replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g, '').trim().slice(0, 60).trim();
+  return raw.replace(/[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2069\ufeff]/g, '').trim().slice(0, 60).trim();
 }
 
 // --- El workspace del link: nombres propios en el dispositivo y un cliente sin sesión -------------------------------
@@ -229,11 +289,12 @@ const clients = new Map<string, SupabaseClient>();
  * El cliente del modo link: sin sesión, sin guardarla ni renovarla y sin leer la dirección; nunca lleva el
  * `Authorization` de una cuenta (supabase-js manda la clave publicable). Uno por link y por carga de la app.
  */
-export function createLinkClient(entry: LinkEntry, version: string = __APP_VERSION__): SupabaseClient {
-  const known = clients.get(entry.id);
+export function createLinkClient(entry: LinkEntry, version: string = __APP_VERSION__, fetchImpl?: typeof fetch): SupabaseClient {
+  // (Con un `fetch` de prueba no se usa ni se deja el cliente compartido.)
+  const known = fetchImpl ? undefined : clients.get(entry.id);
   if (known) return known;
   const client = createClient(entry.url, entry.publishableKey, {
-    global: { headers: linkHeaders(entry, version) },
+    global: { headers: linkHeaders(entry, version), ...(fetchImpl ? { fetch: fetchImpl } : {}) },
     auth: {
       persistSession: false,
       autoRefreshToken: false,
@@ -241,7 +302,7 @@ export function createLinkClient(entry: LinkEntry, version: string = __APP_VERSI
       storageKey: linkStorageNames(entry).auth,
     },
   });
-  clients.set(entry.id, client);
+  if (!fetchImpl) clients.set(entry.id, client);
   return client;
 }
 

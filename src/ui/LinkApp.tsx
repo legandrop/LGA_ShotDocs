@@ -15,7 +15,7 @@ import {
 } from '../linkMode';
 import type { LinkBoot } from '../services';
 import { LinkCommentRemote, LinkRemote, linkProblemOf, type LinkProblem } from '../sync/linkRemote';
-import { errorMessage } from '../sync/types';
+import { errorMessage, isNetworkError } from '../sync/types';
 import { WorkspaceContext, type ActiveWorkspace } from '../workspace';
 import { setLightImages } from './sharpImages';
 import { Workspace } from './Workspace';
@@ -29,19 +29,34 @@ type Opening =
   | { state: 'ready'; info: LinkInfo }
   | { state: 'dead' }
   | { state: 'limited' }
+  /** La primera vez que se abre el link en este dispositivo, sin red: no hay nada guardado todavía. */
+  | { state: 'noConnection' }
   | { state: 'error'; message: string };
 
+/** Cuánto se espera a `plink_open` antes de mostrar lo guardado (una red que no contesta no deja al visitante mirando "Opening…"). */
+export const SLOW_OPEN_MS = 2000;
+
+/** Lo que `plink_open` dijo la última vez: con eso se muestra lo guardado sin preguntarle nada a la base. */
+export function savedLinkInfo(entry: LinkEntry): LinkInfo | null {
+  return entry.linkId && entry.pageId ? { entry, domain: linkDomain(entry), linkId: entry.linkId, pageId: entry.pageId } : null;
+}
 
 export function LinkApp({ entry }: { entry: LinkEntry }) {
   const tr = useT();
   const [opening, setOpening] = useState<Opening>({ state: 'loading' });
   const [problem, setProblem] = useState<LinkProblem | null>(null);
   const [attempt, setAttempt] = useState(0);
+  // Se muestra lo guardado en el dispositivo porque el servidor no contestó (hasta que conteste).
+  const [offline, setOffline] = useState(false);
 
   // Un cliente y un servidor por link y por carga de la app.
   const setup = useMemo(() => {
     const client = createLinkClient(entry);
-    const remote = new LinkRemote(client, __APP_VERSION__, (p) => setProblem(p));
+    const remote = new LinkRemote(client, __APP_VERSION__, (p) => {
+      setProblem(p);
+      // `plink_open` anduvo (acá o en un ciclo del motor): ya no se muestra el aviso de sin conexión.
+      if (p === null) setOffline(false);
+    });
     const user: AuthUser = { id: `link:${entry.id}`, email: '' };
     const workspace: ActiveWorkspace = { config: linkConfig(entry), client };
     const boot: LinkBoot = {
@@ -61,20 +76,45 @@ export function LinkApp({ entry }: { entry: LinkEntry }) {
 
   useEffect(() => {
     let cancelled = false;
+    let settled = false;
+    // Con lo guardado de una visita anterior (el id del link y de la página) se puede abrir sin red: si el servidor
+    // tarda o no contesta, se muestra eso y el motor sigue intentando. Con red, `plink_open` contesta antes y manda:
+    // un link revocado o vencido se corta sin mostrar nada.
+    const saved = savedLinkInfo(entry);
+    const showSaved = () => {
+      if (!saved) return false;
+      setOffline(true);
+      setOpening({ state: 'ready', info: saved });
+      return true;
+    };
+    const timer = saved
+      ? setTimeout(() => {
+          if (!cancelled && !settled) showSaved();
+        }, SLOW_OPEN_MS)
+      : undefined;
     setup.remote.open(true).then(
       (info) => {
+        settled = true;
+        clearTimeout(timer);
         if (cancelled) return;
-        updateLink(entry.id, { title: info.title });
+        updateLink(entry.id, { title: info.title, linkId: info.link_id, pageId: info.page_id });
+        setOffline(false);
         setOpening({ state: 'ready', info: { entry, domain: linkDomain(entry), linkId: info.link_id, pageId: info.page_id } });
       },
       (err: unknown) => {
+        settled = true;
+        clearTimeout(timer);
         if (cancelled) return;
         const p = linkProblemOf(err);
-        setOpening(p === 'link_not_found' ? { state: 'dead' } : p === 'link_rate_limited' ? { state: 'limited' } : { state: 'error', message: errorMessage(err) });
+        if (p === 'link_not_found') setOpening({ state: 'dead' });
+        else if (p === 'link_rate_limited') setOpening({ state: 'limited' });
+        else if (showSaved()) return;
+        else setOpening(isNetworkError(err) ? { state: 'noConnection' } : { state: 'error', message: errorMessage(err) });
       },
     );
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [setup, entry, attempt]);
 
@@ -111,6 +151,19 @@ export function LinkApp({ entry }: { entry: LinkEntry }) {
       </main>
     );
   }
+  if (opening.state === 'noConnection') {
+    return (
+      <main className="center-screen">
+        <div className="card">
+          <h1>{tr('link.noConnection.title')}</h1>
+          <p className="muted">{tr('link.noConnection.text')}</p>
+          <button className="primary" onClick={() => setAttempt((n) => n + 1)}>
+            {tr('common.tryAgain')}
+          </button>
+        </div>
+      </main>
+    );
+  }
   if (opening.state === 'error') {
     return (
       <main className="center-screen">
@@ -127,6 +180,11 @@ export function LinkApp({ entry }: { entry: LinkEntry }) {
   return (
     <WorkspaceContext.Provider value={setup.workspace}>
       <LinkContext.Provider value={opening.info}>
+        {offline && problem === null && (
+          <div className="notice link-offline" role="status">
+            <span>{tr('link.offline')}</span>
+          </div>
+        )}
         {problem === 'link_rate_limited' && (
           <div className="notice link-limited" role="status">
             <span>{tr('link.limited.text')}</span>

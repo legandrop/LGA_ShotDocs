@@ -15,7 +15,7 @@ import {
   updateWorkspaces,
   type DeviceWorkspace,
 } from '../workspaces';
-import { activeLink, rememberLink, readLinks, takeLinkHash, linkDomain, type LinkEntry, type LinkPayload } from '../linkMode';
+import { activeLink, rememberLink, readLinks, setTabLink, tabLink, takeLinkHash, linkDomain, type LinkEntry, type LinkPayload } from '../linkMode';
 import { LegalPage } from './Legal';
 import { LinkApp, LinkConfirm } from './LinkApp';
 import { lazyPart, Part } from './lazyPart';
@@ -85,8 +85,12 @@ function computeStart(): Start {
       list.workspaces.some((w) => sameOrigin(w.url, payload.u)) || readLinks().links.some((l) => sameOrigin(l.url, payload.u));
     const otherwise: Start = fallback ? { kind: 'open', entry: fallback } : { kind: 'welcome' };
     if (!known) return { kind: 'linkConfirm', payload, fallback: otherwise };
-    return { kind: 'link', link: rememberLink(payload) };
+    return { kind: 'link', link: openLinkInTab(payload) };
   }
+  // Recargar la página de un link (el `#` ya no está en la barra): sigue en el link, aunque el dispositivo tenga un
+  // workspace. Una pestaña nueva abre la app de siempre.
+  const inTab = tabLink();
+  if (inTab) return { kind: 'link', link: inTab };
   // Sin workspaces en el dispositivo, el último link abierto (quien solo entra con links vuelve a lo suyo).
   const lastLink = activeLink();
   if (!fallback && lastLink) return { kind: 'link', link: lastLink };
@@ -104,6 +108,13 @@ function computeStart(): Start {
     setArrivalNotice(invite.reason);
   }
   return fallback ? { kind: 'open', entry: fallback } : { kind: 'welcome' };
+}
+
+/** Guarda el link y lo deja como el de esta pestaña (para que recargar siga en el link). */
+function openLinkInTab(payload: LinkPayload): LinkEntry {
+  const entry = rememberLink(payload);
+  setTabLink(entry.id);
+  return entry;
 }
 
 function Screen() {
@@ -132,7 +143,7 @@ function Screen() {
     return (
       <LinkConfirm
         domain={linkDomain({ url: start.payload.u })}
-        onOpen={() => setStart({ kind: 'link', link: rememberLink(start.payload) })}
+        onOpen={() => setStart({ kind: 'link', link: openLinkInTab(start.payload) })}
         onCancel={() => setStart(start.fallback)}
       />
     );

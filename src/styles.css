@@ -6713,7 +6713,8 @@ button.folder-row-main:hover {
   justify-content: flex-start;
   gap: 8px;
 }
-.notice.link-limited {
+.notice.link-limited,
+.notice.link-offline {
   position: fixed;
   top: 8px;
   left: 50%;

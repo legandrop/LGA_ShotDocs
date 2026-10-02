@@ -15,6 +15,15 @@ export const link = {
     en: "This link has been used a lot today. Try again tomorrow, or ask for a new link.",
     es: "Este link se usó mucho hoy. Probá mañana, o pedí un link nuevo.",
   },
+  'link.noConnection.title': { en: "You need a connection to open this link", es: "Hace falta conexión para abrir este link" },
+  'link.noConnection.text': {
+    en: "The first time you open a link, this device has to be online. After that, the page stays available without a connection.",
+    es: "La primera vez que abrís un link, este dispositivo tiene que tener conexión. Después, la página queda disponible sin conexión.",
+  },
+  'link.offline': {
+    en: "Couldn't reach the server. Showing what's saved on this device.",
+    es: "No se pudo llegar al servidor. Se muestra lo guardado en este dispositivo.",
+  },
   'link.confirm.title': { en: "Open a page shared from {domain}?", es: "¿Abrir una página compartida desde {domain}?" },
   'link.confirm.text': {
     en: "Someone shared a page with a link. You don't need an account: it opens in this browser.",
