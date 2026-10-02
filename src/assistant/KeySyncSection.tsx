@@ -47,7 +47,7 @@ function dateText(iso: string | number, lang: string): string {
 const PHRASE_FIELD = { autoCapitalize: 'none', autoCorrect: 'off', spellCheck: false } as const;
 
 type Remote = { kind: 'loading' } | { kind: 'ok'; meta: SyncMeta | null } | { kind: 'fail'; failure: SyncFailure };
-type View = { kind: 'main' } | { kind: 'turnOn'; overwrite?: { generation: number } } | { kind: 'update' } | { kind: 'replace' } | { kind: 'stop' } | { kind: 'ask'; host: string; unlocked: string };
+type View = { kind: 'main' } | { kind: 'turnOn'; overwrite?: { generation: number } } | { kind: 'update' } | { kind: 'replace' } | { kind: 'stop' } | { kind: 'ask'; question: string; unlocked: string };
 type Message = { ok: boolean; text: string; reload?: boolean };
 
 interface Props {
@@ -167,7 +167,11 @@ function Section({ saved, onSaved, online }: Props & { online: boolean }) {
 
   const hasLocal = !!saved && !!saved.model && (saved.hasKey || saved.provider === 'compatible');
   const meta = remote.kind === 'ok' ? remote.meta : null;
-  const opened = !!meta && !!saved?.sync && saved.sync.ref === ref && saved.sync.userId === user.id;
+  const fromHere = !!meta && !!saved?.sync && saved.sync.ref === ref && saved.sync.userId === user.id;
+  // La copia cambió en otro dispositivo después de que este la abrió (*Update* o *Replace* allá): se vuelve a pedir la
+  // frase para tomar la nueva; hasta entonces la clave de este dispositivo sigue andando (regla 5).
+  const changed = fromHere && meta.generation > saved.sync!.generation;
+  const opened = fromHere && !changed;
   const elsewhere = !!saved?.sync && saved.sync.ref !== ref ? saved.sync.name || saved.sync.ref : null;
   const off = policy === 'off';
   const disabled = busy || !online;
@@ -182,10 +186,15 @@ function Section({ saved, onSaved, online }: Props & { online: boolean }) {
         await refresh();
         return;
       }
-      if (unlocked.decision === 'ask') {
+      if (unlocked.decision !== 'adopt') {
         pending.current = unlocked;
-        // A dónde va y el final de la clave (nunca la clave) quedan a la vista mientras se pregunta.
-        setView({ kind: 'ask', host: destinationLabel(unlocked.payload), unlocked: unlockedText(unlocked.payload, tr) });
+        // A dónde va y el final de la clave (nunca la clave) quedan a la vista mientras se pregunta: otro destino
+        // (regla 6), o el mismo con otra clave que el dispositivo no sacó de esta copia (regla 5).
+        const question =
+          unlocked.decision === 'ask'
+            ? tr('assistant.sync.ask', { host: destinationLabel(unlocked.payload) })
+            : tr('assistant.sync.askReplace', { local: unlocked.localEnding ?? '', synced: keyEnding(unlocked.payload.apiKey) });
+        setView({ kind: 'ask', question, unlocked: unlockedText(unlocked.payload, tr) });
         return;
       }
       onSaved(await adoptUnlocked(ctx, unlocked));
@@ -336,7 +345,7 @@ function Section({ saved, onSaved, online }: Props & { online: boolean }) {
         <p className="assistant-ok" role="status">
           {view.unlocked}
         </p>
-        <p className="assistant-warning">{tr('assistant.sync.ask', { host: view.host })}</p>
+        <p className="assistant-warning">{view.question}</p>
         <div className="modal-actions">
           <button type="button" disabled={busy} onClick={keepMine}>
             {tr('assistant.sync.keepMine')}
@@ -404,7 +413,11 @@ function Section({ saved, onSaved, online }: Props & { online: boolean }) {
       <form className="assistant-sync-form" onSubmit={unlock}>
         <input className="sr-only" type="text" name="username" autoComplete="username" value="Shot Docs assistant key" readOnly tabIndex={-1} aria-hidden="true" />
         <p className="muted assistant-small">
-          {elsewhere ? tr('assistant.sync.elsewhere', { workspace: elsewhere }) : tr('assistant.sync.locked', { date: dateText(meta.updatedAt, tr.lang) })}
+          {elsewhere
+            ? tr('assistant.sync.elsewhere', { workspace: elsewhere })
+            : changed
+              ? tr('assistant.sync.changed')
+              : tr('assistant.sync.locked', { date: dateText(meta.updatedAt, tr.lang) })}
         </p>
         <div className="assistant-field">
           <label className="pref-label" htmlFor="assistant-sync-passphrase">

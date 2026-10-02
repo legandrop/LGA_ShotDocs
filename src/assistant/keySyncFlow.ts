@@ -1,5 +1,5 @@
 import { loadSettings, readKey, sameDestination, saveSettings, setSyncInfo, type AssistantSettings, type KeySyncInfo } from './keyStore';
-import { KeySyncError, openKey, sealKey, type KeyPayload } from './keySync';
+import { KeySyncError, keyEnding, openKey, sealKey, type KeyPayload } from './keySync';
 import { deleteSyncRow, fetchSyncRow, insertSyncRow, SyncRemoteError, updateSyncRow, type KeySyncClient, type SyncMeta } from './keySyncRemote';
 
 // Los pasos de la clave sincronizada (Docs/Doc_Clave_Sincronizada.md, entrega S1), sin interfaz: prender, abrir en
@@ -62,8 +62,13 @@ export async function turnOnSync(ctx: SyncContext, passphrase: string, overwrite
 export interface Unlocked {
   payload: KeyPayload;
   meta: SyncMeta;
-  /** `ask`: el dispositivo ya tenía una clave para otro proveedor u otra dirección. */
-  decision: 'adopt' | 'ask';
+  /**
+   * `ask`: el dispositivo ya tenía una clave para otro proveedor u otra dirección (regla 6). `replace`: el mismo destino,
+   * pero el dispositivo tiene otra clave que no vino de esta copia (regla 5: no se pierde sin que la persona lo vea).
+   */
+  decision: 'adopt' | 'ask' | 'replace';
+  /** Con `replace`: los últimos cuatro caracteres de la clave del dispositivo (nunca la clave). */
+  localEnding?: string;
 }
 
 /** *Unlock*: baja la copia y la abre con la frase. No guarda nada (eso es `adoptUnlocked`). `null` si no hay copia. */
@@ -73,8 +78,16 @@ export async function unlockSync(ctx: SyncContext, passphrase: string): Promise<
   const payload = await openKey(row, passphrase, ctx.userId);
   const saved = await loadSettings(ctx.email);
   const hadKey = !!saved && (saved.hasKey || saved.provider === 'compatible');
-  const decision = hadKey && !sameDestination(saved, payload) ? 'ask' : 'adopt';
-  return { payload, meta: { format: row.format, generation: row.generation, updatedAt: row.updatedAt }, decision };
+  const meta = { format: row.format, generation: row.generation, updatedAt: row.updatedAt };
+  if (hadKey && !sameDestination(saved, payload)) return { payload, meta, decision: 'ask' };
+  // El mismo destino con otra clave: si la del dispositivo vino de esta copia y no se cambió (la copia se actualizó en
+  // otro dispositivo), se reemplaza; si no, se pregunta, mostrando el final de las dos.
+  if (saved?.hasKey) {
+    const local = await readKey(ctx.email, saved);
+    const fromThisCopy = !!saved.sync && saved.sync.ref === ctx.ref && saved.sync.userId === ctx.userId && !saved.sync.localChanged;
+    if (local && local !== payload.apiKey && !fromThisCopy) return { payload, meta, decision: 'replace', localEnding: keyEnding(local) };
+  }
+  return { payload, meta, decision: 'adopt' };
 }
 
 /**

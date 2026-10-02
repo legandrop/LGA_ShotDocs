@@ -213,3 +213,29 @@ describe('la frase', () => {
     expect(keyEnding('sk-ant-api03-a1B2')).toBe('a1B2');
   });
 });
+
+describe('la llave que sale de la frase (O3 de la auditoría)', () => {
+  it('es no exportable, solo para cifrar y abrir, al cifrar y al abrir', async () => {
+    const { vi } = await import('vitest');
+    const keys: CryptoKey[] = [];
+    const real = crypto.subtle.deriveKey.bind(crypto.subtle);
+    const spy = vi.spyOn(crypto.subtle, 'deriveKey').mockImplementation(async (...args: Parameters<SubtleCrypto['deriveKey']>) => {
+      const k = await real(...args);
+      keys.push(k);
+      return k;
+    });
+    try {
+      const row = await sealKey(ANT, PHRASE, UID);
+      await openKey(row, PHRASE, UID);
+      expect(spy).toHaveBeenCalledTimes(2);
+      for (const call of spy.mock.calls) expect(call[3]).toBe(false);
+      for (const k of keys) {
+        expect(k.extractable).toBe(false);
+        expect([...k.usages].sort()).toEqual(['decrypt', 'encrypt']);
+        await expect(crypto.subtle.exportKey('raw', k)).rejects.toThrow();
+      }
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});

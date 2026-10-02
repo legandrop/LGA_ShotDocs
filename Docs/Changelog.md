@@ -6,8 +6,8 @@ La clave del asistente sincronizada, entrega S1 (P.24, D72 → B, `Doc_Clave_Sin
 pegarla en cada dispositivo. Ahora *Assistant…* → *Turn on sync…* la cifra en el dispositivo con una frase de seis
 palabras de la lista de la EFF (PBKDF2-SHA256 de 1 000 000 de vueltas y AES-256-GCM, relleno a 1 KB) y sube solo el
 bloque cifrado a `assistant_key_sync`, que con RLS lee solo la persona (migración `20261023120000_clave_sincronizada.sql`,
-sin aplicar, no sube `schema_version`). Otro dispositivo la abre con la frase, viendo a dónde va; si el destino cambia,
-pregunta. *Update* y *Replace synced key…* abren antes la copia; *Stop syncing* la borra. Nuevo *Sign out other devices*
+sin aplicar, no sube `schema_version`). Otro dispositivo la abre con la frase, viendo a dónde va; si cambia el destino o la
+clave del dispositivo es otra, pregunta, y si la copia cambió en otro dispositivo, pide la frase de nuevo. *Update* y *Replace synced key…* abren antes la copia; *Stop syncing* la borra. Nuevo *Sign out other devices*
 en el menú de la cuenta. La base del dispositivo sigue en la versión 1. Sin cambios en el editor ni en
 `min_app_version`.
 [ Clave del asistente sincronizada S1 - copia cifrada con una frase, abrir en otro dispositivo, dejar de sincronizar y cerrar la sesión en los otros dispositivos ]

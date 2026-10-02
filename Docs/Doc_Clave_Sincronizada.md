@@ -727,3 +727,18 @@ frase y la clave no salen a la base ni a la consola: 37 de 37.
 clave, regla 5), el botón en el 401, rechazar una copia más vieja (`savedAt`) y *Also sync in this workspace*. Sin
 probar acá: el iPhone de verdad (tiempo y teclado), que el gestor de contraseñas ofrezca guardar y completar la frase,
 y que `signOut({ scope: 'others' })` corte de verdad otro dispositivo (los tres en el recorrido de Lega, sección 12).
+
+**Correcciones de la auditoría de S1** (aprobada con observaciones, ninguna bloqueante):
+
+- **O1.** Un dispositivo que ya había abierto la copia no se enteraba de que cambió en otro (*Update* o *Replace*
+  allá) y seguía diciendo *Synced in…*. Ahora, si la generación de la copia es mayor que la que abrió, la sección dice
+  *Your synced key changed on another device. Enter your passphrase to update it here.* y pide la frase (el aviso
+  liviano de S2, sin consultas aparte: se ve al abrir *Assistant…*). Hasta entonces la clave del dispositivo sigue
+  (regla 5). La ayuda y el texto de *Replace synced key…* lo dicen.
+- **O2.** Con el mismo destino, *Unlock* reemplazaba sin preguntar una clave del dispositivo distinta de la copia.
+  Ahora pregunta *Replace the key on this device (…L0c4) with the synced one (…z1Z2)?*, salvo que la clave del
+  dispositivo haya venido de esta misma copia y no se haya cambiado después (el caso de O1, donde la persona quiere la
+  nueva).
+- **O3.** Prueba de que la llave derivada es no exportable (al cifrar y al abrir). **O4.** *Sign out other devices*
+  nombra el workspace por su host si no tiene nombre. **O5.** El mutante "sin `user_id` en el `with check`" es
+  equivalente (los permisos por columna y el trigger ya lo impiden), anotado en la prueba SQL y en `Doc_Supabase.md`.

@@ -58,13 +58,13 @@ async function until(check: () => unknown, what: string, tries = 200): Promise<v
   throw new Error(`no llegó: ${what}`);
 }
 
-async function shell(signOut: (o?: unknown) => Promise<{ error: unknown }>) {
+async function shell(signOut: (o?: unknown) => Promise<{ error: unknown }>, name = 'Wanka') {
   const d = await makeDevice(new FakeServer());
   devices.push(d);
   await d.tree.create(null, 'Uno');
   const client = { auth: { signOut } };
   const services = {
-    workspace: { config: { url: 'https://x.supabase.co', publishableKey: 'k', name: 'Wanka', localKey: WANKA_LOCAL_KEY, storage: legacyStorageNames(WANKA_LOCAL_KEY) }, client },
+    workspace: { config: { url: 'https://x.supabase.co', publishableKey: 'k', name, localKey: WANKA_LOCAL_KEY, storage: legacyStorageNames(WANKA_LOCAL_KEY) }, client },
     client,
     user: { id: d.remote.userId, email: 'lega@wanka.tv' },
     db: d.db,
@@ -134,5 +134,11 @@ describe('Sign out other devices', () => {
     await act(async () => buttonIn(dialog()!, 'Sign out others')!.click());
     await until(() => dialog()?.textContent?.includes("Couldn't sign out the other devices."), 'el error');
     expect(buttonIn(dialog()!, 'Sign out others')).toBeTruthy();
+  });
+
+  it('un workspace sin nombre se nombra por el host de su dirección (O4 de la auditoría)', async () => {
+    const host = await shell(vi.fn(async () => ({ error: null })), '');
+    await openFromMenu(host);
+    expect(dialog()!.textContent).toContain('Sign out of x.supabase.co on all your other devices?');
   });
 });

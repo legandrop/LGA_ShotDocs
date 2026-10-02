@@ -387,3 +387,39 @@ describe('la ayuda', () => {
     for (const step of ['Sign out other devices', 'Replace synced key…', 'create a new key at your provider']) expect(text).toContain(step);
   });
 });
+
+describe('correcciones de la auditoría', () => {
+  it('O2: con el mismo destino y otra clave en el dispositivo, pregunta antes de reemplazarla', async () => {
+    const store = new KeySyncStore();
+    await syncedElsewhere(store);
+    await saveSettings(EMAIL, ANT, 'sk-ant-api03-LOCAL-L0c4');
+    const host = await mount(store);
+    await unlockWith(host, PHRASE);
+    expect(section(host).textContent).toContain('Replace the key on this device (…L0c4) with the synced one (…a1B2)?');
+    expect(await readKey(EMAIL, { provider: 'anthropic' })).toBe('sk-ant-api03-LOCAL-L0c4');
+    await click(button(host, 'Keep my current key'));
+    expect(await readKey(EMAIL, { provider: 'anthropic' })).toBe('sk-ant-api03-LOCAL-L0c4');
+    await unlockWith(host, PHRASE);
+    await click(button(host, 'Use it'));
+    await until(() => section(host).textContent?.includes('Synced in Wanka'), 'adoptada');
+    expect(await readKey(EMAIL, { provider: 'anthropic' })).toBe(KEY);
+  });
+
+  it('O1: si la copia cambió en otro dispositivo, lo dice y pide la frase; la clave de acá sigue hasta abrirla', async () => {
+    const store = new KeySyncStore();
+    await saveSettings(EMAIL, ANT, KEY);
+    await turnOnSync({ client: store.client(UID), email: EMAIL, userId: UID, ref: 'wanka', name: 'Wanka' }, PHRASE);
+    // Otro dispositivo reemplaza la copia (la generación sube) con otra clave y otra frase.
+    const sync = (await loadSettings(EMAIL))!.sync!;
+    await saveSettings(EMAIL, ANT, 'sk-ant-api03-ROTADA-e5F6', { sync: null });
+    await turnOnSync({ client: store.client(UID), email: EMAIL, userId: UID, ref: 'wanka', name: 'Wanka' }, 'gift-hello-jump-kite-lemon-mango', { generation: 1 });
+    await saveSettings(EMAIL, ANT, KEY, { sync });
+    const host = await mount(store);
+    expect(section(host).textContent).toContain('Your synced key changed on another device. Enter your passphrase to update it here.');
+    expect(section(host).textContent).not.toContain('Synced in Wanka');
+    expect(await readKey(EMAIL, { provider: 'anthropic' })).toBe(KEY);
+    await unlockWith(host, 'gift-hello-jump-kite-lemon-mango');
+    await until(() => section(host).textContent?.includes('Synced in Wanka'), 'actualizada');
+    expect(await readKey(EMAIL, { provider: 'anthropic' })).toBe('sk-ant-api03-ROTADA-e5F6');
+  });
+});

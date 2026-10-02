@@ -121,10 +121,13 @@ describe('regla 6: un destino nuevo no se adopta solo', () => {
     // Otra dirección del mismo proveedor compatible también pregunta.
     await saveSettings(EMAIL, { provider: 'compatible', baseUrl: 'https://openrouter.ai/api/v1', model: 'y', models: [] }, 'sk-or');
     expect((await unlockSync(ctx(store), PHRASE))?.decision).toBe('ask');
-    // La misma dirección: se adopta, y el modelo del dispositivo se queda.
+    // La misma dirección con otra clave que no vino de la copia: pregunta mostrando el final de las dos (regla 5, O2 de
+    // la auditoría); al adoptarla, el modelo del dispositivo se queda.
     await saveSettings(EMAIL, { provider: 'compatible', baseUrl: 'https://servidor-ajeno.example/v1/', model: 'mio', models: [] }, 'sk-vieja');
     const same = await unlockSync(ctx(store), PHRASE);
-    expect(same?.decision).toBe('adopt');
+    expect(same?.decision).toBe('replace');
+    expect(same?.localEnding).toBe('ieja');
+    expect(await readKey(EMAIL, { provider: 'compatible', baseUrl: 'https://servidor-ajeno.example/v1' })).toBe('sk-vieja');
     expect((await adoptUnlocked(ctx(store), same!)).model).toBe('mio');
     expect(await readKey(EMAIL, { provider: 'compatible', baseUrl: 'https://servidor-ajeno.example/v1' })).toBe('sk-ajena');
   });
@@ -264,5 +267,34 @@ describe('el dispositivo (prueba 6)', () => {
     expect((await loadSettings(EMAIL))?.sync?.localChanged).toBeUndefined();
     await saveSettings(EMAIL, { provider: 'openai', model: 'gpt', models: [] }, 'sk-openai');
     expect((await loadSettings(EMAIL))?.sync?.localChanged).toBe(true);
+  });
+});
+
+describe('la misma dirección con otra clave (O2 de la auditoría) y la copia que cambió en otro dispositivo (O1)', () => {
+  it('con la misma clave no pregunta; con la que vino de esta copia, la reemplaza sin preguntar', async () => {
+    const store = new KeySyncStore();
+    await saveSettings(EMAIL, ANT, KEY);
+    await turnOnSync(ctx(store), PHRASE);
+    // El mismo dispositivo abre su propia copia: la misma clave, nada que preguntar.
+    expect((await unlockSync(ctx(store), PHRASE))?.decision).toBe('adopt');
+    // Otro dispositivo abre la copia, y después la PC la reemplaza con una clave nueva.
+    await otherDevice();
+    await adoptUnlocked(ctx(store), (await unlockSync(ctx(store), PHRASE))!);
+    const phoneSync = (await loadSettings(EMAIL))!.sync!;
+    await closeAssistantDb();
+    indexedDB.deleteDatabase(ASSISTANT_DB);
+    await saveSettings(EMAIL, ANT, 'sk-ant-api03-ROTADA-e5F6');
+    await turnOnSync(ctx(store), 'gift-hello-jump-kite-lemon-mango', { generation: store.rows.get(UID)!.generation });
+    // De vuelta en el "teléfono": tiene la clave vieja, que vino de esta copia.
+    await otherDevice();
+    await saveSettings(EMAIL, ANT, KEY, { sync: phoneSync });
+    expect(store.rows.get(UID)!.generation).toBeGreaterThan(phoneSync.generation);
+    const u = await unlockSync(ctx(store), 'gift-hello-jump-kite-lemon-mango');
+    expect(u?.decision).toBe('adopt');
+    await adoptUnlocked(ctx(store), u!);
+    expect(await readKey(EMAIL, { provider: 'anthropic' })).toBe('sk-ant-api03-ROTADA-e5F6');
+    // Si la clave de ese dispositivo se había cambiado a mano después, sí pregunta.
+    await saveSettings(EMAIL, ANT, 'sk-ant-api03-PEGADA-a-mano');
+    expect((await unlockSync(ctx(store), 'gift-hello-jump-kite-lemon-mango'))?.decision).toBe('replace');
   });
 });

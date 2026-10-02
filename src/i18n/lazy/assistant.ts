@@ -379,8 +379,8 @@ export const assistant = {
   'assistant.sync.updated': { en: "Your synced key was updated.", es: "Se actualizó tu clave sincronizada." },
   'assistant.sync.replace': { en: "Replace synced key…", es: "Reemplazar la clave sincronizada…" },
   'assistant.sync.replaceText': {
-    en: "For a lost device: first Sign out other devices (account menu), create a new key at your provider and save it here. Then replace the synced copy with it and a new passphrase.",
-    es: "Para un dispositivo perdido: primero Cerrar la sesión en los otros dispositivos (menú de la cuenta), creá una clave nueva en tu proveedor y guardala acá. Después reemplazá la copia sincronizada con ella y una frase nueva.",
+    en: "For a lost device: first Sign out other devices (account menu), create a new key at your provider and save it here. Then replace the synced copy with it and a new passphrase: your other devices will ask for the new one.",
+    es: "Para un dispositivo perdido: primero Cerrar la sesión en los otros dispositivos (menú de la cuenta), creá una clave nueva en tu proveedor y guardala acá. Después reemplazá la copia sincronizada con ella y una frase nueva: tus otros dispositivos te van a pedir la nueva.",
   },
   'assistant.sync.currentPassphrase': { en: "Current passphrase", es: "Frase actual" },
   'assistant.sync.newPassphrase': { en: "New passphrase", es: "Frase nueva" },
@@ -417,6 +417,14 @@ export const assistant = {
     es: "Abierta: {provider} en {host}, clave que termina en …{end}.",
   },
   'assistant.sync.ask': { en: "Your synced key now goes to {host}. Use it?", es: "Tu clave sincronizada ahora va a {host}. ¿La usás?" },
+  'assistant.sync.askReplace': {
+    en: "Replace the key on this device (…{local}) with the synced one (…{synced})?",
+    es: "¿Reemplazar la clave de este dispositivo (…{local}) por la sincronizada (…{synced})?",
+  },
+  'assistant.sync.changed': {
+    en: "Your synced key changed on another device. Enter your passphrase to update it here.",
+    es: "Tu clave sincronizada cambió en otro dispositivo. Escribí tu frase para actualizarla acá.",
+  },
   'assistant.sync.useIt': { en: "Use it", es: "Usarla" },
   'assistant.sync.keepMine': { en: "Keep my current key", es: "Seguir con mi clave" },
   'assistant.sync.kept': { en: "Your current key stays on this device.", es: "Tu clave de ahora queda en este dispositivo." },

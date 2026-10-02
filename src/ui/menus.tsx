@@ -122,6 +122,16 @@ export function useFloating(
   }, [ref, arrows]);
 }
 
+/** El nombre del workspace para mostrar: el suyo o, si no tiene, el host de su dirección (como la lista de workspaces). */
+function workspaceLabel(config: { name?: string; url?: string } | undefined): string {
+  if (config?.name) return config.name;
+  try {
+    return new URL(config?.url ?? '').host;
+  } catch {
+    return config?.url ?? '';
+  }
+}
+
 function items(el: HTMLElement): HTMLElement[] {
   return [...el.querySelectorAll<HTMLElement>('input, button:not(:disabled), select, [href]')];
 }
@@ -639,7 +649,7 @@ export function AccountMenu({
         className="menu-row"
         onClick={() => {
           onClose();
-          askSignOutOthers(workspace?.config.name || '', () => client.auth.signOut({ scope: 'others' }));
+          askSignOutOthers(workspaceLabel(workspace?.config), () => client.auth.signOut({ scope: 'others' }));
         }}
       >
         <SignOutIcon />

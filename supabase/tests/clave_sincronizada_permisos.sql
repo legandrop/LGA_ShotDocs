@@ -1,6 +1,9 @@
 -- Pruebas de quién lee y escribe la clave sincronizada (`assistant_key_sync`, 20261023120000_clave_sincronizada.sql;
 -- Docs/Doc_Clave_Sincronizada.md, sección 5). Corre dentro de una transacción que se deshace al final: no deja usuarios
 -- ni datos. Si todo pasa, devuelve una fila con result = 'ok'.
+--
+-- Sacar `user_id = auth.uid()` solo del `with check` de la política no lo detecta ninguna prueba: es un mutante
+-- equivalente, porque los permisos por columna y el trigger ya impiden escribir `user_id`. Las tres barreras quedan.
 
 begin;
 
