@@ -253,6 +253,9 @@ describe('el micrófono propio en la hoja (V3)', () => {
     expect(panel(s.host).textContent).toMatch(/Recording · 0:0\d · tap to stop/);
     const recording = (await notes())[0];
     expect(recording).toMatchObject({ state: 'recording', pageId: s.pageId });
+    // A6: la que se está grabando no aparece en las listas ni en el número.
+    expect(s.host.querySelector('.dictation-saved')).toBeNull();
+    expect(s.host.querySelector('.sync-voice')).toBeNull();
     await click(recordButton(s.host));
     await until(() => !!button(s.host, 'Apply'));
     expect(calls.map((c) => c.url)).toEqual(['https://api.openai.com/v1/audio/transcriptions', 'https://api.anthropic.com/v1/messages']);
@@ -307,7 +310,7 @@ describe('el micrófono propio en la hoja (V3)', () => {
     expect(comment.value).toBe('Revisar clean plate del 010');
     expect(panel(s.host).textContent).toContain('Inserted at the cursor.');
     expect(await getNote(a.id)).toBeNull();
-    // En la página: el cursor en una celda vacía.
+    // En la página: el cursor en una celda vacía (O2, en la página: con una palabra elegida, se escribe después).
     comment.remove();
     const b = await addNote({ email: EMAIL, workspace: WS, pageId: s.pageId, pageTitle: 'Día 06', text: '35 mm', audio: { mime: 'audio/webm', chunks: 1, durationMs: 1000 } });
     await s.remount();

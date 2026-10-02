@@ -66,6 +66,11 @@ export interface QueuedNote {
   audio?: { mime: string; chunks: number; durationMs: number };
   /** Por qué falló la transcripción (sin la clave). */
   error?: string;
+  /**
+   * Una pestaña la está transcribiendo (O1 de la auditoría de V2/V3): las otras no la mandan otra vez hasta `until`. Si
+   * esa pestaña murió, el reclamo vence solo.
+   */
+  claim?: { by: string; until: number };
 }
 
 export interface StoredChunk {

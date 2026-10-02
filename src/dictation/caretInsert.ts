@@ -39,6 +39,9 @@ function padded(before: string, text: string, after: string): string {
 /**
  * Escribe `text` en el lugar recordado. En la página (o sin un campo recordado): en la selección del editor, que se
  * conserva mientras el foco está en la hoja, como una edición más (se deshace con ⌘Z). Devuelve si lo escribió.
+ *
+ * Nunca reemplaza lo elegido (O2 de la auditoría de V2/V3): si había texto elegido, lo dictado va después de él. En el
+ * teléfono un doble toque elige una palabra sin querer, y en un comentario el deshacer del navegador puede no devolverla.
  */
 export function insertAtCursor(text: string, spot: CursorSpot | null, view: EditorView | null, canEditPage: boolean): boolean {
   const clean = text.trim();
@@ -46,8 +49,9 @@ export function insertAtCursor(text: string, spot: CursorSpot | null, view: Edit
   if (spot && spot.el.isConnected && isField(spot.el) && !(view && view.dom.contains(spot.el))) {
     const field = spot.el;
     if (field.readOnly || field.disabled) return false;
-    const start = Math.min(spot.start ?? field.value.length, field.value.length);
-    const end = Math.min(Math.max(spot.end ?? start, start), field.value.length);
+    // Después de lo elegido, sin borrarlo.
+    const start = Math.min(Math.max(spot.end ?? spot.start ?? field.value.length, spot.start ?? 0), field.value.length);
+    const end = start;
     const insert = padded(field.value.slice(0, start), clean, field.value.slice(end));
     const value = field.value.slice(0, start) + insert + field.value.slice(end);
     if (field.maxLength > 0 && value.length > field.maxLength) return false;
@@ -65,11 +69,12 @@ export function insertAtCursor(text: string, spot: CursorSpot | null, view: Edit
   if (!view || !canEditPage || !view.editable) return false;
   const { selection, doc } = view.state;
   if (!(selection instanceof TextSelection) || !selection.$from.parent.isTextblock || !selection.$from.sameParent(selection.$to)) return false;
-  const parent = selection.$from.parent;
-  const before = parent.textBetween(0, selection.$from.parentOffset, '\n', ' ');
+  // Después de lo elegido, sin borrarlo.
+  const parent = selection.$to.parent;
+  const before = parent.textBetween(0, selection.$to.parentOffset, '\n', ' ');
   const after = parent.textBetween(selection.$to.parentOffset, parent.content.size, '\n', ' ');
   const insert = padded(before, clean, after);
-  const tr = view.state.tr.insertText(insert, selection.from, selection.to);
+  const tr = view.state.tr.insertText(insert, selection.to, selection.to);
   if (tr.doc.eq(doc)) return false;
   view.dispatch(tr.scrollIntoView());
   return true;

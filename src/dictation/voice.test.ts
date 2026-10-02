@@ -4,7 +4,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ProviderError } from '../assistant/providers';
 import { closeAssistantDb, saveSettings } from '../assistant/keyStore';
 import { closeDictationDb } from './dictationDb';
-import { addNote, getNote, listNotes, markRecording, putChunk, readChunks, recoverRecordings } from './queue';
+import { TextSelection } from '@tiptap/pm/state';
+import { unmountAll, view } from '../ui/collabHarness';
+import { cellText, mapOf, reportEditor, targetBy } from './fixtures/report';
+import { addNote, claimNote, getNote, listNotes, markRecording, putChunk, readChunks, recoverRecordings, TAB_ID, updateNote } from './queue';
+import { insertAtCursor } from './caretInsert';
 import { NoteRecorder, pickMime, type RecorderEnv, type RecordingStore } from './recorder';
 import { baseMime, encodeWav, extensionOf, geminiMime, isFormatError, transcribe, voiceHints } from './transcribe';
 import { queueRecordingStore, transcribeNote, transcribePending } from './voiceQueue';
@@ -19,6 +23,8 @@ const WS = 'wanka';
 const OPENAI_KEY = 'sk-proj-VOZ-secreta-123456789';
 
 afterEach(async () => {
+  unmountAll();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.useRealTimers();
   await closeDictationDb();
@@ -400,5 +406,112 @@ describe('la cola con audio (V3)', () => {
     expect(await getNote(a)).toMatchObject({ state: 'saved', audio: { chunks: 1 } });
     expect(await getNote(b)).toMatchObject({ state: 'failed', error: 'empty' });
     expect(await listNotes(EMAIL, WS)).toHaveLength(2);
+  });
+});
+
+// --- Correcciones de la auditoría de V2/V3 (O1, O2, O4) -------------------------------------------------------------
+
+describe('correcciones de la auditoría', () => {
+  const policyOn = { from: () => ({ select: () => ({ maybeSingle: async () => ({ data: { assistant_policy: 'on' }, error: null }) }) }) };
+  async function audioNote() {
+    const n = await addNote({ email: EMAIL, workspace: WS, pageId: 'p1', pageTitle: 'Día 06', text: '', state: 'saved', audio: { mime: 'audio/webm', chunks: 1, durationMs: 1000 } });
+    await putChunk(n.id, 0, new Blob(['uno']));
+    return n;
+  }
+
+  it('O1: con otra pestaña transcribiéndola, esta no la manda; un reclamo vencido sí se puede tomar', async () => {
+    await saveSettings(EMAIL, { provider: 'openai', model: 'gpt-5.4-mini', models: [] }, OPENAI_KEY);
+    const n = await audioNote();
+    expect(await claimNote(n.id, 'otra-pestaña')).toMatchObject({ claim: { by: 'otra-pestaña' } });
+    const f = stubFetch(json({ text: 'segunda' }));
+    expect(await transcribeNote(n.id, { email: EMAIL, client: policyOn, workspaceKey: WS, transcribeOptions: { fetcher: f.fetcher } })).toBe('busy');
+    expect(f.calls).toHaveLength(0);
+    // La otra pestaña murió: el reclamo vence y esta la toma.
+    expect(await claimNote(n.id, TAB_ID, Date.now() + 120_000)).toMatchObject({ claim: { by: TAB_ID } });
+  });
+
+  it('O1: lo que llega de una transcripción nunca pisa una corrección hecha mientras tanto', async () => {
+    await saveSettings(EMAIL, { provider: 'openai', model: 'gpt-5.4-mini', models: [] }, OPENAI_KEY);
+    const n = await audioNote();
+    const fetcher = (async () => {
+      // Mientras transcribe, otra pestaña ya la transcribió y la persona la corrigió.
+      await updateNote(n.id, { state: 'ready', text: 'corregida a mano' });
+      return json({ text: 'lo que llegó tarde' });
+    }) as unknown as typeof fetch;
+    const out = await transcribeNote(n.id, { email: EMAIL, client: policyOn, workspaceKey: WS, transcribeOptions: { fetcher } });
+    expect(out).toMatchObject({ state: 'ready', text: 'corregida a mano' });
+    expect((await getNote(n.id))?.text).toBe('corregida a mano');
+  });
+
+  it('A11: una nota ya transcrita (quizás corregida) no se vuelve a mandar', async () => {
+    await saveSettings(EMAIL, { provider: 'openai', model: 'gpt-5.4-mini', models: [] }, OPENAI_KEY);
+    const n = await audioNote();
+    await updateNote(n.id, { state: 'ready', text: 'corregida' });
+    const f = stubFetch(json({ text: 'otra' }));
+    expect(await transcribeNote(n.id, { email: EMAIL, client: policyOn, workspaceKey: WS, transcribeOptions: { fetcher: f.fetcher } })).toBe('notAudio');
+    expect(await transcribePending(WS, { email: EMAIL, client: policyOn, workspaceKey: WS, transcribeOptions: { fetcher: f.fetcher } })).toBe(0);
+    expect(f.calls).toHaveLength(0);
+    expect((await getNote(n.id))?.text).toBe('corregida');
+  });
+
+  it('A7: la segunda clave de un compatible no va a otra dirección', async () => {
+    await saveVoiceSettings(EMAIL, { source: 'own', provider: 'compatible', baseUrl: 'https://api.groq.com/openai/v1', model: 'whisper-large-v3' }, 'gsk_CLAVE-DE-GROQ-0000');
+    const v = (await resolveVoice(EMAIL))!;
+    expect(await readVoiceKey(EMAIL, v)).toBe('gsk_CLAVE-DE-GROQ-0000');
+    expect(await readVoiceKey(EMAIL, { ...v, baseUrl: 'https://otro-servidor.example/v1' })).toBe('');
+    expect(await readVoiceKey(EMAIL, { ...v, provider: 'openai', baseUrl: undefined })).toBe('');
+  });
+
+  it('A12: las pistas llevan los rótulos de la página, nunca el texto de las celdas', () => {
+    const hints = voiceHints(mapOf(reportEditor()));
+    expect(hints).toContain('Location');
+    expect(hints).toContain('Lens · Filters (ND, diffusion, pola)');
+    expect(hints.join(' | ')).not.toContain('Nave 2');
+    expect(hints.join(' | ')).not.toContain('A001C003');
+  });
+
+  it('A2 y A3: los pedazos actualizan la nota y la pestaña que graba no da por cortada su propia grabación', async () => {
+    const store = queueRecordingStore({ email: EMAIL, workspace: WS, pageId: 'p1', pageTitle: 'Día 06' });
+    const id = await store.create('audio/webm');
+    await store.chunk(id, 0, new Blob(['uno']));
+    await store.progress(id, 1, 1000);
+    expect(await getNote(id)).toMatchObject({ state: 'recording', audio: { chunks: 1, durationMs: 1000 } });
+    expect(await recoverRecordings(await listNotes(EMAIL, WS), Date.now() + 60_000)).toBe(false);
+    expect(await getNote(id)).toMatchObject({ state: 'recording' });
+    await store.finish(id, 1, 1000);
+    expect(await getNote(id)).toMatchObject({ state: 'saved' });
+  });
+
+  it('A10: si el primer pedazo no se puede guardar en la cola, no queda ninguna nota vacía', async () => {
+    const realPut = IDBObjectStore.prototype.put;
+    vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (this: IDBObjectStore, value: unknown, key?: IDBValidKey) {
+      if ((value as { kind?: string })?.kind === 'chunk') throw new DOMException('lleno', 'QuotaExceededError');
+      return realPut.call(this, value, key);
+    });
+    const { env: e } = env();
+    const errors: (string | undefined)[] = [];
+    const r = new NoteRecorder({ store: queueRecordingStore({ email: EMAIL, workspace: WS, pageId: 'p1', pageTitle: 'x' }), env: e, onState: (s, err) => s === 'error' && errors.push(err) });
+    await r.start();
+    FakeRecorder.last!.emit('uno');
+    for (let i = 0; i < 20 && errors.length === 0; i++) await new Promise((res) => setTimeout(res, 10));
+    await new Promise((res) => setTimeout(res, 30));
+    expect(errors).toEqual(['storage']);
+    expect(await listNotes(EMAIL, WS)).toEqual([]);
+  });
+
+  it('O2: Insert at cursor no borra lo elegido: lo dictado va después', () => {
+    const field = document.createElement('textarea');
+    field.value = 'Nave 2 norte';
+    document.body.append(field);
+    expect(insertAtCursor('galpón B', { el: field, start: 7, end: 12 }, null, false)).toBe(true);
+    expect(field.value).toBe('Nave 2 norte galpón B');
+    field.remove();
+    // En la página: «2» elegido en la celda de Location.
+    const ed = reportEditor();
+    const loc = targetBy(mapOf(ed), (t) => t.rowLabel === 'Location' && t.col === 2);
+    const v = view(ed);
+    v.dispatch(v.state.tr.setSelection(TextSelection.create(v.state.doc, loc.start + 5, loc.start + 6)));
+    expect(insertAtCursor('norte', null, v, true)).toBe(true);
+    expect(cellText(ed, 1, 3, 2)).toBe('Nave 2 norte');
   });
 });

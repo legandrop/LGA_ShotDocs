@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useT } from '../i18n';
 import { useRoute } from '../router';
 import { usePermissions, useServices, useSyncStatus } from '../services';
@@ -12,6 +12,10 @@ import { useQueuedNotes } from './queue';
 // *Dictate to report* en la app (Docs/Doc_Dictado.md, entrega V1, sección 6): Ctrl/⌘+Alt+Shift+D la abre y la cierra,
 // el botón redondo del teléfono (abajo a la derecha, solo con Editar y la política que lo permite) y la hoja, que se
 // baja aparte la primera vez que se abre. Va en la primera carga y es chico.
+
+/** Los reintentos de transcribir las notas que quedaron `saved` con la red encendida (O3). */
+const RETRIES = 10;
+const RETRY_MS = 60_000;
 
 const DictationPanel = lazyPart(() => import('./DictationPanel').then((m) => m.DictationPanel));
 
@@ -45,6 +49,20 @@ export function DictationHost() {
   const workspaceKey = workspace.config.localKey || workspace.config.url;
   const online = useSyncStatus().online;
   const waiting = useQueuedNotes(user.email, workspaceKey).filter((n) => n.state === 'saved' && n.audio).length;
+  // Con red "encendida" pero un proveedor que no responde (el portal de un hotel), la nota queda `saved`: se reintenta al
+  // volver la app al frente y cada minuto, hasta 10 veces por sesión (O3 de la auditoría de V2/V3).
+  const [nudge, setNudge] = useState(0);
+  useEffect(() => {
+    if (!online || waiting === 0 || nudge >= RETRIES) return;
+    const again = () => setNudge((n) => Math.min(n + 1, RETRIES));
+    const onVisible = () => document.visibilityState === 'visible' && again();
+    const id = setInterval(again, RETRY_MS);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [online, waiting, nudge]);
   useEffect(() => {
     if (!online || waiting === 0) return;
     let live = true;
@@ -57,7 +75,7 @@ export function DictationHost() {
       live = false;
       clearTimeout(id);
     };
-  }, [online, waiting, user.email, client, workspaceKey]);
+  }, [online, waiting, nudge, user.email, client, workspaceKey]);
 
   // Al cambiar de página, la hoja se cierra (la nota queda guardada con su página).
   useEffect(() => {

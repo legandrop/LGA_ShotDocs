@@ -4,7 +4,7 @@ import { errorText } from '../assistant/errorText';
 import { fetchPolicy, policyAllows } from '../assistant/policy';
 import { PROVIDER_NAMES, ProviderError } from '../assistant/providers';
 import type { RecordingStore } from './recorder';
-import { addNote, getNote, listNotes, markRecording, putChunk, readChunks, removeNote, updateNote, type QueuedNote } from './queue';
+import { addNote, claimNote, listNotes, markRecording, putChunk, readChunks, removeNote, settleClaim, updateNote, type QueuedNote } from './queue';
 import { transcribe, type TranscribeOptions } from './transcribe';
 import { isLocalVoice, readVoiceKey, resolveVoice } from './voiceSettings';
 
@@ -63,27 +63,31 @@ export async function transcribeNote(id: string, ctx: TranscribeContext): Promis
   if (inFlight.has(id)) return 'busy';
   inFlight.add(id);
   try {
-    const note = await getNote(id);
-    if (!note) return 'gone';
-    if (!note.audio || (note.state !== 'saved' && note.state !== 'failed')) return 'notAudio';
     const config = await resolveVoice(ctx.email);
     if (!config) return 'noVoice';
     const local = isLocalVoice(config);
     if (ctx.online === false && !local) return 'offline';
     const policy = await fetchPolicy(ctx.client, ctx.workspaceKey);
     if (!policyAllows(policy, config)) return 'policy';
+    // Una sola pestaña la manda (O1): se reclama en una transacción. Una nota ya transcrita (quizás corregida) no se
+    // vuelve a mandar.
+    const note = await claimNote(id);
+    if (typeof note === 'string') return note;
+    const audio = note.audio!;
+    // El resultado se escribe solo si la nota sigue reclamada por esta pestaña y sin transcribir (`settleClaim`).
+    const settle = async (patch: Parameters<typeof settleClaim>[1]) => (await settleClaim(id, patch)) ?? 'gone';
     const chunks = await readChunks(id);
-    const data = new Blob(chunks, { type: note.audio.mime });
-    if (data.size === 0) return (await updateNote(id, { state: 'failed', error: 'empty' })) ?? 'gone';
+    const data = new Blob(chunks, { type: audio.mime });
+    if (data.size === 0) return settle({ state: 'failed', error: 'empty' });
     try {
       // La clave se descifra recién acá y queda solo en esta llamada.
       const key = await readVoiceKey(ctx.email, config);
-      const out = await transcribe(config, key, { data, mime: note.audio.mime }, ctx.hints ?? [], ctx.transcribeOptions);
-      if (!out.text) return (await updateNote(id, { state: 'failed', error: 'nothing' })) ?? 'gone';
-      return (await updateNote(id, { state: 'ready', text: out.text, error: undefined })) ?? 'gone';
+      const out = await transcribe(config, key, { data, mime: audio.mime }, ctx.hints ?? [], ctx.transcribeOptions);
+      if (!out.text) return settle({ state: 'failed', error: 'nothing' });
+      return settle({ state: 'ready', text: out.text, error: undefined });
     } catch (err) {
-      if (err instanceof ProviderError && (err.kind === 'network' || err.kind === 'aborted')) return (await updateNote(id, { state: 'saved' })) ?? 'gone';
-      return (await updateNote(id, { state: 'failed', error: errorText(err, PROVIDER_NAMES[config.provider], t) })) ?? 'gone';
+      if (err instanceof ProviderError && (err.kind === 'network' || err.kind === 'aborted')) return settle({ state: 'saved' });
+      return settle({ state: 'failed', error: errorText(err, PROVIDER_NAMES[config.provider], t) });
     }
   } finally {
     inFlight.delete(id);

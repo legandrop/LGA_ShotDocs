@@ -976,3 +976,20 @@ falso: 31 de 31 (72 px, *Recording* con el primer pedazo guardado, WebM/Opus, el
 `note.webm`, R1, R3 sin red con la transcripción sola al volver, cerrar la hoja y cerrar la pestaña grabando: lo
 guardado se decodifica y sin el primer pedazo no, *Insert at cursor*, *Voice*, *Ask…*, teléfono de 390 px). El WebKit
 de Playwright en Windows no trae micrófono: el iPhone lo prueba Lega. Mutantes de las guardas: 16 de 16 mueren.
+
+**Correcciones de la auditoría de V2 y V3** (aprobado con observaciones):
+
+- **O1, dos pestañas:** la misma nota se transcribía dos veces y la segunda pisaba la primera (aun una corrección). Ahora
+  una pestaña la reclama en una transacción antes de mandarla (`claimNote`: solo si sigue sin transcribir y nadie la
+  tiene; el reclamo vence a los 90 s si esa pestaña murió), y el resultado se escribe solo si la nota sigue reclamada por
+  ella y sin transcribir (`settleClaim`): nunca pisa otra transcripción ni lo que la persona corrigió.
+- **O2, *Insert at cursor*** reemplazaba el texto elegido. Ahora nunca lo borra: lo dictado va después de lo elegido (en
+  la página y en un campo).
+- **O3:** con la red «encendida» y un proveedor que no responde, la nota queda `saved`; se reintenta al volver la app al
+  frente y cada minuto, hasta 10 veces por sesión.
+- **O4:** pruebas para la segunda clave a otra dirección, volver a transcribir una nota ya transcrita, las pistas sin el
+  texto de las celdas, los pedazos que actualizan la nota sin que la propia pestaña la dé por cortada, la nota que se
+  graba fuera de las listas y el primer pedazo que no se guarda sin dejar una nota vacía (`voice.test.ts` pasa a 25).
+- **O5** (salir con «olvidar la clave» no borra la clave de voz ni cuenta las notas) queda para la tanda de S1, en el
+  roadmap. *Undo* de una nota con audio la devuelve sin su grabación (se borró al aplicar): queda el texto transcrito, que
+  es lo que importa (DI7).

@@ -137,6 +137,63 @@ export async function removeNote(id: string): Promise<void> {
   emit();
 }
 
+// --- Transcribir de a una pestaña (O1) -------------------------------------------------------------------------------
+
+/** Esta pestaña (para reclamar una nota antes de transcribirla). */
+export const TAB_ID: string = uuid();
+/** Cuánto dura un reclamo: lo que puede tardar una transcripción de 2 minutos con margen. */
+export const CLAIM_MS = 90_000;
+
+/**
+ * Reclama una nota con audio para transcribirla, en una transacción (las de IndexedDB no se cruzan entre pestañas): solo
+ * si sigue sin transcribir (`saved` o `failed`) y nadie la tiene reclamada. Devuelve la nota reclamada, o por qué no.
+ */
+export async function claimNote(id: string, by = TAB_ID, now = Date.now()): Promise<QueuedNote | 'gone' | 'notAudio' | 'busy'> {
+  const d = await dictationDb();
+  const tx = d.transaction('notes', 'readwrite');
+  const n = await tx.store.get(id);
+  if (!isNote(n)) {
+    await tx.done;
+    return 'gone';
+  }
+  if (!n.audio || (n.state !== 'saved' && n.state !== 'failed')) {
+    await tx.done;
+    return 'notAudio';
+  }
+  if (n.claim && n.claim.by !== by && n.claim.until > now) {
+    await tx.done;
+    return 'busy';
+  }
+  const next: QueuedNote = { ...n, claim: { by, until: now + CLAIM_MS } };
+  await tx.store.put(next);
+  await tx.done;
+  return next;
+}
+
+/**
+ * Escribe el resultado de una transcripción solo si la nota sigue reclamada por esta pestaña y sin transcribir: nunca
+ * pisa una transcripción de otra pestaña ni una corrección de la persona. Devuelve la nota como quedó.
+ */
+export async function settleClaim(id: string, patch: Partial<Pick<QueuedNote, 'state' | 'text' | 'error'>>, by = TAB_ID): Promise<QueuedNote | null> {
+  const d = await dictationDb();
+  const tx = d.transaction('notes', 'readwrite');
+  const n = await tx.store.get(id);
+  if (!isNote(n)) {
+    await tx.done;
+    return null;
+  }
+  if (n.claim?.by !== by || (n.state !== 'saved' && n.state !== 'failed')) {
+    await tx.done;
+    return n;
+  }
+  const { claim: _claim, ...rest } = n;
+  const next: QueuedNote = { ...rest, ...patch, id: n.id, kind: 'note', updatedAt: Date.now() };
+  await tx.store.put(next);
+  await tx.done;
+  emit();
+  return next;
+}
+
 /** Vuelve a poner una nota tal como estaba (el *Undo* de la hoja después de ubicarla). */
 export async function restoreNote(note: QueuedNote): Promise<void> {
   const d = await dictationDb();
