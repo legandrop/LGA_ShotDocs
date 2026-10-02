@@ -99,4 +99,12 @@ export const comments = {
   'commentDiscard.resolve': { en: "Discarding: the thread reopens.", es: "Se descarta: el hilo se vuelve a abrir." },
   'commentDiscard.reopen': { en: "Discarding: the thread stays resolved.", es: "Se descarta: el hilo sigue resuelto." },
   'commentDiscard.generic': { en: "Discard this change?", es: "¿Descartar este cambio?" },
+  'commentDiscard.mentions': {
+    en: "Discarding the mentions: no one gets notified; the text of the comment stays.",
+    es: "Se descartan las menciones: nadie recibe el aviso; el texto del comentario queda.",
+  },
+  'commentError.mentionsInvalid': {
+    en: "The mentions in this comment are not valid.",
+    es: "Las menciones de este comentario no son válidas.",
+  },
 } satisfies Dict;
