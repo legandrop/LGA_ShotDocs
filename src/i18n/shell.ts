@@ -27,6 +27,10 @@ export const shell = {
     en: "Older changes in “{page}” can't be undone (the page was reloaded).",
     es: "Los cambios anteriores en “{page}” no se pueden deshacer (la página se volvió a cargar).",
   },
+  'undo.limit': {
+    en: "Older changes can't be undone: undo keeps your last {pages} pages and {steps} changes in this tab.",
+    es: "Los cambios anteriores no se pueden deshacer: deshacer guarda tus últimas {pages} páginas y {steps} cambios en esta pestaña.",
+  },
   'undo.cant': {
     en: "Can't undo in “{page}”: {reason}. {undo} again for the previous change.",
     es: "No se puede deshacer en “{page}”: {reason}. {undo} otra vez para el cambio anterior.",

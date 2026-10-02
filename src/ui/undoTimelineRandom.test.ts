@@ -4,6 +4,7 @@
 // por la línea de tiempo en el medio; al final, deshacer todo (cada página vuelve a lo de antes) y rehacer todo (vuelve a
 // lo último). Con otra persona escribiendo y borrando en las tres a la vez: nada suyo se va por un deshacer y los dos
 // terminan iguales. Cuántas semillas: `TIMELINE_SEEDS` (por defecto, pocas: la medición grande va en el informe).
+import { appendFileSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
@@ -17,6 +18,12 @@ afterEach(unmountAll);
 
 const SEEDS = Number(process.env.TIMELINE_SEEDS ?? 12);
 const OTHER = '0123456789';
+
+/** Con `TIMELINE_OUT`, los números de la corrida van a ese archivo (para el informe de una medición grande). */
+function report(name: string, tally: object): void {
+  if (process.env.TIMELINE_OUT) appendFileSync(process.env.TIMELINE_OUT, `${name} ${JSON.stringify(tally)}
+`);
+}
 
 interface Page {
   id: string;
@@ -92,15 +99,37 @@ async function run(seed: number, { blocks = false, withOther = false } = {}) {
     if (String(args[0]).startsWith('Deshacer: Yjs no pudo')) failed++;
     else warn(...args);
   };
-  // Lo del otro que se fue por un deshacer propio (nunca tiene que pasar).
+  // Lo del otro que se fue por un deshacer propio (nunca tiene que pasar): sus letras (sus items, de otro autor) vivas
+  // antes de un ⌘Z y borradas después. Aparte se cuentan sus letras que vos borraste y volviste a poner con ⌘Z: Yjs las
+  // vuelve a escribir como copias tuyas, y si después deshacés hasta antes de crear ese renglón, se van con él.
   let otherLost = 0;
+  let copiesLost = 0;
+  const otherItems = () =>
+    new Set(
+      pages.flatMap((p) =>
+        [...p.doc.store.clients]
+          .filter(([c]) => c >= 100)
+          .flatMap(([, structs]) =>
+            (structs as unknown as { deleted: boolean; length: number; content: { str?: string }; id: { client: number; clock: number } }[])
+              .filter((it) => !it.deleted && it.content?.str)
+              // Una clave por letra: Yjs junta y parte items, las letras no cambian de id.
+              .flatMap((it) => Array.from({ length: it.length }, (_, k) => `${p.id}:${it.id.client}:${it.id.clock + k}`)),
+          ),
+      ),
+    );
   const otherChars = () => pages.reduce((n, p) => n + count(yText(p.doc), OTHER), 0);
   const step = async (kind: 'undo' | 'redo') => {
     const before = otherChars();
+    const alive = kind === 'undo' ? otherItems() : null;
     await runner.run(kind);
     // Rehacer vuelve a hacer un borrado propio, que pudo llevarse letras del otro que estaban en el tramo (como al
     // borrarlo la primera vez); deshacer nunca se lleva nada suyo.
-    if (kind === 'undo') otherLost += Math.max(0, before - otherChars());
+    if (alive) {
+      const now = otherItems();
+      const gone = [...alive].filter((k) => !now.has(k)).length;
+      otherLost += gone;
+      copiesLost += Math.max(0, before - otherChars() - gone);
+    }
   };
   try {
     go(pages[0].id);
@@ -162,13 +191,13 @@ async function run(seed: number, { blocks = false, withOther = false } = {}) {
     for (let guard = 0; guard < 2000 && timeline.peek('P', 'redo'); guard++) await step('redo');
     const afterRedo = pages.map((p) => yText(p.doc));
     const strip = (s: string) => [...s].filter((c) => !OTHER.includes(c)).join('');
-    if (process.env.TL_DEBUG) console.log('SEED', seed, JSON.stringify({ initial, last, afterUndo, afterRedo, otherLost, failed }));
     return {
       undoExact: afterUndo.every((s, i) => strip(s) === initial[i]),
       undoLess: afterUndo.some((s, i) => missing(initial[i], strip(s)).length > 0),
       undoMore: afterUndo.some((s, i) => strip(s).replace(/ \| /g, '').length > initial[i].replace(/ \| /g, '').length),
       redoExact: afterRedo.every((s, i) => s === last[i]),
       otherLost,
+      copiesLost,
       failed,
       converged: pages.every((p) => !p.other || yText(p.other) === yText(p.doc)),
     };
@@ -189,7 +218,7 @@ describe('la línea de tiempo al azar con el editor', () => {
       redoExact: results.filter((r) => r.redoExact).length,
       failed: results.reduce((n, r) => n + r.failed, 0),
     };
-    if (process.env.TIMELINE_SEEDS) console.log('texto', JSON.stringify(tally));
+    report('texto', tally);
     expect(tally.undoLess).toBe(0);
     expect(tally.undoMore).toBe(0);
     expect(tally.undoExact).toBe(SEEDS);
@@ -205,7 +234,7 @@ describe('la línea de tiempo al azar con el editor', () => {
       redoExact: results.filter((r) => r.redoExact).length,
       failed: results.reduce((n, r) => n + r.failed, 0),
     };
-    if (process.env.TIMELINE_SEEDS) console.log('bloques', JSON.stringify(tally));
+    report('bloques', tally);
     // El resto de 16.4 (1 de 300 con el editor): en pocas semillas, ninguno.
     expect(tally.undoLess).toBeLessThanOrEqual(Math.ceil(SEEDS / 100));
   });
@@ -215,11 +244,12 @@ describe('la línea de tiempo al azar con el editor', () => {
     for (let s = 1; s <= SEEDS; s++) results.push(await run(2000 + s, { withOther: true }));
     const tally = {
       otherLost: results.reduce((n, r) => n + r.otherLost, 0),
+      copiesLost: results.reduce((n, r) => n + r.copiesLost, 0),
       converged: results.filter((r) => r.converged).length,
       failed: results.reduce((n, r) => n + r.failed, 0),
       undoLess: results.filter((r) => r.undoLess).length,
     };
-    if (process.env.TIMELINE_SEEDS) console.log('con el otro', JSON.stringify(tally));
+    report('con el otro', tally);
     expect(tally.otherLost).toBe(0);
     expect(tally.converged).toBe(SEEDS);
   });

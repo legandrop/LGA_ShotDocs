@@ -72,6 +72,11 @@ const REASONS = {
   loading: 'undo.reason.loading',
 } as const;
 
+/** Si dos documentos de ProseMirror son iguales (`eq`); con otra cosa, nunca. */
+function sameDoc(a: unknown, b: unknown): boolean {
+  return !!a && !!b && typeof (a as { eq?: unknown }).eq === 'function' && (a as { eq: (o: unknown) => boolean }).eq(b);
+}
+
 /** El que corre ⌘Z / ⌘⇧Z: un paso, con las reglas de arriba. Mientras va a otra página, ignora los que lleguen. */
 export function createUndoRunner(deps: UndoUiDeps) {
   let busy = false;
@@ -94,8 +99,9 @@ export function createUndoRunner(deps: UndoUiDeps) {
       const next = timeline.peek(project, kind);
       if (!next) return;
       if (next.kind === 'lost') {
-        timeline.consumeLost(next.pageId);
-        deps.notify(t('undo.lost', { page: deps.title(next.pageId) }));
+        timeline.consumeLost(next.pageId, next.reason, project);
+        if (next.reason === 'limit') deps.notify(t('undo.limit', timeline.limits()));
+        else deps.notify(t('undo.lost', { page: deps.title(next.pageId) }));
         return;
       }
       const pageId = next.pageId;
@@ -125,6 +131,14 @@ export function createUndoRunner(deps: UndoUiDeps) {
       const keepsCursor = timeline.topRemembersCursor(pageId, kind);
       const before = info?.snapshot?.();
       const result = timeline.step(pageId, kind);
+      // Yjs dice que cambió algo, pero en la página no cambió nada a la vista después de cruzar (otra persona ya había
+      // borrado casi todo lo del paso; auditoría de la entrega 1, O2): se avisa como un paso que no cambia nada en vez
+      // de "Undone in…". No se sigue con el anterior (el paso pudo cambiar algo que no está en el texto, como las
+      // anotaciones de una foto pegada).
+      if (result === 'done' && crossed && before !== undefined && sameDoc(before, info?.snapshot?.())) {
+        deps.notify(kind === 'undo' ? t('undo.nothingThere', { undo: label('undo') }) : t('undo.nothingThereRedo', { redo: label('redo') }));
+        return;
+      }
       if (result === 'done') {
         if (before !== undefined && (crossed || !keepsCursor)) info?.reveal?.(before, { moveCursor: crossed || focusInEditor });
         if (crossed) {

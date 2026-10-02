@@ -3,16 +3,20 @@
 // arriba de las pilas de Yjs de cada página, con el editor real (BlockNote + y-prosemirror) y `PageDocs` de verdad
 // (IndexedDB en memoria y el servidor de prueba). Las páginas se montan y desmontan como en la app: el editor abre el
 // documento (`docs.open`), se monta, se le pasa la pila (`attach`) y al irse la deja y cierra el documento.
+import { BlockNoteEditor } from '@blocknote/core';
+import { withCollaboration } from '@blocknote/core/yjs';
 import { ySyncPluginKey } from 'y-prosemirror';
 import { afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { connect, mountEditor, undoManager, view, yText, type Editor } from './collabHarness';
+import { pageEditorExtensions } from './editorExtensions';
+import { schema } from './editorSchema';
 import { previousSchema } from './photoHarness';
 import { revealChange } from './undoReveal';
-import { subscribeStepPopped, UndoTimeline, type TimelineDocs } from './undoTimeline';
-import { createUndoRunner } from './undoTimelineUi';
+import { setUndoRunner, subscribeStepPopped, UndoTimeline, type StepKind, type TimelineDocs } from './undoTimeline';
+import { createUndoRunner, takesUndoShortcut } from './undoTimelineUi';
 
 const devices: Device[] = [];
 const mounted: Editor[] = [];
@@ -636,5 +640,122 @@ describe('la línea de tiempo', () => {
     await runner.run('redo');
     expect(yText(app.doc!)).toContain('nuevo');
     expect(yText(app.doc!)).toContain(' deB');
+  });
+});
+
+describe('observaciones de la auditoría', () => {
+  it('A15: el deshacer del navegador (menú Edición, gesto de iOS) en el editor va a la línea de tiempo; sin ella, al editor', () => {
+    const doc = new Y.Doc();
+    const E = BlockNoteEditor.create(
+      withCollaboration({
+        schema,
+        collaboration: { fragment: doc.getXmlFragment(CONTENT_FRAGMENT), user: { name: 'u', color: '#000' } },
+        extensions: pageEditorExtensions(null),
+      } as never),
+    ) as unknown as Editor;
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    E.mount(el);
+    mounted.push(E);
+    type(E, 'uno');
+    const fire = (inputType: string) => {
+      const ev = new InputEvent('beforeinput', { inputType, bubbles: true, cancelable: true });
+      view(E).dom.dispatchEvent(ev);
+      return ev;
+    };
+    const calls: [StepKind, Element | null][] = [];
+    const off = setUndoRunner((kind, at) => {
+      calls.push([kind, at]);
+      return true;
+    });
+    try {
+      expect(fire('historyUndo').defaultPrevented).toBe(true);
+      fire('historyRedo');
+    } finally {
+      off();
+    }
+    expect(calls).toEqual([
+      ['undo', view(E).dom],
+      ['redo', view(E).dom],
+    ]);
+    // La línea de tiempo no lo hizo: "uno" sigue. Sin nadie anotado, el editor deshace como siempre.
+    expect(yText(doc)).toContain('uno');
+    fire('historyUndo');
+    expect(yText(doc)).not.toContain('uno');
+  });
+
+  it('A2: con un diálogo abierto, ⌘Z no es de la línea de tiempo', () => {
+    const owns = { ownsElement: () => true };
+    const field = document.createElement('div');
+    document.body.appendChild(field);
+    expect(takesUndoShortcut(owns, field)).toBe(true);
+    const dialog = document.createElement('div');
+    dialog.setAttribute('aria-modal', 'true');
+    document.body.appendChild(dialog);
+    expect(takesUndoShortcut(owns, field)).toBe(false);
+    dialog.remove();
+    const title = document.createElement('textarea');
+    document.body.appendChild(title);
+    expect(takesUndoShortcut(owns, title)).toBe(false);
+  });
+
+  it('A8: el tope nunca suelta la página en pantalla aunque sus pasos sean los más viejos', async () => {
+    const { d, ids, app, timeline } = await setup(['A', 'B', 'C'], { maxPages: 2 });
+    const [A, B, C] = ids;
+    await app.go(A);
+    type(app.editor!, 'uno');
+    // Otros editores (sin pantalla para la app) escriben en B y en C mientras A sigue montada.
+    for (const id of [B, C]) {
+      const doc = await d.docs.open(id, { seed: true });
+      const E = mountEditor(doc, 'a');
+      mounted.push(E);
+      const detach = timeline.attach(id, doc, undoManager(E), { editable: () => true, dom: view(E).dom });
+      type(E, 'x');
+      detach();
+      d.docs.close(id);
+    }
+    expect(timeline.stepsOf(A).undo).toBe(1);
+    expect(timeline.stepsOf(B).undo).toBe(0);
+    expect(timeline.stepsOf(C).undo).toBe(1);
+  });
+
+  it('O3: lo que olvida el tope se avisa cuando ⌘Z llega ahí (una vez)', async () => {
+    const { ids, app, runner, notes } = await setup(['A', 'B', 'C'], { maxPages: 2 });
+    for (const id of ids) {
+      await app.go(id);
+      type(app.editor!, 'x');
+    }
+    await runner.run('undo'); // C
+    await runner.run('undo'); // B
+    expect(notes).toEqual(['Undone in “B”']);
+    await runner.run('undo'); // A se olvidó por el tope
+    expect(notes.at(-1)).toBe("Older changes can't be undone: undo keeps your last 2 pages and 1000 changes in this tab.");
+    await runner.run('undo');
+    expect(notes).toHaveLength(2);
+  });
+
+  it('O2: si después de cruzar no cambió nada a la vista, no dice "Undone in…"', async () => {
+    const notes: string[] = [];
+    let page = 'C';
+    const same = { eq: () => true };
+    const fake = {
+      peek: () => ({ kind: 'page', pageId: 'B' }),
+      activePage: () => page,
+      whenAttached: async () => true,
+      mounted: () => ({ snapshot: () => same, reveal: () => undefined }),
+      topRemembersCursor: () => false,
+      step: () => 'done',
+    } as unknown as UndoTimeline;
+    const runner = createUndoRunner({
+      timeline: fake,
+      currentPage: () => page,
+      currentProject: () => 'P',
+      title: (id) => id,
+      blocked: () => null,
+      go: (id) => void (page = id),
+      notify: (m) => void notes.push(m),
+    });
+    await runner.run('undo');
+    expect(notes).toEqual(['Nothing to undo there: someone else already changed it. Ctrl+Z again for the previous change.']);
   });
 });

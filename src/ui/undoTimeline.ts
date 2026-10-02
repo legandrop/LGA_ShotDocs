@@ -76,14 +76,20 @@ interface PageHistory {
   offs: (() => void)[];
 }
 
-/** Pasos de una página que se perdieron (su documento se rearmó): el próximo ⌘Z que llegue ahí lo avisa. */
+/**
+ * Pasos que se perdieron: los de una página cuyo documento se rearmó (`reloaded`) o los que olvidó el tope (`limit`, uno
+ * por proyecto, sin página). El próximo ⌘Z que llegue ahí lo avisa.
+ */
 interface LostMark {
   pageId: string;
   project: string | null;
   seq: number;
+  reason: LostReason;
 }
 
-export type NextStep = { kind: 'page'; pageId: string } | { kind: 'lost'; pageId: string } | null;
+export type LostReason = 'reloaded' | 'limit';
+
+export type NextStep = { kind: 'page'; pageId: string } | { kind: 'lost'; pageId: string; reason: LostReason } | null;
 
 /**
  * - `done`: deshizo (o rehízo) algo;
@@ -270,17 +276,23 @@ export class UndoTimeline {
     }
     if (kind === 'undo') {
       for (const mark of this.lost) {
-        if ((this.options.projectOf(mark.pageId) ?? mark.project) !== project || mark.seq <= bestSeq) continue;
+        const markProject = mark.reason === 'limit' ? mark.project : (this.options.projectOf(mark.pageId) ?? mark.project);
+        if (markProject !== project || mark.seq <= bestSeq) continue;
         bestSeq = mark.seq;
-        best = { kind: 'lost', pageId: mark.pageId };
+        best = { kind: 'lost', pageId: mark.pageId, reason: mark.reason };
       }
     }
     return best;
   }
 
-  /** Saca la marca de pasos perdidos de esa página (ya se avisó). */
-  consumeLost(pageId: string): void {
-    this.lost = this.lost.filter((m) => m.pageId !== pageId);
+  /** Saca la marca de pasos perdidos (ya se avisó): la de esa página, o la del tope en ese proyecto. */
+  consumeLost(pageId: string, reason: LostReason = 'reloaded', project: string | null = null): void {
+    this.lost = this.lost.filter((m) => (reason === 'limit' ? !(m.reason === 'limit' && m.project === project) : !(m.reason === 'reloaded' && m.pageId === pageId)));
+  }
+
+  /** Los topes (para el aviso). */
+  limits(): { pages: number; steps: number } {
+    return { pages: this.maxPages, steps: this.maxSteps };
   }
 
   /** Cuántos pasos para deshacer y rehacer tiene una página (para las pruebas y la memoria). */
@@ -445,8 +457,8 @@ export class UndoTimeline {
     if (lost) {
       const seq = Math.max(-1, ...this.stack(h, 'undo').map((i) => this.order.get(i) ?? 0));
       if (seq >= 0) {
-        this.lost = this.lost.filter((m) => m.pageId !== h.pageId).slice(-(MAX_LOST - 1));
-        this.lost.push({ pageId: h.pageId, project: this.projectOfHistory(h), seq });
+        this.lost = this.lost.filter((m) => !(m.reason === 'reloaded' && m.pageId === h.pageId)).slice(-(MAX_LOST - 1));
+        this.lost.push({ pageId: h.pageId, project: this.projectOfHistory(h), seq, reason: 'reloaded' });
       }
     }
     for (const off of h.offs) off();
@@ -478,6 +490,7 @@ export class UndoTimeline {
         }
       }
       if (!oldest) break;
+      if (oldest.kind === 'undo') this.markLimit(oldest.h, oldest.seq);
       this.stack(oldest.h, oldest.kind).shift();
       total--;
       if (!oldest.h.um && this.size(oldest.h) === 0) this.drop(oldest.h, false);
@@ -490,9 +503,19 @@ export class UndoTimeline {
     const candidates = withSteps.filter((h) => !h.um).sort((a, b) => newest(a) - newest(b));
     for (const h of candidates) {
       if (extra <= 0) break;
+      const seq = Math.max(-1, ...this.stack(h, 'undo').map((i) => this.order.get(i) ?? 0));
+      if (seq >= 0) this.markLimit(h, seq);
       this.drop(h, false);
       extra--;
     }
+  }
+
+  /** Lo que olvida el tope se avisa cuando ⌘Z llega ahí (auditoría de la entrega 1, O3): una marca por proyecto. */
+  private markLimit(h: PageHistory, seq: number): void {
+    const project = this.projectOfHistory(h);
+    const prev = this.lost.find((m) => m.reason === 'limit' && m.project === project);
+    if (prev) prev.seq = Math.max(prev.seq, seq);
+    else this.lost.push({ pageId: '', project, seq, reason: 'limit' });
   }
 }
 
