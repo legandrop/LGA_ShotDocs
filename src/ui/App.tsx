@@ -10,11 +10,14 @@ import {
   configOf,
   loadWorkspaces,
   resolveInvite,
+  sameOrigin,
   setActive,
   updateWorkspaces,
   type DeviceWorkspace,
 } from '../workspaces';
+import { activeLink, rememberLink, readLinks, takeLinkHash, linkDomain, type LinkEntry, type LinkPayload } from '../linkMode';
 import { LegalPage } from './Legal';
+import { LinkApp, LinkConfirm } from './LinkApp';
 import { lazyPart, Part } from './lazyPart';
 import { Login } from './Login';
 import { TooltipLayer } from './Tooltip';
@@ -46,6 +49,10 @@ export function App() {
 
 type Start =
   | { kind: 'open'; entry: DeviceWorkspace }
+  /** Un link público (Docs/Doc_Link_Publico.md): sin cuenta, con su propio cliente sin sesión. */
+  | { kind: 'link'; link: LinkEntry }
+  /** Un link público de un servidor que el dispositivo no conoce: se pregunta antes, con el dominio. */
+  | { kind: 'linkConfirm'; payload: LinkPayload; fallback: Start }
   /** No hay ningún workspace en el dispositivo. */
   | { kind: 'welcome' }
   /** Se llegó con un link de invitación de un workspace que el dispositivo no tiene: se pregunta antes. */
@@ -68,6 +75,21 @@ function computeStart(): Start {
   const build = buildWorkspace();
   const list = loadWorkspaces(build ? { url: build.url, publishableKey: build.publishableKey } : null);
   const fallback = activeWorkspace(list);
+  // Un link público (P1): se lee y se borra de la barra antes que nada. Abre siempre el modo link, sin usar ninguna
+  // sesión (P14, simplificado: ver el informe de la entrega 1).
+  const link = takeLinkHash();
+  if (link.broken) setArrivalNotice(t('link.broken'));
+  if (link.payload) {
+    const payload = link.payload;
+    const known =
+      list.workspaces.some((w) => sameOrigin(w.url, payload.u)) || readLinks().links.some((l) => sameOrigin(l.url, payload.u));
+    const otherwise: Start = fallback ? { kind: 'open', entry: fallback } : { kind: 'welcome' };
+    if (!known) return { kind: 'linkConfirm', payload, fallback: otherwise };
+    return { kind: 'link', link: rememberLink(payload) };
+  }
+  // Sin workspaces en el dispositivo, el último link abierto (quien solo entra con links vuelve a lo suyo).
+  const lastLink = activeLink();
+  if (!fallback && lastLink) return { kind: 'link', link: lastLink };
   const { payload, broken } = takeInviteHash();
   if (broken) setArrivalNotice(t('invite.incomplete'));
   if (payload) {
@@ -106,6 +128,16 @@ function Screen() {
       />
     );
   }
+  if (start.kind === 'linkConfirm') {
+    return (
+      <LinkConfirm
+        domain={linkDomain({ url: start.payload.u })}
+        onOpen={() => setStart({ kind: 'link', link: rememberLink(start.payload) })}
+        onCancel={() => setStart(start.fallback)}
+      />
+    );
+  }
+  if (start.kind === 'link') return <LinkApp entry={start.link} />;
   if (start.kind === 'welcome') return <Welcome onAdded={openNew} />;
   return <Opened entry={start.entry} />;
 }

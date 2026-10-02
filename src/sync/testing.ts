@@ -193,9 +193,21 @@ export class FakeServer {
     return !this.team || (this.pageLevel(uid, pageId) >= 3 && this.role(uid) !== 'guest');
   }
 
-  /** `private.has_plain_readers`: alguien activo con Ver o Comentar, o un invitado con cualquier nivel. */
+  /**
+   * Los links públicos vivos (Docs/Doc_Link_Publico.md), por token: su página y quién lo creó. Los usa el cliente del modo
+   * link de las pruebas (`linkTesting.ts`).
+   */
+  readonly publicLinks = new Map<string, { id: string; pageId: string; createdBy: string; revoked?: boolean }>();
+
+  /** `private.has_plain_readers`: alguien activo con Ver o Comentar, un invitado con cualquier nivel, o un link vivo. */
   hasPlainReaders(pageId: string): boolean {
     if (!this.team) return false;
+    for (const l of this.publicLinks.values()) {
+      if (l.revoked) continue;
+      for (let cur: string | null = pageId, n = 0; cur && n < 10000; cur = this.pages.get(cur)?.parent_id ?? null, n++) {
+        if (cur === l.pageId) return true;
+      }
+    }
     for (const [uid, m] of this.members) {
       if (m.removed_at) continue;
       const level = this.pageLevel(uid, pageId);

@@ -236,6 +236,11 @@ export interface PorteroDeps {
   send?: PartSender;
   /** El token de la sesión de Supabase; se pide en cada pedido porque se renueva solo. */
   token?: () => Promise<string | null>;
+  /**
+   * Un link público (Docs/Doc_Link_Publico.md, 3.9): sus headers van en cada pedido en lugar de una sesión, que nunca
+   * se manda. El portero le pregunta a la base con la clave publicable y el link.
+   */
+  link?: Record<string, string>;
   /** La espera entre reintentos (las pruebas no esperan de verdad). */
   wait?: (ms: number, signal?: AbortSignal) => Promise<void>;
   /** El reloj (las pruebas lo adelantan). */
@@ -420,6 +425,7 @@ export function localDay(date: Date = new Date()): string {
 export class Portero {
   private readonly http: typeof fetch;
   private readonly token: () => Promise<string | null>;
+  private readonly link: Record<string, string> | null;
   private readonly wait: (ms: number, signal?: AbortSignal) => Promise<void>;
   private readonly send: PartSender | null;
   private readonly now: () => number;
@@ -439,6 +445,7 @@ export class Portero {
     // Quien pasa su propio `fetch` quiere todos los pedidos por ahí (las pruebas): las partes no se desvían.
     this.send = deps.send ?? (!deps.fetch && typeof XMLHttpRequest !== 'undefined' ? xhrSend : null);
     this.token = deps.token ?? (async () => null);
+    this.link = deps.link ?? null;
     this.wait = deps.wait ?? sleep;
     this.now = deps.now ?? (() => Date.now());
   }
@@ -804,11 +811,16 @@ export class Portero {
     const interrupted = (): unknown =>
       init.signal?.aborted ? abortError(init.signal) : watch?.stalled ? new StalledError() : null;
     try {
-      const token = await untilAborted(this.token(), signal).catch((err: unknown) => {
-        throw interrupted() ?? err;
-      });
-      if (!token) throw new PorteroError(t('portero.signIn'), 401);
-      const headers: Record<string, string> = { Authorization: `Bearer ${token}`, ...init.headers };
+      // Con un link, sus headers y nunca una sesión.
+      const token = this.link
+        ? null
+        : await untilAborted(this.token(), signal).catch((err: unknown) => {
+            throw interrupted() ?? err;
+          });
+      if (!token && !this.link) throw new PorteroError(t('portero.signIn'), 401);
+      const headers: Record<string, string> = this.link
+        ? { ...this.link, ...init.headers }
+        : { Authorization: `Bearer ${token}`, ...init.headers };
       let body: BodyInit | null = init.body ?? null;
       if (init.json !== undefined) {
         headers['Content-Type'] = 'application/json';
