@@ -73,11 +73,11 @@ Punto de entrada de la documentación. Todo lo de `Docs/` está en castellano, s
 - **Base de datos.** Las migraciones están en `supabase/migrations/` y las pruebas de permisos en
   `supabase/tests/`. `node scripts/db-migrate.mjs --test` aplica lo pendiente y corre las pruebas (ver
   `Doc_Supabase.md`).
-- **Pruebas de la app.** `npm test` corre las 2512 pruebas (v0.115): sincronización (`src/sync/`, algunas con el
+- **Pruebas de la app.** `npm test` corre las 2593 pruebas (v0.0XX; 5 se saltan): sincronización (`src/sync/`, algunas con el
   editor real, en jsdom), interfaz (`src/ui/`; las de editar a la vez son `src/ui/collab*.test.ts`, ver
   `Doc_Colaboracion.md`; las de fotos en línea corren 300 agendas al azar por caso y suman alrededor de un
   minuto y medio), el cliente del portero (`src/media/`), el portero
-  (`portero/src/`), la ayuda (`src/help/`), la recorrida y la página de práctica (`src/tutorial/`), el importador de Coda (`src/import/`), exportar (`src/export/`) y los comandos que preparan un workspace y exportan de Coda (`scripts/*.test.mjs`, sin red). `npm run typecheck`
+  (`portero/src/`), la ayuda (`src/help/`), la recorrida y la página de práctica (`src/tutorial/`), el importador de Coda (`src/import/`), exportar (`src/export/`), el asistente (`src/assistant/`, con la política de contenido en `src/csp.test.ts`) y los comandos que preparan un workspace y exportan de Coda (`scripts/*.test.mjs`, sin red). `npm run typecheck`
   revisa los tipos de la app pero no los del portero: esos van con `npx tsc -p portero --noEmit`.
 
 ## Direcciones de la app
