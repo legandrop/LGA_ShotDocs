@@ -128,6 +128,8 @@ const MENTIONS_SHARE = '0.125';
 const PHOTO_MARKUP = '0.116';
 /** Anotar las fotos en la compu (P.20, entrega 2). El número lo pone quien publica. */
 const ANNOTATE = '0.123';
+/** Anotar con el dedo y con el lápiz (P.20, entrega 3). El número lo pone quien publica. */
+const ANNOTATE_TOUCH = '0.0XX';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -373,6 +375,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     ],
     words: ['annotate', 'anotar', 'flecha', 'arrow', 'círculo', 'circle', 'texto', 'lápiz', 'pencil', 'marker', 'marcador', 'número', 'framerev', 'dibujar', 'draw'],
     since: ANNOTATE,
+  },
+  {
+    id: 'photosAnnotateTouch',
+    section: 'photos',
+    title: 'help.photosAnnotateTouch.title',
+    text: 'help.photosAnnotateTouch.text',
+    words: ['annotate', 'anotar', 'dedo', 'finger', 'pellizco', 'pinch', 'zoom', 'ampliar', 'lápiz', 'pencil', 'apple pencil', 'ipad', 'iphone', 'teléfono', 'phone', 'touch'],
+    since: ANNOTATE_TOUCH,
   },
   { id: 'photosPhone', section: 'photos', title: 'help.photosPhone.title', text: 'help.photosPhone.text', since: BEFORE_HELP },
   {

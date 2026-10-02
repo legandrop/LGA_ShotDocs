@@ -1,27 +1,14 @@
 # Changelog — LGA Shot Docs
 
-v0.128 :
+v0.0XX :
 
-Carpetas con guiones bajos (D3 → B) y dos diseños. Las carpetas que se sueltan en una página llegaban al Drive del dueño
-con espacios (`Día 2 - Puerto`), por la regla de v0.089; Lega decidió que ninguna carpeta del Drive lleve espacios.
-`driveFolderName` del portero vuelve a pasar cada tramo de espacios a `_`, también en subcarpetas, y conserva lo que ya
-protegía (controles, ZWJ entre emojis, corte por grafema); lo ya subido no se renombra y se encuentra por su marca.
-Diseños sin código, auditados y corregidos: **⌘Z en el orden en que editaste** (P.26, `Doc_Deshacer.md`: una línea de
-tiempo por proyecto arriba de las pilas de Yjs, con el reemplazo del proyecto adentro; antes, investigar B.21) y el
-**dictado al reporte** (P.27, `Doc_Dictado.md`: micrófono propio que transcribe con el proveedor de la persona y una
-lista de cambios con fila y columna que valida la app, con vista previa y deshacer).
-[ Carpetas con guiones bajos (D3 → B) y los diseños de deshacer y dictado ]
-
-v0.127 :
-
-Compactar (B.9), entrega 1: leer snapshots. Un dispositivo nuevo baja todas las filas de cada página, y una página muy
-editada llega a miles. Nueva migración `20261019120000_compactar_leer.sql` (`schema_version` 17, snapshots apagados):
-`page_snapshots` y la reserva en `page_compaction`, sin permisos directos; `pull_page_content`, que con un snapshot
-vigente lo manda primero y si no llama a `pull_page_updates`; y las funciones de quien compacta, para la entrega 2.
-Solo lo recibe quien ve lo borrado. En la app, `pullContent` (apagados, el mismo pedido de siempre), la época de
-contenido en `DocState`, un snapshot ilegible que no mueve el cursor y el reinicio de la página si su cadena se
-invalida. Sin snapshots, los pedidos son los de antes. Pruebas SQL en rollback con 60 mutantes y 32 del dispositivo.
-[ Compactar, entrega 1 - leer snapshots: la migración apagada, pull_page_content, la época de contenido y sus pruebas ]
+Anotar fotos con el dedo y con el lápiz (P.20, entrega 3 de `Doc_Anotar_Fotos.md`). En el teléfono el anotador era el
+de la compu: barra chica arriba, un dedo dibujaba y no había cómo ampliar; el iPad no distinguía el lápiz. Ahora, en
+pantallas táctiles, las herramientas van en una tira abajo y el estilo en una hoja que abre el punto de color; dos
+dedos amplían y mueven sin dibujar (lo del primer dedo se descarta: se escribe al soltar); el lápiz prende *Only the
+pencil draws* y el dedo mueve, la palma no dibuja; el texto se escribe en una caja común que abre el teclado en el
+toque. Tocar un tirador sin moverlo cambiaba la forma: ya no. Auditada: lo escrito ya no se pierde si la pantalla cambia con la caja abierta, y una forma chica se mueve con el dedo.
+[ Anotar fotos, entrega 3 - el dedo, dos dedos para ampliar, el lápiz del iPad, la tira, la hoja y el texto del teléfono ]
 
 v0.126 :
 

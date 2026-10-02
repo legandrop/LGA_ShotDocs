@@ -73,6 +73,21 @@ export const annotator = {
   'annotate.baseFull': { en: "This page is too large to add annotations", es: "Esta página es demasiado grande para sumar anotaciones" },
   'annotate.fit': { en: "Fit", es: "Encuadrar" },
   'annotate.fitTip': { en: "**Fit**\nThe whole photo\n{key} · scroll to zoom · hold {pan} and drag to move", es: "**Encuadrar**\nLa foto entera\n{key} · la rueda amplía · {pan} apretada y arrastrar mueve" },
+  // El dedo y el lápiz (entrega 3).
+  'annotate.style': { en: "Color and thickness", es: "Color y grosor" },
+  'annotate.closeStyle': { en: "Close", es: "Cerrar" },
+  'annotate.styleNothing': {
+    en: "Choose a tool, or tap a shape with Select, to change its color and thickness.",
+    es: "Elegí una herramienta, o tocá una forma con Elegir, para cambiar su color y su grosor.",
+  },
+  'annotate.penOnly': { en: "Only the pencil draws", es: "Solo dibuja el lápiz" },
+  'annotate.penOnlyTip': {
+    en: "Your finger moves and zooms the photo; turns on by itself the first time you use a pencil",
+    es: "El dedo mueve y amplía la foto; se prende sola la primera vez que usás un lápiz",
+  },
+  'annotate.fitTipTouch': { en: "**Fit**\nThe whole photo · pinch with two fingers to zoom", es: "**Encuadrar**\nLa foto entera · pellizcá con dos dedos para ampliar" },
+  'annotate.textHintTouch': { en: "Type the text", es: "Escribí el texto" },
+  'annotate.textDone': { en: "OK", es: "OK" },
 } satisfies Dict;
 
 register(annotator);
