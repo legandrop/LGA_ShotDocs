@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useT } from '../i18n';
 import '../i18n/lazy/assistant';
 import { useServices } from '../services';
-import { errorText } from './AssistantPanel';
+import { errorText } from './errorText';
 import { closeAssistantSettings } from './assistantUi';
 import { forgetKey, loadSettings, readKey, sameDestination, saveSettings, type AssistantSettings as Saved } from './keyStore';
 import { KeySyncSection } from './KeySyncSection';

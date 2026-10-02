@@ -8,6 +8,7 @@ import { pageFormat, sizeLabel } from './pageFormat';
 import { ownSplit, splitEnabled } from './titles';
 import {
   AssistantIcon,
+  MicIcon,
   CameraIcon,
   DayReportIcon,
   HistoryIcon,
@@ -153,6 +154,8 @@ export function PageMenu(props: {
   onHistory?: () => void;
   /** "Assistant" (Doc_Asistente.md, A1): con la página abierta en el editor. */
   onAssistant?: () => void;
+  /** *Dictate to report* (Doc_Dictado.md, V1): con la página abierta en el editor. */
+  onDictate?: () => void;
 }) {
   const tree = useTree();
   const perms = usePermissions();
@@ -297,6 +300,20 @@ export function PageMenu(props: {
         >
           <AssistantIcon />
           {tr('pageMenu.assistant')}
+        </button>
+      )}
+      {/* Dictar al reporte (Docs/Doc_Dictado.md, V1): una nota informal que el asistente ubica en la página. */}
+      {props.onDictate && (
+        <button
+          role="menuitem"
+          data-tip={shortcutLabel('dictate')}
+          onClick={() => {
+            props.onClose();
+            props.onDictate?.();
+          }}
+        >
+          <MicIcon />
+          {tr('pageMenu.dictate')}
         </button>
       )}
       {/* El historial de versiones (P.18, Docs/Doc_Historial.md): quién cambió la página, cuándo, y restaurar. */}

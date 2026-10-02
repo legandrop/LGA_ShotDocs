@@ -23,7 +23,7 @@ import { useWorkspace } from '../workspace';
 import { isFindSelectionTarget, openFindBar } from './findUi';
 import { shortcutLabel } from './shortcuts';
 import { disposeSearchSession, isSearchShortcut, otherModalOpen, takesSearchShortcut, useSearchSession } from './projectSearchUi';
-import { ArchiveIcon, DownloadIcon, MenuIcon, MoreIcon, PlusIcon, SearchIcon } from './icons';
+import { ArchiveIcon, DownloadIcon, MenuIcon, MicIcon, MoreIcon, PlusIcon, SearchIcon } from './icons';
 import { menuBelow, PageMenu, type MenuPosition } from './menus';
 import { MoveDialog } from './MoveDialog';
 import { PageFormatDialog } from './PageFormatDialog';
@@ -55,6 +55,8 @@ import { ExportHost } from './ExportHost';
 import { TrashView } from './TrashView';
 import { AssistantHost } from '../assistant/AssistantHost';
 import { openAssistant } from '../assistant/assistantUi';
+import { DictationHost } from '../dictation/DictationHost';
+import { openDictation } from '../dictation/dictationUi';
 import { downloadUnsynced } from './unsyncedDownload';
 import { usePendingCount } from './usePendingCount';
 import { errorMessage } from '../sync/types';
@@ -393,6 +395,12 @@ export function Shell() {
                 </button>
               )}
               {pageId && current && <CommentsToggle pageId={pageId} />}
+              {/* Dictar al reporte (Docs/Doc_Dictado.md, V1). En el teléfono es el botón redondo de abajo (DictationHost). */}
+              {pageId && current && (
+                <button className="icon-button dictate-top" aria-label={tr('shell.dictate')} data-tip={tr('shell.dictateTip', { shortcut: shortcutLabel('dictate') })} onClick={() => void openDictation()}>
+                  <MicIcon size={18} />
+                </button>
+              )}
               {pageId && (
                 <button
                   className="icon-button"
@@ -433,6 +441,7 @@ export function Shell() {
           onShare={perms.canSharePage(pageId) ? () => setSharing({ pageId }) : undefined}
           onHistory={historyAllowed ? () => openHistory(pageId) : undefined}
           onAssistant={() => void openAssistant()}
+          onDictate={() => void openDictation()}
           onTrash={async () => {
             // Primero se manda a la papelera y después se sale: si no, el inicio vuelve a la última página.
             await tree.trash(pageId);
@@ -461,6 +470,8 @@ export function Shell() {
       <HistoryHost />
       {/* El asistente (Docs/Doc_Asistente.md, A1): su atajo, el panel y los ajustes. */}
       <AssistantHost />
+      {/* Dictar al reporte (Docs/Doc_Dictado.md, V1): su atajo, el botón del teléfono y la hoja. */}
+      <DictationHost />
       <TourHost />
       <InstallHost />
       <ReplaceProgressHost />

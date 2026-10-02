@@ -1,6 +1,7 @@
 # Dictado por voz y notas informales que se ubican en el reporte
 
-**Estado: diseño, sin código** (roadmap P.27; pedido de Lega del 2026-10-02). Se diseñó contra `main` v0.123, con el
+**Estado: entrega V1 implementada (v0.135)**; V2 a V4, diseño. Cómo quedó V1 y lo que cambió al implementarla: sección
+15, al final. Roadmap P.27; pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.123, con el
 asistente A1 publicado (v0.118) y A2 terminado en su rama (`lega/asistente-a2`, en auditoría). Las decisiones están
 propuestas (DI1 a DI9, sección 13) y valen hasta que Lega diga otra cosa. Lo medido está en "Cómo se midió", al final;
 los precios y el CORS se verificaron el 2026-10-02 en las páginas oficiales y con pedidos sin clave. **Auditado el mismo
@@ -411,7 +412,7 @@ contesta midiendo (10.3): un modelo barato puede equivocarse más de fila, y la 
 - **El botón *Dictate*:** en el teléfono, un botón redondo de 56 px abajo a la derecha de la página (encima del
   indicador de sincronización), solo con Editar y la política que lo permite; en la compu, en la barra de la página y
   con **Ctrl/⌘+Alt+Shift+D** (registro `dictate`, con `modPressed`; ⌘⌥⇧D en la Mac, sin AltGr; a verificar contra los
-  atajos del sistema). Su tooltip dice solo el atajo.
+  atajos del sistema). Su tooltip, como el de los otros botones de solo ícono, dice el nombre y el atajo.
 - **La hoja *Dictate to report*** (en el teléfono, desde abajo, sin tapar la fila resaltada; en la compu, el panel de la
   derecha, el mismo lugar que el asistente): el campo de texto (donde el teclado dicta), el micrófono grande (V3), la
   chapita del plano (V4), *Place* y *Save for later*; después, la vista previa con *Apply*, *Discard*, *Try again* y
@@ -810,3 +811,76 @@ roadmap pasó a P.27 (P.26 es el diseño de deshacer).
 **Notas de la re-verificación, para V1:** las filas vacías tienen todas el mismo rótulo (vacío), así que comparar rótulos
 no las distingue: el validador agrupa los cambios por la *Slate* que escribe la nota y la vista previa muestra el destino
 como *row 3 (new: 12 · 010 · 4)*.
+
+## 15. Cómo quedó V1 (v0.135)
+
+**Qué hay.** *Dictate to report*: el botón del micrófono en la barra de la página (en la compu), el redondo de 56 px abajo
+a la derecha (en el teléfono, solo con Editar y si la política recordada no es *Off*), *Dictate to report* en el menú de
+la página y Ctrl/⌘+Alt+Shift+D (registro `dictate`). La hoja ocupa el lugar del panel del asistente (abrir uno cierra el
+otro) y usa su proveedor, su clave, su política y su arnés. Ayuda: *Dictate to report* y *Dictation with your keyboard*;
+atajos `dictate` y `dictationPlace` (Ctrl/⌘+Enter ubica; con la vista previa, `assistantApply` aplica).
+
+**Archivos.** `src/dictation/`: `pageMap.ts` (el mapa y la foto), `prompt.ts` (el pedido), `answer.ts` (el validador
+de 5.4 y el destino armado por la app), `applyPlan.ts` (la guarda por operación, aplicar en un paso, *Undo* y *Add to
+Summary*), `drafts.ts` (la nota en el dispositivo), `DictationPanel.tsx` (la hoja), `DictationHost.tsx` y
+`dictationUi.ts` (primera carga: el atajo, el botón y el estado). `src/assistant/policyCache.ts` sacó de `policy.ts` la
+política recordada, para que el botón del teléfono la mire sin bajar los proveedores.
+
+**Lo que cambió al implementar:**
+
+- **La respuesta va como JSON en el texto con los cuatro proveedores**, no con el modo de salida estructurada de cada
+  uno (5.3): sin una clave no se pudo probar ningún parámetro nuevo, y uno mal puesto rompe el pedido para todos. El
+  validador lee el JSON aunque venga dentro de un bloque de código. Medirlo con la clave (10.3) decide si vale sumarlo.
+- **La sección de un plano se copia de la página**: la primera sección `Shot …` que tenga casillas (es la de la plantilla
+  de la que salió la página, de fábrica o propia), y si no hay, la de fábrica en el idioma de la página. No se lee la
+  plantilla por `template_id` (otra página, con su permiso y su carga).
+- **`appendText`**: en un título, al final de su sección (en su primer párrafo vacío, o en uno nuevo después del último
+  bloque con algo); en un bloque vacío, adentro; si no, un bloque nuevo del mismo tipo debajo (párrafo, viñeta, casilla
+  sin tildar). *Add to Summary* usa lo mismo con *Summary*, o el final de la página si no hay *Summary*.
+- **El lugar en la página se marca con un recuadro encima** (no con la API de resaltados): una celda vacía no tiene
+  texto que resaltar. Con la vista previa la página va al primer cambio; tocar un destino lleva a ese lugar (en el
+  teléfono, arriba, sobre la hoja).
+- **La nota en el dispositivo**: base propia `shotdocs-dictation` con `drafts` y, ya creado y vacío, `notes` (la cola de
+  V2, así V2 no sube la versión de la base). Un borrador por correo, workspace y página: el texto mientras se escribe y lo
+  que quedó en *Couldn't place*, y **la última nota aplicada tal como se escribió** (*Your note*, con *Copy*): se ve en
+  la vista previa y sigue a la vista, también al cerrar y abrir, hasta *Done* o *New note*, por si el modelo se salteó
+  una parte sin decirlo (B1 de la auditoría). Lo pendiente sigue hasta *Add to Summary* de cada pedazo o *Done* (que
+  pregunta *Discard N unplaced items?*). *Save for later* (sin red) cierra la hoja con la nota guardada.
+- ***Undo* de la hoja** deshace el paso de *Apply* solo si sigue siendo el último de la página (si no, dice que se
+  deshaga con Ctrl/⌘+Z), y devuelve la nota al campo y saca de *Couldn't place* lo que había agregado ese *Apply*.
+- **`ask` con cambios**: si la respuesta pregunta, los cambios que trae se ignoran; el segundo pedido lleva la nota, la
+  respuesta y un mapa nuevo. Las opciones que son filas muestran su *Slate* (o *row N*).
+- **Las correcciones**: el pedido lleva `RECENT` con lo aplicado en esa página en los últimos 10 minutos (destino, antes
+  y después), en memoria de la pestaña.
+- **Replaces** muestra el valor entero que se toca (lo que hay entre los `·` de una celda combinada: `35 mm`), no solo la
+  palabra.
+- Quedan para después, como dice el diseño: *Insert at cursor* (V3, necesita la transcripción), la chapita del plano
+  activo (V4) y la cola sin red (V2).
+
+**Versiones viejas.** Escribe texto, `checked`, filas de tabla (un nodo `tableRow` insertado) y títulos y casillas: una
+prueba abre lo aplicado con el esquema publicado (`editorSchemaMain`) y no cambia nada. **No hace falta subir
+`min_app_version`.** Sin migración.
+
+- **Correcciones de la auditoría de V1:** un solo cambio por lugar también con `appendText` (escribir y agregar en el
+  mismo párrafo vacío chocaban al aplicar); un *Apply* que falla a mitad no deja nada en rehacer; *Row chosen by the
+  assistant* mira también el setup cuando la nota lo dice pegado al plano («12_010 setup 4», «12_010_4»); en las filas
+  vacías, si la nota le puso la *Slate* a una, lo que vaya a otra fila vacía sin *Slate* va a *Couldn't place*; lo
+  deshecho con *Undo* sale de `RECENT`.
+- **Re-verificación (N1 a N3):** después de *Apply*, los botones que aparecen (*Done* primero, *Undo* al final) no toman
+  un toque en los primeros 600 ms, así un doble toque en *Apply* no deshace lo aplicado; varios `appendText` al mismo
+  lugar se aceptan y quedan en el orden de la respuesta, cada uno debajo del anterior (escribir y agregar en el mismo
+  lugar sigue sin aceptarse); la vuelta atrás de un *Apply* a medias saca de rehacer solo lo que dejan sus propios
+  pasos, aunque antes hubiera algo para rehacer.
+
+**Pruebas.** 69 de Vitest en `src/dictation/` (el mapa, el validador, aplicar con el editor real y con dos editores sin
+red, la hoja con un proveedor simulado y dónde aparece) más las del registro de atajos y la ayuda. Recorrido en Chromium
+sin login con un proveedor falso local: 42 de 42 (R1, R2, R7, *ask*, solo ver, *Off*, sin red, teléfono de 390 px y
+castellano). Mutantes del autor: 13 de 14 mueren; el que vive, insertar la fila con `updateBlock` de la tabla, es
+equivalente hoy: y-prosemirror compara las filas iguales y no las rehace, así que lo que otro escribe sin red en otra
+fila queda igual (la prueba lo comprueba); se deja la inserción como un nodo, que no depende de ese diff. Mutantes de la
+auditoría y de sus correcciones: 24 de 25, y los 4 de la re-verificación mueren; el que vive, Ctrl+Enter sin permiso,
+es equivalente (`applyChanges` también mira el permiso).
+
+**Lo que prueba Lega** (no se puede acá): la calidad con una clave real (10.3), el dictado del teclado dentro de una
+celda y de un comentario en el iPhone y en Android, y Ctrl+Alt+Shift+D / ⌘⌥⇧D en navegadores
+reales (en Firefox para la Mac, Option puede llegar como AltGraph y el atajo no andaría).

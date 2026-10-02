@@ -27,6 +27,7 @@ export const menus = {
   'pageMenu.collapseAll': { en: "Collapse all", es: "Colapsar todo" },
   'pageMenu.history': { en: "Version history", es: "Historial de versiones" },
   'pageMenu.assistant': { en: "Assistant", es: "Asistente" },
+  'pageMenu.dictate': { en: "Dictate to report", es: "Dictar al reporte" },
   // Las plantillas (Docs/Doc_Plantillas.md, 4.1): la ventana se baja con el editor.
   'pageMenu.applyTemplate': { en: "Apply template…", es: "Aplicar plantilla…" },
   'pageMenu.applyTemplateEmpty': { en: "Only on an empty page", es: "Solo en una página vacía" },

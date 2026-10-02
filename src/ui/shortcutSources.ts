@@ -10,6 +10,7 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
   history: ['Workspace.tsx', 'historyUi.ts'],
   newDayReport: ['dayReportUi.tsx', 'dayReport.ts'],
   assistant: ['AssistantHost.tsx', 'assistantUi.ts'],
+  dictate: ['DictationHost.tsx', 'dictationUi.ts'],
   titleEnter: ['PageView.tsx', 'PracticeView.tsx'],
   // Recién elegida una plantilla, Ctrl/⌘+Z en el título vacío deshace la página (templatesUi.ts).
   undo: ['PageView.tsx'],
@@ -80,6 +81,7 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
     'HistoryPanel.tsx',
     'ExportDialog.tsx',
     'AssistantPanel.tsx',
+    'DictationPanel.tsx',
     'AssistantSettings.tsx',
     'SignOutDialog.tsx',
     'SignOutOthersDialog.tsx',
@@ -91,7 +93,8 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
   // La confirmación de "Replace all" (ProjectReplace.tsx): Esc la cierra sin cerrar el panel.
   listClose: ['ProjectSwitcher.tsx', 'ProjectSearch.tsx', 'DrivePasteMenu.tsx', 'ProjectReplace.tsx'],
   versionName: ['HistoryPanel.tsx'],
-  assistantApply: ['AssistantPanel.tsx'],
+  assistantApply: ['AssistantPanel.tsx', 'DictationPanel.tsx'],
+  dictationPlace: ['DictationPanel.tsx'],
   tabsMove: ['InstallDialog.tsx'],
   tourNext: ['TourLayer.tsx'],
   tourBack: ['TourLayer.tsx'],

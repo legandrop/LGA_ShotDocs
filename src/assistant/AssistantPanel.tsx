@@ -17,8 +17,9 @@ import { parseSummary, plainBlocks, toPartialBlocks, type MdBlock, type MdParsed
 import { insertSummary, parsePageTranslation, subpageAllowed, subpageBlocks, takePageSnapshot } from './pageActions';
 import { fetchPolicy, policyAllows, type AssistantPolicy } from './policy';
 import { buildRequest, EDIT_ONLY, LANGUAGES, PAGE_ACTIONS, type Action } from './prompt';
-import { complete, isLocalProvider, PROVIDER_NAMES, ProviderError, type Usage } from './providers';
+import { complete, isLocalProvider, PROVIDER_NAMES, type Usage } from './providers';
 import './assistant.css';
+import { errorText } from './errorText';
 
 // El panel del asistente (Docs/Doc_Asistente.md, entregas A1 y A2, secciones 6 y 11): las acciones sobre lo elegido,
 // *Format as…*, las de la página entera (*Summarize page*, *Translate page*), la respuesta por partes, la vista previa y
@@ -83,31 +84,6 @@ function highlight(view: { domAtPos: (pos: number) => { node: Node; offset: numb
   return () => css.highlights?.delete(HIGHLIGHT);
 }
 
-export function errorText(err: unknown, provider: string, tr: Translate): string {
-  if (!(err instanceof ProviderError)) return tr('assistant.error.other', { provider, message: String((err as Error)?.message ?? err) });
-  switch (err.kind) {
-    case 'auth':
-      return tr('assistant.error.auth', { provider });
-    case 'forbidden':
-      return tr('assistant.error.forbidden', { provider, message: err.message });
-    case 'rateLimit':
-      return err.retryAfter !== null ? tr('assistant.error.rateLimitIn', { seconds: err.retryAfter }) : tr('assistant.error.rateLimit');
-    case 'spendTier':
-      return tr('assistant.error.spendTier', { provider });
-    case 'spendOwn':
-      return tr('assistant.error.spendOwn', { provider });
-    case 'model':
-      return tr('assistant.error.model', { message: err.message });
-    case 'network':
-      return tr('assistant.error.network', { provider });
-    case 'server':
-      return tr('assistant.error.server', { provider, message: err.message });
-    case 'aborted':
-      return tr('assistant.stopped');
-    default:
-      return tr('assistant.error.other', { provider, message: err.message });
-  }
-}
 
 const ACTION_LABELS: Record<Action, Parameters<Translate>[0]> = {
   fix: 'assistant.fix',
