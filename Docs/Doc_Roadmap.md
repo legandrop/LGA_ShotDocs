@@ -308,8 +308,15 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   páginas con link, el detalle *Can view link, created by…* para el equipo, y las entregas 2 y 3.
   **Entrega 2 rediseñada (2026-10-02, sin código):** lo que escribe un link espera en una sala
   (`public_link_updates`) y entra a `page_updates` cuando el dispositivo de un editor lo prueba (`plink_admit`); partida
-  en 2a (texto), 2b (archivos) y 2c (lo apartado a la vista); propuestas LE1 a LE13. Falta su auditoría antes de
-  programarla (`Doc_Link_Publico.md`, "Entrega 2: *Can edit* (rediseño 2026-10-02)").
+  en 2a (texto), 2b (archivos) y 2c (lo apartado a la vista); propuestas LE1 a LE13. **Auditado: aprobado con
+  condiciones, corregido** (B1 a B5, E2.18; la re-verificación revisa solo esos puntos). Observaciones que quedan para
+  después: adelantar a la 2a "volver a la página como la ve el equipo" para el visitante con algo apartado; **decisión de
+  Lega:** que el dueño pueda descartar algo apartado después de bajarlo (la sala solo crece, hasta 100 MB por link, y va
+  contra "no hay borrado duro"); probar el script de restaurar del repo privado con la sala y las columnas nuevas;
+  `plink_set_file_drive` (2b) abierta a `anon` es inofensiva (el portero exige `appProperties.sdFile`); invitar al
+  cliente con Editar ya cubre "el cliente escribe" sin superficie anónima. **Para D14:** la base limpia lleva los ids de
+  archivos de las anotaciones borradas (la clave de `photoMarkup`, sin el contenido); no da acceso por sí sola
+  (`Doc_Link_Publico.md`, "Entrega 2: *Can edit* (rediseño 2026-10-02)").
   **Observaciones de las auditorías que quedaron para después** (ninguna pierde datos ni abre el link): `set_public_link`
   revive un link vencido con la base de antes (le falta el `clean_reset`); en el visitante, *Open my workspace* desde la
   cabecera del link, pruebas de las guardas de la interfaz (*Resolve*, papelera, preferencias, cartel del dominio,
