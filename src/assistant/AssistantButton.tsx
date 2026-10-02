@@ -1,10 +1,10 @@
-import { useComponentsContext } from '@blocknote/react';
+import { useBlockNoteEditor, useComponentsContext } from '@blocknote/react';
 import { useT } from '../i18n';
 import '../i18n/lazy/editor';
 import { useSyncStatus } from '../services';
 import { AssistantIcon } from '../ui/icons';
 import { shortcutLabel } from '../ui/shortcuts';
-import { openAssistant } from './assistantUi';
+import { currentTarget, openAssistant } from './assistantUi';
 
 /**
  * El botón *Assistant* de la barra que aparece al elegir texto (Docs/Doc_Asistente.md, sección 11). Su tooltip dice
@@ -12,8 +12,12 @@ import { openAssistant } from './assistantUi';
  */
 export function AssistantToolbarButton() {
   const Components = useComponentsContext()!;
+  const editor = useBlockNoteEditor();
   const { online } = useSyncStatus();
   const tr = useT();
+  // Solo en el editor de la página abierta (no en la página de práctica ni en una versión del historial).
+  const view = currentTarget()?.view();
+  if (!view || view !== editor.prosemirrorView) return null;
   return (
     <Components.FormattingToolbar.Button
       className="bn-button sd-assistant-button"
