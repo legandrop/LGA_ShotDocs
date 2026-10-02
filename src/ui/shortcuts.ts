@@ -54,6 +54,8 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'newDayReport', keys: ['Mod-Alt-Shift-n'], place: 'global', context: 'dayReport', owner: 'app', source: 'window' },
   // El asistente (Docs/Doc_Asistente.md, A1): abre y cierra su panel sobre lo elegido.
   { id: 'assistant', keys: ['Mod-Alt-j'], place: 'global', owner: 'app', source: 'window' },
+  // *Dictate to report* (Docs/Doc_Dictado.md, V1): abrir o cerrar la hoja.
+  { id: 'dictate', keys: ['Mod-Alt-Shift-d'], place: 'global', owner: 'app', source: 'window' },
   { id: 'titleEnter', keys: ['Enter'], place: 'global', context: 'title', owner: 'app', source: 'dom' },
 
   // --- Editor: lo de la app ---
@@ -192,6 +194,8 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'versionName', keys: ['Enter', 'Escape'], place: 'menus', context: 'versionName', owner: 'app', source: 'dom' },
   // Aplicar la sugerencia del asistente, con el foco en su panel (Esc la descarta: `menusClose`).
   { id: 'assistantApply', keys: ['Mod-Enter'], place: 'menus', context: 'assistant', owner: 'app', source: 'dom' },
+  // *Place* en *Dictate to report*, con el foco en la hoja (con la vista previa abierta, el mismo atajo aplica: `assistantApply`).
+  { id: 'dictationPlace', keys: ['Mod-Enter'], place: 'menus', context: 'dictation', owner: 'app', source: 'dom' },
   // Las pestañas de una ventana (Install app: iPhone, Android, computadora).
   { id: 'tabsMove', keys: ['ArrowLeft', 'ArrowRight', 'Home', 'End'], place: 'menus', context: 'tabs', owner: 'app', source: 'dom' },
 

@@ -1,5 +1,7 @@
 import { t } from '../i18n';
 import '../i18n/lazy/templates';
+import type { CopiedPhoto } from '../media/markupClipboard';
+import { mediaIdsInText } from '../media/markupClipboard';
 import type { PageDocs } from '../sync/docs';
 import { FILE_SCHEME } from '../sync/files';
 import type { PageTree } from '../sync/tree';
@@ -90,6 +92,17 @@ export function stripAppMedia(blocks: TemplateBlock[]): { blocks: TemplateBlock[
   return { blocks: out as TemplateBlock[], removed: count.n };
 }
 
+/**
+ * Las anotaciones que siguen a los bloques: solo las de las fotos que quedaron en ellos. Después de sacar las fotos (otro
+ * proyecto, *Clear filled-in values*) no queda ninguna, y con ellas se van sus anotaciones: no hay forma de que lleguen
+ * flechas de una foto que no llegó.
+ */
+export function markupForBlocks(markup: CopiedPhoto[], blocks: TemplateBlock[]): CopiedPhoto[] {
+  if (markup.length === 0) return markup;
+  const kept = new Set(mediaIdsInText(JSON.stringify(blocks)));
+  return markup.filter((p) => kept.has(p.fileId));
+}
+
 // --- *Clear filled-in values* (5.1) --------------------------------------------------------------------------------
 
 /**
@@ -168,6 +181,8 @@ export interface ReadTemplate {
   blocks: TemplateBlock[];
   /** Los ids (nuevos) de los títulos colapsados para todos en la plantilla. */
   collapsed: string[];
+  /** Las anotaciones de las fotos de `blocks` (las mismas claves: la foto es la misma). Vacío si ninguna foto va. */
+  markup: CopiedPhoto[];
   /** Fotos y archivos que no se copiaron por ser de otro proyecto (PL10). */
   removed: number;
 }
@@ -202,7 +217,7 @@ export async function readPageCopy(deps: OwnTemplateDeps, pageId: string, option
     }
   }
   if (!copy.ok) return { status: 'newer' };
-  return { status: 'ok', row, blocks: copy.blocks, collapsed: copy.collapsed, removed: 0 };
+  return { status: 'ok', row, blocks: copy.blocks, collapsed: copy.collapsed, markup: markupForBlocks(copy.markup, copy.blocks), removed: 0 };
 }
 
 /**
@@ -212,8 +227,9 @@ export async function readPageCopy(deps: OwnTemplateDeps, pageId: string, option
 export async function readOwnTemplate(deps: OwnTemplateDeps, templateId: string, projectId: string, options: { wait?: number } = {}): Promise<ReadTemplateResult> {
   const read = await readPageCopy(deps, templateId, options);
   if (read.status !== 'ok' || read.row.workspace_id === projectId) return read;
+  // Otro proyecto: sin fotos, y por lo tanto sin sus anotaciones (D46: no viajan entre proyectos, tampoco con una plantilla).
   const stripped = stripAppMedia(read.blocks);
-  return { ...read, blocks: stripped.blocks, removed: stripped.removed };
+  return { ...read, blocks: stripped.blocks, markup: [], removed: stripped.removed };
 }
 
 /** El aviso de por qué no se usó una plantilla. */
@@ -243,13 +259,14 @@ async function createTemplatePage(
   page: { title: string; templateId?: string | null; description: string; dayReport: boolean },
   blocks: TemplateBlock[],
   collapsed: string[],
+  markup: CopiedPhoto[] = [],
 ): Promise<string> {
   const setting = templateSetting(page);
   if (!settingsFit(undefined, { template: setting })) throw new TemplateTooLarge();
   const folder = await ensureTemplatesFolder(deps.tree, projectId);
   const id = await deps.tree.create(folder, page.title.trim() || t('templates.untitled'), projectId, page.templateId ? { templateId: page.templateId } : {});
   await deps.tree.setSetting(id, 'template', setting);
-  await writeNewPage(deps.docs, id, blocks, collapsed);
+  await writeNewPage(deps.docs, id, blocks, collapsed, markup);
   return id;
 }
 
@@ -290,12 +307,16 @@ export async function saveAsTemplate(
   const read = await readPageCopy(deps, sourceId);
   if (read.status !== 'ok') throw new TemplateReadError(read.status);
   const blocks = input.clear ? clearFilledIn(read.blocks) : read.blocks;
+  // *Clear filled-in values* saca las fotos y con ellas sus anotaciones (cuentan como valores llenados); sin vaciar, las
+  // anotaciones de las fotos que quedan viajan a la plantilla (las mismas reglas que copiar y pegar, D46).
+  const markup = markupForBlocks(read.markup, blocks);
   const id = await createTemplatePage(
     deps,
     read.row.workspace_id,
     { title: input.name, templateId: read.row.template_id, description: input.description, dayReport: input.dayReport },
     blocks,
     read.collapsed,
+    markup,
   );
   if (input.dayReport) {
     const folder = dayReportFolderOf(deps.tree, sourceId);

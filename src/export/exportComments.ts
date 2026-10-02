@@ -17,6 +17,11 @@ export interface CommentSource {
    * red, o el servidor no contestó): esas salen con lo que tiene el dispositivo, avisado.
    */
   prepare?(pageIds: readonly string[], options: { signal?: AbortSignal; onProgress?: (done: number, total: number) => void }): Promise<number>;
+  /**
+   * Si los comentarios de esa página no se pudieron bajar en `prepare` (salen los del dispositivo). Con el PDF en partes
+   * (D84), `prepare` baja todas las páginas una vez y cada parte pregunta por las suyas.
+   */
+  stale?(pageId: string): boolean;
   threads(pageId: string): Promise<CommentThread[]>;
   /** El nombre para mostrar de una cuenta del equipo (nunca el correo entero), o `null`. */
   nameOf(userId: string): string | null;
@@ -39,7 +44,10 @@ export function appComments(
   db: CommentsDb | null,
   me: { id: string; email?: string | null },
 ): CommentSource {
+  /** Las páginas ya preguntadas al servidor en esta exportación (`true`: al día; `false`: sin red). */
+  const asked = new Map<string, boolean>();
   return {
+    stale: (pageId) => asked.get(pageId) === false,
     async prepare(pageIds, { signal, onProgress } = {}) {
       if (!queue.refresh) return 0;
       let failed = 0;
@@ -47,18 +55,27 @@ export function appComments(
       for (let i = 0; i < pageIds.length; i++) {
         if (signal?.aborted) break;
         onProgress?.(i, pageIds.length);
+        // Ya bajada para una parte anterior del mismo PDF: no se vuelve a pedir.
+        const before = asked.get(pageIds[i]);
+        if (before !== undefined) {
+          if (!before) failed++;
+          continue;
+        }
         // Sin red no se insiste página por página: todas las que faltan salen con lo del dispositivo.
         if (offline || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
           offline = true;
           failed++;
+          asked.set(pageIds[i], false);
           continue;
         }
         try {
           await queue.refresh(pageIds[i]);
+          asked.set(pageIds[i], true);
         } catch {
           // `refresh` solo tira sin red (los demás errores los guarda la cola y sigue).
           offline = true;
           failed++;
+          asked.set(pageIds[i], false);
         }
       }
       onProgress?.(pageIds.length, pageIds.length);
