@@ -211,7 +211,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   (diseño)" y "Cómo quedó (entrega 3)"): la flecha en Ctrl/⌘+K, vista previa, una, la página o todas con confirmación,
   escrito en el Y.Doc de cada página que se puede editar y está completa, y *Undo* de todo lo que siga igual (también
   sin red y después de cerrar la app). Falta probarlo a mano en Safari, el iPhone y Firefox. Queda para después:
-  reemplazar en los títulos, pies y nombres; la papelera, todos los proyectos y los comentarios. Lo pedido: dos lupas. **En el proyecto:** una lupa a la izquierda del "+" de
+  reemplazar en los títulos, pies y nombres; la papelera, todos los proyectos y los comentarios. **D11 (v0.124): al buscar, las
+  secciones colapsadas se abren para mostrar lo encontrado** (solo en este dispositivo y a la vista; se vuelven a cerrar al
+  terminar; `Doc_Buscar.md`, "Abrir al buscar"). Queda para después: abrir también las listas plegables cerradas.
+  Lo pedido: dos lupas. **En el proyecto:** una lupa a la izquierda del "+" de
   páginas en la barra lateral, que busca en todas las páginas del proyecto que la persona puede ver (títulos y
   contenido) y lleva al lugar. **En la página:** una lupa a la izquierda del ícono de comentarios, que busca en
   la página abierta, también adentro de las secciones colapsadas (P.11: el resultado abre la sección). A pensar

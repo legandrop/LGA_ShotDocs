@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.124 :
+
+Buscar dentro de secciones colapsadas (D11, cambiada por Lega el 2026-10-02). Las coincidencias escondidas solo se veían
+al ir una por una, y esa sección quedaba abierta para siempre. Ahora, al buscar en la página (y al abrir un resultado de la
+búsqueda del proyecto), se abren todas las secciones colapsadas que esconden coincidencias y vuelven a cerrarse al cerrar
+la barra o si lo buscado ya no está ahí; la barra cuenta cuántas abrió. Es solo la vista de este dispositivo: va por los
+registros de "abrir para vos" de P.11 y no escribe el Y.Doc ni lo colapsado para todos ni el dispositivo (`persistable`).
+Lo que la persona toca (el triángulo) o donde queda la selección (Esc) se conserva; ir a una coincidencia siempre la
+muestra. Reemplazar sigue igual. Pruebas y un recorrido en Chromium; sin migración ni `min_app_version`.
+[ Buscar con secciones colapsadas (D11) - se abren las que esconden coincidencias, solo a la vista, y se cierran al terminar ]
+
 v0.123 :
 
 Anotar fotos en la compu (P.20, entrega 2 de `Doc_Anotar_Fotos.md`). Las anotaciones se veían pero no había con qué

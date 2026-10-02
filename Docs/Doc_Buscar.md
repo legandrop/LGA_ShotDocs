@@ -5,7 +5,9 @@ proyecto (Ctrl/⌘+K); ajustes de v0.057 (lo que encontró Lega probando); entre
 todo el proyecto**. "Correcciones de la auditoría" manda
 sobre lo de arriba, y "Cómo quedó (entrega 1)", "Cómo quedó (entrega 2)" y "Ajustes de v0.057", al final, sobre
 todo lo demás (el último, sobre los otros dos). "Reemplazar en el proyecto (diseño)", lo último, manda sobre la
-sección 11, y su "Cómo quedó (entrega 3)", al final de todo, sobre su diseño. Lo pidió Lega (urgente, 2026-09-30): "dos lupas: una a la izquierda del
+sección 11, y su "Cómo quedó (entrega 3)", al final de todo, sobre su diseño. **"Abrir al buscar (D11, v0.124)", lo
+último de todo, manda sobre lo que dice más arriba de las secciones colapsadas** (que solo se abría la de la
+coincidencia actual). Lo pidió Lega (urgente, 2026-09-30): "dos lupas: una a la izquierda del
 + de páginas, que busca en todo el proyecto y te lleva al lugar; otra a la izquierda de los comentarios, que
 busca en la página abierta, también adentro de las secciones colapsadas". Después sumó **reemplazar**, como en
 VS Code. Sale de leer el código de `main` (v0.050) y `Doc_Colapsar.md` (rama `lega/colapsar`, en diseño).
@@ -1346,3 +1348,43 @@ dos recorridos en Chromium) se perdió texto de nadie. Arreglado todo lo que enc
 colapsada lleva en su renglón "in a collapsed section" (`engine.hiddenOf`, la misma cuenta que la confirmación) y el
 aviso dice cuántas de las cambiadas estaban escondidas (también al reemplazar una sola con el reemplazo vacío); los
 números del avance con `tabular-nums` (*Stop* no se corre); y la prueba de "an" contra una ñ descompuesta.
+
+## Abrir al buscar (D11, cambiada por Lega el 2026-10-02; v0.124)
+
+**Lo que decidió Lega.** Reemplazar texto escondido en secciones colapsadas: **A** (se reemplaza, como ya estaba) **y
+además**, al buscar, **las secciones colapsadas se abren** para mostrar lo encontrado, en la barra de la página y en la
+búsqueda del proyecto. Antes solo se abría la sección de la coincidencia actual, al ir a ella, y se quedaba abierta.
+
+**Cómo quedó** (`syncSearchOpen` en `collapseEditor.ts`; lo llaman `setFind`, el recálculo de `findEditor.ts` y
+`clearFind` / `closeFind` por los ganchos de `FindCollapseHooks`):
+
+- **Al buscar**, cada vez que cambian las coincidencias (se escribe, una opción, otra persona cambia la página), se
+  abren, de afuera hacia adentro, los títulos que esconden alguna; las que dejan de tener coincidencias vuelven a
+  cerrarse. La barra dice cuántas abrió ("1 collapsed section opened for the search"). Con 0 secciones colapsadas no
+  hace nada. Las **listas plegables** (`toggleListItem`) siguen como antes (solo se abre la de la coincidencia actual;
+  la barra cuenta las cerradas: "in closed toggle lists"): no son secciones.
+- **Solo la vista, solo en este dispositivo.** Abrir va por lo mismo que "abrir para vos" (`records` de P.11): nunca
+  se escribe el mapa de "para todos" (un título colapsado para todos se abre con un registro tuyo, y al terminar vuelve a
+  quedar sin él) ni el contenido (la prueba cuenta los updates del Y.Doc: 0). Lo abierto por la búsqueda **no se guarda
+  en el dispositivo**: `persistable` devuelve lo guardable sin eso (si la ventana se cierra a la mitad, la página abre
+  como estaba).
+- **Al terminar la búsqueda** (la × o Esc, el campo vacío, cerrar la página) las secciones que abrió **se vuelven a
+  colapsar**, salvo (1) lo que la persona **tocó** (el triángulo, *Collapse all*: cualquier cambio de lo colapsado desde el
+  último paso es suyo) y (2) la sección donde está la **selección**: Esc deja elegida la coincidencia actual (VS Code),
+  así que su sección queda abierta, ya como de la persona. Lo mismo vale mientras se busca: una sección con el cursor
+  adentro no se cierra sola (se puede escribir ahí).
+- **Lo que la persona cierra durante la búsqueda no se reabre solo** al cambiar lo buscado, pero **ir a una coincidencia**
+  (Enter, o la actual al escribir) la muestra siempre, aunque la hubiera cerrado: nunca se salta a algo que no se ve.
+- **Desde la búsqueda del proyecto** es lo mismo: abrir un resultado deja la barra de la página con ese texto, que abre
+  las secciones con coincidencias (entre ellas la del resultado) y centra el resultado. Antes la sección quedaba abierta
+  para siempre; ahora vuelve a colapsarse al cerrar la barra (salvo la de la coincidencia elegida).
+- **Reemplazar** no cambia: las coincidencias de las secciones abiertas se reemplazan como las demás (y las de la
+  búsqueda del proyecto siguen con su casilla *Also delete the N in collapsed sections*). Después de *Replace all* ya no
+  hay coincidencias, y al volver a buscar (150 ms) las secciones vuelven a cerrarse. Deshacer o rehacer un reemplazo no
+  abre nada, como antes.
+
+**Pruebas:** `collapseFind.test.ts` (12: abrir solo las que tienen coincidencias, cerrar al terminar, cambiar lo
+buscado, Esc con la selección adentro y afuera, lo tocado, lo cerrado y reabierto con Enter, el cursor adentro, que no
+se escribe nada —ni el Y.Doc ni "para todos" ni el dispositivo—, y que sin secciones colapsadas no pasa nada),
+`projectSearch.test.tsx` (la barra avisa y lo guardado sigue colapsado) y un recorrido en Chromium (16 pasos) sobre la
+app con el servidor falso. No toca el documento ni su esquema: no hace falta subir `min_app_version`.
