@@ -295,6 +295,21 @@ describe('reemplazar', () => {
     expect(await textOf(d, b)).toBe('|sin nada|dos Cameras en B y una Camera más|');
   });
 
+  it('DH9: escribir en el campo de buscar también devuelve Ctrl+Z al campo', async () => {
+    const { d, b } = await app();
+    await openReplace('camara', 'Camera');
+    act(() => replaceAllButton().click());
+    await until(() => panel()!.querySelector('.replace-confirm'), 'la confirmación');
+    const confirmButton = [...panel()!.querySelectorAll<HTMLButtonElement>('.replace-confirm button')].find((x) => x.textContent === 'Replace 4')!;
+    act(() => confirmButton.click());
+    await until(() => document.querySelector('.notice')?.textContent?.includes('4 replacements in 2 pages'), 'reemplazado');
+    type(searchInput(), 'Camera');
+    const e = key(searchInput(), { key: 'z', code: 'KeyZ', ctrlKey: true });
+    expect(e.defaultPrevented).toBe(false);
+    await wait(100);
+    expect(await textOf(d, b)).toBe('|sin nada|dos Cameras en B y una Camera más|');
+  });
+
   it('reemplazar una y dejar otra afuera (por sus caracteres)', async () => {
     const { d, b } = await app();
     await openReplace('camara', 'X');

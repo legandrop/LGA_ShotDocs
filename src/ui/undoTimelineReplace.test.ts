@@ -319,6 +319,49 @@ describe('el reemplazo en la línea de tiempo (entrega 2)', () => {
     expect(await text('A')).toBe('la cámara roja');
   });
 
+  it('cortar el tiempo antes: reemplazar enseguida después de escribir es otro paso (no se pega a lo escrito)', async () => {
+    const { app, runner, text, replaceAll, go } = await setup({ A: ['la '] });
+    await go('A');
+    const v = view(app.editor!);
+    // Sin cortar: lo que se escriba en medio segundo se juntaría en el mismo paso.
+    v.dispatch(v.state.tr.insertText('cámara', endOf(app.editor!)));
+    await replaceAll('camara', 'Camera');
+    expect(await text('A')).toBe('la Camera');
+    await runner.run('undo');
+    expect(await text('A')).toBe('la cámara');
+    await runner.run('undo');
+    expect(await text('A')).toBe('la ');
+  });
+
+  it('DH10 con la página en pantalla: lo contrario del paso deshecho fuera de orden no queda para rehacer', async () => {
+    const { timeline, app, runner, text, replaceAll, go, engine, project } = await setup({ A: ['Toma 1: ', 'nota'] });
+    await go('A');
+    type(app.editor!, 'cámara roja');
+    const op = await replaceAll('camara', 'Camera');
+    type(app.editor!, ' bien', 1);
+    await engine.undo(op, { inOrder: timeline.replaceIsNext(op, 'undo') });
+    expect(await text('A')).toBe('Toma 1: cámara roja | nota bien');
+    expect(timeline.peek(project, 'redo')).toBeNull();
+    await runner.run('undo');
+    await runner.run('undo');
+    expect(await text('A')).toBe('Toma 1:  | nota');
+    await runner.run('redo');
+    await runner.run('redo');
+    expect(await text('A')).toBe('Toma 1: cámara roja | nota bien');
+    expect(timeline.peek(project, 'redo')).toBeNull();
+  });
+
+  it('reemplazar borra lo que había para rehacer aunque no toque esa página', async () => {
+    const { timeline, app, runner, replaceAll, go, project } = await setup({ A: ['la cámara'], B: ['luz'] });
+    await go('B');
+    type(app.editor!, ' uno');
+    await runner.run('undo');
+    expect(timeline.peek(project, 'redo')).not.toBeNull();
+    // A no tiene historia: va por las anclas, sin ningún paso de pila.
+    await replaceAll('camara', 'Camera', ['A']);
+    expect(timeline.peek(project, 'redo')).toBeNull();
+  });
+
   it('el Undo del panel cuando el reemplazo ES lo último hace lo mismo que ⌘Z: se puede rehacer', async () => {
     const { timeline, text, replaceAll, engine, runner } = await setup({ A: ['la cámara'] });
     const op = await replaceAll('camara', 'Camera');
@@ -405,6 +448,25 @@ describe('el reemplazo en la línea de tiempo (entrega 2)', () => {
     expect(timeline.replacePages(op)).toEqual([ids.A]);
     await runner.run('redo');
     expect(await texts()).toEqual({ A: 'la Camera', B: 'otra Camera' });
+  });
+
+  it('una página con historia que no se pudo deshacer: su paso del reemplazo sale de la pila y lo de antes sigue en orden', async () => {
+    const { d, ids, app, runner, replaceAll, go, text, where } = await setup({ A: ['la cámara'], B: ['otra cámara'] });
+    await go('A');
+    type(app.editor!, ' uno');
+    await go('B');
+    type(app.editor!, ' dos');
+    await go('A');
+    await replaceAll('camara', 'Camera');
+    await d.tree.trash(ids.B);
+    await runner.run('undo');
+    expect(await text('A')).toBe('la cámara uno');
+    expect(await text('B')).toBe('otra Camera dos');
+    await d.tree.restore(ids.B);
+    // Lo próximo es lo escrito en B (después de lo de A): el paso del reemplazo que quedó en B no lo tapa.
+    await runner.run('undo');
+    expect(where()).toBe('B');
+    expect(await text('B')).toBe('otra Camera');
   });
 
   it('un reemplazo que ya no está entre los últimos 5 del panel se deshace igual con ⌘Z (con lo guardado en memoria)', async () => {
