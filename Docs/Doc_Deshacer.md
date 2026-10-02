@@ -42,7 +42,9 @@ número final lo pone quien las cierre con Lega. Lo medido salió de prototipos 
 - **Nunca perder datos.** Deshacer es una edición nueva que se guarda primero en el dispositivo y sube como cualquier
   otra. Rehacer existe para todo lo que se deshace con ⌘Z.
 - **Nunca pisar lo ajeno.** Deshacer saca solo lo tuyo: lo que escribió otra persona (o vos en otro dispositivo) queda,
-  aunque sea adentro de lo que se deshace. Yjs ya lo hace por origen; el reemplazo sigue la misma regla.
+  aunque sea adentro de lo que se deshace. Yjs lo hace por origen, salvo con un renglón que creaste y donde otro escribió
+  adentro: deshacer su creación borraba el bloque entero; desde la entrega 1 el bloque queda con lo del otro (17.2,
+  auditoría B1). El reemplazo sigue la misma regla.
 - **Nunca deshacer lo que no ves sin decirlo.** Un cambio en otra página se deshace con esa página en pantalla; un
   reemplazo, con un aviso que dice cuántas páginas tocó y ofrece rehacer.
 - **Nada de tipos de bloque ni propiedades nuevas.** La línea de tiempo vive en memoria.
@@ -260,7 +262,7 @@ Reemplazaste en 50 páginas; después escribiste en *Shot 12*; antes del reempla
 
 | Caso | Qué pasa |
 |---|---|
-| **Otra persona editó después lo mismo** | Lo tuyo se deshace igual y lo suyo queda (Yjs, por origen). Si borró justo lo tuyo, ese paso no cambia nada y se pasa al anterior. En un reemplazo: en las páginas con historia, el deshacer de Yjs (medido: con "XX" escrito por el otro adentro de "Camera", deshacer deja "cámaraXX"; deshacer también lo escrito antes deja solo "XX"); en las demás, las anclas ("had changed", queda como está, con *Show*). Nunca se borra nada del otro: 0 en 300 corridas al azar con el otro escribiendo y borrando. |
+| **Otra persona editó después lo mismo** | Lo tuyo se deshace igual y lo suyo queda (Yjs, por origen). Si borró justo lo tuyo, ese paso no cambia nada y se pasa al anterior. En un reemplazo: en las páginas con historia, el deshacer de Yjs (medido: con "XX" escrito por el otro adentro de "Camera", deshacer deja "cámaraXX"; deshacer también lo escrito antes deja solo "XX"); en las demás, las anclas ("had changed", queda como está, con *Show*). Nunca se borra nada del otro: 0 en 300 corridas al azar con el otro escribiendo y borrando, también adentro de renglones que creaste (17.3). |
 | **Sin red** | Igual que con red: todo es local. Lo deshecho queda pendiente de subir, como cualquier edición. |
 | **La página no está abierta** | Si tiene pasos, su documento está retenido (3.2): ⌘Z la abre (instantáneo, ya está en memoria). Las páginas que solo tocó un reemplazo se deshacen sin abrirlas en pantalla, como hoy. |
 | **La página se fue a la papelera, perdiste Editar, o la borraron** | Ese paso se saca y el aviso lo dice: "Can't undo in “Shot 12”: it's in the trash. ⌘Z again for the previous change." En un reemplazo, esas páginas quedan para *Undo the rest* del panel, como hoy. |
@@ -741,6 +743,17 @@ restos), sin cruzarse con este. **No hace falta subir `min_app_version`.**
 - **El cursor**: un paso de antes de cambiar de página no guarda la selección del editor nuevo; al deshacerlo, el cursor
   va donde empieza el cambio (y se abre la sección colapsada). Con el foco en el árbol y el paso en la misma página, solo
   se mueve la vista.
+- **Lo ajeno adentro de un renglón tuyo (auditoría B1).** Creás un renglón ("Toma 3:"), otra persona escribe adentro
+  ("— buena") y más tarde deshacés hasta antes del renglón: Yjs borraba el `blockContainer` (tuyo) y con él lo del otro.
+  Ya pasaba antes en la misma página; con la pila que dura toda la pestaña pasa mucho más. Ahora la línea de tiempo
+  envuelve el filtro de borrado del `UndoManager` montado (`protectOthers`): no se borra un elemento con algo vivo de
+  otro autor adentro, ni sus atributos (sin el `id`, el editor le pondría uno nuevo y esa edición borraría lo de
+  rehacer). Lo tuyo de adentro se va; el renglón queda con lo del otro. Queda un caso de Yjs: lo del otro que vos
+  borraste y volviste a poner con ⌘Z ya es una copia tuya, y se va con el renglón si después deshacés hasta antes de
+  crearlo (1 letra en 300 corridas). Si Yjs le cambió el autor al documento (B.16), puede sobrar un renglón tuyo.
+- **Avisos de la auditoría:** si después de cruzar el paso no cambió nada a la vista (O2), se avisa "Nothing to undo
+  there…" en vez de "Undone in…"; lo que olvidó el tope (O3) se avisa una vez cuando ⌘Z llega ahí: "Older changes can't
+  be undone: undo keeps your last 20 pages and 1000 changes in this tab."
 
 ### 17.3 Lo medido
 
@@ -750,10 +763,11 @@ restos), sin cruzarse con este. **No hace falta subir `min_app_version`.**
 | Pasear entre páginas sin escribir (retener documentos) | 0 filas nuevas en el dispositivo y en el servidor |
 | Memoria en Chromium con el editor real: 20 páginas retenidas con 5 pasos cada una | +13,2 MB con páginas de 60 KB (0,66 MB por página) y +19,1 MB con páginas de 115 KB (0,96 MB por página); sin borrar el `meta` del editor viejo, +31,5 MB con las de 115 KB (C2). El tope queda en 20 |
 | Al azar con el editor, 3 páginas y cambios de página (300 semillas de 40 acciones, ⌘Z y ⌘⇧Z en el medio) | deshacer todo: 300 de 300 exactas, 0 con letras de menos ni de más; rehacer todo: 300 de 300 |
-| Lo mismo borrando bloques enteros | deshacer todo: 297 de 300 exactas, 0 con letras de menos; rehacer todo: 300 de 300 |
-| Lo mismo con otra persona escribiendo y borrando en las tres | 0 letras del otro borradas por un deshacer; los dos iguales en 300 de 300; ninguna excepción de Yjs (B.22) |
+| Lo mismo borrando bloques enteros | deshacer todo: 297 de 300 exactas (300 de 300 con renglones nuevos, después de la auditoría), 0 con letras de menos; rehacer todo: 300 de 300 |
+| Lo mismo con otra persona escribiendo y borrando en las tres, también adentro de renglones que creaste (después de B1) | 0 letras del otro borradas por un deshacer (sin el arreglo de B1: 51 en 60 corridas); 1 letra que era una copia tuya de lo del otro (17.2); los dos iguales en 300 de 300; ninguna excepción de Yjs (B.22) |
 | Pruebas de mutación (cada protección sacada) | 8 de 9 hacen fallar alguna prueba: un paso por vez, retener el documento, borrar el `meta` del editor viejo, soltar al rearmarse, borrar lo de rehacer en las demás, el editor viejo con sus listas, soltar al olvidar, no pisar una lista. Sobrevive cortar el tiempo después de deshacer o rehacer: Yjs ya corta al deshacer, y no se puede rehacer con lo escrito todavía "abierto" (escribir borra lo de rehacer); queda como protección barata |
 | Versión vieja (el esquema anterior) abriendo lo deshecho y rehecho entre páginas | no escribe nada al abrir y ve el mismo texto |
+| Correcciones de la auditoría: B1 (cruzando y en la misma página), el deshacer del navegador por la línea de tiempo, lo de fondo fuera de la pila, un diálogo abierto, el tope que no suelta la página en pantalla y su aviso | cada una con su prueba, que falla sacando la protección |
 
 Las pruebas: `src/ui/undoTimeline.test.ts` (núcleo con `PageDocs` y el editor real), `undoTimelinePage.test.tsx` (la app
 en jsdom: otra página, *Back*, mantener apretado, el árbol, el título), `undoTimelineRandom.test.ts` (al azar; 12
@@ -765,6 +779,8 @@ semillas en la suite, `TIMELINE_SEEDS` para más) y las de atajos (`shortcuts.te
   PWA instalada.
 - La excepción de Yjs con dos personas (B.22) medida con dos editores borrando bloques enteros.
 - Entregas 2 (el reemplazo adentro, C1, DH9, `planRedo`) y 3 (anotar como un paso).
+- Pruebas que faltan (auditoría, O1): no limpiar el `meta` al montar (A5), los ⌘Z que llegan mientras cruza (A7, probado
+  en el navegador, sin prueba en la suite) y esperar a que el editor sea editable (A9). Al roadmap.
 
 ## Correcciones de la auditoría (2026-10-02)
 
