@@ -1,8 +1,11 @@
-# Deshacer en el orden en que editaste (D10)
+# Deshacer en el orden en que editaste (P.26)
 
-**Estado: diseño, sin código.** Pedido de Lega del 2026-10-02 al cambiar la decisión D10. Se diseñó contra `main`
-v0.123. Las decisiones (DH1 a DH10, sección 11) son propuestas con la recomendación elegida: el número final lo pone
-quien las cierre con Lega. Lo medido salió de prototipos en pruebas que no se versionan (sección 9).
+**Estado: diseño, sin código.** Pedido de Lega del 2026-10-02, al responder cómo se deshace un reemplazo en todo el
+proyecto (una pregunta de su lista de decisiones; no es la D-10 de `Doc_Decisiones.md`). Se diseñó contra `main` v0.123
+y se revisó contra v0.125. Las decisiones (DH1 a DH10, sección 11) son propuestas con la recomendación elegida: el
+número final lo pone quien las cierre con Lega. Lo medido salió de prototipos en pruebas que no se versionan (sección
+9). Auditado el 2026-10-02 (aprobado con condiciones): las correcciones ya están en el texto y resumidas al final
+("Correcciones de la auditoría").
 
 ## En corto
 
@@ -20,12 +23,15 @@ quien las cierre con Lega. Lo medido salió de prototipos en pruebas que no se v
 - **Lo que se descubrió al medir:** hoy, deshacer un reemplazo y después lo que habías escrito antes **deja texto**
   ("Toma 1: cámara" en vez de "Toma 1: "), porque el deshacer del reemplazo escribe letras nuevas que la pila de la
   página no conoce. La propuesta lo arregla: en las páginas con historia en la sesión, **el reemplazo entra en la pila
-  de Yjs de la página** y se deshace con ella (exacto, medido en 300 corridas al azar).
+  de Yjs de la página** y se deshace con ella (exacto, medido en 300 corridas al azar), también cuando se deshace desde
+  el panel y ya no es lo último (DH10).
 - **Dura lo que la pestaña:** al recargar, la pila de Yjs no se puede rearmar (medido: lo borrado ya no está en el
   documento). Los reemplazos siguen en el panel con *Undo*, como hoy.
 - **No cambia nada guardado**: ni el documento, ni el registro de reemplazos, ni la base. Sin migración, sin
   `min_app_version`; una versión vieja no se entera.
-- **Entregas:** 1 la línea de tiempo con las páginas, 2 el reemplazo adentro, 3 (opcional) anotar fotos y lo que queda.
+- **Entregas:** 1 la línea de tiempo con las páginas, 2 el reemplazo adentro, 3 anotar fotos como un paso. **Antes de
+  la entrega 1** hay que investigar un límite del deshacer de Yjs que ya existe hoy (a veces deja restos o se lleva un
+  pedazo de texto, B.21 del roadmap): con la línea de tiempo se deshace más lejos que hoy y se vería más (sección 6).
 
 ## Reglas que no se rompen
 
@@ -89,7 +95,7 @@ evita (sección 3.3).
 ## 2. Qué quiere Lega
 
 "⌘Z sigue el orden en que editaste, no la página: deshace lo último que hiciste, después lo anterior, y si una de esas
-acciones fue un reemplazo en todo el proyecto, se deshace ese reemplazo" (D10, cambiada el 2026-10-02). Eso pide:
+acciones fue un reemplazo en todo el proyecto, se deshace ese reemplazo" (Lega, 2026-10-02). Eso pide:
 
 - un solo orden para todo lo que hacés en el proyecto, con el reemplazo como **un** paso;
 - que el deshacer de cada página siga funcionando como hoy (Yjs, sin pisar a nadie);
@@ -117,19 +123,33 @@ mismo paso.
 - **El documento se retiene**: la línea de tiempo abre la página (`docs.open`, que suma una referencia) mientras tenga
   pasos de ella, así el `Y.Doc` no se destruye al salir. Sin esto, el deshacer de Yjs no puede volver a poner lo borrado:
   un documento rearmado desde lo guardado ya no lo tiene (medido, sección 9).
-- **La pila pasa de un editor al siguiente**: al desmontarse el editor, la línea de tiempo se queda con sus listas
-  (`undoStack`, `redoStack`); al montarse de nuevo, se las pone al `UndoManager` nuevo. Es lo mismo que hace BlockNote al
-  "bifurcar" un documento (`ForkYDoc`: guarda `undoStack` y lo vuelve a asignar). **Sin parchear y-prosemirror.**
-  Medido: con la pila pasada a otro `UndoManager`, y con la otra persona escribiendo y borrando en el medio, deshacer
-  vuelve a poner lo borrado y saca solo lo tuyo.
+- **La pila pasa de un editor al siguiente.** **La línea de tiempo es la dueña de las listas** de cada página
+  (`undoStack`, `redoStack`); el `UndoManager` del editor en pantalla solo las usa. **Sin parchear y-prosemirror.**
+  Comprobado por la auditoría con el editor real de BlockNote (montar, escribir, borrar, desmontar, el otro escribe y
+  borra sin ninguna pila escuchando, montar otro editor y pasarle las listas): montar no deja nada en la pila, deshacer
+  vuelve a poner lo borrado y saca solo lo tuyo, rehacer es exacto y los dos dispositivos terminan iguales. Cómo se pasa:
+  - **Cuándo:** React arma el editor nuevo (y su `UndoManager`) en el render, **antes** de desmontar el viejo. Las
+    listas se le pasan al nuevo cuando se monta su vista, antes de que se pueda escribir; desde ahí la línea de tiempo
+    ignora los eventos del `UndoManager` viejo hasta que se destruye.
+  - **Nunca pisa:** si el `UndoManager` nuevo ya tiene algo (no debería: montar no escribe), las listas guardadas van
+    **debajo** de lo suyo, en el orden en que se hicieron; nunca se reemplaza una lista que no esté vacía.
+  - **Sin arrastrar el editor viejo:** y-prosemirror guarda en cada paso (`stackItem.meta`) la selección con el
+    *binding* del editor como clave, y esa clave retiene el editor viejo con todo su documento de ProseMirror. Al pasar
+    las listas se borran del `meta` las claves de los bindings que ya no existen (medido por la auditoría en una página
+    de 115 KB con 30 pasos: +1,05 MB con el meta viejo, +0,52 MB sin él). La selección de esos pasos se pierde (riesgo 3).
 - Mientras la página no está en pantalla **no hay ningún `UndoManager` escuchando** su documento: lo que escriba un
   editor sin pantalla (el reporte del día, la importación) no entra en la pila por error.
 - **Topes:** las últimas **20 páginas** con pasos y **1000 pasos** en total por pestaña. Al pasar el tope se olvida lo
-  más viejo (y se suelta el documento si ya no tiene pasos). Medido: un documento vivo ocupa unas 10 veces lo que pesa
-  guardado (0,33 MB una página de 26 KB, 0,94 MB una de 90 KB); cada paso, del orden de 1 KB. 20 páginas grandes son
-  unos 20 MB, aceptable también en el iPhone.
+  más viejo (y se suelta el documento si ya no tiene pasos). Medido con Yjs solo: un documento vivo ocupa unas 10 veces
+  lo que pesa guardado (0,33 MB una página de 26 KB, 0,94 MB una de 90 KB). Con el editor real (auditoría): 1,18 MB una
+  página de 115 KB, más unos 17 KB por paso con el meta limpio (0,52 MB los 30 pasos). 20 páginas grandes con su
+  historia serían unos 25 a 35 MB: aceptable en la compu; **en el iPhone se mide en la entrega 1 con el editor real** y,
+  si aprieta, el tope baja a 10 páginas.
 - **Si un documento retenido queda viejo** (llegó algo que no se pudo aplicar, `stale` en `docs.ts`) o se rearma, sus
-  pasos dejan de valer: se sacan de la línea de tiempo y el próximo ⌘Z que llegue ahí lo dice (sección 5).
+  pasos dejan de valer: se sacan de la línea de tiempo y el próximo ⌘Z que llegue ahí lo dice (sección 5). La línea de
+  tiempo suelta su referencia **en el mismo momento** en que `docs.ts` avisa (`unsupportedListeners`), antes de que la
+  página vuelva a abrir: `docs.open` solo rearma un documento viejo si nadie lo tiene abierto, y si la referencia se
+  soltara después, la página seguiría con el viejo. Con su prueba.
 
 ### 3.3 El reemplazo entra en la línea de tiempo
 
@@ -146,11 +166,20 @@ Un *Replace all*, *Replace in page* o *Replace* de una coincidencia es **una** e
 - **Rehacer** es simétrico: la pila de Yjs en las primeras; en las otras, un `planRedo` nuevo (el espejo de `planUndo`:
   vuelve a poner lo nuevo solo donde entre las anclas sigue exactamente lo de antes).
 - El registro en `meta` se guarda igual que hoy (para el panel y para después de recargar). Una página deshecha por la
-  pila se borra del registro como una deshecha por las anclas.
+  pila se borra del registro como una deshecha por las anclas. Las anclas siguen sirviendo después de que la pila
+  deshizo y rehízo el reemplazo, y después de deshacer y rehacer lo escrito al lado (medido por la auditoría: `undone`
+  en los dos casos): después de recargar, el *Undo* del panel encuentra el reemplazo rehecho. Rehacer vuelve a escribir
+  los mismos registros.
 - **El *Undo* del aviso y el de "Last" en el panel** siguen andando, también cuando el reemplazo ya no es lo último
-  (DH10): ahí deshacen por las anclas en todas las páginas (fuera de orden, como hoy), y el paso de ese reemplazo **se
-  saca** de la pila de cada página con historia (si quedara, deshacerlo después volvería a escribir "cámara" encima de
-  lo que ya volvió) y de la línea de tiempo. Si el reemplazo es lo último, el botón hace exactamente lo mismo que ⌘Z.
+  (DH10). Si es lo último, hace exactamente lo mismo que ⌘Z. Si no:
+  - **en las páginas con historia**, se deshace **ese paso de la pila de Yjs aunque no sea el de arriba**: se corta la
+    pila hasta ese paso, se deshace y se vuelven a poner los de arriba (el mismo "un paso por vez" de 3.4). Así vuelven
+    las mismas letras que borró el reemplazo, y deshacer después lo escrito antes sale exacto. Medido por la auditoría
+    con el editor real: escribir "cámara roja", reemplazar, escribir en otro bloque, *Undo* del panel, ⌘Z, ⌘Z deja
+    "Toma 1: " (por las anclas quedaba "Toma 1: cámara", el resto de 1.3). El paso contrario que deja Yjs se descarta:
+    este *Undo* no se rehace con ⌘⇧Z (como hoy; para rehacer, se reemplaza de nuevo);
+  - **en las demás**, por las anclas, como hoy;
+  - el reemplazo sale de la línea de tiempo. Lo que se escribió después queda.
 
 ### 3.4 Qué hace ⌘Z
 
@@ -163,9 +192,13 @@ Un ⌘Z deshace **una** entrada, la última del proyecto que tenés abierto:
 3. **Un reemplazo:** se deshace en todas sus páginas sin moverte de donde estás, con el avance y *Stop* de hoy si tarda.
    Aviso: "Undid “Cámara” → “Camera” in 12 pages · Redo"; si alguna cambió: "· 2 had changed and were left as they are
    · Show". DH3.
-4. **Un paso que ya no cambia nada** (otra persona borró justo eso): se descarta y sigue con el anterior, **sin cambiar
-   de página** en el mismo ⌘Z. (Yjs, si un paso no cambia nada, se saltea solo al anterior de la misma pila; la línea de
-   tiempo le pasa **un paso por vez** para que no se saltee uno de otra página que iba antes. Medido.)
+4. **Un paso que ya no cambia nada** (otra persona borró justo eso): se descarta y, en el mismo ⌘Z, sigue con el
+   anterior **solo si es de esta misma página**. Si el anterior es de otra página o un reemplazo, ese ⌘Z se frena ahí con
+   el aviso "Nothing to undo there: someone else already changed it. {undo} again for the previous change." Ejemplo:
+   escribiste en *Shot 3* y después en *Shot 12*, y otra persona borró lo tuyo de *Shot 12*: el primer ⌘Z en *Shot 12*
+   no cambia nada y avisa; el segundo te lleva a *Shot 3*. (Yjs, si un paso no cambia nada, se saltea solo al anterior
+   de la misma pila; la línea de tiempo le pasa **un paso por vez** para que no se saltee uno de otra página que iba
+   antes. Medido.)
 
 Además:
 
@@ -178,10 +211,20 @@ Además:
   botón). **No** en el título, un comentario, la búsqueda, un diálogo ni el anotador: ahí sigue el deshacer de ese
   campo. Excepciones que ya existen y siguen: el título recién creado desde una plantilla (`armTitleUndo`) y, nueva, el
   campo del panel justo después de un reemplazo (DH9): hasta que escribas en el campo, ⌘Z ahí deshace el reemplazo.
-- **⌘⇧Z** (y Ctrl+Y en Windows) rehace en el mismo orden y con las mismas reglas. **Algo nuevo** (escribir en
+- **⌘⇧Z** rehace en el mismo orden y con las mismas reglas; también ⌘Y en la Mac y Ctrl+Y en Windows, como hoy
+  (`Mod-y` de BlockNote). **Algo nuevo** (escribir en
   cualquier página del proyecto, reemplazar) borra todo lo que había para rehacer, en todas las páginas (como cualquier
   editor: un solo orden).
 - **Con nada para deshacer**, ⌘Z no hace nada (sin aviso, como hoy).
+- **Quienes hoy llaman directo al deshacer de Yjs** pasan por la línea de tiempo (una función suya que deshace un paso
+  dado), así ningún paso queda en una lista que ella no conoce: el asistente cuando su comprobación falla (`apply.ts`,
+  `while … undo.undo()`), restaurar una versión cuando falla y el *Undo* de su aviso (`historyRestore.ts`,
+  `undoRestore`), el título recién creado desde una plantilla (`armTitleUndo`, `pageEditor.undo()`) y el deshacer del
+  navegador (`undoGuard.ts`, `editor.undo()` en `beforeinput`). La marca *Restored from…* (`onStepUndone`) escucha a la
+  línea de tiempo y no al `UndoManager`, que cambia al volver a la página.
+- **Lo que la app escribe de fondo** (`BACKGROUND_META`: renombrar un HEIC a `.jpg`, sacar el bloque de una subida que
+  falló) **no entra** en la pila (`addToHistory: false`): no lo hizo la persona, y como "algo nuevo" borraría lo que
+  había para rehacer en todas las páginas.
 
 ### 3.5 El orden, con el ejemplo de Lega
 
@@ -222,11 +265,12 @@ Reemplazaste en 50 páginas; después escribiste en *Shot 12*; antes del reempla
 | **Cambiar de workspace, cerrar sesión, recargar, cerrar la pestaña** | Se pierde la línea de tiempo (DH4). Los reemplazos siguen en el panel con *Undo*. Dos pestañas: cada una la suya. |
 | **Un reemplazo corriendo** | ⌘Z no hace nada hasta que termina (no se puede deshacer algo a medias); *Stop* sigue igual. |
 | **Un reemplazo cortado con *Stop* o por no poder guardar** | Entra igual, con las páginas que alcanzó a escribir. |
-| **El asistente aplica** | Ya es un paso de la pila de la página (A1, `asOneUndoStep`): entra solo. Si al comprobar falla y lo deshace (`while undo…`), el paso sale de la línea de tiempo con él (escucha `stack-item-popped`). |
+| **El asistente aplica** | Ya es un paso de la pila de la página (A1, `asOneUndoStep`): entra solo. Si al comprobar falla y lo deshace, lo hace por la línea de tiempo (3.4) y el paso sale con él. |
 | **Restaurar una versión** | Un paso de la página. *Undo* del aviso sigue andando mientras sea lo último de esa pila. |
-| **Crear desde una plantilla** | Un paso de la página; ⌘Z en el título recién creado sigue sacando la plantilla (ahora por la línea de tiempo). |
+| **Crear desde una plantilla** (de fábrica o propia, v0.124) | Un paso de la página (`insertTemplate` e `insertTemplateCopy` van por el editor; el colapsado para todos que copia no entra en la pila, como hoy); ⌘Z en el título recién creado sigue sacando la plantilla (ahora por la línea de tiempo). *Customize* y *Save as template…* escriben en otra página (la de la plantilla): son pasos de esa página si se escribe en su editor. |
 | **Reporte del día** | Crea una página y escribe con un editor sin pantalla: no entra (sección 10). La página nueva se manda a la papelera como cualquier otra. |
-| **Anotar** | Con el anotador abierto, su ⌘Z es de esa foto (hoy). En la entrega 3, al cerrarlo, todo lo de esa vez es **un** paso. |
+| **Anotar** | Con el anotador abierto, su ⌘Z es de esa foto (hoy; su pila mira el mapa de anotaciones, no el contenido: no se cruza con la de la página). En la entrega 3, al cerrarlo, todo lo de esa vez es **un** paso. Hasta entonces, un ⌘Z después de anotar saltea la anotación (DH1). |
+| **Renombrar, mover, crear o mandar a la papelera** | No entran (DH1): un ⌘Z después de renombrar *Shot 7* saltea el cambio de nombre y deshace lo anterior, que puede estar en otra página (te lleva). |
 | **El teléfono** | No hay ⌘Z sin teclado. Con teclado físico, igual que en la compu. El gesto de deshacer de iOS llega al editor como `historyUndo` y `undoGuard.ts` lo manda a la línea de tiempo (a probar a mano). Sin botón nuevo (DH8). |
 
 ## 6. No perder datos
@@ -238,11 +282,15 @@ Reemplazaste en 50 páginas; después escribiste en *Shot 12*; antes del reempla
 - **Lo que deshacés se rehace**: ⌘⇧Z para todo lo de la línea de tiempo, también el reemplazo (hoy no tiene rehacer).
 - **Retener un documento** usa `docs.open`: la página cuenta como abierta (la guardia de versión queda armada, como con
   el editor en pantalla), nada se destruye con ediciones sin guardar.
-- **Un límite de Yjs que ya existe hoy** (no lo trae este diseño): si algo que un deshacer volvió a poner se parte
-  escribiendo en el medio, deshacer más atrás puede dejar restos ("la ía" en vez de "la "). Medido en una sola página,
-  como el ⌘Z de hoy: 186 de 300 corridas al azar vuelven exacto al deshacer todo, y en 2 falta algo del principio (está
-  en el historial de versiones). Con la línea de tiempo, en el mismo tipo de corrida: 194 de 300 exactas y 0 con algo de
-  menos. Sin deshacer en el medio de la sesión, 300 de 300 exactas. Queda en el roadmap para investigarlo aparte.
+- **Un límite de Yjs que ya existe hoy** (no lo trae este diseño, pero lo hace más probable): si algo que un deshacer
+  volvió a poner se parte escribiendo en el medio, deshacer más atrás puede dejar restos ("la ía" en vez de "la ") y, a
+  veces, **llevarse un pedazo de texto**: en un caso, un solo deshacer borró "ám" de "cámara" (texto original que un
+  deshacer anterior había vuelto a poner). Medido por la auditoría con la **misma** secuencia al azar en una página, con
+  el deshacer de Yjs tal cual y con "un paso por vez" de la línea de tiempo: **idénticos**, 1.844 de 3.000 exactas al
+  deshacer todo y **14 de 3.000 con algo de menos** en los dos (el texto está en el historial de versiones). O sea, por
+  página la línea de tiempo hace exactamente lo de hoy. Pero hoy la pila muere al cambiar de página y se deshace poco;
+  con la línea de tiempo se llega más atrás, y esto se vería más. **Por eso es condición de la entrega 1: investigarlo
+  (un parche como los de y-prosemirror, o reportarlo a Yjs) y decidir antes de publicar** (B.21 del roadmap).
 
 ## 7. Versiones viejas
 
@@ -256,13 +304,14 @@ Reemplazaste en 50 páginas; después escribiste en *Shot 12*; antes del reempla
 
 - **Sin atajos nuevos.** `undo` y `redo` del registro (`shortcuts.ts`) cambian de dueño (de `blocknote` al de la línea
   de tiempo) y de lugar (también fuera del editor); `shortcutSources.ts` suma los archivos nuevos. En la Mac, ⌘Z y
-  ⌘⇧Z; en Windows, Ctrl+Z, Ctrl+Shift+Z y Ctrl+Y.
+  ⌘⇧Z (y ⌘Y, como hoy); en Windows, Ctrl+Z, Ctrl+Shift+Z y Ctrl+Y.
 - **Ayuda:** la entrada `undo` dice que deshace en el orden en que editaste, también en otra página (te lleva) y un
   reemplazo de todo el proyecto; `replaceProject` cambia su última oración ("{undo} in the page doesn't undo it") por
   que ⌘Z lo deshace si es lo último que hiciste, y que *Undo* del aviso y del panel sigue andando aunque no lo sea.
 - **Textos (inglés, con su traducción):** "Undone in “{page}” · Back", "Redone in “{page}” · Back", "Undid “{from}” →
   “{to}” in {n} pages · Redo", "Redid … · Undo", "Can't undo in “{page}”: {reason}. {undo} again for the previous
-  change.", "Older changes in “{page}” can't be undone (the page was reloaded)."
+  change.", "Older changes in “{page}” can't be undone (the page was reloaded).", "Nothing to undo there: someone
+  else already changed it. {undo} again for the previous change."
 - El tutorial no muestra deshacer: no cambia.
 
 ## 9. Lo medido (prototipos sin versionar)
@@ -280,9 +329,13 @@ archivos quedaron en la carpeta privada de trabajo; no van al repo.
 | **La pila sobre un documento rearmado** desde lo guardado (recargar) | no vuelve a poner lo borrado ("general" en vez de "plano general"): no se puede llevar la pila a otra sesión |
 | **Línea de tiempo: el orden** (escribir en A, reemplazar en A y B, escribir en B; tres ⌘Z y tres ⌘⇧Z) | cada paso en su orden, todo exacto |
 | **Línea de tiempo al azar, solo** (3 páginas, 60 acciones: escribir, borrar, reemplazar en todas; deshacer todo y rehacer todo) | 300 de 300 exactas al deshacer todo y al rehacer todo (9.839 pasos deshechos, 1.518 reemplazos) |
-| Ídem, **deshaciendo y rehaciendo en el medio** | 194 de 300 exactas, 0 con algo de menos (el resto es el límite de Yjs de la sección 6; hoy, en una página sola: 186 de 300 y 2 con algo de menos) |
+| Ídem, **deshaciendo y rehaciendo en el medio** | 194 de 300 exactas, 0 con algo de menos (el resto es el límite de Yjs de la sección 6). **No compara con hoy:** el prototipo de una página sola (186 de 300, 2 con algo de menos) usa otro generador. La comparación controlada es la de la auditoría: misma secuencia, idénticos (1.844 de 3.000 exactas y 14 de 3.000 con algo de menos con y sin "un paso por vez") |
+| **La pila pasada a otro editor real de BlockNote** (auditoría) | montar no deja nada en la pila; deshacer y rehacer exactos; lo del otro queda |
+| ***Undo* del panel fuera de orden** con el editor real (auditoría) | por las anclas, "Toma 1: cámara"; por la pila de Yjs fuera de orden, "Toma 1: " (DH10) |
+| **Línea de tiempo montando y desmontando** (auditoría: solo la página en pantalla tiene `UndoManager`, uno temporal para el reemplazo; 1.000 semillas × 3) | sin deshacer en el medio, 1.000 de 1.000 exactas; con deshacer en el medio, 0 con algo de menos; con el otro, 0 borrados del otro |
 | **Línea de tiempo al azar con el otro** escribiendo y borrando en las tres páginas | 300 corridas, 10.146 pasos deshechos: **0** caracteres del otro borrados por un deshacer y los dos dispositivos iguales en todas |
-| **Memoria** de un documento retenido con su pila | 0,33 MB (página de 26 KB guardada) y 0,94 MB (90 KB); unos 0,9 KB por paso |
+| **Memoria** de un documento retenido con su pila (Yjs solo) | 0,33 MB (página de 26 KB guardada) y 0,94 MB (90 KB); unos 0,9 KB por paso |
+| **Memoria con el editor real** (auditoría; página de 115 KB, 30 pasos) | 1,18 MB el documento; la pila +1,05 MB con el meta del editor viejo, +0,52 MB limpiándolo (3.2) |
 
 **Lo que mostró el prototipo y entra en el diseño:** Yjs, si un paso no cambia nada, sigue solo con el anterior de la
 misma pila (`popStackItem`), y eso saltearía un paso de otra página que iba antes: la línea de tiempo le pasa a Yjs un
@@ -310,7 +363,10 @@ memoria), el gesto de deshacer de iOS en la PWA, y Safari.
 
 **Las opciones:**
 - **A.** Cada paso del deshacer de cada página (lo que hoy deshace ⌘Z en la página) y cada reemplazo del proyecto; en la
-  entrega 3, también anotar una foto (todo lo de esa vez, un paso). Mover, crear, papelera y títulos no.
+  entrega 3, también anotar una foto (todo lo de esa vez, un paso). Mover, crear, papelera, títulos y comentarios no:
+  **un ⌘Z después de mover *Shot 7* o de renombrarla saltea eso** y deshace lo anterior, que puede estar en otra página
+  (te lleva). En el ejemplo: ⌘Z saca lo de *Shot 12*, el siguiente el reemplazo, el siguiente lo de *Shot 3*; *Shot 7*
+  queda movida.
 - **B.** Solo los reemplazos del proyecto; la página sigue con su ⌘Z propio, y el reemplazo se deshace con ⌘Z cuando es
   lo último de esa página (como VS Code).
 - **C.** A, y además el árbol: mover, crear, mandar a la papelera, renombrar.
@@ -430,24 +486,34 @@ otra sesión (medido).
 **Qué pasaba:** reemplazaste, escribiste en otra página, y apretás *Undo* en "Last" del panel.
 
 **Las opciones:**
-- **A.** Se deshace igual (como hoy, por las anclas en todas las páginas) y sale de la línea de tiempo; lo escrito
+- **A.** Se deshace igual: en las páginas que editaste en la sesión, por su pila (ese paso solo, aunque no sea el
+  último), y en las demás por las anclas, como hoy. Sale de la línea de tiempo, no se rehace con ⌘⇧Z y lo escrito
   después queda.
-- **B.** Solo si es lo último; si no, el botón no está.
+- **B.** Lo mismo, pero por las anclas en todas las páginas (como hoy): más simple, y vuelve a dejar el "cámara" de
+  más de 1.3 si después deshacés lo que escribiste antes del reemplazo.
+- **C.** Solo si es lo último; si no, el botón no está.
 
-**Elegí A** porque es lo que hace hoy y a veces querés sacar solo el reemplazo.
+**Elegí A** porque es lo que hace hoy el botón, sin el texto de más (medido con el editor real).
 
-**Si preferís otra:** B es un cambio chico.
+**Si preferís otra:** B y C son cambios chicos.
 
 ## 12. Pruebas
 
 - **Núcleo, sin pantalla** (`src/ui/undoTimeline.test.ts`, con `PageDocs`, IndexedDB y el servidor de prueba): el orden
   con varias páginas; la pila que sobrevive al desmontar y volver; el documento retenido que no se destruye y se suelta
   al pasar el tope; el paso que no cambia nada (no cruza ni se saltea otra página); `stack-item-updated` y rehacer; el
-  asistente que deshace su propio paso; el documento rearmado (`stale`) que saca sus pasos.
+  asistente que deshace su propio paso; el documento rearmado (`stale`) que saca sus pasos y suelta la referencia antes
+  de que la página vuelva a abrir (la página abre el documento nuevo); pasar la pila con el editor real: el `meta` sin
+  bindings viejos, una lista no vacía que no se pisa, y la memoria antes y después; restaurar una versión y el
+  asistente que deshacen por la línea de tiempo (nada queda en una lista que ella no conoce, la marca *Restored from…*
+  se entera después de volver a la página); lo escrito de fondo que no entra ni borra lo de rehacer.
 - **Reemplazo** (`src/search/projectReplace.test.ts`): el hueco de 1.3 arreglado (deshacer el reemplazo y después lo
   escrito antes: exacto); páginas con y sin historia en el mismo reemplazo; rehacer por la pila y por las anclas
-  (`planRedo`, en `replaceDoc.test.ts` con sus casos y al azar); *Undo* del panel fuera de orden que saca el paso de la
-  pila; con el otro a la vez (al azar, `TIMELINE_SEEDS`): nada del otro borrado y los dos iguales.
+  (`planRedo`, en `replaceDoc.test.ts` con sus casos y al azar); *Undo* del panel fuera de orden (DH10): por la pila en
+  las páginas con historia, y después ⌘Z, ⌘Z deja "Toma 1: " exacto; con el otro a la vez (al azar, `TIMELINE_SEEDS`):
+  nada del otro borrado y los dos iguales.
+- **El límite de Yjs** (entrega 0): la misma secuencia al azar con y sin "un paso por vez", 3.000 semillas, contando las
+  "con algo de menos"; con el parche, si lo hay, en cero.
 - **Pantalla** (jsdom, la app de verdad): ⌘Z en otra página (va, muestra, deshace, *Back*); mantener apretado no cruza;
   ⌘Z con el foco en el árbol; en el título y en un comentario no; el campo del panel recién reemplazado (DH9); los avisos;
   ⌘Z en la Mac sí y Ctrl+Z en la Mac no (`macShortcuts.test.ts`); el registro de atajos (`shortcuts.test.ts`).
@@ -459,32 +525,44 @@ otra sesión (medido).
 
 ## 13. Entregas
 
+0. **Antes de la entrega 1 (condición): el límite de Yjs de la sección 6 (B.21).** Encontrar en `UndoManager` por qué
+   un deshacer sigue la copia vuelta a poner solo hasta el primer corte, y decidir: un parche (como los de
+   y-prosemirror, con su prueba al azar de 3.000 semillas en cero "con algo de menos") o reportarlo a Yjs y publicar
+   igual sabiendo el número. **Aceptación:** la decisión anotada con su medición.
 1. **La línea de tiempo con las páginas.** La pila de cada página que sobrevive al cambiar de página (retener y pasar
-   la pila), ⌘Z y ⌘⇧Z en orden entre páginas (DH2), fuera del editor, topes, ayuda y atajos. **Aceptación:** escribir en
-   *A*, en *B* y en *A*; desde *C*, tres ⌘Z deshacen *A*, *B* y *A* en ese orden, cada uno con su página en pantalla, y
-   tres ⌘⇧Z lo vuelven; con otro dispositivo escribiendo en *A* a la vez, lo suyo queda.
+   la pila sin el meta del editor viejo, 3.2), ⌘Z y ⌘⇧Z en orden entre páginas (DH2), fuera del editor, quienes llaman
+   directo al deshacer (3.4), lo de fondo fuera de la pila, topes, ayuda y atajos. **Aceptación:** escribir en *A*, en
+   *B* y en *A*; desde *C*, tres ⌘Z deshacen *A*, *B* y *A* en ese orden, cada uno con su página en pantalla, y tres ⌘⇧Z
+   lo vuelven; con otro dispositivo escribiendo en *A* a la vez, lo suyo queda; **la memoria medida con el editor real**
+   (en Chromium y en el iPhone) con 20 páginas retenidas, para fijar el tope.
 2. **El reemplazo adentro.** La pila de Yjs en las páginas con historia, las anclas en las demás, `planRedo`, los avisos
    con *Redo*, DH9 y DH10. **Aceptación:** el ejemplo de Lega (3.5) en Chromium con 50 páginas: dos ⌘Z dejan las 50 como
    antes y lo escrito antes del reemplazo sale exacto (sin el "cámara" que queda hoy); ⌘⇧Z lo vuelve; sin red, igual.
-3. **(Opcional) Anotar y lo que queda.** Lo de una vez en el anotador como un paso al cerrarlo; el roadmap de DH1 C y
-   DH8 B si Lega los pide. **Aceptación:** anotar, cerrar, ⌘Z saca todo lo de esa vez y ⌘⇧Z lo vuelve.
+3. **Anotar como un paso.** Lo de una vez en el anotador como un paso al cerrarlo (es algo que hiciste en la página;
+   la auditoría pidió que no sea opcional). DH1 C y DH8 B, si Lega los pide, aparte. **Aceptación:** anotar, cerrar, ⌘Z saca todo lo de esa vez y ⌘⇧Z lo vuelve.
 
 Cada entrega con su auditoría antes de publicar.
 
 ## 14. Riesgos
 
-1. **Memoria en el teléfono.** 20 documentos retenidos y 1000 pasos son unos 20 MB en el peor caso medido. Si el iPhone
-   aprieta, bajar el tope a 10 páginas. A medir en la entrega 1.
+1. **Memoria en el teléfono.** 20 documentos retenidos con su historia son unos 25 a 35 MB con el editor real (si se
+   limpia el meta del editor viejo; sin limpiarlo, casi el doble en la pila). Si el iPhone aprieta, bajar el tope a 10
+   páginas. A medir en la entrega 1.
 2. **El `UndoManager` temporal del reemplazo** tiene que usar las mismas opciones que el de y-prosemirror (el filtro que
    protege los párrafos y la marca de huecos estables del parche, `defaultDeleteFilter`): si no, deshacer podría sacar
    la marca del renglón. Una prueba lo compara.
-3. **Pasar la pila de un editor a otro** depende de que y-prosemirror y BlockNote no cambien cómo arman el plugin (hoy
-   BlockNote mismo lo hace en `ForkYDoc`). La selección guardada en cada paso queda con la clave del editor viejo: al
-   deshacer un paso de antes del cambio de página el cursor no vuelve solo; la línea de tiempo muestra el bloque.
+3. **Pasar la pila de un editor a otro** depende de que y-prosemirror y BlockNote no cambien cómo arman el plugin
+   (comprobado con el editor real de hoy; se vuelve a probar al actualizarlos, como los parches de `Doc_Colaboracion.md`).
+   La selección guardada en cada paso tiene como clave el *binding* del editor viejo: se borra al pasar la pila (si no,
+   retiene el editor viejo entero en memoria, 3.2) y, al deshacer un paso de antes del cambio de página, el cursor no
+   vuelve solo; la línea de tiempo muestra el bloque.
 4. **Saltar de página puede sorprender** (DH2). El aviso con *Back* y no cruzar manteniendo apretado lo atenúan.
-5. **El límite de Yjs de la sección 6** (restos al deshacer mucho con deshacer y rehacer en el medio) ya existe; la
-   línea de tiempo no lo empeora (medido) pero lo hace más visible al deshacer más lejos.
-6. **Rehacer un reemplazo por las anclas** (`planRedo`) es código nuevo con la misma regla que `planUndo`; necesita sus
+5. **El límite de Yjs de la sección 6** (restos, y a veces un pedazo de texto de menos, al deshacer mucho con deshacer y
+   rehacer en el medio) ya existe; por página la línea de tiempo hace lo mismo que hoy (medido), pero se deshace más
+   lejos y se vería más. Condición de la entrega 1 (entrega 0).
+6. **Quien llame directo al `UndoManager`** (código nuevo que se olvide de la línea de tiempo) deja pasos que ella no
+   conoce. Una prueba recorre `src` buscando `.undo()` y `.redo()` sobre un `UndoManager` fuera de la línea de tiempo.
+7. **Rehacer un reemplazo por las anclas** (`planRedo`) es código nuevo con la misma regla que `planUndo`; necesita sus
    pruebas al azar como las de `planUndo`.
 
 ## 15. Lo que no se pudo comprobar
@@ -493,3 +571,27 @@ Cada entrega con su auditoría antes de publicar.
 - Cuánto tarda en montarse el editor al saltar de página con el documento ya en memoria (se espera poco: no hay que
   leer IndexedDB).
 - El uso de memoria real en el iPhone con 20 páginas retenidas.
+- El orden de armado y desmontado de React al cambiar de página (3.2, "Cuándo"): leído, no medido con la app entera.
+
+## Correcciones de la auditoría (2026-10-02)
+
+Veredicto: "aprobado con condiciones", sin bloqueantes; la premisa de pasar la pila de un editor al siguiente sin
+parchear nada se comprobó con el editor real de BlockNote, y en 4.000 corridas al azar no se borró nada del otro.
+
+- **C1, el *Undo* del panel fuera de orden dejaba el texto de más de 1.3.** Ahora, en las páginas con historia, deshace
+  ese paso de la pila de Yjs aunque no sea el de arriba (medido: "Toma 1: " en vez de "Toma 1: cámara"); las demás
+  siguen por las anclas (3.3, DH10, "En corto").
+- **C2, pasar la pila arrastraba el editor viejo.** Al pasarla se borra del `meta` la clave del binding viejo (+1,05 MB
+  contra +0,52 MB en 30 pasos); la línea de tiempo es la dueña de las listas, se pasan al montar la vista del editor
+  nuevo y nunca pisan una lista que no esté vacía; la memoria se mide con el editor real en la entrega 1 (3.2, riesgos
+  1 y 3).
+- **C3, el límite de Yjs.** La comparación "no lo empeora" no era controlada; con la misma secuencia, por página es
+  idéntico a hoy (14 de 3.000 con algo de menos en los dos), pero se deshace más lejos. Investigarlo y decidir es
+  condición de la entrega 1 (sección 6, sección 9, entrega 0, B.21 del roadmap).
+- **Observaciones resueltas en el texto:** DH1 dice con un ejemplo que mover, renombrar y (hasta la entrega 3) anotar
+  se saltean; anotar deja de ser opcional; quienes llaman directo al deshacer de Yjs pasan por la línea de tiempo y
+  `onStepUndone` la escucha a ella (3.4, riesgo 6); lo que se escribe de fondo no entra en la pila; el documento viejo
+  retenido se suelta en el mismo momento del aviso; la analogía con `ForkYDoc` se cambió por la comprobación con el
+  editor real; el nombre del pedido ya no choca con D-10 de `Doc_Decisiones.md`; las plantillas propias (v0.124) en la
+  tabla de casos; ⌘Y en la Mac sigue rehaciendo, como hoy; el paso que ya no cambia nada, con un ejemplo; las anclas
+  siguen sirviendo después de deshacer y rehacer por la pila.
