@@ -200,6 +200,11 @@ interface Who {
   isOwner: boolean;
   /** El encabezado `Authorization` de la persona, para preguntarle a la base con su sesión. */
   auth: string;
+  /**
+   * Un visitante con un link público (Docs/Doc_Link_Publico.md, 3.9): el token del header `x-shotdocs-link`. La base lo
+   * valida en cada pregunta (`plink_media_file`); `auth` es entonces la clave publicable, nunca una sesión.
+   */
+  link?: string;
 }
 
 const SCOPE = 'https://www.googleapis.com/auth/drive.file';
@@ -214,6 +219,12 @@ const TEST_FOLDER = 'Media_Test';
 const OLD_NAMES: Record<string, string> = { [ROOT_FOLDER]: 'LGA Shot Docs', [TEST_FOLDER]: 'Media test' };
 /** Un pase de reproducción dura esto: si vence en medio de un video, la reproducción se corta. */
 const PASS_MS = 8 * 60 * 60 * 1000;
+/** Los pases de un link público duran menos (P17): revocar el link corta antes lo ya abierto. */
+const LINK_PASS_MS = 2 * 60 * 60 * 1000;
+/** El token de un link público: `sdl_` y 43 caracteres base64url. */
+const LINK_TOKEN = /^sdl_[A-Za-z0-9_-]{43}$/;
+/** Lo único que un link público (Can view) le pide al portero: pases, comprobar archivos, listar carpetas y el estado. */
+const LINK_ROUTES = new Set(['POST /pass', 'POST /verify', 'POST /folder/list', 'GET /drive/status']);
 /** Una parte de subida no puede pasar esto (el plan gratis de Workers acepta hasta 100 MB por pedido). */
 const MAX_CHUNK = 64 * 1024 * 1024;
 /** Tope del nombre de un archivo en un pase, en caracteres (el de casi todos los sistemas). */
@@ -457,7 +468,7 @@ function cors(req: Request, env: Env): Record<string, string> {
   return {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
-    'Access-Control-Allow-Headers': 'Authorization, Content-Type, Content-Range, Range',
+    'Access-Control-Allow-Headers': 'Authorization, Content-Type, Content-Range, Range, x-shotdocs-link, x-shotdocs-device',
     'Access-Control-Max-Age': '600',
     Vary: 'Origin',
   };
@@ -551,6 +562,10 @@ export class Portero {
       if (thumb && (req.method === 'GET' || req.method === 'HEAD')) return withMediaCors(await this.thumbnail(req, thumb), req, this.env);
 
       const who = await this.whoami(req);
+      // Con un link público, solo lo de ver (nunca lo del dueño, subir ni la papelera).
+      if (who.link && !LINK_ROUTES.has(`${req.method} ${path}`)) {
+        throw new HttpError(403, 'This is not available through a link.', 'link_denied');
+      }
       if (path === '/drive/status' && req.method === 'GET') return json(req, this.env, await this.status(who));
       // Subir y ver: con `file`, según el nivel de la persona sobre el archivo; sin él, solo el dueño.
       if (path === '/upload' && req.method === 'POST') return json(req, this.env, await this.startUpload(req, who));
@@ -586,16 +601,32 @@ export class Portero {
 
   // --- la base del workspace, con la sesión de la persona ------------------------------------------
 
-  private rpc(auth: string, fn: string, args: unknown): Promise<Response> {
+  private rpc(auth: string, fn: string, args: unknown, link?: string): Promise<Response> {
     return this.http(`${this.env.SUPABASE_URL.replace(/\/+$/, '')}/rest/v1/rpc/${fn}`, {
       method: 'POST',
-      headers: { apikey: this.env.SUPABASE_PUBLISHABLE_KEY, Authorization: auth, 'Content-Type': 'application/json' },
+      headers: {
+        apikey: this.env.SUPABASE_PUBLISHABLE_KEY,
+        Authorization: auth,
+        'Content-Type': 'application/json',
+        ...(link ? { 'x-shotdocs-link': link } : {}),
+      },
       body: JSON.stringify(args),
     });
   }
 
+  /** Lo que dura un pase para esta persona (o este link). */
+  private passMs(who: Who): number {
+    return who.link ? LINK_PASS_MS : PASS_MS;
+  }
+
   // Quién es: la sesión de Supabase de la persona, validada por el propio Supabase.
   private async whoami(req: Request): Promise<Who> {
+    // Un link público: con el header del link nunca se usa (ni se reenvía) un `Authorization` que venga en el pedido.
+    const link = req.headers.get('x-shotdocs-link');
+    if (link !== null) {
+      if (!LINK_TOKEN.test(link)) throw new HttpError(401, 'This link does not work anymore.', 'link_not_found');
+      return { userId: 'plink', isOwner: false, auth: `Bearer ${this.env.SUPABASE_PUBLISHABLE_KEY}`, link };
+    }
     const auth = req.headers.get('Authorization') ?? '';
     if (!/^Bearer \S+$/.test(auth)) throw new HttpError(401, 'Sign in to the app first.');
     const res = await this.rpc(auth, 'media_whoami', {});
@@ -608,7 +639,18 @@ export class Portero {
 
   /** El archivo de la app y el nivel de la persona sobre él; `null` si no existe o no lo puede ver. */
   private async mediaFile(who: Who, file: string): Promise<MediaFile | null> {
-    const res = await this.rpc(who.auth, 'media_file', { p_file_id: file });
+    const res = who.link
+      ? await this.rpc(who.auth, 'plink_media_file', { p_file: file }, who.link)
+      : await this.rpc(who.auth, 'media_file', { p_file_id: file });
+    if (who.link && !res.ok) {
+      // La base contesta `link_not_found` (revocado, vencido, reseteado: P0002, que PostgREST da como 404) o
+      // `link_rate_limited` (un tope del día); una base sin la migración, PGRST202.
+      const error = (await res.json().catch(() => null)) as { message?: string; code?: string } | null;
+      if (error?.code === 'PGRST202') throw new HttpError(502, 'The workspace database is not up to date for links yet.');
+      if (error?.message === 'link_rate_limited') throw new HttpError(429, 'This link has been used a lot today.', 'link_rate_limited');
+      if (res.status >= 500 && error?.message !== 'link_not_found') throw new HttpError(502, `The workspace did not answer (${res.status}).`);
+      throw new HttpError(401, 'This link does not work anymore.', 'link_not_found');
+    }
     if (res.status === 401 || res.status === 403) throw new HttpError(401, 'Your session expired: sign in again.');
     if (res.status === 404) throw new HttpError(502, 'The workspace database is not up to date for files yet.');
     if (!res.ok) throw new HttpError(502, `The workspace did not answer (${res.status}).`);
@@ -1659,7 +1701,7 @@ export class Portero {
     };
     const known = this.known(root);
     const now = Date.now();
-    const until = now + PASS_MS;
+    const until = now + this.passMs(who);
     // Las subcarpetas de esta valen lo mismo que ella: si se comprobó hace 8 minutos, ellas también.
     const dirAt = dir === root ? now : (known.get(dir) ?? now);
     const entries: unknown[] = [];
@@ -2122,7 +2164,7 @@ export class Portero {
     if (body.file !== undefined) {
       // El tipo y el nombre son siempre los de `files`: lo que mande la app no cuenta.
       const { drive, type, size, name } = await this.filePass(body.file, who);
-      const pass: Pass = { f: drive, t: type, u: Date.now() + PASS_MS, s: size, ...(name ? { n: name } : {}) };
+      const pass: Pass = { f: drive, t: type, u: Date.now() + this.passMs(who), s: size, ...(name ? { n: name } : {}) };
       return { url: await this.passUrl(req, pass), named: true };
     }
     const asked = typeof body.type === 'string' && MIME.test(body.type) ? body.type : '';

@@ -105,7 +105,9 @@ const FOLDER_ZIP = '0.105';
 /** Sacar una foto o filmar desde la página y guardar en Fotos (camera.ts): la versión se pone al publicar. */
 const CAMERA = '0.110';
 /** Las plantillas de fábrica (Docs/Doc_Plantillas.md, entregas 0 y 1): la versión se ajusta al publicar. */
-const TEMPLATES = '0.113';
+const TEMPLATES = '0.115';
+/** El link público, *Can view* (Doc_Link_Publico.md, entrega 1): la versión se pone al publicar, igual que en el changelog. */
+const PUBLIC_LINK = '0.111';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -396,6 +398,22 @@ export const HELP_ENTRIES: HelpEntry[] = [
   // --- Compartir ---
   { id: 'share', section: 'sharing', title: 'help.share.title', text: 'help.share.text', since: BEFORE_HELP },
   { id: 'members', section: 'sharing', title: 'help.members.title', text: 'help.members.text', when: 'admin', since: BEFORE_HELP },
+  {
+    id: 'publicLink',
+    section: 'sharing',
+    title: 'help.publicLink.title',
+    text: 'help.publicLink.text',
+    words: ['link', 'enlace', 'público', 'public', 'anyone', 'cualquiera', 'sin cuenta', 'without an account', 'reset', 'renovar', 'vence', 'expires'],
+    since: PUBLIC_LINK,
+  },
+  {
+    id: 'openedWithLink',
+    section: 'sharing',
+    title: 'help.openedWithLink.title',
+    text: 'help.openedWithLink.text',
+    words: ['link', 'visitante', 'visitor', 'nombre', 'name', 'via link', 'vía link', 'sin cuenta', 'without an account'],
+    since: PUBLIC_LINK,
+  },
   {
     id: 'deletedPrivacy',
     section: 'sharing',

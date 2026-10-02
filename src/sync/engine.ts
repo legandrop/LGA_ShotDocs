@@ -171,6 +171,13 @@ export class SyncEngine {
       comments?: CommentQueue;
       /** El peso de los proyectos (P.7): se entera de la versión de la base en cada sincronización. */
       sizes?: { configure(schemaVersion: number): void };
+      /** Cada cuánto se sincroniza solo (10 s; el modo link, 30 s: Docs/Doc_Link_Publico.md, P12). */
+      intervalMs?: number;
+      /**
+       * Modo liviano (link público, P12): qué páginas se bajan en cada ciclo. Sin esto, todas las que cambiaron; con el
+       * link, solo las que el dispositivo ya bajó alguna vez (las demás se bajan al abrirlas, `prefetchPage`).
+       */
+      pullOnly?: (pageId: string, cursor: number) => boolean;
     } = {},
   ) {
     const poke = () => this.poke();
@@ -268,7 +275,7 @@ export class SyncEngine {
         window.removeEventListener('pagehide', onHide);
       });
     }
-    this.interval = setInterval(onWake, INTERVAL_MS);
+    this.interval = setInterval(onWake, this.options.intervalMs ?? INTERVAL_MS);
     // Lo que el servidor rechazó se vuelve a intentar una vez por apertura: puede que ya se haya arreglado.
     // Un error de la base de archivos nunca saltea la sincronización del texto. Del árbol, solo lo rechazado por la
     // versión mínima (lo dejó una versión anterior de la app, que lo tomaba como un rechazo): lo demás sigue a la vista
@@ -503,7 +510,10 @@ export class SyncEngine {
       // Hasta `serverSeq`: las filas, o la base limpia para quien no ve lo borrado (Docs/Doc_Privacidad_Borrado.md).
       const stale = this.status.outdated
         ? []
-        : rows.filter((r) => this.tree.serverSeq(r) > (cursors.get(r.id)?.cursor ?? 0)).map((r) => r.id);
+        : rows
+            .filter((r) => this.tree.serverSeq(r) > (cursors.get(r.id)?.cursor ?? 0))
+            .filter((r) => this.options.pullOnly?.(r.id, cursors.get(r.id)?.cursor ?? 0) ?? true)
+            .map((r) => r.id);
       await runPool(stale, PULL_CONCURRENCY, (id) =>
         this.docs.pullPage(id, this.remote).then((n) => {
           if (n > 0) this.lastActivityAt = Date.now();

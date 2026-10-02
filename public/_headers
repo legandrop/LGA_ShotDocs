@@ -1,2 +1,6 @@
+/*
+  X-Robots-Tag: noindex, nofollow
+  Referrer-Policy: strict-origin-when-cross-origin
+
 /assets/*
   Cache-Control: public, max-age=31536000, immutable

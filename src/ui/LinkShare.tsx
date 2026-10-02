@@ -1,0 +1,286 @@
+import { useEffect, useState } from 'react';
+import { useT } from '../i18n';
+import '../i18n/lazy/teamDialogs';
+import { copyText, copyWhenReady } from '../invite';
+import { publicLinkUrl } from '../linkMode';
+import { navigate, pagePath } from '../router';
+import { useServices, useSyncStatus } from '../services';
+import {
+  createPublicLink,
+  deletePublicLinkComments,
+  expiryFor,
+  getPublicLink,
+  LINK_SCHEMA_VERSION,
+  resetPublicLink,
+  revokePublicLink,
+  setPublicLinkExpiry,
+  type ExpiryChoice,
+  type PublicLink,
+  type PublicLinkInfo,
+} from '../sync/publicLinks';
+import { notify } from './notice';
+import { ShareGateNotes, UNSYNCED_BEFORE_SHARE, useShareGate } from './shareGate';
+import { teamErrorText } from './teamText';
+
+// "General access" en Share de una página (Docs/Doc_Link_Publico.md, 3.11): Restricted o Anyone with the link (Can
+// view, que comenta), copiar, vencer (D30: Never por defecto), Reset link, el uso de hoy y quitarlo. Solo se ve con la
+// base en la versión de los links; crear pide el interruptor de D14 (D33: si está apagado, la opción se ve apagada con
+// la línea que lo explica).
+
+function megabytes(bytes: number): string {
+  return (bytes / 1_048_576).toFixed(bytes < 10_485_760 ? 1 : 0);
+}
+
+/** El fin del día elegido (hora local), o `null` si no es una fecha futura. */
+export function endOfDay(date: string, now = Date.now()): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!m) return null;
+  const end = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 23, 59, 59);
+  return end.getTime() > now ? end.toISOString() : null;
+}
+
+export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => void }) {
+  const { client, workspace } = useServices();
+  const status = useSyncStatus();
+  const tr = useT();
+  const gate = useShareGate();
+  const [info, setInfo] = useState<PublicLinkInfo | null | undefined>(undefined);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [manual, setManual] = useState<string | null>(null);
+  const [expiry, setExpiry] = useState<ExpiryChoice | 'date'>('never');
+  const [date, setDate] = useState('');
+  const [reload, setReload] = useState(0);
+
+  const supported = (status.schemaVersion ?? 0) >= LINK_SCHEMA_VERSION;
+
+  useEffect(() => {
+    if (!supported) return;
+    let live = true;
+    getPublicLink(client, pageId).then(
+      (data) => live && setInfo(data),
+      (err: unknown) => live && setError(teamErrorText(err)),
+    );
+    return () => {
+      live = false;
+    };
+  }, [client, pageId, reload, supported]);
+
+  if (!supported || info === null) return null;
+
+  const link = info?.link ?? null;
+  const urlOf = (l: Pick<PublicLink, 'token'>) =>
+    publicLinkUrl(location.origin, {
+      u: workspace.config.url,
+      k: workspace.config.publishableKey,
+      l: status.workspaceLocalKey ?? workspace.config.localKey,
+      t: l.token ?? '',
+    });
+
+  async function run(label: string, work: () => Promise<void>) {
+    setBusy(label);
+    setError(null);
+    try {
+      await work();
+      setReload((n) => n + 1);
+    } catch (err) {
+      if (err !== UNSYNCED_BEFORE_SHARE) setError(teamErrorText(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /** Copia el link que todavía se está creando (en el mismo gesto, para Safari); si no se pudo, lo muestra. */
+  async function copyCreated(created: Promise<PublicLink>) {
+    const text = created.then(urlOf);
+    const copied = copyWhenReady(text);
+    const url = await text;
+    if (await copied) {
+      notify(tr('share.link.copied'));
+      setManual(null);
+    } else setManual(url);
+  }
+
+  function expiresValue(): string | null | undefined {
+    if (expiry !== 'date') return expiryFor(expiry);
+    return endOfDay(date) ?? undefined;
+  }
+
+  /** Anyone with the link: antes sube lo pendiente de la rama; después arma las bases (D14), y copia el link. */
+  function turnOn(anyway = false) {
+    const expires = expiresValue();
+    if (expires === undefined) {
+      setError(tr('share.link.badDate'));
+      return;
+    }
+    if (anyway) gate.clearBlocked();
+    const scope = { pageId };
+    const created = (anyway ? Promise.resolve(true) : gate.ready(scope, true, () => turnOn(), () => turnOn(true))).then((ok) => {
+      if (!ok) throw UNSYNCED_BEFORE_SHARE;
+      return createPublicLink(client, pageId, expires);
+    });
+    void run('on', async () => {
+      await copyCreated(created);
+      gate.after(scope, true, tr('share.link.visitors'));
+    });
+  }
+
+  const usage = link?.usage_today ?? {};
+  const opens = usage.open?.n ?? 0;
+  const commentsToday = usage.comment?.n ?? 0;
+
+  return (
+    <section className="link-share" aria-label={tr('share.link.general')}>
+      <span className="pref-label">{tr('share.link.general')}</span>
+      {info === undefined && !error && <p className="muted small">{tr('common.loading')}</p>}
+      {info?.above && !link && (
+        <p className="muted small team-lead">
+          {tr('share.link.above', { title: info.above.title || tr('share.via.pageAbove') })}{' '}
+          {info.above.title !== null && (
+            <button
+              type="button"
+              className="link"
+              onClick={() => {
+                onClose();
+                navigate(pagePath(info.above!.page_id));
+              }}
+            >
+              {tr('share.link.goAbove')}
+            </button>
+          )}
+        </p>
+      )}
+      {info && (
+        <div className="link-share-row">
+          <select
+            aria-label={tr('share.link.general')}
+            value={link ? 'anyone' : 'restricted'}
+            disabled={busy !== null || (!link && !info.clean_on)}
+            onChange={(e) => {
+              if (e.target.value === 'anyone') turnOn();
+              else void run('off', () => revokePublicLink(client, pageId));
+            }}
+          >
+            <option value="restricted">{tr('share.link.restricted')}</option>
+            <option value="anyone">{tr('share.link.anyone')}</option>
+          </select>
+          <span className="team-role">{tr('share.link.canView')}</span>
+        </div>
+      )}
+      {info && !link && !info.clean_on && <p className="muted small team-lead">{tr('share.link.cleanOff')}</p>}
+      {info && !link && info.clean_on && (
+        <>
+          <p className="muted small team-lead">{tr('share.link.restrictedHint')}</p>
+          <label className="team-check">
+            <span>{tr('share.link.expires')}</span>
+            <ExpirySelect value={expiry} onChange={setExpiry} />
+            {expiry === 'date' && <input type="date" value={date} aria-label={tr('share.link.date')} onChange={(e) => setDate(e.target.value)} />}
+          </label>
+        </>
+      )}
+      {link && (
+        <>
+          <p className="muted small team-lead">{tr('share.link.anyoneHint')}</p>
+          {!link.alive && <p className="warn small team-lead">{tr('share.link.notAlive')}</p>}
+          <div className="team-invite-actions link-share-actions">
+            <button
+              type="button"
+              className="primary"
+              disabled={busy !== null || !link.token}
+              onClick={() =>
+                void copyText(urlOf(link)).then((ok) => {
+                  if (ok) notify(tr('share.link.copied'));
+                  else setManual(urlOf(link));
+                })
+              }
+            >
+              {tr('share.link.copy')}
+            </button>
+            <button
+              type="button"
+              disabled={busy !== null}
+              onClick={() => {
+                if (!confirm(tr('share.link.resetConfirm'))) return;
+                void run('reset', () => copyCreated(resetPublicLink(client, pageId)));
+              }}
+            >
+              {tr('share.link.reset')}
+            </button>
+          </div>
+          <label className="team-check">
+            <span>{tr('share.link.expires')}</span>
+            <span className="muted small">
+              {link.expires_at ? tr('share.link.expiresOn', { date: new Date(link.expires_at).toLocaleDateString() }) : tr('share.link.never')}
+            </span>
+            <ExpirySelect
+              value={null}
+              disabled={busy !== null}
+              onChange={(choice) => {
+                if (choice === 'date') {
+                  const asked = prompt(tr('share.link.datePrompt'), new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10));
+                  const at = asked ? endOfDay(asked.trim()) : null;
+                  if (asked && !at) return setError(tr('share.link.badDate'));
+                  if (at) void run('expiry', async () => void (await setPublicLinkExpiry(client, pageId, at)));
+                  return;
+                }
+                void run('expiry', async () => void (await setPublicLinkExpiry(client, pageId, expiryFor(choice))));
+              }}
+            />
+          </label>
+          <p className="muted small team-lead">
+            {tr('share.link.usage', { opens, comments: commentsToday, mb: megabytes(usage.pull?.bytes ?? 0) })}
+          </p>
+          {link.limited && <p className="warn small team-lead">{tr('share.link.limited')}</p>}
+          {link.comments > 0 && (
+            <button
+              type="button"
+              className="link danger"
+              disabled={busy !== null}
+              onClick={() => {
+                if (!confirm(tr('share.link.deleteCommentsConfirm', { count: link.comments }))) return;
+                void run('comments', async () => void (await deletePublicLinkComments(client, link.id)));
+              }}
+            >
+              {tr('share.link.deleteComments', { count: link.comments })}
+            </button>
+          )}
+        </>
+      )}
+      {manual && (
+        <div className="team-link">
+          <span className="muted">{tr('team.copyManually')}</span>
+          <input readOnly value={manual} onFocus={(e) => e.currentTarget.select()} aria-label={tr('share.link.copy')} />
+        </div>
+      )}
+      <ShareGateNotes gate={gate} reader={!link && !!info?.clean_on} />
+      {error && <p className="error">{error}</p>}
+    </section>
+  );
+}
+
+function ExpirySelect({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: ExpiryChoice | 'date' | null;
+  onChange: (choice: ExpiryChoice | 'date') => void;
+  disabled?: boolean;
+}) {
+  const tr = useT();
+  return (
+    <select
+      aria-label={tr('share.link.expires')}
+      value={value ?? ''}
+      disabled={disabled}
+      onChange={(e) => e.target.value && onChange(e.target.value as ExpiryChoice | 'date')}
+    >
+      {value === null && <option value="">{tr('share.link.change')}</option>}
+      <option value="never">{tr('share.link.never')}</option>
+      <option value="1">{tr('share.link.days', { count: 1 })}</option>
+      <option value="7">{tr('share.link.days', { count: 7 })}</option>
+      <option value="30">{tr('share.link.days', { count: 30 })}</option>
+      <option value="date">{tr('share.link.onDate')}</option>
+    </select>
+  );
+}

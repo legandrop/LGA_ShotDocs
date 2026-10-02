@@ -166,6 +166,28 @@ describe('cleanFileName', () => {
     expect(cleanFileName('a\u200bb\u200cc\u200dd\u2060e\u061cf\u2028g\u2029.pdf')).toBe('abcdefg.pdf');
   });
 
+  it('O4: el ZWJ entre dos emojis se queda (una familia sigue siendo una); entre letras o suelto, no', () => {
+    const family = '👨\u200D👩\u200D👧\u200D👦';
+    expect(cleanFileName(`${family} Familia.jpg`)).toBe(`${family} Familia.jpg`);
+    // Con tono de piel, con el selector de variante y la bandera del arcoíris.
+    expect(cleanFileName('👩🏽\u200D💻.png')).toBe('👩🏽\u200D💻.png');
+    expect(cleanFileName('❤️\u200D🔥 ok.txt')).toBe('❤️\u200D🔥 ok.txt');
+    expect(cleanFileName('🏳️\u200D🌈.pdf')).toBe('🏳️\u200D🌈.pdf');
+    // Entre letras, al principio, al final o junto a una letra: afuera.
+    expect(cleanFileName('rep\u200Dort.pdf')).toBe('report.pdf');
+    expect(cleanFileName('\u200D👨.pdf')).toBe('👨.pdf');
+    expect(cleanFileName('👨\u200D.pdf')).toBe('👨.pdf');
+    expect(cleanFileName('a\u200D👩 👩\u200Da.pdf')).toBe('a👩 👩a.pdf');
+    // Dos seguidos: queda uno solo, el que está entre los dos emojis.
+    expect(cleanFileName('👨\u200D\u200D👩.pdf')).toBe('👨\u200D👩.pdf');
+    // El ZWNJ (U+200C) sigue afuera siempre.
+    expect(cleanFileName('👨\u200C👩.pdf')).toBe('👨👩.pdf');
+    // Cortar en 250 no parte la familia: se va entera.
+    const long = `${'x'.repeat(240)}${family}.jpg`;
+    expect(cleanFileName(long)).toBe(`${'x'.repeat(240)}.jpg`);
+    expect(cleanFileName(`${'x'.repeat(239)}${family}.jpg`)).toBe(`${'x'.repeat(239)}${family}.jpg`);
+  });
+
   it('saca los de control y los que XML no admite', () => {
     expect(cleanFileName('a\u0000b\nc\td\u007f\u0085.txt')).toBe('abcd.txt');
     expect(cleanFileName('x￾￿.pdf')).toBe('x.pdf');
