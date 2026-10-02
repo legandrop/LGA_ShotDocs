@@ -4609,6 +4609,49 @@ button.thread-anchor:hover:not(:disabled) {
   color: var(--muted);
 }
 
+/* Quienes no ven la página (ME2, entrega 2): abajo, en gris, con su título. */
+.mention-list-head {
+  margin-top: 4px;
+  padding: 6px 8px 2px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.mention-list li.outside strong {
+  font-weight: 500;
+  color: var(--muted);
+}
+
+/* La pregunta de compartir desde la mención. */
+.mention-share {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 13px;
+}
+
+.mention-share p {
+  margin: 0 0 6px;
+}
+
+.mention-share .row {
+  margin-top: 4px;
+}
+
+/* El punto de las menciones en el árbol: lleno en la página, hueco en una madre plegada que la tiene adentro. */
+.tree-row .tree-mention-dot {
+  align-self: center;
+  margin: 0 4px;
+}
+
+.tree-row .tree-mention-dot.inside {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
 .comment-actions,
 .thread-actions {
   display: flex;

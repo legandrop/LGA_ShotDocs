@@ -116,10 +116,20 @@ export class SupabaseCommentRemote implements CommentRemote, MentionsRemote {
   async mentionCandidates(pageId: string): Promise<MentionCandidate[]> {
     const { data, error, status } = await timed(this.client.rpc('mention_candidates', { p_page_id: pageId }));
     if (error) throw toRemoteError(error, status);
-    // En la entrega 1 la base no manda filas sin acceso; si llegara alguna, no se ofrece.
-    return ((data ?? []) as { user_id: string; email: string; label: string; has_access: boolean }[])
-      .filter((r) => r.has_access !== false)
-      .map((r) => ({ userId: r.user_id, email: r.email, label: r.label }));
+    // Las filas sin acceso (ME2, entrega 2) le llegan solo al dueño y a los admins que pueden compartir la página.
+    return ((data ?? []) as { user_id: string; email: string; label: string; has_access: boolean }[]).map((r) => ({
+      userId: r.user_id,
+      email: r.email,
+      label: r.label,
+      ...(r.has_access === false ? { hasAccess: false } : {}),
+    }));
+  }
+
+  /** `share_for_mention` (20261016120000_menciones_e2.sql): *Can comment* sobre esa página, para mencionar. */
+  async shareForMention(pageId: string, userId: string): Promise<boolean> {
+    const { data, error, status } = await timed(this.client.rpc('share_for_mention', { p_page_id: pageId, p_user: userId }));
+    if (error) throw toRemoteError(error, status);
+    return (data as { shared?: unknown } | null)?.shared === true;
   }
 
   async mentionsInbox(since: string | null, limit: number): Promise<InboxResponse> {

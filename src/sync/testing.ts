@@ -452,6 +452,10 @@ export class FakeServer {
   readonly failCommentOnce = new Set<string>();
   /** La base tiene las menciones (versión 15, 20261015120000_menciones.sql). */
   mentionsEnabled = false;
+  /** La entrega 2: filas sin acceso y `share_for_mention` (versión 16, 20261016120000_menciones_e2.sql). */
+  mentionSharingEnabled = false;
+  /** Las llamadas a `share_for_mention` (`<página> <persona>`). */
+  readonly mentionShares: string[] = [];
   /** `comment_mentions`, con las filas sacadas (`removed_at`): nada se borra. */
   readonly mentions: {
     id: string;
@@ -539,6 +543,23 @@ export class FakeServer {
     this.listCommentsEnabled = true;
     this.mentionsEnabled = true;
     this.settings = { ...this.settings!, schemaVersion: MENTIONS_SCHEMA_VERSION };
+  }
+
+  /** La entrega 2 de las menciones (ME2): la base en la versión 16. */
+  enableMentionSharing(): void {
+    this.enableMentions();
+    this.mentionSharingEnabled = true;
+    this.settings = { ...this.settings!, schemaVersion: 16 };
+  }
+
+  /** `private.page_in_trash`: ella o una de arriba en la papelera. */
+  pageInTrash(pageId: string): boolean {
+    const seen = new Set<string>();
+    for (let cur: string | null = pageId; cur && !seen.has(cur); cur = this.pages.get(cur)?.parent_id ?? null) {
+      seen.add(cur);
+      if (this.pages.get(cur)?.deleted_at) return true;
+    }
+    return false;
   }
 
   /** `private.mention_allowed` (Docs/Doc_Menciones.md, sección 4). */
@@ -2649,10 +2670,43 @@ export class FakeRemote
     const lvl = this.commentLevel(pageId);
     if (lvl < 1 || !this.member) throw new RemoteError('page_not_found', true, 'P0002');
     if (lvl < 2) throw new RemoteError('comment_denied', true, '42501');
-    return [...this.server.members]
+    const inside: MentionCandidate[] = [...this.server.members]
       .filter(([id, m]) => !m.removed_at && this.server.mentionAllowed(pageId, this.userId, id))
       .map(([id, m]) => ({ userId: id, email: m.email, label: labelForEmail(m.email) }))
       .sort((a, b) => (a.email < b.email ? -1 : 1));
+    // ME2 (20261016120000_menciones_e2.sql): solo el dueño y los admins que pueden compartir la página, fuera de la
+    // papelera, reciben a quienes no la ven.
+    if (!this.mentionOutsidersAllowed(pageId)) return inside;
+    const outside: MentionCandidate[] = [...this.server.members]
+      .filter(([id, m]) => !m.removed_at && id !== this.userId && this.server.pageLevel(id, pageId) < 1)
+      .map(([id, m]) => ({ userId: id, email: m.email, label: labelForEmail(m.email), hasAccess: false as const }))
+      .sort((a, b) => (a.email < b.email ? -1 : 1));
+    return [...inside, ...outside];
+  }
+
+  private mentionOutsidersAllowed(pageId: string): boolean {
+    const role = this.server.role(this.userId);
+    return (
+      this.server.mentionSharingEnabled &&
+      (role === 'owner' || role === 'admin') &&
+      this.canShare({ pageId }) &&
+      !this.server.pageInTrash(pageId)
+    );
+  }
+
+  /** `share_for_mention`: *Can comment* sobre esa página, con las mismas reglas que la base. */
+  async shareForMention(pageId: string, userId: string): Promise<boolean> {
+    this.mentionsCheck(`share_for_mention ${pageId}`);
+    if (!this.server.mentionSharingEnabled) throw new RemoteError('Could not find the function public.share_for_mention', true, 'PGRST202');
+    if (this.commentLevel(pageId) < 1 || !this.member) throw new RemoteError('page_not_found', true, 'P0002');
+    const role = this.server.role(this.userId);
+    if ((role !== 'owner' && role !== 'admin') || !this.canShare({ pageId })) throw this.denied('not_allowed');
+    if (this.server.pageInTrash(pageId)) throw this.denied('page_in_trash');
+    if (!this.server.role(userId)) throw new RemoteError('member_not_found', true, 'P0002');
+    this.server.mentionShares.push(`${pageId} ${userId}`);
+    if (userId === this.userId || this.server.pageLevel(userId, pageId) >= 1) return false;
+    await this.share(userId, { pageId }, 'comment');
+    return true;
   }
 
   /** Lo que `mentions_inbox` y `mentions_index` dan por ido. */

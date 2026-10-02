@@ -51,6 +51,7 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
   commentsCancel: ['CommentsPanel.tsx'],
   mentionPick: ['CommentsPanel.tsx'],
   mentionClose: ['CommentsPanel.tsx'],
+  mentionShareCancel: ['MentionShare.tsx'],
   treeStep: ['Sidebar.tsx', 'treeNav.ts'],
   treeEnds: ['Sidebar.tsx', 'treeNav.ts'],
   treeExpand: ['Sidebar.tsx', 'treeNav.ts'],
@@ -82,6 +83,7 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
     'AssistantSettings.tsx',
     'SignOutDialog.tsx',
     'TemplateHost.tsx',
+    'TemplateDialogs.tsx',
   ],
   listPick: ['ProjectSwitcher.tsx', 'ProjectSearch.tsx', 'DrivePasteMenu.tsx'],
   // La confirmación de "Replace all" (ProjectReplace.tsx): Esc la cierra sin cerrar el panel.
