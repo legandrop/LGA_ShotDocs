@@ -65,6 +65,14 @@ export interface DocState {
    * un archivo (papelera de archivos). No se borra.
    */
   unreadable?: boolean;
+  /**
+   * El último snapshot de compactar que se aplicó de esta página (Docs/Doc_Compactar.md, sección 5): si su cadena se
+   * invalida (cambia `contentEpoch` en el servidor), la página se vuelve a bajar. Las versiones anteriores de la app, que
+   * leen y vuelven a escribir este objeto, lo conservan sin mirarlo.
+   */
+  snapshotId?: string;
+  /** La época de contenido de la página que vino en la misma respuesta que lo último bajado con `pull_page_content`. */
+  contentEpoch?: number;
 }
 
 /** Imagen pegada en una página. Se guarda acá primero y se sube cuando hay red. */

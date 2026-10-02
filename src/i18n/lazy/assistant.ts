@@ -1,15 +1,16 @@
 import { register } from '../index';
 import type { Dict } from '../types';
 
-// El asistente (Docs/Doc_Asistente.md, entrega A1): el panel y la ventana de ajustes. Se carga aparte, con ellos.
+// El asistente (Docs/Doc_Asistente.md, entregas A1 y A2): el panel, la ventana de ajustes y la política del workspace.
+// Se carga aparte, con ellos.
 
 export const assistant = {
   'assistant.title': { en: "Assistant", es: "Asistente" },
   'assistant.settings': { en: "Assistant settings", es: "Ajustes del asistente" },
   'assistant.close': { en: "Close the assistant", es: "Cerrar el asistente" },
   'assistant.setupText': {
-    en: "Fix, improve, shorten or translate what you select, with your own key from Anthropic, OpenAI, Google or a compatible service. The key stays on this device.",
-    es: "Corregí, mejorá, acortá o traducí lo que elijas, con tu propia clave de Anthropic, OpenAI, Google o un servicio compatible. La clave queda en este dispositivo.",
+    en: "Fix, improve, shorten, translate or reshape what you select, or summarize and translate the whole page, with your own key from Anthropic, OpenAI, Google or a compatible service. The key stays on this device.",
+    es: "Corregí, mejorá, acortá, traducí o cambiale la forma a lo que elijas, o resumí y traducí toda la página, con tu propia clave de Anthropic, OpenAI, Google o un servicio compatible. La clave queda en este dispositivo.",
   },
   'assistant.setup': { en: "Set up the assistant", es: "Configurar el asistente" },
   'assistant.fix': { en: "Fix spelling & grammar", es: "Corregir ortografía y gramática" },
@@ -167,6 +168,92 @@ export const assistant = {
     en: "The browser didn't allow pasting: paste with the keyboard.",
     es: "El navegador no dejó pegar: pegá con el teclado.",
   },
+  // --- Entrega A2: la página entera, Format as… y la política del workspace ---
+  'assistant.pageSection': { en: "Whole page", es: "Toda la página" },
+  'assistant.summarize': { en: "Summarize page", es: "Resumir la página" },
+  'assistant.translatePage': { en: "Translate page", es: "Traducir la página" },
+  'assistant.pageLanguage': { en: "Language of the translated page", es: "Idioma de la página traducida" },
+  'assistant.pageHint': {
+    en: "Sends the title and the current text of the whole page.",
+    es: "Manda el título y el texto actual de toda la página.",
+  },
+  'assistant.pageEmpty': { en: "This page has no text to work on.", es: "Esta página no tiene texto para trabajar." },
+  'assistant.pageTooLong': {
+    en: "This page is too long for the assistant (more than 20,000 characters): select a part and use the actions above.",
+    es: "Esta página es demasiado larga para el asistente (más de 20.000 caracteres): elegí una parte y usá las acciones de arriba.",
+  },
+  'assistant.format': { en: "Format as…", es: "Dar forma de…" },
+  'assistant.formatShape': { en: "Shape", es: "Forma" },
+  'assistant.format.bullets': { en: "Bulleted list", es: "Lista con viñetas" },
+  'assistant.format.checklist': { en: "Checklist", es: "Lista de casillas" },
+  'assistant.format.table': { en: "Table", es: "Tabla" },
+  'assistant.format.headings': { en: "Headings", es: "Títulos" },
+  'assistant.format.inTable': {
+    en: "Format as… works on whole blocks, not inside a table cell.",
+    es: "Dar forma de… trabaja con bloques enteros, no adentro de una celda.",
+  },
+  'assistant.format.nested': {
+    en: "Some of these blocks have blocks nested inside, and the new shape would remove them. Nothing was applied.",
+    es: "Algunos de estos bloques tienen bloques adentro, y la forma nueva los sacaría. No se aplicó nada.",
+  },
+  'assistant.format.history': {
+    en: "Edits others make to this text at the same time may only remain in the history.",
+    es: "Lo que otros escriban en este texto al mismo tiempo puede quedar solo en el historial.",
+  },
+  'assistant.format.lost': {
+    en: "The suggestion leaves out text that was selected ({words}). Nothing can be applied: try again, or copy it.",
+    es: "La sugerencia deja afuera texto de lo elegido ({words}). No se puede aplicar: probá de nuevo, o copiala.",
+  },
+  'assistant.format.added': {
+    en: "The suggestion adds words that weren't in the selection (underlined). Check them before applying.",
+    es: "La sugerencia agrega palabras que no estaban en lo elegido (subrayadas). Revisalas antes de aplicar.",
+  },
+  'assistant.format.nothing': { en: "These blocks already have that shape.", es: "Estos bloques ya tienen esa forma." },
+  'assistant.nothingChanged': { en: "Nothing to change.", es: "No hay nada que cambiar." },
+  'assistant.insertTop': { en: "Insert at top", es: "Agregar arriba" },
+  'assistant.insertBelow': { en: "Insert below", es: "Agregar debajo" },
+  'assistant.inserted': { en: "Added. Undo it with {undo}.", es: "Agregado. Se deshace con {undo}." },
+  'assistant.replacePage': { en: "Replace page content", es: "Reemplazar el contenido" },
+  'assistant.createSubpage': { en: "Create translated subpage", es: "Crear una subpágina traducida" },
+  'assistant.subpage.creating': { en: "Creating the subpage…", es: "Creando la subpágina…" },
+  'assistant.subpage.created': { en: "Translated subpage created.", es: "Se creó la subpágina traducida." },
+  'assistant.subpage.untitled': { en: "Untitled", es: "Sin título" },
+  'assistant.subpage.denied': {
+    en: "You can't create pages inside this one: copy the result instead.",
+    es: "No podés crear páginas adentro de esta: copiá el resultado.",
+  },
+  'assistant.subpage.failed': {
+    en: "The subpage was created, but its content couldn't be written. This page didn't change.",
+    es: "Se creó la subpágina, pero no se pudo escribir su contenido. Esta página no cambió.",
+  },
+  'assistant.policy.title': { en: "This workspace", es: "Este workspace" },
+  'assistant.policy.text': {
+    en: "Only the owner and the admins see this. It's a rule of the app, not a barrier: anyone who can read a page can still copy it.",
+    es: "Solo lo ven el dueño y los admins. Es una regla de la app, no una barrera: quien puede leer una página igual la puede copiar.",
+  },
+  'assistant.policy.on': { en: "On", es: "Prendido" },
+  'assistant.policy.onHint': {
+    en: "Everyone uses the assistant with their own key and provider.",
+    es: "Cada uno usa el asistente con su clave y su proveedor.",
+  },
+  'assistant.policy.local': { en: "Local models only", es: "Solo modelos locales" },
+  'assistant.policy.localHint': {
+    en: "Only a model on the same computer or local network: nothing goes to a provider.",
+    es: "Solo un modelo en la misma computadora o red local: nada sale a un proveedor.",
+  },
+  'assistant.policy.off': { en: "Off", es: "Apagado" },
+  'assistant.policy.offHint': { en: "Nobody can use the assistant in this workspace.", es: "Nadie puede usar el asistente en este workspace." },
+  'assistant.policy.saved': { en: "Saved for everyone in this workspace.", es: "Guardado para todos en este workspace." },
+  'assistant.policy.denied': {
+    en: "Only the owner and the admins can change this.",
+    es: "Solo el dueño y los admins pueden cambiar esto.",
+  },
+  'assistant.policy.missing': {
+    en: "This workspace's database needs an update before this can be changed.",
+    es: "La base de este workspace necesita una actualización para poder cambiar esto.",
+  },
+  'assistant.policy.failed': { en: "Couldn't save the change. Try again.", es: "No se pudo guardar el cambio. Probá de nuevo." },
+  'assistant.policy.offline': { en: "Changing it needs internet.", es: "Para cambiarlo hace falta internet." },
 } satisfies Dict;
 
 // Se suma al diccionario cuando se carga la parte que lo usa (viaja con ella, no en la primera carga).

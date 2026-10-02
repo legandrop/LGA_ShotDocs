@@ -82,11 +82,26 @@ export function isAssistantShortcut(
 
 // --- El editor de la página ----------------------------------------------------------------------------------------
 
+/**
+ * Lo que la entrega A2 usa del editor de BlockNote de la página: cambiar el tipo de un bloque (*Format as…*), cambiar
+ * la forma de unos bloques y agregar un resumen, como ediciones del editor (entran en su deshacer).
+ */
+export interface AssistantEditor {
+  readonly document: { id: string }[];
+  getBlock(id: string): { id: string; type: string; props: Record<string, unknown>; children: unknown[] } | undefined;
+  updateBlock(id: string, update: unknown): unknown;
+  replaceBlocks(remove: string[], insert: unknown[]): unknown;
+  insertBlocks(blocks: unknown[], reference: string, placement: 'before' | 'after'): unknown;
+  getTextCursorPosition(): { block: { id: string } };
+}
+
 /** Lo que el panel usa del editor de la página: su vista de ProseMirror y si se puede editar ahora. */
 export interface AssistantTarget {
   pageId: string;
   view: () => EditorView | null;
   editable: () => boolean;
+  /** El editor de BlockNote (A2). Sin él, *Format as…* y los resúmenes no se pueden aplicar (solo copiar). */
+  editor?: () => AssistantEditor | null;
 }
 
 let target: AssistantTarget | null = null;
