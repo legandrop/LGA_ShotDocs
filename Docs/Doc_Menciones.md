@@ -924,7 +924,7 @@ que no le cuenta a nadie nada que hoy no sepa.
 - **El código** de `main` v0.108: las migraciones de comentarios, equipo, versión mínima y papelera; `src/sync/comments.ts`
   (la cola, sus stores y el recurso de `meta` para `import`), `src/ui/CommentsPanel.tsx` (el texto se muestra plano) y
   la barra de arriba de `src/ui/Workspace.tsx`.
-- **La base de Wanka, solo lectura** (2026-10-02): `schema_version` 13, mínima 0.099 en la primera lectura (0.104 cuando auditó la auditoría), interruptor de D14 apagado; la
+- **La base de Wanka, solo lectura** (2026-10-02): `schema_version` 13, mínima 0.099 en la primera lectura (0.104 en la de la auditoría), D14 apagado; la
   publicación `supabase_realtime` sin tablas; `pg_cron` y `pg_net` sin instalar; 49 comentarios, 47 importados, 18 con
   menciones de Coda crudas; un solo miembro activo.
 - **El borrador de la sección 7 compila** en la base real dentro de `begin … rollback` (sin la parte de
