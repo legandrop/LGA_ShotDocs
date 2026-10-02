@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.110 :
+
+No se podía sacar una foto ni filmar desde la página: había que salir de la app, sacarla y elegirla con "/Image", y
+no había cómo guardar en el teléfono una foto de la página. Pedido de Lega (P.25). En el teléfono, *Take photo* y
+*Record video* (el video, con portero) en el menú "/" y en el menú de la página abren la cámara con el selector del
+sistema (`capture`); lo sacado entra en el renglón por el camino de "/Image" y sube por la cola de siempre. *Save to
+camera roll* en la barra de cada foto o video abre la hoja de compartir con el original. En la compu no aparece nada.
+Sin tipos ni propiedades nuevas. Ayuda nueva; `Doc_Fotos_En_Linea.md`, "Cámara".
+[ Cámara - sacar una foto o filmar desde la página y Guardar en Fotos con la hoja de compartir ]
+
 v0.109 :
 
 El esquema "publicado" de las pruebas (`fixtures/editorSchemaMain.ts`) era el de v0.040: las pruebas de "la versión

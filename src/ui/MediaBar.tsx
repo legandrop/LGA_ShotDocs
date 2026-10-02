@@ -1,6 +1,6 @@
 import { ScreenReaderOnlySubmit, useBlockNoteEditor, useComponentsContext, useEditorState, usePortalElement } from '@blocknote/react';
 import { BarButton, BarSep } from './BarButton';
-import { createContext, useCallback, useContext, useState, type ChangeEvent, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { t, useT } from '../i18n';
 import '../i18n/lazy/editor';
 import '../i18n/lazy/folders';
@@ -11,7 +11,9 @@ import { carreteSourceOf } from './carreteModel';
 import { isOffline, startDownload } from './carreteLoader';
 import { commentOnBlock } from './commentsUi';
 import { shortcutLabel } from './shortcuts';
-import { AlignCenterIcon, AlignLeftIcon, AlignRightIcon, CommentIcon, DownloadIcon, RenameIcon, ReplaceIcon, TrashIcon } from './icons';
+import { AlignCenterIcon, AlignLeftIcon, AlignRightIcon, CommentIcon, DownloadIcon, RenameIcon, ReplaceIcon, ShareIcon, TrashIcon } from './icons';
+import { canShareFiles, saveToRollOffered, shareFile, shareFileOf, touchDevice } from './camera';
+import { porteroDownload } from './sharpImages';
 import { ImageSizeButtons, OriginalDownloadButton, ViewIcon } from './MediaToolbarButtons';
 import { notify } from './notice';
 
@@ -122,6 +124,76 @@ export function DownloadButton({ url, name, blockId }: { url: string | null; nam
     );
   };
   return <BarButton label={label} tip={`**${label}**\n${tr('photoTip.download')}`} icon={<DownloadIcon size={18} />} test="mediaDownload" onClick={download} />;
+}
+
+/**
+ * *Save to camera roll* (camera.ts): la hoja de compartir del sistema con el original, donde la persona elige
+ * "Guardar imagen" o "Guardar video". Solo en un dispositivo de toque con un navegador que comparte archivos, y
+ * nunca para un adjunto. El original del dispositivo se prepara apenas se elige la foto (el toque abre la hoja en el
+ * acto); uno que hay que bajar se baja con el toque y, si el navegador ya no deja abrir la hoja, queda listo para el
+ * siguiente toque.
+ */
+export function SaveToRollButton({ url, name }: { url: string | null; name: string }) {
+  const editor = useBlockNoteEditor();
+  const { media } = useServices();
+  const tr = useT();
+  const kind = useMediaKind(url, name);
+  const [able] = useState(() => ({ touch: touchDevice(), share: canShareFiles() }));
+  const ready = useRef<File | null>(null);
+  const busy = useRef(false);
+  const id = mediaIdOf(url);
+  const offered = !!url && saveToRollOffered({ kind, ...able }) && !(id && media.isFolder(id));
+  useEffect(() => {
+    ready.current = null;
+    if (!offered || !id) return;
+    let alive = true;
+    media.source(id).then(
+      (src) => {
+        if (alive && src.original) ready.current = shareFileOf(src.original, src.name || name, src.mime);
+      },
+      () => undefined,
+    );
+    return () => {
+      alive = false;
+    };
+  }, [offered, media, id, name]);
+  if (!offered || !url) return null;
+
+  // El original: el del dispositivo, o bajado con un pase del portero; sin Drive (`sdfile://`), lo que da el editor.
+  const original = async (): Promise<File> => {
+    if (id) {
+      const src = await media.source(id);
+      const blob = src.original ?? (await porteroDownload(media)(id));
+      return shareFileOf(blob, src.name || name, src.mime);
+    }
+    const resolve = (editor as unknown as { resolveFileUrl?: (u: string) => Promise<string> }).resolveFileUrl;
+    const res = await fetch(resolve ? await resolve(url) : url);
+    if (!res.ok) throw new Error(`download ${res.status}`);
+    return shareFileOf(await res.blob(), name);
+  };
+  const share = async (file: File) => {
+    const result = await shareFile(file);
+    if (result === 'again') notify(t('camera.saveAgain'));
+    else if (result === 'unsupported') notify(t('camera.saveUnsupported'));
+    else if (result === 'failed') notify(t('attachment.shareFailed'));
+  };
+  const onClick = () => {
+    if (ready.current) return void share(ready.current);
+    if (busy.current) return;
+    busy.current = true;
+    original()
+      .then(
+        (file) => {
+          ready.current = file;
+          return share(file);
+        },
+        (err: unknown) => notify(isOffline(err) ? t('mediaButton.offline') : t('mediaButton.failed')),
+      )
+      .finally(() => (busy.current = false));
+  };
+  const label = kind === 'video' ? tr('camera.saveVideo') : tr('camera.save');
+  return <BarButton label={label} tip={`**${label}**
+${tr('camera.saveTip')}`} icon={<ShareIcon size={18} />} test="mediaSaveToRoll" onClick={onClick} />;
 }
 
 export type Alignment = 'left' | 'center' | 'right';
@@ -269,6 +341,7 @@ export function ImageBlockBar() {
             <>
               <ViewButton url={block.url} attachment={attachment} onView={() => actions?.onView(block.id)} />
               <DownloadButton url={block.url} name={block.name} blockId={block.id} />
+              {!attachment && <SaveToRollButton url={block.url} name={block.name} />}
             </>
           ),
           !attachment && <ImageSizeButtons />,
