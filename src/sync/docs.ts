@@ -15,6 +15,13 @@ import {
   type LocalDb,
 } from './localDb';
 import { APP_OUTDATED, type Remote } from './remote';
+import {
+  applyRowsInOrder,
+  findRemovedWriting,
+  REMOVED_WRITING_KEEP,
+  removedWritingKey,
+  type RemovedWriting,
+} from './removedWriting';
 import { errorMessage, isPermanent, isTimeout, type RemoteUpdate } from './types';
 
 export const ORIGIN_LOAD = Symbol('load');
@@ -32,6 +39,12 @@ export const ORIGIN_SEED = Symbol('seed');
 const COMPACT_AT = 64;
 const PULL_BATCH = 500;
 const WRITE_RETRY_MS = 3000;
+/**
+ * Una subida armada sin GC (B.16) más grande que esto se vuelve a armar con GC, como antes: el servidor rechaza
+ * las de más de 8 MB, y un rechazo dejaría todo lo de la página sin subir. Pasa solo con una página muy editada
+ * que vuelve a subir entera (después de restaurar una copia de seguridad).
+ */
+export const NO_GC_MAX_BYTES = 6 * 1024 * 1024;
 
 interface LiveDoc {
   doc: Y.Doc;
@@ -118,6 +131,14 @@ export class PageDocs {
   onWarning?: (message: string) => void;
   private readonly unsupportedListeners = new Set<(pageId: string) => void>();
   private readonly renderFailedListeners = new Set<(pageId: string) => void>();
+  private readonly removedWritingListeners = new Set<(pageId: string) => void>();
+  /**
+   * Los autores de Yjs (`clientID`) de cada documento abierto en esta sesión, por página: lo escrito acá (B.16, ver
+   * `findRemovedWriting`). Solo en memoria; después de cerrar la app cuenta lo que quedó sin subir.
+   */
+  private readonly ownClients = new Map<string, Set<number>>();
+  /** Páginas con alguna edición local en esta sesión (para no armar nada al bajar en las demás). */
+  private readonly written = new Set<string>();
 
   constructor(
     private readonly db: LocalDb,
@@ -140,6 +161,9 @@ export class PageDocs {
     }
     if (!entry) {
       const doc = new Y.Doc();
+      const own = this.ownClients.get(pageId) ?? new Set<number>();
+      own.add(doc.clientID);
+      this.ownClients.set(pageId, own);
       const created: LiveDoc = { doc, refs: 0, ready: Promise.resolve() };
       created.ready = this.loadInto(pageId, doc).then(async () => {
         const writable = this.options.canWrite?.(pageId) !== false;
@@ -250,6 +274,26 @@ export class PageDocs {
   subscribeRenderFailed(fn: (pageId: string) => void): () => void {
     this.renderFailedListeners.add(fn);
     return () => this.renderFailedListeners.delete(fn);
+  }
+
+  /**
+   * Avisa cuando un cambio que llegó del servidor dejó borrado algo que este dispositivo había escrito y todavía
+   * no había subido (otro borró el bloque donde se escribía; B.16). El texto queda en `removedWriting`.
+   */
+  subscribeRemovedWriting(fn: (pageId: string) => void): () => void {
+    this.removedWritingListeners.add(fn);
+    return () => this.removedWritingListeners.delete(fn);
+  }
+
+  /** Lo escrito en este dispositivo que otro borró antes de que se subiera (B.16), del más viejo al más nuevo. */
+  async removedWriting(pageId: string): Promise<RemovedWriting[]> {
+    const value = await this.db.get('meta', removedWritingKey(pageId));
+    return Array.isArray(value) ? (value as RemovedWriting[]) : [];
+  }
+
+  /** Quien escribió ya lo vio: se borra el aviso (el texto, si llegó a subirse, sigue en el servidor). */
+  async dismissRemovedWriting(pageId: string): Promise<void> {
+    await this.db.delete('meta', removedWritingKey(pageId));
   }
 
   /**
@@ -367,7 +411,8 @@ export class PageDocs {
       for (let round = 0; round < 5; round++) {
         let pending = state.pending;
         if (!pending) {
-          const saved = await this.readSaved(pageId);
+          // Sin GC (B.16): lo propio que quedó adentro de algo que otro borró viaja con su texto, borrado.
+          const saved = await this.readSaved(pageId, { keepDeleted: true });
           if (!hasUnsyncedContent(saved.state, saved.dirty !== undefined)) {
             saved.doc.destroy();
             break;
@@ -381,7 +426,16 @@ export class PageDocs {
             continue;
           }
           // Los elementos que el servidor no tiene y solo los borrados que no tiene (B.15).
-          const upload = buildUpload(saved.doc, saved.state.syncedSV, knownDeletes(saved.state, saved.generation));
+          let upload = buildUpload(saved.doc, saved.state.syncedSV, knownDeletes(saved.state, saved.generation));
+          if (upload.update.length > NO_GC_MAX_BYTES) {
+            // Demasiado grande con todo lo borrado: se arma con GC, como antes de B.16 (ver `NO_GC_MAX_BYTES`).
+            // Los mismos elementos y los mismos borrados; solo pierde el texto de lo ya borrado.
+            const collected = new Y.Doc();
+            Y.applyUpdate(collected, Y.encodeStateAsUpdate(saved.doc), ORIGIN_LOAD);
+            console.warn(`Page ${pageId}: the upload with deleted text is too large; uploading without it.`);
+            upload = buildUpload(collected, saved.state.syncedSV, knownDeletes(saved.state, saved.generation));
+            collected.destroy();
+          }
           const next = {
             id: crypto.randomUUID(),
             update: upload.update,
@@ -585,6 +639,9 @@ export class PageDocs {
     // por versiones anteriores (cada fila con el delete set entero) la unión tarda, y adentro trabaría el
     // guardado de todas las páginas.
     const deletes = merged ? await this.preparePulledDeletes(pageId, merged) : null;
+    // Lo propio sin subir que lo bajado deja borrado (B.16): también afuera, y solo si lo bajado trae borrados y
+    // la página tiene algo sin subir (lo común es que no: no se arma nada).
+    const removed = merged && deletes && deletes.pulled.size > 0 ? await this.inspectRemovedWriting(pageId, merged) : null;
 
     const tx = this.db.transaction(['docUpdates', 'docState', 'meta'], 'readwrite');
     const [stored, generation] = await Promise.all([
@@ -622,7 +679,23 @@ export class PageDocs {
     state.cursor = maxSeq;
     if (valid.length < updates.length) state.unreadable = true;
     await tx.objectStore('docState').put(state);
+    if (removed) {
+      // En la misma transacción que lo bajado: si queda guardado, queda el aviso.
+      const meta = tx.objectStore('meta');
+      const before = await meta.get(removedWritingKey(pageId));
+      const list = [...(Array.isArray(before) ? (before as RemovedWriting[]) : []), { at: Date.now(), ...removed }];
+      await meta.put(list.slice(-REMOVED_WRITING_KEEP), removedWritingKey(pageId));
+    }
     await tx.done;
+    if (removed) {
+      for (const fn of this.removedWritingListeners) {
+        try {
+          fn(pageId);
+        } catch (err) {
+          console.error('removed writing listener failed', err);
+        }
+      }
+    }
 
     const live = this.live.get(pageId);
     if (merged && live && !live.stale) {
@@ -666,6 +739,39 @@ export class PageDocs {
     const local = Y.decodeStateVector(Y.encodeStateVector(doc));
     doc.destroy();
     return { local, rows: rows.length };
+  }
+
+  /** Hubo ediciones locales de la página en esta sesión de la app. */
+  private wroteHere(pageId: string): boolean {
+    return this.written.has(pageId);
+  }
+
+  /**
+   * Si lo bajado deja borrado algo que este dispositivo escribió y no subió (B.16), su texto (ver
+   * `findRemovedWriting`); si no, `null`. Arma un documento sin GC con lo guardado solo si la página tiene algo
+   * sin subir. Un error acá no frena la bajada: el texto igual sube (la subida va sin GC), solo falta el aviso.
+   */
+  private async inspectRemovedWriting(pageId: string, merged: Uint8Array): Promise<{ text: string; clients: number[] } | null> {
+    try {
+      const tx = this.db.transaction(['docUpdates', 'docState', 'meta'], 'readonly');
+      const [state, dirty] = await Promise.all([tx.objectStore('docState').get(pageId), tx.objectStore('meta').get(dirtyKey(pageId))]);
+      // Nada sin subir y nada escrito en esta sesión: no hay qué mirar (lo común; no se arma nada).
+      if (!hasUnsyncedContent(state ?? emptyDocState(pageId), dirty !== undefined) && !this.wroteHere(pageId)) {
+        await tx.done;
+        return null;
+      }
+      const rows = await tx.objectStore('docUpdates').index('pageId').getAll(pageId);
+      await tx.done;
+      return findRemovedWriting(
+        rows.map((r) => r.data),
+        state?.syncedSV,
+        merged,
+        this.ownClients.get(pageId),
+      );
+    } catch (err) {
+      console.warn(`Page ${pageId}: could not check for removed writing.`, err);
+      return null;
+    }
   }
 
   /**
@@ -781,6 +887,7 @@ export class PageDocs {
    * de una página que se va), aunque el estado ya dijera "saved on this device".
    */
   private persistLocal(pageId: string, updates: Uint8Array[]): void {
+    this.written.add(pageId);
     const buffer = this.unsaved.get(pageId);
     if (buffer) buffer.push(...updates);
     else this.unsaved.set(pageId, [...updates]);
@@ -939,6 +1046,7 @@ export class PageDocs {
    */
   private async readSaved(
     pageId: string,
+    { keepDeleted = false }: { keepDeleted?: boolean } = {},
   ): Promise<{ doc: Y.Doc; state: DocState; dirty?: string; generation: number }> {
     const tx = this.db.transaction(['docUpdates', 'docState', 'meta'], 'readonly');
     const [rows, stored, dirty, generation] = await Promise.all([
@@ -948,8 +1056,16 @@ export class PageDocs {
       tx.objectStore('meta').get(GENERATION_KEY),
     ]);
     await tx.done;
-    const doc = new Y.Doc();
-    if (rows.length > 0) Y.applyUpdate(doc, Y.mergeUpdates(rows.map((r) => r.data)), ORIGIN_LOAD);
+    let doc: Y.Doc;
+    if (keepDeleted) {
+      // Para subir (B.16): sin GC, así lo borrado conserva su texto, y fila por fila en orden, así gana la primera
+      // copia de cada elemento (la que se guardó al escribirlo), nunca una posterior que lo trae como hueco.
+      doc = new Y.Doc({ gc: false });
+      applyRowsInOrder(doc, rows.map((r) => r.data), ORIGIN_LOAD);
+    } else {
+      doc = new Y.Doc();
+      if (rows.length > 0) Y.applyUpdate(doc, Y.mergeUpdates(rows.map((r) => r.data)), ORIGIN_LOAD);
+    }
     return {
       doc,
       state: stored ?? emptyDocState(pageId),
