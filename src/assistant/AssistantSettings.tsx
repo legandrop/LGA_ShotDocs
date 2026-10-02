@@ -6,6 +6,7 @@ import { errorText } from './AssistantPanel';
 import { closeAssistantSettings } from './assistantUi';
 import { forgetKey, loadSettings, readKey, sameDestination, saveSettings, type AssistantSettings as Saved } from './keyStore';
 import { defaultModel, listModels, PROVIDER_NAMES, PROVIDERS, SPEND_LIMIT_URLS, type ModelInfo, type ProviderId } from './providers';
+import { WorkspacePolicy } from './WorkspacePolicy';
 import './assistant.css';
 
 // Los ajustes del asistente (Docs/Doc_Asistente.md, sección 11; menú de la cuenta → *Assistant…*): el proveedor, la
@@ -253,6 +254,8 @@ export function AssistantSettings() {
             </div>
           </>
         )}
+        {/* La política del workspace (A2): solo el dueño y los admins la ven; se guarda al elegir. */}
+        <WorkspacePolicy />
       </div>
     </div>
   );

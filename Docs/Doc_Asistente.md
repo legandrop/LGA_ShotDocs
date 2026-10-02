@@ -1,6 +1,7 @@
 # Asistente con la clave de cada usuario y servidor MCP (fase 5)
 
-**Estado: entrega A1 implementada (v0.118, ver "Cómo quedó A1" al final; su migración, sin aplicar); A2, A3 y el MCP, en diseño** (roadmap P.24; pedido de Lega del 2026-10-02, que decide entre las opciones
+**Estado: entregas A1 (v0.118) y A2 (v0.126) implementadas (ver "Cómo quedó A1" y "Cómo quedó A2" al final; la
+migración de A2, sin aplicar); A3 y el MCP, en diseño** (roadmap P.24; pedido de Lega del 2026-10-02, que decide entre las opciones
 de D-06 y D-07 y lo deja listo para programar por entregas). Las decisiones están propuestas (IA1 a IA10, sección 15) y
 valen hasta que Lega diga otra cosa. Se diseñó contra `main` v0.108. Precios, límites y CORS verificados el 2026-10-02
 en las páginas oficiales (sección 3, con la fuente de cada número); lo medido está en "Cómo se midió", al final.
@@ -271,9 +272,11 @@ Directo del navegador al proveedor, con `fetch` y la respuesta por partes (strea
   colapsado, salto de hoja). El reemplazo usa la misma idea que `replaceDoc`: borrar e insertar solo lo que cambió, para
   que lo que otro escribe a la vez en otra parte del bloque se conserve y para que el historial muestre una diferencia
   chica.
-- Cambiar la forma (*Format as…*) cambia, cuando se puede, **solo el tipo** del bloque conservando su `Y.XmlText` (un
-  párrafo que pasa a casilla); cuando no (un párrafo que se parte en una tabla), crea bloques nuevos del tipo pedido y
-  saca los viejos, en la misma transacción (ver la salvedad de 6.5).
+- Cambiar la forma (*Format as…*) cambia, cuando se puede, **solo el tipo** del bloque conservando su id, sus hijos y sus
+  colores (un párrafo que pasa a casilla); cuando no (un párrafo que se parte en una tabla), crea bloques nuevos del tipo
+  pedido y saca los viejos, en la misma transacción (ver la salvedad de 6.5). **Corregido al implementar A2:** cambiar
+  el tipo **no** conserva el `Y.XmlText`: en Yjs el nombre de un elemento no cambia, y y-prosemirror rehace el bloque de
+  texto con otro nombre (medido; ver "Cómo quedó A2").
 
 ### 6.4 Validaciones antes de mostrar *Apply*
 
@@ -293,14 +296,15 @@ Directo del navegador al proveedor, con `fetch` y la respuesta por partes (strea
 - **Editar a la vez:** lo elegido se compara con la foto antes de aplicar (6.1, paso 6); lo de afuera de lo elegido no se
   toca. Si otro escribe dentro de lo elegido y su edición llega después de aplicar (estaba sin red o en viaje), depende de
   la acción (medido con Yjs en la auditoría):
-  - **Reemplazar el texto dentro del bloque** (*Fix*, *Improve*, *Shorter*, *Translate…* sobre lo elegido): lo del otro
+  - **Reemplazar el texto dentro del bloque** (*Fix*, *Improve*, *Shorter*, *Translate…* sobre lo elegido, y desde A2
+    también *Replace page content* de *Translate page*, que es el mismo reemplazo sobre la página entera): lo del otro
     **se conserva** (puede quedar en un lugar raro del renglón).
-  - **Sacar el bloque y crear otro** (*Format as…* cuando no alcanza con cambiar el tipo, y *Replace page content* de
-    *Translate page*): lo del otro **desaparece de la página y queda en el historial** (`page_updates` es solo agregado;
-    se recupera desde *Show changes* o restaurando). Es lo mismo que pasa hoy si alguien borra a mano un bloque mientras
-    otro escribe sin red: no se pierde, pero no se ve. Por eso *Format as…* conserva el `Y.XmlText` siempre que puede, y
-    la vista previa de esas dos acciones dice *Edits others make to this text at the same time may only remain in the
-    history.*
+  - **Cambiar el tipo o sacar el bloque y crear otro** (*Format as…*, en todos sus casos): lo del otro **desaparece de
+    la página y queda en el historial** (`page_updates` es solo agregado; se recupera desde *Show changes* o
+    restaurando). Es lo mismo que pasa hoy si alguien borra a mano un bloque mientras otro escribe sin red: no se pierde,
+    pero no se ve. La vista previa de *Format as…* dice *Edits others make to this text at the same time may only
+    remain in the history.* (En el diseño se creía que cambiar solo el tipo conservaba el texto en Yjs; no es así, ver
+    "Cómo quedó A2".)
 - **La vista previa no escribe nada.** Cerrar el panel, cambiar de página o recargar la descarta (no se guarda: una
   sugerencia vieja sobre un texto que siguió cambiando es más riesgo que ayuda).
 
@@ -625,7 +629,8 @@ La foto sale del Drive del dueño hacia el proveedor: confirmación por pedido (
 6. Editar a la vez (`collabHarness`): otro escribe dentro de lo elegido durante el pedido → no aplica; otro escribe afuera →
    aplica y se conserva lo del otro; otro borra el bloque → no aplica; otro escribe **sin red** dentro de lo elegido y
    llega después: con *Fix* lo suyo queda en la página; con *Format as…* que parte el bloque, queda en el historial
-   (`page_updates` lo tiene y *Show changes* lo muestra); con *Format as…* que solo cambia el tipo, queda en la página.
+   (`page_updates` lo tiene y *Show changes* lo muestra); con *Format as…* que solo cambia el tipo, también queda solo
+   en el historial (corregido en A2: Yjs rehace el texto del bloque que cambia de tipo).
 7. Permisos en la interfaz: Ver y Comentar sin *Apply*; invitado con Editar sí; la política `off` y `local_only`.
 8. Lo que se manda: con una página con texto borrado, comentarios, una página de arriba y fotos de Drive, el cuerpo del
    pedido no contiene nada de eso (mutante: mandar el Y.Doc entero tiene que hacer fallar la prueba).
@@ -1058,3 +1063,107 @@ una clave sin prefijo conocido en un error.
   compatible guardado, cambiar la Base URL y tocar *Test* sin pegar clave (el campo tiene que estar vacío), y, cuando
   esté cargada `GOOGLE_API_KEY`, abrir el selector de carpetas de Drive en la app publicada sin errores de CSP en la
   consola.
+
+## Cómo quedó A2 (v0.126)
+
+Implementada en `src/assistant/` (la misma parte que se baja al abrir el panel: pasa de unos 44 KB a 68 KB sin
+comprimir, 23 KB comprimida, porque suma el conversor de Markdown con forma y el camino de crear una página con
+contenido). Migración `20261017120000_asistente_politica_ventana.sql` **sin aplicar** (la aplica quien publica).
+
+### Qué hay
+
+- **El panel** suma, debajo de lo de A1, *Format as…* con su forma (*Bulleted list*, *Checklist*, *Table*, *Headings*)
+  y la sección *Whole page* con *Summarize page* y *Translate page* (con su idioma; recuerda el último, el mismo que
+  *Translate to…*).
+- **Qué se manda en las de la página** (`pageActions.ts`): el título con la marca `⟦title⟧` como primer bloque y el
+  contenido actual con las marcas de A1 (fotos, links y bloques que no son texto no viajan; las direcciones tampoco),
+  **cada celda de una tabla como un bloque** (así se traducen). El mismo tope de 20 000 caracteres: una página más
+  larga pide elegir una parte.
+- ***Summarize page***: la respuesta es Markdown con forma (`mdBlocks.ts`: un renglón por bloque; títulos, viñetas,
+  listas numeradas, casillas, citas y tablas; lo demás como texto; sin links nuevos, sin imágenes, las marcas que traiga
+  se sacan). La vista previa la dibuja con su forma y sin nada de afuera. *Insert at top* la pone arriba de todo e
+  *Insert below* debajo del bloque del cursor, como una edición (un Ctrl/⌘+Z la saca); no toca nada de lo que hay.
+- ***Translate page***: la vista previa muestra el título y cada bloque traducidos. *Replace page content* es el
+  reemplazo de A1 sobre la página entera: cada bloque conserva su id, su tipo, sus propiedades (Script, colores), sus
+  fotos (el mismo elemento de Yjs) y sus links; solo cambia el texto, por palabras, en un paso de deshacer, y si la
+  página cambió mientras el modelo pensaba no se aplica nada. El título de la página no se cambia. *Create translated
+  subpage* arma la traducción sobre una copia (la misma guarda), le pone ids nuevos y la escribe en una página nueva
+  adentro de esta, con el título traducido, por el camino de siempre (`tree.create` y `writeNewPage`, el del reporte
+  del día), y la abre. Pide poder crear páginas ahí (Editar y crear).
+- ***Format as…*** (`format.ts`): trabaja con bloques enteros (lo elegido se estira al principio del primero y al final
+  del último; adentro de una celda, no). Aplica lo mínimo: si vuelven los mismos bloques con el mismo texto, solo
+  cambia el tipo (`updateBlock`: id, hijos, colores y fotos quedan); con los mismos bloques y otro texto, tipo y texto
+  con el mismo id; con otra cantidad (un párrafo partido en viñetas, una tabla), saca los bloques elegidos y pone los
+  nuevos en la misma edición, y una foto-bloque o una tabla elegida vuelve tal cual, con su id. Un bloque con hijos no
+  se parte (se perderían): *Some of these blocks have blocks nested inside…*; cambiarle solo el tipo, sí. La guarda es
+  la de A1 más el tipo y las propiedades de cada bloque (si otro tildó la casilla mientras pensaba, no aplica). Al
+  final comprueba que quedó lo pedido y, si no, deshace. Ctrl/⌘+Enter aplica (el atajo `assistantApply` de A1).
+- **La política del workspace** (`WorkspacePolicy.tsx`, en *Assistant…* del menú de la cuenta): solo el dueño y los
+  admins ven *This workspace* con *On*, *Local models only* y *Off*; se guarda al elegir con `set_assistant_policy`
+  (función nueva, `security definer`, que vuelve a mirar el rol) y queda recordada en el dispositivo. Dice que es una
+  regla de la app, no una barrera. Sin red, no se puede cambiar. El panel vuelve a leer la política al cerrar los
+  ajustes.
+- **Permisos:** sin Editar, *Format as…* apagado; *Summarize page* y *Translate page* se piden y solo se copian
+  (*Insert…*, *Replace…* y *Create…* apagados). La política *Off* apaga todo; *Local models only*, todo salvo un modelo
+  local.
+- **Ayuda:** *Summarize or translate a page*, *Format as… (list, checklist, table, headings)* y *The assistant in a
+  workspace* (esta, para dueño y admins), en "Writing". Sin atajos nuevos: *Format as…* usa `assistantApply`.
+
+### Decisiones al implementar
+
+- **Cambiar el tipo rehace el texto en Yjs.** El diseño decía que *Format as…* "conserva el `Y.XmlText`" al cambiar solo
+  el tipo: medido con el editor real, el elemento de Yjs del bloque de texto se rehace (su nombre no cambia en Yjs). El
+  id, los hijos y los colores quedan; lo que otro escribe **sin red** adentro de ese bloque queda solo en el historial,
+  como al partirlo. La vista previa lo avisa siempre; 6.3, 6.5 y la prueba 6 quedaron corregidos.
+- ***Replace page content* reemplaza el texto en su lugar** (el camino de A1), no saca y crea bloques: así conserva ids,
+  propiedades y fotos, y lo que otro escribe sin red se conserva. No lleva el aviso del historial.
+- ***Insert below* es debajo del bloque del cursor**; *Insert at top*, arriba de todo. El título de la página no se
+  toca en *Replace page content*; en la subpágina va traducido (si el modelo no lo trae, el título con el idioma entre
+  paréntesis).
+- **La ventana de la política está en *Assistant…*** (no hay una ventana del workspace todavía): una sección aparte
+  que solo ven el dueño y los admins, que se guarda al elegir.
+- **La migración no sube `schema_version`**: sin la función, la ventana dice que la base del workspace necesita
+  actualizarse y nada cambia.
+
+### Cómo se probó
+
+- **Pruebas nuevas (vitest):** `mdBlocks.test.ts` (6: los tipos por renglón, la tabla, las marcas, los links nuevos, el
+  resumen sin marcas, a bloques de BlockNote), `format.test.ts` (17 con las de la auditoría, con el editor real: lo que se manda, adentro de
+  una tabla, casillas con hijos y colores, partir en viñetas con la foto en línea, la tabla con la foto-bloque, títulos,
+  ya con esa forma, hijos, la guarda del texto y de las propiedades, deshacer si no quedó lo pedido, sin Editar, sin la
+  foto, editar a la vez sin red y la versión publicada `editorSchemaMain` abriendo lo aplicado), `pageActions.test.ts`
+  (10 con la del permiso de la subpágina: lo que se manda con las celdas y sin direcciones, página vacía y larga, la respuesta con el título, *Replace page
+  content* con ids, Script, foto, link y celdas, la guarda, la subpágina escrita en una página nueva que la versión
+  publicada abre igual, y agregar el resumen arriba y debajo) y `panelA2.test.tsx` (12 con la de B1: el recorrido del panel con las
+  tres acciones, sin Editar, *Off*, una respuesta sin título, y la ventana de la política para dueño, admin, miembro e
+  invitado, el rechazo de la base y la base sin la función).
+- **Mutantes:** 23 de 23 mueren (las guardas de *Format as…*, los hijos, el permiso, deshacer lo que no quedó, las
+  marcas, la marca del título, el título escapado, ids nuevos de la subpágina, la guarda de la copia, las celdas, los
+  botones sin permiso y la política para todos).
+- **SQL:** la migración y `supabase/tests/asistente_politica_ventana_permisos.sql` en `begin … rollback` contra la base
+  (todo `ok`: dueño y admin la cambian; miembro, invitado, admin sacado, alguien sin fila, una sesión con contraseña y
+  `anon`, no; un valor desconocido o `null`, no); 7 de 7 mutantes de la migración mueren; la base quedó sin la función.
+- **Recorrido de aceptación en Chromium** (el arnés de A1 con la app real sobre el servidor en memoria, sin login, y el
+  proveedor falso local): los pasos 1 a 4 de la sección 14 (resumir e *Insert at top*, *Create translated subpage*,
+  *Replace page content*, tres renglones a casillas, *Off* en la ventana → el panel lo dice), solo ver y el teléfono:
+  36 de 36.
+
+### Correcciones de la auditoría
+
+La auditoría independiente de A2 dio "no pasa" por un bloqueante. Corregido en una ronda, con sus pruebas:
+
+| Hallazgo | Qué se cambió |
+|---|---|
+| B1. *Format as…* aplicaba una respuesta que dejaba afuera o inventaba texto (un renglón, una palabra, una fila), y la vista previa no lo mostraba | `planFormat` compara las palabras de lo elegido y de la respuesta (sin formato, puntuación ni mayúsculas). Si falta alguna, no se aplica: *The suggestion leaves out text that was selected ("Revisar", "baterías"). Nothing can be applied: try again, or copy it.* Solo se pueden caer las conjunciones entre ítems (*y*, *e*, *o*, *and*, *or*…). En una tabla cuenta que cada palabra aparezca (un rótulo repetido pasa a ser la columna). Las palabras que agrega la respuesta van subrayadas en la vista previa, con un aviso, y se puede aplicar (un encabezado de tabla es razonable) |
+| O1. Los comentarios de un bloque que *Format as…* rehace quedaban sin bloque | Los bloques nuevos heredan, en orden, los ids de los bloques de texto que reemplazan: un comentario anclado a uno de ellos sigue con bloque. Si la respuesta trae menos bloques (tres renglones a una tabla), los comentarios de los que sobran quedan sin bloque, como al borrarlos a mano (al roadmap) |
+| O2. La guarda de permiso de *Create translated subpage* no tenía prueba | `subpageAllowed` (Editar y crear, y el editor escribible), usada por el botón y otra vez al crear, con su prueba con permisos reales del equipo |
+
+Mutantes después de la ronda: 31 de 31 mueren (los 23 de antes y 8 nuevos de B1, O1 y O2).
+
+### Lo que falta y lo que prueba Lega
+
+- Falta: A3 (pie de foto) y el MCP (M0 a M3). La política no se actualiza en vivo en un panel ya abierto de otra
+  persona (se lee al abrirlo y al cerrar los ajustes); el MCP la va a mirar en la base. *Format as…* que junta varios
+  bloques en menos (una tabla) deja sin bloque los comentarios de los que sobran.
+- Lega, con sus claves: la prueba de aceptación de A2 (sección 14) con una página de rodaje real, en la compu y en el
+  iPhone, y la ventana de la política con la migración aplicada.

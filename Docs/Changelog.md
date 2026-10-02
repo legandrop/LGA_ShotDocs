@@ -1,5 +1,18 @@
 # Changelog — LGA Shot Docs
 
+v0.126 :
+
+Asistente, entrega A2 (P.24): el asistente solo trabajaba sobre lo elegido y la política del workspace no tenía cómo
+cambiarse. El panel suma *Summarize page* (*Insert at top* / *Insert below*), *Translate page* (*Replace page content*,
+que traduce cada bloque en su lugar con el reemplazo de A1, o *Create translated subpage*, por `tree.create` y
+`writeNewPage`) y *Format as…* (viñetas, casillas, tabla, títulos; solo bloques que ya existen, un deshacer, la guarda
+más el tipo de cada bloque, sin partir bloques con hijos; no aplica si la respuesta deja afuera palabras de lo
+elegido y subraya las que agrega). Medido: cambiar el tipo rehace el texto en Yjs, así que lo
+escrito a la vez sin red queda en el historial; el diseño quedó corregido. Migración
+`20261017120000_asistente_politica_ventana.sql` (sin aplicar): `set_assistant_policy` para dueño y admins, con la
+sección *This workspace* en *Assistant…*.
+[ Asistente A2 - resumir y traducir la página, Format as… y la política del workspace ]
+
 v0.125 :
 
 Menciones en comentarios (P.21), entrega 2. Para mencionar a alguien que no veía la página había que ir a *Share*,

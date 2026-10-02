@@ -106,6 +106,8 @@ const FOLDER_ZIP = '0.105';
 const CAMERA = '0.110';
 /** El asistente, entrega A1 (Docs/Doc_Asistente.md): la versión se pone al publicar, igual que en el changelog. */
 const ASSISTANT = '0.118';
+/** El asistente, entrega A2 (la página entera, *Format as…*, la política del workspace): la versión la pone quien publica. */
+const ASSISTANT_A2 = '0.126';
 /** Las plantillas de fábrica (Docs/Doc_Plantillas.md, entregas 0 y 1): la versión se ajusta al publicar. */
 const TEMPLATES = '0.117';
 /** Las plantillas propias (Docs/Doc_Plantillas.md, entrega 3): la versión la pone quien publica. */
@@ -254,6 +256,33 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.assistantKey.text',
     words: ['clave', 'api key', 'key', 'proveedor', 'provider', 'anthropic', 'openai', 'gemini', 'openrouter', 'ollama', 'lm studio', 'tope', 'gasto', 'spending limit', 'olvidar', 'forget', 'local'],
     since: ASSISTANT,
+  },
+  {
+    id: 'assistantPage',
+    section: 'writing',
+    title: 'help.assistantPage.title',
+    text: 'help.assistantPage.text',
+    keys: { undo: 'undo' },
+    words: ['resumen', 'resumir', 'traducir página', 'subpágina', 'reemplazar', 'summary', 'summarize', 'translate page', 'subpage', 'replace', 'asistente', 'assistant'],
+    since: ASSISTANT_A2,
+  },
+  {
+    id: 'assistantFormat',
+    section: 'writing',
+    title: 'help.assistantFormat.title',
+    text: 'help.assistantFormat.text',
+    keys: { apply: 'assistantApply', undo: 'undo' },
+    words: ['formato', 'forma', 'viñetas', 'casillas', 'tabla', 'títulos', 'format', 'bullets', 'checklist', 'table', 'headings', 'asistente', 'assistant'],
+    since: ASSISTANT_A2,
+  },
+  {
+    id: 'assistantPolicy',
+    section: 'writing',
+    title: 'help.assistantPolicy.title',
+    text: 'help.assistantPolicy.text',
+    words: ['política', 'apagar', 'modelos locales', 'policy', 'turn off', 'local models', 'asistente', 'assistant', 'dueño', 'owner', 'admin'],
+    when: 'admin',
+    since: ASSISTANT_A2,
   },
 
   // --- Fotos y videos ---
