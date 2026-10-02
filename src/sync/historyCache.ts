@@ -239,13 +239,20 @@ export class HistoryCache {
 
   /**
    * Libera páginas, las abiertas hace más tiempo primero, hasta quedar debajo del tope. `keep` (la que se acaba de
-   * guardar) va última: si sola pasa el tope, tampoco se guarda.
+   * guardar) va última; si sola pasa el tope, no se guarda (y lo demás queda).
    */
   async evict(maxBytes = HISTORY_CACHE_MAX_BYTES, keep?: string): Promise<string[]> {
-    const metas = await this.db.getAll('pages');
+    let metas = await this.db.getAll('pages');
+    const dropped: string[] = [];
+    // La recién guardada pasa el tope sola: se tira ella y no se toca lo demás.
+    const kept = metas.find((m) => m.pageId === keep);
+    if (kept && kept.bytes > maxBytes) {
+      await this.drop(kept.pageId);
+      dropped.push(kept.pageId);
+      metas = metas.filter((m) => m !== kept);
+    }
     let total = metas.reduce((n, m) => n + m.bytes, 0);
     const order = metas.sort((a, b) => (a.pageId === keep ? 1 : b.pageId === keep ? -1 : a.openedAt - b.openedAt));
-    const dropped: string[] = [];
     for (const m of order) {
       if (total <= maxBytes) break;
       await this.drop(m.pageId);
