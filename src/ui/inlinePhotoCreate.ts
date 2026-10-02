@@ -405,6 +405,16 @@ export function pickFiles(editor: PhotoEditor, accept: string, opts: AddFilesOpt
   input.click();
 }
 
+/** El final del último texto de la celda que empieza en `cellPos`, o `null` si no tiene texto. */
+export function cellTextEnd(cell: PMNode, cellPos: number): number | null {
+  let end: number | null = null;
+  cell.descendants((child, offset) => {
+    if (child.isTextblock) end = cellPos + 1 + offset + child.nodeSize - 1;
+    return !child.isTextblock;
+  });
+  return end;
+}
+
 /**
  * La posición entre letras donde se soltó, o `null` si se soltó sobre algo que no es un renglón (una foto-bloque, una
  * tarjeta, el borde de una tabla): ProseMirror da igual la posición de texto más cercana, que puede ser la de otro
@@ -415,9 +425,12 @@ export function dropPos(view: EditorView | undefined, x: number, y: number): num
   if (!view || !at) return null;
   if (at.inside >= 0) {
     const node = view.state.doc.nodeAt(at.inside);
-    // En el relleno de una celda (alrededor de su texto): la posición de texto de esa misma celda.
+    // En el relleno de una celda (alrededor de su texto, o abajo en una fila alta por una miniatura): ProseMirror da la
+    // posición entre el cierre del texto y el de la celda, donde no entra nada en línea. Va al final del texto de esa
+    // celda (auditoría de la entrega 5: sin esto, la foto terminaba debajo de la tabla).
     if (node && (node.type.name === 'tableCell' || node.type.name === 'tableHeader')) {
-      return at.pos > at.inside && at.pos < at.inside + node.nodeSize ? at.pos : null;
+      if (at.pos <= at.inside || at.pos >= at.inside + node.nodeSize) return null;
+      return view.state.doc.resolve(at.pos).parent.isTextblock ? at.pos : cellTextEnd(node, at.inside);
     }
     if (node && !node.isTextblock && !node.isInline && node.type.name !== 'blockContainer') return null;
   }

@@ -15,7 +15,7 @@ import { mountEditor, tick, undoManager, unmountAll, view as viewOf } from './co
 import { schema } from './editorSchema';
 import { schema as previousPublished } from './fixtures/editorSchemaAnterior';
 import { PHOTO } from './inlinePhoto';
-import { addFiles, CELL_PHOTO_WIDTH, canHostPhoto, inlinePhotoSpotsExtension, inTableCell, pasteSpot, type AddFilesOptions, type PhotoEditor } from './inlinePhotoCreate';
+import { addFiles, CELL_PHOTO_WIDTH, canHostPhoto, dropPos, inlinePhotoSpotsExtension, inTableCell, pasteSpot, type AddFilesOptions, type PhotoEditor } from './inlinePhotoCreate';
 import { decorateRows, photoKeyAtPos } from './inlinePhotoEditor';
 import { brokenGaps, previousSchema, storedPhotos } from './photoHarness';
 import { findUnknownContent, knownContent } from './unknownContent';
@@ -149,6 +149,30 @@ describe('dónde entra', () => {
     const E = mountCreating(page());
     await addFiles(E as unknown as PhotoEditor, [file('D.jpg')], { pos: cellPos(E, 0, 0, 2), block: { blockId: 'tb', placement: 'after' } }, options());
     expect(cells(E)[0][0]).toBe('Pl[D.jpg@0]ano');
+  });
+
+  it('soltar en el relleno de una celda (abajo, fuera de su renglón): al final del texto de esa celda, no debajo de la tabla', async () => {
+    const E = mountCreating(page());
+    const doc = viewOf(E).state.doc;
+    // Lo que da `posAtCoords` en el relleno de abajo de una celda de una fila alta (medido en Chromium por la auditoría):
+    // `inside` = la celda, `pos` = entre el cierre de su texto y el de la celda.
+    const para = cellPos(E, 0, 0) - 1;
+    const cell = para - 1;
+    const cellNode = doc.nodeAt(cell)!;
+    expect(cellNode.type.name).toBe('tableCell');
+    const fake = { state: viewOf(E).state, posAtCoords: () => ({ pos: cell + cellNode.nodeSize - 1, inside: cell }) } as never;
+    const at = dropPos(fake, 10, 10);
+    expect(at).toBe(cellPos(E, 0, 0, -1));
+    await addFiles(E as unknown as PhotoEditor, [file('R.jpg')], { pos: at, block: { blockId: 'tb', placement: 'after' } }, options());
+    expect(cells(E)[0][0]).toBe('Plano[R.jpg@0]');
+    expect(E.document.map((b) => b.id)).toEqual(['a', 'tb', 'z']);
+    // Sobre el texto, la posición tal cual; fuera de la celda (el borde de la tabla), ninguna.
+    const onText = { state: viewOf(E).state, posAtCoords: () => ({ pos: cellPos(E, 0, 0, 2), inside: cell }) } as never;
+    expect(dropPos(onText, 0, 0)).toBe(cellPos(E, 0, 0, 2));
+    const tablePos = cell - 1;
+    const onEdge = { state: viewOf(E).state, posAtCoords: () => ({ pos: tablePos + 1, inside: tablePos }) } as never;
+    expect(viewOf(E).state.doc.nodeAt(tablePos)?.type.name).toBe('tableRow');
+    expect(dropPos(onEdge, 0, 0)).toBeNull();
   });
 
   it('un adjunto sigue siendo una tarjeta debajo de la tabla (no entra en una celda); las fotos del mismo pegar, en la celda', async () => {
