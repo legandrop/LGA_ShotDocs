@@ -324,8 +324,8 @@ export const help = {
   },
   'help.removedWriting.title': { en: "When someone deletes what you were writing in", es: "Cuando alguien borra donde estabas escribiendo" },
   'help.removedWriting.text': {
-    en: "If someone deletes a block (or a list, a table or a section) while you are writing in it, the deletion wins for everyone. You get a notice on the page with what you wrote there, so you can copy it and paste it back.",
-    es: "Si alguien borra un bloque (o una lista, una tabla o una sección) mientras escribís en él, el borrado gana para todos. Te aparece un aviso en la página con lo que escribiste ahí, para copiarlo y volver a pegarlo.",
+    en: "If someone deletes a block (or a list, a table or a section) while you are writing or moving text in it, the deletion wins for everyone. You get a notice on the page with what you wrote or moved there (moving a block or changing its type rewrites its text), so you can copy it and paste it back.",
+    es: "Si alguien borra un bloque (o una lista, una tabla o una sección) mientras escribís o movés texto en él, el borrado gana para todos. Te aparece un aviso en la página con lo que escribiste o moviste ahí (mover un bloque o cambiarle el tipo reescribe su texto), para copiarlo y volver a pegarlo.",
   },
   'help.updateApp.title': { en: "When the app asks to be updated", es: "Cuando la app pide actualizarse" },
   'help.updateApp.text': {

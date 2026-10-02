@@ -12,6 +12,16 @@ que alguien escribió en algo ya borrado se ve aparte, en su versión, con **Cop
 unos 10 ms. La lista se actualiza sola con el historial abierto, sin perder la versión elegida.
 [ Historial - los cambios marcados por persona, el texto huérfano, el Worker y la lista que se actualiza sola ]
 
+v0.101 :
+
+Con 300 corridas al azar, la prueba del aviso de B.16 decía que un dispositivo recibía texto ajeno (25 fallas en
+una corrida). Era suyo: cuando la reparación que va con lo bajado escribe, Yjs le cambia el número al documento, y la
+prueba solo conocía el primero. Detrás había un hueco real: la app anotaba como propio solo el número nuevo, y lo que
+copió la reparación (texto propio sin subir) podía desaparecer sin aviso. Ahora la app y la prueba anotan todos los
+números del documento; la prueba suma otra pestaña y compactar al abrir sin red. El aviso dice ahora *what you wrote
+or moved*: puede traer texto que este dispositivo movió o convirtió (D23).
+[ Aviso de lo borrado - todos los autores del documento son propios y la prueba al azar con 300 corridas ]
+
 v0.100 :
 
 Lo borrado de una página viajaba en las filas de `page_updates` a cualquiera que la puede ver, invitados incluidos, y
