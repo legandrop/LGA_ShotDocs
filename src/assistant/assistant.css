@@ -291,3 +291,23 @@
   margin-right: auto;
   color: var(--danger);
 }
+
+/* Con lugar, la página se corre para que el panel no la tape (como el de los comentarios). */
+@media (min-width: 1180px) {
+  .shell:has(> .assistant-panel) > .main {
+    padding-right: var(--assistant-width, 360px);
+    scroll-padding-right: var(--assistant-width, 360px);
+  }
+
+  .shell:has(> .assistant-panel) > .main > .topbar {
+    margin-right: calc(-1 * var(--assistant-width, 360px));
+  }
+}
+
+.assistant-diff del + ins {
+  margin-left: 3px;
+}
+
+.assistant-settings a {
+  color: var(--accent-text);
+}
