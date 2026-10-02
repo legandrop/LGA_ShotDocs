@@ -1030,7 +1030,10 @@ servidor en memoria, *Restored from…* con la fila de otra persona en el medio 
 cortar en cualquier fila da lo que tenía el servidor), `src/ui/historyCacheCleanup.test.tsx` (2: salir de la cuenta y
 sacar el workspace) y 7 más en `historyPanel.test.tsx` (nombrar, renombrar, quitar y el filtro; lo escrito después de un
 nombre; nombre ajeno, base sin migrar y sin la función; sin red y otro dispositivo; *Restored from…*; sin red con lo
-guardado y al volver la red; sin nada guardado). Los mutantes de la app: en el informe de la tanda.
+guardado y al volver la red; sin nada guardado), más el atajo del campo del nombre en el registro (Enter guarda,
+Escape deja como estaba). Mutantes de la app: 25 de 26 hacen fallar alguna prueba; el que vive saca la espera a que la
+página termine de subir antes de buscar la fila de la restauración, que solo ahorra pedidos (sin ella, la busca, no la
+encuentra y espera a la sincronización siguiente). Suite: 2343 (2338 pasan, 5 salteadas).
 
 **Lo que falta:** medir en el iPhone; aplicar la migración. Detalles que quedaron así: Ctrl/⌘+Z de la restauración (en
 vez del *Undo* del aviso) no deja de lado la marca; en el filtro, la versión actual se ve siempre aunque no tenga
