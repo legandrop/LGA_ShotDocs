@@ -386,3 +386,82 @@ describe('quién cambió la página hace poco', () => {
     expect(recentOther([], 'yo', now)).toBeUndefined();
   });
 });
+
+describe('entrega 2: Show changes, el texto huérfano y la lista que se actualiza sola', () => {
+  it('Show changes está prendido: lo agregado se marca con el color y el correo de quien lo escribió; apagado, la versión limpia', async () => {
+    prefs.set({ language: 'en' });
+    const { a, pageId, server } = await setup();
+    const host = await mount(services(a, server.ownerId), pageId);
+    const toggle = host.querySelector<HTMLInputElement>('.history-changes input')!;
+    expect(toggle.checked).toBe(true);
+    // La versión actual (la de Bea) contra la anterior: el bloque de Bea, agregado entero.
+    const added = [...host.querySelectorAll<HTMLElement>('.history-page .hist-add')];
+    expect(added.map((x) => x.textContent).join('')).toContain('Lo de Bea');
+    expect(added[0].getAttribute('data-tip')).toContain('Added by bea@example.com');
+    // Bea es la segunda persona de la página: su color es el segundo de la paleta.
+    expect(added[0].getAttribute('style')).toContain('--hc: var(--hist-2)');
+    expect(host.querySelector('.history-page .hist-node-add.hist-block')).not.toBeNull();
+    // Lo que no cambió no se marca.
+    expect(added.map((x) => x.textContent).join('')).not.toContain('Primera versión');
+    await act(async () => toggle.click());
+    await settle(300);
+    expect(host.querySelector('.history-page .hist-add')).toBeNull();
+    expect(host.querySelector('.history-page')?.textContent).toContain('Lo de Bea');
+    // Queda como lo dejó la persona (se vuelve a prender para las demás pruebas).
+    await act(async () => host.querySelector<HTMLInputElement>('.history-changes input')!.click());
+    await settle(300);
+    expect(host.querySelector('.history-page .hist-add')).not.toBeNull();
+  });
+
+  it('con el historial abierto llegan cambios nuevos: la lista se actualiza sola y la versión elegida sigue elegida', async () => {
+    prefs.set({ language: 'en' });
+    const { a, b, pageId, server } = await setup();
+    const host = await mount(services(a, server.ownerId), pageId);
+    await act(async () => (host.querySelectorAll('.history-session')[1] as HTMLButtonElement).click());
+    await settle(300);
+    const editorBefore = host.querySelector('.history-page .ProseMirror');
+    expect(host.querySelector('.history-page')?.textContent).toContain('Primera versión');
+    // Dos horas después Bea escribe de nuevo (una sesión nueva) y el dispositivo sincroniza.
+    server.now = () => Date.parse('2026-09-30T18:00:00Z');
+    await edit(b, pageId, (g) => g.insert(0, [block('n', 'Bea, más tarde')]));
+    await b.engine.syncNow();
+    await act(async () => void (await a.engine.syncNow()));
+    await settle(400);
+    const items = [...host.querySelectorAll('.history-session')];
+    expect(items.length).toBe(3);
+    expect(items[0].textContent).toContain('Current version');
+    // La elegida sigue siendo la misma (la primera, de la dueña), con el mismo editor (no se volvió a armar).
+    expect(host.querySelector('.history-session[aria-current="true"]')?.textContent).toContain('You');
+    expect(host.querySelector('.history-session[aria-current="true"]')?.textContent).not.toContain('Current version');
+    expect(host.querySelector('.history-page .ProseMirror')).toBe(editorBefore);
+    expect(host.querySelector('.history-page')?.textContent).not.toContain('Bea, más tarde');
+  });
+
+  it('el texto huérfano: lo que Bea escribió en un bloque que la dueña ya había borrado se ve aparte, en la versión de Bea', async () => {
+    prefs.set({ language: 'en' });
+    const { a, b, pageId, server } = await setup();
+    server.now = () => Date.parse('2026-09-30T18:00:00Z');
+    await b.engine.syncNow();
+    // Bea escribe sin subir; la dueña borra el bloque y sube; Bea baja el borrado antes de subir.
+    await edit(b, pageId, (g) => {
+      const t = ((g.get(0) as Y.XmlElement).get(0) as Y.XmlElement).get(0) as Y.XmlText;
+      t.insert(t.length, ' TEXTO-HUÉRFANO');
+    });
+    await edit(a, pageId, (g) => g.delete(0, 1));
+    await a.engine.syncNow();
+    server.now = () => Date.parse('2026-09-30T18:01:00Z');
+    await b.docs.pullPage(pageId, b.remote);
+    await b.engine.syncNow();
+    await a.engine.syncNow();
+    const host = await mount(services(a, server.ownerId), pageId);
+    const orphan = host.querySelector('.history-orphan');
+    expect(orphan?.textContent).toContain('bea@example.com wrote in a part that had already been removed');
+    expect(orphan?.textContent).toContain('TEXTO-HUÉRFANO');
+    // No está en la página ni en la versión: solo en la franja.
+    expect(host.querySelector('.history-page')?.textContent).not.toContain('TEXTO-HUÉRFANO');
+    // En las versiones anteriores, no aparece.
+    await act(async () => (host.querySelectorAll('.history-session')[1] as HTMLButtonElement).click());
+    await settle(300);
+    expect(host.querySelector('.history-orphan')).toBeNull();
+  });
+});
