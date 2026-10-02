@@ -5,6 +5,7 @@ import { usePermissions, useServices } from '../services';
 import { LEVEL_COMMENT, LEVEL_DELETE_ANY } from '../sync/comments';
 import { toggleComments, useCommentsUi } from './commentsUi';
 import { CommentIcon } from './icons';
+import { useInbox } from './MentionsBell';
 
 // Lo de los comentarios que está siempre a la vista (el botón de la barra de arriba). El panel, más
 // pesado, se baja aparte la primera vez que se abre (CommentsPanel.tsx, roadmap B.4).
@@ -32,16 +33,23 @@ export function CommentsToggle({ pageId }: { pageId: string }) {
   const { open } = useCommentsUi();
   const tr = useT();
   const openThreads = comments.threads(pageId).filter((t) => !t.resolved).length;
+  // Un punto si en esta página hay una mención sin leer para quien mira (Doc_Menciones.md, 2.3).
+  const { mentions } = useServices();
+  useInbox();
+  const mentioned = !!mentions?.unreadOn(pageId);
+  const label = openThreads > 0 ? tr('comments.toggleOpen', { count: openThreads }) : tr('comments.title');
   return (
     <button
       className={`icon-button comments-toggle${openThreads > 0 ? ' has-count' : ''}`}
       data-tour="comments"
-      aria-label={openThreads > 0 ? tr('comments.toggleOpen', { count: openThreads }) : tr('comments.title')}
+      aria-label={mentioned ? `${label}, ${tr('comments.mentionedHere')}` : label}
+      data-tip={mentioned ? tr('comments.mentionedHere') : undefined}
       aria-pressed={open}
       onClick={toggleComments}
     >
       <CommentIcon size={19} />
       {openThreads > 0 && <span className="comments-toggle-count">{openThreads > 99 ? '99+' : openThreads}</span>}
+      {mentioned && <span className="mention-dot comments-toggle-dot" />}
     </button>
   );
 }

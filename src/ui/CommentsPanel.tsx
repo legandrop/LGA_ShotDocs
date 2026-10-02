@@ -1,9 +1,18 @@
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { locale, localize, t as current, useT, type Translate } from '../i18n';
 import '../i18n/lazy/commentsPanel';
 import { setVisitorName, useLinkMode, useVisitorName } from '../linkMode';
 import { useServices, useSyncStatus } from '../services';
-import { CommentInvalid, MAX_COMMENT_LENGTH, type CommentThread, type CommentView } from '../sync/comments';
+import {
+  CommentInvalid,
+  labelForEmail,
+  MAX_COMMENT_LENGTH,
+  MAX_MENTIONS,
+  type CommentThread,
+  type CommentView,
+  type MentionRef,
+} from '../sync/comments';
+import type { MentionCandidate } from '../sync/mentions';
 import { errorMessage } from '../sync/types';
 import {
   clearCommentsTarget,
@@ -21,6 +30,8 @@ import {
   type CommentsTarget,
 } from './commentsUi';
 import { CommentsToggle, useCommentAccess } from './CommentsToggle';
+import { activeMentions, insertMention, mentionQuery, mentionSegments } from './mentionText';
+import { useInbox } from './MentionsBell';
 import { shortcutLabel } from './shortcuts';
 import { CloseIcon, CollapseIcon, ExpandIcon, QuestionIcon } from './icons';
 
@@ -49,9 +60,9 @@ function sortThreads(threads: CommentThread[], source: BlockSource | null): Comm
 export function CommentsPanel({ pageId }: { pageId: string }) {
   const ui = useCommentsUi();
   // Al salir de la página, lo pedido para ella no sigue.
-  useEffect(() => () => clearCommentsTarget(), [pageId]);
+  useEffect(() => () => clearCommentsTarget(pageId), [pageId]);
   if (!ui.open) return null;
-  return <Panel pageId={pageId} target={ui.target} nonce={ui.nonce} />;
+  return <Panel pageId={pageId} target={ui.targetPage && ui.targetPage !== pageId ? null : ui.target} nonce={ui.nonce} />;
 }
 
 function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarget | null; nonce: number }) {
@@ -70,13 +81,22 @@ function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarg
   const open = sortThreads(threads.filter((t) => !t.resolved), source);
   const resolved = sortThreads(threads.filter((t) => t.resolved), source);
 
+  // Ver los hilos en el panel marca leídas las menciones de esos hilos (Doc_Menciones.md, 2.3).
+  const { mentions } = useServices();
+  const inbox = useInbox();
+  const visible = [...open, ...(showResolved ? resolved : [])].map((t) => t.id).join(',');
+  useEffect(() => {
+    if (!mentions || !inbox.ready || !mentions.unreadOn(pageId)) return;
+    void mentions.markThreadsRead(pageId, new Set(visible.split(',')));
+  }, [mentions, inbox, pageId, visible]);
+
   // Lo que pidió el editor o el margen: un hilo, los de un bloque, o escribir uno nuevo.
   useEffect(() => {
     if (!target) return;
     if (target.kind === 'thread') {
       setFocused(target.threadId);
       setComposing(null);
-      if (threads.find((t) => t.id === target.threadId)?.resolved) setShowResolved(true);
+      if (target.resolved || threads.find((t) => t.id === target.threadId)?.resolved) setShowResolved(true);
     } else if (target.kind === 'block') {
       const onBlock = threads.filter((t) => t.blockId === target.blockId);
       const first = onBlock.find((t) => !t.resolved) ?? (target.answer ? onBlock[0] : undefined);
@@ -277,9 +297,10 @@ function NewThread({
       <Anchor blockId={blockId} source={source} onReveal={onReveal} />
       <Composer
         autoFocus
+        mentionPage={pageId}
         placeholder={question ? tr('comments.writeAnswer') : tr('comments.write')}
         submitLabel={question ? tr('comments.answer') : tr('comments.comment')}
-        onSubmit={async (text) => onDone(await comments.add(pageId, blockId, text))}
+        onSubmit={async (text, mentions) => onDone(await comments.add(pageId, blockId, text, null, mentions ?? []))}
         onCancel={() => onDone(null)}
       />
     </section>
@@ -337,10 +358,11 @@ function Thread({
       {replying ? (
         <Composer
           autoFocus
+          mentionPage={thread.pageId}
           placeholder={question ? tr('comments.writeAnswer') : tr('comments.replyPlaceholder')}
           submitLabel={question ? tr('comments.answer') : tr('comments.reply')}
-          onSubmit={async (text) => {
-            await comments.add(thread.pageId, thread.blockId, text, thread.id);
+          onSubmit={async (text, mentions) => {
+            await comments.add(thread.pageId, thread.blockId, text, thread.id, mentions ?? []);
             setReplying(false);
           }}
           onCancel={() => setReplying(false)}
@@ -434,16 +456,23 @@ function Comment({ comment, me, canComment, canDeleteAny }: { comment: CommentVi
         <Composer
           autoFocus
           initial={comment.body}
+          initialMentions={comment.mentions}
+          mentionPage={comment.pageId}
           submitLabel={tr('common.save')}
           placeholder={tr('comments.editPlaceholder')}
-          onSubmit={async (text) => {
-            if (text !== comment.body) await comments.edit(comment.pageId, comment.id, text);
+          onSubmit={async (text, mentions) => {
+            if (text !== comment.body) await comments.edit(comment.pageId, comment.id, text, mentions ?? undefined);
             setEditing(false);
           }}
           onCancel={() => setEditing(false)}
         />
       ) : (
-        <p className="comment-body">{comment.body}</p>
+        <CommentBody comment={comment} me={me} />
+      )}
+      {!editing && mine && comment.unnotified.length > 0 && (
+        <p className="comment-unnotified">
+          {tr('comments.notNotified', { count: comment.unnotified.length, names: comment.unnotified.map((l) => `@${l}`).join(', ') })}
+        </p>
       )}
       {comment.error && <Rejected comment={comment} />}
       {error && <p className="comment-error">{error}</p>}
@@ -483,6 +512,74 @@ function Comment({ comment, me, canComment, canDeleteAny }: { comment: CommentVi
       )}
     </div>
   );
+}
+
+/**
+ * El texto del comentario con las menciones pintadas (Doc_Menciones.md, 2.2): cada `@rótulo` de una mención activa,
+ * con el correo en el tooltip (más fuerte si es quien mira); las de Coda como `@Nombre`. Lo de un visitante de un
+ * link no se pinta (no menciona a nadie).
+ */
+function CommentBody({ comment, me }: { comment: CommentView; me: string }) {
+  const { comments } = useServices();
+  const segments = comment.linkAuthor ? [{ text: comment.body }] : mentionSegments(comment.body, comment.mentions, !!comment.importedFrom);
+  return (
+    <p className="comment-body">
+      {segments.map((seg, i) =>
+        'mention' in seg ? (
+          <span
+            key={i}
+            className={`mention${seg.mention.userId === me ? ' me' : ''}`}
+            data-tip={comments.emailOf(seg.mention.userId)}
+            data-tip-plain
+          >
+            {seg.text}
+          </span>
+        ) : 'coda' in seg ? (
+          <span key={i} className="mention">
+            {seg.text}
+          </span>
+        ) : (
+          seg.text
+        ),
+      )}
+    </p>
+  );
+}
+
+/** Los autores conocidos de la página (para mencionar sin red y sin la lista guardada). */
+function knownAuthors(comments: ReturnType<typeof useServices>['comments'], pageId: string, me: string): MentionCandidate[] {
+  const ids = new Set<string>();
+  for (const t of comments.threads(pageId)) {
+    for (const c of [t.root, ...t.replies]) if (c.authorId && c.authorId !== me) ids.add(c.authorId);
+  }
+  const out: MentionCandidate[] = [];
+  for (const id of ids) {
+    const email = comments.emailOf(id);
+    if (email) out.push({ userId: id, email, label: labelForEmail(email) });
+  }
+  return out;
+}
+
+/** La lista del `@` de la página (vacía si no hay menciones: base sin migrar, link público, sin la campana). */
+function useMentionCandidates(pageId: string | null): { on: boolean; list: MentionCandidate[] } {
+  const { mentions, comments, user } = useServices();
+  const inbox = useInbox();
+  const link = useLinkMode();
+  const on = !!pageId && !!mentions && inbox.ready && !link && comments.writable;
+  useEffect(() => {
+    if (on && pageId) void mentions?.refreshIfStale(pageId);
+  }, [on, pageId, mentions]);
+  if (!on || !pageId || !mentions) return { on: false, list: [] };
+  return { on, list: mentions.candidatesFor(pageId, () => knownAuthors(comments, pageId, user.id)) };
+}
+
+/** Hasta 8 de la lista que coinciden con lo escrito después del `@` (primero los que empiezan así). */
+function matchCandidates(list: MentionCandidate[], query: string, taken: Set<string>, me: string): MentionCandidate[] {
+  const q = query.toLowerCase();
+  return list
+    .filter((c) => c.userId !== me && !taken.has(c.userId) && (c.label.toLowerCase().includes(q) || c.email.toLowerCase().includes(q)))
+    .sort((a, b) => Number(!a.label.toLowerCase().startsWith(q)) - Number(!b.label.toLowerCase().startsWith(q)) || a.email.localeCompare(b.email))
+    .slice(0, 8);
 }
 
 /**
@@ -540,9 +637,16 @@ function Rejected({ comment }: { comment: CommentView }) {
   );
 }
 
-/** El cuadro para escribir: Ctrl/⌘+Enter manda, Escape cancela. Crece con el texto. */
+/**
+ * El cuadro para escribir: Ctrl/⌘+Enter manda, Escape cancela. Crece con el texto. Con `mentionPage` (y la base con
+ * menciones), `@` al comienzo o después de un espacio abre la lista de a quién nombrar: ↑ ↓ eligen, Enter o Tab lo
+ * ponen, Esc cierra la lista sin borrar lo escrito. Detrás del cuadro, una copia del texto pinta cada mención elegida.
+ * Al mandar, `mentions` son las elegidas que siguen escritas (`null` sin menciones).
+ */
 function Composer({
   initial = '',
+  initialMentions = [],
+  mentionPage = null,
   placeholder,
   submitLabel,
   autoFocus,
@@ -550,18 +654,49 @@ function Composer({
   onCancel,
 }: {
   initial?: string;
+  initialMentions?: MentionRef[];
+  mentionPage?: string | null;
   placeholder: string;
   submitLabel: string;
   autoFocus?: boolean;
-  onSubmit: (text: string) => Promise<unknown>;
+  onSubmit: (text: string, mentions: MentionRef[] | null) => Promise<unknown>;
   onCancel: () => void;
 }) {
+  const { user } = useServices();
   const [text, setText] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ref = useRef<HTMLTextAreaElement>(null);
+  const backdrop = useRef<HTMLDivElement>(null);
   const dirty = text.trim() !== '' && text !== initial;
   const tr = useT();
+
+  // Las menciones: a quién se eligió, dónde está el cursor y la lista abierta.
+  const candidates = useMentionCandidates(mentionPage);
+  const [picked, setPicked] = useState<MentionRef[]>(initialMentions);
+  const [caret, setCaret] = useState<number | null>(null);
+  const [choice, setChoice] = useState(0);
+  // El `@` en el que se cerró la lista con Esc: no se vuelve a abrir hasta escribir otro.
+  const [closedAt, setClosedAt] = useState<number | null>(null);
+  const active = useMemo(() => activeMentions(text, picked), [text, picked]);
+  const query = candidates.on && caret !== null ? mentionQuery(text, caret) : null;
+  const listOpen = !!query && query.start !== closedAt;
+  const full = active.length >= MAX_MENTIONS;
+  const matches = listOpen && !full ? matchCandidates(candidates.list, query.query, new Set(active.map((m) => m.userId)), user.id) : [];
+  useEffect(() => setChoice(0), [query?.query, query?.start]);
+
+  const pick = (c: MentionCandidate) => {
+    if (!query || caret === null) return;
+    const next = insertMention(text, query.start, caret, c.label);
+    setText(next.text);
+    setPicked((list) => [...list.filter((m) => m.userId !== c.userId), { userId: c.userId, label: c.label }]);
+    setCaret(next.caret);
+    requestAnimationFrame(() => {
+      ref.current?.focus();
+      ref.current?.setSelectionRange(next.caret, next.caret);
+    });
+  };
+  const syncCaret = () => setCaret(ref.current?.selectionStart ?? null);
 
   // Lo escrito a medias: cerrar el panel (tocar afuera, Escape, la X) pide confirmación.
   const draftKey = useRef(Symbol('draft'));
@@ -602,7 +737,7 @@ function Composer({
     setBusy(true);
     setError(null);
     try {
-      await onSubmit(text);
+      await onSubmit(text, candidates.on ? activeMentions(text, picked) : null);
     } catch (err) {
       setError(err instanceof CommentInvalid ? err.message : tr('comments.saveFailed', { reason: errorMessage(err) }));
       setBusy(false);
@@ -620,24 +755,92 @@ function Composer({
         void submit();
       }}
     >
-      <textarea
-        ref={ref}
-        rows={2}
-        value={text}
-        placeholder={placeholder}
-        aria-label={placeholder}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (isSendShortcut(e)) {
-            e.preventDefault();
-            void submit();
-          } else if (e.key === 'Escape') {
-            e.preventDefault();
-            if (dirty && !confirm(tr('comments.discardDraft'))) return;
-            onCancel();
-          }
-        }}
-      />
+      <div className={`mention-field${candidates.on ? ' on' : ''}`}>
+        {candidates.on && (
+          <div ref={backdrop} className="mention-backdrop" aria-hidden="true">
+            {mentionSegments(text, active).map((seg, i) => ('mention' in seg ? <mark key={i}>{seg.text}</mark> : seg.text))}
+            {/* Un salto al final se ve en el cuadro aunque no tenga nada detrás. */}
+            {'\u200b'}
+          </div>
+        )}
+        <textarea
+          ref={ref}
+          rows={2}
+          value={text}
+          placeholder={placeholder}
+          aria-label={placeholder}
+          aria-expanded={candidates.on ? listOpen : undefined}
+          aria-autocomplete={candidates.on ? 'list' : undefined}
+          onChange={(e) => {
+            setText(e.target.value);
+            setCaret(e.target.selectionStart);
+          }}
+          onSelect={syncCaret}
+          onClick={syncCaret}
+          onScroll={(e) => {
+            if (backdrop.current) backdrop.current.scrollTop = e.currentTarget.scrollTop;
+          }}
+          onBlur={() => setTimeout(() => document.activeElement !== ref.current && setCaret(null), 150)}
+          onKeyDown={(e) => {
+            if (listOpen && !isSendShortcut(e)) {
+              if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                if (matches.length === 0) return;
+                e.preventDefault();
+                setChoice((n) => (n + (e.key === 'ArrowDown' ? 1 : -1) + matches.length) % matches.length);
+                return;
+              }
+              if ((e.key === 'Enter' || e.key === 'Tab') && !e.shiftKey && matches.length > 0) {
+                e.preventDefault();
+                pick(matches[Math.min(choice, matches.length - 1)]);
+                return;
+              }
+              if (e.key === 'Escape') {
+                // Cierra la lista sin borrar lo escrito ni cancelar el comentario.
+                e.preventDefault();
+                e.stopPropagation();
+                e.nativeEvent.stopImmediatePropagation();
+                setClosedAt(query!.start);
+                return;
+              }
+            }
+            if (isSendShortcut(e)) {
+              e.preventDefault();
+              void submit();
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              if (dirty && !confirm(tr('comments.discardDraft'))) return;
+              onCancel();
+            }
+          }}
+        />
+      </div>
+      {listOpen && (
+        <ul className="mention-list" role="listbox" aria-label={tr('mentions.listLabel')}>
+          {full ? (
+            <li className="mention-list-note">{tr('mentions.max', { max: MAX_MENTIONS })}</li>
+          ) : matches.length === 0 ? (
+            <li className="mention-list-note">{tr('mentions.noMatch')}</li>
+          ) : (
+            matches.map((c, i) => (
+              <li
+                key={c.userId}
+                role="option"
+                aria-selected={i === choice}
+                className={i === choice ? 'selected' : undefined}
+                // El mouse elige sin sacarle el foco al cuadro.
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  pick(c);
+                }}
+                onMouseEnter={() => setChoice(i)}
+              >
+                <strong>{c.label}</strong>
+                <span className="muted">{c.email}</span>
+              </li>
+            ))
+          )}
+        </ul>
+      )}
       {(error || tooLong) && (
         <p className="comment-error">{tooLong ? tr('comments.tooLong', { max: MAX_COMMENT_LENGTH, now: text.length }) : error}</p>
       )}

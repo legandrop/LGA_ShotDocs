@@ -127,7 +127,7 @@ describe('la cola', () => {
   });
 
   it('a quien la base no avisó lo ve solo quien escribió, sin error ni rechazo', async () => {
-    const { server, owner, ana, brief } = await workspace();
+    const { owner, ana, brief } = await workspace();
     const stop = ana.comments.watch(brief);
     // Nadie no ve Brief: la base lo descarta.
     const id = await ana.comments.add(brief, null, '@beto y @nadie', null, [beto, nadie]);
@@ -366,9 +366,9 @@ describe('la lista del @', () => {
   it('pide la lista con red, la guarda y la usa sin red; sin lista guardada, los autores conocidos', async () => {
     const { server, ana, brief, notes } = await workspace();
     const fallback = () => [{ userId: 'x', email: 'x@y', label: 'x' }];
-    // La primera vez, sin lista guardada: lo de respaldo, y la pide.
+    // La primera vez, sin lista guardada: lo de respaldo; al abrir el campo la pide.
     expect(ana.mentions.candidatesFor(brief, fallback)).toEqual(fallback());
-    await ana.mentions.refreshCandidates(brief);
+    await ana.mentions.refreshIfStale(brief);
     const list = ana.mentions.candidatesFor(brief, fallback);
     // Ana (miembro) ve a la dueña y a Beto; la clienta no comentó y Nadie no ve la página.
     expect(list.map((c) => c.email).sort()).toEqual(['beto@wanka.tv', 'owner@test']);

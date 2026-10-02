@@ -108,7 +108,7 @@ function CommentsSlot({ pageId }: { pageId: string }) {
   const { open } = useCommentsUi();
   useEffect(() => CommentsPanel.preload(), []);
   // Al salir de la página, lo pedido para ella no sigue (también con el panel cerrado).
-  useEffect(() => () => clearCommentsTarget(), [pageId]);
+  useEffect(() => () => clearCommentsTarget(pageId), [pageId]);
   if (!open) return null;
   return (
     <Part onClose={closeComments}>

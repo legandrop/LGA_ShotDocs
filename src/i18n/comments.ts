@@ -103,6 +103,25 @@ export const comments = {
     en: "Discarding the mentions: no one gets notified; the text of the comment stays.",
     es: "Se descartan las menciones: nadie recibe el aviso; el texto del comentario queda.",
   },
+  // La campana de las menciones (Doc_Menciones.md, 2.3): está siempre en la barra de arriba.
+  'mentions.title': { en: "Mentions", es: "Menciones" },
+  'mentions.unread': {
+    en: { one: "{count} unread", other: "{count} unread" },
+    es: { one: "{count} sin leer", other: "{count} sin leer" },
+  },
+  'mentions.unreadMany': { en: "9+ unread", es: "9+ sin leer" },
+  'mentions.markAll': { en: "Mark all as read", es: "Marcar todas como leídas" },
+  'mentions.empty': {
+    en: "No mentions yet. When someone writes @ and your name in a comment, it shows up here.",
+    es: "Todavía no hay menciones. Cuando alguien escriba @ y tu nombre en un comentario, aparece acá.",
+  },
+  'mentions.offline': { en: "Offline · checked {time}", es: "Sin conexión · revisado a las {time}" },
+  'mentions.offlineNever': { en: "Offline", es: "Sin conexión" },
+  'mentions.resolved': { en: "Resolved", es: "Resuelto" },
+  'mentions.inTrash': { en: "In trash", es: "En la papelera" },
+  'mentions.someone': { en: "Someone", es: "Alguien" },
+  'mentions.unreadDot': { en: "Unread", es: "Sin leer" },
+  'comments.mentionedHere': { en: "you were mentioned here", es: "te mencionaron acá" },
   'commentError.mentionsInvalid': {
     en: "The mentions in this comment are not valid.",
     es: "Las menciones de este comentario no son válidas.",

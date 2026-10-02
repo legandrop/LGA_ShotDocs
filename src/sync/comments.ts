@@ -1051,8 +1051,10 @@ export class CommentQueue {
 
     const unknown = new Set<string>();
     for (const r of map.values()) {
-      for (const id of [r.author_id, r.resolved_by, r.deleted_by, r.imported_by]) {
-        if (id && id !== this.userId && !this.authors.has(id)) unknown.add(id);
+      // También las mencionadas: su correo va en el tooltip de cada `@rótulo`.
+      const named = Array.isArray(r.mentions) ? r.mentions.map((m) => m?.user_id) : [];
+      for (const id of [r.author_id, r.resolved_by, r.deleted_by, r.imported_by, ...named]) {
+        if (typeof id === 'string' && id && id !== this.userId && !this.authors.has(id)) unknown.add(id);
       }
     }
     if (unknown.size > 0) await this.pullAuthors(pageId);

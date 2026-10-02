@@ -392,13 +392,18 @@ export class MentionsInbox {
   // --- La lista del `@` ---------------------------------------------------------------------------------------
 
   /**
-   * La lista del `@` de una página: la guardada (o, sin ninguna, los autores conocidos de la página, que la base
-   * vuelve a revisar al subir), y la pide de nuevo si tiene más de 5 minutos y hay red. `onChange` avisa cuando llega.
+   * La lista del `@` de una página: la guardada o, sin ninguna, los autores conocidos de la página (la base los vuelve
+   * a revisar al subir). Para tenerla al día, `refreshIfStale` al abrir el campo.
    */
   candidatesFor(pageId: string, fallback: () => MentionCandidate[]): MentionCandidate[] {
+    return this.candidates.get(pageId)?.list ?? fallback();
+  }
+
+  /** La pide de nuevo si no hay o tiene más de 5 minutos (y hay red). Avisa a los suscriptos cuando llega. */
+  refreshIfStale(pageId: string): Promise<void> {
     const saved = this.candidates.get(pageId);
-    if (this.ready && (!saved || this.now - saved.at >= CANDIDATES_EVERY_MS)) void this.refreshCandidates(pageId);
-    return saved?.list ?? fallback();
+    if (!this.ready || (saved && this.now - saved.at < CANDIDATES_EVERY_MS)) return Promise.resolve();
+    return this.refreshCandidates(pageId);
   }
 
   /** La lista ya se pidió alguna vez (guardada en el dispositivo). */
