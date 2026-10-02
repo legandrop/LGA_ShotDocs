@@ -12,6 +12,7 @@ import { mountEditor, posOf, unmountAll, view, type Editor } from '../ui/collabH
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { AssistantPanel } from './AssistantPanel';
 import { closeAssistant, openCaption, registerAssistantTarget, type AssistantEditor } from './assistantUi';
+import { captionImage } from './captionImage';
 import { closeAssistantDb, saveSettings } from './keyStore';
 import { inlinePhotoRef } from './photoRef';
 
@@ -268,6 +269,7 @@ describe('el panel, entrega A3 (Suggest caption)', () => {
     const { host, ed } = await setup();
     let n = 0;
     const { calls } = provider(() => (++n === 1 ? 'Primer pie' : 'Marcadores de tracking en el piso'));
+    vi.mocked(captionImage).mockClear();
     selectPhoto(ed, 't');
     await click(button(host, 'Suggest caption'));
     await click(button(host, 'Send photo'));
@@ -278,6 +280,8 @@ describe('el panel, entrega A3 (Suggest caption)', () => {
     for (let i = 0; i < 20 && field(host)?.value !== 'Marcadores de tracking en el piso'; i++) await wait(30);
     expect(calls).toHaveLength(2);
     expect(host.textContent).not.toContain('Send this photo to');
+    // La foto se preparó una sola vez: Try again manda la misma.
+    expect(captionImage).toHaveBeenCalledTimes(1);
     expect(field(host)?.value).toBe('Marcadores de tracking en el piso');
     await click(button(host, 'Apply'));
     const table = ed.getBlock('t') as unknown as { content: { rows: { cells: { content: { type: string; text?: string }[] }[] }[] } };

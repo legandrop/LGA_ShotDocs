@@ -104,6 +104,11 @@ describe('qué foto se eligió', () => {
     // La foto-bloque borrada: no está.
     const block: PhotoRef = { kind: 'block', blockId: 'img', index: 0, url: 'sdmedia://croquis', name: '' };
     expect(findPhoto(view(ed).state.doc, block)).not.toBeNull();
+    // La foto-bloque reemplazada (otra dirección): no está.
+    ed.updateBlock('img', { props: { url: 'sdmedia://otra' } } as never);
+    expect(findPhoto(view(ed).state.doc, block)).toBeNull();
+    ed.updateBlock('img', { props: { url: 'sdmedia://croquis' } } as never);
+    expect(findPhoto(view(ed).state.doc, block)).not.toBeNull();
     ed.removeBlocks(['img']);
     expect(findPhoto(view(ed).state.doc, block)).toBeNull();
   });
