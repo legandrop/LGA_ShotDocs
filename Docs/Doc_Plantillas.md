@@ -3,7 +3,8 @@
 **Estado: diseño, sin código ni migración** (roadmap P.23, fase 3 de `Plan_ShotDocs.md`; pedido de Lega del
 2026-10-02). Diseñado contra `main` v0.108. Las decisiones PL1 a PL10 (sección 13) son propuestas: se adoptan como
 están hasta que Lega diga otra cosa. El contenido de las tres plantillas es una primera versión para que Lega la
-ajuste: la entrega 0 la deja a la vista sin guardar nada, justamente para eso.
+ajuste: la entrega 0 la deja a la vista sin guardar nada, justamente para eso. Corregido con la auditoría
+independiente del 2026-10-02 ("aprobado con cambios"; ver "Correcciones de la auditoría", al final).
 
 ## En corto
 
@@ -23,7 +24,7 @@ ajuste: la entrega 0 la deja a la vista sin guardar nada, justamente para eso.
 - **Guardar como plantilla** (sección 5): *Save as template…* en el menú de la página copia la página a la carpeta
   *Templates* (la crea si falta), con la opción de vaciar las tablas y las casillas.
 - **El reporte del día** (sección 6): en la carpeta de reportes y en cada reporte, un botón **New day report**
-  (Ctrl/⌘+Alt+N) abre un globito con la **fecha de hoy** (la del dispositivo, hora local), el **día de rodaje**
+  (Ctrl/⌘+Alt+Shift+N) abre un globito con la **fecha de hoy** (la del dispositivo, hora local), el **día de rodaje**
   siguiente y la **locación del último reporte**, ya puestos y editables. Enter crea la página
   `2026-10-02 | Day 06` al final de la carpeta, con la unidad, el equipo de cámara y la gente de VFX del día anterior.
   Si ya hay uno con esa fecha, Enter lo abre. Sin red, igual.
@@ -58,14 +59,18 @@ número de día y la locación de ayer ya escritos, adentro de la carpeta de rep
   cambiarlo pide nivel 3 (`pages_permissions`, `20260930160000_equipo.sql`).
 - `pages.settings` (JSON, hasta 2000 caracteres, `pages_settings_shape`) guarda ajustes de la rama: cada clave se
   resuelve hacia arriba solo si el código la pide con `tree.resolveSetting`; `setSetting` copia las claves que no
-  conoce, así que **una versión vieja conserva claves nuevas** al cambiar el formato o el encabezado.
+  conoce, así que **una versión vieja conserva claves nuevas** al cambiar el formato o el encabezado, siempre que ya
+  las haya recibido (en secuencia; a la vez, se pisan: punto siguiente).
 - Crear una página (`tree.create`) es una operación de la cola del árbol, sin red; la subida es `upsert` con
   `ignoreDuplicates` (un reintento no duplica).
 - Escribir bloques en una página sin abrirla ya existe: `writePage` de `src/import/codaImport.ts` (documento con la
   semilla, editor sin pantalla, `findUnknownContent` para no tocar lo que no conoce). La página de práctica
   (`src/tutorial/practice*.ts`) arma bloques desde textos por idioma: el mismo molde sirve para las de fábrica.
-- Una foto pegada en una página de **otro proyecto** se ve rota ahí y no se registra (`src/media/queue.ts`); en el
-  mismo proyecto, la cola registra el uso (`link_page_file`) al ver el archivo en el documento.
+- Una foto pegada en una página de **otro proyecto** se registra como uso ajeno (`link_page_file` devuelve `foreign`,
+  `src/media/queue.ts`) y se muestra con la tarjeta de "otro proyecto" (`foreignPlaceholder`), no la foto; en el mismo
+  proyecto, la cola registra el uso al ver el archivo en el documento (`reconcileMedia`, también sin abrir la página).
+- `updatePage` sube `settings` **entero** (`remote.ts`, `.update(patch)`): dos cambios de ajustes de la misma página
+  hechos a la vez sin red se pisan y gana el último en llegar (ver 8).
 
 ## 2. Las tres plantillas de fábrica
 
@@ -103,26 +108,28 @@ Título: lo escribe la persona (por ejemplo `012 | INT. COCINA - NOCHE`, con el 
 | 9 | H2 + párrafo | *References* / Referencias: fotos, previs, storyboards, links |
 | 10 | H2 + 5 preguntas | *Questions* / Preguntas: `Director: ` · `DP: ` · `Production design: ` / `Arte: ` · `SFX · Stunts: ` · `1st AD: ` / `Asistente de dirección: ` |
 | 11 | H2 + viñeta vacía | *Decisions* / Decisiones (fecha · quién · qué) |
-| 12 | H2 + viñetas | *Risks & budget* / Riesgos y presupuesto |
+| 12 | H2 + viñetas | ***Internal — remove before sharing*** / Interno — borrar antes de compartir: *Risks:* / Riesgos · *Budget · Bid:* / Presupuesto · Cotización |
 
 ### 2.3 *On-Set Report* (una página por día de rodaje)
 
 Título: lo pone el reporte del día, `2026-10-02 | Day 06` (PL7). Las filas marcadas **↻** se copian del reporte
-anterior; las marcadas **⏱** las completa el botón (sección 6).
+anterior; las marcadas **⏱** las completa el botón (sección 6). *Setups & takes* sigue en 7 columnas para entrar en
+A4 vertical: lo que no cambia en el día (EI, balance, juego de lentes) va en *Camera package*, y por setup solo lo que
+cambia. Si una columna combinada ("Lens · Filters") molesta, se parte mirando la entrega 0.
 
 | # | Bloque | Contenido (en / es) |
 |---|---|---|
 | 1 | Tabla de datos | *Date* / Fecha **⏱** (`2026-10-02 · Thu`) · *Shoot day* / Día de rodaje **⏱** (`6`) · *Location* / Locación **⏱↻** · *Sets* / Decorados · *Unit* / Unidad **↻** (*Main unit* / Unidad principal) · *Call · Wrap* / Citación · Fin · *Weather* / Clima · *Sunrise · Sunset* / Amanecer · Atardecer · *VFX on set* / VFX en set **↻** · *Director · DP* / Director · DF **↻** |
 | 2 | H2 + párrafo | *Summary* / Resumen: qué se filmó, qué quedó pendiente |
-| 3 | H2 + tabla **↻** | *Camera package* / Equipo de cámara: *Cam* · *Body* · *Sensor mode · Resolution* · *Lens set* · *Notes*; filas A y B |
-| 4 | H2 + tabla (encabezado + 3 filas) | *Setups & takes* / Planos y tomas: *Slate (Sc · Shot · Setup)* · *Cam* · *Lens* · *T-stop · Focus* · *Height · Tilt* · *FPS · Shutter* · *Takes · Notes* |
-| 5 | H2, y un H3 `Shot ` con casillas y un párrafo | *VFX shots* / Planos de VFX. Por plano (se duplica el H3): clean plate; HDRI; chrome & grey ball; color chart; measurements; tracking markers; witness camera; reference photos; element passes |
+| 3 | H2 + tabla **↻** | *Camera package* / Equipo de cámara (lo que no cambia en el día): *Cam* · *Body* · *Sensor mode · Resolution* · *EI · White balance* · *Lens set* · *Notes*; filas A y B |
+| 4 | H2 + tabla (encabezado + 3 filas) | *Setups & takes* / Planos y tomas (lo que cambia por setup): *Slate (Sc · Shot · Setup)* · *Cam · Clip · TC* · *Lens · Filters (ND, diffusion, pola)* · *T-stop · Focus* · *Height · Tilt* · *FPS · Shutter* · *Circled takes · Notes* |
+| 5 | H2, y un H3 `Shot ` con casillas y un párrafo | *VFX shots* / Planos de VFX. Por plano (se duplica el H3): clean plate; HDRI; chrome & grey ball; color chart; lens grid · distortion chart (each lens); measurements; tracking markers; LiDAR · photogrammetry; witness camera; reference photos; element passes |
 | 6 | H2 + tabla (encabezado + 2 filas) | *Lighting reference* / Referencia de luz: *Setup* · *HDRI (brackets · files)* · *Position · Height* · *Chrome & grey ball* · *Color chart* · *Time* · *Notes* |
-| 7 | H2 + tabla + párrafo | *Measurements* / Medidas: *What* · *Value* · *Notes*; filas *Camera to subject*, *Lens height*, *Set dimensions*; debajo, fotos de los croquis |
+| 7 | H2 + tabla + párrafo | *Measurements* / Medidas: *What* · *Value* · *Notes*; filas *Camera to subject*, *Lens height*, *Set dimensions*, *LiDAR · Photogrammetry*; debajo, fotos de los croquis |
 | 8 | H2 + viñetas | *Tracking markers* / Marcadores de tracking: *Type and color:* · *Where:* · *Removed after:*; fotos |
 | 9 | H2 + párrafo | *Reference photos* / Fotos de referencia: set, utilería, actores, texturas |
 | 10 | H2 + viñetas | *Weather & light* / Clima y luz: *Morning:* · *Afternoon:* · *Night:* (cambios de cielo y de sol en el día) |
-| 11 | H2 + tabla | *Data* / Material: *Media* · *Card · Roll* · *Count* · *Offloaded to*; filas *Camera A*, *Camera B*, *HDRI*, *Reference photos*, *Witness cam* |
+| 11 | H2 + tabla | *Data* / Material: *Media* · *Card · Roll* · *Count* · *Offloaded to*; filas *Camera A*, *Camera B*, *HDRI*, *Lens grids*, *LiDAR · Photogrammetry*, *Reference photos*, *Witness cam* |
 | 12 | H2 + casilla vacía | *Issues & follow-ups* / Pendientes |
 | 13 | H2 + 2 preguntas | *Questions* / Preguntas: `Production: ` / `Producción: ` · `Director: ` |
 
@@ -133,7 +140,7 @@ importación de Coda; la lista de planos de *Pre-production Notes* hace de índi
 
 | # | Bloque | Contenido (en / es) |
 |---|---|---|
-| 1 | Tabla de datos | *Shot* / Plano · *Scene* / Escena · *Description* / Descripción · *Frames (in–out · length)* / Cuadros · *Plates* / Placas · *Status* / Estado = *Not started* / Sin empezar · *Complexity* / Complejidad · *Artist · Vendor* / Artista · Proveedor · *Bid (days)* / Cotización (días) · *Due* / Entrega |
+| 1 | Tabla de datos | *Shot* / Plano · *Scene* / Escena · *Description* / Descripción · *Frames (in–out · length)* / Cuadros · *Handles* / Colas · *Plates (clip · TC)* / Placas (clip · TC) · *Lens* / Lente · *Status* / Estado = *Not started* / Sin empezar · *Complexity* / Complejidad · *Due* / Entrega |
 | 2 | H2 + párrafo | *Reference frame* / Cuadro de referencia (foto en línea) |
 | 3 | H2 + casillas | *VFX work* / Trabajo de VFX (la misma lista de 2.2) |
 | 4 | H2 + párrafo | *Technique* / Técnica |
@@ -141,8 +148,16 @@ importación de Coda; la lista de planos de *Pre-production Notes* hace de índi
 | 6 | H2 + tabla de datos | *Shoot data* / Datos de rodaje: *Shoot day (report)* · *Camera · Lens* · *HDRI* · *Clean plate* · *Measurements* |
 | 7 | H2 + tabla | *Notes & feedback* / Notas y devoluciones: *Version* · *Date* · *From* · *Notes* |
 | 8 | H2 + 1 pregunta | *Questions* / Preguntas: `Director: ` |
+| 9 | H2 + tabla de datos | ***Internal — remove before sharing*** / Interno — borrar antes de compartir: *Artist · Vendor* / Artista · Proveedor · *Bid (days)* / Cotización (días) |
 
-### 2.5 Cómo están en el código
+### 2.5 Lo interno, al final
+
+Lo que no debería ver un cliente (cotización, proveedor, riesgos y presupuesto) va en una sección propia, la última,
+*Internal — remove before sharing*: queda en cada página creada, y antes de compartir esa página con un invitado se
+borra la sección entera (un título colapsado se arrastra con todo lo suyo, P.11). Colapsarla no alcanza: quien ve la
+página la puede abrir. La ayuda de *Share* y la de *Templates* lo dicen.
+
+### 2.6 Cómo están en el código
 
 `src/templates/builtin.ts` (nuevo): tres funciones `(texts, values) => PartialBlock[]` y sus textos por idioma, más
 ids fijos (`BUILTIN_PREPRO`, `BUILTIN_ONSET`, `BUILTIN_SHOT`: uuid constantes, para `template_id`). Las de fábrica
@@ -155,6 +170,9 @@ no se editan en la app: se personalizan con *Customize* (sección 5.3).
   la carpeta *Templates* del proyecto (una página raíz con `settings.templatesFolder = true`, creada al guardar la
   primera). Su nombre es el título de la página. Ninguna de estas claves se hereda: se leen solo en la página misma
   (no pasan por `resolveSetting`).
+- **Si la marca se pierde** (dos cambios de ajustes a la vez, ver 8): toda página **directamente adentro** de una
+  carpeta `templatesFolder` cuenta como plantilla aunque no tenga `template`; en el selector sale sin descripción y la
+  franja de 5.2 ofrece volver a marcarla.
 - **Quién las ve:** quien ve la página. Para que todo el equipo use las de un proyecto, se comparte la carpeta
   *Templates* (o el proyecto) como cualquier página. No hay plantillas "personales" aparte: una página que solo ve su
   autor ya lo es.
@@ -182,15 +200,23 @@ no se editan en la app: se personalizan con *Customize* (sección 5.3).
 1. **Los bloques de la plantilla.** De fábrica: los arma la función con los valores del momento. Propia: se copia el
    estado del documento de la plantilla (`Y.encodeStateAsUpdate`) a un `Y.Doc` en memoria, se mira
    `findUnknownContent` (si tiene algo que esta versión no conoce, se corta con *This template was made with a newer
-   version of the app. Update to use it.*) y se pasa a bloques con `yXmlFragmentToBlocks` (`@blocknote/core/yjs`). La plantilla
+   version of the app. Update to use it.*), se comprueba que esté **completa en el dispositivo** (si
+   `row.update_seq` es mayor que lo bajado, el mismo control de `reconcileMedia`, se avisa *This template hasn't
+   finished downloading* con *Wait* —se usa sola al llegar— y, si hay una de fábrica del mismo tipo, *Use built-in*;
+   nunca se copia a medias) y se pasa a bloques con `yXmlFragmentToBlocks` (`@blocknote/core/yjs`). La plantilla
    nunca se monta en un editor: no se le escribe nada.
 2. **Se limpian:** ids nuevos para todos los bloques (los comentarios de la plantilla quedan en la plantilla); las
    preguntas van sin sus respuestas (las respuestas son comentarios); el "colapsado para todos" de la plantilla
    (`collapsedHeadings`) se copia con los ids nuevos.
-3. **Fotos y archivos** (PL10): de una plantilla del mismo proyecto se copian (la cola registra el uso en la página
-   nueva, como al pegar); de **otro proyecto**, se sacan (se verían rotos) y un aviso dice cuántos:
-   *3 photos weren't copied: they belong to another project.*
-4. **Se escriben** como `writePage`: documento con la semilla, editor sin pantalla, y los bloques se **insertan antes
+3. **Fotos y archivos** (PL10): la regla se decide sin red, comparando el proyecto de la plantilla con el de la página
+   nueva. **Mismo proyecto:** se copian (la cola registra el uso en la página nueva, como al pegar). **Otro proyecto:**
+   se sacan todas las direcciones `sdmedia://` y `sdfile://` (fotos-bloque, fotos en línea y en celdas, videos,
+   adjuntos y carpetas de Drive soltadas), que ahí solo mostrarían la tarjeta de "otro proyecto", y un aviso dice
+   cuántas: *3 photos and files weren't copied: they belong to another project.* Las **tarjetas de Drive**
+   (`driveCard`: un párrafo con un link de Drive) se copian como están: son un link escrito, el mismo que se podría
+   pegar; si el reproductor no lo puede mostrar, queda el link.
+4. **Se escriben** como `writePage` (salvo *Apply template…* con la página abierta: ahí con el editor visible, así
+   entra en su deshacer): documento con la semilla, editor sin pantalla, y los bloques se **insertan antes
    del párrafo vacío** de la semilla (que queda al final), sin `replaceBlocks`. Nada que borrar: si otro dispositivo
    escribió a la vez en ese párrafo, su texto queda.
 5. **La fila:** la página nueva lleva `template_id` (la de fábrica o la página plantilla; informativo, nunca da
@@ -204,7 +230,8 @@ no se editan en la app: se personalizan con *Customize* (sección 5.3).
   nivel 4 donde va (`perms.canCreateIn`). Lo hace cumplir la base como hoy (`pages_permissions`, RLS de
   `page_updates`); la app solo esconde lo que no se puede.
 - Todo es local: la cola del árbol crea la página, el contenido se guarda en IndexedDB y sube después. Usar una
-  plantilla propia sin red funciona porque su contenido ya está en el dispositivo.
+  plantilla propia sin red funciona porque su contenido ya está en el dispositivo, **si terminó de bajar** (paso 1 de
+  4.2); si no, se avisa y no se copia a medias.
 
 ## 5. Hacer una plantilla desde una página, y editarla
 
@@ -234,8 +261,8 @@ queda para después.
 ### 6.1 Dónde está el botón
 
 - **New day report** (ícono de calendario con +), arriba a la derecha del título, en la **carpeta de reportes** y en
-  **cada página de adentro**. También en el menú de la carpeta en la barra lateral. Atajo Ctrl/⌘+Alt+N con el foco en
-  una de esas páginas. Solo con nivel 4 en la carpeta (crear ahí); si no, no aparece.
+  **cada página de adentro**. También en el menú de la carpeta en la barra lateral. Atajo Ctrl/⌘+Alt+Shift+N con el foco
+  en una de esas páginas. Solo con nivel 4 en la carpeta (crear ahí); si no, no aparece.
 - En el teléfono, el mismo botón, con su área táctil grande (es el uso de set).
 
 ### 6.2 Cómo sabe cuál es la carpeta de reportes (PL5)
@@ -247,6 +274,14 @@ queda para después.
   el reporte se crea igual, sin botón, y un aviso dice *Put day reports inside a folder to get New day report*.
 - A mano: *Use for day reports* / *Stop using for day reports* en el menú de una página. Puede haber varias (unidad
   principal y segunda unidad).
+- **Si la marca se pierde** (dos cambios de ajustes a la vez, ver 8): una carpeta también cuenta como de reportes si
+  alguna página de adentro tiene `template_id` de *On-Set Report* o de una plantilla con `dayReport`; y cada *New day
+  report* vuelve a escribir `dayReports` si falta. Solo un *Stop using for day reports* explícito la saca (deja
+  `dayReports: false`, que gana sobre lo deducido).
+- **La plantilla de la carpeta que esa persona no ve** (O4): `dayReports.template` apunta a una página de *Templates*
+  que no está en su árbol (un data wrangler con nivel 4 solo sobre los reportes). El globito usa *On-Set Report* de
+  fábrica con el aviso *The report template isn't shared with you; using On-Set Report*, no escribe
+  `dayReports.template` y no corta. Lo mismo si la plantilla está en la papelera o a medio bajar (4.2).
 
 ### 6.3 El globito
 
@@ -269,6 +304,9 @@ Al tocar el botón, un globito con los datos ya puestos y editables; Enter crea:
   acentos) *Location*, *Place*, *Locación*, *Lugar* (lugar); *Date*, *Fecha*; *Shoot day*, *Day*, *Día de rodaje*,
   *Día*; *Unit*, *Unidad*; *VFX on set*, *VFX en set*; *Director · DP*, *Director · DF*. Si alguien renombró la fila,
   el dato queda vacío: nunca se adivina.
+- **El anterior a medio bajar** (O2): si el último reporte no terminó de bajar (`row.update_seq` mayor que lo bajado),
+  se usa lo que hay y el globito avisa *The previous report hasn't finished downloading — check the location*; el
+  campo queda editable.
 - **Se copian del anterior** (↻ en 2.3): locación, unidad, gente de VFX, director y DP, y la tabla *Camera package*
   entera. Lo demás sale vacío de la plantilla.
 - **Escribirlos en la nueva:** sobre la lista de bloques, antes de copiarla (4.2): las mismas filas por rótulo. Vale
@@ -289,7 +327,12 @@ Al tocar el botón, un globito con los datos ya puestos y editables; Enter crea:
 - **Dos dispositivos sin red que crean el reporte del mismo día** terminan con dos páginas `2026-10-02 | Day 06`. No se
   fusionan solas (las dos pueden tener datos); al bajar la segunda, el globito ya dice que existe, y la barra lateral
   muestra las dos. Se evaluó un id fijo por carpeta y fecha (la subida ignora el repetido): los dos dispositivos
-  escribirían su plantilla en la misma página y quedaría duplicada; se descartó.
+  escribirían su plantilla en la misma página y quedaría duplicada; se descartó. **Tampoco sirve escribir el contenido
+  con un autor de Yjs fijo** (el truco de la semilla): los dos pueden tener distinto "reporte anterior", y el mismo
+  autor y reloj con contenido distinto rompen el documento de Yjs, que sí perdería datos. Que nadie lo "mejore" así.
+- **Cuando llega el segundo** (O6): la barra lateral y el globito marcan *2 reports for 2026-10-02*. Si uno quedó igual
+  a como se creó (su huella de contenido, como `previous` en `writePage`), se ofrece mandarlo a la papelera; nunca se
+  borra solo.
 
 ## 7. Modelo de datos y migración
 
@@ -299,7 +342,7 @@ Al tocar el botón, un globito con los datos ya puestos y editables; Enter crea:
 |---|---|---|
 | `pages.settings.template` | `{ description?, dayReport? }`: la página es una plantilla | `pages_settings_shape` (≤ 2000 caracteres), nivel 3 para cambiarlo |
 | `pages.settings.templatesFolder` | `true`: la carpeta *Templates* del proyecto | ídem |
-| `pages.settings.dayReports` | `{ template? }`: la carpeta de reportes | ídem |
+| `pages.settings.dayReports` | `{ template? }`: la carpeta de reportes; `false`: se dejó de usar a mano | ídem |
 | `pages.template_id` | De qué plantilla salió (uuid de fábrica o id de página) | `grant insert`; nivel 3 para cambiarlo |
 
 En la app: `PageSettings` suma las tres claves (no heredables), `PAGE_COLUMNS` suma `template_id` y `NewPage` lo
@@ -313,8 +356,14 @@ caché sin red y su propio editor: es lo que esta propuesta evita.
 - **El contenido** son bloques que conoce la versión mínima: una versión vieja abre una página creada desde una
   plantilla sin borrar nada (prueba con el esquema publicado).
 - **Las claves de `settings`**: una versión vieja no las usa y las conserva al cambiar el formato o el encabezado
-  (`setSetting` copia lo que no conoce). Ve *Templates* como una carpeta común y no ofrece *New day report*.
-- **`template_id`**: una versión vieja no lo baja ni lo escribe.
+  (`setSetting` copia lo que no conoce) **si ya las recibió**. Pero `updatePage` sube el objeto entero: si una versión
+  vieja (o cualquier dispositivo) cambia el formato de la carpeta a la vez que otro la marca, gana el último y la marca
+  se pierde. No se pierde contenido; lo cubre la recuperación de 3 y 6.2. Más adelante, una función de la base que
+  fusione claves (`settings || patch`), con su migración (roadmap P.23). Ve *Templates* como una carpeta común y no
+  ofrece *New day report*.
+- **`template_id`**: una versión vieja no lo baja ni lo escribe. Una página recuperada de la copia local (el `create`
+  de recuperación de `tree.recoverAfterRestore`) vuelve sin `template_id`: es informativo; solo pesa para deducir una
+  carpeta de reportes (6.2), y la marca de la carpeta lo cubre.
 - **No hay que subir `min_app_version`.**
 - **Una plantilla hecha con una versión más nueva** (con algo que esta no conoce): no se usa; aviso de actualizar
   (4.2, paso 1).
@@ -324,10 +373,17 @@ caché sin red y su propio editor: es lo que esta propuesta evita.
 - **Ayuda** (`src/help/entries.ts`, `src/i18n/lazy/help.ts`): *Templates* (la tira, *More…*, *Save as template*,
   editar una plantilla, *Customize*) y *Day reports* (la carpeta, el globito, qué se copia del día anterior, qué pasa
   si ya existe).
-- **Atajo** (`src/ui/shortcuts.ts`): `newDayReport`, `Mod-Alt-n`, lugar `global`, contexto *day report*; texto en
-  `src/help/shortcutTexts.ts`. Se descartó ⌘⌥D: en la Mac esconde el Dock en todo el sistema. Probar en la entrega 2
-  que ⌘⌥N no lo use Safari ni Chrome de Mac, y que AltGr+N no escriba nada en los teclados latinoamericano y español.
+- **Atajo** (`src/ui/shortcuts.ts`): `newDayReport`, **`Mod-Alt-Shift-n`** (⌘⌥⇧N en la Mac, Ctrl+Alt+Shift+N en
+  Windows), lugar `global`, contexto *day report*; texto en `src/help/shortcutTexts.ts`. Mismo molde que `history`
+  (`Mod-Alt-Shift-h`). El matcher **reusa la guarda de `isCommentShortcut`** (`src/ui/commentsUi.ts`): con AltGraph no
+  es el atajo (en un teclado polaco AltGr+N escribe ń) y la tecla se lee por `code === 'KeyN'` (en la Mac, con ⌥ la
+  tecla escribe otro carácter). Descartados: ⌘⌥D (en la Mac esconde el Dock en todo el sistema) y ⌘⌥N (Chrome en la Mac
+  lo usa para *Open split view*). En la entrega 2 se prueba en Firefox de Mac y en un teclado latinoamericano físico.
 - **Recorrida:** el paso `page-menu` suma *Save as template* a su texto; ningún ancla nueva.
+- **Buscar en el proyecto** (O9): las plantillas salen en los resultados con la marca *Template*; *Replace all* en el
+  proyecto las saltea salvo que se marque *Include templates* (cambiar un rótulo en todos los reportes no debería
+  cambiar el molde sin querer).
+- **Ayuda de *Share***: una línea sobre la sección *Internal* de las plantillas (2.5).
 - **Textos de la interfaz** (en / es): *Start from a template*, *More…*, *Templates*, *Built-in*, *This project*,
   *Other projects*, *Use*, *Customize*, *Apply template…*, *Save as template…*, *Clear filled-in values*, *Template
   settings…*, *Stop using as template*, *Use for day reports*, *New day report*, *Date*, *Shoot day*, *Location*,
@@ -344,7 +400,19 @@ caché sin red y su propio editor: es lo que esta propuesta evita.
 - **Reporte del día** (`src/templates/dayReport.test.ts`): fecha local con la zona de Buenos Aires a las 23:30 y a las
   00:30; el anterior por título y por tabla; rótulos en los dos idiomas y uno renombrado (vacío); día + 1 y sin número;
   ya existe; el orden al elegir una fecha anterior; carpeta sin reportes; sin red (solo cola).
-- **Ajustes:** `setSetting` conserva `template`, `templatesFolder` y `dayReports` al cambiar el formato.
+- **Ajustes:** `setSetting` conserva `template`, `templatesFolder` y `dayReports` al cambiar el formato; con la marca
+  perdida, la página adentro de *Templates* sigue siendo plantilla y la carpeta con reportes sigue siendo de reportes;
+  *Stop using for day reports* gana sobre lo deducido.
+- **A medio bajar** (O2): plantilla con `update_seq` mayor que lo bajado → aviso, nada copiado; al llegar, se copia
+  entera. Reporte anterior a medio bajar → aviso en el globito.
+- **Plantilla que no se ve** (O4): el globito usa la de fábrica, avisa y no escribe `dayReports.template`.
+- **Otro proyecto** (PL10): saca `sdmedia://` y `sdfile://` de bloques, renglones y celdas, cuenta bien y deja las
+  tarjetas de Drive.
+- **Atajo** (B1): `Mod-Alt-Shift-n` en Mac y Windows; con `AltGraph` no dispara; con ⌥ en la Mac se lee por `code`.
+- **Lo ya comprobado por la auditoría** (`auditTemplateCopy.test.ts`, 4 de 4): la plantilla no cambia, la copia es fiel,
+  ids nuevos, la semilla queda última, fotos y huecos estables bien, colapsado remapeado, y los dos casos sin red
+  (aplicar contra escribir; aplicar dos veces: duplica contiguo, no pierde). Se pasa al repo en la entrega 1, con el
+  molde de `collabPhotosVersions.published.test.ts` para la `y-prosemirror` publicada.
 - **Permisos en la interfaz:** sin nivel 4 en la carpeta no hay botón; sin nivel 3 no hay tira; *Save as template*
   deshabilitado sin permiso en *Templates*.
 - **Registro de atajos e i18n:** las pruebas de siempre (`shortcuts.test.ts`, `i18n.test.tsx`).
@@ -356,7 +424,7 @@ caché sin red y su propio editor: es lo que esta propuesta evita.
 |---|---|---|
 | 0 | Las tres plantillas en el código (en y es) y una vista para mirarlas sin guardar (`/practice?template=on-set`, como la página de práctica). Riesgo bajo. | Lega abre las tres vistas en la computadora y en el iPhone, en inglés y castellano, y anota qué cambiar; la prueba con el esquema publicado pasa. |
 | 1 | Crear desde una de fábrica: la tira, *More…*, *Apply template…*, la copia (4.2) y `template_id`. Ayuda. | Crear una página con "+", elegir *Shot Breakdown*, escribir; sin red, crear otra y elegir *On-Set Report*; volver la red: las dos suben, nada duplicado. Una versión publicada abre las dos sin perder nada. |
-| 2 | El reporte del día: la marca de la carpeta, el botón, el globito, lo que se copia, "ya existe", el orden, el atajo. Ayuda. | En una carpeta *Reportes*, crear el primero desde la tira (queda `… | Day 01`); escribir una locación; en modo avión, *New day report* → Enter: `… | Day 02`, con la locación y el equipo de cámara de ayer; otra vez → *already exists* → Enter abre el de hoy. |
+| 2 | El reporte del día: la marca de la carpeta, el botón, el globito, lo que se copia, "ya existe", el orden, el atajo. Ayuda. | En una carpeta *Reportes*, crear el primero desde la tira (queda `… | Day 01`); escribir una locación; en modo avión, *New day report* → Enter: `… | Day 02`, con la locación y el equipo de cámara de ayer; otra vez → *already exists* → Enter abre el de hoy. En la Mac, ⌘⌥⇧N en Chrome, Safari y Firefox abre el globito (y no la vista dividida de Chrome); en Windows con teclado latinoamericano, Ctrl+Alt+Shift+N también. |
 | 3 | Plantillas propias: *Save as template*, *Templates*, editar, *Template settings*, *Stop using*, *Customize*, las de otros proyectos y sus fotos. Ayuda. | Guardar un reporte como plantilla con *Clear filled-in values*; editarla; el próximo *New day report* la usa; desde otro proyecto, usarla y ver el aviso de fotos. |
 
 Cada entrega con su auditoría independiente antes de `main`.
@@ -372,6 +440,11 @@ Cada entrega con su auditoría independiente antes de `main`.
 | Un rótulo renombrado o una tabla reordenada | Bajo | Ese dato queda vacío; nunca se escribe en otra fila. |
 | Fecha mal por zona horaria o rodaje nocturno | Bajo | Hora local; el campo se corrige antes de Enter. |
 | *Templates* visible para un cliente que ve todo el proyecto | Medio (notas internas) | La ayuda lo dice; compartir con clientes por página, no el proyecto. |
+| Datos internos (cotización, proveedor) en una página que ve un cliente (O8) | Medio | Sección *Internal* al final, para borrar antes de compartir; ayuda. |
+| La marca de plantilla o de carpeta de reportes se pisa con otro cambio de ajustes a la vez (O1) | Medio (se pierde la marca, no contenido) | Se deduce de la carpeta y de los reportes y se vuelve a escribir al crear; la fusión en la base, en el roadmap. |
+| Plantilla o reporte anterior a medio bajar (O2) | Medio | Se compara `update_seq` con lo bajado; aviso; nunca se copia a medias. |
+| La plantilla de la carpeta no está compartida con quien crea el reporte (O4) | Bajo | La de fábrica, con aviso. |
+| Un atajo que choca con el navegador (B1) | Resuelto | ⌘⌥⇧N con la guarda de AltGr; probado en los tres navegadores en la entrega 2. |
 | Fotos de una plantilla de otro proyecto | Bajo | Se sacan y se avisa (PL10). |
 | `settings` lleno (2000 caracteres) | Bajo | Descripción ≤ 300; si no entra, *Save* avisa sin guardar a medias. |
 
@@ -383,10 +456,12 @@ Cada entrega con su auditoría independiente antes de `main`.
   lente, altura y stop de cada setup, HDRI y chrome ball, y nadie arma la tabla en el momento.
 - **Las opciones:** A) las de la sección 2: ficha de datos arriba y secciones por tema, con tablas angostas y casillas;
   B) solo títulos vacíos, para que cada uno los llene; C) una tabla grande por página, como una planilla.
-- **Elegí A porque** trae lo que se anota en VFX (escena, trabajos, elementos, preguntas; cámara y lente por setup,
-  HDRI, medidas, marcadores; ficha por plano) y entra en una hoja A4; se recorta borrando, que es más rápido que armar.
+- **Elegí A porque** trae lo que se anota en VFX (escena, trabajos, elementos, preguntas; cámara, lente, filtros, EI,
+  balance, clip y timecode, tomas elegidas, HDRI, rejillas de distorsión, LiDAR, medidas, marcadores; ficha por plano)
+  y entra en una hoja A4; lo interno (cotización, proveedor, riesgos) va al final en *Internal*, para borrarlo antes de
+  compartir con un cliente.
 - **Si preferís otra:** la entrega 0 las muestra sin guardar nada; los cambios de texto o de filas son de una línea en
-  `builtin.*.ts`.
+  `builtin.*.ts`. A mirar ahí: si *Setups & takes* conviene partirla, y si *Internal* va o se saca.
 
 ### PL2 · Dónde viven las plantillas propias
 
@@ -426,7 +501,9 @@ Cada entrega con su auditoría independiente antes de `main`.
 - **Las opciones:** A) una carpeta marcada (`dayReports`), que se marca sola con el primer reporte; B) siempre al lado del
   reporte abierto, sin marca; C) preguntar cada vez.
 - **Elegí A porque** el botón aparece también en la carpeta (antes del primer día o con la carpeta abierta), guarda la
-  plantilla de ese rodaje y admite varias unidades.
+  plantilla de ese rodaje y admite varias unidades. Si la marca se pierde por dos cambios a la vez, se deduce de los
+  reportes de adentro y se vuelve a escribir; si quien crea no ve la plantilla de la carpeta, usa la de fábrica con un
+  aviso.
 - **Si preferís otra:** B sale de sacar la marca y usar el padre; se pierde el botón en la carpeta.
 
 ### PL6 · De dónde salen la fecha y el lugar
@@ -469,9 +546,11 @@ Cada entrega con su auditoría independiente antes de `main`.
 ### PL10 · Fotos de una plantilla de otro proyecto
 
 - **Qué pasaba:** la plantilla de ERSO tiene el croquis de los marcadores; usada en MGTZD, esa foto es de otro proyecto
-  (su Drive) y se vería rota.
-- **Las opciones:** A) sacarlas y avisar cuántas; B) dejarlas rotas; C) volver a subirlas al proyecto nuevo.
-- **Elegí A porque** no deja nada roto ni sube nada sin que la persona lo sepa; en el mismo proyecto se copian.
+  (su Drive) y mostraría la tarjeta de "otro proyecto" en lugar de la foto.
+- **Las opciones:** A) sacarlas y avisar cuántas; B) dejarlas con la tarjeta de "otro proyecto"; C) volver a subirlas al proyecto nuevo.
+- **Elegí A porque** no deja tarjetas de "otro proyecto" en una página nueva ni sube nada sin que la persona lo sepa;
+  se decide sin red (proyecto de la plantilla contra el de la página) y vale para fotos, videos, adjuntos y carpetas;
+  las tarjetas de Drive, que son un link escrito, se copian; en el mismo proyecto se copia todo.
 - **Si preferís otra:** C necesita red y el portero de los dos proyectos; queda para después.
 
 ## 14. Fuera de este diseño
@@ -481,3 +560,24 @@ Cada entrega con su auditoría independiente antes de `main`.
 - Clima y amanecer/atardecer automáticos (piden red y coordenadas).
 - Esconder las de fábrica por proyecto; plantillas para todo el workspace sin compartir carpetas.
 - Insertar una plantilla en una página que ya tiene contenido.
+
+## Correcciones de la auditoría (2026-10-02)
+
+Auditoría independiente sobre `39e9559`: "aprobado con cambios", 1 bloqueante y 10 observaciones. Comprobó la copia con
+una prueba propia (4 de 4: la plantilla no cambia, copia fiel, ids nuevos, semilla última, fotos y huecos bien,
+colapsado remapeado, los dos casos sin red).
+
+| Hallazgo | Corrección |
+|---|---|
+| **B1** ⌘⌥N es *Open split view* de Chrome en la Mac | Atajo `Mod-Alt-Shift-n` (⌘⌥⇧N / Ctrl+Alt+Shift+N), con la guarda de AltGr y `code` de `isCommentShortcut` (6.1, 9, 10, entrega 2). |
+| **O1** `settings` se sube entero: dos cambios a la vez borran la marca | Escrito en 1, 8 y 12. La marca se deduce (página adentro de *Templates*; carpeta con reportes) y se vuelve a escribir al crear; *Stop using* explícito gana (3, 6.2). Fusión de claves en la base: roadmap P.23. |
+| **O2** Plantilla o reporte anterior a medio bajar | Control de `update_seq` contra lo bajado: la plantilla no se copia a medias (aviso, *Wait*, *Use built-in*); el reporte anterior se usa con aviso (4.2, 4.3, 6.4, 10). |
+| **O3** §1 decía que la foto de otro proyecto se ve rota y no se registra | Corregido: se registra como uso ajeno y muestra la tarjeta de "otro proyecto". Regla de PL10 sin red, con `sdfile://`, carpetas y tarjetas de Drive (4.2). |
+| **O4** La plantilla de la carpeta que esa persona no ve | La de fábrica con aviso, sin escribir `dayReports.template` (6.2, PL5). |
+| **O5** *Apply template…* con la página abierta | Se inserta con el editor visible, así entra en el deshacer (4.2). |
+| **O6** Dos reportes del mismo día | Marca *2 reports for…* y papelera ofrecida si uno quedó sin tocar; por qué no un autor de Yjs fijo (6.6). |
+| **O7** Faltaban datos de set | Sumados: rejillas de distorsión, filtros (ND, difusión, pola), EI y balance, clip y timecode, tomas elegidas, LiDAR y fotogrametría; *Handles*, *Lens* y clip en *Shot Breakdown*. *Setups & takes* sigue en 7 columnas (2.3, 2.4). |
+| **O8** *Bid*, proveedor y riesgos podían llegar a un cliente | Sección *Internal — remove before sharing* al final de las dos plantillas, y la ayuda (2.5, 9). |
+| **O9** Buscar y reemplazar en el proyecto toca *Templates* | Resultados con la marca *Template*; *Replace all* las saltea salvo *Include templates* (9). |
+| **O10** Una página recuperada vuelve sin `template_id` | Anotado en 8 (informativo). |
+| PL1, PL5 y PL10 "aprobado con cambios" | Reescritas con O7 y O8, O1 y O4, y O3. |

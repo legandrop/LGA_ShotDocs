@@ -7,8 +7,9 @@ del día. `Doc_Plantillas.md` propone una primera versión de *Pre-production No
 con lo que anota un supervisor de VFX, armadas solo con bloques que ya existen. Una plantilla propia es una página
 marcada en una carpeta *Templates*: sin tabla ni migración, con los permisos de la página. Crear desde una plantilla
 copia los bloques sin borrar nada, también sin red. *New day report* crea la página del día con la fecha local y la
-locación del reporte anterior. Decisiones PL1 a PL10 y cuatro entregas.
-[ Plantillas - diseño de las tres plantillas, las propias como páginas y el reporte del día ]
+locación del reporte anterior. Decisiones PL1 a PL10 y cuatro entregas. Una auditoría independiente (aprobado con
+cambios) cambió el atajo a Ctrl/⌘+Alt+Shift+N y sumó datos de set, una sección *Internal* y avisos sin red.
+[ Plantillas - diseño auditado de las tres plantillas, las propias como páginas y el reporte del día ]
 
 v0.108 :
 
