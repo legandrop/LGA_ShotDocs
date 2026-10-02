@@ -1,7 +1,7 @@
 # Historial de versiones de una página (P.18)
 
-**Estado: entrega 1 implementada (v0.098; ver "Cómo quedó (entrega 1)", al final, que manda sobre el diseño en lo que
-toca); la migración `20261007120000_historial.sql` está escrita y probada en `begin … rollback` contra la base, SIN
+**Estado: entregas 1 (v0.098) y 2 (v0.0XX) implementadas; ver "Cómo quedó (entrega 1)" y "Cómo quedó (entrega 2)", al
+final, que mandan sobre el diseño en lo que tocan; la migración `20261007120000_historial.sql` está escrita y probada en `begin … rollback` contra la base, SIN
 aplicar.** Pedido de Lega del 2026-10-01 (en el plan figuraba como fase 6). Toca la regla de no perder datos
 (restaurar es una edición) y los permisos (el historial muestra lo borrado), así que cada entrega va con sus pruebas y
 su auditoría. **Diseño auditado:** lo que encontró la auditoría independiente del diseño está corregido en el texto
@@ -855,3 +855,90 @@ plugin descarta un tramo, restaurar deshace lo aplicado y no dice "Restored"; co
 paso y rehacer lo vuelve a poner), una restauración que el editor intentó y deshizo dice *Couldn't restore this version.
 Nothing changed.* (antes decía que la página no estaba abierta para editar), y la segunda confirmación (cuando otra
 persona cambió la página mientras tanto) conserva la cuenta de fotos mandadas a la papelera de Drive.
+
+## Cómo quedó (entrega 2)
+
+Manda sobre lo de arriba en lo que toca. **Los cambios marcados por persona, el texto huérfano, el Worker y la lista que
+se actualiza sola.** Sin migración: todo sale de las mismas filas de `page_history`.
+
+**Show changes** (casilla en la barra, prendida por defecto; *Changes* en pantalla angosta; queda como la dejó la persona
+mientras la app está abierta; sin atajo). Cada versión contra la anterior de la lista (la primera, contra la página
+vacía). Se arma la **unión** (`src/sync/historyDiff.ts`, `versionChanges`): un documento nuevo, en memoria, con lo que se
+ve en alguna de las dos versiones y, aparte, las marcas (cada una con la fila que la trajo: de ahí quién y cuándo):
+
+- lo agregado y lo borrado dentro de un texto, con `toDelta` y los dos snapshots (exacto, sin adivinar);
+- un bloque entero agregado o borrado (la barra a la izquierda; el borrado, atenuado);
+- algo agregado o borrado adentro de un bloque que sigue (una foto en línea, una fila de tabla): un contorno;
+- **bloques rehechos apareados por id:** y-prosemirror rehace el bloque (o su contenido) al cambiar el tipo, mover o
+  sangrar. Un borrado y un agregado con el mismo id entre las dos versiones son **un** bloque que cambió: rótulo
+  *Changed to Heading 2* (o *Formatting changed*, o *Moved* si solo cambió de lugar) y el texto comparado **por
+  palabras** (letra por letra, "fija" → "en mano" se leía como letras sueltas). Uno con uno, en el orden de Yjs: dos
+  dispositivos que rehacen el mismo bloque a la vez dejan dos con el mismo id, y el de más se muestra agregado;
+- el formato o el nivel cambiado en el lugar (título 1 a 2, un color): el rótulo;
+- la semilla (estructura vacía igual en todos los dispositivos) no se marca.
+
+La pantalla muestra la unión con el editor de solo lectura y pinta las marcas con **decoraciones** de ProseMirror
+(`src/ui/historyMarks.ts`), ubicadas con el mapa de y-prosemirror: el esquema y los documentos no cambian; una versión
+vieja de la app no se entera. Colores: la paleta de la entrega 1, por orden de aparición; lo agregado subrayado con
+fondo suave, lo borrado tachado (se distinguen sin el color). `data-tip` en cada marca: *Added by Ana · ayer, 14:05*. El
+rótulo va al final del renglón (en un bloque sin texto, arriba a la derecha). Con hojas, sin las marcas de corte. Con
+Show changes apagado, la versión limpia de la entrega 1. Si la unión trae algo que esta versión no conoce, se muestra
+la limpia.
+
+**Texto huérfano** (5.4, con la subida sin GC de v0.095): `PageHistory` anota, al sumar cada fila, el texto que trajo
+adentro de algo que una fila **anterior** ya había borrado (sus ancestros), por texto de Yjs y con el id del bloque. Se
+ve arriba de la versión de esa fila, en una franja con el color de la persona: *Ana wrote in a part that had already
+been removed (it isn't on the page):*, el texto y **Copy**. Lo escrito y borrado en la misma subida no cuenta. Las filas
+con GC (versiones anteriores) lo traen como hueco: ahí no hay texto que mostrar.
+
+**El Worker** (`src/sync/history.worker.ts`, `historyCore.ts`, `historyClient.ts`): la pantalla baja las filas y se las
+pasa; el Worker arma el historial y contesta la lista, cada versión y cada unión como updates de Yjs (transferidos).
+Si el navegador no deja crear el Worker, su script no arranca en 10 s o se cae, se arma en la página con el mismo
+código (vuelve a cargar las filas que ya tenía; ningún pedido se pierde). En el build, `history.worker-*.js` (100 KB,
+con Yjs) sin el aviso de libheif (`vite.config.ts`).
+
+**La diferencia solo de lo que cambió:** la unión se arma en **una sola transacción** sobre el documento del historial
+(Yjs parte los elementos en los bordes de cada snapshot una vez, no en cada texto: era lo caro del prototipo), y con
+`scope = 'changed'` solo los bloques que tocó alguna fila del medio (lo que agregaron o borraron por primera vez,
+`PageHistory.fresh`) se comparan con los dos snapshots; el resto se copia como está. La prueba la compara con la
+completa: igual en más de 500 casos al azar.
+
+**La lista se actualiza sola** (O3): después de cada sincronización se piden las filas posteriores a la última y se
+suman (`PageHistory.append`, sin armar todo de nuevo). La versión elegida sigue elegida (por su `seq` o la sesión que
+lo contiene si creció), con el mismo editor si no cambió; la lista no salta si la persona bajó. Al confirmar una
+restauración se mira lo llegado desde que se mostró la confirmación (O1 sigue andando con la lista viva).
+
+**Medido** (PC, Node 22, la simulación del diseño en `src/sync/historyMeasure.test.ts`, que corre solo con
+`HIST_MEASURE=<archivo>`; es más liviana que la del diseño: 421 KB con 10 000 subidas, no 900):
+
+| 10 000 subidas, 104 sesiones | Antes (entrega 1 / prototipo) | Ahora |
+|---|---|---|
+| Armar todo | 167 ms en el hilo de la pantalla | En el Worker; la pantalla copia las filas (5,6 ms) |
+| Abrir una versión | 2 a 22 ms en la pantalla | En el Worker; la pantalla arma el documento recibido (0,7 a 7 ms, con la unión) |
+| Diferencia de una sesión | 71 a 726 ms (`toDelta` por texto, cada uno con su transacción) | 5 a 21 ms la completa; **3 a 10 ms solo lo tocado** |
+| Una fila nueva con el historial abierto | Armar todo otra vez (167 ms) | `append`: 16,6 ms |
+
+Con 2000 subidas (84 KB): armar 32 ms; la diferencia, 16 a 19 ms antes y 2,7 a 5,2 ms ahora. El iPhone sigue sin medir.
+
+**Pruebas nuevas:** `src/sync/historyDiff.test.ts` (6: por persona, rehecho con el mismo id, formato y mover, texto
+huérfano, la diferencia por palabras, y al azar con tres personas y filas con GC de `fixtures/mainDocs.ts` mezcladas:
+cada versión igual al servidor, la unión sin lo borrado igual a la versión y sin lo agregado igual a la anterior, solo
+lo tocado igual a la completa en más de 500 casos, cada letra subida en la versión de su fila o en su texto huérfano;
+sacar los bloques tocados hace fallar 4), `src/sync/historyClient.test.ts` (4: el Worker y la página dan lo mismo, con
+los mensajes copiados como el navegador; un Worker que no arranca y uno que se cae), `src/ui/historyMarks.test.ts` (2:
+las marcas sobre su texto con el editor de hoy y el publicado, sin escribir en la unión; la extensión dibuja clase,
+color, tooltip y rótulo), `src/ui/historyRandom.test.ts` (la prueba 3: A restaura al azar con el editor de verdad y a
+veces deshace, B escribe y C es la versión publicada; restaurar deja la versión y deshacer lo de antes; al final todos
+iguales, al servidor no le falta nada, ninguna letra se pierde y quien quedó con texto huérfano tiene su aviso) y 3 más
+en `historyPanel.test.tsx` (Show changes y apagarlo; la lista viva con la versión elegida; el texto huérfano). Sacar la
+actualización de la lista hace fallar la suya.
+
+**Lo que encontró la prueba 3 (anotado, no cambiado):** una versión con **dos bloques del mismo id** (dos dispositivos
+rehicieron el mismo bloque a la vez) no se puede restaurar: el editor le cambia el id a uno, la comprobación final no da
+y la restauración se deshace sola (*Couldn't restore this version. Nothing changed.*). No se pierde nada; arreglarlo es
+tocar restaurar (fuera de esta entrega).
+
+**Lo que falta:** la entrega 3 (nombrar versiones con `page_versions`, *Restored from…*, *Only named versions*, la caché
+y el historial sin red), medir en el iPhone, y aplicar la migración de la entrega 1. Detalles que quedaron así: el
+tooltip de un tramo largo de una misma apertura (un autor de Yjs) dice la hora de su primera fila; un cambio solo de
+formato de texto (negrita) no se marca; en un bloque rehecho con fotos en línea, las fotos no se marcan.
