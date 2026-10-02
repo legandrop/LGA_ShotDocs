@@ -11,13 +11,18 @@ import { currentTarget, openAssistant } from './assistantUi';
  * solo el atajo; sin red, que el asistente necesita internet (un modelo local se intenta igual, desde el panel).
  */
 export function AssistantToolbarButton() {
-  const Components = useComponentsContext()!;
   const editor = useBlockNoteEditor();
-  const { online } = useSyncStatus();
-  const tr = useT();
-  // Solo en el editor de la página abierta (no en la página de práctica ni en una versión del historial).
+  // Solo en el editor de la página abierta (no en la página de práctica ni en una versión del historial). Se mira antes
+  // de pedir los servicios: donde no se muestra (la práctica, el historial, las pruebas de la barra) no depende de ellos.
   const view = currentTarget()?.view();
   if (!view || view !== editor.prosemirrorView) return null;
+  return <AssistantToolbarButtonShown />;
+}
+
+function AssistantToolbarButtonShown() {
+  const Components = useComponentsContext()!;
+  const { online } = useSyncStatus();
+  const tr = useT();
   return (
     <Components.FormattingToolbar.Button
       className="bn-button sd-assistant-button"
