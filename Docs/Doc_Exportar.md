@@ -1,7 +1,8 @@
 # Exportar una página o un proyecto entero (P.22)
 
-**Estado: diseño, sin código ni migración** (roadmap P.22; pedido de Lega del 2026-10-02). Se diseñó contra `main`
-v0.108. Las decisiones EX1 a EX15 (sección 11) son propuestas con la recomendación tomada: Lega no estaba y quedan a
+**Estado: diseño; entrega 0 hecha (v0.115), sin interfaz todavía** (roadmap P.22; pedido de Lega del 2026-10-02). Se
+diseñó contra `main` v0.108. La entrega 0 (el editor de exportación medido con 300 páginas) está en "Cómo quedó la
+entrega 0", al final. Las decisiones EX1 a EX15 (sección 11) son propuestas con la recomendación tomada: Lega no estaba y quedan a
 confirmar. Lo medido está en un prototipo fuera del repo ("Cómo se midió", al final). **Auditado el 2026-10-02
 ("aprobado con condiciones") y corregido:** los dos bloqueantes (ningún correo en el zip, la vista JPEG en el HTML) y
 las doce observaciones están aplicados en el texto; la tabla está en "Correcciones de la auditoría", al final.
@@ -680,7 +681,7 @@ Cada entrega con su auditoría independiente antes de pasar a `main`, su entrada
 - Safari (Mac e iPhone) y Firefox con las páginas con nombre de CSS (`page:`): solo se midió Chromium.
 - La memoria real de una vista con miles de fotos y la vista previa del diálogo de imprimir de Chrome (el prototipo usa
   `page.pdf`, el mismo motor sin la vista previa).
-- Cuánto tarda el editor de exportación por página con el esquema real (entrega 0).
+- ~~Cuánto tarda el editor de exportación por página con el esquema real~~: medido en la entrega 0 (al final).
 - La velocidad de bajada del Drive por el portero con un proyecto entero, y los llamados reales al Durable Object (la
   cuenta de unos 4 por archivo sale de leer el código, no del panel).
 - La memoria de la vista y los topes de píxeles en el iPhone (WebKit).
@@ -723,3 +724,72 @@ quedó aplicado en el texto de arriba; esta tabla dice dónde.
 | 12 · Sin red, el árbol puede tener páginas cuyo permiso se sacó | "Como estaba en este dispositivo el <fecha de la última sincronización>" en el PDF, el HTML y el manifest (secciones 2.3 y 6; EX13) |
 | (5) de las comprobaciones · BlockNote tira sin avisar una propiedad desconocida; ids de bloque repetidos en un JSON a mano | Las dos se anotan al importar; el repetido recibe un id nuevo (sección 3) |
 | Medidas: el tiempo es solo `page.pdf` y el índice del prototipo no lleva números | Aclarado en "En corto", la sección 5 y "Cómo se midió" |
+
+## Cómo quedó la entrega 0 (v0.115)
+
+**Qué hay.** El editor de exportación y su medición, en archivos nuevos de `src/export/`, sin nada que vea un usuario
+(ni menú ni ruta de la app):
+
+- `pageContent.ts`: los bloques de una página leídos de una **copia** (`docs.snapshot` → `yXmlFragmentToBlocks`) y el
+  colapsado para todos (las claves `true` del mapa `collapsedHeadings` con ids de bloques que existen). Nunca del
+  documento abierto: convertir un documento con algo que la versión no conoce lo saca del documento convertido.
+- `exportEditor.tsx`: un BlockNote con el esquema y las extensiones de la página (sin colapsar), montado afuera de la
+  pantalla en un `article.page` como el de `PageView` (sin `data-page-id`), en solo lectura y sin colaboración. Por
+  página: `replaceBlocks`, espera las imágenes (8 s), copia con `buildPrintView` y pagina con `paginateView` y
+  `applyBreaks`, sin tocar `printView.ts`. Las imágenes pasan por el mismo `resolveFileUrl` que la página
+  (`media.resolve`) y los adjuntos se marcan igual (`markAttachments`).
+- `exportPages.ts`: `exportPlan` (la rama o el proyecto en el orden del árbol con `branchPages`, sin la papelera, con la
+  hoja heredada y el encabezado sin nada de arriba de la raíz exportada) y `renderPages` (página por página, con avance,
+  *Cancel* por `AbortSignal` y `onPage` para quien junta las vistas: el PDF de la entrega 1).
+- `testProject.ts`: el proyecto de prueba, siempre el mismo para la misma semilla: cinco ramas en A4, A5 horizontal,
+  Carta, A3 horizontal y A4; escenas con Script, preguntas, listas, tarjetas de Drive y fotos en línea en renglones;
+  reportes con tablas, fotos en las celdas, salto de hoja y fotos-bloque en filas; notas con fotos de ancho propio; una
+  carpeta de cada diez y una página muy larga de cada 25.
+- `export.test.tsx` (8 pruebas, jsdom) y `bench/` (la medición en el navegador, solo con el servidor de desarrollo:
+  `npx vite --port 5295 --strictPort` y `/src/export/bench/index.html?pages=300&photos=8`; el build no la incluye).
+
+**La prueba de aceptación, medida en Chromium** (Playwright, sin ventana, 1440 × 900; servidor falso de
+`src/sync/testing.ts`, sin login ni red; fotos JPEG de 1600 × 1200 hechas en un canvas y guardadas con la cola de la
+app, que hace sus miniaturas de 480):
+
+| | Corrida final | Las cuatro corridas |
+|---|---|---|
+| Proyecto | 300 páginas, 2219 fotos, 1,8 MB de bloques | 2130 a 2219 fotos |
+| Hojas | 1590 | 1569 a 1590 |
+| Exportar las 300 páginas | **14,5 s** (por página: 50 ms la mediana, 81 ms el p95, 124 ms la peor) | 14,5 a 38,9 s |
+| Leer la copia / poner bloques / esperar imágenes / copiar / paginar | 2,6 / 4,8 / 6,5 / 0,2 / 0,4 s | |
+| Lo guardado de cada página antes y después (SHA-256 de sus filas, su estado y el documento armado) | 0 de 300 distintas | 0 de 300 |
+| Una página abierta en el editor mientras tanto | 0 cambios recibidos, el mismo documento | igual |
+| Cambios del árbol en cola | 0 antes, 0 después | igual |
+| Hojas de cada página contra las marcas de la pantalla (`PageView` real con `SheetBreaks`) | 300 de 300 iguales: las mismas hojas y el mismo bloque (y altura) donde empieza cada una; el encabezado, igual | igual en las dos corridas con la pantalla |
+| Imágenes que no llegaron a tiempo | 0 | 0 |
+
+El objetivo era menos de 60 s. Los tiempos cambian con la carga de la máquina (había otros procesos): la peor corrida
+fue 38,9 s. La pantalla tardó unos 0,8 s por página en abrir y dejar quietas sus marcas: exportar es unas 15 veces más
+rápido que abrir cada página.
+
+**Lo que se aprendió (propuestas para la entrega 1; el diseño de arriba no se cambió):**
+
+1. **El editor de exportación muestra la misma imagen que la pantalla (la miniatura), y la mejor va después en la
+   copia.** La copia toma el ancho de cada foto sin ancho propio del `naturalWidth` de la imagen del editor
+   (`fixMediaWidth`, `inlineNaturalWidth`): si el editor mostrara una imagen más grande, la foto saldría más ancha y los
+   cortes ya no serían los de la pantalla. La sección 2.2 ("toda foto se achica a su ancho impreso a 200 ppp") se cumple
+   cambiando el `src` en la copia, como hace hoy `useOriginals` en `printPage.ts`.
+2. **El encabezado cuenta en las hojas.** Exportado el proyecto entero, cada página lleva el mismo encabezado que en
+   la pantalla (medido: 300 de 300). Exportada una rama, la raíz pierde los contenedores de arriba (regla 2), tiene un
+   renglón menos y sus cortes pueden correrse respecto de las marcas de la pantalla. Los números del índice salen de la
+   paginación de lo exportado (lo que se imprime), así que siguen siendo ciertos; la prueba de "iguales a las marcas de
+   la pantalla" vale para el proyecto entero y para las páginas cuyo encabezado no cambia.
+3. **Abrir una página puede escribir** (la reparación de la estructura al abrir, `normalizeStructure`). La primera
+   corrida sin la pantalla dio una página "cambiada": era la página que la medición abría en el editor, no lo exportado.
+   Por eso exportar lee solo copias (`docs.snapshot`) y nunca llama a `docs.open`.
+4. **La memoria.** Soltando cada vista apenas se pagina, la memoria de JavaScript no crece (358 → 357 MB, con el
+   proyecto entero en la base en memoria). Con las 300 vistas juntas (3643 imágenes, lo que hará el PDF), los procesos de
+   Chromium pasaron de 1653 a 2106 MB (+453 MB) con las vistas afuera de la pantalla, sin dibujar; el diálogo de
+   imprimir las decodifica todas y eso lo mide la entrega 1 (sección 5).
+5. **Las tarjetas de Drive** se dibujan igual en el editor de exportación (la copia lleva la tarjeta y el link, sin el
+   reproductor) y su `iframe` es `loading="lazy"` y está afuera de la pantalla, así que no se carga.
+6. **Lo que no se midió:** (la base local de la medición fue el IndexedDB de Chromium, no uno en memoria, como comprobó
+   la auditoría; leer la copia fue el 18 % del tiempo) el iPhone (WebKit) y
+   Firefox, a mano en la entrega 1; videos y adjuntos (necesitan el portero y la vista previa de PDF; se dibujan con el
+   mismo bloque `image` y la misma marca que la página).
