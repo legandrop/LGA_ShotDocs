@@ -406,10 +406,14 @@ export function DictationPanel({ pageId }: { pageId: string }) {
     }
   };
 
-  // Al abrir, el foco va al campo de la nota (en el teléfono abre el teclado, con su micrófono).
+  // Al abrir (cuando el campo aparece: los ajustes y el borrador se leen primero), el foco va a la nota. En el teléfono
+  // abre el teclado, con su micrófono.
+  const focusedOnce = useRef(false);
   useEffect(() => {
+    if (focusedOnce.current || !ready || !loaded || phase.kind !== 'compose') return;
+    focusedOnce.current = true;
     field.current?.focus({ preventScroll: true });
-  }, []);
+  }, [ready, loaded, phase.kind]);
   useEffect(() => {
     const active = document.activeElement;
     if (!active || active === document.body) root.current?.focus({ preventScroll: true });
@@ -427,6 +431,13 @@ export function DictationPanel({ pageId }: { pageId: string }) {
       // Sin DOM para ese lugar: queda el resaltado.
     }
   };
+
+  // Con la vista previa, la página va al primer cambio (la fila resaltada queda a la vista, detrás de la hoja).
+  useEffect(() => {
+    const first = plan?.changes.find((c) => c.target);
+    if (first) show(first);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan]);
 
   const notice = !allowed
     ? tr(policy === 'off' ? 'dictation.policyOff' : 'dictation.policyLocal')
@@ -518,7 +529,8 @@ export function DictationPanel({ pageId }: { pageId: string }) {
               <ins>{c.after}</ins>
             ) : (
               <>
-                {c.before ? <del>{c.before}</del> : <span className="dictation-empty">—</span>}
+                {/* Tachado solo si saca algo; si solo agrega (o tilda), lo de antes queda como estaba. */}
+                {!c.before.trim() ? <span className="dictation-empty">—</span> : c.replaces || c.op === 'uncheck' ? <del>{c.before}</del> : <span className="dictation-before">{c.before}</span>}
                 <span className="dictation-arrow" aria-hidden="true">
                   {' → '}
                 </span>

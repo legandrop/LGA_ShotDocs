@@ -123,6 +123,10 @@
   text-underline-offset: 2px;
 }
 
+.dictation-before {
+  color: var(--text-2);
+}
+
 .dictation-empty,
 .dictation-arrow {
   color: var(--faint);
