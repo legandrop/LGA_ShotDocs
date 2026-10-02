@@ -1,5 +1,6 @@
 import { createElement, Fragment, useMemo, useSyncExternalStore, type ReactNode } from 'react';
 import { prefs, type Language } from '../prefs';
+import type { assistant } from './lazy/assistant';
 import type { carrete } from './lazy/carrete';
 import type { commentsPanel } from './lazy/commentsPanel';
 import type { drive } from './lazy/drive';
@@ -14,6 +15,7 @@ import type { offline } from './lazy/offline';
 import type { projectStates } from './lazy/projectStates';
 import type { search } from './lazy/search';
 import type { teamDialogs } from './lazy/teamDialogs';
+import type { templates } from './lazy/templates';
 import type { tutorial } from './lazy/tutorial';
 import { strings } from './strings';
 import type { Dict, Entry } from './types';
@@ -34,7 +36,8 @@ import type { Dict, Entry } from './types';
 // Question) son solo etiquetas.
 
 export type { Entry, Plural } from './types';
-type LazyStrings = typeof carrete &
+type LazyStrings = typeof assistant &
+  typeof carrete &
   typeof commentsPanel &
   typeof drive &
   typeof editor &
@@ -48,6 +51,7 @@ type LazyStrings = typeof carrete &
   typeof projectStates &
   typeof search &
   typeof teamDialogs &
+  typeof templates &
   typeof tutorial;
 export type Key = keyof typeof strings | keyof LazyStrings;
 

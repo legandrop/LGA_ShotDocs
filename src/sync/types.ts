@@ -14,6 +14,11 @@ export interface PageRow {
    * copias guardadas por versiones anteriores de la app.
    */
   clean_seq?: number;
+  /**
+   * De qué plantilla salió (Docs/Doc_Plantillas.md, sección 7): el uuid de una de fábrica o el id de la página
+   * plantilla. Informativo, nunca da permisos. Ausente en las copias guardadas por versiones anteriores de la app.
+   */
+  template_id?: string | null;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
@@ -32,7 +37,7 @@ export interface PageSettings {
   format?: { size: string; landscape?: boolean };
 }
 
-export type PagePatch = Partial<Pick<PageRow, 'title' | 'icon' | 'parent_id' | 'sort_key' | 'deleted_at' | 'settings'>>;
+export type PagePatch = Partial<Pick<PageRow, 'title' | 'icon' | 'parent_id' | 'sort_key' | 'deleted_at' | 'settings' | 'template_id'>>;
 
 export interface NewPage {
   id: string;
@@ -40,6 +45,8 @@ export interface NewPage {
   parent_id: string | null;
   title: string;
   sort_key: string;
+  /** La plantilla con que se crea (solo si se crea desde una; las versiones anteriores no lo mandan). */
+  template_id?: string;
 }
 
 /** Un proyecto (`workspaces` en la base): tiene su propio árbol de páginas. */

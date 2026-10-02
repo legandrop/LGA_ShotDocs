@@ -3,9 +3,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { CONTENT_FRAGMENT } from '../sync/structure';
-import { FOLDER_MIME, folderCardUrl } from './attachments';
+import { cleanFileName as appClean, FOLDER_MIME, folderCardUrl } from './attachments';
 import { folderPathOk, foldersFromList, readFolder, summarize, takeDrop, withHidden, type EntryLike, type FolderSource } from './folderRead';
-import { validFolderPath } from '../../portero/src/core';
+import { cleanFileName as porteroClean, validFolderPath } from '../../portero/src/core';
 import { FOLDER_BATCH, FOLDER_CONCURRENCY, FOLDER_TRIES, FolderUploads, openFoldersDb, type FolderPortero } from './folderUpload';
 import { Portero, PorteroError, UploadError, type FolderSessionItem } from './portero';
 import { MEDIA_SCHEME } from './queue';
@@ -553,5 +553,64 @@ describe('el cliente del portero con una subida de carpeta', () => {
     expect((err as UploadError).uploadId).toBeNull();
     expect(calls).toEqual(['PUT /upload/f.x.y']);
     expect(err).toBeInstanceOf(PorteroError);
+  });
+});
+
+describe('el cliente del portero: listar varias subcarpetas (dirs)', () => {
+  const client = (answer: (body: Record<string, unknown>) => Response) => {
+    const sent: Record<string, unknown>[] = [];
+    const fetcher = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      expect(`${init.method} ${new URL(String(input)).pathname}`).toBe('POST /folder/list');
+      const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+      sent.push(body);
+      return answer(body);
+    }) as typeof fetch;
+    return { sent, p: new Portero('https://portero.example', { fetch: fetcher, token: async () => 'jwt', wait: async () => undefined }) };
+  };
+
+  it('manda { file, dirs, pageToken } (sin dir) y devuelve lists, failed, later y el token', async () => {
+    const { p, sent } = client(() =>
+      new Response(JSON.stringify({ lists: { a: [{ type: 'shortcut', name: 'x', modified: null }], b: [] }, failed: { c: 'not_found' }, later: ['d'], nextPageToken: 't2' }), { status: 200 }),
+    );
+    const out = await p.folderListDirs('f1', ['a', 'b', 'c', 'd'], 't1');
+    expect(sent).toEqual([{ file: 'f1', dirs: ['a', 'b', 'c', 'd'], pageToken: 't1' }]);
+    expect(out).toEqual({ lists: { a: [{ type: 'shortcut', name: 'x', modified: null }], b: [] }, failed: { c: 'not_found' }, later: ['d'], nextPageToken: 't2' });
+  });
+
+  it('un portero anterior contesta como con dir (entries, sin lists): null, para listar de a una', async () => {
+    const { p } = client(() => new Response(JSON.stringify({ entries: [], nextPageToken: null }), { status: 200 }));
+    expect(await p.folderListDirs('f1', ['a'])).toBeNull();
+  });
+
+  it('un error del portero llega con su código (por ejemplo, 409 changed o 503 rate)', async () => {
+    const { p } = client(() => new Response(JSON.stringify({ error: 'A folder changed while it was being listed: start again.', code: 'changed' }), { status: 409 }));
+    await expect(p.folderListDirs('f1', ['a'], 't')).rejects.toMatchObject({ status: 409, code: 'changed' });
+  });
+});
+
+describe('cleanFileName: la app y el portero aplican la misma regla (el ZWJ de los emojis compuestos)', () => {
+  it('con un mismo nombre dan lo mismo: lo que sube la app es lo que lista el portero', () => {
+    const family = '👨‍👩‍👧‍👦';
+    const corpus = [
+      `${family}.jpg`,
+      '👩🏽‍💻.png',
+      '❤️‍🔥 ok.txt',
+      '🏳️‍🌈.pdf',
+      'rep‍ort.pdf',
+      '‍👨.pdf',
+      '👨‍.pdf',
+      '👨‍‍👩.pdf',
+      '👨‌👩.pdf',
+      '👨‌‍👩.pdf',
+      '👨​‍👩.pdf',
+      'a‍👩 👩‍a.pdf',
+      '👨‍ 👩.pdf',
+      'x‮y⁦z‎w.txt',
+      `Familia ${family} 2026 🇦🇷.pdf`,
+      'Día 2 - Puerto',
+    ];
+    for (const name of corpus) expect(porteroClean(name), JSON.stringify(name)).toBe(appClean(name));
+    // Y las dos dejan la familia entera.
+    expect(porteroClean(`${family}.jpg`)).toBe(`${family}.jpg`);
   });
 });

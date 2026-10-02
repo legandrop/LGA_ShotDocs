@@ -94,6 +94,11 @@ export const help = {
     en: "Titles like 064 | Name | Place show in the sidebar as a code and a name: Short titles in the ⋯ menu turns it on for a page and everything inside. Above the title, a page can show the pages that contain it.",
     es: "Títulos como 064 | Nombre | Lugar se ven en la barra lateral como un código y un nombre: Títulos cortos, en el menú ⋯, lo prende para una página y todo lo de adentro. Arriba del título, una página puede mostrar las que la contienen.",
   },
+  'help.templates.title': { en: "Templates", es: "Plantillas" },
+  'help.templates.text': {
+    en: "A new empty page offers Start from a template: Pre-production Notes (one page per scene), On-Set Report (one per shoot day) or Shot Breakdown (one per VFX shot). More… describes each one and has Preview, to try it without saving anything. Keep writing and the strip goes away. Pick one, type the page name and {enter} takes you to its first field; {undo} takes it all back. Apply template… in the ⋯ menu does the same on any empty page. The page gets a copy in the app's language. Internal — remove before sharing holds bids and vendors: delete that section before sharing the page with a client.",
+    es: "Una página nueva vacía ofrece Empezar con una plantilla: Notas de preproducción (una página por escena), Reporte de rodaje (una por día de rodaje) o Desglose de plano (una por plano de VFX). Más… cuenta qué trae cada una y tiene Ver, para probarla sin guardar nada. Si seguís escribiendo, la tira se va. Elegí una, escribí el nombre de la página y {enter} te lleva a su primer dato; {undo} la saca entera. Aplicar plantilla…, en el menú ⋯, hace lo mismo en cualquier página vacía. La página recibe una copia en el idioma de la app. Interno — borrar antes de compartir tiene cotizaciones y proveedores: borrá esa sección antes de compartir la página con un cliente.",
+  },
   'help.title.title': { en: "The page title", es: "El título de la página" },
   'help.title.text': { en: "{enter} in the title moves you to the text.", es: "{enter} en el título te pasa al texto." },
   'help.projects.title': { en: "Projects", es: "Proyectos" },
@@ -184,6 +189,11 @@ export const help = {
   'help.carrete.text': {
     en: "Shows every photo, video and file of the page: {prev} {next} to go through them, {ends} to jump to the first or last, scroll or double-click to zoom, {close} to close. Download gets the original.",
     es: "Muestra todas las fotos, los videos y los archivos de la página: {prev} {next} para recorrerlos, {ends} para ir al primero o al último, la rueda o un doble clic para el zoom, {close} para cerrar. Descargar baja el original.",
+  },
+  'help.photosMarkup.title': { en: "Annotations on photos", es: "Anotaciones sobre las fotos" },
+  'help.photosMarkup.text': {
+    en: "A photo can carry annotations drawn on top (arrows, circles, text, numbers, freehand strokes): they show on the page, in a table cell, in the full-screen viewer and in the PDF, and the original never changes. In the viewer, Hide annotations shows the clean photo just for you (nothing is saved). The same photo twice on a page shares its annotations; on another page it shows clean.",
+    es: "Una foto puede llevar anotaciones dibujadas encima (flechas, círculos, texto, números, trazos a mano): se ven en la página, en una celda de una tabla, en el carrete y en el PDF, y el original nunca cambia. En el carrete, Ocultar anotaciones muestra la foto limpia solo para vos (no se guarda nada). La misma foto dos veces en una página comparte sus anotaciones; en otra página sale limpia.",
   },
   'help.photosPhone.title': { en: "On the phone", es: "En el teléfono" },
   'help.photosPhone.text': {
@@ -295,8 +305,8 @@ export const help = {
   // --- Compartir ---
   'help.share.title': { en: "Sharing a page or a project", es: "Compartir una página o un proyecto" },
   'help.share.text': {
-    en: "Share from the ⋯ menu: view, comment, edit, or edit and create pages. A permission covers everything under that page and never what's above it.",
-    es: "Se comparte desde el menú ⋯: ver, comentar, editar, o editar y crear páginas. Un permiso vale para todo lo de abajo de esa página y nunca para lo de arriba.",
+    en: "Share from the ⋯ menu: view, comment, edit, or edit and create pages. A permission covers everything under that page and never what's above it. A page made from a template has an Internal — remove before sharing section: delete it before sharing with a client.",
+    es: "Se comparte desde el menú ⋯: ver, comentar, editar, o editar y crear páginas. Un permiso vale para todo lo de abajo de esa página y nunca para lo de arriba. Una página hecha con una plantilla tiene la sección Interno — borrar antes de compartir: borrala antes de compartirla con un cliente.",
   },
   'help.publicLink.title': { en: "Share with a link", es: "Compartir con un link" },
   'help.publicLink.text': {
@@ -318,6 +328,18 @@ export const help = {
   'help.deletedPrivacy.text': {
     en: "People who can edit a page (not guests) see everything that was deleted, like in the version history. People who only view or comment, and guests, get a clean copy of the page instead: the page as it was the last time an editor's app prepared it, about 20 seconds after you stop typing, every 2 minutes while you keep typing (longer for very large pages) and when you close the app. Until an editor prepares it, they see that the page is being prepared. Something that stayed on the page for a while may have reached them even if you delete it later; something deleted within seconds almost never does. They can tell that something was deleted and how long it was, not what it said. Photos and files removed from a page stop opening for them. What a device already downloaded can't be taken back from it. Until the workspace turns clean copies on, deleted text and photos can still reach the people a page is shared with.",
     es: "Quienes pueden editar una página (no los invitados) ven todo lo que se borró, como en el historial de versiones. Quienes solo ven o comentan, y los invitados, reciben en cambio una copia limpia de la página: la página como estaba la última vez que la app de alguien que edita la preparó, unos 20 segundos después de que dejás de escribir, cada 2 minutos mientras seguís escribiendo (más espaciado en páginas muy grandes) y al cerrar la app. Hasta que alguien que edita la prepara, ven que la página está en preparación. Algo que quedó un rato en la página les pudo haber llegado aunque después lo borres; algo borrado en segundos casi nunca. Pueden saber que se borró algo y cuánto ocupaba, no qué decía. Las fotos y archivos que se sacan de una página dejan de abrirse para ellos. Lo que un dispositivo ya bajó no se le puede quitar. Hasta que el workspace prenda las copias limpias, el texto y las fotos borrados todavía les pueden llegar a las personas con quienes se comparte una página.",
+  },
+
+  // --- El asistente ---
+  'help.assistant.title': { en: "Assistant", es: "Asistente" },
+  'help.assistant.text': {
+    en: "Select some text (or put the cursor in a paragraph) and choose Assistant in the toolbar, in the page menu or with {open}. Fix spelling & grammar, Improve writing, Make shorter, Translate to… or Ask… sends only what you selected to your provider, with your own key, and shows a preview of what changes. Apply replaces it as one edit: undo it with {undo}, or apply the suggestion with {apply}. If the text changes while the assistant is working (you or someone else typed in it), nothing is applied. Photos inside the selection stay; links the assistant invents are removed. If you can only view or comment on the page, you can translate or ask and copy the result. Without internet the assistant doesn't work (a local model on your computer still does).",
+    es: "Elegí un texto (o poné el cursor en un párrafo) y tocá Asistente en la barra, en el menú de la página o con {open}. Corregir ortografía y gramática, Mejorar la redacción, Acortar, Traducir al… o Pedir… manda solo lo elegido a tu proveedor, con tu propia clave, y muestra una vista previa de lo que cambia. Aplicar lo reemplaza como una sola edición: se deshace con {undo}, y la sugerencia se aplica con {apply}. Si el texto cambia mientras el asistente trabaja (escribiste vos u otra persona), no se aplica nada. Las fotos dentro de lo elegido quedan; los links que invente el asistente se sacan. Si en la página solo podés ver o comentar, podés traducir o pedir y copiar el resultado. Sin internet el asistente no anda (un modelo local en tu computadora sí).",
+  },
+  'help.assistantKey.title': { en: "Your assistant key", es: "Tu clave del asistente" },
+  'help.assistantKey.text': {
+    en: "In the account menu, Assistant… sets the provider (Anthropic, OpenAI, Google Gemini or an OpenAI-compatible service such as OpenRouter, Ollama or LM Studio), your API key and the model; Test checks the key and lists the models. The key is saved only on this device, encrypted, and is sent only to that provider (for a compatible service, only to the address it was saved with: if you change the address, paste the key again): not to the workspace, not to the file gatekeeper, not to anyone else. The encryption only keeps it from showing in plain text by accident: anyone using this browser could still use it, so set a spending limit in your provider's account, and on a shared computer check Also forget my assistant key on this device when you sign out (or use Forget key). Each request is charged by the provider to your account; the assistant shows the tokens it used. The workspace owner can turn the assistant off or allow only local models: it's a rule of the app, since anyone who can read a page can copy it.",
+    es: "En el menú de la cuenta, Asistente… elige el proveedor (Anthropic, OpenAI, Google Gemini o un servicio compatible con OpenAI, como OpenRouter, Ollama o LM Studio), tu clave de la API y el modelo; Probar revisa la clave y lista los modelos. La clave se guarda solo en este dispositivo, cifrada, y se manda solo a ese proveedor (en un servicio compatible, solo a la dirección con que se guardó: si cambiás la dirección, pegá la clave de nuevo): ni al workspace, ni al portero de archivos, ni a nadie más. El cifrado solo evita que se vea en claro por accidente: quien use este navegador igual la podría usar, así que poné un tope de gasto en tu cuenta del proveedor, y en una computadora compartida tildá Olvidar también mi clave del asistente en este dispositivo al cerrar la sesión (u Olvidar la clave). Cada pedido lo cobra el proveedor a tu cuenta; el asistente muestra los tokens que usó. El dueño del workspace puede apagar el asistente o permitir solo modelos locales: es una regla de la app, porque quien puede leer una página la puede copiar.",
   },
 
   // --- Papelera ---
@@ -420,6 +442,8 @@ export const help = {
   'shortcut.find': { en: "Find and replace in the page", es: "Buscar y reemplazar en la página" },
   'shortcut.print': { en: "Export PDF / print the page", es: "Exportar PDF / imprimir la página" },
   'shortcut.history': { en: "Version history of the page", es: "Historial de versiones de la página" },
+  'shortcut.assistant': { en: "Open or close the assistant", es: "Abrir o cerrar el asistente" },
+  'shortcut.assistantApply': { en: "Apply the assistant's suggestion", es: "Aplicar la sugerencia del asistente" },
   'shortcut.titleEnter': { en: "From the title, go to the text", es: "Desde el título, pasar al texto" },
   'shortcut.comment': { en: "Comment on the block", es: "Comentar el bloque" },
   'shortcut.question': { en: "Question", es: "Pregunta" },

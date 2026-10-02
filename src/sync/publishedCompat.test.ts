@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { PageDocs as PublishedPageDocs } from './fixtures/publishedDocs';
 import { openLocalDb as openPublishedDb } from './fixtures/publishedLocalDb';
+import { addShape, deleteShape, PHOTO_MARKUP_MAP } from '../media/markup';
 import { dirtyKey, type LocalDb } from './localDb';
 import { mergeRootGroups, seedIfEmpty } from './structure';
 import { FakeRemote, FakeServer, makeDevice, microtasks, watchTransactions, type Device } from './testing';
@@ -232,6 +233,54 @@ describe('la misma base con la versión publicada', () => {
     const fresh = await b.docs.open(pageId);
     expect(fresh.getText('t').toString()).toBe('texto viejo');
     expect(fresh.getMap('collapsedHeadings').toJSON()).toEqual({ h1: true });
+    b.docs.close(pageId);
+  });
+
+  it('las anotaciones de las fotos (otro mapa aparte) pasan intactas por la versión publicada', async () => {
+    // Anotar sobre las fotos (Docs/Doc_Anotar_Fotos.md, entrega 0): la sincronización de v0.029 baja el mapa
+    // `photoMarkup`, lo conserva al editar y lo vuelve a subir; una forma borrada después por la de hoy no vuelve.
+    const server = new FakeServer();
+    const a = await device(server, crypto.randomUUID());
+    const pageId = await a.tree.create(null, 'P');
+    await a.engine.syncNow();
+    const F = '0f8fad5b-d9cb-469f-a165-708677289501';
+    const doc = await a.docs.open(pageId);
+    doc.getText('t').insert(0, 'texto');
+    addShape(doc, F, 'a', { type: 'arrow', posX: 1, posY: 2, startX: 0, startY: 0, endX: 10, endY: 10 }, { w: 400, h: 300 });
+    addShape(doc, F, 'b', { type: 'text', text: '<t1>', futureField: 3 });
+    await a.docs.flush(pageId);
+    await a.engine.syncNow();
+    const before = doc.getMap(PHOTO_MARKUP_MAP).toJSON();
+    a.docs.close(pageId);
+
+    const old = await openPublished(server, crypto.randomUUID());
+    await publishedSync(old, [pageId]);
+    const oldDoc = await old.docs.open(pageId);
+    oldDoc.getText('t').insert(oldDoc.getText('t').length, ' viejo');
+    await old.docs.flush(pageId);
+    old.docs.close(pageId);
+    await publishedSync(old, [pageId]);
+
+    const b = await device(server);
+    await b.engine.syncNow();
+    const fresh = await b.docs.open(pageId);
+    expect(fresh.getText('t').toString()).toBe('texto viejo');
+    expect(fresh.getMap(PHOTO_MARKUP_MAP).toJSON()).toEqual(before);
+    // La de hoy borra una forma; la publicada vuelve a subir su estado entero: la forma no vuelve.
+    deleteShape(fresh, F, 'b');
+    await b.docs.flush(pageId);
+    await b.engine.syncNow();
+    b.docs.close(pageId);
+    const oldAgain = await old.docs.open(pageId);
+    oldAgain.getText('t').insert(0, '>');
+    await old.docs.flush(pageId);
+    old.docs.close(pageId);
+    await publishedSync(old, [pageId]);
+    old.db.close();
+    await b.engine.syncNow();
+    const last = await b.docs.open(pageId);
+    expect(Object.keys(last.getMap(PHOTO_MARKUP_MAP).toJSON()).sort()).toEqual([F, `${F}/a`]);
+    expect(last.getText('t').toString()).toBe('>texto viejo');
     b.docs.close(pageId);
   });
 });

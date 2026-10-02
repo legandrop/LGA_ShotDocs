@@ -11,6 +11,53 @@ del tamaño y en la hoja que dice el índice. La primera medición encontró que
 hoja de la página: se pagina en el orden del documento. Resueltas las observaciones de la entrega 0.
 [ Exportar, entrega 1 - el PDF de una rama o un proyecto con índice, hojas con nombre y fotos achicadas ]
 
+v0.119 :
+
+*Download all* y *Retry missing* listaban una subcarpeta por pedido: una carpeta con 500 subcarpetas eran 505 pedidos al
+portero (el diseño decía ~40 por pedido). `POST /folder/list` acepta `dirs` (hasta 40 ids; `dir` sigue igual para el
+visor y las apps viejas): una sola consulta a Drive con `or` entre padres, agrupada por padre, con el control de árbol
+de cada una, el tope de llamados a Drive (las que no entran vuelven en `later`) y el mismo tope de 100 pases por
+pedido. La app toma 40 de la cola por pedido (505 pasan a 18); si el portero es anterior, o un pedido falla a mitad,
+lista de a una sin perder nada. Además el portero conserva el ZWJ de los emojis compuestos (una familia en el nombre de
+un archivo o carpeta) con la misma regla que la app; una prueba compara las dos.
+[ Carpetas - el portero lista varias subcarpetas por pedido y conserva el ZWJ; Download all usa 40 por pedido ]
+
+v0.118 :
+
+No había asistente (P.24, entrega A1 de `Doc_Asistente.md`). Menú de la cuenta → *Assistant…*: Anthropic, OpenAI,
+Gemini o uno compatible (OpenRouter, Ollama), la clave cifrada solo en el dispositivo y solo para la dirección con que
+se guardó. Sobre lo elegido (Ctrl/⌘+Alt+J, la barra o el menú de la página): *Fix*, *Improve*, *Shorter*, *Translate
+to…* y *Ask…*, directo del navegador al proveedor. La vista previa marca por palabras; *Apply* reemplaza solo lo que
+cambió en un paso de deshacer y no aplica si el texto cambió mientras pensaba. Fotos, links y bloques viajan como marcas
+que tienen que volver bien cerradas; aplicar pide Editar. Tras la auditoría: la CSP de `public/_headers` deja el
+selector de carpetas de Google, los modelos que razonan tienen margen de tokens, 20 000 caracteres por pedido y el foco
+vuelve al panel. Migración `assistant_policy` (de fábrica `on`), sin aplicar.
+[ Asistente A1 - corregir, mejorar, acortar y traducir lo elegido con la clave de cada uno, vista previa y aplicar con deshacer ]
+
+v0.117 :
+
+No había plantillas: cada reporte o ficha de plano se armaba a mano (P.23, entregas 0 y 1 de `Doc_Plantillas.md`).
+Ahora las tres de fábrica, *Pre-production Notes*, *On-Set Report* y *Shot Breakdown*, viven en el código, en inglés y
+castellano, solo con bloques que ya existen. Una página nueva del "+" ofrece *Start from a template*; *More…* y *Apply
+template…* (menú ⋯, solo con la página vacía) abren la ventana con descripción y *Preview*
+(`/practice?template=on-set`, que no guarda nada). Usar una agrega los bloques antes del primero, con el editor, sin
+borrar nada y sin red, y anota `template_id`. Enter en el título lleva al primer dato de la ficha y Ctrl/⌘+Z, también
+desde el título recién elegida, la saca entera. Pruebas con la versión publicada, dos dispositivos sin red y la
+subida al volver la red; ayuda. Auditada: pasa con observaciones, corregidas.
+[ Plantillas - las tres de fábrica, la vista previa y crear una página desde una ]
+
+v0.116 :
+
+Ver las anotaciones de las fotos (P.20, entregas 0 y 1 de `Doc_Anotar_Fotos.md`). No había dónde guardarlas ni cómo
+mostrarlas. Viven en un mapa del documento de la página (`photoMarkup`), afuera del contenido, con una clave por forma:
+las versiones publicadas lo conservan aunque saquen la foto, quien solo ve recibe por la base limpia solo lo vivo, el
+historial lo trae y dos anotando sin red no pierden nada. Se dibujan en un SVG encima de la foto en línea, la de una
+celda, la foto-bloque, el carrete (con *Hide annotations*) y el PDF. El mapa se lee como entrada no confiable; tras la
+auditoría, cortar un texto en renglones es lineal (medía `renglón + palabra` en cada palabra: 200 textos largos
+congelaban la página 6 s por cambio, ahora 12 ms), con topes, y no se dibuja sobre la tarjeta de una foto sin copia.
+Todavía no se puede anotar (entrega 2).
+[ Anotar fotos - entregas 0 y 1: el mapa de anotaciones, sus pruebas y verlas en la página, la celda, el carrete y el PDF ]
+
 v0.115 :
 
 Exportar (P.22), entrega 0. El PDF y el zip de una rama necesitan dibujar cada página fuera de la pantalla con el

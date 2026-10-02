@@ -300,6 +300,8 @@ export interface PracticeSession {
   fresh: number;
   /** El idioma de la plantilla. */
   lang: string;
+  /** La vista previa de una plantilla de fábrica (`prepro:es`…); vacío: el ejemplo de la práctica. */
+  variant: string;
 }
 
 /**
@@ -313,11 +315,15 @@ export function practiceSession(real: Services): PracticeSession | undefined {
 }
 
 /** Arma (o vuelve a armar) la práctica de esta instancia de servicios. */
-export function newPracticeSession(real: Services, init: { title: string; lang: string; fresh: number; answer: string; reply: string }): PracticeSession {
+export function newPracticeSession(
+  real: Services,
+  init: { title: string; lang: string; fresh: number; answer?: string; reply?: string; variant?: string },
+): PracticeSession {
   const previous = sessions.get(real);
   previous?.doc.destroy();
   const comments = new MemoryComments(real.user.id);
-  comments.seed(init.answer, init.reply);
+  // El hilo de ejemplo cuelga de la pregunta del ejemplo: la vista previa de una plantilla no lo tiene.
+  if (init.answer !== undefined && init.reply !== undefined) comments.seed(init.answer, init.reply);
   const session: PracticeSession = {
     services: real,
     comments,
@@ -327,6 +333,7 @@ export function newPracticeSession(real: Services, init: { title: string; lang: 
     format: { size: 'free', landscape: false },
     fresh: init.fresh,
     lang: init.lang,
+    variant: init.variant ?? '',
   };
   session.services = practiceServices(real, session);
   sessions.set(real, session);

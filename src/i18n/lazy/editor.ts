@@ -338,6 +338,8 @@ export const editor = {
   'block.handleDrag': { en: "Drag: move it", es: "Arrastrar: moverlo" },
   // Los colores del bloque entero en la barra, con el bloque elegido con los puntos (PageToolbar.tsx).
   'block.colors': { en: "Block colors", es: "Colores del bloque" },
+  'editor.assistant': { en: "Assistant", es: "Asistente" },
+  'editor.assistantOffline': { en: "The assistant needs internet", es: "El asistente necesita internet" },
 } satisfies Dict;
 
 // Se suma al diccionario cuando se carga la parte que lo usa (viaja con ella, no en la primera carga).

@@ -7,6 +7,7 @@ import { useOffline, usePermissions, useServices, useSyncStatus, useTree } from 
 import { pageFormat, sizeLabel } from './pageFormat';
 import { ownSplit, splitEnabled } from './titles';
 import {
+  AssistantIcon,
   CameraIcon,
   HistoryIcon,
   CollapseAllIcon,
@@ -28,9 +29,11 @@ import {
   SignOutIcon,
   StorageIcon,
   SystemIcon,
+  TemplateIcon,
   TrashIcon,
   VideoIcon,
 } from './icons';
+import { requestTemplates, templateTargetFor } from '../templates/templatesUi';
 import { offlineSupported, openOffline, openStorage } from './SpaceHost';
 import { openExport } from './ExportHost';
 import { openHelp } from '../help/helpUi';
@@ -43,6 +46,8 @@ import { usePendingCount } from './usePendingCount';
 import { LegalLinks } from './Legal';
 import { openInstallDialog, useInstallState } from './install';
 import { shortcutLabel } from './shortcuts';
+import { askSignOut, openAssistantSettings } from '../assistant/assistantUi';
+import { hasAssistantKey } from '../assistant/keyStore';
 
 /**
  * Comportamiento común de menús y paneles flotantes: se cierran con Escape o tocando afuera (tocar el
@@ -142,6 +147,8 @@ export function PageMenu(props: {
   onShare?: () => void;
   /** "Version history" (P.18): solo si la persona lo puede ver (`canSeeHistory`). */
   onHistory?: () => void;
+  /** "Assistant" (Doc_Asistente.md, A1): con la página abierta en el editor. */
+  onAssistant?: () => void;
 }) {
   const tree = useTree();
   const perms = usePermissions();
@@ -164,6 +171,9 @@ export function PageMenu(props: {
   const [asSeen, setAsSeen] = useState(printAsSeen);
   // Sacar una foto o filmar (camera.ts): en el teléfono, con la página abierta y editable.
   const camera = pageCameraFor(props.pageId);
+  // *Apply template…* (Docs/Doc_Plantillas.md, 4.1): solo con la página vacía. Si no está abierta, se abre y se ve allá.
+  const templateTarget = templateTargetFor(props.pageId);
+  const templateBlocked = !!templateTarget && !templateTarget.empty();
 
   const item = (label: string, icon: ReactNode, action: () => void, danger = false, enabled = true) => (
     <button
@@ -188,6 +198,21 @@ export function PageMenu(props: {
       {item(tr('pageMenu.newInside'), <PlusIcon />, props.onNewChild, false, canManage)}
       {item(tr('common.rename'), <RenameIcon />, props.onRename, false, canEdit)}
       {item(tr('pageMenu.move'), <MoveIcon />, props.onMove, false, canManage)}
+      {canEdit && (
+        <button
+          role="menuitem"
+          aria-disabled={templateBlocked || undefined}
+          data-tip={templateBlocked ? tr('pageMenu.applyTemplateEmpty') : undefined}
+          onClick={() => {
+            if (templateBlocked) return;
+            props.onClose();
+            requestTemplates(props.pageId);
+          }}
+        >
+          <TemplateIcon />
+          {tr('pageMenu.applyTemplate')}
+        </button>
+      )}
       <button
         role="menuitem"
         disabled={!canEdit}
@@ -229,6 +254,20 @@ export function PageMenu(props: {
         <ExportIcon />
         {tr('pageMenu.export')}
       </button>
+      {/* El asistente (Docs/Doc_Asistente.md, A1): corregir, mejorar, acortar o traducir lo elegido. */}
+      {props.onAssistant && (
+        <button
+          role="menuitem"
+          data-tip={shortcutLabel('assistant')}
+          onClick={() => {
+            props.onClose();
+            props.onAssistant?.();
+          }}
+        >
+          <AssistantIcon />
+          {tr('pageMenu.assistant')}
+        </button>
+      )}
       {/* El historial de versiones (P.18, Docs/Doc_Historial.md): quién cambió la página, cuándo, y restaurar. */}
       {props.onHistory && (
         <button
@@ -384,6 +423,12 @@ export function AccountMenu({
     ) {
       return;
     }
+    // Con una clave del asistente guardada en este dispositivo, la ventana de salir ofrece olvidarla (Doc_Asistente.md, 4).
+    if (await hasAssistantKey(user.email)) {
+      onClose();
+      askSignOut(user.email, () => client.auth.signOut({ scope: 'local' }));
+      return;
+    }
     await client.auth.signOut({ scope: 'local' });
   }
 
@@ -491,6 +536,17 @@ export function AccountMenu({
           {tr('account.storage')}
         </button>
       )}
+      {/* El asistente (Docs/Doc_Asistente.md, A1): el proveedor, la clave (solo en este dispositivo) y el modelo. */}
+      <button
+        className="menu-row"
+        onClick={() => {
+          onClose();
+          openAssistantSettings();
+        }}
+      >
+        <AssistantIcon />
+        {tr('account.assistant')}
+      </button>
       {/* La ayuda (Docs/Doc_Tutorial.md, sección 5): el foco vuelve al botón de la cuenta al cerrarla. */}
       <button
         className="menu-row"
