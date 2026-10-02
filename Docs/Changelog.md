@@ -4,12 +4,11 @@ v0.0XX :
 
 Deshacer, entrega 0 (B.21, `Doc_Deshacer.md`, sección 16). Deshacer lo escrito dejaba restos ("la ía" en vez de "la ")
 y a veces se llevaba texto de antes (un ⌘Z borró "ám" de "cámara"). La causa estaba en Yjs: deshacer un borrado escribe
-copias, y el deshacer siguiente seguía la copia solo hasta su primer corte (`followRedone` devuelve un item): si se
-había escrito en el medio quedaba el resto, y si las copias se habían juntado se borraban todas. Un parche a Yjs
-(`patches/yjs+13.6.33.patch`, Yjs fijo en 13.6.33, `assertYjsPatched` en `vite.config.ts`) sigue la copia en todo su
-largo y ubica lo que vuelve después de la copia entera del vecino. Al azar: de 1.844 a 3.000 de 3.000 exactas y de 14 a
-0 con algo de menos; con el editor real, de 68 de 300 con restos a 0. Sin cambios en lo guardado ni en
-`min_app_version`.
+copias, y el deshacer siguiente seguía la copia solo hasta su primer corte: si se había escrito en el medio quedaba el
+resto, y si las copias se habían juntado se borraban todas. Un parche a Yjs (`patches/yjs+13.6.33.patch`, Yjs fijo en
+13.6.33, `assertYjsPatched`) sigue la copia en todo su largo. Con texto: de 14 a 0 de 3.000 con algo de menos; con el
+editor real, de 68 de 300 con restos a 0. Borrando bloques enteros queda poco: 1 de 300 con una letra de menos (antes
+7). Sin cambios en lo guardado ni en `min_app_version`.
 [ Deshacer, entrega 0 (B.21): parche de Yjs para que deshacer no deje restos ni se lleve texto ]
 
 v0.131 :

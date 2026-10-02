@@ -32,8 +32,9 @@ número final lo pone quien las cierre con Lega. Lo medido salió de prototipos 
   `min_app_version`; una versión vieja no se entera.
 - **Entregas:** 1 la línea de tiempo con las páginas, 2 el reemplazo adentro, 3 anotar fotos como un paso. **La
   entrega 0 está hecha (v0.0XX):** el deshacer de Yjs dejaba restos y a veces se llevaba texto de antes (B.21) porque
-  seguía lo que otro deshacer volvió a poner solo hasta el primer corte; un parche a Yjs lo sigue entero. Medido: de
-  1.844 a 3.000 de 3.000 exactas y de 14 a 0 con algo de menos (sección 16).
+  seguía lo que otro deshacer volvió a poner solo hasta el primer corte; un parche a Yjs lo sigue entero. Medido con
+  texto: de 1.844 a 3.000 de 3.000 exactas y de 14 a 0 con algo de menos. Borrando y deshaciendo bloques enteros queda
+  un resto chico de Yjs (1 de 300 con el editor, antes 7) (sección 16).
 
 ## Reglas que no se rompen
 
@@ -291,7 +292,9 @@ Reemplazaste en 50 páginas; después escribiste en *Shot 12*; antes del reempla
   página, con el deshacer de Yjs tal cual y con "un paso por vez" de la línea de tiempo: idénticos, 1.844 de 3.000
   exactas al deshacer todo y **14 de 3.000 con algo de menos** en los dos. Con el parche de Yjs: **3.000 de 3.000
   exactas y 0 con algo de menos**, también idénticos con y sin "un paso por vez". Con el editor real y Enter y
-  Backspace en el medio: de 68 de 300 con restos y 1 con algo de menos a 0 y 0.
+  Backspace en el medio: de 68 de 300 con restos y 1 con algo de menos a 0 y 0. **No es cero en todo:** borrando y
+  deshaciendo bloques enteros (con tablas y fotos), la auditoría midió 1 de 300 con una letra de antes de menos con el
+  editor (antes 7) y 10 de 3.000 en un modelo de párrafos (antes 112). Ver 16.3 y 16.4.
 
 ## 7. Versiones viejas
 
@@ -515,8 +518,9 @@ otra sesión (medido).
   nada del otro borrado y los dos iguales.
 - **El límite de Yjs** (entrega 0, hecha): `src/ui/yjsUndoRedone.test.ts` (los casos mínimos, el archivo de `require`,
   3.000 semillas al azar y 500 con otra persona a la vez) y `src/ui/yjsUndoRedoneEditor.test.ts` (con el editor real,
-  Enter y Backspace). En la entrega 1, la prueba al azar de la línea de tiempo cuenta además las "con algo de menos":
-  tienen que seguir en cero con "un paso por vez".
+  Enter y Backspace). En la entrega 1, la prueba al azar de la línea de tiempo cuenta además las "con algo de menos" y
+  **borra y deshace bloques enteros** (con tablas y fotos): con texto tienen que seguir en cero con "un paso por vez";
+  con bloques enteros, no más que el resto conocido de 16.4.
 - **Pantalla** (jsdom, la app de verdad): ⌘Z en otra página (va, muestra, deshace, *Back*); mantener apretado no cruza;
   ⌘Z con el foco en el árbol; en el título y en un comentario no; el campo del panel recién reemplazado (DH9); los avisos;
   ⌘Z en la Mac sí y Ctrl+Z en la Mac no (`macShortcuts.test.ts`); el registro de atajos (`shortcuts.test.ts`).
@@ -558,8 +562,9 @@ Cada entrega con su auditoría antes de publicar.
    vuelve solo; la línea de tiempo muestra el bloque.
 4. **Saltar de página puede sorprender** (DH2). El aviso con *Back* y no cruzar manteniendo apretado lo atenúan.
 5. **El límite de Yjs de la sección 6** quedó arreglado con un parche a Yjs (entrega 0, sección 16). Lo que queda es un
-   parche más que rehacer al actualizar Yjs (las pruebas y el build lo avisan) y un caso raro sin letras de menos ni de
-   más: las mismas letras en otro orden (16.4).
+   parche más que rehacer al actualizar Yjs (las pruebas y el build lo avisan) y los restos raros de 16.4: las mismas
+   letras en otro orden (algunos casos los trae el parche), una letra de antes de menos al deshacer bloques enteros
+   (menos que antes) y una excepción de Yjs con dos personas que ya existía.
 6. **Quien llame directo al `UndoManager`** (código nuevo que se olvide de la línea de tiempo) deja pasos que ella no
    conoce. Una prueba recorre `src` buscando `.undo()` y `.redo()` sobre un `UndoManager` fuera de la línea de tiempo.
 7. **Rehacer un reemplazo por las anclas** (`planRedo`) es código nuevo con la misma regla que `planUndo`; necesita sus
@@ -622,6 +627,12 @@ tiene otro cliente y no entra en el tramo.
 | Con otra persona escribiendo a la vez (3.000 corridas, dos documentos conectados) | 219 con restos propios, 3 con texto de antes de menos | **0 y 0**; nada del otro se va y los dos iguales, en los dos casos |
 | Con el editor real (BlockNote, 300 semillas de 40 acciones con Enter, Backspace, ⌘Z y ⌘⇧Z) | 226 exactas, 68 con letras de más, 1 con letras de menos, 295 rehacen exacto | **299 exactas, 0, 0, 300** |
 | Lo mismo, 2.000 semillas de 20 acciones | — | 1.999 exactas, 0 con letras de más o de menos |
+| **Auditoría:** editor real borrando bloques enteros (1 o 2), con tabla y fotos (300 × 40) | 248 exactas, 32 con letras de más, 7 con letras de menos, 15 en otro orden, rehacer 298 | **296 exactas, 0 de más, 1 de menos, 3 en otro orden**, rehacer 299 (las 4 no exactas tampoco lo eran sin el parche); fotos intactas 300/300 |
+| **Auditoría:** modelo de párrafos de Yjs (crear, borrar 1 o 2 enteros, escribir adentro, deshacer; 3.000) | 2.343 exactas, 112 con letras de antes de menos | **2.971 exactas, 10 con letras de menos**; 5 peores que sin parche, todas en otro orden (16.4) |
+| **Auditoría:** dos personas con versiones mezcladas (vieja y nueva, texto y párrafos; 3.000 por combinación) | convergen como vieja con vieja | igual: ninguna deja de converger por el parche; 0 veces el deshacer de uno borró algo del otro |
+
+Las cifras de "0 con algo de menos" son **con texto** (escribir, borrar tramos, Enter y Backspace). Borrando y
+deshaciendo bloques enteros queda un resto chico, menor que antes (16.4).
 
 Las pruebas: `src/ui/yjsUndoRedone.test.ts` (los tres casos mínimos, `dist/yjs.cjs`, 3.000 semillas y 500 con otra
 persona) y `src/ui/yjsUndoRedoneEditor.test.ts` (los dos casos con el editor y 150 semillas). Todas fallan sin el parche
@@ -629,12 +640,29 @@ persona) y `src/ui/yjsUndoRedoneEditor.test.ts` (los dos casos con el editor y 1
 
 ### 16.4 Lo que queda
 
-**Las mismas letras en otro orden**, sin nada de más ni de menos: 1 de 300 con el editor (semilla 123, "segundo rglónen"
-en vez de "segundo renglón") y 1 de 2.000 con 20 acciones. Pasa cuando lo que vuelve tiene como vecino algo que se borró
-y volvió en otro lado: Yjs lo ubica al lado del original borrado y no de su copia. Seguir la copia también en ese caso
-no lo arregla del todo (se probó: la semilla de 20 acciones sigue igual y rehacer empeora de 300 a 297 exactas), así que
-no se tocó. Es raro, se ve, se arregla escribiendo y no pierde nada: la prueba del editor lo deja anotado como caso
-conocido.
+- **Las mismas letras en otro orden**, sin nada de más ni de menos: 1 de 300 con el editor (semilla 123, "segundo
+  rglónen" en vez de "segundo renglón") y 1 de 2.000 con 20 acciones. Pasa cuando lo que vuelve tiene como vecino algo
+  que se borró y volvió en otro lado: Yjs lo ubica al lado del original borrado y no de su copia. Seguir la copia
+  también en ese caso no lo arregla del todo (se probó: la semilla de 20 acciones sigue igual y rehacer empeora de 300 a
+  297 exactas), así que no se tocó. La prueba del editor lo deja anotado como caso conocido.
+- **Algunos de esos casos los trae el parche** (auditoría). La parte de `redoItem` toma como vecino izquierdo el item
+  que **termina** en la última letra de la copia, pero ese item puede empezar antes; si en la misma función el vecino
+  derecho parte esa copia, el izquierdo queda más corto y lo que vuelve cae en el medio del vecino (modelo de párrafos,
+  semilla 70347: "uno" queda "uon"; sin el parche salía exacto). En 3.000 semillas del modelo de párrafos son 5 peores
+  que sin parche, contra 633 que el parche deja exactas y antes no lo eran; con el editor real no apareció ninguno. La
+  corrección probada (volver a ubicar el vecino izquierdo después de buscar el derecho) los saca, pero sube los casos de
+  documento local distinto de lo guardado (abajo) de 33 a 52: **no se aplicó sin medir más**. Va en el reporte a Yjs.
+- **Una letra de antes de menos al deshacer bloques enteros** (auditoría): 1 de 300 con el editor, borrando y
+  deshaciendo uno o dos bloques con tablas y fotos (semilla 181: "la cámara" queda "a cámara"; sin el parche también
+  fallaba, y eran 7 de 300), y 10 de 3.000 en el modelo de párrafos (antes 112). Es Yjs; el parche lo reduce pero no lo
+  saca.
+- **El documento local distinto de lo guardado** (auditoría; de Yjs, previo al parche): en el modelo de párrafos, después
+  de deshacer o rehacer, el orden en memoria a veces no coincide con el que sale al rearmarlo desde sus ediciones (lo que
+  ve otro dispositivo o la misma página al recargar): 42 de 3.000 sin el parche y 33 con él; con texto, 0; con el editor
+  real, 1 de 300 en los dos. Nunca faltan letras: solo cambia el orden, y recargar lo arregla.
+
+Todo es raro, se ve y se arregla escribiendo; lo único con algo de menos es lo de los bloques enteros, menos que antes, y
+la letra está en el historial de versiones.
 
 ### 16.5 Versiones viejas y otros dispositivos
 
@@ -652,7 +680,12 @@ restos), sin cruzarse con este. **No hace falta subir `min_app_version`.**
   el `UndoManager` temporal del reemplazo (3.3) lo usan igual. Un documento rearmado lo pierde, que ya era la razón por
   la que la pila no sobrevive a recargar.
 - La prueba al azar de la línea de tiempo (sección 12) cuenta las "con algo de menos" y las "con letras de más": cero
-  con el parche.
+  con texto; con bloques enteros borrados y deshechos, no más que el resto de 16.4.
+- **La excepción de Yjs con dos personas** (auditoría, previa al parche): con dos editores reales (1 de 150) y en 24 de
+  3.000 del modelo de párrafos, `UndoManager.undo()` tira `TypeError` (`reading 'client'`) en `redoItem`, cuando la copia
+  del padre ya fue recolectada y `redone` queda sin valor. Con la línea de tiempo se deshace más lejos: la entrega 1
+  tiene que atrapar esa excepción en su deshacer (descartar el paso y avisar, como un paso que no cambia nada, 3.4) y
+  medirla. Está en el roadmap (B.22).
 - **Al actualizar Yjs** (o al pasar a `@blocknote/core/y`, Yjs 14, `Doc_Colaboracion.md`): ver si la versión nueva ya lo
   trae; si no, rehacer el parche en los tres archivos y `npx patch-package yjs`. Las dos pruebas lo cubren. Conviene
   reportarlo a Yjs con los dos casos mínimos de 16.1.
