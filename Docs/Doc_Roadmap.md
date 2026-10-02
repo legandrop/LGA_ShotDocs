@@ -254,7 +254,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   versiones salen de `page_updates` aplicadas en orden (sin guardar nada nuevo; cada fila ya tiene autor y hora
   puestos por la base) y restaurar es una edición por el editor que se deshace. **Entrega 1 hecha (v0.098):** la lista
   por sesión con quién y cuándo, ver una versión y restaurarla (Ctrl/⌘+Alt+Shift+H); la migración
-  `20261007120000_historial.sql` está **sin aplicar** (probada en `begin … rollback`). **Entrega 2 hecha (v0.0XX):**
+  `20261007120000_historial.sql` está **sin aplicar** (probada en `begin … rollback`). **Entrega 2 hecha (v0.103):**
   *Show changes* con lo agregado y lo borrado por persona (decoraciones, bloques rehechos apareados por id), el texto
   huérfano en su versión, el Worker con la página de respaldo, la diferencia solo de lo tocado y la lista que se
   actualiza sola. **Falta:** aplicar la migración (con copia de seguridad), la entrega 3 (nombrar versiones, la caché
@@ -471,8 +471,16 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
     última base de la página (armada por un editor, con lo borrado como hueco), con `clean_reset_seq` al compartir, los
     permisos de los usos sacados de archivos y el interruptor `clean_min_version`, antes de invitar al primer cliente de
     verdad; (2) medir; (3) limpiar el dispositivo de quien deja de ver lo borrado; (4) deltas si hacen falta. La subida
-    no cambia (D19). Depende del frente de las páginas en la papelera legibles con Ver. Pregunta para Lega: aceptar la
-    demora del cliente (sección 13).
+    no cambia (D19). Las páginas en la papelera ya no se leen con Ver (ítem 19, v0.102). Lega aceptó la demora del
+    cliente (D22, sección 13).
+19. **Hecho (v0.102): la papelera de páginas ya no se lee con Ver.** Ver, Comentar y los invitados leían enteras las
+    páginas mandadas a la papelera (título, contenido, comentarios, archivos) si veían algo de arriba: la regla de
+    permisos miraba solo si el proyecto estaba borrado (auditoría de D14). Ahora las ven solo quien edita sin ser
+    invitado y el dueño; migración `20261009120000_papelera_lectores.sql`, con su prueba SQL y
+    `src/sync/trashReaders.test.ts`. Migración aplicada el 2026-10-02. Menores: un pase del portero ya entregado sigue
+    sirviendo hasta que vence (8 horas, igual que al sacar un permiso); una invitada con crear que manda una página a la
+    papelera y la restaura antes de que suba lo primero recibe un rechazo en la segunda (la página queda en la
+    papelera, la restaura el dueño; no se pierde nada). Ver `Doc_Supabase.md`, "La papelera de páginas y quién la ve".
 
 ### C. Esperan a Lega
 

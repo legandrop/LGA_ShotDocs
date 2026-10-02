@@ -1,6 +1,6 @@
 # Historial de versiones de una página (P.18)
 
-**Estado: entregas 1 (v0.098) y 2 (v0.0XX) implementadas; ver "Cómo quedó (entrega 1)" y "Cómo quedó (entrega 2)", al
+**Estado: entregas 1 (v0.098) y 2 (v0.103) implementadas; ver "Cómo quedó (entrega 1)" y "Cómo quedó (entrega 2)", al
 final, que mandan sobre el diseño en lo que tocan; la migración `20261007120000_historial.sql` está escrita y probada en `begin … rollback` contra la base, SIN
 aplicar.** Pedido de Lega del 2026-10-01 (en el plan figuraba como fase 6). Toca la regla de no perder datos
 (restaurar es una edición) y los permisos (el historial muestra lo borrado), así que cada entrega va con sus pruebas y

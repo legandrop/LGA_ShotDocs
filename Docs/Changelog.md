@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.103 :
 
 El historial no mostraba qué cambió en cada versión ni quién (P.18, entrega 2). *Show changes*, prendido por defecto,
 compara cada versión con la anterior: lo agregado subrayado y lo borrado tachado con el color de cada persona, bloques
@@ -11,6 +11,18 @@ que alguien escribió en algo ya borrado se ve aparte, en su versión, con **Cop
 (con la página de respaldo) y la diferencia, en una sola transacción y solo de lo tocado: con 10 000 subidas, de 0,7 s a
 unos 10 ms. La lista se actualiza sola con el historial abierto, sin perder la versión elegida.
 [ Historial - los cambios marcados por persona, el texto huérfano, el Worker y la lista que se actualiza sola ]
+
+v0.102 :
+
+Quien solo podía ver o comentar una rama, y los invitados, leían enteras las páginas mandadas a la papelera dentro de
+ella: título, contenido, comentarios y archivos. La regla de permisos (`user_page_level`) miraba solo si el proyecto
+estaba borrado, y la política de `pages` dejaba ver cualquier fila con permiso sobre el proyecto. La migración
+`20261009120000_papelera_lectores.sql` (sin aplicar) da nivel 0 sobre una página en la papelera, o que cuelga de una,
+a quien tiene menos de Editar y a los invitados; quien edita y el dueño la siguen viendo para restaurarla. Las dos
+funciones pasan a PL/pgSQL con una sola pasada por los padres: leer el árbol es unas cuatro veces más rápido. En la
+app la página sale del árbol sin errores, y un comentario o una edición sin subir quedan rechazados con su texto
+hasta restaurarla.
+[ Papelera para lectores - Ver, Comentar e invitados no leen páginas en la papelera ]
 
 v0.101 :
 
