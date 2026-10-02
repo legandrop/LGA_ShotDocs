@@ -296,6 +296,8 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
         isCancelled: () => cancelled,
       });
       if (!loaded) return null;
+      // Lo que llegue después se guarda con la generación con que quedó guardado esto (la del servidor, si se leyó).
+      if (!cancelled) generationRef.current = loaded.generation;
       let versions = loaded.versions;
       // Las restauraciones de antes cuya marca no llegó a guardarse ("Restored from…").
       if (versions && loaded.offlineAt === null) {
