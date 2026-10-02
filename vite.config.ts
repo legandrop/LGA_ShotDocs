@@ -201,7 +201,8 @@ export default defineConfig(({ mode }) => {
       },
     },
     worker: {
-      rolldownOptions: { output: { postBanner: LIBHEIF_BANNER } },
+      // El aviso de libheif va en el Worker de las fotos HEIC, no en el del historial (history.worker.ts), que no la lleva.
+      rolldownOptions: { output: { postBanner: (chunk: { name: string }) => (chunk.name.startsWith('history') ? '' : LIBHEIF_BANNER) } },
     },
     test: {
       // 15 s por prueba (el de vitest es 5 s): las que montan el editor (38 archivos: buscar, la página, las fotos,

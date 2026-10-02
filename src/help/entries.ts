@@ -88,6 +88,8 @@ const ATTACH_PREVIEW = '0.091';
 const DELETED_PRIVACY = '0.0XX';
 /** El historial de versiones de una página (P.18, Docs/Doc_Historial.md, entrega 1). */
 const HISTORY = '0.098';
+/** Los cambios marcados por persona en el historial (entrega 2; la versión la pone quien publica). */
+const HISTORY_CHANGES = '0.103';
 /** Reemplazar en todo el proyecto (Doc_Buscar.md, "Reemplazar en el proyecto"). */
 const REPLACE_PROJECT = '0.094';
 /** El aviso de lo que escribiste en algo que otro borró (roadmap B.16, Doc_Sincronizacion.md): la versión se pone al publicar. */
@@ -369,6 +371,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     keys: { open: 'history', undo: 'undo' },
     words: ['historial', 'versiones', 'versión', 'restaurar', 'revisiones', 'history', 'versions', 'restore', 'revisions', 'quién cambió'],
     since: HISTORY,
+  },
+  {
+    id: 'historyChanges',
+    section: 'trash',
+    title: 'help.historyChanges.title',
+    text: 'help.historyChanges.text',
+    words: ['cambios', 'mostrar cambios', 'marcas', 'colores', 'tachado', 'subrayado', 'quién escribió', 'show changes', 'changes', 'who wrote', 'compare'],
+    since: HISTORY_CHANGES,
   },
 
   // --- Sin red ---
