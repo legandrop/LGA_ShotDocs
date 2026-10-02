@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+Restos del historial (P.18). Una versión con dos bloques del mismo id (dos dispositivos rehicieron el mismo bloque) no
+se podía restaurar: el editor cambiaba un id, la comprobación no daba y se deshacía sola; ahora, en la copia en memoria,
+el segundo recibe un id nuevo antes de restaurar. Al confirmar, la consulta de filas en curso pudo empezar antes de
+sincronizar: se espera y se pide otra (O9). Una copia restaurada que vuelve atrás el contador de `page_updates` podía
+hacer pasar por buena la caché: se lee la generación del servidor antes de usarla (O7). Deshacer la restauración con
+Ctrl/⌘+Z también deja de lado *Restored from…*. Dos sangrías a la vez bajo el mismo bloque ya no muestran el hijo
+repetido como agregado (O2). Pruebas nuevas, también de `mergeRows` (M5) y de la versión elegida que crece (M10).
+[ Historial - restos: restaurar con ids repetidos, la consulta al confirmar, la generación antes de la caché y Ctrl+Z ]
+
 v0.106 :
 
 El historial no dejaba nombrar versiones ni se veía sin red (P.18, entrega 3): faltaban la tabla y la caché del
