@@ -1,4 +1,5 @@
 import { t } from '../i18n';
+import { cutText } from '../lib/graphemes';
 import { formatSize } from './fileTrash';
 import { deletedLabel, escapeXml, mediaKind } from './probe';
 
@@ -197,7 +198,8 @@ const MAX_NAME = 250;
 /**
  * El nombre sin lo que puede engañar o romper algo: caracteres de control, los que XML no admite (y pares
  * sustitutos sueltos) y los de dirección del texto (con los que `exe.pdf` se ve como `fdp.exe`). Se recorta a
- * 250 caracteres contados por puntos de código (nunca queda medio emoji), conservando la extensión. Vacío,
+ * 250 caracteres (puntos de código, lo que mide la base) sin partir un grafema (ni media bandera ni un emoji sin
+ * su tono), conservando la extensión. Vacío,
  * `empty` (`file.bin`; una carpeta pasa `Folder`).
  */
 export function cleanFileName(name: string, max = MAX_NAME, empty = 'file.bin'): string {
@@ -214,10 +216,10 @@ export function cleanFileName(name: string, max = MAX_NAME, empty = 'file.bin'):
   }
   const clean = kept.join('').trim();
   if (!clean) return empty;
-  const points = Array.from(clean);
-  if (points.length <= max) return clean;
+  if (Array.from(clean).length <= max) return clean;
   const ext = /\.[A-Za-z0-9]{1,10}$/.exec(clean)?.[0] ?? '';
-  return points.slice(0, max - ext.length).join('').trimEnd() + ext;
+  // Por grafemas enteros (nunca media bandera ni un emoji sin su tono) y sin pasar `max` caracteres.
+  return cutText(clean, max - ext.length).trimEnd() + ext;
 }
 
 /**
