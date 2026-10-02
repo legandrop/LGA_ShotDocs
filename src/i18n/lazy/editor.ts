@@ -170,6 +170,11 @@ export const editor = {
     en: "Draw arrows, circles, text and numbers on top; the original never changes",
     es: "Dibujá flechas, círculos, texto y números encima; el original nunca cambia",
   },
+  'photoBar.caption': { en: "Suggest caption", es: "Sugerir un pie de foto" },
+  'photoTip.caption': {
+    en: "The assistant looks at the photo and proposes a line to put under it; you check it before it's added",
+    es: "El asistente mira la foto y propone un renglón para poner debajo; lo revisás antes de que se agregue",
+  },
   'photoBar.rename': { en: "Rename image", es: "Renombrar la foto" },
   'photoBar.renamePlaceholder': { en: "Image name", es: "Nombre de la foto" },
   'photoBar.delete': { en: "Delete image", es: "Borrar la foto" },

@@ -8,7 +8,9 @@ import { CloseIcon, SettingsIcon } from '../ui/icons';
 import { IS_MAC, modPressed } from '../ui/findUi';
 import { shortcutLabel } from '../ui/shortcuts';
 import { appliedDoc, applySuggestion, retakeSnapshot, takeSnapshot, type ApplyOutcome, type Snapshot } from './apply';
-import { closeAssistant, openAssistantSettings, useAssistantTarget, useAssistantUi } from './assistantUi';
+import { clearCaptionRequest, closeAssistant, openAssistantSettings, useAssistantTarget, useAssistantUi } from './assistantUi';
+import { CaptionSection } from './CaptionSection';
+import { selectedPhotoRef, type PhotoRef } from './photoRef';
 import { applyFormat, formatSnapshotFrom, FORMATS, planFormat, takeFormatSnapshot, type FormatOutcome, type FormatPlan, type FormatSnapshot, type FormatTarget, type LostText } from './format';
 import { loadSettings, readKey, rememberLanguage, type AssistantSettings } from './keyStore';
 import { fetchSyncMeta, type KeySyncClient } from './keySyncRemote';
@@ -22,8 +24,9 @@ import './assistant.css';
 import { errorText } from './errorText';
 import { AskMic } from '../dictation/AskMic';
 
-// El panel del asistente (Docs/Doc_Asistente.md, entregas A1 y A2, secciones 6 y 11): las acciones sobre lo elegido,
-// *Format as…*, las de la página entera (*Summarize page*, *Translate page*), la respuesta por partes, la vista previa y
+// El panel del asistente (Docs/Doc_Asistente.md, entregas A1 a A3, secciones 6 y 11): las acciones sobre lo elegido,
+// *Format as…*, *Suggest caption* sobre una foto (CaptionSection.tsx), las de la página entera (*Summarize page*,
+// *Translate page*), la respuesta por partes, la vista previa y
 // *Apply* / *Discard* / *Try again* / *Copy* / *Stop*. A la derecha, como los comentarios; en el teléfono, una hoja
 // desde abajo. No es un diálogo: la página sigue a mano mientras el modelo piensa.
 //
@@ -250,7 +253,7 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
   const status = useSyncStatus();
   const perms = usePermissions();
   const target = useAssistantTarget(pageId);
-  const { settings: settingsOpen } = useAssistantUi();
+  const { settings: settingsOpen, caption: captionRequest } = useAssistantUi();
   const tr = useT();
   const [settings, setSettings] = useState<AssistantSettings | null | undefined>(undefined);
   const [policy, setPolicy] = useState<AssistantPolicy | null>(null);
@@ -259,6 +262,8 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
   const [language, setLanguage] = useState('en');
   const [formatTarget, setFormatTarget] = useState<FormatTarget>('bullets');
   const [instruction, setInstruction] = useState('');
+  /** *Suggest caption* (A3): la foto elegida, mientras dura su pedido. */
+  const [photo, setPhoto] = useState<PhotoRef | null>(null);
   const run = useRef<Run | null>(null);
   const abort = useRef<AbortController | null>(null);
   const root = useRef<HTMLElement>(null);
@@ -306,6 +311,17 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
 
   // Cerrar el panel, cambiar de página o recargar descarta la sugerencia y corta el pedido (6.5).
   useEffect(() => () => abort.current?.abort(), []);
+
+  // *Suggest caption* desde la barra de la foto: lo que estaba en curso se descarta y empieza el de esa foto.
+  useEffect(() => {
+    if (!captionRequest) return;
+    abort.current?.abort();
+    abort.current = null;
+    run.current = null;
+    setPhase({ kind: 'idle' });
+    setPhoto(captionRequest.ref);
+    clearCaptionRequest();
+  }, [captionRequest]);
 
   // Lo elegido, resaltado en la página mientras se ve la sugerencia (no en las de la página entera: es toda).
   const snapshotRange = run.current && !PAGE_ACTIONS.has(run.current.action) ? run.current.snapshot.selected : undefined;
@@ -566,10 +582,22 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
   /** La vista previa tiene un solo *Apply* (Ctrl/⌘+Enter): lo elegido de A1 y *Format as…*. */
   const singleApply = phase.kind === 'preview' && (phase.result.type === 'text' || phase.result.type === 'format');
 
+  /** *Suggest caption* de la lista: la foto elegida en la página (una foto en línea o una foto-bloque). */
+  const startCaption = () => {
+    const view = target?.view();
+    const ref = view ? selectedPhotoRef(view.state) : null;
+    if (!ref) {
+      setPhase({ kind: 'idle', note: tr('assistant.caption.select') });
+      return;
+    }
+    setPhoto(ref);
+  };
+
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Escape') {
       e.preventDefault();
-      if (phase.kind === 'idle') closeAssistant();
+      if (photo) setPhoto(null);
+      else if (phase.kind === 'idle') closeAssistant();
       else if (phase.kind === 'running') stop();
       else if (phase.kind !== 'busy') discard();
       return;
@@ -727,7 +755,25 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
               </p>
             )}
             {!canEdit && (perms.known || target?.editable() === false) && <p className="assistant-notice">{tr('assistant.readOnly')}</p>}
-            {phase.kind === 'idle' && (
+            {photo && config && (
+              <CaptionSection
+                key={`${photo.blockId}#${photo.index}:${photo.url}`}
+                photo={photo}
+                config={config}
+                email={user.email}
+                destination={destinationOf(config)}
+                providerName={providerName}
+                blocked={blocked}
+                canEdit={() => perms.canEditPage(pageId) && (target?.editable() ?? false)}
+                target={target}
+                onUsage={setUsage}
+                onClose={(note) => {
+                  setPhoto(null);
+                  setPhase({ kind: 'idle', note });
+                }}
+              />
+            )}
+            {!photo && phase.kind === 'idle' && (
               <div className="assistant-actions">
                 {(['fix', 'improve', 'shorter'] as Action[]).map((a) => (
                   <button key={a} className="assistant-action" disabled={blocked || (EDIT_ONLY.has(a) && !canEdit)} onClick={() => void start(a)}>
@@ -775,6 +821,11 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
                   </button>
                 </form>
                 <p className="muted assistant-hint">{phase.note ?? tr('assistant.hint')}</p>
+                <p className="mono-label assistant-section">{tr('assistant.photoSection')}</p>
+                <button className="assistant-action" disabled={blocked || !canEdit} onClick={startCaption}>
+                  {tr('assistant.caption')}
+                </button>
+                <p className="muted assistant-hint">{tr('assistant.caption.hint')}</p>
                 <p className="mono-label assistant-section">{tr('assistant.pageSection')}</p>
                 <button className="assistant-action" disabled={blocked} onClick={() => void start('summarize')}>
                   {tr('assistant.summarize')}
@@ -788,7 +839,7 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
                 <p className="muted assistant-hint">{tr('assistant.pageHint')}</p>
               </div>
             )}
-            {phase.kind === 'running' && (
+            {!photo && phase.kind === 'running' && (
               <div className="assistant-result">
                 <p className="mono-label">{tr('assistant.thinking', { action: actionLabel(phase.action, tr) })}</p>
                 {/* Lo que llega, como texto: nada se interpreta hasta el final. */}
@@ -798,14 +849,14 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
                 </div>
               </div>
             )}
-            {phase.kind === 'busy' && (
+            {!photo && phase.kind === 'busy' && (
               <div className="assistant-result">
                 <p className="mono-label" role="status">
                   {tr('assistant.subpage.creating')}
                 </p>
               </div>
             )}
-            {phase.kind === 'error' && (
+            {!photo && phase.kind === 'error' && (
               <div className="assistant-result">
                 <p className="assistant-error" role="alert">
                   {phase.message}
@@ -824,7 +875,7 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
                 </div>
               </div>
             )}
-            {phase.kind === 'preview' && run.current && (
+            {!photo && phase.kind === 'preview' && run.current && (
               <div className="assistant-result">
                 <p className="mono-label">
                   {actionLabel(phase.action, tr)}
@@ -854,6 +905,16 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
       )}
     </aside>
   );
+}
+
+/** Adonde va lo que se manda: el proveedor o, con uno compatible, su dirección (`openrouter.ai`, `localhost`). */
+function destinationOf(config: { provider: string; baseUrl?: string }): string {
+  if (config.provider !== 'compatible') return PROVIDER_NAMES[config.provider as keyof typeof PROVIDER_NAMES] ?? config.provider;
+  try {
+    return new URL(config.baseUrl ?? '').host || PROVIDER_NAMES.compatible;
+  } catch {
+    return PROVIDER_NAMES.compatible;
+  }
 }
 
 /** La respuesta convertida y validada según la acción, o por qué no se puede aplicar. */

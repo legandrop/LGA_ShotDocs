@@ -170,6 +170,53 @@ export const assistant = {
   },
   // --- Entrega A2: la página entera, Format as… y la política del workspace ---
   'assistant.pageSection': { en: "Whole page", es: "Toda la página" },
+  // *Suggest caption* (entrega A3): el modelo mira una foto y propone un pie.
+  'assistant.photoSection': { en: "Photo", es: "Foto" },
+  'assistant.caption': { en: "Suggest caption", es: "Sugerir un pie de foto" },
+  'assistant.caption.hint': {
+    en: "Click a photo first. The assistant looks at it and suggests a line to put under it.",
+    es: "Primero hacé clic en una foto. El asistente la mira y propone un renglón para poner debajo.",
+  },
+  'assistant.caption.select': {
+    en: "Select a photo first: click it, then choose Suggest caption.",
+    es: "Primero elegí una foto: hacé clic en ella y después tocá Sugerir un pie de foto.",
+  },
+  'assistant.caption.confirm': { en: "Send this photo to {provider}?", es: "¿Mandar esta foto a {provider}?" },
+  'assistant.caption.confirmText': {
+    en: "It gets a copy of up to 1,024 pixels, without the file's location and camera data, never the original. Nothing else from the page is sent.",
+    es: "Le llega una copia de hasta 1024 píxeles, sin la ubicación ni los datos de la cámara del archivo, nunca el original. No se manda nada más de la página.",
+  },
+  'assistant.caption.language': { en: "Caption language", es: "Idioma del pie" },
+  'assistant.caption.send': { en: "Send photo", es: "Mandar la foto" },
+  'assistant.caption.cancel': { en: "Cancel", es: "Cancelar" },
+  'assistant.caption.preparing': { en: "Preparing the photo…", es: "Preparando la foto…" },
+  'assistant.caption.field': { en: "Caption", es: "Pie de foto" },
+  'assistant.caption.whereBelow': {
+    en: "Apply adds it as a new line under the photo. You can edit it here first, or later on the page.",
+    es: "Aplicar lo agrega como un renglón nuevo debajo de la foto. Podés retocarlo acá antes, o después en la página.",
+  },
+  'assistant.caption.whereCell': {
+    en: "Apply adds it in the same cell, on a new line under the photo. You can edit it here first, or later on the page.",
+    es: "Aplicar lo agrega en la misma celda, en un renglón nuevo debajo de la foto. Podés retocarlo acá antes, o después en la página.",
+  },
+  'assistant.caption.sent': { en: "Sent {width} × {height} px · {kb} KB", es: "Se mandó de {width} × {height} px · {kb} KB" },
+  'assistant.caption.applied': { en: "Caption added. Undo it with {undo}.", es: "Pie agregado. Se deshace con {undo}." },
+  'assistant.caption.changed': {
+    en: "This photo was removed or replaced while the assistant was working. Nothing was applied.",
+    es: "Esta foto se borró o se reemplazó mientras el asistente trabajaba. No se aplicó nada.",
+  },
+  'assistant.caption.unavailable': {
+    en: "This photo isn't on this device and couldn't be downloaded. Try again with internet.",
+    es: "Esta foto no está en este dispositivo y no se pudo bajar. Probá de nuevo con internet.",
+  },
+  'assistant.caption.unreadable': {
+    en: "This photo can't be read in this browser, so it can't be sent.",
+    es: "Esta foto no se puede leer en este navegador, así que no se puede mandar.",
+  },
+  'assistant.caption.noVision': {
+    en: "This model can't look at photos. Choose another one in the assistant settings.",
+    es: "Este modelo no puede mirar fotos. Elegí otro en los ajustes del asistente.",
+  },
   'assistant.summarize': { en: "Summarize page", es: "Resumir la página" },
   'assistant.translatePage': { en: "Translate page", es: "Traducir la página" },
   'assistant.pageLanguage': { en: "Language of the translated page", es: "Idioma de la página traducida" },
