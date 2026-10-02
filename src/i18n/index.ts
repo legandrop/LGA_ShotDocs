@@ -14,6 +14,7 @@ import type { offline } from './lazy/offline';
 import type { projectStates } from './lazy/projectStates';
 import type { search } from './lazy/search';
 import type { teamDialogs } from './lazy/teamDialogs';
+import type { templates } from './lazy/templates';
 import type { tutorial } from './lazy/tutorial';
 import { strings } from './strings';
 import type { Dict, Entry } from './types';
@@ -48,6 +49,7 @@ type LazyStrings = typeof assistant &
   typeof projectStates &
   typeof search &
   typeof teamDialogs &
+  typeof templates &
   typeof tutorial;
 export type Key = keyof typeof strings | keyof LazyStrings;
 

@@ -1,0 +1,158 @@
+/* Las plantillas (Docs/Doc_Plantillas.md): la tira de la página vacía y la ventana *Templates*. Viaja con el editor. */
+
+.template-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: -8px var(--gutter) 16px;
+  min-width: 0;
+}
+
+.template-strip-label {
+  flex: none;
+}
+
+.template-strip-items {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.template-strip-items::-webkit-scrollbar {
+  display: none;
+}
+
+.template-chip {
+  flex: none;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.template-chip:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.template-chip.more {
+  border-style: dashed;
+  color: var(--muted);
+}
+
+/* En el teléfono la tira va debajo del rótulo y se desliza de costado, con su área táctil. */
+@media (max-width: 640px) {
+  .template-strip {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    margin-right: 0;
+  }
+
+  .template-strip-items {
+    padding-right: var(--gutter);
+  }
+
+  .template-chip {
+    min-height: 36px;
+    padding: 6px 14px;
+  }
+}
+
+.templates-dialog {
+  width: min(560px, 100%);
+  overflow-y: auto;
+}
+
+.templates-dialog .menu-label {
+  margin: 0;
+}
+
+.templates-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.templates-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.templates-list li:last-child {
+  border-bottom: none;
+}
+
+.templates-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.4;
+}
+
+.templates-item-text .muted {
+  font-size: 13px;
+}
+
+.templates-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.templates-dialog button[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.templates-dialog p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.templates-dialog .small {
+  font-size: 12px;
+}
+
+@media (max-width: 520px) {
+  .templates-list li {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .templates-item-actions {
+    justify-content: flex-end;
+  }
+}
+
+
+/* La vista previa (la página de práctica con una plantilla): qué plantilla y en qué idioma, en el aviso de arriba. */
+.template-preview-picker {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.template-preview-picker .segmented {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.template-preview-picker .segmented button {
+  white-space: nowrap;
+}

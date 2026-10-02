@@ -375,7 +375,7 @@ export function thumbPath(fileId: string): string {
   return `${fileId.toLowerCase()}.jpg`;
 }
 export const PAGE_COLUMNS =
-  'id, workspace_id, parent_id, title, icon, sort_key, settings, update_seq, deleted_at, created_at, updated_at';
+  'id, workspace_id, parent_id, title, icon, sort_key, settings, template_id, update_seq, deleted_at, created_at, updated_at';
 // Una instalación que publicó esta versión sin aplicar la migración de ajustes no tiene `pages.settings`:
 // el árbol se sigue bajando sin esa columna, en vez de cortar toda la sincronización.
 const PAGE_COLUMNS_WITHOUT_SETTINGS = PAGE_COLUMNS.replace(' settings,', '');

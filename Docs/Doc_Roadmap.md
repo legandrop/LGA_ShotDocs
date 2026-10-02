@@ -323,7 +323,12 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   cambios) y corregido: atajo ⌘⌥⇧N / Ctrl+Alt+Shift+N (⌘⌥N es de Chrome en la Mac), marcas que se recuperan solas,
   plantillas a medio bajar, datos de set que faltaban y una sección *Internal* para lo que no debe ver un cliente.
   Entregas: 0 (las tres plantillas en el código y una vista para que Lega las revise), 1 (crear desde una de fábrica),
-  2 (el reporte del día), 3 (plantillas propias). **Para después:** que la base fusione las claves de `pages.settings`
+  2 (el reporte del día), 3 (plantillas propias). **Entregas 0 y 1 hechas** (v0.117): la vista previa
+  (`/practice?template=on-set`), la tira de la página nueva, *More…* y *Apply template…*; **falta** que Lega revise el
+  contenido de las tres (PL1), y las entregas 2 y 3. Quedó de la auditoría: *Exit* de la vista previa abierta desde
+  la ventana va al inicio y no a la página donde se elegía (Atrás sí vuelve); un aviso de ProseMirror en la consola al
+  abrir la vista previa (sin efecto visible); y que deshacer la plantilla deja `template_id` (la entrega 2 lo tiene
+  que tener en cuenta). **Para después:** que la base fusione las claves de `pages.settings`
   (`settings || patch`) en vez de reemplazar el objeto entero, con su migración: hoy dos cambios de ajustes a la vez
   se pisan (`Doc_Plantillas.md`, sección 8).
 - **P.20 Anotar sobre las fotos** (Lega, 2026-10-02): flechas, círculos, rectángulos, texto y lápiz encima de una
@@ -335,6 +340,14 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   anotaciones se arma en el dispositivo al bajar; anota quien edita la página. Entregas: 0 (prueba técnica), 1 (ver),
   2 (anotar en la compu), 3 (dedo, y lápiz en el iPad), 4 (bajar, copiar y exportar a FrameRev), 5 (historial, copiar entre
   páginas, buscar), 6 opcional (dibujar en un comentario).
+  **Entregas 0 y 1 hechas (v0.116):** el mapa `photoMarkup` y su lectura segura (`src/media/markup.ts`), las pruebas de
+  versiones publicadas, base limpia, historial y carrera, y el dibujo encima de la foto en línea, la de una celda, la
+  foto-bloque, el carrete (*Hide annotations*) y el PDF. Falta: subir `min_app_version` a esta versión al publicarla
+  (AN10) y la entrega 2 (el anotador, con la poda de AN11); medir el dedo a 60 y 120 Hz y las fotos HEIC de un iPhone
+  real (entrega 0, no se pudo sin teléfono).
+  Del PDF (auditoría O2): el grosor mínimo de 1 px se calcula con la caja en pantalla y la vista de impresión copia el
+  `<svg>` tal cual, así un trazo fino sale más grueso en papel (y una foto que en pantalla no cargó sale sin dibujo);
+  redibujar cada `svg.sd-markup` de la copia con el mínimo de su caja impresa, antes de la entrega 2.
 - **P.22 Exportar una página o un proyecto entero** (Lega, 2026-10-02): PDF y/o zip con las páginas y las fotos, para
   entregarle al cliente o archivar un proyecto terminado. **Diseño en `Doc_Exportar.md`** (sin código; EX1 a EX15 a
   confirmar por Lega; auditado con condiciones y corregido: ningún correo en el zip, vista JPEG de cada foto): un PDF para entregar (toda la rama en orden con un índice que dice la hoja de
@@ -360,7 +373,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   los visitantes del link no mencionan; las menciones de Coda se ven como `@Nombre`. Entregas: 1 (base, `@`, campana,
   sin red), 2 (compartir desde la mención, marcas en el árbol y en el ícono), 3 (correo, grupo C).
 - **P.24 Asistente con la clave de cada usuario y servidor MCP (fase 5)** (era C.11; 2026-10-02, ya sin esperar a
-  Lega). **A1 implementada (v0.0XX):** ajustes con los cuatro proveedores y la clave en el dispositivo, el panel con *Fix*,
+  Lega). **A1 implementada (v0.118):** ajustes con los cuatro proveedores y la clave en el dispositivo, el panel con *Fix*,
   *Improve*, *Shorter*, *Translate to…* y *Ask…* sobre lo elegido, vista previa por palabras, *Apply* con un deshacer y
   la guarda de "cambió mientras pensaba", permisos, sin red, atajo, ayuda, CSP y la migración de `assistant_policy`
   (sin aplicar; la aplica quien publica). Falta: A2, A3 y el MCP (M0 a M3); lo que Lega prueba con sus claves está en

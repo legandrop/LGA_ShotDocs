@@ -68,6 +68,10 @@ export const carrete = {
     en: "The file couldn't be prepared to open or download: {reason}",
     es: "El archivo no se pudo preparar para abrirlo o bajarlo: {reason}",
   },
+  // Las anotaciones de las fotos (P.20, Docs/Doc_Anotar_Fotos.md, AN9).
+  'carrete.hideMarkup': { en: "Hide annotations", es: "Ocultar anotaciones" },
+  'carrete.showMarkup': { en: "Show annotations", es: "Mostrar anotaciones" },
+  'carrete.markupHidden': { en: "This photo has hidden annotations", es: "Esta foto tiene anotaciones ocultas" },
 } satisfies Dict;
 
 // Se suma al diccionario cuando se carga la parte que lo usa (viaja con ella, no en la primera carga).

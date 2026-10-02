@@ -1,6 +1,6 @@
 # Asistente con la clave de cada usuario y servidor MCP (fase 5)
 
-**Estado: entrega A1 implementada (v0.0XX, ver "Cómo quedó A1" al final; su migración, sin aplicar); A2, A3 y el MCP, en diseño** (roadmap P.24; pedido de Lega del 2026-10-02, que decide entre las opciones
+**Estado: entrega A1 implementada (v0.118, ver "Cómo quedó A1" al final; su migración, sin aplicar); A2, A3 y el MCP, en diseño** (roadmap P.24; pedido de Lega del 2026-10-02, que decide entre las opciones
 de D-06 y D-07 y lo deja listo para programar por entregas). Las decisiones están propuestas (IA1 a IA10, sección 15) y
 valen hasta que Lega diga otra cosa. Se diseñó contra `main` v0.108. Precios, límites y CORS verificados el 2026-10-02
 en las páginas oficiales (sección 3, con la fuente de cada número); lo medido está en "Cómo se midió", al final.
@@ -941,7 +941,7 @@ MCP (IA2, IA10) con tres bloqueantes. Todo se corrigió en este documento:
 | O16. `main` ya usa la v0.109 | La entrada del changelog va como `v0.112 :`, se numera al juntar |
 | Faltaba la tabla de riesgos que pedía el encargo | Sección 14 bis |
 
-## Cómo quedó A1 (v0.0XX)
+## Cómo quedó A1 (v0.118)
 
 Implementada en `src/assistant/` (se baja aparte, la primera vez que se abre el panel o los ajustes: unos 44 KB más
 5 KB, sin tocar el paquete principal salvo el atajo, el host del panel y la ventana de salir). Migración
@@ -1033,7 +1033,7 @@ cada uno con su prueba que cae sin el arreglo:
 | B2. Cambiar la Base URL de un servicio compatible y tocar *Test* o *Save* mandaba la clave guardada a la dirección nueva | La clave guardada vale solo para el mismo proveedor y la misma dirección (`sameDestination`, con la dirección normalizada): con otra, el campo queda vacío, *Test* no la manda, *Save* no la conserva y `readKey` no la da (tampoco si otra pestaña cambió los ajustes mientras se pedía). El aviso nombra el host (`openrouter.ai`) en vez de "OpenAI-compatible", y el campo pide no guardarse en el gestor de contraseñas |
 | B3. 4 pruebas rojas en `blockSideMenu.test.tsx` | El botón de la barra mira si se muestra antes de pedir los servicios (un envoltorio sin hooks y el botón adentro) |
 | B4. Un `⟦link:N⟧` sin cierre se aplicaba y el link se extendía | `parseInline` exige que cada link se cierre en su bloque, sin cierres sueltos ni links adentro de otro: si no, *The suggestion would remove a photo or a block.* |
-| B5. La entrada `v0.113` chocaba con `main` | La rama usa `v0.0XX` (changelog, docs) y `'0.0XX'` en la ayuda; el número lo pone quien publica |
+| B5. La entrada `v0.113` chocaba con `main` | La rama usa `v0.118` (changelog, docs) y `'0.118'` en la ayuda; el número lo pone quien publica |
 
 Y de las observaciones: el foco vuelve al panel cuando el botón tocado desaparece (Esc y Ctrl/⌘+Enter andan sin clic,
 salvo que la persona esté escribiendo en la página); a los modelos que razonan (OpenAI `o…` y `gpt-5` o más, Gemini 2.5

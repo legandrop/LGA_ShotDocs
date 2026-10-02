@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.118 :
 
 No había asistente (P.24, entrega A1 de `Doc_Asistente.md`). Menú de la cuenta → *Assistant…*: Anthropic, OpenAI,
 Gemini o uno compatible (OpenRouter, Ollama), la clave cifrada solo en el dispositivo y solo para la dirección con que
@@ -11,6 +11,30 @@ que tienen que volver bien cerradas; aplicar pide Editar. Tras la auditoría: la
 selector de carpetas de Google, los modelos que razonan tienen margen de tokens, 20 000 caracteres por pedido y el foco
 vuelve al panel. Migración `assistant_policy` (de fábrica `on`), sin aplicar.
 [ Asistente A1 - corregir, mejorar, acortar y traducir lo elegido con la clave de cada uno, vista previa y aplicar con deshacer ]
+
+v0.117 :
+
+No había plantillas: cada reporte o ficha de plano se armaba a mano (P.23, entregas 0 y 1 de `Doc_Plantillas.md`).
+Ahora las tres de fábrica, *Pre-production Notes*, *On-Set Report* y *Shot Breakdown*, viven en el código, en inglés y
+castellano, solo con bloques que ya existen. Una página nueva del "+" ofrece *Start from a template*; *More…* y *Apply
+template…* (menú ⋯, solo con la página vacía) abren la ventana con descripción y *Preview*
+(`/practice?template=on-set`, que no guarda nada). Usar una agrega los bloques antes del primero, con el editor, sin
+borrar nada y sin red, y anota `template_id`. Enter en el título lleva al primer dato de la ficha y Ctrl/⌘+Z, también
+desde el título recién elegida, la saca entera. Pruebas con la versión publicada, dos dispositivos sin red y la
+subida al volver la red; ayuda. Auditada: pasa con observaciones, corregidas.
+[ Plantillas - las tres de fábrica, la vista previa y crear una página desde una ]
+
+v0.116 :
+
+Ver las anotaciones de las fotos (P.20, entregas 0 y 1 de `Doc_Anotar_Fotos.md`). No había dónde guardarlas ni cómo
+mostrarlas. Viven en un mapa del documento de la página (`photoMarkup`), afuera del contenido, con una clave por forma:
+las versiones publicadas lo conservan aunque saquen la foto, quien solo ve recibe por la base limpia solo lo vivo, el
+historial lo trae y dos anotando sin red no pierden nada. Se dibujan en un SVG encima de la foto en línea, la de una
+celda, la foto-bloque, el carrete (con *Hide annotations*) y el PDF. El mapa se lee como entrada no confiable; tras la
+auditoría, cortar un texto en renglones es lineal (medía `renglón + palabra` en cada palabra: 200 textos largos
+congelaban la página 6 s por cambio, ahora 12 ms), con topes, y no se dibuja sobre la tarjeta de una foto sin copia.
+Todavía no se puede anotar (entrega 2).
+[ Anotar fotos - entregas 0 y 1: el mapa de anotaciones, sus pruebas y verlas en la página, la celda, el carrete y el PDF ]
 
 v0.115 :
 

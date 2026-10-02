@@ -20,6 +20,8 @@ import { isMediaFile, MEDIA_SCHEME, mediaIdOf } from '../media/queue';
 import { carreteItemsOf, collectCarrete, inlinePhotosOf, parsePhotoKey, photoKeyOf, photoPropsIn, startIndex, type BlockLike, type CarreteItem } from './carreteModel';
 import { createCarreteLoader, type CarreteLoader } from './carreteLoader';
 import { porteroDownload, sharpenImages } from './sharpImages';
+import { attachMarkupOverlay } from './markupOverlay';
+import { PHOTO_MARKUP_MAP } from '../media/markup';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { editorSchemaOptions, insertPageBreakForSlashMenu, SCRIPT_PROP, setVideosAccepted } from './editorSchema';
 import { dropTarget, insertFiles, isEmptyParagraph, isFilesTransfer, takeFiles, type FileEditor, type InsertAt } from './fileDrop';
@@ -73,6 +75,7 @@ import { historyMarksExtension, type HistoryMarksInput } from './historyMarks';
 import { restoreInEditor } from './historyRestore';
 import { RemovedWritingBanner } from './RemovedWritingBanner';
 import { registerAssistantTarget } from '../assistant/assistantUi';
+import { TemplateHost } from '../templates/TemplateHost';
 
 // El carrete se baja aparte, la primera vez que se abre (roadmap B.4).
 const Carrete = lazyPart(() => import('./Carrete').then((m) => m.Carrete));
@@ -238,6 +241,14 @@ export function PageEditor({ pageId }: { pageId: string }) {
           {canComment ? tr('editor.commentOnly') : tr('page.viewOnly')}
         </p>
       )}
+      {/* Las plantillas (Docs/Doc_Plantillas.md): la tira de la página vacía y la ventana *Templates*. */}
+      <TemplateHost
+        pageId={pageId}
+        doc={opening.doc}
+        editor={findEditor}
+        editable={opening.complete && canEdit}
+        complete={opening.complete}
+      />
       {/* Cambiar el idioma vuelve a abrir el editor (sus textos se eligen al crearlo); el documento es el mismo. */}
       <BlockEditor
         key={`${pageId}:${opening.complete}:${canEdit}:${tr.lang}:${remounts}`}
@@ -673,6 +684,29 @@ export function BlockEditor({
     };
   }, [editor, media]);
 
+  // Las anotaciones de las fotos (P.20, Docs/Doc_Anotar_Fotos.md): un mapa del documento de la página, afuera del
+  // contenido. Su dibujo va encima de cada foto anotada, montado siempre (así sale también en el PDF).
+  const markupMap = useMemo(() => doc.getMap<unknown>(PHOTO_MARKUP_MAP), [doc]);
+  useEffect(() => {
+    let overlay: ReturnType<typeof attachMarkupOverlay> | null = null;
+    const start = () => {
+      overlay?.stop();
+      const root = editor.domElement;
+      overlay = root ? attachMarkupOverlay(root, markupMap) : null;
+    };
+    if (editor.domElement) start();
+    const offMount = editor.onMount(start);
+    const offUnmount = editor.onUnmount(() => {
+      overlay?.stop();
+      overlay = null;
+    });
+    return () => {
+      offMount();
+      offUnmount();
+      overlay?.stop();
+    };
+  }, [editor, markupMap]);
+
   // El selector del bloque `image` ofrece videos solo si el workspace tiene portero.
   setVideosAccepted(media.enabled);
 
@@ -1104,7 +1138,7 @@ export function BlockEditor({
       {/* Dónde empieza cada hoja (solo una capa encima; roadmap B.7). */}
       <SheetBreaks pageId={pageId} host={host} />
       {editable && <DrivePasteMenu paste={drivePaste} editor={editor} />}
-      {carrete && <CarreteHost {...carrete} onClose={() => setCarrete(null)} />}
+      {carrete && <CarreteHost {...carrete} markup={markupMap} onClose={() => setCarrete(null)} />}
       {sheet && <AttachmentSheet fileId={sheet} onClose={() => setSheet(null)} />}
       {folderAsk && (
         <FolderAskDialog
@@ -1148,7 +1182,7 @@ interface OpenCarrete {
 }
 
 /** El carrete con el estado de la red (aparte, para que el editor no se vuelva a dibujar con cada cambio). */
-function CarreteHost(props: OpenCarrete & { onClose: () => void }) {
+function CarreteHost(props: OpenCarrete & { onClose: () => void; markup: Y.Map<unknown> }) {
   const { online } = useSyncStatus();
   return (
     <Part onClose={props.onClose}>

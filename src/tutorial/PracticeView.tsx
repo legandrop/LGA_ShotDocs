@@ -3,7 +3,9 @@ import { blocksToYXmlFragment } from '@blocknote/core/yjs';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { t, useT } from '../i18n';
 import '../i18n/lazy/tutorial';
-import { navigate } from '../router';
+import '../i18n/lazy/templates';
+import '../templates/templates.css';
+import { navigate, useSearchParam } from '../router';
 import { ServicesContext, useServices, type Services } from '../services';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { CommentsToggle } from '../ui/CommentsToggle';
@@ -27,56 +29,90 @@ import { newPracticeSession, practiceFilesRejected, practiceSession, type Practi
 import { usePracticeFresh } from './practiceUi';
 import { practiceBlocks, PRACTICE_BLOCKS, PRACTICE_ID } from './practiceTemplate';
 import { practiceHooks, tourSignal } from './tourState';
+import { BUILTIN_KINDS, BUILTIN_SLUGS, builtinBlocks, builtinTexts, kindOfSlug, type BuiltinKind } from '../templates/builtin';
 
 // La página de práctica (Docs/Doc_Tutorial.md, sección 3), en `/practice`: un documento de ejemplo en memoria con el
 // editor de verdad, que no es una página del árbol, no se guarda en el dispositivo, no sube a ningún lado y no lo
 // ve nadie más. Copia lo que hacen PageView y PageEditor (que no se usan acá: abren el documento con `docs.open`):
 // la barra de buscar con Ctrl/⌘+F, el panel de comentarios, el `article.page[data-page-id]` y su `.page-header`
 // (la impresión los busca). Todo lo que cuelga del editor usa los servicios de la práctica (practiceServices.ts).
+//
+// Con `?template=pre-production|on-set|shot-breakdown` (y `&lang=en|es`) es la vista previa de una plantilla de
+// fábrica (Docs/Doc_Plantillas.md, entrega 0): el mismo documento en memoria, armado con la plantilla en vez del
+// ejemplo, para mirarla y probarla sin crear ninguna página.
 
 const CommentsPanel = lazyPart(() => import('../ui/CommentsPanel').then((m) => m.CommentsPanel));
 
-/** El documento de ejemplo: la plantilla del idioma de la interfaz, con los ids fijos que señala la recorrida. */
-function seedDoc(session: PracticeSession, lang: string): void {
-  const texts = lang === 'es' ? practiceEs : practiceEn;
+/** Lo que se muestra: el ejemplo de la práctica, o una plantilla de fábrica en un idioma (la vista previa). */
+interface Variant {
+  template: BuiltinKind | null;
+  lang: string;
+}
+
+/** Una por pantalla: el ejemplo (en el idioma de la interfaz) es `''`; una plantilla, `prepro:es`. */
+const variantKey = (v: Variant) => (v.template ? `${v.template}:${v.lang}` : '');
+
+/**
+ * El documento de ejemplo: la plantilla del idioma de la interfaz, con los ids fijos que señala la recorrida; o la
+ * plantilla de fábrica pedida, en su idioma.
+ */
+function seedDoc(session: PracticeSession, variant: Variant): void {
   // Un editor sin montar, solo para el esquema: la plantilla pasa al fragmento de siempre del documento.
   const editor = BlockNoteEditor.create({ schema });
-  blocksToYXmlFragment(editor as never, practiceBlocks(texts) as never, session.doc.getXmlFragment(CONTENT_FRAGMENT));
+  const blocks = variant.template ? builtinBlocks(variant.template, variant.lang) : practiceBlocks(variant.lang === 'es' ? practiceEs : practiceEn);
+  blocksToYXmlFragment(editor as never, blocks as never, session.doc.getXmlFragment(CONTENT_FRAGMENT));
 }
 
 /** La práctica de esta sesión: la que había (se puede ir a otra página y volver), o una de cero si se pidió. */
-function useSession(real: Services): [PracticeSession, () => void] {
+function useSession(real: Services, variant: Variant): [PracticeSession, () => void] {
   const fresh = usePracticeFresh();
-  const tr = useT();
+  const key = variantKey(variant);
+  const { template, lang } = variant;
   const make = useCallback(() => {
-    const texts = tr.lang === 'es' ? practiceEs : practiceEn;
-    const session = newPracticeSession(real, { title: texts.title, lang: tr.lang, fresh, answer: texts.answer, reply: texts.answerReply });
-    seedDoc(session, tr.lang);
+    let session: PracticeSession;
+    if (template) {
+      // La vista previa: el nombre de la plantilla como título y sin el hilo de ejemplo (no tiene la pregunta).
+      session = newPracticeSession(real, { title: builtinTexts(lang).names[template], lang, fresh, variant: key });
+    } else {
+      const texts = lang === 'es' ? practiceEs : practiceEn;
+      session = newPracticeSession(real, { title: texts.title, lang, fresh, answer: texts.answer, reply: texts.answerReply });
+    }
+    seedDoc(session, { template, lang });
     return session;
-  }, [real, fresh, tr.lang]);
+  }, [real, fresh, key, template, lang]);
   // Idempotente: el modo estricto de React llama dos veces a lo que inicializa el estado, y las dos tienen que dar la
   // misma práctica (la segunda encuentra la que armó la primera).
   const [session, setSession] = useState<PracticeSession>(() => {
     const current = practiceSession(real);
-    return current && current.fresh === fresh ? current : make();
+    return current && current.fresh === fresh && current.variant === key ? current : make();
   });
-  // *Practicar* en la ayuda con la práctica ya abierta: se arma de nuevo.
+  // *Practicar* en la ayuda con la práctica ya abierta, u otra plantilla o idioma en la vista previa: se arma de nuevo.
   useEffect(() => {
-    if (session.fresh !== fresh || session.services.workspace !== real.workspace) setSession(make());
-  }, [fresh, real, session, make]);
+    if (session.fresh !== fresh || session.variant !== key || session.services.workspace !== real.workspace) setSession(make());
+  }, [fresh, real, session, make, key]);
   return [session, () => setSession(make())];
+}
+
+/** Lo que pide la dirección: `?template=on-set&lang=es`. Sin `lang`, el idioma de la interfaz (PL9). */
+function useVariant(): Variant {
+  const tr = useT();
+  const template = kindOfSlug(useSearchParam('template'));
+  const lang = useSearchParam('lang');
+  return { template, lang: template && (lang === 'es' || lang === 'en') ? lang : tr.lang };
 }
 
 export function PracticeView() {
   const real = useServices();
   const tr = useT();
-  const [session, startOver] = useSession(real);
+  const variant = useVariant();
+  const [session, startOver] = useSession(real, variant);
   const [menu, setMenu] = useState<{ position: MenuPosition; anchor: HTMLElement } | null>(null);
   const [, redraw] = useState(0);
+  const crumb = variant.template ? tr('templates.previewCrumb') : tr('practice.crumb');
 
   useEffect(() => {
-    document.title = `${tr('practice.crumb')} · Shot Docs`;
-  }, [tr]);
+    document.title = `${crumb} · Shot Docs`;
+  }, [crumb]);
 
   return (
     <>
@@ -86,7 +122,7 @@ export function PracticeView() {
         </button>
         <nav className="breadcrumbs" aria-label={tr('shell.location')}>
           <span className="crumb current" aria-current="page">
-            {tr('practice.crumb')}
+            {crumb}
           </span>
         </nav>
         <span className="only-mobile">
@@ -118,7 +154,7 @@ export function PracticeView() {
         </ServicesContext.Provider>
       </header>
       <ServicesContext.Provider value={session.services}>
-        <PracticePage key={session.generation} session={session} onStartOver={startOver} />
+        <PracticePage key={session.generation} session={session} variant={variant} onStartOver={startOver} />
         {menu && (
           <PracticeMenu
             session={session}
@@ -134,7 +170,7 @@ export function PracticeView() {
   );
 }
 
-function PracticePage({ session, onStartOver }: { session: PracticeSession; onStartOver: () => void }) {
+function PracticePage({ session, variant, onStartOver }: { session: PracticeSession; variant: Variant; onStartOver: () => void }) {
   const tr = useT();
   const [title, setTitle] = useState(session.title);
   const [findEditor, setFindEditor] = useState<FindEditor | null>(null);
@@ -198,7 +234,8 @@ function PracticePage({ session, onStartOver }: { session: PracticeSession; onSt
       data-page-id={PRACTICE_ID}
     >
       <div className="banner practice-banner" role="note">
-        <span>{tr('practice.banner')}</span>
+        <span>{variant.template ? tr('templates.previewBanner') : tr('practice.banner')}</span>
+        {variant.template && <PreviewPicker variant={variant} />}
         <span className="practice-banner-actions">
           <button className="link" onClick={onStartOver}>
             {tr('practice.startOver')}
@@ -228,6 +265,31 @@ function PracticePage({ session, onStartOver }: { session: PracticeSession; onSt
       />
       <PracticeComments />
     </article>
+  );
+}
+
+/** La vista previa: qué plantilla y en qué idioma (cambian la dirección; el documento se arma de nuevo). */
+function PreviewPicker({ variant }: { variant: Variant }) {
+  const tr = useT();
+  const names = builtinTexts(tr.lang).names;
+  const go = (template: BuiltinKind, lang: string) => navigate(`/practice?template=${BUILTIN_SLUGS[template]}&lang=${lang}`, true);
+  return (
+    <span className="template-preview-picker">
+      <span className="segmented" role="group" aria-label={tr('templates.previewWhich')}>
+        {BUILTIN_KINDS.map((kind) => (
+          <button key={kind} aria-pressed={variant.template === kind} onClick={() => go(kind, variant.lang)}>
+            {names[kind]}
+          </button>
+        ))}
+      </span>
+      <span className="segmented" role="group" aria-label={tr('templates.previewLanguage')}>
+        {(['en', 'es'] as const).map((lang) => (
+          <button key={lang} aria-pressed={variant.lang === lang} onClick={() => go(variant.template!, lang)}>
+            {lang === 'en' ? 'English' : 'Español'}
+          </button>
+        ))}
+      </span>
+    </span>
   );
 }
 

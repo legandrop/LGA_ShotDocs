@@ -94,6 +94,11 @@ export const help = {
     en: "Titles like 064 | Name | Place show in the sidebar as a code and a name: Short titles in the ⋯ menu turns it on for a page and everything inside. Above the title, a page can show the pages that contain it.",
     es: "Títulos como 064 | Nombre | Lugar se ven en la barra lateral como un código y un nombre: Títulos cortos, en el menú ⋯, lo prende para una página y todo lo de adentro. Arriba del título, una página puede mostrar las que la contienen.",
   },
+  'help.templates.title': { en: "Templates", es: "Plantillas" },
+  'help.templates.text': {
+    en: "A new empty page offers Start from a template: Pre-production Notes (one page per scene), On-Set Report (one per shoot day) or Shot Breakdown (one per VFX shot). More… describes each one and has Preview, to try it without saving anything. Keep writing and the strip goes away. Pick one, type the page name and {enter} takes you to its first field; {undo} takes it all back. Apply template… in the ⋯ menu does the same on any empty page. The page gets a copy in the app's language. Internal — remove before sharing holds bids and vendors: delete that section before sharing the page with a client.",
+    es: "Una página nueva vacía ofrece Empezar con una plantilla: Notas de preproducción (una página por escena), Reporte de rodaje (una por día de rodaje) o Desglose de plano (una por plano de VFX). Más… cuenta qué trae cada una y tiene Ver, para probarla sin guardar nada. Si seguís escribiendo, la tira se va. Elegí una, escribí el nombre de la página y {enter} te lleva a su primer dato; {undo} la saca entera. Aplicar plantilla…, en el menú ⋯, hace lo mismo en cualquier página vacía. La página recibe una copia en el idioma de la app. Interno — borrar antes de compartir tiene cotizaciones y proveedores: borrá esa sección antes de compartir la página con un cliente.",
+  },
   'help.title.title': { en: "The page title", es: "El título de la página" },
   'help.title.text': { en: "{enter} in the title moves you to the text.", es: "{enter} en el título te pasa al texto." },
   'help.projects.title': { en: "Projects", es: "Proyectos" },
@@ -184,6 +189,11 @@ export const help = {
   'help.carrete.text': {
     en: "Shows every photo, video and file of the page: {prev} {next} to go through them, {ends} to jump to the first or last, scroll or double-click to zoom, {close} to close. Download gets the original.",
     es: "Muestra todas las fotos, los videos y los archivos de la página: {prev} {next} para recorrerlos, {ends} para ir al primero o al último, la rueda o un doble clic para el zoom, {close} para cerrar. Descargar baja el original.",
+  },
+  'help.photosMarkup.title': { en: "Annotations on photos", es: "Anotaciones sobre las fotos" },
+  'help.photosMarkup.text': {
+    en: "A photo can carry annotations drawn on top (arrows, circles, text, numbers, freehand strokes): they show on the page, in a table cell, in the full-screen viewer and in the PDF, and the original never changes. In the viewer, Hide annotations shows the clean photo just for you (nothing is saved). The same photo twice on a page shares its annotations; on another page it shows clean.",
+    es: "Una foto puede llevar anotaciones dibujadas encima (flechas, círculos, texto, números, trazos a mano): se ven en la página, en una celda de una tabla, en el carrete y en el PDF, y el original nunca cambia. En el carrete, Ocultar anotaciones muestra la foto limpia solo para vos (no se guarda nada). La misma foto dos veces en una página comparte sus anotaciones; en otra página sale limpia.",
   },
   'help.photosPhone.title': { en: "On the phone", es: "En el teléfono" },
   'help.photosPhone.text': {
@@ -295,8 +305,8 @@ export const help = {
   // --- Compartir ---
   'help.share.title': { en: "Sharing a page or a project", es: "Compartir una página o un proyecto" },
   'help.share.text': {
-    en: "Share from the ⋯ menu: view, comment, edit, or edit and create pages. A permission covers everything under that page and never what's above it.",
-    es: "Se comparte desde el menú ⋯: ver, comentar, editar, o editar y crear páginas. Un permiso vale para todo lo de abajo de esa página y nunca para lo de arriba.",
+    en: "Share from the ⋯ menu: view, comment, edit, or edit and create pages. A permission covers everything under that page and never what's above it. A page made from a template has an Internal — remove before sharing section: delete it before sharing with a client.",
+    es: "Se comparte desde el menú ⋯: ver, comentar, editar, o editar y crear páginas. Un permiso vale para todo lo de abajo de esa página y nunca para lo de arriba. Una página hecha con una plantilla tiene la sección Interno — borrar antes de compartir: borrala antes de compartirla con un cliente.",
   },
   'help.publicLink.title': { en: "Share with a link", es: "Compartir con un link" },
   'help.publicLink.text': {

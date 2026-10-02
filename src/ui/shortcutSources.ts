@@ -10,6 +10,9 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
   history: ['Workspace.tsx', 'historyUi.ts'],
   assistant: ['AssistantHost.tsx', 'assistantUi.ts'],
   titleEnter: ['PageView.tsx', 'PracticeView.tsx'],
+  // Recién elegida una plantilla, Ctrl/⌘+Z en el título vacío deshace la página (templatesUi.ts).
+  undo: ['PageView.tsx'],
+  redo: ['PageView.tsx'],
   comment: ['EditorComments.tsx', 'commentsUi.ts'],
   selectAll: ['collapseEditor.ts'],
   photoOpen: ['PageEditor.tsx'],
@@ -55,6 +58,7 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
     'AssistantPanel.tsx',
     'AssistantSettings.tsx',
     'SignOutDialog.tsx',
+    'TemplateHost.tsx',
   ],
   listPick: ['ProjectSwitcher.tsx', 'ProjectSearch.tsx', 'DrivePasteMenu.tsx'],
   // La confirmación de "Replace all" (ProjectReplace.tsx): Esc la cierra sin cerrar el panel.
