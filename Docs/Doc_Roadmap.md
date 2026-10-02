@@ -295,7 +295,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   cuarentena de filas malas; se vuelve a auditar ese diseño antes de programarla), 3 (medir y ajustar los topes).
 - **P.22 Exportar una página o un proyecto entero** (Lega, 2026-10-02): PDF y/o zip con las páginas y las fotos, para
   entregarle al cliente o archivar un proyecto terminado. **Diseño en `Doc_Exportar.md`** (sin código; EX1 a EX15 a
-  confirmar por Lega; falta su auditoría): un PDF para entregar (toda la rama en orden con un índice que dice la hoja de
+  confirmar por Lega; auditado con condiciones y corregido: ningún correo en el zip, vista JPEG de cada foto): un PDF para entregar (toda la rama en orden con un índice que dice la hoja de
   cada página, cada página con su hoja y sus cortes de la fase 4, sin comentarios por defecto) y un zip para archivar
   (una carpeta por página con `.html`, `.md`, los originales del Drive, los comentarios y los bloques en JSON para
   volver; el zip de *Download all*). Lo exporta quien ve, solo su rama; nunca lo borrado (se exportan bloques, nunca el
