@@ -3,7 +3,7 @@
 // hace cada botón de la foto en línea (paridad con la foto-bloque).
 import { BlockNoteEditor } from '@blocknote/core';
 import { BlockNoteView } from '@blocknote/mantine';
-import { NodeSelection } from '@tiptap/pm/state';
+import { NodeSelection, TextSelection } from '@tiptap/pm/state';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -231,7 +231,7 @@ describe('la barra de una foto en una celda de tabla (entrega 5)', () => {
     return out;
   };
 
-  it('miniatura y los tamaños de la celda (no de la página); sin alinear (la tabla no se alinea)', async () => {
+  it('solo miniatura y todo el ancho de la celda (D32); sin 1/2, 1/3, 1/4, acomodar ni alinear', async () => {
     const { editor } = await inCell();
     await choosePhoto(editor, 'C1');
     expect(bar(INLINE)).toEqual([
@@ -240,10 +240,6 @@ describe('la barra de una foto en una celda de tabla (entrega 5)', () => {
       '|',
       'Thumbnail',
       'Full cell width',
-      'Half the cell width',
-      'A third of the cell width',
-      'A quarter of the cell width',
-      'Arrange in rows',
       '|',
       'Comment',
       '|',
@@ -257,14 +253,40 @@ describe('la barra de una foto en una celda de tabla (entrega 5)', () => {
     expect(thumb.hasAttribute('title')).toBe(false);
   });
 
-  it('1/2 la pasa a la mitad de la celda y Miniatura la vuelve a miniatura', async () => {
+  it('todo el ancho de la celda la pasa a w = 1 y Miniatura la vuelve a miniatura', async () => {
     const { editor } = await inCell();
     await choosePhoto(editor, 'C2');
-    await click(INLINE, 'Half the cell width');
-    expect(widths(editor)).toEqual([0, 0.5]);
+    await click(INLINE, 'Full cell width');
+    expect(widths(editor)).toEqual([0, 1]);
     await choosePhoto(editor, 'C2');
     await click(INLINE, 'Thumbnail');
     expect(widths(editor)).toEqual([0, 0]);
+  });
+});
+
+describe('una selección con fotos de una celda y de un renglón (auditoría de la entrega 5, O7)', () => {
+  it('la barra de siempre (tamaños de la página), sin lo de la celda; sin alinear (hay una en una celda)', async () => {
+    const { editor } = await mount();
+    await act(async () => {
+      editor.replaceBlocks(editor.document, [
+        { id: 'p', type: 'paragraph', content: [ph('P1')] },
+        { id: 'tb', type: 'table', content: { type: 'tableContent', rows: [{ cells: [[ph('C1', 0)], [{ type: 'text', text: 'nota', styles: {} }]] }] } },
+      ] as never);
+    });
+    await act(async () => {
+      editor.focus();
+      const from = photoPos(editor, 'P1');
+      const to = photoPos(editor, 'C1') + 1;
+      view(editor).dispatch(view(editor).state.tr.setSelection(TextSelection.create(view(editor).state.doc, from, to)));
+    });
+    await act(async () => {
+      document.dispatchEvent(new FocusEvent('focusin'));
+    });
+    const labels = bar(INLINE);
+    expect(labels).toContain('Half the page width');
+    expect(labels).not.toContain('Thumbnail');
+    expect(labels).not.toContain('Full cell width');
+    expect(labels).not.toContain('Align left');
   });
 });
 

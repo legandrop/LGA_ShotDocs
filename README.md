@@ -92,7 +92,7 @@ In production (v0.049). What works today:
   delete. There is no caption button anymore (existing captions still show). Other files still come in as a card
   below. The PDF splits a paragraph of photos between sheets only between rows.
 - Photos in table cells: with the cursor in a cell, pasted, dropped or picked photos go into that cell as
-  thumbnails as tall as a row, side by side. Their toolbar adds *Thumbnail* and sizes as a fraction of the cell;
+  thumbnails as tall as a row, side by side. Their toolbar has *Thumbnail* and *Full cell width* (handles resize them inside the cell);
   they open full screen like any photo and print the same. Photos in a cell of a Coda table stay in their cell.
 - Photos in rows: the first click selects a photo (handles and its toolbar), the second opens it; quick sizes
   (full, 1/2, 1/3, 1/4 of the page) put photos and videos side by side, *Arrange in rows* lays out a run of

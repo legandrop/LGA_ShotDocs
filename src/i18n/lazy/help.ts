@@ -177,8 +177,8 @@ export const help = {
   },
   'help.photosCells.title': { en: "Photos in a table", es: "Fotos en una tabla" },
   'help.photosCells.text': {
-    en: "Paste, drop or choose photos with the cursor in a table cell and they go into that cell, as thumbnails as tall as a row, side by side. Their bar has Thumbnail and sizes as a fraction of the cell: to make them bigger, widen the column. They open full screen like any photo and come out the same in the PDF.",
-    es: "Pegá, soltá o elegí fotos con el cursor en una celda de una tabla y entran en esa celda, como miniaturas del alto de una fila, una al lado de la otra. Su barra tiene Miniatura y tamaños como una parte de la celda: para agrandarlas, ensanchá la columna. Se abren en grande como cualquier foto y salen iguales en el PDF.",
+    en: "Paste, drop or choose photos with the cursor in a table cell and they go into that cell, as thumbnails as tall as a row, side by side. Their bar has Thumbnail and Full cell width, and their handles make them bigger inside the cell: for more, widen the column. They open full screen like any photo and come out the same in the PDF.",
+    es: "Pegá, soltá o elegí fotos con el cursor en una celda de una tabla y entran en esa celda, como miniaturas del alto de una fila, una al lado de la otra. Su barra tiene Miniatura y Todo el ancho de la celda, y sus tiradores las agrandan dentro de la celda: para más, ensanchá la columna. Se abren en grande como cualquier foto y salen iguales en el PDF.",
   },
   'help.carrete.title': { en: "The full-screen viewer", es: "El carrete" },
   'help.carrete.text': {

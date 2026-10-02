@@ -107,9 +107,6 @@ export const editor = {
   },
   'cellSize.thumb': { en: "Thumbnail", es: "Miniatura" },
   'cellSize.full': { en: "Full cell width", es: "Todo el ancho de la celda" },
-  'cellSize.half': { en: "Half the cell width", es: "La mitad del ancho de la celda" },
-  'cellSize.third': { en: "A third of the cell width", es: "Un tercio del ancho de la celda" },
-  'cellSize.quarter': { en: "A quarter of the cell width", es: "Un cuarto del ancho de la celda" },
   'photoTip.thumb': {
     en: "As tall as a table row; images side by side line up",
     es: "Del alto de una fila de la tabla; las fotos seguidas quedan alineadas",
@@ -119,12 +116,12 @@ export const editor = {
     es: "Pasa todas las fotos elegidas a miniaturas del alto de una fila",
   },
   'photoTip.sizeCell': {
-    en: "Sets its width as a fraction of the cell; widen the column to make it bigger",
-    es: "Fija su ancho como una parte de la celda; para agrandarla, ensanchá la columna",
+    en: "Fills the cell's width; to make it bigger, widen the column",
+    es: "Ocupa todo el ancho de la celda; para agrandarla, ensanchá la columna",
   },
   'photoTip.sizeCellAll': {
-    en: "Gives every selected image this fraction of its cell",
-    es: "Les da esta parte de su celda a todas las fotos elegidas",
+    en: "Every selected image fills its cell's width",
+    es: "Todas las fotos elegidas ocupan el ancho de su celda",
   },
   'photoTip.alignSide': { en: "Moves it to that side of the page", es: "Lo lleva a ese lado de la página" },
   'photoTip.alignCenter': { en: "Centers it on the page", es: "Lo centra en la página" },
