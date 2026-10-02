@@ -82,6 +82,8 @@ const COLLAPSE_2 = '0.084';
  * La vista previa de los PDF adjuntos y los adjuntos en el carrete (Doc_Adjuntos.md, entrega 2).
  */
 const ATTACH_PREVIEW = '0.091';
+/** El aviso de lo que escribiste en algo que otro borró (roadmap B.16, Doc_Sincronizacion.md). */
+const REMOVED_WRITING = '0.093';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -336,6 +338,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
   // --- Sin red ---
   { id: 'syncStatus', section: 'sync', title: 'help.syncStatus.title', text: 'help.syncStatus.text', showMe: 'sync', since: BEFORE_HELP },
   { id: 'syncSafe', section: 'sync', title: 'help.syncSafe.title', text: 'help.syncSafe.text', since: BEFORE_HELP },
+  {
+    id: 'removedWriting',
+    section: 'sync',
+    title: 'help.removedWriting.title',
+    text: 'help.removedWriting.text',
+    words: ['borrado', 'borró', 'deleted', 'perdí', 'lost', 'a la vez', 'same time', 'recuperar', 'recover'],
+    since: REMOVED_WRITING,
+  },
   {
     id: 'availableOffline',
     section: 'sync',
