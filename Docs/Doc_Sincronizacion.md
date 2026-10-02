@@ -372,9 +372,13 @@ que enterarse y tener su texto a mano:
   «abcde». Cada elemento se recorta por relojes (lo vivo propio menos lo nombrado) y el aviso dice «fghij».
 - **Lo propio:** solo lo de los autores de Yjs (`clientID`) que escribieron en la página **desde este dispositivo**,
   anotados en `meta` (`ownClient:<página>:<autor>`) en la misma transacción que su primera edición guardada, sin
-  leer nada antes. Así vale después de cerrar la app, de restaurar una copia o con `syncedSV` atrasado, y nunca toma
-  como propio lo de un tercero. Si no se sabe que algo es propio, no se avisa: mejor no avisar que avisar con texto
-  ajeno. Lo escrito con una versión anterior (que no anota) no avisa.
+  leer nada antes. Así vale después de cerrar la app, de restaurar una copia o con `syncedSV` atrasado. Si no se sabe
+  que algo es propio, no se avisa. Lo escrito con una versión anterior (que no anota) no avisa. **"Propio" es lo que
+  escribió el autor de Yjs del dispositivo, no lo que tecleó la persona** (D23): el editor reescribe con el número
+  del dispositivo lo que mueve o convierte (subir, sangrar o cambiar el tipo de un bloque) y la reparación copia, así
+  que el aviso puede traer texto que tecleó otro y este dispositivo movió. No se pierde nada: quien lo tecleó no
+  recibe aviso (su texto lo borró el movimiento, con nombre), y que lo reciba quien lo movió es la única forma de
+  recuperarlo. Por eso el aviso dice *what you wrote or moved*. Lo que nunca pasó por este dispositivo no se avisa.
 - **Un documento abierto puede tener varios autores** (v0.0XX). Yjs le cambia el número a un documento cuando una
   transacción que aplica algo bajado también escribe con el número del documento: es la reparación de estructura que va
   en la misma transacción que lo que llega (`applyToLive`). `applyUpdate` marca esa transacción como remota y Yjs, al
@@ -390,8 +394,8 @@ que enterarse y tener su texto a mano:
   página, las fotos y los archivos por su nombre entre corchetes, la hora y los tramos de relojes; hasta 20 por
   página), **en la misma transacción que lo bajado**. Las versiones anteriores leen `meta` solo por clave: no les
   cambia nada.
-- **Qué ve:** en la página, un aviso amarillo (*Someone deleted a part of this page while you were writing in it…*)
-  con **Show what you wrote**, **Copy** (si el navegador no deja copiar, el texto queda a la vista) y **Dismiss**,
+- **Qué ve:** en la página, un aviso amarillo (*Someone deleted a part of this page while you were writing or moving
+  text in it…*) con **Show what you wrote or moved**, **Copy** (si el navegador no deja copiar, el texto queda a la vista) y **Dismiss**,
   que borra del dispositivo los avisos que se mostraron (uno que llegó mientras tanto queda; el texto sigue en el
   servidor). Si la página no está abierta, el estado de la
   sincronización lo dice con el título. **Download my unsynced changes** lleva el texto del aviso
@@ -464,7 +468,8 @@ se guarda como hueco: es una copia de algo que ya está en las filas, no texto q
   cerrada; y compactar en orden conserva el texto que una fila posterior trae como hueco (también al abrir con 70
   filas propias más una fila hueco: falla si `loadInto` vuelve a `mergeUpdates`). Desde v0.0XX, lo que copia la
   reparación que vino con lo bajado (Yjs le cambia el autor al documento) también avisa: falla si se vuelve a anotar
-  solo el autor que tiene el documento al guardar.
+  solo el autor que tiene el documento al guardar; y lo que se escribe después con el número nuevo también (falla si
+  se anota solo el número con que se abrió el documento).
 - **`src/ui/collabRemovedWriting.test.ts`:** al azar con el editor real, tres dispositivos y uno de la versión
   publicada, escribiendo en párrafos, listas anidadas, celdas de tablas y secciones con el mapa de colapsar
   mientras otros borran bloques padres, tablas y secciones enteras; sin red, bajando antes de subir, respuestas que
@@ -475,7 +480,7 @@ se guarda como hueco: es una copia de algo que ya está en las filas, no texto q
   servidor. En la suite, 12 corridas de 60 pasos (`REMOVED_SEEDS`, `REMOVED_STEPS`; pasaron 40 de 80). Con la subida
   de antes fallan 29 de 30 corridas. Desde v0.0XX lo propio de cada dispositivo son todos los autores que tuvieron sus
   documentos (la prueba los anota en cada transacción) y no solo el número con que se abrió cada uno: con 300 corridas
-  de 200 pasos, la prueba de antes fallaba en 25 («was told about text it did not write», que era texto del mismo
+  de 200 pasos, la prueba de antes fallaba en 25 en una corrida (17 en otra: a 200 pasos no es del todo repetible) («was told about text it did not write», que era texto del mismo
   dispositivo escrito después de que Yjs le cambió el número); ahora pasan las 300, y las semillas 2 y 88 con 120
   pasos quedan como casos fijos (fallan si la prueba vuelve a mirar solo el primer número). Las corridas al azar
   además vuelven a abrir la página, en la misma pestaña o en otra (otro `PageDocs` sobre la misma base), a veces

@@ -2,11 +2,12 @@
 
 v0.0XX :
 
-Con 300 corridas al azar, la prueba del aviso de B.16 decía que un dispositivo recibía texto ajeno (25 fallas). Era
-suyo: cuando la reparación que va con lo bajado escribe, Yjs le cambia el número al documento, y la prueba solo
-conocía el primero. Detrás había un hueco real: la app anotaba como propio solo el número nuevo, y lo que copió la
-reparación (texto propio sin subir) podía desaparecer sin aviso. Ahora la app y la prueba anotan todos los números del
-documento; la prueba suma otra pestaña y compactar al abrir sin red.
+Con 300 corridas al azar, la prueba del aviso de B.16 decía que un dispositivo recibía texto ajeno (25 fallas en
+una corrida). Era suyo: cuando la reparación que va con lo bajado escribe, Yjs le cambia el número al documento, y la
+prueba solo conocía el primero. Detrás había un hueco real: la app anotaba como propio solo el número nuevo, y lo que
+copió la reparación (texto propio sin subir) podía desaparecer sin aviso. Ahora la app y la prueba anotan todos los
+números del documento; la prueba suma otra pestaña y compactar al abrir sin red. El aviso dice ahora *what you wrote
+or moved*: puede traer texto que este dispositivo movió o convirtió (D23).
 [ Aviso de lo borrado - todos los autores del documento son propios y la prueba al azar con 300 corridas ]
 
 v0.100 :
