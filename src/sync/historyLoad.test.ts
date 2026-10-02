@@ -6,6 +6,7 @@ import { loadHistory, markRestoreLater, settleRestores } from './historyLoad';
 import type { HistoryRemote, NamedVersionsRemote } from './remote';
 import { CONTENT_FRAGMENT } from './structure';
 import { FakeRemote, FakeServer, makeDevice, type Device } from './testing';
+import { RemoteError } from './types';
 
 // El historial con la caché, los nombres de versión y las marcas de restauración (P.18, entrega 3;
 // Docs/Doc_Historial.md, secciones 8, 9 y 10), contra el servidor en memoria con las reglas de
@@ -158,6 +159,61 @@ describe('la caché del historial', () => {
     await loadHistory({ ...base(remote, pageId, cache), generation: 99 });
     expect(remote.calls).toEqual([0]);
     expect((await cache.read(pageId))?.meta.generation).toBe(99);
+  });
+
+  it('una copia restaurada que vuelve atrás el contador de page_updates: con la generación del servidor, lo guardado no se usa aunque el id coincida (O7)', async () => {
+    const { server, a, pageId } = await setup(2);
+    const restore = server.backup();
+    // El contador de ids de `page_updates` de la copia (la restauración lo vuelve a este valor).
+    const counter = server as unknown as { updateIds: number };
+    const atBackup = counter.updateIds;
+    await write(a, pageId, 'despues', 'escrito después de la copia');
+    const cache = await cacheFor();
+    const remote = counting(new FakeRemote(server));
+    await loadHistory(base(remote, pageId, cache));
+    restore();
+    counter.updateIds = atBackup;
+    // Otro dispositivo sube algo nuevo: el mismo seq y, con el contador vuelto atrás, el mismo id que la guardada.
+    const b = await device(server);
+    await b.engine.syncNow();
+    await write(b, pageId, 'otro', 'otra cosa');
+    const saved = (await cache.read(pageId))!.rows;
+    const last = saved[saved.length - 1];
+    expect((server.updates.get(pageId) ?? []).some((u) => u.seq === last.seq && u.id === last.id)).toBe(true);
+    remote.calls.length = 0;
+    // El dispositivo todavía no se enteró de la generación nueva (le pasa la de antes).
+    const got = await loadHistory(base(remote, pageId, cache));
+    expect(remote.calls).toEqual([0]);
+    const doc = new Y.Doc();
+    for (const r of got!.rows) Y.applyUpdate(doc, r.data);
+    const text = doc.getXmlFragment(CONTENT_FRAGMENT).toString();
+    expect(text).toContain('otra cosa');
+    expect(text).not.toContain('escrito después de la copia');
+    expect(got!.generation).toBe(server.settings!.generation);
+    expect((await cache.read(pageId))?.meta.generation).toBe(server.settings!.generation);
+    // Sin red: lo guardado (ya de la generación nueva) no se muestra con la vieja; con la nueva, sí.
+    server.online = false;
+    expect(await loadHistory({ ...base(remote, pageId, cache), online: false })).toBeNull();
+    expect((await loadHistory({ ...base(remote, pageId, cache), online: false, generation: server.settings!.generation }))?.rows.length).toBe(got!.rows.length);
+  });
+
+  it('si la generación del servidor no se puede leer: sin la tabla, la del dispositivo; otro error, se baja todo; sin red, lo guardado', async () => {
+    const { server, pageId } = await setup(2);
+    const cache = await cacheFor();
+    const remote = counting(new FakeRemote(server));
+    await loadHistory(base(remote, pageId, cache));
+    const with_ = (settings: () => Promise<{ generation: number } | null>) => Object.assign(Object.create(remote) as typeof remote, { fetchWorkspaceSettings: settings });
+    const last = (await cache.read(pageId))!.rows.at(-1)!.seq;
+    remote.calls.length = 0;
+    await loadHistory(base(with_(async () => null), pageId, cache));
+    expect(remote.calls).toEqual([last - 1]);
+    remote.calls.length = 0;
+    await loadHistory(base(with_(async () => Promise.reject(new RemoteError('raro', false, 'XX000'))), pageId, cache));
+    expect(remote.calls).toEqual([0]);
+    remote.calls.length = 0;
+    const offline = await loadHistory({ ...base(with_(async () => Promise.reject(new RemoteError('Failed to fetch', false, undefined, true))), pageId, cache), now: () => 1 });
+    expect(offline?.offlineAt).not.toBeNull();
+    expect(remote.calls).toEqual([]);
   });
 
   it('si la base dice que ya no lo puede ver (sin permiso, en la papelera), se tira lo guardado', async () => {

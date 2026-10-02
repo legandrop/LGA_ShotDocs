@@ -102,6 +102,18 @@ function childItems(type: AnyType): Y.Item[] {
 }
 
 const typeOf = (item: Y.Item) => (item.content as Y.ContentType).type as AnyType;
+
+/** Un tipo de Yjs como se ve en un snapshot (nombre, propiedades, texto con formato e hijos), para compararlo. */
+function snapKey(t: AnyType, s: Y.Snapshot): string {
+  if (t instanceof Y.XmlText) return JSON.stringify(t.toDelta(s));
+  if (!(t instanceof Y.XmlElement)) return '';
+  const attrs = cleanAttrs(Y.typeMapGetAllSnapshot(t, s));
+  const keys = Object.keys(attrs).sort();
+  const kids = childItems(t)
+    .filter((n) => visible(n, s))
+    .map((n) => snapKey(typeOf(n), s));
+  return `<${t.nodeName} ${JSON.stringify(keys.map((k) => [k, attrs[k]]))}>${kids.join('')}</>`;
+}
 const isElement = (t: unknown, name?: string): t is Y.XmlElement => t instanceof Y.XmlElement && (name === undefined || t.nodeName === name);
 
 function cleanAttrs(attrs: Attrs | null | undefined): Attrs {
@@ -272,15 +284,31 @@ class UnionBuilder {
     });
   }
 
-  /** Los hijos de un grupo de bloques (con el estado del grupo) al final de `dst`. */
-  private groupChildren(src: Y.XmlElement, state: State, dst: Y.XmlElement): void {
+  /**
+   * Los hijos de un grupo de bloques (con el estado del grupo) al final de `dst`. `seen`: los bloques de los grupos
+   * anteriores del mismo bloque, y si se saltean los iguales (ver `container`).
+   */
+  private groupChildren(src: Y.XmlElement, state: State, dst: Y.XmlElement, seen?: { list: [Y.XmlElement, State][]; skip: boolean }): void {
     for (const n of childItems(src)) {
       const st = this.stateOf(n, state);
       if (!st) continue;
       const t = typeOf(n);
-      if (isElement(t, BLOCK)) this.container(t, st, dst);
-      else this.node(t, st, state, dst, null, false);
+      if (isElement(t, BLOCK)) {
+        if (seen?.skip && seen.list.some(([o, ost]) => this.sameBlock(t, st, o, ost))) continue;
+        seen?.list.push([t, st]);
+        this.container(t, st, dst);
+      } else this.node(t, st, state, dst, null, false);
     }
+  }
+
+  /**
+   * Si el bloque `t` repite a `o` en cada versión en que se ve (la anterior, la nueva o las dos): visible también ahí,
+   * con el mismo id y el mismo contenido. Es lo que descarta `repairBlocks` al juntar dos grupos de hijos.
+   */
+  private sameBlock(t: Y.XmlElement, st: State, o: Y.XmlElement, ost: State): boolean {
+    const snaps = st === 'both' ? [this.prev, this.cur] : [this.snapOf(st)];
+    const sees = (s: Y.Snapshot, state: State) => state === 'both' || this.snapOf(state) === s;
+    return snaps.every((s) => sees(s, ost) && snapKey(t, s) === snapKey(o, s));
   }
 
   private push(dst: Y.XmlElement | Y.XmlFragment, el: Y.XmlElement | Y.XmlText): void {
@@ -339,7 +367,14 @@ class UnionBuilder {
     if (groups.length > 0) {
       const group = new Y.XmlElement(GROUP);
       this.push(el, group);
-      for (const g of groups) this.groupChildren(g.t as Y.XmlElement, g.st, group);
+      // Dos sangrías a la vez bajo el mismo bloque dejan dos grupos de hijos, a veces con el mismo hijo en los dos. La
+      // página los junta en el primero sin repetir el hijo igual (`repairBlocks`); la unión, lo mismo: si no, el de
+      // más se mostraba como agregado (O2 de la auditoría de la entrega 2).
+      const seen = { list: [] as [Y.XmlElement, State][], skip: false };
+      for (const g of groups) {
+        this.groupChildren(g.t as Y.XmlElement, g.st, group, seen);
+        seen.skip = true;
+      }
       if (group.length === 0) el.delete(el.length - 1, 1);
     }
     // El bloque entero agregado o borrado (no la semilla: estructura vacía igual en todos los dispositivos).
