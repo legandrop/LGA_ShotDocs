@@ -250,6 +250,36 @@ describe('entrega 1: el dibujo encima de las fotos', () => {
     expect(drawn(root)).toEqual(['bloque:01', 'en línea:01']);
   });
 
+  it('sobre una tarjeta de la cola (sin copia, borrada, de otro proyecto) o una imagen rota no se dibuja (auditoría O1)', async () => {
+    const { doc, root } = mountPage();
+    for (const n of [1, 2]) annotate(doc, n, NINE.slice(0, 1));
+    await settle();
+    expect(drawn(root)).toEqual(['bloque:01', 'en línea:02']);
+    const imgOf = (where: string) => root.querySelector<HTMLImageElement>(`${where} > img.bn-visual-media`)!;
+    const block = imgOf('.bn-visual-media-wrapper');
+    const real = block.getAttribute('src');
+    // La cola muestra la tarjeta (un SVG `data:`): el dibujo se va; vuelve la foto: el dibujo vuelve.
+    block.setAttribute('src', 'data:image/svg+xml;charset=utf-8,%3Csvg%2F%3E');
+    await settle();
+    expect(drawn(root)).toEqual(['en línea:02']);
+    if (real === null) block.removeAttribute('src');
+    else block.setAttribute('src', real);
+    await settle();
+    expect(drawn(root)).toEqual(['bloque:01', 'en línea:02']);
+    // La foto en línea no carga: el dibujo se va con su `error`; carga: vuelve con su `load`.
+    const photo = imgOf('.sd-photo');
+    photo.setAttribute('src', 'blob:roto');
+    Object.defineProperty(photo, 'complete', { configurable: true, get: () => true });
+    Object.defineProperty(photo, 'naturalWidth', { configurable: true, get: () => 0 });
+    photo.dispatchEvent(new Event('error'));
+    await settle();
+    expect(drawn(root)).toEqual(['bloque:01']);
+    Object.defineProperty(photo, 'naturalWidth', { configurable: true, get: () => 4000 });
+    photo.dispatchEvent(new Event('load'));
+    await settle();
+    expect(drawn(root)).toEqual(['bloque:01', 'en línea:02']);
+  });
+
   it('montado siempre: la vista de impresión (una copia del editor) sale con el dibujo de cada foto anotada', async () => {
     const { doc, article } = mountPage();
     for (const n of [1, 2, 3]) annotate(doc, n);

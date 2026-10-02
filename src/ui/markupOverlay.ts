@@ -23,6 +23,16 @@ function urlOf(img: HTMLImageElement): string | null {
   return img.closest('[data-content-type="image"][data-url]')?.getAttribute('data-url') ?? null;
 }
 
+/**
+ * La imagen no muestra la foto: una tarjeta de la cola (sin copia en el dispositivo, borrada, de otro proyecto: un SVG
+ * `data:`, como en inlinePhotoSize.ts) o una imagen que no cargó. Ahí no se dibuja: las flechas taparían la leyenda de
+ * la tarjeta en otra proporción (auditoría O1). Cuando llega la foto, el cambio de `src` o su `load` la vuelve a dibujar.
+ */
+export function showsNoPhoto(img: HTMLImageElement): boolean {
+  if (img.src.startsWith('data:image/svg')) return true;
+  return img.complete && img.naturalWidth === 0 && !!img.getAttribute('src');
+}
+
 /** El `<svg>` de las anotaciones que ya tiene esa caja, o `null`. */
 const svgIn = (host: Element): SVGSVGElement | null => {
   for (const child of host.children) if (child instanceof SVGSVGElement && child.classList.contains('sd-markup')) return child;
@@ -70,7 +80,7 @@ export function attachMarkupOverlay(root: HTMLElement, map: Y.Map<unknown>): Mar
       const fileId = mediaIdOf(urlOf(img));
       const photo = fileId ? photos.get(fileId) : undefined;
       let svg = svgIn(host);
-      if (!photo) {
+      if (!photo || showsNoPhoto(img)) {
         svg?.remove();
         continue;
       }
@@ -115,7 +125,14 @@ export function attachMarkupOverlay(root: HTMLElement, map: Y.Map<unknown>): Mar
         }
       })
     : null;
-  mutations?.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-url'] });
+  // `src`: la cola cambia la tarjeta por la foto (o al revés) en la misma imagen.
+  mutations?.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-url', 'src'] });
+  // Una imagen que termina de cargar o falla (no burbujean: se escuchan en la captura).
+  const onImage = (e: Event) => {
+    if (e.target instanceof HTMLImageElement) schedule();
+  };
+  root.addEventListener('load', onImage, true);
+  root.addEventListener('error', onImage, true);
 
   // Una foto que cambia de tamaño en pantalla: el grosor mínimo (1 px) se vuelve a calcular.
   const resizes = typeof ResizeObserver === 'function'
@@ -140,6 +157,8 @@ export function attachMarkupOverlay(root: HTMLElement, map: Y.Map<unknown>): Mar
       map.unobserveDeep(onChange);
       mutations?.disconnect();
       resizes?.disconnect();
+      root.removeEventListener('load', onImage, true);
+      root.removeEventListener('error', onImage, true);
     },
   };
 }

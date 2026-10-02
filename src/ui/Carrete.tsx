@@ -677,8 +677,10 @@ export function Carrete({ items, start, loader, online, onClose, markup = null }
               onError={onFullError(it, v)}
             />
           )}
-          {/* Las anotaciones, en la misma caja que la foto (ya tiene su proporción y su zoom). */}
-          {markup && it.mediaId && sized && v.preview && v.kind === 'image' && !markupHidden && (
+          {/* Las anotaciones, en la misma caja que la foto (ya tiene su proporción y su zoom); nunca sobre la tarjeta
+              de la cola (un SVG `data:`: sin copia en el dispositivo, borrada), salvo que ya se vea el original. */}
+          {markup && it.mediaId && sized && v.preview && v.kind === 'image' && !markupHidden &&
+            (!v.preview.startsWith('data:image/svg') || (showFull && v.fullShown)) && (
             <CarreteMarkup map={markup} fileId={it.mediaId} size={sized} />
           )}
         </div>
@@ -756,6 +758,7 @@ export function Carrete({ items, start, loader, online, onClose, markup = null }
           <button
             className="carrete-btn carrete-markup-toggle"
             aria-label={tr(markupHidden ? 'carrete.showMarkup' : 'carrete.hideMarkup')}
+            aria-pressed={markupHidden}
             onClick={() => setMarkupHidden((h) => !h)}
           >
             {markupHidden ? <EyeIcon size={20} /> : <EyeOffIcon size={20} />}
