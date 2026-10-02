@@ -87,7 +87,7 @@ const ATTACH_PREVIEW = '0.091';
 /** Reemplazar en todo el proyecto (Doc_Buscar.md, "Reemplazar en el proyecto"). */
 const REPLACE_PROJECT = '0.094';
 /** El aviso de lo que escribiste en algo que otro borró (roadmap B.16, Doc_Sincronizacion.md): la versión se pone al publicar. */
-const REMOVED_WRITING = '0.0XX';
+const REMOVED_WRITING = '0.095';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
