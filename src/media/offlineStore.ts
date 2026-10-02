@@ -250,11 +250,16 @@ export async function readOfflineView(db: MediaDb, id: string): Promise<Blob | n
   return (await db.get('thumbs', offviewKey(id))) ?? null;
 }
 
-/** Anota cuándo se usó (solo si ya hay una entrada: los originales propios no la tienen en esta entrega). */
-export async function touchCopy(db: MediaDb, id: string, now: number): Promise<void> {
+/**
+ * Anota cuándo se usó. Si no hay entrada, la crea solo con `create` (un original propio: su entrada no tiene copias,
+ * solo `usedAt`, para ordenar qué ofrecer liberar primero, sección 5.5).
+ */
+export async function touchCopy(db: MediaDb, id: string, now: number, create = false): Promise<void> {
   const tx = db.transaction('meta', 'readwrite');
-  const entry = (await tx.store.get(copyKey(id))) as CopyEntry | undefined;
-  if (entry) await tx.store.put({ ...entry, usedAt: now }, copyKey(id));
+  const key = id.toLowerCase();
+  const entry = (await tx.store.get(copyKey(key))) as CopyEntry | undefined;
+  if (entry) await tx.store.put({ ...entry, usedAt: now }, copyKey(key));
+  else if (create) await tx.store.put({ id: key, usedAt: now } satisfies CopyEntry, copyKey(key));
   await tx.done;
 }
 
@@ -307,6 +312,8 @@ export async function dropCopy(db: MediaDb, id: string, guard: DropGuard = {}): 
     if (wanted.orig) wantOrig = false;
     if (wanted.view) wantView = false;
   }
+  // Nada que borrar (o solo la fecha de uso de un original propio): la entrada queda como está.
+  if (!(wantOrig && entry.orig) && !(wantView && entry.view)) return stop();
   let freed = 0;
   if (wantOrig && entry.orig) {
     for (const p of entry.orig.parts) {

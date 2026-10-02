@@ -11,6 +11,37 @@ vieja; *Also sync in this workspace…*; la clave de *Voice* viaja en el mismo s
 *Enter your passphrase to update it here*; la ventana de salir cuenta las notas de voz. Sin migración.
 [ Clave sincronizada S2 - cambiar la frase, solo en esta pestaña, copia más vieja, otros workspaces, la clave de Voice y las notas de voz al salir ]
 
+v0.141 :
+
+Exportar, entrega 3: volver a Shot Docs desde el zip. El zip guardaba lo necesario para volver, pero nada lo leía.
+*Import Shot Docs archive…* (selector de proyectos, dueño y admins) lee el zip por partes (`zipReader.ts`: CRC, Zip64,
+*deflate*, rechaza `..` y rutas absolutas) y crea siempre un proyecto nuevo: el árbol en orden, ajustes de hoja, marcas
+de plantilla con los ids nuevos, los bloques del JSON revisados contra el esquema (`archiveBlocks.ts`), el colapsado
+para todos, las anotaciones (el zip ahora las exporta) y los archivos por `media.add`; sin original, la vista JPEG de
+la foto o su nombre. Los comentarios vuelven con `import_comment` e ids derivados del proyecto nuevo, a nombre de quien
+importa solo si exportó él; piden la migración `20261026120000_comentarios_archivo.sql` (aplicada, versión 18). Si
+se corta, sigue sin duplicar.
+[ Exportar 3 - volver a Shot Docs desde el zip como proyecto nuevo, con anotaciones, plantillas y comentarios ]
+
+v0.140 :
+
+Deshacer en el orden en que editaste (P.26), entrega 1. La pila de ⌘Z de cada página moría al cambiar de página: el
+editor se desmontaba y y-prosemirror destruía su `UndoManager`. Ahora una línea de tiempo por proyecto y pestaña
+(`undoTimeline.ts`) guarda las listas de Yjs al irse, retiene el documento (`docs.open`) y se las pasa al editor nuevo
+sin parchear y-prosemirror. ⌘Z y ⌘⇧Z (`undoTimelineUi.ts`)
+siguen el orden entre páginas: si lo último fue en otra, la app va ahí, lo deshace a la vista y avisa con *Back*. Un paso
+por vez, la excepción de Yjs con dos personas atrapada (B.22), topes de 20 páginas y 1000 pasos. Deshacer un renglón
+propio ya no borra lo que otro escribió adentro (pasaba también antes). El reemplazo sigue igual (entrega 2).
+
+Copias locales, entrega 2 (P.10, D-25). Las fotos y los videos agregados en un dispositivo ocupaban lugar para siempre:
+la entrega 1 no los liberaba. Ahora *Free up* (aviso del tope, *Storage on this device* o un archivo nuevo que no
+entró) los libera con el sí de la persona, con red y un portero con `/verify`, subidos hace 14 días o más, sin marca
+que los pida y con la base y Drive confirmando el mismo archivo (id, peso, marca y MD5). `freeOwn`, la única que borra
+un original, repite todo en su transacción; queda la miniatura y lo que no se libera se dice con su motivo. Si una
+restauración lo vuelve a la cola, se enlaza sin bytes: el portero lo busca por la marca `sdFile` (también antes de
+abrir una subida, que sigue igual si la búsqueda falla). Hacer lugar sin preguntar nunca toca un original.
+[ Deshacer en orden entrega 1 y copias locales entrega 2 - ⌘Z y ⌘⇧Z entre páginas, y liberar los originales agregados en el dispositivo con Drive confirmado ]
+
 v0.139 :
 
 **Dictar al reporte, entregas V2 y V3** (P.27): sin red, *Save for later* solo dejaba la nota en el borrador de su

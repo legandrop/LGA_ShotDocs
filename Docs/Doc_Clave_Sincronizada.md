@@ -796,7 +796,7 @@ y que `signOut({ scope: 'others' })` corte de verdad otro dispositivo (los tres 
   long to sync.* (no se sube sin *Voice* en silencio).
 
 **Probado.** Vitest: 13 pruebas de los pasos (`keySyncS2.test.ts`) y 11 de la ventana (`keySyncS2Ui.test.tsx`), más las
-de S1 sin cambios; la suite entera, 3431. 22 mutantes de las guardas (Change passphrase sin abrir antes o subiendo la
+de S1 sin cambios; la suite entera, 3541 con `main` v0.141 unido. 22 mutantes de las guardas (Change passphrase sin abrir antes o subiendo la
 clave del dispositivo, la copia más vieja, el `savedAt` sin los conocidos, *Keep the key* que guarda igual, las copias de
 otros workspaces, *Also sync* sin comparar, *Forgot it?* con la copia cambiada, la regla 6 y la 5 en *Voice*, el 401
 siempre, salir borrando sin la casilla, etc.), los 22 detectados. Recorrido sin ventana con dos perfiles, dos tablas

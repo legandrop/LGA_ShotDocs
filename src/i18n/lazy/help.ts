@@ -166,8 +166,8 @@ export const help = {
   },
   'help.undo.title': { en: "Undo", es: "Deshacer" },
   'help.undo.text': {
-    en: "{undo} undoes, {redo} redoes. Deleting blocks, a section or the whole page is always a single undo step.",
-    es: "{undo} deshace, {redo} rehace. Borrar bloques, una sección o la página entera es siempre un solo paso de deshacer.",
+    en: "{undo} undoes, {redo} redoes, in the order you edited across the whole project: if your last change was on another page, the app takes you there and undoes it in view (Back returns you). It keeps working after you switch pages, until you reload. Deleting blocks, a section or the whole page is always a single undo step. Renaming, moving or trashing pages isn't undone this way.",
+    es: "{undo} deshace, {redo} rehace, en el orden en que editaste en todo el proyecto: si lo último fue en otra página, la app te lleva y lo deshace a la vista (Volver te devuelve). Sigue andando después de cambiar de página, hasta que recargues. Borrar bloques, una sección o la página entera es siempre un solo paso de deshacer. Renombrar, mover o mandar páginas a la papelera no se deshace así.",
   },
 
   // --- Fotos y videos ---
@@ -464,8 +464,8 @@ export const help = {
   },
   'help.storageDevice.title': { en: "Storage on this device", es: "Espacio en este dispositivo" },
   'help.storageDevice.text': {
-    en: "Storage on this device, in the account menu, shows how much Shot Docs keeps here and what is available offline. Copies of files already in Drive are kept up to a limit you choose (2 GB by default); past it, the app asks before removing the ones opened least recently. Pages marked offline, photos added on this device and anything not uploaded yet are never removed to make room.",
-    es: "Espacio en este dispositivo, en el menú de la cuenta, muestra cuánto guarda Shot Docs acá y qué está disponible sin conexión. Las copias de archivos que ya están en Drive se guardan hasta un tope que elegís (2 GB de fábrica); pasado el tope, la app pregunta antes de sacar las que hace más que no se abren. Lo marcado sin conexión, las fotos agregadas en este dispositivo y lo que todavía no se subió nunca se sacan para hacer lugar.",
+    en: "Storage on this device, in the account menu, shows how much Shot Docs keeps here and what is available offline. Copies of files already in Drive are kept up to a limit you choose (2 GB by default); past it, the app asks before removing the ones opened least recently. Photos, videos and other files added on this device can be freed too, with a connection, 14 days after they were uploaded and only after Drive confirms it has the same file; the thumbnail stays and the original opens from Drive. Pages marked offline and anything not uploaded yet are never removed.",
+    es: "Espacio en este dispositivo, en el menú de la cuenta, muestra cuánto guarda Shot Docs acá y qué está disponible sin conexión. Las copias de archivos que ya están en Drive se guardan hasta un tope que elegís (2 GB de fábrica); pasado el tope, la app pregunta antes de sacar las que hace más que no se abren. Las fotos, los videos y los demás archivos agregados en este dispositivo también se pueden liberar, con conexión, 14 días después de subirlos y solo después de que Drive confirma que tiene el mismo archivo; la miniatura queda y el original se abre desde Drive. Lo marcado sin conexión y lo que todavía no se subió nunca se sacan.",
   },
   'help.removedWriting.title': { en: "When someone deletes what you were writing in", es: "Cuando alguien borra donde estabas escribiendo" },
   'help.removedWriting.text': {
@@ -503,6 +503,11 @@ export const help = {
   'help.exportZip.text': {
     en: "In ⋯ › Export… or Export project…, choose Zip — to archive: a folder for each page with the page to open in any browser (no app or connection needed), its text as Markdown, its photos and files, and the comments with names, never email addresses. Every photo is there as a JPEG you can see; tick Original photos, Attachments and Videos to also get the originals from Drive (the window shows how much each weighs). The zip also keeps what Shot Docs needs to import it again later. Deleted text, removed photos and pages in the trash are never included. Only the workspace owner and admins can export a zip, and only from a computer; on a phone, export the PDF.",
     es: "En ⋯ › Exportar… o Exportar proyecto…, elegí Zip — para archivar: una carpeta por página con la página para abrir en cualquier navegador (sin la app ni conexión), su texto en Markdown, sus fotos y archivos, y los comentarios con nombres, nunca correos. Cada foto va como una JPEG que se ve; tildá Fotos originales, Adjuntos y Videos para sumar los originales del Drive (la ventana dice cuánto pesa cada cosa). El zip guarda además lo que Shot Docs necesita para volver a importarlo. Lo borrado, las fotos sacadas y las páginas de la papelera no salen nunca. Solo el dueño y los admins del workspace exportan un zip, y desde una computadora; en el teléfono, exportá el PDF.",
+  },
+  'help.importArchive.title': { en: "Import a Shot Docs archive", es: "Importar un archivo de Shot Docs" },
+  'help.importArchive.text': {
+    en: "To bring back a project you exported as a zip, open the project list and choose Import Shot Docs archive…, then the zip (or, on a computer, its unzipped folder). It always becomes a new project, never on top of one that exists: pages in the same order with their sheet sizes, blocks, collapsed headings, photo annotations, template marks, comments with their names and dates, and photos and files, which upload to this workspace's Drive. A photo whose original was left out comes back from its preview; a video or file that is not in the zip keeps its name in its place. If it stops, choose the same zip again and Resume. Only the workspace owner and admins can import.",
+    es: "Para volver a traer un proyecto que exportaste como zip, abrí la lista de proyectos y elegí Importar archivo de Shot Docs…, y después el zip (o, en una computadora, su carpeta descomprimida). Siempre entra como un proyecto nuevo, nunca encima de uno que existe: las páginas en el mismo orden con sus hojas, los bloques, los títulos colapsados, las anotaciones de las fotos, las marcas de plantilla, los comentarios con sus nombres y fechas, y las fotos y los archivos, que se suben al Drive de este workspace. Una foto sin su original vuelve desde su vista; un video o un archivo que no está en el zip deja su nombre en su lugar. Si se corta, elegí el mismo zip otra vez y Seguir. Solo el dueño y los admins del workspace pueden importar.",
   },
   'help.pdf.title': { en: "PDF and printing", es: "PDF e impresión" },
   'help.pdf.text': {

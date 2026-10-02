@@ -1117,15 +1117,56 @@ export class Portero {
       const linked = await this.linkFile(who, file, rec.drive);
       return { status: 'done', file: rec.drive, linked };
     }
+    // El portero no lo recuerda (perdió `file:<id>`, o lo subió otra instancia), pero puede estar en Drive con la
+    // marca de este archivo (Doc_Copias_Locales.md, sección 10, entrega 2): se busca por la marca antes de abrir una
+    // subida (no queda dos veces en Drive) y antes de responder `unknown` (una copia liberada en el dispositivo, después
+    // de restaurar la base, se vuelve a enlazar sin mandar bytes).
+    const marked = await this.findMarked(file, size);
+    if (marked && marked !== 'failed') {
+      const linked = await this.linkFile(who, file, marked);
+      return { status: 'done', file: marked, linked };
+    }
     // La app solo pregunta si el portero recuerda la subida (la copia del dispositivo se liberó): sin bytes que
-    // mandar, no se crea la carpeta del día ni se abre una sesión de Drive que quedaría abandonada.
-    if (body.only === 'known') return { status: 'unknown' };
+    // mandar, no se crea la carpeta del día ni se abre una sesión de Drive que quedaría abandonada. Si la búsqueda
+    // falló no se sabe: 502 (la app vuelve a preguntar), nunca `unknown`.
+    if (body.only === 'known') {
+      if (marked === 'failed') throw new HttpError(502, 'Could not look for the file in Google Drive.', 'drive_failed');
+      return { status: 'unknown' };
+    }
+    // Una subida con bytes sigue como antes de la búsqueda aunque Drive no la haya contestado (o la rechace): la
+    // búsqueda solo evita un duplicado, y una subida cortada por ella sería peor.
 
     const folder = await this.dayFolder(media, day);
     const name = (typeof body.name === 'string' && body.name ? body.name : media.name || 'file').slice(0, 250);
     const mime = media.mime || (typeof body.mime === 'string' && body.mime) || 'application/octet-stream';
     const meta = { name, parents: [folder], appProperties: { sdFile: file } };
     return { uploadId: await this.openUpload(who, meta, mime, size, file) };
+  }
+
+  /**
+   * El archivo de Drive que lleva la marca de este archivo de la app (`appProperties.sdFile`), fuera de la papelera
+   * y con el mismo peso, o `null`. Con `drive.file`, Drive solo devuelve lo que creó la app. Un pedido. `failed` si
+   * Drive no contestó bien o rechazó la búsqueda (quien llama decide: una subida sigue igual).
+   */
+  private async findMarked(file: string, size: number): Promise<DriveFile | null | 'failed'> {
+    const q = `appProperties has { key='sdFile' and value=${quoted(file)} } and trashed = false and mimeType != ${quoted(FOLDER_MIME)}`;
+    let found: { id?: unknown; name?: unknown; mimeType?: unknown; size?: unknown }[];
+    try {
+      const res = await this.drive(`/files?${new URLSearchParams({ q, fields: 'files(id,name,mimeType,size)', pageSize: '10' })}`);
+      if (!res.ok) return 'failed';
+      found = ((await res.json()) as { files?: typeof found }).files ?? [];
+    } catch {
+      return 'failed';
+    }
+    // Del mismo peso: una subida de Drive recién crea el archivo al terminar, así que uno marcado está entero.
+    const twin = found.find((f) => typeof f.id === 'string' && Number(f.size) === size);
+    if (!twin) return null;
+    return {
+      id: twin.id as string,
+      name: typeof twin.name === 'string' ? twin.name : '',
+      mimeType: typeof twin.mimeType === 'string' ? twin.mimeType : '',
+      size,
+    };
   }
 
   private async openUpload(who: Who, meta: object, mime: string, size: number, file?: string): Promise<string> {

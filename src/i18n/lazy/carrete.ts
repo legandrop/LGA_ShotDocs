@@ -59,6 +59,10 @@ export const carrete = {
     en: "The full photo couldn't be loaded: {reason}",
     es: "La foto completa no se pudo cargar: {reason}",
   },
+  'carrete.freedHere': {
+    en: "The copy on this device was freed to save space; it's in Drive.",
+    es: "La copia de este dispositivo se liberó para hacer lugar; está en Drive.",
+  },
   'carrete.offlineFile': {
     en: "You're offline, and this file isn't on this device. You can open or download it when you're back online.",
     es: "Estás sin conexión, y este archivo no está en este dispositivo. Vas a poder abrirlo o bajarlo cuando vuelva la conexión.",

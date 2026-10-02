@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import type { CodaFolder, ImportProgress, ImportResult, Resumable } from './codaImport';
+import type { ArchiveImportResult, ArchiveResumable, ShotDocsArchive } from './shotdocsImport';
 
 // El estado de "Importar de Coda", afuera del diálogo: uno por workspace abierto (por su árbol). Así la
 // importación y su resultado no dependen de quién dibuja el diálogo (el selector de proyectos se desmonta
@@ -7,10 +8,19 @@ import type { CodaFolder, ImportProgress, ImportResult, Resumable } from './coda
 // (`ImportCodaHost`) y la app sabe que hay una importación en curso para no cerrarse sin preguntar
 // (`beforeunload`, Workspace.tsx) ni cambiar de workspace (`useLeaveGuard`). Este archivo va en la primera
 // carga: solo tipos de codaImport.ts, nada de lo que pesa.
+//
+// La misma importación sirve para volver a Shot Docs desde un zip exportado (`kind: 'archive'`, shotdocsImport.ts):
+// una sola por workspace a la vez, con las mismas guardas (no cerrar la app, no cambiar de workspace, la otra pestaña).
 
 export interface ImportJobState {
   /** El diálogo está abierto. */
   open: boolean;
+  /** Qué diálogo: la importación de Coda o la de un archivo de Shot Docs. */
+  kind: 'coda' | 'archive';
+  /** El archivo elegido (`kind: 'archive'`), lo que quedó de una importación cortada de él, y su resultado. */
+  archive: ShotDocsArchive | null;
+  archiveResumable: ArchiveResumable | null;
+  archiveResult: ArchiveImportResult | null;
   folder: CodaFolder | null;
   name: string;
   /** Una importación anterior de este doc que se cortó y se puede seguir. */
@@ -24,6 +34,10 @@ export interface ImportJobState {
 
 const EMPTY: ImportJobState = {
   open: false,
+  kind: 'coda',
+  archive: null,
+  archiveResumable: null,
+  archiveResult: null,
   folder: null,
   name: '',
   resumable: null,
@@ -49,8 +63,10 @@ export class ImportJob {
     for (const fn of this.listeners) fn();
   }
 
-  show(): void {
-    this.set({ open: true });
+  show(kind: ImportJobState['kind'] = 'coda'): void {
+    // Con una importación en curso, el diálogo que se abre es el de esa importación.
+    if (this.state.running) this.set({ open: true });
+    else this.set({ ...EMPTY, open: true, kind });
   }
 
   /** Cierra el diálogo y olvida lo elegido. Con una importación en curso no hace nada. */
@@ -66,16 +82,30 @@ export class ImportJob {
    * el control lo sepa (`importingElsewhere`).
    */
   async run(task: (onProgress: (p: ImportProgress) => void) => Promise<ImportResult>, options: { beacon?: string } = {}): Promise<void> {
+    await this.runTask(task, (result) => ({ result }), this.state.folder?.manifest.pages.length ?? 0, options);
+  }
+
+  /** Lo mismo para un archivo de Shot Docs: el resultado queda en `archiveResult`. */
+  async runArchive(task: (onProgress: (p: ImportProgress) => void) => Promise<ArchiveImportResult>, options: { beacon?: string } = {}): Promise<void> {
+    await this.runTask(task, (archiveResult) => ({ archiveResult }), this.state.archive?.manifest.pages.length ?? 0, options);
+  }
+
+  private async runTask<R>(
+    task: (onProgress: (p: ImportProgress) => void) => Promise<R>,
+    done: (result: R) => Partial<ImportJobState>,
+    total: number,
+    options: { beacon?: string },
+  ): Promise<void> {
     if (this.state.running) return;
     const mark = () => options.beacon && writeBeacon(options.beacon, String(Date.now()));
     mark();
-    this.set({ running: true, error: null, result: null, progress: { done: 0, total: this.state.folder?.manifest.pages.length ?? 0, page: '' } });
+    this.set({ running: true, error: null, result: null, archiveResult: null, progress: { done: 0, total, page: '' } });
     try {
       const result = await task((progress) => {
         mark();
         this.set({ progress });
       });
-      this.set({ running: false, result });
+      this.set({ running: false, ...done(result) });
     } catch (err) {
       this.set({ running: false, error: err instanceof Error ? err.message : String(err) });
     } finally {

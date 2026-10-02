@@ -447,7 +447,8 @@ function Comment({ comment, me, canComment, canDeleteAny }: { comment: CommentVi
             data-tip={comment.importedBy ? tr('comments.importedBy', { name: nameOf(comments, comment.importedBy, me, tr) }) : undefined}
             data-tip-plain
           >
-            {tr('comments.importedFrom', { source: sourceName(comment.importedFrom) })}
+            {/* Lo que volvió de un zip exportado (Docs/Doc_Exportar.md, sección 3): "de un archivo". */}
+            {comment.importedFrom === 'shotdocs' ? tr('comments.importedArchive') : tr('comments.importedFrom', { source: sourceName(comment.importedFrom) })}
           </span>
         )}
         {comment.editedAt && <span className="comment-edited">{tr('comments.edited')}</span>}

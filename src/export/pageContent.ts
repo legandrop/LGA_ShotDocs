@@ -1,6 +1,9 @@
 import { BlockNoteEditor, type Block } from '@blocknote/core';
 import { yXmlFragmentToBlocks } from '@blocknote/core/yjs';
 import * as Y from 'yjs';
+import { PHOTO_MARKUP_MAP } from '../media/markup';
+import { snapshotMarkup, type CopiedPhoto } from '../media/markupClipboard';
+import { mediaIdOf } from '../media/queue';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { SHARED_COLLAPSE_MAP } from '../ui/collapseEditor';
 import { editorSchemaOptions } from '../ui/editorSchema';
@@ -19,6 +22,25 @@ export interface PageContent {
   collapsedForAll: string[];
   /** Lo que esta versión no conoce (una página de una versión más nueva), o `null`. Sale lo que se pudo leer. */
   unknown: string | null;
+  /**
+   * Las anotaciones de las fotos que están en los bloques (el mapa `photoMarkup`, P.20), para volver (entrega 3): las
+   * de una foto sacada de la página no salen (solo los valores vigentes de las fotos que se ven).
+   */
+  photoMarkup: CopiedPhoto[];
+}
+
+/** Los ids de los archivos (`sdmedia://`) que usan los bloques, en orden y sin repetir (también en línea y en celdas). */
+export function mediaIdsInBlocks(blocks: unknown, out: string[] = []): string[] {
+  if (Array.isArray(blocks)) for (const b of blocks) mediaIdsInBlocks(b, out);
+  else if (blocks && typeof blocks === 'object') {
+    for (const [k, v] of Object.entries(blocks)) {
+      if (k === 'url' && typeof v === 'string') {
+        const id = mediaIdOf(v);
+        if (id && !out.includes(id)) out.push(id);
+      } else if (typeof v === 'object') mediaIdsInBlocks(v, out);
+    }
+  }
+  return out;
 }
 
 let parser: BlockNoteEditor<any, any, any> | null = null;
@@ -56,7 +78,8 @@ export function readPageContent(doc: Y.Doc): PageContent {
     if (value === true && ids.has(key)) collapsedForAll.push(key);
   });
   collapsedForAll.sort();
-  return { blocks, collapsedForAll, unknown };
+  const photoMarkup = snapshotMarkup(doc.getMap<unknown>(PHOTO_MARKUP_MAP), mediaIdsInBlocks(blocks));
+  return { blocks, collapsedForAll, unknown, photoMarkup };
 }
 
 /** Lo mismo desde un update guardado (para las pruebas y para quien tiene los bytes y no un documento). */

@@ -70,6 +70,8 @@ interface View {
   fullShown: boolean;
   /** La vista previa es la versión grande guardada en el dispositivo (para el aviso sin red). */
   large: boolean;
+  /** El original agregado en este dispositivo se liberó (para el aviso sin red). */
+  freed?: boolean;
   /** Es un adjunto (ver `AttachmentView`), o `null`. */
   file: AttachmentView | null;
   /** La dirección para abrir el adjunto en otra pestaña: `undefined` mientras se prepara, `null` si no se puede. */
@@ -341,7 +343,7 @@ export function Carrete({ items, start, loader, online, onClose, markup = null, 
       const it = items[i];
       const known = viewsRef.current[it.url];
       if (known?.preview && (known.kind || known.file)) continue;
-      void loader.preview(it).then((p) => patch(it.url, { kind: p.kind, name: p.name, preview: p.preview, large: !!p.large, file: p.file ?? null }));
+      void loader.preview(it).then((p) => patch(it.url, { kind: p.kind, name: p.name, preview: p.preview, large: !!p.large, freed: !!p.freed, file: p.file ?? null }));
     }
   }, [index, count, items, loader, patch, online]);
 
@@ -874,22 +876,25 @@ function settled(v: View): View {
 
 /** El aviso bajo la foto o el video, si hace falta uno. */
 export function noticeFor(
-  view: Pick<View, 'kind' | 'state' | 'preview' | 'error'> & { large?: boolean; file?: AttachmentView | null },
+  view: Pick<View, 'kind' | 'state' | 'preview' | 'error'> & { large?: boolean; freed?: boolean; file?: AttachmentView | null },
   name: string,
   tr: Translate = current,
 ): string | null {
   const video = view.kind === 'video';
   if (view.file) {
-    if (view.state === 'offline') return tr('carrete.offlineFile');
+    if (view.state === 'offline') return tr('carrete.offlineFile') + (view.freed ? ` ${tr('carrete.freedHere')}` : '');
     if (view.state === 'failed') return view.error ? tr('carrete.failedFileReason', { reason: view.error }) : tr('carrete.failedFile');
     return null;
   }
   switch (view.state) {
-    case 'offline':
-      if (!view.kind && !view.preview) return tr('carrete.offlineMissing');
-      if (video) return tr('carrete.offlineVideo');
+    case 'offline': {
+      // Un original agregado acá que se liberó para hacer lugar: se dice, para que no parezca que se perdió.
+      const freed = view.freed ? ` ${tr('carrete.freedHere')}` : '';
+      if (!view.kind && !view.preview) return tr('carrete.offlineMissing') + freed;
+      if (video) return tr('carrete.offlineVideo') + freed;
       // Sin red se ve lo que hay en el dispositivo: la versión grande (la nítida guardada) o la miniatura.
-      return tr(view.large ? 'carrete.offlinePhotoLarge' : 'carrete.offlinePhoto');
+      return tr(view.large ? 'carrete.offlinePhotoLarge' : 'carrete.offlinePhoto') + freed;
+    }
     case 'unplayable':
       return video ? tr('carrete.unplayableVideo') : tr('carrete.unplayablePhoto');
     case 'unsupported':
