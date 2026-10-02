@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.130 :
+v0.0XX :
 
 Arreglos de las menciones, entrega 2 (lo que dejó su auditoría). **Sin prueba:** el paso de compartir desde la mención
 por `useShareGate` (sube lo pendiente antes y arma las bases después) no tenía ninguna; había 2 mutantes vivos. Ahora 5

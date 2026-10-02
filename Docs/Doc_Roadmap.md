@@ -427,7 +427,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   nada; una campana con las no leídas que pregunta cada 60 segundos (sin Realtime); sin red con la cola de siempre;
   los visitantes del link no mencionan; las menciones de Coda se ven como `@Nombre`. Entregas: 1 (base, `@`, campana,
   sin red), 2 (compartir desde la mención, marcas en el árbol y en el ícono), 3 (correo, grupo C).
-  De la auditoría de la entrega 2 (ninguna pierde datos ni da acceso de más), **resuelto en v0.130:** la prueba de
+  De la auditoría de la entrega 2 (ninguna pierde datos ni da acceso de más), **resuelto en v0.0XX:** la prueba de
   compartir con `useShareGate` (O1, ya se puede prender D14), la lista del `@` tras Esc o *Cancel* (O2) y la pregunta
   que aclara que se comparte en el acto (O5). Se dejan, con su motivo: compartir desde la mención en un proyecto
   archivado, como con *Share* (O3), y que `share_for_mention` no mire la versión mínima, como `public.share` (O4).
