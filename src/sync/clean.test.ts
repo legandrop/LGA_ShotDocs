@@ -516,6 +516,92 @@ describe('compartir, invitar y mover', () => {
   });
 });
 
+describe('las cuentas (clean.ts) y lo guardado en el dispositivo', () => {
+  it('la comprobación de privacidad rechaza una base sin GC y la de contenido una que no es la del documento', async () => {
+    const { buildCleanBase, checkCleanBase, coversLocal, contentGap, serverSeqFor } = await import('./clean');
+    const src = new Y.Doc({ gc: false });
+    src.getText('t').insert(0, '<t1> <t2> ');
+    const rows = [Y.encodeStateAsUpdate(src)];
+    src.getText('t').delete(5, 5);
+    rows.push(Y.encodeStateAsUpdate(src));
+    const good = buildCleanBase(rows);
+    expect(checkCleanBase(good.base, good.doc)).toBe(null);
+    expect(tokensInBytes([good.base])).toEqual(new Set(['<t1>']));
+    // Sin GC: el texto borrado viaja en la base.
+    expect(checkCleanBase(Y.encodeStateAsUpdate(src), good.doc)).toBe('deleted content');
+    // Otra página: no es la del documento.
+    const other = new Y.Doc();
+    other.getText('t').insert(0, 'otra');
+    expect(checkCleanBase(Y.encodeStateAsUpdate(other), good.doc)).toBe('different');
+    // Una base cubre lo guardado si tiene todo lo de cada autor y sus borrados; una fila suelta, no.
+    expect(coversLocal(rows, good.base)).toBe(true);
+    const more = new Y.Doc();
+    Y.applyUpdate(more, good.base);
+    more.getText('t').insert(0, '<t3> ');
+    expect(coversLocal([Y.encodeStateAsUpdate(more)], good.base)).toBe(false);
+    // "Al día" para quien recibe bases: `clean_seq`; "en preparación" solo sin nada guardado.
+    expect(serverSeqFor({ update_seq: 9, clean_seq: 4 }, true)).toBe(4);
+    expect(serverSeqFor({ update_seq: 9, clean_seq: 4 }, false)).toBe(9);
+    expect(contentGap({ update_seq: 9, clean_seq: 0 }, true, 0)).toBe('preparing');
+    expect(contentGap({ update_seq: 9, clean_seq: 0 }, true, 4)).toBe(null);
+    expect(contentGap({ update_seq: 9, clean_seq: 4 }, true, 3)).toBe('missing');
+    expect(contentGap({ update_seq: 0, clean_seq: 0 }, true, 0)).toBe(null);
+    good.doc.destroy();
+  });
+
+  it('una base no reemplaza lo guardado de un invitado con algo sin subir: se suma y no se pierde nada', async () => {
+    const { server, e1, page, tick } = await setup();
+    await edit(e1, page, add('<t1>'));
+    await share(e1, server, 'g', 'guest', { pageId: page }, 'edit');
+    await e1.engine.syncNow();
+    const g = await device(server, 'g');
+    await g.engine.syncNow();
+    // El invitado escribe sin red: queda sin subir.
+    server.online = false;
+    await edit(g, page, add('<t2>'));
+    await g.engine.syncNow();
+    server.online = true;
+    // Llega una base nueva (bajada a mano, sin subir lo suyo antes).
+    await edit(e1, page, add('<t3>'));
+    await e1.engine.syncNow();
+    tick(25_000);
+    await e1.engine.syncNow();
+    const before = (await stored(g, page)).length;
+    await g.docs.pullPage(page, g.remote);
+    expect((await stored(g, page)).length).toBe(before + 1);
+    expect(visibleTokens(await stored(g, page))).toEqual(new Set(['<t1>', '<t2>', '<t3>']));
+    // Sube lo suyo (su cursor queda por delante de la base: espera una más nueva); la próxima lo reemplaza todo.
+    await g.engine.syncNow();
+    await e1.engine.syncNow();
+    await edit(e1, page, add('<t4>'));
+    await e1.engine.syncNow();
+    tick(25_000);
+    await e1.engine.syncNow();
+    await g.engine.syncNow();
+    expect((await stored(g, page)).length).toBe(1);
+    expect(await text(g, page)).toBe(await text(e1, page));
+  });
+
+  it('un lector: la búsqueda del proyecto y "Available offline" cuentan "en preparación" como sin bajar', async () => {
+    const { server, e1, page } = await setup();
+    await edit(e1, page, add('<t1>'));
+    await e1.engine.syncNow();
+    await share(e1, server, 'v', 'member', { pageId: page }, 'view');
+    const v = await device(server, 'v');
+    await v.engine.syncNow();
+    const row = v.tree.get(page)!;
+    expect(v.tree.serverSeq(row)).toBe(0);
+    expect(v.tree.contentGap(row, 0)).toBe('preparing');
+    await e1.engine.syncNow();
+    await v.engine.syncNow();
+    const after = v.tree.get(page)!;
+    expect(v.tree.serverSeq(after)).toBe(after.clean_seq);
+    expect(v.tree.contentGap(after, (await v.docs.stateOf(page))!.cursor)).toBe(null);
+    // El editor sigue con `update_seq`.
+    expect(e1.tree.serverSeq(e1.tree.get(page)!)).toBe(e1.tree.get(page)!.update_seq);
+  });
+});
+
 describe('versiones y el interruptor', () => {
   it('apagado: todos bajan las filas como hoy y nadie arma nada', async () => {
     const { server, e1, page } = await setup({ clean: false });
@@ -708,9 +794,9 @@ describe('al azar (P7)', () => {
   }, 300_000);
 
   it.each([
-    ['raw', 'el servidor le sirve filas a quien no ve lo borrado'],
-    ['nogc', 'el dispositivo arma sin GC y sin la comprobación'],
-  ] as const)('la mutante %s (%s) da fugas', async (which) => {
+    { which: 'raw' as const, what: 'el servidor le sirve filas a quien no ve lo borrado' },
+    { which: 'nogc' as const, what: 'el dispositivo arma sin GC y sin la comprobación' },
+  ])('la mutante $which ($what) da fugas', async ({ which }) => {
     let leaks = 0;
     for (const seed of SEEDS.slice(0, 3)) {
       if (which === 'nogc') mut.nogc = true;
