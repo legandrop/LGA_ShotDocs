@@ -40,7 +40,7 @@ const UNNOTIFIED_KEY = 'unnotified:';
 /** La versión de la base con `comment_mentions` y sus funciones (20261015120000_menciones.sql). */
 export const MENTIONS_SCHEMA_VERSION = 15;
 /**
- * La versión de la base cuyo `import_comment` acepta el origen `'shotdocs'` (20261021120000_comentarios_archivo.sql):
+ * La versión de la base cuyo `import_comment` acepta el origen `'shotdocs'` (20261026120000_comentarios_archivo.sql):
  * los comentarios que vuelven de un archivo exportado (Docs/Doc_Exportar.md, sección 3).
  */
 export const ARCHIVE_COMMENTS_SCHEMA_VERSION = 18;

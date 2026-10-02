@@ -133,7 +133,7 @@ y el portero); la papelera de archivos (`trashed_files`) no responde a invitados
 
 ### Comentarios que vuelven de un archivo exportado
 
-Migración `20261021120000_comentarios_archivo.sql` (entrega 3 de `Doc_Exportar.md`; **sin aplicar**, `schema_version`
+Migración `20261026120000_comentarios_archivo.sql` (entrega 3 de `Doc_Exportar.md`; **sin aplicar**, `schema_version`
 18): `comments.imported_from` acepta `'shotdocs'` además de `'coda'` (la restricción, que se había creado sin nombre, se
 reemplaza por `comments_imported_from`). La función, los permisos y las vistas no cambian. La app importa los comentarios
 de un zip solo con la base en la 18 o más (`ARCHIVE_COMMENTS_SCHEMA_VERSION`); con una anterior los deja para seguir la
