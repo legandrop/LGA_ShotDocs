@@ -380,6 +380,9 @@ corta, se manda entera otra vez y se vuelve a cortar.
   antes. No cubre un portero que no lee el cuerpo (eso lo corta el vigilante de los bytes) ni uno que se cae sin
   contestar con el cuerpo ya leído (sigue el plazo de la app). Una app anterior no manda `?stall=1` y el portero
   espera como siempre: un `504` sin código lo hubiera tomado como un error que se reintenta en el momento.
+  **Falta medirlo con el Drive real** (auditoría de la entrega 4, O2): qué contesta Google a la pregunta de cuánto
+  llegó mientras todavía cierra un archivo de varios GB. Si dijera `308` con todo recibido, la app mandaría una parte
+  vacía, el portero contestaría `400` y el archivo gastaría un intento hasta *Retry*; nada se pierde ni se duplica.
 - **Se recuerda el plazo que funcionó** (v0.092, `Portero.learn`). Sin eso, detrás del mismo proxy cada archivo
   nuevo volvía a empezar con el plazo corto y se trababa una o más veces antes de pasar. Cuando la respuesta de
   una parte llega después de un minuto o más con el cuerpo ya afuera (`LEARN_FROM_MS`), el cliente anota a qué

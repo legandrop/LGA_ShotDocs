@@ -663,8 +663,9 @@ describe('la cola de las carpetas', () => {
     expect(f.progress('id-o5b')!.state).toBe('done');
   });
 
-  for (const how of ['resume', 'retry'] as const) {
-    it(`pausar durante la espera y después ${how === 'resume' ? 'Resume' : 'Retry'}: la cuenta de trabadas y de esperas vuelve a cero (O5)`, async () => {
+  for (const how of ['resume', 'retry', 'resumeWith'] as const) {
+    const label = how === 'resume' ? 'Resume' : how === 'retry' ? 'Retry' : 'volver a soltar la carpeta';
+    it(`pausar durante la espera y después ${label}: la cuenta de trabadas y de esperas vuelve a cero (O5)`, async () => {
       const fake = fakeFolderPortero();
       let down = true;
       fake.hang(() => down);
@@ -684,13 +685,68 @@ describe('la cola de las carpetas', () => {
       await new Promise((r) => setTimeout(r, 20));
       expect(waits).toEqual([10_000, 20_000]);
       if (how === 'resume') f.resume('id-o5c');
-      else f.retry('id-o5c');
+      else if (how === 'retry') f.retry('id-o5c');
+      else expect(f.resumeWith('id-o5c', sourceOf('Ref', { 'a.jpg': 1, 'b.jpg': 1, 'c.jpg': 1 }))).toBe(3);
       await settle(f, 'id-o5c');
       expect(f.progress('id-o5c')!.state).toBe('done');
       // Después de seguir, la primera espera vuelve a ser la más corta (antes, 40 s).
       expect(waits).toEqual([10_000, 20_000, 10_000]);
     });
   }
+
+  it('la espera porque Drive pidió ir más despacio al abrir las subidas (503 rate) tampoco la corta la vuelta de la red', async () => {
+    const fake = fakeFolderPortero();
+    let once = true;
+    const portero: FolderPortero = {
+      ...fake.portero,
+      folderSessions: async (file, items) => {
+        if (once) {
+          once = false;
+          throw new PorteroError('Google Drive asked to slow down: trying again shortly.', 503, true, 'rate');
+        }
+        return fake.portero.folderSessions(file, items);
+      },
+    };
+    const waits: { ms: number; done: () => void }[] = [];
+    const f = new FolderUploads(null, { portero: () => portero, wait: (ms) => new Promise<void>((done) => void waits.push({ ms, done })) });
+    await f.start('id-o1a', 'page', sourceOf('Ref', { 'a.jpg': 1 }));
+    await until(() => f.progress('id-o1a')!.state === 'waiting');
+    expect(waits.map((w) => w.ms)).toEqual([5000]);
+    f.networkBack();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(f.progress('id-o1a')!.state).toBe('waiting');
+    waits[0]!.done();
+    await settle(f, 'id-o1a');
+    expect(f.progress('id-o1a')!.state).toBe('done');
+  });
+
+  it('pausar con varias esperas a la vez (tres archivos sin red) las despierta a todas y la cola se detiene', async () => {
+    const fake = fakeFolderPortero();
+    const portero: FolderPortero = {
+      ...fake.portero,
+      upload: async (_file, options = {}) => {
+        throw new UploadError('No connection', 0, options.resume ?? null, 0);
+      },
+    };
+    const waits: number[] = [];
+    const f = new FolderUploads(null, {
+      portero: () => portero,
+      // Las esperas no vencen nunca solas: solo pausar las puede soltar.
+      wait: (ms) => {
+        waits.push(ms);
+        return new Promise<void>(() => undefined);
+      },
+    });
+    await f.start('id-o1b', 'page', sourceOf('Ref', { 'a.jpg': 1, 'b.jpg': 1, 'c.jpg': 1 }));
+    await until(() => waits.length === 3);
+    expect(waits).toEqual([15_000, 15_000, 15_000]);
+    expect(f.busy()).toBe(true);
+    f.pause('id-o1b');
+    // Con una sola espera despertada, la vuelta quedaba esperando a los otros dos archivos para siempre.
+    await until(() => !f.busy());
+    expect(f.progress('id-o1b')!.state).toBe('paused');
+    expect(f.progress('id-o1b')!.errors).toEqual([]);
+  });
 
   it('una lista guardada por una versión anterior (sin trabadas) se retoma igual; la carpeta soltada desde el otro sistema se reconoce', async () => {
     const fake = fakeFolderPortero();

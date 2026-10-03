@@ -735,6 +735,14 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
        que no entran en el tope de llamados y en `failed` las que ya no son del árbol, en vez de cortar con `409
        changed`; la app descarta lo suyo y las lista de nuevo. A una app anterior el portero le sigue contestando `409`.
      Probado con relojes simulados y en Chromium contra un portero local que se cuelga o contesta `504 stalled`.
+   - **Queda (BAJO, auditoría de la entrega 4, O2): medir con el portero publicado** un video de varios GB al que
+     Drive tarda más de 90 s en cerrar la última parte. Si Google contestara `308` con todo recibido mientras cierra el
+     archivo, la app mandaría una parte vacía, el portero la rechazaría con `400` y el archivo gastaría un intento hasta
+     *Retry* (nada se pierde ni se duplica). Lo hace Lega con un archivo enorme; si pasa, la app tendría que tomar
+     «todo recibido sin `done`» como «preguntar de nuevo más tarde».
+   - **Queda (informativa, O4):** en las páginas siguientes del listado de varias, el portero vuelve a comprobar las
+     subcarpetas que la app ya descartó (gasta parte del tope de 36 llamados; converge, sin bucle). Arreglo posible:
+     que la app mande cuáles saltear (`skip`).
 12. **Importar de Coda, direcciones sueltas: lo que quedó de v0.069** (`Doc_Importar_Coda.md`, "Direcciones
     sueltas"). **Falta:**
     - **Hecho (v0.071 y v0.087): el anclaje de un comentario** pegado a un renglón con direcciones: un último

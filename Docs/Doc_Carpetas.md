@@ -423,8 +423,22 @@ sueltos) porque es el mismo cliente. Lo que no cubre: un portero que se cae sin 
 (raro: Cloudflare cierra la conexión) sigue esperando el plazo de la app; detalle en `Doc_Portero.md`, "Subidas que
 se traban".
 
+**Lo que queda (BAJO, de la auditoría de la entrega 4):**
+
+- **Medir con el portero publicado y el Drive real (O2):** un archivo de varios GB al que Drive tarda más de 90 s en
+  cerrar la última parte. El portero corta y la app pregunta cuánto llegó: si Drive ya terminó contesta `done` y no se
+  duplica nada; si no, se vuelve a mandar desde lo recibido (los dos casos, probados con un Drive de mentira). Lo que no
+  se sabe es qué contesta Google **mientras** todavía cierra el archivo: si dijera `308` con todo recibido, la app
+  mandaría una parte vacía, el portero la rechazaría con `400` y el archivo gastaría un intento, con el error a la vista
+  hasta *Retry*. No se pierde ni se duplica nada. Es un camino de antes (una respuesta perdida) que el tope de 90 s
+  hace más probable con archivos enormes.
+- **Comprobaciones de más en el listado (O4, informativa):** en una página siguiente el portero vuelve a comprobar
+  también las subcarpetas que la app ya descartó (no sabe cuáles son) y gasta parte de su tope de 36 llamados. Con 40
+  subcarpetas convergió en 2 vueltas; no hay bucle. Si hiciera falta, la app podría mandar cuáles saltear (`skip`).
+
 **Pruebas:** `src/media/folders.test.ts` (la vuelta de la red despierta la espera y la siguiente es más larga; no
-despierta la de Drive que pide ir más despacio; *Pause* y después *Resume* o *Retry* vuelven la espera a 10 s; el
+despierta la de Drive que pide ir más despacio, ni por una subida de la tanda ni por el pedido entero (`503 rate`); *Pause* con tres esperas
+a la vez las despierta a todas; *Pause* y después *Resume*, *Retry* o volver a soltarla vuelven la espera a 10 s; el
 cliente manda `?stall=1` solo en las partes y un `504 stalled` es una trabada sin reintentar, y un `504` sin código
 se sigue reintentando), `src/sync/remoteTimeout.test.ts` (el motor les avisa a las carpetas con el evento `online` y
 cuando la base contesta después de un ciclo sin conexión), `src/media/folderZip.test.ts` (una página siguiente que deja
