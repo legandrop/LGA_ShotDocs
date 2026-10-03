@@ -33,6 +33,7 @@ import { recentForRequest, type AppliedEntry } from './corrections';
 import { applyShotPages, proposeShotPages, undoShotPages, type ShotPageChange, type ShotPageDeps, type ShotPageNote } from './shotPage';
 import { takeDictateLink, useDictateLink } from './dictateLink';
 import { useCommentAccess } from '../ui/CommentsToggle';
+import { useLinkMode } from '../linkMode';
 import './dictation.css';
 
 // La hoja *Dictate to report* (Docs/Doc_Dictado.md, entrega V1, secciones 5 a 8): se escribe la nota (o se dicta con el
@@ -179,7 +180,10 @@ export function DictationPanel({ pageId }: { pageId: string }) {
   const [unchecked, setUnchecked] = useState<Set<number>>(new Set());
   /** Lo propuesto en las páginas de los planos que la persona tildó (destildado de fábrica, DI8). */
   const [extraOn, setExtraOn] = useState<Set<number>>(new Set());
-  const commentAccess = useCommentAccess(pageId);
+  // Quien solo comenta (V4); un visitante de un link público no dicta (la tabla de la sección 7).
+  const access = useCommentAccess(pageId);
+  const linkMode = useLinkMode();
+  const commentAccess = { canComment: access.canComment && !linkMode };
   // El plano activo (V4): fijo entre notas hasta cambiarlo; se pone solo con el plano de lo último aplicado.
   const [activeShot, setActiveShotState] = useState<string | null>(() => loadActiveShot(user.email, workspaceKey, pageId));
   const setActiveShot = (shot: string | null) => {

@@ -10,6 +10,7 @@ import { closeDictation, dictationOpen, isDictateShortcut, openDictation, useDic
 import { useQueuedNotes } from './queue';
 import { useDictateLink } from './dictateLink';
 import { useCommentAccess } from '../ui/CommentsToggle';
+import { useLinkMode } from '../linkMode';
 
 // *Dictate to report* en la app (Docs/Doc_Dictado.md, entrega V1, sección 6): Ctrl/⌘+Alt+Shift+D la abre y la cierra,
 // el botón redondo del teléfono (abajo a la derecha, solo con Editar y la política que lo permite) y la hoja, que se
@@ -114,7 +115,9 @@ export function DictationHost() {
  */
 function DictateFab({ pageId }: { pageId: string }) {
   const perms = usePermissions();
-  const { canComment } = useCommentAccess(pageId);
+  // Con un link público no: el visitante no dicta (Doc_Dictado.md, sección 7).
+  const link = useLinkMode();
+  const canComment = useCommentAccess(pageId).canComment && !link;
   const { workspace, user } = useServices();
   const tr = useT();
   const workspaceKey = workspace.config.localKey || workspace.config.url;
