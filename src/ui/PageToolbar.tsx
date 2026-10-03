@@ -27,6 +27,7 @@ const FILE_ITEMS = new Set(['fileCaptionButton', 'replaceFileButton', 'fileRenam
 import { onlyPhotosSelected, selectedPhotos } from './inlinePhotoSize';
 import { PhotoSizeButtons } from './PhotoToolbar';
 import { TableThumbsButton } from './CellThumbsMenu';
+import { ToolbarTips } from './toolbarTips';
 
 // La barra de formato de la página (PageEditor.tsx). Aparece al elegir texto y también al hacer clic en los
 // puntos de un bloque (BlockSideMenu.tsx, el bloque entero elegido): ahí trae además los colores del bloque (los
@@ -145,7 +146,8 @@ export function BlockColorButton() {
           className="bn-button sd-block-colors"
           data-test="blockColors"
           label={tr('block.colors')}
-          mainTooltip={tr('block.colors')}
+          // El tooltip de la app (D226): el nombre, que el ícono no dice; no tiene atajo.
+          data-tip={tr('block.colors')}
           icon={<ColorSwatch text={colors.textColor} background={colors.backgroundColor} size={20} />}
         />
       </Components.Generic.Menu.Trigger>
@@ -191,23 +193,26 @@ export function PageFormattingToolbar({ items, canComment }: { items: BlockTypeS
   const imageBlock = useChosenImageBlock();
   if (photos === 'only') return null;
   if (imageBlock) return <ImageBlockBar />;
+  // Los botones de BlockNote con el tooltip de la app (D226, toolbarTips.tsx), no con su globo.
   return (
-    <FormattingToolbar blockTypeSelectItems={items}>
-      {getFormattingToolbarItems(items).flatMap((item) =>
-        // Los botones de archivo (leyenda, reemplazar, renombrar, borrar, bajar, vista previa) son de la barra de la
-        // foto; acá no van (D-24: sin leyenda).
-        FILE_ITEMS.has(String(item.key))
-          ? []
-          : item.key === 'createLinkButton'
-              ? [<HideOnBlockSelection key="createLinkButton">{item}</HideOnBlockSelection>]
-              : item.key === 'colorStyleButton'
-                ? [item, <BlockColorButton key="blockColorButton" />, <TableThumbsButton key="tableThumbsButton" />]
-                : [item],
-      )}
-      {photos === 'mixed' && <PhotoSizeButtons key="photoSizeButtons" />}
-      {canComment && <CommentToolbarButton key="comment" />}
-      {/* El asistente (Docs/Doc_Asistente.md, A1): sobre lo elegido. */}
-      <AssistantToolbarButton key="assistant" />
-    </FormattingToolbar>
+    <ToolbarTips>
+      <FormattingToolbar blockTypeSelectItems={items}>
+        {getFormattingToolbarItems(items).flatMap((item) =>
+          // Los botones de archivo (leyenda, reemplazar, renombrar, borrar, bajar, vista previa) son de la barra de la
+          // foto; acá no van (D-24: sin leyenda).
+          FILE_ITEMS.has(String(item.key))
+            ? []
+            : item.key === 'createLinkButton'
+                ? [<HideOnBlockSelection key="createLinkButton">{item}</HideOnBlockSelection>]
+                : item.key === 'colorStyleButton'
+                  ? [item, <BlockColorButton key="blockColorButton" />, <TableThumbsButton key="tableThumbsButton" />]
+                  : [item],
+        )}
+        {photos === 'mixed' && <PhotoSizeButtons key="photoSizeButtons" />}
+        {canComment && <CommentToolbarButton key="comment" />}
+        {/* El asistente (Docs/Doc_Asistente.md, A1): sobre lo elegido. */}
+        <AssistantToolbarButton key="assistant" />
+      </FormattingToolbar>
+    </ToolbarTips>
   );
 }
