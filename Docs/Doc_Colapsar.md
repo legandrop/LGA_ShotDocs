@@ -112,18 +112,21 @@ Decidido (Lega):
   ("…" o "12 bloques"). Tiene el mismo problema del cursor si va adentro del texto; en la capa hay que medir
   dónde termina el renglón. A decidir.
 
-**Tooltips** (con el formato de `Tooltip.tsx`; los textos van en `src/i18n/lazy/editor.ts`):
+**Tooltips** (con el formato de `Tooltip.tsx`; los textos van en `src/i18n/lazy/editor.ts`). Desde D226 (Lega,
+2026-10-03): **un renglón por acción, «gesto o atajo: acción»**; el gesto y el atajo en negrita (blanco), la acción en
+el gris normal del tooltip. Los atajos salen del registro (`collapse` y `collapseEveryone` de `src/ui/shortcuts.ts`);
+en la Mac, ⌘⌥↩ y ⌘⌥⇧↩; en Windows, Ctrl+Alt+Enter y Ctrl+Alt+Shift+Enter.
 
 | Estado | Quien puede editar | Quien solo ve o comenta |
 |---|---|---|
-| Abierto para todos | **Colapsar solo para vos**<br>Shift+clic: para todos | **Colapsar** (solo para vos) |
-| Colapsado solo para vos | **Colapsado solo para vos**<br>Clic: abrir · Shift+clic: colapsar para todos | **Abrir** |
-| Colapsado para todos | **Colapsado para todos**<br>Clic: abrir solo para vos · Shift+clic: abrir para todos | **Abrir** (solo para vos) |
-| Abierto solo para vos (para los demás está colapsado) | **Abierto solo para vos**<br>Clic: colapsar · Shift+clic: abrir para todos | **Colapsar** |
+| Abierto para todos | **Clic o ⌘⌥↩**: colapsar solo para vos<br>**Shift+clic o ⌘⌥⇧↩**: para todos | **Clic o ⌘⌥↩**: colapsar solo para vos |
+| Colapsado solo para vos | **Clic o ⌘⌥↩**: abrir<br>**Shift+clic o ⌘⌥⇧↩**: colapsar para todos | **Clic o ⌘⌥↩**: abrir |
+| Colapsado para todos | **Clic o ⌘⌥↩**: abrir solo para vos<br>**Shift+clic o ⌘⌥⇧↩**: abrir para todos | **Clic o ⌘⌥↩**: abrir solo para vos |
+| Abierto solo para vos (para los demás está colapsado) | **Clic o ⌘⌥↩**: colapsar<br>**Shift+clic o ⌘⌥⇧↩**: abrir para todos | **Clic o ⌘⌥↩**: colapsar |
 
-En inglés: *Collapse just for you / Shift+click: for everyone*, *Collapsed for everyone / Click: open just for
-you · Shift+click: open for everyone*, etc. Colapsado para todos y colapsado para vos **se ven igual**; solo
-cambia el tooltip.
+En inglés: *Click or ⌘⌥↩: collapse just for you / Shift+click or ⌘⌥⇧↩: for everyone*, etc. Quien solo ve o comenta
+ve solo el primer renglón; en una pantalla táctil, sin atajos (*Click: …*). Colapsado para todos y colapsado para vos
+**se ven igual**; solo cambia el tooltip.
 
 **Teléfono y pantallas táctiles** (sin mouse ni Shift): el triángulo **se ve siempre, tenue**, en todos los
 títulos (`pointer: coarse` o el diseño del teléfono, `isPhoneLayout`); un toque colapsa o abre **para vos**;
