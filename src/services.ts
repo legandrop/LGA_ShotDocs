@@ -395,9 +395,10 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser, link
         return db.close();
       }
       // Lo que sobró de un título de más de 500 caracteres va al principio de su página (titleRest.ts).
-      const stopTitleRests = watchTitleRests(tree, docs, (rest) =>
-        notify(t('page.titleRestMoved', { title: cutText(rest.title, 60) || t('common.untitled') })),
-      );
+      const stopTitleRests = watchTitleRests(tree, docs, (rest) => {
+        const short = cutText(rest.title, 60);
+        notify(t('page.titleRestMoved', { title: (short === rest.title ? short : `${short}…`) || t('common.untitled') }));
+      });
       engine.start();
       online = () => engine.getStatus().online;
       mentions?.start();

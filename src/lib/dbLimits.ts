@@ -44,7 +44,12 @@ const WORD_BACKOFF = 60;
  */
 export function splitTitle(text: string): { head: string; rest: string } {
   const cut = splitAtLimit(text, DB_LIMITS.pageTitle);
-  if (!cut.rest || /^\s/.test(cut.rest) || /\s$/.test(cut.head)) return cut;
+  if (!cut.rest) return cut;
+  if (/^\s/.test(cut.rest) || /\s$/.test(cut.head)) {
+    // Ya corta entre palabras: el espacio del borde pasa a lo que sobra (el título no termina en un espacio).
+    const head = cut.head.trimEnd();
+    return head ? { head, rest: text.slice(head.length) } : cut;
+  }
   const space = /\s\S*$/.exec(cut.head);
   if (!space || space.index === 0 || cut.head.length - space.index > WORD_BACKOFF) return cut;
   const head = cut.head.slice(0, space.index).trimEnd();

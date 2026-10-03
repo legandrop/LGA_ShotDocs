@@ -76,6 +76,8 @@ describe('cortar por caracteres de la base', () => {
     const many = splitTitle(words(80));
     expect(codePointLength(many.head)).toBeLessThanOrEqual(500);
     expect(/\S$/.test(many.head) && /^\S/.test(many.rest)).toBe(false);
+    // Si el corte cae justo en un espacio, el título no termina en ese espacio.
+    expect(splitTitle(`${'a'.repeat(499)} bcd`)).toEqual({ head: 'a'.repeat(499), rest: ' bcd' });
     // Sin espacios cerca, corta justo en el tope.
     const solid = 'x'.repeat(800);
     expect(splitTitle(solid)).toEqual({ head: 'x'.repeat(500), rest: 'x'.repeat(300) });

@@ -168,6 +168,7 @@ export function MembersDialog({ onClose }: { onClose: () => void }) {
               type="email"
               required
               placeholder={tr('team.emailPlaceholder')}
+              maxLength={320}
               aria-label={tr('team.email')}
               value={email}
               onChange={(e) => setEmail(e.target.value)}

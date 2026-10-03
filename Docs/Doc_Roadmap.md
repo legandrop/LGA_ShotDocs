@@ -870,6 +870,12 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    900 corridas al azar de la línea de tiempo con el editor, también 300 con otra persona escribiendo y borrando texto,
    no apareció ninguna. Falta: medirla con dos editores borrando y deshaciendo bloques enteros, y ver si se arregla con
    el parche de Yjs o se reporta (`Doc_Deshacer.md`, 16.6 y 17).
+23. **Hecho (v0.0XX): los topes de largo de la base en la app.** Un título de más de 500 caracteres quedaba rechazado
+   para siempre (`pages_title_check`). El árbol corta títulos, nombres de proyecto y claves de orden, lo que sobra del
+   título va al principio de la página y lo ya rechazado vuelve a la cola cortado (`Doc_Sincronizacion.md`, "Topes de
+   largo"). Queda: si alguna vez una clave de orden se rehace en una carpeta donde alguien solo puede crear páginas (no
+   mover las de los demás), esos cambios de las hermanas los rechazaría el servidor (a la vista, con *Retry*); hace falta
+   poner unas 600 páginas en el mismo hueco.
 
 ### C. Esperan a Lega
 
