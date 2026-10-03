@@ -704,6 +704,9 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   PDF (decisión de Lega, ronda 1); también se arregló el botón de comentar del margen, que salía 4 px de la pantalla.
   **Hecho (v0.165):** el botón de comentar mide el margen de la página en el teléfono (20 px, pegado al borde) y ya no
   tapa el final de un renglón largo (medido a 375 y 390 px: sin superposición); el área del dedo sigue de 44 px de alto.
+  **Hecho (restos de la tanda 17):** el contador de comentarios (globo y número) también entra en el margen en el teléfono:
+  pastilla de 20 px con el globo arriba y el número abajo, sin superposición con el texto a 360, 375, 390 y 414 px con 1, 12 y
+  120 comentarios (antes 19,8 a 35,2 px encima); la compu y el PDF no cambian (`Doc_Tabla_Telefono.md`).
   Quedan (chicos, de la auditoría): el botón mide 20 px de ancho (menos que los 44 px de las guías táctiles; confirmarlo
   con el dedo en un iPhone real) y ninguna prueba automática mide la superposición (la del CSS lee el texto del archivo): un
   cambio de `--gutter` la rompería sin aviso.
@@ -967,10 +970,18 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
     papelera y la restaura antes de que suba lo primero recibe un rechazo en la segunda (la página queda en la
     papelera, la restaura el dueño; no se pierde nada). Ver `Doc_Supabase.md`, "La papelera de páginas y quién la ve".
 
-20. **El esquema publicado de las pruebas (lo que quedó de B.20, v0.109).** `src/ui/fixtures/editorSchemaMain.ts` se
-   regeneró desde v0.107 y `editorSchemaFixture.test.ts` avisa si queda distinto de `editorSchema.ts`. Queda: la prueba
-   no ve un atributo nuevo del nodo `photo` (el fixture usa el de hoy), y nada avisa si nadie lo regenera después de
-   publicar un cambio del esquema: al publicar una versión que cambia `editorSchema.ts`, regenerarlo.
+20. **Hecho (restos de la tanda 17): el esquema publicado de las pruebas** (B.20, v0.109). `src/ui/fixtures/editorSchemaMain.ts`
+   es la copia del esquema de la versión publicada y `editorSchemaFixture.test.ts` lo compara con el de hoy. Lo que quedaba
+   abierto, resuelto: (1) la prueba no veía un atributo nuevo de `photo` porque el fixture importa de hoy el módulo de la
+   foto; ahora compara contra una **firma fija** (`fixtures/editorSchemaMain.firma.ts`) y lo ve (medido: con la prueba
+   anterior, un atributo agregado a `photo` pasaba; con la nueva falla); (2) nada avisaba si nadie regeneraba el fixture
+   después de publicar (ya estaba viejo: sin el alto de las miniaturas ni `quietImage`): una prueba compara el fixture con
+   `origin/main:src/ui/editorSchema.ts` cuando esta copia no cambió el esquema y falla con `npm run esquema:publicado`; se salta
+   sola en una rama que cambia el esquema a propósito y sin git u `origin/main`. `npm run esquema:publicado` (`scripts/esquema-publicado.mjs`)
+   regenera el fixture, la firma y vacía `NUEVO_SIN_PUBLICAR`; se corre al publicar un cambio del esquema, en la misma tanda
+   que lo publica (ver `Doc_Fotos_En_Linea.md`, "El esquema publicado de las pruebas"). Queda: el fixture sigue tomando de hoy
+   los módulos compartidos (`photoSpec`, `driveCard`, `imageRowsEditor`, `cellThumbs`, `quietImage`): lo que no es el esquema
+   (por ejemplo, el `parseHTML` de la foto) no lo cubre la firma.
 
 21. **Hecho (v0.132): restos del deshacer de Yjs** (entrega 0 de P.26, `Doc_Deshacer.md`, sección 16). Deshacer lo
    escrito seguía lo que otro deshacer había vuelto a poner solo hasta el primer corte: dejaba restos si se había escrito
