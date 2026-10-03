@@ -32,7 +32,7 @@ jerarquía de tres tonos:
   la clave: la descarta y, si sube sus preferencias, la borra de la cuenta; los dispositivos con esta versión siguen con
   la que tenían (lo mismo que `language` y `phoneImages`).
 
-**El zip de exportar** lleva la preferencia (v0.0XX): cada página `.html` sale con `<html data-contrast="…">` y las
+**El zip de exportar** lleva la preferencia (v0.165): cada página `.html` sale con `<html data-contrast="…">` y las
 reglas de su `style.css` (las mismas de la app) la aplican igual que en el PDF, siempre con los tonos claros. Antes salía
 siempre con *Contrast*. Decisión: el PDF ya seguía el nivel de quien exporta, y un zip que sale distinto del PDF de la
 misma persona sorprendería; el archivo no es una copia fija para comparar sino la página como la ve quien la exporta.
@@ -122,7 +122,7 @@ guarda y marca el documento, los rótulos en castellano, el alto del panel, y en
 renglones a la izquierda) y `src/prefs.test.ts` (de fábrica, valores
 desconocidos, guardar y subir, una cuenta sin la clave).
 
-## 5. Los resaltados en oscuro (v0.0XX)
+## 5. Los resaltados en oscuro (v0.165)
 
 El texto por defecto sobre un resaltado va con la tinta plena del encabezado en los tres niveles (`#ece9e2` en oscuro).
 Con los fondos de BlockNote tres no llegaban a 4,5:1; medido en Chromium sobre la página real (el texto «fondo …» de cada

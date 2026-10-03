@@ -73,7 +73,7 @@ margen (`.comment-add`) se pasaba 4 px del borde derecho cuando había una selec
 de costado. Era `right: -4px` en la regla de teléfono de `.comment-count, .comment-add`; ahora `right: 0` (medido a 360,
 375 y 414 px: el borde derecho del botón queda en el ancho de la pantalla y la página no se corre).
 
-**El botón de comentar ya no tapa el final del renglón (v0.0XX).** Con `right: 0` el botón (28 px) pasaba por arriba del
+**El botón de comentar ya no tapa el final del renglón (v0.165).** Con `right: 0` el botón (28 px) pasaba por arriba del
 margen de la página en el teléfono (`--gutter`, 20 px) y tapaba hasta 8 px del final de un renglón muy largo. Medido en
 Chromium con un párrafo de renglones a ras del margen: a 375 px el texto llegaba a 353,8 y el botón empezaba en 347 (6,8 px
 encima); a 390 px, 367,7 contra 362 (5,7 px). Ahora, a 760 px o menos, el botón mide el margen (`width: var(--gutter)`, 20

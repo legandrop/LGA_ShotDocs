@@ -398,7 +398,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   pregunta al cerrar la pantalla de error (`replaceRunning`), y restaurar sin el editor ya no escribe los atributos por
   defecto en los bloques iguales a la versión (los saltea; la vista de diferencias comparaba los atributos guardados y los
   mostraba como «formato cambiado»).
-  Las tres observaciones de la re-verificación de la 2b quedaron **hechas (v0.0XX)**: la prueba del link muerto con varios
+  Las tres observaciones de la re-verificación de la 2b quedaron **hechas (v0.165)**: la prueba del link muerto con varios
   archivos, la del *Download it* de la insignia con el link vivo, y *Share* con «500 or more» cuando la lista llega al tope
   de la base (sin SQL). **Falta, si alguna vez importa:** el total exacto de archivos de todos los links de la página (una
   cuenta aparte en `public_link_files`, con migración); hoy pasado el tope solo se dice «o más».
@@ -680,7 +680,7 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   access* con la tabla `access_requests`, la campana y *Share*; riesgo alto), E3 opcional (pedir una página). Quedan
   para después: el correo al pedir y al aceptar (B.8), pedir acceso sin cuenta, el link de un video en línea, y en la
   pantalla `/f/` volver a donde estaba y reintentar sola al volver la red (observaciones de la auditoría de E1).
-  También de E1: pruebas de `http://localhost` y de *Sign in instead* (O4). **Hecho (v0.0XX):** *Export* avisa sin red (O6, *No connection: file links … can't use the public link*; un visitante del link no lo ve, con prueba). Queda (chico): el aviso sale también si el PDF no lleva ningún archivo, porque la ventana no cuenta los adjuntos antes de armar, igual que el de las fotos sin conexión.
+  También de E1: pruebas de `http://localhost` y de *Sign in instead* (O4). **Hecho (v0.165):** *Export* avisa sin red (O6, *No connection: file links … can't use the public link*; un visitante del link no lo ve, con prueba). Queda (chico): el aviso sale también si el PDF no lleva ningún archivo, porque la ventana no cuenta los adjuntos antes de armar, igual que el de las fotos sin conexión.
 - **P.28 Hecho (v0.156): la tabla del reporte en el teléfono** (`Doc_Tabla_Telefono.md`): en pantalla angosta ninguna
   columna con ancho guardado baja de 96 px y la tabla se desplaza de costado dentro de su bloque; la celda donde se
   escribe se acomoda a la vista. La compu y el PDF no cambian. Falta probarlo en un iPhone real (dedo, teclado abierto).
@@ -688,7 +688,7 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   que en un iPad vertical (768 a 834 px, con el cajón a la vista) el reporte ya no se encoge (columnas de 96 en lugar de
   47 a 57) y se desplaza, salvo en una página con formato de hoja (A4, A3, Carta) entre 761 y 1024 px, que queda como el
   PDF (decisión de Lega, ronda 1); también se arregló el botón de comentar del margen, que salía 4 px de la pantalla.
-  **Hecho (v0.0XX):** el botón de comentar mide el margen de la página en el teléfono (20 px, pegado al borde) y ya no
+  **Hecho (v0.165):** el botón de comentar mide el margen de la página en el teléfono (20 px, pegado al borde) y ya no
   tapa el final de un renglón largo (medido a 375 y 390 px: sin superposición); el área del dedo sigue de 44 px de alto.
   Quedan (chicos, de la auditoría): el botón mide 20 px de ancho (menos que los 44 px de las guías táctiles; confirmarlo
   con el dedo en un iPhone real) y ninguna prueba automática mide la superposición (la del CSS lee el texto del archivo): un
@@ -699,7 +699,7 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   (de fábrica), *More contrast* y *No contrast* para el texto con el color por defecto, en la página, el historial y el
   PDF (en claro); el panel de la cuenta con íconos, su propio desplazamiento y *Sign out other devices* alineado a la
   izquierda. Queda: verlo en un iPhone real (el panel con el teclado del sistema y la barra de Safari).
-  **Hecho (v0.0XX):** el zip de exportar lleva el contraste que eligió quien exporta (como el PDF), y en oscuro los
+  **Hecho (v0.165):** el zip de exportar lleva el contraste que eligió quien exporta (como el PDF), y en oscuro los
   resaltados gris (2,32:1), amarillo (2,60:1) y naranja (3,69:1) pasaron a 4,74, 4,73 y 4,75:1 con el texto por defecto,
   sin tocar el claro ni el PDF (`Doc_Contraste.md`, sección 5).
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
@@ -1006,7 +1006,7 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    del mouse si el control es más alto que media ventana, y corrido si no entra en ningún lado).
    (c) **Hecho (v0.163):** una prueba del anotador en una ventana angosta con mouse (`annotatorTouch.test.tsx`): la tira
    del teléfono, con los atajos en los tooltips de las herramientas, deshacer, encuadrar y el grosor; el mutante
-   `{ touch: true }` ya no sobrevive. (d) **Hecho (v0.0XX):** la barra de los links (*Edit link*, *Open in new tab*,
+   `{ touch: true }` ya no sobrevive. (d) **Hecho (v0.165):** la barra de los links (*Edit link*, *Open in new tab*,
    *Remove link*, al pasar por un link) también: la página dibuja su `LinkToolbarController` con el botón de BlockNote
    envuelto (`PageLinkToolbarController`, `toolbarTips.tsx`), *Open in new tab* y *Remove link* con su nombre en `data-tip`
    (no tienen atajo: es un ícono) y *Edit link* sin globo (es un botón con texto y BlockNote lo rotulaba «Edit»: repetía

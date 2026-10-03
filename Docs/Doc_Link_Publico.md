@@ -2549,7 +2549,7 @@ subió, solo los links de esa página, `anon` no); las 30 pruebas SQL con la mig
 mutantes SQL nuevos, todos detectados (con los 25 de antes: 33, 32 detectados y 1 equivalente). 9 mutantes nuevos de la
 app y el portero, todos detectados.
 
-**Observaciones de la re-verificación de la ronda (hechas, v0.0XX):**
+**Observaciones de la re-verificación de la ronda (hechas, v0.165):**
 
 | Observación | Cómo quedó |
 |---|---|

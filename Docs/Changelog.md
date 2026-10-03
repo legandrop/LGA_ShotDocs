@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.165 :
 
 **Observaciones del roadmap y de la 2b.** (1) La barra de los links seguía con el globo de BlockNote: ahora usa el
 tooltip de la app; *Edit link* queda sin globo. (2) En oscuro los resaltados gris, amarillo y naranja daban 2,32 a 3,69:1
