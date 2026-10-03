@@ -250,6 +250,71 @@ describe('Also sync in this workspace', () => {
   });
 });
 
+describe('B1: la Voice propia de un dispositivo no se reemplaza sin preguntar', () => {
+  const PC = 'pc@otro.dispositivo';
+  const pcCtx = (store: KeySyncStore) => ({ ...ctx(store), email: PC });
+  const MINE = 'sk-proj-VOZ-DEL-TELEFONO-5555';
+  const PCS = 'sk-proj-VOZ-DE-LA-PC-6666';
+
+  it('(a) eligió Keep my voice key; la PC rota solo la del asistente y actualiza: al abrir, pregunta por Voice', async () => {
+    const store = new KeySyncStore();
+    // La PC (otra base del dispositivo: otro correo) con su clave y su Voice, sincronizada.
+    await saveSettings(PC, ANT, KEY);
+    await saveVoiceSettings(PC, { source: 'own', provider: 'openai', model: '' }, PCS);
+    await turnOnSync(pcCtx(store), PHRASE);
+    // El teléfono, con su propia Voice, abre y se queda con la suya (lo que hace Keep my voice key: la copia sin Voice).
+    await saveVoiceSettings(EMAIL, { source: 'own', provider: 'openai', model: '' }, MINE);
+    const first = (await unlockSync(ctx(store), PHRASE))!;
+    expect(first.voiceAsk).toBe('key');
+    const { voice: _v, ...rest } = first.payload;
+    await adoptUnlocked(ctx(store), { ...first, payload: rest });
+    expect(await readVoiceKey(EMAIL, (await resolveVoice(EMAIL))!)).toBe(MINE);
+    // La PC rota solo la clave del asistente y actualiza la copia (la Voice de la copia sigue siendo la de la PC).
+    await saveSettings(PC, ANT, 'sk-ant-api03-ROTADA-r0T4');
+    await updateSync(pcCtx(store), PHRASE);
+    const again = (await unlockSync(ctx(store), PHRASE))!;
+    expect(again.decision).toBe('adopt');
+    expect(again.voiceAsk).toBe('key');
+    expect(again.voiceLocalEnding).toBe('5555');
+    expect(await readVoiceKey(EMAIL, (await resolveVoice(EMAIL))!)).toBe(MINE);
+  });
+
+  it('(b) abrió una copia sin Voice; la PC suma la suya y actualiza: al abrir, pregunta por Voice', async () => {
+    const store = new KeySyncStore();
+    await saveSettings(PC, ANT, KEY);
+    await turnOnSync(pcCtx(store), PHRASE);
+    await saveVoiceSettings(EMAIL, { source: 'own', provider: 'openai', model: '' }, MINE);
+    const first = (await unlockSync(ctx(store), PHRASE))!;
+    expect(needsAnswer(first)).toBe(false);
+    await adoptUnlocked(ctx(store), first);
+    expect(syncFor(await loadSettings(EMAIL), 'wanka', UID)?.voiceFromCopy).toBeUndefined();
+    await saveVoiceSettings(PC, { source: 'own', provider: 'openai', model: '' }, PCS);
+    await updateSync(pcCtx(store), PHRASE);
+    const again = (await unlockSync(ctx(store), PHRASE))!;
+    expect(again.voiceAsk).toBe('key');
+    expect(await readVoiceKey(EMAIL, (await resolveVoice(EMAIL))!)).toBe(MINE);
+  });
+
+  it('una Voice que sí vino de la copia se actualiza sin preguntar; cambiarla a mano o olvidarla lo corta', async () => {
+    const store = new KeySyncStore();
+    await saveSettings(PC, ANT, KEY);
+    await saveVoiceSettings(PC, { source: 'own', provider: 'openai', model: '' }, PCS);
+    await turnOnSync(pcCtx(store), PHRASE);
+    await adoptUnlocked(ctx(store), (await unlockSync(ctx(store), PHRASE))!);
+    expect(syncFor(await loadSettings(EMAIL), 'wanka', UID)?.voiceFromCopy).toBe(true);
+    await saveVoiceSettings(PC, { source: 'own', provider: 'openai', model: '' }, 'sk-proj-VOZ-NUEVA-7777');
+    await updateSync(pcCtx(store), PHRASE);
+    const fresh = (await unlockSync(ctx(store), PHRASE))!;
+    expect(fresh.voiceAsk).toBeUndefined();
+    await adoptUnlocked(ctx(store), fresh);
+    expect(await readVoiceKey(EMAIL, (await resolveVoice(EMAIL))!)).toBe('sk-proj-VOZ-NUEVA-7777');
+    // A mano en el teléfono: deja de ser la de la copia.
+    await saveVoiceSettings(EMAIL, { source: 'own', provider: 'openai', model: '' }, MINE);
+    expect(syncFor(await loadSettings(EMAIL), 'wanka', UID)?.voiceFromCopy).toBe(false);
+    expect((await unlockSync(ctx(store), PHRASE))!.voiceAsk).toBe('key');
+  });
+});
+
 describe('la clave de Voice en el sobre', () => {
   it('viaja cifrada con la del asistente y el otro dispositivo la guarda; nada en claro en la fila', async () => {
     const store = new KeySyncStore();

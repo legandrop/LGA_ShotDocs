@@ -59,6 +59,12 @@ export interface KeySyncInfo {
   unlockedAt: number;
   /** La clave o el destino de este dispositivo cambiaron después: *Update synced key* sube la de ahora. */
   localChanged?: boolean;
+  /**
+   * La clave propia de *Voice* de este dispositivo es la de esta copia (se abrió con ella o se subió desde acá). Aparte
+   * de `localChanged`, que habla de la del asistente: una *Voice* propia que no vino de la copia nunca se reemplaza sin
+   * preguntar (regla 5), aunque la del asistente sí haya venido de ella.
+   */
+  voiceFromCopy?: boolean;
 }
 
 /** Lo que ve la app de los ajustes: todo menos la clave. */
@@ -326,7 +332,12 @@ export async function dropSyncInfo(email: string, ref: string, userId: string): 
 
 /** La clave o el destino de *Voice* cambiaron: las copias quedan marcadas para *Update synced key*. */
 export async function markSyncStale(email: string): Promise<void> {
-  await changeSync(email, stale).catch(() => undefined);
+  await changeSync(email, (entries) => stale(entries).map((e) => ({ ...e, voiceFromCopy: false }))).catch(() => undefined);
+}
+
+/** Se olvidó la clave de *Voice* del dispositivo: ya no es la de ninguna copia (no marca nada para *Update*). */
+export async function clearVoiceFromCopy(email: string): Promise<void> {
+  await changeSync(email, (entries) => entries.map((e) => ({ ...e, voiceFromCopy: false }))).catch(() => undefined);
 }
 
 async function changeSync(email: string, fn: (entries: KeySyncInfo[]) => KeySyncInfo[]): Promise<AssistantSettings | null> {

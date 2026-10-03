@@ -1,4 +1,4 @@
-import { loadSettings, markSyncStale, normalizeBaseUrl, readKey, type AssistantSettings } from '../assistant/keyStore';
+import { clearVoiceFromCopy, loadSettings, markSyncStale, normalizeBaseUrl, readKey, type AssistantSettings } from '../assistant/keyStore';
 import type { VoicePayload } from '../assistant/keySync';
 import { isLocalUrl, type ProviderId } from '../assistant/providers';
 import { dictationDb } from './dictationDb';
@@ -204,6 +204,7 @@ async function saveVoiceRecord(
 export async function forgetVoiceKey(email: string): Promise<void> {
   tabVoice.delete(norm(email));
   await (await dictationDb()).delete('notes', recordId(email));
+  await clearVoiceFromCopy(email);
 }
 
 /** La segunda clave para meter en la copia sincronizada, o `undefined` si no hay (o *Voice* usa la del asistente). */

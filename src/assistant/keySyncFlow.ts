@@ -51,8 +51,9 @@ async function entryOf(ctx: SyncContext): Promise<KeySyncInfo | undefined> {
   return syncFor(await loadSettings(ctx.email).catch(() => null), ctx.ref, ctx.userId);
 }
 
-function infoFor(ctx: SyncContext, meta: SyncMeta, savedAt: number): KeySyncInfo {
-  return { ref: ctx.ref, name: ctx.name, userId: ctx.userId, generation: meta.generation, savedAt, unlockedAt: Date.now() };
+/** La anotación de la copia. `voiceFromCopy`: la *Voice* propia del dispositivo es la que quedó en la copia. */
+function infoFor(ctx: SyncContext, meta: SyncMeta, savedAt: number, voiceFromCopy: boolean): KeySyncInfo {
+  return { ref: ctx.ref, name: ctx.name, userId: ctx.userId, generation: meta.generation, savedAt, unlockedAt: Date.now(), ...(voiceFromCopy ? { voiceFromCopy } : {}) };
 }
 
 export class NoLocalKeyError extends Error {
@@ -73,7 +74,7 @@ export async function turnOnSync(ctx: SyncContext, passphrase: string, overwrite
   if (!local) throw new NoLocalKeyError();
   const sealed = await sealKey(local.payload, passphrase, ctx.userId);
   const meta = overwrite ? await updateSyncRow(ctx.client, ctx.userId, overwrite.generation, sealed) : await insertSyncRow(ctx.client, sealed);
-  const info = infoFor(ctx, meta, local.payload.savedAt);
+  const info = infoFor(ctx, meta, local.payload.savedAt, !!local.payload.voice);
   await setSyncInfo(ctx.email, info);
   return info;
 }
@@ -124,7 +125,9 @@ export async function unlockSync(ctx: SyncContext, passphrase: string): Promise<
     // Lo que *Voice* usa hoy en este dispositivo (su clave propia, o la del asistente si transcribe).
     const device = await resolveVoice(ctx.email).catch(() => null);
     if (device && !sameDestination(device, payload.voice)) out.voiceAsk = 'destination';
-    else if (device && !fromThisCopy) {
+    // El mismo destino con otra clave: se toma sin preguntar solo si la *Voice* del dispositivo vino de esta copia (no
+    // alcanza con que la del asistente haya venido de ella: la de *Voice* puede ser propia, B1 de la auditoría).
+    else if (device && !entry?.voiceFromCopy) {
       const local = await readVoiceKey(ctx.email, device).catch(() => '');
       if (local && local !== payload.voice.apiKey) Object.assign(out, { voiceAsk: 'key', voiceLocalEnding: keyEnding(local) });
     }
@@ -151,7 +154,7 @@ export async function adoptUnlocked(ctx: SyncContext, unlocked: Unlocked, option
       models: same ? saved.models : [],
     },
     payload.apiKey,
-    { sync: infoFor(ctx, meta, payload.savedAt), othersStale: !sameKey, tabOnly: options.tabOnly },
+    { sync: infoFor(ctx, meta, payload.savedAt, !!payload.voice), othersStale: !sameKey, tabOnly: options.tabOnly },
   );
   // La de *Voice*, si vino en la copia. Si el dispositivo tiene una propia y la copia no trae ninguna, queda (regla 5).
   if (payload.voice) await adoptVoicePayload(ctx.email, payload.voice, !!options.tabOnly);
@@ -173,7 +176,7 @@ export async function updateSync(ctx: SyncContext, passphrase: string): Promise<
   const local = (await localPayload(ctx.email, current.payload.savedAt, (await entryOf(ctx))?.savedAt))!;
   const generation = current.generation;
   const meta = await updateSyncRow(ctx.client, ctx.userId, generation, await sealKey(local.payload, passphrase, ctx.userId));
-  const info = infoFor(ctx, meta, local.payload.savedAt);
+  const info = infoFor(ctx, meta, local.payload.savedAt, !!local.payload.voice);
   await setSyncInfo(ctx.email, info);
   return info;
 }
@@ -188,7 +191,7 @@ export async function replaceSync(ctx: SyncContext, currentPassphrase: string, n
   const local = (await localPayload(ctx.email, current.payload.savedAt, (await entryOf(ctx))?.savedAt))!;
   const generation = current.generation;
   const meta = await updateSyncRow(ctx.client, ctx.userId, generation, await sealKey(local.payload, newPassphrase, ctx.userId));
-  const info = infoFor(ctx, meta, local.payload.savedAt);
+  const info = infoFor(ctx, meta, local.payload.savedAt, !!local.payload.voice);
   await setSyncInfo(ctx.email, info);
   return info;
 }
@@ -203,7 +206,10 @@ export async function changePassphrase(ctx: SyncContext, currentPassphrase: stri
   const entry = await entryOf(ctx);
   const payload: KeyPayload = { ...current.payload, savedAt: nextSavedAt(Date.now(), current.payload.savedAt, entry?.savedAt) };
   const meta = await updateSyncRow(ctx.client, ctx.userId, current.generation, await sealKey(payload, newPassphrase, ctx.userId));
-  const info: KeySyncInfo = { ...infoFor(ctx, meta, payload.savedAt), ...(entry?.localChanged ? { localChanged: true } : {}) };
+  const info: KeySyncInfo = {
+    ...infoFor(ctx, meta, payload.savedAt, !!entry?.voiceFromCopy),
+    ...(entry?.localChanged ? { localChanged: true } : {}),
+  };
   if (entry && entry.generation === current.generation) await setSyncInfo(ctx.email, info);
   return info;
 }
