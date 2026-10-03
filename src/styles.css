@@ -909,12 +909,14 @@ code {
   pointer-events: none;
 }
 
-/* Con el mouse encima, el foco en la fila o en uno de sus botones o el menú ⋯ abierto, los botones aparecen y le
-   sacan su lugar al nombre (que se acorta, sin mover su inicio ni el alto). También en la página abierta: en la
-   compu llega al borde como las demás. */
+/* Con el mouse encima, el foco de teclado en la fila o en uno de sus botones o el menú ⋯ abierto, los botones aparecen
+   y le sacan su lugar al nombre (que se acorta, sin mover su inicio ni el alto). También en la página abierta: en la
+   compu llega al borde como las demás. Es `:focus-visible` y no `:focus-within`: un clic con el mouse (en el triángulo,
+   en la fila o en un botón) también deja el foco ahí, y los botones no se tienen que quedar cuando el mouse se va. Con
+   `:is()` un navegador sin `:has()` se queda con el foco en la fila en vez de descartar toda la regla. */
 .tree-row:hover .row-actions,
 .tree-row.menu-open .row-actions,
-.tree-row:focus-within .row-actions {
+.tree-row:is(:focus-visible, :has(:focus-visible)) .row-actions {
   opacity: 1;
   width: auto;
   margin-left: 0;
@@ -2911,14 +2913,32 @@ code {
    y la tabla su `min-width`, así que ya se desplazaban. Solo el piso, sin forzar el ancho de la tabla (D244): una tabla
    cuyas columnas guardadas son de 96 px o más y entra en la pantalla (3 de 227 px, 2 de 340 px) se achica como siempre
    y no se desplaza; solo se desplaza la que quedaría con columnas de menos de 96 px. Con 7 columnas de 97 px el reporte
-   mide 673 px (7 × 96 + bordes) en vez de 679. */
-@media (max-width: 760px) {
-  .page:not(.sd-export-source) .bn-editor [data-content-type='table'] :is(td, th)[colwidth] {
+   mide 673 px (7 × 96 + bordes) en vez de 679.
+   El corte es de 1024 px y no los 760 del teléfono: en un iPad vertical (768 a 834 px) el cajón de páginas está
+   a la vista y la página queda en 372 a 438 px, así que el reporte se encogía igual que en el teléfono (columnas de 47
+   a 57 px). Como el piso no fuerza el ancho, a un ancho donde la tabla entra no cambia nada; la compu (1025 px o más) y el
+   PDF no se tocan.
+   Entre 761 y 1024 px solo vale para páginas sin hoja (`:not(.sheet)`): una página con formato de hoja (A4, A3, Carta)
+   conserva ahí la hoja entera (794 px para A4) y el texto mide lo mismo que en el PDF; con el piso, el reporte (612 px en
+   la hoja) pasaba a 673 y se salía de ella. Hasta 760 px la hoja se ve libre (como el resto de la página) y el piso
+   vale también para ella, igual que en P.28. */
+@media (max-width: 1024px) {
+  .page:not(.sheet):not(.sd-export-source) .bn-editor [data-content-type='table'] :is(td, th)[colwidth] {
     min-width: 96px !important;
   }
 
-  .page:not(.sd-export-source) .bn-editor [data-content-type='table'] .tableWrapper {
+  .page:not(.sheet):not(.sd-export-source) .bn-editor [data-content-type='table'] .tableWrapper {
     /* Llegar al borde de la tabla no arrastra la página ni vuelve atrás en el navegador. */
+    overscroll-behavior-x: contain;
+  }
+}
+
+@media (max-width: 760px) {
+  .page.sheet:not(.sd-export-source) .bn-editor [data-content-type='table'] :is(td, th)[colwidth] {
+    min-width: 96px !important;
+  }
+
+  .page.sheet:not(.sd-export-source) .bn-editor [data-content-type='table'] .tableWrapper {
     overscroll-behavior-x: contain;
   }
 }
@@ -5066,9 +5086,10 @@ button.thread-anchor:hover:not(:disabled) {
     padding: 10px 8px;
   }
 
+  /* Pegado al borde de la pantalla, no 4 px afuera: afuera cortaba el botón y la página se arrastraba 4 px de costado. */
   .comment-count,
   .comment-add {
-    right: -4px;
+    right: 0;
   }
 }
 
@@ -7085,6 +7106,23 @@ button.folder-row-main:hover {
   border-radius: 50%;
   background: var(--accent);
   box-shadow: 0 0 0 2px var(--sidebar-bg);
+}
+
+/* El mismo punto en el botón de menú de la barra de arriba del teléfono (NavMenuButton): se ve sin abrir el cajón. */
+.icon-button.has-dot {
+  position: relative;
+}
+
+.icon-button.has-dot::after {
+  content: '';
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg);
 }
 
 .help-backdrop {

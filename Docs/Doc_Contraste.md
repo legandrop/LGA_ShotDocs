@@ -1,6 +1,6 @@
 # Contraste del texto y el panel de la cuenta
 
-Pedido de Lega del 2026-10-03 (v0.0XX). Cómo está hoy.
+Pedido de Lega del 2026-10-03 (v0.161). Cómo está hoy.
 
 ## 1. Qué hace
 
