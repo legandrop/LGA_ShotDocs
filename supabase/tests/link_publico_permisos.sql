@@ -152,7 +152,8 @@ $$;
 -- otros), m4 (miembro con Editar y crear P: no es admin ni creó P), g (invitado con Editar y crear P), e (Editar P),
 -- c (Comentar P), x (sin permiso).
 update public.members set removed_at = now() where role = 'owner' and removed_at is null;
-update public.workspace_settings set min_app_version = null, clean_min_version = null, link_limits = '{}' where id;
+-- El interruptor de Can edit apagado (lo que supone esta prueba; la base puede tenerlo prendido): como link_editar_permisos.sql.
+update public.workspace_settings set min_app_version = null, clean_min_version = null, link_edit_min_version = null, link_limits = '{}' where id;
 insert into auth.users (id, email, aud, role) values
   (pg_temp.u('d1a0'), 'lp-o@test.invalid', 'authenticated', 'authenticated'),
   (pg_temp.u('d1a1'), 'lp-a@test.invalid', 'authenticated', 'authenticated'),

@@ -1,10 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { stored } from '../i18n';
+import type { LinkMemory } from '../linkMode';
 import { fromBase64, toBase64 } from '../lib/base64';
 import type { AccessSnapshot } from './access';
 import type { CommentAuthor, CommentRemote, CommentRow, ListedComment, NewComment } from './comments';
 import { SupabaseRemote, timed, toRemoteError, MAX_REQUEST_TIMEOUT_MS, REQUEST_TIMEOUT_MS, type CleanWorkRow, type CleanPushResult, type LinkResult } from './remote';
-import type { AdmitPageRow, AdmitResult, AdmitWorkRow, LinkUpdateRow } from './linkAdmitApi';
+import type { AdmitPageRow, AdmitResult, AdmitWorkRow, LinkAsideRow, LinkUpdateRow } from './linkAdmitApi';
 import {
   AUTHOR_MISSING,
   RemoteError,
@@ -81,6 +82,19 @@ export interface LinkEdits {
 
 const NO_EDITS: LinkEdits = { needName: false, waiting: [], aside: [] };
 
+/** Sin memoria guardada (las pruebas que no la necesitan): solo en esta carga. */
+function memoryInThisLoad(): LinkMemory {
+  let sent: string[] = [];
+  let seen: Record<string, number> = {};
+  return {
+    sent: () => sent,
+    addSent: (p) => void (sent = [...sent.filter((x) => x !== p), p]),
+    dropSent: (ps) => void (sent = sent.filter((x) => !ps.includes(x))),
+    seen: () => seen,
+    setSeen: (p, n) => void (seen = { ...seen, [p]: n }),
+  };
+}
+
 /** Cada cuánto se pregunta el estado de lo mandado mientras algo espera (cuenta como un pase, P11). */
 const STATUS_EVERY_MS = 30_000;
 
@@ -104,6 +118,8 @@ export class LinkRemote extends SupabaseRemote {
   private statusAt = 0;
   /** `plink_push_status` llegó a su tope del día (los pases): no se pregunta más hasta esta hora. */
   private statusOffUntil = 0;
+  /** Lo último que dijo `plink_push_status`, por página: cuántas esperan y cuántas se apartaron. */
+  private counts = new Map<string, { waiting: number; aside: number }>();
 
   /** No admite: lo hace el dispositivo de un editor (E2.3). */
   readonly admitsLinks = false;
@@ -115,6 +131,8 @@ export class LinkRemote extends SupabaseRemote {
     private readonly onProblem: (problem: LinkProblem | null) => void = () => undefined,
     /** El nombre que escribió el visitante (P8), en el momento de subir: sin nombre no se sube lo escrito. */
     private readonly author: () => string = () => '',
+    /** Lo mandado y lo apartado ya visto, guardado con el link (entrega 2c). */
+    private readonly memory: LinkMemory = memoryInThisLoad(),
   ) {
     super(linkClient, appVersion);
     this.linkVersion = appVersion;
@@ -305,6 +323,7 @@ export class LinkRemote extends SupabaseRemote {
       MAX_REQUEST_TIMEOUT_MS,
     );
     this.statusDue = true;
+    this.memory.addSent(pageId);
     this.setEdits({ needName: false, waiting: [...new Set([...this.edits.waiting, pageId])] });
     return 0;
   }
@@ -331,10 +350,45 @@ export class LinkRemote extends SupabaseRemote {
       throw toRemoteError(error, status);
     }
     const rows = (data ?? []) as { page_id: string; waiting: number; aside: number }[];
+    this.counts = new Map(rows.map((r) => [String(r.page_id), { waiting: Number(r.waiting) || 0, aside: Number(r.aside) || 0 }]));
     const waiting = rows.filter((r) => Number(r.waiting) > 0).map((r) => String(r.page_id));
-    const aside = rows.filter((r) => Number(r.aside) > 0).map((r) => String(r.page_id));
     this.statusDue = waiting.length > 0;
+    const aside = this.unseenAside();
+    // Lo mandado que ya no espera ni tiene nada apartado sin ver entró a la página: no hace falta recordarlo (O9).
+    const open = new Set([...waiting, ...aside]);
+    this.memory.dropSent(this.memory.sent().filter((p) => !open.has(p)));
     this.setEdits({ waiting, aside });
+  }
+
+  /**
+   * Las páginas con algo apartado que el visitante todavía no dejó atrás: más apartadas que las que había (apartadas y
+   * esperando) cuando volvió a la versión del equipo en esa página (`acknowledgeAside`).
+   */
+  private unseenAside(): string[] {
+    const seen = this.memory.seen();
+    return [...this.counts].filter(([page, c]) => c.aside > (seen[page] ?? 0)).map(([page]) => page);
+  }
+
+  /** Vuelve a mirar lo apartado ya visto (otra pestaña volvió a la versión del equipo). */
+  recheckAside(): void {
+    this.setEdits({ aside: this.unseenAside() });
+  }
+
+  /**
+   * El visitante bajó lo suyo y volvió a la versión del equipo en esta página (entrega 2c): lo apartado hasta ahora ya no
+   * se avisa. **Solo lo apartado** (O2 de la auditoría de la 2c): lo apartado nunca baja, así que cualquier fila que se
+   * aparte después (también una que esperaba al volver) vuelve a mostrar el aviso. Lo que esperaba de la sesión de antes y
+   * se aparta en cadena lo avisa otra vez: es de más, nunca de menos.
+   */
+  acknowledgeAside(pageId: string): void {
+    const c = this.counts.get(pageId) ?? { waiting: 0, aside: 0 };
+    this.memory.setSeen(pageId, c.aside);
+    this.recheckAside();
+  }
+
+  /** Las páginas donde este dispositivo mandó algo con el link (también antes de recargar la app; O9). */
+  sentPages(): string[] {
+    return this.memory.sent();
   }
 
   override async createPage(): Promise<void> {
@@ -465,6 +519,10 @@ export class LinkRemote extends SupabaseRemote {
   }
 
   override async linkUpdatesOf(): Promise<LinkUpdateRow[]> {
+    return [];
+  }
+
+  override async linkAside(): Promise<LinkAsideRow[]> {
     return [];
   }
 

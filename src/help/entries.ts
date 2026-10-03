@@ -138,6 +138,8 @@ const DAY_REPORTS = '0.121';
 const PUBLIC_LINK = '0.111';
 /** *Can edit* por un link (Doc_Link_Publico.md, entrega 2a): la versión la pone quien publica, igual que en el changelog. */
 const LINK_EDIT = '0.151';
+/** Lo apartado a la vista (Doc_Link_Publico.md, entrega 2c): la versión la pone quien publica, igual que en el changelog. */
+const LINK_ASIDE = '0.157';
 /** Exportar una rama o un proyecto como PDF (P.22, Doc_Exportar.md, entrega 1): la versión se pone al publicar. */
 const EXPORT_PDF = '0.122';
 /** Exportar como zip (P.22, Doc_Exportar.md, entrega 2): la versión se pone al publicar. */
@@ -739,6 +741,22 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.editingWithLink.text',
     words: ['link', 'editar', 'edit', 'visitante', 'visitor', 'nombre', 'name', 'esperando', 'waiting', 'apartado', 'set aside', 'bajar', 'download'],
     since: LINK_EDIT,
+  },
+  {
+    id: 'linkAside',
+    section: 'sharing',
+    title: 'help.linkAside.title',
+    text: 'help.linkAside.text',
+    words: ['link', 'apartado', 'set aside', 'bajar', 'download', 'historial', 'history', 'árbol', 'tree', 'compartir', 'share'],
+    since: LINK_ASIDE,
+  },
+  {
+    id: 'linkStartOver',
+    section: 'sharing',
+    title: 'help.linkStartOver.title',
+    text: 'help.linkStartOver.text',
+    words: ['link', 'apartado', 'set aside', 'versión del equipo', "team's version", 'volver', 'start over', 'bajar', 'download', 'visitante', 'visitor'],
+    since: LINK_ASIDE,
   },
   {
     id: 'deletedPrivacy',

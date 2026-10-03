@@ -20,6 +20,7 @@ import {
   type PublicLink,
   type PublicLinkInfo,
 } from '../sync/publicLinks';
+import { LinkAsideList } from './LinkAsideList';
 import { notify } from './notice';
 import { ShareGateNotes, UNSYNCED_BEFORE_SHARE, useShareGate } from './shareGate';
 import { teamErrorText } from './teamText';
@@ -286,6 +287,8 @@ export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => 
           <input readOnly value={manual} onFocus={(e) => e.currentTarget.select()} aria-label={tr('share.link.copy')} />
         </div>
       )}
+      {/* Lo apartado de los links de esta página (también de los anteriores), para leerlo y bajarlo (entrega 2c). */}
+      {info && <LinkAsideList pageId={pageId} linkId={link?.id ?? null} />}
       <ShareGateNotes gate={gate} reader={!link && !!info?.clean_on} />
       {error && <p className="error">{error}</p>}
     </section>

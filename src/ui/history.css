@@ -199,6 +199,39 @@
 }
 
 /* El teléfono: la lista o la versión, a pantalla entera. */
+/* Lo apartado de un link (entrega 2c): una entrada de la lista que no es una versión, y lo que trae. */
+.history-aside {
+  max-width: var(--page-width);
+  margin: 0 auto 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--warn-border, var(--border));
+  border-left: 3px solid var(--warn);
+  border-radius: 6px;
+  background: var(--warn-bg, var(--surface));
+}
+
+.history-aside p {
+  margin: 0 0 6px;
+}
+
+.history-aside-who {
+  font-weight: 600;
+}
+
+.history-aside-text {
+  margin: 0 0 6px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-style: italic;
+}
+
+.history-aside-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--warn);
+}
+
 @media (max-width: 760px) {
   .history-bar {
     padding-left: 8px;

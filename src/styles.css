@@ -7558,6 +7558,55 @@ button.folder-row-main:hover {
   margin: 0;
 }
 
+/* Lo apartado a la vista (entrega 2c): el ícono del árbol, la lista de Share y el aviso del visitante. */
+.tree-row .tree-link-aside {
+  display: inline-flex;
+  align-self: center;
+  flex: none;
+  margin: 0 2px;
+  color: var(--warn);
+}
+.link-aside-list {
+  margin-top: 4px;
+}
+.link-aside-rows {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.link-aside-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+}
+.link-aside-what {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.link-aside-page {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.link-aside-row > button {
+  flex: none;
+}
+.banner.link-visitor-aside p {
+  margin: 0;
+}
+.link-visitor-aside-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 6px !important;
+}
+
 /* --- El anotador de fotos (P.20, entrega 2; Annotator.tsx): a pantalla completa y oscuro, como el carrete. --- */
 .annotator {
   --annotator-text: #ece9e2;

@@ -105,6 +105,22 @@ export const teamDialogs = {
     en: "{added} changes added today · {waiting} waiting · {aside} set aside · {held} on hold",
     es: "{added} cambios sumados hoy · {waiting} esperando · {aside} apartados · {held} en espera",
   },
+  // Lo apartado a la vista (entrega 2c, Docs/Doc_Link_Publico.md).
+  'share.link.asideTitle': {
+    en: { one: "{count} change sent through this page's link was set aside", other: "{count} changes sent through this page's link were set aside" },
+    es: { one: "{count} cambio mandado con el link de esta página quedó aparte", other: "{count} cambios mandados con el link de esta página quedaron aparte" },
+  },
+  'share.link.asideHint': {
+    en: "They didn't reach the pages and nothing was lost: download them to read them.",
+    es: "No llegaron a las páginas y no se perdió nada: bajalos para leerlos.",
+  },
+  'share.link.asideRow': { en: "{name} (via link) · {when}", es: "{name} (vía link) · {when}" },
+  'share.link.asideOldLink': { en: "earlier link", es: "link anterior" },
+  'share.link.asideDownloadAll': { en: "Download all", es: "Bajar todo" },
+  'share.link.asideMore': {
+    en: { one: "and {count} more", other: "and {count} more" },
+    es: { one: "y {count} más", other: "y {count} más" },
+  },
   'share.link.restrictedHint': {
     en: "Only people with access can open it. With a link, anyone who has it opens this page and the ones inside, without an account.",
     es: "Solo la abre quien tiene acceso. Con un link, cualquiera que lo tenga abre esta página y las de adentro, sin cuenta.",

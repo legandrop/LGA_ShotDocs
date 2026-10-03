@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useT } from '../i18n';
-import { toBase64 } from '../lib/base64';
 import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
 import { LEVEL_EDIT } from '../sync/access';
-import { insertedText } from '../sync/admit';
 import { canAdmit, LINK_EDIT_SCHEMA_VERSION, type LinkUpdateRow } from '../sync/linkAdmitApi';
-import { saveBlob } from './unsyncedDownload';
+import { asideReasonText, downloadLinkChanges } from './linkAside';
 
 // En la página, para quien la edita y ve lo borrado (Docs/Doc_Link_Publico.md, E2.8): si algo que mandó un link
 // público no pudo entrar (quedó apartado por la prueba de admisión o porque el link se revocó), un aviso con el motivo y
@@ -53,31 +51,11 @@ export function LinkAsideNotice({ pageId }: { pageId: string }) {
   const aside = rows.filter((r) => r.state === 'aside');
   const held = rows.filter((r) => r.state === 'held');
   if (!sees || (aside.length === 0 && held.length === 0)) return null;
-  const reasons = [...new Set(aside.map((r) => r.reason ?? 'unspecified'))].join(', ');
+  const reasons = [...new Set(aside.map((r) => asideReasonText(tr, r.reason)))].join('; ');
 
   const download = async () => {
     if (!canAdmit(remote)) return;
-    const out: unknown[] = [];
-    for (const r of [...aside, ...held]) {
-      const bytes = await remote.linkUpdateBytes(r.id);
-      // El texto que trae, para leerlo sin la app (O8), y los bytes tal cual.
-      out.push({ id: r.id, author: r.author, createdAt: r.created_at, state: r.state, reason: r.reason, text: insertedText(bytes), yjsUpdate: toBase64(bytes) });
-    }
-    const blob = new Blob(
-      [
-        JSON.stringify({
-          kind: 'lga-shotdocs-link-changes',
-          formatVersion: 1,
-          exportedAt: new Date().toISOString(),
-          appVersion: __APP_VERSION__,
-          pageId,
-          title: tree.get(pageId)?.title ?? null,
-          changes: out,
-        }),
-      ],
-      { type: 'application/json' },
-    );
-    saveBlob(blob, `shotdocs-link-changes-${new Date().toISOString().slice(0, 10)}.json`);
+    await downloadLinkChanges(remote, [...aside, ...held], { pageId, title: tree.get(pageId)?.title ?? null });
   };
 
   return (
