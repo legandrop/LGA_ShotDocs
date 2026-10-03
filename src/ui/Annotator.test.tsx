@@ -323,6 +323,24 @@ describe('el anotador', () => {
       expect(map(doc).size).toBe(0);
     });
 
+    it('⌘Z en el anotador no se lleva una forma tuya que otra persona movió (queda entera, con su cambio)', async () => {
+      const doc = new Y.Doc();
+      writeFrame(doc, ID, FRAME.w, FRAME.h);
+      const remote = new Y.Doc();
+      Y.applyUpdate(remote, Y.encodeStateAsUpdate(doc));
+      connect(doc, remote, 'sync', { repair: false });
+      const { stage } = await open(doc);
+      key('e');
+      drag(stage, [100, 100], [200, 200]);
+      const [mine] = shapes(doc);
+      expect(mine.type).toBe('ellipse');
+      act(() => (remote.getMap<unknown>(PHOTO_MARKUP_MAP).get(`${ID}/${mine.id}`) as Y.Map<unknown>).set('posX', 1234));
+      key('z', { ctrlKey: true });
+      const [still] = shapes(doc);
+      expect(still).toMatchObject({ id: mine.id, type: 'ellipse', posX: 1234 });
+      expect(shapes(remote)).toEqual(shapes(doc));
+    });
+
     it('sin escribir nada no avisa; si se deshizo todo adentro, avisa sin pasos (es algo nuevo igual)', async () => {
       const doc = new Y.Doc();
       writeFrame(doc, ID, FRAME.w, FRAME.h);

@@ -1,7 +1,8 @@
 # Deshacer en el orden en que editaste (P.26)
 
 **Estado: entregas 0 (v0.132: el límite de Yjs, arreglado con un parche; sección 16), 1 (v0.140: la línea de tiempo
-con las páginas; sección 17) y 2 (v0.144: el reemplazo adentro; sección 18) hechas; 3 en diseño.** Pedido de Lega
+con las páginas; sección 17), 2 (v0.144: el reemplazo adentro; sección 18) y 3 (v0.0XX: anotar una foto como un paso;
+sección 19) hechas.** Pedido de Lega
 del 2026-10-02, al responder cómo se deshace un reemplazo en todo el proyecto (una pregunta de su lista de decisiones;
 no es la D-10 de `Doc_Decisiones.md`). Se diseñó contra `main` v0.123
 y se revisó contra v0.125. Las decisiones (DH1 a DH10, sección 11) son propuestas con la recomendación elegida: el
@@ -118,7 +119,7 @@ y *para rehacer*. Cada entrada es una de:
 |---|---|---|
 | **Paso de página** | la página y el `StackItem` de Yjs (el mismo objeto de la pila de esa página) | la pila de esa página, solo ese paso |
 | **Reemplazo** | el id del registro (`replace:<op>`), lo buscado y el reemplazo, y por página el `StackItem` (páginas con historia) o las anclas (las demás) | cada página por su camino (3.3), en un solo ⌘Z |
-| **Anotaciones** (entrega 3) | la foto y los pasos del anotador de esa vez | la pila del anotador, todos juntos |
+| **Anotaciones** (entrega 3, hecha: sección 19) | la foto y los pasos del anotador de esa vez | la pila del anotador, todos juntos |
 
 La línea de tiempo **no guarda contenido**: guarda punteros a pasos de Yjs que ya existen. El orden lo da el momento en
 que cada paso se crea (`stack-item-added` de cada pila). Lo que se junta en medio segundo (`stack-item-updated`) es el
@@ -275,7 +276,7 @@ Reemplazaste en 50 páginas; después escribiste en *Shot 12*; antes del reempla
 | **Restaurar una versión** | Un paso de la página. *Undo* del aviso sigue andando mientras sea lo último de esa pila. |
 | **Crear desde una plantilla** (de fábrica o propia, v0.124) | Un paso de la página (`insertTemplate` e `insertTemplateCopy` van por el editor; el colapsado para todos que copia no entra en la pila, como hoy); ⌘Z en el título recién creado sigue sacando la plantilla (ahora por la línea de tiempo). *Customize* y *Save as template…* escriben en otra página (la de la plantilla): son pasos de esa página si se escribe en su editor. |
 | **Reporte del día** | Crea una página y escribe con un editor sin pantalla: no entra (sección 10). La página nueva se manda a la papelera como cualquier otra. |
-| **Anotar** | Con el anotador abierto, su ⌘Z es de esa foto (hoy; su pila mira el mapa de anotaciones, no el contenido: no se cruza con la de la página). En la entrega 3, al cerrarlo, todo lo de esa vez es **un** paso. Hasta entonces, un ⌘Z después de anotar saltea la anotación (DH1). |
+| **Anotar** | Con el anotador abierto, su ⌘Z es de esa foto (su pila mira el mapa de anotaciones, no el contenido: no se cruza con la de la página). Al cerrarlo, todo lo de esa vez es **un** paso de la página (entrega 3, sección 19): ⌘Z lo deshace entero, con la página en pantalla y la foto a la vista, y ⌘⇧Z lo rehace. Lo que otra persona anotó en la misma foto queda. |
 | **Renombrar, mover, crear o mandar a la papelera** | No entran (DH1): un ⌘Z después de renombrar *Shot 7* saltea el cambio de nombre y deshace lo anterior, que puede estar en otra página (te lleva). |
 | **El teléfono** | No hay ⌘Z sin teclado. Con teclado físico, igual que en la compu. El gesto de deshacer de iOS llega al editor como `historyUndo` y `undoGuard.ts` lo manda a la línea de tiempo (a probar a mano). Sin botón nuevo (DH8). |
 
@@ -545,8 +546,9 @@ otra sesión (medido).
 2. **Hecha (v0.144, sección 18): el reemplazo adentro.** La pila de Yjs en las páginas con historia, las anclas en las demás, `planRedo`, los avisos
    con *Redo*, DH9 y DH10. **Aceptación:** el ejemplo de Lega (3.5) en Chromium con 50 páginas: dos ⌘Z dejan las 50 como
    antes y lo escrito antes del reemplazo sale exacto (sin el "cámara" que queda hoy); ⌘⇧Z lo vuelve; sin red, igual.
-3. **Anotar como un paso.** Lo de una vez en el anotador como un paso al cerrarlo (es algo que hiciste en la página;
-   la auditoría pidió que no sea opcional). DH1 C y DH8 B, si Lega los pide, aparte. **Aceptación:** anotar, cerrar, ⌘Z saca todo lo de esa vez y ⌘⇧Z lo vuelve.
+3. **Hecha (v0.0XX, sección 19): anotar como un paso.** Lo de una vez en el anotador como un paso al cerrarlo (es algo
+   que hiciste en la página; la auditoría pidió que no sea opcional). DH1 C y DH8 B, si Lega los pide, aparte.
+   **Aceptación:** anotar, cerrar, ⌘Z saca todo lo de esa vez y ⌘⇧Z lo vuelve.
 
 Cada entrega con su auditoría antes de publicar.
 
@@ -851,17 +853,17 @@ semillas en la suite, `TIMELINE_SEEDS` para más) y las de atajos (`shortcuts.te
 
 ### 18.4 Lo que falta
 
-- *Show* en el aviso de ⌘Z de un reemplazo con páginas cambiadas.
+- *Show* en el aviso de ⌘Z de un reemplazo con páginas cambiadas. **Hecho con la entrega 3 (19.1).**
 - **Una página con historia en la papelera durante el ⌘Z de un reemplazo** (auditoría, O1). Escribís "cámara roja" en
   *Shot 3*, *Replace all*, mandás *Shot 3* a la papelera, ⌘Z (deshace en las demás; *Shot 3* "couldn't be undone
   now"), la restaurás y ⌘Z: deshace lo escrito pero queda "Toma 1: Camera"; *Undo the rest* lo deja "Toma 1: cámara"
   en vez de "Toma 1: ". Es el resto de D167 en ese rincón: texto de más, nada de menos. Causa: el paso de esa página
   sale de la pila al pasar el reemplazo a rehacer (18.2). Arreglarlo pide que un reemplazo quede a la vez para rehacer
-  (las páginas hechas) y para deshacer (las que faltan): mediano, al roadmap.
+  (las páginas hechas) y para deshacer (las que faltan): mediano, al roadmap. **Sigue pendiente** (19.4).
 - Una prueba de la ventana de O4 (re-verificación): la marca de «algo nuevo en el medio» se toma antes del primer `await`; un
-  mutante que la toma después sobrevive. El código está bien; falta la prueba.
+  mutante que la toma después sobrevive. El código está bien; falta la prueba. **Hecha con la entrega 3 (19.1).**
 - La memoria en el iPhone (entrega 1) y el gesto de deshacer de iOS en la PWA instalada.
-- Entrega 3 (anotar como un paso).
+- Entrega 3 (anotar como un paso). **Hecha (sección 19).**
 
 ### 18.5 Correcciones de la auditoría
 
@@ -879,7 +881,7 @@ la otra persona escribiendo adentro de lo reemplazado, sin nada perdido.
   pero al terminar el reemplazo igual quedaba para rehacer. Ahora la línea de tiempo cuenta lo nuevo (`newEdits`) y, si
   hubo algo nuevo desde que empezó a deshacerse (`markReplace`), el reemplazo no queda para rehacer.
 - **O1**: al roadmap (18.4). **Fuera de alcance, al roadmap:** después del *Undo* de "Last" del panel el foco queda en la
-  página y Esc ya no cierra el panel (pasa igual en `main`); con el panel abierto y el foco puesto por programa en el
+  página y Esc ya no cierra el panel (pasa igual en `main`; arreglado con la entrega 3, 19.1); con el panel abierto y el foco puesto por programa en el
   editor, Ctrl+Shift+Z deshace (una persona no llega ahí: el panel es modal).
 
 ## Correcciones de la auditoría (2026-10-02)
