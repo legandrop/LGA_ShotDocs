@@ -365,7 +365,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   **Hecho (v0.147): la barrera de error alrededor de la página** (B3 del diseño de *Can edit*, requisito para prender
   el link que edita): una página que hace tirar al editor muestra un aviso con el historial a mano y el resto de la app
   sigue; la app entera, *Reload* en vez de blanco. Ver `Doc_Sincronizacion.md`, "Barreras de error". Las dos
-  observaciones de su re-verificación quedaron **hechas (v0.0XX)**: la prueba con un reemplazo en curso para la
+  observaciones de su re-verificación quedaron **hechas (v0.155)**: la prueba con un reemplazo en curso para la
   pregunta al cerrar la pantalla de error (`replaceRunning`), y restaurar sin el editor ya no escribe los atributos por
   defecto en los bloques iguales a la versión (los saltea; la vista de diferencias comparaba los atributos guardados y los
   mostraba como «formato cambiado»).
@@ -924,7 +924,7 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    la vez una de esas, gana el último que llega (vuelve a su lugar anterior; no se pierde nada, solo el lugar). Pasa solo
    después de unas 600 páginas puestas en el mismo hueco. Arreglo completo: mandar el rehecho como una sola operación del
    servidor que no toque una hermana movida después.
-24. **Un error en la consola al pegar una foto — hecho (v0.0XX).** No era al pegar sino al **copiar** (o arrastrar): el
+24. **Un error en la consola al pegar una foto — hecho (v0.155).** No era al pegar sino al **copiar** (o arrastrar): el
    HTML externo de BlockNote (el foto-bloque) y el de la foto en línea ponían `sdmedia://…` en un `<img src>` creado en
    el documento vivo, y el navegador lo pide al instante. Pasaba igual en `main`. Ahora la dirección sale con
    `loading="lazy"` puesto antes del `src` (`src/ui/quietImage.ts`, con `editorSchema.ts` e `inlinePhoto.ts`): sin pedido,

@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.155 :
 
 **Tres restos de tandas anteriores.** (1) Copiar o arrastrar una foto del Drive dejaba `net::ERR_UNKNOWN_URL_SCHEME` en la
 consola (B.24): el HTML que arma BlockNote para el portapapeles ponía el `sdmedia://…` en un `<img>`, y el navegador
