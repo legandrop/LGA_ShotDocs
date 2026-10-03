@@ -73,6 +73,11 @@ export interface UnsyncedExportInfo {
   user: { id: string; email: string };
   /** El título de una página, si el dispositivo lo sabe. */
   titleOf: (pageId: string) => string | undefined;
+  /**
+   * Páginas que van enteras aunque el servidor haya confirmado todo: lo que un link público mandó y quedó apartado o
+   * esperando cuando el link dejó de andar (Docs/Doc_Link_Publico.md, E2.9). Van con `yjsUpdate` = todo lo guardado.
+   */
+  alsoPages?: string[];
 }
 
 /**
@@ -91,7 +96,19 @@ export async function exportUnsyncedBlob(
   commentsDb: CommentsDb | null = null,
 ): Promise<Blob> {
   const parts: BlobPart[] = [];
-  const [ops, failedOps, states] = await Promise.all([db.getAll('ops'), db.getAll('failedOps'), unsyncedDocStates(db)]);
+  const [ops, failedOps, unsynced] = await Promise.all([db.getAll('ops'), db.getAll('failedOps'), unsyncedDocStates(db)]);
+  const states = [...unsynced];
+  const whole = new Set<string>();
+  for (const pageId of info.alsoPages ?? []) {
+    if (states.some((s) => s.pageId === pageId)) {
+      whole.add(pageId);
+      continue;
+    }
+    const state = await db.get('docState', pageId);
+    if (!state) continue;
+    states.push(state);
+    whole.add(pageId);
+  }
 
   const head = {
     kind: 'lga-shotdocs-unsynced',
@@ -117,14 +134,16 @@ export async function exportUnsyncedBlob(
     // texto (borrado), no como hueco.
     const doc = new Y.Doc({ gc: false });
     applyRowsInOrder(doc, rows.map((r) => r.data));
-    // Lo que el servidor todavía no confirmó: la diferencia contra lo que ya tiene.
-    const update = Y.encodeStateAsUpdate(doc, state.syncedSV);
+    // Lo que el servidor todavía no confirmó: la diferencia contra lo que ya tiene (lo de un link que no entró a la
+    // página, todo lo guardado).
+    const update = whole.has(state.pageId) ? Y.encodeStateAsUpdate(doc) : Y.encodeStateAsUpdate(doc, state.syncedSV);
     parts.push(
       (first ? '' : ',') +
         JSON.stringify({
           pageId: state.pageId,
           title: info.titleOf(state.pageId) ?? null,
           rejected: state.rejected ?? null,
+          ...(whole.has(state.pageId) ? { sentThroughLink: true } : {}),
           text: plainText(doc),
           // Lo escrito acá que otro borró mientras se escribía (el aviso de la página), si lo hay.
           removedWriting: Array.isArray(removed) ? (removed as RemovedWriting[]).map((n) => n.text) : [],

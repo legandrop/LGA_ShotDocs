@@ -37,7 +37,8 @@ import {
   type Remote,
   type TeamRemote,
 } from './remote';
-import type { HistoryRow, PageVersionRow } from './history';
+import { linkAuthorKey, type HistoryRow, type PageVersionRow } from './history';
+import { LINK_EDIT_SCHEMA_VERSION, type AdmitDecision, type AdmitPageRow, type AdmitResult, type AdmitWorkRow, type LinkUpdateRow } from './linkAdmitApi';
 import {
   CommentQueue,
   commentsDbName,
@@ -115,6 +116,40 @@ export async function sha256Hex(data: Uint8Array): Promise<string> {
 type StoredComment = CommentRow & { body: string; updated_at?: string };
 
 /** Servidor en memoria con las mismas reglas que el de Supabase (ver supabase/migrations). */
+/** Un link público en el servidor en memoria (como `public_links`). */
+export interface FakePublicLink {
+  id: string;
+  pageId: string;
+  createdBy: string;
+  level?: 'comment' | 'edit';
+  revoked?: boolean;
+  /** Venció (`expires_at` en el pasado): retenido, puede volver. */
+  expired?: boolean;
+  /** `push_bytes_total`. */
+  pushBytes?: number;
+}
+
+/** Una fila de la sala de espera (`public_link_updates`). */
+export interface FakeRoomRow {
+  id: string;
+  n: number;
+  linkId: string;
+  pageId: string;
+  clientUpdateId: string;
+  /** Nulo al admitir: los bytes se movieron a la página. */
+  data: Uint8Array | null;
+  bytes: number;
+  author: string;
+  device: string | null;
+  appVersion: number;
+  createdAt: number;
+  decidedAt: number | null;
+  decidedBy: string | null;
+  decision: 'admitted' | 'aside' | null;
+  reason: string | null;
+  admittedSeq: number | null;
+}
+
 export class FakeServer {
   online = true;
   /** Guarda el próximo update pero hace como si la respuesta se hubiera perdido. */
@@ -150,7 +185,16 @@ export class FakeServer {
    */
   readonly updates = new Map<
     string,
-    { seq: number; clientUpdateId: string; data: Uint8Array; id?: number; createdBy?: string | null; createdAt?: string }[]
+    {
+      seq: number;
+      clientUpdateId: string;
+      data: Uint8Array;
+      id?: number;
+      createdBy?: string | null;
+      createdAt?: string;
+      /** La fila entró por un link (`page_updates.plink_author`, entrega 2a): el nombre del visitante. */
+      plinkAuthor?: string;
+    }[]
   >();
   /** El contador de `page_updates.id` (nunca vuelve atrás). */
   private updateIds = 0;
@@ -332,7 +376,244 @@ export class FakeServer {
    * Los links públicos vivos (Docs/Doc_Link_Publico.md), por token: su página y quién lo creó. Los usa el cliente del modo
    * link de las pruebas (`linkTesting.ts`).
    */
-  readonly publicLinks = new Map<string, { id: string; pageId: string; createdBy: string; revoked?: boolean }>();
+  readonly publicLinks = new Map<string, FakePublicLink>();
+
+  // --- link público, entrega 2a: Can edit (20261028120000_link_editar.sql) ------------------------------------------
+  /** `public_link_updates`: la sala de espera, en orden de llegada. */
+  readonly linkRoom: FakeRoomRow[] = [];
+  /** Los topes de los links que miran las pruebas (`plink_limit`, con los valores de la migración). */
+  linkLimits = { push_max_bytes: 1048576, waiting_bytes: 20971520, push: 2000, push_bytes: 20971520, life_push_bytes: 104857600, pass: 3000 };
+  /** Lo que contó cada link hoy (`public_link_usage`): `<link>:<tipo>` → cantidad y bytes. */
+  readonly linkUsage = new Map<string, { n: number; bytes: number }>();
+  /** Los pedidos de la admisión, en orden (`link_admit_pages`, `link_admit_work` con sus páginas, `link_admit`). */
+  readonly admitCalls: string[] = [];
+
+  /** Prende *Can edit* por un link (`link_edit_min_version`) con la base en la versión 19. Después de `enableClean`. */
+  enableLinkEdit(minVersion = 0.001): void {
+    this.settings = {
+      ...(this.settings ?? { generation: 1, minAppVersion: null, mediaUrl: null, schemaVersion: 1 }),
+      schemaVersion: Math.max(this.settings?.schemaVersion ?? 1, LINK_EDIT_SCHEMA_VERSION),
+      linkEditMinVersion: minVersion,
+    };
+  }
+
+  /** `private.link_edit_version_allowed`. */
+  linkEditVersionAllowed(version: string | null | undefined): boolean {
+    const min = this.settings?.linkEditMinVersion;
+    if ((this.settings?.schemaVersion ?? 0) < LINK_EDIT_SCHEMA_VERSION || min == null) return false;
+    if (!version || !/^\d{1,4}(\.\d{1,3})?$/.test(version)) return false;
+    const v = Number(version);
+    const appMin = this.settings?.minAppVersion;
+    return v >= min && (appMin == null || v >= appMin);
+  }
+
+  /** El link vive (sin revocar, sin vencer, su creador todavía comparte la página). */
+  linkAlive(l: FakePublicLink): boolean {
+    if (l.revoked || l.expired) return false;
+    const role = this.role(l.createdBy);
+    return !!role && role !== 'guest' && this.pageLevel(l.createdBy, l.pageId, true) >= 4;
+  }
+
+  /** `private.link_page_level`: 3 (Can edit) o 2 (Can view) si la página es de la rama viva del link; si no, 0. */
+  linkPageLevel(l: FakePublicLink, pageId: string): number {
+    if (!this.linkAlive(l)) return 0;
+    let under = false;
+    for (let cur: string | null = pageId, n = 0; cur && n < 10000; cur = this.pages.get(cur)?.parent_id ?? null, n++) {
+      const p = this.pages.get(cur);
+      if (!p || p.deleted_at) return 0;
+      if (cur === l.pageId) under = true;
+    }
+    if (!under || this.pageInDeletedProject(pageId)) return 0;
+    return l.level === 'edit' ? 3 : 2;
+  }
+
+  linkById(id: string): FakePublicLink | undefined {
+    for (const l of this.publicLinks.values()) if (l.id === id) return l;
+    return undefined;
+  }
+
+  /** `private.link_media_allowed`: el archivo lo usa hoy una página de la rama del link. */
+  linkMediaAllowed(l: FakePublicLink, fileId: string): boolean {
+    for (const key of this.pageFiles) {
+      const [pageId, file] = key.split(':');
+      if (file === fileId && this.linkPageLevel(l, pageId) > 0) return true;
+    }
+    return false;
+  }
+
+  /** Cuenta lo que gasta un link (`plink_count`); con un tope lleno, `link_rate_limited` sin sumar. */
+  linkCount(l: FakePublicLink, kind: 'push' | 'pass', bytes: number): string | null {
+    const key = `${l.id}:${kind}`;
+    const cur = this.linkUsage.get(key) ?? { n: 0, bytes: 0 };
+    const next = { n: cur.n + 1, bytes: cur.bytes + bytes };
+    if (next.n > this.linkLimits[kind]) return kind;
+    if (kind === 'push' && next.bytes > this.linkLimits.push_bytes) return 'push_bytes';
+    this.linkUsage.set(key, next);
+    return null;
+  }
+
+  /** `private.link_waiting_bytes`: lo que espera del link en las páginas donde hoy edita. */
+  linkWaitingBytes(l: FakePublicLink): number {
+    return this.linkRoom
+      .filter((r) => r.linkId === l.id && r.decidedAt === null && this.linkPageLevel(l, r.pageId) === 3)
+      .reduce((a, r) => a + r.bytes, 0);
+  }
+
+  /** `private.plink_aside_revoked`: lo que espera de un link revocado o reseteado queda apartado. */
+  asideRevoked(linkId: string, by: string | null): void {
+    for (const r of this.linkRoom) {
+      if (r.linkId === linkId && r.decidedAt === null) {
+        Object.assign(r, { decidedAt: this.now(), decidedBy: by, decision: 'aside', reason: 'link_revoked' });
+      }
+    }
+  }
+
+  /** Revocar (o el viejo de *Reset link*): no anda más y lo que esperaba queda apartado. */
+  revokePublicLink(token: string, by: string | null = this.ownerId): void {
+    const l = this.publicLinks.get(token);
+    if (!l) return;
+    l.revoked = true;
+    this.asideRevoked(l.id, by);
+  }
+
+  // --- la admisión (link_admit_pages, link_admit_work, link_admit) -----------------------------------------------
+
+  private admitAllowed(uid: string, version: string): boolean {
+    if (this.team && (!this.role(uid) || this.role(uid) === 'guest')) return false;
+    const clean = this.settings?.cleanMinVersion;
+    if (!this.cleanOn() || clean == null || !/^\d{1,4}(\.\d{1,3})?$/.test(version) || Number(version) < clean) return false;
+    return this.linkEditVersionAllowed(version);
+  }
+
+  /** `link_admit_pages`: sin bytes, las páginas con algo para decidir; lo retenido no aparece. */
+  admitPages(uid: string, version: string): { page_id: string; waiting: number; bytes: number }[] {
+    this.admitCalls.push('pages');
+    if (!this.admitAllowed(uid, version)) return [];
+    const v = Number(version);
+    const groups = new Map<string, { page: string; link: FakePublicLink; waiting: number; bytes: number; first: number }>();
+    for (const r of this.linkRoom) {
+      if (r.decidedAt !== null) continue;
+      const l = this.linkById(r.linkId);
+      if (!l || l.revoked || l.expired || l.level !== 'edit') continue;
+      const key = `${r.pageId}:${r.linkId}`;
+      const g = groups.get(key) ?? { page: r.pageId, link: l, waiting: 0, bytes: 0, first: r.appVersion };
+      g.waiting++;
+      g.bytes += r.bytes;
+      g.first = Math.min(g.first, r.appVersion);
+      groups.set(key, g);
+    }
+    const pages = new Map<string, { page_id: string; waiting: number; bytes: number; first: number }>();
+    for (const g of groups.values()) {
+      if (g.first > v || !this.seesDeleted(uid, g.page) || this.linkPageLevel(g.link, g.page) !== 3) continue;
+      const p = pages.get(g.page) ?? { page_id: g.page, waiting: 0, bytes: 0, first: g.first };
+      p.waiting += g.waiting;
+      p.bytes += g.bytes;
+      p.first = Math.min(p.first, g.first);
+      pages.set(g.page, p);
+    }
+    return [...pages.values()]
+      .sort((a, b) => a.first - b.first || (a.page_id < b.page_id ? -1 : 1))
+      .slice(0, 50)
+      .map(({ page_id, waiting, bytes }) => ({ page_id, waiting, bytes }));
+  }
+
+  /** `link_admit_work`: los bytes, solo de las páginas pedidas, en orden por página, link y llegada. */
+  admitWork(uid: string, version: string, pages: string[]): { id: string; page_id: string; link_id: string; n: number; data: Uint8Array }[] {
+    this.admitCalls.push(`work:${[...pages].sort().join(',')}`);
+    if (!this.admitAllowed(uid, version) || pages.length === 0) return [];
+    if (pages.length > 20) throw new RemoteError('too_many_pages', true, '22023');
+    const v = Number(version);
+    const blocked = new Set<string>();
+    const out: { id: string; page_id: string; link_id: string; n: number; data: Uint8Array }[] = [];
+    let total = 0;
+    const rows = this.linkRoom
+      .filter((r) => r.decidedAt === null && pages.includes(r.pageId))
+      .sort((a, b) => (a.pageId === b.pageId ? (a.linkId === b.linkId ? a.n - b.n : a.linkId < b.linkId ? -1 : 1) : a.pageId < b.pageId ? -1 : 1));
+    for (const r of rows) {
+      const l = this.linkById(r.linkId);
+      if (!l || l.revoked || l.expired || l.level !== 'edit') continue;
+      const key = `${r.pageId}:${r.linkId}`;
+      if (blocked.has(key)) continue;
+      if (!this.seesDeleted(uid, r.pageId) || this.linkPageLevel(l, r.pageId) < 3 || r.appVersion > v) {
+        blocked.add(key);
+        continue;
+      }
+      if (total > 0 && total + r.bytes > 4194304) break;
+      total += r.bytes;
+      out.push({ id: r.id, page_id: r.pageId, link_id: r.linkId, n: r.n, data: r.data!.slice() });
+    }
+    return out;
+  }
+
+  /** `link_admit`: decide en orden; mueve los bytes a la página; corta en la primera que decide distinto. */
+  admit(uid: string, version: string, pageId: string, decisions: { id: string; ok: boolean; reason?: string; media?: string[] }[]) {
+    this.admitCalls.push(`admit:${pageId}:${decisions.length}`);
+    const page = this.pages.get(pageId);
+    if (!page || !this.seesDeleted(uid, pageId) || (this.team && this.pageLevel(uid, pageId) < 3) || !this.admitAllowed(uid, version)) {
+      throw new RemoteError('page_not_found', true, 'P0002');
+    }
+    const v = Number(version);
+    const res: { id: string; decision: 'admitted' | 'aside' | 'held'; seq?: number; reason?: string }[] = [];
+    for (const d of decisions) {
+      const u = this.linkRoom.find((r) => r.id === d.id && r.pageId === pageId);
+      if (!u) throw new RemoteError('admit_not_found', true, 'P0002');
+      if (u.decidedAt !== null) {
+        res.push({ id: u.id, decision: u.decision!, ...(u.admittedSeq != null ? { seq: u.admittedSeq } : {}), ...(u.reason ? { reason: u.reason } : {}) });
+        if ((u.decision === 'admitted') !== d.ok) break;
+        continue;
+      }
+      if (this.linkRoom.some((x) => x.pageId === u.pageId && x.linkId === u.linkId && x.n < u.n && x.decidedAt === null)) {
+        throw new RemoteError('admit_out_of_order', true, 'P0001');
+      }
+      if (u.appVersion > v) throw new RemoteError('admit_version', true, 'P0001');
+      const l = this.linkById(u.linkId);
+      if (!l || this.linkPageLevel(l, u.pageId) < 3) {
+        res.push({ id: u.id, decision: 'held' });
+        break;
+      }
+      let ok = d.ok;
+      let why = d.reason?.trim().slice(0, 40) || null;
+      if (ok && (d.media ?? []).some((m) => !/^[0-9a-f-]{36}$/.test(m) || !this.linkMediaAllowed(l, m))) {
+        ok = false;
+        why = 'foreign_media';
+        Object.assign(u, { decidedAt: this.now(), decidedBy: uid, decision: 'aside', reason: why });
+        res.push({ id: u.id, decision: 'aside', reason: why });
+        break;
+      }
+      if (ok) {
+        page.update_seq += 1;
+        const list = this.updates.get(pageId) ?? [];
+        list.push({
+          seq: page.update_seq,
+          clientUpdateId: u.id,
+          data: u.data!.slice(),
+          id: this.nextUpdateId(),
+          createdBy: null,
+          createdAt: new Date(this.now()).toISOString(),
+          plinkAuthor: u.author,
+        });
+        this.updates.set(pageId, list);
+        Object.assign(u, { decidedAt: this.now(), decidedBy: uid, decision: 'admitted', admittedSeq: page.update_seq, data: null });
+        res.push({ id: u.id, decision: 'admitted', seq: page.update_seq });
+      } else {
+        Object.assign(u, { decidedAt: this.now(), decidedBy: uid, decision: 'aside', reason: why ?? 'unspecified' });
+        res.push({ id: u.id, decision: 'aside', reason: why ?? 'unspecified' });
+      }
+    }
+    return res;
+  }
+
+  /** `public_link_updates_of`: lo apartado, lo retenido y lo que espera en una página, para quien ve lo borrado. */
+  linkUpdatesOf(uid: string, pageId: string) {
+    if (!this.seesDeleted(uid, pageId) || (this.team && this.pageLevel(uid, pageId) < 3)) throw new RemoteError('page_not_found', true, 'P0002');
+    return this.linkRoom
+      .filter((r) => r.pageId === pageId && (r.decidedAt === null || r.decision === 'aside'))
+      .map((r) => {
+        const l = this.linkById(r.linkId);
+        const state: 'aside' | 'held' | 'waiting' = r.decision === 'aside' ? 'aside' : !l || this.linkPageLevel(l, pageId) < 3 ? 'held' : 'waiting';
+        return { id: r.id, link_id: r.linkId, author: r.author, created_at: new Date(r.createdAt).toISOString(), bytes: r.bytes, state, reason: r.reason };
+      });
+  }
 
   /** `private.has_plain_readers`: alguien activo con Ver o Comentar, un invitado con cualquier nivel, o un link vivo. */
   hasPlainReaders(pageId: string): boolean {
@@ -1848,10 +2129,40 @@ export class FakeRemote
       .map((u) => ({
         id: u.id ?? u.seq,
         seq: u.seq,
-        createdBy: u.createdBy === undefined ? this.server.ownerId : u.createdBy,
+        createdBy: u.plinkAuthor ? linkAuthorKey(u.plinkAuthor) : u.createdBy === undefined ? this.server.ownerId : u.createdBy,
         createdAt: u.createdAt ?? new Date(0).toISOString(),
         data: u.data.slice(),
       }));
+  }
+
+  // --- la admisión de lo que escribe un link (src/sync/linkAdmit.ts) ------------------------------------------------
+
+  async admitPages(): Promise<AdmitPageRow[]> {
+    this.server.check();
+    return this.server.admitPages(this.userId, this.appVersion);
+  }
+
+  async admitWork(pages: string[]): Promise<AdmitWorkRow[]> {
+    this.server.check();
+    return this.server.admitWork(this.userId, this.appVersion, pages);
+  }
+
+  async admit(pageId: string, decisions: AdmitDecision[]): Promise<AdmitResult[]> {
+    this.server.check();
+    return this.server.admit(this.userId, this.appVersion, pageId, decisions);
+  }
+
+  async linkUpdatesOf(pageId: string): Promise<LinkUpdateRow[]> {
+    this.server.check();
+    if ((this.server.settings?.schemaVersion ?? 0) < LINK_EDIT_SCHEMA_VERSION) return [];
+    return this.server.linkUpdatesOf(this.userId, pageId);
+  }
+
+  async linkUpdateBytes(id: string): Promise<Uint8Array> {
+    this.server.check();
+    const r = this.server.linkRoom.find((x) => x.id === id);
+    if (!r || !r.data || !this.server.seesDeleted(this.userId, r.pageId)) throw new RemoteError('not_found', true, 'P0002');
+    return r.data.slice();
   }
 
   async pageHistoryAuthors(pageId: string): Promise<HistoryAuthor[]> {
@@ -2965,6 +3276,8 @@ export async function makeDevice(
     sizes,
     compact,
     onCompacted: (pageId, outcome) => compactions.push({ pageId, outcome }),
+    // La pausa de la admisión (la última edición local) con el reloj del servidor de la prueba.
+    now: () => server.now(),
   });
   const offline = new OfflineManager({
     db: server.mediaDbFails ? null : mediaDb,

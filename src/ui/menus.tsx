@@ -172,6 +172,8 @@ export function PageMenu(props: {
   const perms = usePermissions();
   // Lo que el servidor rechazaría no se ofrece: editar pide 3; crear, mover y la papelera, 4.
   const canEdit = perms.canEditPage(props.pageId);
+  // La fila (título, hoja, títulos cortos, carpeta de reportes): un link con Can edit escribe solo el contenido (E2.4).
+  const canEditRow = perms.canEditRow(props.pageId);
   const canManage = perms.canManagePage(props.pageId);
   const format = pageFormat(tree, props.pageId);
   const { media, mediaDb, offline } = useServices();
@@ -223,7 +225,7 @@ export function PageMenu(props: {
       {camera?.kinds.includes('photo') && item(tr('camera.takePhoto'), <CameraIcon />, () => camera.open('photo'))}
       {camera?.kinds.includes('video') && item(tr('camera.recordVideo'), <VideoIcon />, () => camera.open('video'))}
       {item(tr('pageMenu.newInside'), <PlusIcon />, props.onNewChild, false, canManage)}
-      {item(tr('common.rename'), <RenameIcon />, props.onRename, false, canEdit)}
+      {item(tr('common.rename'), <RenameIcon />, props.onRename, false, canEditRow)}
       {item(tr('pageMenu.move'), <MoveIcon />, props.onMove, false, canManage)}
       {canEdit && (
         <button
@@ -255,12 +257,12 @@ export function PageMenu(props: {
           {tr('pageMenu.saveAsTemplate')}
         </button>
       )}
-      {saveOffer.reuse && item(tr('pageMenu.useAsTemplate'), <TemplateIcon />, () => void tree.setSetting(props.pageId, 'template', {}))}
+      {saveOffer.reuse && canEditRow && item(tr('pageMenu.useAsTemplate'), <TemplateIcon />, () => void tree.setSetting(props.pageId, 'template', {}))}
       {reportFolder &&
         item(tr('dayReport.new'), <DayReportIcon />, () => requestDayReport(props.pageId))}
       <button
         role="menuitem"
-        disabled={!canEdit}
+        disabled={!canEditRow}
         onClick={() => {
           props.onClose();
           props.onFormat();
@@ -380,7 +382,7 @@ export function PageMenu(props: {
       <button
         role="menuitemcheckbox"
         aria-checked={split}
-        disabled={!canEdit}
+        disabled={!canEditRow}
         data-tip={tr('pageMenu.shortTitlesTip')}
         onClick={() => void tree.setSetting(props.pageId, 'split', !split)}
       >
@@ -390,7 +392,7 @@ export function PageMenu(props: {
         {tr('pageMenu.shortTitles')}
         <span className="check">{split ? tr('common.on') : tr('common.off')}</span>
       </button>
-      {own && canEdit && (
+      {own && canEditRow && (
         <button
           role="menuitem"
           onClick={() => {
@@ -403,7 +405,7 @@ export function PageMenu(props: {
         </button>
       )}
       {/* La carpeta de reportes a mano (6.2): puede haber varias (una por unidad). Dejarla gana sobre lo deducido. */}
-      {canEdit && offerReportFolder && (
+      {canEditRow && offerReportFolder && (
         <button
           role="menuitem"
           data-tip={isReportFolder ? undefined : tr('pageMenu.useForDayReportsTip')}

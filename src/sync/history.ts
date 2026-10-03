@@ -35,12 +35,30 @@ export const MAX_RESTORE_BYTES = 4 * 1024 * 1024;
 /** El mapa de colapsar para todos (Doc_Colapsar.md, sección 4): una vista, no contenido. */
 const SHARED_COLLAPSE_MAP = 'collapsedHeadings';
 
+/**
+ * Quién escribió una fila que entró por un link público (Docs/Doc_Link_Publico.md, E2.8): en `createdBy` va el nombre
+ * que escribió el visitante con este prefijo (una cuenta nunca tiene un id así), y la app lo muestra con "(via link)".
+ */
+export const LINK_AUTHOR_PREFIX = 'via-link:';
+
+export function linkAuthorKey(name: string): string {
+  return LINK_AUTHOR_PREFIX + name;
+}
+
+/** El nombre del visitante si `createdBy` es de un link, o `null`. */
+export function linkAuthorName(createdBy: string | null | undefined): string | null {
+  return createdBy?.startsWith(LINK_AUTHOR_PREFIX) ? createdBy.slice(LINK_AUTHOR_PREFIX.length) : null;
+}
+
 /** Una fila de `page_history`. */
 export interface HistoryRow {
   /** `page_updates.id`: el contador que nunca vuelve atrás. */
   id: number;
   seq: number;
-  /** Quién la subió (lo pone la base); `null` si se borró la cuenta. */
+  /**
+   * Quién la subió (lo pone la base); `null` si se borró la cuenta. Una fila que entró por un link: `linkAuthorKey` del
+   * nombre del visitante.
+   */
   createdBy: string | null;
   /** Cuándo llegó al servidor (ISO). */
   createdAt: string;

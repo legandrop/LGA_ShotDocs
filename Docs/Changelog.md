@@ -12,6 +12,17 @@ hermanas), y cortes sin medio emoji en comentarios importados y menciones. El se
 `check`. Ayuda del título actualizada.
 [ Título largo - el título se corta en 500 caracteres y lo que sobra va al principio de la página; lo ya rechazado vuelve a la cola cortado ]
 
+v0.151 :
+
+**Link público, entrega 2a: *Can edit*** (P.19). Un link solo podía ver y comentar. Escribir directo en la página no
+era seguro: una fila rota de alguien sin cuenta podía colarse en una copia resumida o trabar el editor del equipo. Ahora
+lo que escribe el visitante espera en una sala (`public_link_updates`, migración sin aplicar, `schema_version` 19, con
+topes por bytes); el dispositivo de un editor lo prueba en ocho pasos (también la forma, dónde va cada nodo, topes a los
+números y a la profundidad) y la base lo mueve a la página o lo aparta sin perder nada. *Share* ofrece *Can edit* con sus
+números, la página avisa lo apartado con *Download it*, el historial muestra *Ana (via link)* y el visitante pone su
+nombre y ve *Sent, waiting for the team*. El interruptor queda apagado hasta la barrera de error del editor.
+[ Link Can edit 2a - la sala de espera, la admisión por un editor, Share con Can edit y el visitante que escribe ]
+
 v0.150 :
 
 **Dictado, entrega V4** (P.27, `Doc_Dictado.md` sección 18). Dictar varias notas del mismo plano obligaba a nombrarlo

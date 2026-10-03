@@ -1,22 +1,41 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { fromBase64 } from '../lib/base64';
+import { stored } from '../i18n';
+import { fromBase64, toBase64 } from '../lib/base64';
 import type { AccessSnapshot } from './access';
 import type { CommentAuthor, CommentRemote, CommentRow, ListedComment, NewComment } from './comments';
 import { SupabaseRemote, timed, toRemoteError, MAX_REQUEST_TIMEOUT_MS, REQUEST_TIMEOUT_MS, type CleanWorkRow, type CleanPushResult, type LinkResult } from './remote';
-import { RemoteError, type MediaFileRow, type PageRow, type PageUseRow, type ProjectRow, type RemoteUpdate, type WorkspaceSettings } from './types';
+import type { AdmitPageRow, AdmitResult, AdmitWorkRow, LinkUpdateRow } from './linkAdmitApi';
+import {
+  AUTHOR_MISSING,
+  RemoteError,
+  type MediaFileRow,
+  type PageRow,
+  type PageUseRow,
+  type ProjectRow,
+  type RemoteUpdate,
+  type WorkspaceSettings,
+} from './types';
 
 // El servidor visto desde un link público (Docs/Doc_Link_Publico.md, 3.5 a 3.7): las mismas operaciones que usa el motor,
 // sobre las funciones `plink_*` de la base, con el cliente sin sesión del modo link (`createLinkClient`). El visitante es,
 // para la app, un invitado con Comentar sobre la página del link (`fetchMyAccess`): ve la rama, recibe solo bases limpias
 // (D14) y comenta; todo lo demás (escribir, compartir, la papelera, el historial) no existe para él y, si algo lo pidiera
 // igual, la base lo rechaza.
+//
+// Con *Can edit* (entrega 2a, Docs/Doc_Link_Publico.md, E2.2): es un invitado con Editar sobre la página del link y
+// escribe con `plink_push_page_update`, que deja lo escrito en la sala de espera (devuelve 0: todavía no está en la
+// página). Lo ve entrar cuando un editor lo admite y arma la base siguiente. Crear, mover, renombrar, subir archivos
+// (hasta la 2b), compartir, compactar, el historial y las versiones con nombre siguen cerrados.
 
 /** Lo que devuelve `plink_open`. */
 export interface LinkOpenInfo {
   link_id: string;
   page_id: string;
   title: string;
+  /** El nivel que esta versión de la app puede usar (una más vieja que el interruptor de Can edit ve Can view). */
   level: 'comment' | 'edit';
+  /** El nivel del link (con el interruptor apagado, un link Can edit se usa como Can view). */
+  link_level: 'comment' | 'edit';
   expires_at: string | null;
   min_app_version: number | null;
   schema_version: number;
@@ -42,6 +61,29 @@ function readOnly(): never {
   throw new RemoteError(LINK_READ_ONLY, true, '42501');
 }
 
+/** Subir fotos, videos y archivos por un link llega con la entrega 2b: hasta entonces, un aviso que se entiende. */
+function noUploads(): never {
+  throw new RemoteError(stored('link.edit.noUploads'), true, '42501');
+}
+
+/** El tope de una subida por un link (`push_max_bytes`, 1 MB): una más grande no se manda (R1 de la re-verificación). */
+export const LINK_PUSH_MAX_BYTES = 1024 * 1024;
+
+/** Cómo va lo que escribió este dispositivo con el link (`plink_push_status`), por página. */
+export interface LinkEdits {
+  /** Hay algo escrito que no sube porque falta el nombre del visitante. */
+  needName: boolean;
+  /** Páginas con algo mandado que espera a que un editor lo admita. */
+  waiting: string[];
+  /** Páginas con algo apartado (no pudo entrar): se baja con *Download them*. */
+  aside: string[];
+}
+
+const NO_EDITS: LinkEdits = { needName: false, waiting: [], aside: [] };
+
+/** Cada cuánto se pregunta el estado de lo mandado mientras algo espera (cuenta como un pase, P11). */
+const STATUS_EVERY_MS = 30_000;
+
 /** `plink_open` se vuelve a pedir cada tanto (cuenta como una apertura, P11): no en cada ciclo. */
 const OPEN_EVERY_MS = 2 * 60 * 60_000;
 
@@ -54,15 +96,48 @@ export class LinkRemote extends SupabaseRemote {
   private treeRows: PageRow[] = [];
 
   private readonly linkVersion: string;
+  /** Lo que escribió este dispositivo: falta el nombre, espera, se apartó (la insignia y los avisos lo muestran). */
+  private edits: LinkEdits = NO_EDITS;
+  private readonly editListeners = new Set<() => void>();
+  /** Hay que volver a preguntar el estado (se mandó algo, o algo seguía esperando). */
+  private statusDue = true;
+  private statusAt = 0;
+  /** `plink_push_status` llegó a su tope del día (los pases): no se pregunta más hasta esta hora. */
+  private statusOffUntil = 0;
+
+  /** No admite: lo hace el dispositivo de un editor (E2.3). */
+  readonly admitsLinks = false;
 
   constructor(
     private readonly linkClient: SupabaseClient,
     appVersion: string,
     /** Avisa cuando el link deja de andar o llega a un tope (la pantalla lo dice), y cuando vuelve a andar (`null`). */
     private readonly onProblem: (problem: LinkProblem | null) => void = () => undefined,
+    /** El nombre que escribió el visitante (P8), en el momento de subir: sin nombre no se sube lo escrito. */
+    private readonly author: () => string = () => '',
   ) {
     super(linkClient, appVersion);
     this.linkVersion = appVersion;
+  }
+
+  /** Lo que escribió este dispositivo con el link. */
+  linkEdits = (): LinkEdits => this.edits;
+
+  subscribeLinkEdits = (fn: () => void): (() => void) => {
+    this.editListeners.add(fn);
+    return () => this.editListeners.delete(fn);
+  };
+
+  private setEdits(patch: Partial<LinkEdits>): void {
+    const next = { ...this.edits, ...patch };
+    if (JSON.stringify(next) === JSON.stringify(this.edits)) return;
+    this.edits = next;
+    for (const fn of this.editListeners) fn();
+  }
+
+  /** El visitante escribió su nombre: lo que esperaba sube en el próximo ciclo. */
+  nameChanged(): void {
+    if (this.author().trim()) this.setEdits({ needName: false });
   }
 
   /** Lo último que dijo `plink_open` (o `null` si todavía no abrió). */
@@ -91,6 +166,8 @@ export class LinkRemote extends SupabaseRemote {
           page_id: String(raw.page_id),
           title: typeof raw.title === 'string' ? raw.title : '',
           level: raw.level === 'edit' ? 'edit' : 'comment',
+          // Una base anterior a la versión 19 no lo dice: el link es Can view.
+          link_level: raw.link_level === 'edit' ? 'edit' : 'comment',
           expires_at: typeof raw.expires_at === 'string' ? raw.expires_at : null,
           min_app_version: raw.min_app_version == null ? null : Number(raw.min_app_version),
           schema_version: Number(raw.schema_version) || 0,
@@ -145,6 +222,8 @@ export class LinkRemote extends SupabaseRemote {
   override async fetchTree(projectIds: string[]): Promise<PageRow[]> {
     const info = await this.open();
     if (!projectIds.includes(info.link_id)) return [];
+    // Una vez por ciclo, cómo va lo que se mandó (mientras algo espera): sus errores no cortan nada.
+    if (info.level === 'edit') await this.refreshEdits().catch(() => undefined);
     const rows = await this.call<Record<string, unknown>[]>('plink_tree', { p_sig: this.treeSig });
     if (rows.length > 0) {
       this.treeSig = String(rows[0].sig);
@@ -187,6 +266,8 @@ export class LinkRemote extends SupabaseRemote {
       member: { role: 'guest', removed_at: null },
       grants: [{ id: info.link_id, project_id: null, page_id: info.page_id, level: info.level === 'edit' ? 'edit' : 'comment' }],
       fetchedAt: Date.now(),
+      // Con Can edit escribe solo el contenido: el título, los ajustes y la hoja son de la fila (E2.4).
+      contentOnly: true,
     };
   }
 
@@ -202,8 +283,58 @@ export class LinkRemote extends SupabaseRemote {
     return readOnly();
   }
 
-  override async pushUpdate(): Promise<number> {
-    return readOnly();
+  /**
+   * Escribir con *Can edit*: a la sala de espera (`plink_push_page_update`), con la versión y el nombre del visitante.
+   * Devuelve 0: la fila todavía no está en la página (la confirmación sube `syncedSV` y no mueve el cursor; lo admitido
+   * llega con la base siguiente). Sin nombre no se manda (queda en el dispositivo); una subida de más de 1 MB tampoco
+   * (`update_size_invalid` sin pedido: la página queda rechazada hasta deshacer o volver a intentar).
+   */
+  override async pushUpdate(pageId: string, clientUpdateId: string, update: Uint8Array): Promise<number> {
+    const info = await this.open();
+    if (info.level !== 'edit') return readOnly();
+    const name = this.author().trim();
+    if (!name) {
+      this.setEdits({ needName: true });
+      throw new RemoteError(AUTHOR_MISSING, false, '22023');
+    }
+    if (update.length === 0 || update.length > LINK_PUSH_MAX_BYTES) throw new RemoteError('update_size_invalid', true, '22023');
+    const b64 = toBase64(update);
+    await this.call<number>(
+      'plink_push_page_update',
+      { p_page_id: pageId, p_client_update_id: clientUpdateId, p_update: b64, p_app_version: this.version(), p_author: name },
+      MAX_REQUEST_TIMEOUT_MS,
+    );
+    this.statusDue = true;
+    this.setEdits({ needName: false, waiting: [...new Set([...this.edits.waiting, pageId])] });
+    return 0;
+  }
+
+  /**
+   * Cómo va lo mandado desde este dispositivo (`plink_push_status`): qué espera y qué se apartó. Solo mientras algo
+   * espera (o al abrir), una vez cada `STATUS_EVERY_MS`. Cuenta como un pase: con el tope del día lleno, deja de
+   * preguntar hasta mañana sin avisar que el link no puede escribir (R2 de la re-verificación).
+   */
+  async refreshEdits(force = false): Promise<void> {
+    const now = Date.now();
+    if (!force && (!this.statusDue || now < this.statusOffUntil || now - this.statusAt < STATUS_EVERY_MS)) return;
+    this.statusAt = now;
+    const { data, error, status } = await timed(this.linkClient.rpc('plink_push_status'));
+    if (error) {
+      if (linkProblemOf(error.message) === 'link_rate_limited') {
+        const tomorrow = new Date();
+        tomorrow.setHours(24, 0, 0, 0);
+        this.statusOffUntil = tomorrow.getTime();
+        return;
+      }
+      const problem = linkProblemOf(error.message);
+      if (problem) this.onProblem(problem);
+      throw toRemoteError(error, status);
+    }
+    const rows = (data ?? []) as { page_id: string; waiting: number; aside: number }[];
+    const waiting = rows.filter((r) => Number(r.waiting) > 0).map((r) => String(r.page_id));
+    const aside = rows.filter((r) => Number(r.aside) > 0).map((r) => String(r.page_id));
+    this.statusDue = waiting.length > 0;
+    this.setEdits({ waiting, aside });
   }
 
   override async createPage(): Promise<void> {
@@ -223,7 +354,7 @@ export class LinkRemote extends SupabaseRemote {
   }
 
   override async uploadFile(): Promise<void> {
-    return readOnly();
+    return noUploads();
   }
 
   /** Las imágenes viejas `sdfile://` (bucket `page-files`) no se abren por un link (3.9). */
@@ -264,23 +395,25 @@ export class LinkRemote extends SupabaseRemote {
   }
 
   override async registerFile(): Promise<LinkResult> {
-    return readOnly();
+    return noUploads();
   }
 
+  /** El uso de un archivo en una página lo registra el dispositivo de un editor al reconciliar (E2.4): acá, nada. */
   override async linkPageFile(): Promise<LinkResult> {
-    return readOnly();
+    return 'ok';
   }
 
   override async uploadThumb(): Promise<void> {
-    return readOnly();
+    return noUploads();
   }
 
   override async setFileThumb(): Promise<void> {
-    return readOnly();
+    return noUploads();
   }
 
+  /** Lo mismo al sacar una foto: la desvincula el editor al reconciliar. */
   override async unlinkPageFile(): Promise<boolean> {
-    return readOnly();
+    return true;
   }
 
   override async trashedFiles(): Promise<never[]> {
@@ -293,6 +426,96 @@ export class LinkRemote extends SupabaseRemote {
 
   override async projectSizes(): Promise<null> {
     return null;
+  }
+
+  // --- cerrado explícito: lo que hereda de SupabaseRemote y un link no hace nunca (E2.1) ---------------------------
+
+  /** Un link no compacta ni baja snapshots (sigue con `plink_pull_page`). */
+  override async claimCompaction(): Promise<null> {
+    return null;
+  }
+
+  override async pushSnapshot(): Promise<never> {
+    return readOnly();
+  }
+
+  override async confirmSnapshot(): Promise<never> {
+    return readOnly();
+  }
+
+  override async skipCompaction(): Promise<never> {
+    return readOnly();
+  }
+
+  override async invalidateSnapshot(): Promise<boolean> {
+    return false;
+  }
+
+  /** Un link no admite (lo hace un editor) ni ve lo apartado de una página. */
+  override async admitPages(): Promise<AdmitPageRow[]> {
+    return [];
+  }
+
+  override async admitWork(): Promise<AdmitWorkRow[]> {
+    return [];
+  }
+
+  override async admit(): Promise<AdmitResult[]> {
+    return readOnly();
+  }
+
+  override async linkUpdatesOf(): Promise<LinkUpdateRow[]> {
+    return [];
+  }
+
+  override async linkUpdateBytes(): Promise<Uint8Array> {
+    return readOnly();
+  }
+
+  /** Sin historial ni versiones con nombre (P4). */
+  override async pageHistory(): Promise<never> {
+    return readOnly();
+  }
+
+  override async namePageVersion(): Promise<never> {
+    return readOnly();
+  }
+
+  override async renamePageVersion(): Promise<never> {
+    return readOnly();
+  }
+
+  override async removePageVersion(): Promise<never> {
+    return readOnly();
+  }
+
+  override async markPageRestored(): Promise<never> {
+    return readOnly();
+  }
+
+  /** Ni compartir ni el equipo. */
+  override async share(): Promise<never> {
+    return readOnly();
+  }
+
+  override async unshare(): Promise<never> {
+    return readOnly();
+  }
+
+  override async createInvitation(): Promise<never> {
+    return readOnly();
+  }
+
+  override async revokeInvitation(): Promise<never> {
+    return readOnly();
+  }
+
+  override async setMemberRole(): Promise<never> {
+    return readOnly();
+  }
+
+  override async removeMember(): Promise<never> {
+    return readOnly();
   }
 }
 
