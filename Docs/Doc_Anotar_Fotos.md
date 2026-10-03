@@ -210,8 +210,9 @@ doc.getMap('photoMarkup')                    // al lado de CONTENT_FRAGMENT y de
   suma a «lo que no garantiza» de `Doc_Privacidad_Borrado.md` en la entrega 2.
 - **El deshacer del anotador** es un `Y.UndoManager` sobre el mapa raíz con un origen propio por foto
   (`sd-markup:<fileId>` en `trackedOrigins`): deshace solo lo de esa foto en esa sesión. No borra una forma tuya que
-  otra persona cambió (ni el marco de una foto con formas): `protectMarkupOthers`, `Doc_Deshacer.md` 19.2. Al cerrarse,
-  sus pasos pasan a la línea de tiempo de la página como uno solo.
+  otra persona cambió, y nunca borra el marco de la foto (puede haber formas del otro que todavía no llegaron; un marco
+  sin formas no se dibuja): `protectMarkupOthers`, `Doc_Deshacer.md` 19.2 y 19.5. Al cerrarse, sus pasos pasan a la
+  línea de tiempo de la página como uno solo.
 
 ## 4. Cómo se ven en cada lugar
 

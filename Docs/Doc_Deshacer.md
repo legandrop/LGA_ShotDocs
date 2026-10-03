@@ -915,15 +915,17 @@ la otra persona escribiendo adentro de lo reemplazado, sin nada perdido.
   otro cambió después, pero borraba igual algo tuyo con lo del otro adentro: deshacer la forma que creaste se llevaba
   el cambio que otra persona le hizo (moverla, cambiarle el color), y deshacer la primera anotación de una foto borraba
   el marco aunque el otro hubiera dibujado con él (sus formas quedaban sin marco, sin verse). Ahora el filtro de borrado
-  (`protectMarkupOthers`, el mismo criterio que B1 en el texto) deja la forma con lo del otro adentro, entera, y el marco
-  mientras quede alguna forma de esa foto. Vale también para el ⌘Z adentro del anotador (antes tampoco lo cuidaba).
+  (`protectMarkupOthers`, el mismo criterio que B1 en el texto) deja la forma con lo del otro adentro, entera, y
+  **deshacer nunca borra el marco de una foto** (corrección de la auditoría, 19.5: mirar si quedaban formas no
+  alcanzaba con el otro sin red). Vale también para el ⌘Z adentro del anotador (antes tampoco lo cuidaba).
   Para saber qué formas creó el paso que se deshace, se deshace de a un paso por vez (`popMarkupStep`), como `step` en
   la página. Tus cambios a una forma que ya existía se deshacen igual.
 - **Escribir en el anotador es algo nuevo aunque se deshaga todo adentro.** Qué pasaba (la prueba al azar, 1 de 3.000):
   deshacer una anotación con ⌘Z, abrir el anotador otra vez, dibujar en la misma foto y deshacerlo adentro, cerrar y
   ⌘⇧Z: la anotación vieja volvía sin marco, porque Yjs no rehace una clave del mapa que se volvió a escribir después
   (aunque esté borrada) si no fue por la misma pila. Ahora el anotador avisa aunque su pila quede vacía y la línea de
-  tiempo borra lo de rehacer (como cualquier editor: escribir y deshacerlo no devuelve lo que había para rehacer).
+  tiempo borra lo de rehacer (como cualquier editor: escribir y deshacerlo no devuelve lo que había para rehacer). Con
+  el marco que ya no se borra (19.5) ese caso tampoco podría pasar; la regla queda por lo de cualquier editor.
 - **Sin aviso al deshacer en la misma página**, como un paso de página; solo si cruzó. Si la foto ya no está en la
   página (se borró el bloque y la anotación sigue hasta la poda), se deshace igual y se dice: "Undid annotations on a
   photo that's no longer in “Shot 3”."
@@ -939,6 +941,9 @@ la otra persona escribiendo adentro de lo reemplazado, sin nada perdido.
 | Recorrido en Chromium (arnés con la app de verdad, servidor en memoria con archivos, sin login; Windows con Ctrl y Mac con ⌘) | anotar la foto de Shot 3 (rectángulo y flecha), escribir en Shot 12, ⌘Z saca lo escrito, ⌘Z vuelve a Shot 3 y saca la anotación entera (formas y marco) con la foto a la vista y "Undone in “Shot 3” · Back", ⌘⇧Z la vuelve igual, ⌘⇧Z vuelve a Shot 12 con lo escrito; con otra persona dibujando en la misma foto, ⌘Z saca lo tuyo de esa vez y deja lo suyo, y el otro dispositivo baja lo mismo; 0 errores en la consola. 36 de 36 comprobaciones |
 | Al azar sin el editor, sola (3.000 semillas de 50 acciones: anotar dos fotos con dibujar, mover, cambiar el color, borrar y ⌘Z / ⌘⇧Z adentro, escribir en dos páginas, ⌘Z y ⌘⇧Z de la línea de tiempo en el medio) | deshacer todo: 3.000 de 3.000 exactas (el mapa y el texto como al principio); rehacer todo: 3.000 de 3.000 (13.471 veces en el anotador) |
 | Lo mismo con otra persona anotando las mismas fotos (dibuja, mueve y cambia formas suyas y tuyas, borra) | 0 cosas suyas a la vista (formas, campos, el marco de una foto con formas) borradas por un deshacer o rehacer, de la línea de tiempo o del anotador, en 3.000 corridas (29.735 pasos deshechos); 3.000 de 3.000 iguales en los dos dispositivos. Sin `protectMarkupOthers` falla |
+| Correcciones de la auditoría (19.5): al azar con cortes de red y el otro deshaciendo lo suyo, 1.000 semillas | 0 formas sin marco al volver la red, 0 cosas del otro perdidas, 1.000 de 1.000 iguales; con la regla de antes del marco, falla |
+| Recorrido en Chromium, con las correcciones | 44 de 44: lo de arriba, la foto lejana entera y por encima del aviso después de cruzar, y el tooltip del triángulo (Windows y Mac) |
+| Mutantes de las correcciones | 7 de 7 mueren: el marco con la regla de antes, `nearest` sin volver a centrar, y A5, A2, A6, A10 y A1 de la auditoría |
 | Pruebas de mutación (cada protección sacada) | 18 de 18 hacen fallar alguna prueba: proteger lo ajeno, la forma con lo del otro, el marco, los campos de la forma creada en el paso, el paso a mano, lo deshecho adentro que borra lo de rehacer, anotar que borra lo de rehacer de su página, escribir que borra el rehacer de lo anotado, retener la página, rearmar, el tope, mantener apretado, mostrar la foto, el texto a medio escribir, el aviso con la pila vacía, el anotador de a un paso, y la ventana de O4 y el foco del panel |
 | Versión vieja (el esquema anterior) abriendo la página con lo anotado deshecho y rehecho | no escribe nada al abrir |
 
@@ -954,6 +959,34 @@ la papelera, el documento rearmado, el tope, retener, la versión vieja), `undoT
 - La memoria en el iPhone y el gesto de deshacer de iOS en la PWA instalada (entregas 1 y 2).
 - El anotador en el teléfono (sin ⌘Z): sus botones de deshacer siguen siendo de esa vez; lo de esa vez, en la página, se
   deshace con teclado físico o con el gesto de iOS (a probar a mano).
+
+### 19.5 Correcciones de la auditoría
+
+Auditoría independiente sobre `d29bd15`: no aprobado, un bloqueante chico; 1.000 corridas al azar propias por variante
+(con otra persona, con cortes de red, y el otro también deshaciendo lo suyo).
+
+- **B1, las formas del otro sin marco.** Si yo anotaba primero una foto (escribía su marco) y deshacía mi anotación
+  mientras otra persona dibujaba sobre ella sin red, al volver la red sus formas llegaban sin marco y no se veían (42 a
+  46 de 1.000 con cortes). Mirar las formas que ya llegaron no alcanza. Ahora **deshacer nunca borra el marco**: un marco
+  sin formas no se dibuja (`readPhotoMarkup` pide al menos una) y la poda lo saca con la foto. Deshacer todo deja el
+  mapa sin formas (con el marco). Cubre también **O2** (rehacer lo mío después de que el otro anotó y deshizo lo suyo:
+  mis formas volvían sin marco). Pruebas: los casos R6/D2 y D1, y la prueba al azar con cortes de red (200 semillas en
+  la suite; 1.000: 0 formas sin marco, 0 cosas del otro perdidas, 1.000 de 1.000 iguales).
+- **O1, la foto lejana tapada por el aviso.** Después de cruzar de página, la foto de abajo de una página larga quedaba
+  con 27 de 270 px a la vista: se acercaba (`nearest`) antes de que la página tuviera su alto. Ahora `revealPhoto` la
+  centra si no se ve entera (con lugar para el aviso), y otra vez cuando la imagen carga y a los 300 ms, salvo que la
+  persona ya se haya movido. Medido en Chromium: entera, por encima del aviso.
+- **O3, guardas sin prueba:** el proyecto en `peek` (⌘Z en otro proyecto no ofrece lo anotado de este), `forget` con la
+  página en pantalla, `stepMarkup` sin poder editar, y los dos chequeos del documento. Cada una con su prueba, que falla
+  con su mutante.
+- **F1 (de `main`, nivel alto), rehacer un pegado con anotaciones después de ir y volver.** El deshacer de la página
+  sumaba el mapa de anotaciones recién al pegar (`trackMarkupInUndo`); el editor nuevo de la misma página no lo tenía, y
+  rehacer el pegado traía la foto sin sus flechas. Ahora `PageEditor.tsx` lo suma al montar el editor (solo el origen
+  de lo pegado). Pruebas: con la app (el editor recién montado lo sigue) y con la línea de tiempo (vuelven las flechas;
+  sin el arreglo, no).
+- **F2** (un error de la consola al pegar una foto): al roadmap (B.23).
+- **D226**, que viaja con esta entrega (pedido de Lega): el tooltip del triángulo de colapsar, un renglón por acción
+  (`Doc_Colapsar.md`, §3).
 
 ## Correcciones de la auditoría (2026-10-02)
 

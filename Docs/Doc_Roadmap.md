@@ -565,7 +565,8 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   pruebas de A5, A7 y A9 de la entrega 1; sección 18), 3 (**hecha, v0.0XX**: lo de una vez en el anotador es un paso de
   la página, ⌘Z lo deshace entero con la foto a la vista y ⌘⇧Z lo rehace, sin llevarse lo de otra persona; con *Show* en
   el aviso de ⌘Z de un reemplazo con páginas cambiadas, el foco que sigue en el panel después del *Undo* de "Last" y la
-  prueba de la ventana de O4; sección 19). Pendientes chicos: una página con historia que estaba en la papelera durante
+  prueba de la ventana de O4; con sus correcciones: deshacer nunca borra el marco de una foto, la foto lejana a la vista
+  y rehacer un pegado con anotaciones después de ir y volver; sección 19). Pendientes chicos: una página con historia que estaba en la papelera durante
   el ⌘Z de un reemplazo, restaurada después, deja "Toma 1: cámara" (18.4, auditoría O1: el reemplazo tendría que quedar
   a la vez para rehacer y para deshacer; mediano); con el panel abierto y el foco puesto por programa en el editor,
   Ctrl+Shift+Z deshace (no se llega con el mouse ni el teclado: el panel es modal); y la copia propia de lo ajeno que se
@@ -863,6 +864,10 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    900 corridas al azar de la línea de tiempo con el editor, también 300 con otra persona escribiendo y borrando texto,
    no apareció ninguna. Falta: medirla con dos editores borrando y deshaciendo bloques enteros, y ver si se arregla con
    el parche de Yjs o se reporta (`Doc_Deshacer.md`, 16.6 y 17).
+23. **Un error en la consola al pegar una foto** (auditoría de la entrega 3 de P.26, F2; bajo). Al pegar una foto del
+   Drive, la consola muestra `net::ERR_UNKNOWN_URL_SCHEME` por la dirección `sdmedia://…` (algo pide la dirección cruda
+   antes de que la foto pase a mostrarse desde el dispositivo). No rompe nada a la vista; no se verificó si pasa igual en
+   `main`. Reproducción: el arnés de la auditoría (`trabajo/sesion_f554a71f/informes/deshacer-e3-audit/arnes`, R3e).
 
 ### C. Esperan a Lega
 

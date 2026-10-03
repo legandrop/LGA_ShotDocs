@@ -3,14 +3,13 @@
 v0.0XX :
 
 **Deshacer en orden, entrega 3: anotar una foto es un paso** (P.26): ⌘Z en la página salteaba lo anotado. Ahora, al
-cerrar el anotador, lo de esa vez entra en la línea de tiempo de la página: ⌘Z lo deshace entero en su orden (si la
-foto está en otra página, te lleva y la muestra) y ⌘⇧Z lo rehace. Lo de otra persona en la misma foto queda: no se
-borra una forma tuya que ella cambió ni el marco de una foto con formas (también adentro del anotador). Escribir en el
-anotador borra lo de rehacer aunque se deshaga adentro (si no, una anotación vieja volvía sin marco). Además: *Show*
-en el aviso de deshacer un reemplazo con lugares que habían cambiado, el foco que sigue en el panel después de *Undo*
-y la prueba de la ventana de O4. Ayuda al día.
+cerrar el anotador, lo de esa vez entra en la línea de tiempo: ⌘Z lo deshace entero en su orden (si la foto está en
+otra página, te lleva y la muestra) y ⌘⇧Z lo rehace. Lo de otra persona en la misma foto queda, también sin red:
+deshacer no borra una forma tuya que ella cambió ni el marco de la foto. Además: *Show* en el aviso de deshacer un
+reemplazo con lugares cambiados, el foco del panel después de *Undo*, rehacer un pegado con anotaciones después de ir
+y volver (traía la foto sin flechas) y el tooltip del triángulo de colapsar, un renglón por acción con su atajo (D226).
 
-[ Deshacer en orden entrega 3 - anotar una foto como un paso de ⌘Z y ⌘⇧Z, sin llevarse lo de otra persona, Show en el aviso del reemplazo y el foco del panel ]
+[ Deshacer en orden entrega 3 - anotar una foto como un paso de ⌘Z y ⌘⇧Z sin llevarse lo de otra persona, Show en el aviso del reemplazo, rehacer un pegado con anotaciones y el tooltip de colapsar ]
 
 v0.148 :
 
