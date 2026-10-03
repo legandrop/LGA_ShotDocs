@@ -35,7 +35,7 @@ import { downloadProps, isOffline, type AttachmentView, type CarreteLoader, type
 import { CarreteMarkup, useHasMarkup } from './CarreteMarkup';
 import { AnnotateIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, DownloadIcon, EyeIcon, EyeOffIcon, OpenIcon } from './icons';
 import { isLetter } from './findUi';
-import { shortcutLabel } from './shortcuts';
+import { asAction, tipRows } from './tipRows';
 
 // El carrete (paso 7 de Docs/Plan_Workspaces.md; Docs/Doc_Carrete.md): todas las fotos y videos de la
 // página a pantalla completa, en orden, empezando por la que se tocó. Anterior/siguiente con las flechas,
@@ -790,7 +790,7 @@ export function Carrete({ items, start, loader, online, onClose, markup = null, 
           <button
             className="carrete-btn carrete-annotate"
             aria-label={tr('carrete.annotate')}
-            data-tip={tr('carrete.keyboard', { key: shortcutLabel('carreteAnnotate') })}
+            data-tip={tipRows([{ shortcut: 'carreteAnnotate', action: asAction(tr('carrete.annotate')) }])}
             onClick={annotate}
           >
             <AnnotateIcon size={20} />
@@ -798,7 +798,7 @@ export function Carrete({ items, start, loader, online, onClose, markup = null, 
           </button>
         )}
         {downloadLink('carrete-btn', true)}
-        <button className="carrete-btn" aria-label={tr('common.close')} data-tip={tr('carrete.keyboard', { key: shortcutLabel('carreteClose') })} onClick={requestClose}>
+        <button className="carrete-btn" aria-label={tr('common.close')} data-tip={tipRows([{ shortcut: 'carreteClose', action: asAction(tr('common.close')) }])} onClick={requestClose}>
           <CloseIcon size={22} />
         </button>
       </div>
@@ -846,14 +846,14 @@ export function Carrete({ items, start, loader, online, onClose, markup = null, 
             <button
               className="carrete-nav carrete-prev"
               aria-label={tr('carrete.previous')}
-              data-tip={tr('carrete.keyboard', { key: shortcutLabel('carretePrev') })}
+              data-tip={tipRows([{ shortcut: 'carretePrev', action: asAction(tr('carrete.previous')) }])}
               disabled={index === 0} onClick={() => go(-1)}>
               <ChevronLeftIcon size={26} />
             </button>
             <button
               className="carrete-nav carrete-next"
               aria-label={tr('carrete.next')}
-              data-tip={tr('carrete.keyboard', { key: shortcutLabel('carreteNext') })}
+              data-tip={tipRows([{ shortcut: 'carreteNext', action: asAction(tr('carrete.next')) }])}
               disabled={index === count - 1}
               onClick={() => go(1)}
             >

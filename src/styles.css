@@ -2349,6 +2349,44 @@ code {
   clip-path: polygon(0 0, 100% 0, 50% 100%);
 }
 
+/* Al costado (un control más alto que la ventana, como el borde de la barra lateral): la flecha, de 11×16, en el borde
+   izquierdo o derecho y a la altura de `--arrow-y`. */
+.tooltip.right::before,
+.tooltip.left::before {
+  top: calc(var(--arrow-y, 50%) - 8px);
+  width: 11px;
+  height: 16px;
+}
+
+.tooltip.right::after,
+.tooltip.left::after {
+  top: calc(var(--arrow-y, 50%) - 6.5px);
+  width: 10px;
+  height: 13px;
+}
+
+.tooltip.right::before {
+  left: -11px;
+  clip-path: polygon(0 50%, 100% 0, 100% 100%);
+}
+
+.tooltip.right::after {
+  left: -9px;
+  clip-path: polygon(0 50%, 100% 0, 100% 100%);
+}
+
+.tooltip.left::before {
+  left: auto;
+  right: -11px;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+.tooltip.left::after {
+  left: auto;
+  right: -9px;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
 @keyframes tooltip-in {
   from {
     opacity: 0;
@@ -2715,6 +2753,28 @@ code {
 .print-view .bn-editor [data-content-type='table'] .tableWrapper {
   padding: 0;
   overflow: visible;
+}
+
+/* La tabla en una pantalla angosta (P.28): las columnas no bajan de un ancho legible y la tabla se desplaza de costado
+   dentro de su bloque (el contenedor, `.tableWrapper`, ya recorta y desplaza; la página no se corre). Sin esto, una
+   tabla de 7 columnas se encogía al ancho de la pantalla (cada columna, 42 px: una palabra por renglón). Es solo
+   presentación: los anchos guardados en el documento no se tocan, y 96 px es el ancho de fábrica de las columnas del
+   reporte de rodaje (680 / 7), así que esas tablas se ven igual que en la compu. Solo en la página abierta: la vista
+   de impresión (`.print-view`) y el armado del PDF de exportar (`.sd-export-source`) miden con el ancho de la hoja.
+   Solo las celdas con ancho guardado (`colwidth`): las demás ya tienen su mínimo de 120 px (`--default-cell-min-width`)
+   y la tabla su `min-width`, así que ya se desplazaban. Solo el piso, sin forzar el ancho de la tabla (D244): una tabla
+   cuyas columnas guardadas son de 96 px o más y entra en la pantalla (3 de 227 px, 2 de 340 px) se achica como siempre
+   y no se desplaza; solo se desplaza la que quedaría con columnas de menos de 96 px. Con 7 columnas de 97 px el reporte
+   mide 673 px (7 × 96 + bordes) en vez de 679. */
+@media (max-width: 760px) {
+  .page:not(.sd-export-source) .bn-editor [data-content-type='table'] :is(td, th)[colwidth] {
+    min-width: 96px !important;
+  }
+
+  .page:not(.sd-export-source) .bn-editor [data-content-type='table'] .tableWrapper {
+    /* Llegar al borde de la tabla no arrastra la página ni vuelve atrás en el navegador. */
+    overscroll-behavior-x: contain;
+  }
 }
 
 /* Las tarjetas de Drive quedan como link. */

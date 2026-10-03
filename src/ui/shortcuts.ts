@@ -171,6 +171,8 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'findNext', keys: ['Enter', 'F3', 'Mod-g'], place: 'find', owner: 'app', source: 'dom' },
   { id: 'findPrev', keys: ['Shift-Enter', 'Shift-F3', 'Mod-Shift-g'], place: 'find', owner: 'app', source: 'dom' },
   { id: 'findClose', keys: ['Escape'], place: 'find', owner: 'app', source: 'dom' },
+  // En el campo de reemplazar: reemplaza la de ahora y pasa a la siguiente (el botón Replace lo dice en su tooltip).
+  { id: 'findReplace', keys: ['Enter'], place: 'find', context: 'replace', owner: 'app', source: 'dom' },
 
   // --- Comentarios ---
   { id: 'commentsSend', keys: ['Mod-Enter'], place: 'comments', owner: 'app', source: 'dom' },
@@ -228,7 +230,8 @@ const PC_MODS: Record<string, string> = { Mod: 'Ctrl', Ctrl: 'Ctrl', Alt: 'Alt',
 /** El orden de los modificadores en el rótulo (el que ya usaba la app: ⌘⌥M, ⌘⇧Z; Ctrl+Alt+Shift+…). */
 const ORDER = ['Mod', 'Ctrl', 'Alt', 'Shift'];
 
-const KEY_NAMES: Record<string, { mac: string; pc: string; es?: string }> = {
+/** `es`: el nombre en castellano en todas las plataformas; `pcEs`: solo fuera de la Mac (en la Mac va el símbolo). */
+const KEY_NAMES: Record<string, { mac: string; pc: string; es?: string; pcEs?: string }> = {
   Enter: { mac: '↩', pc: 'Enter' },
   Escape: { mac: 'Esc', pc: 'Esc' },
   ArrowUp: { mac: '↑', pc: '↑' },
@@ -239,7 +242,8 @@ const KEY_NAMES: Record<string, { mac: string; pc: string; es?: string }> = {
   End: { mac: 'End', pc: 'End', es: 'Fin' },
   Space: { mac: 'Space', pc: 'Space', es: 'Espacio' },
   Tab: { mac: '⇥', pc: 'Tab' },
-  Backspace: { mac: '⌫', pc: 'Backspace' },
+  Backspace: { mac: '⌫', pc: 'Backspace', pcEs: 'Retroceso' },
+  Delete: { mac: 'Delete', pc: 'Delete', pcEs: 'Supr' },
 };
 
 /**
@@ -255,8 +259,8 @@ export function keyLabel(keys: string, mac = IS_MAC, lang: 'en' | 'es' = 'en'): 
   const named = KEY_NAMES[key];
   const alone = mods.length === 0;
   const name = named
-    ? lang === 'es' && named.es
-      ? named.es
+    ? lang === 'es' && (named.es || (!mac && named.pcEs))
+      ? (named.es ?? named.pcEs)!
       : mac && !(alone && key === 'Enter')
         ? named.mac
         : named.pc

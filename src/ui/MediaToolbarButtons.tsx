@@ -82,7 +82,7 @@ export function OriginalDownloadButton({ fileId, label: given }: { fileId: strin
   };
 
   const label = given ?? dict.formatting_toolbar.file_download.tooltip.image ?? t('mediaButton.download');
-  return <BarButton label={label} tip={`**${label}**\n${t('photoTip.download')}`} icon={<DownloadIcon size={18} />} test="mediaDownload" onClick={onClick} />;
+  return <BarButton label={label} tip={`${label}\n${t('photoTip.download')}`} icon={<DownloadIcon size={18} />} test="mediaDownload" onClick={onClick} />;
 }
 
 /** La foto elegida es un adjunto (un PDF, un zip…) y no una foto o un video. */
@@ -215,7 +215,7 @@ export function ImageSizeButtons() {
           key={f}
           className="image-size-button"
           label={tr(SIZE_LABELS[f].tip)}
-          tip={`**${tr(SIZE_LABELS[f].tip)}**\n${tr('photoTip.size')}`}
+          tip={`${tr(SIZE_LABELS[f].tip)}\n${tr('photoTip.size')}`}
           test={`size-${SIZE_LABELS[f].text}`}
           selected={Math.abs(block.rowWidth - f) < 1e-4}
           onClick={() => setSize(f)}
@@ -226,7 +226,7 @@ export function ImageSizeButtons() {
       {run.length > 1 && (
         <BarButton
           label={tr('imageSize.arrange')}
-          tip={`**${tr('imageSize.arrange')}**\n${ready ? tr('imageSize.arrangeHint') : tr('imageSize.waiting')}`}
+          tip={`${tr('imageSize.arrange')}\n${ready ? tr('imageSize.arrangeHint') : tr('imageSize.waiting')}`}
           icon={<ArrangeIcon />}
           test="arrange"
           disabled={!ready}

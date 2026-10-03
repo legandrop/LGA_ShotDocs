@@ -49,6 +49,7 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
   findNext: ['FindBar.tsx', 'findUi.ts'],
   findPrev: ['FindBar.tsx', 'findUi.ts'],
   findClose: ['FindBar.tsx'],
+  findReplace: ['FindBar.tsx'],
   commentsSend: ['CommentsPanel.tsx', 'commentsUi.ts'],
   commentsCancel: ['CommentsPanel.tsx'],
   mentionPick: ['CommentsPanel.tsx'],

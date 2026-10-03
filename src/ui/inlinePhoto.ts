@@ -4,6 +4,8 @@ import type { Node as PMNode } from '@tiptap/pm/model';
 import { t } from '../i18n';
 import '../i18n/lazy/editor';
 import { pxToRowWidth, snapRowWidth } from './imageRows';
+import { tipRows } from './tipRows';
+import { isAppMediaUrl, setQuietSrc } from './quietImage';
 
 // --- Fotos en línea (Docs/Doc_Fotos_En_Linea.md, entrega 1a) -------------------------------------------
 //
@@ -123,7 +125,8 @@ export const PhotoNode = Node.create({
     return [
       'span',
       mergeAttributes(HTMLAttributes, { 'data-inline-content-type': PHOTO, class: 'sd-photo' }),
-      ['img', { src: String(node.attrs.url ?? ''), alt: String(node.attrs.name ?? '') }],
+      // `loading` primero: un `sdmedia://` en un `<img>` que no se muestra no se pide (quietImage.ts).
+      ['img', { ...(isAppMediaUrl(node.attrs.url) ? { loading: 'lazy' } : {}), src: String(node.attrs.url ?? ''), alt: String(node.attrs.name ?? '') }],
     ];
   },
 
@@ -198,7 +201,9 @@ function showSource(img: HTMLImageElement, url: string, resolve: Resolver | null
     return;
   }
   if (!resolve) {
-    img.src = url;
+    // Un editor sin `resolveFileUrl` no sabe mostrar un archivo de la app: sin imagen, y sin pedirla al navegador.
+    if (isAppMediaUrl(url)) img.removeAttribute('src');
+    else img.src = url;
     return;
   }
   // Mientras se busca, sin imagen (una `sdmedia://` el navegador no la sabe abrir).
@@ -224,7 +229,7 @@ export const photoSpec = createInlineContentSpecFromTipTapNode(
       };
       const { dom, img } = photoElement();
       setData(dom, props);
-      if (props.url) img.src = props.url;
+      if (props.url) setQuietSrc(img, props.url);
       img.alt = props.name;
       return { dom };
     },
@@ -276,7 +281,8 @@ function addResizeHandles(dom: HTMLElement, img: HTMLImageElement, target: () =>
     const handle = document.createElement('span');
     handle.className = `sd-photo-handle sd-photo-handle-${side}`;
     handle.setAttribute('aria-hidden', 'true');
-    handle.dataset.tip = t('photoBar.resize');
+    // Con el dedo también se arrastra (D226: el renglón sale en una pantalla táctil).
+    handle.dataset.tip = tipRows([{ gesture: 'drag', action: t('photoBar.resize'), touch: true }]) ?? '';
     dom.append(handle);
     let drag: { id: number; startX: number; startW: number; px: number; moved: boolean } | null = null;
     // Que el editor no lo tome como un clic en la foto (elegirla, arrastrarla para moverla).

@@ -55,8 +55,8 @@ export const menus = {
   'pageMenu.stopDayReports': { en: "Stop using for day reports", es: "Dejar de usar para reportes del día" },
   'pageMenu.expandAll': { en: "Expand all", es: "Abrir todo" },
   'pageMenu.printTip': {
-    en: "Opens the print dialog with this page size.\nChoose **Save as PDF** to export.",
-    es: "Abre la impresión con este tamaño de hoja.\nElegí **Guardar como PDF** para exportar.",
+    en: "Opens the print dialog with this page size.\nChoose Save as PDF to export.",
+    es: "Abre la impresión con este tamaño de hoja.\nElegí Guardar como PDF para exportar.",
   },
   'pageMenu.printFailed': {
     en: "Printing could not start. Try again.",
@@ -64,8 +64,8 @@ export const menus = {
   },
   'pageMenu.shortTitles': { en: "Short titles inside", es: "Títulos cortos adentro" },
   'pageMenu.shortTitlesTip': {
-    en: "Pages inside show **064 | Name | Place**\nas a short code and a name",
-    es: "Las páginas de adentro muestran **064 | Nombre | Lugar**\ncomo un código corto y un nombre",
+    en: "Pages inside show 064 | Name | Place\nas a short code and a name",
+    es: "Las páginas de adentro muestran 064 | Nombre | Lugar\ncomo un código corto y un nombre",
   },
   'pageMenu.shortTitlesInherit': {
     en: "Short titles: use the setting from above",

@@ -21,7 +21,7 @@ import { APP_OUTDATED, SupabaseRemote } from '../sync/remote';
 import { lazyProjectDrive } from '../media/projectDrive';
 import { useWorkspace } from '../workspace';
 import { isFindSelectionTarget, openFindBar } from './findUi';
-import { shortcutLabel } from './shortcuts';
+import { asAction, tipRows } from './tipRows';
 import { disposeSearchSession, isSearchShortcut, otherModalOpen, takesSearchShortcut, useSearchSession } from './projectSearchUi';
 import { ArchiveIcon, DownloadIcon, MenuIcon, MicIcon, MoreIcon, PlusIcon, SearchIcon } from './icons';
 import { menuBelow, PageMenu, type MenuPosition } from './menus';
@@ -397,8 +397,8 @@ export function Shell() {
                 <button
                   className="icon-button"
                   data-tour="find"
-                  aria-label={tr('shell.findInPage', { shortcut: shortcutLabel('find') })}
-                  data-tip={tr('shell.findInPage', { shortcut: shortcutLabel('find') })}
+                  aria-label={tr('shell.findInPage')}
+                  data-tip={tipRows([{ shortcut: 'find', action: asAction(tr('shell.findInPage')) }])}
                   onClick={() => openFindBar()}
                 >
                   <SearchIcon size={18} />
@@ -407,7 +407,7 @@ export function Shell() {
               {pageId && current && <CommentsToggle pageId={pageId} />}
               {/* Dictar al reporte (Docs/Doc_Dictado.md, V1). En el teléfono es el botón redondo de abajo (DictationHost). */}
               {pageId && current && !perms.viaLink && (
-                <button className="icon-button dictate-top" aria-label={tr('shell.dictate')} data-tip={tr('shell.dictateTip', { shortcut: shortcutLabel('dictate') })} onClick={() => void openDictation()}>
+                <button className="icon-button dictate-top" aria-label={tr('shell.dictate')} data-tip={tipRows([{ shortcut: 'dictate', action: asAction(tr('shell.dictate')) }])} onClick={() => void openDictation()}>
                   <MicIcon size={18} />
                 </button>
               )}

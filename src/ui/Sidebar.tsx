@@ -20,6 +20,7 @@ import { LinkAsideTreeIcon } from './LinkAsideTreeIcon';
 import { useLinkMode } from '../linkMode';
 import { useSearchSession } from './projectSearchUi';
 import { shortcutLabel } from './shortcuts';
+import { tipRows } from './tipRows';
 import { SyncBadge } from './SyncBadge';
 import { OfflineBadge, OfflineLine } from './SpaceHost';
 import { splitEnabled, splitSiblings, type SplitTitle } from './titles';
@@ -398,7 +399,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
             aria-label={tr('sidebar.search', { shortcut: shortcutLabel('search') })}
             aria-haspopup="dialog"
             aria-expanded={search.isOpen()}
-            data-tip={tr('sidebar.search', { shortcut: shortcutLabel('search') })}
+            data-tip={tipRows([{ shortcut: 'search', action: tr('sidebar.searchAct') }])}
             onClick={() => search.setOpen(true)}
           >
             <SearchIcon size={16} />

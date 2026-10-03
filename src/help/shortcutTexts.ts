@@ -86,6 +86,7 @@ export const SHORTCUT_TEXTS: Record<string, Key> = {
   'findNext': 'shortcut.findNext',
   'findPrev': 'shortcut.findPrev',
   'findClose': 'shortcut.findClose',
+  findReplace: 'shortcut.findReplace',
   'commentsSend': 'shortcut.commentsSend',
   'commentsCancel': 'shortcut.commentsCancel',
   mentionPick: 'shortcut.mentionPick',

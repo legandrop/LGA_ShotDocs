@@ -152,6 +152,11 @@ export const help = {
     en: "Select text to get the formatting bar: bold, italic, colors, links. {bold} bold, {italic} italic, {underline} underline, {strike} strikethrough, {code} code, {link} link.",
     es: "Elegí texto y aparece la barra de formato: negrita, cursiva, colores, links. {bold} negrita, {italic} cursiva, {underline} subrayado, {strike} tachado, {code} código, {link} link.",
   },
+  'help.tablePhone.title': { en: "Wide tables on a phone", es: "Tablas anchas en el teléfono" },
+  'help.tablePhone.text': {
+    en: "On a narrow screen a table keeps its column widths and scrolls sideways inside its block: swipe it left or right. The page itself doesn't move, and when you jump to another cell with Tab or the arrows it slides into view. On a computer and in the PDF nothing changes.",
+    es: "En una pantalla angosta la tabla mantiene el ancho de sus columnas y se desplaza de costado dentro de su bloque: deslizala a la izquierda o a la derecha. La página no se mueve, y al pasar a otra celda con Tab o las flechas, la celda se acomoda a la vista. En la compu y en el PDF no cambia nada.",
+  },
   'help.blockTypes.title': { en: "Headings, lists and quotes", es: "Títulos, listas y citas" },
   'help.blockTypes.text': {
     en: "{heading} heading 1 to 6, {paragraph} normal text, {quote} quote, {numbered} numbered list, {bullet} bulleted list, {checklist} checklist, {toggle} toggle list.",
@@ -681,6 +686,10 @@ export const help = {
   'shortcut.findNext': { en: "Next match", es: "Coincidencia siguiente" },
   'shortcut.findPrev': { en: "Previous match", es: "Coincidencia anterior" },
   'shortcut.findClose': { en: "Close the bar (the match stays selected)", es: "Cerrar la barra (queda elegida la coincidencia)" },
+  'shortcut.findReplace': {
+    en: "In the replace field: replace this match and go to the next",
+    es: "En el campo de reemplazar: reemplazar esta coincidencia y pasar a la siguiente",
+  },
   'shortcut.commentsSend': { en: "Send the comment", es: "Mandar el comentario" },
   'shortcut.commentsCancel': { en: "Cancel (on a phone, close the sheet)", es: "Cancelar (en el teléfono, cerrar la hoja)" },
   'shortcut.treeStep': { en: "Open the previous / next page", es: "Abrir la página anterior / siguiente" },

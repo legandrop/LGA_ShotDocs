@@ -368,10 +368,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   cuarentena de filas malas; se vuelve a auditar ese diseño antes de programarla), 3 (medir y ajustar los topes).
   **Hecho (v0.147): la barrera de error alrededor de la página** (B3 del diseño de *Can edit*, requisito para prender
   el link que edita): una página que hace tirar al editor muestra un aviso con el historial a mano y el resto de la app
-  sigue; la app entera, *Reload* en vez de blanco. Ver `Doc_Sincronizacion.md`, "Barreras de error". Quedan dos
-  observaciones de su re-verificación (BAJO): una prueba con un reemplazo en curso para la pregunta al cerrar la pantalla
-  de error (`replaceRunning`), y que los bloques que toca una restauración desde el aviso quedan con sus atributos por
-  defecto escritos (unos bytes más; mirar si la vista de diferencias del historial los muestra como cambiados).
+  sigue; la app entera, *Reload* en vez de blanco. Ver `Doc_Sincronizacion.md`, "Barreras de error". Las dos
+  observaciones de su re-verificación quedaron **hechas (v0.155)**: la prueba con un reemplazo en curso para la
+  pregunta al cerrar la pantalla de error (`replaceRunning`), y restaurar sin el editor ya no escribe los atributos por
+  defecto en los bloques iguales a la versión (los saltea; la vista de diferencias comparaba los atributos guardados y los
+  mostraba como «formato cambiado»).
 - **P.25 Sacar una foto o filmar desde la app** (Lega, 2026-10-01). **Hecho para la web (v0.110):** *Take photo* y
   *Record video* en el menú "/" y en el menú de la página, solo en el teléfono y la tableta (el video, con portero):
   abren la cámara con el selector del sistema y lo sacado entra en el renglón y sube por la cola de siempre; *Save to
@@ -642,9 +643,13 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   (chico): copiar a la página del plano solo el lente (otras columnas con su fila en la ficha se suman en `FIELDS` de
   `shotPage.ts`); lo escrito en la página del plano no entra en el ⌘Z de esa página (se deshace con *Undo* de la hoja,
   como el reemplazo del proyecto antes de D10).
-- **P.28 (chico) La tabla del reporte en el teléfono:** en 375 px las tablas de 7 columnas del *On-Set Report* quedan muy
-  angostas (una palabra por renglón); viene de antes de V4 del dictado (lo anotó su auditoría). Para mirar con el
-  desplazamiento de costado de las tablas o un ancho mínimo por columna.
+- **P.28 Hecho (v0.156): la tabla del reporte en el teléfono** (`Doc_Tabla_Telefono.md`): en pantalla angosta ninguna
+  columna con ancho guardado baja de 96 px y la tabla se desplaza de costado dentro de su bloque; la celda donde se
+  escribe se acomoda a la vista. La compu y el PDF no cambian. Falta probarlo en un iPhone real (dedo, teclado abierto).
+  Quedan (chicos): el corte de teléfono es de 760 px, así que en un iPad vertical (761 px o más) la tabla del reporte
+  sigue encogida (629 px, columnas de 90; una de 12 columnas, unos 51 px por columna): subir el corte para las tablas si
+  se usa; y lo que headless no prueba (el impulso del dedo, el teclado abierto, un editor remoto moviendo la selección
+  mientras se escribe en una tabla).
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
@@ -927,10 +932,22 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    la vez una de esas, gana el último que llega (vuelve a su lugar anterior; no se pierde nada, solo el lugar). Pasa solo
    después de unas 600 páginas puestas en el mismo hueco. Arreglo completo: mandar el rehecho como una sola operación del
    servidor que no toque una hermana movida después.
-24. **Un error en la consola al pegar una foto** (auditoría de la entrega 3 de P.26, F2; bajo). Al pegar una foto del
-   Drive, la consola muestra `net::ERR_UNKNOWN_URL_SCHEME` por la dirección `sdmedia://…` (algo pide la dirección cruda
-   antes de que la foto pase a mostrarse desde el dispositivo). No rompe nada a la vista; no se verificó si pasa igual en
-   `main`. Reproducción: el arnés de la auditoría (`trabajo/sesion_f554a71f/informes/deshacer-e3-audit/arnes`, R3e).
+24. **Un error en la consola al pegar una foto — hecho (v0.155).** No era al pegar sino al **copiar** (o arrastrar): el
+   HTML externo de BlockNote (el foto-bloque) y el de la foto en línea ponían `sdmedia://…` en un `<img src>` creado en
+   el documento vivo, y el navegador lo pide al instante. Pasaba igual en `main`. Ahora la dirección sale con
+   `loading="lazy"` puesto antes del `src` (`src/ui/quietImage.ts`, con `editorSchema.ts` e `inlinePhoto.ts`): sin pedido,
+   y pegar trae las mismas fotos. Pruebas en `quietImage.test.ts`, más la reproducción en Chromium (cero pedidos fallidos).
+   Observaciones de su auditoría que quedan (BAJO): (O3) el `loading` del `renderHTML` de la foto en línea es defensivo y no
+   tiene prueba ni efecto medido (copiar, pegar y arrastrar no pasan por ahí): probarlo con `getHTML` o sacarlo; (O4) con
+   `showPreview: false` (solo llega por una importación o una fila) el HTML externo lleva el placeholder `data:image/gif…` en
+   el `<a href>` y en su texto: envolver solo si `showPreview !== false`, o restituir también `href` y el texto.
+25. **Lo que quedó de D226 (tooltips con gesto o atajo, v0.156).** (a) Los botones propios de BlockNote en la barra de
+   formato (*Bold* con ⌘B abajo, *Italic*, etc.) siguen con su globo: pasarlos al formato de renglones pide reemplazar
+   esos botones. *Comment* y *Assistant*, que son de la app, ya usan los renglones. (b) **Hecho (v0.156):** el tooltip
+   del borde de la barra lateral salía afuera de la pantalla; ahora todo globo queda adentro (a un costado y a la altura
+   del mouse si el control es más alto que media ventana, y corrido si no entra en ningún lado).
+   (c) Falta una prueba de que el anotador en una ventana angosta con mouse conserva los atajos (la decisión es por el
+   tipo de puntero; el mutante `{ touch: true }` sobrevive; re-verificación de D226, N1).
 
 ### C. Esperan a Lega
 

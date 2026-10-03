@@ -27,7 +27,7 @@ import { menuBelow, useFloating, type MenuPosition } from './menus';
 import { notify } from './notice';
 import { editedLabel, monogram, projectStateError, useCurrentProject, useProjectDrive, useSwitchProject } from './project';
 import { useSearchSession } from './projectSearchUi';
-import { shortcutLabel } from './shortcuts';
+import { tipRows } from './tipRows';
 import { DeletedProjectsList, DeleteProjectDialog, ShareDialog } from './lazyDialogs';
 import { Part } from './lazyPart';
 import { OfflineBadge, offlineSupported, openOffline } from './SpaceHost';
@@ -97,7 +97,7 @@ export function ProjectSwitcher() {
         data-tour="project-switcher"
         aria-haspopup="dialog"
         aria-expanded={!!position}
-        data-tip={tr('project.switchTip', { shortcut: shortcutLabel('search') })}
+        data-tip={tipRows([{ shortcut: 'search', action: tr('project.switchTip') }])}
         onClick={toggle}
       >
         <Monogram name={name} />

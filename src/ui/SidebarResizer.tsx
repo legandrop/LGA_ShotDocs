@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { useT } from '../i18n';
+import { tipRows } from './tipRows';
 
 // El ancho de la barra lateral es de cada dispositivo (depende de la pantalla), no de la cuenta.
 const KEY = 'shotdocs-sidebar-width';
@@ -103,7 +104,11 @@ export function SidebarResizer() {
       aria-valuemax={clamp(MAX)}
       aria-valuenow={width}
       tabIndex={0}
-      data-tip={tr('sidebar.widthTip')}
+      data-tip={tipRows([
+        { gesture: 'drag', action: tr('sidebar.widthDrag') },
+        { gesture: 'doubleClick', action: tr('sidebar.widthReset') },
+        { shortcut: 'sidebarResize', action: tr('sidebar.widthKeys') },
+      ])}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={end}

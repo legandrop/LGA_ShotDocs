@@ -4,7 +4,7 @@ import { navigate, pagePath } from '../router';
 import { usePermissions, useTree } from '../services';
 import { DayReportIcon } from '../ui/icons';
 import { lazyPart, Part } from '../ui/lazyPart';
-import { shortcutLabel } from '../ui/shortcuts';
+import { asAction, tipRows } from '../ui/tipRows';
 import { dayReportFolderOf, isDayReportShortcut } from './dayReport';
 import './dayReport.css';
 
@@ -102,7 +102,7 @@ function DayReportControl({ pageId, folderId }: { pageId: string; folderId: stri
         className="day-report-button"
         aria-expanded={open}
         aria-haspopup="dialog"
-        data-tip={shortcutLabel('newDayReport', undefined, tr.lang === 'es' ? 'es' : 'en')}
+        data-tip={tipRows([{ shortcut: 'newDayReport', action: asAction(tr('dayReport.new')) }])}
         onClick={() => setOpen(!open)}
       >
         <DayReportIcon size={16} />

@@ -12,6 +12,40 @@ pantalla de link muerto recuerda lo mandado (O9) y una página ya honda admite l
 `20261029120000_link_apartado.sql`, sin aplicar (`schema_version` 20).
 [ Link público entrega 2c - lo apartado en Share, el historial y el árbol, volver a la versión del equipo sin perder nada, el orden de la admisión por dispositivo, lo mandado recordado y la página ya honda ]
 
+v0.156 :
+
+**Tooltips con gesto o atajo (D226).** Cada tooltip nombraba sus atajos y gestos a su manera («Keyboard: R», «Close
+(Esc)», un ⌘K suelto, «Supr o Retroceso» escrito a mano) y usaba la negrita para cualquier cosa. Ahora van en
+renglones «**gesto o atajo**: acción», como el triángulo de colapsar, también *Comment* y *Assistant* de la barra de
+formato; la negrita es solo del gesto o el atajo. Los arma `tipRows.ts` con los atajos del registro (⌘ en la Mac, Ctrl
+en el resto); en una pantalla táctil (por el puntero, no por el ancho), sin atajos ni gestos de mouse. Suma Enter en el
+campo de reemplazar. El globo del borde de la barra lateral quedaba afuera de la pantalla: ahora todo globo queda
+adentro. Una prueba recorre los tooltips de la app y falla si alguno nombra un gesto o una tecla, o usa negrita, por
+fuera de ese formato.
+
+**La tabla del reporte en el teléfono (P.28).** En 375 px las tablas de 7 columnas del *On-Set Report* se encogían al
+ancho de la pantalla: 304 px, columnas de 42 px (una palabra por renglón) y miniaturas de 21 px. La causa: BlockNote
+deja el ancho de la tabla en `auto` y el navegador la achica a lo que cabe en su bloque, sin mirar los anchos
+guardados. Ahora, solo en pantalla angosta y solo en la página abierta, ninguna columna con ancho guardado baja de 96
+px y la tabla se desplaza de costado dentro de su bloque sin mover la página; la que entra en la pantalla con columnas
+de 96 px o más no cambia. Al pasar de celda con Tab o las flechas, la celda se acomoda entera a la vista. Es solo
+presentación: nada nuevo en el documento. La compu, la vista de impresión y el PDF miden igual que antes. Ayuda: *Wide
+tables on a phone*. Medido en Chromium (375 y 1280 px): 39 de 39.
+
+[ Tooltips con gesto o atajo (D226) y la tabla del reporte en el teléfono - un renglón por acción «gesto o atajo: acción» con los atajos del registro, negrita solo para el gesto o el atajo y el globo siempre adentro de la ventana; en el teléfono ninguna columna de tabla baja de 96 px y la tabla se desplaza de costado ]
+
+v0.155 :
+
+**Tres restos de tandas anteriores.** (1) Copiar o arrastrar una foto del Drive dejaba `net::ERR_UNKNOWN_URL_SCHEME` en la
+consola (B.24): el HTML que arma BlockNote para el portapapeles ponía el `sdmedia://…` en un `<img>`, y el navegador
+intenta pedirlo apenas se le da un `src`. Ahora la dirección sale escrita pero con `loading="lazy"` puesto antes
+(`quietImage.ts`): no se pide, y el pegado lee lo mismo; un editor sin `resolveFileUrl` tampoco la pone en la foto en
+línea. (2) Prueba de la pregunta al cerrar la pantalla de error con un reemplazo del proyecto en curso (R1 de la barrera).
+(3) Restaurar sin el editor reescribía todos los bloques con sus atributos por defecto aunque no hubieran cambiado
+(R2): ahora los bloques ya iguales a la versión se saltean (465 a 184 bytes en un caso de 3 bloques), como hace el editor; un bloque con algo que el esquema no conoce se reescribe igual, para que limpiarlo no falle.
+
+[B.24 sin pedir sdmedia al copiar, R1 y R2 de la barrera: restaurar sin editor solo reescribe lo que cambia]
+
 v0.154 :
 
 **El nombre en el árbol usa todo el ancho de la fila** (D233). Un nombre largo se cortaba con «…» antes del borde
