@@ -2,7 +2,7 @@
 
 **Estado: entregas A1 (v0.118) y A2 (v0.126) implementadas (ver "Cómo quedó A1" y "Cómo quedó A2" al final; la
 migración de A2, sin aplicar); la clave sincronizada (D72 → B, `Doc_Clave_Sincronizada.md`), entrega S1 implementada
-(v0.138); la prueba técnica M0 del MCP hecha en lo que no necesita infraestructura real (v0.0XX: el MCP en el
+(v0.138); la prueba técnica M0 del MCP hecha en lo que no necesita infraestructura real (v0.145: el MCP en el
 portero detrás de un interruptor apagado, lo comprobado y medido, y los pasos que faltan; ver "Cómo quedó M0"); A3, el
 resto del MCP y la entrega S2 de la clave sincronizada, en diseño** (roadmap P.24; pedido de Lega del 2026-10-02, que decide entre las opciones
 de D-06 y D-07 y lo deja listo para programar por entregas). Las decisiones están propuestas (IA1 a IA11, sección 15; IA1 e IA10 cambiadas por Lega, D72 y D77) y
@@ -1347,7 +1347,7 @@ Mutantes después de la ronda: 31 de 31 mueren (los 23 de antes y 8 nuevos de B1
 - Lega, con sus claves: la prueba de aceptación de A2 (sección 14) con una página de rodaje real, en la compu y en el
   iPhone, y la ventana de la política con la migración aplicada.
 
-## Cómo quedó M0 (v0.0XX)
+## Cómo quedó M0 (v0.145)
 
 Prueba técnica del MCP (P.24, sección 14), hecha el 2026-10-02/03 contra `main` v0.137. Lo que se pudo probar sin tocar
 la infraestructura real está probado acá, con números y fuentes; lo que necesita prender cosas en Supabase o en

@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.145 :
 
 MCP, prueba técnica M0 (P.24). Faltaba saber si el portero puede ser el servidor MCP: nada estaba probado. El portero
 suma `/mcp` y su metadata detrás de la variable `MCP_M0` (apagada: hace lo de antes). Valida el token del servidor
