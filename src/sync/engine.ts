@@ -9,8 +9,10 @@ import type { CommentQueue } from './comments';
 import { canCompact, compactPage, SNAPSHOT_MIN_ROWS, type CompactOptions, type CompactOutcome } from './compact';
 import { epochBehind, type PageDocs } from './docs';
 import type { PageFiles } from './files';
+import { canAdmit, LINK_EDIT_SCHEMA_VERSION, LinkAdmission } from './linkAdmit';
 import { hasUnsyncedContent, type DocState } from './localDb';
 import { APP_OUTDATED, SNAPSHOT_SCHEMA_VERSION, type Remote } from './remote';
+import { AUTHOR_MISSING } from './types';
 import type { PageTree } from './tree';
 import { errorMessage, isNetworkError, isPermanent, isTimeout, REQUEST_TIMEOUT, type QueuedOp, type WorkspaceSettings } from './types';
 
@@ -172,6 +174,15 @@ export class SyncEngine {
   private readonly compactAsked = new Map<string, { seq: number; at: number }>();
   /** Hay una compactación en curso (una a la vez). */
   private compacting = false;
+  /**
+   * El interruptor de *Can edit* por un link (`link_edit_min_version`, versión 19 de la base), o `null`: apagado. Con él,
+   * este dispositivo (si arma bases) admite lo que escribió un link antes de armarlas (Docs/Doc_Link_Publico.md, E2.3).
+   */
+  private linkEditMin: number | null = null;
+  /** La admisión de lo que escribe un link (solo si el servidor la tiene). */
+  private admission: LinkAdmission | null = null;
+  /** La última edición local guardada de cada página en esta apertura (la admisión espera la pausa). */
+  private readonly lastEdit = new Map<string, number>();
 
   constructor(
     private readonly remote: Remote,
@@ -182,6 +193,8 @@ export class SyncEngine {
       appVersion?: string;
       schemaVersion?: number;
       media?: MediaQueue;
+      /** Las carpetas que suben (P.9): como la cola de archivos, dejan de esperar cuando vuelve la red. */
+      folders?: { networkBack(): void };
       /** Los permisos de la persona: se actualizan en cada sincronización (ver `checkAccess`). */
       access?: AccessStore;
       /** La cola de comentarios (paso 10): sube y baja al final de cada ciclo. */
@@ -199,6 +212,14 @@ export class SyncEngine {
        * link, solo las que el dispositivo ya bajó alguna vez (las demás se bajan al abrirlas, `prefetchPage`).
        */
       pullOnly?: (pageId: string, cursor: number) => boolean;
+      /**
+       * Un link público con *Can edit* (Docs/Doc_Link_Publico.md, E2.9): sin el nombre del visitante no se sube (queda en
+       * el dispositivo, sin cortar el ciclo), y la primera edición guardada de una página rechazada la vuelve a intentar
+       * (deshacer un pegado de más de 1 MB la destraba sin reabrir la app).
+       */
+      linkVisitor?: boolean;
+      /** El reloj de la pausa de la admisión (la última edición local de cada página); las pruebas pasan el del servidor. */
+      now?: () => number;
     } = {},
   ) {
     const poke = () => this.poke();
@@ -238,6 +259,17 @@ export class SyncEngine {
       }
     }
     this.cleanups.push(docs.subscribeLocalChange(poke));
+    this.cleanups.push(
+      docs.subscribeLocalChange((pageId) => {
+        this.lastEdit.set(pageId, (this.options.now ?? Date.now)());
+        if (options.linkVisitor && !this.stopped) {
+          void docs.clearRejectedPage(pageId).then(
+            (cleared) => cleared && !this.stopped && this.poke(),
+            () => undefined,
+          );
+        }
+      }),
+    );
     docs.onWriteError = (message) => {
       this.patch({ localError: message });
       // Después de `stop()` la base puede estar cerrada: no se cuenta nada más.
@@ -275,9 +307,10 @@ export class SyncEngine {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') return;
       void this.appHidden();
     };
-    // Volvió la red: la cola de archivos deja de esperar al portero o a Storage y prueba enseguida.
+    // Volvió la red: la cola de archivos (y la de las carpetas) deja de esperar al portero o a Storage y prueba enseguida.
     const onOnline = () => {
       this.options.media?.networkBack();
+      this.options.folders?.networkBack();
       this.files.networkBack();
       onWake();
     };
@@ -474,10 +507,11 @@ export class SyncEngine {
     try {
       const { outdated, removed } = await this.checkWorkspace();
       halt();
-      // La base contestó después de un ciclo sin conexión: la cola de archivos deja de esperar (si estaba
+      // La base contestó después de un ciclo sin conexión: la cola de archivos y la de las carpetas dejan de esperar (si estaba
       // esperando porque el portero o Storage no contestaban, puede que fuera la red) y prueba enseguida.
       if (!this.status.online) {
         this.options.media?.networkBack();
+        this.options.folders?.networkBack();
         this.files.networkBack();
       }
       // Si la base dice que sacaron a la persona, no se sube ni se baja nada más: lo del dispositivo queda
@@ -514,6 +548,8 @@ export class SyncEngine {
             contentError = REQUEST_TIMEOUT;
             continue;
           }
+          // Un link sin el nombre del visitante: lo escrito espera en el dispositivo (la app pide el nombre).
+          if (this.options.linkVisitor && errorMessage(err) === AUTHOR_MISSING) continue;
           if (!isPermanent(err)) throw err;
           if (errorMessage(err) === APP_OUTDATED) {
             // El workspace subió la versión mínima entre la consulta y la subida.
@@ -619,6 +655,9 @@ export class SyncEngine {
     this.snapshotMin =
       settings && settings.schemaVersion >= SNAPSHOT_SCHEMA_VERSION ? (settings.snapshotMinVersion ?? null) : null;
     if ((this.cleanMin !== null) !== this.status.cleanOn) this.patch({ cleanOn: this.cleanMin !== null });
+    // El de Can edit por un link: solo con la base en la versión 19 o más.
+    this.linkEditMin =
+      settings && settings.schemaVersion >= LINK_EDIT_SCHEMA_VERSION ? (settings.linkEditMinVersion ?? null) : null;
     this.versionKnown = true;
     if (!settings) {
       this.patch({ outdated: false });
@@ -731,6 +770,9 @@ export class SyncEngine {
   private async reconcileMedia(): Promise<void> {
     const media = this.options.media;
     if (!media?.tracksUsage) return;
+    // Un link con Can edit no registra usos de archivos: los vincula y desvincula el dispositivo de un editor al
+    // reconciliar lo admitido (Docs/Doc_Link_Publico.md, E2.4). Si los anotara, quedarían como cambios sin subir (O7).
+    if (this.options.linkVisitor) return;
     // Hay ediciones que no se pudieron guardar en el dispositivo: lo guardado no es lo que se ve.
     if (this.docs.getWriteError()) return;
     const access = this.options.access;
@@ -951,6 +993,16 @@ export class SyncEngine {
     if (!due) return [];
     this.urgentClean = false;
     this.lastCleanAt = now;
+    // Antes de armar las bases, lo que escribió un link (E2.3): si entra algo, la base de esa página sale con la cadencia
+    // de siempre (la fila admitida lleva la hora de la admisión). Sus errores no cortan las bases; sin red, sí.
+    if (!pages) {
+      try {
+        if ((await this.admitLinks()) > 0) this.lastActivityAt = Date.now();
+      } catch (err) {
+        if (isNetworkError(err)) throw err;
+        console.warn('La admisión de lo que escribió un link falló; se vuelve a intentar en el próximo ciclo.', err);
+      }
+    }
     let work;
     try {
       work = await this.remote.cleanWork({ pages, urgent: urgent || wasUrgent });
@@ -988,6 +1040,41 @@ export class SyncEngine {
       onProgress?.(++done, list.length);
     }
     return work.map((w) => w.page_id);
+  }
+
+  /**
+   * Admite lo que escribió un link público (Docs/Doc_Link_Publico.md, E2.3): con el interruptor de Can edit prendido, esta
+   * versión en su mínima y en la de las bases, quien ve lo borrado. Devuelve cuántas filas entraron.
+   */
+  private async admitLinks(): Promise<number> {
+    if (this.linkEditMin === null || this.cleanMin === null || this.stopped || this.removed || !canAdmit(this.remote)) return 0;
+    const version = Number(this.options.appVersion);
+    if (!(Number.isFinite(version) && version >= this.linkEditMin && version >= this.cleanMin)) return 0;
+    const docs = this.docs;
+    const tree = this.tree;
+    this.admission ??= new LinkAdmission(
+      this.remote,
+      {
+      serverSeq: (pageId) => {
+        const row = tree.get(pageId);
+        return row && !tree.isTrashed(pageId) ? row.update_seq : null;
+      },
+      ready: async (pageId) => {
+        const row = tree.get(pageId);
+        const state = await docs.stateOf(pageId);
+        // Al día y sin nada propio por subir (lo mismo vuelve a mirar `savedRows`, con la marca de lo no guardado).
+        return (
+          !!row && !!state && state.cursor === row.update_seq && !state.rejected && !state.unreadable && !state.pending &&
+          !hasUnsyncedContent(state, false)
+        );
+      },
+      savedRows: (pageId, seq) => docs.savedRows(pageId, seq),
+      lastLocalEdit: (pageId) => this.lastEdit.get(pageId),
+      },
+      this.options.now ?? Date.now,
+    );
+    const result = await this.admission.round();
+    return result.admitted;
   }
 
   /**

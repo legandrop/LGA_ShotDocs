@@ -105,6 +105,12 @@ export interface PageDocsOptions {
    * opción, se puede.
    */
   canWrite?: (pageId: string) => boolean;
+  /**
+   * Desde qué tamaño la subida sin GC se vuelve a armar con GC (`NO_GC_MAX_BYTES` si no se dice). Un link público
+   * usa 1 MB, el tope de una subida por un link (Docs/Doc_Link_Publico.md, LE13): con GC, lo visible es lo mismo y solo
+   * se pierde el texto que el visitante tecleó y borró antes de subir.
+   */
+  noGcMaxBytes?: number;
 }
 
 /**
@@ -542,7 +548,7 @@ export class PageDocs {
           }
           // Los elementos que el servidor no tiene y solo los borrados que no tiene (B.15).
           let upload = buildUpload(saved.doc, saved.state.syncedSV, knownDeletes(saved.state, saved.generation));
-          if (upload.update.length > NO_GC_MAX_BYTES) {
+          if (upload.update.length > (this.options.noGcMaxBytes ?? NO_GC_MAX_BYTES)) {
             // Demasiado grande con todo lo borrado: se arma con GC, como antes de B.16 (ver `NO_GC_MAX_BYTES`).
             // Los mismos elementos y los mismos borrados; solo pierde el texto de lo ya borrado.
             const collected = new Y.Doc();
@@ -1084,6 +1090,47 @@ export class PageDocs {
         built.doc.destroy();
       }
     });
+  }
+
+  /**
+   * Las filas guardadas de la página, para probar lo que escribe un link público antes de admitirlo
+   * (Docs/Doc_Link_Publico.md, E2.3): con las mismas condiciones que `buildCleanBase` (el cursor en `seq`, nada sin subir
+   * ni en memoria ni en vuelo, nada ilegible ni rechazado), así son exactamente las filas del servidor hasta `seq`. Con el
+   * candado de la página: nada se baja ni se sube en el medio.
+   */
+  savedRows(pageId: string, seq: number): Promise<{ rows: Uint8Array[] } | { skip: string }> {
+    return this.withLock(pageId, async () => {
+      await this.flush(pageId);
+      if (!this.isSaved(pageId)) return { skip: 'unsaved' };
+      const tx = this.db.transaction(['docUpdates', 'docState', 'meta'], 'readonly');
+      const [rows, state, dirty] = await Promise.all([
+        tx.objectStore('docUpdates').index('pageId').getAll(pageId),
+        tx.objectStore('docState').get(pageId),
+        tx.objectStore('meta').get(dirtyKey(pageId)),
+      ]);
+      await tx.done;
+      if (!state || state.cursor !== seq) return { skip: 'not current' };
+      if (dirty !== undefined || state.pending || hasUnsyncedContent(state, false)) return { skip: 'unsynced' };
+      if (state.unreadable || state.rejected) return { skip: 'unreadable' };
+      return { rows: rows.map((r) => r.data) };
+    });
+  }
+
+  /**
+   * Una página que el servidor rechazó vuelve a intentarse (lo de `clearRejected`, para una sola). En modo link, la
+   * primera edición guardada después de un rechazo lo hace (Docs/Doc_Link_Publico.md, E2.9: deshacer un pegado de más de
+   * 1 MB destraba la página sin reabrir la app).
+   */
+  async clearRejectedPage(pageId: string): Promise<boolean> {
+    const state = await this.db.get('docState', pageId);
+    if (!state?.rejected) return false;
+    await this.withLock(pageId, () =>
+      updateDocState(this.db, pageId, (s) => {
+        s.rejected = undefined;
+        s.pending = undefined;
+      }),
+    );
+    return true;
   }
 
   /**

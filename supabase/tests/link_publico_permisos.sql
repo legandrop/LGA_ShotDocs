@@ -249,12 +249,13 @@ begin
   perform pg_temp.expect_error(format('select public.create_public_link(%L, %L, %L)', pg_temp.u('d1c0'), pg_temp.u('d1b2'), 'comment'),
     'not_allowed', 'Comentar crea un link');
 
-  -- El dueño del proyecto: no en la papelera, no 'edit' (entrega 2), no vencido.
+  -- El dueño del proyecto: no en la papelera, no 'edit' con el interruptor de Can edit apagado (entrega 2a:
+  -- `edit_off`; antes, `level_invalid`), no vencido.
   perform pg_temp.as_user('d1a1');
   perform pg_temp.expect_error(format('select public.create_public_link(%L, %L, %L)', pg_temp.u('d1c0'), pg_temp.u('d1b5'), 'comment'),
     'page_in_trash', 'crea un link en la papelera');
   perform pg_temp.expect_error(format('select public.create_public_link(%L, %L, %L)', pg_temp.u('d1c0'), pg_temp.u('d1b2'), 'edit'),
-    'level_invalid', 'crea un Can edit en la entrega 1');
+    'edit_off', 'crea un Can edit con el interruptor apagado');
   perform pg_temp.expect_error(format('select public.create_public_link(%L, %L, %L, now() - interval %L)', pg_temp.u('d1c0'), pg_temp.u('d1b2'), 'comment', '1 hour'),
     'link_invalid', 'crea un link vencido');
   -- Con la app vieja para el workspace: no.
@@ -350,11 +351,11 @@ begin
   end loop;
   perform pg_temp.as_postgres();
   -- Lo que anon puede ejecutar en public y private: exactamente esto (`private.mcp_pre_request` es el pre-request de
-  -- PostgREST, que corre en todo pedido; 20261027120000_mcp_plan_b.sql).
+  -- PostgREST, que corre en todo pedido, 20261027120000_mcp_plan_b.sql; las dos de escribir, de la entrega 2a).
   assert (select string_agg(n.nspname || '.' || p.proname, ',' order by n.nspname, p.proname)
           from pg_proc p join pg_namespace n on n.oid = p.pronamespace
           where n.nspname in ('public', 'private') and has_function_privilege('anon', p.oid, 'execute'))
-       = 'private.mcp_pre_request,private.plink_thumbs,private.plink_token,public.plink_add_comment,public.plink_delete_comment,public.plink_edit_comment,public.plink_list_comments,public.plink_media_file,public.plink_media_files,public.plink_open,public.plink_pull_page,public.plink_tree',
+       = 'private.mcp_pre_request,private.plink_thumbs,private.plink_token,public.plink_add_comment,public.plink_delete_comment,public.plink_edit_comment,public.plink_list_comments,public.plink_media_file,public.plink_media_files,public.plink_open,public.plink_pull_page,public.plink_push_page_update,public.plink_push_status,public.plink_tree',
     'anon ejecuta otras funciones';
   -- Y ninguna de las del visitante para una cuenta (authenticated).
   assert not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -364,7 +365,7 @@ begin
   assert (select string_agg(p.proname || ':' || p.provolatile::text, ',' order by p.proname)
           from pg_proc p join pg_namespace n on n.oid = p.pronamespace
           where n.nspname = 'public' and p.proname like 'plink\_%')
-       = 'plink_add_comment:v,plink_delete_comment:v,plink_edit_comment:v,plink_list_comments:v,plink_media_file:v,plink_media_files:v,plink_open:v,plink_pull_page:v,plink_tree:v',
+       = 'plink_add_comment:v,plink_delete_comment:v,plink_edit_comment:v,plink_list_comments:v,plink_media_file:v,plink_media_files:v,plink_open:v,plink_pull_page:v,plink_push_page_update:v,plink_push_status:v,plink_tree:v',
     'volatilidad de plink_*';
 end;
 $$;

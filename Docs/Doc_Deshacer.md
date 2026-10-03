@@ -1,7 +1,7 @@
 # Deshacer en el orden en que editaste (P.26)
 
 **Estado: entregas 0 (v0.132: el límite de Yjs, arreglado con un parche; sección 16), 1 (v0.140: la línea de tiempo
-con las páginas; sección 17), 2 (v0.144: el reemplazo adentro; sección 18) y 3 (v0.0XX: anotar una foto como un paso;
+con las páginas; sección 17), 2 (v0.144: el reemplazo adentro; sección 18) y 3 (v0.152: anotar una foto como un paso;
 sección 19) hechas.** Pedido de Lega
 del 2026-10-02, al responder cómo se deshace un reemplazo en todo el proyecto (una pregunta de su lista de decisiones;
 no es la D-10 de `Doc_Decisiones.md`). Se diseñó contra `main` v0.123
@@ -546,7 +546,7 @@ otra sesión (medido).
 2. **Hecha (v0.144, sección 18): el reemplazo adentro.** La pila de Yjs en las páginas con historia, las anclas en las demás, `planRedo`, los avisos
    con *Redo*, DH9 y DH10. **Aceptación:** el ejemplo de Lega (3.5) en Chromium con 50 páginas: dos ⌘Z dejan las 50 como
    antes y lo escrito antes del reemplazo sale exacto (sin el "cámara" que queda hoy); ⌘⇧Z lo vuelve; sin red, igual.
-3. **Hecha (v0.0XX, sección 19): anotar como un paso.** Lo de una vez en el anotador como un paso al cerrarlo (es algo
+3. **Hecha (v0.152, sección 19): anotar como un paso.** Lo de una vez en el anotador como un paso al cerrarlo (es algo
    que hiciste en la página; la auditoría pidió que no sea opcional). DH1 C y DH8 B, si Lega los pide, aparte.
    **Aceptación:** anotar, cerrar, ⌘Z saca todo lo de esa vez y ⌘⇧Z lo vuelve.
 
@@ -884,7 +884,7 @@ la otra persona escribiendo adentro de lo reemplazado, sin nada perdido.
   página y Esc ya no cierra el panel (pasa igual en `main`; arreglado con la entrega 3, 19.1); con el panel abierto y el foco puesto por programa en el
   editor, Ctrl+Shift+Z deshace (una persona no llega ahí: el panel es modal).
 
-## 19. Entrega 3: cómo quedó (v0.0XX)
+## 19. Entrega 3: cómo quedó (v0.152)
 
 ### 19.1 Qué se hizo
 

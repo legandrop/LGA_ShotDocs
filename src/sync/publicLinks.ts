@@ -22,16 +22,23 @@ export interface PublicLink {
   token: string | null;
   /** Anda hoy (no venció y quien lo creó todavía puede compartir). */
   alive: boolean;
-  usage_today: Partial<Record<'open' | 'pull' | 'pass' | 'comment', LinkUsage>>;
+  usage_today: Partial<Record<'open' | 'pull' | 'pass' | 'comment' | 'push', LinkUsage>>;
   /** Llegó a un tope del día. */
   limited: boolean;
   /** Comentarios vivos escritos con el link. */
   comments: number;
+  /**
+   * Lo que escribió el link (Can edit, versión 19 de la base): cuánto espera en la sala, cuánto está retenido (el link
+   * dejó de editar esa página por algo que puede volver), cuánto se apartó y cuánto entró hoy. Sin la versión 19, no está.
+   */
+  edits?: { waiting: number; held: number; aside: number; admitted_today: number; push_bytes_total: number };
 }
 
 export interface PublicLinkInfo {
   /** El interruptor de D14 (sin él no se crean links, D33). */
   clean_on: boolean;
+  /** El interruptor de Can edit (`link_edit_min_version`, versión 19): sin él, Can edit se ve apagado (`edit_off`). */
+  edit_on?: boolean;
   link: PublicLink | null;
   /** El link de la página de arriba más cercana que tenga uno (sin token); su título solo si la sesión la ve. */
   above: { page_id: string; level: string; title: string | null } | null;
@@ -48,12 +55,21 @@ export function getPublicLink(client: SupabaseClient, pageId: string): Promise<P
   return call(client, 'get_public_link', { p_page: pageId });
 }
 
-export function createPublicLink(client: SupabaseClient, pageId: string, expires: string | null): Promise<PublicLink> {
-  return call(client, 'create_public_link', { p_id: crypto.randomUUID(), p_page: pageId, p_level: 'comment', p_expires: expires });
+/** El nivel de un link: *Can view* (que comenta) o *Can edit* (entrega 2a, con su interruptor). */
+export type LinkLevel = 'comment' | 'edit';
+
+export function createPublicLink(client: SupabaseClient, pageId: string, expires: string | null, level: LinkLevel = 'comment'): Promise<PublicLink> {
+  return call(client, 'create_public_link', { p_id: crypto.randomUUID(), p_page: pageId, p_level: level, p_expires: expires });
 }
 
-export function setPublicLinkExpiry(client: SupabaseClient, pageId: string, expires: string | null): Promise<PublicLink> {
-  return call(client, 'set_public_link', { p_page: pageId, p_level: 'comment', p_expires: expires });
+/** Cambia el nivel y el vencimiento del link vivo (conserva el token). */
+export function setPublicLink(client: SupabaseClient, pageId: string, level: LinkLevel, expires: string | null): Promise<PublicLink> {
+  return call(client, 'set_public_link', { p_page: pageId, p_level: level, p_expires: expires });
+}
+
+/** Cambia solo el vencimiento (con el nivel que ya tiene: cambiarlo de a uno nunca baja un Can edit a Can view). */
+export function setPublicLinkExpiry(client: SupabaseClient, pageId: string, expires: string | null, level: LinkLevel = 'comment'): Promise<PublicLink> {
+  return setPublicLink(client, pageId, level, expires);
 }
 
 export function resetPublicLink(client: SupabaseClient, pageId: string): Promise<PublicLink> {

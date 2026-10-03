@@ -9,6 +9,8 @@ import { usePendingCount } from './usePendingCount';
 import { downloadUnsynced } from './unsyncedDownload';
 import { notify } from './notice';
 import { VoiceNotesNotice } from '../dictation/VoiceNotes';
+import { LinkRemote } from '../sync/linkRemote';
+import { useLinkEdits } from './LinkEditBar';
 import {
   forceUpdate,
   isOfflineNotReady,
@@ -33,9 +35,16 @@ function commentAction(tr: Translate, kind: 'add' | 'edit' | 'delete' | 'resolve
   return tr('sync.comment.resolve', { page });
 }
 
+/** Con un link *Can edit*: lo que mandó este navegador y espera a que el equipo lo sume (E2.9). */
+function useVisitorEdits() {
+  const { remote } = useServices();
+  return useLinkEdits(remote instanceof LinkRemote ? remote : null);
+}
+
 function useSyncTone(): { tone: Tone; text: string; rejected: number } {
   const status = useSyncStatus();
   const pending = usePendingCount();
+  const visitor = useVisitorEdits();
   const tr = useT();
   const changes = tr('sync.changes', { count: pending });
   const rejected = status.failedOps + status.rejectedPages + status.failedMedia + status.failedComments;
@@ -68,6 +77,9 @@ function useSyncTone(): { tone: Tone; text: string; rejected: number } {
   } else if (status.lastSyncAt === null) {
     tone = 'busy';
     text = tr('sync.syncing');
+  } else if (visitor.waiting.length > 0) {
+    // Un link: todo mandado, pero todavía en la sala (entra cuando alguien del equipo abre la app).
+    text = tr('link.edit.waiting');
   }
   // La base vieja no frena la subida: el texto sigue diciendo el estado real y el aviso va en el detalle.
   if ((rejected > 0 || status.warning || status.mediaWarning || status.schemaBehind) && tone !== 'error') tone = 'warn';
@@ -113,12 +125,14 @@ export function SyncBadge() {
   const [details, setDetails] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const { tone, text, rejected } = useSyncTone();
+  const visitor = useVisitorEdits();
   const tr = useT();
   const Icon = TONE_ICONS[tone];
   const mediaError = status.pendingMedia > 0 ? status.mediaError : null;
   const commentError = status.pendingComments > 0 ? status.commentError : null;
   const hasDetails =
     rejected > 0 ||
+    visitor.waiting.length > 0 ||
     !!commentError ||
     !!status.localError ||
     !!status.lastError ||
@@ -171,6 +185,9 @@ export function SyncBadge() {
           {status.lastError && !status.localError && (
             <p>{tr.rich('sync.detail.lastError', { error: <code>{localize(status.lastError)}</code> })}</p>
           )}
+          {/* Un link: el pegado de más de 1 MB no se manda (R1); deshacerlo destraba la página. */}
+          {status.lastError === 'update_size_invalid' && services.remote instanceof LinkRemote && <p>{tr('link.edit.tooBig')}</p>}
+          {visitor.waiting.length > 0 && <p>{tr('link.edit.waitingDetail')}</p>}
           {mediaError && !status.localError && (
             <p>{tr.rich('sync.detail.mediaError', { error: <code>{localize(mediaError)}</code> })}</p>
           )}

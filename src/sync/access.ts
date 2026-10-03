@@ -74,6 +74,11 @@ export interface AccessSnapshot {
   member: MyMembership | null;
   grants: MyGrant[];
   fetchedAt: number;
+  /**
+   * Solo el contenido (un link público con *Can edit*, Docs/Doc_Link_Publico.md, E2.4): escribe en las páginas, nunca su
+   * fila (título, ajustes, hoja), como tampoco crea, mueve ni manda a la papelera. Sin el campo, como siempre.
+   */
+  contentOnly?: boolean;
 }
 
 /**
@@ -250,6 +255,19 @@ export class Permissions {
 
   canEditPage(pageId: string): boolean {
     return this.pageLevel(pageId) >= LEVEL_EDIT;
+  }
+
+  /**
+   * Cambiar la fila de la página (título, ícono, ajustes, hoja): editar, salvo un link público, que escribe solo el
+   * contenido (`contentOnly`; su base rechazaría el cambio).
+   */
+  canEditRow(pageId: string): boolean {
+    return this.canEditPage(pageId) && this.access?.contentOnly !== true;
+  }
+
+  /** El asistente, *Dictate to report* y reemplazar en el proyecto: con una cuenta, nunca con un link (E2.4). */
+  get viaLink(): boolean {
+    return this.access?.contentOnly === true;
   }
 
   /**

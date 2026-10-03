@@ -183,8 +183,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   subcarpeta en NFC, buscando también las de antes (NFC, tal cual y NFD), y retomar en el mismo dispositivo con una
   copia de la carpeta que trae los acentos en la otra forma (un pendrive, una carpeta de red) reconoce los archivos en
   vez de pedirlos de nuevo; y la cola de una carpeta cierra la vuelta con el portero colgado (B.11). Desde otra
-  computadora, soltarla de nuevo sigue siendo otra carpeta (otra tarjeta), por diseño. Detalle en
-  `Doc_Carpetas.md`, "Cómo quedó", "Cómo quedó (entrega 2)" y "Cómo quedó (entrega 3)".
+  computadora, soltarla de nuevo sigue siendo otra carpeta (otra tarjeta), por diseño. **Entrega 4 hecha (v0.149, rama
+  `lega/carpetas-e4`):** la cola de una carpeta escucha la vuelta de la red y *Resume* vuelve a cero la cuenta de
+  esperas (O5), el listado de varias subcarpetas ya no corta con `409` por más de un minuto entre páginas (O7) y una
+  parte a la que Drive no le contesta al portero cuenta como trabada a los 90 s (B.11). Detalle en
+  `Doc_Carpetas.md`, "Cómo quedó", "Cómo quedó (entrega 2)", "Cómo quedó (entrega 3)" y "Cómo quedó (entrega 4)".
 - **P.10 Espacio en el dispositivo y "Available offline"** (Lega, 2026-09-30 y D-25 del 2026-10-01): tope
   elegible, de fábrica 2 GB por workspace en cada dispositivo (pasado el tope, un aviso ofrece liberar las copias ya
   confirmadas en el Drive que hace más que no se abren, y se liberan recién con el sí; la miniatura queda), marcar una página o un proyecto para usarlo sin red (con una ventana de casillas y
@@ -307,13 +310,40 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   **Entregas 0 y 1 hechas (v0.114: *Can view*, migración sin aplicar; ver "Cómo quedó" en `Doc_Link_Publico.md`).** Para
   publicarla: aplicar la migración, prender el interruptor de D14 y subir la mínima. Falta: el ícono del árbol para las
   páginas con link, el detalle *Can view link, created by…* para el equipo, y las entregas 2 y 3.
-  **Observaciones de las auditorías que quedaron para después** (ninguna pierde datos ni abre el link): `set_public_link`
-  revive un link vencido con la base de antes (le falta el `clean_reset`); en el visitante, *Open my workspace* desde la
+  **Entrega 2a hecha (v0.151: escribir; migración `20261028120000_link_editar.sql` sin aplicar, `schema_version` 19, y el
+  interruptor `link_edit_min_version` apagado; ver "Cómo quedó la 2a" en `Doc_Link_Publico.md`).** Para prenderla: la
+  barrera de error alrededor de `PageEditor` en `main` (R4), aplicar la migración, subir la mínima y poner
+  `link_edit_min_version`. Falta la 2b (archivos por el link) y la 2c (lo apartado a la vista). Lo encontrado al
+  implementar: si una fila del visitante se aparta, todo lo que sigue de la misma sesión (el mismo autor de Yjs) también,
+  dependa o no, hasta que recarga: adelantar "volver a la página como la ve el equipo" (2c) gana peso. **Su auditoría
+  dio no aprobado (el paso 8) y se corrigió en una ronda** (`Doc_Link_Publico.md`, "Correcciones de la auditoría de la
+  2a"). Quedan de esa auditoría: O3 (una versión inventada como `'9999'` en una fila la deja sin decidir y traba lo que
+  sigue de ese link en esa página; *Reset link* lo corta; falta un techo de versión en la base), O9 (la
+  pantalla de link muerto, después de recargar, no ofrece lo mandado y apartado) y O4 (con D14 apagado se escribe igual
+  en la sala). Al publicar la 2a, subir `min_app_version` a ella (O5: la publicada pasa *Can edit* a *Can view* al
+  cambiar el vencimiento). De la re-verificación (BAJO): una página del equipo con más de 100 niveles de sangría aparta
+  todo lo que mande el link en esa página (el tope de profundidad se mide en la página entera; solo con una importación rara).
+  **Entrega 2 rediseñada (2026-10-02):** lo que escribe un link espera en una sala
+  (`public_link_updates`) y entra a `page_updates` cuando el dispositivo de un editor lo prueba (`link_admit`); partida
+  en 2a (texto), 2b (archivos) y 2c (lo apartado a la vista); propuestas LE1 a LE13. **Auditado: aprobado con
+  condiciones, corregido** (B1 a B5, E2.18) **y aprobado en la re-verificación** (con la condición C1 aplicada: un
+  bloque de imagen vacío entra). **Para la 2a** (R1 a R4): en modo link, no mandar una subida que pase `push_max_bytes`;
+  `plink_push_status` cuenta como `pass`; el paso 8 acepta `tableCell.colwidth` como lista o nulo, con un caso honesto
+  por cada propiedad propia de la app; y **no prender `link_edit_min_version` hasta que la barrera de error alrededor de
+  `PageEditor` esté en `main`**. Observaciones que quedan para
+  después: adelantar a la 2a "volver a la página como la ve el equipo" para el visitante con algo apartado; **decisión de
+  Lega:** que el dueño pueda descartar algo apartado después de bajarlo (la sala solo crece, hasta 100 MB por link, y va
+  contra "no hay borrado duro"); probar el script de restaurar del repo privado con la sala y las columnas nuevas;
+  `plink_set_file_drive` (2b) abierta a `anon` es inofensiva (el portero exige `appProperties.sdFile`); invitar al
+  cliente con Editar ya cubre "el cliente escribe" sin superficie anónima. **Para D14:** la base limpia lleva los ids de
+  archivos de las anotaciones borradas (la clave de `photoMarkup`, sin el contenido); no da acceso por sí sola
+  (`Doc_Link_Publico.md`, "Entrega 2: *Can edit* (rediseño 2026-10-02)").
+  **Observaciones de las auditorías que quedaron para después** (ninguna pierde datos ni abre el link): en el visitante, *Open my workspace* desde la
   cabecera del link, pruebas de las guardas de la interfaz (*Resolve*, papelera, preferencias, cartel del dominio,
   modo liviano), avisar y ofrecer copiar los comentarios sin subir cuando el link muere, limpiar las bases locales de
   links viejos, confirmar *Restricted* como *Reset link*, los plurales de «Today: opened 1 times», un texto propio del
-  link en vez de «Ask for edit access», `LinkRemote` cerrando también `namePageVersion`/`share`/`deleteProject`,
-  rechazar «(via link)» en el nombre, un selector de fecha en vez de `prompt()` al cambiar el vencimiento, la ayuda
+  link en vez de «Ask for edit access», `LinkRemote` cerrando también `deleteProject` (la 2a cerró `namePageVersion`,
+  `share` y compactar), rechazar «(via link)» en el nombre, un selector de fecha en vez de `prompt()` al cambiar el vencimiento, la ayuda
   según quién la lee; en la base, tiempos de un token que ya existe (el doc dice «cuesta lo mismo»), el costo sin contar
   de `plink_tree(sig)` (26 ms con 423 páginas), el `max_rows` de PostgREST (1000: ramas más grandes llegan cortadas), la
   prueba del portero de los pases de 2 horas en `/folder/list`, el texto de «cada archivo listado cuenta como un pase»,
@@ -496,7 +526,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   botón en el 401, la clave de *Voice* en el mismo sobre y las notas de voz en la ventana de salir. Falta medir en el
   iPhone y el gestor de contraseñas real (recorrido de Lega). Quedó de la auditoría de S2 (improbable): *Change
   passphrase…* no rechaza una copia más vieja repuesta con la misma generación que el dispositivo conoce; al recifrarla le
-  da un `savedAt` nuevo y los otros dispositivos la aceptarían (es una clave vieja de la persona, no filtra nada). Falta una prueba de `clearVoiceFromCopy` (el mutante que no la llama sobrevive: tras *Forget voice key*, la próxima copia volvería a poner su *Voice* sin preguntar; no se pierde ninguna clave propia). **A3 implementada (v0.146):** *Suggest caption* en la barra de la foto y en el panel, con el aviso
+  da un `savedAt` nuevo y los otros dispositivos la aceptarían (es una clave vieja de la persona, no filtra nada). La prueba de `clearVoiceFromCopy` ya está (v0.150, con la entrega V4 del dictado: el mutante que no la llama muere). Esc en *Assistant…* (y en *Voice*) cierra solo esa ventana, no el panel ni la hoja de abajo (v0.150). **A3 implementada (v0.146):** *Suggest caption* en la barra de la foto y en el panel, con el aviso
   antes de mandarla, la foto rearmada en el dispositivo a 1024 px sin EXIF, la vista previa que se retoca y el pie como
   texto debajo de la foto (en una celda, en la misma celda); ver "Cómo quedó A3". Quedó de A3 (chico): el texto
   alternativo no se hace (la app no tiene dónde guardarlo); una foto que no es del Drive (`https` de afuera) puede no
@@ -562,7 +592,7 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   v0.140**: la línea de tiempo con las páginas; la memoria medida en Chromium con el editor real, unos 19 MB con 20
   páginas de 115 KB retenidas; falta medirla en el iPhone; `Doc_Deshacer.md`, sección 17), 2 (**hecha, v0.144**: el
   reemplazo adentro, ⌘Z y ⌘⇧Z en todas sus páginas, `planRedo`, el *Undo* del panel fuera de orden, C1, y DH9; con las
-  pruebas de A5, A7 y A9 de la entrega 1; sección 18), 3 (**hecha, v0.0XX**: lo de una vez en el anotador es un paso de
+  pruebas de A5, A7 y A9 de la entrega 1; sección 18), 3 (**hecha, v0.152**: lo de una vez en el anotador es un paso de
   la página, ⌘Z lo deshace entero con la foto a la vista y ⌘⇧Z lo rehace, sin llevarse lo de otra persona; con *Show* en
   el aviso de ⌘Z de un reemplazo con páginas cambiadas, el foco que sigue en el panel después del *Undo* de "Last" y la
   prueba de la ventana de O4; con sus correcciones: deshacer nunca borra el marco de una foto, la foto lejana a la vista
@@ -582,9 +612,12 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   de la cuenta (después de S1). **V3 hecha (v0.139, sección 17):** el micrófono propio (pedazos de 1 s guardados, C4 y
   C5, OpenAI, Gemini o compatible con pistas, *Voice* con la segunda clave, *Insert at cursor*, *Ask…*); falta que Lega
   lo pruebe en su iPhone (instalada y en Safari) con OpenAI y con Gemini, y que la segunda clave siga a la clave
-  sincronizada cuando exista (D72, S1), y que salir con «olvidar la clave» también olvide la clave de voz y diga
-  cuántas notas quedan (O5 de su auditoría, con la tanda de S1). El reconocimiento del navegador quedó afuera (optativo
-  y apagado).
+  sincronizada (hecho en S2, v0.143, junto con O5: olvidar la clave olvida también la de voz y la ventana de salir
+  cuenta las notas). El reconocimiento del navegador quedó afuera (optativo y apagado). **V4 hecha (v0.150, sección
+  18):** el plano activo (*Shot: 12_010 ▾*, fijo entre notas), las correcciones encadenadas («no, era un 35» con la
+  dirección de ahora), el lente también en la página *Shot Breakdown* del plano (destildado, solo si está vacía o era
+  la copia del reporte, con su guarda y *Undo*), *Add as comment* para quien comenta y `/dictate#<texto>` para un Atajo
+  de iOS; falta que Lega pruebe el Atajo con el botón de acción en su iPhone (¿abre la app instalada o Safari?).
   **Diseño en `Doc_Dictado.md`** (decisiones propuestas DI1 a DI9): el dictado común queda en el teclado del sistema;
   un solo micrófono propio, *Dictate to report*, que graba
   en el dispositivo y transcribe con el proveedor de la persona (OpenAI o Gemini; el reconocimiento del navegador no
@@ -594,9 +627,13 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   V1 (texto dictado con el teclado → ubicar; requiere A2 de P.24 en `main`), V2 (la cola sin red), V3 (el micrófono
   propio, guantes y ruido), V4 (plano activo, correcciones, la página del plano, el botón de acción del iPhone).
   Queda para medir: transcripción adentro del teléfono (Whisper en WebAssembly), sin red y privada.
-  Quedó de la re-verificación de V1 (BAJO): el resguardo de 600 ms contra el doble toque en *Apply* también corre
-  cuando se aplicó con Ctrl/⌘+Enter, y un *Undo* a propósito en menos de medio segundo se ignora sin aviso (el segundo
-  anda); que valga solo para un clic o un toque sobre *Apply*.
+  El resguardo de 600 ms contra el doble toque en *Apply* vale solo para un clic o un toque (v0.150). Queda de V4
+  (chico): copiar a la página del plano solo el lente (otras columnas con su fila en la ficha se suman en `FIELDS` de
+  `shotPage.ts`); lo escrito en la página del plano no entra en el ⌘Z de esa página (se deshace con *Undo* de la hoja,
+  como el reemplazo del proyecto antes de D10).
+- **P.28 (chico) La tabla del reporte en el teléfono:** en 375 px las tablas de 7 columnas del *On-Set Report* quedan muy
+  angostas (una palabra por renglón); viene de antes de V4 del dictado (lo anotó su auditoría). Para mirar con el
+  desplazamiento de costado de las tablas o un ancho mínimo por columna.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
@@ -722,21 +759,26 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
      chica); y las pasadas de `PageFiles.pushPending` esperan después de cerrar por Storage colgado. Probado con
      relojes simulados y en Chromium contra un portero y un Storage locales que se cuelgan (`Doc_Portero.md`,
      "Colgado para todos"; `Doc_Sincronizacion.md`; `Doc_Carpetas.md`, "Cómo quedó (entrega 3)").
-   - **Queda (BAJO):** un archivo grande al que el portero se le cuelga en la última parte espera su plazo de
-     respuesta (hasta unos 10 minutos y medio) antes de contar como trabado, en las dos colas.
-   - **Queda (BAJO, auditoría de la entrega 3, O5): la cola de una carpeta no escucha la vuelta de la red.** Escenario:
-     una carpeta sube, se corta el wifi 5 minutos, la cola cierra la vuelta varias veces y queda esperando 2 o 4
-     minutos; vuelve el wifi y la carpeta sigue esperando hasta que vence esa espera (los sueltos y `page-files`, en
-     cambio, prueban enseguida con `networkBack`). Y *Pause* y después *Resume* (o *Retry*) no vuelven a cero la
-     cuenta de trabadas ni la de esperas: un *Resume* con la racha en 2 o más arranca con otra espera más larga. Nada
-     se pierde. Arreglo: que `FolderUploads` tenga su `networkBack` (despierta `pauseFor`) y que *Resume* y *Retry*
-     pongan en cero `stallStreak` y `stallRounds`.
-   - **Queda (BAJO, auditoría de la entrega 3, O7): un listado de varias subcarpetas que tarda más de un minuto entre
-     páginas puede dar `409 changed`.** Escenario: *Download all* de una carpeta con 36 subcarpetas o más; entre una
-     página y la siguiente Drive pide ir más despacio y la app espera más de 60 s; en la página siguiente el portero
-     tiene que volver a mirar todas en Drive, se pasa del tope de llamados y contesta `changed`. La app cae a listar
-     de a una (`listRound`): no hay bucle ni se pierde nada, solo tarda más. Arreglo posible: con `pageToken`,
-     devolver las que no entran como `later` en vez de cortar.
+   - **Hecho (v0.149, rama `lega/carpetas-e4`; `Doc_Carpetas.md`, "Cómo quedó (entrega 4)"):**
+     - **La última parte de un archivo grande:** el portero, con la parte ya leída, espera a Drive a lo sumo 90 s
+       (`PART_ANSWER_MS`) y contesta `504 stalled` si la app lo pide (`?stall=1`); la app lo toma como una trabada, en
+       las dos colas, sin esperar su plazo de respuesta (hasta 10 minutos y medio, que sigue haciendo falta para un
+       proxy que retiene el cuerpo). Queda sin cubrir un portero que se cae sin contestar con la parte ya leída.
+     - **O5:** la cola de una carpeta escucha la vuelta de la red (`FolderUploads.networkBack`, llamado por el motor
+       como el de los sueltos y `page-files`) y *Resume*, *Retry* y volver a soltarla ponen en cero `stallStreak` y
+       `stallRounds`.
+     - **O7:** con `partial: true`, una página siguiente del listado de varias subcarpetas devuelve en `later` las
+       que no entran en el tope de llamados y en `failed` las que ya no son del árbol, en vez de cortar con `409
+       changed`; la app descarta lo suyo y las lista de nuevo. A una app anterior el portero le sigue contestando `409`.
+     Probado con relojes simulados y en Chromium contra un portero local que se cuelga o contesta `504 stalled`.
+   - **Queda (BAJO, auditoría de la entrega 4, O2): medir con el portero publicado** un video de varios GB al que
+     Drive tarda más de 90 s en cerrar la última parte. Si Google contestara `308` con todo recibido mientras cierra el
+     archivo, la app mandaría una parte vacía, el portero la rechazaría con `400` y el archivo gastaría un intento hasta
+     *Retry* (nada se pierde ni se duplica). Lo hace Lega con un archivo enorme; si pasa, la app tendría que tomar
+     «todo recibido sin `done`» como «preguntar de nuevo más tarde».
+   - **Queda (informativa, O4):** en las páginas siguientes del listado de varias, el portero vuelve a comprobar las
+     subcarpetas que la app ya descartó (gasta parte del tope de 36 llamados; converge, sin bucle). Arreglo posible:
+     que la app mande cuáles saltear (`skip`).
 12. **Importar de Coda, direcciones sueltas: lo que quedó de v0.069** (`Doc_Importar_Coda.md`, "Direcciones
     sueltas"). **Falta:**
     - **Hecho (v0.071 y v0.087): el anclaje de un comentario** pegado a un renglón con direcciones: un último

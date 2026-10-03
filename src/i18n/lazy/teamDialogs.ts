@@ -91,6 +91,20 @@ export const teamDialogs = {
   'share.link.restricted': { en: "Restricted", es: "Restringido" },
   'share.link.anyone': { en: "Anyone with the link", es: "Cualquiera con el link" },
   'share.link.canView': { en: "Can view (and comment)", es: "Puede ver (y comentar)" },
+  // Can edit por un link (entrega 2a, Docs/Doc_Link_Publico.md, E2.8).
+  'share.link.canEdit': { en: "Can edit", es: "Puede editar" },
+  'share.link.editOff': {
+    en: "Editing through a link isn't turned on for this workspace yet.",
+    es: "Editar con un link todavía no está prendido en este workspace.",
+  },
+  'share.link.editHint': {
+    en: "Changes made through the link reach other people when someone from your team opens the app.",
+    es: "Lo que se cambia con el link les llega a los demás cuando alguien de tu equipo abre la app.",
+  },
+  'share.link.edits': {
+    en: "{added} changes added today · {waiting} waiting · {aside} set aside · {held} on hold",
+    es: "{added} cambios sumados hoy · {waiting} esperando · {aside} apartados · {held} en espera",
+  },
   'share.link.restrictedHint': {
     en: "Only people with access can open it. With a link, anyone who has it opens this page and the ones inside, without an account.",
     es: "Solo la abre quien tiene acceso. Con un link, cualquiera que lo tenga abre esta página y las de adentro, sin cuenta.",

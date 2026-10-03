@@ -204,6 +204,12 @@ export interface WorkspaceSettings {
    * bajan con `pull_page_updates`, como siempre); con un número, se baja con `pull_page_content`.
    */
   snapshotMinVersion?: number | null;
+  /**
+   * El interruptor de *Can edit* por un link público (`link_edit_min_version`, versión 19 de la base): `null`, apagado
+   * (los links editan como *Can view* y nadie admite); con un número, las versiones desde esa escriben por un link y,
+   * las que arman bases, admiten lo que espera en la sala (Docs/Doc_Link_Publico.md, entrega 2).
+   */
+  linkEditMinVersion?: number | null;
 }
 
 /** Un archivo nuevo para `register_file` (el proyecto sale de la página). */
@@ -336,6 +342,9 @@ export class RemoteError extends Error {
     this.name = 'RemoteError';
   }
 }
+
+/** Un link público sin el nombre del visitante: lo escrito o comentado espera en el dispositivo hasta que lo escriba. */
+export const AUTHOR_MISSING = 'author_missing';
 
 export function isPermanent(err: unknown): boolean {
   return err instanceof RemoteError && err.permanent;

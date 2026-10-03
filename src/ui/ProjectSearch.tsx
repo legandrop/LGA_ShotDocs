@@ -89,7 +89,8 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
   // Reemplazar en el proyecto (Docs/Doc_Buscar.md, "Reemplazar en el proyecto"): la flecha, solo con los permisos
   // conocidos y alguna página que se pueda editar (sin datos de permisos todo daría "puede": corrección 3).
   const { session: replace, ui: replaceUi } = useReplaceSession();
-  const canReplace = perms.known && index.pagesOf(projectId).some((p) => perms.canEditPage(p.id));
+  // Un link con Can edit no reemplaza en todo el proyecto (E2.4: es de quien edita el proyecto).
+  const canReplace = perms.known && !perms.viaLink && index.pagesOf(projectId).some((p) => perms.canEditPage(p.id));
   const replacing = canReplace && replaceUi.open;
 
   useEffect(() => {

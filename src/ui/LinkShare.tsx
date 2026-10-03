@@ -13,8 +13,10 @@ import {
   LINK_SCHEMA_VERSION,
   resetPublicLink,
   revokePublicLink,
+  setPublicLink,
   setPublicLinkExpiry,
   type ExpiryChoice,
+  type LinkLevel,
   type PublicLink,
   type PublicLinkInfo,
 } from '../sync/publicLinks';
@@ -25,7 +27,8 @@ import { teamErrorText } from './teamText';
 // "General access" en Share de una página (Docs/Doc_Link_Publico.md, 3.11): Restricted o Anyone with the link (Can
 // view, que comenta), copiar, vencer (D30: Never por defecto), Reset link, el uso de hoy y quitarlo. Solo se ve con la
 // base en la versión de los links; crear pide el interruptor de D14 (D33: si está apagado, la opción se ve apagada con
-// la línea que lo explica).
+// la línea que lo explica). Con la versión 19, Can edit (entrega 2a, E2.8): apagado con su línea si el interruptor de
+// Can edit no está prendido; prendido, la línea de cómo llega lo que escribe el link y sus números.
 
 function megabytes(bytes: number): string {
   return (bytes / 1_048_576).toFixed(bytes < 10_485_760 ? 1 : 0);
@@ -49,6 +52,7 @@ export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => 
   const [error, setError] = useState<string | null>(null);
   const [manual, setManual] = useState<string | null>(null);
   const [expiry, setExpiry] = useState<ExpiryChoice | 'date'>('never');
+  const [level, setLevel] = useState<LinkLevel>('comment');
   const [date, setDate] = useState('');
   const [reload, setReload] = useState(0);
 
@@ -117,7 +121,7 @@ export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => 
     const scope = { pageId };
     const created = (anyway ? Promise.resolve(true) : gate.ready(scope, true, () => turnOn(), () => turnOn(true))).then((ok) => {
       if (!ok) throw UNSYNCED_BEFORE_SHARE;
-      return createPublicLink(client, pageId, expires);
+      return createPublicLink(client, pageId, expires, level);
     });
     void run('on', async () => {
       await copyCreated(created);
@@ -128,6 +132,9 @@ export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => 
   const usage = link?.usage_today ?? {};
   const opens = usage.open?.n ?? 0;
   const commentsToday = usage.comment?.n ?? 0;
+  const editOn = info?.edit_on === true;
+  const linkLevel: LinkLevel = link?.level === 'edit' ? 'edit' : 'comment';
+  const shownLevel: LinkLevel = link ? linkLevel : level;
 
   return (
     <section className="link-share" aria-label={tr('share.link.general')}>
@@ -164,9 +171,26 @@ export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => 
             <option value="restricted">{tr('share.link.restricted')}</option>
             <option value="anyone">{tr('share.link.anyone')}</option>
           </select>
-          <span className="team-role">{tr('share.link.canView')}</span>
+          {/* Can edit solo con su interruptor; uno que ya es Can edit se puede bajar a Can view igual. */}
+          <select
+            aria-label={tr('share.link.canEdit')}
+            value={shownLevel}
+            disabled={busy !== null || (!editOn && shownLevel === 'comment')}
+            onChange={(e) => {
+              const next = e.target.value as LinkLevel;
+              if (!link) return setLevel(next);
+              void run('level', async () => void (await setPublicLink(client, pageId, next, link.expires_at)));
+            }}
+          >
+            <option value="comment">{tr('share.link.canView')}</option>
+            <option value="edit" disabled={!editOn}>
+              {tr('share.link.canEdit')}
+            </option>
+          </select>
         </div>
       )}
+      {info && info.clean_on && info.edit_on === false && <p className="muted small team-lead">{tr('share.link.editOff')}</p>}
+      {info && shownLevel === 'edit' && <p className="muted small team-lead">{tr('share.link.editHint')}</p>}
       {info && !link && !info.clean_on && <p className="muted small team-lead">{tr('share.link.cleanOff')}</p>}
       {info && !link && info.clean_on && (
         <>
@@ -220,16 +244,26 @@ export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => 
                   const asked = prompt(tr('share.link.datePrompt'), new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10));
                   const at = asked ? endOfDay(asked.trim()) : null;
                   if (asked && !at) return setError(tr('share.link.badDate'));
-                  if (at) void run('expiry', async () => void (await setPublicLinkExpiry(client, pageId, at)));
+                  if (at) void run('expiry', async () => void (await setPublicLinkExpiry(client, pageId, at, linkLevel)));
                   return;
                 }
-                void run('expiry', async () => void (await setPublicLinkExpiry(client, pageId, expiryFor(choice))));
+                void run('expiry', async () => void (await setPublicLinkExpiry(client, pageId, expiryFor(choice), linkLevel)));
               }}
             />
           </label>
           <p className="muted small team-lead">
             {tr('share.link.usage', { opens, comments: commentsToday, mb: megabytes(usage.pull?.bytes ?? 0) })}
           </p>
+          {link.edits && (link.level === 'edit' || link.edits.waiting + link.edits.held + link.edits.aside + link.edits.admitted_today > 0) && (
+            <p className="muted small team-lead">
+              {tr('share.link.edits', {
+                added: link.edits.admitted_today,
+                waiting: link.edits.waiting,
+                aside: link.edits.aside,
+                held: link.edits.held,
+              })}
+            </p>
+          )}
           {link.limited && <p className="warn small team-lead">{tr('share.link.limited')}</p>}
           {link.comments > 0 && (
             <button

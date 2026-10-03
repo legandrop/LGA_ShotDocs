@@ -2,7 +2,8 @@
 
 Estado: **entrega 1 implementada (v0.081, rama `lega/carpetas`)**, con lo que no depende de Lega; ver "Cómo
 quedó" justo abajo. **Entrega 2 (*Download all*) implementada** (rama `lega/carpetas-zip`): "Cómo quedó (entrega 2)". **Entrega 3 (los
-restos de las auditorías y las subidas que se traban, v0.142, rama `lega/carpetas-e3`):** "Cómo quedó (entrega 3)". El diseño sigue debajo. Rediseñado el 2026-09-30 con las respuestas de Lega (ver "Respondidas por
+restos de las auditorías y las subidas que se traban, v0.142, rama `lega/carpetas-e3`):** "Cómo quedó (entrega 3)". **Entrega 4 (los restos de la
+entrega 3, v0.149, rama `lega/carpetas-e4`):** "Cómo quedó (entrega 4)". El diseño sigue debajo. Rediseñado el 2026-09-30 con las respuestas de Lega (ver "Respondidas por
 Lega"): la carpeta de la página es **una vista en vivo de una carpeta del Drive**, sin tope de archivos y en el
 plan gratis de Cloudflare. El primer diseño (commit `47bbbf4`, una fila de `files` por archivo) y su auditoría
 quedan resumidos al final, en "Historia"; lo que la auditoría encontró y sigue valiendo está incorporado.
@@ -368,7 +369,89 @@ probar a los 10 s, cerró la segunda a los 131 s (6 colgados) y, al volver el po
 
 **Lo que queda (BAJO):** si el portero se cuelga recién en la última parte de un archivo grande, ese archivo espera su
 plazo (hasta 10 minutos y medio con el plazo más largo) antes de contar como trabado; los otros dos en curso, también.
-Es lo mismo que en la cola de los sueltos.
+Es lo mismo que en la cola de los sueltos. *(Hecho en la entrega 4, abajo, cuando lo que se cuelga es Drive.)*
+
+## Cómo quedó (entrega 4, v0.149)
+
+Los tres restos BAJO de la entrega 3 (`Doc_Roadmap.md`, B.11: O5, O7 y la última parte).
+
+**La vuelta de la red (O5).** La cola de una carpeta no se enteraba de que volvía la red: con el wifi cortado unos
+minutos la vuelta se cerraba varias veces y quedaba esperando 2 o 4 minutos aunque el wifi volviera enseguida (los
+sueltos y `page-files` ya probaban en el acto). Ahora `FolderUploads.networkBack` despierta las esperas de cada
+carpeta que no está en pausa, y el motor la llama donde llama a las otras dos (el evento `online` y la base que
+contesta después de un ciclo sin conexión). No vuelve la cuenta a cero: si el portero sigue colgado, la espera
+siguiente es más larga. La espera porque Drive pidió ir más despacio (`rate`) no se despierta: la red no cambia eso.
+De paso, cada carpeta lleva todas sus esperas en curso (`waits`): antes había un solo lugar y, con varios archivos
+esperando a la vez (uno por archivo en curso sin red), pausar despertaba solo al último.
+
+**Pause y Resume (O5).** *Resume*, *Retry* y volver a soltar la carpeta (`resumeWith`) ponen en cero `stallStreak` y
+`stallRounds` y sacan el aviso de que el portero no contesta: antes, un *Resume* con la racha en 2 arrancaba con otra
+espera, más larga (40 s, 80 s…), sin probar.
+
+**Listar varias subcarpetas con más de un minuto entre páginas (O7).** Con `pageToken`, el portero volvía a mirar en
+Drive cada subcarpeta vista hace más de un minuto (`LIST_TRUST_MS`) y, si no entraban todas en su tope de llamados
+(36), cortaba con `409 changed`; la app descartaba todo el grupo y lo listaba de a una (un pedido por subcarpeta).
+Pasaba con *Download all* de una carpeta con 36 subcarpetas o más cuando Drive pedía ir más despacio entre páginas.
+Opciones: (a) que la confianza no venza entre páginas (descartado: es la regla de seguridad del minuto, D81); (b)
+devolver las que no entran como `later` en la página siguiente (lo que proponía el roadmap). Se eligió (b), con dos
+cuidados:
+
+- **La consulta no cambia:** Drive ata el token a la consulta, así que la página sigue pidiendo todas las subcarpetas
+  del grupo, pero de las que no se comprobaron no sale nada (se filtra por padre, como siempre). Lo mismo con una que
+  se movió afuera: sale en `failed` (`not_found`), sin cortar a las demás.
+- **Solo si la app lo pide** (`partial: true` en el pedido): una app anterior sigue lo que recibe en las páginas
+  siguientes sin mirar `later` ni `failed`, y se quedaría con una subcarpeta a medias sin enterarse. A ella el portero
+  le sigue contestando `409`. Un portero anterior ignora `partial` y contesta `409` como siempre (la app ya lo sabe
+  manejar).
+
+En la app (`listRound`), una subcarpeta que una página siguiente deja para después pierde lo que ya tenía (estaba
+incompleto) y se lista de nuevo en la vuelta siguiente; una dada por perdida queda anotada con su código (*Retry
+missing* la reintenta); las demás siguen con sus páginas, siempre con los `dirs` de la primera. Si no queda ninguna
+del grupo, no se piden más páginas.
+
+**El archivo grande colgado en la última parte.** Desde la app no hay cómo saber si una parte que ya salió entera
+está colgada o detrás de un proxy que la sube despacio: no llega nada en los dos casos, y por eso el plazo de la
+respuesta crece hasta 10 minutos y medio (`answerLimit`). Opciones: (a) un plazo por quietud en la app como el de
+`page-files` (descartado: en una subida no hay bytes que vuelvan mientras se espera la respuesta, y cortaría al proxy
+lento); (b) que el portero mande algo mientras espera a Drive (descartado: cambia la forma de las respuestas, y con un
+proxy que retiene el cuerpo tampoco llegaría nada); (c) **que el portero ponga el tope**. El portero lee la parte
+entera antes de pasársela a Drive, así que lo que tarda desde ahí es Cloudflare con Drive, nunca la red de quien sube.
+Con `?stall=1` (la app lo pone en cada parte), si Drive no contesta en 90 s (`PART_ANSWER_MS`; en la última parte de
+un archivo de una carpeta cuenta también la consulta a la base) el portero corta su pedido y contesta `504 stalled`, y
+la app lo toma como una trabada: no gasta intentos y la cola sigue su escala. Vale para las dos colas (carpetas y
+sueltos) porque es el mismo cliente. Lo que no cubre: un portero que se cae sin contestar después de leer la parte
+(raro: Cloudflare cierra la conexión) sigue esperando el plazo de la app; detalle en `Doc_Portero.md`, "Subidas que
+se traban".
+
+**Lo que queda (BAJO, de la auditoría de la entrega 4):**
+
+- **Medir con el portero publicado y el Drive real (O2):** un archivo de varios GB al que Drive tarda más de 90 s en
+  cerrar la última parte. El portero corta y la app pregunta cuánto llegó: si Drive ya terminó contesta `done` y no se
+  duplica nada; si no, se vuelve a mandar desde lo recibido (los dos casos, probados con un Drive de mentira). Lo que no
+  se sabe es qué contesta Google **mientras** todavía cierra el archivo: si dijera `308` con todo recibido, la app
+  mandaría una parte vacía, el portero la rechazaría con `400` y el archivo gastaría un intento, con el error a la vista
+  hasta *Retry*. No se pierde ni se duplica nada. Es un camino de antes (una respuesta perdida) que el tope de 90 s
+  hace más probable con archivos enormes.
+- **Comprobaciones de más en el listado (O4, informativa):** en una página siguiente el portero vuelve a comprobar
+  también las subcarpetas que la app ya descartó (no sabe cuáles son) y gasta parte de su tope de 36 llamados. Con 40
+  subcarpetas convergió en 2 vueltas; no hay bucle. Si hiciera falta, la app podría mandar cuáles saltear (`skip`).
+
+**Pruebas:** `src/media/folders.test.ts` (la vuelta de la red despierta la espera y la siguiente es más larga; no
+despierta la de Drive que pide ir más despacio, ni por una subida de la tanda ni por el pedido entero (`503 rate`); *Pause* con tres esperas
+a la vez las despierta a todas; *Pause* y después *Resume*, *Retry* o volver a soltarla vuelven la espera a 10 s; el
+cliente manda `?stall=1` solo en las partes y un `504 stalled` es una trabada sin reintentar, y un `504` sin código
+se sigue reintentando), `src/sync/remoteTimeout.test.ts` (el motor les avisa a las carpetas con el evento `online` y
+cuando la base contesta después de un ciclo sin conexión), `src/media/folderZip.test.ts` (una página siguiente que deja
+subcarpetas para después o las da por perdidas, sin repetidos y sin listar de a una; sin ninguna, no se piden más
+páginas) y `portero/src/folders.test.ts` (`partial` con 40 subcarpetas y más de un minuto entre páginas, y una movida
+afuera; sin `partial`, `409` como antes; Drive que no contesta una parte con y sin `?stall=1`; la base colgada en la
+última parte).
+
+**Recorrido en Chromium** (sin ventana, con el cliente real del portero, partes por `XMLHttpRequest`, contra un portero
+local): con el portero colgado, una carpeta de 3 archivos cerró la vuelta a los 61 s; al cortarse y volver la red
+(el evento `online` de verdad) subió en 0,3 s en vez de esperar los 10 s que faltaban. Otra, en la segunda espera (20
+s): *Pause* y *Resume* volvió a probar el portero 60 s y la espera siguiente fue de 10 s (antes, 40 s). Cada archivo
+llegó una vez. Lo del portero con Drive colgado, en `Doc_Portero.md`, "Subidas que se traban".
 
 ## Qué se pide
 

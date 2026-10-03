@@ -1,7 +1,12 @@
 # Link público: «Anyone with the link»
 
-**Estado: entregas 0 y 1 implementadas (v0.114, *Can view*; migración sin aplicar, ver "Cómo quedó (entregas 0 y 1)"
-al final); la 2 (*Can edit*) sigue en diseño** (roadmap P.19; pedido de Lega del 2026-10-02). Corregido con la auditoría
+**Estado: entregas 0 y 1 implementadas (v0.114, *Can view*; migración aplicada, ver "Cómo quedó (entregas 0 y 1)"
+al final); la 2 (*Can edit*) se rediseñó el 2026-10-02 contra v0.137 (sala de espera y admisión por un editor, ver
+"Entrega 2: *Can edit* (rediseño 2026-10-02)", al final) y se auditó: aprobado con condiciones, corregido y aprobado en la re-verificación (E2.18).
+**La 2a (escribir) está implementada (v0.151), con su migración sin aplicar y el interruptor `link_edit_min_version`
+apagado: ver "Cómo quedó la 2a"; no se prende hasta que la barrera de error alrededor de `PageEditor` esté en `main`
+(R4)** (roadmap P.19;
+pedido de Lega del 2026-10-02). Corregido con la auditoría
 independiente del mismo día ("aprobado con condiciones"; ver "Correcciones de la auditoría", al final) y con las
 decisiones D29 a D31 (sección 9). Toca permisos, entrar sin cuenta y abuso: riesgo alto. Cada entrega va con sus pruebas
 de permisos (casos negativos y mutantes) y su auditoría independiente. Lo medido está en prototipos fuera del repo
@@ -40,7 +45,10 @@ de permisos (casos negativos y mutantes) y su auditoría independiente. Lo medid
   por vida, 50 MB por día entre todos los links y una guarda que corta las subidas de los links si la base pasa los
   350 MB de los 500 del plan gratis) y la **cuarentena**: una fila de un link que el dispositivo de un editor no puede
   aplicar limpia (basura, dependencias que nunca subieron, tipos desconocidos) se aparta sin marcar la página ilegible ni
-  frenar su base limpia, y sin perder nada. Antes de programarla se vuelve a auditar solo eso.
+  frenar su base limpia, y sin perder nada. Antes de programarla se vuelve a auditar solo eso. **Rediseñada el
+  2026-10-02** ("Entrega 2: *Can edit* (rediseño 2026-10-02)"): con las copias resumidas, la cuarentena en cada
+  dispositivo ya no alcanza; lo que escribe un link espera en una sala y entra a la página recién cuando el dispositivo
+  de un editor lo prueba.
 - **Revocar es instantáneo**: cada pedido vuelve a validar el token. *Reset link* crea uno nuevo y el viejo deja de andar
   en el acto; también deja de andar si vence, si se lo apaga, si la página va a la papelera o si quien lo creó pierde el
   permiso de compartir (la misma regla que `can_share`, en vivo). **Sacar a alguien del workspace revoca sus links**: no
@@ -314,6 +322,9 @@ misma recorrida por los padres que `user_page_level` (una sola pasada, PL/pgSQL)
   nadie (el id de dispositivo lo inventa el visitante): no se propone.
 
 ### 3.8 Editar sin cuenta (*Can edit*, entrega 2)
+
+> **Reemplazado** por "Entrega 2: *Can edit* (rediseño 2026-10-02)", al final (E2.1 dice qué supuesto de acá dejó de
+> valer y por qué). Queda como historia, igual que lo de la entrega 2 en 3.10 (*Compactar*), 3.15, 4, 5, 6 y 7.
 
 **Qué puede** (D29): escribir en las páginas de la rama y subir o sacar fotos, videos y archivos (nivel 3). **No** crea,
 mueve, renombra ni manda páginas a la papelera (nivel 4), ni cambia el formato de la rama: esos cambios van por las filas
@@ -807,7 +818,7 @@ notify pgrst, 'reload schema';
 |---|---|---|---|
 | **0** | La prueba técnica en la base real, sin usuarios ni login, con una función, un objeto y una política de prueba que se sacan al terminar: (a) con `curl` y la clave publicable, que `x-shotdocs-link` llega a `request.headers` en una RPC y en una política de Storage; (b) **la caché de Storage**: `GET` de la miniatura de prueba con el header válido dos veces (`cf-cache-status`), y después sin el header y con un token revocado, que tienen que dar 400 o 404 y nunca `HIT`; si da `HIT`, lo mismo con `createSignedUrls` (plan B); (c) medir `plink_page_level`, `plink_tree` y el listado del bucket con la política (`explain analyze` en `begin … rollback`). Y `noindex` (`_headers`, `robots.txt`) | Las respuestas de `curl`; tiempos | Bajo |
 | **1** | *Can view* completo: la migración (links, lectura, comentarios, archivos, topes de lectura), *Share*, el modo link (solo lectura con comentarios), el portero para ver, las miniaturas por el plan que salió de la 0. Requiere el interruptor de D14 prendido en Wanka | 1, 2, 4, 5, 6 | **Alto**: abre un camino sin cuenta a la base |
-| **2** | *Can edit*: los topes por bytes y la guarda de la base, la cuarentena, escribir, subir archivos, la cola sin red con sus rechazos, el historial. **Antes de programarla, una auditoría solo de 3.8.1 y 3.8.2** (pedido de la auditoría). Se habilita *Can edit* en *Share* recién con `min_app_version` en esta versión | 1 a 6 (las de escritura y la 3) | **Alto**: escrituras sin cuenta, la base y el Drive del dueño |
+| **2** | *Can edit*: los topes por bytes y la guarda de la base, la cuarentena, escribir, subir archivos, la cola sin red con sus rechazos, el historial. **Antes de programarla, una auditoría solo de 3.8.1 y 3.8.2** (pedido de la auditoría). Se habilita *Can edit* en *Share* recién con `min_app_version` en esta versión. **Rediseñada: ver E2.13 (2a, 2b, 2c)** | 1 a 6 (las de escritura y la 3) | **Alto**: escrituras sin cuenta, la base y el Drive del dueño |
 | **3** | Medir el uso real (egress del mes, `public_link_usage`, los `/m/` de video en Workers) y ajustar los topes; el link de un proyecto entero (P16) | — | Medio |
 
 Antes de cerrar cada entrega, la auditoría independiente de siempre (funcionalidad, permisos y RLS, no perder datos,
@@ -1060,6 +1071,1382 @@ Dos auditorías independientes (base y portero; app y motor) dijeron «no pasa»
   U+2028 y U+2029 (base y app, como el portero). 14 mutantes nuevos de la base y 9 de la app, todos detectados salvo uno
   equivalente.
 - **Al roadmap:** el resto de las observaciones (ver `Doc_Roadmap.md`).
+
+## Entrega 2: *Can edit* (rediseño 2026-10-02)
+
+**Estado: la 2a está implementada (v0.151; ver "Cómo quedó la 2a", al final de esta sección), con su migración sin
+aplicar y el interruptor apagado; la 2b y la 2c, en diseño.** El SQL de E2.11 queda como el borrador que se auditó; lo
+que cambió al implementarlo está en "Cómo quedó la 2a".
+Reemplaza a 3.8 (3.8.1 a 3.8.3), a la fila *Compactar* de 3.10, a lo de la entrega 2 en 3.15, 4, 5 y 6, y a la fila 2
+de la sección 7: todo eso queda como historia. Se diseñó contra `main` v0.137 (copias resumidas listas y apagadas, D14
+aplicada y apagada, menciones, anotaciones de fotos, plantillas, exportar, dictado V1, deshacer por orden de edición).
+Lo comprobado, con sus números, está en E2.16. **Auditado el mismo día: aprobado con condiciones; los cinco bloqueantes
+están corregidos en el texto (E2.18)**; la re-verificación del mismo día lo dio por **listo**, con la condición C1 ya aplicada.
+
+### E2.0 En corto
+
+- **El cambio principal (LE1): lo que escribe un link no entra directo a `page_updates`.** Va a una **sala de espera**
+  (`public_link_updates`), con los topes por bytes de 3.8.1. El dispositivo de un editor que ya arma las bases limpias
+  de D14 prueba cada fila en orden sobre las filas del servidor y se lo dice a la base (`plink_admit`): la base **copia
+  los bytes de la sala a `page_updates`** (con `plink_id` y el nombre del visitante) o anota la fila como **apartada**
+  con el motivo. Una sola decisión, guardada en la base, para todos los dispositivos.
+- **Por qué cambia.** La cuarentena de 3.8.2 se pensó en `applyRemote` de cada editor, sobre filas sueltas de
+  `pull_page_updates`. Desde entonces: los editores bajan por `pull_page_content`, que sirve **copias resumidas**
+  (snapshots, v0.127 a v0.137): una fila mala adentro de un snapshot ya no se puede apartar, y el compactador tendría
+  que repetir la cuarentena; lo que "no conoce" un editor depende del esquema de su versión, así que "todos los editores
+  apartan lo mismo" valía solo con la misma versión; y cualquier versión anterior (también las que compactan, desde
+  v0.133) aplicaría una fila sin probar. Con la sala, **ninguna versión de la app, ninguna copia resumida, ninguna base
+  limpia ni el historial ven nunca una fila de un link sin probar**, y `applyRemote`, compactar y el historial no
+  cambian.
+- **La prueba de admisión** (E2.3), medida con las funciones reales de la app: la fila se lee; toca solo los tipos raíz
+  que la app usa (el contenido, *colapsar para todos* y las anotaciones); no deja nada pendiente (structs ni borrados);
+  no trae un bloque ni una marca que esa versión no conozca; las fotos que agrega son del link o las usa hoy su rama, y
+  no trae imágenes externas; la base limpia que sale pasa `checkCleanBase` y pesa hasta 8 MB (N4 y N5 de la
+  re-verificación); y, desde la auditoría, **la forma y los valores** (paso 8: nada que el editor no pueda dibujar).
+  **Prototipo: 11 de 11 casos, 1286 filas honestas al azar y 0 apartadas; 3,6 ms por fila en una página de 77 KB y
+  13,3 ms en una de 346 KB.** Además, una barrera de error alrededor de `PageEditor` para lo que nadie previó.
+- **Hallazgo nuevo (fotos de afuera):** el dispositivo de un editor vincula a la página todo `sdmedia://` que encuentra
+  en su documento (`MediaQueue.reconcilePage` → `link_page_file`, también de otras páginas del proyecto que el editor
+  ve). Con 3.8, un visitante que conociera el id de una foto de afuera de su rama la escribía en la página, el editor la
+  vinculaba y `plink_file_level` se la abría al link. La prueba lo aparta (`foreign_media`) y la base lo vuelve a
+  comprobar al admitir.
+- **Qué puede (D29, sin cambios):** escribir en las páginas de la rama (texto, tablas, anotaciones de fotos, colapsar
+  para todos, una plantilla en una página vacía, reemplazar en la página, deshacer), comentar, y desde la 2b subir fotos
+  y archivos al Drive del dueño. **No** crea, mueve, renombra ni manda páginas a la papelera, ni guarda plantillas, ni
+  crea reportes del día, ni reemplaza en todo el proyecto, ni usa el asistente ni *Dictate to report*.
+- ***Reset link* corta la escritura al instante:** el token viejo da `link_not_found` en el próximo pedido, y lo que
+  quedó en la sala **no se admite**: al revocar o resetear pasa a apartado (`link_revoked`) en el acto; si el link solo
+  dejó de andar por algo que puede volver (vencido, el permiso del creador, *Can view*, la página afuera o en la
+  papelera), queda **retenido**. Las dos cosas, a la vista en *Share* y para bajar. Nunca se borra.
+- **Un interruptor propio (LE6):** `workspace_settings.link_edit_min_version`. Apagado (hoy), *Can edit* no se puede
+  elegir (`edit_off`), `plink_push_page_update` rechaza y `plink_open` le da *Can view* a una app más vieja que el
+  interruptor. Requiere además el de D14 (sin él no hay links: hoy `clean_min_version` es nulo en Wanka).
+- **El equipo ve** lo del visitante en el historial como *Ana (via link)*; en *Share*, lo que espera, lo admitido hoy,
+  lo apartado y lo retenido; y en la página, un aviso cuando algo se apartó, con *Download it*.
+- **Entregas:** 2a escribir (la sala, la admisión, los topes, *Share* con *Can edit*, el interruptor, el historial),
+  2b archivos (portero, miniaturas), 2c lo apartado a la vista (lista, historial, "volver a la página del equipo").
+
+**En términos simples:** con 3.8, lo que escribía alguien con el link entraba directo a la página y cada dispositivo
+del equipo tenía que darse cuenta solo de si era basura. Desde entonces la app aprendió a resumir las páginas en copias,
+y una basura que se metiera en una copia ya no se podía sacar. Ahora lo que escribe el visitante espera en una "sala":
+la app de alguien del equipo lo revisa (que se pueda leer, que no rompa nada, que no traiga fotos de otras páginas) y
+recién ahí entra a la página, con el nombre del visitante. Si no pasa, queda aparte, sin perderse. Si el dueño corta el
+link, lo que estaba esperando tampoco entra.
+
+### E2.1 Contraste con el código de hoy
+
+| Lo que suponía 3.8 | Lo que hay en `main` v0.137 | Qué cambia |
+|---|---|---|
+| Los editores bajan filas con `pull_page_updates` y la cuarentena va en `applyRemote` | Bajan con `pull_page_content` (`src/sync/remote.ts`), que puede servir un snapshot que junta las filas `1..N` (`Doc_Compactar.md`, apagado con `snapshot_min_version` nulo pero listo) | Una fila mala adentro de un snapshot no se aparta. La sala (LE1) hace que nunca llegue a `page_updates` |
+| "Todos los editores apartan lo mismo" | `findUnknownContent` (`src/ui/unknownContent.ts`) compara con el esquema de **cada versión** | Un editor viejo apartaría lo que uno nuevo aplica: documentos distintos. La decisión queda en la base, y solo admite una versión igual o más nueva que la del visitante |
+| Una fila ilegible marca `unreadable` | `applyRemote` la marca y desde ahí `buildCleanBase` saltea la página (`skip: 'unreadable'`) y compactar la saltea 24 h por vez (`skip_page_compaction`) | Igual que B2; con la sala no llega |
+| Una fila con un tipo desconocido | Además, el editor del equipo **no abre la página** (`PageEditor` → *UnsupportedPage*): un visitante dejaba la página sin poder editarse para todo el equipo | La prueba la aparta (`unknown_content`) |
+| `pending` y la versión mínima para las versiones viejas | Toda versión desde v0.133 compacta las filas que baja | Con la sala, una versión vieja solo ve filas probadas |
+| N3: la tabla de rechazos de 3.8.3 | `pushPage` (`src/sync/docs.ts`): un rechazo permanente deja `rejected` y el mismo `pending`; `clearRejected` (al abrir) lo rearma con **todo** lo no confirmado, que vuelve a pesar lo mismo | Un pegado de más de 1 MB traba esa página en ese dispositivo. Salida medible: deshacer el pegado (con GC, lo borrado pesa casi nada) o *Download it* (E2.9) |
+| N4 y N5 | `push_clean_base` rechaza más de 8 MB; `checkCleanBase` (`src/sync/clean.ts`) existe | La prueba arma la base y la comprueba |
+| Fotos: el link registra y vincula | `reconcilePage` vincula todo `sdmedia://` del documento con la sesión del editor | Hallazgo `foreign_media` (E2.0) |
+| Anotaciones y colapsar | Viven en `Y.Map` raíz propios (`photoMarkup`, `collapsedHeadings`) y el dibujo ya trata el mapa como entrada no confiable (`Doc_Anotar_Fotos.md`) | La prueba los permite y rechaza cualquier otro tipo raíz (`unknown_root`) |
+| El historial muestra `created_by` | `page_updates.created_by` es `auth.uid()` por defecto; `page_history` no tiene columnas del link | La fila admitida va con `created_by` nulo, `plink_id` y `plink_author`; `page_history` suma `plink_author` al final |
+| El portero sube con `upload.user` | Para un link `who.userId` es `'plink'` para todos los links | Defensa de más: `plink:<huella del token>` (el id de subida ya es de 192 bits) |
+| `LinkRemote` no compacta | `canCompact(LinkRemote)` da verdadero (hereda de `SupabaseRemote`); no compacta porque sus ajustes no traen `snapshotMinVersion` | Cerrarlo explícito (como pide el roadmap para `share`, `namePageVersion`…) |
+| Comentarios, menciones | Entrega 1 y ME7: el visitante comenta y no menciona | Sin cambios |
+| Deshacer por orden, dictado, exportar | Locales; *Dictate to report* necesita la clave de una cuenta | El visitante deshace; dicta con el teclado del sistema; *Dictate to report*, no |
+| Plantillas | Las de fábrica están en el código; las propias son páginas de *Templates* | Aplicar una en una página vacía de la rama es contenido: sí. Guardar y el reporte del día crean páginas: no |
+| La base real | `public_links` aplicada (schema 17), **0 links, 0 bases limpias, 0 snapshots**, `clean_min_version` y `snapshot_min_version` nulos, `min_app_version` 0.129 | Todo se prueba con el servidor en memoria y SQL en `begin … rollback` |
+
+### E2.2 Cómo escribe el visitante
+
+1. **El motor de siempre** (IndexedDB primero, la cola se vacía solo con la confirmación, reintentos idempotentes, "N por
+   subir"), con `LinkRemote.pushUpdate` sobre `plink_push_page_update(página, client_update_id, update, versión,
+   nombre)`. El nombre es el de los comentarios (P8): sin nombre no sube; la app lo pide la primera vez que escribe.
+2. **La base, en este orden y en una transacción** (lo rechazado no suma):
+   1. el link anda y su nivel sobre la página es 3 (`link_page_level`: la rama, sin papelera, *Can edit*);
+   2. **idempotencia antes de los topes** (pedido de la re-verificación): el mismo `(link, página, client_update_id)`
+      devuelve lo mismo sin contar nada;
+   3. la versión (`link_edit_version_allowed`: la mínima del workspace y el interruptor), el nombre;
+   4. el tamaño: hasta **1 MB** (`push_max_bytes`; `update_size_invalid`);
+   5. la guarda de la base (350 MB de todas las bases, `db_bytes()`);
+   6. lo que espera sin decidir de ese link: hasta **20 MB** (`waiting_bytes`, nuevo: sin un editor conectado la sala
+      no crece sin fin);
+   7. los bytes de por vida del link (100 MB) y los del día: cantidad, bytes por link y del total de links (`plink_count`);
+   8. guarda la fila en la sala con el autor, la huella del dispositivo y la versión.
+3. **Devuelve 0**, no un `seq`: la fila todavía no está en la página. `pushPage` la confirma igual (sube `syncedSV`) y
+   no mueve el cursor (`seq === cursor + 1` no se cumple). El visitante sigue siendo un lector de bases (D14): cuando la
+   fila entra y un editor arma la base siguiente, la baja entera y Yjs no duplica nada (lo ya integrado se saltea).
+   Esto simplifica lo de 4.3 de `Doc_Privacidad_Borrado.md` ("su cursor se adelanta a su propia fila"): el cursor del
+   visitante solo se mueve con bases.
+4. **La subida sin GC** (D15) en modo link: umbral 1 MB (como decía 3.8.1, LE13). Arriba de eso sube con GC: lo visible
+   es lo mismo; se pierde solo el texto que el visitante tecleó y borró antes de subir.
+5. **Cuánto esperó cada cosa:** `plink_push_status()` le dice al visitante, por página, cuántas de las suyas (este link
+   y este dispositivo) esperan y cuántas se apartaron. **Cuenta como un pase** (`pass`, que tiene tope de cantidad por
+   día; observación 7 y R2 de la re-verificación: como `pull` casi no limitaba, porque `pull` solo tiene tope de bytes).
+   La app lo pide solo mientras tenga algo esperando, una vez por ciclo de 30 s, y un `link_rate_limited` del estado no
+   se avisa como "el link no puede escribir": solo deja de pedirlo hasta el día siguiente.
+
+### E2.3 La admisión
+
+**Quién (LE2):** el dispositivo que ya arma las bases limpias: alguien que ve lo borrado en la página (nivel 3, no
+invitado: `sees_deleted`), con una versión igual o mayor que `clean_min_version` y que `link_edit_min_version`. Un
+invitado con Editar, un lector o una versión vieja no admiten: lo de la sala espera (seguro).
+
+**Cuándo, en dos pasos (B2 de la auditoría):** en el mismo paso del ciclo que las bases (`engine.buildCleanBases`),
+**antes** de armarlas:
+
+1. `plink_admit_pages(versión)`: **sin bytes**, las páginas con algo para decidir (como `clean_work`): agrupado por
+   (página, link) entre las filas sin decidir de links vigentes (sin revocar, sin vencer, *Can edit*), filtrado **antes
+   del tope** por lo que la sesión ve con lo borrado y por `link_page_level(l, página) = 3`, con cuántas filas y bytes
+   esperan; hasta 50 páginas. Cuesta una consulta chica por ciclo, como `clean_work`.
+2. El motor se queda con las que tiene **listas**: al día y sin nada propio sin subir (lo mismo que pide
+   `buildCleanBase`), así lo guardado en el dispositivo son exactamente las filas del servidor. Si el editor está
+   escribiendo en una, la saltea hasta la pausa (20 s × f, como la base) y **no baja sus bytes**.
+3. `plink_admit_work(versión, páginas)`: los bytes **solo de esas páginas** (hasta 20 páginas y 4 MB por pedido), en
+   orden por (página, link), de versiones iguales o más viejas que la suya.
+4. Prueba página por página y manda `plink_admit(página, versión, decisiones)`. **Si la base devuelve para una fila una
+   decisión distinta de la que mandó** (otro editor la decidió antes), el motor corta esa página y la vuelve a probar en
+   el ciclo siguiente: lo que sigue se probó sobre un estado que no es el real (observación 2).
+5. Además, el dispositivo recuerda por id las filas que ya bajó y probó sin poder mandarlas (se cortó la red), para no
+   volver a bajarlas: así cada fila de la sala se baja una vez por editor que la decide.
+
+Si admitió algo, `update_seq` subió y la base sale con la cadencia de D14 (la fila admitida lleva la hora de la
+admisión: 20 s × f después, o a los 2 minutos de la base anterior).
+
+**Por qué en dos pasos y filtrado antes del tope (B1 y B2):** con un solo pedido con bytes, las filas de una página que
+el dispositivo no puede probar todavía se volvían a bajar en cada ciclo (hasta 4 MB cada 10 s por dispositivo, ≈1,4 GB
+por hora contra 5 GB por mes de egress), y un tope de filas aplicado **antes** de filtrar dejaba que 2000 filas
+retenidas de una página trabaran la admisión de todo el workspace (reproducido por la auditoría en `begin … rollback`:
+con 2000 retenidas, 0 filas para otra página; con 1999, 1).
+
+**La prueba**, fila por fila, sobre una copia del documento (sin GC) armada con lo guardado y con lo que ya admitió en
+esta vuelta:
+
+| # | Qué mira | Motivo si falla |
+|---|---|---|
+| 1 | Se decodifica (`Y.decodeUpdate`) | `undecodable` |
+| 2 | Ningún struct cuelga de un tipo raíz que la app no usa (solo `document-store`, `collapsedHeadings`, `photoMarkup`) | `unknown_root` |
+| 3 | Se aplica sin error y **no agrega nada pendiente**: `pendingKey` (de `compact.ts`, structs y borrados como tramos) igual antes y después | `pending` |
+| 4 | Si antes la página no tenía nada desconocido, después tampoco (`findUnknownContent`) | `unknown_content` |
+| 5 | Cada `sdmedia://` nuevo es de un archivo que registró el link o que **una página de la rama usa hoy** (sin `removed_at` ni `is_foreign`; LE9-B, B4); y ninguna dirección nueva **no vacía** en un atributo `url` que no sea `sdmedia://` (una imagen externa le avisaría al visitante cuándo abre la página alguien del equipo; observación 8). **Una dirección vacía vale** (C1 de la re-verificación): el editor guarda `url: ""` en un bloque de imagen insertado sin archivo todavía (*/Image*), y apartarlo apartaría en cadena todo lo que el visitante escriba colgado de él | `foreign_media`, `external_url` |
+| 6 | La base limpia que sale (`buildCleanBase` con la fila) pesa hasta 8 MB | `too_big` |
+| 7 | Esa base pasa `checkCleanBase` (privacidad y contenido) | `clean_<motivo>` |
+| 8 | **Forma y valores** (B3): en `document-store` solo hay `XmlElement` y `XmlText` (nada de `Y.Map`, `Y.Array` ni valores sueltos, en ningún nivel); cada atributo nuevo o cambiado de un nodo está en el `propSchema` de su tipo en el esquema de esta versión, con el tipo de su valor por defecto (texto, número o sí/no; un número puede llegar como texto de dígitos y se acepta si su valor es válido) y, si el esquema tiene `values`, uno de ellos (`level` del encabezado, `textAlignment`); los atributos que no son de bloque (`id` del `blockContainer`, los de la tabla y las fotos en línea), de su tipo, con `tableCell.colwidth` como lista de números o nulo (lo que guarda el editor al achicar una columna; R3); cada marca nueva con el tipo de valor que espera (`textColor`, `backgroundColor`, `link`: texto; las demás: sí/no). Se mira solo lo que la fila agrega o cambia | `bad_shape` |
+
+- **El paso 8 (B3), por qué y cómo.** La auditoría armó a mano 19 filas hostiles que pasaban los pasos 1 a 7; 3 hacían
+  tirar al editor real del equipo, al abrir la página y con la página abierta: un `Y.Map` adentro de un párrafo
+  (`text.toDelta is not a function`) y el `level` de un encabezado como objeto o como `'x y'` (*"h[object Object]" is not
+  a valid element local name*). Las otras 16 las absorben `normalizeStructure` o el editor sin perder texto del equipo.
+  El paso 8 es Yjs puro (no carga el editor, como `unknownContent.ts`), en `src/sync/linkShape.ts`, con la lista de
+  atributos y valores sacada del esquema de esta versión y una prueba que la compara con el esquema real (como
+  `unknownContent.test.ts`): si el esquema cambia, la prueba falla hasta actualizarla. Las 19 filas van como casos a
+  `src/sync/admit.test.ts` (las 3 que rompían se apartan con `bad_shape`; las 16, entran o se apartan, pero nunca rompen).
+- **La barrera de error alrededor de `PageEditor` (B3).** Aunque la prueba ataje lo conocido, una forma que nadie
+  previó no tiene que dejar en blanco la app de nadie. La barrera general de la app (un `ErrorBoundary` de React, que hoy
+  no hay en `src/`) la hace otro frente; lo que el link necesita de ella es: (a) que envuelva a `PageEditor` (la página
+  sola, no la app entera: el árbol y *Share* siguen andando para poder hacer *Reset link*); (b) que al tirar muestre
+  *UnsupportedPage* con el historial a mano para quien lo ve (*Restore this version*, D13), así el equipo restaura la
+  versión de antes sin tener que abrir la página en el editor; (c) que no reintente montar el editor en un bucle con el
+  mismo documento; y (d) que anote en la consola el id de la página y el error, para encontrar la fila. En el visitante,
+  la misma barrera muestra *This page can't be shown right now* sin historial. Sirve también hoy, para cualquier
+  invitado con Editar.
+- **En cadena:** si una fila del link se aparta, las siguientes de ese link en esa página que dependen de ella quedan
+  pendientes y también se apartan (3). Las que no dependen, entran.
+- **La versión:** el visitante abre siempre la versión publicada; un editor con una pestaña vieja **no decide** una
+  fila escrita por una versión más nueva (`app_version` de la fila mayor que la suya): la deja para otro, y deja también
+  las siguientes de ese link y esa página (el orden). Con la mínima que sube en cada publicación (LEY 1), espera poco.
+- **Lo que la base controla** (`plink_admit`, con la fila de la página bloqueada como `push_page_update`): quien llama ve
+  lo borrado y tiene la versión; la fila es de esa página y no está decidida (si otro editor ya la decidió, devuelve su
+  decisión: dos editores a la vez no se pisan); **en orden** (nada anterior del mismo link y la misma página sin decidir,
+  si no `admit_out_of_order`); la versión de la fila; el link sigue andando y editando esa página (si no, la fila queda
+  **retenida** y se corta ahí); y vuelve a comprobar cada archivo de la lista que manda el editor (`link_media_allowed`:
+  registrado por el link o usado hoy por una página de la rama; si uno no vale, la aparta con `foreign_media` aunque el
+  editor diga que sí). Al admitir: `update_seq + 1`, inserta en
+  `page_updates` los bytes **de la sala** (el editor nunca los vuelve a subir ni los puede cambiar) con `created_by`
+  nulo, `plink_id`, `plink_author` y `plink_update_id`, y en la sala anota la decisión, el `seq` y pone `update` en nulo
+  (los bytes **se mueven**, no se duplican: LE5).
+- **Por qué alcanza con la versión de la base en ese momento:** la prueba se hizo con la página hasta `seq` N y la fila
+  entra en M ≥ N. Las filas del medio no pueden hacer pendiente lo que no lo era (solo agregan), no vuelven desconocido lo
+  conocido y no cambian qué archivos son de la rama para una foto que ya estaba. La base no mira N.
+- **Lo que no cubre:** una fila válida que borra todo o escribe basura legible es una edición (la permite *Can edit*): la
+  restaura el historial (*Restore this version*, D13) y *Reset link* la corta.
+- **El costo:** se mide en E2.16 (3,6 ms por fila en 77 KB, 13,3 ms en 346 KB, armando todo de nuevo por fila; la
+  implementación arma la copia una vez por página y prueba las filas seguidas). En el teléfono, 3 a 5 veces.
+
+### E2.4 Qué puede y qué no
+
+| Qué | *Can edit* por link | Por qué |
+|---|---|---|
+| Escribir, tablas, formato, fotos en línea ya en la rama | Sí | Es el pedido |
+| Anotaciones de fotos (`photoMarkup`) | Sí (como Editar, `Doc_Anotar_Fotos.md`) | El dibujo ya valida el mapa como entrada no confiable |
+| Colapsar para todos (`collapsedHeadings`) | Sí | Es contenido de la página |
+| Deshacer (también el orden de edición, P.26) | Sí, local | No toca la base |
+| Buscar; reemplazar en la página | Sí | Es una edición |
+| Reemplazar en todo el proyecto | No | Es de quien edita el proyecto (3.10) |
+| Aplicar una plantilla en una página vacía de la rama (de fábrica o propia, si está en la rama) | Sí | Agrega bloques; nada nuevo en la base. Una propia de afuera de la rama no la ve; si la tuviera, sus fotos se apartarían (`foreign_media`). Una propia de la rama con una imagen por dirección externa se apartaría entera al aplicarla (`external_url`): la ayuda lo dice, o la app la aplica sin esas imágenes (re-verificación) |
+| Guardar como plantilla, reporte del día, crear, mover, renombrar, papelera | No (D29) | Crean o cambian filas de `pages` |
+| Comentar y responder | Sí (entrega 1) | — |
+| Mencionar | No (ME7) | — |
+| Subir fotos, videos y archivos | Sí, desde la 2b, con topes | P15 |
+| Soltar una carpeta (P.9) | No (LE7) | Miles de archivos y subcarpetas en el Drive del dueño |
+| Sacar una foto | Sí, como edición (borra el bloque); el uso lo desvincula el dispositivo de un editor al reconciliar | El visitante no llama a `unlink_page_file` |
+| Historial, papelera, versiones con nombre | No (P4) | — |
+| Asistente, *Dictate to report*, MCP | No | No hay cuenta ni clave |
+| Dictar con el teclado del sistema | Sí | Es escribir |
+| Exportar a PDF lo que ve | Como *Can view* | — |
+| *Available offline* | Sí, contra los topes (3.10) | — |
+
+### E2.5 Topes
+
+Los de 3.8.1 siguen, contados en la sala en el momento de escribir (`plink_count`, `public_links.push_bytes_total`);
+se suman `waiting_bytes` y los de archivos de la 2b. Ajustables en `workspace_settings.link_limits` (P11).
+
+| Qué | Valor | Por qué |
+|---|---|---|
+| Por subida | 1 MB | Las filas que no son la primera de una página pesan p99 6,6 KB y como mucho 7,2 KB en Wanka (E2.16); la primera (una plantilla aplicada, una importación) hasta 296 KB salvo las importaciones de Coda |
+| Por link y día | 2000 subidas y 20 MB | Como antes |
+| Todos los links por día | 50 MB | Como antes |
+| De por vida por link | 100 MB | Como antes |
+| **Esperando sin decidir, por link** | **20 MB** (nuevo) | Sin ningún editor conectado, la sala de un link no pasa de esto (`link_rate_limited`, detalle `waiting_bytes`: *Your changes are waiting for the team…*). Cuenta solo lo de las páginas donde el link edita hoy (`link_page_level = 3`, calculado una vez por página distinta): lo retenido de una página que salió de la rama no frena para siempre (observación 4) |
+| Guarda de la base | 350 MB (todas las bases) | Hoy pesan 49,9 MB (E2.16) |
+| Página entera | 8 MB de base limpia | La prueba (6): `too_big` |
+| Archivos (2b) | 100 por día, 500 de por vida, 500 MB cada uno, 1 GB por día, 5 GB de por vida | Como 3.8.1 |
+
+### E2.6 Copias resumidas, base limpia y versiones viejas
+
+- **Copias resumidas (snapshots):** las arma quien edita (nivel 3, no invitado) con las filas exactas del servidor. Las
+  filas admitidas son filas comunes: entran como cualquiera. Lo apartado y lo que espera nunca está en `page_updates`,
+  así que nunca está en un snapshot. **El visitante no compacta** ni baja snapshots (sigue con `plink_pull_page`).
+- **Base limpia (D14):** el link sigue recibiendo solo bases; las arma un editor, ahora con las filas admitidas del
+  visitante adentro. Sin el interruptor de D14 no hay links (P5). Crear el link o pasarlo a *Can edit* no reinicia la
+  rama (los dos niveles reciben solo bases).
+- **Lo que hace una versión vieja:**
+
+  | Versión | Qué pasa |
+  |---|---|
+  | Visitante con una app anterior a `link_edit_min_version` | `plink_open` le da *Can view* (no ve el editor habilitado); si igual intenta, `plink_push_page_update` da `app_outdated` y la app se actualiza (v0.097) |
+  | Visitante con la app de la entrega 1 (sin escribir) | Lo mismo: *Can view* hasta actualizarse |
+  | Editor anterior a la 2a | No admite: lo del link espera (topes de la sala). Ve las filas admitidas como de una cuenta borrada en el historial (`created_by` nulo) |
+  | Editor anterior a v0.133 (sin compactar) | Igual: filas comunes |
+  | Cualquier versión que borra tipos de bloque nuevos | No le llega ninguno: la prueba (4) aparta lo que el admisor no conoce, y el admisor no es más viejo que el visitante |
+
+- **Al publicar la 2a:** se sube `min_app_version` a esa versión y se prende `link_edit_min_version` a la misma (LEY 1:
+  sin preguntar). El orden importa poco: con el interruptor apagado, nada cambia. **Pero `link_edit_min_version` no se
+  prende hasta que la barrera de error alrededor de `PageEditor` esté en `main`** (R4 de la re-verificación): el paso 8
+  cubre lo conocido, y la barrera es para lo que nadie previó.
+
+### E2.7 Revocar, *Reset link* y lo retenido
+
+- **Al instante:** cada pedido valida el token (`current_plink`). Revocar, *Reset*, vencer, apagar *Can edit* o que el
+  creador pierda el permiso de compartir corta `plink_push_page_update` en el próximo pedido.
+- **Revocar y *Reset* lo apartan en el acto (B1):** `revoke_public_link`, `reset_public_link` y `remove_member` (que
+  revoca los links de quien se va) pasan, en la misma transacción, todo lo que espera de ese link a **apartado** con el
+  motivo `link_revoked` (`decided_by` = quien revocó). Revocar es final (un link revocado no vuelve) y *Reset* crea un
+  link **nuevo**: lo del viejo no pasa al nuevo. Así lo de un link revocado nunca queda en la sala sin decidir, ni traba
+  nada; sigue con sus bytes para bajar, como todo lo apartado.
+- **Lo que puede volver queda retenido (LE4):** vencer, que el creador pierda el permiso de compartir, la página (o una
+  de arriba) en la papelera, la página movida afuera de la rama o el link pasado a *Can view*. Eso no se decide:
+  `plink_admit_pages` lo filtra **antes** de su tope (no traba a nadie), `plink_admit` lo vuelve a mirar, se cuenta en
+  *Share* y un editor lo baja. Si el link vuelve a editar esa página, se admite como siempre.
+- **El visitante con algo sin subir:** como 3.8.3: `link_not_found` deja de reintentar a ciegas y ofrece *Download
+  them* (el mismo `unsyncedDownload.ts` de cuando sacan a alguien); con el link nuevo de la misma página, al abrirlo en
+  el mismo dispositivo, ofrece mandarlo con el nuevo (los ids de subida son del dispositivo: si el viejo también tenía
+  esa fila retenida y alguien la admite después, Yjs no duplica nada).
+
+### E2.8 Qué ve el equipo
+
+- **Historial (D13):** las filas admitidas, como *Ana (via link)* (`page_history` suma `plink_author`). Restaurar una
+  versión de antes deshace lo del visitante como cualquier edición.
+- ***Share*, en *General access*:** *Can edit* (con el interruptor prendido; si no, apagado con su línea), la línea de
+  3.8.3 (*Changes made through the link reach other people when someone from your team opens the app.*) y, debajo del
+  uso de hoy: *12 changes added today · 2 waiting · 1 set aside · 3 on hold*, con lo subido al Drive en la 2b (*on
+  hold*: retenido, E2.7).
+- **En la página:** si algo de un link se apartó, un aviso para quien la edita: *A change sent through the link couldn't
+  be added to this page* con *Download it* (la fila tal cual, como "bajar lo pendiente") y el motivo en el detalle. Lo
+  pide `public_link_updates_of(página)` (apartadas, retenidas y cuántas esperan), solo a quien ve lo borrado.
+- **No hay autoría por párrafo** (no existe para nadie): quién escribió qué se ve en el historial.
+
+### E2.9 Qué ve el visitante
+
+- El editor habilitado (como un invitado con Editar), *Your name* la primera vez que escribe, y la línea de la ayuda
+  *Opened with a link* con lo de *Can edit*: lo que escribe se guarda en este navegador, llega a los demás cuando alguien
+  del equipo abre la app, y el link puede dejar de andar.
+- **Estados** (la insignia de sincronización): *N to send* (en el dispositivo), *Sent, waiting for the team* (en la
+  sala), y nada cuando entró. Si algo se apartó: *Some of your changes on this page couldn't be added* con *Download
+  them*.
+- **Los rechazos:**
+
+  | Respuesta | Qué hace la app |
+  |---|---|
+  | `link_not_found` | Deja de reintentar; *This link no longer works. You have N unsent changes:* ***Download them*** |
+  | `page_not_found` (la página salió de la rama o el link pasó a *Can view*) | Igual, por página |
+  | `link_rate_limited` (día, vida, total, guarda, `waiting_bytes`) | Espera (al día siguiente, o a que el equipo admita) sin reintentar cada 10 s, lo dice y ofrece *Download them* |
+  | `update_size_invalid` | La página queda trabada en ese dispositivo (N3): *This change is too big to send through a link. Undo it to keep going, or download it.* Deshacer solo no alcanza: la página queda salteada (`rejected`) hasta reabrir la app (observación 3). En modo link, la primera edición guardada de esa página después del rechazo le saca la marca (`clearRejected` de esa página) y vuelve a intentar: con el pegado deshecho, la subida (con GC) pesa poco. El aviso tiene además *Retry*. **Y en modo link una subida armada que pasa `push_max_bytes` no se manda** (R1 de la re-verificación): queda `rejected` en el dispositivo sin pedido, así seguir escribiendo sin deshacer no repite subidas de más de 1 MB que la base rechaza |
+  | `app_outdated` | Se actualiza la app y sube |
+
+### E2.10 Abuso y plan gratis
+
+- **La base:** todas las bases pesan **49,9 MB** hoy (34,7 MB la del workspace; `page_updates` 9,6 MB en disco, 19 MB
+  de updates). Hasta la guarda quedan ~300 MB: con los 50 MB por día de todos los links al máximo, la guarda corta a los
+  6 días y deja 150 MB para el equipo. Lo apartado y lo retenido nunca se borra, pero está dentro de los 100 MB de por
+  vida de su link.
+- **Egress:** con los dos pasos (B2), el admisor baja los bytes de una fila solo cuando la página está lista para
+  probarla, y recuerda lo ya bajado: en la práctica una vez por editor que decide (en base64, un tercio más). Con los
+  topes, del orden de 50 MB por día entre todos los links, de los 5 GB del mes. `plink_admit_pages` no lleva bytes.
+- **CPU de la base:** `plink_push_page_update` cuesta lo de `current_plink` (0,98 ms medidos en la entrega 0) más el
+  nivel (0,80 ms), la guarda recordada (0,11 ms) y dos `upsert`. `plink_admit_pages` y `plink_admit_work` usan un índice
+  parcial de lo que espera y calculan el nivel una vez por (página, link), no por fila; lo mismo `public_link_json` y
+  `public_link_updates_of` (observación 6).
+- **La sala solo crece** (observación 5): lo apartado y lo retenido guardan sus bytes para siempre, dentro de los
+  100 MB de por vida de su link. Que el dueño pueda descartar algo apartado después de bajarlo va contra "no hay borrado
+  duro": queda en el roadmap como decisión de Lega.
+- **El Drive del dueño (2b):** 5 GB de por vida por link, 1 GB por día, con el aviso en *Share* al pasar 1 GB.
+- **Lo que un visitante malicioso puede hacer y cuánto:** escribir basura legible hasta 20 MB por día (se ve en el
+  historial y se restaura); basura ilegible que queda apartada (sin efecto en la página); trabar la sala de su link
+  (20 MB esperando: solo frena a su propio link). Todo se corta con *Reset link*.
+
+### E2.11 Migración (borrador, sin aplicar)
+
+Va como `supabase/migrations/<fecha>_link_editar.sql` (2a) y `<fecha>_link_archivos.sql` (2b), con
+`supabase/tests/link_editar_permisos.sql`. No toca `pull_page_updates`, `pull_page_content`, `push_page_update`,
+`push_clean_base` ni nada de compactar.
+
+```sql
+-- LGA Shot Docs · link público, entrega 2a: Can edit (escribir). Diseño: Docs/Doc_Link_Publico.md, "Entrega 2".
+-- Lo que escribe un link entra a una sala de espera (`public_link_updates`). El dispositivo de un editor que arma las
+-- bases limpias lo prueba en orden y la base lo mueve a `page_updates` (`plink_admit`) o lo anota como apartado. Nada
+-- se borra: lo apartado y lo retenido quedan en la sala con sus bytes.
+-- Compatible con las versiones publicadas: no cambia ninguna función que usen para bajar o subir contenido; las filas
+-- admitidas son filas comunes con `created_by` nulo. `page_history` suma una columna al final.
+
+-- 1. El interruptor y la versión
+alter table public.workspace_settings
+  add column link_edit_min_version numeric(8,3) check (link_edit_min_version is null or link_edit_min_version > 0);
+
+create function private.version_num(p_version text)
+returns numeric
+language sql immutable set search_path = ''
+as $$
+  select case when p_version ~ '^[0-9]{1,4}(\.[0-9]{1,3})?$' then p_version::numeric end;
+$$;
+
+-- ¿Esta versión puede escribir por un link, o admitir? La mínima del workspace y el interruptor de Can edit.
+create function private.link_edit_version_allowed(p_version text)
+returns boolean
+language sql stable security definer set search_path = ''
+as $$
+  select coalesce((
+    select s.link_edit_min_version is not null
+       and private.app_version_allowed(p_version)
+       and coalesce(private.version_num(p_version) >= s.link_edit_min_version, false)
+    from public.workspace_settings s where s.id), false);
+$$;
+
+-- `private.plink_limit`: `create or replace` con el mismo cuerpo de la entrega 1 y dos claves más en los valores por
+-- defecto: "waiting_bytes": 20971520 (lo que espera sin decidir, por link) y "file_max_bytes": 524288000 (2b).
+
+-- 2. La sala de espera
+create table public.public_link_updates (
+  id               uuid primary key default gen_random_uuid(),
+  n                bigint generated always as identity unique,           -- el orden de llegada
+  link_id          uuid not null references public.public_links (id),
+  page_id          uuid not null references public.pages (id),
+  client_update_id uuid not null,
+  update           bytea check (update is null or octet_length(update) between 1 and 8388608),
+  bytes            int not null check (bytes > 0),
+  author           text not null check (char_length(author) between 1 and 60),
+  device_hash      bytea check (octet_length(device_hash) = 32),
+  app_version      numeric(8,3) not null,
+  created_at       timestamptz not null default now(),
+  decided_at       timestamptz,
+  decided_by       uuid references auth.users (id) on delete set null,
+  decision         text check (decision in ('admitted', 'aside')),
+  reason           text check (char_length(reason) between 1 and 40),
+  admitted_seq     bigint,
+  constraint plu_once unique (link_id, page_id, client_update_id),
+  constraint plu_decided check ((decided_at is null) = (decision is null)),
+  -- Admitida: los bytes se movieron a page_updates. Si no: siguen acá, para siempre.
+  constraint plu_bytes check (case when decision = 'admitted' then update is null and admitted_seq is not null
+                                   else update is not null end)
+);
+create index plu_waiting_idx on public.public_link_updates (page_id, link_id, n) where decided_at is null;
+create index plu_link_waiting_idx on public.public_link_updates (link_id) where decided_at is null;
+create index plu_aside_idx on public.public_link_updates (page_id) where decision = 'aside';
+alter table public.public_link_updates enable row level security;
+revoke all on public.public_link_updates from public, anon, authenticated;
+
+-- La autoría de una fila admitida (como los comentarios del link): `created_by` nulo.
+alter table public.page_updates
+  add column plink_id        uuid references public.public_links (id),
+  add column plink_author    text check (char_length(plink_author) between 1 and 60),
+  add column plink_update_id uuid unique references public.public_link_updates (id),
+  add constraint page_updates_plink check ((plink_id is null) = (plink_author is null)
+                                           and (plink_id is null) = (plink_update_id is null)),
+  add constraint page_updates_plink_no_author check (plink_id is null or created_by is null);
+
+-- 3. El nivel de un link dado (sin el header): lo usan el visitante (con su link) y la admisión (con el de la fila)
+create function private.link_page_level(l public.public_links, p uuid)
+returns int
+language plpgsql stable security definer set search_path = ''
+as $$
+declare
+  under    boolean;
+  in_trash boolean;
+  pdel     boolean;
+begin
+  if l.id is null or p is null or l.revoked_at is not null
+     or (l.expires_at is not null and l.expires_at <= now())
+     or l.created_by is null or not private.user_can_share_page(l.page_id, l.created_by) then
+    return 0;
+  end if;
+  with recursive chain (id, parent_id, deleted_at, depth) as (
+    select pg.id, pg.parent_id, pg.deleted_at, 0 from public.pages pg where pg.id = p
+    union all
+    select pg.id, pg.parent_id, pg.deleted_at, c.depth + 1
+    from public.pages pg join chain c on pg.id = c.parent_id
+    where c.depth < 10000
+  )
+  select exists (select 1 from chain c where c.id = l.page_id),
+         exists (select 1 from chain c where c.deleted_at is not null),
+         (select w.deleted_at is not null
+          from public.pages pg join public.workspaces w on w.id = pg.workspace_id where pg.id = p)
+  into under, in_trash, pdel;
+  if not coalesce(under, false) or in_trash or coalesce(pdel, true) then
+    return 0;
+  end if;
+  return case l.level when 'edit' then 3 else 2 end;
+end;
+$$;
+
+-- La de la entrega 1, sobre la regla única (mismo resultado: `current_plink` ya filtra lo que no anda).
+create or replace function private.plink_page_level(p uuid)
+returns int
+language sql stable security definer set search_path = ''
+as $$
+  select private.link_page_level(private.current_plink(), p);
+$$;
+
+-- La rama de un link dado (la de la entrega 1, `plink_branch`, pasa a llamarla con `current_plink()`).
+create function private.link_branch(l public.public_links)
+returns setof uuid
+language plpgsql stable security definer set search_path = ''
+as $$
+begin
+  if l.id is null or private.link_page_level(l, l.page_id) = 0 then
+    return;
+  end if;
+  return query
+    with recursive sub (id, depth) as (
+      select l.page_id, 0
+      union
+      select pg.id, s.depth + 1 from public.pages pg join sub s on pg.parent_id = s.id
+      where pg.deleted_at is null and s.depth < 10000
+    )
+    select s.id from sub s;
+end;
+$$;
+
+create or replace function private.plink_branch()
+returns setof uuid
+language sql stable security definer set search_path = ''
+as $$
+  select private.link_branch(private.current_plink());
+$$;
+
+-- ¿El link puede poner este archivo en una fila? Lo usa HOY una página de su rama (sin `removed_at` ni `is_foreign`;
+-- LE9-B). En la 2b, también lo que registró él (`files.plink_id`). Lo de afuera de la rama nunca, ni una foto sacada:
+-- el editor que reconcilia la vincularía y `plink_file_level` se la abriría al link (B4 de la auditoría: el id de una
+-- foto sacada con anotaciones queda en la base limpia, en la clave borrada de `photoMarkup`).
+create function private.link_media_allowed(l public.public_links, f uuid)
+returns boolean
+language sql stable security definer set search_path = ''
+as $$
+  select exists (
+    select 1 from public.page_files pf
+    where pf.file_id = f and pf.removed_at is null and not pf.is_foreign
+      and pf.page_id in (select private.link_branch(l)));
+$$;
+
+-- Lo que espera sin decidir de un link, solo en las páginas donde hoy edita (lo retenido de una página que salió de la
+-- rama no frena para siempre). El nivel, una vez por página distinta.
+create function private.link_waiting_bytes(l public.public_links)
+returns bigint
+language sql stable security definer set search_path = ''
+as $$
+  select coalesce(sum(w.bytes), 0)::bigint
+  from (select u.page_id, sum(u.bytes) as bytes
+        from public.public_link_updates u
+        where u.link_id = l.id and u.decided_at is null
+        group by u.page_id) w
+  where private.link_page_level(l, w.page_id) = 3;
+$$;
+
+-- Revocar y Reset: lo que espera de ese link pasa a apartado con `link_revoked`, en la misma transacción (B1). Lo llaman
+-- `revoke_public_link`, `reset_public_link` y `remove_member` justo después de poner `revoked_at`.
+create function private.plink_aside_revoked(p_link uuid)
+returns void
+language sql volatile security definer set search_path = ''
+as $$
+  update public.public_link_updates
+  set decided_at = now(), decided_by = auth.uid(), decision = 'aside', reason = 'link_revoked'
+  where link_id = p_link and decided_at is null;
+$$;
+-- Cambios en las funciones de la entrega 1 (`create or replace` con el mismo cuerpo más esto):
+--   revoke_public_link: después del update, `perform private.plink_aside_revoked(pl.id)` por cada link revocado
+--                       (`update … returning id` en un `for`).
+--   reset_public_link:  después de revocar el viejo, `perform private.plink_aside_revoked(old.id);`
+--   remove_member:      el update de `public_links` pasa a `for … returning id loop perform
+--                       private.plink_aside_revoked(id); end loop;`
+
+revoke all on function private.version_num(text) from public, anon, authenticated;
+revoke all on function private.link_edit_version_allowed(text) from public, anon, authenticated;
+revoke all on function private.link_page_level(public.public_links, uuid) from public, anon, authenticated;
+revoke all on function private.link_branch(public.public_links) from public, anon, authenticated;
+revoke all on function private.link_media_allowed(public.public_links, uuid) from public, anon, authenticated;
+revoke all on function private.link_waiting_bytes(public.public_links) from public, anon, authenticated;
+revoke all on function private.plink_aside_revoked(uuid) from public, anon, authenticated;
+
+-- 4. Lo que llama el visitante
+-- Escribir: a la sala, nunca a page_updates. Devuelve 0 (no hay seq todavía). Idempotente antes de cualquier tope.
+create function public.plink_push_page_update(
+  p_page_id uuid, p_client_update_id uuid, p_update text, p_app_version text, p_author text)
+returns bigint
+language plpgsql volatile security definer set search_path = ''
+as $$
+declare
+  l    public.public_links := private.current_plink();
+  name text := btrim(p_author);
+  bin  bytea;
+  over boolean;
+begin
+  if l.id is null then
+    raise exception 'link_not_found' using errcode = 'P0002';
+  end if;
+  if p_client_update_id is null or private.link_page_level(l, p_page_id) < 3 then
+    raise exception 'page_not_found' using errcode = 'P0002';
+  end if;
+  -- Dos pedidos iguales a la vez: el segundo espera y sale por la idempotencia.
+  perform pg_advisory_xact_lock(hashtextextended('plink_push:' || l.id::text || p_page_id::text, 0));
+  if exists (select 1 from public.public_link_updates u
+             where u.link_id = l.id and u.page_id = p_page_id and u.client_update_id = p_client_update_id) then
+    return 0;
+  end if;
+  if not private.link_edit_version_allowed(p_app_version) then
+    raise exception 'app_outdated' using errcode = 'P0001',
+      hint = 'This version of the app is too old for this workspace. Reload the app to update it.';
+  end if;
+  if name is null or char_length(name) not between 1 and 60
+     or name ~ '[[:cntrl:]\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2069\ufeff]' then
+    raise exception 'author_invalid' using errcode = '22023';
+  end if;
+  bin := decode(p_update, 'base64');
+  if length(bin) = 0 or length(bin) > private.plink_limit('push_max_bytes') then
+    raise exception 'update_size_invalid' using errcode = '22023';
+  end if;
+  perform private.plink_db_guard();
+  if private.link_waiting_bytes(l) + length(bin) > private.plink_limit('waiting_bytes') then
+    raise exception 'link_rate_limited' using errcode = 'P0001', detail = 'waiting_bytes';
+  end if;
+  update public.public_links set push_bytes_total = push_bytes_total + length(bin)
+  where id = l.id
+  returning push_bytes_total > private.plink_limit('life_push_bytes') into over;
+  if over then
+    raise exception 'link_rate_limited' using errcode = 'P0001', detail = 'life_push_bytes';
+  end if;
+  perform private.plink_count('push', 1, length(bin));
+  insert into public.public_link_updates (link_id, page_id, client_update_id, update, bytes, author, device_hash,
+                                          app_version)
+  values (l.id, p_page_id, p_client_update_id, bin, length(bin), name, private.plink_device_hash(),
+          private.version_num(p_app_version));
+  return 0;
+end;
+$$;
+
+-- Cómo van las de este link y este dispositivo, por página: cuántas esperan y cuántas se apartaron. Cuenta como un pase
+-- (`pass`, con tope de cantidad por día; observación 7 y R2 de la re-verificación). VOLATILE: escribe la cuenta.
+create function public.plink_push_status()
+returns table (page_id uuid, waiting int, aside int)
+language plpgsql volatile security definer set search_path = ''
+as $$
+declare
+  l   public.public_links := private.current_plink();
+  dev bytea := private.plink_device_hash();
+  out_rows jsonb;
+begin
+  if l.id is null then
+    raise exception 'link_not_found' using errcode = 'P0002';
+  end if;
+  select coalesce(jsonb_agg(jsonb_build_object('page_id', s.page_id, 'waiting', s.waiting, 'aside', s.aside)), '[]')
+  into out_rows
+  from (select u.page_id, (count(*) filter (where u.decided_at is null))::int as waiting,
+               (count(*) filter (where u.decision = 'aside'))::int as aside
+        from public.public_link_updates u
+        where u.link_id = l.id and dev is not null and u.device_hash = dev
+          and (u.decided_at is null or u.decision = 'aside')
+        group by u.page_id
+        limit 500) s;
+  perform private.plink_count('pass', 1, octet_length(out_rows::text));
+  return query
+    select (r ->> 'page_id')::uuid, (r ->> 'waiting')::int, (r ->> 'aside')::int
+    from jsonb_array_elements(out_rows) r;
+end;
+$$;
+
+-- `public.plink_open`: `create or replace` con el cuerpo de la entrega 1 y un cambio en lo que devuelve: el nivel que
+-- esta versión puede usar (una app más vieja que el interruptor, o con el interruptor apagado, ve Can view):
+--   'level', case when l.level = 'edit' and private.link_edit_version_allowed(p_app_version) then 'edit' else 'comment' end,
+--   'link_level', l.level,
+
+revoke all on function public.plink_push_page_update(uuid, uuid, text, text, text) from public, authenticated;
+revoke all on function public.plink_push_status() from public, authenticated;
+grant execute on function public.plink_push_page_update(uuid, uuid, text, text, text) to anon;
+grant execute on function public.plink_push_status() to anon;
+
+-- 5. La admisión (authenticated: quien ve lo borrado y arma bases), en dos pasos (B2 de la auditoría)
+-- Paso 1, sin bytes: las páginas con algo para decidir. Agrupa por (página, link) entre las filas sin decidir de links
+-- vigentes y filtra el permiso y el nivel por grupo ANTES del tope (B1: el tope de filas antes de filtrar dejaba que lo
+-- retenido de una página trabara a todo el workspace). Lo retenido (link vencido, sin permiso, página afuera o en la
+-- papelera, Can view) no aparece y no ocupa lugar.
+create function public.plink_admit_pages(p_app_version text)
+returns table (page_id uuid, waiting int, bytes bigint)
+language plpgsql stable security definer set search_path = ''
+as $$
+declare
+  v numeric := private.version_num(p_app_version);
+begin
+  if private.workspace_role() is null or private.history_denied_for_guest()
+     or not private.clean_version_allowed(p_app_version) or not private.link_edit_version_allowed(p_app_version) then
+    return;
+  end if;
+  return query
+    with g as (
+      select u.page_id, u.link_id, count(*)::int as waiting, sum(u.bytes)::bigint as bytes,
+             min(u.app_version) as first_version
+      from public.public_link_updates u
+      join public.public_links l on l.id = u.link_id
+      where u.decided_at is null and l.revoked_at is null and l.level = 'edit'
+        and (l.expires_at is null or l.expires_at > now())
+      group by u.page_id, u.link_id
+    )
+    select g.page_id, sum(g.waiting)::int, sum(g.bytes)::bigint
+    from g join public.public_links l on l.id = g.link_id
+    where g.first_version <= v and private.sees_deleted(g.page_id) and private.link_page_level(l, g.page_id) = 3
+    group by g.page_id
+    order by min(g.first_version), g.page_id
+    limit 50;
+end;
+$$;
+
+-- Paso 2, con bytes: solo de las páginas que el motor tiene listas (al día y sin nada propio sin subir). En orden por
+-- (página, link); si una fila no se puede decidir (versión, link retenido), tampoco las siguientes de su (página,
+-- link). Hasta 20 páginas y unos 4 MB.
+create function public.plink_admit_work(p_app_version text, p_pages uuid[])
+returns table (id uuid, page_id uuid, link_id uuid, n bigint, data text)
+language plpgsql stable security definer set search_path = ''
+as $$
+declare
+  v       numeric := private.version_num(p_app_version);
+  r       record;
+  blocked text[] := '{}';
+  allowed text[] := '{}';
+  total   bigint := 0;
+  k       text;
+begin
+  if private.workspace_role() is null or private.history_denied_for_guest()
+     or not private.clean_version_allowed(p_app_version) or not private.link_edit_version_allowed(p_app_version)
+     or coalesce(array_length(p_pages, 1), 0) = 0 then
+    return;
+  end if;
+  if array_length(p_pages, 1) > 20 then
+    raise exception 'too_many_pages' using errcode = '22023';
+  end if;
+  for r in
+    select u.id, u.page_id, u.link_id, u.n, u.app_version, u.bytes, u.update, l as lk
+    from public.public_link_updates u
+    join public.public_links l on l.id = u.link_id
+    where u.decided_at is null and u.page_id = any (p_pages)
+      and l.revoked_at is null and l.level = 'edit' and (l.expires_at is null or l.expires_at > now())
+    order by u.page_id, u.link_id, u.n
+  loop
+    k := r.page_id::text || r.link_id::text;
+    continue when k = any (blocked);
+    -- El permiso y el link, una vez por (página, link).
+    if not k = any (allowed) then
+      if not private.sees_deleted(r.page_id) or private.link_page_level(r.lk, r.page_id) < 3 then
+        blocked := blocked || k;
+        continue;
+      end if;
+      allowed := allowed || k;
+    end if;
+    if r.app_version > v then
+      blocked := blocked || k;
+      continue;
+    end if;
+    exit when total > 0 and total + r.bytes > 4194304;
+    total := total + r.bytes;
+    id := r.id; page_id := r.page_id; link_id := r.link_id; n := r.n;
+    data := translate(encode(r.update, 'base64'), E'\n', '');
+    return next;
+    exit when total >= 4194304;
+  end loop;
+end;
+$$;
+
+-- Decidir, en orden, las filas de una página. `p_decisions`: [{"id", "ok": true|false, "reason", "media": [ids]}].
+-- Devuelve [{"id", "decision": "admitted"|"aside"|"held", "seq"?, "reason"?}]; corta en la primera retenida.
+create function public.plink_admit(p_page_id uuid, p_app_version text, p_decisions jsonb)
+returns jsonb
+language plpgsql volatile security definer set search_path = ''
+as $$
+declare
+  v   numeric := private.version_num(p_app_version);
+  d   jsonb;
+  u   public.public_link_updates;
+  l   public.public_links;
+  s   bigint;
+  m   text;
+  ok  boolean;
+  why text;
+  res jsonb := '[]'::jsonb;
+begin
+  if p_page_id is null or not private.sees_deleted(p_page_id) or not private.clean_version_allowed(p_app_version)
+     or not private.link_edit_version_allowed(p_app_version) then
+    raise exception 'page_not_found' using errcode = 'P0002';
+  end if;
+  perform private.require_write_version();
+  if jsonb_typeof(p_decisions) is distinct from 'array' or jsonb_array_length(p_decisions) > 200 then
+    raise exception 'decisions_invalid' using errcode = '22023';
+  end if;
+  -- Como push_page_update: la fila de la página bloqueada, el seq correlativo.
+  perform 1 from public.pages where id = p_page_id for update;
+  for d in select x from jsonb_array_elements(p_decisions) x loop
+    select * into u from public.public_link_updates x where x.id = (d ->> 'id')::uuid and x.page_id = p_page_id for update;
+    if not found then
+      raise exception 'admit_not_found' using errcode = 'P0002';
+    end if;
+    if u.decided_at is not null then
+      -- Otro editor ya la decidió: su decisión vale.
+      res := res || jsonb_build_object('id', u.id, 'decision', u.decision, 'seq', u.admitted_seq, 'reason', u.reason);
+      continue;
+    end if;
+    if exists (select 1 from public.public_link_updates x
+               where x.page_id = u.page_id and x.link_id = u.link_id and x.n < u.n and x.decided_at is null) then
+      raise exception 'admit_out_of_order' using errcode = 'P0001';
+    end if;
+    if u.app_version > v then
+      raise exception 'admit_version' using errcode = 'P0001';
+    end if;
+    select * into l from public.public_links x where x.id = u.link_id;
+    if private.link_page_level(l, u.page_id) < 3 then
+      res := res || jsonb_build_object('id', u.id, 'decision', 'held');
+      exit;
+    end if;
+    ok := coalesce((d ->> 'ok')::boolean, false);
+    why := nullif(left(btrim(coalesce(d ->> 'reason', '')), 40), '');
+    if ok then
+      for m in select jsonb_array_elements_text(case when jsonb_typeof(d -> 'media') = 'array' then d -> 'media'
+                                                     else '[]'::jsonb end) loop
+        if m !~ '^[0-9a-f-]{36}$' or not private.link_media_allowed(l, m::uuid) then
+          ok := false;
+          why := 'foreign_media';
+          exit;
+        end if;
+      end loop;
+    end if;
+    if ok then
+      update public.pages set update_seq = update_seq + 1 where id = p_page_id returning update_seq into s;
+      insert into public.page_updates (page_id, seq, client_update_id, update, created_by, plink_id, plink_author,
+                                       plink_update_id)
+      values (p_page_id, s, u.id, u.update, null, u.link_id, u.author, u.id);
+      update public.public_link_updates
+      set decided_at = now(), decided_by = auth.uid(), decision = 'admitted', admitted_seq = s, update = null
+      where id = u.id;
+      res := res || jsonb_build_object('id', u.id, 'decision', 'admitted', 'seq', s);
+    else
+      update public.public_link_updates
+      set decided_at = now(), decided_by = auth.uid(), decision = 'aside', reason = coalesce(why, 'unspecified')
+      where id = u.id;
+      res := res || jsonb_build_object('id', u.id, 'decision', 'aside', 'reason', coalesce(why, 'unspecified'));
+    end if;
+  end loop;
+  return res;
+end;
+$$;
+
+-- Lo apartado, lo retenido y cuánto espera en una página, para quien la ve con lo borrado (el aviso de la página).
+create function public.public_link_updates_of(p_page_id uuid)
+returns table (id uuid, link_id uuid, author text, created_at timestamptz, bytes int, state text, reason text)
+language plpgsql stable security definer set search_path = ''
+as $$
+begin
+  if not private.sees_deleted(p_page_id) then
+    raise exception 'page_not_found' using errcode = 'P0002';
+  end if;
+  -- El nivel una vez por link de la página, no por fila (observación 6).
+  return query
+    with lv as (
+      select l.id, private.link_page_level(l, p_page_id) as level
+      from public.public_links l
+      where l.id in (select distinct x.link_id from public.public_link_updates x
+                     where x.page_id = p_page_id and x.decided_at is null)
+    )
+    select u.id, u.link_id, u.author, u.created_at, u.bytes,
+           case when u.decision = 'aside' then 'aside'
+                when coalesce((select lv.level from lv where lv.id = u.link_id), 0) < 3 then 'held'
+                else 'waiting' end,
+           u.reason
+    from public.public_link_updates u
+    where u.page_id = p_page_id and (u.decided_at is null or u.decision = 'aside')
+    order by u.n
+    limit 500;
+end;
+$$;
+
+-- Los bytes de una fila apartada o retenida, para "Download it" (nunca se aplican).
+create function public.public_link_update_bytes(p_id uuid)
+returns text
+language plpgsql stable security definer set search_path = ''
+as $$
+declare
+  u public.public_link_updates;
+begin
+  select * into u from public.public_link_updates x where x.id = p_id;
+  if not found or u.update is null or not private.sees_deleted(u.page_id) then
+    raise exception 'not_found' using errcode = 'P0002';
+  end if;
+  return translate(encode(u.update, 'base64'), E'\n', '');
+end;
+$$;
+
+revoke all on function public.plink_admit_pages(text) from public, anon;
+revoke all on function public.plink_admit_work(text, uuid[]) from public, anon;
+revoke all on function public.plink_admit(uuid, text, jsonb) from public, anon;
+revoke all on function public.public_link_updates_of(uuid) from public, anon;
+revoke all on function public.public_link_update_bytes(uuid) from public, anon;
+grant execute on function public.plink_admit_pages(text) to authenticated;
+grant execute on function public.plink_admit_work(text, uuid[]) to authenticated;
+grant execute on function public.plink_admit(uuid, text, jsonb) to authenticated;
+grant execute on function public.public_link_updates_of(uuid) to authenticated;
+grant execute on function public.public_link_update_bytes(uuid) to authenticated;
+
+-- 6. Quien comparte: Can edit con el interruptor prendido
+-- Lo que piden crear y cambiar: el nivel. 'edit' solo con el interruptor (`edit_off` si no).
+create function private.public_link_level_ok(p_level text)
+returns void
+language plpgsql stable security definer set search_path = ''
+as $$
+begin
+  if p_level is null or p_level not in ('comment', 'edit') then
+    raise exception 'level_invalid' using errcode = '22023';
+  end if;
+  if p_level = 'edit' and (select s.link_edit_min_version from public.workspace_settings s where s.id) is null then
+    raise exception 'edit_off' using errcode = 'P0001',
+      hint = 'Editing through a link is not turned on for this workspace yet.';
+  end if;
+end;
+$$;
+
+revoke all on function private.public_link_level_ok(text) from public, anon, authenticated;
+
+-- create_public_link y set_public_link: el mismo cuerpo que la entrega 1 con un cambio cada una (y una observación del
+-- roadmap de paso):
+--   create_public_link: `if p_level is null or p_level <> 'comment' then raise 'level_invalid'`
+--                       pasa a `perform private.public_link_level_ok(p_level);`
+--   set_public_link:    lo mismo, y además, si el link estaba vencido (`expires_at <= now()`), `clean_reset(null,
+--                       p_page)` antes de devolverlo (revivirlo no sirve la base de antes; observación del roadmap).
+--   Pasar de 'edit' a 'comment' o al revés no reinicia nada: los dos niveles reciben solo bases.
+
+-- `private.public_link_json`: `create or replace` con el cuerpo de la entrega 1, con `limited` que suma
+--   or (u.kind = 'push' and (u.n >= private.plink_limit('push') or u.bytes >= private.plink_limit('push_bytes')))
+-- y una clave más:
+--   'edits', (select jsonb_build_object(
+--       'waiting', coalesce(sum(x.n) filter (where x.state = 'waiting'), 0),
+--       'held', coalesce(sum(x.n) filter (where x.state = 'held'), 0),
+--       'aside', (select count(*) from public.public_link_updates a where a.link_id = l.id and a.decision = 'aside'),
+--       'admitted_today', (select count(*) from public.public_link_updates a
+--                          where a.link_id = l.id and a.decision = 'admitted' and a.decided_at >= current_date),
+--       'push_bytes_total', l.push_bytes_total)
+--     from (select case when private.link_page_level(l, w.page_id) = 3 then 'waiting' else 'held' end as state, w.n
+--           from (select u.page_id, count(*) as n from public.public_link_updates u
+--                 where u.link_id = l.id and u.decided_at is null group by u.page_id) w) x)
+--   (el nivel, una vez por página distinta, no por fila: observación 6). Lo de un link revocado ya está apartado
+--   (`link_revoked`, B1), así que `get_public_link` no necesita contar lo retenido de links viejos.
+
+-- 7. El historial: quién escribió una fila del link (al final; la versión publicada lo ignora)
+drop function public.page_history(uuid, bigint, int);
+
+create function public.page_history(p_page_id uuid, p_after_seq bigint, p_limit int default 500)
+returns table (id bigint, seq bigint, created_by uuid, created_at timestamptz, update text, plink_author text)
+language plpgsql stable security definer set search_path = ''
+as $$
+begin
+  perform private.check_history(p_page_id);
+  return query
+    select u.id, u.seq, u.created_by, u.created_at, translate(encode(u.update, 'base64'), E'\n', ''), u.plink_author
+    from public.page_updates u
+    where u.page_id = p_page_id and u.seq > p_after_seq
+    order by u.seq
+    limit least(greatest(p_limit, 1), 1000);
+end;
+$$;
+
+revoke all on function public.page_history(uuid, bigint, int) from public, anon;
+grant execute on function public.page_history(uuid, bigint, int) to authenticated;
+
+-- 19: la 18 ya la usa `20261026120000_comentarios_archivo.sql` (v0.141, B5 de la auditoría).
+update public.workspace_settings set schema_version = 19 where id and schema_version < 19;
+notify pgrst, 'reload schema';
+```
+
+**2b (archivos), en su propia migración:**
+
+```sql
+-- LGA Shot Docs · link público, entrega 2b: Can edit sube fotos, videos y archivos al Drive del dueño (por el portero).
+alter table public.files add column plink_id uuid references public.public_links (id),
+  add constraint files_plink_no_author check (plink_id is null or created_by is null);
+
+-- Lo que registró el link también lo puede poner en una fila.
+create or replace function private.link_media_allowed(l public.public_links, f uuid)
+returns boolean
+language sql stable security definer set search_path = ''
+as $$
+  select exists (select 1 from public.files x where x.id = f and x.plink_id = l.id)
+      or exists (select 1 from public.page_files pf
+                 where pf.file_id = f and pf.removed_at is null and not pf.is_foreign
+                   and pf.page_id in (select private.link_branch(l)));
+$$;
+
+-- Registrar un archivo nuevo en una página de la rama. Nunca uno que ya existe de otro (ni de otro proyecto): sin
+-- esto, un id conocido se vincularía a la rama y el link lo vería. Idempotente con el mismo id, página y link.
+create function public.plink_register_file(
+  p_id uuid, p_page_id uuid, p_name text, p_mime text, p_size bigint,
+  p_width int, p_height int, p_duration real, p_app_version text)
+returns text
+language plpgsql volatile security definer set search_path = ''
+as $$
+declare
+  l    public.public_links := private.current_plink();
+  cur  public.files;
+  ws   uuid;
+  over boolean;
+begin
+  if l.id is null then
+    raise exception 'link_not_found' using errcode = 'P0002';
+  end if;
+  if p_id is null or private.link_page_level(l, p_page_id) < 3 then
+    raise exception 'page_not_found' using errcode = 'P0002';
+  end if;
+  select * into cur from public.files f where f.id = p_id;
+  if found then
+    if cur.plink_id = l.id and exists (select 1 from public.page_files pf where pf.page_id = p_page_id and pf.file_id = p_id) then
+      return 'ok';
+    end if;
+    raise exception 'file_other_project' using errcode = 'P0001';
+  end if;
+  if not private.link_edit_version_allowed(p_app_version) or not private.files_version_allowed(p_app_version) then
+    raise exception 'app_outdated' using errcode = 'P0001';
+  end if;
+  if p_size is null or p_size <= 0 or p_size > private.plink_limit('file_max_bytes') then
+    raise exception 'file_too_big' using errcode = '22023';
+  end if;
+  perform private.plink_db_guard();
+  update public.public_links set files_total = files_total + 1, upload_bytes_total = upload_bytes_total + p_size
+  where id = l.id
+  returning files_total > private.plink_limit('life_files')
+         or upload_bytes_total > private.plink_limit('life_upload_bytes') into over;
+  if over then
+    raise exception 'link_rate_limited' using errcode = 'P0001', detail = 'life_files';
+  end if;
+  perform private.plink_count('file', 1, 0);
+  perform private.plink_count('upload', 1, p_size);
+  select pg.workspace_id into ws from public.pages pg where pg.id = p_page_id;
+  insert into public.files (id, project_id, name, mime, size, width, height, duration, created_by, plink_id)
+  values (p_id, ws, left(p_name, 250), lower(btrim(p_mime)), p_size, p_width, p_height, p_duration, null, l.id);
+  insert into public.page_files (page_id, file_id) values (p_page_id, p_id);
+  return 'ok';
+end;
+$$;
+
+-- El portero, al terminar la subida (con el header del link): solo un archivo de este link, una vez.
+create function public.plink_set_file_drive(p_file_id uuid, p_drive_id text)
+returns void
+language plpgsql volatile security definer set search_path = ''
+as $$
+declare
+  l   public.public_links := private.current_plink();
+  cur text;
+begin
+  if l.id is null then
+    raise exception 'link_not_found' using errcode = 'P0002';
+  end if;
+  if not exists (select 1 from public.files f where f.id = p_file_id and f.plink_id = l.id)
+     or private.plink_file_level(p_file_id) < 3 then
+    raise exception 'file_not_found' using errcode = 'P0002';
+  end if;
+  if p_drive_id is null or p_drive_id !~ '^[A-Za-z0-9_-]{10,200}$' then
+    raise exception 'drive_id_invalid' using errcode = '22023';
+  end if;
+  select f.drive_id into cur from public.files f where f.id = p_file_id for update;
+  if cur is null then
+    update public.files set drive_id = p_drive_id, uploaded_at = now() where id = p_file_id;
+  elsif cur <> p_drive_id then
+    raise exception 'file_already_uploaded' using errcode = 'P0001';
+  end if;
+end;
+$$;
+
+create function public.plink_set_file_thumb(p_file_id uuid)
+returns void
+language plpgsql volatile security definer set search_path = ''
+as $$
+declare
+  l public.public_links := private.current_plink();
+begin
+  if l.id is null then
+    raise exception 'link_not_found' using errcode = 'P0002';
+  end if;
+  if not exists (select 1 from public.files f where f.id = p_file_id and f.plink_id = l.id)
+     or private.plink_file_level(p_file_id) < 3 then
+    raise exception 'file_not_found' using errcode = 'P0002';
+  end if;
+  update public.files set thumb_at = now() where id = p_file_id;
+end;
+$$;
+
+-- La miniatura de un archivo que registró este link (512 KB y JPEG o WebP: los límites del bucket).
+create function private.plink_thumb_insertable(p_name text)
+returns boolean
+language sql stable security definer set search_path = ''
+as $$
+  select exists (
+    select 1 from public.files f, private.current_plink() l
+    where l.id is not null and l.level = 'edit' and f.plink_id = l.id and f.id::text || '.jpg' = p_name
+      and private.plink_file_level(f.id) >= 3);
+$$;
+
+revoke all on function private.plink_thumb_insertable(text) from public, anon, authenticated;
+grant execute on function private.plink_thumb_insertable(text) to anon;
+create policy thumbs_insert_link on storage.objects
+  for insert to anon
+  with check (bucket_id = 'thumbs' and private.plink_token() is not null and private.plink_thumb_insertable(name));
+
+revoke all on function public.plink_register_file(uuid, uuid, text, text, bigint, int, int, real, text) from public, authenticated;
+revoke all on function public.plink_set_file_drive(uuid, text) from public, authenticated;
+revoke all on function public.plink_set_file_thumb(uuid) from public, authenticated;
+grant execute on function public.plink_register_file(uuid, uuid, text, text, bigint, int, int, real, text) to anon;
+grant execute on function public.plink_set_file_drive(uuid, text) to anon;
+grant execute on function public.plink_set_file_thumb(uuid) to anon;
+notify pgrst, 'reload schema';
+```
+
+### E2.12 Cambios en la app y el portero
+
+| Dónde | Entrega | Qué |
+|---|---|---|
+| `src/sync/linkRemote.ts` | 2a | `pushUpdate` sobre `plink_push_page_update` (devuelve 0, manda la versión y el nombre); `pushStatus`; el nivel de `plink_open` (`level`) decide la vista; cerrar explícito lo de compactar, `share`, `namePageVersion`… (roadmap); `linkPageFile`/`unlinkPageFile` sin hacer nada (los vincula el editor) en vez de `readOnly` |
+| `src/sync/admit.ts`, `src/sync/linkShape.ts` (nuevos) | 2a | La prueba de E2.3 (Yjs puro, sin el editor), sobre una copia armada una vez por página; el paso 8 con la lista de atributos y valores del esquema |
+| `src/ui/PageEditor.tsx` | 2a (la barrera la hace otro frente) | Lo que el link necesita de la barrera de error (E2.3): envolver la página, *UnsupportedPage* con el historial, sin bucle, el id en la consola |
+| `src/sync/engine.ts` | 2a | En `buildCleanBases`, antes de pedir el trabajo de bases: `plink_admit_pages`, quedarse con las páginas listas, `plink_admit_work(versión, páginas)`, probar con `docs`, `plink_admit` (cortar la página si la base devuelve otra decisión); recordar por id lo ya bajado; sus errores no cortan el ciclo. En modo link, sacar `rejected` de una página con la primera edición guardada después del rechazo |
+| `src/sync/docs.ts` | 2a | Una lectura de lo guardado con las mismas condiciones que `buildCleanBase` (al día, nada sin subir, nada ilegible) para la prueba; `NO_GC_MAX_BYTES` de 1 MB en modo link |
+| `src/sync/remote.ts` | 2a | `admitPages`, `admitWork`, `admit`, `linkUpdatesOf`, `linkUpdateBytes`; `page_history` con `plink_author` |
+| Historial (`history.ts`, el Worker) | 2a | *Ana (via link)* con `plink_author` |
+| `src/ui/LinkShare.tsx` | 2a | *Can edit* (apagado con `edit_off`), la línea de 3.8.3 y los números de E2.8 |
+| `src/ui/LinkApp.tsx`, `SyncBadge` | 2a | *Your name* al escribir; *Sent, waiting for the team*; lo apartado con *Download them*; los rechazos de E2.9 |
+| La página (editor del equipo) | 2a | El aviso de lo apartado con *Download it* (`unsyncedDownload.ts`) |
+| Ayuda (`src/help/entries.ts`, `src/i18n/lazy/help.ts`) | 2a | *Opened with a link* y *Share with a link* con *Can edit* |
+| `src/sync/testing.ts` | 2a y 2b | La sala, la admisión, los topes y lo retenido en el servidor en memoria |
+| `src/media/queue.ts`, `src/media/portero.ts` | 2b | Registrar y subir en modo link (`plink_register_file`, `/upload` con el header), la miniatura |
+| `portero/src/core.ts` | 2b | `POST /upload` y `PUT /upload/<id>` con el header (nivel 3 por `plink_media_file`); `plink_set_file_drive` en vez de `set_file_drive`; `who.userId` = `plink:<huella del token>`; carpetas (`/folder/*` de subir) siguen fuera (LE7) |
+| `Doc_Supabase.md`, `Doc_Portero.md`, `Doc_Sincronizacion.md`, `Doc_Privacidad_Borrado.md` (4.3) | 2a y 2b | Al implementar |
+
+### E2.13 Entregas
+
+| | Qué | Tamaño estimado | Riesgo |
+|---|---|---|---|
+| **2a** | Escribir: la migración de E2.11 (sin la 2b), la prueba de admisión, el motor (admitir antes de armar bases), el visitante que escribe, *Share* con *Can edit*, el aviso de lo apartado, el historial, la ayuda | Migración ~650 líneas y su prueba SQL ~500; app ~1100 (admit y forma ~350, motor ~200, linkRemote ~100, docs ~80, UI ~300, i18n y ayuda ~70); pruebas vitest ~900. **~3200** (la auditoría estimó 3000 a 3300 con B1 a B3) | **Alto**: escrituras sin cuenta |
+| **2b** | Archivos: `plink_register_file`, el portero, las miniaturas, la cola de fotos en modo link | Migración ~200 y prueba SQL ~200; portero ~120 y su prueba ~150; app ~200; pruebas ~250. **~1100** | **Alto**: el Drive del dueño |
+| **2c** | Lo apartado a la vista: la lista en *Share*, *Set aside (via link)* en el historial (sin aplicarlas), "volver a la página como la ve el equipo" para el visitante (después de bajar lo suyo), el ícono del árbol | ~600 | Medio |
+
+Se puede publicar la 2a sola (texto) y prender el interruptor; la 2b agrega el botón de subir en modo link.
+
+### E2.14 Pruebas
+
+1. **SQL** (`supabase/tests/link_editar_permisos.sql`, `begin … rollback` con un script propio; los headers con
+   `set_config('request.headers', …)` y `set role anon`):
+   - `plink_push_page_update`: con el link de otra página, de otro proyecto, vencido, revocado, reseteado, *Can view*,
+     con la página afuera de la rama o en la papelera, sin nombre o con controles, sin el interruptor o con una versión
+     vieja (`app_outdated`); el mismo `client_update_id` dos veces devuelve 0 y **no cuenta** (también con el tope ya
+     lleno); 1 MB + 1 da `update_size_invalid`; día, vida, total, guarda y `waiting_bytes` dan `link_rate_limited` sin
+     sumar; **nunca escribe en `page_updates`** (mutante).
+   - `plink_admit_work`/`plink_admit`: un lector, un invitado con Editar, un miembro con Editar sin ver lo borrado de esa
+     página, una versión más vieja que la fila o sin los interruptores: nada; fuera de orden (`admit_out_of_order`); la
+     fila de otra página; dos decisiones de la misma fila (la segunda devuelve la primera); un link revocado entre la
+     escritura y la admisión (`held`, no se decide); un archivo de afuera en `media` (`foreign_media` aunque `ok`); al
+     admitir: `seq` correlativo, `created_by` nulo, `plink_author`, los bytes iguales a los de la sala y la sala con
+     `update` nulo; lo apartado conserva sus bytes; `anon` no llama a ninguna de las dos.
+   - `page_history` devuelve `plink_author`; `public_link_updates_of` y `public_link_update_bytes` solo a quien ve lo
+     borrado; `plink_open` da `comment` a una versión vieja y con el interruptor apagado; `create`/`set_public_link`
+     con `edit` y el interruptor apagado (`edit_off`); `set_public_link` sobre un link vencido reinicia la rama.
+   - 2b: `plink_register_file` con un id existente (propio de otro link, del equipo, de otro proyecto): nunca lo
+     vincula; topes de archivos; `plink_set_file_drive` de un archivo del equipo; la política de `thumbs` para un archivo
+     de otro link.
+   - **Las condiciones de la auditoría:** 2000 filas retenidas de un link en la página que ordena primero no traban la
+     admisión de otra página (antes: 0 filas); revocar y *Reset* pasan lo que espera a `aside` con `link_revoked`, y
+     `remove_member` también; `plink_admit_work` nunca devuelve bytes de una página que no se le pidió (ni de una pedida
+     sin permiso); `plink_admit_pages` no lleva bytes; una foto sacada (`removed_at`) se aparta con `foreign_media`;
+     `waiting_bytes` no cuenta lo retenido de una página que salió de la rama; `plink_push_status` cuenta.
+   - Las pruebas de siempre de `supabase/tests/` pasan con la migración.
+   - **Mutantes** (como mínimo): sin idempotencia antes de los topes, sin `waiting_bytes`, sin el orden, sin mirar el
+     link al admitir, sin volver a mirar `media`, `created_by` del editor, no mover los bytes, `plink_push` que escribe en
+     `page_updates`, `plink_open` sin bajar el nivel, `plink_register_file` que vincula un id existente, el tope de
+     filas antes de filtrar, revocar sin apartar, `link_media_allowed` sin `removed_at`, `plink_admit_work` sin filtrar
+     por `p_pages`.
+2. **La prueba de admisión** (vitest, `src/sync/admit.test.ts`): los 11 casos del prototipo (E2.16) con las funciones
+   reales, más una fila con el bloque `photo` en línea, una con `photoMarkup` y `collapsedHeadings` (entran), una con la
+   marca `lgaStableGaps` (entra) y la corrida al azar (0 honestas apartadas); **las 19 filas hostiles de la auditoría**
+   (`hostile.test.ts`, en jsdom con el editor real: ninguna que entre hace tirar al editor; las 3 que hoy lo rompen se
+   apartan con `bad_shape`); una imagen externa (`external_url`); **un bloque de imagen vacío (`url: ""`, como lo inserta
+   el editor) entra** (C1); **un caso honesto por cada propiedad propia de la app**: `script`, `question`, `driveCard`,
+   `pageBreak`, `rowWidth`, `thumbHeight`, `isToggleable`, `checked`, `colwidth` (lista y nulo), `colspan` y `rowspan`
+   (R3); la lista del paso 8 comparada con el esquema real; un mutante por cada paso de la tabla.
+3. **El motor** con el servidor en memoria: el visitante escribe sin red y con red, la fila espera, un editor la admite y
+   arma la base, el visitante la baja; dos editores admitiendo a la vez; un editor con una versión más vieja que la fila
+   no decide; *Reset* con filas esperando (quedan apartadas con `link_revoked`, el visitante ve *This link no longer
+   works* con *Download them*); vencer con filas esperando (quedan retenidas y entran si se le saca el vencimiento);
+   una página que el editor no tiene lista no baja sus bytes (cuenta de pedidos con el servidor en memoria); dos
+   editores con decisiones distintas (el segundo corta y vuelve a probar); `update_size_invalid` y deshacer el pegado lo
+   destraba sin reabrir la app; dos visitantes en la misma página; la versión
+   publicada (v0.137) como editor en la misma base no ve nada de la sala; y el invariante de D14 (lo que recibe un lector
+   estuvo visible en alguna base) con un visitante que escribe.
+4. **Con el editor real** (jsdom): un visitante con *Can edit* escribe, aplica una plantilla de fábrica en una página
+   vacía y anota una foto; lo admitido se abre en el editor del equipo sin *UnsupportedPage*.
+5. **El portero** (2b): las rutas de subir con el header, `plink:<huella>`, el link revocado a mitad de una subida, el
+   tamaño declarado.
+6. **De punta a punta contra la base real** (lista para Lega): con los dos interruptores prendidos, crear un link *Can
+   edit*, abrirlo en incógnito, escribir, ver que aparece en la app del dueño y en el historial como *(via link)*,
+   *Reset link* y ver que lo que estaba esperando queda apartado (*set aside*) y se puede bajar.
+
+### E2.15 Propuestas
+
+Todas con la recomendación elegida; valen hasta que Lega diga otra cosa.
+
+| # | Propuesta | Opciones | Recomendación | Por qué | Cómo se revierte |
+|---|---|---|---|---|---|
+| **LE1** | Dónde entra lo que escribe un link | A) directo a `page_updates` con la cuarentena de 3.8.2 en cada dispositivo (y en el compactador, el historial y las bases); B) **sala de espera y admisión por un editor** | **B** | Con snapshots, A necesita repetir la cuarentena en cuatro lugares y que todas las versiones decidan igual; B no toca bajar, compactar ni el historial y deja una sola decisión en la base | Con B ya hecha, A sería mover la prueba al dispositivo que baja: no se propone |
+| **LE2** | Quién admite | A) **quien arma bases** (ve lo borrado, versión con los dos interruptores); B) cualquiera con nivel 3; C) solo el dueño | **A** | Tiene las filas exactas del servidor y ya hace el paso de bases; un invitado no ve lo borrado | Cambiar la condición de `plink_admit_work` |
+| **LE3** | La prueba | Los 8 pasos de E2.3 (el 8, forma y valores, sumado por la auditoría), con la regla de la versión, más la barrera de error alrededor de `PageEditor` | **Los 8 y la barrera** | Cubren B2, N4, N5, el editor que no abre la página, las fotos de afuera y las formas que hacían tirar al editor (B3); medidos | Sacar un paso (no se recomienda ninguno) |
+| **LE4** | Lo que espera de un link que dejó de andar | A) admitirlo igual; B) retenerlo; C) apartarlo | **C al revocar o resetear (`link_revoked`, en el acto); B para lo que puede volver** (vencer, el permiso del creador, la papelera, la página afuera, *Can view*) — ajustado por la auditoría (B1) | *Reset link* es "cortar ya" y revocar es final; lo retenido no traba a nadie (se filtra antes del tope); nada se pierde | A: sacar la condición del link en `plink_admit` |
+| **LE5** | Los bytes al admitir | A) **moverlos** (`update` nulo en la sala); B) dejar la copia | **A** | No duplica lo del link en la base del plan gratis; la fila queda en `page_updates`, que no se borra | Dejar de poner nulo |
+| **LE6** | Cómo se prende | A) **un interruptor** (`link_edit_min_version`) además de la mínima; B) solo `min_app_version` | **A** | Es el patrón de D14 y de compactar: se publica apagado, se prende con un SQL, y una versión vieja del visitante recibe *Can view* | Ponerlo en nulo apaga *Can edit* (los links quedan en *Can view* de hecho) |
+| **LE7** | Carpetas (P.9) por un link | A) **no**; B) sí, con los topes | **A** | Una carpeta son cientos de archivos y subcarpetas en el Drive del dueño; los archivos sueltos alcanzan | Abrir `/folder/prepare` y `/folder/sessions` al link con los topes |
+| **LE8** | Plantillas | **Aplicar en una página vacía de la rama, sí** (de fábrica o propias de la rama); guardar y el reporte del día, no | Así | Aplicar es contenido; lo otro crea páginas (D29) | — |
+| **LE9** | Qué fotos puede poner | A) las que registró el link y las que usa o usó la rama; B) **las que registró el link y las que la rama usa hoy** | **B** (corregido por la auditoría, B4) | Con A, el visitante leía en su base limpia el id de una foto sacada (la clave borrada de `photoMarkup` queda en la codificación, sin el texto), la escribía, un editor la volvía a vincular y el link la bajaba. El costo de B: deshacer el borrado de una foto que ya cruzó una admisión y una reconciliación queda apartado | A: sacar `removed_at is null` (no se recomienda) |
+| **LE10** | Lo que espera sin decidir | **20 MB por link** (`waiting_bytes`) | Así | Sin editores conectados la sala no crece sin fin; frena solo a ese link | Cambiar `link_limits` |
+| **LE11** | Qué ve el equipo | **Historial *(via link)*, los números en *Share* y el aviso de lo apartado en la página**; "Last edited through the link" en la página, después | Así | Lo mínimo para saber qué pasó y bajar lo apartado | — |
+| **LE12** | El visitante con algo apartado | **Aviso y *Download them* (2a)**; "volver a la página como la ve el equipo" (2c) | Así | Nada se pierde y el visitante sabe qué pasó; volver a la base es borrar lo local, así que va después de bajarlo | — |
+| **LE13** | La subida sin GC en modo link | A) **umbral 1 MB** (como 3.8.1); B) siempre con GC | **A** | Conserva lo que D15 conserva mientras entre en el tope | B: umbral 0 |
+
+### E2.16 Lo comprobado y lo que no
+
+**Comprobado (2026-10-02):**
+
+- **El prototipo de la prueba de admisión** (vitest con las funciones reales `buildCleanBase`, `checkCleanBase`,
+  `pendingKey`, `findUnknownContent` y `mediaIdsInDoc`; fuera del repo, en la carpeta de trabajo del frente): **11 de
+  11** casos: honesto (entra), basura (`undecodable`), dependencia que nunca subió (`pending`), borrado de algo que no
+  existe (`pending`), bloque desconocido y marca desconocida (`unknown_content`), mapa raíz nuevo (`unknown_root`),
+  foto de afuera (`foreign_media`), página que se pasa del tope (`too_big`), el visitante que escribe adentro de un
+  párrafo que el editor borró después de la base (entra) y una foto de la rama copiada a otra página (entra). **Al azar:
+  60 semillas, 1286 filas honestas (con bases nuevas, borrados del editor y del visitante), 0 apartadas. Costo, armando
+  todo de nuevo por fila: 3,6 ms en una página de 77 KB y 13,3 ms en una de 346 KB** (en la PC).
+- **La base real** (solo lectura): `public_links` aplicada (`schema_version` 17), 0 links, 0 bases limpias, 0 snapshots,
+  `clean_min_version` y `snapshot_min_version` nulos, `min_app_version` 0.129. Todas las bases pesan **49,9 MB** (la del
+  workspace 34,7 MB; `page_updates` 9,6 MB en disco con 826 filas y 19 MB de updates). Las filas que no son la primera de
+  su página (106): mediana 126 B, p95 630 B, **p99 6,6 KB, máximo 7,2 KB**: el tope de 1 MB no frena a nadie que
+  escribe. Las 18 filas de más de 256 KB son todas la primera de su página (importaciones y plantillas aplicadas, varias
+  de 296 KB); 3 pasan 1 MB (importaciones de Coda de 1,4 a 2,1 MB, que por un link no se hacen). Por página, mediana
+  7,4 KB, p95 64 KB, máximo 2,07 MB. El bucket `thumbs` limita a 512 KB y JPEG o WebP.
+- **En el código:** el rechazo que traba la página (N3, `pushPage` y `clearRejected`), el editor que no abre una página
+  con algo desconocido, el vínculo automático de `sdmedia://` (`reconcilePage`), `upload.user = 'plink'` en el portero,
+  `canCompact(LinkRemote)` y `page_updates.created_by` con `auth.uid()` por defecto.
+
+**No se pudo comprobar:**
+
+- El SQL del borrador no se compiló (no hay PostgreSQL local y no se escribe en la base real): lo compila y prueba la
+  2a en `begin … rollback`, como las demás.
+- La prueba con BlockNote de verdad (el prototipo usa bloques como los guarda el editor, sin montarlo) y en el teléfono.
+- Que "deshacer el pegado" destrabe N3 con el editor real (con Yjs puro, un borrado con GC pesa decenas de bytes).
+- El script de restaurar del repo privado de copias con las columnas nuevas de `page_updates` (son nulables; hay que
+  mirarlo antes de publicar, como con compactar).
+- Cuánto tarda la admisión con un editor en el teléfono y cuántas filas por día escribe un visitante real (entrega 3).
+- Las correcciones de la auditoría (pasos de admisión en dos llamadas, apartar al revocar, el paso 8) no se compilaron
+  ni se corrieron: van con la 2a y sus pruebas (E2.14).
+
+### E2.17 Riesgos
+
+| Riesgo | Qué lo cubre |
+|---|---|
+| Una fila de un link traba la base limpia, una copia resumida o el editor del equipo | Nunca llega a `page_updates` sin pasar la prueba (LE1, LE3 con el paso 8); la barrera de error alrededor de `PageEditor` para lo que nadie previó |
+| Lo retenido traba la admisión de otros links | Se filtra antes de cualquier tope (`plink_admit_pages`); lo de un link revocado se aparta en el acto (B1) |
+| La admisión se come el egress del plan gratis | Dos pasos: los bytes solo de las páginas listas, una vez (B2) |
+| El visitante recupera una foto que el equipo sacó | Solo fotos que la rama usa hoy (LE9-B, B4) |
+| Dos editores (o dos versiones) deciden distinto | Una sola decisión en la base; solo decide una versión igual o más nueva que la del visitante |
+| Sin editores conectados lo del visitante no llega | Se dice en *Share* y en la ayuda; `waiting_bytes` acota la sala; nada se pierde |
+| El link le abre al visitante fotos de afuera de su rama | La prueba (5) y `link_media_allowed` en `plink_admit`; `plink_register_file` nunca vincula un id existente |
+| Un visitante llena la base | Topes de 3.8.1, `waiting_bytes` y la guarda de 350 MB, contados al escribir |
+| Lo escrito por un link filtrado entra después del *Reset* | Retenido (LE4) |
+| Un editor malicioso o con un error admite basura o aparta lo honesto | Ya puede escribir cualquier cosa; lo apartado queda con sus bytes y se baja; el historial restaura |
+| Una versión vieja del visitante edita sin poder subir | `plink_open` le da *Can view* y la mínima la actualiza |
+| La admisión cuesta en el teléfono | Una copia por página, solo filas de links (pocas y de hasta 1 MB), solo al día y sin nada sin subir |
+| El SQL tiene un error | Se compila y se prueba con mutantes en la 2a (la auditoría ya compiló el borrador de la 2a y la 2b en `begin … rollback`) |
+
+### E2.18 Correcciones de la auditoría del rediseño (2026-10-02)
+
+Una auditoría independiente del rediseño dio **aprobado con condiciones**. Primero contrastó las premisas con `main`:
+todas eran correctas. Después corrió el prototipo (11 de 11 casos; 1286 filas honestas y 0 apartadas). Compiló el SQL
+de la 2a y la 2b y lo probó contra la base real en `begin … rollback`: escribir, idempotencia, admitir, `foreign_media`,
+fuera de orden, retenida al resetear, `page_history`, `anon` sin admisión. Por último armó 19 filas hostiles contra el
+editor real. Corregido en este documento:
+
+| Hallazgo | Corrección |
+|---|---|
+| **B1.** `plink_admit_work` aplicaba el tope de 2000 filas antes de filtrar. 2000 filas retenidas de una página trababan la admisión de todo el workspace (reproducido: 0 filas para otra página; con 1999, 1) | Dos pasos: `plink_admit_pages` agrupa y filtra por (página, link) antes del tope; `plink_admit_work` se queda con las páginas pedidas y los links vigentes. Revocar, *Reset* y `remove_member` apartan lo que espera con `link_revoked` (`plink_aside_revoked`). Retener queda solo para lo que puede volver (E2.3, E2.7, LE4) |
+| **B2.** Lo que el editor no podía probar todavía se volvía a bajar en cada ciclo (hasta 4 MB cada 10 s, ≈1,4 GB por hora) | `plink_admit_pages` sin bytes; los bytes solo de las páginas listas (`plink_admit_work(versión, páginas)`); se recuerda lo ya bajado (E2.3, E2.10) |
+| **B3.** 3 de 19 filas hostiles pasaban los 7 pasos y hacían tirar al editor del equipo: un `Y.Map` en un párrafo y el `level` de un encabezado como objeto o `'x y'` | **Paso 8, forma y valores** (`bad_shape`), con su lista sacada del esquema y comparada con él en una prueba. Además, lo que el link necesita de la **barrera de error** alrededor de `PageEditor` (la hace otro frente). Las 19 filas pasan a ser casos de `admit.test.ts` (E2.3, E2.14) |
+| **B4.** LE9-A le devolvía al link fotos que el equipo sacó: el id queda en la base limpia, en la clave borrada de `photoMarkup` | **LE9-B**: solo lo registrado por el link y lo que la rama usa hoy (`removed_at is null`), en la prueba y en `link_media_allowed` (2a y 2b) |
+| **B5.** `schema_version` 18 ya la usa `20261026120000_comentarios_archivo.sql` (v0.141) | La 2a sube a **19**. La rama trae `main` (merge) |
+| Obs. 2: dos admisores con decisiones distintas | Si la base devuelve otra decisión, el motor corta esa página y la vuelve a probar (E2.3) |
+| Obs. 3: deshacer no destraba `update_size_invalid` | En modo link, la primera edición guardada después del rechazo saca `rejected` de esa página; *Retry* en el aviso (E2.9) |
+| Obs. 4: `waiting_bytes` contaba lo retenido de páginas fuera de la rama | `link_waiting_bytes`: solo páginas con nivel 3 hoy (E2.5) |
+| Obs. 6: el nivel por fila en *Share* y en el aviso | Una vez por página o por link (`public_link_json`, `public_link_updates_of`) |
+| Obs. 7: `plink_push_status` sin contar | Cuenta como bajada (`pull`) y es `VOLATILE` (E2.2) |
+| Obs. 8: imagen externa | La prueba (5) aparta un `url` nuevo que no sea `sdmedia://` (`external_url`) |
+| Re-verificación (2026-10-02): **listo, con la condición C1** | **Diseño aprobado tras la re-verificación del 2026-10-02, con la condición C1 aplicada**: una dirección vacía vale en el paso 5 y la 2a prueba que un bloque de imagen vacío entra. R1 a R4 van a la lista de la 2a (E2.6, E2.9, E2.14) y al roadmap: no mandar una subida que pase `push_max_bytes`, el estado cuenta como `pass`, `tableCell.colwidth` como lista o nulo con un caso honesto por cada propiedad propia, y no prender `link_edit_min_version` sin la barrera de error en `main` |
+| Obs. 1, 5, 9, 10 y 11 | Al roadmap (P.19): adelantar "volver a la página del equipo"; que el dueño pueda descartar lo apartado (decisión de Lega, va contra "no hay borrado duro"); `plink_set_file_drive` abierta a `anon` es inofensiva por `checkMark`; probar el script de restaurar; invitar al cliente con Editar ya cubre "el cliente escribe" sin superficie anónima. Y, para D14, que la base limpia lleva los ids de archivos de las anotaciones borradas (sin el contenido) |
+
+### Cómo quedó la 2a (v0.151)
+
+**Estado:** implementada en la rama, con la migración `20261028120000_link_editar.sql` **sin aplicar** y el interruptor
+**apagado** (`link_edit_min_version` nulo: *Can edit* se ve apagado en *Share*, `plink_push_page_update` da
+`app_outdated`, `plink_open` da *Can view* y nadie admite). Sube `schema_version` a **19**.
+
+**La base** (`supabase/migrations/20261028120000_link_editar.sql`): todo E2.11 sin la 2b (la sala
+`public_link_updates`, `page_updates.plink_id`, `plink_author` y `plink_update_id`, `link_page_level`, `link_branch`,
+`link_media_allowed`, `link_waiting_bytes`, `plink_aside_revoked`, `plink_push_page_update`, `plink_push_status`, la
+admisión en dos pasos, `public_link_updates_of`, `public_link_update_bytes`, `public_link_level_ok`, `page_history` con
+`plink_author`) y los cuerpos completos de lo que la entrega 1 cambia (`plink_limit`, `plink_open`, `remove_member`,
+`create_public_link`, `set_public_link` con el reinicio al revivir un link vencido, `reset_public_link`,
+`revoke_public_link`, `public_link_json` con `edits` y el tope de subidas en `limited`, `get_public_link`).
+**Lo que cambió respecto de E2.11:**
+
+| Qué | Por qué |
+|---|---|
+| Las funciones de la admisión se llaman `link_admit_pages`, `link_admit_work` y `link_admit` (no `plink_admit*`) | En la entrega 1, `plink_*` son solo las del visitante (`anon`, todas `VOLATILE`), y su prueba lo exige; las de la admisión son de una cuenta y dos son `STABLE` |
+| `link_admit` **corta** también en la primera fila cuya decisión no es la que pidió el editor: un archivo que no vale (`foreign_media` aunque el editor dijo que sí) o una fila que otro editor ya decidió distinto | Lo que sigue se probó con esa fila adentro (Yjs: lo de un mismo autor depende de lo anterior): admitirlo metería filas pendientes en la página. El motor también corta (E2.3, paso 4); la base no depende de que el motor lo haga |
+| `get_public_link` suma `edit_on` | *Share* sabe si ofrecer *Can edit* sin probar y esperar `edit_off` |
+| `plink_push_page_update` con `p_update` nulo da `update_size_invalid` | En el borrador llegaba a la restricción de la tabla (un 23514 en vez del error que la app entiende) |
+| Un índice `plu_link_idx (link_id, decision)` | Los números de *Share* (apartado, admitido hoy) por link sin recorrer la sala |
+| La prueba de la entrega 1 (`link_publico_permisos.sql`) cambia en dos lugares | `edit` con el interruptor apagado da `edit_off` (antes `level_invalid`), y la lista exacta de lo que ejecuta `anon` suma las dos funciones del visitante |
+
+**La app:**
+
+- `src/sync/admit.ts` (la prueba, una copia por página armada una vez y las filas seguidas; si una no entra, se rearma
+  sin ella) y `src/sync/linkShape.ts` (el paso 8: la lista de nodos, atributos, valores y marcas, comparada con el
+  esquema real en `linkShape.test.ts`).
+- `src/sync/linkAdmit.ts` y `linkAdmitApi.ts`: la vuelta de la admisión (páginas sin bytes, las listas, los bytes solo
+  de esas, probar, decidir, cortar si la base decide distinto, y recordar lo probado que no se pudo mandar). El motor
+  (`engine.ts`) la corre en `buildCleanBases` antes de pedir `clean_work`, con los dos interruptores y la versión; sus
+  errores no cortan las bases (sin red, sí). `docs.ts` suma `savedRows` (lo guardado con las condiciones de la base
+  limpia) y `clearRejectedPage`.
+- `src/sync/linkRemote.ts`: el visitante escribe con `plink_push_page_update` (devuelve 0), sin nombre no sube (queda en
+  el dispositivo y el ciclo sigue), una subida de más de 1 MB no se manda (R1), el estado de lo mandado
+  (`plink_push_status`, una vez por ciclo mientras algo espera; con su tope del día lleno deja de preguntar hasta
+  mañana sin avisar nada, R2), y cierra explícito compactar, la admisión, el historial, las versiones con nombre y el
+  equipo. `linkPageFile` y `unlinkPageFile` no hacen nada (los vincula el editor al reconciliar); subir archivos dice
+  *Adding photos, videos and files through a link isn't available yet* (2b). La subida sin GC llega hasta 1 MB (LE13).
+- **El visitante** (`LinkApp.tsx`, `LinkEditBar.tsx`, `SyncBadge.tsx`): la barra de abajo pide el nombre la primera vez
+  que algo no sube por faltarle, y avisa *Some of your changes on a page couldn't be added* con *Download them*; la
+  insignia dice *Sent, waiting for the team* mientras algo espera; un pegado de más de 1 MB lo explica en el detalle
+  (*Undo it to keep going*), y la primera edición guardada de esa página la vuelve a intentar; con el link muerto, la
+  pantalla dice cuántas páginas tienen algo sin mandar y lo baja (lo sin mandar y lo mandado que no entró, enteras).
+- **El equipo:** *Share* con *Can edit* (apagado con *Editing through a link isn't turned on for this workspace yet*),
+  la línea de 3.8.3 y *N changes added today · N waiting · N set aside · N on hold*; cambiar el vencimiento conserva el
+  nivel. En la página (`LinkAsideNotice.tsx`, para quien ve lo borrado): *A change sent through the link couldn't be
+  added to this page*, el motivo y *Download it* (lo apartado y lo retenido, tal cual, en un JSON), y una línea con lo
+  retenido. En el historial, *Ana (via link)* (`createdBy` = `via-link:Ana`, que ninguna cuenta puede tener).
+- **Solo el contenido** (E2.4): el acceso del visitante lleva `contentOnly` y los permisos de la app suman
+  `canEditRow` (el título, la cabecera, la hoja, los títulos cortos, la carpeta de reportes: no se ofrecen) y `viaLink`
+  (sin el asistente, sin *Dictate to report* ni su botón, sin reemplazar en todo el proyecto). Lo encontró el recorrido
+  en el navegador: con Editar, el visitante veía editable el título y *Header for pages inside*, que su base rechaza.
+- La ayuda: *Can edit with a link* y *Editing with a link*.
+
+**Diferencias con el diseño (decididas al implementar):**
+
+1. **"En cadena": lo que sigue del mismo autor de Yjs no entra nunca, dependa o no.** Yjs aplica lo de un autor en el
+   orden de sus relojes: si una fila del visitante se aparta, todas las siguientes de esa sesión (el mismo `clientID`)
+   quedan pendientes y se apartan con `pending`, aunque no toquen lo apartado. Solo lo de otra sesión (después de
+   recargar) que no cuelgue de lo apartado entra. Es la observación 1 de la auditoría con su peso real: "volver a la
+   página como la ve el equipo" (2c) es la salida; lo apartado se baja siempre.
+2. **Paso 5:** una dirección que la página ya tenía (copiar una imagen de la misma página) vale aunque no sea
+   `sdmedia://`; lo apartado es solo lo nuevo. Y `foreign_media` lo decide la base: la prueba manda la lista de
+   archivos nuevos y, sin saber qué usa la rama, no aparta; si la base aparta, corta y la vuelta siguiente sigue.
+3. **Paso 8:** `colwidth` acepta, además de una lista de números o nulo (R3), listas con huecos (`[150, null]`): es lo
+   que guarda el editor en una celda que ocupa dos columnas (lo encontró la prueba con el editor real).
+4. **La pausa** de una página que el editor está escribiendo es de 20 s fijos (sin el `× f` de la base): la admisión
+   no sabe el peso de la base.
+5. **Lo apartado se baja** como JSON con los bytes de Yjs en base64 (el equipo, de la sala; el visitante, su copia
+   entera de cada página): no se aplica en ningún lado.
+6. **El estado del visitante** (*Sent, waiting for the team*) se pregunta como mucho cada 30 s: después de que un editor
+   admite, la insignia lo deja de decir en el ciclo siguiente del visitante.
+
+**Pruebas:** la migración y su prueba (`supabase/tests/link_editar_permisos.sql`) en `begin … rollback` contra la base
+real: pasa, con 30 mutantes de la migración, todos detectados; las 27 pruebas SQL de siempre (con el plan B del MCP aplicado) pasan con la migración
+(con los dos ajustes de la tabla de arriba). En vitest: `admit.test.ts` (los 11 casos del prototipo, las 19 filas
+hostiles contra el editor real, las 3 que tiraban apartadas por la forma, la imagen externa, la vacía de C1, las
+anotaciones, colapsar, la foto en línea, la cadena, 60 semillas al azar con más de 1000 filas honestas y 0
+apartadas, el costo), `linkShape.test.ts` (la lista contra el esquema real y cada propiedad propia de la app escrita por
+el editor real), `linkEdit.test.ts` (el motor de E2.14.3 con el servidor en memoria), `linkEditEditor.test.ts` (el
+visitante con el editor real: escribir, una plantilla de fábrica en una página vacía y una anotación; el equipo lo abre
+sin *UnsupportedPage*) y `linkEdit.published.test.ts` (lo admitido abierto con la librería de las versiones
+publicadas), `admitClean.test.ts` (el paso 7, forzado) y `linkEditUi.test.tsx` (*Share* con *Can edit*, el aviso de
+lo apartado y *Ana (via link)* en el historial). Mutantes de la app: 29, uno por cada paso de E2.3 y por cada corrección de la auditoría, y los del motor y el
+visitante, todos detectados (`mutants_app.mjs` en la carpeta de trabajo, fuera del repo). **En el navegador**
+(Chromium sin ventana, la app real del visitante sobre el servidor en memoria con el interruptor prendido solo ahí, sin
+login): el visitante escribe, la barra le pide el nombre, la sala recibe la fila con su nombre, la insignia dice *Sent,
+waiting for the team*, un editor la admite, el equipo ve *Ana (via link)* en el historial, el visitante sigue viendo su
+texto una sola vez, una fila hostil (un `Y.Map` en un párrafo) queda apartada con `bad_shape` sin tocar la página, y el
+equipo ve el aviso con *Download it*; en el teléfono, sin scroll horizontal; sin errores en la consola.
+
+**Para prenderlo** (con la barrera de error de `PageEditor` ya en `main`, R4): aplicar la migración (con la copia de
+seguridad), publicar, subir `min_app_version` a esta versión y
+`update public.workspace_settings set link_edit_min_version = <esta versión> where id;` (el de D14 ya tiene que estar
+prendido). Apagar es volver a ponerlo en nulo: los links quedan en *Can view* de hecho y lo que espera, esperando.
+
+#### Correcciones de la auditoría de la 2a
+
+Una auditoría independiente sobre `c50ed1d` dio **no aprobado**: la base, bien cerrada; el paso 8, no. Se corrigió en una
+ronda (y la rama trae `main` v0.148, con la barrera de error de `PageEditor` y el plan B del MCP; la migración pasa a
+`20261028120000_link_editar.sql`):
+
+| Hallazgo | Corrección |
+|---|---|
+| **B1.** El editor real escribe `lgaGapText: true` en los textos de un renglón con fotos en línea (Enter, copiar o duplicar el renglón o una foto, Tab, pasarlo a encabezado); el paso 8 lo apartaba (`attribute outside a node`) y, en cadena, todo lo que seguía: 21 % de lo honesto al azar con una foto en la página | `TEXT_ATTRS`: un texto acepta solo `lgaGapText: true`. Prueba con el editor real (9 acciones en un párrafo y en una celda, y lo que sigue escribiendo) y la corrida al azar con fotos en línea, una tabla con fotos y listas (60 semillas, más de 600 filas honestas, 0 apartadas) |
+| **B2.** Un nodo conocido donde el esquema no lo acepta (un párrafo adentro de otro, un bloque adentro de un encabezado, una imagen adentro de un párrafo) pasaba, y el editor del equipo borraba el bloque del equipo al abrir la página | `CHILDREN`: qué hijos acepta cada nodo, comparado en una prueba con el `contentMatch` del esquema real (recorriendo el autómata), y el orden de un bloque (`blockContent blockGroup?`). Los 8 casos del auditor, apartados |
+| **B3.** `colspan: 100000000` (175 bytes) dejaba sin memoria al editor del equipo | Topes: `colspan`/`rowspan` enteros de 1 a 50, `colwidth` hasta 50 anchos de hasta 20 000 px, los px hasta 20 000, `rowWidth` y el ancho de una foto de 0 a 1, `start` de 0 a un millón |
+| **B4.** Mil, tres mil u ocho mil niveles de sangría pasaban (8000: ~11 s en el hilo del editor que admite) y desbordaban la pila del editor y de `normalizeStructure` | La profundidad de la página entera, contada con una pila propia (sin recursión) justo después de aplicar la fila y antes de lo caro: hasta 100 grupos anidados y 400 nodos (`too_deep`). Ocho mil niveles se apartan en milisegundos |
+| **O6.** Mutantes vivos | Pruebas nuevas: `link_admit` con la app vieja en el header (`app_outdated`), un uso de afuera (`is_foreign`) no da permiso, el creador que pierde el permiso deja lo suyo retenido; `savedRows` con algo propio sin subir; el motor ya no corta en el cliente (lo hace la base: era un mutante equivalente) y `ready` mira también lo no subido |
+| **O8.** *Download it* del equipo traía solo Yjs | Suma `text`: lo tecleado en la fila (`insertedText`) |
+| **O12.** La cadena | El aviso del visitante dice que lo que escriba después en esa página tampoco va a llegar, y ofrece la copia |
+| **O7.** Con fotos en línea, la insignia del visitante decía *1 change not uploaded* para siempre | Era el registro de usos de archivos del editor del visitante (`ensureLinks`), que sin portero no sale nunca. Un link no registra usos (`MediaQueue` con `noUsage`, y el motor no reconcilia): los registra el editor que admite. Visto en el navegador: *Sent, waiting for the team* |
+| **O1.** Fusión con el MCP | La lista de lo que ejecuta `anon` en `link_publico_permisos.sql` suma `private.mcp_pre_request` y las dos `plink_push_*`; las 28 pruebas SQL pasan en rollback sobre la base con el plan B aplicado |
+
+**Quedan, al roadmap:** O3 (una versión inventada, `'9999'`, deja una fila que nadie decide y traba lo que manda
+después ese link en esa página: solo lo frena a él y *Reset link* lo corta; arreglarlo pide un techo de versión que
+la base no sabe hoy), O9 (después de recargar, la pantalla de link muerto no sabe de lo mandado y apartado:
+lo tiene el equipo en la sala) y O4 (con D14 apagado igual se escribe en la sala; hoy no hay links sin D14).
+**O5:** la app publicada (v0.146) cambia el vencimiento de un link con `'comment'` fijo y pasaría un *Can edit* a *Can
+view*: por eso, **al publicar, subir `min_app_version` a la versión de la 2a** antes de prender el interruptor.
+**O10:** quien publica completa `v0.151` en el changelog y `LINK_EDIT = '0.151'` en `src/help/entries.ts` a la vez.
+
+**Falta:** la 2b (archivos por el link) y la 2c (lo apartado a la vista: la lista en *Share*, *Set aside (via link)*
+en el historial, "volver a la página como la ve el equipo" para el visitante, el ícono del árbol). Al roadmap, lo de la
+re-verificación que sigue abierto (E2.18).
 
 ## Cómo se midió
 

@@ -27,7 +27,13 @@ import { failureText, queueRecordingStore, transcribeNote } from './voiceQueue';
 import { resolveVoice, type VoiceConfig } from './voiceSettings';
 import { VoiceSettingsDialog } from './VoiceSettingsDialog';
 import { buildPageMap, type PageMap } from './pageMap';
-import { buildPlaceRequest, type RecentChange } from './prompt';
+import { buildPlaceRequest } from './prompt';
+import { loadActiveShot, saveActiveShot, sameShot, shotOfApplied, shotsOnPage } from './activeShot';
+import { recentForRequest, type AppliedEntry } from './corrections';
+import { applyShotPages, proposeShotPages, undoShotPages, type ShotPageChange, type ShotPageDeps, type ShotPageNote } from './shotPage';
+import { takeDictateLink, useDictateLink } from './dictateLink';
+import { useCommentAccess } from '../ui/CommentsToggle';
+import { useLinkMode } from '../linkMode';
 import './dictation.css';
 
 // La hoja *Dictate to report* (Docs/Doc_Dictado.md, entrega V1, secciones 5 a 8): se escribe la nota (o se dicta con el
@@ -42,9 +48,24 @@ type Phase =
   /** La grabación se está pasando a texto (V3). */
   | { kind: 'transcribing' }
   | { kind: 'ask'; question: string; options: AskOption[] }
-  | { kind: 'preview'; plan: Plan }
-  /** Recién aplicado: *Undo* mientras sea lo último que se hizo en la página. `queued`: la nota venía de la cola (V2). */
-  | { kind: 'applied'; count: number; undo: UndoHandle | null; note: string; added: string[]; at: number; message?: string; queued?: QueuedNote }
+  /** `extra`: lo que se propone además en las páginas de los planos (V4), destildado; `extraNotes`, lo que no. */
+  | { kind: 'preview'; plan: Plan; extra: ShotPageChange[]; extraNotes: ShotPageNote[] }
+  /**
+   * Recién aplicado: *Undo* mientras sea lo último que se hizo en la página. `queued`: la nota venía de la cola (V2).
+   * `commented`: se agregó como comentario (V4, quien solo comenta). `extra`: lo escrito en las páginas de los planos.
+   */
+  | {
+      kind: 'applied';
+      count: number;
+      undo: UndoHandle | null;
+      note: string;
+      added: string[];
+      at: number;
+      message?: string;
+      queued?: QueuedNote;
+      commented?: boolean;
+      extra?: ShotPageChange[];
+    }
   | { kind: 'error'; message: string; retry: boolean; keyRejected?: boolean };
 
 interface Run {
@@ -55,18 +76,18 @@ interface Run {
   queued?: QueuedNote;
 }
 
-/** Lo aplicado en cada página en esta sesión (para las correcciones: «no, era un 35»), con la hora. */
-const recentByPage = new Map<string, (RecentChange & { at: number })[]>();
+/** Lo aplicado en cada página en esta sesión (para las correcciones: «no, era un 35»), con la hora y el lugar. */
+const recentByPage = new Map<string, AppliedEntry[]>();
 const RECENT_MS = 10 * 60 * 1000;
 
 /** Lo que dura el resguardo contra el doble toque después de *Apply* (N1 de la re-verificación de V1). */
 export const DOUBLE_TAP_MS = 600;
 
-function recentOf(pageId: string): RecentChange[] {
+function recentOf(pageId: string): AppliedEntry[] {
   const now = Date.now();
   const list = (recentByPage.get(pageId) ?? []).filter((r) => now - r.at < RECENT_MS);
   recentByPage.set(pageId, list);
-  return list.map(({ where, before, after }) => ({ where, before, after }));
+  return list;
 }
 
 /** Para las pruebas: olvida lo aplicado. */
@@ -136,7 +157,7 @@ const clock = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms
 const newId = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`).toString();
 
 export function DictationPanel({ pageId }: { pageId: string }) {
-  const { user, workspace, client, tree } = useServices();
+  const { user, workspace, client, tree, docs, comments } = useServices();
   const status = useSyncStatus();
   const perms = usePermissions();
   const target = useAssistantTarget(pageId);
@@ -157,6 +178,21 @@ export function DictationPanel({ pageId }: { pageId: string }) {
   };
   const [loaded, setLoaded] = useState(false);
   const [unchecked, setUnchecked] = useState<Set<number>>(new Set());
+  /** Lo propuesto en las páginas de los planos que la persona tildó (destildado de fábrica, DI8). */
+  const [extraOn, setExtraOn] = useState<Set<number>>(new Set());
+  // Quien solo comenta (V4); un visitante de un link público no dicta (la tabla de la sección 7).
+  const access = useCommentAccess(pageId);
+  const linkMode = useLinkMode();
+  const commentAccess = { canComment: access.canComment && !linkMode };
+  // El plano activo (V4): fijo entre notas hasta cambiarlo; se pone solo con el plano de lo último aplicado.
+  const [activeShot, setActiveShotState] = useState<string | null>(() => loadActiveShot(user.email, workspaceKey, pageId));
+  const setActiveShot = (shot: string | null) => {
+    setActiveShotState(shot);
+    saveActiveShot(user.email, workspaceKey, pageId, shot);
+  };
+  const [shotOptions, setShotOptions] = useState<string[]>([]);
+  /** Lo que se escribe en las páginas de los planos después de *Apply* (*Undo* lo espera). */
+  const extraWork = useRef<Promise<ShotPageChange[]>>(Promise.resolve([]));
   const [usage, setUsage] = useState<Usage | null>(null);
   const [confirm, setConfirm] = useState<'discardNote' | 'done' | 'discardQueued' | null>(null);
   // La nota de la cola que se está ubicando (V2): se muestra en lugar del campo, y el campo conserva lo suyo.
@@ -175,7 +211,11 @@ export function DictationPanel({ pageId }: { pageId: string }) {
   };
   const [focused, setFocused] = useState<number | null>(null);
   const run = useRef<Run | null>(null);
-  /** Cuándo se aplicó (N1): los botones que aparecen en el lugar de *Apply* no toman el segundo toque de un doble toque. */
+  /**
+   * Cuándo se tocó *Apply* (N1): los botones que aparecen en su lugar no toman el segundo toque de un doble toque. Solo
+   * con un clic o un toque sobre *Apply*: aplicado con Ctrl/⌘+Enter no hay doble toque que frenar, y un *Undo* a
+   * propósito enseguida tiene que andar.
+   */
   const appliedAt = useRef(0);
   const tooSoon = () => Date.now() - appliedAt.current < DOUBLE_TAP_MS;
   const abort = useRef<AbortController | null>(null);
@@ -282,17 +322,23 @@ export function DictationPanel({ pageId }: { pageId: string }) {
   );
 
   // Se guarda mientras se escribe (cerrar la hoja o la app no la pierde).
+  /** Lo que el guardado demorado todavía no guardó (al cerrar la hoja se guarda ya: lo de los últimos 250 ms). */
+  const pendingSave = useRef<(() => void) | null>(null);
   const persist = useCallback(
     (nextText: string, nextPending: PendingItem[]) => {
+      pendingSave.current = null;
       void saveDraft(user.email, workspaceKey, pageId, nextText, nextPending, appliedRef.current).catch((err) => console.error('Dictado: no se pudo guardar la nota en el dispositivo', err));
     },
     [user.email, workspaceKey, pageId],
   );
   useEffect(() => {
     if (!loaded) return;
-    const id = setTimeout(() => persist(text, pending), 250);
+    const save = () => persist(text, pending);
+    pendingSave.current = save;
+    const id = setTimeout(save, 250);
     return () => clearTimeout(id);
   }, [text, pending, applied, loaded, persist]);
+  useEffect(() => () => pendingSave.current?.(), []);
 
   // Cerrar la hoja o cambiar de página corta el pedido.
   useEffect(() => () => abort.current?.abort(), []);
@@ -322,6 +368,12 @@ export function DictationPanel({ pageId }: { pageId: string }) {
   }, []);
 
   const canEdit = perms.canEditPage(pageId) && (target?.editable() ?? false);
+  // Para escribir en las páginas de los planos (V4): los permisos de ahora, cada vez que se piden.
+  const permsRef = useRef(perms);
+  permsRef.current = perms;
+  const shotDeps = useMemo<ShotPageDeps>(() => ({ tree, docs, perms: () => permsRef.current }), [tree, docs]);
+  /** El destino de un cambio en la página de un plano, en palabras (lo arma la app: el título de la página y la fila). */
+  const extraWhere = (x: ShotPageChange) => [tr('dictation.shotPage'), x.pageTitle || x.shot, x.label];
   const config = settings ? { provider: settings.provider, baseUrl: settings.baseUrl, model: settings.model } : null;
   const ready = !!settings && (settings.hasKey || settings.provider === 'compatible') && !!settings.model;
   const local = config ? isLocalProvider(config) : false;
@@ -373,13 +425,16 @@ export function DictationPanel({ pageId }: { pageId: string }) {
     setUsage(null);
     setFocused(null);
     setPhase({ kind: 'running' });
-    const request = buildPlaceRequest(map, note, { recent: recentOf(pageId), answered });
+    // Lo aplicado hace un rato, con la dirección que cada lugar tiene en este mapa (las correcciones encadenadas, V4).
+    const { recent, addrs } = recentForRequest(recentOf(pageId), map, view.state);
+    const shot = activeShot;
+    const request = buildPlaceRequest(map, note, { recent, answered, activeShot: shot });
     try {
       // La clave se descifra recién acá y queda solo en esta llamada.
       const answer = await complete(config, await readKey(user.email, config), request, { signal: controller.signal });
       if (abort.current !== controller) return;
       setUsage(answer.usage);
-      const result = answer.cut ? 'unreadable' : validateAnswer(answer.text, map, { note, words }, builtinShot(map.lang));
+      const result = answer.cut ? 'unreadable' : validateAnswer(answer.text, map, { note, words, activeShot: shot, recent: addrs }, builtinShot(map.lang));
       if (result === 'unreadable') {
         setPhase({ kind: 'error', message: tr('dictation.unreadable'), retry: true });
         return;
@@ -388,8 +443,17 @@ export function DictationPanel({ pageId }: { pageId: string }) {
         setPhase({ kind: 'ask', question: result.ask.question || tr('dictation.whichShot'), options: result.ask.options });
         return;
       }
+      // La página *Shot Breakdown* de cada plano (V4): se lee recién acá, solo las que nombran un plano de los cambios.
+      let extra: { changes: ShotPageChange[]; notes: ShotPageNote[] } = { changes: [], notes: [] };
+      try {
+        extra = await proposeShotPages(shotDeps, pageId, map, result.changes, 1000);
+      } catch (err) {
+        console.warn('Dictado: no se pudieron buscar las páginas de los planos', err);
+      }
+      if (abort.current !== controller) return;
       setUnchecked(new Set());
-      setPhase({ kind: 'preview', plan: result });
+      setExtraOn(new Set());
+      setPhase({ kind: 'preview', plan: result, extra: extra.changes, extraNotes: extra.notes });
     } catch (err) {
       if (abort.current !== controller) return;
       setPhase({ kind: 'error', message: errorText(err, providerName, tr), retry: true, keyRejected: isKeyRejected(err) });
@@ -412,7 +476,8 @@ export function DictationPanel({ pageId }: { pageId: string }) {
 
   const removePending = (id: string) => setPending((list) => list.filter((p) => p.id !== id));
 
-  const apply = () => {
+  /** `tap`: con un clic o un toque sobre *Apply* (solo entonces corre el resguardo contra el doble toque, N1). */
+  const apply = (tap = false) => {
     if (phase.kind !== 'preview' || !run.current) return;
     const current = run.current;
     const view = target?.view() ?? null;
@@ -455,20 +520,61 @@ export function DictationPanel({ pageId }: { pageId: string }) {
     }
     const at = Date.now();
     const list = recentByPage.get(pageId) ?? [];
-    for (const c of chosen) list.push({ where: c.where.join(' › '), before: c.before, after: c.after, at });
+    // Con el lugar (la foto), para encontrarlo en la página de la próxima nota aunque se corra (V4).
+    for (const c of chosen) list.push({ where: c.where.join(' › '), before: c.before, after: c.after, at, ...(c.target && (c.op === 'setCell' || c.op === 'setText' || c.op === 'check' || c.op === 'uncheck') ? { target: c.target } : {}) });
     recentByPage.set(pageId, list);
+    // El plano activo pasa a ser el de lo aplicado (V4): las próximas notas sin plano van a ese.
+    const shot = shotOfApplied(chosen, current.map);
+    if (shot) setActiveShot(shot);
     run.current = null;
     setFocused(null);
-    appliedAt.current = Date.now();
-    setPhase({ kind: 'applied', count: res.changed, undo: res.undo, note: current.note, added: added.map((a) => a.id), at, queued: current.queued });
+    appliedAt.current = tap ? Date.now() : 0;
+    // Lo tildado en las páginas de los planos, solo si su cambio del reporte también se aplicó. Se escribe después (otra
+    // página, con su candado y su guarda): lo del reporte ya quedó.
+    const chosenIds = new Set(chosen.map((c) => c.id));
+    const extra = phase.extra.filter((x) => extraOn.has(x.id) && chosenIds.has(x.from));
+    setPhase({ kind: 'applied', count: res.changed, undo: res.undo, note: current.note, added: added.map((a) => a.id), at, queued: current.queued, extra: [] });
+    if (extra.length > 0) {
+      const work = applyShotPages(shotDeps, pageId, extra).then(({ written, failed }) => {
+        setPhase((p) =>
+          p.kind === 'applied' && p.at === at
+            ? {
+                ...p,
+                count: p.count + written.length,
+                extra: written,
+                message: failed.length > 0 ? tr('dictation.shotPageFailed', { where: failed.map((f) => extraWhere(f).join(' › ')).join('; ') }) : p.message,
+              }
+            : p,
+        );
+        return written;
+      });
+      extraWork.current = work.catch(() => []);
+    } else extraWork.current = Promise.resolve([]);
   };
 
-  const undo = () => {
-    if (phase.kind !== 'applied' || tooSoon()) return;
+  const undoing = useRef(false);
+  const undo = async () => {
+    if (phase.kind !== 'applied' || phase.commented || tooSoon() || undoing.current) return;
+    undoing.current = true;
+    try {
+      await undoNow(phase);
+    } finally {
+      undoing.current = false;
+    }
+  };
+  const undoNow = async (phase: Extract<Phase, { kind: 'applied' }>) => {
     if (!undoApplied(target?.view() ?? null, phase.undo)) {
       setPhase({ ...phase, message: tr('dictation.undoLater', { undo: shortcutLabel('undo') }) });
       return;
     }
+    // Lo escrito en las páginas de los planos (V4) se deshace también, solo donde nadie lo cambió después.
+    const written = await extraWork.current;
+    let extraNote: string | null = null;
+    if (written.length > 0) {
+      const { kept } = await undoShotPages(shotDeps, pageId, written);
+      if (kept.length > 0) extraNote = tr('dictation.shotPageKept', { where: kept.map((k) => extraWhere(k).join(' › ')).join('; ') });
+    }
+    extraWork.current = Promise.resolve([]);
     // Deshecho: la nota vuelve al campo y lo que había agregado a *Couldn't place* sale (no se pierde nada).
     const nextPending = pending.filter((p) => !phase.added.includes(p.id));
     if (phase.queued) {
@@ -483,7 +589,7 @@ export function DictationPanel({ pageId }: { pageId: string }) {
         await restoreNote(back);
       });
       setQueued(back);
-      setPhase({ kind: 'compose', note: tr('dictation.undoneQueued') });
+      setPhase({ kind: 'compose', note: extraNote ?? tr('dictation.undoneQueued') });
       return;
     }
     const nextText = text.trim() ? `${phase.note}\n${text}` : phase.note;
@@ -493,8 +599,90 @@ export function DictationPanel({ pageId }: { pageId: string }) {
     setPending(nextPending);
     setText(nextText);
     persist(nextText, nextPending);
-    setPhase({ kind: 'compose', note: tr('dictation.undone') });
+    setPhase({ kind: 'compose', note: extraNote ?? tr('dictation.undone') });
   };
+
+  /**
+   * *Add as comment* (V4): quien puede comentar pero no editar deja la nota y la ubicación propuesta como un comentario
+   * en la página (en el bloque del primer cambio), para que quien edita la pase. Lo destildado va a *Couldn't place*.
+   */
+  const [commenting, setCommenting] = useState(false);
+  const addAsComment = async () => {
+    if (phase.kind !== 'preview' || !run.current || !commentAccess.canComment || commenting) return;
+    const current = run.current;
+    const chosen = phase.plan.changes.filter((c) => !unchecked.has(c.id));
+    const left = phase.plan.changes.filter((c) => unchecked.has(c.id));
+    const lines = [
+      tr('dictation.commentHead', { note: current.note.trim() }),
+      ...chosen.map((c) => `• ${c.where.join(' › ')}: ${c.before.trim() || '—'} → ${c.after.trim() || '—'}`),
+      ...(phase.plan.unplaced.length > 0 ? [tr('dictation.commentUnplaced'), ...phase.plan.unplaced.map((u) => `• ${u}`)] : []),
+    ];
+    const blockId = chosen.find((c) => c.target)?.target?.blockId ?? null;
+    setCommenting(true);
+    try {
+      await comments.add(pageId, blockId && /^[A-Za-z0-9_-]{1,128}$/.test(blockId) ? blockId : null, lines.join('\n').slice(0, 9_000));
+    } catch (err) {
+      console.error('Dictado: no se pudo agregar el comentario', err);
+      setCommenting(false);
+      setPhase({ kind: 'error', message: tr('dictation.commentFailed'), retry: false });
+      return;
+    }
+    setCommenting(false);
+    const added = left.map((c) => c.text).filter((t) => t.trim()).map((t) => ({ id: newId(), text: t }));
+    const nextPending = [...pending, ...added];
+    setPending(nextPending);
+    setApplied(current.note);
+    if (current.queued) {
+      const from = current.queued;
+      const keepText = text;
+      void enqueue(async () => {
+        await saveDraft(user.email, workspaceKey, pageId, keepText, nextPending, current.note);
+        await removeNote(from.id);
+      });
+      setQueued(null);
+    } else {
+      setText('');
+      persist('', nextPending);
+    }
+    run.current = null;
+    setFocused(null);
+    appliedAt.current = 0;
+    setPhase({ kind: 'applied', count: chosen.length, undo: null, note: current.note, added: added.map((a) => a.id), at: Date.now(), commented: true });
+  };
+
+  // El texto de un Atajo de iOS (`/dictate#…`, V4): va al campo, sin mandar nada; la persona lo revisa y toca *Place*.
+  const link = useDictateLink();
+  const textRef = useRef(text);
+  textRef.current = text;
+  const pendingRef = useRef(pending);
+  pendingRef.current = pending;
+  useEffect(() => {
+    if (!loaded || link === null) return;
+    const incoming = takeDictateLink();
+    if (incoming === null) return;
+    if (incoming) {
+      // Se guarda ya (no es algo que se está escribiendo): cerrar la hoja enseguida no lo pierde.
+      const now = textRef.current;
+      const next = (now.trim() ? `${now.trimEnd()}\n${incoming}` : incoming).slice(0, 2000);
+      setText(next);
+      persist(next, pendingRef.current);
+    }
+    setQueued(null);
+    setPhase({ kind: 'compose', note: tr(incoming ? 'dictation.fromShortcut' : 'dictation.fromShortcutEmpty') });
+    requestAnimationFrame(() => field.current?.focus({ preventScroll: true }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, link]);
+
+  /** Los planos de la página para la chapita (se leen al abrir, al volver a escribir y al tocar la chapita). */
+  const refreshShots = useCallback(() => {
+    const view = target?.view();
+    if (!view) return;
+    const map = buildPageMap(view.state, '');
+    if (typeof map !== 'string') setShotOptions(shotsOnPage(map));
+  }, [target]);
+  useEffect(() => {
+    if (phase.kind === 'compose') refreshShots();
+  }, [phase.kind, refreshShots]);
 
   /**
    * *Save for later* (V2): la nota del campo pasa a la cola del dispositivo y el campo se vacía, recién cuando la cola
@@ -707,6 +895,8 @@ export function DictationPanel({ pageId }: { pageId: string }) {
 
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Escape') {
+      // Con una ventana de arriba abierta (*Voice*, *Assistant…*), Esc es de esa ventana: cierra solo esa.
+      if (voiceSettings || settingsOpen) return;
       e.preventDefault();
       if (confirm) setConfirm(null);
       else if (phase.kind === 'running') stop();
@@ -723,7 +913,7 @@ export function DictationPanel({ pageId }: { pageId: string }) {
         void place(text);
       } else if (phase.kind === 'preview' && canEdit) {
         e.preventDefault();
-        apply();
+        apply(false);
       }
     }
   };
@@ -886,6 +1076,28 @@ export function DictationPanel({ pageId }: { pageId: string }) {
     </div>
   ) : null;
 
+  /** La chapita del plano activo (V4): *Shot: 12_010 ▾*, fija entre notas hasta cambiarla. */
+  const options = activeShot && !shotOptions.some((o) => sameShot(o, activeShot)) ? [activeShot, ...shotOptions] : shotOptions;
+  const shotChip =
+    options.length > 0 ? (
+      <label className={`dictation-shot${activeShot ? ' on' : ''}`} data-tip={tr('dictation.shotTip')}>
+        <span className="mono-label">{tr('dictation.shot')}</span>
+        <select
+          value={activeShot ? (options.find((o) => sameShot(o, activeShot)) ?? activeShot) : ''}
+          aria-label={tr('dictation.shotLabel')}
+          onFocus={refreshShots}
+          onChange={(e) => setActiveShot(e.target.value || null)}
+        >
+          <option value="">{tr('dictation.shotNone')}</option>
+          {options.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+      </label>
+    ) : null;
+
   /** Las notas guardadas para esta página (V2): se ubican de a una. */
   const savedBox = savedNotes.length > 0 && (
     <section className="dictation-pending dictation-saved" aria-label={tr('dictation.savedNotes')}>
@@ -955,6 +1167,7 @@ export function DictationPanel({ pageId }: { pageId: string }) {
           </p>
           {c.replaces && <p className="assistant-warning dictation-flag">{tr('dictation.replaces', { text: c.replaces })}</p>}
           {c.chosen && <p className="assistant-warning dictation-flag">{tr('dictation.chosen')}</p>}
+          {c.corrects && <p className="muted dictation-why">{tr('dictation.corrects')}</p>}
           {c.why && <p className="muted dictation-why">{c.why}</p>}
         </div>
       </li>
@@ -991,10 +1204,11 @@ export function DictationPanel({ pageId }: { pageId: string }) {
                 {notice}
               </p>
             )}
-            {!canEdit && (perms.known || target?.editable() === false) && <p className="assistant-notice">{tr('dictation.readOnlyNotice')}</p>}
+            {!canEdit && (perms.known || target?.editable() === false) && <p className="assistant-notice">{tr(commentAccess.canComment ? 'dictation.commentNotice' : 'dictation.readOnlyNotice')}</p>}
             {phase.kind === 'compose' && queued && (
               <div className="dictation-compose dictation-queued">
                 <p className="mono-label">{tr('dictation.savedNote', { time: noteTime(queued.createdAt, tr.lang) })}</p>
+                {shotChip}
                 {queued.audio && queued.state !== 'ready' ? (
                   <>
                     <p className={queued.state === 'failed' ? 'assistant-error' : 'dictation-heard'} role="status">
@@ -1045,6 +1259,7 @@ export function DictationPanel({ pageId }: { pageId: string }) {
             {phase.kind === 'compose' && !queued && (
               <div className="dictation-compose">
                 {micBox}
+                {shotChip}
                 <textarea
                   ref={field}
                   className="dictation-field"
@@ -1161,6 +1376,60 @@ export function DictationPanel({ pageId }: { pageId: string }) {
                 ) : (
                   <p className="assistant-notice">{tr('dictation.nothing')}</p>
                 )}
+                {(phase.extra.length > 0 || phase.extraNotes.length > 0) && (
+                  <section className="dictation-extra" aria-label={tr('dictation.shotPageTitle')}>
+                    <p className="mono-label">{tr('dictation.shotPageTitle')}</p>
+                    {phase.extra.length > 0 && (
+                      <ul className="dictation-changes">
+                        {phase.extra.map((x) => {
+                          const on = extraOn.has(x.id) && !unchecked.has(x.from);
+                          return (
+                            <li key={x.id} className={`dictation-change${on ? '' : ' off'}`}>
+                              <input
+                                type="checkbox"
+                                checked={on}
+                                disabled={unchecked.has(x.from)}
+                                aria-label={extraWhere(x).join(' › ')}
+                                onChange={() =>
+                                  setExtraOn((s) => {
+                                    const next = new Set(s);
+                                    if (next.has(x.id)) next.delete(x.id);
+                                    else next.add(x.id);
+                                    return next;
+                                  })
+                                }
+                              />
+                              <div className="dictation-change-body">
+                                <p className="dictation-where dictation-where-static">{extraWhere(x).join(' › ')}</p>
+                                <p className="dictation-diff">
+                                  {x.before.trim() ? <del>{x.before}</del> : <span className="dictation-empty">—</span>}
+                                  <span className="dictation-arrow" aria-hidden="true">
+                                    {' → '}
+                                  </span>
+                                  <ins>{x.after || '—'}</ins>
+                                </p>
+                                <p className="muted dictation-why">{tr('dictation.shotPageHint')}</p>
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                    {phase.extraNotes.map((n, i) => (
+                      <p key={i} className="muted assistant-small">
+                        {n.kind === 'differs'
+                          ? tr('dictation.shotPageDiffers', { where: [tr('dictation.shotPage'), n.pageTitle ?? n.shot, n.label ?? ''].join(' › '), text: n.text ?? '' })
+                          : n.kind === 'notText'
+                            ? tr('dictation.shotPageNotText', { where: [tr('dictation.shotPage'), n.pageTitle ?? n.shot, n.label ?? ''].join(' › ') })
+                            : n.kind === 'ambiguous'
+                              ? tr('dictation.shotPageAmbiguous', { shot: n.shot })
+                              : n.kind === 'unavailable'
+                                ? tr('dictation.shotPageUnavailable', { page: n.pageTitle ?? n.shot })
+                                : tr('dictation.shotPageReadOnly', { page: n.pageTitle ?? n.shot })}
+                      </p>
+                    ))}
+                  </section>
+                )}
                 {run.current.map.trimmed && <p className="assistant-warning">{tr('dictation.trimmed')}</p>}
                 {phase.plan.linksRemoved && <p className="assistant-warning">{tr('assistant.linksRemoved')}</p>}
                 {phase.plan.unplaced.length > 0 && (
@@ -1177,11 +1446,20 @@ export function DictationPanel({ pageId }: { pageId: string }) {
                   </section>
                 )}
                 <div className="assistant-buttons">
+                  {!canEdit && commentAccess.canComment && (
+                    <button
+                      className="primary dictation-big"
+                      disabled={commenting || (phase.plan.changes.every((c) => unchecked.has(c.id)) && phase.plan.unplaced.length === 0)}
+                      onClick={() => void addAsComment()}
+                    >
+                      {tr('dictation.addAsComment')}
+                    </button>
+                  )}
                   <button
-                    className="primary dictation-big"
+                    className={canEdit || !commentAccess.canComment ? 'primary dictation-big' : 'dictation-big'}
                     disabled={!canEdit || phase.plan.changes.every((c) => unchecked.has(c.id))}
                     data-tip={shortcutLabel('assistantApply')}
-                    onClick={apply}
+                    onClick={() => apply(true)}
                   >
                     {tr('assistant.apply')}
                   </button>
@@ -1198,7 +1476,7 @@ export function DictationPanel({ pageId }: { pageId: string }) {
             {phase.kind === 'applied' && (
               <div className="assistant-result">
                 <p className="assistant-ok" role="status">
-                  {tr('dictation.applied', { count: phase.count })}
+                  {phase.commented ? tr('dictation.commented') : tr('dictation.applied', { count: phase.count })}
                 </p>
                 {phase.message && <p className="assistant-notice">{phase.message}</p>}
                 {keptBox}
@@ -1208,9 +1486,11 @@ export function DictationPanel({ pageId }: { pageId: string }) {
                     {tr('dictation.done')}
                   </button>
                   <button onClick={newNote}>{tr('dictation.another')}</button>
-                  <button className="dictation-big" onClick={undo}>
-                    {tr('dictation.undo')}
-                  </button>
+                  {!phase.commented && (
+                    <button className="dictation-big" onClick={() => void undo()}>
+                      {tr('dictation.undo')}
+                    </button>
+                  )}
                 </div>
                 {confirmBox}
                 {pendingBox}
