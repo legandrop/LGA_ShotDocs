@@ -101,6 +101,11 @@ export function closeSignOutOthers(): void {
   if (state.signOutOthers) set({ signOutOthers: null });
 }
 
+/** Hay una ventana de salir abierta (encima de los ajustes): Esc es de ella. */
+export function signOutDialogOpen(): boolean {
+  return !!state.signOut || !!state.signOutOthers;
+}
+
 /**
  * Ctrl+Alt+J (⌘⌥J en la Mac: nunca Ctrl en la Mac). Con AltGr (en Windows llega como Ctrl+Alt) no: en algunos teclados
  * escribe un carácter. Con Alt la tecla escribe otra cosa (en la Mac, ⌥J es "∆"): se mira también la posición.

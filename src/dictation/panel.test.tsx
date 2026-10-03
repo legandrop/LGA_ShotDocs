@@ -393,7 +393,8 @@ describe('Dictate to report', () => {
   it('sin Editar: ubica y muestra, pero Apply no; Copy sí', async () => {
     const s = await setup({ editable: false });
     provider(answer([LENS]));
-    expect(s.host.textContent).toContain("You can't edit this page: you can place the note and copy the result.");
+    // Quien puede comentar (acá, el dueño con el editor sin poder escribir) ve también *Add as comment* (V4).
+    expect(s.host.textContent).toContain("You can't edit this page: you can place the note and add it as a comment, or copy the result.");
     await place(s.host, 'el 12_010 setup 3 con un 50');
     expect(button(s.host, 'Apply')?.disabled).toBe(true);
     expect(button(s.host, 'Copy')?.disabled).toBe(false);
@@ -453,7 +454,7 @@ describe('Dictate to report', () => {
     await wait(DOUBLE_TAP_MS);
     await click(button(s.host, 'New note'));
     await place(s.host, 'no, era un 35');
-    expect(p.user(1)).toContain('RECENT\n- Setups & takes › 12 · 010 · 3 › Lens · Filters (ND, diffusion, pola): "" → "50 mm"');
+    expect(p.user(1)).toContain('RECENT\n- T3 r3 c3 (Setups & takes › 12 · 010 · 3 › Lens · Filters (ND, diffusion, pola)): "" → "50 mm" (last)');
     await click(button(s.host, 'Apply'));
     expect(cellText(s.ed, 3, 3, 3)).toBe('35 mm');
   });

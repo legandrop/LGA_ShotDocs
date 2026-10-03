@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.151 :
 
 **Link público, entrega 2a: *Can edit*** (P.19). Un link solo podía ver y comentar. Escribir directo en la página no
 era seguro: una fila rota de alguien sin cuenta podía colarse en una copia resumida o trabar el editor del equipo. Ahora
@@ -10,6 +10,30 @@ números y a la profundidad) y la base lo mueve a la página o lo aparta sin per
 números, la página avisa lo apartado con *Download it*, el historial muestra *Ana (via link)* y el visitante pone su
 nombre y ve *Sent, waiting for the team*. El interruptor queda apagado hasta la barrera de error del editor.
 [ Link Can edit 2a - la sala de espera, la admisión por un editor, Share con Can edit y el visitante que escribe ]
+
+v0.150 :
+
+**Dictado, entrega V4** (P.27, `Doc_Dictado.md` sección 18). Dictar varias notas del mismo plano obligaba a nombrarlo
+cada vez, una corrección no sabía qué corregir y el lente quedaba solo en el reporte. Ahora la hoja tiene el plano
+activo (*Shot: 12_010 ▾*), fijo entre notas y puesto solo con lo aplicado; «no, era un 35» lleva lo reciente con la
+dirección de ahora y corrige el último cambio del mismo campo; la vista previa ofrece, destildado, escribir el lente en la ficha de la
+página *Shot Breakdown* del plano, solo si está vacía o era la copia del reporte, con su guarda y *Undo*; quien solo
+comenta tiene *Add as comment*; y `/dictate#<texto>` abre la hoja con el texto de un Atajo de iOS sin mandar nada.
+Además: Esc en *Assistant…* y *Voice* cierra solo esa ventana, el doble toque se frena solo con un clic en *Apply*,
+la hoja guarda al cerrarse lo escrito en los últimos 250 ms (antes se perdía) y la prueba de `clearVoiceFromCopy`.
+[ Dictado V4 - plano activo, correcciones encadenadas, la ficha del plano, Add as comment, /dictate y restos del asistente ]
+
+v0.149 :
+
+**Carpetas, entrega 4** (restos de B.11). Tres cosas hacían esperar de más sin perder nada. La cola de una carpeta no
+escuchaba la vuelta de la red y *Resume* arrancaba con una espera más larga: ahora el motor le avisa como a los
+sueltos y *Resume*, *Retry* y volver a soltarla ponen la cuenta en cero. En *Download all*, más de un minuto entre
+páginas con 36 subcarpetas o más daba `409` y la app listaba de a una: con `partial`, el portero devuelve en `later`
+las que no entran y en `failed` las que salieron del árbol. Y una parte a la que Drive no le contestaba al portero
+esperaba el plazo de la app (hasta 10 minutos y medio): el portero, que ya leyó la parte, contesta `504 stalled` a
+los 90 s (`?stall=1`) y la app la toma como trabada, en las dos colas. Ayuda actualizada.
+[ Carpetas entrega 4 - la cola escucha la vuelta de la red, Resume vuelve a cero, el listado sin 409 entre páginas y Drive colgado cuenta como trabada a los 90 s ]
+
 v0.148 :
 
 MCP, pasos reales 1 a 5 (P.24). Para prender el MCP faltaba lo de código: con el servidor OAuth prendido, el token de

@@ -14,6 +14,7 @@ import {
   within,
 } from './remote';
 import { MAX_FILE_BYTES } from './files';
+import { SyncEngine } from './engine';
 import { FakeServer, makeDevice, type Device } from './testing';
 import { isNetworkError, isPermanent, isTimeout, REQUEST_TIMEOUT, RemoteError } from './types';
 import * as Y from 'yjs';
@@ -565,6 +566,41 @@ describe('page-files: el motor le avisa cuando vuelve la red', () => {
     // Con red de corrido, no se vuelve a avisar.
     await d.engine.syncNow();
     expect(back).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('las carpetas que suben: el motor les avisa cuando vuelve la red (O5)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('con el evento online y cuando la base contesta después de un ciclo sin conexión', async () => {
+    const server = new FakeServer();
+    const d = await makeDevice(server);
+    d.engine.stop();
+    const folders = { networkBack: vi.fn() };
+    const engine = new SyncEngine(d.remote, d.tree, d.docs, d.files, { media: d.media, folders });
+    const win = new EventTarget();
+    vi.stubGlobal('window', win);
+    vi.stubGlobal('document', Object.assign(new EventTarget(), { visibilityState: 'hidden' }));
+    engine.start();
+    await engine.syncNow();
+    folders.networkBack.mockClear();
+    win.dispatchEvent(new Event('online'));
+    expect(folders.networkBack).toHaveBeenCalledTimes(1);
+    await engine.syncNow();
+    expect(folders.networkBack).toHaveBeenCalledTimes(1);
+    server.online = false;
+    await engine.syncNow();
+    expect(engine.getStatus().online).toBe(false);
+    expect(folders.networkBack).toHaveBeenCalledTimes(1);
+    server.online = true;
+    await engine.syncNow();
+    expect(folders.networkBack).toHaveBeenCalledTimes(2);
+    await engine.syncNow();
+    expect(folders.networkBack).toHaveBeenCalledTimes(2);
+    engine.stop();
+    d.db.close();
   });
 });
 

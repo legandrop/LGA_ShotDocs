@@ -3,7 +3,7 @@
 **Estado: entregas 0 y 1 implementadas (v0.114, *Can view*; migración aplicada, ver "Cómo quedó (entregas 0 y 1)"
 al final); la 2 (*Can edit*) se rediseñó el 2026-10-02 contra v0.137 (sala de espera y admisión por un editor, ver
 "Entrega 2: *Can edit* (rediseño 2026-10-02)", al final) y se auditó: aprobado con condiciones, corregido y aprobado en la re-verificación (E2.18).
-**La 2a (escribir) está implementada (v0.0XX), con su migración sin aplicar y el interruptor `link_edit_min_version`
+**La 2a (escribir) está implementada (v0.151), con su migración sin aplicar y el interruptor `link_edit_min_version`
 apagado: ver "Cómo quedó la 2a"; no se prende hasta que la barrera de error alrededor de `PageEditor` esté en `main`
 (R4)** (roadmap P.19;
 pedido de Lega del 2026-10-02). Corregido con la auditoría
@@ -1074,7 +1074,7 @@ Dos auditorías independientes (base y portero; app y motor) dijeron «no pasa»
 
 ## Entrega 2: *Can edit* (rediseño 2026-10-02)
 
-**Estado: la 2a está implementada (v0.0XX; ver "Cómo quedó la 2a", al final de esta sección), con su migración sin
+**Estado: la 2a está implementada (v0.151; ver "Cómo quedó la 2a", al final de esta sección), con su migración sin
 aplicar y el interruptor apagado; la 2b y la 2c, en diseño.** El SQL de E2.11 queda como el borrador que se auditó; lo
 que cambió al implementarlo está en "Cómo quedó la 2a".
 Reemplaza a 3.8 (3.8.1 a 3.8.3), a la fila *Compactar* de 3.10, a lo de la entrega 2 en 3.15, 4, 5 y 6, y a la fila 2
@@ -2320,7 +2320,7 @@ editor real. Corregido en este documento:
 | Re-verificación (2026-10-02): **listo, con la condición C1** | **Diseño aprobado tras la re-verificación del 2026-10-02, con la condición C1 aplicada**: una dirección vacía vale en el paso 5 y la 2a prueba que un bloque de imagen vacío entra. R1 a R4 van a la lista de la 2a (E2.6, E2.9, E2.14) y al roadmap: no mandar una subida que pase `push_max_bytes`, el estado cuenta como `pass`, `tableCell.colwidth` como lista o nulo con un caso honesto por cada propiedad propia, y no prender `link_edit_min_version` sin la barrera de error en `main` |
 | Obs. 1, 5, 9, 10 y 11 | Al roadmap (P.19): adelantar "volver a la página del equipo"; que el dueño pueda descartar lo apartado (decisión de Lega, va contra "no hay borrado duro"); `plink_set_file_drive` abierta a `anon` es inofensiva por `checkMark`; probar el script de restaurar; invitar al cliente con Editar ya cubre "el cliente escribe" sin superficie anónima. Y, para D14, que la base limpia lleva los ids de archivos de las anotaciones borradas (sin el contenido) |
 
-### Cómo quedó la 2a (v0.0XX)
+### Cómo quedó la 2a (v0.151)
 
 **Estado:** implementada en la rama, con la migración `20261028120000_link_editar.sql` **sin aplicar** y el interruptor
 **apagado** (`link_edit_min_version` nulo: *Can edit* se ve apagado en *Share*, `plink_push_page_update` da
@@ -2442,7 +2442,7 @@ la base no sabe hoy), O9 (después de recargar, la pantalla de link muerto no sa
 lo tiene el equipo en la sala) y O4 (con D14 apagado igual se escribe en la sala; hoy no hay links sin D14).
 **O5:** la app publicada (v0.146) cambia el vencimiento de un link con `'comment'` fijo y pasaría un *Can edit* a *Can
 view*: por eso, **al publicar, subir `min_app_version` a la versión de la 2a** antes de prender el interruptor.
-**O10:** quien publica completa `v0.0XX` en el changelog y `LINK_EDIT = '0.0XX'` en `src/help/entries.ts` a la vez.
+**O10:** quien publica completa `v0.151` en el changelog y `LINK_EDIT = '0.151'` en `src/help/entries.ts` a la vez.
 
 **Falta:** la 2b (archivos por el link) y la 2c (lo apartado a la vista: la lista en *Share*, *Set aside (via link)*
 en el historial, "volver a la página como la ve el equipo" para el visitante, el ícono del árbol). Al roadmap, lo de la

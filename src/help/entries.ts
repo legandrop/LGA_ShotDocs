@@ -120,6 +120,8 @@ const DICTATION = '0.135';
 const DICTATION_QUEUE = '0.139';
 /** *Dictate to report*, entrega V3 (el micrófono propio): la versión la pone quien publica. */
 const DICTATION_VOICE = '0.139';
+/** *Dictate to report*, entrega V4 (el plano activo, las correcciones, la página del plano, el Atajo de iOS): la versión la pone quien publica. */
+const DICTATION_V4 = '0.150';
 /** Las plantillas de fábrica (Docs/Doc_Plantillas.md, entregas 0 y 1): la versión se ajusta al publicar. */
 const TEMPLATES = '0.117';
 /** Las plantillas propias (Docs/Doc_Plantillas.md, entrega 3): la versión la pone quien publica. */
@@ -129,7 +131,7 @@ const DAY_REPORTS = '0.121';
 /** El link público, *Can view* (Doc_Link_Publico.md, entrega 1): la versión se pone al publicar, igual que en el changelog. */
 const PUBLIC_LINK = '0.111';
 /** *Can edit* por un link (Doc_Link_Publico.md, entrega 2a): la versión la pone quien publica, igual que en el changelog. */
-const LINK_EDIT = '0.0XX';
+const LINK_EDIT = '0.151';
 /** Exportar una rama o un proyecto como PDF (P.22, Doc_Exportar.md, entrega 1): la versión se pone al publicar. */
 const EXPORT_PDF = '0.122';
 /** Exportar como zip (P.22, Doc_Exportar.md, entrega 2): la versión se pone al publicar. */
@@ -350,6 +352,22 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.dictationVoice.text',
     words: ['grabar', 'micrófono', 'voz', 'nota de voz', 'transcribir', 'insertar en el cursor', 'record', 'microphone', 'voice', 'voice note', 'transcribe', 'insert at cursor', 'openai', 'gemini', 'whisper', 'dictar', 'dictate'],
     since: DICTATION_VOICE,
+  },
+  {
+    id: 'dictationShot',
+    section: 'writing',
+    title: 'help.dictationShot.title',
+    text: 'help.dictationShot.text',
+    words: ['plano activo', 'este plano', 'corregir', 'no, era', 'desglose de plano', 'agregar como comentario', 'active shot', 'this shot', 'correct', 'shot breakdown', 'add as comment', 'dictar', 'dictate'],
+    since: DICTATION_V4,
+  },
+  {
+    id: 'dictationShortcut',
+    section: 'writing',
+    title: 'help.dictationShortcut.title',
+    text: 'help.dictationShortcut.text',
+    words: ['atajo', 'atajos', 'botón de acción', 'siri', 'iphone', 'shortcut', 'shortcuts', 'action button', 'dictar', 'dictate'],
+    since: DICTATION_V4,
   },
   {
     id: 'keyboardDictation',
