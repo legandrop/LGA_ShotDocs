@@ -14,6 +14,7 @@ import { acceptInvitationsQuietly, AccessStore, Permissions } from './sync/acces
 import { CommentQueue, commentsDbName, openCommentsDb, type CommentRemote, type CommentsDb } from './sync/comments';
 import { SupabaseCommentRemote } from './sync/commentsRemote';
 import { MentionsInbox } from './sync/mentions';
+import { ACCESS_REQUESTS_SCHEMA_VERSION, AccessRequestsInbox, supabaseAccessRequests, type AccessRequestsSnapshot } from './sync/accessRequests';
 import { PageDocs } from './sync/docs';
 import { SyncEngine, type SyncStatus } from './sync/engine';
 import { PageFiles } from './sync/files';
@@ -61,6 +62,11 @@ export interface Services {
    * arman los servicios a mano; con la base del workspace sin migrar, está apagada (`ready` en falso).
    */
   mentions?: MentionsInbox;
+  /**
+   * Los pedidos de acceso de quien puede compartir (P.30, entrega 2, Docs/Doc_Links_PDF.md, 5.3). No está con un link
+   * público ni en las pruebas que arman los servicios a mano; con la base sin migrar o para un invitado, apagada.
+   */
+  accessRequests?: AccessRequestsInbox;
   /** Cuánto ocupa cada proyecto en el Drive (P.7), con la última respuesta guardada en el dispositivo. */
   sizes: ProjectSizes;
   /** "Available offline" y el espacio de la app en este dispositivo (P.10, Docs/Doc_Copias_Locales.md). */
@@ -106,6 +112,15 @@ export function usePermissions(): Permissions {
   useSyncExternalStore(access.subscribe, access.getRevision);
   return new Permissions(tree, access.get(), user.id);
 }
+
+/** Los pedidos de acceso que la persona puede decidir; vacío sin la lista (link público, pruebas, base sin migrar). */
+export function useAccessRequests(): AccessRequestsSnapshot {
+  const { accessRequests } = useServices() as Partial<Services>;
+  return useSyncExternalStore(accessRequests?.subscribe ?? noSubscribe, accessRequests?.getSnapshot ?? emptyRequests);
+}
+
+const EMPTY_REQUESTS: AccessRequestsSnapshot = { ready: false, items: [] };
+const emptyRequests = () => EMPTY_REQUESTS;
 
 /** El peso de los proyectos en el Drive (P.7); re-renderiza cuando llega una respuesta nueva. */
 export function useProjectSizes(): SizesView {
@@ -365,6 +380,8 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser, link
           ? new MentionsInbox(commentsDb, commentsRemote, comments, { online: () => online() })
           : undefined;
       await mentions?.load();
+      // Los pedidos de acceso: solo con una cuenta (sin cuenta no se pide ni se decide, LF3).
+      const accessRequests = link ? undefined : new AccessRequestsInbox(supabaseAccessRequests(workspace.client), { online: () => online() });
       const sizes = new ProjectSizes(db, remote);
       await sizes.load().catch(() => undefined);
       const engine = new SyncEngine(remote, tree, docs, files, {
@@ -398,6 +415,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser, link
       await offline.load().catch(() => undefined);
       if (cancelled) {
         mentions?.stop();
+        accessRequests?.stop();
         mediaDb?.close();
         commentsDb?.close();
         foldersDb?.close();
@@ -411,6 +429,14 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser, link
       engine.start();
       online = () => engine.getStatus().online;
       mentions?.start();
+      // La lista de pedidos se prende con la base en la versión 22 y para quien no es invitado (la base igual filtra).
+      const syncRequests = () => {
+        const role = new Permissions(tree, access.get(), user.id).role;
+        accessRequests?.setEnabled((engine.getStatus().schemaVersion ?? 0) >= ACCESS_REQUESTS_SCHEMA_VERSION && role !== null && role !== 'guest');
+      };
+      const unwatchRequests = accessRequests ? [engine.subscribe(syncRequests), access.subscribe(syncRequests)] : [];
+      syncRequests();
+      accessRequests?.start();
       // Después de cada sincronización (y al volver la red), "Available offline" mira si algo cambió y baja lo que falte.
       const offlineManager = offline;
       let lastSync = engine.getStatus().lastSyncAt;
@@ -446,6 +472,8 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser, link
           const stopping = engine.stop();
           stopTitleRests();
           mentions?.stop();
+          accessRequests?.stop();
+          for (const fn of unwatchRequests) fn();
           unwatch();
           unwatchFolders();
           offlineManager.stop();
@@ -490,6 +518,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser, link
           comments,
           commentsDb,
           mentions,
+          accessRequests,
           sizes,
           offline: offlineManager,
           shutdown,
