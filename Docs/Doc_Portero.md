@@ -300,8 +300,15 @@ verdad el registro de ese proyecto). Sin la variable, cualquier `test` responde 
 **El servidor MCP (prueba técnica M0, v0.145; `Doc_Asistente.md`, "Cómo quedó M0"):** `/mcp` y
 `/.well-known/oauth-protected-resource` atienden solo con la variable `MCP_M0=1` (texto) en el Worker; sin ella, esas
 rutas responden como cualquier otra sin sesión. `MCP_MAX_PAGE_KB` (opcional, de fábrica 16) es el tope de página que
-lee. Se prende y se apaga como `TEST_MODES`. **Siempre**, con o sin la variable: un token del servidor OAuth de Supabase
-(con `client_id`, el de un asistente conectado) en cualquier otra ruta responde `403 assistant_token`.
+lee. **Desde el paso 4 (tanda del 2026-10-03) la variable va en `portero/wrangler.jsonc`** (`"vars": { "MCP_M0": "1" }`):
+el push a `main` la publica prendida. `keep_vars` sigue: las variables del panel no se borran (documentación de
+Wrangler: "Whether Wrangler should keep variables configured in the dashboard on deploy"), y el valor del jsonc gana
+sobre el del panel. **Para apagarlo se pone `"0"` en el jsonc y se publica**: con `keep_vars`, sacar la línea no borra
+la variable ya publicada (Wrangler conserva los valores de texto que no vienen en el archivo). `node
+scripts/portero-smoke.mjs` prueba lo que se publica (prendido: el 401 con el desafío, la metadata, 405 por GET, 403 a
+otro origen); con `PORTERO_SMOKE_MCP=0`, el portero apagado. **Siempre**, con o sin la variable: un token del
+servidor OAuth de Supabase (con `client_id`, el de un asistente conectado) en cualquier otra ruta responde
+`403 assistant_token`.
 
 La app manda partes de 8 MiB (`PART_BYTES` en `src/media/portero.ts`); el portero acepta hasta 64 MiB por
 parte (`MAX_CHUNK`) y rechaza la que no coincide con la subida. El permiso para subir se mira al abrir la

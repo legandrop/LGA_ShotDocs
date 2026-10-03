@@ -1662,8 +1662,9 @@ en memoria con una consulta de solo lectura, sin escribirlas a disco; todas son 
    registrar un cliente llamado "Claude" con su propia dirección de vuelta y mandar el link de autorizar. Tiene que
    estar publicada, porque Supabase exige el origen del *Site URL*. Volver: no hace nada si el servidor OAuth está
    apagado.
-4. **Publicar el portero con el MCP** (lo hace el push a `main` de esta rama ya auditada) y cargar la variable
-   `MCP_M0=1` en el Worker `shotdocs-portero`. Volver: borrar la variable (el portero queda como hoy).
+4. **Publicar el portero con el MCP** (lo hace el push a `main` de esta rama ya auditada): desde la tanda del
+   2026-10-03 la variable `MCP_M0=1` va en `portero/wrangler.jsonc`. Volver: `"MCP_M0": "0"` en el jsonc y publicar
+   (con `keep_vars`, sacar la línea no borra la variable publicada; el portero queda como hoy).
 5. **Prender el servidor OAuth** (mismo `PATCH`): `oauth_server_enabled: true`, `oauth_server_allow_dynamic_registration:
    true`, `oauth_server_authorization_path: "/oauth/consent/znlvpuddswymxpffgvbz"`. Cambia: cualquiera puede registrar un
    cliente (no entrar: el registro de personas sigue cerrado). Volver: antes de apagar, revocar cada cliente
@@ -1716,3 +1717,44 @@ una ronda:
 | O5. Un nombre como `constructor` llegaba a PostgREST como función | `Object.hasOwn`: responde *Unknown tool* (`-32602`), con su prueba |
 | O10. `public.mcp_pre_request` quedaba expuesta por su propia regla | El paso 2 la pone en `private` |
 | O2, O4. El título va afuera del contenido no confiable; la pantalla de permiso tiene que mostrar el host del `redirect_uri` | Al roadmap de M1 (P.24) y al paso 3 |
+
+### Pasos reales (tanda del 2026-10-03)
+
+Lo de código de los pasos 1 a 5 de "Lo que necesita la infraestructura real" quedó listo y probado sin tocar la
+configuración real. Prender cada paso lo hace el coordinador, en orden, con su vuelta atrás.
+
+1. **El hook *Custom Access Token*** (sin código nuevo). Probado contra la base real en una transacción que se deshizo,
+   con eventos con la forma del esquema de Supabase (`user_id`, `claims` con `iss`, `aud`, `exp`, `iat`, `sub`, `email`,
+   `phone`, `role`, `aal`, `amr`, `session_id`, `is_anonymous`, y `authentication_method`): 12 de 12. Pasan sin tocar
+   los claims el ingreso con código, con link y el alta (`otp`, `magiclink`, `email/signup`), su renovación
+   (`token_refresh`), la invitación, el canje y la renovación de un token OAuth (`oauth_provider/authorization_code`,
+   con `client_id`), un `amr` nulo y TOTP sobre una sesión con código; se rechazan con
+   `{"error": {"http_code": 403, …}}` el ingreso con contraseña, su renovación y contraseña más TOTP. La salida que pasa
+   es solo `{"claims"}` con los obligatorios del esquema y sus tipos. `supabase_auth_admin` tiene `execute` y `usage`
+   en `private`; `authenticated`, `anon` y `PUBLIC`, no. La Management API no puede tomar ese rol (membresía reservada):
+   se llamó con un rol temporal con exactamente esos dos permisos. El `PATCH` es el de arriba; los logs de Auth después
+   de prenderlo se leen con `GET /v1/projects/<ref>/analytics/endpoints/logs` (SQL de ClickHouse sobre la tabla `logs`,
+   `source = 'auth_logs'`, `log_attributes['path'] = '/token'` y `['grant_type']`, `['status']`; ventanas de hasta 24
+   horas; el viejo `logs.all` ya no existe).
+2. **El plan B en la base:** `supabase/migrations/20261027120000_mcp_plan_b.sql` (sin aplicar; `Doc_Supabase.md`, "El
+   MCP: plan B", con el SQL de volver atrás). `private.mcp_pre_request()` sale enseguida si los claims no dicen
+   `client_id` (sin convertir nada: una sesión normal no puede hacerla fallar) y si no, deja pasar solo
+   `/rpc/mcp_[a-z0-9_]+`. La ejecutan `anon`, `authenticated` y `service_role` (PostgREST la llama en todo pedido, con el
+   rol ya cambiado; según su documentación, para todos los pedidos, también sin JWT). La ruta llega en `request.path`
+   (PostgREST la carga antes del pre-request, sin `/rest/v1`); si no llegara, el token de un asistente queda cerrado en
+   todo y la app sigue igual (no la mira). Probada en rollback con la migración adelante: su prueba y las otras 26 del
+   repo pasan; 8 de 8 mutantes mueren; la vuelta atrás deja las políticas y la configuración exactamente como hoy.
+3. **La pantalla de permiso** en `/oauth/consent/<ref>` (`src/ui/OAuthConsent.tsx`, que se baja solo en esa dirección):
+   el ref elige el workspace del dispositivo (por `https://<ref>.supabase.co` o por la clave local); sin sesión, el login
+   de siempre con *Sign in to connect your assistant.* (el link del correo vuelve a la pantalla y no se cambia de
+   workspace); muestra *<Cliente> wants to connect to LGA Shot Docs*, la cuenta y el workspace, *Returns to* con el host
+   del `redirect_uri` (la dirección entera en el tooltip; *an app on this computer* si es `127.0.0.1` o `localhost`),
+   los permisos pedidos, el aviso de permitir solo si se empezó la conexión, y *Allow* / *Deny* (una sola respuesta,
+   `skipBrowserRedirect` y la vuelta a mano). Ya permitido antes: vuelve directo. Errores con su mensaje y el código
+   chico (vencida o el 400 de `#2820`, servidor apagado, sin red con *Try again*, sesión vencida que pide entrar de
+   nuevo), el detalle en la consola (`[oauth-consent]`). El `authorization_id` se valida (supabase-js lo pega en la
+   dirección sin codificar). Sin elegir proyectos (M1).
+4. **El portero con el MCP prendido:** `"vars": { "MCP_M0": "1" }` en `portero/wrangler.jsonc`. El push a `main` lo
+   publica sin borrar las variables del panel (`keep_vars`). Para apagarlo, `"0"` y publicar (sacar la línea no la
+   borra). El smoke prueba lo que se publica.
+5. **El servidor OAuth:** sin código; la *Authorization Path* es `/oauth/consent/znlvpuddswymxpffgvbz`, que ahora existe.
