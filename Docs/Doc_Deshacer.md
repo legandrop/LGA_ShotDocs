@@ -1032,7 +1032,8 @@ En el parche de Yjs (`patches/yjs+13.6.33.patch`), marcado `LGA-SHOTDOCS-PATCH (
   (devuelve `null`, como ya hace Yjs cuando el padre no se puede volver a poner) y deja una marca en la transacción.
 - **`popStackItem`**: si la marca está, ese paso **no saca lo que había insertado**. Lo insertado puede ser el mismo
   texto movido (un Enter, un bloque arrastrado): sacarlo cuando el original no tiene dónde volver lo haría desaparecer.
-  Sobra texto en vez de faltar. Lo demás del paso se hace.
+  Sobra texto en vez de faltar: por ejemplo, un *Replace all* de la página "b" → "B" en dos renglones, deshecho cuando
+  uno de los dos ya no existe, deja "xbBz" en el otro (vuelve la "b" y la "B" queda). Lo demás del paso se hace.
 
 Solo actúa donde antes Yjs tiraba la excepción: en los dos caminos el código anterior seguía con `undefined` y tiraba
 siempre. Como B.21, decide qué escribe el deshacer de este dispositivo; lo que sale son ediciones comunes: **no hace
