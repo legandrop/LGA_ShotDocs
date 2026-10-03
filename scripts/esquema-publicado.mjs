@@ -15,25 +15,25 @@
 //
 // En esta PC las pruebas van con Node 22: `npx -y node@22 scripts/esquema-publicado.mjs`.
 
-import { execFileSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
+
+// Las pruebas (vitest) no arrancan con Node 20: se avisa antes de escribir nada, no después de dejar el fixture a medias.
+const major = Number(process.versions.node.split('.')[0]);
+if (major < 22) {
+  console.error(`Este script necesita Node 22 o más (esta corrida usa Node ${process.versions.node}) y todavía no escribió nada.`);
+  console.error('Corrélo con: npx -y node@22 scripts/esquema-publicado.mjs');
+  process.exit(1);
+}
 
 const SCHEMA = 'src/ui/editorSchema.ts';
 const FIXTURE = 'src/ui/fixtures/editorSchemaMain.ts';
 const TEST = 'src/ui/editorSchemaFixture.test.ts';
 const VITEST = 'node_modules/vitest/vitest.mjs';
 
-function commit() {
-  try {
-    return execFileSync('git', ['rev-parse', '--short', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
-  } catch {
-    return null;
-  }
-}
-
 const source = readFileSync(SCHEMA, 'utf8').replace(/\r\n/g, '\n');
 const header =
-  `// Copia de src/ui/editorSchema.ts de la versión publicada${commit() ? ` (árbol de ${commit()})` : ''}. Las pruebas la usan para comprobar\n` +
+  '// Copia de src/ui/editorSchema.ts de la versión publicada. Las pruebas la usan para comprobar\n' +
   '// que lo nuevo degrada en la versión que hoy puede estar abierta en otro dispositivo. No se edita a mano: la escribe\n' +
   "// scripts/esquema-publicado.mjs (`npm run esquema:publicado`) y cambian solo los imports ('./x' pasa a '../x'). Los\n" +
   '// módulos que importa (driveCard, imageRowsEditor, inlinePhoto, shortcuts, cellThumbs, quietImage) son los de hoy, así que\n' +

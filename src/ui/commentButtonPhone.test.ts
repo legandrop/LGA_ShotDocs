@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest';
 
 // El botón de comentar del margen en el teléfono (roadmap P.28; Doc_Tabla_Telefono.md, "El botón de comentar"): el margen
 // de la página mide `--gutter` (20 px a 760 px o menos) y el botón (28 px de siempre) tapaba hasta 8 px del final de un
-// renglón muy largo. Ahora mide justo el margen. El diseño en pantalla se midió en Chromium a 375 y 390 px (el informe del
-// frente); acá se fija lo que lo produce en el CSS.
+// renglón muy largo. Ahora mide justo el margen. El diseño en pantalla se midió en Chromium a 375 y 390 px (un párrafo de
+// renglones a ras del margen, el rectángulo del botón contra el del texto; ver Doc_Tabla_Telefono.md); acá se fija lo que lo
+// produce en el CSS.
 
 const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 
@@ -58,7 +59,7 @@ describe('el botón de comentar del margen en el teléfono', () => {
 // El contador de comentarios (`.comment-count`, globo y número) en el teléfono (restos de la tanda 17, roadmap P.28): uno al
 // lado del otro medía 40 a 55 px (1, 12 y 120 comentarios) y pasaba hasta 35 px sobre el final de un renglón largo. Ahora el
 // globo va arriba y el número abajo, en una pastilla del ancho del margen. La medida real (Chromium a 360, 375, 390 y 414 px:
-// superposición con el texto de 19,8 / 27,2 / 35,2 px a 0 con 1, 12 y 120 comentarios) está en el informe del frente; acá se
+// superposición con el texto de 19,8 / 27,2 / 35,2 px a 0 con 1, 12 y 120 comentarios) está en Doc_Tabla_Telefono.md; acá se
 // fija lo que la produce en el CSS.
 describe('el contador de comentarios del margen en el teléfono', () => {
   const block = phoneBlocks().find((b) => rule(b, '.comment-count') !== null)!;

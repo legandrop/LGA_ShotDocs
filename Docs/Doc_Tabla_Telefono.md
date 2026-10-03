@@ -90,8 +90,11 @@ mide 20 × 29 px y con 1, 12 y 120 comentarios la superposición con el texto es
 desplazamiento de la página. Con 4 dígitos o más (mil comentarios en un bloque, no probable) el ancho crece a 26 px antes
 de cortar el número. Dos renglones sueltos comentados, uno debajo del otro (30 px de paso), no se pisan (29 px de alto). El
 área del dedo es de unos 47 px de alto (`::after` con `inset: -8px 0`: solo para arriba y para abajo). La compu y la
-tablet (más de 760 px) no cambian: medido, 39,8 / 47,2 / 55,2 px de ancho como antes. Prueba: `commentButtonPhone.test.ts`
-(4 casos nuevos sobre el CSS; la medida con el diseño real está en el informe del frente).
+tablet (más de 760 px) no cambian: medido, 39,8 / 47,2 / 55,2 px de ancho como antes. Cómo se midió: Chromium sin ventana con la página real, párrafos de «m» a ras del margen
+con 1, 12 y 120 comentarios abiertos, y el rectángulo del contador contra el del texto que cruza su altura (los números de
+arriba), con la compu y la tablet de testigo. Prueba: `commentButtonPhone.test.ts` (4 casos nuevos sobre el CSS; jsdom no
+hace diseño, así que lo que mide la superposición de verdad es la medida de Chromium, que se repite a mano si cambian el
+margen o la tipografía del contador).
 
 ## Pruebas
 

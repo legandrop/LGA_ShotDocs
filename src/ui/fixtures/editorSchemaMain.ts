@@ -1,4 +1,4 @@
-// Copia de src/ui/editorSchema.ts de la versión publicada (árbol de 3dda6a7). Las pruebas la usan para comprobar
+// Copia de src/ui/editorSchema.ts de la versión publicada. Las pruebas la usan para comprobar
 // que lo nuevo degrada en la versión que hoy puede estar abierta en otro dispositivo. No se edita a mano: la escribe
 // scripts/esquema-publicado.mjs (`npm run esquema:publicado`) y cambian solo los imports ('./x' pasa a '../x'). Los
 // módulos que importa (driveCard, imageRowsEditor, inlinePhoto, shortcuts, cellThumbs, quietImage) son los de hoy, así que
