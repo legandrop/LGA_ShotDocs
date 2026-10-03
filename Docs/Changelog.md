@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.163 :
+v0.0XX :
 
 **Prueba inestable de las novedades.** La suite completa dejaba a veces un error sin atender (`InvalidStateError` de la
 base de pruebas, en `unsyncedPages`) que Vitest atribuía a «no suma entradas al historial del navegador». Causa: el
