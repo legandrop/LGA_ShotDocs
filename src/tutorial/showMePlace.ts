@@ -1,4 +1,5 @@
 import { currentTarget } from '../assistant/assistantUi';
+import { pageScrollAtNavOpen } from '../ui/navStore';
 
 // Dónde estaba la persona al tocar "Mostrame" (Docs/Doc_Tutorial.md, entrega 3): al volver de la práctica, la página
 // se vuelve a armar (arriba de todo, con el cursor en el título). Se anota el desplazamiento de la zona principal y,
@@ -23,7 +24,8 @@ function scroller(): HTMLElement | null {
 /** Anota dónde está la persona ahora. */
 export function capturePlace(): ShowMePlace {
   const path = location.pathname + location.search;
-  const place: ShowMePlace = { path, scrollTop: scroller()?.scrollTop ?? 0, pageId: null, anchor: null, head: null };
+  // En el teléfono la ayuda se abre desde el cajón: vale lo que estaba desplazada la página al abrirlo.
+  const place: ShowMePlace = { path, scrollTop: pageScrollAtNavOpen() ?? scroller()?.scrollTop ?? 0, pageId: null, anchor: null, head: null };
   const target = currentTarget();
   const view = target?.view();
   if (target && view && !view.isDestroyed && location.pathname.endsWith(`/${target.pageId}`)) {

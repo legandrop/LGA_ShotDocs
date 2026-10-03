@@ -448,6 +448,45 @@ describe('Mostrame', () => {
     await until(() => !bubble() && path() === `/p/${page}`, 'volver con Esc desde el renglón');
   });
 
+  it('Esc que cierra el panel de comentarios, el menú ⋯ o el selector de proyectos no termina "Mostrame"', async () => {
+    const { host, page } = await app();
+    await openHelp(host);
+    click(dialog()!.querySelector('[data-help-id="slash"] .help-show-me'));
+    await until(() => bubble()?.querySelector('h3')?.textContent === 'The / menu' && practiceHooks.slashMenuOpen, 'el paso del menú /');
+    const escOn = (el: Element | null) => act(() => void (el ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })));
+
+    // El panel de comentarios, con el foco adentro.
+    click(host.querySelector('[data-tour="comments"]'));
+    await until(() => document.querySelector('.comments-panel'), 'el panel de comentarios');
+    const inPanel = document.querySelector<HTMLElement>('.comments-panel textarea, .comments-panel button')!;
+    act(() => inPanel.focus());
+    escOn(document.activeElement);
+    await until(() => !document.querySelector('.comments-panel'), 'que se cierre el panel');
+    await wait(100);
+    expect(bubble(), 'sigue después del panel').not.toBeNull();
+
+    // El menú ⋯ de la página (de la práctica).
+    click(host.querySelector('[data-tour="page-menu"]'));
+    await until(() => document.querySelector('.menu'), 'el menú ⋯');
+    escOn(document.activeElement);
+    await until(() => !document.querySelector('.menu'), 'que se cierre el menú');
+    await wait(100);
+    expect(bubble(), 'sigue después del menú ⋯').not.toBeNull();
+
+    // El selector de proyectos.
+    click(host.querySelector('[data-tour="project-switcher"]'));
+    await until(() => document.querySelector('.menu'), 'el selector de proyectos');
+    escOn(document.activeElement);
+    await until(() => !document.querySelector('.menu'), 'que se cierre el selector');
+    await wait(100);
+    expect(bubble(), 'sigue después del selector').not.toBeNull();
+    expect(path()).toBe('/practice');
+
+    // Sin nada de eso, Esc termina.
+    escOn(document.body);
+    await until(() => !bubble() && path() === `/p/${page}`, 'volver con Esc');
+  });
+
   it('→ y Enter también terminan', async () => {
     const { host, page } = await app();
     for (const key of ['ArrowRight', 'Enter']) {

@@ -827,9 +827,12 @@ Shift+clic (el mapa vive en su documento, que no se guarda). La recorrida no mue
   **vuelven a donde estaba la persona**, con el desplazamiento de la página y la selección del editor de antes (y el
   foco en el editor, salvo en un táctil: abriría el teclado); si ya estaba en la práctica, se queda ahí.
 - **Esc** termina también con el foco afuera del globito (un clic en la página) y desde el renglón del paso del menú
-  "/" (ahí el foco está en el editor para escribir "/"), salvo que el Esc sea de otro: el menú "/" abierto, un diálogo
-  o el carrete, o algo que ya lo usó (la barra de buscar, el panel de comentarios). En un táctil la entrada *Show me*
-  no nombra Esc (`textTouch`, por el puntero como los tooltips, D226).
+  "/" (ahí el foco está en el editor para escribir "/"), salvo que el Esc sea de otro, mirado antes de que nadie lo
+  atienda porque varios cierran sin `preventDefault` (`escTakenElsewhere` en `TourLayer.tsx`): el menú "/" abierto, un
+  diálogo o el carrete, un menú flotante abierto (`.menu` de `useFloating`: el ⋯ de la página, el selector de
+  proyectos, la cuenta), una lista o un menú con el foco adentro, el panel de comentarios con el foco adentro (en el
+  teléfono, abierto), o algo que ya lo usó (la barra de buscar). Ese Esc cierra lo suyo y el paso sigue. En un táctil
+  la entrada *Show me* no nombra Esc (`textTouch`, por el puntero como los tooltips, D226).
 - **Historial del navegador:** `showStep` suma una entrada (`/practice`) y al terminar se vuelve con Atrás
   (`history.back()`), así no queda ninguna de más; Atrás durante el paso vuelve a la página y lo termina. También
   desde la vista previa de una plantilla (`/practice?template=…`), que tiene la misma ruta: el paso va a la práctica y
@@ -838,7 +841,8 @@ Shift+clic (el mapa vive en su documento, que no se guarda). La recorrida no mue
   una recorrida en curso queda como tarjeta de retomar (su paso sigue guardado).
 - **Estado:** `showStep(id)` y `endShowStep()` en `src/tutorial/tourState.ts` (`TourUi.only = { id, back, prev }`);
   el lugar (dirección, desplazamiento de `.main`, selección del editor de la página) lo anota y lo pone
-  `src/tutorial/showMePlace.ts`, con el editor que registra la página (`currentTarget` del asistente). No escribe
+  `src/tutorial/showMePlace.ts` (en el teléfono, el desplazamiento que tenía la página al abrir el cajón, donde está el
+  "?": `pageScrollAtNavOpen` de `navStore.ts`), con el editor que registra la página (`currentTarget` del asistente). No escribe
   `shotdocs-tour` ni la marca de la cuenta: no cuenta como recorrida vista ni a medias. El componente `ShowMe` de
   `TourLayer.tsx` reusa `StepView` con `single`.
 - **Diferencias con la recorrida entera:** vale en los dos diseños (en el teléfono también el paso de Buscar, que la
@@ -906,6 +910,8 @@ auditoría lo vio porque el arnés entraba con el correo de Lega.
   con la selección y el foco en el editor, no suma entradas al historial, Esc desde afuera y desde el renglón (no con
   el menú "/" abierto), → y Enter, la tarjeta de retomar vuelve, desde la vista previa de una plantilla, una entrada
   que no se puede usar no ofrece *Show me*, el texto táctil sin Esc, y reabrir la ayuda conserva la lista.
+  Ronda 2: Esc que cierra el panel de comentarios, el menú ⋯ o el selector de proyectos no termina el paso. En
+  Chromium, además, el desplazamiento al volver en el teléfono (375 px) cuando se abrió la ayuda desde el cajón.
 - En Chromium sin ventana (arnés fuera del repo, con el servidor en memoria; 93 comprobaciones): la ayuda con
   novedades en computadora y teléfono (375 px, táctil; también en castellano y oscuro), *Show me* de las 16 entradas en
   los dos con toques y clics de verdad, *Done* y Esc, el foco de luz sobre su ancla y el globito dentro de la pantalla,

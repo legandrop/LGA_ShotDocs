@@ -49,12 +49,12 @@ function ShowMe({ id, onPractice }: { id: string; onPractice: boolean }) {
     else if (entered) endShowStep({ goBack: false });
   }, [onPractice]);
   // Esc termina "Mostrame" también con el foco afuera del globito (un clic en la página, el renglón del paso del menú
-  // "/"), salvo que sea de otro: el menú "/" abierto, un diálogo o el carrete, o algo que ya lo usó (la barra de buscar,
-  // el panel de comentarios). En el editor, Esc no es de nadie más (BlockNote lo usa para soltar el foco).
+  // "/"), salvo que sea de otro (`escTakenElsewhere`) o que algo ya lo haya usado (la barra de buscar). En el editor,
+  // Esc no es de nadie más (BlockNote lo usa para soltar el foco).
   useEffect(() => {
     let skip = false;
     const before = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape') skip = !!practiceHooks.slashMenuOpen?.() || !!document.querySelector(MODAL);
+      if (e.key === 'Escape') skip = escTakenElsewhere(e.target);
     };
     const after = (e: globalThis.KeyboardEvent) => {
       if (e.key !== 'Escape' || skip) return;
@@ -156,6 +156,20 @@ function skip() {
   setNavOpen(false);
   endTour();
   notify(t('tour.replay'));
+}
+
+/**
+ * Un Esc que es de otro, mirado antes de que nadie lo atienda (varios cierran sin `preventDefault`): el menú "/" de la
+ * práctica abierto, un diálogo o el carrete, un menú flotante (`.menu` de `useFloating`, que cierra con cualquier Esc:
+ * el ⋯ de la página, el selector de proyectos, la cuenta), una lista o un menú con el foco adentro, o el panel de
+ * comentarios con el foco adentro (en el teléfono, abierto: cierra con cualquier Esc).
+ */
+function escTakenElsewhere(target: EventTarget | null): boolean {
+  if (practiceHooks.slashMenuOpen?.() || document.querySelector(MODAL) || document.querySelector('.menu')) return true;
+  const focus = document.activeElement;
+  const inside = (sel: string) => [target, focus].some((el) => el instanceof Element && !!el.closest(sel));
+  if (inside('[role="menu"], [role="listbox"], .comments-panel')) return true;
+  return isPhoneLayout() && !!document.querySelector('.comments-panel');
 }
 
 /** Termina "Mostrame": el cajón del teléfono se cierra y se vuelve a donde estaba la persona. */
