@@ -212,10 +212,14 @@ function StepView({ step, index, total, phone, single = false }: { step: TourSte
         off();
       };
     }
-    // El foco va al globito (la app quedó `inert`: lo que tenía el foco, como el editor, lo pierde).
-    next.current?.focus({ preventScroll: true });
     return () => cancelAnimationFrame(frame);
   }, [step, phone, index, total, single]);
+
+  // El foco va al globito (la app quedó `inert`: lo que tenía el foco, como el editor, lo pierde). También cuando el
+  // globito aparece después, al irse un diálogo que lo tapaba ("Mostrame" cierra la ayuda en el mismo cambio).
+  useEffect(() => {
+    if (!modal && !step.interactive) next.current?.focus({ preventScroll: true });
+  }, [step, modal]);
 
   useLayoutEffect(() => {
     const el = bubble.current;

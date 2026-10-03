@@ -830,7 +830,7 @@ Shift+clic (el mapa vive en su documento, que no se guarda). La recorrida no mue
   escribe `shotdocs-tour` ni la marca de la cuenta: no cuenta como recorrida vista ni a medias. El componente
   `ShowMe` de `TourLayer.tsx` reusa `StepView` con `single`.
 - **Diferencias con la recorrida entera:** vale en los dos diseños (en el teléfono también el paso de Buscar, que la
-  recorrida saltea); en el paso del menú "/" elegir algo no lo termina (queda a la vista lo que pasó; termina con
+  recorrida saltea: suma `tour.find.textPhone`, sin atajo); en el paso del menú "/" elegir algo no lo termina (queda a la vista lo que pasó; termina con
   *Done*); si la persona se va de la práctica a mitad, se termina sin la tarjeta de pausa.
 - **La práctica no se vuelve a armar** al entrar con *Show me*: lo que la persona hizo ahí sigue (decisión E3-2, abajo).
   Si borró el bloque que señala el paso, el globito va centrado, como en la recorrida.
@@ -839,8 +839,9 @@ Shift+clic (el mapa vive en su documento, que no se guarda). La recorrida no mue
   `findPage` (lupa), `share`, `sheets` y `pdf` (menú ⋯), `syncStatus` (sincronización). Una prueba exige que cada paso
   de la recorrida (salvo el saludo y el del "?") tenga al menos una entrada.
 - **Arreglo de paso:** si un paso se dibujaba en el mismo cambio en que se cerraba un diálogo (la ayuda), quedaba
-  escondido para siempre (`useModalOpen` miraba el DOM antes de que el diálogo se fuera y no volvía a mirar). Ahora
-  mira de nuevo al montarse. El paso del menú "/" espera hasta 3 s a que el editor de la práctica esté para poner el
+  escondido para siempre (`useModalOpen` miraba el DOM antes de que el diálogo se fuera y no volvía a mirar), y el
+  foco no llegaba al globito (Esc no le llegaba). Ahora mira de nuevo al montarse y el foco va al globito cuando
+  aparece. El paso del menú "/" espera hasta 3 s a que el editor de la práctica esté para poner el
   cursor (antes, entrando directo a ese paso, no lo ponía).
 
 ### Novedades
@@ -886,8 +887,10 @@ carpetas, compactar y las subidas que se traban, y *Import from Coda* (solo la c
   arriba con *New* (lo más nuevo primero), que se apaga y no vuelve, en castellano; *Show me* de **cada** entrada abre
   su paso (título, *Show me*, un solo botón, `aria-live`) y *Done* vuelve a la página, sin tocar `shotdocs-tour`; Esc
   vuelve; elegir en el menú "/" no lo cierra; irse lo termina sin pausa; desde la práctica se queda.
-- En Chromium sin ventana (arnés fuera del repo, con el servidor en memoria): la ayuda con novedades en computadora y
-  teléfono (375 px), *Show me* de cada entrada en los dos, *Done* y Esc, y el foco de luz sobre su ancla.
+- En Chromium sin ventana (arnés fuera del repo, con el servidor en memoria; 93 comprobaciones): la ayuda con
+  novedades en computadora y teléfono (375 px, táctil; también en castellano y oscuro), *Show me* de las 16 entradas en
+  los dos con toques y clics de verdad, *Done* y Esc, el foco de luz sobre su ancla y el globito dentro de la pantalla,
+  sin atajos en el teléfono, la recorrida guardada sin cambios y ningún pedido fuera del servidor local.
 
 ### Decisiones de esta entrega (sin Lega)
 

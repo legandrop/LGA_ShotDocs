@@ -319,6 +319,8 @@ describe('Mostrame', () => {
       expect(bubble()!.querySelector('.tour-skip')).toBeNull();
       expect([...bubble()!.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Done']);
       expect(document.querySelector('.tour-live')?.textContent).toBe(`Show me: ${t(step.title)}`);
+      // El foco en "Done" (Esc y Enter le llegan al globito), aunque se dibujó mientras se cerraba la ayuda.
+      if (!step.interactive) await until(() => document.activeElement?.textContent === 'Done', `el foco en Done (${entry.id})`);
       click(bubble()!.querySelector('button.primary'));
       await until(() => !bubble() && path() === `/p/${page}`, `volver de ${entry.id}`);
     }

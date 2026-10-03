@@ -92,6 +92,8 @@ export const tutorial = {
   },
   'tour.find.title': { en: "Find", es: "Buscar" },
   'tour.find.text': { en: "Find and replace in the page ({find}).", es: "Buscá y reemplazá en la página ({find})." },
+  // Solo lo usa "Mostrame" en el teléfono (la recorrida entera no tiene este paso ahí): sin atajo.
+  'tour.find.textPhone': { en: "Find and replace in the page.", es: "Buscá y reemplazá en la página." },
   'tour.pageMenu.title': { en: "The page", es: "La página" },
   'tour.pageMenu.text': {
     en: "Share, move, page size, Save as template and Export PDF ({print}).",
