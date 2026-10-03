@@ -785,3 +785,156 @@ describe('entrega 2: restaurado sin su carpeta, "Look for its files again" en el
     expect(owner.tree.project(o)?.drive_missing_at).toBeTruthy();
   });
 });
+
+// --- entrega 3: Delete forever (Docs/Doc_Proyectos_Borrar.md, sección 2.3 y "Cómo quedó (entrega 3)") --------------
+
+describe('entrega 3: Delete forever en el renglón de un borrado', () => {
+  const DAY = 86_400_000;
+
+  /** "Bosque Negro" borrado hace `days` días, en la versión 23 (o la 10 con `schema: 'drive'`), con la papelera abierta. */
+  async function purgeable(
+    opts: { days?: number; schema?: 'purge' | 'drive'; drive?: Parameters<typeof fakeDrive>[1]; folderSent?: boolean } = {},
+  ) {
+    const ws = await driveWorkspace();
+    if ((opts.schema ?? 'purge') === 'purge') ws.server.enableProjectPurge();
+    await ws.owner.engine.syncNow();
+    await ws.owner.remote.deleteProject(ws.o);
+    await ws.owner.tree.forgetProject(ws.o);
+    ws.server.deletedProjects.get(ws.o)!.at = new Date(Date.now() - (opts.days ?? 31) * DAY).toISOString();
+    if (opts.folderSent) {
+      const at = new Date(Date.now() - 2 * DAY).toISOString();
+      ws.server.projectDrive.set(ws.o, { requested_at: at, trashed_at: at, missing_at: null });
+    }
+    const fake = fakeDrive(ws.server, opts.drive);
+    await openWith(ws.owner, ws.server.ownerId, fake.drive);
+    await act(async () => (byText('Trash') ?? byText('Papelera'))!.click());
+    await vi.waitFor(() => expect(document.querySelector('[data-kind="project"]')?.textContent).toContain('Bosque Negro'));
+    return { ...ws, ...fake };
+  }
+
+  const purgeInput = () => document.querySelector<HTMLInputElement>('.deleted-project-ask input');
+  async function typePurgeWord(value: string) {
+    const input = purgeInput()!;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setter.call(input, value);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
+
+  it('antes de los 30 días no se ofrece; el renglón dice cuántos quedan', async () => {
+    await purgeable({ days: 29 });
+    expect(document.querySelector('[data-kind="project"]')?.textContent).toContain('1 day left');
+    expect(byText('Delete forever…')).toBeUndefined();
+  });
+
+  it('a los 30 días: pide la palabra del idioma, manda la carpeta antes y lo saca de la papelera sin borrar nada', async () => {
+    const { server, owner, o, calls } = await purgeable();
+    const notices: string[] = [];
+    window.addEventListener('shotdocs:notice', (e) => notices.push((e as CustomEvent<string>).detail));
+    expect(document.querySelector('[data-kind="project"]')?.textContent).toContain('30 days passed');
+    await act(async () => byText('Delete forever…')!.click());
+    const ask = document.querySelector('.deleted-project-ask')!;
+    expect(ask.textContent).toContain('Delete “Bosque Negro” forever? It leaves the Trash and can no longer be restored from the app.');
+    const input = purgeInput()!;
+    expect(document.activeElement).toBe(input);
+    expect(input.getAttribute('autocapitalize')).toBe('off');
+    expect(input.getAttribute('autocorrect')).toBe('off');
+    expect(input.getAttribute('spellcheck')).toBe('false');
+    expect(document.querySelector('.deleted-project-ask [title]')).toBeNull();
+    expect(byText('Delete forever')!.disabled).toBe(true);
+    // La palabra del otro idioma no vale; con mayúsculas y espacios, sí.
+    await typePurgeWord('borrar');
+    expect(byText('Delete forever')!.disabled).toBe(true);
+    await typePurgeWord('  DELETE ');
+    expect(byText('Delete forever')!.disabled).toBe(false);
+    expect(calls).toEqual([]);
+    await act(async () => byText('Delete forever')!.click());
+    await settle();
+    // La base pidió la carpeta primero (`drive_trash_first`): el portero la mandó y recién ahí se marcó.
+    expect(calls).toEqual([`trash ${o} borrado`]);
+    expect(server.deletedProjects.get(o)?.purged).toBeTruthy();
+    expect(server.projects.has(o)).toBe(true);
+    expect(server.mediaFiles.get('f1')?.drive_trashed_at).toBeTruthy();
+    await vi.waitFor(() => expect(document.querySelector('[data-kind="project"]')).toBeNull());
+    await vi.waitFor(() => expect(notices.join(' ')).toContain('“Bosque Negro” was deleted forever.'));
+    // Ya no se restaura, y repetirlo no cambia nada.
+    await expect(owner.remote.restoreProject(o)).rejects.toThrow('project_purged');
+    await owner.remote.purgeProject(o);
+  });
+
+  it('con la carpeta ya en la papelera de Drive no vuelve a llamar al portero', async () => {
+    const { server, o, calls } = await purgeable({ folderSent: true });
+    await act(async () => byText('Delete forever…')!.click());
+    await typePurgeWord('delete');
+    await act(async () => byText('Delete forever')!.click());
+    await settle();
+    expect(calls).toEqual([]);
+    expect(server.deletedProjects.get(o)?.purged).toBeTruthy();
+  });
+
+  it('si la carpeta no va a la papelera de Drive, lo dice en el renglón y no lo marca', async () => {
+    const { server, o } = await purgeable({ drive: { trash: new PorteroError('x', 503, true, 'drive_not_connected') } });
+    await act(async () => byText('Delete forever…')!.click());
+    await typePurgeWord('delete');
+    await act(async () => byText('Delete forever')!.click());
+    await settle();
+    expect(document.querySelector('.deleted-project-ask .error')?.textContent).toBe(
+      'Its folder did not go to the Google Drive trash (Google Drive is not connected: the workspace owner has to connect it.), so it was not deleted forever.',
+    );
+    expect(server.deletedProjects.get(o)?.purged).toBeFalsy();
+    expect(document.querySelector('[data-kind="project"]')?.textContent).toContain('Bosque Negro');
+  });
+
+  it('Escape cierra la pregunta sin salir de la papelera', async () => {
+    await purgeable();
+    await act(async () => byText('Delete forever…')!.click());
+    await act(async () => {
+      purgeInput()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    });
+    expect(document.querySelector('.deleted-project-ask')).toBeNull();
+    expect(document.querySelector('.trash-panel')).not.toBeNull();
+    expect(byText('Delete forever…')).toBeDefined();
+  });
+
+  it('con una base anterior a la versión 23 no se ofrece', async () => {
+    await purgeable({ schema: 'drive' });
+    expect(document.querySelector('[data-kind="project"]')?.textContent).toContain('30 days passed');
+    expect(byText('Delete forever…')).toBeUndefined();
+  });
+
+  it('a quien lo maneja sin ser dueño ni admin (su creador miembro), Restore sí y Delete forever no', async () => {
+    const ws = await driveWorkspace();
+    ws.server.enableProjectPurge();
+    ws.server.addMember('ana', 'member');
+    // Como las cuentas de antes del paso 5: un miembro que creó un proyecto, con editar y crear sobre él.
+    const mine = ws.o;
+    ws.server.projects.get(mine)!.owner_id = 'ana';
+    ws.server.grant('ana', { projectId: mine }, 'edit_pages');
+    const ana = await makeDevice(ws.server, undefined, undefined, undefined, undefined, { id: 'ana' });
+    devices.push(ana);
+    await ana.engine.syncNow();
+    await ana.remote.deleteProject(mine);
+    await ana.tree.forgetProject(mine);
+    ws.server.deletedProjects.get(mine)!.at = new Date(Date.now() - 31 * DAY).toISOString();
+    await openWith(ana, 'ana', fakeDrive(ws.server).drive);
+    await act(async () => byText('Trash')!.click());
+    await vi.waitFor(() => expect(document.querySelector('[data-kind="project"]')?.textContent).toContain('Bosque Negro'));
+    expect(byText('Restore')).toBeDefined();
+    expect(byText('Delete forever…')).toBeUndefined();
+    await expect(ana.remote.purgeProject(mine)).rejects.toThrow('not_allowed');
+  });
+
+  it('en castellano, con la palabra borrar', async () => {
+    act(() => prefs.set({ language: 'es' }));
+    const { server, o } = await purgeable();
+    await act(async () => byText('Borrar para siempre…')!.click());
+    expect(document.querySelector('.deleted-project-ask')?.textContent).toContain('¿Borrar “Bosque Negro” para siempre?');
+    await typePurgeWord('delete');
+    expect(byText('Borrar para siempre')!.disabled).toBe(true);
+    await typePurgeWord('Borrar');
+    await act(async () => byText('Borrar para siempre')!.click());
+    await settle();
+    expect(server.deletedProjects.get(o)?.purged).toBeTruthy();
+  });
+});

@@ -128,6 +128,8 @@ const DICTATION_VOICE = '0.139';
 const DICTATION_V4 = '0.150';
 /** Una sola papelera en el selector de proyectos (Doc_Proyectos_Borrar.md, "Cómo quedó: una sola papelera"): la versión la pone quien publica. */
 const ONE_TRASH = '0.162';
+/** *Delete forever* de un proyecto borrado (P.14, entrega 3, Doc_Proyectos_Borrar.md): la versión la pone quien publica. */
+const PROJECT_PURGE = '0.0XX';
 /** Las tablas anchas se desplazan de costado en el teléfono (P.28, Doc_Tabla_Telefono.md): la versión la pone quien publica. */
 const TABLE_PHONE = '0.156';
 /** Las plantillas de fábrica (Docs/Doc_Plantillas.md, entregas 0 y 1): la versión se ajusta al publicar. */
@@ -263,6 +265,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
   },
   { id: 'projectsArchive', section: 'pages', title: 'help.projectsArchive.title', text: 'help.projectsArchive.text', since: BEFORE_HELP },
   { id: 'projectsDrive', section: 'pages', title: 'help.projectsDrive.title', text: 'help.projectsDrive.text', when: 'admin', since: BEFORE_HELP },
+  {
+    id: 'projectsPurge',
+    section: 'pages',
+    title: 'help.projectsPurge.title',
+    text: 'help.projectsPurge.text',
+    words: ['delete forever', 'borrar para siempre', 'para siempre', 'forever', 'definitivo', 'permanently', 'purge', 'purgar', '30 days', '30 días'],
+    when: 'admin',
+    since: PROJECT_PURGE,
+  },
   { id: 'workspaces', section: 'pages', title: 'help.workspaces.title', text: 'help.workspaces.text', since: BEFORE_HELP },
 
   // --- Escribir ---

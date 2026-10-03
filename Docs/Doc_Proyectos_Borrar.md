@@ -2,7 +2,8 @@
 
 Estado: **entrega 1 publicada (v0.077, migración 9 aplicada); entrega 2 implementada en la rama
 `lega/proyectos-borrar-drive`, sin publicar y con la migración 10 sin aplicar** (2026-10-01; ver "Cómo quedó (entrega
-1)" y "Cómo quedó (entrega 2)", al final). La entrega 3 (*Delete forever*) sigue en diseño. Lega aprobó
+1)" y "Cómo quedó (entrega 2)", al final). La entrega 3 (*Delete forever*) está implementada, con su migración sin
+aplicar (`20261101120000_proyectos_purgar.sql`, versión 23; "Cómo quedó (entrega 3)"). Lega aprobó
 todas las propuestas ("sí a todo", sección "Decisiones de Lega"). La auditoría independiente del diseño dio
 "aprobado con cambios" y, corregido, "aprobado" (sección "Correcciones de la auditoría"). La migración 9 está en el
 repo pero no aplicada en la base; las 10 y 11, solo en este documento: el SQL de las tres migraciones (entregas 1, 2 y 3: secciones 1.3, 3.6 y 2.3) **se corrió con
@@ -1780,7 +1781,8 @@ proyecto con archivos subidos fuera de la papelera de Drive no se marca, para qu
 liberó algo que sigue ocupando.
 
 `supabase/migrations/20261010120000_proyectos_borrar_definitivo.sql` (`schema_version` 11; probada en rollback
-encima de la 9 y la 10, sección 9.3; sin aplicar):
+encima de la 9 y la 10, sección 9.3; sin aplicar). **Lo implementado** es `20261101120000_proyectos_purgar.sql`, con
+`schema_version` 23, sobre la base de hoy y con lo que cambió desde este diseño (ver "Cómo quedó (entrega 3)"):
 
 ```sql
 -- LGA Shot Docs · borrar un proyecto para siempre (P.14, entrega 3; Docs/Doc_Proyectos_Borrar.md, sección 2).
@@ -3701,10 +3703,78 @@ abierto y nombrándolo (en los dos idiomas), su avance a la vista al cambiar de 
 salió de la lista, y *Send files to the Drive trash* solo con `can_purge`; y sin red, sin *Files* ni "No deleted
 projects".
 
+## Cómo quedó (entrega 3)
+
+**Base** (`supabase/migrations/20261101120000_proyectos_purgar.sql`, `schema_version` 23, **sin aplicar**; va después de
+la 22). Es el SQL de la sección 2.3 llevado a la base de hoy: `workspaces.purged_at` y `purged_by` (con su `check`: solo
+un proyecto borrado; la API no los escribe) y `purge_project(p)`, que **no borra ninguna fila**: comprueba quién (dueño o
+admin que maneja el proyecto, `can_purge_project`; quien no lo veía recibe `project_not_found`), que esté borrado, que
+pasaron los 30 días, que la carpeta esté en la papelera de Drive si tenía archivos subidos (`drive_trash_first`) y la
+versión mínima de la app; marca sus archivos subidos como mandados a la papelera de Drive (`project_files_purged`, de la
+entrega 2) y pone la marca. Después, `restore_project`, `request_project_drive_trash` y `project_drive_untrashed` dan
+`project_purged`; `trashed_projects` lo deja afuera para todos (misma firma); `media_project` suma `purged_at`.
+
+**Portero:** sin rutas nuevas. `/project/trash` y `/project/untrash` responden `409 project_purged` sin tocar Drive ni la
+base si el proyecto está borrado para siempre (`Doc_Portero.md`).
+
+**App:** en la papelera única, el renglón de un proyecto borrado suma *Delete forever…* (en rojo, al lado de *Send files
+to the Drive trash*) cuando pasaron los 30 días, la persona es dueña o admin que lo maneja (`can_purge`), la base está en
+la 23 y hay red. Pregunta en el mismo renglón: qué pasa, la palabra (`delete` / `borrar`, la del idioma de la app, sin
+mayúscula ni corrector en el iPhone) y *Delete forever*, que se habilita recién con ella; Enter confirma y Escape cierra
+la pregunta. Si la base contesta `drive_trash_first`, el portero manda la carpeta y se vuelve a pedir; si Drive falla, lo
+dice en el renglón y no marca nada. Al terminar, el renglón sale y queda el aviso "“X” was deleted forever". Nada del
+dispositivo se borra. Textos en los dos idiomas (`src/i18n/lazy/projectStates.ts`, `project.errorPurged`) y la entrada
+*Delete a project forever* de la ayuda (dueños y admins). Sin atajos nuevos.
+
+**Pruebas:** SQL `supabase/tests/proyectos_purgar_permisos.sql` (con la preparación de la 1.4), corrida en `begin; …
+rollback;` contra la base real junto con las otras 30 (todas `ok`), una aserción falsa de control y 17 mutantes de la
+migración (los 17 fallan donde tienen que fallar). App: 8 de componente (`projectStates.test.tsx`: antes de los 30
+días, la palabra en los dos idiomas, la carpeta antes, ya mandada, Drive que falla, Escape, base anterior a la 23, el
+creador miembro), la búsqueda de la ayuda y 2 del portero (`core.test.ts`).
+
+**Una versión vieja de la app** (con la base en la 23): `trashed_projects` ya no le da el proyecto borrado para siempre,
+así que no lo muestra como restaurable; si tenía la papelera abierta de antes y aprieta *Restore*, la base responde
+`project_purged` (lo ve como "Could not do it: project_purged") y no cambia nada. El proyecto ya había salido de su lista
+al borrarlo. Lo que un dispositivo tenía sin subir de ese proyecto quedó rechazado y a la vista desde el borrado, y sigue
+ahí (se baja con *Download my unsynced changes*). **No hace falta subir `min_app_version`** por esta entrega.
+
+**Decisiones tomadas en el camino** (Lega no estaba):
+
+1. **Dónde va *Delete forever*.** Qué pasaba: el diseño lo ponía en *Deleted projects*, que ya no existe (v0.162). Las
+   opciones: (A) un botón en el renglón del proyecto en la papelera única; (B) en la ventana de borrar; (C) también en la
+   pantalla "sin proyectos". Elegí A porque es donde está el proyecto borrado y su *Restore*, y la pantalla "sin
+   proyectos" sirve para restaurar, no para borrar. Si preferís otra, es pasar `purgeReady` en `DeletedProjectsList`.
+2. **Antes de los 30 días, el botón no está** (en vez de apagado con el motivo). Qué pasaba: un botón apagado en cada
+   borrado suma ruido a todos. Las opciones: (A) no mostrarlo; (B) apagado con un globito. Elegí A porque el renglón ya
+   dice "quedan N días" y la ayuda lo explica. Si preferís B, es un `data-tip` en `DeletedProjectItem`.
+3. **La pregunta en el renglón, no una ventana.** Qué pasaba: las otras preguntas de un borrado (mandar la carpeta,
+   restaurar sin los archivos) son en el renglón. Las opciones: (A) en el renglón con la palabra; (B) una ventana como la
+   de borrar. Elegí A porque es lo mismo que ya hay en ese lugar y no tapa el selector. Si preferís B, la ventana de
+   borrar se puede reusar casi entera.
+4. **Primero la base, después el portero si hace falta.** Qué pasaba: el diseño mandaba la carpeta antes; un proyecto
+   sin archivos subidos, o con la carpeta ya mandada, pediría Drive conectado sin necesidad. Las opciones: (A) pedir a la
+   base y, solo con `drive_trash_first`, mandar la carpeta y volver a pedir; (B) siempre la carpeta antes. Elegí A porque
+   la base decide igual (no marca nada si falta la carpeta) y anda sin Drive cuando no hace falta. Si preferís B, es una
+   línea en `purge`.
+5. **Los archivos de otros proyectos que solo usaba quedan libres.** Qué pasaba: un archivo de O usado solo en una página
+   de P queda frenado mientras P está borrado (`file_in_deleted_project`, para que restaurar P lo encuentre); con P
+   borrado para siempre quedaba frenado para siempre en la papelera de O. Las opciones: (A) que esos usos dejen de contar
+   (`file_in_deleted_project`, `trashed_files` y `files_due_for_purge` miran `purged_at`); (B) dejarlo. Elegí A porque P
+   ya no vuelve y el archivo es de O: se manda desde la papelera de O como cualquier otro. Si preferís B, se sacan las
+   tres funciones de la migración.
+6. **Pedir o traer la carpeta de uno borrado para siempre, no.** Qué pasaba: el diseño solo frenaba traerla. Las
+   opciones: (A) también pedirla (`request_project_drive_trash`), y el portero responde `project_purged` antes de tocar
+   Drive; (B) solo traerla. Elegí A porque un pedido nuevo sobre un proyecto que ya no se ve dejaría marcas que nadie
+   puede cerrar. Si preferís B, se saca esa guarda.
+7. **La versión mínima también frena *Delete forever*** (`require_session_write_version`, como borrar y restaurar desde
+   la v0.099): una pestaña vieja no marca nada si el workspace pide una más nueva.
+8. **El nombre y la versión de la migración** son los del encargo (`20261101120000`, 23), no los del diseño (`…10120000`,
+   11), que quedaron ocupados por otras migraciones.
+
 ## Pendiente
 
 - **Entrega 2:** auditoría del código hecha y corregida (B1); copia de seguridad y `db:migrate` de la migración 10;
   publicar el portero y la app en el mismo push; subir `min_app_version` a esta versión; prender `TEST_MODES=1`, correr
   la prueba técnica con un proyecto de prueba y sacar la variable; recién después borrar ERSO con la casilla.
-- **Entrega 3** (*Delete forever*): su prueba SQL va a `supabase/tests/` con la preparación de la 1.4 y se vuelve a
-  correr en `begin; … rollback;` antes de migrar.
+- **Entrega 3** (*Delete forever*): implementada, sin publicar. Falta la auditoría, la copia de seguridad, aplicar la 22
+  y después la 23 (`npm run db:migrate`) y publicar.

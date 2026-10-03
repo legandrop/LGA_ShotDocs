@@ -164,6 +164,32 @@ export const projectStates = {
     en: "Could not load the deleted projects: {reason}",
     es: "No se pudieron leer los proyectos borrados: {reason}",
   },
+  // *Delete forever* (entrega 3): en el renglón de un borrado, pasados los 30 días, solo dueño y admins que lo manejan.
+  'purgeProject.open': { en: "Delete forever…", es: "Borrar para siempre…" },
+  'purgeProject.confirm': {
+    en: "Delete “{name}” forever? It leaves the Trash and can no longer be restored from the app. If its folder is not in the Google Drive trash yet, it goes there now; Google deletes it for good after 30 days.",
+    es: "¿Borrar “{name}” para siempre? Sale de la papelera y ya no se puede restaurar desde la app. Si su carpeta todavía no está en la papelera de Google Drive, va ahora; Google la borra para siempre a los 30 días.",
+  },
+  'purgeProject.button': { en: "Delete forever", es: "Borrar para siempre" },
+  'purgeProject.purging': { en: "Deleting…", es: "Borrando…" },
+  'purgeProject.sendingDrive': { en: "Sending its folder to the Drive trash…", es: "Mandando su carpeta a la papelera de Drive…" },
+  'purgeProject.done': { en: "“{name}” was deleted forever.", es: "“{name}” se borró para siempre." },
+  'purgeProject.notDue': {
+    en: "A deleted project can be deleted forever 30 days after it was deleted.",
+    es: "Un proyecto borrado se puede borrar para siempre 30 días después de borrarlo.",
+  },
+  'purgeProject.notDeleted': {
+    en: "It is not in the Trash anymore: someone restored it.",
+    es: "Ya no está en la papelera: alguien lo restauró.",
+  },
+  'purgeProject.driveFirst': {
+    en: "Some of its files are not in the Google Drive trash yet: try again.",
+    es: "Algunos de sus archivos todavía no están en la papelera de Google Drive: probá de nuevo.",
+  },
+  'purgeProject.driveFailed': {
+    en: "Its folder did not go to the Google Drive trash ({reason}), so it was not deleted forever.",
+    es: "Su carpeta no fue a la papelera de Google Drive ({reason}), así que no se borró para siempre.",
+  },
 } satisfies Dict;
 
 register(projectStates);

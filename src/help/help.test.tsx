@@ -44,6 +44,9 @@ describe('buscar en la ayuda', () => {
     expect(ids('shift clic', 'es')).toContain('photosInline');
     expect(ids('ctrl v')[0]).toBe('photosAdd');
     expect(ids('look for its files again')).toContain('projectsDrive');
+    // Borrar un proyecto para siempre (P.14, entrega 3).
+    expect(first('delete forever')).toBe('projectsPurge');
+    expect(ids('borrar para siempre', 'es')).toContain('projectsPurge');
     // Colapsar para todos y mover la sección entera (Doc_Colapsar.md, 1b y 2).
     expect(ids('shift')).toContain('collapseEveryone');
     expect(ids('para todos', 'es')).toContain('collapseEveryone');
