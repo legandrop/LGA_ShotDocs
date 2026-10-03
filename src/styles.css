@@ -1696,6 +1696,16 @@ code {
   --bn-font-family: var(--font);
 }
 
+/* Los fondos de los resaltados en oscuro: el gris, el amarillo y el naranja de BlockNote (#9b9a97, #b58b00, #b7600a) son
+   tan claros que el texto por defecto (#ece9e2, la tinta plena de un resaltado en los tres niveles de contraste) daba
+   2,32:1, 2,60:1 y 3,69:1. Los mismos tonos más oscuros (mismo matiz y saturación, solo menos luz) llegan a 4,7:1 o
+   más. Solo con el esquema oscuro: el claro y el PDF (siempre claro) conservan los de BlockNote. Doc_Contraste.md. */
+.bn-container[data-color-scheme='dark'] {
+  --bn-colors-highlights-gray-background: #676663;
+  --bn-colors-highlights-yellow-background: #806200;
+  --bn-colors-highlights-orange-background: #9d5209;
+}
+
 .bn-container .bn-default-styles {
   font-size: var(--doc-size);
   line-height: 1.6;
