@@ -2,7 +2,8 @@
 
 **Estado: entregas 0 (v0.132: el límite de Yjs, arreglado con un parche; sección 16), 1 (v0.140: la línea de tiempo
 con las páginas; sección 17), 2 (v0.144: el reemplazo adentro; sección 18) y 3 (v0.152: anotar una foto como un paso;
-sección 19) hechas.** Pedido de Lega
+sección 19) hechas; B.22 (v0.0XX: el ⌘Z con dos personas ya no tira la excepción de Yjs; sección 20)
+también.** Pedido de Lega
 del 2026-10-02, al responder cómo se deshace un reemplazo en todo el proyecto (una pregunta de su lista de decisiones;
 no es la D-10 de `Doc_Decisiones.md`). Se diseñó contra `main` v0.123
 y se revisó contra v0.125. Las decisiones (DH1 a DH10, sección 11) son propuestas con la recomendación elegida: el
@@ -690,7 +691,7 @@ restos), sin cruzarse con este. **No hace falta subir `min_app_version`.**
   3.000 del modelo de párrafos, `UndoManager.undo()` tira `TypeError` (`reading 'client'`) en `redoItem`, cuando la copia
   del padre ya fue recolectada y `redone` queda sin valor. Con la línea de tiempo se deshace más lejos: la entrega 1
   tiene que atrapar esa excepción en su deshacer (descartar el paso y avisar, como un paso que no cambia nada, 3.4) y
-  medirla. Está en el roadmap (B.22).
+  medirla. Está en el roadmap (B.22). **Medida y arreglada en el parche (v0.0XX, sección 20).**
 - **Al actualizar Yjs** (o al pasar a `@blocknote/core/y`, Yjs 14, `Doc_Colaboracion.md`): ver si la versión nueva ya lo
   trae; si no, rehacer el parche en los tres archivos y `npx patch-package yjs`. Las dos pruebas lo cubren. Conviene
   reportarlo a Yjs con los dos casos mínimos de 16.1.
@@ -779,7 +780,8 @@ semillas en la suite, `TIMELINE_SEEDS` para más) y las de atajos (`shortcuts.te
 
 - La memoria en el iPhone con 20 páginas retenidas (si aprieta, el tope baja a 10) y el gesto de deshacer de iOS en la
   PWA instalada.
-- La excepción de Yjs con dos personas (B.22) medida con dos editores borrando bloques enteros.
+- La excepción de Yjs con dos personas (B.22) medida con dos editores borrando bloques enteros. **Hecho (v0.0XX):**
+  medida y arreglada en el parche de Yjs (sección 20).
 - Entregas 2 (el reemplazo adentro, C1, DH9, `planRedo`; hecha, sección 18) y 3 (anotar como un paso).
 - Pruebas que faltan (auditoría, O1): no limpiar el `meta` al montar (A5), los ⌘Z que llegan mientras cruza (A7, probado
   en el navegador, sin prueba en la suite) y esperar a que el editor sea editable (A9). **Hechas con la entrega 2**
@@ -987,6 +989,88 @@ Auditoría independiente sobre `d29bd15`: no aprobado, un bloqueante chico; 1.00
 - **F2** (un error de la consola al pegar una foto): al roadmap (B.24).
 - **D226**, que viaja con esta entrega (pedido de Lega): el tooltip del triángulo de colapsar, un renglón por acción
   (`Doc_Colapsar.md`, §3).
+
+## 20. B.22: la excepción del ⌘Z con dos personas, cómo quedó (v0.0XX)
+
+### 20.1 La causa
+
+- Deshacer un borrado vuelve a poner cada cosa **adentro de la copia de su padre**: `redoItem` (`Item.js`) sigue
+  `parentItem.redone` hasta el renglón que está hoy en el documento.
+- Las copias que escribe un deshacer quedan guardadas (`keep`) para que Yjs no las recolecte. Pero esa marca se pone y
+  se saca **subiendo por los padres** (`keepItem`), y cuando Yjs vacía la lista de rehacer (al escribir algo nuevo) le
+  saca la marca a lo que guardaban esos pasos y a todos sus padres: también a la copia del renglón.
+- Si después **otra persona** borra esa copia, en este dispositivo Yjs la recolecta en el momento (`tryGcDeleteSet`): el
+  renglón queda como un item sin su tipo (`ContentDeleted`) y lo de adentro como `GC` (sin `redone` ni padre). Si la
+  borra uno mismo, ese borrado la vuelve a guardar: por eso hacen falta dos personas.
+- Cuando un ⌘Z tiene que volver a poner algo de ese renglón, `redoItem` llega al `GC` y tira `TypeError` ("reading
+  'client'"; si lo borrado era un hijo directo del renglón, como una foto en línea, "reading '_item'"). El paso ya salió
+  de la pila y no se hizo nada: lo que tenía en otros renglones tampoco vuelve.
+
+Caso mínimo (Yjs solo): A escribe los renglones "abc" y "xyz". B borra la "b" y la "y" en un paso; borra el renglón
+"ac" entero; ⌘Z (vuelve una copia); escribe "Z" en la copia y ⌘Z; escribe "q" en el otro renglón (vacía rehacer). A
+borra la copia. B: ⌘Z (se va la "q") y ⌘Z: `TypeError`, y "xz" se queda sin la "y". Con una foto en línea en vez de
+la "b", el mismo caso tira "reading '_item'".
+
+### 20.2 Lo medido antes del arreglo
+
+| Prueba | Resultado |
+|---|---|
+| **Dos editores reales** (BlockNote con el esquema de la app, conectados en cola como la app, con la reparación; 5 bloques con foto en línea y tabla; 40 acciones con 16 % de borrar 1 o 2 bloques enteros, Enter, Backspace, ⌘Z y ⌘⇧Z; después los dos deshacen todo, intercalado; 3.000 corridas) | **10 corridas con la excepción, 13 ⌘Z**, todas en el deshacer final |
+| Qué deja en pantalla cada ⌘Z frenado | **nada cambia**: 0 de 13 tocaron el documento, el editor muestra el texto del documento 13 de 13 y los dos editores terminan iguales 10 de 10 corridas. Lo que se pierde es **el paso**: el mismo ⌘Z con el arreglo vuelve a poner texto en 7 de 13 (renglones enteros: "tercero", la tabla, "segundo renglón", "la cámara y la toma"), saca letras escritas por esa persona en 3 y no cambia letras en 3 |
+| Modelo de párrafos de la auditoría (dos personas, 3.000 semillas) | 24 con la excepción (25 ⌘Z); ninguno cambió el documento; con el arreglo, 11 de esos 24 ⌘Z cambian algo |
+| 20.000 semillas más del modelo | 236 con la excepción (1,2 %) |
+
+La línea de tiempo atrapaba la excepción (17.2): el paso se descartaba con "Nothing to undo there…" y el ⌘Z se frenaba.
+No quedaba nada a medias, pero ese paso ya no se podía deshacer, y lo que tenía para volver no volvía.
+
+### 20.3 El arreglo
+
+En el parche de Yjs (`patches/yjs+13.6.33.patch`), marcado `LGA-SHOTDOCS-PATCH (B.22)` en `dist/yjs.mjs`,
+`dist/yjs.cjs` y `src` (`assertYjsPatched` lo exige):
+
+- **`redoItem`**: si al seguir la copia del padre llega a un `GC` o a un item sin su tipo, no vuelve a poner esa cosa
+  (devuelve `null`, como ya hace Yjs cuando el padre no se puede volver a poner) y deja una marca en la transacción.
+- **`popStackItem`**: si la marca está, ese paso **no saca lo que había insertado**. Lo insertado puede ser el mismo
+  texto movido (un Enter, un bloque arrastrado): sacarlo cuando el original no tiene dónde volver lo haría desaparecer.
+  Sobra texto en vez de faltar. Lo demás del paso se hace.
+
+Solo actúa donde antes Yjs tiraba la excepción: en los dos caminos el código anterior seguía con `undefined` y tiraba
+siempre. Como B.21, decide qué escribe el deshacer de este dispositivo; lo que sale son ediciones comunes: **no hace
+falta subir `min_app_version`**. La línea de tiempo sigue atrapando la excepción, por si Yjs tira por otra causa.
+
+Se descartaron:
+
+- **Saltar y sacar igual lo insertado** (lo que hace Yjs cuando el padre se borró sin copia). Con el editor, en 2 de las
+  10 corridas el final quedaba con texto de antes de menos que con el ⌘Z frenado: un Enter deshecho sacaba " la toma"
+  del renglón nuevo y no lo podía devolver al de arriba, que la otra persona había borrado.
+- **Frenar el paso entero, sin la excepción**: deja afuera lo que sí tiene dónde volver (los 7 de 13 de arriba).
+- **Revisar también los vecinos** (`leftTrace`, `rightTrace`) por si son un `GC`: no apareció en 23.000 corridas del
+  modelo ni en 3.000 con el editor (todas las excepciones salen del padre); no se agregó código que no se puede probar.
+
+### 20.4 Lo medido con el arreglo
+
+| Prueba | Con B.21 | Con B.21 y B.22 |
+|---|---|---|
+| Dos editores reales, bloques enteros (3.000) | 10 corridas con la excepción | **0**; terminan iguales 2.994 en los dos casos, y las 10 corridas de la excepción terminan con el mismo texto que con el ⌘Z frenado |
+| Modelo de párrafos, dos personas (3.000) | 24 con la excepción | **0**; las mismas 2.978 terminan iguales (las 22 que no, ya estaban) |
+| 20.000 semillas más del modelo | 236 | **0** |
+| Las 2.976 semillas del modelo sin la excepción | — | cada ⌘Z da **idéntico**, antes y después |
+| Letras de antes que faltan al final (las 24 semillas de la excepción) | 55 | 55 |
+| Versiones mezcladas (una persona con B.22 y otra sin él, párrafos y texto) | — | ninguna deja de converger por el arreglo |
+| Una persona (los tres generadores de 16.3) y mapas (anotar) | — | idénticos |
+
+Las pruebas: `src/ui/yjsUndoGone.test.ts` (los dos casos mínimos, `dist/yjs.cjs`, el caso con dos editores, el Enter
+cuyo texto no tiene dónde volver y 3.000 semillas del modelo). Cada parte del arreglo sacada hace fallar alguna.
+
+### 20.5 Lo que queda
+
+- **De Yjs, sin copias y sin el arreglo** (encontrado al medir): A parte un renglón con Enter, B borra el de arriba y A
+  hace ⌘Z: la segunda mitad vuelve al renglón borrado y desaparece también. Lo hace Yjs con cualquier padre borrado por
+  otro; está en el historial y ⌘⇧Z lo trae.
+- Con dos editores, 6 de 3.000 corridas terminan con los dos textos distintos (las mismas 6 sin el arreglo, ninguna con
+  la excepción; en 5, también rearmando cada documento desde cero), y 22 de 3.000 en el modelo de párrafos. Ya estaba:
+  queda para investigar aparte.
+- Reportarlo a Yjs con los casos mínimos de 20.1, junto con los de 16.1 y 16.4.
 
 ## Correcciones de la auditoría (2026-10-02)
 

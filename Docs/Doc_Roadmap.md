@@ -962,14 +962,18 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    con una letra de antes de menos con el editor (antes 7) y 10 de 3.000 en un modelo de párrafos (antes 112). Quedan
    casos raros con las mismas letras en otro orden (1 de 300 con el editor; algunos los trae la parte de `redoItem` del
    parche, sin pérdida). Pendiente: reportarlo a Yjs con los casos mínimos (`Doc_Deshacer.md`, 16.1 y 16.4).
-22. **La excepción del ⌘Z de Yjs con dos personas** (la encontró la auditoría de la entrega 0 de P.26; ya pasaba antes del
-   parche de B.21). Con dos personas editando la misma página, a veces `UndoManager.undo()` tira `TypeError` (`reading
-   'client'`) en `redoItem`, cuando la copia del padre que tiene que volver ya fue recolectada (1 de 150 con dos editores
-   reales; 24 de 3.000 en un modelo de párrafos); qué deja ese ⌘Z en pantalla no está medido. **Atrapada en la línea de
-   tiempo (P.26, entrega 1, v0.140):** el paso se descarta, se avisa y el ⌘Z se frena (probado simulando el error). En
-   900 corridas al azar de la línea de tiempo con el editor, también 300 con otra persona escribiendo y borrando texto,
-   no apareció ninguna. Falta: medirla con dos editores borrando y deshaciendo bloques enteros, y ver si se arregla con
-   el parche de Yjs o se reporta (`Doc_Deshacer.md`, 16.6 y 17).
+22. **Hecho (v0.0XX): la excepción del ⌘Z de Yjs con dos personas** (la encontró la auditoría de la entrega 0 de P.26; ya
+   pasaba antes del parche de B.21). Con dos personas, a veces `UndoManager.undo()` tiraba `TypeError` en `redoItem`: el
+   ⌘Z tenía que volver a poner algo en la copia de un renglón que la otra persona había borrado y Yjs ya había
+   recolectado (vaciar rehacer le saca la marca que la guardaba). La línea de tiempo lo atrapaba (v0.140) y frenaba el ⌘Z.
+   **Medido** con dos editores borrando y deshaciendo bloques enteros: 10 de 3.000 corridas (13 ⌘Z); ninguno dejaba
+   nada a medias ni los editores distintos, pero el paso se perdía (en 7 de 13, renglones enteros que tenían que
+   volver). **Arreglado en el parche de Yjs:** lo que no tiene dónde volver se salta, lo demás del paso se hace y, si se
+   saltó algo, lo insertado por ese paso se deja (puede ser el mismo texto movido). De 10 a 0 con el editor, de 24 a 0
+   (y de 236 a 0 en 20.000 más) en el modelo de párrafos; sin la excepción, idéntico. Sin `min_app_version`.
+   Queda: con dos editores, 6 de 3.000 corridas terminan con los dos textos distintos (las mismas sin el arreglo, ninguna
+   con la excepción; para investigar aparte); el Enter deshecho cuya mitad vuelve a un renglón que otro borró desaparece
+   (de Yjs, sin copias); reportarlo a Yjs (`Doc_Deshacer.md`, sección 20).
 23. **Hecho (v0.152): los topes de largo de la base en la app.** Un título de más de 500 caracteres quedaba rechazado
    para siempre (`pages_title_check`). El árbol corta títulos, nombres de proyecto y claves de orden, lo que sobra del
    título va al principio de la página y lo ya rechazado vuelve a la cola cortado (`Doc_Sincronizacion.md`, "Topes de
