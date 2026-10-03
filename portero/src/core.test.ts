@@ -103,7 +103,7 @@ function fakeWorld() {
   let metaGets = 0;
   const calls: string[] = [];
   /** Links públicos de la base: el token, qué archivos ve (con su nivel) y si se revocó o llegó a un tope. */
-  const links = new Map<string, { files: Record<string, number>; revoked?: boolean; limited?: boolean }>();
+  const links = new Map<string, { files: Record<string, number>; revoked?: boolean; limited?: boolean; mine?: string[] }>();
   /** Los headers de cada pedido a la base con un link (para ver que nunca va la sesión de nadie). */
   const linkCalls: { path: string; authorization: string | null; link: string | null }[] = [];
   const projects = new Map<string, BaseProject>();
@@ -149,15 +149,28 @@ function fakeWorld() {
       // Un link público (rol anon): la clave publicable y el token; solo `plink_media_file`.
       linkCalls.push({ path: url.pathname, authorization: headers.get('Authorization'), link: headers.get('x-shotdocs-link') });
       if (headers.get('Authorization') !== `Bearer ${env.SUPABASE_PUBLISHABLE_KEY}`) return jsonRes({ message: 'JWT expired' }, 401);
-      if (url.pathname !== '/rest/v1/rpc/plink_media_file') return jsonRes({ code: '42501', message: 'permission denied' }, 401);
+      const fn = url.pathname.replace('/rest/v1/rpc/', '');
+      if (fn !== 'plink_media_file' && fn !== 'plink_set_file_drive') return jsonRes({ code: '42501', message: 'permission denied' }, 401);
       const l = links.get(headers.get('x-shotdocs-link')!);
       if (!l || l.revoked) return jsonRes({ code: 'P0002', message: 'link_not_found' }, 404);
-      const args = JSON.parse(String(init.body ?? '{}')) as { p_file?: string };
+      const args = JSON.parse(String(init.body ?? '{}')) as { p_file?: string; p_file_id?: string; p_drive_id?: string };
+      if (fn === 'plink_set_file_drive') {
+        // Como la migración de la entrega 2b: solo un archivo que registró este link y que la rama usa (nivel 3).
+        const bf = base.get(args.p_file_id ?? '');
+        if (!bf || (l.files[args.p_file_id ?? ''] ?? 0) < 3 || !l.mine?.includes(args.p_file_id ?? '')) {
+          return jsonRes({ code: 'P0002', message: 'file_not_found' }, 404);
+        }
+        if (bf.drive_id && bf.drive_id !== args.p_drive_id) return jsonRes({ code: 'P0001', message: 'file_already_uploaded' }, 400);
+        bf.drive_id = args.p_drive_id!;
+        return new Response(null, { status: 204 });
+      }
       const level = l.files[args.p_file ?? ''] ?? 0;
       const bf = base.get(args.p_file ?? '');
       if (!bf || level === 0) return jsonRes(null);
       if (l.limited) return jsonRes({ code: 'P0001', message: 'link_rate_limited', details: 'pass' }, 400);
-      return jsonRes({ id: args.p_file, ...bf, levels: undefined, project_id: 'link-1', project_name: '', created_at: '2026-09-30T10:00:00Z', level, created_by: null });
+      // El proyecto, nunca: su huella (`project_mark`) y si el archivo es de este link (`mine`), como la 2b.
+      const mark = createHash('sha256').update(`sdproject:${bf.project_id}`).digest('hex');
+      return jsonRes({ id: args.p_file, ...bf, levels: undefined, project_id: 'link-1', project_name: '', created_at: '2026-09-30T10:00:00Z', level, created_by: null, via_link: true, mine: !!l.mine?.includes(args.p_file ?? ''), project_mark: mark });
     }
     if (url.host === 'ws.example') {
       const s = sessions.get((headers.get('Authorization') ?? '').replace('Bearer ', ''));
@@ -2660,13 +2673,13 @@ describe('portero: link público (Can view, Docs/Doc_Link_Publico.md 3.9)', () =
     expect(((await res.json()) as { code: string }).code).toBe('link_rate_limited');
   });
 
-  it('con el link solo se ve: subir, la papelera, lo del dueño y los proyectos dan 403 sin preguntarle nada a la base', async () => {
+  it('con el link no hay papelera, carpetas, lo del dueño ni los proyectos: 403 sin preguntarle nada a la base', async () => {
     const { world, p } = await setup();
     world.links.set(LINK, { files: { [FILE_A]: 3 } });
     addBaseFile(world, FILE_A);
     const n = world.linkCalls.length;
     for (const [method, path] of [
-      ['POST', '/upload'], ['PUT', '/upload/x'], ['POST', '/trash'], ['POST', '/folder/prepare'], ['POST', '/folder/sessions'],
+      ['POST', '/upload'], ['PUT', '/upload/f.x'], ['POST', '/trash'], ['POST', '/folder/prepare'], ['POST', '/folder/sessions'],
       ['POST', '/project/trash'], ['POST', '/project/untrash'], ['POST', '/drive/connect'], ['POST', '/drive/folder'],
       ['POST', '/drive/picker'], ['GET', '/project/inspect'],
     ] as const) {
@@ -2685,5 +2698,120 @@ describe('portero: link público (Can view, Docs/Doc_Link_Publico.md 3.9)', () =
     const res = await p.handle(new Request(`${SELF}/pass`, { method: 'OPTIONS', headers: { Origin: APP } }));
     expect(res.headers.get('Access-Control-Allow-Headers')).toContain('x-shotdocs-link');
     expect(res.headers.get('Access-Control-Allow-Headers')).toContain('x-shotdocs-device');
+  });
+});
+
+/** Abre una subida con el header del link (como la app del visitante). */
+async function linkUpload(p: Portero, file: string, data: Uint8Array<ArrayBuffer>, link = LINK): Promise<{ start: Response; started: Record<string, unknown> }> {
+  const start = await linkCall(p, '/upload', { method: 'POST', link, body: JSON.stringify({ file, size: data.length, day: '2026-10-03' }) });
+  const started = (await start.clone().json()) as Record<string, unknown>;
+  return { start, started };
+}
+
+function linkPart(p: Portero, uploadId: string, range: string, data?: Uint8Array<ArrayBuffer>, link = LINK): Promise<Response> {
+  return linkCall(p, `/upload/${uploadId}`, { method: 'PUT', link, headers: { 'Content-Range': range }, body: data });
+}
+
+describe('portero: link público Can edit sube lo suyo (Docs/Doc_Link_Publico.md, entrega 2b)', () => {
+  it('sube un archivo que registró el link: a Via_link si no sabe el proyecto, plink_set_file_drive con el link y plink:<huella>', async () => {
+    const { world, store, p } = await setup();
+    addBaseFile(world, FILE_A, { mime: 'image/jpeg', name: 'foto.jpg', size: 1000, levels: {} });
+    world.links.set(LINK, { files: { [FILE_A]: 3 }, mine: [FILE_A] });
+    const data = bytes(1000);
+    const { start, started } = await linkUpload(p, FILE_A, data);
+    expect(start.status).toBe(200);
+    const uploadId = started.uploadId as string;
+    // Quién abrió la subida: la huella del token, nunca el token.
+    const saved = store.data.get(`upload:${uploadId}`) as { user: string };
+    expect(saved.user).toBe(`plink:${createHash('sha256').update(LINK).digest('hex')}`);
+    expect(JSON.stringify([...store.data.values()])).not.toContain(LINK);
+    const done = (await (await linkPart(p, uploadId, 'bytes 0-999/1000', data)).json()) as { status: string; linked: boolean; file: { id: string } };
+    expect(done).toMatchObject({ status: 'done', linked: true });
+    expect(world.base.get(FILE_A)!.drive_id).toBe(done.file.id);
+    expect(pathOf(world, done.file.id)).toEqual(['LGA_ShotDocs', 'Via_link', '2026-10-03']);
+    expect(world.files.get(done.file.id)!.appProperties).toEqual({ sdFile: FILE_A });
+    // Nunca con una sesión ni las funciones de una cuenta.
+    for (const c of world.linkCalls) expect(c.authorization).toBe(`Bearer ${env.SUPABASE_PUBLISHABLE_KEY}`);
+    expect(world.linkCalls.map((c) => c.path)).toContain('/rest/v1/rpc/plink_set_file_drive');
+    expect(world.calls.some((c) => c.endsWith('/rpc/set_file_drive'))).toBe(false);
+  });
+
+  it('si alguien del equipo ya subió a ese proyecto, lo del link va a la misma carpeta del día, sin renombrar nada', async () => {
+    const { world, p } = await setup();
+    addBaseFile(world, FILE_B, { size: 10 });
+    await uploadFile(p, 'editor-jwt', FILE_B, bytes(10), '2026-10-03');
+    const before = world.folders().map(([id, f]) => `${id}:${f.name}`).sort();
+    addBaseFile(world, FILE_A, { mime: 'image/jpeg', size: 100, levels: {} });
+    world.links.set(LINK, { files: { [FILE_A]: 3 }, mine: [FILE_A] });
+    const { started } = await linkUpload(p, FILE_A, bytes(100));
+    const done = (await (await linkPart(p, started.uploadId as string, 'bytes 0-99/100', bytes(100))).json()) as { file: { id: string } };
+    expect(pathOf(world, done.file.id)).toEqual(['LGA_ShotDocs', 'Spot_Coca-Cola_2026', '2026-10-03']);
+    expect(world.folders().map(([id, f]) => `${id}:${f.name}`).sort()).toEqual(before);
+  });
+
+  it('lo que no es suyo no: Can view, una foto del equipo de la rama, un archivo que no ve, un tamaño que no coincide', async () => {
+    const { world, p } = await setup();
+    addBaseFile(world, FILE_A, { size: 10 });
+    addBaseFile(world, FILE_B, { size: 10 });
+    addBaseFile(world, FILE_C, { size: 10 });
+    const sessions = world.calls.filter((c) => c.includes('/upload/drive/v3/files')).length;
+    // Can view (nivel 2), aunque lo haya registrado.
+    world.links.set(LINK, { files: { [FILE_A]: 2 }, mine: [FILE_A] });
+    expect((await linkUpload(p, FILE_A, bytes(10))).start.status).toBe(403);
+    // Can edit sobre una foto del equipo que todavía no subió: nivel 3 pero no es del link.
+    world.links.set(LINK, { files: { [FILE_A]: 3, [FILE_B]: 3 }, mine: [FILE_A] });
+    const other = await linkUpload(p, FILE_B, bytes(10));
+    expect(other.start.status).toBe(403);
+    expect(other.started.code).toBe('not_mine');
+    // Uno de afuera de la rama.
+    expect((await linkUpload(p, FILE_C, bytes(10))).start.status).toBe(404);
+    // El tamaño declarado tiene que ser el registrado.
+    const bad = await linkCall(p, '/upload', { method: 'POST', body: JSON.stringify({ file: FILE_A, size: 11, day: '2026-10-03' }) });
+    expect(bad.status).toBe(400);
+    expect(world.calls.filter((c) => c.includes('/upload/drive/v3/files')).length).toBe(sessions);
+  });
+
+  it('revocado a mitad de la subida: la parte siguiente no sale a Drive; con el token de Reset link tampoco se sigue', async () => {
+    const { world, p } = await setup();
+    addBaseFile(world, FILE_A, { size: 2000, levels: {} });
+    world.links.set(LINK, { files: { [FILE_A]: 3 }, mine: [FILE_A] });
+    const data = bytes(2000);
+    const { started } = await linkUpload(p, FILE_A, data);
+    const uploadId = started.uploadId as string;
+    expect((await linkPart(p, uploadId, 'bytes 0-999/2000', data.slice(0, 1000))).status).toBe(200);
+    const parts = world.calls.filter((c) => c.includes('/session/')).length;
+    // Otro link (el de Reset link) no sigue la subida del viejo.
+    const NEW = 'sdl_' + 'N'.repeat(43);
+    world.links.set(NEW, { files: { [FILE_A]: 3 }, mine: [] });
+    expect((await linkPart(p, uploadId, 'bytes 1000-1999/2000', data.slice(1000), NEW)).status).toBe(404);
+    // Revocado: 401 link_not_found y nada más a Drive.
+    world.links.set(LINK, { files: { [FILE_A]: 3 }, mine: [FILE_A], revoked: true });
+    const cut = await linkPart(p, uploadId, 'bytes 1000-1999/2000', data.slice(1000));
+    expect(cut.status).toBe(401);
+    expect(((await cut.json()) as { code: string }).code).toBe('link_not_found');
+    // El link pasó a Can view: tampoco.
+    world.links.set(LINK, { files: { [FILE_A]: 2 }, mine: [FILE_A] });
+    expect((await linkPart(p, uploadId, 'bytes 1000-1999/2000', data.slice(1000))).status).toBe(403);
+    expect(world.calls.filter((c) => c.includes('/session/')).length).toBe(parts);
+    expect(world.base.get(FILE_A)!.drive_id).toBeNull();
+  });
+
+  it('si el link se revoca justo antes de la última respuesta, el archivo queda en Drive sin confirmar (no se pierde, no entra)', async () => {
+    const { world, store, p } = await setup();
+    addBaseFile(world, FILE_A, { size: 10, levels: {} });
+    world.links.set(LINK, { files: { [FILE_A]: 3 }, mine: [FILE_A] });
+    const { started } = await linkUpload(p, FILE_A, bytes(10));
+    // La base deja de aceptarlo justo después de la comprobación de la parte: `plink_set_file_drive` lo rechaza.
+    const l = world.links.get(LINK)!;
+    let asked = 0;
+    const p2 = new Portero(env, store, (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const res = await world.http(input, init);
+      if (String(input).endsWith('/rpc/plink_media_file') && ++asked === 1) l.revoked = true;
+      return res;
+    }) as typeof fetch);
+    const done = (await (await linkPart(p2, started.uploadId as string, 'bytes 0-9/10', bytes(10))).json()) as { status: string; linked: boolean; file: { id: string } };
+    expect(done).toMatchObject({ status: 'done', linked: false });
+    expect(world.files.has(done.file.id)).toBe(true);
+    expect(world.base.get(FILE_A)!.drive_id).toBeNull();
   });
 });

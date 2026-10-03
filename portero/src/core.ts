@@ -195,6 +195,10 @@ interface MediaFile {
   drive_trashed_at?: string | null;
   /** Quién agregó el archivo (`files.created_by`; desde la migración de carpetas, P.9; antes no viene). */
   created_by?: string | null;
+  /** Con un link (`plink_media_file`, entrega 2b): el archivo lo registró este link. Sin el dato, no. */
+  mine?: boolean;
+  /** Con un link (entrega 2b): la huella del proyecto (`projectMark`), sin el id ni el nombre (P10). */
+  project_mark?: string;
 }
 
 export interface DriveFile {
@@ -224,6 +228,8 @@ const FOLDER_MIME = 'application/vnd.google-apps.folder';
 /** Nombres de carpeta sin espacios: guiones bajos, y el de la app igual al del repo. */
 const ROOT_FOLDER = 'LGA_ShotDocs';
 const TEST_FOLDER = 'Media_Test';
+/** Lo que sube un link cuando el portero no sabe la carpeta de su proyecto (entrega 2b, `linkDayFolder`). */
+const VIA_LINK_FOLDER = 'Via_link';
 /** Los nombres con espacios de v0.022–v0.026: una carpeta que todavía se llame así se renombra sola. */
 const OLD_NAMES: Record<string, string> = { [ROOT_FOLDER]: 'LGA Shot Docs', [TEST_FOLDER]: 'Media test' };
 /** Un pase de reproducción dura esto: si vence en medio de un video, la reproducción se corta. */
@@ -234,6 +240,15 @@ const LINK_PASS_MS = 2 * 60 * 60 * 1000;
 const LINK_TOKEN = /^sdl_[A-Za-z0-9_-]{43}$/;
 /** Lo único que un link público (Can view) le pide al portero: pases, comprobar archivos, listar carpetas y el estado. */
 const LINK_ROUTES = new Set(['POST /pass', 'POST /verify', 'POST /folder/list', 'GET /drive/status']);
+
+/**
+ * Lo que un link le puede pedir: lo de ver y, desde la entrega 2b (Docs/Doc_Link_Publico.md, E2.12), subir un archivo
+ * que registró (`POST /upload` y `PUT /upload/<id>`: el nivel 3 lo dice la base en cada pedido). Las carpetas (`/folder/*`
+ * de subir), nunca (LE7).
+ */
+function linkRoute(method: string, path: string): boolean {
+  return LINK_ROUTES.has(`${method} ${path}`) || (method === 'POST' && path === '/upload') || (method === 'PUT' && /^\/upload\/[^/]+$/.test(path));
+}
 /** Una parte de subida no puede pasar esto (el plan gratis de Workers acepta hasta 100 MB por pedido). */
 const MAX_CHUNK = 64 * 1024 * 1024;
 /** Tope del nombre de un archivo en un pase, en caracteres (el de casi todos los sistemas). */
@@ -396,6 +411,22 @@ export function validFolderPath(path: unknown): path is string {
 function parentPath(path: string): string {
   const at = path.lastIndexOf('/');
   return at < 0 ? '' : path.slice(0, at);
+}
+
+/** SHA-256 en hex. */
+async function sha256Hex(text: string): Promise<string> {
+  const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)));
+  return Array.from(hash, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** La huella de un token de link: lo que guarda una subida como "quién la abrió", nunca el token. */
+function tokenMark(token: string): Promise<string> {
+  return sha256Hex(token);
+}
+
+/** La huella de un proyecto, igual que la de `plink_media_file` (`sdproject:<id>`; entrega 2b). */
+export function projectMark(project: string): Promise<string> {
+  return sha256Hex(`sdproject:${project.toLowerCase()}`);
 }
 
 /** La ruta resumida (cabe en los 124 bytes de una `appProperties` de Drive). */
@@ -657,8 +688,8 @@ export class Portero {
       }
 
       const who = await this.whoami(req);
-      // Con un link público, solo lo de ver (nunca lo del dueño, subir ni la papelera).
-      if (who.link && !LINK_ROUTES.has(`${req.method} ${path}`)) {
+      // Con un link público, lo de ver y subir un archivo propio (nunca lo del dueño, las carpetas ni la papelera).
+      if (who.link && !linkRoute(req.method, path)) {
         throw new HttpError(403, 'This is not available through a link.', 'link_denied');
       }
       if (path === '/drive/status' && req.method === 'GET') return json(req, this.env, await this.status(who));
@@ -720,7 +751,9 @@ export class Portero {
     const link = req.headers.get('x-shotdocs-link');
     if (link !== null) {
       if (!LINK_TOKEN.test(link)) throw new HttpError(401, 'This link does not work anymore.', 'link_not_found');
-      return { userId: 'plink', isOwner: false, auth: `Bearer ${this.env.SUPABASE_PUBLISHABLE_KEY}`, link };
+      // Quién abrió una subida: la huella del token (E2.1). Una subida abierta con un link no la sigue otro link, ni
+      // el mismo después de *Reset link* (su token es otro).
+      return { userId: `plink:${await tokenMark(link)}`, isOwner: false, auth: `Bearer ${this.env.SUPABASE_PUBLISHABLE_KEY}`, link };
     }
     const auth = req.headers.get('Authorization') ?? '';
     if (!/^Bearer \S+$/.test(auth)) throw new HttpError(401, 'Sign in to the app first.');
@@ -765,7 +798,11 @@ export class Portero {
   private async linkFile(who: Who, file: string, drive: DriveFile): Promise<boolean> {
     let linked = false;
     try {
-      const res = await this.rpc(who.auth, 'set_file_drive', { p_file_id: file, p_drive_id: drive.id });
+      // Con un link, la base vuelve a validarlo y acepta solo un archivo que registró él (`plink_set_file_drive`): si se
+      // revocó mientras subía, el archivo queda en Drive sin confirmar (no se pierde y no entra).
+      const res = who.link
+        ? await this.rpc(who.auth, 'plink_set_file_drive', { p_file_id: file, p_drive_id: drive.id }, who.link)
+        : await this.rpc(who.auth, 'set_file_drive', { p_file_id: file, p_drive_id: drive.id });
       if (res.ok) linked = true;
       else {
         const error = (await res.json().catch(() => null)) as { message?: string } | null;
@@ -777,7 +814,8 @@ export class Portero {
     }
     const rec = (await this.store.get<FileRecord>(`file:${file}`)) ?? {};
     await this.store.put(`file:${file}`, { ...rec, drive, linked, verified: rec.verified ?? drive.id } satisfies FileRecord);
-    if (linked) await this.trashIfPurged(who, file, drive);
+    // Un link no confirma la papelera (`media_purged` es de una cuenta): lo termina el `/trash` del dueño.
+    if (linked && !who.link) await this.trashIfPurged(who, file, drive);
     return linked;
   }
 
@@ -1058,8 +1096,40 @@ export class Portero {
    */
   private async dayFolder(media: MediaFile, day: string): Promise<string> {
     const project = await this.projectFolder(media);
-    return this.once(`day:${media.project_id}:${day}`, async () => {
-      const key = `day:${media.project_id}:${day}`;
+    return this.dayIn(media.project_id, project, day);
+  }
+
+  /**
+   * La carpeta del día de un archivo que sube un link (entrega 2b, Docs/Doc_Link_Publico.md, E2.12). La base no le da al
+   * link el proyecto (P10): da su huella (`project_mark`), que el portero aprende cada vez que alguien del equipo sube algo
+   * a ese proyecto (`projectFolder`). Con ella, la misma carpeta del día que usa el equipo; sin ella (nadie del equipo
+   * subió nada desde esta versión del portero) o si esa carpeta ya no está, `LGA_ShotDocs/Via_link/<día>`. Nunca crea ni
+   * renombra la carpeta de un proyecto: no sabe su nombre.
+   */
+  private async linkDayFolder(media: MediaFile, day: string): Promise<string> {
+    const mark = typeof media.project_mark === 'string' && /^[0-9a-f]{64}$/.test(media.project_mark) ? media.project_mark : null;
+    const project = mark ? await this.store.get<string>(`projectmark:${mark}`) : undefined;
+    if (typeof project === 'string' && project) {
+      const saved = await this.store.get<ProjectFolder>(`project:${project}`);
+      if (saved) {
+        const found = await this.look(saved.id, saved.name);
+        if (found && !found.trashed) return this.dayIn(project, saved.id, day);
+      }
+    }
+    const root = await this.rootFolder();
+    const via = await this.once('viaLink', async () => {
+      const saved = await this.store.get<string>('viaLink');
+      const id = await this.folder(saved, VIA_LINK_FOLDER, root);
+      if (id !== saved) await this.store.put('viaLink', id);
+      return id;
+    });
+    return this.dayIn(VIA_LINK_FOLDER, via, day);
+  }
+
+  /** `<carpeta>/<AAAA-MM-DD>` (la de un proyecto, o `Via_link`), recordada con `day:<dueño>:<día>`. La crea si falta. */
+  private dayIn(owner: string, project: string, day: string): Promise<string> {
+    return this.once(`day:${owner}:${day}`, async () => {
+      const key = `day:${owner}:${day}`;
       const saved = await this.store.get<string>(key);
       if (saved) {
         const found = await this.look(saved, day);
@@ -1074,6 +1144,8 @@ export class Portero {
   /** `LGA_ShotDocs / <Proyecto>`, renombrada si el proyecto cambió de nombre (ver `dayFolder`). */
   private async projectFolder(media: MediaFile): Promise<string> {
     const root = await this.rootFolder();
+    // La huella del proyecto, para poner en esta misma carpeta lo que suba un link (`linkDayFolder`, entrega 2b).
+    await this.rememberProjectMark(media.project_id);
     return this.once(`project:${media.project_id}`, async () => {
       const key = `project:${media.project_id}`;
       const want = folderName(media.project_name ?? '');
@@ -1097,6 +1169,13 @@ export class Portero {
       await this.store.put(key, { id, name: want } satisfies ProjectFolder);
       return id;
     });
+  }
+
+  /** Anota `projectmark:<huella>` → el proyecto, una vez (lo llama solo una cuenta: un link nunca llega a `projectFolder`). */
+  private async rememberProjectMark(project: string): Promise<void> {
+    if (!project) return;
+    const key = `projectmark:${await projectMark(project)}`;
+    if ((await this.store.get<string>(key)) !== project) await this.store.put(key, project);
   }
 
   /** Cómo está una carpeta que ya conocemos; `null` si ya no existe. Un error pasajero no es "no existe". */
@@ -1145,6 +1224,7 @@ export class Portero {
     const body = await readBody(req);
     if (body.file !== undefined) return this.startFileUpload(body, who);
     // Sin `file`: la prueba de media, solo el dueño, a `Media_Test`.
+    if (who.link) throw new HttpError(403, 'This is not available through a link.', 'link_denied');
     if (!who.isOwner) throw new HttpError(403, 'Only the owner of the workspace can do this for now.');
     const size = Number(body.size);
     if (typeof body.name !== 'string' || !body.name || !Number.isSafeInteger(size) || size <= 0) {
@@ -1166,6 +1246,9 @@ export class Portero {
     // Una carpeta (P.9) no se sube como un archivo: su Drive lo crea `/folder/prepare`.
     if (media.mime === APP_FOLDER_MIME) throw new HttpError(409, 'This is a folder: drop it again to upload its files.', 'is_folder');
     if (media.level < 3) throw new HttpError(403, 'You cannot add files to this page.');
+    // Un link sube solo lo que registró él: con Can edit tiene nivel 3 sobre las fotos del equipo de su rama, y una que
+    // todavía no terminó de subir quedaría con sus bytes (el portero los recuerda y se los da a la base después).
+    if (who.link && media.mine !== true) throw new HttpError(403, 'Only files added through this link can be uploaded with it.', 'not_mine');
     const size = Number(media.size);
     if (body.size !== undefined && Number(body.size) !== size) throw new HttpError(400, 'The size does not match the file.');
 
@@ -1201,7 +1284,7 @@ export class Portero {
     // Una subida con bytes sigue como antes de la búsqueda aunque Drive no la haya contestado (o la rechace): la
     // búsqueda solo evita un duplicado, y una subida cortada por ella sería peor.
 
-    const folder = await this.dayFolder(media, day);
+    const folder = who.link ? await this.linkDayFolder(media, day) : await this.dayFolder(media, day);
     const name = (typeof body.name === 'string' && body.name ? body.name : media.name || 'file').slice(0, 250);
     const mime = media.mime || (typeof body.mime === 'string' && body.mime) || 'application/octet-stream';
     const meta = { name, parents: [folder], appProperties: { sdFile: file } };
@@ -1260,6 +1343,8 @@ export class Portero {
   private async uploadChunk(req: Request, uploadId: string, who: Who): Promise<unknown> {
     // Un archivo de una carpeta (P.9): la subida viene cifrada en el id y no hay nada guardado.
     const sealed = uploadId.startsWith('f.');
+    // Los archivos de una carpeta, nunca por un link (LE7).
+    if (sealed && who.link) throw new HttpError(403, 'This is not available through a link.', 'link_denied');
     const upload = sealed ? await this.folderUpload(uploadId) : await this.store.get<Upload>(`upload:${uploadId}`);
     if (!upload || upload.user !== who.userId) throw new HttpError(404, 'This upload does not exist anymore: start it again.');
     if (sealed && Date.now() - upload.createdAt > SESSION_MAX_MS) throw new HttpError(410, 'This upload expired: start it again.');
@@ -1277,6 +1362,9 @@ export class Portero {
         throw new HttpError(400, 'The part does not match the upload.');
       }
     }
+    // Con un link, cada parte vuelve a preguntarle a la base (un pase): revocar, *Reset link*, vencer o sacar la página
+    // de la rama corta la subida en la parte siguiente, no recién al terminar (E2.0: cortar al instante).
+    if (part && who.link && upload.file) await this.linkStillUploads(who, upload.file);
     const forward = async (signal?: AbortSignal): Promise<unknown> => {
       if (part) {
         const [, end, total] = part.slice(1).map(Number);
@@ -1350,6 +1438,14 @@ export class Portero {
     // La subida queda guardada: cuando el dueño libere espacio, la app la retoma desde lo que llegó.
     if (res.status === 403 && (await driveReasons(res)).includes('storageQuotaExceeded')) throw driveFull();
     throw new HttpError(502, `Google Drive answered ${res.status} to a part of the upload.`);
+  }
+
+  /** El link todavía edita una página que usa el archivo (nivel 3); si no, la parte no sale. */
+  private async linkStillUploads(who: Who, file: string): Promise<void> {
+    const media = await this.mediaFile(who, file);
+    if (!media) throw new HttpError(404, 'This file does not exist or you cannot see it.', 'not_found');
+    if (media.level < 3) throw new HttpError(403, 'You cannot add files to this page.', 'not_allowed');
+    if (media.mine !== true) throw new HttpError(403, 'Only files added through this link can be uploaded with it.', 'not_mine');
   }
 
   /** La subida terminó. Si es un archivo de la app, se le dice a la base dónde quedó (una vez). */
