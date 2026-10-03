@@ -40,7 +40,10 @@ import { errorMessage, isNetworkError, RemoteError } from '../sync/types';
 import { Permissions } from '../sync/access';
 import { versionNode } from './historyRestore';
 import { cleanClipboard, type HistoryMarksInput, type MarkLook } from './historyMarks';
-import { MoreIcon } from './icons';
+import { MoreIcon, WarningIcon } from './icons';
+import { HistoryAside } from './HistoryAside';
+import { useLinkAside } from './linkAside';
+import type { LinkAsideRow } from '../sync/linkAdmitApi';
 import { historyServices } from './historyServices';
 import { closeHistory, requestRestore, restoreTargetSettled } from './historyUi';
 import { dismissNotice, notify } from './notice';
@@ -264,6 +267,12 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
   }, []);
   /** El `seq` de la última fila conocida cuando se mostró la confirmación de restaurar (O1). */
   const confirmSeq = useRef(0);
+  // Lo que un link mandó a esta página y quedó apartado (entrega 2c): entradas *Set aside (via link)* en la lista, que se
+  // ven sin aplicarlas (no son versiones). Con la base en la versión 20 y para quien ve lo borrado.
+  const asideAll = useLinkAside(true);
+  const asideHere = useMemo(() => asideAll.rows.filter((r) => r.page_id === pageId), [asideAll, pageId]);
+  const [asideChosen, setAsideChosen] = useState<string | null>(null);
+  const asideRow = asideChosen ? (asideHere.find((r) => r.id === asideChosen) ?? null) : null;
 
   /**
    * Cómo estaba la red cuando el historial quedó sin conexión: con el dispositivo sin red, se vuelve a pedir cuando
@@ -905,14 +914,14 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
           {session && chosenName && <span className="history-version-name">{chosenName}</span>}
           {session && <span className="history-when">{whenLabel(session.end, lang)}</span>}
         </h1>
-        {session && (
+        {session && !asideRow && (
           <label className="history-changes" data-tip={tr('history.showChangesTip')}>
             <input type="checkbox" checked={showChanges} onChange={(e) => setShowChanges(e.target.checked)} />
             <span className="history-wide">{tr('history.showChanges')}</span>
             <span className="history-narrow">{tr('history.showChangesShort')}</span>
           </label>
         )}
-        {restoreButton}
+        {!asideRow && restoreButton}
       </header>
       {/* En el teléfono no hay tooltip: el motivo de que no se pueda restaurar, en una línea (O4 de la auditoría). */}
       {session && !isCurrent && blocker && !message && <p className="history-why">{blockerText[blocker]}</p>}
@@ -948,10 +957,11 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
           {(unknown || shapeOk === false) && <p className="banner">{tr('history.partial')}</p>}
           {current?.error && <p className="banner">{tr('history.versionFailed', { reason: current.error })}</p>}
           {/* Mientras se arma la versión, o su unión con los cambios. */}
-          {session && (!current || waitingUnion) && <p className="muted history-version-loading">{tr('history.loadingVersion')}</p>}
+          {asideRow && <HistoryAside row={asideRow} />}
+          {session && !asideRow && (!current || waitingUnion) && <p className="muted history-version-loading">{tr('history.loadingVersion')}</p>}
           {/* El texto huérfano (Doc_Historial.md, 5.4): lo que alguien escribió en algo ya borrado, en la versión de su
               fila. No está en la página ni en ninguna versión: solo acá. */}
-          {orphans.map((o, i) => {
+          {!asideRow && orphans.map((o, i) => {
             const who = ready?.rows[o.row]?.createdBy ?? null;
             return (
               <div key={`${o.row}:${i}`} className="history-orphan" style={{ '--hc': colorOf(who) } as CSSProperties}>
@@ -963,7 +973,7 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
               </div>
             );
           })}
-          {shown && !unknown && (
+          {shown && !unknown && !asideRow && (
             <article
               className={`page history-page${sheet ? ' sheet' : ''}${union ? ' history-changes-on' : ''}`}
               style={
@@ -1041,6 +1051,14 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
             onlyNamed={namesSupported && onlyNamed}
             onPick={(i) => {
               setChosen(sessions[i].seq);
+              setAsideChosen(null);
+              setMessage(null);
+              setPane('version');
+            }}
+            aside={asideHere}
+            asideChosen={asideChosen}
+            onPickAside={(id) => {
+              setAsideChosen(id);
               setMessage(null);
               setPane('version');
             }}
@@ -1192,6 +1210,9 @@ function SessionList({
   onlyNamed,
   onPick,
   actions,
+  aside = [],
+  asideChosen = null,
+  onPickAside,
 }: {
   sessions: HistorySession[];
   index: number;
@@ -1205,16 +1226,53 @@ function SessionList({
   onPick: (index: number) => void;
   /** El botón de acciones de cada versión (nombrar…), si se ofrece. */
   actions?: (s: HistorySession) => ReactNode;
+  /** Lo apartado de un link en esta página (entrega 2c): entradas que se ven y no se restauran. */
+  aside?: LinkAsideRow[];
+  asideChosen?: string | null;
+  onPickAside?: (id: string) => void;
 }) {
   const tr = useT();
   const order = sessions
     .map((s, i) => ({ s, i, labels: labelsOf(s) }))
     .filter(({ i, labels }) => !onlyNamed || labels.name !== null || i === sessions.length - 1)
     .reverse();
+  // Lo apartado va entre las versiones, por la hora en que llegó (no con *Only named versions*).
+  type Entry = { kind: 'session'; at: string; item: (typeof order)[number] } | { kind: 'aside'; at: string; row: LinkAsideRow };
+  const entries: Entry[] = order.map((item) => ({ kind: 'session' as const, at: item.s.end, item }));
+  if (!onlyNamed) {
+    for (const row of aside) {
+      const at = Date.parse(row.created_at);
+      const k = entries.findIndex((e) => Date.parse(e.at) < at);
+      entries.splice(k < 0 ? entries.length : k, 0, { kind: 'aside', at: row.created_at, row });
+    }
+  }
   let lastDay = '';
   return (
     <ol className="history-sessions">
-      {order.map(({ s, i, labels }) => {
+      {entries.map((entry) => {
+        if (entry.kind === 'aside') {
+          const { row } = entry;
+          const day = dayLabel(row.created_at, lang);
+          const header = day !== lastDay;
+          lastDay = day;
+          return (
+            <li key={`aside:${row.id}`} className="history-session-row history-aside-row">
+              {header && <h2 className="history-day">{day}</h2>}
+              <button className="history-session" aria-current={row.id === asideChosen ? 'true' : undefined} onClick={() => onPickAside?.(row.id)}>
+                <span className="history-aside-label">
+                  <WarningIcon size={13} /> {tr('history.aside')}
+                </span>
+                <span className="history-time" data-tip={tr('history.serverTimeTip')}>
+                  {timeLabel(row.created_at, lang)}
+                </span>
+                <span className="history-people">
+                  <span className="history-person">{tr('history.viaLink', { name: row.author })}</span>
+                </span>
+              </button>
+            </li>
+          );
+        }
+        const { s, i, labels } = entry.item;
         const day = dayLabel(s.end, lang);
         const header = day !== lastDay;
         lastDay = day;
@@ -1223,7 +1281,7 @@ function SessionList({
           // renglón (no se vuelve a crear).
           <li key={s.first} className="history-session-row">
             {header && <h2 className="history-day">{day}</h2>}
-            <button className="history-session" aria-current={i === index ? 'true' : undefined} onClick={() => onPick(i)}>
+            <button className="history-session" aria-current={i === index && asideChosen === null ? 'true' : undefined} onClick={() => onPick(i)}>
               {labels.name && <span className="history-name">{labels.name}</span>}
               <span className="history-time" data-tip={tr('history.serverTimeTip')}>
                 {timeLabel(s.end, lang)}

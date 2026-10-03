@@ -3,7 +3,7 @@ import { t } from '../i18n';
 import { toBase64 } from '../lib/base64';
 import type { MediaDb } from '../media/mediaDb';
 import { exportComments, unsyncedComments, type CommentsDb } from './comments';
-import { unsyncedDocStates, type LocalDb } from './localDb';
+import { STARTED_OVER_PREFIX, startedOverKey, unsyncedDocStates, type LocalDb } from './localDb';
 import { applyRowsInOrder, removedWritingKey, type RemovedWriting } from './removedWriting';
 import { CONTENT_FRAGMENT } from './structure';
 
@@ -67,6 +67,19 @@ function plainText(doc: Y.Doc): string {
   return lines.join('\n');
 }
 
+/** El texto de un update de Yjs suelto (sin GC: lo borrado con su texto también). Vacío si no se puede leer. */
+function textOf(update: Uint8Array): string {
+  const doc = new Y.Doc({ gc: false });
+  try {
+    Y.applyUpdate(doc, update);
+    return plainText(doc);
+  } catch {
+    return '';
+  } finally {
+    doc.destroy();
+  }
+}
+
 export interface UnsyncedExportInfo {
   appVersion: string;
   workspace: { url: string; localKey: string; name: string };
@@ -110,6 +123,17 @@ export async function exportUnsyncedBlob(
     whole.add(pageId);
   }
 
+  // Las páginas donde un visitante volvió a la versión del equipo: lo que tenía antes también va (entrega 2c).
+  const startedOver = await db.getAllKeys('meta', IDBKeyRange.bound(STARTED_OVER_PREFIX, `${STARTED_OVER_PREFIX}￿`));
+  for (const key of startedOver) {
+    const pageId = String(key).slice(STARTED_OVER_PREFIX.length);
+    if (states.some((s) => s.pageId === pageId)) continue;
+    const state = await db.get('docState', pageId);
+    if (!state) continue;
+    states.push(state);
+    whole.add(pageId);
+  }
+
   const head = {
     kind: 'lga-shotdocs-unsynced',
     formatVersion: 1,
@@ -126,9 +150,10 @@ export async function exportUnsyncedBlob(
   parts.push(',"pages":[');
   let first = true;
   for (const state of states) {
-    const [rows, removed] = await Promise.all([
+    const [rows, removed, before] = await Promise.all([
       db.getAllFromIndex('docUpdates', 'pageId', state.pageId),
       db.get('meta', removedWritingKey(state.pageId)),
+      db.get('meta', startedOverKey(state.pageId)),
     ]);
     // Sin GC y fila por fila, como la subida (B.16): lo propio que quedó adentro de algo que otro borró va con su
     // texto (borrado), no como hueco.
@@ -149,6 +174,8 @@ export async function exportUnsyncedBlob(
           removedWriting: Array.isArray(removed) ? (removed as RemovedWriting[]).map((n) => n.text) : [],
           yjsUpdate: toBase64(update),
           yjsFullState: toBase64(Y.encodeStateAsUpdate(doc)),
+          // Lo que tenía la página en este navegador antes de volver a la versión del equipo (entrega 2c).
+          ...(before instanceof Uint8Array ? { beforeStartingOver: { text: textOf(before), yjsUpdate: toBase64(before) } } : {}),
         }),
     );
     first = false;

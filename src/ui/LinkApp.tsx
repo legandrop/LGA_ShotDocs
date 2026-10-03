@@ -8,6 +8,7 @@ import {
   LinkContext,
   linkDomain,
   linkHeaders,
+  linkMemory,
   updateLink,
   visitorName,
   type LinkEntry,
@@ -63,6 +64,8 @@ export function LinkApp({ entry }: { entry: LinkEntry }) {
       },
       // Con Can edit, el nombre se lee al subir (sin nombre, lo escrito espera en este navegador).
       () => visitorName(entry.id),
+      // Lo mandado y lo apartado ya visto, guardado con el link (entrega 2c).
+      linkMemory(entry.id),
     );
     const user: AuthUser = { id: `link:${entry.id}`, email: '' };
     const workspace: ActiveWorkspace = { config: linkConfig(entry), client };
@@ -205,7 +208,8 @@ function DeadLink({ entry, remote, onLeave }: { entry: LinkEntry; remote: LinkRe
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const sent = remote.linkEdits();
-  const extra = [...new Set([...sent.waiting, ...sent.aside])];
+  // Lo que se mandó y puede no haber entrado: también lo de antes de recargar la app (guardado con el link, O9).
+  const extra = [...new Set([...sent.waiting, ...sent.aside, ...remote.sentPages()])];
   useEffect(() => {
     let live = true;
     // La app del link se cerró (sin la sincronización): se lee lo guardado aparte.

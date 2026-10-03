@@ -101,6 +101,16 @@ export interface LinkEntry {
   linkId: string;
   pageId: string;
   openedAt: number;
+  /**
+   * Las páginas donde este dispositivo mandó algo con el link (entrega 2c, O9 de la auditoría de la 2a): la pantalla de
+   * "este link ya no anda" las ofrece para bajar aunque se haya recargado la app después de mandar.
+   */
+  sent?: string[];
+  /**
+   * Por página, cuántas filas apartadas o esperando tenía este dispositivo cuando el visitante volvió a la versión del
+   * equipo (entrega 2c): el aviso de lo apartado se muestra solo si después se aparta algo más.
+   */
+  asideSeen?: Record<string, number>;
 }
 
 export interface LinkList {
@@ -190,6 +200,57 @@ export function updateLink(id: string, patch: Partial<Pick<LinkEntry, 'name' | '
   Object.assign(entry, patch);
   writeLinks(list, store);
   return entry;
+}
+
+/**
+ * Lo que el modo link recuerda de lo mandado, guardado con el link en este dispositivo (`LinkEntry.sent` y
+ * `asideSeen`). Lo usa `LinkRemote`; se lee cada vez (otra pestaña del mismo link también lo cambia).
+ */
+export interface LinkMemory {
+  sent(): string[];
+  addSent(pageId: string): void;
+  /** Deja de recordar estas páginas (lo mandado ya entró, o ya se bajó y se dejó atrás). */
+  dropSent(pageIds: string[]): void;
+  seen(): Record<string, number>;
+  setSeen(pageId: string, count: number): void;
+}
+
+/** Hasta cuántas páginas recuerda `sent` (las más recientes). */
+const SENT_KEEP = 500;
+
+export function linkMemory(id: string, store: KeyValueStore = browserStore()): LinkMemory {
+  const entry = () => readLinks(store).links.find((l) => l.id === id);
+  const change = (fn: (e: LinkEntry) => void) => {
+    const list = readLinks(store);
+    const e = list.links.find((l) => l.id === id);
+    if (!e) return;
+    fn(e);
+    writeLinks(list, store);
+  };
+  return {
+    sent: () => (Array.isArray(entry()?.sent) ? entry()!.sent!.filter((p) => typeof p === 'string') : []),
+    addSent: (pageId) => {
+      if (entry()?.sent?.includes(pageId)) return;
+      change((e) => {
+        e.sent = [...(Array.isArray(e.sent) ? e.sent : []).filter((p) => p !== pageId), pageId].slice(-SENT_KEEP);
+      });
+    },
+    dropSent: (pageIds) => {
+      const drop = new Set(pageIds);
+      if (!entry()?.sent?.some((p) => drop.has(p))) return;
+      change((e) => {
+        e.sent = (Array.isArray(e.sent) ? e.sent : []).filter((p) => !drop.has(p));
+      });
+    },
+    seen: () => {
+      const v = entry()?.asideSeen;
+      return v && typeof v === 'object' ? v : {};
+    },
+    setSeen: (pageId, count) =>
+      change((e) => {
+        e.asideSeen = { ...(e.asideSeen && typeof e.asideSeen === 'object' ? e.asideSeen : {}), [pageId]: count };
+      }),
+  };
 }
 
 /** Deja de abrir links al arrancar (volver a un workspace del dispositivo). No borra nada guardado. */

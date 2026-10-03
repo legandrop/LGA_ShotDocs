@@ -180,7 +180,7 @@ describe('el aviso de lo apartado y el historial', () => {
     vi.stubGlobal('URL', { ...URL, createObjectURL: (b: Blob) => (saved.push(b), 'blob:x'), revokeObjectURL: () => undefined });
     const host = await mount(services(d), <LinkAsideNotice pageId={page} />);
     expect(host.textContent).toContain("A change sent through the link couldn't be added to this page.");
-    expect(host.textContent).toContain('Reason: undecodable');
+    expect(host.textContent).toContain("Reason: the app couldn't add it safely.");
     const download = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Download it')!;
     await act(async () => download.click());
     await settle();

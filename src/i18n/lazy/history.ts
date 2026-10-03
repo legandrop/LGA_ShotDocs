@@ -34,6 +34,18 @@ export const history = {
   'history.you': { en: "You", es: "Vos" },
   'history.formerMember': { en: "Former member", es: "Ex miembro" },
   'history.viaLink': { en: "{name} (via link)", es: "{name} (vía link)" },
+  // Lo apartado de un link (entrega 2c): se ve en la lista, sin aplicarlo.
+  'history.aside': { en: "Set aside (via link)", es: "Apartado (vía link)" },
+  'history.asideTitle': {
+    en: "A change {name} sent through a link that couldn't be added",
+    es: "Un cambio que {name} mandó con un link y no se pudo sumar",
+  },
+  'history.asideText': {
+    en: "It's not on the page and not in any version: it's kept apart. Reason: {reason}.",
+    es: "No está en la página ni en ninguna versión: queda aparte. Motivo: {reason}.",
+  },
+  'history.asideTyped': { en: "What it brings:", es: "Lo que trae:" },
+  'history.asideEmpty': { en: "It brings no text.", es: "No trae texto." },
   'history.serverTimeTip': {
     en: "When it reached the server.\nWhat was written offline shows when it synced.",
     es: "Cuando llegó al servidor.\nLo escrito sin conexión figura cuando se sincronizó.",

@@ -306,11 +306,19 @@ export function shapeProblem(doc: Y.Doc, before: Map<number, number>): string | 
   return null;
 }
 
+/** Hasta dónde llega la página: grupos anidados (sangrías) y nodos anidados. */
+export interface PageDepth {
+  groups: number;
+  nodes: number;
+}
+
 /**
- * Si la página entera pasa los topes de profundidad (B4): grupos anidados (sangrías) y nodos, contados sin recursión
- * (con una pila propia, que no es la del motor de JavaScript) y sin recorrer más allá del tope. `null` si está bien.
+ * La profundidad de la página entera (B4): grupos anidados (sangrías) y nodos, contados sin recursión (con una pila
+ * propia, que no es la del motor de JavaScript). Con `stopAbove`, deja de recorrer apenas pasa esos topes (lo que mide
+ * es "más que eso"): así una fila hostil de miles de niveles se corta en milisegundos.
  */
-export function depthProblem(doc: Y.Doc): string | null {
+export function pageDepth(doc: Y.Doc, stopAbove?: PageDepth): PageDepth {
+  const out: PageDepth = { groups: 0, nodes: 0 };
   const stack: [Y.XmlElement | Y.XmlFragment, number, number][] = [[doc.getXmlFragment(CONTENT_FRAGMENT), 0, 0]];
   while (stack.length > 0) {
     const [node, depth, groups] = stack.pop()!;
@@ -319,11 +327,26 @@ export function depthProblem(doc: Y.Doc): string | null {
       const type = child.content.type;
       if (!(type instanceof Y.XmlElement)) continue;
       const g = groups + (type.nodeName === 'blockGroup' ? 1 : 0);
-      if (g > MAX_GROUP_DEPTH) return `more than ${MAX_GROUP_DEPTH} nested groups`;
-      if (depth + 1 > MAX_NODE_DEPTH) return `more than ${MAX_NODE_DEPTH} nested nodes`;
+      if (g > out.groups) out.groups = g;
+      if (depth + 1 > out.nodes) out.nodes = depth + 1;
+      if (stopAbove && (out.groups > stopAbove.groups || out.nodes > stopAbove.nodes)) return out;
       stack.push([type, depth + 1, g]);
     }
   }
+  return out;
+}
+
+/**
+ * Si la página pasa los topes de profundidad (B4) **por lo que agregó la fila**: más de `MAX_GROUP_DEPTH` grupos
+ * anidados o `MAX_NODE_DEPTH` nodos, y más hondo que antes (`before`). Una página del equipo que ya pasaba el tope (una
+ * importación, cien sangrías) sigue admitiendo lo que no la hace más honda (R1 de la re-verificación de la 2a): el
+ * editor del equipo ya la dibuja. `null` si está bien.
+ */
+export function depthProblem(doc: Y.Doc, before: PageDepth = { groups: 0, nodes: 0 }): string | null {
+  const limit: PageDepth = { groups: Math.max(MAX_GROUP_DEPTH, before.groups), nodes: Math.max(MAX_NODE_DEPTH, before.nodes) };
+  const after = pageDepth(doc, limit);
+  if (after.groups > limit.groups) return `more than ${limit.groups} nested groups`;
+  if (after.nodes > limit.nodes) return `more than ${limit.nodes} nested nodes`;
   return null;
 }
 

@@ -10,6 +10,7 @@ import {
   GENERATION_KEY,
   hasUnsyncedContent,
   onlyGuard,
+  startedOverKey,
   storedGeneration,
   updateDocState,
   type DocState,
@@ -56,6 +57,18 @@ const WRITE_RETRY_MS = 3000;
  * que vuelve a subir entera (después de restaurar una copia de seguridad).
  */
 export const NO_GC_MAX_BYTES = 6 * 1024 * 1024;
+
+/** Lo guardado cambió entre la copia y volver a la versión del equipo (`replaceWithServer`): no se tocó nada. */
+export const LOCAL_CHANGED = 'local_changed';
+
+/** Cómo estaba guardada una página (ver `PageDocs.localMark`). */
+export interface LocalMark {
+  keys: number[];
+  dirty: string | null;
+  version: number;
+  /** Nada en memoria sin guardar. */
+  saved: boolean;
+}
 
 interface LiveDoc {
   doc: Y.Doc;
@@ -1131,6 +1144,82 @@ export class PageDocs {
       }),
     );
     return true;
+  }
+
+  /**
+   * Cómo está guardada la página ahora (las filas, la marca de lo sin subir, la versión): para volver a la versión del
+   * equipo (`replaceWithServer`) solo si nada cambió desde que se bajó la copia (Docs/Doc_Link_Publico.md, entrega 2c).
+   */
+  async localMark(pageId: string): Promise<LocalMark> {
+    await this.flush(pageId);
+    const tx = this.db.transaction(['docUpdates', 'docState', 'meta'], 'readonly');
+    const [keys, state, dirty] = await Promise.all([
+      tx.objectStore('docUpdates').index('pageId').getAllKeys(pageId),
+      tx.objectStore('docState').get(pageId),
+      tx.objectStore('meta').get(dirtyKey(pageId)),
+    ]);
+    await tx.done;
+    return { keys: keys.map(Number), dirty: typeof dirty === 'string' ? dirty : null, version: state?.version ?? 0, saved: this.isSaved(pageId) };
+  }
+
+  /**
+   * Volver a la página como la ve el equipo (un visitante con un link, entrega 2c): lo guardado de la página se cambia por
+   * lo que manda el servidor (`updates`, la base limpia), como un dispositivo que la baja de cero. Solo si lo guardado es
+   * exactamente lo de `mark` (lo que se bajó como copia antes): si se escribió algo en el medio, no se toca nada y tira
+   * `LOCAL_CHANGED`. Lo de antes no se tira: queda junto, en `meta` (`startedOverKey`), y sale en "bajar lo pendiente".
+   * El documento abierto se vuelve a armar desde lo guardado (la página lo reabre, con otro autor de Yjs: lo que se
+   * escriba ahora ya no cuelga de lo apartado).
+   */
+  replaceWithServer(pageId: string, updates: RemoteUpdate[], mark: LocalMark): Promise<void> {
+    return this.withLock(pageId, async () => {
+      await this.flush(pageId);
+      if (!mark.saved || !this.isSaved(pageId)) throw new Error(LOCAL_CHANGED);
+      const tx = this.db.transaction(['docUpdates', 'docState', 'meta'], 'readwrite');
+      const index = tx.objectStore('docUpdates').index('pageId');
+      const [keys, rows, stored, dirty, kept] = await Promise.all([
+        index.getAllKeys(pageId),
+        index.getAll(pageId),
+        tx.objectStore('docState').get(pageId),
+        tx.objectStore('meta').get(dirtyKey(pageId)),
+        tx.objectStore('meta').get(startedOverKey(pageId)),
+      ]);
+      const same =
+        keys.length === mark.keys.length &&
+        keys.every((k, i) => Number(k) === mark.keys[i]) &&
+        (typeof dirty === 'string' ? dirty : null) === mark.dirty &&
+        (stored?.version ?? 0) === mark.version;
+      if (!same) {
+        tx.abort();
+        await tx.done.catch(() => undefined);
+        throw new Error(LOCAL_CHANGED);
+      }
+      // Lo de antes, junto con lo de una vuelta anterior: nunca se pierde (sin ningún await en el medio).
+      const before = [...(kept instanceof Uint8Array ? [kept] : []), ...rows.map((r) => r.data)];
+      if (before.length > 0) await tx.objectStore('meta').put(Y.mergeUpdates(before), startedOverKey(pageId));
+      await Promise.all(keys.map((k) => tx.objectStore('docUpdates').delete(k)));
+      await tx.objectStore('meta').delete(dirtyKey(pageId));
+      // Como una página que este dispositivo nunca tuvo, sin nada pendiente: la versión queda confirmada (una versión
+      // anterior de la app que abra esta base tampoco la ve pendiente).
+      const version = stored?.version ?? 0;
+      await tx.objectStore('docState').put({ pageId, cursor: 0, version, ackedVersion: version });
+      await tx.done;
+      const live = this.live.get(pageId);
+      // Lo que llega no se aplica al documento abierto (tiene lo de antes): se arma de nuevo desde lo guardado.
+      if (live) live.stale = true;
+      if (updates.length > 0) await this.applyRemote(pageId, updates);
+      if (live) for (const fn of this.unsupportedListeners) fn(pageId);
+    });
+  }
+
+  /**
+   * La página cambió en otra pestaña (volvió a la versión del equipo, entrega 2c): el documento abierto acá se vuelve a
+   * armar desde lo guardado.
+   */
+  reloadFromSaved(pageId: string): void {
+    const live = this.live.get(pageId);
+    if (!live) return;
+    live.stale = true;
+    for (const fn of this.unsupportedListeners) fn(pageId);
   }
 
   /**

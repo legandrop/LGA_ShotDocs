@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { t } from '../i18n';
 import { fromBase64, toBase64 } from '../lib/base64';
 import { linkAuthorKey, type HistoryRow, type PageVersionRow } from './history';
-import { parseAdmitResults, type AdmitDecision, type AdmitPageRow, type AdmitResult, type AdmitWorkRow, type LinkUpdateRow } from './linkAdmitApi';
+import { parseAdmitResults, type AdmitDecision, type AdmitPageRow, type AdmitResult, type AdmitWorkRow, type LinkAsideRow, type LinkUpdateRow } from './linkAdmitApi';
 import { THUMB_MAX_BYTES } from '../media/probe';
 import { CLEAN_SCHEMA_VERSION } from './clean';
 import { MAX_FILE_BYTES } from './files';
@@ -1171,6 +1171,24 @@ export class SupabaseRemote
       created_at: String(r.created_at),
       bytes: Number(r.bytes),
       state: r.state === 'aside' || r.state === 'held' ? r.state : 'waiting',
+      reason: typeof r.reason === 'string' ? r.reason : null,
+    }));
+  }
+
+  /** Lo apartado de todos los links en las páginas que la persona ve con lo borrado (entrega 2c). Sin la migración: nada. */
+  async linkAside(): Promise<LinkAsideRow[]> {
+    const { data, error, status } = await timed(this.client.rpc('public_link_aside'));
+    if (error?.code === MISSING_FUNCTION) return [];
+    if (error) throw toRemoteError(error, status);
+    return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+      id: String(r.id),
+      page_id: String(r.page_id),
+      link_id: String(r.link_id),
+      link_page_id: String(r.link_page_id),
+      author: String(r.author),
+      created_at: String(r.created_at),
+      decided_at: typeof r.decided_at === 'string' ? r.decided_at : null,
+      bytes: Number(r.bytes),
       reason: typeof r.reason === 'string' ? r.reason : null,
     }));
   }
