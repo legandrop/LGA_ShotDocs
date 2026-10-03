@@ -171,7 +171,14 @@ export interface FailedOp {
   opSeq?: number;
   op: TreeOp;
   error: string;
+  /** Cuándo falló, con el reloj del dispositivo: solo para mostrarlo. Nunca decide nada contra el reloj del servidor. */
   failedAt: number;
+  /**
+   * El `updated_at` que tenía la página en la copia del dispositivo al fallar (reloj del servidor, salvo que el
+   * dispositivo la haya tocado al confirmar un cambio suyo). `null`: la página no estaba en la copia. Sin el campo: lo
+   * guardó una versión anterior a 0.153. Dice si la fila cambió después del rechazo (`PageTree.titleChangedAfter`).
+   */
+  rowUpdatedAt?: string | null;
 }
 
 /** Los ajustes del workspace (`workspace_settings`): una sola fila que la app lee en cada sincronización. */
