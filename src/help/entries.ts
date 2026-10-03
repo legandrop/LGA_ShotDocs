@@ -175,7 +175,7 @@ const HELP_3 = '0.158';
 /** El contraste del texto (Docs/Doc_Contraste.md). */
 const CONTRAST = '0.161';
 /** Los links a los archivos en el PDF (P.30, Doc_Links_PDF.md, entrega 1): el número lo pone quien publica. */
-const FILE_LINKS = '0.163';
+const FILE_LINKS = '0.0XX';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---

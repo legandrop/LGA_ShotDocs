@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.163 :
+v0.0XX :
 
 **Links a los archivos en el PDF, entrega 1** (P.30, `Doc_Links_PDF.md`). En el PDF (exportar o imprimir) los
 adjuntos, las carpetas y los videos salían solo como imagen: la copia de impresión no ponía ningún link y el portero no
