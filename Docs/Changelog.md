@@ -11,6 +11,18 @@ nada del archivo; decide `media_file`. Después del `#` va el Supabase del works
 *Export* puede usar el link público de la página (aviso con página y nivel; *Can edit* destildado); imprimir, nunca.
 
 [ Links a los archivos en el PDF, entrega 1 - la dirección fija /f/ de cada archivo con el Supabase después del #, la tarjeta y el nombre como link en el PDF, una sola pantalla sin acceso, el link público solo desde Export con su aviso ]
+
+v0.163 :
+
+**La barra de formato con los tooltips de la app (D226, B.25a y B.25c).** Los botones propios de BlockNote en la barra
+(*Bold*, *Italic*, *Underline*, *Strike*, alinear, *Colors*, *Nest*, *Link*) seguían con su globo: el nombre arriba y el
+atajo escrito por BlockNote abajo, fuera del formato y del registro. No se podía cambiar botón por botón sin rehacerlos.
+Ahora la barra le da a BlockNote su propio botón (`toolbarTips.tsx`, por el contexto de componentes): cada uno conserva
+lo que hace, marcado y apagado, y su tooltip es `data-tip` con «**⌘B**: bold» y el atajo del registro, o solo el nombre
+si no tiene atajo; en pantallas táctiles, sin atajos. Una prueba con la barra real comprueba que el globo de BlockNote
+ya no aparece. Además, una prueba del anotador en una ventana angosta con mouse: conserva los atajos.
+[ Barra de formato con los tooltips de la app - los botones de BlockNote con un renglón «atajo: acción» del registro o su nombre, sin su globo, y la prueba del anotador angosto con mouse ]
+
 v0.162 :
 
 **Una sola papelera** (pedido de Lega). Había dos: *Trash* abajo de la barra lateral (páginas y archivos) y *Deleted
