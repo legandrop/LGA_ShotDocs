@@ -5271,6 +5271,19 @@ button.thread-anchor:hover:not(:disabled) {
   .comment-add {
     right: 0;
   }
+
+  /* El botón de comentar entra justo en el margen de la página (--gutter, 20 px): con sus 28 px de siempre tapaba hasta
+     8 px del final de un renglón muy largo. Para el dedo, el área que responde se estira para arriba y para abajo (el
+     ancho es el del margen: nunca llega al texto). */
+  .comment-add {
+    width: var(--gutter);
+  }
+
+  .comment-add::after {
+    content: '';
+    position: absolute;
+    inset: -10px 0;
+  }
 }
 
 /* --- Pantalla de permiso de un asistente (MCP, Doc_Asistente.md, 9.2) ------------------------------ */
