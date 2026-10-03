@@ -198,6 +198,7 @@ describe('la papelera en el selector de proyectos', () => {
     expect(document.querySelector('.trash-menu [title]')).toBeNull();
     // *Empty* es de los archivos: con *All* no está.
     expect(byText('Empty')).toBeUndefined();
+    expect(panel()!.textContent).not.toContain('Photos and videos that no page outside the trash uses anymore.');
   });
 
   it('con *All projects* suma lo de los otros proyectos, con el nombre de cada uno', async () => {
