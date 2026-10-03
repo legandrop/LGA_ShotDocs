@@ -145,7 +145,7 @@ const ANNOTATE_COPY = '0.132';
 /** La clave del asistente sincronizada, entrega S1 (Doc_Clave_Sincronizada.md). El número lo pone quien publica. */
 const ASSISTANT_SYNC = '0.138';
 /** La clave sincronizada, entrega S2 (cambiar la frase, computadora prestada, varios workspaces). El número lo pone quien publica. */
-const ASSISTANT_SYNC_S2 = '0.0XX';
+const ASSISTANT_SYNC_S2 = '0.143';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---

@@ -1,7 +1,7 @@
 import { t } from '../i18n';
 import type { LocalDb } from './localDb';
 import type { Remote } from './remote';
-import { errorMessage, isNetworkError, isTimeout, REQUEST_TIMEOUT, STALLS_TO_CLOSE_ROUND } from './types';
+import { errorMessage, isNetworkError, isTimeout, MAX_STALL_WAIT_MS, REQUEST_TIMEOUT, STALLS_TO_CLOSE_ROUND, stallWait } from './types';
 
 /** Las imágenes se guardan en el documento con esta dirección, que no depende de ningún servidor. */
 export const FILE_SCHEME = 'sdfile://';
@@ -34,12 +34,20 @@ export class FileRejected extends Error {}
 export class PageFiles {
   private readonly objectUrls = new Map<string, string>();
   private readonly downloads = new Map<string, Promise<string>>();
+  /**
+   * La pasada dejó de subir porque Storage no contestó para dos imágenes seguidas (ver `pushPending`): hasta `until`
+   * no se vuelve a probar, y cada vez que vuelve a pasar se espera más (`count`: 10 s, 20 s… hasta 10 minutos).
+   * Sin esto, cada ciclo del motor esperaba dos topes enteros (hasta unos 27 minutos cada uno con una imagen de 25 MB)
+   * antes de los comentarios. Vuelve a cero cuando una imagen sube. Solo en memoria: al recargar se prueba enseguida.
+   */
+  private stallPause: { until: number; count: number; error: string } | null = null;
 
   onQueued?: () => void;
 
   constructor(
     private readonly db: LocalDb,
     private readonly remote: Remote,
+    private readonly now: () => number = Date.now,
   ) {}
 
   async add(pageId: string, file: Blob & { name?: string }): Promise<string> {
@@ -59,6 +67,9 @@ export class PageFiles {
       uploaded: 0,
       createdAt: Date.now(),
     });
+    // Si la pasada esperaba porque Storage no contestaba, una imagen nueva acorta la espera a la más corta (sin volver
+    // la cuenta a cero): si ya anda, sube enseguida; si sigue colgado, la espera siguiente es más larga.
+    if (this.stallPause) this.stallPause.until = Math.min(this.stallPause.until, this.now() + stallWait(1));
     this.onQueued?.();
     return FILE_SCHEME + path;
   }
@@ -146,6 +157,12 @@ export class PageFiles {
    * sincronización, y ninguna se descarta. Devuelve el último error, si hubo.
    */
   async pushPending(skipPage: (pageId: string) => boolean): Promise<string | null> {
+    // Storage no contestaba para nadie: hasta que pase la espera no se prueba (el error sigue a la vista). Un plazo
+    // más largo que la espera más larga posible es un reloj que saltó hacia atrás: se da por vencido.
+    if (this.stallPause) {
+      if (this.stallPause.until - this.now() > MAX_STALL_WAIT_MS) this.stallPause.until = 0;
+      if (this.now() < this.stallPause.until) return this.stallPause.error;
+    }
     // Las que ya vencieron su tope van al final: si dos están colgadas solo para ellas, irían siempre primero,
     // cortarían la pasada (abajo) y las demás no subirían nunca.
     const pending = (await this.db.getAllFromIndex('files', 'uploaded', 0)).sort(
@@ -160,6 +177,7 @@ export class PageFiles {
         await this.remote.uploadFile(file.path, file.data, file.mime);
         await this.db.put('files', { ...file, uploaded: 1, lastError: undefined });
         timeouts = 0;
+        this.stallPause = null;
       } catch (err) {
         lastError = errorMessage(err);
         await this.db.put('files', { ...file, lastError });
@@ -167,7 +185,12 @@ export class PageFiles {
         // pasada siguiente empezara otra vez por ella y las demás no subirían nunca. Dos seguidas, sí: Storage
         // está colgado para todas y cada una esperaría su tope entero. Una falla de red de verdad corta siempre.
         if (isTimeout(err)) {
-          if (++timeouts >= STALLS_TO_CLOSE_ROUND) break;
+          if (++timeouts >= STALLS_TO_CLOSE_ROUND) {
+            // Y las pasadas siguientes esperan antes de volver a probar (la imagen sigue en el dispositivo).
+            const count = (this.stallPause?.count ?? 0) + 1;
+            this.stallPause = { until: this.now() + stallWait(count), count, error: lastError };
+            break;
+          }
           continue;
         }
         timeouts = 0;
@@ -175,5 +198,13 @@ export class PageFiles {
       }
     }
     return lastError;
+  }
+
+  /**
+   * Volvió la red (el evento `online`, o la base contestó después de un ciclo sin conexión): si la pasada esperaba
+   * porque Storage no contestaba, puede que fuera la red; prueba enseguida, sin volver la cuenta a cero.
+   */
+  networkBack(): void {
+    if (this.stallPause) this.stallPause.until = 0;
   }
 }

@@ -1,6 +1,6 @@
 # La clave del asistente en todos tus dispositivos (D72 → B)
 
-**Estado: entregas S1 (v0.138) y S2 (v0.0XX) implementadas; ver "Cómo quedó S1" y "Cómo quedó S2", al final. S2 no
+**Estado: entregas S1 (v0.138) y S2 (v0.143) implementadas; ver "Cómo quedó S1" y "Cómo quedó S2", al final. S2 no
 tiene migración** (roadmap P.24; pedido de Lega del 2026-10-02, que cambió D72 de A a B: "la clave
 sincronizada entre tus dispositivos, cifrada con una frase que solo sabés vos"). Reemplaza la parte de IA1 de
 `Doc_Asistente.md` que decía "se carga una vez por dispositivo"; todo lo demás de la sección 4 de ese documento (la
@@ -743,7 +743,7 @@ y que `signOut({ scope: 'others' })` corte de verdad otro dispositivo (los tres 
   nombra el workspace por su host si no tiene nombre. **O5.** El mutante "sin `user_id` en el `with check`" es
   equivalente (los permisos por columna y el trigger ya lo impiden), anotado en la prueba SQL y en `Doc_Supabase.md`.
 
-## Cómo quedó S2 (v0.0XX)
+## Cómo quedó S2 (v0.143)
 
 **Qué hay.** Sin migración ni cambios en la tabla, sin subir `schema_version` ni `min_app_version`; la base
 `shotdocs-assistant` sigue en la versión 1.

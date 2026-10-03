@@ -1,7 +1,7 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { stored, t } from '../i18n';
-import { isNetworkError } from '../sync/types';
-import { normalizeMime } from './queue';
+import { isNetworkError, STALLS_TO_CLOSE_ROUND, stallWait } from '../sync/types';
+import { normalizeMime, STALLS_BEFORE_RENEW } from './queue';
 import { sortDirs, type FolderFile, type FolderSource } from './folderRead';
 import { PorteroError, UploadError, type FolderPrepared, type FolderSession, type FolderSessionItem, type UploadOptions, type UploadResult } from './portero';
 
@@ -13,7 +13,8 @@ import { PorteroError, UploadError, type FolderPrepared, type FolderSession, typ
 // carpeta en su tarjeta se compara por ruta y peso y se sube solo lo que falta.
 //
 // Va por un camino propio, que nunca frena a las fotos y adjuntos de las páginas: hasta 3 archivos a la vez,
-// pausa por carpeta, un error por archivo que no frena a los demás, y si Drive pide ir más despacio, espera.
+// pausa por carpeta, un error por archivo que no frena a los demás, y si Drive pide ir más despacio, espera. Con el
+// portero colgado para todos, cierra la vuelta como la cola de los archivos sueltos (ver `stallStreak`).
 
 /** Archivos a la vez. */
 export const FOLDER_CONCURRENCY = 3;
@@ -47,6 +48,12 @@ export interface FolderItem {
   error: string | null;
   /** Su carpeta no se pudo crear en Drive (el portero no aceptó la ruta): no se sube, ni con "Retry". */
   skipped?: boolean;
+  /**
+   * Trabadas seguidas sin avanzar (el portero dejó de moverse). No gastan intentos: con el portero colgado para todos
+   * no es culpa del archivo. Los que se trabaron van después de los demás, y cada `STALLS_BEFORE_RENEW` se pide otra
+   * subida si la que hay no recibió nada. Lo guardado por una versión anterior no lo trae (vale 0).
+   */
+  stalls?: number;
 }
 
 /** Una carpeta que se sube desde este dispositivo. */
@@ -125,6 +132,17 @@ interface Running {
   wake: (() => void) | null;
   /** Ya se volvió a armar el árbol en esta vuelta (el portero dijo que una subcarpeta no era de esta carpeta). */
   rebuilt: boolean;
+  /**
+   * Archivos seguidos que se trabaron sin avanzar. A `STALLS_TO_CLOSE_ROUND` la cola deja de empezar archivos, espera
+   * los que están en curso y después `stallWait(stallRounds)` antes de volver a probar: sin esto, con el portero
+   * colgado para todos cada archivo esperaba su tope (uno o dos minutos) y gastaba sus 5 intentos hasta quedar con
+   * su error. Vuelve a cero cuando un archivo avanza o termina.
+   */
+  stallStreak: number;
+  /** Cuántas veces seguidas se cerró la vuelta así (de esto sale la espera). */
+  stallRounds: number;
+  /** Lo más que el portero confirmó de cada archivo en esta sesión: avanzar es pasar de ahí. */
+  best: Map<string, number>;
 }
 
 export interface FolderUploadsOptions {
@@ -188,9 +206,13 @@ export class FolderUploads {
     return this.running.has(id);
   }
 
-  /** La carpeta que se sube tiene algún archivo con una de esas rutas (para reconocer la misma carpeta soltada otra vez). */
+  /**
+   * La carpeta que se sube tiene algún archivo con una de esas rutas (para reconocer la misma carpeta soltada otra
+   * vez). Sin mirar la forma de los acentos (`samePath`).
+   */
   hasAnyPath(id: string, paths: ReadonlySet<string>): boolean {
-    return !!this.running.get(id)?.items.some((i) => paths.has(i.path));
+    const wanted = new Set([...paths].map(samePath));
+    return !!this.running.get(id)?.items.some((i) => wanted.has(samePath(i.path)));
   }
 
   /**
@@ -229,16 +251,18 @@ export class FolderUploads {
 
   /**
    * Se volvió a soltar la carpeta (después de cerrar la pestaña): cada archivo que falta se toma de ahí si tiene
-   * la misma ruta y el mismo peso. Devuelve cuántos se encontraron.
+   * la misma ruta y el mismo peso. La ruta se compara sin mirar la forma de los acentos (`samePath`): la Mac y
+   * Windows los dan distinto, y una carpeta en un disco externo puede traer cualquiera de las dos. Lo que se sube va
+   * con la ruta de la lista de trabajo (la de las subcarpetas ya creadas). Devuelve cuántos se encontraron.
    */
   resumeWith(id: string, source: FolderSource): number {
     const r = this.running.get(id);
     if (!r) return 0;
-    const byPath = new Map<string, FolderFile>(source.files.map((f) => [f.path, f]));
+    const byPath = new Map<string, FolderFile>(source.files.map((f) => [samePath(f.path), f]));
     let found = 0;
     for (const item of r.items) {
       if (item.done || item.skipped) continue;
-      const f = byPath.get(item.path);
+      const f = byPath.get(samePath(item.path));
       if (f && f.file.size === item.size) {
         r.files.set(item.path, f.file);
         found++;
@@ -341,6 +365,9 @@ export class FolderUploads {
       noteAt: 0,
       wake: null,
       rebuilt: false,
+      stallStreak: 0,
+      stallRounds: 0,
+      best: new Map(),
     };
   }
 
@@ -495,15 +522,37 @@ export class FolderUploads {
     const running = new Set<Promise<void>>();
     for (;;) {
       if (r.job.paused || this.stopped) break;
+      // El portero no se mueve para nadie: no se empieza otro archivo; se esperan los que están en curso (terminan o
+      // se traban) y, si nadie avanzó, se espera cada vez más antes de volver a probar. No se gasta ningún intento.
+      if (r.stallStreak >= STALLS_TO_CLOSE_ROUND) {
+        await Promise.all([...running]);
+        if (r.job.paused || this.stopped) break;
+        if (r.stallStreak >= STALLS_TO_CLOSE_ROUND) {
+          r.stallRounds++;
+          r.problem = stored('folder.serverStalled');
+          await this.pauseFor(r, stallWait(r.stallRounds));
+          r.stallStreak = 0;
+        }
+        continue;
+      }
+      // Uno se trabó sin avanzar: no se empieza otro hasta que los que están en curso terminen o se traben. Si el
+      // portero está colgado para todos, se traban juntos y la vuelta se cierra sin probar más archivos; si era solo
+      // ese, el que termina vuelve la cuenta a cero y se sigue como siempre.
+      if (r.stallStreak > 0 && running.size > 0) {
+        await Promise.race(running);
+        continue;
+      }
       const ready = r.items.filter((i) => !i.done && !i.skipped && i.tries < FOLDER_TRIES && r.files.has(i.path) && !r.active.has(i.path));
       if (ready.length === 0 && running.size === 0) break;
       if (ready.length === 0 || r.active.size >= FOLDER_CONCURRENCY) {
         await Promise.race(running);
         continue;
       }
-      const next = ready[0]!;
+      // Primero los que nunca se trabaron: si uno está colgado solo para él, no va siempre adelante de los demás.
+      let next = ready[0]!;
+      for (const i of ready) if ((i.stalls ?? 0) < (next.stalls ?? 0)) next = i;
       if (!next.uploadId) {
-        const batch = ready.filter((i) => !i.uploadId).slice(0, FOLDER_BATCH);
+        const batch = [next, ...ready.filter((i) => !i.uploadId && i !== next)].slice(0, FOLDER_BATCH);
         try {
           await this.openSessions(r, portero, batch);
           waits = 0;
@@ -600,23 +649,58 @@ export class FolderUploads {
     const abort = new AbortController();
     const slot = { sent: 0, abort };
     r.active.set(item.path, slot);
+    const stalls = item.stalls ?? 0;
+    // Cada `STALLS_BEFORE_RENEW` trabadas seguidas, si la subida que hay no recibió nada, se pide otra (puede ser
+    // la subida la que se cuelga). Recién con la respuesta del portero: si ya hubiera terminado, no se abre otra.
+    const renew = stalls > 0 && stalls % STALLS_BEFORE_RENEW === 0;
+    // Lo que el portero ya había confirmado de este archivo: la primera respuesta de este intento es la base.
+    let best = r.best.get(item.path);
+    let advanced = false;
     try {
       await portero.upload(file, {
         resume: item.uploadId,
         noOpen: true,
+        renewIfEmpty: renew,
+        // Cada trabada seguida le da más plazo a la respuesta de la parte: lento termina pasando.
+        stalledBefore: stalls,
         signal: abort.signal,
         onProgress: (p) => {
           slot.sent = p.sent;
+          if (best === undefined) best = p.sent;
+          else if (p.sent > best) {
+            best = p.sent;
+            advanced = true;
+            this.moved(r, item);
+          }
+          r.best.set(item.path, best);
           this.note(r.job.id);
           this.emit();
         },
       });
       item.done = true;
       item.error = null;
+      this.moved(r, item);
+      r.best.delete(item.path);
     } catch (err) {
       if (err instanceof UploadError && err.cancelled) return;
       // El portero ya no tiene la subida (o venció): se pide otra en la próxima tanda.
       if (err instanceof UploadError && !err.uploadId) item.uploadId = null;
+      // Se trabó (el portero dejó de moverse): no gasta un intento. Sin avance, cuenta para cerrar la vuelta.
+      if (err instanceof UploadError && err.stalled) {
+        item.stalls = (item.stalls ?? 0) + 1;
+        if (!advanced) r.stallStreak++;
+        item.error = describe(err);
+        return;
+      }
+      // La subida que no había recibido nada se dejó para pedir otra (`renew`): no es un intento. Tampoco es una
+      // trabada de la vuelta: el portero contestó (el cliente pide otra siempre que no llegó nada, también con el
+      // portero sano), y contarla cerraba la vuelta otra vez justo cuando el portero volvía. Sí suma al archivo, para
+      // que el intento siguiente no vuelva a pedir otra.
+      if (renew && err instanceof UploadError && !err.uploadId && err.sent === 0) {
+        item.stalls = (item.stalls ?? 0) + 1;
+        item.error = stored('portero.stalled');
+        return;
+      }
       const offline = err instanceof PorteroError && err.status === 0;
       if (!offline) item.tries++;
       item.error = describe(err);
@@ -627,6 +711,14 @@ export class FolderUploads {
       this.note(r.job.id, item.done && r.items.every((i) => i.done));
       this.emit();
     }
+  }
+
+  /** El portero anda para este archivo (avanzó o terminó): la cuenta de trabadas y la espera vuelven a cero. */
+  private moved(r: Running, item: FolderItem): void {
+    item.stalls = 0;
+    r.stallStreak = 0;
+    r.stallRounds = 0;
+    if (r.problem === stored('folder.serverStalled')) r.problem = null;
   }
 
   private async saveJob(job: FolderJob): Promise<void> {
@@ -650,6 +742,11 @@ export class FolderUploads {
       // Queda en el dispositivo: se vuelve a leer como terminada y se borra la próxima vez.
     }
   }
+}
+
+/** Una ruta para comparar: en NFC (la Mac da los acentos en dos partes, Windows en una). */
+function samePath(path: string): string {
+  return path.normalize('NFC');
 }
 
 function itemKey(job: string, path: string): string {
