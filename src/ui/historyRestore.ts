@@ -258,8 +258,66 @@ const RESTORE_IN_DOC = Symbol('restore-in-doc');
  * bloque que agregó, sigue estando cuando llega, igual que restaurando por el editor (`restoreInEditor`). Sin
  * relación previa entre los elementos y los nodos (el editor no está), compara por contenido.
  */
-function writeNode(doc: Y.Doc, node: PMNode): void {
-  updateYFragment(doc, doc.getXmlFragment(CONTENT_FRAGMENT), node as never, { mapping: new Map(), isOMark: new Map() } as never);
+function writeNode(doc: Y.Doc, node: PMNode, unchanged: readonly [number, number][] = []): void {
+  const fragment = doc.getXmlFragment(CONTENT_FRAGMENT);
+  const meta = { mapping: new Map<unknown, unknown>(), isOMark: new Map() };
+  // Los bloques de arriba que ya se leen igual que en la versión: se anotan como ya emparejados con su nodo y
+  // `updateYFragment` los salta. Sin eso compara cada elemento por sus atributos tal como están guardados, y un
+  // bloque que no tiene escritos los de valor por defecto (uno de una versión anterior de la app, o de una
+  // importación) los recibe todos, también el que no cambió: unos bytes de más por bloque y, en el historial, un
+  // «formato cambiado» que nadie hizo. El editor tampoco toca lo que no cambió (R2 de la barrera).
+  const group = fragment.length === 1 ? fragment.get(0) : null;
+  const target = node.childCount === 1 ? node.child(0) : null;
+  if (group instanceof Y.XmlElement && target) {
+    const kids = group.toArray();
+    for (const [y, p] of unchanged) if (kids[y] && p < target.childCount) meta.mapping.set(kids[y], target.child(p));
+  }
+  updateYFragment(doc, fragment, node as never, meta as never);
+}
+
+/** Un bloque de arriba como lo arma el editor, leído en una copia suelta (leer borra lo que no se puede armar), o `null`. */
+function readBlock(el: Y.XmlElement, schema: Schema, probe: Y.Doc): PMNode | null {
+  const fragment = probe.getXmlFragment(CONTENT_FRAGMENT);
+  try {
+    fragment.insert(0, [el.clone()]);
+    const root = yXmlFragmentToProseMirrorRootNode(fragment, schema);
+    return fragment.length === 1 && root.childCount === 1 ? root.child(0) : null;
+  } catch {
+    return null;
+  } finally {
+    if (fragment.length > 0) fragment.delete(0, fragment.length);
+  }
+}
+
+/**
+ * Los bloques de arriba de la página que ya son iguales a los de `node`, como pares (lugar en la página, lugar en
+ * `node`), en orden. Lo que no se puede leer (una fila que el editor no arma) no entra: se reescribe. Se mira una copia,
+ * nunca la página.
+ */
+function unchangedBlocks(doc: Y.Doc, node: PMNode, schema: Schema): [number, number][] {
+  const fragment = doc.getXmlFragment(CONTENT_FRAGMENT);
+  const group = fragment.length === 1 ? fragment.get(0) : null;
+  const target = node.childCount === 1 ? node.child(0) : null;
+  if (!(group instanceof Y.XmlElement) || !target || group.nodeName !== target.type.name) return [];
+  const probe = new Y.Doc();
+  try {
+    const read: PMNode[] = [];
+    const at: number[] = [];
+    group.toArray().forEach((kid, i) => {
+      const n = kid instanceof Y.XmlElement ? readBlock(kid, schema, probe) : null;
+      if (n) {
+        read.push(n);
+        at.push(i);
+      }
+    });
+    const want: PMNode[] = [];
+    target.forEach((child) => want.push(child));
+    return commonBlocks(read, want).map(([i, j]): [number, number] => [at[i], j]);
+  } catch {
+    return [];
+  } finally {
+    probe.destroy();
+  }
 }
 
 /**
@@ -279,10 +337,11 @@ export function restoreInDoc(doc: Y.Doc, version: Y.Doc, schema: Schema | null):
   // La prueba, en una copia del documento de la página: nada de esto se guarda. Lo que tiene que quedar (el XML) se
   // anota antes de leerla con y-prosemirror, que borra de su documento lo que no puede armar.
   let expected: string;
+  const unchanged = unchangedBlocks(doc, node, schema);
   const scratch = new Y.Doc();
   try {
     Y.applyUpdate(scratch, Y.encodeStateAsUpdate(doc));
-    scratch.transact(() => writeNode(scratch, node));
+    scratch.transact(() => writeNode(scratch, node, unchanged));
     expected = scratch.getXmlFragment(CONTENT_FRAGMENT).toString();
     const read = yXmlFragmentToProseMirrorRootNode(scratch.getXmlFragment(CONTENT_FRAGMENT), schema);
     if (!read.eq(node) || scratch.getXmlFragment(CONTENT_FRAGMENT).toString() !== expected) return { ok: false, reason: 'failed' };
@@ -295,7 +354,7 @@ export function restoreInDoc(doc: Y.Doc, version: Y.Doc, schema: Schema | null):
   const fragment = doc.getXmlFragment(CONTENT_FRAGMENT);
   const undo = new Y.UndoManager(fragment, { trackedOrigins: new Set([RESTORE_IN_DOC]), captureTimeout: 0 });
   try {
-    doc.transact(() => writeNode(doc, node), RESTORE_IN_DOC);
+    doc.transact(() => writeNode(doc, node, unchanged), RESTORE_IN_DOC);
     // Es el mismo estado que la copia, así que tiene que dar lo mismo; por las dudas, si no, se deshace.
     if (fragment.toString() !== expected) {
       while (undo.undoStack.length > 0) undo.undo();
