@@ -322,7 +322,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   **Entrega 2a hecha (v0.151: escribir; migración `20261028120000_link_editar.sql` sin aplicar, `schema_version` 19, y el
   interruptor `link_edit_min_version` apagado; ver "Cómo quedó la 2a" en `Doc_Link_Publico.md`).** Para prenderla: la
   barrera de error alrededor de `PageEditor` en `main` (R4), aplicar la migración, subir la mínima y poner
-  `link_edit_min_version`. Falta la 2b (archivos por el link). **Su auditoría
+  `link_edit_min_version`. **Su auditoría
   dio no aprobado (el paso 8) y se corrigió en una ronda** (`Doc_Link_Publico.md`, "Correcciones de la auditoría de la
   2a"). Queda de esa auditoría O4 (con D14 apagado se escribe igual en la sala). Al publicar la 2a, subir
   `min_app_version` a ella (O5: la publicada pasa *Can edit* a *Can view* al cambiar el vencimiento).
@@ -336,6 +336,15 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   no contar lo que tiene una versión mayor que la de cualquier editor que admitió hoy, o mostrarlo en *Share* como
   trabado), y probar a mano
   con el link de verdad la descarga y la vuelta a la versión del equipo en Safari del iPhone (la descarga de un JSON).
+  **Entrega 2b hecha (v0.0XX: fotos, videos y archivos por un link al Drive del dueño; migración
+  `20261030120000_link_archivos.sql` sin aplicar, `schema_version` 21, y el portero; ver "Cómo quedó la 2b" en
+  `Doc_Link_Publico.md`):** registrar con los topes de E2.5 sin vincular nunca un id ajeno, la miniatura, el original por
+  el portero solo de lo que registró el link (con cada parte validada), la carpeta del proyecto por su huella o
+  `Via_link`, y lo escrito de una página que espera a que sus archivos estén registrados. Para publicarla: aplicar la
+  migración (con la copia) y publicar el portero con la app. Quedan: lo registrado por un link cuya fila quedó apartada
+  sigue usado por su página sin que ningún documento lo muestre (no va a la papelera de archivos; decisión de Lega si el
+  equipo lo puede ver y mandar a la papelera), que `plink_open` diga el tope por archivo (hoy la app usa 500 MB fijos), y
+  probar con el portero y el Drive de verdad (lista de Lega).
   **Entrega 2 rediseñada (2026-10-02):** lo que escribe un link espera en una sala
   (`public_link_updates`) y entra a `page_updates` cuando el dispositivo de un editor lo prueba (`link_admit`); partida
   en 2a (texto), 2b (archivos) y 2c (lo apartado a la vista); propuestas LE1 a LE13. **Auditado: aprobado con

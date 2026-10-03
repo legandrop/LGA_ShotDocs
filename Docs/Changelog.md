@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+**Link público, entrega 2b: fotos y archivos por un link** (P.19). Con *Can edit*, el visitante escribía pero no podía
+sumar fotos, videos ni archivos: no había cómo registrarlos sin cuenta ni subirlos al Drive del dueño. Ahora los
+registra con `plink_register_file` (500 MB cada uno, 100 por día y 500 de por vida, 1 GB por día y 5 GB de por vida; lo
+rechazado no suma y nunca vincula un id ajeno), sube la miniatura y el portero sube el original solo si lo registró ese
+link, volviendo a validarlo en cada parte. Lo escrito de una página espera a que sus archivos estén registrados (si no,
+la admisión lo apartaría). Carpetas, no. *Share* cuenta lo subido y avisa desde 1 GB. Migración
+`20261030120000_link_archivos.sql`, sin aplicar (`schema_version` 21).
+[ Link público entrega 2b - el visitante sube fotos y archivos al Drive del dueño con topes, el portero solo sube lo que registró ese link y corta al revocar, lo escrito espera a sus archivos y Share cuenta lo subido ]
+
 v0.158 :
 
 **Ayuda, entrega 3: "Mostrame" y novedades** (P.13). La ayuda explicaba cada función pero no la señalaba, y nada
