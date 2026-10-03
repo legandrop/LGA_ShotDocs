@@ -8,7 +8,7 @@ import { LinkRemote } from './linkRemote';
 import { startOverFromTeam, TEAM_VERSION_NOT_READY, type StartOverDeps } from './linkStartOver';
 import { addPublicLink, fakeLinkClient, makeLinkDevice, resetPublicLink, type LinkDevice } from './linkTesting';
 import { startedOverKey } from './localDb';
-import { keepLateWriting } from './startedOver';
+import { keepLateWriting, pendingCount } from './startedOver';
 import { normalizeStructure, seedIfEmpty } from './structure';
 import { CONTENT_FRAGMENT } from './structure';
 import { FakeServer, makeDevice, type Device } from './testing';
@@ -417,6 +417,19 @@ describe('correcciones de la auditoría de la 2c', () => {
     expect(tokens([(await v.db.get('meta', startedOverKey(s))) as Uint8Array]).has('<t23>')).toBe(true);
     expect(await v.docs.startedOverLate(s)).toBe(2);
     other.close(s);
+  });
+
+  it('lo pendiente de Yjs se lee en su formato (2): cuenta lo que trae', () => {
+    const src = new Y.Doc();
+    group(src).push([block('p0', 'base')]);
+    const sv = Y.encodeStateVector(src);
+    group(src).push([block('p1', 'uno'), block('p2', 'dos')]);
+    const late = Y.encodeStateAsUpdate(src, sv);
+    const doc = new Y.Doc();
+    Y.applyUpdate(doc, late);
+    expect(doc.store.pendingStructs).not.toBeNull();
+    const expected = Y.decodeUpdate(late).structs.length;
+    expect(pendingCount(doc.store.pendingStructs!.update)).toBe(expected);
   });
 
   it('O1: algo pendiente que no se arma sobre lo de antes no es de antes: no se toca', async () => {

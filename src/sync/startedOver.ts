@@ -70,7 +70,7 @@ export async function keepLateWriting(db: LocalDb, pageId: string): Promise<numb
 }
 
 /** Cuántos elementos trae lo pendiente (formato 2 de Yjs); si no se puede leer, 1 (igual se pasa y se avisa). */
-function pendingCount(update: Uint8Array): number {
+export function pendingCount(update: Uint8Array): number {
   try {
     return Y.decodeUpdateV2(update).structs.length;
   } catch {
