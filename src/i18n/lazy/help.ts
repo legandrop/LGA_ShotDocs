@@ -86,6 +86,10 @@ export const help = {
     en: "When the app brings something new, the ? at the bottom of the sidebar shows a dot. Open the help: What's new, at the top, lists what's new or changed since you last looked, and those entries say New. Once you've opened it, the dot goes away until the next new thing. It's remembered on this device.",
     es: "Cuando la app trae algo nuevo, el ? de abajo de la barra lateral muestra un punto. Abrí la ayuda: Novedades, arriba de todo, lista lo nuevo o cambiado desde la última vez que la miraste, y esas entradas dicen Nuevo. Una vez abierta, el punto se va hasta la próxima novedad. Se recuerda en este dispositivo.",
   },
+  'help.news.textTouch': {
+    en: "When the app brings something new, the ? at the bottom of the page list shows a dot (on a phone, so does the menu button at the top left). Open the help: What's new, at the top, lists what's new or changed since you last looked, and those entries say New. Once you've opened it, the dots go away until the next new thing. It's remembered on this device.",
+    es: "Cuando la app trae algo nuevo, el ? de abajo de la lista de páginas muestra un punto (en el teléfono, también el botón de menú de arriba a la izquierda). Abrí la ayuda: Novedades, arriba de todo, lista lo nuevo o cambiado desde la última vez que la miraste, y esas entradas dicen Nuevo. Una vez abierta, los puntos se van hasta la próxima novedad. Se recuerda en este dispositivo.",
+  },
   'help.showMe.title': { en: "Show me", es: "Mostrame" },
   'help.showMe.text': {
     en: "Entries with Show me open the practice page and point at that part of the screen, just that step of the tour. Done (or Esc) takes you back where you were. Nothing you do there is saved.",
@@ -144,13 +148,13 @@ export const help = {
   },
   'help.projectsArchive.title': { en: "Archive and delete projects", es: "Archivar y borrar proyectos" },
   'help.projectsArchive.text': {
-    en: "Hover a project in the list (on a phone, tap its ⋯) to rename, archive or delete it. An archived project leaves the everyday list but can still be opened and edited. Deleting asks you to type delete and moves it to Deleted projects: nobody sees it, and Restore brings it back exactly as it was.",
-    es: "Pasá el mouse por un proyecto de la lista (en el teléfono, tocá su ⋯) para renombrarlo, archivarlo o borrarlo. Un archivado sale de la lista de todos los días pero se sigue abriendo y editando. Borrar pide escribir borrar y lo pasa a Proyectos borrados: nadie lo ve, y Restaurar lo deja tal como estaba.",
+    en: "Hover a project in the list (on a phone, tap its ⋯) to rename, archive or delete it. An archived project leaves the everyday list but can still be opened and edited. Deleting asks you to type delete and moves it to the Trash: nobody sees it, and Restore brings it back exactly as it was.",
+    es: "Pasá el mouse por un proyecto de la lista (en el teléfono, tocá su ⋯) para renombrarlo, archivarlo o borrarlo. Un archivado sale de la lista de todos los días pero se sigue abriendo y editando. Borrar pide escribir borrar y lo pasa a la papelera: nadie lo ve, y Restaurar lo deja tal como estaba.",
   },
   'help.projectsDrive.title': { en: "Its files in Google Drive", es: "Sus archivos en Google Drive" },
   'help.projectsDrive.text': {
-    en: "When the workspace owner or an admin deletes a project, Also send its files to the Google Drive trash sends its whole folder to the Drive trash; it starts unticked. Google deletes it for good after 30 days; Restore before that brings the folder back with everything in it. From Deleted projects you can also send it later. If Google Drive no longer has the folder, the app asks before restoring the pages without their files, and Look for its files again, on the project's start page, brings them back if the folder turns up.",
-    es: "Cuando el dueño del workspace o un admin borra un proyecto, Mandar también sus archivos a la papelera de Google Drive manda su carpeta entera a la papelera de Drive; arranca destildada. Google la borra para siempre a los 30 días; Restaurar antes la trae de vuelta con todo lo de adentro. Desde Proyectos borrados también se puede mandar después. Si Google Drive ya no tiene la carpeta, la app pregunta antes de restaurar las páginas sin sus archivos, y Buscar sus archivos de nuevo, en el inicio del proyecto, los trae si la carpeta aparece.",
+    en: "When the workspace owner or an admin deletes a project, Also send its files to the Google Drive trash sends its whole folder to the Drive trash; it starts unticked. Google deletes it for good after 30 days; Restore before that brings the folder back with everything in it. From the Trash you can also send it later. If Google Drive no longer has the folder, the app asks before restoring the pages without their files, and Look for its files again, on the project's start page, brings them back if the folder turns up.",
+    es: "Cuando el dueño del workspace o un admin borra un proyecto, Mandar también sus archivos a la papelera de Google Drive manda su carpeta entera a la papelera de Drive; arranca destildada. Google la borra para siempre a los 30 días; Restaurar antes la trae de vuelta con todo lo de adentro. Desde la papelera también se puede mandar después. Si Google Drive ya no tiene la carpeta, la app pregunta antes de restaurar las páginas sin sus archivos, y Buscar sus archivos de nuevo, en el inicio del proyecto, los trae si la carpeta aparece.",
   },
   'help.workspaces.title': { en: "Workspaces", es: "Workspaces" },
   'help.workspaces.text': {
@@ -174,10 +178,10 @@ export const help = {
     en: "Select text to get the formatting bar: bold, italic, colors, links. {bold} bold, {italic} italic, {underline} underline, {strike} strikethrough, {code} code, {link} link.",
     es: "Elegí texto y aparece la barra de formato: negrita, cursiva, colores, links. {bold} negrita, {italic} cursiva, {underline} subrayado, {strike} tachado, {code} código, {link} link.",
   },
-  'help.tablePhone.title': { en: "Wide tables on a phone", es: "Tablas anchas en el teléfono" },
+  'help.tablePhone.title': { en: "Wide tables on a phone or tablet", es: "Tablas anchas en el teléfono o la tablet" },
   'help.tablePhone.text': {
-    en: "On a narrow screen a table keeps its column widths and scrolls sideways inside its block: swipe it left or right. The page itself doesn't move, and when you jump to another cell with Tab or the arrows it slides into view. On a computer and in the PDF nothing changes.",
-    es: "En una pantalla angosta la tabla mantiene el ancho de sus columnas y se desplaza de costado dentro de su bloque: deslizala a la izquierda o a la derecha. La página no se mueve, y al pasar a otra celda con Tab o las flechas, la celda se acomoda a la vista. En la compu y en el PDF no cambia nada.",
+    en: "On a narrow screen (a phone, or a tablet held upright) a table keeps its column widths and scrolls sideways inside its block: swipe it left or right. The page itself doesn't move, and when you jump to another cell with Tab or the arrows it slides into view. On a computer and in the PDF nothing changes (a tablet gets the same as a phone, except on a page with a sheet size like A4).",
+    es: "En una pantalla angosta (un teléfono, o una tablet vertical) la tabla mantiene el ancho de sus columnas y se desplaza de costado dentro de su bloque: deslizala a la izquierda o a la derecha. La página no se mueve, y al pasar a otra celda con Tab o las flechas, la celda se acomoda a la vista. En la compu y en el PDF no cambia nada (una tablet recibe lo mismo que el teléfono, salvo en una página con tamaño de hoja, como A4).",
   },
   'help.blockTypes.title': { en: "Headings, lists and quotes", es: "Títulos, listas y citas" },
   'help.blockTypes.text': {
@@ -522,8 +526,8 @@ export const help = {
   },
   'help.trash.title': { en: "Trash", es: "Papelera" },
   'help.trash.text': {
-    en: "Sending a page to the Trash, at the bottom of the sidebar, takes its subpages with it; Restore brings everything back where it was. With Google Drive connected, its Files tab lists the photos and files no page uses anymore (the owner and admins manage it).",
-    es: "Mandar una página a la papelera, abajo en la barra lateral, se lleva sus subpáginas; Restaurar devuelve todo a su lugar. Con Google Drive conectado, su pestaña Archivos muestra las fotos y los archivos que ya no usa ninguna página (los manejan el dueño y los admins).",
+    en: "There is one Trash, in the project menu (click the project at the top of the sidebar): deleted projects, pages with their subpages and, with Google Drive connected, the photos and files no page uses anymore, newest first. Filter by All, Projects, Pages or Files, and switch between This project and All projects. Restore brings a page or a project back where it was; the owner and admins manage the files.",
+    es: "Hay una sola papelera, en el selector de proyectos (clic en el proyecto, arriba de la barra lateral): los proyectos borrados, las páginas con sus subpáginas y, con Google Drive conectado, las fotos y los archivos que ya no usa ninguna página, del más nuevo al más viejo. Filtrá por Todo, Proyectos, Páginas o Archivos, y pasá de Este proyecto a Todos los proyectos. Restaurar devuelve una página o un proyecto a su lugar; los archivos los manejan el dueño y los admins.",
   },
 
   // --- Sin red ---
@@ -599,7 +603,12 @@ export const help = {
   'help.prefs.title': { en: "Appearance", es: "Apariencia" },
   'help.prefs.text': {
     en: "In the account menu: light, dark or system theme, default or editorial typeface, text size and page width. They're saved in your account and follow you to every device.",
-    es: "En el menú de la cuenta: tema claro, oscuro o del sistema, letra común o editorial, tamaño del texto y ancho de la página. Se guardan en tu cuenta y te siguen a cada dispositivo.",
+    es: "En el menú de la cuenta: tema claro, oscuro o del sistema, fuente normal o editorial, tamaño del texto y ancho de la página. Se guardan en tu cuenta y te siguen a cada dispositivo.",
+  },
+  'help.contrast.title': { en: "Text contrast", es: "Contraste del texto" },
+  'help.contrast.text': {
+    en: "In the account menu, Contrast gives the page text three shades: headings the strongest, bold a little softer and the rest a little softer still. More contrast makes the steps clearer; No contrast shows everything in one shade. Text with a color you picked keeps its color. It applies to the page, to a version in the history and to the PDF (always in the light shades), and it follows you to every device.",
+    es: "En el menú de la cuenta, Contraste le da tres tonos al texto de la página: los encabezados, los más fuertes; la negrita, un poco más suave, y el resto, un poco más todavía. Más contraste marca más los pasos; Sin contraste muestra todo en un solo tono. El texto con un color elegido conserva su color. Vale en la página, en una versión del historial y en el PDF (siempre con los tonos claros), y te sigue a cada dispositivo.",
   },
   'help.language.title': { en: "Language", es: "Idioma" },
   'help.language.text': {

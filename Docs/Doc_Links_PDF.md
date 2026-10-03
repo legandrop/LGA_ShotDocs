@@ -921,7 +921,7 @@ que diga otra cosa.
 | O18 · Casos y mutantes de la auditoría | Sumados a 9.2 | 9.2 |
 | O19 · E3 no puede reusar `page_id` | E3 con otra columna (`target_page_id`), `file_id` sin `not null`, `check` de uno de los dos e índice único por objetivo | 11 |
 
-## 16. Cómo quedó la entrega 1 (v0.160)
+## 16. Cómo quedó la entrega 1 (v0.163)
 
 | Pieza | Dónde |
 |---|---|

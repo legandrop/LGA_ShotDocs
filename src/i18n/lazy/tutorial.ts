@@ -56,12 +56,12 @@ export const tutorial = {
   },
   'tour.projects.title': { en: "Projects", es: "Proyectos" },
   'tour.projects.text': {
-    en: "A workspace has several projects. Switch or create one here; {search} finds pages and projects.",
-    es: "Un workspace tiene varios proyectos. Acá cambiás de proyecto o creás uno; {search} busca páginas y proyectos.",
+    en: "A workspace has several projects. Switch or create one here; the Trash is here too. {search} finds pages and projects.",
+    es: "Un workspace tiene varios proyectos. Acá cambiás de proyecto o creás uno, y está la papelera. {search} busca páginas y proyectos.",
   },
   'tour.projects.textPhone': {
-    en: "A workspace has several projects. Switch or create one here.",
-    es: "Un workspace tiene varios proyectos. Acá cambiás de proyecto o creás uno.",
+    en: "A workspace has several projects. Switch or create one here; the Trash is here too.",
+    es: "Un workspace tiene varios proyectos. Acá cambiás de proyecto o creás uno, y está la papelera.",
   },
   'tour.slash.title': { en: "The / menu", es: "El menú /" },
   'tour.slash.text': {

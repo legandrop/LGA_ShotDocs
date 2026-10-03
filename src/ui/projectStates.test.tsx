@@ -169,7 +169,12 @@ describe('selector: archivar', () => {
     expect(label('Rename “Bosque Negro”')).not.toBeNull();
     expect(label('Archive “Bosque Negro”')).toBeNull();
     expect(label('Delete “Bosque Negro”…')).toBeNull();
+    // La papelera está igual (con las páginas), sin el filtro de proyectos: la base no los tiene.
     expect(byText('Deleted projects')).toBeUndefined();
+    await act(async () => byText('Trash')!.click());
+    await vi.waitFor(() => expect(document.querySelector('.trash-panel')).not.toBeNull());
+    expect(document.querySelector('.trash-filter')?.textContent).not.toContain('Projects');
+    expect(document.querySelector('[data-kind="project"]')).toBeNull();
   });
 });
 
@@ -245,9 +250,9 @@ describe('selector: borrar', () => {
     await owner.remote.deleteProject(o);
     await owner.tree.forgetProject(o);
     await open$(owner, server.ownerId);
-    await act(async () => byText('Deleted projects')!.click());
-    await vi.waitFor(() => expect(document.querySelector('.deleted-projects')?.textContent).toContain('Bosque Negro'));
-    const list = document.querySelector('.deleted-projects')!;
+    await act(async () => byText('Trash')!.click());
+    await vi.waitFor(() => expect(document.querySelector('[data-kind="project"]')?.textContent).toContain('Bosque Negro'));
+    const list = document.querySelector('[data-kind="project"]')!;
     expect(list.textContent).toContain('Deleted by owner@test');
     expect(list.textContent).toContain('30 days left');
     await act(async () => byText('Restore')!.click());
@@ -331,7 +336,7 @@ describe('pantalla "sin proyectos"', () => {
     const onRetry = vi.fn();
     const host = await mountNoProjects(true, calls, onRetry);
     await vi.waitFor(() => expect(host.textContent).toContain('Mi spot'));
-    expect(host.textContent).toContain('Deleted projects');
+    expect(host.textContent).toContain('Trash');
     await act(async () => byText('Restore')!.click());
     await vi.waitFor(() => expect(onRetry).toHaveBeenCalled());
     expect(calls).toContain('restore_project m1');
@@ -341,7 +346,7 @@ describe('pantalla "sin proyectos"', () => {
     const host = await mountNoProjects(false, [], () => undefined);
     await settle();
     expect(host.textContent).toContain('No projects yet');
-    expect(host.textContent).not.toContain('Deleted projects');
+    expect(host.textContent).not.toContain('Trash');
   });
 });
 
@@ -420,7 +425,7 @@ describe('correcciones de la auditoría del código', () => {
     const { translate } = await import('../i18n');
     const tr = Object.assign((key: never, params?: never) => translate('es', key, params), { lang: 'es' }) as never;
     expect(projectStateError(new RemoteError('not_allowed', true, '42501'))).toBe("You can't do that in this project anymore: your access changed.");
-    expect(projectStateError(new RemoteError('project_deleted', true, 'P0001'), tr)).toBe('Este proyecto se borró mientras tanto: está en Proyectos borrados.');
+    expect(projectStateError(new RemoteError('project_deleted', true, 'P0001'), tr)).toBe('Este proyecto se borró mientras tanto: está en la papelera.');
     expect(projectStateError(new RemoteError('project_not_found', true, 'P0002'))).toBe("This project no longer exists, or you can't see it anymore.");
     expect(projectStateError(new RemoteError('boom', false))).toBe('Could not do it: boom');
   });
@@ -500,7 +505,7 @@ describe('obs. 7: el plazo en minúscula después del "·"', () => {
     await owner.tree.forgetProject(o);
     act(() => prefs.set({ language: 'es' }));
     await open$(owner, server.ownerId);
-    await act(async () => byText('Proyectos borrados')!.click());
+    await act(async () => byText('Papelera')!.click());
     await vi.waitFor(() => expect(document.querySelector('.deleted-project-row')?.textContent).toContain('1 página · quedan 30 días'));
   });
 });
@@ -615,7 +620,7 @@ describe('entrega 2: la casilla de Drive en la ventana de borrar', () => {
     expect(calls).toEqual([]);
   });
 
-  it('si Drive falla, el proyecto queda borrado y el aviso dice que se manda desde Deleted projects', async () => {
+  it('si Drive falla, el proyecto queda borrado y el aviso dice que se manda desde la papelera', async () => {
     const { server, owner, o } = await driveWorkspace();
     const { drive } = fakeDrive(server, { trash: new PorteroError('x', 503, true, 'drive_not_connected') });
     const notices: string[] = [];
@@ -630,7 +635,7 @@ describe('entrega 2: la casilla de Drive en la ventana de borrar', () => {
     await settle();
     expect(server.deletedProjects.has(o)).toBe(true);
     await vi.waitFor(() =>
-      expect(notices.join(' ')).toContain('Its files did not go to the Google Drive trash (Google Drive is not connected: the workspace owner has to connect it.): send them from Deleted projects.'),
+      expect(notices.join(' ')).toContain('Its files did not go to the Google Drive trash (Google Drive is not connected: the workspace owner has to connect it.): send them from the Trash.'),
     );
   });
 
@@ -667,14 +672,14 @@ describe('entrega 2: la lista de borrados con la carpeta en la papelera de Drive
     ws.server.projectDrive.set(ws.o, { requested_at: now, trashed_at: now, missing_at: null });
     const fake = fakeDrive(ws.server, opts);
     await openWith(ws.owner, ws.server.ownerId, fake.drive);
-    await act(async () => byText('Deleted projects')!.click());
-    await vi.waitFor(() => expect(document.querySelector('.deleted-projects')?.textContent).toContain('Bosque Negro'));
+    await act(async () => byText('Trash')!.click());
+    await vi.waitFor(() => expect(document.querySelector('[data-kind="project"]')?.textContent).toContain('Bosque Negro'));
     return { ...ws, ...fake };
   }
 
   it('dice hasta cuándo están en la papelera de Drive; Restore primero trae la carpeta y después restaura', async () => {
     const { server, owner, o, calls } = await deletedWithFolder();
-    expect(document.querySelector('.deleted-projects')?.textContent).toMatch(/Files in the Google Drive trash until \w+ \d+/);
+    expect(document.querySelector('[data-kind="project"]')?.textContent).toMatch(/Files in the Google Drive trash until \w+ \d+/);
     await act(async () => byText('Restore')!.click());
     await vi.waitFor(() => expect(server.deletedProjects.has(o)).toBe(false));
     expect(calls).toEqual([`untrash ${o}`]);
@@ -701,9 +706,26 @@ describe('entrega 2: la lista de borrados con la carpeta en la papelera de Drive
   it('con Drive conectado a otra cuenta (o sin conectar) no ofrece restaurar sin los archivos', async () => {
     const { server, o } = await deletedWithFolder({ untrash: new PorteroError('x', 409, false, 'drive_other_account') });
     await act(async () => byText('Restore')!.click());
-    await vi.waitFor(() => expect(document.querySelector('.deleted-projects .error')?.textContent).toContain('Google Drive is connected to another account'));
+    await vi.waitFor(() => expect(document.querySelector('.trash-panel .error')?.textContent).toContain('Google Drive is connected to another account'));
     expect(byText('Restore without its files')).toBeUndefined();
     expect(server.deletedProjects.has(o)).toBe(true);
+  });
+
+  it('a quien no es dueño ni admin no le ofrece mandar la carpeta de un borrado (can_purge), aunque haya portero', async () => {
+    const ws = await driveWorkspace();
+    ws.server.addMember('ana', 'member');
+    ws.server.grant('ana', { projectId: ws.o }, 'edit_pages');
+    await ws.owner.remote.deleteProject(ws.o);
+    const ana = await makeDevice(ws.server, undefined, undefined, undefined, undefined, { id: 'ana' });
+    devices.push(ana);
+    await ana.engine.syncNow();
+    const { drive, calls } = fakeDrive(ws.server);
+    await openWith(ana, 'ana', drive);
+    await act(async () => byText('Trash')!.click());
+    await vi.waitFor(() => expect(document.querySelector('[data-kind="project"]')?.textContent).toContain('Bosque Negro'));
+    expect(byText('Send files to the Drive trash')).toBeUndefined();
+    expect(byText('Restore')).toBeUndefined();
+    expect(calls).toEqual([]);
   });
 
   it('un borrado sin la carpeta enviada ofrece mandarla (pregunta antes); a medias, la termina', async () => {
@@ -712,7 +734,7 @@ describe('entrega 2: la lista de borrados con la carpeta en la papelera de Drive
     await ws.owner.tree.forgetProject(ws.o);
     const { drive, calls } = fakeDrive(ws.server);
     await openWith(ws.owner, ws.server.ownerId, drive);
-    await act(async () => byText('Deleted projects')!.click());
+    await act(async () => byText('Trash')!.click());
     await vi.waitFor(() => expect(byText('Send files to the Drive trash')).toBeDefined());
     await act(async () => byText('Send files to the Drive trash')!.click());
     expect(document.querySelector('.deleted-project-ask')?.textContent).toContain('Send the folder LGA_ShotDocs/Bosque_Negro to the Google Drive trash');
@@ -720,7 +742,7 @@ describe('entrega 2: la lista de borrados con la carpeta en la papelera de Drive
     await act(async () => byText('Send to the Drive trash')!.click());
     await settle();
     expect(calls).toEqual([`trash ${ws.o} borrado`]);
-    await vi.waitFor(() => expect(document.querySelector('.deleted-projects')?.textContent).toMatch(/Files in the Google Drive trash until/));
+    await vi.waitFor(() => expect(document.querySelector('[data-kind="project"]')?.textContent).toMatch(/Files in the Google Drive trash until/));
     expect(byText('Send files to the Drive trash')).toBeUndefined();
   });
 });

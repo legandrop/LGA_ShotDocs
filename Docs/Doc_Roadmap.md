@@ -248,8 +248,8 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   práctica en `/practice` y la recorrida de diez pasos (nueve en el teléfono). **Entrega 3 hecha (v0.158):**
   *Show me* en las 16 entradas con un paso (la práctica con solo ese paso, y vuelta a donde estabas) y el punto de
   novedades en el "?" con *What's new* arriba de la ayuda. Falta elegir con Lega las fotos del ejemplo y probar a
-  mano en Safari, el iPhone y con VoiceOver. Pendiente chico: en el teléfono el punto de novedades se ve solo con el
-  cajón abierto; llevarlo también al botón de menú de la barra de arriba (la de la página y la de la práctica).
+  mano en Safari, el iPhone y con VoiceOver. **Hecho (v0.160):** en el teléfono el punto de novedades también está en
+  el botón de menú de la barra de arriba (la de la página y la de la práctica), con la misma regla que el del "?".
 - **P.14 Borrar y archivar proyectos (Lega, 2026-09-30: "¿cómo borro los proyectos viejos? No encontré de
   dónde"):** hoy un proyecto se crea, se renombra y se comparte, pero no se puede sacar de la lista: no hay nada
   para eso ni en la app ni en la base (`workspaces` no se borra desde la API). Faltan dos opciones distintas:
@@ -275,6 +275,12 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   (destildada; dueño y admins), las rutas `/project/trash` y `/project/untrash` del portero, restaurar trayendo la
   carpeta, *Restore without its files* solo con `missing` de verdad y *Look for its files again*; falta la auditoría,
   aplicar la migración 10, publicar y correr la prueba técnica. Después, la 3 (*Delete forever*).
+  **Una sola papelera (v0.162, pedido de Lega del 2026-10-03):** *Trash* sale de la barra lateral y reemplaza a
+  *Deleted projects* en el selector de proyectos, con proyectos, páginas y archivos juntos del más nuevo al más viejo,
+  el filtro *All / Projects / Pages / Files* y *This project / All projects*; sin migración
+  (`Doc_Proyectos_Borrar.md`, "Cómo quedó: una sola papelera"). Falta probarla a mano en la compu y el iPhone.
+  Pendiente chico: con *All projects* se hace una consulta `trashed_files` por proyecto (la primera vez); con muchos
+  proyectos convendría una función de la base que las junte (migración nueva).
 - **P.16 Hecho (v0.074): el árbol de páginas con el teclado** (Lega, 2026-10-01). Con el foco en una fila
   (queda ahí después de un clic): ↑ / ↓ abren la página visible anterior o siguiente (una pulsación al
   instante; con la tecla apretada el foco corre y se abre la última al frenar, 150 ms), → despliega o pasa a la
@@ -286,9 +292,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   la página abierta, D242) y recién ahí lleva «…»; ⋯ y + (que no ocupan lugar mientras no se ven) le sacan su lugar con
   el mouse encima, el foco en la fila o en sus botones, o el menú ⋯ abierto. En el teléfono (`hover: none`) la página
   abierta los muestra siempre, como antes. Pendientes menores de su auditoría: (O2) `:hover` y `.menu-open` no se pueden
-  calcular en jsdom; la prueba afirma el texto del selector y la medición real está en Chromium; (O3) un clic en el
-  triángulo de una fila no abierta le deja el foco y, por `:focus-within`, sus ⋯ y + (y el nombre cortado) hasta que el
-  foco se va, aunque el mouse ya no esté; pasar a `:focus-visible` lo evitaría pero cambia el comportamiento existente.
+  calcular en jsdom; la prueba afirma el texto del selector y la medición real está en Chromium; (O3, resuelta en
+  v0.160) un clic con el mouse en el triángulo o en la fila dejaba el foco ahí y, por `:focus-within`, sus ⋯ y + (y el
+  nombre cortado) hasta que el foco se iba; ahora la regla es `:is(:focus-visible, :has(:focus-visible))`: con el
+  teclado (flechas, Tab) siguen apareciendo, con el mouse no se quedan.
 - **P.17 Hecho (v0.079): instalar la app** (Lega, 2026-10-01). La app reconoce si está instalada; si no, ofrece
   *Install app* en el menú de la cuenta y en la pantalla de entrar, y en el teléfono un aviso que se cierra por 30
   días. La ventana muestra los pasos con dibujos para iPhone, Android y computadora, con *Install* directo donde
@@ -655,10 +662,21 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
 - **P.28 Hecho (v0.156): la tabla del reporte en el teléfono** (`Doc_Tabla_Telefono.md`): en pantalla angosta ninguna
   columna con ancho guardado baja de 96 px y la tabla se desplaza de costado dentro de su bloque; la celda donde se
   escribe se acomoda a la vista. La compu y el PDF no cambian. Falta probarlo en un iPhone real (dedo, teclado abierto).
-  Quedan (chicos): el corte de teléfono es de 760 px, así que en un iPad vertical (761 px o más) la tabla del reporte
-  sigue encogida (629 px, columnas de 90; una de 12 columnas, unos 51 px por columna): subir el corte para las tablas si
-  se usa; y lo que headless no prueba (el impulso del dedo, el teclado abierto, un editor remoto moviendo la selección
+  **Hecho (v0.160):** el piso de las columnas y el desplazamiento valen hasta 1024 px (no 760) solo para las tablas, así
+  que en un iPad vertical (768 a 834 px, con el cajón a la vista) el reporte ya no se encoge (columnas de 96 en lugar de
+  47 a 57) y se desplaza, salvo en una página con formato de hoja (A4, A3, Carta) entre 761 y 1024 px, que queda como el
+  PDF (decisión de Lega, ronda 1); también se arregló el botón de comentar del margen, que salía 4 px de la pantalla.
+  Queda un detalle de diseño: con `right: 0` ese botón (28 px) tapa hasta 8 px del final de un renglón muy largo, porque
+  el margen de la página en el teléfono es de 20 px; si se ve apretado, `right: 2px` sigue sin cortarlo.
+  Quedan (chicos): lo que headless no prueba (el impulso del dedo, el teclado abierto, un editor remoto moviendo la selección
   mientras se escribe en una tabla).
+- **P.29 Hecho (v0.161): contraste del texto y el panel de la cuenta** (Lega, 2026-10-03; `Doc_Contraste.md`): *Contrast*
+  (de fábrica), *More contrast* y *No contrast* para el texto con el color por defecto, en la página, el historial y el
+  PDF (en claro); el panel de la cuenta con íconos, su propio desplazamiento y *Sign out other devices* alineado a la
+  izquierda. Queda: verlo en un iPhone real (el panel con el teclado del sistema y la barra de Safari) y, si Lega lo
+  quiere, llevar la preferencia al zip de exportar (hoy sale con *Contrast*, como sale con la fuente normal).
+  En el modo oscuro los resaltados gris (2,32:1), amarillo (2,60:1) y naranja (3,69:1) de la paleta de BlockNote quedan bajo
+  4,5:1 con el texto por defecto, igual que antes del contraste: ajustar esos fondos si Lega los usa.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.

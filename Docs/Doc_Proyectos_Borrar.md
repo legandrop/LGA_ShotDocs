@@ -3616,6 +3616,91 @@ verdad con Drive y base de mentira.
 **Ayuda (regla de P.13):** la entrada de la entrega 1 suma un párrafo; está en `Doc_Tutorial.md`, "Entradas esperando
 la ayuda".
 
+## Cómo quedó: una sola papelera (v0.162)
+
+**Qué pasaba.** Había dos papeleras: *Trash* abajo de la barra lateral, arriba del nombre de la cuenta (páginas y, en
+otra pestaña, archivos), y *Deleted projects* adentro del selector de proyectos. Lega no entendía la diferencia (un
+ejemplo real: borra un proyecto de prueba y después lo busca en *Trash*, donde no está). Pidió una sola (2026-10-03).
+
+**Cómo quedó.** Una sola *Trash*, en el selector de proyectos, en el lugar de *Deleted projects* (la línea de abajo
+de *Archived projects*). Abre el selector en un modo propio (como los archivados), más ancho en la compu (440 px) y la
+hoja de abajo de siempre en el teléfono:
+
+```
+┌ ‹ Trash                                            ┐
+│ [ All | Projects | Pages | Files ]                 │
+│ [ This project | All projects ]                    │
+│ Deleted projects, pages and files, newest first…   │
+│ [BN] PROJECT                          [Restore]    │
+│      Bosque Negro · Deleted by lega@… · today      │
+│ [▣]  FILE · MGTZD                 [Send to Drive…] │
+│      IMG_0042.JPG · 2 KB · Oct 3 · 30 days left    │
+│ [📄] PAGE · MGTZD                     [Restore]    │
+│      Escena vieja · 10/2/2026, 14:03               │
+└────────────────────────────────────────────────────┘
+```
+
+- **La lista:** proyectos, páginas y archivos juntos, del más nuevo al más viejo (por la hora de borrado: la del
+  dispositivo y la de la base se comparan como fechas, no como texto). Cada renglón dice qué es y de qué proyecto
+  (*Page · MGTZD*); un proyecto borrado dice *Project*.
+- **El filtro** *All / Projects / Pages / Files* (sin *Projects* con una base anterior a la versión 9; sin *Files* si
+  la persona no ve ninguna papelera de archivos; con solo páginas, sin filtro). Cada filtro lleva su explicación de
+  antes; *Files*, además, el total, el borrado automático, el aviso de lo sin sincronizar y *Empty*.
+- **El alcance:** *This project* de entrada; *All projects* suma las páginas y los archivos de los demás proyectos
+  del dispositivo (activos y archivados). Los proyectos borrados no son de ningún proyecto abierto: se ven con los
+  dos alcances, y con el filtro *Projects* el alcance no aparece.
+- **Cada tipo hace lo de antes:** páginas de la copia del dispositivo (anda sin red), *Restore* a quien puede
+  manejarla y el título la abre (y cierra el selector); archivos con red, una consulta `trashed_files` por proyecto la
+  primera vez que entra en el alcance, mandar a la papelera de Drive de a uno o *Empty* (solo dueño y admins, con sus
+  confirmaciones); proyectos con red (`trashed_projects`), con *Restore*, *Restore without its files*, *Send files
+  to the Drive trash* y las preguntas en el renglón, iguales (`useDeletedProjects` y `DeletedProjectItem` en
+  `ProjectStatesPart.tsx`, que también usa la pantalla "sin proyectos").
+- **Permisos:** sin cambios en la base y sin migración. Lo que se ve sale de las mismas consultas de antes: los
+  proyectos borrados, de `trashed_projects` (quien no veía *Deleted projects* con alguno adentro, no ve ninguno); los
+  archivos, solo de los proyectos con `canSeeFileTrash` y lo que la base devuelve; las páginas, de lo que la base ya
+  le baja al dispositivo.
+- **Sin red:** las páginas, con la línea *Deleted projects and files need an internet connection*; nada se pide. *Files*
+  no se ofrece si no había archivos leídos, y *Projects* no dice además "No deleted projects".
+- **El avance de *Empty*** ("Sending 2 of 4…") va arriba de la lista y se ve aunque se cambie de filtro o de alcance a
+  mitad (el envío sigue).
+- **La dirección vieja `/trash`** (un marcador): muestra el inicio del proyecto con el selector abierto en la papelera
+  (`openProjectTrash`). Con un link público, va a la página compartida.
+- **Lo que se fue:** el botón de la barra lateral y la vista `/trash` a pantalla entera. Los textos que decían
+  *Deleted projects* como lugar ahora dicen *the Trash* (la ventana de borrar, los avisos, los errores, la ayuda).
+- **Ayuda y recorrida:** la entrada *Trash* se reescribió (dónde está, el filtro, el alcance), con *Show me* al paso
+  del selector y `since` nuevo (sale en *What's new*); el paso del selector de la recorrida dice que la papelera
+  está ahí. Sin atajo nuevo (no había uno para la papelera).
+
+**Decisiones tomadas en el camino** (Lega no estaba):
+
+1. **Los proyectos borrados se ven con *This project*.** Qué pasaba: con el alcance de entrada, un proyecto borrado
+   (que no es de ningún proyecto abierto) no habría aparecido nunca sin pasar a *All projects*; Lega borra un
+   proyecto, abre la papelera y no lo ve. Opciones: (A) siempre; (B) solo con *All projects*; (C) un tercer alcance.
+   Elegí A porque es lo que se busca primero y son pocos. Si preferís otra, es una línea en `TrashView.tsx`.
+2. **`/trash` abre el selector en la papelera, sin cambiar la dirección.** Qué pasaba: un marcador viejo a `/trash`
+   mostraba la papelera a pantalla entera. Opciones: (A) abrir el selector en la papelera sobre el inicio; (B) mandar
+   al inicio sin más; (C) mantener la vista a pantalla entera. Elegí A porque el marcador sigue llevando a la papelera
+   y no hay dos lugares. Si preferís B, se borra el efecto de `Workspace.tsx`.
+3. ***Empty* solo con el filtro *Files*.** Qué pasaba: con *All*, un *Empty* parecería vaciar también páginas y
+   proyectos, y eso no existe. Opciones: (A) solo en *Files*; (B) en *All* con otro nombre. Elegí A: es lo de antes
+   (la pestaña Archivos) y no confunde. Si preferís B, se agrega el botón en el modo *All*.
+4. **El selector se cierra al hacer clic afuera**, como siempre: un *Empty* en curso se corta ahí (lo mandado queda
+   mandado, lo demás sigue en la papelera), igual que antes al salir de la vista `/trash`.
+5. ***Empty* vacía solo la papelera de archivos del proyecto abierto (decisión de Lega, después de la auditoría).**
+   La auditoría encontró que con *All projects* vaciaba las de todos los proyectos y la pregunta no lo decía. Ahora
+   *Empty* se ofrece solo con *Files* y *This project* (con *All projects* no está), y la pregunta nombra el proyecto:
+   *Empty the file trash of “MGTZD”: send all 4 files to the Google Drive trash?*. Es el mismo alcance que antes.
+
+**Pruebas:** `src/ui/trashUnified.test.tsx` (16: el orden con horas escritas distinto, los filtros, la barra lateral
+sin papelera, el selector con los tres tipos y su proyecto, *All projects*, cada filtro con su explicación, restaurar
+y abrir una página, restaurar un proyecto, mandar a Drive un archivo de otro proyecto, castellano, un miembro que solo
+ve (sin *Restore*, sin archivos, solo el borrado que veía y sin quién lo borró), quien no veía ninguno, sin red, una
+base sin la versión 9, `openProjectTrash` con Escape y ‹, y el teléfono); las de `trashView.test.tsx` y
+`projectStates.test.tsx` pasan a la papelera única. Después de la auditoría (ronda 1), 5 más: *Empty* solo del proyecto
+abierto y nombrándolo (en los dos idiomas), su avance a la vista al cambiar de filtro, sin páginas de un proyecto que
+salió de la lista, y *Send files to the Drive trash* solo con `can_purge`; y sin red, sin *Files* ni "No deleted
+projects".
+
 ## Pendiente
 
 - **Entrega 2:** auditoría del código hecha y corregida (B1); copia de seguridad y `db:migrate` de la migración 10;

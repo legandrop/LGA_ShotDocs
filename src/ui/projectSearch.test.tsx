@@ -379,7 +379,7 @@ describe('ir a un resultado', () => {
 
   it('en la misma página: sin cambiar la dirección, cierra el cajón del teléfono y va a la coincidencia', async () => {
     const { host, a } = await app();
-    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Open pages"]')!.click());
+    act(() => host.querySelector<HTMLButtonElement>('.topbar button.only-mobile')!.click());
     expect(host.querySelector('.shell')!.classList.contains('nav-open')).toBe(true);
     act(() => host.querySelector<HTMLButtonElement>('.section-title .search-button')!.click());
     await until(panel, 'el panel');

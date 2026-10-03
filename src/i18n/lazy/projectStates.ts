@@ -1,7 +1,7 @@
 import { register } from '../index';
 import type { Dict } from '../types';
 
-// La ventana de borrar un proyecto y la lista de proyectos borrados (P.14; se cargan aparte).
+// La ventana de borrar un proyecto y los proyectos borrados de la papelera (P.14; se cargan aparte).
 
 export const projectStates = {
   'deleteProject.title': { en: "Delete “{name}”?", es: "¿Borrar “{name}”?" },
@@ -18,8 +18,8 @@ export const projectStates = {
     es: { one: "Compartido con {count} persona.", other: "Compartido con {count} personas." },
   },
   'deleteProject.where': {
-    en: "It goes to Deleted projects: nobody sees it anymore, and it can be restored exactly as it was for {days} days.",
-    es: "Va a Proyectos borrados: nadie lo ve más, y se puede restaurar tal como estaba durante {days} días.",
+    en: "It goes to the Trash: nobody sees it anymore, and it can be restored exactly as it was for {days} days.",
+    es: "Va a la papelera: nadie lo ve más, y se puede restaurar tal como estaba durante {days} días.",
   },
   'deleteProject.driveStays': {
     en: "Its files stay in Google Drive ({size}).",
@@ -53,8 +53,8 @@ export const projectStates = {
     es: "Google Drive ya no tenía su carpeta.",
   },
   'deleteProject.driveFailed': {
-    en: "Its files did not go to the Google Drive trash ({reason}): send them from Deleted projects.",
-    es: "Sus archivos no fueron a la papelera de Google Drive ({reason}): mandalos desde Proyectos borrados.",
+    en: "Its files did not go to the Google Drive trash ({reason}): send them from the Trash.",
+    es: "Sus archivos no fueron a la papelera de Google Drive ({reason}): mandalos desde la papelera.",
   },
   'deleteProject.usedElsewhere': {
     en: {
@@ -90,8 +90,8 @@ export const projectStates = {
   'deleteProject.button': { en: "Delete project", es: "Borrar proyecto" },
   'deleteProject.deleting': { en: "Deleting…", es: "Borrando…" },
   'deleteProject.done': {
-    en: "“{name}” is in Deleted projects. It can be restored for {days} days.",
-    es: "“{name}” está en Proyectos borrados. Se puede restaurar durante {days} días.",
+    en: "“{name}” is in the Trash. It can be restored for {days} days.",
+    es: "“{name}” está en la papelera. Se puede restaurar durante {days} días.",
   },
   'deleteProject.checking': { en: "Checking this device…", es: "Revisando este dispositivo…" },
   'deleteProject.loadFailed': {

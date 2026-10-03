@@ -441,6 +441,28 @@ describe('la recorrida', () => {
     expect(getTourUi().mode).toBe('running');
   });
 
+  it('el punto de la recorrida también está en el botón de menú de la barra de arriba (teléfono), en la página y en la práctica', async () => {
+    const dot = (h: Harness) => h.host.querySelector('.topbar button.only-mobile')?.classList.contains('has-dot');
+    const help = (h: Harness) => h.host.querySelector('.help-button')?.classList.contains('has-dot');
+    const h = await app({ firstLoad: true, accountSeen: true });
+    await until(() => h.host.querySelector('.topbar button.only-mobile'), 'la barra de arriba');
+    await wait(300);
+    // Misma regla que el "?" del cajón: los dos con punto, y la ayuda abierta los apaga a los dos.
+    expect(help(h)).toBe(true);
+    expect(dot(h)).toBe(true);
+    // En la práctica (otra barra de arriba) también.
+    act(() => {
+      history.pushState(null, '', '/practice');
+      window.dispatchEvent(new Event('shotdocs:navigate'));
+    });
+    await until(() => question(), 'la práctica');
+    expect(dot(h)).toBe(true);
+    click(h.host.querySelector('.help-button'));
+    await until(() => document.querySelector('[data-help-id="tour"] .help-action'), 'la ayuda');
+    expect(help(h)).toBe(false);
+    expect(dot(h)).toBe(false);
+  });
+
   it('con un link de invitación: primero lo del link y la tarjeta de primera vez', async () => {
     localStorage.setItem(legacyStorageNames(WANKA_LOCAL_KEY).inviteTarget, 'a-page-id');
     await app({ firstLoad: true });

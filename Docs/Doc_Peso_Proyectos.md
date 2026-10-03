@@ -214,7 +214,7 @@ nulo y `schema_version` en 6.
   subiendo con cuántos archivos, en proyectos que no ves), la nota de qué cuenta (corrección 8) y "Actualizado
   14:32 · Volver a calcular"; sin red, "Sin conexión: último cálculo del…". Con una base sin la función la
   sección no aparece. Los textos van en la parte que se baja con el diálogo (`src/i18n/lazy/drive.ts`).
-- Papelera → Archivos (`src/ui/TrashView.tsx`): "14 archivos · 2,1 GB" arriba (sumado en el cliente, todo lo de
+- Papelera → Archivos (`src/ui/TrashView.tsx`; desde v0.162, el filtro *Files* de la papelera del selector de proyectos): "14 archivos · 2,1 GB" arriba (sumado en el cliente, todo lo de
   la lista) y la confirmación de vaciar suma solo lo que se va a mandar: "2,1 GB pasan a la papelera de Google
   Drive. El espacio en Drive se libera cuando Google vacía su papelera (a los 30 días), no enseguida."
 
