@@ -256,8 +256,8 @@ export const help = {
   },
   'help.folderUpload.title': { en: "While it uploads", es: "Mientras sube" },
   'help.folderUpload.text': {
-    en: "The card says how it is going; click it to see the upload: Pause, Resume, Retry for the files that failed. If you close the tab, drop the same folder on its card again (or Choose the folder…): only what is missing goes up. Dropping the same folder elsewhere in the page offers to continue it. Stop uploading forgets it on this device (what reached Drive stays).",
-    es: "La tarjeta dice cómo va; un clic muestra la subida: Pausar, Seguir, Reintentar los archivos que fallaron. Si cerrás la pestaña, soltá la misma carpeta otra vez en su tarjeta (o Elegir la carpeta…): sube solo lo que falta. Soltar la misma carpeta en otro lugar de la página ofrece seguirla. Dejar de subir la olvida en este dispositivo (lo que llegó a Drive queda).",
+    en: "The card says how it is going; click it to see the upload: Pause, Resume, Retry for the files that failed. If you close the tab, drop the same folder on its card again (or Choose the folder…): only what is missing goes up. Dropping the same folder elsewhere in the page offers to continue it. Stop uploading forgets it on this device (what reached Drive stays). If the media server or the connection stops answering, it waits a moment and tries again (sooner when the connection comes back); no file fails because of that.",
+    es: "La tarjeta dice cómo va; un clic muestra la subida: Pausar, Seguir, Reintentar los archivos que fallaron. Si cerrás la pestaña, soltá la misma carpeta otra vez en su tarjeta (o Elegir la carpeta…): sube solo lo que falta. Soltar la misma carpeta en otro lugar de la página ofrece seguirla. Dejar de subir la olvida en este dispositivo (lo que llegó a Drive queda). Si el servidor de archivos o la conexión dejan de contestar, espera un momento y vuelve a probar (antes, si vuelve la conexión); ningún archivo falla por eso.",
   },
   'help.folderOpen.title': { en: "Open a folder", es: "Abrir una carpeta" },
   'help.folderOpen.text': {

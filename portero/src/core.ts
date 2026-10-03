@@ -306,6 +306,16 @@ export const LIST_DIRS_MAX = 40;
  */
 export const LIST_TRUST_MS = 60_000;
 /**
+ * Lo más que el portero espera a Drive (y, en la última parte de un archivo de una carpeta, a la base) con una parte
+ * ya recibida entera. La parte está en la memoria del portero: lo que tarda de acá en más es Cloudflare con Drive
+ * (segundos para 8 MiB), nunca la red de quien sube. Pasado esto contesta `504 stalled` y la app lo toma como una
+ * subida trabada, sin esperar su propio plazo de respuesta (hasta 10 minutos y medio, que tiene que cubrir un proxy
+ * o un antivirus que se queda con el cuerpo y lo sube despacio). Solo si la app lo pide (`?stall=1`): una anterior
+ * lo tomaría como un error que se reintenta en el momento. Menos que el plazo más corto de la app (2 minutos), para
+ * que la respuesta llegue antes de que la app corte.
+ */
+export const PART_ANSWER_MS = 90_000;
+/**
  * Los motivos de un 403 de Drive que piden ir más despacio (no dicen nada del permiso): el límite por usuario o por
  * proyecto (`userRateLimitExceeded`, `rateLimitExceeded`) y el del día (`dailyLimitExceeded`, `quotaExceeded`).
  */
@@ -1266,14 +1276,56 @@ export class Portero {
       if (total !== upload.size || end < start || body.byteLength !== end - start + 1 || body.byteLength > MAX_CHUNK) {
         throw new HttpError(400, 'The part does not match the upload.');
       }
-      // La última parte de un archivo de una carpeta crea el archivo en Drive: antes se vuelve a mirar que la persona
-      // todavía pueda subir ahí (sacada de la página o del workspace, la subida queda sin terminar).
-      if (sealed && upload.folder && end + 1 === total) await this.appFolder(who, upload.folder, 3);
     }
+    const forward = async (signal?: AbortSignal): Promise<unknown> => {
+      if (part) {
+        const [, end, total] = part.slice(1).map(Number);
+        // La última parte de un archivo de una carpeta crea el archivo en Drive: antes se vuelve a mirar que la persona
+        // todavía pueda subir ahí (sacada de la página o del workspace, la subida queda sin terminar).
+        if (sealed && upload.folder && end! + 1 === total) await this.appFolder(who, upload.folder, 3);
+      }
+      return this.forwardChunk(uploadId, upload, sealed, range, body, who, signal);
+    };
+    // Con la parte entera acá, lo que falta es Cloudflare con Drive: si no contesta, la app se entera enseguida.
+    if (part && new URL(req.url).searchParams.get('stall') === '1') return this.answerWithin(PART_ANSWER_MS, forward);
+    return forward();
+  }
+
+  /**
+   * `work` con un tope: pasado `ms` se corta (su señal) y se contesta `504 stalled`, que la app toma como una subida
+   * trabada. Lo que Drive haya recibido queda en la subida: al retomar, la app pregunta cuánto llegó.
+   */
+  private async answerWithin<T>(ms: number, work: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    const stop = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const late = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        stop.abort();
+        reject(new HttpError(504, 'Google Drive did not answer in time: trying again shortly.', 'stalled'));
+      }, ms);
+    });
+    try {
+      return await Promise.race([work(stop.signal), late]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** La parte (o la pregunta de cuánto llegó) a Drive, y su respuesta para la app. */
+  private async forwardChunk(
+    uploadId: string,
+    upload: Upload,
+    sealed: boolean,
+    range: string,
+    body: ArrayBuffer,
+    who: Who,
+    signal?: AbortSignal,
+  ): Promise<unknown> {
     const res = await this.http(upload.session, {
       method: 'PUT',
       headers: { 'Content-Range': range, 'Content-Length': String(body.byteLength) },
       body,
+      ...(signal ? { signal } : {}),
     });
     if (res.status === 308) {
       const got = /bytes=0-(\d+)/.exec(res.headers.get('Range') ?? '');
@@ -1903,8 +1955,13 @@ export class Portero {
    *   - `later`: las que no entraron en el tope de llamados a Drive de este pedido (se piden de nuevo);
    *   - `nextPageToken`: para seguir con el mismo `dirs` (solo las de `lists`: la consulta no puede cambiar).
    * Cada subcarpeta se comprueba (`inTree`) como en el listado de una, salvo la que se comprobó hace menos de
-   * `LIST_TRUST_MS`. Con `pageToken` el conjunto ya no puede cambiar: una que ya no se puede comprobar corta el
-   * pedido con `409 changed` y la app vuelve a empezar. Cada pedido avanza al menos una subcarpeta.
+   * `LIST_TRUST_MS`. Con `pageToken` el conjunto ya no puede cambiar (Drive ata el token a la consulta): una que ya
+   * no se puede comprobar corta el pedido con `409 changed` y la app vuelve a empezar. Con `partial: true` (una app
+   * que lo entiende, desde v0.149) no corta: la consulta sigue con todas, pero lo de las que no entraron en el tope
+   * de llamados vuelve en `later` y lo de las que ya no son del árbol en `failed`, sin nada de ellas en `lists`; la
+   * app descarta lo que ya tenía de esas y las lista de nuevo, y sigue con las demás (antes, una espera de más de un
+   * minuto entre páginas con 36 subcarpetas o más daba `409` y la app caía a listar de a una). Cada pedido avanza
+   * al menos una subcarpeta.
    */
   private async folderListMany(req: Request, who: Who, root: string, body: Record<string, unknown>): Promise<unknown> {
     if (body.dir !== undefined && body.dir !== null && body.dir !== '') throw new HttpError(400, 'Send either dir or dirs, not both.', 'bad_request');
@@ -1915,11 +1972,13 @@ export class Portero {
     // Sin repetidas y en orden: la consulta tiene que ser la misma en cada página (Drive ata el `pageToken` a ella).
     const dirs = [...new Set(given as string[])].sort();
     const pageToken = typeof body.pageToken === 'string' && /^[\w.~-]{1,2000}$/.test(body.pageToken) ? body.pageToken : '';
+    // La app sabe dejar subcarpetas para después también en las páginas siguientes (ver arriba).
+    const partial = body.partial === true;
     const known = this.known(root);
     const accepted: string[] = [];
     const failed: Record<string, string> = {};
     const later: string[] = [];
-    if (pageToken) {
+    if (pageToken && !partial) {
       for (const dir of dirs) {
         // La misma confianza corta que en la primera página: sin esto, en las siguientes valía la de `inTree`
         // (10 minutos) y una subcarpeta movida a otro proyecto se seguía listando hasta terminar las páginas.
@@ -1948,8 +2007,11 @@ export class Portero {
     for (const dir of accepted) lists[dir] = [];
     if (accepted.length === 0) return { lists, failed, later, nextPageToken: null };
 
+    // Con `pageToken`, la consulta de la primera página (todas las pedidas), aunque alguna haya quedado afuera de esta:
+    // de las que no se comprobaron no sale nada (`wanted`, abajo).
+    const asked = pageToken ? dirs : accepted;
     const params = new URLSearchParams({
-      q: `(${accepted.map((d) => `${quoted(d)} in parents`).join(' or ')}) and trashed = false`,
+      q: `(${asked.map((d) => `${quoted(d)} in parents`).join(' or ')}) and trashed = false`,
       fields: LIST_FIELDS,
       pageSize: LIST_PAGE,
       orderBy: 'folder,name_natural',
