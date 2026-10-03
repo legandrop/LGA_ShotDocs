@@ -275,12 +275,19 @@ function writeNode(doc: Y.Doc, node: PMNode, unchanged: readonly [number, number
   updateYFragment(doc, fragment, node as never, meta as never);
 }
 
-/** Un bloque de arriba como lo arma el editor, leído en una copia suelta (leer borra lo que no se puede armar), o `null`. */
+/**
+ * Un bloque de arriba como lo arma el editor, leído en una copia suelta (leer borra lo que no se puede armar), o `null`.
+ * También `null` si la lectura cambió el XML del bloque (tenía adentro algo que el esquema no conoce y la lectura lo
+ * tiró): un bloque así no es «igual» aunque se lea igual, y tiene que reescribirse para que la restauración lo limpie,
+ * como antes de saltear los iguales (la página rota de la barrera puede tener uno).
+ */
 function readBlock(el: Y.XmlElement, schema: Schema, probe: Y.Doc): PMNode | null {
   const fragment = probe.getXmlFragment(CONTENT_FRAGMENT);
   try {
     fragment.insert(0, [el.clone()]);
+    const stored = fragment.toString();
     const root = yXmlFragmentToProseMirrorRootNode(fragment, schema);
+    if (fragment.toString() !== stored) return null;
     return fragment.length === 1 && root.childCount === 1 ? root.child(0) : null;
   } catch {
     return null;

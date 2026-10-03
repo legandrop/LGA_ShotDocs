@@ -113,6 +113,30 @@ describe('restaurar sin editor: lo que no cambió no se toca', () => {
     for (const id of ['b0', 'b2', 'b3']) expect(after[id]).toBe(before[id]);
   });
 
+  it('un bloque con un elemento que el esquema no conoce, igual a la versión salvo por eso, se reescribe y se limpia (no hace fallar la restauración)', () => {
+    const { version, doc } = pair();
+    // Algo de una versión más nueva: el editor lo tira al leer, así que el bloque «se lee igual» a la versión.
+    ((group(doc).get(1) as Y.XmlElement).get(0) as Y.XmlElement).insert(0, [new Y.XmlElement('cosaDelFuturo')]);
+    const schema = schemaOfApp();
+    const before = xmlById(doc);
+    expect(before.b1.toLowerCase()).toContain('cosadelfuturo');
+    const outcome = restoreInDoc(doc, version, schema);
+    expect(outcome.ok).toBe(true);
+    const after = xmlById(doc);
+    expect(after.b1.toLowerCase()).not.toContain('cosadelfuturo');
+    expect(shown(doc, schema)).toBe(shown(version, schema));
+    // Los demás no se tocan.
+    for (const id of ['b0', 'b2', 'b3']) expect(after[id]).toBe(before[id]);
+  });
+
+  it('un atributo que el esquema no conoce en un bloque igual a la versión no hace fallar la restauración', () => {
+    const { version, doc } = pair();
+    ((group(doc).get(1) as Y.XmlElement).get(0) as Y.XmlElement).setAttribute('cosaDelFuturo', 'x');
+    const schema = schemaOfApp();
+    expect(restoreInDoc(doc, version, schema).ok).toBe(true);
+    expect(shown(doc, schema)).toBe(shown(version, schema));
+  });
+
   it('la versión publicada de la app (el esquema anterior) abre lo restaurado igual y no pierde nada', () => {
     const { version, doc } = pair();
     textOf(group(doc).get(0) as Y.XmlElement).insert(4, ' y algo más');

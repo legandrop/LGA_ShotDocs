@@ -929,6 +929,10 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    el documento vivo, y el navegador lo pide al instante. Pasaba igual en `main`. Ahora la dirección sale con
    `loading="lazy"` puesto antes del `src` (`src/ui/quietImage.ts`, con `editorSchema.ts` e `inlinePhoto.ts`): sin pedido,
    y pegar trae las mismas fotos. Pruebas en `quietImage.test.ts`, más la reproducción en Chromium (cero pedidos fallidos).
+   Observaciones de su auditoría que quedan (BAJO): (O3) el `loading` del `renderHTML` de la foto en línea es defensivo y no
+   tiene prueba ni efecto medido (copiar, pegar y arrastrar no pasan por ahí): probarlo con `getHTML` o sacarlo; (O4) con
+   `showPreview: false` (solo llega por una importación o una fila) el HTML externo lleva el placeholder `data:image/gif…` en
+   el `<a href>` y en su texto: envolver solo si `showPreview !== false`, o restituir también `href` y el texto.
 
 ### C. Esperan a Lega
 
