@@ -542,9 +542,6 @@ export class PageDocs {
   pushPage(pageId: string, remote: Remote): Promise<'clean' | 'pushed'> {
     return this.withLock(pageId, async () => {
       await this.flush(pageId);
-      // Una página que volvió a la versión del equipo con algo tecleado tarde: se pasa a lo de antes antes de subir (sin
-      // volver a abrirla, el aviso aparece igual).
-      await this.sweepLate(pageId);
       let state = (await this.db.get('docState', pageId)) ?? emptyDocState(pageId);
       let pushed = false;
       for (let round = 0; round < 5; round++) {
@@ -552,6 +549,15 @@ export class PageDocs {
         if (!pending) {
           // Sin GC (B.16): lo propio que quedó adentro de algo que otro borró viaja con su texto, borrado.
           const saved = await this.readSaved(pageId, { keepDeleted: true });
+          // Una página que volvió a la versión del equipo con algo tecleado tarde en un documento con lo de antes (O1 y
+          // ON1 de la auditoría de la 2c): lo pendiente no sube nunca (en la sala apartaría la fila entera, también lo
+          // nuevo, y la sesión volvería a la cadena). Se saca de lo que se sube, en la misma lectura con que se arma, y
+          // pasa a lo de antes con su aviso (también sin volver a abrir la página).
+          if ((saved.doc.store.pendingStructs || saved.doc.store.pendingDs) && isBytes(await this.db.get('meta', startedOverKey(pageId)))) {
+            saved.doc.store.pendingStructs = null;
+            saved.doc.store.pendingDs = null;
+            await this.sweepLate(pageId);
+          }
           if (!hasUnsyncedContent(saved.state, saved.dirty !== undefined)) {
             saved.doc.destroy();
             break;

@@ -43,7 +43,8 @@ export async function keepLateWriting(db: LocalDb, pageId: string): Promise<numb
     applyRowsInOrder(all, rows.map((r) => r.data));
     // Solo lo que se arma sobre lo de antes es de antes; si sigue pendiente, no es esto (no se toca).
     if (all.store.pendingStructs || all.store.pendingDs) return 0;
-    const moved = pending ? Math.max(1, Y.decodeUpdate(pending.update).structs.length) : 1;
+    // Lo pendiente de Yjs está en el formato 2 de los updates.
+    const moved = pending ? Math.max(1, pendingCount(pending.update)) : 1;
     page.store.pendingStructs = null;
     page.store.pendingDs = null;
     const integrated = Y.encodeStateAsUpdate(page);
@@ -65,5 +66,14 @@ export async function keepLateWriting(db: LocalDb, pageId: string): Promise<numb
   } finally {
     page.destroy();
     all.destroy();
+  }
+}
+
+/** Cuántos elementos trae lo pendiente (formato 2 de Yjs); si no se puede leer, 1 (igual se pasa y se avisa). */
+function pendingCount(update: Uint8Array): number {
+  try {
+    return Y.decodeUpdateV2(update).structs.length;
+  } catch {
+    return 1;
   }
 }

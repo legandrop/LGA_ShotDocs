@@ -437,6 +437,27 @@ describe('correcciones de la auditoría de la 2c', () => {
     expect(await v.docs.startedOverLate(s)).toBe(0);
   });
 
+  it('ON1: teclas tarde en la otra pestaña y algo nuevo en esta: lo nuevo entra y lo tarde va a la copia', async () => {
+    const { server, e1, s, tick, v } = await visitorWithAside();
+    const other = new PageDocs(v.db, { normalize: normalizeStructure, seed: seedIfEmpty });
+    extraDocs.push(other);
+    const docB = await other.open(s);
+    await startOverFromTeam(deps(v, server, { broadcast: () => undefined }), s);
+    await write(v, s, '<t300>');
+    docB.transact(() => group(docB).push([block('Lx1', '<t301> ')]), 'test');
+    await other.flush(s);
+    docB.transact(() => group(docB).push([block('Lx2', '<t302> ')]), 'test');
+    await other.flush(s);
+    await v.engine.syncNow();
+    await editorRound(e1, tick, [s]);
+    expect(serverTokens(server, s).has('<t300>')).toBe(true);
+    expect(serverTokens(server, s).has('<t301>')).toBe(false);
+    const before = textTokens((await copyOf(v, s)).before!);
+    expect(before.has('<t301>') && before.has('<t302>')).toBe(true);
+    expect(await v.docs.startedOverLate(s)).toBeGreaterThan(0);
+    other.close(s);
+  });
+
   it('O2: lo que esperaba al volver y después entra no tapa un apartado nuevo', async () => {
     const { server, e1, s, tick, v } = await visitorWithAside();
     await v.engine.syncNow();

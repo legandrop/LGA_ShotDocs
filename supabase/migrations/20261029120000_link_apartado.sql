@@ -27,11 +27,14 @@ begin
   if private.workspace_role() is null or private.history_denied_for_guest() then
     return;
   end if;
-  -- El permiso una vez por página distinta (sees_deleted), no por fila; el tope, por página.
+  -- El permiso una vez por página distinta (sees_deleted), no por fila; el tope, por página. `materialized` obliga a
+  -- calcular las páginas y el permiso antes: sin él, el planificador metía `sees_deleted` fila por fila (~5 ms cada una)
+  -- y con 2000 filas apartadas tardaba ~11 s, más que el tope de 8 s de `authenticated` (BN1 de la re-verificación).
+  -- Con él, 54 ms.
   return query
-    with pages_aside as (
+    with pages_aside as materialized (
       select distinct u.page_id from public.public_link_updates u where u.decision = 'aside'
-    ), seen as (
+    ), seen as materialized (
       select pa.page_id from pages_aside pa where private.sees_deleted(pa.page_id)
     ), ranked as (
       select u.id, u.n, u.page_id, u.link_id, u.author, u.created_at, u.decided_at, u.bytes, u.reason,

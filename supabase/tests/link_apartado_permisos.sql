@@ -287,6 +287,31 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------------------------------
+-- BN1 de la re-verificación: con miles de filas apartadas (un link molesto reseteado), la lista tarda poco (el tope de
+-- `authenticated` es de 8 s; acá, 2 s)
+-- ---------------------------------------------------------------------------------------------------
+do $$
+declare
+  t0 timestamptz;
+  ms numeric;
+  n  int;
+begin
+  insert into public.public_link_updates (link_id, page_id, client_update_id, update, bytes, author, app_version,
+                                          decided_at, decision, reason)
+  select pg_temp.lid('S'), pg_temp.u('c2b2'), gen_random_uuid(), '\x01'::bytea, 1, 'Molesto', 1.0, now(), 'aside', 'link_revoked'
+  from generate_series(1, 3000);
+  perform pg_temp.as_user('c2a6');
+  t0 := clock_timestamp();
+  select count(*) into n from public.public_link_aside();
+  ms := extract(epoch from clock_timestamp() - t0) * 1000;
+  perform pg_temp.as_postgres();
+  raise notice 'public_link_aside con ~3250 filas apartadas: % ms, % filas', round(ms), n;
+  assert n = 400, format('con miles de filas: %s (se esperaban 200 de S y 200 de H)', n);
+  assert ms < 2000, format('public_link_aside tarda %s ms con miles de filas apartadas', round(ms));
+end;
+$$;
+
+-- ---------------------------------------------------------------------------------------------------
 -- Permisos y volatilidad
 -- ---------------------------------------------------------------------------------------------------
 do $$
