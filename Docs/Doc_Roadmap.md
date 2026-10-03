@@ -307,8 +307,14 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   **Entregas 0 y 1 hechas (v0.114: *Can view*, migración sin aplicar; ver "Cómo quedó" en `Doc_Link_Publico.md`).** Para
   publicarla: aplicar la migración, prender el interruptor de D14 y subir la mínima. Falta: el ícono del árbol para las
   páginas con link, el detalle *Can view link, created by…* para el equipo, y las entregas 2 y 3.
-  **Entrega 2 rediseñada (2026-10-02, sin código):** lo que escribe un link espera en una sala
-  (`public_link_updates`) y entra a `page_updates` cuando el dispositivo de un editor lo prueba (`plink_admit`); partida
+  **Entrega 2a hecha (v0.0XX: escribir; migración `20261027120000_link_editar.sql` sin aplicar, `schema_version` 19, y el
+  interruptor `link_edit_min_version` apagado; ver "Cómo quedó la 2a" en `Doc_Link_Publico.md`).** Para prenderla: la
+  barrera de error alrededor de `PageEditor` en `main` (R4), aplicar la migración, subir la mínima y poner
+  `link_edit_min_version`. Falta la 2b (archivos por el link) y la 2c (lo apartado a la vista). Lo encontrado al
+  implementar: si una fila del visitante se aparta, todo lo que sigue de la misma sesión (el mismo autor de Yjs) también,
+  dependa o no, hasta que recarga: adelantar "volver a la página como la ve el equipo" (2c) gana peso.
+  **Entrega 2 rediseñada (2026-10-02):** lo que escribe un link espera en una sala
+  (`public_link_updates`) y entra a `page_updates` cuando el dispositivo de un editor lo prueba (`link_admit`); partida
   en 2a (texto), 2b (archivos) y 2c (lo apartado a la vista); propuestas LE1 a LE13. **Auditado: aprobado con
   condiciones, corregido** (B1 a B5, E2.18) **y aprobado en la re-verificación** (con la condición C1 aplicada: un
   bloque de imagen vacío entra). **Para la 2a** (R1 a R4): en modo link, no mandar una subida que pase `push_max_bytes`;
@@ -322,13 +328,12 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   cliente con Editar ya cubre "el cliente escribe" sin superficie anónima. **Para D14:** la base limpia lleva los ids de
   archivos de las anotaciones borradas (la clave de `photoMarkup`, sin el contenido); no da acceso por sí sola
   (`Doc_Link_Publico.md`, "Entrega 2: *Can edit* (rediseño 2026-10-02)").
-  **Observaciones de las auditorías que quedaron para después** (ninguna pierde datos ni abre el link): `set_public_link`
-  revive un link vencido con la base de antes (le falta el `clean_reset`); en el visitante, *Open my workspace* desde la
+  **Observaciones de las auditorías que quedaron para después** (ninguna pierde datos ni abre el link): en el visitante, *Open my workspace* desde la
   cabecera del link, pruebas de las guardas de la interfaz (*Resolve*, papelera, preferencias, cartel del dominio,
   modo liviano), avisar y ofrecer copiar los comentarios sin subir cuando el link muere, limpiar las bases locales de
   links viejos, confirmar *Restricted* como *Reset link*, los plurales de «Today: opened 1 times», un texto propio del
-  link en vez de «Ask for edit access», `LinkRemote` cerrando también `namePageVersion`/`share`/`deleteProject`,
-  rechazar «(via link)» en el nombre, un selector de fecha en vez de `prompt()` al cambiar el vencimiento, la ayuda
+  link en vez de «Ask for edit access», `LinkRemote` cerrando también `deleteProject` (la 2a cerró `namePageVersion`,
+  `share` y compactar), rechazar «(via link)» en el nombre, un selector de fecha en vez de `prompt()` al cambiar el vencimiento, la ayuda
   según quién la lee; en la base, tiempos de un token que ya existe (el doc dice «cuesta lo mismo»), el costo sin contar
   de `plink_tree(sig)` (26 ms con 423 páginas), el `max_rows` de PostgREST (1000: ramas más grandes llegan cortadas), la
   prueba del portero de los pases de 2 horas en `/folder/list`, el texto de «cada archivo listado cuenta como un pase»,

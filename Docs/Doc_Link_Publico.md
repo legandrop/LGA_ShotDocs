@@ -2370,6 +2370,10 @@ admisión en dos pasos, `public_link_updates_of`, `public_link_update_bytes`, `p
   nivel. En la página (`LinkAsideNotice.tsx`, para quien ve lo borrado): *A change sent through the link couldn't be
   added to this page*, el motivo y *Download it* (lo apartado y lo retenido, tal cual, en un JSON), y una línea con lo
   retenido. En el historial, *Ana (via link)* (`createdBy` = `via-link:Ana`, que ninguna cuenta puede tener).
+- **Solo el contenido** (E2.4): el acceso del visitante lleva `contentOnly` y los permisos de la app suman
+  `canEditRow` (el título, la cabecera, la hoja, los títulos cortos, la carpeta de reportes: no se ofrecen) y `viaLink`
+  (sin el asistente, sin *Dictate to report* ni su botón, sin reemplazar en todo el proyecto). Lo encontró el recorrido
+  en el navegador: con Editar, el visitante veía editable el título y *Header for pages inside*, que su base rechaza.
 - La ayuda: *Can edit with a link* y *Editing with a link*.
 
 **Diferencias con el diseño (decididas al implementar):**
@@ -2388,6 +2392,8 @@ admisión en dos pasos, `public_link_updates_of`, `public_link_update_bytes`, `p
    no sabe el peso de la base.
 5. **Lo apartado se baja** como JSON con los bytes de Yjs en base64 (el equipo, de la sala; el visitante, su copia
    entera de cada página): no se aplica en ningún lado.
+6. **El estado del visitante** (*Sent, waiting for the team*) se pregunta como mucho cada 30 s: después de que un editor
+   admite, la insignia lo deja de decir en el ciclo siguiente del visitante.
 
 **Pruebas:** la migración y su prueba (`supabase/tests/link_editar_permisos.sql`) en `begin … rollback` contra la base
 real: pasa, con 27 mutantes de la migración, todos detectados; las 26 pruebas SQL de siempre pasan con la migración
@@ -2398,8 +2404,14 @@ apartadas, el costo), `linkShape.test.ts` (la lista contra el esquema real y cad
 el editor real), `linkEdit.test.ts` (el motor de E2.14.3 con el servidor en memoria), `linkEditEditor.test.ts` (el
 visitante con el editor real: escribir, una plantilla de fábrica en una página vacía y una anotación; el equipo lo abre
 sin *UnsupportedPage*) y `linkEdit.published.test.ts` (lo admitido abierto con la librería de las versiones
-publicadas). Mutantes de la app: uno por cada paso de E2.3 y los del motor y el visitante (`mutants_app.mjs` en la
-carpeta de trabajo, fuera del repo).
+publicadas), `admitClean.test.ts` (el paso 7, forzado) y `linkEditUi.test.tsx` (*Share* con *Can edit*, el aviso de
+lo apartado y *Ana (via link)* en el historial). Mutantes de la app: 21, uno por cada paso de E2.3 y los del motor y el
+visitante, todos detectados (`mutants_app.mjs` en la carpeta de trabajo, fuera del repo). **En el navegador**
+(Chromium sin ventana, la app real del visitante sobre el servidor en memoria con el interruptor prendido solo ahí, sin
+login): el visitante escribe, la barra le pide el nombre, la sala recibe la fila con su nombre, la insignia dice *Sent,
+waiting for the team*, un editor la admite, el equipo ve *Ana (via link)* en el historial, el visitante sigue viendo su
+texto una sola vez, una fila hostil (un `Y.Map` en un párrafo) queda apartada con `bad_shape` sin tocar la página, y el
+equipo ve el aviso con *Download it*; en el teléfono, sin scroll horizontal; sin errores en la consola.
 
 **Para prenderlo** (con la barrera de error de `PageEditor` ya en `main`, R4): aplicar la migración (con la copia de
 seguridad), publicar, subir `min_app_version` a esta versión y
