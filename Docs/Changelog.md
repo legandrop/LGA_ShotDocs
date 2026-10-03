@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.150 :
+
+**Dictado, entrega V4** (P.27, `Doc_Dictado.md` sección 18). Dictar varias notas del mismo plano obligaba a nombrarlo
+cada vez, una corrección no sabía qué corregir y el lente quedaba solo en el reporte. Ahora la hoja tiene el plano
+activo (*Shot: 12_010 ▾*), fijo entre notas y puesto solo con lo aplicado; «no, era un 35» lleva lo reciente con la
+dirección de ahora y corrige el último cambio del mismo campo; la vista previa ofrece, destildado, escribir el lente en la ficha de la
+página *Shot Breakdown* del plano, solo si está vacía o era la copia del reporte, con su guarda y *Undo*; quien solo
+comenta tiene *Add as comment*; y `/dictate#<texto>` abre la hoja con el texto de un Atajo de iOS sin mandar nada.
+Además: Esc en *Assistant…* y *Voice* cierra solo esa ventana, el doble toque se frena solo con un clic en *Apply*,
+la hoja guarda al cerrarse lo escrito en los últimos 250 ms (antes se perdía) y la prueba de `clearVoiceFromCopy`.
+[ Dictado V4 - plano activo, correcciones encadenadas, la ficha del plano, Add as comment, /dictate y restos del asistente ]
+
 v0.149 :
 
 **Carpetas, entrega 4** (restos de B.11). Tres cosas hacían esperar de más sin perder nada. La cola de una carpeta no

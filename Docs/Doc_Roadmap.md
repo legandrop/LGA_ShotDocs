@@ -499,7 +499,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   botón en el 401, la clave de *Voice* en el mismo sobre y las notas de voz en la ventana de salir. Falta medir en el
   iPhone y el gestor de contraseñas real (recorrido de Lega). Quedó de la auditoría de S2 (improbable): *Change
   passphrase…* no rechaza una copia más vieja repuesta con la misma generación que el dispositivo conoce; al recifrarla le
-  da un `savedAt` nuevo y los otros dispositivos la aceptarían (es una clave vieja de la persona, no filtra nada). Falta una prueba de `clearVoiceFromCopy` (el mutante que no la llama sobrevive: tras *Forget voice key*, la próxima copia volvería a poner su *Voice* sin preguntar; no se pierde ninguna clave propia). **A3 implementada (v0.146):** *Suggest caption* en la barra de la foto y en el panel, con el aviso
+  da un `savedAt` nuevo y los otros dispositivos la aceptarían (es una clave vieja de la persona, no filtra nada). La prueba de `clearVoiceFromCopy` ya está (v0.150, con la entrega V4 del dictado: el mutante que no la llama muere). Esc en *Assistant…* (y en *Voice*) cierra solo esa ventana, no el panel ni la hoja de abajo (v0.150). **A3 implementada (v0.146):** *Suggest caption* en la barra de la foto y en el panel, con el aviso
   antes de mandarla, la foto rearmada en el dispositivo a 1024 px sin EXIF, la vista previa que se retoca y el pie como
   texto debajo de la foto (en una celda, en la misma celda); ver "Cómo quedó A3". Quedó de A3 (chico): el texto
   alternativo no se hace (la app no tiene dónde guardarlo); una foto que no es del Drive (`https` de afuera) puede no
@@ -583,9 +583,12 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   de la cuenta (después de S1). **V3 hecha (v0.139, sección 17):** el micrófono propio (pedazos de 1 s guardados, C4 y
   C5, OpenAI, Gemini o compatible con pistas, *Voice* con la segunda clave, *Insert at cursor*, *Ask…*); falta que Lega
   lo pruebe en su iPhone (instalada y en Safari) con OpenAI y con Gemini, y que la segunda clave siga a la clave
-  sincronizada cuando exista (D72, S1), y que salir con «olvidar la clave» también olvide la clave de voz y diga
-  cuántas notas quedan (O5 de su auditoría, con la tanda de S1). El reconocimiento del navegador quedó afuera (optativo
-  y apagado).
+  sincronizada (hecho en S2, v0.143, junto con O5: olvidar la clave olvida también la de voz y la ventana de salir
+  cuenta las notas). El reconocimiento del navegador quedó afuera (optativo y apagado). **V4 hecha (v0.150, sección
+  18):** el plano activo (*Shot: 12_010 ▾*, fijo entre notas), las correcciones encadenadas («no, era un 35» con la
+  dirección de ahora), el lente también en la página *Shot Breakdown* del plano (destildado, solo si está vacía o era
+  la copia del reporte, con su guarda y *Undo*), *Add as comment* para quien comenta y `/dictate#<texto>` para un Atajo
+  de iOS; falta que Lega pruebe el Atajo con el botón de acción en su iPhone (¿abre la app instalada o Safari?).
   **Diseño en `Doc_Dictado.md`** (decisiones propuestas DI1 a DI9): el dictado común queda en el teclado del sistema;
   un solo micrófono propio, *Dictate to report*, que graba
   en el dispositivo y transcribe con el proveedor de la persona (OpenAI o Gemini; el reconocimiento del navegador no
@@ -595,9 +598,13 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   V1 (texto dictado con el teclado → ubicar; requiere A2 de P.24 en `main`), V2 (la cola sin red), V3 (el micrófono
   propio, guantes y ruido), V4 (plano activo, correcciones, la página del plano, el botón de acción del iPhone).
   Queda para medir: transcripción adentro del teléfono (Whisper en WebAssembly), sin red y privada.
-  Quedó de la re-verificación de V1 (BAJO): el resguardo de 600 ms contra el doble toque en *Apply* también corre
-  cuando se aplicó con Ctrl/⌘+Enter, y un *Undo* a propósito en menos de medio segundo se ignora sin aviso (el segundo
-  anda); que valga solo para un clic o un toque sobre *Apply*.
+  El resguardo de 600 ms contra el doble toque en *Apply* vale solo para un clic o un toque (v0.150). Queda de V4
+  (chico): copiar a la página del plano solo el lente (otras columnas con su fila en la ficha se suman en `FIELDS` de
+  `shotPage.ts`); lo escrito en la página del plano no entra en el ⌘Z de esa página (se deshace con *Undo* de la hoja,
+  como el reemplazo del proyecto antes de D10).
+- **P.28 (chico) La tabla del reporte en el teléfono:** en 375 px las tablas de 7 columnas del *On-Set Report* quedan muy
+  angostas (una palabra por renglón); viene de antes de V4 del dictado (lo anotó su auditoría). Para mirar con el
+  desplazamiento de costado de las tablas o un ancho mínimo por columna.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.

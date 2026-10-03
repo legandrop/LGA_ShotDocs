@@ -3,7 +3,7 @@ import { useT } from '../i18n';
 import '../i18n/lazy/assistant';
 import { useServices } from '../services';
 import { errorText } from './errorText';
-import { closeAssistantSettings } from './assistantUi';
+import { closeAssistantSettings, signOutDialogOpen } from './assistantUi';
 import { forgetKey, forgetTabKey, loadSettings, readKey, sameDestination, saveSettings, type AssistantSettings as Saved } from './keyStore';
 import { KeySyncSection } from './KeySyncSection';
 import { defaultModel, listModels, PROVIDER_NAMES, PROVIDERS, SPEND_LIMIT_URLS, type ModelInfo, type ProviderId } from './providers';
@@ -58,12 +58,24 @@ export function AssistantSettings() {
     };
   }, [user.email]);
 
+  // Esc cierra solo esta ventana, nunca el panel de abajo (el asistente o *Dictate to report*): se toma en la fase de
+  // captura, antes que nadie, y no sigue. Antes el foco quedaba en el botón del panel (el campo todavía no estaba al
+  // abrir) y el mismo Esc cerraba los dos.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && closeAssistantSettings();
-    document.addEventListener('keydown', onKey);
-    first.current?.focus();
-    return () => document.removeEventListener('keydown', onKey);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.isComposing || signOutDialogOpen()) return;
+      e.preventDefault();
+      e.stopPropagation();
+      closeAssistantSettings();
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
   }, []);
+  // El foco entra a la ventana cuando lo guardado se leyó (recién ahí está el primer campo).
+  const ready = saved !== undefined;
+  useEffect(() => {
+    if (ready) first.current?.focus();
+  }, [ready]);
 
   const name = PROVIDER_NAMES[provider];
   // La guardada vale solo para el mismo proveedor y, en uno compatible, la misma dirección: si cambia la Base URL, el

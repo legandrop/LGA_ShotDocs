@@ -49,7 +49,7 @@ export function findBlock(doc: PMNode, id: string): { pos: number; node: PMNode 
   return found;
 }
 
-interface Resolved {
+export interface Resolved {
   /** Dónde empieza el contenido del bloque de texto ahora. */
   start: number;
   node: PMNode;
@@ -61,7 +61,7 @@ interface Resolved {
  * Dónde está hoy el lugar de la foto (por su ancla, que sigue al elemento de Yjs), si es el mismo elemento: el bloque
  * con el mismo id o la celda de la misma tabla. `null` si ya no está.
  */
-function locate(state: EditorState, t: Target): Resolved | null {
+export function locate(state: EditorState, t: Target): Resolved | null {
   const binding = bindingOf(state);
   let pos: number | null = t.start;
   if (binding && t.anchor) {

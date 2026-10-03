@@ -50,11 +50,18 @@ export function VoiceSettingsDialog({ email, assistant, onClose }: { email: stri
       }
       setLoaded(true);
     });
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close.current();
-    document.addEventListener('keydown', onKey);
+    // Esc cierra solo esta ventana, no la hoja ni el panel de abajo (está adentro de ellos): en la fase de captura y sin
+    // seguir.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.isComposing) return;
+      e.preventDefault();
+      e.stopPropagation();
+      close.current();
+    };
+    document.addEventListener('keydown', onKey, true);
     return () => {
       live = false;
-      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('keydown', onKey, true);
     };
   }, [email, canShare]);
 
