@@ -11,7 +11,7 @@ import { AppIcon } from './icons';
 // nota arriba que lo explica, y los links del resto de la app sí se traducen.
 
 /** La fecha de la última versión de los dos textos. */
-export const LEGAL_UPDATED = 'September 30, 2026';
+export const LEGAL_UPDATED = 'October 3, 2026';
 export const CONTACT_EMAIL = 'info@lega.com.ar';
 const REPO_URL = 'https://github.com/legandrop/LGA_ShotDocs';
 const USER_DATA_POLICY = 'https://developers.google.com/terms/api-services-user-data-policy';
@@ -177,10 +177,22 @@ function Privacy() {
           GitHub repository of the owner, who decides how long copies are kept. In our workspace, copies are made
           four times a day and we keep the last 30 days plus one copy per month.
         </li>
+        <li>
+          <strong>The assistant</strong> (optional, off until you set it up with your own provider: Anthropic, OpenAI,
+          Google, another service, or a model on your own computer, which needs no key). A key is stored encrypted on
+          your device and, only if you turn on sync, encrypted with your passphrase in the workspace’s database. When
+          you ask the assistant for something, your browser sends it directly to that provider, under your own
+          account with it, never through us: the text you selected (or the page, for page actions), for Dictate to
+          report your note or voice recording and the text of the page it goes into, or, for Suggest caption, a copy
+          of the photo of up to 1,024 pixels without its location data (the app asks you each time before sending a
+          photo). The provider handles it under its own terms. The workspace owner can turn the assistant off or allow
+          only local models.
+        </li>
       </ul>
       <p>
-        These providers handle the data under their own terms, on the owner’s accounts, and may process it in other
-        countries (the owner chooses the region of the database).
+        These providers handle the data under their own terms, on the owner’s accounts (the assistant, on the account
+        of each person who sets it up), and may process it in other countries (the owner chooses the region of the
+        database).
       </p>
       <p>
         When a page shows a Google Drive link as a card, or the owner opens Google’s folder picker, your browser
@@ -304,8 +316,7 @@ function Privacy() {
       <h2>Changes to this policy</h2>
       <p>
         If this policy changes, we will publish the new version on this page with a new date. Before the app uses
-        data in a new way (for example, a planned assistant that would use each user’s own AI provider key, which
-        does not exist yet), this page will be updated to say so.
+        data in a new way, this page will be updated to say so.
       </p>
 
       <h2>Contact</h2>

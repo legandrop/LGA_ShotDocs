@@ -490,14 +490,18 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   botón en el 401, la clave de *Voice* en el mismo sobre y las notas de voz en la ventana de salir. Falta medir en el
   iPhone y el gestor de contraseñas real (recorrido de Lega). Quedó de la auditoría de S2 (improbable): *Change
   passphrase…* no rechaza una copia más vieja repuesta con la misma generación que el dispositivo conoce; al recifrarla le
-  da un `savedAt` nuevo y los otros dispositivos la aceptarían (es una clave vieja de la persona, no filtra nada). Falta una prueba de `clearVoiceFromCopy` (el mutante que no la llama sobrevive: tras *Forget voice key*, la próxima copia volvería a poner su *Voice* sin preguntar; no se pierde ninguna clave propia). **M0 hecha en lo que no necesita infraestructura real
+  da un `savedAt` nuevo y los otros dispositivos la aceptarían (es una clave vieja de la persona, no filtra nada). Falta una prueba de `clearVoiceFromCopy` (el mutante que no la llama sobrevive: tras *Forget voice key*, la próxima copia volvería a poner su *Voice* sin preguntar; no se pierde ninguna clave propia). **A3 implementada (v0.146):** *Suggest caption* en la barra de la foto y en el panel, con el aviso
+  antes de mandarla, la foto rearmada en el dispositivo a 1024 px sin EXIF, la vista previa que se retoca y el pie como
+  texto debajo de la foto (en una celda, en la misma celda); ver "Cómo quedó A3". Quedó de A3 (chico): el texto
+  alternativo no se hace (la app no tiene dónde guardarlo); una foto que no es del Drive (`https` de afuera) puede no
+  bajarse por CORS (lo dice); con varias fotos elegidas no se ofrece. **M0 hecha en lo que no necesita infraestructura real
   (v0.145):** el MCP en el portero detrás de `MCP_M0` (apagado), el token de un asistente rechazado en las demás rutas,
   la especificación 2026-07-28 (la *elicitation* sin estado, por MRTR), el servidor OAuth de Supabase (no respeta
   `resource`; fallas abiertas `#2820` y `#2703` que pegan en los clientes MCP), la API de Auth (con la configuración de
   hoy, el token de un tercero podría ponerle una contraseña a la cuenta en las primeras 24 horas de su sesión, aunque
   con ella no ve nada en la base: se cierra conectando el hook que ya rechaza el ingreso con contraseña), el plan B probado
   en SQL de solo lectura y la CPU con páginas reales (en el plan gratis entran listar, buscar y leer páginas de hasta
-  ~16 KB). Faltan los ocho pasos con Supabase y Cloudflare reales ("Cómo quedó M0"), después M1 a M3 y A3. Para M1
+  ~16 KB). Faltan los ocho pasos con Supabase y Cloudflare reales ("Cómo quedó M0"), después M1 a M3. Para M1
   (de la auditoría de M0): el título de la página y los títulos de `list_pages` y `search_titles` van adentro del
   contenido no confiable (hoy el título de `read_page` va afuera del envoltorio y las listas salen como JSON crudo), y
   la pantalla de permiso muestra el host del `redirect_uri` además del nombre del cliente. De la re-verificación de M0: la migración de M1 da `execute` sobre `private.mcp_pre_request` a `anon` y `authenticated` (si falta, falla todo pedido a PostgREST), y la vuelta atrás del paso 1 vacía por SQL las contraseñas que pueda haber puesto un tercero (o deja el hook conectado). Lo que Lega prueba con

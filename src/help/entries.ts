@@ -110,6 +110,8 @@ const CAMERA = '0.110';
 const ASSISTANT = '0.118';
 /** El asistente, entrega A2 (la página entera, *Format as…*, la política del workspace): la versión la pone quien publica. */
 const ASSISTANT_A2 = '0.126';
+/** El asistente, entrega A3 (*Suggest caption* sobre una foto): la versión la pone quien publica. */
+const ASSISTANT_A3 = '0.146';
 /** *Dictate to report* (Docs/Doc_Dictado.md, entrega V1): la versión la pone quien publica. */
 const DICTATION = '0.135';
 /** *Dictate to report*, entrega V2 (la cola sin red): la versión la pone quien publica. */
@@ -301,6 +303,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
     keys: { undo: 'undo' },
     words: ['resumen', 'resumir', 'traducir página', 'subpágina', 'reemplazar', 'summary', 'summarize', 'translate page', 'subpage', 'replace', 'asistente', 'assistant'],
     since: ASSISTANT_A2,
+  },
+  {
+    id: 'assistantCaption',
+    section: 'writing',
+    title: 'help.assistantCaption.title',
+    text: 'help.assistantCaption.text',
+    keys: { apply: 'assistantApply', undo: 'undo' },
+    words: ['pie de foto', 'leyenda', 'foto', 'describir', 'claqueta', 'caption', 'photo', 'describe', 'slate', 'image', 'asistente', 'assistant'],
+    since: ASSISTANT_A3,
   },
   {
     id: 'assistantFormat',

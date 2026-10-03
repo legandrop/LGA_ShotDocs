@@ -41,6 +41,11 @@ export interface CompletionRequest {
   system: string;
   user: string;
   maxTokens: number;
+  /**
+   * Una foto para que el modelo la mire (*Suggest caption*, entrega A3): JPEG en base64, ya achicada en el dispositivo
+   * (captionImage.ts). Va antes del texto, como recomiendan los cuatro.
+   */
+  image?: { mime: string; data: string };
 }
 
 export interface Usage {
@@ -334,20 +339,52 @@ export async function complete(
         model: config.model,
         max_tokens: request.maxTokens,
         system: request.system,
-        messages: [{ role: 'user', content: request.user }],
+        messages: [
+          {
+            role: 'user',
+            content: request.image
+              ? [
+                  { type: 'image', source: { type: 'base64', media_type: request.image.mime, data: request.image.data } },
+                  { type: 'text', text: request.user },
+                ]
+              : request.user,
+          },
+        ],
         stream: true,
       };
       break;
     case 'openai':
       // `store: false`: de fábrica la API guarda la respuesta (Docs/Doc_Asistente.md, 3.1).
       url = `${base}/responses`;
-      body = { model: config.model, instructions: request.system, input: request.user, max_output_tokens: outputCap(config, request.maxTokens), store: false, stream: true };
+      body = {
+        model: config.model,
+        instructions: request.system,
+        input: request.image
+          ? [
+              {
+                role: 'user',
+                content: [
+                  { type: 'input_image', image_url: `data:${request.image.mime};base64,${request.image.data}` },
+                  { type: 'input_text', text: request.user },
+                ],
+              },
+            ]
+          : request.user,
+        max_output_tokens: outputCap(config, request.maxTokens),
+        store: false,
+        stream: true,
+      };
       break;
     case 'gemini':
       url = `${base}/models/${encodeURIComponent(config.model)}:streamGenerateContent?alt=sse`;
       body = {
         systemInstruction: { parts: [{ text: request.system }] },
-        contents: [{ role: 'user', parts: [{ text: request.user }] }],
+        contents: [
+          {
+            role: 'user',
+            parts: request.image ? [{ inline_data: { mime_type: request.image.mime, data: request.image.data } }, { text: request.user }] : [{ text: request.user }],
+          },
+        ],
         generationConfig: { maxOutputTokens: outputCap(config, request.maxTokens) },
       };
       break;
@@ -357,7 +394,15 @@ export async function complete(
         model: config.model,
         messages: [
           { role: 'system', content: request.system },
-          { role: 'user', content: request.user },
+          {
+            role: 'user',
+            content: request.image
+              ? [
+                  { type: 'image_url', image_url: { url: `data:${request.image.mime};base64,${request.image.data}` } },
+                  { type: 'text', text: request.user },
+                ]
+              : request.user,
+          },
         ],
         max_tokens: request.maxTokens,
         stream: true,

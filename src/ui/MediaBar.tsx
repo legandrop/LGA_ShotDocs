@@ -11,7 +11,9 @@ import { carreteSourceOf } from './carreteModel';
 import { isOffline, startDownload } from './carreteLoader';
 import { commentOnBlock } from './commentsUi';
 import { shortcutLabel } from './shortcuts';
-import { AlignCenterIcon, AlignLeftIcon, AlignRightIcon, AnnotateIcon, CommentIcon, DownloadIcon, RenameIcon, ReplaceIcon, ShareIcon, TrashIcon } from './icons';
+import { currentTarget, openCaption } from '../assistant/assistantUi';
+import type { PhotoRef } from '../assistant/photoRef';
+import { AlignCenterIcon, AlignLeftIcon, AlignRightIcon, AnnotateIcon, AssistantIcon, CommentIcon, DownloadIcon, RenameIcon, ReplaceIcon, ShareIcon, TrashIcon } from './icons';
 import { canShareFiles, saveToRollOffered, shareFile, shareFileOf, touchDevice } from './camera';
 import { porteroDownload } from './sharpImages';
 import { ImageSizeButtons, OriginalDownloadButton, ViewIcon } from './MediaToolbarButtons';
@@ -101,6 +103,32 @@ export function AnnotateButton({ url, name, kind }: { url: string | null; name: 
   const label = tr('photoBar.annotate');
   return <BarButton label={label} tip={`**${label}**
 ${tr('photoTip.annotate')}`} icon={<AnnotateIcon size={18} />} test="mediaAnnotate" onClick={() => actions.onAnnotate!(url, name)} />;
+}
+
+/**
+ * *Suggest caption* (Docs/Doc_Asistente.md, entrega A3): abre el panel del asistente con el pedido de esa foto. Solo una
+ * foto (no videos ni adjuntos) y solo en el editor de la página abierta (no en una versión del historial ni en la
+ * práctica). La barra ya sale solo con la página editable. `photo` se calcula al tocar (la foto de ese momento).
+ */
+export function SuggestCaptionButton({ kind, photo }: { kind: MediaKind; photo: () => PhotoRef | null }) {
+  const editor = useBlockNoteEditor();
+  const tr = useT();
+  const view = currentTarget()?.view();
+  if (kind !== 'image' || !view || view !== editor.prosemirrorView) return null;
+  const label = tr('photoBar.caption');
+  return (
+    <BarButton
+      label={label}
+      tip={`**${label}**
+${tr('photoTip.caption')}`}
+      icon={<AssistantIcon size={18} />}
+      test="mediaCaption"
+      onClick={() => {
+        const ref = photo();
+        if (ref) openCaption(ref);
+      }}
+    />
+  );
 }
 
 /**
@@ -358,6 +386,9 @@ export function ImageBlockBar() {
               <DownloadButton url={block.url} name={block.name} blockId={block.id} />
               {!attachment && <SaveToRollButton url={block.url} name={block.name} />}
               {!attachment && <AnnotateButton url={block.url} name={block.name} kind={kind} />}
+              {!attachment && (
+                <SuggestCaptionButton kind={kind} photo={() => ({ kind: 'block', blockId: block.id, index: 0, url: block.url, name: block.name })} />
+              )}
             </>
           ),
           !attachment && <ImageSizeButtons />,
