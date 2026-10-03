@@ -14,12 +14,15 @@ import { mountEditor, pmFromY, undoManager, unmountAll, view, yText, type Editor
 import { schema as mainSchema } from '../ui/fixtures/editorSchemaMain';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { askSignOutOthers, closeAssistant, closeAssistantSettings, closeSignOutOthers, openAssistantSettings, registerAssistantTarget, useAssistantUi, type AssistantEditor } from '../assistant/assistantUi';
-import { LinkContext, setVisitorName, type LinkInfo } from '../linkMode';
+import { LinkContext, rememberLink, setVisitorName, type LinkInfo } from '../linkMode';
+
+/** El link de la prueba del visitante (O5). */
+let linkId = '';
 import { AssistantSettings } from '../assistant/AssistantSettings';
 import { closeAssistantDb, saveSettings } from '../assistant/keyStore';
 import { DictationPanel, DOUBLE_TAP_MS, forgetRecent } from './DictationPanel';
 import { closeDictation, dictationOpen, openDictation } from './dictationUi';
-import { closeDictationDb } from './drafts';
+import { closeDictationDb, loadDraft } from './drafts';
 import { captureDictateLink, resetDictateLink } from './dictateLink';
 import { answer, cellText, cursorAt, mapOf, reportBlocks, WORDS } from './fixtures/report';
 import { applyShotPages, factValue, proposeShotPages, type ShotPageDeps } from './shotPage';
@@ -187,7 +190,7 @@ async function setup(opts: { editable?: boolean; breakdown?: { title: string; sh
     roots.push(root);
     act(() =>
       root.render(
-        <LinkContext.Provider value={opts.link ? ({ entry: { id: 'link-1' }, domain: 'x.supabase.co', linkId: 'l1', pageId } as unknown as LinkInfo) : null}>
+        <LinkContext.Provider value={opts.link ? ({ entry: { id: linkId }, domain: 'x.supabase.co', linkId: 'l1', pageId } as unknown as LinkInfo) : null}>
           <ServicesContext.Provider value={services(device)}>
             <DictationPanel pageId={pageId} />
           </ServicesContext.Provider>
@@ -518,6 +521,8 @@ describe('V4 · /dictate (Atajo de iOS)', () => {
     captureDictateLink({ pathname: '/dictate', hash: '#este%20plano%20se%20film%C3%B3%20con%20un%2050' }, { replaceState });
     const p = provider(answer([LENS]));
     const s = await setup();
+    // Guardado ya en el borrador (no espera el guardado demorado de lo que se teclea).
+    expect((await loadDraft(EMAIL, WANKA_LOCAL_KEY, s.pageId))?.text).toBe('este plano se filmó con un 50');
     await wait(60);
     expect(s.host.querySelector('textarea')!.value).toBe('este plano se filmó con un 50');
     expect(s.host.textContent).toContain('From your Shortcut. Check the note and tap Place: nothing is sent until you do.');
@@ -805,7 +810,10 @@ describe('V4 · correcciones de la auditoría', () => {
   });
 
   it('O5: el visitante de un link público no tiene Add as comment (aunque pueda comentar)', async () => {
-    setVisitorName('link-1', 'Ana');
+    // Un visitante con nombre (así podría comentar): sin el link, la hoja le ofrecería *Add as comment*.
+    const entry = rememberLink({ u: 'https://x.supabase.co', k: 'k', l: WANKA_LOCAL_KEY, t: 'sdl_' + 'a'.repeat(43) } as never);
+    setVisitorName(entry.id, 'Ana');
+    linkId = entry.id;
     const s = await setup({ editable: false, link: true });
     provider(answer([LENS]));
     await place(s.host, 'el 12_010 setup 3 con un 50');

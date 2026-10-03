@@ -596,6 +596,7 @@ Safari 18.4 MediaRecorder también graba WebM/Opus. Por eso:
 | Una pestaña vieja abre la base de la clave con otra versión | La voz usa su propia base (8) |
 | La IA se corre una fila o una columna en una celda vacía | `row` y `col` comparados con el mapa; el destino lo arma la app (5.4, 5.5) |
 | La persona destilda un cambio y la información se pierde | Lo destildado va a *Couldn't place*; la nota no se vacía sola (5.5, 5.7) |
+| V4: otro dispositivo **sin red** escribe en la misma celda de la ficha del plano mientras el dictado escribe ahí | La guarda solo ve lo que ya llegó; al sincronizar, Yjs junta los dos textos (por ejemplo «50 mm24 mm»): nada se pierde, pero queda un texto que nadie escribió así y la hoja no lo muestra. Es la fusión normal de dos personas tecleando en el mismo lugar; se arregla a mano en la ficha (auditoría de V4, O3) |
 | El proveedor rechaza el audio del iPhone | WebM si se puede, extensión del archivo, el plan B a WAV (11 bis, C4) |
 | La grabación cortada no se puede leer | El primer pedazo confirmado antes de grabar; `ended` y `pagehide` (11 bis, C5) |
 
@@ -1007,7 +1008,8 @@ de Playwright en Windows no trae micrófono: el iPhone lo prueba Lega. Mutantes 
 - **Correcciones encadenadas.** `RECENT` lleva lo aplicado en la hoja en los últimos 10 minutos con la dirección que cada
   lugar tiene **en el mapa nuevo** (el ancla de Yjs de la foto lo sigue aunque se agreguen filas arriba), un renglón por
   lugar (lo de antes de la primera vez y lo de después de la última) y el más nuevo marcado `(last)`. «no, era un 35»
-  corrige el `(last)`; otra corrección encima va al mismo lugar. Un cambio en un lugar de `RECENT` se muestra con
+  vuelve al lugar de `RECENT` que guarda ese tipo de valor (un 35 al lente, un T4 al T-stop, un número de toma a las
+  tomas) y el `(last)` solo desempata; otra corrección encima va al mismo lugar. Un cambio en un lugar de `RECENT` se muestra con
   *Corrects a change you just applied* y nunca como elegido por el asistente.
 - **La página *Shot Breakdown* del plano (DI8 → A).** Cuando la nota cambia la columna *Lens · Filters* (o *Lente ·
   Filtros*) de una fila con *Slate*, la vista previa suma *Also in the shot's page* con *Shot Breakdown › 012_010 ›
@@ -1051,8 +1053,8 @@ guarda al cerrarse lo escrito en los últimos 250 ms (antes se perdía si se cer
 celda que existe. Una prueba abre la página del plano escrita con el esquema publicado y no cambia nada. **No hace
 falta subir `min_app_version`.** Sin migración.
 
-**Pruebas.** Vitest: 13 en `v4.test.ts` (el nombre de un plano, los de la página, el plano activo como señal, `RECENT`
-juntado y con la dirección de ahora aunque se agregue una fila, `ACTIVE_SHOT` en el pedido, `/dictate`) y 16 en
+**Pruebas.** Vitest: 16 en `v4.test.ts` (el nombre de un plano, los de la página, el plano activo como señal, `RECENT`
+juntado y con la dirección de ahora aunque se agregue una fila, `ACTIVE_SHOT` en el pedido, `/dictate`) y 29 en
 `panelV4.test.tsx` con el editor real y el proveedor simulado (las aceptaciones 1 a 4; la página del plano destildada,
 tildada, con la guarda, con *Undo* después de que otro la cambió, con dos candidatas, sin permiso, en la papelera y con
 el esquema publicado; *Add as comment*; Ctrl+Enter y *Undo*; Esc en *Assistant…* y en *Voice*), más una en
@@ -1066,3 +1068,23 @@ Recorrido en Chromium sin login con el proveedor falso local: 31 de 31 (las cuat
 no la app instalada en la pantalla de inicio, que tiene su propio almacenamiento: si es así, hay que entrar una vez en
 Safari y la hoja se abre ahí), el botón de acción, la chapita en el iPhone con guantes, y la calidad de las correcciones
 con una clave real (10.3).
+
+**Correcciones de la auditoría de V4** (aprobado con observaciones, sin bloqueantes):
+
+- **O1:** la regla decía corregir el `(last)`; en la secuencia de la lista de Lega (lente, T2.8, foco, «la buena es la 4»,
+  «no, era un 35») el último es *Circled takes = 4* y un modelo obediente habría escrito 35 ahí. Ahora la corrección
+  vuelve al lugar reciente que guarda ese tipo de valor (por su columna o rótulo y su valor) y el `(last)` solo desempata;
+  si no encaja en ninguno, pregunta. Una prueba mira el pedido de esa secuencia.
+- **O2, O4, O5, O6:** una prueba por guarda que sobrevivía a su mutante (el permiso adentro y afuera del candado, el
+  contenido desconocido al proponer y al escribir, la celda de una fila borrada con el documento que guarda lo borrado,
+  algo que no es una celda, la ficha a medio bajar, ilegible o rechazada, la ficha de otro plano con el mismo título, la
+  guarda exacta, la ficha de un cambio destildado, el guardado de los últimos 250 ms, *Stop* mientras se busca la ficha,
+  el visitante de un link, Esc con la ventana de salir arriba de *Assistant…*). Los 22 mutantes de la ronda mueren.
+- **O3:** la fusión de dos dispositivos sin red en la misma celda, en los riesgos (sección 12).
+- **O7:** la ficha a medio bajar, ilegible o rechazada dice *…isn't fully on this device yet* (no *You can't edit*), y una
+  celda con una foto o un salto, *…has a photo or a line break*.
+- **O8:** `/dictate` saca los caracteres de control y de dirección del texto (U+202A a U+202E, U+2066 a U+2069) y no deja
+  medio emoji al cortar a 2000.
+- **O9:** escribir en la ficha mira también que el documento vivo sea el de la página (`docs.peek`), como el reemplazo
+  del proyecto.
+- **O10:** el changelog nombra el guardado de los últimos 250 ms.

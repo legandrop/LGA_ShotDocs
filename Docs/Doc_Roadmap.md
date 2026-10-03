@@ -588,6 +588,9 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   (chico): copiar a la página del plano solo el lente (otras columnas con su fila en la ficha se suman en `FIELDS` de
   `shotPage.ts`); lo escrito en la página del plano no entra en el ⌘Z de esa página (se deshace con *Undo* de la hoja,
   como el reemplazo del proyecto antes de D10).
+- **P.28 (chico) La tabla del reporte en el teléfono:** en 375 px las tablas de 7 columnas del *On-Set Report* quedan muy
+  angostas (una palabra por renglón); viene de antes de V4 del dictado (lo anotó su auditoría). Para mirar con el
+  desplazamiento de costado de las tablas o un ancho mínimo por columna.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
