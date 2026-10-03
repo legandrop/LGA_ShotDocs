@@ -24,7 +24,7 @@ import { attachMarkupOverlay } from './markupOverlay';
 import { PHOTO_MARKUP_MAP } from '../media/markup';
 import { startMarkupPrune } from '../media/markupPrune';
 import { clipScope } from '../media/markupClipboard';
-import { markupClipboardExtension, pasteWithMarkup } from './markupClipboardEditor';
+import { markupClipboardExtension, pasteWithMarkup, trackMarkupInUndo } from './markupClipboardEditor';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { editorSchemaOptions, insertPageBreakForSlashMenu, SCRIPT_PROP, setVideosAccepted } from './editorSchema';
 import { dropTarget, insertFiles, isEmptyParagraph, isFilesTransfer, takeFiles, type FileEditor, type InsertAt } from './fileDrop';
@@ -579,6 +579,10 @@ export function BlockEditor({
       const um = (yUndoPluginKey.getState(view.state as never) as { undoManager?: Y.UndoManager } | undefined)?.undoManager;
       if (!um) return;
       const binding = (ySyncPluginKey.getState(view.state as never) as { binding?: object | null } | undefined)?.binding ?? null;
+      // La pila que llega de un editor anterior puede tener un pegado con anotaciones (D46): su `UndoManager` sumaba el
+      // mapa de anotaciones al pegar, y este no lo tiene. Sin él, rehacer ese pegado traía la foto sin sus flechas
+      // (auditoría de la entrega 3 de Doc_Deshacer.md, F1). Se suma desde el principio (solo el origen de lo pegado).
+      trackMarkupInUndo(view.state, doc);
       detach = timeline.attach(pageId, doc, um, {
         binding,
         editable: () => editableRef.current && view.editable,

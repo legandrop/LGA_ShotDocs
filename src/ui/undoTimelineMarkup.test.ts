@@ -7,9 +7,11 @@ import { ySyncPluginKey } from 'y-prosemirror';
 import { afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { addShape, deleteShape, markupOrigin, PHOTO_MARKUP_MAP, readAllMarkup, updateShape } from '../media/markup';
+import { MARKUP_PASTE_ORIGIN } from '../media/markupClipboard';
 import { mediaIdOf } from '../media/queue';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { connect, mountEditor, undoManager, view, yText, type Editor } from './collabHarness';
+import { trackMarkupInUndo } from './markupClipboardEditor';
 import { para, previousSchema } from './photoHarness';
 import { revealChange, revealPhoto } from './undoReveal';
 import { popMarkupStep, protectMarkupOthers, UndoTimeline, type TimelineDocs } from './undoTimeline';
@@ -87,6 +89,8 @@ class App {
   editor: Editor | null = null;
   doc: Y.Doc | null = null;
   shown: string[] = [];
+  /** Como PageEditor.tsx: el deshacer de cada editor sigue también lo pegado en el mapa de anotaciones (F1). */
+  trackMarkup = true;
   private detach: (() => void) | null = null;
   constructor(
     readonly d: Device,
@@ -100,6 +104,7 @@ class App {
     mounted.push(E);
     const v = view(E);
     const binding = (ySyncPluginKey.getState(v.state as never) as { binding: object }).binding;
+    if (this.trackMarkup) trackMarkupInUndo(v.state, doc);
     this.detach = this.timeline.attach(pageId, doc, undoManager(E), {
       binding,
       editable: () => true,
@@ -526,6 +531,36 @@ describe('anotar como un paso de la línea de tiempo (entrega 3)', () => {
       proto.getBoundingClientRect = was.rect;
     }
   });
+
+  for (const track of [true, false]) {
+    it(`auditoría F1: pegar con anotaciones, ⌘Z, ir y volver, ⌘⇧Z: ${track ? 'vuelven las anotaciones' : 'sin el mapa en el editor nuevo, no vuelven (el error)'}`, async () => {
+      const { ids, app, runner } = await setup();
+      app.trackMarkup = track;
+      await app.go(ids.A);
+      const doc = app.doc!;
+      // El pegado (pasteWithMarkup): el editor sigue el mapa y lo pegado entra en el mismo paso que el texto.
+      trackMarkupInUndo(view(app.editor!).state, doc);
+      const v = view(app.editor!);
+      v.dispatch(v.state.tr.insertText(' pegado', 3));
+      doc.transact(() => {
+        const m = doc.getMap<unknown>(PHOTO_MARKUP_MAP);
+        m.set(PHOTO_ID, { v: 1, w: FRAME.w, h: FRAME.h });
+        const shape = new Y.Map<unknown>();
+        for (const [k, val] of Object.entries(rect(10))) shape.set(k, val);
+        m.set(`${PHOTO_ID}/pegada`, shape);
+      }, MARKUP_PASTE_ORIGIN);
+      undoManager(app.editor!).stopCapturing();
+      expect(drawn(doc)).toEqual([`${PHOTO_ID}/pegada`]);
+      await runner.run('undo');
+      expect(yText(doc)).not.toContain('pegado');
+      expect(drawn(doc)).toEqual([]);
+      await app.go(ids.B);
+      await app.go(ids.A);
+      await runner.run('redo');
+      expect(yText(doc)).toContain('pegado');
+      expect(drawn(doc)).toEqual(track ? [`${PHOTO_ID}/pegada`] : []);
+    });
+  }
 
   it('una versión vieja (el esquema anterior) abre la página con lo anotado deshecho y rehecho sin escribir nada', async () => {
     const { d, ids, app, runner } = await setup();
