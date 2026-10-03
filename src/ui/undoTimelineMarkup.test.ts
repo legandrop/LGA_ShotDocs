@@ -549,3 +549,71 @@ describe('anotar como un paso de la línea de tiempo (entrega 3)', () => {
     d.docs.close(ids.A);
   });
 });
+
+// Las guardas de lo anotado en la línea de tiempo (auditoría de la entrega 3, O3), sin el editor: dos proyectos, páginas
+// con un `UndoManager` simple anotado como el editor en pantalla.
+describe('anotar como un paso: las guardas (auditoría O3)', () => {
+  function core() {
+    const docs: Record<string, Y.Doc> = { A: new Y.Doc(), B: new Y.Doc(), X: new Y.Doc() };
+    const project: Record<string, string> = { A: 'P1', B: 'P1', X: 'P2' };
+    const tdocs: TimelineDocs = { open: async (id) => docs[id], close: () => undefined, subscribeUnsupported: () => () => undefined };
+    const timeline = new UndoTimeline({ docs: tdocs, projectOf: (id) => project[id] ?? null });
+    let editable = true;
+    const attach = (id: string) =>
+      timeline.attach(id, docs[id], new Y.UndoManager(docs[id].getXmlFragment('content'), { trackedOrigins: new Set(['texto']) }), { editable: () => editable });
+    const annotateIn = (id: string, shape: string) =>
+      annotate(timeline, id, docs[id], () => addShape(docs[id], PHOTO_ID, shape, rect(10), FRAME));
+    return { docs, timeline, attach, annotateIn, setEditable: (on: boolean) => (editable = on) };
+  }
+
+  it('peek mira el proyecto de lo anotado: ⌘Z en otro proyecto no lo ofrece', () => {
+    const { timeline, attach, annotateIn } = core();
+    attach('A');
+    attach('X');
+    const id = annotateIn('A', 's1')!;
+    expect(timeline.peek('P1', 'undo')).toEqual({ kind: 'markup', id, pageId: 'A', fileId: PHOTO_ID });
+    expect(timeline.peek('P2', 'undo')).toBeNull();
+  });
+
+  it('forget con la página en pantalla saca lo anotado (el próximo ⌘Z no vuelve a avisar)', () => {
+    const { timeline, attach, annotateIn } = core();
+    attach('A');
+    annotateIn('A', 's1');
+    timeline.forget('A');
+    expect(timeline.peek('P1', 'undo')).toBeNull();
+  });
+
+  it('stepMarkup no deshace en una página que no se puede editar (ni sin su editor)', () => {
+    const { docs, timeline, attach, annotateIn, setEditable } = core();
+    const detach = attach('A');
+    const id = annotateIn('A', 's1')!;
+    setEditable(false);
+    expect(timeline.stepMarkup(id, 'undo')).toBe('readOnly');
+    expect(drawn(docs.A)).toEqual([`${PHOTO_ID}/s1`]);
+    setEditable(true);
+    detach();
+    expect(timeline.stepMarkup(id, 'undo')).toBe('notMounted');
+    attach('A');
+    expect(timeline.stepMarkup(id, 'undo')).toBe('done');
+    expect(drawn(docs.A)).toEqual([]);
+  });
+
+  it('pushMarkup con otro documento que el de la página no entra; stepMarkup con el documento cambiado lo descarta', () => {
+    const { docs, timeline, attach, annotateIn } = core();
+    attach('A');
+    // Lo anotado sobre otro documento (la página se rearmó mientras se anotaba).
+    const stray = new Y.Doc();
+    expect(annotate(timeline, 'A', stray, () => addShape(stray, PHOTO_ID, 's0', rect(1), FRAME))).toBeNull();
+    const id = annotateIn('A', 's1')!;
+    // El documento de la entrada deja de ser el de la página (sin pasar por el aviso de rearmado): una copia con lo mismo.
+    const copy = new Y.Doc();
+    Y.applyUpdate(copy, Y.encodeStateAsUpdate(docs.A));
+    const entry = (timeline as unknown as { markups: Map<string, { map: Y.Map<unknown> }> }).markups.get(id)!;
+    entry.map = copy.getMap<unknown>(PHOTO_MARKUP_MAP);
+    expect(timeline.stepMarkup(id, 'undo')).toBe('nothing');
+    expect(timeline.markupState(id)).toBeNull();
+    // No deshace en ninguno de los dos.
+    expect(drawn(docs.A)).toEqual([`${PHOTO_ID}/s1`]);
+    expect(drawn(copy)).toEqual([`${PHOTO_ID}/s1`]);
+  });
+});
