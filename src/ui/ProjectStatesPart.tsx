@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import { locale, t, useT } from '../i18n';
 import '../i18n/lazy/projectStates';
 import { formatSize } from '../media/fileTrash';
@@ -341,6 +341,8 @@ export interface DeletedProjects {
   drive: ProjectDrive | null;
   /** Con la base en la versión 23 y con red: se ofrece *Delete forever*. */
   purgeReady: boolean;
+  /** Los números de un borrado (`project_delete_info`): la pregunta de *Delete forever* cuenta los usados afuera. */
+  deleteInfo: (projectId: string) => Promise<ProjectDeleteInfo>;
 }
 
 /**
@@ -450,6 +452,9 @@ export function useDeletedProjects(props: {
     }
   }
 
+  const { remote } = props;
+  const deleteInfo = useCallback((projectId: string) => remote.projectDeleteInfo(projectId), [remote]);
+
   /**
    * *Delete forever* (entrega 3): la base decide (plazo, permisos, la carpeta). Si contesta que la carpeta tiene que ir
    * antes a la papelera de Drive (`drive_trash_first`), el portero la manda y se vuelve a pedir; si eso falla, no se
@@ -507,6 +512,7 @@ export function useDeletedProjects(props: {
     purgeStep,
     drive: props.drive ?? null,
     purgeReady: !!props.purgeReady && enabled,
+    deleteInfo,
   };
 }
 
@@ -608,14 +614,32 @@ export function DeletedProjectItem(props: { row: TrashedProjectRow; list: Delete
 function PurgeAsk({ row: r, list }: { row: TrashedProjectRow; list: DeletedProjects }) {
   const tr = useT();
   const [word, setWord] = useState('');
+  // Los archivos de este proyecto que usan páginas vivas de otros proyectos (`used_elsewhere`, como en la ventana de
+  // borrar): se van con la carpeta y esas páginas los pierden cuando Google vacía su papelera. El botón espera a saberlo;
+  // si no se puede leer, no frena (la base decide igual).
+  const [usedElsewhere, setUsedElsewhere] = useState<number | 'loading' | 'failed'>('loading');
+  const { deleteInfo } = list;
+  useEffect(() => {
+    let live = true;
+    deleteInfo(r.id).then(
+      (info) => live && setUsedElsewhere(info.used_elsewhere),
+      () => live && setUsedElsewhere('failed'),
+    );
+    return () => {
+      live = false;
+    };
+  }, [deleteInfo, r.id]);
   const working = list.busy === r.id;
-  const ready = deleteWordMatches(word, tr.lang) && list.busy === null;
+  const ready = deleteWordMatches(word, tr.lang) && list.busy === null && usedElsewhere !== 'loading';
   const confirm = () => {
     if (ready) void list.purge(r);
   };
   return (
     <div ref={list.askRef} className="deleted-project-ask" role="group" aria-label={tr('purgeProject.button')}>
       <p className="small">{tr('purgeProject.confirm', { name: r.name })}</p>
+      {typeof usedElsewhere === 'number' && usedElsewhere > 0 && (
+        <p className="small delete-project-warning">{tr('purgeProject.usedElsewhere', { count: usedElsewhere })}</p>
+      )}
       <form
         className="delete-project-word"
         onSubmit={(e) => {

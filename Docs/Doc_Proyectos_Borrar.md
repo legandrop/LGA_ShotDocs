@@ -1,14 +1,13 @@
 # Borrar y archivar proyectos (P.14)
 
-Estado: **entrega 1 publicada (v0.077, migración 9 aplicada); entrega 2 implementada en la rama
-`lega/proyectos-borrar-drive`, sin publicar y con la migración 10 sin aplicar** (2026-10-01; ver "Cómo quedó (entrega
-1)" y "Cómo quedó (entrega 2)", al final). La entrega 3 (*Delete forever*) está implementada, con su migración sin
-aplicar (`20261101120000_proyectos_purgar.sql`, versión 23; "Cómo quedó (entrega 3)"). Lega aprobó
-todas las propuestas ("sí a todo", sección "Decisiones de Lega"). La auditoría independiente del diseño dio
-"aprobado con cambios" y, corregido, "aprobado" (sección "Correcciones de la auditoría"). La migración 9 está en el
-repo pero no aplicada en la base; las 10 y 11, solo en este documento: el SQL de las tres migraciones (entregas 1, 2 y 3: secciones 1.3, 3.6 y 2.3) **se corrió con
-sus pruebas contra la base real dentro de `begin; … rollback;`** y pasa entero, con las once pruebas que ya
-existían y los casos negativos de la auditoría (sección 9.3). Sale de leer
+Estado: **entregas 1 y 2 publicadas (v0.077 y v0.080, migraciones 9 y 10 aplicadas); una sola papelera en el selector
+de proyectos (v0.162); entrega 3 (*Delete forever*) implementada y auditada, con su migración sin aplicar**
+(`20261101120000_proyectos_purgar.sql`, versión 23; ver "Cómo quedó" de cada una, al final). Lega aprobó todas las
+propuestas ("sí a todo", sección "Decisiones de Lega"). La auditoría independiente del diseño dio "aprobado con cambios"
+y, corregido, "aprobado" (sección "Correcciones de la auditoría"). Cuando se escribió el diseño (2026-10-01) ninguna de
+las tres migraciones estaba aplicada; su SQL (secciones 1.3, 3.6 y 2.3) **se corrió con sus pruebas contra la base real
+dentro de `begin; … rollback;`** y pasaba entero, con las once pruebas que ya existían y los casos negativos de la
+auditoría (sección 9.3). Sale de leer
 `main` en `19c7692` (v0.074): las migraciones de `supabase/migrations/`, `src/sync/` (árbol, motor, remoto,
 permisos), `src/ui/ProjectSwitcher.tsx`, `src/ui/project.ts`, `src/ui/Workspace.tsx`, `src/ui/WorkspaceMenu.tsx`,
 `src/ui/TrashView.tsx`, `src/media/` (papelera de archivos, peso) y `portero/src/`.
@@ -3722,15 +3721,16 @@ to the Drive trash*) cuando pasaron los 30 días, la persona es dueña o admin q
 la 23 y hay red. Pregunta en el mismo renglón: qué pasa, la palabra (`delete` / `borrar`, la del idioma de la app, sin
 mayúscula ni corrector en el iPhone) y *Delete forever*, que se habilita recién con ella; Enter confirma y Escape cierra
 la pregunta. Si la base contesta `drive_trash_first`, el portero manda la carpeta y se vuelve a pedir; si Drive falla, lo
-dice en el renglón y no marca nada. Al terminar, el renglón sale y queda el aviso "“X” was deleted forever". Nada del
+dice en el renglón y no marca nada. Si archivos de este proyecto se usan en páginas vivas de otros proyectos, la pregunta
+lo avisa con su cuenta (`used_elsewhere`): esas páginas los pierden cuando Google vacíe su papelera. Al terminar, el renglón sale y queda el aviso "“X” was deleted forever". Nada del
 dispositivo se borra. Textos en los dos idiomas (`src/i18n/lazy/projectStates.ts`, `project.errorPurged`) y la entrada
 *Delete a project forever* de la ayuda (dueños y admins). Sin atajos nuevos.
 
 **Pruebas:** SQL `supabase/tests/proyectos_purgar_permisos.sql` (con la preparación de la 1.4), corrida en `begin; …
 rollback;` contra la base real junto con las otras 30 (todas `ok`), una aserción falsa de control y 17 mutantes de la
-migración (los 17 fallan donde tienen que fallar). App: 8 de componente (`projectStates.test.tsx`: antes de los 30
+migración (los 17 fallan donde tienen que fallar). App: 10 de componente (`projectStates.test.tsx`: antes de los 30
 días, la palabra en los dos idiomas, la carpeta antes, ya mandada, Drive que falla, Escape, base anterior a la 23, el
-creador miembro), la búsqueda de la ayuda y 2 del portero (`core.test.ts`).
+creador miembro, el aviso de los archivos usados afuera y el botón que lo espera), la búsqueda de la ayuda y 2 del portero (`core.test.ts`).
 
 **Una versión vieja de la app** (con la base en la 23): `trashed_projects` ya no le da el proyecto borrado para siempre,
 así que no lo muestra como restaurable; si tenía la papelera abierta de antes y aprieta *Restore*, la base responde
@@ -3770,11 +3770,20 @@ ahí (se baja con *Download my unsynced changes*). **No hace falta subir `min_ap
    la v0.099): una pestaña vieja no marca nada si el workspace pide una más nueva.
 8. **El nombre y la versión de la migración** son los del encargo (`20261101120000`, 23), no los del diseño (`…10120000`,
    11), que quedaron ocupados por otras migraciones.
+9. **La pregunta avisa de los archivos usados en otros proyectos** (auditoría, observación 1). Qué pasaba: los archivos de
+   este proyecto que usan páginas vivas de otros proyectos van a la papelera de Drive con la carpeta, y esas páginas los
+   pierden cuando Google la vacía; la ventana de borrar lo decía, pero 30 días antes. Las opciones: (A) la misma cuenta
+   (`used_elsewhere` de `project_delete_info`) en la pregunta, con *Delete forever* esperando a leerla; (B) no avisar.
+   Elegí A porque es el mismo criterio que la ventana de borrar y la última oportunidad de verlo. Si no se puede leer, no
+   frena (la base decide igual). Si preferís B, se saca el aviso de `PurgeAsk`.
 
 ## Pendiente
 
-- **Entrega 2:** auditoría del código hecha y corregida (B1); copia de seguridad y `db:migrate` de la migración 10;
-  publicar el portero y la app en el mismo push; subir `min_app_version` a esta versión; prender `TEST_MODES=1`, correr
-  la prueba técnica con un proyecto de prueba y sacar la variable; recién después borrar ERSO con la casilla.
-- **Entrega 3** (*Delete forever*): implementada, sin publicar. Falta la auditoría, la copia de seguridad, aplicar la 22
-  y después la 23 (`npm run db:migrate`) y publicar.
+- **Entrega 2** (publicada en v0.080, migración 10 aplicada): falta la prueba técnica con Drive de verdad (sección 3.9;
+  prender `TEST_MODES=1`, correrla con un proyecto de prueba y sacar la variable); recién después borrar ERSO con la
+  casilla.
+- **Entrega 3** (*Delete forever*): implementada y auditada (aprobada con observaciones; la 1 corregida: la pregunta
+  avisa de los archivos usados en otros proyectos), sin publicar. Falta la copia de seguridad, aplicar la 22 y después la
+  23 (`npm run db:migrate`) y publicar.
+- Dos observaciones de la auditoría de la entrega 3, en el roadmap (P.14): el servidor de las pruebas no aplica el corte
+  por fecha de subida de `drive_trash_first`, y un proyecto borrado para siempre sigue sumando en el peso.

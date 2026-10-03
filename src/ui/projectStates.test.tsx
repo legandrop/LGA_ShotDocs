@@ -925,6 +925,45 @@ describe('entrega 3: Delete forever en el renglón de un borrado', () => {
     await expect(ana.remote.purgeProject(mine)).rejects.toThrow('not_allowed');
   });
 
+  it('avisa cuántos archivos de este proyecto usan páginas de otros proyectos (se pierden al vaciarse la papelera de Drive)', async () => {
+    const { owner, o } = await purgeable();
+    const real = owner.remote.projectDeleteInfo.bind(owner.remote);
+    const spy = vi.spyOn(owner.remote, 'projectDeleteInfo').mockImplementation(async (id) => ({ ...(await real(id)), used_elsewhere: 2 }));
+    await act(async () => byText('Delete forever…')!.click());
+    await vi.waitFor(() =>
+      expect(document.querySelector('.deleted-project-ask .delete-project-warning')?.textContent).toBe(
+        '2 files of this project are also used in pages of other projects: they go to the Google Drive trash with the folder, and those pages lose them for good when Google empties the trash.',
+      ),
+    );
+    expect(spy).toHaveBeenCalledWith(o);
+    await typePurgeWord('delete');
+    expect(byText('Delete forever')!.disabled).toBe(false);
+    // En castellano, con el singular.
+    spy.mockImplementation(async (id) => ({ ...(await real(id)), used_elsewhere: 1 }));
+    await act(async () => byText('Cancel')!.click());
+    act(() => prefs.set({ language: 'es' }));
+    await act(async () => byText('Borrar para siempre…')!.click());
+    await vi.waitFor(() =>
+      expect(document.querySelector('.deleted-project-ask .delete-project-warning')?.textContent).toBe(
+        '1 archivo de este proyecto se usa también en páginas de otros proyectos: va a la papelera de Google Drive con la carpeta, y esas páginas lo pierden para siempre cuando Google vacía la papelera.',
+      ),
+    );
+  });
+
+  it('sin archivos usados afuera no avisa; mientras lo pregunta, el botón espera', async () => {
+    const { owner } = await purgeable();
+    let answer: (v: Awaited<ReturnType<typeof owner.remote.projectDeleteInfo>>) => void = () => undefined;
+    const real = owner.remote.projectDeleteInfo.bind(owner.remote);
+    const spy = vi.spyOn(owner.remote, 'projectDeleteInfo').mockImplementation(() => new Promise((r) => (answer = r)));
+    await act(async () => byText('Delete forever…')!.click());
+    await typePurgeWord('delete');
+    expect(byText('Delete forever')!.disabled).toBe(true);
+    const info = await real((spy.mock.calls[0] as [string])[0]);
+    await act(async () => answer({ ...info, used_elsewhere: 0 }));
+    expect(byText('Delete forever')!.disabled).toBe(false);
+    expect(document.querySelector('.deleted-project-ask .delete-project-warning')).toBeNull();
+  });
+
   it('en castellano, con la palabra borrar', async () => {
     act(() => prefs.set({ language: 'es' }));
     const { server, o } = await purgeable();

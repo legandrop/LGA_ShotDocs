@@ -170,6 +170,16 @@ export const projectStates = {
     en: "Delete “{name}” forever? It leaves the Trash and can no longer be restored from the app. If its folder is not in the Google Drive trash yet, it goes there now; Google deletes it for good after 30 days.",
     es: "¿Borrar “{name}” para siempre? Sale de la papelera y ya no se puede restaurar desde la app. Si su carpeta todavía no está en la papelera de Google Drive, va ahora; Google la borra para siempre a los 30 días.",
   },
+  'purgeProject.usedElsewhere': {
+    en: {
+      one: "{count} file of this project is also used in pages of other projects: it goes to the Google Drive trash with the folder, and those pages lose it for good when Google empties the trash.",
+      other: "{count} files of this project are also used in pages of other projects: they go to the Google Drive trash with the folder, and those pages lose them for good when Google empties the trash.",
+    },
+    es: {
+      one: "{count} archivo de este proyecto se usa también en páginas de otros proyectos: va a la papelera de Google Drive con la carpeta, y esas páginas lo pierden para siempre cuando Google vacía la papelera.",
+      other: "{count} archivos de este proyecto se usan también en páginas de otros proyectos: van a la papelera de Google Drive con la carpeta, y esas páginas los pierden para siempre cuando Google vacía la papelera.",
+    },
+  },
   'purgeProject.button': { en: "Delete forever", es: "Borrar para siempre" },
   'purgeProject.purging': { en: "Deleting…", es: "Borrando…" },
   'purgeProject.sendingDrive': { en: "Sending its folder to the Drive trash…", es: "Mandando su carpeta a la papelera de Drive…" },
