@@ -7,9 +7,11 @@ sumar fotos, videos ni archivos: no había cómo registrarlos sin cuenta ni subi
 registra con `plink_register_file` (500 MB cada uno, 100 por día y 500 de por vida, 1 GB por día y 5 GB de por vida; lo
 rechazado no suma y nunca vincula un id ajeno), sube la miniatura y el portero sube el original solo si lo registró ese
 link, volviendo a validarlo en cada parte. Lo escrito de una página espera a que sus archivos estén registrados (si no,
-la admisión lo apartaría). Carpetas, no. *Share* cuenta lo subido y avisa desde 1 GB. Migración
+la admisión lo apartaría). Carpetas, no. *Share* cuenta lo que llegó al Drive, avisa desde 1 GB y lista los archivos de
+los links de la página, también los de lo apartado, que no se borran. Con el link muerto, el visitante baja sus
+originales sin subir. Migración
 `20261030120000_link_archivos.sql`, sin aplicar (`schema_version` 21).
-[ Link público entrega 2b - el visitante sube fotos y archivos al Drive del dueño con topes, el portero solo sube lo que registró ese link y corta al revocar, lo escrito espera a sus archivos y Share cuenta lo subido ]
+[ Link público entrega 2b - el visitante sube fotos y archivos al Drive del dueño con topes, el portero solo sube lo que registró ese link y corta al revocar, lo escrito espera a sus archivos, Share lista y cuenta lo subido y el link muerto baja los originales ]
 
 v0.162 :
 

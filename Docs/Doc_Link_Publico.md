@@ -2507,8 +2507,8 @@ confirma, y su visitante solo lo puede poner en una fila si una página de la ra
 
 **Lo que queda (al roadmap):** lo registrado por un link cuya fila quedó apartada (o que se reseteó antes de admitirla)
 sigue usado por su página en `page_files` sin que ningún documento lo muestre: no pasa a la papelera de archivos y, si
-llegó a subir, ocupa el Drive del dueño. Nada se borra (regla); que el equipo lo vea y lo mande a la papelera es una
-decisión de Lega. Tampoco se probó con el portero real ni con Drive (ver la lista de Lega).
+llegó a subir, ocupa el Drive del dueño. **Lega decidió** (2026-10-03) que así quede, a la vista en *Share* (ver
+"Correcciones de la auditoría de la 2b"). Tampoco se probó con el portero real ni con Drive (ver la lista de Lega).
 
 **Pruebas:** la migración y `supabase/tests/link_archivos_permisos.sql` en `begin … rollback` contra la base real
 (pasa; 25 mutantes de la migración, 24 detectados y 1 equivalente) y las 29 pruebas SQL de siempre con la migración
@@ -2526,6 +2526,28 @@ servidor y el portero en memoria, sin login): el visitante suelta una foto, escr
 link, sube su miniatura y el original por el portero, lo escrito llega a la sala recién después, el equipo lo admite y ve
 el archivo; *Share* cuenta lo subido y avisa desde 1 GB; con el tope del día lleno la segunda foto no se registra, lo
 escrito espera y el detalle lo dice; en el teléfono, sin scroll horizontal; sin errores en la consola (14 de 14).
+
+#### Correcciones de la auditoría de la 2b
+
+Una auditoría independiente sobre `f5051be` dio **no aprobado** por un bloqueante; lo demás (permisos, topes, archivos
+ajenos, carpetas, revocar) quedó bien. Se corrigió en una ronda (y la rama trae `main` v0.162):
+
+| Hallazgo | Corrección |
+|---|---|
+| **B1.** Si el link muere (revocado, *Reset link*, vencido) con un archivo a medio subir, el original quedaba encerrado en el navegador del visitante: la pantalla del link muerto bajaba solo el texto, y con el link nuevo no sube nunca (es del viejo) | La pantalla del link muerto lista los originales que quedaron en este navegador sin llegar a Drive (`linkUnsentMedia`, de la base de archivos del link, sin la sincronización ni el portero) y los baja de a uno, el mismo archivo (*N photos or files you added didn't finish uploading*). Con el link vivo, el detalle de la insignia ofrece *Download it* en cada archivo detenido (la página salió de la rama, un tope). Prueba: `src/ui/linkDeadFiles.test.tsx` (el caso del auditor, un video cortado por *Reset link*, achicado a 3 MB) |
+| **O1.** Un bloque recién soltado y copiado a otra página antes de registrar su archivo no esperaba ahí: se apartaba | Lo escrito espera mientras el documento muestre **cualquier** archivo propio sin registrar (`MediaQueue.unregistered`, sin filtrar por página); al registrarse entra en las dos y el editor que admite registra el uso en la otra |
+| **O2, O4 y la decisión de Lega** (2026-10-03). Lo registrado por un link y que ninguna fila muestra era invisible para el equipo | **Los archivos de lo apartado no se borran ni van solos a la papelera:** siguen en el Drive del dueño y *Share* los lista (*N files were added through this page's link*), con nombre, peso, fecha, *earlier link*, *didn't finish uploading* o *in the trash*, y *Download* para lo que llegó al Drive. La lista sale de `public_link_files(página)` (de `files.plink_id` de todos los links de la página, también los reseteados, lo subido sin usar y lo registrado a mano), no de las filas apartadas; la ve quien ve lo borrado de la página. Cuando exista D184 (descartar lo apartado), descartar manda sus archivos a la papelera (roadmap). Que lectores e invitados no listen esos usos: roadmap (O4) |
+| **O3.** *Share* decía "in your Drive" con lo registrado | `public_link_json.files.drive_bytes` (lo que llegó a Drive); el aviso de 1 GB también |
+| **O5.** Mutantes vivos | Pruebas nuevas: justo hasta el tope de por vida entra; otro link cuya rama contiene la de S ve el archivo con `mine` falso; nombres de miniatura que empiezan con el id; el portero con una base sin `mine` da `not_mine`; lo escrito sale apenas el archivo se registra aunque el original no haya subido |
+| **O6.** Docs | `Doc_Sincronizacion.md` (el visitante y sus archivos) y `Doc_Privacidad_Borrado.md` 4.4 (los usos de un link) |
+| **O8.** Menores | El comentario suelto del servidor en memoria; la ayuda dice "de fábrica" para los topes; lo demás al roadmap |
+| **O9.** Una corrida completa de la suite podía salir con código 1 por un rechazo suelto de `refreshCounts` con la base cerrada (también en `main`) | `poke` ignora ese rechazo (la cuenta es solo lo que se muestra) |
+| **O7.** Sin tope de todos los links juntos para archivos | Roadmap (`link_limits.all_upload_bytes` ya funciona si se carga) |
+
+**Pruebas de la ronda:** la prueba SQL suma lo de arriba y `public_link_files` (quién la ve, los links viejos, lo que no
+subió, solo los links de esa página, `anon` no); las 30 pruebas SQL con la migración pasan en `begin … rollback`. 8
+mutantes SQL nuevos, todos detectados (con los 25 de antes: 33, 32 detectados y 1 equivalente). 9 mutantes nuevos de la
+app y el portero, todos detectados. El *Download it* del detalle de la insignia (link vivo) no tiene prueba propia.
 
 ### Cómo quedó la 2c (v0.157)
 

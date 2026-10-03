@@ -249,7 +249,7 @@ describe('los archivos de los links de la página, en Share (decisión de Lega, 
     const link = {
       id: 'l2', page_id: 'p', level: 'edit', created_at: '2026-10-03T10:00:00Z', expires_at: null, created_by_name: 'owner',
       token: 'sdl_' + 'x'.repeat(43), alive: true, usage_today: {}, limited: false, comments: 0,
-      edits: { waiting: 0, held: 0, aside: 0, admitted_today: 0, push_bytes_total: 0 }, files: { total: 1, bytes: 10, drive_bytes: 0 },
+      edits: { waiting: 0, held: 0, aside: 0, admitted_today: 0, push_bytes_total: 0 }, files: { total: 1, bytes: 5 * 1024 * 1024, drive_bytes: 0 },
     };
     const rpc = async (fn: string) => {
       calls.push(fn);

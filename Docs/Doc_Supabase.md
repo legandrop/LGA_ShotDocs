@@ -54,7 +54,7 @@ Las migraciones están en `supabase/migrations/`, en orden:
 | `20261016120000_menciones_e2.sql` | **Sin aplicar** (v0.125; P.21, entrega 2, ME2; `Doc_Menciones.md`). `mention_candidates` suma las filas `has_access = false` (miembros activos que no ven la página) solo para el dueño y los admins que pueden compartirla, fuera de la papelera. `share_for_mention(página, persona)`: con esa misma condición, comparte con Comentar solo esa página (por `public.share`, con el reinicio de la privacidad de lo borrado); a quien ya la ve no le cambia nada (`{"shared": false}`); `page_in_trash`, `not_allowed`, `member_not_found`. `schema_version` 16. |
 | `20261009120000_papelera_lectores.sql` | **Aplicada (2026-10-02, v0.102).** La papelera de páginas ya no se lee con Ver: `private.user_page_level` da 0 sobre una página en la papelera (o que cuelga de una) a quien tiene menos de 3 y a los invitados, y la política de lectura de `pages` (`can_view_page_row`, que con un permiso sobre el proyecto entero dejaba ver cualquier fila) aplica la misma regla. Las dos pasan a PL/pgSQL con una sola pasada por la cadena de padres (más rápidas que antes). No cambia firmas ni sube `schema_version`. Ver "La papelera de páginas y quién la ve". |
 | `20261027120000_mcp_plan_b.sql` | **Sin aplicar** (paso 2 del MCP, `Doc_Asistente.md`, "Pasos reales"; no sube `schema_version`). El token de un asistente (con `client_id`) solo llega a `/rpc/mcp_*`: `private.mcp_pre_request()` conectada como `pgrst.db_pre_request` del rol `authenticator`, las cuatro políticas de Storage de `authenticated` con `client_id is null` y `public.mcp_ping()`. Ver "El MCP: plan B". |
-| `20261030120000_link_archivos.sql` | **Sin aplicar** (P.19, entrega 2b; `Doc_Link_Publico.md`, "Cómo quedó la 2b"). Un link *Can edit* sube fotos, videos y archivos al Drive del dueño: `files.plink_id`, `plink_register_file` (con los topes de E2.5, nunca un id ajeno, sin carpetas), `plink_set_file_drive`, `plink_set_file_thumb`, la política `thumbs_insert_link`, `plink_media_file` con `mine` y `project_mark`, `link_media_allowed` con lo registrado y `public_link_json` con `files`. Sube `schema_version` a 21 (`LINK_FILES_SCHEMA_VERSION`). Detalle en la sección "Link público, entrega 2b". |
+| `20261030120000_link_archivos.sql` | **Sin aplicar** (P.19, entrega 2b; `Doc_Link_Publico.md`, "Cómo quedó la 2b"). Un link *Can edit* sube fotos, videos y archivos al Drive del dueño: `files.plink_id`, `plink_register_file` (con los topes de E2.5, nunca un id ajeno, sin carpetas), `plink_set_file_drive`, `plink_set_file_thumb`, la política `thumbs_insert_link`, `plink_media_file` con `mine` y `project_mark`, `link_media_allowed` con lo registrado, `public_link_json` con `files` y `public_link_files` (la lista de *Share*). Sube `schema_version` a 21 (`LINK_FILES_SCHEMA_VERSION`). Detalle en la sección "Link público, entrega 2b". |
 
 Reglas del esquema:
 
@@ -214,7 +214,12 @@ firma ni de resultado (`public_link_json` y `plink_media_file` suman claves al f
 - **`link_media_allowed`** acepta además lo registrado por el link (LE9-B, la admisión).
 - La política **`thumbs_insert_link`** (`anon`, con el header): la miniatura `<id>.jpg` de un archivo de ese link con
   nivel 3 (`private.plink_thumb_insertable`, `execute` solo para `anon`).
-- **`public_link_json`**: `files` (cuántos y cuánto pesan, de por vida) y `limited` cuenta los topes de archivos del día.
+- **`public_link_json`**: `files` (cuántos, cuánto pesan y cuánto llegó al Drive, `drive_bytes`, de por vida) y
+  `limited` cuenta los topes de archivos del día.
+- **`public_link_files(página)`** (`authenticated`, `STABLE`, decisión de Lega del 2026-10-03): los archivos que
+  registraron los links de esa página (también los reseteados o revocados), con nombre, tipo, peso, fecha, si llegó al
+  Drive y si está en la papelera, sin bytes ni ids de Drive; solo a quien ve lo borrado de la página (`page_not_found`
+  si no). Lo usa la lista de *Share*: lo de un link no se borra ni va solo a la papelera.
 - **Pruebas:** `supabase/tests/link_archivos_permisos.sql` (corrida en `begin … rollback`); `link_publico_permisos.sql`
   y `archivos_permisos.sql` suman las funciones y la política nuevas.
 
