@@ -187,13 +187,16 @@ describe('aplicar el pie', () => {
   it('en una celda, una dirección tampoco queda como link (sin el link automático)', () => {
     const ed = page();
     const ref = inlinePhotoRef(view(ed).state.doc, photoPos(ed, 't'))!;
-    expect(applyCaption(ed$(ed), view(ed), ref, 'Ver https://ref.example.com/foto y listo', true).ok).toBe(true);
+    // La dirección como última palabra y un espacio al final (el pie se recorta: el link automático, que mira la última
+    // palabra antes de un espacio, nunca se dispara; `preventAutolink` queda de resguardo).
+    expect(applyCaption(ed$(ed), view(ed), ref, 'Ver https://ref.example.com/foto ', true).ok).toBe(true);
+    expect(applyCaption(ed$(ed), view(ed), ref, 'y listo', true).ok).toBe(true);
     const marks: string[] = [];
     view(ed).state.doc.nodeAt(posOf(ed, 't'))!.descendants((n) => {
       for (const m of n.marks) marks.push(m.type.name);
       return true;
     });
-    expect(cellText(ed)).toBe('[foto]\nVer https://ref.example.com/foto y listo');
+    expect(cellText(ed)).toBe('[foto]\nVer https://ref.example.com/foto\ny listo');
     expect(marks).not.toContain('link');
   });
 

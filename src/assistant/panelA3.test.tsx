@@ -360,10 +360,20 @@ describe('el panel, entrega A3 (Suggest caption)', () => {
     expect(calls).toHaveLength(1);
   });
 
-  it('lo mismo desde la vista previa: con otro servicio compatible, se vuelve a preguntar', async () => {
+  it('lo mismo desde la vista previa: otra dirección del mismo servicio compatible vuelve a preguntar', async () => {
     const { host, ed } = await setup();
     const { calls } = provider('Un pie');
+    // Un modelo local en la máquina.
+    await saveSettings('lega@wanka.tv', { provider: 'compatible', baseUrl: 'http://localhost:11434/v1', model: 'llava', models: [] });
+    await act(async () => {
+      openAssistantSettings();
+    });
+    await act(async () => {
+      closeAssistantSettings();
+    });
+    await wait(150);
     await fromPhotoBar(ed, 'f');
+    expect(host.textContent).toContain('Send this photo to localhost:11434?');
     await click(button(host, 'Send photo'));
     await until(host, 'Apply');
     await saveSettings('lega@wanka.tv', { provider: 'compatible', baseUrl: 'https://openrouter.ai/api/v1', model: 'x/y', models: [] }, 'sk-or-OTRA-clave-1234567890');
@@ -377,6 +387,7 @@ describe('el panel, entrega A3 (Suggest caption)', () => {
     expect(host.textContent).toContain('Send this photo to openrouter.ai?');
     expect(button(host, 'Try again')).toBeUndefined();
     expect(calls.filter((c) => c.url.includes('openrouter.ai'))).toHaveLength(0);
+    expect(calls.every((c) => c.url.startsWith('http://localhost:11434/'))).toBe(true);
   });
 
   it('Apply vuelve a mirar el permiso: si se perdió mientras se veía la vista previa, no aplica', async () => {
