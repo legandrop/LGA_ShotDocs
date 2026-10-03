@@ -2244,6 +2244,11 @@ code {
   padding-left: 0;
 }
 
+/* *Delete forever*: la palabra, con aire antes de los botones. */
+.deleted-project-ask .delete-project-word {
+  margin-bottom: 8px;
+}
+
 /* Adentro del selector (`.menu button` ocupa todo el ancho): el link de *Send files…* va a la izquierda y entero. */
 .deleted-project-actions button.link {
   width: auto;
