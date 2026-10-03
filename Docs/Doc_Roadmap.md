@@ -532,8 +532,12 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   páginas de 115 KB retenidas; falta medirla en el iPhone; `Doc_Deshacer.md`, sección 17), 2 (**hecha, v0.0XX**: el
   reemplazo adentro, ⌘Z y ⌘⇧Z en todas sus páginas, `planRedo`, el *Undo* del panel fuera de orden, C1, y DH9; con las
   pruebas de A5, A7 y A9 de la entrega 1; sección 18), 3 (anotar como un paso). Pendientes chicos: *Show* en el aviso de
-  ⌘Z de un reemplazo con páginas cambiadas (18.4) y la copia propia de lo ajeno que se va con un renglón deshecho (17.2,
-  de Yjs, 1 en 300). Botones de deshacer en el teléfono y el árbol (mover, crear, papelera) quedan afuera (DH1, DH8).
+  ⌘Z de un reemplazo con páginas cambiadas (18.4); una página con historia que estaba en la papelera durante el ⌘Z de
+  un reemplazo, restaurada después, deja "Toma 1: cámara" (18.4, auditoría O1: el reemplazo tendría que quedar a la vez
+  para rehacer y para deshacer; mediano); después del *Undo* de "Last" del panel, Esc ya no cierra el panel (el foco
+  queda en la página; pasa también en `main`); con el panel abierto y el foco puesto por programa en el editor,
+  Ctrl+Shift+Z deshace (no se llega con el mouse ni el teclado: el panel es modal); y la copia propia de lo ajeno que se
+  va con un renglón deshecho (17.2, de Yjs, 1 en 300). Botones de deshacer en el teléfono y el árbol (mover, crear, papelera) quedan afuera (DH1, DH8).
 - **P.27 Dictado por voz y notas informales que se ubican en el reporte** (Lega, 2026-10-02): dictar en toda la app,
   sobre todo en el teléfono, y que la IA pase «este plano se filmó con un 50 mm, anotalo donde corresponda» a la celda
   *Lens* de la fila de ese plano en el *On-Set Report*. **V1 hecha (v0.135, `Doc_Dictado.md` sección 15):** *Dictate to

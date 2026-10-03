@@ -115,6 +115,8 @@ interface ReplaceEntry {
   pages: string[];
   /** Lo que guarda quien reemplaza (el encabezado y los cambios de cada página): para rehacer y para el aviso. */
   saved: unknown;
+  /** Cuántas veces hubo algo nuevo cuando empezó a deshacerse (`markReplace`). */
+  mark: number;
 }
 
 /** Cómo quedó deshacer o rehacer el paso de un reemplazo en una página; `none`: no tiene paso ahí (van las anclas). */
@@ -158,6 +160,8 @@ export class UndoTimeline {
   private counter = 0;
   private lost: LostMark[] = [];
   private readonly replaces = new Map<string, ReplaceEntry>();
+  /** Cuántas veces hubo algo nuevo (escribir, reemplazar) en esta pestaña: lo que borra lo de rehacer. */
+  private newEdits = 0;
   /** El filtro de borrado del `UndoManager` de y-prosemirror, del primer editor que se anotó (para `tempManager`). */
   private editorFilter: UndoManager['deleteFilter'] | null = null;
   /** Los pasos de las pilas que son de un reemplazo (no cuentan como pasos de su página). */
@@ -419,7 +423,7 @@ export class UndoTimeline {
   beginReplace(opId: string, project: string): void {
     if (this.disposed || this.replaces.has(opId)) return;
     this.clearRedoExcept(null, project);
-    this.replaces.set(opId, { opId, project, where: 'pending', seq: 0, items: new Map(), pages: [], saved: null });
+    this.replaces.set(opId, { opId, project, where: 'pending', seq: 0, items: new Map(), pages: [], saved: null, mark: 0 });
   }
 
   /**
@@ -571,6 +575,9 @@ export class UndoTimeline {
   settleReplace(opId: string, kind: StepKind, pages: string[], keep: boolean): void {
     const entry = this.replaces.get(opId);
     if (!entry || entry.where === 'pending') return;
+    // Si mientras se deshacía se escribió algo nuevo (auditoría de la entrega 2, O4), ya no queda para rehacer: algo
+    // nuevo borra lo de rehacer, también lo que se estaba deshaciendo.
+    if (kind === 'undo' && entry.mark !== this.newEdits) keep = false;
     for (const [pageId, item] of [...entry.items]) {
       const h = this.pages.get(pageId);
       const from = h ? this.stack(h, kind) : null;
@@ -586,6 +593,12 @@ export class UndoTimeline {
       return;
     }
     this.place(entry, kind === 'undo' ? 'redo' : 'undo', pages);
+  }
+
+  /** Empieza a deshacer (o rehacer) el reemplazo: anota cuántas veces hubo algo nuevo hasta ahora (ver `settleReplace`). */
+  markReplace(opId: string): void {
+    const entry = this.replaces.get(opId);
+    if (entry) entry.mark = this.newEdits;
   }
 
   /** Si el próximo ⌘Z (o ⌘⇧Z) de su proyecto es este reemplazo. */
@@ -676,6 +689,7 @@ export class UndoTimeline {
   }
 
   private clearRedoExcept(h: PageHistory | null, project = h ? this.projectOfHistory(h) : null): void {
+    this.newEdits++;
     // Los reemplazos para rehacer también (sus pasos en las pilas se van con ellas).
     for (const entry of [...this.replaces.values()]) if (entry.where === 'redo' && entry.project === project) this.discard(entry);
     for (const other of [...this.pages.values()]) {

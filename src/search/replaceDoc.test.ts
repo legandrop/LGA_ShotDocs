@@ -451,6 +451,17 @@ describe('rehacer con las anclas (planRedo; Docs/Doc_Deshacer.md, 3.3)', () => {
     expect(xml(del)).toBe(deleted);
   });
 
+  it('auditoría O3: si el bloque ya no está (se borró), no se escribe nada', () => {
+    const a = pageDoc([{ parts: ['la cámara'] }, { parts: ['otra'] }]);
+    const { records } = replace(a, 'camara', 'Camera');
+    undo(a, records);
+    const g = a.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement;
+    a.transact(() => g.delete(0, 1));
+    const before = xml(a);
+    expect(redo(a, records)).toEqual({ redone: 0, changed: 1, already: 0 });
+    expect(xml(a)).toBe(before);
+  });
+
   it('si otro cambió lo de antes, eso no se toca; lo demás se rehace', () => {
     const a = pageDoc([{ parts: ['uno cámara dos cámara'] }]);
     const b = new Y.Doc();

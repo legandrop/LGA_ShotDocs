@@ -96,6 +96,8 @@ export interface ReplaceHistory {
   endReplace(opId: string, saved: SavedOp | null): void;
   popReplace(pageId: string, doc: Y.Doc, opId: string, kind: 'undo' | 'redo', keep: boolean): 'done' | 'nothing' | 'failed' | 'none';
   settleReplace(opId: string, kind: 'undo' | 'redo', pages: string[], keep: boolean): void;
+  /** Empieza a deshacer o rehacer (si mientras tanto se escribe algo nuevo, no queda para rehacer). */
+  markReplace(opId: string): void;
   replaceSaved(opId: string): unknown;
   replacePages(opId: string): string[];
 }
@@ -543,6 +545,7 @@ export class ProjectReplace {
     const result: UndoResult = { undone: 0, changed: 0, notApplied: 0, pages: 0, remaining: 0, unsaved: false, changedAt: [] };
     if (this.progress) return result;
     const { docs, meta, history } = this.deps;
+    history?.markReplace(opId);
     const stored = (await meta.get(headerKey(opId))) as OpHeader | undefined;
     // Uno que ya no está en `meta` (quedó fuera de los últimos 5) pero sigue en la línea de tiempo: con lo guardado ahí.
     const saved = stored ? null : ((history?.replaceSaved(opId) ?? null) as SavedOp | null);

@@ -15,6 +15,7 @@ import { para, previousSchema } from './photoHarness';
 import { revealChange } from './undoReveal';
 import { tempManager, UndoTimeline, type StepKind, type TimelineDocs } from './undoTimeline';
 import { createUndoRunner } from './undoTimelineUi';
+import { redoReplace, type ReplaceSession } from './replaceUi';
 
 const devices: Device[] = [];
 const mounted: Editor[] = [];
@@ -359,6 +360,73 @@ describe('el reemplazo en la línea de tiempo (entrega 2)', () => {
     expect(timeline.peek(project, 'redo')).not.toBeNull();
     // A no tiene historia: va por las anclas, sin ningún paso de pila.
     await replaceAll('camara', 'Camera', ['A']);
+    expect(timeline.peek(project, 'redo')).toBeNull();
+  });
+
+  it('auditoría O2: dos ⌘Z seguidos sobre un reemplazo deshacen solo el reemplazo y su ⌘⇧Z sigue', async () => {
+    const { timeline, app, runner, text, replaceAll, go } = await setup({ A: ['la cámara'], B: ['luz'] });
+    await go('B');
+    type(app.editor!, ' uno');
+    const op = await replaceAll('camara', 'Camera');
+    await Promise.all([runner.run('undo'), runner.run('undo')]);
+    expect(await text('A')).toBe('la cámara');
+    expect(await text('B')).toBe('luz uno');
+    expect(timeline.replaceIsNext(op, 'redo')).toBe(true);
+    await runner.run('redo');
+    expect(await text('A')).toBe('la Camera');
+  });
+
+  it('auditoría O3: un reemplazo que no cambió nada no borra lo que había para rehacer', async () => {
+    const { timeline, app, runner, replaceAll, go, project } = await setup({ A: ['la cámara'], B: ['luz'] });
+    await go('B');
+    type(app.editor!, ' uno');
+    await runner.run('undo');
+    expect(await replaceAll('zzz', 'y')).toBeFalsy();
+    expect(timeline.peek(project, 'redo')).not.toBeNull();
+  });
+
+  it('auditoría O3: el Redo de un aviso viejo no rehace el reemplazo si ya no es lo próximo', async () => {
+    const { timeline, engine, app, runner, text, replaceAll, go } = await setup({ A: ['la cámara'] });
+    await go('A');
+    type(app.editor!, ' uno');
+    const op = await replaceAll('camara', 'Camera');
+    await runner.run('undo');
+    await runner.run('undo');
+    expect(await text('A')).toBe('la cámara');
+    const r = await redoReplace({ timeline, engine } as unknown as ReplaceSession, op);
+    expect(r.pages).toBe(0);
+    expect(await text('A')).toBe('la cámara');
+    expect(timeline.replaceState(op)).toBe('redo');
+    await runner.run('redo');
+    await runner.run('redo');
+    expect(await text('A')).toBe('la Camera uno');
+  });
+
+  it('auditoría O3: el paso de una página se deshace solo con su mismo documento', async () => {
+    const { timeline, ids, app, runner, text, replaceAll, go } = await setup({ A: ['la cámara'] });
+    await go('A');
+    type(app.editor!, ' uno');
+    const op = await replaceAll('camara', 'Camera');
+    expect(timeline.popReplace(ids.A, new Y.Doc(), op, 'undo', true)).toBe('none');
+    expect(await text('A')).toBe('la Camera uno');
+    await runner.run('undo');
+    await runner.run('undo');
+    expect(await text('A')).toBe('la cámara');
+  });
+
+  it('auditoría O4: si escribís mientras se deshace un reemplazo, ya no queda para rehacer', async () => {
+    const pages: Record<string, string[]> = { Z: ['nada'] };
+    for (let i = 0; i < 8; i++) pages[`P${i}`] = [`la cámara ${i}`];
+    const { timeline, engine, app, runner, replaceAll, go, project, text } = await setup(pages);
+    await go('Z');
+    const op = await replaceAll('camara', 'Camera');
+    const undoing = runner.run('undo');
+    for (let i = 0; i < 200 && !engine.isRunning(); i++) await tick(1);
+    expect(engine.isRunning()).toBe(true);
+    type(app.editor!, ' nuevo');
+    await undoing;
+    expect(await text('P7')).toBe('la cámara 7');
+    expect(timeline.replaceState(op)).toBeNull();
     expect(timeline.peek(project, 'redo')).toBeNull();
   });
 

@@ -852,8 +852,33 @@ semillas en la suite, `TIMELINE_SEEDS` para más) y las de atajos (`shortcuts.te
 ### 18.4 Lo que falta
 
 - *Show* en el aviso de ⌘Z de un reemplazo con páginas cambiadas.
+- **Una página con historia en la papelera durante el ⌘Z de un reemplazo** (auditoría, O1). Escribís "cámara roja" en
+  *Shot 3*, *Replace all*, mandás *Shot 3* a la papelera, ⌘Z (deshace en las demás; *Shot 3* "couldn't be undone
+  now"), la restaurás y ⌘Z: deshace lo escrito pero queda "Toma 1: Camera"; *Undo the rest* lo deja "Toma 1: cámara"
+  en vez de "Toma 1: ". Es el resto de D167 en ese rincón: texto de más, nada de menos. Causa: el paso de esa página
+  sale de la pila al pasar el reemplazo a rehacer (18.2). Arreglarlo pide que un reemplazo quede a la vez para rehacer
+  (las páginas hechas) y para deshacer (las que faltan): mediano, al roadmap.
 - La memoria en el iPhone (entrega 1) y el gesto de deshacer de iOS en la PWA instalada.
 - Entrega 3 (anotar como un paso).
+
+### 18.5 Correcciones de la auditoría
+
+Auditoría independiente sobre `87baf3b`: aprobado con observaciones, sin bloqueantes; 450 semillas al azar propias, con
+la otra persona escribiendo adentro de lo reemplazado, sin nada perdido.
+
+- **O2, `busy` con prueba.** Con dos ⌘Z muy seguidos, el segundo llegaba al motor antes de que marcara que estaba
+  corriendo: las anclas no escriben dos veces, pero el segundo descartaba el reemplazo y se perdía su ⌘⇧Z. `busy` ya lo
+  frenaba; ahora una prueba lo comprueba (falla sin `busy`).
+- **O3, pruebas de cuatro guardas**: un reemplazo sin cambios no borra lo de rehacer (18.2), el *Redo* de un aviso viejo
+  no rehace fuera de orden, el paso de una página se deshace solo con su mismo documento, y `planRedo` no escribe en un
+  bloque borrado. Las tres primeras fallan con su mutante; la de `planRedo` no puede: con el bloque borrado su texto
+  ya no es lo de antes y sale "changed" igual.
+- **O4, escribir mientras ⌘Z recorre un reemplazo largo.** Lo escrito borraba lo de rehacer en las páginas ya hechas,
+  pero al terminar el reemplazo igual quedaba para rehacer. Ahora la línea de tiempo cuenta lo nuevo (`newEdits`) y, si
+  hubo algo nuevo desde que empezó a deshacerse (`markReplace`), el reemplazo no queda para rehacer.
+- **O1**: al roadmap (18.4). **Fuera de alcance, al roadmap:** después del *Undo* de "Last" del panel el foco queda en la
+  página y Esc ya no cierra el panel (pasa igual en `main`); con el panel abierto y el foco puesto por programa en el
+  editor, Ctrl+Shift+Z deshace (una persona no llega ahí: el panel es modal).
 
 ## Correcciones de la auditoría (2026-10-02)
 
