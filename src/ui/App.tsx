@@ -26,6 +26,8 @@ import { Workspace } from './Workspace';
 
 // La medición del espacio del dispositivo (P.10, sección 9.1): se baja solo si se abre.
 const StorageTest = lazyPart(() => import('./StorageTest').then((m) => m.StorageTest));
+// La pantalla de permiso de un asistente (MCP, Doc_Asistente.md, 9.2): se baja solo si se llega a esa dirección.
+const OAuthConsent = lazyPart(() => import('./OAuthConsent').then((m) => m.OAuthConsent));
 
 export function App() {
   // La política de privacidad y las condiciones se ven antes de todo lo demás: sin sesión, sin workspace y sin
@@ -36,6 +38,12 @@ export function App() {
       {route.name === 'storageTest' ? (
         <Part>
           <StorageTest />
+        </Part>
+      ) : route.name === 'oauthConsent' ? (
+        // Sin el arranque de la app (links de invitación o públicos, lista de workspaces): el ref de la dirección
+        // elige el workspace y la pantalla pide entrar si hace falta.
+        <Part>
+          <OAuthConsent projectRef={route.projectRef} />
         </Part>
       ) : isPublicRoute(route) ? (
         <LegalPage page={route.name} />

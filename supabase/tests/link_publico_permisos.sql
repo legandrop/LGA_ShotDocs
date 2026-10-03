@@ -350,11 +350,12 @@ begin
     perform pg_temp.expect_error(t, '42501', 'anon corre ' || left(t, 60));
   end loop;
   perform pg_temp.as_postgres();
-  -- Lo que anon puede ejecutar en public y private: exactamente esto (con las dos de escribir de la entrega 2a).
+  -- Lo que anon puede ejecutar en public y private: exactamente esto (`private.mcp_pre_request` es el pre-request de
+  -- PostgREST, que corre en todo pedido, 20261027120000_mcp_plan_b.sql; las dos de escribir, de la entrega 2a).
   assert (select string_agg(n.nspname || '.' || p.proname, ',' order by n.nspname, p.proname)
           from pg_proc p join pg_namespace n on n.oid = p.pronamespace
           where n.nspname in ('public', 'private') and has_function_privilege('anon', p.oid, 'execute'))
-       = 'private.plink_thumbs,private.plink_token,public.plink_add_comment,public.plink_delete_comment,public.plink_edit_comment,public.plink_list_comments,public.plink_media_file,public.plink_media_files,public.plink_open,public.plink_pull_page,public.plink_push_page_update,public.plink_push_status,public.plink_tree',
+       = 'private.mcp_pre_request,private.plink_thumbs,private.plink_token,public.plink_add_comment,public.plink_delete_comment,public.plink_edit_comment,public.plink_list_comments,public.plink_media_file,public.plink_media_files,public.plink_open,public.plink_pull_page,public.plink_push_page_update,public.plink_push_status,public.plink_tree',
     'anon ejecuta otras funciones';
   -- Y ninguna de las del visitante para una cuenta (authenticated).
   assert not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace

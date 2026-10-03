@@ -10,7 +10,7 @@ import { FakeServer, makeDevice, type Device } from './testing';
 
 // El link público con *Can edit*, entrega 2a (Docs/Doc_Link_Publico.md, E2.14.3): el visitante y los editores con el
 // motor de verdad (`SyncEngine`, `PageDocs`, IndexedDB en memoria) contra el servidor en memoria con las reglas de
-// 20261027120000_link_editar.sql: lo que escribe el link espera en la sala, un editor que arma bases lo prueba y lo
+// 20261028120000_link_editar.sql: lo que escribe el link espera en la sala, un editor que arma bases lo prueba y lo
 // admite, y el visitante lo recibe con la base siguiente. Cada texto es una marca única (`<tN>`): se busca en los bytes.
 
 const TOKEN_RE = /<t\d+>/g;

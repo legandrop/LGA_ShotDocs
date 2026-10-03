@@ -3,7 +3,7 @@ import { RemoteError } from './types';
 // Lo que se habla con la base para admitir lo que escribe un link público (Docs/Doc_Link_Publico.md, E2.3): los tipos,
 // la versión de la base y cómo se lee la respuesta. La vuelta de la admisión está en linkAdmit.ts.
 
-/** La versión de la base con la sala y la admisión (20261027120000_link_editar.sql). */
+/** La versión de la base con la sala y la admisión (20261028120000_link_editar.sql). */
 export const LINK_EDIT_SCHEMA_VERSION = 19;
 
 /** Como mucho, cuántas páginas se piden con bytes por vuelta (`link_admit_work` rechaza más de 20). */

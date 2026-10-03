@@ -1,4 +1,4 @@
--- Pruebas del link público, entrega 2a: Can edit (20261027120000_link_editar.sql, Docs/Doc_Link_Publico.md, E2.14).
+-- Pruebas del link público, entrega 2a: Can edit (20261028120000_link_editar.sql, Docs/Doc_Link_Publico.md, E2.14).
 -- El visitante escribe con el rol anon y el token en `x-shotdocs-link`: lo que manda va a la sala de espera
 -- (`public_link_updates`), nunca a `page_updates`, con topes por bytes que no suman lo rechazado y con idempotencia antes
 -- de los topes. Un editor que ve lo borrado lo admite en orden (`link_admit_pages`, `link_admit_work`, `link_admit`): la

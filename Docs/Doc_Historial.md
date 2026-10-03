@@ -430,6 +430,10 @@ comprobaciones en cada caso (sección 11).
     y al restaurar, los demás la ven como no disponible, igual que hoy si alguien pega ese bloque.
 - **Versiones viejas de la app:** lo restaurado es una edición común con el esquema de siempre; una pestaña vieja la
   recibe como cualquier cambio. No hace falta subir `min_app_version`.
+- **Una página que el editor no puede mostrar** (v0.147): el aviso de la página ofrece *Version history* y restaurar
+  se hace sin el editor, sobre el documento (`restoreInDoc`), con la misma ida y vuelta y el mismo paso a Yjs del editor
+  (lo que otro escribe a la vez queda); sin **Undo** en el aviso. Ver
+  `Doc_Sincronizacion.md`, "Barreras de error".
 - **Una página en la papelera:** no se abre el historial; primero se restaura la página. Las funciones de la base
   también lo rechazan (`page_in_trash`), no solo la interfaz.
 - **Sin permiso de edición, o con la app por debajo de la mínima:** no se ofrece (el servidor lo rechazaría:

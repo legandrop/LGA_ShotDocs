@@ -377,7 +377,7 @@ export class FakeServer {
    */
   readonly publicLinks = new Map<string, FakePublicLink>();
 
-  // --- link público, entrega 2a: Can edit (20261027120000_link_editar.sql) ------------------------------------------
+  // --- link público, entrega 2a: Can edit (20261028120000_link_editar.sql) ------------------------------------------
   /** `public_link_updates`: la sala de espera, en orden de llegada. */
   readonly linkRoom: FakeRoomRow[] = [];
   /** Los topes de los links que miran las pruebas (`plink_limit`, con los valores de la migración). */

@@ -1119,7 +1119,7 @@ export class SupabaseRemote
     }));
   }
 
-  // --- link público, entrega 2a: admitir lo que escribe un link (20261027120000_link_editar.sql, src/sync/linkAdmit.ts) ---
+  // --- link público, entrega 2a: admitir lo que escribe un link (20261028120000_link_editar.sql, src/sync/linkAdmit.ts) ---
 
   /** Las páginas con algo de un link para decidir, sin bytes. Una base sin la migración: nada. */
   async admitPages(): Promise<AdmitPageRow[]> {

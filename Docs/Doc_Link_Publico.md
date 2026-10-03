@@ -2322,11 +2322,11 @@ editor real. Corregido en este documento:
 
 ### Cómo quedó la 2a (v0.0XX)
 
-**Estado:** implementada en la rama, con la migración `20261027120000_link_editar.sql` **sin aplicar** y el interruptor
+**Estado:** implementada en la rama, con la migración `20261028120000_link_editar.sql` **sin aplicar** y el interruptor
 **apagado** (`link_edit_min_version` nulo: *Can edit* se ve apagado en *Share*, `plink_push_page_update` da
 `app_outdated`, `plink_open` da *Can view* y nadie admite). Sube `schema_version` a **19**.
 
-**La base** (`supabase/migrations/20261027120000_link_editar.sql`): todo E2.11 sin la 2b (la sala
+**La base** (`supabase/migrations/20261028120000_link_editar.sql`): todo E2.11 sin la 2b (la sala
 `public_link_updates`, `page_updates.plink_id`, `plink_author` y `plink_update_id`, `link_page_level`, `link_branch`,
 `link_media_allowed`, `link_waiting_bytes`, `plink_aside_revoked`, `plink_push_page_update`, `plink_push_status`, la
 admisión en dos pasos, `public_link_updates_of`, `public_link_update_bytes`, `public_link_level_ok`, `page_history` con
