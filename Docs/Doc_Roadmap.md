@@ -280,6 +280,9 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   abren. Solo con el foco en el árbol y sin Ctrl, ⌘, Alt ni Shift. Y el defecto: plegar con el triángulo (o
   con ←) una madre de la página abierta no dejaba; ahora pliega y la abierta pasa a ser esa madre (en el
   teléfono el cajón sigue abierto). Lógica en `src/ui/treeNav.ts`. Su entrada en la ayuda está desde v0.082 (P.13).
+  Ancho del nombre (D233, v0.0XX): sin mouse, foco ni menú abierto el nombre usa todo el ancho de la fila y recién ahí
+  lleva «…»; ⋯ y + (que no ocupan lugar mientras no se ven) le sacan su lugar con el mouse encima, el foco en la
+  fila o en sus botones, o el menú ⋯ abierto. La página abierta los muestra siempre, como antes.
 - **P.17 Hecho (v0.079): instalar la app** (Lega, 2026-10-01). La app reconoce si está instalada; si no, ofrece
   *Install app* en el menú de la cuenta y en la pantalla de entrar, y en el teléfono un aviso que se cierra por 30
   días. La ventana muestra los pasos con dibujos para iPhone, Android y computadora, con *Install* directo donde
