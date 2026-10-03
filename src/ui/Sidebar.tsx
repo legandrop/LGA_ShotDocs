@@ -6,7 +6,7 @@ import { usePermissions, useServices, useTree } from '../services';
 import type { PageRow } from '../sync/types';
 import { openHelp } from '../help/helpUi';
 import { useHelpDot } from '../tutorial/tourState';
-import { AccountIcon, CollapseIcon, ExpandIcon, HelpIcon, MoreIcon, PlusIcon, SearchIcon, TrashIcon } from './icons';
+import { AccountIcon, CollapseIcon, ExpandIcon, HelpIcon, MoreIcon, PlusIcon, SearchIcon } from './icons';
 import { AccountMenu, menuBelow, PageMenu, type MenuPosition } from './menus';
 import { DriveDialogHost, MembersDialog, ShareDialog } from './lazyDialogs';
 import { Part } from './lazyPart';
@@ -378,7 +378,6 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
     if (neighbor) focusRow(neighbor, true);
     else setFocusId(null);
   });
-  const trashCount = tree.trashed(projectId).length;
   // Con un link público: sin proyectos, papelera ni cuenta (Docs/Doc_Link_Publico.md, 3.5).
   const linkMode = useLinkMode();
   const canCreateRoot = perms.canCreateIn(null, projectId);
@@ -421,17 +420,9 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
       <div className="sidebar-spacer" />
       <div className="sidebar-footer">
         <div className="footer-row">
-          {linkMode ? (
-            <span className="footer-item" />
-          ) : (
-            <button
-              className={`footer-item${route.name === 'trash' ? ' active' : ''}`}
-              onClick={() => navigate('/trash')}
-            >
-              <TrashIcon size={17} /> {tr('trash.title')}
-              {trashCount > 0 ? ` (${trashCount})` : ''}
-            </button>
-          )}
+          {/* La papelera está en el selector de proyectos (una sola, con proyectos, páginas y archivos): acá queda
+              solo la ayuda, a la derecha. */}
+          <span className="footer-item" />
           {/* La ayuda (Docs/Doc_Tutorial.md, sección 5): sin tooltip, el ícono ya lo dice (D-15). */}
           <button
             className={`help-button${help.dot ? ' has-dot' : ''}`}

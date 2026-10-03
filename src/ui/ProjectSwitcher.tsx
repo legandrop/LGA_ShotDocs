@@ -25,10 +25,10 @@ import {
 } from './icons';
 import { menuBelow, useFloating, type MenuPosition } from './menus';
 import { notify } from './notice';
-import { editedLabel, monogram, projectStateError, useCurrentProject, useProjectDrive, useSwitchProject } from './project';
+import { editedLabel, monogram, projectStateError, useCurrentProject, useSwitchProject } from './project';
 import { useSearchSession } from './projectSearchUi';
 import { tipRows } from './tipRows';
-import { DeletedProjectsList, DeleteProjectDialog, ShareDialog } from './lazyDialogs';
+import { DeleteProjectDialog, ShareDialog, TrashPanel } from './lazyDialogs';
 import { Part } from './lazyPart';
 import { OfflineBadge, offlineSupported, openOffline } from './SpaceHost';
 import { openExport } from './ExportHost';
@@ -54,6 +54,16 @@ export function Monogram({ name, size = 26 }: { name: string; size?: number }) {
 // En pantallas táctiles no se enfoca el buscador al abrir: el teclado taparía la lista.
 const coarsePointer = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
+// Abrir la papelera desde afuera del selector (la dirección vieja `/trash`, Workspace.tsx): el selector se abre ya en
+// la papelera. Sin un selector montado no hace nada (no queda un pedido guardado que lo abra solo más tarde): el
+// `Shell` lo pide con la barra lateral ya montada.
+const trashListeners = new Set<() => void>();
+
+/** Abre el selector de proyectos en la papelera (*Trash*). */
+export function openProjectTrash(): void {
+  for (const listener of trashListeners) listener();
+}
+
 /**
  * Arriba de la barra lateral: el proyecto abierto (y, con varios workspaces en el dispositivo, antes el
  * workspace: Workspace › Proyecto). Abre el selector con un clic. Ctrl/⌘+K ya no lo abre: abre la búsqueda del
@@ -70,6 +80,8 @@ export function ProjectSwitcher() {
   const codaOwner = useCodaOwner();
   useRememberWorkspaceName();
   const [position, setPosition] = useState<MenuPosition | null>(null);
+  // Con qué lista se abre el selector: la de siempre o la papelera (`openProjectTrash`).
+  const [startIn, setStartIn] = useState<'list' | 'trash'>('list');
   const [sharing, setSharing] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<{ id: string; name: string } | null>(null);
   const switchTo = useSwitchProject();
@@ -81,7 +93,22 @@ export function ProjectSwitcher() {
   const tr = useT();
   const name = project?.name ?? tr('project.defaultName');
 
-  const toggle = () => setPosition((open) => (open || !button.current ? null : menuBelow(button.current, 340)));
+  const toggle = () => {
+    setStartIn('list');
+    setPosition((open) => (open || !button.current ? null : menuBelow(button.current, 340)));
+  };
+
+  useEffect(() => {
+    const open = () => {
+      if (!button.current) return;
+      setStartIn('trash');
+      setPosition(menuBelow(button.current, 340));
+    };
+    trashListeners.add(open);
+    return () => {
+      trashListeners.delete(open);
+    };
+  }, []);
 
   // Ctrl/⌘+K con el selector abierto abre la búsqueda: el selector se cierra (no queda abajo del panel).
   const searchOpen = useSearchSession().isOpen();
@@ -121,6 +148,7 @@ export function ProjectSwitcher() {
             <div className="sheet-scrim" aria-hidden="true" />
             <ProjectMenu
               current={current}
+              initialMode={startIn}
               position={position}
               anchor={button.current}
               onClose={() => setPosition(null)}
@@ -181,10 +209,13 @@ type Mode =
   | { name: 'new' }
   | { name: 'rename'; id: string }
   | { name: 'archived' }
-  | { name: 'deleted' };
+  // La papelera única: proyectos, páginas y archivos borrados (TrashView.tsx).
+  | { name: 'trash' };
 
 function ProjectMenu(props: {
   current: string;
+  /** `trash`: se abre directo en la papelera (`openProjectTrash`). */
+  initialMode?: 'list' | 'trash';
   position: MenuPosition;
   anchor: HTMLElement | null;
   onClose: () => void;
@@ -202,12 +233,11 @@ function ProjectMenu(props: {
   const { sizes: sizeStore, remote, engine, mediaDb } = useServices();
   const status = useSyncStatus();
   const sizes = useProjectSizes();
-  const drive = useProjectDrive();
   const switchTo = useSwitchProject();
   const ref = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
-  const [mode, setMode] = useState<Mode>({ name: 'list' });
+  const [mode, setMode] = useState<Mode>(props.initialMode === 'trash' ? { name: 'trash' } : { name: 'list' });
   const [touch] = useState(coarsePointer);
   const [returned, setReturned] = useState(false);
   const search = useRef<HTMLInputElement>(null);
@@ -332,24 +362,28 @@ function ProjectMenu(props: {
     );
   }
 
-  if (mode.name === 'deleted') {
+  if (mode.name === 'trash') {
     return (
-      <div ref={ref} className="menu project-menu" role="dialog" aria-label={tr('project.deletedList')} style={props.position}>
-        <button className="project-back" onClick={backToList}>
+      <div
+        ref={ref}
+        className="menu project-menu trash-menu"
+        role="dialog"
+        aria-label={tr('trash.title')}
+        style={props.position}
+        onKeyDown={(e) => {
+          // Escape vuelve a la lista de proyectos (sin cerrar el selector), como en los archivados.
+          if (e.key !== 'Escape' || e.defaultPrevented) return;
+          e.preventDefault();
+          e.stopPropagation();
+          backToList();
+        }}
+      >
+        <button className="project-back" autoFocus={!touch} onClick={backToList}>
           <ChevronLeftIcon size={16} />
-          {tr('project.deletedList')}
+          {tr('trash.title')}
         </button>
         <Part>
-          <DeletedProjectsList
-            remote={remote}
-            drive={drive}
-            sizeOf={(id) => sizes.rows?.find((r) => r.project_id === id)?.drive_bytes ?? null}
-            onRestored={async () => {
-              // Vuelve a la lista en la próxima sincronización, con los mismos permisos (no se tocaron).
-              await engine.syncNow();
-              void sizeStore.refresh();
-            }}
-          />
+          <TrashPanel current={props.current} onClose={props.onClose} />
         </Part>
       </div>
     );
@@ -610,7 +644,7 @@ function ProjectMenu(props: {
       </div>
       {!archivedMode && (
         <>
-          {(perms.canCreateProject || perms.canShareProject(props.current) || statesReady) && <hr />}
+          <hr />
           {perms.canShareProject(props.current) && (
             <button
               onClick={() => {
@@ -668,16 +702,11 @@ function ProjectMenu(props: {
               {tr('project.archivedList', { count: archivedCount })}
             </button>
           )}
-          {statesReady && (
-            <button
-              disabled={offline}
-              data-tip={offline ? tr('fileTrash.needsInternet') : undefined}
-              onClick={() => setMode({ name: 'deleted' })}
-            >
-              <TrashIcon size={16} />
-              {tr('project.deletedList')}
-            </button>
-          )}
+          {/* La papelera única (proyectos, páginas y archivos): anda sin red con las páginas del dispositivo. */}
+          <button onClick={() => setMode({ name: 'trash' })}>
+            <TrashIcon size={16} />
+            {tr('trash.title')}
+          </button>
           <WorkspaceSection onClose={props.onClose} onDialog={props.onWorkspaces} onRemove={props.onRemoveWorkspace} />
         </>
       )}

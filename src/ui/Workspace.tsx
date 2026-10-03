@@ -33,6 +33,7 @@ import { replaceBlocksLeaving, replaceRunning, replaceSession } from './replaceU
 import { InstallBanner, InstallHost } from './InstallBanner';
 import { lastPageOf, rememberPage, useCurrentProject, useSwitchProject } from './project';
 import { RemovedScreen } from './RemovedScreen';
+import { openProjectTrash } from './ProjectSwitcher';
 import { WorkspaceBarrier } from './ErrorBarrier';
 import type { ShareTarget } from './ShareDialog';
 import { DeletedProjectsList, HelpDialog, ImportArchiveDialog, ImportCodaDialog, LookForFilesButton, ProjectSearch, ShareDialog } from './lazyDialogs';
@@ -54,7 +55,6 @@ import { SyncIcon } from './SyncBadge';
 import { SpaceHost } from './SpaceHost';
 import { OwnTemplatesHost } from '../templates/ownTemplatesUi';
 import { ExportHost } from './ExportHost';
-import { TrashView } from './TrashView';
 import { AssistantHost } from '../assistant/AssistantHost';
 import { openAssistant } from '../assistant/assistantUi';
 import { DictationHost } from '../dictation/DictationHost';
@@ -330,6 +330,15 @@ export function Shell() {
   const projectId = useCurrentProject();
   const revision = tree.getRevision();
   const linkMode = useLinkMode();
+  // La dirección vieja de la papelera (`/trash`, un marcador o un link de antes): la papelera es una sola y está en
+  // el selector de proyectos; se abre ahí, sobre el inicio del proyecto. Con un link público no hay papelera: la
+  // página compartida.
+  const linkPage = linkMode?.pageId ?? null;
+  useEffect(() => {
+    if (route.name !== 'trash') return;
+    if (linkPage) navigate(pagePath(linkPage), true);
+    else openProjectTrash();
+  }, [route.name, linkPage]);
   useEffect(() => {
     if (route.name === 'page') rememberPage(keys, tree, user.id, route.id);
     if (route.name !== 'home') return;
@@ -385,7 +394,6 @@ export function Shell() {
                     {current.title || tr('common.untitled')}
                   </span>
                 )}
-                {route.name === 'trash' && <span className="crumb current">{tr('trash.title')}</span>}
               </nav>
               <span className="only-mobile">
                 <SyncIcon onClick={() => setNavOpen(true)} />
@@ -429,8 +437,6 @@ export function Shell() {
             <InstallBanner />
             {route.name === 'page' ? (
               <PageView key={route.id} id={route.id} />
-            ) : route.name === 'trash' ? (
-              <TrashView />
             ) : (
               <Home />
             )}
@@ -774,7 +780,7 @@ export function NoProjects({
         {error && <p className="error">{error}</p>}
         {restorable && (
           <>
-            <h2 className="mono-label">{tr('project.deletedList')}</h2>
+            <h2 className="mono-label">{tr('trash.title')}</h2>
             <Part>
               <DeletedProjectsList remote={remote} drive={drive} onRestored={onRetry} />
             </Part>

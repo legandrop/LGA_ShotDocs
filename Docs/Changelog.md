@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.162 :
+
+**Una sola papelera** (pedido de Lega). Había dos: *Trash* abajo de la barra lateral (páginas y archivos) y *Deleted
+projects* en el selector de proyectos, y no se entendía cuál era cuál. Ahora *Trash* está solo en el selector, en el
+lugar de *Deleted projects*: proyectos, páginas y archivos juntos, del más nuevo al más viejo, cada uno con su
+proyecto, con el filtro *All / Projects / Pages / Files* y *This project / All projects* (los proyectos borrados se ven
+siempre). Cada tipo hace lo de antes (*Restore*, mandar a Drive, *Restore without its files*; *Empty*, solo del
+proyecto abierto y nombrándolo) y cada uno ve lo que la base le dejaba ver: sin migración. Sin red, las páginas. `/trash` abre el selector en la papelera. Ayuda,
+recorrida y textos que decían *Deleted projects*, al día.
+[ Una sola papelera - Trash pasa al selector de proyectos con proyectos, páginas y archivos juntos, el filtro All Projects Pages Files y este proyecto o todos ]
+
 v0.161 :
 
 **Contraste del texto y el panel de la cuenta.** El texto del documento era todo del mismo tono, y el panel de la cuenta

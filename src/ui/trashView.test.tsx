@@ -9,10 +9,11 @@ import type { SupabaseRemote } from '../sync/remote';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
-import { TrashView } from './TrashView';
+import { TrashPanel } from './TrashView';
 
-// La pestaña Archivos de la papelera (paso 11), montada contra el servidor y el portero en memoria: quién la
-// ve, qué muestra y que mandar a la papelera de Drive pide confirmación y saca el archivo de la lista.
+// Los archivos de la papelera (paso 11; desde la papelera única, el filtro *Files*), montada contra el servidor y el
+// portero en memoria: quién los ve, qué muestra y que mandar a la papelera de Drive pide confirmación y saca el
+// archivo de la lista.
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -65,7 +66,13 @@ async function mount(value: Services): Promise<HTMLElement> {
   document.body.append(host);
   const root = createRoot(host);
   roots.push(root);
-  await act(async () => root.render(<ServicesContext.Provider value={value}>{<TrashView />}</ServicesContext.Provider>));
+  await act(async () =>
+    root.render(
+      <ServicesContext.Provider value={value}>
+        <TrashPanel current={value.tree.workspaceId} onClose={() => undefined} />
+      </ServicesContext.Provider>,
+    ),
+  );
   await settle();
   return host;
 }
@@ -112,7 +119,7 @@ async function trashedPhoto(): Promise<{ server: FakeServer; owner: Device; id: 
 const buttons = (host: HTMLElement) => [...host.querySelectorAll('button')];
 const byText = (host: HTMLElement, text: string) => buttons(host).find((b) => b.textContent?.trim() === text);
 
-describe('papelera: pestaña Archivos', () => {
+describe('papelera: los archivos (filtro Files)', () => {
   it('el dueño ve la lista con los datos y los avisos, y manda uno a la papelera de Drive con confirmación', async () => {
     const { server, owner, id } = await trashedPhoto();
     const host = await mount(services(owner, server.ownerId));
@@ -170,6 +177,7 @@ describe('papelera: pestaña Archivos', () => {
     await sync(owner);
 
     const host = await mount(services(owner, server.ownerId));
+    await act(async () => byText(host, 'Pages')!.click());
     expect(host.textContent).toContain('already sent to the Google Drive trash');
     await act(async () => byText(host, 'Files')!.click());
     await vi.waitFor(() => expect(host.textContent).toContain('Used by “Día 1” in the trash'));
@@ -201,7 +209,7 @@ describe('papelera: pestaña Archivos', () => {
     expect(byText(host, 'Empty')!.disabled).toBe(true);
   });
 
-  it('quien no puede verla no tiene la pestaña; quien la ve sin ser dueño ni admin no puede mandar nada', async () => {
+  it('quien no puede verla no tiene el filtro Files; quien la ve sin ser dueño ni admin no puede mandar nada', async () => {
     const { server } = await trashedPhoto();
     server.addMember('editor-1', 'member');
     server.grant('editor-1', { projectId: server.workspaceId }, 'edit');

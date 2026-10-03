@@ -265,12 +265,12 @@ describe('lo que las flechas iban a abrir', () => {
     expect(path()).toBe(pagePath(ids.a1));
   });
 
-  it('sin página abierta, ir a la papelera lo anula', async () => {
+  it('sin página abierta, ir a otra dirección (la vieja de la papelera) lo anula', async () => {
     await app({ open: 'none' });
     focusRow('Uno');
     press('ArrowDown', { repeat: true });
     expect(focusedTitle()).toBe('Dos');
-    act(() => document.querySelector<HTMLButtonElement>('.sidebar-footer .footer-item')!.click());
+    act(() => navigate('/trash'));
     expect(path()).toBe('/trash');
     await wait(OPEN_DELAY_MS + 60);
     expect(path()).toBe('/trash');
