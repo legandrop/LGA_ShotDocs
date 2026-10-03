@@ -1440,12 +1440,14 @@ export class Portero {
     throw new HttpError(502, `Google Drive answered ${res.status} to a part of the upload.`);
   }
 
-  /** El link todavía edita una página que usa el archivo (nivel 3); si no, la parte no sale. */
+  /**
+   * El link todavía edita una página que usa el archivo (nivel 3); si no, la parte no sale. Que el archivo sea suyo ya se
+   * miró al abrir la subida (y no cambia: `files.plink_id` no se toca), y la subida solo la sigue el mismo token.
+   */
   private async linkStillUploads(who: Who, file: string): Promise<void> {
     const media = await this.mediaFile(who, file);
     if (!media) throw new HttpError(404, 'This file does not exist or you cannot see it.', 'not_found');
     if (media.level < 3) throw new HttpError(403, 'You cannot add files to this page.', 'not_allowed');
-    if (media.mine !== true) throw new HttpError(403, 'Only files added through this link can be uploaded with it.', 'not_mine');
   }
 
   /** La subida terminó. Si es un archivo de la app, se le dice a la base dónde quedó (una vez). */

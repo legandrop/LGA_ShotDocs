@@ -1,4 +1,4 @@
-import { afterAll, afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 import { FileRejected } from './files';
 import { block, group } from './historyTesting';
@@ -139,6 +139,12 @@ describe('Can edit por un link: archivos (entrega 2b)', () => {
     await v.engine.syncNow();
     expect(await v.engine.prefetchPage(s)).toBe(true);
     const id = await addPhoto(v, s);
+    // Registrarlo despierta al motor (lo escrito de la página esperaba al archivo).
+    const poke = vi.spyOn(v.engine, 'poke');
+    await v.engine.syncMedia();
+    expect(server.mediaFiles.has(id)).toBe(true);
+    expect(poke).toHaveBeenCalled();
+    poke.mockRestore();
     await visitorRound(v);
     const link = server.publicLinks.get(token)!;
     // Registrada por el link (sin cuenta), en la página, con su miniatura, y en Drive por el portero.
@@ -230,6 +236,8 @@ describe('Can edit por un link: archivos (entrega 2b)', () => {
     // Una carpeta (P.9), tampoco: ni la cola ni la base.
     await expect(v.media.addFolder(s, 'Fotos', 1000)).rejects.toBeInstanceOf(FileRejected);
     await expect(v.remote.registerFile({ id: crypto.randomUUID(), pageId: s, name: 'Fotos', mime: 'inode/directory', size: 1, width: null, height: null, duration: null })).rejects.toBeInstanceOf(RemoteError);
+    // Ni se le pregunta a la base.
+    expect(v.calls.some((c) => c.fn === 'plink_register_file')).toBe(false);
     // La base, directo (lo que haría un visitante sin la app).
     const client = fakeLinkClient(server, { 'x-shotdocs-version': '0.200', 'x-shotdocs-link': token, 'x-shotdocs-device': 'd'.repeat(20) });
     const reg = (size: number, mime = 'image/jpeg', id: string = crypto.randomUUID()) =>

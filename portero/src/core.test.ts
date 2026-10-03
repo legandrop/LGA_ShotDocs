@@ -2815,3 +2815,16 @@ describe('portero: link público Can edit sube lo suyo (Docs/Doc_Link_Publico.md
     expect(world.base.get(FILE_A)!.drive_id).toBeNull();
   });
 });
+
+describe('portero: link Can edit y la papelera de archivos (entrega 2b)', () => {
+  it('si el dueño lo mandó a la papelera mientras subía, el link no lo manda a la papelera de Drive (lo termina el /trash del dueño)', async () => {
+    const { world, p } = await setup();
+    addBaseFile(world, FILE_A, { size: 10, levels: {}, trashed_at: '2026-10-03T10:00:00Z', purged_at: '2026-10-03T10:00:01Z' });
+    world.links.set(LINK, { files: { [FILE_A]: 3 }, mine: [FILE_A] });
+    const { started } = await linkUpload(p, FILE_A, bytes(10));
+    const done = (await (await linkPart(p, started.uploadId as string, 'bytes 0-9/10', bytes(10))).json()) as { linked: boolean; file: { id: string } };
+    expect(done.linked).toBe(true);
+    expect(world.files.get(done.file.id)!.trashed).toBeFalsy();
+    expect(world.linkCalls.some((c) => c.path.endsWith('/media_purged'))).toBe(false);
+  });
+});
