@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
+  accessRequestsEnabled,
   AccessRequestsInbox,
   askedAt,
   parseAccessRequest,
@@ -40,6 +41,18 @@ function fakeClient(answer: (fn: string, args: Record<string, unknown>) => { dat
   const rpc = vi.fn(async (fn: string, args: Record<string, unknown>) => ({ data: null, error: null, status: 200, ...answer(fn, args) }));
   return { client: { rpc } as unknown as SupabaseClient, rpc };
 }
+
+describe('cuándo se pregunta la lista', () => {
+  it('con la base en la 22 y un rol que comparte; nunca a un invitado, a quien sacaron o con la base vieja', () => {
+    expect(accessRequestsEnabled(22, 'owner')).toBe(true);
+    expect(accessRequestsEnabled(23, 'admin')).toBe(true);
+    expect(accessRequestsEnabled(22, 'member')).toBe(true);
+    expect(accessRequestsEnabled(22, 'guest')).toBe(false);
+    expect(accessRequestsEnabled(22, null)).toBe(false);
+    expect(accessRequestsEnabled(21, 'owner')).toBe(false);
+    expect(accessRequestsEnabled(null, 'owner')).toBe(false);
+  });
+});
 
 describe('las filas y la base', () => {
   it('una fila se lee entera; sin páginas, sin rol válido o sin ids, no', () => {

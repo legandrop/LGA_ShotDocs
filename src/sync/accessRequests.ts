@@ -94,6 +94,14 @@ export function supabaseAccessRequests(client: SupabaseClient): AccessRequestsRe
   };
 }
 
+/**
+ * ¿Se pregunta la lista? Con la base del workspace en la versión 22 y un rol que puede compartir algo (no invitado, no
+ * sacado). La base igual filtra (a quien no puede compartir nada le da una lista vacía): esto solo ahorra la pregunta.
+ */
+export function accessRequestsEnabled(schemaVersion: number | null | undefined, role: Role | null): boolean {
+  return (schemaVersion ?? 0) >= ACCESS_REQUESTS_SCHEMA_VERSION && role !== null && role !== 'guest';
+}
+
 export interface AccessRequestsSnapshot {
   /** La base del workspace tiene pedidos y la persona puede decidir alguno (no es invitada). */
   ready: boolean;

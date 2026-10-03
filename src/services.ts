@@ -14,7 +14,7 @@ import { acceptInvitationsQuietly, AccessStore, Permissions } from './sync/acces
 import { CommentQueue, commentsDbName, openCommentsDb, type CommentRemote, type CommentsDb } from './sync/comments';
 import { SupabaseCommentRemote } from './sync/commentsRemote';
 import { MentionsInbox } from './sync/mentions';
-import { ACCESS_REQUESTS_SCHEMA_VERSION, AccessRequestsInbox, supabaseAccessRequests, type AccessRequestsSnapshot } from './sync/accessRequests';
+import { accessRequestsEnabled, AccessRequestsInbox, supabaseAccessRequests, type AccessRequestsSnapshot } from './sync/accessRequests';
 import { PageDocs } from './sync/docs';
 import { SyncEngine, type SyncStatus } from './sync/engine';
 import { PageFiles } from './sync/files';
@@ -432,7 +432,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser, link
       // La lista de pedidos se prende con la base en la versión 22 y para quien no es invitado (la base igual filtra).
       const syncRequests = () => {
         const role = new Permissions(tree, access.get(), user.id).role;
-        accessRequests?.setEnabled((engine.getStatus().schemaVersion ?? 0) >= ACCESS_REQUESTS_SCHEMA_VERSION && role !== null && role !== 'guest');
+        accessRequests?.setEnabled(accessRequestsEnabled(engine.getStatus().schemaVersion, role));
       };
       const unwatchRequests = accessRequests ? [engine.subscribe(syncRequests), access.subscribe(syncRequests)] : [];
       syncRequests();
