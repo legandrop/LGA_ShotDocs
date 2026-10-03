@@ -246,7 +246,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
           aria-level={depth + 1}
           aria-expanded={children.length ? open : undefined}
           aria-label={page.title || tr('common.untitled')}
-          className={`tree-row${children.length ? ' parent' : ''}${page.id === activeId ? ' active' : ''}${dropClass}`}
+          className={`tree-row${children.length ? ' parent' : ''}${page.id === activeId ? ' active' : ''}${menu?.id === page.id ? ' menu-open' : ''}${renaming === page.id ? ' renaming' : ''}${dropClass}`}
           style={{ paddingLeft: 4 + depth * 18 }}
           data-tip={split ? page.title : undefined}
           data-tip-plain

@@ -200,6 +200,11 @@ export class FakeServer {
   private updateIds = 0;
   /** El reloj del servidor (`now()`): las pruebas del historial lo mueven. */
   now: () => number = () => Date.now();
+  /**
+   * El reloj con que la base pone `pages.updated_at`. Las pruebas del reloj del dispositivo lo corren horas para un lado
+   * o el otro (Doc_Sincronizacion.md, "Topes de largo"); aparte de `now` para no mover el del historial.
+   */
+  treeClock: () => number = () => Date.now();
   nextUpdateId(): number {
     return ++this.updateIds;
   }
@@ -1761,7 +1766,7 @@ export class FakeRemote
     if (this.team && !this.server.canCreatePage(this.userId, page.workspace_id, page.parent_id)) {
       throw this.denied('page_create_denied');
     }
-    const now = new Date().toISOString();
+    const now = new Date(this.server.treeClock()).toISOString();
     this.server.pages.set(page.id, {
       ...page,
       icon: null,
@@ -1801,7 +1806,7 @@ export class FakeRemote
     // La política de la versión mira la fila nueva, después de los triggers (como en la base).
     this.checkWriteVersion();
     checkPageLengths({ ...page, ...patch });
-    this.server.pages.set(id, { ...page, ...patch, updated_at: new Date().toISOString() });
+    this.server.pages.set(id, { ...page, ...patch, updated_at: new Date(this.server.treeClock()).toISOString() });
     // `pages_clean_move`: mover a una rama con lectores reinicia la página y su rama.
     if (patch.parent_id !== undefined && patch.parent_id !== page.parent_id && this.server.hasPlainReaders(id)) {
       this.server.cleanReset({ pageId: id });
