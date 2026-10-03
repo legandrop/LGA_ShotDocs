@@ -1,7 +1,7 @@
 # Deshacer en el orden en que editaste (P.26)
 
 **Estado: entregas 0 (v0.132: el límite de Yjs, arreglado con un parche; sección 16), 1 (v0.140: la línea de tiempo
-con las páginas; sección 17) y 2 (v0.0XX: el reemplazo adentro; sección 18) hechas; 3 en diseño.** Pedido de Lega
+con las páginas; sección 17) y 2 (v0.144: el reemplazo adentro; sección 18) hechas; 3 en diseño.** Pedido de Lega
 del 2026-10-02, al responder cómo se deshace un reemplazo en todo el proyecto (una pregunta de su lista de decisiones;
 no es la D-10 de `Doc_Decisiones.md`). Se diseñó contra `main` v0.123
 y se revisó contra v0.125. Las decisiones (DH1 a DH10, sección 11) son propuestas con la recomendación elegida: el
@@ -542,7 +542,7 @@ otra sesión (medido).
    *B* y en *A*; desde *C*, tres ⌘Z deshacen *A*, *B* y *A* en ese orden, cada uno con su página en pantalla, y tres ⌘⇧Z
    lo vuelven; con otro dispositivo escribiendo en *A* a la vez, lo suyo queda; **la memoria medida con el editor real**
    (en Chromium y en el iPhone) con 20 páginas retenidas, para fijar el tope.
-2. **Hecha (v0.0XX, sección 18): el reemplazo adentro.** La pila de Yjs en las páginas con historia, las anclas en las demás, `planRedo`, los avisos
+2. **Hecha (v0.144, sección 18): el reemplazo adentro.** La pila de Yjs en las páginas con historia, las anclas en las demás, `planRedo`, los avisos
    con *Redo*, DH9 y DH10. **Aceptación:** el ejemplo de Lega (3.5) en Chromium con 50 páginas: dos ⌘Z dejan las 50 como
    antes y lo escrito antes del reemplazo sale exacto (sin el "cámara" que queda hoy); ⌘⇧Z lo vuelve; sin red, igual.
 3. **Anotar como un paso.** Lo de una vez en el anotador como un paso al cerrarlo (es algo que hiciste en la página;
@@ -783,7 +783,7 @@ semillas en la suite, `TIMELINE_SEEDS` para más) y las de atajos (`shortcuts.te
   en el navegador, sin prueba en la suite) y esperar a que el editor sea editable (A9). **Hechas con la entrega 2**
   (`undoTimeline.test.ts`; cada una falla con su mutante).
 
-## 18. Entrega 2: cómo quedó (v0.0XX)
+## 18. Entrega 2: cómo quedó (v0.144)
 
 ### 18.1 Qué se hizo
 
@@ -858,6 +858,8 @@ semillas en la suite, `TIMELINE_SEEDS` para más) y las de atajos (`shortcuts.te
   en vez de "Toma 1: ". Es el resto de D167 en ese rincón: texto de más, nada de menos. Causa: el paso de esa página
   sale de la pila al pasar el reemplazo a rehacer (18.2). Arreglarlo pide que un reemplazo quede a la vez para rehacer
   (las páginas hechas) y para deshacer (las que faltan): mediano, al roadmap.
+- Una prueba de la ventana de O4 (re-verificación): la marca de «algo nuevo en el medio» se toma antes del primer `await`; un
+  mutante que la toma después sobrevive. El código está bien; falta la prueba.
 - La memoria en el iPhone (entrega 1) y el gesto de deshacer de iOS en la PWA instalada.
 - Entrega 3 (anotar como un paso).
 

@@ -529,7 +529,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   lo escrito antes, también desde el *Undo* del panel) y por las anclas en las demás; ⌘⇧Z rehace todo, también el
   reemplazo. Dura lo que la pestaña; nada cambia en lo guardado. Entregas: 0 (hecha, v0.132: B.21), 1 (**hecha,
   v0.140**: la línea de tiempo con las páginas; la memoria medida en Chromium con el editor real, unos 19 MB con 20
-  páginas de 115 KB retenidas; falta medirla en el iPhone; `Doc_Deshacer.md`, sección 17), 2 (**hecha, v0.0XX**: el
+  páginas de 115 KB retenidas; falta medirla en el iPhone; `Doc_Deshacer.md`, sección 17), 2 (**hecha, v0.144**: el
   reemplazo adentro, ⌘Z y ⌘⇧Z en todas sus páginas, `planRedo`, el *Undo* del panel fuera de orden, C1, y DH9; con las
   pruebas de A5, A7 y A9 de la entrega 1; sección 18), 3 (anotar como un paso). Pendientes chicos: *Show* en el aviso de
   ⌘Z de un reemplazo con páginas cambiadas (18.4); una página con historia que estaba en la papelera durante el ⌘Z de

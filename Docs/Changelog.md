@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.144 :
 
 Deshacer en orden (P.26), entrega 2. El reemplazo en todo el proyecto no estaba en ⌘Z: solo se deshacía con *Undo*
 del aviso o del panel, sin rehacer, y deshacer después lo escrito antes dejaba texto de más ("Toma 1: cámara" en vez de
