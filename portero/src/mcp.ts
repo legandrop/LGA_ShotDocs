@@ -15,7 +15,6 @@
 //   llegan en M1; mientras tanto responden que la base no está lista). Las de escritura no están (M2).
 // - Lo necesario para confirmar con *elicitation* sin estado (MRTR, 2026-07-28): un `requestState` firmado, atado a la
 //   persona, al cliente, a la herramienta y a sus argumentos, que vence (`sealState`/`openState`).
-import { buildDoc, pageToMarkdown } from './mcpPage';
 
 export const MODERN_VERSION = '2026-07-28';
 export const LEGACY_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26'];
@@ -451,6 +450,19 @@ export async function handleMcp(req: Request, env: McpEnv, deps: McpDeps): Promi
   const modernVersion = meta['io.modelcontextprotocol/protocolVersion'];
   const modern = typeof modernVersion === 'string' && method !== 'initialize';
 
+  // Para la prueba con clientes reales (M0): qué versión hablan y si declaran que saben preguntarle a la persona. Sin
+  // tokens, personas ni contenido.
+  const info = (modern ? meta['io.modelcontextprotocol/clientInfo'] : params.clientInfo) as { name?: unknown; version?: unknown } | undefined;
+  const legacyCaps = method === 'initialize' ? (params.capabilities as Record<string, unknown> | undefined) : undefined;
+  console.log(
+    'mcp:',
+    JSON.stringify({
+      metodo: method,
+      version: modern ? modernVersion : method === 'initialize' ? params.protocolVersion : req.headers.get('MCP-Protocol-Version'),
+      cliente: info ? `${String(info.name ?? '').slice(0, 60)} ${String(info.version ?? '').slice(0, 20)}` : null,
+      elicitation: modern ? declaresElicitation(params) : legacyCaps ? 'elicitation' in legacyCaps : null,
+    }),
+  );
   try {
     if (modern) checkModernHeaders(req, method, params, modernVersion as string);
     else checkLegacyHeader(req, method);
@@ -598,6 +610,9 @@ async function readPage(ctx: Ctx, user: McpUser, args: Record<string, unknown>):
   if (pulled.too_large || pulled.bytes > max) {
     return toolText("This page is too large for the assistant connection on this workspace's plan.", true);
   }
+  // Yjs se carga recién acá (el empaquetador lo deja para el primer uso): con el MCP apagado, o en un pedido que no lee
+  // páginas, el portero no evalúa Yjs.
+  const { buildDoc, pageToMarkdown } = await import('./mcpPage');
   const { markdown: raw, blocks } = pageToMarkdown(buildDoc(pulled.updates ?? []));
   // Que el texto de una página no pueda cerrar el envoltorio y hacerse pasar por algo de afuera.
   const markdown = raw.replace(/<(\/?)page_content/gi, '&lt;$1page_content');

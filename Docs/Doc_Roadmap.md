@@ -467,8 +467,14 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   (sin aplicar; la aplica quien publica). **A2 implementada (v0.126):** *Summarize page* (*Insert at top* / *Insert
   below*), *Translate page* (*Replace page content* en su lugar o *Create translated subpage*), *Format as…* (viñetas,
   casillas, tabla, títulos) y la política del workspace en *Assistant…* para dueño y admins, con su migración
-  `20261017120000_asistente_politica_ventana.sql` (sin aplicar). Falta: A3 y el MCP (M0 a M3); lo que Lega prueba con
-  sus claves está en "Cómo quedó A1" y "Cómo quedó A2". Quedó de A2 (chico): la política no se actualiza en vivo en un
+  `20261017120000_asistente_politica_ventana.sql` (sin aplicar). **M0 hecha en lo que no necesita infraestructura real
+  (v0.138):** el MCP en el portero detrás de `MCP_M0` (apagado), el token de un asistente rechazado en las demás rutas,
+  la especificación 2026-07-28 (la *elicitation* sin estado, por MRTR), el servidor OAuth de Supabase (no respeta
+  `resource`; fallas abiertas `#2820` y `#2703` que pegan en los clientes MCP), la API de Auth (con la configuración de
+  hoy, el token de un tercero podría ponerle una contraseña a la cuenta: se cierra con dos ajustes), el plan B probado
+  en SQL de solo lectura y la CPU con páginas reales (en el plan gratis entran listar, buscar y leer páginas de hasta
+  ~16 KB). Faltan los ocho pasos con Supabase y Cloudflare reales ("Cómo quedó M0"), después M1 a M3 y A3; lo que Lega
+  prueba con sus claves está en "Cómo quedó A1" y "Cómo quedó A2". Quedó de A2 (chico): la política no se actualiza en vivo en un
   panel ya abierto (se lee al abrirlo); *Format as…* no conserva los colores de un bloque al que le cambia el texto, y
   cuando junta varios bloques en menos (renglones a una tabla) los comentarios de los que sobran quedan sin bloque;
   *Format as… Headings* sobre un bloque Script le saca el Script sin decirlo en la vista previa. Quedó de la auditoría de A1 (chico): la barra de formato de BlockNote se dibuja encima del panel

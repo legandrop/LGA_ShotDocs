@@ -297,6 +297,12 @@ verdad el registro de ese proyecto). Sin la variable, cualquier `test` responde 
 - **Apagarlos al terminar:** borrar la variable `TEST_MODES` (o dejarla vacía) y guardar. Como `keep_vars` está
   prendido, publicar el portero no la toca: hay que sacarla a mano.
 
+**El servidor MCP (prueba técnica M0, v0.138; `Doc_Asistente.md`, "Cómo quedó M0"):** `/mcp` y
+`/.well-known/oauth-protected-resource` atienden solo con la variable `MCP_M0=1` (texto) en el Worker; sin ella, esas
+rutas responden como cualquier otra sin sesión. `MCP_MAX_PAGE_KB` (opcional, de fábrica 16) es el tope de página que
+lee. Se prende y se apaga como `TEST_MODES`. **Siempre**, con o sin la variable: un token del servidor OAuth de Supabase
+(con `client_id`, el de un asistente conectado) en cualquier otra ruta responde `403 assistant_token`.
+
 La app manda partes de 8 MiB (`PART_BYTES` en `src/media/portero.ts`); el portero acepta hasta 64 MiB por
 parte (`MAX_CHUNK`) y rechaza la que no coincide con la subida. El permiso para subir se mira al abrir la
 subida, no en cada parte (una subida dura minutos); al terminar, la base lo vuelve a mirar en
