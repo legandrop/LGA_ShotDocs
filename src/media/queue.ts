@@ -447,9 +447,13 @@ export class MediaQueue {
   /**
    * La cola dejó de subir archivos porque el portero o Storage no contestan para nadie (ver `round`): hasta
    * `until` no se vuelve a probar, y cada vez que vuelve a pasar se espera más (`count`). Vuelve a cero cuando un
-   * archivo termina de subir o con "Retry". Solo en memoria: al recargar se prueba enseguida.
+   * archivo termina de subir o con "Retry". Solo en memoria: al recargar se prueba enseguida. `storage`: alguna de
+   * las trabadas fue una miniatura (Storage no contestó); si no, mientras espera se siguen subiendo las miniaturas
+   * (ver `prepareWhilePaused`).
    */
-  private stallPause: { until: number; count: number } | null = null;
+  private stallPause: { until: number; count: number; storage?: boolean } | null = null;
+  /** La última vez que `process` devolvió `stalled`, si fue por la miniatura (Storage) y no por el portero. */
+  private lastStallWasThumb = false;
   private again = false;
   private stopped = false;
   private controller: AbortController | null = null;
@@ -1221,6 +1225,8 @@ export class MediaQueue {
     );
     // Archivos distintos seguidos que se trabaron sin avanzar en esta vuelta (portero o miniatura a Storage).
     let stalled = 0;
+    // De esas, cuántas fueron una miniatura (Storage).
+    let thumbStalls = 0;
     for (const record of this.uploadsPaused() ? [] : records) {
       if (this.stopped) return;
       if (record.blocked || record.retryAt > this.now() || skipPage(record.pageId)) continue;
@@ -1230,9 +1236,11 @@ export class MediaQueue {
       if (outcome === 'neutral') continue;
       if (outcome !== 'stalled') {
         stalled = 0;
+        thumbStalls = 0;
         if (outcome === 'done') this.stallPause = null;
         continue;
       }
+      if (this.lastStallWasThumb) thumbStalls++;
       // Con el portero o Storage colgados para todos, cada archivo esperaría su tope entero (un minuto o más) y
       // una vuelta por 2300 archivos duraría horas sin subir nada. A la segunda trabada seguida se deja de subir,
       // como sin conexión, y se espera antes de volver a probar (10 s, 20 s… hasta 10 minutos). Los archivos que
@@ -1240,9 +1248,15 @@ export class MediaQueue {
       // salen igual en esta vuelta.
       if (++stalled >= STALLS_TO_CLOSE_ROUND) {
         const count = (this.stallPause?.count ?? 0) + 1;
-        this.stallPause = { until: this.now() + backoff(count), count };
+        this.stallPause = { until: this.now() + backoff(count), count, storage: thumbStalls > 0 };
         break;
       }
+    }
+    // Mientras se espera al portero, lo que no le pide nada sigue: registrar los archivos nuevos y subir sus
+    // miniaturas (los otros dispositivos ya los ven, con su miniatura). Sin red o con la app vieja, corta.
+    if (this.uploadsPaused()) {
+      const cut = await this.prepareWhilePaused(records, portero, skipPage);
+      if (cut) return;
     }
     // Primero los usos nuevos y después los que se quitaron: un archivo que se cortó de una página y se pegó
     // en otra no pasa por la papelera en el medio.
@@ -1318,6 +1332,34 @@ export class MediaQueue {
     }
   }
 
+  /**
+   * Con la cola esperando al portero (`stallPause`), registra los archivos que todavía no están en la base y sube sus
+   * miniaturas, sin pedirle nada al portero: es lo mismo que `process` hace antes de mandar el original, y queda
+   * hecho para cuando el portero vuelva. Las miniaturas, solo si la espera no fue por Storage (y si una se traba acá,
+   * se sigue solo registrando). Devuelve `true` si hay que cortar la vuelta (sin red, la app vieja, se paró).
+   */
+  private async prepareWhilePaused(
+    records: MediaRecord[],
+    portero: MediaPortero,
+    skipPage: (pageId: string) => boolean,
+  ): Promise<boolean> {
+    for (const listed of records) {
+      if (this.stopped) return true;
+      // Lo ya registrado y con su miniatura no se vuelve a leer (lo de la lista solo puede estar atrasado).
+      if (listed.registered && !(listed.thumb === 'local' && !this.stallPause?.storage)) continue;
+      // Lo leído al empezar la vuelta pudo cambiar en ella (se registró, se subió): se lee de nuevo.
+      const record = await this.store.get('files', listed.id);
+      if (!record || !record.pending || record.blocked || record.retryAt > this.now() || skipPage(record.pageId)) continue;
+      const thumbs = !this.stallPause?.storage;
+      if (record.registered && !(thumbs && record.thumb === 'local')) continue;
+      const outcome = await this.process(record, portero, { beforeOriginal: true, thumbs });
+      if (outcome === 'offline' || outcome === 'cancelled' || outcome === 'outdated') return true;
+      // La miniatura se trabó: Storage tampoco contesta. Lo que queda, solo se registra.
+      if (outcome === 'stalled' && this.stallPause) this.stallPause.storage = true;
+    }
+    return false;
+  }
+
   /** La cola espera antes de volver a probar el portero y Storage (ver `stallPause`). */
   private uploadsPaused(): boolean {
     if (!this.stallPause) return false;
@@ -1339,7 +1381,11 @@ export class MediaQueue {
    * Sube un archivo. `stalled`: se trabó (el portero o Storage dejaron de moverse) sin que la subida avanzara en
    * este intento; quedó anotado como cualquier error que se arregla solo, y la vuelta lo cuenta (ver `round`).
    */
-  private async process(start: MediaRecord, portero: MediaPortero): Promise<Outcome | 'done' | 'stalled' | 'neutral'> {
+  private async process(
+    start: MediaRecord,
+    portero: MediaPortero,
+    only: { beforeOriginal?: boolean; thumbs?: boolean } = {},
+  ): Promise<Outcome | 'done' | 'stalled' | 'neutral'> {
     let record = start;
     // Lo que el progreso guarda (la subida para retomar) va en orden, antes del resultado final.
     let saving: Promise<unknown> = Promise.resolve();
@@ -1415,7 +1461,8 @@ export class MediaQueue {
         // Registrada: lista. No habló con el portero ni con Storage (no dice si andan).
         return 'neutral';
       }
-      if (record.thumb === 'local') {
+      // `only.thumbs === false`: la cola espera porque Storage no contesta (ver `prepareWhilePaused`).
+      if (record.thumb === 'local' && only.thumbs !== false) {
         const thumb = await this.store.get('thumbs', record.id);
         try {
           if (thumb) {
@@ -1434,6 +1481,9 @@ export class MediaQueue {
           record = await this.patch(record.id, { thumb: 'none', thumbError: friendly(err), ...(record.thumbStalls ? { thumbStalls: 0 } : {}) });
         }
       }
+
+      // Mientras la cola espera al portero, hasta acá (registrado y con su miniatura): el original, cuando vuelva.
+      if (only.beforeOriginal) return 'neutral';
 
       let blob: Blob | undefined = await this.store.get('blobs', record.id);
       if (!blob && record.freedAt) {
@@ -1591,7 +1641,10 @@ export class MediaQueue {
       // Se trabó sin avanzar (el portero o Storage no se movieron): la vuelta lo cuenta para dejar de subir si
       // les pasa lo mismo a los siguientes. Si avanzó, el servidor anda (despacio): no cuenta.
       const stuck = thumbStalled || (err instanceof UploadError && err.stalled);
-      if (stuck && !advanced && outcome === 'retry') return 'stalled';
+      if (stuck && !advanced && outcome === 'retry') {
+        this.lastStallWasThumb = thumbStalled;
+        return 'stalled';
+      }
       return outcome === 'waiting' ? 'retry' : outcome;
     }
   }

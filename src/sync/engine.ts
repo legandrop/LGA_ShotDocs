@@ -278,6 +278,7 @@ export class SyncEngine {
     // Volvió la red: la cola de archivos deja de esperar al portero o a Storage y prueba enseguida.
     const onOnline = () => {
       this.options.media?.networkBack();
+      this.files.networkBack();
       onWake();
     };
     if (typeof window !== 'undefined') {
@@ -475,7 +476,10 @@ export class SyncEngine {
       halt();
       // La base contestó después de un ciclo sin conexión: la cola de archivos deja de esperar (si estaba
       // esperando porque el portero o Storage no contestaban, puede que fuera la red) y prueba enseguida.
-      if (!this.status.online) this.options.media?.networkBack();
+      if (!this.status.online) {
+        this.options.media?.networkBack();
+        this.files.networkBack();
+      }
       // Si la base dice que sacaron a la persona, no se sube ni se baja nada más: lo del dispositivo queda
       // como está hasta que ella elija qué hacer (pantalla "You no longer have access").
       if (removed) {

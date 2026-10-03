@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   FILE_DOWNLOAD_TIMEOUT_MS,
+  FILE_IDLE_MS,
   MAX_REQUEST_TIMEOUT_MS,
   REQUEST_TIMEOUT_MS,
   storageTimeout,
@@ -333,13 +334,66 @@ describe('tope de tiempo de las imágenes de `page-files` (un workspace sin port
     expect(isTimeout(upDone?.error)).toBe(true);
     expect(isNetworkError(upDone?.error)).toBe(true);
 
-    // La bajada no sabe cuánto llega: el tope de la más pesada que acepta el bucket (25 MB).
+    // La bajada no sabe cuánto llega: su tope total es el de la más pesada que acepta el bucket (25 MB, 27 minutos),
+    // pero sin que llegue nada se corta a los 30 s (antes esperaba los 27 minutos aunque la imagen fuera chica).
     expect(FILE_DOWNLOAD_TIMEOUT_MS).toBe(storageTimeout(MAX_FILE_BYTES));
     const down = remote.downloadFile('page/x.png');
-    expect(await after(down, FILE_DOWNLOAD_TIMEOUT_MS - 1000)).toBeNull();
+    expect(await after(down, FILE_IDLE_MS - 1000)).toBeNull();
     const downDone = await after(down, 2000);
     expect(aborted).toBe(2);
     expect(isTimeout(downDone?.error)).toBe(true);
+    expect(isNetworkError(downDone?.error)).toBe(true);
+  });
+
+  /** Una respuesta de Storage que manda `chunks` pedazos, uno cada `every` ms, y después se queda quieta o termina. */
+  function trickle(chunks: number, every: number, end: boolean): { fetch: typeof fetch; aborted: () => number } {
+    let aborted = 0;
+    const fetcher = ((_input: RequestInfo | URL, init?: RequestInit) => {
+      init?.signal?.addEventListener('abort', () => aborted++);
+      let sent = 0;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          init?.signal?.addEventListener('abort', () => {
+            clearTimeout(timer);
+            controller.error(init.signal!.reason ?? new DOMException('aborted', 'AbortError'));
+          });
+          const next = () => {
+            if (sent === chunks) {
+              if (end) controller.close();
+              return;
+            }
+            controller.enqueue(new Uint8Array([sent++]));
+            timer = setTimeout(next, every);
+          };
+          timer = setTimeout(next, every);
+        },
+      });
+      return Promise.resolve(new Response(body, { status: 200, headers: { 'Content-Type': 'image/png' } }));
+    }) as typeof fetch;
+    return { fetch: fetcher, aborted: () => aborted };
+  }
+
+  it('bajar: una imagen lenta que sigue llegando no se corta, aunque tarde más que el tope sin movimiento', async () => {
+    // 8 pedazos, uno cada 20 s, y el final 20 s después: 180 s en total, seis veces FILE_IDLE_MS.
+    const slow = trickle(8, 20_000, true);
+    const remote = remoteWith(slow.fetch);
+    const down = remote.downloadFile('page/x.png');
+    const done = await after(down, 9 * 20_000 + 1000);
+    expect(done?.error).toBeUndefined();
+    expect((done?.value as Blob).size).toBe(8);
+    expect(slow.aborted()).toBe(0);
+  });
+
+  it('bajar: una imagen que deja de llegar a mitad se corta a los 30 s del último pedazo', async () => {
+    const stuck = trickle(3, 5_000, false);
+    const remote = remoteWith(stuck.fetch);
+    const down = remote.downloadFile('page/x.png');
+    // El último pedazo llega a los 15 s: hasta los 45 s sigue esperando.
+    expect(await after(down, 15_000 + FILE_IDLE_MS - 1000)).toBeNull();
+    const done = await after(down, 2000);
+    expect(isTimeout(done?.error)).toBe(true);
+    expect(stuck.aborted()).toBe(1);
   });
 
   it('una imagen grande en una red lenta no se corta: el tope no tiene el techo de las consultas', async () => {
@@ -417,11 +471,100 @@ describe('tope de tiempo de las imágenes de `page-files` (un workspace sin port
     // Primera pasada: las dos primeras vencen y la pasada termina sin probar la tercera.
     await d.files.pushPending(() => false);
     expect(tried).toEqual(order.slice(0, 2));
-    // Segunda: la tercera va primero y sube.
+    // Segunda (pasada la espera que dejó la primera; acá, como si volviera la red): la tercera va primero y sube.
+    d.files.networkBack();
     tried.length = 0;
     await d.files.pushPending(() => false);
     expect(tried[0]).toBe(order[2]);
     expect(server.files.has(order[2])).toBe(true);
+  });
+});
+
+describe('page-files con Storage colgado para todas: las pasadas siguientes esperan', () => {
+  it('después de cortar una pasada, las siguientes no prueban hasta la espera (10 s, 20 s…); subir una la vuelve a cero', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const server = new FakeServer();
+    const d = await makeDevice(server);
+    devices.push(d);
+    const page = await d.tree.create(null, 'Día 1');
+    await d.engine.syncNow();
+    const png = (n: number) => new File([new Uint8Array([n, 1, 2, 3])], `${n}.png`, { type: 'image/png' });
+    for (const n of [1, 2, 3]) await d.files.add(page, png(n));
+    let hung = true;
+    let tried = 0;
+    const upload = d.remote.uploadFile.bind(d.remote);
+    d.remote.uploadFile = async (path, data, mime) => {
+      tried++;
+      if (hung) throw new RemoteError(REQUEST_TIMEOUT, false, REQUEST_TIMEOUT, true);
+      return upload(path, data, mime);
+    };
+    // Primera pasada: dos seguidas vencen y se corta.
+    expect(await d.files.pushPending(() => false)).toBe(REQUEST_TIMEOUT);
+    expect(tried).toBe(2);
+    // Enseguida (otro ciclo del motor): no prueba nada, y el error sigue a la vista.
+    expect(await d.files.pushPending(() => false)).toBe(REQUEST_TIMEOUT);
+    expect(tried).toBe(2);
+    // Pasados 10 s vuelve a probar; sigue colgado: la próxima espera es de 20 s.
+    vi.setSystemTime(Date.now() + 10_001);
+    await d.files.pushPending(() => false);
+    expect(tried).toBe(4);
+    vi.setSystemTime(Date.now() + 10_001);
+    await d.files.pushPending(() => false);
+    expect(tried).toBe(4);
+    // Volvió la red: prueba enseguida.
+    d.files.networkBack();
+    await d.files.pushPending(() => false);
+    expect(tried).toBe(6);
+    // Una imagen nueva acorta la espera a la más corta (10 s), no a cero.
+    await d.files.add(page, png(4));
+    await d.files.pushPending(() => false);
+    expect(tried).toBe(6);
+    vi.setSystemTime(Date.now() + 10_001);
+    // Storage volvió: suben todas y la cuenta vuelve a cero.
+    hung = false;
+    expect(await d.files.pushPending(() => false)).toBeNull();
+    expect(await d.files.pendingCount()).toBe(0);
+    expect(server.files.size).toBeGreaterThanOrEqual(4);
+  });
+});
+
+describe('page-files: el motor le avisa cuando vuelve la red', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('con el evento online del navegador', async () => {
+    const server = new FakeServer();
+    const d = await makeDevice(server);
+    // Como en el navegador: el motor escucha "online" en window (en las pruebas no hay window).
+    const win = new EventTarget();
+    vi.stubGlobal('window', win);
+    vi.stubGlobal('document', Object.assign(new EventTarget(), { visibilityState: 'hidden' }));
+    const back = vi.spyOn(d.files, 'networkBack');
+    d.engine.start();
+    win.dispatchEvent(new Event('online'));
+    expect(back).toHaveBeenCalledTimes(1);
+    // Se para con window todavía puesto (sus avisos se sacan de window).
+    d.engine.stop();
+    d.db.close();
+  });
+
+  it('cuando la base contesta después de un ciclo sin conexión', async () => {
+    const server = new FakeServer();
+    const d = await makeDevice(server);
+    devices.push(d);
+    await d.engine.syncNow();
+    const back = vi.spyOn(d.files, 'networkBack');
+    server.online = false;
+    await d.engine.syncNow();
+    expect(d.engine.getStatus().online).toBe(false);
+    expect(back).not.toHaveBeenCalled();
+    server.online = true;
+    await d.engine.syncNow();
+    expect(back).toHaveBeenCalledTimes(1);
+    // Con red de corrido, no se vuelve a avisar.
+    await d.engine.syncNow();
+    expect(back).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.142 :
+
+Carpetas, entrega 3, y subidas que se traban (P.9, B.11). Con el portero colgado, cada archivo de una carpeta gastaba
+sus 5 intentos y quedaba con error: ahora una trabada no gasta intentos y, a la segunda, la cola de la carpeta espera
+(10 s, 20 s… hasta 10 minutos), como la de los sueltos, que mientras espera registra los archivos nuevos y sube sus
+miniaturas. La bajada de `page-files` se corta a los 30 s sin recibir nada (antes, 27 minutos) y sus pasadas esperan
+tras cerrar por Storage colgado. En el portero, el 403 de Drive por límite de pedidos sale como `rate` (no «fuera del
+árbol»), la confianza de 60 s vale también en las páginas siguientes, el ZWJ va como escape y la marca de cada
+subcarpeta va en NFC, buscando también las anteriores; retomar compara rutas sin la forma de los acentos.
+[ Carpetas entrega 3 y subidas que se traban - la cola de una carpeta cierra la vuelta con el portero colgado, registrar y miniaturas mientras la cola espera, page-files con tope por quietud, 403 por límite como rate y marcas en NFC ]
+
 v0.141 :
 
 Exportar, entrega 3: volver a Shot Docs desde el zip. El zip guardaba lo necesario para volver, pero nada lo leía.
