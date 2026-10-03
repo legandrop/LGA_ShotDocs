@@ -967,7 +967,7 @@ adjunto y la de la carpeta (270 × 74 pt, el área de la tarjeta), el cuadro del
 En un perfil limpio, `/f/…#ws=` de un servidor desconocido mostró *Join a workspace?* con el host y **ningún pedido a ese
 Supabase** antes de confirmar; *Not now* volvió a `/`; un `#ws=` roto volvió a `/` con el aviso.
 
-## 17. Cómo quedó la entrega 2 (v0.0XX)
+## 17. Cómo quedó la entrega 2 (v0.166)
 
 | Pieza | Dónde |
 |---|---|

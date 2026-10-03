@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.166 :
 
 **Links del PDF, entrega 2: *Request access*.** Quien abría la dirección de un archivo sin permiso solo leía «pedíselo a
 quien te compartió el documento»: no había cómo pedirlo ni dónde verlo. Ahora la tabla `access_requests` (cerrada con

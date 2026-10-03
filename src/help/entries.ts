@@ -179,7 +179,7 @@ const CONTRAST = '0.161';
 /** Los links a los archivos en el PDF (P.30, Doc_Links_PDF.md, entrega 1): el número lo pone quien publica. */
 const FILE_LINKS = '0.164';
 /** *Request access* desde la dirección de un archivo (P.30, entrega 2): el número lo pone quien publica. */
-const ACCESS_REQUESTS = '0.0XX';
+const ACCESS_REQUESTS = '0.166';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
