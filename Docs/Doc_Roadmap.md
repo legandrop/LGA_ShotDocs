@@ -325,6 +325,9 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   Depende del interruptor de la privacidad de lo borrado (B.18) prendido en Wanka. Entregas: 0 (prueba de los headers y
   de la caché de miniaturas en la base real, y `noindex`), 1 (*Can view*), 2 (*Can edit*, con topes por bytes y la
   cuarentena de filas malas; se vuelve a auditar ese diseño antes de programarla), 3 (medir y ajustar los topes).
+  **Hecho (v0.0XX): la barrera de error alrededor de la página** (B3 del diseño de *Can edit*, requisito para prender
+  el link que edita): una página que hace tirar al editor muestra un aviso con el historial a mano y el resto de la app
+  sigue; la app entera, *Reload* en vez de blanco. Ver `Doc_Sincronizacion.md`, "Barreras de error".
 - **P.25 Sacar una foto o filmar desde la app** (Lega, 2026-10-01). **Hecho para la web (v0.110):** *Take photo* y
   *Record video* en el menú "/" y en el menú de la página, solo en el teléfono y la tableta (el video, con portero):
   abren la cámara con el selector del sistema y lo sacado entra en el renglón y sube por la cola de siempre; *Save to

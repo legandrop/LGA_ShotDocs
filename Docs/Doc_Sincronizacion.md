@@ -1251,6 +1251,39 @@ cuando Lega la tenga en sus dispositivos, subir `min_app_version` a 0.099 o más
 con el número provisional) y `src/sync/writeVersion.test.ts` falla si no coincide con la entrada del changelog que nombra la
 migración. No sube `schema_version`: la app no necesita saber si la base la tiene.
 
+## Barreras de error (v0.0XX)
+
+Hasta acá la única barrera de error de React era la de las partes que se bajan aparte (`lazyPart.tsx`, que solo explica
+lo que no bajó). Si el editor tiraba una excepción al dibujar una página (una forma que nadie previó, un bug), React
+desmontaba todo: la app quedaba en blanco. La auditoría del link *Can edit* (`Doc_Link_Publico.md`, B3) armó 3 filas
+que lo hacían: un `Y.Map` adentro de un párrafo (`text.toDelta is not a function`) y el `level` de un encabezado como
+objeto o `'x y'` (`"h[object Object]" is not a valid element local name`). Ahora hay tres (`src/ui/ErrorBarrier.tsx`):
+
+- **La de la página** (`PageBarrier`, en `PageView.tsx`, alrededor del editor): falla solo el cuerpo de la página; el
+  título, el árbol, la barra, *Share* y el resto siguen. En su lugar, *This page can't be shown right now*. Quien puede
+  ver el historial (`canSeeHistory`) tiene *Version history* y *Try again*; quien no (un visitante con link, un
+  invitado, quien solo ve), solo *Try again*. En la consola, una vez: `[barrera] La página <id> no se pudo mostrar`
+  con el error.
+- **La del workspace** (`WorkspaceBarrier`, en `Workspace.tsx`, debajo de los servicios): *Something went wrong* con
+  *Reload*. La base del dispositivo y la sincronización quedan vivas arriba, así lo pendiente sigue subiendo y la
+  pantalla dice cuántos cambios faltan (`usePendingCount`). Mientras se ve, pide confirmación al cerrar o recargar con
+  algo todavía sin guardar en IndexedDB (lo mismo que la app) y la recarga por versión nueva lo espera
+  (`watchPendingWrites`).
+- **La de la raíz** (`AppBarrier`, en `main.tsx`): lo mismo para lo que pase fuera de un workspace (entrar, la
+  bienvenida), sin contar nada (no hay servicios para leerlo sin riesgo).
+
+**Sin bucles:** ninguna vuelve a montar sola lo que acaba de tirar; solo *Try again*, restaurar una versión o cambiar de
+página (la de la página se reinicia con el id). **Nada se borra:** las barreras no tocan IndexedDB ni las colas; *Reload*
+es el de los avisos de siempre (`reloadByHand`, que pregunta si hay un comentario sin mandar).
+
+**Restaurar sin el editor.** Con el aviso a la vista, el historial restaura sobre el documento de la página
+(`restoreInDoc` de `historyRestore.ts`): la misma ida y vuelta que el editor (`versionNode`, con el esquema del editor
+que muestra la versión, que el historial pasa en `requestRestore`) y una transacción de Yjs que reemplaza el contenido
+por una copia de la versión con sus ids (los comentarios siguen anclados). Es una edición local más: se guarda, sube y
+el historial la muestra. No tiene **Undo** en el aviso (el editor que se monta después no la tiene en su pila); para
+volver atrás se restaura otra versión. La vista de una versión en el historial tiene su propia barrera: si la actual es
+la que rompe, se ve *This version can't be shown* y se elige otra. Pruebas: `src/ui/errorBarrier.test.tsx`.
+
 ## Volver después de mucho tiempo sin red
 
 El caso: alguien trabaja semanas sin red con una versión de la app (un rodaje) y mientras tanto se publican otras,
