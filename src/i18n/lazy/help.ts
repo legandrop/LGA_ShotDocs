@@ -594,7 +594,12 @@ export const help = {
   'help.prefs.title': { en: "Appearance", es: "Apariencia" },
   'help.prefs.text': {
     en: "In the account menu: light, dark or system theme, default or editorial typeface, text size and page width. They're saved in your account and follow you to every device.",
-    es: "En el menú de la cuenta: tema claro, oscuro o del sistema, letra común o editorial, tamaño del texto y ancho de la página. Se guardan en tu cuenta y te siguen a cada dispositivo.",
+    es: "En el menú de la cuenta: tema claro, oscuro o del sistema, fuente normal o editorial, tamaño del texto y ancho de la página. Se guardan en tu cuenta y te siguen a cada dispositivo.",
+  },
+  'help.contrast.title': { en: "Text contrast", es: "Contraste del texto" },
+  'help.contrast.text': {
+    en: "In the account menu, Contrast gives the page text three shades: headings the strongest, bold a little softer and the rest a little softer still. More contrast makes the steps clearer; No contrast shows everything in one shade. Text with a color you picked keeps its color. It applies to the page, to a version in the history and to the PDF (always in the light shades), and it follows you to every device.",
+    es: "En el menú de la cuenta, Contraste le da tres tonos al texto de la página: los encabezados, los más fuertes; la negrita, un poco más suave, y el resto, un poco más todavía. Más contraste marca más los pasos; Sin contraste muestra todo en un solo tono. El texto con un color elegido conserva su color. Vale en la página, en una versión del historial y en el PDF (siempre con los tonos claros), y te sigue a cada dispositivo.",
   },
   'help.language.title': { en: "Language", es: "Idioma" },
   'help.language.text': {

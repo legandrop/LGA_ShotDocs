@@ -119,7 +119,7 @@ describe('versiones viejas de la app', () => {
     // Primero se leyó la cuenta; gana el tema cambiado acá, el idioma sale de la cuenta.
     expect(state.reads).toBe(1);
     // La clave nueva que la cuenta todavía no tenía sube con su valor de fábrica.
-    expect(state.pushed).toEqual([{ ...OLD_KEYS, theme: 'dark', language: 'es', phoneImages: 'rows' }]);
+    expect(state.pushed).toEqual([{ ...OLD_KEYS, theme: 'dark', language: 'es', phoneImages: 'rows', contrast: 'contrast' }]);
     expect(prefs.get().language).toBe('es');
     expect(prefs.hasUnsynced()).toBe(false);
   });
@@ -133,7 +133,7 @@ describe('fotos en fila en el teléfono (phoneImages)', () => {
     await prefs.attach(client, USER);
     await flush();
     expect(prefs.get().phoneImages).toBe('stacked');
-    expect(state.pushed).toEqual([{ ...OLD_KEYS, theme: 'dark', language: 'es', phoneImages: 'stacked' }]);
+    expect(state.pushed).toEqual([{ ...OLD_KEYS, theme: 'dark', language: 'es', phoneImages: 'stacked', contrast: 'contrast' }]);
   });
 
   it('un valor desconocido queda en el de fábrica (en fila)', async () => {
@@ -157,8 +157,8 @@ describe('un cambio antes de leer la cuenta', () => {
     fake.open();
     await attaching;
     await flush();
-    expect(prefs.get()).toEqual({ ...account, language: 'es', phoneImages: 'rows' });
-    expect(fake.state.pushed).toEqual([{ ...account, language: 'es', phoneImages: 'rows' }]);
+    expect(prefs.get()).toEqual({ ...account, language: 'es', phoneImages: 'rows', contrast: 'contrast' });
+    expect(fake.state.pushed).toEqual([{ ...account, language: 'es', phoneImages: 'rows', contrast: 'contrast' }]);
     expect(prefs.hasUnsynced()).toBe(false);
   });
 
@@ -176,7 +176,41 @@ describe('un cambio antes de leer la cuenta', () => {
     window.dispatchEvent(new Event('online'));
     await flush();
     await flush();
-    expect(fake.state.pushed).toEqual([{ ...account, theme: 'light', phoneImages: 'rows' }]);
-    expect(prefs.get()).toEqual({ ...account, theme: 'light', phoneImages: 'rows' });
+    expect(fake.state.pushed).toEqual([{ ...account, theme: 'light', phoneImages: 'rows', contrast: 'contrast' }]);
+    expect(prefs.get()).toEqual({ ...account, theme: 'light', phoneImages: 'rows', contrast: 'contrast' });
+  });
+});
+
+describe('contraste del texto (contrast)', () => {
+  it('de fábrica es Contrast, y un valor desconocido vuelve a Contrast', async () => {
+    const { cleanPrefs, DEFAULT_PREFS } = await import('./prefs');
+    expect(DEFAULT_PREFS.contrast).toBe('contrast');
+    expect(cleanPrefs({}).contrast).toBe('contrast');
+    expect(cleanPrefs({ contrast: 'max' }).contrast).toBe('contrast');
+    expect(cleanPrefs({ contrast: 'none' }).contrast).toBe('none');
+    expect(cleanPrefs({ contrast: 'more' }).contrast).toBe('more');
+  });
+
+  it('se guarda en el dispositivo, sube a la cuenta y marca el documento (data-contrast)', async () => {
+    const prefs = await store();
+    const { client, state } = fakeClient({ ...OLD_KEYS, language: 'en' } as Partial<Prefs>);
+    await prefs.attach(client, USER);
+    expect(prefs.get().contrast).toBe('contrast');
+    prefs.set({ contrast: 'more' });
+    await flush();
+    expect(document.documentElement.dataset.contrast).toBe('more');
+    expect(JSON.parse(localStorage.getItem('shotdocs-prefs')!).prefs.contrast).toBe('more');
+    expect(state.pushed.at(-1)).toMatchObject({ contrast: 'more' });
+    // Una carga nueva de la app arranca con lo guardado, sin red.
+    const again = await store();
+    expect(again.get().contrast).toBe('more');
+  });
+
+  it('una cuenta borrada por una versión vieja (sin la clave) no le cambia el contraste a este dispositivo', async () => {
+    localStorage.setItem('shotdocs-prefs', JSON.stringify({ userId: USER, prefs: { ...OLD_KEYS, language: 'es', contrast: 'none' }, dirty: false }));
+    const prefs = await store();
+    const { client } = fakeClient({ ...OLD_KEYS, language: 'es' } as Partial<Prefs>);
+    await prefs.attach(client, USER);
+    expect(prefs.get().contrast).toBe('none');
   });
 });

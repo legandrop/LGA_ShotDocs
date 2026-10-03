@@ -170,6 +170,8 @@ const UNDO_ORDER = '0.152';
 const TITLE_LONG = '0.152';
 /** "Mostrame" y las novedades (Doc_Tutorial.md, entrega 3): el número lo pone quien publica. */
 const HELP_3 = '0.158';
+/** El contraste del texto (Docs/Doc_Contraste.md). */
+const CONTRAST = '0.0XX';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -880,6 +882,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
 
   // --- Preferencias ---
   { id: 'prefs', section: 'prefs', title: 'help.prefs.title', text: 'help.prefs.text', since: BEFORE_HELP },
+  {
+    id: 'contrast',
+    section: 'prefs',
+    title: 'help.contrast.title',
+    text: 'help.contrast.text',
+    words: ['contraste', 'contrast', 'negrita', 'bold', 'encabezado', 'heading', 'gris', 'gray', 'grey', 'tono', 'legible', 'readable', 'pdf'],
+    since: CONTRAST,
+  },
   { id: 'language', section: 'prefs', title: 'help.language.title', text: 'help.language.text', since: BEFORE_HELP },
 
   // --- Atajos (la tabla entera va abajo de esta entrada) ---
