@@ -490,7 +490,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   botón en el 401, la clave de *Voice* en el mismo sobre y las notas de voz en la ventana de salir. Falta medir en el
   iPhone y el gestor de contraseñas real (recorrido de Lega). Quedó de la auditoría de S2 (improbable): *Change
   passphrase…* no rechaza una copia más vieja repuesta con la misma generación que el dispositivo conoce; al recifrarla le
-  da un `savedAt` nuevo y los otros dispositivos la aceptarían (es una clave vieja de la persona, no filtra nada). Falta una prueba de `clearVoiceFromCopy` (el mutante que no la llama sobrevive: tras *Forget voice key*, la próxima copia volvería a poner su *Voice* sin preguntar; no se pierde ninguna clave propia). **A3 implementada (v0.0XX):** *Suggest caption* en la barra de la foto y en el panel, con el aviso
+  da un `savedAt` nuevo y los otros dispositivos la aceptarían (es una clave vieja de la persona, no filtra nada). Falta una prueba de `clearVoiceFromCopy` (el mutante que no la llama sobrevive: tras *Forget voice key*, la próxima copia volvería a poner su *Voice* sin preguntar; no se pierde ninguna clave propia). **A3 implementada (v0.146):** *Suggest caption* en la barra de la foto y en el panel, con el aviso
   antes de mandarla, la foto rearmada en el dispositivo a 1024 px sin EXIF, la vista previa que se retoca y el pie como
   texto debajo de la foto (en una celda, en la misma celda); ver "Cómo quedó A3". Quedó de A3 (chico): el texto
   alternativo no se hace (la app no tiene dónde guardarlo); una foto que no es del Drive (`https` de afuera) puede no

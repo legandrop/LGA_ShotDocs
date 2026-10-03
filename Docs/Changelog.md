@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.146 :
 
 **Asistente, entrega A3: *Suggest caption*** (P.24): el asistente no miraba fotos. Ahora la barra de una foto (en
 línea, en una celda o foto-bloque) y el panel suman *Suggest caption*: primero pregunta *Send this photo to

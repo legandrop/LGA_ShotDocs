@@ -1,6 +1,6 @@
 # Asistente con la clave de cada usuario y servidor MCP (fase 5)
 
-**Estado: entregas A1 (v0.118), A2 (v0.126) y A3 (v0.0XX) implementadas (ver "Cómo quedó A1", "Cómo quedó A2" y
+**Estado: entregas A1 (v0.118), A2 (v0.126) y A3 (v0.146) implementadas (ver "Cómo quedó A1", "Cómo quedó A2" y
 "Cómo quedó A3" al final; la migración de A2, sin aplicar); la clave sincronizada (D72 → B, `Doc_Clave_Sincronizada.md`),
 entregas S1 (v0.138) y S2 (v0.143) implementadas; la prueba técnica M0 del MCP hecha en lo que no necesita infraestructura real (v0.145:
 el MCP en el portero detrás de un interruptor apagado, lo comprobado y medido, y los pasos que faltan; ver "Cómo quedó
@@ -1349,7 +1349,7 @@ Mutantes después de la ronda: 31 de 31 mueren (los 23 de antes y 8 nuevos de B1
 - Lega, con sus claves: la prueba de aceptación de A2 (sección 14) con una página de rodaje real, en la compu y en el
   iPhone, y la ventana de la política con la migración aplicada.
 
-## Cómo quedó A3 (v0.0XX)
+## Cómo quedó A3 (v0.146)
 
 Implementada en `src/assistant/` (la misma parte que se baja al abrir el panel: pasa de 40 a 52 KB sin comprimir, 3,4 KB más
 comprimida; el paquete principal, 0,25 KB más) y en la
