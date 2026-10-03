@@ -5,8 +5,11 @@
 // con la celda cortada. Acá se la acomoda entera cuando entra, solo de costado y solo dentro de la tabla: la página
 // no se mueve ni arriba ni abajo (con el teclado del teléfono abierto, el alto lo maneja el navegador).
 
-/** Pantalla angosta: la misma regla de `styles.css` (la tabla con piso de ancho y desplazamiento). */
-export const NARROW_QUERY = '(max-width: 760px)';
+/**
+ * Donde la tabla tiene piso de ancho y se desplaza: la misma regla de `styles.css`. Llega a 1024 px (teléfono y tablet,
+ * también la vertical con el cajón de páginas a la vista) y no a los 760 px del resto de las reglas de teléfono.
+ */
+export const TABLE_SCROLL_QUERY = '(max-width: 1024px)';
 
 /**
  * Corre `wrapper` de costado lo justo para que `cell` entre entera en lo que se ve del contenedor. Si la celda es más
@@ -40,7 +43,7 @@ export function selectionCell(root: Document = document): { cell: HTMLElement; w
 
 /** Al cambiar la selección: en pantalla angosta, la celda con el cursor entra entera en la tabla. */
 export function revealSelectionCell(root: Document = document): boolean {
-  if (typeof matchMedia === 'function' && !matchMedia(NARROW_QUERY).matches) return false;
+  if (typeof matchMedia === 'function' && !matchMedia(TABLE_SCROLL_QUERY).matches) return false;
   const found = selectionCell(root);
   return found ? revealCell(found.wrapper, found.cell) : false;
 }

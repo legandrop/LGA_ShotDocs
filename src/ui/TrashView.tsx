@@ -10,150 +10,404 @@ import {
   type TrashOutcome,
 } from '../media/fileTrash';
 import { locale, t, useT } from '../i18n';
+import '../i18n/lazy/projectStates';
 import { navigate, pagePath } from '../router';
-import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
-import type { TrashedFileRow } from '../sync/types';
+import { usePermissions, useProjectSizes, useServices, useSyncStatus, useTree } from '../services';
+import { PROJECT_STATES_SCHEMA_VERSION } from '../sync/remote';
+import type { PageRow, TrashedFileRow, TrashedProjectRow } from '../sync/types';
 import { errorMessage } from '../sync/types';
-import { RestoreIcon, TrashIcon } from './icons';
+import { PageIcon, RestoreIcon, TrashIcon } from './icons';
 import { notify } from './notice';
-import { useCurrentProject } from './project';
+import { useProjectDrive } from './project';
+import { DeletedProjectItem, DeletedProjectsError, useDeletedProjects } from './ProjectStatesPart';
 import { extensionLabel, fileKind } from '../media/attachments';
 
-// La papelera del proyecto: las páginas y, desde el paso 11 (Docs/Plan_Workspaces.md), la pestaña Archivos
-// con las fotos y los videos que ninguna página usa. La pestaña se muestra solo si la base deja verla
-// (`trashed_files` no da `not_allowed`); mandar a la papelera de Drive, solo el dueño y los admins.
+// La papelera única (pedido de Lega, 2026-10-03; Docs/Doc_Proyectos_Borrar.md, "Cómo quedó: una sola papelera"): las
+// páginas, los archivos (fotos y videos que ninguna página usa, paso 11 de Docs/Plan_Workspaces.md) y los proyectos
+// borrados (P.14), en una sola lista del más nuevo al más viejo, dentro del selector de proyectos. Arriba, el filtro
+// *All / Projects / Pages / Files* y de qué proyectos (el abierto, o todos). Cada tipo hace lo mismo que antes:
+// - Páginas: de la copia del dispositivo (anda sin red); *Restore* a quien puede manejar la página.
+// - Archivos: con red, uno por proyecto que la persona ve (`trashed_files`; la base decide); mandar a la papelera de
+//   Drive y *Empty*, solo el dueño y los admins.
+// - Proyectos: con red y la base en la versión 9 (`trashed_projects`: la base decide cuáles ve cada uno). No son de
+//   ningún proyecto abierto: se ven con los dos alcances.
 
-type Tab = 'pages' | 'files';
+/** Qué tipos muestra la lista. */
+export type TrashFilter = 'all' | 'projects' | 'pages' | 'files';
+/** De qué proyectos: el abierto o todos los del dispositivo. */
+export type TrashScope = 'current' | 'all';
 
-export function TrashView() {
-  const projectId = useCurrentProject();
-  const perms = usePermissions();
-  const { media } = useServices();
-  const [tab, setTab] = useState<Tab>('pages');
-  // La pestaña Archivos se ofrece si la base tiene la papelera de archivos y los permisos del dispositivo no
-  // la descartan; la base decide de verdad al pedirla (`FilesTrash` avisa si no la deja ver).
-  const [filesAllowed, setFilesAllowed] = useState(true);
-  const offerFiles = media.trashEnabled && perms.canSeeFileTrash(projectId) && filesAllowed;
-  useEffect(() => setFilesAllowed(true), [projectId]);
-  const hideFiles = useCallback(() => setFilesAllowed(false), []);
-  const current = offerFiles ? tab : 'pages';
-  const tr = useT();
+type Item =
+  | { kind: 'page'; at: number; projectId: string; page: PageRow }
+  | { kind: 'file'; at: number; projectId: string; file: TrashedFileRow }
+  | { kind: 'project'; at: number; row: TrashedProjectRow };
 
-  return (
-    <article className="page narrow">
-      <h1 className="page-heading">{tr('trash.title')}</h1>
-      {offerFiles && (
-        <div className="segmented trash-tabs" role="group" aria-label={tr('trash.contents')}>
-          <button aria-pressed={current === 'pages'} onClick={() => setTab('pages')}>
-            {tr('trash.pages')}
-          </button>
-          <button aria-pressed={current === 'files'} onClick={() => setTab('files')}>
-            {tr('trash.files')}
-          </button>
-        </div>
-      )}
-      {current === 'pages' ? (
-        <PagesTrash projectId={projectId} />
-      ) : (
-        <FilesTrash key={projectId} projectId={projectId} onNotAllowed={hideFiles} />
-      )}
-    </article>
-  );
-}
+/** La lista de archivos de un proyecto: cargando, con error, lista, o que la base no la deja ver (no se muestra). */
+type Loaded =
+  | { state: 'loading' }
+  | { state: 'error'; message: string }
+  | { state: 'ready'; files: TrashedFileRow[] }
+  | { state: 'hidden' };
 
-function PagesTrash({ projectId }: { projectId: string }) {
-  const tree = useTree();
-  const perms = usePermissions();
-  const { media } = useServices();
-  const items = tree.trashed(projectId);
-  const tr = useT();
-  return (
-    <>
-      <p className="muted">{media.trashEnabled ? tr('trash.pagesHintMedia') : tr('trash.pagesHint')}</p>
-      {items.length === 0 ? (
-        <p className="muted">{tr('trash.empty')}</p>
-      ) : (
-        <ul className="trash-list">
-          {items.map((p) => (
-            <li key={p.id}>
-              <button className="link title" onClick={() => navigate(pagePath(p.id))}>
-                {p.title || tr('common.untitled')}
-              </button>
-              <span className="when">{new Date(p.deleted_at!).toLocaleString(locale(tr.lang))}</span>
-              {perms.canManagePage(p.id) && (
-                <button onClick={() => void tree.restore(p.id)}>
-                  <RestoreIcon size={16} /> {tr('trash.restore')}
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </>
-  );
-}
-
-type Loaded = { state: 'loading' } | { state: 'error'; message: string } | { state: 'ready'; files: TrashedFileRow[] };
+/** Una fecha ISO como número para ordenar (la del dispositivo y la de la base se escriben distinto). */
+const when = (iso: string | null | undefined) => (iso ? Date.parse(iso) || 0 : 0);
 
 /**
- * Lo que dice la confirmación: adónde van, cómo se recuperan y el riesgo que anota el plan. Al vaciar,
- * además cuánto pasa a la papelera de Drive (que no libera nada hasta que Google la vacía).
+ * Las piezas de la lista, ya filtradas y ordenadas (sin React, para las pruebas): las páginas que se mandaron a la
+ * papelera (no las que están adentro de otra), los archivos y los proyectos borrados, del más nuevo al más viejo.
  */
-function confirmText(question: string, many: boolean, space?: string): string {
-  const where = many ? t('fileTrash.whereMany') : t('fileTrash.whereOne');
-  return [question, where, space, unsyncedUseWarning()].filter(Boolean).join('\n\n');
+export function trashItems(input: {
+  filter: TrashFilter;
+  pages: PageRow[];
+  files: { projectId: string; file: TrashedFileRow }[];
+  projects: TrashedProjectRow[];
+}): Item[] {
+  const items: Item[] = [];
+  if (input.filter === 'all' || input.filter === 'pages') {
+    for (const page of input.pages) items.push({ kind: 'page', at: when(page.deleted_at), projectId: page.workspace_id, page });
+  }
+  if (input.filter === 'all' || input.filter === 'files') {
+    for (const f of input.files) items.push({ kind: 'file', at: when(f.file.trashed_at), projectId: f.projectId, file: f.file });
+  }
+  if (input.filter === 'all' || input.filter === 'projects') {
+    for (const row of input.projects) items.push({ kind: 'project', at: when(row.deleted_at), row });
+  }
+  // `sort` es estable: con la misma hora queda el orden de cada lista.
+  return items.sort((a, b) => b.at - a.at);
 }
 
 function sumSizes(files: TrashedFileRow[]): number {
   return files.reduce((sum, f) => sum + (Number.isFinite(f.size) ? f.size : 0), 0);
 }
 
-/** Las fotos y los videos que ninguna página usa. Solo con red: lo que dice la base y el portero. */
-function FilesTrash({ projectId, onNotAllowed }: { projectId: string; onNotAllowed: () => void }) {
-  const { media, remote, sizes } = useServices();
+/**
+ * Lo que dice la confirmación de mandar archivos: adónde van, cómo se recuperan y el riesgo que anota el plan. Al
+ * vaciar, además cuánto pasa a la papelera de Drive (que no libera nada hasta que Google la vacía).
+ */
+function confirmText(question: string, many: boolean, space?: string): string {
+  const where = many ? t('fileTrash.whereMany') : t('fileTrash.whereOne');
+  return [question, where, space, unsyncedUseWarning()].filter(Boolean).join('\n\n');
+}
+
+/**
+ * La papelera única, adentro del selector de proyectos. `current` es el proyecto abierto (el alcance de entrada);
+ * `onClose` cierra el selector (al abrir una página de la lista).
+ */
+export function TrashPanel(props: { current: string; onClose: () => void }) {
+  const tree = useTree();
   const perms = usePermissions();
+  const { media, remote, sizes: sizeStore, engine } = useServices();
   const status = useSyncStatus();
-  const canPurge = perms.canPurgeFiles(projectId);
-  const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' });
+  const sizes = useProjectSizes();
+  const drive = useProjectDrive();
+  const [filter, setFilter] = useState<TrashFilter>('all');
+  const [scope, setScope] = useState<TrashScope>('current');
+  const tr = useT();
+  const online = status.online;
+  const statesReady = (status.schemaVersion ?? 0) >= PROJECT_STATES_SCHEMA_VERSION;
+
+  const deleted = useDeletedProjects({
+    remote,
+    drive,
+    enabled: statesReady && online,
+    onRestored: async () => {
+      // Vuelve a la lista de proyectos en la próxima sincronización, con los mismos permisos (no se tocaron).
+      await engine.syncNow();
+      void sizeStore.refresh();
+    },
+  });
+
+  // Los proyectos del alcance: el abierto, o todos los que el dispositivo conoce (activos y archivados).
+  const known = tree.projects().map((p) => p.id);
+  const inScope = scope === 'current' ? [props.current] : known.includes(props.current) ? known : [props.current, ...known];
+  // Los archivos, de los proyectos cuya papelera de archivos ve la persona (la base decide de verdad al pedirla).
+  const fileProjects = media.trashEnabled ? inScope.filter((id) => perms.canSeeFileTrash(id)) : [];
+  const files = useFileTrash(fileProjects, online);
+
+  // Las páginas, de la copia del dispositivo: solo las de proyectos que siguen en la lista (las de uno borrado
+  // quedan en el dispositivo hasta la próxima sincronización, que ya no las trae).
+  const pages = (scope === 'current' ? tree.trashed(props.current) : tree.trashed()).filter(
+    (p) => p.workspace_id === props.current || !!tree.project(p.workspace_id),
+  );
+  const fileRows = fileProjects.flatMap((id) => {
+    const l = files.loaded[id];
+    return l?.state === 'ready' ? l.files.map((file) => ({ projectId: id, file })) : [];
+  });
+  const projectRows = statesReady && Array.isArray(deleted.rows) ? deleted.rows : [];
+
+  // Los filtros que tienen sentido acá: *Projects* con la base en la versión 9, *Files* si hay alguna papelera de
+  // archivos que la persona pueda ver. Con uno solo (las páginas), sin filtro.
+  // Sin red, solo si ya hay archivos leídos (si no, *Files* diría a la vez "hace falta conexión" y "no hay archivos").
+  const filesOffered = online
+    ? fileProjects.some((id) => files.loaded[id]?.state !== 'hidden')
+    : fileProjects.some((id) => files.loaded[id]?.state === 'ready');
+  const filters: TrashFilter[] = ['all', ...(statesReady ? (['projects'] as const) : []), 'pages', ...(filesOffered ? (['files'] as const) : [])];
+  const shown: TrashFilter = filters.includes(filter) ? filter : 'all';
+  const showFilters = filters.length > 2;
+  const onlyPages = !showFilters;
+  const list = trashItems({ filter: onlyPages ? 'pages' : shown, pages, files: fileRows, projects: projectRows });
+
+  const nameOf = (id: string) => tree.project(id)?.name ?? tr('project.thisProject');
+  const filesLoading = fileProjects.some((id) => (files.loaded[id]?.state ?? 'loading') === 'loading') && online;
+  const projectsLoading = statesReady && online && deleted.rows === null && !deleted.error;
+  const loading = (shown === 'files' || shown === 'all') && filesLoading ? true : (shown === 'projects' || shown === 'all') && projectsLoading;
+  const fileErrors = fileProjects.flatMap((id) => {
+    const l = files.loaded[id];
+    return l?.state === 'error' ? [{ id, message: l.message }] : [];
+  });
+
+  // *Empty* vacía solo la papelera de archivos del proyecto abierto, como antes (decisión de Lega, ronda 1): se ofrece
+  // con *Files* y *This project*; con *All projects* no está. Lo que se puede vaciar: los archivos del abierto si la
+  // persona los manda a la papelera de Drive, sin los que usa una página de la papelera (esos, de a uno, con su
+  // confirmación) ni los de una página de un proyecto borrado (esos no se mandan ni de a uno).
+  const offerEmpty = shown === 'files' && scope === 'current' && perms.canPurgeFiles(props.current);
+  const currentFiles = fileRows.filter((f) => f.projectId === props.current);
+  const purgeable = offerEmpty ? currentFiles : [];
+  const emptiable = purgeable.filter((f) => !f.file.in_trashed_page && !f.file.in_deleted_project);
+  const working = files.busy !== null || files.progress !== null;
+
+  const hint =
+    shown === 'pages' || onlyPages
+      ? media.trashEnabled
+        ? tr('trash.pagesHintMedia')
+        : tr('trash.pagesHint')
+      : shown === 'projects'
+        ? tr('deletedList.hint')
+        : shown === 'files'
+          ? null
+          : tr('trash.hintAll');
+
+  // Sin red, la línea de arriba ya dice que los proyectos y los archivos no se pueden leer: no se dice además que no hay.
+  const emptyText =
+    !online && (shown === 'projects' || shown === 'files')
+      ? null
+      : shown === 'projects'
+        ? tr('deletedList.none')
+        : shown === 'files'
+          ? tr('fileTrash.none')
+          : tr('trash.empty');
+
+  return (
+    <div className="trash-panel">
+      {showFilters && (
+        <div className="segmented trash-filter" role="group" aria-label={tr('trash.filter')}>
+          {filters.map((f) => (
+            <button key={f} aria-pressed={shown === f} onClick={() => setFilter(f)}>
+              {tr(f === 'all' ? 'trash.filterAll' : f === 'projects' ? 'trash.filterProjects' : f === 'pages' ? 'trash.pages' : 'trash.files')}
+            </button>
+          ))}
+        </div>
+      )}
+      {/* Los proyectos borrados no son de ningún proyecto abierto: con el filtro *Projects* el alcance no cambia nada. */}
+      {shown !== 'projects' && known.length > 1 && (
+        <div className="segmented trash-scope" role="group" aria-label={tr('trash.scope')}>
+          <button aria-pressed={scope === 'current'} onClick={() => setScope('current')}>
+            {tr('trash.scopeCurrent')}
+          </button>
+          <button aria-pressed={scope === 'all'} onClick={() => setScope('all')}>
+            {tr('trash.scopeAll')}
+          </button>
+        </div>
+      )}
+      {hint && <p className="muted small trash-hint">{hint}</p>}
+      {/* El avance de *Empty* se ve siempre, aunque se cambie de filtro o de alcance a mitad (sigue corriendo). */}
+      {files.progress && (
+        <p className="muted small trash-progress" role="status">
+          {tr('fileTrash.sendingOf', { n: Math.min(files.progress.done + 1, files.progress.total), total: files.progress.total })}
+        </p>
+      )}
+      {shown === 'files' && (
+        <>
+          <p className="muted small trash-hint">
+            {tr('fileTrash.intro')}{' '}
+            {status.autoPurgeFiles ? (
+              tr('fileTrash.autoOn', { days: TRASH_DAYS })
+            ) : (
+              <>
+                <strong>{tr('fileTrash.autoOffTitle')}</strong> {tr('fileTrash.autoOff', { days: TRASH_DAYS })}
+              </>
+            )}
+          </p>
+          <p className="muted small trash-warning">{tr('fileTrash.unsyncedUse')}</p>
+          {fileRows.length > 0 && (
+            <div className="row trash-files-actions">
+              <span className="muted small">
+                {tr('fileTrash.total', { count: fileRows.length, size: formatSize(sumSizes(fileRows.map((f) => f.file)), tr.lang) })}
+              </span>
+              {purgeable.length > 0 && (
+                <button
+                  className="link danger"
+                  disabled={working || !online || emptiable.length === 0}
+                  data-tip={!online ? tr('fileTrash.needsInternet') : tr('fileTrash.emptyTip')}
+                  onClick={() => void files.emptyAll(emptiable, currentFiles.length, nameOf(props.current))}
+                >
+                  <TrashIcon size={16} /> {tr('fileTrash.emptyButton')}
+                </button>
+              )}
+            </div>
+          )}
+        </>
+      )}
+      {!online && shown !== 'pages' && !onlyPages && <p className="muted small trash-hint">{tr('trash.offlineRest')}</p>}
+      {statesReady && online && deleted.rows === 'missing' && (shown === 'projects' || shown === 'all') && (
+        <p className="muted small">{tr('deletedList.notYet')}</p>
+      )}
+      {list.length > 0 && (
+        <ul className="trash-list trash-items">
+          {list.map((item) => {
+            if (item.kind === 'project') {
+              return (
+                <li key={`project-${item.row.id}`} className="trash-item" data-kind="project">
+                  <DeletedProjectItem
+                    row={item.row}
+                    list={deleted}
+                    kind={tr('trash.kindProject')}
+                    bytes={sizes.rows?.find((r) => r.project_id === item.row.id)?.drive_bytes ?? null}
+                  />
+                </li>
+              );
+            }
+            if (item.kind === 'page') {
+              const p = item.page;
+              return (
+                <li key={`page-${p.id}`} className="trash-item" data-kind="page">
+                  <span className="trash-thumb trash-thumb-page" aria-hidden="true">
+                    <PageIcon size={18} />
+                  </span>
+                  <div className="trash-file">
+                    <span className="trash-kind">
+                      {tr('trash.kindPage')} · {nameOf(item.projectId)}
+                    </span>
+                    <button
+                      className="link title"
+                      onClick={() => {
+                        props.onClose();
+                        navigate(pagePath(p.id));
+                      }}
+                    >
+                      {p.title || tr('common.untitled')}
+                    </button>
+                    <span className="when">{new Date(p.deleted_at!).toLocaleString(locale(tr.lang))}</span>
+                  </div>
+                  {perms.canManagePage(p.id) && (
+                    <button className="secondary" onClick={() => void tree.restore(p.id)}>
+                      <RestoreIcon size={16} /> {tr('trash.restore')}
+                    </button>
+                  )}
+                </li>
+              );
+            }
+            const f = item.file;
+            const canPurge = perms.canPurgeFiles(item.projectId);
+            return (
+              <li key={`file-${f.id}`} className="trash-item" data-kind="file">
+                <FileThumb id={f.id} name={f.name} />
+                <div className="trash-file">
+                  <span className="trash-kind">
+                    {tr('trash.kindFile')} · {nameOf(item.projectId)}
+                  </span>
+                  <span className="title">{f.name}</span>
+                  <span className="when">
+                    {formatSize(f.size)} · {new Date(f.trashed_at).toLocaleDateString(locale(tr.lang))} · {daysLeftText(f.days_left)}
+                  </span>
+                  {f.in_deleted_project ? (
+                    <span className="muted small">{tr('fileTrash.inDeletedProject')}</span>
+                  ) : (
+                    f.in_trashed_page && (
+                      <span className="muted small">{tr('fileTrash.usedBy', { page: f.trashed_page_title || tr('common.untitled') })}</span>
+                    )
+                  )}
+                  {f.purged_at && !files.errors[f.id] && <span className="muted small">{tr('fileTrash.notConfirmed')}</span>}
+                  {files.errors[f.id] && <span className="trash-error small">{files.errors[f.id]}</span>}
+                </div>
+                {/* Un archivo que usa una página de un proyecto borrado no se manda: vuelve si lo restauran (P.14). */}
+                {canPurge && !f.in_deleted_project && (
+                  <button
+                    className="secondary"
+                    disabled={working || !online}
+                    data-tip={!online ? tr('fileTrash.needsInternet') : tr('fileTrash.sendTip')}
+                    onClick={() => void files.sendOne(item.projectId, f)}
+                  >
+                    {files.busy === f.id ? tr('fileTrash.sending') : tr('fileTrash.send')}
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {loading && <p className="muted small">{tr('common.loading')}</p>}
+      {!loading && list.length === 0 && emptyText && <p className="muted">{emptyText}</p>}
+      {(shown === 'projects' || shown === 'all') && <DeletedProjectsError list={deleted} />}
+      {(shown === 'files' || shown === 'all') &&
+        fileErrors.map((e) => (
+          <p key={e.id} className="muted small">
+            {fileErrors.length > 1 || scope === 'all' ? `${nameOf(e.id)}: ` : ''}
+            {tr('fileTrash.loadFailed', { reason: e.message })}{' '}
+            <button className="link" onClick={() => files.reload(e.id)}>
+              {tr('common.retry')}
+            </button>
+          </p>
+        ))}
+    </div>
+  );
+}
+
+/**
+ * Las papeleras de archivos de los proyectos del alcance: una consulta por proyecto (la que había, `trashed_files`),
+ * la primera vez que entra en el alcance y con red. Mandar a la papelera de Drive, de a uno o *Empty*, como antes.
+ */
+function useFileTrash(projectIds: string[], online: boolean) {
+  const { media, remote, sizes } = useServices();
+  const [loaded, setLoaded] = useState<Record<string, Loaded>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
-  const tr = useT();
   const live = useRef(true);
-  useEffect(
-    () => () => {
+  const asked = useRef(new Set<string>());
+  useEffect(() => {
+    live.current = true;
+    return () => {
       live.current = false;
+    };
+  }, []);
+
+  const reload = useCallback(
+    (projectId: string) => {
+      asked.current.add(projectId);
+      setLoaded((l) => ({ ...l, [projectId]: l[projectId]?.state === 'ready' ? l[projectId] : { state: 'loading' } }));
+      loadFileTrash(remote, projectId).then(
+        (files) => live.current && setLoaded((l) => ({ ...l, [projectId]: files === null ? { state: 'hidden' } : { state: 'ready', files } })),
+        (err: unknown) => live.current && setLoaded((l) => ({ ...l, [projectId]: { state: 'error', message: errorMessage(err) } })),
+      );
     },
-    [],
+    [remote],
   );
 
-  const reload = useCallback(async () => {
-    try {
-      const files = await loadFileTrash(remote, projectId);
-      if (!live.current) return;
-      if (files === null) onNotAllowed();
-      else setLoaded({ state: 'ready', files });
-    } catch (err) {
-      if (live.current) setLoaded({ state: 'error', message: errorMessage(err) });
-    }
-  }, [remote, projectId, onNotAllowed]);
-
+  // Sin red no se pide nada (quedan cargando); al volver la red, lo que faltaba. Cada proyecto, una vez.
+  const key = projectIds.join(',');
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    if (!online) return;
+    for (const id of key ? key.split(',') : []) if (!asked.current.has(id)) reload(id);
+  }, [key, online, reload]);
 
-  const trash = (id: string) => media.trash(id);
-  const files = loaded.state === 'ready' ? loaded.files : [];
+  const drop = (file: TrashedFileRow) => {
+    setLoaded((l) => {
+      const next: Record<string, Loaded> = {};
+      for (const [id, v] of Object.entries(l)) next[id] = v.state === 'ready' ? { ...v, files: v.files.filter((f) => f.id !== file.id) } : v;
+      return next;
+    });
+    setErrors((e) => {
+      const next = { ...e };
+      delete next[file.id];
+      return next;
+    });
+  };
 
-  /** Lo que pasó con uno: sale de la lista, se vuelve a leer la lista (409) o queda con su error. */
+  /** Lo que pasó con uno: sale de la lista, hay que volver a leer su proyecto (409) o queda con su error. */
   const settle = (file: TrashedFileRow, outcome: TrashOutcome): boolean => {
     if (outcome.status === 'done') {
-      setLoaded((l) => (l.state === 'ready' ? { ...l, files: l.files.filter((f) => f.id !== file.id) } : l));
-      setErrors((e) => {
-        const next = { ...e };
-        delete next[file.id];
-        return next;
-      });
+      drop(file);
       return false;
     }
     if (outcome.status === 'in_use') {
@@ -169,7 +423,9 @@ function FilesTrash({ projectId, onNotAllowed }: { projectId: string; onNotAllow
     return false;
   };
 
-  const sendOne = async (file: TrashedFileRow) => {
+  const trash = (id: string) => media.trash(id);
+
+  const sendOne = async (projectId: string, file: TrashedFileRow) => {
     const question = file.in_trashed_page
       ? t('fileTrash.confirmUsed', { name: file.name, page: file.trashed_page_title || t('common.untitled') })
       : t('fileTrash.confirmOne', { name: file.name });
@@ -178,37 +434,32 @@ function FilesTrash({ projectId, onNotAllowed }: { projectId: string; onNotAllow
     const outcome = await sendToDriveTrash(trash, file.id);
     if (!live.current) return;
     setBusy(null);
-    if (settle(file, outcome)) await reload();
+    if (settle(file, outcome)) reload(projectId);
   };
 
-  // "Empty" deja afuera los que usa una página que está en la papelera de páginas: se mandan de a uno, con su
-  // propia confirmación.
-  // Tampoco los que usa una página de un proyecto borrado (P.14): esos no se mandan ni de a uno.
-  const emptiable = files.filter((f) => !f.in_trashed_page && !f.in_deleted_project);
-
-  const emptyAll = async () => {
-    const list = emptiable;
+  const emptyAll = async (list: { projectId: string; file: TrashedFileRow }[], listed: number, project: string) => {
     if (list.length === 0) return;
-    const what = list.length === 1 ? `“${list[0].name}”` : t('fileTrash.allFiles', { count: list.length });
-    const kept = files.length - list.length;
+    const what = list.length === 1 ? `“${list[0].file.name}”` : t('fileTrash.allFiles', { count: list.length });
+    const kept = listed - list.length;
     const skip = kept > 0 ? ` ${t('fileTrash.kept', { count: kept })}` : '';
     // Solo lo que se va a mandar (sin los que usa una página de la papelera).
-    const space = t('fileTrash.emptySpace', { size: formatSize(sumSizes(list)) });
-    if (!confirm(confirmText(t('fileTrash.confirmEmpty', { what, skip }), list.length > 1, space))) return;
+    const space = t('fileTrash.emptySpace', { size: formatSize(sumSizes(list.map((f) => f.file))) });
+    if (!confirm(confirmText(t('fileTrash.confirmEmpty', { what, skip, project }), list.length > 1, space))) return;
     setProgress({ done: 0, total: list.length });
-    let refresh = false;
-    const byId = new Map(list.map((f) => [f.id, f]));
+    const refresh = new Set<string>();
+    const byId = new Map(list.map((f) => [f.file.id, f]));
     const stop = { cancelled: false };
     const results = await emptyFileTrash(
       trash,
-      list.map((f) => f.id),
+      list.map((f) => f.file.id),
       (done, total, id, outcome) => {
         if (!live.current) {
           stop.cancelled = true;
           return;
         }
         setProgress({ done, total });
-        if (settle(byId.get(id)!, outcome)) refresh = true;
+        const entry = byId.get(id)!;
+        if (settle(entry.file, outcome)) refresh.add(entry.projectId);
       },
       stop,
     );
@@ -221,93 +472,10 @@ function FilesTrash({ projectId, onNotAllowed }: { projectId: string; onNotAllow
     if (!outcomes.some((r) => r.status === 'not_connected') && failed > 0) {
       notify(t('fileTrash.someFailed', { failed, total: list.length }));
     }
-    if (refresh) await reload();
+    for (const id of refresh) reload(id);
   };
 
-  const working = busy !== null || progress !== null;
-  const offline = !status.online;
-
-  return (
-    <>
-      <p className="muted">
-        {tr('fileTrash.intro')}{' '}
-        {status.autoPurgeFiles ? (
-          tr('fileTrash.autoOn', { days: TRASH_DAYS })
-        ) : (
-          <>
-            <strong>{tr('fileTrash.autoOffTitle')}</strong> {tr('fileTrash.autoOff', { days: TRASH_DAYS })}
-          </>
-        )}
-      </p>
-      <p className="muted trash-warning">{tr('fileTrash.unsyncedUse')}</p>
-      {loaded.state === 'loading' && <p className="muted">{tr('common.loading')}</p>}
-      {loaded.state === 'error' && (
-        <p className="muted">
-          {tr('fileTrash.loadFailed', { reason: loaded.message })}{' '}
-          <button className="link" onClick={() => void reload()}>
-            {tr('common.retry')}
-          </button>
-        </p>
-      )}
-      {loaded.state === 'ready' && files.length === 0 && <p className="muted">{tr('fileTrash.none')}</p>}
-      {loaded.state === 'ready' && files.length > 0 && (
-        <>
-          <p className="muted">
-            {tr('fileTrash.total', { count: files.length, size: formatSize(sumSizes(files), tr.lang) })}
-          </p>
-          {canPurge && (
-            <div className="row trash-files-actions">
-              <button
-                className="link danger"
-                disabled={working || offline || emptiable.length === 0}
-                data-tip={offline ? tr('fileTrash.needsInternet') : tr('fileTrash.emptyTip')}
-                onClick={() => void emptyAll()}
-              >
-                <TrashIcon size={16} /> {tr('fileTrash.emptyButton')}
-              </button>
-              {progress && (
-                <span className="muted" role="status">
-                  {tr('fileTrash.sendingOf', { n: Math.min(progress.done + 1, progress.total), total: progress.total })}
-                </span>
-              )}
-            </div>
-          )}
-          <ul className="trash-list trash-files">
-            {files.map((f) => (
-              <li key={f.id}>
-                <FileThumb id={f.id} name={f.name} />
-                <div className="trash-file">
-                  <span className="title">{f.name}</span>
-                  <span className="when">
-                    {formatSize(f.size)} · {new Date(f.trashed_at).toLocaleDateString(locale(tr.lang))} · {daysLeftText(f.days_left)}
-                  </span>
-                  {f.in_deleted_project ? (
-                    <span className="muted small">{tr('fileTrash.inDeletedProject')}</span>
-                  ) : (
-                    f.in_trashed_page && (
-                      <span className="muted small">{tr('fileTrash.usedBy', { page: f.trashed_page_title || tr('common.untitled') })}</span>
-                    )
-                  )}
-                  {f.purged_at && !errors[f.id] && <span className="muted small">{tr('fileTrash.notConfirmed')}</span>}
-                  {errors[f.id] && <span className="trash-error small">{errors[f.id]}</span>}
-                </div>
-                {/* Un archivo que usa una página de un proyecto borrado no se manda: vuelve si lo restauran (P.14). */}
-                {canPurge && !f.in_deleted_project && (
-                  <button
-                    disabled={working || offline}
-                    data-tip={offline ? tr('fileTrash.needsInternet') : tr('fileTrash.sendTip')}
-                    onClick={() => void sendOne(f)}
-                  >
-                    {busy === f.id ? tr('fileTrash.sending') : tr('fileTrash.send')}
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-    </>
-  );
+  return { loaded, errors, busy, progress, reload, sendOne, emptyAll };
 }
 
 /**

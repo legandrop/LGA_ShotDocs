@@ -116,6 +116,8 @@ export const shell = {
   },
   'shell.error.title': { en: "Could not open your workspace", es: "No se pudo abrir tu workspace" },
   'shell.openPages': { en: "Open pages", es: "Abrir páginas" },
+  // Con el punto de la ayuda (novedades o la recorrida sin ver): el nombre lo dice, como el del "?" del cajón.
+  'shell.openPagesDot': { en: "Open pages (the help has something new)", es: "Abrir páginas (la ayuda tiene algo nuevo)" },
   'shell.findInPage': { en: "Find in page", es: "Buscar en la página" },
   // *Dictate to report* (Docs/Doc_Dictado.md): el botón de la barra y el redondo del teléfono.
   'shell.dictate': { en: "Dictate to report", es: "Dictar al reporte" },

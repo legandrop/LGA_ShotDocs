@@ -32,14 +32,17 @@ interface ExternalResult {
  * Envuelve el `toExternalHTML` de un bloque de imagen: una foto de la app sale con su dirección en el `<img>` y en el
  * `data-url` del bloque, pero sin pedirla. El de BlockNote pone el `src` al crear la imagen, antes de poder marcarla:
  * se lo arma con una imagen mínima (y su `data-url`) y después se pone la dirección verdadera con la marca ya puesta.
- * Se llama con el mismo `this` y los mismos argumentos que el original (BlockNote lo usa para los atributos del bloque).
+ * Una foto sin vista previa no se toca (ver más abajo). Se llama con el mismo `this` y los mismos argumentos que el
+ * original (BlockNote lo usa para los atributos del bloque).
  */
-export function quietExternalHtml<B extends { props: { url?: unknown } }, A extends unknown[]>(
+export function quietExternalHtml<B extends { props: { url?: unknown; showPreview?: unknown } }, A extends unknown[]>(
   original: (this: unknown, block: B, ...rest: A) => ExternalResult,
 ): (this: unknown, block: B, ...rest: A) => ExternalResult {
   return function (this: unknown, block, ...rest) {
     const url = block.props.url;
-    if (!isAppMediaUrl(url)) return original.call(this, block, ...rest);
+    // Sin vista previa (llega por una importación o una fila) BlockNote arma un `<a href>` en vez de un `<img>`: un
+    // vínculo no hace ningún pedido, y con la imagen mínima el vínculo y su texto saldrían con ella. Va como siempre.
+    if (!isAppMediaUrl(url) || !block.props.showPreview) return original.call(this, block, ...rest);
     const out = original.call(this, { ...block, props: { ...block.props, url: PLACEHOLDER } }, ...rest);
     const els = [out.dom, ...Array.from((out.dom as ParentNode).querySelectorAll?.('*') ?? [])].filter((el): el is HTMLElement => el instanceof HTMLElement);
     for (const el of els) {

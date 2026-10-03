@@ -115,6 +115,59 @@
   --page-width: 1040px;
 }
 
+/* El contraste del texto del documento (Docs/Doc_Contraste.md): tres tonos para el texto con el color por defecto,
+   encabezados (`--ink-heading`), negrita fuera de un encabezado (`--ink-bold`) y texto común (`--ink-body`). Un token
+   por modo y por nivel; los niveles eligen entre ellos con `data-contrast` (`contrast` de fábrica, también sin el
+   atributo). Todo texto común queda en 4,5:1 o más contra el fondo (WCAG AA): las razones están en el doc y las
+   comprueba `src/contrast.test.ts`. El PDF y la vista de impresión usan siempre los del modo claro (`.print-view`). */
+:root {
+  --ink-light-heading: #1b1a17;
+  --ink-light-bold: #33312c;
+  --ink-light-body: #46433d;
+  --ink-light-more-bold: #3a3833;
+  --ink-light-more-body: #5a5750;
+  --ink-dark-heading: #ece9e2;
+  --ink-dark-bold: #dad6cd;
+  --ink-dark-body: #c8c3b8;
+  --ink-dark-more-bold: #cfcac0;
+  --ink-dark-more-body: #b0aba1;
+}
+
+:root,
+.print-view {
+  --ink-heading: var(--ink-light-heading);
+  --ink-bold: var(--ink-light-bold);
+  --ink-body: var(--ink-light-body);
+}
+
+:root[data-contrast='more'],
+:root[data-contrast='more'] .print-view {
+  --ink-bold: var(--ink-light-more-bold);
+  --ink-body: var(--ink-light-more-body);
+}
+
+:root[data-contrast='none'],
+:root[data-contrast='none'] .print-view {
+  --ink-bold: var(--ink-light-heading);
+  --ink-body: var(--ink-light-heading);
+}
+
+:root[data-theme='dark'] {
+  --ink-heading: var(--ink-dark-heading);
+  --ink-bold: var(--ink-dark-bold);
+  --ink-body: var(--ink-dark-body);
+}
+
+:root[data-theme='dark'][data-contrast='more'] {
+  --ink-bold: var(--ink-dark-more-bold);
+  --ink-body: var(--ink-dark-more-body);
+}
+
+:root[data-theme='dark'][data-contrast='none'] {
+  --ink-bold: var(--ink-dark-heading);
+  --ink-body: var(--ink-dark-heading);
+}
+
 /* --- Base ------------------------------------------------------------------------------------------ */
 
 * {
@@ -856,12 +909,14 @@ code {
   pointer-events: none;
 }
 
-/* Con el mouse encima, el foco en la fila o en uno de sus botones o el menú ⋯ abierto, los botones aparecen y le
-   sacan su lugar al nombre (que se acorta, sin mover su inicio ni el alto). También en la página abierta: en la
-   compu llega al borde como las demás. */
+/* Con el mouse encima, el foco de teclado en la fila o en uno de sus botones o el menú ⋯ abierto, los botones aparecen
+   y le sacan su lugar al nombre (que se acorta, sin mover su inicio ni el alto). También en la página abierta: en la
+   compu llega al borde como las demás. Es `:focus-visible` y no `:focus-within`: un clic con el mouse (en el triángulo,
+   en la fila o en un botón) también deja el foco ahí, y los botones no se tienen que quedar cuando el mouse se va. Con
+   `:is()` un navegador sin `:has()` se queda con el foco en la fila en vez de descartar toda la regla. */
 .tree-row:hover .row-actions,
 .tree-row.menu-open .row-actions,
-.tree-row:focus-within .row-actions {
+.tree-row:is(:focus-visible, :has(:focus-visible)) .row-actions {
   opacity: 1;
   width: auto;
   margin-left: 0;
@@ -1064,18 +1119,30 @@ code {
 
 .account-menu {
   width: 300px;
-  /* En una pantalla baja (el teléfono acostado), el menú se recorre sin perder "Sign out". */
+  /* En una ventana baja (o el teléfono acostado), el panel se recorre adentro sin perder "Sign out": el alto que
+     queda arriba del botón de la cuenta lo pone AccountMenu (menus.tsx); esto es el tope si no hay posición. */
   max-height: calc(100dvh - 16px);
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 8px;
-  gap: 4px;
+  gap: 2px;
+}
+
+/* Un renglón largo ("Cerrar la sesión en los otros dispositivos") baja a dos líneas alineado a la izquierda, como
+   los demás (el botón lo centraba). */
+.account-menu .menu-row {
+  height: auto;
+  min-height: 36px;
+  padding-block: 7px;
+  text-align: left;
+  line-height: 1.3;
 }
 
 .account-head {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 10px 14px;
+  padding: 6px 10px 10px;
   border-bottom: 1px solid var(--menu-border);
   margin-bottom: 6px;
   min-width: 0;
@@ -1097,8 +1164,37 @@ code {
 
 .pref {
   display: grid;
+  gap: 6px;
+  padding: 4px 10px 8px;
+}
+
+/* Los selectores de solo íconos (Appearance, Font, Contrast): el rótulo a la izquierda y los íconos a la derecha,
+   en un renglón; el nombre de cada opción, en su tooltip. */
+.pref.pref-icons {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   gap: 8px;
-  padding: 4px 10px 10px;
+  padding: 3px 10px;
+}
+
+/* Los tres del mismo ancho, alineados a la derecha (Font tiene dos opciones: más anchas). */
+.pref-icons .segmented {
+  width: 132px;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+}
+
+.menu .pref-icons .segmented button,
+.pref-icons .segmented button {
+  height: 28px;
+  padding: 0;
+  border-radius: 6px;
+}
+
+/* Los demás selectores del panel, un poco más bajos. */
+.account-menu .segmented button {
+  height: 30px;
 }
 
 .pref-label {
@@ -1128,13 +1224,6 @@ code {
   gap: 6px;
   font-size: 12px;
   color: var(--muted);
-}
-
-.menu .segmented button.tall,
-.segmented button.tall {
-  height: 56px;
-  flex-direction: column;
-  gap: 4px;
 }
 
 .menu .segmented button svg {
@@ -1167,6 +1256,15 @@ code {
 .segmented .sample.serif {
   font-family: var(--serif);
   font-size: 24px;
+}
+
+.pref-icons .sample {
+  font-size: 15px;
+  color: inherit;
+}
+
+.pref-icons .sample.serif {
+  font-size: 19px;
 }
 
 .pref-divider {
@@ -1601,7 +1699,7 @@ code {
 .bn-container .bn-default-styles {
   font-size: var(--doc-size);
   line-height: 1.6;
-  color: var(--text);
+  color: var(--ink-body);
 }
 
 .bn-container [data-content-type='heading'] h1,
@@ -1610,6 +1708,56 @@ code {
   font-family: var(--heading-font);
   font-weight: var(--heading-weight);
   letter-spacing: -0.01em;
+}
+
+/* El contraste del texto (Docs/Doc_Contraste.md): el encabezado y la negrita con su tono, solo con el color por
+   defecto. Todo lo que pone su propio color (un color elegido para unas letras o un bloque, que BlockNote pinta en
+   el bloque y en sus hijos; un link; la cita, gris; lo borrado del historial) cambia los tonos por `currentColor`, que
+   en `color` es el color heredado: así la negrita y los encabezados de adentro siguen con ese color, nunca con el tono
+   por defecto. La negrita de un encabezado va con el encabezado. Con *No contrast* estas reglas no corren: queda
+   exactamente lo de siempre (el texto común es `--text`). */
+:root:not([data-contrast='none']) .bn-container .bn-default-styles [data-content-type='heading'] {
+  color: var(--ink-heading);
+}
+
+:root:not([data-contrast='none']) .bn-container .bn-default-styles strong {
+  color: var(--ink-bold);
+}
+
+:root:not([data-contrast='none']) .bn-container .bn-default-styles [data-content-type='heading'] strong {
+  color: inherit;
+}
+
+.bn-container .bn-default-styles
+  :is(
+    [data-style-type='textColor'],
+    [data-text-color]:not([data-text-color='default']),
+    .bn-block:has(> .bn-block-content[data-text-color]:not([data-text-color='default'])),
+    a,
+    blockquote,
+    .hist-del
+  ) {
+  --ink-heading: currentColor;
+  --ink-bold: currentColor;
+}
+
+/* Un resaltado (color de fondo elegido, en unas letras o en un bloque y sus hijos) queda afuera de la jerarquía: su
+   texto por defecto y su negrita van con la tinta plena del encabezado, como siempre. En oscuro los fondos de BlockNote
+   son claros o saturados y un tono más apagado bajaba de 4,5:1 (rojo 3,20, amarillo 1,38 con More). Lo que además
+   tiene un color de texto elegido no se toca. */
+:root:not([data-contrast='none'])
+  .bn-container
+  .bn-default-styles
+  :is(
+    [data-style-type='backgroundColor'],
+    [data-background-color]:not([data-background-color='default']),
+    .bn-block:has(> .bn-block-content[data-background-color]:not([data-background-color='default']))
+  ):not(
+    [data-text-color]:not([data-text-color='default']),
+    .bn-block:has(> .bn-block-content[data-text-color]:not([data-text-color='default']))
+  ) {
+  color: var(--ink-heading);
+  --ink-bold: var(--ink-heading);
 }
 
 .trash-list {
@@ -1646,12 +1794,7 @@ code {
   white-space: nowrap;
 }
 
-/* Papelera: pestañas Páginas / Archivos y la lista de archivos (paso 11). */
-.trash-tabs {
-  max-width: 260px;
-  margin: 16px 0 4px;
-}
-
+/* Papelera: la lista de archivos (paso 11). */
 .trash-files-actions {
   display: flex;
   align-items: center;
@@ -2115,6 +2258,153 @@ code {
   width: auto;
   height: 32px;
   padding: 0 12px;
+}
+
+/* La papelera única, adentro del selector de proyectos: más ancha que el selector para que entren el filtro, la
+   miniatura y *Restore*. En el teléfono, la hoja de abajo de siempre (ancho entero). */
+@media (min-width: 761px) {
+  .menu.project-menu.trash-menu {
+    width: 440px;
+  }
+}
+
+/* Una sola columna que no crece más que el selector (si no, un texto largo lo ensancha y se corta a la derecha). */
+.menu.trash-menu {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.trash-panel {
+  display: grid;
+  gap: 8px;
+  padding: 2px 6px 6px;
+  min-width: 0;
+}
+
+.trash-panel .trash-hint,
+.trash-panel .trash-warning {
+  margin: 0;
+}
+
+.trash-panel .trash-files-actions {
+  margin-top: 0;
+  flex-wrap: wrap;
+}
+
+.menu .trash-panel .trash-files-actions button.link {
+  width: auto;
+  height: 28px;
+  padding: 0;
+}
+
+.trash-panel .trash-list {
+  margin: 0;
+}
+
+.trash-panel .trash-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.trash-panel .trash-item:last-child {
+  border-bottom: none;
+}
+
+/* Un proyecto borrado ocupa el renglón entero (con sus notas y preguntas abajo). */
+.trash-panel .trash-item[data-kind='project'] {
+  display: block;
+}
+
+.trash-panel .trash-item .deleted-project-row {
+  padding: 0;
+}
+
+.trash-panel .trash-thumb {
+  flex: none;
+  width: 48px;
+  height: 36px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--seg-bg);
+  border: 1px solid var(--border);
+}
+
+.trash-panel .trash-thumb-file,
+.trash-panel .trash-thumb-page {
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted-2);
+}
+
+.trash-panel .trash-file {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.trash-panel .trash-file .title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* El título de una página es un link que la abre: en el selector, sin el alto ni el relleno de los renglones. */
+.menu .trash-panel .trash-file button.title {
+  width: 100%;
+  height: auto;
+  padding: 0;
+  display: block;
+  font-size: 14px;
+}
+
+.trash-panel .trash-file .when {
+  white-space: normal;
+}
+
+/* Qué es y de qué proyecto: "Page · MGTZD". */
+.trash-panel .trash-kind {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trash-panel .small {
+  font-size: 12px;
+}
+
+.trash-panel .trash-error {
+  color: var(--danger);
+}
+
+.menu .trash-panel .trash-item > button.secondary {
+  flex: none;
+  width: auto;
+  max-width: 40%;
+  height: auto;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  white-space: normal;
+  text-align: center;
+}
+
+.menu .trash-panel .error button.link,
+.menu .trash-panel p button.link {
+  display: inline;
+  width: auto;
+  height: auto;
+  padding: 0;
 }
 
 .delete-project-drive {
@@ -2765,14 +3055,32 @@ code {
    y la tabla su `min-width`, así que ya se desplazaban. Solo el piso, sin forzar el ancho de la tabla (D244): una tabla
    cuyas columnas guardadas son de 96 px o más y entra en la pantalla (3 de 227 px, 2 de 340 px) se achica como siempre
    y no se desplaza; solo se desplaza la que quedaría con columnas de menos de 96 px. Con 7 columnas de 97 px el reporte
-   mide 673 px (7 × 96 + bordes) en vez de 679. */
-@media (max-width: 760px) {
-  .page:not(.sd-export-source) .bn-editor [data-content-type='table'] :is(td, th)[colwidth] {
+   mide 673 px (7 × 96 + bordes) en vez de 679.
+   El corte es de 1024 px y no los 760 del teléfono: en un iPad vertical (768 a 834 px) el cajón de páginas está
+   a la vista y la página queda en 372 a 438 px, así que el reporte se encogía igual que en el teléfono (columnas de 47
+   a 57 px). Como el piso no fuerza el ancho, a un ancho donde la tabla entra no cambia nada; la compu (1025 px o más) y el
+   PDF no se tocan.
+   Entre 761 y 1024 px solo vale para páginas sin hoja (`:not(.sheet)`): una página con formato de hoja (A4, A3, Carta)
+   conserva ahí la hoja entera (794 px para A4) y el texto mide lo mismo que en el PDF; con el piso, el reporte (612 px en
+   la hoja) pasaba a 673 y se salía de ella. Hasta 760 px la hoja se ve libre (como el resto de la página) y el piso
+   vale también para ella, igual que en P.28. */
+@media (max-width: 1024px) {
+  .page:not(.sheet):not(.sd-export-source) .bn-editor [data-content-type='table'] :is(td, th)[colwidth] {
     min-width: 96px !important;
   }
 
-  .page:not(.sd-export-source) .bn-editor [data-content-type='table'] .tableWrapper {
+  .page:not(.sheet):not(.sd-export-source) .bn-editor [data-content-type='table'] .tableWrapper {
     /* Llegar al borde de la tabla no arrastra la página ni vuelve atrás en el navegador. */
+    overscroll-behavior-x: contain;
+  }
+}
+
+@media (max-width: 760px) {
+  .page.sheet:not(.sd-export-source) .bn-editor [data-content-type='table'] :is(td, th)[colwidth] {
+    min-width: 96px !important;
+  }
+
+  .page.sheet:not(.sd-export-source) .bn-editor [data-content-type='table'] .tableWrapper {
     overscroll-behavior-x: contain;
   }
 }
@@ -4920,9 +5228,10 @@ button.thread-anchor:hover:not(:disabled) {
     padding: 10px 8px;
   }
 
+  /* Pegado al borde de la pantalla, no 4 px afuera: afuera cortaba el botón y la página se arrastraba 4 px de costado. */
   .comment-count,
   .comment-add {
-    right: -4px;
+    right: 0;
   }
 }
 
@@ -6939,6 +7248,23 @@ button.folder-row-main:hover {
   border-radius: 50%;
   background: var(--accent);
   box-shadow: 0 0 0 2px var(--sidebar-bg);
+}
+
+/* El mismo punto en el botón de menú de la barra de arriba del teléfono (NavMenuButton): se ve sin abrir el cajón. */
+.icon-button.has-dot {
+  position: relative;
+}
+
+.icon-button.has-dot::after {
+  content: '';
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg);
 }
 
 .help-backdrop {

@@ -5,7 +5,7 @@ import { checkPageLengths, checkProjectName, jsonbTextLength } from './lengthChe
 import { CONTENT_FRAGMENT } from './structure';
 import { FakeServer, makeDevice, type Device } from './testing';
 import { onlyTitleRests, prependRest, restParagraphs, TITLE_REST_PREFIX, watchTitleRests } from './titleRest';
-import { rekeyWindow, sameInstant } from './tree';
+import { keyBetween, rekeyWindow, sameInstant } from './tree';
 import type { FailedOp, QueuedOp } from './types';
 
 // El tope del título (500 caracteres, `pages_title_check`) y lo que sobra, que va al principio de la página
@@ -631,6 +631,12 @@ describe('otros topes del árbol', () => {
     expect(rekeyed.length).toBeGreaterThan(0);
     expect(rekeyed.every((id) => piled.has(id))).toBe(true);
     expect(new Set(rekeyed).size).toBeLessThan(piled.size);
+    // Y las claves que escribió el rehecho quedan en la mitad del tope, no en el borde.
+    const written = d.tree
+      .pendingOps()
+      .flatMap((o) => (o.op.kind === 'update' && o.op.patch.sort_key !== undefined ? [o.op.patch.sort_key] : []));
+    expect(written.length).toBeGreaterThan(0);
+    expect(Math.max(...written.map((k) => k.length))).toBeLessThanOrEqual(DB_LIMITS.pageSortKey / 2);
     for (const id of spread) expect(d.tree.get(id)!.sort_key).toBe(keysBefore.get(id));
     const order = d.tree.roots(server.workspaceId).map((p) => p.title);
     expect(order.slice(0, 100)).toEqual(Array.from({ length: 100 }, (_, i) => `h${i}`));
@@ -658,5 +664,51 @@ describe('otros topes del árbol', () => {
     const twins = keys(['a0', 'a1', 'a1', 'a2']);
     const t = rekeyWindow(twins, 2);
     expect(t.keys.every((k, i, all) => i === 0 || all[i - 1] < k)).toBe(true);
+  });
+
+  it('el objetivo de la ventana es la mitad del tope: las claves nuevas no pasan de 64, ni se rehace de más', () => {
+    // Muchas páginas puestas siempre en el mismo hueco, antes de la última: la clave entre las dos vecinas crece.
+    const grow = (until: number): { sort_key: string }[] => {
+      const keys = ['a0', 'a1'];
+      while (keys[keys.length - 2].length < until) keys.splice(keys.length - 1, 0, keyBetween(keys[keys.length - 2], 'a1'));
+      return keys.map((sort_key) => ({ sort_key }));
+    };
+    const roomy = DB_LIMITS.pageSortKey / 2;
+    // Con la clave del hueco entre 65 y 128 (entra en la base, pero pasa la mitad): la ventana crece hasta que las
+    // claves nuevas quedan en 64 o menos. Con un objetivo de 128 devolvería de una vez la clave larga.
+    const piled = grow(100);
+    const at = piled.length - 1;
+    const direct = keyBetween(piled[at - 1].sort_key, piled[at].sort_key).length;
+    expect(direct).toBeGreaterThan(roomy);
+    expect(direct).toBeLessThanOrEqual(DB_LIMITS.pageSortKey);
+    const w = rekeyWindow(piled, at);
+    expect(w.from).toBeLessThan(at);
+    expect(Math.max(...w.keys.map((k) => k.length))).toBeLessThanOrEqual(roomy);
+    // Lo que queda afuera de la ventana no se toca y el orden es estricto.
+    const chain = [piled[w.from - 1]?.sort_key ?? '', ...w.keys, piled[w.from + w.keys.length - 1]?.sort_key ?? '~'];
+    expect(chain.every((k, i) => i === 0 || chain[i - 1] < k)).toBe(true);
+    // Con la clave del hueco por debajo de 64 no hay nada que rehacer de más: la ventana es solo el hueco.
+    const shallow = grow(roomy - 12);
+    const s = rekeyWindow(shallow, shallow.length - 1);
+    expect(s.from).toBe(shallow.length - 1);
+    expect(s.keys).toHaveLength(1);
+    // Cada profundidad de 40 a 120 caracteres, una por una (incluido el borde: 64 sí se queda, 65 no): la ventana es solo el
+    // hueco si la clave directa mide 64 o menos; si mide más, crece y las claves nuevas quedan en 64 o menos.
+    const lengths = new Set<number>();
+    for (let until = 40; until <= 120; until++) {
+      const list = grow(until);
+      const hole = list.length - 1;
+      const directLength = keyBetween(list[hole - 1].sort_key, list[hole].sort_key).length;
+      lengths.add(directLength);
+      const win = rekeyWindow(list, hole);
+      if (directLength <= roomy) expect(win.from, `directa de ${directLength}`).toBe(hole);
+      else {
+        expect(win.from, `directa de ${directLength}`).toBeLessThan(hole);
+        expect(Math.max(...win.keys.map((k) => k.length)), `directa de ${directLength}`).toBeLessThanOrEqual(roomy);
+      }
+    }
+    // El barrido tiene que pasar justo por los dos lados del borde.
+    expect(lengths.has(roomy)).toBe(true);
+    expect(lengths.has(roomy + 1)).toBe(true);
   });
 });
