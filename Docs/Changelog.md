@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.154 :
 
 **El nombre en el árbol usa todo el ancho de la fila** (D233). Un nombre largo se cortaba con «…» antes del borde
 aunque no pasaras el mouse: la fila reservaba siempre el lugar de ⋯ y +, que solo se ven con hover. Ahora esos
