@@ -104,6 +104,10 @@ export const sidebar = {
     en: "This project was deleted in the meantime: it is in the Trash.",
     es: "Este proyecto se borró mientras tanto: está en la papelera.",
   },
+  'project.errorPurged': {
+    en: "This project was deleted forever: it can no longer be restored from the app.",
+    es: "Este proyecto se borró para siempre: ya no se puede restaurar desde la app.",
+  },
   'import.menu': { en: "Import from Coda…", es: "Importar de Coda…" },
   'importArchive.menu': { en: "Import Shot Docs archive…", es: "Importar archivo de Shot Docs…" },
   // Con una importación en curso (de Coda o de un archivo de Shot Docs, importJob.ts): cerrar la sesión o quitar el

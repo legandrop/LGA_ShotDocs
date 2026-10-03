@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.167 :
+
+**Borrar un proyecto para siempre (P.14, entrega 3).** Un proyecto borrado quedaba en la papelera sin fin: no había
+cómo sacarlo (D-23 (6)). Ahora, pasados los 30 días, dueños y admins que lo manejan tienen *Delete forever…* en su
+renglón de la papelera, con la palabra `delete` / `borrar` y el aviso de los archivos que usan otros proyectos. Es una marca, no un borrado: `purge_project` pone
+`purged_at` y marca sus archivos subidos como mandados a la papelera de Drive; si la carpeta no estaba ahí, el portero la
+manda antes. Ninguna fila se borra; ya no se restaura, ni se pide o trae su carpeta (`project_purged`), y sale de la
+papelera para todos. Un archivo de otro proyecto que solo usaban sus páginas deja de estar frenado. Migración
+`20261101120000_proyectos_purgar` (schema 23), con su prueba SQL y 17 mutantes; ayuda.
+
+[Borrar un proyecto para siempre - pasados los 30 días, dueños y admins escriben la palabra en su renglón de la papelera y sale para siempre sin borrar ninguna fila; la carpeta va antes a la papelera de Drive (migración, schema 23)]
+
 v0.166 :
 
 **Links del PDF, entrega 2: *Request access*.** Quien abría la dirección de un archivo sin permiso solo leía «pedíselo a
