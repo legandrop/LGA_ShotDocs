@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.163 :
+
+**Prueba inestable de las novedades.** La suite completa dejaba a veces un error sin atender (`InvalidStateError` de la
+base de pruebas, en `unsyncedPages`) que Vitest atribuía a «no suma entradas al historial del navegador». Causa: el
+motor de sincronización cuenta lo pendiente (`refreshCounts`) esperando las escrituras locales; si en ese rato se hace
+`stop()` y se cierra la base (cerrar sesión, cambiar de workspace), el conteo seguía y chocaba con la base cerrada,
+y desde `poke()` nadie atendía el rechazo. Ahora un motor detenido no cuenta nada, ni antes ni después de consultar la
+base (un error con el motor andando se sigue viendo), y la prueba espera el cierre del motor. Prueba nueva en
+`engineStop.test.ts` que lo reproduce siempre.
+[ Prueba inestable de las novedades - un motor detenido ya no cuenta lo pendiente contra la base cerrada, y la prueba espera su cierre ]
+
 v0.162 :
 
 **Una sola papelera** (pedido de Lega). Había dos: *Trash* abajo de la barra lateral (páginas y archivos) y *Deleted

@@ -1156,14 +1156,25 @@ export class SyncEngine {
   }
 
   private async refreshCounts(): Promise<void> {
+    if (this.stopped) return;
     const comments = this.options.comments?.status();
-    const [states, unsynced, pendingFiles, media] = await Promise.all([
-      this.docs.states(),
-      this.docs.unsyncedPages(),
-      this.files.pendingCount(),
-      // La base de archivos puede estar cerrándose (se cierra la app): el conteo se deja como estaba.
-      this.options.media?.status().catch(() => undefined),
-    ]);
+    let counted;
+    try {
+      counted = await Promise.all([
+        this.docs.states(),
+        this.docs.unsyncedPages(),
+        this.files.pendingCount(),
+        // La base de archivos puede estar cerrándose (se cierra la app): el conteo se deja como estaba.
+        this.options.media?.status().catch(() => undefined),
+      ]);
+    } catch (err) {
+      // Un conteo que quedó en vuelo (esperando las escrituras locales) cuando se hizo `stop()` y se cerró la base
+      // choca con la base cerrada: ya no le importa a nadie. Detenido o no, un error de verdad se sigue viendo.
+      if (this.stopped) return;
+      throw err;
+    }
+    if (this.stopped) return;
+    const [states, unsynced, pendingFiles, media] = counted;
     let rejectedPages = 0;
     // Rechazada y con algo sin subir (la lista ya cuenta la marca de ediciones sin subir).
     const unsyncedSet = new Set(unsynced);
