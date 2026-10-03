@@ -320,7 +320,8 @@ describe('el anotador', () => {
       um.undoStack = [...steps];
       while (um.undoStack.length) popMarkupStep(um, 'undo');
       expect(shapes(doc)).toEqual([]);
-      expect(map(doc).size).toBe(0);
+      // El marco de la foto queda (deshacer nunca lo borra; un marco solo no se dibuja).
+      expect([...map(doc).keys()]).toEqual([ID]);
     });
 
     it('⌘Z en el anotador no se lleva una forma tuya que otra persona movió (queda entera, con su cambio)', async () => {

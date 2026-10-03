@@ -5,7 +5,8 @@
 // texto de las páginas va por un `UndoManager` simple anotado en la línea de tiempo.
 //
 // - Sola: deshacer todo deja el mapa y el texto como al principio, y rehacer todo, como al final.
-// - Con otra persona anotando la misma foto (dibuja, mueve y cambia formas suyas y tuyas, borra): ningún deshacer ni
+// - Con otra persona anotando la misma foto (dibuja, mueve y cambia formas suyas y tuyas, borra; también con cortes de
+//   red y deshaciendo lo suyo): ningún deshacer ni
 //   rehacer (de la línea de tiempo o del anotador) se lleva algo suyo que estaba a la vista (una forma, un campo, el
 //   marco de una foto donde dibujó), y los dos terminan iguales.
 //
@@ -64,7 +65,14 @@ const lost = (before: Set<string>, after: Set<string>) => [...before].filter((k)
 const sorted = (v: unknown): unknown =>
   Array.isArray(v) ? v.map(sorted) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sorted((v as Record<string, unknown>)[k])])) : v;
 
-const json = (doc: Y.Doc) => JSON.stringify({ m: sorted(doc.getMap(PHOTO_MARKUP_MAP).toJSON()), t: doc.getXmlFragment(CONTENT_FRAGMENT).toString() });
+/** Lo anotado sin los marcos solos (deshacer nunca borra el marco, auditoría B1; un marco sin formas no se dibuja). */
+function shown(map: Y.Map<unknown>): Record<string, unknown> {
+  const all = map.toJSON() as Record<string, unknown>;
+  const keys = Object.keys(all);
+  return Object.fromEntries(Object.entries(all).filter(([k]) => k.includes('/') || keys.some((o) => o.startsWith(`${k}/`))));
+}
+
+const json = (doc: Y.Doc) => JSON.stringify({ m: sorted(shown(doc.getMap(PHOTO_MARKUP_MAP))), t: doc.getXmlFragment(CONTENT_FRAGMENT).toString() });
 
 interface Tally {
   runs: number;
@@ -75,9 +83,20 @@ interface Tally {
   othersLost: number;
   converged: number;
   errors: number;
+  frameless: number;
 }
 
-function run(seed: number, withOther: boolean, tally: Tally): void {
+/** Formas vivas sin el marco de su foto (no se ven): lo que dejaba B1 de la auditoría al volver la red. */
+function frameless(map: Y.Map<unknown>): number {
+  let n = 0;
+  for (const key of map.keys()) if (key.includes('/') && !map.has(key.split('/')[0])) n++;
+  return n;
+}
+
+type Mode = 'sola' | 'otro' | 'cortes';
+
+function run(seed: number, mode: Mode, tally: Tally): void {
+  const withOther = mode !== 'sola';
   const rnd = seeded(seed);
   const pick = <T,>(xs: readonly T[]): T => xs[Math.floor(rnd() * xs.length)];
   // Dos páginas: A tiene las fotos; B, solo texto (para el orden entre páginas).
@@ -92,11 +111,28 @@ function run(seed: number, withOther: boolean, tally: Tally): void {
   const mine = docs.A;
   const map = mine.getMap<unknown>(PHOTO_MARKUP_MAP);
   let other: Y.Doc | null = null;
+  let link: ReturnType<typeof connect> | null = null;
+  // Con cortes, el otro anota con su anotador (también deshace lo suyo, de a un paso y protegido, como Annotator.tsx).
+  let otherUm: Y.UndoManager | null = null;
   if (withOther) {
     other = new Y.Doc();
     Y.applyUpdate(other, Y.encodeStateAsUpdate(mine));
-    connect(mine, other, 'sync', { repair: false });
+    link = connect(mine, other, 'sync', { repair: false });
+    if (mode === 'cortes') {
+      const otherMap = other.getMap<unknown>(PHOTO_MARKUP_MAP);
+      otherUm = new Y.UndoManager(otherMap, { trackedOrigins: new Set(PHOTOS.map(markupOrigin)), captureTimeout: 0 });
+      protectMarkupOthers(otherUm, otherMap);
+    }
   }
+  let online = true;
+  /** Vuelve la red y mira que no queden formas sin marco en ninguno de los dos. */
+  const reconnect = () => {
+    link!.online();
+    online = true;
+    const n = frameless(map) + frameless(other!.getMap(PHOTO_MARKUP_MAP));
+    tally.frameless += n;
+    if (n > 0) throw new Error(`semilla ${seed}: ${n} formas sin marco al volver la red`);
+  };
   const tdocs: TimelineDocs = { open: async (id) => docs[id], close: () => undefined, subscribeUnsupported: () => () => undefined };
   const timeline = new UndoTimeline({ docs: tdocs, projectOf: () => 'P' });
   // El texto de cada página: un `UndoManager` anotado en la línea de tiempo (como el editor en pantalla).
@@ -155,6 +191,17 @@ function run(seed: number, withOther: boolean, tally: Tally): void {
 
   for (let i = 0; i < 50; i++) {
     const r = rnd();
+    if (link && mode === 'cortes' && rnd() < 0.12) {
+      if (online) {
+        link.offline();
+        online = false;
+      } else reconnect();
+      continue;
+    }
+    if (otherUm && r < 0.05) {
+      popMarkupStep(otherUm, 'undo');
+      continue;
+    }
     if (other && r < 0.2) {
       // El otro anota la misma foto: dibuja, mueve o cambia (suyas o mías), o borra.
       const fileId = pick(PHOTOS);
@@ -193,6 +240,7 @@ function run(seed: number, withOther: boolean, tally: Tally): void {
     else timelineStep('redo');
   }
   close();
+  if (link && !online) reconnect();
   // Lo último, con lo que quedaba para rehacer: deshacer todo vuelve al principio y rehacer todo, acá.
   for (let g = 0; g < 1000 && timelineStep('redo'); g++);
   const end = { A: json(docs.A), B: json(docs.B) };
@@ -203,17 +251,19 @@ function run(seed: number, withOther: boolean, tally: Tally): void {
   for (let g = 0; g < 1000 && timelineStep('redo'); g++);
   const afterRedo = { A: json(docs.A), B: json(docs.B) };
   if (!other && afterRedo.A === end.A && afterRedo.B === end.B) tally.exactRedo++;
+  if (link && mode === 'cortes') reconnect();
   if (other && JSON.stringify(sorted(other.getMap(PHOTO_MARKUP_MAP).toJSON())) === JSON.stringify(sorted(map.toJSON()))) tally.converged++;
   tally.runs++;
+  otherUm?.destroy();
   timeline.dispose();
 }
 
-const fresh = (): Tally => ({ runs: 0, exactUndo: 0, exactRedo: 0, undone: 0, sessions: 0, othersLost: 0, converged: 0, errors: 0 });
+const fresh = (): Tally => ({ runs: 0, exactUndo: 0, exactRedo: 0, undone: 0, sessions: 0, othersLost: 0, converged: 0, errors: 0, frameless: 0 });
 
 describe('lo anotado como un paso, al azar (entrega 3)', () => {
   it(`sola: deshacer todo vuelve al principio y rehacer todo, al final (${SEEDS} semillas)`, () => {
     const tally = fresh();
-    for (let seed = 1; seed <= SEEDS; seed++) run(seed * 7919, false, tally);
+    for (let seed = 1; seed <= SEEDS; seed++) run(seed * 7919, 'sola', tally);
     report('markup-sola', tally);
     expect(tally.sessions).toBeGreaterThan(SEEDS);
     expect(tally.exactUndo).toBe(SEEDS);
@@ -222,10 +272,23 @@ describe('lo anotado como un paso, al azar (entrega 3)', () => {
 
   it(`con otra persona anotando la misma foto: nada suyo a la vista se va y los dos iguales (${SEEDS} semillas)`, () => {
     const tally = fresh();
-    for (let seed = 1; seed <= SEEDS; seed++) run(seed * 104729, true, tally);
+    for (let seed = 1; seed <= SEEDS; seed++) run(seed * 104729, 'otro', tally);
     report('markup-otro', tally);
     expect(tally.othersLost).toBe(0);
     expect(tally.errors).toBe(0);
     expect(tally.converged).toBe(SEEDS);
+  });
+
+  // Auditoría de la entrega 3, B1: con la red cortada, el otro dibuja con el marco que escribí yo mientras deshago mi
+  // anotación; al volver la red, sus formas no pueden quedar sin marco. Barata (sin editor): más semillas por defecto.
+  const CUTS = Number(process.env.TIMELINE_SEEDS ?? 200);
+  it(`con otra persona y cortes de red: ninguna forma queda sin marco y nada suyo se va (${CUTS} semillas)`, () => {
+    const tally = fresh();
+    for (let seed = 1; seed <= CUTS; seed++) run(seed * 141421, 'cortes', tally);
+    report('markup-cortes', tally);
+    expect(tally.frameless).toBe(0);
+    expect(tally.othersLost).toBe(0);
+    expect(tally.errors).toBe(0);
+    expect(tally.converged).toBe(CUTS);
   });
 });

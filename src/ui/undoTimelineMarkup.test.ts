@@ -6,7 +6,7 @@
 import { ySyncPluginKey } from 'y-prosemirror';
 import { afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
-import { addShape, deleteShape, markupOrigin, PHOTO_MARKUP_MAP, updateShape } from '../media/markup';
+import { addShape, deleteShape, markupOrigin, PHOTO_MARKUP_MAP, readAllMarkup, updateShape } from '../media/markup';
 import { mediaIdOf } from '../media/queue';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { connect, mountEditor, undoManager, view, yText, type Editor } from './collabHarness';
@@ -37,8 +37,16 @@ afterEach(async () => {
 const tick = (ms = 20) => new Promise((r) => setTimeout(r, ms));
 const PHOTO_ID = '0f8fad5b-d9cb-469f-a165-708677289501';
 const FRAME = { w: 4000, h: 3000 };
-const rect = (posX: number) => ({ type: 'rectangle', posX, posY: 10, w: 200, h: 100, color: '#ff0000' });
+/** Una forma que se dibuja (una línea, con los campos del formato). */
+const rect = (posX: number) => ({ type: 'line', zValue: 1, posX, posY: 10, startX: 0, startY: 0, endX: 50, endY: 50, strokeColor: '#FF0000' });
 const markupOf = (doc: Y.Doc) => doc.getMap<unknown>(PHOTO_MARKUP_MAP).toJSON() as Record<string, Record<string, unknown>>;
+/**
+ * Lo que se dibuja: las formas (deshacer nunca borra el marco de la foto, auditoría B1; un marco solo no se dibuja).
+ */
+const drawn = (doc: Y.Doc) => {
+  expect(readAllMarkup(doc.getMap<unknown>(PHOTO_MARKUP_MAP)).size === 0).toBe(Object.keys(markupOf(doc)).every((k) => !k.includes('/')));
+  return Object.keys(markupOf(doc)).filter((k) => k.includes('/')).sort();
+};
 
 /** Escribe al final del primer renglón con texto como un paso propio de la pila. */
 function type(E: Editor, text: string): void {
@@ -189,7 +197,7 @@ describe('anotar como un paso de la línea de tiempo (entrega 3)', () => {
     await runner.run('undo');
     expect(where()).toBe('A');
     // Todo lo de esa vez: las dos formas, el cambio y el marco.
-    expect(markupOf(app.doc!)).toEqual({});
+    expect(drawn(app.doc!)).toEqual([]);
     expect(app.shown).toEqual([PHOTO_ID]);
     expect(notes.at(-1)).toBe('Undone in “A”');
 
@@ -215,7 +223,7 @@ describe('anotar como un paso de la línea de tiempo (entrega 3)', () => {
     expect(yText(doc)).not.toContain('dos');
     expect(Object.keys(markupOf(doc))).toHaveLength(2);
     await runner.run('undo');
-    expect(markupOf(doc)).toEqual({});
+    expect(drawn(doc)).toEqual([]);
     expect(yText(doc)).toContain('Toma A: uno');
     await runner.run('undo');
     expect(yText(doc)).not.toContain('uno');
@@ -236,7 +244,7 @@ describe('anotar como un paso de la línea de tiempo (entrega 3)', () => {
     await runner.run('undo');
     expect(Object.keys(markupOf(doc)).sort()).toEqual([PHOTO_ID, `${PHOTO_ID}/s1`]);
     await runner.run('undo');
-    expect(markupOf(doc)).toEqual({});
+    expect(drawn(doc)).toEqual([]);
     await runner.run('redo');
     await runner.run('redo');
     expect(Object.keys(markupOf(doc)).sort()).toEqual([PHOTO_ID, `${PHOTO_ID}/s1`, `${PHOTO_ID}/s2`]);
@@ -272,20 +280,20 @@ describe('anotar como un paso de la línea de tiempo (entrega 3)', () => {
     expect(app.timeline.peek(project, 'redo')).toBeNull();
   });
 
-  it('dibujar y deshacer todo adentro del anotador también es algo nuevo: lo anotado antes ya no se rehace (si no, volvía sin marco)', async () => {
+  it('dibujar y deshacer todo adentro del anotador también es algo nuevo: lo anotado antes ya no se rehace (como en cualquier editor)', async () => {
     const { ids, app, runner, project } = await setup();
     await app.go(ids.A);
     const doc = app.doc!;
     const first = annotate(app.timeline, ids.A, doc, () => addShape(doc, PHOTO_ID, 's1', rect(10), FRAME))!;
     await runner.run('undo');
-    expect(markupOf(doc)).toEqual({});
+    expect(drawn(doc)).toEqual([]);
     expect(app.timeline.markupState(first)).toBe('redo');
-    // Otra vez en el anotador: dibuja (escribe el marco de nuevo) y lo deshace adentro antes de cerrar.
+    // Otra vez en el anotador: dibuja y lo deshace adentro antes de cerrar.
     expect(annotate(app.timeline, ids.A, doc, (um) => {
       addShape(doc, PHOTO_ID, 's2', rect(20), FRAME);
       popMarkupStep(um, 'undo');
     })).toBeNull();
-    expect(markupOf(doc)).toEqual({});
+    expect(drawn(doc)).toEqual([]);
     expect(app.timeline.markupState(first)).toBeNull();
     expect(app.timeline.peek(project, 'redo')).toBeNull();
   });
@@ -301,7 +309,7 @@ describe('anotar como un paso de la línea de tiempo (entrega 3)', () => {
     await runner.run('undo', { repeat: true });
     expect(Object.keys(markupOf(doc))).toHaveLength(2);
     await runner.run('undo');
-    expect(markupOf(doc)).toEqual({});
+    expect(drawn(doc)).toEqual([]);
   });
 
   it('con otra persona anotando la misma foto: su forma, su cambio a la mía y el marco quedan; lo demás mío se va', async () => {
@@ -334,6 +342,44 @@ describe('anotar como un paso de la línea de tiempo (entrega 3)', () => {
     expect(Object.keys(markupOf(doc)).sort()).toEqual([PHOTO_ID, `${PHOTO_ID}/mia1`, `${PHOTO_ID}/mia2`, `${PHOTO_ID}/suya`]);
   });
 
+  it('auditoría B1 (R6/D2): el otro dibuja sin red con el marco que escribí yo, deshago mi anotación, vuelve la red: lo suyo se ve', async () => {
+    const { ids, app, runner } = await setup();
+    await app.go(ids.A);
+    const doc = app.doc!;
+    const other = new Y.Doc();
+    Y.applyUpdate(other, Y.encodeStateAsUpdate(doc));
+    const link = connect(doc, other, 'sync', { repair: false });
+    annotate(app.timeline, ids.A, doc, () => addShape(doc, PHOTO_ID, 'mia', rect(10), FRAME));
+    link.offline();
+    // El otro ya tiene el marco: su forma no lo escribe.
+    addShape(other, PHOTO_ID, 'suya', rect(500), FRAME);
+    await runner.run('undo');
+    expect(drawn(doc)).toEqual([]);
+    link.online();
+    const seen = readAllMarkup(doc.getMap<unknown>(PHOTO_MARKUP_MAP)).get(PHOTO_ID);
+    expect(seen?.shapes.map((s) => s.id)).toEqual(['suya']);
+    expect(readAllMarkup(other.getMap<unknown>(PHOTO_MARKUP_MAP)).get(PHOTO_ID)?.shapes.map((s) => s.id)).toEqual(['suya']);
+  });
+
+  it('auditoría O2 (D1): deshago, el otro anota esa foto y deshace lo suyo, rehago: lo mío se ve', async () => {
+    const { ids, app, runner } = await setup();
+    await app.go(ids.A);
+    const doc = app.doc!;
+    const other = new Y.Doc();
+    Y.applyUpdate(other, Y.encodeStateAsUpdate(doc));
+    connect(doc, other, 'sync', { repair: false });
+    annotate(app.timeline, ids.A, doc, () => addShape(doc, PHOTO_ID, 'mia', rect(10), FRAME));
+    await runner.run('undo');
+    const otherMap = other.getMap<unknown>(PHOTO_MARKUP_MAP);
+    const theirs = new Y.UndoManager(otherMap, { trackedOrigins: new Set([markupOrigin(PHOTO_ID)]), captureTimeout: 0 });
+    protectMarkupOthers(theirs, otherMap);
+    addShape(other, PHOTO_ID, 'suya', rect(500), FRAME);
+    popMarkupStep(theirs, 'undo');
+    await runner.run('redo');
+    expect(readAllMarkup(doc.getMap<unknown>(PHOTO_MARKUP_MAP)).get(PHOTO_ID)?.shapes.map((s) => s.id)).toEqual(['mia']);
+    expect(markupOf(other)).toEqual(markupOf(doc));
+  });
+
   it('en el anotador: deshacer la forma que el otro movió no se la lleva (protectMarkupOthers)', async () => {
     const doc = new Y.Doc();
     const other = new Y.Doc();
@@ -351,7 +397,7 @@ describe('anotar como un paso de la línea de tiempo (entrega 3)', () => {
     expect(popMarkupStep(um, 'undo')).toBeNull();
     expect(markupOf(doc)[`${PHOTO_ID}/mia`]).toEqual({ ...rect(10), posX: 777 });
     expect(markupOf(doc)[PHOTO_ID]).toBeTruthy();
-    // Sin el otro adentro, deshacer crear sí la borra (y el marco).
+    // Sin el otro adentro, deshacer crear sí la borra (el marco queda: auditoría B1).
     const um2 = new Y.UndoManager(map, { trackedOrigins: new Set([markupOrigin(PHOTO_ID)]), captureTimeout: 0 });
     protectMarkupOthers(um2, map);
     deleteShape(doc, PHOTO_ID, 'mia');
@@ -382,7 +428,7 @@ describe('anotar como un paso de la línea de tiempo (entrega 3)', () => {
     await app.go(ids.B);
     await runner.run('undo');
     expect(where()).toBe('A');
-    expect(markupOf(app.doc!)).toEqual({});
+    expect(drawn(app.doc!)).toEqual([]);
     expect(notes.at(-1)).toBe('Undid annotations on a photo that\'s no longer in “A”.');
     await runner.run('redo');
     expect(notes.at(-1)).toBe('Redid annotations on a photo that\'s no longer in “A”.');

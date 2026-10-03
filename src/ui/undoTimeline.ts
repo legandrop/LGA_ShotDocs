@@ -1069,7 +1069,8 @@ export function tempManager(doc: Y.Doc, deleteFilter: UndoManager['deleteFilter'
 // escribiste vos) se iba aunque otra persona hubiera dibujado con él, y sus formas quedaban sin marco. Ahora:
 //   - una forma con un campo vivo de otro autor no se borra, ni sus campos si la forma se creó en ese mismo paso (si
 //     no, quedaría una forma a medias); tus cambios a una forma que ya existía se deshacen igual;
-//   - el marco de una foto no se borra mientras quede alguna forma viva de esa foto (sin él, no se ven).
+//   - el marco de una foto no se borra nunca al deshacer: puede haber formas del otro que todavía no llegaron (sin red),
+//     y sin él no se ven. Un marco solo no se dibuja.
 // Para saber qué creó el paso, se deshace de a un paso por vez (`popMarkupStep`), con el paso a mano.
 
 interface MapItemLike {
@@ -1096,18 +1097,16 @@ export function protectMarkupOthers(um: UndoManager, map: Y.Map<unknown>): void 
   if (protectedManagers.has(um)) return;
   protectedManagers.add(um);
   const previous = um.deleteFilter;
-  const root = map as unknown as { _map: Map<string, MapItemLike> };
   um.deleteFilter = (raw) => {
     if (!previous(raw)) return false;
     const item = raw as unknown as MapItemLike;
     if (item.parent === map && item.parentSub !== null) {
       if (item.parentSub.includes('/')) return !mapHasOthers(item);
-      // El marco de una foto: queda mientras quede alguna forma viva de esa foto (de otro, o tuya que quedó por lo del
-      // otro). Las formas que borra el mismo paso ya se borraron: el marco se escribe antes que ellas y Yjs borra de
-      // atrás para adelante.
-      const prefix = `${item.parentSub}/`;
-      for (const [key, shape] of root._map) if (!shape.deleted && key.startsWith(prefix)) return false;
-      return true;
+      // El marco de una foto: deshacer nunca lo borra (auditoría de la entrega 3, B1). Mirar si quedan formas no alcanza:
+      // otra persona puede estar dibujando con ese marco sin red (o lo suyo todavía no llegó), y al llegar sus formas
+      // quedarían sin marco, sin verse. Un marco sin formas no se dibuja (`readPhotoMarkup` pide al menos una) y la
+      // poda lo saca con la foto.
+      return false;
     }
     // Un campo de una forma que este mismo paso creó y que queda por lo del otro: queda también.
     const owner = item.parentSub !== null ? (item.parent as { _item?: MapItemLike | null } | null)?._item : null;
