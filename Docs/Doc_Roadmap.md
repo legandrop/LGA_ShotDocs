@@ -324,7 +324,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   dio no aprobado (el paso 8) y se corrigió en una ronda** (`Doc_Link_Publico.md`, "Correcciones de la auditoría de la
   2a"). Queda de esa auditoría O4 (con D14 apagado se escribe igual en la sala). Al publicar la 2a, subir
   `min_app_version` a ella (O5: la publicada pasa *Can edit* a *Can view* al cambiar el vencimiento).
-  **Entrega 2c hecha (v0.0XX: lo apartado a la vista; migración `20261029120000_link_apartado.sql` sin aplicar,
+  **Entrega 2c hecha (v0.157: lo apartado a la vista; migración `20261029120000_link_apartado.sql` sin aplicar,
   `schema_version` 20; ver "Cómo quedó la 2c" en `Doc_Link_Publico.md`):** la lista en *Share*, *Set aside (via link)* en
   el historial, el ícono del árbol y "volver a la página como la ve el equipo" para el visitante (la salida de la cadena
   de D235); con O3 (el orden de la admisión por dispositivo), O9 (la pantalla de link muerto recuerda lo mandado) y R1

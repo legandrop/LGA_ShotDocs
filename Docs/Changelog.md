@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.157 :
 
 **Link público, entrega 2c: lo apartado a la vista** (P.19). Lo que un visitante mandó y no entró solo se veía en un
 aviso de la página y un número en *Share*, y quien tenía algo apartado seguía escribiendo sin que llegara nada (D235).
