@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.159 :
 
 **Restos de dos auditorías, solo pruebas y un ajuste.** (1) Claves de orden (B.23): si el objetivo de la ventana de
 rehacer pasaba de 64 a 128 caracteres, ninguna prueba fallaba; ahora una barre las profundidades de 40 a 120 (incluido el
