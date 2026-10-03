@@ -125,8 +125,10 @@ export const PhotoNode = Node.create({
     return [
       'span',
       mergeAttributes(HTMLAttributes, { 'data-inline-content-type': PHOTO, class: 'sd-photo' }),
-      // `loading` primero: un `sdmedia://` en un `<img>` que no se muestra no se pide (quietImage.ts).
-      ['img', { ...(isAppMediaUrl(node.attrs.url) ? { loading: 'lazy' } : {}), src: String(node.attrs.url ?? ''), alt: String(node.attrs.name ?? '') }],
+      // Sin `loading`: el serializador de ProseMirror arma esto en un documento inerte (no pide nada) y la marca no
+      // cambia nada en los otros casos (medido en Chromium y WebKit, Doc_Imagenes.md); la copia para el portapapeles de
+      // BlockNote con la dirección de la app va por `render`, más abajo, que sí la lleva (quietImage.ts).
+      ['img', { src: String(node.attrs.url ?? ''), alt: String(node.attrs.name ?? '') }],
     ];
   },
 
