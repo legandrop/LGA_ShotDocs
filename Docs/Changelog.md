@@ -11,6 +11,94 @@ rutas, prendido o apagado. Medido: validar 0,4 ms; leer una página de 16 KB, 8,
 Cloudflare reales quedan en `Doc_Asistente.md`.
 [ MCP M0 - servidor MCP de prueba en el portero, apagado de fábrica, y rechazo de tokens de asistentes fuera de /mcp ]
 
+v0.144 :
+
+Deshacer en orden (P.26), entrega 2. El reemplazo en todo el proyecto no estaba en ⌘Z: solo se deshacía con *Undo*
+del aviso o del panel, sin rehacer, y deshacer después lo escrito antes dejaba texto de más ("Toma 1: cámara" en vez de
+"Toma 1: "), porque las anclas escriben letras nuevas que la pila de la página no conoce. Ahora el reemplazo es un paso
+de la línea de tiempo: ⌘Z lo deshace en todas sus páginas sin moverte y ⌘⇧Z lo rehace (`planRedo`). En las páginas
+editadas en la sesión entra en la pila de Yjs de la página, así lo de antes sale exacto, también desde el *Undo* del
+panel fuera de orden (C1). Recién reemplazado, ⌘Z en el panel lo deshace (DH9). Deshacer un borrado por las anclas
+sigue al vecino que volvió con un deshacer.
+[ Deshacer en orden entrega 2 - el reemplazo en todo el proyecto como un paso de ⌘Z y ⌘⇧Z, exacto en las páginas editadas ]
+
+v0.143 :
+
+La clave del asistente sincronizada, entrega S2 (P.24, `Doc_Clave_Sincronizada.md`). Faltaba cambiar la frase, abrir
+la copia en una computadora prestada sin guardarla, sincronizar en un segundo workspace y llevar la clave de *Voice*; un
+dispositivo aceptaba una copia más vieja repuesta en la base, y con la copia cambiada en otro ofrecía *Choose a new
+passphrase…*, que la pisaba con la clave vieja. Ahora: *Change passphrase…* vuelve a cifrar la copia (abriéndola antes);
+*Keep the key on this device* destildada deja la clave solo en la pestaña; el `savedAt` del sobre rechaza una copia más
+vieja; *Also sync in this workspace…*; la clave de *Voice* viaja en el mismo sobre; el error de clave rechazada suma
+*Enter your passphrase to update it here*; la ventana de salir cuenta las notas de voz. Sin migración.
+[ Clave sincronizada S2 - cambiar la frase, solo en esta pestaña, copia más vieja, otros workspaces, la clave de Voice y las notas de voz al salir ]
+
+v0.142 :
+
+Carpetas, entrega 3, y subidas que se traban (P.9, B.11). Con el portero colgado, cada archivo de una carpeta gastaba
+sus 5 intentos y quedaba con error: ahora una trabada no gasta intentos y, a la segunda, la cola de la carpeta espera
+(10 s, 20 s… hasta 10 minutos), como la de los sueltos, que mientras espera registra los archivos nuevos y sube sus
+miniaturas. La bajada de `page-files` se corta a los 30 s sin recibir nada (antes, 27 minutos) y sus pasadas esperan
+tras cerrar por Storage colgado. En el portero, el 403 de Drive por límite de pedidos sale como `rate` (no «fuera del
+árbol»), la confianza de 60 s vale también en las páginas siguientes, el ZWJ va como escape y la marca de cada
+subcarpeta va en NFC, buscando también las anteriores; retomar compara rutas sin la forma de los acentos.
+[ Carpetas entrega 3 y subidas que se traban - la cola de una carpeta cierra la vuelta con el portero colgado, registrar y miniaturas mientras la cola espera, page-files con tope por quietud, 403 por límite como rate y marcas en NFC ]
+
+v0.141 :
+
+Exportar, entrega 3: volver a Shot Docs desde el zip. El zip guardaba lo necesario para volver, pero nada lo leía.
+*Import Shot Docs archive…* (selector de proyectos, dueño y admins) lee el zip por partes (`zipReader.ts`: CRC, Zip64,
+*deflate*, rechaza `..` y rutas absolutas) y crea siempre un proyecto nuevo: el árbol en orden, ajustes de hoja, marcas
+de plantilla con los ids nuevos, los bloques del JSON revisados contra el esquema (`archiveBlocks.ts`), el colapsado
+para todos, las anotaciones (el zip ahora las exporta) y los archivos por `media.add`; sin original, la vista JPEG de
+la foto o su nombre. Los comentarios vuelven con `import_comment` e ids derivados del proyecto nuevo, a nombre de quien
+importa solo si exportó él; piden la migración `20261026120000_comentarios_archivo.sql` (aplicada, versión 18). Si
+se corta, sigue sin duplicar.
+[ Exportar 3 - volver a Shot Docs desde el zip como proyecto nuevo, con anotaciones, plantillas y comentarios ]
+
+v0.140 :
+
+Deshacer en el orden en que editaste (P.26), entrega 1. La pila de ⌘Z de cada página moría al cambiar de página: el
+editor se desmontaba y y-prosemirror destruía su `UndoManager`. Ahora una línea de tiempo por proyecto y pestaña
+(`undoTimeline.ts`) guarda las listas de Yjs al irse, retiene el documento (`docs.open`) y se las pasa al editor nuevo
+sin parchear y-prosemirror. ⌘Z y ⌘⇧Z (`undoTimelineUi.ts`)
+siguen el orden entre páginas: si lo último fue en otra, la app va ahí, lo deshace a la vista y avisa con *Back*. Un paso
+por vez, la excepción de Yjs con dos personas atrapada (B.22), topes de 20 páginas y 1000 pasos. Deshacer un renglón
+propio ya no borra lo que otro escribió adentro (pasaba también antes). El reemplazo sigue igual (entrega 2).
+
+Copias locales, entrega 2 (P.10, D-25). Las fotos y los videos agregados en un dispositivo ocupaban lugar para siempre:
+la entrega 1 no los liberaba. Ahora *Free up* (aviso del tope, *Storage on this device* o un archivo nuevo que no
+entró) los libera con el sí de la persona, con red y un portero con `/verify`, subidos hace 14 días o más, sin marca
+que los pida y con la base y Drive confirmando el mismo archivo (id, peso, marca y MD5). `freeOwn`, la única que borra
+un original, repite todo en su transacción; queda la miniatura y lo que no se libera se dice con su motivo. Si una
+restauración lo vuelve a la cola, se enlaza sin bytes: el portero lo busca por la marca `sdFile` (también antes de
+abrir una subida, que sigue igual si la búsqueda falla). Hacer lugar sin preguntar nunca toca un original.
+[ Deshacer en orden entrega 1 y copias locales entrega 2 - ⌘Z y ⌘⇧Z entre páginas, y liberar los originales agregados en el dispositivo con Drive confirmado ]
+
+v0.139 :
+
+**Dictar al reporte, entregas V2 y V3** (P.27): sin red, *Save for later* solo dejaba la nota en el borrador de su
+página, y el único micrófono era el del teclado, que obliga a tocar un campo. V2: *Save for later* pasa la nota a una
+cola del dispositivo (`shotdocs-dictation`, sin subir su versión) y vacía el campo recién con la escritura confirmada;
+el indicador de sincronización suma *N voice notes to place* con la lista, y la hoja las ubica de a una con su vista
+previa o las pega como texto. Nunca se borra sola. V3: un botón de 72 px graba pedazos de 1 s en la cola (*Recording*
+recién con el primero guardado; `ended` y `pagehide` cortan y guardan), con nivel, tope de 2 minutos y pantalla
+despierta; transcribe con OpenAI, Gemini o un compatible (WebM primero, plan B a WAV) y ubica. *Voice* usa la clave del
+asistente o una segunda cifrada; *Insert at cursor*; micrófono en *Ask…*.
+[ Dictar al reporte V2 y V3 - la cola sin red y el micrófono propio: grabar por pedazos, transcribir con la clave de la persona e insertar donde se escribía ]
+
+v0.138 :
+
+La clave del asistente sincronizada, entrega S1 (P.24, D72 → B, `Doc_Clave_Sincronizada.md`). La clave había que
+pegarla en cada dispositivo. Ahora *Assistant…* → *Turn on sync…* la cifra en el dispositivo con una frase de seis
+palabras de la lista de la EFF (PBKDF2-SHA256 de 1 000 000 de vueltas y AES-256-GCM, relleno a 1 KB) y sube solo el
+bloque cifrado a `assistant_key_sync`, que con RLS lee solo la persona (migración `20261023120000_clave_sincronizada.sql`,
+aplicada, no sube `schema_version`). Otro dispositivo la abre con la frase, viendo a dónde va; si cambia el destino o la
+clave del dispositivo es otra, pregunta, y si la copia cambió en otro dispositivo, pide la frase de nuevo. *Update* y *Replace synced key…* abren antes la copia; *Stop syncing* la borra. Nuevo *Sign out other devices*
+en el menú de la cuenta. La base del dispositivo sigue en la versión 1. Sin cambios en el editor ni en
+`min_app_version`.
+[ Clave del asistente sincronizada S1 - copia cifrada con una frase, abrir en otro dispositivo, dejar de sincronizar y cerrar la sesión en los otros dispositivos ]
+
 v0.137 :
 
 Compactar (B.9), entrega 3: listos para prender (siguen apagados). Faltaba lo que la re-verificación de la entrega 2

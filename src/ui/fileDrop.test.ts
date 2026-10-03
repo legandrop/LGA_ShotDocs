@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { BlockNoteEditor } from '@blocknote/core';
 import { withCollaboration } from '@blocknote/core/yjs';
+import { yUndoPluginKey } from 'y-prosemirror';
 import { afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
@@ -125,5 +126,24 @@ describe('insertar archivos', () => {
     expect(editor.document[0].type).toBe('paragraph');
     expect(editor.document[0].children).toHaveLength(1);
     expect(editor.document[1].type).toBe('image');
+  });
+});
+
+describe('la dirección al terminar de subir es de la app (P.26)', () => {
+  it('no entra en la pila de deshacer: un ⌘Z saca el bloque entero, no deja uno sin dirección', async () => {
+    const editor = mount();
+    editor.replaceBlocks(editor.document, [{ type: 'paragraph', content: 'Antes' }]);
+    const um = (yUndoPluginKey.getState(editor.prosemirrorView!.state as never) as { undoManager: Y.UndoManager }).undoManager;
+    um.clear();
+    um.stopCapturing();
+    const fe = editor as unknown as FileEditor;
+    fe.uploadFile = async (file: File) => {
+      // La subida termina después: lo que venga es otro paso si entra en la pila.
+      um.stopCapturing();
+      return `sdmedia://${file.name}`;
+    };
+    await insertFiles(fe, [new File(['x'], 'a.pdf')], { blockId: editor.document[0].id, placement: 'after' });
+    expect((editor.document[1].props as { url: string }).url).toBe('sdmedia://a.pdf');
+    expect(um.undoStack).toHaveLength(1);
   });
 });

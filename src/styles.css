@@ -7860,3 +7860,49 @@ button.folder-row-main:hover {
     display: none;
   }
 }
+
+/* Las notas de *Dictate to report* guardadas para ubicar después (Docs/Doc_Dictado.md, V2): el aviso en el indicador
+   de sincronización, su lista y el número sobre el botón redondo del teléfono. */
+.sync-voice {
+  display: block;
+  border: none;
+  background: none;
+  font-size: 12px;
+  color: var(--accent-text);
+  padding: 6px 8px 0;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.voice-notes li {
+  margin-bottom: 8px;
+}
+
+.voice-note-text {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.voice-note-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 2px;
+}
+
+.dictate-fab-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: center;
+}

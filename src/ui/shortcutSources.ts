@@ -12,9 +12,10 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
   assistant: ['AssistantHost.tsx', 'assistantUi.ts'],
   dictate: ['DictationHost.tsx', 'dictationUi.ts'],
   titleEnter: ['PageView.tsx', 'PracticeView.tsx'],
-  // Recién elegida una plantilla, Ctrl/⌘+Z en el título vacío deshace la página (templatesUi.ts).
-  undo: ['PageView.tsx'],
-  redo: ['PageView.tsx'],
+  // Recién elegida una plantilla, Ctrl/⌘+Z en el título vacío deshace la página (templatesUi.ts). En el resto, la línea
+  // de tiempo del proyecto (P.26, undoTimelineUi.ts); recién reemplazado, también en el panel de buscar (DH9).
+  undo: ['PageView.tsx', 'undoTimelineUi.ts', 'ProjectSearch.tsx'],
+  redo: ['PageView.tsx', 'undoTimelineUi.ts', 'ProjectSearch.tsx'],
   comment: ['EditorComments.tsx', 'commentsUi.ts'],
   selectAll: ['collapseEditor.ts'],
   photoOpen: ['PageEditor.tsx'],
@@ -82,8 +83,10 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
     'ExportDialog.tsx',
     'AssistantPanel.tsx',
     'DictationPanel.tsx',
+    'VoiceSettingsDialog.tsx',
     'AssistantSettings.tsx',
     'SignOutDialog.tsx',
+    'SignOutOthersDialog.tsx',
     'TemplateHost.tsx',
     'TemplateDialogs.tsx',
     'RootReportDialog.tsx',

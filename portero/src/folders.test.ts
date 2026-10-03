@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanFileName, cutText, DRIVE_CALL_BUDGET, driveFolderName, FOLDER_BATCH, LIST_TRUST_MS, Portero, TREE_TTL_MS, validFolderPath, type Env, type Store } from './core';
 
@@ -319,7 +322,7 @@ describe('carpetas: nombres y rutas', () => {
     expect(driveFolderName('x'.repeat(199) + '🇦🇷')).toBe('x'.repeat(199));
     expect(driveFolderName('x'.repeat(198) + '🇦🇷🇦🇷')).toBe('x'.repeat(198) + '🇦🇷');
     expect(driveFolderName('x'.repeat(199) + '👍🏽')).toBe('x'.repeat(199));
-    expect(cutText('dí', 2)).toBe('d');
+    expect(cutText('di\u0301', 2)).toBe('d');
     expect(cutText('abc', 0)).toBe('');
     // El nombre de un archivo (el del pase, 255) también, y conserva la extensión.
     const name = cleanFileName('a'.repeat(250) + '🇦🇷🇦🇷🇦🇷.mov');
@@ -1144,6 +1147,35 @@ describe('carpetas: listar varias subcarpetas de una vez (dirs)', () => {
   });
 });
 
+describe('el código no lleva caracteres invisibles (van como escape)', () => {
+  it('ningún renglón de código de la app ni del portero tiene un ZWJ, un ZWNJ, una BOM ni una marca de dirección escritos tal cual', () => {
+    // Escritos tal cual no se ven: `'X'` con un ZWJ adentro parece `'X'` vacío. En los comentarios, los emojis
+    // compuestos de ejemplo (`👨‍👩‍👧`) sí pueden llevarlos.
+    const hidden = /[\u200B-\u200F\u2060\uFEFF\u202A-\u202E\u2066-\u2069]/;
+    const root = fileURLToPath(new URL('../../', import.meta.url));
+    const bad: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          if (entry.name !== 'node_modules' && entry.name !== 'fixtures') walk(path);
+        } else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) {
+          readFileSync(path, 'utf8')
+            .split('\n')
+            .forEach((line, i) => {
+              const code = line.trim();
+              if (code.startsWith('//') || code.startsWith('*') || code.startsWith('/*')) return;
+              if (hidden.test(line)) bad.push(`${path.slice(root.length)}:${i + 1}`);
+            });
+        }
+      }
+    };
+    walk(join(root, 'src'));
+    walk(join(root, 'portero', 'src'));
+    expect(bad).toEqual([]);
+  });
+});
+
 describe('carpetas: el ZWJ de los emojis compuestos en lo que lista el portero', () => {
   it('cleanFileName: el ZWJ se queda entre dos emojis y se saca entre letras, suelto o con el ZWNJ (igual que la app)', () => {
     const same = ['👨‍👩‍👧.jpg', '👩🏽‍💻.png', '❤️‍🔥.txt', 'Familia 👨‍👩‍👧‍👦 2026.pdf'];
@@ -1177,5 +1209,173 @@ describe('carpetas: el ZWJ de los emojis compuestos en lo que lista el portero',
     world.drive.set('hijaxxxxxxxxxx', { name: '🇦🇷 👨‍👩‍👧.jpg', mimeType: 'image/jpeg', parents: [dir], data: new Uint8Array([1]) });
     const many = (await (await call(p, '/folder/list', 'viewer-jwt', { file: F1, dirs: [dir] })).json()) as { lists: Record<string, { name: string }[]> };
     expect(many.lists[dir]!.map((e) => e.name)).toEqual(['🇦🇷 👨‍👩‍👧.jpg']);
+  });
+});
+
+describe('carpetas: entrega 3 (Drive que pide ir más despacio, la confianza corta y los acentos)', () => {
+  /** La marca que dejaba un portero anterior: la ruta tal cual llegaba, resumida. */
+  async function oldMark(path: string): Promise<string> {
+    const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(path)));
+    return Buffer.from(hash).toString('base64url').slice(0, 22);
+  }
+  /** Un Drive que contesta 403 a la metadata de `id` con el motivo que se le dé. */
+  function forbidding(http: typeof fetch, id: () => string | null, reason: string | null): typeof fetch {
+    return ((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      const target = id();
+      if (target && url.pathname === `/drive/v3/files/${target}` && !url.searchParams.get('alt')) {
+        const body = reason ? { error: { code: 403, errors: [{ domain: 'usageLimits', reason }] } } : { error: { code: 403 } };
+        return Promise.resolve(new Response(JSON.stringify(body), { status: 403, headers: { 'Content-Type': 'application/json' } }));
+      }
+      return http(input, init);
+    }) as typeof fetch;
+  }
+
+  it('un 403 de Drive por el límite de pedidos no es "fuera del árbol": sale como rate (la app espera y vuelve a pedir)', async () => {
+    const { world, store } = await setup();
+    const tree = await prepare(new Portero(env, store, world.http), { dirs: ['Fotos'] });
+    const dir = tree.dirs['Fotos']!;
+    let target: string | null = dir;
+    const later = (ms: number) => vi.useFakeTimers({ now: Date.now() + ms, toFake: ['Date'] });
+    for (const reason of ['userRateLimitExceeded', 'rateLimitExceeded', 'dailyLimitExceeded']) {
+      // El listado de una la mira siempre en Drive.
+      const one = await call(new Portero(env, store, forbidding(world.http, () => target, reason)), '/folder/list', 'viewer-jwt', { file: F1, dir });
+      expect(one.status).toBe(503);
+      expect(((await one.json()) as { code: string }).code).toBe('rate');
+      // El de varias, pasado el minuto de confianza.
+      later(LIST_TRUST_MS + 1000);
+      const many = await call(new Portero(env, store, forbidding(world.http, () => target, reason)), '/folder/list', 'viewer-jwt', { file: F1, dirs: [dir] });
+      expect(many.status).toBe(503);
+      expect(((await many.json()) as { code: string }).code).toBe('rate');
+    }
+    // Un 429 también.
+    const tooMany = (async (input: RequestInfo | URL, init?: RequestInit) =>
+      new URL(String(input)).pathname === `/drive/v3/files/${dir}` ? new Response('{}', { status: 429 }) : world.http(input, init)) as typeof fetch;
+    const res = await call(new Portero(env, store, tooMany), '/folder/list', 'viewer-jwt', { file: F1, dir });
+    expect(res.status).toBe(503);
+    // Un 403 de permiso (o sin motivo) sigue siendo "no existe o no la ves", nunca una lista.
+    for (const reason of ['insufficientFilePermissions', null]) {
+      const denied = await call(new Portero(env, store, forbidding(world.http, () => target, reason)), '/folder/list', 'viewer-jwt', { file: F1, dir });
+      expect(denied.status).toBe(404);
+    }
+    // Y al subir: rate, no "esa carpeta no es de esta carpeta" (que hacía rearmar el árbol). Pasados los 10 minutos
+    // de la comprobación, para que la vuelva a mirar en Drive.
+    later(TREE_TTL_MS + 1000);
+    const up = await call(new Portero(env, store, forbidding(world.http, () => target, 'userRateLimitExceeded')), '/folder/sessions', 'editor-jwt', {
+      file: F1,
+      items: [{ dir, name: 'a.jpg', mime: 'image/jpeg', size: 3 }],
+    });
+    expect(up.status).toBe(503);
+    expect(((await up.json()) as { code: string }).code).toBe('rate');
+    target = null;
+    const fine = await call(new Portero(env, store, world.http), '/folder/list', 'viewer-jwt', { file: F1, dir });
+    expect(fine.status).toBe(200);
+  });
+
+  it('en las páginas siguientes de un listado de varias la confianza también es de un minuto (antes, 10)', async () => {
+    const { world, store } = await setup();
+    const tree = await prepare(new Portero(env, store, world.http), { dirs: ['A', 'B'] });
+    const [a, b] = [tree.dirs['A']!, tree.dirs['B']!];
+    for (let i = 0; i < 150; i++) {
+      world.drive.set(`pg${String(i).padStart(4, '0')}`.padEnd(14, 'x'), { name: `f${i}.jpg`, mimeType: 'image/jpeg', parents: [a], data: new Uint8Array([1]) });
+    }
+    const first = (await (await call(new Portero(env, store, world.http), '/folder/list', 'viewer-jwt', { file: F1, dirs: [a, b] })).json()) as {
+      nextPageToken: string | null;
+    };
+    expect(first.nextPageToken).toBeTruthy();
+    // El dueño mueve B a otro lado y pasa un poco más de un minuto (no 10).
+    const carpetas = world.drive.get(tree.root.id)!.parents[0]!;
+    world.drive.get(b)!.parents = [carpetas];
+    vi.useFakeTimers({ now: Date.now() + LIST_TRUST_MS + 1000, toFake: ['Date'] });
+    const next = await call(new Portero(env, store, world.http), '/folder/list', 'viewer-jwt', { file: F1, dirs: [a, b], pageToken: first.nextPageToken });
+    expect(next.status).toBe(409);
+    expect(((await next.json()) as { code: string }).code).toBe('changed');
+  });
+
+  it('dentro del minuto, las páginas siguientes no le preguntan nada más a Drive; una subcarpeta honda no se vuelve a mirar en cada pedido', async () => {
+    const { world, store } = await setup();
+    const tree = await prepare(new Portero(env, store, world.http), { dirs: ['A', 'A/B', 'A/B/C', 'A/B/D'] });
+    const [c, d] = [tree.dirs['A/B/C']!, tree.dirs['A/B/D']!];
+    for (let i = 0; i < 150; i++) {
+      world.drive.set(`hd${String(i).padStart(4, '0')}`.padEnd(14, 'x'), { name: `f${i}.jpg`, mimeType: 'image/jpeg', parents: [c], data: new Uint8Array([1]) });
+    }
+    const gets = () => world.calls.filter((x) => x.startsWith('GET www.googleapis.com/drive/v3/files/')).length;
+    const start = Date.now();
+    // Pasan 50 s y se lista B (de a una, como el visor): Drive muestra a C y D adentro, ahora.
+    vi.useFakeTimers({ now: start + 50_000, toFake: ['Date'] });
+    const listedB = await call(new Portero(env, store, world.http), '/folder/list', 'viewer-jwt', { file: F1, dir: tree.dirs['A/B']! });
+    expect(listedB.status).toBe(200);
+    // 20 s después (70 s desde que se comprobaron A y B): C y D se vieron hace 20 s. Antes heredaban la fecha de B y
+    // se volvían a mirar en cada pedido; ahora no, ni en la primera página ni en las siguientes.
+    vi.useFakeTimers({ now: start + 70_000, toFake: ['Date'] });
+    const before = gets();
+    const first = (await (await call(new Portero(env, store, world.http), '/folder/list', 'viewer-jwt', { file: F1, dirs: [c, d] })).json()) as {
+      nextPageToken: string | null;
+    };
+    expect(first.nextPageToken).toBeTruthy();
+    const second = await call(new Portero(env, store, world.http), '/folder/list', 'viewer-jwt', { file: F1, dirs: [c, d], pageToken: first.nextPageToken });
+    expect(second.status).toBe(200);
+    expect(gets() - before).toBe(0);
+  });
+
+  it('la marca de una subcarpeta no depende de la forma de los acentos: soltarla desde el otro sistema no crea otra al lado', async () => {
+    const { world, p } = await setup();
+    const nfd = 'Di\u0301a_1/Mari\u0301a';
+    const nfc = nfd.normalize('NFC');
+    expect(nfc).not.toBe(nfd);
+    const fromMac = await prepare(p, { dirs: ['Di\u0301a_1', nfd] });
+    const folders = () => [...world.drive.values()].filter((f) => f.mimeType === FOLDER && f.appProperties?.sdFolder === F1).length;
+    const count = folders();
+    // Desde Windows (NFC): las mismas dos, sin crear nada.
+    const fromWindows = await prepare(p, { dirs: ['Día_1'.normalize('NFC'), nfc] });
+    expect(fromWindows.dirs['Día_1'.normalize('NFC')]).toBe(fromMac.dirs['Di\u0301a_1']);
+    expect(fromWindows.dirs[nfc]).toBe(fromMac.dirs[nfd]);
+    expect(folders()).toBe(count);
+    // Las nuevas se marcan en NFC y su nombre en Drive va en NFC.
+    expect(world.drive.get(fromMac.dirs[nfd]!)!.appProperties!.sdPath).toBe(await oldMark(nfc));
+    expect(world.drive.get(fromMac.dirs[nfd]!)!.name).toBe('María'.normalize('NFC'));
+  });
+
+  it('una subcarpeta marcada por un portero anterior (la ruta tal cual) se encuentra desde los dos sistemas y conserva su marca', async () => {
+    const { world, p } = await setup();
+    const tree = await prepare(p, { dirs: [] });
+    const nfd = 'Cana\u0301rias';
+    // Como la dejó un portero anterior desde la Mac: marca de la ruta en NFD.
+    const old = 'oldnfdxxxxxxxxx';
+    world.drive.set(old, { name: 'Canárias', mimeType: FOLDER, parents: [tree.root.id], appProperties: { sdFolder: F1, sdPath: await oldMark(nfd) } });
+    const count = world.drive.size;
+    expect((await prepare(p, { dirs: [nfd] })).dirs[nfd]).toBe(old);
+    expect((await prepare(p, { dirs: [nfd.normalize('NFC')] })).dirs[nfd.normalize('NFC')]).toBe(old);
+    expect(world.drive.size).toBe(count);
+    expect(world.drive.get(old)!.appProperties!.sdPath).toBe(await oldMark(nfd));
+    // Y una de un portero anterior desde Windows (NFC) se encuentra desde la Mac.
+    const nfc2 = 'Sen\u0303al'.normalize('NFC');
+    const old2 = 'oldnfcxxxxxxxxx';
+    world.drive.set(old2, { name: nfc2, mimeType: FOLDER, parents: [tree.root.id], appProperties: { sdFolder: F1, sdPath: await oldMark(nfc2) } });
+    expect((await prepare(p, { dirs: [nfc2.normalize('NFD')] })).dirs[nfc2.normalize('NFD')]).toBe(old2);
+  });
+
+  it('dos rutas del mismo pedido que solo difieren en los acentos (en Windows, dos carpetas) van a una sola subcarpeta', async () => {
+    const { world, p } = await setup();
+    const nfd = 'Nin\u0303o';
+    const nfc = nfd.normalize('NFC');
+    const out = await prepare(p, { dirs: [nfc, nfd, `${nfc}/x`, `${nfd}/y`] });
+    expect(out.dirs[nfc]).toBe(out.dirs[nfd]);
+    const made = [...world.drive.values()].filter((f) => f.mimeType === FOLDER && f.appProperties?.sdFolder === F1);
+    expect(made.map((f) => f.name).sort()).toEqual(['Niño'.normalize('NFC'), 'x', 'y']);
+  });
+
+  it('30 rutas con acentos (60 marcas) se buscan en consultas cortas, sin crear nada dos veces', async () => {
+    const { world, p } = await setup();
+    const paths = Array.from({ length: FOLDER_BATCH }, (_, i) => `Cami\u0301on_${i}`);
+    const first = await prepare(p, { dirs: paths });
+    const before = world.drive.size;
+    const calls = world.calls.length;
+    const again = await prepare(p, { dirs: paths.map((x) => x.normalize('NFC')) });
+    expect(world.drive.size).toBe(before);
+    for (const x of paths) expect(again.dirs[x.normalize('NFC')]).toBe(first.dirs[x]);
+    // Cada ruta da dos marcas (NFC y NFD): 60 marcas, en consultas de a 40 como mucho.
+    const searches = world.calls.slice(calls).filter((x) => x === 'GET www.googleapis.com/drive/v3/files').length;
+    expect(searches).toBe(2);
   });
 });

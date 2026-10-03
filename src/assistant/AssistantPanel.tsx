@@ -11,6 +11,7 @@ import { appliedDoc, applySuggestion, retakeSnapshot, takeSnapshot, type ApplyOu
 import { closeAssistant, openAssistantSettings, useAssistantTarget, useAssistantUi } from './assistantUi';
 import { applyFormat, formatSnapshotFrom, FORMATS, planFormat, takeFormatSnapshot, type FormatOutcome, type FormatPlan, type FormatSnapshot, type FormatTarget, type LostText } from './format';
 import { loadSettings, readKey, rememberLanguage, type AssistantSettings } from './keyStore';
+import { fetchSyncMeta, type KeySyncClient } from './keySyncRemote';
 import { cleanAnswer, diffKeys, parseAnswer, plainNew, type Atom, type NewUnit, type OldUnit, type Parsed } from './markup';
 import { parseSummary, plainBlocks, toPartialBlocks, type MdBlock, type MdParsed } from './mdBlocks';
 import { insertSummary, parsePageTranslation, subpageAllowed, subpageBlocks, takePageSnapshot } from './pageActions';
@@ -19,6 +20,8 @@ import { buildRequest, EDIT_ONLY, LANGUAGES, PAGE_ACTIONS, type Action } from '.
 import { complete, isLocalProvider, PROVIDER_NAMES, type Usage } from './providers';
 import './assistant.css';
 import { errorText } from './errorText';
+import { isKeyRejected, SyncedKeyHint } from './SyncedKeyHint';
+import { AskMic } from '../dictation/AskMic';
 
 // El panel del asistente (Docs/Doc_Asistente.md, entregas A1 y A2, secciones 6 y 11): las acciones sobre lo elegido,
 // *Format as…*, las de la página entera (*Summarize page*, *Translate page*), la respuesta por partes, la vista previa y
@@ -43,7 +46,7 @@ type Phase =
   | { kind: 'idle'; note?: string }
   | { kind: 'running'; action: Action; text: string }
   /** `retake`: lo elegido cambió; *Try again* pide sobre lo que hay hoy en el mismo lugar. */
-  | { kind: 'error'; action: Action; message: string; text?: string; retake?: boolean }
+  | { kind: 'error'; action: Action; message: string; text?: string; retake?: boolean; keyRejected?: boolean }
   | { kind: 'preview'; action: Action; result: Result; warnings: string[] }
   /** Creando la subpágina traducida (sin red, igual: es local). */
   | { kind: 'busy'; action: Action };
@@ -277,6 +280,21 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
     };
   }, [user.email, settingsOpen]);
 
+  // Sin clave en este dispositivo: si la persona tiene una copia sincronizada en este workspace, el panel ofrece abrirla
+  // (Docs/Doc_Clave_Sincronizada.md, sección 9). Con cualquier error (sin red, la base sin la tabla), no se ofrece.
+  const [hasCopy, setHasCopy] = useState(false);
+  const noKey = settings !== undefined && !(settings && (settings.hasKey || settings.provider === 'compatible') && settings.model);
+  useEffect(() => {
+    if (settingsOpen || !noKey || !status.online) return;
+    let live = true;
+    fetchSyncMeta(client as unknown as KeySyncClient, user.id)
+      .then((m) => live && setHasCopy(!!m))
+      .catch(() => live && setHasCopy(false));
+    return () => {
+      live = false;
+    };
+  }, [client, user.id, noKey, status.online, settingsOpen]);
+
   // La política, al abrir y otra vez al cerrar los ajustes (el dueño o un admin la pudo cambiar ahí, A2).
   useEffect(() => {
     if (settingsOpen) return;
@@ -422,7 +440,7 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
         setPhase({ kind: 'preview', action: next.action, result, warnings: warningsOf(next, result, tr) });
       } catch (err) {
         if (abort.current !== controller) return;
-        setPhase({ kind: 'error', action: next.action, message: errorText(err, providerName, tr) });
+        setPhase({ kind: 'error', action: next.action, message: errorText(err, providerName, tr), keyRejected: isKeyRejected(err) });
       }
     },
     [settings, config, busy, target, language, formatTarget, instruction, user.email, tr, providerName, canEdit, tree, pageId],
@@ -700,6 +718,7 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
             <button className="primary" onClick={openAssistantSettings}>
               {tr('assistant.setup')}
             </button>
+            {hasCopy && <button onClick={openAssistantSettings}>{tr('assistant.unlockSynced')}</button>}
           </div>
         ) : (
           <>
@@ -750,6 +769,8 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
                     disabled={blocked}
                     onChange={(e) => setInstruction(e.target.value)}
                   />
+                  {/* Dictar el pedido con el micrófono propio (Docs/Doc_Dictado.md, V3). */}
+                  <AskMic disabled={blocked} onText={(said) => setInstruction((now) => (now.trim() ? `${now.trim()} ${said}` : said).slice(0, 500))} />
                   <button type="submit" disabled={blocked || !instruction.trim()}>
                     {tr('assistant.send')}
                   </button>
@@ -798,6 +819,7 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
                     </button>
                   )}
                   {phase.text && <button onClick={copy}>{tr('assistant.copy')}</button>}
+                  <SyncedKeyHint show={!!phase.keyRejected} />
                   <button className="link" onClick={discard}>
                     {tr('assistant.back')}
                   </button>

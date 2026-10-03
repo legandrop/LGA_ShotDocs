@@ -766,7 +766,15 @@ export async function buildZip(options: ZipOptions): Promise<ZipResult> {
           const json = `${SHOTDOCS_DIR}/pages/${String(n).padStart(4, '0')}.json`;
           await out.file(
             json,
-            JSON.stringify({ format: ARCHIVE_FORMAT, id: page.id, title: page.title, blocks: blocksForArchive(content.blocks as never, inside), collapsedForAll: content.collapsedForAll }),
+            JSON.stringify({
+              format: ARCHIVE_FORMAT,
+              id: page.id,
+              title: page.title,
+              blocks: blocksForArchive(content.blocks as never, inside),
+              collapsedForAll: content.collapsedForAll,
+              // Las anotaciones de las fotos de la página (entrega 3): campo nuevo del mismo formato 1, opcional al volver.
+              photoMarkup: content.photoMarkup,
+            }),
           );
           if (comments) {
             for (const th of threads) if (!th.root.deleted || th.replies.some((r) => !r.deleted)) threadsOut.push(threadJson(th, comments, options.me.id));

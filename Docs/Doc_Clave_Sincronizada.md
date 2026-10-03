@@ -1,10 +1,11 @@
 # La clave del asistente en todos tus dispositivos (D72 → B)
 
-**Estado: diseño, sin código** (roadmap P.24; pedido de Lega del 2026-10-02, que cambió D72 de A a B: "la clave
+**Estado: entregas S1 (v0.138) y S2 (v0.143) implementadas; ver "Cómo quedó S1" y "Cómo quedó S2", al final. S2 no
+tiene migración** (roadmap P.24; pedido de Lega del 2026-10-02, que cambió D72 de A a B: "la clave
 sincronizada entre tus dispositivos, cifrada con una frase que solo sabés vos"). Reemplaza la parte de IA1 de
 `Doc_Asistente.md` que decía "se carga una vez por dispositivo"; todo lo demás de la sección 4 de ese documento (la
-clave local, *Forget key*, la casilla al salir) sigue igual. Diseñado contra `main` v0.129. Las decisiones están
-propuestas (CS1 a CS9, sección 14) y valen hasta que Lega diga otra cosa. Los tiempos están medidos en esta PC (sección
+clave local, *Forget key*, la casilla al salir) sigue igual. Diseñado contra `main` v0.129. Las decisiones CS1 a CS9
+(sección 14) están decididas (Lega pidió no preguntar; quedan en su lista para cambiarlas si quiere). Los tiempos están medidos en esta PC (sección
 4.1 y "Cómo se midió"); los del iPhone son estimados y se miden en la entrega S1.
 
 ## En corto
@@ -673,3 +674,161 @@ tiene que cumplir:
 - **El sobre:** otro script fuera del repo (Node 22): cifrar, abrir y los seis casos que no tienen que abrir de la sección 4.3.
 - **Adivinar:** la cuenta de la sección 4.2 usa unos 9 000 millones de vueltas de PBKDF2-SHA256 por segundo por placa,
   del orden de lo que publican los benchmarks de `hashcat` para las placas más rápidas de 2023-2024; no se midió acá.
+
+## Cómo quedó S1 (v0.138)
+
+**Qué hay.** La migración `20261023120000_clave_sincronizada.sql` (la tabla de la sección 5, con una condición más:
+la sesión tiene que ser de la app, `private.session_allowed()`, como en el resto de la base; no sube `schema_version`,
+sin aplicar). En el dispositivo: el sobre (`src/assistant/keySync.ts`, con la lista de la EFF en `wordlist.ts`), la
+tabla (`keySyncRemote.ts`), los pasos sin interfaz (`keySyncFlow.ts`) y la sección *Sync across my devices* de
+*Assistant…* (`KeySyncSection.tsx`): *Turn on sync…* (frase generada o propia), *Unlock* (muestra el destino y el
+final de la clave, y pregunta si cambia), *Update synced key*, *Replace synced key…*, *Stop syncing*, *Choose a new
+passphrase…* (el *Forgot it?*), y los estados sin red, sin la tabla, con *Off* y con la copia en otro workspace. En el
+menú de la cuenta, *Sign out other devices* (`SignOutOthersDialog.tsx`). El panel sin clave suma *Unlock your synced
+key*; la ventana de salir, el aviso de la copia; la ayuda, *Sync your assistant key* con los cuatro pasos del
+dispositivo perdido. La base `shotdocs-assistant` sigue en la versión 1: lo nuevo es el campo opcional `sync` del
+registro (con dos campos más que los de la sección 6: `name`, para mostrar el workspace, y `localChanged`, que marca
+que la clave del dispositivo cambió después de abrir o subir la copia y hace aparecer *Update synced key*).
+
+**Lo que cambió del diseño al implementar:**
+
+- **La lista tiene 1 295 palabras**, no 1 296: la de la EFF trae "yo-yo", que con guiones de separador no se distingue
+  de dos palabras, y ya trae "yoyo". Sacarla deja 6 × log2(1 295) ≈ 62,0 bits, lo mismo en la práctica.
+- **La forma de "la generada" es cualquier frase de seis palabras de letras** (separadas por guiones o espacios): se
+  pasa a minúsculas con guiones. Una frase propia de seis palabras queda igual de normalizada al cifrar y al abrir (R1),
+  así que en ella las mayúsculas no cuentan; una propia con otra forma se usa tal cual.
+- ***Replace synced key…* sube la clave que está guardada en el dispositivo**, con la frase actual (que abre la copia,
+  regla 7) y una nueva. La clave nueva se pega antes arriba, con *Save*: así hay un solo lugar donde se escribe una
+  clave. La ayuda y la ventana lo dicen en ese orden.
+- ***Stop syncing* también está cuando la copia no se abrió en este dispositivo** (para borrar una copia que no se puede
+  abrir o que no es de la persona).
+- **La medición del iPhone no tiene una página aparte:** *Unlock* es la medición (en Chromium de esta PC, perfil de
+  teléfono, 170 ms). Si en el iPhone de Lega tarda más de 1,5 s, se agrega `format = 2` con 600 000 vueltas.
+
+**Probado.** Vitest: el sobre (13 pruebas: ida y vuelta, Node abre sin el código de la app con PBKDF2 de 1 000 000 de
+vueltas, los vectores de RFC 7914, lo que no abre, los parámetros y la dirección de la fila que no mandan, el relleno en
+bytes, R1, NFKC, la generada sin sesgo con un millón de sorteos, la propia), los pasos (14: dos dispositivos, regla 6,
+regla 7, la escritura condicional, *Forgot it?*, *Stop syncing*, nada en claro en lo que sale, lo guardado y la
+consola, la base en la versión 1 leída como la lee `main`), la ventana (15: cada estado de la sección 9, prender con la
+generada y con una propia, abrir con una frase mala y con la buena, preguntar ante un destino nuevo, *Update* con una
+frase mala, el aviso de "cambió en otro dispositivo", *Stop syncing*, la ventana de salir, la ayuda), el panel (1) y
+*Sign out other devices* desde el menú (2). 27 mutantes de la app, los 27 detectados. SQL en `begin … rollback`:
+`clave_sincronizada_permisos.sql` pasa, las otras 25 pruebas pasan con la migración, y 12 mutantes (sin `client_id`,
+sin `user_id`, sin la sesión de la app, `update` e `insert` a todas las columnas, el trigger sin generación o sin el id,
+`anon` lee, los `check` de versión y de largo, sin `cascade`, en Realtime), los 12 detectados. Recorrido en Chromium
+sin ventana con dos perfiles (la PC y un teléfono) sobre la app real, una tabla falsa compartida y un proveedor falso:
+prender, abrir en el otro con una frase mala y con la buena (con mayúscula inicial), el panel corrige con la clave
+abierta, sin red, la versión sin S1 (`keyStore.ts` de `main`) lee y usa la clave en el mismo perfil y la app nueva
+sigue después, el destino nuevo (*Keep my current key* / *Use it*), *Sign out other devices*, *Stop syncing* y que la
+frase y la clave no salen a la base ni a la consola: 37 de 37.
+
+**Falta (S2 y lo que no se pudo probar acá):** *Change passphrase…*, *Keep the key on this device*, el aviso de
+"cambió en otro dispositivo" (hoy un dispositivo que ya abrió la copia no se entera de una actualización: sigue con su
+clave, regla 5), el botón en el 401, rechazar una copia más vieja (`savedAt`) y *Also sync in this workspace*. Sin
+probar acá: el iPhone de verdad (tiempo y teclado), que el gestor de contraseñas ofrezca guardar y completar la frase,
+y que `signOut({ scope: 'others' })` corte de verdad otro dispositivo (los tres en el recorrido de Lega, sección 12).
+
+**Correcciones de la auditoría de S1** (aprobada con observaciones, ninguna bloqueante):
+
+- **O1.** Un dispositivo que ya había abierto la copia no se enteraba de que cambió en otro (*Update* o *Replace*
+  allá) y seguía diciendo *Synced in…*. Ahora, si la generación de la copia es mayor que la que abrió, la sección dice
+  *Your synced key changed on another device. Enter your passphrase to update it here.* y pide la frase (el aviso
+  liviano de S2, sin consultas aparte: se ve al abrir *Assistant…*). Hasta entonces la clave del dispositivo sigue
+  (regla 5). La ayuda y el texto de *Replace synced key…* lo dicen.
+- **O2.** Con el mismo destino, *Unlock* reemplazaba sin preguntar una clave del dispositivo distinta de la copia.
+  Ahora pregunta *Replace the key on this device (…L0c4) with the synced one (…z1Z2)?*, salvo que la clave del
+  dispositivo haya venido de esta misma copia y no se haya cambiado después (el caso de O1, donde la persona quiere la
+  nueva).
+- **O3.** Prueba de que la llave derivada es no exportable (al cifrar y al abrir). **O4.** *Sign out other devices*
+  nombra el workspace por su host si no tiene nombre. **O5.** El mutante "sin `user_id` en el `with check`" es
+  equivalente (los permisos por columna y el trigger ya lo impiden), anotado en la prueba SQL y en `Doc_Supabase.md`.
+
+## Cómo quedó S2 (v0.143)
+
+**Qué hay.** Sin migración ni cambios en la tabla, sin subir `schema_version` ni `min_app_version`; la base
+`shotdocs-assistant` sigue en la versión 1.
+
+- ***Change passphrase…*** (copia abierta): la frase actual abre la copia (regla 7) y lo mismo que tenía (clave, destino,
+  modelo, la de *Voice*) se vuelve a cifrar con la nueva, con sal e iv nuevos. No sube la clave del dispositivo (para eso
+  están *Update* y *Replace*). El dispositivo que la cambió sigue al día; los otros ven "cambió en otro dispositivo".
+- ***Keep the key on this device*** (tildada de fábrica, con `data-tip`) debajo de *Unlock*. Destildada, la clave y la
+  de *Voice* quedan en una variable de `keyStore.ts` y de `voiceSettings.ts`, que mientras existe manda sobre lo
+  guardado: leer, cambiar el modelo y el aviso "cambió" andan, y la base no se toca. *Forget key* olvida solo la de la
+  pestaña (si el dispositivo tenía una guardada de antes, vuelve a valer); la casilla de salir olvida las dos. La
+  sección dice *This key is only in this tab…*, y *Stop syncing* avisa que la clave se va al recargar.
+- **Una copia más vieja no se adopta:** `unlockSync` compara el `savedAt` de adentro del sobre con el que anotó el
+  dispositivo para ESE workspace (*This synced copy is older than the one on this device.*). Cada sobre nuevo lleva un
+  `savedAt` posterior a los conocidos (`nextSavedAt`: la copia abierta, la anotación, y en *Forgot it?* la hora de la
+  fila), así un reloj atrasado no hace que los otros dispositivos rechacen la copia nueva.
+- **El botón en el 401** (`SyncedKeyHint.tsx`): si el proveedor rechaza la clave y la copia de este workspace es más
+  nueva que la anotada, el error del panel y el de *Dictate to report* suman *Enter your passphrase to update it here*
+  (abre *Assistant…*); si el dispositivo nunca abrió la copia, *Unlock your synced key*. El panel cambia en tres líneas
+  (el tipo del error, el `keyRejected` y el botón).
+- ***Also sync in this workspace…*** (CS2): en un workspace sin copia, con la clave sincronizada en otro, la sección dice
+  *Your key is synced in <otro>.* y ofrece subir otra copia con la misma frase escrita dos veces (regla 7: la de allá no
+  se abre desde acá), o una frase nueva. El registro del dispositivo suma `moreSync` (las copias de los otros
+  workspaces, cada una con su generación); `sync` sigue siendo la primera. Una clave nueva marca todas; *Update* actualiza
+  la de ese workspace; *Stop syncing* saca solo esa anotación; abrir en un workspace una copia con otra clave marca las de
+  los otros.
+- **La observación de la re-verificación de S1:** con la copia cambiada en otro dispositivo, *Choose a new passphrase…*
+  (y el *Forgot it?*) ya no aparece, aunque la clave de este dispositivo se haya cambiado alguna vez. Quien perdió la
+  frase nueva usa *Stop syncing* y prende de nuevo, con la confirmación a la vista.
+- **La clave de *Voice* viaja en el mismo sobre** (campo opcional `voice`, sin cambiar el formato: una versión con S1 lo
+  ignora al abrir). Se sube si *Voice* usa una clave propia; al abrir se guarda en *Voice*. La regla 6 vale también para
+  ella: si va a otro destino que el que usa hoy *Voice* (la propia o la del asistente), o al mismo con otra clave, se
+  pregunta junto con lo demás. Cambiar la clave o el destino de *Voice* marca las copias para *Update*; el modelo solo,
+  no. Una copia sin *Voice* no le saca la suya al dispositivo (regla 5).
+- **La ventana de salir** dice cuántas notas de voz quedan sin ubicar en ese workspace (*You have 3 voice notes to place
+  on this device.*) con la casilla destildada *Also delete them*; *Also forget my assistant key…* olvida también la de
+  *Voice* (O5 del dictado). Se abre también sin clave del asistente si hay notas o clave de *Voice*.
+- La ayuda suma *Change your passphrase, borrowed computers and other workspaces*.
+
+**Decisiones de la implementación:**
+
+- ***Change passphrase…* vuelve a cifrar el contenido de la copia, no la clave del dispositivo.** Si fuera la del
+  dispositivo, cambiar la frase en uno desactualizado pisaría la clave nueva con la vieja (el mismo problema de la
+  observación de S1).
+- **Una sola anotación por workspace** (`sync` + `moreSync`) en vez de cambiar el campo `sync` a una lista: la versión
+  con S1 lee `sync` y sigue andando; si guarda, saca `moreSync` (pierde solo el aviso de esas copias).
+- ***Also sync* con la frase dos veces**, no abriendo la copia del otro workspace: desde un workspace no hay sesión del
+  otro, y la regla 7 lo prevé ("si no hay copia, la piden dos veces").
+- **La clave de *Voice* dentro del mismo sobre de 1 KB**, sin `format = 2`: una clave de Anthropic más una de OpenAI con
+  sus modelos ocupan unos 500 bytes. Si una dirección muy larga no entra, la sección dice *This key or Base URL is too
+  long to sync.* (no se sube sin *Voice* en silencio).
+
+**Probado.** Vitest: 13 pruebas de los pasos (`keySyncS2.test.ts`) y 11 de la ventana (`keySyncS2Ui.test.tsx`), más las
+de S1 sin cambios; la suite entera, 3548 con `main` v0.141 unido (con las dos rondas de correcciones de la auditoría). 22 mutantes de las guardas (Change passphrase sin abrir antes o subiendo la
+clave del dispositivo, la copia más vieja, el `savedAt` sin los conocidos, *Keep the key* que guarda igual, las copias de
+otros workspaces, *Also sync* sin comparar, *Forgot it?* con la copia cambiada, la regla 6 y la 5 en *Voice*, el 401
+siempre, salir borrando sin la casilla, etc.), los 22 detectados. Recorrido sin ventana con dos perfiles, dos tablas
+falsas y el proveedor falso: 36 de 36 en Chromium y 36 de 36 en WebKit. Lo que Lega prueba a
+mano está en "Recorrido de Lega (S2)" (sección 12), más: *Also sync in this workspace* en un segundo workspace y salir
+con notas de voz pendientes.
+
+**Falta:** el iPhone de verdad (tiempo de *Unlock*, teclado, gestor de contraseñas) y `signOut({ scope: 'others' })`
+contra otro dispositivo, que siguen en el recorrido de Lega. *Keep the key on this device* no tiene botón para pasar
+después la clave de la pestaña al dispositivo (se vuelve a abrir con la casilla tildada).
+
+**Correcciones de la auditoría de S2** (aprobada con observaciones, ninguna bloqueante):
+
+- **O1.** En la computadora prestada, *Stop syncing* decía *Your key stays on this device.* Ahora dice que la clave está
+  solo en la pestaña y que al recargar no va a estar en esa computadora (antes y después de borrar).
+- **O2.** *Forget key* en modo pestaña borraba también la clave que el dispositivo tenía guardada de antes. Ahora olvida
+  solo la de la pestaña (`forgetTabKey`) y la guardada vuelve a verse; la casilla de salir sigue olvidando todo.
+- **O3.** *Choose a new passphrase…* aparecía con la copia cambiada si la clave local se había cambiado alguna vez (un
+  pegado de hace semanas habilitaba pisar la copia nueva). Ya no aparece con la copia cambiada; queda *Stop syncing*.
+- **O4.** Si lo único que se preguntaba era la clave de *Voice*, *Keep my current key* tampoco guardaba la del
+  asistente y decía que la clave de ahora quedaba aunque no hubiera ninguna. Ahora el botón es *Keep my voice key*: toma
+  la del asistente, deja la de *Voice* del dispositivo y lo dice.
+- **O5.** Prueba de que *Change passphrase…* desde un dispositivo atrasado no lo anota como al día (mata el mutante M6).
+- Queda para el roadmap el caso improbable de la auditoría: *Change passphrase…* no aplica el rechazo de la copia más
+  vieja a lo que abre (haría falta un dueño que reponga una fila vieja con la misma generación que el dispositivo
+  conoce; no filtra nada).
+
+Mutantes después de las correcciones: 27, los 27 detectados.
+
+**Ronda 2 (B1 de la re-verificación).** La clave propia de *Voice* de un dispositivo se reemplazaba sin preguntar cuando
+la copia se actualizaba en otro: la pregunta por *Voice* miraba si la clave **del asistente** venía de la copia. Ahora la
+anotación de cada copia lleva `voiceFromCopy` (se pone al abrir una copia con *Voice* o al subir la del dispositivo; se
+saca al elegir *Keep my voice key*, al abrir una copia sin *Voice*, al cambiar *Voice* a mano y al olvidarla), y solo con
+eso se toma la de la copia sin preguntar. Mutantes: 30, los 30 detectados.

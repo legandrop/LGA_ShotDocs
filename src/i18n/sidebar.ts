@@ -103,13 +103,15 @@ export const sidebar = {
     es: "Este proyecto se borró mientras tanto: está en Proyectos borrados.",
   },
   'import.menu': { en: "Import from Coda…", es: "Importar de Coda…" },
-  // Con una importación de Coda en curso (importJob.ts): cerrar la sesión o quitar el workspace esperan.
+  'importArchive.menu': { en: "Import Shot Docs archive…", es: "Importar archivo de Shot Docs…" },
+  // Con una importación en curso (de Coda o de un archivo de Shot Docs, importJob.ts): cerrar la sesión o quitar el
+  // workspace esperan.
   'import.running': {
-    en: "An import from Coda is running. Wait until it finishes.",
-    es: "Hay una importación de Coda en curso. Esperá a que termine.",
+    en: "An import is running. Wait until it finishes.",
+    es: "Hay una importación en curso. Esperá a que termine.",
   },
   'import.otherTab': {
-    en: "The other window is importing from Coda. If you take over, the import stops there (it can be resumed later). Take over anyway?",
-    es: "La otra ventana está importando de Coda. Si tomás el control, la importación se corta ahí (después se puede seguir). ¿Tomar el control igual?",
+    en: "The other window is importing. If you take over, the import stops there (it can be resumed later). Take over anyway?",
+    es: "La otra ventana está importando. Si tomás el control, la importación se corta ahí (después se puede seguir). ¿Tomar el control igual?",
   },
 } satisfies Dict;

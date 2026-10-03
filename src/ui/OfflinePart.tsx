@@ -2,11 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { locale, localize, useT, type Translate } from '../i18n';
 import '../i18n/lazy/offline';
 import { formatSize } from '../media/fileTrash';
-import { IOS_OFFLINE_TOTAL_MAX, LIMIT_CHOICES, reserveFor, type MarkView, type PlanState } from '../media/offline';
+import { IOS_OFFLINE_TOTAL_MAX, LIMIT_CHOICES, reserveFor, type FreeCandidate, type MarkView, type PlanState } from '../media/offline';
 import { selectedTotal, type RowKey } from '../media/offlinePlan';
 import { DEFAULT_OPTIONS, type OfflineOptions } from '../media/offlineStore';
 import { deviceTraits, useOffline, useServices, useTree } from '../services';
 import { notify } from './notice';
+import { freedText } from './SpaceHost';
 
 // "Available offline" y "Storage on this device" (P.10, Docs/Doc_Copias_Locales.md, secciones 3.4 y 6). Se bajan
 // aparte (lazyPart): no hacen falta para la primera pantalla.
@@ -131,7 +132,9 @@ export function OfflineDialog(props: { kind: 'page' | 'project'; target: string;
   const quota = estimate?.quota ?? 0;
   const available = quota > 0 ? quota - (estimate?.usage ?? 0) : null;
   const reserve = quota > 0 ? reserveFor(quota) : 0;
-  const freeable = snapshot.usage?.freeable ?? 0;
+  // Para hacer lugar a una marca se liberan solo copias bajadas y nítidas (se liberan sin red ni espera): un original
+  // agregado acá se libera desde *Storage on this device*, después de que Drive lo confirma.
+  const freeable = (snapshot.usage?.freeable ?? 0) - (snapshot.usage?.own.freeable ?? 0);
   const needed = total?.missing ?? 0;
   const fits = available === null || needed <= available - reserve;
   const fitsFreeing = !fits && available !== null && needed <= available - reserve + freeable;
@@ -146,7 +149,7 @@ export function OfflineDialog(props: { kind: 'page' | 'project'; target: string;
     if (!ready) return;
     setBusy(true);
     try {
-      if (fitsFreeing) await offline.freeUp('all');
+      if (fitsFreeing) await offline.freeUp('all', { own: false });
       await offline.mark(props.kind, props.target, options);
       setStarted(true);
     } finally {
@@ -346,7 +349,7 @@ export function StorageDialog(props: { onClose: () => void; onEdit: (mark: MarkV
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [goneConfirm, setGoneConfirm] = useState(false);
   const saveLink = useRef<HTMLAnchorElement>(null);
-  const [list, setList] = useState<{ id: string; name: string; bytes: number; usedAt: number | null }[] | null>(null);
+  const [list, setList] = useState<FreeCandidate[] | null>(null);
   const [showList, setShowList] = useState(props.showList === true);
   useEffect(() => {
     if (!showList) return;
@@ -377,8 +380,9 @@ export function StorageDialog(props: { onClose: () => void; onEdit: (mark: MarkV
   async function freeAll() {
     setBusy(true);
     try {
-      const freed = await offline.freeUp('all');
-      notify(tr('space.freed', { size: formatSize(freed, tr.lang) }));
+      await offline.freeUp('all');
+      const report = offline.getSnapshot().report;
+      if (report) notify(freedText(report, tr));
     } finally {
       setBusy(false);
       setConfirming(false);
@@ -446,7 +450,14 @@ export function StorageDialog(props: { onClose: () => void; onEdit: (mark: MarkV
           {usage && usage.waitingCount > 0 && (
             <p className="muted">{tr('storage.waiting', { size: formatSize(usage.waiting, tr.lang), count: usage.waitingCount })}</p>
           )}
-          <p className="muted">{tr('storage.ownLater')}</p>
+          {usage && usage.own.freeable > 0 && (
+            <p className="muted">{tr('storage.ownFreeable', { size: formatSize(usage.own.freeable, tr.lang), count: usage.own.count })}</p>
+          )}
+          {usage && usage.own.held === 'offline' && <p className="muted">{tr('storage.ownOffline', { size: formatSize(usage.own.heldBytes, tr.lang) })}</p>}
+          {usage && usage.own.held === 'server' && <p className="muted">{tr('storage.ownServer', { size: formatSize(usage.own.heldBytes, tr.lang) })}</p>}
+          {usage && usage.own.recentCount > 0 && (
+            <p className="muted">{tr('storage.ownRecent', { size: formatSize(usage.own.recent, tr.lang), count: usage.own.recentCount })}</p>
+          )}
           {confirming ? (
             <div className="offline-remove">
               <p>{tr('storage.freeConfirm', { size: formatSize(usage?.freeable ?? 0, tr.lang) })}</p>
@@ -479,6 +490,7 @@ export function StorageDialog(props: { onClose: () => void; onEdit: (mark: MarkV
                     <span className="storage-list-name">{c.id ? c.name : tr('storage.listViews')}</span>
                     <span className="muted">
                       {formatSize(c.bytes, tr.lang)}
+                      {c.own ? ` · ${tr('storage.listOwn')}` : ''}
                       {c.usedAt ? ` · ${tr('storage.openedAgo', { when: ago(c.usedAt, tr.lang) })}` : ''}
                     </span>
                   </li>

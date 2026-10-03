@@ -231,6 +231,7 @@ export type MediaPortero = Pick<Portero, 'upload' | 'pass' | 'trash'> & {
   passInfo?: (target: { file: string }) => Promise<{ url: string; named: boolean }>;
   status?: Portero['status'];
   verify?: Portero['verify'];
+  relink?: Portero['relink'];
 };
 
 export interface MediaQueueOptions {
@@ -389,6 +390,8 @@ export interface MediaSource {
   original: Blob | null;
   /** El tipo (`files.mime`), si se sabe. */
   mime?: string;
+  /** Se agregó en este dispositivo y su original se liberó (está en Drive): para el aviso sin conexión. */
+  freed?: boolean;
 }
 
 /** Lo que se sabe de un archivo sin esperar a nada (ver `MediaQueue.fileInfo`). */
@@ -444,9 +447,13 @@ export class MediaQueue {
   /**
    * La cola dejó de subir archivos porque el portero o Storage no contestan para nadie (ver `round`): hasta
    * `until` no se vuelve a probar, y cada vez que vuelve a pasar se espera más (`count`). Vuelve a cero cuando un
-   * archivo termina de subir o con "Retry". Solo en memoria: al recargar se prueba enseguida.
+   * archivo termina de subir o con "Retry". Solo en memoria: al recargar se prueba enseguida. `storage`: alguna de
+   * las trabadas fue una miniatura (Storage no contestó); si no, mientras espera se siguen subiendo las miniaturas
+   * (ver `prepareWhilePaused`).
    */
-  private stallPause: { until: number; count: number } | null = null;
+  private stallPause: { until: number; count: number; storage?: boolean } | null = null;
+  /** La última vez que `process` devolvió `stalled`, si fue por la miniatura (Storage) y no por el portero. */
+  private lastStallWasThumb = false;
   private again = false;
   private stopped = false;
   private controller: AbortController | null = null;
@@ -732,7 +739,7 @@ export class MediaQueue {
           try {
             const own = this.db ? await this.db.get('files', id) : undefined;
             if (own) {
-              this.remember(id, own, true);
+              this.remember(id, own, !own.freedAt);
               return;
             }
             const known = (this.db ? await this.db.get('known', id) : undefined) ?? (await this.fetchMeta(id).catch(() => null));
@@ -1218,6 +1225,8 @@ export class MediaQueue {
     );
     // Archivos distintos seguidos que se trabaron sin avanzar en esta vuelta (portero o miniatura a Storage).
     let stalled = 0;
+    // De esas, cuántas fueron una miniatura (Storage).
+    let thumbStalls = 0;
     for (const record of this.uploadsPaused() ? [] : records) {
       if (this.stopped) return;
       if (record.blocked || record.retryAt > this.now() || skipPage(record.pageId)) continue;
@@ -1227,9 +1236,11 @@ export class MediaQueue {
       if (outcome === 'neutral') continue;
       if (outcome !== 'stalled') {
         stalled = 0;
+        thumbStalls = 0;
         if (outcome === 'done') this.stallPause = null;
         continue;
       }
+      if (this.lastStallWasThumb) thumbStalls++;
       // Con el portero o Storage colgados para todos, cada archivo esperaría su tope entero (un minuto o más) y
       // una vuelta por 2300 archivos duraría horas sin subir nada. A la segunda trabada seguida se deja de subir,
       // como sin conexión, y se espera antes de volver a probar (10 s, 20 s… hasta 10 minutos). Los archivos que
@@ -1237,9 +1248,15 @@ export class MediaQueue {
       // salen igual en esta vuelta.
       if (++stalled >= STALLS_TO_CLOSE_ROUND) {
         const count = (this.stallPause?.count ?? 0) + 1;
-        this.stallPause = { until: this.now() + backoff(count), count };
+        this.stallPause = { until: this.now() + backoff(count), count, storage: thumbStalls > 0 };
         break;
       }
+    }
+    // Mientras se espera al portero, lo que no le pide nada sigue: registrar los archivos nuevos y subir sus
+    // miniaturas (los otros dispositivos ya los ven, con su miniatura). Sin red o con la app vieja, corta.
+    if (this.uploadsPaused()) {
+      const cut = await this.prepareWhilePaused(records, portero, skipPage);
+      if (cut) return;
     }
     // Primero los usos nuevos y después los que se quitaron: un archivo que se cortó de una página y se pegó
     // en otra no pasa por la papelera en el medio.
@@ -1315,6 +1332,34 @@ export class MediaQueue {
     }
   }
 
+  /**
+   * Con la cola esperando al portero (`stallPause`), registra los archivos que todavía no están en la base y sube sus
+   * miniaturas, sin pedirle nada al portero: es lo mismo que `process` hace antes de mandar el original, y queda
+   * hecho para cuando el portero vuelva. Las miniaturas, solo si la espera no fue por Storage (y si una se traba acá,
+   * se sigue solo registrando). Devuelve `true` si hay que cortar la vuelta (sin red, la app vieja, se paró).
+   */
+  private async prepareWhilePaused(
+    records: MediaRecord[],
+    portero: MediaPortero,
+    skipPage: (pageId: string) => boolean,
+  ): Promise<boolean> {
+    for (const listed of records) {
+      if (this.stopped) return true;
+      // Lo ya registrado y con su miniatura no se vuelve a leer (lo de la lista solo puede estar atrasado).
+      if (listed.registered && !(listed.thumb === 'local' && !this.stallPause?.storage)) continue;
+      // Lo leído al empezar la vuelta pudo cambiar en ella (se registró, se subió): se lee de nuevo.
+      const record = await this.store.get('files', listed.id);
+      if (!record || !record.pending || record.blocked || record.retryAt > this.now() || skipPage(record.pageId)) continue;
+      const thumbs = !this.stallPause?.storage;
+      if (record.registered && !(thumbs && record.thumb === 'local')) continue;
+      const outcome = await this.process(record, portero, { beforeOriginal: true, thumbs });
+      if (outcome === 'offline' || outcome === 'cancelled' || outcome === 'outdated') return true;
+      // La miniatura se trabó: Storage tampoco contesta. Lo que queda, solo se registra.
+      if (outcome === 'stalled' && this.stallPause) this.stallPause.storage = true;
+    }
+    return false;
+  }
+
   /** La cola espera antes de volver a probar el portero y Storage (ver `stallPause`). */
   private uploadsPaused(): boolean {
     if (!this.stallPause) return false;
@@ -1336,7 +1381,11 @@ export class MediaQueue {
    * Sube un archivo. `stalled`: se trabó (el portero o Storage dejaron de moverse) sin que la subida avanzara en
    * este intento; quedó anotado como cualquier error que se arregla solo, y la vuelta lo cuenta (ver `round`).
    */
-  private async process(start: MediaRecord, portero: MediaPortero): Promise<Outcome | 'done' | 'stalled' | 'neutral'> {
+  private async process(
+    start: MediaRecord,
+    portero: MediaPortero,
+    only: { beforeOriginal?: boolean; thumbs?: boolean } = {},
+  ): Promise<Outcome | 'done' | 'stalled' | 'neutral'> {
     let record = start;
     // Lo que el progreso guarda (la subida para retomar) va en orden, antes del resultado final.
     let saving: Promise<unknown> = Promise.resolve();
@@ -1412,7 +1461,8 @@ export class MediaQueue {
         // Registrada: lista. No habló con el portero ni con Storage (no dice si andan).
         return 'neutral';
       }
-      if (record.thumb === 'local') {
+      // `only.thumbs === false`: la cola espera porque Storage no contesta (ver `prepareWhilePaused`).
+      if (record.thumb === 'local' && only.thumbs !== false) {
         const thumb = await this.store.get('thumbs', record.id);
         try {
           if (thumb) {
@@ -1432,7 +1482,18 @@ export class MediaQueue {
         }
       }
 
-      const blob = await this.store.get('blobs', record.id);
+      // Mientras la cola espera al portero, hasta acá (registrado y con su miniatura): el original, cuando vuelva.
+      if (only.beforeOriginal) return 'neutral';
+
+      let blob: Blob | undefined = await this.store.get('blobs', record.id);
+      if (!blob && record.freedAt) {
+        // El original se liberó (Drive tenía el mismo archivo) y una restauración de la base lo volvió a la cola. Si
+        // hay una copia bajada entera, se sube esa (es el mismo archivo); si no, se vuelve a enlazar sin mandar bytes
+        // (Docs/Doc_Copias_Locales.md, sección 7).
+        const copy = this.db ? await readCopy(this.db, record.id).catch(() => null) : null;
+        if (copy && copy.size === record.size) blob = copy;
+        else return await this.relinkFreed(record, portero);
+      }
       if (!blob) {
         await this.patch(record.id, { error: stored('queue.originalMissing'), blocked: true });
         return 'blocked';
@@ -1580,7 +1641,10 @@ export class MediaQueue {
       // Se trabó sin avanzar (el portero o Storage no se movieron): la vuelta lo cuenta para dejar de subir si
       // les pasa lo mismo a los siguientes. Si avanzó, el servidor anda (despacio): no cuenta.
       const stuck = thumbStalled || (err instanceof UploadError && err.stalled);
-      if (stuck && !advanced && outcome === 'retry') return 'stalled';
+      if (stuck && !advanced && outcome === 'retry') {
+        this.lastStallWasThumb = thumbStalled;
+        return 'stalled';
+      }
       return outcome === 'waiting' ? 'retry' : outcome;
     }
   }
@@ -1752,6 +1816,25 @@ export class MediaQueue {
     // Medidas y miniatura del HEIC (Safari lo abre; Chrome no): las del archivo que se va a subir.
     await this.ensureProbed(id);
     this.thumbReady(id);
+  }
+
+  /**
+   * Un original liberado que volvió a la cola (una restauración de la base): `POST /upload` con `only: 'known'`, sin
+   * bytes. Si el portero recuerda la subida o la encuentra en Drive por su marca, le avisa a la base y queda subido.
+   * Si no, o con un portero que no anuncia `known` (abriría una subida nueva), se detiene con el aviso: el archivo
+   * está en el Drive del dueño, pero este dispositivo ya no tiene con qué volver a subirlo.
+   */
+  private async relinkFreed(record: MediaRecord, portero: MediaPortero): Promise<Outcome | 'done'> {
+    const stop = async (): Promise<Outcome> => {
+      await this.patch(record.id, { error: stored('queue.freedUnknown'), blocked: true });
+      this.onChange?.();
+      return 'blocked';
+    };
+    if (!portero.relink || !(await this.features()).includes('known')) return stop();
+    const found = await portero.relink({ id: record.id, day: record.day, name: record.name, mime: record.mime, size: record.size });
+    if (!found) return stop();
+    if (await this.confirmed(record.id)) return this.markUploaded(record, found.id);
+    return this.waitForDatabase(await this.patch(record.id, { driveId: found.id, uploadId: null, sent: record.size }));
   }
 
   /** La base ya tiene el id de Drive del archivo. */
@@ -2205,7 +2288,7 @@ export class MediaQueue {
         return fileKind(meta.mime, meta.name);
       }
       const own = this.db ? await this.db.get('files', id) : undefined;
-      if (own) this.remember(id, own, true);
+      if (own) this.remember(id, own, !own.freedAt);
       if (own?.projectId) return own.projectId !== pageProject && fileKind(own.mime, own.name);
       let known = this.db ? await this.db.get('known', id) : undefined;
       if (!known || known.projectId === undefined) known = (await this.fetchMeta(id).catch(() => null)) ?? known;
@@ -2333,7 +2416,7 @@ export class MediaQueue {
       void this.checkDeleted(id);
       const own = await db.get('files', id);
       if (own) {
-        this.remember(id, own, true);
+        this.remember(id, own, !own.freedAt);
         if (isFolderMime(own.mime)) return this.card(id, folderCardUrl({ name: own.name, size: own.size, note: this.folderNotes.get(id) ?? null }));
         const kind = viewKind(own.mime, own.name);
         if (!kind) {
@@ -2525,7 +2608,7 @@ export class MediaQueue {
     if (own) {
       const original = (await db.get('blobs', id)) ?? (await readCopy(db, id).catch(() => null));
       this.remember(id, own, !!original);
-      return { kind: viewKind(own.mime, own.name), name: own.name, original, mime: own.mime };
+      return { kind: viewKind(own.mime, own.name), name: own.name, original, mime: own.mime, ...(!original && own.freedAt ? { freed: true } : {}) };
     }
     const meta = (await db.get('known', id)) ?? (await this.fetchMeta(id).catch(() => null));
     if (!meta) return { kind: null, name: '', original: null };
@@ -2686,7 +2769,8 @@ export class MediaQueue {
         if (view !== original) await this.storeView(id, side, view);
         return this.keepView(id, side, view);
       }
-      if (!download || own || !meta.driveId || !VIEW_FETCH_TYPES.has(meta.mime)) return null;
+      // Lo agregado acá se hace del original del dispositivo; si se liberó (está en Drive), se baja como cualquier otro.
+      if (!download || (own && !own.freedAt) || !meta.driveId || !VIEW_FETCH_TYPES.has(meta.mime)) return null;
       if (typeof meta.size === 'number' && meta.size > maxBytes) return null;
       // Después de una bajada que falló se espera 1 minuto, después 4, 16 y hasta una hora (una página abierta
       // no insiste cada minuto con un portero que no responde).

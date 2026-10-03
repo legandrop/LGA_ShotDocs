@@ -356,6 +356,189 @@ export const assistant = {
     en: { one: "Discard {count} unplaced item?", other: "Discard {count} unplaced items?" },
     es: { one: "¿Descartar {count} dato sin ubicar?", other: "¿Descartar {count} datos sin ubicar?" },
   },
+  // --- La clave sincronizada (Docs/Doc_Clave_Sincronizada.md, entrega S1) ---
+  'assistant.unlockSynced': { en: "Unlock your synced key", es: "Abrir tu clave sincronizada" },
+  'assistant.settings.staysSynced': {
+    en: "Your key is sent only to {provider}. With sync on, an encrypted copy is stored in {workspace}. The provider charges each request to your account.",
+    es: "Tu clave se manda solo a {provider}. Con la sincronización prendida, una copia cifrada queda en {workspace}. Cada pedido lo cobra el proveedor a tu cuenta.",
+  },
+  'assistant.sync.title': { en: "Sync across my devices", es: "Sincronizar en mis dispositivos" },
+  'assistant.sync.needKey': { en: "Save a key first to sync it across your devices.", es: "Primero guardá una clave para sincronizarla en tus dispositivos." },
+  'assistant.sync.onlyHere': { en: "Your key is only on this device.", es: "Tu clave está solo en este dispositivo." },
+  'assistant.sync.turnOn': { en: "Turn on sync…", es: "Prender la sincronización…" },
+  'assistant.sync.synced': { en: "Synced in {workspace} · updated {date}.", es: "Sincronizada en {workspace} · actualizada el {date}." },
+  'assistant.sync.localChanged': {
+    en: "The key on this device is different from the synced one.",
+    es: "La clave de este dispositivo es distinta de la sincronizada.",
+  },
+  'assistant.sync.update': { en: "Update synced key", es: "Actualizar la clave sincronizada" },
+  'assistant.sync.updateText': {
+    en: "Enter your passphrase to replace the synced copy with the key on this device.",
+    es: "Escribí tu frase para reemplazar la copia sincronizada por la clave de este dispositivo.",
+  },
+  'assistant.sync.updated': { en: "Your synced key was updated.", es: "Se actualizó tu clave sincronizada." },
+  'assistant.sync.replace': { en: "Replace synced key…", es: "Reemplazar la clave sincronizada…" },
+  'assistant.sync.replaceText': {
+    en: "For a lost device: first Sign out other devices (account menu), create a new key at your provider and save it here. Then replace the synced copy with it and a new passphrase: your other devices will ask for the new one.",
+    es: "Para un dispositivo perdido: primero Cerrar la sesión en los otros dispositivos (menú de la cuenta), creá una clave nueva en tu proveedor y guardala acá. Después reemplazá la copia sincronizada con ella y una frase nueva: tus otros dispositivos te van a pedir la nueva.",
+  },
+  'assistant.sync.currentPassphrase': { en: "Current passphrase", es: "Frase actual" },
+  'assistant.sync.newPassphrase': { en: "New passphrase", es: "Frase nueva" },
+  'assistant.sync.replaceButton': { en: "Replace synced key", es: "Reemplazar la clave sincronizada" },
+  'assistant.sync.replaced': {
+    en: "Your synced key was replaced. Use the new passphrase on your other devices.",
+    es: "Se reemplazó tu clave sincronizada. Usá la frase nueva en tus otros dispositivos.",
+  },
+  'assistant.sync.stop': { en: "Stop syncing", es: "Dejar de sincronizar" },
+  'assistant.sync.stopText': {
+    en: "Delete the synced copy from {workspace}? Your key stays on this device.",
+    es: "¿Borrar la copia sincronizada de {workspace}? Tu clave queda en este dispositivo.",
+  },
+  'assistant.sync.deleteCopy': { en: "Delete copy", es: "Borrar la copia" },
+  'assistant.sync.stopped': {
+    en: "The synced copy was deleted. Your key stays on this device.",
+    es: "Se borró la copia sincronizada. Tu clave queda en este dispositivo.",
+  },
+  'assistant.sync.locked': {
+    en: "Your key is synced (saved {date}). Enter your passphrase to use it on this device.",
+    es: "Tu clave está sincronizada (guardada el {date}). Escribí tu frase para usarla en este dispositivo.",
+  },
+  'assistant.sync.elsewhere': { en: "Your key is synced in {workspace}.", es: "Tu clave está sincronizada en {workspace}." },
+  'assistant.sync.passphrase': { en: "Passphrase", es: "Frase" },
+  'assistant.sync.unlock': { en: "Unlock", es: "Abrir" },
+  'assistant.sync.forgot': {
+    en: "Forgot it? Paste your API key again and choose a new passphrase.",
+    es: "¿La olvidaste? Pegá tu clave de la API de nuevo y elegí una frase nueva.",
+  },
+  'assistant.sync.newPassphraseButton': { en: "Choose a new passphrase…", es: "Elegir una frase nueva…" },
+  'assistant.sync.unlocked': { en: "Unlocked: {provider} key ending in …{end}.", es: "Abierta: clave de {provider} que termina en …{end}." },
+  'assistant.sync.unlockedAt': {
+    en: "Unlocked: {provider} at {host}, key ending in …{end}.",
+    es: "Abierta: {provider} en {host}, clave que termina en …{end}.",
+  },
+  'assistant.sync.ask': { en: "Your synced key now goes to {host}. Use it?", es: "Tu clave sincronizada ahora va a {host}. ¿La usás?" },
+  'assistant.sync.askReplace': {
+    en: "Replace the key on this device (…{local}) with the synced one (…{synced})?",
+    es: "¿Reemplazar la clave de este dispositivo (…{local}) por la sincronizada (…{synced})?",
+  },
+  'assistant.sync.changed': {
+    en: "Your synced key changed on another device. Enter your passphrase to update it here.",
+    es: "Tu clave sincronizada cambió en otro dispositivo. Escribí tu frase para actualizarla acá.",
+  },
+  'assistant.sync.useIt': { en: "Use it", es: "Usarla" },
+  'assistant.sync.keepMine': { en: "Keep my current key", es: "Seguir con mi clave" },
+  'assistant.sync.kept': { en: "Your current key stays on this device.", es: "Tu clave de ahora queda en este dispositivo." },
+  'assistant.sync.wrong': { en: "That passphrase doesn't open your synced key.", es: "Esa frase no abre tu clave sincronizada." },
+  'assistant.sync.unlockOffline': { en: "Unlocking needs internet.", es: "Para abrirla hace falta internet." },
+  'assistant.sync.offline': { en: "Syncing your key needs internet.", es: "Para sincronizar tu clave hace falta internet." },
+  'assistant.sync.missing': {
+    en: "This workspace's database needs an update to sync your key.",
+    es: "La base de este workspace necesita una actualización para sincronizar tu clave.",
+  },
+  'assistant.sync.policyOff': {
+    en: "The owner turned the assistant off in this workspace, so your key can't be synced here.",
+    es: "El dueño apagó el asistente en este workspace, así que tu clave no se puede sincronizar acá.",
+  },
+  'assistant.sync.newer': {
+    en: "This synced key was saved by a newer version of the app. Update the app to unlock it.",
+    es: "Esta clave sincronizada la guardó una versión más nueva de la app. Actualizá la app para abrirla.",
+  },
+  'assistant.sync.tooLong': { en: "This key or Base URL is too long to sync.", es: "Esta clave o esta dirección son demasiado largas para sincronizar." },
+  'assistant.sync.conflict': {
+    en: "Your synced key changed on another device. Reload it?",
+    es: "Tu clave sincronizada cambió en otro dispositivo. ¿La volvés a cargar?",
+  },
+  'assistant.sync.reload': { en: "Reload", es: "Volver a cargar" },
+  'assistant.sync.failed': { en: "Couldn't sync your key. Try again.", es: "No se pudo sincronizar tu clave. Probá de nuevo." },
+  'assistant.sync.done': { en: "Your key is synced in {workspace}.", es: "Tu clave está sincronizada en {workspace}." },
+  'assistant.sync.yourPassphrase': { en: "Your passphrase", es: "Tu frase" },
+  'assistant.sync.copy': { en: "Copy", es: "Copiar" },
+  'assistant.sync.newOne': { en: "New one", es: "Otra" },
+  'assistant.sync.saveIt': {
+    en: "Save it in your password manager. You'll need it once on each new device. If you lose it, nobody can recover it: you'll paste your API key again.",
+    es: "Guardala en tu gestor de contraseñas. La vas a necesitar una vez en cada dispositivo nuevo. Si la perdés, nadie la puede recuperar: vas a pegar tu clave de la API de nuevo.",
+  },
+  'assistant.sync.copied': {
+    en: "Copied. Copied passphrases can stay in your clipboard history.",
+    es: "Copiada. Una frase copiada puede quedar en el historial del portapapeles.",
+  },
+  'assistant.sync.useOwn': { en: "Use my own passphrase instead", es: "Usar una frase mía" },
+  'assistant.sync.useGenerated': { en: "Use a generated passphrase", es: "Usar una frase generada" },
+  'assistant.sync.ownWarning': {
+    en: "A passphrase you make up is much easier to guess than a generated one. Anyone who gets a copy of this workspace's database could try.",
+    es: "Una frase que inventás es mucho más fácil de adivinar que una generada. Cualquiera que consiga una copia de la base de este workspace podría intentarlo.",
+  },
+  'assistant.sync.ownRule': { en: "At least 20 characters and four words.", es: "Al menos 20 caracteres y cuatro palabras." },
+  'assistant.sync.repeat': { en: "Repeat it", es: "Repetila" },
+  'assistant.sync.mismatch': { en: "The two passphrases don't match.", es: "Las dos frases no coinciden." },
+  'assistant.sync.saved': { en: "I saved my passphrase", es: "Guardé mi frase" },
+  'assistant.sync.turnOnButton': { en: "Turn on sync", es: "Prender la sincronización" },
+  'assistant.sync.footnote': {
+    en: "Your key is encrypted on this device with your passphrase. {workspace} stores only the encrypted copy and can't read it.",
+    es: "Tu clave se cifra en este dispositivo con tu frase. {workspace} guarda solo la copia cifrada y no la puede leer.",
+  },
+  // S2 (Doc_Clave_Sincronizada.md, sección 9)
+  'assistant.sync.change': { en: "Change passphrase…", es: "Cambiar la frase…" },
+  'assistant.sync.changeText': {
+    en: "Your synced key stays the same; only the passphrase changes. Your other devices will ask for the new one.",
+    es: "Tu clave sincronizada sigue igual; solo cambia la frase. Tus otros dispositivos te van a pedir la nueva.",
+  },
+  'assistant.sync.changeButton': { en: "Change passphrase", es: "Cambiar la frase" },
+  'assistant.sync.passphraseChanged': {
+    en: "Your passphrase was changed. Use the new one on your other devices.",
+    es: "Se cambió tu frase. Usá la nueva en tus otros dispositivos.",
+  },
+  'assistant.sync.keepHere': { en: "Keep the key on this device", es: "Guardar la clave en este dispositivo" },
+  'assistant.sync.keepHereTip': {
+    en: "Off on a borrowed computer: the key lives only in this tab.",
+    es: "Destildala en una computadora prestada: la clave vive solo en esta pestaña.",
+  },
+  'assistant.sync.tabOnly': {
+    en: "This key is only in this tab. If you reload, you'll need your passphrase again.",
+    es: "Esta clave está solo en esta pestaña. Si recargás, vas a necesitar tu frase de nuevo.",
+  },
+  'assistant.sync.older': {
+    en: "This synced copy is older than the one on this device.",
+    es: "Esta copia sincronizada es más vieja que la de este dispositivo.",
+  },
+  'assistant.sync.alsoSync': { en: "Also sync in this workspace…", es: "Sincronizar también en este workspace…" },
+  'assistant.sync.alsoText': {
+    en: "Enter the passphrase you use in {other}, twice. {workspace} gets its own encrypted copy.",
+    es: "Escribí dos veces la frase que usás en {other}. {workspace} recibe su propia copia cifrada.",
+  },
+  'assistant.sync.alsoButton': { en: "Sync here too", es: "Sincronizar también acá" },
+  'assistant.sync.useNewPassphrase': { en: "Use a new passphrase instead", es: "Usar una frase nueva" },
+  'assistant.sync.voiceUnlocked': {
+    en: "Voice: {provider} key ending in …{end}.",
+    es: "Voz: clave de {provider} que termina en …{end}.",
+  },
+  'assistant.sync.voiceUnlockedAt': {
+    en: "Voice: {provider} at {host}, key ending in …{end}.",
+    es: "Voz: {provider} en {host}, clave que termina en …{end}.",
+  },
+  'assistant.sync.askVoice': {
+    en: "Your synced voice key now goes to {host}. Use it?",
+    es: "Tu clave de voz sincronizada ahora va a {host}. ¿La usás?",
+  },
+  'assistant.sync.askVoiceReplace': {
+    en: "Replace the voice key on this device (…{local}) with the synced one (…{synced})?",
+    es: "¿Reemplazar la clave de voz de este dispositivo (…{local}) por la sincronizada (…{synced})?",
+  },
+  'assistant.sync.stopTextTab': {
+    en: "Delete the synced copy from {workspace}? Your key is only in this tab: after you reload, it won't be on this computer.",
+    es: "¿Borrar la copia sincronizada de {workspace}? Tu clave está solo en esta pestaña: al recargar, no va a estar en esta computadora.",
+  },
+  'assistant.sync.stoppedTab': {
+    en: "The synced copy was deleted. Your key is only in this tab until you reload.",
+    es: "Se borró la copia sincronizada. Tu clave está solo en esta pestaña hasta que recargues.",
+  },
+  'assistant.sync.forgotTabKeepsSaved': {
+    en: "Forgot the key in this tab. The key saved on this device before stays.",
+    es: "Se olvidó la clave de esta pestaña. La que este dispositivo tenía guardada de antes queda.",
+  },
+  'assistant.sync.keepMyVoice': { en: "Keep my voice key", es: "Seguir con mi clave de voz" },
+  'assistant.sync.keptVoice': { en: "Your current voice key stays on this device.", es: "Tu clave de voz de ahora queda en este dispositivo." },
+  'assistant.sync.updateHere': { en: "Enter your passphrase to update it here", es: "Escribir tu frase para actualizarla acá" },
 } satisfies Dict;
 
 // Se suma al diccionario cuando se carga la parte que lo usa (viaja con ella, no en la primera carga).

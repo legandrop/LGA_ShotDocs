@@ -3,6 +3,7 @@ import { useRoute } from '../router';
 import { lazyPart, Part } from '../ui/lazyPart';
 import { assistantOpen, closeAssistant, closeAssistantSettings, isAssistantShortcut, openAssistant, useAssistantUi } from './assistantUi';
 import { SignOutDialog } from './SignOutDialog';
+import { SignOutOthersDialog } from './SignOutOthersDialog';
 
 // El asistente en la app (Docs/Doc_Asistente.md, entrega A1): Ctrl/⌘+Alt+J lo abre y lo cierra, y el panel y los
 // ajustes se bajan aparte la primera vez que se abren. Va en la primera carga y es chico.
@@ -11,7 +12,7 @@ const AssistantPanel = lazyPart(() => import('./AssistantPanel').then((m) => m.A
 const AssistantSettings = lazyPart(() => import('./AssistantSettings').then((m) => m.AssistantSettings));
 
 export function AssistantHost() {
-  const { pageId, settings, signOut } = useAssistantUi();
+  const { pageId, settings, signOut, signOutOthers } = useAssistantUi();
   const route = useRoute();
   const routePage = route.name === 'page' ? route.id : null;
 
@@ -48,7 +49,8 @@ export function AssistantHost() {
           <AssistantSettings />
         </Part>
       )}
-      {signOut && <SignOutDialog email={signOut.email} run={signOut.run} />}
+      {signOut && <SignOutDialog email={signOut.email} workspace={signOut.workspace} run={signOut.run} />}
+      {signOutOthers && <SignOutOthersDialog workspace={signOutOthers.workspace} run={signOutOthers.run} />}
     </>
   );
 }

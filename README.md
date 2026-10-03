@@ -18,6 +18,9 @@ its own project: a tree of pages you own.
   content and other pages; a "folder" is just a page with no content.
 - **Visual editor.** Headings, lists, checklists, tables and images. You never see Markdown; it is only
   used behind the scenes to import, export and back up your pages.
+- **Undo in the order you edited.** Ctrl/⌘+Z undoes your last change in the project even if it was on another page:
+  the app takes you there and undoes it in view (*Back* returns you). A replace across the project is one step, undone
+  and redone in every page it changed. Ctrl/⌘+Shift+Z redoes. It lasts until you reload the tab.
 - **Script text.** Paste a screenplay and turn it into *Script*: it shows in a screenplay typeface, with
   INT/EXT, DAY, NIGHT and DAWN/DUSK marked in color.
 - **Templates.** Reusable page layouts such as *Pre-production Notes*, *On-Set Report* or *Shot
@@ -29,7 +32,7 @@ its own project: a tree of pages you own.
   OpenAI-compatible service (OpenRouter, or a local model such as Ollama) and fix, improve, shorten, translate,
   rewrite or reshape what you select, or summarize and translate a whole page. You see a preview first; applying it is
   a regular edit: synced, versioned and undoable. The workspace owner can turn it off or allow only local models.
-- **Dictate to report.** Write or dictate (with your keyboard's microphone) an informal note on set, like “this shot
+- **Dictate to report.** Write or dictate (with the app's microphone or your keyboard's) an informal note on set, like “this shot
   was a 50 mm”, and the assistant places each piece where it goes in the report: the right row and column, the line
   after its label, the checkbox. You check every change before applying it, and nothing you said is lost.
 - **Offline first, nothing lost.** Every change is saved on your device first and synced when you are
@@ -143,6 +146,7 @@ In production (v0.049). What works today:
 - Page breaks and PDF: pages with a paper size show where each sheet starts, and *Export PDF / Print* in the page menu prints exactly those sheets. A manual page break (*Page break* in the / menu, or Ctrl+Enter, ⌘↩ on a Mac) makes what follows start on a new sheet, on screen and in the PDF.
 - Export a branch or a whole project as PDF: *Export…* in the page menu (the page and the pages inside) or *Export project…* in the project list. It starts with a contents page that links to each page and says on which PDF page it starts, every page keeps its own paper size (in Chrome or Edge on a computer), photos keep their annotations and go as they were taken, at full resolution (tick *Smaller file* for a lighter PDF with photos scaled to their printed size), and comments can be included with names but never email addresses. If it is too much for one PDF on the device, it comes out in parts (*Part 1*, *Part 2*…), split between pages, and at the end any page that could not be exported is listed with a link and *Export again*. Pages in the trash are never included, and a guest exports only what they can see.
 - Export a branch or a whole project as a zip to archive it: a folder for each page with the page as a web page that opens in any browser without a connection, its text as Markdown, a JPEG of every photo (also iPhone HEIC photos), the original photos, attachments and videos from Drive if you tick them, and the comments with names but never email addresses. It also keeps the blocks and the page tree for importing it back later. On Chrome and Edge on a computer it is written as it is made (or into a folder); in other browsers it is built in memory. Only the workspace owner and admins can export a zip, and only from a computer.
+- Import a Shot Docs archive: *Import Shot Docs archive…* in the project list brings an exported zip (or its unzipped folder) back as a new project, never on top of an existing one, with its pages in order, sheet sizes, blocks, collapsed headings, photo annotations, template marks, comments with their names and dates, and photos and files, which upload to the workspace's Drive. A photo whose original was left out comes back from its preview; a video or file that is not in the zip keeps its name in its place. If it stops, choosing the same zip again resumes without repeating anything. Only the workspace owner and admins can import.
 - English and Spanish: the whole interface in both languages, chosen in the account menu and saved in your account (Script is *Guion* in Spanish).
 - Available offline: mark a page (with its subpages) or a whole project from its menu, choose what to keep (large
   photos, original photos, attachments, videos) with the size of each, and it downloads everything needed to use it
@@ -154,8 +158,11 @@ In production (v0.049). What works today:
   a two-minute tour with Next walks through the app on a practice page that is never saved or synced; it can be
   replayed, and the practice page reopened, from the help.
 - Assistant (account menu → *Assistant…*): choose Anthropic, OpenAI, Google Gemini or an OpenAI-compatible service,
-  paste your API key and pick a model from your provider's list. The key is stored encrypted only on that device and
-  sent only to that provider. Select text and press Ctrl+Alt+J (⌘⌥J on a Mac), or use *Assistant* in the toolbar or the
+  paste your API key and pick a model from your provider's list. The key is stored encrypted on that device and sent
+  only to that provider. *Sync across my devices* encrypts it on the device with a six-word passphrase the app proposes
+  and stores only that encrypted copy in the workspace, so another device unlocks it with the passphrase (on a borrowed
+  computer, only for that tab); *Change passphrase…* re-encrypts it, the voice key travels in the same copy, and *Sign
+  out other devices* in the account menu is there for a lost device. Select text and press Ctrl+Alt+J (⌘⌥J on a Mac), or use *Assistant* in the toolbar or the
   page menu: *Fix spelling & grammar*, *Improve writing*, *Make shorter*, *Translate to…* or *Ask…*. The preview marks
   what changes word by word; *Apply* replaces it as one edit you undo with Ctrl+Z, and nothing is applied if the text
   changed while the assistant was working. Photos and links inside the selection stay. *Format as…* turns the selected
@@ -168,7 +175,13 @@ In production (v0.049). What works today:
   shown change by change, each with its checkbox and its place (*Setups & takes › 12 · 010 · 3 › Lens*). *Apply* applies
   the checked ones as one edit you undo with *Undo* or Ctrl+Z, and nothing is applied if those places changed meanwhile.
   If it is not clear which shot, it asks with a button per row. What it could not place, and what you unchecked, stays
-  under *Couldn't place* on that device until you add it to *Summary*, copy it or discard it.
+  under *Couldn't place* on that device until you add it to *Summary*, copy it or discard it. Without internet,
+  *Save for later* keeps the note on the device: *N voice notes to place*, under the sync status, lists them, and each
+  one is placed in its page with its preview, inserted as text at the end of the page, or discarded after asking.
+  The big microphone button records a voice note on the device (tap to start, tap to stop, up to 2 minutes) and your
+  provider turns it into text (OpenAI, Gemini or a compatible service, with the assistant's key or a second one in
+  *Voice*); then it is placed like a written note, or written where the cursor was with *Insert at cursor*. Without
+  internet the recording is saved and transcribed when you are back online.
 - Templates: a new empty page offers the three built-in ones, and *More…* lists them with your project's own templates
   and the ones from other projects you can see. *Save as template…* in the page menu copies a page to the project's
   *Templates* folder (optionally clearing the filled-in values); a template is a page you edit like any other, and new

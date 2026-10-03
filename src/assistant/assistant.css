@@ -437,3 +437,55 @@
 .assistant-policy-option .assistant-small {
   margin: 0;
 }
+
+/* La clave sincronizada (Docs/Doc_Clave_Sincronizada.md, S1): una sección debajo de los ajustes, como la política. */
+.assistant-sync {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.assistant-sync h3 {
+  margin: 0;
+}
+
+.assistant-sync p {
+  margin: 0;
+}
+
+.assistant-sync-form {
+  display: grid;
+  gap: 8px;
+}
+
+.assistant-sync-row {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.assistant-sync-actions {
+  flex-wrap: wrap;
+}
+
+.assistant-sync .link {
+  justify-self: start;
+}
+
+/* La frase generada: se lee entera, en una sola línea si entra, y se puede elegir con el mouse. */
+.assistant-phrase {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  font-family: var(--mono);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+/* La ventana de salir: cuántas notas de voz quedan, pegado a su casilla (SignOutDialog). */
+.signout-notes {
+  margin: 0.25em 0 0.4em;
+}

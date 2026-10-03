@@ -70,6 +70,10 @@ export const media = {
     en: "The original file is missing on this device.",
     es: "El archivo original ya no está en este dispositivo.",
   },
+  'queue.freedUnknown': {
+    en: "The copy on this device was freed and the media server doesn't remember this file. It's in the owner's Google Drive: ask them.",
+    es: "La copia de este dispositivo se liberó y el servidor de archivos no recuerda este archivo. Está en el Google Drive del dueño: pedíselo.",
+  },
   'queue.unknownToServer': {
     en: "The media server does not know this file reached Google Drive. Retry uploads it again.",
     es: "El servidor de archivos no sabe que este archivo llegó a Google Drive. Reintentar lo vuelve a subir.",
@@ -125,6 +129,10 @@ export const media = {
   'folder.card': { en: "Google Drive folder", es: "Carpeta de Google Drive" },
   'folder.cardStopped': { en: "Stopped: {done} of {total} (open it to retry)", es: "Detenida: {done} de {total} (abrila para reintentar)" },
   'folder.rate': { en: "Google Drive asked to slow down.", es: "Google Drive pidió ir más despacio." },
+  'folder.serverStalled': {
+    en: "The media server is not answering; it will try again shortly.",
+    es: "El servidor de archivos no contesta; se vuelve a probar en un rato.",
+  },
   'folder.notCreator': {
     en: "Only the person who added this folder can upload into it.",
     es: "Solo quien agregó esta carpeta puede subir adentro.",

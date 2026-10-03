@@ -51,8 +51,9 @@ import { usePendingCount } from './usePendingCount';
 import { LegalLinks } from './Legal';
 import { openInstallDialog, useInstallState } from './install';
 import { shortcutLabel } from './shortcuts';
-import { askSignOut, openAssistantSettings } from '../assistant/assistantUi';
+import { askSignOut, askSignOutOthers, openAssistantSettings } from '../assistant/assistantUi';
 import { hasAssistantKey } from '../assistant/keyStore';
+import { voiceLeftovers } from '../dictation/leftovers';
 
 /**
  * Comportamiento común de menús y paneles flotantes: se cierran con Escape o tocando afuera (tocar el
@@ -120,6 +121,16 @@ export function useFloating(
     el.addEventListener('keydown', onKey);
     return () => el.removeEventListener('keydown', onKey);
   }, [ref, arrows]);
+}
+
+/** El nombre del workspace para mostrar: el suyo o, si no tiene, el host de su dirección (como la lista de workspaces). */
+function workspaceLabel(config: { name?: string; url?: string } | undefined): string {
+  if (config?.name) return config.name;
+  try {
+    return new URL(config?.url ?? '').host;
+  } catch {
+    return config?.url ?? '';
+  }
 }
 
 function items(el: HTMLElement): HTMLElement[] {
@@ -460,7 +471,7 @@ export function AccountMenu({
   onMembers?: () => void;
 }) {
   const perms = usePermissions();
-  const { user, docs, client, tree, mediaDb } = useServices();
+  const { user, docs, client, tree, mediaDb, workspace } = useServices();
   const status = useSyncStatus();
   const pending = usePendingCount();
   const isOwner = !!status.mediaUrl && !!status.ownerId && status.ownerId === user.id;
@@ -485,10 +496,13 @@ export function AccountMenu({
     ) {
       return;
     }
-    // Con una clave del asistente guardada en este dispositivo, la ventana de salir ofrece olvidarla (Doc_Asistente.md, 4).
-    if (await hasAssistantKey(user.email)) {
+    // Con una clave del asistente o de *Voice* guardada en este dispositivo, la ventana de salir ofrece olvidarla
+    // (Doc_Asistente.md, 4); con notas de voz sin ubicar, las cuenta y ofrece borrarlas (Doc_Dictado.md, 8).
+    const wsKey = workspace.config.localKey || workspace.config.url;
+    const left = await voiceLeftovers(user.email, wsKey).catch(() => ({ notes: 0, voiceKey: false }));
+    if ((await hasAssistantKey(user.email)) || left.notes > 0 || left.voiceKey) {
       onClose();
-      askSignOut(user.email, () => client.auth.signOut({ scope: 'local' }));
+      askSignOut(user.email, () => client.auth.signOut({ scope: 'local' }), wsKey);
       return;
     }
     await client.auth.signOut({ scope: 'local' });
@@ -634,6 +648,17 @@ export function AccountMenu({
           {tr('install.menu')}
         </button>
       )}
+      {/* Para un dispositivo perdido (Docs/Doc_Clave_Sincronizada.md, S1): esta sesión sigue, las otras se cierran. */}
+      <button
+        className="menu-row"
+        onClick={() => {
+          onClose();
+          askSignOutOthers(workspaceLabel(workspace?.config), () => client.auth.signOut({ scope: 'others' }));
+        }}
+      >
+        <SignOutIcon />
+        {tr('account.signOutOthers')}
+      </button>
       <button className="menu-row" onClick={() => void signOut()}>
         <SignOutIcon />
         {tr('common.signOut')}

@@ -154,25 +154,10 @@ export const search = {
     en: { one: "{count} page wasn't changed", other: "{count} pages weren't changed" },
     es: { one: "{count} página no se cambió", other: "{count} páginas no se cambiaron" },
   },
-  'replace.unsaved': {
-    en: "Couldn't save on this device: replacing stopped",
-    es: "No se pudo guardar en este dispositivo: se paró el reemplazo",
-  },
   'replace.changed': { en: "That match changed: the list was updated", es: "Esa coincidencia cambió: la lista se actualizó" },
   'replace.undo': { en: "Undo", es: "Deshacer" },
   'replace.undoRest': { en: "Undo the rest", es: "Deshacer lo que falta" },
-  'replace.undone': {
-    en: { one: "Undid {count} replacement", other: "Undid {count} replacements" },
-    es: { one: "Se deshizo {count} reemplazo", other: "Se deshicieron {count} reemplazos" },
-  },
-  'replace.undoChanged': {
-    en: { one: "{count} had changed and was left as is", other: "{count} had changed and were left as they are" },
-    es: { one: "{count} había cambiado y quedó como estaba", other: "{count} habían cambiado y quedaron como estaban" },
-  },
-  'replace.undoRemaining': {
-    en: { one: "{count} page couldn't be undone now", other: "{count} pages couldn't be undone now" },
-    es: { one: "{count} página no se pudo deshacer ahora", other: "{count} páginas no se pudieron deshacer ahora" },
-  },
+  'replace.redoing': { en: "Redoing… {done} of {total} pages", es: "Rehaciendo… {done} de {total} páginas" },
   'replace.recent': {
     en: "Last: “{query}” → “{replacement}”, {count} in {pages}",
     es: "Último: “{query}” → “{replacement}”, {count} en {pages}",
