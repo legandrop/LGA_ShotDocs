@@ -35,6 +35,10 @@ export interface Change {
   replaces: string;
   /** La fila (o la sección del plano) la eligió el modelo: no la nombra la nota, ni es la del cursor. */
   chosen: boolean;
+  /** Corrige un cambio aplicado hace un rato en el mismo lugar (`RECENT`, V4): la fila la eligió la persona antes. */
+  corrects?: boolean;
+  /** `setCell` en una fila vacía: la *Slate* que el mismo pedido le escribe a esa fila. */
+  slate?: string;
   why: string;
   /** El texto que va a *Couldn't place* si la persona lo destilda. */
   text: string;
@@ -249,6 +253,10 @@ export interface ValidateContext {
     addRow: (after: string) => string;
     newSection: (title: string) => string;
   };
+  /** El plano activo de la hoja (V4): una fila de ese plano no es "elegida por el asistente". */
+  activeShot?: string | null;
+  /** Las direcciones (en este mapa) de lo aplicado hace un rato en esta hoja (`RECENT`): corregirlas no es elegir. */
+  recent?: Set<string>;
 }
 
 interface Raw {
@@ -398,7 +406,9 @@ export function validateAnswer(answer: string, map: PageMap, ctx: ValidateContex
         before: t.plain,
         after: atomsPlain(atoms),
         replaces: removedText(t, atoms),
-        chosen: chosenRow(map, ctx.note, t, slate, renamed),
+        chosen: !ctx.recent?.has(t.addr) && chosenRow(map, ctx, t, slate, renamed),
+        ...(ctx.recent?.has(t.addr) ? { corrects: true } : {}),
+        ...(slate ? { slate } : {}),
         why,
         text: atomsPlain(atoms),
       });
@@ -420,7 +430,8 @@ export function validateAnswer(answer: string, map: PageMap, ctx: ValidateContex
         before: t.checked ? '☑' : '☐',
         after: op === 'check' ? '☑' : '☐',
         replaces: '',
-        chosen: chosenRow(map, ctx.note, t, null, renamed),
+        chosen: !ctx.recent?.has(t.addr) && chosenRow(map, ctx, t, null, renamed),
+        ...(ctx.recent?.has(t.addr) ? { corrects: true } : {}),
         why,
         text: t.plain.trim(),
       });
@@ -490,7 +501,7 @@ export function validateAnswer(answer: string, map: PageMap, ctx: ValidateContex
         before: '',
         after,
         replaces: '',
-        chosen: !!slate && !noteMentions(ctx.note, slate),
+        chosen: !!slate && !noteMentions(ctx.note, slate) && !(ctx.activeShot && noteMentions(ctx.activeShot, slate)),
         why,
         text: cells.filter(Boolean).join(' · '),
       });
@@ -569,17 +580,20 @@ function linkFree(text: string, seen: { linksRemoved: boolean }): string {
  * Si la fila (o la sección del plano) la eligió el modelo sin una señal propia: no es la del cursor y la nota no la
  * nombra. Solo cuenta en tablas con encabezado (las de filas por plano) y en las secciones de los planos.
  */
-function chosenRow(map: PageMap, note: string, t: Target, slate: string | null, renamed: Map<string, string>): boolean {
+function chosenRow(map: PageMap, ctx: ValidateContext, t: Target, slate: string | null, renamed: Map<string, string>): boolean {
+  const { note, activeShot } = ctx;
+  // El plano activo de la hoja (V4) es una señal de la persona, como el cursor y lo dicho.
+  const named = (label: string) => noteMentions(note, label) || (!!activeShot && noteMentions(activeShot, label));
   if (t.kind === 'cell') {
     const table = map.tables.find((x) => x.n === t.table);
     if (!table?.headerRow) return false;
     if (map.cursor?.table === t.table && map.cursor?.row === t.row) return false;
     const label = (slate ?? t.rowLabel ?? '').trim();
-    return !label || !noteMentions(note, label);
+    return !label || !named(label);
   }
   const shot: ShotSection | undefined = map.shots.find((s) => s.heading.addr === t.addr || s.checks.some((c) => c.addr === t.addr));
   if (!shot) return false;
   if (map.cursor?.shot !== undefined && map.cursor.shot === shot.name) return false;
   const name = shot.name || renamed.get(shot.heading.addr) || '';
-  return !name || !noteMentions(note, name);
+  return !name || !named(name);
 }

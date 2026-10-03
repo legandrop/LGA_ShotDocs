@@ -11,6 +11,8 @@ export interface RecentChange {
   where: string;
   before: string;
   after: string;
+  /** La dirección de ese lugar en el mapa de este pedido (V4), si sigue en la página. */
+  addr?: string;
 }
 
 const SYSTEM = `You place notes from a film set into the right place of a report page, in a document editor used by film and VFX crews. A person dictated or typed a short, informal note; you decide where each piece of information goes in the page and return a list of changes. You never write the page yourself: the app checks your changes and the person sees them before applying.
@@ -38,13 +40,13 @@ Rules:
 - Use only addresses that are in the map. Copy "old", "row", "col" and "label" exactly as the map shows them.
 - Never write into a header row, into column c1 of a table whose c1 holds the labels, or into the label of a labeled line.
 - Before addRow, use an empty row the table already has (write the shot in its c1, like "12 · 010 · 4", in the format of the other rows). Before addShotSection, use the empty shot section of the template (a heading that is only "Shot " or "Plano ": setText its heading to the shot name and check its items). Before appendText, write after the label of a labeled line (setText).
-- "This shot" / "este plano": first what the note says ("12_010", "el diez", "escena 12 setup 3"; normalize 12_010, 12 · 010 and "doce cero diez" to the same shot), then the row or shot section where the CURSOR is. If more than one row could be meant and nothing tells them apart, do not guess: set "changes" to [] and "ask" to {"question": "<short question>", "options": ["T3 r2", "T3 r3", "new row"]} with the candidate rows as addresses.
+- "This shot" / "este plano": first what the note says ("12_010", "el diez", "escena 12 setup 3"; normalize 12_010, 12 · 010 and "doce cero diez" to the same shot), then the row or shot section where the CURSOR is, then ACTIVE_SHOT (the shot the person set for these notes, if there is one). In a page about a single shot (a shot breakdown), "this shot" is the page. If more than one row could be meant and nothing tells them apart, do not guess: set "changes" to [] and "ask" to {"question": "<short question>", "options": ["T3 r2", "T3 r3", "new row"]} with the candidate rows as addresses.
 - A cell that holds several values ("Lens · Filters", "T-stop · Focus") is written whole: keep what it had and put the new value in its place ("50 mm · ND .6"). Replace a value only when the note corrects it.
 - Write values in the language of the page (LANG), keep crew jargon as crews say it (clean plate, HDRI, chrome ball, witness cam), write numbers in digits, and use the format the column already has (units like "50 mm", "T2.8", "3 m", "24 fps", "180°", "ND .6").
 - Keep every ⟦photo:N⟧ and ⟦link:N⟧…⟦/link⟧ of the old text in "new". Do not add links, images, HTML or Markdown.
 - One note can bring several changes (at most 20). Never invent information that is not in the note.
 - What you cannot place goes in "unplaced", in the words of the note. Do not drop anything.
-- "RECENT" lists changes applied in this page a moment ago: a correction ("no, it was a 35") changes that value again, with the text it has now as "old".`;
+- "RECENT" lists changes applied in this page a moment ago, oldest first, with the address each place has now; the newest is marked (last). A correction that doesn't name another place ("no, it was a 35", "no, era un 35", "mejor 40") changes the place of the (last) change again, with the text it has now in the map as "old". If the note names the place ("no, the T-stop was 4"), correct that one.`;
 
 const escapeTags = (s: string) => s.replace(/<(?=\/?(?:note|page_map)\b)/gi, '\\<');
 
@@ -52,12 +54,19 @@ const escapeTags = (s: string) => s.replace(/<(?=\/?(?:note|page_map)\b)/gi, '\\
  * El pedido de ubicar una nota. `recent`: lo aplicado en esta hoja en los últimos minutos. `answered`: la respuesta de
  * la persona a una pregunta del modelo (*ask*), que va con la misma nota y un mapa nuevo.
  */
-export function buildPlaceRequest(map: PageMap, note: string, opts: { recent?: RecentChange[]; answered?: { question: string; answer: string } } = {}): CompletionRequest {
+export function buildPlaceRequest(
+  map: PageMap,
+  note: string,
+  opts: { recent?: RecentChange[]; answered?: { question: string; answer: string }; activeShot?: string | null } = {},
+): CompletionRequest {
   const parts: string[] = ['Place this note in the page. Answer with the JSON object only.', `<page_map>\n${escapeTags(map.text)}\n</page_map>`];
+  // El plano activo de la hoja (V4): un dato de la persona, fuera del mapa (que es solo la página).
+  if (opts.activeShot) parts.push(`ACTIVE_SHOT ${JSON.stringify(opts.activeShot)}`);
   if (opts.recent?.length) {
+    const last = opts.recent.length - 1;
     parts.push(
       `RECENT\n${opts.recent
-        .map((r) => `- ${r.where}: ${JSON.stringify(r.before)} → ${JSON.stringify(r.after)}`)
+        .map((r, i) => `- ${r.addr ? `${r.addr} (${r.where})` : r.where}: ${JSON.stringify(r.before)} → ${JSON.stringify(r.after)}${i === last ? ' (last)' : ''}`)
         .join('\n')}`,
     );
   }

@@ -370,3 +370,65 @@
 .ask-mic.on {
   color: var(--danger);
 }
+
+/* El plano activo (V4): la chapita *Shot: 12_010 ▾*, fija entre notas. El select nativo da la lista grande del teléfono. */
+.dictation-shot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
+  max-width: 100%;
+  padding: 2px 4px 2px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.dictation-shot.on {
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.dictation-shot .mono-label {
+  margin: 0;
+}
+
+.dictation-shot select {
+  min-width: 0;
+  max-width: 14em;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+/* Lo que se propone en la página del plano (V4): otra página, aparte y destildado. */
+.dictation-extra {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.dictation-extra .mono-label,
+.dictation-extra p {
+  margin: 0;
+}
+
+.dictation-where-static {
+  cursor: default;
+}
+
+.dictation-where-static:hover {
+  text-decoration: none;
+}
+
+@media (max-width: 760px) {
+  .dictation-shot select {
+    height: 40px;
+    font-size: 16px;
+  }
+}

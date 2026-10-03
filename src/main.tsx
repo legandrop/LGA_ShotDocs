@@ -5,6 +5,7 @@ import { App } from './ui/App';
 import { listenForInstallPrompt } from './ui/install';
 import { listenForMissingFiles } from './ui/lazyPart';
 import { watchNewVersionFromStart } from './ui/appUpdate';
+import { captureDictateLink } from './dictation/dictateLink';
 // Los estilos del editor van con la primera pantalla aunque el editor se baje aparte (roadmap B.4): así
 // quedan antes de styles.css, que los ajusta, como antes. Cargados con el editor irían después y le
 // ganarían a esos ajustes.
@@ -19,6 +20,9 @@ import '@fontsource/courier-prime/latin-700.css';
 import './styles.css';
 
 prefs.init();
+// `/dictate#<texto>` (el Atajo de iOS, Doc_Dictado.md, V4): el texto se guarda para la hoja y la dirección vuelve al
+// inicio antes de que la app la lea.
+captureDictateLink();
 // Un archivo de la versión vieja que ya no está (se publicó una nueva): recargar una vez (lazyPart.tsx).
 listenForMissingFiles();
 // Una versión nueva que toma el control de la pestaña antes de entrar a un workspace también cuenta (appUpdate.ts).

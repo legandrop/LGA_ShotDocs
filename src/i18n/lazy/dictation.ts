@@ -109,6 +109,50 @@ export const dictation = {
   'dictation.voice.forget': { en: "Forget voice key", es: "Olvidar la clave de voz" },
   'dictation.voice.test': { en: "Test", es: "Probar" },
   'dictation.voice.save': { en: "Save", es: "Guardar" },
+
+  // V4: el plano activo, las correcciones, la página del plano, Add as comment y el Atajo de iOS.
+  'dictation.shot': { en: "Shot", es: "Plano" },
+  'dictation.shotLabel': { en: "Active shot", es: "Plano activo" },
+  'dictation.shotNone': { en: "None", es: "Ninguno" },
+  'dictation.shotTip': {
+    en: "Notes that don't name a shot go to this one. It changes by itself to the shot of what you apply.",
+    es: "Las notas que no nombran un plano van a este. Cambia solo al plano de lo que aplicás.",
+  },
+  'dictation.corrects': { en: "Corrects a change you just applied", es: "Corrige un cambio que acabás de aplicar" },
+  'dictation.shotPage': { en: "Shot Breakdown", es: "Desglose de plano" },
+  'dictation.shotPageTitle': { en: "Also in the shot's page", es: "También en la página del plano" },
+  'dictation.shotPageHint': {
+    en: "Another page: tick it to write it there too. Undo in this panel takes it out.",
+    es: "Es otra página: tildalo para escribirlo también ahí. Deshacer en este panel lo saca.",
+  },
+  'dictation.shotPageDiffers': { en: "{where} already says “{text}”: it's left as it is.", es: "{where} ya dice «{text}»: queda como está." },
+  'dictation.shotPageAmbiguous': {
+    en: "More than one page could be the one of shot {shot}: nothing is proposed there.",
+    es: "Más de una página podría ser la del plano {shot}: no se propone nada ahí.",
+  },
+  'dictation.shotPageReadOnly': { en: "You can't edit {page}, the page of that shot.", es: "No podés editar {page}, la página de ese plano." },
+  'dictation.shotPageFailed': {
+    en: "Not written in {where}: it changed, or you can't edit it anymore. The rest was applied.",
+    es: "No se escribió en {where}: cambió, o ya no la podés editar. Lo demás se aplicó.",
+  },
+  'dictation.shotPageKept': {
+    en: "Undone in this page. {where} changed after, so it was left as it is.",
+    es: "Deshecho en esta página. {where} cambió después, así que quedó como está.",
+  },
+  'dictation.addAsComment': { en: "Add as comment", es: "Agregar como comentario" },
+  'dictation.commentHead': { en: "Dictated note: “{note}”. Where it would go:", es: "Nota dictada: «{note}». Dónde iría:" },
+  'dictation.commentUnplaced': { en: "Couldn't place:", es: "No se pudo ubicar:" },
+  'dictation.commentFailed': { en: "The comment couldn't be added. Your note is still here.", es: "No se pudo agregar el comentario. Tu nota sigue acá." },
+  'dictation.commented': { en: "Added as a comment on this page.", es: "Se agregó como comentario en esta página." },
+  'dictation.commentNotice': {
+    en: "You can't edit this page: you can place the note and add it as a comment, or copy the result.",
+    es: "No podés editar esta página: podés ubicar la nota y agregarla como comentario, o copiar el resultado.",
+  },
+  'dictation.fromShortcut': {
+    en: "From your Shortcut. Check the note and tap Place: nothing is sent until you do.",
+    es: "Desde tu Atajo. Revisá la nota y tocá Ubicar: no se manda nada hasta que lo hagas.",
+  },
+  'dictation.fromShortcutEmpty': { en: "Opened from your Shortcut. Write or dictate the note.", es: "Abierto desde tu Atajo. Escribí o dictá la nota." },
 } satisfies Dict;
 
 // Se suma al diccionario cuando se carga la parte que lo usa (viaja con ella, no en la primera carga).
