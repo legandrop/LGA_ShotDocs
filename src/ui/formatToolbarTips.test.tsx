@@ -185,6 +185,9 @@ describe('la barra de formato: los botones de BlockNote con el tooltip de la app
     await mount({ coarse: true });
     expect(button('bold')!.hasAttribute('data-tip')).toBe(false);
     expect(button('alignTextLeft')!.getAttribute('data-tip')).toBe('Align text left');
+    // Comment (de la app) sigue como estaba: sin tooltip, y no pasa a mostrar su nombre.
+    const comment = buttons().find((b) => b.getAttribute('aria-label') === 'Comment')!;
+    expect(comment.hasAttribute('data-tip')).toBe(false);
   });
 });
 
@@ -236,6 +239,7 @@ describe('toolbarTip', () => {
     expect(toolbarTip({ 'data-test': 'mergeCells', mainTooltip: 'Merge cells' }, env)).toBe('Merge cells');
     expect(toolbarTip({ label: 'Colors' }, env)).toBe('Colors');
     expect(toolbarTip({ 'data-tip': 'x', mainTooltip: 'Bold', 'data-test': 'bold' }, env)).toBe('x');
+    expect(toolbarTip({ 'data-tip': undefined, label: 'Comment' }, env)).toBeUndefined();
     expect(toolbarTip({}, env)).toBeUndefined();
   });
   it('el data-test que BlockNote saca del nombre se conserva', () => {
