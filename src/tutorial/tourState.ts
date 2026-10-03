@@ -1,7 +1,8 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { helpSeen, useHelpUi } from '../help/helpUi';
 import { checkHelpNews, useHelpNews } from '../help/news';
-import { navigate, PRACTICE_PATH } from '../router';
+import { PRACTICE_PATH } from '../router';
+import { capturePlace, restorePlace, type ShowMePlace } from './showMePlace';
 
 // El estado de la recorrida (Docs/Doc_Tutorial.md, sección 4, "Cuándo aparece y dónde se guarda que ya se vio"). Va
 // en la primera carga y es chico: decidir si arranca, el punto del "?" y las señales de la práctica. El motor
@@ -62,10 +63,11 @@ export interface TourUi {
   /** Sube al empezar o al seguir: la recorrida lleva a la práctica (si la persona se fue, queda en pausa). */
   nonce: number;
   /**
-   * "Mostrame" de la ayuda (entrega 3): un solo paso, `id`, en la práctica. Al terminar se vuelve a `back` (la
-   * dirección donde estaba la persona; `null` si ya estaba en la práctica). No cuenta como recorrida vista ni a medias.
+   * "Mostrame" de la ayuda (entrega 3): un solo paso, `id`, en la práctica. Al terminar se vuelve a `back` (dónde
+   * estaba la persona, con el desplazamiento y el cursor; `null` si ya estaba en la práctica). No cuenta como recorrida
+   * vista ni a medias; `prev` es lo que había a la vista antes (la tarjeta de retomar o la de primera vez), que vuelve.
    */
-  only?: { id: string; back: string | null };
+  only?: { id: string; back: ShowMePlace | null; prev: TourUi | null };
 }
 
 let ui: TourUi = { mode: 'off', step: 0, nonce: 0 };
@@ -121,16 +123,41 @@ export function decideStart(f: StartFacts): TourMode {
  */
 export function showStep(id: string): void {
   const here = location.pathname + location.search;
-  const back = here === PRACTICE_PATH ? null : here;
-  set({ mode: 'running', step: 0, nonce: ui.nonce + 1, only: { id, back } });
-  navigate(PRACTICE_PATH);
+  const back = here === PRACTICE_PATH ? null : capturePlace();
+  // Lo que estaba a la vista vuelve al terminar: la tarjeta de retomar o la de primera vez; una recorrida en curso
+  // queda como tarjeta de retomar (su paso sigue guardado en el dispositivo).
+  const before = ui.only ? ui.only.prev : ui;
+  const prev = before && before.mode !== 'off' ? (before.mode === 'running' ? { ...before, mode: 'resume' as const, only: undefined } : before) : null;
+  set({ mode: 'running', step: 0, nonce: ui.nonce + 1, only: { id, back, prev } });
+  // Una entrada nueva en el historial del navegador (Atrás durante el paso vuelve a la página y lo termina); al terminar
+  // se vuelve con Atrás, así no queda ninguna de más. También desde la vista previa de una plantilla (`/practice?…`),
+  // que tiene la misma ruta.
+  if (back) {
+    history.pushState({ shotdocsShowMe: true }, '', PRACTICE_PATH);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }
 }
 
-/** Termina "Mostrame": vuelve a donde estaba la persona (sin que Atrás del navegador la deje en la práctica). */
-export function endShowStep(): void {
-  const back = ui.only?.back ?? null;
-  if (ui.mode !== 'off') set({ mode: 'off', step: 0, nonce: ui.nonce });
-  if (back && location.pathname === PRACTICE_PATH) navigate(back, true);
+let cancelRestore: (() => void) | null = null;
+
+/**
+ * Termina "Mostrame". Con `goBack`, vuelve a donde estaba la persona (Atrás del navegador, que saca la entrada que
+ * sumó `showStep`) con el desplazamiento y el cursor de antes. Sin `goBack` (la persona ya se fue de la práctica),
+ * solo termina.
+ */
+export function endShowStep({ goBack = true }: { goBack?: boolean } = {}): void {
+  const only = ui.only;
+  if (!only) return;
+  set(only.prev ? { ...only.prev, nonce: ui.nonce + 1 } : { mode: 'off', step: 0, nonce: ui.nonce });
+  const back = only.back;
+  if (!goBack || !back || location.pathname !== PRACTICE_PATH) return;
+  cancelRestore?.();
+  if ((history.state as { shotdocsShowMe?: boolean } | null)?.shotdocsShowMe) history.back();
+  else {
+    history.replaceState(null, '', back.path);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }
+  cancelRestore = restorePlace(back);
 }
 
 /** Arranca la recorrida desde el paso 1 (la ayuda la ofrece siempre; Docs/Doc_Tutorial.md, sección 4). */
@@ -223,4 +250,8 @@ export function onTourSignal(fn: (s: Signal) => void): () => void {
 }
 
 /** Lo que la recorrida le pide a la práctica: llevar el cursor al renglón vacío (paso del menú "/"). */
-export const practiceHooks: { focusEmptyLine: (() => void) | null } = { focusEmptyLine: null };
+export const practiceHooks: {
+  focusEmptyLine: (() => void) | null;
+  /** Si el menú "/" de la práctica está abierto ("Mostrame": Esc es del menú). */
+  slashMenuOpen: (() => boolean) | null;
+} = { focusEmptyLine: null, slashMenuOpen: null };

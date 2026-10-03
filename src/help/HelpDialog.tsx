@@ -241,7 +241,7 @@ function HelpEntryView({
         {tr(entry.title)}
         {fresh && <span className="help-new">{tr('help.new')}</span>}
       </h4>
-      <p>{tr.rich(entry.text, params)}</p>
+      <p>{tr.rich(entry.textTouch && coarse() ? entry.textTouch : entry.text, params)}</p>
       {reason && <p className="help-reason">{entry.when === 'notInstalled' ? reason : tr('help.unavailable', { reason })}</p>}
       {(action || showMe) && (
         <div className="help-buttons">

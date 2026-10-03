@@ -49,6 +49,8 @@ export interface HelpEntry {
   section: HelpSection;
   title: Key;
   text: Key;
+  /** En una pantalla táctil (por el puntero, como los tooltips, D226), si el texto nombra una tecla. */
+  textTouch?: Key;
   /**
    * Los atajos que nombra el texto: `{nombre}` del texto → id del registro (shortcuts.ts). El rótulo sale del
    * registro al mostrarla, así nunca queda viejo; la búsqueda también los encuentra ("ctrl f").
@@ -164,7 +166,7 @@ const FIND_COLLAPSED = '0.130';
 const UNDO_ORDER = '0.152';
 /** El título de hasta 500 caracteres, lo que sobra va a la página (v0.152). */
 const TITLE_LONG = '0.152';
-/** "Mostrame", las novedades y la entrada de Google Drive (Doc_Tutorial.md, entrega 3): el número lo pone quien publica. */
+/** "Mostrame" y las novedades (Doc_Tutorial.md, entrega 3): el número lo pone quien publica. */
 const HELP_3 = '0.0XX';
 
 export const HELP_ENTRIES: HelpEntry[] = [
@@ -184,6 +186,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'start',
     title: 'help.showMe.title',
     text: 'help.showMe.text',
+    textTouch: 'help.showMe.textTouch',
     words: ['mostrame', 'mostrar', 'práctica', 'ejemplo', 'show me', 'practice', 'example', 'tour', 'recorrida'],
     since: HELP_3,
   },

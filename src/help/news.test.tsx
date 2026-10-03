@@ -9,14 +9,16 @@ import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { TOUR_STEPS } from '../tutorial/steps';
-import { dismissTour, getTourUi, readDeviceTour, tourSignal } from '../tutorial/tourState';
+import { TextSelection } from '@tiptap/pm/state';
+import type { EditorView } from '@tiptap/pm/view';
+import { dismissTour, getTourUi, practiceHooks, readDeviceTour, tourSignal } from '../tutorial/tourState';
 import { closeFindBar } from '../ui/findUi';
 import { setNavOpen } from '../ui/navStore';
 import { SHORTCUTS } from '../ui/shortcuts';
 import { Shell } from '../ui/Workspace';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { entryShortcuts, HELP_ENTRIES } from './entries';
-import { closeHelp } from './helpUi';
+import { closeHelp, openHelp as openHelpUi } from './helpUi';
 import { checkHelpNews, hasHelpNews, helpNewsFrom, isNewer, isUnpublished, isValidSince, latestOf, markHelpNewsSeen, readHelpNews, versionValue } from './news';
 
 // La entrega 3 de la ayuda (Docs/Doc_Tutorial.md): las novedades (el punto del "?" con lo nuevo desde la última vez
@@ -83,7 +85,8 @@ describe('las novedades en el dispositivo', () => {
     await checkHelpNews('0.154', load(['0.081', '0.150']));
     expect(readHelpNews()).toEqual({ seen: '0.150', latest: '0.150', app: '0.154' });
     expect(hasHelpNews()).toBe(false);
-    expect(helpNewsFrom()).toBeNull();
+    // Lo visto es lo de hoy: la ayuda no lista nada.
+    expect(helpNewsFrom()).toBe('0.150');
   });
 
   it('una versión nueva de la app con entradas nuevas prende el punto; abrir la ayuda lo apaga', async () => {
@@ -277,6 +280,10 @@ describe('las novedades en la ayuda', () => {
     expect(button.classList.contains('has-dot')).toBe(false);
     expect(button.getAttribute('aria-label')).toBe('Help and shortcuts');
     expect(readHelpNews()?.seen).toBe(LATEST);
+    // Volver a pedir la ayuda con la ayuda abierta (el menú de la cuenta): la lista sigue.
+    act(() => openHelpUi('keys'));
+    await wait(50);
+    expect(dialog()!.querySelectorAll('[data-help-section="news"] .help-entry').length).toBe(expected.length);
 
     act(() => closeHelp());
     await until(() => !dialog(), 'que se cierre');
@@ -371,5 +378,137 @@ describe('Mostrame', () => {
     click(bubble()!.querySelector('button.primary'));
     await until(() => !bubble(), 'que termine');
     expect(path()).toBe('/practice');
+  });
+
+  it('vuelve con el cursor de antes en la página (y el foco en el editor)', async () => {
+    const { host, page } = await app();
+    await until(() => document.querySelector('article.page .bn-editor'), 'el editor de la página');
+    const view = () => (document.querySelector('article.page .bn-editor') as unknown as { editor?: { view: EditorView } } | null)?.editor?.view;
+    await until(() => view(), 'la vista');
+    act(() => {
+      const v = view()!;
+      v.dispatch(v.state.tr.insertText('Una línea larga de prueba para el cursor', 1));
+    });
+    act(() => {
+      const v = view()!;
+      v.dispatch(v.state.tr.setSelection(TextSelection.create(v.state.doc, 5, 12)));
+    });
+    const before = view()!;
+    await openHelp(host);
+    click(dialog()!.querySelector('[data-help-id="findPage"] .help-show-me'));
+    await until(() => bubble(), 'el paso');
+    click(bubble()!.querySelector('button.primary'));
+    await until(() => path() === `/p/${page}` && view() && view() !== before, 'la página otra vez');
+    await until(() => view()!.state.selection.anchor === 5 && view()!.state.selection.head === 12, 'el cursor de antes');
+    expect(view()!.state.doc.textContent).toContain('Una línea larga de prueba');
+    await until(() => document.activeElement?.closest('.bn-editor'), 'el foco en el editor');
+  });
+
+  it('no suma entradas al historial del navegador', async () => {
+    const { host, page } = await app();
+    const round = async () => {
+      await openHelp(host);
+      click(dialog()!.querySelector('[data-help-id="comments"] .help-show-me'));
+      await until(() => bubble(), 'el paso');
+      click(bubble()!.querySelector('button.primary'));
+      await until(() => !bubble() && path() === `/p/${page}`, 'volver');
+      await wait(50);
+    };
+    await round();
+    const length = history.length;
+    await round();
+    await round();
+    expect(history.length).toBe(length);
+  });
+
+  it('Esc termina con el foco afuera del globito y en el paso del menú "/" (salvo con el menú abierto)', async () => {
+    const { host, page } = await app();
+    await openHelp(host);
+    click(dialog()!.querySelector('[data-help-id="share"] .help-show-me'));
+    await until(() => bubble(), 'el paso del menú de la página');
+    // Un clic afuera: el foco vuelve al documento.
+    act(() => (document.activeElement as HTMLElement | null)?.blur());
+    act(() => void document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })));
+    await until(() => !bubble() && path() === `/p/${page}`, 'volver con Esc desde afuera');
+
+    await openHelp(host);
+    click(dialog()!.querySelector('[data-help-id="slash"] .help-show-me'));
+    await until(() => bubble()?.querySelector('h3')?.textContent === 'The / menu' && practiceHooks.slashMenuOpen, 'el paso del menú /');
+    const editor = document.querySelector('.bn-editor .ProseMirror') ?? document.querySelector('.bn-editor')!;
+    const escInEditor = () => act(() => void editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })));
+    // Con el menú "/" abierto, Esc es del menú.
+    const real = practiceHooks.slashMenuOpen;
+    practiceHooks.slashMenuOpen = () => true;
+    escInEditor();
+    await wait(100);
+    expect(bubble()).not.toBeNull();
+    practiceHooks.slashMenuOpen = real;
+    // Cerrado, Esc en el renglón termina.
+    escInEditor();
+    await until(() => !bubble() && path() === `/p/${page}`, 'volver con Esc desde el renglón');
+  });
+
+  it('→ y Enter también terminan', async () => {
+    const { host, page } = await app();
+    for (const key of ['ArrowRight', 'Enter']) {
+      await openHelp(host);
+      click(dialog()!.querySelector('[data-help-id="pdf"] .help-show-me'));
+      await until(() => bubble(), 'el paso');
+      press(key);
+      await until(() => !bubble() && path() === `/p/${page}`, `volver con ${key}`);
+    }
+  });
+
+  it('la tarjeta de retomar la recorrida vuelve después de "Mostrame"', async () => {
+    localStorage.setItem('shotdocs-tour', JSON.stringify({ v: 1, done: false, step: 3 }));
+    const { host, page } = await app();
+    await until(() => document.querySelector('.tour-card'), 'la tarjeta');
+    await openHelp(host);
+    click(dialog()!.querySelector('[data-help-id="comments"] .help-show-me'));
+    await until(() => bubble(), 'el paso');
+    expect(document.querySelector('.tour-card')).toBeNull();
+    click(bubble()!.querySelector('button.primary'));
+    await until(() => !bubble() && path() === `/p/${page}`, 'volver');
+    await until(() => document.querySelector('.tour-card')?.textContent?.includes('Continue the tour?'), 'la tarjeta de nuevo');
+    expect(readDeviceTour()).toMatchObject({ done: false, step: 3 });
+  });
+
+  it('desde la vista previa de una plantilla: el paso en la práctica y vuelta a la vista previa', async () => {
+    const { host } = await app();
+    act(() => {
+      history.pushState(null, '', '/practice?template=on-set');
+      window.dispatchEvent(new Event('shotdocs:navigate'));
+    });
+    await until(() => document.querySelector('.practice-banner'), 'la vista previa');
+    await openHelp(host);
+    click(dialog()!.querySelector('[data-help-id="photosOpen"] .help-show-me'));
+    await until(() => bubble() && location.pathname + location.search === '/practice', 'la práctica sin plantilla');
+    click(bubble()!.querySelector('button.primary'));
+    await until(() => !bubble() && location.pathname + location.search === '/practice?template=on-set', 'volver a la vista previa');
+  });
+
+  it('una entrada que la persona no puede usar no ofrece "Mostrame"; en un táctil, el texto sin Esc', async () => {
+    // Una entrada de prueba con `when` (hoy ninguna con paso lo tiene): apagada, sin el botón.
+    const fake = { id: 'zzFake', section: 'start' as const, title: 'help.news.title' as const, text: 'help.news.text' as const, showMe: 'find', when: 'portero' as const, since: '0.081' };
+    HELP_ENTRIES.push(fake);
+    const coarse = window.matchMedia;
+    try {
+      const { host } = await app();
+      await openHelp(host);
+      expect(dialog()!.querySelector('[data-help-id="attach"]')?.classList.contains('off')).toBe(true);
+      expect(dialog()!.querySelector('[data-help-id="zzFake"]')?.classList.contains('off')).toBe(true);
+      expect(dialog()!.querySelector('[data-help-id="zzFake"] .help-show-me')).toBeNull();
+      expect(dialog()!.querySelector('[data-help-id="showMe"] p')?.textContent).toContain('Done (or Esc)');
+      act(() => closeHelp());
+      await until(() => !dialog(), 'que se cierre');
+      window.matchMedia = ((q: string) => ({ ...coarse(q), matches: q.includes('coarse') })) as typeof window.matchMedia;
+      await openHelp(host);
+      const text = dialog()!.querySelector('[data-help-id="showMe"] p')?.textContent ?? '';
+      expect(text).toContain('Done takes you back');
+      expect(text).not.toContain('Esc');
+    } finally {
+      HELP_ENTRIES.splice(HELP_ENTRIES.indexOf(fake), 1);
+      window.matchMedia = coarse;
+    }
   });
 });

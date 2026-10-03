@@ -201,9 +201,13 @@ function PracticePage({ session, variant, onStartOver }: { session: PracticeSess
     } | null;
     if (!editor?.setTextCursorPosition) return;
     const shown = (v: unknown) => !!v && (v as { show?: boolean }).show !== false && (v as { triggerCharacter?: string }).triggerCharacter === '/';
+    let menuOpen = false;
     const stopMenu = editor.getExtension?.('suggestionMenu')?.store?.subscribe(({ prevVal, currentVal }) => {
+      menuOpen = shown(currentVal);
       if (shown(prevVal) && !shown(currentVal)) tourSignal('slash');
     });
+    // "Mostrame" (entrega 3): con el menú "/" abierto, Esc es del menú, no termina el paso.
+    practiceHooks.slashMenuOpen = () => menuOpen;
     practiceHooks.focusEmptyLine = () => {
       try {
         editor.setTextCursorPosition!(PRACTICE_BLOCKS.empty, 'start');
@@ -214,6 +218,7 @@ function PracticePage({ session, variant, onStartOver }: { session: PracticeSess
     };
     return () => {
       practiceHooks.focusEmptyLine = null;
+      practiceHooks.slashMenuOpen = null;
       stopMenu?.();
     };
   }, [findEditor]);

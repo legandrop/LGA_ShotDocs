@@ -46,8 +46,29 @@ function ShowMe({ id, onPractice }: { id: string; onPractice: boolean }) {
   const [entered, setEntered] = useState(onPractice);
   useEffect(() => {
     if (onPractice) setEntered(true);
-    else if (entered) dismissTour();
+    else if (entered) endShowStep({ goBack: false });
   }, [onPractice]);
+  // Esc termina "Mostrame" también con el foco afuera del globito (un clic en la página, el renglón del paso del menú
+  // "/"), salvo que sea de otro: el menú "/" abierto, un diálogo o el carrete, o algo que ya lo usó (la barra de buscar,
+  // el panel de comentarios). En el editor, Esc no es de nadie más (BlockNote lo usa para soltar el foco).
+  useEffect(() => {
+    let skip = false;
+    const before = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') skip = !!practiceHooks.slashMenuOpen?.() || !!document.querySelector(MODAL);
+    };
+    const after = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== 'Escape' || skip) return;
+      const inEditor = e.target instanceof Element && !!e.target.closest('.bn-editor');
+      if (e.defaultPrevented && !inEditor) return;
+      finishShowMe();
+    };
+    window.addEventListener('keydown', before, true);
+    window.addEventListener('keydown', after);
+    return () => {
+      window.removeEventListener('keydown', before, true);
+      window.removeEventListener('keydown', after);
+    };
+  }, []);
   useEffect(() => {
     // Un paso que ya no existe (una ayuda vieja en otra pestaña): no se traba nada.
     if (!step) endShowStep();

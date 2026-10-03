@@ -79,12 +79,12 @@ export function hasHelpNews(): boolean {
 }
 
 /**
- * Lo que la persona vio la última vez, si hay algo más nuevo (lo guarda la ayuda al abrirse, para listar las
- * novedades aunque al mismo tiempo se den por vistas); `null` si no hay novedades.
+ * Lo que la persona vio la última vez (lo guarda la ayuda al abrirse, para listar las novedades aunque al mismo tiempo
+ * se den por vistas); `null` sin nada guardado. No mira `latest`: si la ayuda se abre antes de que se cuente la versión
+ * nueva, la lista sale igual de las entradas que trae la ayuda.
  */
 export function helpNewsFrom(): string | null {
-  const s = readHelpNews();
-  return s && isNewer(s.latest, s.seen) ? s.seen : null;
+  return readHelpNews()?.seen ?? null;
 }
 
 /**

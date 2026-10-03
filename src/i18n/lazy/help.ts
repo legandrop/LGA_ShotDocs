@@ -91,6 +91,10 @@ export const help = {
     en: "Entries with Show me open the practice page and point at that part of the screen, just that step of the tour. Done (or Esc) takes you back where you were. Nothing you do there is saved.",
     es: "Las entradas con Mostrame abren la página de práctica y señalan esa parte de la pantalla, solo ese paso de la recorrida. Listo (o Esc) te devuelve a donde estabas. Nada de lo que hagas ahí se guarda.",
   },
+  'help.showMe.textTouch': {
+    en: "Entries with Show me open the practice page and point at that part of the screen, just that step of the tour. Done takes you back where you were. Nothing you do there is saved.",
+    es: "Las entradas con Mostrame abren la página de práctica y señalan esa parte de la pantalla, solo ese paso de la recorrida. Listo te devuelve a donde estabas. Nada de lo que hagas ahí se guarda.",
+  },
 
   // --- Páginas y proyectos ---
   'help.pagesTree.title': { en: "Pages inside pages", es: "Páginas adentro de páginas" },
