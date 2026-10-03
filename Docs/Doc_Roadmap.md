@@ -357,10 +357,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   cuarentena de filas malas; se vuelve a auditar ese diseño antes de programarla), 3 (medir y ajustar los topes).
   **Hecho (v0.147): la barrera de error alrededor de la página** (B3 del diseño de *Can edit*, requisito para prender
   el link que edita): una página que hace tirar al editor muestra un aviso con el historial a mano y el resto de la app
-  sigue; la app entera, *Reload* en vez de blanco. Ver `Doc_Sincronizacion.md`, "Barreras de error". Quedan dos
-  observaciones de su re-verificación (BAJO): una prueba con un reemplazo en curso para la pregunta al cerrar la pantalla
-  de error (`replaceRunning`), y que los bloques que toca una restauración desde el aviso quedan con sus atributos por
-  defecto escritos (unos bytes más; mirar si la vista de diferencias del historial los muestra como cambiados).
+  sigue; la app entera, *Reload* en vez de blanco. Ver `Doc_Sincronizacion.md`, "Barreras de error". Las dos
+  observaciones de su re-verificación quedaron **hechas (v0.0XX)**: la prueba con un reemplazo en curso para la
+  pregunta al cerrar la pantalla de error (`replaceRunning`), y restaurar sin el editor ya no escribe los atributos por
+  defecto en los bloques iguales a la versión (los saltea; la vista de diferencias comparaba los atributos guardados y los
+  mostraba como «formato cambiado»).
 - **P.25 Sacar una foto o filmar desde la app** (Lega, 2026-10-01). **Hecho para la web (v0.110):** *Take photo* y
   *Record video* en el menú "/" y en el menú de la página, solo en el teléfono y la tableta (el video, con portero):
   abren la cámara con el selector del sistema y lo sacado entra en el renglón y sube por la cola de siempre; *Save to
@@ -918,10 +919,11 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    servidor con la hora del dispositivo): guardar en `failOp` el `updated_at` que tenía la fila y comparar contra ese.
    Solo afecta a rechazos por largo de versiones anteriores. Y falta una prueba del «renombre posterior en la cola»
    (mutante R3; solo importa con la app desactualizada).
-24. **Un error en la consola al pegar una foto** (auditoría de la entrega 3 de P.26, F2; bajo). Al pegar una foto del
-   Drive, la consola muestra `net::ERR_UNKNOWN_URL_SCHEME` por la dirección `sdmedia://…` (algo pide la dirección cruda
-   antes de que la foto pase a mostrarse desde el dispositivo). No rompe nada a la vista; no se verificó si pasa igual en
-   `main`. Reproducción: el arnés de la auditoría (`trabajo/sesion_f554a71f/informes/deshacer-e3-audit/arnes`, R3e).
+24. **Un error en la consola al pegar una foto — hecho (v0.0XX).** No era al pegar sino al **copiar** (o arrastrar): el
+   HTML externo de BlockNote (el foto-bloque) y el de la foto en línea ponían `sdmedia://…` en un `<img src>` creado en
+   el documento vivo, y el navegador lo pide al instante. Pasaba igual en `main`. Ahora la dirección sale con
+   `loading="lazy"` puesto antes del `src` (`src/ui/quietImage.ts`, con `editorSchema.ts` e `inlinePhoto.ts`): sin pedido,
+   y pegar trae las mismas fotos. Pruebas en `quietImage.test.ts`, más la reproducción en Chromium (cero pedidos fallidos).
 
 ### C. Esperan a Lega
 
