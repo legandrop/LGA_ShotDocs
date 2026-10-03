@@ -12,6 +12,28 @@ y la prueba de la ventana de O4. Ayuda al día.
 
 [ Deshacer en orden entrega 3 - anotar una foto como un paso de ⌘Z y ⌘⇧Z, sin llevarse lo de otra persona, Show en el aviso del reemplazo y el foco del panel ]
 
+v0.148 :
+
+MCP, pasos reales 1 a 5 (P.24). Para prender el MCP faltaba lo de código: con el servidor OAuth prendido, el token de
+un asistente valdría como una sesión de la app y no había pantalla de permiso. La migración
+`20261027120000_mcp_plan_b.sql` (sin aplicar) suma el pre-request de PostgREST: con `client_id` solo pasa
+`/rpc/mcp_*`; sin él sale enseguida, sin nada que pueda fallar. Storage pide `client_id` nulo y llega `mcp_ping`.
+La app suma `/oauth/consent/<ref>`: elige el workspace por el ref, pide entrar con el código, muestra quién pide,
+adónde vuelve y qué pide, y contesta *Allow* o *Deny*. El portero publica `MCP_M0=1` desde su jsonc. El hook de
+contraseñas, probado en rollback con eventos de la forma real: no necesitó cambios. Ayuda nueva.
+[ MCP pasos 1 a 5 - plan B en la base, pantalla de permiso de un asistente y el MCP del portero prendido ]
+
+v0.147 :
+
+**Barrera de error** (B3 del link *Can edit*). Si el editor tiraba una excepción al dibujar una página (una forma que
+nadie previó; la auditoría del link encontró tres: un `Y.Map` en un párrafo y el `level` de un encabezado como objeto
+o `'x y'`), React desmontaba todo y la app quedaba en blanco. Ahora falla solo la página: *This page can't be shown
+right now*, con *Version history* para quien lo ve (restaura sobre el documento, sin abrir el editor) y *Try again*; el
+árbol y el resto siguen. Lo que se escape muestra *Something went wrong* con *Reload* y cuántos cambios faltan subir,
+con la sincronización viva. Nada se reintenta solo ni se borra; el id de la página y el error van a la consola. Ayuda
+actualizada.
+[ Barrera de error - la página que hace tirar al editor muestra un aviso con el historial a mano y la app muestra Reload en vez de blanco ]
+
 v0.146 :
 
 **Asistente, entrega A3: *Suggest caption*** (P.24): el asistente no miraba fotos. Ahora la barra de una foto (en

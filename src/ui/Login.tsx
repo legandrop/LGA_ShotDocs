@@ -28,7 +28,11 @@ function explain(error: { message: string; code?: string; status?: number }): st
   return error.message;
 }
 
-export function Login() {
+/**
+ * `consent`: el login de la pantalla de permiso de un asistente (MCP): un aviso arriba del correo, el link del correo
+ * vuelve a esa pantalla (de fábrica, al inicio de la app) y el workspace no se cambia (lo elige la dirección).
+ */
+export function Login({ consent }: { consent?: { notice: string; returnTo: string } } = {}) {
   const { client, config } = useWorkspace();
   // Si se llegó con un link de invitación del workspace que se abre, se explica qué hacer; si el link no
   // servía (roto, o de un workspace que no se pudo agregar), el aviso.
@@ -53,7 +57,7 @@ export function Login() {
     setError(null);
     const { error } = await client.auth.signInWithOtp({
       email: address,
-      options: { emailRedirectTo: location.origin },
+      options: { emailRedirectTo: consent?.returnTo ?? location.origin },
     });
     setBusy(false);
     if (error) setError(explain(error));
@@ -116,7 +120,7 @@ export function Login() {
                 <h2>{tr('login.title')}</h2>
                 <p className="lead">{tr('login.lead')}</p>
               </div>
-              <LoginWorkspaceBar />
+              <LoginWorkspaceBar fixed={!!consent} />
               {(invite === 'this' || invite === 'this-page') && (
                 <p className="login-invite">
                   {tr('login.invited', { workspace: config.name || tr('noProjects.thisWorkspace') })}
@@ -124,6 +128,7 @@ export function Login() {
                 </p>
               )}
               {invite && invite !== 'this' && invite !== 'this-page' && <p className="login-invite">{invite}</p>}
+              {consent && <p className="login-invite">{consent.notice}</p>}
               <div className="field">
                 <label htmlFor="email">{tr('team.email')}</label>
                 <input

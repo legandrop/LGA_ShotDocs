@@ -1516,6 +1516,38 @@ code {
   margin: 0;
 }
 
+/* La barrera de error de la página (ErrorBarrier.tsx): el editor tiró un error; el resto de la app sigue. */
+.banner.page-crash {
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.banner.page-crash p {
+  flex: 1 1 100%;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.page-crash-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+/* Una versión del historial que el editor no puede mostrar. */
+.banner.history-version-crash {
+  margin-top: 8px;
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+/* La barrera de la app: la pantalla con *Reload* en lugar del blanco. */
+.app-crash .card p {
+  line-height: 1.5;
+}
+
 /* El mismo aviso para un diálogo o el carrete, que se abren encima: como diálogo. */
 .part-error-dialog p {
   margin: 0;
@@ -4810,6 +4842,69 @@ button.thread-anchor:hover:not(:disabled) {
   .comment-add {
     right: -4px;
   }
+}
+
+/* --- Pantalla de permiso de un asistente (MCP, Doc_Asistente.md, 9.2) ------------------------------ */
+
+.consent-card {
+  width: min(480px, 100%);
+}
+
+.consent-card .brand-row {
+  margin-bottom: 4px;
+}
+
+.consent-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 14px;
+  margin: 4px 0 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.consent-facts dt {
+  color: var(--muted);
+}
+
+.consent-facts dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.consent-host {
+  font-family: var(--mono);
+  font-weight: 500;
+}
+
+.consent-scopes {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.consent-warning {
+  padding: 12px 14px;
+  border: 1px solid var(--warn-border);
+  border-radius: 10px;
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: 13px;
+}
+
+.card p.consent-detail {
+  color: var(--muted-2);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.consent-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
 }
 
 /* --- Workspaces: bienvenida, unirse, crear, selector (paso 12) ----------------------------------- */

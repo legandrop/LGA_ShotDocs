@@ -112,6 +112,8 @@ const ASSISTANT = '0.118';
 const ASSISTANT_A2 = '0.126';
 /** El asistente, entrega A3 (*Suggest caption* sobre una foto): la versión la pone quien publica. */
 const ASSISTANT_A3 = '0.146';
+/** La pantalla de permiso de un asistente (MCP, Doc_Asistente.md, 9.2): la versión la pone quien publica. */
+const MCP_CONSENT = '0.147';
 /** *Dictate to report* (Docs/Doc_Dictado.md, entrega V1): la versión la pone quien publica. */
 const DICTATION = '0.135';
 /** *Dictate to report*, entrega V2 (la cola sin red): la versión la pone quien publica. */
@@ -658,6 +660,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
     words: ['borrado', 'borrar', 'privacidad', 'cliente', 'invitado', 'deleted', 'privacy', 'client', 'guest', 'preparación', 'prepared'],
     since: DELETED_PRIVACY,
   },
+  {
+    id: 'mcpConnect',
+    section: 'sharing',
+    title: 'help.mcpConnect.title',
+    text: 'help.mcpConnect.text',
+    words: ['mcp', 'conector', 'connector', 'claude', 'chatgpt', 'cursor', 'asistente', 'assistant', 'conectar', 'connect', 'permitir', 'allow', 'deny', 'oauth', 'permiso', 'consent'],
+    since: MCP_CONSENT,
+    when: 'portero',
+  },
 
   // --- Papelera ---
   { id: 'trash', section: 'trash', title: 'help.trash.title', text: 'help.trash.text', since: BEFORE_HELP },
@@ -667,7 +678,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     title: 'help.history.title',
     text: 'help.history.text',
     keys: { open: 'history', undo: 'undo' },
-    words: ['historial', 'versiones', 'versión', 'restaurar', 'revisiones', 'history', 'versions', 'restore', 'revisions', 'quién cambió'],
+    words: ['historial', 'versiones', 'versión', 'restaurar', 'revisiones', 'history', 'versions', 'restore', 'revisions', 'quién cambió', 'no se puede mostrar', 'error', 'página rota', "can't be shown", 'broken page'],
     since: HISTORY,
   },
   {

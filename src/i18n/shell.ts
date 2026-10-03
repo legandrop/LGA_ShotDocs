@@ -104,6 +104,16 @@ export const shell = {
     es: "Otra ventana tomó el control y esta dejó de guardar. Tus cambios quedan en este dispositivo; recargá para volver a usar esta ventana.",
   },
   'shell.lost.reload': { en: "Reload", es: "Recargar" },
+  // La barrera de error de la app (ui/ErrorBarrier.tsx): un error que no dejó seguir, en lugar de la pantalla en blanco.
+  'shell.crash.title': { en: "Something went wrong", es: "Algo salió mal" },
+  'shell.crash.text': {
+    en: "The app hit an error and can't continue in this window. Reload to keep working: what is saved on this device stays there.",
+    es: "La app tuvo un error y no puede seguir en esta ventana. Recargá para seguir trabajando: lo guardado en este dispositivo queda ahí.",
+  },
+  'shell.crash.pending': {
+    en: "{changes} still to upload: they are saved on this device and keep uploading after you reload.",
+    es: "{changes} sin subir: están guardados en este dispositivo y se siguen subiendo después de recargar.",
+  },
   'shell.error.title': { en: "Could not open your workspace", es: "No se pudo abrir tu workspace" },
   'shell.openPages': { en: "Open pages", es: "Abrir páginas" },
   'shell.findInPage': { en: "Find in page ({shortcut})", es: "Buscar en la página ({shortcut})" },
