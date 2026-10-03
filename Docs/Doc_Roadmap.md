@@ -248,7 +248,8 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   práctica en `/practice` y la recorrida de diez pasos (nueve en el teléfono). **Entrega 3 hecha (v0.0XX):**
   *Show me* en las 16 entradas con un paso (la práctica con solo ese paso, y vuelta a donde estabas) y el punto de
   novedades en el "?" con *What's new* arriba de la ayuda. Falta elegir con Lega las fotos del ejemplo y probar a
-  mano en Safari, el iPhone y con VoiceOver.
+  mano en Safari, el iPhone y con VoiceOver. Pendiente chico: en el teléfono el punto de novedades se ve solo con el
+  cajón abierto; llevarlo también al botón de menú de la barra de arriba (la de la página y la de la práctica).
 - **P.14 Borrar y archivar proyectos (Lega, 2026-09-30: "¿cómo borro los proyectos viejos? No encontré de
   dónde"):** hoy un proyecto se crea, se renombra y se comparte, pero no se puede sacar de la lista: no hay nada
   para eso ni en la app ni en la base (`workspaces` no se borra desde la API). Faltan dos opciones distintas:

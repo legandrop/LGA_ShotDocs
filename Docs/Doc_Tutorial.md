@@ -824,11 +824,23 @@ Shift+clic (el mapa vive en su documento, que no se guarda). La recorrida no mue
 - **Qué hace:** cada entrada con `showMe` (16, en `src/help/entries.ts`) tiene *Show me* / *Mostrame*. Cierra la
   ayuda, abre `/practice` y muestra **solo ese paso** de la recorrida, con el mismo foco de luz y globito; el globito
   dice *Show me* en lugar de "3/10" y tiene un solo botón, *Done* / *Listo*. *Done*, Esc, → o Enter terminan y
-  **vuelven a la dirección donde estaba la persona** (con `replace`, así Atrás del navegador no la deja en la
-  práctica); si ya estaba en la práctica, se queda ahí.
-- **Estado:** `showStep(id)` y `endShowStep()` en `src/tutorial/tourState.ts` (`TourUi.only = { id, back }`). No
-  escribe `shotdocs-tour` ni la marca de la cuenta: no cuenta como recorrida vista ni a medias. El componente
-  `ShowMe` de `TourLayer.tsx` reusa `StepView` con `single`.
+  **vuelven a donde estaba la persona**, con el desplazamiento de la página y la selección del editor de antes (y el
+  foco en el editor, salvo en un táctil: abriría el teclado); si ya estaba en la práctica, se queda ahí.
+- **Esc** termina también con el foco afuera del globito (un clic en la página) y desde el renglón del paso del menú
+  "/" (ahí el foco está en el editor para escribir "/"), salvo que el Esc sea de otro: el menú "/" abierto, un diálogo
+  o el carrete, o algo que ya lo usó (la barra de buscar, el panel de comentarios). En un táctil la entrada *Show me*
+  no nombra Esc (`textTouch`, por el puntero como los tooltips, D226).
+- **Historial del navegador:** `showStep` suma una entrada (`/practice`) y al terminar se vuelve con Atrás
+  (`history.back()`), así no queda ninguna de más; Atrás durante el paso vuelve a la página y lo termina. También
+  desde la vista previa de una plantilla (`/practice?template=…`), que tiene la misma ruta: el paso va a la práctica y
+  se vuelve a la vista previa.
+- **Lo que estaba a la vista vuelve:** la tarjeta "¿Seguimos la recorrida?" o la de primera vez reaparecen al terminar;
+  una recorrida en curso queda como tarjeta de retomar (su paso sigue guardado).
+- **Estado:** `showStep(id)` y `endShowStep()` en `src/tutorial/tourState.ts` (`TourUi.only = { id, back, prev }`);
+  el lugar (dirección, desplazamiento de `.main`, selección del editor de la página) lo anota y lo pone
+  `src/tutorial/showMePlace.ts`, con el editor que registra la página (`currentTarget` del asistente). No escribe
+  `shotdocs-tour` ni la marca de la cuenta: no cuenta como recorrida vista ni a medias. El componente `ShowMe` de
+  `TourLayer.tsx` reusa `StepView` con `single`.
 - **Diferencias con la recorrida entera:** vale en los dos diseños (en el teléfono también el paso de Buscar, que la
   recorrida saltea: suma `tour.find.textPhone`, sin atajo); en el paso del menú "/" elegir algo no lo termina (queda a la vista lo que pasó; termina con
   *Done*); si la persona se va de la práctica a mitad, se termina sin la tarjeta de pausa.
@@ -850,7 +862,9 @@ Shift+clic (el mapa vive en su documento, que no se guarda). La recorrida no mue
   punto (y su nombre pasa a *Help and shortcuts: what's new*). Al abrir la ayuda, arriba de todo, *What's new* /
   *Novedades* las lista (lo más nuevo primero) y cada una dice *New* / *Nuevo* también en su sección; el índice suma
   la entrada. Al abrirla quedan vistas: el punto se va, y la lista sigue mientras la ayuda está abierta (la toma
-  `openHelp` en `HelpUiState.news`). Cerrar y volver a abrir ya no la muestra.
+  `openHelp` en `HelpUiState.news`, también si se vuelve a pedir la ayuda con la ayuda abierta). Cerrar y volver a
+  abrir ya no la muestra. La lista sale de las entradas que trae la ayuda contra lo visto, no del `latest` guardado:
+  abrirla justo después de actualizar, antes de que se cuente la versión nueva, igual la muestra.
 - **Dónde se guarda:** `src/help/news.ts`, en la primera carga (chico). `localStorage` `shotdocs-help-news =
   { seen, latest, app }`, una clave por dispositivo para todos los workspaces, como la recorrida (decisión E3-1).
 - **Cómo se cuenta sin bajar la ayuda en cada arranque:** el punto solo necesita el `since` más nuevo. Una vez por
@@ -876,7 +890,9 @@ Relevadas contra el changelog de v0.083 a v0.154: casi todas las funciones visib
   Drive root*) y el espacio en Drive. `since` antes de la ayuda: la función es vieja.
 
 Sin entrada a propósito: el nombre del árbol a todo el ancho (v0.154, solo aspecto), los arreglos internos de
-carpetas, compactar y las subidas que se traban, y *Import from Coda* (solo la cuenta de Lega).
+carpetas, compactar y las subidas que se traban, y *Import from Coda*: solo aparece para la cuenta de Lega
+(`src/import/codaOwner.ts` compara el hash del correo; para los demás ni el ítem ni el diálogo se montan). La
+auditoría lo vio porque el arnés entraba con el correo de Lega.
 
 ### Pruebas (entrega 3)
 
@@ -886,7 +902,10 @@ carpetas, compactar y las subidas que se traban, y *Import from Coda* (solo la c
   no retrocede, un visto sin publicar, sin red, almacenamiento roto); en el Shell: el punto con su nombre, la lista
   arriba con *New* (lo más nuevo primero), que se apaga y no vuelve, en castellano; *Show me* de **cada** entrada abre
   su paso (título, *Show me*, un solo botón, `aria-live`) y *Done* vuelve a la página, sin tocar `shotdocs-tour`; Esc
-  vuelve; elegir en el menú "/" no lo cierra; irse lo termina sin pausa; desde la práctica se queda.
+  vuelve; elegir en el menú "/" no lo cierra; irse lo termina sin pausa; desde la práctica se queda. Ronda 1: vuelve
+  con la selección y el foco en el editor, no suma entradas al historial, Esc desde afuera y desde el renglón (no con
+  el menú "/" abierto), → y Enter, la tarjeta de retomar vuelve, desde la vista previa de una plantilla, una entrada
+  que no se puede usar no ofrece *Show me*, el texto táctil sin Esc, y reabrir la ayuda conserva la lista.
 - En Chromium sin ventana (arnés fuera del repo, con el servidor en memoria; 93 comprobaciones): la ayuda con
   novedades en computadora y teléfono (375 px, táctil; también en castellano y oscuro), *Show me* de las 16 entradas en
   los dos con toques y clics de verdad, *Done* y Esc, el foco de luz sobre su ancla y el globito dentro de la pantalla,
@@ -901,13 +920,19 @@ carpetas, compactar y las subidas que se traban, y *Import from Coda* (solo la c
 - **E3-2. *Show me* no rearma la práctica:** rearmarla borraría lo que la persona estaba probando. Si falta el bloque
   señalado, el paso va centrado.
 - **E3-3. Desde cuándo se cuenta:** desde la primera vez que la app con esta entrega abre en el dispositivo. Contar
-  desde v0.082 marcaría unas 50 entradas como nuevas a quien ya usa la app.
+  desde v0.082 marcaría unas 50 entradas como nuevas a quien ya usa la app. Consecuencia: quien ya la usa no ve
+  *What's new* ni *Show me* como novedad en esta misma versión.
+- **E3-4. Esc en el paso del menú "/":** primero se dejó solo *Done* (el foco está en el renglón); la auditoría pidió
+  que Esc termine también ahí. Quedó: con el menú "/" abierto, Esc lo cierra; cerrado, Esc termina el paso.
+- **E3-5. `since` sin publicar:** `0.0XX`, reconocido por la forma (ver "Novedades").
 
 ### Falta (para Lega)
 
 - Elegir las fotos del ejemplo (siguen las dibujadas).
 - Probar en Safari de la Mac, el iPhone (Safari y la app instalada) y VoiceOver: *Show me* en el teléfono (el paso de
   Buscar y los del cajón) y el punto de novedades después de una actualización real.
+- En el teléfono el punto de novedades se ve solo con el cajón abierto (el "?" vive ahí): llevarlo también al botón de
+  menú de arriba queda en el roadmap (P.13).
 
 ## Entradas esperando la ayuda
 
