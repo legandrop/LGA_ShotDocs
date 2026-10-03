@@ -555,16 +555,19 @@ begin
   assert (pg_temp.room('e012')).decided_at is null, 'lo retenido se decidió';
   perform pg_temp.as_user('d2a6');
   assert (select x.state from public.public_link_updates_of(pg_temp.u('d2b3')) x) = 'held', 'lo retenido no se ve retenido';
-  -- Revivirlo (set_public_link con otro vencimiento) reinicia la rama y lo retenido vuelve.
+  -- Revivirlo (set_public_link con otro vencimiento) reinicia la rama y lo retenido vuelve. (El equipo escribió en H
+  -- mientras estaba vencido: el reinicio llega a esa fila.)
   perform pg_temp.as_user('d2a1');
+  perform public.push_page_update(pg_temp.u('d2b3'), pg_temp.u('d203'), 'BwgJ', '9.999');
   perform public.set_public_link(pg_temp.u('d2b2'), 'edit', now() + interval '1 day');
   perform pg_temp.as_postgres();
-  assert (select clean_reset_seq from public.pages where id = pg_temp.u('d2b3')) = 1, 'revivir no reinicia la rama';
+  assert (select clean_reset_seq from public.pages where id = pg_temp.u('d2b3')) = 2, 'revivir no reinicia la rama';
   perform pg_temp.check(pg_temp.admit_pages('d2a6'), 'H:1', 'lo retenido no vuelve');
   -- Can view: retenido.
   perform pg_temp.as_user('d2a1');
   perform public.set_public_link(pg_temp.u('d2b2'), 'comment');
   perform pg_temp.check(pg_temp.admit_pages('d2a6'), '', 'lo de un Can view aparece');
+  perform pg_temp.check(pg_temp.push(pg_temp.tok('S'), 'd2b2', 'e039', 'Fg=='), 'error:page_not_found', 'un Can view escribe');
   perform pg_temp.as_user('d2a1');
   perform public.set_public_link(pg_temp.u('d2b2'), 'edit');
   -- La hija en la papelera: retenida; el resto sigue.
@@ -573,7 +576,7 @@ begin
   perform pg_temp.check(pg_temp.admit_pages('d2a6'), '', 'lo de la papelera aparece');
   update public.pages set deleted_at = null where id = pg_temp.u('d2b3');
   -- Admitir H (e012), que vuelve.
-  perform pg_temp.check(pg_temp.admit('d2a6', 'd2b3', jsonb_build_array(pg_temp.dec('e012', true))), 'admitted:2', 'lo retenido no entra al volver');
+  perform pg_temp.check(pg_temp.admit('d2a6', 'd2b3', jsonb_build_array(pg_temp.dec('e012', true))), 'admitted:3', 'lo retenido no entra al volver');
 
   -- waiting_bytes no cuenta lo retenido de una página que salió de la rama (observación 4).
   perform pg_temp.check(pg_temp.push(pg_temp.tok('S'), 'd2b6', 'e040', 'FRUV'), 'ok', 'escribe en M');
