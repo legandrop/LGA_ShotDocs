@@ -43,7 +43,7 @@ const bytesOf = (size: number, seed: number) => new Uint8Array(size).map((_, i) 
 interface Dropped {
   name: string;
   type: string;
-  bytes: Uint8Array;
+  bytes: Uint8Array<ArrayBuffer>;
 }
 
 /**

@@ -398,9 +398,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   pregunta al cerrar la pantalla de error (`replaceRunning`), y restaurar sin el editor ya no escribe los atributos por
   defecto en los bloques iguales a la versión (los saltea; la vista de diferencias comparaba los atributos guardados y los
   mostraba como «formato cambiado»).
-  Observaciones de la re-verificación de la 2b (chicas): la prueba del link muerto usa un solo archivo (no distingue «baja
-  ese» de «baja el primero»), falta la prueba automática del *Download it* de la insignia con el link vivo (anda a mano), y
-  la lista de *Share* corta en 500 archivos y titula con 500 aunque haya más.
+  Las tres observaciones de la re-verificación de la 2b quedaron **hechas (v0.0XX)**: la prueba del link muerto con varios
+  archivos, la del *Download it* de la insignia con el link vivo, y *Share* con «500 or more» cuando la lista llega al tope
+  de la base (sin SQL). **Falta, si alguna vez importa:** el total exacto de archivos de todos los links de la página (una
+  cuenta aparte en `public_link_files`, con migración); hoy pasado el tope solo se dice «o más».
 - **P.25 Sacar una foto o filmar desde la app** (Lega, 2026-10-01). **Hecho para la web (v0.110):** *Take photo* y
   *Record video* en el menú "/" y en el menú de la página, solo en el teléfono y la tableta (el video, con portero):
   abren la cámara con el selector del sistema y lo sacado entra en el renglón y sube por la cola de siempre; *Save to

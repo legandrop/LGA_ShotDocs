@@ -2547,7 +2547,15 @@ ajenos, carpetas, revocar) quedó bien. Se corrigió en una ronda (y la rama tra
 **Pruebas de la ronda:** la prueba SQL suma lo de arriba y `public_link_files` (quién la ve, los links viejos, lo que no
 subió, solo los links de esa página, `anon` no); las 30 pruebas SQL con la migración pasan en `begin … rollback`. 8
 mutantes SQL nuevos, todos detectados (con los 25 de antes: 33, 32 detectados y 1 equivalente). 9 mutantes nuevos de la
-app y el portero, todos detectados. El *Download it* del detalle de la insignia (link vivo) no tiene prueba propia.
+app y el portero, todos detectados.
+
+**Observaciones de la re-verificación de la ronda (hechas, v0.0XX):**
+
+| Observación | Cómo quedó |
+|---|---|
+| **O-R1.** La prueba del link muerto (`linkDeadFiles.test.tsx`) tenía un solo archivo: «baja ese» y «baja el primero de la base» daban lo mismo (mutante b1b vivo) | Un caso con tres archivos de distinto largo y contenido: cada botón, en un orden que no es el de la lista, baja su propio original, byte por byte, y se puede bajar otra vez (no se borra nada). Mueren los mutantes «el primero de la base» y «el último» de `linkMediaBlob` |
+| **O-R2.** El *Download it* del detalle de la insignia con el link vivo no tenía prueba automática | `linkBadgeDownload.test.tsx`: con la insignia real (`SyncBadge`), el link vivo y el tope del día en cero, dos archivos quedan sin registrar; el detalle los nombra con el motivo y cada *Download it* baja el original de su fila, con su nombre. Mueren: bajar el de otra fila, el nombre equivocado, sin botón y un blob distinto |
+| **O-R3.** `public_link_files` corta en 500 y *Share* titulaba con la cantidad que llegó | **Sin tocar el SQL:** `PUBLIC_LINK_FILES_MAX` (500, el `limit` de la migración; una prueba lee el SQL y lo compara) y, con la lista en el tope, el título dice *500 or more files were added through this page's link* y la línea del resto aclara que hay anteriores sin listar (*and 480 more, plus older ones that aren't listed*). Con 499 dice la cantidad exacta. Pedir el total exacto necesitaría un cambio de SQL (cuenta aparte en `public_link_files`); no se hizo, y «o más» alcanza para lo que el equipo decide con ese número |
 
 ### Cómo quedó la 2c (v0.157)
 

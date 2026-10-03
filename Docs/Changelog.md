@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+**Tres observaciones chicas de la re-verificación de la 2b.** (1) La prueba del link muerto tenía un solo archivo sin subir
+y no distinguía «baja ese» de «baja el primero de la base»: ahora son tres, con distinto largo y contenido, y cada botón
+baja su propio original (mueren los mutantes «el primero» y «el último»). (2) El *Download it* del detalle de la insignia
+con el link vivo no tenía prueba: ahora una con la insignia real y el tope del día en cero baja cada original con su nombre.
+(3) `public_link_files` devuelve hasta 500 y *Share* titulaba con lo que llegó (*500 files were added…*): con la lista en
+el tope dice *500 or more* y aclara que hay anteriores sin listar; sin tocar el SQL, y una prueba ata el tope de la app al
+`limit` de la migración.
+
+[ Pruebas del link muerto con varios archivos y del Download it de la insignia, y Share dice «500 o más» cuando la lista llega al tope de la base ]
+
 v0.164 :
 
 **Link público 2b y links a los archivos en el PDF.** (1) Con *Can edit* el visitante no podía sumar fotos ni archivos:
