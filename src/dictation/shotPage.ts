@@ -127,6 +127,11 @@ function factRows(doc: Y.Doc): FactRow[] | null {
   return null;
 }
 
+/** El texto de la fila de la ficha con uno de esos rótulos (sin mayúsculas ni acentos), o `null` (también para pruebas). */
+export function factValue(doc: Y.Doc, labels: string[]): string | null {
+  return factRows(doc)?.find((r) => labels.includes(labelKey(r.label)))?.text ?? null;
+}
+
 /** Las páginas del proyecto (sin la papelera), en orden del árbol. */
 function projectPages(tree: ShotPageDeps['tree'], projectId: string): PageRow[] {
   const out: PageRow[] = [];
@@ -264,7 +269,10 @@ export interface ShotPageWritten {
 function paraOf(doc: Y.Doc, cell: unknown): Y.XmlElement | null {
   try {
     const abs = Y.createAbsolutePositionFromRelativePosition(Y.createRelativePositionFromJSON(cell), doc);
-    return abs && abs.type instanceof Y.XmlElement && abs.type.nodeName === 'tableParagraph' ? abs.type : null;
+    if (!abs || !(abs.type instanceof Y.XmlElement) || abs.type.nodeName !== 'tableParagraph') return null;
+    // Borrada (otro sacó la fila o la tabla): ya no está.
+    for (let t = abs.type as { _item: { deleted: boolean; parent: unknown } | null } | null; t; t = (t._item?.parent as typeof t) ?? null) if (t._item?.deleted) return null;
+    return abs.type;
   } catch {
     return null;
   }

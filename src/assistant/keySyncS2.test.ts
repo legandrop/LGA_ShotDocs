@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { openDB } from 'idb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { closeDictationDb, DICTATION_DB } from '../dictation/dictationDb';
-import { readVoiceKey, resetTabOnlyVoice, resolveVoice, saveVoiceSettings } from '../dictation/voiceSettings';
+import { forgetVoiceKey, readVoiceKey, resetTabOnlyVoice, resolveVoice, saveVoiceSettings } from '../dictation/voiceSettings';
 import { ASSISTANT_DB, closeAssistantDb, forgetKey, loadSettings, readKey, resetTabOnlyKeys, saveSettings, syncEntries, syncFor } from './keyStore';
 import { nextSavedAt, openKey } from './keySync';
 import { adoptUnlocked, alsoSync, changePassphrase, needsAnswer, outcomeOf, stopSync, turnOnSync, unlockSync, updateSync, type SyncContext } from './keySyncFlow';
@@ -312,6 +312,28 @@ describe('B1: la Voice propia de un dispositivo no se reemplaza sin preguntar', 
     await saveVoiceSettings(EMAIL, { source: 'own', provider: 'openai', model: '' }, MINE);
     expect(syncFor(await loadSettings(EMAIL), 'wanka', UID)?.voiceFromCopy).toBe(false);
     expect((await unlockSync(ctx(store), PHRASE))!.voiceAsk).toBe('key');
+  });
+
+  it('Forget voice key corta la marca: la próxima copia con otra Voice pregunta en lugar de ponerla sola', async () => {
+    const store = new KeySyncStore();
+    // El asistente en OpenAI: sin la Voice propia, el teléfono transcribe con la clave del asistente.
+    const OAI = { provider: 'openai' as const, model: 'gpt-5.4-mini', models: [] };
+    const OAI_KEY = 'sk-proj-ASISTENTE-oai-1111';
+    await saveSettings(PC, OAI, OAI_KEY);
+    await saveVoiceSettings(PC, { source: 'own', provider: 'openai', model: '' }, PCS);
+    await turnOnSync(pcCtx(store), PHRASE);
+    await adoptUnlocked(ctx(store), (await unlockSync(ctx(store), PHRASE))!);
+    expect(syncFor(await loadSettings(EMAIL), 'wanka', UID)?.voiceFromCopy).toBe(true);
+    // En el teléfono: Forget voice key (la Voice pasa a ser la del asistente).
+    await forgetVoiceKey(EMAIL);
+    expect(syncFor(await loadSettings(EMAIL), 'wanka', UID)?.voiceFromCopy).toBe(false);
+    expect(await readVoiceKey(EMAIL, (await resolveVoice(EMAIL))!)).toBe(OAI_KEY);
+    // La PC cambia su Voice y actualiza: el teléfono ya no la toma sin preguntar.
+    await saveVoiceSettings(PC, { source: 'own', provider: 'openai', model: '' }, 'sk-proj-VOZ-NUEVA-8888');
+    await updateSync(pcCtx(store), PHRASE);
+    const again = (await unlockSync(ctx(store), PHRASE))!;
+    expect(again.voiceAsk).toBe('key');
+    expect(again.voiceLocalEnding).toBe('1111');
   });
 });
 

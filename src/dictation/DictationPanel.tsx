@@ -318,17 +318,23 @@ export function DictationPanel({ pageId }: { pageId: string }) {
   );
 
   // Se guarda mientras se escribe (cerrar la hoja o la app no la pierde).
+  /** Lo que el guardado demorado todavía no guardó (al cerrar la hoja se guarda ya: lo de los últimos 250 ms). */
+  const pendingSave = useRef<(() => void) | null>(null);
   const persist = useCallback(
     (nextText: string, nextPending: PendingItem[]) => {
+      pendingSave.current = null;
       void saveDraft(user.email, workspaceKey, pageId, nextText, nextPending, appliedRef.current).catch((err) => console.error('Dictado: no se pudo guardar la nota en el dispositivo', err));
     },
     [user.email, workspaceKey, pageId],
   );
   useEffect(() => {
     if (!loaded) return;
-    const id = setTimeout(() => persist(text, pending), 250);
+    const save = () => persist(text, pending);
+    pendingSave.current = save;
+    const id = setTimeout(save, 250);
     return () => clearTimeout(id);
   }, [text, pending, applied, loaded, persist]);
+  useEffect(() => () => pendingSave.current?.(), []);
 
   // Cerrar la hoja o cambiar de página corta el pedido.
   useEffect(() => () => abort.current?.abort(), []);
@@ -642,11 +648,21 @@ export function DictationPanel({ pageId }: { pageId: string }) {
 
   // El texto de un Atajo de iOS (`/dictate#…`, V4): va al campo, sin mandar nada; la persona lo revisa y toca *Place*.
   const link = useDictateLink();
+  const textRef = useRef(text);
+  textRef.current = text;
+  const pendingRef = useRef(pending);
+  pendingRef.current = pending;
   useEffect(() => {
     if (!loaded || link === null) return;
     const incoming = takeDictateLink();
     if (incoming === null) return;
-    if (incoming) setText((t) => (t.trim() ? `${t.trimEnd()}\n${incoming}` : incoming).slice(0, 2000));
+    if (incoming) {
+      // Se guarda ya (no es algo que se está escribiendo): cerrar la hoja enseguida no lo pierde.
+      const now = textRef.current;
+      const next = (now.trim() ? `${now.trimEnd()}\n${incoming}` : incoming).slice(0, 2000);
+      setText(next);
+      persist(next, pendingRef.current);
+    }
     setQueued(null);
     setPhase({ kind: 'compose', note: tr(incoming ? 'dictation.fromShortcut' : 'dictation.fromShortcutEmpty') });
     requestAnimationFrame(() => field.current?.focus({ preventScroll: true }));
