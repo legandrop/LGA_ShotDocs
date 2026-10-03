@@ -41,9 +41,10 @@ import { versionNode } from './historyRestore';
 import { cleanClipboard, type HistoryMarksInput, type MarkLook } from './historyMarks';
 import { MoreIcon } from './icons';
 import { historyServices } from './historyServices';
-import { closeHistory, requestRestore } from './historyUi';
+import { closeHistory, requestRestore, restoreTargetSettled } from './historyUi';
 import { dismissNotice, notify } from './notice';
 import { BlockEditor } from './PageEditor';
+import { ErrorBarrier } from './ErrorBarrier';
 import type { FindEditor } from './FindBar';
 import type { Schema } from '@tiptap/pm/model';
 import { mm, pageFormat, SHEET_MARGIN_MM, sheetSize } from './pageFormat';
@@ -765,7 +766,10 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
         setMessage(tr('history.restoreFailed', { reason: blockerText[why] }));
         return;
       }
-      const outcome = requestRestore(pageId, version);
+      // El esquema del editor que muestra la versión: con él restaura la barrera de la página si el editor tiró un error
+      // (si la barrera todavía se está preparando, se la espera).
+      await restoreTargetSettled(pageId);
+      const outcome = requestRestore(pageId, version, pmSchema);
       if (!outcome.ok) {
         // `failed`: el editor lo intentó y lo deshizo (la comprobación final no dio): la página quedó como estaba.
         if (outcome.reason === 'failed') setMessage(tr('history.restoreUnchanged'));
@@ -785,6 +789,11 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
             )
           : null;
       closeHistory();
+      // Restaurada desde la barrera de la página (sin editor): el aviso va sin **Undo** (ErrorBarrier.tsx).
+      if (outcome.undoable === false) {
+        notify(t('history.restored', { date }));
+        return;
+      }
       notify(t('history.restored', { date }), {
         key,
         label: t('history.undo'),
@@ -969,18 +978,26 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
               onClick={onMarkTap}
             >
               <ServicesContext.Provider value={previewServices}>
-                <BlockEditor
-                  key={`${shownKey}:${tr.lang}`}
-                  doc={shown}
-                  collapse={new Map()}
-                  pageId={pageId}
-                  editable={false}
-                  permsKnown
-                  canComment={false}
-                  onEditor={onPreviewEditor}
-                  preview
-                  marks={marksInput}
-                />
+                {/* Una versión que el editor no puede mostrar (tira un error) no se lleva el historial: elegir otra la
+                    vuelve a intentar (ErrorBarrier.tsx). */}
+                <ErrorBarrier
+                  resetKey={`${shownKey}:${tr.lang}`}
+                  what={`Una versión del historial de la página ${pageId} no se pudo mostrar`}
+                  fallback={() => <p className="banner history-version-crash" role="alert">{tr('history.versionCrash')}</p>}
+                >
+                  <BlockEditor
+                    key={`${shownKey}:${tr.lang}`}
+                    doc={shown}
+                    collapse={new Map()}
+                    pageId={pageId}
+                    editable={false}
+                    permsKnown
+                    canComment={false}
+                    onEditor={onPreviewEditor}
+                    preview
+                    marks={marksInput}
+                  />
+                </ErrorBarrier>
               </ServicesContext.Provider>
             </article>
           )}

@@ -8,6 +8,7 @@ import { TemplateBanner } from '../templates/ownTemplatesUi';
 import { disarmTitleUndo, titleUndoFor } from '../templates/templatesUi';
 import { clearCommentsTarget, closeComments, useCommentsUi } from './commentsUi';
 import { isLetter, modPressed } from './findUi';
+import { PageBarrier } from './ErrorBarrier';
 import { CollapseIcon, HeaderIcon } from './icons';
 import { lazyPart, Part } from './lazyPart';
 import { useFloating } from './menus';
@@ -90,9 +91,12 @@ export function PageView({ id }: { id: string }) {
       <TemplateBanner pageId={id} />
       <PageHeader id={id} editable={perms.canEditPage(id)} />
       <TitleInput id={id} title={page.title} readOnly={!perms.canEditPage(id)} />
-      <Part fallback={<EditorSkeleton />}>
-        <PageEditor pageId={id} />
-      </Part>
+      {/* Si el editor tira un error con lo que tiene la página, falla solo la página (ErrorBarrier.tsx). */}
+      <PageBarrier pageId={id}>
+        <Part fallback={<EditorSkeleton />}>
+          <PageEditor pageId={id} />
+        </Part>
+      </PageBarrier>
       <CommentsSlot pageId={id} />
     </article>
   );

@@ -32,6 +32,7 @@ import { replaceBlocksLeaving, replaceRunning, replaceSession } from './replaceU
 import { InstallBanner, InstallHost } from './InstallBanner';
 import { lastPageOf, rememberPage, useCurrentProject, useSwitchProject } from './project';
 import { RemovedScreen } from './RemovedScreen';
+import { WorkspaceBarrier } from './ErrorBarrier';
 import type { ShareTarget } from './ShareDialog';
 import { DeletedProjectsList, HelpDialog, ImportArchiveDialog, ImportCodaDialog, LookForFilesButton, ProjectSearch, ShareDialog } from './lazyDialogs';
 import { closeHelp, useHelpUi } from '../help/helpUi';
@@ -145,7 +146,10 @@ export function Workspace({ user, link }: { user: AuthUser; link?: LinkBoot }) {
   if (boot.state === 'empty') return <NoProjects user={user} onRetry={boot.retry} />;
   return (
     <ServicesContext.Provider value={boot.services}>
-      <Gate />
+      {/* Un error que no dejó seguir: pantalla con *Reload* en vez de blanco, con la sincronización viva (ErrorBarrier.tsx). */}
+      <WorkspaceBarrier>
+        <Gate />
+      </WorkspaceBarrier>
     </ServicesContext.Provider>
   );
 }
