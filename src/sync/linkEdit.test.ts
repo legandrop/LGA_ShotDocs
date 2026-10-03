@@ -191,6 +191,20 @@ describe('Can edit por un link, con el motor de verdad', () => {
     expect(team.viaLink).toBe(false);
   });
 
+  it('las filas para probar son solo las del servidor: con algo propio sin subir, no hay (savedRows)', async () => {
+    const { server, e1, s } = await setup();
+    const seq = server.pages.get(s)!.update_seq;
+    expect('rows' in (await e1.docs.savedRows(s, seq))).toBe(true);
+    server.online = false;
+    await write(e1, s, '<t9>');
+    expect(await e1.docs.savedRows(s, seq)).toEqual({ skip: 'unsynced' });
+    expect(await e1.docs.savedRows(s, seq + 1)).toEqual({ skip: 'not current' });
+    server.online = true;
+    await e1.engine.syncNow();
+    const after = await e1.docs.savedRows(s, server.pages.get(s)!.update_seq);
+    expect('rows' in after && tokens(after.rows).has('<t9>')).toBe(true);
+  });
+
   it('dos editores admiten a la vez: una sola decisión, sin filas repetidas', async () => {
     const { server, e1, s, tick } = await setup();
     server.addMember('ed2', 'member');

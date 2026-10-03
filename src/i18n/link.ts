@@ -56,8 +56,14 @@ export const link = {
     es: "Tus cambios llegan a la página cuando alguien del equipo abre la app. Mientras tanto quedan guardados en este navegador.",
   },
   'link.edit.aside': {
-    en: { one: "Some of your changes on a page couldn't be added.", other: "Some of your changes on {count} pages couldn't be added." },
-    es: { one: "Algunos de tus cambios en una página no se pudieron sumar.", other: "Algunos de tus cambios en {count} páginas no se pudieron sumar." },
+    en: {
+      one: "Some of your changes on a page couldn't be added, and what you write next on it won't reach the team either. Keep a copy:",
+      other: "Some of your changes on {count} pages couldn't be added, and what you write next on them won't reach the team either. Keep a copy:",
+    },
+    es: {
+      one: "Algunos de tus cambios en una página no se pudieron sumar, y lo que escribas ahí después tampoco va a llegar al equipo. Guardá una copia:",
+      other: "Algunos de tus cambios en {count} páginas no se pudieron sumar, y lo que escribas ahí después tampoco va a llegar al equipo. Guardá una copia:",
+    },
   },
   'link.edit.downloadThem': { en: "Download them", es: "Bajarlos" },
   'link.edit.tooBig': {

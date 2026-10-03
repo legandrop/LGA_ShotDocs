@@ -185,9 +185,9 @@ describe('el aviso de lo apartado y el historial', () => {
     await act(async () => download.click());
     await settle();
     expect(saved).toHaveLength(1);
-    const file = JSON.parse(await saved[0].text()) as { kind: string; changes: { id: string; reason: string; yjsUpdate: string }[] };
+    const file = JSON.parse(await saved[0].text()) as { kind: string; changes: { id: string; reason: string; text: string; yjsUpdate: string }[] };
     expect(file.kind).toBe('lga-shotdocs-link-changes');
-    expect(file.changes.map((c) => [c.id, c.reason, c.yjsUpdate])).toEqual([['r2', 'undecodable', 'CQkJ']]);
+    expect(file.changes.map((c) => [c.id, c.reason, c.text, c.yjsUpdate])).toEqual([['r2', 'undecodable', '', 'CQkJ']]);
     act(() => roots.pop()!.unmount());
 
     // Quien no ve lo borrado (Comentar) no ve el aviso.

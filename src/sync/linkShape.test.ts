@@ -7,7 +7,7 @@ import { mountEditor, unmountAll } from '../ui/collabHarness';
 import { editorSchemaOptions, schema } from '../ui/editorSchema';
 import { STABLE_GAPS_MARKER } from '../ui/unknownContent';
 import { block, group, textOf } from './historyTesting';
-import { MARK_ATTRS, NODE_ATTRS, shapeProblem, valueOk } from './linkShape';
+import { CHILDREN, MARK_ATTRS, NODE_ATTRS, ROOT, shapeProblem, TEXT, valueOk } from './linkShape';
 import { CONTENT_FRAGMENT } from './structure';
 
 afterEach(() => unmountAll());
@@ -61,6 +61,50 @@ describe('la forma de lo que escribe un link (paso 8)', () => {
     }
   });
 
+  it('los hijos de cada nodo son los que acepta su `contentMatch` en el esquema real (B2)', () => {
+    const editor = realEditor();
+    const nodes = editor.pmSchema.nodes as Record<string, { contentMatch: unknown; spec: { lgaGapText?: boolean } }>;
+    type Match = { edgeCount: number; edge(n: number): { type: { name: string }; next: Match } };
+    /** Todos los tipos que el contenido de un nodo acepta en algún lugar (recorriendo el autómata). */
+    const reachable = (start: Match): string[] => {
+      const seen = new Set<Match>();
+      const out = new Set<string>();
+      const todo = [start];
+      while (todo.length) {
+        const m = todo.pop()!;
+        if (seen.has(m)) continue;
+        seen.add(m);
+        for (let i = 0; i < m.edgeCount; i++) {
+          const e = m.edge(i);
+          out.add(e.type.name === 'text' ? TEXT : e.type.name);
+          todo.push(e.next);
+        }
+      }
+      // La marca de los renglones con fotos (solo en Yjs) va donde va una foto.
+      if (out.has('photo')) out.add(STABLE_GAPS_MARKER);
+      return [...out].sort();
+    };
+    for (const name of Object.keys(nodes).filter((n) => n !== 'text')) {
+      const key = name === 'doc' ? ROOT : name;
+      expect([key, reachable(nodes[name].contentMatch as Match)]).toEqual([key, [...CHILDREN[key]].sort()]);
+    }
+    expect([STABLE_GAPS_MARKER, CHILDREN[STABLE_GAPS_MARKER]]).toEqual([STABLE_GAPS_MARKER, []]);
+  });
+
+  it('topes a los números (B3)', () => {
+    expect(valueOk(NODE_ATTRS.tableCell.colspan, 100_000_000)).toBe(false);
+    expect(valueOk(NODE_ATTRS.tableCell.colspan, 0)).toBe(false);
+    expect(valueOk(NODE_ATTRS.tableCell.rowspan, -3)).toBe(false);
+    expect(valueOk(NODE_ATTRS.tableCell.colspan, 1.5)).toBe(false);
+    expect(valueOk(NODE_ATTRS.tableCell.colspan, 50)).toBe(true);
+    expect(valueOk(NODE_ATTRS.tableCell.colwidth, Array(51).fill(100))).toBe(false);
+    expect(valueOk(NODE_ATTRS.tableCell.colwidth, [1e9])).toBe(false);
+    expect(valueOk(NODE_ATTRS.image.previewWidth, 1e9)).toBe(false);
+    expect(valueOk(NODE_ATTRS.numberedListItem.start, '999999999')).toBe(false);
+    expect(valueOk(NODE_ATTRS.photo.w, 0.25)).toBe(true);
+    expect(valueOk(NODE_ATTRS.heading.level, '2.000')).toBe(true);
+  });
+
   it('todo lo que guarda el editor real tiene la forma (cada propiedad propia de la app, R3)', async () => {
     const doc = new Y.Doc();
     const before = Y.decodeStateVector(Y.encodeStateVector(doc));
@@ -81,7 +125,7 @@ describe('la forma de lo que escribe un link (paso 8)', () => {
       { type: 'paragraph', props: { pageBreak: true } as never },
       { type: 'checkListItem', props: { checked: true } as never, content: 'x' },
       { type: 'numberedListItem', props: { start: 3 } as never, content: 'n' },
-      { type: 'image', props: { url: 'sdmedia://aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', previewWidth: 300, rowWidth: 2 } as never },
+      { type: 'image', props: { url: 'sdmedia://aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', previewWidth: 300, rowWidth: 0.5 } as never },
       { type: 'image' },
       { type: 'codeBlock', props: { language: 'js' } as never, content: 'x' },
       {
@@ -106,7 +150,8 @@ describe('la forma de lo que escribe un link (paso 8)', () => {
     expect(valueOk(NODE_ATTRS.tableCell.colspan, 2)).toBe(true);
     expect(valueOk(NODE_ATTRS.tableHeader.rowspan, 2)).toBe(true);
     expect(valueOk(NODE_ATTRS.table.thumbHeight, 150)).toBe(true);
-    expect(valueOk(NODE_ATTRS.image.rowWidth, 3)).toBe(true);
+    expect(valueOk(NODE_ATTRS.image.rowWidth, 0.33)).toBe(true);
+    expect(valueOk(NODE_ATTRS.image.rowWidth, 3)).toBe(false);
   });
 
   it('un número como texto de dígitos vale si su valor vale; los valores de la lista, solo esos', () => {

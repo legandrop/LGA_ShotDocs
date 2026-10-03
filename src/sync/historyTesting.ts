@@ -20,9 +20,12 @@ export function block(id: string, text: string, type = 'paragraph', attrs: Recor
   bc.setAttribute('id', id);
   const p = new Y.XmlElement(type);
   for (const [k, v] of Object.entries(attrs)) p.setAttribute(k, v);
-  const t = new Y.XmlText();
-  t.insert(0, text);
-  p.insert(0, [t]);
+  // Una imagen o un separador no tienen texto adentro (como los guarda el editor).
+  if (!(text === '' && (type === 'image' || type === 'divider'))) {
+    const t = new Y.XmlText();
+    t.insert(0, text);
+    p.insert(0, [t]);
+  }
   bc.insert(0, [p]);
   return bc;
 }

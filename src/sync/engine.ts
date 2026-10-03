@@ -1055,7 +1055,11 @@ export class SyncEngine {
       ready: async (pageId) => {
         const row = tree.get(pageId);
         const state = await docs.stateOf(pageId);
-        return !!row && !!state && state.cursor === row.update_seq && !state.rejected && !state.unreadable;
+        // Al día y sin nada propio por subir (lo mismo vuelve a mirar `savedRows`, con la marca de lo no guardado).
+        return (
+          !!row && !!state && state.cursor === row.update_seq && !state.rejected && !state.unreadable && !state.pending &&
+          !hasUnsyncedContent(state, false)
+        );
       },
       savedRows: (pageId, seq) => docs.savedRows(pageId, seq),
       lastLocalEdit: (pageId) => this.lastEdit.get(pageId),

@@ -49,6 +49,7 @@ exception when others then
   m := sqlerrm;
   if sqlstate = 'PGRST' then
     m := (sqlerrm::json ->> 'message');
+    d := null;
   end if;
   return 'error:' || m || coalesce(':' || nullif(d, ''), '');
 end;
@@ -234,13 +235,15 @@ insert into public.files (id, project_id, name, mime, size, created_by) values
   (pg_temp.u('d2f2'), pg_temp.u('d2e0'), 'sacado.jpg', 'image/jpeg', 10, pg_temp.u('d2a1')),
   (pg_temp.u('d2f3'), pg_temp.u('d2e0'), 'arriba.jpg', 'image/jpeg', 10, pg_temp.u('d2a1')),
   (pg_temp.u('d2f4'), pg_temp.u('d2e1'), 'ajeno.jpg', 'image/jpeg', 10, pg_temp.u('d2a0')),
-  (pg_temp.u('d2f6'), pg_temp.u('d2e0'), 'hija.jpg', 'image/jpeg', 10, pg_temp.u('d2a1'));
+  (pg_temp.u('d2f6'), pg_temp.u('d2e0'), 'hija.jpg', 'image/jpeg', 10, pg_temp.u('d2a1')),
+  (pg_temp.u('d2f7'), pg_temp.u('d2e1'), 'pegada.jpg', 'image/jpeg', 10, pg_temp.u('d2a0'));
 insert into public.page_files (page_id, file_id, removed_at, is_foreign) values
   (pg_temp.u('d2b2'), pg_temp.u('d2f1'), null, false),
   (pg_temp.u('d2b2'), pg_temp.u('d2f2'), now(), false),
   (pg_temp.u('d2b1'), pg_temp.u('d2f3'), null, false),
   (pg_temp.u('d2b9'), pg_temp.u('d2f4'), null, false),
-  (pg_temp.u('d2b3'), pg_temp.u('d2f6'), null, false);
+  (pg_temp.u('d2b3'), pg_temp.u('d2f6'), null, false),
+  (pg_temp.u('d2b3'), pg_temp.u('d2f7'), null, true);
 
 -- ---------------------------------------------------------------------------------------------------
 -- El interruptor: apagado, Can edit no se crea ni se elige
@@ -518,6 +521,18 @@ begin
     'aside:foreign_media', 'una dirección mal formada');
   perform pg_temp.check(pg_temp.admit('d2a6', 'd2b2', jsonb_build_array(pg_temp.dec('e033', false, 'bad_shape'))),
     'aside:bad_shape', 'apartada por el editor');
+  -- Un archivo pegado desde otro proyecto en la hija (uso de afuera, `is_foreign`): tampoco da permiso.
+  perform pg_temp.check(pg_temp.push(pg_temp.tok('S'), 'd2b2', 'e035', 'Fg=='), 'ok', 'escribe e035');
+  perform pg_temp.check(pg_temp.admit('d2a6', 'd2b2', jsonb_build_array(pg_temp.dec('e035', true, null, jsonb_build_array(pg_temp.u('d2f7'))))),
+    'aside:foreign_media', 'un uso de afuera da permiso');
+  -- Un editor con una app más vieja que la mínima del workspace (el header): `app_outdated`, nada decidido.
+  perform pg_temp.check(pg_temp.push(pg_temp.tok('S'), 'd2b2', 'e036', 'Fw=='), 'ok', 'escribe e036');
+  perform pg_temp.as_user('d2a6', '0.100');
+  perform pg_temp.check(pg_temp.try(format('select public.link_admit(%L, %L, %L)', pg_temp.u('d2b2'), '9.999',
+      jsonb_build_array(pg_temp.dec('e036', true)))), 'error:app_outdated', 'admite con la app vieja (header)');
+  perform pg_temp.as_postgres();
+  assert (pg_temp.room('e036')).decided_at is null, 'la app vieja decidió';
+  perform pg_temp.check(pg_temp.admit('d2a6', 'd2b2', jsonb_build_array(pg_temp.dec('e036', false, 'pending'))), 'aside:pending', 'aparta e036');
   -- Otro editor que manda otra decisión para una ya decidida: recibe la de antes y la base corta.
   perform pg_temp.check(pg_temp.push(pg_temp.tok('S'), 'd2b2', 'e034', 'FQ=='), 'ok', 'escribe e034');
   perform pg_temp.check(pg_temp.admit('d2a1', 'd2b2', jsonb_build_array(pg_temp.dec('e033', true), pg_temp.dec('e034', true))),
@@ -532,7 +547,7 @@ begin
   assert (select h.plink_author from public.page_history(pg_temp.u('d2b2'), 0, 10) h where h.seq = 1) is null,
     'page_history da un nombre a una fila del equipo';
   -- Lo apartado, para quien ve lo borrado; los bytes para bajar.
-  assert (select count(*) from public.public_link_updates_of(pg_temp.u('d2b2')) x where x.state = 'aside') = 6,
+  assert (select count(*) from public.public_link_updates_of(pg_temp.u('d2b2')) x where x.state = 'aside') = 8,
     'public_link_updates_of no da lo apartado';
   assert public.public_link_update_bytes((pg_temp.room('e033')).id) = 'FA==', 'los bytes de lo apartado';
   perform pg_temp.check(pg_temp.try(format('select public.public_link_update_bytes(%L)', (pg_temp.room('e011')).id)),
@@ -548,11 +563,11 @@ begin
   -- Share: los números.
   perform pg_temp.as_user('d2a1');
   j := public.get_public_link(pg_temp.u('d2b2')) -> 'link' -> 'edits';
-  assert j ->> 'aside' = '6' and j ->> 'admitted_today' = '2' and j ->> 'waiting' = '1' and j ->> 'held' = '0',
+  assert j ->> 'aside' = '8' and j ->> 'admitted_today' = '2' and j ->> 'waiting' = '1' and j ->> 'held' = '0',
     format('los números de Share: %s', j);
-  -- El estado del visitante: en S, nada esperando de A y 6 apartadas.
+  -- El estado del visitante: en S, nada esperando de A y 8 apartadas.
   perform pg_temp.as_anon(pg_temp.tok('S'));
-  assert (select s.aside from public.plink_push_status() s where s.page_id = pg_temp.u('d2b2')) = 6, 'el estado no ve lo apartado';
+  assert (select s.aside from public.plink_push_status() s where s.page_id = pg_temp.u('d2b2')) = 8, 'el estado no ve lo apartado';
   perform pg_temp.as_postgres();
 end;
 $$;
@@ -593,6 +608,16 @@ begin
   update public.pages set deleted_at = null where id = pg_temp.u('d2b3');
   -- Admitir H (e012), que vuelve.
   perform pg_temp.check(pg_temp.admit('d2a6', 'd2b3', jsonb_build_array(pg_temp.dec('e012', true))), 'admitted:3', 'lo retenido no entra al volver');
+
+  -- El creador del link deja de poder compartir (el admin de Sib pasa a invitado): lo que esperaba queda retenido (no
+  -- aparece ni se decide) y entra cuando vuelve a poder (O6 de la auditoría).
+  perform pg_temp.check(pg_temp.push(pg_temp.tok('Sib'), 'd2b7', 'e037', 'GA=='), 'ok', 'el link de Sib escribe');
+  update public.members set role = 'guest' where user_id = pg_temp.u('d2a2');
+  perform pg_temp.check(pg_temp.push(pg_temp.tok('Sib'), 'd2b7', 'e038', 'GQ=='), 'error:link_not_found', 'un link de un creador sin permiso escribe');
+  assert pg_temp.admit_pages('d2a6') not like '%Sib%', 'lo de un creador sin permiso aparece';
+  perform pg_temp.check(pg_temp.admit('d2a6', 'd2b7', jsonb_build_array(pg_temp.dec('e037', true))), 'held', 'lo de un creador sin permiso se decide');
+  update public.members set role = 'admin' where user_id = pg_temp.u('d2a2');
+  perform pg_temp.check(pg_temp.admit('d2a6', 'd2b7', jsonb_build_array(pg_temp.dec('e037', true))), 'admitted:1', 'lo del creador que vuelve no entra');
 
   -- waiting_bytes no cuenta lo retenido de una página que salió de la rama (observación 4).
   perform pg_temp.check(pg_temp.push(pg_temp.tok('S'), 'd2b6', 'e040', 'FRUV'), 'ok', 'escribe en M');

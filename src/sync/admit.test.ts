@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { applyLikeApp, mountEditor, unmountAll } from '../ui/collabHarness';
 import { STABLE_GAPS_MARKER } from '../ui/unknownContent';
-import { admitRows, AdmissionTester, type AdmitVerdict } from './admit';
+import { admitRows, AdmissionTester, insertedText, type AdmitVerdict } from './admit';
 import { buildCleanBase } from './clean';
 import { block, group, seeded, textOf } from './historyTesting';
 import { CONTENT_FRAGMENT, normalizeStructure } from './structure';
@@ -82,6 +82,16 @@ describe('la prueba de admisión (los casos del prototipo)', () => {
     expect(admitRows(rows, [row])[0]).toEqual({ ok: true, media: [ALLOWED] });
   });
 
+  it('el texto que trae una fila se lee sin la app (O8)', () => {
+    const v = visitorFrom(rows);
+    const row = edit(v, (g) => {
+      g.insert(1, [block('t1', 'primera línea')]);
+      g.insert(2, [block('t2', 'segunda línea')]);
+    });
+    expect(insertedText(row).split(String.fromCharCode(10)).sort()).toEqual(['primera línea', 'segunda línea']);
+    expect(insertedText(new Uint8Array([1, 2, 3, 250]))).toBe('');
+  });
+
   it('basura, dependencias que nunca subieron y borrados de algo que no existe', () => {
     expect(reason(one(rows, new Uint8Array([1, 2, 3, 250, 251, 7, 9])))).toBe('undecodable');
     const v = visitorFrom(rows);
@@ -154,7 +164,7 @@ describe('la prueba de admisión (los casos del prototipo)', () => {
       const photo = new Y.XmlElement('photo');
       photo.setAttribute('url', `sdmedia://${ALLOWED}`);
       photo.setAttribute('name', 'foto.jpg');
-      photo.setAttribute('w', 160 as never);
+      photo.setAttribute('w', 0.4 as never);
       photo.setAttribute('rowStart', true as never);
       const t1 = new Y.XmlText();
       t1.insert(0, 'antes ');
@@ -169,7 +179,7 @@ describe('la prueba de admisión (los casos del prototipo)', () => {
 
   it('en cadena: lo que sigue del mismo autor de Yjs se aparta (pendiente); lo de otra sesión que no depende, entra', () => {
     const v = visitorFrom(rows);
-    const bad = edit(v, (g) => g.insert(0, [block('x1', '', 'image', { url: 'https://example.invalid/x.png' })]));
+    const bad = edit(v, (g) => g.insert(0, [block('x1', 'colgable'), block('x2', '', 'image', { url: 'https://example.invalid/x.png' })]));
     const dependent = edit(v, (g) => textOf(g.get(0) as Y.XmlElement).insert(0, 'colgado'));
     // Yjs aplica lo de un autor en el orden de sus relojes: aunque no toque lo apartado, lo que sigue de la misma
     // sesión queda pendiente (observación 1 de la auditoría: "volver a la página del equipo" es la 2c).
@@ -368,7 +378,7 @@ describe('lo que escribe el editor real del visitante entra (R3)', () => {
     add('pageBreak', [{ type: 'paragraph', props: { pageBreak: true } }]);
     add('isToggleable', [{ type: 'heading', props: { level: 2, isToggleable: true }, content: 'Plegable' }]);
     add('checked', [{ type: 'checkListItem', props: { checked: true }, content: 'hecho' }]);
-    add('rowWidth', [{ type: 'image', props: { url: '', rowWidth: 3 } }]);
+    add('rowWidth', [{ type: 'image', props: { url: '', rowWidth: 0.5 } }]);
     add('thumbHeight', [{ type: 'table', props: { thumbHeight: 140 }, content: { type: 'tableContent', rows: [{ cells: ['a', 'b'] }] } }]);
     steps.push([
       'colwidth, colspan, rowspan',

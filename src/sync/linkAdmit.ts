@@ -113,19 +113,17 @@ export class LinkAdmission {
   }
 
   /**
-   * Manda las decisiones de una página. Si la base devuelve para una fila otra cosa que la pedida (otro editor la
-   * decidió distinto, un archivo no vale, el link dejó de editar), lo que sigue se probó sobre una página que no es la
-   * real: se corta y la página se vuelve a probar en la vuelta siguiente (la base también corta ahí).
+   * Manda las decisiones de una página. La base decide en orden y **corta** en la primera fila que decide distinto de lo
+   * pedido (otro editor la decidió distinto, un archivo no vale, el link dejó de editar ahí): lo que sigue se probó sobre
+   * una página que no es la real y queda sin decidir, así que la vuelta siguiente lo baja y lo vuelve a probar. Acá solo
+   * se cuenta lo que la base decidió.
    */
   private async send(pageId: string, decisions: AdmitDecision[], out: AdmitRoundResult): Promise<void> {
     if (decisions.length === 0) return;
     const results = await this.remote.admit(pageId, decisions);
-    const asked = new Map(decisions.map((d) => [d.id, d]));
     for (const r of results) {
       if (r.decision === 'admitted') out.admitted++;
       else if (r.decision === 'aside') out.aside++;
-      const d = asked.get(r.id);
-      if (r.decision === 'held' || !d || (r.decision === 'admitted') !== d.ok) break;
     }
   }
 }

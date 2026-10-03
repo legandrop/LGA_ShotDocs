@@ -4,7 +4,7 @@ import { mediaIdsInDoc } from '../media/usage';
 import { findUnknownContent, type KnownContent } from '../ui/unknownContent';
 import { checkCleanBase } from './clean';
 import { pendingKey } from './compact';
-import { shapeProblem, urlsInDoc } from './linkShape';
+import { depthProblem, shapeProblem, urlsInDoc } from './linkShape';
 import { CONTENT_FRAGMENT } from './structure';
 
 // La prueba de admisión de lo que escribe un link público (Docs/Doc_Link_Publico.md, E2.3, LE3). Lo que manda un
@@ -31,6 +31,7 @@ export type AdmitReason =
   | 'foreign_media'
   | 'external_url'
   | 'bad_shape'
+  | 'too_deep'
   | 'too_big'
   | `clean_${string}`;
 
@@ -122,6 +123,9 @@ export class AdmissionTester {
         return verdict;
       }
       if (pendingKey(doc) !== pendingBefore) return (verdict = { ok: false, reason: 'pending' });
+      // 8, primero lo barato y lo que protege a lo que sigue: la profundidad de la página entera (B4), sin recursión.
+      const deep = depthProblem(doc);
+      if (deep) return (verdict = { ok: false, reason: 'too_deep', detail: deep });
       // 4. Nada que esta versión no conozca (si antes no había).
       const unknown = unknownBefore === null ? findUnknownContent(doc, known) : null;
       if (unknown) return (verdict = { ok: false, reason: 'unknown_content', detail: unknown });
@@ -165,4 +169,28 @@ export function admitRows(rows: readonly Uint8Array[], candidates: readonly Uint
   } finally {
     tester.destroy();
   }
+}
+
+/**
+ * El texto que trae una fila (lo que se tecleó, en orden de llegada), para leer lo apartado sin la app (O8 de la
+ * auditoría: *Download it* traía solo los bytes de Yjs). Un salto de renglón donde un tramo no sigue al anterior. Vacío si
+ * la fila no se puede leer.
+ */
+export function insertedText(update: Uint8Array): string {
+  let decoded: ReturnType<typeof Y.decodeUpdate>;
+  try {
+    decoded = Y.decodeUpdate(update);
+  } catch {
+    return '';
+  }
+  let out = '';
+  let last: { client: number; clock: number } | null = null;
+  for (const s of decoded.structs) {
+    if (!(s instanceof Y.Item) || !(s.content instanceof Y.ContentString)) continue;
+    const follows = last && s.origin && s.origin.client === last.client && s.origin.clock === last.clock;
+    if (out && !follows) out += String.fromCharCode(10);
+    out += s.content.str;
+    last = { client: s.id.client, clock: s.id.clock + s.length - 1 };
+  }
+  return out;
 }

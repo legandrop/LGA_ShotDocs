@@ -3,6 +3,7 @@ import { useT } from '../i18n';
 import { toBase64 } from '../lib/base64';
 import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
 import { LEVEL_EDIT } from '../sync/access';
+import { insertedText } from '../sync/admit';
 import { canAdmit, LINK_EDIT_SCHEMA_VERSION, type LinkUpdateRow } from '../sync/linkAdmitApi';
 import { saveBlob } from './unsyncedDownload';
 
@@ -59,7 +60,8 @@ export function LinkAsideNotice({ pageId }: { pageId: string }) {
     const out: unknown[] = [];
     for (const r of [...aside, ...held]) {
       const bytes = await remote.linkUpdateBytes(r.id);
-      out.push({ id: r.id, author: r.author, createdAt: r.created_at, state: r.state, reason: r.reason, yjsUpdate: toBase64(bytes) });
+      // El texto que trae, para leerlo sin la app (O8), y los bytes tal cual.
+      out.push({ id: r.id, author: r.author, createdAt: r.created_at, state: r.state, reason: r.reason, text: insertedText(bytes), yjsUpdate: toBase64(bytes) });
     }
     const blob = new Blob(
       [
