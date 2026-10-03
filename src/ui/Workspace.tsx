@@ -33,7 +33,7 @@ import { InstallBanner, InstallHost } from './InstallBanner';
 import { lastPageOf, rememberPage, useCurrentProject, useSwitchProject } from './project';
 import { RemovedScreen } from './RemovedScreen';
 import type { ShareTarget } from './ShareDialog';
-import { DeletedProjectsList, HelpDialog, ImportCodaDialog, LookForFilesButton, ProjectSearch, ShareDialog } from './lazyDialogs';
+import { DeletedProjectsList, HelpDialog, ImportArchiveDialog, ImportCodaDialog, LookForFilesButton, ProjectSearch, ShareDialog } from './lazyDialogs';
 import { closeHelp, useHelpUi } from '../help/helpUi';
 import { openPractice } from '../tutorial/practiceUi';
 import { TourHost } from '../tutorial/TourHost';
@@ -60,6 +60,8 @@ import { openDictation } from '../dictation/dictationUi';
 import { downloadUnsynced } from './unsyncedDownload';
 import { usePendingCount } from './usePendingCount';
 import { errorMessage } from '../sync/types';
+import { disposeUndoTimeline } from './undoTimeline';
+import { useUndoTimelineKeys } from './undoTimelineUi';
 
 // La página de práctica (P.13, Docs/Doc_Tutorial.md): se baja aparte, con sus plantillas y sus textos.
 const PracticeView = lazyPart(() => import('../tutorial/PracticeView').then((m) => m.PracticeView));
@@ -79,6 +81,8 @@ export function Workspace({ user, link }: { user: AuthUser; link?: LinkBoot }) {
   // suelta (el índice deja de escuchar y de leer, y lo leído se libera).
   const readyServices = boot.state === 'ready' ? boot.services : null;
   useEffect(() => (readyServices ? () => disposeSearchSession(readyServices) : undefined), [readyServices]);
+  // La línea de tiempo de deshacer también (P.26): suelta los documentos que retenía.
+  useEffect(() => (readyServices ? () => disposeUndoTimeline(readyServices) : undefined), [readyServices]);
 
   // Las preferencias de la cuenta (tema, fuente…) se bajan al entrar y se suben cuando cambian.
   // Con un link público no hay cuenta: las preferencias quedan las del dispositivo.
@@ -203,6 +207,8 @@ export function Shell() {
   useInviteTarget();
   // La caché del historial de una página cuyo historial ya no se puede ver se tira (D13).
   useHistoryCachePruning();
+  // ⌘Z y ⌘⇧Z en el orden en que editaste, también en otra página (P.26, undoTimelineUi.ts).
+  useUndoTimelineKeys();
 
   // Ctrl/⌘+K busca en el proyecto desde cualquier lugar (Docs/Doc_Buscar.md, sección 9); con el panel abierto,
   // lo cierra. En el editor con texto elegido sigue siendo "crear un link" de BlockNote.
@@ -463,6 +469,7 @@ export function Shell() {
         </Part>
       )}
       {codaOwner && <ImportCodaHost />}
+      <ImportArchiveHost />
       {/* "Available offline", "Storage on this device" y el aviso del tope (P.10). */}
       <SpaceHost />
       <ExportHost />
@@ -523,7 +530,7 @@ function ReplaceProgressHost() {
   if (!progress || search.isOpen()) return null;
   return (
     <div className="notice replace-progress-bar" role="status">
-      <span>{tr(progress.kind === 'undo' ? 'replace.barUndo' : 'replace.bar', { done: progress.done, total: progress.total })}</span>
+      <span>{tr(progress.kind === 'undo' ? 'replace.barUndo' : progress.kind === 'redo' ? 'replace.barRedo' : 'replace.bar', { done: progress.done, total: progress.total })}</span>
       {progress.kind === 'replace' && (
         <button className="link" onClick={() => session.engine.stop()}>
           {tr('replace.barStop')}
@@ -563,10 +570,25 @@ function HelpHost() {
 function ImportCodaHost() {
   const { tree } = useServices();
   const [state, job] = useImportJob(tree);
-  if (!state.open) return null;
+  if (!state.open || state.kind !== 'coda') return null;
   return (
     <Part onClose={() => job.close()}>
       <ImportCodaDialog />
+    </Part>
+  );
+}
+
+/**
+ * *Import Shot Docs archive…* (P.22, entrega 3; lo abre el selector de proyectos, para dueño y admins): como el de
+ * Coda, se dibuja acá para que la importación siga a la vista aunque el selector se desmonte.
+ */
+function ImportArchiveHost() {
+  const { tree } = useServices();
+  const [state, job] = useImportJob(tree);
+  if (!state.open || state.kind !== 'archive') return null;
+  return (
+    <Part onClose={() => job.close()}>
+      <ImportArchiveDialog />
     </Part>
   );
 }

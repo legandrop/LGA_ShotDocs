@@ -11,6 +11,67 @@ export const shell = {
   'replace.bar': { en: "Replacing… {done} of {total} pages", es: "Reemplazando… {done} de {total} páginas" },
   'replace.barUndo': { en: "Undoing… {done} of {total} pages", es: "Deshaciendo… {done} de {total} páginas" },
   'replace.barStop': { en: "Stop", es: "Parar" },
+  'replace.barRedo': { en: "Redoing… {done} of {total} pages", es: "Rehaciendo… {done} de {total} páginas" },
+  // Lo que dice deshacer un reemplazo (también con ⌘Z, sin el panel cargado).
+  'replace.undone': {
+    en: { one: "Undid {count} replacement", other: "Undid {count} replacements" },
+    es: { one: "Se deshizo {count} reemplazo", other: "Se deshicieron {count} reemplazos" },
+  },
+  'replace.undoChanged': {
+    en: { one: "{count} had changed and was left as is", other: "{count} had changed and were left as they are" },
+    es: { one: "{count} había cambiado y quedó como estaba", other: "{count} habían cambiado y quedaron como estaban" },
+  },
+  'replace.undoRemaining': {
+    en: { one: "{count} page couldn't be undone now", other: "{count} pages couldn't be undone now" },
+    es: { one: "{count} página no se pudo deshacer ahora", other: "{count} páginas no se pudieron deshacer ahora" },
+  },
+  'replace.unsaved': {
+    en: "Couldn't save on this device: replacing stopped",
+    es: "No se pudo guardar en este dispositivo: se paró el reemplazo",
+  },
+  // Deshacer en el orden en que editaste (P.26, Docs/Doc_Deshacer.md, sección 8): los avisos de ⌘Z y ⌘⇧Z.
+  'undo.doneIn': { en: "Undone in “{page}”", es: "Deshecho en “{page}”" },
+  'undo.redoneIn': { en: "Redone in “{page}”", es: "Rehecho en “{page}”" },
+  'undo.back': { en: "Back", es: "Volver" },
+  // El reemplazo del proyecto en la línea de tiempo (entrega 2).
+  'undo.replaceUndone': { en: "Undid {what} in {pages}", es: "Se deshizo {what} en {pages}" },
+  'undo.replaceRedone': { en: "Redid {what} in {pages}", es: "Se rehízo {what} en {pages}" },
+  'undo.replaceWhat': { en: "“{from}” → “{to}”", es: "“{from}” → “{to}”" },
+  'undo.replaceWhatDelete': { en: "deleting “{from}”", es: "el borrado de “{from}”" },
+  'undo.pages': {
+    en: { one: "{count} page", other: "{count} pages" },
+    es: { one: "{count} página", other: "{count} páginas" },
+  },
+  'undo.redoAction': { en: "Redo", es: "Rehacer" },
+  'undo.undoAction': { en: "Undo", es: "Deshacer" },
+  'undo.nothingThere': {
+    en: "Nothing to undo there: someone else already changed it. {undo} again for the previous change.",
+    es: "No hay nada para deshacer ahí: otra persona ya lo cambió. {undo} otra vez para el cambio anterior.",
+  },
+  'undo.nothingThereRedo': {
+    en: "Nothing to redo there: someone else already changed it. {redo} again for the next change.",
+    es: "No hay nada para rehacer ahí: otra persona ya lo cambió. {redo} otra vez para el cambio siguiente.",
+  },
+  'undo.lost': {
+    en: "Older changes in “{page}” can't be undone (the page was reloaded).",
+    es: "Los cambios anteriores en “{page}” no se pueden deshacer (la página se volvió a cargar).",
+  },
+  'undo.limit': {
+    en: "Older changes can't be undone: undo keeps your last {pages} pages and {steps} changes in this tab.",
+    es: "Los cambios anteriores no se pueden deshacer: deshacer guarda tus últimas {pages} páginas y {steps} cambios en esta pestaña.",
+  },
+  'undo.cant': {
+    en: "Can't undo in “{page}”: {reason}. {undo} again for the previous change.",
+    es: "No se puede deshacer en “{page}”: {reason}. {undo} otra vez para el cambio anterior.",
+  },
+  'undo.cantRedo': {
+    en: "Can't redo in “{page}”: {reason}. {redo} again for the next change.",
+    es: "No se puede rehacer en “{page}”: {reason}. {redo} otra vez para el cambio siguiente.",
+  },
+  'undo.reason.trash': { en: "it's in the trash", es: "está en la papelera" },
+  'undo.reason.deleted': { en: "it was deleted", es: "se borró" },
+  'undo.reason.noEdit': { en: "you can no longer edit it", es: "ya no la podés editar" },
+  'undo.reason.loading': { en: "the page didn't open in time", es: "la página no terminó de abrir" },
   'shell.opening': { en: "Opening your workspace…", es: "Abriendo tu workspace…" },
   'shell.busy.title': { en: "Already open in another window", es: "Ya está abierta en otra ventana" },
   'shell.busy.text': {

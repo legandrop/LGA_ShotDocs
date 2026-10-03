@@ -159,7 +159,7 @@ describe('diálogo de importar de Coda', () => {
     );
     await act(async () => button(host, 'Sign out').click());
     expect(signOut).not.toHaveBeenCalled();
-    expect(alert).toHaveBeenCalledWith('An import from Coda is running. Wait until it finishes.');
+    expect(alert).toHaveBeenCalledWith('An import is running. Wait until it finishes.');
     finish();
     await running;
     job.close();

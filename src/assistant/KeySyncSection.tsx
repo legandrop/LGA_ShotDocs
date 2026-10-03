@@ -2,16 +2,31 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type MutableR
 import { useT, type Key, type Translate } from '../i18n';
 import '../i18n/lazy/assistant';
 import { useServices, useSyncStatus, type Services } from '../services';
-import { loadSettings, type AssistantSettings as Saved } from './keyStore';
+import { loadSettings, syncEntries, syncFor, type AssistantSettings as Saved } from './keyStore';
 import { generatePassphrase, keyEnding, ownPassphraseOk, type KeyPayload } from './keySync';
-import { adoptUnlocked, outcomeOf, replaceSync, stopSync, turnOnSync, unlockSync, updateSync, type SyncContext, type SyncOutcome, type Unlocked } from './keySyncFlow';
+import {
+  adoptUnlocked,
+  alsoSync,
+  changePassphrase,
+  needsAnswer,
+  outcomeOf,
+  replaceSync,
+  stopSync,
+  turnOnSync,
+  unlockSync,
+  updateSync,
+  type SyncContext,
+  type SyncOutcome,
+  type Unlocked,
+} from './keySyncFlow';
 import { fetchSyncMeta, type KeySyncClient, type SyncFailure, type SyncMeta } from './keySyncRemote';
 import { fetchPolicy, type AssistantPolicy } from './policy';
 import { PROVIDER_NAMES } from './providers';
 
 // *Sync across my devices*, en los ajustes del asistente (Docs/Doc_Clave_Sincronizada.md, secciones 2 y 9; entrega
-// S1): prender la copia cifrada, abrirla en otro dispositivo con la frase, actualizarla, reemplazarla con una frase
-// nueva y dejar de sincronizar. Los pasos están en keySyncFlow.ts; esto solo los muestra.
+// S1 y S2): prender la copia cifrada, abrirla en otro dispositivo con la frase (y guardarla o no en el dispositivo),
+// actualizarla, reemplazarla con una frase nueva, cambiar la frase, subir otra copia a este workspace y dejar de
+// sincronizar. Los pasos están en keySyncFlow.ts; esto solo los muestra.
 //
 // Los campos de la frase son `input` NO controlados (4.4): se leen por `ref` al tocar el botón y se vacían. La frase
 // generada vive en una `ref` y se escribe directo en la página; nunca en el estado de React. Lo mismo la clave abierta
@@ -31,11 +46,30 @@ export function destinationLabel(p: Pick<KeyPayload, 'provider' | 'baseUrl'>): s
   return p.provider === 'compatible' ? hostOf(p.baseUrl) : PROVIDER_NAMES[p.provider];
 }
 
-/** *Unlocked: Anthropic key ending in …a1B2.* (con el host en uno compatible). */
+/** *Unlocked: Anthropic key ending in …a1B2.* (con el host en uno compatible), y a dónde va la de *Voice* si viene. */
 export function unlockedText(p: KeyPayload, tr: Translate): string {
-  return p.provider === 'compatible'
-    ? tr('assistant.sync.unlockedAt', { provider: PROVIDER_NAMES.compatible, host: hostOf(p.baseUrl), end: keyEnding(p.apiKey) })
-    : tr('assistant.sync.unlocked', { provider: PROVIDER_NAMES[p.provider], end: keyEnding(p.apiKey) });
+  const main =
+    p.provider === 'compatible'
+      ? tr('assistant.sync.unlockedAt', { provider: PROVIDER_NAMES.compatible, host: hostOf(p.baseUrl), end: keyEnding(p.apiKey) })
+      : tr('assistant.sync.unlocked', { provider: PROVIDER_NAMES[p.provider], end: keyEnding(p.apiKey) });
+  const v = p.voice;
+  if (!v) return main;
+  const voice =
+    v.provider === 'compatible'
+      ? tr('assistant.sync.voiceUnlockedAt', { provider: PROVIDER_NAMES.compatible, host: hostOf(v.baseUrl), end: keyEnding(v.apiKey) })
+      : tr('assistant.sync.voiceUnlocked', { provider: PROVIDER_NAMES[v.provider], end: keyEnding(v.apiKey) });
+  return `${main} ${voice}`;
+}
+
+/** Lo que se pregunta antes de usar una copia abierta (regla 6 y O2), para la clave y para la de *Voice*. */
+function questionFor(u: Unlocked, tr: Translate): string {
+  const parts: string[] = [];
+  if (u.decision === 'ask') parts.push(tr('assistant.sync.ask', { host: destinationLabel(u.payload) }));
+  if (u.decision === 'replace') parts.push(tr('assistant.sync.askReplace', { local: u.localEnding ?? '', synced: keyEnding(u.payload.apiKey) }));
+  if (u.voiceAsk === 'destination' && u.payload.voice) parts.push(tr('assistant.sync.askVoice', { host: destinationLabel(u.payload.voice) }));
+  if (u.voiceAsk === 'key' && u.payload.voice)
+    parts.push(tr('assistant.sync.askVoiceReplace', { local: u.voiceLocalEnding ?? '', synced: keyEnding(u.payload.voice.apiKey) }));
+  return parts.join(' ');
 }
 
 function dateText(iso: string | number, lang: string): string {
@@ -47,7 +81,16 @@ function dateText(iso: string | number, lang: string): string {
 const PHRASE_FIELD = { autoCapitalize: 'none', autoCorrect: 'off', spellCheck: false } as const;
 
 type Remote = { kind: 'loading' } | { kind: 'ok'; meta: SyncMeta | null } | { kind: 'fail'; failure: SyncFailure };
-type View = { kind: 'main' } | { kind: 'turnOn'; overwrite?: { generation: number } } | { kind: 'update' } | { kind: 'replace' } | { kind: 'stop' } | { kind: 'ask'; question: string; unlocked: string };
+type View =
+  | { kind: 'main' }
+  | { kind: 'turnOn'; overwrite?: { generation: number; updatedAt?: string } }
+  | { kind: 'update' }
+  | { kind: 'replace' }
+  | { kind: 'change' }
+  | { kind: 'also' }
+  | { kind: 'stop' }
+  /** `voiceOnly`: lo único que se pregunta es la clave de *Voice* (la del asistente se toma igual). */
+  | { kind: 'ask'; question: string; unlocked: string; voiceOnly: boolean };
 type Message = { ok: boolean; text: string; reload?: boolean };
 
 interface Props {
@@ -85,6 +128,8 @@ function errorKey(outcome: SyncOutcome, unlocking: boolean): Key {
       return 'assistant.sync.missing';
     case 'conflict':
       return 'assistant.sync.conflict';
+    case 'older':
+      return 'assistant.sync.older';
     default:
       return 'assistant.sync.failed';
   }
@@ -103,6 +148,11 @@ function Section({ saved, onSaved, online }: Props & { online: boolean }) {
   const [busy, setBusy] = useState(false);
   const unlockField = useRef<HTMLInputElement>(null);
   const currentField = useRef<HTMLInputElement>(null);
+  const repeatField = useRef<HTMLInputElement>(null);
+  /** *Keep the key on this device* (tildada de fábrica; CS7). No es un secreto: va en el estado. */
+  const [keepHere, setKeepHere] = useState(true);
+  /** Lo que dijo la casilla al tocar *Unlock*, para cuando la persona contesta la pregunta (regla 6). */
+  const keepAtUnlock = useRef(true);
   /** La copia abierta mientras se pregunta si se usa (regla 6): en una `ref`, nunca en el estado. */
   const pending = useRef<Unlocked | null>(null);
   const newPhrase = useRef<PhraseHandle | null>(null);
@@ -160,19 +210,22 @@ function Section({ saved, onSaved, online }: Props & { online: boolean }) {
     } catch (err) {
       fail(err, unlocking);
     } finally {
-      for (const f of [unlockField, currentField]) if (f.current) f.current.value = '';
+      for (const f of [unlockField, currentField, repeatField]) if (f.current) f.current.value = '';
       setBusy(false);
     }
   };
 
   const hasLocal = !!saved && !!saved.model && (saved.hasKey || saved.provider === 'compatible');
   const meta = remote.kind === 'ok' ? remote.meta : null;
-  const fromHere = !!meta && !!saved?.sync && saved.sync.ref === ref && saved.sync.userId === user.id;
-  // La copia cambió en otro dispositivo después de que este la abrió (*Update* o *Replace* allá): se vuelve a pedir la
-  // frase para tomar la nueva; hasta entonces la clave de este dispositivo sigue andando (regla 5).
-  const changed = fromHere && meta.generation > saved.sync!.generation;
+  /** Lo que este dispositivo anotó de la copia de ESTE workspace (puede tener otras, de otros workspaces). */
+  const entry = syncFor(saved, ref, user.id);
+  const fromHere = !!meta && !!entry;
+  // La copia cambió en otro dispositivo después de que este la abrió (*Update*, *Replace* o *Change passphrase* allá):
+  // se vuelve a pedir la frase para tomar la nueva; hasta entonces la clave de este dispositivo sigue andando (regla 5).
+  const changed = fromHere && meta.generation > entry.generation;
   const opened = fromHere && !changed;
-  const elsewhere = !!saved?.sync && saved.sync.ref !== ref ? saved.sync.name || saved.sync.ref : null;
+  const other = entry ? undefined : syncEntries(saved)[0];
+  const elsewhere = other ? other.name || other.ref : null;
   const off = policy === 'off';
   const disabled = busy || !online;
 
@@ -180,24 +233,26 @@ function Section({ saved, onSaved, online }: Props & { online: boolean }) {
     e.preventDefault();
     const phrase = unlockField.current?.value ?? '';
     if (!phrase.trim()) return;
+    keepAtUnlock.current = keepHere;
     void step(async () => {
       const unlocked = await unlockSync(ctx, phrase);
       if (!unlocked) {
         await refresh();
         return;
       }
-      if (unlocked.decision !== 'adopt') {
+      if (needsAnswer(unlocked)) {
         pending.current = unlocked;
         // A dónde va y el final de la clave (nunca la clave) quedan a la vista mientras se pregunta: otro destino
-        // (regla 6), o el mismo con otra clave que el dispositivo no sacó de esta copia (regla 5).
-        const question =
-          unlocked.decision === 'ask'
-            ? tr('assistant.sync.ask', { host: destinationLabel(unlocked.payload) })
-            : tr('assistant.sync.askReplace', { local: unlocked.localEnding ?? '', synced: keyEnding(unlocked.payload.apiKey) });
-        setView({ kind: 'ask', question, unlocked: unlockedText(unlocked.payload, tr) });
+        // (regla 6), o el mismo con otra clave que el dispositivo no sacó de esta copia (regla 5); lo mismo con *Voice*.
+        setView({
+          kind: 'ask',
+          question: questionFor(unlocked, tr),
+          unlocked: unlockedText(unlocked.payload, tr),
+          voiceOnly: unlocked.decision === 'adopt' && !!unlocked.voiceAsk,
+        });
         return;
       }
-      onSaved(await adoptUnlocked(ctx, unlocked));
+      onSaved(await adoptUnlocked(ctx, unlocked, { tabOnly: !keepAtUnlock.current }));
       setMessage({ ok: true, text: unlockedText(unlocked.payload, tr) });
     }, true);
   };
@@ -208,14 +263,25 @@ function Section({ saved, onSaved, online }: Props & { online: boolean }) {
       pending.current = null;
       setView({ kind: 'main' });
       if (!unlocked) return;
-      onSaved(await adoptUnlocked(ctx, unlocked));
+      onSaved(await adoptUnlocked(ctx, unlocked, { tabOnly: !keepAtUnlock.current }));
       setMessage({ ok: true, text: unlockedText(unlocked.payload, tr) });
     });
 
   const keepMine = () => {
+    const unlocked = pending.current;
     pending.current = null;
+    const voiceOnly = view.kind === 'ask' && view.voiceOnly;
     setView({ kind: 'main' });
-    setMessage({ ok: true, text: tr('assistant.sync.kept') });
+    if (!voiceOnly || !unlocked) {
+      setMessage({ ok: true, text: tr('assistant.sync.kept') });
+      return;
+    }
+    // Solo se preguntó por *Voice*: la clave del asistente se toma y la de *Voice* del dispositivo queda.
+    void step(async () => {
+      const { voice: _voice, ...rest } = unlocked.payload;
+      onSaved(await adoptUnlocked(ctx, { ...unlocked, payload: rest }, { tabOnly: !keepAtUnlock.current }));
+      setMessage({ ok: true, text: `${unlockedText(rest, tr)} ${tr('assistant.sync.keptVoice')}` });
+    });
   };
 
   const turnOn = (e: FormEvent) => {
@@ -263,11 +329,53 @@ function Section({ saved, onSaved, online }: Props & { online: boolean }) {
     });
   };
 
+  const change = (e: FormEvent) => {
+    e.preventDefault();
+    const current = currentField.current?.value ?? '';
+    if (!current.trim()) return;
+    const next = newPhrase.current?.read();
+    if (!next) return;
+    void step(async () => {
+      await changePassphrase(ctx, current, next);
+      newPhrase.current?.clear();
+      setView({ kind: 'main' });
+      setMessage({ ok: true, text: tr('assistant.sync.passphraseChanged') });
+      await reload();
+      await refresh();
+    });
+  };
+
+  const also = (e: FormEvent) => {
+    e.preventDefault();
+    const a = currentField.current?.value ?? '';
+    const b = repeatField.current?.value ?? '';
+    if (!a.trim()) return;
+    // La copia de allá no se puede abrir desde acá: la frase se escribe dos veces (regla 7) y tiene que servir de frase.
+    if (!ownPassphraseOk(a)) {
+      setMessage({ ok: false, text: tr('assistant.sync.ownRule') });
+      return;
+    }
+    if (a !== b) {
+      for (const f of [currentField, repeatField]) if (f.current) f.current.value = '';
+      setMessage({ ok: false, text: tr('assistant.sync.mismatch') });
+      return;
+    }
+    void step(async () => {
+      await alsoSync(ctx, a);
+      setView({ kind: 'main' });
+      setMessage({ ok: true, text: tr('assistant.sync.done', { workspace: name }) });
+      await reload();
+      await refresh();
+    });
+  };
+
+  // En la computadora prestada la clave no "queda en este dispositivo": vive en la pestaña y se va al recargar.
+  const tabOnlyNow = !!saved?.tabOnly;
   const stop = () =>
     void step(async () => {
       await stopSync(ctx);
       setView({ kind: 'main' });
-      setMessage({ ok: true, text: tr('assistant.sync.stopped') });
+      setMessage({ ok: true, text: tr(tabOnlyNow ? 'assistant.sync.stoppedTab' : 'assistant.sync.stopped') });
       await reload();
       await refresh();
     });
@@ -284,15 +392,15 @@ function Section({ saved, onSaved, online }: Props & { online: boolean }) {
   );
 
   let body: ReactNode;
-  if (view.kind === 'turnOn' || view.kind === 'replace') {
-    const isReplace = view.kind === 'replace';
+  if (view.kind === 'turnOn' || view.kind === 'replace' || view.kind === 'change') {
+    const isReplace = view.kind === 'replace' || view.kind === 'change';
     body = (
-      <form className="assistant-sync-form" onSubmit={isReplace ? replace : turnOn}>
+      <form className="assistant-sync-form" onSubmit={view.kind === 'replace' ? replace : view.kind === 'change' ? change : turnOn}>
         {/* El usuario oculto: así el gestor de contraseñas la guarda con nombre propio (4.4). */}
         <input className="sr-only" type="text" name="username" autoComplete="username" value="Shot Docs assistant key" readOnly tabIndex={-1} aria-hidden="true" />
         {isReplace && (
           <>
-            <p className="muted assistant-small">{tr('assistant.sync.replaceText')}</p>
+            <p className="muted assistant-small">{tr(view.kind === 'change' ? 'assistant.sync.changeText' : 'assistant.sync.replaceText')}</p>
             <label className="assistant-field">
               <span className="pref-label">{tr('assistant.sync.currentPassphrase')}</span>
               <input ref={currentField} type="password" name="current-passphrase" autoComplete="current-password" {...PHRASE_FIELD} />
@@ -304,7 +412,7 @@ function Section({ saved, onSaved, online }: Props & { online: boolean }) {
         <div className="modal-actions">
           {back}
           <button type="submit" className="primary" disabled={disabled || !phraseReady}>
-            {tr(isReplace ? 'assistant.sync.replaceButton' : 'assistant.sync.turnOnButton')}
+            {tr(view.kind === 'replace' ? 'assistant.sync.replaceButton' : view.kind === 'change' ? 'assistant.sync.changeButton' : 'assistant.sync.turnOnButton')}
           </button>
         </div>
         <p className="muted assistant-small">{tr('assistant.sync.footnote', { workspace: name })}</p>
@@ -327,10 +435,35 @@ function Section({ saved, onSaved, online }: Props & { online: boolean }) {
         </div>
       </form>
     );
+  } else if (view.kind === 'also') {
+    body = (
+      <form className="assistant-sync-form" onSubmit={also}>
+        <input className="sr-only" type="text" name="username" autoComplete="username" value="Shot Docs assistant key" readOnly tabIndex={-1} aria-hidden="true" />
+        <p className="muted assistant-small">{tr('assistant.sync.alsoText', { other: elsewhere ?? '', workspace: name })}</p>
+        <label className="assistant-field">
+          <span className="pref-label">{tr('assistant.sync.passphrase')}</span>
+          <input ref={currentField} type="password" name="passphrase" autoComplete="current-password" {...PHRASE_FIELD} />
+        </label>
+        <label className="assistant-field">
+          <span className="pref-label">{tr('assistant.sync.repeat')}</span>
+          <input ref={repeatField} type="password" name="passphrase-repeat" autoComplete="current-password" {...PHRASE_FIELD} />
+        </label>
+        <button type="button" className="link" disabled={busy} onClick={() => (setMessage(null), setView({ kind: 'turnOn' }))}>
+          {tr('assistant.sync.useNewPassphrase')}
+        </button>
+        <div className="modal-actions">
+          {back}
+          <button type="submit" className="primary" disabled={disabled}>
+            {tr('assistant.sync.alsoButton')}
+          </button>
+        </div>
+        <p className="muted assistant-small">{tr('assistant.sync.footnote', { workspace: name })}</p>
+      </form>
+    );
   } else if (view.kind === 'stop') {
     body = (
       <>
-        <p>{tr('assistant.sync.stopText', { workspace: name })}</p>
+        <p>{tr(tabOnlyNow ? 'assistant.sync.stopTextTab' : 'assistant.sync.stopText', { workspace: name })}</p>
         <div className="modal-actions">
           {back}
           <button type="button" className="primary danger" disabled={disabled} onClick={stop}>
@@ -348,7 +481,7 @@ function Section({ saved, onSaved, online }: Props & { online: boolean }) {
         <p className="assistant-warning">{view.question}</p>
         <div className="modal-actions">
           <button type="button" disabled={busy} onClick={keepMine}>
-            {tr('assistant.sync.keepMine')}
+            {tr(view.voiceOnly ? 'assistant.sync.keepMyVoice' : 'assistant.sync.keepMine')}
           </button>
           <button type="button" className="primary" disabled={busy} onClick={useIt}>
             {tr('assistant.sync.useIt')}
@@ -377,6 +510,14 @@ function Section({ saved, onSaved, online }: Props & { online: boolean }) {
       <p className="muted assistant-small">{tr('assistant.sync.needKey')}</p>
     ) : off ? (
       <p className="muted assistant-small">{tr('assistant.sync.policyOff')}</p>
+    ) : elsewhere ? (
+      // La clave ya está sincronizada en otro workspace (CS2): acá se puede subir otra copia, con la misma frase.
+      <div className="assistant-row assistant-sync-row">
+        <p className="muted assistant-small">{tr('assistant.sync.elsewhere', { workspace: elsewhere })}</p>
+        <button type="button" disabled={disabled || policy === null} onClick={() => (setMessage(null), setView({ kind: 'also' }))}>
+          {tr('assistant.sync.alsoSync')}
+        </button>
+      </div>
     ) : (
       <div className="assistant-row assistant-sync-row">
         <p className="muted assistant-small">{tr('assistant.sync.onlyHere')}</p>
@@ -389,17 +530,21 @@ function Section({ saved, onSaved, online }: Props & { online: boolean }) {
     body = (
       <>
         <p className="muted assistant-small">{tr('assistant.sync.synced', { workspace: name, date: dateText(meta.updatedAt, tr.lang) })}</p>
-        {saved?.sync?.localChanged && hasLocal && <p className="assistant-warning">{tr('assistant.sync.localChanged')}</p>}
+        {saved?.tabOnly && <p className="muted assistant-small">{tr('assistant.sync.tabOnly')}</p>}
+        {entry.localChanged && hasLocal && <p className="assistant-warning">{tr('assistant.sync.localChanged')}</p>}
         <div className="modal-actions assistant-sync-actions">
           <button type="button" className="link danger" disabled={disabled} onClick={() => (setMessage(null), setView({ kind: 'stop' }))}>
             {tr('assistant.sync.stop')}
+          </button>
+          <button type="button" disabled={disabled} onClick={() => (setMessage(null), setView({ kind: 'change' }))}>
+            {tr('assistant.sync.change')}
           </button>
           {hasLocal && (
             <button type="button" disabled={disabled} onClick={() => (setMessage(null), setView({ kind: 'replace' }))}>
               {tr('assistant.sync.replace')}
             </button>
           )}
-          {saved?.sync?.localChanged && hasLocal && (
+          {entry.localChanged && hasLocal && (
             <button type="button" className="primary" disabled={disabled} onClick={() => (setMessage(null), setView({ kind: 'update' }))}>
               {tr('assistant.sync.update')}
             </button>
@@ -408,7 +553,11 @@ function Section({ saved, onSaved, online }: Props & { online: boolean }) {
       </>
     );
   } else {
-    // Hay copia y este dispositivo no la abrió: se pide la frase.
+    // Hay copia y este dispositivo no la abrió (o cambió desde que la abrió): se pide la frase. *Forgot it?* no se ofrece
+    // si la persona tiene la copia en otro workspace (una fila plantada acá) ni si la copia cambió en otro dispositivo:
+    // pisaría la nueva con la clave de este, que puede ser vieja (quizás la revocada de un dispositivo perdido), aunque
+    // se haya pegado otra a mano alguna vez. Quien perdió la frase nueva usa *Stop syncing* y prende de nuevo, a la vista.
+    const canForget = !elsewhere && !changed;
     body = (
       <form className="assistant-sync-form" onSubmit={unlock}>
         <input className="sr-only" type="text" name="username" autoComplete="username" value="Shot Docs assistant key" readOnly tabIndex={-1} aria-hidden="true" />
@@ -441,13 +590,20 @@ function Section({ saved, onSaved, online }: Props & { online: boolean }) {
             </button>
           </div>
         </div>
-        {!elsewhere && <p className="muted assistant-small">{tr('assistant.sync.forgot')}</p>}
+        <label className="folder-check" data-tip={tr('assistant.sync.keepHereTip')}>
+          <input type="checkbox" checked={keepHere} onChange={(e) => setKeepHere(e.target.checked)} /> {tr('assistant.sync.keepHere')}
+        </label>
+        {canForget && <p className="muted assistant-small">{tr('assistant.sync.forgot')}</p>}
         <div className="modal-actions assistant-sync-actions">
           <button type="button" className="link danger" disabled={disabled} onClick={() => (setMessage(null), setView({ kind: 'stop' }))}>
             {tr('assistant.sync.stop')}
           </button>
-          {!elsewhere && hasLocal && !off && (
-            <button type="button" disabled={disabled} onClick={() => (setMessage(null), setView({ kind: 'turnOn', overwrite: { generation: meta.generation } }))}>
+          {canForget && hasLocal && !off && (
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => (setMessage(null), setView({ kind: 'turnOn', overwrite: { generation: meta.generation, updatedAt: meta.updatedAt } }))}
+            >
               {tr('assistant.sync.newPassphraseButton')}
             </button>
           )}

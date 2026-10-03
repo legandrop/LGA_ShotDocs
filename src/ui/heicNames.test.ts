@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { BlockNoteEditor } from '@blocknote/core';
 import { withCollaboration } from '@blocknote/core/yjs';
+import { yUndoPluginKey } from 'y-prosemirror';
 import { afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import type { FileInfo } from '../media/queue';
@@ -67,5 +68,18 @@ describe('el nombre del bloque de un HEIC convertido', () => {
     const content = editor.document[0].content as { type: string; text?: string; props?: { name: string; url: string; w: number } }[];
     expect(content.map((c) => c.text ?? `${c.props!.name}@${c.props!.w}`)).toEqual(['antes ', 'IMG_0001.jpg@0.5', 'IMG_0002.HEIC@0.5']);
     expect(renameConvertedHeic(editor as unknown as NameEditor, media, A)).toBe(0);
+  });
+});
+
+describe('el renombre es de la app, no de la persona (P.26)', () => {
+  it('no entra en la pila de deshacer', () => {
+    const editor = mount();
+    editor.replaceBlocks(editor.document, [{ type: 'image', props: { url: `sdmedia://${A}`, name: 'IMG_0001.HEIC' } }] as never);
+    const um = (yUndoPluginKey.getState(editor.prosemirrorView!.state as never) as { undoManager: Y.UndoManager }).undoManager;
+    um.clear();
+    um.stopCapturing();
+    const media = { fileInfo: () => info('image/jpeg', 'IMG_0001.jpg') };
+    expect(renameConvertedHeic(editor as unknown as NameEditor, media, A)).toBe(1);
+    expect(um.undoStack).toHaveLength(0);
   });
 });

@@ -445,7 +445,8 @@ En la recorrida no hace falta un paso nuevo (no cambia nada de lo que ya señala
 `src/i18n/lazy/help.ts`, en los dos idiomas), sin `when` ni atajos; las ventanas de `OfflinePart.tsx` cierran con Esc
 (`menusClose` en `shortcutSources.ts`). La recorrida y la práctica no suman nada: el paso del estado de la
 sincronización ya existe, y la práctica no tiene archivos ni base de archivos (solo lee lo marcado, no marca ni libera).
-Cuando llegue la entrega 2 (liberar originales propios), el texto de `storageDevice` tiene que decirlo.
+Con la entrega 2 (liberar originales propios), el texto de `storageDevice` dice que las fotos y los videos agregados
+en el dispositivo también se liberan, con conexión, a los 14 días de subidos y con Drive confirmado.
 
 ## 8. Tamaño y carga
 

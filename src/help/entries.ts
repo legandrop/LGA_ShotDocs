@@ -130,6 +130,8 @@ const PUBLIC_LINK = '0.111';
 const EXPORT_PDF = '0.122';
 /** Exportar como zip (P.22, Doc_Exportar.md, entrega 2): la versión se pone al publicar. */
 const EXPORT_ZIP = '0.129';
+/** Volver a Shot Docs desde un zip exportado (P.22, entrega 3). */
+const IMPORT_ARCHIVE = '0.141';
 /** Las menciones en comentarios (P.21, Doc_Menciones.md, entrega 1): la versión se pone al publicar, igual que en el changelog. */
 const MENTIONS = '0.120';
 /** Menciones, entrega 2: compartir desde la mención, el punto del árbol y el número afuera (la versión la pone quien publica). */
@@ -144,6 +146,8 @@ const ANNOTATE_TOUCH = '0.129';
 const ANNOTATE_COPY = '0.132';
 /** La clave del asistente sincronizada, entrega S1 (Doc_Clave_Sincronizada.md). El número lo pone quien publica. */
 const ASSISTANT_SYNC = '0.138';
+/** La clave sincronizada, entrega S2 (cambiar la frase, computadora prestada, varios workspaces). El número lo pone quien publica. */
+const ASSISTANT_SYNC_S2 = '0.143';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -282,6 +286,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.assistantSync.text',
     words: ['sincronizar', 'frase', 'contraseña', 'dispositivos', 'iphone', 'perdido', 'robado', 'sync', 'passphrase', 'password', 'devices', 'lost', 'stolen', 'sign out other devices', 'cerrar la sesión en los otros dispositivos', 'clave', 'key', 'asistente', 'assistant'],
     since: ASSISTANT_SYNC,
+  },
+  {
+    id: 'assistantSyncMore',
+    section: 'writing',
+    title: 'help.assistantSyncMore.title',
+    text: 'help.assistantSyncMore.text',
+    words: ['cambiar la frase', 'computadora prestada', 'pestaña', 'guardar la clave en este dispositivo', 'otro workspace', 'más vieja', 'voz', 'change passphrase', 'borrowed computer', 'tab', 'keep the key on this device', 'also sync', 'older', 'voice', 'sincronizar', 'sync', 'frase', 'passphrase'],
+    since: ASSISTANT_SYNC_S2,
   },
   {
     id: 'assistantPage',
@@ -592,7 +604,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'find',
     title: 'help.replaceProject.title',
     text: 'help.replaceProject.text',
-    keys: { search: 'search', undo: 'undo' },
+    keys: { search: 'search', undo: 'undo', redo: 'redo' },
     words: ['replace all', 'reemplazar todo', 'find and replace', 'buscar y reemplazar'],
     since: REPLACE_PROJECT,
   },
@@ -738,6 +750,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.exportZip.text',
     words: ['zip', 'archivar', 'archive', 'backup', 'respaldo', 'markdown', 'html', 'originales', 'originals', 'descargar', 'download'],
     since: EXPORT_ZIP,
+  },
+  {
+    id: 'importArchive',
+    section: 'print',
+    title: 'help.importArchive.title',
+    text: 'help.importArchive.text',
+    words: ['importar', 'import', 'zip', 'archivo', 'archive', 'restaurar', 'restore', 'volver', 'proyecto nuevo', 'new project', 'respaldo', 'backup'],
+    since: IMPORT_ARCHIVE,
+    when: 'admin',
   },
 
   // --- Preferencias ---

@@ -11,6 +11,7 @@ import { applyCaption, buildCaptionRequest, captionPlace, cleanCaption } from '.
 import { captionImage, CaptionImageError, type CaptionImage } from './captionImage';
 import { errorText } from './errorText';
 import { readKey } from './keyStore';
+import { isKeyRejected, SyncedKeyHint } from './SyncedKeyHint';
 import type { PhotoRef } from './photoRef';
 import { LANGUAGES } from './prompt';
 import { complete, ProviderError, type ProviderConfig, type Usage } from './providers';
@@ -26,8 +27,8 @@ type Phase =
   | { kind: 'preparing' }
   | { kind: 'running'; text: string }
   | { kind: 'preview'; text: string; linksRemoved: boolean }
-  /** `again`: *Try again* tiene sentido (la foto sigue ahí). */
-  | { kind: 'error'; message: string; again: boolean };
+  /** `again`: *Try again* tiene sentido (la foto sigue ahí); `keyRejected`: el 401, con el botón de la copia sincronizada (S2). */
+  | { kind: 'error'; message: string; again: boolean; keyRejected?: boolean };
 
 /** Dónde se recuerda el idioma del pie (en este dispositivo; una comodidad, no un dato). */
 const LANGUAGE_KEY = 'shotdocs.assistant.captionLanguage';
@@ -154,7 +155,7 @@ export function CaptionSection({ photo, config, email, destination, providerName
       setPhase({ kind: 'preview', text: clean.text, linksRemoved: clean.linksRemoved });
     } catch (err) {
       if (abort.current !== controller) return;
-      setPhase({ kind: 'error', message: captionErrorText(err, providerName, tr), again: true });
+      setPhase({ kind: 'error', message: captionErrorText(err, providerName, tr), again: true, keyRejected: isKeyRejected(err) });
     }
   };
 
@@ -307,6 +308,7 @@ export function CaptionSection({ photo, config, email, destination, providerName
                 {tr('assistant.tryAgain')}
               </button>
             )}
+            <SyncedKeyHint show={!!phase.keyRejected} />
             <button className="link" onClick={() => close()}>
               {tr('assistant.back')}
             </button>

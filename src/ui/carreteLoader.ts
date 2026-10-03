@@ -25,6 +25,8 @@ export interface Preview {
   preview: string | null;
   /** La vista previa es una versión grande guardada en el dispositivo (la nítida), no la miniatura. */
   large?: boolean;
+  /** Se agregó en este dispositivo y su original se liberó (está en Drive): el aviso sin conexión lo dice. */
+  freed?: boolean;
   /**
    * Es un adjunto (un PDF, un zip…; Docs/Doc_Adjuntos.md): el carrete muestra su tarjeta grande con *Open* y
    * *Download*. `preview` es entonces su vista previa (la primera página de un PDF) o, si no tiene, la tarjeta.
@@ -294,7 +296,7 @@ export function createCarreteLoader({ media, files }: { media: Media; files: Fil
       const saved = source.kind === 'image' && !source.original ? ((await media.view?.(id).catch(() => null))?.url ?? null) : null;
       const sharp = media.viewUrl?.(id) ?? saved;
       const preview = sharp ?? thumb ?? (await media.resolve(item.url).catch(() => null));
-      return { kind: source.kind, name: source.name || fallbackName(item), preview, large: !!sharp };
+      return { kind: source.kind, name: source.name || fallbackName(item), preview, large: !!sharp, ...(source.freed ? { freed: true } : {}) };
     }
     if (item.source === 'file') {
       // La imagen entera, guardada en el dispositivo o bajada de Supabase.
