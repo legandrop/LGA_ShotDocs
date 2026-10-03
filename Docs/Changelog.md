@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.145 :
+
+MCP, prueba técnica M0 (P.24). Faltaba saber si el portero puede ser el servidor MCP: nada estaba probado. El portero
+suma `/mcp` y su metadata detrás de la variable `MCP_M0` (apagada: hace lo de antes). Valida el token del servidor
+OAuth de Supabase sin pedidos a la base (ES256 con el JWKS, `client_id` obligatorio), habla la especificación
+2026-07-28 y las anteriores sin sesiones, y deja listo el estado firmado para confirmar con *elicitation*. Las
+herramientas de lectura llaman a funciones `mcp_*` que llegan en M1. El token de un asistente ya no sirve en las demás
+rutas, prendido o apagado. Medido: validar 0,4 ms; leer una página de 16 KB, 8,5 ms en frío. Los pasos con Supabase y
+Cloudflare reales quedan en `Doc_Asistente.md`.
+[ MCP M0 - servidor MCP de prueba en el portero, apagado de fábrica, y rechazo de tokens de asistentes fuera de /mcp ]
+
 v0.144 :
 
 Deshacer en orden (P.26), entrega 2. El reemplazo en todo el proyecto no estaba en ⌘Z: solo se deshacía con *Undo*
