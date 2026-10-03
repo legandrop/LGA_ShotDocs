@@ -11,7 +11,7 @@ import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { saveCollapse } from './collapseStore';
 import { closeFindBar, updateFindUi } from './findUi';
-import { replaceBlocksLeaving, replaceSession } from './replaceUi';
+import { replaceBlocksLeaving, replaceSession, showChanged } from './replaceUi';
 import { Shell } from './Workspace';
 
 // Reemplazar en todo el proyecto, con la app de verdad (el árbol, la base local, el editor y el panel de Ctrl/⌘+K
@@ -354,8 +354,51 @@ describe('reemplazar', () => {
     await until(() => document.querySelector('.notice')?.textContent?.includes('4 replacements in 2 pages'), 'el aviso');
     await until(() => panel()!.querySelector('.replace-recent')?.textContent?.includes('4 in 2 pages'), 'los últimos');
     expect(panel()!.querySelector('.replace-recent')!.textContent).toContain('Last: “camara” → “Z”, 4 in 2 pages');
-    act(() => panel()!.querySelector<HTMLButtonElement>('.replace-recent button')!.click());
+    // Con el mouse, el foco queda en el botón (que se va con el renglón).
+    const last = panel()!.querySelector<HTMLButtonElement>('.replace-recent button')!;
+    act(() => {
+      last.focus();
+      last.click();
+    });
     await until(async () => (await textOf(d, b)).includes('cámaras'), 'deshecho desde el panel');
+    // El foco sigue en el panel (el renglón se fue): Esc lo cierra (P.26, pendiente de la entrega 2).
+    await until(() => panel()!.contains(document.activeElement), 'el foco en el panel');
+    key(document.activeElement!, { key: 'Escape' });
+    expect(panel()).toBeNull();
+    act(() => navigate('/'));
+  });
+
+  it('Show en el aviso de deshacer, si una página había cambiado: lleva a ese bloque', async () => {
+    const { d, a, b } = await app();
+    await openReplace('camara', 'Camera');
+    act(() => replaceAllButton().click());
+    await until(() => panel()!.querySelector('.replace-confirm'), 'la confirmación');
+    const ok = [...panel()!.querySelectorAll<HTMLButtonElement>('.replace-confirm button')].find((x) => x.textContent === 'Replace 4')!;
+    act(() => ok.click());
+    await until(() => document.querySelector('.notice')?.textContent?.includes('4 replacements in 2 pages'), 'el aviso');
+    // Otra persona escribe adentro de lo reemplazado en B (la página no está abierta: van las anclas).
+    const doc = await d.docs.open(b);
+    doc.transact(() => {
+      const walk = (n: Y.XmlElement | Y.XmlFragment | Y.XmlText): void => {
+        if (n instanceof Y.XmlText) {
+          const at = n.toString().indexOf('Cameras');
+          if (at >= 0) n.insert(at + 3, 'XX');
+        } else n.toArray().forEach((c) => walk(c as never));
+      };
+      walk(doc.getXmlFragment(CONTENT_FRAGMENT));
+    }, 'otra-persona');
+    d.docs.close(b);
+    await d.docs.flush();
+    const undo = [...document.querySelectorAll<HTMLButtonElement>('.notice button')].find((x) => x.textContent === 'Undo')!;
+    act(() => undo.click());
+    await until(() => document.querySelector('.notice')?.textContent?.includes('had changed'), 'el aviso de deshacer');
+    const buttons = [...document.querySelectorAll<HTMLButtonElement>('.notice button')].map((x) => x.textContent);
+    expect(buttons).toEqual(['Redo', 'Show', 'OK']);
+    expect(location.pathname).toBe(pagePath(a));
+    act(() => [...document.querySelectorAll<HTMLButtonElement>('.notice button')].find((x) => x.textContent === 'Show')!.click());
+    await until(() => location.pathname === pagePath(b), 'la página que cambió');
+    // El bloque, a la vista (`showChanged` con sus partes, abajo).
+    await until(() => document.querySelector('.editor [data-id="b2"]'), 'el bloque');
     act(() => navigate('/'));
   });
 });
@@ -385,5 +428,38 @@ describe('mientras corre', () => {
     // Terminado: ya no frena.
     expect(replaceBlocksLeaving()).toBe(false);
     expect(document.querySelector('.replace-progress-bar')).toBeNull();
+  });
+});
+
+describe('Show (deshacer un reemplazo con lugares que habían cambiado)', () => {
+  it('va al primero, espera a que el bloque esté y, con más de uno, ofrece Next hasta el último', async () => {
+    const went: string[] = [];
+    const notes: { message: string; next?: () => void }[] = [];
+    let ready = 0;
+    const revealed: string[] = [];
+    const deps = {
+      go: (id: string) => void went.push(id),
+      // El bloque aparece al tercer intento (la página tarda en abrir).
+      reveal: (block: string) => (++ready >= 3 ? (revealed.push(block), true) : false),
+      notify: (message: string, action?: { run: () => void }) => void notes.push({ message, next: action?.run }),
+      waitMs: 2000,
+    };
+    showChanged(
+      [
+        { pageId: 'P1', blockId: 'x' },
+        { pageId: 'P1', blockId: 'x' },
+        { pageId: 'P2', blockId: 'y' },
+      ],
+      deps,
+    );
+    expect(went).toEqual(['P1']);
+    await new Promise((r) => setTimeout(r, 200));
+    expect(revealed).toEqual(['x']);
+    expect(notes.map((n) => n.message)).toEqual(['Changed after the replace, left as it is (1 of 2)']);
+    notes[0].next!();
+    expect(went).toEqual(['P1', 'P2']);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(revealed).toEqual(['x', 'y']);
+    expect(notes[1]).toEqual({ message: 'Changed after the replace, left as it is (2 of 2)', next: undefined });
   });
 });
