@@ -7,7 +7,8 @@ import { useAccessRequests, useServices, useSyncStatus, useTree } from '../servi
 import type { AccessRequest } from '../sync/accessRequests';
 import { labelForEmail } from '../sync/comments';
 import type { InboxSnapshot, MentionItem } from '../sync/mentions';
-import { AccessRequestDialog, AccessRequestRow } from './AccessRequests';
+import { AccessRequestRow } from './AccessRequestRow';
+import { lazyPart, Part } from './lazyPart';
 import { showComments } from './commentsUi';
 import { useFloating } from './menus';
 import { mentionSegments, plainCoda } from './mentionText';
@@ -90,10 +91,19 @@ export function MentionsBell() {
           />,
           document.body,
         )}
-      {reviewing && createPortal(<AccessRequestDialog request={reviewing} onClose={() => setReviewing(null)} />, document.body)}
+      {reviewing &&
+        createPortal(
+          <Part onClose={() => setReviewing(null)}>
+            <AccessRequestDialog request={reviewing} onClose={() => setReviewing(null)} />
+          </Part>,
+          document.body,
+        )}
     </>
   );
 }
+
+// La ventana de decidir se baja la primera vez que se abre (lleva lo de compartir).
+const AccessRequestDialog = lazyPart(() => import('./AccessRequests').then((m) => m.AccessRequestDialog));
 
 function BellIcon({ size = 19 }: { size?: number }) {
   return (

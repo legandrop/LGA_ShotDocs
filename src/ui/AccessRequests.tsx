@@ -1,46 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
-import { locale, useT } from '../i18n';
+import { useT } from '../i18n';
 import { useAccessRequests, useServices, useSyncStatus } from '../services';
 import { GRANT_LEVELS, LEVEL_LABELS, ROLE_LABELS, type GrantLevel } from '../sync/access';
 import type { AccessRequest } from '../sync/accessRequests';
+import { AccessRequestRow, agoText } from './AccessRequestRow';
 import { ShareGateNotes, useShareGate } from './shareGate';
 import { teamErrorText } from './teamText';
 
-// Los pedidos de acceso a un archivo (P.30, entrega 2; Docs/Doc_Links_PDF.md, 5.3): la fila de cada pedido (en la campana
-// y en *Share* de la página) y lo que se decide. Dar acceso es un permiso de los de siempre sobre una página que usa el
-// archivo (la primera donde se agregó, por defecto), *View* por defecto, con el mismo paso previo que *Share* para quien
-// no ve lo borrado (useShareGate). Rechazar es un botón aparte (LF20). Decidir pide red.
-
-/** "5 min ago", "hace 3 h", "Sep 30" (con el formato del idioma). */
-export function agoText(iso: string, lang: Parameters<typeof locale>[0], now = Date.now()): string {
-  const t = Date.parse(iso);
-  if (Number.isNaN(t)) return '';
-  const diff = Math.max(0, now - t);
-  const rtf = new Intl.RelativeTimeFormat(locale(lang), { numeric: 'auto', style: 'short' });
-  if (diff < 60_000) return rtf.format(0, 'minute');
-  if (diff < 3_600_000) return rtf.format(-Math.floor(diff / 60_000), 'minute');
-  if (diff < 86_400_000) return rtf.format(-Math.floor(diff / 3_600_000), 'hour');
-  return new Intl.DateTimeFormat(locale(lang), { month: 'short', day: 'numeric' }).format(t);
-}
-
-/** Una fila: quién pide qué, su rol, cuándo y cuántas veces, y *Review*. */
-export function AccessRequestRow({ request, onReview }: { request: AccessRequest; onReview: () => void }) {
-  const tr = useT();
-  return (
-    <li className="access-request">
-      <span className="access-request-text">
-        <span>{tr('requests.asks', { email: request.email, file: request.fileName || tr('common.untitled') })}</span>
-        <span className="muted small">
-          {tr(ROLE_LABELS[request.role])} · {agoText(request.askedAt, tr.lang)}
-          {request.times > 1 ? ` · ${tr('requests.times', { count: request.times })}` : ''}
-        </span>
-      </span>
-      <button type="button" className="link" onClick={onReview}>
-        {tr('requests.review')}
-      </button>
-    </li>
-  );
-}
+// Los pedidos de acceso a un archivo (P.30, entrega 2; Docs/Doc_Links_PDF.md, 5.3): lo que se decide, desde la campana
+// (en una ventana) y en *Share* de la página. Se baja aparte; la fila de cada pedido está en AccessRequestRow.tsx. Dar
+// acceso es un permiso de los de siempre sobre una página que usa el archivo (la primera donde se agregó, por defecto),
+// *View* por defecto, con el mismo paso previo que *Share* para quien no ve lo borrado (useShareGate). Rechazar es un
+// botón aparte (LF20). Decidir pide red.
 
 /**
  * Decidir un pedido. `pageId`: la página donde se abrió (*Share*), elegida si el archivo está ahí. `onDone`: decidido

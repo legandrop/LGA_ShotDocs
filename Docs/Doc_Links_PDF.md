@@ -1,12 +1,12 @@
 # Links a los archivos en el PDF y *Request access* (P.30)
 
-**Estado: diseño auditado el 2026-10-03 ("aprobado con condiciones" en E1, E2 y E3) y corregido; E1 en programación.**
+**Estado: diseño auditado el 2026-10-03 ("aprobado con condiciones" en E1, E2 y E3) y corregido; E1 hecha (v0.164, sección 16); E2 programada, con su migración sin aplicar (sección 17).**
 Pedido de Lega del 2026-10-03, diseñado contra `main` v0.158. Toca permisos, Row Level Security y privacidad, y suma una
 tabla: **riesgo alto**. Las decisiones ya tomadas por Lega están en "Qué se pide"; las nuevas (LF1 a LF16, sección 10)
 son propuestas con la recomendación tomada; LF17 a LF20 son de Lega, sobre los hallazgos de la auditoría. **Las
 correcciones de la auditoría (sección 15) mandan sobre lo de arriba.**
-La migración de la entrega 2 está en borrador (sección 7), probada contra la base real en una transacción que se
-deshace (sección 9).
+La migración de la entrega 2 es `supabase/migrations/20261031120000_access_requests.sql` (sección 17; el borrador de la
+sección 7 con `schema_version` 22), probada contra la base real en una transacción que se deshace.
 
 ## En corto
 
@@ -965,3 +965,54 @@ adjunto y la de la carpeta (270 × 74 pt, el área de la tarjeta), el cuadro del
 (12 pt de alto) y el de Drive como estaba; la foto, ninguno. La vista de medir y la de imprimir midieron lo mismo (751 px).
 En un perfil limpio, `/f/…#ws=` de un servidor desconocido mostró *Join a workspace?* con el host y **ningún pedido a ese
 Supabase** antes de confirmar; *Not now* volvió a `/`; un `#ws=` roto volvió a `/` con el aviso.
+
+## 17. Cómo quedó la entrega 2 (v0.0XX)
+
+| Pieza | Dónde |
+|---|---|
+| La migración (la tabla y las tres funciones de la sección 7, `schema_version` 22), **sin aplicar** | `supabase/migrations/20261031120000_access_requests.sql` |
+| Su prueba SQL (en `begin … rollback`) | `supabase/tests/access_requests_permisos.sql` |
+| Pedir, la lista, decidir y lo que recuerda el dispositivo de quien pide | `src/sync/accessRequests.ts` (`requestAccess`, `AccessRequestsInbox`, `askedAt`/`rememberAsked`) |
+| Cuándo se pregunta la lista (base en la 22 y un rol que no es invitado) | `accessRequestsEnabled`, prendida desde `src/services.ts` (`accessRequests`) |
+| *Request access* en la pantalla sin acceso (con el aviso de LF19), *You asked for access on…*, la pregunta de fondo cada 60 s | `src/ui/FileScreen.tsx` (`RequestAccess`) |
+| La sección de la campana y su número, la ventana de decidir, los pedidos en *Share* | `src/ui/AccessRequests.tsx`, `src/ui/MentionsBell.tsx`, `src/ui/ShareDialog.tsx` (`ShareRequests`) |
+| La ayuda (*Access requests*) | `src/help/entries.ts`, `src/i18n/lazy/help.ts` |
+| El servidor en memoria con los pedidos | `src/sync/testing.ts` (`requestAccess`, `accessRequestsRemote`) |
+
+**Distinto de lo diseñado o sumado (decidido al programar):**
+
+- **La campana suma los pedidos a su número** (el de la pestaña y el ícono de la app instalada también) y la sección
+  aparece solo si hay alguno: un miembro que no comparte nada no ve una sección vacía.
+- **La lista se pregunta solo con la base en la 22 y para quien no es invitado** (la base igual filtra; esto ahorra la
+  pregunta de cada minuto a un invitado).
+- **Decidir usa el mismo paso previo que *Share*** para quien recibe Ver o Comentar o es invitado (sube lo pendiente
+  antes, con *Retry* / *Share anyway*, y después prepara la base limpia): aceptar es compartir.
+- **En *Share* la decisión se abre ahí mismo** (no una ventana arriba de otra), con la página de *Share* elegida si el
+  archivo está en ella; desde la campana, una ventana con la primera página donde se agregó.
+- **Pedido ya decidido por otro:** la ventana lo dice (*Someone already decided this request…*) y sale de la lista.
+- **La pantalla `/f/` (O7 de la auditoría de E1):** *Close* / *Go to Shot Docs* vuelve a la ruta de la app desde la que
+  se abrió (si se llegó de afuera, al inicio); sin red o con un error, reintenta sola al volver la red; la pregunta de
+  fondo de cada 60 s no muestra *Opening…* ni cambia la pantalla si falla.
+- **El aviso de choque de clave y *Join a workspace?*** siguen con el texto de las invitaciones (O7 c): queda en el
+  roadmap.
+- **Quien pide sin la base migrada** sigue viendo *Ask whoever shared the document with you*; con un link público, igual
+  (sin cuenta no se pide, LF3).
+
+**Pruebas:**
+
+- **SQL, en la base real dentro de una transacción que se deshace** (la migración y la prueba en una sola consulta):
+  pasa entera. **20 mutantes** de las guardas principales: **17 detectados**; los 3 vivos son equivalentes: la lista sin
+  el corte de invitados (`user_can_share_page` ya los deja afuera), decidir sin `member_not_found` (lo tira `share()` con
+  el mismo error) y la tabla sin `enable row level security` (la base de Wanka tiene `rls_auto_enable`, que la prende
+  sola; además el `revoke all` cierra la tabla). El `for update` de decidir no se puede probar con una sola sesión: lo
+  cubre la prueba de «decidir dos veces».
+- **App:** `src/sync/accessRequests.test.ts` (las filas, lo que se manda al decidir, la lista y el dispositivo),
+  `src/ui/accessRequests.test.tsx` (la campana, la ventana y *Share* contra el servidor en memoria: dar acceso, rechazar,
+  ya decidido, sin red, nunca baja), `src/ui/fileScreen.test.tsx` (pedir, el aviso antes, *Cancel*, la base vieja y el
+  link, `has_access`, el tope, la pregunta de fondo, la red que vuelve y *Close*).
+- **O4 de la auditoría de E1:** `http://localhost` en el `#ws=` con la app publicada (`src/fileLinkTake.test.ts` y
+  `src/fileLink.test.ts`) y *Sign in instead* con `leaveLinks()` (`src/ui/linkApp.test.tsx`). El de `alive: false`
+  ya estaba cubierto desde la ronda 1 de E1 (`exportLinks.test.ts`, el link A).
+
+**Versiones viejas:** no hace falta subir `min_app_version`: la migración no cambia nada de lo que usa la versión
+publicada y la app nueva ofrece *Request access* y la lista solo con la base en la 22.
