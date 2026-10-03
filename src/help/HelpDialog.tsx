@@ -7,6 +7,7 @@ import { openInstallDialog, useInstallState } from '../ui/install';
 import { CloseIcon, SearchIcon } from '../ui/icons';
 import { IS_MAC, shortcutLabel, SHORTCUT_PLACES, SHORTCUTS } from '../ui/shortcuts';
 import { HELP_ENTRIES, HELP_SECTIONS, type HelpEntry, type HelpWhen } from './entries';
+import { isNewer, latestOf, markHelpNewsSeen, versionValue } from './news';
 import { searchHelp } from './search';
 import { PLACE_TEXTS, SHORTCUT_TEXTS } from './shortcutTexts';
 
@@ -22,11 +23,15 @@ export interface HelpDialogProps {
   onTour?: () => void;
   /** "Practicar": abre la página de práctica, o la arma de nuevo. */
   onPractice?: () => void;
+  /** "Mostrame" (entrega 3): la práctica con el paso de la recorrida de la entrada (`showMe`), y vuelta. */
+  onShowMe?: (step: string) => void;
+  /** Las novedades: lo que la persona había visto al abrir (`HelpUiState.news`); `null`, sin novedades. */
+  news?: string | null;
 }
 
 const coarse = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
-export function HelpDialog({ section = null, onClose, onTour, onPractice }: HelpDialogProps) {
+export function HelpDialog({ section = null, onClose, onTour, onPractice, onShowMe, news = null }: HelpDialogProps) {
   const tr = useT();
   const [query, setQuery] = useState('');
   const dialog = useRef<HTMLDivElement>(null);
@@ -40,6 +45,11 @@ export function HelpDialog({ section = null, onClose, onTour, onPractice }: Help
   useLayoutEffect(() => {
     if (coarse()) dialog.current?.focus({ preventScroll: true });
     else search.current?.focus({ preventScroll: true });
+  }, []);
+
+  // Al abrir, las novedades quedan vistas: el punto del "?" se va (la lista sigue mientras la ayuda está abierta).
+  useEffect(() => {
+    markHelpNewsSeen(latestOf(HELP_ENTRIES.map((e) => e.since)), __APP_VERSION__);
   }, []);
 
   // Abre en la sección pedida.
@@ -84,19 +94,28 @@ export function HelpDialog({ section = null, onClose, onTour, onPractice }: Help
       openInstallDialog();
     },
   };
-  const renderEntry = (entry: HelpEntry, withSection = false) => (
+  const isNew = (entry: HelpEntry) => news !== null && isNewer(entry.since, news);
+  const renderEntry = (entry: HelpEntry, withSection = false, key = entry.id) => (
     <HelpEntryView
-      key={entry.id}
+      key={key}
       entry={entry}
       tr={tr}
       reason={entry.when ? unavailable(entry.when) : null}
       sectionLabel={withSection ? tr(HELP_SECTIONS.find((s) => s.id === entry.section)!.title) : null}
       onAction={entry.action ? actions[entry.action] : undefined}
+      onShowMe={entry.showMe && onShowMe ? () => onShowMe(entry.showMe!) : undefined}
+      fresh={isNew(entry)}
     />
   );
   // Las entradas con botón solo si el botón existe (antes de la recorrida, no se ofrecen).
   const visible = HELP_ENTRIES.filter((e) => !e.action || actions[e.action]);
   const sections = HELP_SECTIONS.filter((s) => s.id === 'keys' || visible.some((e) => e.section === s.id));
+  // Las novedades, arriba de todo: lo más nuevo primero (las de la misma versión, en el orden de la ayuda).
+  const fresh = visible
+    .map((e, i) => ({ e, i }))
+    .filter(({ e }) => isNew(e))
+    .sort((a, b) => versionValue(b.e.since) - versionValue(a.e.since) || a.i - b.i)
+    .map(({ e }) => e);
 
   return (
     <div className="modal-backdrop help-backdrop" onClick={onClose}>
@@ -130,6 +149,11 @@ export function HelpDialog({ section = null, onClose, onTour, onPractice }: Help
         <div className="help-body">
           {!query && (
             <nav className="help-index" aria-label={tr('help.index')}>
+              {fresh.length > 0 && (
+                <button className="help-index-news" onClick={() => goTo('news')}>
+                  {tr('help.section.news')}
+                </button>
+              )}
               {sections.map((s) => (
                 <button key={s.id} onClick={() => goTo(s.id)}>
                   {tr(s.title)}
@@ -149,13 +173,22 @@ export function HelpDialog({ section = null, onClose, onTour, onPractice }: Help
                 </p>
               )
             ) : (
-              sections.map((s) => (
-                <section key={s.id} className="help-section" data-help-section={s.id} aria-labelledby={`help-sec-${s.id}`}>
-                  <h3 id={`help-sec-${s.id}`}>{tr(s.title)}</h3>
-                  {visible.filter((e) => e.section === s.id).map((e) => renderEntry(e))}
-                  {s.id === 'keys' && <ShortcutTable tr={tr} phone={phone} />}
-                </section>
-              ))
+              <>
+                {fresh.length > 0 && (
+                  <section className="help-section help-news" data-help-section="news" aria-labelledby="help-sec-news">
+                    <h3 id="help-sec-news">{tr('help.section.news')}</h3>
+                    <p className="muted help-news-intro">{tr('help.newsIntro')}</p>
+                    {fresh.map((e) => renderEntry(e, true, `news-${e.id}`))}
+                  </section>
+                )}
+                {sections.map((s) => (
+                  <section key={s.id} className="help-section" data-help-section={s.id} aria-labelledby={`help-sec-${s.id}`}>
+                    <h3 id={`help-sec-${s.id}`}>{tr(s.title)}</h3>
+                    {visible.filter((e) => e.section === s.id).map((e) => renderEntry(e))}
+                    {s.id === 'keys' && <ShortcutTable tr={tr} phone={phone} />}
+                  </section>
+                ))}
+              </>
             )}
           </div>
         </div>
@@ -185,25 +218,44 @@ function HelpEntryView({
   reason,
   sectionLabel,
   onAction,
+  onShowMe,
+  fresh,
 }: {
   entry: HelpEntry;
   tr: Translate;
   reason: string | null;
   sectionLabel: string | null;
   onAction?: () => void;
+  onShowMe?: () => void;
+  /** Novedad desde la última vez que la persona abrió la ayuda. */
+  fresh: boolean;
 }) {
   const params: Record<string, ReactNode> = {};
   for (const [name, id] of Object.entries(entry.keys ?? {})) params[name] = <kbd>{shortcutLabel(id, IS_MAC, tr.lang)}</kbd>;
+  const action = onAction && !reason;
+  const showMe = onShowMe && !reason;
   return (
-    <article className={`help-entry${reason ? ' off' : ''}`} data-help-id={entry.id}>
+    <article className={`help-entry${reason ? ' off' : ''}${fresh ? ' fresh' : ''}`} data-help-id={entry.id}>
       {sectionLabel && <span className="mono-label help-entry-section">{sectionLabel}</span>}
-      <h4>{tr(entry.title)}</h4>
+      <h4>
+        {tr(entry.title)}
+        {fresh && <span className="help-new">{tr('help.new')}</span>}
+      </h4>
       <p>{tr.rich(entry.text, params)}</p>
       {reason && <p className="help-reason">{entry.when === 'notInstalled' ? reason : tr('help.unavailable', { reason })}</p>}
-      {onAction && !reason && (
-        <button className="secondary help-action" onClick={onAction}>
-          {entry.action === 'tour' ? tr('help.tour.action') : entry.action === 'install' ? tr('help.install.action') : tr('help.practice.action')}
-        </button>
+      {(action || showMe) && (
+        <div className="help-buttons">
+          {action && (
+            <button className="secondary help-action" onClick={onAction}>
+              {entry.action === 'tour' ? tr('help.tour.action') : entry.action === 'install' ? tr('help.install.action') : tr('help.practice.action')}
+            </button>
+          )}
+          {showMe && (
+            <button className="secondary help-show-me" onClick={onShowMe}>
+              {tr('help.showMe.action')}
+            </button>
+          )}
+        </div>
       )}
     </article>
   );

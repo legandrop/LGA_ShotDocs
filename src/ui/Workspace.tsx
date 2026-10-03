@@ -38,7 +38,7 @@ import { DeletedProjectsList, HelpDialog, ImportArchiveDialog, ImportCodaDialog,
 import { closeHelp, useHelpUi } from '../help/helpUi';
 import { openPractice } from '../tutorial/practiceUi';
 import { TourHost } from '../tutorial/TourHost';
-import { startTour } from '../tutorial/tourState';
+import { showStep, startTour } from '../tutorial/tourState';
 import { setNavOpen, useNavOpen } from './navStore';
 import { canSeeHistory, closeHistory, historyOpen, isHistoryShortcut, openHistory, useHistoryUi } from './historyUi';
 import { useHistoryCachePruning } from './historyCachePrune';
@@ -572,6 +572,11 @@ function HelpHost() {
         onPractice={() => {
           closeHelp();
           openPractice();
+        }}
+        news={help.news}
+        onShowMe={(step) => {
+          closeHelp();
+          showStep(step);
         }}
       />
     </Part>

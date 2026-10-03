@@ -156,7 +156,8 @@ In production (v0.049). What works today:
 - Help and a guided tour: the "?" at the bottom of the sidebar (or *Help and shortcuts* in the account menu)
   explains every feature and lists every keyboard shortcut, with a search box. The first time someone signs in,
   a two-minute tour with Next walks through the app on a practice page that is never saved or synced; it can be
-  replayed, and the practice page reopened, from the help.
+  replayed, and the practice page reopened, from the help. *Show me* on an entry opens the practice page at just
+  that step and brings you back; a dot on the "?" means there is something new, listed under *What's new*.
 - Assistant (account menu → *Assistant…*): choose Anthropic, OpenAI, Google Gemini or an OpenAI-compatible service,
   paste your API key and pick a model from your provider's list. The key is stored encrypted on that device and sent
   only to that provider. *Sync across my devices* encrypts it on the device with a six-word passphrase the app proposes

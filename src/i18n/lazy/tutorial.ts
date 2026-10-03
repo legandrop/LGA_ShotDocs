@@ -38,6 +38,10 @@ export const tutorial = {
   'tour.invite': { en: "First time here? A two-minute tour", es: "¿Primera vez? Recorrida de 2 minutos" },
   'tour.start': { en: "Start", es: "Empezar" },
   'tour.notNow': { en: "Not now", es: "Ahora no" },
+  // "Mostrame" de la ayuda (entrega 3): un solo paso, y vuelta a donde estaba la persona.
+  'tour.showMe': { en: "Show me", es: "Mostrame" },
+  'tour.done': { en: "Done", es: "Listo" },
+  'tour.liveShowMe': { en: "Show me: {title}", es: "Mostrame: {title}" },
 
   // --- Los pasos (src/tutorial/steps.ts) ---
   'tour.hello.title': { en: "Hi!", es: "¡Hola!" },

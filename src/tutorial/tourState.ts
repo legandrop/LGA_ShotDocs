@@ -1,5 +1,7 @@
-import { useSyncExternalStore } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { helpSeen, useHelpUi } from '../help/helpUi';
+import { checkHelpNews, useHelpNews } from '../help/news';
+import { navigate, PRACTICE_PATH } from '../router';
 
 // El estado de la recorrida (Docs/Doc_Tutorial.md, sección 4, "Cuándo aparece y dónde se guarda que ya se vio"). Va
 // en la primera carga y es chico: decidir si arranca, el punto del "?" y las señales de la práctica. El motor
@@ -59,6 +61,11 @@ export interface TourUi {
   step: number;
   /** Sube al empezar o al seguir: la recorrida lleva a la práctica (si la persona se fue, queda en pausa). */
   nonce: number;
+  /**
+   * "Mostrame" de la ayuda (entrega 3): un solo paso, `id`, en la práctica. Al terminar se vuelve a `back` (la
+   * dirección donde estaba la persona; `null` si ya estaba en la práctica). No cuenta como recorrida vista ni a medias.
+   */
+  only?: { id: string; back: string | null };
 }
 
 let ui: TourUi = { mode: 'off', step: 0, nonce: 0 };
@@ -108,6 +115,24 @@ export function decideStart(f: StartFacts): TourMode {
   return 'running';
 }
 
+/**
+ * "Mostrame" (entrega 3): la práctica con un solo paso de la recorrida, el `id` de una entrada de la ayuda (`showMe`).
+ * No toca lo guardado de la recorrida entera (ni vista, ni a medias). Al terminar, vuelve a donde estaba la persona.
+ */
+export function showStep(id: string): void {
+  const here = location.pathname + location.search;
+  const back = here === PRACTICE_PATH ? null : here;
+  set({ mode: 'running', step: 0, nonce: ui.nonce + 1, only: { id, back } });
+  navigate(PRACTICE_PATH);
+}
+
+/** Termina "Mostrame": vuelve a donde estaba la persona (sin que Atrás del navegador la deje en la práctica). */
+export function endShowStep(): void {
+  const back = ui.only?.back ?? null;
+  if (ui.mode !== 'off') set({ mode: 'off', step: 0, nonce: ui.nonce });
+  if (back && location.pathname === PRACTICE_PATH) navigate(back, true);
+}
+
 /** Arranca la recorrida desde el paso 1 (la ayuda la ofrece siempre; Docs/Doc_Tutorial.md, sección 4). */
 export function startTour(step = 0): void {
   writeDeviceTour({ ...readDeviceTour(), done: false, step });
@@ -116,7 +141,7 @@ export function startTour(step = 0): void {
 
 /** Sigue una recorrida a medias (la tarjeta de retomar o la de pausa), en el paso guardado. */
 export function continueTour(): void {
-  startTour(ui.mode === 'running' ? ui.step : (readDeviceTour().step ?? 0));
+  startTour(ui.mode === 'running' && !ui.only ? ui.step : (readDeviceTour().step ?? 0));
 }
 
 /** Muestra una tarjeta (retomar o la de primera vez) sin empezar nada. */
@@ -158,12 +183,29 @@ export async function syncAccountMark(): Promise<void> {
   if (await markAccount().catch(() => false)) writeDeviceTour({ ...readDeviceTour(), account: true });
 }
 
-/** El punto del "?": hay una recorrida para ver (nunca terminada acá) y la ayuda nunca se abrió en el dispositivo. */
-export function useHelpDot(): boolean {
+/**
+ * El punto del "?": hay una recorrida para ver (nunca terminada acá) y la ayuda nunca se abrió en el dispositivo, o
+ * hay novedades en la ayuda (entrega 3). `news` dice cuál de las dos (para el nombre del botón).
+ */
+export function useHelpDot(): { dot: boolean; news: boolean } {
   useHelpUi();
   const { mode } = useTourUi();
-  return mode === 'off' && !readDeviceTour().done && !helpSeen();
+  const news = useHelpNews();
+  // Una vez por carga: si la app cambió de versión, se cuentan las novedades (las entradas se bajan con la ayuda).
+  useEffect(() => {
+    if (newsChecked) return;
+    newsChecked = true;
+    const run = () => void checkHelpNews(__APP_VERSION__, () => import('../help/entries').then((m) => m.HELP_ENTRIES.map((e) => e.since)));
+    // Cuando el navegador está libre: la primera carga no espera a la ayuda.
+    const idle = (globalThis as { requestIdleCallback?: (fn: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+    if (idle) idle(run, { timeout: 4000 });
+    else setTimeout(run, 1500);
+  }, []);
+  return { dot: news || (mode === 'off' && !readDeviceTour().done && !helpSeen()), news };
 }
+
+/** Las novedades se cuentan una vez por carga de la app. */
+let newsChecked = false;
 
 // --- Señales entre la práctica y la recorrida (las dos se bajan aparte) -----------------------------------
 

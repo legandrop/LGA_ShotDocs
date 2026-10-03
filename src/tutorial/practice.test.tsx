@@ -166,7 +166,8 @@ async function snapshot(h: Harness) {
     commentsQueue: d.comments.status().pending,
     unsaved: d.docs.hasUnsavedEdits() || d.tree.hasUnsavedWrites() || d.media.hasUnsavedWrites() || d.comments.hasUnsavedWrites(),
     storage: Object.keys(localStorage)
-      .filter((k) => k !== 'shotdocs-expanded')
+      // Las novedades de la ayuda se cuentan al abrir la app, cuando el navegador está libre (no es la práctica).
+      .filter((k) => k !== 'shotdocs-expanded' && k !== 'shotdocs-help-news')
       .sort()
       .map((k) => `${k}=${localStorage.getItem(k)}`),
   };

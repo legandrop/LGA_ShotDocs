@@ -1,6 +1,6 @@
 # Tutorial animado y ayuda (P.13)
 
-Estado: **entregas 1 y 2 hechas (v0.082); la 3 ("Mostrame" y novedades), pendiente.** "Cómo quedó" (al final)
+Estado: **las tres entregas hechas (1 y 2 en v0.082; la 3, "Mostrame" y novedades, en v0.0XX).** "Cómo quedó" (al final)
 dice lo que se hizo y en qué se apartó del diseño; "Correcciones de la auditoría" manda sobre lo anterior. **Lega
 respondió las preguntas el 2026-09-30** ("Decisiones"). Las fotos del ejemplo quedaron dibujadas para la app (ver
 "Cómo quedó"); falta que Lega diga si se cambian por fotos de la lista. Lo
@@ -816,6 +816,95 @@ Shift+clic (el mapa vive en su documento, que no se guarda). La recorrida no mue
 - **Falta probar a mano:** Safari de la Mac, el iPhone (Safari y la app instalada, con el teclado en pantalla en el
   paso del menú "/"), Firefox y VoiceOver. La prueba de punta a punta `tour.mjs` del repo de pruebas privado todavía
   no está.
+
+## Cómo quedó (entrega 3, v0.0XX)
+
+### "Mostrame"
+
+- **Qué hace:** cada entrada con `showMe` (16, en `src/help/entries.ts`) tiene *Show me* / *Mostrame*. Cierra la
+  ayuda, abre `/practice` y muestra **solo ese paso** de la recorrida, con el mismo foco de luz y globito; el globito
+  dice *Show me* en lugar de "3/10" y tiene un solo botón, *Done* / *Listo*. *Done*, Esc, → o Enter terminan y
+  **vuelven a la dirección donde estaba la persona** (con `replace`, así Atrás del navegador no la deja en la
+  práctica); si ya estaba en la práctica, se queda ahí.
+- **Estado:** `showStep(id)` y `endShowStep()` en `src/tutorial/tourState.ts` (`TourUi.only = { id, back }`). No
+  escribe `shotdocs-tour` ni la marca de la cuenta: no cuenta como recorrida vista ni a medias. El componente
+  `ShowMe` de `TourLayer.tsx` reusa `StepView` con `single`.
+- **Diferencias con la recorrida entera:** vale en los dos diseños (en el teléfono también el paso de Buscar, que la
+  recorrida saltea); en el paso del menú "/" elegir algo no lo termina (queda a la vista lo que pasó; termina con
+  *Done*); si la persona se va de la práctica a mitad, se termina sin la tarjeta de pausa.
+- **La práctica no se vuelve a armar** al entrar con *Show me*: lo que la persona hizo ahí sigue (decisión E3-2, abajo).
+  Si borró el bloque que señala el paso, el globito va centrado, como en la recorrida.
+- **Entradas con paso:** `pagesTree` y `pagesArrange` (árbol), `projects` y `findProject` (selector), `slash` y
+  `blocks` (menú "/"), `photosOpen`, `photosInline` y `photosRows` (fotos), `comments` y `questions` (comentarios),
+  `findPage` (lupa), `share`, `sheets` y `pdf` (menú ⋯), `syncStatus` (sincronización). Una prueba exige que cada paso
+  de la recorrida (salvo el saludo y el del "?") tenga al menos una entrada.
+- **Arreglo de paso:** si un paso se dibujaba en el mismo cambio en que se cerraba un diálogo (la ayuda), quedaba
+  escondido para siempre (`useModalOpen` miraba el DOM antes de que el diálogo se fuera y no volvía a mirar). Ahora
+  mira de nuevo al montarse. El paso del menú "/" espera hasta 3 s a que el editor de la práctica esté para poner el
+  cursor (antes, entrando directo a ese paso, no lo ponía).
+
+### Novedades
+
+- **Qué hace:** cuando hay entradas con un `since` más nuevo que lo que la persona vio la última vez, el "?" lleva el
+  punto (y su nombre pasa a *Help and shortcuts: what's new*). Al abrir la ayuda, arriba de todo, *What's new* /
+  *Novedades* las lista (lo más nuevo primero) y cada una dice *New* / *Nuevo* también en su sección; el índice suma
+  la entrada. Al abrirla quedan vistas: el punto se va, y la lista sigue mientras la ayuda está abierta (la toma
+  `openHelp` en `HelpUiState.news`). Cerrar y volver a abrir ya no la muestra.
+- **Dónde se guarda:** `src/help/news.ts`, en la primera carga (chico). `localStorage` `shotdocs-help-news =
+  { seen, latest, app }`, una clave por dispositivo para todos los workspaces, como la recorrida (decisión E3-1).
+- **Cómo se cuenta sin bajar la ayuda en cada arranque:** el punto solo necesita el `since` más nuevo. Una vez por
+  versión de la app (`app` distinto de `__APP_VERSION__`), cuando el navegador está libre, se baja `entries.ts` (la
+  parte de la ayuda) y se anota `latest`. La primera vez (nada guardado), lo de hoy cuenta como visto: a alguien nuevo,
+  o a quien ya usaba la app al publicarse esto, no se le marcan 80 entradas como nuevas (decisión E3-3).
+- **`since`:** una versión publicada (`0.154`) o, sin publicar, `0.0XX` (con X: la cuenta como lo más nuevo; quien
+  publica pone el número). `news.ts` reconoce la forma, no el texto exacto, así el reemplazo al publicar no la toca.
+  Un "visto" sin publicar (una versión de prueba en el mismo navegador) no frena las novedades publicadas. Una ayuda
+  vieja en otra pestaña nunca hace retroceder lo visto.
+- **Funciones que cambiaron después de su entrada:** su entrada sube a la versión del cambio, como hizo `attach` con
+  la vista previa: `undo` a 0.152 (deshacer en orden, anotar como un paso), `title` a 0.152 (500 caracteres) y
+  `findPage` a 0.130 (abre lo colapsado). Es la costumbre para las tandas que vienen: si cambia algo que el usuario
+  nota, se sube el `since` de su entrada.
+
+### Entradas nuevas
+
+Relevadas contra el changelog de v0.083 a v0.154: casi todas las funciones visibles ya tenían su entrada. Faltaban:
+
+- `news` (*What's new*) y `showMe` (*Show me*), en Primeros pasos.
+- `driveConnect` (*Connect Google Drive*), en Archivos adjuntos, `when: 'owner'` (el primer uso de ese `when`): el
+  ítem *Google Drive* del menú de la cuenta, estado, *Reconnect*, la carpeta `LGA_ShotDocs` (*Choose folder…*, *Use My
+  Drive root*) y el espacio en Drive. `since` antes de la ayuda: la función es vieja.
+
+Sin entrada a propósito: el nombre del árbol a todo el ancho (v0.154, solo aspecto), los arreglos internos de
+carpetas, compactar y las subidas que se traban, y *Import from Coda* (solo la cuenta de Lega).
+
+### Pruebas (entrega 3)
+
+- `src/help/news.test.tsx`: las versiones (números, sin publicar, lo que no se entiende), cada `since` válido, cada
+  atajo que nombra una entrada está en el registro, cada `showMe` es un paso y cada paso tiene su entrada; las
+  novedades en el dispositivo (la primera vez nada, una versión nueva prende el punto y abrir lo apaga, una ayuda vieja
+  no retrocede, un visto sin publicar, sin red, almacenamiento roto); en el Shell: el punto con su nombre, la lista
+  arriba con *New* (lo más nuevo primero), que se apaga y no vuelve, en castellano; *Show me* de **cada** entrada abre
+  su paso (título, *Show me*, un solo botón, `aria-live`) y *Done* vuelve a la página, sin tocar `shotdocs-tour`; Esc
+  vuelve; elegir en el menú "/" no lo cierra; irse lo termina sin pausa; desde la práctica se queda.
+- En Chromium sin ventana (arnés fuera del repo, con el servidor en memoria): la ayuda con novedades en computadora y
+  teléfono (375 px), *Show me* de cada entrada en los dos, *Done* y Esc, y el foco de luz sobre su ancla.
+
+### Decisiones de esta entrega (sin Lega)
+
+- **E3-1. Dónde se guarda lo visto:** por dispositivo (como la recorrida), no en la cuenta. Opciones: la cuenta
+  (metadatos de Supabase Auth, por workspace: otro workspace volvería a mostrar lo mismo, y pide red) o el dispositivo.
+  Se eligió el dispositivo: no toca nada del workspace y anda sin red; en otro dispositivo las novedades se ven una vez
+  más, que es poco.
+- **E3-2. *Show me* no rearma la práctica:** rearmarla borraría lo que la persona estaba probando. Si falta el bloque
+  señalado, el paso va centrado.
+- **E3-3. Desde cuándo se cuenta:** desde la primera vez que la app con esta entrega abre en el dispositivo. Contar
+  desde v0.082 marcaría unas 50 entradas como nuevas a quien ya usa la app.
+
+### Falta (para Lega)
+
+- Elegir las fotos del ejemplo (siguen las dibujadas).
+- Probar en Safari de la Mac, el iPhone (Safari y la app instalada) y VoiceOver: *Show me* en el teléfono (el paso de
+  Buscar y los del cajón) y el punto de novedades después de una actualización real.
 
 ## Entradas esperando la ayuda
 

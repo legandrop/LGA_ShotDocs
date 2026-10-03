@@ -60,11 +60,13 @@ export interface HelpEntry {
   words?: string[];
   /** Lo que hace el botón de la entrada (la recorrida, la práctica). */
   action?: 'tour' | 'practice' | 'install';
-  /** El paso de la recorrida que la muestra (para "Mostrame", entrega 3). */
+  /** El paso de la recorrida que la muestra ("Mostrame", entrega 3): un id de `TOUR_STEPS` (src/tutorial/steps.ts). */
   showMe?: string;
   /**
-   * La versión de la app que la trajo (para las novedades, entrega 3). Lo que ya estaba antes de la ayuda lleva
-   * `BEFORE_HELP`: las novedades se cuentan desde la primera vez que se abre la ayuda.
+   * La versión de la app que la trajo (para las novedades, entrega 3; src/help/news.ts). Lo que ya estaba antes de la
+   * ayuda lleva `BEFORE_HELP`. Cuando una función cambia algo que el usuario nota, su entrada sube a la versión del
+   * cambio (así sale en las novedades, como `attach` con la vista previa). Sin publicar, `0.0XX`: quien publica pone
+   * el número.
    */
   since: string;
   when?: HelpWhen;
@@ -154,11 +156,35 @@ const ANNOTATE_COPY = '0.132';
 const ASSISTANT_SYNC = '0.138';
 /** La clave sincronizada, entrega S2 (cambiar la frase, computadora prestada, varios workspaces). El número lo pone quien publica. */
 const ASSISTANT_SYNC_S2 = '0.143';
+/** Buscar en la página abre las secciones colapsadas que esconden coincidencias (D11). */
+const FIND_COLLAPSED = '0.130';
+/** Deshacer en el orden en que editaste, con anotar una foto como un paso (P.26, entrega 3). */
+const UNDO_ORDER = '0.152';
+/** El título de hasta 500 caracteres, lo que sobra va a la página (v0.152). */
+const TITLE_LONG = '0.152';
+/** "Mostrame", las novedades y la entrada de Google Drive (Doc_Tutorial.md, entrega 3): el número lo pone quien publica. */
+const HELP_3 = '0.0XX';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
   { id: 'tour', section: 'start', title: 'help.tour.title', text: 'help.tour.text', action: 'tour', since: HELP },
   { id: 'practice', section: 'start', title: 'help.practice.title', text: 'help.practice.text', action: 'practice', since: HELP },
+  {
+    id: 'news',
+    section: 'start',
+    title: 'help.news.title',
+    text: 'help.news.text',
+    words: ['novedades', 'nuevo', 'qué hay de nuevo', 'punto', 'actualización', "what's new", 'new', 'dot', 'update', 'changes'],
+    since: HELP_3,
+  },
+  {
+    id: 'showMe',
+    section: 'start',
+    title: 'help.showMe.title',
+    text: 'help.showMe.text',
+    words: ['mostrame', 'mostrar', 'práctica', 'ejemplo', 'show me', 'practice', 'example', 'tour', 'recorrida'],
+    since: HELP_3,
+  },
   {
     id: 'install',
     section: 'start',
@@ -172,7 +198,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
 
   // --- Páginas y proyectos ---
   { id: 'pagesTree', section: 'pages', title: 'help.pagesTree.title', text: 'help.pagesTree.text', showMe: 'pages', since: BEFORE_HELP },
-  { id: 'pagesArrange', section: 'pages', title: 'help.pagesArrange.title', text: 'help.pagesArrange.text', since: BEFORE_HELP },
+  { id: 'pagesArrange', section: 'pages', title: 'help.pagesArrange.title', text: 'help.pagesArrange.text', showMe: 'pages', since: BEFORE_HELP },
   {
     id: 'pagesKeys',
     section: 'pages',
@@ -183,7 +209,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     since: BEFORE_HELP,
   },
   { id: 'pagesTitles', section: 'pages', title: 'help.pagesTitles.title', text: 'help.pagesTitles.text', since: BEFORE_HELP },
-  { id: 'title', section: 'pages', title: 'help.title.title', text: 'help.title.text', keys: { enter: 'titleEnter' }, since: BEFORE_HELP },
+  { id: 'title', section: 'pages', title: 'help.title.title', text: 'help.title.text', keys: { enter: 'titleEnter' }, since: TITLE_LONG },
   {
     id: 'templates',
     section: 'pages',
@@ -231,6 +257,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     title: 'help.blocks.title',
     text: 'help.blocks.text',
     keys: { up: 'moveUp', down: 'moveDown', indent: 'indent', outdent: 'outdent' },
+    showMe: 'slash',
     since: BEFORE_HELP,
   },
   {
@@ -267,7 +294,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     since: BEFORE_HELP,
   },
   { id: 'script', section: 'writing', title: 'help.script.title', text: 'help.script.text', keys: { script: 'script' }, more: ['scriptEnter'], since: BEFORE_HELP },
-  { id: 'undo', section: 'writing', title: 'help.undo.title', text: 'help.undo.text', keys: { undo: 'undo', redo: 'redo' }, more: ['selectAll'], since: BEFORE_HELP },
+  { id: 'undo', section: 'writing', title: 'help.undo.title', text: 'help.undo.text', keys: { undo: 'undo', redo: 'redo' }, more: ['selectAll'], since: UNDO_ORDER },
   {
     id: 'assistant',
     section: 'writing',
@@ -397,6 +424,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     keys: { select: 'photoInlineSelect', delete: 'photoDelete' },
     more: ['photoInlineType', 'photoOpen'],
     words: ['shift', 'clic', 'click', 'arrastrar', 'drag', 'elegir', 'select'],
+    showMe: 'practice-photos',
     since: BEFORE_HELP,
   },
   {
@@ -415,6 +443,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.photosRows.text',
     keys: { next: 'photoRowNext', prev: 'photoRowPrev', leave: 'photoRowLeave', enter: 'photoRowEnter' },
     more: ['photoInlineSelect', 'photoInlineType'],
+    showMe: 'practice-photos',
     since: BEFORE_HELP,
   },
   {
@@ -503,6 +532,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
   { id: 'photosOffline', section: 'photos', title: 'help.photosOffline.title', text: 'help.photosOffline.text', since: BEFORE_HELP },
 
   // --- Adjuntos y links de Drive ---
+  {
+    id: 'driveConnect',
+    section: 'attachments',
+    title: 'help.driveConnect.title',
+    text: 'help.driveConnect.text',
+    when: 'owner',
+    words: ['google drive', 'drive', 'conectar', 'connect', 'reconectar', 'reconnect', 'carpeta', 'folder', 'LGA_ShotDocs', 'espacio', 'space', 'dueño', 'owner'],
+    since: BEFORE_HELP,
+  },
   {
     id: 'attach',
     section: 'attachments',
@@ -600,7 +638,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     when: 'admin',
     since: MENTIONS_SHARE,
   },
-  { id: 'questions', section: 'comments', title: 'help.questions.title', text: 'help.questions.text', keys: { question: 'question' }, since: BEFORE_HELP },
+  { id: 'questions', section: 'comments', title: 'help.questions.title', text: 'help.questions.text', keys: { question: 'question' }, showMe: 'comments', since: BEFORE_HELP },
 
   // --- Buscar ---
   {
@@ -610,7 +648,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.findPage.text',
     keys: { find: 'find', next: 'findNext', prev: 'findPrev', close: 'findClose' },
     showMe: 'find',
-    since: BEFORE_HELP,
+    since: FIND_COLLAPSED,
   },
   {
     id: 'findProject',
@@ -619,6 +657,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.findProject.text',
     keys: { search: 'search' },
     more: ['listPick', 'listClose'],
+    showMe: 'project-switcher',
     since: BEFORE_HELP,
   },
   {
@@ -654,7 +693,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
   { id: 'collapsePrint', section: 'collapse', title: 'help.collapsePrint.title', text: 'help.collapsePrint.text', since: BEFORE_HELP },
 
   // --- Compartir ---
-  { id: 'share', section: 'sharing', title: 'help.share.title', text: 'help.share.text', since: BEFORE_HELP },
+  { id: 'share', section: 'sharing', title: 'help.share.title', text: 'help.share.text', showMe: 'page-menu', since: BEFORE_HELP },
   { id: 'members', section: 'sharing', title: 'help.members.title', text: 'help.members.text', when: 'admin', since: BEFORE_HELP },
   {
     id: 'publicLink',
@@ -771,7 +810,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
   },
 
   // --- Hojas y PDF ---
-  { id: 'sheets', section: 'print', title: 'help.sheets.title', text: 'help.sheets.text', since: BEFORE_HELP },
+  { id: 'sheets', section: 'print', title: 'help.sheets.title', text: 'help.sheets.text', showMe: 'page-menu', since: BEFORE_HELP },
   {
     id: 'pageBreak',
     section: 'print',

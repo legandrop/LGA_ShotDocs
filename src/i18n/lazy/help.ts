@@ -40,6 +40,14 @@ export const help = {
   'help.section.print': { en: "Sheets, PDF and printing", es: "Hojas, PDF e impresión" },
   'help.section.prefs': { en: "Preferences", es: "Preferencias" },
   'help.section.keys': { en: "Keyboard shortcuts", es: "Atajos de teclado" },
+  // Las novedades (entrega 3): arriba de todo, solo cuando hay algo nuevo desde la última vez.
+  'help.section.news': { en: "What's new", es: "Novedades" },
+  'help.newsIntro': {
+    en: "New or changed since you last opened the help.",
+    es: "Lo nuevo o cambiado desde la última vez que abriste la ayuda.",
+  },
+  'help.new': { en: "New", es: "Nuevo" },
+  'help.showMe.action': { en: "Show me", es: "Mostrame" },
 
   // --- Los lugares de la tabla de atajos ---
   'help.place.global': { en: "Anywhere (with a page open)", es: "En toda la app (con una página abierta)" },
@@ -73,6 +81,16 @@ export const help = {
     es: "Instalar la app, en el menú de la cuenta (o Instalar en el aviso del teléfono), muestra los pasos para tu dispositivo: iPhone y iPad, Android o computadora. Instalada, Shot Docs se abre desde la pantalla de inicio en su propia ventana; en el iPhone guarda sus datos aparte y Safari no los borra.",
   },
   'help.install.action': { en: "Install app", es: "Instalar la app" },
+  'help.news.title': { en: "What's new", es: "Novedades" },
+  'help.news.text': {
+    en: "When the app brings something new, the ? at the bottom of the sidebar shows a dot. Open the help: What's new, at the top, lists what's new or changed since you last looked, and those entries say New. Once you've opened it, the dot goes away until the next new thing. It's remembered on this device.",
+    es: "Cuando la app trae algo nuevo, el ? de abajo de la barra lateral muestra un punto. Abrí la ayuda: Novedades, arriba de todo, lista lo nuevo o cambiado desde la última vez que la miraste, y esas entradas dicen Nuevo. Una vez abierta, el punto se va hasta la próxima novedad. Se recuerda en este dispositivo.",
+  },
+  'help.showMe.title': { en: "Show me", es: "Mostrame" },
+  'help.showMe.text': {
+    en: "Entries with Show me open the practice page and point at that part of the screen, just that step of the tour. Done (or Esc) takes you back where you were. Nothing you do there is saved.",
+    es: "Las entradas con Mostrame abren la página de práctica y señalan esa parte de la pantalla, solo ese paso de la recorrida. Listo (o Esc) te devuelve a donde estabas. Nada de lo que hagas ahí se guarda.",
+  },
 
   // --- Páginas y proyectos ---
   'help.pagesTree.title': { en: "Pages inside pages", es: "Páginas adentro de páginas" },
@@ -246,6 +264,11 @@ export const help = {
   },
 
   // --- Adjuntos ---
+  'help.driveConnect.title': { en: "Connect Google Drive", es: "Conectar Google Drive" },
+  'help.driveConnect.text': {
+    en: "Photos, videos and files added to pages are stored in the workspace owner's Google Drive. In the account menu, Google Drive (only the owner sees it) connects it and shows whether it's connected and with which account, Reconnect if Google asks again, where the LGA_ShotDocs folder is (Choose folder… moves it with everything inside; Use My Drive root brings it back) and how much the app's files take up in Drive.",
+    es: "Las fotos, los videos y los archivos que se agregan a las páginas se guardan en el Google Drive del dueño del workspace. En el menú de la cuenta, Google Drive (solo lo ve el dueño) lo conecta y muestra si está conectado y con qué cuenta, Volver a conectar si Google lo pide de nuevo, dónde está la carpeta LGA_ShotDocs (Elegir carpeta… la mueve con todo lo que tiene; Usar la raíz de Mi unidad la vuelve a poner ahí) y cuánto ocupan en Drive los archivos de la app.",
+  },
   'help.attach.title': { en: "Any file", es: "Cualquier archivo" },
   'help.attach.text': {
     en: "Drop or paste any file (a PDF, a zip, a sound) and it shows as a card with its icon; a PDF shows its first page. A second click opens or downloads it; on a phone, a sheet offers Open, Download and Share. In the full-screen viewer, files appear large among the photos, with Open and Download. Previews you've already seen also show offline.",
