@@ -247,3 +247,51 @@ export function undoRestore(view: EditorView, stackSize: number): boolean {
   undo.undo();
   return true;
 }
+
+/** El origen de la restauración sin editor: se guarda y sube como cualquier edición local (docs.ts). */
+const RESTORE_IN_DOC = Symbol('restore-in-doc');
+
+/**
+ * Restaura la versión **sin el editor**, sobre el documento de la página (la barrera de la página, ErrorBarrier.tsx:
+ * el editor tiró un error con lo que hay y no se puede usar). Primero la misma ida y vuelta que `restoreInEditor`
+ * (`versionNode`, con el esquema del editor que muestra la versión): lo que el editor no podría armar no se restaura.
+ * Después, una sola transacción de Yjs reemplaza el contenido de la página por una copia del de la versión (con los ids
+ * de sus bloques: los comentarios siguen anclados). Es una edición nueva: lo de antes sigue en las filas de
+ * `page_updates` y en el historial. El mapa de colapsar, el título y el formato no se tocan. Al final la forma tiene que
+ * ser la de la versión; si no, se deshace y no se avisa "restaurada". No se deshace desde el aviso (`undoable: false`):
+ * el editor que se monta después no tiene este paso en su deshacer; se vuelve atrás restaurando otra versión.
+ */
+export function restoreInDoc(doc: Y.Doc, version: Y.Doc, schema: Schema | null): RestoreOutcome {
+  if (!schema) return { ok: false, reason: 'shape' };
+  const { node, complete } = versionNode(version, schema);
+  if (!node || !complete) return { ok: false, reason: 'shape' };
+  const copy = new Y.Doc();
+  Y.applyUpdate(copy, Y.encodeStateAsUpdate(version));
+  uniqueBlockIds(copy);
+  const fragment = doc.getXmlFragment(CONTENT_FRAGMENT);
+  const undo = new Y.UndoManager(fragment, { trackedOrigins: new Set([RESTORE_IN_DOC]), captureTimeout: 0 });
+  try {
+    const children = copy
+      .getXmlFragment(CONTENT_FRAGMENT)
+      .toArray()
+      .filter((c): c is Y.XmlElement | Y.XmlText => c instanceof Y.XmlElement || c instanceof Y.XmlText)
+      .map((c) => c.clone());
+    doc.transact(() => {
+      if (fragment.length > 0) fragment.delete(0, fragment.length);
+      fragment.insert(0, children);
+    }, RESTORE_IN_DOC);
+    if (!sameShape(yShape(doc), yShape(copy))) {
+      while (undo.undoStack.length > 0) undo.undo();
+      return { ok: false, reason: 'failed' };
+    }
+    const step = undo.undoStack[undo.undoStack.length - 1];
+    const trace = step ? traceFromSets(step.insertions, step.deletions) : undefined;
+    return { ok: true, undo: () => false, onEdit: () => () => undefined, trace, undoable: false };
+  } catch {
+    while (undo.undoStack.length > 0) undo.undo();
+    return { ok: false, reason: 'failed' };
+  } finally {
+    undo.destroy();
+    copy.destroy();
+  }
+}
