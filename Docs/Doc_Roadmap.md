@@ -327,7 +327,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   cuarentena de filas malas; se vuelve a auditar ese diseño antes de programarla), 3 (medir y ajustar los topes).
   **Hecho (v0.0XX): la barrera de error alrededor de la página** (B3 del diseño de *Can edit*, requisito para prender
   el link que edita): una página que hace tirar al editor muestra un aviso con el historial a mano y el resto de la app
-  sigue; la app entera, *Reload* en vez de blanco. Ver `Doc_Sincronizacion.md`, "Barreras de error".
+  sigue; la app entera, *Reload* en vez de blanco. Ver `Doc_Sincronizacion.md`, "Barreras de error". Quedan dos
+  observaciones de su re-verificación (BAJO): una prueba con un reemplazo en curso para la pregunta al cerrar la pantalla
+  de error (`replaceRunning`), y que los bloques que toca una restauración desde el aviso quedan con sus atributos por
+  defecto escritos (unos bytes más; mirar si la vista de diferencias del historial los muestra como cambiados).
 - **P.25 Sacar una foto o filmar desde la app** (Lega, 2026-10-01). **Hecho para la web (v0.110):** *Take photo* y
   *Record video* en el menú "/" y en el menú de la página, solo en el teléfono y la tableta (el video, con portero):
   abren la cámara con el selector del sistema y lo sacado entra en el renglón y sube por la cola de siempre; *Save to
