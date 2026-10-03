@@ -510,10 +510,21 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   hoy, el token de un tercero podría ponerle una contraseña a la cuenta en las primeras 24 horas de su sesión, aunque
   con ella no ve nada en la base: se cierra conectando el hook que ya rechaza el ingreso con contraseña), el plan B probado
   en SQL de solo lectura y la CPU con páginas reales (en el plan gratis entran listar, buscar y leer páginas de hasta
-  ~16 KB). Faltan los ocho pasos con Supabase y Cloudflare reales ("Cómo quedó M0"), después M1 a M3. Para M1
+  ~16 KB). Faltan los ocho pasos con Supabase y Cloudflare reales ("Cómo quedó M0"), después M1 a M3. **Lo de código de los
+pasos 1 a 5 quedó listo (tanda del 2026-10-03, "Pasos reales"):** el hook probado en rollback con eventos de la forma real (12 de
+12; el `PATCH` y su vuelta, en el paso 1); la migración del plan B `20261027120000_mcp_plan_b.sql` (sin
+aplicar); la pantalla de permiso `/oauth/consent/<ref>`; `MCP_M0` en el jsonc del portero. El paso 1 está prendido
+desde el 2026-10-03; falta prender el 2 (con su control de `pg_stat_statements` antes del 5), 3 a 5 y los pasos 6 a 8.
+Para M1 (de la auditoría de los pasos reales, O6): las `mcp_*` devuelven `json` o escalares, nunca filas de una tabla
+(PostgREST deja embeber tablas relacionadas desde una función que devuelve un tipo de tabla, y el pre-request la dejaría
+pasar). Quedó de esa auditoría (chico): una prueba unitaria de `Login` con `consent` que mire que no ofrece *Change*
+(hoy lo cubre solo el recorrido en Chromium, O7); un 500 de Supabase en la pantalla de permiso se muestra como *No
+connection* (supabase-js lo convierte en `AuthRetryableFetchError`; el detalle dice 500 y hay *Try again*, O8); el
+camino rápido del pre-request busca la clave escrita tal cual (`client_id` no lo dispara; no es alcanzable porque
+Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Para M1
   (de la auditoría de M0): el título de la página y los títulos de `list_pages` y `search_titles` van adentro del
   contenido no confiable (hoy el título de `read_page` va afuera del envoltorio y las listas salen como JSON crudo), y
-  la pantalla de permiso muestra el host del `redirect_uri` además del nombre del cliente. De la re-verificación de M0: la migración de M1 da `execute` sobre `private.mcp_pre_request` a `anon` y `authenticated` (si falta, falla todo pedido a PostgREST), y la vuelta atrás del paso 1 vacía por SQL las contraseñas que pueda haber puesto un tercero (o deja el hook conectado). Lo que Lega prueba con
+  la pantalla de permiso muestra el host del `redirect_uri` además del nombre del cliente. De la re-verificación de M0: la migración del plan B da `execute` sobre `private.mcp_pre_request` a `anon`, `authenticated` y `service_role` (hecho, con su prueba), y la vuelta atrás del paso 1 vacía por SQL las contraseñas que pueda haber puesto un tercero (o deja el hook conectado). Lo que Lega prueba con
   sus claves está en "Cómo quedó A1" y "Cómo quedó A2". Quedó de A2 (chico): la política no se actualiza en vivo en un
   panel ya abierto (se lee al abrirlo); *Format as…* no conserva los colores de un bloque al que le cambia el texto, y
   cuando junta varios bloques en menos (renglones a una tabla) los comentarios de los que sobran quedan sin bloque;

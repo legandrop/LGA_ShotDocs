@@ -7,6 +7,10 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-09-01",
   "keep_vars": true,
+  // El servidor MCP de prueba (M0, Docs/Doc_Asistente.md, "Cómo quedó M0", paso 4): "1" lo prende, cualquier otro valor lo
+  // apaga (`/mcp` vuelve a dar 401 como toda ruta sin sesión). Publicar pone este valor aunque el panel tenga otro. Para
+  // apagarlo se pone "0" y se publica: con `keep_vars`, sacar la línea NO borra la variable ya publicada.
+  "vars": { "MCP_M0": "1" },
   "durable_objects": {
     "bindings": [{ "name": "STORE", "class_name": "Store" }]
   },

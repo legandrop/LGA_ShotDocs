@@ -516,7 +516,8 @@ export function WorkspacesDialog(props: {
  * En el login: en qué workspace se entra y cómo cambiar. Con Wanka sola (lo de siempre en la dirección de
  * Lega) no se muestra nada.
  */
-export function LoginWorkspaceBar() {
+/** `fixed`: sin *Change* (la pantalla de permiso de un asistente: el workspace lo elige la dirección). */
+export function LoginWorkspaceBar({ fixed = false }: { fixed?: boolean } = {}) {
   const { config } = useWorkspace();
   const list = useWorkspaceList();
   const [open, setOpen] = useState(false);
@@ -530,9 +531,11 @@ export function LoginWorkspaceBar() {
         <strong data-tip={hostOf(current.url)} data-tip-plain>
           {displayName(current)}
         </strong>
-        <button type="button" className="link" onClick={() => setOpen(true)}>
-          {tr('workspaces.change')}
-        </button>
+        {!fixed && (
+          <button type="button" className="link" onClick={() => setOpen(true)}>
+            {tr('workspaces.change')}
+          </button>
+        )}
       </div>
       {current.pending && <p className="login-invite">{tr('workspaces.pendingSignIn', { host: hostOf(current.url) })}</p>}
       {open && <WorkspacesDialog initial="list" currentId={current.id} onClose={() => setOpen(false)} />}

@@ -26,6 +26,10 @@ const vars = {
   GOOGLE_CLIENT_ID: 'smoke',
   GOOGLE_CLIENT_SECRET: 'smoke',
 };
+// El MCP de prueba (M0) va prendido en portero/wrangler.jsonc (`MCP_M0`): la prueba corre con lo que se publica.
+// `PORTERO_SMOKE_MCP=0` lo apaga, como la vuelta atrás del paso 4 (poner "0" y publicar).
+const mcpOn = (process.env.PORTERO_SMOKE_MCP ?? '1') !== '0';
+if (!mcpOn) vars.MCP_M0 = '0';
 const args = ['-y', WRANGLER, 'dev', '--port', String(PORT), '--ip', '127.0.0.1', '--persist-to', state, '--log-level', 'warn'];
 for (const [k, v] of Object.entries(vars)) args.push('--var', `${k}:${v}`);
 
@@ -65,6 +69,26 @@ async function expect(name, method, path, want, init = {}, cors) {
   console.log(`${ok ? 'OK  ' : 'FAIL'} ${name}: ${res.status}${ok ? '' : ` (se esperaba ${want})`}`);
 }
 
+// /mcp sin token: 401 con el desafío que lleva al cliente a la metadata (RFC 9728) y al scope.
+async function expectMcpChallenge() {
+  const res = await fetch(`http://127.0.0.1:${PORT}/mcp`, { method: 'POST', body: '{}', headers: { 'Content-Type': 'application/json' } });
+  await res.arrayBuffer();
+  const challenge = res.headers.get('WWW-Authenticate') ?? '';
+  const metadata = `resource_metadata="http://127.0.0.1:${PORT}/.well-known/oauth-protected-resource/mcp"`;
+  const ok = res.status === 401 && challenge.includes(metadata) && challenge.includes('scope="email"');
+  results.push({ name: '/mcp sin token', ok, status: res.status });
+  console.log(`${ok ? 'OK  ' : 'FAIL'} /mcp sin token: ${res.status} ${challenge}`);
+}
+
+// La metadata: el emisor es el Auth del Supabase del portero y el scope, solo email.
+async function expectMetadata() {
+  const res = await fetch(`http://127.0.0.1:${PORT}/.well-known/oauth-protected-resource/mcp`);
+  const body = await res.json().catch(() => ({}));
+  const ok = res.status === 200 && body.authorization_servers?.[0] === `${vars.SUPABASE_URL}/auth/v1` && body.scopes_supported?.join() === 'email';
+  results.push({ name: 'contenido de la metadata', ok, status: res.status });
+  console.log(`${ok ? 'OK  ' : 'FAIL'} contenido de la metadata: ${JSON.stringify(body)}`);
+}
+
 let failed = true;
 try {
   await ready();
@@ -83,9 +107,18 @@ try {
   await expect('pase inválido desde la app (CORS)', 'GET', '/m/abc.def', 403, { headers: { Origin: vars.APP_ORIGINS } }, vars.APP_ORIGINS);
   await expect('pase inválido desde otro origen (sin CORS)', 'GET', '/m/abc.def', 403, { headers: { Origin: 'https://evil.example' } }, null);
   await expect('preflight de /m/ desde otro origen (sin CORS)', 'OPTIONS', '/m/abc.def', 204, { headers: { Origin: 'https://evil.example', 'Access-Control-Request-Method': 'GET' } }, null);
-  // El MCP (prueba técnica M0) está apagado de fábrica: /mcp y su metadata siguen como cualquier ruta sin sesión.
-  await expect('/mcp con el MCP apagado, sin sesión', 'POST', '/mcp', 401, { body: '{}', headers: { 'Content-Type': 'application/json' } });
-  await expect('metadata del MCP apagado, sin sesión', 'GET', '/.well-known/oauth-protected-resource', 401);
+  if (mcpOn) {
+    // Prendido (lo que se publica): /mcp pide el token con la dirección de su metadata, y la metadata dice quién emite.
+    await expectMcpChallenge();
+    await expect('metadata del MCP (RFC 9728)', 'GET', '/.well-known/oauth-protected-resource/mcp', 200);
+    await expectMetadata();
+    await expect('/mcp por GET', 'GET', '/mcp', 405);
+    await expect('/mcp desde un navegador de otro origen', 'POST', '/mcp', 403, { body: '{}', headers: { 'Content-Type': 'application/json', Origin: 'https://evil.example' } });
+  } else {
+    // Apagado: /mcp y su metadata siguen como cualquier ruta sin sesión.
+    await expect('/mcp con el MCP apagado, sin sesión', 'POST', '/mcp', 401, { body: '{}', headers: { 'Content-Type': 'application/json' } });
+    await expect('metadata del MCP apagado, sin sesión', 'GET', '/.well-known/oauth-protected-resource', 401);
+  }
   // El token de un asistente (con `client_id`) no sirve para pases: 403 sin preguntarle a la base.
   const assistant = ['{"alg":"ES256"}', '{"sub":"x","client_id":"c"}', 'sig'].map((p, i) => (i < 2 ? Buffer.from(p).toString('base64url') : p)).join('.');
   await expect('token de asistente en /pass', 'POST', '/pass', 403, { body: '{}', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${assistant}` } });
