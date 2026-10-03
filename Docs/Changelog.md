@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.159 :
+v0.0XX :
 
 **La barra de formato con los tooltips de la app (D226, B.25a y B.25c).** Los botones propios de BlockNote en la barra
 (*Bold*, *Italic*, *Underline*, *Strike*, alinear, *Colors*, *Nest*, *Link*) seguían con su globo: el nombre arriba y el
