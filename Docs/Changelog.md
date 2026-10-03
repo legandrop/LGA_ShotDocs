@@ -11,6 +11,18 @@ panel fuera de orden (C1). Recién reemplazado, ⌘Z en el panel lo deshace (DH9
 sigue al vecino que volvió con un deshacer.
 [ Deshacer en orden entrega 2 - el reemplazo en todo el proyecto como un paso de ⌘Z y ⌘⇧Z, exacto en las páginas editadas ]
 
+v0.141 :
+
+Exportar, entrega 3: volver a Shot Docs desde el zip. El zip guardaba lo necesario para volver, pero nada lo leía.
+*Import Shot Docs archive…* (selector de proyectos, dueño y admins) lee el zip por partes (`zipReader.ts`: CRC, Zip64,
+*deflate*, rechaza `..` y rutas absolutas) y crea siempre un proyecto nuevo: el árbol en orden, ajustes de hoja, marcas
+de plantilla con los ids nuevos, los bloques del JSON revisados contra el esquema (`archiveBlocks.ts`), el colapsado
+para todos, las anotaciones (el zip ahora las exporta) y los archivos por `media.add`; sin original, la vista JPEG de
+la foto o su nombre. Los comentarios vuelven con `import_comment` e ids derivados del proyecto nuevo, a nombre de quien
+importa solo si exportó él; piden la migración `20261026120000_comentarios_archivo.sql` (aplicada, versión 18). Si
+se corta, sigue sin duplicar.
+[ Exportar 3 - volver a Shot Docs desde el zip como proyecto nuevo, con anotaciones, plantillas y comentarios ]
+
 v0.140 :
 
 Deshacer en el orden en que editaste (P.26), entrega 1. La pila de ⌘Z de cada página moría al cambiar de página: el

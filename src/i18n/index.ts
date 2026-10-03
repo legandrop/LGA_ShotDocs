@@ -12,6 +12,7 @@ import type { exportZip } from './lazy/exportZip';
 import type { help } from './lazy/help';
 import type { folders } from './lazy/folders';
 import type { history } from './lazy/history';
+import type { importArchive } from './lazy/importArchive';
 import type { importCoda } from './lazy/importCoda';
 import type { installDialog } from './lazy/install';
 import type { offline } from './lazy/offline';
@@ -51,6 +52,7 @@ type LazyStrings = typeof annotator &
   typeof help &
   typeof folders &
   typeof history &
+  typeof importArchive &
   typeof importCoda &
   typeof installDialog &
   typeof offline &

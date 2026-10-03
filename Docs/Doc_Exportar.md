@@ -1,11 +1,13 @@
 # Exportar una página o un proyecto entero (P.22)
 
-**Estado: entregas 0 (v0.115), 1 (v0.122: el PDF de una rama o de un proyecto), 2 (v0.129: el zip) y 1b (v0.134: los
+**Estado: entregas 0 (v0.115), 1 (v0.122: el PDF de una rama o de un proyecto), 2 (v0.129: el zip), 1b (v0.134: los
 cambios de Lega al PDF, D84, D85 y D88: fotos en resolución completa, el PDF en partes y la lista de las que fallaron)
-hechas; volver, pendiente** (roadmap P.22; pedido de Lega del 2026-10-02). Se diseñó contra `main` v0.108. Cómo quedaron, al final:
+y 3 (v0.141: volver a Shot Docs desde el zip, con su migración sin aplicar) hechas; la 4, pendiente** (roadmap P.22;
+pedido de Lega del 2026-10-02). Se diseñó contra `main` v0.108. Cómo quedaron, al final:
 "Cómo quedó la entrega 0" (el editor de exportación medido con 300 páginas), "Cómo quedó la entrega 1" (el PDF, medido
 con la impresión real de Chrome y Edge) y "Cómo quedó la entrega 2" (el zip, abierto con `file://` en Chromium y
-Firefox), y "Cómo quedó la entrega 1b" (las fotos originales y las partes, medido con `page.pdf`). **Cambiado por Lega
+Firefox), "Cómo quedó la entrega 1b" (las fotos originales y las partes, medido con `page.pdf`) y "Cómo quedó la
+entrega 3" (volver, con las decisiones EX16 a EX22, tomadas sin Lega). **Cambiado por Lega
 (2026-10-02):** el PDF lleva las fotos como se tomaron, en resolución completa, con *Smaller file* para achicarlas
 (D85); si no entra en un PDF del dispositivo, sale en varios por páginas enteras (D84, en vez de ofrecer ramas); y al
 terminar lista las páginas que fallaron con su link y *Export again* (D88). El zip lo exportan solo el dueño y los admins (D60), nunca desde un
@@ -1077,3 +1079,146 @@ el portero de verdad (tiempo de bajada y pedidos al Worker: unos dos por foto), 
 - **O9 · El PDF con originales para quien solo ve.** No es una decisión nueva: Lega ya decidió en D60 que el PDF lo
   saca cualquiera que vea (el zip, solo dueño y admins). Con D85 ese PDF lleva las fotos en su resolución original.
 - **O10 y O11** (el margen de 500 MB en una compu de 8 GB; Safari y Firefox sin medir) quedan para la prueba a mano.
+
+## Cómo quedó la entrega 3 (v0.141: volver a Shot Docs desde el zip)
+
+**Qué ve el usuario.** En el selector de proyectos, **dueño y admins** (los que crean proyectos) tienen *Import Shot
+Docs archive…*, al lado de *New project*. La ventana pide el zip con un selector de archivo común (anda también en el
+iPhone y el iPad) o, en una computadora, *Choose unzipped folder*. Antes de empezar dice qué trae ("“Reporte ERSO”: 240
+pages and 2459 files (5.7 GB). It also has 31 comments."), cuántas fotos vuelven solo con su vista y cuántos archivos
+no están en el zip, el espacio libre del dispositivo (si no entra, lo dice y *Import* queda apagado), "Connect Google
+Drive first" si trae archivos y el Drive no está conectado, y en un teléfono o una tableta, pasado 1 GB, que es más
+seguro desde una computadora. El nombre del proyecto nuevo es editable. Mientras: "Page 3 of 9: <título>" y que no se
+cierre la ventana (la app pide confirmar antes de cerrarse, con las guardas de la importación de Coda). Al terminar:
+"Imported 9 pages and 5 files.", los comentarios que suben con la sincronización, la lista de lo que hay que revisar y
+*Open project*. Si se cortó, elegir el mismo zip ofrece *Resume*. La ayuda suma *Import a Shot Docs archive*; sin atajos
+nuevos. Un comentario que volvió se ve "from an archive".
+
+**Cómo está hecho:**
+
+- `src/export/zipReader.ts`: lee el zip por partes (`Blob.slice`): el final y el directorio central (Zip64 incluido),
+  y cada archivo recién cuando se pide, con su **CRC32** comprobado. Sin comprimir (el de la app) es un pedazo del mismo
+  `Blob`; con *deflate* (el Explorador o el Finder al volver a comprimir), por `DecompressionStream`, cortado si
+  descomprime más de lo que dice (una bomba). Un nombre con `..`, absoluto (`/`, `C:`, una ruta de red), con caracteres
+  de control o partes vacías no se ofrece y queda anotado; también uno cifrado, con otro método o repetido. Un zip
+  cortado (sin su final) o algo que no es zip es un error claro. `folderSource` hace lo mismo con la carpeta
+  descomprimida; `subSource`, con un zip que alguien volvió a comprimir con su carpeta de arriba. Nada se escribe en el
+  disco: lo que sale del zip va a la base del navegador por `media.add`, como soltar una foto.
+- `src/import/shotdocsImport.ts`: `openArchive` busca `_shotdocs/manifest.json` (arriba o dentro de una sola carpeta) y
+  lo revisa (`format` mayor que 1: "Update the app to import this archive"; sin `format`: no es un archivo de Shot
+  Docs; páginas sin uuid o repetidas, salteadas y anotadas). `importArchive` crea el proyecto, todas las páginas en el
+  orden del árbol (`treePlan` de la importación de Coda: un padre que no está o un círculo, al primer nivel y anotado),
+  después por página: los ajustes (hoja, encabezado, títulos cortos), el ícono y las **marcas de plantilla** con los ids
+  nuevos (`template_id`, `template`, `templatesFolder`, `dayReports.template`; una de fábrica queda igual, una de
+  afuera no se escribe), los archivos que usa por primera vez (`media.add`), los bloques y, en el mismo documento, el
+  colapsado para todos y las **anotaciones** (`carryMarkup` de pegar una foto anotada, con el id de archivo nuevo y
+  dentro de los topes). Los comentarios, con `import_comment`.
+- `src/import/archiveBlocks.ts`: cada bloque contra el esquema de la app (tipos, propiedades y su tipo, estilos), los
+  `sdmedia://` al archivo nuevo, los links a páginas del archivo a la página nueva y los ids de bloque conservados (los
+  usan los comentarios y el colapsado). Todo lo que cambia queda anotado por página.
+- `src/export/pageContent.ts` y `exportZip.ts`: el JSON de cada página suma `photoMarkup` (las anotaciones de las fotos
+  que están en la página, solo los valores vigentes). Es un campo nuevo del mismo `format: 1`: un zip de v0.129 a v0.134
+  vuelve sin anotaciones.
+- `src/import/codaImport.ts`: `writePage` se exporta y acepta lo que se escribe después de los bloques; sus editores sin
+  pantalla ya no piden las fotos (un `sdmedia://` en un `<img>` era un pedido que fallaba en la consola).
+- `src/import/importJob.ts`: la misma importación de Coda con `kind: 'archive'`: una a la vez por workspace, con las
+  mismas guardas (cerrar la app, cambiar de workspace, la otra pestaña); los textos de esas guardas pasan a decir "An
+  import is running".
+- La base: `supabase/migrations/20261026120000_comentarios_archivo.sql` suma `'shotdocs'` a `comments.imported_from` y
+  sube `schema_version` a 18 (`ARCHIVE_COMMENTS_SCHEMA_VERSION`). **Sin aplicar.** Su prueba va en
+  `supabase/tests/comentarios_importados_permisos.sql` (sin correr: pide la base).
+
+**Lo probado** (suite con Node 22: 3245 pruebas, 3240 pasan y 5 salteadas, 34 más que v0.134; en los archivos nuevos: `zipReader.test.ts` 8, `archiveBlocks.test.ts` 6,
+`shotdocsImport.test.tsx` 11, `importArchiveDialog.test.tsx` 4; `tsc` y `npm run build` limpios; la ventana va en su
+pedazo aparte, de 47 KB):
+
+- **Ida y vuelta** (servidor y portero en memoria): un proyecto de 9 páginas con un título colapsado para todos, Script,
+  pregunta, foto en línea, tabla con una foto en una celda, foto anotada (dos formas, una con un campo de una versión
+  más nueva) con su ancho, salto de hoja, links adentro y afuera, listas con hijos, una subpágina con la misma foto, la
+  plantilla de fábrica del reporte, una carpeta *Templates* con una plantilla propia, una carpeta de reportes que la
+  usa, una página de esa plantilla con ícono, video y PDF, y cuatro comentarios (uno resuelto, uno de Ana, un hilo con
+  el primero borrado). Exportado e importado por otro dispositivo del dueño: el árbol, los ajustes y las marcas de
+  plantilla iguales (por título), **cada página bloque por bloque igual, con los mismos ids de bloque** (más de 20
+  bloques), el colapsado y las anotaciones iguales, los 5 archivos una vez cada uno con los mismos bytes y subidos, los
+  4 comentarios con su autor, fecha y resuelto, ningún correo, ningún id viejo en el árbol nuevo.
+- Dos importaciones del mismo zip en el mismo Supabase: dos proyectos, 8 comentarios con ids distintos, sin choques;
+  un admin que no exportó: todo a nombre del autor, ninguno a su nombre.
+- Sin los originales: 3 fotos vuelven desde su vista (anotada, con su marco) y avisadas; el video y el PDF quedan como
+  "clip 001.mov (not in the archive)", sin ningún id viejo. Una rama: su raíz arriba, el link a la rama de afuera como
+  texto.
+- **La versión publicada de la app** (`fixtures/editorSchemaMain.ts`) abre una página importada y no cambia nada (ni un
+  update, el mismo fragmento y las mismas anotaciones).
+- Cortes: un corte justo después de guardar una página y antes de anotarlo; al seguir, 9 páginas, el contenido igual
+  (sin una copia abajo), los archivos y los comentarios una vez. Si la persona escribió en una página antes de que la
+  importación llegara a escribirla, lo importado va debajo. Sin lugar para un archivo: esa página queda para seguir y al
+  seguir se reescribe con el archivo.
+- La base sin la migración (versión 17): los comentarios esperan, la importación queda para seguir; con la base al día,
+  *Resume* los suma.
+- Zips hostiles: uno que no es zip, uno cortado a la mitad o sin sus últimos bytes, uno de una versión más nueva, con el
+  manifest roto, sin `format` o sin `id`: el error y ningún proyecto creado. Un manifest editado a mano (rutas con `..`
+  y `C:/`, una página repetida, una sin uuid, dos páginas en círculo, un JSON roto, un archivo `../../evil.exe`): las
+  cuatro páginas válidas, lo demás anotado, nada leído afuera del archivo. Nombres peligrosos en el zip, CRC cambiado,
+  bomba de *deflate*, Zip64 y *deflate* de verdad en `zipReader.test.ts`.
+- Mutaciones: sacar el colapsado, las marcas de plantilla, las anotaciones o el "va debajo" hace fallar alguna prueba.
+- **El recorrido en Chromium** (Playwright sin ventana, el arnés `src/export/bench/import.html` con el servidor de vite:
+  arma un proyecto con fotos JPEG de verdad, otro dispositivo lo exporta y la ventana de verdad importa en un tercero):
+  11 de 11 pasos bien. Un archivo que no es zip y el zip cortado avisan con *Import* apagado; el bueno muestra "7 pages
+  and 4 files (112 KB). It also has 2 comments."; *Import* tarda 283 ms; las 7 páginas iguales bloque por bloque, con
+  el colapsado y las anotaciones; los 4 archivos con los mismos bytes y subidos; los 2 comentarios a nombre de quien
+  importa, sin correo; ningún error en la consola.
+
+**Lo que no se midió (para Lega, a mano):** ERSO entero (2459 archivos, 5,7 GB) importado en Chrome con el portero de
+verdad: el tiempo, el espacio que pide el navegador mientras sube y la subida al Drive; Safari y el iPhone (elegir un
+zip grande desde Archivos); la migración aplicada y su prueba SQL.
+
+### Decisiones de la entrega 3 (tomadas sin Lega, a confirmar)
+
+- **EX16 · Quién importa.** Qué pasaba: D60 dejó el zip para dueño y admins, y volver crea un proyecto. Opciones: A)
+  quien crea proyectos (dueño y admins, `canCreateProject`); B) cualquiera que edita; C) solo el dueño. Elegí **A**: es
+  el mismo permiso que *New project* y el mismo grupo que exporta el zip; la base ya lo exige al crear el proyecto.
+- **EX17 · Los comentarios vuelven, con un origen propio y la base al día.** Qué pasaba: el diseño pide
+  `imported_from = 'shotdocs'`, que la base de hoy rechaza. Opciones: A) migración nueva y la app importa los comentarios
+  solo con la base en la versión 18 (con una más vieja, los deja para *Resume* y lo avisa); B) marcarlos `'coda'`
+  (prohibido por el diseño); C) no traerlos. Elegí **A**: nada se pierde (quedan en el zip y la importación queda para
+  seguir) y nada falla a medias. Sin red al empezar (la versión de la base no se sabe), van a la cola como siempre.
+- **EX18 · Una foto sin su original.** Qué pasaba: con *Original photos* destildada, el zip trae solo la vista JPEG
+  (2048 o la miniatura). Opciones: A) subir la vista como la foto (`IMG_0413.jpg`), avisado por foto; B) dejar un
+  marcador. Elegí **A** para las fotos (se ve y se anota: la vista tiene la misma proporción, así las anotaciones caen
+  donde estaban) y el marcador para videos y adjuntos (el cuadro de un video no es el video).
+- **EX19 · Los links.** El diseño decía `https:` y `mailto:`; quedan también los `http:` (un link de la persona,
+  inofensivo). Un `/p/<id>` (también con el dominio de la app) a una página del archivo va a la página nueva; a una de
+  afuera, su texto. `javascript:`, `data:` y lo demás, texto, anotado.
+- **EX20 · Sin red.** Se puede importar sin red, como la de Coda: todo queda en el dispositivo (páginas, archivos,
+  comentarios) y sube al volver. Es lo más seguro para no perder nada: nada depende de la red a mitad.
+- **EX21 · Seguir donde quedó sin duplicar.** Antes de escribir una página se anota la huella de lo que se va a escribir
+  (probada en un documento aparte): un corte entre escribir y anotar no deja la página "editada por la persona" con una
+  copia abajo. Si el editor no acepta los bloques de una página (un zip armado a mano), va su texto en párrafos, anotado.
+- **EX22 · La carpeta descomprimida.** Además del zip, *Choose unzipped folder* en una computadora (el diseño lo
+  preveía para Chrome y Edge; anda en todos los de escritorio con `webkitdirectory`).
+
+### Correcciones de la auditoría de la entrega 3 (O1 a O6)
+
+- **O1 · El arnés de Playwright quedó versionado** (`.zz-pw/`): sacado del repo.
+- **O2 · Una entrada *deflate* se descomprimía entera en memoria** (un zip vuelto a comprimir: 1 GB subía el navegador
+  +2,15 GB, y un zip de 1 MB que dice 4 GB colgaba la pestaña). Ahora `zipReader.ts` arma el `Blob` a medida que
+  llega, corta en el pedazo que pasa lo declarado y tiene topes que mira antes de leer: 256 MB por archivo y 4 GB por
+  zip abierto (`MAX_DEFLATE_ENTRY`, `MAX_DEFLATE_TOTAL`). Lo que pasa el tope no se lee: la ventana lo cuenta antes de
+  empezar ("compressed again… import the zip Shot Docs made"), la foto vuelve desde su vista y un video o un adjunto
+  queda con su nombre, avisados. Medido en Chromium sin ventana (`inflate.html`): una entrada de 248 MB, +473 MB; una de
+  1 GB, rechazada sin leerla (+0). Chromium igual guarda el `Blob` en memoria (1 GB con el `Blob` armado a medida: +1,5
+  GB), por eso el tope.
+- **O3 · Un link absoluto de la app a una página de afuera** (`https://<la app>/p/<id>`) quedaba vivo: ahora queda su
+  texto, como el relativo.
+- **O4 · Una imagen de otro sitio** queda (la app las muestra), pero va en la lista del final con su sitio.
+- **O5 · Los colores** (`textColor`, `backgroundColor`, en bloques, celdas y estilos) solo los del editor; otro texto
+  se saca, anotado.
+- **O6 · Tres mutantes vivos**: el corte de una bomba en un archivo (la prueba mira que corte a mitad, no al final) y
+  las marcas de plantilla y de reportes que apuntan a otro proyecto (se descartan; las de adentro van a la página
+  nueva). Probados con su mutante: los cinco fallan.
+- O7 (una página dañada crea igual el proyecto, con esa página avisada y para seguir) queda como está: lo válido entra.
+- **Re-verificación · La bomba seguía inflando entera.** Un zip de 2 MB que dice 200 MB y descomprime 2 GB subía
+  +2 GB antes del corte: `blob.stream()` le pasaba al descompresor pedazos grandes y Chromium saca entero lo de cada
+  uno antes de que el control lo vea. Ahora el comprimido va de a 16 KB (`INFLATE_PIECE`, `blob.slice`, solo cuando el
+  descompresor pide más), en `blob()` y en `text()`. Medido en Chromium sin ventana: la bomba, **+314 MB** (con
+  `blob.stream()`, +2326 MB); una entrada legítima de 248 MB, +328 MB y 0,4 s. La prueba mide el pedazo más grande que
+  recibe el descompresor y lo que sale antes del corte (con `blob.stream()`, falla).
