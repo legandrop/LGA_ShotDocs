@@ -280,6 +280,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   abren. Solo con el foco en el árbol y sin Ctrl, ⌘, Alt ni Shift. Y el defecto: plegar con el triángulo (o
   con ←) una madre de la página abierta no dejaba; ahora pliega y la abierta pasa a ser esa madre (en el
   teléfono el cajón sigue abierto). Lógica en `src/ui/treeNav.ts`. Su entrada en la ayuda está desde v0.082 (P.13).
+  Ancho del nombre (D233, v0.154): sin mouse, foco ni menú abierto el nombre usa todo el ancho de la fila (también en
+  la página abierta, D242) y recién ahí lleva «…»; ⋯ y + (que no ocupan lugar mientras no se ven) le sacan su lugar con
+  el mouse encima, el foco en la fila o en sus botones, o el menú ⋯ abierto. En el teléfono (`hover: none`) la página
+  abierta los muestra siempre, como antes. Pendientes menores de su auditoría: (O2) `:hover` y `.menu-open` no se pueden
+  calcular en jsdom; la prueba afirma el texto del selector y la medición real está en Chromium; (O3) un clic en el
+  triángulo de una fila no abierta le deja el foco y, por `:focus-within`, sus ⋯ y + (y el nombre cortado) hasta que el
+  foco se va, aunque el mouse ya no esté; pasar a `:focus-visible` lo evitaría pero cambia el comportamiento existente.
 - **P.17 Hecho (v0.079): instalar la app** (Lega, 2026-10-01). La app reconoce si está instalada; si no, ofrece
   *Install app* en el menú de la cuenta y en la pantalla de entrar, y en el teléfono un aviso que se cierra por 30
   días. La ventana muestra los pasos con dibujos para iPhone, Android y computadora, con *Install* directo donde
@@ -910,15 +917,13 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
 23. **Hecho (v0.152): los topes de largo de la base en la app.** Un título de más de 500 caracteres quedaba rechazado
    para siempre (`pages_title_check`). El árbol corta títulos, nombres de proyecto y claves de orden, lo que sobra del
    título va al principio de la página y lo ya rechazado vuelve a la cola cortado (`Doc_Sincronizacion.md`, "Topes de
-   largo"). Queda: rehacer las claves de orden manda un cambio por hermana, y si otro dispositivo movió una de ellas a la
-   vez, gana el último que llega (la hermana puede volver a su lugar anterior; no se pierde nada, solo el lugar). Pasa
-   solo después de unas 600 páginas puestas en el mismo hueco. Arreglo posible: rehacer solo las claves vecinas al hueco
-   (no todas) o mandar el rehecho como una sola operación del servidor.
-   De su re-verificación (ALTA, para la próxima tanda): con el reloj del dispositivo adelantado, reparar un rechazo
-   heredado puede volver a pisar un título puesto a mano después (`titleChangedAfter` compara el `updated_at` del
-   servidor con la hora del dispositivo): guardar en `failOp` el `updated_at` que tenía la fila y comparar contra ese.
-   Solo afecta a rechazos por largo de versiones anteriores. Y falta una prueba del «renombre posterior en la cola»
-   (mutante R3; solo importa con la app desactualizada).
+   largo"). **Hecho (v0.153):** la reparación de un rechazo ya no depende del reloj del dispositivo (compara el
+   `updated_at` que tenía la fila al rechazarse con el de ahora; un rechazo de una versión anterior, sin ese dato, deja
+   el título y manda el texto entero a la página), con la prueba del renombre posterior en la cola (mutante R3), y
+   rehacer las claves de orden toca solo las páginas amontonadas alrededor del hueco. Queda: si otro dispositivo movió a
+   la vez una de esas, gana el último que llega (vuelve a su lugar anterior; no se pierde nada, solo el lugar). Pasa solo
+   después de unas 600 páginas puestas en el mismo hueco. Arreglo completo: mandar el rehecho como una sola operación del
+   servidor que no toque una hermana movida después.
 24. **Un error en la consola al pegar una foto — hecho (v0.0XX).** No era al pegar sino al **copiar** (o arrastrar): el
    HTML externo de BlockNote (el foto-bloque) y el de la foto en línea ponían `sdmedia://…` en un `<img src>` creado en
    el documento vivo, y el navegador lo pide al instante. Pasaba igual en `main`. Ahora la dirección sale con

@@ -69,6 +69,17 @@ export function isLengthRejection(f: FailedOp): boolean {
   return /\b(pages_title_check|workspaces_name_length)\b/.test(f.error) && fitOp(f.op) !== null;
 }
 
+/**
+ * Dos `updated_at` del servidor son el mismo momento. Sin el primero (`null` o sin guardar) no hay con qué comparar:
+ * no lo son. Igualdad, no "antes o después": los dos salen del mismo reloj, y cualquier diferencia es un cambio.
+ */
+export function sameInstant(was: string | null | undefined, now: string): boolean {
+  if (typeof was !== 'string') return false;
+  if (was === now) return true;
+  const a = Date.parse(was);
+  return Number.isFinite(a) && a === Date.parse(now);
+}
+
 /** La página a la que va lo que sobró del título de un cambio. */
 function restPage(op: TreeOp): string | null {
   return op.kind === 'create' ? op.page.id : op.kind === 'update' ? op.id : null;
@@ -80,6 +91,33 @@ export function keyBetween(before: string | null, after: string | null): string 
     return generateKeyBetween(before, after);
   } catch {
     return generateKeyBetween(before, null);
+  }
+}
+
+/**
+ * Claves nuevas para el hueco `at` y las hermanas de alrededor, cuando la clave del hueco ya no entra en la base. La
+ * ventana crece desde el hueco hacia el lado de la vecina con la clave más larga (de ahí viene el problema: muchas
+ * páginas puestas en el mismo hueco) hasta que las claves nuevas, entre las dos vecinas que quedan afuera y no se
+ * tocan, ocupan como mucho la mitad del tope. Así se rehacen solo las que se amontonaron, no toda la lista. Devuelve
+ * desde qué hermana empieza la ventana y sus claves, una más que hermanas: la de `at - from` es la del hueco.
+ */
+export function rekeyWindow(siblings: Pick<PageRow, 'sort_key'>[], at: number): { from: number; keys: string[] } {
+  const roomy = DB_LIMITS.pageSortKey / 2;
+  let from = at;
+  let to = at;
+  for (;;) {
+    const lower = siblings[from - 1]?.sort_key ?? null;
+    const upper = siblings[to]?.sort_key ?? null;
+    const whole = lower === null && upper === null;
+    try {
+      const keys = generateNKeysBetween(lower, upper, to - from + 1);
+      if (whole || keys.every((k) => k.length <= roomy)) return { from, keys };
+    } catch {
+      // Dos vecinas con la misma clave (las generaron dos dispositivos a la vez): se agranda la ventana.
+    }
+    const step = Math.max(1, Math.ceil((to - from) / 4));
+    if (lower !== null && (upper === null || lower.length >= upper.length)) from = Math.max(0, from - step);
+    else to = Math.min(siblings.length, to + step);
   }
 }
 
@@ -424,17 +462,19 @@ export class PageTree {
   /**
    * La clave para quedar en la posición `at` entre `siblings`. La clave entre dos vecinas se alarga cada vez que se pone
    * algo en el mismo hueco: después de unas 600 veces pasaría los 128 caracteres que acepta la base y el cambio quedaría
-   * rechazado para siempre. Antes de eso, las hermanas reciben claves nuevas y parejas, en el mismo orden.
+   * rechazado para siempre. Antes de eso, las hermanas de alrededor del hueco reciben claves nuevas y parejas, en el
+   * mismo orden (`rekeyWindow`): solo las que hace falta, para no pisar el lugar de otras que movió otro dispositivo.
    */
   private async keyAt(siblings: PageRow[], at: number): Promise<string> {
     const key = keyBetween(siblings[at - 1]?.sort_key ?? null, siblings[at]?.sort_key ?? null);
     if (key.length <= DB_LIMITS.pageSortKey) return key;
-    const keys = generateNKeysBetween(null, null, siblings.length + 1);
-    const others = keys.filter((_, i) => i !== at);
-    for (const [i, sibling] of siblings.entries()) {
-      if (sibling.sort_key !== others[i]) await this.enqueue({ kind: 'update', id: sibling.id, patch: { sort_key: others[i] } });
+    const { from, keys } = rekeyWindow(siblings, at);
+    const others = keys.filter((_, i) => i !== at - from);
+    for (const [i, key] of others.entries()) {
+      const sibling = siblings[from + i];
+      if (sibling.sort_key !== key) await this.enqueue({ kind: 'update', id: sibling.id, patch: { sort_key: key } });
     }
-    return keys[at];
+    return keys[at - from];
   }
 
   /** Hermanas en un lugar del árbol; en la raíz, solo las del mismo proyecto. */
@@ -579,16 +619,19 @@ export class PageTree {
   }
 
   /**
-   * El título de la página cambió después de que el servidor rechazó `f`: lo cambió el servidor (otro dispositivo, o
-   * esta persona al ver el rechazo) o hay un cambio de título posterior en este dispositivo. Del servidor se mira su
-   * `updated_at` contra el momento del rechazo (cambia con el título, el lugar, la papelera o los ajustes, no con el
-   * contenido): en la duda, se toma como cambiado, y el texto largo va entero a la página sin pisar nada.
+   * El título de la página pudo cambiar después de que el servidor rechazó `f`: lo cambió el servidor (otro
+   * dispositivo, o esta persona al ver el rechazo) o hay un cambio de título posterior en este dispositivo. Del
+   * servidor se mira si su `updated_at` sigue siendo el que tenía la fila al fallar (`rowUpdatedAt`): reloj del
+   * servidor contra reloj del servidor, sin la hora del dispositivo, que puede ir adelantada horas y esconder un
+   * renombre. `updated_at` cambia con el título, el lugar, la papelera o los ajustes, no con el contenido. En la duda
+   * (otro valor, la fila no estaba, o un rechazo de una versión anterior que no guardó el dato) se toma como cambiado:
+   * el texto largo va entero a la página y el título de ahora queda. Nada se pisa ni se pierde.
    */
   private titleChangedAfter(f: FailedOp): boolean {
     if (f.op.kind !== 'update') return false;
     const id = f.op.id;
     const row = this.snapshot.get(id);
-    if (row && Date.parse(row.updated_at) > f.failedAt) return true;
+    if (row && !sameInstant(f.rowUpdatedAt, row.updated_at)) return true;
     const later = (op: TreeOp, seq: number | undefined) =>
       op.kind === 'update' && op.id === id && op.patch.title !== undefined && (seq ?? Infinity) > (f.opSeq ?? -1);
     return this.ops.some((o) => later(o.op, o.seq)) || this.failed.some((g) => g !== f && later(g.op, g.opSeq));
@@ -666,6 +709,9 @@ export class PageTree {
    */
   async failOp(op: QueuedOp, error: string): Promise<void> {
     const failed: FailedOp = { op: op.op, opSeq: op.seq, error, failedAt: Date.now() };
+    // Cómo estaba la fila al fallar (reloj del servidor): `titleChangedAfter` compara contra esto y no contra la hora
+    // del dispositivo, que puede ir adelantada (Docs/Doc_Sincronizacion.md, "Topes de largo").
+    if (op.op.kind === 'update') failed.rowUpdatedAt = this.snapshot.get(op.op.id)?.updated_at ?? null;
     const tx = this.db.transaction(['ops', 'failedOps'], 'readwrite');
     await tx.objectStore('ops').delete(op.seq!);
     failed.seq = await tx.objectStore('failedOps').add(failed);
@@ -680,8 +726,8 @@ export class PageTree {
    * nada que reintentar no escribe nada ni avisa.
    */
   async retryFailed(only: (f: FailedOp) => boolean = () => true): Promise<void> {
-    // Los rechazados por un tope de largo no: volverían a fallar, y su momento de rechazo es lo que dice si el título
-    // cambió después (`repairRejected` los arregla con el próximo árbol que baje, que *Retry* pide enseguida).
+    // Los rechazados por un tope de largo no: volverían a fallar, y cómo estaba la fila al rechazarse es lo que dice si
+    // el título cambió después (`repairRejected` los arregla con el próximo árbol que baje, que *Retry* pide enseguida).
     const retry = this.failed.filter((f) => only(f) && !isLengthRejection(f));
     if (retry.length === 0) return;
     const tx = this.db.transaction(['ops', 'failedOps'], 'readwrite');

@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -593,5 +595,102 @@ describe('teléfono', () => {
     await wait();
     expect(path()).toBe(pagePath(ids.dos));
     expect(host.querySelector('.shell.nav-open')).toBeNull();
+  });
+});
+
+// El nombre de la fila usa todo el ancho; solo con el mouse encima, el foco o el menú abierto deja lugar a ⋯ y +.
+// jsdom no calcula el layout: se prueba el cascado del CSS real de la fila (el ancho de los botones, que es lo que
+// le saca lugar al nombre) y las clases que prenden los estados. La medición en pantalla está en el informe.
+describe('ancho del nombre de la fila', () => {
+  function rowCss(withMedia = false): string {
+    const css = readFileSync(resolve(__dirname, '../styles.css'), 'utf8').replace(/\r\n/g, '\n');
+    const from = css.indexOf('\n.tree-row {');
+    const to = css.indexOf('\n.row-actions button {');
+    expect(from).toBeGreaterThan(0);
+    expect(to).toBeGreaterThan(from);
+    // Sin la parte táctil (salvo que se pida): jsdom no resuelve `@media`.
+    const rules = css.slice(from, to);
+    return withMedia ? rules : rules.replace(/@media \(hover: none\) \{[\s\S]*?\n\}\n/, '');
+  }
+  const actionsWidth = (el: HTMLElement) => getComputedStyle(el.querySelector('.row-actions')!).width;
+
+  it('sin hover, foco ni menú los botones no ocupan lugar; con foco o menú abierto sí', async () => {
+    await app();
+    const style = document.createElement('style');
+    style.textContent = rowCss();
+    document.head.append(style);
+    try {
+      const dos = row('Dos');
+      expect(actionsWidth(dos)).toBe('0px');
+      expect(getComputedStyle(dos.querySelector('.row-actions')!).marginLeft).toBe('-4px');
+      // Con el foco en la fila.
+      act(() => dos.focus());
+      expect(actionsWidth(dos)).toBe('auto');
+      act(() => (document.activeElement as HTMLElement).blur());
+      expect(actionsWidth(dos)).toBe('0px');
+      // Con el foco en uno de sus botones.
+      const more = dos.querySelector<HTMLButtonElement>('[aria-label="More actions"]')!;
+      act(() => more.focus());
+      expect(actionsWidth(dos)).toBe('auto');
+      act(() => more.blur());
+      // En la compu, la página abierta también llega al borde: sus botones salen solo con hover, foco o menú.
+      expect(actionsWidth(row('Uno.A.1'))).toBe('0px');
+      // Con el menú ⋯ abierto, aunque el foco se vaya al menú.
+      act(() => more.click());
+      expect(dos.classList.contains('menu-open')).toBe(true);
+      act(() => (document.activeElement as HTMLElement | null)?.blur());
+      expect(actionsWidth(dos)).toBe('auto');
+      press('Escape');
+      expect(document.querySelector('.menu')).toBeNull();
+      expect(dos.classList.contains('menu-open')).toBe(false);
+      expect(row('Uno.B').classList.contains('menu-open')).toBe(false);
+    } finally {
+      style.remove();
+    }
+  });
+
+  it('el CSS muestra los botones con hover, foco o menú abierto (jsdom no calcula :hover) y en la compu no por ser la abierta', () => {
+    const css = rowCss();
+    const shown = css.match(/((?:\.tree-row[^{,]*\.row-actions,?\s*)+)\{\s*opacity: 1;/)![1];
+    expect(shown.replace(/\s+/g, ' ').trim()).toBe(
+      '.tree-row:hover .row-actions, .tree-row.menu-open .row-actions, .tree-row:focus-within .row-actions',
+    );
+  });
+
+  it('en el teléfono (hover: none) solo la página abierta tiene los botones, a la vista siempre', async () => {
+    await app();
+    const touch = rowCss(true).match(/@media \(hover: none\) \{([\s\S]*?)\n\}\n/)![1];
+    const style = document.createElement('style');
+    // jsdom no evalúa `@media`: se prueba el contenido de la regla táctil como si valiera.
+    style.textContent = rowCss() + touch;
+    document.head.append(style);
+    try {
+      expect(actionsWidth(row('Uno.A.1'))).toBe('auto');
+      expect(getComputedStyle(row('Uno.A.1').querySelector('.row-actions')!).display).not.toBe('none');
+      expect(getComputedStyle(row('Dos').querySelector('.row-actions')!).display).toBe('none');
+      expect(getComputedStyle(row('Uno.B').querySelector('.row-actions')!).display).toBe('none');
+    } finally {
+      style.remove();
+    }
+  });
+
+  it('renombrando, la fila no muestra los botones: el campo usa todo el ancho', async () => {
+    await app();
+    const style = document.createElement('style');
+    style.textContent = rowCss();
+    document.head.append(style);
+    try {
+      act(() => row('Uno.B').querySelector<HTMLButtonElement>('[aria-label="More actions"]')!.click());
+      const rename = [...document.querySelectorAll<HTMLButtonElement>('.menu button')].find((b) => b.textContent?.includes('Rename'));
+      act(() => rename!.click());
+      const renaming = document.querySelector<HTMLElement>('.tree-row.renaming')!;
+      expect(renaming).not.toBeNull();
+      expect(renaming.classList.contains('menu-open')).toBe(false);
+      expect(getComputedStyle(renaming.querySelector('.row-actions')!).display).toBe('none');
+      press('Escape', {}, document.activeElement);
+      expect(document.querySelector('.tree-row.renaming')).toBeNull();
+    } finally {
+      style.remove();
+    }
   });
 });
