@@ -15,6 +15,7 @@ import { PageFiles } from './files';
 import { openLocalDb, type LocalDb } from './localDb';
 import {
   PROJECT_DRIVE_SCHEMA_VERSION,
+  PROJECT_PURGE_SCHEMA_VERSION,
   PROJECT_STATES_SCHEMA_VERSION,
   SNAPSHOT_SCHEMA_VERSION,
   type AccessRow,
@@ -892,7 +893,7 @@ export class FakeServer {
    * La papelera de proyectos (P.14): id → cuándo y quién lo borró. Con el proyecto acá, todos los niveles dan 0
    * y no se ve por ningún camino, como en la base (`user_page_level`, `workspaces_select`).
    */
-  readonly deletedProjects = new Map<string, { at: string; by: string }>();
+  readonly deletedProjects = new Map<string, { at: string; by: string; purged?: { at: string; by: string } }>();
 
   /**
    * La carpeta de cada proyecto en la papelera de Drive (P.14, entrega 2, versión 10): pedida, confirmada y, si se
@@ -904,6 +905,12 @@ export class FakeServer {
   enableProjectDrive(): void {
     this.enableProjectStates();
     this.settings = { ...this.settings!, schemaVersion: Math.max(this.settings!.schemaVersion, PROJECT_DRIVE_SCHEMA_VERSION) };
+  }
+
+  /** Prende *Delete forever* (P.14, entrega 3): la base en la versión 23. */
+  enableProjectPurge(): void {
+    this.enableProjectDrive();
+    this.settings = { ...this.settings!, schemaVersion: Math.max(this.settings!.schemaVersion, PROJECT_PURGE_SCHEMA_VERSION) };
   }
 
   /** Prende archivar y borrar proyectos: la base en la versión 9. */
@@ -1794,6 +1801,8 @@ export class FakeRemote
   async restoreProject(projectId: string, withoutDrive = false): Promise<void> {
     this.projectStatesCheck(projectId);
     if (!this.server.deletedProjects.has(projectId)) return;
+    // Como la migración 23: uno borrado para siempre no vuelve.
+    if (this.server.deletedProjects.get(projectId)!.purged) throw new RemoteError('project_purged', true, 'P0001');
     this.checkWriteVersion();
     // Como la migración 10: con la carpeta pedida para la papelera de Drive, primero traerla (o sin ella, con marca).
     const d = this.server.projectDrive.get(projectId);
@@ -1812,7 +1821,7 @@ export class FakeRemote
     const role = this.server.role(this.userId);
     const staff = !this.team || role === 'owner' || role === 'admin';
     return [...this.server.deletedProjects.entries()]
-      .filter(([id]) => this.server.couldViewProject(this.userId, id))
+      .filter(([id, d]) => !d.purged && this.server.couldViewProject(this.userId, id))
       .sort((a, b) => (a[1].at < b[1].at ? 1 : -1))
       .map(([id, d]) => {
         const p = this.server.projects.get(id)!;
@@ -1838,6 +1847,41 @@ export class FakeRemote
           can_purge: can && (role === 'owner' || role === 'admin' || !this.team),
         };
       });
+  }
+
+  /**
+   * *Delete forever* como `purge_project` (migración 23): una marca; ninguna fila se borra. Los archivos subidos quedan
+   * como mandados a la papelera de Drive, que tiene que tener la carpeta antes (`drive_trash_first`).
+   */
+  async purgeProject(projectId: string): Promise<void> {
+    this.server.check();
+    if ((this.server.settings?.schemaVersion ?? 0) < PROJECT_PURGE_SCHEMA_VERSION) {
+      throw new RemoteError('Could not find the function', true, 'PGRST202');
+    }
+    const project = this.server.projects.get(projectId);
+    if (!project || !this.server.couldViewProject(this.userId, projectId)) {
+      throw new RemoteError('project_not_found', true, 'P0002');
+    }
+    const role = this.server.role(this.userId);
+    const staff = !this.team || role === 'owner' || role === 'admin';
+    if (!staff || !this.server.canManageProject(this.userId, projectId)) throw this.denied('not_allowed');
+    const d = this.server.deletedProjects.get(projectId);
+    if (d?.purged) return;
+    if (!d) throw new RemoteError('project_not_deleted', true, 'P0001');
+    if (Date.parse(d.at) > Date.now() - 30 * 86_400_000) throw new RemoteError('project_trash_not_due', true, 'P0001');
+    const drive = this.server.projectDrive.get(projectId);
+    const folderGone = !!drive && (!!drive.trashed_at || !!drive.missing_at);
+    const files = [...this.server.mediaFiles.values()].filter((f) => f.project_id === projectId && f.drive_id && !f.drive_trashed_at);
+    if (files.length > 0 && !folderGone) throw new RemoteError('drive_trash_first', true, 'P0001');
+    this.checkWriteVersion();
+    const now = new Date().toISOString();
+    for (const f of files) {
+      f.trashed_at ??= now;
+      f.purged_at ??= now;
+      f.drive_trashed_at = now;
+    }
+    this.server.projectDrive.delete(projectId);
+    d.purged = { at: now, by: this.userId };
   }
 
   async projectDeleteInfo(projectId: string): Promise<ProjectDeleteInfo> {

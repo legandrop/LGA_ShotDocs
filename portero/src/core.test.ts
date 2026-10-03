@@ -57,6 +57,9 @@ type BaseProject = {
   requested_at: string | null;
   trashed_at: string | null;
   missing_at: string | null;
+  /** Borrado para siempre (entrega 3, migración 23). `oldMedia`: `media_project` sin `purged_at` (lo frena la base). */
+  purged_at?: string | null;
+  oldMedia?: boolean;
 };
 type BaseFile = {
   project_id: string;
@@ -188,13 +191,15 @@ function fakeWorld() {
           return jsonRes(
             can
               ? { id: args.p_project, name: pr.name, deleted_at: pr.deleted_at, drive_trash_requested_at: pr.requested_at,
-                  drive_trashed_at: pr.trashed_at, drive_missing_at: pr.missing_at }
+                  drive_trashed_at: pr.trashed_at, drive_missing_at: pr.missing_at,
+                  ...(pr.oldMedia ? {} : { purged_at: pr.purged_at ?? null }) }
               : null,
           );
         }
         if (!can) return jsonRes({ code: '42501', message: 'not_allowed' }, 403);
         if (projectFn === 'request_project_drive_trash') {
           if (!pr.deleted_at) return jsonRes({ code: 'P0001', message: 'project_not_deleted' }, 400);
+          if (pr.purged_at) return jsonRes({ code: 'P0001', message: 'project_purged' }, 400);
           if (pr.missing_at) Object.assign(pr, { requested_at: null, trashed_at: null, missing_at: null });
           pr.requested_at ??= now;
         } else if (projectFn === 'project_drive_trashed') {
@@ -2480,6 +2485,33 @@ describe('portero: la carpeta de un proyecto borrado en la papelera de Drive', (
     const pre = await p.handle(new Request(`${SELF}/project/untrash`, { method: 'OPTIONS', headers: { Origin: APP } }));
     expect(pre.status).toBe(204);
     expect(pre.headers.get('Access-Control-Allow-Methods')).toContain('POST');
+  });
+
+  it('borrado para siempre (entrega 3): 409 project_purged al mandar y al traer, sin tocar Drive ni la base', async () => {
+    const { world, p, folder } = await deletedProject();
+    // Como lo deja `purge_project`: la carpeta ya se mandó y las marcas del proyecto se cerraron archivo por archivo.
+    world.files.get(folder)!.trashed = true;
+    Object.assign(world.projects.get(PROJ)!, { purged_at: '2026-11-01T10:00:00Z' });
+    const before = world.calls.length;
+    for (const route of ['trash', 'untrash'] as const) {
+      const res = await projectCall(p, route, 'owner-jwt');
+      expect(res.status).toBe(409);
+      expect(await res.json()).toMatchObject({ code: 'project_purged' });
+    }
+    expect(world.calls.slice(before).filter((c) => c.includes('googleapis'))).toEqual([]);
+    expect(changes(world, before)).toEqual([]);
+    expect(world.files.get(folder)!.trashed).toBe(true);
+  });
+
+  it('borrado para siempre, si media_project no lo dijera: la base rechaza el pedido (project_purged) y Drive no se toca', async () => {
+    const { world, p, folder } = await deletedProject();
+    Object.assign(world.projects.get(PROJ)!, { purged_at: '2026-11-01T10:00:00Z', oldMedia: true });
+    const before = world.calls.length;
+    const res = await projectCall(p, 'trash', 'owner-jwt');
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: 'project_purged' });
+    expect(world.calls.slice(before).filter((c) => c.startsWith('PATCH'))).toEqual([]);
+    expect(world.files.get(folder)!.trashed).toBeFalsy();
   });
 });
 
