@@ -182,6 +182,8 @@ export class SyncEngine {
       appVersion?: string;
       schemaVersion?: number;
       media?: MediaQueue;
+      /** Las carpetas que suben (P.9): como la cola de archivos, dejan de esperar cuando vuelve la red. */
+      folders?: { networkBack(): void };
       /** Los permisos de la persona: se actualizan en cada sincronización (ver `checkAccess`). */
       access?: AccessStore;
       /** La cola de comentarios (paso 10): sube y baja al final de cada ciclo. */
@@ -275,9 +277,10 @@ export class SyncEngine {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') return;
       void this.appHidden();
     };
-    // Volvió la red: la cola de archivos deja de esperar al portero o a Storage y prueba enseguida.
+    // Volvió la red: la cola de archivos (y la de las carpetas) deja de esperar al portero o a Storage y prueba enseguida.
     const onOnline = () => {
       this.options.media?.networkBack();
+      this.options.folders?.networkBack();
       this.files.networkBack();
       onWake();
     };
@@ -474,10 +477,11 @@ export class SyncEngine {
     try {
       const { outdated, removed } = await this.checkWorkspace();
       halt();
-      // La base contestó después de un ciclo sin conexión: la cola de archivos deja de esperar (si estaba
+      // La base contestó después de un ciclo sin conexión: la cola de archivos y la de las carpetas dejan de esperar (si estaba
       // esperando porque el portero o Storage no contestaban, puede que fuera la red) y prueba enseguida.
       if (!this.status.online) {
         this.options.media?.networkBack();
+        this.options.folders?.networkBack();
         this.files.networkBack();
       }
       // Si la base dice que sacaron a la persona, no se sube ni se baja nada más: lo del dispositivo queda

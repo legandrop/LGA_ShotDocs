@@ -11,7 +11,10 @@ export type Route =
   | { name: 'privacy' }
   | { name: 'terms' }
   // La medición del espacio del dispositivo (Docs/Doc_Copias_Locales.md, sección 9.1): sin sesión ni workspace.
-  | { name: 'storageTest' };
+  | { name: 'storageTest' }
+  // La pantalla de permiso de un asistente (MCP, Docs/Doc_Asistente.md, 9.2): la *Authorization Path* del servidor
+  // OAuth de cada Supabase es `/oauth/consent/<ref>`; el ref elige el workspace (la app es una para todos).
+  | { name: 'oauthConsent'; projectRef: string };
 
 export const PRIVACY_PATH = '/privacy';
 export const TERMS_PATH = '/terms';
@@ -29,6 +32,9 @@ export function parseRoute(pathname: string): Route {
   if (pathname === PRIVACY_PATH || pathname === PRIVACY_PATH + '/') return { name: 'privacy' };
   if (pathname === TERMS_PATH || pathname === TERMS_PATH + '/') return { name: 'terms' };
   if (pathname === STORAGE_TEST_PATH) return { name: 'storageTest' };
+  // El ref de un proyecto de Supabase: minúsculas y números (20 en supabase.co; se acepta un poco más de margen).
+  const consent = /^\/oauth\/consent\/([a-z0-9]{3,40})\/?$/.exec(pathname)?.[1];
+  if (consent) return { name: 'oauthConsent', projectRef: consent };
   return { name: 'home' };
 }
 
@@ -37,6 +43,11 @@ export type PublicRoute = Extract<Route, { name: 'privacy' | 'terms' }>;
 
 export function isPublicRoute(route: Route): route is PublicRoute {
   return route.name === 'privacy' || route.name === 'terms';
+}
+
+/** La pantalla de permiso de un asistente para el Supabase con ese ref (su *Authorization Path*). */
+export function oauthConsentPath(projectRef: string): string {
+  return `/oauth/consent/${projectRef}`;
 }
 
 export function pagePath(id: string): string {

@@ -15,6 +15,11 @@ usuarios `Guide_Create_Workspace.md` (en inglés); lo que sigue explica qué hac
 - La app solo usa la **URL del proyecto** y la **clave pública** (`sb_publishable_...`), como variables de
   entorno `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY`. La clave secreta nunca va a la app: si se carga una
   por error, la compilación se corta.
+- **Claves y llaves de firma en Wanka (2026-10-03):** se desactivaron las claves API heredadas (la `anon` y la
+  `service_role` en formato JWT; `PUT /v1/projects/<ref>/api-keys/legacy?enabled=false`) y se revocó la llave de firma
+  HS256 heredada: los tokens se firman solo con la ES256 que está en uso. La app y el portero usan la publicable
+  (`sb_publishable_…`); las pruebas de punta a punta, la secreta (`sb_secret_…`). Volver: `enabled=true` en el mismo
+  `PUT` (la llave HS256 revocada no vuelve).
 - Para desarrollo local: copiar `.env.example` a `.env.local` y completarlo.
 
 ## Base de datos
@@ -48,6 +53,7 @@ Las migraciones están en `supabase/migrations/`, en orden:
 | `20261015120000_menciones.sql` | **Sin aplicar** (v0.120; P.21, entrega 1; `Doc_Menciones.md`). Las menciones en comentarios: la tabla `comment_mentions` (una fila por comentario y persona, con el rótulo; `removed_at` y `read_at`, nada se borra; sin acceso desde la API), la regla `private.mention_allowed` (miembro activo que ve la página; un miembro a un invitado solo si ya participa; un invitado solo a quien participa, le compartió algo o lo invitó), `mention_candidates`, `set_comment_mentions` (el conjunto entero, idempotente, descarta sin error a quien no pasa la regla, mira la versión mínima), `mentions_inbox` (sin leer contadas hasta 10, lo cambiado desde una fecha; lo que ya no se ve llega solo con `id`, `gone` y `updated_at`), `mentions_index` y `mark_mentions_read`. `list_comments` y `comments_view` (por `private.comment_mentions_json`) suman `mentions` al final y `comment_authors`, a las mencionadas. `schema_version` 15. |
 | `20261016120000_menciones_e2.sql` | **Sin aplicar** (v0.125; P.21, entrega 2, ME2; `Doc_Menciones.md`). `mention_candidates` suma las filas `has_access = false` (miembros activos que no ven la página) solo para el dueño y los admins que pueden compartirla, fuera de la papelera. `share_for_mention(página, persona)`: con esa misma condición, comparte con Comentar solo esa página (por `public.share`, con el reinicio de la privacidad de lo borrado); a quien ya la ve no le cambia nada (`{"shared": false}`); `page_in_trash`, `not_allowed`, `member_not_found`. `schema_version` 16. |
 | `20261009120000_papelera_lectores.sql` | **Aplicada (2026-10-02, v0.102).** La papelera de páginas ya no se lee con Ver: `private.user_page_level` da 0 sobre una página en la papelera (o que cuelga de una) a quien tiene menos de 3 y a los invitados, y la política de lectura de `pages` (`can_view_page_row`, que con un permiso sobre el proyecto entero dejaba ver cualquier fila) aplica la misma regla. Las dos pasan a PL/pgSQL con una sola pasada por la cadena de padres (más rápidas que antes). No cambia firmas ni sube `schema_version`. Ver "La papelera de páginas y quién la ve". |
+| `20261027120000_mcp_plan_b.sql` | **Sin aplicar** (paso 2 del MCP, `Doc_Asistente.md`, "Pasos reales"; no sube `schema_version`). El token de un asistente (con `client_id`) solo llega a `/rpc/mcp_*`: `private.mcp_pre_request()` conectada como `pgrst.db_pre_request` del rol `authenticator`, las cuatro políticas de Storage de `authenticated` con `client_id is null` y `public.mcp_ping()`. Ver "El MCP: plan B". |
 
 Reglas del esquema:
 
@@ -178,6 +184,60 @@ Deja los snapshots **apagados** (`workspace_settings.snapshot_min_version` nulo)
 - Sin la migración, la app dice *This workspace's database needs an update to sync your key.* y la clave local sigue.
 - **Pruebas:** `supabase/tests/clave_sincronizada_permisos.sql` (corrida en `begin … rollback`).
 
+### El MCP: plan B (`20261027120000_mcp_plan_b.sql`)
+
+Un cliente MCP recibe del servidor OAuth de Supabase un token de la persona con `client_id` y rol `authenticated`: sin
+esto valdría como una sesión de la app. La migración (sin aplicar; **no sube `schema_version`**, la app no depende de
+nada nuevo):
+
+- **`private.mcp_pre_request()`**, la función que PostgREST corre antes de cada pedido (`db_pre_request`), después de
+  cambiar al rol del pedido y cargar `request.jwt.claims` y `request.path` (la ruta sin `/rest/v1`: `/rpc/share`,
+  `/pages`). Si los claims no dicen `client_id`, vuelve sin convertir nada (toda sesión de la app, `anon` con o sin el
+  header del link público, `service_role`). Si lo dicen, lee el JSON: con `client_id` arriba de todo (también vacío o
+  null) o si no se puede leer, pasa solo una ruta `^/rpc/mcp_[a-z0-9_]+$`; lo demás (también `/rpc/graphql`, otra
+  mayúscula, `../`, sin ruta) corta con `42501 mcp_route_not_allowed` (403). Es `stable` y no lee tablas.
+- **Corre en cada pedido de la app a PostgREST:** si fallara, la app entera dejaría de andar. Por eso la ejecutan
+  `anon`, `authenticated` y `service_role` (a `service_role` se le suma `usage` en `private`, que no tenía), nunca
+  `PUBLIC`, y en una sesión normal no hace nada que pueda tirar un error. `authenticator` no la necesita (PostgREST la
+  llama con el rol ya cambiado).
+- **Conectada** con `alter role authenticator set pgrst.db_pre_request = 'private.mcp_pre_request'` y `notify pgrst,
+  'reload config'` (llega al hacer commit, cuando la función ya existe).
+- **Storage** no pasa por PostgREST: `page_files_select`, `page_files_insert`, `thumbs_select` y `thumbs_insert` suman
+  `and (auth.jwt() ->> 'client_id') is null` con `alter policy` (el resto igual; no hay un momento sin política).
+  `thumbs_select_link` (`anon`) no cambia. Realtime: la app no lo usa y no tiene políticas.
+- **`public.mcp_ping()`** devuelve `auth.uid()` (solo `authenticated`): con un token de asistente prueba que llega a
+  `/rpc/mcp_ping` y a nada más.
+- **Volver atrás** (nunca con una sesión OAuth viva: un cliente que siga renovando tendría toda la base):
+
+  ```sql
+  alter role authenticator reset pgrst.db_pre_request;
+  notify pgrst, 'reload config';
+  alter policy page_files_select on storage.objects using (bucket_id = 'page-files'
+    and private.can_view_page(private.try_uuid((storage.foldername(name))[1])));
+  alter policy page_files_insert on storage.objects with check (bucket_id = 'page-files'
+    and private.can_edit_page(private.try_uuid((storage.foldername(name))[1])));
+  alter policy thumbs_select on storage.objects using (bucket_id = 'thumbs'
+    and private.file_level(private.thumb_file_id(name)) >= 1);
+  alter policy thumbs_insert on storage.objects with check (bucket_id = 'thumbs'
+    and private.file_level(private.thumb_file_id(name)) >= 3);
+  ```
+
+  La función y `mcp_ping` pueden quedar (sin la configuración, PostgREST no la llama).
+- **Control después de aplicar (antes de prender el servidor OAuth):** que PostgREST tomó el pre-request. Si no lo
+  tomara, la app andaría igual y el token de un asistente tendría toda la base. Usar la app un minuto y, en el SQL Editor:
+
+  ```sql
+  select coalesce(sum(calls), 0) from extensions.pg_stat_statements
+  where query ~* '^\s*select\s+"?private"?\s*\.\s*"?mcp_pre_request"?\s*\(\s*\)\s*;?\s*$';
+  ```
+
+  Tiene que dar más que 0 (la llamada que hace PostgREST antes de cada pedido; antes de aplicar da 0). Si da 0,
+  `notify pgrst, 'reload config';`, usar la app y volver a mirar; si sigue en 0, no prender el servidor OAuth.
+- Se puede volver a aplicar (`create or replace`). `alter policy` toma un instante un lock exclusivo de
+  `storage.objects`: aplicarla sin subidas en curso.
+- **Pruebas:** `supabase/tests/mcp_plan_b_permisos.sql` (corrida en `begin … rollback` con la migración adelante; 9 de 9
+  mutantes mueren, también `thumbs_insert` sin la condición, con un segundo archivo `.jpg`). `link_publico_permisos.sql` suma `private.mcp_pre_request` a lo que `anon` puede ejecutar.
+
 ### Aplicar las migraciones
 
 Con un token personal de Supabase (supabase.com → Account → Access Tokens):
@@ -229,6 +289,7 @@ un error que dice qué; si todo pasa, devuelve una fila con `result = 'ok'`.
 | `version_minima_archivos_permisos.sql` | La versión mínima en la cola de archivos: sin mínima anda todo; con una mínima menor a 0.090, las funciones con versión comparan y las de siempre andan; con 0.090 o más, las de siempre y las versiones menores, ilegibles o ausentes dan `app_outdated` sin escribir nada; el permiso va antes que la versión; anon no llama a nada. |
 | `version_minima_arbol_permisos.sql` | La versión mínima en el árbol y los comentarios: sin mínima anda todo; con una mínima menor a 0.099, sin header anda y con un header menor se rechaza; con 0.099 o más, sin header, vacío, ilegible o menor, crear (también reintentar una que ya está), renombrar, mover, papelera, ícono y formato, crear y renombrar proyectos, comentar, responder, editar, borrar, resolver e importar, y archivar, borrar y restaurar proyectos dan el 503 `app_outdated` sin escribir nada (repetir lo ya hecho anda), y leer sigue andando; la mínima y las mayores escriben todo sin duplicar; el permiso va antes; la consola no se frena; anon no llama a nada. |
 | `papelera_lectores_permisos.sql` | La papelera de páginas para quien solo ve: con una página en la papelera, su hija y una raíz en la papelera compartida sola, Ver (sobre el proyecto, sobre la raíz de arriba y sobre la página misma), Comentar y una invitada con Editar no ven la fila ni el contenido (`pull_page_updates` y la tabla), los comentarios (`list_comments`, la tabla, `comment_authors`, comentar), el archivo que solo usa esa página (`file_level`, `media_file` del portero, `files`) ni su uso de un archivo compartido, y la invitada no escribe ni renombra; Editar, una admin con Editar y el dueño sí (Editar no restaura: pide 4); el dueño crea adentro de una página de la papelera; Editar solo sobre la hija ve la hija y no la madre; una invitada con crear que reintenta un alta con el id de una página de la papelera no la ve ni la pisa; una invitada con crear manda una página a la papelera, deja de verla y no la restaura; al restaurar, Ver ve todo de nuevo con contenido, comentarios y archivo, la invitada escribe y quien comenta comenta. |
+| `mcp_plan_b_permisos.sql` | El plan B del MCP (`20261027120000_mcp_plan_b.sql`): la configuración de PostgREST y los permisos de la función (`anon`, `authenticated` y `service_role` sí; `PUBLIC` no); imitando a PostgREST, la sesión de la app pasa a todo (también sin ruta y con `client_id` en sus metadatos), `anon` sin JWT, el link público y `service_role` pasan; el token con `client_id` pasa solo a `/rpc/mcp_*` y no a `/pages`, `/rpc/share`, `/rpc/graphql`, `MCP_`, `../`, `mcp-`, con barra de más, sin ruta, con `client_id` vacío o null, ni con unos claims rotos; `mcp_ping` da la persona y `anon` no la ejecuta; en Storage la app sube y ve fotos y miniaturas y el token de asistente no; las cuatro políticas con la condición y lo de antes igual, la del link sin tocar. |
 
 **Pruebas de punta a punta** (no están en el repo): crean sus usuarios con la API de administración
 (`auth.admin.createUser`, que no pasa por el hook *Before User Created*) y les insertan un proyecto por SQL.
@@ -370,14 +431,17 @@ Cómo entra la gente:
   `mailer_otp_length: 8` y `mailer_otp_exp: 3600`). Supabase trae 6; la app acepta de 6 a 10
   (`src/ui/Login.tsx`).
 - Contraseñas: la app no las usa y la base no las acepta: una sesión abierta con contraseña no ve ni puede
-  nada (`private.session_allowed`, ver "Abrir el registro solo para invitados"). Quedan los valores de
-  fábrica (`password_min_length: 6`, sin chequeo de contraseñas filtradas).
-- Verificación en dos pasos: vienen prendidos de fábrica los códigos de app autenticadora
-  (`mfa_totp_enroll_enabled` y `mfa_totp_verify_enabled`), aunque la app no los ofrece; por teléfono y
-  WebAuthn, apagados.
-- Hooks: todos apagados (`hook_*_enabled: false`), incluidos *Before User Created*
-  (`hook_before_user_created_enabled` y `hook_before_user_created_uri`) y *Custom Access Token*
-  (`hook_custom_access_token_enabled` y `hook_custom_access_token_uri`); ver "Abrir el registro solo para
+  nada (`private.session_allowed`, ver "Abrir el registro solo para invitados"). Desde el 2026-10-03 (paso 1 del MCP,
+  `Doc_Asistente.md`): cambiar la contraseña pide la actual (`security_update_password_require_current_password: true`)
+  y, en una sesión de más de 24 horas, un código por correo (`security_update_password_require_reauthentication: true`).
+  El resto, de fábrica (`password_min_length: 6`, sin chequeo de contraseñas filtradas).
+- Verificación en dos pasos: desde el 2026-10-03 no se pueden agregar códigos de app autenticadora
+  (`mfa_totp_enroll_enabled: false`; `mfa_totp_verify_enabled` sigue de fábrica); la app no los ofrece. Por teléfono
+  y WebAuthn, apagados.
+- Hooks: *Custom Access Token* **conectado desde el 2026-10-03** (`hook_custom_access_token_enabled: true`,
+  `hook_custom_access_token_uri: "pg-functions://postgres/private/hook_custom_access_token"`; paso 1 del MCP). Los
+  demás apagados (`hook_*_enabled: false`), incluido *Before User Created* (`hook_before_user_created_enabled` y
+  `hook_before_user_created_uri`); ver "Abrir el registro solo para
   invitados". Captcha apagado (`security_captcha_enabled: false`).
 
 ### Abrir el registro solo para invitados
@@ -459,7 +523,8 @@ por código corta antes de llegar al hook; la invitación desde el panel no.
    }
    ```
 
-   Se apaga con `{"hook_custom_access_token_enabled": false}`.
+   Se apaga con `{"hook_custom_access_token_enabled": false}`. **En Wanka está conectado desde el 2026-10-03** (paso 1
+   del MCP, `Doc_Asistente.md`).
 7. **Recién ahora, abrir el registro.** `signup.json`:
 
    ```json

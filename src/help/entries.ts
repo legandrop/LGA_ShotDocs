@@ -112,6 +112,8 @@ const ASSISTANT = '0.118';
 const ASSISTANT_A2 = '0.126';
 /** El asistente, entrega A3 (*Suggest caption* sobre una foto): la versión la pone quien publica. */
 const ASSISTANT_A3 = '0.146';
+/** La pantalla de permiso de un asistente (MCP, Doc_Asistente.md, 9.2): la versión la pone quien publica. */
+const MCP_CONSENT = '0.147';
 /** *Dictate to report* (Docs/Doc_Dictado.md, entrega V1): la versión la pone quien publica. */
 const DICTATION = '0.135';
 /** *Dictate to report*, entrega V2 (la cola sin red): la versión la pone quien publica. */
@@ -119,7 +121,7 @@ const DICTATION_QUEUE = '0.139';
 /** *Dictate to report*, entrega V3 (el micrófono propio): la versión la pone quien publica. */
 const DICTATION_VOICE = '0.139';
 /** *Dictate to report*, entrega V4 (el plano activo, las correcciones, la página del plano, el Atajo de iOS): la versión la pone quien publica. */
-const DICTATION_V4 = '0.148';
+const DICTATION_V4 = '0.150';
 /** Las plantillas de fábrica (Docs/Doc_Plantillas.md, entregas 0 y 1): la versión se ajusta al publicar. */
 const TEMPLATES = '0.117';
 /** Las plantillas propias (Docs/Doc_Plantillas.md, entrega 3): la versión la pone quien publica. */
@@ -675,6 +677,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.deletedPrivacy.text',
     words: ['borrado', 'borrar', 'privacidad', 'cliente', 'invitado', 'deleted', 'privacy', 'client', 'guest', 'preparación', 'prepared'],
     since: DELETED_PRIVACY,
+  },
+  {
+    id: 'mcpConnect',
+    section: 'sharing',
+    title: 'help.mcpConnect.title',
+    text: 'help.mcpConnect.text',
+    words: ['mcp', 'conector', 'connector', 'claude', 'chatgpt', 'cursor', 'asistente', 'assistant', 'conectar', 'connect', 'permitir', 'allow', 'deny', 'oauth', 'permiso', 'consent'],
+    since: MCP_CONSENT,
+    when: 'portero',
   },
 
   // --- Papelera ---

@@ -183,8 +183,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   subcarpeta en NFC, buscando también las de antes (NFC, tal cual y NFD), y retomar en el mismo dispositivo con una
   copia de la carpeta que trae los acentos en la otra forma (un pendrive, una carpeta de red) reconoce los archivos en
   vez de pedirlos de nuevo; y la cola de una carpeta cierra la vuelta con el portero colgado (B.11). Desde otra
-  computadora, soltarla de nuevo sigue siendo otra carpeta (otra tarjeta), por diseño. Detalle en
-  `Doc_Carpetas.md`, "Cómo quedó", "Cómo quedó (entrega 2)" y "Cómo quedó (entrega 3)".
+  computadora, soltarla de nuevo sigue siendo otra carpeta (otra tarjeta), por diseño. **Entrega 4 hecha (v0.149, rama
+  `lega/carpetas-e4`):** la cola de una carpeta escucha la vuelta de la red y *Resume* vuelve a cero la cuenta de
+  esperas (O5), el listado de varias subcarpetas ya no corta con `409` por más de un minuto entre páginas (O7) y una
+  parte a la que Drive no le contesta al portero cuenta como trabada a los 90 s (B.11). Detalle en
+  `Doc_Carpetas.md`, "Cómo quedó", "Cómo quedó (entrega 2)", "Cómo quedó (entrega 3)" y "Cómo quedó (entrega 4)".
 - **P.10 Espacio en el dispositivo y "Available offline"** (Lega, 2026-09-30 y D-25 del 2026-10-01): tope
   elegible, de fábrica 2 GB por workspace en cada dispositivo (pasado el tope, un aviso ofrece liberar las copias ya
   confirmadas en el Drive que hace más que no se abren, y se liberan recién con el sí; la miniatura queda), marcar una página o un proyecto para usarlo sin red (con una ventana de casillas y
@@ -496,7 +499,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   botón en el 401, la clave de *Voice* en el mismo sobre y las notas de voz en la ventana de salir. Falta medir en el
   iPhone y el gestor de contraseñas real (recorrido de Lega). Quedó de la auditoría de S2 (improbable): *Change
   passphrase…* no rechaza una copia más vieja repuesta con la misma generación que el dispositivo conoce; al recifrarla le
-  da un `savedAt` nuevo y los otros dispositivos la aceptarían (es una clave vieja de la persona, no filtra nada). La prueba de `clearVoiceFromCopy` ya está (v0.0XX, con la entrega V4 del dictado: el mutante que no la llama muere). Esc en *Assistant…* (y en *Voice*) cierra solo esa ventana, no el panel ni la hoja de abajo (v0.0XX). **A3 implementada (v0.146):** *Suggest caption* en la barra de la foto y en el panel, con el aviso
+  da un `savedAt` nuevo y los otros dispositivos la aceptarían (es una clave vieja de la persona, no filtra nada). La prueba de `clearVoiceFromCopy` ya está (v0.150, con la entrega V4 del dictado: el mutante que no la llama muere). Esc en *Assistant…* (y en *Voice*) cierra solo esa ventana, no el panel ni la hoja de abajo (v0.150). **A3 implementada (v0.146):** *Suggest caption* en la barra de la foto y en el panel, con el aviso
   antes de mandarla, la foto rearmada en el dispositivo a 1024 px sin EXIF, la vista previa que se retoca y el pie como
   texto debajo de la foto (en una celda, en la misma celda); ver "Cómo quedó A3". Quedó de A3 (chico): el texto
   alternativo no se hace (la app no tiene dónde guardarlo); una foto que no es del Drive (`https` de afuera) puede no
@@ -507,10 +510,21 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   hoy, el token de un tercero podría ponerle una contraseña a la cuenta en las primeras 24 horas de su sesión, aunque
   con ella no ve nada en la base: se cierra conectando el hook que ya rechaza el ingreso con contraseña), el plan B probado
   en SQL de solo lectura y la CPU con páginas reales (en el plan gratis entran listar, buscar y leer páginas de hasta
-  ~16 KB). Faltan los ocho pasos con Supabase y Cloudflare reales ("Cómo quedó M0"), después M1 a M3. Para M1
+  ~16 KB). Faltan los ocho pasos con Supabase y Cloudflare reales ("Cómo quedó M0"), después M1 a M3. **Lo de código de los
+pasos 1 a 5 quedó listo (tanda del 2026-10-03, "Pasos reales"):** el hook probado en rollback con eventos de la forma real (12 de
+12; el `PATCH` y su vuelta, en el paso 1); la migración del plan B `20261027120000_mcp_plan_b.sql` (sin
+aplicar); la pantalla de permiso `/oauth/consent/<ref>`; `MCP_M0` en el jsonc del portero. El paso 1 está prendido
+desde el 2026-10-03; falta prender el 2 (con su control de `pg_stat_statements` antes del 5), 3 a 5 y los pasos 6 a 8.
+Para M1 (de la auditoría de los pasos reales, O6): las `mcp_*` devuelven `json` o escalares, nunca filas de una tabla
+(PostgREST deja embeber tablas relacionadas desde una función que devuelve un tipo de tabla, y el pre-request la dejaría
+pasar). Quedó de esa auditoría (chico): una prueba unitaria de `Login` con `consent` que mire que no ofrece *Change*
+(hoy lo cubre solo el recorrido en Chromium, O7); un 500 de Supabase en la pantalla de permiso se muestra como *No
+connection* (supabase-js lo convierte en `AuthRetryableFetchError`; el detalle dice 500 y hay *Try again*, O8); el
+camino rápido del pre-request busca la clave escrita tal cual (`client_id` no lo dispara; no es alcanzable porque
+Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Para M1
   (de la auditoría de M0): el título de la página y los títulos de `list_pages` y `search_titles` van adentro del
   contenido no confiable (hoy el título de `read_page` va afuera del envoltorio y las listas salen como JSON crudo), y
-  la pantalla de permiso muestra el host del `redirect_uri` además del nombre del cliente. De la re-verificación de M0: la migración de M1 da `execute` sobre `private.mcp_pre_request` a `anon` y `authenticated` (si falta, falla todo pedido a PostgREST), y la vuelta atrás del paso 1 vacía por SQL las contraseñas que pueda haber puesto un tercero (o deja el hook conectado). Lo que Lega prueba con
+  la pantalla de permiso muestra el host del `redirect_uri` además del nombre del cliente. De la re-verificación de M0: la migración del plan B da `execute` sobre `private.mcp_pre_request` a `anon`, `authenticated` y `service_role` (hecho, con su prueba), y la vuelta atrás del paso 1 vacía por SQL las contraseñas que pueda haber puesto un tercero (o deja el hook conectado). Lo que Lega prueba con
   sus claves está en "Cómo quedó A1" y "Cómo quedó A2". Quedó de A2 (chico): la política no se actualiza en vivo en un
   panel ya abierto (se lee al abrirlo); *Format as…* no conserva los colores de un bloque al que le cambia el texto, y
   cuando junta varios bloques en menos (renglones a una tabla) los comentarios de los que sobran quedan sin bloque;
@@ -570,7 +584,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   C5, OpenAI, Gemini o compatible con pistas, *Voice* con la segunda clave, *Insert at cursor*, *Ask…*); falta que Lega
   lo pruebe en su iPhone (instalada y en Safari) con OpenAI y con Gemini, y que la segunda clave siga a la clave
   sincronizada (hecho en S2, v0.143, junto con O5: olvidar la clave olvida también la de voz y la ventana de salir
-  cuenta las notas). El reconocimiento del navegador quedó afuera (optativo y apagado). **V4 hecha (v0.0XX, sección
+  cuenta las notas). El reconocimiento del navegador quedó afuera (optativo y apagado). **V4 hecha (v0.150, sección
   18):** el plano activo (*Shot: 12_010 ▾*, fijo entre notas), las correcciones encadenadas («no, era un 35» con la
   dirección de ahora), el lente también en la página *Shot Breakdown* del plano (destildado, solo si está vacía o era
   la copia del reporte, con su guarda y *Undo*), *Add as comment* para quien comenta y `/dictate#<texto>` para un Atajo
@@ -584,7 +598,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   V1 (texto dictado con el teclado → ubicar; requiere A2 de P.24 en `main`), V2 (la cola sin red), V3 (el micrófono
   propio, guantes y ruido), V4 (plano activo, correcciones, la página del plano, el botón de acción del iPhone).
   Queda para medir: transcripción adentro del teléfono (Whisper en WebAssembly), sin red y privada.
-  El resguardo de 600 ms contra el doble toque en *Apply* vale solo para un clic o un toque (v0.0XX). Queda de V4
+  El resguardo de 600 ms contra el doble toque en *Apply* vale solo para un clic o un toque (v0.150). Queda de V4
   (chico): copiar a la página del plano solo el lente (otras columnas con su fila en la ficha se suman en `FIELDS` de
   `shotPage.ts`); lo escrito en la página del plano no entra en el ⌘Z de esa página (se deshace con *Undo* de la hoja,
   como el reemplazo del proyecto antes de D10).
@@ -716,21 +730,26 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
      chica); y las pasadas de `PageFiles.pushPending` esperan después de cerrar por Storage colgado. Probado con
      relojes simulados y en Chromium contra un portero y un Storage locales que se cuelgan (`Doc_Portero.md`,
      "Colgado para todos"; `Doc_Sincronizacion.md`; `Doc_Carpetas.md`, "Cómo quedó (entrega 3)").
-   - **Queda (BAJO):** un archivo grande al que el portero se le cuelga en la última parte espera su plazo de
-     respuesta (hasta unos 10 minutos y medio) antes de contar como trabado, en las dos colas.
-   - **Queda (BAJO, auditoría de la entrega 3, O5): la cola de una carpeta no escucha la vuelta de la red.** Escenario:
-     una carpeta sube, se corta el wifi 5 minutos, la cola cierra la vuelta varias veces y queda esperando 2 o 4
-     minutos; vuelve el wifi y la carpeta sigue esperando hasta que vence esa espera (los sueltos y `page-files`, en
-     cambio, prueban enseguida con `networkBack`). Y *Pause* y después *Resume* (o *Retry*) no vuelven a cero la
-     cuenta de trabadas ni la de esperas: un *Resume* con la racha en 2 o más arranca con otra espera más larga. Nada
-     se pierde. Arreglo: que `FolderUploads` tenga su `networkBack` (despierta `pauseFor`) y que *Resume* y *Retry*
-     pongan en cero `stallStreak` y `stallRounds`.
-   - **Queda (BAJO, auditoría de la entrega 3, O7): un listado de varias subcarpetas que tarda más de un minuto entre
-     páginas puede dar `409 changed`.** Escenario: *Download all* de una carpeta con 36 subcarpetas o más; entre una
-     página y la siguiente Drive pide ir más despacio y la app espera más de 60 s; en la página siguiente el portero
-     tiene que volver a mirar todas en Drive, se pasa del tope de llamados y contesta `changed`. La app cae a listar
-     de a una (`listRound`): no hay bucle ni se pierde nada, solo tarda más. Arreglo posible: con `pageToken`,
-     devolver las que no entran como `later` en vez de cortar.
+   - **Hecho (v0.149, rama `lega/carpetas-e4`; `Doc_Carpetas.md`, "Cómo quedó (entrega 4)"):**
+     - **La última parte de un archivo grande:** el portero, con la parte ya leída, espera a Drive a lo sumo 90 s
+       (`PART_ANSWER_MS`) y contesta `504 stalled` si la app lo pide (`?stall=1`); la app lo toma como una trabada, en
+       las dos colas, sin esperar su plazo de respuesta (hasta 10 minutos y medio, que sigue haciendo falta para un
+       proxy que retiene el cuerpo). Queda sin cubrir un portero que se cae sin contestar con la parte ya leída.
+     - **O5:** la cola de una carpeta escucha la vuelta de la red (`FolderUploads.networkBack`, llamado por el motor
+       como el de los sueltos y `page-files`) y *Resume*, *Retry* y volver a soltarla ponen en cero `stallStreak` y
+       `stallRounds`.
+     - **O7:** con `partial: true`, una página siguiente del listado de varias subcarpetas devuelve en `later` las
+       que no entran en el tope de llamados y en `failed` las que ya no son del árbol, en vez de cortar con `409
+       changed`; la app descarta lo suyo y las lista de nuevo. A una app anterior el portero le sigue contestando `409`.
+     Probado con relojes simulados y en Chromium contra un portero local que se cuelga o contesta `504 stalled`.
+   - **Queda (BAJO, auditoría de la entrega 4, O2): medir con el portero publicado** un video de varios GB al que
+     Drive tarda más de 90 s en cerrar la última parte. Si Google contestara `308` con todo recibido mientras cierra el
+     archivo, la app mandaría una parte vacía, el portero la rechazaría con `400` y el archivo gastaría un intento hasta
+     *Retry* (nada se pierde ni se duplica). Lo hace Lega con un archivo enorme; si pasa, la app tendría que tomar
+     «todo recibido sin `done`» como «preguntar de nuevo más tarde».
+   - **Queda (informativa, O4):** en las páginas siguientes del listado de varias, el portero vuelve a comprobar las
+     subcarpetas que la app ya descartó (gasta parte del tope de 36 llamados; converge, sin bucle). Arreglo posible:
+     que la app mande cuáles saltear (`skip`).
 12. **Importar de Coda, direcciones sueltas: lo que quedó de v0.069** (`Doc_Importar_Coda.md`, "Direcciones
     sueltas"). **Falta:**
     - **Hecho (v0.071 y v0.087): el anclaje de un comentario** pegado a un renglón con direcciones: un último

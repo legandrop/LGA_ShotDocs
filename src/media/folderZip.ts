@@ -23,7 +23,8 @@ export interface FolderLister {
   folderList(file: string, dir?: string | null, pageToken?: string | null): Promise<FolderListing>;
   /**
    * Varias subcarpetas por pedido (hasta `FOLDER_LIST_DIRS`), de un portero que lo sabe. `null`: el portero es
-   * anterior (no devolvió `lists`): se lista de a una con `folderList`, como sin este método.
+   * anterior (no devolvió `lists`): se lista de a una con `folderList`, como sin este método. Las páginas siguientes
+   * van con los mismos `dirs`; en ellas, `later` y `failed` pueden traer algunas que ya venían (ver `listRound`).
    */
   folderListDirs?(file: string, dirs: string[], pageToken?: string | null): Promise<FolderListingMany | null>;
 }
@@ -185,15 +186,23 @@ export async function planFolder(
    * después (el tope de llamados a Drive de un pedido). Si el pedido falla a mitad (o el portero no sabe de
    * `dirs`), se descarta lo recibido de esas y se listan de a una: una que no anda no pierde a las otras. Si Drive
    * pide ir más despacio y no cede, quedan anotadas con `rate` (de a una serían igual de lentas).
+   *
+   * En una página siguiente el portero puede dejar alguna para después o darla por perdida (más de un minuto entre
+   * páginas y ya no entran todas en su tope de llamados a Drive, o una se movió afuera): se descarta lo que ya se
+   * tenía de esa y se lista de nuevo en la vuelta siguiente (o queda anotada), y las demás siguen con sus páginas. Las
+   * páginas siguientes se piden con los mismos `dirs` de la primera, aunque alguna haya quedado afuera: Drive ata el
+   * token a la consulta.
    */
   const listRound = async (nodes: Node[]): Promise<Node[]> => {
     const byId = new Map(nodes.map((n) => [n.id!, n]));
     let accepted = nodes;
     const later: Node[] = [];
     let token: string | null = null;
+    // Los `dirs` de la primera página: las siguientes van con los mismos.
+    let query: string[] | null = null;
     try {
       do {
-        const ids = accepted.map((n) => n.id!);
+        const ids = query ?? accepted.map((n) => n.id!);
         const page: FolderListingMany | null = await withRate(() => lister.folderListDirs!(fileId, ids, token), wait, opts.signal);
         if (!page) {
           if (token) throw new Error('The media server changed its answer.');
@@ -212,6 +221,24 @@ export async function planFolder(
             else if (n.id! in page.lists) accepted.push(n);
             else n.failed = 'no_answer';
           }
+          query = accepted.map((n) => n.id!);
+        } else {
+          // Una página siguiente: la que el portero dejó para después o dio por perdida sale de esta vuelta, sin lo
+          // que ya se tenía de ella (incompleto).
+          const deferred = new Set(page.later);
+          const still: Node[] = [];
+          for (const n of accepted) {
+            const code = page.failed[n.id!];
+            if (code === undefined && !deferred.has(n.id!) && n.id! in page.lists) {
+              still.push(n);
+              continue;
+            }
+            dropEntries(n);
+            if (code !== undefined) n.failed = code;
+            else if (deferred.has(n.id!)) later.push(n);
+            else n.failed = 'no_answer';
+          }
+          accepted = still;
         }
         const mine = new Set(accepted);
         for (const [id, entries] of Object.entries(page.lists)) {
@@ -219,7 +246,8 @@ export async function planFolder(
           if (n && mine.has(n)) addEntries(n, entries);
         }
         opts.onProgress?.({ ...progress });
-        token = page.nextPageToken;
+        // Si ya no queda ninguna de esta vuelta, no hace falta seguir con las páginas.
+        token = accepted.length > 0 ? page.nextPageToken : null;
       } while (token);
     } catch (err) {
       if (isAbort(err)) throw err;

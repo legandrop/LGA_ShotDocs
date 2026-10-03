@@ -1,6 +1,6 @@
 # Dictado por voz y notas informales que se ubican en el reporte
 
-**Estado: entregas V1 (v0.135), V2 (v0.139), V3 (v0.139) y V4 (v0.0XX) implementadas.** Cómo quedaron y lo que cambió
+**Estado: entregas V1 (v0.135), V2 (v0.139), V3 (v0.139) y V4 (v0.150) implementadas.** Cómo quedaron y lo que cambió
 al implementarlas: secciones 15 a 18, al final. Roadmap P.27; pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.123, con el
 asistente A1 publicado (v0.118) y A2 terminado en su rama (`lega/asistente-a2`, en auditoría). Las decisiones están
 propuestas (DI1 a DI9, sección 13) y valen hasta que Lega diga otra cosa. Lo medido está en "Cómo se midió", al final;

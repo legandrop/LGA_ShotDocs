@@ -1466,7 +1466,7 @@ La auditoría independiente (nivel alto) dio "no aprobado" por un bloqueante. Co
 
 Mutantes de la ronda: 8 de 9 mueren (el equivalente de arriba).
 
-### Restos arreglados con la entrega V4 del dictado (v0.0XX)
+### Restos arreglados con la entrega V4 del dictado (v0.150)
 
 - **Esc en *Assistant…*** cerraba también el panel (o *Dictate to report*) de abajo: la ventana escuchaba Esc en el
   documento, en la fase de burbuja, y el foco seguía en el engranaje del panel porque el primer campo aparece recién
@@ -1640,7 +1640,10 @@ en memoria con una consulta de solo lectura, sin escribirlas a disco; todas son 
 - **M0-8 · Contrato provisional de las `mcp_*`:** `mcp_list_projects()`, `mcp_list_pages(p_project, p_parent)`,
   `mcp_search_titles(p_query, p_project)` y `mcp_pull_page(p_page, p_max_bytes)` → `{id, title, shared_with_guests,
   bytes, too_large, updates[]}` (base64, la base primero), con errores por mensaje (`assistant_disabled`,
-  `mcp_not_connected`, `mcp_project_not_allowed`, `mcp_rate_limited`, `not_found`). Se fija en M1.
+  `mcp_not_connected`, `mcp_project_not_allowed`, `mcp_rate_limited`, `not_found`). Se fija en M1. Las `mcp_*` devuelven
+  `json` o escalares, **nunca filas de una tabla**: PostgREST deja embeber tablas relacionadas (`?select=*,pages(*)`)
+  desde una función que devuelve un tipo de tabla, y el pre-request del plan B la dejaría pasar (auditoría de los pasos
+  reales, O6).
 - **M0-9 · Orígenes:** sin `Origin` (clientes nativos y de servidor) o los de la app; un cliente que corre en un navegador
   (el *MCP Inspector*) necesita sumarse a mano. Sin CORS en `/mcp` por ahora.
 - **M0-10 · Yjs perezoso:** se carga en el primer `read_page`, así el portero apagado o un pedido que no lee no lo
@@ -1654,17 +1657,25 @@ en memoria con una consulta de solo lectura, sin escribirlas a disco; todas son 
 1. **Cerrar la cuenta al token de un tercero** (Supabase, `PATCH /v1/projects/znlvpuddswymxpffgvbz/config/auth`):
    `hook_custom_access_token_enabled: true` con `hook_custom_access_token_uri:
    "pg-functions://postgres/private/hook_custom_access_token"` (la función ya está en la base; `Doc_Supabase.md`),
-   `security_update_password_require_reauthentication: true` y `mfa_totp_enroll_enabled: false`. Cambia: ninguna sesión
-   abierta con contraseña recibe un token (tampoco al renovarla); en una sesión de más de 24 horas, poner una contraseña
-   pide un código por correo; no se pueden agregar factores TOTP. La app no usa contraseñas ni MFA. El hook corre en
+   `security_update_password_require_reauthentication: true`, `security_update_password_require_current_password:
+   true` y `mfa_totp_enroll_enabled: false`. Cambia: ninguna sesión abierta con contraseña recibe un token (tampoco al
+   renovarla); cambiar la contraseña de una cuenta que tiene una pide la actual, y en una sesión de más de 24 horas,
+   además, un código por correo; no se pueden agregar factores TOTP. La app no usa contraseñas ni MFA. El hook corre en
    cada ingreso y renovación de todos: antes de seguir, entrar y salir con código en la app (si fallara, no entraría
-   nadie). Volver: `hook_custom_access_token_enabled: false` y los otros dos campos en `false` y `true`.
+   nadie). Volver: `hook_custom_access_token_enabled: false`, los dos `security_update_password_*` en `false` y
+   `mfa_totp_enroll_enabled: true`. **Aplicado el 2026-10-03** (con los cinco campos).
 2. **El plan B en la base** (una migración de M1 o una de prueba, auditada): `private.mcp_pre_request()` con la regla
    probada (en `private`: con el prefijo `mcp_` en `public` quedaría expuesta por la propia regla), `alter role
    authenticator set pgrst.db_pre_request = 'private.mcp_pre_request'`, `notify pgrst, 'reload
    config'`, la condición `client_id is null` en las cuatro políticas de Storage y una `mcp_ping()` que devuelve
    `auth.uid()`. Comprobar que la app sigue andando igual (entrar, abrir, editar, subir una foto) y que
-   `current_setting('request.path')` llega a la función en el PostgREST de Supabase. Volver:
+   `current_setting('request.path')` llega a la función en el PostgREST de Supabase. **Control obligatorio antes del
+   paso 5: que PostgREST tomó el pre-request.** Si no lo tomara (configuración sin recargar), la app andaría igual pero
+   el token de un asistente tendría toda la base. Después de aplicar y usar la app un minuto, en el SQL Editor:
+   `select coalesce(sum(calls), 0) from extensions.pg_stat_statements where query ~*
+   '^\s*select\s+"?private"?\s*\.\s*"?mcp_pre_request"?\s*\(\s*\)\s*;?\s*$';` tiene que dar más que 0 (es la llamada
+   que hace PostgREST antes de cada pedido; hoy da 0). Si da 0: `notify pgrst, 'reload config';`, usar la app y volver
+   a mirar; si sigue en 0, no prender el paso 5. Volver:
    `alter role authenticator reset pgrst.db_pre_request; notify pgrst, 'reload config';` y las políticas de antes.
 3. **La pantalla de permiso en la app** (código: la ruta `/oauth/consent/<ref>` con
    `supabase.auth.oauth.getAuthorizationDetails` y *Allow* / *Deny*; para M0 alcanza sin elegir proyectos). Muestra,
@@ -1672,8 +1683,9 @@ en memoria con una consulta de solo lectura, sin escribirlas a disco; todas son 
    registrar un cliente llamado "Claude" con su propia dirección de vuelta y mandar el link de autorizar. Tiene que
    estar publicada, porque Supabase exige el origen del *Site URL*. Volver: no hace nada si el servidor OAuth está
    apagado.
-4. **Publicar el portero con el MCP** (lo hace el push a `main` de esta rama ya auditada) y cargar la variable
-   `MCP_M0=1` en el Worker `shotdocs-portero`. Volver: borrar la variable (el portero queda como hoy).
+4. **Publicar el portero con el MCP** (lo hace el push a `main` de esta rama ya auditada): desde la tanda del
+   2026-10-03 la variable `MCP_M0=1` va en `portero/wrangler.jsonc`. Volver: `"MCP_M0": "0"` en el jsonc y publicar
+   (con `keep_vars`, sacar la línea no borra la variable publicada; el portero queda como hoy).
 5. **Prender el servidor OAuth** (mismo `PATCH`): `oauth_server_enabled: true`, `oauth_server_allow_dynamic_registration:
    true`, `oauth_server_authorization_path: "/oauth/consent/znlvpuddswymxpffgvbz"`. Cambia: cualquiera puede registrar un
    cliente (no entrar: el registro de personas sigue cerrado). Volver: antes de apagar, revocar cada cliente
@@ -1682,7 +1694,8 @@ en memoria con una consulta de solo lectura, sin escribirlas a disco; todas son 
    no está comprobado que apagarlo frene la renovación de esas sesiones.
 6. **La API de Auth con un token real** (con `curl` y el token que da el paso 7): que el hook del paso 1 no corta el
    ingreso con código ni el canje y la renovación del token OAuth; `GET /auth/v1/user` (200); `PUT /auth/v1/user` con
-   `password` (dentro de las primeras 24 horas de esa sesión **va a dar 200**: lo que se comprueba es que después
+   `password` (con `require_current_password` prendido y las cuentas con contraseña, **tendría que rechazarse** por
+   faltar la actual; en una cuenta sin contraseña puede dar 200. Anotar cuál. Lo que vale en los dos casos es que
    `POST /auth/v1/token?grant_type=password` con esa contraseña lo rechaza el hook); `POST /auth/v1/factors` (rechazado),
    `POST /auth/v1/logout?scope=others` (anotar qué hace), y con ese token `GET /rest/v1/pages` (rechazado por el paso 2)
    y `POST /rest/v1/rpc/mcp_ping` (la persona). Anotar acá cada respuesta.
@@ -1726,3 +1739,47 @@ una ronda:
 | O5. Un nombre como `constructor` llegaba a PostgREST como función | `Object.hasOwn`: responde *Unknown tool* (`-32602`), con su prueba |
 | O10. `public.mcp_pre_request` quedaba expuesta por su propia regla | El paso 2 la pone en `private` |
 | O2, O4. El título va afuera del contenido no confiable; la pantalla de permiso tiene que mostrar el host del `redirect_uri` | Al roadmap de M1 (P.24) y al paso 3 |
+
+### Pasos reales (tanda del 2026-10-03)
+
+Lo de código de los pasos 1 a 5 de "Lo que necesita la infraestructura real" quedó listo y probado sin tocar la
+configuración real. Prender cada paso lo hace el coordinador, en orden, con su vuelta atrás.
+
+1. **El hook *Custom Access Token*** (sin código nuevo). Probado contra la base real en una transacción que se deshizo,
+   con eventos con la forma del esquema de Supabase (`user_id`, `claims` con `iss`, `aud`, `exp`, `iat`, `sub`, `email`,
+   `phone`, `role`, `aal`, `amr`, `session_id`, `is_anonymous`, y `authentication_method`): 12 de 12. Pasan sin tocar
+   los claims el ingreso con código, con link y el alta (`otp`, `magiclink`, `email/signup`), su renovación
+   (`token_refresh`), la invitación, el canje y la renovación de un token OAuth (`oauth_provider/authorization_code`,
+   con `client_id`), un `amr` nulo y TOTP sobre una sesión con código; se rechazan con
+   `{"error": {"http_code": 403, …}}` el ingreso con contraseña, su renovación y contraseña más TOTP. La salida que pasa
+   es solo `{"claims"}` con los obligatorios del esquema y sus tipos. `supabase_auth_admin` tiene `execute` y `usage`
+   en `private`; `authenticated`, `anon` y `PUBLIC`, no. La Management API no puede tomar ese rol (membresía reservada):
+   se llamó con un rol temporal con exactamente esos dos permisos. El `PATCH` es el de arriba (**aplicado el
+   2026-10-03**, con `security_update_password_require_current_password: true`); los logs de Auth después
+   de prenderlo se leen con `GET /v1/projects/<ref>/analytics/endpoints/logs` (SQL de ClickHouse sobre la tabla `logs`,
+   `source = 'auth_logs'`, `log_attributes['path'] = '/token'` y `['grant_type']`, `['status']`; ventanas de hasta 24
+   horas; el viejo `logs.all` ya no existe).
+2. **El plan B en la base:** `supabase/migrations/20261027120000_mcp_plan_b.sql` (sin aplicar; `Doc_Supabase.md`, "El
+   MCP: plan B", con el SQL de volver atrás). `private.mcp_pre_request()` sale enseguida si los claims no dicen
+   `client_id` (sin convertir nada: una sesión normal no puede hacerla fallar) y si no, deja pasar solo
+   `/rpc/mcp_[a-z0-9_]+`. La ejecutan `anon`, `authenticated` y `service_role` (PostgREST la llama en todo pedido, con el
+   rol ya cambiado; según su documentación, para todos los pedidos, también sin JWT). La ruta llega en `request.path`
+   (PostgREST la carga antes del pre-request, sin `/rest/v1`); si no llegara, el token de un asistente queda cerrado en
+   todo y la app sigue igual (no la mira). Después de aplicarla, el control con `pg_stat_statements` del paso 2 dice si
+   PostgREST la tomó: sin eso, el paso 5 no se prende. Se puede volver a aplicar (`create or replace`). Probada en rollback con la migración adelante: su prueba y las otras 26 del
+   repo pasan; 9 de 9 mutantes mueren; la vuelta atrás deja las políticas y la configuración exactamente como hoy.
+3. **La pantalla de permiso** en `/oauth/consent/<ref>` (`src/ui/OAuthConsent.tsx`, que se baja solo en esa dirección):
+   el ref elige el workspace del dispositivo (por `https://<ref>.supabase.co` o por la clave local); sin sesión, el login
+   de siempre con *Sign in to connect your assistant.* (el link del correo vuelve a la pantalla y no se cambia de
+   workspace); muestra *<Cliente> wants to connect to LGA Shot Docs*, la cuenta y el workspace, *Returns to* con el host
+   del `redirect_uri` (la dirección entera en el tooltip; *an app on this computer* si es `127.0.0.1` o `localhost`),
+   los permisos pedidos, el aviso de permitir solo si se empezó la conexión, y *Allow* / *Deny* (una sola respuesta,
+   `skipBrowserRedirect` y la vuelta a mano). Ya permitido antes: vuelve directo. Errores con su mensaje y el código
+   chico (vencida o el 400 de `#2820`, servidor apagado, sin red con *Try again*, sesión vencida que pide entrar de
+   nuevo), el detalle en la consola (`[oauth-consent]`). El `authorization_id` se valida (supabase-js lo pega en la
+   dirección sin codificar), y una vuelta `javascript:`, `data:`, `vbscript:`, `blob:`, `file:` o `about:` no se sigue
+   aunque la mande el servidor. Sin elegir proyectos (M1).
+4. **El portero con el MCP prendido:** `"vars": { "MCP_M0": "1" }` en `portero/wrangler.jsonc`. El push a `main` lo
+   publica sin borrar las variables del panel (`keep_vars`). Para apagarlo, `"0"` y publicar (sacar la línea no la
+   borra). El smoke prueba lo que se publica.
+5. **El servidor OAuth:** sin código; la *Authorization Path* es `/oauth/consent/znlvpuddswymxpffgvbz`, que ahora existe.
