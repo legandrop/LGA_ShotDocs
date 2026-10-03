@@ -176,7 +176,7 @@ export interface FailedOp {
   /**
    * El `updated_at` que tenía la página en la copia del dispositivo al fallar (reloj del servidor, salvo que el
    * dispositivo la haya tocado al confirmar un cambio suyo). `null`: la página no estaba en la copia. Sin el campo: lo
-   * guardó una versión anterior a 0.0XX. Dice si la fila cambió después del rechazo (`PageTree.titleChangedAfter`).
+   * guardó una versión anterior a 0.153. Dice si la fila cambió después del rechazo (`PageTree.titleChangedAfter`).
    */
   rowUpdatedAt?: string | null;
 }

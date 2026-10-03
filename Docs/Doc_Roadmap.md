@@ -909,7 +909,7 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
 23. **Hecho (v0.152): los topes de largo de la base en la app.** Un título de más de 500 caracteres quedaba rechazado
    para siempre (`pages_title_check`). El árbol corta títulos, nombres de proyecto y claves de orden, lo que sobra del
    título va al principio de la página y lo ya rechazado vuelve a la cola cortado (`Doc_Sincronizacion.md`, "Topes de
-   largo"). **Hecho (v0.0XX):** la reparación de un rechazo ya no depende del reloj del dispositivo (compara el
+   largo"). **Hecho (v0.153):** la reparación de un rechazo ya no depende del reloj del dispositivo (compara el
    `updated_at` que tenía la fila al rechazarse con el de ahora; un rechazo de una versión anterior, sin ese dato, deja
    el título y manda el texto entero a la página), con la prueba del renombre posterior en la cola (mutante R3), y
    rehacer las claves de orden toca solo las páginas amontonadas alrededor del hueco. Queda: si otro dispositivo movió a

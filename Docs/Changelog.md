@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.153 :
 
 **Título largo: el reloj del dispositivo ya no decide.** Reparar un título rechazado por el largo podía pisar uno puesto
 a mano después si el reloj del dispositivo iba adelantado: se comparaba el `updated_at` del servidor con la hora del
