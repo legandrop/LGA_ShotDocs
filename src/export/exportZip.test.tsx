@@ -7,6 +7,7 @@ import { BlobSink, type DownloadTarget, type FileOut } from '../media/folderZip'
 import { formatSize } from '../media/fileTrash';
 import { HeicError } from '../media/heic';
 import { mediaIdOf } from '../media/queue';
+import { prefs } from '../prefs';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, fakeConvertHeic, makeDevice, type Device } from '../sync/testing';
@@ -14,7 +15,7 @@ import { ExportDialog } from '../ui/ExportDialog';
 import { hasPython, pythonReadZip, text, type PyEntry, type PyZip } from '../test/zipCheck';
 import { SHARED_COLLAPSE_MAP } from '../ui/collapseEditor';
 import { porteroDownload } from '../ui/sharpImages';
-import { ARCHIVE_CSS, blocksForArchive, escapeHtml, indexHtml, PAGE_BREAK_MARK, pageMarkdown, sanitize } from './archiveHtml';
+import { ARCHIVE_CSS, blocksForArchive, escapeHtml, indexHtml, PAGE_BREAK_MARK, pageHtml, pageMarkdown, sanitize } from './archiveHtml';
 import { appComments } from './exportComments';
 import { ExportCancelled, ExportEditor } from './exportEditor';
 import { exportPlan } from './exportPages';
@@ -307,6 +308,45 @@ describe('exportar zip: el .html, el .md y el JSON', () => {
     expect(host.textContent).toContain('Hola');
     expect(escapeHtml('<a href="x">&</a>')).toBe('&lt;a href=&quot;x&quot;&gt;&amp;&lt;/a&gt;');
     expect(ARCHIVE_CSS).toContain('@media print');
+  });
+
+  it('el .html lleva el contraste de quien exporta en <html data-contrast>; sin él, el de fábrica (Contrast)', () => {
+    const view = document.createElement('div');
+    view.className = 'print-view';
+    view.innerHTML = '<p>Hola <strong>negrita</strong></p>';
+    const input = {
+      view,
+      title: 'P',
+      dir: '',
+      format: { size: 'A4' as const, landscape: false },
+      images: [],
+      pageHref: () => null,
+      path: [{ title: 'P', html: null }],
+      notes: [],
+      footer: '',
+      comments: null,
+      lang: 'en',
+    };
+    for (const level of ['none', 'contrast', 'more'] as const) {
+      expect(pageHtml({ ...input, contrast: level })).toContain(`<html lang="en" class="sd-archive" data-contrast="${level}">`);
+    }
+    expect(pageHtml(input)).toContain('<html lang="en" class="sd-archive">');
+  });
+
+  it('el zip entero lleva el contraste elegido en cada página (el de las preferencias, o el que se le pasa)', async () => {
+    const w = await world();
+    const inc = { include: { originals: false, attachments: false, videos: false, comments: false } };
+    const dataContrast = (zip: Uint8Array) => ['none', 'contrast', 'more'].filter((l) => contains(zip, utf8(`class="sd-archive" data-contrast="${l}"`)));
+    try {
+      prefs.set({ contrast: 'more' });
+      expect(dataContrast((await zipOf(w, w.b, inc)).zip)).toEqual(['more']);
+      prefs.set({ contrast: 'none' });
+      expect(dataContrast((await zipOf(w, w.b, inc)).zip)).toEqual(['none']);
+      // Lo que se pasa manda sobre las preferencias.
+      expect(dataContrast((await zipOf(w, w.b, { ...inc, contrast: 'contrast' })).zip)).toEqual(['contrast']);
+    } finally {
+      prefs.set({ contrast: 'contrast' });
+    }
   });
 
   it('el .md: cada foto con su vista y link al original, el salto de hoja en su línea, los links', () => {
