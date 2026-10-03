@@ -140,6 +140,25 @@ describe('Export: los links a los archivos con un link público', () => {
     expect(tokenOf((await exportNow()).mediaHref!(FILE, child))).toBe(TOKEN.edit);
   });
 
+  it('sin red la ventana dice que los links a los archivos no usan el link público; con red y con un link, no', async () => {
+    const { exportNow, d, host, box } = await setup('comment');
+    const notice = () => host.querySelector('.export-offline-links')?.textContent ?? null;
+    // Con red y con un link público: el aviso del link, no el de sin conexión.
+    expect(notice()).toBeNull();
+    expect(box()).not.toBeNull();
+    const engine = d.engine as unknown as { patch(p: { online: boolean }): void };
+    await act(async () => engine.patch({ online: false }));
+    await settle();
+    expect(notice()).toBe("No connection: file links in this PDF can't use the public link of the page, even if it has one. They ask to sign in.");
+    // Sin la casilla (no se piden links) y con la dirección de siempre en cada link.
+    expect(box()).toBeNull();
+    expect((await exportNow()).mediaHref).toBeUndefined();
+    await act(async () => engine.patch({ online: true }));
+    await settle();
+    expect(notice()).toBeNull();
+    expect(box()).not.toBeNull();
+  });
+
   it('la red se corta y vuelve: la casilla queda como la dejó la persona', async () => {
     const { exportNow, box, d, rpc } = await setup('comment');
     await act(async () => box()!.click());

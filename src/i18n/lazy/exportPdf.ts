@@ -97,6 +97,10 @@ export const exportPdf = {
     en: "Without it, file links ask to sign in.",
     es: "Sin él, los links a archivos piden entrar con una cuenta.",
   },
+  'exportDialog.offlineFileLinks': {
+    en: "No connection: file links in this PDF can't use the public link of the page, even if it has one. They ask to sign in.",
+    es: "Sin conexión: los links a los archivos de este PDF no pueden usar el link público de la página, aunque tenga uno. Piden entrar con una cuenta.",
+  },
   'exportDialog.export': { en: "Export PDF", es: "Exportar PDF" },
   'exportDialog.fetchingComments': { en: "Fetching comments: page {done} of {total}", es: "Bajando los comentarios: página {done} de {total}" },
   'exportDialog.commentsStale': {
