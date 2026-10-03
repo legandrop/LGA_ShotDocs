@@ -8,6 +8,8 @@ export type TextSize = 'small' | 'normal' | 'large';
 export type PageWidth = 'normal' | 'wide';
 export type Language = 'en' | 'es';
 export type PhoneImages = 'rows' | 'stacked';
+/** El contraste del texto del documento (Docs/Doc_Contraste.md): sin jerarquía, con jerarquía o más marcada. */
+export type Contrast = 'none' | 'contrast' | 'more';
 
 /** Preferencias de la cuenta: siguen al usuario en todos sus dispositivos. */
 export interface Prefs {
@@ -28,6 +30,13 @@ export interface Prefs {
    * Una versión anterior no conoce la clave (igual que `language`).
    */
   phoneImages: PhoneImages;
+  /**
+   * El contraste del texto con el color por defecto (Docs/Doc_Contraste.md): encabezados, negrita y texto común en
+   * tres tonos (`contrast`, de fábrica), más marcados (`more`) o todos iguales (`none`). Solo cambia cómo se ve: el
+   * documento guardado no cambia. Una versión anterior no conoce la clave (igual que `language`): la descarta al leer y,
+   * si sube sus preferencias, la borra de la cuenta; los dispositivos con esta versión siguen con la que tenían.
+   */
+  contrast: Contrast;
 }
 
 /** El idioma de fábrica: castellano si el navegador está en castellano (`es`, `es-AR`…); si no, inglés. */
@@ -44,6 +53,7 @@ export const DEFAULT_PREFS: Prefs = {
   pageWidth: 'normal',
   language: detectLanguage(),
   phoneImages: 'rows',
+  contrast: 'contrast',
 };
 
 const CHOICES: { [K in keyof Prefs]: readonly Prefs[K][] } = {
@@ -53,6 +63,7 @@ const CHOICES: { [K in keyof Prefs]: readonly Prefs[K][] } = {
   pageWidth: ['normal', 'wide'],
   language: ['en', 'es'],
   phoneImages: ['rows', 'stacked'],
+  contrast: ['none', 'contrast', 'more'],
 };
 
 /**
@@ -401,6 +412,7 @@ function applyToDocument(prefs: Prefs, scheme: 'light' | 'dark'): void {
   root.dataset.pageWidth = prefs.pageWidth;
   root.lang = prefs.language;
   root.dataset.phoneImages = prefs.phoneImages;
+  root.dataset.contrast = prefs.contrast;
   for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
     meta.content = THEME_COLORS[scheme];
     meta.removeAttribute('media');

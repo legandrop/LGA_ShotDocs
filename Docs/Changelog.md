@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.161 :
+
+**Contraste del texto y el panel de la cuenta.** El texto del documento era todo del mismo tono, y el panel de la cuenta
+ya no entraba en una ventana baja: su tope era la ventana entera y la cabecera quedaba afuera por arriba. Ahora
+*Contrast* (de fábrica) da tres tonos al texto con el color por defecto: encabezados como siempre, negrita un poco más
+suave y texto común un poco más; *More contrast* lo marca más y *No contrast* deja todo como antes. Son tokens por
+modo y nivel, todos de 4,5:1 o más (`Doc_Contraste.md`); un color elegido, un resaltado y la cita no cambian. Vale en
+la página, el historial y el PDF, en claro. El panel se recorre adentro con el alto que queda, *Appearance*, *Font* («Fuente») y *Contrast* son solo
+íconos con su nombre en el tooltip, y *Sign out other devices* va a la izquierda.
+[ Contraste del texto - Contrast de fábrica, More contrast y No contrast para encabezados, negrita y texto común, en la página, el historial y el PDF; el panel de la cuenta con íconos y su propio desplazamiento ]
+
 v0.160 :
 
 **Teléfono pulido: cuatro chicos.** (1) El punto de novedades del "?" solo se veía con el cajón abierto; ahora también

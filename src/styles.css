@@ -115,6 +115,59 @@
   --page-width: 1040px;
 }
 
+/* El contraste del texto del documento (Docs/Doc_Contraste.md): tres tonos para el texto con el color por defecto,
+   encabezados (`--ink-heading`), negrita fuera de un encabezado (`--ink-bold`) y texto común (`--ink-body`). Un token
+   por modo y por nivel; los niveles eligen entre ellos con `data-contrast` (`contrast` de fábrica, también sin el
+   atributo). Todo texto común queda en 4,5:1 o más contra el fondo (WCAG AA): las razones están en el doc y las
+   comprueba `src/contrast.test.ts`. El PDF y la vista de impresión usan siempre los del modo claro (`.print-view`). */
+:root {
+  --ink-light-heading: #1b1a17;
+  --ink-light-bold: #33312c;
+  --ink-light-body: #46433d;
+  --ink-light-more-bold: #3a3833;
+  --ink-light-more-body: #5a5750;
+  --ink-dark-heading: #ece9e2;
+  --ink-dark-bold: #dad6cd;
+  --ink-dark-body: #c8c3b8;
+  --ink-dark-more-bold: #cfcac0;
+  --ink-dark-more-body: #b0aba1;
+}
+
+:root,
+.print-view {
+  --ink-heading: var(--ink-light-heading);
+  --ink-bold: var(--ink-light-bold);
+  --ink-body: var(--ink-light-body);
+}
+
+:root[data-contrast='more'],
+:root[data-contrast='more'] .print-view {
+  --ink-bold: var(--ink-light-more-bold);
+  --ink-body: var(--ink-light-more-body);
+}
+
+:root[data-contrast='none'],
+:root[data-contrast='none'] .print-view {
+  --ink-bold: var(--ink-light-heading);
+  --ink-body: var(--ink-light-heading);
+}
+
+:root[data-theme='dark'] {
+  --ink-heading: var(--ink-dark-heading);
+  --ink-bold: var(--ink-dark-bold);
+  --ink-body: var(--ink-dark-body);
+}
+
+:root[data-theme='dark'][data-contrast='more'] {
+  --ink-bold: var(--ink-dark-more-bold);
+  --ink-body: var(--ink-dark-more-body);
+}
+
+:root[data-theme='dark'][data-contrast='none'] {
+  --ink-bold: var(--ink-dark-heading);
+  --ink-body: var(--ink-dark-heading);
+}
+
 /* --- Base ------------------------------------------------------------------------------------------ */
 
 * {
@@ -1066,18 +1119,30 @@ code {
 
 .account-menu {
   width: 300px;
-  /* En una pantalla baja (el teléfono acostado), el menú se recorre sin perder "Sign out". */
+  /* En una ventana baja (o el teléfono acostado), el panel se recorre adentro sin perder "Sign out": el alto que
+     queda arriba del botón de la cuenta lo pone AccountMenu (menus.tsx); esto es el tope si no hay posición. */
   max-height: calc(100dvh - 16px);
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 8px;
-  gap: 4px;
+  gap: 2px;
+}
+
+/* Un renglón largo ("Cerrar la sesión en los otros dispositivos") baja a dos líneas alineado a la izquierda, como
+   los demás (el botón lo centraba). */
+.account-menu .menu-row {
+  height: auto;
+  min-height: 36px;
+  padding-block: 7px;
+  text-align: left;
+  line-height: 1.3;
 }
 
 .account-head {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 10px 14px;
+  padding: 6px 10px 10px;
   border-bottom: 1px solid var(--menu-border);
   margin-bottom: 6px;
   min-width: 0;
@@ -1099,8 +1164,37 @@ code {
 
 .pref {
   display: grid;
+  gap: 6px;
+  padding: 4px 10px 8px;
+}
+
+/* Los selectores de solo íconos (Appearance, Font, Contrast): el rótulo a la izquierda y los íconos a la derecha,
+   en un renglón; el nombre de cada opción, en su tooltip. */
+.pref.pref-icons {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   gap: 8px;
-  padding: 4px 10px 10px;
+  padding: 3px 10px;
+}
+
+/* Los tres del mismo ancho, alineados a la derecha (Font tiene dos opciones: más anchas). */
+.pref-icons .segmented {
+  width: 132px;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+}
+
+.menu .pref-icons .segmented button,
+.pref-icons .segmented button {
+  height: 28px;
+  padding: 0;
+  border-radius: 6px;
+}
+
+/* Los demás selectores del panel, un poco más bajos. */
+.account-menu .segmented button {
+  height: 30px;
 }
 
 .pref-label {
@@ -1130,13 +1224,6 @@ code {
   gap: 6px;
   font-size: 12px;
   color: var(--muted);
-}
-
-.menu .segmented button.tall,
-.segmented button.tall {
-  height: 56px;
-  flex-direction: column;
-  gap: 4px;
 }
 
 .menu .segmented button svg {
@@ -1169,6 +1256,15 @@ code {
 .segmented .sample.serif {
   font-family: var(--serif);
   font-size: 24px;
+}
+
+.pref-icons .sample {
+  font-size: 15px;
+  color: inherit;
+}
+
+.pref-icons .sample.serif {
+  font-size: 19px;
 }
 
 .pref-divider {
@@ -1603,7 +1699,7 @@ code {
 .bn-container .bn-default-styles {
   font-size: var(--doc-size);
   line-height: 1.6;
-  color: var(--text);
+  color: var(--ink-body);
 }
 
 .bn-container [data-content-type='heading'] h1,
@@ -1612,6 +1708,56 @@ code {
   font-family: var(--heading-font);
   font-weight: var(--heading-weight);
   letter-spacing: -0.01em;
+}
+
+/* El contraste del texto (Docs/Doc_Contraste.md): el encabezado y la negrita con su tono, solo con el color por
+   defecto. Todo lo que pone su propio color (un color elegido para unas letras o un bloque, que BlockNote pinta en
+   el bloque y en sus hijos; un link; la cita, gris; lo borrado del historial) cambia los tonos por `currentColor`, que
+   en `color` es el color heredado: así la negrita y los encabezados de adentro siguen con ese color, nunca con el tono
+   por defecto. La negrita de un encabezado va con el encabezado. Con *No contrast* estas reglas no corren: queda
+   exactamente lo de siempre (el texto común es `--text`). */
+:root:not([data-contrast='none']) .bn-container .bn-default-styles [data-content-type='heading'] {
+  color: var(--ink-heading);
+}
+
+:root:not([data-contrast='none']) .bn-container .bn-default-styles strong {
+  color: var(--ink-bold);
+}
+
+:root:not([data-contrast='none']) .bn-container .bn-default-styles [data-content-type='heading'] strong {
+  color: inherit;
+}
+
+.bn-container .bn-default-styles
+  :is(
+    [data-style-type='textColor'],
+    [data-text-color]:not([data-text-color='default']),
+    .bn-block:has(> .bn-block-content[data-text-color]:not([data-text-color='default'])),
+    a,
+    blockquote,
+    .hist-del
+  ) {
+  --ink-heading: currentColor;
+  --ink-bold: currentColor;
+}
+
+/* Un resaltado (color de fondo elegido, en unas letras o en un bloque y sus hijos) queda afuera de la jerarquía: su
+   texto por defecto y su negrita van con la tinta plena del encabezado, como siempre. En oscuro los fondos de BlockNote
+   son claros o saturados y un tono más apagado bajaba de 4,5:1 (rojo 3,20, amarillo 1,38 con More). Lo que además
+   tiene un color de texto elegido no se toca. */
+:root:not([data-contrast='none'])
+  .bn-container
+  .bn-default-styles
+  :is(
+    [data-style-type='backgroundColor'],
+    [data-background-color]:not([data-background-color='default']),
+    .bn-block:has(> .bn-block-content[data-background-color]:not([data-background-color='default']))
+  ):not(
+    [data-text-color]:not([data-text-color='default']),
+    .bn-block:has(> .bn-block-content[data-text-color]:not([data-text-color='default']))
+  ) {
+  color: var(--ink-heading);
+  --ink-bold: var(--ink-heading);
 }
 
 .trash-list {

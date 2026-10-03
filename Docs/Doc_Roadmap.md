@@ -657,6 +657,13 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   el margen de la página en el teléfono es de 20 px; si se ve apretado, `right: 2px` sigue sin cortarlo.
   Quedan (chicos): lo que headless no prueba (el impulso del dedo, el teclado abierto, un editor remoto moviendo la selección
   mientras se escribe en una tabla).
+- **P.29 Hecho (v0.161): contraste del texto y el panel de la cuenta** (Lega, 2026-10-03; `Doc_Contraste.md`): *Contrast*
+  (de fábrica), *More contrast* y *No contrast* para el texto con el color por defecto, en la página, el historial y el
+  PDF (en claro); el panel de la cuenta con íconos, su propio desplazamiento y *Sign out other devices* alineado a la
+  izquierda. Queda: verlo en un iPhone real (el panel con el teclado del sistema y la barra de Safari) y, si Lega lo
+  quiere, llevar la preferencia al zip de exportar (hoy sale con *Contrast*, como sale con la fuente normal).
+  En el modo oscuro los resaltados gris (2,32:1), amarillo (2,60:1) y naranja (3,69:1) de la paleta de BlockNote quedan bajo
+  4,5:1 con el texto por defecto, igual que antes del contraste: ajustar esos fondos si Lega los usa.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
