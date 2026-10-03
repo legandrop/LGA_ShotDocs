@@ -177,6 +177,31 @@ describe('aplicar el pie', () => {
     const order = ids(ed);
     const content = ed.getBlock(order[order.indexOf('p') + 1])?.content as { type: string }[];
     expect(content.every((c) => c.type === 'text')).toBe(true);
+    // Con https y un espacio después (lo que dispara el link automático al escribir): tampoco.
+    const again = applyCaption(ed$(ed), view(ed), ref, 'Ver https://ref.example.com/foto y listo', true);
+    expect(again.ok).toBe(true);
+    const content2 = ed.getBlock(ids(ed)[ids(ed).indexOf('p') + 1])?.content as { type: string }[];
+    expect(content2.every((c) => c.type === 'text')).toBe(true);
+  });
+
+  it('en una celda, una dirección tampoco queda como link (sin el link automático)', () => {
+    const ed = page();
+    const ref = inlinePhotoRef(view(ed).state.doc, photoPos(ed, 't'))!;
+    expect(applyCaption(ed$(ed), view(ed), ref, 'Ver https://ref.example.com/foto y listo', true).ok).toBe(true);
+    const marks: string[] = [];
+    view(ed).state.doc.nodeAt(posOf(ed, 't'))!.descendants((n) => {
+      for (const m of n.marks) marks.push(m.type.name);
+      return true;
+    });
+    expect(cellText(ed)).toBe('[foto]\nVer https://ref.example.com/foto y listo');
+    expect(marks).not.toContain('link');
+  });
+
+  it('los caracteres invisibles del campo (dirección, ancho cero, control) no llegan a la página', () => {
+    const ed = page();
+    const ref = inlinePhotoRef(view(ed).state.doc, photoPos(ed, 'p', 0))!;
+    expect(applyCaption(ed$(ed), view(ed), ref, 'Toma‮ 4​ lista\u0007', true).ok).toBe(true);
+    expect(plain(ed, ids(ed)[ids(ed).indexOf('p') + 1])).toBe('Toma 4 lista');
   });
 
   it('la foto ya no está (borrada mientras pensaba): no aplica nada', () => {
@@ -213,6 +238,8 @@ describe('lo que se manda y lo que vuelve', () => {
 
   it('limpia la respuesta: un renglón, sin comillas, sin "Caption:", sin Markdown ni direcciones, con tope', () => {
     expect(cleanCaption('"Claqueta: escena 12, toma 4"')).toEqual({ text: 'Claqueta: escena 12, toma 4', linksRemoved: false });
+    // Caracteres de dirección (U+202E), de ancho cero, BOM, controles y tabuladores (auditoría de A3, O1).
+    expect(cleanCaption('‮Claqueta​ esc‍ 12⁦⁩,\u0000 toma\t4﻿\u0007').text).toBe('Claqueta esc 12, toma 4');
     expect(cleanCaption('Caption: **Grúa** en el set\n\nThis caption describes…').text).toBe('Grúa en el set');
     expect(cleanCaption('\n  “Cámara A con lente 35 mm.”  ').text).toBe('Cámara A con lente 35 mm.');
     expect(cleanCaption('Set con lluvia, ver https://evil.example/?d=x')).toEqual({ text: 'Set con lluvia, ver', linksRemoved: true });

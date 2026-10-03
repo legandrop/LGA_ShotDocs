@@ -11,7 +11,7 @@ import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { mountEditor, posOf, unmountAll, view, type Editor } from '../ui/collabHarness';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { AssistantPanel } from './AssistantPanel';
-import { closeAssistant, openCaption, registerAssistantTarget, type AssistantEditor } from './assistantUi';
+import { closeAssistant, closeAssistantSettings, openAssistantSettings, openCaption, registerAssistantTarget, type AssistantEditor } from './assistantUi';
 import { captionImage } from './captionImage';
 import { closeAssistantDb, saveSettings } from './keyStore';
 import { inlinePhotoRef } from './photoRef';
@@ -122,6 +122,8 @@ interface Setup {
   ed: Editor;
   device: Device;
   pageId: string;
+  /** El permiso de editar que ve el panel (el editor sigue editable: lo cambia otro, como un permiso que se pierde). */
+  editable: { current: boolean };
 }
 
 const text = (t: string) => ({ type: 'text', text: t, styles: {} });
@@ -160,7 +162,7 @@ async function setup(opts: { editable?: boolean; client?: unknown } = {}): Promi
     ),
   );
   await wait(80);
-  return { host, ed, device, pageId };
+  return { host, ed, device, pageId, editable };
 }
 
 const button = (host: HTMLElement, label: string) => [...host.querySelectorAll('button')].find((b) => b.textContent?.trim() === label) as HTMLButtonElement | undefined;
@@ -332,5 +334,62 @@ describe('el panel, entrega A3 (Suggest caption)', () => {
     expect(off.host.textContent).toContain('turned the assistant off');
     expect(button(off.host, 'Send photo')?.disabled).toBe(true);
     expect(calls).toHaveLength(0);
+  });
+
+  it('cambiar de proveedor en los ajustes vuelve a preguntar: Try again no manda la foto al nuevo (auditoría B-1)', async () => {
+    const { host, ed } = await setup();
+    // Con el primero (Anthropic) el modelo no mira fotos.
+    const { calls } = provider('This model does not support image input.', { status: 400 });
+    await fromPhotoBar(ed, 'f');
+    await click(button(host, 'Send photo'));
+    await until(host, 'Back');
+    expect(button(host, 'Try again')).toBeTruthy();
+    // La persona elige OpenAI en los ajustes y los cierra.
+    await saveSettings('lega@wanka.tv', { provider: 'openai', model: 'gpt-5.4-mini', models: [] }, 'sk-proj-OTRA-clave-1234567890');
+    await act(async () => {
+      openAssistantSettings();
+    });
+    await act(async () => {
+      closeAssistantSettings();
+    });
+    await wait(150);
+    // Vuelve a preguntar, ahora por OpenAI, y nada salió hacia OpenAI.
+    expect(host.textContent).toContain('Send this photo to OpenAI?');
+    if (button(host, 'Try again')) await click(button(host, 'Try again'));
+    expect(calls.filter((c) => c.url.includes('openai.com'))).toHaveLength(0);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('lo mismo desde la vista previa: con otro servicio compatible, se vuelve a preguntar', async () => {
+    const { host, ed } = await setup();
+    const { calls } = provider('Un pie');
+    await fromPhotoBar(ed, 'f');
+    await click(button(host, 'Send photo'));
+    await until(host, 'Apply');
+    await saveSettings('lega@wanka.tv', { provider: 'compatible', baseUrl: 'https://openrouter.ai/api/v1', model: 'x/y', models: [] }, 'sk-or-OTRA-clave-1234567890');
+    await act(async () => {
+      openAssistantSettings();
+    });
+    await act(async () => {
+      closeAssistantSettings();
+    });
+    await wait(150);
+    expect(host.textContent).toContain('Send this photo to openrouter.ai?');
+    expect(button(host, 'Try again')).toBeUndefined();
+    expect(calls.filter((c) => c.url.includes('openrouter.ai'))).toHaveLength(0);
+  });
+
+  it('Apply vuelve a mirar el permiso: si se perdió mientras se veía la vista previa, no aplica', async () => {
+    const { host, ed, editable } = await setup();
+    provider('Un pie');
+    await fromPhotoBar(ed, 'f');
+    await click(button(host, 'Send photo'));
+    await until(host, 'Apply');
+    const before = ed.document.map((b) => b.id).join();
+    // El permiso se pierde (el botón ya estaba dibujado y habilitado).
+    editable.current = false;
+    await click(button(host, 'Apply'));
+    expect(host.querySelector('.assistant-error')?.textContent).toContain('You can view this page but not edit it');
+    expect(ed.document.map((b) => b.id).join()).toBe(before);
   });
 });

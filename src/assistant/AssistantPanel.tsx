@@ -758,7 +758,9 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
             {!canEdit && (perms.known || target?.editable() === false) && <p className="assistant-notice">{tr('assistant.readOnly')}</p>}
             {photo && config && (
               <CaptionSection
-                key={`${photo.blockId}#${photo.index}:${photo.url}`}
+                // El destino va en la clave: si la persona cambia de proveedor (o de dirección) en los ajustes, la
+                // sección vuelve a empezar y vuelve a preguntar antes de mandar la foto (auditoría de A3, B-1).
+                key={`${photo.blockId}#${photo.index}:${photo.url}|${config.provider}|${config.baseUrl ?? ''}`}
                 photo={photo}
                 config={config}
                 email={user.email}

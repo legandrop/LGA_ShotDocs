@@ -31,9 +31,12 @@ describe('de dónde sale la foto', () => {
   });
 
   it('sin nada mejor (una foto chica, una HEIC sin convertir, sin red): la miniatura; sin miniatura, no hay foto', async () => {
-    const d = deps({ files: { 'blob:thumb': blob('MINI') } });
+    // Con la bajada del portero a mano: no se baja el original (podría ser de cualquier tamaño); la nítida ya decidió.
+    const download = vi.fn(async () => blob('ORIGINAL'));
+    const d = deps({ files: { 'blob:thumb': blob('MINI') }, download });
     d.media.thumbnail.mockResolvedValue('blob:thumb');
     expect(await (await captionSource(`sdmedia://${ID}`, d)).text()).toBe('MINI');
+    expect(download).not.toHaveBeenCalled();
     const none = deps();
     await expect(captionSource(`sdmedia://${ID}`, none)).rejects.toEqual(new CaptionImageError('unavailable'));
   });

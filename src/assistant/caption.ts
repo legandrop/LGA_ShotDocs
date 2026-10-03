@@ -41,13 +41,21 @@ export interface CleanCaption {
 }
 
 /**
+ * Saca los caracteres de control, los de dirección (U+202E da vuelta lo que sigue) y los de ancho cero (auditoría de A3,
+ * O1): en la página se verían al revés o con huecos invisibles. Un tabulador pasa a espacio.
+ */
+export function stripInvisible(text: string): string {
+  return text.replace(/\t/g, ' ').replace(/[\p{Cc}\p{Cf}]/gu, '');
+}
+
+/**
  * La respuesta, limpia: un renglón, sin comillas alrededor, sin "Caption:", sin Markdown ni direcciones, y no más de
  * `CAPTION_MAX` caracteres. Vacía si no queda nada.
  */
 export function cleanCaption(answer: string): CleanCaption {
   let text = answer.replace(/\r/g, '');
   // Un modelo que se explica: el primer renglón con algo.
-  text = text.split('\n').map((l) => l.trim()).find((l) => l.length > 0) ?? '';
+  text = stripInvisible(text.split('\n').map((l) => l.trim()).find((l) => l.length > 0) ?? '');
   text = text.replace(/^(?:\*\*)?(?:caption|pie(?: de foto)?|leyenda)\s*:\s*(?:\*\*)?\s*/i, '');
   const before = text;
   text = text.replace(/\bhttps?:\/\/\S+|\bwww\.\S+/gi, '').replace(/\[([^\]]*)\]\(\s*\)/g, '$1');
@@ -84,7 +92,8 @@ export function applyCaption(
   canEdit: boolean,
 ): ApplyOutcome & { blockId?: string } {
   if (!canEdit || !view?.editable) return { ok: false, reason: 'readOnly' };
-  const text = caption.replace(/\s+/g, ' ').trim();
+  // Lo retocado en el campo también (algo pegado puede traerlos).
+  const text = stripInvisible(caption).replace(/\s+/g, ' ').trim();
   if (!text) return { ok: true, changed: 0 };
   const found = findPhoto(view.state.doc, ref);
   if (!found) return { ok: false, reason: 'changed' };

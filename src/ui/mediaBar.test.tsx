@@ -531,6 +531,31 @@ describe('Suggest caption (el asistente, entrega A3)', () => {
     }
   });
 
+  it('en un video (en línea o bloque) no aparece: el modelo mira fotos', async () => {
+    const { editor } = await mount();
+    const off = registerAssistantTarget({ pageId: 'pg', view: () => view(editor), editable: () => true });
+    try {
+      await act(async () => {
+        const v = view(editor);
+        const at = photoPos(editor, 'F3') + 1;
+        v.dispatch(v.state.tr.insert(at, v.state.schema.nodes.photo.create({ url: 'https://example.invalid/clip.mp4', name: 'clip.mp4', w: 0.5 })));
+        editor.updateBlock('img', { props: { url: 'https://example.invalid/toma.mov', name: 'toma.mov' } } as never);
+      });
+      await choosePhoto(editor, 'clip.mp4');
+      expect(bar(INLINE)).toContain('View full screen');
+      expect(bar(INLINE)).not.toContain('Suggest caption');
+      await chooseBlock(editor);
+      expect(bar(BLOCK)).toContain('View full screen');
+      expect(bar(BLOCK)).not.toContain('Suggest caption');
+      // Una foto, en la misma página, sí.
+      await choosePhoto(editor, 'F2');
+      expect(bar(INLINE)).toContain('Suggest caption');
+    } finally {
+      off();
+      closeAssistant();
+    }
+  });
+
   it('sin el editor de la página anotado (el historial, la práctica): no aparece', async () => {
     const { editor } = await mount();
     await choosePhoto(editor, 'F2');
