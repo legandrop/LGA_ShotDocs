@@ -79,9 +79,19 @@ Chromium con un párrafo de renglones a ras del margen: a 375 px el texto llegab
 encima); a 390 px, 367,7 contra 362 (5,7 px). Ahora, a 760 px o menos, el botón mide el margen (`width: var(--gutter)`, 20
 px, pegado al borde): empieza en 355 y 370, y el texto termina en 353,8 y 367,7 (sin superposición). Para el dedo el área
 que responde sigue siendo de 44 px de alto: un `::after` se estira 10 px para arriba y para abajo, nunca hacia los
-costados, así no llega al texto. La compu y la tablet (margen de 54 px) siguen con 28 px. El contador de comentarios
-(`.comment-count`, con un número) no se tocó: no cabe en 20 px y avisa de comentarios que ya existen. Prueba:
+costados, así no llega al texto. La compu y la tablet (margen de 54 px) siguen con 28 px. Prueba:
 `src/ui/commentButtonPhone.test.ts`.
+
+**El contador de comentarios tampoco pasa del margen (restos de la tanda 17).** El contador (`.comment-count`: globo y
+número uno al lado del otro) medía 39,8 px con 1 comentario, 47,2 con 12 y 55,2 con 120, y a 360, 375, 390 y 414 px pasaba
+sobre el texto 19,8, 27,2 y 35,2 px (el borde derecho del texto queda 20 px antes del de la pantalla). Ahora, a 760 px o
+menos, es una pastilla de 20 px de ancho (el margen) pegada al borde, con el globo (12 px) arriba y el número (10 px) abajo:
+mide 20 × 29 px y con 1, 12 y 120 comentarios la superposición con el texto es de 0 px en los cuatro anchos, sin
+desplazamiento de la página. Con 4 dígitos o más (mil comentarios en un bloque, no probable) el ancho crece a 26 px antes
+de cortar el número. Dos renglones sueltos comentados, uno debajo del otro (30 px de paso), no se pisan (29 px de alto). El
+área del dedo es de unos 47 px de alto (`::after` con `inset: -8px 0`: solo para arriba y para abajo). La compu y la
+tablet (más de 760 px) no cambian: medido, 39,8 / 47,2 / 55,2 px de ancho como antes. Prueba: `commentButtonPhone.test.ts`
+(4 casos nuevos sobre el CSS; la medida con el diseño real está en el informe del frente).
 
 ## Pruebas
 
