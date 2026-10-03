@@ -645,6 +645,13 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   (chico): copiar a la página del plano solo el lente (otras columnas con su fila en la ficha se suman en `FIELDS` de
   `shotPage.ts`); lo escrito en la página del plano no entra en el ⌘Z de esa página (se deshace con *Undo* de la hoja,
   como el reemplazo del proyecto antes de D10).
+- **P.30 Links a los archivos en el PDF y *Request access*** (Lega, 2026-10-03; `Doc_Links_PDF.md`, diseño sin código): hoy
+  en el PDF los adjuntos, los videos y las carpetas salen solo como imagen, sin link. Cada archivo pasa a tener una
+  dirección fija (`/f/<clave local>/<id>`, con la dirección del Supabase después del `#`) que abre el archivo con
+  sesión y permiso, pide entrar sin sesión y muestra *Request access* sin permiso, sin decir nada del archivo. Con un
+  link público vivo, los links del PDF van por él. Entregas: E1 (la dirección y los links en el PDF, sin migración;
+  riesgo medio), E2 (*Request access* con la tabla `access_requests`, la campana y *Share*; riesgo alto), E3 opcional
+  (pedir una página). Queda para después: el correo al pedir y al aceptar (B.8) y pedir acceso sin cuenta.
 - **P.28 Hecho (v0.156): la tabla del reporte en el teléfono** (`Doc_Tabla_Telefono.md`): en pantalla angosta ninguna
   columna con ancho guardado baja de 96 px y la tabla se desplaza de costado dentro de su bloque; la celda donde se
   escribe se acomoda a la vista. La compu y el PDF no cambian. Falta probarlo en un iPhone real (dedo, teclado abierto).

@@ -165,9 +165,12 @@ Las dos se pueden pedir sobre **esta página**, **esta página y las de adentro*
   está anclado (las primeras 80 letras), quién (el nombre, nunca el correo), cuándo, las respuestas y si está resuelto.
   Un hilo cuyo primer comentario se borró y tiene respuestas vivas sale con "(deleted comment)" arriba y las respuestas.
   Las respuestas a las preguntas son hilos: van con la misma casilla.
-- **Videos, adjuntos y tarjetas de Drive:** como en el PDF de hoy: el cuadro con su miniatura y el link (al portero
-  para lo del workspace; al Drive de afuera para una tarjeta de un link de Drive). Un link al portero en un PDF que se
-  le manda a un cliente pide sesión para abrirse: es lo que pasa hoy con el PDF de una página.
+- **Videos, adjuntos y tarjetas de Drive:** como en el PDF de una página. **Corregido el 2026-10-03:** este punto
+  decía que salían con un link al portero, y no es así. Un video sale como su cuadro y un adjunto o una carpeta como su
+  tarjeta (una imagen), **sin link**: la copia de impresión (`printView.ts`) cambia el `<video>` por una imagen y no
+  agrega ningún `<a>`, y el portero no tiene una dirección fija por archivo (solo `/m/<pase>`, que vence a las 8 horas).
+  Solo la tarjeta de un link de Drive pegado lleva su link a Drive. La dirección fija de cada archivo, los links en el
+  PDF y *Request access* están diseñados en `Doc_Links_PDF.md` (P.30).
 
 ### 2.3 El zip (EX4, EX9, EX10, EX11)
 
