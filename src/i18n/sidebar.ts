@@ -14,17 +14,18 @@ export const sidebar = {
   'help.open': { en: "Help and shortcuts", es: "Ayuda y atajos" },
   // Con novedades en la ayuda (el punto del "?", Docs/Doc_Tutorial.md, entrega 3).
   'help.openNews': { en: "Help and shortcuts: what's new", es: "Ayuda y atajos: novedades" },
-  'sidebar.widthTip': {
-    en: "**Drag:** resize the sidebar\n**Double-click:** back to the default width\n**Arrow keys:** resize from the keyboard",
-    es: "**Arrastrar:** cambia el ancho de la barra\n**Doble clic:** vuelve al ancho de fábrica\n**Flechas:** cambia el ancho con el teclado",
-  },
+  // El tooltip del borde (D226): renglones «gesto o atajo: acción» que arma tipRows.ts.
+  'sidebar.widthDrag': { en: "resize the sidebar", es: "cambiar el ancho de la barra" },
+  'sidebar.widthReset': { en: "back to the default width", es: "volver al ancho de fábrica" },
+  'sidebar.widthKeys': { en: "resize step by step", es: "cambiar el ancho de a poco" },
   'project.defaultName': { en: "My project", es: "Mi proyecto" },
   'project.thisProject': { en: "this project", es: "este proyecto" },
   'project.switchTip': {
-    en: "**{shortcut}** searches pages and projects from anywhere",
-    es: "**{shortcut}** busca páginas y proyectos desde cualquier lado",
+    en: "search pages and projects from anywhere",
+    es: "buscar páginas y proyectos desde cualquier lado",
   },
   'sidebar.search': { en: "Search this project ({shortcut})", es: "Buscar en el proyecto ({shortcut})" },
+  'sidebar.searchAct': { en: "search this project", es: "buscar en el proyecto" },
   'project.summary': {
     en: { one: "Project · {count} page", other: "Project · {count} pages" },
     es: { one: "Proyecto · {count} página", other: "Proyecto · {count} páginas" },

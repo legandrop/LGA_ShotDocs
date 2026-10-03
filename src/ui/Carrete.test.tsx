@@ -207,8 +207,8 @@ describe('carrete: pantalla', () => {
   it('tooltips solo con data-tip (los atajos), nunca los del navegador', async () => {
     await open({ start: 1 });
     expect(dialog().querySelectorAll('[title]').length).toBe(0);
-    expect(button('Close').dataset.tip).toMatch(/Esc/);
-    expect(button('Next').dataset.tip).toMatch(/→/);
+    expect(button('Close').dataset.tip).toBe('**Esc**: close');
+    expect(button('Next').dataset.tip).toBe('**→**: next');
   });
 
   it('muestra la leyenda del bloque si tiene', async () => {
@@ -578,7 +578,7 @@ describe('carrete: anotaciones (P.20, Docs/Doc_Anotar_Fotos.md, AN9)', () => {
     const onAnnotate = vi.fn();
     const { onClose } = await open({ onAnnotate });
     expect(button('Annotate')).not.toBeNull();
-    expect(button('Annotate').getAttribute('data-tip')).toBe('**Keyboard:** A');
+    expect(button('Annotate').getAttribute('data-tip')).toBe('**A**: annotate');
     await key('a');
     expect(onAnnotate).toHaveBeenCalledTimes(1);
     expect(onAnnotate.mock.calls[0][0]).toMatchObject({ mediaId: FILE_A, source: 'media' });

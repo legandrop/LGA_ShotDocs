@@ -45,7 +45,7 @@ export function ThumbHeightMenu({ tables, current }: ThumbHeightMenuProps) {
   return (
     <Components.Generic.Menu.Root portalElement={portal}>
       <Components.Generic.Menu.Trigger>
-        <BarButton test="cellThumbs-size" label={label} tip={`**${label}**\n${tr(tables.length > 1 ? 'cellThumbs.tipAll' : 'cellThumbs.tip')}`} icon={<ThumbSizeIcon />} />
+        <BarButton test="cellThumbs-size" label={label} tip={`${label}\n${tr(tables.length > 1 ? 'cellThumbs.tipAll' : 'cellThumbs.tip')}`} icon={<ThumbSizeIcon />} />
       </Components.Generic.Menu.Trigger>
       <Components.Generic.Menu.Dropdown className="bn-menu-dropdown sd-thumb-size-menu">
         <Components.Generic.Menu.Label>{label}</Components.Generic.Menu.Label>

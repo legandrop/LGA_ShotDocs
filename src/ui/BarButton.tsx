@@ -26,7 +26,7 @@ export const BarButton = forwardRef<HTMLButtonElement, BarButtonProps>(function 
   const { label, tip, icon, children, selected, disabled, className, test, onClick, ...rest } = props as BarButtonProps &
     Record<string, unknown>;
   const Components = useComponentsContext()!;
-  const text = tip === null ? undefined : (tip ?? `**${label}**`);
+  const text = tip === null ? undefined : (tip ?? label);
   return (
     <Components.FormattingToolbar.Button
       {...(rest as object)}

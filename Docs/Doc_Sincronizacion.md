@@ -1321,7 +1321,10 @@ es el de los avisos de siempre (`reloadByHand`, que pregunta si hay un comentari
 (`restoreInDoc` de `historyRestore.ts`): la misma ida y vuelta que el editor (`versionNode`, con el esquema del editor
 que muestra la versión, que el historial pasa en `requestRestore`) y después **el mismo algoritmo con que el editor pasa
 lo suyo a Yjs** (`updateYFragment` de y-prosemirror): conserva los bloques iguales y, en los distintos, cambia solo
-atributos y texto. Así lo que otro dispositivo escribió sin red o a la vez sigue estando cuando llega, como al restaurar
+atributos y texto. Los bloques de arriba que ya se leen igual que en la versión se anotan como emparejados antes
+(`unchangedBlocks`, sobre una copia; un bloque cuyo XML cambia al leerlo, por tener algo que el esquema no conoce, no cuenta como igual y se reescribe, así se limpia como siempre) y `updateYFragment` los salta: sin eso, un bloque sin los atributos por defecto
+escritos (de una versión vieja o de una importación) los recibía todos aunque no hubiera cambiado, y el historial lo
+mostraba como «formato cambiado» (R2; `restoreInDocDefaults.test.ts`). Así lo que otro dispositivo escribió sin red o a la vez sigue estando cuando llega, como al restaurar
 por el editor (la primera versión reemplazaba el grupo entero y lo perdía: 0 de 200 casos al azar contra 50 de 50 por el
 editor; auditoría, B1). Se prueba primero en una copia en memoria; si no da igual a la versión, no se escribe ni sube
 nada. Es una edición local más: se guarda, sube y el historial la muestra. No tiene **Undo** en el aviso (el editor que
@@ -1332,7 +1335,7 @@ historial tiene su propia barrera: si la actual es la que rompe, se ve *This ver
 **Exportar a PDF o zip** no necesita barrera: el editor de exportación vive en su propia raíz de React, fuera de la app,
 y una página que lo hace tirar se saltea con su motivo mientras las demás salen (`exportPages.ts`; probado con las tres
 filas en `src/export/exportHostile.test.tsx`). Pruebas de las barreras: `src/ui/errorBarrier.test.tsx`,
-`src/ui/restoreInDoc.test.tsx` y `src/ui/restoreInDocCheck.test.ts`.
+`src/ui/restoreInDoc.test.tsx`, `src/ui/restoreInDocCheck.test.ts`, `src/ui/restoreInDocDefaults.test.ts` y `src/ui/restoreInDocGate.test.ts` (la compuerta de la copia).
 
 ## Volver después de mucho tiempo sin red
 

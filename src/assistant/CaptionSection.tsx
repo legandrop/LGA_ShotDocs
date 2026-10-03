@@ -6,6 +6,7 @@ import { useServices } from '../services';
 import { IS_MAC, modPressed } from '../ui/findUi';
 import { porteroDownload } from '../ui/sharpImages';
 import { shortcutLabel } from '../ui/shortcuts';
+import { asAction, tipRows } from '../ui/tipRows';
 import type { AssistantTarget } from './assistantUi';
 import { applyCaption, buildCaptionRequest, captionPlace, cleanCaption } from './caption';
 import { captionImage, CaptionImageError, type CaptionImage } from './captionImage';
@@ -244,7 +245,7 @@ export function CaptionSection({ photo, config, email, destination, providerName
             <button className="primary" disabled={blocked || !canEdit()} onClick={() => void send()}>
               {tr('assistant.caption.send')}
             </button>
-            <button onClick={() => close()} data-tip={shortcutLabel('menusClose')}>
+            <button onClick={() => close()} data-tip={tipRows([{ shortcut: 'menusClose', action: asAction(tr('assistant.caption.cancel')) }])}>
               {tr('assistant.caption.cancel')}
             </button>
           </div>
@@ -284,10 +285,10 @@ export function CaptionSection({ photo, config, email, destination, providerName
           <p className="muted assistant-hint">{tr(place === 'cell' ? 'assistant.caption.whereCell' : 'assistant.caption.whereBelow')}</p>
           {phase.linksRemoved && <p className="assistant-warning">{tr('assistant.linksRemoved')}</p>}
           <div className="assistant-buttons">
-            <button className="primary" disabled={!canEdit() || !caption.trim()} data-tip={shortcutLabel('assistantApply')} onClick={apply}>
+            <button className="primary" disabled={!canEdit() || !caption.trim()} data-tip={tipRows([{ shortcut: 'assistantApply', action: asAction(tr('assistant.apply')) }])} onClick={apply}>
               {tr('assistant.apply')}
             </button>
-            <button onClick={() => close()} data-tip={shortcutLabel('menusClose')}>
+            <button onClick={() => close()} data-tip={tipRows([{ shortcut: 'menusClose', action: asAction(tr('assistant.discard')) }])}>
               {tr('assistant.discard')}
             </button>
             <button disabled={blocked} onClick={() => void send()}>

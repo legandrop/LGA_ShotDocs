@@ -115,7 +115,8 @@ Decidido (Lega):
 **Tooltips** (con el formato de `Tooltip.tsx`; los textos van en `src/i18n/lazy/editor.ts`). Desde D226 (Lega,
 2026-10-03): **un renglón por acción, «gesto o atajo: acción»**; el gesto y el atajo en negrita (blanco), la acción en
 el gris normal del tooltip. Los atajos salen del registro (`collapse` y `collapseEveryone` de `src/ui/shortcuts.ts`);
-en la Mac, ⌘⌥↩ y ⌘⌥⇧↩; en Windows, Ctrl+Alt+Enter y Ctrl+Alt+Shift+Enter.
+en la Mac, ⌘⌥↩ y ⌘⌥⇧↩; en Windows, Ctrl+Alt+Enter y Ctrl+Alt+Shift+Enter. Los renglones los arma `src/ui/tipRows.ts`, el
+mismo de todos los tooltips con gesto o atajo (Doc_Decisiones.md, D226).
 
 | Estado | Quien puede editar | Quien solo ve o comenta |
 |---|---|---|

@@ -50,7 +50,7 @@ import { replaceBlocksLeaving } from './replaceUi';
 import { usePendingCount } from './usePendingCount';
 import { LegalLinks } from './Legal';
 import { openInstallDialog, useInstallState } from './install';
-import { shortcutLabel } from './shortcuts';
+import { asAction, tipRows } from './tipRows';
 import { askSignOut, askSignOutOthers, openAssistantSettings } from '../assistant/assistantUi';
 import { hasAssistantKey } from '../assistant/keyStore';
 import { voiceLeftovers } from '../dictation/leftovers';
@@ -305,7 +305,7 @@ export function PageMenu(props: {
       {props.onAssistant && (
         <button
           role="menuitem"
-          data-tip={shortcutLabel('assistant')}
+          data-tip={tipRows([{ shortcut: 'assistant', action: asAction(tr('pageMenu.assistant')) }])}
           onClick={() => {
             props.onClose();
             props.onAssistant?.();
@@ -319,7 +319,7 @@ export function PageMenu(props: {
       {props.onDictate && (
         <button
           role="menuitem"
-          data-tip={shortcutLabel('dictate')}
+          data-tip={tipRows([{ shortcut: 'dictate', action: asAction(tr('pageMenu.dictate')) }])}
           onClick={() => {
             props.onClose();
             props.onDictate?.();
@@ -333,7 +333,7 @@ export function PageMenu(props: {
       {props.onHistory && (
         <button
           role="menuitem"
-          data-tip={shortcutLabel('history')}
+          data-tip={tipRows([{ shortcut: 'history', action: asAction(tr('pageMenu.history')) }])}
           onClick={() => {
             props.onClose();
             props.onHistory?.();

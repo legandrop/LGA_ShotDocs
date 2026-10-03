@@ -13,7 +13,6 @@ export const carrete = {
     en: "Download {name} (not available offline)",
     es: "Descargar {name} (no disponible sin conexión)",
   },
-  'carrete.keyboard': { en: "**Keyboard:** {key}", es: "**Teclado:** {key}" },
   'carrete.previous': { en: "Previous", es: "Anterior" },
   'carrete.next': { en: "Next", es: "Siguiente" },
   'carrete.offlineMissing': {
