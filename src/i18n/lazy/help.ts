@@ -144,13 +144,13 @@ export const help = {
   },
   'help.projectsArchive.title': { en: "Archive and delete projects", es: "Archivar y borrar proyectos" },
   'help.projectsArchive.text': {
-    en: "Hover a project in the list (on a phone, tap its ⋯) to rename, archive or delete it. An archived project leaves the everyday list but can still be opened and edited. Deleting asks you to type delete and moves it to Deleted projects: nobody sees it, and Restore brings it back exactly as it was.",
-    es: "Pasá el mouse por un proyecto de la lista (en el teléfono, tocá su ⋯) para renombrarlo, archivarlo o borrarlo. Un archivado sale de la lista de todos los días pero se sigue abriendo y editando. Borrar pide escribir borrar y lo pasa a Proyectos borrados: nadie lo ve, y Restaurar lo deja tal como estaba.",
+    en: "Hover a project in the list (on a phone, tap its ⋯) to rename, archive or delete it. An archived project leaves the everyday list but can still be opened and edited. Deleting asks you to type delete and moves it to the Trash: nobody sees it, and Restore brings it back exactly as it was.",
+    es: "Pasá el mouse por un proyecto de la lista (en el teléfono, tocá su ⋯) para renombrarlo, archivarlo o borrarlo. Un archivado sale de la lista de todos los días pero se sigue abriendo y editando. Borrar pide escribir borrar y lo pasa a la papelera: nadie lo ve, y Restaurar lo deja tal como estaba.",
   },
   'help.projectsDrive.title': { en: "Its files in Google Drive", es: "Sus archivos en Google Drive" },
   'help.projectsDrive.text': {
-    en: "When the workspace owner or an admin deletes a project, Also send its files to the Google Drive trash sends its whole folder to the Drive trash; it starts unticked. Google deletes it for good after 30 days; Restore before that brings the folder back with everything in it. From Deleted projects you can also send it later. If Google Drive no longer has the folder, the app asks before restoring the pages without their files, and Look for its files again, on the project's start page, brings them back if the folder turns up.",
-    es: "Cuando el dueño del workspace o un admin borra un proyecto, Mandar también sus archivos a la papelera de Google Drive manda su carpeta entera a la papelera de Drive; arranca destildada. Google la borra para siempre a los 30 días; Restaurar antes la trae de vuelta con todo lo de adentro. Desde Proyectos borrados también se puede mandar después. Si Google Drive ya no tiene la carpeta, la app pregunta antes de restaurar las páginas sin sus archivos, y Buscar sus archivos de nuevo, en el inicio del proyecto, los trae si la carpeta aparece.",
+    en: "When the workspace owner or an admin deletes a project, Also send its files to the Google Drive trash sends its whole folder to the Drive trash; it starts unticked. Google deletes it for good after 30 days; Restore before that brings the folder back with everything in it. From the Trash you can also send it later. If Google Drive no longer has the folder, the app asks before restoring the pages without their files, and Look for its files again, on the project's start page, brings them back if the folder turns up.",
+    es: "Cuando el dueño del workspace o un admin borra un proyecto, Mandar también sus archivos a la papelera de Google Drive manda su carpeta entera a la papelera de Drive; arranca destildada. Google la borra para siempre a los 30 días; Restaurar antes la trae de vuelta con todo lo de adentro. Desde la papelera también se puede mandar después. Si Google Drive ya no tiene la carpeta, la app pregunta antes de restaurar las páginas sin sus archivos, y Buscar sus archivos de nuevo, en el inicio del proyecto, los trae si la carpeta aparece.",
   },
   'help.workspaces.title': { en: "Workspaces", es: "Workspaces" },
   'help.workspaces.text': {
@@ -522,8 +522,8 @@ export const help = {
   },
   'help.trash.title': { en: "Trash", es: "Papelera" },
   'help.trash.text': {
-    en: "Sending a page to the Trash, at the bottom of the sidebar, takes its subpages with it; Restore brings everything back where it was. With Google Drive connected, its Files tab lists the photos and files no page uses anymore (the owner and admins manage it).",
-    es: "Mandar una página a la papelera, abajo en la barra lateral, se lleva sus subpáginas; Restaurar devuelve todo a su lugar. Con Google Drive conectado, su pestaña Archivos muestra las fotos y los archivos que ya no usa ninguna página (los manejan el dueño y los admins).",
+    en: "There is one Trash, in the project menu (click the project at the top of the sidebar): deleted projects, pages with their subpages and, with Google Drive connected, the photos and files no page uses anymore, newest first. Filter by All, Projects, Pages or Files, and switch between This project and All projects. Restore brings a page or a project back where it was; the owner and admins manage the files.",
+    es: "Hay una sola papelera, en el selector de proyectos (clic en el proyecto, arriba de la barra lateral): los proyectos borrados, las páginas con sus subpáginas y, con Google Drive conectado, las fotos y los archivos que ya no usa ninguna página, del más nuevo al más viejo. Filtrá por Todo, Proyectos, Páginas o Archivos, y pasá de Este proyecto a Todos los proyectos. Restaurar devuelve una página o un proyecto a su lugar; los archivos los manejan el dueño y los admins.",
   },
 
   // --- Sin red ---

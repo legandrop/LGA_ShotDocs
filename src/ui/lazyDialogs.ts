@@ -15,6 +15,8 @@ export const DeleteProjectDialog = lazyPart(() => import('./ProjectStatesPart').
 // La ayuda (P.13, Docs/Doc_Tutorial.md).
 export const HelpDialog = lazyPart(() => import('../help/HelpDialog').then((m) => m.HelpDialog));
 export const DeletedProjectsList = lazyPart(() => import('./ProjectStatesPart').then((m) => m.DeletedProjectsList));
+// La papelera única del selector de proyectos: proyectos, páginas y archivos borrados.
+export const TrashPanel = lazyPart(() => import('./TrashView').then((m) => m.TrashPanel));
 // "Available offline" y "Storage on this device" (P.10).
 export const OfflineDialog = lazyPart(() => import('./OfflinePart').then((m) => m.OfflineDialog));
 export const StorageDialog = lazyPart(() => import('./OfflinePart').then((m) => m.StorageDialog));

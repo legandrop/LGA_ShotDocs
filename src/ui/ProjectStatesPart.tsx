@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { locale, t, useT } from '../i18n';
 import '../i18n/lazy/projectStates';
 import { formatSize } from '../media/fileTrash';
@@ -28,7 +28,7 @@ type DriveOption = { state: 'ready' } | { state: 'off'; reason: string } | { sta
  * de él y la palabra del idioma de la app. Solo con red. Al confirmar, la base lo manda a la papelera de
  * proyectos; recién con la respuesta la app sale de él (`onDeleted`). Con la casilla (entrega 2, destildada al
  * abrir), después el portero manda su carpeta entera a la papelera de Drive; si eso falla, el proyecto queda borrado
- * con sus archivos en Drive y se termina desde *Deleted projects*.
+ * con sus archivos en Drive y se termina desde la papelera (*Trash*, en el selector de proyectos).
  */
 export function DeleteProjectDialog(props: {
   projectId: string;
@@ -298,31 +298,53 @@ function driveLine(r: TrashedProjectRow, tr: ReturnType<typeof useT>): string | 
     : tr('deletedList.driveTrashedPast', { date: dateText(Date.parse(r.drive_trashed_at), tr.lang) });
 }
 
+/** Cómo está la lista de borrados: cargando (`null`), sin la función en la base (`missing`) o las filas. */
+export type DeletedRows = TrashedProjectRow[] | null | 'missing';
+
+/** Lo que comparten los renglones de los borrados: el trabajo en curso, la pregunta abierta y las acciones. */
+export interface DeletedProjects {
+  rows: DeletedRows;
+  error: string | null;
+  busy: string | null;
+  /** Una pregunta en el renglón: restaurar sin los archivos, o mandar la carpeta a la papelera de Drive. */
+  ask: { id: string; kind: 'missing' | 'send' } | null;
+  setAsk: (ask: { id: string; kind: 'missing' | 'send' } | null) => void;
+  askRef: RefObject<HTMLDivElement | null>;
+  load: () => void;
+  restore: (row: TrashedProjectRow, withoutDrive?: boolean) => Promise<void>;
+  send: (row: TrashedProjectRow) => Promise<void>;
+  drive: ProjectDrive | null;
+}
+
 /**
- * La papelera de proyectos (`trashed_projects`): los borrados que la sesión veía. *Restore* solo en los que puede
- * restaurar. Sin red, la lista no se puede leer. La usan el selector y la pantalla "sin proyectos" (que no tiene
- * los servicios abiertos: por eso recibe el remoto y, para la carpeta de Drive, el cliente del portero).
+ * La papelera de proyectos (`trashed_projects`): los borrados que la sesión veía (la base decide cuáles; acá no se
+ * filtra nada). *Restore* solo en los que puede restaurar. Sin red, la lista no se puede leer. Con `enabled: false`
+ * no pide nada (sin red o con una base sin la versión 9).
  *
  * Entrega 2: restaurar uno con la carpeta en la papelera de Drive primero la trae (`/project/untrash`). Si Drive,
  * conectado a la misma cuenta, ya no la tiene, pregunta antes de restaurar sin los archivos (una marca reversible).
  * A los dueños y admins que lo manejan, *Send files to the Drive trash* manda la carpeta de uno borrado sin ella (o
  * termina un envío que quedó a medias).
  */
-export function DeletedProjectsList(props: {
+export function useDeletedProjects(props: {
   remote: ProjectStatesRemote;
   onRestored: (row: TrashedProjectRow) => void | Promise<void>;
-  /** Para mostrar el peso en Drive de cada uno (solo a quien lo puede restaurar). */
-  sizeOf?: (projectId: string) => number | null;
-  /** El portero, para la carpeta de Drive (entrega 2). Sin él, *Restore* de uno con la carpeta enviada lo dice. */
   drive?: ProjectDrive | null;
-}) {
-  const [rows, setRows] = useState<TrashedProjectRow[] | null | 'missing'>(null);
+  enabled?: boolean;
+}): DeletedProjects {
+  const enabled = props.enabled ?? true;
+  const [rows, setRows] = useState<DeletedRows>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  /** Una pregunta en el renglón: restaurar sin los archivos, o mandar la carpeta a la papelera de Drive. */
   const [ask, setAsk] = useState<{ id: string; kind: 'missing' | 'send' } | null>(null);
   const askRef = useRef<HTMLDivElement>(null);
-  const tr = useT();
+  const live = useRef(true);
+  useEffect(() => {
+    live.current = true;
+    return () => {
+      live.current = false;
+    };
+  }, []);
 
   // La pregunta del renglón puede quedar abajo del borde del selector: se la trae a la vista, con el foco en su botón.
   useEffect(() => {
@@ -332,14 +354,15 @@ export function DeletedProjectsList(props: {
   }, [ask]);
 
   const load = () => {
+    if (!enabled) return;
     setError(null);
     props.remote.trashedProjects().then(
-      (list) => setRows(list ?? 'missing'),
-      (err: unknown) => setError(t('deletedList.loadFailed', { reason: errorMessage(err) })),
+      (list) => live.current && setRows(list ?? 'missing'),
+      (err: unknown) => live.current && setError(t('deletedList.loadFailed', { reason: errorMessage(err) })),
     );
   };
-  // Una vez al abrir la lista (y con "Retry").
-  useEffect(() => load(), [props.remote]);
+  // Una vez al abrir la lista (y con "Retry", o cuando vuelve la red).
+  useEffect(() => load(), [props.remote, enabled]);
 
   async function restore(row: TrashedProjectRow, withoutDrive = false) {
     setBusy(row.id);
@@ -389,95 +412,129 @@ export function DeletedProjectsList(props: {
     }
   }
 
+  return { rows, error, busy, ask, setAsk, askRef, load, restore, send, drive: props.drive ?? null };
+}
+
+/**
+ * Un borrado: nombre, quién y cuándo, sus números, la carpeta de Drive, *Restore* y las preguntas del renglón. `kind`
+ * es la línea de arriba en la papelera única ("Project"); la pantalla "sin proyectos" no la lleva.
+ */
+export function DeletedProjectItem(props: { row: TrashedProjectRow; list: DeletedProjects; bytes: number | null; kind?: string }) {
+  const { row: r, list, bytes } = props;
+  const tr = useT();
+  const line = driveLine(r, tr);
+  // Con la carpeta en la papelera de Drive, restaurar la trae: solo dueño y admins (la base lo exige).
+  const needsStaff = r.can_restore && folderSent(r) && !r.can_purge;
+  // Mandar la carpeta (o terminar un envío a medias): dueño y admins que lo manejan, con portero.
+  const canSend = r.can_purge && !!list.drive && (!r.drive_trash_requested_at || !!r.drive_missing_at || !r.drive_trashed_at);
+  const unfinished = folderSent(r) && !r.drive_trashed_at;
+  const asking = list.ask?.id === r.id ? list.ask.kind : null;
+  const busy = list.busy;
+  return (
+    <div className="deleted-project-item" data-kind="project">
+      <div className="deleted-project-row">
+        <Monogram name={r.name} />
+        <span className="project-label">
+          {props.kind && <span className="trash-kind">{props.kind}</span>}
+          <strong>{r.name}</strong>
+          <span>
+            {r.deleted_by_email
+              ? tr('deletedList.by', { email: r.deleted_by_email, when: whenText(r.deleted_at, tr.lang) })
+              : tr('deletedList.on', { when: whenText(r.deleted_at, tr.lang) })}
+          </span>
+          <span>{rowStats(r, bytes, tr)}</span>
+          {line && <span>{line}</span>}
+        </span>
+        {r.can_restore && (
+          <button className="secondary" disabled={busy !== null || needsStaff} onClick={() => void list.restore(r)}>
+            <RestoreIcon size={16} /> {busy === r.id && !asking ? tr('deletedList.restoring') : tr('deletedList.restore')}
+          </button>
+        )}
+      </div>
+      {needsStaff && <p className="muted small deleted-project-note">{tr('deletedList.needsStaff')}</p>}
+      {canSend && !asking && (
+        <div className="deleted-project-actions">
+          <button
+            className="link"
+            disabled={busy !== null}
+            onClick={() => (unfinished ? void list.send(r) : list.setAsk({ id: r.id, kind: 'send' }))}
+          >
+            {bytes !== null && bytes > 0
+              ? tr('deletedList.sendToDriveSize', { size: formatSize(bytes, tr.lang) })
+              : tr('deletedList.sendToDrive')}
+          </button>
+        </div>
+      )}
+      {asking === 'send' && (
+        <div ref={list.askRef} className="deleted-project-ask" role="group" aria-label={tr('deletedList.sendToDrive')}>
+          <p className="small">{tr('deletedList.sendConfirm', { folder: driveFolderLabel(r.name) })}</p>
+          {r.drive_missing_at && <p className="small delete-project-warning">{tr('deleteProject.driveMissingBefore')}</p>}
+          <div className="deleted-project-actions">
+            <button className="primary danger" disabled={busy !== null} onClick={() => void list.send(r)}>
+              {busy === r.id ? tr('deletedList.sending') : tr('deletedList.send')}
+            </button>
+            <button className="link" disabled={busy !== null} onClick={() => list.setAsk(null)}>
+              {tr('common.cancel')}
+            </button>
+          </div>
+        </div>
+      )}
+      {asking === 'missing' && (
+        <div ref={list.askRef} className="deleted-project-ask" role="group" aria-label={tr('deletedList.restoreWithoutFiles')}>
+          <p className="small">{tr('deletedList.missingQuestion')}</p>
+          <div className="deleted-project-actions">
+            <button className="primary" disabled={busy !== null} onClick={() => void list.restore(r, true)}>
+              {busy === r.id ? tr('deletedList.restoring') : tr('deletedList.restoreWithoutFiles')}
+            </button>
+            <button className="link" disabled={busy !== null} onClick={() => list.setAsk(null)}>
+              {tr('common.cancel')}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** El error de la lista de borrados, con *Retry*. */
+export function DeletedProjectsError({ list }: { list: DeletedProjects }) {
+  const tr = useT();
+  if (!list.error) return null;
+  return (
+    <p className="error">
+      {list.error}{' '}
+      <button className="link" onClick={list.load}>
+        {tr('common.retry')}
+      </button>
+    </p>
+  );
+}
+
+/**
+ * Los proyectos borrados solos: la pantalla "sin proyectos", que no tiene los servicios abiertos (por eso recibe el
+ * remoto y, para la carpeta de Drive, el cliente del portero). Adentro de la app están en la papelera única
+ * (`TrashPanel`, TrashView.tsx), junto con las páginas y los archivos.
+ */
+export function DeletedProjectsList(props: {
+  remote: ProjectStatesRemote;
+  onRestored: (row: TrashedProjectRow) => void | Promise<void>;
+  /** Para mostrar el peso en Drive de cada uno (solo a quien lo puede restaurar). */
+  sizeOf?: (projectId: string) => number | null;
+  /** El portero, para la carpeta de Drive (entrega 2). Sin él, *Restore* de uno con la carpeta enviada lo dice. */
+  drive?: ProjectDrive | null;
+}) {
+  const list = useDeletedProjects(props);
+  const tr = useT();
+  const rows = list.rows;
   return (
     <div className="deleted-projects">
       <p className="muted small">{tr('deletedList.hint')}</p>
-      {rows === null && !error && <p className="muted">{tr('common.loading')}</p>}
+      {rows === null && !list.error && <p className="muted">{tr('common.loading')}</p>}
       {rows === 'missing' && <p className="muted">{tr('deletedList.notYet')}</p>}
       {Array.isArray(rows) && rows.length === 0 && <p className="muted">{tr('deletedList.none')}</p>}
       {Array.isArray(rows) &&
-        rows.map((r) => {
-          const bytes = props.sizeOf?.(r.id) ?? null;
-          const line = driveLine(r, tr);
-          // Con la carpeta en la papelera de Drive, restaurar la trae: solo dueño y admins (la base lo exige).
-          const needsStaff = r.can_restore && folderSent(r) && !r.can_purge;
-          // Mandar la carpeta (o terminar un envío a medias): dueño y admins que lo manejan, con portero.
-          const canSend =
-            r.can_purge && !!props.drive && (!r.drive_trash_requested_at || !!r.drive_missing_at || !r.drive_trashed_at);
-          const unfinished = folderSent(r) && !r.drive_trashed_at;
-          const asking = ask?.id === r.id ? ask.kind : null;
-          return (
-            <div key={r.id} className="deleted-project-item">
-              <div className="deleted-project-row">
-                <Monogram name={r.name} />
-                <span className="project-label">
-                  <strong>{r.name}</strong>
-                  <span>
-                    {r.deleted_by_email
-                      ? tr('deletedList.by', { email: r.deleted_by_email, when: whenText(r.deleted_at, tr.lang) })
-                      : tr('deletedList.on', { when: whenText(r.deleted_at, tr.lang) })}
-                  </span>
-                  <span>{rowStats(r, bytes, tr)}</span>
-                  {line && <span>{line}</span>}
-                </span>
-                {r.can_restore && (
-                  <button className="secondary" disabled={busy !== null || needsStaff} onClick={() => void restore(r)}>
-                    <RestoreIcon size={16} /> {busy === r.id && !asking ? tr('deletedList.restoring') : tr('deletedList.restore')}
-                  </button>
-                )}
-              </div>
-              {needsStaff && <p className="muted small deleted-project-note">{tr('deletedList.needsStaff')}</p>}
-              {canSend && !asking && (
-                <div className="deleted-project-actions">
-                  <button
-                    className="link"
-                    disabled={busy !== null}
-                    onClick={() => (unfinished ? void send(r) : setAsk({ id: r.id, kind: 'send' }))}
-                  >
-                    {bytes !== null && bytes > 0
-                      ? tr('deletedList.sendToDriveSize', { size: formatSize(bytes, tr.lang) })
-                      : tr('deletedList.sendToDrive')}
-                  </button>
-                </div>
-              )}
-              {asking === 'send' && (
-                <div ref={askRef} className="deleted-project-ask" role="group" aria-label={tr('deletedList.sendToDrive')}>
-                  <p className="small">{tr('deletedList.sendConfirm', { folder: driveFolderLabel(r.name) })}</p>
-                  {r.drive_missing_at && <p className="small delete-project-warning">{tr('deleteProject.driveMissingBefore')}</p>}
-                  <div className="deleted-project-actions">
-                    <button className="primary danger" disabled={busy !== null} onClick={() => void send(r)}>
-                      {busy === r.id ? tr('deletedList.sending') : tr('deletedList.send')}
-                    </button>
-                    <button className="link" disabled={busy !== null} onClick={() => setAsk(null)}>
-                      {tr('common.cancel')}
-                    </button>
-                  </div>
-                </div>
-              )}
-              {asking === 'missing' && (
-                <div ref={askRef} className="deleted-project-ask" role="group" aria-label={tr('deletedList.restoreWithoutFiles')}>
-                  <p className="small">{tr('deletedList.missingQuestion')}</p>
-                  <div className="deleted-project-actions">
-                    <button className="primary" disabled={busy !== null} onClick={() => void restore(r, true)}>
-                      {busy === r.id ? tr('deletedList.restoring') : tr('deletedList.restoreWithoutFiles')}
-                    </button>
-                    <button className="link" disabled={busy !== null} onClick={() => setAsk(null)}>
-                      {tr('common.cancel')}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      {error && (
-        <p className="error">
-          {error}{' '}
-          <button className="link" onClick={load}>
-            {tr('common.retry')}
-          </button>
-        </p>
-      )}
+        rows.map((r) => <DeletedProjectItem key={r.id} row={r} list={list} bytes={props.sizeOf?.(r.id) ?? null} />)}
+      <DeletedProjectsError list={list} />
     </div>
   );
 }

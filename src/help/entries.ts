@@ -126,6 +126,8 @@ const DICTATION_QUEUE = '0.139';
 const DICTATION_VOICE = '0.139';
 /** *Dictate to report*, entrega V4 (el plano activo, las correcciones, la página del plano, el Atajo de iOS): la versión la pone quien publica. */
 const DICTATION_V4 = '0.150';
+/** Una sola papelera en el selector de proyectos (Doc_Proyectos_Borrar.md, "Cómo quedó: una sola papelera"): la versión la pone quien publica. */
+const ONE_TRASH = '0.0XX';
 /** Las tablas anchas se desplazan de costado en el teléfono (P.28, Doc_Tabla_Telefono.md): la versión la pone quien publica. */
 const TABLE_PHONE = '0.156';
 /** Las plantillas de fábrica (Docs/Doc_Plantillas.md, entregas 0 y 1): la versión se ajusta al publicar. */
@@ -777,7 +779,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
   },
 
   // --- Papelera ---
-  { id: 'trash', section: 'trash', title: 'help.trash.title', text: 'help.trash.text', since: BEFORE_HELP },
+  {
+    id: 'trash',
+    section: 'trash',
+    title: 'help.trash.title',
+    text: 'help.trash.text',
+    words: ['papelera', 'borrado', 'borrados', 'restaurar', 'proyectos borrados', 'deleted', 'deleted projects', 'restore', 'trash', 'recuperar', 'recover'],
+    showMe: 'project-switcher',
+    since: ONE_TRASH,
+  },
   {
     id: 'history',
     section: 'trash',

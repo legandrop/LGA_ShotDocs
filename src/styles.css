@@ -1646,12 +1646,7 @@ code {
   white-space: nowrap;
 }
 
-/* Papelera: pestañas Páginas / Archivos y la lista de archivos (paso 11). */
-.trash-tabs {
-  max-width: 260px;
-  margin: 16px 0 4px;
-}
-
+/* Papelera: la lista de archivos (paso 11). */
 .trash-files-actions {
   display: flex;
   align-items: center;
@@ -2115,6 +2110,144 @@ code {
   width: auto;
   height: 32px;
   padding: 0 12px;
+}
+
+/* La papelera única, adentro del selector de proyectos: más ancha que el selector para que entren el filtro, la
+   miniatura y *Restore*. En el teléfono, la hoja de abajo de siempre (ancho entero). */
+.menu.project-menu.trash-menu {
+  width: 440px;
+}
+
+.trash-panel {
+  display: grid;
+  gap: 8px;
+  padding: 2px 6px 6px;
+  min-width: 0;
+}
+
+.trash-panel .trash-hint,
+.trash-panel .trash-warning {
+  margin: 0;
+}
+
+.trash-panel .trash-files-actions {
+  margin-top: 0;
+  flex-wrap: wrap;
+}
+
+.menu .trash-panel .trash-files-actions button.link {
+  width: auto;
+  height: 28px;
+  padding: 0;
+}
+
+.trash-panel .trash-list {
+  margin: 0;
+}
+
+.trash-panel .trash-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.trash-panel .trash-item:last-child {
+  border-bottom: none;
+}
+
+/* Un proyecto borrado ocupa el renglón entero (con sus notas y preguntas abajo). */
+.trash-panel .trash-item[data-kind='project'] {
+  display: block;
+}
+
+.trash-panel .trash-item .deleted-project-row {
+  padding: 0;
+}
+
+.trash-panel .trash-thumb {
+  flex: none;
+  width: 48px;
+  height: 36px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--seg-bg);
+  border: 1px solid var(--border);
+}
+
+.trash-panel .trash-thumb-file,
+.trash-panel .trash-thumb-page {
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted-2);
+}
+
+.trash-panel .trash-file {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.trash-panel .trash-file .title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* El título de una página es un link que la abre: en el selector, sin el alto ni el relleno de los renglones. */
+.menu .trash-panel .trash-file button.title {
+  width: 100%;
+  height: auto;
+  padding: 0;
+  display: block;
+  font-size: 14px;
+}
+
+.trash-panel .trash-file .when {
+  white-space: normal;
+}
+
+/* Qué es y de qué proyecto: "Page · MGTZD". */
+.trash-panel .trash-kind {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trash-panel .small {
+  font-size: 12px;
+}
+
+.trash-panel .trash-error {
+  color: var(--danger);
+}
+
+.menu .trash-panel .trash-item > button.secondary {
+  flex: none;
+  width: auto;
+  max-width: 45%;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.menu .trash-panel .error button.link,
+.menu .trash-panel p button.link {
+  display: inline;
+  width: auto;
+  height: auto;
+  padding: 0;
 }
 
 .delete-project-drive {
