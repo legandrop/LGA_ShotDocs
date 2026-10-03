@@ -14,8 +14,14 @@ jerarquía de tres tonos:
 | *More contrast* | el de siempre | más apagada que en *Contrast* | más apagado que en *Contrast* |
 
 - El **texto con un color elegido** (unas letras o un bloque entero, que BlockNote pinta también en sus hijos) no cambia,
-  ni la negrita ni los encabezados de adentro: siguen con ese color. Tampoco los links ni lo borrado que marca el
-  historial con *Show changes*.
+  ni la negrita ni los encabezados de adentro: siguen con ese color. Tampoco los links, la cita (gris, también su
+  negrita) ni lo borrado que marca el historial con *Show changes*.
+- Lo **resaltado** (un color de fondo elegido, en unas letras o en un bloque y sus hijos) queda afuera de la jerarquía:
+  su texto y su negrita van con la tinta plena de siempre. En oscuro los fondos de BlockNote son claros o saturados y
+  un tono más apagado bajaba de 4,5:1 (rojo 4,64 → 3,20 con *Contrast*; amarillo 1,38 con *More*).
+- *No contrast* es **exactamente lo de antes**: las reglas de los encabezados, la negrita y el resaltado no corren
+  (`:root:not([data-contrast='none'])`) y el texto común resuelve a `--text`. Medido en Chromium contra `main`, elemento
+  por elemento (44 textos, claro y oscuro, página y PDF): cero diferencias.
 - La negrita adentro de un encabezado va con el encabezado.
 - Vale en la página, en la vista de una versión del historial (usa el mismo editor) y en el PDF y la impresión, que
   siempre usan los tonos del **modo claro** (`.print-view`), también con la app en oscuro.
@@ -66,7 +72,9 @@ Por qué estos valores:
 `src/contrast.test.ts` resuelve los tokens con la cascada (especificidad y orden de las reglas, también la de
 `.print-view` adentro de `:root`) para cada modo, nivel y destino, y comprueba 4,5:1 contra los fondos y las marcas de
 Script, el orden encabezado > negrita > texto común, que *More* marca más que *Contrast*, que *No contrast* es un solo
-tono y que el PDF tiene los del modo claro.
+tono (y que toda regla que pinta con el tono del encabezado o de la negrita está apagada con *No contrast*), que sobre
+los nueve resaltados de BlockNote, en claro y oscuro, el texto da lo mismo que antes, y que el PDF tiene los del modo
+claro.
 
 ## 3. Cómo se aplica sin tocar los colores elegidos
 
@@ -77,11 +85,17 @@ tono y que el PDF tiene los del modo claro.
 .bn-container .bn-default-styles [data-content-type='heading'] strong { color: inherit; }
 ```
 
+Las tres reglas de color (encabezado, negrita, resaltado) van detrás de `:root:not([data-contrast='none'])`.
 Lo que pone su propio color (`[data-style-type='textColor']`, `[data-text-color]`, el `.bn-block:has(...)` con el que
-BlockNote pinta un bloque y sus hijos, `a`, `.hist-del`) redefine `--ink-heading` y `--ink-bold` como `currentColor`.
+BlockNote pinta un bloque y sus hijos, `a`, `blockquote`, `.hist-del`) redefine `--ink-heading` y `--ink-bold` como
+`currentColor`. Lo resaltado (`[data-style-type='backgroundColor']`, `[data-background-color]` y su `.bn-block:has(...)`),
+salvo que además tenga un color de texto elegido, pinta con `--ink-heading` y pasa ese tono a su negrita.
 En la propiedad `color`, `currentColor` es el color heredado: así una negrita o un encabezado adentro de algo pintado
 siguen con ese color. Medido en Chromium (getComputedStyle y los colores de relleno del PDF con pdf.js): el rojo, el azul,
-el verde y el violeta elegidos dan el mismo valor en los tres niveles, en la página, el historial y el PDF.
+el verde y el violeta elegidos, los nueve resaltados y la cita dan el mismo valor en los tres niveles y que en `main`, en
+la página, el historial y el PDF. Con *Contrast* y *More* cambian solo los 15 textos con el color por defecto (común,
+negrita, listas, itálica, código en línea); todo lo que queda debajo de 4,5:1 es lo mismo que ya lo estaba en `main`
+(colores y fondos de la paleta de BlockNote, la cita).
 
 Ningún cambio al esquema del editor ni al documento: es solo CSS y una preferencia.
 
@@ -98,5 +112,6 @@ Ningún cambio al esquema del editor ni al documento: es solo CSS y una preferen
 - *Sign out other devices* (y cualquier renglón largo) baja a dos líneas alineado a la izquierda, como los demás.
 
 Pruebas: `src/ui/accountPrefs.test.tsx` (solo íconos con tooltip y `aria-label`, sin `title`, *Contrast* de fábrica, se
-guarda y marca el documento, los rótulos en castellano, el alto del panel) y `src/prefs.test.ts` (de fábrica, valores
+guarda y marca el documento, los rótulos en castellano, el alto del panel, y en el CSS el desplazamiento propio y los
+renglones a la izquierda) y `src/prefs.test.ts` (de fábrica, valores
 desconocidos, guardar y subir, una cuenta sin la clave).

@@ -6,8 +6,8 @@ v0.0XX :
 ya no entraba en una ventana baja: su tope era la ventana entera y la cabecera quedaba afuera por arriba. Ahora
 *Contrast* (de fábrica) da tres tonos al texto con el color por defecto: encabezados como siempre, negrita un poco más
 suave y texto común un poco más; *More contrast* lo marca más y *No contrast* deja todo como antes. Son tokens por
-modo y nivel, todos de 4,5:1 o más (`Doc_Contraste.md`); un color elegido no cambia. Vale en la página, el historial y el
-PDF, en claro. El panel se recorre adentro con el alto que queda, *Appearance*, *Font* («Fuente») y *Contrast* son solo
+modo y nivel, todos de 4,5:1 o más (`Doc_Contraste.md`); un color elegido, un resaltado y la cita no cambian. Vale en
+la página, el historial y el PDF, en claro. El panel se recorre adentro con el alto que queda, *Appearance*, *Font* («Fuente») y *Contrast* son solo
 íconos con su nombre en el tooltip, y *Sign out other devices* va a la izquierda.
 [ Contraste del texto - Contrast de fábrica, More contrast y No contrast para encabezados, negrita y texto común, en la página, el historial y el PDF; el panel de la cuenta con íconos y su propio desplazamiento ]
 

@@ -43,7 +43,8 @@ its own project: a tree of pages you own.
   and sign in to see only the pages shared with them. A page can also be shared with *Anyone with the link*: they
   open it without an account, see that page and the ones inside, and comment with a name.
 - **Your look, everywhere.** Light or dark theme, a default or an editorial typeface, text contrast
-  (headings, bold and body text in three shades, also in the PDF), text size and page width, saved in your account and applied on every device. Scene titles like `064 | Name | Place` show
+  (headings, bold and body text in three shades, also in the PDF), text size and page width, saved in
+  your account and applied on every device. Scene titles like `064 | Name | Place` show
   as a short code and a name in the sidebar, and each page can show the pages that contain it above its
   title.
 - **One app, many workspaces.** The same app connects to several workspaces. Each workspace is an island
