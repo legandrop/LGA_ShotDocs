@@ -39,6 +39,19 @@ describe('la dirección de un archivo', () => {
     expect(parseWorkspaceHash(`#invite=${enc(WS).slice(4)}`)).toBeNull();
   });
 
+  it('http://localhost solo con la app en la computadora (O4 de la auditoría de E1)', () => {
+    const enc = (o: unknown) => `#ws=${btoa(JSON.stringify(o)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`;
+    const local = enc({ ...WS, u: 'http://localhost:54321' });
+    // Sin decirlo, decide dónde corre la app: acá (sin `location`, como en la web publicada) no es localhost.
+    expect(typeof location).toBe('undefined');
+    expect(parseWorkspaceHash(local)).toBeNull();
+    expect(parseWorkspaceHash(local, false)).toBeNull();
+    expect(parseWorkspaceHash(enc({ ...WS, u: 'http://127.0.0.1:54321' }), false)).toBeNull();
+    expect(parseWorkspaceHash(local, true)).toEqual({ ...WS, u: 'http://localhost:54321' });
+    // Ni con la app en la computadora se acepta otro host por http.
+    expect(parseWorkspaceHash(enc({ ...WS, u: 'http://abc.supabase.co' }), true)).toBeNull();
+  });
+
   it('la ruta pide clave local y uuid', () => {
     expect(parseRoute(`/f/wanka_1/${ID}/`)).toEqual({ name: 'file', localKey: 'wanka_1', id: ID });
     for (const path of [`/f/${ID}`, `/f/ab/${ID}`, `/f/Wanka/${ID}`, '/f/wanka_1/123', `/f/wanka_1/${ID}/x`, `/f/wa nka/${ID}`]) {

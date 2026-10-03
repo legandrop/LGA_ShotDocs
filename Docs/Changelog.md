@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.166 :
+
+**Links del PDF, entrega 2: *Request access*.** Quien abría la dirección de un archivo sin permiso solo leía «pedíselo a
+quien te compartió el documento»: no había cómo pedirlo ni dónde verlo. Ahora la tabla `access_requests` (cerrada con
+RLS, sin políticas) y tres funciones: pedir responde lo mismo exista o no el archivo, con tope de 20 por día; la lista la
+ve quien puede compartir una página viva que usa el archivo; decidir rechaza solo si se lo pide y nunca baja un permiso.
+La pantalla `/f/` suma *Request access* con el aviso de quién lo verá, recuerda cuándo se pidió, vuelve a preguntar cada
+minuto, reintenta al volver la red y *Close* vuelve a donde estaba. La campana y *Share* muestran los pedidos con la
+ventana de decidir. Migración `20261031120000_access_requests` (schema 22).
+[ Request access en los links del PDF - pedir acceso a un archivo desde /f/, los pedidos en la campana y en Share con dar acceso o rechazar, la tabla access_requests con RLS (schema 22) y sus pruebas SQL con mutantes ]
+
 v0.165 :
 
 **Observaciones del roadmap y de la 2b.** (1) La barra de los links seguía con el globo de BlockNote: ahora usa el

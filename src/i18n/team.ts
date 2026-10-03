@@ -99,4 +99,38 @@ export const team = {
     en: "You do not have permission for this ({error}).",
     es: "No tenés permiso para esto ({error}).",
   },
+  'teamError.requestNotFound': {
+    en: "Someone already decided this request, or it is no longer yours to decide.",
+    es: "Alguien ya decidió este pedido, o ya no te toca decidirlo.",
+  },
+  'teamError.pageInvalid': {
+    en: "Access can't be given on that page. Choose another one.",
+    es: "No se puede dar acceso en esa página. Elegí otra.",
+  },
+  'teamError.decisionInvalid': { en: "Choose Give access or Decline.", es: "Elegí Dar acceso o Rechazar." },
+  // Los pedidos de acceso a un archivo (Doc_Links_PDF.md, 5.3): en la campana, en Share y en la ventana de decidir.
+  'requests.title': { en: "Access requests", es: "Pedidos de acceso" },
+  'requests.count': {
+    en: { one: "{count} access request", other: "{count} access requests" },
+    es: { one: "{count} pedido de acceso", other: "{count} pedidos de acceso" },
+  },
+  'requests.asks': { en: "{email} asks for access to {file}", es: "{email} pide acceso a {file}" },
+  'requests.times': {
+    en: { one: "{count} time", other: "{count} times" },
+    es: { one: "{count} vez", other: "{count} veces" },
+  },
+  'requests.review': { en: "Review", es: "Revisar" },
+  'requests.onPage': { en: "Access requests to files on this page", es: "Pedidos de acceso a archivos de esta página" },
+  'requests.page': { en: "Page", es: "Página" },
+  'requests.level': { en: "Access", es: "Acceso" },
+  'requests.scope': {
+    en: "Gives access to this page and the pages inside it.",
+    es: "Da acceso a esta página y a las de adentro.",
+  },
+  'requests.give': { en: "Give access", es: "Dar acceso" },
+  'requests.decline': { en: "Decline", es: "Rechazar" },
+  'requests.offline': {
+    en: "You're offline. Deciding needs an internet connection.",
+    es: "Estás sin conexión. Para decidir hace falta internet.",
+  },
 } satisfies Dict;
