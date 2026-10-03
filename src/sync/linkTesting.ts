@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { toBase64 } from '../lib/base64';
+import { fromBase64, toBase64 } from '../lib/base64';
 import { AccessStore, Permissions } from './access';
 import { CommentQueue, commentsDbName, openCommentsDb, type CommentRow } from './comments';
 import { PageDocs } from './docs';
@@ -9,6 +9,7 @@ import { LinkCommentRemote, LinkRemote, type LinkProblem } from './linkRemote';
 import { openLocalDb, type LocalDb } from './localDb';
 import { normalizeStructure, seedIfEmpty } from './structure';
 import type { FakeServer } from './testing';
+import { LINK_PUSH_MAX_BYTES } from './linkRemote';
 import { PageTree } from './tree';
 
 // Lo de las pruebas del modo link (Docs/Doc_Link_Publico.md, sección 6.2): un cliente de Supabase en memoria que
@@ -24,13 +25,20 @@ export interface LinkCall {
 }
 
 /** Un link vivo en el servidor en memoria (como `create_public_link`). Devuelve el token. */
-export function addPublicLink(server: FakeServer, pageId: string, createdBy = server.ownerId): string {
+export function addPublicLink(server: FakeServer, pageId: string, createdBy = server.ownerId, level: 'comment' | 'edit' = 'comment'): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   const token = 'sdl_' + toBase64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  server.publicLinks.set(token, { id: crypto.randomUUID(), pageId, createdBy });
+  server.publicLinks.set(token, { id: crypto.randomUUID(), pageId, createdBy, level });
   server.cleanReset({ pageId });
   return token;
+}
+
+/** *Reset link* (como `reset_public_link`): el viejo no anda más, lo que esperaba queda apartado, y uno nuevo. */
+export function resetPublicLink(server: FakeServer, token: string): string {
+  const old = server.publicLinks.get(token)!;
+  server.revokePublicLink(token);
+  return addPublicLink(server, old.pageId, old.createdBy, old.level ?? 'comment');
 }
 
 /**
@@ -41,23 +49,13 @@ export function fakeLinkClient(server: FakeServer, headers: Record<string, strin
   const fail = (message: string, code: string, status: number): Result => ({ data: null, error: { message, code }, status });
   const link = () => {
     const l = server.publicLinks.get(headers['x-shotdocs-link'] ?? '');
-    if (!l || l.revoked) return null;
-    // El creador todavía puede compartir: miembro activo que no es invitado.
-    const role = server.role(l.createdBy);
-    if (!role || role === 'guest' || server.pageLevel(l.createdBy, l.pageId, true) < 4) return null;
-    return l;
+    // Sin revocar, sin vencer, y el creador todavía puede compartir: miembro activo que no es invitado.
+    return l && server.linkAlive(l) ? l : null;
   };
-  /** `plink_page_level`: la raíz del link en la cadena y nada de la cadena en la papelera. */
+  /** `plink_page_level`: la raíz del link en la cadena y nada de la cadena en la papelera (2, o 3 con Can edit). */
   const level = (pageId: string): number => {
     const l = link();
-    if (!l) return 0;
-    let under = false;
-    for (let cur: string | null = pageId, n = 0; cur && n < 10000; cur = server.pages.get(cur)?.parent_id ?? null, n++) {
-      const p = server.pages.get(cur);
-      if (!p || p.deleted_at) return 0;
-      if (cur === l.pageId) under = true;
-    }
-    return under ? 2 : 0;
+    return l ? server.linkPageLevel(l, pageId) : 0;
   };
   const branch = (): string[] => {
     const l = link();
@@ -75,7 +73,10 @@ export function fakeLinkClient(server: FakeServer, headers: Record<string, strin
         const s = server.settings;
         return {
           data: {
-            link_id: l.id, page_id: l.pageId, title: server.pages.get(l.pageId)?.title ?? '', level: 'comment', expires_at: null,
+            link_id: l.id, page_id: l.pageId, title: server.pages.get(l.pageId)?.title ?? '',
+            // El nivel que esta versión puede usar: Can edit solo con el interruptor y la versión (entrega 2a).
+            level: l.level === 'edit' && server.linkEditVersionAllowed(args.p_app_version as string | null) ? 'edit' : 'comment',
+            link_level: l.level ?? 'comment', expires_at: null,
             min_app_version: s?.minAppVersion ?? null, schema_version: Math.max(s?.schemaVersion ?? 0, 14),
             clean_on: server.cleanOn(), media_url: s?.mediaUrl ?? null, outdated: false,
           },
@@ -142,6 +143,46 @@ export function fakeLinkClient(server: FakeServer, headers: Record<string, strin
         } as CommentRow & { body: string; updated_at: string });
         return { data: null, error: null, status: 204 };
       }
+      case 'plink_push_page_update': {
+        // Como la migración de la entrega 2a, en el mismo orden: el nivel, la idempotencia, la versión, el nombre, el
+        // tamaño, lo que espera, el tope de por vida y los del día. A la sala, nunca a la página.
+        const pageId = String(args.p_page_id);
+        if (!args.p_client_update_id || level(pageId) < 3) return fail('page_not_found', 'P0002', 404);
+        const cid = String(args.p_client_update_id);
+        if (server.linkRoom.some((r) => r.linkId === l.id && r.pageId === pageId && r.clientUpdateId === cid)) {
+          return { data: 0, error: null, status: 200 };
+        }
+        if (!server.linkEditVersionAllowed(args.p_app_version as string | null)) return fail('app_outdated', 'P0001', 400);
+        const name = String(args.p_author ?? '').trim();
+        if (!name || name.length > 60) return fail('author_invalid', '22023', 400);
+        const data = fromBase64(String(args.p_update ?? ''));
+        if (data.length === 0 || data.length > server.linkLimits.push_max_bytes) return fail('update_size_invalid', '22023', 400);
+        const limited = (detail: string): Result => ({ data: null, error: { message: 'link_rate_limited', code: 'P0001', details: detail } as never, status: 400 });
+        if (server.linkWaitingBytes(l) + data.length > server.linkLimits.waiting_bytes) return limited('waiting_bytes');
+        if ((l.pushBytes ?? 0) + data.length > server.linkLimits.life_push_bytes) return limited('life_push_bytes');
+        const over = server.linkCount(l, 'push', data.length);
+        if (over) return limited(over);
+        l.pushBytes = (l.pushBytes ?? 0) + data.length;
+        server.linkRoom.push({
+          id: crypto.randomUUID(), n: server.linkRoom.length + 1, linkId: l.id, pageId, clientUpdateId: cid, data, bytes: data.length,
+          author: name, device: device(), appVersion: Number(args.p_app_version), createdAt: server.now(), decidedAt: null,
+          decidedBy: null, decision: null, reason: null, admittedSeq: null,
+        });
+        return { data: 0, error: null, status: 200 };
+      }
+      case 'plink_push_status': {
+        if (server.linkCount(l, 'pass', 0)) return { data: null, error: { message: 'link_rate_limited', code: 'P0001' }, status: 400 };
+        const byPage = new Map<string, { page_id: string; waiting: number; aside: number }>();
+        for (const r of server.linkRoom) {
+          if (r.linkId !== l.id || !device() || r.device !== device()) continue;
+          if (r.decidedAt !== null && r.decision !== 'aside') continue;
+          const row = byPage.get(r.pageId) ?? { page_id: r.pageId, waiting: 0, aside: 0 };
+          if (r.decidedAt === null) row.waiting++;
+          else row.aside++;
+          byPage.set(r.pageId, row);
+        }
+        return { data: [...byPage.values()], error: null, status: 200 };
+      }
       case 'plink_edit_comment':
       case 'plink_delete_comment': {
         const c = server.comments.get(String(args.p_id)) as (CommentRow & { body: string; plink_id?: string; plink_device?: string; updated_at?: string }) | undefined;
@@ -174,11 +215,18 @@ export interface LinkDevice {
 }
 
 /** Un visitante con el link: como \`services.ts\` en modo link (modo liviano, solo bases, comentarios con nombre). */
-export async function makeLinkDevice(server: FakeServer, token: string, device = 'dev-' + 'x'.repeat(20), appVersion = '9.999'): Promise<LinkDevice> {
+export async function makeLinkDevice(
+  server: FakeServer,
+  token: string,
+  device = 'dev-' + 'x'.repeat(20),
+  appVersion = '9.999',
+  visitorName = '',
+): Promise<LinkDevice> {
   const calls: LinkCall[] = [];
   const problems: (LinkProblem | null)[] = [];
+  const name = { value: visitorName };
   const client = fakeLinkClient(server, { 'x-shotdocs-version': appVersion, 'x-shotdocs-link': token, 'x-shotdocs-device': device }, calls);
-  const remote = new LinkRemote(client, appVersion, (p) => problems.push(p));
+  const remote = new LinkRemote(client, appVersion, (p) => problems.push(p), () => name.value);
   const userId = `link:${device}`;
   const db = await openLocalDb(crypto.randomUUID());
   const access = new AccessStore(db, userId);
@@ -189,9 +237,10 @@ export async function makeLinkDevice(server: FakeServer, token: string, device =
     normalize: normalizeStructure,
     seed: seedIfEmpty,
     canWrite: (pageId) => new Permissions(tree, access.get(), userId).canEditPage(pageId),
+    // Como services.ts en modo link: la subida sin GC hasta el tope de una subida por un link (LE13).
+    noGcMaxBytes: LINK_PUSH_MAX_BYTES,
   });
   const files = new PageFiles(db, remote);
-  const name = { value: '' };
   const commentsDb = await openCommentsDb(commentsDbName(crypto.randomUUID()));
   const comments = new CommentQueue(commentsDb, new LinkCommentRemote(client, userId, () => name.value), userId);
   await comments.load();
@@ -201,6 +250,7 @@ export async function makeLinkDevice(server: FakeServer, token: string, device =
     comments,
     intervalMs: 30_000,
     pullOnly: (id, cursor) => cursor > 0 || !!docs.peek(id),
+    linkVisitor: true,
   });
   return { db, tree, docs, engine, remote, comments, access, problems, calls, name };
 }

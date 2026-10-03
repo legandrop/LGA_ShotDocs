@@ -1476,6 +1476,28 @@ búsqueda y el reemplazo del proyecto. Sin base todavía, la página está "en p
 - **Un invitado con Editar** sube sus filas como siempre; su cursor queda por delante de la base y baja la siguiente.
 - **La subida no cambia** (D15, D19).
 
+## Lo que escribe un link público (*Can edit*, entrega 2a)
+
+`Doc_Link_Publico.md`, "Entrega 2". Con el interruptor `link_edit_min_version` prendido (versión 19 de la base):
+
+- **El visitante** es un invitado con Editar sobre la página del link y sube con el motor de siempre (IndexedDB
+  primero, la cola se vacía solo con la confirmación), pero a la **sala de espera** (`plink_push_page_update`), que
+  devuelve 0: la confirmación sube `syncedSV` y no mueve el cursor. Sigue siendo un lector de bases: lo suyo vuelve con
+  la base siguiente, cuando un editor lo admitió (Yjs no duplica nada). Sin el nombre del visitante no sube (queda en el
+  dispositivo y el ciclo sigue); una subida armada de más de 1 MB no se manda y la página queda rechazada, y la primera
+  edición guardada de esa página (deshacer el pegado) la vuelve a intentar (`linkVisitor` en el motor,
+  `clearRejectedPage`). La subida sin GC llega hasta 1 MB (`noGcMaxBytes`). Mientras algo espera, una vez por ciclo,
+  `plink_push_status` dice qué espera y qué se apartó.
+- **La admisión** la hace el dispositivo de quien arma las bases, en `buildCleanBases` y antes de `clean_work`
+  (`LinkAdmission` en `src/sync/linkAdmit.ts`): las páginas con algo para decidir (sin bytes); de esas, las que tiene
+  exactamente como el servidor (cursor en `update_seq`, nada sin subir, nada rechazado ni ilegible) y sin una edición
+  local en los últimos 20 s; los bytes solo de esas; la prueba (`src/sync/admit.ts`, sobre `docs.savedRows`) y la
+  decisión. Si la base decide distinto, se corta esa página y se vuelve a probar en la vuelta siguiente; lo probado que
+  no se pudo mandar (sin red) se manda en la siguiente sin volver a bajarlo. Si entró algo, la base de esa página sale
+  con la cadencia de siempre. Sus errores no cortan las bases.
+- **Lo admitido** es una fila común de `page_updates` (`created_by` nulo, `plink_author`): baja, se compacta y se ve en
+  el historial como cualquiera. Lo apartado y lo que espera nunca están en `page_updates`.
+
 ## Restaurar una copia de seguridad: la generación
 
 Las copias de seguridad de la base (`Plan_Workspaces.md`, sección 7) se pueden restaurar, pero lo que se

@@ -20,6 +20,7 @@ import { mediaIdsInDoc } from '../media/usage';
 import { isDeletedRow } from '../media/queue';
 import { ServicesContext, usePermissions, useServices, useSyncStatus, useTree } from '../services';
 import {
+  linkAuthorName,
   MAX_RESTORE_BYTES,
   NAMED_VERSIONS_SCHEMA_VERSION,
   versionBreaks,
@@ -455,7 +456,12 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
   const people = useMemo(() => ready?.summary.people ?? [], [ready]);
   const emails = ready?.emails;
   const nameOf = useCallback(
-    (id: string | null) => (id === user.id ? tr('history.you') : id ? (emails?.get(id) ?? tr('history.formerMember')) : tr('history.formerMember')),
+    (id: string | null) => {
+      // Una fila que entró por un link público: el nombre del visitante, siempre con "(via link)" (E2.8).
+      const viaLink = linkAuthorName(id);
+      if (viaLink !== null) return tr('history.viaLink', { name: viaLink });
+      return id === user.id ? tr('history.you') : id ? (emails?.get(id) ?? tr('history.formerMember')) : tr('history.formerMember');
+    },
     [user.id, emails, tr],
   );
   const colorOf = useCallback(
@@ -573,7 +579,7 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
       if (all.length === known.rows.length) return known.rows;
       const summary = await builder.append(all.slice(known.rows.length));
       // Los correos, si llegó alguien nuevo.
-      const stranger = fresh.some((r) => r.createdBy && !known.emails.has(r.createdBy));
+      const stranger = fresh.some((r) => r.createdBy && linkAuthorName(r.createdBy) === null && !known.emails.has(r.createdBy));
       const mails = stranger
         ? await historyRemote.pageHistoryAuthors(pageId).then(
             (list) => new Map(list.map((a) => [a.user_id, a.email])),
