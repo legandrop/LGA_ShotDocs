@@ -171,6 +171,8 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'findNext', keys: ['Enter', 'F3', 'Mod-g'], place: 'find', owner: 'app', source: 'dom' },
   { id: 'findPrev', keys: ['Shift-Enter', 'Shift-F3', 'Mod-Shift-g'], place: 'find', owner: 'app', source: 'dom' },
   { id: 'findClose', keys: ['Escape'], place: 'find', owner: 'app', source: 'dom' },
+  // En el campo de reemplazar: reemplaza la de ahora y pasa a la siguiente (el botón Replace lo dice en su tooltip).
+  { id: 'findReplace', keys: ['Enter'], place: 'find', context: 'replace', owner: 'app', source: 'dom' },
 
   // --- Comentarios ---
   { id: 'commentsSend', keys: ['Mod-Enter'], place: 'comments', owner: 'app', source: 'dom' },

@@ -28,4 +28,15 @@ export const common = {
   'common.cancel': { en: "Cancel", es: "Cancelar" },
   'common.copied': { en: "Copied", es: "Copiado" },
   'common.continue': { en: "Continue", es: "Seguir" },
+  // Los gestos de los tooltips con renglones «gesto o atajo: acción» (D226, src/ui/tipRows.ts). El modificador
+  // (Shift, ⌥/Alt, ⌘/Ctrl) y la tecla que se mantiene apretada los pone tipRows según la plataforma.
+  'tip.click': { en: "Click", es: "Clic" },
+  'tip.clickMod': { en: "click", es: "clic" },
+  'tip.doubleClick': { en: "Double-click", es: "Doble clic" },
+  'tip.drag': { en: "Drag", es: "Arrastrar" },
+  'tip.dragMod': { en: "drag", es: "arrastrar" },
+  'tip.scroll': { en: "Scroll", es: "Rueda" },
+  'tip.pinch': { en: "Pinch", es: "Pellizcar" },
+  // Solo la palabra (una clave "{a} or {b}" confundiría a `localize` con cualquier texto guardado "… or …").
+  'tip.or': { en: "or", es: "o" },
 } satisfies Dict;

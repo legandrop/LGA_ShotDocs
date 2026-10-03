@@ -671,6 +671,10 @@ export const help = {
   'shortcut.findNext': { en: "Next match", es: "Coincidencia siguiente" },
   'shortcut.findPrev': { en: "Previous match", es: "Coincidencia anterior" },
   'shortcut.findClose': { en: "Close the bar (the match stays selected)", es: "Cerrar la barra (queda elegida la coincidencia)" },
+  'shortcut.findReplace': {
+    en: "In the replace field: replace this match and go to the next",
+    es: "En el campo de reemplazar: reemplazar esta coincidencia y pasar a la siguiente",
+  },
   'shortcut.commentsSend': { en: "Send the comment", es: "Mandar el comentario" },
   'shortcut.commentsCancel': { en: "Cancel (on a phone, close the sheet)", es: "Cancelar (en el teléfono, cerrar la hoja)" },
   'shortcut.treeStep': { en: "Open the previous / next page", es: "Abrir la página anterior / siguiente" },

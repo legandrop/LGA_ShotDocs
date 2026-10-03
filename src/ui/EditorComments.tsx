@@ -26,6 +26,7 @@ import { paragraphProps, QUESTION_PROP } from './editorSchema';
 import { CommentIcon, QuestionIcon } from './icons';
 import { PHOTO } from './inlinePhoto';
 import { shortcutLabel } from './shortcuts';
+import { asAction, tipRows } from './tipRows';
 
 /** Lo que se corre un contador de comentarios que caería encima de otro (el alto del botón y un poco). */
 const MARK_STACK_PX = 26;
@@ -372,7 +373,7 @@ export function CommentMargin({
           className="comment-margin-button comment-add"
           style={{ top: active.top }}
           aria-label={tr('comments.onBlock')}
-          data-tip={`${tr('comments.comment')}\n${shortcutLabel('comment')}`}
+          data-tip={tipRows([{ shortcut: 'comment', action: asAction(tr('comments.comment')) }])}
           onClick={() => commentOnBlock(active.id)}
         >
           <CommentIcon size={15} />

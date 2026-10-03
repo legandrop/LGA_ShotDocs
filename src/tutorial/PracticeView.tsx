@@ -21,7 +21,7 @@ import { setNavOpen } from '../ui/navStore';
 import { notify } from '../ui/notice';
 import { BlockEditor } from '../ui/PageEditor';
 import { mm, PAGE_SIZES, sheetSize, sizeLabel, SHEET_MARGIN_MM, type PageSize } from '../ui/pageFormat';
-import { shortcutLabel } from '../ui/shortcuts';
+import { asAction, tipRows } from '../ui/tipRows';
 import { SyncIcon } from '../ui/SyncBadge';
 import { practiceEn } from './practice.en';
 import { practiceEs } from './practice.es';
@@ -132,8 +132,8 @@ export function PracticeView() {
           <button
             className="icon-button"
             data-tour="find"
-            aria-label={tr('shell.findInPage', { shortcut: shortcutLabel('find') })}
-            data-tip={tr('shell.findInPage', { shortcut: shortcutLabel('find') })}
+            aria-label={tr('shell.findInPage')}
+            data-tip={tipRows([{ shortcut: 'find', action: asAction(tr('shell.findInPage')) }])}
             onClick={() => openFindBar()}
           >
             <SearchIcon size={18} />

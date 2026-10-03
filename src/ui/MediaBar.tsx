@@ -10,7 +10,7 @@ import { isAttachment } from './attachments';
 import { carreteSourceOf } from './carreteModel';
 import { isOffline, startDownload } from './carreteLoader';
 import { commentOnBlock } from './commentsUi';
-import { shortcutLabel } from './shortcuts';
+import { asAction, tipRows } from './tipRows';
 import { currentTarget, openCaption } from '../assistant/assistantUi';
 import type { PhotoRef } from '../assistant/photoRef';
 import { AlignCenterIcon, AlignLeftIcon, AlignRightIcon, AnnotateIcon, AssistantIcon, CommentIcon, DownloadIcon, RenameIcon, ReplaceIcon, ShareIcon, TrashIcon } from './icons';
@@ -88,7 +88,10 @@ export function ViewButton({ url, attachment = false, onView }: { url: string | 
   if (!url || !carreteSourceOf(url)) return null;
   // Un adjunto (Docs/Doc_Adjuntos.md) no va al carrete: *Open* lo abre en otra pestaña o lo baja.
   const name = attachment ? tr('attachment.open') : tr('mediaButton.view');
-  const tip = attachment ? `**${name}**\n${tr('attachment.openTip')}` : `**${name}**\n${tr('photoTip.view')}\n${tr('mediaButton.space')}`;
+  // Con el atajo (D226): el renglón «**Espacio**: ver» y debajo lo que hace; sin atajo (táctil), el nombre.
+  const tip = attachment
+    ? `**${name}**\n${tr('attachment.openTip')}`
+    : (tipRows([{ shortcut: 'photoOpen', action: asAction(name) }, tr('photoTip.view')]) ?? `**${name}**\n${tr('photoTip.view')}`);
   return <BarButton label={name} tip={tip} icon={<ViewIcon />} test="mediaView" onClick={onView} />;
 }
 
@@ -262,7 +265,8 @@ export function AlignButtons({ current, inline = false, onAlign }: { current: Al
 export function CommentButton({ blockId }: { blockId: string | null }) {
   const tr = useT();
   const label = tr('comments.comment');
-  return <BarButton label={label} tip={`**${label}**\n${tr('photoTip.comment')}\n${shortcutLabel('comment')}`} icon={<CommentIcon size={18} />} test="mediaComment" onClick={() => commentOnBlock(blockId)} />;
+  const tip = tipRows([{ shortcut: 'comment', action: asAction(label) }, tr('photoTip.comment')]) ?? `**${label}**\n${tr('photoTip.comment')}`;
+  return <BarButton label={label} tip={tip}icon={<CommentIcon size={18} />} test="mediaComment" onClick={() => commentOnBlock(blockId)} />;
 }
 
 /** Reemplazar: el selector de archivos del sistema (uno); lo elegido se guarda y pasa a ser la foto. */
@@ -326,7 +330,9 @@ export function RenameButton({ name, kind = 'image', onRename }: { name: string;
 export function DeleteButton({ many, kind = 'image', onDelete }: { many: boolean; kind?: MediaKind; onDelete: () => void }) {
   const tr = useT();
   const label = many ? tr('photoBar.deleteMany') : kindLabel(kind, tr('photoBar.delete'), tr('photoBar.deleteVideo'), tr('photoBar.deleteFile'));
-  return <BarButton label={label} tip={`**${label}**\n${many ? tr('photoTip.deleteMany') : tr('photoTip.delete')}\n${tr('photoBar.deleteKeys')}`} icon={<TrashIcon />} test="mediaDelete" onClick={onDelete} />;
+  const what = many ? tr('photoTip.deleteMany') : tr('photoTip.delete');
+  const tip = tipRows([{ shortcut: 'photoDelete', action: asAction(label) }, what]) ?? `**${label}**\n${what}`;
+  return <BarButton label={label} tip={tip}icon={<TrashIcon />} test="mediaDelete" onClick={onDelete} />;
 }
 
 // --- La barra de la foto-bloque ---------------------------------------------------------------------------

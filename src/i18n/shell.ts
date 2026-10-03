@@ -116,10 +116,9 @@ export const shell = {
   },
   'shell.error.title': { en: "Could not open your workspace", es: "No se pudo abrir tu workspace" },
   'shell.openPages': { en: "Open pages", es: "Abrir páginas" },
-  'shell.findInPage': { en: "Find in page ({shortcut})", es: "Buscar en la página ({shortcut})" },
+  'shell.findInPage': { en: "Find in page", es: "Buscar en la página" },
   // *Dictate to report* (Docs/Doc_Dictado.md): el botón de la barra y el redondo del teléfono.
   'shell.dictate': { en: "Dictate to report", es: "Dictar al reporte" },
-  'shell.dictateTip': { en: "Dictate to report ({shortcut})", es: "Dictar al reporte ({shortcut})" },
   'shell.dictateSaved': {
     en: { one: "Dictate to report · {count} saved note", other: "Dictate to report · {count} saved notes" },
     es: { one: "Dictar al reporte · {count} nota guardada", other: "Dictar al reporte · {count} notas guardadas" },

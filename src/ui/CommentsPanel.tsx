@@ -33,7 +33,7 @@ import { CommentsToggle, useCommentAccess } from './CommentsToggle';
 import { activeMentions, insertMention, mentionQuery, mentionSegments } from './mentionText';
 import { useInbox } from './MentionsBell';
 import { MentionShareArea } from './MentionShare';
-import { shortcutLabel } from './shortcuts';
+import { asAction, tipRows } from './tipRows';
 import { CloseIcon, CollapseIcon, ExpandIcon, QuestionIcon } from './icons';
 
 // El panel de comentarios de la página (paso 10): a la derecha en la computadora y como hoja desde abajo en
@@ -906,7 +906,7 @@ function Composer({
         <p className="comment-error">{tooLong ? tr('comments.tooLong', { max: MAX_COMMENT_LENGTH, now: text.length }) : error}</p>
       )}
       <div className="row">
-        <button type="submit" className="primary" disabled={busy || !text.trim() || tooLong} data-tip={shortcutLabel('commentsSend')}>
+        <button type="submit" className="primary" disabled={busy || !text.trim() || tooLong} data-tip={tipRows([{ shortcut: 'commentsSend', action: asAction(submitLabel) }])}>
           {submitLabel}
         </button>
         <button type="button" className="link" onClick={onCancel}>

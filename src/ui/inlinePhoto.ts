@@ -4,6 +4,7 @@ import type { Node as PMNode } from '@tiptap/pm/model';
 import { t } from '../i18n';
 import '../i18n/lazy/editor';
 import { pxToRowWidth, snapRowWidth } from './imageRows';
+import { tipRows } from './tipRows';
 
 // --- Fotos en línea (Docs/Doc_Fotos_En_Linea.md, entrega 1a) -------------------------------------------
 //
@@ -276,7 +277,8 @@ function addResizeHandles(dom: HTMLElement, img: HTMLImageElement, target: () =>
     const handle = document.createElement('span');
     handle.className = `sd-photo-handle sd-photo-handle-${side}`;
     handle.setAttribute('aria-hidden', 'true');
-    handle.dataset.tip = t('photoBar.resize');
+    // Con el dedo también se arrastra (D226: el renglón sale en una pantalla táctil).
+    handle.dataset.tip = tipRows([{ gesture: 'drag', action: t('photoBar.resize'), touch: true }]) ?? '';
     dom.append(handle);
     let drag: { id: number; startX: number; startW: number; px: number; moved: boolean } | null = null;
     // Que el editor no lo tome como un clic en la foto (elegirla, arrastrarla para moverla).

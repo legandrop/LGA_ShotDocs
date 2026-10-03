@@ -220,8 +220,8 @@ describe('el botón New day report y su globito', () => {
     const host = await open(device, first);
     const button = host.querySelector<HTMLButtonElement>('.day-report-button')!;
     expect(button.textContent).toBe('New day report');
-    // El tooltip no repite el nombre: dice el atajo.
-    expect(button.dataset.tip).toBe(IS_MAC ? '⌘⌥⇧N' : 'Ctrl+Alt+Shift+N');
+    // El tooltip dice el atajo, en el renglón «atajo: acción» (D226).
+    expect(button.dataset.tip).toBe(IS_MAC ? '**⌘⌥⇧N**: new day report' : '**Ctrl+Alt+Shift+N**: new day report');
     click(button);
     await popoverReady();
     const [date, day, place] = inputs();

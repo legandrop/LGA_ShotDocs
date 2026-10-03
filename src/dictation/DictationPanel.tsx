@@ -6,6 +6,7 @@ import { builtinTexts } from '../templates/builtin';
 import { CloseIcon, MicIcon, SettingsIcon } from '../ui/icons';
 import { IS_MAC, modPressed } from '../ui/findUi';
 import { shortcutLabel } from '../ui/shortcuts';
+import { asAction, tipRows } from '../ui/tipRows';
 import { errorText } from '../assistant/errorText';
 import { isKeyRejected, SyncedKeyHint } from '../assistant/SyncedKeyHint';
 import { openAssistantSettings, useAssistantTarget, useAssistantUi } from '../assistant/assistantUi';
@@ -1226,7 +1227,7 @@ export function DictationPanel({ pageId }: { pageId: string }) {
                   <p className="dictation-heard dictation-note">“{queued.text}”</p>
                 )}
                 <div className="assistant-buttons">
-                  <button className="primary dictation-big" disabled={blocked || !queued.text.trim()} data-tip={shortcutLabel('dictationPlace')} onClick={() => void place(queued.text, undefined, queued)}>
+                  <button className="primary dictation-big" disabled={blocked || !queued.text.trim()} data-tip={tipRows([{ shortcut: 'dictationPlace', action: asAction(tr('dictation.place')) }])} onClick={() => void place(queued.text, undefined, queued)}>
                     {tr('dictation.place')}
                   </button>
                   {queued.audio && (
@@ -1271,7 +1272,7 @@ export function DictationPanel({ pageId }: { pageId: string }) {
                   onChange={(e) => setText(e.target.value)}
                 />
                 <div className="assistant-buttons">
-                  <button className="primary dictation-big" disabled={blocked || !text.trim()} data-tip={shortcutLabel('dictationPlace')} onClick={() => void place(text)}>
+                  <button className="primary dictation-big" disabled={blocked || !text.trim()} data-tip={tipRows([{ shortcut: 'dictationPlace', action: asAction(tr('dictation.place')) }])} onClick={() => void place(text)}>
                     {tr('dictation.place')}
                   </button>
                   {offline && text.trim() && (
@@ -1458,12 +1459,12 @@ export function DictationPanel({ pageId }: { pageId: string }) {
                   <button
                     className={canEdit || !commentAccess.canComment ? 'primary dictation-big' : 'dictation-big'}
                     disabled={!canEdit || phase.plan.changes.every((c) => unchecked.has(c.id))}
-                    data-tip={shortcutLabel('assistantApply')}
+                    data-tip={tipRows([{ shortcut: 'assistantApply', action: asAction(tr('assistant.apply')) }])}
                     onClick={() => apply(true)}
                   >
                     {tr('assistant.apply')}
                   </button>
-                  <button onClick={backToNote} data-tip={shortcutLabel('menusClose')}>
+                  <button onClick={backToNote} data-tip={tipRows([{ shortcut: 'menusClose', action: asAction(tr('assistant.discard')) }])}>
                     {tr('assistant.discard')}
                   </button>
                   <button disabled={blocked} onClick={() => void place(run.current!.note, run.current!.answered, run.current!.queued)}>

@@ -217,6 +217,13 @@ diga otra cosa.
   (g) Con permiso quitado se borran las copias; al restaurar un proyecto o devolver el permiso "vuelve como online":
   no se vuelve a bajar solo, se vuelve a marcar si se quiere. (h) Sin internet la app dice claramente "Offline" junto
   con lo pendiente ("Offline · 700 to upload").
+- **D226 · Tooltips con gesto o atajo** (2026-10-03, Lega). Todo tooltip que nombra un gesto (clic, Shift+clic,
+  ⌥/Alt+clic, doble clic, arrastrar) o un atajo de teclado va en renglones, uno por acción: «**gesto o atajo**:
+  acción» (*Click or ⌘⌥↩: collapse just for you*). Solo el gesto y el atajo en negrita (blancos); la acción en el gris
+  del tooltip. Los atajos salen del registro (`src/ui/shortcuts.ts`) con la forma de cada plataforma (⌘ en la Mac,
+  Ctrl en el resto), nunca escritos a mano. En una pantalla táctil, sin atajos de teclado ni gestos de mouse; quien
+  no puede hacer una acción no ve su renglón. Los arma `src/ui/tipRows.ts` y lo controla `src/ui/tipFormat.test.ts`.
+  Quedan afuera los tooltips de la barra de formato, que son de BlockNote.
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 

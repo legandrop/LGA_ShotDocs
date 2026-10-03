@@ -23,6 +23,7 @@ import { closeFindBar, dropFindTarget, getFindUi, hasFindTarget, takeFindTarget,
 import { onCollapseChange } from './collapseEditor';
 import { scrollParent, stopKeepingInView } from './findScroll';
 import { ChevronUpIcon, CloseIcon, CollapseIcon, ExpandIcon } from './icons';
+import { asAction, tipRows } from './tipRows';
 
 // La barra de buscar y reemplazar en la página (Docs/Doc_Buscar.md, secciones 5 y 6). Como la del navegador,
 // pero busca en el documento: también en lo que está en secciones colapsadas, en los pies de las fotos y en
@@ -282,13 +283,13 @@ export function FindBar({
           >
             ab
           </button>
-          <button className="find-button" aria-label={tr('find.previous')} data-tip={tr('find.previous')} disabled={total === 0} onMouseDown={keepFocus} onClick={() => step(-1)}>
+          <button className="find-button" aria-label={tr('find.previous')} data-tip={tipRows([{ shortcut: 'findPrev', action: asAction(tr('find.previous')) }])} disabled={total === 0} onMouseDown={keepFocus} onClick={() => step(-1)}>
             <ChevronUpIcon size={16} />
           </button>
-          <button className="find-button" aria-label={tr('find.next')} data-tip={tr('find.next')} disabled={total === 0} onMouseDown={keepFocus} onClick={() => step(1)}>
+          <button className="find-button" aria-label={tr('find.next')} data-tip={tipRows([{ shortcut: 'findNext', action: asAction(tr('find.next')) }])} disabled={total === 0} onMouseDown={keepFocus} onClick={() => step(1)}>
             <CollapseIcon size={16} />
           </button>
-          <button className="find-button" aria-label={tr('find.close')} data-tip={tr('find.close')} onClick={close}>
+          <button className="find-button" aria-label={tr('find.close')} data-tip={tipRows([{ shortcut: 'findClose', action: asAction(tr('find.close')) }])} onClick={close}>
             <CloseIcon size={15} />
           </button>
         </div>
@@ -308,7 +309,7 @@ export function FindBar({
             <button
               className="find-text-button"
               disabled={total === 0}
-              data-tip={tr('find.replaceTip')}
+              data-tip={tipRows([{ shortcut: 'findReplace', action: tr('find.replaceTip') }])}
               onMouseDown={keepFocus}
               onClick={() => editor && report(replaceCurrent(editor, ui.replacement), false)}
             >
