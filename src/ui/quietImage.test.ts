@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { SideMenuExtension } from '@blocknote/core';
 import * as Y from 'yjs';
-import { mountEditor, unmountAll } from './collabHarness';
+import { mountEditor, unmountAll, view } from './collabHarness';
+import { schema as mainSchema } from './fixtures/editorSchemaMain';
 import { isAppMediaUrl, quietExternalHtml, setQuietSrc } from './quietImage';
 
 // B.24: copiar o arrastrar una foto del Drive armaba un `<img src="sdmedia://…">` que el navegador intentaba pedir
@@ -130,18 +132,139 @@ describe('quietImage', () => {
 
   it('quietExternalHtml llama al original con el mismo this y deja intacto lo que no es de la app', () => {
     const calls: unknown[] = [];
-    const wrapped = quietExternalHtml(function (this: unknown, block: { props: { url?: unknown } }) {
+    const seen: unknown[] = [];
+    const wrapped = quietExternalHtml(function (this: unknown, block: { props: { url?: unknown; showPreview?: unknown } }) {
       calls.push(this);
+      seen.push(block.props.url);
       const dom = document.createElement('div');
       dom.setAttribute('data-url', String(block.props.url));
       return { dom };
     });
     const me = { me: true };
-    const out = wrapped.call(me, { props: { url: 'https://a.test/x.png' } });
+    const out = wrapped.call(me, { props: { url: 'https://a.test/x.png', showPreview: true } });
     expect(calls[0]).toBe(me);
     expect((out.dom as HTMLElement).getAttribute('data-url')).toBe('https://a.test/x.png');
-    const app = wrapped.call(me, { props: { url: URL_ } });
+    // Una foto de la app con vista previa se arma con la imagen mínima y se le pone la dirección después.
+    const app = wrapped.call(me, { props: { url: URL_, showPreview: true } });
     expect(calls[1]).toBe(me);
+    expect(seen[1]).toContain('data:image/gif');
     expect((app.dom as HTMLElement).getAttribute('data-url')).toBe(URL_);
+    // Sin vista previa, el original recibe la dirección verdadera (arma un vínculo, que no pide nada).
+    wrapped.call(me, { props: { url: URL_, showPreview: false } });
+    expect(seen[2]).toBe(URL_);
+    // Misma regla que BlockNote (arma el vínculo con cualquier valor falso): sin la propiedad tampoco hay imagen.
+    wrapped.call(me, { props: { url: URL_ } });
+    expect(seen[3]).toBe(URL_);
+  });
+});
+
+describe('foto en línea: renderHTML (el serializador de ProseMirror)', () => {
+  // Es el HTML interno que ProseMirror arma al copiar o arrastrar. BlockNote lo vuelve a leer con `innerHTML` en la página
+  // viva al arrastrar por el tirador (SideMenu, `onDragStart`): ahí un `<img src="sdmedia://…">` sin `loading` antes del
+  // `src` se pide y deja `ERR_UNKNOWN_URL_SCHEME` en la consola. Se mira el orden de los atributos al volver a leerlo.
+  const photoDoc = (url: string) =>
+    [{ type: 'paragraph', content: [{ type: 'text', text: 'a ', styles: {} }, { type: 'photo', props: { url, name: 'Linea.jpg', w: 0.3 } }] }] as never[];
+  const orderOf = (html: string) => {
+    const box = document.createElement('div');
+    box.innerHTML = html;
+    return Array.from(box.querySelectorAll('img')).map((img) => img.getAttributeNames());
+  };
+
+  it.each([URL_, 'https://a.test/x.png'])('serializar y volver a leer deja la foto intacta (%s)', (url) => {
+    const E = mountEditor(new Y.Doc());
+    E.replaceBlocks(E.document, photoDoc(url));
+    const v = view(E);
+    const html = v.serializeForClipboard(v.state.doc.slice(0, v.state.doc.content.size)).dom.innerHTML;
+    expect(html).toContain('data-inline-content-type="photo"');
+    expect(html).toContain(`src="${url}"`);
+    const names = orderOf(html);
+    expect(names).toHaveLength(1);
+    // De la app: con la marca antes del src. De otro lado: sin marca.
+    if (isAppMediaUrl(url)) expect(names[0].indexOf('loading')).toBeGreaterThanOrEqual(0);
+    if (isAppMediaUrl(url)) expect(names[0].indexOf('loading')).toBeLessThan(names[0].indexOf('src'));
+    else expect(names[0]).not.toContain('loading');
+    const blocks = E.tryParseHTMLToBlocks(html) as unknown as { content?: { type: string; props?: Record<string, unknown> }[] }[];
+    const photo = blocks.flatMap((b) => (Array.isArray(b.content) ? b.content : [])).find((c) => c.type === 'photo');
+    expect(photo?.props).toMatchObject({ url, name: 'Linea.jpg', w: 0.3 });
+  });
+
+  it('arrastrar el párrafo por el tirador: el HTML que BlockNote relee en la página viva lleva la marca antes del src', () => {
+    const E = mountEditor(new Y.Doc());
+    E.replaceBlocks(E.document, photoDoc(URL_));
+    const data = new Map<string, string>();
+    const dataTransfer = {
+      effectAllowed: '',
+      clearData: () => data.clear(),
+      setData: (k: string, v: string) => void data.set(k, v),
+      getData: (k: string) => data.get(k) ?? '',
+      setDragImage: () => undefined,
+    };
+    // Lo que `onDragStart` le hace al HTML interno: `innerHTML` en un `div` del documento vivo.
+    const reads: string[][][] = [];
+    const desc = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML')!;
+    Object.defineProperty(Element.prototype, 'innerHTML', {
+      ...desc,
+      set(this: Element, v: string) {
+        desc.set!.call(this, v);
+        if (this.querySelector('img')) reads.push(Array.from(this.querySelectorAll('img')).map((img) => img.getAttributeNames()));
+      },
+    });
+    try {
+      E.getExtension(SideMenuExtension)!.blockDragStart({ dataTransfer: dataTransfer as never, clientY: 0 }, E.document[0]);
+      expect(data.get('blocknote/html')).toContain(URL_);
+      const ev = new Event('dragstart', { bubbles: true });
+      Object.defineProperty(ev, 'dataTransfer', { value: dataTransfer });
+      view(E).root.dispatchEvent(ev);
+    } finally {
+      Object.defineProperty(Element.prototype, 'innerHTML', desc);
+    }
+    const mine = reads.flat().filter((names) => names.includes('src'));
+    expect(mine.length).toBeGreaterThanOrEqual(1);
+    for (const names of mine) {
+      expect(names).toContain('loading');
+      expect(names.indexOf('loading')).toBeLessThan(names.indexOf('src'));
+    }
+  });
+});
+
+describe('foto sin vista previa (showPreview: false)', () => {
+  const noPreview = () => [{ type: 'image', props: { url: URL_, name: 'Sin vista.jpg', showPreview: false, caption: 'pie' } }] as never[];
+
+  it('el HTML externo es un vínculo con la dirección y el nombre, sin la imagen mínima y sin pedir nada', () => {
+    const E = mountEditor(new Y.Doc());
+    E.replaceBlocks(E.document, noPreview());
+    const w = watchSrc();
+    let html = '';
+    try {
+      html = E.blocksToHTMLLossy(E.document);
+    } finally {
+      w.stop();
+    }
+    expect(html).not.toContain('data:image/gif');
+    expect(html).toContain(`href="${URL_}"`);
+    expect(html).toContain('>Sin vista.jpg<');
+    expect(html).toContain('pie');
+    expect(w.sets.filter((s) => s.value.startsWith('sdmedia://'))).toEqual([]);
+  });
+
+  it('sin nombre, el texto del vínculo es la dirección verdadera', () => {
+    const E = mountEditor(new Y.Doc());
+    E.replaceBlocks(E.document, [{ type: 'image', props: { url: URL_, showPreview: false } }] as never[]);
+    const html = E.blocksToHTMLLossy(E.document);
+    expect(html).not.toContain('data:image/gif');
+    expect(html).toContain(`>${URL_}<`);
+  });
+
+  it('la versión anterior del editor saca el mismo HTML y ve el mismo bloque: no pierde nada', () => {
+    const doc = new Y.Doc();
+    const nuevo = mountEditor(doc);
+    nuevo.replaceBlocks(nuevo.document, noPreview());
+    const viejo = mountEditor(doc, 'v', mainSchema);
+    expect(viejo.blocksToHTMLLossy(viejo.document)).toBe(nuevo.blocksToHTMLLossy(nuevo.document));
+    const props = (e: typeof nuevo) => (e.document[0] as unknown as { props: Record<string, unknown> }).props;
+    expect(props(viejo)).toMatchObject({ url: URL_, name: 'Sin vista.jpg', showPreview: false, caption: 'pie' });
+    // Y la que sí tiene vista previa, igual en las dos versiones salvo la marca de no pedirla.
+    nuevo.replaceBlocks(nuevo.document, [{ type: 'image', props: { url: URL_, name: 'Con.jpg' } }] as never[]);
+    expect(props(viejo)).toMatchObject({ url: URL_, name: 'Con.jpg', showPreview: true });
   });
 });
