@@ -83,6 +83,12 @@ try {
   await expect('pase inválido desde la app (CORS)', 'GET', '/m/abc.def', 403, { headers: { Origin: vars.APP_ORIGINS } }, vars.APP_ORIGINS);
   await expect('pase inválido desde otro origen (sin CORS)', 'GET', '/m/abc.def', 403, { headers: { Origin: 'https://evil.example' } }, null);
   await expect('preflight de /m/ desde otro origen (sin CORS)', 'OPTIONS', '/m/abc.def', 204, { headers: { Origin: 'https://evil.example', 'Access-Control-Request-Method': 'GET' } }, null);
+  // El MCP (prueba técnica M0) está apagado de fábrica: /mcp y su metadata siguen como cualquier ruta sin sesión.
+  await expect('/mcp con el MCP apagado, sin sesión', 'POST', '/mcp', 401, { body: '{}', headers: { 'Content-Type': 'application/json' } });
+  await expect('metadata del MCP apagado, sin sesión', 'GET', '/.well-known/oauth-protected-resource', 401);
+  // El token de un asistente (con `client_id`) no sirve para pases: 403 sin preguntarle a la base.
+  const assistant = ['{"alg":"ES256"}', '{"sub":"x","client_id":"c"}', 'sig'].map((p, i) => (i < 2 ? Buffer.from(p).toString('base64url') : p)).join('.');
+  await expect('token de asistente en /pass', 'POST', '/pass', 403, { body: '{}', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${assistant}` } });
   await expect('salud al final', 'GET', '/health', 200);
   failed = results.some((r) => !r.ok);
   console.log(failed ? 'El portero NO pasó la prueba: no publicarlo.' : `${results.length}/${results.length} bien.`);
