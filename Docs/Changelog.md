@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.164 :
 
 **Link público 2b y links a los archivos en el PDF.** (1) Con *Can edit* el visitante no podía sumar fotos ni archivos:
 no había cómo registrarlos sin cuenta. Ahora los registra con topes (`plink_register_file`), el portero sube solo lo que

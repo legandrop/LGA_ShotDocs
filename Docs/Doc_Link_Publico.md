@@ -1075,8 +1075,8 @@ Dos auditorías independientes (base y portero; app y motor) dijeron «no pasa»
 ## Entrega 2: *Can edit* (rediseño 2026-10-02)
 
 **Estado: la 2a está implementada (v0.151; ver "Cómo quedó la 2a", al final de esta sección), con el interruptor
-apagado; la 2c también (v0.157, "Cómo quedó la 2c", con su migración sin aplicar); la 2b también (v0.0XX, "Cómo quedó
-la 2b", con su migración sin aplicar).** El SQL de E2.11 queda como el borrador que se auditó; lo
+apagado; la 2c también (v0.157, "Cómo quedó la 2c", migración aplicada); la 2b también (v0.164, "Cómo quedó
+la 2b", migración aplicada).** El SQL de E2.11 queda como el borrador que se auditó; lo
 que cambió al implementarlo está en "Cómo quedó la 2a".
 Reemplaza a 3.8 (3.8.1 a 3.8.3), a la fila *Compactar* de 3.10, a lo de la entrega 2 en 3.15, 4, 5 y 6, y a la fila 2
 de la sección 7: todo eso queda como historia. Se diseñó contra `main` v0.137 (copias resumidas listas y apagadas, D14
@@ -2162,7 +2162,7 @@ notify pgrst, 'reload schema';
 | | Qué | Tamaño estimado | Riesgo |
 |---|---|---|---|
 | **2a** | Escribir: la migración de E2.11 (sin la 2b), la prueba de admisión, el motor (admitir antes de armar bases), el visitante que escribe, *Share* con *Can edit*, el aviso de lo apartado, el historial, la ayuda | Migración ~650 líneas y su prueba SQL ~500; app ~1100 (admit y forma ~350, motor ~200, linkRemote ~100, docs ~80, UI ~300, i18n y ayuda ~70); pruebas vitest ~900. **~3200** (la auditoría estimó 3000 a 3300 con B1 a B3) | **Alto**: escrituras sin cuenta |
-| **2b** | Archivos: `plink_register_file`, el portero, las miniaturas, la cola de fotos en modo link. **Hecha (v0.0XX, "Cómo quedó la 2b")** | Migración ~200 y prueba SQL ~200; portero ~120 y su prueba ~150; app ~200; pruebas ~250. **~1100** | **Alto**: el Drive del dueño |
+| **2b** | Archivos: `plink_register_file`, el portero, las miniaturas, la cola de fotos en modo link. **Hecha (v0.164, "Cómo quedó la 2b")** | Migración ~200 y prueba SQL ~200; portero ~120 y su prueba ~150; app ~200; pruebas ~250. **~1100** | **Alto**: el Drive del dueño |
 | **2c** | Lo apartado a la vista: la lista en *Share*, *Set aside (via link)* en el historial (sin aplicarlas), "volver a la página como la ve el equipo" para el visitante (después de bajar lo suyo), el ícono del árbol. **Hecha (v0.157, "Cómo quedó la 2c")** | ~600 | Medio |
 
 Se puede publicar la 2a sola (texto) y prender el interruptor; la 2b agrega el botón de subir en modo link.
@@ -2448,9 +2448,9 @@ view*: por eso, **al publicar, subir `min_app_version` a la versión de la 2a** 
 **Falta:** nada de la entrega 2: la 2b y la 2c están hechas (abajo). Al roadmap, lo de la re-verificación que sigue
 abierto (E2.18).
 
-### Cómo quedó la 2b (v0.0XX)
+### Cómo quedó la 2b (v0.164)
 
-**Estado:** implementada en la rama, con la migración `20261030120000_link_archivos.sql` **sin aplicar** (sube
+**Estado:** publicada en v0.164, con la migración `20261030120000_link_archivos.sql` **aplicada** (sube
 `schema_version` a **21**) y el portero con las rutas de subir para un link. La app ofrece subir por un link solo con la
 base en la 21; con la 20, el aviso de siempre (*Adding photos, videos and files through a link isn't available yet*).
 

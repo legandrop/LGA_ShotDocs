@@ -343,8 +343,8 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   no contar lo que tiene una versión mayor que la de cualquier editor que admitió hoy, o mostrarlo en *Share* como
   trabado), y probar a mano
   con el link de verdad la descarga y la vuelta a la versión del equipo en Safari del iPhone (la descarga de un JSON).
-  **Entrega 2b hecha (v0.0XX: fotos, videos y archivos por un link al Drive del dueño; migración
-  `20261030120000_link_archivos.sql` sin aplicar, `schema_version` 21, y el portero; ver "Cómo quedó la 2b" en
+  **Entrega 2b hecha (v0.164: fotos, videos y archivos por un link al Drive del dueño; migración
+  `20261030120000_link_archivos.sql` aplicada, `schema_version` 21, y el portero; ver "Cómo quedó la 2b" en
   `Doc_Link_Publico.md`):** registrar con los topes de E2.5 sin vincular nunca un id ajeno, la miniatura, el original por
   el portero solo de lo que registró el link (con cada parte validada), la carpeta del proyecto por su huella o
   `Via_link`, y lo escrito de una página que espera a que sus archivos estén registrados. Para publicarla: aplicar la
@@ -398,6 +398,9 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   pregunta al cerrar la pantalla de error (`replaceRunning`), y restaurar sin el editor ya no escribe los atributos por
   defecto en los bloques iguales a la versión (los saltea; la vista de diferencias comparaba los atributos guardados y los
   mostraba como «formato cambiado»).
+  Observaciones de la re-verificación de la 2b (chicas): la prueba del link muerto usa un solo archivo (no distingue «baja
+  ese» de «baja el primero»), falta la prueba automática del *Download it* de la insignia con el link vivo (anda a mano), y
+  la lista de *Share* corta en 500 archivos y titula con 500 aunque haya más.
 - **P.25 Sacar una foto o filmar desde la app** (Lega, 2026-10-01). **Hecho para la web (v0.110):** *Take photo* y
   *Record video* en el menú "/" y en el menú de la página, solo en el teléfono y la tableta (el video, con portero):
   abren la cámara con el selector del sistema y lo sacado entra en el renglón y sube por la cola de siempre; *Save to
@@ -668,7 +671,7 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   (chico): copiar a la página del plano solo el lente (otras columnas con su fila en la ficha se suman en `FIELDS` de
   `shotPage.ts`); lo escrito en la página del plano no entra en el ⌘Z de esa página (se deshace con *Undo* de la hoja,
   como el reemplazo del proyecto antes de D10).
-- **P.30 Links a los archivos en el PDF y *Request access*** (Lega, 2026-10-03; `Doc_Links_PDF.md`). **Hecho (v0.0XX):
+- **P.30 Links a los archivos en el PDF y *Request access*** (Lega, 2026-10-03; `Doc_Links_PDF.md`). **Hecho (v0.164):
   la entrega 1.** Cada adjunto, carpeta y video del PDF (exportar o imprimir) lleva un link a su dirección fija
   (`/f/<clave local>/<id>`, con la dirección del Supabase después del `#`), que abre el archivo con sesión y permiso,
   pide entrar sin sesión y vuelve, y sin permiso muestra una sola pantalla sin nada del archivo. *Export* puede usar el
@@ -676,6 +679,7 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   access* con la tabla `access_requests`, la campana y *Share*; riesgo alto), E3 opcional (pedir una página). Quedan
   para después: el correo al pedir y al aceptar (B.8), pedir acceso sin cuenta, el link de un video en línea, y en la
   pantalla `/f/` volver a donde estaba y reintentar sola al volver la red (observaciones de la auditoría de E1).
+  También de E1: pruebas de `http://localhost` y de *Sign in instead* (O4) y que *Export* avise sin red (O6).
 - **P.28 Hecho (v0.156): la tabla del reporte en el teléfono** (`Doc_Tabla_Telefono.md`): en pantalla angosta ninguna
   columna con ancho guardado baja de 96 px y la tabla se desplaza de costado dentro de su bloque; la celda donde se
   escribe se acomoda a la vista. La compu y el PDF no cambian. Falta probarlo en un iPhone real (dedo, teclado abierto).

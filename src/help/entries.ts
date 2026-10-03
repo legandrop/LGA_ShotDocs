@@ -143,7 +143,7 @@ const LINK_EDIT = '0.151';
 /** Lo apartado a la vista (Doc_Link_Publico.md, entrega 2c): la versión la pone quien publica, igual que en el changelog. */
 const LINK_ASIDE = '0.157';
 /** Fotos y archivos por un link (Doc_Link_Publico.md, entrega 2b): la versión la pone quien publica, igual que en el changelog. */
-const LINK_FILES = '0.0XX';
+const LINK_FILES = '0.164';
 /** Exportar una rama o un proyecto como PDF (P.22, Doc_Exportar.md, entrega 1): la versión se pone al publicar. */
 const EXPORT_PDF = '0.122';
 /** Exportar como zip (P.22, Doc_Exportar.md, entrega 2): la versión se pone al publicar. */
@@ -177,7 +177,7 @@ const HELP_3 = '0.158';
 /** El contraste del texto (Docs/Doc_Contraste.md). */
 const CONTRAST = '0.161';
 /** Los links a los archivos en el PDF (P.30, Doc_Links_PDF.md, entrega 1): el número lo pone quien publica. */
-const FILE_LINKS = '0.0XX';
+const FILE_LINKS = '0.164';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
