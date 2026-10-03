@@ -63,11 +63,15 @@ import { usePendingCount } from './usePendingCount';
 import { errorMessage } from '../sync/types';
 import { disposeUndoTimeline } from './undoTimeline';
 import { useUndoTimelineKeys } from './undoTimelineUi';
+import { setMediaLinkSource } from './mediaLinks';
+import { fileHref, linkHash, workspaceHash } from '../fileLink';
 
 // La página de práctica (P.13, Docs/Doc_Tutorial.md): se baja aparte, con sus plantillas y sus textos.
 const PracticeView = lazyPart(() => import('../tutorial/PracticeView').then((m) => m.PracticeView));
 // El historial de versiones (P.18, Docs/Doc_Historial.md): se baja aparte, la primera vez que se abre.
 const HistoryPanel = lazyPart(() => import('./HistoryPanel').then((m) => m.HistoryPanel));
+// La dirección fija de un archivo (P.30, Docs/Doc_Links_PDF.md): se baja solo si se llega a una.
+const FileScreen = lazyPart(() => import('./FileScreen').then((m) => m.FileScreen));
 
 // Versiones anteriores recordaban una sola última página; se sigue leyendo como respaldo.
 const LEGACY_LAST_PAGE_KEY = 'shotdocs-last-page';
@@ -349,6 +353,21 @@ export function Shell() {
     if (page && page.workspace_id === projectId && !tree.isTrashed(page.id)) navigate(pagePath(page.id), true);
   }, [route, tree, revision, projectId, user.id, keys, linkMode]);
 
+  // Los links a los archivos en el PDF (P.30): la dirección fija de cada uno, con el `#` de este workspace o, con un link
+  // público, el del propio link (imprimir nunca pone el token de un link de la cuenta: LF17).
+  useEffect(() => {
+    const config = workspace.config;
+    const hash = linkMode
+      ? linkHash({ u: linkMode.entry.url, k: linkMode.entry.publishableKey, l: linkMode.entry.localKey, t: linkMode.entry.token })
+      : workspaceHash({ u: config.url, k: config.publishableKey, l: config.localKey });
+    const key = linkMode ? linkMode.entry.localKey : config.localKey;
+    return setMediaLinkSource({
+      info: (id) => media.fileInfo(id),
+      linkable: (id, page) => media.linkable(id, page),
+      href: (id) => fileHref(location.origin, key, id, hash),
+    });
+  }, [media, workspace, linkMode]);
+
   const pageId = route.name === 'page' && tree.get(route.id) ? route.id : null;
   const crumbs = pageId ? tree.ancestors(pageId) : [];
   const current = pageId ? tree.get(pageId) : undefined;
@@ -430,6 +449,10 @@ export function Shell() {
             <InstallBanner />
             {route.name === 'page' ? (
               <PageView key={route.id} id={route.id} />
+            ) : route.name === 'file' ? (
+              <Part>
+                <FileScreen key={route.id} localKey={route.localKey} id={route.id} />
+              </Part>
             ) : route.name === 'trash' ? (
               <TrashView />
             ) : (

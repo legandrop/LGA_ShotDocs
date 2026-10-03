@@ -492,6 +492,12 @@ export class MediaQueue {
   private readonly previewing = new Set<string>();
   /** Los adjuntos cuya tarjeta ya se mostró con vista previa (no hace falta volver a dibujarla cuando llega). */
   private readonly previewed = new Set<string>();
+  /**
+   * Lo que se está mostrando sin el archivo (P.30, Docs/Doc_Links_PDF.md, 3.1): el marcador de otro proyecto en una
+   * página (`<página>:<id>`), la tarjeta de uno borrado y el "no está en este dispositivo". Esos no llevan link en el PDF.
+   */
+  private readonly shownForeign = new Set<string>();
+  private readonly shownWithout = new Set<string>();
   private readonly playMark: (thumb: Blob) => Promise<Blob>;
   private readonly makeView: (file: Blob, mime: string, side: number) => Promise<Blob | null>;
   private readonly heic: (file: Blob) => Promise<Blob>;
@@ -2264,7 +2270,11 @@ export class MediaQueue {
     this.options.onUse?.(id, 'show');
     if (pageId) {
       return this.foreignTo(id, pageId).then((kind) => {
-        if (kind === false) return this.resolveOwn(id);
+        if (kind === false) {
+          this.shownForeign.delete(`${pageId}:${id}`);
+          return this.resolveOwn(id);
+        }
+        this.shownForeign.add(`${pageId}:${id}`);
         if (kind === 'file') {
           const info = this.infos.get(id);
           if (isFolderMime(info?.mime)) return folderCardUrl({ name: info?.name ?? '', size: info?.size, state: 'foreign' });
@@ -2410,6 +2420,7 @@ export class MediaQueue {
   }
 
   private async display(id: string): Promise<string> {
+    this.shownWithout.delete(id);
     try {
       const db = this.store;
       // Mandado a la papelera de Drive (papelera de archivos): ni roto ni pendiente, borrado, con la
@@ -2477,13 +2488,25 @@ export class MediaQueue {
       if (meta && kind === 'image' && isHeicType(meta.mime)) return placeholderUrl(kind, meta.name, heicNotice('none'));
       return placeholderUrl(kind, meta?.name ?? t('queue.notYet'));
     } catch {
+      this.shownWithout.add(id);
       return placeholderUrl(null, t('queue.notOnDevice'));
     }
+  }
+
+  /**
+   * Si la tarjeta o el cuadro del archivo puede llevar link en el PDF: no si en esa página se muestra el marcador de otro
+   * proyecto, ni si se muestra borrado o "no está en este dispositivo" (P.30, Doc_Links_PDF.md, 3.1). Sin esperar a nada.
+   */
+  linkable(id: string, pageId?: string | null): boolean {
+    const key = id.toLowerCase();
+    if (pageId && this.shownForeign.has(`${pageId}:${key}`)) return false;
+    return !this.shownWithout.has(key);
   }
 
   /** La foto, el video o el adjunto que un dueño o admin mandó a la papelera de Drive. */
   private async deletedDisplay(id: string, meta: KnownFile): Promise<string> {
     this.forgetView(id);
+    this.shownWithout.add(id);
     // Pedido y confirmado por el portero, o solo pedido (Drive falló: se puede volver a pedir desde la
     // papelera). Sin el dato (guardado antes), se lo da por confirmado.
     const notice = meta.inDriveTrash === false ? requestedLabel() : deletedLabel();

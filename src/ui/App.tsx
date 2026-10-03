@@ -1,17 +1,20 @@
 import { useMemo, useState } from 'react';
 import { useAuth } from '../auth';
 import { t, useT } from '../i18n';
-import { isPublicRoute, useRoute } from '../router';
+import { isPublicRoute, parseRoute, useRoute, type Route } from '../router';
+import { filePath, takeWorkspaceHash } from '../fileLink';
 import { markInviteArrival, setArrivalNotice, takeInviteHash } from '../invite';
 import { buildWorkspace, createWorkspaceClient, WorkspaceContext, type ActiveWorkspace } from '../workspace';
 import {
   activeWorkspace,
   addWorkspace,
   configOf,
+  displayName,
   loadWorkspaces,
   resolveInvite,
   sameOrigin,
   setActive,
+  type WorkspaceList,
   updateWorkspaces,
   type DeviceWorkspace,
 } from '../workspaces';
@@ -64,7 +67,7 @@ type Start =
   /** No hay ningún workspace en el dispositivo. */
   | { kind: 'welcome' }
   /** Se llegó con un link de invitación de un workspace que el dispositivo no tiene: se pregunta antes. */
-  | { kind: 'confirm'; entry: DeviceWorkspace; target: string | null; fallback: DeviceWorkspace | null };
+  | { kind: 'confirm'; entry: DeviceWorkspace; target: string | null; fallback: DeviceWorkspace | null; file?: boolean };
 
 let started: Start | null = null;
 
@@ -95,6 +98,10 @@ function computeStart(): Start {
     if (!known) return { kind: 'linkConfirm', payload, fallback: otherwise };
     return { kind: 'link', link: openLinkInTab(payload) };
   }
+  // La dirección fija de un archivo (P.30, Docs/Doc_Links_PDF.md, 2.2): antes que el link de la pestaña y el último link
+  // abierto (si no, un dispositivo que alguna vez abrió un link ignoraría el `#ws=`).
+  const route = typeof location === 'undefined' ? null : parseRoute(location.pathname);
+  if (route?.name === 'file') return fileStart(list, route, fallback);
   // Recargar la página de un link (el `#` ya no está en la barra): sigue en el link, aunque el dispositivo tenga un
   // workspace. Una pestaña nueva abre la app de siempre.
   const inTab = tabLink();
@@ -116,6 +123,44 @@ function computeStart(): Start {
     setArrivalNotice(invite.reason);
   }
   return fallback ? { kind: 'open', entry: fallback } : { kind: 'welcome' };
+}
+
+/**
+ * A qué workspace va la dirección de un archivo (`/f/<clave local>/<id>#ws=…`). La configuración del dispositivo manda:
+ * un `#ws=` nunca cambia a qué servidor va un workspace que ya está (LF2); uno nuevo se confirma antes, como una
+ * invitación. Lo que no cierra (roto, otra clave, choque) vuelve al inicio con un aviso, nunca abre otra isla.
+ */
+export function fileStart(list: WorkspaceList, route: Extract<Route, { name: 'file' }>, fallback: DeviceWorkspace | null): Start {
+  const { payload, broken } = takeWorkspaceHash();
+  const otherwise: Start = fallback ? { kind: 'open', entry: fallback } : { kind: 'welcome' };
+  const leave = (notice: string): Start => {
+    setArrivalNotice(notice);
+    history.replaceState(null, '', '/');
+    return otherwise;
+  };
+  if (broken) return leave(t('file.incomplete'));
+  // Recargar una pestaña del modo link en la dirección de un archivo: sigue en el link.
+  if (!payload) {
+    const inTab = tabLink();
+    if (inTab && inTab.localKey === route.localKey) return { kind: 'link', link: inTab };
+  }
+  const own = list.workspaces.find((w) => !w.pending && configOf(w).localKey === route.localKey);
+  if (own) {
+    // La misma clave con otra dirección: el error de una invitación que choca (no se abre el del dispositivo en silencio).
+    if (payload && !sameOrigin(payload.u, own.url)) return leave(t('wsError.localKeyClash', { name: displayName(own) }));
+    updateWorkspaces((l) => setActive(l, own.id));
+    return { kind: 'open', entry: own };
+  }
+  if (!payload || payload.l !== route.localKey) return leave(t('file.incomplete'));
+  const invite = resolveInvite(list, { u: payload.u, k: payload.k, l: payload.l });
+  if (invite.kind === 'invalid') return leave(invite.reason);
+  if (invite.kind === 'open') {
+    // El dispositivo ya tiene ese Supabase con otra clave local: se abre ese, y la dirección pasa a decir su clave.
+    updateWorkspaces((l) => setActive(l, invite.entry.id));
+    history.replaceState(null, '', filePath(configOf(invite.entry).localKey, route.id));
+    return { kind: 'open', entry: invite.entry };
+  }
+  return { kind: 'confirm', entry: invite.entry, target: null, fallback, file: true };
 }
 
 /** Guarda el link y lo deja como el de esta pestaña (para que recargar siga en el link). */
@@ -142,8 +187,12 @@ function Screen() {
     return (
       <JoinConfirm
         entry={start.entry}
-        onJoin={() => openNew(start.entry, { target: start.target })}
-        onCancel={() => setStart(start.fallback ? { kind: 'open', entry: start.fallback } : { kind: 'welcome' })}
+        onJoin={() => (start.file ? openNew(start.entry) : openNew(start.entry, { target: start.target }))}
+        onCancel={() => {
+          // No abrir la dirección de un archivo en otro workspace.
+          if (start.file) history.replaceState(null, '', '/');
+          setStart(start.fallback ? { kind: 'open', entry: start.fallback } : { kind: 'welcome' });
+        }}
       />
     );
   }

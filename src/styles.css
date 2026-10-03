@@ -2744,6 +2744,28 @@ code {
   object-fit: contain;
 }
 
+/* Los links a los archivos en el PDF (P.30, Docs/Doc_Links_PDF.md, 3.2): la tarjeta entera con `display: block` (un
+   rectángulo exacto en el PDF; en línea sumaba una franja del renglón) y el nombre debajo en un solo renglón de alto fijo,
+   también en la vista de medir (sin link), así las marcas de hoja coinciden con el PDF. */
+.print-view a.sd-media-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.print-view .sd-media-name {
+  display: block;
+  height: 16px;
+  margin-top: 2px;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #1a56c4;
+  text-decoration: underline;
+}
+
 .page.sheet img.bn-visual-media {
   max-height: calc(var(--sheet-height) - 2 * var(--gutter) - 48px);
   object-fit: contain;

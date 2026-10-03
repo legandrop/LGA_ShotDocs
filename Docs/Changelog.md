@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.160 :
+
+**Links a los archivos en el PDF, entrega 1** (P.30, `Doc_Links_PDF.md`). En el PDF (exportar o imprimir) los
+adjuntos, las carpetas y los videos salían solo como imagen: la copia de impresión no ponía ningún link y el portero no
+tiene una dirección fija por archivo. Ahora cada uno lleva un link a `/f/<clave local>/<id>` (la tarjeta entera y el
+nombre debajo, también en la vista de medir); las fotos no. Esa dirección abre el archivo con sesión y permiso (carrete,
+hoja del adjunto o visor de la carpeta), pide entrar sin sesión y vuelve, y sin permiso muestra una sola pantalla sin
+nada del archivo; decide `media_file`. Después del `#` va el Supabase del workspace: un servidor nuevo se confirma antes.
+*Export* puede usar el link público de la página (aviso con página y nivel; *Can edit* destildado); imprimir, nunca.
+
+[ Links a los archivos en el PDF, entrega 1 - la dirección fija /f/ de cada archivo con el Supabase después del #, la tarjeta y el nombre como link en el PDF, una sola pantalla sin acceso, el link público solo desde Export con su aviso ]
+
 v0.159 :
 
 **Restos de dos auditorías, solo pruebas y un ajuste.** (1) Claves de orden (B.23): si el objetivo de la ventana de

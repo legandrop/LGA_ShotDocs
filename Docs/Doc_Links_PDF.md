@@ -920,3 +920,39 @@ que diga otra cosa.
 | O17 · Un invitado puede recibir *edit_pages* | Los mismos niveles que *Share* | 5.3 |
 | O18 · Casos y mutantes de la auditoría | Sumados a 9.2 | 9.2 |
 | O19 · E3 no puede reusar `page_id` | E3 con otra columna (`target_page_id`), `file_id` sin `not null`, `check` de uno de los dos e índice único por objetivo | 11 |
+
+## 16. Cómo quedó la entrega 1 (v0.160)
+
+| Pieza | Dónde |
+|---|---|
+| La dirección: `filePath`, `workspaceHash`, `linkHash`, `fileHref`, `parseWorkspaceHash`, `takeWorkspaceHash` | `src/fileLink.ts` |
+| La ruta `{ name: 'file', localKey, id }` | `src/router.ts` |
+| El arranque (`fileStart`, en el orden de 2.2: después de `#link=`, antes del link de la pestaña) | `src/ui/App.tsx` |
+| La pantalla: decide solo `media_file` (o `plink_media_files` con un link); carrete, hoja del adjunto, visor de la carpeta; borrado; sin red; otra clave local | `src/ui/FileScreen.tsx` (se baja aparte), dibujada por `Shell` en `src/ui/Workspace.tsx` |
+| Los links en la copia de impresión (la misma función para medir e imprimir) | `src/ui/mediaLinks.ts`, llamado desde `buildPrintView` (`src/ui/printView.ts`); estilos en `src/styles.css` |
+| Qué tarjeta no lleva link (otro proyecto en esa página, borrado, sin el archivo) | `MediaQueue.linkable` (`src/media/queue.ts`) |
+| El link público al exportar (el vivo más cercano *Can view*; *Can edit* solo si no hay otro, destildado) | `src/export/exportLinks.ts`, la ventana en `src/ui/ExportDialog.tsx`, `mediaHref` en `src/export/exportEditor.tsx` |
+| *Sign in instead* con el link muerto | `src/ui/LinkApp.tsx` (`DeadLink`) |
+| El login que vuelve | `src/ui/Login.tsx` (`emailRedirectTo` a la ruta, *Sign in to open this file.*, y el pedido de invitación si el correo no tiene cuenta) |
+| La línea de *Share* sobre los PDF que usan el link | `src/ui/LinkShare.tsx` |
+| La ayuda (*Links to files in a PDF*) | `src/help/entries.ts`, `src/i18n/lazy/help.ts` |
+
+**Distinto de lo diseñado (decidido al programar):**
+
+- La pantalla de confirmar un servidor nuevo es la de las invitaciones (*Join a workspace?* con el host, `JoinConfirm`):
+  agregar el workspace al dispositivo es lo que pasa de verdad. Cancelar vuelve al inicio, nunca abre la dirección en otro
+  workspace.
+- No se guarda aparte la ruta pendiente por workspace: el código del login deja la pestaña en la ruta, y el link del correo
+  vuelve a ella (`emailRedirectTo`).
+- La bienvenida (un dispositivo sin workspaces) ahora muestra el aviso del link con que se abrió la app (antes se perdía,
+  también con una invitación rota).
+- Un dispositivo sin ningún proyecto visible (por ejemplo, un invitado al que le sacaron todo) ve la pantalla de "sin
+  proyectos" en vez de la del archivo: la del archivo se dibuja adentro de la app.
+- Se preguntan como mucho 40 links públicos por exportación (`MAX_LINK_LOOKUPS`).
+
+**Medido en Chromium** (Playwright 1.63, `page.pdf()`, la vista de impresión real con `styles.css`, en un arnés fuera del
+repo): en una página con un adjunto, un video, una carpeta, una foto y un link de Drive salieron 7 links: la tarjeta del
+adjunto y la de la carpeta (270 × 74 pt, el área de la tarjeta), el cuadro del video (240 × 137 pt), los tres nombres
+(12 pt de alto) y el de Drive como estaba; la foto, ninguno. La vista de medir y la de imprimir midieron lo mismo (751 px).
+En un perfil limpio, `/f/…#ws=` de un servidor desconocido mostró *Join a workspace?* con el host y **ningún pedido a ese
+Supabase** antes de confirmar; *Not now* volvió a `/`; un `#ws=` roto volvió a `/` con el aviso.

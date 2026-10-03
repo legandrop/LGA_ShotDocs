@@ -206,6 +206,8 @@ export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => 
       {link && (
         <>
           <p className="muted small team-lead">{tr('share.link.anyoneHint')}</p>
+          {/* Los PDF exportados con este link lo llevan en sus links a archivos (P.30, LF18). */}
+          <p className="muted small team-lead">{tr('share.link.pdfHint')}</p>
           {!link.alive && <p className="warn small team-lead">{tr('share.link.notAlive')}</p>}
           <div className="team-invite-actions link-share-actions">
             <button

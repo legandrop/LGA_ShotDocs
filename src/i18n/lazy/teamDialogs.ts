@@ -125,6 +125,10 @@ export const teamDialogs = {
     en: "Only people with access can open it. With a link, anyone who has it opens this page and the ones inside, without an account.",
     es: "Solo la abre quien tiene acceso. Con un link, cualquiera que lo tenga abre esta página y las de adentro, sin cuenta.",
   },
+  'share.link.pdfHint': {
+    en: "PDFs exported with this link use it in their file links: changing its level also changes what they open, and Reset link turns them off.",
+    es: "Los PDF exportados con este link lo usan en sus links a archivos: cambiar su nivel cambia también lo que abren, y Reset link los apaga.",
+  },
   'share.link.anyoneHint': {
     en: "Anyone with the link can open this page and the ones inside, and comment with a name. Not for sensitive material.",
     es: "Cualquiera con el link abre esta página y las de adentro, y comenta con un nombre. No es para material sensible.",
