@@ -81,12 +81,50 @@ export function revealPhoto(view: EditorView, fileId: string, idOf: (url: string
       // Sin colapsar en este navegador: no hay nada que abrir.
     }
   }
+  let el: Element | null = null;
   try {
     const dom = view.nodeDOM(at);
-    const el = dom instanceof Element ? dom : dom?.parentElement;
-    el?.scrollIntoView?.({ block: 'nearest' });
+    el = dom instanceof Element ? dom : (dom?.parentElement ?? null);
   } catch {
     // La foto no tiene un elemento a la vista.
   }
+  if (el) keepInView(el);
   return true;
+}
+
+/**
+ * Trae la foto al medio de la vista (abajo está el aviso, que la tapaba). Después de cruzar de página la imagen todavía no
+ * tiene su alto (auditoría de la entrega 3, O1: quedaba con 27 de sus 270 px a la vista): se vuelve a centrar cuando
+ * carga, y una vez más un momento después, por las fotos de arriba que también cargan. Solo durante 2 s, y no si la
+ * persona ya se movió (la rueda, el teclado, el dedo).
+ */
+/** Lo que tapa el aviso abajo de la pantalla (styles.css, `.notice`), con un margen. */
+const NOTICE_ROOM = 96;
+
+function keepInView(el: Element): void {
+  // Si ya se ve entera (con lugar para el aviso de abajo), no se mueve nada.
+  const seen = () => {
+    const r = el.getBoundingClientRect();
+    return r.height > 0 && r.top >= 0 && r.bottom <= window.innerHeight - NOTICE_ROOM;
+  };
+  const center = () => {
+    if (el.isConnected && !seen()) el.scrollIntoView?.({ block: 'center' });
+  };
+  center();
+  const img = el instanceof HTMLImageElement ? el : el.querySelector('img');
+  let moved = false;
+  const stop = () => {
+    moved = true;
+  };
+  const opts = { once: true, passive: true, capture: true } as const;
+  for (const type of ['wheel', 'keydown', 'touchstart', 'pointerdown'] as const) window.addEventListener(type, stop, opts);
+  const again = () => {
+    if (!moved) center();
+  };
+  if (img && !img.complete) img.addEventListener('load', again, { once: true });
+  setTimeout(again, 300);
+  setTimeout(() => {
+    for (const type of ['wheel', 'keydown', 'touchstart', 'pointerdown'] as const) window.removeEventListener(type, stop, opts);
+    img?.removeEventListener('load', again);
+  }, 2000);
 }

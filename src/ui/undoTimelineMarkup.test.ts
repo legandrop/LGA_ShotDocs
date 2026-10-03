@@ -491,6 +491,42 @@ describe('anotar como un paso de la línea de tiempo (entrega 3)', () => {
     expect(app.timeline.retains(ids.A)).toBe(false);
   });
 
+  it('auditoría O1: la foto queda en el medio de la vista (no tapada por el aviso), también si la página termina de armarse después', async () => {
+    const { ids, app } = await setup();
+    await app.go(ids.A);
+    const v = view(app.editor!);
+    const calls: unknown[] = [];
+    let box = { top: 900, bottom: 1170, height: 270 };
+    const proto = Element.prototype as unknown as { scrollIntoView?: unknown; getBoundingClientRect: () => DOMRect };
+    const was = { scroll: proto.scrollIntoView, rect: proto.getBoundingClientRect };
+    proto.scrollIntoView = function (this: Element, arg: unknown) {
+      calls.push(arg);
+    };
+    proto.getBoundingClientRect = () => ({ ...box, left: 0, right: 100, width: 100, x: 0, y: box.top, toJSON: () => ({}) }) as DOMRect;
+    try {
+      expect(revealPhoto(v, PHOTO_ID, mediaIdOf)).toBe(true);
+      expect(calls).toEqual([{ block: 'center' }]);
+      // La página siguió armándose (las fotos de arriba cargaron): se vuelve a centrar.
+      await tick(350);
+      expect(calls).toHaveLength(2);
+      // Ya se ve entera, con lugar para el aviso: no se mueve.
+      box = { top: 200, bottom: 470, height: 270 };
+      calls.length = 0;
+      expect(revealPhoto(v, PHOTO_ID, mediaIdOf)).toBe(true);
+      await tick(350);
+      expect(calls).toEqual([]);
+      // Si la persona se movió, no se la lleva de vuelta.
+      box = { top: 900, bottom: 1170, height: 270 };
+      revealPhoto(v, PHOTO_ID, mediaIdOf);
+      window.dispatchEvent(new Event('wheel'));
+      await tick(350);
+      expect(calls).toEqual([{ block: 'center' }]);
+    } finally {
+      proto.scrollIntoView = was.scroll;
+      proto.getBoundingClientRect = was.rect;
+    }
+  });
+
   it('una versión vieja (el esquema anterior) abre la página con lo anotado deshecho y rehecho sin escribir nada', async () => {
     const { d, ids, app, runner } = await setup();
     await app.go(ids.A);
