@@ -913,6 +913,11 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    vez, gana el último que llega (la hermana puede volver a su lugar anterior; no se pierde nada, solo el lugar). Pasa
    solo después de unas 600 páginas puestas en el mismo hueco. Arreglo posible: rehacer solo las claves vecinas al hueco
    (no todas) o mandar el rehecho como una sola operación del servidor.
+   De su re-verificación (ALTA, para la próxima tanda): con el reloj del dispositivo adelantado, reparar un rechazo
+   heredado puede volver a pisar un título puesto a mano después (`titleChangedAfter` compara el `updated_at` del
+   servidor con la hora del dispositivo): guardar en `failOp` el `updated_at` que tenía la fila y comparar contra ese.
+   Solo afecta a rechazos por largo de versiones anteriores. Y falta una prueba del «renombre posterior en la cola»
+   (mutante R3; solo importa con la app desactualizada).
 24. **Un error en la consola al pegar una foto** (auditoría de la entrega 3 de P.26, F2; bajo). Al pegar una foto del
    Drive, la consola muestra `net::ERR_UNKNOWN_URL_SCHEME` por la dirección `sdmedia://…` (algo pide la dirección cruda
    antes de que la foto pase a mostrarse desde el dispositivo). No rompe nada a la vista; no se verificó si pasa igual en
