@@ -676,11 +676,11 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   la entrega 1.** Cada adjunto, carpeta y video del PDF (exportar o imprimir) lleva un link a su dirección fija
   (`/f/<clave local>/<id>`, con la dirección del Supabase después del `#`), que abre el archivo con sesión y permiso,
   pide entrar sin sesión y vuelve, y sin permiso muestra una sola pantalla sin nada del archivo. *Export* puede usar el
-  link público de la página (aviso con página y nivel, *Can edit* destildado); imprimir, nunca. **Programada (v0.166):
+  link público de la página (aviso con página y nivel, *Can edit* destildado); imprimir, nunca. **Hecho (v0.166):
   la entrega 2**, *Request access*: la pantalla sin acceso lo pide (con el aviso de quién lo verá), la campana y *Share*
   muestran los pedidos a quien puede compartir y la ventana da acceso (nunca baja) o rechaza; la pantalla `/f/` vuelve a
-  donde estaba y reintenta sola al volver la red; pruebas de `http://localhost` y de *Sign in instead* (O4). **Falta
-  aplicar su migración** (`20261031120000_access_requests`, schema 22) y la prueba de aceptación 4 de Lega. Falta E3
+  donde estaba y reintenta sola al volver la red; pruebas de `http://localhost` y de *Sign in instead* (O4). Migración
+  `20261031120000_access_requests` aplicada (schema 22). Falta la prueba de aceptación 4 de Lega. Falta E3
   opcional (pedir una página). Quedan para después: el correo al pedir y al aceptar (B.8), pedir acceso sin cuenta, el
   link de un video en línea y los textos de invitación en el choque de clave y en *Join a workspace?* para una dirección
   de archivo (O7 c). De la auditoría de E2 (chico): una prueba de dos personas decidiendo a la vez con dos sesiones

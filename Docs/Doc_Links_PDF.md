@@ -1,6 +1,6 @@
 # Links a los archivos en el PDF y *Request access* (P.30)
 
-**Estado: diseño auditado el 2026-10-03 ("aprobado con condiciones" en E1, E2 y E3) y corregido; E1 hecha (v0.164, sección 16); E2 programada, con su migración sin aplicar (sección 17).**
+**Estado: diseño auditado el 2026-10-03 ("aprobado con condiciones" en E1, E2 y E3) y corregido; E1 hecha (v0.164, sección 16); E2 hecha (v0.166, sección 17), con su migración aplicada.**
 Pedido de Lega del 2026-10-03, diseñado contra `main` v0.158. Toca permisos, Row Level Security y privacidad, y suma una
 tabla: **riesgo alto**. Las decisiones ya tomadas por Lega están en "Qué se pide"; las nuevas (LF1 a LF16, sección 10)
 son propuestas con la recomendación tomada; LF17 a LF20 son de Lega, sobre los hallazgos de la auditoría. **Las
@@ -971,7 +971,7 @@ Supabase** antes de confirmar; *Not now* volvió a `/`; un `#ws=` roto volvió a
 
 | Pieza | Dónde |
 |---|---|
-| La migración (la tabla y las tres funciones de la sección 7, `schema_version` 22), **sin aplicar** | `supabase/migrations/20261031120000_access_requests.sql` |
+| La migración (la tabla y las tres funciones de la sección 7, `schema_version` 22), **aplicada** (v0.166) | `supabase/migrations/20261031120000_access_requests.sql` |
 | Su prueba SQL (en `begin … rollback`) | `supabase/tests/access_requests_permisos.sql` |
 | Pedir, la lista, decidir y lo que recuerda el dispositivo de quien pide | `src/sync/accessRequests.ts` (`requestAccess`, `AccessRequestsInbox`, `askedAt`/`rememberAsked`) |
 | Cuándo se pregunta la lista (base en la 22 y un rol que no es invitado) | `accessRequestsEnabled`, prendida desde `src/services.ts` (`accessRequests`) |

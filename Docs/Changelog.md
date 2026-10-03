@@ -8,7 +8,7 @@ RLS, sin políticas) y tres funciones: pedir responde lo mismo exista o no el ar
 ve quien puede compartir una página viva que usa el archivo; decidir rechaza solo si se lo pide y nunca baja un permiso.
 La pantalla `/f/` suma *Request access* con el aviso de quién lo verá, recuerda cuándo se pidió, vuelve a preguntar cada
 minuto, reintenta al volver la red y *Close* vuelve a donde estaba. La campana y *Share* muestran los pedidos con la
-ventana de decidir. Migración `20261031120000_access_requests` (schema 22), sin aplicar.
+ventana de decidir. Migración `20261031120000_access_requests` (schema 22).
 [ Request access en los links del PDF - pedir acceso a un archivo desde /f/, los pedidos en la campana y en Share con dar acceso o rechazar, la tabla access_requests con RLS (schema 22) y sus pruebas SQL con mutantes ]
 
 v0.165 :
