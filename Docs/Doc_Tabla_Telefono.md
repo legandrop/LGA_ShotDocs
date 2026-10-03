@@ -14,7 +14,7 @@ una palabra por renglón (y las miniaturas de las celdas, de 21 px de ancho).
 
 ## Cómo quedó
 
-Solo hasta 1024 px de ancho (`@media (max-width: 1024px)`: teléfono y tablet; desde v0.0XX, antes eran los 760 px del
+Solo hasta 1024 px de ancho (`@media (max-width: 1024px)`: teléfono y tablet; desde v0.160, antes eran los 760 px del
 teléfono que usa el resto de `styles.css`) y solo en la página abierta (`.page:not(.sd-export-source)`: la vista de impresión y el armado del PDF de exportar miden
 con el ancho de la hoja y no se tocan):
 
@@ -68,7 +68,7 @@ teléfono:
 - una página A4 en el teléfono se ve libre (como ya era), y la vista de impresión y el armado del PDF de exportar miden
   lo mismo que en la compu.
 
-Un hallazgo que venía de antes y no era de las tablas (arreglado en v0.0XX): en el teléfono el botón de comentar del
+Un hallazgo que venía de antes y no era de las tablas (arreglado en v0.160): en el teléfono el botón de comentar del
 margen (`.comment-add`) se pasaba 4 px del borde derecho cuando había una selección, y la página se podía arrastrar 4 px
 de costado. Era `right: -4px` en la regla de teléfono de `.comment-count, .comment-add`; ahora `right: 0` (medido a 360,
 375 y 414 px: el borde derecho del botón queda en el ancho de la pantalla y la página no se corre).
@@ -82,7 +82,7 @@ la página llama a `revealSelectionCell` en cada cambio de selección, también 
 sin forzar el ancho de la tabla, el desplazamiento dentro del bloque). No hay prueba con el esquema anterior porque no cambia el esquema ni el documento.
 Lo medido de verdad es el recorrido en Chromium de arriba; jsdom no hace diseño.
 
-## Tablet vertical (v0.0XX)
+## Tablet vertical (v0.160)
 
 Con el corte en 760 px, un iPad vertical (768 a 834 px) no recibía nada: el cajón de páginas queda a la vista y la
 página mide 372 a 438 px, así que el reporte se encogía igual que en el teléfono (columnas de 47 a 57 px; una de 12
@@ -116,7 +116,7 @@ px sigue con el piso (7 columnas: 673, de 96; 10 columnas: 961); a 375 px, hoja 
 - **Sin probar en headless:** `overscroll-behavior-x` (solo importa para el gesto «atrás» de Safari), el impulso del dedo
   en iOS, el teclado abierto, un editor remoto escribiendo en la misma tabla (si su cambio mueve la selección local, el
   enganche podría devolver la tabla a la celda del cursor). Las tablas no usan `:has()` (el árbol de páginas sí, con `:is()`
-  que lo protege, v0.0XX). El CSS compilado de las tablas usa `@media (width<=1024px)` y, para las hojas, `(width<=760px)`
+  que lo protege, v0.160). El CSS compilado de las tablas usa `@media (width<=1024px)` y, para las hojas, `(width<=760px)`
   (Safari 16.4 o más), igual que las demás reglas de teléfono de la app.
 
 - Probarlo en un iPhone real: el desplazamiento con el dedo, el teclado abierto y escribir en la última columna.
