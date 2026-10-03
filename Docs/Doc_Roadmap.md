@@ -348,10 +348,17 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   `Doc_Link_Publico.md`):** registrar con los topes de E2.5 sin vincular nunca un id ajeno, la miniatura, el original por
   el portero solo de lo que registró el link (con cada parte validada), la carpeta del proyecto por su huella o
   `Via_link`, y lo escrito de una página que espera a que sus archivos estén registrados. Para publicarla: aplicar la
-  migración (con la copia) y publicar el portero con la app. Quedan: lo registrado por un link cuya fila quedó apartada
-  sigue usado por su página sin que ningún documento lo muestre (no va a la papelera de archivos; decisión de Lega si el
-  equipo lo puede ver y mandar a la papelera), que `plink_open` diga el tope por archivo (hoy la app usa 500 MB fijos), y
-  probar con el portero y el Drive de verdad (lista de Lega).
+  migración (con la copia) y publicar el portero con la app. **Decisión de Lega (2026-10-03), hecha en la ronda 1:** lo que
+  subió un link no se borra ni va solo a la papelera; *Share* lista los archivos de los links de la página (de
+  `files.plink_id`, también de links reseteados y lo subido sin usar) con *Download*. **Junto a D184** (descartar lo
+  apartado, cuando exista): descartar manda también sus archivos a la papelera de archivos. Quedan: que `plink_open` diga
+  el tope por archivo (hoy la app usa 500 MB fijos); un tope de todos los links juntos para archivos
+  (`link_limits.all_upload_bytes`, O7: hoy cada link sube hasta 1 GB por día; cargarlo ya funciona sin código); que la
+  política de `page_files` no liste a lectores e invitados los usos de un link que ninguna fila admitida muestra (O4); que
+  el visitante no pueda marcar lo suyo con otro id de Drive llamando `plink_set_file_drive` a mano (O8c: no gana nada, el
+  portero exige la marca `sdFile`, solo rompe lo suyo); no loguear nunca el usuario `plink:<huella>` del portero (es la
+  huella del token, igual a `public_links.token_hash`, O8b); con dos workspaces en el mismo Drive, `findMarked` por un id
+  elegido por un visitante; y probar con el portero y el Drive de verdad (lista de Lega).
   **Entrega 2 rediseñada (2026-10-02):** lo que escribe un link espera en una sala
   (`public_link_updates`) y entra a `page_updates` cuando el dispositivo de un editor lo prueba (`link_admit`); partida
   en 2a (texto), 2b (archivos) y 2c (lo apartado a la vista); propuestas LE1 a LE13. **Auditado: aprobado con

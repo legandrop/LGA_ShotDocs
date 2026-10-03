@@ -22,6 +22,7 @@ import {
   type PublicLinkInfo,
 } from '../sync/publicLinks';
 import { LinkAsideList } from './LinkAsideList';
+import { LinkFilesList } from './LinkFilesList';
 import { notify } from './notice';
 import { ShareGateNotes, UNSYNCED_BEFORE_SHARE, useShareGate } from './shareGate';
 import { teamErrorText } from './teamText';
@@ -142,6 +143,8 @@ export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => 
   const editOn = info?.edit_on === true;
   const linkLevel: LinkLevel = link?.level === 'edit' ? 'edit' : 'comment';
   const shownLevel: LinkLevel = link ? linkLevel : level;
+  // Lo que llegó al Drive (O3 de la auditoría de la 2b): lo registrado que no subió no cuenta. Una base sin el dato, lo registrado.
+  const inDrive = link?.files ? (link.files.drive_bytes ?? link.files.bytes) : 0;
 
   return (
     <section className="link-share" aria-label={tr('share.link.general')}>
@@ -274,11 +277,11 @@ export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => 
           {/* Lo que subió al Drive del dueño (entrega 2b): el uso y, desde 1 GB, el aviso. */}
           {link.files && (link.level === 'edit' || link.files.total > 0) && (
             <p className="muted small team-lead">
-              {tr('share.link.files', { today: usage.file?.n ?? 0, total: link.files.total, size: driveSize(link.files.bytes) })}
+              {tr('share.link.files', { today: usage.file?.n ?? 0, total: link.files.total, size: driveSize(inDrive) })}
             </p>
           )}
-          {link.files && link.files.bytes > LINK_DRIVE_WARN_BYTES && (
-            <p className="warn small team-lead">{tr('share.link.filesBig', { size: driveSize(link.files.bytes) })}</p>
+          {link.files && inDrive > LINK_DRIVE_WARN_BYTES && (
+            <p className="warn small team-lead">{tr('share.link.filesBig', { size: driveSize(inDrive) })}</p>
           )}
           {link.limited && <p className="warn small team-lead">{tr('share.link.limited')}</p>}
           {link.comments > 0 && (
@@ -304,6 +307,8 @@ export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => 
       )}
       {/* Lo apartado de los links de esta página (también de los anteriores), para leerlo y bajarlo (entrega 2c). */}
       {info && <LinkAsideList pageId={pageId} linkId={link?.id ?? null} />}
+      {/* Los archivos que subieron los links de esta página, también los de lo apartado (entrega 2b, decisión de Lega). */}
+      {info && <LinkFilesList pageId={pageId} linkId={link?.id ?? null} />}
       <ShareGateNotes gate={gate} reader={!link && !!info?.clean_on} />
       {error && <p className="error">{error}</p>}
     </section>

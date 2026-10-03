@@ -1540,7 +1540,6 @@ export class FakePortero {
     return res;
   };
 
-  /** `set_file_drive`, como lo llama el portero. */
   /** Lo que el portero le contesta a un link antes de hacer nada (`null`: sigue como con una cuenta). */
   private linkDenied(method: string, path: string, token: string, body: Record<string, unknown> | undefined, range?: string): Response | null {
     const upload = method === 'POST' && path === '/upload';
@@ -1572,6 +1571,7 @@ export class FakePortero {
     return null;
   }
 
+  /** `set_file_drive` (o `plink_set_file_drive`, con un link), como lo llama el portero. */
   private link(file: string, driveId: string, linkToken: string | null = null): boolean {
     if (this.failLink) return false;
     if (this.lieLinked) return true;

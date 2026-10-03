@@ -119,9 +119,10 @@ set min_app_version = 0.5, clean_min_version = 0.5, link_edit_min_version = 0.5,
 insert into auth.users (id, email, aud, role) values
   (pg_temp.u('d3a0'), 'lf-o@test.invalid', 'authenticated', 'authenticated'),
   (pg_temp.u('d3a1'), 'lf-a@test.invalid', 'authenticated', 'authenticated'),
-  (pg_temp.u('d3a6'), 'lf-e@test.invalid', 'authenticated', 'authenticated');
+  (pg_temp.u('d3a6'), 'lf-e@test.invalid', 'authenticated', 'authenticated'),
+  (pg_temp.u('d3a7'), 'lf-c@test.invalid', 'authenticated', 'authenticated');
 insert into public.members (user_id, role) values
-  (pg_temp.u('d3a0'), 'owner'), (pg_temp.u('d3a1'), 'member'), (pg_temp.u('d3a6'), 'member');
+  (pg_temp.u('d3a0'), 'owner'), (pg_temp.u('d3a1'), 'member'), (pg_temp.u('d3a6'), 'member'), (pg_temp.u('d3a7'), 'member');
 insert into public.workspaces (id, owner_id, name) values
   (pg_temp.u('d3e0'), pg_temp.u('d3a1'), 'P'),
   (pg_temp.u('d3e1'), pg_temp.u('d3a0'), 'Q');
@@ -134,7 +135,8 @@ insert into public.pages (id, workspace_id, parent_id, title, sort_key, settings
   (pg_temp.u('d3b7'), pg_temp.u('d3e0'), pg_temp.u('d3b0'), 'Sib', 'a1', '{}'),
   (pg_temp.u('d3b9'), pg_temp.u('d3e1'), null, 'QX', 'a0', '{}');
 insert into public.grants (user_id, project_id, page_id, level) values
-  (pg_temp.u('d3a6'), pg_temp.u('d3e0'), null, 'edit');
+  (pg_temp.u('d3a6'), pg_temp.u('d3e0'), null, 'edit'),
+  (pg_temp.u('d3a7'), pg_temp.u('d3e0'), null, 'comment');
 -- Archivos del equipo: f1 en S (todavía sin Drive), f7 en Sib (afuera de la rama), f9 de Q.
 insert into public.files (id, project_id, name, mime, size, created_by) values
   (pg_temp.u('d3f1'), pg_temp.u('d3e0'), 'equipo.jpg', 'image/jpeg', 10, pg_temp.u('d3a1')),
@@ -149,6 +151,8 @@ begin
   perform pg_temp.save('S', public.create_public_link(pg_temp.u('d3c0'), pg_temp.u('d3b2'), 'edit'));
   perform pg_temp.save('Sib', public.create_public_link(pg_temp.u('d3c1'), pg_temp.u('d3b7'), 'edit'));
   perform pg_temp.save('H', public.create_public_link(pg_temp.u('d3c2'), pg_temp.u('d3b3'), 'comment'));
+  -- Un link de la página de arriba: su rama contiene la de S (O5, a03 de la auditoría).
+  perform pg_temp.save('R', public.create_public_link(pg_temp.u('d3c3'), pg_temp.u('d3b0'), 'edit'));
   perform pg_temp.as_postgres();
   update public.pages set deleted_at = now() where id = pg_temp.u('d3b5');
 end;
@@ -235,8 +239,10 @@ begin
     'lo rechazado sumó de por vida';
   assert pg_temp.used('S', 'file') = '2/0' and pg_temp.used('S', 'upload') = '2/1500', 'lo rechazado sumó en el día';
   assert not exists (select 1 from public.files where id = pg_temp.u('d320')), 'lo rechazado quedó';
-  -- Con lugar otra vez, entra.
-  perform pg_temp.check(pg_temp.reg(pg_temp.tok('S'), 'd3b2', 'd320', 10), 'ok', 'no registra con lugar');
+  -- Justo hasta el tope de por vida (archivos y bytes), entra (la frontera es «más de», O5 de la auditoría).
+  perform pg_temp.limits('{"life_files": 3, "life_upload_bytes": 1510}');
+  perform pg_temp.check(pg_temp.reg(pg_temp.tok('S'), 'd3b2', 'd320', 10), 'ok', 'no registra justo hasta el tope');
+  perform pg_temp.limits('{}');
 end;
 $$;
 
@@ -257,7 +263,13 @@ begin
   assert position(pg_temp.u('d3e0')::text in j::text) = 0, 'plink_media_file da el id del proyecto';
   j := public.plink_media_file(pg_temp.u('d3f1'));
   assert not (j ->> 'mine')::boolean and (j ->> 'level')::int = 3, 'un archivo del equipo de la rama dice mine';
+  -- Otro link cuya rama contiene la de S lo ve con nivel 3, pero no es suyo (la guarda entre links del portero).
+  perform pg_temp.as_anon(pg_temp.tok('R'));
+  j := public.plink_media_file(pg_temp.u('d310'));
+  assert (j ->> 'level')::int = 3 and not (j ->> 'mine')::boolean, 'el link de arriba dice mine de un archivo de otro link';
   perform pg_temp.as_postgres();
+  perform pg_temp.check(pg_temp.anon_try(pg_temp.tok('R'), format('select public.plink_set_file_thumb(%L)', pg_temp.u('d310'))),
+    'error:file_not_found', 'el link de arriba marca la miniatura de otro link');
 
   -- plink_set_file_drive.
   perform pg_temp.check(pg_temp.anon_try(pg_temp.tok('S'), format('select public.plink_set_file_drive(%L, %L)', pg_temp.u('d3f1'), 'driveTeam000001')),
@@ -286,6 +298,13 @@ begin
   perform pg_temp.check(pg_temp.anon_try(pg_temp.tok('S'),
     format('insert into storage.objects (bucket_id, name) values (%L, %L)', 'thumbs', pg_temp.u('d311')::text || '.jpg')),
     'ok', 'no sube la miniatura de lo suyo');
+  -- Solo `<id>.jpg` exacto: nada que empiece con el id (O5, a05 de la auditoría).
+  assert pg_temp.anon_try(pg_temp.tok('S'),
+    format('insert into storage.objects (bucket_id, name) values (%L, %L)', 'thumbs', pg_temp.u('d310')::text || '.jpg.png'))
+    like 'error:new row violates row-level security%', 'sube una miniatura con otro nombre que empieza con el id';
+  assert pg_temp.anon_try(pg_temp.tok('S'),
+    format('insert into storage.objects (bucket_id, name) values (%L, %L)', 'thumbs', pg_temp.u('d310')::text || 'x.jpg'))
+    like 'error:new row violates row-level security%', 'sube una miniatura con el id y algo más';
   assert pg_temp.anon_try(pg_temp.tok('S'),
     format('insert into storage.objects (bucket_id, name) values (%L, %L)', 'thumbs', pg_temp.u('d3f1')::text || '.jpg')) like 'error:new row violates row-level security%',
     'sube la miniatura del equipo';
@@ -354,6 +373,7 @@ begin
   -- Share: cuántos archivos y cuánto pesan, de por vida, y el uso del día.
   j := public.get_public_link(pg_temp.u('d3b2')) -> 'link';
   assert (j -> 'files' ->> 'total')::int = 4 and (j -> 'files' ->> 'bytes')::bigint = 1520, 'Share no cuenta los archivos';
+  assert (j -> 'files' ->> 'drive_bytes')::bigint = 1000, 'Share cuenta en el Drive lo que no llegó';
   assert (j -> 'usage_today' -> 'upload' ->> 'bytes')::bigint = 1520, 'Share no cuenta lo subido hoy';
   assert not (j ->> 'limited')::boolean, 'Share dice que llegó al tope';
   perform pg_temp.as_postgres();
@@ -374,6 +394,52 @@ begin
   -- Lo del viejo sigue: filas y usos.
   assert (select count(*) from public.files where plink_id = (select id from public.public_links where token = old_token)) = 4,
     'se perdió algo registrado por el link viejo';
+end;
+$$;
+
+-- ---------------------------------------------------------------------------------------------------
+-- public_link_files: lo que subieron los links de la página (decisión de Lega), para quien ve lo apartado
+-- ---------------------------------------------------------------------------------------------------
+create function pg_temp.files_of(who text, page text) returns text language plpgsql as $$
+declare
+  t text;
+begin
+  perform pg_temp.as_user(who);
+  begin
+    select string_agg(right(f.id::text, 4) || ':' || f.link_live || ':' || f.uploaded || ':' || right(f.page_id::text, 4),
+                      ',' order by f.id) into t
+    from public.public_link_files(pg_temp.u(page)) f;
+  exception when others then
+    t := 'error:' || sqlerrm;
+  end;
+  perform pg_temp.as_postgres();
+  return coalesce(t, '');
+end;
+$$;
+
+do $$
+begin
+  -- Después de Reset: los cuatro del link viejo (también el que nunca subió y el sacado), sin el link vivo.
+  perform pg_temp.check(pg_temp.files_of('d3a1', 'd3b2'),
+    'd310:false:true:d3b2,d311:false:false:d3b3,d320:false:false:d3b2,d322:false:false:d3b3', 'los archivos de los links de S');
+  perform pg_temp.check(pg_temp.files_of('d3a6', 'd3b2'),
+    'd310:false:true:d3b2,d311:false:false:d3b3,d320:false:false:d3b2,d322:false:false:d3b3', 'quien edita no ve los archivos');
+  -- Uno del link nuevo, vivo.
+  perform pg_temp.check(pg_temp.reg(pg_temp.tok('S'), 'd3b2', 'd340', 10), 'ok', 'el link nuevo no registra');
+  assert pg_temp.files_of('d3a1', 'd3b2') like 'd310:false:true:d3b2,d311:false:false:d3b3,d320:false:false:d3b2,d322:false:false:d3b3,d340:true:false:d3b2',
+    'falta el archivo del link nuevo';
+  -- Solo los links de esa página: H (Can view) y Sib no tienen; la de arriba tampoco muestra los de S.
+  perform pg_temp.check(pg_temp.files_of('d3a1', 'd3b3'), '', 'H lista archivos de otro link');
+  perform pg_temp.check(pg_temp.files_of('d3a1', 'd3b0'), '', 'R lista los archivos de los links de S');
+  -- Quien no ve lo borrado (Comentar), no.
+  perform pg_temp.check(pg_temp.files_of('d3a7', 'd3b2'), 'error:page_not_found', 'quien comenta ve los archivos del link');
+  -- Nada se borró, y lo que su página sigue usando no fue solo a la papelera (d311 y d322 se sacaron a mano de la página,
+  -- como un editor: esos sí, por la papelera de archivos de siempre).
+  assert (select count(*) from public.files where plink_id is not null) = 5, 'se borró algo del link';
+  assert (select count(*) from public.files where plink_id is not null and trashed_at is null) = 3, 'algo usado del link fue a la papelera';
+  -- anon no la llama.
+  perform pg_temp.check(left(pg_temp.anon_try(pg_temp.tok('S'), format('select * from public.public_link_files(%L)', pg_temp.u('d3b2'))), 23),
+    'error:permission denied', 'anon lista los archivos');
 end;
 $$;
 

@@ -281,6 +281,8 @@ export async function makeLinkDevice(
   device = 'dev-' + 'x'.repeat(20),
   appVersion = '9.999',
   visitorName = '',
+  /** El nombre de la base de archivos (por defecto, una nueva): la de un `LinkEntry` para probar la pantalla del link muerto. */
+  mediaDb: string = mediaDbName(crypto.randomUUID()),
 ): Promise<LinkDevice> {
   const calls: LinkCall[] = [];
   const problems: (LinkProblem | null)[] = [];
@@ -304,7 +306,7 @@ export async function makeLinkDevice(
   // Como services.ts en modo link: sin usos de archivos, hasta 500 MB por archivo, sin carpetas, y el portero con los
   // headers del link (nunca una sesión).
   const linkHeaders = { 'x-shotdocs-version': appVersion, 'x-shotdocs-link': token, 'x-shotdocs-device': device };
-  const media = new MediaQueue(await openMediaDb(mediaDbName(crypto.randomUUID())), remote, {
+  const media = new MediaQueue(await openMediaDb(mediaDb), remote, {
     noUsage: true,
     maxFileBytes: LINK_FILE_MAX_BYTES,
     noFolders: true,

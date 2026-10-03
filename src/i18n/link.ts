@@ -87,6 +87,16 @@ export const link = {
     en: "Your changes are saved in this browser and wait to be sent: the link reached a limit (for today, or until the team takes in what's waiting).",
     es: "Tus cambios quedan guardados en este navegador y esperan para mandarse: el link llegó a un tope (por hoy, o hasta que el equipo sume lo que espera).",
   },
+  'link.dead.files': {
+    en: {
+      one: "{count} photo or file you added didn't finish uploading. Download it:",
+      other: "{count} photos or files you added didn't finish uploading. Download each one:",
+    },
+    es: {
+      one: "{count} foto o archivo que agregaste no terminó de subir. Bajalo:",
+      other: "{count} fotos o archivos que agregaste no terminaron de subir. Bajá cada uno:",
+    },
+  },
   'link.dead.unsent': {
     en: { one: "You have {count} page with unsent changes.", other: "You have {count} pages with unsent changes." },
     es: { one: "Tenés {count} página con cambios sin mandar.", other: "Tenés {count} páginas con cambios sin mandar." },

@@ -114,6 +114,17 @@ export const teamDialogs = {
     en: "This link has uploaded {size} to your Drive. Reset link if it went too far.",
     es: "Este link ya subió {size} a tu Drive. Si se escapó, Renovar link.",
   },
+  'share.link.filesTitle': {
+    en: { one: "{count} file was added through this page's link", other: "{count} files were added through this page's link" },
+    es: { one: "Se sumó {count} archivo con el link de esta página", other: "Se sumaron {count} archivos con el link de esta página" },
+  },
+  'share.link.filesHint': {
+    en: "Also the ones in changes that were set aside. They stay in your Drive.",
+    es: "También los de cambios que quedaron aparte. Quedan en tu Drive.",
+  },
+  'share.link.fileDownload': { en: "Download", es: "Bajar" },
+  'share.link.fileNotUploaded': { en: "didn't finish uploading", es: "no terminó de subir" },
+  'share.link.fileTrashed': { en: "in the trash", es: "en la papelera" },
   // Lo apartado a la vista (entrega 2c, Docs/Doc_Link_Publico.md).
   'share.link.asideTitle': {
     en: { one: "{count} change sent through this page's link was set aside", other: "{count} changes sent through this page's link were set aside" },

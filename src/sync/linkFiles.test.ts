@@ -358,3 +358,52 @@ describe('Can edit por un link: archivos (entrega 2b)', () => {
     expect(server.mediaFiles.get(id)!.plink_id).not.toBe(server.publicLinks.get(fresh)!.id);
   });
 });
+
+describe('Can edit por un link: archivos, correcciones de la auditoría', () => {
+  it('O1: un bloque recién soltado y copiado a otra página espera ahí también; después entra en las dos y no apunta a nada roto', async () => {
+    const { server, e1, s, h, tick } = await setup();
+    const token = addPublicLink(server, s, server.ownerId, 'edit');
+    await e1.engine.prepareBases([s, h]);
+    const v = await visitor(server, token);
+    await v.engine.syncNow();
+    await v.engine.prefetchPage(s);
+    await v.engine.prefetchPage(h);
+    server.linkLimits.file = 0;
+    const id = await addPhoto(v, s);
+    // El bloque, copiado a H antes de que el archivo se registre.
+    const doc = await v.docs.open(h);
+    doc.transact(() => group(doc).push([block('copia', '', 'image', { url: `sdmedia://${id}` })]), 'test');
+    await v.docs.flush(h);
+    v.docs.close(h);
+    await visitorRound(v);
+    expect((await v.docs.unsyncedPages()).sort()).toEqual([s, h].sort());
+    expect(roomShows(server, id)).toBe(false);
+    server.linkLimits.file = 100;
+    await v.media.clearBlocked();
+    await visitorRound(v);
+    expect(await v.docs.unsyncedPages()).toEqual([]);
+    await editorRound(e1, tick, [s, h]);
+    expect(server.linkRoom.map((r) => r.decision)).toEqual(['admitted', 'admitted']);
+    // El editor que admitió registra el uso en H: el archivo es de la página y el equipo lo ve ahí.
+    await e1.engine.syncNow();
+    expect(server.pageFiles.has(`${h}:${id}`)).toBe(true);
+    expect(server.mediaFiles.get(id)!.drive_id).not.toBeNull();
+  });
+
+  it('lo escrito sale apenas el archivo se registra, aunque el original todavía no haya subido', async () => {
+    const { server, e1, s } = await setup();
+    const token = addPublicLink(server, s, server.ownerId, 'edit');
+    await e1.engine.prepareBases([s]);
+    const v = await visitor(server, token);
+    await v.engine.syncNow();
+    await v.engine.prefetchPage(s);
+    // El portero no recibe ninguna parte (se corta la red en cada una).
+    server.portero.cutAfterParts = 0;
+    const id = await addPhoto(v, s);
+    await visitorRound(v);
+    expect(server.mediaFiles.get(id)?.plink_id).toBeDefined();
+    expect(server.mediaFiles.get(id)!.drive_id).toBeNull();
+    expect(roomShows(server, id)).toBe(true);
+    expect(await v.docs.unsyncedPages()).toEqual([]);
+  });
+});

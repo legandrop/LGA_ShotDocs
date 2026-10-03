@@ -170,7 +170,7 @@ export class PageDocs {
   /**
    * Antes de armar lo que se sube de una página, con lo que se va a subir: `true` la deja para la vuelta siguiente (lo
    * escrito queda sin subir, a la vista). Un link (entrega 2b) espera mientras la página muestre un archivo propio que la
-   * base todavía no conoce (`SyncEngine`, `MediaQueue.unregisteredOn`).
+   * base todavía no conoce (`SyncEngine`, `MediaQueue.unregistered`).
    */
   holdUpload?: (pageId: string, doc: Y.Doc) => Promise<boolean>;
   private readonly unsupportedListeners = new Set<(pageId: string) => void>();

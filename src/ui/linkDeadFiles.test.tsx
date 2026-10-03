@@ -1,0 +1,109 @@
+// @vitest-environment jsdom
+import { Blob as NodeBlob } from 'node:buffer';
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { rememberLink } from '../linkMode';
+import { mediaDbName } from '../media/mediaDb';
+import { prefs } from '../prefs';
+import { block, group } from '../sync/historyTesting';
+import { addPublicLink, makeLinkDevice, resetPublicLink } from '../sync/linkTesting';
+import { FakeServer, makeDevice } from '../sync/testing';
+import type { KeyValueStore } from '../workspaces';
+import { LinkApp } from './LinkApp';
+import { linkDbName } from './LinkEditBar';
+
+// B1 de la auditoría de la entrega 2b (Docs/Doc_Link_Publico.md, E2.7): si el link deja de andar con un archivo a medio
+// subir, el original no puede quedar encerrado en el navegador del visitante. La pantalla de "este link ya no anda" lo
+// ofrece para bajar, el mismo archivo, sin base ni portero (como la de cuando sacan a alguien). El caso del auditor (un video
+// de 40 MB cortado por *Reset link* a mitad de la subida), achicado.
+
+vi.mock('./Workspace', async () => {
+  const { createElement } = await import('react');
+  return { Workspace: () => createElement('div', { id: 'workspace' }, 'WORKSPACE') };
+});
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const roots: Root[] = [];
+afterEach(() => {
+  for (const r of roots.splice(0)) act(() => r.unmount());
+  document.body.innerHTML = '';
+  vi.unstubAllGlobals();
+  localStorage.clear();
+});
+
+const settle = () => act(async () => new Promise((r) => setTimeout(r, 30)));
+const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+
+describe('el link muerto con un archivo sin subir (B1)', () => {
+  it('Reset link a mitad de la subida: la pantalla ofrece bajar el original, el mismo archivo', async () => {
+    prefs.set({ language: 'en' });
+    const server = new FakeServer();
+    server.enableTeam();
+    server.enableClean(0.1);
+    server.enableLinkEdit(0.1);
+    server.enableLinkFiles();
+    const e1 = await makeDevice(server, undefined, '0.200');
+    const page = await e1.tree.create(null, 'Brief');
+    await e1.engine.syncNow();
+    const doc0 = await e1.docs.open(page);
+    doc0.transact(() => group(doc0).push([block('e0', 'Del equipo')]), 'test');
+    await e1.docs.flush(page);
+    e1.docs.close(page);
+    await e1.engine.syncNow();
+    const token = addPublicLink(server, page, server.ownerId, 'edit');
+    await e1.engine.prepareBases([page]);
+
+    // El visitante, con la base de archivos del link de este navegador (la que lee la pantalla del link muerto).
+    const entry = rememberLink({ u: 'https://abcdefghijklmnopqrst.supabase.co', k: 'sb_publishable_x', l: 'wanka_1', t: token }, localStorage as KeyValueStore);
+    const v = await makeLinkDevice(server, token, entry.device, '0.200', 'Ana', mediaDbName(linkDbName(entry)));
+    await v.engine.syncNow();
+    await v.engine.prefetchPage(page);
+    // Un "video" de 3 MB que no llega a subir: ninguna parte le llega al portero.
+    server.portero.cutAfterParts = 0;
+    const bytes = new Uint8Array(3 * 1024 * 1024).map((_, i) => (i * 31) % 251);
+    // Un Blob de Node: el de jsdom no pasa por el IndexedDB de las pruebas (en el navegador, el de siempre).
+    const url = await v.media.add(page, Object.assign(new NodeBlob([bytes], { type: 'video/mp4' }) as unknown as Blob, { name: 'toma-12.mp4' }));
+    const doc = await v.docs.open(page);
+    doc.transact(() => group(doc).push([block('vid', '', 'image', { url })]), 'test');
+    await v.docs.flush(page);
+    v.docs.close(page);
+    await v.media.idle();
+    for (let i = 0; i < 2; i++) {
+      await v.engine.syncNow();
+      await v.engine.syncMedia();
+    }
+    const id = url.slice('sdmedia://'.length);
+    expect(server.mediaFiles.get(id)?.plink_id).toBeDefined();
+    expect(server.mediaFiles.get(id)!.drive_id).toBeNull();
+    // Reset link: el link de este navegador ya no anda.
+    resetPublicLink(server, token);
+    await v.engine.stop();
+
+    // La app del link vuelve a abrir: el servidor dice que no anda.
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(json(404, { message: 'link_not_found', code: 'P0002', details: null, hint: null }))));
+    const saved: Blob[] = [];
+    const created = vi.fn((b: Blob) => {
+      saved.push(b);
+      return 'blob:saved';
+    });
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: created, revokeObjectURL: () => undefined }));
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    await act(async () => root.render(<LinkApp entry={entry} />));
+    for (let i = 0; i < 20 && !host.textContent?.includes('toma-12.mp4'); i++) await settle();
+    expect(host.textContent).toContain('This link no longer works');
+    expect(host.textContent).toContain("1 photo or file you added didn't finish uploading");
+    const button = [...host.querySelectorAll('button')].find((b) => b.textContent === 'toma-12.mp4')!;
+    expect(button).toBeDefined();
+    await act(async () => button.click());
+    for (let i = 0; i < 20 && saved.length === 0; i++) await settle();
+    expect(saved).toHaveLength(1);
+    // El mismo original, byte por byte.
+    expect(new Uint8Array(await saved[0].arrayBuffer())).toEqual(bytes);
+    expect(host.textContent).toContain('downloaded');
+  });
+});

@@ -18,7 +18,10 @@ import type { LinkBoot } from '../services';
 import { LinkCommentRemote, LinkRemote, linkProblemOf, type LinkProblem } from '../sync/linkRemote';
 import { errorMessage, isNetworkError } from '../sync/types';
 import { WorkspaceContext, type ActiveWorkspace } from '../workspace';
-import { downloadLinkPages, LinkEditBar, linkUnsentPages } from './LinkEditBar';
+import { formatSize } from '../media/fileTrash';
+import type { MediaRecord } from '../media/mediaDb';
+import { downloadLinkPages, LinkEditBar, linkMediaBlob, linkUnsentMedia, linkUnsentPages } from './LinkEditBar';
+import { saveBlob } from './unsyncedDownload';
 import { setLightImages } from './sharpImages';
 import { Workspace } from './Workspace';
 
@@ -200,13 +203,16 @@ export function LinkApp({ entry }: { entry: LinkEntry }) {
 /**
  * El link dejó de andar (revocado, *Reset link*, vencido, el creador ya no comparte). Con *Can edit*, lo escrito en este
  * navegador no se pierde (E2.9): se dice cuántas páginas tienen algo sin mandar y se baja como archivo, con lo que se mandó
- * y no llegó a entrar.
+ * y no llegó a entrar; y las fotos y archivos que agregó y no terminaron de subir se bajan de a uno, con su original (con
+ * el link muerto no suben nunca; B1 de la auditoría de la 2b).
  */
 function DeadLink({ entry, remote, onLeave }: { entry: LinkEntry; remote: LinkRemote; onLeave: () => void }) {
   const tr = useT();
   const [unsent, setUnsent] = useState(0);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [media, setMedia] = useState<MediaRecord[]>([]);
+  const [mediaDone, setMediaDone] = useState<ReadonlySet<string>>(new Set());
   const sent = remote.linkEdits();
   // Lo que se mandó y puede no haber entrado: también lo de antes de recargar la app (guardado con el link, O9).
   const extra = [...new Set([...sent.waiting, ...sent.aside, ...remote.sentPages()])];
@@ -215,6 +221,10 @@ function DeadLink({ entry, remote, onLeave }: { entry: LinkEntry; remote: LinkRe
     // La app del link se cerró (sin la sincronización): se lee lo guardado aparte.
     linkUnsentPages(entry).then(
       (n) => live && setUnsent(n),
+      () => undefined,
+    );
+    linkUnsentMedia(entry).then(
+      (list) => live && setMedia(list),
       () => undefined,
     );
     return () => {
@@ -244,6 +254,37 @@ function DeadLink({ entry, remote, onLeave }: { entry: LinkEntry; remote: LinkRe
               {busy ? tr('common.preparing') : tr('link.edit.downloadThem')}
             </button>
           </p>
+        )}
+        {media.length > 0 && (
+          <div className="removed-media">
+            <span>{tr('link.dead.files', { count: media.length })}</span>
+            <ul>
+              {media.map((m) => (
+                <li key={m.id}>
+                  <button
+                    className="link"
+                    onClick={() => {
+                      setFailed(false);
+                      void linkMediaBlob(entry, m.id).then(
+                        (blob) => {
+                          if (!blob) return setFailed(true);
+                          saveBlob(blob, m.name);
+                          setMediaDone((prev) => new Set(prev).add(m.id));
+                        },
+                        () => setFailed(true),
+                      );
+                    }}
+                  >
+                    {m.name}
+                  </button>{' '}
+                  <span className="muted">
+                    {formatSize(m.size, tr.lang)}
+                    {mediaDone.has(m.id) ? ` · ${tr('removed.downloaded')}` : ''}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
         {failed && <p className="error">{tr('sync.downloadFailed')}</p>}
         <button className="link" onClick={onLeave}>

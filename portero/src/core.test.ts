@@ -103,7 +103,7 @@ function fakeWorld() {
   let metaGets = 0;
   const calls: string[] = [];
   /** Links públicos de la base: el token, qué archivos ve (con su nivel) y si se revocó o llegó a un tope. */
-  const links = new Map<string, { files: Record<string, number>; revoked?: boolean; limited?: boolean; mine?: string[] }>();
+  const links = new Map<string, { files: Record<string, number>; revoked?: boolean; limited?: boolean; mine?: string[]; oldBase?: boolean }>();
   /** Los headers de cada pedido a la base con un link (para ver que nunca va la sesión de nadie). */
   const linkCalls: { path: string; authorization: string | null; link: string | null }[] = [];
   const projects = new Map<string, BaseProject>();
@@ -170,6 +170,8 @@ function fakeWorld() {
       if (l.limited) return jsonRes({ code: 'P0001', message: 'link_rate_limited', details: 'pass' }, 400);
       // El proyecto, nunca: su huella (`project_mark`) y si el archivo es de este link (`mine`), como la 2b.
       const mark = createHash('sha256').update(`sdproject:${bf.project_id}`).digest('hex');
+      // `oldBase`: una base sin la migración de la 2b (no da `mine` ni `project_mark`).
+      if (l.oldBase) return jsonRes({ id: args.p_file, ...bf, levels: undefined, project_id: 'link-1', project_name: '', created_at: '2026-09-30T10:00:00Z', level, created_by: null, via_link: true });
       return jsonRes({ id: args.p_file, ...bf, levels: undefined, project_id: 'link-1', project_name: '', created_at: '2026-09-30T10:00:00Z', level, created_by: null, via_link: true, mine: !!l.mine?.includes(args.p_file ?? ''), project_mark: mark });
     }
     if (url.host === 'ws.example') {
@@ -2765,6 +2767,12 @@ describe('portero: link público Can edit sube lo suyo (Docs/Doc_Link_Publico.md
     expect(other.started.code).toBe('not_mine');
     // Uno de afuera de la rama.
     expect((await linkUpload(p, FILE_C, bytes(10))).start.status).toBe(404);
+    // Con la base sin la 2b (el portero se publica antes que la migración): sin `mine`, nada es suyo.
+    world.links.set(LINK, { files: { [FILE_A]: 3 }, mine: [FILE_A], oldBase: true });
+    const old = await linkUpload(p, FILE_A, bytes(10));
+    expect(old.start.status).toBe(403);
+    expect(old.started.code).toBe('not_mine');
+    world.links.set(LINK, { files: { [FILE_A]: 3, [FILE_B]: 3 }, mine: [FILE_A] });
     // El tamaño declarado tiene que ser el registrado.
     const bad = await linkCall(p, '/upload', { method: 'POST', body: JSON.stringify({ file: FILE_A, size: 11, day: '2026-10-03' }) });
     expect(bad.status).toBe(400);

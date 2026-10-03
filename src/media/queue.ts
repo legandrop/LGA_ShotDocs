@@ -648,14 +648,15 @@ export class MediaQueue {
   }
 
   /**
-   * Los archivos agregados en este dispositivo a esta página que todavía no están registrados en la base. Con un link
-   * (entrega 2b), el motor no manda lo escrito de la página mientras su documento muestre alguno: en la sala, una fila
-   * con un archivo que la base no conoce se apartaría (`foreign_media`) y, en cadena, todo lo que siga de esa sesión.
+   * Los archivos agregados en este dispositivo que todavía no están registrados en la base, de cualquier página. Con un
+   * link (entrega 2b), el motor no manda lo escrito de una página mientras su documento muestre alguno: en la sala, una
+   * fila con un archivo que la base no conoce se apartaría (`foreign_media`) y, en cadena, todo lo que siga de esa sesión.
+   * De cualquier página (O1 de la auditoría): el bloque recién soltado en una página y copiado a otra también espera ahí.
    */
-  async unregisteredOn(pageId: string): Promise<Set<string>> {
+  async unregistered(): Promise<Set<string>> {
     if (!this.db) return new Set();
     const pending = await this.db.getAllFromIndex('files', 'pending', 1);
-    return new Set(pending.filter((r) => r.pageId === pageId && !r.registered).map((r) => r.id));
+    return new Set(pending.filter((r) => !r.registered).map((r) => r.id));
   }
 
   /** Hay un archivo a medio guardar en el dispositivo: cerrar la app ahora lo perdería. */
@@ -1487,7 +1488,7 @@ export class MediaQueue {
           record = await this.patch(record.id, { registered: true });
         }
         // Un link no manda lo escrito de una página mientras muestre un archivo propio sin registrar
-        // (`unregisteredOn`): ya registrado, que el motor lo mande pronto.
+        // (`unregistered`): ya registrado, que el motor lo mande pronto.
         if (this.options.noUsage) this.onQueued?.();
       }
       // Una carpeta (P.9) no tiene original: lo de adentro lo sube su propia cola. Registrada, está lista (vuelve

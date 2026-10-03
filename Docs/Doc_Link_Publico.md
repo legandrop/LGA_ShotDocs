@@ -2486,7 +2486,7 @@ confirma, y su visitante solo lo puede poner en una fila si una página de la ra
    cadena, todo lo que siga de esa sesión en la página. *Opciones:* A) que la base retenga sin decidir una fila con un
    archivo que todavía no existe; B) que el dispositivo del visitante no mande lo escrito de una página mientras su
    documento muestre un archivo agregado ahí que la base no registró (`PageDocs.holdUpload`,
-   `MediaQueue.unregisteredOn`); C) nada. *Elegí B:* no toca la admisión ni la base, y con A un id inventado dejaría
+   `MediaQueue.unregistered`); C) nada. *Elegí B:* no toca la admisión ni la base, y con A un id inventado dejaría
    filas sin decidir que se vuelven a bajar en cada ciclo. Si el archivo no se puede registrar (un tope), la página espera
    con el aviso; sacar el bloque la destraba. *Si preferís otra:* A.
 2. **Un link sube solo lo que registró él.** *Qué pasaba:* el diseño abre `/upload` al link con nivel 3, y con *Can edit*

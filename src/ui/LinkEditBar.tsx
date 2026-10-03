@@ -1,6 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useT } from '../i18n';
 import { cleanVisitorName, linkStorageNames, setVisitorName, type LinkEntry } from '../linkMode';
+import { mediaDbName, openMediaDb, type MediaRecord } from '../media/mediaDb';
 import { openLocalDb } from '../sync/localDb';
 import type { LinkEdits, LinkRemote } from '../sync/linkRemote';
 import { PageTree } from '../sync/tree';
@@ -41,6 +42,34 @@ export async function linkUnsentPages(entry: LinkEntry): Promise<number> {
   const db = await openLocalDb(linkDbName(entry));
   try {
     return (await unsyncedDocStates(db)).length;
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Los originales que este navegador agregó con el link y no llegaron a Drive (con su archivo todavía acá): con el link
+ * muerto no suben nunca (con el link nuevo tampoco: son del viejo), así que la pantalla de "este link ya no anda" los
+ * ofrece de a uno (B1 de la auditoría de la 2b; E2.7). Se leen aparte, como las páginas: no hace falta la sincronización.
+ */
+export async function linkUnsentMedia(entry: LinkEntry): Promise<MediaRecord[]> {
+  const db = await openMediaDb(mediaDbName(linkDbName(entry)));
+  try {
+    const out: MediaRecord[] = [];
+    for (const r of await db.getAllFromIndex('files', 'pending', 1)) {
+      if ((await db.count('blobs', r.id)) > 0) out.push(r);
+    }
+    return out;
+  } finally {
+    db.close();
+  }
+}
+
+/** El original de un archivo de `linkUnsentMedia`, para bajarlo (`null` si ya no está). */
+export async function linkMediaBlob(entry: LinkEntry, id: string): Promise<Blob | null> {
+  const db = await openMediaDb(mediaDbName(linkDbName(entry)));
+  try {
+    return ((await db.get('blobs', id)) as Blob | undefined) ?? null;
   } finally {
     db.close();
   }

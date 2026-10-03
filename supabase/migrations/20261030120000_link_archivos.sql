@@ -217,8 +217,8 @@ create policy thumbs_insert_link on storage.objects
 -- 4. Lo que ve el equipo en Share: lo subido al Drive (E2.8, E2.10)
 -- ---------------------------------------------------------------------------------------------------
 -- El cuerpo de la 2a (20261028120000_link_editar.sql) y dos cambios: `limited` cuenta también los archivos del día
--- (`file`, `upload_bytes`), y `files` dice cuántos archivos registró el link y cuánto pesan, de por vida (Share avisa al
--- pasar 1 GB).
+-- (`file`, `upload_bytes`), y `files` dice cuántos archivos registró el link, cuánto pesan y cuánto llegó al Drive, de
+-- por vida (Share avisa al pasar 1 GB en el Drive).
 create or replace function private.public_link_json(l public.public_links)
 returns jsonb
 language sql stable security definer set search_path = ''
@@ -257,11 +257,45 @@ as $$
       from (select case when private.link_page_level(l, w.page_id) = 3 then 'waiting' else 'held' end as state, w.n
             from (select u.page_id, count(*) as n from public.public_link_updates u
                   where u.link_id = l.id and u.decided_at is null group by u.page_id) w) x),
-    'files', jsonb_build_object('total', l.files_total, 'bytes', l.upload_bytes_total));
+    'files', jsonb_build_object('total', l.files_total, 'bytes', l.upload_bytes_total,
+      -- Lo que llegó de verdad al Drive (O3 de la auditoría): lo registrado y cortado por Reset o un tope no cuenta.
+      'drive_bytes', (select coalesce(sum(f.size), 0) from public.files f where f.plink_id = l.id and f.drive_id is not null)));
 $$;
 
 -- ---------------------------------------------------------------------------------------------------
--- 5. Versión de la base: la app sube archivos por un link desde la 21. Nada cambia para la versión publicada.
+-- 5. Los archivos que subieron los links de una página, para el equipo (decisión de Lega, 2026-10-03)
+-- ---------------------------------------------------------------------------------------------------
+-- Lo que registra un link no se borra ni va solo a la papelera (su uso en `page_files` queda vivo aunque la fila que lo
+-- mostraba se haya apartado, o aunque nunca se haya escrito en una página). Para que el equipo lo vea y lo baje, Share lo
+-- lista a partir de los archivos de cada link de la página (`files.plink_id`: también los de un link reseteado o
+-- revocado, lo subido y no usado y lo registrado a mano), no de las filas apartadas. Lo ve quien ve lo apartado de esa
+-- página (`sees_deleted`). Sin bytes ni ids de Drive: el original se baja con el pase de siempre (el uso le da nivel).
+create function public.public_link_files(p_page uuid)
+returns table (id uuid, link_id uuid, link_live boolean, page_id uuid, name text, mime text, size bigint,
+               created_at timestamptz, uploaded boolean, trashed boolean)
+language plpgsql stable security definer set search_path = ''
+as $$
+begin
+  if p_page is null or not private.sees_deleted(p_page) then
+    raise exception 'page_not_found' using errcode = 'P0002';
+  end if;
+  return query
+    select f.id, f.plink_id, l.revoked_at is null,
+           (select pf.page_id from public.page_files pf where pf.file_id = f.id order by pf.created_at limit 1),
+           f.name, f.mime, f.size, f.created_at, f.drive_id is not null, f.trashed_at is not null
+    from public.public_links l
+    join public.files f on f.plink_id = l.id
+    where l.page_id = p_page
+    order by f.created_at desc, f.id
+    limit 500;
+end;
+$$;
+
+revoke all on function public.public_link_files(uuid) from public, anon;
+grant execute on function public.public_link_files(uuid) to authenticated;
+
+-- ---------------------------------------------------------------------------------------------------
+-- 6. Versión de la base: la app sube archivos por un link desde la 21. Nada cambia para la versión publicada.
 -- ---------------------------------------------------------------------------------------------------
 update public.workspace_settings set schema_version = 21 where id and schema_version < 21;
 
