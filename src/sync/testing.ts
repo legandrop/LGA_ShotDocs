@@ -56,6 +56,7 @@ import {
   ARCHIVE_COMMENTS_SCHEMA_VERSION,
 } from './comments';
 import { MentionsInbox, type InboxResponse, type MentionCandidate, type MentionsRemote } from './mentions';
+import type { AccessRequestsRemote } from './accessRequests';
 import { CLEAN_SCHEMA_VERSION } from './clean';
 import { normalizeStructure, seedIfEmpty } from './structure';
 import { PageTree } from './tree';
@@ -858,6 +859,19 @@ export class FakeServer {
   mentionSharingEnabled = false;
   /** Las llamadas a `share_for_mention` (`<página> <persona>`). */
   readonly mentionShares: string[] = [];
+  /** `access_requests` (P.30, entrega 2): los pedidos de acceso a un archivo; nada se borra. */
+  readonly accessRequests: {
+    id: string;
+    user_id: string;
+    file_id: string;
+    state: 'pending' | 'accepted' | 'declined' | 'void';
+    times: number;
+    asked_at: string;
+    decided_at: string | null;
+    decided_by: string | null;
+    page_id: string | null;
+    level: GrantLevel | null;
+  }[] = [];
   /** `comment_mentions`, con las filas sacadas (`removed_at`): nada se borra. */
   readonly mentions: {
     id: string;
@@ -2721,6 +2735,90 @@ export class FakeRemote
   }
 
   /** `private.can_share`. */
+  // --- pedidos de acceso (P.30, entrega 2): las reglas de 20261031120000_access_requests.sql, sin el tope ni las horas ---
+
+  /** Las páginas vivas que usan el archivo (sin los usos ajenos ni los sacados). */
+  private aliveFilePages(fileId: string): string[] {
+    return [...this.server.pageFiles]
+      .map((k) => k.split(':'))
+      .filter(([, f]) => f === fileId)
+      .map(([p]) => p)
+      .filter((p) => this.server.pages.has(p) && !this.server.pageInTrash(p) && !this.server.pageInDeletedProject(p));
+  }
+
+  /** `request_access`: `sent` exista o no el archivo (`void` si no vale), `has_access` si ya lo ve. */
+  async requestAccess(fileId: string): Promise<'sent' | 'has_access'> {
+    this.server.check();
+    if (!this.server.role(this.userId)) throw new RemoteError('not_member', true, '42501');
+    if (this.aliveFilePages(fileId).some((p) => this.server.pageLevel(this.userId, p) >= 1)) return 'has_access';
+    const now = new Date().toISOString();
+    const open = this.server.accessRequests.find((r) => r.user_id === this.userId && r.file_id === fileId && (r.state === 'pending' || r.state === 'void'));
+    if (open) {
+      open.times += 1;
+      open.asked_at = now;
+      return 'sent';
+    }
+    const declined = this.server.accessRequests.some((r) => r.user_id === this.userId && r.file_id === fileId && r.state === 'declined');
+    const valid = this.aliveFilePages(fileId).length > 0 && !declined;
+    this.server.accessRequests.push({
+      id: crypto.randomUUID(),
+      user_id: this.userId,
+      file_id: fileId,
+      state: valid ? 'pending' : 'void',
+      times: 1,
+      asked_at: now,
+      decided_at: null,
+      decided_by: null,
+      page_id: null,
+      level: null,
+    });
+    return 'sent';
+  }
+
+  /** `access_requests_pending` y `decide_access_request` de esta sesión. */
+  accessRequestsRemote(): AccessRequestsRemote {
+    const shareable = (fileId: string) => this.aliveFilePages(fileId).filter((p) => this.server.role(this.userId) !== 'guest' && this.canShare({ pageId: p }));
+    return {
+      pending: async () => {
+        this.server.check();
+        if (!this.server.role(this.userId) || this.server.role(this.userId) === 'guest') return [];
+        return this.server.accessRequests
+          .filter((r) => r.state === 'pending' && r.user_id !== this.userId && this.server.role(r.user_id))
+          .filter((r) => !this.aliveFilePages(r.file_id).some((p) => this.server.pageLevel(r.user_id, p) >= 1))
+          .map((r) => ({ r, pages: shareable(r.file_id) }))
+          .filter(({ pages }) => pages.length > 0)
+          .map(({ r, pages }) => ({
+            id: r.id,
+            userId: r.user_id,
+            email: this.server.members.get(r.user_id)?.email ?? '',
+            role: this.server.role(r.user_id)!,
+            fileId: r.file_id,
+            fileName: this.server.mediaFiles.get(r.file_id)?.name ?? '',
+            mime: this.server.mediaFiles.get(r.file_id)?.mime ?? '',
+            askedAt: r.asked_at,
+            times: r.times,
+            pages: pages.map((p) => ({ pageId: p, title: this.server.pages.get(p)?.title ?? '' })),
+          }));
+      },
+      decide: async (id, accept, pageId, level) => {
+        this.server.check();
+        const r = this.server.accessRequests.find((x) => x.id === id);
+        if (!r || r.state !== 'pending' || shareable(r.file_id).length === 0) throw new RemoteError('request_not_found', true, 'P0002');
+        const now = new Date().toISOString();
+        if (!accept) {
+          Object.assign(r, { state: 'declined', decided_at: now, decided_by: this.userId });
+          return 'declined';
+        }
+        if (!pageId || !shareable(r.file_id).includes(pageId)) throw new RemoteError('page_invalid', true, '22023');
+        if (!this.server.role(r.user_id)) throw new RemoteError('member_not_found', true, 'P0002');
+        // Nunca baja (LF11).
+        if (this.server.pageLevel(r.user_id, pageId) < levelValue(level)) await this.share(r.user_id, { pageId }, level);
+        Object.assign(r, { state: 'accepted', decided_at: now, decided_by: this.userId, page_id: pageId, level });
+        return 'accepted';
+      },
+    };
+  }
+
   private canShare(target: { projectId: string } | { pageId: string }): boolean {
     const uid = this.userId;
     const role = this.server.role(uid);

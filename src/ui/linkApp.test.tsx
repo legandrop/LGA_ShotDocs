@@ -122,3 +122,39 @@ describe('abrir un link sin red', () => {
     expect(host.textContent).toContain('This link has been used a lot today');
   });
 });
+
+describe('el link muerto en la dirección de un archivo (P.30, LF16)', () => {
+  const FILE = '0f8fad5b-d9cb-469f-a165-70867728950e';
+  afterEach(() => {
+    history.replaceState(null, '', '/');
+    sessionStorage.clear();
+  });
+
+  it('Sign in instead deja de abrir el link en esta pestaña y pasa a la dirección de miembro, sin el token', async () => {
+    stubFetch(() => Promise.resolve(json(404, { message: 'link_not_found', code: 'P0002', details: null, hint: null })));
+    history.replaceState(null, '', `/f/wanka_1/${FILE}`);
+    const entry = entryFor(true);
+    sessionStorage.setItem('shotdocs-tab-link', entry.id);
+    expect(readLinks().active).toBe(entry.id);
+    const host = await mount(entry);
+    const button = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Sign in instead');
+    expect(button).toBeTruthy();
+    // jsdom no recarga (lo avisa por consola): alcanza con lo que queda escrito antes de recargar.
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await act(async () => button!.click());
+    quiet.mockRestore();
+    // Recargar no vuelve al link muerto (O2): ni el de la pestaña ni el último abierto.
+    expect(sessionStorage.getItem('shotdocs-tab-link')).toBeNull();
+    expect(readLinks().active).toBeNull();
+    expect(location.pathname).toBe(`/f/wanka_1/${FILE}`);
+    expect(location.hash.startsWith('#ws=')).toBe(true);
+    expect(location.hash).not.toContain(entry.token);
+  });
+
+  it('en la página de un link (no un archivo), sin Sign in instead', async () => {
+    stubFetch(() => Promise.resolve(json(404, { message: 'link_not_found', code: 'P0002', details: null, hint: null })));
+    const host = await mount(entryFor(true));
+    expect(host.textContent).toContain('This link no longer works');
+    expect(host.textContent).not.toContain('Sign in instead');
+  });
+});

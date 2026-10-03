@@ -73,6 +73,12 @@ export interface PublicLinkFile {
   trashed: boolean;
 }
 
+/**
+ * Cuántos archivos devuelve `public_link_files` como mucho (el `limit 500` de la migración 20261030120000). Si llegan tantos, el
+ * total de verdad puede ser mayor: quien muestra la cantidad dice «o más» (O-R3 de la re-verificación de la entrega 2b).
+ */
+export const PUBLIC_LINK_FILES_MAX = 500;
+
 /** Los archivos que subieron los links de la página, también los anteriores. `page_not_found` si no ve lo borrado. */
 export async function getPublicLinkFiles(client: SupabaseClient, pageId: string): Promise<PublicLinkFile[]> {
   const rows = await call<Record<string, unknown>[] | null>(client, 'public_link_files', { p_page: pageId });

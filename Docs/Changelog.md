@@ -12,6 +12,28 @@ papelera para todos. Un archivo de otro proyecto que solo usaban sus páginas de
 
 [Borrar un proyecto para siempre - pasados los 30 días, dueños y admins escriben la palabra en su renglón de la papelera y sale para siempre sin borrar ninguna fila; la carpeta va antes a la papelera de Drive (migración, schema 23)]
 
+v0.166 :
+
+**Links del PDF, entrega 2: *Request access*.** Quien abría la dirección de un archivo sin permiso solo leía «pedíselo a
+quien te compartió el documento»: no había cómo pedirlo ni dónde verlo. Ahora la tabla `access_requests` (cerrada con
+RLS, sin políticas) y tres funciones: pedir responde lo mismo exista o no el archivo, con tope de 20 por día; la lista la
+ve quien puede compartir una página viva que usa el archivo; decidir rechaza solo si se lo pide y nunca baja un permiso.
+La pantalla `/f/` suma *Request access* con el aviso de quién lo verá, recuerda cuándo se pidió, vuelve a preguntar cada
+minuto, reintenta al volver la red y *Close* vuelve a donde estaba. La campana y *Share* muestran los pedidos con la
+ventana de decidir. Migración `20261031120000_access_requests` (schema 22).
+[ Request access en los links del PDF - pedir acceso a un archivo desde /f/, los pedidos en la campana y en Share con dar acceso o rechazar, la tabla access_requests con RLS (schema 22) y sus pruebas SQL con mutantes ]
+
+v0.165 :
+
+**Observaciones del roadmap y de la 2b.** (1) La barra de los links seguía con el globo de BlockNote: ahora usa el
+tooltip de la app; *Edit link* queda sin globo. (2) En oscuro los resaltados gris, amarillo y naranja daban 2,32 a 3,69:1
+con el texto por defecto: sus fondos pasan a 4,7:1; el claro y el PDF no cambian. (3) El botón de comentar del teléfono
+tapaba hasta 8 px de un renglón largo: ahora mide el margen. (4) El zip lleva el contraste de quien exporta, como el PDF.
+(5) *Export* sin red avisa que los links a los archivos no usan el link público. (6) *Share* titulaba con los archivos
+que llegaron (la base devuelve hasta 500): en el tope dice *500 or more*. Pruebas nuevas del link muerto con varios
+archivos y del *Download it* de la insignia.
+[ Observaciones - barra de links con los tooltips de la app, resaltados en oscuro a 4,5:1, botón de comentar del teléfono dentro del margen, zip con el contraste elegido, aviso de Export sin red y Share con 500 o más archivos del link ]
+
 v0.164 :
 
 **Link público 2b y links a los archivos en el PDF.** (1) Con *Can edit* el visitante no podía sumar fotos ni archivos:

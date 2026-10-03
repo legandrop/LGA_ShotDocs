@@ -4,6 +4,7 @@ import '../i18n/lazy/teamDialogs';
 import { usePermissions, useServices, useTree } from '../services';
 import { GRANT_LEVELS, LEVEL_LABELS, ROLE_LABELS, levelValue, type GrantLevel, type Role } from '../sync/access';
 import type { AccessRow, MemberRow } from '../sync/remote';
+import { ShareRequests } from './AccessRequests';
 import { LinkShare } from './LinkShare';
 import { inviteAndCopy, useInviteLink } from './MembersDialog';
 import { ShareGateNotes, UNSYNCED_BEFORE_SHARE, useShareGate } from './shareGate';
@@ -192,6 +193,8 @@ export function ShareDialog({ target, onClose }: { target: ShareTarget; onClose:
         <h2>{tr('share.title', { title })}</h2>
         <p className="muted team-lead">{isProject ? tr('share.projectScope') : tr('share.pageScope')}</p>
         {!perms.canInvite && <p className="muted team-lead">{tr('share.creatorOnly')}</p>}
+        {/* Los pedidos de acceso a archivos de esta página (Doc_Links_PDF.md, 5.3). */}
+        {!isProject && <ShareRequests pageId={target.pageId} onDecided={() => setReload((n) => n + 1)} />}
 
         <form className="team-invite" onSubmit={(e) => void add(e)}>
           <div className="team-invite-row">

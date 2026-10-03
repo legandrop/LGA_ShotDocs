@@ -6,6 +6,7 @@ import * as Y from 'yjs';
 import { prefs } from '../prefs';
 import { ServicesContext, type Services } from '../services';
 import { block, group } from '../sync/historyTesting';
+import { PUBLIC_LINK_FILES_MAX } from '../sync/publicLinks';
 import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
@@ -291,6 +292,44 @@ describe('los archivos de los links de la página, en Share (decisión de Lega, 
     expect(rows.map((li) => !!li.querySelector('button'))).toEqual([true, false, true]);
     // Share dice lo que llegó al Drive, no lo registrado (O3).
     expect(host.textContent).toContain('(0.0 MB in your Drive)');
+  });
+
+  it('el tope de la app es el `limit` de public_link_files en la migración (si uno cambia, el otro también)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const sql = readFileSync('supabase/migrations/20261030120000_link_archivos.sql', 'utf8');
+    const body = sql.slice(sql.indexOf('create function public.public_link_files'));
+    expect(Number(/limit (\d+);/.exec(body)![1])).toBe(PUBLIC_LINK_FILES_MAX);
+  });
+
+  // O-R3 de la re-verificación: la base devuelve hasta 500; con 500 el total de verdad puede ser mayor y el título no puede
+  // afirmar «500 files».
+  it('con la lista cortada en el tope (500) el título dice «o más»; con 499 dice la cantidad exacta', async () => {
+    const many = (n: number) => Array.from({ length: n }, (_, i) => row(`f${String(i).padStart(3, '0')}`, { uploaded: false }));
+    for (const [n, title, capped] of [
+      [499, "499 files were added through this page's link", false],
+      [500, "500 or more files were added through this page's link", true],
+    ] as const) {
+      prefs.set({ language: 'en' });
+      const { server, d, page } = await teamDevice();
+      server.enableLinkFiles();
+      await d.engine.syncNow();
+      const host = await mount(services(d, filesClient(many(n)).client), <LinkShare pageId={page} onClose={() => undefined} />);
+      const list = host.querySelector('.link-files-list')!;
+      expect(list.querySelector('strong')!.textContent).toBe(title);
+      // Se muestran 20 y el resto se cuenta; con el tope se aclara que hay más que no se listan.
+      expect(list.querySelectorAll('li')).toHaveLength(20);
+      expect(list.textContent).toContain(`and ${n - 20} more`);
+      expect(list.textContent!.includes("plus older ones that aren't listed")).toBe(capped);
+      act(() => roots.pop()!.unmount());
+    }
+    // En castellano.
+    prefs.set({ language: 'es' });
+    const { server, d, page } = await teamDevice();
+    server.enableLinkFiles();
+    await d.engine.syncNow();
+    const host = await mount(services(d, filesClient(many(500)).client), <LinkShare pageId={page} onClose={() => undefined} />);
+    expect(host.querySelector('.link-files-list strong')!.textContent).toBe('Se sumaron 500 archivos o más con el link de esta página');
+    prefs.set({ language: 'en' });
   });
 
   it('sin permiso (no ve lo borrado) o con la base anterior a la 21: no hay lista', async () => {

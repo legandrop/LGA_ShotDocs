@@ -58,8 +58,19 @@ export function pagePath(id: string): string {
   return `/p/${id}`;
 }
 
+/** Desde dónde se abrió adentro de la app la dirección de un archivo (O7): *Close* vuelve ahí. */
+let fileReturn: string | null = null;
+
+/** A dónde vuelve *Close* en la dirección de un archivo: donde estaba, si llegó desde la app; si no, el inicio. */
+export function fileReturnPath(): string {
+  return fileReturn ?? '/';
+}
+
 export function navigate(path: string, replace = false): void {
   if (path === location.pathname || path === location.pathname + location.search) return;
+  if (path.startsWith('/f/')) {
+    if (!location.pathname.startsWith('/f/')) fileReturn = location.pathname + location.search;
+  } else fileReturn = null;
   if (replace) history.replaceState(null, '', path);
   else history.pushState(null, '', path);
   window.dispatchEvent(new Event(EVENT));
