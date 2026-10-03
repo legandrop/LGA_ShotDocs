@@ -130,6 +130,14 @@ export const dictation = {
     en: "More than one page could be the one of shot {shot}: nothing is proposed there.",
     es: "Más de una página podría ser la del plano {shot}: no se propone nada ahí.",
   },
+  'dictation.shotPageNotText': {
+    en: "{where} has a photo or a line break: it's left as it is.",
+    es: "{where} tiene una foto o un salto de renglón: queda como está.",
+  },
+  'dictation.shotPageUnavailable': {
+    en: "{page}, the page of that shot, isn't fully on this device yet: nothing is proposed there.",
+    es: "{page}, la página de ese plano, todavía no está entera en este dispositivo: no se propone nada ahí.",
+  },
   'dictation.shotPageReadOnly': { en: "You can't edit {page}, the page of that shot.", es: "No podés editar {page}, la página de ese plano." },
   'dictation.shotPageFailed': {
     en: "Not written in {where}: it changed, or you can't edit it anymore. The rest was applied.",

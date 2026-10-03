@@ -110,6 +110,14 @@ export function DictationHost() {
 }
 
 /**
+ * Si se muestra el botón del teléfono: con Editar, o con Comentar fuera de un link público (el visitante de un link no
+ * dicta, sección 7), y si la política del workspace no apagó el asistente.
+ */
+export function fabVisible(o: { canEdit: boolean; canComment: boolean; link: boolean; policyOff: boolean }): boolean {
+  return !o.policyOff && (o.canEdit || (o.canComment && !o.link));
+}
+
+/**
  * El botón del teléfono: con Editar (o Comentar, para *Add as comment*, V4) y si la política del workspace no apagó el
  * asistente. En la compu no se ve.
  */
@@ -117,14 +125,13 @@ function DictateFab({ pageId }: { pageId: string }) {
   const perms = usePermissions();
   // Con un link público no: el visitante no dicta (Doc_Dictado.md, sección 7).
   const link = useLinkMode();
-  const canComment = useCommentAccess(pageId).canComment && !link;
+  const { canComment } = useCommentAccess(pageId);
   const { workspace, user } = useServices();
   const tr = useT();
   const workspaceKey = workspace.config.localKey || workspace.config.url;
   // Las notas guardadas para esta página (V2): el número va sobre el botón.
   const saved = useQueuedNotes(user.email, workspaceKey).filter((n) => n.pageId === pageId).length;
-  if (!perms.canEditPage(pageId) && !canComment) return null;
-  if (cachedPolicyValue(workspaceKey) === 'off') return null;
+  if (!fabVisible({ canEdit: perms.canEditPage(pageId), canComment, link: !!link, policyOff: cachedPolicyValue(workspaceKey) === 'off' })) return null;
   return (
     <button className="dictate-fab" aria-label={saved > 0 ? tr('shell.dictateSaved', { count: saved }) : tr('shell.dictate')} onClick={() => openDictation()}>
       <MicIcon size={26} />

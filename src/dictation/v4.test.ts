@@ -8,6 +8,9 @@ import { recentForRequest, type AppliedEntry } from './corrections';
 import { captureDictateLink, peekDictateLink, resetDictateLink, takeDictateLink, textOfHash } from './dictateLink';
 import { answer, mapOf, reportEditor, targetBy, WORDS } from './fixtures/report';
 import { buildPlaceRequest } from './prompt';
+import { paraOf } from './shotPage';
+import { fabVisible } from './DictationHost';
+import * as Y from 'yjs';
 
 // Lo puro de la entrega V4 de *Dictate to report* (Docs/Doc_Dictado.md, fila V4 y 5.6/5.7): el nombre de un plano, los
 // planos de la página, el plano activo como señal propia, las correcciones encadenadas con la dirección de ahora, el
@@ -185,3 +188,49 @@ function resetDictateLinkMemoryOnly(): void {
   resetDictateLink();
   if (saved) sessionStorage.setItem('shotdocs-dictate-link', saved);
 }
+
+describe('correcciones de la auditoría (lo puro)', () => {
+  /** Una tabla de Yjs a mano: una fila con una celda y su párrafo, y un párrafo suelto. */
+  function tableDoc(gc: boolean) {
+    const doc = new Y.Doc({ gc });
+    const frag = doc.getXmlFragment('document-store');
+    const table = new Y.XmlElement('table');
+    const other = new Y.XmlElement('paragraph');
+    frag.insert(0, [table, other]);
+    const row = new Y.XmlElement('tableRow');
+    table.insert(0, [row]);
+    const cell = new Y.XmlElement('tableCell');
+    row.insert(0, [cell]);
+    const para = new Y.XmlElement('tableParagraph');
+    cell.insert(0, [para]);
+    const text = new Y.XmlText();
+    para.insert(0, [text]);
+    text.insert(0, '50 mm');
+    const rel = (t: Y.XmlElement) => Y.relativePositionToJSON(Y.createRelativePositionFromTypeIndex(t, 0));
+    return { doc, table, para, other, rel };
+  }
+
+  it('O2: paraOf no da una celda de una fila borrada (aunque el documento guarde lo borrado) ni algo que no es una celda', () => {
+    const { doc, table, para, other, rel } = tableDoc(false);
+    const cell = rel(para);
+    expect(paraOf(doc, cell)).toBe(para);
+    expect(paraOf(doc, rel(other))).toBeNull();
+    table.delete(0, 1);
+    expect(paraOf(doc, cell)).toBeNull();
+  });
+
+  it('O8: /dictate saca los caracteres de control y de dirección, y no deja medio emoji al cortar', () => {
+    expect(textOfHash('#' + encodeURIComponent('a\u0000b\u0007c‮d⁦e\tf\ng'))).toBe('abcde\tf\ng');
+    const long = 'x'.repeat(1999) + '😀';
+    expect(textOfHash('#' + encodeURIComponent(long))).toBe('x'.repeat(1999));
+  });
+
+  it('O5: el botón del teléfono: con Editar, o con Comentar fuera de un link público; nunca con la política apagada', () => {
+    const v = (o: Partial<Parameters<typeof fabVisible>[0]>) => fabVisible({ canEdit: false, canComment: false, link: false, policyOff: false, ...o });
+    expect(v({ canEdit: true })).toBe(true);
+    expect(v({ canComment: true })).toBe(true);
+    expect(v({ canComment: true, link: true })).toBe(false);
+    expect(v({})).toBe(false);
+    expect(v({ canEdit: true, policyOff: true })).toBe(false);
+  });
+});

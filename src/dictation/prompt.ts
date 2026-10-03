@@ -46,7 +46,7 @@ Rules:
 - Keep every ⟦photo:N⟧ and ⟦link:N⟧…⟦/link⟧ of the old text in "new". Do not add links, images, HTML or Markdown.
 - One note can bring several changes (at most 20). Never invent information that is not in the note.
 - What you cannot place goes in "unplaced", in the words of the note. Do not drop anything.
-- "RECENT" lists changes applied in this page a moment ago, oldest first, with the address each place has now; the newest is marked (last). A correction that doesn't name another place ("no, it was a 35", "no, era un 35", "mejor 40") changes the place of the (last) change again, with the text it has now in the map as "old". If the note names the place ("no, the T-stop was 4"), correct that one.`;
+- "RECENT" lists changes applied in this page a moment ago, oldest first, with the address each place has now; the newest is marked (last). A correction ("no, it was a 35", "no, era un 35", "mejor 40") changes again one of those places, with the text it has now in the map as "old". If the note names the place ("no, the T-stop was 4"), correct that one. If it doesn't, correct the recent place that holds that kind of value, judging by its column or label and by the value it has: a focal length ("35", "35 mm") goes back to the lens, a stop ("T4", "f/2.8") to the T-stop, a take number to the takes. Use the (last) change only to break a tie, when the value fits more than one recent place equally well; if it fits none, ask.`;
 
 const escapeTags = (s: string) => s.replace(/<(?=\/?(?:note|page_map)\b)/gi, '\\<');
 

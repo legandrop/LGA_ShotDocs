@@ -13,7 +13,8 @@ import { builtinBlocks } from '../templates/builtin';
 import { mountEditor, pmFromY, undoManager, unmountAll, view, yText, type Editor } from '../ui/collabHarness';
 import { schema as mainSchema } from '../ui/fixtures/editorSchemaMain';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
-import { closeAssistant, closeAssistantSettings, openAssistantSettings, registerAssistantTarget, useAssistantUi, type AssistantEditor } from '../assistant/assistantUi';
+import { askSignOutOthers, closeAssistant, closeAssistantSettings, closeSignOutOthers, openAssistantSettings, registerAssistantTarget, useAssistantUi, type AssistantEditor } from '../assistant/assistantUi';
+import { LinkContext, setVisitorName, type LinkInfo } from '../linkMode';
 import { AssistantSettings } from '../assistant/AssistantSettings';
 import { closeAssistantDb, saveSettings } from '../assistant/keyStore';
 import { DictationPanel, DOUBLE_TAP_MS, forgetRecent } from './DictationPanel';
@@ -21,7 +22,7 @@ import { closeDictation, dictationOpen, openDictation } from './dictationUi';
 import { closeDictationDb } from './drafts';
 import { captureDictateLink, resetDictateLink } from './dictateLink';
 import { answer, cellText, cursorAt, mapOf, reportBlocks, WORDS } from './fixtures/report';
-import { applyShotPages, factValue, proposeShotPages } from './shotPage';
+import { applyShotPages, factValue, proposeShotPages, type ShotPageDeps } from './shotPage';
 import { validateAnswer } from './answer';
 
 // La entrega V4 de *Dictate to report* con el editor real y un proveedor simulado (Docs/Doc_Dictado.md, fila V4 de la
@@ -162,7 +163,7 @@ interface Setup {
   remount: () => Promise<void>;
 }
 
-async function setup(opts: { editable?: boolean; breakdown?: { title: string; shot?: string; lens?: string }[] } = {}): Promise<Setup> {
+async function setup(opts: { editable?: boolean; breakdown?: { title: string; shot?: string; lens?: string }[]; link?: boolean } = {}): Promise<Setup> {
   const server = new FakeServer();
   server.enableTeam();
   const device = await makeDevice(server);
@@ -186,9 +187,11 @@ async function setup(opts: { editable?: boolean; breakdown?: { title: string; sh
     roots.push(root);
     act(() =>
       root.render(
-        <ServicesContext.Provider value={services(device)}>
-          <DictationPanel pageId={pageId} />
-        </ServicesContext.Provider>,
+        <LinkContext.Provider value={opts.link ? ({ entry: { id: 'link-1' }, domain: 'x.supabase.co', linkId: 'l1', pageId } as unknown as LinkInfo) : null}>
+          <ServicesContext.Provider value={services(device)}>
+            <DictationPanel pageId={pageId} />
+          </ServicesContext.Provider>
+        </LinkContext.Provider>,
       ),
     );
     await wait(80);
@@ -600,5 +603,245 @@ describe('V4 · restos del asistente', () => {
     expect(s.host.querySelector('.voice-settings')).toBeNull();
     expect(dictationOpen()).toBe(true);
     delete (navigator as { mediaDevices?: unknown }).mediaDevices;
+  });
+});
+
+describe('V4 · correcciones de la auditoría', () => {
+  /** La página del plano 012_010 (su id). */
+  const shotPageOf = (s: Setup, title = '012_010') => s.device.tree.roots(s.device.tree.get(s.pageId)!.workspace_id).find((r) => r.title === title)!.id;
+  type Perms = { known: boolean; canEditPage(id: string): boolean };
+  const depsOf = (s: Setup, over: { perms?: Perms; tree?: unknown; docs?: unknown } = {}) =>
+    ({ tree: over.tree ?? s.device.tree, docs: over.docs ?? s.device.docs, perms: () => over.perms ?? { known: true, canEditPage: () => true } }) as ShotPageDeps;
+  const lensPlan = (s: Setup) => {
+    const map = mapOf(s.ed);
+    const plan = validateAnswer(answer([LENS]), map, { note: 'el 12_010 setup 3 con un 50', words: WORDS }, { word: 'Shot', checks: [] });
+    if (plan === 'unreadable') throw new Error('no');
+    return { map, plan };
+  };
+  /** Cambia el Y.Doc guardado de una página como una edición local (sin editor). */
+  const change = (s: Setup, pageId: string, fn: (doc: Y.Doc) => void) =>
+    s.device.docs.edit(pageId, (doc) => s.device.docs.applyLocal(pageId, doc, ORIGIN_REPLACE, () => fn(doc))).then(() => s.device.docs.flush(pageId));
+  /** El párrafo de la celda de valor de la fila *Lens* de la ficha. */
+  const lensPara = (doc: Y.Doc): Y.XmlElement => {
+    const stack: unknown[] = doc.getXmlFragment('document-store').toArray();
+    while (stack.length) {
+      const n = stack.pop();
+      if (!(n instanceof Y.XmlElement)) continue;
+      if (n.nodeName === 'tableRow') {
+        const [a, b] = n.toArray().filter((x): x is Y.XmlElement => x instanceof Y.XmlElement);
+        if ((a.toArray()[0] as Y.XmlElement).toArray().map((t) => (t as Y.XmlText).toString()).join('') === 'Lens') return b.toArray()[0] as Y.XmlElement;
+      }
+      stack.push(...n.toArray());
+    }
+    throw new Error('sin Lens');
+  };
+
+  it('O1: después de lente, T2.8, foco y «la buena es la 4», «no, era un 35» va con el lente en RECENT y la regla del mismo campo', async () => {
+    const s = await setup();
+    const p = provider(
+      answer([LENS]),
+      answer([{ ...TSTOP, new: 'T2.8' }]),
+      answer([{ ...TSTOP, old: 'T2.8', new: 'T2.8 · 3 m' }]),
+      answer([CIRCLED]),
+      answer([{ ...LENS, old: '50 mm', new: '35 mm' }]),
+    );
+    for (const note of ['el 12_010 setup 3 con un 50', 'a T2.8', 'foco a tres metros', 'la buena es la 4']) {
+      await place(s.host, note);
+      await click(button(s.host, 'Apply'));
+      await next(s.host);
+    }
+    await place(s.host, 'no, era un 35');
+    const sent = p.user(4);
+    // Un renglón por lugar: el lente (no es el último), el T-stop juntado y las tomas como (last).
+    expect(sent).toContain(
+      'RECENT\n' +
+        '- T3 r3 c3 (Setups & takes › 12 · 010 · 3 › Lens · Filters (ND, diffusion, pola)): "" → "50 mm"\n' +
+        '- T3 r3 c4 (Setups & takes › 12 · 010 · 3 › T-stop · Focus): "" → "T2.8 · 3 m"\n' +
+        '- T3 r3 c7 (Setups & takes › 12 · 010 · 3 › Circled takes · Notes): "" → "4" (last)',
+    );
+    const system = (JSON.parse(p.calls[4].body) as Body).system;
+    // La regla: el lugar que guarda ese tipo de valor (un 35 vuelve al lente); el (last) solo desempata.
+    expect(system).toContain('correct the recent place that holds that kind of value');
+    expect(system).toContain('a focal length ("35", "35 mm") goes back to the lens');
+    expect(system).toContain('Use the (last) change only to break a tie');
+    expect(system).not.toContain('changes the place of the (last) change again');
+    await click(button(s.host, 'Apply'));
+    expect([cellText(s.ed, 3, 3, 3), cellText(s.ed, 3, 3, 7)]).toEqual(['35 mm', '4']);
+  });
+
+  it('O2: el permiso adentro del candado (se perdió mientras se esperaba) y afuera (sin permiso ni se abre la página)', async () => {
+    const s = await setup({ breakdown: [{ title: '012_010' }] });
+    const other = shotPageOf(s);
+    const { map, plan } = lensPlan(s);
+    const ok = await proposeShotPages(depsOf(s), s.pageId, map, plan.changes, 1000);
+    expect(ok.changes).toHaveLength(1);
+    // Adentro: la primera mirada (afuera) da que sí, la de adentro del candado que no.
+    let calls = 0;
+    const late = await applyShotPages(depsOf(s, { perms: { known: true, canEditPage: () => ++calls <= 1 } }), s.pageId, ok.changes);
+    expect(late.written).toEqual([]);
+    expect(calls).toBe(2);
+    expect(await lensOf(s.device, other)).toBe('');
+    // Afuera: sin permiso, ni siquiera se abre la página.
+    const edit = vi.spyOn(s.device.docs, 'edit');
+    const none = await applyShotPages(depsOf(s, { perms: { known: true, canEditPage: () => false } }), s.pageId, ok.changes);
+    expect(none.written).toEqual([]);
+    expect(edit).not.toHaveBeenCalled();
+    edit.mockRestore();
+  });
+
+  it('O2: contenido que esta versión no conoce: no se propone; si aparece después, no se escribe', async () => {
+    const s = await setup({ breakdown: [{ title: '012_010' }, { title: '012_011' }] });
+    const other = shotPageOf(s);
+    const { map, plan } = lensPlan(s);
+    const ok = await proposeShotPages(depsOf(s), s.pageId, map, plan.changes, 1000);
+    expect(ok.changes).toHaveLength(1);
+    const addUnknown = (doc: Y.Doc) => {
+      const group = doc.getXmlFragment('document-store').toArray()[0] as Y.XmlElement;
+      const block = new Y.XmlElement('blockContainer');
+      group.insert(group.length, [block]);
+      block.insert(0, [new Y.XmlElement('futureBlock')]);
+    };
+    await change(s, other, addUnknown);
+    const res = await applyShotPages(depsOf(s), s.pageId, ok.changes);
+    expect(res.written).toEqual([]);
+    expect(await lensOf(s.device, other)).toBe('');
+    expect(await proposeShotPages(depsOf(s), s.pageId, map, plan.changes, 1000)).toEqual({ changes: [], notes: [] });
+  });
+
+  it('O2: la ficha a medio bajar, ilegible o rechazada no se propone y dice por qué (O7)', async () => {
+    const s = await setup({ breakdown: [{ title: '012_010' }] });
+    const { map, plan } = lensPlan(s);
+    const gapTree = Object.assign(Object.create(s.device.tree), { contentGap: () => 'missing', hasUnsentCreate: () => false });
+    const missing = await proposeShotPages(depsOf(s, { tree: gapTree }), s.pageId, map, plan.changes, 1000);
+    expect(missing).toEqual({ changes: [], notes: [{ shot: '12_010', kind: 'unavailable', pageTitle: '012_010' }] });
+    for (const flag of ['unreadable', 'rejected']) {
+      const docs = Object.assign(Object.create(s.device.docs), { stateOf: async (id: string) => ({ ...(await s.device.docs.stateOf(id)), [flag]: true }) });
+      const r = await proposeShotPages(depsOf(s, { docs }), s.pageId, map, plan.changes, 1000);
+      expect(r.notes.map((n) => n.kind)).toEqual(['unavailable']);
+      expect(r.changes).toEqual([]);
+    }
+    // Lo que dice la vista previa.
+    provider(answer([LENS]));
+    s.device.tree.contentGap = () => 'missing';
+    await place(s.host, 'el 12_010 setup 3 con un 50');
+    expect(s.host.querySelector('.dictation-extra')!.textContent).toContain("012_010, the page of that shot, isn't fully on this device yet");
+  });
+
+  it('O2: una página con el título del plano pero cuya ficha es de OTRO plano no se toma', async () => {
+    const s = await setup({ breakdown: [{ title: '012_010', shot: '012_011' }] });
+    const { map, plan } = lensPlan(s);
+    expect(await proposeShotPages(depsOf(s), s.pageId, map, plan.changes, 1000)).toEqual({ changes: [], notes: [] });
+  });
+
+  it('O2: la guarda es exacta: un espacio escrito entre la vista previa y Apply ya frena', async () => {
+    const s = await setup({ breakdown: [{ title: '012_010' }] });
+    const other = shotPageOf(s);
+    const { map, plan } = lensPlan(s);
+    const ok = await proposeShotPages(depsOf(s), s.pageId, map, plan.changes, 1000);
+    await writeLens(s.device, other, ' ');
+    expect((await applyShotPages(depsOf(s), s.pageId, ok.changes)).written).toEqual([]);
+    expect(await lensOf(s.device, other)).toBe(' ');
+  });
+
+  it('O9: si el documento vivo no es el de la página (quedó viejo), no se escribe', async () => {
+    const s = await setup({ breakdown: [{ title: '012_010' }] });
+    const other = shotPageOf(s);
+    const { map, plan } = lensPlan(s);
+    const ok = await proposeShotPages(depsOf(s), s.pageId, map, plan.changes, 1000);
+    const docs = Object.assign(Object.create(s.device.docs), { peek: () => null });
+    expect((await applyShotPages(depsOf(s, { docs }), s.pageId, ok.changes)).written).toEqual([]);
+    expect(await lensOf(s.device, other)).toBe('');
+  });
+
+  it('O7: una celda de la ficha con algo que no es texto no se toca y lo dice así', async () => {
+    const s = await setup({ breakdown: [{ title: '012_010' }] });
+    const other = shotPageOf(s);
+    await change(s, other, (doc) => lensPara(doc).insert(0, [new Y.XmlElement('hardBreak')]));
+    provider(answer([LENS]));
+    await place(s.host, 'el 12_010 setup 3 con un 50');
+    expect(s.host.querySelector('.dictation-extra input')).toBeNull();
+    expect(s.host.querySelector('.dictation-extra')!.textContent).toContain('Shot Breakdown › 012_010 › Lens has a photo or a line break');
+  });
+
+  it('O4: la ficha tildada no se escribe si después se destilda su cambio del reporte', async () => {
+    const s = await setup({ breakdown: [{ title: '012_010' }] });
+    const other = shotPageOf(s);
+    provider(answer([LENS, TSTOP]));
+    await place(s.host, 'el 12_010 setup 3 con un 50 a T2.8');
+    await click(s.host.querySelector<HTMLInputElement>('.dictation-extra input')!);
+    await click(s.host.querySelectorAll<HTMLInputElement>('.dictation-changes input[type=checkbox]')[0]);
+    await click(button(s.host, 'Apply'));
+    await wait(300);
+    expect([cellText(s.ed, 3, 3, 3), cellText(s.ed, 3, 3, 4)]).toEqual(['', 'T2.8 · 3 m']);
+    expect(await lensOf(s.device, other)).toBe('');
+  });
+
+  it('O4: lo escrito justo antes de cerrar la hoja (menos de 250 ms) queda guardado', async () => {
+    const s = await setup();
+    await type(s.host, 'llovió a la tarde');
+    await s.remount();
+    expect(s.host.querySelector('textarea')!.value).toBe('llovió a la tarde');
+  });
+
+  it('O4: Stop mientras se busca la página del plano: la vista previa no aparece', async () => {
+    const s = await setup({ breakdown: [{ title: '012_010' }] });
+    provider(answer([LENS]));
+    let release: () => void = () => undefined;
+    const slow = new Promise<void>((r) => (release = r));
+    const real = s.device.docs.indexSnapshot.bind(s.device.docs);
+    const spy = vi.spyOn(s.device.docs, 'indexSnapshot').mockImplementation(async (id) => {
+      await slow;
+      return real(id);
+    });
+    await type(s.host, 'el 12_010 setup 3 con un 50');
+    await click(button(s.host, 'Place'));
+    await until(() => spy.mock.calls.length > 0);
+    await click(button(s.host, 'Stop'));
+    release();
+    await wait(300);
+    expect(button(s.host, 'Apply')).toBeUndefined();
+    expect(s.host.querySelector('textarea')).toBeTruthy();
+    spy.mockRestore();
+  });
+
+  it('O5: el visitante de un link público no tiene Add as comment (aunque pueda comentar)', async () => {
+    setVisitorName('link-1', 'Ana');
+    const s = await setup({ editable: false, link: true });
+    provider(answer([LENS]));
+    await place(s.host, 'el 12_010 setup 3 con un 50');
+    expect(button(s.host, 'Add as comment')).toBeUndefined();
+    expect(s.host.textContent).toContain("You can't edit this page: you can place the note and copy the result.");
+  });
+
+  it('O6: Esc con la ventana de salir abierta encima de Assistant… no cierra los ajustes', async () => {
+    const s = await setup();
+    const settingsHost = document.createElement('div');
+    document.body.append(settingsHost);
+    const r = createRoot(settingsHost);
+    roots.push(r);
+    let ui = { settings: false };
+    function Settings() {
+      ui = useAssistantUi();
+      return ui.settings ? <AssistantSettings /> : null;
+    }
+    act(() =>
+      r.render(
+        <ServicesContext.Provider value={services(s.device)}>
+          <Settings />
+        </ServicesContext.Provider>,
+      ),
+    );
+    await act(async () => openAssistantSettings());
+    await wait(60);
+    askSignOutOthers('Wanka', async () => ({ error: null }));
+    await act(async () => {
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(ui.settings).toBe(true);
+    closeSignOutOthers();
+    await act(async () => {
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(ui.settings).toBe(false);
   });
 });

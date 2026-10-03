@@ -69,7 +69,11 @@ export interface ShotPageChange {
 /** Algo que la vista previa dice en lugar de proponer (la celda dice otra cosa, más de una página…). */
 export interface ShotPageNote {
   shot: string;
-  kind: 'differs' | 'ambiguous' | 'readOnly';
+  /**
+   * `differs`: dice otra cosa; `notText`: tiene algo que no es texto (una foto, un salto); `ambiguous`: más de una página;
+   * `readOnly`: sin permiso de editarla; `unavailable`: a medio bajar, ilegible o rechazada en este dispositivo.
+   */
+  kind: 'differs' | 'notText' | 'ambiguous' | 'readOnly' | 'unavailable';
   pageTitle?: string;
   label?: string;
   text?: string;
@@ -159,14 +163,15 @@ async function readDoc<T>(docs: ShotPageDeps['docs'], pageId: string, fn: (doc: 
 }
 
 /** Lo que tiene que estar bien para escribir en la página (lo mismo que mira el reemplazo en el proyecto). */
-async function writable(deps: ShotPageDeps, pageId: string, projectId: string): Promise<boolean> {
+async function writable(deps: ShotPageDeps, pageId: string, projectId: string): Promise<'ok' | 'readOnly' | 'unavailable'> {
   const row = deps.tree.get(pageId);
-  if (!row || row.workspace_id !== projectId || deps.tree.isTrashed(pageId)) return false;
+  if (!row || row.workspace_id !== projectId || deps.tree.isTrashed(pageId)) return 'readOnly';
   const perms = deps.perms();
-  if (!perms.known || !perms.canEditPage(pageId)) return false;
+  if (!perms.known || !perms.canEditPage(pageId)) return 'readOnly';
   const state = await deps.docs.stateOf(pageId);
-  if (treeContentGap(deps.tree, row, state?.cursor ?? 0) !== null && !deps.tree.hasUnsentCreate(pageId)) return false;
-  return !state?.unreadable && !state?.rejected;
+  // A medio bajar (escribir sobre un documento incompleto armaría algo paralelo), ilegible o rechazada.
+  if (treeContentGap(deps.tree, row, state?.cursor ?? 0) !== null && !deps.tree.hasUnsentCreate(pageId)) return 'unavailable';
+  return state?.unreadable || state?.rejected ? 'unavailable' : 'ok';
 }
 
 const same = (a: string, b: string) => a.replace(/\s+/g, ' ').trim() === b.replace(/\s+/g, ' ').trim();
@@ -242,16 +247,22 @@ export async function proposeShotPages(
     const [{ page, row, cell }] = candidates;
     const key = `${page.id}|${labelKey(row.label)}`;
     if (used.has(key)) continue;
-    if (!(await writable(deps, page.id, projectId))) {
-      notes.push({ shot, kind: 'readOnly', pageTitle: page.title });
+    const can = await writable(deps, page.id, projectId);
+    if (can !== 'ok') {
+      notes.push({ shot, kind: can, pageTitle: page.title });
       continue;
     }
     const now = row.text;
+    // Una foto o un salto en la celda: no se escribe (no se sabe dónde) y se dice así.
+    if (now === null) {
+      notes.push({ shot, kind: 'notText', pageTitle: page.title, label: row.label.trim() });
+      continue;
+    }
     // Ya dice eso: nada que hacer.
-    if (now !== null && same(now, m.after)) continue;
+    if (same(now, m.after)) continue;
     // Nunca pisa lo de otro: solo vacía, o la copia de lo que decía el reporte.
-    if (now === null || (now.trim() && !(m.before.trim() && same(now, m.before)))) {
-      notes.push({ shot, kind: 'differs', pageTitle: page.title, label: row.label.trim(), text: (now ?? '').trim() });
+    if (now.trim() && !(m.before.trim() && same(now, m.before))) {
+      notes.push({ shot, kind: 'differs', pageTitle: page.title, label: row.label.trim(), text: now.trim() });
       continue;
     }
     used.add(key);
@@ -266,7 +277,7 @@ export interface ShotPageWritten {
 }
 
 /** El párrafo de la celda, en el documento de ahora, si sigue (por su posición relativa de Yjs). */
-function paraOf(doc: Y.Doc, cell: unknown): Y.XmlElement | null {
+export function paraOf(doc: Y.Doc, cell: unknown): Y.XmlElement | null {
   try {
     const abs = Y.createAbsolutePositionFromRelativePosition(Y.createRelativePositionFromJSON(cell), doc);
     if (!abs || !(abs.type instanceof Y.XmlElement) || abs.type.nodeName !== 'tableParagraph') return null;
@@ -296,11 +307,14 @@ function writePara(para: Y.XmlElement, value: string): void {
  * si cambió o ya no está; `'readOnly'` sin permiso.
  */
 async function writeOne(deps: ShotPageDeps, projectId: string, c: ShotPageChange, expect: string, value: string): Promise<'ok' | 'changed' | 'readOnly'> {
-  if (!(await writable(deps, c.pageId, projectId))) return 'readOnly';
+  // Antes de abrir la página (sin permiso, ni se abre).
+  if ((await writable(deps, c.pageId, projectId)) !== 'ok') return 'readOnly';
   const res = await deps.docs.edit(c.pageId, async (doc) => {
     // Otra vez adentro del candado: mientras se esperaba pudo llegar algo (la papelera, un permiso menos, lo bajado).
-    if (!(await writable(deps, c.pageId, projectId))) return 'readOnly' as const;
-    if (findUnknownContent(doc)) return 'changed' as const;
+    if ((await writable(deps, c.pageId, projectId)) !== 'ok') return 'readOnly' as const;
+    // Algo que esta versión no puede mostrar, o el documento vivo quedó viejo (lo bajado no entró): como el reemplazo
+    // del proyecto, no se escribe.
+    if (findUnknownContent(doc) || deps.docs.peek(c.pageId) !== doc) return 'changed' as const;
     const para = paraOf(doc, c.cell);
     const now = para ? paraText(para) : null;
     if (!para || now === null || now !== expect) return 'changed' as const;

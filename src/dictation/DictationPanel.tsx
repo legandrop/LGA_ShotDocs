@@ -1419,9 +1419,13 @@ export function DictationPanel({ pageId }: { pageId: string }) {
                       <p key={i} className="muted assistant-small">
                         {n.kind === 'differs'
                           ? tr('dictation.shotPageDiffers', { where: [tr('dictation.shotPage'), n.pageTitle ?? n.shot, n.label ?? ''].join(' › '), text: n.text ?? '' })
-                          : n.kind === 'ambiguous'
-                            ? tr('dictation.shotPageAmbiguous', { shot: n.shot })
-                            : tr('dictation.shotPageReadOnly', { page: n.pageTitle ?? n.shot })}
+                          : n.kind === 'notText'
+                            ? tr('dictation.shotPageNotText', { where: [tr('dictation.shotPage'), n.pageTitle ?? n.shot, n.label ?? ''].join(' › ') })
+                            : n.kind === 'ambiguous'
+                              ? tr('dictation.shotPageAmbiguous', { shot: n.shot })
+                              : n.kind === 'unavailable'
+                                ? tr('dictation.shotPageUnavailable', { page: n.pageTitle ?? n.shot })
+                                : tr('dictation.shotPageReadOnly', { page: n.pageTitle ?? n.shot })}
                       </p>
                     ))}
                   </section>

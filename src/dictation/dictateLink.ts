@@ -62,7 +62,15 @@ export function textOfHash(hash: string): string {
   } catch {
     text = raw;
   }
-  return text.replace(/\r\n?/g, '\n').trim().slice(0, MAX_LINK_TEXT);
+  // Sin caracteres de control (salvo el tab y el salto de renglón) ni de dirección del texto (U+202A a U+202E, U+2066 a
+  // U+2069): no los escribe nadie dictando y pueden esconder o dar vuelta lo que se ve en el campo.
+  const clean = text
+    .replace(/\r\n?/g, '\n')
+    .replace(/[\u0000-\u0008\u000B-\u001F\u007F\u202A-\u202E\u2066-\u2069]/g, '')
+    .trim()
+    .slice(0, MAX_LINK_TEXT);
+  // Cortado justo en la mitad de un emoji: sin la mitad suelta.
+  return clean.replace(/[\uD800-\uDBFF]$/, '');
 }
 
 /**
