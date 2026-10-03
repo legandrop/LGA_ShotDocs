@@ -26,6 +26,15 @@ export const page = {
     es: "Algo de su contenido hizo fallar al editor. No se borró nada: en el historial de versiones podés restaurar una versión anterior, y el resto de la app sigue andando.",
   },
   'page.title': { en: "Title", es: "Título" },
+  // El tope del título (500 caracteres, el de la base): lo que sobra va al principio de la página (sync/titleRest.ts).
+  'page.titleTooLong': {
+    en: "A title can be up to {max} characters.",
+    es: "Un título puede tener hasta {max} caracteres.",
+  },
+  'page.titleRestMoved': {
+    en: "The title was longer than 500 characters: the rest is now the first paragraph of “{title}”.",
+    es: "El título pasaba de 500 caracteres: lo que sobraba quedó como primer párrafo de “{title}”.",
+  },
   'header.options': { en: "Header options", es: "Opciones del encabezado" },
   'header.optionsTip': {
     en: "Header: how many containing pages show here",
