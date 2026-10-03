@@ -502,13 +502,29 @@ begin
   perform pg_temp.check(pg_temp.push(pg_temp.tok('S'), 'd2b2', 'e031', 'Eg=='), 'ok', 'escribe e031');
   perform pg_temp.check(pg_temp.push(pg_temp.tok('S'), 'd2b2', 'e032', 'Ew=='), 'ok', 'escribe e032');
   perform pg_temp.check(pg_temp.push(pg_temp.tok('S'), 'd2b2', 'e033', 'FA=='), 'ok', 'escribe e033');
+  -- Una foto sacada aunque el editor diga que sí: apartada, y la base corta ahí (lo que sigue se probó con ella adentro).
   perform pg_temp.check(pg_temp.admit('d2a6', 'd2b2', jsonb_build_array(
       pg_temp.dec('e020', true),
       pg_temp.dec('e030', true, null, jsonb_build_array(pg_temp.u('d2f2'))),
-      pg_temp.dec('e031', true, null, jsonb_build_array(pg_temp.u('d2f4'))),
-      pg_temp.dec('e032', true, null, '["../../x"]'::jsonb),
-      pg_temp.dec('e033', false, 'bad_shape'))),
-    'admitted:' || (seq0 + 2) || ',aside:foreign_media,aside:foreign_media,aside:foreign_media,aside:bad_shape', 'varias en orden');
+      pg_temp.dec('e031', true))),
+    'admitted:' || (seq0 + 2) || ',aside:foreign_media', 'varias en orden, cortando en la que la base aparta');
+  assert (pg_temp.room('e031')).decided_at is null, 'después del corte se decidió algo';
+  -- Una de otro proyecto y una dirección mal formada, igual; una apartada por el editor no corta.
+  perform pg_temp.check(pg_temp.admit('d2a6', 'd2b2', jsonb_build_array(
+      pg_temp.dec('e031', true, null, jsonb_build_array(pg_temp.u('d2f4'))), pg_temp.dec('e032', true))),
+    'aside:foreign_media', 'una foto de otro proyecto');
+  perform pg_temp.check(pg_temp.admit('d2a6', 'd2b2', jsonb_build_array(
+      pg_temp.dec('e032', true, null, '["../../x"]'::jsonb))),
+    'aside:foreign_media', 'una dirección mal formada');
+  perform pg_temp.check(pg_temp.admit('d2a6', 'd2b2', jsonb_build_array(pg_temp.dec('e033', false, 'bad_shape'))),
+    'aside:bad_shape', 'apartada por el editor');
+  -- Otro editor que manda otra decisión para una ya decidida: recibe la de antes y la base corta.
+  perform pg_temp.check(pg_temp.push(pg_temp.tok('S'), 'd2b2', 'e034', 'FQ=='), 'ok', 'escribe e034');
+  perform pg_temp.check(pg_temp.admit('d2a1', 'd2b2', jsonb_build_array(pg_temp.dec('e033', true), pg_temp.dec('e034', true))),
+    'aside:bad_shape', 'una decisión distinta de una ya decidida no corta');
+  assert (pg_temp.room('e034')).decided_at is null, 'después de una decisión distinta se decidió algo';
+  perform pg_temp.check(pg_temp.admit('d2a6', 'd2b2', jsonb_build_array(pg_temp.dec('e034', false, 'pending'))),
+    'aside:pending', 'aparta e034');
   -- El historial: el nombre del visitante.
   perform pg_temp.as_user('d2a6');
   assert (select h.plink_author from public.page_history(pg_temp.u('d2b2'), seq0, 10) h where h.seq = seq0 + 1) = 'Ana',
@@ -516,7 +532,7 @@ begin
   assert (select h.plink_author from public.page_history(pg_temp.u('d2b2'), 0, 10) h where h.seq = 1) is null,
     'page_history da un nombre a una fila del equipo';
   -- Lo apartado, para quien ve lo borrado; los bytes para bajar.
-  assert (select count(*) from public.public_link_updates_of(pg_temp.u('d2b2')) x where x.state = 'aside') = 5,
+  assert (select count(*) from public.public_link_updates_of(pg_temp.u('d2b2')) x where x.state = 'aside') = 6,
     'public_link_updates_of no da lo apartado';
   assert public.public_link_update_bytes((pg_temp.room('e033')).id) = 'FA==', 'los bytes de lo apartado';
   perform pg_temp.check(pg_temp.try(format('select public.public_link_update_bytes(%L)', (pg_temp.room('e011')).id)),
@@ -532,11 +548,11 @@ begin
   -- Share: los números.
   perform pg_temp.as_user('d2a1');
   j := public.get_public_link(pg_temp.u('d2b2')) -> 'link' -> 'edits';
-  assert j ->> 'aside' = '5' and j ->> 'admitted_today' = '2' and j ->> 'waiting' = '1' and j ->> 'held' = '0',
+  assert j ->> 'aside' = '6' and j ->> 'admitted_today' = '2' and j ->> 'waiting' = '1' and j ->> 'held' = '0',
     format('los números de Share: %s', j);
-  -- El estado del visitante: en S, nada esperando de A y 5 apartadas.
+  -- El estado del visitante: en S, nada esperando de A y 6 apartadas.
   perform pg_temp.as_anon(pg_temp.tok('S'));
-  assert (select s.aside from public.plink_push_status() s where s.page_id = pg_temp.u('d2b2')) = 5, 'el estado no ve lo apartado';
+  assert (select s.aside from public.plink_push_status() s where s.page_id = pg_temp.u('d2b2')) = 6, 'el estado no ve lo apartado';
   perform pg_temp.as_postgres();
 end;
 $$;

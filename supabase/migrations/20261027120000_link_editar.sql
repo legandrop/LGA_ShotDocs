@@ -508,9 +508,12 @@ end;
 $$;
 
 -- Decidir, en orden, las filas de una página. `p_decisions`: [{"id", "ok": true|false, "reason", "media": [ids]}].
--- Devuelve [{"id", "decision": "admitted"|"aside"|"held", "seq"?, "reason"?}]; corta en la primera retenida. Si otro
--- editor ya decidió una fila, devuelve su decisión (dos editores a la vez no se pisan). Al admitir, los bytes se MUEVEN
--- de la sala a `page_updates` (el editor nunca los vuelve a subir ni los puede cambiar), con `created_by` nulo.
+-- Devuelve [{"id", "decision": "admitted"|"aside"|"held", "seq"?, "reason"?}]. Si otro editor ya decidió una fila,
+-- devuelve su decisión (dos editores a la vez no se pisan). Al admitir, los bytes se MUEVEN de la sala a `page_updates`
+-- (el editor nunca los vuelve a subir ni los puede cambiar), con `created_by` nulo.
+-- Corta (no decide nada más de la lista) en la primera retenida y en la primera cuya decisión no es la que pidió el
+-- editor (otro ya la decidió distinto, o un archivo no vale): lo que sigue se probó sobre una página que no es la real,
+-- y el editor lo vuelve a probar en la vuelta siguiente.
 create function public.link_admit(p_page_id uuid, p_app_version text, p_decisions jsonb)
 returns jsonb
 language plpgsql volatile security definer set search_path = ''
@@ -545,6 +548,7 @@ begin
       -- Otro editor ya la decidió: su decisión vale.
       res := res || jsonb_strip_nulls(jsonb_build_object('id', u.id, 'decision', u.decision, 'seq', u.admitted_seq,
                                                          'reason', u.reason));
+      exit when (u.decision = 'admitted') is distinct from coalesce((d ->> 'ok')::boolean, false);
       continue;
     end if;
     if exists (select 1 from public.public_link_updates x
@@ -573,6 +577,14 @@ begin
           exit;
         end if;
       end loop;
+      if not ok then
+        -- Apartada aunque el editor dijo que sí: se corta acá (lo que sigue se probó con esta fila adentro).
+        update public.public_link_updates
+        set decided_at = now(), decided_by = auth.uid(), decision = 'aside', reason = why
+        where id = u.id;
+        res := res || jsonb_build_object('id', u.id, 'decision', 'aside', 'reason', why);
+        exit;
+      end if;
     end if;
     if ok then
       update public.pages set update_seq = update_seq + 1 where id = p_page_id returning update_seq into s;
