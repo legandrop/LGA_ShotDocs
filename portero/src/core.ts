@@ -1957,7 +1957,7 @@ export class Portero {
    * Cada subcarpeta se comprueba (`inTree`) como en el listado de una, salvo la que se comprobó hace menos de
    * `LIST_TRUST_MS`. Con `pageToken` el conjunto ya no puede cambiar (Drive ata el token a la consulta): una que ya
    * no se puede comprobar corta el pedido con `409 changed` y la app vuelve a empezar. Con `partial: true` (una app
-   * que lo entiende, desde v0.0XX) no corta: la consulta sigue con todas, pero lo de las que no entraron en el tope
+   * que lo entiende, desde v0.149) no corta: la consulta sigue con todas, pero lo de las que no entraron en el tope
    * de llamados vuelve en `later` y lo de las que ya no son del árbol en `failed`, sin nada de ellas en `lists`; la
    * app descarta lo que ya tenía de esas y las lista de nuevo, y sigue con las demás (antes, una espera de más de un
    * minuto entre páginas con 36 subcarpetas o más daba `409` y la app caía a listar de a una). Cada pedido avanza

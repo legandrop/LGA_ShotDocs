@@ -183,7 +183,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   subcarpeta en NFC, buscando también las de antes (NFC, tal cual y NFD), y retomar en el mismo dispositivo con una
   copia de la carpeta que trae los acentos en la otra forma (un pendrive, una carpeta de red) reconoce los archivos en
   vez de pedirlos de nuevo; y la cola de una carpeta cierra la vuelta con el portero colgado (B.11). Desde otra
-  computadora, soltarla de nuevo sigue siendo otra carpeta (otra tarjeta), por diseño. **Entrega 4 hecha (v0.0XX, rama
+  computadora, soltarla de nuevo sigue siendo otra carpeta (otra tarjeta), por diseño. **Entrega 4 hecha (v0.149, rama
   `lega/carpetas-e4`):** la cola de una carpeta escucha la vuelta de la red y *Resume* vuelve a cero la cuenta de
   esperas (O5), el listado de varias subcarpetas ya no corta con `409` por más de un minuto entre páginas (O7) y una
   parte a la que Drive no le contesta al portero cuenta como trabada a los 90 s (B.11). Detalle en
@@ -723,7 +723,7 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
      chica); y las pasadas de `PageFiles.pushPending` esperan después de cerrar por Storage colgado. Probado con
      relojes simulados y en Chromium contra un portero y un Storage locales que se cuelgan (`Doc_Portero.md`,
      "Colgado para todos"; `Doc_Sincronizacion.md`; `Doc_Carpetas.md`, "Cómo quedó (entrega 3)").
-   - **Hecho (v0.0XX, rama `lega/carpetas-e4`; `Doc_Carpetas.md`, "Cómo quedó (entrega 4)"):**
+   - **Hecho (v0.149, rama `lega/carpetas-e4`; `Doc_Carpetas.md`, "Cómo quedó (entrega 4)"):**
      - **La última parte de un archivo grande:** el portero, con la parte ya leída, espera a Drive a lo sumo 90 s
        (`PART_ANSWER_MS`) y contesta `504 stalled` si la app lo pide (`?stall=1`); la app lo toma como una trabada, en
        las dos colas, sin esperar su plazo de respuesta (hasta 10 minutos y medio, que sigue haciendo falta para un

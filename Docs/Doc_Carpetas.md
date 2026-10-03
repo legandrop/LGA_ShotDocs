@@ -3,7 +3,7 @@
 Estado: **entrega 1 implementada (v0.081, rama `lega/carpetas`)**, con lo que no depende de Lega; ver "Cómo
 quedó" justo abajo. **Entrega 2 (*Download all*) implementada** (rama `lega/carpetas-zip`): "Cómo quedó (entrega 2)". **Entrega 3 (los
 restos de las auditorías y las subidas que se traban, v0.142, rama `lega/carpetas-e3`):** "Cómo quedó (entrega 3)". **Entrega 4 (los restos de la
-entrega 3, v0.0XX, rama `lega/carpetas-e4`):** "Cómo quedó (entrega 4)". El diseño sigue debajo. Rediseñado el 2026-09-30 con las respuestas de Lega (ver "Respondidas por
+entrega 3, v0.149, rama `lega/carpetas-e4`):** "Cómo quedó (entrega 4)". El diseño sigue debajo. Rediseñado el 2026-09-30 con las respuestas de Lega (ver "Respondidas por
 Lega"): la carpeta de la página es **una vista en vivo de una carpeta del Drive**, sin tope de archivos y en el
 plan gratis de Cloudflare. El primer diseño (commit `47bbbf4`, una fila de `files` por archivo) y su auditoría
 quedan resumidos al final, en "Historia"; lo que la auditoría encontró y sigue valiendo está incorporado.
@@ -371,7 +371,7 @@ probar a los 10 s, cerró la segunda a los 131 s (6 colgados) y, al volver el po
 plazo (hasta 10 minutos y medio con el plazo más largo) antes de contar como trabado; los otros dos en curso, también.
 Es lo mismo que en la cola de los sueltos. *(Hecho en la entrega 4, abajo, cuando lo que se cuelga es Drive.)*
 
-## Cómo quedó (entrega 4, v0.0XX)
+## Cómo quedó (entrega 4, v0.149)
 
 Los tres restos BAJO de la entrega 3 (`Doc_Roadmap.md`, B.11: O5, O7 y la última parte).
 

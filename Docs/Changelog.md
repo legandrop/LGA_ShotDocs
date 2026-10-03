@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.149 :
 
 **Carpetas, entrega 4** (restos de B.11). Tres cosas hacían esperar de más sin perder nada. La cola de una carpeta no
 escuchaba la vuelta de la red y *Resume* arrancaba con una espera más larga: ahora el motor le avisa como a los
