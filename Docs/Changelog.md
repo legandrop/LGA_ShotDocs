@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.159 :
+
+**La barra de formato con los tooltips de la app (D226, B.25a y B.25c).** Los botones propios de BlockNote en la barra
+(*Bold*, *Italic*, *Underline*, *Strike*, alinear, *Colors*, *Nest*, *Link*) seguían con su globo: el nombre arriba y el
+atajo escrito por BlockNote abajo, fuera del formato y del registro. No se podía cambiar botón por botón sin rehacerlos.
+Ahora la barra le da a BlockNote su propio botón (`toolbarTips.tsx`, por el contexto de componentes): cada uno conserva
+lo que hace, marcado y apagado, y su tooltip es `data-tip` con «**⌘B**: bold» y el atajo del registro, o solo el nombre
+si no tiene atajo; en pantallas táctiles, sin atajos. Una prueba con la barra real comprueba que el globo de BlockNote
+ya no aparece. Además, una prueba del anotador en una ventana angosta con mouse: conserva los atajos.
+[ Barra de formato con los tooltips de la app - los botones de BlockNote con un renglón «atajo: acción» del registro o su nombre, sin su globo, y la prueba del anotador angosto con mouse ]
+
 v0.158 :
 
 **Ayuda, entrega 3: "Mostrame" y novedades** (P.13). La ayuda explicaba cada función pero no la señalaba, y nada
