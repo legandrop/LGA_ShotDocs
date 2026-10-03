@@ -403,4 +403,15 @@ describe('el panel, entrega A3 (Suggest caption)', () => {
     expect(host.querySelector('.assistant-error')?.textContent).toContain('You can view this page but not edit it');
     expect(ed.document.map((b) => b.id).join()).toBe(before);
   });
+
+  it('si salió de la miniatura (sin una copia más nítida), lo dice debajo de lo mandado (auditoría O4)', async () => {
+    const { host, ed } = await setup();
+    provider('Un pie');
+    vi.mocked(captionImage).mockResolvedValueOnce({ mime: 'image/jpeg', data: 'TUlOSQ==', bytes: 4, width: 480, height: 360, fromThumbnail: true });
+    await fromPhotoBar(ed, 'f');
+    await click(button(host, 'Send photo'));
+    await until(host, 'Apply');
+    expect(host.textContent).toContain('Sent 480 × 360 px');
+    expect(host.textContent).toContain('from the thumbnail (less detail)');
+  });
 });

@@ -316,7 +316,10 @@ export function CaptionSection({ photo, config, email, destination, providerName
         </>
       )}
       {sent && (phase.kind === 'running' || phase.kind === 'preview') && (
-        <p className="muted assistant-small">{tr('assistant.caption.sent', { width: sent.width, height: sent.height, kb: Math.max(1, Math.round(sent.bytes / 1024)) })}</p>
+        <p className="muted assistant-small">
+          {tr('assistant.caption.sent', { width: sent.width, height: sent.height, kb: Math.max(1, Math.round(sent.bytes / 1024)) })}
+          {sent.fromThumbnail && <> · {tr('assistant.caption.fromThumbnail')}</>}
+        </p>
       )}
     </div>
   );

@@ -60,6 +60,11 @@ describe('lo que se manda', () => {
     expect(atob(img.data)).toBe('jpeg(VISTA)@1024');
     expect(img.bytes).toBe('jpeg(VISTA)@1024'.length);
     expect([img.width, img.height]).toEqual([1024, 683]);
+    expect(img.fromThumbnail).toBe(false);
+    // De la miniatura (sin nada más nítido): se marca, para que el panel lo diga.
+    const t = deps({ files: { 'blob:thumb': blob('MINI') } });
+    t.media.thumbnail.mockResolvedValue('blob:thumb');
+    expect((await captionImage(`sdmedia://${ID}`, t)).fromThumbnail).toBe(true);
   });
 
   it('un archivo que no es una imagen no se manda', async () => {

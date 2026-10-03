@@ -25,7 +25,15 @@ export interface CaptionImage {
   bytes: number;
   width: number;
   height: number;
+  /**
+   * Salió de la miniatura (sin red, o una foto que no tiene nada más nítido en el dispositivo): el panel lo dice, porque
+   * el modelo ve menos detalle (auditoría de A3, O4).
+   */
+  fromThumbnail?: boolean;
 }
+
+/** Los Blob que salieron de la miniatura (para decirlo sin cambiar lo que devuelve `captionSource`). */
+const thumbnails = new WeakSet<Blob>();
 
 export class CaptionImageError extends Error {
   /** `unavailable`: no hay de dónde sacarla (sin red, sin copia); `unreadable`: el navegador no la abre. */
@@ -73,7 +81,11 @@ export async function captionSource(url: string, deps: CaptionImageDeps): Promis
     const view = await deps.media.view(id, { side: CAPTION_SIDE, download: deps.download }).catch(() => null);
     if (view) return blobAt(view.url, fetcher);
     const thumb = await deps.media.thumbnail(id).catch(() => null);
-    if (thumb) return blobAt(thumb, fetcher);
+    if (thumb) {
+      const blob = await blobAt(thumb, fetcher);
+      thumbnails.add(blob);
+      return blob;
+    }
     throw new CaptionImageError('unavailable');
   }
   if (!url) throw new CaptionImageError('unavailable');
@@ -122,5 +134,5 @@ export async function captionImage(url: string, deps: CaptionImageDeps): Promise
   const source = await captionSource(url, deps);
   if (source.type && !source.type.startsWith('image/')) throw new CaptionImageError('unreadable');
   const { blob, width, height } = await (deps.encode ?? encodeInBrowser)(source, CAPTION_SIDE);
-  return { mime: 'image/jpeg', data: await base64Of(blob), bytes: blob.size, width, height };
+  return { mime: 'image/jpeg', data: await base64Of(blob), bytes: blob.size, width, height, fromThumbnail: thumbnails.has(source) };
 }

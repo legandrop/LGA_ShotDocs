@@ -200,6 +200,10 @@ export const assistant = {
     es: "Aplicar lo agrega en la misma celda, en un renglón nuevo debajo de la foto. Podés retocarlo acá antes, o después en la página.",
   },
   'assistant.caption.sent': { en: "Sent {width} × {height} px · {kb} KB", es: "Se mandó de {width} × {height} px · {kb} KB" },
+  'assistant.caption.fromThumbnail': {
+    en: "from the thumbnail (less detail): a sharper copy wasn't available",
+    es: "de la miniatura (con menos detalle): no había una copia más nítida",
+  },
   'assistant.caption.applied': { en: "Caption added. Undo it with {undo}.", es: "Pie agregado. Se deshace con {undo}." },
   'assistant.caption.changed': {
     en: "This photo was removed or replaced while the assistant was working. Nothing was applied.",
