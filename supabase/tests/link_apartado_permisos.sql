@@ -288,7 +288,7 @@ $$;
 
 -- ---------------------------------------------------------------------------------------------------
 -- BN1 de la re-verificación: con miles de filas apartadas (un link molesto reseteado), la lista tarda poco (el tope de
--- `authenticated` es de 8 s; acá, 2 s)
+-- `authenticated` es de 8 s; acá, 1 s: con las páginas materializadas tarda ~0,1 s, sin, ~2 a 11 s)
 -- ---------------------------------------------------------------------------------------------------
 do $$
 declare
@@ -307,7 +307,7 @@ begin
   perform pg_temp.as_postgres();
   raise notice 'public_link_aside con ~3250 filas apartadas: % ms, % filas', round(ms), n;
   assert n = 400, format('con miles de filas: %s (se esperaban 200 de S y 200 de H)', n);
-  assert ms < 2000, format('public_link_aside tarda %s ms con miles de filas apartadas', round(ms));
+  assert ms < 1000, format('public_link_aside tarda %s ms con miles de filas apartadas', round(ms));
 end;
 $$;
 
