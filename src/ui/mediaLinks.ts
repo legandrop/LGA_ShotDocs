@@ -1,3 +1,4 @@
+import { fileHref, linkHash, workspaceHash } from '../fileLink';
 import { fileKind, isFolderMime, mimeFromName } from '../media/attachments';
 
 // Los links a los archivos en la copia de impresión (P.30, Docs/Doc_Links_PDF.md, sección 3): cada tarjeta de un adjunto
@@ -26,6 +27,27 @@ export interface MediaLinkSource {
 }
 
 let current: MediaLinkSource | null = null;
+
+/**
+ * La fuente de la app abierta (la pone `Shell`, Workspace.tsx). Con una cuenta, el `#` es siempre el del workspace
+ * (`#ws=`): imprimir nunca pone el token de un link público (LF17). Con un link público abierto, el del propio link.
+ */
+export function appLinkSource(
+  media: { fileInfo(id: string): { mime: string; name: string } | null; linkable(id: string, pageId: string | null): boolean },
+  config: { url: string; publishableKey: string; localKey: string },
+  link: { url: string; publishableKey: string; localKey: string; token: string } | null,
+  origin: string,
+): MediaLinkSource {
+  const hash = link
+    ? linkHash({ u: link.url, k: link.publishableKey, l: link.localKey, t: link.token })
+    : workspaceHash({ u: config.url, k: config.publishableKey, l: config.localKey });
+  const key = link ? link.localKey : config.localKey;
+  return {
+    info: (id) => media.fileInfo(id),
+    linkable: (id, page) => media.linkable(id, page),
+    href: (id) => fileHref(origin, key, id, hash),
+  };
+}
 
 /** La pone el workspace abierto (Workspace.tsx). Devuelve cómo sacarla. */
 export function setMediaLinkSource(source: MediaLinkSource): () => void {

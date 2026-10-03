@@ -93,6 +93,16 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
   const [fileLinks, setFileLinks] = useState<FileLinkPlan | null>(null);
   /** La casilla: tildada si todos los links son *Can view*, destildada si alguno es *Can edit*. */
   const [useFileLinks, setUseFileLinks] = useState(true);
+  /**
+   * La persona tocó la casilla para lo elegido ahora: volver a pedir los links (la red se cortó y volvió) no la pisa (un
+   * *Can view* destildado a mano no vuelve a salir con el token). Cambiar qué se exporta la vuelve a su valor de fábrica.
+   */
+  const fileLinksTouched = useRef<{ plan: ExportPlanPage[]; touched: boolean }>({ plan, touched: false });
+  if (fileLinksTouched.current.plan !== plan) fileLinksTouched.current = { plan, touched: false };
+  const chooseFileLinks = (checked: boolean) => {
+    fileLinksTouched.current = { plan, touched: true };
+    setUseFileLinks(checked);
+  };
   useEffect(() => {
     setFileLinks(null);
     if (linkMode || !media.enabled || !status.online || plan.length === 0) return;
@@ -102,7 +112,7 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
     void loadFileLinks(client, plan.map((p) => p.id), parentOf, titleOf).then((found) => {
       if (!live) return;
       setFileLinks(found);
-      setUseFileLinks(fileLinksTickedByDefault(found));
+      if (!fileLinksTouched.current.touched) setUseFileLinks(fileLinksTickedByDefault(found));
     });
     return () => {
       live = false;
@@ -357,7 +367,7 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
                   </label>
                 </div>
                 {media.enabled && !smaller && !online && <p className="muted">{tr('exportDialog.offlineOriginals')}</p>}
-                <FileLinksNotice plan={fileLinks} checked={useFileLinks} onChange={setUseFileLinks} />
+                <FileLinksNotice plan={fileLinks} checked={useFileLinks} onChange={chooseFileLinks} />
                 {!named && <p className="muted">{tr('exportDialog.oneSize', { size: rootSize })}</p>}
                 <p className="muted">{tr('exportDialog.margins')}</p>
                 {plan.length === 0 && <p className="error">{tr('exportDialog.empty')}</p>}

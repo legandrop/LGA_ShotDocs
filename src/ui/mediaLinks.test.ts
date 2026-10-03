@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
-import { addMediaLinks, setMediaLinkSource, type MediaLinkSource } from './mediaLinks';
+import { addMediaLinks, appLinkSource, setMediaLinkSource, type MediaLinkSource } from './mediaLinks';
+import { parseWorkspaceHash } from '../fileLink';
+import { parseLinkHash } from '../linkMode';
 import { buildPrintView } from './printView';
 
 // Los links a los archivos en la copia de impresión (P.30, Docs/Doc_Links_PDF.md, 3.1 y 3.2).
@@ -148,5 +150,25 @@ describe('buildPrintView con los links', () => {
     const page = article('P1');
     const output = buildPrintView(page, { size: 'A4', landscape: false }, 'output');
     expect(output.root.querySelectorAll('.sd-media-name')).toHaveLength(0);
+  });
+});
+
+describe('appLinkSource (la que pone la app abierta)', () => {
+  const media = { fileInfo: () => null, linkable: () => true };
+  const config = { url: 'https://aaaaaaaaaa.supabase.co', publishableKey: 'sb_publishable_aaaaaaaa', localKey: 'wanka_1' };
+  const token = `sdl_${'T'.repeat(43)}`;
+
+  it('con una cuenta: siempre el # del workspace, nunca un token (imprimir, LF17)', () => {
+    const href = new URL(appLinkSource(media, config, null, 'https://app.test').href(ID.pdf));
+    expect(href.origin + href.pathname).toBe(`https://app.test/f/wanka_1/${ID.pdf}`);
+    expect(parseWorkspaceHash(href.hash)).toEqual({ u: config.url, k: config.publishableKey, l: 'wanka_1' });
+    expect(parseLinkHash(href.hash)).toBeNull();
+  });
+
+  it('con un link público abierto: el # del propio link', () => {
+    const link = { url: 'https://bbbbbbbbbb.supabase.co', publishableKey: 'sb_publishable_bbbbbbbb', localKey: 'otro_2', token };
+    const href = new URL(appLinkSource(media, config, link, 'https://app.test').href(ID.pdf));
+    expect(href.pathname).toBe(`/f/otro_2/${ID.pdf}`);
+    expect(parseLinkHash(href.hash)?.t).toBe(token);
   });
 });

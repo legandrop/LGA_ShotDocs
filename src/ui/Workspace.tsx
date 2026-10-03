@@ -64,8 +64,7 @@ import { usePendingCount } from './usePendingCount';
 import { errorMessage } from '../sync/types';
 import { disposeUndoTimeline } from './undoTimeline';
 import { useUndoTimelineKeys } from './undoTimelineUi';
-import { setMediaLinkSource } from './mediaLinks';
-import { fileHref, linkHash, workspaceHash } from '../fileLink';
+import { appLinkSource, setMediaLinkSource } from './mediaLinks';
 
 // La página de práctica (P.13, Docs/Doc_Tutorial.md): se baja aparte, con sus plantillas y sus textos.
 const PracticeView = lazyPart(() => import('../tutorial/PracticeView').then((m) => m.PracticeView));
@@ -365,18 +364,7 @@ export function Shell() {
 
   // Los links a los archivos en el PDF (P.30): la dirección fija de cada uno, con el `#` de este workspace o, con un link
   // público, el del propio link (imprimir nunca pone el token de un link de la cuenta: LF17).
-  useEffect(() => {
-    const config = workspace.config;
-    const hash = linkMode
-      ? linkHash({ u: linkMode.entry.url, k: linkMode.entry.publishableKey, l: linkMode.entry.localKey, t: linkMode.entry.token })
-      : workspaceHash({ u: config.url, k: config.publishableKey, l: config.localKey });
-    const key = linkMode ? linkMode.entry.localKey : config.localKey;
-    return setMediaLinkSource({
-      info: (id) => media.fileInfo(id),
-      linkable: (id, page) => media.linkable(id, page),
-      href: (id) => fileHref(location.origin, key, id, hash),
-    });
-  }, [media, workspace, linkMode]);
+  useEffect(() => setMediaLinkSource(appLinkSource(media, workspace.config, linkMode?.entry ?? null, location.origin)), [media, workspace, linkMode]);
 
   const pageId = route.name === 'page' && tree.get(route.id) ? route.id : null;
   const crumbs = pageId ? tree.ancestors(pageId) : [];

@@ -3043,6 +3043,12 @@ code {
   text-decoration: none;
 }
 
+/* La imagen como bloque en las dos vistas (con link o con el renglón sin link): sin el hueco de la línea base, el área
+   del link es exactamente la tarjeta. */
+.print-view .bn-file-block-content-wrapper:has(> .sd-media-name) img.bn-visual-media {
+  display: block;
+}
+
 .print-view .sd-media-name {
   display: block;
   height: 16px;

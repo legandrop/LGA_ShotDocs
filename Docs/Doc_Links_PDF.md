@@ -949,6 +949,15 @@ que diga otra cosa.
 - Un dispositivo sin ningún proyecto visible (por ejemplo, un invitado al que le sacaron todo) ve la pantalla de "sin
   proyectos" en vez de la del archivo: la del archivo se dibuja adentro de la app.
 - Se preguntan como mucho 40 links públicos por exportación (`MAX_LINK_LOOKUPS`).
+- Sin red al exportar, la ventana no lo avisa (3.3 decía que sí): no se piden links y el PDF va con la dirección de
+  siempre (`#ws=`), que es lo seguro.
+
+**Ronda 1 de la auditoría de E1** (aprobado con observaciones, sin bloqueantes): si la red se cortaba y volvía con la
+ventana *Export* abierta, la casilla volvía a su valor de fábrica y un *Can view* destildado a mano podía salir con el
+token; ahora lo que tocó la persona se respeta hasta que cambie qué se exporta. La fuente de los links de la app
+(`appLinkSource`, `mediaLinks.ts`) y el armado de *Export* tienen pruebas propias (`exportFileLinks.test.tsx`: tildado,
+destildado, *Can edit* y la red que vuelve), con sus mutantes detectados. La imagen de la tarjeta va como bloque en las
+dos vistas: el área del link ya no suma el hueco de la línea base. README y documentos al día.
 
 **Medido en Chromium** (Playwright 1.63, `page.pdf()`, la vista de impresión real con `styles.css`, en un arnés fuera del
 repo): en una página con un adjunto, un video, una carpeta, una foto y un link de Drive salieron 7 links: la tarjeta del

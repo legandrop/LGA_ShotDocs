@@ -49,9 +49,9 @@ describe('loadFileLinks', () => {
   const info = (level: string, token: string | null, alive = true) => ({ clean_on: true, link: { level, token, alive, expires_at: null }, above: null });
 
   it('pregunta solo por los links del camino, y solo usa los que tienen token y andan', async () => {
-    const c = client(['A', 'B', 'D'], { A: info('comment', null), B: info('edit', 'tok-B'), D: info('comment', 'tok-D', false) });
+    const c = client(['A', 'B', 'D'], { A: info('comment', 'tok-A', false), B: info('edit', 'tok-B'), D: info('comment', 'tok-D') });
     const plan = await loadFileLinks(c, ['B', 'C'], parentOf, (id) => `t-${id}`);
-    // A: sin token (quien exporta no la puede compartir); B: Can edit; D: fuera de la rama, ni se pregunta.
+    // A: Can view pero vencido o apagado (no anda); B: Can edit, el único que anda; D: fuera de la rama, ni se pregunta.
     expect(plan?.byPage.get('C')?.token).toBe('tok-B');
     expect(plan?.links.map((l) => l.title)).toEqual(['t-B']);
     const asked = (c.rpc as unknown as ReturnType<typeof vi.fn>).mock.calls.filter((call) => call[0] === 'get_public_link').map((call) => call[1].p_page);
