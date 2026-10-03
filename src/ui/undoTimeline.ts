@@ -1062,7 +1062,7 @@ export function tempManager(doc: Y.Doc, deleteFilter: UndoManager['deleteFilter'
 // escribiste vos) se iba aunque otra persona hubiera dibujado con él, y sus formas quedaban sin marco. Ahora:
 //   - una forma con un campo vivo de otro autor no se borra, ni sus campos si la forma se creó en ese mismo paso (si
 //     no, quedaría una forma a medias); tus cambios a una forma que ya existía se deshacen igual;
-//   - el marco de una foto con formas vivas de otro autor no se borra.
+//   - el marco de una foto no se borra mientras quede alguna forma viva de esa foto (sin él, no se ven).
 // Para saber qué creó el paso, se deshace de a un paso por vez (`popMarkupStep`), con el paso a mano.
 
 interface MapItemLike {
@@ -1095,9 +1095,11 @@ export function protectMarkupOthers(um: UndoManager, map: Y.Map<unknown>): void 
     const item = raw as unknown as MapItemLike;
     if (item.parent === map && item.parentSub !== null) {
       if (item.parentSub.includes('/')) return !mapHasOthers(item);
-      // El marco de una foto: queda si hay formas vivas de otro autor de esa foto.
+      // El marco de una foto: queda mientras quede alguna forma viva de esa foto (de otro, o tuya que quedó por lo del
+      // otro). Las formas que borra el mismo paso ya se borraron: el marco se escribe antes que ellas y Yjs borra de
+      // atrás para adelante.
       const prefix = `${item.parentSub}/`;
-      for (const [key, shape] of root._map) if (!shape.deleted && shape.id.client !== item.id.client && key.startsWith(prefix)) return false;
+      for (const [key, shape] of root._map) if (!shape.deleted && key.startsWith(prefix)) return false;
       return true;
     }
     // Un campo de una forma que este mismo paso creó y que queda por lo del otro: queda también.
