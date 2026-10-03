@@ -169,7 +169,7 @@ const UNDO_ORDER = '0.152';
 /** El título de hasta 500 caracteres, lo que sobra va a la página (v0.152). */
 const TITLE_LONG = '0.152';
 /** "Mostrame" y las novedades (Doc_Tutorial.md, entrega 3): el número lo pone quien publica. */
-const HELP_3 = '0.0XX';
+const HELP_3 = '0.158';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---

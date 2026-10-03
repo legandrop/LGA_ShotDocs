@@ -245,7 +245,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   borrar), los dos idiomas, el teléfono, y que la ayuda se mantenga al día con cada función nueva (una regla:
   cada feature nueva suma su línea en la ayuda). **Entregas 1 y 2 hechas (v0.082, `Doc_Tutorial.md`, "Cómo
   quedó"):** la ayuda con el "?" y el menú de la cuenta, el registro único de atajos con sus pruebas, la página de
-  práctica en `/practice` y la recorrida de diez pasos (nueve en el teléfono). **Entrega 3 hecha (v0.0XX):**
+  práctica en `/practice` y la recorrida de diez pasos (nueve en el teléfono). **Entrega 3 hecha (v0.158):**
   *Show me* en las 16 entradas con un paso (la práctica con solo ese paso, y vuelta a donde estabas) y el punto de
   novedades en el "?" con *What's new* arriba de la ayuda. Falta elegir con Lega las fotos del ejemplo y probar a
   mano en Safari, el iPhone y con VoiceOver. Pendiente chico: en el teléfono el punto de novedades se ve solo con el

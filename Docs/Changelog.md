@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.158 :
 
 **Ayuda, entrega 3: "Mostrame" y novedades** (P.13). La ayuda explicaba cada función pero no la señalaba, y nada
 avisaba qué había de nuevo. Ahora las entradas con un paso de la recorrida (16) tienen *Show me*: abre la práctica con

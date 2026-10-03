@@ -1,6 +1,6 @@
 # Tutorial animado y ayuda (P.13)
 
-Estado: **las tres entregas hechas (1 y 2 en v0.082; la 3, "Mostrame" y novedades, en v0.0XX).** "Cómo quedó" (al final)
+Estado: **las tres entregas hechas (1 y 2 en v0.082; la 3, "Mostrame" y novedades, en v0.158).** "Cómo quedó" (al final)
 dice lo que se hizo y en qué se apartó del diseño; "Correcciones de la auditoría" manda sobre lo anterior. **Lega
 respondió las preguntas el 2026-09-30** ("Decisiones"). Las fotos del ejemplo quedaron dibujadas para la app (ver
 "Cómo quedó"); falta que Lega diga si se cambian por fotos de la lista. Lo
@@ -817,7 +817,7 @@ Shift+clic (el mapa vive en su documento, que no se guarda). La recorrida no mue
   paso del menú "/"), Firefox y VoiceOver. La prueba de punta a punta `tour.mjs` del repo de pruebas privado todavía
   no está.
 
-## Cómo quedó (entrega 3, v0.0XX)
+## Cómo quedó (entrega 3, v0.158)
 
 ### "Mostrame"
 
