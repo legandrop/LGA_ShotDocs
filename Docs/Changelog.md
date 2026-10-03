@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.159 :
+v0.0XX :
 
 **Teléfono pulido: cuatro chicos.** (1) El punto de novedades del "?" solo se veía con el cajón abierto; ahora también
 está en el botón de menú de la barra de arriba (la de la página y la de la práctica), con la misma regla (`useHelpDot`,

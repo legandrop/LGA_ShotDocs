@@ -248,7 +248,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   práctica en `/practice` y la recorrida de diez pasos (nueve en el teléfono). **Entrega 3 hecha (v0.158):**
   *Show me* en las 16 entradas con un paso (la práctica con solo ese paso, y vuelta a donde estabas) y el punto de
   novedades en el "?" con *What's new* arriba de la ayuda. Falta elegir con Lega las fotos del ejemplo y probar a
-  mano en Safari, el iPhone y con VoiceOver. **Hecho (v0.159):** en el teléfono el punto de novedades también está en
+  mano en Safari, el iPhone y con VoiceOver. **Hecho (v0.0XX):** en el teléfono el punto de novedades también está en
   el botón de menú de la barra de arriba (la de la página y la de la práctica), con la misma regla que el del "?".
 - **P.14 Borrar y archivar proyectos (Lega, 2026-09-30: "¿cómo borro los proyectos viejos? No encontré de
   dónde"):** hoy un proyecto se crea, se renombra y se comparte, pero no se puede sacar de la lista: no hay nada
@@ -287,7 +287,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   el mouse encima, el foco en la fila o en sus botones, o el menú ⋯ abierto. En el teléfono (`hover: none`) la página
   abierta los muestra siempre, como antes. Pendientes menores de su auditoría: (O2) `:hover` y `.menu-open` no se pueden
   calcular en jsdom; la prueba afirma el texto del selector y la medición real está en Chromium; (O3, resuelta en
-  v0.159) un clic con el mouse en el triángulo o en la fila dejaba el foco ahí y, por `:focus-within`, sus ⋯ y + (y el
+  v0.0XX) un clic con el mouse en el triángulo o en la fila dejaba el foco ahí y, por `:focus-within`, sus ⋯ y + (y el
   nombre cortado) hasta que el foco se iba; ahora la regla es `:is(:focus-visible, :has(:focus-visible))`: con el
   teclado (flechas, Tab) siguen apareciendo, con el mouse no se quedan.
 - **P.17 Hecho (v0.079): instalar la app** (Lega, 2026-10-01). La app reconoce si está instalada; si no, ofrece
@@ -649,7 +649,7 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
 - **P.28 Hecho (v0.156): la tabla del reporte en el teléfono** (`Doc_Tabla_Telefono.md`): en pantalla angosta ninguna
   columna con ancho guardado baja de 96 px y la tabla se desplaza de costado dentro de su bloque; la celda donde se
   escribe se acomoda a la vista. La compu y el PDF no cambian. Falta probarlo en un iPhone real (dedo, teclado abierto).
-  **Hecho (v0.159):** el piso de las columnas y el desplazamiento valen hasta 1024 px (no 760) solo para las tablas, así
+  **Hecho (v0.0XX):** el piso de las columnas y el desplazamiento valen hasta 1024 px (no 760) solo para las tablas, así
   que en un iPad vertical (768 a 834 px, con el cajón a la vista) el reporte ya no se encoge (columnas de 96 en lugar de
   47 a 57) y se desplaza; también se arregló el botón de comentar del margen, que salía 4 px de la pantalla.
   Quedan (chicos): lo que headless no prueba (el impulso del dedo, el teclado abierto, un editor remoto moviendo la selección

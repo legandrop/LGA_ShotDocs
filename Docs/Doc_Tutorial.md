@@ -937,7 +937,7 @@ auditoría lo vio porque el arnés entraba con el correo de Lega.
 - Elegir las fotos del ejemplo (siguen las dibujadas).
 - Probar en Safari de la Mac, el iPhone (Safari y la app instalada) y VoiceOver: *Show me* en el teléfono (el paso de
   Buscar y los del cajón) y el punto de novedades después de una actualización real.
-- (Hecho en v0.159) En el teléfono el punto de novedades se veía solo con el cajón abierto (el "?" vive ahí): ahora
+- (Hecho en v0.0XX) En el teléfono el punto de novedades se veía solo con el cajón abierto (el "?" vive ahí): ahora
   también está en el botón de menú de la barra de arriba (`NavMenuButton`, `src/ui/NavMenuButton.tsx`, en la barra de la
   página y en la de la práctica), con la misma regla que el "?" (`useHelpDot`: la recorrida sin ver o las novedades) y se
   apaga junto con él al abrir la ayuda; la entrada *What's new* tiene su texto para pantallas táctiles
