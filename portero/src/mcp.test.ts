@@ -1,5 +1,5 @@
 // El servidor MCP de la prueba técnica M0 (mcp.ts) y el interruptor en el portero (core.ts).
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 import { Portero, type Env, type Store } from './core';
 import {
@@ -227,6 +227,44 @@ describe('MCP prendido: metadata y token', () => {
     expect(calls.filter((c) => c.url.endsWith('jwks.json'))).toHaveLength(1);
   });
 
+  it('las llaves recordadas vencen a los 10 minutos y una llave desconocida se vuelve a pedir como mucho una vez por minuto', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const start = Date.now();
+      const calls: Call[] = [];
+      const p = portero(on, fakeHttp({}, calls));
+      const jwks = () => calls.filter((c) => c.url.endsWith('jwks.json')).length;
+      expect((await p.handle(modernReq(await sign(claims()), 'tools/list'))).status).toBe(200);
+      expect(jwks()).toBe(1);
+      vi.setSystemTime(start + 9 * 60_000);
+      expect((await p.handle(modernReq(await sign(claims()), 'tools/list'))).status).toBe(200);
+      expect(jwks()).toBe(1);
+      // Pasados los 10 minutos se vuelven a pedir: una llave sacada del JWKS deja de valer.
+      vi.setSystemTime(start + 10 * 60_000 + 1);
+      expect((await p.handle(modernReq(await sign(claims()), 'tools/list'))).status).toBe(200);
+      expect(jwks()).toBe(2);
+      // Una llave desconocida: en el mismo minuto no se repide; pasado el minuto, sí (una vez).
+      for (let i = 0; i < 5; i++) expect((await p.handle(modernReq(await sign(claims(), { kid: 'nueva' }), 'tools/list'))).status).toBe(401);
+      expect(jwks()).toBe(2);
+      vi.setSystemTime(start + 11 * 60_000 + 2);
+      for (let i = 0; i < 3; i++) expect((await p.handle(modernReq(await sign(claims(), { kid: 'nueva' }), 'tools/list'))).status).toBe(401);
+      expect(jwks()).toBe(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('una llave mal formada en el JWKS se saltea y las demás siguen validando', async () => {
+    const base = fakeHttp({});
+    const http = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith('jwks.json')) {
+        return Response.json({ keys: [{ kty: 'EC', crv: 'P-256', kid: 'rota', x: 'no', y: 'sirve' }, { ...publicJwk, kid: 'k1' }] });
+      }
+      return base(input, init);
+    }) as typeof fetch;
+    expect((await portero(on, http).handle(modernReq(await sign(claims()), 'tools/list'))).status).toBe(200);
+  });
+
   it('otro origen de navegador: 403; GET y DELETE: 405', async () => {
     const token = await sign(claims());
     const p = portero(on, fakeHttp({}));
@@ -332,6 +370,10 @@ describe('MCP prendido: herramientas', () => {
     expect(bad.result.isError).toBe(true);
     const unknown = (await (await p.handle(modernReq(token, 'tools/call', { name: 'share_page', arguments: {} }))).json()) as { error: { code: number } };
     expect(unknown.error.code).toBe(-32602);
+    for (const name of ['constructor', '__proto__', 'toString']) {
+      const odd = (await (await p.handle(modernReq(token, 'tools/call', { name, arguments: {} }))).json()) as { error: { code: number } };
+      expect(odd.error.code, name).toBe(-32602);
+    }
   });
 
   it('la base rechaza el token (revocado o vencido): 401 para que el cliente vuelva a conectar', async () => {

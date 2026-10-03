@@ -118,14 +118,18 @@ async function loadJwks(env: McpEnv, http: typeof fetch, now: number): Promise<J
   for (const jwk of body.keys ?? []) {
     // Solo ES256 (la del proyecto desde 2026-09-29): una llave simétrica nunca se publica y no se puede validar acá.
     if (jwk.kty !== 'EC' || jwk.crv !== 'P-256' || typeof jwk.kid !== 'string') continue;
-    const key = await crypto.subtle.importKey(
-      'jwk',
-      { kty: 'EC', crv: 'P-256', x: jwk.x as string, y: jwk.y as string, ext: true },
-      { name: 'ECDSA', namedCurve: 'P-256' },
-      false,
-      ['verify'],
-    );
-    keys.set(jwk.kid, key);
+    try {
+      const key = await crypto.subtle.importKey(
+        'jwk',
+        { kty: 'EC', crv: 'P-256', x: jwk.x as string, y: jwk.y as string, ext: true },
+        { name: 'ECDSA', namedCurve: 'P-256' },
+        false,
+        ['verify'],
+      );
+      keys.set(jwk.kid, key);
+    } catch {
+      // Una llave mal formada se saltea: no tumba la validación con las demás.
+    }
   }
   const entry = { keys, until: now + JWKS_TTL_MS, tried: now };
   jwksMemory.set(base, entry);
@@ -568,7 +572,8 @@ function maxPageBytes(env: McpEnv): number {
 async function callTool(ctx: Ctx, user: McpUser, params: Record<string, unknown>): Promise<Record<string, unknown>> {
   const name = typeof params.name === 'string' ? params.name : '';
   const args = (params.arguments && typeof params.arguments === 'object' ? params.arguments : {}) as Record<string, unknown>;
-  const fn = TOOL_RPC[name];
+  // Solo las propias (`constructor`, `__proto__` y compañía no son herramientas).
+  const fn = Object.hasOwn(TOOL_RPC, name) ? TOOL_RPC[name] : undefined;
   if (!fn) throw new RpcFailure(200, -32602, `Unknown tool: ${name}`);
   try {
     if (name === 'read_page') return await readPage(ctx, user, args);

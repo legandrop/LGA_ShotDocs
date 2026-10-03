@@ -1382,8 +1382,10 @@ deja hacer cosas de la cuenta con el token del tercero. Las dos cosas se prueban
   con 5 minutos. Probado con las pruebas; ninguna herramienta lo usa todavía.
 - **Un log por pedido** (`mcp: {metodo, version, cliente, elicitation}`), sin tokens, personas ni contenido: es lo que
   dice qué hablan los clientes reales (paso 7).
-- Pruebas: `portero/src/mcp.test.ts` (31). Mutantes: 6 de 6 mueren (sin firma, sin el rechazo en las otras rutas, sin
-  comparar los argumentos del estado, sin `client_id`, sin el escape del envoltorio, el interruptor siempre prendido).
+- Pruebas: `portero/src/mcp.test.ts` (33). Mutantes: 10 de 10 mueren (sin firma, sin el rechazo en las otras rutas,
+  sin comparar los argumentos del estado, sin `client_id`, sin el escape del envoltorio, el interruptor siempre prendido,
+  y de la auditoría: las llaves que nunca vencen, repedirlas sin freno, una llave rota que tumba a todas y un nombre
+  heredado como `constructor` tomado por herramienta).
 
 ### Lo comprobado
 
@@ -1431,13 +1433,20 @@ deja hacer cosas de la cuenta con el token del tercero. Las dos cosas se prueban
 
 **La API de Auth con el token de un tercero** (el router de `supabase/auth`, `internal/api/api.go`): `/user` (leer y
 cambiar), `/logout`, `/factors` y `/user/oauth/grants` piden solo una sesión válida (`requireAuthentication`) y **no
-distinguen un token OAuth**. Con la configuración de hoy de Wanka (`security_update_password_require_reauthentication:
-false`), **un cliente MCP podría ponerle una contraseña a la cuenta y entrar después con correo y contraseña, con la
-sesión completa**: eso sí cambia la cuenta, y la regla de 9.2 dice que así el MCP en el portero no sale. Se cierra con
-la configuración (paso 1): pedir la reautenticación por correo para cambiar la contraseña y apagar el alta de TOTP (la
-app no usa contraseñas ni MFA: no le cuesta nada a nadie). Lo que queda con el token: leer el usuario, pedir un cambio de
-correo (con `mailer_secure_email_change_enabled: true` hay que confirmarlo en los dos correos), cerrar todas las
-sesiones (una molestia, no un acceso) y revocar sus propios permisos. No se probó con un token real (paso 6).
+distinguen un token OAuth**. **Un cliente MCP puede ponerle una contraseña a la cuenta** (`PUT /auth/v1/user` con
+`password`), y **la reautenticación no lo frena**: `security_update_password_require_reauthentication` (hoy `false`) pide
+el código por correo solo si la sesión tiene más de 24 horas (`internal/api/user.go`, líneas 153 a 163), y la sesión de
+un cliente MCP se crea al conectarlo (y de nuevo en cada reconexión, con el registro dinámico). Con esa contraseña se
+puede abrir una sesión con correo y contraseña. **En la base esa sesión no ve nada:** `private.session_allowed()` no
+acepta una sesión abierta con contraseña (`workspace_role()` da null, todos los niveles dan 0, `media_whoami` no da
+dueño; `Doc_Supabase.md`). Lo que sí consigue es cambiar la cuenta y usar la API de Auth con una sesión propia, y la
+regla de 9.2 dice que así el MCP en el portero no sale. **Se cierra en el paso 1 conectando el hook ya escrito y probado
+`private.hook_custom_access_token`**, que rechaza el ingreso con contraseña y la renovación de una sesión abierta así:
+aunque el tercero ponga una contraseña, no consigue ninguna sesión. Se suman la reautenticación (cubre las sesiones de
+más de 24 horas) y apagar el alta de TOTP (la app no usa contraseñas ni MFA: no le cuesta nada a nadie). Lo que queda
+con el token: leer el usuario, poner una contraseña que no sirve para entrar, pedir un cambio de correo (con
+`mailer_secure_email_change_enabled: true` hay que confirmarlo en los dos correos), cerrar todas las sesiones (una
+molestia, no un acceso) y revocar sus propios permisos. No se probó con un token real (paso 6).
 
 **La base, con un token OAuth simulado** (SQL en una transacción `read only` que se deshizo, con `request.jwt.claims`
 armados a mano y el rol `authenticated`):
@@ -1514,27 +1523,38 @@ en memoria con una consulta de solo lectura, sin escribirlas a disco; todas son 
 ### Lo que necesita la infraestructura real (lo hacen el coordinador o Lega, en este orden)
 
 1. **Cerrar la cuenta al token de un tercero** (Supabase, `PATCH /v1/projects/znlvpuddswymxpffgvbz/config/auth`):
-   `security_update_password_require_reauthentication: true` y `mfa_totp_enroll_enabled: false`. Cambia: poner o
-   cambiar una contraseña pide un código por correo; no se pueden agregar factores TOTP. La app no usa ninguna de las dos.
-   Volver: los mismos campos en `false` y `true`.
-2. **El plan B en la base** (una migración de M1 o una de prueba, auditada): `public.mcp_pre_request()` con la regla
-   probada, `alter role authenticator set pgrst.db_pre_request = 'public.mcp_pre_request'`, `notify pgrst, 'reload
+   `hook_custom_access_token_enabled: true` con `hook_custom_access_token_uri:
+   "pg-functions://postgres/private/hook_custom_access_token"` (la función ya está en la base; `Doc_Supabase.md`),
+   `security_update_password_require_reauthentication: true` y `mfa_totp_enroll_enabled: false`. Cambia: ninguna sesión
+   abierta con contraseña recibe un token (tampoco al renovarla); en una sesión de más de 24 horas, poner una contraseña
+   pide un código por correo; no se pueden agregar factores TOTP. La app no usa contraseñas ni MFA. El hook corre en
+   cada ingreso y renovación de todos: antes de seguir, entrar y salir con código en la app (si fallara, no entraría
+   nadie). Volver: `hook_custom_access_token_enabled: false` y los otros dos campos en `false` y `true`.
+2. **El plan B en la base** (una migración de M1 o una de prueba, auditada): `private.mcp_pre_request()` con la regla
+   probada (en `private`: con el prefijo `mcp_` en `public` quedaría expuesta por la propia regla), `alter role
+   authenticator set pgrst.db_pre_request = 'private.mcp_pre_request'`, `notify pgrst, 'reload
    config'`, la condición `client_id is null` en las cuatro políticas de Storage y una `mcp_ping()` que devuelve
    `auth.uid()`. Comprobar que la app sigue andando igual (entrar, abrir, editar, subir una foto) y que
    `current_setting('request.path')` llega a la función en el PostgREST de Supabase. Volver:
    `alter role authenticator reset pgrst.db_pre_request; notify pgrst, 'reload config';` y las políticas de antes.
 3. **La pantalla de permiso en la app** (código: la ruta `/oauth/consent/<ref>` con
-   `supabase.auth.oauth.getAuthorizationDetails` y *Allow* / *Deny*; para M0 alcanza sin elegir proyectos). Tiene que
+   `supabase.auth.oauth.getAuthorizationDetails` y *Allow* / *Deny*; para M0 alcanza sin elegir proyectos). Muestra,
+   además del nombre del cliente, el host del `redirect_uri`: con el registro dinámico abierto cualquiera puede
+   registrar un cliente llamado "Claude" con su propia dirección de vuelta y mandar el link de autorizar. Tiene que
    estar publicada, porque Supabase exige el origen del *Site URL*. Volver: no hace nada si el servidor OAuth está
    apagado.
 4. **Publicar el portero con el MCP** (lo hace el push a `main` de esta rama ya auditada) y cargar la variable
    `MCP_M0=1` en el Worker `shotdocs-portero`. Volver: borrar la variable (el portero queda como hoy).
 5. **Prender el servidor OAuth** (mismo `PATCH`): `oauth_server_enabled: true`, `oauth_server_allow_dynamic_registration:
    true`, `oauth_server_authorization_path: "/oauth/consent/znlvpuddswymxpffgvbz"`. Cambia: cualquiera puede registrar un
-   cliente (no entrar: el registro de personas sigue cerrado). Volver: `oauth_server_enabled: false` (los clientes y
-   sesiones OAuth quedan en la base sin uso; con la LEY 1 se pueden borrar).
-6. **La API de Auth con un token real** (con `curl` y el token que da el paso 7): `GET /auth/v1/user` (200),
-   `PUT /auth/v1/user` con `password` (tiene que pedir reautenticación), `POST /auth/v1/factors` (rechazado),
+   cliente (no entrar: el registro de personas sigue cerrado). Volver: antes de apagar, revocar cada cliente
+   (`revokeGrant`, que necesita el servidor prendido) o cerrar por SQL las sesiones con `oauth_client_id` (LEY 1);
+   después `oauth_server_enabled: false`. Apagar solo no alcanza: los tokens de acceso siguen valiendo hasta una hora y
+   no está comprobado que apagarlo frene la renovación de esas sesiones.
+6. **La API de Auth con un token real** (con `curl` y el token que da el paso 7): que el hook del paso 1 no corta el
+   ingreso con código ni el canje y la renovación del token OAuth; `GET /auth/v1/user` (200); `PUT /auth/v1/user` con
+   `password` (dentro de las primeras 24 horas de esa sesión **va a dar 200**: lo que se comprueba es que después
+   `POST /auth/v1/token?grant_type=password` con esa contraseña lo rechaza el hook); `POST /auth/v1/factors` (rechazado),
    `POST /auth/v1/logout?scope=others` (anotar qué hace), y con ese token `GET /rest/v1/pages` (rechazado por el paso 2)
    y `POST /rest/v1/rpc/mcp_ping` (la persona). Anotar acá cada respuesta.
 7. **Clientes reales:** agregar `https://<portero>/mcp` como conector en Claude (web y escritorio), ChatGPT (modo
@@ -1546,6 +1566,10 @@ en memoria con una consulta de solo lectura, sin escribirlas a disco; todas son 
 8. **CPU en Cloudflare:** con el paso 4, el tiempo de CPU de cada pedido a `/mcp` en Workers Logs (`observability` está
    prendido): `tools/list` ya; `read_page` cuando exista `mcp_pull_page` (M1), con páginas de 7, 16, 31 y 63 KB. Con
    eso se fija `MCP_MAX_PAGE_KB` y se decide el plan pago (D73).
+
+**Volver atrás va siempre en orden inverso** (8 a 1): el paso 2 no se deshace mientras quede alguna sesión con
+`oauth_client_id` (un cliente que siga renovando volvería a tener toda la base), y el 1 no se deshace con el servidor
+OAuth prendido.
 
 Si en el paso 7 ningún cliente pasa la pantalla de permiso por `#2820`, el MCP en el portero espera a Supabase y el
 camino es el MCP local (9.9) o reportar el caso con los datos del paso 7.
@@ -1559,3 +1583,17 @@ camino es el MCP local (9.9) o reportar el caso con los datos del paso 7.
    el login, el token y el portero); con M1, la lista.
 4. Repetir 1 a 3 en ChatGPT y en el teléfono.
 5. Revocar (paso 7) y volver a pedir: en menos de una hora deja de andar.
+
+### Correcciones de la auditoría
+
+La auditoría independiente dio "no aprobado" por un bloqueante de documentación; el código quedó aprobado. Corregido en
+una ronda:
+
+| Hallazgo | Qué se cambió |
+|---|---|
+| B1. El paso 1 no cerraba la API de Auth: Supabase pide la reautenticación para cambiar la contraseña solo con sesiones de más de 24 horas, y la de un cliente MCP es nueva | "La API de Auth con el token de un tercero" lo dice; el paso 1 conecta el hook `private.hook_custom_access_token` (rechaza el ingreso con contraseña); el paso 6 espera un 200 del `PUT` y comprueba que la contraseña no sirve para entrar; se corrigió "la sesión completa" (`session_allowed` no acepta sesiones con contraseña) y la frase del roadmap |
+| O1. Volver atrás del paso 5 y del 2 dejaba sesiones OAuth vivas sin el plan B | Revocar antes de apagar el servidor OAuth; volver siempre en orden inverso |
+| O3. Sin prueba de que las llaves recordadas vencen ni del freno; una llave mal formada tumbaba la validación | Dos pruebas nuevas (vencen a los 10 minutos, una llave desconocida se repide como mucho una vez por minuto); la llave mal formada se saltea |
+| O5. Un nombre como `constructor` llegaba a PostgREST como función | `Object.hasOwn`: responde *Unknown tool* (`-32602`), con su prueba |
+| O10. `public.mcp_pre_request` quedaba expuesta por su propia regla | El paso 2 la pone en `private` |
+| O2, O4. El título va afuera del contenido no confiable; la pantalla de permiso tiene que mostrar el host del `redirect_uri` | Al roadmap de M1 (P.24) y al paso 3 |
