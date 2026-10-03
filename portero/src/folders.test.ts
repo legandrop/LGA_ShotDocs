@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanFileName, cutText, DRIVE_CALL_BUDGET, driveFolderName, FOLDER_BATCH, LIST_TRUST_MS, Portero, TREE_TTL_MS, validFolderPath, type Env, type Store } from './core';
+import { cleanFileName, cutText, DRIVE_CALL_BUDGET, driveFolderName, FOLDER_BATCH, LIST_TRUST_MS, PART_ANSWER_MS, Portero, TREE_TTL_MS, validFolderPath, type Env, type Store } from './core';
 
 // Carpetas (P.9, Docs/Doc_Carpetas.md): crear el árbol, abrir las subidas, listar en vivo y, sobre todo, que
 // nadie pueda listar, subir ni bajar nada de afuera del árbol de la carpeta.
@@ -532,6 +532,83 @@ describe('carpetas: subir', () => {
     };
     vi.useFakeTimers({ now: Date.now() + 7 * 24 * 3600_000, toFake: ['Date'] });
     expect((await uploadOne(p, items[0]!.uploadId, new Uint8Array(3))).status).toBe(410);
+  });
+
+  it('Drive que no contesta una parte (?stall=1): a los 90 s el portero contesta 504 stalled y corta el pedido a Drive; sin stall=1 sigue esperando', async () => {
+    const { world, store, p } = await setup();
+    await prepare(p, {});
+    const open = async () =>
+      ((await (await call(p, '/folder/sessions', 'editor-jwt', { file: F1, items: [{ dir: null, name: 'a.bin', size: 6 }] })).json()) as { items: { uploadId: string }[] })
+        .items[0]!.uploadId;
+    let hangDrive = true;
+    let aborted = 0;
+    let reached = 0;
+    const http = ((input: RequestInfo | URL, init: RequestInit = {}) => {
+      if (hangDrive && String(input).includes('/session/') && init.method === 'PUT') {
+        reached++;
+        return new Promise<Response>((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => {
+            aborted++;
+            reject(new DOMException('aborted', 'AbortError'));
+          });
+        });
+      }
+      return world.http(input, init);
+    }) as typeof fetch;
+    const hung = new Portero(env, store, http);
+    const part = (id: string, range: string, data: Uint8Array<ArrayBuffer>, query: string) =>
+      call(hung, `/upload/${id}${query}`, 'editor-jwt', undefined, { method: 'PUT', headers: { 'Content-Range': range }, body: data });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    // La primera parte (Drive no contesta): 504 stalled a los PART_ANSWER_MS, ni antes ni después.
+    const first = await open();
+    let answer: Response | null = null;
+    void part(first, 'bytes 0-2/6', new Uint8Array([1, 2, 3]), '?stall=1').then((r) => (answer = r));
+    // (El id de la subida se descifra con WebCrypto, fuera de los relojes simulados: se espera a que llegue a Drive.)
+    await vi.waitFor(() => expect(reached).toBe(1));
+    await vi.advanceTimersByTimeAsync(PART_ANSWER_MS - 1000);
+    expect(answer).toBeNull();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(answer).not.toBeNull();
+    expect(answer!.status).toBe(504);
+    expect(((await answer!.json()) as { code: string }).code).toBe('stalled');
+    expect(aborted).toBe(1);
+    // Sin `stall=1` (una app anterior): como siempre, espera a Drive.
+    let plain: Response | null = null;
+    void part(first, 'bytes 0-2/6', new Uint8Array([1, 2, 3]), '').then((r) => (plain = r));
+    await vi.waitFor(() => expect(reached).toBe(2));
+    await vi.advanceTimersByTimeAsync(PART_ANSWER_MS * 3);
+    expect(plain).toBeNull();
+    // Drive vuelve: la subida sigue (lo de antes se cortó, se manda de nuevo) y termina.
+    hangDrive = false;
+    vi.useRealTimers();
+    expect((await part(first, 'bytes 0-2/6', new Uint8Array([1, 2, 3]), '?stall=1')).status).toBe(200);
+    const last = await part(first, 'bytes 3-5/6', new Uint8Array([4, 5, 6]), '?stall=1');
+    expect(last.status).toBe(200);
+    expect(((await last.json()) as { status: string }).status).toBe('done');
+    // Una sola copia en Drive.
+    expect([...world.drive.values()].filter((f) => f.name === 'a.bin')).toHaveLength(1);
+  });
+
+  it('la última parte de un archivo de una carpeta con la base colgada (?stall=1): también 504 stalled', async () => {
+    const { world, store, p } = await setup();
+    await prepare(p, {});
+    const { items } = (await (await call(p, '/folder/sessions', 'editor-jwt', { file: F1, items: [{ dir: null, name: 'b.bin', size: 3 }] })).json()) as {
+      items: { uploadId: string }[];
+    };
+    let reached = 0;
+    const http = ((input: RequestInfo | URL, init: RequestInit = {}) =>
+      String(input).includes('/rpc/media_file') ? (reached++, new Promise<Response>(() => undefined)) : world.http(input, init)) as typeof fetch;
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    let answer: Response | null = null;
+    void call(new Portero(env, store, http), `/upload/${items[0]!.uploadId}?stall=1`, 'editor-jwt', undefined, {
+      method: 'PUT',
+      headers: { 'Content-Range': 'bytes 0-2/3' },
+      body: new Uint8Array([1, 2, 3]),
+    }).then((r) => (answer = r));
+    await vi.waitFor(() => expect(reached).toBe(1));
+    await vi.advanceTimersByTimeAsync(PART_ANSWER_MS);
+    expect(answer!.status).toBe(504);
+    expect([...world.drive.values()].some((f) => f.name === 'b.bin')).toBe(false);
   });
 
   it('subir pide editar, una carpeta ya creada y una subcarpeta del árbol', async () => {

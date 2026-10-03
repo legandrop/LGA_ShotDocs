@@ -737,7 +737,10 @@ export class Portero {
     signal?: AbortSignal,
     stalledBefore = 0,
   ): Promise<ChunkAnswer> {
-    return this.request<ChunkAnswer>('PUT', `/upload/${encodeURIComponent(uploadId)}`, {
+    // Con una parte, `stall=1`: si Drive no le contesta al portero a tiempo, el portero lo dice (`504 stalled`) y la
+    // subida cuenta como trabada enseguida, sin esperar el plazo de la respuesta (`answerLimit`, hasta 10 minutos y
+    // medio). Un portero anterior lo ignora.
+    return this.request<ChunkAnswer>('PUT', `/upload/${encodeURIComponent(uploadId)}${body ? '?stall=1' : ''}`, {
       headers: { 'Content-Range': range },
       body,
       signal,
@@ -911,6 +914,9 @@ export class Portero {
         // Un 5xx, un tiempo agotado (408) o demasiados pedidos (429) pueden andar si se repiten; los demás 4xx no.
         const retryable = status >= 500 || status === 408 || status === 429;
         const code = typeof data?.code === 'string' ? data.code : undefined;
+        // El portero no tuvo respuesta de Drive a tiempo con la parte ya recibida (`?stall=1`): es una trabada, igual
+        // que si la hubiera cortado el vigilante de acá (no se reintenta en el momento; la cola decide cuándo).
+        if (status === 504 && code === 'stalled') throw new StalledError();
         throw new PorteroError(data?.error ?? t('portero.answered', { status }), status, retryable, code);
       }
       if (data === null) throw new PorteroError(t('portero.unreadable'), res.status, true);

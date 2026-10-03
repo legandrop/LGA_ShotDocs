@@ -834,6 +834,41 @@ describe('el cliente del portero con una subida de carpeta', () => {
   });
 });
 
+describe('el cliente del portero: Drive que no le contesta al portero una parte', () => {
+  it('las partes van con ?stall=1 (la pregunta de cuánto llegó, no); un 504 stalled es una trabada: sin reintentar, con la subida y lo enviado', async () => {
+    const calls: string[] = [];
+    const fetcher = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const url = new URL(String(input));
+      const range = new Headers(init.headers).get('Content-Range');
+      calls.push(`${init.method} ${url.pathname}${url.search} ${range}`);
+      if (range === 'bytes */6') return new Response(JSON.stringify({ status: 'incomplete', received: 3 }), { status: 200 });
+      return new Response(JSON.stringify({ error: 'Google Drive did not answer in time: trying again shortly.', code: 'stalled' }), { status: 504 });
+    }) as typeof fetch;
+    const p = new Portero('https://portero.example', { fetch: fetcher, token: async () => 'jwt', wait: async () => undefined });
+    const err = await p.upload(new File(['abcdef'], 'a.txt'), { resume: 'f.x.y', noOpen: true }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(UploadError);
+    expect((err as UploadError).stalled).toBe(true);
+    expect((err as UploadError).uploadId).toBe('f.x.y');
+    expect((err as UploadError).sent).toBe(3);
+    // Una pregunta y una parte: el 504 no se reintenta en el momento (antes de esto no existía; un 5xx sí se repite).
+    expect(calls).toEqual(['PUT /upload/f.x.y bytes */6', 'PUT /upload/f.x.y?stall=1 bytes 3-5/6']);
+  });
+
+  it('un 504 sin ese código (un proxy) sigue siendo un error que se reintenta', async () => {
+    let n = 0;
+    const fetcher = (async (_input: RequestInfo | URL, init: RequestInit = {}) => {
+      const range = new Headers(init.headers).get('Content-Range');
+      if (range === 'bytes */3') return new Response(JSON.stringify({ status: 'incomplete', received: 0 }), { status: 200 });
+      n++;
+      if (n === 1) return new Response('Gateway Timeout', { status: 504 });
+      return new Response(JSON.stringify({ status: 'done', file: { id: 'd1', name: 'a.txt', mimeType: 'text/plain', size: 3 } }), { status: 200 });
+    }) as typeof fetch;
+    const p = new Portero('https://portero.example', { fetch: fetcher, token: async () => 'jwt', wait: async () => undefined });
+    expect((await p.upload(new File(['abc'], 'a.txt'), { resume: 'f.x.y', noOpen: true })).id).toBe('d1');
+    expect(n).toBe(2);
+  });
+});
+
 describe('el cliente del portero: listar varias subcarpetas (dirs)', () => {
   const client = (answer: (body: Record<string, unknown>) => Response) => {
     const sent: Record<string, unknown>[] = [];

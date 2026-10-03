@@ -306,6 +306,16 @@ export const LIST_DIRS_MAX = 40;
  */
 export const LIST_TRUST_MS = 60_000;
 /**
+ * Lo más que el portero espera a Drive (y, en la última parte de un archivo de una carpeta, a la base) con una parte
+ * ya recibida entera. La parte está en la memoria del portero: lo que tarda de acá en más es Cloudflare con Drive
+ * (segundos para 8 MiB), nunca la red de quien sube. Pasado esto contesta `504 stalled` y la app lo toma como una
+ * subida trabada, sin esperar su propio plazo de respuesta (hasta 10 minutos y medio, que tiene que cubrir un proxy
+ * o un antivirus que se queda con el cuerpo y lo sube despacio). Solo si la app lo pide (`?stall=1`): una anterior
+ * lo tomaría como un error que se reintenta en el momento. Menos que el plazo más corto de la app (2 minutos), para
+ * que la respuesta llegue antes de que la app corte.
+ */
+export const PART_ANSWER_MS = 90_000;
+/**
  * Los motivos de un 403 de Drive que piden ir más despacio (no dicen nada del permiso): el límite por usuario o por
  * proyecto (`userRateLimitExceeded`, `rateLimitExceeded`) y el del día (`dailyLimitExceeded`, `quotaExceeded`).
  */
@@ -1266,14 +1276,56 @@ export class Portero {
       if (total !== upload.size || end < start || body.byteLength !== end - start + 1 || body.byteLength > MAX_CHUNK) {
         throw new HttpError(400, 'The part does not match the upload.');
       }
-      // La última parte de un archivo de una carpeta crea el archivo en Drive: antes se vuelve a mirar que la persona
-      // todavía pueda subir ahí (sacada de la página o del workspace, la subida queda sin terminar).
-      if (sealed && upload.folder && end + 1 === total) await this.appFolder(who, upload.folder, 3);
     }
+    const forward = async (signal?: AbortSignal): Promise<unknown> => {
+      if (part) {
+        const [, end, total] = part.slice(1).map(Number);
+        // La última parte de un archivo de una carpeta crea el archivo en Drive: antes se vuelve a mirar que la persona
+        // todavía pueda subir ahí (sacada de la página o del workspace, la subida queda sin terminar).
+        if (sealed && upload.folder && end! + 1 === total) await this.appFolder(who, upload.folder, 3);
+      }
+      return this.forwardChunk(uploadId, upload, sealed, range, body, who, signal);
+    };
+    // Con la parte entera acá, lo que falta es Cloudflare con Drive: si no contesta, la app se entera enseguida.
+    if (part && new URL(req.url).searchParams.get('stall') === '1') return this.answerWithin(PART_ANSWER_MS, forward);
+    return forward();
+  }
+
+  /**
+   * `work` con un tope: pasado `ms` se corta (su señal) y se contesta `504 stalled`, que la app toma como una subida
+   * trabada. Lo que Drive haya recibido queda en la subida: al retomar, la app pregunta cuánto llegó.
+   */
+  private async answerWithin<T>(ms: number, work: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    const stop = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const late = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        stop.abort();
+        reject(new HttpError(504, 'Google Drive did not answer in time: trying again shortly.', 'stalled'));
+      }, ms);
+    });
+    try {
+      return await Promise.race([work(stop.signal), late]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** La parte (o la pregunta de cuánto llegó) a Drive, y su respuesta para la app. */
+  private async forwardChunk(
+    uploadId: string,
+    upload: Upload,
+    sealed: boolean,
+    range: string,
+    body: ArrayBuffer,
+    who: Who,
+    signal?: AbortSignal,
+  ): Promise<unknown> {
     const res = await this.http(upload.session, {
       method: 'PUT',
       headers: { 'Content-Range': range, 'Content-Length': String(body.byteLength) },
       body,
+      ...(signal ? { signal } : {}),
     });
     if (res.status === 308) {
       const got = /bytes=0-(\d+)/.exec(res.headers.get('Range') ?? '');
