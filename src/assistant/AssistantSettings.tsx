@@ -4,7 +4,7 @@ import '../i18n/lazy/assistant';
 import { useServices } from '../services';
 import { errorText } from './errorText';
 import { closeAssistantSettings } from './assistantUi';
-import { forgetKey, loadSettings, readKey, sameDestination, saveSettings, type AssistantSettings as Saved } from './keyStore';
+import { forgetKey, forgetTabKey, loadSettings, readKey, sameDestination, saveSettings, type AssistantSettings as Saved } from './keyStore';
 import { KeySyncSection } from './KeySyncSection';
 import { defaultModel, listModels, PROVIDER_NAMES, PROVIDERS, SPEND_LIMIT_URLS, type ModelInfo, type ProviderId } from './providers';
 import { WorkspacePolicy } from './WorkspacePolicy';
@@ -151,6 +151,20 @@ export function AssistantSettings() {
   const forget = async () => {
     setBusy(true);
     try {
+      // Abierta solo en esta pestaña (computadora prestada): se olvida la de la pestaña y nada más; si el dispositivo
+      // tenía una guardada de antes, vuelve a verse (Doc_Clave_Sincronizada.md, "Cómo quedó S2").
+      if (saved?.tabOnly && forgetTabKey(user.email)) {
+        const stored = await loadSettings(user.email).catch(() => null);
+        setKey('');
+        if (stored) showSaved(stored);
+        else {
+          setSaved(null);
+          setModel('');
+          setModels([]);
+        }
+        setMessage({ ok: true, text: tr(stored ? 'assistant.sync.forgotTabKeepsSaved' : 'assistant.settings.forgotten') });
+        return;
+      }
       await forgetKey(user.email);
       setSaved(null);
       setKey('');

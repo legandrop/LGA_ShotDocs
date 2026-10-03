@@ -11,6 +11,28 @@ panel fuera de orden (C1). Recién reemplazado, ⌘Z en el panel lo deshace (DH9
 sigue al vecino que volvió con un deshacer.
 [ Deshacer en orden entrega 2 - el reemplazo en todo el proyecto como un paso de ⌘Z y ⌘⇧Z, exacto en las páginas editadas ]
 
+v0.143 :
+
+La clave del asistente sincronizada, entrega S2 (P.24, `Doc_Clave_Sincronizada.md`). Faltaba cambiar la frase, abrir
+la copia en una computadora prestada sin guardarla, sincronizar en un segundo workspace y llevar la clave de *Voice*; un
+dispositivo aceptaba una copia más vieja repuesta en la base, y con la copia cambiada en otro ofrecía *Choose a new
+passphrase…*, que la pisaba con la clave vieja. Ahora: *Change passphrase…* vuelve a cifrar la copia (abriéndola antes);
+*Keep the key on this device* destildada deja la clave solo en la pestaña; el `savedAt` del sobre rechaza una copia más
+vieja; *Also sync in this workspace…*; la clave de *Voice* viaja en el mismo sobre; el error de clave rechazada suma
+*Enter your passphrase to update it here*; la ventana de salir cuenta las notas de voz. Sin migración.
+[ Clave sincronizada S2 - cambiar la frase, solo en esta pestaña, copia más vieja, otros workspaces, la clave de Voice y las notas de voz al salir ]
+
+v0.142 :
+
+Carpetas, entrega 3, y subidas que se traban (P.9, B.11). Con el portero colgado, cada archivo de una carpeta gastaba
+sus 5 intentos y quedaba con error: ahora una trabada no gasta intentos y, a la segunda, la cola de la carpeta espera
+(10 s, 20 s… hasta 10 minutos), como la de los sueltos, que mientras espera registra los archivos nuevos y sube sus
+miniaturas. La bajada de `page-files` se corta a los 30 s sin recibir nada (antes, 27 minutos) y sus pasadas esperan
+tras cerrar por Storage colgado. En el portero, el 403 de Drive por límite de pedidos sale como `rate` (no «fuera del
+árbol»), la confianza de 60 s vale también en las páginas siguientes, el ZWJ va como escape y la marca de cada
+subcarpeta va en NFC, buscando también las anteriores; retomar compara rutas sin la forma de los acentos.
+[ Carpetas entrega 3 y subidas que se traban - la cola de una carpeta cierra la vuelta con el portero colgado, registrar y miniaturas mientras la cola espera, page-files con tope por quietud, 403 por límite como rate y marcas en NFC ]
+
 v0.141 :
 
 Exportar, entrega 3: volver a Shot Docs desde el zip. El zip guardaba lo necesario para volver, pero nada lo leía.

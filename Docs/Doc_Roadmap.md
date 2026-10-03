@@ -176,14 +176,15 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   `lega/carpetas-e2`). Falta (BAJO): Firefox sin tope por el service worker y probar a mano en Safari, el iPhone y con
   el Drive real (si Drive rechaza la consulta con varios padres, la app cae a de a una sin perder nada, pero gasta un
   pedido de más por tanda; medir el CPU de un pedido con 40 subcarpetas en el plan gratis). De la auditoría de la entrega
-  2 (BAJO): la confianza de 60 s del listado de varias deja listar hasta 60 s una subcarpeta recién movida a otro proyecto
-  (D81); en las páginas siguientes esa confianza vale 10 min y no 60 s; el ZWJ va como carácter invisible en el código
-  (pasarlo a `'‍'`); `inTree` toma cualquier 403 de Drive (también el de límite de pedidos) como «fuera del árbol»,
-  y la subcarpeta aparece como faltante hasta *Retry missing*. Detalle en
-  `Doc_Carpetas.md`, "Cómo quedó" y "Cómo quedó (entrega 2)". Pendiente de los nombres (auditoría de D3, BAJO):
-  - Mac y Windows: la marca de cada subcarpeta resume la ruta sin normalizar los acentos (la Mac da `í` en dos
-    partes). Volver a soltar desde el otro sistema crea subcarpetas nuevas, con el mismo nombre, al lado de las de
-    antes. Normalizarla cambiaría la marca de lo ya subido: hay que pensarlo (por ejemplo, buscar por las dos formas).
+  2 (BAJO, decidido, sin acción): la confianza de 60 s del listado de varias deja listar hasta 60 s una subcarpeta recién
+  movida a otro proyecto (D81). **Entrega 3 hecha (v0.142, rama `lega/carpetas-e3`):** la confianza de 60 s también
+  en las páginas siguientes (con la fecha en que Drive mostró cada subcarpeta, no la del camino); el ZWJ como escape;
+  el 403 de Drive por el límite de pedidos sale como `rate` (ya no como «fuera del árbol»); la marca de cada
+  subcarpeta en NFC, buscando también las de antes (NFC, tal cual y NFD), y retomar en el mismo dispositivo con una
+  copia de la carpeta que trae los acentos en la otra forma (un pendrive, una carpeta de red) reconoce los archivos en
+  vez de pedirlos de nuevo; y la cola de una carpeta cierra la vuelta con el portero colgado (B.11). Desde otra
+  computadora, soltarla de nuevo sigue siendo otra carpeta (otra tarjeta), por diseño. Detalle en
+  `Doc_Carpetas.md`, "Cómo quedó", "Cómo quedó (entrega 2)" y "Cómo quedó (entrega 3)".
 - **P.10 Espacio en el dispositivo y "Available offline"** (Lega, 2026-09-30 y D-25 del 2026-10-01): tope
   elegible, de fábrica 2 GB por workspace en cada dispositivo (pasado el tope, un aviso ofrece liberar las copias ya
   confirmadas en el Drive que hace más que no se abren, y se liberan recién con el sí; la miniatura queda), marcar una página o un proyecto para usarlo sin red (con una ventana de casillas y
@@ -484,9 +485,12 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   `20261017120000_asistente_politica_ventana.sql` (sin aplicar). **La clave sincronizada, S1 implementada (v0.138,
   D72 → B, `Doc_Clave_Sincronizada.md`):** prender la copia cifrada con una frase, abrirla en otro dispositivo
   (preguntando si cambia el destino), *Update* / *Replace synced key…*, *Stop syncing* y *Sign out other devices*; su
-  migración `20261023120000_clave_sincronizada.sql`, sin aplicar. Falta S2 (*Change passphrase…*, *Keep the key on this
-  device*, el aviso de "cambió en otro dispositivo", rechazar una copia más vieja, *Also sync in this workspace*) y medir
-  en el iPhone. Falta: A3 y el MCP (M0 a M3); lo que Lega prueba con
+  migración `20261023120000_clave_sincronizada.sql`, sin aplicar. **S2 implementada (v0.143, sin migración):**
+  *Change passphrase…*, *Keep the key on this device*, rechazar una copia más vieja, *Also sync in this workspace…*, el
+  botón en el 401, la clave de *Voice* en el mismo sobre y las notas de voz en la ventana de salir. Falta medir en el
+  iPhone y el gestor de contraseñas real (recorrido de Lega). Quedó de la auditoría de S2 (improbable): *Change
+  passphrase…* no rechaza una copia más vieja repuesta con la misma generación que el dispositivo conoce; al recifrarla le
+  da un `savedAt` nuevo y los otros dispositivos la aceptarían (es una clave vieja de la persona, no filtra nada). Falta una prueba de `clearVoiceFromCopy` (el mutante que no la llama sobrevive: tras *Forget voice key*, la próxima copia volvería a poner su *Voice* sin preguntar; no se pierde ninguna clave propia). Falta: A3 y el MCP (M0 a M3); lo que Lega prueba con
   sus claves está en "Cómo quedó A1" y "Cómo quedó A2". Quedó de A2 (chico): la política no se actualiza en vivo en un
   panel ya abierto (se lee al abrirlo); *Format as…* no conserva los colores de un bloque al que le cambia el texto, y
   cuando junta varios bloques en menos (renglones a una tabla) los comentarios de los que sobran quedan sin bloque;
@@ -674,15 +678,28 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
    - **Probarlo en Safari de iPhone y con una red lenta de verdad** (lo hace Lega). El aviso de bytes que salen
      (`XMLHttpRequest`) puede portarse distinto en Safari, con HTTP/2 y a través de Cloudflare; y que cortar la
      subida de una miniatura (la señal en el `fetch` del cliente de Supabase) la corte de verdad en Safari.
-   - **Las carpetas (P.9) no cierran la vuelta:** con el portero colgado para todos, cada archivo de una carpeta
-     se traba hasta sus 5 intentos y queda con su error hasta *Retry*. Y mientras la cola de archivos espera,
-     tampoco registra archivos nuevos ni sube sus miniaturas (como sin conexión).
-   - **La bajada de `page-files` espera hasta 27 minutos** aunque la imagen sea chica (no se sabe cuánto pesa
-     antes de pedirla).
-   - **`page-files` con Storage colgado para todos** (solo workspaces sin portero): `PageFiles.pushPending` corre
-     dentro del ciclo del motor y no tiene la espera de la cola, así que cada ciclo espera hasta dos topes
-     (`storageTimeout`, hasta unos 27 minutos cada uno con una imagen de 25 MB) antes de los comentarios. El texto
-     de las páginas ya salió antes en ese ciclo y nada se pierde.
+   - **Hecho (v0.142, rama `lega/carpetas-e3`):** las carpetas (P.9) cierran la vuelta como los archivos sueltos (una
+     trabada no gasta intentos; a la segunda, la cola de la carpeta espera 10 s, 20 s… hasta 10 minutos); mientras la
+     cola de archivos espera al portero, registra los archivos nuevos y sube sus miniaturas (si la espera no fue por
+     Storage); la bajada de `page-files` se corta a los 30 s sin recibir nada (antes, 27 minutos con una imagen
+     chica); y las pasadas de `PageFiles.pushPending` esperan después de cerrar por Storage colgado. Probado con
+     relojes simulados y en Chromium contra un portero y un Storage locales que se cuelgan (`Doc_Portero.md`,
+     "Colgado para todos"; `Doc_Sincronizacion.md`; `Doc_Carpetas.md`, "Cómo quedó (entrega 3)").
+   - **Queda (BAJO):** un archivo grande al que el portero se le cuelga en la última parte espera su plazo de
+     respuesta (hasta unos 10 minutos y medio) antes de contar como trabado, en las dos colas.
+   - **Queda (BAJO, auditoría de la entrega 3, O5): la cola de una carpeta no escucha la vuelta de la red.** Escenario:
+     una carpeta sube, se corta el wifi 5 minutos, la cola cierra la vuelta varias veces y queda esperando 2 o 4
+     minutos; vuelve el wifi y la carpeta sigue esperando hasta que vence esa espera (los sueltos y `page-files`, en
+     cambio, prueban enseguida con `networkBack`). Y *Pause* y después *Resume* (o *Retry*) no vuelven a cero la
+     cuenta de trabadas ni la de esperas: un *Resume* con la racha en 2 o más arranca con otra espera más larga. Nada
+     se pierde. Arreglo: que `FolderUploads` tenga su `networkBack` (despierta `pauseFor`) y que *Resume* y *Retry*
+     pongan en cero `stallStreak` y `stallRounds`.
+   - **Queda (BAJO, auditoría de la entrega 3, O7): un listado de varias subcarpetas que tarda más de un minuto entre
+     páginas puede dar `409 changed`.** Escenario: *Download all* de una carpeta con 36 subcarpetas o más; entre una
+     página y la siguiente Drive pide ir más despacio y la app espera más de 60 s; en la página siguiente el portero
+     tiene que volver a mirar todas en Drive, se pasa del tope de llamados y contesta `changed`. La app cae a listar
+     de a una (`listRound`): no hay bucle ni se pierde nada, solo tarda más. Arreglo posible: con `pageToken`,
+     devolver las que no entran como `later` en vez de cortar.
 12. **Importar de Coda, direcciones sueltas: lo que quedó de v0.069** (`Doc_Importar_Coda.md`, "Direcciones
     sueltas"). **Falta:**
     - **Hecho (v0.071 y v0.087): el anclaje de un comentario** pegado a un renglón con direcciones: un último

@@ -1,4 +1,5 @@
-import { loadSettings, normalizeBaseUrl, readKey, type AssistantSettings } from '../assistant/keyStore';
+import { clearVoiceFromCopy, loadSettings, markSyncStale, normalizeBaseUrl, readKey, type AssistantSettings } from '../assistant/keyStore';
+import type { VoicePayload } from '../assistant/keySync';
 import { isLocalUrl, type ProviderId } from '../assistant/providers';
 import { dictationDb } from './dictationDb';
 
@@ -10,8 +11,10 @@ import { dictationDb } from './dictationDb';
 // - Si el asistente usa Anthropic (que no recibe audio), o la persona prefiere otro, *Voice* guarda una segunda clave,
 //   solo para transcribir. Se guarda igual que la del asistente: cifrada con AES-GCM y una llave del dispositivo creada
 //   "no exportable", en la base del dictado (`shotdocs-dictation`, almacén `notes`, con los prefijos `v:` para los
-//   ajustes de cada correo y `k:` para la llave; la versión de la base no sube). Cuando la clave del asistente se
-//   sincronice (D72, S1), esta segunda clave tiene que seguir el mismo camino: queda anotado en el roadmap.
+//   ajustes de cada correo y `k:` para la llave; la versión de la base no sube).
+// - La segunda clave viaja en la misma copia sincronizada que la del asistente (Doc_Clave_Sincronizada.md, S2): adentro
+//   del sobre cifrado, como `voice`. Cambiarla acá marca las copias para *Update synced key*; abrir una copia que la
+//   trae la guarda acá. Con *Keep the key on this device* destildada vive solo en esta pestaña, como la del asistente.
 //
 // La clave se descifra justo antes de cada pedido y no queda en ninguna variable global ni en el estado de React.
 
@@ -60,6 +63,21 @@ export interface VoiceConfig {
 }
 
 const norm = (email: string) => email.trim().toLowerCase();
+
+/** Lo que se ve de *Voice* sin la clave, venga de la base o de esta pestaña. */
+type VoiceInfo = Omit<VoiceRecord, 'iv' | 'cipher'> & { hasKey: boolean };
+
+// *Keep the key on this device* destildada (como en keyStore.ts): la segunda clave, solo en esta pestaña, en una variable
+// de este módulo. Mientras está, manda sobre lo guardado y la base no se toca.
+const tabVoice = new Map<string, { record: Omit<VoiceRecord, 'iv' | 'cipher'>; apiKey: string }>();
+
+/** Para las pruebas: como recargar la pestaña. */
+export function resetTabOnlyVoice(): void {
+  tabVoice.clear();
+}
+
+const sameVoiceDestination = (a: Pick<VoiceRecord, 'provider' | 'baseUrl'>, b: Pick<VoiceRecord, 'provider' | 'baseUrl'>) =>
+  a.provider === b.provider && (a.provider !== 'compatible' || normalizeBaseUrl(a.baseUrl) === normalizeBaseUrl(b.baseUrl));
 const recordId = (email: string) => `v:${norm(email)}`;
 const KEY_ID = 'k:aes';
 
@@ -90,10 +108,20 @@ async function loadRecord(email: string): Promise<VoiceRecord | null> {
   return r?.kind === 'voice' ? r : null;
 }
 
-export async function loadVoiceSettings(email: string): Promise<VoiceSettings | null> {
+/** Lo de *Voice* de esa persona (de esta pestaña si vive solo en ella), sin la clave. */
+async function loadInfo(email: string): Promise<VoiceInfo | null> {
+  const t = tabVoice.get(norm(email));
+  if (t) return { ...t.record, hasKey: !!t.apiKey };
   const r = await loadRecord(email);
   if (!r) return null;
-  return { source: r.source, provider: r.provider, baseUrl: r.baseUrl, model: r.model, hasKey: !!r.cipher };
+  const { iv: _iv, cipher, ...rest } = r;
+  return { ...rest, hasKey: !!cipher };
+}
+
+export async function loadVoiceSettings(email: string): Promise<VoiceSettings | null> {
+  const r = await loadInfo(email);
+  if (!r) return null;
+  return { source: r.source, provider: r.provider, baseUrl: r.baseUrl, model: r.model, hasKey: r.hasKey };
 }
 
 /**
@@ -104,12 +132,46 @@ export async function saveVoiceSettings(
   email: string,
   settings: { source: 'assistant' | 'own'; provider: VoiceProviderId; baseUrl?: string; model: string },
   apiKey?: string,
+  options: { fromSync?: boolean; tabOnly?: boolean } = {},
+): Promise<VoiceSettings> {
+  const before = await loadInfo(email);
+  // La segunda clave viaja en la copia sincronizada: si cambian ella, su destino o si se usa, las copias quedan marcadas
+  // para *Update synced key* (salvo cuando viene justamente de abrir una copia). Cambiar solo el modelo no marca nada.
+  const ownBefore = before?.source === 'own';
+  const ownAfter = settings.source === 'own';
+  const voiceChanged = ownBefore !== ownAfter || (ownAfter && (apiKey !== undefined || !before || !sameVoiceDestination(before, settings)));
+  const out = tabVoice.has(norm(email)) || options.tabOnly ? saveTabVoice(email, settings, apiKey) : await saveVoiceRecord(email, settings, apiKey);
+  if (voiceChanged && !options.fromSync) await markSyncStale(email);
+  return out;
+}
+
+function saveTabVoice(email: string, settings: { source: 'assistant' | 'own'; provider: VoiceProviderId; baseUrl?: string; model: string }, apiKey?: string): VoiceSettings {
+  const prev = tabVoice.get(norm(email));
+  const keep = !!prev && sameVoiceDestination(prev.record, settings);
+  const record: Omit<VoiceRecord, 'iv' | 'cipher'> = {
+    id: recordId(email),
+    kind: 'voice',
+    source: settings.source,
+    provider: settings.provider,
+    baseUrl: settings.provider === 'compatible' ? settings.baseUrl?.trim() : undefined,
+    model: settings.model.trim() || DEFAULT_VOICE_MODEL[settings.provider],
+    savedAt: Date.now(),
+  };
+  const key = apiKey !== undefined ? apiKey : keep ? prev!.apiKey : '';
+  tabVoice.set(norm(email), { record, apiKey: key });
+  return { source: record.source, provider: record.provider, baseUrl: record.baseUrl, model: record.model, hasKey: !!key };
+}
+
+async function saveVoiceRecord(
+  email: string,
+  settings: { source: 'assistant' | 'own'; provider: VoiceProviderId; baseUrl?: string; model: string },
+  apiKey?: string,
 ): Promise<VoiceSettings> {
   const d = await dictationDb();
   const prev = await loadRecord(email);
   let iv = prev?.iv ?? null;
   let cipher = prev?.cipher ?? null;
-  const same = !!prev && prev.provider === settings.provider && (settings.provider !== 'compatible' || normalizeBaseUrl(prev.baseUrl) === normalizeBaseUrl(settings.baseUrl));
+  const same = !!prev && sameVoiceDestination(prev, settings);
   if (apiKey === undefined && !same) {
     iv = null;
     cipher = null;
@@ -140,7 +202,25 @@ export async function saveVoiceSettings(
 
 /** *Forget voice key*: saca la segunda clave y los ajustes de *Voice* de este dispositivo. */
 export async function forgetVoiceKey(email: string): Promise<void> {
+  tabVoice.delete(norm(email));
   await (await dictationDb()).delete('notes', recordId(email));
+  await clearVoiceFromCopy(email);
+}
+
+/** La segunda clave para meter en la copia sincronizada, o `undefined` si no hay (o *Voice* usa la del asistente). */
+export async function voicePayloadOf(email: string): Promise<VoicePayload | undefined> {
+  const v = await loadInfo(email);
+  if (!v || v.source !== 'own') return undefined;
+  if (!v.hasKey && !(v.provider === 'compatible' && v.baseUrl)) return undefined;
+  const apiKey = v.hasKey ? await readVoiceKey(email, { provider: v.provider, baseUrl: v.baseUrl, model: v.model, source: 'own' }) : '';
+  return { provider: v.provider, ...(v.provider === 'compatible' ? { baseUrl: v.baseUrl } : {}), model: v.model, apiKey };
+}
+
+/** Guarda la segunda clave que vino en una copia sincronizada (después de que la persona la aceptó). */
+export async function adoptVoicePayload(email: string, voice: VoicePayload, tabOnly = false): Promise<void> {
+  const prev = await loadInfo(email);
+  const model = prev?.source === 'own' && sameVoiceDestination(prev, voice) && prev.model ? prev.model : voice.model;
+  await saveVoiceSettings(email, { source: 'own', provider: voice.provider, baseUrl: voice.baseUrl, model }, voice.apiKey, { fromSync: true, tabOnly });
 }
 
 /**
@@ -148,10 +228,10 @@ export async function forgetVoiceKey(email: string): Promise<void> {
  * no hay asistente configurado). Sin ajustes de *Voice*, la del asistente si transcribe.
  */
 export async function resolveVoice(email: string): Promise<VoiceConfig | null> {
-  const [voice, assistant] = await Promise.all([loadRecord(email), loadSettings(email)]);
+  const [voice, assistant] = await Promise.all([loadInfo(email), loadSettings(email)]);
   if (voice?.source === 'own') {
     // Un compatible local puede no tener clave.
-    if (!voice.cipher && !(voice.provider === 'compatible' && voice.baseUrl)) return null;
+    if (!voice.hasKey && !(voice.provider === 'compatible' && voice.baseUrl)) return null;
     return { provider: voice.provider, baseUrl: voice.baseUrl, model: voice.model, source: 'own' };
   }
   if (!assistantTranscribes(assistant)) return null;
@@ -166,6 +246,8 @@ export async function resolveVoice(email: string): Promise<VoiceConfig | null> {
  */
 export async function readVoiceKey(email: string, config: VoiceConfig): Promise<string> {
   if (config.source === 'assistant') return readKey(email, { provider: config.provider, baseUrl: config.baseUrl });
+  const t = tabVoice.get(norm(email));
+  if (t) return t.record.source === 'own' && sameVoiceDestination(t.record, config) ? t.apiKey : '';
   const r = await loadRecord(email);
   if (!r?.cipher || !r.iv || r.provider !== config.provider) return '';
   if (config.provider === 'compatible' && normalizeBaseUrl(r.baseUrl) !== normalizeBaseUrl(config.baseUrl)) return '';

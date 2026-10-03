@@ -587,8 +587,80 @@ export function storageTimeout(bytes: number): number {
   return REQUEST_TIMEOUT_MS + Math.ceil((bytes / SLOW_BYTES_PER_SECOND) * 1000);
 }
 
-/** El tope de la bajada de una imagen de `page-files`, que no sabe cuánto llega: el de la más pesada que acepta. */
+/**
+ * El tope total de la bajada de una imagen de `page-files`, que no sabe cuánto llega: el de la más pesada que acepta
+ * (27 minutos). Lo que corta de verdad a una bajada colgada es `FILE_IDLE_MS`.
+ */
 export const FILE_DOWNLOAD_TIMEOUT_MS = storageTimeout(MAX_FILE_BYTES);
+
+/**
+ * Lo más que puede pasar sin que llegue nada en la bajada de una imagen de `page-files`: hasta la respuesta y entre
+ * un pedazo y el siguiente. Antes, con solo el tope total, una imagen chica de un Storage colgado esperaba 27 minutos;
+ * lento no es colgado: una bajada que sigue recibiendo no se corta (hasta el tope total).
+ */
+export const FILE_IDLE_MS = REQUEST_TIMEOUT_MS;
+
+/**
+ * Como `within`, pero además se corta si pasan `idleMs` sin un aviso de `moved` (que llama quien hace el pedido
+ * cada vez que llega algo). El error es el mismo del tope: cuenta como sin red y se reintenta.
+ */
+export function withinIdle<T>(ms: number, idleMs: number, request: (signal: AbortSignal, moved: () => void) => PromiseLike<T>): Promise<T> {
+  const idle = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const moved = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => idle.abort(), idleMs);
+  };
+  return within(ms, (signal) => {
+    moved();
+    const both = anySignal(signal, idle.signal);
+    return new Promise<T>((resolve, reject) => {
+      const expired = () => reject(new RemoteError(REQUEST_TIMEOUT, false, REQUEST_TIMEOUT, true));
+      idle.signal.addEventListener('abort', expired, { once: true });
+      Promise.resolve()
+        .then(() => request(both, moved))
+        .then(resolve, reject)
+        .finally(() => idle.signal.removeEventListener('abort', expired));
+    });
+  }).finally(() => clearTimeout(timer));
+}
+
+/** Una señal que se corta cuando se corta cualquiera de las dos. */
+function anySignal(a: AbortSignal, b: AbortSignal): AbortSignal {
+  if (typeof AbortSignal.any === 'function') return AbortSignal.any([a, b]);
+  const both = new AbortController();
+  for (const s of [a, b]) {
+    if (s.aborted) both.abort(s.reason);
+    else s.addEventListener('abort', () => both.abort(s.reason), { once: true });
+  }
+  return both.signal;
+}
+
+/**
+ * El cliente de Storage de un bucket cuyos pedidos llevan `signal` y avisan `moved` al llegar la respuesta y cada
+ * pedazo del cuerpo (para `withinIdle`). Sin `fetch` propio en el cliente queda solo con el tope total.
+ */
+function bucketWatched(client: SupabaseClient, bucket: string, signal: AbortSignal, moved: () => void): ReturnType<SupabaseClient['storage']['from']> {
+  const api = client.storage.from(bucket);
+  const holder = api as unknown as { fetch?: typeof fetch };
+  const base = holder.fetch;
+  if (typeof base !== 'function') return api;
+  holder.fetch = async (input, init) => {
+    const res = await base(input, { ...init, signal: init?.signal ?? signal });
+    moved();
+    if (!res.body || typeof TransformStream !== 'function') return res;
+    const watched = res.body.pipeThrough(
+      new TransformStream<Uint8Array, Uint8Array>({
+        transform(chunk, out) {
+          moved();
+          out.enqueue(chunk);
+        },
+      }),
+    );
+    return new Response(watched, { status: res.status, statusText: res.statusText, headers: res.headers });
+  };
+  return api;
+}
 
 /**
  * El cliente de Storage de un bucket con todos sus pedidos atados a `signal`. `upload` no acepta una señal de
@@ -1104,9 +1176,10 @@ export class SupabaseRemote
   async downloadFile(path: string): Promise<Blob> {
     let result;
     try {
-      // Con tope: el de la imagen más pesada que acepta el bucket (no se sabe de antemano cuánto llega).
-      result = await within(FILE_DOWNLOAD_TIMEOUT_MS, (signal) =>
-        this.client.storage.from(FILES_BUCKET).download(path, {}, { signal }),
+      // Dos topes: el de la imagen más pesada que acepta el bucket (no se sabe de antemano cuánto llega) y
+      // `FILE_IDLE_MS` sin que llegue nada (la respuesta o un pedazo): un Storage colgado se nota en 30 s.
+      result = await withinIdle(FILE_DOWNLOAD_TIMEOUT_MS, FILE_IDLE_MS, (signal, moved) =>
+        bucketWatched(this.client, FILES_BUCKET, signal, moved).download(path, {}, { signal }),
       );
     } catch (err) {
       throw networkError(err);
