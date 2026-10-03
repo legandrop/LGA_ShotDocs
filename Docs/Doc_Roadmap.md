@@ -279,6 +279,8 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   *Deleted projects* en el selector de proyectos, con proyectos, páginas y archivos juntos del más nuevo al más viejo,
   el filtro *All / Projects / Pages / Files* y *This project / All projects*; sin migración
   (`Doc_Proyectos_Borrar.md`, "Cómo quedó: una sola papelera"). Falta probarla a mano en la compu y el iPhone.
+  Pendiente chico: con *All projects* se hace una consulta `trashed_files` por proyecto (la primera vez); con muchos
+  proyectos convendría una función de la base que las junte (migración nueva).
 - **P.16 Hecho (v0.074): el árbol de páginas con el teclado** (Lega, 2026-10-01). Con el foco en una fila
   (queda ahí después de un clic): ↑ / ↓ abren la página visible anterior o siguiente (una pulsación al
   instante; con la tecla apretada el foco corre y se abre la última al frenar, 150 ms), → despliega o pasa a la

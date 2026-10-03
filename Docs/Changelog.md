@@ -6,8 +6,8 @@ v0.0XX :
 projects* en el selector de proyectos, y no se entendía cuál era cuál. Ahora *Trash* está solo en el selector, en el
 lugar de *Deleted projects*: proyectos, páginas y archivos juntos, del más nuevo al más viejo, cada uno con su
 proyecto, con el filtro *All / Projects / Pages / Files* y *This project / All projects* (los proyectos borrados se ven
-siempre). Cada tipo hace lo de antes (*Restore*, mandar a Drive, *Empty*, *Restore without its files*) y cada uno ve lo
-que la base le dejaba ver: sin migración. Sin red, las páginas. `/trash` abre el selector en la papelera. Ayuda,
+siempre). Cada tipo hace lo de antes (*Restore*, mandar a Drive, *Restore without its files*; *Empty*, solo del
+proyecto abierto y nombrándolo) y cada uno ve lo que la base le dejaba ver: sin migración. Sin red, las páginas. `/trash` abre el selector en la papelera. Ayuda,
 recorrida y textos que decían *Deleted projects*, al día.
 [ Una sola papelera - Trash pasa al selector de proyectos con proyectos, páginas y archivos juntos, el filtro All Projects Pages Files y este proyecto o todos ]
 
