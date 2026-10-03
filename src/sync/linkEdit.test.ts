@@ -1,5 +1,6 @@
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
+import { Permissions } from './access';
 import { linkAuthorName } from './history';
 import { block, group } from './historyTesting';
 import { LINK_PUSH_MAX_BYTES } from './linkRemote';
@@ -170,6 +171,24 @@ describe('Can edit por un link, con el motor de verdad', () => {
     expect(v.remote.linkEdits()).toMatchObject({ waiting: [], aside: [] });
     // Lo pedido por el visitante fue solo plink_* (nunca la admisión).
     expect(v.calls.every((c) => c.fn.startsWith('plink_'))).toBe(true);
+  });
+
+  it('el visitante escribe solo el contenido: ni el título, ni los ajustes, ni el asistente, ni reemplazar en el proyecto', async () => {
+    const { server, e1, s, h } = await setup();
+    const token = addPublicLink(server, s, server.ownerId, 'edit');
+    await e1.engine.prepareBases([s, h]);
+    const v = await visitor(server, token);
+    await v.engine.syncNow();
+    const perms = new Permissions(v.tree, v.access.get(), v.access.userId);
+    expect(perms.canEditPage(s)).toBe(true);
+    expect(perms.canEditPage(h)).toBe(true);
+    expect(perms.canEditRow(s)).toBe(false);
+    expect(perms.canManagePage(s)).toBe(false);
+    expect(perms.viaLink).toBe(true);
+    // El equipo, como siempre.
+    const team = new Permissions(e1.tree, e1.access.get(), e1.access.userId);
+    expect(team.canEditRow(s)).toBe(true);
+    expect(team.viaLink).toBe(false);
   });
 
   it('dos editores admiten a la vez: una sola decisión, sin filas repetidas', async () => {

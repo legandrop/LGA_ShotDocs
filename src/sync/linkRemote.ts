@@ -266,6 +266,8 @@ export class LinkRemote extends SupabaseRemote {
       member: { role: 'guest', removed_at: null },
       grants: [{ id: info.link_id, project_id: null, page_id: info.page_id, level: info.level === 'edit' ? 'edit' : 'comment' }],
       fetchedAt: Date.now(),
+      // Con Can edit escribe solo el contenido: el título, los ajustes y la hoja son de la fila (E2.4).
+      contentOnly: true,
     };
   }
 

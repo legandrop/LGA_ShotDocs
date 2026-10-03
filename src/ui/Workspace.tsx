@@ -402,7 +402,7 @@ export function Shell() {
               )}
               {pageId && current && <CommentsToggle pageId={pageId} />}
               {/* Dictar al reporte (Docs/Doc_Dictado.md, V1). En el teléfono es el botón redondo de abajo (DictationHost). */}
-              {pageId && current && (
+              {pageId && current && !perms.viaLink && (
                 <button className="icon-button dictate-top" aria-label={tr('shell.dictate')} data-tip={tr('shell.dictateTip', { shortcut: shortcutLabel('dictate') })} onClick={() => void openDictation()}>
                   <MicIcon size={18} />
                 </button>
@@ -446,8 +446,9 @@ export function Shell() {
           onFormat={() => setFormatting(pageId)}
           onShare={perms.canSharePage(pageId) ? () => setSharing({ pageId }) : undefined}
           onHistory={historyAllowed ? () => openHistory(pageId) : undefined}
-          onAssistant={() => void openAssistant()}
-          onDictate={() => void openDictation()}
+          // Sin cuenta no hay asistente ni Dictate to report (un link, E2.4).
+          onAssistant={perms.viaLink ? undefined : () => void openAssistant()}
+          onDictate={perms.viaLink ? undefined : () => void openDictation()}
           onTrash={async () => {
             // Primero se manda a la papelera y después se sale: si no, el inicio vuelve a la última página.
             await tree.trash(pageId);

@@ -90,8 +90,8 @@ export function PageView({ id }: { id: string }) {
       {/* Una plantilla propia (Docs/Doc_Plantillas.md, 5.2): qué es y sus ajustes. */}
       <TemplateBanner pageId={id} />
       <LinkAsideNotice pageId={id} />
-      <PageHeader id={id} editable={perms.canEditPage(id)} />
-      <TitleInput id={id} title={page.title} readOnly={!perms.canEditPage(id)} />
+      <PageHeader id={id} editable={perms.canEditRow(id)} />
+      <TitleInput id={id} title={page.title} readOnly={!perms.canEditRow(id)} />
       <Part fallback={<EditorSkeleton />}>
         <PageEditor pageId={id} />
       </Part>

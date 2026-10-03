@@ -107,7 +107,8 @@ function DictateFab({ pageId }: { pageId: string }) {
   const workspaceKey = workspace.config.localKey || workspace.config.url;
   // Las notas guardadas para esta página (V2): el número va sobre el botón.
   const saved = useQueuedNotes(user.email, workspaceKey).filter((n) => n.pageId === pageId).length;
-  if (!perms.canEditPage(pageId)) return null;
+  // Sin cuenta (un link público) no hay *Dictate to report* (Docs/Doc_Link_Publico.md, E2.4).
+  if (!perms.canEditPage(pageId) || perms.viaLink) return null;
   if (cachedPolicyValue(workspaceKey) === 'off') return null;
   return (
     <button className="dictate-fab" aria-label={saved > 0 ? tr('shell.dictateSaved', { count: saved }) : tr('shell.dictate')} onClick={() => openDictation()}>
