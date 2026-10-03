@@ -2,7 +2,7 @@
 
 Estado: **entrega 1 implementada (v0.081, rama `lega/carpetas`)**, con lo que no depende de Lega; ver "Cómo
 quedó" justo abajo. **Entrega 2 (*Download all*) implementada** (rama `lega/carpetas-zip`): "Cómo quedó (entrega 2)". **Entrega 3 (los
-restos de las auditorías y las subidas que se traban, v0.0XX, rama `lega/carpetas-e3`):** "Cómo quedó (entrega 3)". El diseño sigue debajo. Rediseñado el 2026-09-30 con las respuestas de Lega (ver "Respondidas por
+restos de las auditorías y las subidas que se traban, v0.142, rama `lega/carpetas-e3`):** "Cómo quedó (entrega 3)". El diseño sigue debajo. Rediseñado el 2026-09-30 con las respuestas de Lega (ver "Respondidas por
 Lega"): la carpeta de la página es **una vista en vivo de una carpeta del Drive**, sin tope de archivos y en el
 plan gratis de Cloudflare. El primer diseño (commit `47bbbf4`, una fila de `files` por archivo) y su auditoría
 quedan resumidos al final, en "Historia"; lo que la auditoría encontró y sigue valiendo está incorporado.
@@ -284,7 +284,7 @@ listar, accesos directos, documentos de Google, subcarpeta movida afuera, ciclos
 un error que no frena, retomar por ruta y peso después de cerrar, pausar, la fila de la carpeta, sin red, la
 tarjeta). Recorrido en Chromium con el portero real en la página y un Drive de mentira: 16 de 16.
 
-## Cómo quedó (entrega 3, v0.0XX)
+## Cómo quedó (entrega 3, v0.142)
 
 Los restos BAJO de las entregas 1 y 2 y la parte de B.11 (subidas que se traban) que toca a las carpetas.
 

@@ -896,8 +896,8 @@ decenas de KB; los originales van al Drive por el portero), y desde v0.092 tambi
 |---|---|---|
 | Subir la miniatura (`uploadThumb`) | `thumbUploadLimit`: la primera vez, `timeoutFor(tamaño)`, 30 s más lo que tarda a 16 KB/s (40 s para 160 KB; 62 s para 512 KB, lo máximo que acepta el bucket); después el doble, el triple… por cada vez seguida que venció (`thumbStalls`), hasta lo que tardaría a 2 KB/s (280 s para 500 KB) y como mínimo cuatro veces el primero | El archivo vuelve a la cola con su espera (10 s, 20 s… hasta 10 minutos) y el aviso *The upload stopped moving; it will try again*; la vuelta sigue con los demás. A la segunda trabada seguida, deja de subir (ver abajo) |
 | Bajar la miniatura de otro dispositivo (`downloadThumb`) | 62 s (`THUMB_DOWNLOAD_TIMEOUT_MS`): no se sabe de antemano cuánto pesa, se le da lo de la más pesada posible | Al final de la vuelta: no se piden las demás miniaturas en esa pasada (los adjuntos, que no piden nada a Storage, sí se actualizan) y se vuelve a preguntar un minuto después del corte. Al dibujar la página: queda el ícono y se vuelve a preguntar |
-| Subir una imagen de `page-files` (`uploadFile`) | `storageTimeout(tamaño)`: 30 s más lo que tarda a 16 KB/s, **sin el techo** de las consultas (una de 25 MB tiene 27 minutos) | Queda por subir con su error y la pasada sigue con las demás; a la segunda seguida, la pasada termina (`PageFiles.pushPending`) y las siguientes esperan antes de volver a probar (10 s, 20 s… hasta 10 minutos; desde v0.0XX). Las que vencieron van al final de la pasada siguiente |
-| Bajar una imagen de `page-files` (`downloadFile`) | **30 s sin que llegue nada** (`FILE_IDLE_MS`: hasta la respuesta y entre un pedazo y el siguiente; desde v0.0XX) y, como techo, `FILE_DOWNLOAD_TIMEOUT_MS`: el de la más pesada que acepta el bucket (25 MB, 27 minutos) | Error de red: la imagen no se muestra y se vuelve a pedir al dibujarla |
+| Subir una imagen de `page-files` (`uploadFile`) | `storageTimeout(tamaño)`: 30 s más lo que tarda a 16 KB/s, **sin el techo** de las consultas (una de 25 MB tiene 27 minutos) | Queda por subir con su error y la pasada sigue con las demás; a la segunda seguida, la pasada termina (`PageFiles.pushPending`) y las siguientes esperan antes de volver a probar (10 s, 20 s… hasta 10 minutos; desde v0.142). Las que vencieron van al final de la pasada siguiente |
+| Bajar una imagen de `page-files` (`downloadFile`) | **30 s sin que llegue nada** (`FILE_IDLE_MS`: hasta la respuesta y entre un pedazo y el siguiente; desde v0.142) y, como techo, `FILE_DOWNLOAD_TIMEOUT_MS`: el de la más pesada que acepta el bucket (25 MB, 27 minutos) | Error de red: la imagen no se muestra y se vuelve a pedir al dibujarla |
 
 - **Las subidas se cortan de verdad** (v0.092). `upload` del cliente de Storage (`@supabase/storage-js` 2.117)
   no acepta una señal de corte, pero cada pedido sale por el `fetch` del cliente, y cada `storage.from(bucket)`
@@ -917,12 +917,12 @@ decenas de KB; los originales van al Drive por el portero), y desde v0.092 tambi
   falla de red de verdad (el pedido falla en vez de colgarse) sigue cortando enseguida.
 - **El minuto de la bajada se cuenta desde el corte,** no desde que se preguntó: el tope (62 s) dura más
   que esa espera (60 s), y contado desde el principio la vuelta siguiente volvería a pedir enseguida.
-- **La bajada de `page-files` se corta por quietud** (v0.0XX). No se sabe de antemano cuánto pesa, así que antes su
+- **La bajada de `page-files` se corta por quietud** (v0.142). No se sabe de antemano cuánto pesa, así que antes su
   único tope era el de la más pesada (27 minutos) y una imagen chica de un Storage colgado frenaba "Available offline"
   todo ese rato. Ahora `withinIdle` corta a los 30 s sin que llegue nada: `bucketWatched` envuelve el `fetch` del
   cliente de Storage y avisa al llegar la respuesta y con cada pedazo del cuerpo (un `TransformStream`). Lenta no es
   colgada: una bajada que sigue recibiendo no se corta hasta el techo de siempre.
-- **Las pasadas de `page-files` esperan** (v0.0XX). `pushPending` corre adentro del ciclo del motor: con Storage
+- **Las pasadas de `page-files` esperan** (v0.142). `pushPending` corre adentro del ciclo del motor: con Storage
   colgado para todas, cada ciclo esperaba dos topes enteros antes de los comentarios. Después de cerrar una pasada,
   las siguientes no prueban hasta su espera (`stallWait`: 10 s, 20 s… hasta 10 minutos), devuelven el mismo error
   (sigue a la vista) y siguen con lo demás del ciclo. Una imagen nueva acorta la espera a 10 s, volver la red la

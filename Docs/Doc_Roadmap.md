@@ -177,7 +177,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   el Drive real (si Drive rechaza la consulta con varios padres, la app cae a de a una sin perder nada, pero gasta un
   pedido de más por tanda; medir el CPU de un pedido con 40 subcarpetas en el plan gratis). De la auditoría de la entrega
   2 (BAJO, decidido, sin acción): la confianza de 60 s del listado de varias deja listar hasta 60 s una subcarpeta recién
-  movida a otro proyecto (D81). **Entrega 3 hecha (v0.0XX, rama `lega/carpetas-e3`):** la confianza de 60 s también
+  movida a otro proyecto (D81). **Entrega 3 hecha (v0.142, rama `lega/carpetas-e3`):** la confianza de 60 s también
   en las páginas siguientes (con la fecha en que Drive mostró cada subcarpeta, no la del camino); el ZWJ como escape;
   el 403 de Drive por el límite de pedidos sale como `rate` (ya no como «fuera del árbol»); la marca de cada
   subcarpeta en NFC, buscando también las de antes (NFC, tal cual y NFD), y retomar en el mismo dispositivo con una
@@ -675,7 +675,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
    - **Probarlo en Safari de iPhone y con una red lenta de verdad** (lo hace Lega). El aviso de bytes que salen
      (`XMLHttpRequest`) puede portarse distinto en Safari, con HTTP/2 y a través de Cloudflare; y que cortar la
      subida de una miniatura (la señal en el `fetch` del cliente de Supabase) la corte de verdad en Safari.
-   - **Hecho (v0.0XX, rama `lega/carpetas-e3`):** las carpetas (P.9) cierran la vuelta como los archivos sueltos (una
+   - **Hecho (v0.142, rama `lega/carpetas-e3`):** las carpetas (P.9) cierran la vuelta como los archivos sueltos (una
      trabada no gasta intentos; a la segunda, la cola de la carpeta espera 10 s, 20 s… hasta 10 minutos); mientras la
      cola de archivos espera al portero, registra los archivos nuevos y sube sus miniaturas (si la espera no fue por
      Storage); la bajada de `page-files` se corta a los 30 s sin recibir nada (antes, 27 minutos con una imagen
