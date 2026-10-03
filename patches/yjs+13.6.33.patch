@@ -1,5 +1,5 @@
 diff --git a/node_modules/yjs/dist/yjs.cjs b/node_modules/yjs/dist/yjs.cjs
-index a29f8ef..116b76b 100644
+index a29f8ef..6486ff5 100644
 --- a/node_modules/yjs/dist/yjs.cjs
 +++ b/node_modules/yjs/dist/yjs.cjs
 @@ -3499,6 +3499,43 @@ const clearUndoManagerStackItem = (tr, um, stackItem) => {
@@ -84,7 +84,48 @@ index a29f8ef..116b76b 100644
        iterateDeletedStructs(transaction, stackItem.deletions, struct => {
          if (
            struct instanceof Item &&
-@@ -9709,7 +9753,9 @@ const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemoteMapCh
+@@ -3553,11 +3597,16 @@ const popStackItem = (undoManager, stack, eventType) => {
+       itemsToRedo.forEach(struct => {
+         performedChange = redoItem(transaction, struct, itemsToRedo, stackItem.insertions, undoManager.ignoreRemoteMapChanges, undoManager) !== null || performedChange;
+       });
++      // LGA-SHOTDOCS-PATCH (B.22): `redoItem` marca si tuvo que saltar algo porque la copia de su padre ya no existe.
++      // Si algo de este paso no pudo volver, lo que el paso insertó se deja: puede ser ese mismo texto movido a otro lado
++      // (un Enter, un bloque arrastrado) y sacarlo lo haría desaparecer. Sobra texto en vez de faltar.
++      const lgaParentGone = transaction.meta.get('lga-shotdocs:parentGone') === true;
++      transaction.meta.delete('lga-shotdocs:parentGone');
+       // We want to delete in reverse order so that children are deleted before
+       // parents, so we have more information available when items are filtered.
+       for (let i = itemsToDelete.length - 1; i >= 0; i--) {
+         const item = itemsToDelete[i];
+-        if (undoManager.deleteFilter(item)) {
++        if (!lgaParentGone && undoManager.deleteFilter(item)) {
+           item.delete(transaction);
+           performedChange = true;
+         }
+@@ -9691,8 +9740,21 @@ const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemoteMapCh
+     if (parentItem.redone === null && (!redoitems.has(parentItem) || redoItem(transaction, parentItem, redoitems, itemsToDelete, ignoreRemoteMapChanges, um) === null)) {
+       return null
+     }
++    // LGA-SHOTDOCS-PATCH (B.22): la copia del padre pudo irse del documento: otra persona la borró y, como ya nadie la
++    // guardaba para deshacer, Yjs la recolectó (queda un `GC`, sin `redone`, o un item sin su tipo). No hay dónde volver
++    // a poner esto: se salta (como cuando el padre no se puede volver a poner) y se avisa al deshacer, en vez de tirar
++    // `TypeError` y dejar el paso a medias.
+     while (parentItem.redone !== null) {
+-      parentItem = getItemCleanStart(transaction, parentItem.redone);
++      const next = getItemCleanStart(transaction, parentItem.redone);
++      if (!(next instanceof Item)) {
++        transaction.meta.set('lga-shotdocs:parentGone', true);
++        return null
++      }
++      parentItem = next;
++    }
++    if (!(parentItem.content instanceof ContentType)) {
++      transaction.meta.set('lga-shotdocs:parentGone', true);
++      return null
+     }
+   }
+   const parentType = parentItem === null ? /** @type {AbstractType<any>} */ (item.parent) : /** @type {ContentType} */ (parentItem.content).type;
+@@ -9709,7 +9771,9 @@ const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemoteMapCh
        let leftTrace = left;
        // trace redone until parent matches
        while (leftTrace !== null && /** @type {AbstractType<any>} */ (leftTrace.parent)._item !== parentItem) {
@@ -96,7 +137,7 @@ index a29f8ef..116b76b 100644
        if (leftTrace !== null && /** @type {AbstractType<any>} */ (leftTrace.parent)._item === parentItem) {
          left = leftTrace;
 diff --git a/node_modules/yjs/dist/yjs.mjs b/node_modules/yjs/dist/yjs.mjs
-index bd77560..2afcc1a 100644
+index bd77560..fa37d56 100644
 --- a/node_modules/yjs/dist/yjs.mjs
 +++ b/node_modules/yjs/dist/yjs.mjs
 @@ -3462,6 +3462,43 @@ const clearUndoManagerStackItem = (tr, um, stackItem) => {
@@ -181,7 +222,48 @@ index bd77560..2afcc1a 100644
        iterateDeletedStructs(transaction, stackItem.deletions, struct => {
          if (
            struct instanceof Item &&
-@@ -9672,7 +9716,9 @@ const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemoteMapCh
+@@ -3516,11 +3560,16 @@ const popStackItem = (undoManager, stack, eventType) => {
+       itemsToRedo.forEach(struct => {
+         performedChange = redoItem(transaction, struct, itemsToRedo, stackItem.insertions, undoManager.ignoreRemoteMapChanges, undoManager) !== null || performedChange;
+       });
++      // LGA-SHOTDOCS-PATCH (B.22): `redoItem` marca si tuvo que saltar algo porque la copia de su padre ya no existe.
++      // Si algo de este paso no pudo volver, lo que el paso insertó se deja: puede ser ese mismo texto movido a otro lado
++      // (un Enter, un bloque arrastrado) y sacarlo lo haría desaparecer. Sobra texto en vez de faltar.
++      const lgaParentGone = transaction.meta.get('lga-shotdocs:parentGone') === true;
++      transaction.meta.delete('lga-shotdocs:parentGone');
+       // We want to delete in reverse order so that children are deleted before
+       // parents, so we have more information available when items are filtered.
+       for (let i = itemsToDelete.length - 1; i >= 0; i--) {
+         const item = itemsToDelete[i];
+-        if (undoManager.deleteFilter(item)) {
++        if (!lgaParentGone && undoManager.deleteFilter(item)) {
+           item.delete(transaction);
+           performedChange = true;
+         }
+@@ -9654,8 +9703,21 @@ const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemoteMapCh
+     if (parentItem.redone === null && (!redoitems.has(parentItem) || redoItem(transaction, parentItem, redoitems, itemsToDelete, ignoreRemoteMapChanges, um) === null)) {
+       return null
+     }
++    // LGA-SHOTDOCS-PATCH (B.22): la copia del padre pudo irse del documento: otra persona la borró y, como ya nadie la
++    // guardaba para deshacer, Yjs la recolectó (queda un `GC`, sin `redone`, o un item sin su tipo). No hay dónde volver
++    // a poner esto: se salta (como cuando el padre no se puede volver a poner) y se avisa al deshacer, en vez de tirar
++    // `TypeError` y dejar el paso a medias.
+     while (parentItem.redone !== null) {
+-      parentItem = getItemCleanStart(transaction, parentItem.redone);
++      const next = getItemCleanStart(transaction, parentItem.redone);
++      if (!(next instanceof Item)) {
++        transaction.meta.set('lga-shotdocs:parentGone', true);
++        return null
++      }
++      parentItem = next;
++    }
++    if (!(parentItem.content instanceof ContentType)) {
++      transaction.meta.set('lga-shotdocs:parentGone', true);
++      return null
+     }
+   }
+   const parentType = parentItem === null ? /** @type {AbstractType<any>} */ (item.parent) : /** @type {ContentType} */ (parentItem.content).type;
+@@ -9672,7 +9734,9 @@ const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemoteMapCh
        let leftTrace = left;
        // trace redone until parent matches
        while (leftTrace !== null && /** @type {AbstractType<any>} */ (leftTrace.parent)._item !== parentItem) {
@@ -193,10 +275,33 @@ index bd77560..2afcc1a 100644
        if (leftTrace !== null && /** @type {AbstractType<any>} */ (leftTrace.parent)._item === parentItem) {
          left = leftTrace;
 diff --git a/node_modules/yjs/src/structs/Item.js b/node_modules/yjs/src/structs/Item.js
-index fca5827..3e03a7b 100644
+index fca5827..3396804 100644
 --- a/node_modules/yjs/src/structs/Item.js
 +++ b/node_modules/yjs/src/structs/Item.js
-@@ -181,7 +181,9 @@ export const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemo
+@@ -163,8 +163,21 @@ export const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemo
+     if (parentItem.redone === null && (!redoitems.has(parentItem) || redoItem(transaction, parentItem, redoitems, itemsToDelete, ignoreRemoteMapChanges, um) === null)) {
+       return null
+     }
++    // LGA-SHOTDOCS-PATCH (B.22): la copia del padre pudo irse del documento: otra persona la borró y, como ya nadie la
++    // guardaba para deshacer, Yjs la recolectó (queda un `GC`, sin `redone`, o un item sin su tipo). No hay dónde volver
++    // a poner esto: se salta (como cuando el padre no se puede volver a poner) y se avisa al deshacer, en vez de tirar
++    // `TypeError` y dejar el paso a medias.
+     while (parentItem.redone !== null) {
+-      parentItem = getItemCleanStart(transaction, parentItem.redone)
++      const next = getItemCleanStart(transaction, parentItem.redone)
++      if (!(next instanceof Item)) {
++        transaction.meta.set('lga-shotdocs:parentGone', true)
++        return null
++      }
++      parentItem = next
++    }
++    if (!(parentItem.content instanceof ContentType)) {
++      transaction.meta.set('lga-shotdocs:parentGone', true)
++      return null
+     }
+   }
+   const parentType = parentItem === null ? /** @type {AbstractType<any>} */ (item.parent) : /** @type {ContentType} */ (parentItem.content).type
+@@ -181,7 +194,9 @@ export const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemo
        let leftTrace = left
        // trace redone until parent matches
        while (leftTrace !== null && /** @type {AbstractType<any>} */ (leftTrace.parent)._item !== parentItem) {
@@ -208,7 +313,7 @@ index fca5827..3e03a7b 100644
        if (leftTrace !== null && /** @type {AbstractType<any>} */ (leftTrace.parent)._item === parentItem) {
          left = leftTrace
 diff --git a/node_modules/yjs/src/utils/UndoManager.js b/node_modules/yjs/src/utils/UndoManager.js
-index e5c4dc8..6a82d38 100644
+index e5c4dc8..385f5dd 100644
 --- a/node_modules/yjs/src/utils/UndoManager.js
 +++ b/node_modules/yjs/src/utils/UndoManager.js
 @@ -1,6 +1,7 @@
@@ -301,3 +406,21 @@ index e5c4dc8..6a82d38 100644
        iterateDeletedStructs(transaction, stackItem.deletions, struct => {
          if (
            struct instanceof Item &&
+@@ -99,11 +144,16 @@ const popStackItem = (undoManager, stack, eventType) => {
+       itemsToRedo.forEach(struct => {
+         performedChange = redoItem(transaction, struct, itemsToRedo, stackItem.insertions, undoManager.ignoreRemoteMapChanges, undoManager) !== null || performedChange
+       })
++      // LGA-SHOTDOCS-PATCH (B.22): `redoItem` marca si tuvo que saltar algo porque la copia de su padre ya no existe.
++      // Si algo de este paso no pudo volver, lo que el paso insertó se deja: puede ser ese mismo texto movido a otro lado
++      // (un Enter, un bloque arrastrado) y sacarlo lo haría desaparecer. Sobra texto en vez de faltar.
++      const lgaParentGone = transaction.meta.get('lga-shotdocs:parentGone') === true
++      transaction.meta.delete('lga-shotdocs:parentGone')
+       // We want to delete in reverse order so that children are deleted before
+       // parents, so we have more information available when items are filtered.
+       for (let i = itemsToDelete.length - 1; i >= 0; i--) {
+         const item = itemsToDelete[i]
+-        if (undoManager.deleteFilter(item)) {
++        if (!lgaParentGone && undoManager.deleteFilter(item)) {
+           item.delete(transaction)
+           performedChange = true
+         }
