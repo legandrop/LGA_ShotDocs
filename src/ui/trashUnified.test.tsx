@@ -356,6 +356,9 @@ describe('sin red, una base vieja y la dirección vieja', () => {
     expect(shown()).toEqual(['page:Escena vieja']);
     expect(panel()!.textContent).toContain('Deleted projects and files need an internet connection');
     expect(server.mediaCalls.length).toBe(before);
+    // Nada se pidió sin red: ni el error de los borrados ni el de los archivos.
+    expect(panel()!.querySelector('.error')).toBeNull();
+    expect(panel()!.textContent).not.toContain('could not be read');
     await act(async () => byText('Restore')!.click());
     await settle();
     expect(owner.tree.isTrashed(old)).toBe(false);
