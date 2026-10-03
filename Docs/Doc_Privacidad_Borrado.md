@@ -296,6 +296,13 @@ hoy). **Límites:** el uso se marca con `removed_at` cuando un dispositivo de un
 la página). Las imágenes viejas `sdfile://` del bucket `page-files` no tienen registro de uso: siguen legibles enteras
 para quien ve la página (sección 6).
 
+**Lo que sube un link *Can edit*** (`Doc_Link_Publico.md`, entrega 2b): `plink_register_file` deja el uso vivo
+(`removed_at` nulo) desde que se registra, aunque la fila que lo muestra se aparte o no exista. Quien ve la página (también
+un invitado o un lector) lo puede ver si conoce su id o lista `page_files` de la página; no aparece en ninguna base limpia
+ni en el documento. Lo ve el equipo en *Share* (`public_link_files`, decisión de Lega del 2026-10-03) y no va solo a la
+papelera; sacarlo de la página es la papelera de archivos de siempre. Al roadmap: no listar a lectores e invitados los
+usos de un link que ninguna fila admitida muestra.
+
 ### 4.5 Lo medido
 
 **Privacidad y convergencia** (P7, 300 corridas de 200 pasos: dos editores escriben notas y las borran antes de

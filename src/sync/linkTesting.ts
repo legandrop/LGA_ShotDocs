@@ -8,8 +8,11 @@ import { PageFiles } from './files';
 import { LinkCommentRemote, LinkRemote, type LinkProblem } from './linkRemote';
 import { openLocalDb, type LocalDb } from './localDb';
 import { normalizeStructure, seedIfEmpty } from './structure';
-import type { FakeServer } from './testing';
-import { LINK_PUSH_MAX_BYTES } from './linkRemote';
+import { fakeProbe, fakeViewImage, type FakeServer } from './testing';
+import { LINK_FILE_MAX_BYTES, LINK_PUSH_MAX_BYTES } from './linkRemote';
+import { MediaQueue } from '../media/queue';
+import { mediaDbName, openMediaDb } from '../media/mediaDb';
+import { Portero } from '../media/portero';
 import { PageTree } from './tree';
 
 // Lo de las pruebas del modo link (Docs/Doc_Link_Publico.md, sección 6.2): un cliente de Supabase en memoria que
@@ -106,8 +109,37 @@ export function fakeLinkClient(server: FakeServer, headers: Record<string, strin
         if (!base || base.toSeq <= Number(args.p_after_seq ?? 0)) return { data: [], error: null, status: 200 };
         return { data: [{ seq: base.toSeq, update: toBase64(base.state) }], error: null, status: 200 };
       }
-      case 'plink_media_files':
-        return { data: [], error: null, status: 200 };
+      case 'plink_media_files': {
+        // Las filas de los archivos que usa hoy una página de la rama (como la migración de la entrega 1).
+        const ids = (args.p_ids as string[] | null) ?? [];
+        const rows = ids.flatMap((id) => {
+          const f = server.mediaFiles.get(id);
+          if (!f || server.linkFileLevel(l, id) < 1) return [];
+          return [{ id: f.id, name: f.name, mime: f.mime, size: f.size, width: f.width, height: f.height, duration: f.duration, thumb_at: f.thumb_at, drive_id: f.drive_id }];
+        });
+        return { data: rows, error: null, status: 200 };
+      }
+      case 'plink_register_file': {
+        // Entrega 2b: como `plink_register_file` (FakeServer.linkRegisterFile, con los topes de E2.5).
+        const failure = server.linkRegisterFile(
+          l,
+          {
+            id: String(args.p_id), pageId: String(args.p_page_id), name: String(args.p_name ?? ''), mime: String(args.p_mime ?? ''),
+            size: Number(args.p_size), width: (args.p_width as number | null) ?? null, height: (args.p_height as number | null) ?? null,
+            duration: (args.p_duration as number | null) ?? null,
+          },
+          (args.p_app_version as string | null) ?? null,
+        );
+        if (failure) return { data: null, error: { message: failure.message, code: failure.code, details: failure.detail } as never, status: failure.code === 'P0002' ? 404 : 400 };
+        return { data: 'ok', error: null, status: 200 };
+      }
+      case 'plink_set_file_thumb': {
+        const id = String(args.p_file_id);
+        if (!server.linkOwnsFile(l, id)) return fail('file_not_found', 'P0002', 404);
+        server.mediaFiles.get(id)!.thumb_at = new Date().toISOString();
+        server.mediaCalls.push(`plink_set_file_thumb ${id}`);
+        return { data: null, error: null, status: 204 };
+      }
       case 'plink_list_comments': {
         const pageId = String(args.p_page_id);
         if (level(pageId) < 1) return fail('page_not_found', 'P0002', 404);
@@ -197,7 +229,33 @@ export function fakeLinkClient(server: FakeServer, headers: Record<string, strin
         return fail(`permission denied for function ${fn}`, '42501', 401);
     }
   };
-  return { rpc: (fn: string, args: Record<string, unknown> = {}) => rpc(fn, args) } as unknown as SupabaseClient;
+  // El bucket `thumbs` con las políticas del link: leer lo de la rama (`thumbs_select_link`) y, desde la entrega 2b, subir
+  // la miniatura de un archivo que registró este link (`thumbs_insert_link`), sin reemplazar.
+  const storage = {
+    from: (bucket: string) => ({
+      upload: async (path: string, data: Blob) => {
+        calls.push({ fn: `storage.upload ${bucket}/${path}`, headers: { ...headers } });
+        if (!server.online) return { data: null, error: { name: 'StorageUnknownError', message: 'Failed to fetch' } };
+        const l = link();
+        const id = path.replace(/\.jpg$/, '');
+        if (bucket !== 'thumbs' || !l || l.level !== 'edit' || !server.linkOwnsFile(l, id)) {
+          return { data: null, error: { message: 'new row violates row-level security policy', statusCode: '403' } };
+        }
+        if (server.thumbs.has(id)) return { data: null, error: { message: 'The resource already exists', statusCode: '409' } };
+        server.thumbs.set(id, data);
+        return { data: { path }, error: null };
+      },
+      download: async (path: string) => {
+        if (!server.online) return { data: null, error: { name: 'StorageUnknownError', message: 'Failed to fetch' } };
+        const l = link();
+        const id = path.replace(/\.jpg$/, '');
+        const thumb = server.thumbs.get(id);
+        if (bucket !== 'thumbs' || !l || !thumb || server.linkFileLevel(l, id) < 1) return { data: null, error: { message: 'Object not found', statusCode: '400' } };
+        return { data: thumb, error: null };
+      },
+    }),
+  };
+  return { rpc: (fn: string, args: Record<string, unknown> = {}) => rpc(fn, args), storage } as unknown as SupabaseClient;
 }
 
 export interface LinkDevice {
@@ -212,6 +270,8 @@ export interface LinkDevice {
   calls: LinkCall[];
   /** El nombre con el que comenta el visitante. */
   name: { value: string };
+  /** La cola de fotos y archivos del visitante (entrega 2b): sube con el header del link, nunca con una sesión. */
+  media: MediaQueue;
 }
 
 /** Un visitante con el link: como \`services.ts\` en modo link (modo liviano, solo bases, comentarios con nombre). */
@@ -221,6 +281,8 @@ export async function makeLinkDevice(
   device = 'dev-' + 'x'.repeat(20),
   appVersion = '9.999',
   visitorName = '',
+  /** El nombre de la base de archivos (por defecto, una nueva): la de un `LinkEntry` para probar la pantalla del link muerto. */
+  mediaDb: string = mediaDbName(crypto.randomUUID()),
 ): Promise<LinkDevice> {
   const calls: LinkCall[] = [];
   const problems: (LinkProblem | null)[] = [];
@@ -241,6 +303,21 @@ export async function makeLinkDevice(
     noGcMaxBytes: LINK_PUSH_MAX_BYTES,
   });
   const files = new PageFiles(db, remote);
+  // Como services.ts en modo link: sin usos de archivos, hasta 500 MB por archivo, sin carpetas, y el portero con los
+  // headers del link (nunca una sesión).
+  const linkHeaders = { 'x-shotdocs-version': appVersion, 'x-shotdocs-link': token, 'x-shotdocs-device': device };
+  const media = new MediaQueue(await openMediaDb(mediaDb), remote, {
+    noUsage: true,
+    maxFileBytes: LINK_FILE_MAX_BYTES,
+    noFolders: true,
+    portero: (url) => new Portero(url, { fetch: server.portero.fetch, send: server.portero.send, link: linkHeaders, wait: async () => undefined }),
+    projectOf: (pageId) => tree.get(pageId)?.workspace_id,
+    probe: fakeProbe,
+    playMark: async (thumb) => thumb,
+    viewImage: fakeViewImage,
+    offline: () => !server.online,
+  });
+  await media.load();
   const commentsDb = await openCommentsDb(commentsDbName(crypto.randomUUID()));
   const comments = new CommentQueue(commentsDb, new LinkCommentRemote(client, userId, () => name.value), userId);
   await comments.load();
@@ -248,9 +325,10 @@ export async function makeLinkDevice(
     appVersion,
     access,
     comments,
+    media,
     intervalMs: 30_000,
     pullOnly: (id, cursor) => cursor > 0 || !!docs.peek(id),
     linkVisitor: true,
   });
-  return { db, tree, docs, engine, remote, comments, access, problems, calls, name };
+  return { db, tree, docs, engine, remote, comments, access, problems, calls, name, media };
 }

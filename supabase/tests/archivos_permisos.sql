@@ -405,10 +405,11 @@ begin
           where schemaname = 'storage' and tablename = 'objects' and policyname like 'thumbs%'
             and roles = array['authenticated']::name[]) = 2,
     'thumbs tiene políticas de más';
-  -- Desde el link público (20261012120000_link_publico.sql), una más, solo para anon y con el header del link.
+  -- Desde el link público (20261012120000_link_publico.sql), una más, solo para anon y con el header del link; desde la
+  -- entrega 2b (20261030120000_link_archivos.sql), la de subir la miniatura de un archivo del link.
   assert (select count(*) from pg_policies
           where schemaname = 'storage' and tablename = 'objects' and policyname like 'thumbs%'
-            and roles <> array['authenticated']::name[]) <= 1,
+            and roles <> array['authenticated']::name[]) <= 2,
     'thumbs tiene políticas de más para otros roles';
   assert (select count(*) from public.files where created_by is null) = 0, 'un archivo sin autor';
 end;

@@ -19,7 +19,7 @@ import { SyncEngine, type SyncStatus } from './sync/engine';
 import { PageFiles } from './sync/files';
 import { openLocalDb, type LocalDb } from './sync/localDb';
 import { supportsContent } from './ui/unknownContent';
-import { LINK_PUSH_MAX_BYTES } from './sync/linkRemote';
+import { LINK_FILE_MAX_BYTES, LINK_PUSH_MAX_BYTES } from './sync/linkRemote';
 import { SupabaseRemote } from './sync/remote';
 import { normalizeStructure, seedIfEmpty } from './sync/structure';
 import { PageTree } from './sync/tree';
@@ -327,6 +327,8 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser, link
         onRejected: (file) => offline?.rejected(file),
         // Un link no registra usos de archivos: los registra el editor que admite (O7 de la auditoría de la 2a).
         noUsage: !!link,
+        // Un link sube archivos de hasta 500 MB y nunca carpetas (entrega 2b, E2.5 y LE7).
+        ...(link ? { maxFileBytes: LINK_FILE_MAX_BYTES, noFolders: true } : {}),
       });
       await media.load().catch(() => undefined);
       // Las carpetas (P.9): solo la lista de trabajo, sin bytes, en otra base. Si no se abre, se suben igual

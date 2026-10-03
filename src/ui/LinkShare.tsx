@@ -10,6 +10,7 @@ import {
   deletePublicLinkComments,
   expiryFor,
   getPublicLink,
+  LINK_DRIVE_WARN_BYTES,
   LINK_SCHEMA_VERSION,
   resetPublicLink,
   revokePublicLink,
@@ -21,6 +22,7 @@ import {
   type PublicLinkInfo,
 } from '../sync/publicLinks';
 import { LinkAsideList } from './LinkAsideList';
+import { LinkFilesList } from './LinkFilesList';
 import { notify } from './notice';
 import { ShareGateNotes, UNSYNCED_BEFORE_SHARE, useShareGate } from './shareGate';
 import { teamErrorText } from './teamText';
@@ -33,6 +35,11 @@ import { teamErrorText } from './teamText';
 
 function megabytes(bytes: number): string {
   return (bytes / 1_048_576).toFixed(bytes < 10_485_760 ? 1 : 0);
+}
+
+/** Lo subido al Drive: en MB, o en GB desde 1 GB (*1.2 GB*). */
+export function driveSize(bytes: number): string {
+  return bytes >= 1_073_741_824 ? `${(bytes / 1_073_741_824).toFixed(1)} GB` : `${megabytes(bytes)} MB`;
 }
 
 /** El fin del día elegido (hora local), o `null` si no es una fecha futura. */
@@ -136,6 +143,8 @@ export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => 
   const editOn = info?.edit_on === true;
   const linkLevel: LinkLevel = link?.level === 'edit' ? 'edit' : 'comment';
   const shownLevel: LinkLevel = link ? linkLevel : level;
+  // Lo que llegó al Drive (O3 de la auditoría de la 2b): lo registrado que no subió no cuenta. Una base sin el dato, lo registrado.
+  const inDrive = link?.files ? (link.files.drive_bytes ?? link.files.bytes) : 0;
 
   return (
     <section className="link-share" aria-label={tr('share.link.general')}>
@@ -206,6 +215,8 @@ export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => 
       {link && (
         <>
           <p className="muted small team-lead">{tr('share.link.anyoneHint')}</p>
+          {/* Los PDF exportados con este link lo llevan en sus links a archivos (P.30, LF18). */}
+          <p className="muted small team-lead">{tr('share.link.pdfHint')}</p>
           {!link.alive && <p className="warn small team-lead">{tr('share.link.notAlive')}</p>}
           <div className="team-invite-actions link-share-actions">
             <button
@@ -265,6 +276,15 @@ export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => 
               })}
             </p>
           )}
+          {/* Lo que subió al Drive del dueño (entrega 2b): el uso y, desde 1 GB, el aviso. */}
+          {link.files && (link.level === 'edit' || link.files.total > 0) && (
+            <p className="muted small team-lead">
+              {tr('share.link.files', { today: usage.file?.n ?? 0, total: link.files.total, size: driveSize(inDrive) })}
+            </p>
+          )}
+          {link.files && inDrive > LINK_DRIVE_WARN_BYTES && (
+            <p className="warn small team-lead">{tr('share.link.filesBig', { size: driveSize(inDrive) })}</p>
+          )}
           {link.limited && <p className="warn small team-lead">{tr('share.link.limited')}</p>}
           {link.comments > 0 && (
             <button
@@ -289,6 +309,8 @@ export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => 
       )}
       {/* Lo apartado de los links de esta página (también de los anteriores), para leerlo y bajarlo (entrega 2c). */}
       {info && <LinkAsideList pageId={pageId} linkId={link?.id ?? null} />}
+      {/* Los archivos que subieron los links de esta página, también los de lo apartado (entrega 2b, decisión de Lega). */}
+      {info && <LinkFilesList pageId={pageId} linkId={link?.id ?? null} />}
       <ShareGateNotes gate={gate} reader={!link && !!info?.clean_on} />
       {error && <p className="error">{error}</p>}
     </section>

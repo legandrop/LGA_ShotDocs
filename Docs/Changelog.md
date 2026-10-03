@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.164 :
+
+**Link público 2b y links a los archivos en el PDF.** (1) Con *Can edit* el visitante no podía sumar fotos ni archivos:
+no había cómo registrarlos sin cuenta. Ahora los registra con topes (`plink_register_file`), el portero sube solo lo que
+registró ese link y corta al revocar, lo escrito espera a sus archivos, *Share* cuenta y lista lo llegado (también lo
+apartado, que no se borra) y con el link muerto el visitante baja sus originales. Migración `20261030120000_link_archivos`
+(schema 21). (2) En el PDF los adjuntos, videos y carpetas salían sin link: cada uno lleva `/f/<clave local>/<id>#ws=…`,
+que abre el archivo con permiso, pide entrar sin sesión y sin acceso muestra una sola pantalla; el link público solo desde
+*Export*, con aviso. (3) `refreshCounts` consultaba la base cerrada después de `stop()`: ya no.
+
+[ Link público 2b y links a los archivos en el PDF - el visitante sube fotos y archivos al Drive del dueño con topes y baja sus originales si el link muere, Share lista lo llegado, cada adjunto, video y carpeta del PDF con su dirección fija /f/, y el motor no cuenta después de detenerse ]
+
 v0.163 :
 
 **La barra de formato con los tooltips de la app (D226, B.25a y B.25c).** Los botones propios de BlockNote en la barra

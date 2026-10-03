@@ -206,3 +206,106 @@ describe('el aviso de lo apartado y el historial', () => {
     expect(hostHistory.textContent).toContain('Ana (via link)');
   });
 });
+
+describe('lo que el link sube al Drive, en Share (entrega 2b)', () => {
+  /** `get_public_link` con un link Can edit que ya subió archivos. */
+  function filesClient(files: { total: number; bytes: number } | undefined, level: 'edit' | 'comment' = 'edit', today = 2) {
+    const link = {
+      id: 'l1', page_id: 'p', level, created_at: '2026-10-03T10:00:00Z', expires_at: null, created_by_name: 'owner',
+      token: 'sdl_' + 'x'.repeat(43), alive: true, usage_today: { file: { n: today, bytes: 0 } }, limited: false, comments: 0,
+      edits: { waiting: 0, held: 0, aside: 0, admitted_today: 0, push_bytes_total: 0 }, ...(files ? { files } : {}),
+    };
+    return { rpc: async (fn: string) => (fn === 'get_public_link' ? { data: { clean_on: true, edit_on: true, link, above: null }, error: null, status: 200 } : { data: [], error: null, status: 200 }), auth: {} };
+  }
+
+  it('cuántos archivos subió (hoy y en total, con el peso) y, desde 1 GB, el aviso; sin la base 21 o en Can view sin archivos, nada', async () => {
+    prefs.set({ language: 'en' });
+    const big = await teamDevice();
+    const host = await mount(services(big.d, filesClient({ total: 3, bytes: 1.25 * 1024 ** 3 })), <LinkShare pageId={big.page} onClose={() => undefined} />);
+    expect(host.textContent).toContain('Files added through the link: 2 today · 3 in all (1.3 GB in your Drive)');
+    expect(host.textContent).toContain('This link has uploaded 1.3 GB to your Drive.');
+    act(() => roots.pop()!.unmount());
+
+    const small = await teamDevice();
+    const host2 = await mount(services(small.d, filesClient({ total: 1, bytes: 5 * 1024 ** 2 })), <LinkShare pageId={small.page} onClose={() => undefined} />);
+    expect(host2.textContent).toContain('(5.0 MB in your Drive)');
+    expect(host2.textContent).not.toContain('has uploaded');
+    act(() => roots.pop()!.unmount());
+
+    // Una base anterior a la 21 no lo dice; un link Can view sin archivos tampoco lo muestra.
+    const old = await teamDevice();
+    const host3 = await mount(services(old.d, filesClient(undefined)), <LinkShare pageId={old.page} onClose={() => undefined} />);
+    expect(host3.textContent).not.toContain('Files added through the link');
+    act(() => roots.pop()!.unmount());
+    const view = await teamDevice();
+    const host4 = await mount(services(view.d, filesClient({ total: 0, bytes: 0 }, 'comment', 0)), <LinkShare pageId={view.page} onClose={() => undefined} />);
+    expect(host4.textContent).not.toContain('Files added through the link');
+  });
+});
+
+describe('los archivos de los links de la página, en Share (decisión de Lega, entrega 2b)', () => {
+  function filesClient(files: Record<string, unknown>[] | { error: string }) {
+    const calls: string[] = [];
+    const link = {
+      id: 'l2', page_id: 'p', level: 'edit', created_at: '2026-10-03T10:00:00Z', expires_at: null, created_by_name: 'owner',
+      token: 'sdl_' + 'x'.repeat(43), alive: true, usage_today: {}, limited: false, comments: 0,
+      edits: { waiting: 0, held: 0, aside: 0, admitted_today: 0, push_bytes_total: 0 }, files: { total: 1, bytes: 5 * 1024 * 1024, drive_bytes: 0 },
+    };
+    const rpc = async (fn: string) => {
+      calls.push(fn);
+      if (fn === 'get_public_link') return { data: { clean_on: true, edit_on: true, link, above: null }, error: null, status: 200 };
+      if (fn === 'public_link_files') {
+        return 'error' in files
+          ? { data: null, error: { message: files.error, code: 'P0002' }, status: 404 }
+          : { data: files, error: null, status: 200 };
+      }
+      return { data: [], error: null, status: 200 };
+    };
+    return { client: { rpc, auth: {} }, calls };
+  }
+  const row = (id: string, over: Record<string, unknown>) => ({
+    id, link_id: 'l2', link_live: true, page_id: 'p', name: `${id}.jpg`, mime: 'image/jpeg', size: 2048,
+    created_at: '2026-10-03T10:00:00Z', uploaded: true, trashed: false, ...over,
+  });
+
+  it('lista los de cada link de la página (también uno anterior), con Download solo para lo que llegó al Drive', async () => {
+    prefs.set({ language: 'en' });
+    const { server, d, page } = await teamDevice();
+    server.enableLinkFiles();
+    await d.engine.syncNow();
+    const c = filesClient([
+      row('subido', {}),
+      row('cortado', { link_id: 'l1', link_live: false, uploaded: false }),
+      row('sacado', { trashed: true }),
+    ]);
+    const host = await mount(services(d, c.client), <LinkShare pageId={page} onClose={() => undefined} />);
+    expect(c.calls).toContain('public_link_files');
+    const list = host.querySelector('.link-files-list')!;
+    expect(list.textContent).toContain("3 files were added through this page's link");
+    expect(list.textContent).toContain('subido.jpg');
+    expect(list.textContent).toContain('cortado.jpg');
+    expect(list.textContent).toContain('earlier link');
+    expect(list.textContent).toContain("didn't finish uploading");
+    expect(list.textContent).toContain('in the trash');
+    const rows = [...list.querySelectorAll('li')];
+    expect(rows.map((li) => !!li.querySelector('button'))).toEqual([true, false, true]);
+    // Share dice lo que llegó al Drive, no lo registrado (O3).
+    expect(host.textContent).toContain('(0.0 MB in your Drive)');
+  });
+
+  it('sin permiso (no ve lo borrado) o con la base anterior a la 21: no hay lista', async () => {
+    prefs.set({ language: 'en' });
+    const a = await teamDevice();
+    a.server.enableLinkFiles();
+    await a.d.engine.syncNow();
+    const denied = filesClient({ error: 'page_not_found' });
+    const host = await mount(services(a.d, denied.client), <LinkShare pageId={a.page} onClose={() => undefined} />);
+    expect(host.querySelector('.link-files-list')).toBeNull();
+    act(() => roots.pop()!.unmount());
+    const b = await teamDevice();
+    const old = filesClient([row('x', {})]);
+    const host2 = await mount(services(b.d, old.client), <LinkShare pageId={b.page} onClose={() => undefined} />);
+    expect(old.calls).not.toContain('public_link_files');
+    expect(host2.querySelector('.link-files-list')).toBeNull();
+  });
+});

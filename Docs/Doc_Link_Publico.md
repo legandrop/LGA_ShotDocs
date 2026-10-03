@@ -1075,7 +1075,8 @@ Dos auditorías independientes (base y portero; app y motor) dijeron «no pasa»
 ## Entrega 2: *Can edit* (rediseño 2026-10-02)
 
 **Estado: la 2a está implementada (v0.151; ver "Cómo quedó la 2a", al final de esta sección), con el interruptor
-apagado; la 2c también (v0.157, "Cómo quedó la 2c", con su migración sin aplicar); la 2b, en diseño.** El SQL de E2.11 queda como el borrador que se auditó; lo
+apagado; la 2c también (v0.157, "Cómo quedó la 2c", migración aplicada); la 2b también (v0.164, "Cómo quedó
+la 2b", migración aplicada).** El SQL de E2.11 queda como el borrador que se auditó; lo
 que cambió al implementarlo está en "Cómo quedó la 2a".
 Reemplaza a 3.8 (3.8.1 a 3.8.3), a la fila *Compactar* de 3.10, a lo de la entrega 2 en 3.15, 4, 5 y 6, y a la fila 2
 de la sección 7: todo eso queda como historia. Se diseñó contra `main` v0.137 (copias resumidas listas y apagadas, D14
@@ -2161,7 +2162,7 @@ notify pgrst, 'reload schema';
 | | Qué | Tamaño estimado | Riesgo |
 |---|---|---|---|
 | **2a** | Escribir: la migración de E2.11 (sin la 2b), la prueba de admisión, el motor (admitir antes de armar bases), el visitante que escribe, *Share* con *Can edit*, el aviso de lo apartado, el historial, la ayuda | Migración ~650 líneas y su prueba SQL ~500; app ~1100 (admit y forma ~350, motor ~200, linkRemote ~100, docs ~80, UI ~300, i18n y ayuda ~70); pruebas vitest ~900. **~3200** (la auditoría estimó 3000 a 3300 con B1 a B3) | **Alto**: escrituras sin cuenta |
-| **2b** | Archivos: `plink_register_file`, el portero, las miniaturas, la cola de fotos en modo link | Migración ~200 y prueba SQL ~200; portero ~120 y su prueba ~150; app ~200; pruebas ~250. **~1100** | **Alto**: el Drive del dueño |
+| **2b** | Archivos: `plink_register_file`, el portero, las miniaturas, la cola de fotos en modo link. **Hecha (v0.164, "Cómo quedó la 2b")** | Migración ~200 y prueba SQL ~200; portero ~120 y su prueba ~150; app ~200; pruebas ~250. **~1100** | **Alto**: el Drive del dueño |
 | **2c** | Lo apartado a la vista: la lista en *Share*, *Set aside (via link)* en el historial (sin aplicarlas), "volver a la página como la ve el equipo" para el visitante (después de bajar lo suyo), el ícono del árbol. **Hecha (v0.157, "Cómo quedó la 2c")** | ~600 | Medio |
 
 Se puede publicar la 2a sola (texto) y prender el interruptor; la 2b agrega el botón de subir en modo link.
@@ -2444,8 +2445,109 @@ lo tiene el equipo en la sala) y O4 (con D14 apagado igual se escribe en la sala
 view*: por eso, **al publicar, subir `min_app_version` a la versión de la 2a** antes de prender el interruptor.
 **O10:** quien publica completa `v0.151` en el changelog y `LINK_EDIT = '0.151'` en `src/help/entries.ts` a la vez.
 
-**Falta:** la 2b (archivos por el link). La 2c está hecha (abajo). Al roadmap, lo de la re-verificación que sigue
+**Falta:** nada de la entrega 2: la 2b y la 2c están hechas (abajo). Al roadmap, lo de la re-verificación que sigue
 abierto (E2.18).
+
+### Cómo quedó la 2b (v0.164)
+
+**Estado:** publicada en v0.164, con la migración `20261030120000_link_archivos.sql` **aplicada** (sube
+`schema_version` a **21**) y el portero con las rutas de subir para un link. La app ofrece subir por un link solo con la
+base en la 21; con la 20, el aviso de siempre (*Adding photos, videos and files through a link isn't available yet*).
+
+**La base** (detalle en `Doc_Supabase.md`, "Link público, entrega 2b"): `files.plink_id` (sin cuenta), el borrador de
+E2.11 (`plink_register_file`, `plink_set_file_drive`, `plink_set_file_thumb`, la política `thumbs_insert_link`,
+`link_media_allowed` con lo registrado) y, además: carpetas no (`folder_not_allowed`), el detalle de cada tope de por
+vida (`life_files` o `life_upload_bytes`), un candado por id para dos registros iguales a la vez, `plink_media_file` con
+`mine` y `project_mark`, y `public_link_json` con `files` y los topes de archivos del día en `limited`.
+
+**El portero** (`Doc_Portero.md`, "Con un link público"): `POST /upload` (con `file`) y `PUT /upload/<id>` con el header,
+solo de un archivo del link (`mine`) con nivel 3; `plink:<SHA-256 del token>`; cada parte vuelve a preguntar; al terminar
+`plink_set_file_drive`; las carpetas (`/folder/*` y las subidas `f.…`), nunca.
+
+**La app:** `LinkRemote` registra con `plink_register_file`, sube la miniatura (`thumbs`, con el header) y la marca con
+`plink_set_file_thumb`; la cola de siempre sube el original por el portero con los headers del link (`services.ts`).
+Un tope de archivos no apaga el link entero (solo `link_not_found` va a la pantalla): queda en el aviso del archivo
+(*This link reached its limit for adding files…*, *Files added through a link can be up to 500 MB.*), con *Retry*. Un
+archivo de más de 500 MB no se guarda; una carpeta soltada avisa *Folders can't be added through a link*. En *Share*,
+*Files added through the link: 2 today · 3 in all (1.3 GB in your Drive)* y, desde 1 GB, *This link has uploaded 1.3 GB
+to your Drive. Reset link if it went too far.* La ayuda suma *Photos and files through a link* y corrige *Can edit with a
+link*.
+
+**Revocar, *Reset link* y lo apartado (E2.7, LE9-B):** el link viejo no registra, no sube (la parte siguiente da
+`link_not_found`) ni confirma (`plink_set_file_drive`); lo que subió queda en Drive sin confirmar o confirmado, y su fila y
+su uso quedan (nada se borra). El link nuevo no tiene como suyo lo del viejo (`plink_id` es del viejo): no lo sube ni lo
+confirma, y su visitante solo lo puede poner en una fila si una página de la rama lo usa hoy.
+
+**Decisiones de esta entrega** (con la recomendación; valen hasta que Lega diga otra cosa):
+
+1. **Lo escrito con un archivo que todavía no está registrado.** *Qué pasaba:* el diseño no dice qué pasa si la fila
+   con el bloque de una foto llega a la sala antes de que el archivo se registre (la cola de archivos va después del
+   texto en cada ciclo, y un HEIC o un video tardan en estar listos): la admisión la apartaría (`foreign_media`) y, en
+   cadena, todo lo que siga de esa sesión en la página. *Opciones:* A) que la base retenga sin decidir una fila con un
+   archivo que todavía no existe; B) que el dispositivo del visitante no mande lo escrito de una página mientras su
+   documento muestre un archivo agregado ahí que la base no registró (`PageDocs.holdUpload`,
+   `MediaQueue.unregistered`); C) nada. *Elegí B:* no toca la admisión ni la base, y con A un id inventado dejaría
+   filas sin decidir que se vuelven a bajar en cada ciclo. Si el archivo no se puede registrar (un tope), la página espera
+   con el aviso; sacar el bloque la destraba. *Si preferís otra:* A.
+2. **Un link sube solo lo que registró él.** *Qué pasaba:* el diseño abre `/upload` al link con nivel 3, y con *Can edit*
+   el link tiene nivel 3 sobre las fotos del equipo de su rama: para una foto del equipo que todavía no terminó de subir,
+   el visitante podía mandar otros bytes, que el portero recuerda y le da a la base cuando la persona del equipo la sube.
+   *Opciones:* A) como el diseño; B) solo `mine`. *Elegí B* (`plink_media_file` dice `mine`; `403 not_mine`).
+3. **La carpeta en el Drive del dueño.** *Qué pasaba:* `plink_media_file` da el id del link como proyecto y un nombre
+   vacío (P10): el portero habría creado una carpeta `Project` por cada link (y, con el id real y el nombre vacío,
+   renombrado la del proyecto). *Opciones:* A) darle al link el id del proyecto; B) una huella del proyecto que el portero
+   aprende de las subidas del equipo, con `Via_link` de respaldo; C) siempre `Via_link`. *Elegí B:* P10 se cumple y casi
+   siempre va a la carpeta del día del proyecto. *Si preferís otra:* C es más simple y deja todo lo de los links junto.
+4. **Revocar corta en la parte siguiente.** *Qué pasaba:* 3.9 valida el link al abrir la subida y al terminar; una subida
+   de 500 MB abierta seguía mandando partes después de *Reset link*. *Elegí* volver a preguntar en cada parte (un pase
+   cada 8 MiB: ~63 por un archivo de 500 MB, contra 3000 por día). *Si preferís otra:* solo al abrir y al terminar.
+5. **El tope de 500 MB en la app es fijo.** La app no guarda un archivo de más de 500 MB por un link; si el dueño cambia
+   `file_max_bytes` en `link_limits`, la base manda (un archivo entre los dos topes queda detenido con su aviso). *Si
+   preferís otra:* que `plink_open` diga el tope.
+
+**Lo que queda (al roadmap):** lo registrado por un link cuya fila quedó apartada (o que se reseteó antes de admitirla)
+sigue usado por su página en `page_files` sin que ningún documento lo muestre: no pasa a la papelera de archivos y, si
+llegó a subir, ocupa el Drive del dueño. **Lega decidió** (2026-10-03) que así quede, a la vista en *Share* (ver
+"Correcciones de la auditoría de la 2b"). Tampoco se probó con el portero real ni con Drive (ver la lista de Lega).
+
+**Pruebas:** la migración y `supabase/tests/link_archivos_permisos.sql` en `begin … rollback` contra la base real
+(pasa; 25 mutantes de la migración, 24 detectados y 1 equivalente) y las 29 pruebas SQL de siempre con la migración
+(pasan; `link_publico_permisos.sql` y `archivos_permisos.sql` con las funciones y la política nuevas). El portero:
+`portero/src/core.test.ts` (6 casos nuevos: subir lo suyo con `plink:<huella>` y a `Via_link`, la carpeta del proyecto
+por la huella sin renombrar nada, Can view, una foto del equipo (`not_mine`), afuera de la rama y el tamaño, revocado a
+mitad, el token de *Reset*, revocado justo antes del final (en Drive sin confirmar) y la papelera con un link) y
+`scripts/portero-smoke.mjs` (24 de 24). En vitest: `src/sync/linkFiles.test.ts` (el visitante con el motor de verdad, el
+servidor y el portero en memoria: subir, admitir y verlo el equipo; registrar despierta al motor; lo escrito que espera
+al archivo; sacar el bloque; los topes y las carpetas; cada guarda) y `src/ui/linkEditUi.test.tsx` (lo de *Share*).
+Mutantes de la app y el portero: 26, 23 detectados, 2 equivalentes (esperar solo en la página del archivo: el documento
+ya lo filtra; el servidor en memoria sin lo registrado: lo cubre la prueba SQL) y 1 que llevó a sacar una comprobación
+repetida. **En el navegador** (Chromium sin ventana, la app real del visitante y *Share* real del equipo sobre el
+servidor y el portero en memoria, sin login): el visitante suelta una foto, escribe su nombre, la foto se registra con el
+link, sube su miniatura y el original por el portero, lo escrito llega a la sala recién después, el equipo lo admite y ve
+el archivo; *Share* cuenta lo subido y avisa desde 1 GB; con el tope del día lleno la segunda foto no se registra, lo
+escrito espera y el detalle lo dice; en el teléfono, sin scroll horizontal; sin errores en la consola (14 de 14).
+
+#### Correcciones de la auditoría de la 2b
+
+Una auditoría independiente sobre `f5051be` dio **no aprobado** por un bloqueante; lo demás (permisos, topes, archivos
+ajenos, carpetas, revocar) quedó bien. Se corrigió en una ronda (y la rama trae `main` v0.162):
+
+| Hallazgo | Corrección |
+|---|---|
+| **B1.** Si el link muere (revocado, *Reset link*, vencido) con un archivo a medio subir, el original quedaba encerrado en el navegador del visitante: la pantalla del link muerto bajaba solo el texto, y con el link nuevo no sube nunca (es del viejo) | La pantalla del link muerto lista los originales que quedaron en este navegador sin llegar a Drive (`linkUnsentMedia`, de la base de archivos del link, sin la sincronización ni el portero) y los baja de a uno, el mismo archivo (*N photos or files you added didn't finish uploading*). Con el link vivo, el detalle de la insignia ofrece *Download it* en cada archivo detenido (la página salió de la rama, un tope). Prueba: `src/ui/linkDeadFiles.test.tsx` (el caso del auditor, un video cortado por *Reset link*, achicado a 3 MB) |
+| **O1.** Un bloque recién soltado y copiado a otra página antes de registrar su archivo no esperaba ahí: se apartaba | Lo escrito espera mientras el documento muestre **cualquier** archivo propio sin registrar (`MediaQueue.unregistered`, sin filtrar por página); al registrarse entra en las dos y el editor que admite registra el uso en la otra |
+| **O2, O4 y la decisión de Lega** (2026-10-03). Lo registrado por un link y que ninguna fila muestra era invisible para el equipo | **Los archivos de lo apartado no se borran ni van solos a la papelera:** siguen en el Drive del dueño y *Share* los lista (*N files were added through this page's link*), con nombre, peso, fecha, *earlier link*, *didn't finish uploading* o *in the trash*, y *Download* para lo que llegó al Drive. La lista sale de `public_link_files(página)` (de `files.plink_id` de todos los links de la página, también los reseteados, lo subido sin usar y lo registrado a mano), no de las filas apartadas; la ve quien ve lo borrado de la página. Cuando exista D184 (descartar lo apartado), descartar manda sus archivos a la papelera (roadmap). Que lectores e invitados no listen esos usos: roadmap (O4) |
+| **O3.** *Share* decía "in your Drive" con lo registrado | `public_link_json.files.drive_bytes` (lo que llegó a Drive); el aviso de 1 GB también |
+| **O5.** Mutantes vivos | Pruebas nuevas: justo hasta el tope de por vida entra; otro link cuya rama contiene la de S ve el archivo con `mine` falso; nombres de miniatura que empiezan con el id; el portero con una base sin `mine` da `not_mine`; lo escrito sale apenas el archivo se registra aunque el original no haya subido |
+| **O6.** Docs | `Doc_Sincronizacion.md` (el visitante y sus archivos) y `Doc_Privacidad_Borrado.md` 4.4 (los usos de un link) |
+| **O8.** Menores | El comentario suelto del servidor en memoria; la ayuda dice "de fábrica" para los topes; lo demás al roadmap |
+| **O9.** Una corrida completa de la suite podía salir con código 1 por un rechazo suelto de `refreshCounts` con la base cerrada (también en `main`) | `poke` ignora ese rechazo (la cuenta es solo lo que se muestra) |
+| **O7.** Sin tope de todos los links juntos para archivos | Roadmap (`link_limits.all_upload_bytes` ya funciona si se carga) |
+
+**Pruebas de la ronda:** la prueba SQL suma lo de arriba y `public_link_files` (quién la ve, los links viejos, lo que no
+subió, solo los links de esa página, `anon` no); las 30 pruebas SQL con la migración pasan en `begin … rollback`. 8
+mutantes SQL nuevos, todos detectados (con los 25 de antes: 33, 32 detectados y 1 equivalente). 9 mutantes nuevos de la
+app y el portero, todos detectados. El *Download it* del detalle de la insignia (link vivo) no tiene prueba propia.
 
 ### Cómo quedó la 2c (v0.157)
 

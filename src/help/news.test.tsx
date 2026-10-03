@@ -168,7 +168,8 @@ afterEach(async () => {
   });
   for (const r of roots.splice(0)) act(() => r.unmount());
   for (const d of devices.splice(0)) {
-    d.engine.stop();
+    // Esperar el cierre del motor: un conteo en vuelo no puede chocar con la base ya cerrada.
+    await d.engine.stop();
     d.db.close();
     d.mediaDb.close();
     d.commentsDb.close();

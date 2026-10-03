@@ -1,4 +1,5 @@
 import { fitPrintedMarkup } from './markupOverlay';
+import { addMediaLinks, mediaLinkSource } from './mediaLinks';
 import { t } from '../i18n';
 import { thumbSize } from './sharpMarks';
 import type { PageFormat, PrintGeometry } from './pageFormat';
@@ -90,7 +91,16 @@ export function buildPrintView(
   article: HTMLElement,
   format: Pick<PageFormat, 'size' | 'landscape'>,
   kind: 'measure' | 'output',
-  options: { asSeen?: boolean } = {},
+  options: {
+    asSeen?: boolean;
+    /** La página que se copia (para el marcador de otro proyecto); de fábrica, la del artículo. */
+    pageId?: string | null;
+    /**
+     * La dirección de cada archivo en el PDF (exportar con un link público, Docs/Doc_Links_PDF.md 3.3). De fábrica, la del
+     * workspace abierto (`mediaLinks.ts`). La vista de medir nunca lleva links: solo el renglón del nombre.
+     */
+    mediaHref?: ((id: string) => string | null) | null;
+  } = {},
 ): PrintView {
   const geometry = printGeometry(format);
   const root = document.createElement('div');
@@ -139,6 +149,13 @@ export function buildPrintView(
     shell.setAttribute('data-mantine-color-scheme', 'light');
     const copy = live.cloneNode(true) as HTMLElement;
     cleanCopy(copy, live, kind === 'output' && !!options.asSeen);
+    // Los links a los archivos (P.30): la tarjeta y el cuadro de un video, con el nombre debajo.
+    const source = mediaLinkSource();
+    addMediaLinks(copy, {
+      source,
+      pageId: options.pageId !== undefined ? options.pageId : (article.dataset.pageId ?? null),
+      href: kind === 'measure' ? null : (options.mediaHref ?? (source ? (id: string) => source.href(id) : null)),
+    });
     shell.append(copy);
     host.append(shell);
     page.append(host);

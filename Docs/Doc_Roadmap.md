@@ -329,7 +329,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   **Entrega 2a hecha (v0.151: escribir; migración `20261028120000_link_editar.sql` sin aplicar, `schema_version` 19, y el
   interruptor `link_edit_min_version` apagado; ver "Cómo quedó la 2a" en `Doc_Link_Publico.md`).** Para prenderla: la
   barrera de error alrededor de `PageEditor` en `main` (R4), aplicar la migración, subir la mínima y poner
-  `link_edit_min_version`. Falta la 2b (archivos por el link). **Su auditoría
+  `link_edit_min_version`. **Su auditoría
   dio no aprobado (el paso 8) y se corrigió en una ronda** (`Doc_Link_Publico.md`, "Correcciones de la auditoría de la
   2a"). Queda de esa auditoría O4 (con D14 apagado se escribe igual en la sala). Al publicar la 2a, subir
   `min_app_version` a ella (O5: la publicada pasa *Can edit* a *Can view* al cambiar el vencimiento).
@@ -343,6 +343,22 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   no contar lo que tiene una versión mayor que la de cualquier editor que admitió hoy, o mostrarlo en *Share* como
   trabado), y probar a mano
   con el link de verdad la descarga y la vuelta a la versión del equipo en Safari del iPhone (la descarga de un JSON).
+  **Entrega 2b hecha (v0.164: fotos, videos y archivos por un link al Drive del dueño; migración
+  `20261030120000_link_archivos.sql` aplicada, `schema_version` 21, y el portero; ver "Cómo quedó la 2b" en
+  `Doc_Link_Publico.md`):** registrar con los topes de E2.5 sin vincular nunca un id ajeno, la miniatura, el original por
+  el portero solo de lo que registró el link (con cada parte validada), la carpeta del proyecto por su huella o
+  `Via_link`, y lo escrito de una página que espera a que sus archivos estén registrados. Para publicarla: aplicar la
+  migración (con la copia) y publicar el portero con la app. **Decisión de Lega (2026-10-03), hecha en la ronda 1:** lo que
+  subió un link no se borra ni va solo a la papelera; *Share* lista los archivos de los links de la página (de
+  `files.plink_id`, también de links reseteados y lo subido sin usar) con *Download*. **Junto a D184** (descartar lo
+  apartado, cuando exista): descartar manda también sus archivos a la papelera de archivos. Quedan: que `plink_open` diga
+  el tope por archivo (hoy la app usa 500 MB fijos); un tope de todos los links juntos para archivos
+  (`link_limits.all_upload_bytes`, O7: hoy cada link sube hasta 1 GB por día; cargarlo ya funciona sin código); que la
+  política de `page_files` no liste a lectores e invitados los usos de un link que ninguna fila admitida muestra (O4); que
+  el visitante no pueda marcar lo suyo con otro id de Drive llamando `plink_set_file_drive` a mano (O8c: no gana nada, el
+  portero exige la marca `sdFile`, solo rompe lo suyo); no loguear nunca el usuario `plink:<huella>` del portero (es la
+  huella del token, igual a `public_links.token_hash`, O8b); con dos workspaces en el mismo Drive, `findMarked` por un id
+  elegido por un visitante; y probar con el portero y el Drive de verdad (lista de Lega).
   **Entrega 2 rediseñada (2026-10-02):** lo que escribe un link espera en una sala
   (`public_link_updates`) y entra a `page_updates` cuando el dispositivo de un editor lo prueba (`link_admit`); partida
   en 2a (texto), 2b (archivos) y 2c (lo apartado a la vista); propuestas LE1 a LE13. **Auditado: aprobado con
@@ -382,6 +398,9 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   pregunta al cerrar la pantalla de error (`replaceRunning`), y restaurar sin el editor ya no escribe los atributos por
   defecto en los bloques iguales a la versión (los saltea; la vista de diferencias comparaba los atributos guardados y los
   mostraba como «formato cambiado»).
+  Observaciones de la re-verificación de la 2b (chicas): la prueba del link muerto usa un solo archivo (no distingue «baja
+  ese» de «baja el primero»), falta la prueba automática del *Download it* de la insignia con el link vivo (anda a mano), y
+  la lista de *Share* corta en 500 archivos y titula con 500 aunque haya más.
 - **P.25 Sacar una foto o filmar desde la app** (Lega, 2026-10-01). **Hecho para la web (v0.110):** *Take photo* y
   *Record video* en el menú "/" y en el menú de la página, solo en el teléfono y la tableta (el video, con portero):
   abren la cámara con el selector del sistema y lo sacado entra en el renglón y sube por la cola de siempre; *Save to
@@ -652,6 +671,15 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   (chico): copiar a la página del plano solo el lente (otras columnas con su fila en la ficha se suman en `FIELDS` de
   `shotPage.ts`); lo escrito en la página del plano no entra en el ⌘Z de esa página (se deshace con *Undo* de la hoja,
   como el reemplazo del proyecto antes de D10).
+- **P.30 Links a los archivos en el PDF y *Request access*** (Lega, 2026-10-03; `Doc_Links_PDF.md`). **Hecho (v0.164):
+  la entrega 1.** Cada adjunto, carpeta y video del PDF (exportar o imprimir) lleva un link a su dirección fija
+  (`/f/<clave local>/<id>`, con la dirección del Supabase después del `#`), que abre el archivo con sesión y permiso,
+  pide entrar sin sesión y vuelve, y sin permiso muestra una sola pantalla sin nada del archivo. *Export* puede usar el
+  link público de la página (aviso con página y nivel, *Can edit* destildado); imprimir, nunca. Falta: E2 (*Request
+  access* con la tabla `access_requests`, la campana y *Share*; riesgo alto), E3 opcional (pedir una página). Quedan
+  para después: el correo al pedir y al aceptar (B.8), pedir acceso sin cuenta, el link de un video en línea, y en la
+  pantalla `/f/` volver a donde estaba y reintentar sola al volver la red (observaciones de la auditoría de E1).
+  También de E1: pruebas de `http://localhost` y de *Sign in instead* (O4) y que *Export* avise sin red (O6).
 - **P.28 Hecho (v0.156): la tabla del reporte en el teléfono** (`Doc_Tabla_Telefono.md`): en pantalla angosta ninguna
   columna con ancho guardado baja de 96 px y la tabla se desplaza de costado dentro de su bloque; la celda donde se
   escribe se acomoda a la vista. La compu y el PDF no cambian. Falta probarlo en un iPhone real (dedo, teclado abierto).

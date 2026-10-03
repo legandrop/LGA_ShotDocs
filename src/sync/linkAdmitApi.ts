@@ -9,6 +9,9 @@ export const LINK_EDIT_SCHEMA_VERSION = 19;
 /** La versión de la base con la lista de lo apartado (`public_link_aside`, 20261029120000_link_apartado.sql). */
 export const LINK_ASIDE_SCHEMA_VERSION = 20;
 
+/** La versión de la base con los archivos por un link (`plink_register_file`, 20261030120000_link_archivos.sql). */
+export const LINK_FILES_SCHEMA_VERSION = 21;
+
 /** Como mucho, cuántas páginas se piden con bytes por vuelta (`link_admit_work` rechaza más de 20). */
 export const ADMIT_PAGES_PER_ROUND = 20;
 

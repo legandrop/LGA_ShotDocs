@@ -165,9 +165,13 @@ Las dos se pueden pedir sobre **esta página**, **esta página y las de adentro*
   está anclado (las primeras 80 letras), quién (el nombre, nunca el correo), cuándo, las respuestas y si está resuelto.
   Un hilo cuyo primer comentario se borró y tiene respuestas vivas sale con "(deleted comment)" arriba y las respuestas.
   Las respuestas a las preguntas son hilos: van con la misma casilla.
-- **Videos, adjuntos y tarjetas de Drive:** como en el PDF de hoy: el cuadro con su miniatura y el link (al portero
-  para lo del workspace; al Drive de afuera para una tarjeta de un link de Drive). Un link al portero en un PDF que se
-  le manda a un cliente pide sesión para abrirse: es lo que pasa hoy con el PDF de una página.
+- **Videos, adjuntos y tarjetas de Drive:** como en el PDF de una página. **Desde la entrega 1 de P.30
+  (`Doc_Links_PDF.md`, sección 16):** la tarjeta de un adjunto o de una carpeta y el cuadro de un video llevan un link a
+  la dirección fija del archivo (`/f/<clave local>/<id>`), la tarjeta entera y el nombre debajo; las fotos no, ni el
+  marcador de un archivo de otro proyecto ni uno borrado. Quien abre el link entra con su cuenta y ve el archivo solo si
+  tiene permiso. Imprimir una página usa siempre la dirección del workspace; *Export* puede usar el link público de la
+  página, con un aviso que nombra la página y el nivel y una casilla (destildada si el link es *Can edit*). La tarjeta de
+  un link de Drive pegado sigue con su link a Drive. (Hasta v0.162 salían sin link: este punto decía lo contrario.)
 
 ### 2.3 El zip (EX4, EX9, EX10, EX11)
 

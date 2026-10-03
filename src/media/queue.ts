@@ -220,6 +220,10 @@ function friendly(err: unknown): string {
   const message = errorMessage(err);
   if (message === 'page_not_found') return stored('queue.pageNotFound');
   if (message === 'file_other_project') return stored('queue.otherProject');
+  // Por un link (entrega 2b, Docs/Doc_Link_Publico.md, E2.5): los topes de archivos y las carpetas.
+  if (message === 'file_too_big') return stored('link.edit.fileTooBig');
+  if (message === 'link_rate_limited') return stored('link.edit.filesLimited');
+  if (message === 'folder_not_allowed') return stored('link.edit.noFolders');
   return message;
 }
 
@@ -240,6 +244,13 @@ export interface MediaQueueOptions {
    * lo hace el dispositivo de un editor al reconciliar lo admitido. Sin la opción, como siempre.
    */
   noUsage?: boolean;
+  /**
+   * Lo más que pesa un archivo que se puede agregar (un link: 500 MB, E2.5). Uno más grande no se guarda (se avisa): con
+   * un link, la base lo rechazaría y la página no mandaría lo escrito mientras lo muestre. Sin la opción, sin tope.
+   */
+  maxFileBytes?: number;
+  /** Sin carpetas (un link, LE7): soltar una avisa y no registra nada. */
+  noFolders?: boolean;
   /** El cliente del portero para una dirección (`workspace_settings.media_url`). */
   portero: (baseUrl: string) => MediaPortero;
   /** El proyecto de una página (se guarda con el archivo). */
@@ -492,6 +503,12 @@ export class MediaQueue {
   private readonly previewing = new Set<string>();
   /** Los adjuntos cuya tarjeta ya se mostró con vista previa (no hace falta volver a dibujarla cuando llega). */
   private readonly previewed = new Set<string>();
+  /**
+   * Lo que se está mostrando sin el archivo (P.30, Docs/Doc_Links_PDF.md, 3.1): el marcador de otro proyecto en una
+   * página (`<página>:<id>`), la tarjeta de uno borrado y el "no está en este dispositivo". Esos no llevan link en el PDF.
+   */
+  private readonly shownForeign = new Set<string>();
+  private readonly shownWithout = new Set<string>();
   private readonly playMark: (thumb: Blob) => Promise<Blob>;
   private readonly makeView: (file: Blob, mime: string, side: number) => Promise<Blob | null>;
   private readonly heic: (file: Blob) => Promise<Blob>;
@@ -587,6 +604,11 @@ export class MediaQueue {
     return !!this.db && this.schemaReady && this.options.noUsage !== true;
   }
 
+  /** Sin carpetas (un link, LE7). */
+  get noFolders(): boolean {
+    return this.options.noFolders === true;
+  }
+
   /** La base tiene la papelera de archivos (versión 6). */
   get trashEnabled(): boolean {
     return !!this.db && this.schemaReady && this.trashReady;
@@ -631,6 +653,18 @@ export class MediaQueue {
     }
   }
 
+  /**
+   * Los archivos agregados en este dispositivo que todavía no están registrados en la base, de cualquier página. Con un
+   * link (entrega 2b), el motor no manda lo escrito de una página mientras su documento muestre alguno: en la sala, una
+   * fila con un archivo que la base no conoce se apartaría (`foreign_media`) y, en cadena, todo lo que siga de esa sesión.
+   * De cualquier página (O1 de la auditoría): el bloque recién soltado en una página y copiado a otra también espera ahí.
+   */
+  async unregistered(): Promise<Set<string>> {
+    if (!this.db) return new Set();
+    const pending = await this.db.getAllFromIndex('files', 'pending', 1);
+    return new Set(pending.filter((r) => !r.registered).map((r) => r.id));
+  }
+
   /** Hay un archivo a medio guardar en el dispositivo: cerrar la app ahora lo perdería. */
   hasUnsavedWrites(): boolean {
     return this.adding > 0;
@@ -646,6 +680,7 @@ export class MediaQueue {
    */
   async addFolder(pageId: string, name: string, size: number): Promise<{ id: string; url: string }> {
     if (!this.db) throw new FileRejected(t('queue.cannotAdd', { reason: localize(this.unavailable ?? '') }));
+    if (this.options.noFolders) throw new FileRejected(t('link.edit.noFolders'));
     if (!this.enabled) throw new FileRejected(t('queue.needsDrive'));
     // Se registra en el acto: con una versión más vieja que la mínima no se puede (no queda nada a medias).
     if (this.outdatedNow) throw new FileRejected(t('queue.outdated'));
@@ -764,6 +799,7 @@ export class MediaQueue {
   private async save(pageId: string, file: Blob & { name?: string }, heic = false): Promise<string> {
     if (!this.db) throw new FileRejected(t('queue.cannotAdd', { reason: localize(this.unavailable ?? '') }));
     if (file.size <= 0) throw new FileRejected(t('queue.empty'));
+    if (this.options.maxFileBytes !== undefined && file.size > this.options.maxFileBytes) throw new FileRejected(t('link.edit.fileTooBig'));
     const mime = normalizeMime(file.type, file.name);
     const name = cleanName(file.name, mime);
     // Un adjunto solo va por el portero (sin él, las fotos siguen por el camino de antes).
@@ -1457,6 +1493,9 @@ export class MediaQueue {
         } else {
           record = await this.patch(record.id, { registered: true });
         }
+        // Un link no manda lo escrito de una página mientras muestre un archivo propio sin registrar
+        // (`unregistered`): ya registrado, que el motor lo mande pronto.
+        if (this.options.noUsage) this.onQueued?.();
       }
       // Una carpeta (P.9) no tiene original: lo de adentro lo sube su propia cola. Registrada, está lista (vuelve
       // acá, por ejemplo, después de restaurar una copia de la base).
@@ -2264,7 +2303,11 @@ export class MediaQueue {
     this.options.onUse?.(id, 'show');
     if (pageId) {
       return this.foreignTo(id, pageId).then((kind) => {
-        if (kind === false) return this.resolveOwn(id);
+        if (kind === false) {
+          this.shownForeign.delete(`${pageId}:${id}`);
+          return this.resolveOwn(id);
+        }
+        this.shownForeign.add(`${pageId}:${id}`);
         if (kind === 'file') {
           const info = this.infos.get(id);
           if (isFolderMime(info?.mime)) return folderCardUrl({ name: info?.name ?? '', size: info?.size, state: 'foreign' });
@@ -2410,6 +2453,7 @@ export class MediaQueue {
   }
 
   private async display(id: string): Promise<string> {
+    this.shownWithout.delete(id);
     try {
       const db = this.store;
       // Mandado a la papelera de Drive (papelera de archivos): ni roto ni pendiente, borrado, con la
@@ -2477,13 +2521,25 @@ export class MediaQueue {
       if (meta && kind === 'image' && isHeicType(meta.mime)) return placeholderUrl(kind, meta.name, heicNotice('none'));
       return placeholderUrl(kind, meta?.name ?? t('queue.notYet'));
     } catch {
+      this.shownWithout.add(id);
       return placeholderUrl(null, t('queue.notOnDevice'));
     }
+  }
+
+  /**
+   * Si la tarjeta o el cuadro del archivo puede llevar link en el PDF: no si en esa página se muestra el marcador de otro
+   * proyecto, ni si se muestra borrado o "no está en este dispositivo" (P.30, Doc_Links_PDF.md, 3.1). Sin esperar a nada.
+   */
+  linkable(id: string, pageId?: string | null): boolean {
+    const key = id.toLowerCase();
+    if (pageId && this.shownForeign.has(`${pageId}:${key}`)) return false;
+    return !this.shownWithout.has(key);
   }
 
   /** La foto, el video o el adjunto que un dueño o admin mandó a la papelera de Drive. */
   private async deletedDisplay(id: string, meta: KnownFile): Promise<string> {
     this.forgetView(id);
+    this.shownWithout.add(id);
     // Pedido y confirmado por el portero, o solo pedido (Drive falló: se puede volver a pedir desde la
     // papelera). Sin el dato (guardado antes), se lo da por confirmado.
     const notice = meta.inDriveTrash === false ? requestedLabel() : deletedLabel();

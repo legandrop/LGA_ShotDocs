@@ -352,11 +352,12 @@ begin
   end loop;
   perform pg_temp.as_postgres();
   -- Lo que anon puede ejecutar en public y private: exactamente esto (`private.mcp_pre_request` es el pre-request de
-  -- PostgREST, que corre en todo pedido, 20261027120000_mcp_plan_b.sql; las dos de escribir, de la entrega 2a).
+  -- PostgREST, que corre en todo pedido, 20261027120000_mcp_plan_b.sql; las dos de escribir, de la entrega 2a; las de
+  -- archivos y la de la política de miniaturas, de la 2b).
   assert (select string_agg(n.nspname || '.' || p.proname, ',' order by n.nspname, p.proname)
           from pg_proc p join pg_namespace n on n.oid = p.pronamespace
           where n.nspname in ('public', 'private') and has_function_privilege('anon', p.oid, 'execute'))
-       = 'private.mcp_pre_request,private.plink_thumbs,private.plink_token,public.plink_add_comment,public.plink_delete_comment,public.plink_edit_comment,public.plink_list_comments,public.plink_media_file,public.plink_media_files,public.plink_open,public.plink_pull_page,public.plink_push_page_update,public.plink_push_status,public.plink_tree',
+       = 'private.mcp_pre_request,private.plink_thumb_insertable,private.plink_thumbs,private.plink_token,public.plink_add_comment,public.plink_delete_comment,public.plink_edit_comment,public.plink_list_comments,public.plink_media_file,public.plink_media_files,public.plink_open,public.plink_pull_page,public.plink_push_page_update,public.plink_push_status,public.plink_register_file,public.plink_set_file_drive,public.plink_set_file_thumb,public.plink_tree',
     'anon ejecuta otras funciones';
   -- Y ninguna de las del visitante para una cuenta (authenticated).
   assert not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -366,7 +367,7 @@ begin
   assert (select string_agg(p.proname || ':' || p.provolatile::text, ',' order by p.proname)
           from pg_proc p join pg_namespace n on n.oid = p.pronamespace
           where n.nspname = 'public' and p.proname like 'plink\_%')
-       = 'plink_add_comment:v,plink_delete_comment:v,plink_edit_comment:v,plink_list_comments:v,plink_media_file:v,plink_media_files:v,plink_open:v,plink_pull_page:v,plink_push_page_update:v,plink_push_status:v,plink_tree:v',
+       = 'plink_add_comment:v,plink_delete_comment:v,plink_edit_comment:v,plink_list_comments:v,plink_media_file:v,plink_media_files:v,plink_open:v,plink_pull_page:v,plink_push_page_update:v,plink_push_status:v,plink_register_file:v,plink_set_file_drive:v,plink_set_file_thumb:v,plink_tree:v',
     'volatilidad de plink_*';
 end;
 $$;

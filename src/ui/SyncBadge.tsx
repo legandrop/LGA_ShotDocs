@@ -6,7 +6,7 @@ import { ErrorIcon, OfflineIcon, SyncedIcon, UploadingIcon, WarningIcon } from '
 import { rejectionText } from './teamText';
 import { copyText } from './commentsUi';
 import { usePendingCount } from './usePendingCount';
-import { downloadUnsynced } from './unsyncedDownload';
+import { downloadUnsynced, saveBlob } from './unsyncedDownload';
 import { notify } from './notice';
 import { VoiceNotesNotice } from '../dictation/VoiceNotes';
 import { LinkRemote } from '../sync/linkRemote';
@@ -256,6 +256,24 @@ export function SyncBadge() {
                 {mediaFailures.map((f) => (
                   <li key={f.id}>
                     {tr('sync.upload', { name: f.name })}: <code>{localize(f.error)}</code>
+                    {/* Con un link, un archivo que no sube (la página salió de la rama, un tope) se puede bajar: con
+                        el link no se completa nunca solo (B1 de la auditoría de la 2b). */}
+                    {services.remote instanceof LinkRemote && !f.id.includes(':') && (
+                      <>
+                        {' '}
+                        <button
+                          className="link"
+                          onClick={() =>
+                            void media.source(f.id).then(
+                              (src) => (src.original ? saveBlob(src.original, f.name) : notify(tr('sync.downloadFailed'))),
+                              () => notify(tr('sync.downloadFailed')),
+                            )
+                          }
+                        >
+                          {tr('link.aside.download')}
+                        </button>
+                      </>
+                    )}
                   </li>
                 ))}
                 {status.failedComments > 0 &&

@@ -970,6 +970,8 @@ export function BlockEditor({
       );
     }
     if (dirs.length === 0) return;
+    // Por un link, carpetas no (LE7): se avisa sin leerlas.
+    if (media.noFolders) return notify(t('link.edit.noFolders'));
     // Sin forma de leer carpetas (P.9): se sigue pidiendo comprimirlas.
     if (!supported || !folders) return notify(t('editor.foldersNotSupported'));
     void Promise.all(dirs.map((d) => readFolder(d)))

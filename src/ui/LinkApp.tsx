@@ -18,9 +18,14 @@ import type { LinkBoot } from '../services';
 import { LinkCommentRemote, LinkRemote, linkProblemOf, type LinkProblem } from '../sync/linkRemote';
 import { errorMessage, isNetworkError } from '../sync/types';
 import { WorkspaceContext, type ActiveWorkspace } from '../workspace';
-import { downloadLinkPages, LinkEditBar, linkUnsentPages } from './LinkEditBar';
+import { formatSize } from '../media/fileTrash';
+import type { MediaRecord } from '../media/mediaDb';
+import { downloadLinkPages, LinkEditBar, linkMediaBlob, linkUnsentMedia, linkUnsentPages } from './LinkEditBar';
+import { saveBlob } from './unsyncedDownload';
 import { setLightImages } from './sharpImages';
 import { Workspace } from './Workspace';
+import { useRoute } from '../router';
+import { filePath, workspaceHash } from '../fileLink';
 
 // La app abierta con un link público (Docs/Doc_Link_Publico.md, 3.2 y 3.5): sin cuenta, con un cliente sin sesión y su
 // propia base local. Es la app de siempre con un "usuario" que es el link: la base lo trata como un invitado con
@@ -200,13 +205,16 @@ export function LinkApp({ entry }: { entry: LinkEntry }) {
 /**
  * El link dejó de andar (revocado, *Reset link*, vencido, el creador ya no comparte). Con *Can edit*, lo escrito en este
  * navegador no se pierde (E2.9): se dice cuántas páginas tienen algo sin mandar y se baja como archivo, con lo que se mandó
- * y no llegó a entrar.
+ * y no llegó a entrar; y las fotos y archivos que agregó y no terminaron de subir se bajan de a uno, con su original (con
+ * el link muerto no suben nunca; B1 de la auditoría de la 2b).
  */
 function DeadLink({ entry, remote, onLeave }: { entry: LinkEntry; remote: LinkRemote; onLeave: () => void }) {
   const tr = useT();
   const [unsent, setUnsent] = useState(0);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [media, setMedia] = useState<MediaRecord[]>([]);
+  const [mediaDone, setMediaDone] = useState<ReadonlySet<string>>(new Set());
   const sent = remote.linkEdits();
   // Lo que se mandó y puede no haber entrado: también lo de antes de recargar la app (guardado con el link, O9).
   const extra = [...new Set([...sent.waiting, ...sent.aside, ...remote.sentPages()])];
@@ -217,11 +225,27 @@ function DeadLink({ entry, remote, onLeave }: { entry: LinkEntry; remote: LinkRe
       (n) => live && setUnsent(n),
       () => undefined,
     );
+    linkUnsentMedia(entry).then(
+      (list) => live && setMedia(list),
+      () => undefined,
+    );
     return () => {
       live = false;
     };
   }, [entry]);
   const pages = Math.max(unsent, extra.length);
+  // La dirección de un archivo con un link que ya no anda (P.30, LF16): quien tiene cuenta entra con ella, con la misma
+  // dirección del Supabase y sin el token. Se deja de abrir el link en esta pestaña (si no, recargar volvería acá).
+  const route = useRoute();
+  const signInInstead =
+    route.name === 'file'
+      ? () => {
+          leaveLinks();
+          // La misma dirección con otro `#`: hay que recargar para que el arranque la lea.
+          history.replaceState(null, '', filePath(entry.localKey, route.id) + workspaceHash({ u: entry.url, k: entry.publishableKey, l: entry.localKey }));
+          location.reload();
+        }
+      : null;
   return (
     <main className="center-screen">
       <div className="card">
@@ -245,7 +269,43 @@ function DeadLink({ entry, remote, onLeave }: { entry: LinkEntry; remote: LinkRe
             </button>
           </p>
         )}
+        {media.length > 0 && (
+          <div className="removed-media">
+            <span>{tr('link.dead.files', { count: media.length })}</span>
+            <ul>
+              {media.map((m) => (
+                <li key={m.id}>
+                  <button
+                    className="link"
+                    onClick={() => {
+                      setFailed(false);
+                      void linkMediaBlob(entry, m.id).then(
+                        (blob) => {
+                          if (!blob) return setFailed(true);
+                          saveBlob(blob, m.name);
+                          setMediaDone((prev) => new Set(prev).add(m.id));
+                        },
+                        () => setFailed(true),
+                      );
+                    }}
+                  >
+                    {m.name}
+                  </button>{' '}
+                  <span className="muted">
+                    {formatSize(m.size, tr.lang)}
+                    {mediaDone.has(m.id) ? ` · ${tr('removed.downloaded')}` : ''}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {failed && <p className="error">{tr('sync.downloadFailed')}</p>}
+        {signInInstead && (
+          <button className="primary" onClick={signInInstead}>
+            {tr('file.signInInstead')}
+          </button>
+        )}
         <button className="link" onClick={onLeave}>
           {tr('link.leave')}
         </button>

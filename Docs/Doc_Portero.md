@@ -18,6 +18,8 @@ una página (D3 → B, 2026-10-02; entre v0.089 y v0.127 esas conservaban su nom
 <carpeta elegida por el dueño, o la raíz de su Drive>
 └── LGA_ShotDocs
     ├── Media_Test                      (lo de la prueba de media)
+    ├── Via_link                        (lo que sube un link cuando el portero no sabe su proyecto; ver abajo)
+    │   └── <AAAA-MM-DD>
     └── <Proyecto>                      (el nombre del proyecto, con _ y sin caracteres raros)
         ├── <AAAA-MM-DD>                (el día en que se subió)
         │   └── IMG_1234.MOV
@@ -116,7 +118,9 @@ una página (D3 → B, 2026-10-02; entre v0.089 y v0.127 esas conservaban su nom
   | `upload:<id>` | Una subida en curso o terminada (con el archivo de la app, si es uno). |
   | `drivePlace` | La carpeta que eligió el dueño para `LGA_ShotDocs` (sin la clave: la raíz). |
   | `project:<id del proyecto>` | La carpeta del proyecto y el nombre que le puso la app. |
-  | `day:<id del proyecto>:<AAAA-MM-DD>` | La carpeta de ese día. |
+  | `day:<id del proyecto>:<AAAA-MM-DD>` | La carpeta de ese día (`day:Via_link:<día>`, la de lo que sube un link sin proyecto conocido). |
+  | `projectmark:<huella>` | El proyecto de una huella (`SHA-256` de `sdproject:<id>`): para poner lo que sube un link en la carpeta de su proyecto (entrega 2b). |
+  | `viaLink` | La carpeta `Via_link`. |
   | `file:<id del archivo>` | Lo que subió el portero y si la base ya se enteró; qué id de Drive ya se comprobó. |
   | `cache:<id de Drive>:head`, `cache:<id>:tail` | Qué hay guardado de cada punta de un archivo (peso, largo, tipo). |
   | `cache:<id>:<peso>:h<n>`, `cache:<id>:<peso>:t<n>` | Los trozos de 127 KiB de cada punta. |
@@ -164,12 +168,33 @@ Supabase (`Authorization: Bearer …`). "Nivel" es el de la persona sobre el arc
 ### Con un link público (`Doc_Link_Publico.md`, 3.9)
 
 Un pedido con el header `x-shotdocs-link` (y sin sesión) es de alguien que abrió un link: el portero acepta solo
-`POST /pass`, `POST /verify`, `POST /folder/list` y `GET /drive/status`; lo demás da `403 link_denied` sin preguntarle
-nada a la base. Pregunta `plink_media_file` (por `POST`, con la clave publicable y el header reenviado: la base valida
-el link y cuenta el pase) en lugar de `media_file`, nunca reenvía un `Authorization` que venga en el pedido, y los
-pases del link vencen a las 2 horas (también los de `/folder/list`; las cuentas siguen con 8). Un link revocado o
-vencido da `401 link_not_found`; uno que llegó al tope del día, `429 link_rate_limited`. CORS acepta
-`x-shotdocs-link` y `x-shotdocs-device`.
+`POST /pass`, `POST /verify`, `POST /folder/list`, `GET /drive/status` y, desde la entrega 2b, `POST /upload` (con
+`file`) y `PUT /upload/<id>`; lo demás da `403 link_denied` sin preguntarle nada a la base (también `POST /upload` sin
+`file` y una subida `f.…` de una carpeta: carpetas por un link, nunca, LE7). Pregunta `plink_media_file` (por `POST`,
+con la clave publicable y el header reenviado: la base valida el link y cuenta el pase) en lugar de `media_file`, nunca
+reenvía un `Authorization` que venga en el pedido, y los pases del link vencen a las 2 horas (también los de
+`/folder/list`; las cuentas siguen con 8). Un link revocado o vencido da `401 link_not_found`; uno que llegó al tope del
+día, `429 link_rate_limited`. CORS acepta `x-shotdocs-link` y `x-shotdocs-device`.
+
+**Subir con un link *Can edit* (entrega 2b):**
+
+- Solo un archivo que **registró ese link** (`plink_media_file` devuelve `mine`) y con nivel 3: `403 not_mine` si es
+  otro (con *Can edit* el link tiene nivel 3 sobre las fotos del equipo de su rama, y sin esto podría mandar otros bytes
+  para una que todavía no terminó de subir: el portero los recordaría y se los daría a la base). El tamaño es el
+  registrado (Drive no acepta más que eso).
+- "Quién abrió la subida" es `plink:<SHA-256 del token>` (nunca el token): otro link, o el mismo después de *Reset
+  link*, no la sigue (`404`).
+- **Cada parte vuelve a preguntarle a la base** (un pase): revocar, *Reset link*, vencer o sacar la página de la rama
+  corta la subida en la parte siguiente (`401 link_not_found` o `403`). Preguntar cuánto llegó (`bytes */total`) no
+  pregunta nada (no manda bytes).
+- Al terminar, `plink_set_file_drive` con el header del link (nunca `set_file_drive`): si el link se revocó en el medio,
+  el archivo queda en Drive sin confirmar (`linked: false`) y no entra. No confirma la papelera (`media_purged` es de una
+  cuenta): si el dueño lo mandó a la papelera mientras subía, lo termina su `/trash`.
+- **La carpeta:** la base no le da al link el proyecto (P10), sino su huella (`project_mark`). El portero anota la huella
+  de cada proyecto al que sube alguien del equipo (`projectmark:<huella>`), y con ella pone lo del link en la misma
+  carpeta del día del proyecto, sin crearla ni renombrarla. Si no la conoce (nadie del equipo subió nada a ese proyecto
+  desde esta versión) o esa carpeta ya no está, va a `LGA_ShotDocs/Via_link/<día>`. Los archivos se encuentran siempre
+  por su id: la carpeta es solo orden.
 
 ### Lo que se sirve (`/m/<pase>`)
 

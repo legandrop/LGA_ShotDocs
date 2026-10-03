@@ -105,6 +105,26 @@ export const teamDialogs = {
     en: "{added} changes added today · {waiting} waiting · {aside} set aside · {held} on hold",
     es: "{added} cambios sumados hoy · {waiting} esperando · {aside} apartados · {held} en espera",
   },
+  // Lo que sube el link al Drive (entrega 2b, Docs/Doc_Link_Publico.md, E2.8).
+  'share.link.files': {
+    en: "Files added through the link: {today} today · {total} in all ({size} in your Drive)",
+    es: "Archivos sumados con el link: {today} hoy · {total} en total ({size} en tu Drive)",
+  },
+  'share.link.filesBig': {
+    en: "This link has uploaded {size} to your Drive. Reset link if it went too far.",
+    es: "Este link ya subió {size} a tu Drive. Si se escapó, Renovar link.",
+  },
+  'share.link.filesTitle': {
+    en: { one: "{count} file was added through this page's link", other: "{count} files were added through this page's link" },
+    es: { one: "Se sumó {count} archivo con el link de esta página", other: "Se sumaron {count} archivos con el link de esta página" },
+  },
+  'share.link.filesHint': {
+    en: "Also the ones in changes that were set aside. They stay in your Drive.",
+    es: "También los de cambios que quedaron aparte. Quedan en tu Drive.",
+  },
+  'share.link.fileDownload': { en: "Download", es: "Bajar" },
+  'share.link.fileNotUploaded': { en: "didn't finish uploading", es: "no terminó de subir" },
+  'share.link.fileTrashed': { en: "in the trash", es: "en la papelera" },
   // Lo apartado a la vista (entrega 2c, Docs/Doc_Link_Publico.md).
   'share.link.asideTitle': {
     en: { one: "{count} change sent through this page's link was set aside", other: "{count} changes sent through this page's link were set aside" },
@@ -124,6 +144,10 @@ export const teamDialogs = {
   'share.link.restrictedHint': {
     en: "Only people with access can open it. With a link, anyone who has it opens this page and the ones inside, without an account.",
     es: "Solo la abre quien tiene acceso. Con un link, cualquiera que lo tenga abre esta página y las de adentro, sin cuenta.",
+  },
+  'share.link.pdfHint': {
+    en: "PDFs exported with this link use it in their file links: changing its level also changes what they open, and Reset link turns them off.",
+    es: "Los PDF exportados con este link lo usan en sus links a archivos: cambiar su nivel cambia también lo que abren, y Reset link los apaga.",
   },
   'share.link.anyoneHint': {
     en: "Anyone with the link can open this page and the ones inside, and comment with a name. Not for sensitive material.",

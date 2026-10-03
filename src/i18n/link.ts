@@ -46,6 +46,19 @@ export const link = {
     en: "Adding photos, videos and files through a link isn't available yet.",
     es: "Todavía no se pueden subir fotos, videos ni archivos con un link.",
   },
+  // Archivos por un link (entrega 2b, E2.5): los topes y las carpetas.
+  'link.edit.noFolders': {
+    en: "Folders can't be added through a link. Add the files inside it instead.",
+    es: "Con un link no se pueden agregar carpetas. Agregá los archivos de adentro.",
+  },
+  'link.edit.fileTooBig': {
+    en: "Files added through a link can be up to 500 MB.",
+    es: "Con un link se pueden agregar archivos de hasta 500 MB.",
+  },
+  'link.edit.filesLimited': {
+    en: "This link reached its limit for adding files. Try again tomorrow, or ask for a new link.",
+    es: "Este link llegó a su tope para agregar archivos. Probá mañana, o pedí un link nuevo.",
+  },
   'link.edit.namePrompt': {
     en: "Write your name so your changes can be sent. It's shown with “(via link)”.",
     es: "Escribí tu nombre para que se manden tus cambios. Se muestra con “(vía link)”.",
@@ -73,6 +86,16 @@ export const link = {
   'link.edit.limited': {
     en: "Your changes are saved in this browser and wait to be sent: the link reached a limit (for today, or until the team takes in what's waiting).",
     es: "Tus cambios quedan guardados en este navegador y esperan para mandarse: el link llegó a un tope (por hoy, o hasta que el equipo sume lo que espera).",
+  },
+  'link.dead.files': {
+    en: {
+      one: "{count} photo or file you added didn't finish uploading. Download it:",
+      other: "{count} photos or files you added didn't finish uploading. Download each one:",
+    },
+    es: {
+      one: "{count} foto o archivo que agregaste no terminó de subir. Bajalo:",
+      other: "{count} fotos o archivos que agregaste no terminaron de subir. Bajá cada uno:",
+    },
   },
   'link.dead.unsent': {
     en: { one: "You have {count} page with unsent changes.", other: "You have {count} pages with unsent changes." },

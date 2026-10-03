@@ -1542,6 +1542,13 @@ búsqueda y el reemplazo del proyecto. Sin base todavía, la página está "en p
   con la cadencia de siempre. Sus errores no cortan las bases.
 - **Lo admitido** es una fila común de `page_updates` (`created_by` nulo, `plink_author`): baja, se compacta y se ve en
   el historial como cualquiera. Lo apartado y lo que espera nunca están en `page_updates`.
+- **Los archivos del visitante** (entrega 2b, base 21): la cola de siempre, sin usos (`noUsage`), registra con
+  `plink_register_file`, sube la miniatura y el original por el portero con los headers del link. **Lo escrito de una
+  página no sale mientras su documento muestre un archivo agregado en este dispositivo que la base todavía no registró**
+  (`PageDocs.holdUpload` con `MediaQueue.unregistered`, de cualquier página: también un bloque copiado a otra): en la sala
+  se apartaría por `foreign_media` y, en cadena, todo lo que siga de esa sesión. Registrar despierta al motor; el
+  original puede seguir subiendo después. Si el link muere con un archivo sin subir, la pantalla del link muerto lo
+  ofrece para bajar (`linkUnsentMedia`).
 
 ## Restaurar una copia de seguridad: la generación
 

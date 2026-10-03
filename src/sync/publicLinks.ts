@@ -22,7 +22,7 @@ export interface PublicLink {
   token: string | null;
   /** Anda hoy (no venció y quien lo creó todavía puede compartir). */
   alive: boolean;
-  usage_today: Partial<Record<'open' | 'pull' | 'pass' | 'comment' | 'push', LinkUsage>>;
+  usage_today: Partial<Record<'open' | 'pull' | 'pass' | 'comment' | 'push' | 'file' | 'upload', LinkUsage>>;
   /** Llegó a un tope del día. */
   limited: boolean;
   /** Comentarios vivos escritos con el link. */
@@ -32,7 +32,12 @@ export interface PublicLink {
    * dejó de editar esa página por algo que puede volver), cuánto se apartó y cuánto entró hoy. Sin la versión 19, no está.
    */
   edits?: { waiting: number; held: number; aside: number; admitted_today: number; push_bytes_total: number };
+  /** Los archivos que registró el link y cuánto pesan, de por vida (entrega 2b, versión 21). Sin la 21, no está. */
+  files?: { total: number; bytes: number; drive_bytes?: number };
 }
+
+/** Desde cuánto subido al Drive por un link *Share* avisa (E2.10: 1 GB). */
+export const LINK_DRIVE_WARN_BYTES = 1024 * 1024 * 1024;
 
 export interface PublicLinkInfo {
   /** El interruptor de D14 (sin él no se crean links, D33). */
@@ -48,6 +53,41 @@ async function call<T>(client: SupabaseClient, fn: string, args: Record<string, 
   const { data, error, status } = await timed(client.rpc(fn, args));
   if (error) throw toRemoteError(error, status);
   return data as T;
+}
+
+/** Un archivo que subió un link de la página (`public_link_files`, versión 21; decisión de Lega del 2026-10-03). */
+export interface PublicLinkFile {
+  id: string;
+  link_id: string;
+  /** Su link sigue vivo (si no, es de uno anterior, reseteado o revocado). */
+  link_live: boolean;
+  /** La página donde se registró. */
+  page_id: string | null;
+  name: string;
+  mime: string;
+  size: number;
+  created_at: string;
+  /** Llegó al Drive del dueño (si no, quedó en el navegador del visitante). */
+  uploaded: boolean;
+  /** Está en la papelera de archivos (alguien del equipo lo sacó de su página). */
+  trashed: boolean;
+}
+
+/** Los archivos que subieron los links de la página, también los anteriores. `page_not_found` si no ve lo borrado. */
+export async function getPublicLinkFiles(client: SupabaseClient, pageId: string): Promise<PublicLinkFile[]> {
+  const rows = await call<Record<string, unknown>[] | null>(client, 'public_link_files', { p_page: pageId });
+  return (rows ?? []).map((r) => ({
+    id: String(r.id),
+    link_id: String(r.link_id),
+    link_live: r.link_live === true,
+    page_id: r.page_id == null ? null : String(r.page_id),
+    name: typeof r.name === 'string' ? r.name : '',
+    mime: typeof r.mime === 'string' ? r.mime : '',
+    size: Number(r.size) || 0,
+    created_at: String(r.created_at),
+    uploaded: r.uploaded === true,
+    trashed: r.trashed === true,
+  }));
 }
 
 /** `null` si la sesión no puede compartir la página. */

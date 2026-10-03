@@ -227,6 +227,18 @@ export class SyncEngine {
     // Qué páginas le llegan a este dispositivo como base limpia (con el interruptor prendido y sin ver lo borrado).
     tree.baseReader = (pageId) => this.isBaseReader(pageId);
     docs.isBaseReader = (pageId) => this.isBaseReader(pageId);
+    // Un link con archivos (entrega 2b, Docs/Doc_Link_Publico.md): lo escrito de una página no sale mientras muestre un
+    // archivo agregado acá que la base todavía no registró. En la sala, esa fila se apartaría (`foreign_media`) y, en
+    // cadena, todo lo que siga de esta sesión en la página; esperando, sale apenas el archivo queda registrado.
+    if (options.linkVisitor && options.media) {
+      const media = options.media;
+      docs.holdUpload = async (_pageId, doc) => {
+        const unregistered = await media.unregistered().catch(() => new Set<string>());
+        if (unregistered.size === 0) return false;
+        const shown = mediaIdsInDoc(doc);
+        return [...unregistered].some((id) => shown.has(id));
+      };
+    }
     files.onQueued = poke;
     if (options.media) {
       options.media.onQueued = poke;
@@ -474,7 +486,9 @@ export class SyncEngine {
   poke(): void {
     // Después de `stop()` la base puede estar cerrándose (se cierra la app o se cambia de workspace).
     if (this.stopped) return;
-    void this.refreshCounts();
+    // La cuenta es solo lo que se muestra: si la base se cierra en el medio (la app se cierra, otra ventana toma el
+    // control), queda como estaba, sin un rechazo suelto (O9 de la auditoría de la 2b).
+    void this.refreshCounts().catch(() => undefined);
     if (this.timer) clearTimeout(this.timer);
     this.timer = setTimeout(() => void this.syncNow(), DEBOUNCE_MS);
   }
@@ -1156,14 +1170,25 @@ export class SyncEngine {
   }
 
   private async refreshCounts(): Promise<void> {
+    if (this.stopped) return;
     const comments = this.options.comments?.status();
-    const [states, unsynced, pendingFiles, media] = await Promise.all([
-      this.docs.states(),
-      this.docs.unsyncedPages(),
-      this.files.pendingCount(),
-      // La base de archivos puede estar cerrándose (se cierra la app): el conteo se deja como estaba.
-      this.options.media?.status().catch(() => undefined),
-    ]);
+    let counted;
+    try {
+      counted = await Promise.all([
+        this.docs.states(),
+        this.docs.unsyncedPages(),
+        this.files.pendingCount(),
+        // La base de archivos puede estar cerrándose (se cierra la app): el conteo se deja como estaba.
+        this.options.media?.status().catch(() => undefined),
+      ]);
+    } catch (err) {
+      // Un conteo que quedó en vuelo (esperando las escrituras locales) cuando se hizo `stop()` y se cerró la base
+      // choca con la base cerrada: ya no le importa a nadie. Detenido o no, un error de verdad se sigue viendo.
+      if (this.stopped) return;
+      throw err;
+    }
+    if (this.stopped) return;
+    const [states, unsynced, pendingFiles, media] = counted;
     let rejectedPages = 0;
     // Rechazada y con algo sin subir (la lista ya cuenta la marca de ediciones sin subir).
     const unsyncedSet = new Set(unsynced);
