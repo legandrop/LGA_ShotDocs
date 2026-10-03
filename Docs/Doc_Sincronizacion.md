@@ -569,14 +569,20 @@ las pruebas aplica los mismos `check` con el mismo error (`src/sync/lengthChecks
   sobra se anota (son lo último que hizo la persona). Los **rechazados por el largo** (solo por `pages_title_check` o
   `workspaces_name_length`: un rechazo por permisos no se toca) se arreglan con el árbol del servidor a la vista, en
   `setSnapshot` (`repairRejected`): si el título no cambió después del rechazo, el cambio vuelve a la cola en su lugar,
-  cortado; si cambió (el `updated_at` del servidor es posterior al rechazo, o hay un renombre posterior en este
-  dispositivo), **el título más nuevo queda** y el texto largo va entero a la página. En la duda gana el título de ahora:
-  nada se pisa ni se pierde. *Retry* no los manda de nuevo (perderían el momento del rechazo) y *Hide* no los descarta.
+  cortado; si cambió, **el título más nuevo queda** y el texto largo va entero a la página. Para saber si cambió no se
+  usa la hora del dispositivo (puede ir adelantada horas y esconder un renombre): al rechazarse, `failOp` guarda el
+  `updated_at` que tenía la fila (`rowUpdatedAt`, reloj del servidor) y la reparación mira si el del servidor sigue
+  siendo ese (`sameInstant`: igualdad, no "antes o después"); también cuenta un renombre posterior en la cola o un
+  rechazo posterior de la misma página (con la app desactualizada la cola no sube, y eso es lo único que lo ve). Un
+  rechazo que guardó una versión anterior (hasta v0.152) no tiene ese dato: se toma siempre como cambiado. En la duda
+  gana el título de ahora: nada se pisa ni se pierde. *Retry* no los manda de nuevo y *Hide* no los descarta.
 - **Nombre de proyecto (200).** Los campos ya tenían el tope; el árbol lo corta igual (sin aviso: no se llega).
 - **Clave de orden (128).** La clave entre dos vecinas se alarga cada vez que se pone algo en el mismo hueco (unas 600
-  veces para pasar los 128). Antes de pasarlo, las hermanas reciben claves nuevas y parejas en el mismo orden
-  (un cambio por hermana). Si otro dispositivo movió una de esas hermanas a la vez, gana el último cambio que llega
-  (roadmap B.23).
+  veces para pasar los 128). Antes de pasarlo, las hermanas **de alrededor del hueco** reciben claves nuevas y parejas
+  en el mismo orden (`rekeyWindow`): la ventana crece desde el hueco hacia la vecina de clave más larga (de ahí vienen
+  las amontonadas) hasta que las claves nuevas, entre dos vecinas que no se tocan, ocupan como mucho la mitad del tope.
+  Con 200 hermanas y 650 páginas puestas en el mismo hueco se rehacen 363, todas de las amontonadas; antes, las 850. Si
+  otro dispositivo movió a la vez una de las rehechas, gana el último cambio que llega (roadmap B.23).
 - **Una página nueva con título largo** (asistente, reporte del día, copia propia): su contenido lo escribe
   `writeNewPage`, que no escribe en una página con algo. Lo que sobró del título no cuenta (`onlyTitleRests`, por el
   prefijo `titlerest-` de esos párrafos): si llega antes, el contenido va después de él.
