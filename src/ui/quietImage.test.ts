@@ -139,9 +139,9 @@ describe('quietImage', () => {
     const me = { me: true };
     const out = wrapped.call(me, { props: { url: 'https://a.test/x.png' } });
     expect(calls[0]).toBe(me);
-    expect(out.dom.getAttribute?.('data-url')).toBe('https://a.test/x.png');
+    expect((out.dom as HTMLElement).getAttribute('data-url')).toBe('https://a.test/x.png');
     const app = wrapped.call(me, { props: { url: URL_ } });
     expect(calls[1]).toBe(me);
-    expect(app.dom.getAttribute?.('data-url')).toBe(URL_);
+    expect((app.dom as HTMLElement).getAttribute('data-url')).toBe(URL_);
   });
 });
