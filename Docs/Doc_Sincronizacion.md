@@ -565,14 +565,21 @@ las pruebas aplica los mismos `check` con el mismo error (`src/sync/lengthChecks
   repite. Aviso: *The title was longer than 500 characters: the rest is now the first paragraph of “…”*.
 - **En el título de la página**, pegar, soltar o dictar más de la cuenta deja el título en el tope y manda lo que sobra
   a la página (con sus renglones); teclear pasado el tope no entra y avisa *A title can be up to 500 characters.*
-- **La cola.** Al abrir, los cambios guardados por una versión anterior con un título largo (en la cola o ya
-  rechazados por `pages_title_check`) se cortan y lo que sobra se anota; los rechazados vuelven a la cola en su lugar.
-  Si igual llega un rechazo por el largo (otra pestaña con una versión anterior), el cambio no pasa a rechazados:
-  queda en la cola, cortado.
+- **La cola.** Al abrir, los cambios sin subir que dejó una versión anterior con un título largo se cortan y lo que
+  sobra se anota (son lo último que hizo la persona). Los **rechazados por el largo** (solo por `pages_title_check` o
+  `workspaces_name_length`: un rechazo por permisos no se toca) se arreglan con el árbol del servidor a la vista, en
+  `setSnapshot` (`repairRejected`): si el título no cambió después del rechazo, el cambio vuelve a la cola en su lugar,
+  cortado; si cambió (el `updated_at` del servidor es posterior al rechazo, o hay un renombre posterior en este
+  dispositivo), **el título más nuevo queda** y el texto largo va entero a la página. En la duda gana el título de ahora:
+  nada se pisa ni se pierde. *Retry* no los manda de nuevo (perderían el momento del rechazo) y *Hide* no los descarta.
 - **Nombre de proyecto (200).** Los campos ya tenían el tope; el árbol lo corta igual (sin aviso: no se llega).
 - **Clave de orden (128).** La clave entre dos vecinas se alarga cada vez que se pone algo en el mismo hueco (unas 600
   veces para pasar los 128). Antes de pasarlo, las hermanas reciben claves nuevas y parejas en el mismo orden
-  (un cambio por hermana).
+  (un cambio por hermana). Si otro dispositivo movió una de esas hermanas a la vez, gana el último cambio que llega
+  (roadmap B.23).
+- **Una página nueva con título largo** (asistente, reporte del día, copia propia): su contenido lo escribe
+  `writeNewPage`, que no escribe en una página con algo. Lo que sobró del título no cuenta (`onlyTitleRests`, por el
+  prefijo `titlerest-` de esos párrafos): si llega antes, el contenido va después de él.
 - Un archivo de Shot Docs importado ya no corta el título en 500 (`shotdocsImport.ts`): lo corta el árbol y lo que
   sobra queda en la página. Los demás cortes de texto que van a la base (autor y cuerpo de un comentario importado,
   rótulo de una mención) usan `cutText` para no dejar medio emoji.

@@ -17,6 +17,7 @@ import { dateAtStart, dayInTitle, dayReportsMark, isReusableReport, localDate, r
 import { fillReport, readFacts, type ReportFacts } from './dayReportFacts';
 import { isTemplatePage } from './own';
 import { readOwnTemplate } from './ownCopy';
+import { onlyTitleRests, TITLE_REST_PREFIX } from '../sync/titleRest';
 
 // Crear el reporte del día (Docs/Doc_Plantillas.md, 6.3 a 6.6): leer los reportes de la carpeta (todo está en el
 // dispositivo: anda sin red), proponer la fecha, el día y la locación, y crear la página con la plantilla llena. La
@@ -347,7 +348,8 @@ export async function createDayReport(
  * Escribe los bloques en una página vacía sin abrirla, como lo haría el editor (y como `writePage` de la importación):
  * el documento con la semilla, un editor sin pantalla, y los bloques agregados ANTES del primero (el párrafo vacío de
  * la semilla queda al final). Nunca reemplaza ni borra. Si la página ya tiene contenido (un intento anterior llegó a
- * escribir), no agrega nada: solo espera a que lo de antes quede guardado.
+ * escribir), no agrega nada: solo espera a que lo de antes quede guardado. Lo que sobró de un título largo
+ * (sync/titleRest.ts) no cuenta: si llegó antes, los bloques van después de eso.
  */
 export async function writeNewPage(
   docs: DayReportDeps['docs'],
@@ -362,7 +364,8 @@ export async function writeNewPage(
   try {
     // Algo que esta versión no conoce: el editor lo borraría. No se toca.
     if (findUnknownContent(doc)) throw new Error('The page has content this version does not know.');
-    if (!isEmptyPage(doc)) {
+    const rests = onlyTitleRests(doc);
+    if (!isEmptyPage(doc) && !rests) {
       await docs.flush(pageId);
       return;
     }
@@ -380,7 +383,9 @@ export async function writeNewPage(
       editor.mount(host);
       const first = editor.document[0];
       if (!first) throw new Error('The page has no blocks to insert before.');
-      editor.insertBlocks(blocks as never[], first.id, 'before');
+      const lastRest = rests ? [...editor.document].reverse().find((b) => b.id.startsWith(TITLE_REST_PREFIX)) : undefined;
+      if (lastRest) editor.insertBlocks(blocks as never[], lastRest.id, 'after');
+      else editor.insertBlocks(blocks as never[], first.id, 'before');
       if (collapsed.length) {
         const shared = doc.getMap(SHARED_COLLAPSE_MAP);
         doc.transact(() => {

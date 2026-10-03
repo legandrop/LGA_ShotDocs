@@ -907,9 +907,10 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
 23. **Hecho (v0.0XX): los topes de largo de la base en la app.** Un título de más de 500 caracteres quedaba rechazado
    para siempre (`pages_title_check`). El árbol corta títulos, nombres de proyecto y claves de orden, lo que sobra del
    título va al principio de la página y lo ya rechazado vuelve a la cola cortado (`Doc_Sincronizacion.md`, "Topes de
-   largo"). Queda: si alguna vez una clave de orden se rehace en una carpeta donde alguien solo puede crear páginas (no
-   mover las de los demás), esos cambios de las hermanas los rechazaría el servidor (a la vista, con *Retry*); hace falta
-   poner unas 600 páginas en el mismo hueco.
+   largo"). Queda: rehacer las claves de orden manda un cambio por hermana, y si otro dispositivo movió una de ellas a la
+   vez, gana el último que llega (la hermana puede volver a su lugar anterior; no se pierde nada, solo el lugar). Pasa
+   solo después de unas 600 páginas puestas en el mismo hueco. Arreglo posible: rehacer solo las claves vecinas al hueco
+   (no todas) o mandar el rehecho como una sola operación del servidor.
 
 ### C. Esperan a Lega
 

@@ -6,10 +6,10 @@ v0.0XX :
 (`pages_title_check`) y *Retry* volvía a fallar: el título de la página no tenía tope. Ahora todo lo que escribe un
 título pasa por el árbol, que lo corta en 500 caracteres de la base (puntos de código, sin partir un emoji ni una
 palabra) y anota lo que sobra en la misma transacción; eso queda como primer párrafo de la página, con aviso. En el
-título, teclear pasado el tope no entra. Al abrir, un cambio largo que dejó una versión anterior (también el ya
-rechazado) se corta y vuelve a la cola. Topes nuevos: nombre de proyecto (200), clave de orden (128, rehace las de las
-hermanas), y cortes sin medio emoji en comentarios importados y menciones. El servidor falso aplica los mismos
-`check`. Ayuda del título actualizada.
+título, teclear pasado el tope no entra. Lo rechazado por el largo vuelve a la cola cortado, salvo que el título haya
+cambiado después: entonces queda el nuevo y el texto largo va a la página. Una página nueva con título largo recibe
+igual su contenido. Topes nuevos: nombre de proyecto (200), clave de orden (128) y cortes sin medio emoji en
+comentarios importados y menciones. El servidor falso aplica los mismos `check`.
 [ Título largo - el título se corta en 500 caracteres y lo que sobra va al principio de la página; lo ya rechazado vuelve a la cola cortado ]
 
 v0.151 :
