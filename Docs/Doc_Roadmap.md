@@ -280,6 +280,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   abren. Solo con el foco en el árbol y sin Ctrl, ⌘, Alt ni Shift. Y el defecto: plegar con el triángulo (o
   con ←) una madre de la página abierta no dejaba; ahora pliega y la abierta pasa a ser esa madre (en el
   teléfono el cajón sigue abierto). Lógica en `src/ui/treeNav.ts`. Su entrada en la ayuda está desde v0.082 (P.13).
+  Ancho del nombre (D233, v0.154): sin mouse, foco ni menú abierto el nombre usa todo el ancho de la fila (también en
+  la página abierta, D242) y recién ahí lleva «…»; ⋯ y + (que no ocupan lugar mientras no se ven) le sacan su lugar con
+  el mouse encima, el foco en la fila o en sus botones, o el menú ⋯ abierto. En el teléfono (`hover: none`) la página
+  abierta los muestra siempre, como antes. Pendientes menores de su auditoría: (O2) `:hover` y `.menu-open` no se pueden
+  calcular en jsdom; la prueba afirma el texto del selector y la medición real está en Chromium; (O3) un clic en el
+  triángulo de una fila no abierta le deja el foco y, por `:focus-within`, sus ⋯ y + (y el nombre cortado) hasta que el
+  foco se va, aunque el mouse ya no esté; pasar a `:focus-visible` lo evitaría pero cambia el comportamiento existente.
 - **P.17 Hecho (v0.079): instalar la app** (Lega, 2026-10-01). La app reconoce si está instalada; si no, ofrece
   *Install app* en el menú de la cuenta y en la pantalla de entrar, y en el teléfono un aviso que se cierra por 30
   días. La ventana muestra los pasos con dibujos para iPhone, Android y computadora, con *Install* directo donde

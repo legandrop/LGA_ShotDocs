@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.154 :
+
+**El nombre en el árbol usa todo el ancho de la fila** (D233). Un nombre largo se cortaba con «…» antes del borde
+aunque no pasaras el mouse: la fila reservaba siempre el lugar de ⋯ y +, que solo se ven con hover. Ahora esos
+botones no ocupan lugar mientras no se ven (ancho cero, no solo transparentes) y el nombre llega hasta el borde. Con
+el mouse encima, el foco del teclado en la fila o en sus botones, o el menú ⋯ abierto (la fila lleva `menu-open`),
+aparecen y el nombre se acorta como antes, sin mover su inicio ni el alto. También en la página abierta: en la compu
+llega al borde como las demás; en el teléfono (sin hover) sigue con los botones a la vista, igual que hoy. Renombrando,
+el campo usa todo el ancho; la marca offline y el punto de menciones siguen reservando su lugar. Solo CSS y una clase por estado. Pruebas: el cascado real de la fila en jsdom y la
+medición en Chromium (sin hover, hover, foco, menú, renombrar y teléfono).
+[ Árbol ancho - el nombre de la página usa todo el ancho de la fila hasta el borde y se acorta solo con el mouse encima, el foco o el menú ⋯ abierto, para dejar lugar a ⋯ y + ]
+
 v0.153 :
 
 **Título largo: el reloj del dispositivo ya no decide.** Reparar un título rechazado por el largo podía pisar uno puesto
