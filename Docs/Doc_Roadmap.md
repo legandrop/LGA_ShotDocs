@@ -652,6 +652,11 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   sigue encogida (629 px, columnas de 90; una de 12 columnas, unos 51 px por columna): subir el corte para las tablas si
   se usa; y lo que headless no prueba (el impulso del dedo, el teclado abierto, un editor remoto moviendo la selección
   mientras se escribe en una tabla).
+- **P.29 Hecho (v0.0XX): contraste del texto y el panel de la cuenta** (Lega, 2026-10-03; `Doc_Contraste.md`): *Contrast*
+  (de fábrica), *More contrast* y *No contrast* para el texto con el color por defecto, en la página, el historial y el
+  PDF (en claro); el panel de la cuenta con íconos, su propio desplazamiento y *Sign out other devices* alineado a la
+  izquierda. Queda: verlo en un iPhone real (el panel con el teclado del sistema y la barra de Safari) y, si Lega lo
+  quiere, llevar la preferencia al zip de exportar (hoy sale con *Contrast*, como sale con la fuente normal).
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
