@@ -17,6 +17,7 @@ import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import { cellThumbsExtension, DEFAULT_THUMB_HEIGHT, THUMB_HEIGHT_PROP } from './cellThumbs';
 import { createDriveCardView, DRIVE_CARD_PROP, driveLinkInContent } from './driveCard';
 import { imageRowsExtension, ROW_WIDTH_PROP } from './imageRowsEditor';
+import { quietExternalHtml } from './quietImage';
 import { photoSpec } from './inlinePhoto';
 import { shortcutKeys } from './shortcuts';
 
@@ -535,6 +536,8 @@ const image = {
   },
   implementation: {
     ...blockSpecs.image.implementation,
+    // Copiar o arrastrar una foto del Drive no pide su `sdmedia://` al navegador (quietImage.ts, B.24).
+    toExternalHTML: quietExternalHtml(blockSpecs.image.implementation.toExternalHTML as never) as never,
     meta: { ...blockSpecs.image.implementation.meta, fileBlockAccept: imageAccept },
   },
   extensions: [...(blockSpecs.image.extensions ?? []), imageRowsExtension],
