@@ -1,7 +1,7 @@
 # Borrar y archivar proyectos (P.14)
 
 Estado: **entregas 1 y 2 publicadas (v0.077 y v0.080, migraciones 9 y 10 aplicadas); una sola papelera en el selector
-de proyectos (v0.162); entrega 3 (*Delete forever*) implementada y auditada, con su migración sin aplicar**
+de proyectos (v0.162); entrega 3 (*Delete forever*) publicada (v0.167), con su migración aplicada**
 (`20261101120000_proyectos_purgar.sql`, versión 23; ver "Cómo quedó" de cada una, al final). Lega aprobó todas las
 propuestas ("sí a todo", sección "Decisiones de Lega"). La auditoría independiente del diseño dio "aprobado con cambios"
 y, corregido, "aprobado" (sección "Correcciones de la auditoría"). Cuando se escribió el diseño (2026-10-01) ninguna de
@@ -3704,7 +3704,7 @@ projects".
 
 ## Cómo quedó (entrega 3)
 
-**Base** (`supabase/migrations/20261101120000_proyectos_purgar.sql`, `schema_version` 23, **sin aplicar**; va después de
+**Base** (`supabase/migrations/20261101120000_proyectos_purgar.sql`, `schema_version` 23, **aplicada** en v0.167, después de
 la 22). Es el SQL de la sección 2.3 llevado a la base de hoy: `workspaces.purged_at` y `purged_by` (con su `check`: solo
 un proyecto borrado; la API no los escribe) y `purge_project(p)`, que **no borra ninguna fila**: comprueba quién (dueño o
 admin que maneja el proyecto, `can_purge_project`; quien no lo veía recibe `project_not_found`), que esté borrado, que

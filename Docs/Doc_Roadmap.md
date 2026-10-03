@@ -284,8 +284,8 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   **Entrega 3, *Delete forever* (v0.167, D-23 (6)):** en el renglón de un proyecto borrado de la papelera, pasados los
   30 días, dueños y admins que lo manejan escriben la palabra y el proyecto sale de la papelera para siempre; es una
   marca (`purged_at`), ninguna fila se borra, y la carpeta va antes a la papelera de Drive si no estaba. Migración
-  `20261101120000_proyectos_purgar.sql` (versión 23) **sin aplicar**: va después de la 22 (`Doc_Proyectos_Borrar.md`,
-  "Cómo quedó (entrega 3)"). Auditada (aprobada con observaciones); falta aplicarla y publicar.
+  `20261101120000_proyectos_purgar.sql` (versión 23) **aplicada** (v0.167; `Doc_Proyectos_Borrar.md`,
+  "Cómo quedó (entrega 3)"). Auditada (aprobada con observaciones) y publicada.
   - Pendiente chico (auditoría, O3): el servidor de las pruebas (`src/sync/testing.ts`, `purgeProject`) no aplica el
     corte por `uploaded_at` de `drive_trash_first` (la base sí): hoy no cambia ninguna prueba, pero puede esconder un error.
   - Pendiente chico (auditoría, O4): un proyecto borrado para siempre sigue sumando en el peso (`project_sizes`) de quien
