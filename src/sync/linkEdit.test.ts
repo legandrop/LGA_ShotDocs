@@ -254,7 +254,7 @@ describe('Can edit por un link, con el motor de verdad', () => {
     expect(server.linkRoom[0].decision).toBe('admitted');
   });
 
-  it('una página que el editor no tiene lista (escribiendo, o con algo sin subir) no baja sus bytes', async () => {
+  it('una página en la que el editor está escribiendo espera la pausa (20 s) sin bajar sus bytes; las demás no', async () => {
     const { server, e1, s, h, tick } = await setup();
     const token = addPublicLink(server, s, server.ownerId, 'edit');
     await e1.engine.prepareBases([s, h]);
@@ -265,10 +265,12 @@ describe('Can edit por un link, con el motor de verdad', () => {
     await write(v, s, '<t3>');
     await write(v, h, '<t4>');
     await v.engine.syncNow();
-    // El editor acaba de escribir en S: la saltea (la pausa), pero H sí (escribió en H hace rato).
+    // El editor escribe en S (en H escribió hace rato) y la tiene al día: la saltea solo por la pausa.
     tick(25_000);
     await write(e1, s, '<t5>');
     await e1.engine.syncNow();
+    await e1.engine.syncNow();
+    expect((await e1.docs.stateOf(s))?.cursor).toBe(server.pages.get(s)!.update_seq);
     const works = server.admitCalls.filter((c) => c.startsWith('work:'));
     expect(works.length).toBeGreaterThan(0);
     for (const w of works) expect(w.includes(s)).toBe(false);
@@ -277,8 +279,32 @@ describe('Can edit por un link, con el motor de verdad', () => {
     // Después de la pausa, S también.
     tick(25_000);
     await e1.engine.syncNow();
-    await e1.engine.syncNow();
     expect(server.linkRoom.find((r) => r.pageId === s)?.decision).toBe('admitted');
+  });
+
+  it('una página que el editor no tiene como el servidor (algo propio rechazado) no baja sus bytes', async () => {
+    const { server, e1, s, h, tick } = await setup();
+    const token = addPublicLink(server, s, server.ownerId, 'edit');
+    await e1.engine.prepareBases([s, h]);
+    const v = await visitor(server, token);
+    await v.engine.syncNow();
+    await v.engine.prefetchPage(s);
+    await v.engine.prefetchPage(h);
+    await write(v, s, '<t3>');
+    await write(v, h, '<t4>');
+    await v.engine.syncNow();
+    // El editor escribió en S algo que el servidor rechaza (queda sin subir): pasada la pausa, S sigue sin estar lista.
+    server.maxUpdateBytes = 50;
+    await write(e1, s, `<t5>${'x'.repeat(200)}`);
+    tick(25_000);
+    await e1.engine.syncNow();
+    await e1.engine.syncNow();
+    expect((await e1.docs.stateOf(s))?.rejected).toBe('update_size_invalid');
+    const works = server.admitCalls.filter((c) => c.startsWith('work:'));
+    expect(works.length).toBeGreaterThan(0);
+    for (const w of works) expect(w.includes(s)).toBe(false);
+    expect(server.linkRoom.find((r) => r.pageId === h)?.decision).toBe('admitted');
+    expect(server.linkRoom.find((r) => r.pageId === s)?.decidedAt).toBeNull();
   });
 
   it('dos editores con decisiones distintas: el segundo corta esa página y la vuelve a probar en el ciclo siguiente', async () => {

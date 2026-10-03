@@ -2,7 +2,10 @@
 
 **Estado: entregas 0 y 1 implementadas (v0.114, *Can view*; migración aplicada, ver "Cómo quedó (entregas 0 y 1)"
 al final); la 2 (*Can edit*) se rediseñó el 2026-10-02 contra v0.137 (sala de espera y admisión por un editor, ver
-"Entrega 2: *Can edit* (rediseño 2026-10-02)", al final) y se auditó: aprobado con condiciones, corregido y aprobado en la re-verificación (E2.18)** (roadmap P.19;
+"Entrega 2: *Can edit* (rediseño 2026-10-02)", al final) y se auditó: aprobado con condiciones, corregido y aprobado en la re-verificación (E2.18).
+**La 2a (escribir) está implementada (v0.0XX), con su migración sin aplicar y el interruptor `link_edit_min_version`
+apagado: ver "Cómo quedó la 2a"; no se prende hasta que la barrera de error alrededor de `PageEditor` esté en `main`
+(R4)** (roadmap P.19;
 pedido de Lega del 2026-10-02). Corregido con la auditoría
 independiente del mismo día ("aprobado con condiciones"; ver "Correcciones de la auditoría", al final) y con las
 decisiones D29 a D31 (sección 9). Toca permisos, entrar sin cuenta y abuso: riesgo alto. Cada entrega va con sus pruebas
@@ -1071,7 +1074,9 @@ Dos auditorías independientes (base y portero; app y motor) dijeron «no pasa»
 
 ## Entrega 2: *Can edit* (rediseño 2026-10-02)
 
-**Estado: diseño, sin código ni migración** (el SQL va en borrador en E2.11, sin archivo en `supabase/migrations/`).
+**Estado: la 2a está implementada (v0.0XX; ver "Cómo quedó la 2a", al final de esta sección), con su migración sin
+aplicar y el interruptor apagado; la 2b y la 2c, en diseño.** El SQL de E2.11 queda como el borrador que se auditó; lo
+que cambió al implementarlo está en "Cómo quedó la 2a".
 Reemplaza a 3.8 (3.8.1 a 3.8.3), a la fila *Compactar* de 3.10, a lo de la entrega 2 en 3.15, 4, 5 y 6, y a la fila 2
 de la sección 7: todo eso queda como historia. Se diseñó contra `main` v0.137 (copias resumidas listas y apagadas, D14
 aplicada y apagada, menciones, anotaciones de fotos, plantillas, exportar, dictado V1, deshacer por orden de edición).
@@ -2314,6 +2319,96 @@ editor real. Corregido en este documento:
 | Obs. 8: imagen externa | La prueba (5) aparta un `url` nuevo que no sea `sdmedia://` (`external_url`) |
 | Re-verificación (2026-10-02): **listo, con la condición C1** | **Diseño aprobado tras la re-verificación del 2026-10-02, con la condición C1 aplicada**: una dirección vacía vale en el paso 5 y la 2a prueba que un bloque de imagen vacío entra. R1 a R4 van a la lista de la 2a (E2.6, E2.9, E2.14) y al roadmap: no mandar una subida que pase `push_max_bytes`, el estado cuenta como `pass`, `tableCell.colwidth` como lista o nulo con un caso honesto por cada propiedad propia, y no prender `link_edit_min_version` sin la barrera de error en `main` |
 | Obs. 1, 5, 9, 10 y 11 | Al roadmap (P.19): adelantar "volver a la página del equipo"; que el dueño pueda descartar lo apartado (decisión de Lega, va contra "no hay borrado duro"); `plink_set_file_drive` abierta a `anon` es inofensiva por `checkMark`; probar el script de restaurar; invitar al cliente con Editar ya cubre "el cliente escribe" sin superficie anónima. Y, para D14, que la base limpia lleva los ids de archivos de las anotaciones borradas (sin el contenido) |
+
+### Cómo quedó la 2a (v0.0XX)
+
+**Estado:** implementada en la rama, con la migración `20261027120000_link_editar.sql` **sin aplicar** y el interruptor
+**apagado** (`link_edit_min_version` nulo: *Can edit* se ve apagado en *Share*, `plink_push_page_update` da
+`app_outdated`, `plink_open` da *Can view* y nadie admite). Sube `schema_version` a **19**.
+
+**La base** (`supabase/migrations/20261027120000_link_editar.sql`): todo E2.11 sin la 2b (la sala
+`public_link_updates`, `page_updates.plink_id`, `plink_author` y `plink_update_id`, `link_page_level`, `link_branch`,
+`link_media_allowed`, `link_waiting_bytes`, `plink_aside_revoked`, `plink_push_page_update`, `plink_push_status`, la
+admisión en dos pasos, `public_link_updates_of`, `public_link_update_bytes`, `public_link_level_ok`, `page_history` con
+`plink_author`) y los cuerpos completos de lo que la entrega 1 cambia (`plink_limit`, `plink_open`, `remove_member`,
+`create_public_link`, `set_public_link` con el reinicio al revivir un link vencido, `reset_public_link`,
+`revoke_public_link`, `public_link_json` con `edits` y el tope de subidas en `limited`, `get_public_link`).
+**Lo que cambió respecto de E2.11:**
+
+| Qué | Por qué |
+|---|---|
+| Las funciones de la admisión se llaman `link_admit_pages`, `link_admit_work` y `link_admit` (no `plink_admit*`) | En la entrega 1, `plink_*` son solo las del visitante (`anon`, todas `VOLATILE`), y su prueba lo exige; las de la admisión son de una cuenta y dos son `STABLE` |
+| `link_admit` **corta** también en la primera fila cuya decisión no es la que pidió el editor: un archivo que no vale (`foreign_media` aunque el editor dijo que sí) o una fila que otro editor ya decidió distinto | Lo que sigue se probó con esa fila adentro (Yjs: lo de un mismo autor depende de lo anterior): admitirlo metería filas pendientes en la página. El motor también corta (E2.3, paso 4); la base no depende de que el motor lo haga |
+| `get_public_link` suma `edit_on` | *Share* sabe si ofrecer *Can edit* sin probar y esperar `edit_off` |
+| `plink_push_page_update` con `p_update` nulo da `update_size_invalid` | En el borrador llegaba a la restricción de la tabla (un 23514 en vez del error que la app entiende) |
+| Un índice `plu_link_idx (link_id, decision)` | Los números de *Share* (apartado, admitido hoy) por link sin recorrer la sala |
+| La prueba de la entrega 1 (`link_publico_permisos.sql`) cambia en dos lugares | `edit` con el interruptor apagado da `edit_off` (antes `level_invalid`), y la lista exacta de lo que ejecuta `anon` suma las dos funciones del visitante |
+
+**La app:**
+
+- `src/sync/admit.ts` (la prueba, una copia por página armada una vez y las filas seguidas; si una no entra, se rearma
+  sin ella) y `src/sync/linkShape.ts` (el paso 8: la lista de nodos, atributos, valores y marcas, comparada con el
+  esquema real en `linkShape.test.ts`).
+- `src/sync/linkAdmit.ts` y `linkAdmitApi.ts`: la vuelta de la admisión (páginas sin bytes, las listas, los bytes solo
+  de esas, probar, decidir, cortar si la base decide distinto, y recordar lo probado que no se pudo mandar). El motor
+  (`engine.ts`) la corre en `buildCleanBases` antes de pedir `clean_work`, con los dos interruptores y la versión; sus
+  errores no cortan las bases (sin red, sí). `docs.ts` suma `savedRows` (lo guardado con las condiciones de la base
+  limpia) y `clearRejectedPage`.
+- `src/sync/linkRemote.ts`: el visitante escribe con `plink_push_page_update` (devuelve 0), sin nombre no sube (queda en
+  el dispositivo y el ciclo sigue), una subida de más de 1 MB no se manda (R1), el estado de lo mandado
+  (`plink_push_status`, una vez por ciclo mientras algo espera; con su tope del día lleno deja de preguntar hasta
+  mañana sin avisar nada, R2), y cierra explícito compactar, la admisión, el historial, las versiones con nombre y el
+  equipo. `linkPageFile` y `unlinkPageFile` no hacen nada (los vincula el editor al reconciliar); subir archivos dice
+  *Adding photos, videos and files through a link isn't available yet* (2b). La subida sin GC llega hasta 1 MB (LE13).
+- **El visitante** (`LinkApp.tsx`, `LinkEditBar.tsx`, `SyncBadge.tsx`): la barra de abajo pide el nombre la primera vez
+  que algo no sube por faltarle, y avisa *Some of your changes on a page couldn't be added* con *Download them*; la
+  insignia dice *Sent, waiting for the team* mientras algo espera; un pegado de más de 1 MB lo explica en el detalle
+  (*Undo it to keep going*), y la primera edición guardada de esa página la vuelve a intentar; con el link muerto, la
+  pantalla dice cuántas páginas tienen algo sin mandar y lo baja (lo sin mandar y lo mandado que no entró, enteras).
+- **El equipo:** *Share* con *Can edit* (apagado con *Editing through a link isn't turned on for this workspace yet*),
+  la línea de 3.8.3 y *N changes added today · N waiting · N set aside · N on hold*; cambiar el vencimiento conserva el
+  nivel. En la página (`LinkAsideNotice.tsx`, para quien ve lo borrado): *A change sent through the link couldn't be
+  added to this page*, el motivo y *Download it* (lo apartado y lo retenido, tal cual, en un JSON), y una línea con lo
+  retenido. En el historial, *Ana (via link)* (`createdBy` = `via-link:Ana`, que ninguna cuenta puede tener).
+- La ayuda: *Can edit with a link* y *Editing with a link*.
+
+**Diferencias con el diseño (decididas al implementar):**
+
+1. **"En cadena": lo que sigue del mismo autor de Yjs no entra nunca, dependa o no.** Yjs aplica lo de un autor en el
+   orden de sus relojes: si una fila del visitante se aparta, todas las siguientes de esa sesión (el mismo `clientID`)
+   quedan pendientes y se apartan con `pending`, aunque no toquen lo apartado. Solo lo de otra sesión (después de
+   recargar) que no cuelgue de lo apartado entra. Es la observación 1 de la auditoría con su peso real: "volver a la
+   página como la ve el equipo" (2c) es la salida; lo apartado se baja siempre.
+2. **Paso 5:** una dirección que la página ya tenía (copiar una imagen de la misma página) vale aunque no sea
+   `sdmedia://`; lo apartado es solo lo nuevo. Y `foreign_media` lo decide la base: la prueba manda la lista de
+   archivos nuevos y, sin saber qué usa la rama, no aparta; si la base aparta, corta y la vuelta siguiente sigue.
+3. **Paso 8:** `colwidth` acepta, además de una lista de números o nulo (R3), listas con huecos (`[150, null]`): es lo
+   que guarda el editor en una celda que ocupa dos columnas (lo encontró la prueba con el editor real).
+4. **La pausa** de una página que el editor está escribiendo es de 20 s fijos (sin el `× f` de la base): la admisión
+   no sabe el peso de la base.
+5. **Lo apartado se baja** como JSON con los bytes de Yjs en base64 (el equipo, de la sala; el visitante, su copia
+   entera de cada página): no se aplica en ningún lado.
+
+**Pruebas:** la migración y su prueba (`supabase/tests/link_editar_permisos.sql`) en `begin … rollback` contra la base
+real: pasa, con 27 mutantes de la migración, todos detectados; las 26 pruebas SQL de siempre pasan con la migración
+(con los dos ajustes de la tabla de arriba). En vitest: `admit.test.ts` (los 11 casos del prototipo, las 19 filas
+hostiles contra el editor real, las 3 que tiraban apartadas por la forma, la imagen externa, la vacía de C1, las
+anotaciones, colapsar, la foto en línea, la cadena, 60 semillas al azar con más de 1000 filas honestas y 0
+apartadas, el costo), `linkShape.test.ts` (la lista contra el esquema real y cada propiedad propia de la app escrita por
+el editor real), `linkEdit.test.ts` (el motor de E2.14.3 con el servidor en memoria), `linkEditEditor.test.ts` (el
+visitante con el editor real: escribir, una plantilla de fábrica en una página vacía y una anotación; el equipo lo abre
+sin *UnsupportedPage*) y `linkEdit.published.test.ts` (lo admitido abierto con la librería de las versiones
+publicadas). Mutantes de la app: uno por cada paso de E2.3 y los del motor y el visitante (`mutants_app.mjs` en la
+carpeta de trabajo, fuera del repo).
+
+**Para prenderlo** (con la barrera de error de `PageEditor` ya en `main`, R4): aplicar la migración (con la copia de
+seguridad), publicar, subir `min_app_version` a esta versión y
+`update public.workspace_settings set link_edit_min_version = <esta versión> where id;` (el de D14 ya tiene que estar
+prendido). Apagar es volver a ponerlo en nulo: los links quedan en *Can view* de hecho y lo que espera, esperando.
+
+**Falta:** la 2b (archivos por el link) y la 2c (lo apartado a la vista: la lista en *Share*, *Set aside (via link)*
+en el historial, "volver a la página como la ve el equipo" para el visitante, el ícono del árbol). Al roadmap, lo de la
+re-verificación que sigue abierto (E2.18).
 
 ## Cómo se midió
 

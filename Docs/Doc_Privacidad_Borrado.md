@@ -272,6 +272,11 @@ prepared this page for you yet. It will appear when one of them opens the app.*
 (observación 5): queda por delante de la base y no baja nada hasta que haya una base más nueva que su subida, que
 recibe entera. No rompe nada (aplicar la base de nuevo no duplica); el costo está en P7 (`guestDown`).
 
+**El visitante de un link con *Can edit*** (`Doc_Link_Publico.md`, entrega 2a) es más simple: lo que sube va a la sala
+de espera y la base devuelve 0 (no un `seq`), así que **su cursor solo se mueve con bases**. Lo suyo entra a la página
+cuando un editor lo admite, y vuelve en la base siguiente (que lo trae entero; Yjs saltea lo que ya tenía). Mientras
+tanto la base que llega no cubre lo guardado (le falta lo suyo) y se suma como una fila más, sin reemplazar nada.
+
 **La demora.** El lector ve los cambios cuando un editor arma la base (4.1). Al cerrar la app o pasar a otra, la del
 editor intenta armarla antes; si el navegador la corta antes de terminar,
 cuando un editor vuelva a sincronizar (el motor baja todas las páginas en cada ciclo, así que con abrir la app
