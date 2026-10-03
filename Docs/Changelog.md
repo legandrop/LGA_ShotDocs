@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.167 :
 
 **Borrar un proyecto para siempre (P.14, entrega 3).** Un proyecto borrado quedaba en la papelera sin fin: no había
 cómo sacarlo (D-23 (6)). Ahora, pasados los 30 días, dueños y admins que lo manejan tienen *Delete forever…* en su

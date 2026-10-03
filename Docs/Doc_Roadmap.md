@@ -281,7 +281,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   (`Doc_Proyectos_Borrar.md`, "Cómo quedó: una sola papelera"). Falta probarla a mano en la compu y el iPhone.
   Pendiente chico: con *All projects* se hace una consulta `trashed_files` por proyecto (la primera vez); con muchos
   proyectos convendría una función de la base que las junte (migración nueva).
-  **Entrega 3, *Delete forever* (v0.0XX, D-23 (6)):** en el renglón de un proyecto borrado de la papelera, pasados los
+  **Entrega 3, *Delete forever* (v0.167, D-23 (6)):** en el renglón de un proyecto borrado de la papelera, pasados los
   30 días, dueños y admins que lo manejan escriben la palabra y el proyecto sale de la papelera para siempre; es una
   marca (`purged_at`), ninguna fila se borra, y la carpeta va antes a la papelera de Drive si no estaba. Migración
   `20261101120000_proyectos_purgar.sql` (versión 23) **sin aplicar**: va después de la 22 (`Doc_Proyectos_Borrar.md`,

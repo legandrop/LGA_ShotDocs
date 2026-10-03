@@ -129,7 +129,7 @@ const DICTATION_V4 = '0.150';
 /** Una sola papelera en el selector de proyectos (Doc_Proyectos_Borrar.md, "Cómo quedó: una sola papelera"): la versión la pone quien publica. */
 const ONE_TRASH = '0.162';
 /** *Delete forever* de un proyecto borrado (P.14, entrega 3, Doc_Proyectos_Borrar.md): la versión la pone quien publica. */
-const PROJECT_PURGE = '0.0XX';
+const PROJECT_PURGE = '0.167';
 /** Las tablas anchas se desplazan de costado en el teléfono (P.28, Doc_Tabla_Telefono.md): la versión la pone quien publica. */
 const TABLE_PHONE = '0.156';
 /** Las plantillas de fábrica (Docs/Doc_Plantillas.md, entregas 0 y 1): la versión se ajusta al publicar. */
