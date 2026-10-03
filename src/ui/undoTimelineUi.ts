@@ -22,6 +22,8 @@ import { setUndoRunner, undoTimelineFor, type StepKind, type UndoTimeline } from
 //
 // - un reemplazo del proyecto (entrega 2): se deshace en todas sus páginas sin moverte ("Undid “Cámara” → “Camera” in 12
 //   pages · Redo"; replaceUi.ts). Manteniendo apretado se frena antes de un reemplazo.
+// - lo anotado en una foto la vez que se cerró el anotador (entrega 3): todo junto, con su página en pantalla y la foto a
+//   la vista (si cruzó, "Undone in “Shot 12” · Back"). Manteniendo apretado se frena antes, como con un reemplazo.
 //
 // Mientras se va a otra página, o se deshace un reemplazo, los ⌘Z que llegan no hacen nada (no se encolan).
 
@@ -123,6 +125,8 @@ export function createUndoRunner(deps: UndoUiDeps) {
         }
         return;
       }
+      // Lo anotado en una foto (entrega 3): un paso grande, como un reemplazo, manteniendo apretado se frena antes.
+      if (next.kind === 'markup' && repeat) return;
       const pageId = next.pageId;
       const why = deps.blocked(pageId);
       if (why) {
@@ -147,31 +151,46 @@ export function createUndoRunner(deps: UndoUiDeps) {
         crossed = true;
       }
       const info = timeline.mounted(pageId);
-      const keepsCursor = timeline.topRemembersCursor(pageId, kind);
-      const before = info?.snapshot?.();
-      const result = timeline.step(pageId, kind);
-      // Yjs dice que cambió algo, pero en la página no cambió nada a la vista después de cruzar (otra persona ya había
-      // borrado casi todo lo del paso; auditoría de la entrega 1, O2): se avisa como un paso que no cambia nada en vez
-      // de "Undone in…". No se sigue con el anterior (el paso pudo cambiar algo que no está en el texto, como las
-      // anotaciones de una foto pegada).
-      if (result === 'done' && crossed && before !== undefined && sameDoc(before, info?.snapshot?.())) {
-        deps.notify(kind === 'undo' ? t('undo.nothingThere', { undo: label('undo') }) : t('undo.nothingThereRedo', { redo: label('redo') }));
-        return;
-      }
-      if (result === 'done') {
-        if (before !== undefined && (crossed || !keepsCursor)) info?.reveal?.(before, { moveCursor: crossed || focusInEditor });
-        if (crossed) {
-          const back = here && here !== pageId ? here : null;
-          deps.notify(
-            t(kind === 'undo' ? 'undo.doneIn' : 'undo.redoneIn', { page: deps.title(pageId) }),
-            back ? { label: t('undo.back'), run: () => deps.go(back) } : undefined,
-          );
+      const back = here && here !== pageId ? here : null;
+      const doneIn = () =>
+        deps.notify(
+          t(kind === 'undo' ? 'undo.doneIn' : 'undo.redoneIn', { page: deps.title(pageId) }),
+          back ? { label: t('undo.back'), run: () => deps.go(back) } : undefined,
+        );
+      let result: ReturnType<UndoTimeline['step']>;
+      if (next.kind === 'markup') {
+        result = timeline.stepMarkup(next.id, kind);
+        if (result === 'done') {
+          // La foto, a la vista. Si ya no está en la página, se dice: si no, deshacer cambiaría algo que no se ve.
+          if (info?.showPhoto && !info.showPhoto(next.fileId)) {
+            deps.notify(
+              t(kind === 'undo' ? 'undo.markupGone' : 'undo.markupGoneRedo', { page: deps.title(pageId) }),
+              back ? { label: t('undo.back'), run: () => deps.go(back) } : undefined,
+            );
+          } else if (crossed) doneIn();
+          return;
         }
-        return;
+      } else {
+        const keepsCursor = timeline.topRemembersCursor(pageId, kind);
+        const before = info?.snapshot?.();
+        result = timeline.step(pageId, kind);
+        // Yjs dice que cambió algo, pero en la página no cambió nada a la vista después de cruzar (otra persona ya había
+        // borrado casi todo lo del paso; auditoría de la entrega 1, O2): se avisa como un paso que no cambia nada en vez
+        // de "Undone in…". No se sigue con el anterior (el paso pudo cambiar algo que no está en el texto, como las
+        // anotaciones de una foto pegada).
+        if (result === 'done' && crossed && before !== undefined && sameDoc(before, info?.snapshot?.())) {
+          deps.notify(kind === 'undo' ? t('undo.nothingThere', { undo: label('undo') }) : t('undo.nothingThereRedo', { redo: label('redo') }));
+          return;
+        }
+        if (result === 'done') {
+          if (before !== undefined && (crossed || !keepsCursor)) info?.reveal?.(before, { moveCursor: crossed || focusInEditor });
+          if (crossed) doneIn();
+          return;
+        }
       }
       if (result !== 'nothing' && result !== 'failed') return;
-      // No cambió nada: en el mismo ⌘Z se sigue solo si lo anterior es de esta misma página. Si Yjs tiró un error
-      // (B.22), se avisa y se frena siempre: el próximo ⌘Z sigue con lo anterior.
+      // No cambió nada: en el mismo ⌘Z se sigue solo si lo anterior es de esta misma página (un paso, no lo anotado).
+      // Si Yjs tiró un error (B.22), se avisa y se frena siempre: el próximo ⌘Z sigue con lo anterior.
       const after = timeline.peek(project, kind);
       if (result === 'nothing' && after?.kind === 'page' && after.pageId === pageId) continue;
       deps.notify(kind === 'undo' ? t('undo.nothingThere', { undo: label('undo') }) : t('undo.nothingThereRedo', { redo: label('redo') }));

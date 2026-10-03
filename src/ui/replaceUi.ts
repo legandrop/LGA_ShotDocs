@@ -3,7 +3,9 @@ import { metaOf, ProjectReplace, type OpHeader, type RedoResult, type SavedOp, t
 import { t } from '../i18n';
 import { useServices, type Services } from '../services';
 import { Permissions } from '../sync/access';
-import { notify } from './notice';
+import { navigate, pagePath } from '../router';
+import { blockElement, revealBlock } from './commentsUi';
+import { notify, type NoticeAction } from './notice';
 import { shortcutLabel } from './shortcuts';
 import { undoTimelineFor, type UndoTimeline } from './undoTimeline';
 
@@ -147,6 +149,60 @@ function leftParts(r: { changed: number; remaining: number; unsaved: boolean }):
   return parts;
 }
 
+/** Dónde había cambiado algo que deshacer no tocó (un lugar por bloque, en orden). */
+type Place = { pageId: string; blockId: string };
+
+export interface ShowDeps {
+  go: (pageId: string) => void;
+  /** Lleva la vista al bloque y lo resalta; `false` si todavía no está en pantalla. */
+  reveal: (blockId: string) => boolean;
+  notify: typeof notify;
+  waitMs?: number;
+}
+
+const showDeps: ShowDeps = {
+  go: (pageId) => navigate(pagePath(pageId)),
+  reveal: (blockId) => (blockElement(blockId) ? revealBlock(blockId) : false),
+  notify,
+};
+
+/**
+ * *Show* (Docs/Doc_Buscar.md: "con *Show*: la página y el fragmento de cada una, para arreglarlas a mano"): lleva al
+ * primer lugar que había cambiado y lo muestra; con más de uno, un aviso con *Next* lleva al siguiente.
+ */
+export function showChanged(changedAt: readonly Place[], deps: ShowDeps = showDeps, at = 0): void {
+  const seen = new Set<string>();
+  const places = changedAt.filter((p) => {
+    const key = `${p.pageId}/${p.blockId}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  const place = places[at];
+  if (!place) return;
+  deps.go(place.pageId);
+  // La página puede tardar en abrir: se espera a que el bloque esté (hasta `waitMs`).
+  const started = Date.now();
+  const tryReveal = () => {
+    if (deps.reveal(place.blockId) || Date.now() - started > (deps.waitMs ?? 10000)) return;
+    setTimeout(tryReveal, 50);
+  };
+  tryReveal();
+  if (places.length > 1) {
+    deps.notify(
+      t('undo.changedHere', { n: at + 1, total: places.length }),
+      at + 1 < places.length ? { label: t('undo.nextChanged'), run: () => showChanged(places, deps, at + 1) } : undefined,
+    );
+  }
+}
+
+/** El botón *Show* del aviso, si algo había cambiado. */
+function showAction(result: UndoResult): NoticeAction | undefined {
+  if (result.changed === 0 || result.changedAt.length === 0) return undefined;
+  const places = [...result.changedAt];
+  return { label: t('undo.showChanged'), run: () => showChanged(places) };
+}
+
 /**
  * Deshace un reemplazo y avisa. Si es el próximo ⌘Z de la línea de tiempo (⌘Z, o *Undo* cuando es lo último), queda
  * para rehacer: "Undid “Cámara” → “Camera” in 12 pages · Redo". Si no (DH10), en las páginas con historia se deshace
@@ -165,12 +221,13 @@ export async function undoReplace(session: ReplaceSession, opId: string): Promis
       notify(
         [t('undo.replaceUndone', what(saved.header, result.pages)), ...leftParts(result)].join(' · '),
         canRedo ? { label: t('undo.redoAction'), run: () => void redoReplace(session, opId) } : undefined,
+        showAction(result),
       );
     }
     return result;
   }
   const parts = [t('replace.undone', { count: result.undone }), ...leftParts(result)];
-  notify(parts.join(' · '));
+  notify(parts.join(' · '), showAction(result));
   return result;
 }
 

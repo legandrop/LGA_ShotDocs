@@ -46,3 +46,47 @@ export function revealChange(view: EditorView, before: PMNode, { moveCursor }: {
     // La posición no tiene un elemento a la vista.
   }
 }
+
+/**
+ * Muestra una foto de la página (deshacer lo anotado, entrega 3): abre la sección colapsada que la esconde y la trae a
+ * la vista, sin mover el cursor. `idOf` da el archivo de la dirección de una foto (`mediaIdOf`). Devuelve si la foto
+ * está en la página (la foto-bloque, o una en línea, también adentro de una tabla).
+ */
+export function revealPhoto(view: EditorView, fileId: string, idOf: (url: string) => string | null): boolean {
+  if (view.isDestroyed) return false;
+  let at = -1;
+  view.state.doc.descendants((node, pos) => {
+    if (at >= 0) return false;
+    const url = (node.attrs as { url?: unknown }).url;
+    if (typeof url === 'string' && idOf(url) === fileId) {
+      at = pos;
+      return false;
+    }
+    return true;
+  });
+  if (at < 0) return false;
+  const $pos = view.state.doc.resolve(at);
+  let blockId: string | null = null;
+  for (let d = $pos.depth; d > 0; d--) {
+    const node = $pos.node(d);
+    if (node.type.name === 'blockContainer' && node.attrs.id) {
+      blockId = String(node.attrs.id);
+      break;
+    }
+  }
+  if (blockId) {
+    try {
+      revealBlock(view, blockId);
+    } catch {
+      // Sin colapsar en este navegador: no hay nada que abrir.
+    }
+  }
+  try {
+    const dom = view.nodeDOM(at);
+    const el = dom instanceof Element ? dom : dom?.parentElement;
+    el?.scrollIntoView?.({ block: 'nearest' });
+  } catch {
+    // La foto no tiene un elemento a la vista.
+  }
+  return true;
+}

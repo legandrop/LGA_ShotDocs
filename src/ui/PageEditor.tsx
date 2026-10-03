@@ -82,7 +82,7 @@ import { TemplateHost } from '../templates/TemplateHost';
 import { ySyncPluginKey, yUndoPluginKey } from 'y-prosemirror';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { undoTimelineFor } from './undoTimeline';
-import { revealChange } from './undoReveal';
+import { revealChange, revealPhoto } from './undoReveal';
 
 // El carrete se baja aparte, la primera vez que se abre (roadmap B.4).
 const Carrete = lazyPart(() => import('./Carrete').then((m) => m.Carrete));
@@ -585,6 +585,7 @@ export function BlockEditor({
         dom: view.dom,
         snapshot: () => view.state.doc,
         reveal: (before, opts) => revealChange(view, before as PMNode, opts),
+        showPhoto: (fileId) => revealPhoto(view, fileId, mediaIdOf),
       });
     };
     if (editor.domElement) start();
@@ -1282,6 +1283,11 @@ export function BlockEditor({
             loader={annotating.loader}
             size={annotating.size}
             onClose={() => setAnnotating(null)}
+            onUndoSteps={
+              inTimeline && !preview && !filesNotice
+                ? (steps, map) => undoTimelineFor(services).pushMarkup(pageId, map, annotating.item.mediaId!, steps)
+                : undefined
+            }
           />
         </Part>
       )}

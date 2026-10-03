@@ -144,6 +144,16 @@ export function ReplaceRow({ count, onReplaceAll, busy }: { count: number; onRep
   );
 }
 
+/**
+ * Después del *Undo* de un renglón de "Last": el renglón se va (o el botón se apaga mientras deshace) y el foco quedaba en
+ * la página, donde Esc ya no cierra el panel. Vuelve al campo del reemplazo si el panel sigue abierto.
+ */
+export function keepFocusInPanel(): void {
+  const panel = document.querySelector<HTMLElement>('.search-panel');
+  if (!panel || panel.contains(document.activeElement)) return;
+  panel.querySelector<HTMLInputElement>('.replace-input')?.focus();
+}
+
 /** Los resultados con el reemplazo desplegado: la lista de cambios, la confirmación, el avance y los últimos. */
 export function ReplaceResults({ index, projectId, searched, indexRevision, onGo }: Props) {
   const { session, ui } = useReplaceSession();
@@ -318,6 +328,14 @@ export function ReplaceResults({ index, projectId, searched, indexRevision, onGo
     document.querySelector<HTMLInputElement>('.search-panel .replace-input')?.focus();
   };
 
+  /** *Undo* de un renglón de "Last" (o de los anteriores), con el foco que sigue en el panel. */
+  const undoFromPanel = (opId: string) =>
+    void undoOp(session, opId).finally(() => {
+      keepFocusInPanel();
+      // El renglón se va con el próximo dibujo del panel.
+      setTimeout(keepFocusInPanel, 50);
+    });
+
   const latest = recent[0];
   const older = recent.slice(1);
   const recentLine = (op: OpHeader) => (
@@ -332,7 +350,7 @@ export function ReplaceResults({ index, projectId, searched, indexRevision, onGo
         {op.status === 'stopped' && ` · ${tr('replace.recentStopped', { done: op.pages.length, total: op.planned })}`}
         {op.status === 'partial' && ` · ${tr('replace.recentPartial')}`}
       </span>
-      <button className="link" disabled={busy} onClick={() => void undoOp(session, op.id)}>
+      <button className="link" disabled={busy} onClick={() => undoFromPanel(op.id)}>
         {op.status === 'partial' ? tr('replace.undoRest') : tr('replace.undo')}
       </button>
     </li>

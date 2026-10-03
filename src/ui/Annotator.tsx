@@ -89,6 +89,7 @@ import {
 import { drawMarkup, MARKUP_FONT, markupMeasure } from './markupSvg';
 import { notify } from './notice';
 import { IS_MAC, shortcutLabel } from './shortcuts';
+import { popMarkupStep, protectMarkupOthers } from './undoTimeline';
 
 // El anotador de fotos en la compu (P.20, entrega 2; Docs/Doc_Anotar_Fotos.md, sección 2). A pantalla completa, como
 // el carrete: arriba las nueve herramientas de FrameRev (con sus letras), deshacer, rehacer y *Done*; debajo, la franja
@@ -100,7 +101,9 @@ import { IS_MAC, shortcutLabel } from './shortcuts';
 //   - Se escribe AL SOLTAR, nunca en cada cuadro de un arrastre: mientras se arrastra, la forma vive solo en esta
 //     pantalla (`draft` y `patches`). Lo pisado deja huecos para siempre en la base limpia (sección 10).
 //   - Deshacer es de esta foto en esta sesión: un `Y.UndoManager` que sigue solo el origen `sd-markup:<fileId>` (lo de
-//     otro, el texto de la página y la poda no se deshacen acá).
+//     otro, el texto de la página y la poda no se deshacen acá; tampoco se borra una forma tuya que otro cambió,
+//     `protectMarkupOthers`). Al cerrarse, lo que quedó en su pila pasa a la línea de tiempo de la página como UN paso
+//     (`onUndoSteps`; Docs/Doc_Deshacer.md, entrega 3): ⌘Z en la página lo deshace entero.
 //   - Topes en bytes codificados (markupLimits.ts): al tope, las herramientas de crear se apagan.
 //   - Solo lo abre quien puede editar la página (PageEditor.tsx); un marco de una versión más nueva lo abre en solo
 //     lectura.
@@ -205,6 +208,11 @@ export interface AnnotatorProps {
    */
   size?: () => Promise<{ width: number; height: number } | null>;
   onClose: () => void;
+  /**
+   * Al cerrarse (o desmontarse) con algo hecho: los pasos de su deshacer, los de abajo primero (la línea de tiempo de la
+   * página los toma como un solo paso).
+   */
+  onUndoSteps?: (steps: Y.UndoManager['undoStack'], map: Y.Map<unknown>) => void;
 }
 
 interface ImageState {
@@ -239,7 +247,7 @@ function readShapes(map: Y.Map<unknown>, fileId: string, frame: MarkupFrame, pat
   return out.sort((a, b) => a.z - b.z || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
-export function Annotator({ doc, fileId, name, item, loader, size, onClose }: AnnotatorProps) {
+export function Annotator({ doc, fileId, name, item, loader, size, onClose, onUndoSteps }: AnnotatorProps) {
   const tr = useT();
   const map = useMemo(() => doc.getMap<unknown>(PHOTO_MARKUP_MAP), [doc]);
   const origin = markupOrigin(fileId);
@@ -351,19 +359,43 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
     if (selection.some((id) => !byId.has(id))) setSelection((sel) => sel.filter((id) => byId.has(id)));
   }, [byId, selection]);
 
-  // Deshacer propio de esta foto en esta sesión.
+  // Deshacer propio de esta foto en esta sesión. Al irse, lo que quedó en la pila pasa a la línea de tiempo de la página.
+  const onUndoStepsRef = useRef(onUndoSteps);
+  onUndoStepsRef.current = onUndoSteps;
   useEffect(() => {
     const um = new Y.UndoManager(map, { trackedOrigins: new Set([origin]), captureTimeout: 0 });
+    protectMarkupOthers(um, map);
     const update = () => setStacks({ undo: um.undoStack.length > 0, redo: um.redoStack.length > 0 });
     um.on('stack-item-added', update);
     um.on('stack-item-popped', update);
     um.on('stack-cleared', update);
     undo.current = um;
     return () => {
+      // Un texto a medio escribir se guarda antes (si no, quedaría fuera del paso).
+      commitOnExit.current?.();
       undo.current = null;
+      um.off('stack-item-added', update);
+      um.off('stack-item-popped', update);
+      um.off('stack-cleared', update);
+      // Lo deshecho y no rehecho se olvida (su lugar en la memoria también); lo hecho, a la línea de tiempo.
+      um.clear(false, true);
+      const steps = um.undoStack;
+      um.undoStack = [];
       um.destroy();
+      if (steps.length > 0) onUndoStepsRef.current?.(steps, map);
     };
   }, [map, origin]);
+
+  /**
+   * ⌘Z / ⌘⇧Z del anotador: un paso por vez (`popMarkupStep`: así no se lleva lo de otro). Los botones se vuelven a mirar
+   * después (mientras deshace, los pasos de abajo se sacan un momento de la pila).
+   */
+  const stepUndo = (kind: 'undo' | 'redo') => {
+    const um = undo.current;
+    if (!um) return;
+    popMarkupStep(um, kind);
+    setStacks({ undo: um.undoStack.length > 0, redo: um.redoStack.length > 0 });
+  };
 
   // --- la foto ------------------------------------------------------------------------------------------
 
@@ -631,10 +663,10 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
         changeWidth(action.delta, action.next);
         return;
       case 'undo':
-        undo.current?.undo();
+        stepUndo('undo');
         return;
       case 'redo':
-        undo.current?.redo();
+        stepUndo('redo');
         return;
       case 'delete':
         deleteSelected();
@@ -1314,10 +1346,10 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
             <span className="annotator-sep" />
           </>
         )}
-        <button className="annotator-btn" aria-label={tr('annotate.undo')} data-tip={tr('annotate.undoTip', { key: shortcutLabel('annotateUndo') })} disabled={!stacks.undo} onClick={() => undo.current?.undo()}>
+        <button className="annotator-btn" aria-label={tr('annotate.undo')} data-tip={tr('annotate.undoTip', { key: shortcutLabel('annotateUndo') })} disabled={!stacks.undo} onClick={() => stepUndo('undo')}>
           <UndoIcon size={20} />
         </button>
-        <button className="annotator-btn" aria-label={tr('annotate.redo')} data-tip={tr('annotate.redoTip', { key: shortcutLabel('annotateRedo') })} disabled={!stacks.redo} onClick={() => undo.current?.redo()}>
+        <button className="annotator-btn" aria-label={tr('annotate.redo')} data-tip={tr('annotate.redoTip', { key: shortcutLabel('annotateRedo') })} disabled={!stacks.redo} onClick={() => stepUndo('redo')}>
           <RedoIcon size={20} />
         </button>
         <button
