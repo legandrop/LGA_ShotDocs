@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.153 :
+
+**Título largo: el reloj del dispositivo ya no decide.** Reparar un título rechazado por el largo podía pisar uno puesto
+a mano después si el reloj del dispositivo iba adelantado: se comparaba el `updated_at` del servidor con la hora del
+dispositivo. Ahora, al rechazarse, se guarda el `updated_at` que tenía la fila y la reparación mira si sigue siendo el
+mismo (reloj del servidor contra reloj del servidor). Un rechazo que guardó una versión anterior, sin ese dato, deja el
+título como está y manda el texto largo entero a la página. Probado con el reloj adelantado y atrasado horas, con la
+cola de v0.152 y con un renombre que espera en la cola de una app desactualizada. Además, rehacer las claves de orden
+toca solo las páginas amontonadas en el hueco, no todas las hermanas.
+[ Título largo - la reparación de un rechazo compara contra cómo estaba la fila en el servidor y no contra el reloj del dispositivo; las claves de orden se rehacen solo alrededor del hueco ]
+
 v0.152 :
 
 **Deshacer en orden, entrega 3: anotar una foto es un paso** (P.26): ⌘Z en la página salteaba lo anotado. Ahora, al
