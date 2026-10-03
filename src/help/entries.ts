@@ -685,7 +685,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     title: 'help.history.title',
     text: 'help.history.text',
     keys: { open: 'history', undo: 'undo' },
-    words: ['historial', 'versiones', 'versión', 'restaurar', 'revisiones', 'history', 'versions', 'restore', 'revisions', 'quién cambió'],
+    words: ['historial', 'versiones', 'versión', 'restaurar', 'revisiones', 'history', 'versions', 'restore', 'revisions', 'quién cambió', 'no se puede mostrar', 'error', 'página rota', "can't be shown", 'broken page'],
     since: HISTORY,
   },
   {

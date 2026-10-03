@@ -15,6 +15,16 @@ export const page = {
   },
   'page.restoreNamed': { en: "Restore “{title}”", es: "Restaurar “{title}”" },
   'page.loadingEditor': { en: "Loading the editor", es: "Cargando el editor" },
+  // La barrera de error de la página (ui/ErrorBarrier.tsx): el editor tiró un error con lo que tiene la página.
+  'page.crash.title': { en: "This page can't be shown right now.", es: "Esta página no se puede mostrar ahora." },
+  'page.crash.text': {
+    en: "Something in it made the editor fail. Nothing was deleted, and the rest of the app keeps working.",
+    es: "Algo de su contenido hizo fallar al editor. No se borró nada, y el resto de la app sigue andando.",
+  },
+  'page.crash.textHistory': {
+    en: "Something in it made the editor fail. Nothing was deleted: in Version history you can restore an earlier version, and the rest of the app keeps working.",
+    es: "Algo de su contenido hizo fallar al editor. No se borró nada: en el historial de versiones podés restaurar una versión anterior, y el resto de la app sigue andando.",
+  },
   'page.title': { en: "Title", es: "Título" },
   'header.options': { en: "Header options", es: "Opciones del encabezado" },
   'header.optionsTip': {

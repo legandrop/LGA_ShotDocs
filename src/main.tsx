@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { prefs } from './prefs';
 import { App } from './ui/App';
+import { AppBarrier } from './ui/ErrorBarrier';
 import { listenForInstallPrompt } from './ui/install';
 import { listenForMissingFiles } from './ui/lazyPart';
 import { watchNewVersionFromStart } from './ui/appUpdate';
@@ -32,6 +33,9 @@ listenForInstallPrompt();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    {/* Lo que se escape de las barreras de adentro: una pantalla con *Reload*, nunca en blanco (ErrorBarrier.tsx). */}
+    <AppBarrier>
+      <App />
+    </AppBarrier>
   </StrictMode>,
 );

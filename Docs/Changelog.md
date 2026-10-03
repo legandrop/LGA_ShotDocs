@@ -5,12 +5,23 @@ v0.0XX :
 **Dictado, entrega V4** (P.27, `Doc_Dictado.md` sección 18). Dictar varias notas del mismo plano obligaba a nombrarlo
 cada vez, una corrección no sabía qué corregir y el lente quedaba solo en el reporte. Ahora la hoja tiene el plano
 activo (*Shot: 12_010 ▾*), fijo entre notas y puesto solo con lo aplicado; «no, era un 35» lleva lo reciente con la
-dirección de ahora y corrige el último cambio; la vista previa ofrece, destildado, escribir el lente en la ficha de la
+dirección de ahora y corrige el último cambio del mismo campo; la vista previa ofrece, destildado, escribir el lente en la ficha de la
 página *Shot Breakdown* del plano, solo si está vacía o era la copia del reporte, con su guarda y *Undo*; quien solo
 comenta tiene *Add as comment*; y `/dictate#<texto>` abre la hoja con el texto de un Atajo de iOS sin mandar nada.
-Además: Esc en *Assistant…* y *Voice* cierra solo esa ventana, el resguardo del doble toque vale solo para un clic en
-*Apply* y la prueba de `clearVoiceFromCopy`.
+Además: Esc en *Assistant…* y *Voice* cierra solo esa ventana, el doble toque se frena solo con un clic en *Apply*,
+la hoja guarda al cerrarse lo escrito en los últimos 250 ms (antes se perdía) y la prueba de `clearVoiceFromCopy`.
 [ Dictado V4 - plano activo, correcciones encadenadas, la ficha del plano, Add as comment, /dictate y restos del asistente ]
+
+v0.147 :
+
+**Barrera de error** (B3 del link *Can edit*). Si el editor tiraba una excepción al dibujar una página (una forma que
+nadie previó; la auditoría del link encontró tres: un `Y.Map` en un párrafo y el `level` de un encabezado como objeto
+o `'x y'`), React desmontaba todo y la app quedaba en blanco. Ahora falla solo la página: *This page can't be shown
+right now*, con *Version history* para quien lo ve (restaura sobre el documento, sin abrir el editor) y *Try again*; el
+árbol y el resto siguen. Lo que se escape muestra *Something went wrong* con *Reload* y cuántos cambios faltan subir,
+con la sincronización viva. Nada se reintenta solo ni se borra; el id de la página y el error van a la consola. Ayuda
+actualizada.
+[ Barrera de error - la página que hace tirar al editor muestra un aviso con el historial a mano y la app muestra Reload en vez de blanco ]
 
 v0.146 :
 

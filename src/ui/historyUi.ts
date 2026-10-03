@@ -65,11 +65,23 @@ export type RestoreOutcome =
    * `undo`: deshace la restauración si sigue siendo lo último; `onEdit`: avisa la próxima edición de la página;
    * `onUndone`: avisa cuando se deshace la restauración, por el **Undo** del aviso o con Ctrl/⌘+Z (una vez).
    */
-  | { ok: true; undo: () => boolean; onEdit: (fn: () => void) => () => void; onUndone?: (fn: () => void) => () => void; trace?: RestoreTrace }
+  | {
+      ok: true;
+      undo: () => boolean;
+      onEdit: (fn: () => void) => () => void;
+      onUndone?: (fn: () => void) => () => void;
+      trace?: RestoreTrace;
+      /** `false`: no se deshace desde el aviso (se restauró sin el editor, desde la barrera de la página). */
+      undoable?: false;
+    }
   /** `shape`: la versión no pasó la ida y vuelta (algo que el editor no puede armar); `notEditable`: sin editor. */
   | { ok: false; reason: 'shape' | 'notEditable' | 'failed' };
 
-type RestoreTarget = (version: import('yjs').Doc) => RestoreOutcome;
+/**
+ * `schema`: el de ProseMirror del editor que muestra la versión en el historial. El editor de la página usa el suyo; la
+ * barrera de la página (ErrorBarrier.tsx), que restaura sin editor, necesita este para la ida y vuelta.
+ */
+type RestoreTarget = (version: import('yjs').Doc, schema?: import('@tiptap/pm/model').Schema | null) => RestoreOutcome;
 
 const targets = new Map<string, RestoreTarget>();
 
@@ -81,9 +93,38 @@ export function registerRestoreTarget(pageId: string, target: RestoreTarget): ()
   };
 }
 
-/** Restaura la versión en el editor abierto de la página (si no hay uno editable, no hace nada). */
-export function requestRestore(pageId: string, version: import('yjs').Doc): RestoreOutcome {
+const pendingTargets = new Map<string, Promise<unknown>>();
+
+/**
+ * Un destino que se está preparando (la barrera de la página baja la parte y abre el documento): `restoreTargetSettled`
+ * lo espera. Devuelve cómo sacarlo.
+ */
+export function markRestorePending(pageId: string, ready: Promise<unknown>): () => void {
+  pendingTargets.set(pageId, ready);
+  return () => {
+    if (pendingTargets.get(pageId) === ready) pendingTargets.delete(pageId);
+  };
+}
+
+/** Espera (hasta `maxMs`) a que termine de prepararse el destino de la página, si se está preparando. */
+export async function restoreTargetSettled(pageId: string, maxMs = 10_000): Promise<void> {
+  const ready = pendingTargets.get(pageId);
+  if (!ready) return;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([ready.catch(() => undefined), new Promise((r) => (timer = setTimeout(r, maxMs)))]);
+  clearTimeout(timer);
+}
+
+/**
+ * Restaura la versión en el editor abierto de la página, o desde la barrera si el editor tiró un error (si no hay
+ * ninguno de los dos, no hace nada).
+ */
+export function requestRestore(
+  pageId: string,
+  version: import('yjs').Doc,
+  schema?: import('@tiptap/pm/model').Schema | null,
+): RestoreOutcome {
   const target = targets.get(pageId);
   if (!target) return { ok: false, reason: 'notEditable' };
-  return target(version);
+  return target(version, schema);
 }
