@@ -1466,6 +1466,16 @@ La auditoría independiente (nivel alto) dio "no aprobado" por un bloqueante. Co
 
 Mutantes de la ronda: 8 de 9 mueren (el equivalente de arriba).
 
+### Restos arreglados con la entrega V4 del dictado (v0.0XX)
+
+- **Esc en *Assistant…*** cerraba también el panel (o *Dictate to report*) de abajo: la ventana escuchaba Esc en el
+  documento, en la fase de burbuja, y el foco seguía en el engranaje del panel porque el primer campo aparece recién
+  cuando se leen los ajustes. Ahora la ventana toma Esc en la fase de captura y no lo deja seguir, el foco entra cuando
+  el campo existe, y el panel ignora Esc mientras la ventana está abierta (lo mismo con *Voice*, que vive adentro de la
+  hoja y del micrófono de *Ask…*). Con una ventana de salir abierta encima de los ajustes, Esc sigue siendo de esa.
+- **`clearVoiceFromCopy`** tiene su prueba (`keySyncS2.test.ts`): después de *Forget voice key*, la próxima copia con
+  otra *Voice* pregunta en lugar de ponerla sola. El mutante que no la llama muere.
+
 ## Cómo quedó M0 (v0.145)
 
 Prueba técnica del MCP (P.24, sección 14), hecha el 2026-10-02/03 contra `main` v0.137. Lo que se pudo probar sin tocar

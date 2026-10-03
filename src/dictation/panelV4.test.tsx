@@ -425,7 +425,8 @@ describe('V4 · la página Shot Breakdown del plano', () => {
     expect(await lensOf(s.device, other)).toBe('');
     // Una página en la papelera tampoco.
     await s.device.tree.trash(other);
-    expect((await proposeShotPages(deps({ known: true, canEditPage: () => true }), s.pageId, map, plan.changes, 1000)).changes).toEqual([]);
+    // (Ni siquiera se nombra: no es "la página del plano" que no se puede editar.)
+    expect(await proposeShotPages(deps({ known: true, canEditPage: () => true }), s.pageId, map, plan.changes, 1000)).toEqual({ changes: [], notes: [] });
   });
 
   it('lo escrito en la ficha lo abre igual la versión publicada (esquema anterior), sin cambiar nada', async () => {

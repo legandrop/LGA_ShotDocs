@@ -1,7 +1,7 @@
 # Dictado por voz y notas informales que se ubican en el reporte
 
-**Estado: entregas V1 (v0.135), V2 (v0.139) y V3 (v0.139) implementadas**; V4, diseño. Cómo quedaron y lo que cambió
-al implementarlas: secciones 15 a 17, al final. Roadmap P.27; pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.123, con el
+**Estado: entregas V1 (v0.135), V2 (v0.139), V3 (v0.139) y V4 (v0.0XX) implementadas.** Cómo quedaron y lo que cambió
+al implementarlas: secciones 15 a 18, al final. Roadmap P.27; pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.123, con el
 asistente A1 publicado (v0.118) y A2 terminado en su rama (`lega/asistente-a2`, en auditoría). Las decisiones están
 propuestas (DI1 a DI9, sección 13) y valen hasta que Lega diga otra cosa. Lo medido está en "Cómo se midió", al final;
 los precios y el CORS se verificaron el 2026-10-02 en las páginas oficiales y con pedidos sin clave. **Auditado el mismo
@@ -994,3 +994,75 @@ de Playwright en Windows no trae micrófono: el iPhone lo prueba Lega. Mutantes 
 - **O5** (salir con «olvidar la clave» no borra la clave de voz ni cuenta las notas) queda para la tanda de S1, en el
   roadmap. *Undo* de una nota con audio la devuelve sin su grabación (se borró al aplicar): queda el texto transcrito, que
   es lo que importa (DI7).
+
+## 18. Cómo quedó V4
+
+**Qué hay.** Las cuatro piezas de la fila V4 de la tabla de entregas, más *Add as comment*:
+
+- **El plano activo.** En la hoja, arriba del campo, la chapita *Shot: 12_010 ▾* (un `select` nativo: en el teléfono abre
+  la lista grande del sistema) con los planos de la página (las *Slate* con dos números de las tablas con encabezado y
+  las secciones `Shot …`) y *None*. Queda fija entre notas y se pone sola con el plano de lo último aplicado. Va en el
+  pedido como `ACTIVE_SHOT "12_010"` (afuera del mapa: es un dato de la persona, no de la página) y las instrucciones lo
+  ponen después de lo dicho y del cursor (DI4). Una fila de ese plano ya no se marca *Row chosen by the assistant*.
+- **Correcciones encadenadas.** `RECENT` lleva lo aplicado en la hoja en los últimos 10 minutos con la dirección que cada
+  lugar tiene **en el mapa nuevo** (el ancla de Yjs de la foto lo sigue aunque se agreguen filas arriba), un renglón por
+  lugar (lo de antes de la primera vez y lo de después de la última) y el más nuevo marcado `(last)`. «no, era un 35»
+  corrige el `(last)`; otra corrección encima va al mismo lugar. Un cambio en un lugar de `RECENT` se muestra con
+  *Corrects a change you just applied* y nunca como elegido por el asistente.
+- **La página *Shot Breakdown* del plano (DI8 → A).** Cuando la nota cambia la columna *Lens · Filters* (o *Lente ·
+  Filtros*) de una fila con *Slate*, la vista previa suma *Also in the shot's page* con *Shot Breakdown › 012_010 ›
+  Lens: — → 50 mm*, **destildado**. Tildado, se escribe después de aplicar lo del reporte. *Undo* de la hoja lo saca
+  de las dos páginas.
+- ***Add as comment*.** Quien puede comentar pero no editar ve la vista previa con *Add as comment*: la nota, los
+  cambios tildados (destino, antes y después) y lo que no se ubicó van como un comentario en el bloque del primer
+  cambio. Lo destildado queda en *Couldn't place*. El botón redondo del teléfono aparece también para quien comenta.
+- **`/dictate` para un Atajo de iOS.** `https://<la app>/dictate#<texto>`: al arrancar, `main.tsx` toma el texto del
+  fragmento (que el navegador no manda al servidor), lo guarda en `sessionStorage` de la pestaña y deja la dirección en
+  el inicio, que abre la última página del proyecto. Cuando esa página tiene su editor, *Dictate to report* se abre
+  sola con el texto en el campo (guardado ya en el borrador) y *From your Shortcut. Check the note and tap Place*.
+  **Nunca manda nada solo.** Sin texto (`/dictate` pelado), abre la hoja con el campo vacío.
+
+**Archivos.** `activeShot.ts` (el nombre de un plano, los de la página, el de lo aplicado y el guardado), `corrections.ts`
+(`RECENT` con la dirección de ahora), `shotPage.ts` (buscar la página del plano, proponer, escribir y deshacer sin
+editor), `dictateLink.ts` (la entrada `/dictate`, en la primera carga), y la hoja, el validador (`answer.ts`: el plano
+activo y las correcciones como señales propias) y el pedido (`prompt.ts`).
+
+**Decisiones al implementar** (propuestas; valen hasta que Lega diga otra cosa):
+
+| | Qué pasaba | Opciones | Elegí | Por qué |
+|---|---|---|---|---|
+| DV1 | Dónde vive el plano activo | En memoria de la pestaña; en el borrador de la base del dictado; en `localStorage` por correo, workspace y página | `localStorage` por página | En el iPhone la app se cierra sola seguido; es una preferencia de la hoja, no un dato: no necesita la base ni sube la versión de nada |
+| DV2 | Qué se copia a la página del plano | Todas las columnas con una fila parecida; solo el lente; lo que diga el modelo | **Solo el lente** (*Lens · Filters* → la fila *Lens* / *Lente* de la ficha), con el texto entero de la celda del reporte | Es el ejemplo de la aceptación y la única fila de la ficha con un par claro en el reporte; el modelo no ve la otra página, así que lo arma la app (la tabla `FIELDS` de `shotPage.ts` se amplía sin tocar nada más) |
+| DV3 | Cuál es la página del plano | Por la plantilla de la que salió; por el título; por la ficha | **Por el título** (nombra el plano: `012_010`, `Shot 12_010`) **y la ficha** (tiene la fila *Shot*, vacía o con ese plano, y la fila *Lens*); si hay más de una, no se propone y se dice | Leer solo las páginas cuyo título nombra el plano es barato; `template_id` falta en páginas importadas o copiadas |
+| DV4 | «Nunca pisar texto de otro» | Proponer con *Replaces*; no proponer si la fila dice algo; proponer si dice lo mismo que el reporte | **Solo si la fila de la ficha está vacía o dice exactamente lo que decía la celda del reporte antes del cambio** (era su copia); si dice otra cosa, *… already says “35 mm anamórfico”: it's left as it is.* | Lo de la ficha lo pudo escribir otra persona a propósito; así una corrección («no, era un 35») también la sigue |
+| DV5 | Cómo se escribe y se deshace en la otra página | Abrir un editor escondido; escribir en el Y.Doc como el reemplazo del proyecto | **Como el reemplazo del proyecto:** `docs.edit` (el candado de la página) y `docs.applyLocal` con un origen propio (`ORIGIN_DICTATION`), solo texto en una celda que existe. La guarda, adentro del candado: el mismo párrafo de Yjs (por su posición relativa) con el mismo texto de la foto, permiso de editar, ni en la papelera ni ilegible | Sin DOM ni esquema, y la versión vieja lo abre igual (prueba con `editorSchemaMain`). No entra en el ⌘Z de esa página (como el reemplazo): se deshace con *Undo* de la hoja, que vuelve lo de antes solo si la celda sigue diciendo lo que se escribió |
+| DV6 | Si la página del plano falla al aplicar (cambió, o se perdió el permiso) | Deshacer también lo del reporte; dejarlo | **Lo del reporte queda** y la hoja dice *Not written in Shot Breakdown › 012_010 › Lens…* | Lo del reporte es la nota que pidió la persona; la otra página es opcional y su texto ya está en el reporte |
+| DV7 | *Add as comment*: dónde y qué | En la página; en cada bloque; en el del primer cambio | **Un solo comentario en el bloque del primer cambio** (la tabla, para una celda), con la nota y los destinos en palabras armados por la app | Un hilo que quien edita lee de una; sin *Undo* (se borra desde el panel de comentarios, como cualquier comentario) |
+| DV8 | El texto del Atajo, ¿a qué página? | Preguntar; la última del proyecto; el reporte de hoy | **La que abre el inicio** (la última página del proyecto) | Es la que estaba abierta en el set; la hoja la muestra detrás y la nota no se manda sola |
+
+**Restos del asistente (P.24 y P.27):** Esc en *Assistant…* (y en *Voice*) cierra solo esa ventana. La tomaban del
+documento en la fase de burbuja y, como el foco quedaba en el botón del panel (el primer campo todavía no estaba), el
+mismo Esc cerraba también el panel o la hoja. Ahora la ventana lo toma en la fase de captura y no sigue, el foco entra
+cuando lo guardado se leyó, y el panel y la hoja ignoran Esc con una ventana arriba. El resguardo de 600 ms contra el
+doble toque vale solo para un clic o un toque sobre *Apply* (con Ctrl/⌘+Enter, un *Undo* enseguida anda). Y la hoja
+guarda al cerrarse lo escrito en los últimos 250 ms (antes se perdía si se cerraba enseguida).
+
+**Versiones viejas.** Nada nuevo en el editor: el reporte recibe lo mismo que en V1, y la página del plano, texto en una
+celda que existe. Una prueba abre la página del plano escrita con el esquema publicado y no cambia nada. **No hace
+falta subir `min_app_version`.** Sin migración.
+
+**Pruebas.** Vitest: 13 en `v4.test.ts` (el nombre de un plano, los de la página, el plano activo como señal, `RECENT`
+juntado y con la dirección de ahora aunque se agregue una fila, `ACTIVE_SHOT` en el pedido, `/dictate`) y 16 en
+`panelV4.test.tsx` con el editor real y el proveedor simulado (las aceptaciones 1 a 4; la página del plano destildada,
+tildada, con la guarda, con *Undo* después de que otro la cambió, con dos candidatas, sin permiso, en la papelera y con
+el esquema publicado; *Add as comment*; Ctrl+Enter y *Undo*; Esc en *Assistant…* y en *Voice*), más una en
+`keySyncS2.test.ts` (`clearVoiceFromCopy`). Mutantes: 21 de 22 mueren; el que vive (no filtrar la papelera al listar
+las páginas del proyecto) es equivalente: el árbol ya no devuelve las páginas en la papelera y escribir vuelve a mirarlo.
+Recorrido en Chromium sin login con el proveedor falso local: 31 de 31 (las cuatro aceptaciones, la ficha del plano con
+*Undo*, Esc en *Assistant…*, Ctrl+Enter y *Undo*, *Add as comment* con permiso de comentar, el Atajo y el teléfono de
+390 px).
+
+**Lo que no se pudo comprobar y prueba Lega:** el Atajo de iOS de verdad (en el iPhone, *Abrir URL* puede abrir Safari y
+no la app instalada en la pantalla de inicio, que tiene su propio almacenamiento: si es así, hay que entrar una vez en
+Safari y la hoja se abre ahí), el botón de acción, la chapita en el iPhone con guantes, y la calidad de las correcciones
+con una clave real (10.3).
