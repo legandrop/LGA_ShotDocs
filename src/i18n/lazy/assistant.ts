@@ -170,6 +170,57 @@ export const assistant = {
   },
   // --- Entrega A2: la página entera, Format as… y la política del workspace ---
   'assistant.pageSection': { en: "Whole page", es: "Toda la página" },
+  // *Suggest caption* (entrega A3): el modelo mira una foto y propone un pie.
+  'assistant.photoSection': { en: "Photo", es: "Foto" },
+  'assistant.caption': { en: "Suggest caption", es: "Sugerir un pie de foto" },
+  'assistant.caption.hint': {
+    en: "Click a photo first. The assistant looks at it and suggests a line to put under it.",
+    es: "Primero hacé clic en una foto. El asistente la mira y propone un renglón para poner debajo.",
+  },
+  'assistant.caption.select': {
+    en: "Select a photo first: click it, then choose Suggest caption.",
+    es: "Primero elegí una foto: hacé clic en ella y después tocá Sugerir un pie de foto.",
+  },
+  'assistant.caption.confirm': { en: "Send this photo to {provider}?", es: "¿Mandar esta foto a {provider}?" },
+  'assistant.caption.confirmText': {
+    en: "It gets a copy of up to 1,024 pixels, without the file's location and camera data, never the original. Nothing else from the page is sent.",
+    es: "Le llega una copia de hasta 1024 píxeles, sin la ubicación ni los datos de la cámara del archivo, nunca el original. No se manda nada más de la página.",
+  },
+  'assistant.caption.language': { en: "Caption language", es: "Idioma del pie" },
+  'assistant.caption.send': { en: "Send photo", es: "Mandar la foto" },
+  'assistant.caption.cancel': { en: "Cancel", es: "Cancelar" },
+  'assistant.caption.preparing': { en: "Preparing the photo…", es: "Preparando la foto…" },
+  'assistant.caption.field': { en: "Caption", es: "Pie de foto" },
+  'assistant.caption.whereBelow': {
+    en: "Apply adds it as a new line under the photo. You can edit it here first, or later on the page.",
+    es: "Aplicar lo agrega como un renglón nuevo debajo de la foto. Podés retocarlo acá antes, o después en la página.",
+  },
+  'assistant.caption.whereCell': {
+    en: "Apply adds it in the same cell, on a new line under the photo. You can edit it here first, or later on the page.",
+    es: "Aplicar lo agrega en la misma celda, en un renglón nuevo debajo de la foto. Podés retocarlo acá antes, o después en la página.",
+  },
+  'assistant.caption.sent': { en: "Sent {width} × {height} px · {kb} KB", es: "Se mandó de {width} × {height} px · {kb} KB" },
+  'assistant.caption.fromThumbnail': {
+    en: "from the thumbnail (less detail): a sharper copy wasn't available",
+    es: "de la miniatura (con menos detalle): no había una copia más nítida",
+  },
+  'assistant.caption.applied': { en: "Caption added. Undo it with {undo}.", es: "Pie agregado. Se deshace con {undo}." },
+  'assistant.caption.changed': {
+    en: "This photo was removed or replaced while the assistant was working. Nothing was applied.",
+    es: "Esta foto se borró o se reemplazó mientras el asistente trabajaba. No se aplicó nada.",
+  },
+  'assistant.caption.unavailable': {
+    en: "This photo isn't on this device and couldn't be downloaded. Try again with internet.",
+    es: "Esta foto no está en este dispositivo y no se pudo bajar. Probá de nuevo con internet.",
+  },
+  'assistant.caption.unreadable': {
+    en: "This photo can't be read in this browser, so it can't be sent.",
+    es: "Esta foto no se puede leer en este navegador, así que no se puede mandar.",
+  },
+  'assistant.caption.noVision': {
+    en: "This model can't look at photos. Choose another one in the assistant settings.",
+    es: "Este modelo no puede mirar fotos. Elegí otro en los ajustes del asistente.",
+  },
   'assistant.summarize': { en: "Summarize page", es: "Resumir la página" },
   'assistant.translatePage': { en: "Translate page", es: "Traducir la página" },
   'assistant.pageLanguage': { en: "Language of the translated page", es: "Idioma de la página traducida" },
@@ -477,6 +528,68 @@ export const assistant = {
     en: "Your key is encrypted on this device with your passphrase. {workspace} stores only the encrypted copy and can't read it.",
     es: "Tu clave se cifra en este dispositivo con tu frase. {workspace} guarda solo la copia cifrada y no la puede leer.",
   },
+  // S2 (Doc_Clave_Sincronizada.md, sección 9)
+  'assistant.sync.change': { en: "Change passphrase…", es: "Cambiar la frase…" },
+  'assistant.sync.changeText': {
+    en: "Your synced key stays the same; only the passphrase changes. Your other devices will ask for the new one.",
+    es: "Tu clave sincronizada sigue igual; solo cambia la frase. Tus otros dispositivos te van a pedir la nueva.",
+  },
+  'assistant.sync.changeButton': { en: "Change passphrase", es: "Cambiar la frase" },
+  'assistant.sync.passphraseChanged': {
+    en: "Your passphrase was changed. Use the new one on your other devices.",
+    es: "Se cambió tu frase. Usá la nueva en tus otros dispositivos.",
+  },
+  'assistant.sync.keepHere': { en: "Keep the key on this device", es: "Guardar la clave en este dispositivo" },
+  'assistant.sync.keepHereTip': {
+    en: "Off on a borrowed computer: the key lives only in this tab.",
+    es: "Destildala en una computadora prestada: la clave vive solo en esta pestaña.",
+  },
+  'assistant.sync.tabOnly': {
+    en: "This key is only in this tab. If you reload, you'll need your passphrase again.",
+    es: "Esta clave está solo en esta pestaña. Si recargás, vas a necesitar tu frase de nuevo.",
+  },
+  'assistant.sync.older': {
+    en: "This synced copy is older than the one on this device.",
+    es: "Esta copia sincronizada es más vieja que la de este dispositivo.",
+  },
+  'assistant.sync.alsoSync': { en: "Also sync in this workspace…", es: "Sincronizar también en este workspace…" },
+  'assistant.sync.alsoText': {
+    en: "Enter the passphrase you use in {other}, twice. {workspace} gets its own encrypted copy.",
+    es: "Escribí dos veces la frase que usás en {other}. {workspace} recibe su propia copia cifrada.",
+  },
+  'assistant.sync.alsoButton': { en: "Sync here too", es: "Sincronizar también acá" },
+  'assistant.sync.useNewPassphrase': { en: "Use a new passphrase instead", es: "Usar una frase nueva" },
+  'assistant.sync.voiceUnlocked': {
+    en: "Voice: {provider} key ending in …{end}.",
+    es: "Voz: clave de {provider} que termina en …{end}.",
+  },
+  'assistant.sync.voiceUnlockedAt': {
+    en: "Voice: {provider} at {host}, key ending in …{end}.",
+    es: "Voz: {provider} en {host}, clave que termina en …{end}.",
+  },
+  'assistant.sync.askVoice': {
+    en: "Your synced voice key now goes to {host}. Use it?",
+    es: "Tu clave de voz sincronizada ahora va a {host}. ¿La usás?",
+  },
+  'assistant.sync.askVoiceReplace': {
+    en: "Replace the voice key on this device (…{local}) with the synced one (…{synced})?",
+    es: "¿Reemplazar la clave de voz de este dispositivo (…{local}) por la sincronizada (…{synced})?",
+  },
+  'assistant.sync.stopTextTab': {
+    en: "Delete the synced copy from {workspace}? Your key is only in this tab: after you reload, it won't be on this computer.",
+    es: "¿Borrar la copia sincronizada de {workspace}? Tu clave está solo en esta pestaña: al recargar, no va a estar en esta computadora.",
+  },
+  'assistant.sync.stoppedTab': {
+    en: "The synced copy was deleted. Your key is only in this tab until you reload.",
+    es: "Se borró la copia sincronizada. Tu clave está solo en esta pestaña hasta que recargues.",
+  },
+  'assistant.sync.forgotTabKeepsSaved': {
+    en: "Forgot the key in this tab. The key saved on this device before stays.",
+    es: "Se olvidó la clave de esta pestaña. La que este dispositivo tenía guardada de antes queda.",
+  },
+  'assistant.sync.keepMyVoice': { en: "Keep my voice key", es: "Seguir con mi clave de voz" },
+  'assistant.sync.keptVoice': { en: "Your current voice key stays on this device.", es: "Tu clave de voz de ahora queda en este dispositivo." },
+  'assistant.sync.updateHere': { en: "Enter your passphrase to update it here", es: "Escribir tu frase para actualizarla acá" },
 } satisfies Dict;
 
 // Se suma al diccionario cuando se carga la parte que lo usa (viaja con ella, no en la primera carga).

@@ -1,4 +1,5 @@
-import type * as Y from 'yjs';
+import * as Y from 'yjs';
+import { CONTENT_FRAGMENT } from '../sync/structure';
 
 // Deshacer en el orden en que editaste (P.26, entrega 1; Docs/Doc_Deshacer.md, sección 3).
 //
@@ -21,6 +22,12 @@ import type * as Y from 'yjs';
 // versión, el título recién creado desde una plantilla) no rompe nada: la línea de tiempo escucha los eventos de esa
 // pila (`stack-item-added`, `-updated`, `-popped`), y lo que hagan queda en el orden. Nada de esto se guarda: dura lo
 // que la pestaña (DH4).
+//
+// **El reemplazo del proyecto** (entrega 2, 3.3) es UNA entrada de la línea de tiempo. En las páginas con historia en la
+// sesión (las que están acá), lo que escribe entra además como un paso de la pila de Yjs de esa página (el del editor si
+// está en pantalla, o uno de un momento con las mismas opciones), así deshacerlo vuelve a poner las mismas letras y lo
+// escrito antes sale exacto. En las demás, quien reemplaza usa las anclas de su registro. El orden lo da `seq` de la
+// entrada; sus pasos en las pilas quedan marcados (`tagged`) y no cuentan como pasos de página.
 
 type StackItem = Y.UndoManager['undoStack'][number];
 type UndoManager = Y.UndoManager;
@@ -89,7 +96,31 @@ interface LostMark {
 
 export type LostReason = 'reloaded' | 'limit';
 
-export type NextStep = { kind: 'page'; pageId: string } | { kind: 'lost'; pageId: string; reason: LostReason } | null;
+export type NextStep =
+  | { kind: 'page'; pageId: string }
+  | { kind: 'replace'; opId: string }
+  | { kind: 'lost'; pageId: string; reason: LostReason }
+  | null;
+
+/** Un reemplazo del proyecto en la línea de tiempo (entrega 2; Doc_Deshacer.md, 3.3). */
+interface ReplaceEntry {
+  opId: string;
+  project: string | null;
+  /** `pending`: se está escribiendo; `undo` / `redo`: en qué lista está. */
+  where: 'pending' | StepKind;
+  seq: number;
+  /** Por página con historia, su paso en la pila de Yjs de esa página (en la lista de `where`). */
+  items: Map<string, StackItem>;
+  /** Las páginas que se deshicieron (las que vuelve a escribir rehacer). */
+  pages: string[];
+  /** Lo que guarda quien reemplaza (el encabezado y los cambios de cada página): para rehacer y para el aviso. */
+  saved: unknown;
+  /** Cuántas veces hubo algo nuevo cuando empezó a deshacerse (`markReplace`). */
+  mark: number;
+}
+
+/** Cómo quedó deshacer o rehacer el paso de un reemplazo en una página; `none`: no tiene paso ahí (van las anclas). */
+export type ReplacePop = 'done' | 'nothing' | 'failed' | 'none';
 
 /**
  * - `done`: deshizo (o rehízo) algo;
@@ -128,6 +159,13 @@ export class UndoTimeline {
   private readonly order = new WeakMap<StackItem, number>();
   private counter = 0;
   private lost: LostMark[] = [];
+  private readonly replaces = new Map<string, ReplaceEntry>();
+  /** Cuántas veces hubo algo nuevo (escribir, reemplazar) en esta pestaña: lo que borra lo de rehacer. */
+  private newEdits = 0;
+  /** El filtro de borrado del `UndoManager` de y-prosemirror, del primer editor que se anotó (para `tempManager`). */
+  private editorFilter: UndoManager['deleteFilter'] | null = null;
+  /** Los pasos de las pilas que son de un reemplazo (no cuentan como pasos de su página). */
+  private readonly tagged = new WeakMap<StackItem, ReplaceEntry>();
   private readonly maxPages: number;
   private readonly maxSteps: number;
   private readonly offUnsupported: () => void;
@@ -184,6 +222,9 @@ export class UndoTimeline {
     h.um = um;
     h.info = info;
     cleanMeta([...um.undoStack, ...um.redoStack], info.binding ?? null);
+    // El filtro de borrado de y-prosemirror (sin envolver): el `UndoManager` de un momento del reemplazo usa el mismo.
+    // Se toma del editor y no se importa y-prosemirror acá: este archivo va en la primera carga (firstLoad.test.ts).
+    if (!isProtected(um)) this.editorFilter = um.deleteFilter;
     protectOthers(um);
     const page = h;
     const onAdded = (e: StackEvent) => this.onStackItem(page, um, e, true);
@@ -267,12 +308,18 @@ export class UndoTimeline {
       if (this.projectOfHistory(h) !== project) continue;
       const stack = this.stack(h, kind);
       const top = stack[stack.length - 1];
-      if (!top) continue;
+      // Arriba está el paso de un reemplazo: lo ofrece su entrada (lo de abajo es de antes).
+      if (!top || this.tagged.has(top)) continue;
       const seq = this.order.get(top) ?? 0;
       if (seq > bestSeq) {
         bestSeq = seq;
         best = { kind: 'page', pageId: h.pageId };
       }
+    }
+    for (const entry of this.replaces.values()) {
+      if (entry.where !== kind || entry.project !== project || entry.seq <= bestSeq) continue;
+      bestSeq = entry.seq;
+      best = { kind: 'replace', opId: entry.opId };
     }
     if (kind === 'undo') {
       for (const mark of this.lost) {
@@ -348,6 +395,7 @@ export class UndoTimeline {
   forget(pageId: string): void {
     const h = this.pages.get(pageId);
     if (!h) return;
+    this.forgetReplaceItems(pageId);
     if (h.um) {
       h.um.undoStack.length = 0;
       h.um.redoStack.length = 0;
@@ -359,12 +407,260 @@ export class UndoTimeline {
   dispose(): void {
     if (this.disposed) return;
     for (const h of [...this.pages.values()]) this.drop(h, false);
+    this.replaces.clear();
     this.lost = [];
     this.offUnsupported();
     this.disposed = true;
   }
 
+  // --- El reemplazo del proyecto (entrega 2; Doc_Deshacer.md, 3.3) ----------------------------------------------
+  //
+  // Quien reemplaza (search/projectReplace.ts, `ReplaceHistory`) avisa cuándo empieza, escribe cada página por acá,
+  // avisa cuándo termina, y para deshacer y rehacer pide el paso de cada página (`popReplace`) y después dónde quedó
+  // (`settleReplace`). Lo que no tiene paso en una pila va por las anclas de su registro, que maneja quien reemplaza.
+
+  /** Empieza a escribir un reemplazo: es algo nuevo, así que lo que había para rehacer en el proyecto se borra. */
+  beginReplace(opId: string, project: string): void {
+    if (this.disposed || this.replaces.has(opId)) return;
+    this.clearRedoExcept(null, project);
+    this.replaces.set(opId, { opId, project, where: 'pending', seq: 0, items: new Map(), pages: [], saved: null, mark: 0 });
+  }
+
+  /**
+   * Escribe el reemplazo en una página: corre `write` (una sola vez, con el origen `origin`) y, si la página tiene
+   * historia en la sesión, lo que escribe entra como un paso propio de su pila de Yjs (cortado antes y después: si no,
+   * se pega a lo escrito medio segundo antes). Devuelve si entró en la pila.
+   */
+  writeReplace(pageId: string, doc: Y.Doc, opId: string, origin: symbol, write: () => void, as: 'new' | StepKind = 'new'): boolean {
+    const entry = this.replaces.get(opId);
+    const h = this.pages.get(pageId);
+    // Sin editor en pantalla hace falta el filtro de un editor (siempre lo hay: los pasos de página salen de un editor).
+    if (!entry || entry.where !== (as === 'new' ? 'pending' : as) || !h || h.doc !== doc || (!h.um && !this.editorFilter)) {
+      write();
+      return false;
+    }
+    // `undo` / `redo`: quien reemplaza deshace (o rehace) esta página por las anclas, en orden, y la página ahora tiene
+    // historia. Lo que escribe entra en la pila como lo contrario (para rehacer, o para deshacer otra vez), igual que un
+    // deshacer de Yjs: así lo que se rehaga después alrededor sigue a estas letras y no a las de antes (las anclas
+    // escriben letras nuevas). Sin borrar nada para rehacer (Yjs no borra con `undoing` / `redoing`).
+    const temp = !h.um;
+    const um = h.um ?? tempManager(doc, this.editorFilter!);
+    const target = () => (as === 'undo' ? um.redoStack : um.undoStack);
+    const before = target().length;
+    um.stopCapturing();
+    um.trackedOrigins.add(origin);
+    if (as === 'undo') um.undoing = true;
+    if (as === 'redo') um.redoing = true;
+    try {
+      write();
+    } finally {
+      um.undoing = false;
+      um.redoing = false;
+      um.trackedOrigins.delete(origin);
+      um.stopCapturing();
+    }
+    const stack = target();
+    const item = stack.length > before ? stack[stack.length - 1] : null;
+    if (temp) {
+      um.undoStack = [];
+      um.redoStack = [];
+      um.destroy();
+      if (item) {
+        if (as === 'undo') h.redo.push(item);
+        else h.undo.push(item);
+        if (as === 'new') {
+          // Algo nuevo en esta página: lo de rehacer de acá se va (en las demás lo borró `beginReplace`).
+          h.redo = [];
+          this.order.set(item, ++this.counter);
+        }
+        this.retain(h);
+      }
+    }
+    if (!item) return false;
+    this.tagged.set(item, entry);
+    entry.items.set(pageId, item);
+    if (as !== 'new') this.order.set(item, entry.seq);
+    return true;
+  }
+
+  /** Terminó de escribir: entra en la línea de tiempo como un paso (sin nada escrito, `saved` es `null` y se va). */
+  endReplace(opId: string, saved: unknown): void {
+    const entry = this.replaces.get(opId);
+    if (!entry || entry.where !== 'pending') return;
+    if (saved === null || saved === undefined) {
+      this.discard(entry);
+      return;
+    }
+    entry.saved = saved;
+    this.place(entry, 'undo', []);
+    this.enforceLimits();
+  }
+
+  /**
+   * Deshace (o rehace) el paso del reemplazo en esa página, aunque no sea el de arriba de su pila (fuera de orden: se
+   * saca ese solo y los de arriba vuelven a su lugar). `keep`: lo contrario queda para rehacer (o deshacer); si no
+   * (el *Undo* del panel cuando el reemplazo ya no es lo último, DH10), se descarta.
+   */
+  popReplace(pageId: string, doc: Y.Doc, opId: string, kind: StepKind, keep: boolean): ReplacePop {
+    const entry = this.replaces.get(opId);
+    const h = this.pages.get(pageId);
+    const item = entry?.items.get(pageId);
+    if (!entry || !h || h.doc !== doc || !item || (!h.um && !this.editorFilter)) return 'none';
+    const list = this.stack(h, kind);
+    const at = list.indexOf(item);
+    if (at < 0) {
+      entry.items.delete(pageId);
+      return 'none';
+    }
+    entry.items.delete(pageId);
+    this.tagged.delete(item);
+    let result: StackItem | null = null;
+    let failed = false;
+    let inverse: StackItem | null = null;
+    if (h.um) {
+      const um = h.um;
+      const own = kind === 'undo' ? um.undoStack : um.redoStack;
+      const above = own.splice(at + 1);
+      const below = own.splice(0, at);
+      const otherBefore = (kind === 'undo' ? um.redoStack : um.undoStack).length;
+      try {
+        result = kind === 'undo' ? um.undo() : um.redo();
+      } catch (err) {
+        console.warn('Deshacer: Yjs no pudo deshacer un reemplazo en una página; se descarta.', err);
+        failed = true;
+      } finally {
+        const now = kind === 'undo' ? um.undoStack : um.redoStack;
+        // Yjs no reemplaza la lista que está sacando: queda vacía (o con el paso, si tiró antes de sacarlo).
+        now.splice(0, now.length, ...below, ...above);
+        um.stopCapturing();
+      }
+      const other = kind === 'undo' ? um.redoStack : um.undoStack;
+      if (other.length > otherBefore) {
+        inverse = other[other.length - 1];
+        // Fuera de orden (o si Yjs tiró): lo contrario no queda en ninguna lista.
+        if (!keep || failed) other.pop();
+      }
+    } else {
+      const um = tempManager(h.doc, this.editorFilter!);
+      list.splice(at, 1);
+      if (kind === 'undo') um.undoStack = [item];
+      else um.redoStack = [item];
+      try {
+        result = kind === 'undo' ? um.undo() : um.redo();
+      } catch (err) {
+        console.warn('Deshacer: Yjs no pudo deshacer un reemplazo en una página; se descarta.', err);
+        failed = true;
+      }
+      inverse = (kind === 'undo' ? um.redoStack : um.undoStack)[0] ?? null;
+      um.undoStack = [];
+      um.redoStack = [];
+      um.destroy();
+      if (inverse && keep && !failed) (kind === 'undo' ? h.redo : h.undo).push(inverse);
+    }
+    if (inverse && keep && !failed) {
+      this.tagged.set(inverse, entry);
+      entry.items.set(pageId, inverse);
+      this.order.set(inverse, entry.seq);
+    }
+    if (!h.um && this.size(h) === 0) this.drop(h, false);
+    if (failed) return 'failed';
+    return result ? 'done' : 'nothing';
+  }
+
+  /**
+   * Terminó de deshacer (o rehacer) el reemplazo. Con `keep` (⌘Z en orden, o el *Undo* que es lo último), pasa a la otra
+   * lista con las páginas hechas (`pages`); sin nada hecho, o sin `keep`, sale de la línea de tiempo. Lo que quedó de
+   * él en la lista de donde venía (páginas que no se pudieron) sale de la pila: queda para *Undo the rest* del panel.
+   */
+  settleReplace(opId: string, kind: StepKind, pages: string[], keep: boolean): void {
+    const entry = this.replaces.get(opId);
+    if (!entry || entry.where === 'pending') return;
+    // Si mientras se deshacía se escribió algo nuevo (auditoría de la entrega 2, O4), ya no queda para rehacer: algo
+    // nuevo borra lo de rehacer, también lo que se estaba deshaciendo.
+    if (kind === 'undo' && entry.mark !== this.newEdits) keep = false;
+    for (const [pageId, item] of [...entry.items]) {
+      const h = this.pages.get(pageId);
+      const from = h ? this.stack(h, kind) : null;
+      const at = from ? from.indexOf(item) : -1;
+      if (at < 0) continue;
+      from!.splice(at, 1);
+      entry.items.delete(pageId);
+      this.tagged.delete(item);
+      if (h && !h.um && this.size(h) === 0) this.drop(h, false);
+    }
+    if (!keep || pages.length === 0) {
+      this.discard(entry);
+      return;
+    }
+    this.place(entry, kind === 'undo' ? 'redo' : 'undo', pages);
+  }
+
+  /** Empieza a deshacer (o rehacer) el reemplazo: anota cuántas veces hubo algo nuevo hasta ahora (ver `settleReplace`). */
+  markReplace(opId: string): void {
+    const entry = this.replaces.get(opId);
+    if (entry) entry.mark = this.newEdits;
+  }
+
+  /** Si el próximo ⌘Z (o ⌘⇧Z) de su proyecto es este reemplazo. */
+  replaceIsNext(opId: string, kind: StepKind): boolean {
+    const entry = this.replaces.get(opId);
+    if (!entry || entry.where !== kind) return false;
+    const next = this.peek(entry.project, kind);
+    return next?.kind === 'replace' && next.opId === opId;
+  }
+
+  /** Lo que guardó quien reemplaza (`endReplace`), o `null` si el reemplazo no está en la línea de tiempo. */
+  replaceSaved(opId: string): unknown {
+    return this.replaces.get(opId)?.saved ?? null;
+  }
+
+  /** Las páginas que se deshicieron (las que vuelve a escribir rehacer). */
+  replacePages(opId: string): string[] {
+    return [...(this.replaces.get(opId)?.pages ?? [])];
+  }
+
+  /** En qué lista está un reemplazo (para las pruebas). */
+  replaceState(opId: string): 'pending' | StepKind | null {
+    return this.replaces.get(opId)?.where ?? null;
+  }
+
   // --- Por dentro ---------------------------------------------------------------------------------------------
+
+  /** Pone el reemplazo arriba de una lista (el más nuevo); sus pasos en las pilas toman su número. */
+  private place(entry: ReplaceEntry, where: StepKind, pages: string[]): void {
+    entry.where = where;
+    entry.seq = ++this.counter;
+    entry.pages = pages;
+    for (const item of entry.items.values()) this.order.set(item, entry.seq);
+  }
+
+  /** Saca el reemplazo de la línea de tiempo, con sus pasos de las pilas. */
+  private discard(entry: ReplaceEntry): void {
+    if (this.replaces.get(entry.opId) !== entry) return;
+    this.replaces.delete(entry.opId);
+    for (const [pageId, item] of [...entry.items]) {
+      this.tagged.delete(item);
+      const h = this.pages.get(pageId);
+      if (!h) continue;
+      for (const kind of ['undo', 'redo'] as const) {
+        const list = this.stack(h, kind);
+        const at = list.indexOf(item);
+        if (at >= 0) list.splice(at, 1);
+      }
+      if (!h.um && this.size(h) === 0) this.drop(h, false);
+    }
+    entry.items.clear();
+  }
+
+  /** La página ya no está en la línea de tiempo (o se olvidaron sus pasos): los reemplazos van por las anclas ahí. */
+  private forgetReplaceItems(pageId: string): void {
+    for (const entry of this.replaces.values()) {
+      const item = entry.items.get(pageId);
+      if (!item) continue;
+      entry.items.delete(pageId);
+      this.tagged.delete(item);
+    }
+  }
 
   private projectOfHistory(h: PageHistory): string | null {
     return this.options.projectOf(h.pageId) ?? h.project;
@@ -392,8 +688,10 @@ export class UndoTimeline {
     }
   }
 
-  private clearRedoExcept(h: PageHistory): void {
-    const project = this.projectOfHistory(h);
+  private clearRedoExcept(h: PageHistory | null, project = h ? this.projectOfHistory(h) : null): void {
+    this.newEdits++;
+    // Los reemplazos para rehacer también (sus pasos en las pilas se van con ellas).
+    for (const entry of [...this.replaces.values()]) if (entry.where === 'redo' && entry.project === project) this.discard(entry);
     for (const other of [...this.pages.values()]) {
       if (other === h || this.projectOfHistory(other) !== project) continue;
       if (other.um) other.um.redoStack.length = 0;
@@ -454,6 +752,8 @@ export class UndoTimeline {
   private drop(h: PageHistory, lost: boolean): void {
     if (this.pages.get(h.pageId) !== h) return;
     this.pages.delete(h.pageId);
+    // Los reemplazos que tenían un paso acá siguen; en esta página van por las anclas.
+    this.forgetReplaceItems(h.pageId);
     if (lost) {
       const seq = Math.max(-1, ...this.stack(h, 'undo').map((i) => this.order.get(i) ?? 0));
       if (seq >= 0) {
@@ -474,25 +774,48 @@ export class UndoTimeline {
     this.release(h);
   }
 
-  /** Topes: pasos en total y páginas con pasos. Lo más viejo se olvida. */
+  /** Topes: pasos en total y páginas con pasos. Lo más viejo se olvida (un reemplazo, entero). */
   private enforceLimits(): void {
-    let total = 0;
-    for (const h of this.pages.values()) total += this.size(h);
-    while (total > this.maxSteps) {
-      // El paso más viejo es el de abajo de alguna lista.
+    const total = () => {
+      let n = 0;
+      for (const h of this.pages.values()) n += this.size(h);
+      for (const entry of this.replaces.values()) if (entry.where !== 'pending') n++;
+      return n;
+    };
+    for (let left = total(), guard = 0; left > this.maxSteps && guard < 100_000; left = total(), guard++) {
+      // El paso más viejo es el de abajo de alguna lista, o un reemplazo.
       let oldest: { h: PageHistory; kind: StepKind; seq: number } | null = null;
+      let oldestEntry: ReplaceEntry | null = null;
+      let oldestSeq = Infinity;
       for (const h of this.pages.values()) {
         for (const kind of ['undo', 'redo'] as const) {
           const first = this.stack(h, kind)[0];
           if (!first) continue;
           const seq = this.order.get(first) ?? 0;
-          if (!oldest || seq < oldest.seq) oldest = { h, kind, seq };
+          if (seq < oldestSeq) {
+            oldestSeq = seq;
+            oldest = { h, kind, seq };
+            oldestEntry = this.tagged.get(first) ?? null;
+          }
         }
+      }
+      for (const entry of this.replaces.values()) {
+        if (entry.where !== 'pending' && entry.seq < oldestSeq) {
+          oldestSeq = entry.seq;
+          oldest = null;
+          oldestEntry = entry;
+        }
+      }
+      if (oldestEntry) {
+        // Un reemplazo a medio escribir no se olvida (se cuenta al terminar).
+        if (oldestEntry.where === 'pending') break;
+        if (oldestEntry.where === 'undo') this.markLimitIn(oldestEntry.project, oldestEntry.seq);
+        this.discard(oldestEntry);
+        continue;
       }
       if (!oldest) break;
       if (oldest.kind === 'undo') this.markLimit(oldest.h, oldest.seq);
       this.stack(oldest.h, oldest.kind).shift();
-      total--;
       if (!oldest.h.um && this.size(oldest.h) === 0) this.drop(oldest.h, false);
     }
     const withSteps = [...this.pages.values()].filter((h) => this.size(h) > 0);
@@ -512,7 +835,10 @@ export class UndoTimeline {
 
   /** Lo que olvida el tope se avisa cuando ⌘Z llega ahí (auditoría de la entrega 1, O3): una marca por proyecto. */
   private markLimit(h: PageHistory, seq: number): void {
-    const project = this.projectOfHistory(h);
+    this.markLimitIn(this.projectOfHistory(h), seq);
+  }
+
+  private markLimitIn(project: string | null, seq: number): void {
     const prev = this.lost.find((m) => m.reason === 'limit' && m.project === project);
     if (prev) prev.seq = Math.max(prev.seq, seq);
     else this.lost.push({ pageId: '', project, seq, reason: 'limit' });
@@ -548,7 +874,25 @@ export function hasOthersInside(item: ItemLike, client = item.id.client): boolea
   return false;
 }
 
+/**
+ * Un `UndoManager` de un momento sobre el contenido de una página sin editor en pantalla (escribir, deshacer o rehacer
+ * el paso de un reemplazo), con las mismas opciones que el de y-prosemirror: su filtro de borrado (protege los párrafos
+ * y la marca de huecos estables; la línea de tiempo lo toma del editor), lo de fondo afuera, y lo ajeno protegido como
+ * en el del editor (B1). Riesgo 2 del diseño: una prueba lo compara con el del editor.
+ */
+export function tempManager(doc: Y.Doc, deleteFilter: UndoManager['deleteFilter']): UndoManager {
+  const um = new Y.UndoManager(doc.getXmlFragment(CONTENT_FRAGMENT), {
+    trackedOrigins: new Set(),
+    deleteFilter,
+    captureTransaction: (tr) => tr.meta.get('addToHistory') !== false,
+  });
+  protectOthers(um);
+  return um;
+}
+
 const protectedManagers = new WeakSet<UndoManager>();
+
+const isProtected = (um: UndoManager) => protectedManagers.has(um);
 
 /** Envuelve el filtro de borrado del `UndoManager` (una vez): lo de siempre y, además, nada con lo de otro adentro. */
 function protectOthers(um: UndoManager): void {

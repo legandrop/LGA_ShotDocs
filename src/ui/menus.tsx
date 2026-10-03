@@ -53,6 +53,7 @@ import { openInstallDialog, useInstallState } from './install';
 import { shortcutLabel } from './shortcuts';
 import { askSignOut, askSignOutOthers, openAssistantSettings } from '../assistant/assistantUi';
 import { hasAssistantKey } from '../assistant/keyStore';
+import { voiceLeftovers } from '../dictation/leftovers';
 
 /**
  * Comportamiento común de menús y paneles flotantes: se cierran con Escape o tocando afuera (tocar el
@@ -495,10 +496,13 @@ export function AccountMenu({
     ) {
       return;
     }
-    // Con una clave del asistente guardada en este dispositivo, la ventana de salir ofrece olvidarla (Doc_Asistente.md, 4).
-    if (await hasAssistantKey(user.email)) {
+    // Con una clave del asistente o de *Voice* guardada en este dispositivo, la ventana de salir ofrece olvidarla
+    // (Doc_Asistente.md, 4); con notas de voz sin ubicar, las cuenta y ofrece borrarlas (Doc_Dictado.md, 8).
+    const wsKey = workspace.config.localKey || workspace.config.url;
+    const left = await voiceLeftovers(user.email, wsKey).catch(() => ({ notes: 0, voiceKey: false }));
+    if ((await hasAssistantKey(user.email)) || left.notes > 0 || left.voiceKey) {
       onClose();
-      askSignOut(user.email, () => client.auth.signOut({ scope: 'local' }));
+      askSignOut(user.email, () => client.auth.signOut({ scope: 'local' }), wsKey);
       return;
     }
     await client.auth.signOut({ scope: 'local' });

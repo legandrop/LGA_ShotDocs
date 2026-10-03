@@ -129,6 +129,10 @@ export const media = {
   'folder.card': { en: "Google Drive folder", es: "Carpeta de Google Drive" },
   'folder.cardStopped': { en: "Stopped: {done} of {total} (open it to retry)", es: "Detenida: {done} de {total} (abrila para reintentar)" },
   'folder.rate': { en: "Google Drive asked to slow down.", es: "Google Drive pidió ir más despacio." },
+  'folder.serverStalled': {
+    en: "The media server is not answering; it will try again shortly.",
+    es: "El servidor de archivos no contesta; se vuelve a probar en un rato.",
+  },
   'folder.notCreator': {
     en: "Only the person who added this folder can upload into it.",
     es: "Solo quien agregó esta carpeta puede subir adentro.",

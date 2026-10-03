@@ -11,10 +11,39 @@ export const shell = {
   'replace.bar': { en: "Replacing… {done} of {total} pages", es: "Reemplazando… {done} de {total} páginas" },
   'replace.barUndo': { en: "Undoing… {done} of {total} pages", es: "Deshaciendo… {done} de {total} páginas" },
   'replace.barStop': { en: "Stop", es: "Parar" },
+  'replace.barRedo': { en: "Redoing… {done} of {total} pages", es: "Rehaciendo… {done} de {total} páginas" },
+  // Lo que dice deshacer un reemplazo (también con ⌘Z, sin el panel cargado).
+  'replace.undone': {
+    en: { one: "Undid {count} replacement", other: "Undid {count} replacements" },
+    es: { one: "Se deshizo {count} reemplazo", other: "Se deshicieron {count} reemplazos" },
+  },
+  'replace.undoChanged': {
+    en: { one: "{count} had changed and was left as is", other: "{count} had changed and were left as they are" },
+    es: { one: "{count} había cambiado y quedó como estaba", other: "{count} habían cambiado y quedaron como estaban" },
+  },
+  'replace.undoRemaining': {
+    en: { one: "{count} page couldn't be undone now", other: "{count} pages couldn't be undone now" },
+    es: { one: "{count} página no se pudo deshacer ahora", other: "{count} páginas no se pudieron deshacer ahora" },
+  },
+  'replace.unsaved': {
+    en: "Couldn't save on this device: replacing stopped",
+    es: "No se pudo guardar en este dispositivo: se paró el reemplazo",
+  },
   // Deshacer en el orden en que editaste (P.26, Docs/Doc_Deshacer.md, sección 8): los avisos de ⌘Z y ⌘⇧Z.
   'undo.doneIn': { en: "Undone in “{page}”", es: "Deshecho en “{page}”" },
   'undo.redoneIn': { en: "Redone in “{page}”", es: "Rehecho en “{page}”" },
   'undo.back': { en: "Back", es: "Volver" },
+  // El reemplazo del proyecto en la línea de tiempo (entrega 2).
+  'undo.replaceUndone': { en: "Undid {what} in {pages}", es: "Se deshizo {what} en {pages}" },
+  'undo.replaceRedone': { en: "Redid {what} in {pages}", es: "Se rehízo {what} en {pages}" },
+  'undo.replaceWhat': { en: "“{from}” → “{to}”", es: "“{from}” → “{to}”" },
+  'undo.replaceWhatDelete': { en: "deleting “{from}”", es: "el borrado de “{from}”" },
+  'undo.pages': {
+    en: { one: "{count} page", other: "{count} pages" },
+    es: { one: "{count} página", other: "{count} páginas" },
+  },
+  'undo.redoAction': { en: "Redo", es: "Rehacer" },
+  'undo.undoAction': { en: "Undo", es: "Deshacer" },
   'undo.nothingThere': {
     en: "Nothing to undo there: someone else already changed it. {undo} again for the previous change.",
     es: "No hay nada para deshacer ahí: otra persona ya lo cambió. {undo} otra vez para el cambio anterior.",

@@ -12,7 +12,8 @@ import { useCurrentProject, useSwitchProject } from './project';
 import { Monogram } from './ProjectSwitcher';
 import { ReplaceResults } from './ProjectReplace';
 import { searchSession, type ResultRequest } from './projectSearchUi';
-import { useReplaceSession } from './replaceUi';
+import { redoReplace, undoReplace, useReplaceSession } from './replaceUi';
+import { isRedoShortcut, isUndoShortcut } from './undoTimelineUi';
 
 // El panel de buscar en el proyecto (Docs/Doc_Buscar.md, secciones 7 y 8, y "Cómo quedó (entrega 2)"). Se abre
 // con la lupa de la barra lateral o con Ctrl/⌘+K; en la computadora es una ventana arriba al centro y en el
@@ -242,9 +243,18 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
     }
   };
 
-  // En todo el panel: Esc cierra (con el foco donde sea) y Tab no sale del panel (es modal).
+  // En todo el panel: Esc cierra (con el foco donde sea) y Tab no sale del panel (es modal). Recién reemplazado, y hasta
+  // que se escriba en un campo del panel, ⌘Z deshace el reemplazo y ⌘⇧Z lo rehace (DH9, Docs/Doc_Deshacer.md).
   const onPanelKey = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+    const undoKind = isUndoShortcut(e) ? 'undo' : isRedoShortcut(e) ? 'redo' : null;
+    const armed = undoKind ? replace.armedFor(undoKind) : null;
+    if (undoKind && armed) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!e.repeat && !replace.engine.isRunning()) void (undoKind === 'undo' ? undoReplace(replace, armed) : redoReplace(replace, armed));
+      return;
+    }
     if (e.key === 'Escape') {
       e.preventDefault();
       onClose();
@@ -325,7 +335,11 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
             autoComplete="off"
             spellCheck={false}
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              // Escribir en el campo: ⌘Z vuelve a ser del campo (DH9).
+              replace.disarm();
+              setQuery(e.target.value);
+            }}
             onKeyDown={onInputKey}
           />
           <button className="icon-button search-close" aria-label={tr('common.close')} onClick={onClose}>

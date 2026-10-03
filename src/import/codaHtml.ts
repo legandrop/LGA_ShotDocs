@@ -668,7 +668,7 @@ function inlinePhotos(content: Inline[], photoOf: (index: number) => InlinePhoto
   if (!found) return content;
   const isPhoto = (i: Inline | undefined) => i?.type === 'photo';
   const out = items
-    .map((i) => (i.type === 'text' && i.text ? { ...i, text: i.text.replace(/​/g, '') } : i))
+    .map((i) => (i.type === 'text' && i.text ? { ...i, text: i.text.replace(/\u200B/g, '') } : i))
     .map((i, k, all) => {
       if (i.type !== 'text' || i.text === undefined) return i;
       let text = i.text;

@@ -3,6 +3,7 @@ import type { EditorState } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { inlinePhotoRef } from '../assistant/photoRef';
 import { useT } from '../i18n';
 import '../i18n/lazy/editor';
 import { mediaIdOf } from '../media/queue';
@@ -24,6 +25,7 @@ import {
   ReplaceButton,
   SaveToRollButton,
   Sectors,
+  SuggestCaptionButton,
   useMediaActions,
   useMediaKind,
   ViewButton,
@@ -261,6 +263,7 @@ export function PhotoToolbar() {
               <DownloadButton url={choice.url} name={choice.name} />
               <SaveToRollButton url={choice.url} name={choice.name} />
               <AnnotateButton url={choice.url} name={choice.name} kind={kind} />
+              <SuggestCaptionButton kind={kind} photo={() => inlinePhotoRef(view.state.doc, choice.positions[0])} />
             </>
           ),
           <PhotoSizeButtons />,

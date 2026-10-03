@@ -88,7 +88,9 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'toggle', keys: ['Mod-Shift-6'], place: 'editor', owner: 'blocknote', source: 'keymap' },
   // Deshacer y rehacer en el orden en que editaste (P.26, Docs/Doc_Deshacer.md): los toma primero la app en `window`
   // (undoTimelineUi.ts), con el foco en el editor de la página o fuera de un campo de texto, y pueden llevarte a otra
-  // página. El atajo de BlockNote sigue en el editor para la página de práctica y las versiones del historial.
+  // página. Un reemplazo en todo el proyecto es un paso (entrega 2); recién reemplazado, también en el panel de buscar
+  // (ProjectSearch.tsx, DH9). El atajo de BlockNote sigue en el editor para la página de práctica y las versiones del
+  // historial.
   { id: 'undo', keys: ['Mod-z'], place: 'editor', owner: 'app', source: 'keymap' },
   { id: 'redo', keys: ['Mod-Shift-z', 'Mod-y'], place: 'editor', owner: 'app', source: 'keymap' },
   { id: 'indent', keys: ['Tab'], place: 'editor', owner: 'blocknote', source: 'keymap' },

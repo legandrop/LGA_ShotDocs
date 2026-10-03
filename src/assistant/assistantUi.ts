@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import type { EditorView } from '@tiptap/pm/view';
 import { IS_MAC, isLetter, modPressed } from '../ui/findUi';
+import type { PhotoRef } from './photoRef';
 
 // El asistente (Docs/Doc_Asistente.md, entrega A1): si el panel o los ajustes están abiertos, y el editor de la página
 // abierta, que se anota acá al montarse. Va en la primera carga y es chico: el panel, los ajustes y los proveedores se
@@ -12,12 +13,17 @@ interface AssistantUiState {
   /** La ventana de ajustes (proveedor, clave, modelo). */
   settings: boolean;
   /** Salir de la cuenta con una clave del asistente guardada: la ventana con la casilla de olvidarla. */
-  signOut: { email: string; run: () => Promise<unknown> } | null;
+  signOut: { email: string; workspace?: string; run: () => Promise<unknown> } | null;
   /** *Sign out other devices* (Docs/Doc_Clave_Sincronizada.md, S1): la confirmación, con el nombre del workspace. */
   signOutOthers: { workspace: string; run: () => Promise<{ error: unknown }> } | null;
+  /**
+   * *Suggest caption* pedido desde la barra de la foto (entrega A3): la foto, y un número que cambia en cada pedido (el
+   * mismo botón otra vez con el panel abierto vuelve a empezar).
+   */
+  caption: { ref: PhotoRef; n: number } | null;
 }
 
-let state: AssistantUiState = { pageId: null, settings: false, signOut: null, signOutOthers: null };
+let state: AssistantUiState = { pageId: null, settings: false, signOut: null, signOutOthers: null, caption: null };
 const listeners = new Set<() => void>();
 
 function set(next: Partial<AssistantUiState>): void {
@@ -43,7 +49,20 @@ export function openAssistant(): boolean {
 }
 
 export function closeAssistant(): void {
-  if (state.pageId !== null) set({ pageId: null });
+  if (state.pageId !== null || state.caption !== null) set({ pageId: null, caption: null });
+}
+
+/** *Suggest caption* de la barra de la foto (entrega A3): abre el panel con el pedido de esa foto. */
+export function openCaption(ref: PhotoRef): boolean {
+  const target = currentTarget();
+  if (!target) return false;
+  set({ pageId: target.pageId, caption: { ref, n: (state.caption?.n ?? 0) + 1 } });
+  return true;
+}
+
+/** El panel ya tomó el pedido de la barra (o lo descartó). */
+export function clearCaptionRequest(): void {
+  if (state.caption !== null) set({ caption: null });
 }
 
 export function assistantOpen(): boolean {
@@ -62,8 +81,8 @@ export function closeAssistantSettings(): void {
  * Salir con una clave guardada (Docs/Doc_Asistente.md, sección 4): la ventana de salir suma la casilla *Also forget my
  * assistant key on this device*, destildada. `run` sale de la cuenta.
  */
-export function askSignOut(email: string, run: () => Promise<unknown>): void {
-  set({ signOut: { email, run } });
+export function askSignOut(email: string, run: () => Promise<unknown>, workspace?: string): void {
+  set({ signOut: { email, workspace, run } });
 }
 
 export function closeSignOut(): void {

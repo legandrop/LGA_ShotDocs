@@ -355,6 +355,18 @@ export const REQUEST_TIMEOUT = 'request_timeout';
  */
 export const STALLS_TO_CLOSE_ROUND = 2;
 
+/** Lo más que se espera para volver a probar un servidor colgado para todos. */
+export const MAX_STALL_WAIT_MS = 10 * 60_000;
+
+/**
+ * Cuánto se espera para volver a probar después de cerrar la pasada `count` veces seguidas por un servidor colgado
+ * para todos: 10 s, 20 s, 40 s… hasta 10 minutos. La misma escala que la cola de archivos (`stallPause` en
+ * src/media/queue.ts); la usan las carpetas y las imágenes de `page-files`.
+ */
+export function stallWait(count: number): number {
+  return Math.min(10_000 * 2 ** Math.max(0, count - 1), MAX_STALL_WAIT_MS);
+}
+
 /** Una consulta que venció su tope (o se cortó): la red anda, pero muy lenta para lo que se pidió. */
 export function isTimeout(err: unknown): boolean {
   return err instanceof RemoteError && (err.code === REQUEST_TIMEOUT || /^(AbortError|TimeoutError)\b/.test(err.message));

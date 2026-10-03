@@ -297,6 +297,12 @@ verdad el registro de ese proyecto). Sin la variable, cualquier `test` responde 
 - **Apagarlos al terminar:** borrar la variable `TEST_MODES` (o dejarla vacía) y guardar. Como `keep_vars` está
   prendido, publicar el portero no la toca: hay que sacarla a mano.
 
+**El servidor MCP (prueba técnica M0, v0.145; `Doc_Asistente.md`, "Cómo quedó M0"):** `/mcp` y
+`/.well-known/oauth-protected-resource` atienden solo con la variable `MCP_M0=1` (texto) en el Worker; sin ella, esas
+rutas responden como cualquier otra sin sesión. `MCP_MAX_PAGE_KB` (opcional, de fábrica 16) es el tope de página que
+lee. Se prende y se apaga como `TEST_MODES`. **Siempre**, con o sin la variable: un token del servidor OAuth de Supabase
+(con `client_id`, el de un asistente conectado) en cualquier otra ruta responde `403 assistant_token`.
+
 La app manda partes de 8 MiB (`PART_BYTES` en `src/media/portero.ts`); el portero acepta hasta 64 MiB por
 parte (`MAX_CHUNK`) y rechaza la que no coincide con la subida. El permiso para subir se mira al abrir la
 subida, no en cada parte (una subida dura minutos); al terminar, la base lo vuelve a mirar en
@@ -406,9 +412,15 @@ contestó (`Doc_Sincronizacion.md`, "Cada consulta a la base tiene un tope de ti
   contesta después de un ciclo sin conexión) y con *Retry* (que se ve solo si hay algo detenido). Un plazo más
   largo que la espera más larga posible (el reloj del equipo saltó hacia atrás) se da por vencido. Vive en
   memoria: al recargar, se prueba de nuevo.
-- Lo que sigue sin cubrir: mientras la cola espera tampoco se registran archivos nuevos ni se suben sus miniaturas
-  (como sin conexión), y las carpetas (P.9) tienen su propia cola, que no cierra la vuelta: con el portero colgado,
-  cada archivo de una carpeta se traba hasta sus 5 intentos y queda con su error a la vista hasta *Retry*.
+- **Mientras la cola espera, se registra y se suben las miniaturas** (v0.142, `prepareWhilePaused`): lo que no le
+  pide nada al portero sigue. Los archivos todavía sin registrar se registran en la base y, si la espera no fue por
+  Storage (`stallPause.storage`: alguna de las trabadas que cerró la vuelta fue una miniatura), se suben sus
+  miniaturas; los otros dispositivos ya los ven, con su miniatura, y el original sale cuando el portero vuelve. Si una
+  miniatura se traba ahí, lo que queda solo se registra. Sin red o con la app vieja, se corta como siempre. Es el
+  mismo camino de `process` hasta antes de leer el original (`beforeOriginal`).
+- **Las carpetas (P.9) cierran la vuelta igual** (v0.142): una trabada no gasta intentos, después de una no se empieza
+  otro archivo hasta que los que están en curso terminen o se traben, y a la segunda la cola de la carpeta espera
+  (`stallWait`, la misma escala). Detalle en `Doc_Carpetas.md`, "Cómo quedó (entrega 3)".
 
 **Al retomar** siempre se le pregunta primero a la subida que quedó (`bytes */total`):
 
@@ -457,10 +469,14 @@ el que se colgaba era uno de esos, la cola esperaba igual que antes. Ahora tiene
 tamaño, y al vencer el archivo vuelve a la cola como una subida trabada. Detalle en
 `Doc_Sincronizacion.md`, "Cada consulta a la base tiene un tope de tiempo".
 
-**Lo que queda afuera** (anotado en `Doc_Roadmap.md`, B.11). Con el portero colgado para todos los
-archivos, la vuelta gasta un minuto en cada uno en vez de cortarse; con Storage colgado para todos pasa lo
-mismo con la miniatura (de 30 a 62 s por archivo en cada vuelta). Y el plazo que le sirvió a un archivo
-detrás de un proxy lento no se recuerda para el siguiente.
+**"Colgado para todos", entrega 3 (v0.142), probado en Chromium** con la cola real y el cliente del portero de
+verdad (partes por `XMLHttpRequest`) contra un portero local que recibe el pedido y no contesta (la base y las
+miniaturas, en memoria): con 4 fotos, la vuelta se cerró a los 120 s con 2 subidas abiertas, y las otras 2 quedaron
+registradas y con su miniatura, sin error; una foto nueva durante la espera se registró con su miniatura sin abrir
+ninguna subida; al volver el portero subieron las 5, una vez cada una.
+
+**Lo que queda afuera** (anotado en `Doc_Roadmap.md`, B.11): probarlo en Safari de iPhone y con una red lenta de
+verdad.
 
 ### Carpetas: nunca hacia arriba (P.9)
 
@@ -471,7 +487,11 @@ una subcarpeta nueva) se comprueba subiendo por sus `parents` hasta la carpeta d
 comprobado se recuerda 10 minutos en la memoria de la instancia, con una llave fija (`memoryKey` de `index.ts`;
 cada pedido crea su propio stub del Durable Object, que en Cloudflare queda atado al pedido que lo creó). La
 subcarpeta que se pide listar se vuelve a mirar en Drive siempre: una que el dueño mandó a la papelera o movió afuera
-deja de listarse en el acto; lo que está adentro de ella, a más tardar a los 10 minutos. La última parte de cada
+deja de listarse en el acto; lo que está adentro de ella, a más tardar a los 10 minutos. En el listado de varias, la
+subcarpeta pedida que se movió afuera deja de listarse a más tardar al minuto, también en sus páginas siguientes
+(`LIST_TRUST_MS`); lo de adentro de una subcarpeta de arriba movida afuera, igual que en el de una, hasta los 10
+minutos de su comprobación (medido en la auditoría de la entrega 3). Un 403 de Drive por el límite de pedidos
+no es "afuera": sale como `503 rate` (v0.142). La última parte de cada
 archivo de una carpeta vuelve a preguntarle a la base si la persona todavía puede subir ahí: sacada de la página, la
 subida queda sin terminar.
 La raíz del Drive, un ciclo, algo que no es una carpeta (un acceso directo), algo en la papelera, una carpeta con

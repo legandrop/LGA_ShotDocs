@@ -110,6 +110,8 @@ const CAMERA = '0.110';
 const ASSISTANT = '0.118';
 /** El asistente, entrega A2 (la página entera, *Format as…*, la política del workspace): la versión la pone quien publica. */
 const ASSISTANT_A2 = '0.126';
+/** El asistente, entrega A3 (*Suggest caption* sobre una foto): la versión la pone quien publica. */
+const ASSISTANT_A3 = '0.146';
 /** *Dictate to report* (Docs/Doc_Dictado.md, entrega V1): la versión la pone quien publica. */
 const DICTATION = '0.135';
 /** *Dictate to report*, entrega V2 (la cola sin red): la versión la pone quien publica. */
@@ -144,6 +146,8 @@ const ANNOTATE_TOUCH = '0.129';
 const ANNOTATE_COPY = '0.132';
 /** La clave del asistente sincronizada, entrega S1 (Doc_Clave_Sincronizada.md). El número lo pone quien publica. */
 const ASSISTANT_SYNC = '0.138';
+/** La clave sincronizada, entrega S2 (cambiar la frase, computadora prestada, varios workspaces). El número lo pone quien publica. */
+const ASSISTANT_SYNC_S2 = '0.143';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -284,6 +288,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     since: ASSISTANT_SYNC,
   },
   {
+    id: 'assistantSyncMore',
+    section: 'writing',
+    title: 'help.assistantSyncMore.title',
+    text: 'help.assistantSyncMore.text',
+    words: ['cambiar la frase', 'computadora prestada', 'pestaña', 'guardar la clave en este dispositivo', 'otro workspace', 'más vieja', 'voz', 'change passphrase', 'borrowed computer', 'tab', 'keep the key on this device', 'also sync', 'older', 'voice', 'sincronizar', 'sync', 'frase', 'passphrase'],
+    since: ASSISTANT_SYNC_S2,
+  },
+  {
     id: 'assistantPage',
     section: 'writing',
     title: 'help.assistantPage.title',
@@ -291,6 +303,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
     keys: { undo: 'undo' },
     words: ['resumen', 'resumir', 'traducir página', 'subpágina', 'reemplazar', 'summary', 'summarize', 'translate page', 'subpage', 'replace', 'asistente', 'assistant'],
     since: ASSISTANT_A2,
+  },
+  {
+    id: 'assistantCaption',
+    section: 'writing',
+    title: 'help.assistantCaption.title',
+    text: 'help.assistantCaption.text',
+    keys: { apply: 'assistantApply', undo: 'undo' },
+    words: ['pie de foto', 'leyenda', 'foto', 'describir', 'claqueta', 'caption', 'photo', 'describe', 'slate', 'image', 'asistente', 'assistant'],
+    since: ASSISTANT_A3,
   },
   {
     id: 'assistantFormat',
@@ -583,7 +604,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'find',
     title: 'help.replaceProject.title',
     text: 'help.replaceProject.text',
-    keys: { search: 'search', undo: 'undo' },
+    keys: { search: 'search', undo: 'undo', redo: 'redo' },
     words: ['replace all', 'reemplazar todo', 'find and replace', 'buscar y reemplazar'],
     since: REPLACE_PROJECT,
   },

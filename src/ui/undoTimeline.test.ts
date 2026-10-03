@@ -110,6 +110,8 @@ function otherWritesIn(doc: Y.Doc, where: string, text: string): Y.Doc {
 
 /** La app, en chico: una página en pantalla por vez, con su editor real sobre el documento de `PageDocs`. */
 class App {
+  /** Si el editor en pantalla se puede editar (A9: la página abre de solo lectura un momento). */
+  editable = true;
   current: string | null = null;
   editor: Editor | null = null;
   doc: Y.Doc | null = null;
@@ -128,7 +130,7 @@ class App {
     const binding = (ySyncPluginKey.getState(v.state as never) as { binding: object }).binding;
     this.detach = this.timeline.attach(pageId, doc, undoManager(E), {
       binding,
-      editable: () => true,
+      editable: () => this.editable,
       dom: v.dom,
       snapshot: () => v.state.doc,
       reveal: (before, opts) => revealChange(v, before as never, opts),
@@ -732,6 +734,51 @@ describe('observaciones de la auditoría', () => {
     expect(notes.at(-1)).toBe("Older changes can't be undone: undo keeps your last 2 pages and 1000 changes in this tab.");
     await runner.run('undo');
     expect(notes).toHaveLength(2);
+  });
+
+  it('A5: al montarse, la selección guardada por otro editor (otro binding) se borra de los pasos', async () => {
+    const { ids, app, timeline } = await setup(['A']);
+    const [A] = ids;
+    await app.go(A);
+    app.leave();
+    const doc = await app.d.docs.open(A);
+    // Un editor que escribe sin estar anotado (su selección queda en el meta con su binding) y otro que se anota.
+    const E = mountEditor(doc, 'suelto');
+    mounted.push(E);
+    const v = view(E);
+    v.dispatch(v.state.tr.insertText('uno', endOfFirst(E)));
+    undoManager(E).stopCapturing();
+    const binding = (ySyncPluginKey.getState(v.state as never) as { binding: object }).binding;
+    const items = [...undoManager(E).undoStack];
+    expect(items.some((i) => i.meta.has(binding))).toBe(true);
+    timeline.attach(A, doc, undoManager(E), { binding: { otro: true }, editable: () => true, dom: v.dom });
+    expect(items.every((i) => !i.meta.has(binding))).toBe(true);
+    app.d.docs.close(A);
+  });
+
+  it('A7: dos ⌘Z mientras cruza de página deshacen uno solo', async () => {
+    const { ids, app, runner } = await setup(['A', 'B']);
+    const [A, B] = ids;
+    await app.go(A);
+    type(app.editor!, 'uno');
+    type(app.editor!, ' dos');
+    await app.go(B);
+    await Promise.all([runner.run('undo'), runner.run('undo')]);
+    expect(app.current).toBe(A);
+    expect(yText(app.doc!)).toBe('uno');
+  });
+
+  it('A9: al cruzar, espera a que la otra página se pueda editar antes de deshacer', async () => {
+    const { ids, app, runner } = await setup(['A', 'B']);
+    const [A, B] = ids;
+    await app.go(A);
+    type(app.editor!, 'uno');
+    await app.go(B);
+    app.editable = false;
+    setTimeout(() => (app.editable = true), 150);
+    await runner.run('undo');
+    expect(app.current).toBe(A);
+    expect(yText(app.doc!)).toBe('');
   });
 
   it('O2: si después de cruzar no cambió nada a la vista, no dice "Undone in…"', async () => {

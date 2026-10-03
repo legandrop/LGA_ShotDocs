@@ -300,3 +300,60 @@ describe('lo demás', () => {
     for (const url of ['https://openrouter.ai/api/v1', 'http://172.40.0.1', 'https://api.openai.com', 'nada', undefined]) expect(isLocalUrl(url), String(url)).toBe(false);
   });
 });
+
+describe('con una foto (Suggest caption, entrega A3)', () => {
+  const image = { mime: 'image/jpeg', data: 'L9j/4AAQ' };
+  const request = { system: 'S', user: 'Suggest a caption for this photo.', maxTokens: 200, image };
+  const done = (provider: string) =>
+    provider === 'anthropic'
+      ? sse([{ type: 'content_block_delta', delta: { type: 'text_delta', text: 'Pie' } }, { type: 'message_stop' }])
+      : provider === 'openai'
+        ? sse([{ type: 'response.output_text.delta', delta: 'Pie' }, { type: 'response.completed', response: { usage: {} } }])
+        : provider === 'gemini'
+          ? sse([{ candidates: [{ content: { parts: [{ text: 'Pie' }] }, finishReason: 'STOP' }] }])
+          : sse([{ choices: [{ delta: { content: 'Pie' }, finish_reason: 'stop' }] }, '[DONE]']);
+
+  it('cada proveedor recibe la foto antes del texto, en su forma (base64, nunca una dirección de afuera)', async () => {
+    const bodies: Record<string, unknown> = {};
+    for (const config of [anthropic, openai, gemini, { provider: 'compatible', baseUrl: 'http://localhost:11434/v1', model: 'llava' } as ProviderConfig]) {
+      const { fetcher, calls } = fakeFetch(() => done(config.provider));
+      const out = await complete(config, KEY, request, { fetcher });
+      expect(out.text).toBe('Pie');
+      bodies[config.provider] = calls[0].body;
+    }
+    expect((bodies.anthropic as { messages: unknown[] }).messages[0]).toEqual({
+      role: 'user',
+      content: [
+        { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'L9j/4AAQ' } },
+        { type: 'text', text: 'Suggest a caption for this photo.' },
+      ],
+    });
+    expect((bodies.openai as { input: unknown; store: boolean }).input).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'input_image', image_url: 'data:image/jpeg;base64,L9j/4AAQ' },
+          { type: 'input_text', text: 'Suggest a caption for this photo.' },
+        ],
+      },
+    ]);
+    expect((bodies.openai as { store: boolean }).store).toBe(false);
+    expect((bodies.gemini as { contents: unknown[] }).contents[0]).toEqual({
+      role: 'user',
+      parts: [{ inline_data: { mime_type: 'image/jpeg', data: 'L9j/4AAQ' } }, { text: 'Suggest a caption for this photo.' }],
+    });
+    expect((bodies.compatible as { messages: unknown[] }).messages[1]).toEqual({
+      role: 'user',
+      content: [
+        { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,L9j/4AAQ' } },
+        { type: 'text', text: 'Suggest a caption for this photo.' },
+      ],
+    });
+  });
+
+  it('sin foto, el pedido de texto sigue igual que antes (una cadena)', async () => {
+    const { fetcher, calls } = fakeFetch(() => done('anthropic'));
+    await complete(anthropic, KEY, { system: 'S', user: 'U', maxTokens: 10 }, { fetcher });
+    expect((calls[0].body as { messages: { content: unknown }[] }).messages[0].content).toBe('U');
+  });
+});

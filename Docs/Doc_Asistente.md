@@ -1,8 +1,10 @@
 # Asistente con la clave de cada usuario y servidor MCP (fase 5)
 
-**Estado: entregas A1 (v0.118) y A2 (v0.126) implementadas (ver "Cómo quedó A1" y "Cómo quedó A2" al final; la
-migración de A2, sin aplicar); la clave sincronizada (D72 → B, `Doc_Clave_Sincronizada.md`), entrega S1 implementada
-(v0.138); A3, el MCP y la entrega S2 de la clave sincronizada, en diseño** (roadmap P.24; pedido de Lega del 2026-10-02, que decide entre las opciones
+**Estado: entregas A1 (v0.118), A2 (v0.126) y A3 (v0.146) implementadas (ver "Cómo quedó A1", "Cómo quedó A2" y
+"Cómo quedó A3" al final; la migración de A2, sin aplicar); la clave sincronizada (D72 → B, `Doc_Clave_Sincronizada.md`),
+entregas S1 (v0.138) y S2 (v0.143) implementadas; la prueba técnica M0 del MCP hecha en lo que no necesita infraestructura real (v0.145:
+el MCP en el portero detrás de un interruptor apagado, lo comprobado y medido, y los pasos que faltan; ver "Cómo quedó
+M0"); el resto del MCP, en diseño** (roadmap P.24; pedido de Lega del 2026-10-02, que decide entre las opciones
 de D-06 y D-07 y lo deja listo para programar por entregas). Las decisiones están propuestas (IA1 a IA11, sección 15; IA1 e IA10 cambiadas por Lega, D72 y D77) y
 valen hasta que Lega diga otra cosa. Se diseñó contra `main` v0.108. Precios, límites y CORS verificados el 2026-10-02
 en las páginas oficiales (sección 3, con la fuente de cada número); lo medido está en "Cómo se midió", al final.
@@ -110,7 +112,7 @@ de un proyecto), corregidos acá. Ver "Correcciones de la auditoría (2026-10-02
 | *Summarize page* | La página abierta | Un resumen en el panel | Opcional: *Insert at top* / *Insert below* | A2 |
 | *Translate page* | La página abierta | La página traducida | *Replace page content* (Editar) o *Create translated subpage* (Editar y crear) | A2 |
 | *Format as…* (*Bulleted list*, *Checklist*, *Table*, *Headings*) | Lo elegido | Los mismos datos con otra forma | Sí | A2 |
-| *Suggest caption* | Una foto elegida | Un pie de foto | Sí (en el pie, que ya existe) | A3 |
+| *Suggest caption* | Una foto elegida | Un pie de foto | Sí (como texto debajo de la foto; corregido al implementar, ver "Cómo quedó A3") | A3 |
 
 Sin texto elegido, las acciones de A1 toman **el bloque donde está el cursor**. Un pedido manda como máximo **20 000
 caracteres** (unos 5 000 a 7 000 tokens; eran 60 000 hasta la auditoría de A1, ver "Cómo quedó A1"): más que eso pide
@@ -131,7 +133,8 @@ proveedor cuenta y cobra; un token es más o menos 4 caracteres en inglés y alg
 - **Recortar, cambiar el tamaño y comprimir** no necesitan un modelo: son operaciones de la app sobre el original o la
   miniatura. Pasan al roadmap de fotos (`Doc_Imagenes.md`), sin clave ni costo.
 - **Sugerir un pie de foto o un texto alternativo** sí: el modelo mira la foto. Va en A3, con un aviso por pedido (la
-  foto sale del Drive del dueño hacia el proveedor), mandando la copia de 2048 px que ya existe y nunca el original.
+  foto sale del Drive del dueño hacia el proveedor), mandando la copia de 2048 px que ya existe y nunca el original
+  (al implementar: una copia de 1024 px rearmada en el dispositivo, sin EXIF; ver "Cómo quedó A3").
 - **Editar la imagen con un modelo** (borrar algo, cambiar el cielo): fuera de este diseño. En VFX la foto de set es
   referencia: alterarla sin querer es peor que no tenerla.
 
@@ -683,7 +686,8 @@ su Supabase y su portero, y cada persona su proveedor): por eso la vista previa 
 ### 10.5 Fotos (A3)
 
 La foto sale del Drive del dueño hacia el proveedor: confirmación por pedido (*Send this photo to <provider>?*), la copia de
-2048 px y nunca el original, y apagada con `assistant_policy = off` o `local_only` (salvo un proveedor local).
+2048 px y nunca el original, y apagada con `assistant_policy = off` o `local_only` (salvo un proveedor local). Al
+implementar: 1024 px, rearmada en el dispositivo (sin EXIF ni GPS), y nada más de la página ("Cómo quedó A3").
 
 ## 11. Interfaz y ayuda
 
@@ -1033,6 +1037,8 @@ que en el set con el teléfono en el bolsillo no sirve.
 
 ## 17. Lo que no se pudo comprobar
 
+Lo del MCP se probó en M0 hasta donde se puede sin prender nada real: lo que quedó y quién lo hace, en "Cómo quedó M0".
+
 - Qué clientes MCP reales hacen *elicitation* (la pregunta directa a la persona de 9.3 bis) con un servidor sin sesión
   guardada; M0 lo prueba. Sin eso, la confirmación de mover y borrar es la conversación con el agente.
 - Una llamada real a cada proveedor desde la app (hace falta una clave): solo se probaron el preflight CORS y que los
@@ -1342,3 +1348,371 @@ Mutantes después de la ronda: 31 de 31 mueren (los 23 de antes y 8 nuevos de B1
   bloques en menos (una tabla) deja sin bloque los comentarios de los que sobran.
 - Lega, con sus claves: la prueba de aceptación de A2 (sección 14) con una página de rodaje real, en la compu y en el
   iPhone, y la ventana de la política con la migración aplicada.
+
+## Cómo quedó A3 (v0.146)
+
+Implementada en `src/assistant/` (la misma parte que se baja al abrir el panel: pasa de 40 a 52 KB sin comprimir, 3,4 KB más
+comprimida; el paquete principal, 0,25 KB más) y en la
+barra de la foto (`src/ui/MediaBar.tsx`, `PhotoToolbar.tsx`: un botón y `photoRef.ts`, chico, en la primera carga). Sin
+migración ni cambios en el esquema del editor.
+
+### Qué hay
+
+- ***Suggest caption*** en la barra de una foto (en línea, en una celda o foto-bloque; no en videos ni adjuntos, y solo
+  en el editor de la página abierta: no en el historial ni en la práctica) y en el panel, en la sección *Photo*, que toma
+  la foto elegida (si no hay, *Select a photo first…*). La barra de la foto ya sale solo con la página editable.
+- **El aviso, en cada pedido** (10.5): la miniatura de la foto y *Send this photo to <proveedor>?* (con un servicio
+  compatible, su dirección: `openrouter.ai`, `localhost:11434`), con lo que viaja (*a copy of up to 1,024 pixels, without
+  the file's location and camera data, never the original. Nothing else from the page is sent.*), el idioma del pie
+  (la lista de *Translate to…*, recordado en el dispositivo; de fábrica, el de la app) y *Send photo* / *Cancel*. Nada
+  sale antes del sí. *Try again* sobre la misma foto no vuelve a preguntar (ya se dijo que sí a esa foto y a ese
+  proveedor) y manda la misma copia; **si la persona cambia de proveedor o de dirección en los ajustes, vuelve a
+  preguntar** (el destino es parte de la clave de la sección; corrección B-1 de la auditoría).
+- **La foto que viaja** (`captionImage.ts`): la imagen nítida de la página que ya existe (`media.view` a 1024 px: la
+  guardada, el original del dispositivo o, con red, el original bajado una vez por el portero, como para verla nítida);
+  si no hay nada mejor (una foto chica, una HEIC sin convertir), la miniatura; una que no es del Drive, lo que da el
+  editor para mostrarla. **Siempre se rearma en el dispositivo**: lado mayor de 1024 px como mucho, JPEG al 85 %, en un
+  canvas, lo que además saca el EXIF (la ubicación GPS de un iPhone, la cámara). Va en base64 adentro del pedido, en la
+  forma de cada proveedor (Anthropic `image`, OpenAI `input_image`, Gemini `inline_data`, compatible `image_url`), antes
+  del texto. Nada más de la página: ni el nombre del archivo, ni su dirección, ni el texto de alrededor.
+- **Las instrucciones** (`caption.ts`): un pie corto (unas 15 palabras) de lo que importa al equipo (el set, la cámara,
+  la luz, una claqueta, marcadores), con el texto legible de la foto tal cual, en el idioma elegido; el texto que
+  aparece en la foto es dato, nunca instrucción. La respuesta se limpia: un renglón, sin comillas, sin *Caption:*, sin
+  Markdown, sin direcciones (se avisa si sacó alguna) y hasta 300 caracteres.
+- **La vista previa** es un campo con el pie, que se puede retocar (Enter no parte el renglón), con dónde va a quedar y
+  cuánto se mandó (*Sent 1024 × 768 px · 142 KB*). *Apply* (Ctrl/⌘+Enter) · *Discard* (Esc) · *Try again* · *Copy*.
+- **Dónde queda el pie:** como **texto común**, nunca como propiedad: un párrafo nuevo debajo del bloque de la foto (una
+  foto en un renglón, sola o en una fila, o una foto-bloque) o, en una celda, un renglón nuevo al final de la misma
+  celda (con un salto de renglón; la tabla no se rompe). Un solo paso de deshacer, el cursor al final del pie, sin
+  links (la transacción lleva `preventAutolink`).
+- **La guarda:** la foto se recuerda sin posiciones (`photoRef.ts`: el bloque, cuál de sus fotos y su dirección). Al
+  aplicar se la busca otra vez; si se borró, se reemplazó (otra dirección) o se borró su bloque, no se aplica nada:
+  *This photo was removed or replaced while the assistant was working. Nothing was applied.* Escribir antes, o agregar
+  otra foto al mismo bloque, no la pierde.
+- **Permisos, política y sin red:** pedir y aplicar piden Editar (sin Editar, el botón del panel está apagado y la barra
+  no sale); se mira otra vez al aplicar. La política *Off* lo apaga; *Local models only*, salvo un modelo local. Sin
+  red, lo de siempre (un modelo local se intenta; la foto sale del dispositivo).
+- **Un modelo que no mira imágenes** (el proveedor responde 400 hablando de imágenes): *This model can't look at
+  photos. Choose another one in the assistant settings.* La foto que no está en el dispositivo y no se pudo bajar, y
+  la que el navegador no abre, tienen su mensaje.
+- **Ayuda:** *Suggest a caption for a photo*, en "Writing". Sin atajos nuevos (*Apply* es `assistantApply`; el panel
+  y sus teclas, en `shortcutSources.ts`).
+
+### Decisiones al implementar
+
+- **El pie como texto, no como propiedad (corrige "en el pie, que ya existe" de 2.1).** Qué pasaba: la foto en línea no
+  tiene leyenda, y la foto-bloque dejó de ofrecerla (D-24, Lega sacó *Edit caption*); un pie guardado en una propiedad
+  sería un texto que nadie puede editar ni borrar desde la app, que la búsqueda y el PDF tratan aparte y que una versión
+  vieja pierde. Opciones: A) texto común debajo de la foto; B) una propiedad nueva `caption` en la foto en línea (con su
+  prueba con el esquema anterior); C) la propiedad `caption` de la foto-bloque. Elegí A: una versión vieja lo ve igual,
+  se busca, se traduce, sale en el PDF y se edita como cualquier renglón; no toca el esquema (riesgo normal). B y C
+  contradicen D-24.
+- **1024 px y no la copia de 2048 (corrige 2.3 y 10.5).** Para leer una claqueta alcanza, y cuesta la mitad o menos:
+  Anthropic cuenta ancho × alto / 750 tokens y achica de por sí a 1568 px (2048 × 1536 serían unos 2 400 tokens; 1024 ×
+  768, unos 1 050); OpenAI y Gemini cobran por mosaicos. La de 1024 px ya existe en el dispositivo para el teléfono
+  (`view1024:`), así que muchas veces ni hay que hacerla. Medido en Chromium (abajo): 75 a 150 KB.
+- **Siempre rearmada**, aunque ya sea un JPEG chico: la imagen nítida puede ser el original tal cual (un JPEG que ya
+  entraba), con su EXIF. Rearmarla garantiza que no viaje la ubicación.
+- **Sin texto alternativo:** la app no tiene dónde guardarlo (el `alt` de la foto es su nombre) ni dónde verlo; sería
+  una propiedad nueva sin interfaz. Queda para cuando haya un lector de pantalla que lo pida.
+- **Sin el texto de la página:** el pedido lleva solo la foto. El texto de alrededor ayudaría (el número de toma), pero
+  el aviso dice "la foto" y mandar más contradice 6.2; una claqueta en la foto se lee igual.
+- **Una sola foto:** con varias elegidas la barra no lo ofrece (el pie es de una).
+
+### Cómo se probó
+
+- **Pruebas nuevas (vitest):** `caption.test.ts` (10, con el editor real: qué foto se eligió, la guarda que la sigue
+  aunque se escriba antes o se agregue otra foto y la pierde si la borran o la reemplazan, el pie debajo en un renglón,
+  en la foto-bloque y en una celda, un solo Ctrl+Z también escribiendo justo antes, sin links, sin Editar, y **la versión
+  publicada `editorSchemaMain` abriendo lo aplicado sin cambiarlo**; lo que se manda y la limpieza de la respuesta),
+  `captionImage.test.ts` (6: de dónde sale, nunca el original, 1024 px, lo que no es una imagen), `panelA3.test.tsx` (6,
+  con un proveedor falso: el aviso antes de mandar y que sin el sí no sale nada, lo que se manda sin nada de la página,
+  el campo que se retoca y *Apply*, la celda, *Try again* sin volver a preguntar y con la misma copia, la foto borrada
+  mientras pensaba, un modelo sin visión, sin Editar y *Off*), 2 en `providers.test.ts` (la foto en los cuatro) y 2 en
+  `mediaBar.test.tsx` (el botón en las dos barras y abrir el panel con esa foto; no en el historial). Suite: 3433 (3640 con la unión y las correcciones de la auditoría).
+- **Mutantes:** 16 de 16 mueren (la guarda, el permiso, el deshacer, la celda, la dirección de la foto en línea y de la
+  foto-bloque, las direcciones del pie, la foto en Anthropic y Gemini, mandar sin aviso, preparar la foto otra vez en
+  *Try again*, *Send* sin permiso, mandar el original, la nítida de 2048, el botón fuera de la página y el mensaje del
+  modelo sin visión).
+- **Recorrido en Chromium** (Playwright sin ventana, perfil temporal; la app real sobre el servidor en memoria, sin
+  login, con fotos de verdad guardadas en el dispositivo y el código real de miniaturas, nítidas y HEIC; un proveedor
+  falso local, nunca uno real): 33 de 33 — la barra con el botón y su `data-tip`, el aviso sin pedidos antes del sí,
+  JPEG de 1024 px, sin EXIF, nada de la página, el campo retocado y Ctrl+Enter, Ctrl+Z, desde el panel con la foto
+  elegida, *Discard*, *Try again*, la HEIC del iPhone en una celda, la foto-bloque, la foto borrada mientras pensaba,
+  nada afuera, la consola, *Off*, solo ver, y el teléfono (390 px, sin scroll horizontal).
+- **Lo medido** (lo que llega al proveedor, Chromium en la PC): una "foto de teléfono" de 4032 × 3024 con ruido (lo peor
+  para el JPEG) → 1024 × 769, 75 a 81 KB; una foto real de 6,3 MB → 1024 × 739, 138 KB; una real de 1,5 MB con EXIF →
+  745 × 1024, 149 KB, sin EXIF; la HEIC de prueba del iPhone (96 × 64, girada) → 64 × 96, 1 KB. Preparar y mandar,
+  0,2 a 0,5 s antes de la respuesta del proveedor falso. En base64, un tercio más.
+
+### Lo que falta y lo que prueba Lega
+
+- Falta: el MCP (M0 a M3). Lo chico de A3, en el roadmap (P.24).
+- Lega, con sus claves: la prueba de aceptación de A3 (sección 14) con Anthropic, OpenAI y Gemini de verdad (que el
+  modelo elegido mire imágenes: los baratos de los tres pueden), una foto del Drive en la compu y una recién sacada con
+  el iPhone, y una foto en una celda.
+
+### Correcciones de la auditoría de A3
+
+La auditoría independiente (nivel alto) dio "no aprobado" por un bloqueante. Corregido en una ronda, con sus pruebas:
+
+| Hallazgo | Qué se cambió |
+|---|---|
+| **B-1.** Cambiar de proveedor en los ajustes y tocar *Try again* mandaba la foto al proveedor nuevo sin preguntar (de un modelo local a OpenAI, por ejemplo) | La sección del pie lleva el destino (proveedor y dirección) en su clave: con otro destino vuelve a empezar y pregunta *Send this photo to <el nuevo>?*. Pruebas: de Anthropic a OpenAI desde el error, y de `localhost:11434` a `openrouter.ai` desde la vista previa; el nuevo no recibe nada |
+| O1. `cleanCaption` dejaba pasar caracteres de control, de dirección (U+202E) y de ancho cero | `stripInvisible` saca `\p{Cc}` y `\p{Cf}` (un tabulador pasa a espacio), en la respuesta y en lo que se aplica desde el campo |
+| O2. Cuatro guardas sin prueba | Pruebas de *Apply* que vuelve a mirar el permiso, el botón que no sale en un video, la miniatura sin bajar el original y una dirección en la celda que no queda como link. El de `preventAutolink` es un mutante equivalente: el link automático de BlockNote solo mira la última palabra antes de un espacio final, y el pie se recorta (queda de resguardo) |
+| O3. La política de privacidad decía que el asistente "does not exist yet" | `Legal.tsx`: un renglón *The assistant* con qué se manda (lo elegido o la página, la nota o la grabación del dictado, la foto de 1024 px sin ubicación, con aviso), a quién (directo al proveedor de la persona, nunca a nosotros), dónde queda la clave y que el dueño lo puede apagar; fecha nueva |
+| O4. Sin red se mandaba la miniatura y solo lo decía el tamaño | El panel suma *from the thumbnail (less detail): a sharper copy wasn't available* cuando salió de la miniatura |
+
+Mutantes de la ronda: 8 de 9 mueren (el equivalente de arriba).
+
+## Cómo quedó M0 (v0.145)
+
+Prueba técnica del MCP (P.24, sección 14), hecha el 2026-10-02/03 contra `main` v0.137. Lo que se pudo probar sin tocar
+la infraestructura real está probado acá, con números y fuentes; lo que necesita prender cosas en Supabase o en
+Cloudflare queda en pasos numerados, con qué cambia cada uno y cómo se vuelve atrás. **Veredicto corto:** el portero
+puede ser el servidor MCP en el plan gratis para listar, buscar y leer páginas chicas; el bloqueante ya no es la CPU sino
+el servidor OAuth de Supabase (en beta, con fallas abiertas que pegan justo en los clientes MCP) y la API de Auth, que
+deja hacer cosas de la cuenta con el token del tercero. Las dos cosas se prueban con los pasos de abajo antes de M1.
+
+### Qué hay en el código
+
+- **El MCP en el portero, apagado de fábrica** (`portero/src/mcp.ts` y `mcpPage.ts`): atiende `/mcp` y
+  `/.well-known/oauth-protected-resource` solo con la variable del Worker `MCP_M0=1`. Apagado, esas rutas siguen como
+  cualquier ruta sin sesión (401), y el smoke del portero pasa igual que antes (21 de 21, con tres casos nuevos).
+- **Metadata (RFC 9728)** con el emisor de los tokens (`<SUPABASE_URL>/auth/v1`) y `scopes_supported: ["email"]`; 401 con
+  `WWW-Authenticate: Bearer resource_metadata="…", scope="email"`.
+- **El token se valida en el portero, sin pedidos a la base** (M0-1): firma ES256 con el JWKS del Supabase (recordado 10
+  minutos por instancia), vencimiento, emisor, rol, `sub` y `client_id` obligatorio. La sesión de la app no entra a
+  `/mcp`.
+- **El token de un asistente no sirve en las demás rutas del portero** (`/pass`, subidas, carpetas, papelera, estado de
+  Drive): 403 `assistant_token` sin preguntarle a la base. **Vale con el MCP prendido o apagado** (M0-3).
+- **MCP sin estado, en las dos épocas de la especificación** (M0-4): la 2026-07-28 (cada pedido trae su versión y sus
+  capacidades en `_meta`; los headers espejados se validan: `-32020` si no coinciden, `-32022` con las versiones que
+  entiende) y las anteriores (`initialize` sin `Mcp-Session-Id`, notificaciones con 202). GET y DELETE, 405. Un `Origin`
+  de navegador que no sea de la app, 403.
+- **Herramientas de lectura** (`list_projects`, `list_pages`, `search_titles`, `read_page`, con `readOnlyHint`) que
+  llaman a funciones `mcp_*` con el token de la persona (contrato provisional, M0-8). Esas funciones no existen todavía
+  (M1): hoy la herramienta responde *The workspace database is not ready for assistant connections yet.* `read_page` arma
+  la página con Yjs (cargado recién al leer, M0-10), la devuelve como Markdown con el id de cada bloque y la envuelve en
+  `<page_content trust="untrusted">`, sin que el texto de la página pueda cerrar el envoltorio.
+- **Confirmar sin estado** (para M2, M0-5): `sealState`/`openState` firman el `requestState` de la *elicitation* con un
+  secreto propio del portero, atado a la persona, al cliente, a la herramienta, a sus argumentos y a la acción pendiente,
+  con 5 minutos. Probado con las pruebas; ninguna herramienta lo usa todavía.
+- **Un log por pedido** (`mcp: {metodo, version, cliente, elicitation}`), sin tokens, personas ni contenido: es lo que
+  dice qué hablan los clientes reales (paso 7).
+- Pruebas: `portero/src/mcp.test.ts` (33). Mutantes: 10 de 10 mueren (sin firma, sin el rechazo en las otras rutas,
+  sin comparar los argumentos del estado, sin `client_id`, sin el escape del envoltorio, el interruptor siempre prendido,
+  y de la auditoría: las llaves que nunca vencen, repedirlas sin freno, una llave rota que tumba a todas y un nombre
+  heredado como `constructor` tomado por herramienta).
+
+### Lo comprobado
+
+**La especificación MCP 2026-07-28** (modelcontextprotocol.io, leída el 2026-10-02):
+
+- Streamable HTTP ya no tiene sesiones ni el stream por GET; cada pedido trae su versión en `_meta` y en
+  `MCP-Protocol-Version`. **La *elicitation* va por MRTR** (*Multi Round-Trip Requests*): el servidor contesta
+  `resultType: "input_required"` con el pedido y un `requestState`, y el cliente **reintenta la misma herramienta en otro
+  pedido HTTP** con la respuesta y el estado. Es justo el caso del Worker sin estado de 9.3 bis: se correlaciona con el
+  `requestState` firmado (la especificación exige protegerlo con HMAC o AEAD y atarlo a la persona, con vencimiento) y
+  el "una sola vez" lo pone la base (`mcp_pending_actions`), porque el estado firmado solo no lo garantiza.
+- En las versiones anteriores (hasta 2025-11-25) la *elicitation* era un pedido del servidor por el stream SSE abierto,
+  que un Worker sin estado no puede sostener: **con esos clientes, la confirmación es la conversación** (`confirm_action`).
+- El servidor "MUST validate that access tokens were issued specifically for them" (audiencia, RFC 8707); el registro
+  preferido son los *Client ID Metadata Documents* y el dinámico queda "deprecated".
+
+**El servidor OAuth de Supabase** (docs de supabase.com, el código de `supabase/auth` en `master` y sus issues, leídos el
+2026-10-02):
+
+- Los tokens llevan `client_id`, `aud: "authenticated"` y `role: "authenticated"`; vencen a la hora (`jwt_exp` 3600 en
+  Wanka). **`resource` se valida, se guarda y se compara al canjear el código, pero no cambia `aud`**
+  (`internal/api/oauthserver/authorize.go` y `handlers.go`; pedido abierto `supabase/auth#2610`): la audiencia del MCP no
+  se puede cumplir con tokens de Supabase (M0-2).
+- **Fallas abiertas que pegan en los clientes MCP:** `#2820` (2026-09-20, abierta, sin respuesta): la pantalla de
+  permiso recibe 400 al pedir los datos de la autorización si el cliente es público (PKCE sin secreto), si pide
+  `offline_access` o si manda `resource`, que es lo que hacen los clientes MCP (el reporte es de ChatGPT); en el código
+  ese 400 sale solo si la autorización ya no está pendiente, así que puede ser otra cosa, pero hay que probarlo.
+  `#2703`: el `redirect_uri` de un cliente de escritorio en `127.0.0.1` con puerto al azar se compara exacto.
+  `#2801`: verificar un factor MFA borra las sesiones de los clientes OAuth. `#2850`: no hay *Client ID Metadata
+  Documents* (solo registro dinámico, con un cliente nuevo por cada reconexión). `offline_access` se acepta desde el
+  2026-07-30 (`#2628`, cerrado).
+- **Revocar:** `DELETE /auth/v1/user/oauth/grants?client_id=…` (`supabase.auth.oauth.revokeGrant`) revoca el
+  consentimiento y borra las sesiones de ese cliente: el refresco deja de andar en el acto, pero **el token de acceso
+  sigue valiendo en PostgREST y en el portero hasta que vence** (es un JWT). Por eso `mcp_grants.revoked` se mira en cada
+  `mcp_*` (M1), como ya decía 9.2.
+- **La pantalla de permiso** es el *Site URL* más la *Authorization Path*:
+  `https://shotdocs.lega.com.ar/oauth/consent/<ref>` sirve. El pedido de los datos de la autorización exige venir del
+  origen del *Site URL*: la pantalla tiene que estar publicada en la app (no sirve una página de prueba local).
+- **El hook:** su esquema admite en `role` solo `anon` y `authenticated`: el rol propio `mcp_client` (plan A) casi seguro
+  no se puede; queda el plan B de 9.2.
+- **Las llaves de Wanka:** ES256 en uso desde el 2026-09-29 (la HS256, "previously used"); el JWKS público tiene una sola
+  llave EC P-256. La validación en el portero anda, y `openid` también andaría (no se pide).
+- La configuración de Auth de Wanka (lectura): `oauth_server_enabled: false`, registro dinámico apagado, sin
+  *Authorization Path*, `disable_signup: true`, hook apagado.
+
+**La API de Auth con el token de un tercero** (el router de `supabase/auth`, `internal/api/api.go`): `/user` (leer y
+cambiar), `/logout`, `/factors` y `/user/oauth/grants` piden solo una sesión válida (`requireAuthentication`) y **no
+distinguen un token OAuth**. **Un cliente MCP puede ponerle una contraseña a la cuenta** (`PUT /auth/v1/user` con
+`password`), y **la reautenticación no lo frena**: `security_update_password_require_reauthentication` (hoy `false`) pide
+el código por correo solo si la sesión tiene más de 24 horas (`internal/api/user.go`, líneas 153 a 163), y la sesión de
+un cliente MCP se crea al conectarlo (y de nuevo en cada reconexión, con el registro dinámico). Con esa contraseña se
+puede abrir una sesión con correo y contraseña. **En la base esa sesión no ve nada:** `private.session_allowed()` no
+acepta una sesión abierta con contraseña (`workspace_role()` da null, todos los niveles dan 0, `media_whoami` no da
+dueño; `Doc_Supabase.md`). Lo que sí consigue es cambiar la cuenta y usar la API de Auth con una sesión propia, y la
+regla de 9.2 dice que así el MCP en el portero no sale. **Se cierra en el paso 1 conectando el hook ya escrito y probado
+`private.hook_custom_access_token`**, que rechaza el ingreso con contraseña y la renovación de una sesión abierta así:
+aunque el tercero ponga una contraseña, no consigue ninguna sesión. Se suman la reautenticación (cubre las sesiones de
+más de 24 horas) y apagar el alta de TOTP (la app no usa contraseñas ni MFA: no le cuesta nada a nadie). Lo que queda
+con el token: leer el usuario, poner una contraseña que no sirve para entrar, pedir un cambio de correo (con
+`mailer_secure_email_change_enabled: true` hay que confirmarlo en los dos correos), cerrar todas las sesiones (una
+molestia, no un acceso) y revocar sus propios permisos. No se probó con un token real (paso 6).
+
+**La base, con un token OAuth simulado** (SQL en una transacción `read only` que se deshizo, con `request.jwt.claims`
+armados a mano y el rol `authenticated`):
+
+- **Hoy un token con `client_id` vale como una sesión de la app:** `media_whoami` lo acepta (dueño) y la persona ve sus
+  35 páginas por RLS. Sin el plan B, el token del tercero tendría todo lo de la cuenta en la base y en el portero.
+- **La regla candidata de `db_pre_request`** (si el JWT trae `client_id`, solo `^/rpc/mcp_[a-z0-9_]+$`), en 11 casos:
+  la sesión de la app pasa a `rpc/share` y a `/pages`; el token OAuth pasa solo a `rpc/mcp_pull_page` y se rechaza en
+  `rpc/share`, `rpc/pull_page_updates`, `/pages`, `rpc/graphql` (pg_graphql también entra por PostgREST), `rpc/MCP_…`,
+  una ruta con `../`, un `client_id` vacío y sin ruta. Hoy no hay ninguna (`authenticator` no tiene
+  `pgrst.db_pre_request`).
+- **Storage:** 5 políticas en `storage.objects` (`page_files_insert`, `page_files_select`, `thumbs_insert`,
+  `thumbs_select` para `authenticated` y `thumbs_select_link` para `anon`): las cuatro de `authenticated` necesitan
+  `and (auth.jwt() ->> 'client_id') is null` (probada: falsa con `client_id`, también vacío).
+- **Realtime:** la app no lo usa; no hay políticas en `realtime.messages` ni tablas en la publicación: con ese token no
+  llega nada. Si algún día se usa, sus políticas llevan la misma condición.
+
+**CPU** (Node 22 en la PC de Lega, `Portero.handle` entero con la base falsa contestando al instante: es la CPU del
+portero; "frío" = la primera vez de un proceso nuevo con lo genérico de Node ya cargado; páginas reales de Wanka bajadas
+en memoria con una consulta de solo lectura, sin escribirlas a disco; todas son de una sola fila):
+
+| Pedido | Frío | Caliente (promedio de 40) |
+|---|---|---|
+| Validar el token + `tools/list` | 2,0 a 2,2 ms | 0,4 ms |
+| `read_page` 7 KB (la mediana de Wanka) | 7,9 a 8,4 ms | 1,2 ms |
+| `read_page` 16 KB | 8,5 a 8,6 ms | 1,2 ms |
+| `read_page` 31 KB | 11,4 a 12,4 ms | 2,0 ms |
+| `read_page` 63 KB (el p95) | 17,3 a 18,2 ms | 3,1 ms |
+| `read_page` 153 KB | 31 a 37 ms | 7,0 ms |
+
+- **En workerd (`wrangler dev`, local)** con un Supabase falso: `tools/list`, `read_page` de una página de 60 bloques e
+  `initialize` andan de punta a punta; con el JWKS real de Wanka, un token con una llave desconocida da 401
+  `invalid_token`. El portero pasa de 113 KiB a 412 KiB (gzip 30 a 85 KiB) por Yjs, que se evalúa recién en el primer
+  `read_page`.
+- **Lectura:** en el plan gratis (10 ms por pedido) entran siempre la validación, listar y buscar; `read_page` entra en
+  frío hasta unos 16 KB (más de la mitad de las páginas de Wanka) y en caliente hasta unos 150 KB. Cloudflare tolera
+  pasarse "de vez en cuando", no siempre. Por eso el tope de fábrica `MCP_MAX_PAGE_KB=16` (M0-6), que la base aplica
+  antes de mandar el contenido; con el plan pago se sube. Escribir (M2) arma la página primero: cuesta por lo menos lo
+  mismo. El número que vale se mide en Cloudflare (paso 8).
+
+### Decisiones (propuestas; valen hasta que Lega diga otra cosa)
+
+- **M0-1 · Validar el token en el portero.** Opciones: A) firma con el JWKS, sin pedidos; B) preguntarle a Supabase en
+  cada pedido (`/auth/v1/user`, que sí ve una revocación al instante). **A** porque cuesta 0,4 ms y ningún subpedido; la
+  revocación la corta `mcp_grants` en la base (M1). B se puede sumar con una variable si hace falta.
+- **M0-2 · La audiencia.** Supabase pone siempre `authenticated`. Opciones: A) aceptar `authenticated` con `client_id`
+  obligatorio (y la dirección del MCP si algún día llega); B) un hook que ponga `aud` = la dirección del MCP; C) no
+  salir hasta que Supabase lo soporte. **A**: el token igual es del Supabase de ese workspace y de un cliente OAuth, y
+  la base pide un `mcp_grants` de ese `client_id`. B toca el hook de todos los logins y PostgREST podría rechazar otro
+  `aud`. Es un desvío de un MUST de la especificación: queda dicho.
+- **M0-3 · Rechazar los tokens de asistentes en las otras rutas del portero, siempre** (no detrás del interruptor).
+  Opciones: siempre, o solo con el MCP prendido. **Siempre**: hoy ningún token trae `client_id` (el comportamiento no
+  cambia, el smoke lo confirma) y, si alguien prende el servidor OAuth antes que el MCP, el agujero ya está cerrado.
+- **M0-4 · Las dos épocas, sin sesiones.** 2026-07-28 y las anteriores, sin `Mcp-Session-Id`; la *elicitation* solo con
+  la nueva (MRTR). Los clientes viejos confirman por la conversación.
+- **M0-5 · El `requestState` firmado** con un secreto aparte del de los pases (`mcpStateSecret` en el Durable Object),
+  con persona, cliente, herramienta, argumentos, acción y 5 minutos; una sola vez, en la base.
+- **M0-6 · Tope de página en el plan gratis:** 16 KB de fábrica (`MCP_MAX_PAGE_KB`); la base corta antes de mandar
+  (`p_max_bytes`) y la herramienta dice *This page is too large…*.
+- **M0-7 · Scopes:** solo `email` (el de fábrica de Supabase). Ni `openid` (no hace falta el ID token) ni
+  `offline_access` (la especificación pide no anunciarlo, y es uno de los disparadores de `#2820`).
+- **M0-8 · Contrato provisional de las `mcp_*`:** `mcp_list_projects()`, `mcp_list_pages(p_project, p_parent)`,
+  `mcp_search_titles(p_query, p_project)` y `mcp_pull_page(p_page, p_max_bytes)` → `{id, title, shared_with_guests,
+  bytes, too_large, updates[]}` (base64, la base primero), con errores por mensaje (`assistant_disabled`,
+  `mcp_not_connected`, `mcp_project_not_allowed`, `mcp_rate_limited`, `not_found`). Se fija en M1.
+- **M0-9 · Orígenes:** sin `Origin` (clientes nativos y de servidor) o los de la app; un cliente que corre en un navegador
+  (el *MCP Inspector*) necesita sumarse a mano. Sin CORS en `/mcp` por ahora.
+- **M0-10 · Yjs perezoso:** se carga en el primer `read_page`, así el portero apagado o un pedido que no lee no lo
+  evalúa.
+- **M0-11 · Wanka o un proyecto de prueba.** La sección 14 pedía un proyecto de Supabase de prueba. Con la LEY 1 (todo es
+  descartable) se puede en Wanka, y es más barato (no hace falta otro proyecto, otro portero ni otra app). **Wanka**, con
+  el paso 1 primero; cada paso se deshace.
+
+### Lo que necesita la infraestructura real (lo hacen el coordinador o Lega, en este orden)
+
+1. **Cerrar la cuenta al token de un tercero** (Supabase, `PATCH /v1/projects/znlvpuddswymxpffgvbz/config/auth`):
+   `hook_custom_access_token_enabled: true` con `hook_custom_access_token_uri:
+   "pg-functions://postgres/private/hook_custom_access_token"` (la función ya está en la base; `Doc_Supabase.md`),
+   `security_update_password_require_reauthentication: true` y `mfa_totp_enroll_enabled: false`. Cambia: ninguna sesión
+   abierta con contraseña recibe un token (tampoco al renovarla); en una sesión de más de 24 horas, poner una contraseña
+   pide un código por correo; no se pueden agregar factores TOTP. La app no usa contraseñas ni MFA. El hook corre en
+   cada ingreso y renovación de todos: antes de seguir, entrar y salir con código en la app (si fallara, no entraría
+   nadie). Volver: `hook_custom_access_token_enabled: false` y los otros dos campos en `false` y `true`.
+2. **El plan B en la base** (una migración de M1 o una de prueba, auditada): `private.mcp_pre_request()` con la regla
+   probada (en `private`: con el prefijo `mcp_` en `public` quedaría expuesta por la propia regla), `alter role
+   authenticator set pgrst.db_pre_request = 'private.mcp_pre_request'`, `notify pgrst, 'reload
+   config'`, la condición `client_id is null` en las cuatro políticas de Storage y una `mcp_ping()` que devuelve
+   `auth.uid()`. Comprobar que la app sigue andando igual (entrar, abrir, editar, subir una foto) y que
+   `current_setting('request.path')` llega a la función en el PostgREST de Supabase. Volver:
+   `alter role authenticator reset pgrst.db_pre_request; notify pgrst, 'reload config';` y las políticas de antes.
+3. **La pantalla de permiso en la app** (código: la ruta `/oauth/consent/<ref>` con
+   `supabase.auth.oauth.getAuthorizationDetails` y *Allow* / *Deny*; para M0 alcanza sin elegir proyectos). Muestra,
+   además del nombre del cliente, el host del `redirect_uri`: con el registro dinámico abierto cualquiera puede
+   registrar un cliente llamado "Claude" con su propia dirección de vuelta y mandar el link de autorizar. Tiene que
+   estar publicada, porque Supabase exige el origen del *Site URL*. Volver: no hace nada si el servidor OAuth está
+   apagado.
+4. **Publicar el portero con el MCP** (lo hace el push a `main` de esta rama ya auditada) y cargar la variable
+   `MCP_M0=1` en el Worker `shotdocs-portero`. Volver: borrar la variable (el portero queda como hoy).
+5. **Prender el servidor OAuth** (mismo `PATCH`): `oauth_server_enabled: true`, `oauth_server_allow_dynamic_registration:
+   true`, `oauth_server_authorization_path: "/oauth/consent/znlvpuddswymxpffgvbz"`. Cambia: cualquiera puede registrar un
+   cliente (no entrar: el registro de personas sigue cerrado). Volver: antes de apagar, revocar cada cliente
+   (`revokeGrant`, que necesita el servidor prendido) o cerrar por SQL las sesiones con `oauth_client_id` (LEY 1);
+   después `oauth_server_enabled: false`. Apagar solo no alcanza: los tokens de acceso siguen valiendo hasta una hora y
+   no está comprobado que apagarlo frene la renovación de esas sesiones.
+6. **La API de Auth con un token real** (con `curl` y el token que da el paso 7): que el hook del paso 1 no corta el
+   ingreso con código ni el canje y la renovación del token OAuth; `GET /auth/v1/user` (200); `PUT /auth/v1/user` con
+   `password` (dentro de las primeras 24 horas de esa sesión **va a dar 200**: lo que se comprueba es que después
+   `POST /auth/v1/token?grant_type=password` con esa contraseña lo rechaza el hook); `POST /auth/v1/factors` (rechazado),
+   `POST /auth/v1/logout?scope=others` (anotar qué hace), y con ese token `GET /rest/v1/pages` (rechazado por el paso 2)
+   y `POST /rest/v1/rpc/mcp_ping` (la persona). Anotar acá cada respuesta.
+7. **Clientes reales:** agregar `https://<portero>/mcp` como conector en Claude (web y escritorio), ChatGPT (modo
+   desarrollador) y Cursor (un cliente de escritorio vuelve a `127.0.0.1`, `#2703`). Anotar para cada uno: si la
+   pantalla de permiso carga (`#2820`), qué scopes y `resource` manda, si canjea y refresca el token, qué versión habla y
+   si declara *elicitation* (el log `mcp:` del portero en Workers Logs). Con *elicitation*: si se la muestra a la persona
+   (la lista de 9.3 bis). Revocar con `revokeGrant` y ver que el refresco falla y que el token de acceso sigue hasta
+   que vence.
+8. **CPU en Cloudflare:** con el paso 4, el tiempo de CPU de cada pedido a `/mcp` en Workers Logs (`observability` está
+   prendido): `tools/list` ya; `read_page` cuando exista `mcp_pull_page` (M1), con páginas de 7, 16, 31 y 63 KB. Con
+   eso se fija `MCP_MAX_PAGE_KB` y se decide el plan pago (D73).
+
+**Volver atrás va siempre en orden inverso** (8 a 1): el paso 2 no se deshace mientras quede alguna sesión con
+`oauth_client_id` (un cliente que siga renovando volvería a tener toda la base), y el 1 no se deshace con el servidor
+OAuth prendido.
+
+Si en el paso 7 ningún cliente pasa la pantalla de permiso por `#2820`, el MCP en el portero espera a Supabase y el
+camino es el MCP local (9.9) o reportar el caso con los datos del paso 7.
+
+### Lo que prueba Lega a mano
+
+1. Con los pasos 1 a 5 hechos: en Claude (web), *Settings → Connectors → Add custom connector*, pegar la dirección del
+   portero con `/mcp`.
+2. Se abre la pantalla de permiso de Shot Docs: entrar con el código si la pide, ver el nombre del cliente y *Allow*.
+3. En el chat: "listá mis proyectos de Shot Docs". Antes de M1 tiene que contestar que la base no está lista (eso prueba
+   el login, el token y el portero); con M1, la lista.
+4. Repetir 1 a 3 en ChatGPT y en el teléfono.
+5. Revocar (paso 7) y volver a pedir: en menos de una hora deja de andar.
+
+### Correcciones de la auditoría
+
+La auditoría independiente dio "no aprobado" por un bloqueante de documentación; el código quedó aprobado. Corregido en
+una ronda:
+
+| Hallazgo | Qué se cambió |
+|---|---|
+| B1. El paso 1 no cerraba la API de Auth: Supabase pide la reautenticación para cambiar la contraseña solo con sesiones de más de 24 horas, y la de un cliente MCP es nueva | "La API de Auth con el token de un tercero" lo dice; el paso 1 conecta el hook `private.hook_custom_access_token` (rechaza el ingreso con contraseña); el paso 6 espera un 200 del `PUT` y comprueba que la contraseña no sirve para entrar; se corrigió "la sesión completa" (`session_allowed` no acepta sesiones con contraseña) y la frase del roadmap |
+| O1. Volver atrás del paso 5 y del 2 dejaba sesiones OAuth vivas sin el plan B | Revocar antes de apagar el servidor OAuth; volver siempre en orden inverso |
+| O3. Sin prueba de que las llaves recordadas vencen ni del freno; una llave mal formada tumbaba la validación | Dos pruebas nuevas (vencen a los 10 minutos, una llave desconocida se repide como mucho una vez por minuto); la llave mal formada se saltea |
+| O5. Un nombre como `constructor` llegaba a PostgREST como función | `Object.hasOwn`: responde *Unknown tool* (`-32602`), con su prueba |
+| O10. `public.mcp_pre_request` quedaba expuesta por su propia regla | El paso 2 la pone en `private` |
+| O2, O4. El título va afuera del contenido no confiable; la pantalla de permiso tiene que mostrar el host del `redirect_uri` | Al roadmap de M1 (P.24) y al paso 3 |

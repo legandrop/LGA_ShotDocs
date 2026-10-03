@@ -1,5 +1,61 @@
 # Changelog — LGA Shot Docs
 
+v0.146 :
+
+**Asistente, entrega A3: *Suggest caption*** (P.24): el asistente no miraba fotos. Ahora la barra de una foto (en
+línea, en una celda o foto-bloque) y el panel suman *Suggest caption*: primero pregunta *Send this photo to
+<proveedor>?* (nada sale sin el sí), arma en el dispositivo un JPEG de 1024 px como mucho (sin EXIF ni GPS; nunca el
+original) y se lo manda con la clave de la persona, sin nada más de la página. La vista previa es un campo que se
+retoca; *Apply* lo agrega como texto común debajo de la foto (en una celda, en un renglón nuevo de la misma celda), un
+solo Ctrl+Z, sin propiedades nuevas en el esquema. Si la foto se borró o se reemplazó mientras pensaba, no aplica.
+Cambiar de proveedor en los ajustes vuelve a preguntar. Respeta la política del workspace y pide Editar. La
+política de privacidad ahora dice qué manda el asistente y a quién. Ayuda nueva.
+[ Pie de foto A3 - sugerir el pie mirando la foto, con aviso antes de mandarla, achicada en el dispositivo y aplicado como texto debajo ]
+
+v0.145 :
+
+MCP, prueba técnica M0 (P.24). Faltaba saber si el portero puede ser el servidor MCP: nada estaba probado. El portero
+suma `/mcp` y su metadata detrás de la variable `MCP_M0` (apagada: hace lo de antes). Valida el token del servidor
+OAuth de Supabase sin pedidos a la base (ES256 con el JWKS, `client_id` obligatorio), habla la especificación
+2026-07-28 y las anteriores sin sesiones, y deja listo el estado firmado para confirmar con *elicitation*. Las
+herramientas de lectura llaman a funciones `mcp_*` que llegan en M1. El token de un asistente ya no sirve en las demás
+rutas, prendido o apagado. Medido: validar 0,4 ms; leer una página de 16 KB, 8,5 ms en frío. Los pasos con Supabase y
+Cloudflare reales quedan en `Doc_Asistente.md`.
+[ MCP M0 - servidor MCP de prueba en el portero, apagado de fábrica, y rechazo de tokens de asistentes fuera de /mcp ]
+
+v0.144 :
+
+Deshacer en orden (P.26), entrega 2. El reemplazo en todo el proyecto no estaba en ⌘Z: solo se deshacía con *Undo*
+del aviso o del panel, sin rehacer, y deshacer después lo escrito antes dejaba texto de más ("Toma 1: cámara" en vez de
+"Toma 1: "), porque las anclas escriben letras nuevas que la pila de la página no conoce. Ahora el reemplazo es un paso
+de la línea de tiempo: ⌘Z lo deshace en todas sus páginas sin moverte y ⌘⇧Z lo rehace (`planRedo`). En las páginas
+editadas en la sesión entra en la pila de Yjs de la página, así lo de antes sale exacto, también desde el *Undo* del
+panel fuera de orden (C1). Recién reemplazado, ⌘Z en el panel lo deshace (DH9). Deshacer un borrado por las anclas
+sigue al vecino que volvió con un deshacer.
+[ Deshacer en orden entrega 2 - el reemplazo en todo el proyecto como un paso de ⌘Z y ⌘⇧Z, exacto en las páginas editadas ]
+
+v0.143 :
+
+La clave del asistente sincronizada, entrega S2 (P.24, `Doc_Clave_Sincronizada.md`). Faltaba cambiar la frase, abrir
+la copia en una computadora prestada sin guardarla, sincronizar en un segundo workspace y llevar la clave de *Voice*; un
+dispositivo aceptaba una copia más vieja repuesta en la base, y con la copia cambiada en otro ofrecía *Choose a new
+passphrase…*, que la pisaba con la clave vieja. Ahora: *Change passphrase…* vuelve a cifrar la copia (abriéndola antes);
+*Keep the key on this device* destildada deja la clave solo en la pestaña; el `savedAt` del sobre rechaza una copia más
+vieja; *Also sync in this workspace…*; la clave de *Voice* viaja en el mismo sobre; el error de clave rechazada suma
+*Enter your passphrase to update it here*; la ventana de salir cuenta las notas de voz. Sin migración.
+[ Clave sincronizada S2 - cambiar la frase, solo en esta pestaña, copia más vieja, otros workspaces, la clave de Voice y las notas de voz al salir ]
+
+v0.142 :
+
+Carpetas, entrega 3, y subidas que se traban (P.9, B.11). Con el portero colgado, cada archivo de una carpeta gastaba
+sus 5 intentos y quedaba con error: ahora una trabada no gasta intentos y, a la segunda, la cola de la carpeta espera
+(10 s, 20 s… hasta 10 minutos), como la de los sueltos, que mientras espera registra los archivos nuevos y sube sus
+miniaturas. La bajada de `page-files` se corta a los 30 s sin recibir nada (antes, 27 minutos) y sus pasadas esperan
+tras cerrar por Storage colgado. En el portero, el 403 de Drive por límite de pedidos sale como `rate` (no «fuera del
+árbol»), la confianza de 60 s vale también en las páginas siguientes, el ZWJ va como escape y la marca de cada
+subcarpeta va en NFC, buscando también las anteriores; retomar compara rutas sin la forma de los acentos.
+[ Carpetas entrega 3 y subidas que se traban - la cola de una carpeta cierra la vuelta con el portero colgado, registrar y miniaturas mientras la cola espera, page-files con tope por quietud, 403 por límite como rate y marcas en NFC ]
+
 v0.141 :
 
 Exportar, entrega 3: volver a Shot Docs desde el zip. El zip guardaba lo necesario para volver, pero nada lo leía.

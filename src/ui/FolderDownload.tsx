@@ -172,7 +172,7 @@ export function FolderDownloadDialog({ fileId, name, onClose }: { fileId: string
   const missingText = (plan: DownloadPlan) => (items: MissingItem[]) => {
     const date = new Date().toLocaleString();
     // *Retry missing* que bajó todo: la lista nueva lo dice (en un zip, reemplaza a la vieja al descomprimirlo encima).
-    if (!items.length) return `﻿${tr('folders.missingNone', { name: plan.root, date })}\r\n`;
+    if (!items.length) return `\uFEFF${tr('folders.missingNone', { name: plan.root, date })}\r\n`;
     const lines = [tr('folders.missingHead', { name: plan.root, date }), ''];
     for (const item of items) {
       const why = {
@@ -185,7 +185,7 @@ export function FolderDownloadDialog({ fileId, name, onClose }: { fileId: string
       lines.push(`${item.path} — ${why}${item.detail ? ` (${item.detail})` : ''}`);
     }
     // Con BOM y fin de renglón de Windows: el Bloc de notas viejo también lo lee bien.
-    return `﻿${lines.join('\r\n')}\r\n`;
+    return `\uFEFF${lines.join('\r\n')}\r\n`;
   };
 
   // Lo que faltó en cada bajada terminada (para *Retry missing*).

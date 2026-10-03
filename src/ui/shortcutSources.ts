@@ -13,9 +13,9 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
   dictate: ['DictationHost.tsx', 'dictationUi.ts'],
   titleEnter: ['PageView.tsx', 'PracticeView.tsx'],
   // Recién elegida una plantilla, Ctrl/⌘+Z en el título vacío deshace la página (templatesUi.ts). En el resto, la línea
-  // de tiempo del proyecto (P.26, undoTimelineUi.ts).
-  undo: ['PageView.tsx', 'undoTimelineUi.ts'],
-  redo: ['PageView.tsx', 'undoTimelineUi.ts'],
+  // de tiempo del proyecto (P.26, undoTimelineUi.ts); recién reemplazado, también en el panel de buscar (DH9).
+  undo: ['PageView.tsx', 'undoTimelineUi.ts', 'ProjectSearch.tsx'],
+  redo: ['PageView.tsx', 'undoTimelineUi.ts', 'ProjectSearch.tsx'],
   comment: ['EditorComments.tsx', 'commentsUi.ts'],
   selectAll: ['collapseEditor.ts'],
   photoOpen: ['PageEditor.tsx'],
@@ -82,6 +82,7 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
     'HistoryPanel.tsx',
     'ExportDialog.tsx',
     'AssistantPanel.tsx',
+    'CaptionSection.tsx',
     'DictationPanel.tsx',
     'VoiceSettingsDialog.tsx',
     'AssistantSettings.tsx',
@@ -95,7 +96,7 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
   // La confirmación de "Replace all" (ProjectReplace.tsx): Esc la cierra sin cerrar el panel.
   listClose: ['ProjectSwitcher.tsx', 'ProjectSearch.tsx', 'DrivePasteMenu.tsx', 'ProjectReplace.tsx'],
   versionName: ['HistoryPanel.tsx'],
-  assistantApply: ['AssistantPanel.tsx', 'DictationPanel.tsx'],
+  assistantApply: ['AssistantPanel.tsx', 'CaptionSection.tsx', 'DictationPanel.tsx'],
   dictationPlace: ['DictationPanel.tsx'],
   tabsMove: ['InstallDialog.tsx'],
   tourNext: ['TourLayer.tsx'],

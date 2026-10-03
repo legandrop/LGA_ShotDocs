@@ -833,6 +833,65 @@ describe('cola de archivos: subidas que se traban', () => {
     for (const id of [first, second]) expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 1, stalls: 2, blocked: false });
   });
 
+  it('mientras la cola espera al portero, registra los archivos nuevos y sube sus miniaturas sin abrir subidas', async () => {
+    const { server, a, page, ids } = await withFiles(['a.jpg', 'b.jpg', 'c.jpg', 'd.jpg']);
+    await a.media.idle();
+    server.portero.hang = true;
+    const opens = () => server.portero.calls.filter((c) => c.path === '/upload').length;
+    const { done } = round(a);
+    for (const n of [1, 2]) {
+      await until(() => opens() === n);
+      elapse(server, CONTROL_TIMEOUT_MS + STALL_CHECK_MS);
+    }
+    await done;
+    expect(opens()).toBe(2);
+    // Los dos que no se probaron: registrados y con su miniatura, sin error ni espera, esperando el original.
+    for (const id of ids.slice(2)) {
+      expect(server.mediaFiles.get(id)).toBeTruthy();
+      expect(server.mediaFiles.get(id)?.drive_id).toBeFalsy();
+      expect(server.thumbs.has(id)).toBe(true);
+      expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 1, registered: true, thumb: 'done', failures: 0, error: null, blocked: false });
+    }
+    // Un archivo nuevo mientras espera: se registra y sube su miniatura en la vuelta siguiente, sin tocar el portero.
+    const fresh = mediaIdOf(await a.media.add(page, makeFile(MB, 'e.jpg', 'image/jpeg')))!;
+    await a.media.idle();
+    await a.engine.syncMedia();
+    expect(opens()).toBe(2);
+    expect(server.mediaFiles.get(fresh)).toBeTruthy();
+    expect(server.thumbs.has(fresh)).toBe(true);
+    // Lo ya hecho no se vuelve a mandar en las vueltas siguientes.
+    const calls = server.mediaCalls.length;
+    await a.engine.syncMedia();
+    expect(server.mediaCalls.slice(calls).filter((c) => c.startsWith('thumb') || c.startsWith('register'))).toEqual([]);
+    // Vuelve el portero: sube los originales, una vez cada uno.
+    server.portero.hang = false;
+    server.clockOffset += LATER;
+    await a.engine.syncMedia();
+    server.clockOffset += LATER;
+    await a.engine.syncMedia();
+    for (const id of [...ids, fresh]) expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+    expect(server.portero.drive.size).toBe(5);
+  });
+
+  it('si la espera fue por Storage, mientras espera solo registra (no prueba las miniaturas)', async () => {
+    const { server, a, page } = await withFiles([]);
+    const setPause = (value: { until: number; count: number; storage?: boolean } | null) =>
+      ((a.media as unknown as { stallPause: unknown }).stallPause = value);
+    const ids: string[] = [];
+    for (const name of ['x.jpg', 'y.jpg']) ids.push(mediaIdOf(await a.media.add(page, makeFile(MB, name, 'image/jpeg')))!);
+    await a.media.idle();
+    // La cola venía esperando porque Storage no contestaba las miniaturas.
+    setPause({ until: Date.now() + server.clockOffset + 600_000, count: 3, storage: true });
+    const thumbsBefore = server.mediaCalls.filter((c) => c.startsWith('thumb')).length;
+    await a.engine.syncMedia();
+    for (const id of ids) {
+      expect(server.mediaFiles.get(id)).toBeTruthy();
+      expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 1, registered: true, thumb: 'local', error: null });
+    }
+    expect(server.mediaCalls.filter((c) => c.startsWith('thumb')).length).toBe(thumbsBefore);
+    expect(server.portero.calls.filter((c) => c.path === '/upload').length).toBe(0);
+  });
+
   it('un archivo nuevo acorta la espera de la cola (sin volver la cuenta a cero), y un avance la borra', async () => {
     const { server, a, page } = await withFiles([]);
     const pause = () => (a.media as unknown as { stallPause: { until: number; count: number } | null }).stallPause;
@@ -1276,6 +1335,32 @@ describe('cola de archivos: miniaturas que Storage no contesta', () => {
       expect(server.mediaFiles.get(id)?.thumb_at).toBeTruthy();
       expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
     }
+  });
+
+  it('si una miniatura se traba mientras la cola espera al portero, lo que sigue solo se registra', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    const ids: string[] = [];
+    for (const name of ['IMG_0401.JPG', 'IMG_0402.JPG']) {
+      server.clockOffset += 1000;
+      ids.push(mediaIdOf(await a.media.add(page, makeFile(MB, name, 'image/jpeg')))!);
+    }
+    await a.media.idle();
+    const limit = timeoutFor((await a.mediaDb.get('thumbs', ids[0]))!.size);
+    const storage = realThumbs(a, server);
+    storage.upload = never;
+    (a.media as unknown as { stallPause: unknown }).stallPause = { until: Date.now() + server.clockOffset + 600_000, count: 1, storage: false };
+    const { done } = round(a);
+    await until(() => storage.calls.length === 1);
+    await vi.advanceTimersByTimeAsync(limit + 1000);
+    await done;
+    // La primera probó su miniatura (se trabó); la segunda solo se registró.
+    expect(storage.calls).toEqual([`POST ${ids[0]}`]);
+    expect((a.media as unknown as { stallPause: { storage?: boolean } }).stallPause.storage).toBe(true);
+    for (const id of ids) expect(server.mediaFiles.get(id)).toBeTruthy();
+    expect(await a.mediaDb.get('files', ids[0])).toMatchObject({ pending: 1, thumb: 'local', thumbStalls: 1 });
+    expect(await a.mediaDb.get('files', ids[1])).toMatchObject({ pending: 1, registered: true, thumb: 'local', error: null });
+    expect(server.portero.calls.filter((c) => c.path === '/upload').length).toBe(0);
   });
 
   it('el tope de la miniatura crece con las fallas seguidas: una que tarda más que el tope termina pasando', async () => {
