@@ -1089,6 +1089,64 @@ describe('carpetas: listar varias subcarpetas de una vez (dirs)', () => {
     expect(again.failed).toEqual({ [ids[1]!]: 'not_found' });
   });
 
+  it('O7: con partial, más de un minuto entre páginas con 40 subcarpetas no corta con 409: las que no entran vuelven en later, sin nada de ellas', async () => {
+    const { world, store } = await setup();
+    const names = Array.from({ length: 40 }, (_, i) => `n${i}`);
+    const made: Record<string, string> = {};
+    for (let round = 0; round < 6 && Object.keys(made).length < names.length; round++) {
+      const batch = names.filter((d) => !(d in made)).slice(0, FOLDER_BATCH);
+      Object.assign(made, (await prepare(new Portero(env, store, world.http), { dirs: batch })).dirs);
+    }
+    const all = names.map((d) => made[d]!);
+    // 3 archivos en cada una: 120 cosas, dos páginas.
+    let n = 0;
+    for (const dir of all) {
+      for (let i = 0; i < 3; i++) world.drive.set(`o7f${++n}`.padEnd(14, 'x'), { name: `f${i}.jpg`, mimeType: 'image/jpeg', parents: [dir], data: new Uint8Array([1]) });
+    }
+    const list = (body: Record<string, unknown>) => call(new Portero(env, store, world.http), '/folder/list', 'viewer-jwt', { file: F1, ...body });
+    // Recién creadas (Drive las mostró hace un momento): la primera página las acepta a todas sin preguntarle nada a Drive.
+    const first = (await (await list({ dirs: all, partial: true })).json()) as Many;
+    expect(Object.keys(first.lists)).toHaveLength(40);
+    expect(first.nextPageToken).toBeTruthy();
+    const firstCount = Object.values(first.lists).flat().length;
+    // Drive pide ir más despacio y la app espera más de un minuto: hay que volver a mirar las 40 y no entran.
+    vi.useFakeTimers({ now: Date.now() + LIST_TRUST_MS + 1000, toFake: ['Date'] });
+    // Una app anterior (sin partial) sigue recibiendo 409, como siempre.
+    const old = await list({ dirs: all, pageToken: first.nextPageToken });
+    expect(old.status).toBe(409);
+    vi.useFakeTimers({ now: Date.now() + LIST_TRUST_MS + 1000, toFake: ['Date'] });
+    const before = world.listQueries.length;
+    const res = await list({ dirs: all, pageToken: first.nextPageToken, partial: true });
+    expect(res.status).toBe(200);
+    const next = (await res.json()) as Many;
+    expect(next.later.length).toBeGreaterThan(0);
+    expect(Object.keys(next.lists).length + next.later.length).toBe(40);
+    expect(next.failed).toEqual({});
+    // De las que quedaron para después no sale nada; el token valió (la misma consulta que la primera página).
+    for (const d of next.later) expect(next.lists[d]).toBeUndefined();
+    expect(world.listQueries.length - before).toBe(1);
+    expect(world.listQueries.at(-1)).toBe(world.listQueries[before - 1]);
+    expect(firstCount + Object.values(next.lists).flat().length).toBeLessThanOrEqual(120);
+    expect(next.nextPageToken).toBeNull();
+  });
+
+  it('O7: con partial, una subcarpeta movida afuera en una página siguiente sale en failed y las demás siguen', async () => {
+    const { world, ids, add, tree, ask } = await many();
+    for (let i = 0; i < 150; i++) add(`h${String(i).padStart(3, '0')}.jpg`, [ids[i % 2]!]);
+    const first = (await (await ask({ dirs: [ids[0]!, ids[1]!], partial: true })).json()) as Many;
+    expect(first.nextPageToken).toBeTruthy();
+    const carpetas = world.drive.get(tree.root.id)!.parents[0]!;
+    world.drive.get(ids[1]!)!.parents = [carpetas];
+    vi.useFakeTimers({ now: Date.now() + TREE_TTL_MS + 1000, toFake: ['Date'] });
+    const res = await ask({ dirs: [ids[0]!, ids[1]!], pageToken: first.nextPageToken, partial: true });
+    expect(res.status).toBe(200);
+    const next = (await res.json()) as Many;
+    expect(next.failed).toEqual({ [ids[1]!]: 'not_found' });
+    expect(Object.keys(next.lists)).toEqual([ids[0]!]);
+    expect(next.lists[ids[0]!]!.length).toBeGreaterThan(0);
+    expect(next.later).toEqual([]);
+  });
+
   it('el tope de llamados a Drive: lo que no entra vuelve como later y cada pedido avanza al menos una', async () => {
     const { world, store } = await setup();
     const names = Array.from({ length: 40 }, (_, i) => `n${i}`);

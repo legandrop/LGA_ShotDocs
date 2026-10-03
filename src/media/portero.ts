@@ -544,10 +544,14 @@ export class Portero {
    * Lo de varias subcarpetas (hasta `FOLDER_LIST_DIRS`) en un solo pedido, con un pase por archivo: lo que usa el
    * recorrido de *Download all*. Las páginas siguen con el mismo `dirs` y el `nextPageToken` (solo las que
    * vinieron en `lists`). `null` si el portero es anterior a esto (contesta como si fuera `dir`, sin `lists`): hay
-   * que listar de a una.
+   * que listar de a una. Con `partial`, el portero puede dejar algunas para después (`later`) o darlas por perdidas
+   * (`failed`) también en las páginas siguientes, en vez de cortar con `409 changed` (uno anterior lo ignora).
    */
   async folderListDirs(file: string, dirs: string[], pageToken: string | null = null): Promise<FolderListingMany | null> {
-    const body = await this.request<Partial<FolderListingMany>>('POST', '/folder/list', { json: { file, dirs, pageToken }, stallMs: CONTROL_TIMEOUT_MS });
+    const body = await this.request<Partial<FolderListingMany>>('POST', '/folder/list', {
+      json: { file, dirs, pageToken, partial: true },
+      stallMs: CONTROL_TIMEOUT_MS,
+    });
     if (!body.lists || typeof body.lists !== 'object') return null;
     return { lists: body.lists, failed: body.failed ?? {}, later: body.later ?? [], nextPageToken: body.nextPageToken ?? null };
   }

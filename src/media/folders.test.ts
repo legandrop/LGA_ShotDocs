@@ -846,12 +846,13 @@ describe('el cliente del portero: listar varias subcarpetas (dirs)', () => {
     return { sent, p: new Portero('https://portero.example', { fetch: fetcher, token: async () => 'jwt', wait: async () => undefined }) };
   };
 
-  it('manda { file, dirs, pageToken } (sin dir) y devuelve lists, failed, later y el token', async () => {
+  it('manda { file, dirs, pageToken, partial } (sin dir) y devuelve lists, failed, later y el token', async () => {
     const { p, sent } = client(() =>
       new Response(JSON.stringify({ lists: { a: [{ type: 'shortcut', name: 'x', modified: null }], b: [] }, failed: { c: 'not_found' }, later: ['d'], nextPageToken: 't2' }), { status: 200 }),
     );
     const out = await p.folderListDirs('f1', ['a', 'b', 'c', 'd'], 't1');
-    expect(sent).toEqual([{ file: 'f1', dirs: ['a', 'b', 'c', 'd'], pageToken: 't1' }]);
+    // `partial`: la app sabe que una página siguiente puede dejar algunas para después (O7); uno anterior lo ignora.
+    expect(sent).toEqual([{ file: 'f1', dirs: ['a', 'b', 'c', 'd'], pageToken: 't1', partial: true }]);
     expect(out).toEqual({ lists: { a: [{ type: 'shortcut', name: 'x', modified: null }], b: [] }, failed: { c: 'not_found' }, later: ['d'], nextPageToken: 't2' });
   });
 

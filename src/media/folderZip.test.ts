@@ -58,13 +58,21 @@ function world(tree: Tree, opts: { page?: number } = {}) {
    * El mismo Drive detrás de un portero que lista varias subcarpetas por pedido (`folderListDirs`, como
    * portero/src/core.ts): `page` cosas en total por pedido, agrupadas por padre; `cap` subcarpetas por pedido (el
    * resto vuelve en `later`); `old`: un portero anterior (no devuelve `lists`); `err`: el código del error de
-   * ese pedido (el número de pedido, desde 1), o `null`.
+   * ese pedido (el número de pedido, desde 1), o `null`; `partial`: en una página siguiente, las que el portero deja
+   * para después o da por perdidas (sin nada de ellas en `lists`; la consulta sigue con todas, como Drive).
    */
-  const cfg: { page: number; cap: number; old: boolean; err: (n: number, ids: string[], token: string | null) => string | null } = {
+  const cfg: {
+    page: number;
+    cap: number;
+    old: boolean;
+    err: (n: number, ids: string[], token: string | null) => string | null;
+    partial: (n: number, ids: string[], token: string) => { later?: string[]; failed?: Record<string, string> } | null;
+  } = {
     page: 100,
     cap: Infinity,
     old: false,
     err: () => null,
+    partial: () => null,
   };
   const manyLog: { ids: string[]; token: string | null }[] = [];
   const listerDirs: FolderLister = {
@@ -91,6 +99,15 @@ function world(tree: Tree, opts: { page?: number } = {}) {
       const from = Number(token ?? 0);
       const lists: Record<string, FolderEntry[]> = Object.fromEntries(accepted.map((id) => [id, []]));
       for (const [id, e] of flat.slice(from, from + cfg.page)) lists[id]!.push(e);
+      const out = token ? cfg.partial(manyLog.length, ids, token) : null;
+      for (const id of out?.later ?? []) {
+        delete lists[id];
+        later.push(id);
+      }
+      for (const [id, code] of Object.entries(out?.failed ?? {})) {
+        delete lists[id];
+        failed[id] = code;
+      }
       return { lists, failed, later, nextPageToken: from + cfg.page < flat.length ? String(from + cfg.page) : null };
     },
   };
@@ -993,6 +1010,47 @@ describe('Download all: varias subcarpetas por pedido (dirs)', () => {
       // Después del error, de a una (las subcarpetas que quedaban en ese pedido).
       expect(w.listed.length).toBeGreaterThan(1);
     }
+  });
+
+  it('una página siguiente que deja subcarpetas para después o las da por perdidas (O7): se descarta lo suyo, se listan de nuevo y las demás siguen, sin listar de a una', async () => {
+    const tree: Tree = Object.fromEntries(
+      ['A', 'B', 'C', 'D'].map((d) => [d, Object.fromEntries(Array.from({ length: 6 }, (_, i) => [`${d.toLowerCase()}${i}.txt`, 'x'.repeat(i + 1)]))]),
+    );
+    const w = world(tree);
+    w.cfg.page = 5; // 24 cosas: 5 páginas en el primer pedido
+    const [b, c] = [w.idOf('B'), w.idOf('C')];
+    // En la tercera página del primer pedido el portero deja B para después (no entró en su tope de llamados) y da a C
+    // por perdida (se movió afuera del árbol). Lo de C de las páginas anteriores no puede quedar en el plan.
+    w.cfg.partial = (n) => (n === 3 ? { later: [b], failed: { [c]: 'not_found' } } : null);
+    const seen: { files: number; bytes: number }[] = [];
+    const plan = await planFolder(w.listerDirs, 'carpeta-1', 'R', { wait: noWait, onProgress: (p) => seen.push(p) });
+    const paths = plan.files.map((f) => f.path);
+    expect(paths.filter((p) => p.startsWith('A/'))).toHaveLength(6);
+    expect(paths.filter((p) => p.startsWith('B/'))).toHaveLength(6);
+    expect(paths.filter((p) => p.startsWith('D/'))).toHaveLength(6);
+    expect(paths.filter((p) => p.startsWith('C/'))).toEqual([]);
+    expect(new Set(plan.files.map((f) => f.id)).size).toBe(plan.files.length);
+    expect(plan.skipped).toEqual([{ path: 'C/', reason: 'folder', detail: 'not_found', dirId: c }]);
+    expect(seen.at(-1)).toMatchObject({ files: 18, bytes: plan.bytes });
+    // Sin caer a listar de a una (solo la raíz, que no tiene id); B se pidió de nuevo en otra vuelta, sola.
+    expect(w.listed).toEqual([null]);
+    expect(w.manyLog.filter((x) => x.token === null).map((x) => x.ids.length)).toEqual([4, 1]);
+    // Las páginas siguientes repitieron los mismos dirs de su primer pedido (Drive ata el token a la consulta).
+    const first = w.manyLog[0]!.ids.join();
+    for (const x of w.manyLog.slice(1).filter((x) => x.token !== null && x.ids.length === 4)) expect(x.ids.join()).toBe(first);
+  });
+
+  it('si en una página siguiente ya no queda ninguna de esa vuelta, no se piden más páginas', async () => {
+    const tree: Tree = { A: Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`a${i}.txt`, 'x'])) };
+    const w = world(tree);
+    w.cfg.page = 4;
+    const a = w.idOf('A');
+    let once = true;
+    w.cfg.partial = () => (once ? ((once = false), { later: [a] }) : null);
+    const plan = await planFolder(w.listerDirs, 'carpeta-1', 'R', { wait: noWait });
+    expect(plan.files).toHaveLength(12);
+    // Primer pedido: la página 1 y la 2 (que la deja para después); después, las 3 páginas de la vuelta nueva.
+    expect(w.manyLog.map((x) => x.token === null)).toEqual([true, false, true, false, false]);
   });
 
   it('Drive que pide ir más despacio: espera y repite el mismo pedido; si no cede, las anota con "rate"', async () => {

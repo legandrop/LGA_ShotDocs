@@ -1903,8 +1903,13 @@ export class Portero {
    *   - `later`: las que no entraron en el tope de llamados a Drive de este pedido (se piden de nuevo);
    *   - `nextPageToken`: para seguir con el mismo `dirs` (solo las de `lists`: la consulta no puede cambiar).
    * Cada subcarpeta se comprueba (`inTree`) como en el listado de una, salvo la que se comprobó hace menos de
-   * `LIST_TRUST_MS`. Con `pageToken` el conjunto ya no puede cambiar: una que ya no se puede comprobar corta el
-   * pedido con `409 changed` y la app vuelve a empezar. Cada pedido avanza al menos una subcarpeta.
+   * `LIST_TRUST_MS`. Con `pageToken` el conjunto ya no puede cambiar (Drive ata el token a la consulta): una que ya
+   * no se puede comprobar corta el pedido con `409 changed` y la app vuelve a empezar. Con `partial: true` (una app
+   * que lo entiende, desde v0.0XX) no corta: la consulta sigue con todas, pero lo de las que no entraron en el tope
+   * de llamados vuelve en `later` y lo de las que ya no son del árbol en `failed`, sin nada de ellas en `lists`; la
+   * app descarta lo que ya tenía de esas y las lista de nuevo, y sigue con las demás (antes, una espera de más de un
+   * minuto entre páginas con 36 subcarpetas o más daba `409` y la app caía a listar de a una). Cada pedido avanza
+   * al menos una subcarpeta.
    */
   private async folderListMany(req: Request, who: Who, root: string, body: Record<string, unknown>): Promise<unknown> {
     if (body.dir !== undefined && body.dir !== null && body.dir !== '') throw new HttpError(400, 'Send either dir or dirs, not both.', 'bad_request');
@@ -1915,11 +1920,13 @@ export class Portero {
     // Sin repetidas y en orden: la consulta tiene que ser la misma en cada página (Drive ata el `pageToken` a ella).
     const dirs = [...new Set(given as string[])].sort();
     const pageToken = typeof body.pageToken === 'string' && /^[\w.~-]{1,2000}$/.test(body.pageToken) ? body.pageToken : '';
+    // La app sabe dejar subcarpetas para después también en las páginas siguientes (ver arriba).
+    const partial = body.partial === true;
     const known = this.known(root);
     const accepted: string[] = [];
     const failed: Record<string, string> = {};
     const later: string[] = [];
-    if (pageToken) {
+    if (pageToken && !partial) {
       for (const dir of dirs) {
         // La misma confianza corta que en la primera página: sin esto, en las siguientes valía la de `inTree`
         // (10 minutos) y una subcarpeta movida a otro proyecto se seguía listando hasta terminar las páginas.
@@ -1948,8 +1955,11 @@ export class Portero {
     for (const dir of accepted) lists[dir] = [];
     if (accepted.length === 0) return { lists, failed, later, nextPageToken: null };
 
+    // Con `pageToken`, la consulta de la primera página (todas las pedidas), aunque alguna haya quedado afuera de esta:
+    // de las que no se comprobaron no sale nada (`wanted`, abajo).
+    const asked = pageToken ? dirs : accepted;
     const params = new URLSearchParams({
-      q: `(${accepted.map((d) => `${quoted(d)} in parents`).join(' or ')}) and trashed = false`,
+      q: `(${asked.map((d) => `${quoted(d)} in parents`).join(' or ')}) and trashed = false`,
       fields: LIST_FIELDS,
       pageSize: LIST_PAGE,
       orderBy: 'folder,name_natural',
