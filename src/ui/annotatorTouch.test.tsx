@@ -16,6 +16,7 @@ import { PHOTO_MARKUP_MAP, readPhotoMarkup, writeFrame } from '../media/markup';
 import { Annotator } from './Annotator';
 import { inputOf, movePoints, routeDown } from './annotatorTouch';
 import { loadPrefs } from './annotatorStyles';
+import { shortcutLabel } from './shortcuts';
 import type { CarreteItem } from './carreteModel';
 import { connect, mountEditor, tick, unmountAll, yText } from './collabHarness';
 import { schema } from './editorSchema';
@@ -383,6 +384,58 @@ describe('el lápiz (AN8)', () => {
     // Los bytes de este trazo (sección 10: 1,7 KB medidos a 240 Hz en el diseño).
     const bytes = Y.encodeStateAsUpdate(doc).length - before;
     expect(bytes).toBeLessThan(2500);
+  });
+});
+
+/**
+ * Una ventana angosta con mouse (`max-width: 760px` sí, `pointer: coarse` no): el anotador se arma como en el teléfono
+ * (la tira de abajo y la hoja) pero los tooltips conservan los atajos y los gestos del mouse, porque lo decide el tipo de
+ * puntero y no el ancho (D226; roadmap B.25c).
+ */
+function narrowMouse() {
+  vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('max-width'), media: query, addEventListener: () => undefined, removeEventListener: () => undefined }));
+}
+
+describe('una ventana angosta con mouse: la tira del teléfono, con los atajos en los tooltips (B.25c)', () => {
+  const tipOf = (el: Element, selector: string) => el.querySelector<HTMLElement>(selector)?.getAttribute('data-tip') ?? null;
+
+  it('las herramientas, deshacer, encuadrar y el grosor dicen su atajo; en el teléfono, no', async () => {
+    narrowMouse();
+    const doc = new Y.Doc();
+    writeFrame(doc, ID, FRAME.w, FRAME.h);
+    const { el } = await open(doc);
+    // Angosta: la tira de abajo, como en el teléfono.
+    expect(el.hasAttribute('data-compact')).toBe(true);
+    expect(tipOf(el, '.annotator-dock [data-tool="arrow"]')).toContain(`**${shortcutLabel('annotateArrow', false)}**: `);
+    // Con mouse sí hay Shift+arrastrar.
+    expect(tipOf(el, '[data-tool="arrow"]')).toContain('**Shift+drag**: ');
+    expect(tipOf(el, 'button[aria-label="Undo"]')!.startsWith(`**${shortcutLabel('annotateUndo', false)}**: undo`)).toBe(true);
+    // Encuadrar: la tecla, la rueda y Espacio+arrastrar (no el toque).
+    const fit = tipOf(el, 'button[aria-label="Fit"]')!;
+    expect(fit).toContain(`**${shortcutLabel('annotateFit', false)}**: `);
+    expect(fit).toContain('**Scroll**: ');
+    expect(fit).not.toContain('**Pinch**');
+    // El grosor, en la hoja.
+    tool(el, 'line');
+    act(() => el.querySelector<HTMLButtonElement>('.annotator-dot')!.click());
+    const width = [...el.querySelectorAll<HTMLElement>('.annotator-sheet .annotator-field')].find((f) => f.textContent?.includes('Thickness'));
+    expect(width?.getAttribute('data-tip')).toContain(`**${shortcutLabel('annotateWidth', false)}**: `);
+  });
+
+  it('en el teléfono (el dedo), las mismas sin atajos', async () => {
+    phone();
+    const doc = new Y.Doc();
+    writeFrame(doc, ID, FRAME.w, FRAME.h);
+    const { el } = await open(doc);
+    expect(el.hasAttribute('data-compact')).toBe(true);
+    expect(tipOf(el, '[data-tool="arrow"]')).toBeNull();
+    expect(tipOf(el, 'button[aria-label="Undo"]')).toBeNull();
+    expect(tipOf(el, 'button[aria-label="Fit"]')).not.toContain(shortcutLabel('annotateFit', false) + '**');
+    tool(el, 'line');
+    act(() => el.querySelector<HTMLButtonElement>('.annotator-dot')!.click());
+    const width = [...el.querySelectorAll<HTMLElement>('.annotator-sheet .annotator-field')].find((f) => f.textContent?.includes('Thickness'));
+    expect(width).toBeTruthy();
+    expect(width!.getAttribute('data-tip')).toBeNull();
   });
 });
 
