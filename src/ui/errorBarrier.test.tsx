@@ -14,8 +14,11 @@ import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { mountEditor, unmountAll } from './collabHarness';
 import { AppBarrier, ErrorBarrier, WorkspaceBarrier } from './ErrorBarrier';
 import { schema as publishedSchema } from './fixtures/editorSchemaMain';
+import { yXmlFragmentToProseMirrorRootNode } from 'y-prosemirror';
 import { restoreInDoc } from './historyRestore';
-import { closeHistory, requestRestore, useHistoryUi } from './historyUi';
+import { importJobFor } from '../import/importJob';
+import { closeHistory, requestRestore, restoreTargetSettled, useHistoryUi } from './historyUi';
+import { hasUnsavedWork } from './lazyPart';
 import { HistoryPanel } from './HistoryPanel';
 import { PageView } from './PageView';
 
@@ -213,6 +216,38 @@ function HistoryHost() {
   return pageId ? <HistoryPanel key={pageId} pageId={pageId} /> : null;
 }
 
+/** Lo que muestra el editor (sobre una copia): el editor escribe los atributos por defecto de lo que toca. */
+function shown(d: Y.Doc, schema: import('@tiptap/pm/model').Schema): string {
+  const c = new Y.Doc();
+  Y.applyUpdate(c, Y.encodeStateAsUpdate(d));
+  try {
+    return JSON.stringify(yXmlFragmentToProseMirrorRootNode(c.getXmlFragment(CONTENT_FRAGMENT), schema).toJSON());
+  } finally {
+    c.destroy();
+  }
+}
+
+/** Demora las aperturas de la página rota desde la segunda (la primera es la del editor; la segunda, la de la barrera). */
+function slowOpens(device: Device, pageId: string, ms: number) {
+  const open = device.docs.open.bind(device.docs);
+  const close = device.docs.close.bind(device.docs);
+  let opens = 0;
+  const counts = { opened: 0, closed: 0 };
+  vi.spyOn(device.docs, 'open').mockImplementation(async (id, options) => {
+    if (id !== pageId) return open(id, options);
+    opens++;
+    if (opens >= 2) await new Promise((r) => setTimeout(r, ms));
+    const doc = await open(id, options);
+    counts.opened++;
+    return doc;
+  });
+  vi.spyOn(device.docs, 'close').mockImplementation((id) => {
+    if (id === pageId) counts.closed++;
+    close(id);
+  });
+  return counts;
+}
+
 const crashed = (host: HTMLElement) => !!host.querySelector('.page-crash');
 const editorShown = (host: HTMLElement) => !!host.querySelector('.bn-editor');
 
@@ -388,13 +423,15 @@ describe('la barrera de la página, con las filas hostiles', () => {
     expect(await reader.docs.unsyncedPages()).not.toContain(broken);
     const onServer = new Y.Doc();
     for (const row of server.updates.get(broken)!) Y.applyUpdate(onServer, row.data);
-    expect(JSON.stringify(onServer.getXmlFragment(CONTENT_FRAGMENT).toJSON())).toBe(JSON.stringify(before.getXmlFragment(CONTENT_FRAGMENT).toJSON()));
+    expect(shown(onServer, schema)).toBe(shown(before, schema));
   });
 });
 
 describe('el historial desde la barrera', () => {
   it('la versión actual (rota) no se lleva el historial; elegir la anterior y Restore arreglan la página, sin Undo', async () => {
-    const { reader, broken } = await brokenWorkspace(HOSTILE.nivelObjeto);
+    const { reader, broken, server } = await brokenWorkspace(HOSTILE.nivelObjeto);
+    // La barrera tarda en prepararse (bajar la parte y abrir el documento): *Restore* la espera.
+    slowOpens(reader, broken, 2500);
     const notices: unknown[] = [];
     const onNotice = (e: Event) => notices.push((e as CustomEvent).detail);
     window.addEventListener('shotdocs:notice', onNotice);
@@ -421,10 +458,53 @@ describe('el historial desde la barrera', () => {
       // El aviso de restaurada, sin **Undo** (no se deshace desde ahí: se restaura otra versión).
       expect(notices.some((n) => typeof n === 'string' && n.startsWith('Restored the version from'))).toBe(true);
       expect(notices.some((n) => typeof n === 'object')).toBe(false);
-      expect(await reader.docs.unsyncedPages()).toContain(broken);
+      // Sube como cualquier edición: en el servidor ya no está la fila que rompía.
+      await act(async () => void (await reader.engine.syncNow()));
+      expect(await reader.docs.unsyncedPages()).not.toContain(broken);
+      const onServer = new Y.Doc();
+      for (const row of server.updates.get(broken)!) Y.applyUpdate(onServer, row.data);
+      expect(onServer.getXmlFragment(CONTENT_FRAGMENT).toString()).not.toContain('[object Object]');
+      expect(onServer.getXmlFragment(CONTENT_FRAGMENT).toString()).toContain('texto del equipo uno');
     } finally {
       window.removeEventListener('shotdocs:notice', onNotice);
     }
+  });
+});
+
+describe('la barrera de la página mientras prepara la restauración', () => {
+  it('Restore antes de que esté lista: el historial la espera y restaura', async () => {
+    const { reader, broken, server } = await brokenWorkspace(HOSTILE.nivelTexto);
+    slowOpens(reader, broken, 600);
+    const host = render(<Shell device={reader} pageId={broken} />);
+    await until(() => crashed(host) || editorShown(host));
+    expect(crashed(host)).toBe(true);
+    const before = new Y.Doc();
+    for (const row of server.updates.get(broken)!.slice(0, -1)) Y.applyUpdate(before, row.data);
+    const schema = mountEditor(new Y.Doc()).prosemirrorView!.state.schema;
+    // Sin esperar, todavía no hay a quién pedírselo (lo que veía antes el historial: *The page isn't open…*).
+    expect(requestRestore(broken, before, schema)).toEqual({ ok: false, reason: 'notEditable' });
+    // Lo que hace el historial antes de pedirlo.
+    await act(async () => restoreTargetSettled(broken));
+    let outcome: ReturnType<typeof requestRestore> = { ok: false, reason: 'notEditable' };
+    await act(async () => {
+      outcome = requestRestore(broken, before, schema);
+    });
+    expect(outcome.ok).toBe(true);
+    await until(() => editorShown(host));
+    expect(host.textContent).toContain('texto del equipo uno');
+  });
+
+  it('cambiar de página mientras abre el documento no lo deja abierto', async () => {
+    const { reader, broken, healthy } = await brokenWorkspace(HOSTILE.nivelObjeto);
+    const counts = slowOpens(reader, broken, 400);
+    const host = render(<Shell device={reader} pageId={broken} />);
+    await until(() => crashed(host));
+    // Enseguida a otra página: la barrera todavía estaba abriendo el documento.
+    act(() => rootOf(host).render(<Shell device={reader} pageId={healthy} />));
+    await until(() => editorShown(host));
+    await wait(800);
+    expect(counts.opened).toBeGreaterThanOrEqual(2);
+    expect(counts.closed).toBe(counts.opened);
   });
 });
 
@@ -445,7 +525,7 @@ describe('restaurar sin editor', () => {
       expect(outcome.trace && outcome.trace.ins.length + outcome.trace.del.length).toBeGreaterThan(0);
       expect(outcome.undo()).toBe(false);
     }
-    expect(doc.getXmlFragment(CONTENT_FRAGMENT).toJSON()).toBe(before.getXmlFragment(CONTENT_FRAGMENT).toJSON());
+    expect(shown(doc, schema)).toBe(shown(before, schema));
     expect(doc.getMap('collapsedHeadings').get('b1')).toEqual({ at: 1 });
     // La versión publicada de la app (el esquema anterior) abre lo restaurado sin perder nada.
     const old = mountEditor(doc, 'viejo', publishedSchema);
@@ -526,6 +606,45 @@ describe('la barrera de la app', () => {
     // Sin bucle.
     await wait(300);
     expect(barrierLogs.length).toBe(1);
+  });
+
+  it('con la pantalla de error, cerrar con algo sin guardar o con una importación en curso pregunta, y la recarga por versión nueva espera', async () => {
+    const d = await makeDevice(new FakeServer());
+    devices.push(d);
+    let unsaved = false;
+    vi.spyOn(d.docs, 'hasUnsavedEdits').mockImplementation(() => unsaved);
+    const host = render(
+      <ServicesContext.Provider value={services(d)}>
+        <WorkspaceBarrier>
+          <Bomb armed />
+        </WorkspaceBarrier>
+      </ServicesContext.Provider>,
+    );
+    await wait(50);
+    expect(host.querySelector('.app-crash')).not.toBeNull();
+    const closing = () => {
+      const e = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    expect(closing()).toBe(false);
+    expect(hasUnsavedWork()).toBe(false);
+    // Algo sin guardar en el dispositivo: el navegador pregunta y la recarga por una versión nueva no sale sola.
+    unsaved = true;
+    expect(closing()).toBe(true);
+    expect(hasUnsavedWork()).toBe(true);
+    unsaved = false;
+    // Una importación que sigue corriendo (fuera de React) aunque la app se cayó: también.
+    const job = importJobFor(d.tree);
+    job.set({ running: true });
+    expect(closing()).toBe(true);
+    job.set({ running: false });
+    expect(closing()).toBe(false);
+    // Al irse la pantalla, dejan de mirar.
+    act(() => rootOf(host).render(<p />));
+    unsaved = true;
+    expect(closing()).toBe(false);
+    expect(hasUnsavedWork()).toBe(false);
   });
 
   it('sin servicios (fuera de un workspace): la misma pantalla, sin contar nada', async () => {

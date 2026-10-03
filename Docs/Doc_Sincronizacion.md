@@ -1278,11 +1278,20 @@ es el de los avisos de siempre (`reloadByHand`, que pregunta si hay un comentari
 
 **Restaurar sin el editor.** Con el aviso a la vista, el historial restaura sobre el documento de la página
 (`restoreInDoc` de `historyRestore.ts`): la misma ida y vuelta que el editor (`versionNode`, con el esquema del editor
-que muestra la versión, que el historial pasa en `requestRestore`) y una transacción de Yjs que reemplaza el contenido
-por una copia de la versión con sus ids (los comentarios siguen anclados). Es una edición local más: se guarda, sube y
-el historial la muestra. No tiene **Undo** en el aviso (el editor que se monta después no la tiene en su pila); para
-volver atrás se restaura otra versión. La vista de una versión en el historial tiene su propia barrera: si la actual es
-la que rompe, se ve *This version can't be shown* y se elige otra. Pruebas: `src/ui/errorBarrier.test.tsx`.
+que muestra la versión, que el historial pasa en `requestRestore`) y después **el mismo algoritmo con que el editor pasa
+lo suyo a Yjs** (`updateYFragment` de y-prosemirror): conserva los bloques iguales y, en los distintos, cambia solo
+atributos y texto. Así lo que otro dispositivo escribió sin red o a la vez sigue estando cuando llega, como al restaurar
+por el editor (la primera versión reemplazaba el grupo entero y lo perdía: 0 de 200 casos al azar contra 50 de 50 por el
+editor; auditoría, B1). Se prueba primero en una copia en memoria; si no da igual a la versión, no se escribe ni sube
+nada. Es una edición local más: se guarda, sube y el historial la muestra. No tiene **Undo** en el aviso (el editor que
+se monta después no la tiene en su pila); para volver atrás se restaura otra versión. Si *Restore* llega mientras la
+barrera todavía abre el documento, el historial la espera (`restoreTargetSettled`). La vista de una versión en el
+historial tiene su propia barrera: si la actual es la que rompe, se ve *This version can't be shown* y se elige otra.
+
+**Exportar a PDF o zip** no necesita barrera: el editor de exportación vive en su propia raíz de React, fuera de la app,
+y una página que lo hace tirar se saltea con su motivo mientras las demás salen (`exportPages.ts`; probado con las tres
+filas en `src/export/exportHostile.test.tsx`). Pruebas de las barreras: `src/ui/errorBarrier.test.tsx`,
+`src/ui/restoreInDoc.test.tsx` y `src/ui/restoreInDocCheck.test.ts`.
 
 ## Volver después de mucho tiempo sin red
 

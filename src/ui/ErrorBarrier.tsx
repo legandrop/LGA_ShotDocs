@@ -1,8 +1,10 @@
 import { Component, useEffect, type ErrorInfo, type ReactNode } from 'react';
 import { useT } from '../i18n';
 import { usePermissions, useServices, useSyncStatus, type Services } from '../services';
-import { canSeeHistory, openHistory, registerRestoreTarget } from './historyUi';
+import { importJobFor } from '../import/importJob';
+import { canSeeHistory, markRestorePending, openHistory, registerRestoreTarget } from './historyUi';
 import { reloadByHand, watchPendingWrites } from './lazyPart';
+import { replaceRunning } from './replaceUi';
 import { usePendingCount } from './usePendingCount';
 
 // Las barreras de error (Docs/Doc_Sincronizacion.md, «Barreras de error»). Un error al dibujar (una página con una
@@ -85,12 +87,14 @@ function PageCrash({ pageId, retry }: { pageId: string; retry: () => void }) {
     let cancelled = false;
     let opened = false;
     let off = () => undefined as void;
-    void import('./historyRestore')
+    // Mientras se prepara (bajar la parte y abrir el documento), *Restore* del historial espera (historyUi.ts).
+    const ready = import('./historyRestore')
       .then(async ({ restoreInDoc }) => {
         if (cancelled) return;
         const doc = await docs.open(pageId);
+        // Se cambió de página mientras se abría: se cierra acá (la limpieza ya pasó sin nada que cerrar).
+        if (cancelled) return docs.close(pageId);
         opened = true;
-        if (cancelled) return;
         off = registerRestoreTarget(pageId, (version, schema) => {
           const outcome = restoreInDoc(doc, version, schema ?? null);
           if (outcome.ok) retry();
@@ -98,8 +102,10 @@ function PageCrash({ pageId, retry }: { pageId: string; retry: () => void }) {
         });
       })
       .catch((err: unknown) => console.warn(`[barrera] No se pudo preparar la restauración de la página ${pageId}.`, err));
+    const offPending = markRestorePending(pageId, ready);
     return () => {
       cancelled = true;
+      offPending();
       off();
       if (opened) docs.close(pageId);
     };
@@ -126,9 +132,20 @@ function PageCrash({ pageId, retry }: { pageId: string; retry: () => void }) {
 
 // --- La app ----------------------------------------------------------------------------------------------------------
 
-/** Lo que todavía no llegó a IndexedDB (lo mismo que mira el `beforeunload` de la app, sin la importación). */
+/**
+ * Lo que se perdería o quedaría a medias al cerrar: lo mismo que mira el `beforeunload` de la app (Workspace.tsx). La
+ * importación y el reemplazo en el proyecto corren fuera de React: siguen aunque la app se haya caído.
+ */
 function unsavedLocal(s: Services): boolean {
-  return s.docs.hasUnsavedEdits() || s.tree.hasUnsavedWrites() || s.media.hasUnsavedWrites() || s.comments.hasUnsavedWrites() || !!s.folders?.busy();
+  return (
+    s.docs.hasUnsavedEdits() ||
+    s.tree.hasUnsavedWrites() ||
+    s.media.hasUnsavedWrites() ||
+    s.comments.hasUnsavedWrites() ||
+    !!s.folders?.busy() ||
+    importJobFor(s.tree).get().running ||
+    replaceRunning({ docs: s.docs })
+  );
 }
 
 /** La barrera de la app de un workspace: los servicios quedan arriba, vivos (lo pendiente sigue subiendo). */

@@ -41,7 +41,7 @@ import { versionNode } from './historyRestore';
 import { cleanClipboard, type HistoryMarksInput, type MarkLook } from './historyMarks';
 import { MoreIcon } from './icons';
 import { historyServices } from './historyServices';
-import { closeHistory, requestRestore } from './historyUi';
+import { closeHistory, requestRestore, restoreTargetSettled } from './historyUi';
 import { dismissNotice, notify } from './notice';
 import { BlockEditor } from './PageEditor';
 import { ErrorBarrier } from './ErrorBarrier';
@@ -766,7 +766,9 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
         setMessage(tr('history.restoreFailed', { reason: blockerText[why] }));
         return;
       }
-      // El esquema del editor que muestra la versión: con él restaura la barrera de la página si el editor tiró un error.
+      // El esquema del editor que muestra la versión: con él restaura la barrera de la página si el editor tiró un error
+      // (si la barrera todavía se está preparando, se la espera).
+      await restoreTargetSettled(pageId);
       const outcome = requestRestore(pageId, version, pmSchema);
       if (!outcome.ok) {
         // `failed`: el editor lo intentó y lo deshizo (la comprobación final no dio): la página quedó como estaba.

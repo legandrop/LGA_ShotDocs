@@ -93,6 +93,28 @@ export function registerRestoreTarget(pageId: string, target: RestoreTarget): ()
   };
 }
 
+const pendingTargets = new Map<string, Promise<unknown>>();
+
+/**
+ * Un destino que se está preparando (la barrera de la página baja la parte y abre el documento): `restoreTargetSettled`
+ * lo espera. Devuelve cómo sacarlo.
+ */
+export function markRestorePending(pageId: string, ready: Promise<unknown>): () => void {
+  pendingTargets.set(pageId, ready);
+  return () => {
+    if (pendingTargets.get(pageId) === ready) pendingTargets.delete(pageId);
+  };
+}
+
+/** Espera (hasta `maxMs`) a que termine de prepararse el destino de la página, si se está preparando. */
+export async function restoreTargetSettled(pageId: string, maxMs = 10_000): Promise<void> {
+  const ready = pendingTargets.get(pageId);
+  if (!ready) return;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([ready.catch(() => undefined), new Promise((r) => (timer = setTimeout(r, maxMs)))]);
+  clearTimeout(timer);
+}
+
 /**
  * Restaura la versión en el editor abierto de la página, o desde la barrera si el editor tiró un error (si no hay
  * ninguno de los dos, no hace nada).

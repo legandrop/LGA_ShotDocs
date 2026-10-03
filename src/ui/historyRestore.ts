@@ -1,6 +1,6 @@
 import type { Node as PMNode, Schema } from '@tiptap/pm/model';
 import type { EditorView } from '@tiptap/pm/view';
-import { yUndoPluginKey, yXmlFragmentToProseMirrorRootNode } from 'y-prosemirror';
+import { updateYFragment, yUndoPluginKey, yXmlFragmentToProseMirrorRootNode } from 'y-prosemirror';
 import * as Y from 'yjs';
 import { sameShape, traceFromSets, yShape, type ContentShape } from '../sync/history';
 import { CONTENT_FRAGMENT } from '../sync/structure';
@@ -252,35 +252,52 @@ export function undoRestore(view: EditorView, stackSize: number): boolean {
 const RESTORE_IN_DOC = Symbol('restore-in-doc');
 
 /**
+ * Pasa el contenido de la página a `node` con el mismo algoritmo que usa el editor para pasar lo que cambia en
+ * ProseMirror a Yjs (`updateYFragment` de y-prosemirror, con sus parches): conserva los elementos iguales y, en los
+ * distintos, cambia solo atributos y texto donde puede. Así lo que otro escribió sin red o a la vez en un bloque, o un
+ * bloque que agregó, sigue estando cuando llega, igual que restaurando por el editor (`restoreInEditor`). Sin
+ * relación previa entre los elementos y los nodos (el editor no está), compara por contenido.
+ */
+function writeNode(doc: Y.Doc, node: PMNode): void {
+  updateYFragment(doc, doc.getXmlFragment(CONTENT_FRAGMENT), node as never, { mapping: new Map(), isOMark: new Map() } as never);
+}
+
+/**
  * Restaura la versión **sin el editor**, sobre el documento de la página (la barrera de la página, ErrorBarrier.tsx:
  * el editor tiró un error con lo que hay y no se puede usar). Primero la misma ida y vuelta que `restoreInEditor`
  * (`versionNode`, con el esquema del editor que muestra la versión): lo que el editor no podría armar no se restaura.
- * Después, una sola transacción de Yjs reemplaza el contenido de la página por una copia del de la versión (con los ids
- * de sus bloques: los comentarios siguen anclados). Es una edición nueva: lo de antes sigue en las filas de
- * `page_updates` y en el historial. El mapa de colapsar, el título y el formato no se tocan. Al final la forma tiene que
- * ser la de la versión; si no, se deshace y no se avisa "restaurada". No se deshace desde el aviso (`undoable: false`):
+ * Después se prueba en una copia en memoria del documento (`writeNode`, lo mismo que hace el editor al escribir) y,
+ * solo si la copia queda igual a la versión, se hace lo mismo en el documento de la página, en una transacción: si algo
+ * no da, no se escribe ni se sube nada. Es una edición nueva: lo de antes sigue en las filas de `page_updates` y en el
+ * historial. El mapa de colapsar, el título y el formato no se tocan. No se deshace desde el aviso (`undoable: false`):
  * el editor que se monta después no tiene este paso en su deshacer; se vuelve atrás restaurando otra versión.
  */
 export function restoreInDoc(doc: Y.Doc, version: Y.Doc, schema: Schema | null): RestoreOutcome {
   if (!schema) return { ok: false, reason: 'shape' };
   const { node, complete } = versionNode(version, schema);
   if (!node || !complete) return { ok: false, reason: 'shape' };
-  const copy = new Y.Doc();
-  Y.applyUpdate(copy, Y.encodeStateAsUpdate(version));
-  uniqueBlockIds(copy);
+  // La prueba, en una copia del documento de la página: nada de esto se guarda. Lo que tiene que quedar (el XML) se
+  // anota antes de leerla con y-prosemirror, que borra de su documento lo que no puede armar.
+  let expected: string;
+  const scratch = new Y.Doc();
+  try {
+    Y.applyUpdate(scratch, Y.encodeStateAsUpdate(doc));
+    scratch.transact(() => writeNode(scratch, node));
+    expected = scratch.getXmlFragment(CONTENT_FRAGMENT).toString();
+    const read = yXmlFragmentToProseMirrorRootNode(scratch.getXmlFragment(CONTENT_FRAGMENT), schema);
+    if (!read.eq(node) || scratch.getXmlFragment(CONTENT_FRAGMENT).toString() !== expected) return { ok: false, reason: 'failed' };
+    if (!sameShape(yShape(scratch), pmShape(node))) return { ok: false, reason: 'failed' };
+  } catch {
+    return { ok: false, reason: 'failed' };
+  } finally {
+    scratch.destroy();
+  }
   const fragment = doc.getXmlFragment(CONTENT_FRAGMENT);
   const undo = new Y.UndoManager(fragment, { trackedOrigins: new Set([RESTORE_IN_DOC]), captureTimeout: 0 });
   try {
-    const children = copy
-      .getXmlFragment(CONTENT_FRAGMENT)
-      .toArray()
-      .filter((c): c is Y.XmlElement | Y.XmlText => c instanceof Y.XmlElement || c instanceof Y.XmlText)
-      .map((c) => c.clone());
-    doc.transact(() => {
-      if (fragment.length > 0) fragment.delete(0, fragment.length);
-      fragment.insert(0, children);
-    }, RESTORE_IN_DOC);
-    if (!sameShape(yShape(doc), yShape(copy))) {
+    doc.transact(() => writeNode(doc, node), RESTORE_IN_DOC);
+    // Es el mismo estado que la copia, así que tiene que dar lo mismo; por las dudas, si no, se deshace.
+    if (fragment.toString() !== expected) {
       while (undo.undoStack.length > 0) undo.undo();
       return { ok: false, reason: 'failed' };
     }
@@ -292,6 +309,5 @@ export function restoreInDoc(doc: Y.Doc, version: Y.Doc, schema: Schema | null):
     return { ok: false, reason: 'failed' };
   } finally {
     undo.destroy();
-    copy.destroy();
   }
 }
