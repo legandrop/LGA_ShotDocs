@@ -24,6 +24,8 @@ const LAZY_FILES = [
   'ui/CommentsPanel.tsx',
   'ui/MembersDialog.tsx',
   'ui/ShareDialog.tsx',
+  // Decidir un pedido de acceso (P.30, entrega 2): la campana lleva solo la fila.
+  'ui/AccessRequests.tsx',
   'ui/DriveDialog.tsx',
   // Hojas y PDF: bajan con el editor (y el menú de la página pide printPage aparte).
   'ui/SheetBreaks.tsx',
