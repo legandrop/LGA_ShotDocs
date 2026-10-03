@@ -165,9 +165,9 @@ const NOT_GESTURES: Record<string, string> = {
 };
 
 /**
- * El globo de BlockNote (`mainTooltip`): solo en el botón de colores de la barra de formato, que no tiene atajo. Los
- * botones de la app en esa barra (Comment, Assistant) usan `data-tip` con tipRows; los propios de BlockNote (negrita,
- * cursiva…) quedan con el suyo (roadmap B.25a).
+ * El globo de BlockNote (`mainTooltip`, `secondaryTooltip`): ningún botón de la app lo usa. Los propios de BlockNote en
+ * la barra de formato (Bold, Italic…) pasan al tooltip de la app con toolbarTips.tsx (roadmap B.25a); lo prueba
+ * formatToolbarTips.test.tsx con la barra de verdad.
  */
 const BLOCKNOTE_TOOLTIPS = /\b(?:mainTooltip|secondaryTooltip)=/;
 
@@ -210,10 +210,15 @@ describe('tooltips con gesto o atajo (D226): un renglón por acción, «gesto o 
     expect(wrong).toEqual([]);
   });
 
-  it('ningún botón de la app usa el globo de BlockNote para un atajo (solo Colors, que no tiene)', () => {
+  it('ningún botón de la app usa el globo de BlockNote', () => {
     const files2 = [...files].filter(([, code]) => BLOCKNOTE_TOOLTIPS.test(code)).map(([path]) => basename(path)).sort();
-    expect(files2).toEqual(['PageToolbar.tsx']);
-    expect(files.get([...files.keys()].find((p) => basename(p) === 'PageToolbar.tsx')!)).not.toMatch(/secondaryTooltip=/);
+    expect(files2).toEqual([]);
+  });
+
+  it('la barra de formato pasa los botones de BlockNote al tooltip de la app (toolbarTips.tsx)', () => {
+    const code = files.get([...files.keys()].find((p) => basename(p) === 'PageToolbar.tsx')!)!;
+    expect(code).toMatch(/<ToolbarTips>\s*<FormattingToolbar\b/);
+    expect(found.some((f) => f.file === 'toolbarTips.tsx' && f.expr.includes('tip'))).toBe(true);
   });
 
   it('cada clave de NOT_GESTURES existe y se usa en un tooltip', () => {

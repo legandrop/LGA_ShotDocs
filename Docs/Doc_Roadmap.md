@@ -966,13 +966,16 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    con prueba y con el esquema anterior. Pegar solo ese HTML trae texto plano (`sdmedia://` no es un destino de enlace
    permitido), no un enlace ni una foto; con el portapapeles completo vuelve el bloque intacto. Queda (BAJO): arrastrar
    una tabla con foto en una celda por el tirador (misma ruta; no se midió).
-25. **Lo que quedó de D226 (tooltips con gesto o atajo, v0.156).** (a) Los botones propios de BlockNote en la barra de
-   formato (*Bold* con ⌘B abajo, *Italic*, etc.) siguen con su globo: pasarlos al formato de renglones pide reemplazar
-   esos botones. *Comment* y *Assistant*, que son de la app, ya usan los renglones. (b) **Hecho (v0.156):** el tooltip
+25. **Lo que quedó de D226 (tooltips con gesto o atajo, v0.156).** (a) **Hecho (v0.163):** los botones propios de
+   BlockNote en la barra de formato (*Bold*, *Italic*, alinear, *Colors*, *Link*…) usan el tooltip de la app: la barra
+   le pasa a BlockNote su propio botón (`src/ui/toolbarTips.tsx`), con «**atajo**: acción» del registro o el nombre si
+   no tiene atajo; lo prueba `formatToolbarTips.test.tsx` con la barra real (el globo de BlockNote ya no aparece). (b) **Hecho (v0.156):** el tooltip
    del borde de la barra lateral salía afuera de la pantalla; ahora todo globo queda adentro (a un costado y a la altura
    del mouse si el control es más alto que media ventana, y corrido si no entra en ningún lado).
-   (c) Falta una prueba de que el anotador en una ventana angosta con mouse conserva los atajos (la decisión es por el
-   tipo de puntero; el mutante `{ touch: true }` sobrevive; re-verificación de D226, N1).
+   (c) **Hecho (v0.163):** una prueba del anotador en una ventana angosta con mouse (`annotatorTouch.test.tsx`): la tira
+   del teléfono, con los atajos en los tooltips de las herramientas, deshacer, encuadrar y el grosor; el mutante
+   `{ touch: true }` ya no sobrevive. Fuera de esta barra queda la de los links (*Edit link*, *Open in new tab*, *Remove
+   link*, al pasar por un link), con el globo de BlockNote solo con el nombre (sin atajos).
 
 ### C. Esperan a Lega
 
