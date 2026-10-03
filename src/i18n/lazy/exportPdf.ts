@@ -78,6 +78,25 @@ export const exportPdf = {
     es: "En el diálogo de imprimir, dejá los márgenes y la escala como están: de eso dependen los números de hoja del índice.",
   },
   'exportDialog.empty': { en: "There is nothing to export here.", es: "Acá no hay nada para exportar." },
+  // Los links a los archivos con un link público (P.30, Docs/Doc_Links_PDF.md, 3.3, LF18).
+  'exportDialog.fileLinksView': {
+    en: "File links in this PDF use the public link of “{title}”: anyone with the PDF can open that page and the pages inside it.",
+    es: "Los links a los archivos de este PDF usan el link público de «{title}»: cualquiera con el PDF puede abrir esa página y las de adentro.",
+  },
+  'exportDialog.fileLinksEdit': {
+    en: "File links in this PDF use the public link of “{title}”: anyone with the PDF can open that page and the pages inside it, and edit them.",
+    es: "Los links a los archivos de este PDF usan el link público de «{title}»: cualquiera con el PDF puede abrir esa página y las de adentro, y editarlas.",
+  },
+  'exportDialog.fileLinksExpires': { en: "That link expires on {date}.", es: "Ese link vence el {date}." },
+  'exportDialog.fileLinksLevel': {
+    en: "Changing a link's level also changes what PDFs that use it can open. Reset link turns them off.",
+    es: "Cambiar el nivel de un link cambia también lo que abren los PDF que lo usan. Reset link los apaga.",
+  },
+  'exportDialog.useFileLinks': { en: "Use the public link for file links", es: "Usar el link público en los links a archivos" },
+  'exportDialog.fileLinksOff': {
+    en: "Without it, file links ask to sign in.",
+    es: "Sin él, los links a archivos piden entrar con una cuenta.",
+  },
   'exportDialog.export': { en: "Export PDF", es: "Exportar PDF" },
   'exportDialog.fetchingComments': { en: "Fetching comments: page {done} of {total}", es: "Bajando los comentarios: página {done} de {total}" },
   'exportDialog.commentsStale': {

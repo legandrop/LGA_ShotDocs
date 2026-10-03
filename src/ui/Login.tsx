@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { t, useT } from '../i18n';
 import { inviteArrival, takeArrivalNotice } from '../invite';
 import { useWorkspace } from '../workspace';
+import { useRoute } from '../router';
 import { AppIcon, ArrowLeftIcon, ArrowRightIcon, MailIcon, SlateBand } from './icons';
 import { LegalLinks } from './Legal';
 import { openInstallDialog, useInstallState } from './install';
@@ -48,6 +49,10 @@ export function Login({ consent }: { consent?: { notice: string; returnTo: strin
   const [error, setError] = useState<string | null>(null);
   const tr = useT();
   const { installed } = useInstallState();
+  // Se llegó por la dirección de un archivo (P.30, Docs/Doc_Links_PDF.md, LF15): el link del correo vuelve a esa misma
+  // dirección (sin el `#`); con el código, la pestaña ya está ahí.
+  const route = useRoute();
+  const fileRoute = !consent && route.name === 'file';
 
   async function sendEmail(e?: FormEvent) {
     e?.preventDefault();
@@ -57,7 +62,7 @@ export function Login({ consent }: { consent?: { notice: string; returnTo: strin
     setError(null);
     const { error } = await client.auth.signInWithOtp({
       email: address,
-      options: { emailRedirectTo: consent?.returnTo ?? location.origin },
+      options: { emailRedirectTo: consent?.returnTo ?? (fileRoute ? location.origin + location.pathname : location.origin) },
     });
     setBusy(false);
     if (error) setError(explain(error));
@@ -129,6 +134,7 @@ export function Login({ consent }: { consent?: { notice: string; returnTo: strin
               )}
               {invite && invite !== 'this' && invite !== 'this-page' && <p className="login-invite">{invite}</p>}
               {consent && <p className="login-invite">{consent.notice}</p>}
+              {fileRoute && <p className="login-invite">{tr('file.signIn')}</p>}
               <div className="field">
                 <label htmlFor="email">{tr('team.email')}</label>
                 <input
@@ -160,6 +166,7 @@ export function Login({ consent }: { consent?: { notice: string; returnTo: strin
                 </button>
               </div>
               {error && <p className="login-error">{error}</p>}
+              {error && fileRoute && error === t('login.error.noAccount') && <p className="muted">{tr('file.askInvite')}</p>}
               <div className="hint">
                 <MailIcon />
                 <span>{tr('login.iphoneHint')}</span>

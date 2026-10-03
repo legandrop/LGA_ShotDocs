@@ -4,6 +4,8 @@ export type Route =
   | { name: 'home' }
   | { name: 'page'; id: string }
   | { name: 'trash' }
+  // La dirección fija de un archivo (P.30, Docs/Doc_Links_PDF.md): la clave local del workspace y el id del archivo.
+  | { name: 'file'; localKey: string; id: string }
   // La página de práctica (P.13, Docs/Doc_Tutorial.md): en memoria, no es una página del árbol.
   | { name: 'practice' }
   // Política de privacidad y condiciones de uso: públicas, se ven sin sesión y sin workspace (Google las pide
@@ -28,6 +30,8 @@ export function parseRoute(pathname: string): Route {
   const page = /^\/p\/([^/]+)\/?$/.exec(pathname)?.[1];
   if (page && UUID.test(page)) return { name: 'page', id: page };
   if (pathname === '/trash') return { name: 'trash' };
+  const file = /^\/f\/([a-z0-9_-]{4,64})\/([^/]+)\/?$/.exec(pathname);
+  if (file && UUID.test(file[2])) return { name: 'file', localKey: file[1], id: file[2].toLowerCase() };
   if (pathname === PRACTICE_PATH || pathname === PRACTICE_PATH + '/') return { name: 'practice' };
   if (pathname === PRIVACY_PATH || pathname === PRIVACY_PATH + '/') return { name: 'privacy' };
   if (pathname === TERMS_PATH || pathname === TERMS_PATH + '/') return { name: 'terms' };

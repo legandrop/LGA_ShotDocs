@@ -56,6 +56,11 @@ export interface ExportEditorOptions {
   resolveFileUrl?: (url: string, pageId: string) => Promise<string>;
   /** Para marcar los adjuntos (su tarjeta tiene tamaño fijo, como en la página). */
   media?: Pick<MediaQueue, 'fileInfo'> | null;
+  /**
+   * La dirección de cada archivo en el PDF (con un link público, Docs/Doc_Links_PDF.md 3.3). Sin esto, la del workspace
+   * abierto (`mediaLinks.ts`).
+   */
+  mediaHref?: (id: string, pageId: string) => string | null;
   /** Lo que se espera a que se pongan las imágenes del editor (como `printPage`: 8 s). */
   imageTimeoutMs?: number;
   /** Lo que se espera a que carguen las imágenes de la copia (como `printPage`: 6 s). */
@@ -240,7 +245,11 @@ export class ExportEditor {
     const overlay = page.markup && page.markup.size > 0 && this.editor.domElement ? attachMarkupOverlay(this.editor.domElement, page.markup) : null;
     overlay?.flush();
     overlay?.stop();
-    const view = buildPrintView(this.article, page.format, 'output');
+    const mediaHref = this.options.mediaHref;
+    const view = buildPrintView(this.article, page.format, 'output', {
+      pageId: page.id,
+      mediaHref: mediaHref ? (id) => mediaHref(id, page.id) : undefined,
+    });
     // Las de esta página no quedan en el editor para la siguiente.
     if (overlay) for (const svg of this.article.querySelectorAll('svg.sd-markup')) svg.remove();
     try {

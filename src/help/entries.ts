@@ -176,6 +176,8 @@ const TITLE_LONG = '0.152';
 const HELP_3 = '0.158';
 /** El contraste del texto (Docs/Doc_Contraste.md). */
 const CONTRAST = '0.161';
+/** Los links a los archivos en el PDF (P.30, Doc_Links_PDF.md, entrega 1): el número lo pone quien publica. */
+const FILE_LINKS = '0.0XX';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -882,6 +884,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.export.text',
     words: ['exportar', 'export', 'pdf', 'índice', 'contents', 'proyecto entero', 'whole project', 'entregar', 'cliente', 'client', 'reporte', 'partes', 'parts', 'resolución', 'resolution', 'liviano', 'smaller file'],
     since: EXPORT_PDF,
+  },
+  {
+    id: 'fileLinks',
+    section: 'print',
+    title: 'help.fileLinks.title',
+    text: 'help.fileLinks.text',
+    words: ['link', 'links', 'pdf', 'video', 'adjunto', 'attachment', 'carpeta', 'folder', 'acceso', 'access', 'cliente', 'client', 'link público', 'public link'],
+    since: FILE_LINKS,
   },
   {
     id: 'exportZip',

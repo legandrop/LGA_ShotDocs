@@ -24,6 +24,8 @@ import { downloadLinkPages, LinkEditBar, linkMediaBlob, linkUnsentMedia, linkUns
 import { saveBlob } from './unsyncedDownload';
 import { setLightImages } from './sharpImages';
 import { Workspace } from './Workspace';
+import { useRoute } from '../router';
+import { filePath, workspaceHash } from '../fileLink';
 
 // La app abierta con un link público (Docs/Doc_Link_Publico.md, 3.2 y 3.5): sin cuenta, con un cliente sin sesión y su
 // propia base local. Es la app de siempre con un "usuario" que es el link: la base lo trata como un invitado con
@@ -232,6 +234,18 @@ function DeadLink({ entry, remote, onLeave }: { entry: LinkEntry; remote: LinkRe
     };
   }, [entry]);
   const pages = Math.max(unsent, extra.length);
+  // La dirección de un archivo con un link que ya no anda (P.30, LF16): quien tiene cuenta entra con ella, con la misma
+  // dirección del Supabase y sin el token. Se deja de abrir el link en esta pestaña (si no, recargar volvería acá).
+  const route = useRoute();
+  const signInInstead =
+    route.name === 'file'
+      ? () => {
+          leaveLinks();
+          // La misma dirección con otro `#`: hay que recargar para que el arranque la lea.
+          history.replaceState(null, '', filePath(entry.localKey, route.id) + workspaceHash({ u: entry.url, k: entry.publishableKey, l: entry.localKey }));
+          location.reload();
+        }
+      : null;
   return (
     <main className="center-screen">
       <div className="card">
@@ -287,6 +301,11 @@ function DeadLink({ entry, remote, onLeave }: { entry: LinkEntry; remote: LinkRe
           </div>
         )}
         {failed && <p className="error">{tr('sync.downloadFailed')}</p>}
+        {signInInstead && (
+          <button className="primary" onClick={signInInstead}>
+            {tr('file.signInInstead')}
+          </button>
+        )}
         <button className="link" onClick={onLeave}>
           {tr('link.leave')}
         </button>

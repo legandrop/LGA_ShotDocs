@@ -18,6 +18,11 @@ import { ExportZipPanel } from './ExportZip';
 import { detectPlatform, isMobilePlatform } from './install';
 import { porteroDownload } from './sharpImages';
 import { navigate, pagePath } from '../router';
+import { loadFileLinks, type FileLinkPlan } from '../export/exportLinks';
+import { fileHref, linkHash } from '../fileLink';
+import { useLinkMode } from '../linkMode';
+import { mediaLinkSource } from './mediaLinks';
+import { FileLinksNotice, fileLinksTickedByDefault } from './FileLinksNotice';
 
 // La ventana *Export* (P.22, Docs/Doc_Exportar.md, sección 7; entrega 1: el PDF; entrega 2: el zip, en ExportZip.tsx).
 // Desde el menú de una página (esta página, o con las de adentro) o desde el de un proyecto (el proyecto entero). Arma la vista del PDF
@@ -54,7 +59,8 @@ const convertHeic = async (blob: Blob) => (await import('../media/heicConvert'))
 
 export function ExportDialog(props: { target: ExportTarget; onClose: () => void }) {
   const tree = useTree();
-  const { docs, media, comments, commentsDb, user, engine } = useServices();
+  const { docs, media, comments, commentsDb, user, engine, client, workspace } = useServices();
+  const linkMode = useLinkMode();
   const status = useSyncStatus();
   const tr = useT();
   const target = props.target;
@@ -83,6 +89,35 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
   const limits = useMemo(() => deviceLimits(touch), [touch]);
 
   const plan = useMemo(() => planFor(tree, target, scope), [tree, target, scope]);
+  // Los links públicos que pueden usar los links a los archivos (P.30, LF17 y LF18): solo con una cuenta y con red.
+  const [fileLinks, setFileLinks] = useState<FileLinkPlan | null>(null);
+  /** La casilla: tildada si todos los links son *Can view*, destildada si alguno es *Can edit*. */
+  const [useFileLinks, setUseFileLinks] = useState(true);
+  /**
+   * La persona tocó la casilla para lo elegido ahora: volver a pedir los links (la red se cortó y volvió) no la pisa (un
+   * *Can view* destildado a mano no vuelve a salir con el token). Cambiar qué se exporta la vuelve a su valor de fábrica.
+   */
+  const fileLinksTouched = useRef<{ plan: ExportPlanPage[]; touched: boolean }>({ plan, touched: false });
+  if (fileLinksTouched.current.plan !== plan) fileLinksTouched.current = { plan, touched: false };
+  const chooseFileLinks = (checked: boolean) => {
+    fileLinksTouched.current = { plan, touched: true };
+    setUseFileLinks(checked);
+  };
+  useEffect(() => {
+    setFileLinks(null);
+    if (linkMode || !media.enabled || !status.online || plan.length === 0) return;
+    let live = true;
+    const parentOf = (id: string) => tree.get(id)?.parent_id ?? null;
+    const titleOf = (id: string) => tree.get(id)?.title?.trim() || t('common.untitled');
+    void loadFileLinks(client, plan.map((p) => p.id), parentOf, titleOf).then((found) => {
+      if (!live) return;
+      setFileLinks(found);
+      if (!fileLinksTouched.current.touched) setUseFileLinks(fileLinksTickedByDefault(found));
+    });
+    return () => {
+      live = false;
+    };
+  }, [plan, linkMode, media.enabled, status.online, client, tree]);
   const title = target.kind === 'project' ? (tree.project(target.id)?.name ?? '') : (tree.get(target.id)?.title ?? '');
   const shownTitle = title.trim() || tr('common.untitled');
   const [failures, setFailures] = useState<Failure[]>([]);
@@ -155,8 +190,19 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
     let editor: ExportEditor | null = null;
     try {
       const withMedia = media.enabled;
+      // Con un link público tildado, sus archivos van con el token del link; los demás, con la dirección de siempre.
+      const source = mediaLinkSource();
+      const chosen = useFileLinks && fileLinks && fileLinks.links.length > 0 ? fileLinks : null;
+      const config = workspace.config;
       editor = await ExportEditor.create({
         lang: tr.lang,
+        mediaHref: chosen
+          ? (id, pageId) => {
+              const link = chosen.byPage.get(pageId);
+              if (!link) return source ? source.href(id) : null;
+              return fileHref(location.origin, config.localKey, id, linkHash({ u: config.url, k: config.publishableKey, l: config.localKey, t: link.token }));
+            }
+          : undefined,
         resolveFileUrl: withMedia ? (url, pageId) => media.resolve(url, pageId) : undefined,
         media: withMedia ? media : null,
       });
@@ -321,6 +367,7 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
                   </label>
                 </div>
                 {media.enabled && !smaller && !online && <p className="muted">{tr('exportDialog.offlineOriginals')}</p>}
+                <FileLinksNotice plan={fileLinks} checked={useFileLinks} onChange={chooseFileLinks} />
                 {!named && <p className="muted">{tr('exportDialog.oneSize', { size: rootSize })}</p>}
                 <p className="muted">{tr('exportDialog.margins')}</p>
                 {plan.length === 0 && <p className="error">{tr('exportDialog.empty')}</p>}

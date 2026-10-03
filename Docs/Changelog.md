@@ -2,16 +2,15 @@
 
 v0.0XX :
 
-**Link público, entrega 2b: fotos y archivos por un link** (P.19). Con *Can edit*, el visitante escribía pero no podía
-sumar fotos, videos ni archivos: no había cómo registrarlos sin cuenta ni subirlos al Drive del dueño. Ahora los
-registra con `plink_register_file` (500 MB cada uno, 100 por día y 500 de por vida, 1 GB por día y 5 GB de por vida; lo
-rechazado no suma y nunca vincula un id ajeno), sube la miniatura y el portero sube el original solo si lo registró ese
-link, volviendo a validarlo en cada parte. Lo escrito de una página espera a que sus archivos estén registrados (si no,
-la admisión lo apartaría). Carpetas, no. *Share* cuenta lo que llegó al Drive, avisa desde 1 GB y lista los archivos de
-los links de la página, también los de lo apartado, que no se borran. Con el link muerto, el visitante baja sus
-originales sin subir. Migración
-`20261030120000_link_archivos.sql`, sin aplicar (`schema_version` 21).
-[ Link público entrega 2b - el visitante sube fotos y archivos al Drive del dueño con topes, el portero solo sube lo que registró ese link y corta al revocar, lo escrito espera a sus archivos, Share lista y cuenta lo subido y el link muerto baja los originales ]
+**Link público 2b y links a los archivos en el PDF.** (1) Con *Can edit* el visitante no podía sumar fotos ni archivos:
+no había cómo registrarlos sin cuenta. Ahora los registra con topes (`plink_register_file`), el portero sube solo lo que
+registró ese link y corta al revocar, lo escrito espera a sus archivos, *Share* cuenta y lista lo llegado (también lo
+apartado, que no se borra) y con el link muerto el visitante baja sus originales. Migración `20261030120000_link_archivos`
+(schema 21). (2) En el PDF los adjuntos, videos y carpetas salían sin link: cada uno lleva `/f/<clave local>/<id>#ws=…`,
+que abre el archivo con permiso, pide entrar sin sesión y sin acceso muestra una sola pantalla; el link público solo desde
+*Export*, con aviso. (3) `refreshCounts` consultaba la base cerrada después de `stop()`: ya no.
+
+[ Link público 2b y links a los archivos en el PDF - el visitante sube fotos y archivos al Drive del dueño con topes y baja sus originales si el link muere, Share lista lo llegado, cada adjunto, video y carpeta del PDF con su dirección fija /f/, y el motor no cuenta después de detenerse ]
 
 v0.163 :
 

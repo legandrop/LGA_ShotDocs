@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { t, useT } from '../i18n';
-import { clearInviteTarget, rememberInviteTarget } from '../invite';
+import { clearInviteTarget, rememberInviteTarget, takeArrivalNotice } from '../invite';
 import { useWorkspace } from '../workspace';
 import {
   addWorkspace,
@@ -43,6 +43,8 @@ export function Welcome({ onAdded }: { onAdded: OnAdded }) {
   // Sin ningún workspace, "ya está en el dispositivo" no puede pasar; si pasara (otra pestaña), se abre.
   const open = (entry: DeviceWorkspace, invite?: { target: string | null }) => onAdded(entry, invite);
   const tr = useT();
+  // El aviso de un link con que se abrió la app y no se pudo usar (roto, incompleto; P.30: la dirección de un archivo).
+  const [notice] = useState(() => takeArrivalNotice());
   return (
     <main className="center-screen">
       <div className="card welcome-card">
@@ -54,6 +56,7 @@ export function Welcome({ onAdded }: { onAdded: OnAdded }) {
           <>
             <h1>{tr('welcome.title')}</h1>
             <p className="muted">{tr('welcome.text')}</p>
+            {notice && <p className="error" role="status">{notice}</p>}
             <WorkspaceChoices onJoin={() => setMode('join')} onCreate={() => setMode('create')} />
           </>
         )}

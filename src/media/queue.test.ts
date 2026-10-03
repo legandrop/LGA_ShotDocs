@@ -2047,6 +2047,10 @@ describe('adjuntos', () => {
     expect(card).toContain('notas.pdf');
     expect(card).toContain('width="360" height="96"');
     expect(cardText(await a.media.resolve(url, page))).not.toContain(t('attachment.foreign'));
+    // En el PDF (P.30): el marcador de otro proyecto no lleva link en esa página; en la suya, sí.
+    const id = mediaIdOf(url)!;
+    expect(a.media.linkable(id, foreign)).toBe(false);
+    expect(a.media.linkable(id, page)).toBe(true);
   });
 
   it('un adjunto mandado a la papelera de Drive se ve tachado', async () => {
@@ -2062,6 +2066,9 @@ describe('adjuntos', () => {
     expect(card).toContain('line-through');
     expect(card).toContain(deletedLabel());
     expect(card).toContain('width="360" height="96"');
+    // Borrado: sin link en el PDF (P.30).
+    expect(b.media.linkable(id, null)).toBe(false);
+    expect(a.media.linkable(id, null)).toBe(true);
   });
 
   it('sin portero, un adjunto se rechaza con el aviso de conectar Google Drive (las fotos siguen)', async () => {
