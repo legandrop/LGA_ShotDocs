@@ -2,106 +2,21 @@
 // Los botones de BlockNote en la barra de formato con el tooltip de la app (D226, roadmap B.25a; toolbarTips.tsx): un
 // renglón «**atajo**: acción» con el atajo del registro, o el nombre si no tiene atajo; sin el globo de BlockNote, y cada
 // botón con lo que hacía (aplicar el formato, marcado y apagado).
-import { BlockNoteEditor } from '@blocknote/core';
-import { BlockNoteView } from '@blocknote/mantine';
-import { TextSelection } from '@tiptap/pm/state';
 import { ComponentsContext, useComponentsContext } from '@blocknote/react';
 import { act, createRef, forwardRef, type Ref } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { t } from '../i18n';
-import { ServicesContext } from '../services';
-import { editorSchemaOptions } from './editorSchema';
-import { PageFormattingToolbarController, PageFormattingToolbar, pageToolbarItems } from './PageToolbar';
+import { createRoot } from 'react-dom/client';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { button, buttons, cleanup, mount, roots, screen, setupDom, tips } from './formatToolbarHarness';
 import { shortcutLabel } from './shortcuts';
 import { defaultDataTest, TOOLBAR_SHORTCUTS, ToolbarTips, toolbarTip } from './toolbarTips';
 
-(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
-/** `coarse`: la pantalla táctil (`(pointer: coarse)`). */
-function screen(coarse: boolean) {
-  vi.stubGlobal('matchMedia', (query: string) => ({
-    matches: coarse && query.includes('coarse'),
-    media: query,
-    onchange: null,
-    addEventListener: () => undefined,
-    removeEventListener: () => undefined,
-    addListener: () => undefined,
-    removeListener: () => undefined,
-    dispatchEvent: () => false,
-  }));
-}
-
-beforeAll(() => {
-  globalThis.ResizeObserver ??= class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  } as never;
-  Range.prototype.getClientRects ??= (() => []) as never;
-  Range.prototype.getBoundingClientRect ??= (() => ({ top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, x: 0, y: 0 })) as never;
-});
-
-const roots: Root[] = [];
-afterEach(() => {
-  for (const r of roots.splice(0)) act(() => r.unmount());
-  document.body.innerHTML = '';
-  vi.unstubAllGlobals();
-});
-
-const editorRef: { current: BlockNoteEditor | null } = { current: null };
-function Toolbar() {
-  return <PageFormattingToolbar items={pageToolbarItems(editorRef.current!.dictionary, t)} canComment />;
-}
-
-/** El editor con dos párrafos y "hola mundo" del segundo elegido: la barra de formato abierta. */
-async function mount({ coarse = false } = {}) {
-  screen(coarse);
-  const editor = BlockNoteEditor.create({ ...editorSchemaOptions }) as unknown as BlockNoteEditor;
-  editorRef.current = editor;
-  const el = document.createElement('div');
-  document.body.appendChild(el);
-  const root = createRoot(el);
-  roots.push(root);
-  await act(async () => {
-    root.render(
-      <ServicesContext.Provider value={{ media: { fileInfo: () => null } } as never}>
-        <BlockNoteView editor={editor} sideMenu={false} formattingToolbar={false} slashMenu={false}>
-          <PageFormattingToolbarController formattingToolbar={Toolbar} />
-        </BlockNoteView>
-      </ServicesContext.Provider>,
-    );
-  });
-  await act(async () => {
-    editor.replaceBlocks(editor.document, [
-      { id: 'a', type: 'paragraph', content: 'primero' },
-      { id: 'b', type: 'paragraph', content: 'hola mundo' },
-    ] as never);
-  });
-  await act(async () => {
-    editor.focus();
-    const v = editor.prosemirrorView!;
-    let from = -1;
-    v.state.doc.descendants((n, pos) => {
-      if (n.isText && n.text === 'hola mundo') from = pos;
-      return from < 0;
-    });
-    v.dispatch(v.state.tr.setSelection(TextSelection.create(v.state.doc, from, from + 4)));
-  });
-  await act(async () => {
-    document.dispatchEvent(new FocusEvent('focusin'));
-  });
-  return editor;
-}
-
-const buttons = () => [...document.querySelectorAll<HTMLButtonElement>('.bn-formatting-toolbar button')];
-const button = (test: string) => document.querySelector<HTMLButtonElement>(`.bn-formatting-toolbar button[data-test="${test}"]`);
+beforeAll(setupDom);
+afterEach(cleanup);
 
 describe('la barra de formato: los botones de BlockNote con el tooltip de la app (D226)', () => {
   it('cada botón con su data-tip: «**atajo**: acción» con el atajo del registro, o el nombre; nunca title', async () => {
     await mount();
     const all = buttons();
-    console.log(all.map((b) => [b.getAttribute('data-test'), b.getAttribute('aria-label'), b.getAttribute('data-tip'), b.disabled].join(' / ')).join('\n'));
     expect(all.length).toBeGreaterThan(8);
     for (const b of all) {
       expect(b.hasAttribute('title')).toBe(false);
@@ -109,19 +24,22 @@ describe('la barra de formato: los botones de BlockNote con el tooltip de la app
       if (b.hasAttribute('aria-label')) expect(b.getAttribute('data-tip'), b.getAttribute('aria-label')!).toBeTruthy();
     }
     expect(all.filter((b) => b.hasAttribute('aria-label')).length).toBeGreaterThanOrEqual(12);
-    // Los de BlockNote con atajo: el atajo es exactamente el del registro (Ctrl en jsdom, que no es una Mac).
-    const shown: Record<string, string> = {
-      bold: 'bold',
-      italic: 'italic',
-      underline: 'underline',
-      strike: 'strike',
-      createLink: 'create link',
-      nestBlock: 'nest block',
-      unnestBlock: 'unnest block',
-    };
-    for (const [test, action] of Object.entries(shown)) {
-      expect(button(test)?.getAttribute('data-tip'), test).toBe(`**${shortcutLabel(TOOLBAR_SHORTCUTS[test], false)}**: ${action}`);
-    }
+    // Los atajos, escritos acá (no sacados de la tabla que se prueba): Windows, porque jsdom no es una Mac. La Mac,
+    // en formatToolbarTipsMac.test.tsx.
+    expect(tips()).toEqual({
+      bold: '**Ctrl+B**: bold',
+      italic: '**Ctrl+I**: italic',
+      underline: '**Ctrl+U**: underline',
+      strike: '**Ctrl+Shift+S**: strike',
+      alignTextLeft: 'Align text left',
+      alignTextCenter: 'Align text center',
+      alignTextRight: 'Align text right',
+      colors: 'Colors',
+      nestBlock: '**Tab**: nest block',
+      unnestBlock: '**Shift+Tab**: unnest block',
+      createLink: '**Ctrl+K**: create link',
+      Comment: '**Ctrl+Alt+M**: comment',
+    });
     expect(button('bold')!.getAttribute('data-tip')).toBe('**Ctrl+B**: bold');
     // Sin atajo: el nombre (es un ícono).
     expect(button('alignTextLeft')!.getAttribute('data-tip')).toBe('Align text left');
