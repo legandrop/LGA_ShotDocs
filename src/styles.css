@@ -2114,8 +2114,15 @@ code {
 
 /* La papelera única, adentro del selector de proyectos: más ancha que el selector para que entren el filtro, la
    miniatura y *Restore*. En el teléfono, la hoja de abajo de siempre (ancho entero). */
-.menu.project-menu.trash-menu {
-  width: 440px;
+@media (min-width: 761px) {
+  .menu.project-menu.trash-menu {
+    width: 440px;
+  }
+}
+
+/* Una sola columna que no crece más que el selector (si no, un texto largo lo ensancha y se corta a la derecha). */
+.menu.trash-menu {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .trash-panel {
@@ -2235,11 +2242,13 @@ code {
 .menu .trash-panel .trash-item > button.secondary {
   flex: none;
   width: auto;
-  max-width: 45%;
-  height: 32px;
-  padding: 0 10px;
+  max-width: 40%;
+  height: auto;
+  min-height: 32px;
+  padding: 4px 10px;
   border: 1px solid var(--border);
-  white-space: nowrap;
+  white-space: normal;
+  text-align: center;
 }
 
 .menu .trash-panel .error button.link,
