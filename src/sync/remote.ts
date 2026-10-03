@@ -1,7 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { t } from '../i18n';
 import { fromBase64, toBase64 } from '../lib/base64';
-import type { HistoryRow, PageVersionRow } from './history';
+import { linkAuthorKey, type HistoryRow, type PageVersionRow } from './history';
+import { parseAdmitResults, type AdmitDecision, type AdmitPageRow, type AdmitResult, type AdmitWorkRow, type LinkUpdateRow } from './linkAdmitApi';
 import { THUMB_MAX_BYTES } from '../media/probe';
 import { CLEAN_SCHEMA_VERSION } from './clean';
 import { MAX_FILE_BYTES } from './files';
@@ -758,6 +759,7 @@ export class SupabaseRemote
       auto_purge_files?: boolean | null;
       clean_min_version?: number | string | null;
       snapshot_min_version?: number | string | null;
+      link_edit_min_version?: number | string | null;
     };
     // Los snapshots se bajan con `pull_page_content` solo prendidos y con la base en la versión 17 (si no, todo sale
     // por `pull_page_updates`, como siempre).
@@ -776,6 +778,8 @@ export class SupabaseRemote
       cleanMinVersion: extra.clean_min_version == null ? null : Number(extra.clean_min_version),
       // Sin la columna (base anterior a la versión 17), apagados.
       snapshotMinVersion: extra.snapshot_min_version == null ? null : Number(extra.snapshot_min_version),
+      // Sin la columna (base anterior a la versión 19), apagado.
+      linkEditMinVersion: extra.link_edit_min_version == null ? null : Number(extra.link_edit_min_version),
     };
   }
 
@@ -1105,13 +1109,77 @@ export class SupabaseRemote
       limit <= 1 ? MAX_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS,
     );
     if (error) throw toRemoteError(error, status);
-    return (data as { id: number; seq: number; created_by: string | null; created_at: string; update: string }[]).map((r) => ({
+    return (data as { id: number; seq: number; created_by: string | null; created_at: string; update: string; plink_author?: string | null }[]).map((r) => ({
       id: Number(r.id),
       seq: Number(r.seq),
-      createdBy: r.created_by ?? null,
+      // Una fila que entró por un link (versión 19 de la base): el nombre del visitante (E2.8).
+      createdBy: r.plink_author ? linkAuthorKey(r.plink_author) : (r.created_by ?? null),
       createdAt: String(r.created_at),
       data: fromBase64(r.update),
     }));
+  }
+
+  // --- link público, entrega 2a: admitir lo que escribe un link (20261027120000_link_editar.sql, src/sync/linkAdmit.ts) ---
+
+  /** Las páginas con algo de un link para decidir, sin bytes. Una base sin la migración: nada. */
+  async admitPages(): Promise<AdmitPageRow[]> {
+    const { data, error, status } = await timed(this.client.rpc('link_admit_pages', { p_app_version: this.appVersion || null }));
+    if (error?.code === MISSING_FUNCTION) return [];
+    if (error) throw toRemoteError(error, status);
+    return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+      page_id: String(r.page_id),
+      waiting: Number(r.waiting),
+      bytes: Number(r.bytes),
+    }));
+  }
+
+  /** Los bytes de lo que espera en estas páginas (hasta 20 páginas y unos 4 MB), en orden por página, link y llegada. */
+  async admitWork(pages: string[]): Promise<AdmitWorkRow[]> {
+    const { data, error, status } = await timed(
+      this.client.rpc('link_admit_work', { p_app_version: this.appVersion || null, p_pages: pages }),
+      MAX_REQUEST_TIMEOUT_MS,
+    );
+    if (error?.code === MISSING_FUNCTION) return [];
+    if (error) throw toRemoteError(error, status);
+    return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+      id: String(r.id),
+      page_id: String(r.page_id),
+      link_id: String(r.link_id),
+      n: Number(r.n),
+      data: fromBase64(String(r.data)),
+    }));
+  }
+
+  /** Decide en orden las filas de una página; la base corta en la primera que decide distinto. */
+  async admit(pageId: string, decisions: AdmitDecision[]): Promise<AdmitResult[]> {
+    const { data, error, status } = await timed(
+      this.client.rpc('link_admit', { p_page_id: pageId, p_app_version: this.appVersion || null, p_decisions: decisions }),
+    );
+    if (error) throw toRemoteError(error, status);
+    return parseAdmitResults(data);
+  }
+
+  /** Lo de un link que no entró a la página (apartado, retenido, esperando), para quien la ve con lo borrado. */
+  async linkUpdatesOf(pageId: string): Promise<LinkUpdateRow[]> {
+    const { data, error, status } = await timed(this.client.rpc('public_link_updates_of', { p_page_id: pageId }));
+    if (error?.code === MISSING_FUNCTION) return [];
+    if (error) throw toRemoteError(error, status);
+    return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+      id: String(r.id),
+      link_id: String(r.link_id),
+      author: String(r.author),
+      created_at: String(r.created_at),
+      bytes: Number(r.bytes),
+      state: r.state === 'aside' || r.state === 'held' ? r.state : 'waiting',
+      reason: typeof r.reason === 'string' ? r.reason : null,
+    }));
+  }
+
+  /** Los bytes de una fila apartada o retenida (para "Download it"; nunca se aplican). */
+  async linkUpdateBytes(id: string): Promise<Uint8Array> {
+    const { data, error, status } = await timed(this.client.rpc('public_link_update_bytes', { p_id: id }), MAX_REQUEST_TIMEOUT_MS);
+    if (error) throw toRemoteError(error, status);
+    return fromBase64(String(data));
   }
 
   async pageHistoryAuthors(pageId: string): Promise<HistoryAuthor[]> {

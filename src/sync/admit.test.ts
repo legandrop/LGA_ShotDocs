@@ -17,7 +17,7 @@ const tick = () => new Promise((r) => setTimeout(r, 40));
 
 const ALLOWED = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const FOREIGN = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
-const allowed = (id: string) => id === ALLOWED;
+const allowed = (id: string): boolean => id === ALLOWED;
 
 /** Una página del editor: `n` párrafos de ~`len` letras, con lo tecleado y borrado en varias filas. */
 function editorPage(n: number, len: number, seed = 1): Uint8Array[] {
