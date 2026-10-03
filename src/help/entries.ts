@@ -180,6 +180,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'start',
     title: 'help.news.title',
     text: 'help.news.text',
+    textTouch: 'help.news.textTouch',
     words: ['novedades', 'nuevo', 'qué hay de nuevo', 'punto', 'actualización', "what's new", 'new', 'dot', 'update', 'changes'],
     since: HELP_3,
   },
