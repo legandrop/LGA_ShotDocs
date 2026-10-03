@@ -368,6 +368,9 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
                 </div>
                 {media.enabled && !smaller && !online && <p className="muted">{tr('exportDialog.offlineOriginals')}</p>}
                 <FileLinksNotice plan={fileLinks} checked={useFileLinks} onChange={chooseFileLinks} />
+                {/* Sin red no se puede pedir el link público de la página (Doc_Links_PDF.md, 3.3): los links van con la dirección
+                    de siempre y la ventana lo dice. Un visitante del link usa el suyo y no ve este aviso. */}
+                {media.enabled && !linkMode && !online && !fileLinks && <p className="muted export-offline-links">{tr('exportDialog.offlineFileLinks')}</p>}
                 {!named && <p className="muted">{tr('exportDialog.oneSize', { size: rootSize })}</p>}
                 <p className="muted">{tr('exportDialog.margins')}</p>
                 {plan.length === 0 && <p className="error">{tr('exportDialog.empty')}</p>}

@@ -118,6 +118,15 @@ export const teamDialogs = {
     en: { one: "{count} file was added through this page's link", other: "{count} files were added through this page's link" },
     es: { one: "Se sumó {count} archivo con el link de esta página", other: "Se sumaron {count} archivos con el link de esta página" },
   },
+  // Con la lista cortada en el tope de la base no se sabe el total: se dice «o más».
+  'share.link.filesTitleCapped': {
+    en: "{count} or more files were added through this page's link",
+    es: "Se sumaron {count} archivos o más con el link de esta página",
+  },
+  'share.link.filesCappedMore': {
+    en: "and {count} more, plus older ones that aren't listed. They all stay in your Drive.",
+    es: "y {count} más, y otros anteriores que no se listan. Todos quedan en tu Drive.",
+  },
   'share.link.filesHint': {
     en: "Also the ones in changes that were set aside. They stay in your Drive.",
     es: "También los de cambios que quedaron aparte. Quedan en tu Drive.",

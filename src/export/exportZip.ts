@@ -10,6 +10,7 @@ import { mediaIdOf, VIEW_PREFIX, VIEW_SMALL_PREFIX, type MediaQueue } from '../m
 import { mediaIdsInDoc } from '../media/usage';
 import { VIEW_SIDE } from '../media/probe';
 import { ZipWriter } from '../media/zipWriter';
+import { prefs, type Contrast } from '../prefs';
 import type { Role } from '../sync/access';
 import type { CommentThread, CommentView } from '../sync/comments';
 import type { PageRow } from '../sync/types';
@@ -303,6 +304,8 @@ export interface ZipOptions {
   appVersion: string;
   now?: Date;
   lastSync?: number | null;
+  /** El contraste del texto de las páginas `.html` (por defecto, el de quien exporta: `prefs.contrast`). */
+  contrast?: Contrast;
   /** Los estilos y sus letras (por defecto, los del documento: `archiveStyles`). */
   styles?: { css: string; fonts: { url: string; name: string }[] };
   /** Pasar un HEIC a JPEG (por defecto, el convertidor de la app). */
@@ -522,6 +525,8 @@ export async function buildZip(options: ZipOptions): Promise<ZipResult> {
   const downloaded = { files: 0, bytes: 0 };
   let loose = 0;
   const lang = locale();
+  // El contraste de quien exporta (Doc_Contraste.md): el mismo del PDF, no uno fijo.
+  const contrast = options.contrast ?? prefs.get().contrast;
   const dates = new Intl.DateTimeFormat(lang, { dateStyle: 'medium', timeStyle: 'short' });
   const asOf = options.lastSync ? t('exportPdf.asOf', { date: dates.format(options.lastSync) }) : '';
   const footer = [t('exportPdf.exported', { date: new Intl.DateTimeFormat(lang, { dateStyle: 'medium' }).format(now) }), asOf].filter(Boolean).join(' · ');
@@ -748,6 +753,7 @@ export async function buildZip(options: ZipOptions): Promise<ZipResult> {
             footer,
             comments: section,
             lang,
+            contrast,
           });
           await out.file(htmlOf(slot), html);
           const md = pageMarkdown({
