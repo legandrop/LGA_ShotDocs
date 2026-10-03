@@ -322,6 +322,8 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser, link
         onUse: (id, how) => offline?.used(id, how),
         makeRoom: async (bytes) => (offline ? offline.makeRoom(bytes) : 0),
         onRejected: (file) => offline?.rejected(file),
+        // Un link no registra usos de archivos: los registra el editor que admite (O7 de la auditoría de la 2a).
+        noUsage: !!link,
       });
       await media.load().catch(() => undefined);
       // Las carpetas (P.9): solo la lista de trabajo, sin bytes, en otra base. Si no se abre, se suben igual

@@ -766,6 +766,9 @@ export class SyncEngine {
   private async reconcileMedia(): Promise<void> {
     const media = this.options.media;
     if (!media?.tracksUsage) return;
+    // Un link con Can edit no registra usos de archivos: los vincula y desvincula el dispositivo de un editor al
+    // reconciliar lo admitido (Docs/Doc_Link_Publico.md, E2.4). Si los anotara, quedarían como cambios sin subir (O7).
+    if (this.options.linkVisitor) return;
     // Hay ediciones que no se pudieron guardar en el dispositivo: lo guardado no es lo que se ve.
     if (this.docs.getWriteError()) return;
     const access = this.options.access;

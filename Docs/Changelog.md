@@ -5,8 +5,8 @@ v0.0XX :
 **Link público, entrega 2a: *Can edit*** (P.19). Un link solo podía ver y comentar. Escribir directo en la página no
 era seguro: una fila rota de alguien sin cuenta podía colarse en una copia resumida o trabar el editor del equipo. Ahora
 lo que escribe el visitante espera en una sala (`public_link_updates`, migración sin aplicar, `schema_version` 19, con
-topes por bytes); el dispositivo de un editor lo prueba en ocho pasos (también la forma y los valores, con las 19 filas
-hostiles de la auditoría) y la base lo mueve a la página o lo aparta sin perder nada. *Share* ofrece *Can edit* con sus
+topes por bytes); el dispositivo de un editor lo prueba en ocho pasos (también la forma, dónde va cada nodo, topes a los
+números y a la profundidad) y la base lo mueve a la página o lo aparta sin perder nada. *Share* ofrece *Can edit* con sus
 números, la página avisa lo apartado con *Download it*, el historial muestra *Ana (via link)* y el visitante pone su
 nombre y ve *Sent, waiting for the team*. El interruptor queda apagado hasta la barrera de error del editor.
 [ Link Can edit 2a - la sala de espera, la admisión por un editor, Share con Can edit y el visitante que escribe ]

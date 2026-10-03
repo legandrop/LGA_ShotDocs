@@ -312,7 +312,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   barrera de error alrededor de `PageEditor` en `main` (R4), aplicar la migración, subir la mínima y poner
   `link_edit_min_version`. Falta la 2b (archivos por el link) y la 2c (lo apartado a la vista). Lo encontrado al
   implementar: si una fila del visitante se aparta, todo lo que sigue de la misma sesión (el mismo autor de Yjs) también,
-  dependa o no, hasta que recarga: adelantar "volver a la página como la ve el equipo" (2c) gana peso.
+  dependa o no, hasta que recarga: adelantar "volver a la página como la ve el equipo" (2c) gana peso. **Su auditoría
+  dio no aprobado (el paso 8) y se corrigió en una ronda** (`Doc_Link_Publico.md`, "Correcciones de la auditoría de la
+  2a"). Quedan de esa auditoría: O3 (una versión inventada como `'9999'` en una fila la deja sin decidir y traba lo que
+  sigue de ese link en esa página; *Reset link* lo corta; falta un techo de versión en la base), O9 (la
+  pantalla de link muerto, después de recargar, no ofrece lo mandado y apartado) y O4 (con D14 apagado se escribe igual
+  en la sala). Al publicar la 2a, subir `min_app_version` a ella (O5: la publicada pasa *Can edit* a *Can view* al
+  cambiar el vencimiento).
   **Entrega 2 rediseñada (2026-10-02):** lo que escribe un link espera en una sala
   (`public_link_updates`) y entra a `page_updates` cuando el dispositivo de un editor lo prueba (`link_admit`); partida
   en 2a (texto), 2b (archivos) y 2c (lo apartado a la vista); propuestas LE1 a LE13. **Auditado: aprobado con

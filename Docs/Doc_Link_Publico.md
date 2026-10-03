@@ -2396,7 +2396,7 @@ admisión en dos pasos, `public_link_updates_of`, `public_link_update_bytes`, `p
    admite, la insignia lo deja de decir en el ciclo siguiente del visitante.
 
 **Pruebas:** la migración y su prueba (`supabase/tests/link_editar_permisos.sql`) en `begin … rollback` contra la base
-real: pasa, con 27 mutantes de la migración, todos detectados; las 26 pruebas SQL de siempre pasan con la migración
+real: pasa, con 30 mutantes de la migración, todos detectados; las 27 pruebas SQL de siempre (con el plan B del MCP aplicado) pasan con la migración
 (con los dos ajustes de la tabla de arriba). En vitest: `admit.test.ts` (los 11 casos del prototipo, las 19 filas
 hostiles contra el editor real, las 3 que tiraban apartadas por la forma, la imagen externa, la vacía de C1, las
 anotaciones, colapsar, la foto en línea, la cadena, 60 semillas al azar con más de 1000 filas honestas y 0
@@ -2405,7 +2405,7 @@ el editor real), `linkEdit.test.ts` (el motor de E2.14.3 con el servidor en memo
 visitante con el editor real: escribir, una plantilla de fábrica en una página vacía y una anotación; el equipo lo abre
 sin *UnsupportedPage*) y `linkEdit.published.test.ts` (lo admitido abierto con la librería de las versiones
 publicadas), `admitClean.test.ts` (el paso 7, forzado) y `linkEditUi.test.tsx` (*Share* con *Can edit*, el aviso de
-lo apartado y *Ana (via link)* en el historial). Mutantes de la app: 21, uno por cada paso de E2.3 y los del motor y el
+lo apartado y *Ana (via link)* en el historial). Mutantes de la app: 29, uno por cada paso de E2.3 y por cada corrección de la auditoría, y los del motor y el
 visitante, todos detectados (`mutants_app.mjs` en la carpeta de trabajo, fuera del repo). **En el navegador**
 (Chromium sin ventana, la app real del visitante sobre el servidor en memoria con el interruptor prendido solo ahí, sin
 login): el visitante escribe, la barra le pide el nombre, la sala recibe la fila con su nombre, la insignia dice *Sent,
@@ -2417,6 +2417,32 @@ equipo ve el aviso con *Download it*; en el teléfono, sin scroll horizontal; si
 seguridad), publicar, subir `min_app_version` a esta versión y
 `update public.workspace_settings set link_edit_min_version = <esta versión> where id;` (el de D14 ya tiene que estar
 prendido). Apagar es volver a ponerlo en nulo: los links quedan en *Can view* de hecho y lo que espera, esperando.
+
+#### Correcciones de la auditoría de la 2a
+
+Una auditoría independiente sobre `c50ed1d` dio **no aprobado**: la base, bien cerrada; el paso 8, no. Se corrigió en una
+ronda (y la rama trae `main` v0.148, con la barrera de error de `PageEditor` y el plan B del MCP; la migración pasa a
+`20261028120000_link_editar.sql`):
+
+| Hallazgo | Corrección |
+|---|---|
+| **B1.** El editor real escribe `lgaGapText: true` en los textos de un renglón con fotos en línea (Enter, copiar o duplicar el renglón o una foto, Tab, pasarlo a encabezado); el paso 8 lo apartaba (`attribute outside a node`) y, en cadena, todo lo que seguía: 21 % de lo honesto al azar con una foto en la página | `TEXT_ATTRS`: un texto acepta solo `lgaGapText: true`. Prueba con el editor real (9 acciones en un párrafo y en una celda, y lo que sigue escribiendo) y la corrida al azar con fotos en línea, una tabla con fotos y listas (60 semillas, más de 600 filas honestas, 0 apartadas) |
+| **B2.** Un nodo conocido donde el esquema no lo acepta (un párrafo adentro de otro, un bloque adentro de un encabezado, una imagen adentro de un párrafo) pasaba, y el editor del equipo borraba el bloque del equipo al abrir la página | `CHILDREN`: qué hijos acepta cada nodo, comparado en una prueba con el `contentMatch` del esquema real (recorriendo el autómata), y el orden de un bloque (`blockContent blockGroup?`). Los 8 casos del auditor, apartados |
+| **B3.** `colspan: 100000000` (175 bytes) dejaba sin memoria al editor del equipo | Topes: `colspan`/`rowspan` enteros de 1 a 50, `colwidth` hasta 50 anchos de hasta 20 000 px, los px hasta 20 000, `rowWidth` y el ancho de una foto de 0 a 1, `start` de 0 a un millón |
+| **B4.** Mil, tres mil u ocho mil niveles de sangría pasaban (8000: ~11 s en el hilo del editor que admite) y desbordaban la pila del editor y de `normalizeStructure` | La profundidad de la página entera, contada con una pila propia (sin recursión) justo después de aplicar la fila y antes de lo caro: hasta 100 grupos anidados y 400 nodos (`too_deep`). Ocho mil niveles se apartan en milisegundos |
+| **O6.** Mutantes vivos | Pruebas nuevas: `link_admit` con la app vieja en el header (`app_outdated`), un uso de afuera (`is_foreign`) no da permiso, el creador que pierde el permiso deja lo suyo retenido; `savedRows` con algo propio sin subir; el motor ya no corta en el cliente (lo hace la base: era un mutante equivalente) y `ready` mira también lo no subido |
+| **O8.** *Download it* del equipo traía solo Yjs | Suma `text`: lo tecleado en la fila (`insertedText`) |
+| **O12.** La cadena | El aviso del visitante dice que lo que escriba después en esa página tampoco va a llegar, y ofrece la copia |
+| **O7.** Con fotos en línea, la insignia del visitante decía *1 change not uploaded* para siempre | Era el registro de usos de archivos del editor del visitante (`ensureLinks`), que sin portero no sale nunca. Un link no registra usos (`MediaQueue` con `noUsage`, y el motor no reconcilia): los registra el editor que admite. Visto en el navegador: *Sent, waiting for the team* |
+| **O1.** Fusión con el MCP | La lista de lo que ejecuta `anon` en `link_publico_permisos.sql` suma `private.mcp_pre_request` y las dos `plink_push_*`; las 28 pruebas SQL pasan en rollback sobre la base con el plan B aplicado |
+
+**Quedan, al roadmap:** O3 (una versión inventada, `'9999'`, deja una fila que nadie decide y traba lo que manda
+después ese link en esa página: solo lo frena a él y *Reset link* lo corta; arreglarlo pide un techo de versión que
+la base no sabe hoy), O9 (después de recargar, la pantalla de link muerto no sabe de lo mandado y apartado:
+lo tiene el equipo en la sala) y O4 (con D14 apagado igual se escribe en la sala; hoy no hay links sin D14).
+**O5:** la app publicada (v0.146) cambia el vencimiento de un link con `'comment'` fijo y pasaría un *Can edit* a *Can
+view*: por eso, **al publicar, subir `min_app_version` a la versión de la 2a** antes de prender el interruptor.
+**O10:** quien publica completa `v0.0XX` en el changelog y `LINK_EDIT = '0.0XX'` en `src/help/entries.ts` a la vez.
 
 **Falta:** la 2b (archivos por el link) y la 2c (lo apartado a la vista: la lista en *Share*, *Set aside (via link)*
 en el historial, "volver a la página como la ve el equipo" para el visitante, el ícono del árbol). Al roadmap, lo de la

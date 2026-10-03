@@ -235,6 +235,11 @@ export type MediaPortero = Pick<Portero, 'upload' | 'pass' | 'trash'> & {
 };
 
 export interface MediaQueueOptions {
+  /**
+   * Sin usos de archivos (un link público con Can edit, Docs/Doc_Link_Publico.md, E2.4): ni los registra ni los saca;
+   * lo hace el dispositivo de un editor al reconciliar lo admitido. Sin la opción, como siempre.
+   */
+  noUsage?: boolean;
   /** El cliente del portero para una dirección (`workspace_settings.media_url`). */
   portero: (baseUrl: string) => MediaPortero;
   /** El proyecto de una página (se guarda con el archivo). */
@@ -579,7 +584,7 @@ export class MediaQueue {
 
   /** Se lleva la cuenta de qué archivos usa cada página (hay base de archivos y la base tiene `files`). */
   get tracksUsage(): boolean {
-    return !!this.db && this.schemaReady;
+    return !!this.db && this.schemaReady && this.options.noUsage !== true;
   }
 
   /** La base tiene la papelera de archivos (versión 6). */
@@ -980,7 +985,7 @@ export class MediaQueue {
    * a pedir.
    */
   async ensureLinks(pageId: string, fileIds: string[]): Promise<void> {
-    if (!this.db) return;
+    if (!this.db || this.options.noUsage) return;
     let added = false;
     for (const fileId of new Set(fileIds.map((id) => id.toLowerCase()))) {
       const key = `${pageId}:${fileId}`;
