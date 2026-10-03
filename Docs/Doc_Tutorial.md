@@ -43,7 +43,7 @@ Relevado del código de `main`. Son los lugares a los que puede apuntar un globi
 | Selector de proyectos | Arriba de la barra lateral (`ProjectSwitcher.tsx`) | Cambia de proyecto, crea uno, cambia de workspace; muestra lo que pesa cada proyecto. Hoy se abre con Ctrl/⌘+K. |
 | Estado de sincronización | Debajo del selector (`SyncBadge.tsx`); en el teléfono, un ícono en la barra de arriba | "Todo sincronizado", "3 cambios sin subir", sin conexión, actualizá la app. |
 | Árbol de páginas | Barra lateral (`Sidebar.tsx`) | Abrir, "+" para una página nueva (arriba y en cada renglón), arrastrar para ordenar, menú de cada página; ancho con el tirador (`SidebarResizer.tsx`). En el teléfono, un cajón que se abre con el botón de menú. |
-| Pie de la barra lateral | `Sidebar.tsx` | Papelera (páginas y archivos) y el menú de la cuenta. |
+| Pie de la barra lateral | `Sidebar.tsx` | La ayuda y el menú de la cuenta (desde v0.162 la papelera está en el selector de proyectos, con proyectos, páginas y archivos). |
 | Menú de la cuenta | `AccountMenu` en `menus.tsx` | Apariencia (tema, letra, tamaño, ancho de la página), fotos en fila en el teléfono, idioma, miembros, Google Drive (el dueño), salir, textos legales. Las preferencias siguen a la persona ("Guardado en tu cuenta"). |
 | Barra de arriba de la página | `Workspace.tsx` | Migas, **lupa** (buscar en la página, Ctrl/⌘+F), **ícono de comentarios**, menú "⋯" de la página. |
 | Menú "⋯" de la página | `PageMenu` en `menus.tsx` | Compartir, página nueva adentro, renombrar, mover, tamaño de hoja, **Exportar PDF / Imprimir**, títulos cortos, mandar a la papelera. Desde P.11 (v0.053): colapsar todo / abrir todo. |
@@ -337,7 +337,7 @@ Arriba, un campo de búsqueda; abajo, las secciones:
 8. **Buscar y reemplazar** (y, con P.12 entrega 2, buscar en el proyecto).
 9. **Colapsar secciones** (P.11): colapsar, colapsar para todos (Shift+clic) y mover la sección entera; ver "Entrada de ayuda: colapsar".
 10. **Compartir y miembros:** permisos, invitados.
-11. **Papelera:** páginas y archivos, qué se recupera.
+11. **Papelera:** páginas y archivos, qué se recupera (desde v0.162, una sola en el selector de proyectos, también con los proyectos borrados).
 12. **Sin red y sincronización:** qué quiere decir cada estado, por qué no se pierde nada.
 13. **Hojas, PDF e impresión.** Con el salto de hoja (entrada `pageBreak`: Ctrl/⌘+Enter o "/" *Page break*).
 14. **Preferencias:** tema, letra, tamaño, ancho, idioma.
@@ -937,8 +937,11 @@ auditoría lo vio porque el arnés entraba con el correo de Lega.
 - Elegir las fotos del ejemplo (siguen las dibujadas).
 - Probar en Safari de la Mac, el iPhone (Safari y la app instalada) y VoiceOver: *Show me* en el teléfono (el paso de
   Buscar y los del cajón) y el punto de novedades después de una actualización real.
-- En el teléfono el punto de novedades se ve solo con el cajón abierto (el "?" vive ahí): llevarlo también al botón de
-  menú de arriba queda en el roadmap (P.13).
+- (Hecho en v0.160) En el teléfono el punto de novedades se veía solo con el cajón abierto (el "?" vive ahí): ahora
+  también está en el botón de menú de la barra de arriba (`NavMenuButton`, `src/ui/NavMenuButton.tsx`, en la barra de la
+  página y en la de la práctica), con la misma regla que el "?" (`useHelpDot`: la recorrida sin ver o las novedades) y se
+  apaga junto con él al abrir la ayuda; la entrada *What's new* tiene su texto para pantallas táctiles
+  (`help.news.textTouch`). Probar en un iPhone real que el punto se ve sobre el ícono.
 
 ## Entradas esperando la ayuda
 

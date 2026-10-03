@@ -126,6 +126,8 @@ const DICTATION_QUEUE = '0.139';
 const DICTATION_VOICE = '0.139';
 /** *Dictate to report*, entrega V4 (el plano activo, las correcciones, la página del plano, el Atajo de iOS): la versión la pone quien publica. */
 const DICTATION_V4 = '0.150';
+/** Una sola papelera en el selector de proyectos (Doc_Proyectos_Borrar.md, "Cómo quedó: una sola papelera"): la versión la pone quien publica. */
+const ONE_TRASH = '0.162';
 /** Las tablas anchas se desplazan de costado en el teléfono (P.28, Doc_Tabla_Telefono.md): la versión la pone quien publica. */
 const TABLE_PHONE = '0.156';
 /** Las plantillas de fábrica (Docs/Doc_Plantillas.md, entregas 0 y 1): la versión se ajusta al publicar. */
@@ -170,6 +172,8 @@ const UNDO_ORDER = '0.152';
 const TITLE_LONG = '0.152';
 /** "Mostrame" y las novedades (Doc_Tutorial.md, entrega 3): el número lo pone quien publica. */
 const HELP_3 = '0.158';
+/** El contraste del texto (Docs/Doc_Contraste.md). */
+const CONTRAST = '0.161';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -180,6 +184,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'start',
     title: 'help.news.title',
     text: 'help.news.text',
+    textTouch: 'help.news.textTouch',
     words: ['novedades', 'nuevo', 'qué hay de nuevo', 'punto', 'actualización', "what's new", 'new', 'dot', 'update', 'changes'],
     since: HELP_3,
   },
@@ -777,7 +782,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
   },
 
   // --- Papelera ---
-  { id: 'trash', section: 'trash', title: 'help.trash.title', text: 'help.trash.text', since: BEFORE_HELP },
+  {
+    id: 'trash',
+    section: 'trash',
+    title: 'help.trash.title',
+    text: 'help.trash.text',
+    words: ['papelera', 'borrado', 'borrados', 'restaurar', 'proyectos borrados', 'deleted', 'deleted projects', 'restore', 'trash', 'recuperar', 'recover'],
+    showMe: 'project-switcher',
+    since: ONE_TRASH,
+  },
   {
     id: 'history',
     section: 'trash',
@@ -880,6 +893,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
 
   // --- Preferencias ---
   { id: 'prefs', section: 'prefs', title: 'help.prefs.title', text: 'help.prefs.text', since: BEFORE_HELP },
+  {
+    id: 'contrast',
+    section: 'prefs',
+    title: 'help.contrast.title',
+    text: 'help.contrast.text',
+    words: ['contraste', 'contrast', 'negrita', 'bold', 'encabezado', 'heading', 'gris', 'gray', 'grey', 'tono', 'legible', 'readable', 'pdf'],
+    since: CONTRAST,
+  },
   { id: 'language', section: 'prefs', title: 'help.language.title', text: 'help.language.text', since: BEFORE_HELP },
 
   // --- Atajos (la tabla entera va abajo de esta entrada) ---

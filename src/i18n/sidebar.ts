@@ -79,7 +79,6 @@ export const sidebar = {
   'project.archivedTitle': { en: "Archived projects", es: "Proyectos archivados" },
   'project.findArchived': { en: "Find an archived project…", es: "Buscar un proyecto archivado…" },
   'project.noArchived': { en: "No archived project with that name.", es: "No hay ningún proyecto archivado con ese nombre." },
-  'project.deletedList': { en: "Deleted projects", es: "Proyectos borrados" },
   'project.onlyOne': {
     en: "This is your only project: create another one first",
     es: "Es tu único proyecto: primero creá otro",
@@ -98,12 +97,12 @@ export const sidebar = {
     es: "Este proyecto ya no existe, o ya no lo ves.",
   },
   'project.errorDriveFirst': {
-    en: "Its files are in the Google Drive trash: Restore brings them back first. Open Deleted projects again.",
-    es: "Sus archivos están en la papelera de Google Drive: Restaurar primero los trae. Abrí Proyectos borrados de nuevo.",
+    en: "Its files are in the Google Drive trash: Restore brings them back first. Open the Trash again.",
+    es: "Sus archivos están en la papelera de Google Drive: Restaurar primero los trae. Abrí la papelera de nuevo.",
   },
   'project.errorDeleted': {
-    en: "This project was deleted in the meantime: it is in Deleted projects.",
-    es: "Este proyecto se borró mientras tanto: está en Proyectos borrados.",
+    en: "This project was deleted in the meantime: it is in the Trash.",
+    es: "Este proyecto se borró mientras tanto: está en la papelera.",
   },
   'import.menu': { en: "Import from Coda…", es: "Importar de Coda…" },
   'importArchive.menu': { en: "Import Shot Docs archive…", es: "Importar archivo de Shot Docs…" },

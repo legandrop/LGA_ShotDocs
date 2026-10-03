@@ -11,6 +11,51 @@ si no tiene atajo; en pantallas táctiles, sin atajos. Una prueba con la barra r
 ya no aparece. Además, una prueba del anotador en una ventana angosta con mouse: conserva los atajos.
 [ Barra de formato con los tooltips de la app - los botones de BlockNote con un renglón «atajo: acción» del registro o su nombre, sin su globo, y la prueba del anotador angosto con mouse ]
 
+v0.162 :
+
+**Una sola papelera** (pedido de Lega). Había dos: *Trash* abajo de la barra lateral (páginas y archivos) y *Deleted
+projects* en el selector de proyectos, y no se entendía cuál era cuál. Ahora *Trash* está solo en el selector, en el
+lugar de *Deleted projects*: proyectos, páginas y archivos juntos, del más nuevo al más viejo, cada uno con su
+proyecto, con el filtro *All / Projects / Pages / Files* y *This project / All projects* (los proyectos borrados se ven
+siempre). Cada tipo hace lo de antes (*Restore*, mandar a Drive, *Restore without its files*; *Empty*, solo del
+proyecto abierto y nombrándolo) y cada uno ve lo que la base le dejaba ver: sin migración. Sin red, las páginas. `/trash` abre el selector en la papelera. Ayuda,
+recorrida y textos que decían *Deleted projects*, al día.
+[ Una sola papelera - Trash pasa al selector de proyectos con proyectos, páginas y archivos juntos, el filtro All Projects Pages Files y este proyecto o todos ]
+
+v0.161 :
+
+**Contraste del texto y el panel de la cuenta.** El texto del documento era todo del mismo tono, y el panel de la cuenta
+ya no entraba en una ventana baja: su tope era la ventana entera y la cabecera quedaba afuera por arriba. Ahora
+*Contrast* (de fábrica) da tres tonos al texto con el color por defecto: encabezados como siempre, negrita un poco más
+suave y texto común un poco más; *More contrast* lo marca más y *No contrast* deja todo como antes. Son tokens por
+modo y nivel, todos de 4,5:1 o más (`Doc_Contraste.md`); un color elegido, un resaltado y la cita no cambian. Vale en
+la página, el historial y el PDF, en claro. El panel se recorre adentro con el alto que queda, *Appearance*, *Font* («Fuente») y *Contrast* son solo
+íconos con su nombre en el tooltip, y *Sign out other devices* va a la izquierda.
+[ Contraste del texto - Contrast de fábrica, More contrast y No contrast para encabezados, negrita y texto común, en la página, el historial y el PDF; el panel de la cuenta con íconos y su propio desplazamiento ]
+
+v0.160 :
+
+**Teléfono pulido: cuatro chicos.** (1) El punto de novedades del "?" solo se veía con el cajón abierto; ahora también
+está en el botón de menú de la barra de arriba (la de la página y la de la práctica), con la misma regla (`useHelpDot`,
+componente `NavMenuButton`, con su nombre accesible), y la ayuda lo dice. (2) El botón de comentar del margen salía 4 px de la
+pantalla (`right: -4px`) y la página se arrastraba 4 px de costado; ahora `right: 0`. (3) El piso de 96 px por columna de
+las tablas valía hasta 760 px; en un iPad vertical el reporte seguía en 47 px por columna: ahora vale hasta 1024 px, solo
+para las tablas de páginas sin hoja (una hoja A4 queda como el PDF; la compu tampoco cambia). (4) Un clic con el mouse en el triángulo o en la fila dejaba ⋯ y + a la
+vista por `:focus-within`; ahora es `:focus-visible`, que solo es el teclado.
+[ Teléfono pulido - el punto de novedades también en el botón de menú, el botón de comentar adentro de la pantalla, el piso de las columnas de la tabla hasta 1024 px (tablet vertical) y ⋯ y + del árbol solo con foco de teclado ]
+
+v0.159 :
+
+**Restos de dos auditorías, solo pruebas y un ajuste.** (1) Claves de orden (B.23): si el objetivo de la ventana de
+rehacer pasaba de 64 a 128 caracteres, ninguna prueba fallaba; ahora una barre las profundidades de 40 a 120 (incluido el
+borde 64/65) y exige claves de 64 o menos sin rehacer de más. No había error de lógica. (2) Una foto sin vista previa
+(llega por una importación o una fila) salía en el HTML externo con la imagen mínima `data:image/gif…` en el vínculo y
+en su texto; ahora sale con su `sdmedia://` y su nombre, como el original de BlockNote. (3) El `loading` del
+`renderHTML` de la foto en línea se queda: sin él, arrastrar un párrafo por el tirador vuelve a dejar
+`ERR_UNKNOWN_URL_SCHEME` (BlockNote relee ese HTML con `innerHTML` en la página viva). Ahora lo exigen dos pruebas, una
+por la ruta del arrastre.
+[ Restos de B.23 y B.24 - la prueba que fija la ventana de claves en 64, la foto sin vista previa sin la imagen mínima en el HTML externo y la prueba del loading de la foto en línea al arrastrar ]
+
 v0.158 :
 
 **Ayuda, entrega 3: "Mostrame" y novedades** (P.13). La ayuda explicaba cada función pero no la señalaba, y nada

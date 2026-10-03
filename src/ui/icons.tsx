@@ -69,6 +69,19 @@ export const LightIcon = icon(
   'M10 6.75a3.25 3.25 0 1 1 0 6.5 3.25 3.25 0 0 1 0-6.5zM10 2.5v1.5M10 16v1.5M2.5 10H4M16 10h1.5M4.7 4.7l1.05 1.05M14.25 14.25l1.05 1.05M4.7 15.3l1.05-1.05M14.25 5.75l1.05-1.05',
 );
 export const DarkIcon = icon('M15.5 12.25A6 6 0 0 1 7.75 4.5a6 6 0 1 0 7.75 7.75z');
+// El contraste del texto (Docs/Doc_Contraste.md): un encabezado y dos renglones, cada uno con la opacidad de su nivel
+// (todos iguales sin contraste; más apagados cuanto más marcada la jerarquía).
+const CONTRAST_STEPS = { none: [1, 1, 1], contrast: [1, 0.68, 0.45], more: [1, 0.5, 0.26] } as const;
+export function ContrastIcon({ level, size = 18 }: { level: keyof typeof CONTRAST_STEPS; size?: number }) {
+  const [h, b, t] = CONTRAST_STEPS[level];
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeLinecap="round" aria-hidden="true">
+      <path d="M3.5 5h9" strokeWidth={2.4} opacity={h} />
+      <path d="M3.5 10h13" strokeWidth={1.9} opacity={b} />
+      <path d="M3.5 15h10.5" strokeWidth={1.5} opacity={t} />
+    </svg>
+  );
+}
 // Instalar la app: un teléfono con una flecha que baja.
 export const InstallIcon = icon(
   'M6.75 2.75h6.5a1 1 0 0 1 1 1v12.5a1 1 0 0 1-1 1h-6.5a1 1 0 0 1-1-1V3.75a1 1 0 0 1 1-1zM10 6.5v5.25M8 9.75l2 2 2-2M9 14.75h2',

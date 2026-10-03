@@ -1,19 +1,36 @@
 import type { Dict } from './types';
 
-// La papelera: páginas y archivos (fotos y videos que ninguna página usa).
+// La papelera única, en el selector de proyectos: proyectos, páginas y archivos (fotos y videos que ninguna página
+// usa) borrados.
 
 export const trash = {
   'trash.title': { en: "Trash", es: "Papelera" },
-  'trash.contents': { en: "Trash contents", es: "Contenido de la papelera" },
   'trash.pages': { en: "Pages", es: "Páginas" },
   'trash.files': { en: "Files", es: "Archivos" },
+  'trash.filter': { en: "Show", es: "Mostrar" },
+  'trash.filterAll': { en: "All", es: "Todo" },
+  'trash.filterProjects': { en: "Projects", es: "Proyectos" },
+  'trash.scope': { en: "Which projects", es: "De qué proyectos" },
+  'trash.scopeCurrent': { en: "This project", es: "Este proyecto" },
+  'trash.scopeAll': { en: "All projects", es: "Todos los proyectos" },
+  'trash.kindPage': { en: "Page", es: "Página" },
+  'trash.kindFile': { en: "File", es: "Archivo" },
+  'trash.kindProject': { en: "Project", es: "Proyecto" },
+  'trash.hintAll': {
+    en: "Deleted projects, pages and files, newest first. Nothing here is erased from the app: Restore brings a project or a page back as it was, and a file leaves the trash when a page uses it again.",
+    es: "Proyectos, páginas y archivos borrados, del más nuevo al más viejo. Nada de lo que está acá se borra de la app: Restaurar devuelve un proyecto o una página tal como estaba, y un archivo sale de la papelera cuando una página lo vuelve a usar.",
+  },
+  'trash.offlineRest': {
+    en: "Deleted projects and files need an internet connection: only pages show now.",
+    es: "Los proyectos y los archivos borrados necesitan conexión a internet: ahora se ven solo las páginas.",
+  },
   'trash.pagesHint': {
     en: "Nothing here is ever deleted from the app. Restoring a page brings it back with everything that was inside it.",
     es: "Nada de lo que está acá se borra de la app. Restaurar una página la trae de vuelta con todo lo que tenía adentro.",
   },
   'trash.pagesHintMedia': {
-    en: "Nothing here is ever deleted from the app. Restoring a page brings it back with everything that was inside it, except photos and videos that were already sent to the Google Drive trash from the Files tab: those show as deleted.",
-    es: "Nada de lo que está acá se borra de la app. Restaurar una página la trae de vuelta con todo lo que tenía adentro, menos las fotos y los videos que ya se mandaron a la papelera de Google Drive desde la pestaña Archivos: esos aparecen como borrados.",
+    en: "Nothing here is ever deleted from the app. Restoring a page brings it back with everything that was inside it, except photos and videos that were already sent to the Google Drive trash from Files: those show as deleted.",
+    es: "Nada de lo que está acá se borra de la app. Restaurar una página la trae de vuelta con todo lo que tenía adentro, menos las fotos y los videos que ya se mandaron a la papelera de Google Drive desde Archivos: esos aparecen como borrados.",
   },
   'trash.empty': { en: "The trash is empty.", es: "La papelera está vacía." },
   'trash.restore': { en: "Restore", es: "Restaurar" },
@@ -62,10 +79,12 @@ export const trash = {
     en: { one: "({count} used by a page in the trash stays)", other: "({count} used by pages in the trash stay)" },
     es: { one: "(queda {count}, que usa una página de la papelera)", other: "(quedan {count}, que usan páginas de la papelera)" },
   },
+  // Vacía solo la papelera de archivos del proyecto abierto: la pregunta lo nombra.
   'fileTrash.confirmEmpty': {
-    en: "Empty the file trash: send {what}{skip} to the Google Drive trash?",
-    es: "Vaciar la papelera de archivos: ¿mandar {what}{skip} a la papelera de Google Drive?",
+    en: "Empty the file trash of “{project}”: send {what}{skip} to the Google Drive trash?",
+    es: "Vaciar la papelera de archivos de “{project}”: ¿mandar {what}{skip} a la papelera de Google Drive?",
   },
+
   'fileTrash.emptySpace': {
     en: "{size} go to the Google Drive trash. The space in Drive is freed when Google empties its trash (after 30 days), not right away.",
     es: "{size} pasan a la papelera de Google Drive. El espacio en Drive se libera cuando Google vacía su papelera (a los 30 días), no enseguida.",
@@ -103,8 +122,8 @@ export const trash = {
     es: "Lo usa una página de un proyecto borrado. Vuelve si restauran ese proyecto.",
   },
   'fileTrash.emptyTip': {
-    en: "Send every file in this list to the Google Drive trash, except those used by pages in the trash",
-    es: "Manda todos los archivos de esta lista a la papelera de Google Drive, menos los que usan páginas de la papelera",
+    en: "Send every file of this project in this list to the Google Drive trash, except those used by pages in the trash",
+    es: "Manda todos los archivos de este proyecto de esta lista a la papelera de Google Drive, menos los que usan páginas de la papelera",
   },
   'fileTrash.emptyButton': { en: "Empty", es: "Vaciar" },
   'fileTrash.sendingOf': { en: "Sending {n} of {total}…", es: "Mandando {n} de {total}…" },

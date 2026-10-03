@@ -712,7 +712,8 @@ página viva lo usa; la base lo recalcula sola con cada cambio de `page_files` y
 o sale de la papelera de páginas. Usar un archivo es una fila de `page_files` sin `removed_at`, y eso lo
 mantienen los dispositivos. El código: `src/media/usage.ts` (qué archivos tiene un documento),
 `MediaQueue.reconcilePage` y la cola en `src/media/queue.ts`, `reconcileMedia` en `src/sync/engine.ts`, la
-pestaña en `src/ui/TrashView.tsx` y `src/media/fileTrash.ts`.
+pestaña en `src/ui/TrashView.tsx` y `src/media/fileTrash.ts` (desde v0.162, el filtro *Files* de la papelera única, en el
+selector de proyectos: `Doc_Proyectos_Borrar.md`, "Cómo quedó: una sola papelera").
 
 - **Qué archivos usa cada página.** En cada sincronización, después de subir y bajar el contenido, cada
   página cuyo documento cambió desde la última vez (acá o en otro dispositivo, abierta o no) se lee de lo
