@@ -3,7 +3,9 @@
 // escribir, renglones nuevos, borrar tramos, borrar bloques enteros, cambiar de página (el editor se desmonta y se monta otro), ⌘Z y ⌘⇧Z
 // por la línea de tiempo en el medio; al final, deshacer todo (cada página vuelve a lo de antes) y rehacer todo (vuelve a
 // lo último). Con otra persona escribiendo y borrando en las tres a la vez: nada suyo se va por un deshacer y los dos
-// terminan iguales. Cuántas semillas: `TIMELINE_SEEDS` (por defecto, pocas: la medición grande va en el informe).
+// terminan iguales. Con `replace` (entrega 2), también reemplazar en las tres (el motor de verdad, con su registro y las
+// anclas en las páginas sin historia) y, con `panel`, el *Undo* del panel fuera de orden (DH10). Cuántas semillas:
+// `TIMELINE_SEEDS` (por defecto, pocas: la medición grande va en el informe).
 import { appendFileSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
@@ -13,6 +15,8 @@ import { para } from './photoHarness';
 import { UndoTimeline, type TimelineDocs } from './undoTimeline';
 import { createUndoRunner } from './undoTimelineUi';
 import { ySyncPluginKey } from 'y-prosemirror';
+import { ProjectReplace, type ReplaceDocs, type ReplaceMeta, type ReplaceTree } from '../search/projectReplace';
+import type { PageRow } from '../sync/types';
 
 afterEach(unmountAll);
 
@@ -46,7 +50,49 @@ function missing(want: string, got: string): string {
 
 const count = (s: string, set: string) => [...s].filter((c) => set.includes(c)).length;
 
-async function run(seed: number, { blocks = false, withOther = false } = {}) {
+/** El motor de reemplazar sobre los documentos de la prueba (sin base: `meta` en memoria, todo guardado al instante). */
+function replaceEngine(docOf: (id: string) => Y.Doc, timeline: UndoTimeline): ProjectReplace {
+  const store = new Map<string, unknown>();
+  const meta: ReplaceMeta = {
+    get: async (k) => (store.has(k) ? structuredClone(store.get(k)) : undefined),
+    put: async (k, v) => void store.set(k, structuredClone(v)),
+    delete: async (k) => void store.delete(k),
+    keys: async (prefix) => [...store.keys()].filter((k) => k.startsWith(prefix)),
+  };
+  const tree: ReplaceTree = {
+    get: (id) => ({ id, workspace_id: 'P', update_seq: 0 }) as unknown as PageRow,
+    isTrashed: () => false,
+    hasUnsentCreate: () => false,
+  };
+  const docs: ReplaceDocs = {
+    edit: async (id, fn) => fn(docOf(id)),
+    applyLocal: (_id, doc, origin, apply) => {
+      doc.transact(apply, origin);
+      return true;
+    },
+    flush: async () => undefined,
+    isSaved: () => true,
+    peek: (id) => docOf(id),
+    indexSnapshot: async () => {
+      throw new Error('no hace falta');
+    },
+    stateOf: async () => undefined,
+  };
+  return new ProjectReplace({ tree, docs, meta, perms: () => ({ known: true, canEditPage: () => true }), online: () => true, history: timeline });
+}
+
+/** Lo que reemplaza la prueba al azar: ida y vuelta, también borrar (reemplazo vacío). */
+const REPLACES: [string, string][] = [
+  ['camara', 'Camera'],
+  ['camera', 'cámara'],
+  ['camara', ''],
+  ['roja', 'ROJA'],
+  ['wk', 'Wk'],
+  ['renglon', 'fila'],
+  ['x', ''],
+];
+
+async function run(seed: number, { blocks = false, withOther = false, replace = false, panel = false } = {}) {
   const rnd = seeded(seed);
   const pick = <T>(xs: T[]) => xs[Math.floor(rnd() * xs.length)];
   const pages: Page[] = [];
@@ -72,6 +118,10 @@ async function run(seed: number, { blocks = false, withOther = false } = {}) {
     subscribeUnsupported: () => () => undefined,
   };
   const timeline = new UndoTimeline({ docs, projectOf: () => 'P' });
+  const engine = replace ? replaceEngine((id) => pages.find((p) => p.id === id)!.doc, timeline) : null;
+  const ops: string[] = [];
+  let replaces = 0;
+  let panelUndos = 0;
   let current: { page: Page; E: Editor; detach: () => void } | null = null;
   const go = (id: string) => {
     if (current) {
@@ -92,6 +142,7 @@ async function run(seed: number, { blocks = false, withOther = false } = {}) {
     blocked: () => null,
     go,
     notify: () => undefined,
+    replace: engine ? (kind, opId) => (kind === 'undo' ? engine.undo(opId, { inOrder: true }) : engine.redo(opId)) : undefined,
   });
   let failed = 0;
   const warn = console.warn;
@@ -141,6 +192,30 @@ async function run(seed: number, { blocks = false, withOther = false } = {}) {
         if (n.isTextblock) for (let k = 0; k <= n.content.size; k++) positions.push(p + 1 + k);
         return true;
       });
+      if (engine && rnd() < 0.1) {
+        // Reemplazar en las tres, o (con `panel`) el *Undo* del panel de uno que ya no es lo último.
+        if (panel && ops.length > 0 && rnd() < 0.35) {
+          const op = pick(ops);
+          const before = otherChars();
+          const alive = otherItems();
+          await engine.undo(op, { inOrder: timeline.replaceIsNext(op, 'undo') });
+          const now = otherItems();
+          const gone = [...alive].filter((k) => !now.has(k)).length;
+          otherLost += gone;
+          copiesLost += Math.max(0, before - otherChars() - gone);
+          ops.splice(ops.indexOf(op), 1);
+          panelUndos++;
+        } else {
+          const [query, replacement] = pick(REPLACES);
+          const result = await engine.run({ projectId: 'P', pageIds: pages.map((p) => p.id), query, replacement, options: {} });
+          if (result.opId) {
+            ops.push(result.opId);
+            replaces++;
+          }
+        }
+        undoManager(current!.E).stopCapturing();
+        continue;
+      }
       const r = rnd();
       if (r < 0.3) {
         v.dispatch(v.state.tr.insertText(pick(['x', 'yz', 'wk', 'vhp']), pick(positions)));
@@ -191,6 +266,7 @@ async function run(seed: number, { blocks = false, withOther = false } = {}) {
     for (let guard = 0; guard < 2000 && timeline.peek('P', 'redo'); guard++) await step('redo');
     const afterRedo = pages.map((p) => yText(p.doc));
     const strip = (s: string) => [...s].filter((c) => !OTHER.includes(c)).join('');
+    if (process.env.TIMELINE_DEBUG && (afterRedo.some((s, i) => s !== last[i]) || afterUndo.some((s, i) => strip(s) !== initial[i]))) console.log(seed, JSON.stringify({ last, afterRedo, afterUndo, initial }, null, 1));
     return {
       undoExact: afterUndo.every((s, i) => strip(s) === initial[i]),
       undoLess: afterUndo.some((s, i) => missing(initial[i], strip(s)).length > 0),
@@ -200,6 +276,8 @@ async function run(seed: number, { blocks = false, withOther = false } = {}) {
       copiesLost,
       failed,
       converged: pages.every((p) => !p.other || yText(p.other) === yText(p.doc)),
+      replaces,
+      panelUndos,
     };
   } finally {
     console.warn = warn;
@@ -237,6 +315,42 @@ describe('la línea de tiempo al azar con el editor', () => {
     report('bloques', tally);
     // El resto de 16.4 (1 de 300 con el editor): en pocas semillas, ninguno.
     expect(tally.undoLess).toBeLessThanOrEqual(Math.ceil(SEEDS / 100));
+  });
+
+  it(`${SEEDS} semillas con reemplazos en las tres (entrega 2): deshacer todo vuelve exacto y rehacer todo a lo último`, { timeout: 30_000 + SEEDS * 2500 }, async () => {
+    const results = [];
+    for (let s = 1; s <= SEEDS; s++) results.push(await run(3000 + s, { replace: true }));
+    const tally = {
+      undoExact: results.filter((r) => r.undoExact).length,
+      undoLess: results.filter((r) => r.undoLess).length,
+      undoMore: results.filter((r) => r.undoMore).length,
+      redoExact: results.filter((r) => r.redoExact).length,
+      failed: results.reduce((n, r) => n + r.failed, 0),
+      replaces: results.reduce((n, r) => n + r.replaces, 0),
+    };
+    report('reemplazos', tally);
+    expect(tally.replaces).toBeGreaterThan(SEEDS);
+    expect(tally.undoLess).toBe(0);
+    expect(tally.undoMore).toBe(0);
+    expect(tally.undoExact).toBe(SEEDS);
+    expect(tally.redoExact).toBe(SEEDS);
+  });
+
+  it(`${SEEDS} semillas con reemplazos, el Undo del panel fuera de orden y otra persona: nada suyo se va y los dos iguales`, { timeout: 30_000 + SEEDS * 2500 }, async () => {
+    const results = [];
+    for (let s = 1; s <= SEEDS; s++) results.push(await run(4000 + s, { replace: true, panel: true, withOther: true }));
+    const tally = {
+      otherLost: results.reduce((n, r) => n + r.otherLost, 0),
+      copiesLost: results.reduce((n, r) => n + r.copiesLost, 0),
+      converged: results.filter((r) => r.converged).length,
+      failed: results.reduce((n, r) => n + r.failed, 0),
+      replaces: results.reduce((n, r) => n + r.replaces, 0),
+      panelUndos: results.reduce((n, r) => n + r.panelUndos, 0),
+      redoExact: results.filter((r) => r.redoExact).length,
+    };
+    report('reemplazos, panel y el otro', tally);
+    expect(tally.otherLost).toBe(0);
+    expect(tally.converged).toBe(SEEDS);
   });
 
   it(`${SEEDS} semillas con otra persona escribiendo y borrando en las tres: nada suyo se va y los dos iguales`, { timeout: 30_000 + SEEDS * 1500 }, async () => {

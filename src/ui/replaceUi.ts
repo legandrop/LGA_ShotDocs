@@ -1,8 +1,11 @@
 import { useSyncExternalStore } from 'react';
-import { metaOf, ProjectReplace } from '../search/projectReplace';
+import { metaOf, ProjectReplace, type OpHeader, type RedoResult, type SavedOp, type UndoResult } from '../search/projectReplace';
 import { t } from '../i18n';
 import { useServices, type Services } from '../services';
 import { Permissions } from '../sync/access';
+import { notify } from './notice';
+import { shortcutLabel } from './shortcuts';
+import { undoTimelineFor, type UndoTimeline } from './undoTimeline';
 
 // Reemplazar en todo el proyecto (Docs/Doc_Buscar.md, "Reemplazar en el proyecto"): lo que vive siempre cargado. El
 // motor (`ProjectReplace`, uno por instancia de servicios, como la búsqueda) y lo que el panel recuerda mientras
@@ -34,9 +37,15 @@ export class ReplaceSession {
   readonly engine: ProjectReplace;
   private state: ReplaceUiState = EMPTY;
   private readonly listeners = new Set<() => void>();
+  /** El último reemplazo hecho desde el panel, hasta que se escriba en un campo del panel (DH9). */
+  private armed: string | null = null;
+  private readonly timelineOf: () => UndoTimeline;
 
   constructor(services: Pick<Services, 'tree' | 'docs' | 'db' | 'engine' | 'access' | 'user'>) {
     const { tree, docs, db, engine, access, user } = services;
+    // La línea de tiempo de deshacer de esta instancia de servicios (se pide cada vez: se suelta al cerrar sesión).
+    this.timelineOf = () => undoTimelineFor({ docs, tree });
+    const timelineOf = this.timelineOf;
     this.engine = new ProjectReplace({
       tree,
       docs,
@@ -44,7 +53,28 @@ export class ReplaceSession {
       perms: () => new Permissions(tree, access.get(), user.id),
       online: () => engine.getStatus().online,
       sync: () => engine.syncNow(),
+      get history() {
+        return timelineOf();
+      },
     });
+  }
+
+  get timeline(): UndoTimeline {
+    return this.timelineOf();
+  }
+
+  /** Recién reemplazado desde el panel: ⌘Z ahí deshace el reemplazo hasta que se escriba en un campo (DH9). */
+  arm(opId: string): void {
+    this.armed = opId;
+  }
+
+  disarm(): void {
+    this.armed = null;
+  }
+
+  /** El reemplazo que ⌘Z (o ⌘⇧Z) en el panel deshace (o rehace) ahora, o `null`: ahí sigue el deshacer del campo. */
+  armedFor(kind: 'undo' | 'redo'): string | null {
+    return this.armed && this.timeline.replaceIsNext(this.armed, kind) ? this.armed : null;
   }
 
   get = (): ReplaceUiState => this.state;
@@ -55,6 +85,8 @@ export class ReplaceSession {
   };
 
   update(patch: Partial<ReplaceUiState>): void {
+    // Escribir en el campo del reemplazo: ⌘Z ahí vuelve a ser del campo (DH9).
+    if ('replacement' in patch && patch.replacement !== this.state.replacement) this.armed = null;
     this.state = { ...this.state, ...patch };
     for (const fn of this.listeners) fn();
   }
@@ -94,6 +126,70 @@ export function replaceBlocksLeaving(): boolean {
   if (![...every].some((s) => s.engine.isRunning())) return false;
   alert(t('replace.runningLeave'));
   return true;
+}
+
+// --- Deshacer y rehacer un reemplazo (Docs/Doc_Deshacer.md, 3.3, DH3, DH5 y DH10) -----------------------------------
+
+/** "“Cámara” → “Camera” in 12 pages" (o "deleting “Cámara” in 12 pages" con el reemplazo vacío). */
+function what(header: Pick<OpHeader, 'query' | 'replacement'>, pages: number): { what: string; pages: string } {
+  return {
+    what: header.replacement ? t('undo.replaceWhat', { from: header.query, to: header.replacement }) : t('undo.replaceWhatDelete', { from: header.query }),
+    pages: t('undo.pages', { count: pages }),
+  };
+}
+
+/** Lo que no salió (otro lo cambió, no se pudo ahora, no se pudo guardar), para sumar al aviso. */
+function leftParts(r: { changed: number; remaining: number; unsaved: boolean }): string[] {
+  const parts: string[] = [];
+  if (r.changed > 0) parts.push(t('replace.undoChanged', { count: r.changed }));
+  if (r.remaining > 0) parts.push(t('replace.undoRemaining', { count: r.remaining }));
+  if (r.unsaved) parts.push(t('replace.unsaved'));
+  return parts;
+}
+
+/**
+ * Deshace un reemplazo y avisa. Si es el próximo ⌘Z de la línea de tiempo (⌘Z, o *Undo* cuando es lo último), queda
+ * para rehacer: "Undid “Cámara” → “Camera” in 12 pages · Redo". Si no (DH10), en las páginas con historia se deshace
+ * su paso de la pila aunque no sea el de arriba, en las demás por las anclas, y no se rehace.
+ */
+export async function undoReplace(session: ReplaceSession, opId: string): Promise<UndoResult> {
+  const timeline = session.timeline;
+  const inOrder = timeline.replaceIsNext(opId, 'undo');
+  const saved = timeline.replaceSaved(opId) as SavedOp | null;
+  const result = await session.engine.undo(opId, { inOrder });
+  if (inOrder && saved) {
+    if (result.pages === 0) {
+      notify([t('undo.nothingThere', { undo: shortcutLabel('undo') }), ...leftParts(result)].join(' · '));
+    } else {
+      const canRedo = timeline.replaceIsNext(opId, 'redo');
+      notify(
+        [t('undo.replaceUndone', what(saved.header, result.pages)), ...leftParts(result)].join(' · '),
+        canRedo ? { label: t('undo.redoAction'), run: () => void redoReplace(session, opId) } : undefined,
+      );
+    }
+    return result;
+  }
+  const parts = [t('replace.undone', { count: result.undone }), ...leftParts(result)];
+  notify(parts.join(' · '));
+  return result;
+}
+
+/** Rehace un reemplazo deshecho con ⌘Z y avisa: "Redid “Cámara” → “Camera” in 12 pages · Undo". */
+export async function redoReplace(session: ReplaceSession, opId: string): Promise<RedoResult> {
+  const timeline = session.timeline;
+  const saved = timeline.replaceSaved(opId) as SavedOp | null;
+  if (!saved || !timeline.replaceIsNext(opId, 'redo')) return { redone: 0, changed: 0, pages: 0, remaining: 0, unsaved: false };
+  const result = await session.engine.redo(opId);
+  if (result.pages === 0) {
+    notify([t('undo.nothingThereRedo', { redo: shortcutLabel('redo') }), ...leftParts(result)].join(' · '));
+  } else {
+    const canUndo = timeline.replaceIsNext(opId, 'undo');
+    notify(
+      [t('undo.replaceRedone', what(saved.header, result.pages)), ...leftParts(result)].join(' · '),
+      canUndo ? { label: t('undo.undoAction'), run: () => void undoReplace(session, opId) } : undefined,
+    );
+  }
+  return result;
 }
 
 export function useReplaceSession(): { session: ReplaceSession; ui: ReplaceUiState } {

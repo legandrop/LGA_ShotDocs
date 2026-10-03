@@ -5,7 +5,7 @@ import { usePermissions, useServices } from '../services';
 import { isLetter, modPressed } from './findUi';
 import { notify } from './notice';
 import { useCurrentProject } from './project';
-import { replaceRunning } from './replaceUi';
+import { redoReplace, replaceRunning, replaceSession, undoReplace } from './replaceUi';
 import { IS_MAC, shortcutLabel } from './shortcuts';
 import { setUndoRunner, undoTimelineFor, type StepKind, type UndoTimeline } from './undoTimeline';
 
@@ -20,7 +20,10 @@ import { setUndoRunner, undoTimelineFor, type StepKind, type UndoTimeline } from
 // - un paso que ya no cambia nada (otra persona borró justo eso) se descarta y, en el mismo ⌘Z, se sigue con el anterior
 //   solo si es de la misma página; si no, se avisa y se frena.
 //
-// Mientras se va a otra página, los ⌘Z que llegan no hacen nada (no se encolan).
+// - un reemplazo del proyecto (entrega 2): se deshace en todas sus páginas sin moverte ("Undid “Cámara” → “Camera” in 12
+//   pages · Redo"; replaceUi.ts). Manteniendo apretado se frena antes de un reemplazo.
+//
+// Mientras se va a otra página, o se deshace un reemplazo, los ⌘Z que llegan no hacen nada (no se encolan).
 
 type KeyLike = { ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean; key: string; code?: string };
 
@@ -61,6 +64,11 @@ export interface UndoUiDeps {
   blocked: (pageId: string) => 'trash' | 'deleted' | 'noEdit' | null;
   go: (pageId: string) => void;
   notify: typeof notify;
+  /**
+   * Deshace (o rehace) un reemplazo del proyecto en todas sus páginas, sin moverte (DH3; replaceUi.ts, con su aviso).
+   * Sin él (pruebas de solo páginas), un reemplazo no se toca.
+   */
+  replace?: (kind: StepKind, opId: string) => Promise<unknown>;
   /** Cuánto se espera a que la otra página esté lista. */
   waitMs?: number;
 }
@@ -102,6 +110,17 @@ export function createUndoRunner(deps: UndoUiDeps) {
         timeline.consumeLost(next.pageId, next.reason, project);
         if (next.reason === 'limit') deps.notify(t('undo.limit', timeline.limits()));
         else deps.notify(t('undo.lost', { page: deps.title(next.pageId) }));
+        return;
+      }
+      if (next.kind === 'replace') {
+        // Un reemplazo: en todas sus páginas a la vez; manteniendo apretado se frena acá (3.4).
+        if (repeat || !deps.replace) return;
+        busy = true;
+        try {
+          await deps.replace(kind, next.opId);
+        } finally {
+          busy = false;
+        }
         return;
       }
       const pageId = next.pageId;
@@ -190,6 +209,10 @@ export function useUndoTimelineKeys(): void {
       },
       go: (id) => navigate(pagePath(id)),
       notify,
+      replace: (kind, opId) => {
+        const session = replaceSession(services);
+        return kind === 'undo' ? undoReplace(session, opId) : redoReplace(session, opId);
+      },
     });
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.isComposing || e.keyCode === 229) return;

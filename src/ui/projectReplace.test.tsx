@@ -258,9 +258,56 @@ describe('reemplazar', () => {
     const undo = [...document.querySelectorAll<HTMLButtonElement>('.notice button')].find((x) => x.textContent === 'Undo')!;
     act(() => undo.click());
     await until(async () => (await textOf(d, b)).includes('cámaras'), 'deshecho');
-    await until(() => document.querySelector('.notice')?.textContent?.includes('Undid 4 replacements'), 'el aviso de deshacer');
+    // Es lo último que hiciste: como ⌘Z (P.26, entrega 2), con *Redo*.
+    await until(() => document.querySelector('.notice')?.textContent?.includes('Undid “camara” → “Camera” in 2 pages'), 'el aviso de deshacer');
     expect(await textOf(d, a)).toBe('|Planta|la cámara escondida|Afuera|otra cámara a la vista|');
     expect(replaceSession(services(d)).engine.isRunning()).toBe(false);
+    const redo = [...document.querySelectorAll<HTMLButtonElement>('.notice button')].find((x) => x.textContent === 'Redo')!;
+    act(() => redo.click());
+    await until(async () => (await textOf(d, b)) === '|sin nada|dos Cameras en B y una Camera más|', 'rehecho');
+    await until(() => document.querySelector('.notice')?.textContent?.includes('Redid “camara” → “Camera” in 2 pages'), 'el aviso de rehacer');
+    expect(await textOf(d, a)).toBe('|Planta|la Camera escondida|Afuera|otra Camera a la vista|');
+  });
+
+  it('DH9: recién reemplazado, Ctrl+Z en el panel deshace el reemplazo y Ctrl+Shift+Z lo rehace; escribir en un campo lo devuelve al campo', async () => {
+    const { d, b } = await app();
+    await openReplace('camara', 'Camera');
+    act(() => replaceAllButton().click());
+    await until(() => panel()!.querySelector('.replace-confirm'), 'la confirmación');
+    const confirmButton = [...panel()!.querySelectorAll<HTMLButtonElement>('.replace-confirm button')].find((x) => x.textContent === 'Replace 4')!;
+    act(() => confirmButton.click());
+    await until(() => document.querySelector('.notice')?.textContent?.includes('4 replacements in 2 pages'), 'reemplazado');
+    // El foco queda en el campo del reemplazo.
+    expect(document.activeElement).toBe(replaceInput());
+    const undo = key(replaceInput(), { key: 'z', code: 'KeyZ', ctrlKey: true });
+    expect(undo.defaultPrevented).toBe(true);
+    await until(async () => (await textOf(d, b)).includes('cámaras'), 'deshecho desde el panel');
+    await until(() => document.querySelector('.notice')?.textContent?.includes('Undid “camara” → “Camera” in 2 pages'), 'el aviso');
+    // Mantener apretado no hace nada de más.
+    key(replaceInput(), { key: 'z', code: 'KeyZ', ctrlKey: true, repeat: true });
+    key(replaceInput(), { key: 'z', code: 'KeyZ', ctrlKey: true, shiftKey: true });
+    await until(async () => (await textOf(d, b)).includes('Cameras'), 'rehecho desde el panel');
+    // Escribir en el campo: Ctrl+Z vuelve a ser del campo (no toca las páginas).
+    type(replaceInput(), 'Camara');
+    const again = key(replaceInput(), { key: 'z', code: 'KeyZ', ctrlKey: true });
+    expect(again.defaultPrevented).toBe(false);
+    await wait(100);
+    expect(await textOf(d, b)).toBe('|sin nada|dos Cameras en B y una Camera más|');
+  });
+
+  it('DH9: escribir en el campo de buscar también devuelve Ctrl+Z al campo', async () => {
+    const { d, b } = await app();
+    await openReplace('camara', 'Camera');
+    act(() => replaceAllButton().click());
+    await until(() => panel()!.querySelector('.replace-confirm'), 'la confirmación');
+    const confirmButton = [...panel()!.querySelectorAll<HTMLButtonElement>('.replace-confirm button')].find((x) => x.textContent === 'Replace 4')!;
+    act(() => confirmButton.click());
+    await until(() => document.querySelector('.notice')?.textContent?.includes('4 replacements in 2 pages'), 'reemplazado');
+    type(searchInput(), 'Camera');
+    const e = key(searchInput(), { key: 'z', code: 'KeyZ', ctrlKey: true });
+    expect(e.defaultPrevented).toBe(false);
+    await wait(100);
+    expect(await textOf(d, b)).toBe('|sin nada|dos Cameras en B y una Camera más|');
   });
 
   it('reemplazar una y dejar otra afuera (por sus caracteres)', async () => {

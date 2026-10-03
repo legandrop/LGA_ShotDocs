@@ -593,7 +593,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'find',
     title: 'help.replaceProject.title',
     text: 'help.replaceProject.text',
-    keys: { search: 'search', undo: 'undo' },
+    keys: { search: 'search', undo: 'undo', redo: 'redo' },
     words: ['replace all', 'reemplazar todo', 'find and replace', 'buscar y reemplazar'],
     since: REPLACE_PROJECT,
   },

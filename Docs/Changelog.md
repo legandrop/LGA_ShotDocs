@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.144 :
+
+Deshacer en orden (P.26), entrega 2. El reemplazo en todo el proyecto no estaba en ⌘Z: solo se deshacía con *Undo*
+del aviso o del panel, sin rehacer, y deshacer después lo escrito antes dejaba texto de más ("Toma 1: cámara" en vez de
+"Toma 1: "), porque las anclas escriben letras nuevas que la pila de la página no conoce. Ahora el reemplazo es un paso
+de la línea de tiempo: ⌘Z lo deshace en todas sus páginas sin moverte y ⌘⇧Z lo rehace (`planRedo`). En las páginas
+editadas en la sesión entra en la pila de Yjs de la página, así lo de antes sale exacto, también desde el *Undo* del
+panel fuera de orden (C1). Recién reemplazado, ⌘Z en el panel lo deshace (DH9). Deshacer un borrado por las anclas
+sigue al vecino que volvió con un deshacer.
+[ Deshacer en orden entrega 2 - el reemplazo en todo el proyecto como un paso de ⌘Z y ⌘⇧Z, exacto en las páginas editadas ]
+
 v0.143 :
 
 La clave del asistente sincronizada, entrega S2 (P.24, `Doc_Clave_Sincronizada.md`). Faltaba cambiar la frase, abrir
