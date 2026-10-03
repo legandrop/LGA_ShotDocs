@@ -5,7 +5,8 @@
 import { BlockNoteEditor } from '@blocknote/core';
 import { BlockNoteView } from '@blocknote/mantine';
 import { TextSelection } from '@tiptap/pm/state';
-import { act } from 'react';
+import { ComponentsContext, useComponentsContext } from '@blocknote/react';
+import { act, createRef, forwardRef, type Ref } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { t } from '../i18n';
@@ -13,7 +14,7 @@ import { ServicesContext } from '../services';
 import { editorSchemaOptions } from './editorSchema';
 import { PageFormattingToolbarController, PageFormattingToolbar, pageToolbarItems } from './PageToolbar';
 import { shortcutLabel } from './shortcuts';
-import { defaultDataTest, TOOLBAR_SHORTCUTS, toolbarTip } from './toolbarTips';
+import { defaultDataTest, TOOLBAR_SHORTCUTS, ToolbarTips, toolbarTip } from './toolbarTips';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -131,19 +132,15 @@ describe('la barra de formato: los botones de BlockNote con el tooltip de la app
   });
 
   it('el globo de BlockNote ya no aparece al pasar el mouse', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    try {
-      await mount();
-      for (const b of buttons()) {
-        act(() => {
-          for (const type of ['pointerover', 'pointerenter', 'mouseover', 'mouseenter', 'focus']) b.dispatchEvent(new MouseEvent(type, { bubbles: type.endsWith('over') }));
-        });
-        act(() => vi.advanceTimersByTime(1500));
-      }
-      expect(document.querySelector('.bn-tooltip, [role="tooltip"]')).toBeNull();
-    } finally {
-      vi.useRealTimers();
+    await mount();
+    // Con el globo de BlockNote (su Tooltip de Mantine), esto lo abre enseguida (medido: sin toolbarTips.tsx, aparece).
+    for (const b of buttons()) {
+      await act(async () => {
+        for (const type of ['pointerover', 'pointerenter', 'mouseover', 'mouseenter']) b.dispatchEvent(new MouseEvent(type, { bubbles: type.endsWith('over') }));
+      });
     }
+    await act(async () => new Promise((r) => setTimeout(r, 300)));
+    expect(document.querySelector('.bn-tooltip, [role="tooltip"]')).toBeNull();
   });
 
   it('cada botón hace lo de antes: Bold pone negrita y queda marcado; Nest se apaga donde no se puede', async () => {
@@ -170,10 +167,61 @@ describe('la barra de formato: los botones de BlockNote con el tooltip de la app
     expect(editor.getBlock('a')!.children.map((c) => c.id)).toEqual(['b']);
   });
 
+  it('Colors abre su menú (el botón le da su ref al menú) y el color se aplica', async () => {
+    const editor = await mount();
+    await act(async () => {
+      button('colors')!.click();
+    });
+    await act(async () => new Promise((r) => setTimeout(r, 300)));
+    const red = document.querySelector<HTMLElement>('[data-test="text-color-red"]');
+    expect(red).not.toBeNull();
+    await act(async () => {
+      red!.click();
+    });
+    expect(editor.getActiveStyles()).toMatchObject({ textColor: 'red' });
+  });
+
   it('en una pantalla táctil, sin atajos: el botón con atajo se queda sin tooltip; el de solo nombre lo conserva', async () => {
     await mount({ coarse: true });
     expect(button('bold')!.hasAttribute('data-tip')).toBe(false);
     expect(button('alignTextLeft')!.getAttribute('data-tip')).toBe('Align text left');
+  });
+});
+
+describe('ToolbarTips: el botón de BlockNote envuelto', () => {
+  it('pasa la ref y todo lo demás al botón de BlockNote, sin mainTooltip ni secondaryTooltip', () => {
+    const seen: Record<string, unknown>[] = [];
+    const Base = forwardRef(function Base(props: Record<string, unknown>, ref: Ref<HTMLButtonElement>) {
+      seen.push(props);
+      return <button ref={ref} aria-label={String(props.label)} data-tip={props['data-tip'] as string} data-test={props['data-test'] as string} />;
+    });
+    const ref = createRef<HTMLButtonElement>();
+    function Probe() {
+      const C = useComponentsContext()!;
+      const Button = C.FormattingToolbar.Button as unknown as React.ComponentType<Record<string, unknown>>;
+      return <Button ref={ref} label="Merge cells" mainTooltip="Merge cells" isSelected isDisabled onClick={() => undefined} />;
+    }
+    screen(false);
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    const root = createRoot(el);
+    roots.push(root);
+    act(() =>
+      root.render(
+        <ComponentsContext.Provider value={{ FormattingToolbar: { Button: Base } } as never}>
+          <ToolbarTips>
+            <Probe />
+          </ToolbarTips>
+        </ComponentsContext.Provider>,
+      ),
+    );
+    expect(ref.current).toBeInstanceOf(HTMLButtonElement);
+    expect(ref.current!.getAttribute('data-tip')).toBe('Merge cells');
+    expect(ref.current!.getAttribute('data-test')).toBe('mergecells');
+    const props = seen[seen.length - 1];
+    expect(props).toMatchObject({ label: 'Merge cells', isSelected: true, isDisabled: true });
+    expect(typeof props.onClick).toBe('function');
+    expect('mainTooltip' in props || 'secondaryTooltip' in props).toBe(false);
   });
 });
 
