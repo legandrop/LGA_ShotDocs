@@ -57,12 +57,12 @@ export const link = {
   },
   'link.edit.aside': {
     en: {
-      one: "Some of your changes on a page couldn't be added, and what you write next on it won't reach the team either. Keep a copy:",
-      other: "Some of your changes on {count} pages couldn't be added, and what you write next on them won't reach the team either. Keep a copy:",
+      one: "Some of your changes on a page couldn't be added, and what you write next on it won't reach the team either. On the page you can go back to the team's version. Keep a copy:",
+      other: "Some of your changes on {count} pages couldn't be added, and what you write next on them won't reach the team either. On each page you can go back to the team's version. Keep a copy:",
     },
     es: {
-      one: "Algunos de tus cambios en una página no se pudieron sumar, y lo que escribas ahí después tampoco va a llegar al equipo. Guardá una copia:",
-      other: "Algunos de tus cambios en {count} páginas no se pudieron sumar, y lo que escribas ahí después tampoco va a llegar al equipo. Guardá una copia:",
+      one: "Algunos de tus cambios en una página no se pudieron sumar, y lo que escribas ahí después tampoco va a llegar al equipo. En la página podés volver a la versión del equipo. Guardá una copia:",
+      other: "Algunos de tus cambios en {count} páginas no se pudieron sumar, y lo que escribas ahí después tampoco va a llegar al equipo. En cada página podés volver a la versión del equipo. Guardá una copia:",
     },
   },
   'link.edit.downloadThem': { en: "Download them", es: "Bajarlos" },
