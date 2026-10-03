@@ -2717,6 +2717,31 @@ code {
   overflow: visible;
 }
 
+/* La tabla en una pantalla angosta (P.28): las columnas no bajan de un ancho legible y la tabla se desplaza de costado
+   dentro de su bloque (el contenedor, `.tableWrapper`, ya recorta y desplaza; la página no se corre). Sin esto, una
+   tabla de 7 columnas se encogía al ancho de la pantalla (cada columna, 42 px: una palabra por renglón). Es solo
+   presentación: los anchos guardados en el documento no se tocan, y 96 px es el ancho de fábrica de las columnas del
+   reporte de rodaje (680 / 7), así que esas tablas se ven igual que en la compu. Solo en la página abierta: la vista
+   de impresión (`.print-view`) y el armado del PDF de exportar (`.sd-export-source`) miden con el ancho de la hoja.
+   Solo las celdas con ancho guardado (`colwidth`): las demás ya tienen su mínimo de 120 px (`--default-cell-min-width`)
+   y la tabla su `min-width`, así que ya se desplazaban. */
+@media (max-width: 760px) {
+  .page:not(.sd-export-source) .bn-editor [data-content-type='table'] :is(td, th)[colwidth] {
+    min-width: 96px !important;
+  }
+
+  /* Una tabla con todas sus columnas con ancho guardado mide la suma de esos anchos (BlockNote le pone `width: auto`
+     y el navegador la encogía hasta el ancho de la pantalla, aun con el piso de arriba: 673 px en vez de 679). */
+  .page:not(.sd-export-source) .bn-editor [data-content-type='table'] table:not(:has(:is(td, th):not([colwidth]))) {
+    width: max-content !important;
+  }
+
+  .page:not(.sd-export-source) .bn-editor [data-content-type='table'] .tableWrapper {
+    /* Llegar al borde de la tabla no arrastra la página ni vuelve atrás en el navegador. */
+    overscroll-behavior-x: contain;
+  }
+}
+
 /* Las tarjetas de Drive quedan como link. */
 .print-view .drive-card-foot {
   flex-wrap: nowrap !important;
