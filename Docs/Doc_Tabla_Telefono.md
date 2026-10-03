@@ -14,8 +14,8 @@ una palabra por renglón (y las miniaturas de las celdas, de 21 px de ancho).
 
 ## Cómo quedó
 
-Solo en pantalla angosta (`@media (max-width: 760px)`, el mismo corte del teléfono que usa el resto de `styles.css`) y
-solo en la página abierta (`.page:not(.sd-export-source)`: la vista de impresión y el armado del PDF de exportar miden
+Solo hasta 1024 px de ancho (`@media (max-width: 1024px)`: teléfono y tablet; desde v0.159, antes eran los 760 px del
+teléfono que usa el resto de `styles.css`) y solo en la página abierta (`.page:not(.sd-export-source)`: la vista de impresión y el armado del PDF de exportar miden
 con el ancho de la hoja y no se tocan):
 
 - **Piso de 96 px por columna** con ancho guardado (`min-width` en las celdas con `colwidth`; el ancho de fábrica del
@@ -45,7 +45,7 @@ con el ancho de la hoja y no se tocan):
   la vista de impresión de una página A4 mide lo mismo en el teléfono que en la compu, y el PDF sale igual.
 - **Las fotos en las celdas** (miniaturas Small, Medium y Large) miden igual que en la compu: antes, en el teléfono,
   las de una tabla de 7 columnas quedaban en 21 px de ancho.
-- **Una pantalla angosta con mouse** (una ventana de compu angosta) recibe lo mismo que el teléfono: es el mismo corte.
+- **Una pantalla angosta con mouse** (una ventana de compu de hasta 1024 px) recibe lo mismo que el teléfono: es el mismo corte.
 
 ## Cómo se midió
 
@@ -68,8 +68,10 @@ teléfono:
 - una página A4 en el teléfono se ve libre (como ya era), y la vista de impresión y el armado del PDF de exportar miden
   lo mismo que en la compu.
 
-Un hallazgo que viene de antes y no es de las tablas: en el teléfono el botón de comentar del margen (`.comment-add`)
-se pasa 4 px del borde derecho cuando hay una selección, y la página se puede arrastrar 4 px de costado.
+Un hallazgo que venía de antes y no era de las tablas (arreglado en v0.159): en el teléfono el botón de comentar del
+margen (`.comment-add`) se pasaba 4 px del borde derecho cuando había una selección, y la página se podía arrastrar 4 px
+de costado. Era `right: -4px` en la regla de teléfono de `.comment-count, .comment-add`; ahora `right: 0` (medido a 360,
+375 y 414 px: el borde derecho del botón queda en el ancho de la pantalla y la página no se corre).
 
 ## Pruebas
 
@@ -80,11 +82,21 @@ la página llama a `revealSelectionCell` en cada cambio de selección, también 
 sin forzar el ancho de la tabla, el desplazamiento dentro del bloque). No hay prueba con el esquema anterior porque no cambia el esquema ni el documento.
 Lo medido de verdad es el recorrido en Chromium de arriba; jsdom no hace diseño.
 
-## Queda
+## Tablet vertical (v0.159)
 
-- **Tablet vertical (761 px en adelante):** el corte es el del teléfono de toda la app (760 px), así que ahí no se aplica
-  nada: el reporte a 768 px mide 629 (columnas de 90) y una de 12 columnas queda con unos 51 px por columna. Si Lega usa
-  el iPad vertical, subir el corte para las tablas.
+Con el corte en 760 px, un iPad vertical (768 a 834 px) no recibía nada: el cajón de páginas queda a la vista y la
+página mide 372 a 438 px, así que el reporte se encogía igual que en el teléfono (columnas de 47 a 57 px; una de 12
+columnas, 33). **Decisión:** el corte de las tablas sube a **1024 px**, solo en las reglas de tabla y en
+`TABLE_SCROLL_QUERY` (`src/ui/tableScroll.ts`); el resto de las reglas de teléfono sigue en 760. Como el piso no fuerza el
+ancho de la tabla (D244), a un ancho donde la tabla entra no cambia nada. Medido en Chromium (arnés con el Shell
+completo, con el cajón): a 768 y 834 px el reporte de 7 columnas mide 673 con columnas de 96 (antes 341 y 407, con 47 y
+57) y la de 12 columnas 1153 con columnas de 96 (antes 33 y 34), se desplazan dentro de su bloque y la página no se
+corre; a 1024 px igual (antes 597 y 85). A 1025 y 1280 px las tablas miden exactamente lo mismo que antes, y la vista de
+impresión y el armado del PDF de exportar miden lo mismo a 1280, 1025, 1024, 834, 768 y 375 px, y lo mismo que antes del
+cambio. Un iPad de 1024 px de ancho en horizontal (el de 9,7 pulgadas y el mini) con el cajón a la vista entra en el mismo
+caso; uno más ancho (1025 px o más) sigue como la compu.
+
+## Queda
 - **Sin probar en headless:** `overscroll-behavior-x` (solo importa para el gesto «atrás» de Safari), el impulso del dedo
   en iOS, el teclado abierto, un editor remoto escribiendo en la misma tabla (si su cambio mueve la selección local, el
   enganche podría devolver la tabla a la celda del cursor), y `:has()` ya no se usa. El CSS compilado usa

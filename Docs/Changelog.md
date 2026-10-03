@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.159 :
+
+**Teléfono pulido: cuatro chicos.** (1) El punto de novedades del "?" solo se veía con el cajón abierto; ahora también
+está en el botón de menú de la barra de arriba (la de la página y la de la práctica), con la misma regla (`useHelpDot`,
+componente `NavMenuButton`), y la ayuda del teléfono lo dice. (2) El botón de comentar del margen salía 4 px de la
+pantalla (`right: -4px`) y la página se arrastraba 4 px de costado; ahora `right: 0`. (3) El piso de 96 px por columna de
+las tablas valía hasta 760 px; en un iPad vertical el reporte seguía en 47 px por columna: ahora vale hasta 1024 px, solo
+para las tablas (la compu y el PDF miden igual). (4) Un clic con el mouse en el triángulo o en la fila dejaba ⋯ y + a la
+vista por `:focus-within`; ahora es `:focus-visible`, que solo es el teclado.
+[ Teléfono pulido - el punto de novedades también en el botón de menú, el botón de comentar adentro de la pantalla, el piso de las columnas de la tabla hasta 1024 px (tablet vertical) y ⋯ y + del árbol solo con foco de teclado ]
+
 v0.158 :
 
 **Ayuda, entrega 3: "Mostrame" y novedades** (P.13). La ayuda explicaba cada función pero no la señalaba, y nada

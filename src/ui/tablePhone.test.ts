@@ -1,19 +1,20 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { NARROW_QUERY } from './tableScroll';
+import { TABLE_SCROLL_QUERY } from './tableScroll';
 
-// La tabla en el teléfono (P.28) es presentación pura en styles.css: el medido de verdad (Chromium a 375 px, tablas de
-// 680 px, la compu y el PDF sin cambios) está en el recorrido de Docs/Doc_Tabla_Telefono.md. Acá se cuida lo que no
-// se debe perder en una edición del CSS: que valga solo en pantalla angosta, solo en la página abierta (no en la vista
-// de impresión ni en el armado del PDF de exportar) y que no toque el documento.
+// La tabla en el teléfono (P.28) es presentación pura en styles.css: el medido de verdad (Chromium a 375 px y a 768 y
+// 834 px de tablet vertical, tablas de 680 px, la compu y el PDF sin cambios) está en el recorrido de
+// Docs/Doc_Tabla_Telefono.md. Acá se cuida lo que no se debe perder en una edición del CSS: que valga solo hasta 1024
+// px (teléfono y tablet), solo en la página abierta (no en la vista de impresión ni en el armado del PDF de exportar) y
+// que no toque el documento.
 
 const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 
-/** El bloque `@media (max-width: 760px)` que lleva las reglas de las tablas. */
+/** El bloque `@media (max-width: 1024px)` que lleva las reglas de las tablas. */
 function tableBlock(): string {
   const at = css.indexOf("[data-content-type='table'] :is(td, th)[colwidth]");
   expect(at).toBeGreaterThan(0);
-  const start = css.lastIndexOf('@media (max-width: 760px) {', at);
+  const start = css.lastIndexOf('@media (max-width: 1024px) {', at);
   expect(start).toBeGreaterThan(0);
   let depth = 0;
   for (let i = css.indexOf('{', start); i < css.length; i++) {
@@ -24,9 +25,11 @@ function tableBlock(): string {
 }
 
 describe('la tabla en una pantalla angosta (styles.css)', () => {
-  it('usa la misma pantalla angosta que el código que acomoda la celda', () => {
-    expect(NARROW_QUERY).toBe('(max-width: 760px)');
-    expect(tableBlock().startsWith('@media (max-width: 760px) {')).toBe(true);
+  it('usa el mismo corte que el código que acomoda la celda: 1024 px, no los 760 del teléfono (tablet vertical)', () => {
+    expect(TABLE_SCROLL_QUERY).toBe('(max-width: 1024px)');
+    expect(tableBlock().startsWith('@media (max-width: 1024px) {')).toBe(true);
+    // El corte va solo para las tablas: ninguna otra regla de este bloque, ni de más abajo, se mudó a 1024.
+    expect(css.match(/@media \(max-width: 1024px\) \{/g)?.length).toBe(1);
   });
 
   it('todas sus reglas valen solo en la página abierta: ni la vista de impresión ni el PDF', () => {

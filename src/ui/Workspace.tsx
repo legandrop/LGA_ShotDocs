@@ -23,7 +23,8 @@ import { useWorkspace } from '../workspace';
 import { isFindSelectionTarget, openFindBar } from './findUi';
 import { asAction, tipRows } from './tipRows';
 import { disposeSearchSession, isSearchShortcut, otherModalOpen, takesSearchShortcut, useSearchSession } from './projectSearchUi';
-import { ArchiveIcon, DownloadIcon, MenuIcon, MicIcon, MoreIcon, PlusIcon, SearchIcon } from './icons';
+import { ArchiveIcon, DownloadIcon, MicIcon, MoreIcon, PlusIcon, SearchIcon } from './icons';
+import { NavMenuButton } from './NavMenuButton';
 import { menuBelow, PageMenu, type MenuPosition } from './menus';
 import { MoveDialog } from './MoveDialog';
 import { PageFormatDialog } from './PageFormatDialog';
@@ -367,9 +368,7 @@ export function Shell() {
         ) : (
           <>
             <header className="topbar">
-              <button className="icon-button only-mobile" aria-label={tr('shell.openPages')} onClick={() => setNavOpen(true)}>
-                <MenuIcon />
-              </button>
+              <NavMenuButton />
               <nav className="breadcrumbs" aria-label={tr('shell.location')}>
                 {crumbs.map((p) => (
                   <span key={p.id}>

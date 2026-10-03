@@ -86,6 +86,10 @@ export const help = {
     en: "When the app brings something new, the ? at the bottom of the sidebar shows a dot. Open the help: What's new, at the top, lists what's new or changed since you last looked, and those entries say New. Once you've opened it, the dot goes away until the next new thing. It's remembered on this device.",
     es: "Cuando la app trae algo nuevo, el ? de abajo de la barra lateral muestra un punto. Abrí la ayuda: Novedades, arriba de todo, lista lo nuevo o cambiado desde la última vez que la miraste, y esas entradas dicen Nuevo. Una vez abierta, el punto se va hasta la próxima novedad. Se recuerda en este dispositivo.",
   },
+  'help.news.textTouch': {
+    en: "When the app brings something new, the ? at the bottom of the page list shows a dot, and so does the menu button at the top left. Open the help: What's new, at the top, lists what's new or changed since you last looked, and those entries say New. Once you've opened it, the dots go away until the next new thing. It's remembered on this device.",
+    es: "Cuando la app trae algo nuevo, el ? de abajo de la lista de páginas muestra un punto, y el botón de menú de arriba a la izquierda también. Abrí la ayuda: Novedades, arriba de todo, lista lo nuevo o cambiado desde la última vez que la miraste, y esas entradas dicen Nuevo. Una vez abierta, los puntos se van hasta la próxima novedad. Se recuerda en este dispositivo.",
+  },
   'help.showMe.title': { en: "Show me", es: "Mostrame" },
   'help.showMe.text': {
     en: "Entries with Show me open the practice page and point at that part of the screen, just that step of the tour. Done (or Esc) takes you back where you were. Nothing you do there is saved.",
