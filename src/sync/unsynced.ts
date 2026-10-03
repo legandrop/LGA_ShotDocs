@@ -5,6 +5,7 @@ import type { MediaDb } from '../media/mediaDb';
 import { exportComments, unsyncedComments, type CommentsDb } from './comments';
 import { STARTED_OVER_PREFIX, startedOverKey, unsyncedDocStates, type LocalDb } from './localDb';
 import { applyRowsInOrder, removedWritingKey, type RemovedWriting } from './removedWriting';
+import { isBytes, keepLateWriting } from './startedOver';
 import { CONTENT_FRAGMENT } from './structure';
 
 // Lo que el dispositivo tiene sin subir, para no perderlo cuando sacan a alguien del workspace (sección 8
@@ -150,6 +151,8 @@ export async function exportUnsyncedBlob(
   parts.push(',"pages":[');
   let first = true;
   for (const state of states) {
+    // Lo tecleado tarde después de volver a la versión del equipo pasa a lo de antes, así sale con su texto (O1, 2c).
+    await keepLateWriting(db, state.pageId).catch(() => 0);
     const [rows, removed, before] = await Promise.all([
       db.getAllFromIndex('docUpdates', 'pageId', state.pageId),
       db.get('meta', removedWritingKey(state.pageId)),
@@ -175,7 +178,7 @@ export async function exportUnsyncedBlob(
           yjsUpdate: toBase64(update),
           yjsFullState: toBase64(Y.encodeStateAsUpdate(doc)),
           // Lo que tenía la página en este navegador antes de volver a la versión del equipo (entrega 2c).
-          ...(before instanceof Uint8Array ? { beforeStartingOver: { text: textOf(before), yjsUpdate: toBase64(before) } } : {}),
+          ...(isBytes(before) ? { beforeStartingOver: { text: textOf(before), yjsUpdate: toBase64(before) } } : {}),
         }),
     );
     first = false;

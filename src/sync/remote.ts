@@ -1184,7 +1184,7 @@ export class SupabaseRemote
       id: String(r.id),
       page_id: String(r.page_id),
       link_id: String(r.link_id),
-      link_page_id: String(r.link_page_id),
+      link_page_id: typeof r.link_page_id === 'string' ? r.link_page_id : null,
       author: String(r.author),
       created_at: String(r.created_at),
       decided_at: typeof r.decided_at === 'string' ? r.decided_at : null,

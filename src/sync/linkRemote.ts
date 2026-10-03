@@ -375,13 +375,14 @@ export class LinkRemote extends SupabaseRemote {
   }
 
   /**
-   * El visitante bajó lo suyo y volvió a la versión del equipo en esta página (entrega 2c): lo apartado hasta ahora, y lo
-   * que todavía espera de la sesión de antes (que se va a apartar en cadena), ya no se avisa. Si después se aparta algo
-   * más, el aviso vuelve.
+   * El visitante bajó lo suyo y volvió a la versión del equipo en esta página (entrega 2c): lo apartado hasta ahora ya no
+   * se avisa. **Solo lo apartado** (O2 de la auditoría de la 2c): lo apartado nunca baja, así que cualquier fila que se
+   * aparte después (también una que esperaba al volver) vuelve a mostrar el aviso. Lo que esperaba de la sesión de antes y
+   * se aparta en cadena lo avisa otra vez: es de más, nunca de menos.
    */
   acknowledgeAside(pageId: string): void {
     const c = this.counts.get(pageId) ?? { waiting: 0, aside: 0 };
-    this.memory.setSeen(pageId, c.aside + c.waiting);
+    this.memory.setSeen(pageId, c.aside);
     this.recheckAside();
   }
 

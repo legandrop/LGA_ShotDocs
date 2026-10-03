@@ -60,14 +60,15 @@ export interface LinkUpdateRow {
 
 /**
  * Algo que un link mandó y quedó apartado (`public_link_aside`, entrega 2c), de cualquier link (también uno reseteado o
- * revocado), en una página que quien pregunta ve con lo borrado. `link_page_id`: la página raíz del link (la de su
- * *Share*). Sin bytes: se bajan de a uno (`linkUpdateBytes`).
+ * revocado), en una página que quien pregunta ve con lo borrado (hasta 200 por página). `link_page_id`: la página raíz
+ * del link (la de su *Share*). Sin bytes: se bajan de a uno (`linkUpdateBytes`).
  */
 export interface LinkAsideRow {
   id: string;
   page_id: string;
   link_id: string;
-  link_page_id: string;
+  /** Nula si quien pregunta no ve la raíz del link (no se le da ni su id). */
+  link_page_id: string | null;
   author: string;
   created_at: string;
   decided_at: string | null;

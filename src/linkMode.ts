@@ -107,7 +107,7 @@ export interface LinkEntry {
    */
   sent?: string[];
   /**
-   * Por página, cuántas filas apartadas o esperando tenía este dispositivo cuando el visitante volvió a la versión del
+   * Por página, cuántas filas apartadas tenía este dispositivo cuando el visitante volvió a la versión del
    * equipo (entrega 2c): el aviso de lo apartado se muestra solo si después se aparta algo más.
    */
   asideSeen?: Record<string, number>;

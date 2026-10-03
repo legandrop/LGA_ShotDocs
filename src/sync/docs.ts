@@ -28,6 +28,7 @@ import {
   removedWritingKey,
   type RemovedWriting,
 } from './removedWriting';
+import { isBytes, keepLateWriting, startedOverLateKey } from './startedOver';
 import { errorMessage, isPermanent, isTimeout, type RemoteUpdate } from './types';
 
 export const ORIGIN_LOAD = Symbol('load');
@@ -169,6 +170,7 @@ export class PageDocs {
   private readonly unsupportedListeners = new Set<(pageId: string) => void>();
   private readonly renderFailedListeners = new Set<(pageId: string) => void>();
   private readonly removedWritingListeners = new Set<(pageId: string) => void>();
+  private readonly startedOverLateListeners = new Set<(pageId: string) => void>();
   /** Páginas con alguna edición local en esta sesión (para no armar nada al bajar en las demás). */
   private readonly written = new Set<string>();
   /**
@@ -540,6 +542,9 @@ export class PageDocs {
   pushPage(pageId: string, remote: Remote): Promise<'clean' | 'pushed'> {
     return this.withLock(pageId, async () => {
       await this.flush(pageId);
+      // Una página que volvió a la versión del equipo con algo tecleado tarde: se pasa a lo de antes antes de subir (sin
+      // volver a abrirla, el aviso aparece igual).
+      await this.sweepLate(pageId);
       let state = (await this.db.get('docState', pageId)) ?? emptyDocState(pageId);
       let pushed = false;
       for (let round = 0; round < 5; round++) {
@@ -1194,7 +1199,7 @@ export class PageDocs {
         throw new Error(LOCAL_CHANGED);
       }
       // Lo de antes, junto con lo de una vuelta anterior: nunca se pierde (sin ningún await en el medio).
-      const before = [...(kept instanceof Uint8Array ? [kept] : []), ...rows.map((r) => r.data)];
+      const before = [...(isBytes(kept) ? [kept] : []), ...rows.map((r) => r.data)];
       if (before.length > 0) await tx.objectStore('meta').put(Y.mergeUpdates(before), startedOverKey(pageId));
       await Promise.all(keys.map((k) => tx.objectStore('docUpdates').delete(k)));
       await tx.objectStore('meta').delete(dirtyKey(pageId));
@@ -1220,6 +1225,39 @@ export class PageDocs {
     if (!live) return;
     live.stale = true;
     for (const fn of this.unsupportedListeners) fn(pageId);
+  }
+
+  /**
+   * Avisa cuando algo tecleado en un documento con lo de antes (después de volver a la versión del equipo) pasó a lo de
+   * antes (`keepLateWriting`, O1 de la auditoría de la 2c): no se ve en la página pero sale en la copia.
+   */
+  subscribeStartedOverLate(fn: (pageId: string) => void): () => void {
+    this.startedOverLateListeners.add(fn);
+    return () => this.startedOverLateListeners.delete(fn);
+  }
+
+  /** Cuántas veces pasó algo tecleado tarde a lo de antes en esta página, sin que el visitante cerrara el aviso. */
+  async startedOverLate(pageId: string): Promise<number> {
+    const value = await this.db.get('meta', startedOverLateKey(pageId));
+    return typeof value === 'number' ? value : 0;
+  }
+
+  /** El visitante cerró el aviso (lo tecleado tarde sigue en lo de antes, en la copia). */
+  async dismissStartedOverLate(pageId: string): Promise<void> {
+    await this.db.delete('meta', startedOverLateKey(pageId));
+  }
+
+  /** Busca lo tecleado tarde y, si pasó algo a lo de antes, avisa. Sus errores no cortan nada (se vuelve a mirar). */
+  private async sweepLate(pageId: string): Promise<void> {
+    const moved = await keepLateWriting(this.db, pageId).catch(() => 0);
+    if (moved === 0) return;
+    for (const fn of this.startedOverLateListeners) {
+      try {
+        fn(pageId);
+      } catch (err) {
+        console.error('started over listener failed', err);
+      }
+    }
   }
 
   /**
@@ -1614,6 +1652,10 @@ export class PageDocs {
 
   /** Carga en `doc` todo lo guardado de la página, y compacta si hay muchos updates sueltos. */
   private async loadInto(pageId: string, doc: Y.Doc): Promise<void> {
+    // Lo tecleado tarde en un documento con lo de antes (otra pestaña, o esta antes de reabrir): primero se guarda y se
+    // pasa a lo de antes, así no queda pendiente y escondido en lo que se carga (O1 de la auditoría de la 2c).
+    await this.flush(pageId);
+    await this.sweepLate(pageId);
     const tx = this.db.transaction('docUpdates', 'readwrite');
     const index = tx.store.index('pageId');
     const keys = await index.getAllKeys(pageId);

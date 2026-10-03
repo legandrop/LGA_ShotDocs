@@ -148,10 +148,12 @@ insert into auth.users (id, email, aud, role) values
   (pg_temp.u('c2a5'), 'la-g@test.invalid', 'authenticated', 'authenticated'),
   (pg_temp.u('c2a6'), 'la-e@test.invalid', 'authenticated', 'authenticated'),
   (pg_temp.u('c2a7'), 'la-c@test.invalid', 'authenticated', 'authenticated'),
-  (pg_temp.u('c2a9'), 'la-e2@test.invalid', 'authenticated', 'authenticated');
+  (pg_temp.u('c2a9'), 'la-e2@test.invalid', 'authenticated', 'authenticated'),
+  (pg_temp.u('c2a8'), 'la-h@test.invalid', 'authenticated', 'authenticated');
 insert into public.members (user_id, role) values
   (pg_temp.u('c2a0'), 'owner'), (pg_temp.u('c2a1'), 'member'), (pg_temp.u('c2a5'), 'guest'),
-  (pg_temp.u('c2a6'), 'member'), (pg_temp.u('c2a7'), 'member'), (pg_temp.u('c2a9'), 'member');
+  (pg_temp.u('c2a6'), 'member'), (pg_temp.u('c2a7'), 'member'), (pg_temp.u('c2a9'), 'member'),
+  (pg_temp.u('c2a8'), 'member');
 insert into public.workspaces (id, owner_id, name) values (pg_temp.u('c2e0'), pg_temp.u('c2a1'), 'P');
 -- P: R › S (la del link) › H; R › Sib.
 insert into public.pages (id, workspace_id, parent_id, title, sort_key, settings) values
@@ -163,7 +165,8 @@ insert into public.grants (user_id, project_id, page_id, level) values
   (pg_temp.u('c2a5'), pg_temp.u('c2e0'), null, 'edit_pages'),
   (pg_temp.u('c2a6'), pg_temp.u('c2e0'), null, 'edit'),
   (pg_temp.u('c2a7'), pg_temp.u('c2e0'), null, 'comment'),
-  (pg_temp.u('c2a9'), null, pg_temp.u('c2b7'), 'edit');
+  (pg_temp.u('c2a9'), null, pg_temp.u('c2b7'), 'edit'),
+  (pg_temp.u('c2a8'), null, pg_temp.u('c2b3'), 'edit');
 
 do $$
 begin
@@ -247,6 +250,39 @@ begin
   update public.pages set deleted_at = now() where id = pg_temp.u('c2b3');
   perform pg_temp.check(pg_temp.aside('c2a9'), '', 'la papelera abre lo apartado a otro');
   update public.pages set deleted_at = null where id = pg_temp.u('c2b3');
+end;
+$$;
+
+-- ---------------------------------------------------------------------------------------------------
+-- O3 de la auditoría de la 2c: el tope es por página (un Reset con miles de filas en H no vacía la lista de S) y la raíz
+-- del link solo a quien la ve
+-- ---------------------------------------------------------------------------------------------------
+do $$
+declare
+  hn int;
+  sn int;
+begin
+  -- 250 filas apartadas más en H, más nuevas que todo lo de S (como un Reset de un link molesto).
+  insert into public.public_link_updates (link_id, page_id, client_update_id, update, bytes, author, app_version,
+                                          decided_at, decision, reason)
+  select pg_temp.lid('S'), pg_temp.u('c2b3'), gen_random_uuid(), '\x01'::bytea, 1, 'Molesto', 1.0, now(), 'aside', 'link_revoked'
+  from generate_series(1, 250);
+  perform pg_temp.as_user('c2a6');
+  select count(*) filter (where a.page_id = pg_temp.u('c2b3')), count(*) filter (where a.page_id = pg_temp.u('c2b2'))
+  into hn, sn from public.public_link_aside() a;
+  perform pg_temp.as_postgres();
+  assert hn = 200, format('el tope por página no es 200 (H: %s)', hn);
+  assert sn = 3, format('las filas de H dejaron sin lista a S (S: %s)', sn);
+  -- Quien edita solo H ve lo apartado de H, pero no la raíz del link (S): ni su id.
+  perform pg_temp.as_user('c2a8');
+  assert (select count(*) from public.public_link_aside() a where a.page_id = pg_temp.u('c2b3')) = 200, 'quien edita H no ve lo de H';
+  assert not exists (select 1 from public.public_link_aside() a where a.page_id <> pg_temp.u('c2b3')), 'quien edita H ve lo de S';
+  assert not exists (select 1 from public.public_link_aside() a where a.link_page_id is not null), 'quien no ve la raíz recibe su id';
+  perform pg_temp.as_postgres();
+  -- Quien la ve, sí.
+  perform pg_temp.as_user('c2a6');
+  assert not exists (select 1 from public.public_link_aside() a where a.link_page_id is distinct from pg_temp.u('c2b2')), 'la raíz falta para quien la ve';
+  perform pg_temp.as_postgres();
 end;
 $$;
 

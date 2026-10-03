@@ -640,15 +640,25 @@ export class FakeServer {
       if (!seen.has(pageId)) seen.set(pageId, this.seesDeleted(uid, pageId) && (!this.team || this.pageLevel(uid, pageId) >= 3));
       return seen.get(pageId)!;
     };
+    // Hasta 200 por página, las más nuevas (O3 de la auditoría de la 2c: no un tope para todo el workspace).
+    const perPage = new Map<string, number>();
+    const root = (linkId: string) => {
+      const p = this.linkById(linkId)?.pageId ?? null;
+      return p && (!this.team || this.pageLevel(uid, p) >= 1) ? p : null;
+    };
     return this.linkRoom
       .filter((r) => r.decision === 'aside' && sees(r.pageId))
       .sort((a, b) => b.n - a.n)
-      .slice(0, 1000)
+      .filter((r) => {
+        const k = (perPage.get(r.pageId) ?? 0) + 1;
+        perPage.set(r.pageId, k);
+        return k <= 200;
+      })
       .map((r) => ({
         id: r.id,
         page_id: r.pageId,
         link_id: r.linkId,
-        link_page_id: this.linkById(r.linkId)?.pageId ?? r.pageId,
+        link_page_id: root(r.linkId),
         author: r.author,
         created_at: new Date(r.createdAt).toISOString(),
         decided_at: r.decidedAt === null ? null : new Date(r.decidedAt).toISOString(),

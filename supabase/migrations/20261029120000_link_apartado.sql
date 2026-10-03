@@ -1,10 +1,11 @@
 -- LGA Shot Docs · link público, entrega 2c: lo apartado a la vista. Diseño: Docs/Doc_Link_Publico.md, "Entrega 2: Can
 -- edit (rediseño 2026-10-02)", E2.13, y "Cómo quedó la 2c".
 --
--- 1. `public_link_aside()`: todo lo apartado de los links (también de links revocados o reseteados) en las páginas que
+-- 1. `public_link_aside()`: lo apartado de los links (también de links revocados o reseteados) en las páginas que
 --    quien pregunta ve con lo borrado, con la página raíz de su link. Lo usan la lista de Share (lo de los links de esa
---    página) y el ícono del árbol (las páginas con algo apartado). Sin bytes: se bajan de a una con
---    `public_link_update_bytes`, como el aviso de la página.
+--    página), el historial y el ícono del árbol (las páginas con algo apartado). Sin bytes: se bajan de a una con
+--    `public_link_update_bytes`, como el aviso de la página. Hasta 200 por página (las más nuevas), no un tope para todo
+--    el workspace: un Reset de un link con miles de filas no deja sin lista a las demás páginas (O3 de su auditoría).
 -- 2. El orden de la admisión pasa a ser por (página, link, dispositivo) y no por (página, link) (O3 de la auditoría de la
 --    2a): una fila que ningún editor decide nunca (el visitante inventó una versión, `'9999'`) trababa lo que mandaran
 --    después todos los visitantes de ese link en esa página. Ahora traba solo lo que sigue de ese dispositivo. Es seguro:
@@ -26,20 +27,29 @@ begin
   if private.workspace_role() is null or private.history_denied_for_guest() then
     return;
   end if;
-  -- El permiso una vez por página distinta (sees_deleted), no por fila.
+  -- El permiso una vez por página distinta (sees_deleted), no por fila; el tope, por página.
   return query
     with pages_aside as (
       select distinct u.page_id from public.public_link_updates u where u.decision = 'aside'
     ), seen as (
       select pa.page_id from pages_aside pa where private.sees_deleted(pa.page_id)
+    ), ranked as (
+      select u.id, u.n, u.page_id, u.link_id, u.author, u.created_at, u.decided_at, u.bytes, u.reason,
+             row_number() over (partition by u.page_id order by u.n desc) as k
+      from public.public_link_updates u
+      join seen s on s.page_id = u.page_id
+      where u.decision = 'aside'
+    ), roots as (
+      -- La raíz del link, solo si quien pregunta la ve (si no, nula: ni su id). Una vez por link.
+      select l.id, case when private.page_level(l.page_id) >= 1 then l.page_id end as root
+      from public.public_links l
+      where l.id in (select distinct r.link_id from ranked r where r.k <= 200)
     )
-    select u.id, u.page_id, u.link_id, l.page_id, u.author, u.created_at, u.decided_at, u.bytes, u.reason
-    from public.public_link_updates u
-    join seen s on s.page_id = u.page_id
-    join public.public_links l on l.id = u.link_id
-    where u.decision = 'aside'
-    order by u.n desc
-    limit 1000;
+    select r.id, r.page_id, r.link_id, ro.root, r.author, r.created_at, r.decided_at, r.bytes, r.reason
+    from ranked r
+    join roots ro on ro.id = r.link_id
+    where r.k <= 200
+    order by r.n desc;
 end;
 $$;
 
