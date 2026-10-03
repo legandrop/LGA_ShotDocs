@@ -592,11 +592,13 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   v0.140**: la línea de tiempo con las páginas; la memoria medida en Chromium con el editor real, unos 19 MB con 20
   páginas de 115 KB retenidas; falta medirla en el iPhone; `Doc_Deshacer.md`, sección 17), 2 (**hecha, v0.144**: el
   reemplazo adentro, ⌘Z y ⌘⇧Z en todas sus páginas, `planRedo`, el *Undo* del panel fuera de orden, C1, y DH9; con las
-  pruebas de A5, A7 y A9 de la entrega 1; sección 18), 3 (anotar como un paso). Pendientes chicos: *Show* en el aviso de
-  ⌘Z de un reemplazo con páginas cambiadas (18.4); una página con historia que estaba en la papelera durante el ⌘Z de
-  un reemplazo, restaurada después, deja "Toma 1: cámara" (18.4, auditoría O1: el reemplazo tendría que quedar a la vez
-  para rehacer y para deshacer; mediano); después del *Undo* de "Last" del panel, Esc ya no cierra el panel (el foco
-  queda en la página; pasa también en `main`); con el panel abierto y el foco puesto por programa en el editor,
+  pruebas de A5, A7 y A9 de la entrega 1; sección 18), 3 (**hecha, v0.152**: lo de una vez en el anotador es un paso de
+  la página, ⌘Z lo deshace entero con la foto a la vista y ⌘⇧Z lo rehace, sin llevarse lo de otra persona; con *Show* en
+  el aviso de ⌘Z de un reemplazo con páginas cambiadas, el foco que sigue en el panel después del *Undo* de "Last" y la
+  prueba de la ventana de O4; con sus correcciones: deshacer nunca borra el marco de una foto, la foto lejana a la vista
+  y rehacer un pegado con anotaciones después de ir y volver; sección 19). Pendientes chicos: una página con historia que estaba en la papelera durante
+  el ⌘Z de un reemplazo, restaurada después, deja "Toma 1: cámara" (18.4, auditoría O1: el reemplazo tendría que quedar
+  a la vez para rehacer y para deshacer; mediano); con el panel abierto y el foco puesto por programa en el editor,
   Ctrl+Shift+Z deshace (no se llega con el mouse ni el teclado: el panel es modal); y la copia propia de lo ajeno que se
   va con un renglón deshecho (17.2, de Yjs, 1 en 300). Botones de deshacer en el teléfono y el árbol (mover, crear, papelera) quedan afuera (DH1, DH8).
 - **P.27 Dictado por voz y notas informales que se ubican en el reporte** (Lega, 2026-10-02): dictar en toda la app,
@@ -904,6 +906,22 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    900 corridas al azar de la línea de tiempo con el editor, también 300 con otra persona escribiendo y borrando texto,
    no apareció ninguna. Falta: medirla con dos editores borrando y deshaciendo bloques enteros, y ver si se arregla con
    el parche de Yjs o se reporta (`Doc_Deshacer.md`, 16.6 y 17).
+23. **Hecho (v0.152): los topes de largo de la base en la app.** Un título de más de 500 caracteres quedaba rechazado
+   para siempre (`pages_title_check`). El árbol corta títulos, nombres de proyecto y claves de orden, lo que sobra del
+   título va al principio de la página y lo ya rechazado vuelve a la cola cortado (`Doc_Sincronizacion.md`, "Topes de
+   largo"). Queda: rehacer las claves de orden manda un cambio por hermana, y si otro dispositivo movió una de ellas a la
+   vez, gana el último que llega (la hermana puede volver a su lugar anterior; no se pierde nada, solo el lugar). Pasa
+   solo después de unas 600 páginas puestas en el mismo hueco. Arreglo posible: rehacer solo las claves vecinas al hueco
+   (no todas) o mandar el rehecho como una sola operación del servidor.
+   De su re-verificación (ALTA, para la próxima tanda): con el reloj del dispositivo adelantado, reparar un rechazo
+   heredado puede volver a pisar un título puesto a mano después (`titleChangedAfter` compara el `updated_at` del
+   servidor con la hora del dispositivo): guardar en `failOp` el `updated_at` que tenía la fila y comparar contra ese.
+   Solo afecta a rechazos por largo de versiones anteriores. Y falta una prueba del «renombre posterior en la cola»
+   (mutante R3; solo importa con la app desactualizada).
+24. **Un error en la consola al pegar una foto** (auditoría de la entrega 3 de P.26, F2; bajo). Al pegar una foto del
+   Drive, la consola muestra `net::ERR_UNKNOWN_URL_SCHEME` por la dirección `sdmedia://…` (algo pide la dirección cruda
+   antes de que la foto pase a mostrarse desde el dispositivo). No rompe nada a la vista; no se verificó si pasa igual en
+   `main`. Reproducción: el arnés de la auditoría (`trabajo/sesion_f554a71f/informes/deshacer-e3-audit/arnes`, R3e).
 
 ### C. Esperan a Lega
 

@@ -24,7 +24,7 @@ import { attachMarkupOverlay } from './markupOverlay';
 import { PHOTO_MARKUP_MAP } from '../media/markup';
 import { startMarkupPrune } from '../media/markupPrune';
 import { clipScope } from '../media/markupClipboard';
-import { markupClipboardExtension, pasteWithMarkup } from './markupClipboardEditor';
+import { markupClipboardExtension, pasteWithMarkup, trackMarkupInUndo } from './markupClipboardEditor';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { editorSchemaOptions, insertPageBreakForSlashMenu, SCRIPT_PROP, setVideosAccepted } from './editorSchema';
 import { dropTarget, insertFiles, isEmptyParagraph, isFilesTransfer, takeFiles, type FileEditor, type InsertAt } from './fileDrop';
@@ -82,7 +82,7 @@ import { TemplateHost } from '../templates/TemplateHost';
 import { ySyncPluginKey, yUndoPluginKey } from 'y-prosemirror';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { undoTimelineFor } from './undoTimeline';
-import { revealChange } from './undoReveal';
+import { revealChange, revealPhoto } from './undoReveal';
 
 // El carrete se baja aparte, la primera vez que se abre (roadmap B.4).
 const Carrete = lazyPart(() => import('./Carrete').then((m) => m.Carrete));
@@ -579,12 +579,17 @@ export function BlockEditor({
       const um = (yUndoPluginKey.getState(view.state as never) as { undoManager?: Y.UndoManager } | undefined)?.undoManager;
       if (!um) return;
       const binding = (ySyncPluginKey.getState(view.state as never) as { binding?: object | null } | undefined)?.binding ?? null;
+      // La pila que llega de un editor anterior puede tener un pegado con anotaciones (D46): su `UndoManager` sumaba el
+      // mapa de anotaciones al pegar, y este no lo tiene. Sin él, rehacer ese pegado traía la foto sin sus flechas
+      // (auditoría de la entrega 3 de Doc_Deshacer.md, F1). Se suma desde el principio (solo el origen de lo pegado).
+      trackMarkupInUndo(view.state, doc);
       detach = timeline.attach(pageId, doc, um, {
         binding,
         editable: () => editableRef.current && view.editable,
         dom: view.dom,
         snapshot: () => view.state.doc,
         reveal: (before, opts) => revealChange(view, before as PMNode, opts),
+        showPhoto: (fileId) => revealPhoto(view, fileId, mediaIdOf),
       });
     };
     if (editor.domElement) start();
@@ -1282,6 +1287,11 @@ export function BlockEditor({
             loader={annotating.loader}
             size={annotating.size}
             onClose={() => setAnnotating(null)}
+            onUndoSteps={
+              inTimeline && !preview && !filesNotice
+                ? (steps, map) => undoTimelineFor(services).pushMarkup(pageId, map, annotating.item.mediaId!, steps)
+                : undefined
+            }
           />
         </Part>
       )}

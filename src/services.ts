@@ -23,6 +23,9 @@ import { LINK_PUSH_MAX_BYTES } from './sync/linkRemote';
 import { SupabaseRemote } from './sync/remote';
 import { normalizeStructure, seedIfEmpty } from './sync/structure';
 import { PageTree } from './sync/tree';
+import { watchTitleRests } from './sync/titleRest';
+import { cutText } from './lib/graphemes';
+import { DB_LIMITS } from './lib/dbLimits';
 import { errorMessage } from './sync/types';
 import { DB_SCHEMA_VERSION, type ActiveWorkspace } from './workspace';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -398,6 +401,11 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser, link
         foldersDb?.close();
         return db.close();
       }
+      // Lo que sobró de un título de más de 500 caracteres va al principio de su página (titleRest.ts).
+      const stopTitleRests = watchTitleRests(tree, docs, (rest) => {
+        const short = cutText(rest.title, 60);
+        notify(t('page.titleRestMoved', { max: DB_LIMITS.pageTitle, title: (short === rest.title ? short : `${short}…`) || t('common.untitled') }));
+      });
       engine.start();
       online = () => engine.getStatus().online;
       mentions?.start();
@@ -434,6 +442,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser, link
       const shutdown = () => {
         closing ??= (async () => {
           const stopping = engine.stop();
+          stopTitleRests();
           mentions?.stop();
           unwatch();
           unwatchFolders();

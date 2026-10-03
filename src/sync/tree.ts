@@ -1,5 +1,7 @@
-import { generateKeyBetween } from 'fractional-indexing';
+import { generateKeyBetween, generateNKeysBetween } from 'fractional-indexing';
 import { t } from '../i18n';
+import { cutText } from '../lib/graphemes';
+import { DB_LIMITS, splitTitle } from '../lib/dbLimits';
 import { contentGap, serverSeqFor } from './clean';
 import { GENERATION_KEY, type LocalDb } from './localDb';
 import type { FailedOp, PagePatch, PageRow, PageSettings, ProjectRow, QueuedOp, TreeOp } from './types';
@@ -19,6 +21,58 @@ const PRIMARY_KEY = 'workspaceId';
 const FRESH_KEY = 'templateOffer';
 /** Cuántas se recuerdan (las más viejas se olvidan: una página vacía de hace cien páginas ya no ofrece nada). */
 const FRESH_MAX = 50;
+/** Lo que sobró de títulos largos y todavía no se escribió en su página (`TitleRest`). */
+const TITLE_REST_KEY = 'titleRests';
+
+/**
+ * Lo que sobró de un título más largo que el tope de la base (500 caracteres, `DB_LIMITS.pageTitle`): espera en el
+ * dispositivo hasta que `titleRest.ts` lo escribe al principio de su página. Se anota en la misma transacción que el
+ * cambio de título: el título cortado nunca sale sin que lo que sobra quede guardado.
+ */
+export interface TitleRest {
+  id: string;
+  pageId: string;
+  /** Lo que sobró, tal cual (con sus renglones si los tenía). */
+  text: string;
+  /** El título que quedó (para el aviso). */
+  title: string;
+  at: number;
+}
+
+/**
+ * El cambio con sus textos dentro de los topes de la base: el título de una página en 500 caracteres (lo que sobra
+ * vuelve en `rest`) y el nombre de un proyecto en 200 (la app ya no deja escribir más). Sin nada que cortar, `null`.
+ */
+export function fitOp(op: TreeOp): { op: TreeOp; rest: string } | null {
+  if (op.kind === 'create') {
+    const { head, rest } = splitTitle(op.page.title);
+    return rest ? { op: { ...op, page: { ...op.page, title: head } }, rest } : null;
+  }
+  if (op.kind === 'update') {
+    if (typeof op.patch.title !== 'string') return null;
+    const { head, rest } = splitTitle(op.patch.title);
+    return rest ? { op: { ...op, patch: { ...op.patch, title: head } }, rest } : null;
+  }
+  const name = op.kind === 'createProject' ? op.project.name : op.name;
+  const cut = cutText(name, DB_LIMITS.projectName);
+  if (cut === name) return null;
+  return op.kind === 'createProject'
+    ? { op: { ...op, project: { ...op.project, name: cut } }, rest: '' }
+    : { op: { ...op, name: cut }, rest: '' };
+}
+
+/**
+ * El servidor rechazó el cambio por un tope de largo de la base (`pages_title_check`, `workspaces_name_length`) y el
+ * cambio pasa el tope: lo arregla `PageTree.repairRejected`. Un rechazo por otra causa (permisos, ciclo) no se toca.
+ */
+export function isLengthRejection(f: FailedOp): boolean {
+  return /\b(pages_title_check|workspaces_name_length)\b/.test(f.error) && fitOp(f.op) !== null;
+}
+
+/** La página a la que va lo que sobró del título de un cambio. */
+function restPage(op: TreeOp): string | null {
+  return op.kind === 'create' ? op.page.id : op.kind === 'update' ? op.id : null;
+}
 
 /** Clave entre dos vecinos. Si dos dispositivos generaron la misma clave, igual devuelve una válida. */
 export function keyBetween(before: string | null, after: string | null): string {
@@ -95,9 +149,13 @@ export class PageTree {
   private projectsKnown = false;
   private primary: string;
   private fresh: string[] = [];
+  private rests: TitleRest[] = [];
 
   /** Se llama cuando entra un cambio local a la cola. */
   onQueued?: () => void;
+
+  /** Se llama cuando queda anotado algo que sobró de un título (`titleRest.ts` lo escribe en la página). */
+  onTitleRest?: () => void;
 
   /**
    * Si a este dispositivo la página le llega como base limpia y no como filas (Docs/Doc_Privacidad_Borrado.md): lo
@@ -123,12 +181,13 @@ export class PageTree {
   }
 
   async load(): Promise<void> {
-    const [rows, ops, failed, projects, fresh] = await Promise.all([
+    const [rows, ops, failed, projects, fresh, rests] = await Promise.all([
       this.db.getAll('pages'),
       this.db.getAll('ops'),
       this.db.getAll('failedOps'),
       this.db.get('meta', PROJECTS_KEY) as Promise<ProjectRow[] | undefined>,
       this.db.get('meta', FRESH_KEY).catch(() => undefined),
+      this.db.get('meta', TITLE_REST_KEY) as Promise<TitleRest[] | undefined>,
     ]);
     this.fresh = Array.isArray(fresh) ? fresh.filter((id): id is string => typeof id === 'string') : [];
     this.snapshot = new Map(rows.map((r) => [r.id, r]));
@@ -136,6 +195,8 @@ export class PageTree {
     this.projectsKnown = projects !== undefined;
     this.ops = ops;
     this.failed = failed;
+    this.rests = Array.isArray(rests) ? rests : [];
+    await this.repairQueued();
     this.recompute();
     await this.adoptPrimary();
   }
@@ -315,8 +376,7 @@ export class PageTree {
     const workspaceId = parent?.workspace_id ?? projectId ?? this.workspaceId;
     const siblings = this.siblingsIn(parentId, workspaceId);
     const at = options.before ? siblings.findIndex((p) => p.id === options.before) : -1;
-    const sortKey =
-      at >= 0 ? keyBetween(siblings[at - 1]?.sort_key ?? null, siblings[at].sort_key) : keyBetween(siblings.at(-1)?.sort_key ?? null, null);
+    const sortKey = await this.keyAt(siblings, at >= 0 ? at : siblings.length);
     const id = crypto.randomUUID();
     const page = { id, workspace_id: workspaceId, parent_id: parentId, title, sort_key: sortKey };
     // Antes de encolar: la página se dibuja apenas entra a la cola y ya tiene que saberse nueva.
@@ -351,14 +411,30 @@ export class PageTree {
   /** Crea un proyecto. Funciona sin red: sube antes que las páginas que se le creen. */
   async createProject(name: string): Promise<string> {
     const id = crypto.randomUUID();
-    await this.enqueue({ kind: 'createProject', project: { id, name: name.trim() || t('project.untitled') } });
+    await this.enqueue({ kind: 'createProject', project: { id, name: cutText(name.trim(), DB_LIMITS.projectName) || t('project.untitled') } });
     return id;
   }
 
   async renameProject(id: string, name: string): Promise<void> {
-    const next = name.trim();
+    const next = cutText(name.trim(), DB_LIMITS.projectName);
     if (!next || this.projectView.get(id)?.name === next) return;
     await this.enqueue({ kind: 'renameProject', id, name: next });
+  }
+
+  /**
+   * La clave para quedar en la posición `at` entre `siblings`. La clave entre dos vecinas se alarga cada vez que se pone
+   * algo en el mismo hueco: después de unas 600 veces pasaría los 128 caracteres que acepta la base y el cambio quedaría
+   * rechazado para siempre. Antes de eso, las hermanas reciben claves nuevas y parejas, en el mismo orden.
+   */
+  private async keyAt(siblings: PageRow[], at: number): Promise<string> {
+    const key = keyBetween(siblings[at - 1]?.sort_key ?? null, siblings[at]?.sort_key ?? null);
+    if (key.length <= DB_LIMITS.pageSortKey) return key;
+    const keys = generateNKeysBetween(null, null, siblings.length + 1);
+    const others = keys.filter((_, i) => i !== at);
+    for (const [i, sibling] of siblings.entries()) {
+      if (sibling.sort_key !== others[i]) await this.enqueue({ kind: 'update', id: sibling.id, patch: { sort_key: others[i] } });
+    }
+    return keys[at];
   }
 
   /** Hermanas en un lugar del árbol; en la raíz, solo las del mismo proyecto. */
@@ -367,9 +443,14 @@ export class PageTree {
     return parentId ? list : list.filter((p) => p.workspace_id === workspaceId);
   }
 
-  async rename(id: string, title: string): Promise<void> {
-    if (this.view.get(id)?.title === title) return;
-    await this.enqueue({ kind: 'update', id, patch: { title } });
+  /**
+   * Cambia el título. Lo que pasa de 500 caracteres no se pierde: va al principio de la página (`TitleRest`). `rest` es
+   * lo que ya cortó quien llama (el título de la página al pegar, con sus renglones) y va después de lo que sobre acá.
+   */
+  async rename(id: string, title: string, { rest = '' }: { rest?: string } = {}): Promise<void> {
+    const fitted = splitTitle(title);
+    if (this.view.get(id)?.title === fitted.head && !fitted.rest && !rest.trim()) return;
+    await this.enqueue({ kind: 'update', id, patch: { title: fitted.head } }, fitted.rest + rest);
   }
 
   /** Mueve `id` adentro de `parentId`: antes o después de una hermana, o al final si no se indica. */
@@ -387,7 +468,7 @@ export class PageTree {
     const anchor = position.before ?? position.after;
     const found = anchor ? siblings.findIndex((p) => p.id === anchor) : -1;
     if (found >= 0) at = position.before ? found : found + 1;
-    const sortKey = keyBetween(siblings[at - 1]?.sort_key ?? null, siblings[at]?.sort_key ?? null);
+    const sortKey = await this.keyAt(siblings, at);
     if (page.parent_id === parentId && page.sort_key === sortKey) return;
     await this.enqueue({ kind: 'update', id, patch: { parent_id: parentId, sort_key: sortKey } });
   }
@@ -420,17 +501,144 @@ export class PageTree {
     return this.writing > 0;
   }
 
-  private async enqueue(op: TreeOp): Promise<void> {
-    const queued: QueuedOp = { opId: crypto.randomUUID(), op, createdAt: Date.now() };
+  /**
+   * Pone el cambio en la cola, con sus textos dentro de los topes de la base (`fitOp`). Lo que sobra del título (y el
+   * `extraRest` que cortó quien llama) se anota en la misma transacción, para ir al principio de la página.
+   */
+  private async enqueue(op: TreeOp, extraRest = ''): Promise<void> {
+    const fitted = fitOp(op);
+    const final = fitted?.op ?? op;
+    const queued: QueuedOp = { opId: crypto.randomUUID(), op: final, createdAt: Date.now() };
+    const restText = (fitted?.rest ?? '') + extraRest;
+    const pageId = restPage(final);
+    const rest = pageId && restText.trim() ? this.newRest(pageId, restText, final) : null;
     this.writing++;
     try {
-      queued.seq = await this.db.add('ops', queued);
+      if (rest) {
+        const tx = this.db.transaction(['ops', 'meta'], 'readwrite');
+        queued.seq = await tx.objectStore('ops').add(queued);
+        await tx.objectStore('meta').put([...this.rests, rest], TITLE_REST_KEY);
+        await tx.done;
+      } else {
+        queued.seq = await this.db.add('ops', queued);
+      }
     } finally {
       this.writing--;
     }
+    if (rest) this.rests = [...this.rests, rest];
     this.ops.push(queued);
     this.recompute();
     this.onQueued?.();
+    if (rest) this.onTitleRest?.();
+  }
+
+  private newRest(pageId: string, text: string, op: TreeOp): TitleRest {
+    const title = op.kind === 'create' ? op.page.title : op.kind === 'update' ? (op.patch.title ?? '') : '';
+    return { id: crypto.randomUUID(), pageId, text, title, at: Date.now() };
+  }
+
+  // --- lo que sobró de los títulos largos ------------------------------------------------------------
+
+  /** Lo que sobró de títulos largos y todavía no se escribió en su página, del más viejo al más nuevo. */
+  titleRests(): TitleRest[] {
+    return [...this.rests];
+  }
+
+  /** Lo que sobró ya está escrito (y guardado) en su página: se olvida. */
+  async doneTitleRest(id: string): Promise<void> {
+    const next = this.rests.filter((r) => r.id !== id);
+    if (next.length === this.rests.length) return;
+    await this.db.put('meta', next, TITLE_REST_KEY);
+    this.rests = next;
+  }
+
+  /**
+   * Al abrir: los cambios sin subir que guardó una versión anterior de la app con un título de más de 500 caracteres (o
+   * un proyecto de más de 200) se cortan, y lo que sobra del título se anota para ir al principio de la página. Son lo
+   * último que hizo la persona, así que se suben como cualquier otro cambio. Los ya rechazados los arregla
+   * `repairRejected`, con el árbol del servidor a la vista (Docs/Doc_Sincronizacion.md, "Topes de largo").
+   */
+  private async repairQueued(): Promise<void> {
+    const ops: QueuedOp[] = [];
+    const rests: TitleRest[] = [];
+    for (const o of this.ops) {
+      const fitted = fitOp(o.op);
+      if (!fitted) continue;
+      ops.push({ ...o, op: fitted.op });
+      const pageId = restPage(fitted.op);
+      if (pageId && fitted.rest.trim()) rests.push(this.newRest(pageId, fitted.rest, fitted.op));
+    }
+    if (ops.length === 0) return;
+    const tx = this.db.transaction(['ops', 'meta'], 'readwrite');
+    for (const o of ops) await tx.objectStore('ops').put(o);
+    if (rests.length) await tx.objectStore('meta').put([...this.rests, ...rests], TITLE_REST_KEY);
+    await tx.done;
+    const fixed = new Map(ops.map((o) => [o.seq, o]));
+    this.ops = this.ops.map((o) => fixed.get(o.seq) ?? o);
+    this.rests = [...this.rests, ...rests];
+  }
+
+  /**
+   * El título de la página cambió después de que el servidor rechazó `f`: lo cambió el servidor (otro dispositivo, o
+   * esta persona al ver el rechazo) o hay un cambio de título posterior en este dispositivo. Del servidor se mira su
+   * `updated_at` contra el momento del rechazo (cambia con el título, el lugar, la papelera o los ajustes, no con el
+   * contenido): en la duda, se toma como cambiado, y el texto largo va entero a la página sin pisar nada.
+   */
+  private titleChangedAfter(f: FailedOp): boolean {
+    if (f.op.kind !== 'update') return false;
+    const id = f.op.id;
+    const row = this.snapshot.get(id);
+    if (row && Date.parse(row.updated_at) > f.failedAt) return true;
+    const later = (op: TreeOp, seq: number | undefined) =>
+      op.kind === 'update' && op.id === id && op.patch.title !== undefined && (seq ?? Infinity) > (f.opSeq ?? -1);
+    return this.ops.some((o) => later(o.op, o.seq)) || this.failed.some((g) => g !== f && later(g.op, g.opSeq));
+  }
+
+  /**
+   * Con el árbol del servidor recién bajado (`setSnapshot`): los cambios rechazados por un tope de largo
+   * (`isLengthRejection`; los dejó una versión anterior, o una pestaña vieja) se arreglan. Si el título no cambió
+   * después del rechazo, el cambio vuelve a la cola en su lugar, cortado, y lo que sobra se anota para la página. Si
+   * cambió (`titleChangedAfter`), el título más nuevo queda: el texto largo entero va al principio de la página y el
+   * rechazo se descarta (lo demás que traía el cambio, si traía algo, vuelve a la cola). Nada se pierde y nada pisa un
+   * título más nuevo. Todo en una transacción. Devuelve qué hubo, para avisar después de `recompute`.
+   */
+  private async repairRejected(): Promise<{ queued: boolean; rests: boolean }> {
+    const targets = this.failed.filter(isLengthRejection);
+    if (targets.length === 0) return { queued: false, rests: false };
+    const requeued: { failed: FailedOp; op: QueuedOp }[] = [];
+    const dropped: FailedOp[] = [];
+    const rests: TitleRest[] = [];
+    const queue = (f: FailedOp, op: TreeOp) => {
+      const queued: QueuedOp = { opId: crypto.randomUUID(), op, createdAt: Date.now() };
+      if (f.opSeq !== undefined) queued.seq = f.opSeq;
+      requeued.push({ failed: f, op: queued });
+    };
+    for (const f of targets) {
+      if (f.op.kind === 'update' && typeof f.op.patch.title === 'string' && this.titleChangedAfter(f)) {
+        const { title: long, ...others } = f.op.patch;
+        rests.push({ id: crypto.randomUUID(), pageId: f.op.id, text: long ?? '', title: this.snapshot.get(f.op.id)?.title ?? '', at: Date.now() });
+        if (Object.keys(others).length > 0) queue(f, { ...f.op, patch: others });
+        else dropped.push(f);
+        continue;
+      }
+      const fitted = fitOp(f.op)!;
+      queue(f, fitted.op);
+      const pageId = restPage(fitted.op);
+      if (pageId && fitted.rest.trim()) rests.push(this.newRest(pageId, fitted.rest, fitted.op));
+    }
+    const tx = this.db.transaction(['ops', 'failedOps', 'meta'], 'readwrite');
+    for (const r of requeued) {
+      r.op.seq = await tx.objectStore('ops').put(r.op);
+      await tx.objectStore('failedOps').delete(r.failed.seq!);
+    }
+    for (const f of dropped) await tx.objectStore('failedOps').delete(f.seq!);
+    if (rests.length) await tx.objectStore('meta').put([...this.rests, ...rests], TITLE_REST_KEY);
+    await tx.done;
+    const gone = new Set([...requeued.map((r) => r.failed), ...dropped]);
+    this.ops = [...this.ops, ...requeued.map((r) => r.op)].sort((a, b) => a.seq! - b.seq!);
+    this.failed = this.failed.filter((f) => !gone.has(f));
+    this.rests = [...this.rests, ...rests];
+    return { queued: requeued.length > 0, rests: rests.length > 0 };
   }
 
   // --- sincronización ------------------------------------------------------------------------------
@@ -451,7 +659,11 @@ export class PageTree {
     this.recompute();
   }
 
-  /** El servidor rechazó el cambio para siempre (por ejemplo, un movimiento que armaba un ciclo). */
+  /**
+   * El servidor rechazó el cambio para siempre (por ejemplo, un movimiento que armaba un ciclo). Uno rechazado por un
+   * tope de largo (lo dejó una pestaña con una versión anterior) lo arregla `repairRejected` con el próximo árbol que
+   * baje, mirando si el título cambió después.
+   */
   async failOp(op: QueuedOp, error: string): Promise<void> {
     const failed: FailedOp = { op: op.op, opSeq: op.seq, error, failedAt: Date.now() };
     const tx = this.db.transaction(['ops', 'failedOps'], 'readwrite');
@@ -468,7 +680,9 @@ export class PageTree {
    * nada que reintentar no escribe nada ni avisa.
    */
   async retryFailed(only: (f: FailedOp) => boolean = () => true): Promise<void> {
-    const retry = this.failed.filter(only);
+    // Los rechazados por un tope de largo no: volverían a fallar, y su momento de rechazo es lo que dice si el título
+    // cambió después (`repairRejected` los arregla con el próximo árbol que baje, que *Retry* pide enseguida).
+    const retry = this.failed.filter((f) => only(f) && !isLengthRejection(f));
     if (retry.length === 0) return;
     const tx = this.db.transaction(['ops', 'failedOps'], 'readwrite');
     const queued: QueuedOp[] = [];
@@ -502,7 +716,8 @@ export class PageTree {
 
   /**
    * Lo rechazado que no se puede descartar sin perder algo: creaciones de páginas, proyectos rechazados
-   * que tienen páginas creadas adentro (en la cola o rechazadas), y los cambios posteriores sobre ellos.
+   * que tienen páginas creadas adentro (en la cola o rechazadas), los cambios posteriores sobre ellos, y los rechazados
+   * por un tope de largo (su texto todavía no está en la página: lo pone `repairRejected`).
    */
   private failedKeepers(): Set<FailedOp> {
     const pageOps = [...this.ops.map((o) => o.op), ...this.failed.map((f) => f.op)];
@@ -517,7 +732,9 @@ export class PageTree {
     );
     return new Set(
       this.failed.filter((f) =>
-        keptCreates.includes(f) || ((f.op.kind === 'update' || f.op.kind === 'renameProject') && created.has(f.op.id)),
+        keptCreates.includes(f) ||
+        isLengthRejection(f) ||
+        ((f.op.kind === 'update' || f.op.kind === 'renameProject') && created.has(f.op.id)),
       ),
     );
   }
@@ -649,8 +866,12 @@ export class PageTree {
       this.projectSnapshot = new Map(projects.map((p) => [p.id, p]));
       this.projectsKnown = true;
     }
+    // Con el árbol del servidor a la vista: los rechazados por un tope de largo (si los hay).
+    const repaired = await this.repairRejected();
     this.recompute();
     if (projects) await this.adoptPrimary();
+    if (repaired.queued) this.onQueued?.();
+    if (repaired.rests) this.onTitleRest?.();
   }
 
   /**

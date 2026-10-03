@@ -20,6 +20,7 @@ import { PAGE_SIZES } from '../ui/pageFormat';
 import { cleanArchiveBlocks, textOnlyBlocks, type NoteKey } from './archiveBlocks';
 import { contentFingerprint, HIDDEN_IMAGE, treePlan, writePage, type CodaManifestPage } from './codaImport';
 import type { PageBlock } from './codaComments';
+import { cutText } from '../lib/graphemes';
 
 // Volver a Shot Docs desde el zip que arma la app (P.22, entrega 3; Docs/Doc_Exportar.md, sección 3 y "Cómo quedó la
 // entrega 3"). Siempre a un PROYECTO NUEVO: nunca encima de uno que existe (regla 5). Por los mismos caminos que la
@@ -138,7 +139,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const str = (v: unknown, max: number): string => (typeof v === 'string' ? v.slice(0, max) : '');
 // eslint-disable-next-line no-control-regex
-const cleanTitle = (v: unknown) => str(v, 2000).replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, 500);
+// Sin cortar en 500: lo corta el árbol, que pasa lo que sobra al principio de la página (tree.ts, `TitleRest`).
+const cleanTitle = (v: unknown) => cutText(typeof v === 'string' ? v : '', 2000).replace(/[\u0000-\u001f\u007f]/g, ' ');
 
 async function sha256Hex(data: Uint8Array): Promise<string> {
   const hash = await crypto.subtle.digest('SHA-256', data as BufferSource);
@@ -335,7 +337,7 @@ export function parseArchiveComments(raw: unknown): Map<string, ArchiveThread[]>
         id: c.id,
         deleted: c.deleted === true || typeof c.body !== 'string' || !/\S/.test(c.body),
         // Nunca un correo (EX8): un zip armado a mano que lo traiga queda con la parte de antes de la `@`.
-        author: (author.includes('@') ? author.slice(0, author.indexOf('@')) : author).slice(0, 200).trim(),
+        author: cutText(author.includes('@') ? author.slice(0, author.indexOf('@')) : author, 200).trim(),
         mine: c.mine === true,
         createdAt: typeof c.createdAt === 'string' ? c.createdAt : '',
         body: typeof c.body === 'string' ? c.body : '',

@@ -1,5 +1,6 @@
 import * as Y from 'yjs';
 import type { ImportedComment } from '../sync/comments';
+import { cutText } from '../lib/graphemes';
 
 // Los comentarios de Coda (Docs/Doc_Importar_Coda.md, "3. Comentarios"). La API REST de Coda y su exportación
 // HTML no los dan; el servidor MCP de Coda sí (`content_read` con `contentTypesToInclude: ["comments"]`). Su
@@ -300,7 +301,7 @@ const validDate = (seconds: number | undefined, now: string): string | null => {
 };
 
 /** Lo que la base acepta como nombre (1 a 200 caracteres) y como correo (3 a 320, con arroba). */
-const cleanName = (name: string | undefined) => name?.replace(/\s+/g, ' ').trim().slice(0, 200) || null;
+const cleanName = (name: string | undefined) => (name ? cutText(name.replace(/\s+/g, ' ').trim(), 200) : '') || null;
 const cleanEmail = (email: string | undefined) => {
   const e = email?.trim().toLowerCase() || '';
   return e.length >= 3 && e.length <= 320 && e.includes('@') ? e : null;

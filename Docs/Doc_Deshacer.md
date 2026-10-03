@@ -1,7 +1,8 @@
 # Deshacer en el orden en que editaste (P.26)
 
 **Estado: entregas 0 (v0.132: el límite de Yjs, arreglado con un parche; sección 16), 1 (v0.140: la línea de tiempo
-con las páginas; sección 17) y 2 (v0.144: el reemplazo adentro; sección 18) hechas; 3 en diseño.** Pedido de Lega
+con las páginas; sección 17), 2 (v0.144: el reemplazo adentro; sección 18) y 3 (v0.152: anotar una foto como un paso;
+sección 19) hechas.** Pedido de Lega
 del 2026-10-02, al responder cómo se deshace un reemplazo en todo el proyecto (una pregunta de su lista de decisiones;
 no es la D-10 de `Doc_Decisiones.md`). Se diseñó contra `main` v0.123
 y se revisó contra v0.125. Las decisiones (DH1 a DH10, sección 11) son propuestas con la recomendación elegida: el
@@ -118,7 +119,7 @@ y *para rehacer*. Cada entrada es una de:
 |---|---|---|
 | **Paso de página** | la página y el `StackItem` de Yjs (el mismo objeto de la pila de esa página) | la pila de esa página, solo ese paso |
 | **Reemplazo** | el id del registro (`replace:<op>`), lo buscado y el reemplazo, y por página el `StackItem` (páginas con historia) o las anclas (las demás) | cada página por su camino (3.3), en un solo ⌘Z |
-| **Anotaciones** (entrega 3) | la foto y los pasos del anotador de esa vez | la pila del anotador, todos juntos |
+| **Anotaciones** (entrega 3, hecha: sección 19) | la foto y los pasos del anotador de esa vez | la pila del anotador, todos juntos |
 
 La línea de tiempo **no guarda contenido**: guarda punteros a pasos de Yjs que ya existen. El orden lo da el momento en
 que cada paso se crea (`stack-item-added` de cada pila). Lo que se junta en medio segundo (`stack-item-updated`) es el
@@ -275,7 +276,7 @@ Reemplazaste en 50 páginas; después escribiste en *Shot 12*; antes del reempla
 | **Restaurar una versión** | Un paso de la página. *Undo* del aviso sigue andando mientras sea lo último de esa pila. |
 | **Crear desde una plantilla** (de fábrica o propia, v0.124) | Un paso de la página (`insertTemplate` e `insertTemplateCopy` van por el editor; el colapsado para todos que copia no entra en la pila, como hoy); ⌘Z en el título recién creado sigue sacando la plantilla (ahora por la línea de tiempo). *Customize* y *Save as template…* escriben en otra página (la de la plantilla): son pasos de esa página si se escribe en su editor. |
 | **Reporte del día** | Crea una página y escribe con un editor sin pantalla: no entra (sección 10). La página nueva se manda a la papelera como cualquier otra. |
-| **Anotar** | Con el anotador abierto, su ⌘Z es de esa foto (hoy; su pila mira el mapa de anotaciones, no el contenido: no se cruza con la de la página). En la entrega 3, al cerrarlo, todo lo de esa vez es **un** paso. Hasta entonces, un ⌘Z después de anotar saltea la anotación (DH1). |
+| **Anotar** | Con el anotador abierto, su ⌘Z es de esa foto (su pila mira el mapa de anotaciones, no el contenido: no se cruza con la de la página). Al cerrarlo, todo lo de esa vez es **un** paso de la página (entrega 3, sección 19): ⌘Z lo deshace entero, con la página en pantalla y la foto a la vista, y ⌘⇧Z lo rehace. Lo que otra persona anotó en la misma foto queda. |
 | **Renombrar, mover, crear o mandar a la papelera** | No entran (DH1): un ⌘Z después de renombrar *Shot 7* saltea el cambio de nombre y deshace lo anterior, que puede estar en otra página (te lleva). |
 | **El teléfono** | No hay ⌘Z sin teclado. Con teclado físico, igual que en la compu. El gesto de deshacer de iOS llega al editor como `historyUndo` y `undoGuard.ts` lo manda a la línea de tiempo (a probar a mano). Sin botón nuevo (DH8). |
 
@@ -545,8 +546,9 @@ otra sesión (medido).
 2. **Hecha (v0.144, sección 18): el reemplazo adentro.** La pila de Yjs en las páginas con historia, las anclas en las demás, `planRedo`, los avisos
    con *Redo*, DH9 y DH10. **Aceptación:** el ejemplo de Lega (3.5) en Chromium con 50 páginas: dos ⌘Z dejan las 50 como
    antes y lo escrito antes del reemplazo sale exacto (sin el "cámara" que queda hoy); ⌘⇧Z lo vuelve; sin red, igual.
-3. **Anotar como un paso.** Lo de una vez en el anotador como un paso al cerrarlo (es algo que hiciste en la página;
-   la auditoría pidió que no sea opcional). DH1 C y DH8 B, si Lega los pide, aparte. **Aceptación:** anotar, cerrar, ⌘Z saca todo lo de esa vez y ⌘⇧Z lo vuelve.
+3. **Hecha (v0.152, sección 19): anotar como un paso.** Lo de una vez en el anotador como un paso al cerrarlo (es algo
+   que hiciste en la página; la auditoría pidió que no sea opcional). DH1 C y DH8 B, si Lega los pide, aparte.
+   **Aceptación:** anotar, cerrar, ⌘Z saca todo lo de esa vez y ⌘⇧Z lo vuelve.
 
 Cada entrega con su auditoría antes de publicar.
 
@@ -851,17 +853,17 @@ semillas en la suite, `TIMELINE_SEEDS` para más) y las de atajos (`shortcuts.te
 
 ### 18.4 Lo que falta
 
-- *Show* en el aviso de ⌘Z de un reemplazo con páginas cambiadas.
+- *Show* en el aviso de ⌘Z de un reemplazo con páginas cambiadas. **Hecho con la entrega 3 (19.1).**
 - **Una página con historia en la papelera durante el ⌘Z de un reemplazo** (auditoría, O1). Escribís "cámara roja" en
   *Shot 3*, *Replace all*, mandás *Shot 3* a la papelera, ⌘Z (deshace en las demás; *Shot 3* "couldn't be undone
   now"), la restaurás y ⌘Z: deshace lo escrito pero queda "Toma 1: Camera"; *Undo the rest* lo deja "Toma 1: cámara"
   en vez de "Toma 1: ". Es el resto de D167 en ese rincón: texto de más, nada de menos. Causa: el paso de esa página
   sale de la pila al pasar el reemplazo a rehacer (18.2). Arreglarlo pide que un reemplazo quede a la vez para rehacer
-  (las páginas hechas) y para deshacer (las que faltan): mediano, al roadmap.
+  (las páginas hechas) y para deshacer (las que faltan): mediano, al roadmap. **Sigue pendiente** (19.4).
 - Una prueba de la ventana de O4 (re-verificación): la marca de «algo nuevo en el medio» se toma antes del primer `await`; un
-  mutante que la toma después sobrevive. El código está bien; falta la prueba.
+  mutante que la toma después sobrevive. El código está bien; falta la prueba. **Hecha con la entrega 3 (19.1).**
 - La memoria en el iPhone (entrega 1) y el gesto de deshacer de iOS en la PWA instalada.
-- Entrega 3 (anotar como un paso).
+- Entrega 3 (anotar como un paso). **Hecha (sección 19).**
 
 ### 18.5 Correcciones de la auditoría
 
@@ -879,8 +881,112 @@ la otra persona escribiendo adentro de lo reemplazado, sin nada perdido.
   pero al terminar el reemplazo igual quedaba para rehacer. Ahora la línea de tiempo cuenta lo nuevo (`newEdits`) y, si
   hubo algo nuevo desde que empezó a deshacerse (`markReplace`), el reemplazo no queda para rehacer.
 - **O1**: al roadmap (18.4). **Fuera de alcance, al roadmap:** después del *Undo* de "Last" del panel el foco queda en la
-  página y Esc ya no cierra el panel (pasa igual en `main`); con el panel abierto y el foco puesto por programa en el
+  página y Esc ya no cierra el panel (pasa igual en `main`; arreglado con la entrega 3, 19.1); con el panel abierto y el foco puesto por programa en el
   editor, Ctrl+Shift+Z deshace (una persona no llega ahí: el panel es modal).
+
+## 19. Entrega 3: cómo quedó (v0.152)
+
+### 19.1 Qué se hizo
+
+- **`src/ui/undoTimeline.ts`**: lo anotado es una entrada de la línea de tiempo (`MarkupEntry`): la página, la foto, el
+  mapa de anotaciones de su documento y los pasos del anotador de esa vez. `pushMarkup` la anota al cerrarse el
+  anotador (algo nuevo: borra lo de rehacer en el proyecto, también en esa página); `stepMarkup` la deshace (o rehace)
+  entera con un `UndoManager` de un momento sobre el mapa (`markupManager`, las mismas opciones que el del anotador),
+  paso por paso hasta vaciar la lista, y lo contrario queda para rehacer. Cuenta como paso de la página: la retiene
+  (`docs.open`), entra en los topes, sale con la papelera (`forget`), con el documento rearmado (con su aviso) y con algo
+  nuevo si estaba para rehacer.
+- **`src/ui/Annotator.tsx`**: al cerrarse o desmontarse, primero guarda el texto a medio escribir y después pasa lo que
+  quedó en su pila (`onUndoSteps`); lo deshecho adentro y no rehecho se olvida. `PageEditor.tsx` lo manda a la línea de
+  tiempo de la página (no en la práctica ni en una versión del historial).
+- **`src/ui/undoTimelineUi.ts`**: ⌘Z sobre lo anotado va a su página si hace falta (como un paso de página, DH2), lo
+  deshace y trae la foto a la vista (`revealPhoto` en `undoReveal.ts`: abre la sección colapsada y la acerca, sin mover
+  el cursor). Si cruzó, "Undone in “Shot 3” · Back". Manteniendo apretado se frena antes (como un reemplazo).
+- **Pendientes de 18.4:** *Show* en el aviso de deshacer un reemplazo con lugares que habían cambiado (`showChanged` en
+  `replaceUi.ts`: va a la página y al bloque; con más de uno, *Next*); el aviso tiene un segundo botón para eso
+  (`notice.ts`, `Workspace.tsx`). Después del *Undo* de "Last" del panel, el foco vuelve al campo del reemplazo
+  (`keepFocusInPanel`, `ProjectReplace.tsx`) y Esc cierra el panel. La prueba de la ventana de O4 (escribir antes de que
+  el motor lea su registro).
+- Ayuda: `help.undo.text` (anotar es un paso) y `help.photosAnnotate.text` (al cerrarlo, ⌘Z en la página deshace todo lo
+  de esa vez); textos nuevos en inglés y castellano (`shell.ts`). Sin atajos nuevos.
+
+### 19.2 Diferencias con el diseño (decididas al implementar)
+
+- **Lo de otra persona en la misma foto.** Deshacer sigue solo el origen de la foto y Yjs no vuelve a poner un campo que
+  otro cambió después, pero borraba igual algo tuyo con lo del otro adentro: deshacer la forma que creaste se llevaba
+  el cambio que otra persona le hizo (moverla, cambiarle el color), y deshacer la primera anotación de una foto borraba
+  el marco aunque el otro hubiera dibujado con él (sus formas quedaban sin marco, sin verse). Ahora el filtro de borrado
+  (`protectMarkupOthers`, el mismo criterio que B1 en el texto) deja la forma con lo del otro adentro, entera, y
+  **deshacer nunca borra el marco de una foto** (corrección de la auditoría, 19.5: mirar si quedaban formas no
+  alcanzaba con el otro sin red). Vale también para el ⌘Z adentro del anotador (antes tampoco lo cuidaba).
+  Para saber qué formas creó el paso que se deshace, se deshace de a un paso por vez (`popMarkupStep`), como `step` en
+  la página. Tus cambios a una forma que ya existía se deshacen igual.
+- **Escribir en el anotador es algo nuevo aunque se deshaga todo adentro.** Qué pasaba (la prueba al azar, 1 de 3.000):
+  deshacer una anotación con ⌘Z, abrir el anotador otra vez, dibujar en la misma foto y deshacerlo adentro, cerrar y
+  ⌘⇧Z: la anotación vieja volvía sin marco, porque Yjs no rehace una clave del mapa que se volvió a escribir después
+  (aunque esté borrada) si no fue por la misma pila. Ahora el anotador avisa aunque su pila quede vacía y la línea de
+  tiempo borra lo de rehacer (como cualquier editor: escribir y deshacerlo no devuelve lo que había para rehacer). Con
+  el marco que ya no se borra (19.5) ese caso tampoco podría pasar; la regla queda por lo de cualquier editor.
+- **Sin aviso al deshacer en la misma página**, como un paso de página; solo si cruzó. Si la foto ya no está en la
+  página (se borró el bloque y la anotación sigue hasta la poda), se deshace igual y se dice: "Undid annotations on a
+  photo that's no longer in “Shot 3”."
+- **Manteniendo apretado ⌘Z se frena antes de lo anotado**, como antes de un reemplazo: es un paso grande.
+- **Abrir el anotador sin hacer nada** no es un paso ni borra lo de rehacer.
+- **O1 (la papelera durante el ⌘Z de un reemplazo) no se tocó:** pide que un reemplazo quede a la vez en las dos listas,
+  un cambio mediano en la parte más delicada de la entrega 2. Sigue en el roadmap.
+
+### 19.3 Lo medido
+
+| Prueba | Resultado |
+|---|---|
+| Recorrido en Chromium (arnés con la app de verdad, servidor en memoria con archivos, sin login; Windows con Ctrl y Mac con ⌘) | anotar la foto de Shot 3 (rectángulo y flecha), escribir en Shot 12, ⌘Z saca lo escrito, ⌘Z vuelve a Shot 3 y saca la anotación entera (formas y marco) con la foto a la vista y "Undone in “Shot 3” · Back", ⌘⇧Z la vuelve igual, ⌘⇧Z vuelve a Shot 12 con lo escrito; con otra persona dibujando en la misma foto, ⌘Z saca lo tuyo de esa vez y deja lo suyo, y el otro dispositivo baja lo mismo; 0 errores en la consola. 36 de 36 comprobaciones |
+| Al azar sin el editor, sola (3.000 semillas de 50 acciones: anotar dos fotos con dibujar, mover, cambiar el color, borrar y ⌘Z / ⌘⇧Z adentro, escribir en dos páginas, ⌘Z y ⌘⇧Z de la línea de tiempo en el medio) | deshacer todo: 3.000 de 3.000 exactas (el mapa y el texto como al principio); rehacer todo: 3.000 de 3.000 (13.471 veces en el anotador) |
+| Lo mismo con otra persona anotando las mismas fotos (dibuja, mueve y cambia formas suyas y tuyas, borra) | 0 cosas suyas a la vista (formas, campos, el marco de una foto con formas) borradas por un deshacer o rehacer, de la línea de tiempo o del anotador, en 3.000 corridas (29.735 pasos deshechos); 3.000 de 3.000 iguales en los dos dispositivos. Sin `protectMarkupOthers` falla |
+| Correcciones de la auditoría (19.5): al azar con cortes de red y el otro deshaciendo lo suyo, 1.000 semillas | 0 formas sin marco al volver la red, 0 cosas del otro perdidas, 1.000 de 1.000 iguales; con la regla de antes del marco, falla |
+| Recorrido en Chromium, con las correcciones | 44 de 44: lo de arriba, la foto lejana entera y por encima del aviso después de cruzar, y el tooltip del triángulo (Windows y Mac) |
+| Mutantes de las correcciones | 7 de 7 mueren: el marco con la regla de antes, `nearest` sin volver a centrar, y A5, A2, A6, A10 y A1 de la auditoría |
+| Pruebas de mutación (cada protección sacada) | 18 de 18 hacen fallar alguna prueba: proteger lo ajeno, la forma con lo del otro, el marco, los campos de la forma creada en el paso, el paso a mano, lo deshecho adentro que borra lo de rehacer, anotar que borra lo de rehacer de su página, escribir que borra el rehacer de lo anotado, retener la página, rearmar, el tope, mantener apretado, mostrar la foto, el texto a medio escribir, el aviso con la pila vacía, el anotador de a un paso, y la ventana de O4 y el foco del panel |
+| Versión vieja (el esquema anterior) abriendo la página con lo anotado deshecho y rehecho | no escribe nada al abrir |
+
+Las pruebas: `src/ui/undoTimelineMarkup.test.ts` (con el editor real y `PageDocs`: orden con lo escrito en la misma y en
+otra página, dos veces en el anotador, algo nuevo y rehacer, mantener apretado, la otra persona, la foto que ya no está,
+la papelera, el documento rearmado, el tope, retener, la versión vieja), `undoTimelineMarkupRandom.test.ts` (al azar;
+`TIMELINE_SEEDS`), `Annotator.test.tsx` (lo que pasa al cerrarse y la forma que otro movió), `projectReplace.test.tsx`
+(*Show* y el foco) y `undoTimelineReplace.test.ts` (O4).
+
+### 19.4 Lo que falta
+
+- O1 (18.4): una página con historia en la papelera durante el ⌘Z de un reemplazo, restaurada después.
+- La memoria en el iPhone y el gesto de deshacer de iOS en la PWA instalada (entregas 1 y 2).
+- El anotador en el teléfono (sin ⌘Z): sus botones de deshacer siguen siendo de esa vez; lo de esa vez, en la página, se
+  deshace con teclado físico o con el gesto de iOS (a probar a mano).
+
+### 19.5 Correcciones de la auditoría
+
+Auditoría independiente sobre `d29bd15`: no aprobado, un bloqueante chico; 1.000 corridas al azar propias por variante
+(con otra persona, con cortes de red, y el otro también deshaciendo lo suyo).
+
+- **B1, las formas del otro sin marco.** Si yo anotaba primero una foto (escribía su marco) y deshacía mi anotación
+  mientras otra persona dibujaba sobre ella sin red, al volver la red sus formas llegaban sin marco y no se veían (42 a
+  46 de 1.000 con cortes). Mirar las formas que ya llegaron no alcanza. Ahora **deshacer nunca borra el marco**: un marco
+  sin formas no se dibuja (`readPhotoMarkup` pide al menos una) y la poda lo saca con la foto. Deshacer todo deja el
+  mapa sin formas (con el marco). Cubre también **O2** (rehacer lo mío después de que el otro anotó y deshizo lo suyo:
+  mis formas volvían sin marco). Pruebas: los casos R6/D2 y D1, y la prueba al azar con cortes de red (200 semillas en
+  la suite; 1.000: 0 formas sin marco, 0 cosas del otro perdidas, 1.000 de 1.000 iguales).
+- **O1, la foto lejana tapada por el aviso.** Después de cruzar de página, la foto de abajo de una página larga quedaba
+  con 27 de 270 px a la vista: se acercaba (`nearest`) antes de que la página tuviera su alto. Ahora `revealPhoto` la
+  centra si no se ve entera (con lugar para el aviso), y otra vez cuando la imagen carga y a los 300 ms, salvo que la
+  persona ya se haya movido. Medido en Chromium: entera, por encima del aviso.
+- **O3, guardas sin prueba:** el proyecto en `peek` (⌘Z en otro proyecto no ofrece lo anotado de este), `forget` con la
+  página en pantalla, `stepMarkup` sin poder editar, y los dos chequeos del documento. Cada una con su prueba, que falla
+  con su mutante.
+- **F1 (de `main`, nivel alto), rehacer un pegado con anotaciones después de ir y volver.** El deshacer de la página
+  sumaba el mapa de anotaciones recién al pegar (`trackMarkupInUndo`); el editor nuevo de la misma página no lo tenía, y
+  rehacer el pegado traía la foto sin sus flechas. Ahora `PageEditor.tsx` lo suma al montar el editor (solo el origen
+  de lo pegado). Pruebas: con la app (el editor recién montado lo sigue) y con la línea de tiempo (vuelven las flechas;
+  sin el arreglo, no).
+- **F2** (un error de la consola al pegar una foto): al roadmap (B.24).
+- **D226**, que viaja con esta entrega (pedido de Lega): el tooltip del triángulo de colapsar, un renglón por acción
+  (`Doc_Colapsar.md`, §3).
 
 ## Correcciones de la auditoría (2026-10-02)
 

@@ -10,6 +10,9 @@ import type { SupabaseRemote } from '../sync/remote';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
+import { yUndoPluginKey } from 'y-prosemirror';
+import { PHOTO_MARKUP_MAP } from '../media/markup';
+import { MARKUP_PASTE_ORIGIN } from '../media/markupClipboard';
 import { undoTimelineFor } from './undoTimeline';
 import { Shell } from './Workspace';
 
@@ -173,6 +176,19 @@ async function go(pageId: string, expected: string) {
 const notice = () => document.querySelector('.notice, [role="status"]')?.textContent ?? '';
 
 describe('⌘Z en el orden en que editaste, con la app', () => {
+  it('auditoría F1: el deshacer de cada editor de la página sigue lo pegado en el mapa de anotaciones desde que se monta', async () => {
+    const { b } = await app();
+    const tracks = () => {
+      const um = (yUndoPluginKey.getState(editorView()!.state as never) as { undoManager: Y.UndoManager }).undoManager;
+      return um.scope.includes(um.doc.getMap(PHOTO_MARKUP_MAP)) && um.trackedOrigins.has(MARKUP_PASTE_ORIGIN);
+    };
+    expect(tracks()).toBe(true);
+    // El editor de otra página, recién montado (sin pegar nada), también.
+    await go(b, 'toma');
+    expect(tracks()).toBe(true);
+  });
+
+
   it('va a la otra página, lo deshace a la vista y avisa con Back; ⌘⇧Z lo vuelve', async () => {
     const { a, b, c, svc } = await app();
     typeText(' general');

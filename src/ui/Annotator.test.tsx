@@ -7,6 +7,7 @@ import { addShape, PHOTO_MARKUP_MAP, readPhotoMarkup, writeFrame } from '../medi
 import { PHOTO_MARKUP_CAP } from '../media/markupLimits';
 import { Annotator } from './Annotator';
 import { connect } from './collabHarness';
+import { markupManager, popMarkupStep } from './undoTimeline';
 import type { CarreteItem } from './carreteModel';
 
 // El anotador en jsdom (P.20, entrega 2): se escribe AL SOLTAR (nada durante el arrastre), el deshacer es de esta foto,
@@ -52,14 +53,16 @@ const shapes = (doc: Y.Doc) => readPhotoMarkup(map(doc), ID)?.shapes ?? [];
 
 type Loader = { preview: () => Promise<{ kind: 'image'; name: string; preview: string | null }>; full: () => Promise<{ url: string; local: boolean }> };
 
-async function open(doc: Y.Doc, left = 0, extra: { loader?: Loader; size?: () => Promise<{ width: number; height: number } | null> } = {}) {
+type Steps = NonNullable<Parameters<typeof Annotator>[0]['onUndoSteps']>;
+
+async function open(doc: Y.Doc, left = 0, extra: { loader?: Loader; size?: () => Promise<{ width: number; height: number } | null>; onUndoSteps?: Steps } = {}) {
   const onClose = vi.fn();
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
   roots.push(root);
   await act(async () => {
-    root.render(<Annotator doc={doc} fileId={ID} name="IMG_0423.jpg" item={ITEM} loader={extra.loader ?? loader} size={extra.size} onClose={onClose} />);
+    root.render(<Annotator doc={doc} fileId={ID} name="IMG_0423.jpg" item={ITEM} loader={extra.loader ?? loader} size={extra.size} onClose={onClose} onUndoSteps={extra.onUndoSteps} />);
   });
   await act(async () => new Promise((r) => setTimeout(r, 10)));
   // El anotador va al `body` (como el carrete): el último es el que se acaba de abrir.
@@ -284,6 +287,76 @@ describe('el anotador', () => {
     });
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(shapes(doc).length).toBe(1);
+  });
+
+  describe('al cerrarse, lo de esta vez pasa a la línea de tiempo de la página (Doc_Deshacer.md, entrega 3)', () => {
+    it('una sola vez, con todos los pasos (también un texto a medio escribir); deshacerlos todos lo saca entero', async () => {
+      const doc = new Y.Doc();
+      const got: { steps: number; map: Y.Map<unknown> }[] = [];
+      let steps: Y.UndoManager['undoStack'] = [];
+      const { el, stage } = await open(doc, 0, {
+        size: async () => ({ width: FRAME.w, height: FRAME.h }),
+        onUndoSteps: (s, m) => {
+          steps = s;
+          got.push({ steps: s.length, map: m });
+        },
+      });
+      key('e');
+      drag(stage, [100, 100], [200, 200]);
+      key('r');
+      drag(stage, [300, 300], [400, 400]);
+      key('t');
+      pointer(stage, 'pointerdown', 50, 50);
+      const area = el.querySelector<HTMLTextAreaElement>('.annotator-text')!;
+      area.value = 'Plano 12';
+      act(() => area.dispatchEvent(new Event('input', { bubbles: true })));
+      expect(got).toEqual([]);
+      for (const r of roots.splice(0)) act(() => r.unmount());
+      expect(got).toHaveLength(1);
+      expect(got[0].steps).toBe(3);
+      expect(got[0].map).toBe(map(doc));
+      expect(shapes(doc)).toHaveLength(3);
+      const um = markupManager(map(doc));
+      um.undoStack = [...steps];
+      while (um.undoStack.length) popMarkupStep(um, 'undo');
+      expect(shapes(doc)).toEqual([]);
+      // El marco de la foto queda (deshacer nunca lo borra; un marco solo no se dibuja).
+      expect([...map(doc).keys()]).toEqual([ID]);
+    });
+
+    it('⌘Z en el anotador no se lleva una forma tuya que otra persona movió (queda entera, con su cambio)', async () => {
+      const doc = new Y.Doc();
+      writeFrame(doc, ID, FRAME.w, FRAME.h);
+      const remote = new Y.Doc();
+      Y.applyUpdate(remote, Y.encodeStateAsUpdate(doc));
+      connect(doc, remote, 'sync', { repair: false });
+      const { stage } = await open(doc);
+      key('e');
+      drag(stage, [100, 100], [200, 200]);
+      const [mine] = shapes(doc);
+      expect(mine.type).toBe('ellipse');
+      act(() => (remote.getMap<unknown>(PHOTO_MARKUP_MAP).get(`${ID}/${mine.id}`) as Y.Map<unknown>).set('posX', 1234));
+      key('z', { ctrlKey: true });
+      const [still] = shapes(doc);
+      expect(still).toMatchObject({ id: mine.id, type: 'ellipse', posX: 1234 });
+      expect(shapes(remote)).toEqual(shapes(doc));
+    });
+
+    it('sin escribir nada no avisa; si se deshizo todo adentro, avisa sin pasos (es algo nuevo igual)', async () => {
+      const doc = new Y.Doc();
+      writeFrame(doc, ID, FRAME.w, FRAME.h);
+      const calls: number[] = [];
+      await open(doc, 0, { onUndoSteps: (s) => void calls.push(s.length) });
+      for (const r of roots.splice(0)) act(() => r.unmount());
+      expect(calls).toEqual([]);
+      const second = await open(doc, 0, { onUndoSteps: (s) => void calls.push(s.length) });
+      key('e');
+      drag(second.stage, [100, 100], [200, 200]);
+      key('z', { ctrlKey: true });
+      expect(shapes(doc)).toEqual([]);
+      for (const r of roots.splice(0)) act(() => r.unmount());
+      expect(calls).toEqual([0]);
+    });
   });
 
   describe('el marco de la primera anotación (auditoría B1)', () => {

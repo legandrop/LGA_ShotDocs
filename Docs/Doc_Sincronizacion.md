@@ -549,6 +549,41 @@ arma). Siguen apagados en la base hasta la entrega 3.
   el último que llega al servidor. Son preferencias de vista, no contenido, y se vuelven a elegir en un
   toque.
 
+### Topes de largo
+
+La base tiene `check` de largo (`length()`, en caracteres de Postgres: **puntos de código**, no unidades UTF-16 de JS;
+un emoji son dos unidades y un carácter). Un cambio que pasa uno lo rechaza para siempre y el *Retry* vuelve a fallar:
+pasó con un título pegado de más de 500 caracteres. Los topes están en `src/lib/dbLimits.ts` y el servidor falso de
+las pruebas aplica los mismos `check` con el mismo error (`src/sync/lengthChecks.ts`).
+
+- **Título (500).** Todo lo que escribe un título pasa por el árbol (`PageTree.enqueue` → `fitOp`): lo corta en 500
+  caracteres sin partir un grafema (`cutText`) y, si el corte cae en una palabra, en el espacio anterior (hasta 60
+  caracteres atrás). **Lo que sobra no se pierde:** se anota en `meta.titleRests` en la misma transacción que el
+  cambio, y `src/sync/titleRest.ts` lo escribe al principio de la página, un párrafo por renglón, como una edición
+  local (se guarda y se sube; no entra en el ⌘Z del editor abierto). Lo anotado se olvida recién cuando la página
+  quedó guardada en el dispositivo; el primer párrafo lleva el id de lo anotado, así que un corte en el medio no lo
+  repite. Aviso: *The title was longer than 500 characters: the rest is now the first paragraph of “…”*.
+- **En el título de la página**, pegar, soltar o dictar más de la cuenta deja el título en el tope y manda lo que sobra
+  a la página (con sus renglones); teclear pasado el tope no entra y avisa *A title can be up to 500 characters.*
+- **La cola.** Al abrir, los cambios sin subir que dejó una versión anterior con un título largo se cortan y lo que
+  sobra se anota (son lo último que hizo la persona). Los **rechazados por el largo** (solo por `pages_title_check` o
+  `workspaces_name_length`: un rechazo por permisos no se toca) se arreglan con el árbol del servidor a la vista, en
+  `setSnapshot` (`repairRejected`): si el título no cambió después del rechazo, el cambio vuelve a la cola en su lugar,
+  cortado; si cambió (el `updated_at` del servidor es posterior al rechazo, o hay un renombre posterior en este
+  dispositivo), **el título más nuevo queda** y el texto largo va entero a la página. En la duda gana el título de ahora:
+  nada se pisa ni se pierde. *Retry* no los manda de nuevo (perderían el momento del rechazo) y *Hide* no los descarta.
+- **Nombre de proyecto (200).** Los campos ya tenían el tope; el árbol lo corta igual (sin aviso: no se llega).
+- **Clave de orden (128).** La clave entre dos vecinas se alarga cada vez que se pone algo en el mismo hueco (unas 600
+  veces para pasar los 128). Antes de pasarlo, las hermanas reciben claves nuevas y parejas en el mismo orden
+  (un cambio por hermana). Si otro dispositivo movió una de esas hermanas a la vez, gana el último cambio que llega
+  (roadmap B.23).
+- **Una página nueva con título largo** (asistente, reporte del día, copia propia): su contenido lo escribe
+  `writeNewPage`, que no escribe en una página con algo. Lo que sobró del título no cuenta (`onlyTitleRests`, por el
+  prefijo `titlerest-` de esos párrafos): si llega antes, el contenido va después de él.
+- Un archivo de Shot Docs importado ya no corta el título en 500 (`shotdocsImport.ts`): lo corta el árbol y lo que
+  sobra queda en la página. Los demás cortes de texto que van a la base (autor y cuerpo de un comentario importado,
+  rótulo de una mención) usan `cutText` para no dejar medio emoji.
+
 ## Preferencias de la cuenta
 
 Tema, fuente, tamaño del texto y ancho de página se aplican al instante y se guardan en el dispositivo

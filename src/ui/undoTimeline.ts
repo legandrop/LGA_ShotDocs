@@ -28,6 +28,12 @@ import { CONTENT_FRAGMENT } from '../sync/structure';
 // está en pantalla, o uno de un momento con las mismas opciones), así deshacerlo vuelve a poner las mismas letras y lo
 // escrito antes sale exacto. En las demás, quien reemplaza usa las anclas de su registro. El orden lo da `seq` de la
 // entrada; sus pasos en las pilas quedan marcados (`tagged`) y no cuentan como pasos de página.
+//
+// **Anotar una foto** (entrega 3, 3.1 y caso «Anotar» de la sección 5): con el anotador abierto, su ⌘Z es de esa foto
+// (su propio `UndoManager` sobre el mapa de anotaciones). Al cerrarlo, todo lo de esa vez entra como UNA entrada de la
+// página (`MarkupEntry`): los pasos del anotador, que se deshacen (o rehacen) todos juntos con un `UndoManager` de un
+// momento sobre el mapa, uno por uno, como si se apretara ⌘Z en el anotador hasta vaciarlo. Lo de otra persona en la
+// misma foto no se lleva (origen propio de la foto, y `protectMarkupOthers`).
 
 type StackItem = Y.UndoManager['undoStack'][number];
 type UndoManager = Y.UndoManager;
@@ -65,6 +71,8 @@ export interface AttachInfo {
   reveal?: (before: unknown, opts: { moveCursor: boolean }) => void;
   /** El documento de ProseMirror ahora (para `reveal`). */
   snapshot?: () => unknown;
+  /** Trae a la vista la foto de ese archivo (deshacer lo anotado); `false` si ya no está en la página. */
+  showPhoto?: (fileId: string) => boolean;
 }
 
 interface PageHistory {
@@ -99,6 +107,7 @@ export type LostReason = 'reloaded' | 'limit';
 export type NextStep =
   | { kind: 'page'; pageId: string }
   | { kind: 'replace'; opId: string }
+  | { kind: 'markup'; id: string; pageId: string; fileId: string }
   | { kind: 'lost'; pageId: string; reason: LostReason }
   | null;
 
@@ -117,6 +126,20 @@ interface ReplaceEntry {
   saved: unknown;
   /** Cuántas veces hubo algo nuevo cuando empezó a deshacerse (`markReplace`). */
   mark: number;
+}
+
+/** Lo de una vez en el anotador de una foto (entrega 3): un paso de la página. */
+interface MarkupEntry {
+  id: string;
+  pageId: string;
+  fileId: string;
+  project: string | null;
+  /** El mapa de las anotaciones del documento de la página (el mismo `Y.Doc` que retiene la página). */
+  map: Y.Map<unknown>;
+  where: StepKind;
+  seq: number;
+  /** Los pasos del anotador (los de abajo primero) en la lista de `where`. */
+  items: StackItem[];
 }
 
 /** Cómo quedó deshacer o rehacer el paso de un reemplazo en una página; `none`: no tiene paso ahí (van las anclas). */
@@ -160,6 +183,9 @@ export class UndoTimeline {
   private counter = 0;
   private lost: LostMark[] = [];
   private readonly replaces = new Map<string, ReplaceEntry>();
+  /** Lo anotado en las fotos, una entrada por cada vez que se cerró el anotador (entrega 3). */
+  private readonly markups = new Map<string, MarkupEntry>();
+  private markupCount = 0;
   /** Cuántas veces hubo algo nuevo (escribir, reemplazar) en esta pestaña: lo que borra lo de rehacer. */
   private newEdits = 0;
   /** El filtro de borrado del `UndoManager` de y-prosemirror, del primer editor que se anotó (para `tempManager`). */
@@ -321,6 +347,12 @@ export class UndoTimeline {
       bestSeq = entry.seq;
       best = { kind: 'replace', opId: entry.opId };
     }
+    for (const entry of this.markups.values()) {
+      if (entry.where !== kind || entry.seq <= bestSeq) continue;
+      if ((this.options.projectOf(entry.pageId) ?? entry.project) !== project) continue;
+      bestSeq = entry.seq;
+      best = { kind: 'markup', id: entry.id, pageId: entry.pageId, fileId: entry.fileId };
+    }
     if (kind === 'undo') {
       for (const mark of this.lost) {
         const markProject = mark.reason === 'limit' ? mark.project : (this.options.projectOf(mark.pageId) ?? mark.project);
@@ -396,6 +428,7 @@ export class UndoTimeline {
     const h = this.pages.get(pageId);
     if (!h) return;
     this.forgetReplaceItems(pageId);
+    this.discardMarkups(pageId);
     if (h.um) {
       h.um.undoStack.length = 0;
       h.um.redoStack.length = 0;
@@ -408,6 +441,7 @@ export class UndoTimeline {
     if (this.disposed) return;
     for (const h of [...this.pages.values()]) this.drop(h, false);
     this.replaces.clear();
+    this.markups.clear();
     this.lost = [];
     this.offUnsupported();
     this.disposed = true;
@@ -624,6 +658,91 @@ export class UndoTimeline {
     return this.replaces.get(opId)?.where ?? null;
   }
 
+  // --- Anotar una foto (entrega 3; Doc_Deshacer.md, 3.1 y sección 19) -----------------------------------------
+  //
+  // El anotador (Annotator.tsx) avisa al cerrarse con lo que quedó en su pila: eso es UN paso de la página, en el orden
+  // del proyecto. ⌘Z lo deshace entero (con la página en pantalla) y ⌘⇧Z lo rehace.
+
+  /**
+   * Se cerró el anotador de `fileId` en `pageId`, que escribió algo, con estos pasos (los de abajo primero): entran como
+   * un paso de la página. Escribir en el anotador es algo nuevo aunque después se haya deshecho todo adentro (`items`
+   * vacío): lo que había para rehacer en el proyecto se borra (también en esta página). Si no, rehacer una anotación
+   * vieja podía no volver a poner el marco de la foto: Yjs no rehace una clave del mapa que se volvió a escribir después
+   * (aunque esté borrada) si no fue por la misma pila, y las formas quedaban sin marco. Devuelve el id de la entrada, o
+   * `null` si no entró (nada que deshacer, o el documento ya no es el de la página).
+   */
+  pushMarkup(pageId: string, map: Y.Map<unknown>, fileId: string, items: StackItem[]): string | null {
+    if (this.disposed || !map.doc) return null;
+    if (items.length === 0) {
+      this.clearRedoExcept(null, this.pages.get(pageId) ? this.projectOfHistory(this.pages.get(pageId)!) : this.options.projectOf(pageId));
+      return null;
+    }
+    const doc = map.doc;
+    let h = this.pages.get(pageId);
+    // El documento de la página se rearmó mientras se anotaba: estos pasos ya no son de su documento.
+    if (h && h.doc !== doc) return null;
+    if (!h) {
+      h = { pageId, project: this.options.projectOf(pageId), doc, retained: false, um: null, info: null, undo: [], redo: [], offs: [] };
+      this.pages.set(pageId, h);
+    }
+    const id = `markup-${++this.markupCount}`;
+    this.markups.set(id, { id, pageId, fileId, project: h.project, map, where: 'undo', seq: ++this.counter, items: [...items] });
+    // Algo nuevo: lo de rehacer se va en todas las páginas del proyecto, también en esta (no lo borró ninguna pila).
+    this.clearRedoExcept(null, this.projectOfHistory(h));
+    this.retain(h);
+    this.enforceLimits();
+    return this.markups.has(id) ? id : null;
+  }
+
+  /**
+   * Deshace (o rehace) TODO lo de esa vez en el anotador. La página tiene que estar en pantalla y editable (como `step`).
+   * Con un `UndoManager` de un momento sobre el mapa, paso por paso hasta vaciar la lista (lo mismo que ⌘Z en el
+   * anotador hasta el principio); lo contrario queda para rehacer (o deshacer otra vez). Si ya no cambia nada (otra
+   * persona borró justo eso) o Yjs tira un error (B.22), la entrada sale.
+   */
+  stepMarkup(id: string, kind: StepKind): StepResult {
+    const entry = this.markups.get(id);
+    if (!entry || entry.where !== kind) return 'empty';
+    const h = this.pages.get(entry.pageId);
+    if (!h?.um) return 'notMounted';
+    if (h.info?.editable?.() === false) return 'readOnly';
+    if (entry.map.doc !== h.doc) {
+      this.discardMarkup(entry);
+      return 'nothing';
+    }
+    const um = markupManager(entry.map);
+    if (kind === 'undo') um.undoStack = [...entry.items];
+    else um.redoStack = [...entry.items];
+    let changed = false;
+    let failed = false;
+    try {
+      const left = () => (kind === 'undo' ? um.undoStack : um.redoStack).length;
+      for (let guard = 0; left() > 0 && guard < 100_000; guard++) {
+        if (popMarkupStep(um, kind)) changed = true;
+      }
+    } catch (err) {
+      console.warn('Deshacer: Yjs no pudo deshacer lo anotado en una foto; se descarta.', err);
+      failed = true;
+    }
+    const inverse = [...(kind === 'undo' ? um.redoStack : um.undoStack)];
+    um.undoStack = [];
+    um.redoStack = [];
+    um.destroy();
+    if (failed || !changed || inverse.length === 0) {
+      this.discardMarkup(entry);
+      return failed ? 'failed' : 'nothing';
+    }
+    entry.items = inverse;
+    entry.where = kind === 'undo' ? 'redo' : 'undo';
+    entry.seq = ++this.counter;
+    return 'done';
+  }
+
+  /** En qué lista está lo anotado (para las pruebas), o `null` si ya no está en la línea de tiempo. */
+  markupState(id: string): StepKind | null {
+    return this.markups.get(id)?.where ?? null;
+  }
+
   // --- Por dentro ---------------------------------------------------------------------------------------------
 
   /** Pone el reemplazo arriba de una lista (el más nuevo); sus pasos en las pilas toman su número. */
@@ -652,6 +771,30 @@ export class UndoTimeline {
     entry.items.clear();
   }
 
+  private discardMarkup(entry: MarkupEntry): void {
+    if (this.markups.get(entry.id) !== entry) return;
+    this.markups.delete(entry.id);
+    entry.items = [];
+    const h = this.pages.get(entry.pageId);
+    if (h && !h.um && this.size(h) === 0) this.drop(h, false);
+  }
+
+  /** Saca lo anotado de una página (sin soltarla: quien llama decide). */
+  private discardMarkups(pageId: string): void {
+    for (const entry of [...this.markups.values()]) {
+      if (entry.pageId !== pageId) continue;
+      this.markups.delete(entry.id);
+      entry.items = [];
+    }
+  }
+
+  /** Lo anotado de una página (de una lista, o de las dos). */
+  private markupsOf(pageId: string, kind?: StepKind): MarkupEntry[] {
+    const out: MarkupEntry[] = [];
+    for (const entry of this.markups.values()) if (entry.pageId === pageId && (!kind || entry.where === kind)) out.push(entry);
+    return out;
+  }
+
   /** La página ya no está en la línea de tiempo (o se olvidaron sus pasos): los reemplazos van por las anclas ahí. */
   private forgetReplaceItems(pageId: string): void {
     for (const entry of this.replaces.values()) {
@@ -671,8 +814,9 @@ export class UndoTimeline {
     return kind === 'undo' ? h.undo : h.redo;
   }
 
+  /** Pasos de una página: los de sus pilas y lo anotado en sus fotos (que también la retiene). */
   private size(h: PageHistory): number {
-    return this.stack(h, 'undo').length + this.stack(h, 'redo').length;
+    return this.stack(h, 'undo').length + this.stack(h, 'redo').length + this.markupsOf(h.pageId).length;
   }
 
   /** Un paso nuevo (o extendido) en la pila de una página montada. */
@@ -692,6 +836,10 @@ export class UndoTimeline {
     this.newEdits++;
     // Los reemplazos para rehacer también (sus pasos en las pilas se van con ellas).
     for (const entry of [...this.replaces.values()]) if (entry.where === 'redo' && entry.project === project) this.discard(entry);
+    // Lo anotado para rehacer, también.
+    for (const entry of [...this.markups.values()]) {
+      if (entry.where === 'redo' && (this.options.projectOf(entry.pageId) ?? entry.project) === project) this.discardMarkup(entry);
+    }
     for (const other of [...this.pages.values()]) {
       if (other === h || this.projectOfHistory(other) !== project) continue;
       if (other.um) other.um.redoStack.length = 0;
@@ -754,8 +902,11 @@ export class UndoTimeline {
     this.pages.delete(h.pageId);
     // Los reemplazos que tenían un paso acá siguen; en esta página van por las anclas.
     this.forgetReplaceItems(h.pageId);
+    // Lo anotado sale con la página (sin su documento no se puede deshacer).
+    const markupSeqs = this.markupsOf(h.pageId, 'undo').map((m) => m.seq);
+    this.discardMarkups(h.pageId);
     if (lost) {
-      const seq = Math.max(-1, ...this.stack(h, 'undo').map((i) => this.order.get(i) ?? 0));
+      const seq = Math.max(-1, ...this.stack(h, 'undo').map((i) => this.order.get(i) ?? 0), ...markupSeqs);
       if (seq >= 0) {
         this.lost = this.lost.filter((m) => !(m.reason === 'reloaded' && m.pageId === h.pageId)).slice(-(MAX_LOST - 1));
         this.lost.push({ pageId: h.pageId, project: this.projectOfHistory(h), seq, reason: 'reloaded' });
@@ -806,6 +957,20 @@ export class UndoTimeline {
           oldestEntry = entry;
         }
       }
+      let oldestMarkup: MarkupEntry | null = null;
+      for (const entry of this.markups.values()) {
+        if (entry.seq < oldestSeq) {
+          oldestSeq = entry.seq;
+          oldest = null;
+          oldestEntry = null;
+          oldestMarkup = entry;
+        }
+      }
+      if (oldestMarkup) {
+        if (oldestMarkup.where === 'undo') this.markLimitIn(this.options.projectOf(oldestMarkup.pageId) ?? oldestMarkup.project, oldestMarkup.seq);
+        this.discardMarkup(oldestMarkup);
+        continue;
+      }
       if (oldestEntry) {
         // Un reemplazo a medio escribir no se olvida (se cuenta al terminar).
         if (oldestEntry.where === 'pending') break;
@@ -822,11 +987,15 @@ export class UndoTimeline {
     let extra = withSteps.length - this.maxPages;
     if (extra <= 0) return;
     // Las páginas cuyo paso más nuevo es el más viejo; nunca la que está en pantalla.
-    const newest = (h: PageHistory) => Math.max(0, ...[...this.stack(h, 'undo'), ...this.stack(h, 'redo')].map((i) => this.order.get(i) ?? 0));
+    const seqs = (h: PageHistory, kinds: StepKind[]) => [
+      ...kinds.flatMap((kind) => this.stack(h, kind).map((i) => this.order.get(i) ?? 0)),
+      ...this.markupsOf(h.pageId).filter((m) => kinds.includes(m.where)).map((m) => m.seq),
+    ];
+    const newest = (h: PageHistory) => Math.max(0, ...seqs(h, ['undo', 'redo']));
     const candidates = withSteps.filter((h) => !h.um).sort((a, b) => newest(a) - newest(b));
     for (const h of candidates) {
       if (extra <= 0) break;
-      const seq = Math.max(-1, ...this.stack(h, 'undo').map((i) => this.order.get(i) ?? 0));
+      const seq = Math.max(-1, ...seqs(h, ['undo']));
       if (seq >= 0) this.markLimit(h, seq);
       this.drop(h, false);
       extra--;
@@ -887,6 +1056,95 @@ export function tempManager(doc: Y.Doc, deleteFilter: UndoManager['deleteFilter'
     captureTransaction: (tr) => tr.meta.get('addToHistory') !== false,
   });
   protectOthers(um);
+  return um;
+}
+
+// --- Anotaciones: nunca llevarse lo de otro (entrega 3) ---------------------------------------------------------------
+//
+// El mapa de las anotaciones (media/markup.ts) tiene una clave por forma (`<fileId>/<shapeId>`, un `Y.Map` con un campo
+// por propiedad) y una por el marco de la foto (`<fileId>`, `{ v, w, h }`). Deshacer sigue solo el origen de la foto
+// (lo de otro no está en sus pasos), y Yjs no vuelve a poner un campo que otro cambió después. Lo que faltaba: borrar
+// algo tuyo que tiene adentro lo de otro. Al deshacer la forma que creaste, si otra persona la movió o le cambió el
+// color, Yjs borraba la forma entera con su cambio; y al deshacer la primera anotación de una foto, el marco (que
+// escribiste vos) se iba aunque otra persona hubiera dibujado con él, y sus formas quedaban sin marco. Ahora:
+//   - una forma con un campo vivo de otro autor no se borra, ni sus campos si la forma se creó en ese mismo paso (si
+//     no, quedaría una forma a medias); tus cambios a una forma que ya existía se deshacen igual;
+//   - el marco de una foto no se borra nunca al deshacer: puede haber formas del otro que todavía no llegaron (sin red),
+//     y sin él no se ven. Un marco solo no se dibuja.
+// Para saber qué creó el paso, se deshace de a un paso por vez (`popMarkupStep`), con el paso a mano.
+
+interface MapItemLike {
+  id: { client: number; clock: number };
+  deleted: boolean;
+  parentSub: string | null;
+  parent: unknown;
+  content: { type?: { _map?: Map<string, MapItemLike> } };
+}
+
+/** El paso que está deshaciendo (o rehaciendo) cada `UndoManager` de anotaciones. */
+const markupStepOf = new WeakMap<UndoManager, StackItem>();
+
+/** Si en el `Y.Map` de `item` hay algún campo vivo de un autor que no es el de `item`. */
+function mapHasOthers(item: MapItemLike): boolean {
+  const fields = item.content?.type?._map;
+  if (!fields) return false;
+  for (const field of fields.values()) if (!field.deleted && field.id.client !== item.id.client) return true;
+  return false;
+}
+
+/** Envuelve el filtro de borrado de un `UndoManager` sobre el mapa de anotaciones `map` (ver arriba). Una vez. */
+export function protectMarkupOthers(um: UndoManager, map: Y.Map<unknown>): void {
+  if (protectedManagers.has(um)) return;
+  protectedManagers.add(um);
+  const previous = um.deleteFilter;
+  um.deleteFilter = (raw) => {
+    if (!previous(raw)) return false;
+    const item = raw as unknown as MapItemLike;
+    if (item.parent === map && item.parentSub !== null) {
+      if (item.parentSub.includes('/')) return !mapHasOthers(item);
+      // El marco de una foto: deshacer nunca lo borra (auditoría de la entrega 3, B1). Mirar si quedan formas no alcanza:
+      // otra persona puede estar dibujando con ese marco sin red (o lo suyo todavía no llegó), y al llegar sus formas
+      // quedarían sin marco, sin verse. Un marco sin formas no se dibuja (`readPhotoMarkup` pide al menos una) y la
+      // poda lo saca con la foto.
+      return false;
+    }
+    // Un campo de una forma que este mismo paso creó y que queda por lo del otro: queda también.
+    const owner = item.parentSub !== null ? (item.parent as { _item?: MapItemLike | null } | null)?._item : null;
+    if (!owner || owner.deleted || owner.parent !== map || !mapHasOthers(owner)) return true;
+    const step = markupStepOf.get(um);
+    return !(step && Y.isDeleted(step.insertions, owner.id as Y.ID));
+  };
+}
+
+/**
+ * Deshace (o rehace) el paso de arriba de un `UndoManager` de anotaciones, de a uno (así el filtro sabe qué creó ese
+ * paso); si no cambia nada, sigue con el anterior, como Yjs. Devuelve el paso, o `null` si no cambió nada.
+ */
+export function popMarkupStep(um: UndoManager, kind: StepKind): StackItem | null {
+  for (let guard = 0; guard < 100_000; guard++) {
+    const stack = kind === 'undo' ? um.undoStack : um.redoStack;
+    if (stack.length === 0) return null;
+    const below = stack.splice(0, stack.length - 1);
+    markupStepOf.set(um, stack[0]);
+    let result: StackItem | null = null;
+    try {
+      result = kind === 'undo' ? um.undo() : um.redo();
+    } finally {
+      markupStepOf.delete(um);
+      (kind === 'undo' ? um.undoStack : um.redoStack).unshift(...below);
+    }
+    if (result) return result;
+  }
+  return null;
+}
+
+/**
+ * Un `UndoManager` de un momento sobre el mapa de anotaciones, con las mismas opciones que el del anotador (sin juntar
+ * pasos, el filtro de siempre) y lo ajeno protegido.
+ */
+export function markupManager(map: Y.Map<unknown>): UndoManager {
+  const um = new Y.UndoManager(map, { trackedOrigins: new Set(), captureTimeout: 0 });
+  protectMarkupOthers(um, map);
   return um;
 }
 

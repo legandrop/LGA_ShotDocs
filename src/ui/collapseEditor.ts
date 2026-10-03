@@ -1830,5 +1830,3 @@ export function isSelectAllKey(event: KeyboardEvent, mac = IS_MAC): boolean {
   return modPressed(event, mac) && !event.altKey && !event.shiftKey && isLetter(event, 'a');
 }
 
-/** El atajo, como se ve en los tooltips (del registro de atajos). */
-export const COLLAPSE_SHORTCUT_LABEL = shortcutLabel('collapse');

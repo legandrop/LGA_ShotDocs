@@ -199,6 +199,7 @@ export function ShareDialog({ target, onClose }: { target: ShareTarget; onClose:
               type="email"
               required
               list="share-members"
+              maxLength={320}
               placeholder={perms.canInvite ? tr('share.emailOrMember') : tr('share.emailListed')}
               aria-label={tr('team.email')}
               value={email}

@@ -8,6 +8,8 @@ import { TemplateBanner } from '../templates/ownTemplatesUi';
 import { disarmTitleUndo, titleUndoFor } from '../templates/templatesUi';
 import { clearCommentsTarget, closeComments, useCommentsUi } from './commentsUi';
 import { isLetter, modPressed } from './findUi';
+import { codePointLength, DB_LIMITS, splitTitle } from '../lib/dbLimits';
+import { notify } from './notice';
 import { PageBarrier } from './ErrorBarrier';
 import { CollapseIcon, HeaderIcon } from './icons';
 import { lazyPart, Part } from './lazyPart';
@@ -138,6 +140,8 @@ function TitleInput({ id, title, readOnly }: { id: string; title: string; readOn
   const focused = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ref = useRef<HTMLTextAreaElement>(null);
+  /** Lo que viene llegó pegado o soltado (no tecleado): si pasa el tope, lo que sobra va a la página. */
+  const bulk = useRef(false);
 
   // Si el título cambia desde otro lado (otro dispositivo, la barra lateral), se muestra salvo que se
   // esté escribiendo acá.
@@ -220,11 +224,37 @@ function TitleInput({ id, title, readOnly }: { id: string; title: string; readOn
         disarmTitleUndo(id);
         if (!readOnly) commit(value);
       }}
+      onPaste={() => (bulk.current = true)}
+      onDrop={() => (bulk.current = true)}
       onChange={(e) => {
         disarmTitleUndo(id);
-        setValue(e.target.value);
-        if (timer.current) clearTimeout(timer.current);
         const next = e.target.value;
+        const pasted = bulk.current;
+        bulk.current = false;
+        // El tope de la base (500 caracteres, `pages_title_check`): sin él, el cambio quedaba rechazado para siempre.
+        if (codePointLength(next) > DB_LIMITS.pageTitle) {
+          const native = e.nativeEvent as Partial<InputEvent>;
+          const typed =
+            !pasted &&
+            typeof native.inputType === 'string' &&
+            /^insert(Text|CompositionText)$/.test(native.inputType) &&
+            codePointLength(native.data ?? '') <= 4;
+          if (typed) {
+            // Tecleado: no entra (el campo vuelve a lo que tenía) y se avisa.
+            notify(tr('page.titleTooLong', { max: DB_LIMITS.pageTitle }));
+            return;
+          }
+          // Pegado, soltado o dictado: el título queda en el tope y lo que sobra va al principio de la página
+          // (el aviso lo da sync/titleRest.ts al escribirlo).
+          const { head, rest } = splitTitle(next);
+          setValue(head);
+          if (timer.current) clearTimeout(timer.current);
+          timer.current = null;
+          void tree.rename(id, head.replace(/\s+/g, ' ').trim(), { rest });
+          return;
+        }
+        setValue(next);
+        if (timer.current) clearTimeout(timer.current);
         timer.current = setTimeout(() => commit(next), 300);
       }}
       onKeyDown={(e) => {

@@ -15,6 +15,8 @@ export interface NoticeAction {
 interface NoticeDetail {
   message: string;
   action?: NoticeAction;
+  /** Un segundo botón (por ejemplo *Show* junto a *Redo* al deshacer un reemplazo con páginas que habían cambiado). */
+  second?: NoticeAction;
 }
 
 /** Cuánto queda a la vista un aviso; uno con un botón, más (hay que llegar a tocarlo). */
@@ -22,9 +24,10 @@ const NOTICE_MS = 6000;
 const ACTION_NOTICE_MS = 15000;
 
 /** Muestra un aviso corto al usuario (por ejemplo, una imagen que no se puede agregar), con un botón opcional. */
-export function notify(message: string, action?: NoticeAction): void {
+export function notify(message: string, action?: NoticeAction, second?: NoticeAction): void {
   // Sin botón, el texto solo (como siempre: quien escucha el evento lee el texto).
-  window.dispatchEvent(new CustomEvent<NoticeDetail | string>(EVENT, { detail: action ? { message, action } : message }));
+  const detail: NoticeDetail | string = action || second ? { message, action: action ?? second, second: action ? second : undefined } : message;
+  window.dispatchEvent(new CustomEvent<NoticeDetail | string>(EVENT, { detail }));
 }
 
 /** Quita el aviso con el botón de esa `key`, si es el que está a la vista. */
@@ -32,8 +35,8 @@ export function dismissNotice(key: string): void {
   window.dispatchEvent(new CustomEvent<string>(DISMISS_EVENT, { detail: key }));
 }
 
-/** El aviso a la vista: el texto, su botón (si tiene) y cerrarlo. */
-export function useNotice(): [string | null, () => void, NoticeAction | undefined] {
+/** El aviso a la vista: el texto, cerrarlo, su botón (si tiene) y el segundo. */
+export function useNotice(): [string | null, () => void, NoticeAction | undefined, NoticeAction | undefined] {
   const [notice, setNotice] = useState<NoticeDetail | null>(null);
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -56,5 +59,5 @@ export function useNotice(): [string | null, () => void, NoticeAction | undefine
       clearTimeout(timer);
     };
   }, []);
-  return [notice?.message ?? null, () => setNotice(null), notice?.action];
+  return [notice?.message ?? null, () => setNotice(null), notice?.action, notice?.second];
 }

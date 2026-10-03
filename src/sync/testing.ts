@@ -58,6 +58,7 @@ import { MentionsInbox, type InboxResponse, type MentionCandidate, type Mentions
 import { CLEAN_SCHEMA_VERSION } from './clean';
 import { normalizeStructure, seedIfEmpty } from './structure';
 import { PageTree } from './tree';
+import { checkPageLengths, checkProjectName } from './lengthChecks';
 import {
   RemoteError,
   type DueFileRow,
@@ -1685,6 +1686,7 @@ export class FakeRemote
     // La política de la versión mira la fila propuesta aunque el proyecto ya exista (`upsert` sin pisar).
     this.checkWriteVersion();
     if (this.server.projects.has(project.id)) return;
+    checkProjectName(project.name);
     const role = this.server.role(this.userId);
     if (this.server.rejectProjects || (this.team && role !== 'owner' && role !== 'admin')) {
       throw new RemoteError('new row violates row-level security policy for table "workspaces"', true, '42501');
@@ -1699,6 +1701,7 @@ export class FakeRemote
       throw new RemoteError('project_not_found', true, 'P0002');
     }
     this.checkWriteVersion();
+    checkProjectName(name);
     this.server.projects.set(id, { ...project, name });
   }
 
@@ -1707,6 +1710,7 @@ export class FakeRemote
     // Como en los proyectos: la versión se mira aunque la página ya exista.
     this.checkWriteVersion();
     if (this.server.pages.has(page.id)) return;
+    checkPageLengths(page);
     if (this.server.rejectCreates) {
       throw new RemoteError('new row violates row-level security policy for table "pages"', true, '42501');
     }
@@ -1759,6 +1763,7 @@ export class FakeRemote
     }
     // La política de la versión mira la fila nueva, después de los triggers (como en la base).
     this.checkWriteVersion();
+    checkPageLengths({ ...page, ...patch });
     this.server.pages.set(id, { ...page, ...patch, updated_at: new Date().toISOString() });
     // `pages_clean_move`: mover a una rama con lectores reinicia la página y su rama.
     if (patch.parent_id !== undefined && patch.parent_id !== page.parent_id && this.server.hasPlainReaders(id)) {

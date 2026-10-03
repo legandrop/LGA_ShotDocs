@@ -42,6 +42,22 @@ export const shell = {
     en: { one: "{count} page", other: "{count} pages" },
     es: { one: "{count} página", other: "{count} páginas" },
   },
+  // Lo anotado en una foto (entrega 3), cuando la foto ya no está en la página.
+  'undo.markupGone': {
+    en: "Undid annotations on a photo that's no longer in “{page}”.",
+    es: "Se deshicieron las anotaciones de una foto que ya no está en “{page}”.",
+  },
+  'undo.markupGoneRedo': {
+    en: "Redid annotations on a photo that's no longer in “{page}”.",
+    es: "Se rehicieron las anotaciones de una foto que ya no está en “{page}”.",
+  },
+  // *Show* en el aviso de ⌘Z de un reemplazo con páginas que habían cambiado (entrega 3, pendiente de 18.4).
+  'undo.showChanged': { en: "Show", es: "Mostrar" },
+  'undo.changedHere': {
+    en: "Changed after the replace, left as it is ({n} of {total})",
+    es: "Cambió después del reemplazo y quedó como estaba ({n} de {total})",
+  },
+  'undo.nextChanged': { en: "Next", es: "Siguiente" },
   'undo.redoAction': { en: "Redo", es: "Rehacer" },
   'undo.undoAction': { en: "Undo", es: "Deshacer" },
   'undo.nothingThere': {

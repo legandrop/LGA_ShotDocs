@@ -1,5 +1,24 @@
 # Changelog — LGA Shot Docs
 
+v0.152 :
+
+**Deshacer en orden, entrega 3: anotar una foto es un paso** (P.26): ⌘Z en la página salteaba lo anotado. Ahora, al
+cerrar el anotador, lo de esa vez entra en la línea de tiempo: ⌘Z lo deshace entero en su orden (si la foto está en
+otra página, te lleva y la muestra) y ⌘⇧Z lo rehace. Lo de otra persona en la misma foto queda, también sin red:
+deshacer no borra una forma tuya que ella cambió ni el marco de la foto. Además: *Show* en el aviso de deshacer un
+reemplazo con lugares cambiados, el foco del panel después de *Undo*, rehacer un pegado con anotaciones después de ir
+y volver (traía la foto sin flechas) y el tooltip del triángulo de colapsar, un renglón por acción con su atajo (D226).
+
+**Título largo.** Un título de más de 500 caracteres (uno pegado) quedaba rechazado por el servidor para siempre
+(`pages_title_check`) y *Retry* volvía a fallar: el título de la página no tenía tope. Ahora todo lo que escribe un
+título pasa por el árbol, que lo corta en 500 caracteres de la base (puntos de código, sin partir un emoji ni una
+palabra) y anota lo que sobra en la misma transacción; eso queda como primer párrafo de la página, con aviso. En el
+título, teclear pasado el tope no entra. Lo rechazado por el largo vuelve a la cola cortado, salvo que el título haya
+cambiado después: entonces queda el nuevo y el texto largo va a la página. Una página nueva con título largo recibe
+igual su contenido. Topes nuevos: nombre de proyecto (200), clave de orden (128) y cortes sin medio emoji en
+comentarios importados y menciones. El servidor falso aplica los mismos `check`.
+[ Deshacer en orden entrega 3 - anotar una foto como un paso de ⌘Z y ⌘⇧Z sin llevarse lo de otra persona, Show en el aviso del reemplazo, rehacer un pegado con anotaciones y el tooltip de colapsar · Título largo - el título se corta en 500 caracteres y lo que sobra va al principio de la página; lo ya rechazado vuelve a la cola cortado ]
+
 v0.151 :
 
 **Link público, entrega 2a: *Can edit*** (P.19). Un link solo podía ver y comentar. Escribir directo en la página no

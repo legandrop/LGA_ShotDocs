@@ -2,6 +2,8 @@ import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { errorMessage, isNetworkError, isPermanent, RemoteError } from './types';
 import { APP_OUTDATED } from './remote';
 import { localize, stored, t } from '../i18n';
+import { cutText } from '../lib/graphemes';
+import { codePointLength } from '../lib/dbLimits';
 
 // Comentarios y preguntas (paso 10 de Docs/Plan_Workspaces.md; Docs/Doc_Sincronizacion.md, "Comentarios y
 // preguntas"). Viven en una tabla propia de la base, anclados al id de un bloque de la página (o a la página
@@ -650,7 +652,8 @@ export class CommentQueue {
         pageId: c.pageId,
         blockId: c.threadId ? null : c.blockId,
         threadId: c.threadId,
-        body: body.length > MAX_COMMENT_LENGTH ? `${body.slice(0, MAX_COMMENT_LENGTH - 1)}…` : body,
+        // Sin partir un emoji: `cutText` cuenta caracteres, como la base.
+        body: codePointLength(body) > MAX_COMMENT_LENGTH ? `${cutText(body, MAX_COMMENT_LENGTH - 1)}…` : body,
         at: c.createdAt,
         resolvedAt: c.threadId ? null : c.resolvedAt,
         source: c.source,
@@ -1449,7 +1452,7 @@ function applyOp(row: CommentRow | undefined, op: CommentOp, userId: string): Co
  */
 export function cleanLabel(label: string): string {
   // eslint-disable-next-line no-control-regex, no-misleading-character-class
-  return label.replace(/[\s\u0000-\u001f\u007f"@\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2069\ufeff]/gu, '').slice(0, 64);
+  return cutText(label.replace(/[\s\u0000-\u001f\u007f"@\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2069\ufeff]/gu, ''), 64);
 }
 
 /** El rótulo que propone la lista para un correo (como `private.mention_label` de la base). */
