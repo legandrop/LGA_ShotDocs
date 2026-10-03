@@ -1516,6 +1516,38 @@ code {
   margin: 0;
 }
 
+/* La barrera de error de la página (ErrorBarrier.tsx): el editor tiró un error; el resto de la app sigue. */
+.banner.page-crash {
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.banner.page-crash p {
+  flex: 1 1 100%;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.page-crash-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+/* Una versión del historial que el editor no puede mostrar. */
+.banner.history-version-crash {
+  margin-top: 8px;
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+/* La barrera de la app: la pantalla con *Reload* en lugar del blanco. */
+.app-crash .card p {
+  line-height: 1.5;
+}
+
 /* El mismo aviso para un diálogo o el carrete, que se abren encima: como diálogo. */
 .part-error-dialog p {
   margin: 0;

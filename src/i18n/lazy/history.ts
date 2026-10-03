@@ -107,6 +107,11 @@ export const history = {
     es: "La página no está abierta para editar en este dispositivo",
   },
   'history.restored': { en: "Restored the version from {date}.", es: "Se restauró la versión del {date}." },
+  // Una versión que el editor no puede mostrar (ui/ErrorBarrier.tsx): las demás se siguen pudiendo elegir.
+  'history.versionCrash': {
+    en: "This version can't be shown. Choose another one in the list.",
+    es: "Esta versión no se puede mostrar. Elegí otra de la lista.",
+  },
   'history.undo': { en: "Undo", es: "Deshacer" },
   'history.undone': { en: "Restore undone.", es: "Se deshizo la restauración." },
   'history.restoreFailed': { en: "Could not restore: {reason}", es: "No se pudo restaurar: {reason}" },

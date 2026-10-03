@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.147 :
+
+**Barrera de error** (B3 del link *Can edit*). Si el editor tiraba una excepción al dibujar una página (una forma que
+nadie previó; la auditoría del link encontró tres: un `Y.Map` en un párrafo y el `level` de un encabezado como objeto
+o `'x y'`), React desmontaba todo y la app quedaba en blanco. Ahora falla solo la página: *This page can't be shown
+right now*, con *Version history* para quien lo ve (restaura sobre el documento, sin abrir el editor) y *Try again*; el
+árbol y el resto siguen. Lo que se escape muestra *Something went wrong* con *Reload* y cuántos cambios faltan subir,
+con la sincronización viva. Nada se reintenta solo ni se borra; el id de la página y el error van a la consola. Ayuda
+actualizada.
+[ Barrera de error - la página que hace tirar al editor muestra un aviso con el historial a mano y la app muestra Reload en vez de blanco ]
+
 v0.146 :
 
 **Asistente, entrega A3: *Suggest caption*** (P.24): el asistente no miraba fotos. Ahora la barra de una foto (en
