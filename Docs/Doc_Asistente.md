@@ -1362,7 +1362,8 @@ migración ni cambios en el esquema del editor.
   the file's location and camera data, never the original. Nothing else from the page is sent.*), el idioma del pie
   (la lista de *Translate to…*, recordado en el dispositivo; de fábrica, el de la app) y *Send photo* / *Cancel*. Nada
   sale antes del sí. *Try again* sobre la misma foto no vuelve a preguntar (ya se dijo que sí a esa foto y a ese
-  proveedor) y manda la misma copia.
+  proveedor) y manda la misma copia; **si la persona cambia de proveedor o de dirección en los ajustes, vuelve a
+  preguntar** (el destino es parte de la clave de la sección; corrección B-1 de la auditoría).
 - **La foto que viaja** (`captionImage.ts`): la imagen nítida de la página que ya existe (`media.view` a 1024 px: la
   guardada, el original del dispositivo o, con red, el original bajado una vez por el portero, como para verla nítida);
   si no hay nada mejor (una foto chica, una HEIC sin convertir), la miniatura; una que no es del Drive, lo que da el
@@ -1424,7 +1425,7 @@ migración ni cambios en el esquema del editor.
   con un proveedor falso: el aviso antes de mandar y que sin el sí no sale nada, lo que se manda sin nada de la página,
   el campo que se retoca y *Apply*, la celda, *Try again* sin volver a preguntar y con la misma copia, la foto borrada
   mientras pensaba, un modelo sin visión, sin Editar y *Off*), 2 en `providers.test.ts` (la foto en los cuatro) y 2 en
-  `mediaBar.test.tsx` (el botón en las dos barras y abrir el panel con esa foto; no en el historial). Suite: 3433.
+  `mediaBar.test.tsx` (el botón en las dos barras y abrir el panel con esa foto; no en el historial). Suite: 3433 (3640 con la unión y las correcciones de la auditoría).
 - **Mutantes:** 16 de 16 mueren (la guarda, el permiso, el deshacer, la celda, la dirección de la foto en línea y de la
   foto-bloque, las direcciones del pie, la foto en Anthropic y Gemini, mandar sin aviso, preparar la foto otra vez en
   *Try again*, *Send* sin permiso, mandar el original, la nítida de 2048, el botón fuera de la página y el mensaje del
@@ -1446,3 +1447,17 @@ migración ni cambios en el esquema del editor.
 - Lega, con sus claves: la prueba de aceptación de A3 (sección 14) con Anthropic, OpenAI y Gemini de verdad (que el
   modelo elegido mire imágenes: los baratos de los tres pueden), una foto del Drive en la compu y una recién sacada con
   el iPhone, y una foto en una celda.
+
+### Correcciones de la auditoría de A3
+
+La auditoría independiente (nivel alto) dio "no aprobado" por un bloqueante. Corregido en una ronda, con sus pruebas:
+
+| Hallazgo | Qué se cambió |
+|---|---|
+| **B-1.** Cambiar de proveedor en los ajustes y tocar *Try again* mandaba la foto al proveedor nuevo sin preguntar (de un modelo local a OpenAI, por ejemplo) | La sección del pie lleva el destino (proveedor y dirección) en su clave: con otro destino vuelve a empezar y pregunta *Send this photo to <el nuevo>?*. Pruebas: de Anthropic a OpenAI desde el error, y de `localhost:11434` a `openrouter.ai` desde la vista previa; el nuevo no recibe nada |
+| O1. `cleanCaption` dejaba pasar caracteres de control, de dirección (U+202E) y de ancho cero | `stripInvisible` saca `\p{Cc}` y `\p{Cf}` (un tabulador pasa a espacio), en la respuesta y en lo que se aplica desde el campo |
+| O2. Cuatro guardas sin prueba | Pruebas de *Apply* que vuelve a mirar el permiso, el botón que no sale en un video, la miniatura sin bajar el original y una dirección en la celda que no queda como link. El de `preventAutolink` es un mutante equivalente: el link automático de BlockNote solo mira la última palabra antes de un espacio final, y el pie se recorta (queda de resguardo) |
+| O3. La política de privacidad decía que el asistente "does not exist yet" | `Legal.tsx`: un renglón *The assistant* con qué se manda (lo elegido o la página, la nota o la grabación del dictado, la foto de 1024 px sin ubicación, con aviso), a quién (directo al proveedor de la persona, nunca a nosotros), dónde queda la clave y que el dueño lo puede apagar; fecha nueva |
+| O4. Sin red se mandaba la miniatura y solo lo decía el tamaño | El panel suma *from the thumbnail (less detail): a sharper copy wasn't available* cuando salió de la miniatura |
+
+Mutantes de la ronda: 8 de 9 mueren (el equivalente de arriba).

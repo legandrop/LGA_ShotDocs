@@ -8,7 +8,8 @@ línea, en una celda o foto-bloque) y el panel suman *Suggest caption*: primero 
 original) y se lo manda con la clave de la persona, sin nada más de la página. La vista previa es un campo que se
 retoca; *Apply* lo agrega como texto común debajo de la foto (en una celda, en un renglón nuevo de la misma celda), un
 solo Ctrl+Z, sin propiedades nuevas en el esquema. Si la foto se borró o se reemplazó mientras pensaba, no aplica.
-Respeta la política del workspace, pide Editar y avisa si el modelo no mira imágenes. Ayuda nueva.
+Cambiar de proveedor en los ajustes vuelve a preguntar. Respeta la política del workspace y pide Editar. La
+política de privacidad ahora dice qué manda el asistente y a quién. Ayuda nueva.
 [ Pie de foto A3 - sugerir el pie mirando la foto, con aviso antes de mandarla, achicada en el dispositivo y aplicado como texto debajo ]
 
 v0.144 :
