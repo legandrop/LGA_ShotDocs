@@ -11,7 +11,16 @@ campo de reemplazar. El globo del borde de la barra lateral quedaba afuera de la
 adentro. Una prueba recorre los tooltips de la app y falla si alguno nombra un gesto o una tecla, o usa negrita, por
 fuera de ese formato.
 
-[ Tooltips con gesto o atajo (D226) - un renglón por acción «gesto o atajo: acción», con los atajos del registro, sin atajos en pantallas táctiles y negrita solo para el gesto o el atajo; el globo siempre adentro de la ventana ]
+**La tabla del reporte en el teléfono (P.28).** En 375 px las tablas de 7 columnas del *On-Set Report* se encogían al
+ancho de la pantalla: 304 px, columnas de 42 px (una palabra por renglón) y miniaturas de 21 px. La causa: BlockNote
+deja el ancho de la tabla en `auto` y el navegador la achica a lo que cabe en su bloque, sin mirar los anchos
+guardados. Ahora, solo en pantalla angosta y solo en la página abierta, ninguna columna con ancho guardado baja de 96
+px y la tabla se desplaza de costado dentro de su bloque sin mover la página; la que entra en la pantalla con columnas
+de 96 px o más no cambia. Al pasar de celda con Tab o las flechas, la celda se acomoda entera a la vista. Es solo
+presentación: nada nuevo en el documento. La compu, la vista de impresión y el PDF miden igual que antes. Ayuda: *Wide
+tables on a phone*. Medido en Chromium (375 y 1280 px): 39 de 39.
+
+[ Tooltips con gesto o atajo (D226) y la tabla del reporte en el teléfono - un renglón por acción «gesto o atajo: acción» con los atajos del registro, negrita solo para el gesto o el atajo y el globo siempre adentro de la ventana; en el teléfono ninguna columna de tabla baja de 96 px y la tabla se desplaza de costado ]
 
 v0.155 :
 

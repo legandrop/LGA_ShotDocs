@@ -639,9 +639,13 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   (chico): copiar a la página del plano solo el lente (otras columnas con su fila en la ficha se suman en `FIELDS` de
   `shotPage.ts`); lo escrito en la página del plano no entra en el ⌘Z de esa página (se deshace con *Undo* de la hoja,
   como el reemplazo del proyecto antes de D10).
-- **P.28 (chico) La tabla del reporte en el teléfono:** en 375 px las tablas de 7 columnas del *On-Set Report* quedan muy
-  angostas (una palabra por renglón); viene de antes de V4 del dictado (lo anotó su auditoría). Para mirar con el
-  desplazamiento de costado de las tablas o un ancho mínimo por columna.
+- **P.28 Hecho (v0.0XX): la tabla del reporte en el teléfono** (`Doc_Tabla_Telefono.md`): en pantalla angosta ninguna
+  columna con ancho guardado baja de 96 px y la tabla se desplaza de costado dentro de su bloque; la celda donde se
+  escribe se acomoda a la vista. La compu y el PDF no cambian. Falta probarlo en un iPhone real (dedo, teclado abierto).
+  Quedan (chicos): el corte de teléfono es de 760 px, así que en un iPad vertical (761 px o más) la tabla del reporte
+  sigue encogida (629 px, columnas de 90; una de 12 columnas, unos 51 px por columna): subir el corte para las tablas si
+  se usa; y lo que headless no prueba (el impulso del dedo, el teclado abierto, un editor remoto moviendo la selección
+  mientras se escribe en una tabla).
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
@@ -938,6 +942,8 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    esos botones. *Comment* y *Assistant*, que son de la app, ya usan los renglones. (b) **Hecho (v0.0XX):** el tooltip
    del borde de la barra lateral salía afuera de la pantalla; ahora todo globo queda adentro (a un costado y a la altura
    del mouse si el control es más alto que media ventana, y corrido si no entra en ningún lado).
+   (c) Falta una prueba de que el anotador en una ventana angosta con mouse conserva los atajos (la decisión es por el
+   tipo de puntero; el mutante `{ touch: true }` sobrevive; re-verificación de D226, N1).
 
 ### C. Esperan a Lega
 

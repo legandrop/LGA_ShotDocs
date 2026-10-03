@@ -122,6 +122,8 @@ const DICTATION_QUEUE = '0.139';
 const DICTATION_VOICE = '0.139';
 /** *Dictate to report*, entrega V4 (el plano activo, las correcciones, la página del plano, el Atajo de iOS): la versión la pone quien publica. */
 const DICTATION_V4 = '0.150';
+/** Las tablas anchas se desplazan de costado en el teléfono (P.28, Doc_Tabla_Telefono.md): la versión la pone quien publica. */
+const TABLE_PHONE = '0.0XX';
 /** Las plantillas de fábrica (Docs/Doc_Plantillas.md, entregas 0 y 1): la versión se ajusta al publicar. */
 const TEMPLATES = '0.117';
 /** Las plantillas propias (Docs/Doc_Plantillas.md, entrega 3): la versión la pone quien publica. */
@@ -241,6 +243,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     keys: { bold: 'bold', italic: 'italic', underline: 'underline', strike: 'strike', code: 'code', link: 'link' },
     more: ['lineBreak'],
     since: BEFORE_HELP,
+  },
+  {
+    id: 'tablePhone',
+    section: 'writing',
+    title: 'help.tablePhone.title',
+    text: 'help.tablePhone.text',
+    words: ['tabla', 'table', 'columna', 'column', 'teléfono', 'phone', 'iphone', 'desplazar', 'scroll', 'costado', 'sideways'],
+    since: TABLE_PHONE,
   },
   {
     id: 'blockTypes',
