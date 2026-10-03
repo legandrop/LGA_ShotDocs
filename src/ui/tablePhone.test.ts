@@ -11,7 +11,7 @@ const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8').repl
 
 /** El bloque `@media (max-width: 760px)` que lleva las reglas de las tablas. */
 function tableBlock(): string {
-  const at = css.indexOf('table:not(:has(:is(td, th):not([colwidth])))');
+  const at = css.indexOf("[data-content-type='table'] :is(td, th)[colwidth]");
   expect(at).toBeGreaterThan(0);
   const start = css.lastIndexOf('@media (max-width: 760px) {', at);
   expect(start).toBeGreaterThan(0);
@@ -31,7 +31,7 @@ describe('la tabla en una pantalla angosta (styles.css)', () => {
 
   it('todas sus reglas valen solo en la página abierta: ni la vista de impresión ni el PDF', () => {
     const selectors = tableBlock().match(/^ {2}\.page[^{]*\{/gm) ?? [];
-    expect(selectors.length).toBe(3);
+    expect(selectors.length).toBe(2);
     for (const s of selectors) expect(s).toContain('.page:not(.sd-export-source) .bn-editor');
     expect(tableBlock()).not.toContain('.print-view');
   });
@@ -40,8 +40,8 @@ describe('la tabla en una pantalla angosta (styles.css)', () => {
     expect(tableBlock()).toMatch(/:is\(td, th\)\[colwidth\] \{\s*min-width: 96px !important;/);
   });
 
-  it('una tabla con todos sus anchos guardados mide la suma de esos anchos', () => {
-    expect(tableBlock()).toMatch(/table:not\(:has\(:is\(td, th\):not\(\[colwidth\]\)\)\) \{\s*width: max-content !important;/);
+  it('no fuerza el ancho de la tabla (D244): una que entra en la pantalla con columnas de 96 px o más no se desplaza', () => {
+    expect(tableBlock()).not.toMatch(/max-content|[^-]width:|table-layout/);
   });
 
   it('el desplazamiento queda dentro del bloque de la tabla: la página no se mueve de costado', () => {

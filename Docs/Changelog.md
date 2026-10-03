@@ -5,12 +5,12 @@ v0.0XX :
 **La tabla del reporte en el teléfono (P.28).** En 375 px las tablas de 7 columnas del *On-Set Report* se encogían al
 ancho de la pantalla: 304 px, columnas de 42 px (una palabra por renglón) y miniaturas de 21 px. La causa: BlockNote
 deja el ancho de la tabla en `auto` y el navegador la achica a lo que cabe en su bloque, sin mirar los anchos
-guardados. Ahora, solo en pantalla angosta y solo en la página abierta, una tabla con todos sus anchos guardados mide
-la suma (680 px, igual que en la compu), con piso de 96 px por columna, y se desplaza de costado dentro de su bloque
-sin mover la página. Al pasar de celda con Tab o las flechas, la celda se acomoda entera a la vista. Es solo
+guardados. Ahora, solo en pantalla angosta y solo en la página abierta, ninguna columna con ancho guardado baja de 96
+px y la tabla se desplaza de costado dentro de su bloque sin mover la página; la que entra en la pantalla con columnas
+de 96 px o más no cambia. Al pasar de celda con Tab o las flechas, la celda se acomoda entera a la vista. Es solo
 presentación: nada nuevo en el documento. La compu, la vista de impresión y el PDF miden igual que antes. Ayuda: *Wide
-tables on a phone*. Medido en Chromium (375 y 1280 px): 31 de 31.
-[ Tabla en el teléfono - las tablas con anchos guardados miden la suma de sus columnas (piso de 96 px) y se desplazan de costado dentro de su bloque, y la celda donde se escribe se acomoda a la vista; la compu y el PDF no cambian ]
+tables on a phone*. Medido en Chromium (375 y 1280 px): 39 de 39.
+[ Tabla en el teléfono - ninguna columna con ancho guardado baja de 96 px y la tabla se desplaza de costado dentro de su bloque, y la celda donde se escribe se acomoda a la vista; la compu y el PDF no cambian ]
 
 v0.155 :
 
