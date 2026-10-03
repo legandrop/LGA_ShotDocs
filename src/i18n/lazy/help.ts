@@ -111,7 +111,10 @@ export const help = {
     es: "Nuevo reporte del día ({newReport}) está arriba del título de la carpeta de reportes y de cada reporte de adentro. Propone la fecha de hoy (la hora de tu dispositivo), el día de rodaje siguiente y la locación del reporte anterior: cambiá lo que haga falta y apretá Enter. La página nueva se llama como 2026-10-02 | Día 06 y copia del reporte anterior la unidad, la gente de VFX, director y DF, y el equipo de cámara. Si ya hay un reporte con esa fecha, Enter lo abre y Crear otro hace uno más con el mismo día de rodaje (una segunda unidad, un día partido). Elegir Reporte de rodaje en una página nueva adentro de una carpeta la vuelve la carpeta de reportes; en la raíz del proyecto pide una carpeta antes (crear una, con un nombre que podés cambiar, o elegir la que ya tenés) y la página queda adentro; Usar para reportes del día, en el menú ⋯, lo hace a mano, y un proyecto puede tener varias. Todo anda sin conexión. El atajo va por la posición de la tecla (donde está la N en un teclado de EE. UU.): en Dvorak es la tecla que escribe B.",
   },
   'help.title.title': { en: "The page title", es: "El título de la página" },
-  'help.title.text': { en: "{enter} in the title moves you to the text.", es: "{enter} en el título te pasa al texto." },
+  'help.title.text': {
+    en: "{enter} in the title moves you to the text. A title can be up to 500 characters: if you paste a longer text, the rest becomes the first paragraph of the page.",
+    es: "{enter} en el título te pasa al texto. Un título puede tener hasta 500 caracteres: si pegás un texto más largo, lo que sobra queda como primer párrafo de la página.",
+  },
   'help.projects.title': { en: "Projects", es: "Proyectos" },
   'help.projects.text': {
     en: "Each show or job is a project with its own page tree. Switch projects or create one from the top of the sidebar; {search} lists them too.",
