@@ -2771,14 +2771,28 @@ code {
    El corte es de 1024 px y no los 760 del teléfono: en un iPad vertical (768 a 834 px) el cajón de páginas está
    a la vista y la página queda en 372 a 438 px, así que el reporte se encogía igual que en el teléfono (columnas de 47
    a 57 px). Como el piso no fuerza el ancho, a un ancho donde la tabla entra no cambia nada; la compu (1025 px o más) y el
-   PDF no se tocan. */
+   PDF no se tocan.
+   Entre 761 y 1024 px solo vale para páginas sin hoja (`:not(.sheet)`): una página con formato de hoja (A4, A3, Carta)
+   conserva ahí la hoja entera (794 px para A4) y el texto mide lo mismo que en el PDF; con el piso, el reporte (612 px en
+   la hoja) pasaba a 673 y se salía de ella. Hasta 760 px la hoja se ve libre (como el resto de la página) y el piso
+   vale también para ella, igual que en P.28. */
 @media (max-width: 1024px) {
-  .page:not(.sd-export-source) .bn-editor [data-content-type='table'] :is(td, th)[colwidth] {
+  .page:not(.sheet):not(.sd-export-source) .bn-editor [data-content-type='table'] :is(td, th)[colwidth] {
     min-width: 96px !important;
   }
 
-  .page:not(.sd-export-source) .bn-editor [data-content-type='table'] .tableWrapper {
+  .page:not(.sheet):not(.sd-export-source) .bn-editor [data-content-type='table'] .tableWrapper {
     /* Llegar al borde de la tabla no arrastra la página ni vuelve atrás en el navegador. */
+    overscroll-behavior-x: contain;
+  }
+}
+
+@media (max-width: 760px) {
+  .page.sheet:not(.sd-export-source) .bn-editor [data-content-type='table'] :is(td, th)[colwidth] {
+    min-width: 96px !important;
+  }
+
+  .page.sheet:not(.sd-export-source) .bn-editor [data-content-type='table'] .tableWrapper {
     overscroll-behavior-x: contain;
   }
 }

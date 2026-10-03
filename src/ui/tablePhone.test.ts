@@ -10,18 +10,30 @@ import { TABLE_SCROLL_QUERY } from './tableScroll';
 
 const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 
-/** El bloque `@media (max-width: 1024px)` que lleva las reglas de las tablas. */
-function tableBlock(): string {
-  const at = css.indexOf("[data-content-type='table'] :is(td, th)[colwidth]");
-  expect(at).toBeGreaterThan(0);
-  const start = css.lastIndexOf('@media (max-width: 1024px) {', at);
-  expect(start).toBeGreaterThan(0);
+/** El bloque `@media (query) { ... }` que sigue a `from` (con sus llaves). */
+function mediaBlock(query: string, from = 0): string {
+  const start = css.indexOf(`@media (${query}) {`, from);
+  expect(start).toBeGreaterThan(-1);
   let depth = 0;
   for (let i = css.indexOf('{', start); i < css.length; i++) {
     if (css[i] === '{') depth++;
     else if (css[i] === '}' && --depth === 0) return css.slice(start, i + 1);
   }
   throw new Error('bloque sin cerrar');
+}
+
+/** El bloque de 1024 px con las reglas de las tablas de páginas sin hoja (teléfono y tablet). */
+function tableBlock(): string {
+  const block = mediaBlock('max-width: 1024px');
+  expect(block).toContain("[data-content-type='table'] :is(td, th)[colwidth]");
+  return block;
+}
+
+/** El bloque de 760 px que lleva el mismo piso para las páginas con hoja (que en el teléfono se ven libres). */
+function phoneSheetBlock(): string {
+  const block = mediaBlock('max-width: 760px', css.indexOf(tableBlock()) + 10);
+  expect(block).toContain("[data-content-type='table'] :is(td, th)[colwidth]");
+  return block;
 }
 
 describe('la tabla en una pantalla angosta (styles.css)', () => {
@@ -33,10 +45,23 @@ describe('la tabla en una pantalla angosta (styles.css)', () => {
   });
 
   it('todas sus reglas valen solo en la página abierta: ni la vista de impresión ni el PDF', () => {
-    const selectors = tableBlock().match(/^ {2}\.page[^{]*\{/gm) ?? [];
-    expect(selectors.length).toBe(2);
-    for (const s of selectors) expect(s).toContain('.page:not(.sd-export-source) .bn-editor');
-    expect(tableBlock()).not.toContain('.print-view');
+    for (const block of [tableBlock(), phoneSheetBlock()]) {
+      const selectors = block.match(/^ {2}\.page[^{]*\{/gm) ?? [];
+      expect(selectors.length).toBe(2);
+      for (const s of selectors) expect(s).toContain(':not(.sd-export-source) .bn-editor');
+      expect(block).not.toContain('.print-view');
+    }
+  });
+
+  it('entre 761 y 1024 px solo las páginas sin hoja: una hoja (A4, A3, Carta) sigue como el PDF; hasta 760 px la hoja se ve libre y también lleva el piso', () => {
+    // Sin hoja: hasta 1024 px.
+    for (const s of tableBlock().match(/^ {2}\.page[^{]*\{/gm) ?? []) expect(s).toContain('.page:not(.sheet):not(.sd-export-source)');
+    // Con hoja: solo hasta 760 px, donde la hoja se ve libre (`.page.sheet` de ese tramo, más arriba en el archivo).
+    const sheet = phoneSheetBlock();
+    expect(sheet.startsWith('@media (max-width: 760px) {')).toBe(true);
+    for (const s of sheet.match(/^ {2}\.page[^{]*\{/gm) ?? []) expect(s).toContain('.page.sheet:not(.sd-export-source)');
+    // Ninguna regla de tabla vale para una hoja a más de 760 px: en 1024 no aparece `.page.sheet` sin el `:not`.
+    expect(tableBlock()).not.toMatch(/\.page\.sheet|\.page:not\(\.sd-export-source\)/);
   });
 
   it('el piso de ancho es de 96 px (el ancho de fábrica del reporte) y solo en las celdas con ancho guardado', () => {

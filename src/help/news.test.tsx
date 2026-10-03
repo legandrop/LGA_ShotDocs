@@ -264,6 +264,7 @@ describe('las novedades en la ayuda', () => {
     // El mismo punto, con la misma regla, en el botón de menú de la barra de arriba (teléfono, P.13 O7).
     const menu = host.querySelector('.topbar button.only-mobile')!;
     expect(menu.classList.contains('has-dot')).toBe(true);
+    expect(menu.getAttribute('aria-label')).toBe('Open pages (the help has something new)');
 
     await openHelp(host);
     const expected = HELP_ENTRIES.filter((e) => isNewer(e.since, '0.120')).map((e) => e.id);
@@ -282,6 +283,7 @@ describe('las novedades en la ayuda', () => {
     // Al abrirla quedaron vistas: el punto se fue (en el "?" y en el botón de menú).
     expect(button.classList.contains('has-dot')).toBe(false);
     expect(menu.classList.contains('has-dot')).toBe(false);
+    expect(menu.getAttribute('aria-label')).toBe('Open pages');
     expect(button.getAttribute('aria-label')).toBe('Help and shortcuts');
     expect(readHelpNews()?.seen).toBe(LATEST);
     // Volver a pedir la ayuda con la ayuda abierta (el menú de la cuenta): la lista sigue.

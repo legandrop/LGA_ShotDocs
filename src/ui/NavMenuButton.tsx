@@ -12,7 +12,7 @@ export function NavMenuButton() {
   const tr = useT();
   const { dot } = useHelpDot();
   return (
-    <button className={`icon-button only-mobile${dot ? ' has-dot' : ''}`} aria-label={tr('shell.openPages')} onClick={() => setNavOpen(true)}>
+    <button className={`icon-button only-mobile${dot ? ' has-dot' : ''}`} aria-label={tr(dot ? 'shell.openPagesDot' : 'shell.openPages')} onClick={() => setNavOpen(true)}>
       <MenuIcon />
     </button>
   );

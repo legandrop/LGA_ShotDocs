@@ -651,7 +651,10 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   escribe se acomoda a la vista. La compu y el PDF no cambian. Falta probarlo en un iPhone real (dedo, teclado abierto).
   **Hecho (v0.0XX):** el piso de las columnas y el desplazamiento valen hasta 1024 px (no 760) solo para las tablas, así
   que en un iPad vertical (768 a 834 px, con el cajón a la vista) el reporte ya no se encoge (columnas de 96 en lugar de
-  47 a 57) y se desplaza; también se arregló el botón de comentar del margen, que salía 4 px de la pantalla.
+  47 a 57) y se desplaza, salvo en una página con formato de hoja (A4, A3, Carta) entre 761 y 1024 px, que queda como el
+  PDF (decisión de Lega, ronda 1); también se arregló el botón de comentar del margen, que salía 4 px de la pantalla.
+  Queda un detalle de diseño: con `right: 0` ese botón (28 px) tapa hasta 8 px del final de un renglón muy largo, porque
+  el margen de la página en el teléfono es de 20 px; si se ve apretado, `right: 2px` sigue sin cortarlo.
   Quedan (chicos): lo que headless no prueba (el impulso del dedo, el teclado abierto, un editor remoto moviendo la selección
   mientras se escribe en una tabla).
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y

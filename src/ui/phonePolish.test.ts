@@ -38,6 +38,9 @@ describe('el punto del botón de menú de la barra de arriba', () => {
     const body = ruleAfter(at, '.icon-button.has-dot::after').replace(/\s+/g, ' ');
     expect(body).toContain('width: 7px');
     expect(body).toContain('height: 7px');
+    // Adentro del botón (esquina de arriba a la derecha), como el del "?": medido en Chromium, acá solo el texto.
+    expect(body).toContain('top: 7px');
+    expect(body).toContain('right: 7px');
     expect(body).toContain('background: var(--accent)');
     expect(css).toMatch(/\.icon-button\.has-dot \{\s*position: relative;/);
   });

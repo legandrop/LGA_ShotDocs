@@ -96,11 +96,28 @@ impresión y el armado del PDF de exportar miden lo mismo a 1280, 1025, 1024, 83
 cambio. Un iPad de 1024 px de ancho en horizontal (el de 9,7 pulgadas y el mini) con el cajón a la vista entra en el mismo
 caso; uno más ancho (1025 px o más) sigue como la compu.
 
+## Páginas con hoja entre 761 y 1024 px (ronda 1, decisión de Lega)
+
+La auditoría midió que el corte de 1024 px alcanzaba también a una página con formato de hoja (A4, A3, Carta): entre 761 y
+1024 px la hoja conserva su ancho entero (794 px para A4; la página se desplaza de costado) y el texto mide 643 px, igual
+que en el PDF. Con el piso, el reporte de 7 columnas, que en la hoja mide 612 px (columnas de 87), pasaba a 673 y se salía
+de ella, y una tabla de 10 columnas de 68 px pasaba de 612 a 961. **Decisión (Lega):** entre 761 y 1024 px el piso y el
+desplazamiento valen **solo para páginas sin hoja** (`.page:not(.sheet)`); una hoja queda como el PDF. Hasta 760 px la hoja
+se ve libre (lo hace `.page.sheet` en esa pantalla), así que ahí el piso vale también para ella, como en P.28: son dos
+bloques de `styles.css`, el de 1024 px con `:not(.sheet)` y el de 760 px con `.page.sheet`.
+Medido en Chromium (arnés con el Shell completo, A4): a 768, 834 y 1024 px el reporte de 7 columnas y la tabla de 10 miden
+**612 px** (columnas de 87 y 61, sin desplazamiento: igual que a 1280 px y que el PDF); una página libre a 768, 834 y 1024
+px sigue con el piso (7 columnas: 673, de 96; 10 columnas: 961); a 375 px, hoja o no, el piso vale; la compu (1280 px),
+680 px libre y 612 con A4, sin cambios. Prueba: `tablePhone.test.ts` ata el `:not(.sheet)` del bloque de 1024 y el
+`.page.sheet` del de 760; el mutante «quitar `:not(.sheet)`» muere (en la prueba y en Chromium: la hoja pasa a 673).
+`revealSelectionCell` queda igual: solo mueve algo si el contenedor desborda, y la hoja entre 761 y 1024 no desborda.
+
 ## Queda
 - **Sin probar en headless:** `overscroll-behavior-x` (solo importa para el gesto «atrás» de Safari), el impulso del dedo
   en iOS, el teclado abierto, un editor remoto escribiendo en la misma tabla (si su cambio mueve la selección local, el
-  enganche podría devolver la tabla a la celda del cursor), y `:has()` ya no se usa. El CSS compilado usa
-  `@media (width<=760px)` (Safari 16.4 o más), igual que las demás reglas de teléfono de la app.
+  enganche podría devolver la tabla a la celda del cursor). Las tablas no usan `:has()` (el árbol de páginas sí, con `:is()`
+  que lo protege, v0.0XX). El CSS compilado de las tablas usa `@media (width<=1024px)` y, para las hojas, `(width<=760px)`
+  (Safari 16.4 o más), igual que las demás reglas de teléfono de la app.
 
 - Probarlo en un iPhone real: el desplazamiento con el dedo, el teclado abierto y escribir en la última columna.
 - Una pista de que la tabla se desplaza (hoy se ve la columna siguiente cortada por el borde); si hiciera falta, un
