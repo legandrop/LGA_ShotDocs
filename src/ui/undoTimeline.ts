@@ -664,12 +664,19 @@ export class UndoTimeline {
   // del proyecto. ⌘Z lo deshace entero (con la página en pantalla) y ⌘⇧Z lo rehace.
 
   /**
-   * Se cerró el anotador de `fileId` en `pageId` con estos pasos (los de abajo primero): entran como un paso de la
-   * página. Es algo nuevo: lo que había para rehacer en el proyecto se borra (también en esta página). Devuelve el id de
-   * la entrada, o `null` si no entró (nada que deshacer, o el documento ya no es el de la página).
+   * Se cerró el anotador de `fileId` en `pageId`, que escribió algo, con estos pasos (los de abajo primero): entran como
+   * un paso de la página. Escribir en el anotador es algo nuevo aunque después se haya deshecho todo adentro (`items`
+   * vacío): lo que había para rehacer en el proyecto se borra (también en esta página). Si no, rehacer una anotación
+   * vieja podía no volver a poner el marco de la foto: Yjs no rehace una clave del mapa que se volvió a escribir después
+   * (aunque esté borrada) si no fue por la misma pila, y las formas quedaban sin marco. Devuelve el id de la entrada, o
+   * `null` si no entró (nada que deshacer, o el documento ya no es el de la página).
    */
   pushMarkup(pageId: string, map: Y.Map<unknown>, fileId: string, items: StackItem[]): string | null {
-    if (this.disposed || items.length === 0 || !map.doc) return null;
+    if (this.disposed || !map.doc) return null;
+    if (items.length === 0) {
+      this.clearRedoExcept(null, this.pages.get(pageId) ? this.projectOfHistory(this.pages.get(pageId)!) : this.options.projectOf(pageId));
+      return null;
+    }
     const doc = map.doc;
     let h = this.pages.get(pageId);
     // El documento de la página se rearmó mientras se anotaba: estos pasos ya no son de su documento.

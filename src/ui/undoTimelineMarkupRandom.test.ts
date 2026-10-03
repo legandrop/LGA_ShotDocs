@@ -106,7 +106,7 @@ function run(seed: number, withOther: boolean, tally: Tally): void {
     timeline.attach(name, doc, textUm[name], { editable: () => true });
   }
   const start = { A: json(docs.A), B: json(docs.B) };
-  let session: { um: Y.UndoManager; fileId: string } | null = null;
+  let session: { um: Y.UndoManager; fileId: string; wrote: { n: number } } | null = null;
   let counter = 0;
   const shapeIn = (doc: Y.Doc, fileId: string): string | null => {
     const keys = [...doc.getMap(PHOTO_MARKUP_MAP).keys()].filter((k) => k.startsWith(`${fileId}/`));
@@ -132,15 +132,14 @@ function run(seed: number, withOther: boolean, tally: Tally): void {
 
   const close = () => {
     if (!session) return;
-    const { um, fileId } = session;
+    const { um, fileId, wrote } = session;
     um.clear(false, true);
     const steps = um.undoStack;
     um.undoStack = [];
     um.destroy();
-    if (steps.length) {
-      timeline.pushMarkup('A', map, fileId, steps);
-      tally.sessions++;
-    }
+    // Como Annotator.tsx: si se escribió algo (aunque se haya deshecho todo adentro).
+    if (wrote.n > 0) timeline.pushMarkup('A', map, fileId, steps);
+    if (steps.length) tally.sessions++;
     session = null;
   };
 
@@ -183,7 +182,9 @@ function run(seed: number, withOther: boolean, tally: Tally): void {
       const fileId = pick(PHOTOS);
       const um = new Y.UndoManager(map, { trackedOrigins: new Set([markupOrigin(fileId)]), captureTimeout: 0 });
       protectMarkupOthers(um, map);
-      session = { um, fileId };
+      const wrote = { n: 0 };
+      um.on('stack-item-added', () => void wrote.n++);
+      session = { um, fileId, wrote };
     } else if (r < 0.65) {
       const name = pick(['A', 'B']);
       docs[name].transact(() => texts[name].insert(texts[name].length, `${name}${counter++} `), 'texto');
@@ -198,6 +199,7 @@ function run(seed: number, withOther: boolean, tally: Tally): void {
   for (let g = 0; g < 1000 && timelineStep('undo'); g++);
   const afterUndo = { A: json(docs.A), B: json(docs.B) };
   if (!other && afterUndo.A === start.A && afterUndo.B === start.B) tally.exactUndo++;
+  else if (!other && process.env.MARKUP_DEBUG) console.log('DEBUG', seed, afterUndo.A, afterUndo.B);
   for (let g = 0; g < 1000 && timelineStep('redo'); g++);
   const afterRedo = { A: json(docs.A), B: json(docs.B) };
   if (!other && afterRedo.A === end.A && afterRedo.B === end.B) tally.exactRedo++;

@@ -209,8 +209,8 @@ export interface AnnotatorProps {
   size?: () => Promise<{ width: number; height: number } | null>;
   onClose: () => void;
   /**
-   * Al cerrarse (o desmontarse) con algo hecho: los pasos de su deshacer, los de abajo primero (la línea de tiempo de la
-   * página los toma como un solo paso).
+   * Al cerrarse (o desmontarse), si se escribió algo: los pasos que quedaron en su deshacer, los de abajo primero (la
+   * línea de tiempo de la página los toma como un solo paso; vacío si se deshizo todo adentro).
    */
   onUndoSteps?: (steps: Y.UndoManager['undoStack'], map: Y.Map<unknown>) => void;
 }
@@ -365,8 +365,14 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose, onUn
   useEffect(() => {
     const um = new Y.UndoManager(map, { trackedOrigins: new Set([origin]), captureTimeout: 0 });
     protectMarkupOthers(um, map);
+    /** Se escribió algo en esta vez (aunque después se haya deshecho): para la línea de tiempo es algo nuevo. */
+    let wrote = false;
     const update = () => setStacks({ undo: um.undoStack.length > 0, redo: um.redoStack.length > 0 });
-    um.on('stack-item-added', update);
+    const added = () => {
+      wrote = true;
+      update();
+    };
+    um.on('stack-item-added', added);
     um.on('stack-item-popped', update);
     um.on('stack-cleared', update);
     undo.current = um;
@@ -374,7 +380,7 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose, onUn
       // Un texto a medio escribir se guarda antes (si no, quedaría fuera del paso).
       commitOnExit.current?.();
       undo.current = null;
-      um.off('stack-item-added', update);
+      um.off('stack-item-added', added);
       um.off('stack-item-popped', update);
       um.off('stack-cleared', update);
       // Lo deshecho y no rehecho se olvida (su lugar en la memoria también); lo hecho, a la línea de tiempo.
@@ -382,7 +388,7 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose, onUn
       const steps = um.undoStack;
       um.undoStack = [];
       um.destroy();
-      if (steps.length > 0) onUndoStepsRef.current?.(steps, map);
+      if (wrote) onUndoStepsRef.current?.(steps, map);
     };
   }, [map, origin]);
 

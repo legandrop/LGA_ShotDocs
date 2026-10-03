@@ -64,12 +64,14 @@ function annotate(timeline: UndoTimeline, pageId: string, doc: Y.Doc, work: (um:
   const map = doc.getMap<unknown>(PHOTO_MARKUP_MAP);
   const um = new Y.UndoManager(map, { trackedOrigins: new Set([markupOrigin(fileId)]), captureTimeout: 0 });
   protectMarkupOthers(um, map);
+  let wrote = false;
+  um.on('stack-item-added', () => void (wrote = true));
   work(um);
   um.clear(false, true);
   const steps = um.undoStack;
   um.undoStack = [];
   um.destroy();
-  return timeline.pushMarkup(pageId, map, fileId, steps);
+  return wrote ? timeline.pushMarkup(pageId, map, fileId, steps) : null;
 }
 
 class App {
@@ -267,6 +269,24 @@ describe('anotar como un paso de la línea de tiempo (entrega 3)', () => {
     expect(app.timeline.markupState(id)).toBe('redo');
     type(app.editor!, 'x');
     expect(app.timeline.markupState(id)).toBeNull();
+    expect(app.timeline.peek(project, 'redo')).toBeNull();
+  });
+
+  it('dibujar y deshacer todo adentro del anotador también es algo nuevo: lo anotado antes ya no se rehace (si no, volvía sin marco)', async () => {
+    const { ids, app, runner, project } = await setup();
+    await app.go(ids.A);
+    const doc = app.doc!;
+    const first = annotate(app.timeline, ids.A, doc, () => addShape(doc, PHOTO_ID, 's1', rect(10), FRAME))!;
+    await runner.run('undo');
+    expect(markupOf(doc)).toEqual({});
+    expect(app.timeline.markupState(first)).toBe('redo');
+    // Otra vez en el anotador: dibuja (escribe el marco de nuevo) y lo deshace adentro antes de cerrar.
+    expect(annotate(app.timeline, ids.A, doc, (um) => {
+      addShape(doc, PHOTO_ID, 's2', rect(20), FRAME);
+      popMarkupStep(um, 'undo');
+    })).toBeNull();
+    expect(markupOf(doc)).toEqual({});
+    expect(app.timeline.markupState(first)).toBeNull();
     expect(app.timeline.peek(project, 'redo')).toBeNull();
   });
 
