@@ -432,7 +432,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'photos',
     title: 'help.photosAnnotate.title',
     text: 'help.photosAnnotate.text',
-    keys: { viewer: 'carreteAnnotate', width: 'annotateWidth', next: 'annotateWidthNext', undo: 'annotateUndo', close: 'annotateEscape' },
+    keys: { viewer: 'carreteAnnotate', width: 'annotateWidth', next: 'annotateWidthNext', undo: 'annotateUndo', pageUndo: 'undo', close: 'annotateEscape' },
     more: [
       'annotateSelect',
       'annotateRectangle',
