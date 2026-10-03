@@ -89,7 +89,7 @@ import {
 import { drawMarkup, MARKUP_FONT, markupMeasure } from './markupSvg';
 import { notify } from './notice';
 import { IS_MAC } from './shortcuts';
-import { asAction, tipRows } from './tipRows';
+import { asAction, tipRows, touchScreen } from './tipRows';
 import { popMarkupStep, protectMarkupOthers } from './undoTimeline';
 
 // El anotador de fotos en la compu (P.20, entrega 2; Docs/Doc_Anotar_Fotos.md, sección 2). A pantalla completa, como
@@ -1288,8 +1288,10 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose, onUn
         ? tr('annotate.noSize')
         : limitText ?? (image.fullFailed && !image.fullShown && image.preview ? tr('annotate.preview') : null);
 
-  // Los tooltips con atajo (D226, tipRows.ts): en el teléfono, sin atajos de teclado.
-  const tipEnv = compact ? { touch: true } : {};
+  // Los tooltips con atajo (D226, tipRows.ts): sin atajos en una pantalla táctil. Lo decide el tipo de puntero y no el
+  // ancho: una ventana angosta con mouse sigue con sus atajos (auditoría de D226, O4).
+  const touch = touchScreen();
+  const tipEnv = { touch };
   const cursor = panning ? 'grab' : tool === 'select' ? 'default' : tool === 'text' ? 'text' : 'crosshair';
   const boxStyle = { width: fit.width, height: fit.height, transform: `translate3d(${zoom.x}px, ${zoom.y}px, 0) scale(${zoom.scale})` };
   const pct = (p: Point): Record<string, string> => (frame ? { left: `${(p.x / frame.w) * 100}%`, top: `${(p.y / frame.h) * 100}%` } : {});
@@ -1309,16 +1311,15 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose, onUn
         data-tool={t}
         data-letter={TOOL_LETTERS[t]}
         disabled={t !== 'select' && !canCreate}
-        // En el teléfono no hay teclado ni Shift: el globito diría solo el nombre, que ya está en el ícono.
-        data-tip={
-          compact
-            ? undefined
-            : tipRows([
-                { shortcut: TOOL_SHORTCUTS[t], action: asAction(label) },
-                modifiers && { gesture: 'shiftDrag', action: tr('annotate.shiftDragAct') },
-                modifiers && { gesture: 'altDrag', action: tr('annotate.altDragAct') },
-              ])
-        }
+        // En una pantalla táctil no hay teclado ni Shift: sin renglones, sin globito (el nombre ya está en el ícono).
+        data-tip={tipRows(
+          [
+            { shortcut: TOOL_SHORTCUTS[t], action: asAction(label) },
+            modifiers && { gesture: 'shiftDrag', action: tr('annotate.shiftDragAct') },
+            modifiers && { gesture: 'altDrag', action: tr('annotate.altDragAct') },
+          ],
+          tipEnv,
+        )}
         onClick={() => setTool(t)}
       >
         <Icon size={20} />
@@ -1382,9 +1383,9 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose, onUn
           // En el teléfono: tocar encuadra y dos dedos amplían; con el mouse, la tecla, la rueda y Espacio+arrastrar.
           data-tip={tipRows(
             [
-              { gesture: compact ? 'click' : undefined, shortcut: 'annotateFit', action: tr('annotate.fitAct') },
+              { gesture: touch ? 'click' : undefined, shortcut: 'annotateFit', action: tr('annotate.fitAct') },
               { gesture: 'scroll', action: tr('annotate.zoomAct') },
-              compact && { gesture: 'pinch', action: tr('annotate.zoomAct') },
+              touch && { gesture: 'pinch', action: tr('annotate.zoomAct') },
               { gesture: 'drag', hold: 'annotatePan', action: tr('annotate.panAct') },
             ],
             tipEnv,
@@ -1590,8 +1591,8 @@ function StyleStrip({
 }) {
   const tr = useT();
   const show = controlsOf(tool);
-  // En el teléfono, el tooltip del grosor va sin atajos (D226).
-  const tipEnv = useCompact() ? { touch: true } : {};
+  // En una pantalla táctil, el tooltip del grosor va sin atajos (D226; por el puntero, no por el ancho).
+  const tipEnv = { touch: touchScreen() };
   /** Los recientes que no están entre los 8 de siempre. */
   const extra = recent.filter((c) => !(PALETTE as readonly string[]).includes(c)).slice(0, 6);
   const [widthText, setWidthText] = useState(String(style.width));
@@ -1643,7 +1644,7 @@ function StyleStrip({
             {extra.map((c) => swatch(c, true))}
           </span>
         )}
-        <label className="annotator-custom" data-tip={`**${tr('annotate.customColor')}**`}>
+        <label className="annotator-custom" data-tip={tr('annotate.customColor')}>
           <input ref={colorRef} type="color" value={style.color.toLowerCase()} aria-label={tr('annotate.customColor')} onChange={(e) => onChange({ color: e.currentTarget.value.toUpperCase() }, false)} />
         </label>
       </div>

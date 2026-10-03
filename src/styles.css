@@ -2349,6 +2349,44 @@ code {
   clip-path: polygon(0 0, 100% 0, 50% 100%);
 }
 
+/* Al costado (un control más alto que la ventana, como el borde de la barra lateral): la flecha, de 11×16, en el borde
+   izquierdo o derecho y a la altura de `--arrow-y`. */
+.tooltip.right::before,
+.tooltip.left::before {
+  top: calc(var(--arrow-y, 50%) - 8px);
+  width: 11px;
+  height: 16px;
+}
+
+.tooltip.right::after,
+.tooltip.left::after {
+  top: calc(var(--arrow-y, 50%) - 6.5px);
+  width: 10px;
+  height: 13px;
+}
+
+.tooltip.right::before {
+  left: -11px;
+  clip-path: polygon(0 50%, 100% 0, 100% 100%);
+}
+
+.tooltip.right::after {
+  left: -9px;
+  clip-path: polygon(0 50%, 100% 0, 100% 100%);
+}
+
+.tooltip.left::before {
+  left: auto;
+  right: -11px;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+.tooltip.left::after {
+  left: auto;
+  right: -9px;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
 @keyframes tooltip-in {
   from {
     opacity: 0;

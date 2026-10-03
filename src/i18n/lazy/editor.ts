@@ -71,8 +71,8 @@ export const editor = {
   'drivePaste.text': { en: "Text", es: "Texto" },
   'drivePaste.card': { en: "Card", es: "Tarjeta" },
   'drivePaste.cardTip': {
-    en: "Shows the **Google Drive player** on the page.\nPlays for people signed in to Google with access to the file.\nIn Safari and on iPhone, only files shared by link may play.",
-    es: "Muestra el **reproductor de Google Drive** en la página.\nSe reproduce para quien entró a Google y tiene acceso al archivo.\nEn Safari y en el iPhone, puede que solo anden los compartidos por link.",
+    en: "Shows the Google Drive player on the page.\nPlays for people signed in to Google with access to the file.\nIn Safari and on iPhone, only files shared by link may play.",
+    es: "Muestra el reproductor de Google Drive en la página.\nSe reproduce para quien entró a Google y tiene acceso al archivo.\nEn Safari y en el iPhone, puede que solo anden los compartidos por link.",
   },
   'mediaButton.offline': {
     en: "You're offline, and the original isn't on this device.",
@@ -157,7 +157,7 @@ export const editor = {
     en: "The name it's shown and downloaded with",
     es: "El nombre con el que se muestra y se descarga",
   },
-  'photoTip.delete': { en: "Takes it out of the page; undo brings it back", es: "Lo saca de la página; deshacer lo devuelve" },
+  'photoTip.delete': { en: "Takes it out of the page; undo brings it back", es: "Se saca de la página; con deshacer vuelve" },
   'photoTip.deleteMany': { en: "Takes them out of the page; undo brings them back", es: "Las saca de la página; deshacer las devuelve" },
   'photoBar.alignLeft': { en: "Align left", es: "Alinear a la izquierda" },
   'photoBar.alignCenter': { en: "Align center", es: "Alinear al centro" },
@@ -230,8 +230,8 @@ export const editor = {
   'camera.save': { en: "Save to camera roll", es: "Guardar en Fotos" },
   'camera.saveVideo': { en: "Save video to camera roll", es: "Guardar el video en Fotos" },
   'camera.saveTip': {
-    en: "Opens the share sheet: choose **Save Image** or **Save Video**",
-    es: "Abre la hoja de compartir: elegí **Guardar imagen** o **Guardar video**",
+    en: "Opens the share sheet: choose Save Image or Save Video",
+    es: "Abre la hoja de compartir: elegí Guardar imagen o Guardar video",
   },
   'camera.saveAgain': {
     en: "The original is ready. Tap Save to camera roll again.",

@@ -40,12 +40,15 @@ export function placeNear(
   const clampY = (y: number) => Math.min(Math.max(edge, y), viewport.height - edge - size.height);
   const cx = target.left + target.width / 2;
   const cy = target.top + target.height / 2;
+  // Si no entra en ningún lado, igual queda adentro de la pantalla (corrido también en el otro eje).
+  const fallback = !fits[side];
   if (side === 'below' || side === 'above') {
     const left = clampX(cx - size.width / 2);
     const top = side === 'below' ? target.top + target.height + gap : target.top - gap - size.height;
-    return { left, top, side, arrow: Math.min(Math.max(14, cx - left), size.width - 14) };
+    return { left, top: fallback ? clampY(top) : top, side, arrow: Math.min(Math.max(14, cx - left), size.width - 14) };
   }
   const top = clampY(cy - size.height / 2);
-  const left = side === 'right' ? target.left + target.width + gap : target.left - gap - size.width;
+  const beside = side === 'right' ? target.left + target.width + gap : target.left - gap - size.width;
+  const left = fallback ? clampX(beside) : beside;
   return { left, top, side, arrow: Math.min(Math.max(14, cy - top), size.height - 14) };
 }

@@ -222,8 +222,11 @@ diga otra cosa.
   acción» (*Click or ⌘⌥↩: collapse just for you*). Solo el gesto y el atajo en negrita (blancos); la acción en el gris
   del tooltip. Los atajos salen del registro (`src/ui/shortcuts.ts`) con la forma de cada plataforma (⌘ en la Mac,
   Ctrl en el resto), nunca escritos a mano. En una pantalla táctil, sin atajos de teclado ni gestos de mouse; quien
-  no puede hacer una acción no ve su renglón. Los arma `src/ui/tipRows.ts` y lo controla `src/ui/tipFormat.test.ts`.
-  Quedan afuera los tooltips de la barra de formato, que son de BlockNote.
+  no puede hacer una acción no ve su renglón (táctil se decide por el tipo de puntero, no por el ancho). **Ningún
+  otro texto de un tooltip va en negrita** (los nombres de los botones, como *Download image*, van en el gris). Los
+  arma `src/ui/tipRows.ts` y lo controla `src/ui/tipFormat.test.ts`; *Comment* y *Assistant* de la barra de formato
+  también. Quedan afuera solo los botones propios de BlockNote en esa barra (negrita, cursiva…), con su globo.
+  Todo globo queda adentro de la ventana: abajo, arriba, a un costado o corrido (`Tooltip.tsx`).
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 

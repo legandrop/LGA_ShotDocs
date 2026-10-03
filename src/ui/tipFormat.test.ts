@@ -52,11 +52,26 @@ function sourceFiles(): Map<string, string> {
 }
 
 /** Lo que nombra un gesto o una tecla, en inglés o en castellano. */
-const GESTURE_WORDS =
-  /\b(click|clic|double[- ]click|doble clic|drag|dragging|arrastr\w*|scroll|pinch\w*|pellizc\w*|keyboard|teclado|arrow keys|hold)\b/i;
+const GESTURE_WORDS = new RegExp(
+  [
+    // Mouse y teclado.
+    'click\\w*|clic|double[- ]click|right[- ]click|doble clic|clic derecho|drag\\w*|arrastr\\w*|scroll\\w*|rueda|hover\\w*|mouse|trackpad',
+    'keyboard|teclado|arrow keys|hold|press\\w*|apret\\w*|pulsa\\w*|mantené|mantener',
+    // El dedo.
+    'tap\\w*|toc[aá]\\w*|toque\\w*|pinch\\w*|pellizc\\w*|swipe\\w*|desliz\\w*|long[- ]press|finger\\w*|dedos?',
+  ]
+    .join('|')
+    .split('|')
+    .map((w) => `\\b${w}\\b`)
+    .join('|'),
+  'i',
+);
 const KEY_NAMES = /\b(Shift|Alt|Ctrl|Cmd|Command|Option|Esc|Escape|Enter|Space|Espacio|Backspace|Retroceso|Supr|Tab|F3)\b|\{(key|shortcut|pan|next|alt)\}/;
 const KEY_SYMBOLS = /[⌘⌥⇧⌃↩⌫⇥←→↑↓]/;
 const namesGestureOrKey = (text: string) => GESTURE_WORDS.test(text) || KEY_NAMES.test(text) || KEY_SYMBOLS.test(text);
+/** Lo que un texto de tooltip no puede tener por su cuenta: un gesto, una tecla o negrita (la negrita es solo del
+ * gesto o el atajo de un renglón de tipRows; auditoría de D226, O5). */
+const outOfFormat = (text: string) => namesGestureOrKey(text) || text.includes('**');
 
 /**
  * Las expresiones que terminan en un tooltip: `data-tip={…}`, `'data-tip': …`, `dataset.tip = …`,
@@ -149,7 +164,11 @@ const NOT_GESTURES: Record<string, string> = {
   'annotate.penOnlyTip': 'explica el interruptor Only the pencil draws',
 };
 
-/** Los tooltips de la barra de formato son de BlockNote (su propio globo, con su forma de escribir los atajos). */
+/**
+ * El globo de BlockNote (`mainTooltip`): solo en el botón de colores de la barra de formato, que no tiene atajo. Los
+ * botones de la app en esa barra (Comment, Assistant) usan `data-tip` con tipRows; los propios de BlockNote (negrita,
+ * cursiva…) quedan con el suyo (roadmap B.25a).
+ */
 const BLOCKNOTE_TOOLTIPS = /\b(?:mainTooltip|secondaryTooltip)=/;
 
 describe('tooltips con gesto o atajo (D226): un renglón por acción, «gesto o atajo: acción»', () => {
@@ -169,12 +188,12 @@ describe('tooltips con gesto o atajo (D226): un renglón por acción, «gesto o 
     expect(loose).toEqual([]);
   });
 
-  it('ningún texto de tooltip escrito en el código nombra un gesto o una tecla', () => {
-    const wrong = found.flatMap((f) => literals(f.expr).filter(namesGestureOrKey).map((text) => `${f.file}: ${text}`));
+  it('ningún texto de tooltip escrito en el código nombra un gesto o una tecla, ni lleva negrita', () => {
+    const wrong = found.flatMap((f) => literals(f.expr).filter(outOfFormat).map((text) => `${f.file}: ${text}`));
     expect(wrong).toEqual([]);
   });
 
-  it('ningún texto de tooltip del diccionario nombra un gesto o una tecla (el gesto lo pone tipRows)', () => {
+  it('ningún texto de tooltip del diccionario nombra un gesto o una tecla, ni lleva negrita (lo pone tipRows)', () => {
     const keys = new Set(found.flatMap((f) => keysOf(f.expr)));
     // También las claves con nombre de tooltip, aunque se armen en una variable con otro nombre.
     for (const key of Object.keys(DICT)) if (/(?:Tip|\.tip)(?:$|[A-Z.])/.test(key) && !key.startsWith('tip.')) keys.add(key);
@@ -185,15 +204,16 @@ describe('tooltips con gesto o atajo (D226): un renglón por acción, «gesto o 
       const pair = DICT[key];
       expect(pair, `${key} no está en el diccionario`).toBeTruthy();
       for (const lang of ['en', 'es'] as const) {
-        for (const text of forms(pair[lang])) if (namesGestureOrKey(text)) wrong.push(`${key} (${lang}): ${text}`);
+        for (const text of forms(pair[lang])) if (outOfFormat(text)) wrong.push(`${key} (${lang}): ${text}`);
       }
     }
     expect(wrong).toEqual([]);
   });
 
-  it('los tooltips de BlockNote (barra de formato) son los únicos fuera de tipRows, y solo en sus botones', () => {
+  it('ningún botón de la app usa el globo de BlockNote para un atajo (solo Colors, que no tiene)', () => {
     const files2 = [...files].filter(([, code]) => BLOCKNOTE_TOOLTIPS.test(code)).map(([path]) => basename(path)).sort();
-    expect(files2).toEqual(['AssistantButton.tsx', 'EditorComments.tsx', 'PageToolbar.tsx']);
+    expect(files2).toEqual(['PageToolbar.tsx']);
+    expect(files.get([...files.keys()].find((p) => basename(p) === 'PageToolbar.tsx')!)).not.toMatch(/secondaryTooltip=/);
   });
 
   it('cada clave de NOT_GESTURES existe y se usa en un tooltip', () => {

@@ -933,11 +933,11 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    tiene prueba ni efecto medido (copiar, pegar y arrastrar no pasan por ahí): probarlo con `getHTML` o sacarlo; (O4) con
    `showPreview: false` (solo llega por una importación o una fila) el HTML externo lleva el placeholder `data:image/gif…` en
    el `<a href>` y en su texto: envolver solo si `showPreview !== false`, o restituir también `href` y el texto.
-25. **Lo que quedó de D226 (tooltips con gesto o atajo, v0.0XX).** (a) Los tooltips de la barra de formato son de
-   BlockNote (su propio globo: *Bold* con ⌘B abajo, y *Comment* y *Assistant* que siguen su forma): pasarlos al formato
-   de renglones pide reemplazar los botones de BlockNote. (b) El tooltip del borde de la barra lateral sale abajo del
-   borde, que ocupa todo el alto de la ventana: queda afuera de la pantalla (ya pasaba antes). Arreglo posible: que
-   `Tooltip.tsx` lo ubique a la altura del mouse cuando el control es más alto que la ventana.
+25. **Lo que quedó de D226 (tooltips con gesto o atajo, v0.0XX).** (a) Los botones propios de BlockNote en la barra de
+   formato (*Bold* con ⌘B abajo, *Italic*, etc.) siguen con su globo: pasarlos al formato de renglones pide reemplazar
+   esos botones. *Comment* y *Assistant*, que son de la app, ya usan los renglones. (b) **Hecho (v0.0XX):** el tooltip
+   del borde de la barra lateral salía afuera de la pantalla; ahora todo globo queda adentro (a un costado y a la altura
+   del mouse si el control es más alto que media ventana, y corrido si no entra en ningún lado).
 
 ### C. Esperan a Lega
 

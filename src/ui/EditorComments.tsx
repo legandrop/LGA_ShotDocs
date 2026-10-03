@@ -140,8 +140,8 @@ export function CommentToolbarButton() {
     <Components.FormattingToolbar.Button
       className="bn-button"
       label={tr('comments.comment')}
-      mainTooltip={tr('comments.comment')}
-      secondaryTooltip={shortcutLabel('comment')}
+      // El tooltip de la app (D226), no el de BlockNote: «**⌘⌥M**: comment».
+      data-tip={tipRows([{ shortcut: 'comment', action: asAction(tr('comments.comment')) }])}
       icon={<CommentIcon size={18} />}
       onClick={() => commentOnBlock(currentBlockId(editor as AnyEditor))}
     />
