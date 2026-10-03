@@ -7078,8 +7078,36 @@ button.folder-row-main:hover {
   color: var(--muted);
 }
 
-.help-entry .help-action {
+/* Los botones de una entrada: su acción (la recorrida, practicar, instalar) y "Mostrame" (entrega 3). */
+.help-entry .help-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 8px;
+}
+
+/* Las novedades (entrega 3): la marca "Nuevo" al lado del título y la sección de arriba. */
+.help-new {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  vertical-align: 1px;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+
+.help-news-intro {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+
+.help-index .help-index-news {
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .help-entry-section {

@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { helpNewsFrom } from './news';
 
 // Si la ayuda está abierta y en qué sección (Docs/Doc_Tutorial.md, sección 5). Va en la primera carga: el botón
 // "?" del pie de la barra lateral y la entrada del menú de la cuenta la abren; el diálogo se baja aparte. Ninguna
@@ -8,9 +9,14 @@ export interface HelpUiState {
   open: boolean;
   /** La sección donde abre (por ejemplo, `keys` para los atajos); `null`, arriba de todo. */
   section: string | null;
+  /**
+   * Las novedades (entrega 3): lo último que la persona había visto al abrir, si había algo más nuevo. La ayuda las
+   * lista con esto aunque al abrirse las dé por vistas (el punto del "?" se va).
+   */
+  news: string | null;
 }
 
-let state: HelpUiState = { open: false, section: null };
+let state: HelpUiState = { open: false, section: null, news: null };
 /** Lo que tenía el foco al abrir: al cerrar, el foco vuelve ahí (el botón "?" o el de la cuenta). */
 let opener: HTMLElement | null = null;
 const listeners = new Set<() => void>();
@@ -39,12 +45,13 @@ export function openHelp(section: string | null = null, from: Element | null = n
   }
   const active = from ?? (typeof document !== 'undefined' ? document.activeElement : null);
   opener = active instanceof HTMLElement && active !== document.body ? active : null;
-  set({ open: true, section });
+  // Si ya estaba abierta (el menú de la cuenta con la ayuda abierta), las novedades que mostraba siguen.
+  set({ open: true, section, news: state.open ? state.news : helpNewsFrom() });
 }
 
 export function closeHelp(): void {
   if (!state.open) return;
-  set({ open: false, section: null });
+  set({ open: false, section: null, news: null });
   const back = opener;
   opener = null;
   if (back?.isConnected) back.focus({ preventScroll: true });

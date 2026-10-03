@@ -9,8 +9,8 @@ import { placeNear, type Rect } from '../ui/floating';
 import { setNavOpen } from '../ui/navStore';
 import { notify } from '../ui/notice';
 import { shortcutLabel } from '../ui/shortcuts';
-import { stepsFor, type TourAnchor, type TourStep } from './steps';
-import { continueTour, dismissTour, endTour, onTourSignal, practiceHooks, setTourStep, startTour, useTourUi } from './tourState';
+import { stepsFor, TOUR_STEPS, type TourAnchor, type TourStep } from './steps';
+import { continueTour, dismissTour, endShowStep, endTour, onTourSignal, practiceHooks, setTourStep, startTour, useTourUi } from './tourState';
 
 // El motor de la recorrida (Docs/Doc_Tutorial.md, sección 4): propio, sin librerías. Un foco de luz (un solo `div`
 // con una sombra enorme que oscurece el resto) que se desliza de un ancla a otra, y un globito con *Atrás*,
@@ -31,7 +31,50 @@ export function TourLayer() {
   if (ui.mode === 'invite') return <InviteCard />;
   if (ui.mode === 'resume') return <ResumeCard step={ui.step} />;
   if (ui.mode !== 'running') return null;
+  if (ui.only) return <ShowMe key={ui.nonce} id={ui.only.id} onPractice={route.name === 'practice'} />;
   return <Running key={ui.nonce} step={ui.step} onPractice={route.name === 'practice'} />;
+}
+
+/**
+ * "Mostrame" (entrega 3): un solo paso en la práctica, el que pidió una entrada de la ayuda. Vale en los dos diseños
+ * (en el teléfono también el de Buscar, que la recorrida entera saltea). Si la persona se va de la práctica, se
+ * termina sin más (no queda en pausa: no es la recorrida).
+ */
+function ShowMe({ id, onPractice }: { id: string; onPractice: boolean }) {
+  const [phone] = useState(isPhoneLayout);
+  const step = TOUR_STEPS.find((s) => s.id === id);
+  const [entered, setEntered] = useState(onPractice);
+  useEffect(() => {
+    if (onPractice) setEntered(true);
+    else if (entered) endShowStep({ goBack: false });
+  }, [onPractice]);
+  // Esc termina "Mostrame" también con el foco afuera del globito (un clic en la página, el renglón del paso del menú
+  // "/"), salvo que sea de otro (`escTakenElsewhere`) o que algo ya lo haya usado (la barra de buscar). En el editor,
+  // Esc no es de nadie más (BlockNote lo usa para soltar el foco).
+  useEffect(() => {
+    let skip = false;
+    const before = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') skip = escTakenElsewhere(e.target);
+    };
+    const after = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== 'Escape' || skip) return;
+      const inEditor = e.target instanceof Element && !!e.target.closest('.bn-editor');
+      if (e.defaultPrevented && !inEditor) return;
+      finishShowMe();
+    };
+    window.addEventListener('keydown', before, true);
+    window.addEventListener('keydown', after);
+    return () => {
+      window.removeEventListener('keydown', before, true);
+      window.removeEventListener('keydown', after);
+    };
+  }, []);
+  useEffect(() => {
+    // Un paso que ya no existe (una ayuda vieja en otra pestaña): no se traba nada.
+    if (!step) endShowStep();
+  }, [step]);
+  if (!step || !onPractice) return null;
+  return <StepView step={step} index={0} total={1} phone={phone} single />;
 }
 
 function Card({ text, sub, primary, onPrimary, secondary, onSecondary }: { text: string; sub?: string; primary: string; onPrimary: () => void; secondary: string; onSecondary: () => void }) {
@@ -115,7 +158,27 @@ function skip() {
   notify(t('tour.replay'));
 }
 
-function StepView({ step, index, total, phone }: { step: TourStep; index: number; total: number; phone: boolean }) {
+/**
+ * Un Esc que es de otro, mirado antes de que nadie lo atienda (varios cierran sin `preventDefault`): el menú "/" de la
+ * práctica abierto, un diálogo o el carrete, un menú flotante (`.menu` de `useFloating`, que cierra con cualquier Esc:
+ * el ⋯ de la página, el selector de proyectos, la cuenta), una lista o un menú con el foco adentro, o el panel de
+ * comentarios con el foco adentro (en el teléfono, abierto: cierra con cualquier Esc).
+ */
+function escTakenElsewhere(target: EventTarget | null): boolean {
+  if (practiceHooks.slashMenuOpen?.() || document.querySelector(MODAL) || document.querySelector('.menu')) return true;
+  const focus = document.activeElement;
+  const inside = (sel: string) => [target, focus].some((el) => el instanceof Element && !!el.closest(sel));
+  if (inside('[role="menu"], [role="listbox"], .comments-panel')) return true;
+  return isPhoneLayout() && !!document.querySelector('.comments-panel');
+}
+
+/** Termina "Mostrame": el cajón del teléfono se cierra y se vuelve a donde estaba la persona. */
+function finishShowMe() {
+  setNavOpen(false);
+  endShowStep();
+}
+
+function StepView({ step, index, total, phone, single = false }: { step: TourStep; index: number; total: number; phone: boolean; single?: boolean }) {
   const tr = useT();
   const { media } = useServices();
   const next = useRef<HTMLButtonElement>(null);
@@ -166,19 +229,32 @@ function StepView({ step, index, total, phone }: { step: TourStep; index: number
     // mismo dibujo, después de este efecto).
     const frame = phone ? requestAnimationFrame(() => setNavOpen(!!step.drawer)) : 0;
     if (step.interactive === 'slash') {
-      practiceHooks.focusEmptyLine?.();
+      // El editor de la práctica puede no estar todavía ("Mostrame" o retomar justo en este paso): se espera hasta 3 s.
+      let tries = 0;
+      let wait = 0;
+      const focusLine = () => {
+        if (practiceHooks.focusEmptyLine) practiceHooks.focusEmptyLine();
+        else if (tries++ < ANCHOR_WAIT_MS / 100) wait = window.setTimeout(focusLine, 100);
+      };
+      focusLine();
+      // En "Mostrame" el paso queda a la vista después de elegir (para ver lo que pasó): termina con Listo.
       const off = onTourSignal((s) => {
-        if (s === 'slash') go(index + 1, total);
+        if (s === 'slash' && !single) go(index + 1, total);
       });
       return () => {
         cancelAnimationFrame(frame);
+        clearTimeout(wait);
         off();
       };
     }
-    // El foco va al globito (la app quedó `inert`: lo que tenía el foco, como el editor, lo pierde).
-    next.current?.focus({ preventScroll: true });
     return () => cancelAnimationFrame(frame);
-  }, [step, phone, index, total]);
+  }, [step, phone, index, total, single]);
+
+  // El foco va al globito (la app quedó `inert`: lo que tenía el foco, como el editor, lo pierde). También cuando el
+  // globito aparece después, al irse un diálogo que lo tapaba ("Mostrame" cierra la ayuda en el mismo cambio).
+  useEffect(() => {
+    if (!modal && !step.interactive) next.current?.focus({ preventScroll: true });
+  }, [step, modal]);
 
   useLayoutEffect(() => {
     const el = bubble.current;
@@ -199,11 +275,13 @@ function StepView({ step, index, total, phone }: { step: TourStep; index: number
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
-      skip();
+      if (single) finishShowMe();
+      else skip();
     } else if (e.key === 'ArrowRight' || (e.key === 'Enter' && !(e.target instanceof HTMLButtonElement))) {
       e.preventDefault();
-      go(index + 1, total);
-    } else if (e.key === 'ArrowLeft' && index > 0) {
+      if (single) finishShowMe();
+      else go(index + 1, total);
+    } else if (e.key === 'ArrowLeft' && index > 0 && !single) {
       e.preventDefault();
       go(index - 1, total);
     }
@@ -246,28 +324,40 @@ function StepView({ step, index, total, phone }: { step: TourStep; index: number
         onKeyDown={onKeyDown}
       >
         <div className="tour-head">
-          <span className="mono-label">
-            {index + 1}/{total}
-          </span>
-          <button className="link tour-skip" onClick={skip}>
-            {tr('tour.skip')}
-          </button>
+          {single ? (
+            <span className="mono-label">{tr('tour.showMe')}</span>
+          ) : (
+            <>
+              <span className="mono-label">
+                {index + 1}/{total}
+              </span>
+              <button className="link tour-skip" onClick={skip}>
+                {tr('tour.skip')}
+              </button>
+            </>
+          )}
         </div>
         <h3 id="tour-title">{title}</h3>
         <p id="tour-text">{tr(textKey, params)}</p>
         <div className="tour-actions">
-          {index > 0 && (
+          {index > 0 && !single && (
             <button className="secondary" onClick={() => go(index - 1, total)}>
               {tr('tour.back')}
             </button>
           )}
-          <button ref={next} className="primary" onClick={() => go(index + 1, total)}>
-            {last ? tr('tour.finish') : tr('tour.next')}
-          </button>
+          {single ? (
+            <button ref={next} className="primary" onClick={finishShowMe}>
+              {tr('tour.done')}
+            </button>
+          ) : (
+            <button ref={next} className="primary" onClick={() => go(index + 1, total)}>
+              {last ? tr('tour.finish') : tr('tour.next')}
+            </button>
+          )}
         </div>
       </div>
       <div className="tour-live" aria-live="polite">
-        {tr('tour.live', { n: index + 1, total, title })}
+        {single ? tr('tour.liveShowMe', { title }) : tr('tour.live', { n: index + 1, total, title })}
       </div>
     </>,
     document.body,
@@ -288,6 +378,8 @@ function useModalOpen(): boolean {
     const check = () => setOpen(!!document.querySelector(MODAL));
     const observer = new MutationObserver(check);
     observer.observe(document.body, { childList: true, subtree: true });
+    // Lo que se veía al dibujar puede haberse ido en el mismo cambio (la ayuda se cierra y abre "Mostrame").
+    check();
     return () => observer.disconnect();
   }, []);
   return open;

@@ -38,6 +38,10 @@ export const tutorial = {
   'tour.invite': { en: "First time here? A two-minute tour", es: "¿Primera vez? Recorrida de 2 minutos" },
   'tour.start': { en: "Start", es: "Empezar" },
   'tour.notNow': { en: "Not now", es: "Ahora no" },
+  // "Mostrame" de la ayuda (entrega 3): un solo paso, y vuelta a donde estaba la persona.
+  'tour.showMe': { en: "Show me", es: "Mostrame" },
+  'tour.done': { en: "Done", es: "Listo" },
+  'tour.liveShowMe': { en: "Show me: {title}", es: "Mostrame: {title}" },
 
   // --- Los pasos (src/tutorial/steps.ts) ---
   'tour.hello.title': { en: "Hi!", es: "¡Hola!" },
@@ -88,6 +92,8 @@ export const tutorial = {
   },
   'tour.find.title': { en: "Find", es: "Buscar" },
   'tour.find.text': { en: "Find and replace in the page ({find}).", es: "Buscá y reemplazá en la página ({find})." },
+  // Solo lo usa "Mostrame" en el teléfono (la recorrida entera no tiene este paso ahí): sin atajo.
+  'tour.find.textPhone': { en: "Find and replace in the page.", es: "Buscá y reemplazá en la página." },
   'tour.pageMenu.title': { en: "The page", es: "La página" },
   'tour.pageMenu.text': {
     en: "Share, move, page size, Save as template and Export PDF ({print}).",

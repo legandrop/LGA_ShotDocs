@@ -53,7 +53,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
   const search = useSearchSession();
   const tr = useT();
   // Un punto en el "?" mientras haya una recorrida para ver y la ayuda nunca se haya abierto acá.
-  const helpDot = useHelpDot();
+  const help = useHelpDot();
 
   const [expanded, setExpanded] = useState<Set<string>>(readExpanded);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -434,9 +434,9 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
           )}
           {/* La ayuda (Docs/Doc_Tutorial.md, sección 5): sin tooltip, el ícono ya lo dice (D-15). */}
           <button
-            className={`help-button${helpDot ? ' has-dot' : ''}`}
+            className={`help-button${help.dot ? ' has-dot' : ''}`}
             data-tour="help"
-            aria-label={tr('help.open')}
+            aria-label={help.news ? tr('help.openNews') : tr('help.open')}
             onClick={(e) => openHelp(null, e.currentTarget)}
           >
             <HelpIcon size={18} />

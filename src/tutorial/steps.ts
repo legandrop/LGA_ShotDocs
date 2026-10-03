@@ -86,8 +86,9 @@ export const TOUR_STEPS: TourStep[] = [
     textPhone: 'tour.comments.textPhone',
     keys: { comment: 'comment' },
   },
-  // En el teléfono no va (un paso menos: buscar en la página se explica en la ayuda).
-  { id: 'find', anchor: { tour: 'find' }, layout: 'desktop', title: 'tour.find.title', text: 'tour.find.text', keys: { find: 'find' } },
+  // En el teléfono no va en la recorrida (un paso menos: buscar en la página se explica en la ayuda); "Mostrame" sí lo
+  // muestra ahí, con el texto sin atajo.
+  { id: 'find', anchor: { tour: 'find' }, layout: 'desktop', title: 'tour.find.title', text: 'tour.find.text', textPhone: 'tour.find.textPhone', keys: { find: 'find' } },
   {
     id: 'page-menu',
     anchor: { tour: 'page-menu' },

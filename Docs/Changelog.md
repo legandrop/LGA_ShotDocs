@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.158 :
+
+**Ayuda, entrega 3: "Mostrame" y novedades** (P.13). La ayuda explicaba cada función pero no la señalaba, y nada
+avisaba qué había de nuevo. Ahora las entradas con un paso de la recorrida (16) tienen *Show me*: abre la práctica con
+solo ese paso y *Done* o Esc vuelve a donde estabas (con el desplazamiento y la selección de antes, sin sumar
+entradas al historial), sin tocar la recorrida guardada. El "?" lleva un punto cuando una
+entrada tiene un `since` más nuevo que lo visto la última vez (en este dispositivo); al abrir la ayuda, *What's new*
+las lista arriba con la marca *New* y el punto se va. Nuevas entradas: *What's new*, *Show me* y *Connect Google
+Drive* (el dueño); deshacer, el título y buscar suben a la versión que los cambió. Arreglo: un paso podía quedar
+invisible si se abría en el mismo cambio en que se cerraba un diálogo.
+[ Ayuda entrega 3 - Mostrame abre la práctica con solo el paso de cada entrada y vuelve a donde estabas, y el punto del ? con las novedades desde la última vez que abriste la ayuda ]
+
 v0.157 :
 
 **Link público, entrega 2c: lo apartado a la vista** (P.19). Lo que un visitante mandó y no entró solo se veía en un
