@@ -1,8 +1,10 @@
 # Links a los archivos en el PDF y *Request access* (P.30)
 
-**Estado: diseño, sin código (2026-10-03, contra `main` v0.158).** Pedido de Lega del 2026-10-03. Toca permisos, Row
-Level Security y privacidad, y suma una tabla: **riesgo alto**. Se audita antes de programar nada. Las decisiones ya
-tomadas por Lega están en "Qué se pide"; las nuevas (LF1 a LF16, sección 10) son propuestas con la recomendación tomada.
+**Estado: diseño auditado el 2026-10-03 ("aprobado con condiciones" en E1, E2 y E3) y corregido; E1 en programación.**
+Pedido de Lega del 2026-10-03, diseñado contra `main` v0.158. Toca permisos, Row Level Security y privacidad, y suma una
+tabla: **riesgo alto**. Las decisiones ya tomadas por Lega están en "Qué se pide"; las nuevas (LF1 a LF16, sección 10)
+son propuestas con la recomendación tomada; LF17 a LF20 son de Lega, sobre los hallazgos de la auditoría. **Las
+correcciones de la auditoría (sección 15) mandan sobre lo de arriba.**
 La migración de la entrega 2 está en borrador (sección 7), probada contra la base real en una transacción que se
 deshace (sección 9).
 
@@ -23,13 +25,15 @@ deshace (sección 9).
 - **En el PDF:** cada tarjeta de adjunto, cada carpeta y cada video llevan un link a esa dirección (el área entera de la
   tarjeta, medida en Chromium) y el nombre debajo como texto con link (LF5, LF6). Las fotos no llevan link. La tarjeta de
   un link de Drive pegado sigue como está.
-- **Con un link público vivo** sobre la página al exportar, los links del PDF van con el token de ese link
-  (`/f/<clave local>/<id>#link=…`): quien tiene el PDF abre como quien tiene el link. Revocarlo o *Reset link* los apaga;
-  la pantalla del link muerto ofrece entrar con una cuenta (LF7, LF16).
+- **Con un link público vivo** sobre la página, **solo desde la ventana *Export*** (nunca al imprimir con ⌘P/Ctrl+P,
+  LF17), los links del PDF van con el token de ese link (`/f/<clave local>/<id>#link=…`), con un aviso que nombra la
+  página y el nivel del link y una casilla (destildada si el link es *Can edit*, LF18): quien tiene el PDF abre como quien
+  tiene el link. Revocarlo o *Reset link* los apaga; la pantalla del link muerto ofrece entrar con una cuenta (LF7, LF16).
 - **Request access (entrega 2):** una tabla nueva, `access_requests`, cerrada con Row Level Security y sin políticas: solo
   la tocan tres funciones. Pedir responde lo mismo exista o no el archivo; tope de 20 pedidos nuevos por persona por día.
   Lo ven y lo deciden quienes pueden compartir alguna página viva que usa el archivo (dueño, admins con nivel 4, dueño
-  del proyecto), en la campana y en *Share* de la página. Aceptar da un permiso de los de siempre (`share()`) sobre una
+  del proyecto aunque sea miembro común, LF19), en la campana y en *Share* de la página; antes de mandar, quien pide
+  sabe que esas personas van a ver su correo y su rol. Rechazar es un parámetro explícito (LF20). Aceptar da un permiso de los de siempre (`share()`) sobre una
   de esas páginas, *Can view* por defecto, y nunca baja uno que ya existe. Sin correo (B.8 queda como está).
 - **Sin cuenta no se pide acceso:** el registro sigue cerrado (D-09). El login lo explica; para alguien de afuera sin
   cuenta, el camino es el link público (LF3).
@@ -80,8 +84,8 @@ lugar para páginas (E3).
 5. **Los permisos son los de siempre:** aceptar un pedido es `share()` sobre una página; ninguna regla nueva de quién ve
    qué. Valen hacia abajo, nunca hacia arriba.
 6. **Nada de tipos de bloque nuevos ni cambios en el documento:** los links existen solo en la copia de impresión.
-7. **Un PDF ya exportado no cambia** (no tiene links) y uno nuevo no lleva nada que no esté ya en el PDF salvo la
-   dirección (sección 6).
+7. **Un PDF ya exportado no cambia** (no tiene links). Uno nuevo suma la dirección de cada archivo y **el nombre de cada
+   video** (el cuadro no lo tenía; el de un adjunto o una carpeta ya estaba dibujado en la tarjeta): sección 6.
 
 ## 1. Qué hay hoy (con el código)
 
@@ -94,7 +98,7 @@ lugar para páginas (E3).
 | Quién ve un archivo | `public.media_file(id)` → `private.file_level` | El nivel más alto de las páginas vivas que lo usan (`page_files`, sin `is_foreign`); `null` si es 0, **sea porque no existe o porque no hay permiso** (leído de la base real). `authenticated` puede llamarla; `anon`, no. |
 | Con un link público | `public.plink_media_file(id)` | Lo mismo con el token del header `x-shotdocs-link`; devuelve `project_name` vacío. |
 | Las rutas de la app | `src/router.ts` | `/p/<id>`, `/trash`, `/practice`, `/privacy`, `/terms`, `/storage-test`, `/oauth/consent/<ref>`. Cualquier otra, el inicio. Cloudflare sirve `index.html` para toda dirección que no es un archivo (`wrangler.jsonc`, `single-page-application`). |
-| Saber a qué Supabase ir | `src/App.tsx`, `computeStart` (82-119); `src/workspaces.ts`, `resolveInvite` (374) | La lista de workspaces del dispositivo (en `localStorage`) y, al llegar con `#invite=` o `#link=`, la dirección y la clave publicable del `#`. Un servidor nuevo se pregunta antes (`JoinConfirm`, `LinkConfirm`). |
+| Saber a qué Supabase ir | `src/ui/App.tsx`, `computeStart` (82-119); `src/workspaces.ts`, `resolveInvite` (374) | La lista de workspaces del dispositivo (en `localStorage`) y, al llegar con `#invite=` o `#link=`, la dirección y la clave publicable del `#`. Un servidor nuevo se pregunta antes (`JoinConfirm`, `LinkConfirm`). |
 | El login | `src/ui/Login.tsx` (58-60) | Código de 8 dígitos o el link del mail; `emailRedirectTo` es el origen de la app (salvo la pantalla de permiso del MCP, que vuelve a su ruta). Las direcciones permitidas de Wanka incluyen `https://shotdocs.lega.com.ar/**` (`Doc_Supabase.md`, "Direcciones permitidas"). |
 | Compartir | `public.share(persona, proyecto, página, nivel)`; `private.user_can_share_page` | Nivel 4 sobre la página, miembro vivo no invitado, y dueño o admin del workspace o dueño del proyecto. `share()` **pisa** el nivel de un permiso que ya existe sobre la misma página (también para bajarlo). |
 | El visor de una carpeta | `src/ui/FolderViewer.tsx` | Recibe el id y el nombre; lista con el portero y trae *Download all*. |
@@ -125,18 +129,24 @@ https://shotdocs.lega.com.ar/f/<clave local>/<id del archivo>#link=<el payload d
 
 ### 2.2 Cómo sabe la app a qué Supabase ir (LF2)
 
-Al abrir `/f/<clave>/<id>`, antes de crear ningún cliente de Supabase (en `computeStart`):
+Al abrir `/f/<clave>/<id>`, antes de crear ningún cliente de Supabase (en `computeStart`, `src/ui/App.tsx`), **en este
+orden** (corregido por la auditoría, O2 y O3):
 
 1. **Con `#link=`:** el modo link de siempre (`LinkApp`, sin usar ninguna sesión), que ahora mira la ruta y muestra el
    archivo en vez de la raíz del link.
-2. **El dispositivo ya tiene un workspace con esa clave local:** se abre ese, con su dirección guardada, y **el `#ws=`
-   se ignora** (la configuración del dispositivo manda; así un `#ws=` armado a propósito no cambia nada de un workspace
-   que ya está).
-3. **No lo tiene y hay `#ws=`:** se resuelve como una invitación sin página (`resolveInvite`): dirección `https://`,
-   clave publicable con su forma, clave local que no choque con otra del dispositivo. Si todo está bien, la pantalla de
-   confirmar (*Open a file from xyz.supabase.co?*, con el host, nunca un nombre que trae el link) y recién ahí se agrega
-   y se pasa al login.
-4. **Ni una cosa ni la otra** (el `#` se perdió, por ejemplo un correo que reescribió el link): *This link is incomplete.
+2. **La ruta `/f/` va antes que el link de la pestaña y el último link abierto** (`tabLink`, `activeLink`): si no, un
+   dispositivo sin workspaces que alguna vez abrió un link ignoraría el `#ws=` y abriría ese link.
+3. **El dispositivo ya tiene un workspace con esa clave local:** si el `#ws=` no trae dirección o trae **la misma**, se
+   abre ese y el `#` se ignora (la configuración del dispositivo manda). Si el `#ws=` trae **otra** dirección para esa
+   clave, no se abre el del dispositivo en silencio (mostraría «sin acceso» en la isla equivocada): el mismo error que
+   una invitación que choca (`wsError.localKeyClash`).
+4. **No tiene esa clave y hay `#ws=`:** si la `l` del `#ws=` no es la clave del camino, *This link is incomplete*. Si no,
+   se resuelve como una invitación sin página (`resolveInvite`): dirección `https://`, clave publicable con su forma,
+   clave local que no choque. `checkWorkspace` busca primero **por dirección** (`findByUrl`): si el dispositivo ya tiene
+   ese Supabase con otra clave, abre ese. Si es nuevo, la pantalla de confirmar (*Open a file from xyz.supabase.co?*, con
+   el host, nunca un nombre que trae el link) y recién ahí se agrega y se pasa al login. Quien no tiene cuenta deja un
+   workspace muerto en su lista (como hoy una invitación; se quita desde el selector).
+5. **Ni una cosa ni la otra** (el `#` se perdió, por ejemplo un correo que reescribió el link): *This link is incomplete.
    Open it again from the document.*
 
 Un PDF de **otro workspace** trae su propia dirección: el dispositivo se conecta a ese Supabase (preguntando antes si no
@@ -152,6 +162,7 @@ link), así usa los mismos servicios que una página: el portero del workspace, 
 | Sin sesión (modo cuenta) | El login del workspace con una línea arriba: *Sign in to open this file.* Con el código, sigue en la misma pestaña y en la misma ruta; con el link del mail, `emailRedirectTo` es `<origen>/f/<clave>/<id>` (LF15). |
 | Sin cuenta en ese workspace | Supabase no manda el código (registro cerrado); el login ya dice que hace falta una invitación. Se le suma: *If someone sent you this document, ask them to invite you.* |
 | Sesión, miembro sacado o sin membresía | La pantalla de siempre (`RemovedScreen`); sin *Request access*. |
+| Sesión y permiso, archivo borrado (`trashed_at`, `purged_at` o `drive_trashed_at`) | El estado de borrado de siempre (`deletedDisplay`), sin pedir el pase. |
 | Sesión, `media_file(id)` nulo | **«You don't have access to this file»**, *Request access* (E2; si la base del workspace no tiene la migración, solo *Ask whoever shared the document with you*) y *Go to Shot Docs*. **Sin el nombre del archivo** (quien tiene solo la dirección no lo sabía), sin proyecto, sin página. El título de la pestaña: `Shot Docs`. |
 | Sesión y permiso: foto o video | El carrete con ese solo archivo (reproduce por el pase del portero; lo que el navegador no puede reproducir muestra el cuadro y *Download*, como hoy). |
 | Sesión y permiso: PDF u otro adjunto | La hoja del adjunto (`AttachmentSheet`): la tarjeta, *Open* y *Download* (LF8). |
@@ -161,12 +172,16 @@ link), así usa los mismos servicios que una página: el portero del workspace, 
 | Errores del portero | Los de siempre (`drive_missing`, `not_uploaded`, `drive_not_connected`), que ya traen su texto. |
 
 **Siempre se pregunta a la base estando en línea**, aunque el dispositivo tenga el archivo en su lista: a alguien que
-perdió el permiso no se le muestra lo guardado como si siguiera teniéndolo.
+perdió el permiso no se le muestra lo guardado como si siguiera teniéndolo. **Una sola fuente (O4):** la pantalla decide
+**solo** con `media_file` (la misma que usa el portero para el pase), nunca con el `select` de `files` de la cola: su
+política (`can_view_file`) deja ver al creador un archivo que no está en ninguna página y `file_level` no; la pantalla y
+el pase no coincidirían.
 
 ### 2.4 «No existe» y «sin acceso» son lo mismo (LF4)
 
-- **La respuesta:** `media_file` devuelve `null` en los dos casos (y también con el archivo solo en la papelera o en un
-  proyecto borrado). La app no pide el pase si es `null`, así que el portero no se entera.
+- **La respuesta:** `media_file` devuelve `null` en los dos casos (y también con el proyecto borrado, o con el archivo
+  solo en páginas de la papelera para quien no las ve; quien edita, nivel 3 o más y no invitado, sí las ve, `sees_deleted`,
+  y el archivo le abre: O5). La app no pide el pase si es `null`, así que el portero no se entera.
 - **La pantalla:** la misma, sin datos del archivo.
 - **Pedir acceso:** responde `sent` en los dos (sección 5.2), deja una fila en los dos y cuenta en el tope igual.
 - **Recorrer ids:** imposible (uuid v4 al azar, 122 bits).
@@ -189,12 +204,15 @@ perdió el permiso no se le muestra lo guardado como si siguiera teniéndolo.
 | Foto | La foto | Sin cambios (sin link). |
 | Tarjeta de un link de Drive pegado | La tarjeta con su link a Drive | Sin cambios. |
 | Link a otra página | Interno o solo texto (`rewriteLinks`) | Sin cambios. |
+| Marcador de un archivo de otro proyecto (`foreign`), tarjeta de uno borrado, *not on this device* | La tarjeta o el marcador | Sin link (O6). |
+| Video en línea (`.sd-photo`, también en una celda) | Su cuadro | Sin link en E1: el nombre debajo rompería el renglón y la celda; queda en el roadmap. |
 
 ### 3.2 Cómo se pone el link
 
 - En `cleanCopy` (`printView.ts`), después de cambiar los `<video>` por su cuadro, una función nueva recorre los bloques
   `[data-content-type="image"][data-url^="sdmedia://"]` de la copia; para cada uno que es adjunto, carpeta o video
-  (`fileInfo(id).kind` y `mime`; sin la info, la extensión del nombre del bloque, como `isAttachment`):
+  (`fileInfo(id).kind` y `mime`; sin la info, la extensión del nombre del bloque, como `isAttachment`). **La vista de
+  medir y la de imprimir deciden con la misma función** (si no, las marcas de hoja se corren; O6):
   - envuelve el contenedor de la imagen en `<a class="sd-media-link" href="…">` con **`display: block`**;
   - agrega debajo, dentro del mismo bloque, `<a class="sd-media-name" href="…">nombre</a>`: un solo renglón, letra de 12
     px, recortado con `…` si no entra (así su alto es fijo y predecible).
@@ -218,18 +236,31 @@ perdió el permiso no se le muestra lo guardado como si siguiera teniéndolo.
 
 ### 3.3 Con un link público (LF7)
 
-- **Cuándo:** al armar el PDF (exportar o imprimir), para cada página que sale se busca el link público vivo **más
-  cercano** hacia arriba (la página misma o una de arriba; el más cercano da menos acceso). Los archivos de esa página
-  van con su `#link=`; los de una página sin link, con `#ws=`.
+- **Solo desde la ventana *Export* (LF17, decisión de Lega sobre B1 de la auditoría).** Imprimir una página (⌘P/Ctrl+P
+  o el menú del navegador) arma **siempre** los links con `#ws=`: imprimir es sincrónico a propósito (el iPhone abre el
+  diálogo en el mismo toque, `printPage.ts`; desde el menú del navegador la vista se arma en `beforeprint`), no hay dónde
+  esperar un pedido a la base, y una credencial no entra en un PDF sin su aviso y su casilla. **Un visitante del link**
+  que imprime usa su propio link (ya está en el dispositivo, sin pedido a la red): repartir ese PDF es como reenviar el
+  link que ya tiene.
+- **Cuál link (LF18, decisión de Lega sobre B2):** para cada página que sale se busca hacia arriba (ella misma o una de
+  arriba) el link público **vivo** (sin revocar ni vencer) más cercano **de nivel *Can view***; uno *Can edit* solo si no
+  hay ninguno *Can view*, y entonces la casilla viene **destildada**. Los archivos de esa página van con su `#link=`; los
+  de una página sin link (o con la casilla destildada), con `#ws=`.
 - **Cómo:** `get_public_link(página)` devuelve el token solo a quien puede compartir esa página; con `above` dice si hay
-  uno arriba y en qué página, y se pide `get_public_link` de esa. **Quien exporta sin poder compartir** (un miembro con
-  *Can view*, un invitado) no recibe el token y su PDF va con `#ws=`: no puede repartir un link que no puede ver.
-- **Un visitante del link** que imprime: sus links van con su mismo link (ya lo tiene; repartir el PDF es como reenviar
-  el link).
-- **La ventana *Export*** lo dice antes: *File links in this PDF use this page's public link: anyone with the PDF can
-  open those files.* con la casilla **Use the public link for file links**, tildada (lo decidido por Lega); destildada,
-  todo va con `#ws=`. Imprimir una página (Ctrl/⌘+P) usa el link sin preguntar y lo dice en el aviso que ya muestra la
-  impresión.
+  uno arriba y en qué página, y se pide `get_public_link` de esa. Se resuelve **una vez por rama** (lo que cuelga de una
+  página con link hereda su respuesta), no una vez por página (O10). **Quien exporta sin poder compartir** (un miembro
+  con *Can view*, un invitado) no recibe el token y su PDF va con `#ws=`: no puede repartir un link que no puede ver.
+- **La ventana *Export*** lo dice antes, nombrando la página y el nivel: *File links in this PDF use the public link of
+  "<page>": anyone with the PDF can open that page and the pages inside it* (y *and edit them* si es *Can edit*; con la
+  fecha si vence). Abajo: *Changing this link's level also changes what PDFs that use it can open. Reset link turns them
+  off.* Con la casilla **Use the public link for file links** (tildada con *Can view*, destildada con *Can edit*);
+  destildada, todo va con `#ws=`. La ayuda y *Share* suman la misma línea sobre cambiar el nivel.
+- **Por qué nombrar página y nivel:** el token abre **la página del link y todo lo de adentro**, no solo los archivos
+  (con un link de una página de arriba, más que la rama exportada); con *Can edit* deja editar; y `set_public_link`
+  cambia el nivel **conservando el token**, así un PDF repartido con un link *Can view* pasa a editar si después se sube
+  el link.
+- **Hoy (D14 apagado) no se puede crear un link público en Wanka:** la parte del link de E1 se prueba con el servidor
+  falso y la prueba de aceptación 3 espera a que se prenda el interruptor (O9).
 - **Sin red al exportar** no se puede saber si hay link: los links van con `#ws=` y la ventana lo dice.
 - **Revocar, *Reset link*, vencer, la página a la papelera o quien lo creó sin permiso de compartir:** el token deja de
   valer en el acto (lo valida la base en cada pedido); el link del PDF abre la pantalla del link muerto, que para una
@@ -287,6 +318,8 @@ perdió el permiso no se le muestra lo guardado como si siguiera teniéndolo.
   si el archivo lo usa una página viva (`private.page_alive`: ni ella ni una de arriba en la papelera, proyecto sin
   borrar) y no hubo un rechazo de ese archivo en 24 horas; `void` si no. Responde `sent` en los dos casos.
 - Dos pestañas a la vez no pasan el tope (`pg_advisory_xact_lock` por persona).
+- **Antes de mandar (LF19),** el botón dice qué va a pasar: *The people who can share this file will see your email and
+  your role.* (**Request access** y *Cancel*.)
 - **Quien pide no tiene cómo listar sus pedidos** (sería la misma pregunta por otro camino). La app guarda en el
   dispositivo cuándo lo pidió y lo muestra: *You asked for access on Oct 3.*
 
@@ -294,7 +327,7 @@ perdió el permiso no se le muestra lo guardado como si siguiera teniéndolo.
 
 - `access_requests_pending()`: los pendientes de los **últimos 30 días**, de **miembros vivos** que **todavía no ven** el
   archivo, sobre archivos que usa **alguna página viva que quien llama puede compartir** (`user_can_share_page`). Cada
-  uno trae el correo y el rol de quien pide, el nombre y el tipo del archivo, cuándo y cuántas veces, y **solo las
+  uno trae el correo y el rol de quien pide (también a un miembro común dueño del proyecto, LF19), el nombre y el tipo del archivo, cuándo y cuántas veces, y **solo las
   páginas que quien llama puede compartir** (id y título). Un invitado nunca ve nada. Hasta 100.
 - **Dónde:** la campana suma una sección *Access requests* arriba de las menciones (con el número en la campana), solo
   para quien puede compartir y con la base migrada; se consulta en el mismo ciclo de 60 segundos. Y *Share* de una
@@ -302,8 +335,10 @@ perdió el permiso no se le muestra lo guardado como si siguiera teniéndolo.
 - **Decidir** (una ventanita desde la campana o *Share*): *<correo> asks for access to <archivo>*; la página donde se da
   el permiso (si el archivo está en varias, una lista; por defecto la primera donde se agregó), el nivel (*Can view* por
   defecto; *Can comment*, *Can edit*, *Can edit and create pages*), y la línea *Gives access to this page and the pages
-  inside it.* Botones **Give access** y **Decline**.
-- `decide_access_request(pedido, página, nivel)`: con página, acepta; sin página, rechaza. Comprueba que el pedido esté
+  inside it.* Botones **Give access** y **Decline**. A un invitado se le ofrecen los mismos niveles que en *Share* (hoy
+  también *Can edit and create pages*, O17).
+- `decide_access_request(pedido, aceptar, página, nivel)`: con `aceptar` en verdadero, acepta sobre esa página; en
+  falso, rechaza; nulo, `decision_invalid` (LF20: rechazar es explícito, nunca una página que faltó). Comprueba que el pedido esté
   pendiente y que quien llama pueda compartir alguna página viva que usa el archivo (si no, `request_not_found`: el mismo
   error para «no existe», «ya decidido» y «no te toca»); que la página elegida use el archivo, esté viva y la pueda
   compartir (`page_invalid`); el nivel (`level_invalid`); y que quien pidió siga siendo miembro (`member_not_found`).
@@ -318,6 +353,7 @@ perdió el permiso no se le muestra lo guardado como si siguiera teniéndolo.
 | Caso | Qué pasa |
 |---|---|
 | Pide de nuevo un pendiente | `sent`; la fila suma una vez (como mucho una por hora). No crea otra. |
+| Pidió un archivo que todavía no estaba en ninguna página viva (`void`) y después se agrega a una | Se vuelve a mirar recién 24 horas después del pedido (O15): renovarlo antes no lo trae. |
 | Le rechazaron y vuelve a pedir el mismo día | `sent`, pero queda `void` y no lo ve nadie. Al día siguiente, se puede volver a pedir. |
 | El archivo va a la papelera (o su página, o se borra el proyecto) | Desaparece de la lista (ninguna página viva); si se restaura dentro de los 30 días, vuelve. Pedirlo con el archivo en la papelera deja un `void`. |
 | Le dan acceso por otro lado (por ejemplo, *Share* de la página) | Desaparece de la lista (ya lo ve). |
@@ -334,13 +370,21 @@ perdió el permiso no se le muestra lo guardado como si siguiera teniéndolo.
 - La lista de quien decide: **~20 ms** con 15 pendientes (medido; 20 llamadas en 296-399 ms, con `page_alive` y
   `user_can_share_page` por página). La campana la pide una vez por minuto.
 - Nada de esto pasa por el portero ni gasta pedidos de Workers.
+- La lista recorre todos los pendientes de 30 días y filtra después (O16): bien a esta escala; si crece, un índice
+  `(asked_at) where state = 'pending'`.
 
 ## 6. Privacidad: qué lleva el PDF y qué muestra la dirección
 
 - **El PDF lleva**, por cada archivo con link: el origen de la app, la clave local del workspace, el id del archivo y, en
   el `#`, la dirección del Supabase y la clave publicable (o el payload del link público con su token, solo si la página
   tiene uno y quien exporta lo dejó tildado). **Ningún nombre de proyecto, de página ni de workspace, ni correos.** El
-  nombre del archivo ya estaba en el PDF (dibujado en la tarjeta).
+  nombre de un adjunto o una carpeta ya estaba en el PDF (dibujado en la tarjeta); **el de un video es un dato nuevo**
+  (el cuadro no lo tenía; O7).
+- **Lo que reparte el `#ws=` (O8):** con la dirección y la clave publicable, quien tenga el PDF puede probar qué correos
+  tienen cuenta (el login responde distinto con el registro cerrado, `signup_disabled`) y gastar el tope de 30 correos
+  por hora del workspace. En Wanka ya es público (va en la app); en otro workspace hasta hoy lo tenían solo los
+  invitados. Se acepta (LF1). El camino `/f/<clave>/<id>` llega a los registros del host de la app (como `/p/<id>` hoy);
+  `Referrer-Policy: strict-origin-when-cross-origin` (`public/_headers`) lo deja afuera de Supabase y del portero.
 - **La dirección sin acceso no muestra nada:** ni el nombre del archivo, ni del proyecto, ni de la página. El host del
   Supabase sí (en la pantalla de confirmar, como una invitación).
 - **Con el link público,** el visitante ve lo que ve con el link: nada de afuera de su rama (`plink_media_file`).
@@ -464,7 +508,9 @@ begin
 end;
 $$;
 
-create function public.decide_access_request(p_id uuid, p_page uuid, p_level text default 'view') returns text
+-- p_accept explícito (LF20): un error de la app que pierde la página nunca rechaza un pedido.
+create function public.decide_access_request(p_id uuid, p_accept boolean, p_page uuid default null,
+                                             p_level text default 'view') returns text
 language plpgsql volatile security definer set search_path = '' as $$
 declare
   uid uuid := auth.uid();
@@ -477,14 +523,17 @@ begin
         and private.page_alive(pf.page_id) and private.user_can_share_page(pf.page_id, uid)) then
     raise exception 'request_not_found' using errcode = 'P0002';
   end if;
-  if p_page is null then
+  if p_accept is null then
+    raise exception 'decision_invalid' using errcode = '22023';
+  end if;
+  if not p_accept then
     update public.access_requests set state = 'declined', decided_at = now(), decided_by = uid where id = p_id;
     return 'declined';
   end if;
   if p_level is null or p_level not in ('view', 'comment', 'edit', 'edit_pages') then
     raise exception 'level_invalid' using errcode = '22023';
   end if;
-  if not exists (select 1 from public.page_files pf
+  if p_page is null or not exists (select 1 from public.page_files pf
                  where pf.file_id = r.file_id and pf.page_id = p_page and pf.removed_at is null and not pf.is_foreign)
      or not private.page_alive(p_page) or not private.user_can_share_page(p_page, uid) then
     raise exception 'page_invalid' using errcode = '22023';
@@ -505,10 +554,10 @@ $$;
 
 revoke all on function public.request_access(uuid) from public, anon;
 revoke all on function public.access_requests_pending() from public, anon;
-revoke all on function public.decide_access_request(uuid, uuid, text) from public, anon;
+revoke all on function public.decide_access_request(uuid, boolean, uuid, text) from public, anon;
 grant execute on function public.request_access(uuid) to authenticated;
 grant execute on function public.access_requests_pending() to authenticated;
-grant execute on function public.decide_access_request(uuid, uuid, text) to authenticated;
+grant execute on function public.decide_access_request(uuid, boolean, uuid, text) to authenticated;
 
 update public.workspace_settings set schema_version = :N where id and schema_version < :N;
 ```
@@ -536,7 +585,7 @@ update public.workspace_settings set schema_version = :N where id and schema_ver
 **SQL en la base real, en una sola consulta `begin; …; rollback;`** por la Management API (nada quedó: después, la tabla
 no existe y la base sigue con 2 cuentas y 2 miembros). Cuatro usuarios simulados dentro de la transacción (B invitado, C
 y E miembros, D admin sin permisos, X sin membresía) y el dueño real; un archivo vivo F de la página P y otro G cuya
-página se mandó a la papelera dentro de la prueba. **42 de 42 comprobaciones con el resultado esperado** (más 5 mediciones de tiempo; corrida tres veces, la última con el SQL exacto de la sección 7):
+página se mandó a la papelera dentro de la prueba. **42 de 42 comprobaciones con el resultado esperado** (más 5 mediciones de tiempo; corrida tres veces, la última con el SQL exacto de la sección 7). Después de la auditoría, otra vez con `p_accept` (LF20): **44 de 44**, con `decision_invalid` para `p_accept` nulo y `page_invalid` para aceptar sin página:
 
 | Qué | Resultado |
 |---|---|
@@ -576,7 +625,14 @@ página se mandó a la papelera dentro de la prueba. **42 de 42 comprobaciones c
   sesión con contraseña (`session_allowed`), un dueño de proyecto que no es admin, un admin con nivel 4 en una sola
   página, dos decisiones a la vez, un archivo en dos páginas (solo las que se pueden compartir), un pedido de más de 30
   días, y **mutantes** (sacar el `user_can_share_page` de la lista, el `for update`, el «nunca baja», el `revoke`): cada
-  uno tiene que hacer fallar algo.
+  uno tiene que hacer fallar algo. **Sumado por la auditoría (O18):** `anon` en las cinco puertas (pedir, listar, decidir,
+  leer la tabla, `media_file`), `authenticated` sin `sub`, el miembro común dueño de otro proyecto (ve solo los de su
+  proyecto y decide solo esos), un admin sin nada (lista vacía), un admin con nivel 4 en una de dos páginas (solo esa),
+  aceptar sobre la página de arriba (`page_invalid`), un miembro sacado (lista, aceptar, pedir), 30 días (oculto y vuelve
+  al renovar; renovar dos veces en la hora suma una), rechazo (mismo día `void`, 25 h después `pending`), un invitado con
+  *edit_pages*, `p_accept` nulo (`decision_invalid`) y aceptar sin página (`page_invalid`); y los dos mutantes de la
+  auditoría (la lista sin `user_can_share_page` le muestra 3 pedidos a un admin sin nada; decidir sin «nunca baja» deja
+  `view` a quien tenía `edit`).
 - **E2, app:** la campana con y sin pedidos, con base vieja (sin la sección), la ventana de decidir, *Share* con
   pedidos, el texto local *You asked for access on…*.
 - **Recorrido (Lega, a mano):** sección 11.
@@ -660,7 +716,9 @@ página se mandó a la papelera dentro de la prueba. **42 de 42 comprobaciones c
   tildada para no usarlo. **B.** Automático sin casilla. **C.** Preguntar cada vez.
 - **Elegí A porque** respeta lo decidido (va por el link) y deja ver que el PDF lleva una llave; el más cercano da el
   menor acceso; quien no puede compartir la página no ve el token y no lo reparte.
-- **Si preferís otra:** B es lo literal; la casilla es un renglón y se puede sacar.
+- **Si preferís otra:** B es lo literal; la casilla es un renglón y se puede sacar. **Corregida por LF17 y LF18:** solo
+  desde *Export*, el link vivo más cercano *Can view* (no «el más cercano»: uno *Can edit* más cerca da más), y el aviso
+  nombra página y nivel.
 
 ### LF8 · Abrir un PDF adjunto desde la dirección
 
@@ -689,7 +747,8 @@ página se mandó a la papelera dentro de la prueba. **42 de 42 comprobaciones c
 - **Elegí A porque** es la misma regla que *Share*: un pedido que no se puede aceptar no se muestra, y un admin no se
   entera de que existe un archivo de un proyecto privado ajeno ni de su nombre.
 - **Si preferís otra:** B mostraría pedidos que esa persona no puede resolver y nombres de archivos de proyectos
-  privados.
+  privados. **Ajuste marcado (auditoría, O13):** A también **amplía** lo pedido: un miembro común dueño de un proyecto
+  decide y ve correo y rol de quien pide. Lega lo confirmó con el aviso antes de mandar (LF19).
 
 ### LF11 · Aceptar: qué permiso
 
@@ -741,8 +800,48 @@ página se mandó a la papelera dentro de la prueba. **42 de 42 comprobaciones c
   video del PDF.
 - **Las opciones:** **A.** La pantalla del link muerto suma *Sign in instead* para una ruta `/f/` (sigue como miembro con la
   misma dirección del Supabase). **B.** Solo *This link no longer works*.
-- **Elegí A porque** el PDF sigue sirviendo a quien tiene permiso con su cuenta, sin revivir el link.
+- **Elegí A porque** el PDF sigue sirviendo a quien tiene permiso con su cuenta, sin revivir el link. *Sign in instead*
+  borra el link de la pestaña (`setTabLink`): si no, recargar vuelve al link muerto (O2).
 - **Si preferís otra:** B obliga a pedir un PDF nuevo.
+
+### LF17 · El token del link público solo desde *Export* (decisión de Lega, 2026-10-03, sobre B1 de la auditoría)
+
+- **Qué pasaba:** Lega está en la página del reporte, que tiene un link público, y aprieta ⌘P para mandarle el PDF a
+  alguien del equipo. Imprimir arma la vista en el mismo toque (el iPhone lo exige) y no puede esperar a la base para
+  saber si hay link; y un token terminaría en el PDF sin aviso.
+- **Las opciones:** **A.** ⌘P/Ctrl+P siempre con `#ws=`; el token entra solo desde *Export*, con su aviso y su casilla.
+  **B.** Recordar en el dispositivo si la página tiene link y usarlo al imprimir.
+- **Decidido A (Lega)** porque imprimir sigue sincrónico y ninguna credencial entra en un PDF sin que quien lo arma lo
+  vea. Un visitante del link que imprime usa su propio link (ya lo tiene en el dispositivo).
+
+### LF18 · Qué dice el aviso de *Export* y qué link elige (decisión de Lega, 2026-10-03, sobre B2 de la auditoría)
+
+- **Qué pasaba:** el aviso propuesto decía *anyone with the PDF can open those files*, pero el token abre la página del
+  link y todo lo de adentro, con un link *Can edit* deja editar, y cambiar el nivel del link conserva el token: un PDF
+  repartido con *Can view* pasaría a editar.
+- **Las opciones:** **A.** El aviso nombra la página y el nivel del link; se prefiere el link vivo más cercano *Can view*;
+  con uno *Can edit* la casilla viene destildada; el aviso dice que cambiar el nivel del link cambia lo que abren los PDF
+  ya repartidos. **B.** El aviso de antes.
+- **Decidido A (Lega)** porque quien exporta sabe exactamente qué reparte, y un permiso de escritura nunca sale en un PDF
+  sin que lo tilde a mano.
+
+### LF19 · El dueño de un proyecto también decide, y quien pide lo sabe (decisión de Lega, 2026-10-03, sobre O13)
+
+- **Qué pasaba:** con LF10, un miembro común dueño de un proyecto ve los pedidos de los archivos de su proyecto, con el
+  correo y el rol de quien pide. Lega había dicho «el dueño y los admins», y hoy un miembro común no ve correos ajenos
+  (ME2).
+- **Las opciones:** **A.** Decide también el miembro común dueño del proyecto, y *Request access* avisa antes de mandar:
+  *The people who can share this file will see your email and your role.* **B.** Solo dueño y admins (quien no es admin
+  no decide pedidos de su propio proyecto).
+- **Decidido A (Lega)** porque el pedido es sobre un archivo de su proyecto y quien pide lo manda sabiendo quién lo va a
+  ver.
+
+### LF20 · Rechazar es explícito (decisión de Lega, 2026-10-03, sobre O14)
+
+- **Qué pasaba:** `decide_access_request(id, null)` rechazaba: un error de la app que pierde la página elegida
+  rechazaría el pedido sin querer.
+- **Las opciones:** **A.** Un parámetro `p_accept` explícito (nulo = error). **B.** Dos funciones.
+- **Decidido A (Lega).** La página solo cuenta al aceptar; aceptar sin página da `page_invalid`.
 
 ## 11. Entregas
 
@@ -750,7 +849,7 @@ página se mandó a la papelera dentro de la prueba. **42 de 42 comprobaciones c
 |---|---|---|---|
 | **E1** | La ruta `/f/` (router, `#ws=` en `computeStart`, la pantalla en `Workspace` y en `LinkApp`, *Sign in instead*, `emailRedirectTo`), los links en la copia de impresión (exportar, imprimir y medir), el link público al exportar con su aviso y casilla, la ayuda (*File links in PDFs*), `Doc_Exportar.md`. Sin migración ni portero. | Medio (privacidad de la pantalla y de lo que lleva el PDF; ningún permiso nuevo) | ~600-900 líneas con pruebas |
 | **E2** | La migración de la sección 7 (con su `schema_version`), *Request access* en la pantalla, la sección de la campana, los pedidos en *Share*, la ventana de decidir, la ayuda (*Access requests*). | Alto (tabla nueva, RLS, permisos) | ~200 de SQL, ~500-700 de app, pruebas SQL con mutantes |
-| **E3** (opcional) | *Request access* también en `/p/<id>` sin acceso (pedido de una página: `page_id` como objetivo). | Bajo-medio | ~200 |
+| **E3** (opcional) | *Request access* también en `/p/<id>` sin acceso, con **otra columna** para la página pedida (`target_page_id`; `page_id` ya es «donde se dio el permiso»), `file_id` sin `not null`, un `check` de uno de los dos y el índice único por objetivo (O19). | Bajo-medio | ~200 |
 
 **Prueba de aceptación de cada entrega (Lega, a mano):**
 
@@ -768,6 +867,7 @@ página se mandó a la papelera dentro de la prueba. **42 de 42 comprobaciones c
 | Riesgo | Cómo se cubre |
 |---|---|
 | El PDF con el token del link público se reenvía de más | Aviso y casilla al exportar; *Reset link* corta todo. |
+| El PDF reparte la dirección y la clave publicable del Supabase (O8) | Aceptado: permite probar qué correos tienen cuenta y gastar el tope de correos; en Wanka ya es público. |
 | Un `#ws=` armado a propósito | Se confirma el host antes de agregar; la clave local del dispositivo manda (LF2). |
 | La pantalla de «sin acceso» dice algo del archivo | Sin nombre; prueba que compara el HTML de los dos casos. |
 | Un admin se entera de archivos de proyectos privados | La lista sale de `user_can_share_page` (LF10); probado con un admin sin permisos (0 pedidos). |
@@ -791,3 +891,32 @@ página se mandó a la papelera dentro de la prueba. **42 de 42 comprobaciones c
 - El correo al pedir y al aceptar (B.8).
 - Pedir acceso sin cuenta (LF3) y un permiso «solo este archivo» (LF11).
 - Links en el zip (ya lleva los archivos) y links al original de cada foto (LF5).
+
+## 15. Correcciones de la auditoría (2026-10-03)
+
+Auditoría independiente sobre `0e301b8`: **aprobado con condiciones** en E1, E2 y E3. El SQL de E2 pasó 62
+comprobaciones en rollback y detectó 2 mutantes. Lo de abajo ya está aplicado en el texto y manda sobre cualquier línea
+que diga otra cosa.
+
+| Hallazgo | Corrección | Dónde |
+|---|---|---|
+| B1 · Imprimir no puede esperar a saber si hay link público | ⌘P/Ctrl+P siempre con `#ws=`; el token solo desde *Export* (LF17) | 3.3, En corto |
+| B2 · El aviso no decía qué da el token | Nombra página y nivel; *Can view* preferido; *Can edit* destildado; cambiar el nivel cambia lo repartido (LF18) | 3.3 |
+| O1 · `computeStart` está en `src/ui/App.tsx` | Corregido | 1, 2.2 |
+| O2 · El orden de arranque | `/f/` antes de `tabLink`/`activeLink`; *Sign in instead* borra el link de la pestaña | 2.2, LF16 |
+| O3 · Clave y dirección que no coinciden | `l` distinta de la del camino: *incomplete*; clave del dispositivo con otra dirección: `localKeyClash`; dirección conocida con otra clave: se abre esa | 2.2 |
+| O4 · Una sola fuente | La pantalla decide solo con `media_file` | 2.3 |
+| O5 · La papelera | Quien edita sí abre un archivo de una página en la papelera; un archivo borrado muestra su estado | 2.3, 2.4 |
+| O6 · Qué tarjetas llevan link | Sin link: `foreign`, borrado, *not on this device*, video en línea; medir e imprimir con la misma función | 3.1, 3.2 |
+| O7 · El nombre del video es nuevo en el PDF | Escrito | Reglas 7, 6 |
+| O8 · Lo que reparte el `#ws=` | Escrito y aceptado | 6, 12 |
+| O9 · D14 apagado: no hay links públicos en Wanka | La parte del link se prueba con el servidor falso | 3.3, 11 |
+| O10 · Un `get_public_link` por página | Una vez por rama | 3.3 |
+| O11 · Un workspace muerto en la lista de quien no tiene cuenta | Escrito (como una invitación) | 2.2 |
+| O13 · LF10 suma al miembro común dueño de proyecto | LF19 y el aviso antes de mandar | 5.2, 5.3 |
+| O14 · Rechazar con página nula | `p_accept` explícito (LF20) | 5.3, 7 |
+| O15 · Un `void` se mira de nuevo a las 24 h | Escrito | 5.4 |
+| O16 · La lista filtra después | Índice anotado para cuando crezca | 5.5 |
+| O17 · Un invitado puede recibir *edit_pages* | Los mismos niveles que *Share* | 5.3 |
+| O18 · Casos y mutantes de la auditoría | Sumados a 9.2 | 9.2 |
+| O19 · E3 no puede reusar `page_id` | E3 con otra columna (`target_page_id`), `file_id` sin `not null`, `check` de uno de los dos e índice único por objetivo | 11 |
