@@ -17,6 +17,7 @@ import type { LinkBoot } from '../services';
 import { LinkCommentRemote, LinkRemote, linkProblemOf, type LinkProblem } from '../sync/linkRemote';
 import { errorMessage, isNetworkError } from '../sync/types';
 import { WorkspaceContext, type ActiveWorkspace } from '../workspace';
+import { downloadLinkPages, LinkEditBar, linkUnsentPages } from './LinkEditBar';
 import { setLightImages } from './sharpImages';
 import { Workspace } from './Workspace';
 
@@ -52,11 +53,17 @@ export function LinkApp({ entry }: { entry: LinkEntry }) {
   // Un cliente y un servidor por link y por carga de la app.
   const setup = useMemo(() => {
     const client = createLinkClient(entry);
-    const remote = new LinkRemote(client, __APP_VERSION__, (p) => {
-      setProblem(p);
-      // `plink_open` anduvo (acá o en un ciclo del motor): ya no se muestra el aviso de sin conexión.
-      if (p === null) setOffline(false);
-    });
+    const remote = new LinkRemote(
+      client,
+      __APP_VERSION__,
+      (p) => {
+        setProblem(p);
+        // `plink_open` anduvo (acá o en un ciclo del motor): ya no se muestra el aviso de sin conexión.
+        if (p === null) setOffline(false);
+      },
+      // Con Can edit, el nombre se lee al subir (sin nombre, lo escrito espera en este navegador).
+      () => visitorName(entry.id),
+    );
     const user: AuthUser = { id: `link:${entry.id}`, email: '' };
     const workspace: ActiveWorkspace = { config: linkConfig(entry), client };
     const boot: LinkBoot = {
@@ -126,17 +133,7 @@ export function LinkApp({ entry }: { entry: LinkEntry }) {
 
   if (opening.state === 'loading') return <main className="center-screen muted">{tr('link.opening')}</main>;
   if (opening.state === 'dead' || (opening.state === 'ready' && problem === 'link_not_found')) {
-    return (
-      <main className="center-screen">
-        <div className="card">
-          <h1>{tr('link.dead.title')}</h1>
-          <p className="muted">{tr('link.dead.text')}</p>
-          <button className="link" onClick={leave}>
-            {tr('link.leave')}
-          </button>
-        </div>
-      </main>
-    );
+    return <DeadLink entry={entry} remote={setup.remote} onLeave={leave} />;
   }
   if (opening.state === 'limited') {
     return (
@@ -187,12 +184,69 @@ export function LinkApp({ entry }: { entry: LinkEntry }) {
         )}
         {problem === 'link_rate_limited' && (
           <div className="notice link-limited" role="status">
-            <span>{tr('link.limited.text')}</span>
+            <span>{tr(setup.remote.opened?.level === 'edit' ? 'link.edit.limited' : 'link.limited.text')}</span>
           </div>
         )}
+        <LinkEditBar entry={entry} remote={setup.remote} />
         <Workspace user={setup.user} link={setup.boot} />
       </LinkContext.Provider>
     </WorkspaceContext.Provider>
+  );
+}
+
+/**
+ * El link dejó de andar (revocado, *Reset link*, vencido, el creador ya no comparte). Con *Can edit*, lo escrito en este
+ * navegador no se pierde (E2.9): se dice cuántas páginas tienen algo sin mandar y se baja como archivo, con lo que se mandó
+ * y no llegó a entrar.
+ */
+function DeadLink({ entry, remote, onLeave }: { entry: LinkEntry; remote: LinkRemote; onLeave: () => void }) {
+  const tr = useT();
+  const [unsent, setUnsent] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const sent = remote.linkEdits();
+  const extra = [...new Set([...sent.waiting, ...sent.aside])];
+  useEffect(() => {
+    let live = true;
+    // La app del link se cerró (sin la sincronización): se lee lo guardado aparte.
+    linkUnsentPages(entry).then(
+      (n) => live && setUnsent(n),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [entry]);
+  const pages = Math.max(unsent, extra.length);
+  return (
+    <main className="center-screen">
+      <div className="card">
+        <h1>{tr('link.dead.title')}</h1>
+        <p className="muted">{tr('link.dead.text')}</p>
+        {pages > 0 && (
+          <p>
+            {tr('link.dead.unsent', { count: pages })}{' '}
+            <button
+              className="link"
+              disabled={busy}
+              onClick={() => {
+                setBusy(true);
+                setFailed(false);
+                void downloadLinkPages(entry, extra)
+                  .catch(() => setFailed(true))
+                  .finally(() => setBusy(false));
+              }}
+            >
+              {busy ? tr('common.preparing') : tr('link.edit.downloadThem')}
+            </button>
+          </p>
+        )}
+        {failed && <p className="error">{tr('sync.downloadFailed')}</p>}
+        <button className="link" onClick={onLeave}>
+          {tr('link.leave')}
+        </button>
+      </div>
+    </main>
   );
 }
 

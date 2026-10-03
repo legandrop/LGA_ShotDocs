@@ -10,6 +10,7 @@ import { clearCommentsTarget, closeComments, useCommentsUi } from './commentsUi'
 import { isLetter, modPressed } from './findUi';
 import { CollapseIcon, HeaderIcon } from './icons';
 import { lazyPart, Part } from './lazyPart';
+import { LinkAsideNotice } from './LinkAsideNotice';
 import { useFloating } from './menus';
 import { pageFormat, sheetSize, SHEET_MARGIN_MM, mm } from './pageFormat';
 import { headerLevels, headerPages, ownHeader } from './titles';
@@ -88,6 +89,7 @@ export function PageView({ id }: { id: string }) {
       )}
       {/* Una plantilla propia (Docs/Doc_Plantillas.md, 5.2): qué es y sus ajustes. */}
       <TemplateBanner pageId={id} />
+      <LinkAsideNotice pageId={id} />
       <PageHeader id={id} editable={perms.canEditPage(id)} />
       <TitleInput id={id} title={page.title} readOnly={!perms.canEditPage(id)} />
       <Part fallback={<EditorSkeleton />}>

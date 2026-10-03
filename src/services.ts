@@ -19,6 +19,7 @@ import { SyncEngine, type SyncStatus } from './sync/engine';
 import { PageFiles } from './sync/files';
 import { openLocalDb, type LocalDb } from './sync/localDb';
 import { supportsContent } from './ui/unknownContent';
+import { LINK_PUSH_MAX_BYTES } from './sync/linkRemote';
 import { SupabaseRemote } from './sync/remote';
 import { normalizeStructure, seedIfEmpty } from './sync/structure';
 import { PageTree } from './sync/tree';
@@ -291,6 +292,8 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser, link
         supports: supportsContent,
         // Sin "Edit", las reparaciones de estructura quedan en memoria: el servidor las rechazaría.
         canWrite: (pageId) => new Permissions(tree, access.get(), user.id).canEditPage(pageId),
+        // Un link (Can edit): la subida sin GC hasta el tope de una subida por un link (LE13).
+        ...(link ? { noGcMaxBytes: LINK_PUSH_MAX_BYTES } : {}),
       });
       const files = new PageFiles(db, remote);
       // Los archivos grandes, en una base aparte (la de siempre no cambia de versión).
@@ -365,7 +368,8 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser, link
         comments,
         sizes,
         // El modo link (P12): un ciclo cada 30 s y solo las páginas que ya se bajaron o están abiertas.
-        ...(link ? { intervalMs: 30_000, pullOnly: (id: string, cursor: number) => cursor > 0 || !!docs.peek(id) } : {}),
+        // Con Can edit (entrega 2a): sin el nombre del visitante lo escrito espera, y editar destraba una página rechazada.
+        ...(link ? { intervalMs: 30_000, pullOnly: (id: string, cursor: number) => cursor > 0 || !!docs.peek(id), linkVisitor: true } : {}),
       });
       const traits = deviceTraits();
       offline = new OfflineManager({
