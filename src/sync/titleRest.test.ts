@@ -5,7 +5,7 @@ import { checkPageLengths, checkProjectName, jsonbTextLength } from './lengthChe
 import { CONTENT_FRAGMENT } from './structure';
 import { FakeServer, makeDevice, type Device } from './testing';
 import { onlyTitleRests, prependRest, restParagraphs, TITLE_REST_PREFIX, watchTitleRests } from './titleRest';
-import { sameInstant } from './tree';
+import { rekeyWindow, sameInstant } from './tree';
 import type { FailedOp, QueuedOp } from './types';
 
 // El tope del título (500 caracteres, `pages_title_check`) y lo que sobra, que va al principio de la página
@@ -614,4 +614,49 @@ describe('otros topes del árbol', () => {
     expect(d.engine.getStatus().failedOps).toBe(0);
     expect(d.tree.pendingOps()).toEqual([]);
   }, 60_000);
+
+  it('al rehacer las claves se tocan solo las páginas amontonadas en el hueco, no las demás hermanas', async () => {
+    const server = new FakeServer();
+    const d = await device(server);
+    const spread: string[] = [];
+    for (let i = 0; i < 200; i++) spread.push(await d.tree.create(null, `h${i}`));
+    const keysBefore = new Map(spread.map((id) => [id, d.tree.get(id)!.sort_key]));
+    const wall = spread[100];
+    const piled = new Set<string>();
+    for (let i = 0; i < 650; i++) piled.add(await d.tree.create(null, `n${i}`, undefined, { before: wall }));
+    const rekeyed = d.tree
+      .pendingOps()
+      .flatMap((o) => (o.op.kind === 'update' && Object.keys(o.op.patch).join() === 'sort_key' ? [o.op.id] : []));
+    // Hubo que rehacer claves, pero solo de las amontonadas, y no de todas: las otras 200 conservan la suya.
+    expect(rekeyed.length).toBeGreaterThan(0);
+    expect(rekeyed.every((id) => piled.has(id))).toBe(true);
+    expect(new Set(rekeyed).size).toBeLessThan(piled.size);
+    for (const id of spread) expect(d.tree.get(id)!.sort_key).toBe(keysBefore.get(id));
+    const order = d.tree.roots(server.workspaceId).map((p) => p.title);
+    expect(order.slice(0, 100)).toEqual(Array.from({ length: 100 }, (_, i) => `h${i}`));
+    expect(order.slice(100, 750)).toEqual(Array.from({ length: 650 }, (_, i) => `n${i}`));
+    expect(order.slice(750)).toEqual(Array.from({ length: 100 }, (_, i) => `h${i + 100}`));
+    expect(Math.max(...d.tree.roots(server.workspaceId).map((p) => p.sort_key.length))).toBeLessThanOrEqual(DB_LIMITS.pageSortKey);
+    await d.engine.syncNow();
+    expect(d.engine.getStatus().failedOps).toBe(0);
+    expect(d.tree.pendingOps()).toEqual([]);
+  }, 60_000);
+
+  it('la ventana de claves nuevas: vecinas que quedan afuera intactas, orden estricto, y con claves repetidas igual sale', () => {
+    const keys = (list: string[]) => list.map((sort_key) => ({ sort_key }));
+    // Sin vecinas o con vecinas cortas, alcanza con la clave del hueco.
+    expect(rekeyWindow([], 0)).toEqual({ from: 0, keys: [expect.any(String)] });
+    // Una vecina larga a la izquierda: la ventana crece hacia ese lado, no hacia la derecha.
+    const long = `a0${'V'.repeat(120)}`;
+    const left = keys(['a0', `a0${'V'.repeat(100)}`, long, 'a1', 'a2']);
+    const w = rekeyWindow(left, 3);
+    expect(w.from + w.keys.length - 1).toBe(3);
+    expect(w.keys.every((k) => k.length <= DB_LIMITS.pageSortKey / 2)).toBe(true);
+    const lower = left[w.from - 1]?.sort_key ?? '';
+    expect([lower, ...w.keys, 'a1'].every((k, i, all) => i === 0 || all[i - 1] < k)).toBe(true);
+    // Dos vecinas con la misma clave: no se cuelga ni tira, y el resultado sigue ordenado.
+    const twins = keys(['a0', 'a1', 'a1', 'a2']);
+    const t = rekeyWindow(twins, 2);
+    expect(t.keys.every((k, i, all) => i === 0 || all[i - 1] < k)).toBe(true);
+  });
 });

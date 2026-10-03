@@ -94,6 +94,33 @@ export function keyBetween(before: string | null, after: string | null): string 
   }
 }
 
+/**
+ * Claves nuevas para el hueco `at` y las hermanas de alrededor, cuando la clave del hueco ya no entra en la base. La
+ * ventana crece desde el hueco hacia el lado de la vecina con la clave más larga (de ahí viene el problema: muchas
+ * páginas puestas en el mismo hueco) hasta que las claves nuevas, entre las dos vecinas que quedan afuera y no se
+ * tocan, ocupan como mucho la mitad del tope. Así se rehacen solo las que se amontonaron, no toda la lista. Devuelve
+ * desde qué hermana empieza la ventana y sus claves, una más que hermanas: la de `at - from` es la del hueco.
+ */
+export function rekeyWindow(siblings: Pick<PageRow, 'sort_key'>[], at: number): { from: number; keys: string[] } {
+  const roomy = DB_LIMITS.pageSortKey / 2;
+  let from = at;
+  let to = at;
+  for (;;) {
+    const lower = siblings[from - 1]?.sort_key ?? null;
+    const upper = siblings[to]?.sort_key ?? null;
+    const whole = lower === null && upper === null;
+    try {
+      const keys = generateNKeysBetween(lower, upper, to - from + 1);
+      if (whole || keys.every((k) => k.length <= roomy)) return { from, keys };
+    } catch {
+      // Dos vecinas con la misma clave (las generaron dos dispositivos a la vez): se agranda la ventana.
+    }
+    const step = Math.max(1, Math.ceil((to - from) / 4));
+    if (lower !== null && (upper === null || lower.length >= upper.length)) from = Math.max(0, from - step);
+    else to = Math.min(siblings.length, to + step);
+  }
+}
+
 /** Páginas que son su propio ancestro. El servidor no lo permite, pero la vista no puede colgarse si pasa. */
 function pagesInCycles(pages: Map<string, PageRow>): Set<string> {
   const result = new Set<string>();
@@ -435,17 +462,19 @@ export class PageTree {
   /**
    * La clave para quedar en la posición `at` entre `siblings`. La clave entre dos vecinas se alarga cada vez que se pone
    * algo en el mismo hueco: después de unas 600 veces pasaría los 128 caracteres que acepta la base y el cambio quedaría
-   * rechazado para siempre. Antes de eso, las hermanas reciben claves nuevas y parejas, en el mismo orden.
+   * rechazado para siempre. Antes de eso, las hermanas de alrededor del hueco reciben claves nuevas y parejas, en el
+   * mismo orden (`rekeyWindow`): solo las que hace falta, para no pisar el lugar de otras que movió otro dispositivo.
    */
   private async keyAt(siblings: PageRow[], at: number): Promise<string> {
     const key = keyBetween(siblings[at - 1]?.sort_key ?? null, siblings[at]?.sort_key ?? null);
     if (key.length <= DB_LIMITS.pageSortKey) return key;
-    const keys = generateNKeysBetween(null, null, siblings.length + 1);
-    const others = keys.filter((_, i) => i !== at);
-    for (const [i, sibling] of siblings.entries()) {
-      if (sibling.sort_key !== others[i]) await this.enqueue({ kind: 'update', id: sibling.id, patch: { sort_key: others[i] } });
+    const { from, keys } = rekeyWindow(siblings, at);
+    const others = keys.filter((_, i) => i !== at - from);
+    for (const [i, key] of others.entries()) {
+      const sibling = siblings[from + i];
+      if (sibling.sort_key !== key) await this.enqueue({ kind: 'update', id: sibling.id, patch: { sort_key: key } });
     }
-    return keys[at];
+    return keys[at - from];
   }
 
   /** Hermanas en un lugar del árbol; en la raíz, solo las del mismo proyecto. */
