@@ -235,9 +235,7 @@ export function ConsentPanel({
             {tr('oauth.retry')}
           </button>
         ) : null}
-        <a className="link" href="/">
-          {tr('oauth.openApp')}
-        </a>
+        <OpenApp />
       </Card>
     );
   }
@@ -298,6 +296,16 @@ function Card({ children }: { children: ReactNode }) {
   );
 }
 
+/** Volver a la app de siempre (el inicio). */
+function OpenApp() {
+  const tr = useT();
+  return (
+    <button className="link" onClick={() => location.assign('/')}>
+      {tr('oauth.openApp')}
+    </button>
+  );
+}
+
 function Loading() {
   const tr = useT();
   return <main className="center-screen muted">{tr('oauth.loading')}</main>;
@@ -312,9 +320,7 @@ function NoWorkspace({ projectRef }: { projectRef: string }) {
     <Card>
       <h1>{tr('oauth.noWorkspace.title')}</h1>
       <p className="muted">{tr('oauth.noWorkspace.text', { ref: projectRef })}</p>
-      <a className="link" href="/">
-        {tr('oauth.openApp')}
-      </a>
+      <OpenApp />
     </Card>
   );
 }
