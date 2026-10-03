@@ -596,6 +596,8 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
 
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Escape') {
+      // Con *Assistant…* abierta, Esc es de esa ventana (cierra solo esa).
+      if (settingsOpen) return;
       e.preventDefault();
       if (photo) setPhoto(null);
       else if (phase.kind === 'idle') closeAssistant();
