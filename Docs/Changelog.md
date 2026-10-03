@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+**Restos de dos auditorías, solo pruebas y un ajuste.** (1) Claves de orden (B.23): si el objetivo de la ventana de
+rehacer pasaba de 64 a 128 caracteres, ninguna prueba fallaba; ahora una prueba arma un hueco con la clave entre 65 y 128
+y exige claves de 64 o menos (y que un hueco corto no rehaga de más); no hubo error de lógica. (2) Una foto sin vista
+previa (llega por una importación o una fila) salía en el HTML externo con la imagen mínima `data:image/gif…` en el
+vínculo y en su texto; ahora va como siempre, con su `sdmedia://` y su nombre (misma regla que BlockNote: sin vista
+previa no hay `<img>`). La versión anterior saca el mismo HTML y ve el mismo bloque. (3) El `loading` del
+`renderHTML` de la foto en línea no cambiaba nada en Chromium ni en WebKit (medido en tres situaciones): se sacó, con
+una prueba de ida y vuelta.
+[ Restos de B.23 y B.24 - la prueba que fija la ventana de claves en 64, la foto sin vista previa sin la imagen mínima en el HTML externo y la foto en línea sin loading inútil ]
+
 v0.158 :
 
 **Ayuda, entrega 3: "Mostrame" y novedades** (P.13). La ayuda explicaba cada función pero no la señalaba, y nada
