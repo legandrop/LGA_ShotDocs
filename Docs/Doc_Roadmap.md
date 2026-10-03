@@ -177,7 +177,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   el Drive real (si Drive rechaza la consulta con varios padres, la app cae a de a una sin perder nada, pero gasta un
   pedido de más por tanda; medir el CPU de un pedido con 40 subcarpetas en el plan gratis). De la auditoría de la entrega
   2 (BAJO, decidido, sin acción): la confianza de 60 s del listado de varias deja listar hasta 60 s una subcarpeta recién
-  movida a otro proyecto (D81). **Entrega 3 hecha (v0.141, rama `lega/carpetas-e3`):** la confianza de 60 s también
+  movida a otro proyecto (D81). **Entrega 3 hecha (v0.0XX, rama `lega/carpetas-e3`):** la confianza de 60 s también
   en las páginas siguientes (con la fecha en que Drive mostró cada subcarpeta, no la del camino); el ZWJ como escape;
   el 403 de Drive por el límite de pedidos sale como `rate` (ya no como «fuera del árbol»); la marca de cada
   subcarpeta en NFC, buscando también las de antes (NFC, tal cual y NFD), así que soltarla desde el otro sistema ya no
@@ -437,7 +437,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   páginas enteras cuando pasa un tope (500 MB de fotos por parte en una computadora; medido en Chromium con 300 páginas
   y 2219 fotos de teléfono) y la lista de las que fallaron con *Export again*. Falta a mano: guardar de verdad una parte
   de 500 MB con la vista previa de Chrome y Edge (también en 8 GB), originales reales de iPhone por el portero, Safari,
-  Firefox y el iPhone (`Doc_Exportar.md`, "Cómo quedó la entrega 1b"). Sigue la entrega 3 (volver a Shot Docs).
+  Firefox y el iPhone (`Doc_Exportar.md`, "Cómo quedó la entrega 1b"). **Entrega 3 hecha (v0.141): volver a Shot Docs
+  desde el zip** (*Import Shot Docs archive…* en el selector, dueño y admins, EX16): siempre a un proyecto nuevo, con el
+  árbol, los ajustes, las marcas de plantilla, los bloques revisados contra el esquema, el colapsado, las anotaciones,
+  los archivos (sin original, la vista de la foto o su nombre) y los comentarios (migración
+  `20261026120000_comentarios_archivo.sql`, **sin aplicar**: con la base vieja esperan para *Resume*); sigue donde quedó
+  sin duplicar; zips rotos y hostiles avisados sin crear nada. Falta: aplicar la migración (con su prueba SQL) y a mano
+  ERSO entero con el portero de verdad, Safari y el iPhone (`Doc_Exportar.md`, "Cómo quedó la entrega 3"). Sigue la 4.
   Quedó de la re-verificación de la 1b (BAJO): una foto de más de 100 MP que hay que pasar a JPEG (girada, PNG, CMYK)
   sale a 200 ppp y el aviso dice «sin conexión» (llevarla al tope de píxeles de a una y dar su motivo); sin red y sin
   miniaturas en el dispositivo las fotos salen como marcador y la ventana no lo cuenta al terminar (de antes); el tope de
@@ -667,7 +673,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
    - **Probarlo en Safari de iPhone y con una red lenta de verdad** (lo hace Lega). El aviso de bytes que salen
      (`XMLHttpRequest`) puede portarse distinto en Safari, con HTTP/2 y a través de Cloudflare; y que cortar la
      subida de una miniatura (la señal en el `fetch` del cliente de Supabase) la corte de verdad en Safari.
-   - **Hecho (v0.141, rama `lega/carpetas-e3`):** las carpetas (P.9) cierran la vuelta como los archivos sueltos (una
+   - **Hecho (v0.0XX, rama `lega/carpetas-e3`):** las carpetas (P.9) cierran la vuelta como los archivos sueltos (una
      trabada no gasta intentos; a la segunda, la cola de la carpeta espera 10 s, 20 s… hasta 10 minutos); mientras la
      cola de archivos espera al portero, registra los archivos nuevos y sube sus miniaturas (si la espera no fue por
      Storage); la bajada de `page-files` se corta a los 30 s sin recibir nada (antes, 27 minutos con una imagen

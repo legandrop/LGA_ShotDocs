@@ -128,7 +128,8 @@ export function ProjectSwitcher() {
               onDelete={(id, name) => setDeleting({ id, name })}
               onWorkspaces={(mode) => setWorkspaces(mode)}
               onRemoveWorkspace={() => setRemoving(true)}
-              onImport={codaOwner ? () => importJobFor(tree).show() : undefined}
+              onImport={codaOwner ? () => importJobFor(tree).show('coda') : undefined}
+              onImportArchive={() => importJobFor(tree).show('archive')}
             />
           </>,
           document.body,
@@ -193,6 +194,8 @@ function ProjectMenu(props: {
   onRemoveWorkspace: () => void;
   /** Solo para la cuenta de Lega (codaOwner.ts); sin esto no aparece "Importar de Coda". */
   onImport?: () => void;
+  /** *Import Shot Docs archive…* (P.22, entrega 3): para quien crea proyectos (dueño y admins). */
+  onImportArchive?: () => void;
 }) {
   const tree = useTree();
   const perms = usePermissions();
@@ -623,6 +626,17 @@ function ProjectMenu(props: {
             <button onClick={() => setMode({ name: 'new' })}>
               <PlusIcon size={16} />
               {needle && projects.length === 0 ? tr('project.newNamed', { name: query.trim() }) : tr('project.new')}
+            </button>
+          )}
+          {perms.canCreateProject && props.onImportArchive && (
+            <button
+              onClick={() => {
+                props.onClose();
+                props.onImportArchive?.();
+              }}
+            >
+              <ImportIcon size={16} />
+              {tr('importArchive.menu')}
             </button>
           )}
           {perms.canCreateProject && props.onImport && (

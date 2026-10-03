@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.141 :
+v0.0XX :
 
 Carpetas, entrega 3, y subidas que se traban (P.9, B.11). Con el portero colgado, cada archivo de una carpeta gastaba
 sus 5 intentos y quedaba con error: ahora una trabada no gasta intentos y, a la segunda, la cola de la carpeta espera
@@ -10,6 +10,18 @@ tras cerrar por Storage colgado. En el portero, el 403 de Drive por límite de p
 árbol»), la confianza de 60 s vale también en las páginas siguientes, el ZWJ va como escape y la marca de cada
 subcarpeta va en NFC, buscando también las anteriores: soltarla desde el otro sistema ya no crea otra al lado.
 [ Carpetas entrega 3 y subidas que se traban - la cola de una carpeta cierra la vuelta con el portero colgado, registrar y miniaturas mientras la cola espera, page-files con tope por quietud, 403 por límite como rate y marcas en NFC ]
+
+v0.141 :
+
+Exportar, entrega 3: volver a Shot Docs desde el zip. El zip guardaba lo necesario para volver, pero nada lo leía.
+*Import Shot Docs archive…* (selector de proyectos, dueño y admins) lee el zip por partes (`zipReader.ts`: CRC, Zip64,
+*deflate*, rechaza `..` y rutas absolutas) y crea siempre un proyecto nuevo: el árbol en orden, ajustes de hoja, marcas
+de plantilla con los ids nuevos, los bloques del JSON revisados contra el esquema (`archiveBlocks.ts`), el colapsado
+para todos, las anotaciones (el zip ahora las exporta) y los archivos por `media.add`; sin original, la vista JPEG de
+la foto o su nombre. Los comentarios vuelven con `import_comment` e ids derivados del proyecto nuevo, a nombre de quien
+importa solo si exportó él; piden la migración `20261026120000_comentarios_archivo.sql` (aplicada, versión 18). Si
+se corta, sigue sin duplicar.
+[ Exportar 3 - volver a Shot Docs desde el zip como proyecto nuevo, con anotaciones, plantillas y comentarios ]
 
 v0.140 :
 

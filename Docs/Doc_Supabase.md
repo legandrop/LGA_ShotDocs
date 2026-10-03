@@ -131,6 +131,14 @@ y el portero); la papelera de archivos (`trashed_files`) no responde a invitados
   bases son copias derivadas.
 - **Pruebas:** `supabase/tests/privacidad_borrado_permisos.sql` (corrida en `begin … rollback`).
 
+### Comentarios que vuelven de un archivo exportado
+
+Migración `20261026120000_comentarios_archivo.sql` (entrega 3 de `Doc_Exportar.md`; **sin aplicar**, `schema_version`
+18): `comments.imported_from` acepta `'shotdocs'` además de `'coda'` (la restricción, que se había creado sin nombre, se
+reemplaza por `comments_imported_from`). La función, los permisos y las vistas no cambian. La app importa los comentarios
+de un zip solo con la base en la 18 o más (`ARCHIVE_COMMENTS_SCHEMA_VERSION`); con una anterior los deja para seguir la
+importación. Prueba: el bloque de `'shotdocs'` en `supabase/tests/comentarios_importados_permisos.sql` (se deshace solo).
+
 ### Compactar: los snapshots
 
 Migración `20261019120000_compactar_leer.sql` (entrega 1 de `Doc_Compactar.md`; sin aplicar, `schema_version` 17).
