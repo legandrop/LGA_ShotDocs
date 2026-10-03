@@ -1710,18 +1710,19 @@ code {
 
 /* El contraste del texto (Docs/Doc_Contraste.md): el encabezado y la negrita con su tono, solo con el color por
    defecto. Todo lo que pone su propio color (un color elegido para unas letras o un bloque, que BlockNote pinta en
-   el bloque y en sus hijos; un link; lo agregado o borrado del historial) cambia los tonos por `currentColor`, que en
-   `color` es el color heredado: así la negrita y los encabezados de adentro siguen con ese color, nunca con el tono
-   por defecto. La negrita de un encabezado va con el encabezado. */
-.bn-container .bn-default-styles [data-content-type='heading'] {
+   el bloque y en sus hijos; un link; la cita, gris; lo borrado del historial) cambia los tonos por `currentColor`, que
+   en `color` es el color heredado: así la negrita y los encabezados de adentro siguen con ese color, nunca con el tono
+   por defecto. La negrita de un encabezado va con el encabezado. Con *No contrast* estas reglas no corren: queda
+   exactamente lo de siempre (el texto común es `--text`). */
+:root:not([data-contrast='none']) .bn-container .bn-default-styles [data-content-type='heading'] {
   color: var(--ink-heading);
 }
 
-.bn-container .bn-default-styles strong {
+:root:not([data-contrast='none']) .bn-container .bn-default-styles strong {
   color: var(--ink-bold);
 }
 
-.bn-container .bn-default-styles [data-content-type='heading'] strong {
+:root:not([data-contrast='none']) .bn-container .bn-default-styles [data-content-type='heading'] strong {
   color: inherit;
 }
 
@@ -1731,10 +1732,30 @@ code {
     [data-text-color]:not([data-text-color='default']),
     .bn-block:has(> .bn-block-content[data-text-color]:not([data-text-color='default'])),
     a,
+    blockquote,
     .hist-del
   ) {
   --ink-heading: currentColor;
   --ink-bold: currentColor;
+}
+
+/* Un resaltado (color de fondo elegido, en unas letras o en un bloque y sus hijos) queda afuera de la jerarquía: su
+   texto por defecto y su negrita van con la tinta plena del encabezado, como siempre. En oscuro los fondos de BlockNote
+   son claros o saturados y un tono más apagado bajaba de 4,5:1 (rojo 3,20, amarillo 1,38 con More). Lo que además
+   tiene un color de texto elegido no se toca. */
+:root:not([data-contrast='none'])
+  .bn-container
+  .bn-default-styles
+  :is(
+    [data-style-type='backgroundColor'],
+    [data-background-color]:not([data-background-color='default']),
+    .bn-block:has(> .bn-block-content[data-background-color]:not([data-background-color='default']))
+  ):not(
+    [data-text-color]:not([data-text-color='default']),
+    .bn-block:has(> .bn-block-content[data-text-color]:not([data-text-color='default']))
+  ) {
+  color: var(--ink-heading);
+  --ink-bold: var(--ink-heading);
 }
 
 .trash-list {

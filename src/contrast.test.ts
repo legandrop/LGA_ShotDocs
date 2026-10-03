@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { COLORS_DARK_MODE_DEFAULT, COLORS_DEFAULT } from '@blocknote/core';
 import { describe, expect, it } from 'vitest';
 
 // El contraste del texto (Docs/Doc_Contraste.md): los tokens de styles.css, resueltos con una cascada mínima (las
@@ -184,33 +185,109 @@ describe('tokens del contraste del texto', () => {
 });
 
 describe('reglas del editor', () => {
+  const GATE = ":root:not([data-contrast='none'])";
   const block = (selector: string) => {
     const at = CSS.indexOf(`${selector} {`);
     expect(at, selector).toBeGreaterThan(-1);
     return CSS.slice(at, CSS.indexOf('}', at));
   };
+  /** Los selectores de una lista, separados solo por las comas de afuera de los paréntesis. */
+  const topLevel = (list: string) => {
+    const out: string[] = [];
+    let depth = 0;
+    let cur = '';
+    for (const ch of list) {
+      if (ch === '(') depth++;
+      if (ch === ')') depth--;
+      if (ch === ',' && depth === 0) {
+        out.push(cur.trim());
+        cur = '';
+      } else cur += ch;
+    }
+    out.push(cur.trim());
+    return out;
+  };
+  /** La regla (selector y cuerpo) que empieza en `head`, con los espacios y saltos de renglón juntados en uno. */
+  const FLAT = CSS.replace(/\s+/g, ' ');
+  const ruleAt = (head: string) => {
+    const at = FLAT.indexOf(head);
+    expect(at, head).toBeGreaterThan(-1);
+    return FLAT.slice(at, FLAT.indexOf('}', at));
+  };
 
   it('el texto común, los encabezados y la negrita usan su tono; la negrita de un encabezado, el del encabezado', () => {
     expect(block('.bn-container .bn-default-styles')).toContain('color: var(--ink-body)');
-    expect(block(".bn-container .bn-default-styles [data-content-type='heading']")).toContain('color: var(--ink-heading)');
-    expect(block('.bn-container .bn-default-styles strong')).toContain('color: var(--ink-bold)');
-    expect(block(".bn-container .bn-default-styles [data-content-type='heading'] strong")).toContain('color: inherit');
+    expect(block(`${GATE} .bn-container .bn-default-styles [data-content-type='heading']`)).toContain('color: var(--ink-heading)');
+    expect(block(`${GATE} .bn-container .bn-default-styles strong`)).toContain('color: var(--ink-bold)');
+    expect(block(`${GATE} .bn-container .bn-default-styles [data-content-type='heading'] strong`)).toContain('color: inherit');
   });
 
-  it('todo lo que pone su propio color cambia los tonos por el color heredado (un color elegido no se toca)', () => {
-    const at = CSS.indexOf('.bn-container .bn-default-styles\n  :is(');
-    expect(at).toBeGreaterThan(-1);
-    const rule = CSS.slice(at, CSS.indexOf('}', at));
+  it('No contrast es lo de siempre: ninguna regla con el tono del encabezado o la negrita corre, y el común es --text', () => {
+    // Toda regla que pinta con `--ink-heading` o `--ink-bold` está apagada con *No contrast*; la única que queda es la del
+    // texto común, que con *No contrast* resuelve a `--text` (el valor de antes): así nada cambia (ni la negrita de una
+    // cita, que hereda su gris).
+    const re = /([^{}]+)\{([^{}]*)\}/g;
+    let m: RegExpExecArray | null;
+    let painted = 0;
+    while ((m = re.exec(CSS))) {
+      if (!/(^|;|\s)color:\s*var\(--ink-(heading|bold)\)/.test(m[2])) continue;
+      painted++;
+      for (const sel of topLevel(m[1])) expect(sel.startsWith(GATE), sel).toBe(true);
+    }
+    expect(painted).toBe(3);
+    for (const mode of ['light', 'dark'] as Mode[]) {
+      const text = mode === 'light' ? '#1b1a17' : '#ece9e2';
+      expect(resolveInks('root', attrsOf(mode, 'none'))['--ink-body']).toBe(text);
+      expect(resolveInks('print', attrsOf(mode, 'none'))['--ink-body']).toBe('#1b1a17');
+    }
+  });
+
+  it('todo lo que pone su propio color cambia los tonos por el color heredado (un color elegido, un link, la cita)', () => {
+    const rule = ruleAt('.bn-container .bn-default-styles :is(');
     for (const s of [
       "[data-style-type='textColor']",
       "[data-text-color]:not([data-text-color='default'])",
       ".bn-block:has(> .bn-block-content[data-text-color]:not([data-text-color='default']))",
       'a,',
+      'blockquote,',
       '.hist-del',
     ]) {
       expect(rule, s).toContain(s);
     }
     expect(rule).toContain('--ink-heading: currentColor');
     expect(rule).toContain('--ink-bold: currentColor');
+  });
+
+  it('un resaltado queda afuera de la jerarquía (tinta plena, también su negrita), salvo con un color de texto elegido', () => {
+    const rule = ruleAt(`${GATE} .bn-container .bn-default-styles :is( [data-style-type='backgroundColor']`);
+    for (const s of [
+      "[data-background-color]:not([data-background-color='default'])",
+      ".bn-block:has(> .bn-block-content[data-background-color]:not([data-background-color='default']))",
+      "):not( [data-text-color]:not([data-text-color='default']),",
+      ".bn-block:has(> .bn-block-content[data-text-color]:not([data-text-color='default'])) ) {",
+      'color: var(--ink-heading);',
+      '--ink-bold: var(--ink-heading);',
+    ]) {
+      expect(rule, s).toContain(s);
+    }
+  });
+
+  it('sobre cada resaltado de BlockNote el texto da lo mismo que antes en los tres niveles, y 4,5:1 donde antes llegaba', () => {
+    const palettes: Record<Mode, Record<string, { background: string }>> = { light: COLORS_DEFAULT, dark: COLORS_DARK_MODE_DEFAULT };
+    for (const mode of ['light', 'dark'] as Mode[]) {
+      const text = mode === 'light' ? '#1b1a17' : '#ece9e2';
+      const bgs = Object.values(palettes[mode]).map((c) => c.background);
+      expect(bgs).toHaveLength(9);
+      for (const level of LEVELS) {
+        // El resaltado pinta con el tono del encabezado (y su negrita también).
+        const ink = resolveInks('root', attrsOf(mode, level))['--ink-heading'];
+        expect(ink).toBe(text);
+        for (const bg of bgs) {
+          const before = contrastRatio(text, bg);
+          expect(contrastRatio(ink, bg)).toBeCloseTo(before, 6);
+          if (before >= 4.5) expect(contrastRatio(ink, bg)).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+    }
   });
 });

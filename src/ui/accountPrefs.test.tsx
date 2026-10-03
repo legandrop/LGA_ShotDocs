@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -130,5 +132,21 @@ describe('panel de la cuenta: Appearance, Font y Contrast', () => {
     expect(accountMaxHeight({ left: 8 })).toBeUndefined();
     const host = await menu({ bottom: 72, left: 8 });
     expect(host.querySelector<HTMLElement>('.account-menu')!.style.maxHeight).toBe('calc(100dvh - 80px)');
+  });
+
+  it('el CSS del panel: se recorre adentro y los renglones largos van a la izquierda (jsdom no calcula el layout)', () => {
+    const css = readFileSync(resolve(__dirname, '../styles.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const rule = (selector: string) => {
+      const at = css.indexOf(`\n${selector} {`);
+      expect(at, selector).toBeGreaterThan(-1);
+      return css.slice(at, css.indexOf('}', at));
+    };
+    const menu = rule('.account-menu');
+    expect(menu).toContain('overflow-y: auto;');
+    expect(menu).toContain('overscroll-behavior: contain;');
+    expect(menu).toContain('max-height: calc(100dvh - 16px);');
+    const row = rule('.account-menu .menu-row');
+    expect(row).toContain('text-align: left;');
+    expect(row).toContain('height: auto;');
   });
 });
