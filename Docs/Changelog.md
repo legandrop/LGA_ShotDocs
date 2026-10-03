@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+**Cinco observaciones del roadmap.** (1) La barra de los links (*Open in new tab*, *Remove link*) seguía con el globo de
+BlockNote: ahora usa el tooltip de la app (`PageLinkToolbarController`); *Edit link* queda sin globo, repetía su texto.
+(2) En oscuro los resaltados gris, amarillo y naranja daban 2,32, 2,60 y 3,69:1 con el texto por defecto: sus fondos
+pasan a 4,7:1 (misma tonalidad, menos luz); el claro y el PDF no cambian. (3) El botón de comentar del teléfono (28 px)
+tapaba hasta 8 px del final de un renglón largo: ahora mide el margen (20 px). (4) El zip salía siempre con *Contrast*:
+lleva el de quien exporta, como el PDF. (5) *Export* sin red avisa que los links a los archivos no usan el link público.
+[ Cinco observaciones del roadmap - barra de links con los tooltips de la app, resaltados en oscuro a 4,5:1, botón de comentar del teléfono dentro del margen, zip con el contraste elegido y aviso de Export sin red ]
+
 v0.164 :
 
 **Link público 2b y links a los archivos en el PDF.** (1) Con *Can edit* el visitante no podía sumar fotos ni archivos:

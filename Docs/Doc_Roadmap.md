@@ -679,7 +679,7 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   access* con la tabla `access_requests`, la campana y *Share*; riesgo alto), E3 opcional (pedir una página). Quedan
   para después: el correo al pedir y al aceptar (B.8), pedir acceso sin cuenta, el link de un video en línea, y en la
   pantalla `/f/` volver a donde estaba y reintentar sola al volver la red (observaciones de la auditoría de E1).
-  También de E1: pruebas de `http://localhost` y de *Sign in instead* (O4) y que *Export* avise sin red (O6).
+  También de E1: pruebas de `http://localhost` y de *Sign in instead* (O4). **Hecho (v0.0XX):** *Export* avisa sin red (O6, *No connection: file links … can't use the public link*).
 - **P.28 Hecho (v0.156): la tabla del reporte en el teléfono** (`Doc_Tabla_Telefono.md`): en pantalla angosta ninguna
   columna con ancho guardado baja de 96 px y la tabla se desplaza de costado dentro de su bloque; la celda donde se
   escribe se acomoda a la vista. La compu y el PDF no cambian. Falta probarlo en un iPhone real (dedo, teclado abierto).
@@ -687,17 +687,17 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   que en un iPad vertical (768 a 834 px, con el cajón a la vista) el reporte ya no se encoge (columnas de 96 en lugar de
   47 a 57) y se desplaza, salvo en una página con formato de hoja (A4, A3, Carta) entre 761 y 1024 px, que queda como el
   PDF (decisión de Lega, ronda 1); también se arregló el botón de comentar del margen, que salía 4 px de la pantalla.
-  Queda un detalle de diseño: con `right: 0` ese botón (28 px) tapa hasta 8 px del final de un renglón muy largo, porque
-  el margen de la página en el teléfono es de 20 px; si se ve apretado, `right: 2px` sigue sin cortarlo.
+  **Hecho (v0.0XX):** el botón de comentar mide el margen de la página en el teléfono (20 px, pegado al borde) y ya no
+  tapa el final de un renglón largo (medido a 375 y 390 px: sin superposición); el área del dedo sigue de 44 px de alto.
   Quedan (chicos): lo que headless no prueba (el impulso del dedo, el teclado abierto, un editor remoto moviendo la selección
   mientras se escribe en una tabla).
 - **P.29 Hecho (v0.161): contraste del texto y el panel de la cuenta** (Lega, 2026-10-03; `Doc_Contraste.md`): *Contrast*
   (de fábrica), *More contrast* y *No contrast* para el texto con el color por defecto, en la página, el historial y el
   PDF (en claro); el panel de la cuenta con íconos, su propio desplazamiento y *Sign out other devices* alineado a la
-  izquierda. Queda: verlo en un iPhone real (el panel con el teclado del sistema y la barra de Safari) y, si Lega lo
-  quiere, llevar la preferencia al zip de exportar (hoy sale con *Contrast*, como sale con la fuente normal).
-  En el modo oscuro los resaltados gris (2,32:1), amarillo (2,60:1) y naranja (3,69:1) de la paleta de BlockNote quedan bajo
-  4,5:1 con el texto por defecto, igual que antes del contraste: ajustar esos fondos si Lega los usa.
+  izquierda. Queda: verlo en un iPhone real (el panel con el teclado del sistema y la barra de Safari).
+  **Hecho (v0.0XX):** el zip de exportar lleva el contraste que eligió quien exporta (como el PDF), y en oscuro los
+  resaltados gris (2,32:1), amarillo (2,60:1) y naranja (3,69:1) pasaron a 4,74, 4,73 y 4,75:1 con el texto por defecto,
+  sin tocar el claro ni el PDF (`Doc_Contraste.md`, sección 5).
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
@@ -1002,8 +1002,11 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    del mouse si el control es más alto que media ventana, y corrido si no entra en ningún lado).
    (c) **Hecho (v0.163):** una prueba del anotador en una ventana angosta con mouse (`annotatorTouch.test.tsx`): la tira
    del teléfono, con los atajos en los tooltips de las herramientas, deshacer, encuadrar y el grosor; el mutante
-   `{ touch: true }` ya no sobrevive. Fuera de esta barra queda la de los links (*Edit link*, *Open in new tab*, *Remove
-   link*, al pasar por un link), con el globo de BlockNote solo con el nombre (sin atajos).
+   `{ touch: true }` ya no sobrevive. (d) **Hecho (v0.0XX):** la barra de los links (*Edit link*, *Open in new tab*,
+   *Remove link*, al pasar por un link) también: la página dibuja su `LinkToolbarController` con el botón de BlockNote
+   envuelto (`PageLinkToolbarController`, `toolbarTips.tsx`), *Open in new tab* y *Remove link* con su nombre en `data-tip`
+   (no tienen atajo: es un ícono) y *Edit link* sin globo (es un botón con texto y BlockNote lo rotulaba «Edit»: repetía
+   lo que ya dice); sin el globo de BlockNote. Prueba `linkToolbarTips.test.tsx` con la barra real.
 
 ### C. Esperan a Lega
 

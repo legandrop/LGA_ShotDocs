@@ -226,6 +226,8 @@ Reporte_ERSO/
   que guarda otra página), así se abre con doble clic y sin red. Los links entre páginas van al `.html` de la otra
   página; afuera de lo exportado, el texto visible sin link. Arriba, el camino desde la raíz de lo exportado; abajo, los comentarios
   (si la casilla está tildada). Se imprime con la hoja de la página (`@page` en el mismo archivo).
+- **El contraste del texto (v0.0XX):** cada `.html` lleva `data-contrast` en el `<html>` con el que eligió quien exporta
+  (*Contrast*, *More contrast* o *No contrast*, `Doc_Contraste.md`), igual que el PDF; antes salía siempre con *Contrast*.
 - **`<página>.md`:** el texto en Markdown (la conversión de BlockNote con el esquema de la app), las fotos como
   `[![IMG_0413.HEIC](Files/_view/IMG_0413.jpg)](Files/IMG_0413.HEIC)` en su renglón (la vista con link al original; sin
   original, la vista sola), los links de afuera como texto, el salto de hoja como una línea propia

@@ -73,6 +73,16 @@ margen (`.comment-add`) se pasaba 4 px del borde derecho cuando había una selec
 de costado. Era `right: -4px` en la regla de teléfono de `.comment-count, .comment-add`; ahora `right: 0` (medido a 360,
 375 y 414 px: el borde derecho del botón queda en el ancho de la pantalla y la página no se corre).
 
+**El botón de comentar ya no tapa el final del renglón (v0.0XX).** Con `right: 0` el botón (28 px) pasaba por arriba del
+margen de la página en el teléfono (`--gutter`, 20 px) y tapaba hasta 8 px del final de un renglón muy largo. Medido en
+Chromium con un párrafo de renglones a ras del margen: a 375 px el texto llegaba a 353,8 y el botón empezaba en 347 (6,8 px
+encima); a 390 px, 367,7 contra 362 (5,7 px). Ahora, a 760 px o menos, el botón mide el margen (`width: var(--gutter)`, 20
+px, pegado al borde): empieza en 355 y 370, y el texto termina en 353,8 y 367,7 (sin superposición). Para el dedo el área
+que responde sigue siendo de 44 px de alto: un `::after` se estira 10 px para arriba y para abajo, nunca hacia los
+costados, así no llega al texto. La compu y la tablet (margen de 54 px) siguen con 28 px. El contador de comentarios
+(`.comment-count`, con un número) no se tocó: no cabe en 20 px y avisa de comentarios que ya existen. Prueba:
+`src/ui/commentButtonPhone.test.ts`.
+
 ## Pruebas
 
 `src/ui/tableScroll.test.ts` (la lógica de acomodar la celda: cortada por la derecha, por la izquierda, entera, tabla

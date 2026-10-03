@@ -18,7 +18,8 @@ jerarquía de tres tonos:
   negrita) ni lo borrado que marca el historial con *Show changes*.
 - Lo **resaltado** (un color de fondo elegido, en unas letras o en un bloque y sus hijos) queda afuera de la jerarquía:
   su texto y su negrita van con la tinta plena de siempre. En oscuro los fondos de BlockNote son claros o saturados y
-  un tono más apagado bajaba de 4,5:1 (rojo 4,64 → 3,20 con *Contrast*; amarillo 1,38 con *More*).
+  un tono más apagado bajaba de 4,5:1 (rojo 4,64 → 3,20 con *Contrast*; amarillo 1,38 con *More*). Además, en oscuro
+  tres fondos (gris, amarillo, naranja) ya no llegaban ni con la tinta plena: ver «Los resaltados en oscuro» (sección 5).
 - *No contrast* es **exactamente lo de antes**: las reglas de los encabezados, la negrita y el resaltado no corren
   (`:root:not([data-contrast='none'])`) y el texto común resuelve a `--text`. Medido en Chromium contra `main`, elemento
   por elemento (44 textos, claro y oscuro, página y PDF): cero diferencias.
@@ -31,7 +32,12 @@ jerarquía de tres tonos:
   la clave: la descarta y, si sube sus preferencias, la borra de la cuenta; los dispositivos con esta versión siguen con
   la que tenían (lo mismo que `language` y `phoneImages`).
 
-**El zip de exportar** no lleva la preferencia (tampoco lleva la fuente): su HTML sale con *Contrast*.
+**El zip de exportar** lleva la preferencia (v0.0XX): cada página `.html` sale con `<html data-contrast="…">` y las
+reglas de su `style.css` (las mismas de la app) la aplican igual que en el PDF, siempre con los tonos claros. Antes salía
+siempre con *Contrast*. Decisión: el PDF ya seguía el nivel de quien exporta, y un zip que sale distinto del PDF de la
+misma persona sorprendería; el archivo no es una copia fija para comparar sino la página como la ve quien la exporta.
+No lleva la fuente (sigue la normal). `buildZip` toma `options.contrast` o, sin él, `prefs.contrast`. El `index.html` del
+zip no lleva texto del documento y no cambia.
 
 ## 2. Los tokens
 
@@ -115,3 +121,29 @@ Pruebas: `src/ui/accountPrefs.test.tsx` (solo íconos con tooltip y `aria-label`
 guarda y marca el documento, los rótulos en castellano, el alto del panel, y en el CSS el desplazamiento propio y los
 renglones a la izquierda) y `src/prefs.test.ts` (de fábrica, valores
 desconocidos, guardar y subir, una cuenta sin la clave).
+
+## 5. Los resaltados en oscuro (v0.0XX)
+
+El texto por defecto sobre un resaltado va con la tinta plena del encabezado en los tres niveles (`#ece9e2` en oscuro).
+Con los fondos de BlockNote tres no llegaban a 4,5:1; medido en Chromium sobre la página real (el texto «fondo …» de cada
+color) y calculado con WCAG 2.x:
+
+| Resaltado (oscuro) | Fondo de BlockNote | Razón antes | Fondo ahora | Razón ahora |
+|---|---|---|---|---|
+| gris | `#9b9a97` | 2,32 | `#676663` | 4,74 |
+| amarillo | `#b58b00` | 2,60 | `#806200` | 4,73 |
+| naranja | `#b7600a` | 3,69 | `#9d5209` | 4,75 |
+
+Los otros seis (marrón 6,92; rojo 4,64; verde 5,23; azul 4,68; violeta 6,02; rosa 5,47) ya llegaban y no se tocan. Cada
+tono nuevo es el de BlockNote con **la misma tonalidad y saturación y menos luz** (HSL), buscando el más claro que pase
+4,5:1 con margen (4,7 en vez de 4,5 por el redondeo), así el gris sigue gris, el amarillo mostaza y el naranja anaranjado, y
+cada uno se distingue de la página (3,1:1 contra `#171716`). El cambio está en `src/styles.css`
+(`.bn-container[data-color-scheme='dark']` redefine `--bn-colors-highlights-{gray,yellow,orange}-background`): vale en los
+tres niveles de contraste (el texto resaltado no depende del nivel) y **solo en el esquema oscuro**: el modo claro y el PDF
+(que arma siempre el claro) conservan los fondos de BlockNote. También cambia el color de esas muestras en el selector de
+colores del modo oscuro (usa las mismas variables).
+
+Queda sin cambio, a propósito: un texto con un color elegido **y** un resaltado a la vez (rojo sobre amarillo: 1,24 antes y
+1,47 ahora en oscuro; 3,84 en claro) es una combinación que elige la persona, y la cita con un resaltado dentro (1,48), que
+ya estaba así en `main`. Pruebas: dos en `src/contrast.test.ts` (los nueve resaltados de BlockNote en oscuro a 4,5:1 o más
+con los tres niveles, solo esos tres tocados, y que ninguna regla de resaltados cuelga del modo claro ni de `.print-view`).

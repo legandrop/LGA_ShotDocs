@@ -261,7 +261,7 @@ el pase no coincidirían.
   el link.
 - **Hoy (D14 apagado) no se puede crear un link público en Wanka:** la parte del link de E1 se prueba con el servidor
   falso y la prueba de aceptación 3 espera a que se prenda el interruptor (O9).
-- **Sin red al exportar** no se puede saber si hay link: los links van con `#ws=` y la ventana lo dice.
+- **Sin red al exportar** no se puede saber si hay link: los links van con `#ws=` y la ventana lo dice (v0.0XX): *No connection: file links in this PDF can't use the public link of the page, even if it has one. They ask to sign in.* Sale solo en la ventana del PDF, con archivos en Drive conectados, sin red (o con la red caída del navegador) y sin los links ya pedidos; un visitante del link no lo ve (usa el suyo). Prueba: `exportFileLinks.test.tsx`.
 - **Revocar, *Reset link*, vencer, la página a la papelera o quien lo creó sin permiso de compartir:** el token deja de
   valer en el acto (lo valida la base en cada pedido); el link del PDF abre la pantalla del link muerto, que para una
   ruta `/f/` suma **Sign in instead** (LF16): convierte la dirección en la de miembro (`u`, `k`, `l` del mismo payload,
@@ -949,8 +949,8 @@ que diga otra cosa.
 - Un dispositivo sin ningún proyecto visible (por ejemplo, un invitado al que le sacaron todo) ve la pantalla de "sin
   proyectos" en vez de la del archivo: la del archivo se dibuja adentro de la app.
 - Se preguntan como mucho 40 links públicos por exportación (`MAX_LINK_LOOKUPS`).
-- Sin red al exportar, la ventana no lo avisa (3.3 decía que sí): no se piden links y el PDF va con la dirección de
-  siempre (`#ws=`), que es lo seguro.
+- Sin red al exportar, la ventana no lo avisaba (3.3 decía que sí; observación O6 de la auditoría): no se piden links y el
+  PDF va con la dirección de siempre (`#ws=`), que es lo seguro. **Hecho (v0.0XX):** ahora la ventana lo dice (3.3).
 
 **Ronda 1 de la auditoría de E1** (aprobado con observaciones, sin bloqueantes): si la red se cortaba y volvía con la
 ventana *Export* abierta, la casilla volvía a su valor de fábrica y un *Can view* destildado a mano podía salir con el
