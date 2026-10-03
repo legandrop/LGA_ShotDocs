@@ -639,7 +639,7 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   (chico): copiar a la página del plano solo el lente (otras columnas con su fila en la ficha se suman en `FIELDS` de
   `shotPage.ts`); lo escrito en la página del plano no entra en el ⌘Z de esa página (se deshace con *Undo* de la hoja,
   como el reemplazo del proyecto antes de D10).
-- **P.28 Hecho (v0.0XX): la tabla del reporte en el teléfono** (`Doc_Tabla_Telefono.md`): en pantalla angosta ninguna
+- **P.28 Hecho (v0.156): la tabla del reporte en el teléfono** (`Doc_Tabla_Telefono.md`): en pantalla angosta ninguna
   columna con ancho guardado baja de 96 px y la tabla se desplaza de costado dentro de su bloque; la celda donde se
   escribe se acomoda a la vista. La compu y el PDF no cambian. Falta probarlo en un iPhone real (dedo, teclado abierto).
   Quedan (chicos): el corte de teléfono es de 760 px, así que en un iPad vertical (761 px o más) la tabla del reporte
@@ -937,9 +937,9 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    tiene prueba ni efecto medido (copiar, pegar y arrastrar no pasan por ahí): probarlo con `getHTML` o sacarlo; (O4) con
    `showPreview: false` (solo llega por una importación o una fila) el HTML externo lleva el placeholder `data:image/gif…` en
    el `<a href>` y en su texto: envolver solo si `showPreview !== false`, o restituir también `href` y el texto.
-25. **Lo que quedó de D226 (tooltips con gesto o atajo, v0.0XX).** (a) Los botones propios de BlockNote en la barra de
+25. **Lo que quedó de D226 (tooltips con gesto o atajo, v0.156).** (a) Los botones propios de BlockNote en la barra de
    formato (*Bold* con ⌘B abajo, *Italic*, etc.) siguen con su globo: pasarlos al formato de renglones pide reemplazar
-   esos botones. *Comment* y *Assistant*, que son de la app, ya usan los renglones. (b) **Hecho (v0.0XX):** el tooltip
+   esos botones. *Comment* y *Assistant*, que son de la app, ya usan los renglones. (b) **Hecho (v0.156):** el tooltip
    del borde de la barra lateral salía afuera de la pantalla; ahora todo globo queda adentro (a un costado y a la altura
    del mouse si el control es más alto que media ventana, y corrido si no entra en ningún lado).
    (c) Falta una prueba de que el anotador en una ventana angosta con mouse conserva los atajos (la decisión es por el

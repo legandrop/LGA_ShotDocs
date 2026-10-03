@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.156 :
 
 **Tooltips con gesto o atajo (D226).** Cada tooltip nombraba sus atajos y gestos a su manera («Keyboard: R», «Close
 (Esc)», un ⌘K suelto, «Supr o Retroceso» escrito a mano) y usaba la negrita para cualquier cosa. Ahora van en
