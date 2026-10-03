@@ -328,9 +328,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   `schema_version` 20; ver "Cómo quedó la 2c" en `Doc_Link_Publico.md`):** la lista en *Share*, *Set aside (via link)* en
   el historial, el ícono del árbol y "volver a la página como la ve el equipo" para el visitante (la salida de la cadena
   de D235); con O3 (el orden de la admisión por dispositivo), O9 (la pantalla de link muerto recuerda lo mandado) y R1
-  (una página ya honda admite lo que no la ahonda). Para publicarla: aplicar la migración (con la copia). Quedan: que el
+  (una página ya honda admite lo que no la ahonda); su auditoría la aprobó con observaciones, corregidas (O1 a O4 y O6). Para publicarla: aplicar la migración (con la copia). Quedan: que el
   dueño pueda descartar lo apartado después de bajarlo (decisión de Lega: va contra "no hay borrado duro"), las filas
-  con una versión inventada cuentan en los 20 MB de lo que espera de su link hasta *Reset link* (BAJO), y probar a mano
+  con una versión inventada cuentan en los 20 MB de lo que espera de su link hasta *Reset link* (BAJO, O5 de su auditoría:
+  no contar lo que tiene una versión mayor que la de cualquier editor que admitió hoy, o mostrarlo en *Share* como
+  trabado), y probar a mano
   con el link de verdad la descarga y la vuelta a la versión del equipo en Safari del iPhone (la descarga de un JSON).
   **Entrega 2 rediseñada (2026-10-02):** lo que escribe un link espera en una sala
   (`public_link_updates`) y entra a `page_updates` cuando el dispositivo de un editor lo prueba (`link_admit`); partida

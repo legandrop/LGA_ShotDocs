@@ -2515,6 +2515,21 @@ red, sin base, con algo escrito en el medio y con dos pestañas; lo mandado reco
 (R1), `linkAsideStore.test.ts` (cuándo pregunta) y `linkAsideUi.test.tsx` (*Share*, el historial, el árbol y el aviso del
 visitante, montados). No toca el editor (ningún tipo de bloque ni propiedad nueva).
 
+#### Correcciones de la auditoría de la 2c
+
+Una auditoría independiente dio **aprobado con observaciones** (sin bloqueantes). Se corrigió antes de publicar:
+
+| Hallazgo | Corrección |
+|---|---|
+| **O1.** Lo tecleado en el documento con lo de antes después del reemplazo (otra pestaña antes de enterarse, o esta en los milisegundos hasta reabrir) quedaba guardado pero pendiente en Yjs: no se veía, no salía en la copia ni se contaba | `keepLateWriting` (`src/sync/startedOver.ts`): si una página que volvió tiene en sus filas algo pendiente que sí se arma sobre lo de antes, lo pasa a lo de antes en la misma transacción en que lo saca de las filas, y anota el aviso (`startedOverLate:<página>`). Corre al abrir la página (después de guardar lo que esté en vuelo), antes de subirla en cada sincronización y al armar la copia. El visitante ve *Something you typed while this page changed to the team's version wasn't added. It's kept in this browser and comes in the copy you download*, con *Download them* y *Got it* (cerrar el aviso no toca lo guardado). Nunca hay una tecla escondida sin aviso: a lo sumo, hasta la próxima sincronización |
+| **O2.** Al volver se daba por visto «apartado + esperando»: un apartado nuevo de algo que esperaba no se avisaba | Se da por visto solo lo apartado (nunca baja): cualquier apartado posterior vuelve a mostrar el aviso. Lo que esperaba de la sesión de antes y se aparta en cadena lo avisa otra vez (de más, nunca de menos) |
+| **O3.** El tope de 1000 de `public_link_aside` era para todo el workspace | Hasta 200 por página (las más nuevas, `row_number() over (partition by page_id)`) |
+| **O4.** `link_publico_permisos.sql` suponía el interruptor de *Can edit* apagado | Lo apaga al principio, como `link_editar_permisos.sql`: pasa con la base de hoy |
+| **O6.** `link_page_id` iba a quien no ve la raíz del link | Nula para quien no la ve (`page_level`, una vez por link) |
+
+Queda al roadmap (O5): lo trabado por una versión inventada sigue contando en los 20 MB que esperan de su link, hasta
+*Reset link*.
+
 ## Cómo se midió
 
 Prototipos fuera del repo, con sus resultados en `res_*.txt`. No se creó ningún usuario, no se entró con login ni se tocó

@@ -10,6 +10,7 @@ import { block, group } from '../sync/historyTesting';
 import { addPublicLink, makeLinkDevice, type LinkDevice } from '../sync/linkTesting';
 import type { SupabaseRemote } from '../sync/remote';
 import { CONTENT_FRAGMENT } from '../sync/structure';
+import { startedOverLateKey } from '../sync/startedOver';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { HistoryPanel } from './HistoryPanel';
@@ -282,5 +283,20 @@ describe('el visitante vuelve a la versión del equipo', () => {
     v.docs.close(s);
     // El aviso se fue.
     expect(host.querySelector('.link-visitor-aside')).toBeNull();
+
+    // Algo tecleado tarde pasó a lo de antes (O1 de la auditoría): el aviso lo dice hasta que se cierra.
+    await v.db.put('meta', 1, startedOverLateKey(s));
+    act(() => roots.pop()!.unmount());
+    const again = await mount(
+      value,
+      <LinkContext.Provider value={{ entry, domain: linkDomain(entry), linkId: entry.linkId, pageId: s }}>
+        <LinkVisitorAsideNotice pageId={s} />
+      </LinkContext.Provider>,
+    );
+    expect(again.textContent).toContain("Something you typed while this page changed to the team's version wasn't added.");
+    await act(async () => buttonNamed(again, 'Got it').click());
+    await settle();
+    expect(again.querySelector('.link-visitor-aside')).toBeNull();
+    expect(await v.docs.startedOverLate(s)).toBe(0);
   });
 });

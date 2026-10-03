@@ -11,6 +11,7 @@ además en el navegador. También: la admisión ordena por dispositivo (una vers
 pantalla de link muerto recuerda lo mandado (O9) y una página ya honda admite lo que no la ahonda (R1). Migración
 `20261029120000_link_apartado.sql`, sin aplicar (`schema_version` 20).
 [ Link público entrega 2c - lo apartado en Share, el historial y el árbol, volver a la versión del equipo sin perder nada, el orden de la admisión por dispositivo, lo mandado recordado y la página ya honda ]
+
 v0.154 :
 
 **El nombre en el árbol usa todo el ancho de la fila** (D233). Un nombre largo se cortaba con «…» antes del borde

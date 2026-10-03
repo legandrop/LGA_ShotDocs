@@ -125,6 +125,15 @@ export const link = {
     en: "You're offline, so nothing was replaced. Try again when you're back online.",
     es: "No hay conexión, así que no se reemplazó nada. Probá de nuevo cuando vuelva.",
   },
+  'link.startOver.lateTitle': {
+    en: "Something you typed while this page changed to the team's version wasn't added.",
+    es: "Algo que escribiste mientras esta página pasaba a la versión del equipo no se sumó.",
+  },
+  'link.startOver.lateText': {
+    en: "It's kept in this browser and comes in the copy you download.",
+    es: "Queda guardado en este navegador y viene en la copia que bajás.",
+  },
+  'link.startOver.lateDismiss': { en: "Got it", es: "Entendido" },
   'link.startOver.failed': {
     en: "Nothing was replaced: {reason}",
     es: "No se reemplazó nada: {reason}",

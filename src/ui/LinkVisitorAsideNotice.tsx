@@ -44,9 +44,54 @@ export function LinkVisitorAsideNotice({ pageId }: { pageId: string }) {
 
   useEffect(() => setError(null), [pageId]);
 
-  if (!link || !remote || !edits.aside.includes(pageId)) return null;
+  // Algo tecleado mientras la página volvía a la versión del equipo pasó a lo de antes (O1 de la auditoría de la 2c): no
+  // está en la página pero sí en la copia. Se dice hasta que el visitante cierra el aviso.
+  const [late, setLate] = useState(0);
+  useEffect(() => {
+    if (!link) return;
+    let live = true;
+    const read = () => void docs.startedOverLate(pageId).then((n) => live && setLate(n), () => undefined);
+    read();
+    const off = docs.subscribeStartedOverLate((id) => id === pageId && read());
+    return () => {
+      live = false;
+      off();
+    };
+  }, [link, docs, pageId]);
+
+  if (!link || !remote) return null;
 
   const download = () => downloadLinkPages(link.entry, [pageId]);
+
+  if (!edits.aside.includes(pageId)) {
+    if (late === 0) return null;
+    return (
+      <div className="banner link-visitor-aside" role="status">
+        <p>
+          <strong>{tr('link.startOver.lateTitle')}</strong> {tr('link.startOver.lateText')}
+        </p>
+        <p className="link-visitor-aside-actions">
+          <button
+            className="link"
+            disabled={busy !== null}
+            onClick={() => {
+              setBusy('download');
+              setError(null);
+              void download()
+                .catch(() => setError(tr('sync.downloadFailed')))
+                .finally(() => setBusy(null));
+            }}
+          >
+            {busy === 'download' ? tr('common.preparing') : tr('link.edit.downloadThem')}
+          </button>
+          <button className="link" disabled={busy !== null} onClick={() => void docs.dismissStartedOverLate(pageId).then(() => setLate(0))}>
+            {tr('link.startOver.lateDismiss')}
+          </button>
+        </p>
+        {error && <p className="error">{error}</p>}
+      </div>
+    );
+  }
 
   const startOver = async () => {
     if (!confirm(tr('link.startOver.confirm'))) return;

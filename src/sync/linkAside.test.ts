@@ -351,6 +351,98 @@ describe('volver a la página como la ve el equipo (sin perder nada)', () => {
   });
 });
 
+describe('correcciones de la auditoría de la 2c', () => {
+  it('O1: lo que otra pestaña teclea en su documento viejo después del reemplazo pasa a lo de antes, sale en la copia y se avisa', async () => {
+    const { server, s, v } = await visitorWithAside();
+    const other = new PageDocs(v.db, { normalize: normalizeStructure, seed: seedIfEmpty });
+    extraDocs.push(other);
+    const docB = await other.open(s);
+    let lateB = 0;
+    other.subscribeStartedOverLate((id) => id === s && lateB++);
+    // El aviso del BroadcastChannel todavía no llegó a B.
+    await startOverFromTeam(deps(v, server, { broadcast: () => undefined }), s);
+    docB.transact(() => group(docB).push([block('late20', '<t20> ')]), 'test');
+    await other.flush(s);
+    other.reloadFromSaved(s);
+    other.close(s);
+    const reopened = await other.open(s);
+    other.close(s);
+    // No está en la página (es de lo de antes), pero sí en lo de antes y en la copia, y se avisa.
+    expect(docTokens(reopened).has('<t20>')).toBe(false);
+    expect(tokens([(await v.db.get('meta', startedOverKey(s))) as Uint8Array]).has('<t20>')).toBe(true);
+    expect(textTokens((await copyOf(v, s)).before!).has('<t20>')).toBe(true);
+    expect(lateB).toBe(1);
+    expect(await v.docs.startedOverLate(s)).toBe(1);
+    // En las filas no queda nada pendiente: la página sigue siendo la del equipo.
+    expect(await visible(v, s)).toEqual(new Set(['<t1>', '<t3>']));
+    // Cerrar el aviso no toca lo guardado.
+    await v.docs.dismissStartedOverLate(s);
+    expect(await v.docs.startedOverLate(s)).toBe(0);
+    expect(tokens([(await v.db.get('meta', startedOverKey(s))) as Uint8Array]).has('<t20>')).toBe(true);
+  });
+
+  it('O1: lo que esta pestaña teclea en el documento abierto justo después del reemplazo, también', async () => {
+    const { server, s, v } = await visitorWithAside();
+    const docA = await v.docs.open(s);
+    let late = 0;
+    v.docs.subscribeStartedOverLate((id) => id === s && late++);
+    await startOverFromTeam(deps(v, server), s);
+    docA.transact(() => group(docA).push([block('late21', '<t21> ')]), 'test');
+    v.docs.close(s);
+    expect(await visible(v, s)).toEqual(new Set(['<t1>', '<t3>']));
+    expect(tokens([(await v.db.get('meta', startedOverKey(s))) as Uint8Array]).has('<t21>')).toBe(true);
+    expect(textTokens((await copyOf(v, s)).before!).has('<t21>')).toBe(true);
+    expect(late).toBe(1);
+  });
+
+  it('O1: sin volver a abrir la página, la próxima sincronización lo pasa a lo de antes y avisa; la copia también lo busca', async () => {
+    const { server, s, v } = await visitorWithAside();
+    const other = new PageDocs(v.db, { normalize: normalizeStructure, seed: seedIfEmpty });
+    extraDocs.push(other);
+    const docB = await other.open(s);
+    await startOverFromTeam(deps(v, server, { broadcast: () => undefined }), s);
+    docB.transact(() => group(docB).push([block('late22', '<t22> ')]), 'test');
+    await other.flush(s);
+    // La copia (sin abrir nada) ya lo trae.
+    expect(textTokens((await copyOf(v, s)).before!).has('<t22>')).toBe(true);
+    expect(await v.docs.startedOverLate(s)).toBe(1);
+    // Otra tecla tarde: la sincronización (subir) la pasa sin abrir la página.
+    docB.transact(() => group(docB).push([block('late23', '<t23> ')]), 'test');
+    await other.flush(s);
+    let late = 0;
+    v.docs.subscribeStartedOverLate((id) => id === s && late++);
+    await v.engine.syncNow();
+    expect(late).toBe(1);
+    expect(tokens([(await v.db.get('meta', startedOverKey(s))) as Uint8Array]).has('<t23>')).toBe(true);
+    expect(await v.docs.startedOverLate(s)).toBe(2);
+    other.close(s);
+  });
+
+  it('O2: lo que esperaba al volver y después entra no tapa un apartado nuevo', async () => {
+    const { server, e1, s, tick, v } = await visitorWithAside();
+    await v.engine.syncNow();
+    // Otra sesión escribe arriba de todo, sin colgar de lo apartado: espera en la sala al volver.
+    const other = new PageDocs(v.db, { normalize: normalizeStructure, seed: seedIfEmpty });
+    extraDocs.push(other);
+    const docB = await other.open(s);
+    docB.transact(() => group(docB).insert(0, [block('ind7', '<t7> ')]), 'test');
+    await other.flush(s);
+    other.close(s);
+    await v.engine.syncNow();
+    await v.remote.refreshEdits(true);
+    expect(server.linkRoom.filter((r) => r.decidedAt === null).length).toBeGreaterThan(0);
+    await startOverFromTeam(deps(v, server), s);
+    expect(v.remote.linkEdits().aside).toEqual([]);
+    await editorRound(e1, tick, [s]);
+    // Después de volver, algo nuevo se aparta: el aviso vuelve.
+    await write(v, s, '<t8>');
+    await v.engine.syncNow();
+    server.admit(server.ownerId, '0.200', s, [{ id: server.linkRoom.at(-1)!.id, ok: false, reason: 'bad_shape' }]);
+    await v.remote.refreshEdits(true);
+    expect(v.remote.linkEdits().aside).toEqual([s]);
+  });
+});
+
 describe('O9: el visitante recuerda dónde mandó algo', () => {
   function memoryStore(): KeyValueStore {
     const m = new Map<string, string>();
