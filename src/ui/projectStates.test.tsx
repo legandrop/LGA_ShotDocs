@@ -711,6 +711,23 @@ describe('entrega 2: la lista de borrados con la carpeta en la papelera de Drive
     expect(server.deletedProjects.has(o)).toBe(true);
   });
 
+  it('a quien no es dueño ni admin no le ofrece mandar la carpeta de un borrado (can_purge), aunque haya portero', async () => {
+    const ws = await driveWorkspace();
+    ws.server.addMember('ana', 'member');
+    ws.server.grant('ana', { projectId: ws.o }, 'edit_pages');
+    await ws.owner.remote.deleteProject(ws.o);
+    const ana = await makeDevice(ws.server, undefined, undefined, undefined, undefined, { id: 'ana' });
+    devices.push(ana);
+    await ana.engine.syncNow();
+    const { drive, calls } = fakeDrive(ws.server);
+    await openWith(ana, 'ana', drive);
+    await act(async () => byText('Trash')!.click());
+    await vi.waitFor(() => expect(document.querySelector('[data-kind="project"]')?.textContent).toContain('Bosque Negro'));
+    expect(byText('Send files to the Drive trash')).toBeUndefined();
+    expect(byText('Restore')).toBeUndefined();
+    expect(calls).toEqual([]);
+  });
+
   it('un borrado sin la carpeta enviada ofrece mandarla (pregunta antes); a medias, la termina', async () => {
     const ws = await driveWorkspace();
     await ws.owner.remote.deleteProject(ws.o);

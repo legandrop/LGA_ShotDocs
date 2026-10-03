@@ -79,10 +79,12 @@ export const trash = {
     en: { one: "({count} used by a page in the trash stays)", other: "({count} used by pages in the trash stay)" },
     es: { one: "(queda {count}, que usa una página de la papelera)", other: "(quedan {count}, que usan páginas de la papelera)" },
   },
+  // Vacía solo la papelera de archivos del proyecto abierto: la pregunta lo nombra.
   'fileTrash.confirmEmpty': {
-    en: "Empty the file trash: send {what}{skip} to the Google Drive trash?",
-    es: "Vaciar la papelera de archivos: ¿mandar {what}{skip} a la papelera de Google Drive?",
+    en: "Empty the file trash of “{project}”: send {what}{skip} to the Google Drive trash?",
+    es: "Vaciar la papelera de archivos de “{project}”: ¿mandar {what}{skip} a la papelera de Google Drive?",
   },
+
   'fileTrash.emptySpace': {
     en: "{size} go to the Google Drive trash. The space in Drive is freed when Google empties its trash (after 30 days), not right away.",
     es: "{size} pasan a la papelera de Google Drive. El espacio en Drive se libera cuando Google vacía su papelera (a los 30 días), no enseguida.",
@@ -120,8 +122,8 @@ export const trash = {
     es: "Lo usa una página de un proyecto borrado. Vuelve si restauran ese proyecto.",
   },
   'fileTrash.emptyTip': {
-    en: "Send every file in this list to the Google Drive trash, except those used by pages in the trash",
-    es: "Manda todos los archivos de esta lista a la papelera de Google Drive, menos los que usan páginas de la papelera",
+    en: "Send every file of this project in this list to the Google Drive trash, except those used by pages in the trash",
+    es: "Manda todos los archivos de este proyecto de esta lista a la papelera de Google Drive, menos los que usan páginas de la papelera",
   },
   'fileTrash.emptyButton': { en: "Empty", es: "Vaciar" },
   'fileTrash.sendingOf': { en: "Sending {n} of {total}…", es: "Mandando {n} de {total}…" },

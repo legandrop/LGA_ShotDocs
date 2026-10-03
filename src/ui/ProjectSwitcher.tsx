@@ -55,16 +55,12 @@ export function Monogram({ name, size = 26 }: { name: string; size?: number }) {
 const coarsePointer = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
 // Abrir la papelera desde afuera del selector (la dirección vieja `/trash`, Workspace.tsx): el selector se abre ya en
-// la papelera. Si el selector todavía no está montado, el pedido espera a que lo esté.
+// la papelera. Sin un selector montado no hace nada (no queda un pedido guardado que lo abra solo más tarde): el
+// `Shell` lo pide con la barra lateral ya montada.
 const trashListeners = new Set<() => void>();
-let trashPending = false;
 
 /** Abre el selector de proyectos en la papelera (*Trash*). */
 export function openProjectTrash(): void {
-  if (trashListeners.size === 0) {
-    trashPending = true;
-    return;
-  }
   for (const listener of trashListeners) listener();
 }
 
@@ -109,10 +105,6 @@ export function ProjectSwitcher() {
       setPosition(menuBelow(button.current, 340));
     };
     trashListeners.add(open);
-    if (trashPending) {
-      trashPending = false;
-      open();
-    }
     return () => {
       trashListeners.delete(open);
     };

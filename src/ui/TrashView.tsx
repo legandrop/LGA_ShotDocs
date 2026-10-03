@@ -137,7 +137,10 @@ export function TrashPanel(props: { current: string; onClose: () => void }) {
 
   // Los filtros que tienen sentido acá: *Projects* con la base en la versión 9, *Files* si hay alguna papelera de
   // archivos que la persona pueda ver. Con uno solo (las páginas), sin filtro.
-  const filesOffered = fileProjects.some((id) => files.loaded[id]?.state !== 'hidden');
+  // Sin red, solo si ya hay archivos leídos (si no, *Files* diría a la vez "hace falta conexión" y "no hay archivos").
+  const filesOffered = online
+    ? fileProjects.some((id) => files.loaded[id]?.state !== 'hidden')
+    : fileProjects.some((id) => files.loaded[id]?.state === 'ready');
   const filters: TrashFilter[] = ['all', ...(statesReady ? (['projects'] as const) : []), 'pages', ...(filesOffered ? (['files'] as const) : [])];
   const shown: TrashFilter = filters.includes(filter) ? filter : 'all';
   const showFilters = filters.length > 2;
@@ -153,11 +156,13 @@ export function TrashPanel(props: { current: string; onClose: () => void }) {
     return l?.state === 'error' ? [{ id, message: l.message }] : [];
   });
 
-  // Lo que se puede vaciar: los archivos listados de proyectos donde la persona manda a la papelera de Drive, sin
-  // los que usa una página de la papelera (esos, de a uno, con su confirmación) ni los de una página de un proyecto
-  // borrado (esos no se mandan ni de a uno).
-  const listedFiles = shown === 'files' ? fileRows : [];
-  const purgeable = listedFiles.filter((f) => perms.canPurgeFiles(f.projectId));
+  // *Empty* vacía solo la papelera de archivos del proyecto abierto, como antes (decisión de Lega, ronda 1): se ofrece
+  // con *Files* y *This project*; con *All projects* no está. Lo que se puede vaciar: los archivos del abierto si la
+  // persona los manda a la papelera de Drive, sin los que usa una página de la papelera (esos, de a uno, con su
+  // confirmación) ni los de una página de un proyecto borrado (esos no se mandan ni de a uno).
+  const offerEmpty = shown === 'files' && scope === 'current' && perms.canPurgeFiles(props.current);
+  const currentFiles = fileRows.filter((f) => f.projectId === props.current);
+  const purgeable = offerEmpty ? currentFiles : [];
   const emptiable = purgeable.filter((f) => !f.file.in_trashed_page && !f.file.in_deleted_project);
   const working = files.busy !== null || files.progress !== null;
 
@@ -172,8 +177,15 @@ export function TrashPanel(props: { current: string; onClose: () => void }) {
           ? null
           : tr('trash.hintAll');
 
+  // Sin red, la línea de arriba ya dice que los proyectos y los archivos no se pueden leer: no se dice además que no hay.
   const emptyText =
-    shown === 'projects' ? tr('deletedList.none') : shown === 'files' ? tr('fileTrash.none') : tr('trash.empty');
+    !online && (shown === 'projects' || shown === 'files')
+      ? null
+      : shown === 'projects'
+        ? tr('deletedList.none')
+        : shown === 'files'
+          ? tr('fileTrash.none')
+          : tr('trash.empty');
 
   return (
     <div className="trash-panel">
@@ -198,6 +210,12 @@ export function TrashPanel(props: { current: string; onClose: () => void }) {
         </div>
       )}
       {hint && <p className="muted small trash-hint">{hint}</p>}
+      {/* El avance de *Empty* se ve siempre, aunque se cambie de filtro o de alcance a mitad (sigue corriendo). */}
+      {files.progress && (
+        <p className="muted small trash-progress" role="status">
+          {tr('fileTrash.sendingOf', { n: Math.min(files.progress.done + 1, files.progress.total), total: files.progress.total })}
+        </p>
+      )}
       {shown === 'files' && (
         <>
           <p className="muted small trash-hint">
@@ -221,15 +239,10 @@ export function TrashPanel(props: { current: string; onClose: () => void }) {
                   className="link danger"
                   disabled={working || !online || emptiable.length === 0}
                   data-tip={!online ? tr('fileTrash.needsInternet') : tr('fileTrash.emptyTip')}
-                  onClick={() => void files.emptyAll(emptiable, fileRows.length)}
+                  onClick={() => void files.emptyAll(emptiable, currentFiles.length, nameOf(props.current))}
                 >
                   <TrashIcon size={16} /> {tr('fileTrash.emptyButton')}
                 </button>
-              )}
-              {files.progress && (
-                <span className="muted small" role="status">
-                  {tr('fileTrash.sendingOf', { n: Math.min(files.progress.done + 1, files.progress.total), total: files.progress.total })}
-                </span>
               )}
             </div>
           )}
@@ -324,7 +337,7 @@ export function TrashPanel(props: { current: string; onClose: () => void }) {
         </ul>
       )}
       {loading && <p className="muted small">{tr('common.loading')}</p>}
-      {!loading && list.length === 0 && <p className="muted">{emptyText}</p>}
+      {!loading && list.length === 0 && emptyText && <p className="muted">{emptyText}</p>}
       {(shown === 'projects' || shown === 'all') && <DeletedProjectsError list={deleted} />}
       {(shown === 'files' || shown === 'all') &&
         fileErrors.map((e) => (
@@ -424,14 +437,14 @@ function useFileTrash(projectIds: string[], online: boolean) {
     if (settle(file, outcome)) reload(projectId);
   };
 
-  const emptyAll = async (list: { projectId: string; file: TrashedFileRow }[], listed: number) => {
+  const emptyAll = async (list: { projectId: string; file: TrashedFileRow }[], listed: number, project: string) => {
     if (list.length === 0) return;
     const what = list.length === 1 ? `“${list[0].file.name}”` : t('fileTrash.allFiles', { count: list.length });
     const kept = listed - list.length;
     const skip = kept > 0 ? ` ${t('fileTrash.kept', { count: kept })}` : '';
     // Solo lo que se va a mandar (sin los que usa una página de la papelera).
     const space = t('fileTrash.emptySpace', { size: formatSize(sumSizes(list.map((f) => f.file))) });
-    if (!confirm(confirmText(t('fileTrash.confirmEmpty', { what, skip }), list.length > 1, space))) return;
+    if (!confirm(confirmText(t('fileTrash.confirmEmpty', { what, skip, project }), list.length > 1, space))) return;
     setProgress({ done: 0, total: list.length });
     const refresh = new Set<string>();
     const byId = new Map(list.map((f) => [f.file.id, f]));

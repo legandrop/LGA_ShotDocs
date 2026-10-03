@@ -362,6 +362,13 @@ describe('sin red, una base vieja y la dirección vieja', () => {
     // Nada se pidió sin red: ni el error de los borrados ni el de los archivos.
     expect(panel()!.querySelector('.error')).toBeNull();
     expect(panel()!.textContent).not.toContain('could not be read');
+    // Sin archivos leídos no se ofrece *Files* (diría "hace falta conexión" y "no hay archivos" a la vez); con
+    // *Projects*, la línea de sin red y no "No deleted projects".
+    expect(document.querySelector('.trash-filter')?.textContent).not.toContain('Files');
+    await act(async () => byText('Projects')!.click());
+    expect(panel()!.textContent).toContain('need an internet connection');
+    expect(panel()!.textContent).not.toContain('No deleted projects.');
+    await act(async () => byText('All')!.click());
     await act(async () => byText('Restore')!.click());
     await settle();
     expect(owner.tree.isTrashed(old)).toBe(false);
@@ -411,5 +418,91 @@ describe('sin red, una base vieja y la dirección vieja', () => {
     expect(shown()).toEqual(['project:Bosque Negro', 'file:foto1.jpg', 'page:Escena vieja']);
     // Sin el foco en el botón de volver (en el teléfono no se enfoca nada solo).
     expect(document.activeElement?.classList.contains('project-back')).toBe(false);
+  });
+});
+
+describe('ronda 1 de la auditoría', () => {
+  it('B1: Empty vacía solo la papelera de archivos del proyecto abierto y lo nombra; con All projects no está', async () => {
+    const { server, owner, q } = await workspace();
+    fileInTrash(server, 'foto2', server.workspaceId, new Date().toISOString());
+    fileInTrash(server, 'fotoq', q, new Date().toISOString());
+    await openTrash(owner, server.ownerId);
+    await act(async () => byText('Files')!.click());
+    await act(async () => byText('All projects')!.click());
+    await vi.waitFor(() => expect(shown()).toContain('file:fotoq.jpg'));
+    // Con *All projects* se ven todos, pero *Empty* no se ofrece.
+    expect(byText('Empty')).toBeUndefined();
+    await act(async () => byText('This project')!.click());
+    expect(shown().sort()).toEqual(['file:foto1.jpg', 'file:foto2.jpg']);
+    const confirm = vi.fn((_message: string) => true);
+    vi.stubGlobal('confirm', confirm);
+    await act(async () => byText('Empty')!.click());
+    await vi.waitFor(async () => {
+      await settle();
+      expect(server.mediaFiles.get('foto2')?.drive_trashed_at).toBeTruthy();
+    });
+    expect(confirm.mock.calls[0]?.[0]).toMatch(/^Empty the file trash of “My project”: send all 2 files to the Google Drive trash\?/);
+    expect(server.mediaFiles.get('foto1')?.drive_trashed_at).toBeTruthy();
+    // El archivo de Old spot no se tocó.
+    expect(server.mediaFiles.get('fotoq')?.drive_trashed_at).toBeFalsy();
+    expect(server.portero.calls.filter((c) => c.path === '/trash').map((c) => c.body?.file).sort()).toEqual(['foto1', 'foto2']);
+  });
+
+  it('B1: en castellano la pregunta también nombra el proyecto', async () => {
+    const { server, owner } = await workspace();
+    act(() => prefs.set({ language: 'es' }));
+    const host = await mount(services(owner, server.ownerId));
+    await act(async () => host.querySelector<HTMLButtonElement>('.project-button')!.click());
+    await settle();
+    await act(async () => byText('Papelera')!.click());
+    await vi.waitFor(() => expect(byText('Archivos')).toBeDefined());
+    await act(async () => byText('Archivos')!.click());
+    const confirm = vi.fn((_message: string) => false);
+    vi.stubGlobal('confirm', confirm);
+    await act(async () => byText('Vaciar')!.click());
+    expect(confirm.mock.calls[0]?.[0]).toMatch(/^Vaciar la papelera de archivos de “My project”: ¿mandar “foto1\.jpg” a la papelera de Google Drive\?/);
+  });
+
+  it('O1: el avance de Empty se ve aunque se cambie de filtro a mitad', async () => {
+    const { server, owner } = await workspace();
+    fileInTrash(server, 'foto2', server.workspaceId, new Date().toISOString());
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const original = owner.media.trash.bind(owner.media);
+    owner.media.trash = async (id: string) => {
+      await gate;
+      return original(id);
+    };
+    await openTrash(owner, server.ownerId);
+    await act(async () => byText('Files')!.click());
+    vi.stubGlobal('confirm', () => true);
+    await act(async () => byText('Empty')!.click());
+    await settle();
+    await act(async () => byText('Pages')!.click());
+    expect(document.querySelector('.trash-progress')?.textContent).toBe('Sending 1 of 2…');
+    release();
+    await vi.waitFor(async () => {
+      await settle();
+      expect(document.querySelector('.trash-progress')).toBeNull();
+    });
+    expect(server.mediaFiles.get('foto2')?.drive_trashed_at).toBeTruthy();
+  });
+
+  it('O2: con All projects no aparecen las páginas de un proyecto que ya no está en la lista', async () => {
+    const { server, owner } = await workspace();
+    const r = await owner.tree.createProject('Se va');
+    const page = await owner.tree.create(null, 'Escena de R', r);
+    await owner.engine.syncNow();
+    await owner.tree.trash(page);
+    await owner.engine.syncNow();
+    // Sale de la lista (borrado en otro dispositivo, o sin permiso): sus páginas siguen en el dispositivo hasta la
+    // próxima sincronización.
+    await owner.tree.forgetProject(r);
+    expect(owner.tree.trashed().some((p) => p.id === page)).toBe(true);
+    await openTrash(owner, server.ownerId);
+    await act(async () => byText('All projects')!.click());
+    await settle();
+    expect(shown()).toContain('page:Escena de Q');
+    expect(shown()).not.toContain('page:Escena de R');
   });
 });
