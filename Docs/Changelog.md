@@ -8,7 +8,7 @@ sus 5 intentos y quedaba con error: ahora una trabada no gasta intentos y, a la 
 miniaturas. La bajada de `page-files` se corta a los 30 s sin recibir nada (antes, 27 minutos) y sus pasadas esperan
 tras cerrar por Storage colgado. En el portero, el 403 de Drive por límite de pedidos sale como `rate` (no «fuera del
 árbol»), la confianza de 60 s vale también en las páginas siguientes, el ZWJ va como escape y la marca de cada
-subcarpeta va en NFC, buscando también las anteriores: soltarla desde el otro sistema ya no crea otra al lado.
+subcarpeta va en NFC, buscando también las anteriores; retomar compara rutas sin la forma de los acentos.
 [ Carpetas entrega 3 y subidas que se traban - la cola de una carpeta cierra la vuelta con el portero colgado, registrar y miniaturas mientras la cola espera, page-files con tope por quietud, 403 por límite como rate y marcas en NFC ]
 
 v0.141 :

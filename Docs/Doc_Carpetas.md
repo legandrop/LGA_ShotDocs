@@ -297,7 +297,9 @@ de los archivos sueltos, `Doc_Portero.md`, "Colgado para todos"):
   opcional; lo guardado por una versión anterior vale 0) y el archivo vuelve a la fila, detrás de los que nunca se
   trabaron. Cada trabada le da más plazo a la respuesta de la parte (`stalledBefore`) y cada dos, si la subida no
   recibió nada, se pide otra (`renewIfEmpty`, que con `noOpen` devuelve la subida sin id y la cola pide otra al
-  portero).
+  portero). Pedir otra **no cuenta como trabada de la vuelta**: el cliente la pide siempre que no llegó nada, también
+  con el portero sano (corrección de la auditoría, B1: contarla cerraba la vuelta otra vez justo cuando el portero
+  volvía, con una espera del doble y el aviso falso; una carpeta de 3 archivos tardaba 160 s de más).
 - Después de una trabada sin avance **no se empieza otro archivo** hasta que los que están en curso terminen o se
   traben. A la segunda seguida (`STALLS_TO_CLOSE_ROUND`) la cola espera `stallWait` (10 s, 20 s… hasta 10 minutos, la
   misma escala que la cola de los sueltos) con el aviso *The media server is not answering; it will try again
@@ -325,12 +327,17 @@ fecha de la comprobación más vieja del camino, y una subcarpeta honda se volv�
 sigue con sus 10 minutos.
 
 **El ZWJ como escape.** `stripHidden` del portero comparaba con el U+200D escrito tal cual (no se ve en el código):
-ahora es la constante `ZWJ = '\u200D'`. De paso, la BOM de `MISSING_FILES.txt` (`FolderDownload.tsx`) y el espacio de
+ahora es la constante `ZWJ = '\u200D'` (escrita como escape; una prueba revisa que ningún renglón de
+código de la app ni del portero lleve un carácter invisible tal cual). De paso, la BOM de `MISSING_FILES.txt` (`FolderDownload.tsx`) y el espacio de
 ancho cero de `codaHtml.ts` también van como escapes.
 
 **Los acentos de la Mac y de Windows en la marca de cada subcarpeta.** La marca (`sdPath`) resumía la ruta tal cual
 llegaba: la Mac da `í` en dos partes (NFD) y Windows en una (NFC), así que la misma subcarpeta tenía dos marcas y
-pedirla desde el otro sistema creaba otra al lado, con el mismo nombre. Opciones: (a) normalizar la marca, que
+pedirla con la otra forma creaba otra al lado, con el mismo nombre. **Cuándo pasa de verdad:** la app le manda al
+portero las rutas de la lista de trabajo del dispositivo, que no cambian; lo que puede traer la otra forma es una
+copia de la carpeta soltada para retomar en el mismo dispositivo (un pendrive, una carpeta de red, otro navegador).
+Desde otra computadora, soltar la carpeta de nuevo crea otra carpeta (otra tarjeta), por diseño. Lo que protege en
+ese caso es la comparación de rutas de la app (abajo); las marcas del portero son una defensa más. Opciones: (a) normalizar la marca, que
 cambiaba la de lo ya subido y lo dejaba sin encontrar; (b) normalizar en la app las rutas al leer la carpeta, que
 dejaba igual el problema con las listas de trabajo guardadas; (c) **marcar lo nuevo en NFC y buscar por las dos
 formas**. Se eligió (c), sin tocar nada en el Drive del dueño:
@@ -353,7 +360,8 @@ de más dentro del minuto con una subcarpeta honda; las marcas desde los dos sis
 NFD y en NFC, dos rutas del mismo pedido, 30 rutas con acentos en dos consultas) y `src/media/folders.test.ts` (el
 portero colgado para todos: 3 vueltas de 3 archivos, esperas de 10, 20 y 40 s, ningún error ni intento gastado; uno
 colgado solo para él, con más plazo y otra subida a las dos trabadas; una trabada después de avanzar no cierra la
-vuelta; una lista guardada sin `stalls` y la misma carpeta desde el otro sistema). **Recorrido en Chromium** con el
+vuelta; una lista guardada sin `stalls` y la misma carpeta con los acentos en la otra forma; pedir otra subida al
+volver el portero no cierra la vuelta otra vez; los que se trabaron van después). **Recorrido en Chromium** con el
 cliente real del portero (partes por `XMLHttpRequest`) contra un portero local que recibe el pedido y no contesta: la
 carpeta de 6 archivos, en castellano, cerró la primera vuelta a los 61 s con 3 pedidos colgados y el aviso, volvió a
 probar a los 10 s, cerró la segunda a los 131 s (6 colgados) y, al volver el portero, subió los 6, una vez cada uno.

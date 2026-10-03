@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanFileName, cutText, DRIVE_CALL_BUDGET, driveFolderName, FOLDER_BATCH, LIST_TRUST_MS, Portero, TREE_TTL_MS, validFolderPath, type Env, type Store } from './core';
 
@@ -1141,6 +1144,35 @@ describe('carpetas: listar varias subcarpetas de una vez (dirs)', () => {
     const out = await askOk({ dirs: [ids[0]!, ids[1]!] });
     expect(Object.keys(out.lists)).toEqual([ids[0]!]);
     expect(out.failed).toEqual({ [ids[1]!]: 'not_found' });
+  });
+});
+
+describe('el código no lleva caracteres invisibles (van como escape)', () => {
+  it('ningún renglón de código de la app ni del portero tiene un ZWJ, un ZWNJ, una BOM ni una marca de dirección escritos tal cual', () => {
+    // Escritos tal cual no se ven: `'X'` con un ZWJ adentro parece `'X'` vacío. En los comentarios, los emojis
+    // compuestos de ejemplo (`👨‍👩‍👧`) sí pueden llevarlos.
+    const hidden = /[\u200B-\u200F\u2060\uFEFF\u202A-\u202E\u2066-\u2069]/;
+    const root = fileURLToPath(new URL('../../', import.meta.url));
+    const bad: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          if (entry.name !== 'node_modules' && entry.name !== 'fixtures') walk(path);
+        } else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) {
+          readFileSync(path, 'utf8')
+            .split('\n')
+            .forEach((line, i) => {
+              const code = line.trim();
+              if (code.startsWith('//') || code.startsWith('*') || code.startsWith('/*')) return;
+              if (hidden.test(line)) bad.push(`${path.slice(root.length)}:${i + 1}`);
+            });
+        }
+      }
+    };
+    walk(join(root, 'src'));
+    walk(join(root, 'portero', 'src'));
+    expect(bad).toEqual([]);
   });
 });
 

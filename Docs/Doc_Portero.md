@@ -481,8 +481,10 @@ una subcarpeta nueva) se comprueba subiendo por sus `parents` hasta la carpeta d
 comprobado se recuerda 10 minutos en la memoria de la instancia, con una llave fija (`memoryKey` de `index.ts`;
 cada pedido crea su propio stub del Durable Object, que en Cloudflare queda atado al pedido que lo creó). La
 subcarpeta que se pide listar se vuelve a mirar en Drive siempre: una que el dueño mandó a la papelera o movió afuera
-deja de listarse en el acto; lo que está adentro de ella, a más tardar a los 10 minutos (en el listado de varias, a
-más tardar al minuto, también en sus páginas siguientes: `LIST_TRUST_MS`). Un 403 de Drive por el límite de pedidos
+deja de listarse en el acto; lo que está adentro de ella, a más tardar a los 10 minutos. En el listado de varias, la
+subcarpeta pedida que se movió afuera deja de listarse a más tardar al minuto, también en sus páginas siguientes
+(`LIST_TRUST_MS`); lo de adentro de una subcarpeta de arriba movida afuera, igual que en el de una, hasta los 10
+minutos de su comprobación (medido en la auditoría de la entrega 3). Un 403 de Drive por el límite de pedidos
 no es "afuera": sale como `503 rate` (v0.0XX). La última parte de cada
 archivo de una carpeta vuelve a preguntarle a la base si la persona todavía puede subir ahí: sacada de la página, la
 subida queda sin terminar.

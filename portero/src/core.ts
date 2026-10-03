@@ -2851,7 +2851,7 @@ const LONE_SURROGATE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[
 const EMOJI = /^\p{Extended_Pictographic}$/u;
 const EMOJI_BEFORE_ZWJ = /^[\p{Extended_Pictographic}\u{FE0F}\u{1F3FB}-\u{1F3FF}]$/u;
 /** El ZWJ (U+200D), como escape: escrito tal cual no se ve en el código. */
-const ZWJ = '‍';
+const ZWJ = '\u200D';
 
 /**
  * El texto sin `HIDDEN_CHARS`, salvo el ZWJ (U+200D) cuando está entre dos emojis (`👨‍👩‍👧`, una familia, sigue siendo

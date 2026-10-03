@@ -190,13 +190,16 @@ function fakeFolderPortero() {
         const s = sessions.get(options.resume ?? '');
         if (!s) throw new UploadError('gone', 410, null, 0);
         uploadCalls.push({ name: s.name, renew: !!options.renewIfEmpty, stalledBefore: options.stalledBefore ?? 0 });
+        // Como el cliente de verdad: con `renewIfEmpty`, pregunta cuánto llegó y, si no llegó nada, deja la subida para
+        // que se pida otra (con `noOpen`, sin id), esté el portero colgado o no. Acá ninguna subida recibió nada
+        // antes de su intento (cada intento manda el archivo entero).
+        if (options.renewIfEmpty) {
+          sessions.delete(options.resume!);
+          throw new UploadError('gone', 410, null, 0);
+        }
         if (hung(s.name)) {
-          // Como el cliente de verdad: pregunta cuánto llegó (nada) y la parte deja de moverse.
+          // Pregunta cuánto llegó (nada) y la parte deja de moverse.
           options.onProgress?.({ uploadId: options.resume!, sent: 0, total: file.size, bytesPerSecond: 0, retries: 0 });
-          if (options.renewIfEmpty) {
-            sessions.delete(options.resume!);
-            throw new UploadError('gone', 410, null, 0);
-          }
           throw new UploadError('The upload stopped moving; it will try again.', 408, options.resume!, 0, false, true);
         }
         if (lostOnce === s.name) {
@@ -528,6 +531,52 @@ describe('la cola de las carpetas', () => {
     // La subida nueva se pidió al portero (una sesión más para "a.jpg").
     expect(fake.sessionsAsked.flat().filter((i) => i.name === 'a.jpg').length).toBeGreaterThanOrEqual(2);
     expect(Math.max(...waits)).toBeLessThanOrEqual(600_000);
+  });
+
+  it('al volver el portero, pedir otra subida (lo que hace el cliente cuando no llegó nada) no cierra la vuelta otra vez', async () => {
+    const fake = fakeFolderPortero();
+    let down = true;
+    fake.hang(() => down);
+    const waits: number[] = [];
+    let f!: FolderUploads;
+    f = new FolderUploads(null, {
+      portero: () => fake.portero,
+      wait: async (ms) => {
+        waits.push(ms);
+        // Vuelve durante la segunda espera: los 3 llevan 2 trabadas y el intento siguiente pide otra subida.
+        if (waits.length === 2) down = false;
+      },
+    });
+    await f.start('id-9', 'page', sourceOf('Ref', { 'a.jpg': 1, 'b.jpg': 1, 'c.jpg': 1 }));
+    await settle(f, 'id-9');
+    const p = f.progress('id-9')!;
+    expect(p.state).toBe('done');
+    expect(p.errors).toEqual([]);
+    expect(p.problem).toBeNull();
+    // Sin una tercera espera (antes, 40 s más con el aviso de que el portero no contesta).
+    expect(waits).toEqual([10_000, 20_000]);
+    expect(fake.uploadCalls.filter((c) => c.renew).map((c) => c.name).sort()).toEqual(['a.jpg', 'b.jpg', 'c.jpg']);
+  });
+
+  it('los que se trabaron van después de los que nunca se trabaron', async () => {
+    const fake = fakeFolderPortero();
+    fake.hang((name) => name === 'a.jpg');
+    let f!: FolderUploads;
+    const waits: number[] = [];
+    f = new FolderUploads(null, {
+      portero: () => fake.portero,
+      wait: async (ms) => {
+        waits.push(ms);
+        fake.hang(() => false);
+      },
+    });
+    await f.start('id-10', 'page', sourceOf('Ref', { 'a.jpg': 1, 'b.jpg': 1, 'c.jpg': 1, 'd.jpg': 1, 'e.jpg': 1 }));
+    await settle(f, 'id-10');
+    expect(f.progress('id-10')!.state).toBe('done');
+    const order = fake.uploadCalls.map((c) => c.name);
+    // a, b y c salen juntos; a se traba: d y e van antes de que a vuelva a probar.
+    expect(order.slice(0, 3).sort()).toEqual(['a.jpg', 'b.jpg', 'c.jpg']);
+    expect(order.indexOf('a.jpg', 1)).toBeGreaterThan(order.indexOf('e.jpg'));
   });
 
   it('una trabada después de avanzar no cuenta: el portero anda, aunque despacio', async () => {

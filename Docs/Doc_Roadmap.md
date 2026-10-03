@@ -180,8 +180,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   movida a otro proyecto (D81). **Entrega 3 hecha (v0.0XX, rama `lega/carpetas-e3`):** la confianza de 60 s también
   en las páginas siguientes (con la fecha en que Drive mostró cada subcarpeta, no la del camino); el ZWJ como escape;
   el 403 de Drive por el límite de pedidos sale como `rate` (ya no como «fuera del árbol»); la marca de cada
-  subcarpeta en NFC, buscando también las de antes (NFC, tal cual y NFD), así que soltarla desde el otro sistema ya no
-  crea otra al lado; y la cola de una carpeta cierra la vuelta con el portero colgado (B.11). Detalle en
+  subcarpeta en NFC, buscando también las de antes (NFC, tal cual y NFD), y retomar en el mismo dispositivo con una
+  copia de la carpeta que trae los acentos en la otra forma (un pendrive, una carpeta de red) reconoce los archivos en
+  vez de pedirlos de nuevo; y la cola de una carpeta cierra la vuelta con el portero colgado (B.11). Desde otra
+  computadora, soltarla de nuevo sigue siendo otra carpeta (otra tarjeta), por diseño. Detalle en
   `Doc_Carpetas.md`, "Cómo quedó", "Cómo quedó (entrega 2)" y "Cómo quedó (entrega 3)".
 - **P.10 Espacio en el dispositivo y "Available offline"** (Lega, 2026-09-30 y D-25 del 2026-10-01): tope
   elegible, de fábrica 2 GB por workspace en cada dispositivo (pasado el tope, un aviso ofrece liberar las copias ya
@@ -682,6 +684,19 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
      "Colgado para todos"; `Doc_Sincronizacion.md`; `Doc_Carpetas.md`, "Cómo quedó (entrega 3)").
    - **Queda (BAJO):** un archivo grande al que el portero se le cuelga en la última parte espera su plazo de
      respuesta (hasta unos 10 minutos y medio) antes de contar como trabado, en las dos colas.
+   - **Queda (BAJO, auditoría de la entrega 3, O5): la cola de una carpeta no escucha la vuelta de la red.** Escenario:
+     una carpeta sube, se corta el wifi 5 minutos, la cola cierra la vuelta varias veces y queda esperando 2 o 4
+     minutos; vuelve el wifi y la carpeta sigue esperando hasta que vence esa espera (los sueltos y `page-files`, en
+     cambio, prueban enseguida con `networkBack`). Y *Pause* y después *Resume* (o *Retry*) no vuelven a cero la
+     cuenta de trabadas ni la de esperas: un *Resume* con la racha en 2 o más arranca con otra espera más larga. Nada
+     se pierde. Arreglo: que `FolderUploads` tenga su `networkBack` (despierta `pauseFor`) y que *Resume* y *Retry*
+     pongan en cero `stallStreak` y `stallRounds`.
+   - **Queda (BAJO, auditoría de la entrega 3, O7): un listado de varias subcarpetas que tarda más de un minuto entre
+     páginas puede dar `409 changed`.** Escenario: *Download all* de una carpeta con 36 subcarpetas o más; entre una
+     página y la siguiente Drive pide ir más despacio y la app espera más de 60 s; en la página siguiente el portero
+     tiene que volver a mirar todas en Drive, se pasa del tope de llamados y contesta `changed`. La app cae a listar
+     de a una (`listRound`): no hay bucle ni se pierde nada, solo tarda más. Arreglo posible: con `pageToken`,
+     devolver las que no entran como `later` en vez de cortar.
 12. **Importar de Coda, direcciones sueltas: lo que quedó de v0.069** (`Doc_Importar_Coda.md`, "Direcciones
     sueltas"). **Falta:**
     - **Hecho (v0.071 y v0.087): el anclaje de un comentario** pegado a un renglón con direcciones: un último

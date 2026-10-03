@@ -528,6 +528,46 @@ describe('page-files con Storage colgado para todas: las pasadas siguientes espe
   });
 });
 
+describe('page-files: el motor le avisa cuando vuelve la red', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('con el evento online del navegador', async () => {
+    const server = new FakeServer();
+    const d = await makeDevice(server);
+    // Como en el navegador: el motor escucha "online" en window (en las pruebas no hay window).
+    const win = new EventTarget();
+    vi.stubGlobal('window', win);
+    vi.stubGlobal('document', Object.assign(new EventTarget(), { visibilityState: 'hidden' }));
+    const back = vi.spyOn(d.files, 'networkBack');
+    d.engine.start();
+    win.dispatchEvent(new Event('online'));
+    expect(back).toHaveBeenCalledTimes(1);
+    // Se para con window todavía puesto (sus avisos se sacan de window).
+    d.engine.stop();
+    d.db.close();
+  });
+
+  it('cuando la base contesta después de un ciclo sin conexión', async () => {
+    const server = new FakeServer();
+    const d = await makeDevice(server);
+    devices.push(d);
+    await d.engine.syncNow();
+    const back = vi.spyOn(d.files, 'networkBack');
+    server.online = false;
+    await d.engine.syncNow();
+    expect(d.engine.getStatus().online).toBe(false);
+    expect(back).not.toHaveBeenCalled();
+    server.online = true;
+    await d.engine.syncNow();
+    expect(back).toHaveBeenCalledTimes(1);
+    // Con red de corrido, no se vuelve a avisar.
+    await d.engine.syncNow();
+    expect(back).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('una página que vence el tope no traba al resto', () => {
   it('la bajada achica el lote si vence el tope, hasta de a uno', async () => {
     const server = new FakeServer();

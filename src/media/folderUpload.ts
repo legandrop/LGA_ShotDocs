@@ -692,11 +692,12 @@ export class FolderUploads {
         item.error = describe(err);
         return;
       }
-      // La subida que no había recibido nada se dejó para pedir otra (`renew`): tampoco es un intento, pero cuenta
-      // como una trabada más (la próxima no vuelve a pedir otra, y si sigue colgado la vuelta se cierra).
+      // La subida que no había recibido nada se dejó para pedir otra (`renew`): no es un intento. Tampoco es una
+      // trabada de la vuelta: el portero contestó (el cliente pide otra siempre que no llegó nada, también con el
+      // portero sano), y contarla cerraba la vuelta otra vez justo cuando el portero volvía. Sí suma al archivo, para
+      // que el intento siguiente no vuelva a pedir otra.
       if (renew && err instanceof UploadError && !err.uploadId && err.sent === 0) {
         item.stalls = (item.stalls ?? 0) + 1;
-        if (!advanced) r.stallStreak++;
         item.error = stored('portero.stalled');
         return;
       }
