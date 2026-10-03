@@ -1251,7 +1251,7 @@ cuando Lega la tenga en sus dispositivos, subir `min_app_version` a 0.099 o más
 con el número provisional) y `src/sync/writeVersion.test.ts` falla si no coincide con la entrada del changelog que nombra la
 migración. No sube `schema_version`: la app no necesita saber si la base la tiene.
 
-## Barreras de error (v0.0XX)
+## Barreras de error (v0.147)
 
 Hasta acá la única barrera de error de React era la de las partes que se bajan aparte (`lazyPart.tsx`, que solo explica
 lo que no bajó). Si el editor tiraba una excepción al dibujar una página (una forma que nadie previó, un bug), React

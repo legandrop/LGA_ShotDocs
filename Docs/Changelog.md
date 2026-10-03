@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.147 :
 
 **Barrera de error** (B3 del link *Can edit*). Si el editor tiraba una excepción al dibujar una página (una forma que
 nadie previó; la auditoría del link encontró tres: un `Y.Map` en un párrafo y el `level` de un encabezado como objeto

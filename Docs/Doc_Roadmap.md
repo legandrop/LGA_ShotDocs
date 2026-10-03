@@ -325,7 +325,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   Depende del interruptor de la privacidad de lo borrado (B.18) prendido en Wanka. Entregas: 0 (prueba de los headers y
   de la caché de miniaturas en la base real, y `noindex`), 1 (*Can view*), 2 (*Can edit*, con topes por bytes y la
   cuarentena de filas malas; se vuelve a auditar ese diseño antes de programarla), 3 (medir y ajustar los topes).
-  **Hecho (v0.0XX): la barrera de error alrededor de la página** (B3 del diseño de *Can edit*, requisito para prender
+  **Hecho (v0.147): la barrera de error alrededor de la página** (B3 del diseño de *Can edit*, requisito para prender
   el link que edita): una página que hace tirar al editor muestra un aviso con el historial a mano y el resto de la app
   sigue; la app entera, *Reload* en vez de blanco. Ver `Doc_Sincronizacion.md`, "Barreras de error". Quedan dos
   observaciones de su re-verificación (BAJO): una prueba con un reemplazo en curso para la pregunta al cerrar la pantalla
