@@ -8,6 +8,7 @@ import { LinkRemote } from './linkRemote';
 import { startOverFromTeam, TEAM_VERSION_NOT_READY, type StartOverDeps } from './linkStartOver';
 import { addPublicLink, fakeLinkClient, makeLinkDevice, resetPublicLink, type LinkDevice } from './linkTesting';
 import { startedOverKey } from './localDb';
+import { keepLateWriting } from './startedOver';
 import { normalizeStructure, seedIfEmpty } from './structure';
 import { CONTENT_FRAGMENT } from './structure';
 import { FakeServer, makeDevice, type Device } from './testing';
@@ -416,6 +417,24 @@ describe('correcciones de la auditoría de la 2c', () => {
     expect(tokens([(await v.db.get('meta', startedOverKey(s))) as Uint8Array]).has('<t23>')).toBe(true);
     expect(await v.docs.startedOverLate(s)).toBe(2);
     other.close(s);
+  });
+
+  it('O1: algo pendiente que no se arma sobre lo de antes no es de antes: no se toca', async () => {
+    const { server, s, v } = await visitorWithAside();
+    await startOverFromTeam(deps(v, server), s);
+    // Una fila que cuelga de algo que no está en ningún lado (ni en las filas ni en lo de antes).
+    const ghost = new Y.Doc();
+    group(ghost).push([block('g0', '<t30> ')]);
+    const sv = Y.encodeStateVector(ghost);
+    group(ghost).push([block('g1', '<t31> ')]);
+    const orphan = Y.encodeStateAsUpdate(ghost, sv);
+    await v.db.add('docUpdates', { pageId: s, data: orphan });
+    const before = (await v.db.getAllFromIndex('docUpdates', 'pageId', s)).length;
+    const kept = (await v.db.get('meta', startedOverKey(s))) as Uint8Array;
+    expect(await keepLateWriting(v.db, s)).toBe(0);
+    expect((await v.db.getAllFromIndex('docUpdates', 'pageId', s)).length).toBe(before);
+    expect(tokens([(await v.db.get('meta', startedOverKey(s))) as Uint8Array])).toEqual(tokens([kept]));
+    expect(await v.docs.startedOverLate(s)).toBe(0);
   });
 
   it('O2: lo que esperaba al volver y después entra no tapa un apartado nuevo', async () => {
