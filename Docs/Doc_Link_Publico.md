@@ -2527,6 +2527,13 @@ Una auditoría independiente dio **aprobado con observaciones** (sin bloqueantes
 | **O4.** `link_publico_permisos.sql` suponía el interruptor de *Can edit* apagado | Lo apaga al principio, como `link_editar_permisos.sql`: pasa con la base de hoy |
 | **O6.** `link_page_id` iba a quien no ve la raíz del link | Nula para quien no la ve (`page_level`, una vez por link) |
 
+La re-verificación encontró dos cosas más, corregidas en una ronda:
+
+| Hallazgo | Corrección |
+|---|---|
+| **BN1.** Con ~2000 filas apartadas (un link reseteado), `public_link_aside` tardaba ~11 s y `authenticated` la corta a los 8 s: la lista de *Share*, el ícono del árbol y el historial quedaban vacíos para siempre | Las páginas con algo apartado y su permiso van `materialized` (el planificador metía `sees_deleted` fila por fila): ~0,1 s con 3000 filas. La prueba SQL lo mide y falla si pasa de 1 s |
+| **ON1.** Una tecla tarde de la otra pestaña podía subir junto con lo nuevo de esta: la fila entera se apartaba y la sesión volvía a la cadena | Después de volver a la versión del equipo, **lo pendiente nunca sube**: se saca de lo que se sube en la misma lectura con que se arma (`pushPage`) y pasa a lo de antes, con su aviso. Además, lo pendiente de Yjs se leía con el formato 1 (está en el 2): en algunos casos tiraba y el barrido no pasaba nada, en silencio |
+
 Queda al roadmap (O5): lo trabado por una versión inventada sigue contando en los 20 MB que esperan de su link, hasta
 *Reset link*.
 
