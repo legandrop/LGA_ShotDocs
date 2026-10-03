@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+**Carpetas, entrega 4** (restos de B.11). Tres cosas hacían esperar de más sin perder nada. La cola de una carpeta no
+escuchaba la vuelta de la red y *Resume* arrancaba con una espera más larga: ahora el motor le avisa como a los
+sueltos y *Resume*, *Retry* y volver a soltarla ponen la cuenta en cero. En *Download all*, más de un minuto entre
+páginas con 36 subcarpetas o más daba `409` y la app listaba de a una: con `partial`, el portero devuelve en `later`
+las que no entran y en `failed` las que salieron del árbol. Y una parte a la que Drive no le contestaba al portero
+esperaba el plazo de la app (hasta 10 minutos y medio): el portero, que ya leyó la parte, contesta `504 stalled` a
+los 90 s (`?stall=1`) y la app la toma como trabada, en las dos colas. Ayuda actualizada.
+[ Carpetas entrega 4 - la cola escucha la vuelta de la red, Resume vuelve a cero, el listado sin 409 entre páginas y Drive colgado cuenta como trabada a los 90 s ]
+
 v0.147 :
 
 **Barrera de error** (B3 del link *Can edit*). Si el editor tiraba una excepción al dibujar una página (una forma que

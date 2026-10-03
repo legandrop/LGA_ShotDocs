@@ -183,8 +183,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   subcarpeta en NFC, buscando también las de antes (NFC, tal cual y NFD), y retomar en el mismo dispositivo con una
   copia de la carpeta que trae los acentos en la otra forma (un pendrive, una carpeta de red) reconoce los archivos en
   vez de pedirlos de nuevo; y la cola de una carpeta cierra la vuelta con el portero colgado (B.11). Desde otra
-  computadora, soltarla de nuevo sigue siendo otra carpeta (otra tarjeta), por diseño. Detalle en
-  `Doc_Carpetas.md`, "Cómo quedó", "Cómo quedó (entrega 2)" y "Cómo quedó (entrega 3)".
+  computadora, soltarla de nuevo sigue siendo otra carpeta (otra tarjeta), por diseño. **Entrega 4 hecha (v0.0XX, rama
+  `lega/carpetas-e4`):** la cola de una carpeta escucha la vuelta de la red y *Resume* vuelve a cero la cuenta de
+  esperas (O5), el listado de varias subcarpetas ya no corta con `409` por más de un minuto entre páginas (O7) y una
+  parte a la que Drive no le contesta al portero cuenta como trabada a los 90 s (B.11). Detalle en
+  `Doc_Carpetas.md`, "Cómo quedó", "Cómo quedó (entrega 2)", "Cómo quedó (entrega 3)" y "Cómo quedó (entrega 4)".
 - **P.10 Espacio en el dispositivo y "Available offline"** (Lega, 2026-09-30 y D-25 del 2026-10-01): tope
   elegible, de fábrica 2 GB por workspace en cada dispositivo (pasado el tope, un aviso ofrece liberar las copias ya
   confirmadas en el Drive que hace más que no se abren, y se liberan recién con el sí; la miniatura queda), marcar una página o un proyecto para usarlo sin red (con una ventana de casillas y
@@ -709,21 +712,18 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
      chica); y las pasadas de `PageFiles.pushPending` esperan después de cerrar por Storage colgado. Probado con
      relojes simulados y en Chromium contra un portero y un Storage locales que se cuelgan (`Doc_Portero.md`,
      "Colgado para todos"; `Doc_Sincronizacion.md`; `Doc_Carpetas.md`, "Cómo quedó (entrega 3)").
-   - **Queda (BAJO):** un archivo grande al que el portero se le cuelga en la última parte espera su plazo de
-     respuesta (hasta unos 10 minutos y medio) antes de contar como trabado, en las dos colas.
-   - **Queda (BAJO, auditoría de la entrega 3, O5): la cola de una carpeta no escucha la vuelta de la red.** Escenario:
-     una carpeta sube, se corta el wifi 5 minutos, la cola cierra la vuelta varias veces y queda esperando 2 o 4
-     minutos; vuelve el wifi y la carpeta sigue esperando hasta que vence esa espera (los sueltos y `page-files`, en
-     cambio, prueban enseguida con `networkBack`). Y *Pause* y después *Resume* (o *Retry*) no vuelven a cero la
-     cuenta de trabadas ni la de esperas: un *Resume* con la racha en 2 o más arranca con otra espera más larga. Nada
-     se pierde. Arreglo: que `FolderUploads` tenga su `networkBack` (despierta `pauseFor`) y que *Resume* y *Retry*
-     pongan en cero `stallStreak` y `stallRounds`.
-   - **Queda (BAJO, auditoría de la entrega 3, O7): un listado de varias subcarpetas que tarda más de un minuto entre
-     páginas puede dar `409 changed`.** Escenario: *Download all* de una carpeta con 36 subcarpetas o más; entre una
-     página y la siguiente Drive pide ir más despacio y la app espera más de 60 s; en la página siguiente el portero
-     tiene que volver a mirar todas en Drive, se pasa del tope de llamados y contesta `changed`. La app cae a listar
-     de a una (`listRound`): no hay bucle ni se pierde nada, solo tarda más. Arreglo posible: con `pageToken`,
-     devolver las que no entran como `later` en vez de cortar.
+   - **Hecho (v0.0XX, rama `lega/carpetas-e4`; `Doc_Carpetas.md`, "Cómo quedó (entrega 4)"):**
+     - **La última parte de un archivo grande:** el portero, con la parte ya leída, espera a Drive a lo sumo 90 s
+       (`PART_ANSWER_MS`) y contesta `504 stalled` si la app lo pide (`?stall=1`); la app lo toma como una trabada, en
+       las dos colas, sin esperar su plazo de respuesta (hasta 10 minutos y medio, que sigue haciendo falta para un
+       proxy que retiene el cuerpo). Queda sin cubrir un portero que se cae sin contestar con la parte ya leída.
+     - **O5:** la cola de una carpeta escucha la vuelta de la red (`FolderUploads.networkBack`, llamado por el motor
+       como el de los sueltos y `page-files`) y *Resume*, *Retry* y volver a soltarla ponen en cero `stallStreak` y
+       `stallRounds`.
+     - **O7:** con `partial: true`, una página siguiente del listado de varias subcarpetas devuelve en `later` las
+       que no entran en el tope de llamados y en `failed` las que ya no son del árbol, en vez de cortar con `409
+       changed`; la app descarta lo suyo y las lista de nuevo. A una app anterior el portero le sigue contestando `409`.
+     Probado con relojes simulados y en Chromium contra un portero local que se cuelga o contesta `504 stalled`.
 12. **Importar de Coda, direcciones sueltas: lo que quedó de v0.069** (`Doc_Importar_Coda.md`, "Direcciones
     sueltas"). **Falta:**
     - **Hecho (v0.071 y v0.087): el anclaje de un comentario** pegado a un renglón con direcciones: un último
