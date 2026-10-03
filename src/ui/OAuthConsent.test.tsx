@@ -257,6 +257,22 @@ describe('la pantalla de permiso de un asistente', () => {
     expect(r.go).not.toHaveBeenCalled();
   });
 
+  it('una vuelta javascript: o data: del servidor no se sigue (ya permitida ni después de Allow)', async () => {
+    const ya = fakeClient({ session: SESSION, details: async () => ({ data: { redirect_url: 'javascript:alert(document.domain)' }, error: null }) });
+    let r = await render(ya.client);
+    expect(r.go).not.toHaveBeenCalled();
+    expect(r.el.textContent).toContain(tx('oauth.error.other'));
+    expect(r.el.querySelector('.consent-detail')?.textContent).toBe(tx('oauth.error.detail', { detail: 'unsafe_redirect' }));
+    act(() => root?.unmount());
+
+    const allow = fakeClient({ session: SESSION, approve: { data: { redirect_url: 'data:text/html,<script>alert(1)</script>' }, error: null } });
+    r = await render(allow.client);
+    await act(async () => button(r.el, tx('oauth.allow'))!.click());
+    await flush();
+    expect(r.go).not.toHaveBeenCalled();
+    expect(r.el.textContent).toContain(tx('oauth.error.other'));
+  });
+
   it('sin authorization_id (o uno que cambiaría la dirección del pedido): no pregunta nada y avisa', async () => {
     for (const search of ['', '?authorization_id=../user']) {
       const f = fakeClient({ session: SESSION });

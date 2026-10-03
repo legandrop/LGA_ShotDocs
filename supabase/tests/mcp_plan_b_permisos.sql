@@ -184,11 +184,16 @@ insert into public.workspaces (id, owner_id, name) values
   ('00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-00000000000a', 'Proyecto MCP');
 insert into public.pages (id, workspace_id, title, sort_key) values
   ('00000000-0000-4000-8000-0000000000a1', '00000000-0000-4000-8000-0000000000e1', 'a1', 'a0');
+-- f1 tiene miniatura subida por la app; f2 todavía no (para ver que el asistente no la puede subir: el nombre es válido,
+-- `.jpg` como pide `private.thumb_file_id`, así que solo lo frena la condición de `client_id`).
 insert into public.files (id, project_id, name, mime, size, created_by) values
   ('00000000-0000-4000-8000-0000000000f1', '00000000-0000-4000-8000-0000000000e1', 'x.jpg', 'image/jpeg', 1,
+   '00000000-0000-4000-8000-00000000000a'),
+  ('00000000-0000-4000-8000-0000000000f2', '00000000-0000-4000-8000-0000000000e1', 'y.jpg', 'image/jpeg', 1,
    '00000000-0000-4000-8000-00000000000a');
 insert into public.page_files (page_id, file_id) values
-  ('00000000-0000-4000-8000-0000000000a1', '00000000-0000-4000-8000-0000000000f1');
+  ('00000000-0000-4000-8000-0000000000a1', '00000000-0000-4000-8000-0000000000f1'),
+  ('00000000-0000-4000-8000-0000000000a1', '00000000-0000-4000-8000-0000000000f2');
 
 -- Con la sesión de la app: sube y ve, como hoy.
 select pg_temp.req('authenticated',
@@ -213,7 +218,7 @@ begin
     $q$insert into storage.objects (bucket_id, name) values ('page-files', '00000000-0000-4000-8000-0000000000a1/otra.jpg')$q$,
     '42501', 'el token de asistente sube una foto');
   perform pg_temp.expect_error(
-    $q$insert into storage.objects (bucket_id, name) values ('thumbs', '00000000-0000-4000-8000-0000000000f1.png')$q$,
+    $q$insert into storage.objects (bucket_id, name) values ('thumbs', '00000000-0000-4000-8000-0000000000f2.jpg')$q$,
     '42501', 'el token de asistente sube una miniatura');
 end;
 $$;
@@ -224,6 +229,10 @@ begin
     'client_id vacío ve fotos o miniaturas';
 end;
 $$;
+-- Control: la misma miniatura que el asistente no pudo subir, la app sí (el nombre es válido).
+select pg_temp.req('authenticated',
+  '{"sub":"00000000-0000-4000-8000-00000000000a","role":"authenticated","amr":[{"method":"otp","timestamp":1}]}', '');
+insert into storage.objects (bucket_id, name) values ('thumbs', '00000000-0000-4000-8000-0000000000f2.jpg');
 select set_config('role', 'postgres', true);
 
 -- Las políticas: las cuatro de authenticated con la condición y lo de antes igual; la del link público, sin tocar.

@@ -4,6 +4,7 @@ import {
   consentErrorDetail,
   consentErrorKind,
   redirectTarget,
+  safeRedirect,
   scopeList,
   workspaceForRef,
 } from './oauthConsent';
@@ -125,6 +126,17 @@ describe('authorizationIdFrom', () => {
       '?authorization_id=' + 'a'.repeat(201),
     ]) {
       expect(authorizationIdFrom(bad), bad).toBeNull();
+    }
+  });
+});
+
+describe('safeRedirect', () => {
+  it('vuelve a https, a esta computadora y a un esquema de app; nunca a javascript:, data: y parecidos', () => {
+    for (const ok of ['https://claude.ai/api/mcp/auth_callback?code=x', 'http://127.0.0.1:33418/cb?code=x', 'cursor://anysphere.cursor-retrieval/cb?code=x']) {
+      expect(safeRedirect(ok), ok).toBe(true);
+    }
+    for (const bad of ['javascript:alert(1)', ' JavaScript:alert(1)', 'data:text/html,x', 'vbscript:x', 'blob:https://a/b', 'file:///c:/x', 'about:blank', 'no es una dirección', '']) {
+      expect(safeRedirect(bad), bad).toBe(false);
     }
   });
 });

@@ -89,3 +89,16 @@ export function authorizationIdFrom(search: string): string | null {
   const id = new URLSearchParams(search).get('authorization_id')?.trim() ?? '';
   return /^[A-Za-z0-9_-]{1,200}$/.test(id) ? id : null;
 }
+
+// Esquemas que nunca son la vuelta de un cliente: correrían algo en la app o abrirían algo local. Supabase no deja
+// registrarlos, pero la app no navega a ellos aunque el servidor los mande (defensa de más).
+const UNSAFE_SCHEMES = new Set(['javascript:', 'data:', 'vbscript:', 'blob:', 'file:', 'about:']);
+
+/** Si se puede volver a esa dirección: se entiende y no es uno de los esquemas de arriba. */
+export function safeRedirect(url: string): boolean {
+  try {
+    return !UNSAFE_SCHEMES.has(new URL(url.trim()).protocol.toLowerCase());
+  } catch {
+    return false;
+  }
+}

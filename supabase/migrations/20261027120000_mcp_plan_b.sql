@@ -30,7 +30,10 @@
 -- - Si lo dice (un token de asistente, o una sesión con `client_id` en sus metadatos), recién ahí lo lee como jsonb.
 --   Sin `client_id` arriba de todo, vuelve. Con `client_id` (aunque sea vacío) o si no se pudo leer, solo pasa una ruta
 --   `/rpc/mcp_[a-z0-9_]+`. Sin ruta, se rechaza.
-create function private.mcp_pre_request()
+-- - El camino rápido busca la clave escrita tal cual: Supabase Auth la escribe así y PostgREST vuelve a escribir los
+--   claims sin escapar `_` (un `client_id` no llega nunca; Storage, que no pasa por acá, igual lo frena).
+-- `create or replace`: la vuelta atrás deja la función, y la migración se puede volver a aplicar.
+create or replace function private.mcp_pre_request()
 returns void
 language plpgsql stable set search_path = ''
 as $$
@@ -81,7 +84,8 @@ alter role authenticator set pgrst.db_pre_request = 'private.mcp_pre_request';
 -- 3. Storage: los tokens de asistentes no suben ni bajan fotos ni miniaturas
 -- ---------------------------------------------------------------------------------------------------
 -- Las mismas expresiones de hoy, con `client_id is null` al final. `alter policy` cambia solo la expresión: el nombre,
--- la orden y el rol quedan, y no hay un momento sin política.
+-- la orden y el rol quedan, y no hay un momento sin política. Toma un instante un lock exclusivo de `storage.objects`:
+-- aplicarla sin subidas en curso.
 alter policy page_files_select on storage.objects
   using (
     bucket_id = 'page-files'
@@ -115,7 +119,7 @@ alter policy thumbs_insert on storage.objects
 -- ---------------------------------------------------------------------------------------------------
 -- La única función `mcp_*` hasta M1. No lee tablas: con un token de asistente devuelve su persona, y prueba que
 -- PostgREST deja pasar `/rpc/mcp_ping` y nada más.
-create function public.mcp_ping()
+create or replace function public.mcp_ping()
 returns uuid
 language sql stable set search_path = ''
 as $$

@@ -15,6 +15,11 @@ usuarios `Guide_Create_Workspace.md` (en inglés); lo que sigue explica qué hac
 - La app solo usa la **URL del proyecto** y la **clave pública** (`sb_publishable_...`), como variables de
   entorno `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY`. La clave secreta nunca va a la app: si se carga una
   por error, la compilación se corta.
+- **Claves y llaves de firma en Wanka (2026-10-03):** se desactivaron las claves API heredadas (la `anon` y la
+  `service_role` en formato JWT; `PUT /v1/projects/<ref>/api-keys/legacy?enabled=false`) y se revocó la llave de firma
+  HS256 heredada: los tokens se firman solo con la ES256 que está en uso. La app y el portero usan la publicable
+  (`sb_publishable_…`); las pruebas de punta a punta, la secreta (`sb_secret_…`). Volver: `enabled=true` en el mismo
+  `PUT` (la llave HS256 revocada no vuelve).
 - Para desarrollo local: copiar `.env.example` a `.env.local` y completarlo.
 
 ## Base de datos
@@ -218,8 +223,20 @@ nada nuevo):
   ```
 
   La función y `mcp_ping` pueden quedar (sin la configuración, PostgREST no la llama).
-- **Pruebas:** `supabase/tests/mcp_plan_b_permisos.sql` (corrida en `begin … rollback` con la migración adelante; 8 de 8
-  mutantes mueren). `link_publico_permisos.sql` suma `private.mcp_pre_request` a lo que `anon` puede ejecutar.
+- **Control después de aplicar (antes de prender el servidor OAuth):** que PostgREST tomó el pre-request. Si no lo
+  tomara, la app andaría igual y el token de un asistente tendría toda la base. Usar la app un minuto y, en el SQL Editor:
+
+  ```sql
+  select coalesce(sum(calls), 0) from extensions.pg_stat_statements
+  where query ~* '^\s*select\s+"?private"?\s*\.\s*"?mcp_pre_request"?\s*\(\s*\)\s*;?\s*$';
+  ```
+
+  Tiene que dar más que 0 (la llamada que hace PostgREST antes de cada pedido; antes de aplicar da 0). Si da 0,
+  `notify pgrst, 'reload config';`, usar la app y volver a mirar; si sigue en 0, no prender el servidor OAuth.
+- Se puede volver a aplicar (`create or replace`). `alter policy` toma un instante un lock exclusivo de
+  `storage.objects`: aplicarla sin subidas en curso.
+- **Pruebas:** `supabase/tests/mcp_plan_b_permisos.sql` (corrida en `begin … rollback` con la migración adelante; 9 de 9
+  mutantes mueren, también `thumbs_insert` sin la condición, con un segundo archivo `.jpg`). `link_publico_permisos.sql` suma `private.mcp_pre_request` a lo que `anon` puede ejecutar.
 
 ### Aplicar las migraciones
 
@@ -414,14 +431,17 @@ Cómo entra la gente:
   `mailer_otp_length: 8` y `mailer_otp_exp: 3600`). Supabase trae 6; la app acepta de 6 a 10
   (`src/ui/Login.tsx`).
 - Contraseñas: la app no las usa y la base no las acepta: una sesión abierta con contraseña no ve ni puede
-  nada (`private.session_allowed`, ver "Abrir el registro solo para invitados"). Quedan los valores de
-  fábrica (`password_min_length: 6`, sin chequeo de contraseñas filtradas).
-- Verificación en dos pasos: vienen prendidos de fábrica los códigos de app autenticadora
-  (`mfa_totp_enroll_enabled` y `mfa_totp_verify_enabled`), aunque la app no los ofrece; por teléfono y
-  WebAuthn, apagados.
-- Hooks: todos apagados (`hook_*_enabled: false`), incluidos *Before User Created*
-  (`hook_before_user_created_enabled` y `hook_before_user_created_uri`) y *Custom Access Token*
-  (`hook_custom_access_token_enabled` y `hook_custom_access_token_uri`); ver "Abrir el registro solo para
+  nada (`private.session_allowed`, ver "Abrir el registro solo para invitados"). Desde el 2026-10-03 (paso 1 del MCP,
+  `Doc_Asistente.md`): cambiar la contraseña pide la actual (`security_update_password_require_current_password: true`)
+  y, en una sesión de más de 24 horas, un código por correo (`security_update_password_require_reauthentication: true`).
+  El resto, de fábrica (`password_min_length: 6`, sin chequeo de contraseñas filtradas).
+- Verificación en dos pasos: desde el 2026-10-03 no se pueden agregar códigos de app autenticadora
+  (`mfa_totp_enroll_enabled: false`; `mfa_totp_verify_enabled` sigue de fábrica); la app no los ofrece. Por teléfono
+  y WebAuthn, apagados.
+- Hooks: *Custom Access Token* **conectado desde el 2026-10-03** (`hook_custom_access_token_enabled: true`,
+  `hook_custom_access_token_uri: "pg-functions://postgres/private/hook_custom_access_token"`; paso 1 del MCP). Los
+  demás apagados (`hook_*_enabled: false`), incluido *Before User Created* (`hook_before_user_created_enabled` y
+  `hook_before_user_created_uri`); ver "Abrir el registro solo para
   invitados". Captcha apagado (`security_captcha_enabled: false`).
 
 ### Abrir el registro solo para invitados
@@ -503,7 +523,8 @@ por código corta antes de llegar al hook; la invitación desde el panel no.
    }
    ```
 
-   Se apaga con `{"hook_custom_access_token_enabled": false}`.
+   Se apaga con `{"hook_custom_access_token_enabled": false}`. **En Wanka está conectado desde el 2026-10-03** (paso 1
+   del MCP, `Doc_Asistente.md`).
 7. **Recién ahora, abrir el registro.** `signup.json`:
 
    ```json

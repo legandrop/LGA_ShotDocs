@@ -8,6 +8,7 @@ import {
   consentErrorDetail,
   consentErrorKind,
   redirectTarget,
+  safeRedirect,
   scopeList,
   workspaceForRef,
   type ConsentError,
@@ -149,6 +150,11 @@ export function ConsentPanel({
     (url: unknown) => {
       if (typeof url !== 'string' || !url) {
         fail({ message: 'The server did not send the address to return to.' });
+        return;
+      }
+      // Una vuelta `javascript:`, `data:`… correría en la app: no se navega (Supabase no deja registrarlas).
+      if (!safeRedirect(url)) {
+        fail({ message: 'The address to return to is not allowed.', code: 'unsafe_redirect' });
         return;
       }
       setState({ kind: 'returning', host: redirectTarget(url).host });
