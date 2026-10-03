@@ -33,6 +33,7 @@ export const history = {
   'history.yesterday': { en: "Yesterday", es: "Ayer" },
   'history.you': { en: "You", es: "Vos" },
   'history.formerMember': { en: "Former member", es: "Ex miembro" },
+  'history.viaLink': { en: "{name} (via link)", es: "{name} (vía link)" },
   'history.serverTimeTip': {
     en: "When it reached the server.\nWhat was written offline shows when it synced.",
     es: "Cuando llegó al servidor.\nLo escrito sin conexión figura cuando se sincronizó.",
