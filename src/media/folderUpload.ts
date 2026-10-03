@@ -125,11 +125,15 @@ interface Running {
   active: Map<string, { sent: number; abort: AbortController }>;
   loop: Promise<void> | null;
   problem: string | null;
-  waitingUntil: number;
+  /**
+   * Las esperas en curso (la de la vuelta, la de un error que pasa solo, la de un archivo sin red: pueden ser
+   * varias a la vez, una por archivo en curso). Pausar, parar o la vuelta de la red las despiertan a todas
+   * (antes había un solo lugar y se despertaba solo la última).
+   */
+  waits: Set<Waiter>;
   startedAt: number;
   bytesAtStart: number;
   noteAt: number;
-  wake: (() => void) | null;
   /** Ya se volvió a armar el árbol en esta vuelta (el portero dijo que una subcarpeta no era de esta carpeta). */
   rebuilt: boolean;
   /**
@@ -143,6 +147,14 @@ interface Running {
   stallRounds: number;
   /** Lo más que el portero confirmó de cada archivo en esta sesión: avanzar es pasar de ahí. */
   best: Map<string, number>;
+}
+
+/** Una espera de la cola de una carpeta (ver `pauseFor`). */
+interface Waiter {
+  until: number;
+  /** La vuelta de la red la despierta: todas, salvo la de Drive pidiendo ir más despacio (la red no cambia eso). */
+  network: boolean;
+  wake: () => void;
 }
 
 export interface FolderUploadsOptions {
@@ -270,6 +282,7 @@ export class FolderUploads {
     }
     if (found > 0) {
       r.job.paused = false;
+      this.freshStart(r);
       void this.saveJob(r.job);
       this.kick(id);
     }
@@ -283,7 +296,7 @@ export class FolderUploads {
     r.job.paused = true;
     void this.saveJob(r.job);
     for (const a of r.active.values()) a.abort.abort();
-    r.wake?.();
+    wakeAll(r);
     this.note(id, true);
     this.emit();
   }
@@ -292,6 +305,7 @@ export class FolderUploads {
     const r = this.running.get(id);
     if (!r) return;
     r.job.paused = false;
+    this.freshStart(r);
     void this.saveJob(r.job);
     this.kick(id);
   }
@@ -309,7 +323,21 @@ export class FolderUploads {
     }
     r.problem = null;
     r.job.paused = false;
+    this.freshStart(r);
     this.kick(id);
+  }
+
+  /**
+   * Volvió la red (el evento `online`, o la base contestó después de un ciclo sin conexión; lo avisa el motor de
+   * sincronización, igual que a la cola de los archivos sueltos y a `page-files`): las carpetas que esperaban porque
+   * el portero no contestaba o no había red prueban enseguida. Sin volver la cuenta a cero: si el portero sigue
+   * colgado, la espera siguiente es más larga. La espera porque Drive pidió ir más despacio sigue.
+   */
+  networkBack(): void {
+    for (const r of this.running.values()) {
+      if (r.job.paused) continue;
+      for (const w of [...r.waits]) if (w.network) w.wake();
+    }
   }
 
   /** Deja de seguir una carpeta en este dispositivo (lo que subió queda en Drive). */
@@ -319,7 +347,7 @@ export class FolderUploads {
     if (r) {
       r.job.paused = true;
       for (const a of r.active.values()) a.abort.abort();
-      r.wake?.();
+      wakeAll(r);
       uploaded = r.items.reduce((n, i) => n + (i.done ? i.size : 0), 0);
     }
     this.running.delete(id);
@@ -333,7 +361,7 @@ export class FolderUploads {
   stop(): void {
     for (const r of this.running.values()) {
       for (const a of r.active.values()) a.abort.abort();
-      r.wake?.();
+      wakeAll(r);
     }
     this.stopped = true;
   }
@@ -359,11 +387,10 @@ export class FolderUploads {
       active: new Map(),
       loop: null,
       problem: null,
-      waitingUntil: 0,
+      waits: new Set(),
       startedAt: 0,
       bytesAtStart: 0,
       noteAt: 0,
-      wake: null,
       rebuilt: false,
       stallStreak: 0,
       stallRounds: 0,
@@ -399,7 +426,7 @@ export class FolderUploads {
     else if (r.job.paused) state = 'paused';
     else if (r.loop === null && missing > 0) state = 'missing';
     else if (r.loop === null && (errors.length > 0 || r.problem)) state = 'failed';
-    else if (r.waitingUntil > this.now()) state = 'waiting';
+    else if (waitingUntil(r) > this.now()) state = 'waiting';
     else if (Object.keys(r.job.dirIds).length === 0 || pendingDirs(r.job).length > 0) state = 'preparing';
     else state = 'uploading';
     let eta: number | null = null;
@@ -477,14 +504,31 @@ export class FolderUploads {
     await this.drop(r.job.id);
   }
 
-  /** Espera `ms`, o hasta que se pause o se pare. */
-  private async pauseFor(r: Running, ms: number): Promise<void> {
-    r.waitingUntil = this.now() + ms;
+  /**
+   * Una carpeta que vuelve a arrancar a mano (*Resume*, *Retry* o soltarla de nuevo): la cuenta de trabadas y la de
+   * esperas vuelven a cero. Sin esto, un *Resume* con la racha en 2 o más empezaba con otra espera, más larga.
+   */
+  private freshStart(r: Running): void {
+    r.stallStreak = 0;
+    r.stallRounds = 0;
+    if (r.problem === stored('folder.serverStalled')) r.problem = null;
+  }
+
+  /**
+   * Espera `ms`, o hasta que se pause o se pare. `network`: también hasta que vuelva la red (`networkBack`); no
+   * para la espera de Drive que pide ir más despacio.
+   */
+  private async pauseFor(r: Running, ms: number, network = true): Promise<void> {
+    let waiter!: Waiter;
+    const woken = new Promise<void>((resolve) => (waiter = { until: this.now() + ms, network, wake: resolve }));
+    r.waits.add(waiter);
     this.emit();
-    await Promise.race([this.wait(ms), new Promise<void>((resolve) => (r.wake = resolve))]);
-    r.wake = null;
-    r.waitingUntil = 0;
-    this.emit();
+    try {
+      await Promise.race([this.wait(ms), woken]);
+    } finally {
+      r.waits.delete(waiter);
+      this.emit();
+    }
   }
 
   private async drain(r: Running): Promise<void> {
@@ -587,7 +631,8 @@ export class FolderUploads {
     const passing = err instanceof PorteroError ? err.retryable || err.status === 0 : isNetworkError(err);
     if (!passing || r.job.paused || this.stopped) return false;
     r.problem = describe(err);
-    await this.pauseFor(r, Math.min(5000 * 2 ** Math.min(waits - 1, 5), 120_000));
+    const rate = err instanceof PorteroError && err.code === 'rate';
+    await this.pauseFor(r, Math.min(5000 * 2 ** Math.min(waits - 1, 5), 120_000), !rate);
     return true;
   }
 
@@ -640,7 +685,7 @@ export class FolderUploads {
     });
     this.note(r.job.id);
     this.emit();
-    if (slowDown) await this.pauseFor(r, 10_000);
+    if (slowDown) await this.pauseFor(r, 10_000, false);
   }
 
   private async uploadOne(r: Running, portero: FolderPortero, item: FolderItem): Promise<void> {
@@ -742,6 +787,18 @@ export class FolderUploads {
       // Queda en el dispositivo: se vuelve a leer como terminada y se borra la próxima vez.
     }
   }
+}
+
+/** Despierta todas las esperas de una carpeta (pausar, dejar de subir, cerrar la app). */
+function wakeAll(r: Running): void {
+  for (const w of [...r.waits]) w.wake();
+}
+
+/** Hasta cuándo espera la carpeta (la más larga de sus esperas), o 0. */
+function waitingUntil(r: Running): number {
+  let until = 0;
+  for (const w of r.waits) until = Math.max(until, w.until);
+  return until;
 }
 
 /** Una ruta para comparar: en NFC (la Mac da los acentos en dos partes, Windows en una). */

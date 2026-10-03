@@ -361,6 +361,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser, link
         appVersion: __APP_VERSION__,
         schemaVersion: DB_SCHEMA_VERSION,
         media,
+        folders,
         access,
         comments,
         sizes,
