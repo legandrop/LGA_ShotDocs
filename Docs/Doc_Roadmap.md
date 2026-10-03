@@ -638,9 +638,10 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   (chico): copiar a la página del plano solo el lente (otras columnas con su fila en la ficha se suman en `FIELDS` de
   `shotPage.ts`); lo escrito en la página del plano no entra en el ⌘Z de esa página (se deshace con *Undo* de la hoja,
   como el reemplazo del proyecto antes de D10).
-- **P.28 (chico) La tabla del reporte en el teléfono:** en 375 px las tablas de 7 columnas del *On-Set Report* quedan muy
-  angostas (una palabra por renglón); viene de antes de V4 del dictado (lo anotó su auditoría). Para mirar con el
-  desplazamiento de costado de las tablas o un ancho mínimo por columna.
+- **P.28 Hecho (v0.0XX): la tabla del reporte en el teléfono** (`Doc_Tabla_Telefono.md`): en pantalla angosta las
+  tablas con anchos guardados miden la suma de sus columnas (piso de 96 px) y se desplazan de costado dentro de su
+  bloque; la celda donde se escribe se acomoda a la vista. La compu y el PDF no cambian. Falta probarlo en un iPhone
+  real (dedo, teclado abierto).
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
