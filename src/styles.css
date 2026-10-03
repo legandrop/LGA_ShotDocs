@@ -848,18 +848,40 @@ code {
 .row-actions {
   display: flex;
   opacity: 0;
+  /* Sin hover, foco ni menú los botones no ocupan lugar: el nombre llega hasta el borde de la fila y recién ahí
+     lleva «…». El margen negativo se come el hueco (gap) que el elemento de ancho cero deja igual. */
+  width: 0;
+  margin-left: -4px;
+  overflow: hidden;
+  pointer-events: none;
 }
 
+/* Con el mouse encima, el foco en la fila o en uno de sus botones o el menú ⋯ abierto, los botones aparecen y le
+   sacan su lugar al nombre (que se acorta, sin mover su inicio ni el alto). También en la página abierta: en la
+   compu llega al borde como las demás. */
 .tree-row:hover .row-actions,
-.tree-row.active .row-actions,
+.tree-row.menu-open .row-actions,
 .tree-row:focus-within .row-actions {
   opacity: 1;
+  width: auto;
+  margin-left: 0;
+  overflow: visible;
+  pointer-events: auto;
 }
 
-/* En pantallas táctiles no hay hover: las acciones se ven en la página abierta. */
+/* Renombrando, el campo usa todo el ancho: los botones no se muestran. */
+.tree-row.renaming .row-actions {
+  display: none;
+}
+
+/* En pantallas táctiles no hay hover: las acciones se ven solo en la página abierta, siempre. */
 @media (hover: none) {
   .tree-row.active .row-actions {
     opacity: 1;
+    width: auto;
+    margin-left: 0;
+    overflow: visible;
+    pointer-events: auto;
   }
 
   .tree-row:not(.active) .row-actions {

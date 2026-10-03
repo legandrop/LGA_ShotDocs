@@ -12,6 +12,41 @@ y falla si alguno nombra un gesto o una tecla por fuera de ese formato.
 
 [ Tooltips con gesto o atajo (D226) - un renglón por acción «gesto o atajo: acción», con los atajos del registro y sin atajos en pantallas táctiles, en todos los tooltips de la app ]
 
+v0.155 :
+
+**Tres restos de tandas anteriores.** (1) Copiar o arrastrar una foto del Drive dejaba `net::ERR_UNKNOWN_URL_SCHEME` en la
+consola (B.24): el HTML que arma BlockNote para el portapapeles ponía el `sdmedia://…` en un `<img>`, y el navegador
+intenta pedirlo apenas se le da un `src`. Ahora la dirección sale escrita pero con `loading="lazy"` puesto antes
+(`quietImage.ts`): no se pide, y el pegado lee lo mismo; un editor sin `resolveFileUrl` tampoco la pone en la foto en
+línea. (2) Prueba de la pregunta al cerrar la pantalla de error con un reemplazo del proyecto en curso (R1 de la barrera).
+(3) Restaurar sin el editor reescribía todos los bloques con sus atributos por defecto aunque no hubieran cambiado
+(R2): ahora los bloques ya iguales a la versión se saltean (465 a 184 bytes en un caso de 3 bloques), como hace el editor; un bloque con algo que el esquema no conoce se reescribe igual, para que limpiarlo no falle.
+
+[B.24 sin pedir sdmedia al copiar, R1 y R2 de la barrera: restaurar sin editor solo reescribe lo que cambia]
+
+v0.154 :
+
+**El nombre en el árbol usa todo el ancho de la fila** (D233). Un nombre largo se cortaba con «…» antes del borde
+aunque no pasaras el mouse: la fila reservaba siempre el lugar de ⋯ y +, que solo se ven con hover. Ahora esos
+botones no ocupan lugar mientras no se ven (ancho cero, no solo transparentes) y el nombre llega hasta el borde. Con
+el mouse encima, el foco del teclado en la fila o en sus botones, o el menú ⋯ abierto (la fila lleva `menu-open`),
+aparecen y el nombre se acorta como antes, sin mover su inicio ni el alto. También en la página abierta: en la compu
+llega al borde como las demás; en el teléfono (sin hover) sigue con los botones a la vista, igual que hoy. Renombrando,
+el campo usa todo el ancho; la marca offline y el punto de menciones siguen reservando su lugar. Solo CSS y una clase por estado. Pruebas: el cascado real de la fila en jsdom y la
+medición en Chromium (sin hover, hover, foco, menú, renombrar y teléfono).
+[ Árbol ancho - el nombre de la página usa todo el ancho de la fila hasta el borde y se acorta solo con el mouse encima, el foco o el menú ⋯ abierto, para dejar lugar a ⋯ y + ]
+
+v0.153 :
+
+**Título largo: el reloj del dispositivo ya no decide.** Reparar un título rechazado por el largo podía pisar uno puesto
+a mano después si el reloj del dispositivo iba adelantado: se comparaba el `updated_at` del servidor con la hora del
+dispositivo. Ahora, al rechazarse, se guarda el `updated_at` que tenía la fila y la reparación mira si sigue siendo el
+mismo (reloj del servidor contra reloj del servidor). Un rechazo que guardó una versión anterior, sin ese dato, deja el
+título como está y manda el texto largo entero a la página. Probado con el reloj adelantado y atrasado horas, con la
+cola de v0.152 y con un renombre que espera en la cola de una app desactualizada. Además, rehacer las claves de orden
+toca solo las páginas amontonadas en el hueco, no todas las hermanas.
+[ Título largo - la reparación de un rechazo compara contra cómo estaba la fila en el servidor y no contra el reloj del dispositivo; las claves de orden se rehacen solo alrededor del hueco ]
+
 v0.152 :
 
 **Deshacer en orden, entrega 3: anotar una foto es un paso** (P.26): ⌘Z en la página salteaba lo anotado. Ahora, al

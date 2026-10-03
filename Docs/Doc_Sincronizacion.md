@@ -569,14 +569,20 @@ las pruebas aplica los mismos `check` con el mismo error (`src/sync/lengthChecks
   sobra se anota (son lo último que hizo la persona). Los **rechazados por el largo** (solo por `pages_title_check` o
   `workspaces_name_length`: un rechazo por permisos no se toca) se arreglan con el árbol del servidor a la vista, en
   `setSnapshot` (`repairRejected`): si el título no cambió después del rechazo, el cambio vuelve a la cola en su lugar,
-  cortado; si cambió (el `updated_at` del servidor es posterior al rechazo, o hay un renombre posterior en este
-  dispositivo), **el título más nuevo queda** y el texto largo va entero a la página. En la duda gana el título de ahora:
-  nada se pisa ni se pierde. *Retry* no los manda de nuevo (perderían el momento del rechazo) y *Hide* no los descarta.
+  cortado; si cambió, **el título más nuevo queda** y el texto largo va entero a la página. Para saber si cambió no se
+  usa la hora del dispositivo (puede ir adelantada horas y esconder un renombre): al rechazarse, `failOp` guarda el
+  `updated_at` que tenía la fila (`rowUpdatedAt`, reloj del servidor) y la reparación mira si el del servidor sigue
+  siendo ese (`sameInstant`: igualdad, no "antes o después"); también cuenta un renombre posterior en la cola o un
+  rechazo posterior de la misma página (con la app desactualizada la cola no sube, y eso es lo único que lo ve). Un
+  rechazo que guardó una versión anterior (hasta v0.152) no tiene ese dato: se toma siempre como cambiado. En la duda
+  gana el título de ahora: nada se pisa ni se pierde. *Retry* no los manda de nuevo y *Hide* no los descarta.
 - **Nombre de proyecto (200).** Los campos ya tenían el tope; el árbol lo corta igual (sin aviso: no se llega).
 - **Clave de orden (128).** La clave entre dos vecinas se alarga cada vez que se pone algo en el mismo hueco (unas 600
-  veces para pasar los 128). Antes de pasarlo, las hermanas reciben claves nuevas y parejas en el mismo orden
-  (un cambio por hermana). Si otro dispositivo movió una de esas hermanas a la vez, gana el último cambio que llega
-  (roadmap B.23).
+  veces para pasar los 128). Antes de pasarlo, las hermanas **de alrededor del hueco** reciben claves nuevas y parejas
+  en el mismo orden (`rekeyWindow`): la ventana crece desde el hueco hacia la vecina de clave más larga (de ahí vienen
+  las amontonadas) hasta que las claves nuevas, entre dos vecinas que no se tocan, ocupan como mucho la mitad del tope.
+  Con 200 hermanas y 650 páginas puestas en el mismo hueco se rehacen 363, todas de las amontonadas; antes, las 850. Si
+  otro dispositivo movió a la vez una de las rehechas, gana el último cambio que llega (roadmap B.23).
 - **Una página nueva con título largo** (asistente, reporte del día, copia propia): su contenido lo escribe
   `writeNewPage`, que no escribe en una página con algo. Lo que sobró del título no cuenta (`onlyTitleRests`, por el
   prefijo `titlerest-` de esos párrafos): si llega antes, el contenido va después de él.
@@ -1315,7 +1321,10 @@ es el de los avisos de siempre (`reloadByHand`, que pregunta si hay un comentari
 (`restoreInDoc` de `historyRestore.ts`): la misma ida y vuelta que el editor (`versionNode`, con el esquema del editor
 que muestra la versión, que el historial pasa en `requestRestore`) y después **el mismo algoritmo con que el editor pasa
 lo suyo a Yjs** (`updateYFragment` de y-prosemirror): conserva los bloques iguales y, en los distintos, cambia solo
-atributos y texto. Así lo que otro dispositivo escribió sin red o a la vez sigue estando cuando llega, como al restaurar
+atributos y texto. Los bloques de arriba que ya se leen igual que en la versión se anotan como emparejados antes
+(`unchangedBlocks`, sobre una copia; un bloque cuyo XML cambia al leerlo, por tener algo que el esquema no conoce, no cuenta como igual y se reescribe, así se limpia como siempre) y `updateYFragment` los salta: sin eso, un bloque sin los atributos por defecto
+escritos (de una versión vieja o de una importación) los recibía todos aunque no hubiera cambiado, y el historial lo
+mostraba como «formato cambiado» (R2; `restoreInDocDefaults.test.ts`). Así lo que otro dispositivo escribió sin red o a la vez sigue estando cuando llega, como al restaurar
 por el editor (la primera versión reemplazaba el grupo entero y lo perdía: 0 de 200 casos al azar contra 50 de 50 por el
 editor; auditoría, B1). Se prueba primero en una copia en memoria; si no da igual a la versión, no se escribe ni sube
 nada. Es una edición local más: se guarda, sube y el historial la muestra. No tiene **Undo** en el aviso (el editor que
@@ -1326,7 +1335,7 @@ historial tiene su propia barrera: si la actual es la que rompe, se ve *This ver
 **Exportar a PDF o zip** no necesita barrera: el editor de exportación vive en su propia raíz de React, fuera de la app,
 y una página que lo hace tirar se saltea con su motivo mientras las demás salen (`exportPages.ts`; probado con las tres
 filas en `src/export/exportHostile.test.tsx`). Pruebas de las barreras: `src/ui/errorBarrier.test.tsx`,
-`src/ui/restoreInDoc.test.tsx` y `src/ui/restoreInDocCheck.test.ts`.
+`src/ui/restoreInDoc.test.tsx`, `src/ui/restoreInDocCheck.test.ts`, `src/ui/restoreInDocDefaults.test.ts` y `src/ui/restoreInDocGate.test.ts` (la compuerta de la copia).
 
 ## Volver después de mucho tiempo sin red
 
