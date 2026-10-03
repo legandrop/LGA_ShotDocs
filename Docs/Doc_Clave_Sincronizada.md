@@ -797,7 +797,7 @@ y que `signOut({ scope: 'others' })` corte de verdad otro dispositivo (los tres 
   long to sync.* (no se sube sin *Voice* en silencio).
 
 **Probado.** Vitest: 13 pruebas de los pasos (`keySyncS2.test.ts`) y 11 de la ventana (`keySyncS2Ui.test.tsx`), más las
-de S1 sin cambios; la suite entera, 3545 con `main` v0.141 unido (con las correcciones de la auditoría). 22 mutantes de las guardas (Change passphrase sin abrir antes o subiendo la
+de S1 sin cambios; la suite entera, 3548 con `main` v0.141 unido (con las dos rondas de correcciones de la auditoría). 22 mutantes de las guardas (Change passphrase sin abrir antes o subiendo la
 clave del dispositivo, la copia más vieja, el `savedAt` sin los conocidos, *Keep the key* que guarda igual, las copias de
 otros workspaces, *Also sync* sin comparar, *Forgot it?* con la copia cambiada, la regla 6 y la 5 en *Voice*, el 401
 siempre, salir borrando sin la casilla, etc.), los 22 detectados. Recorrido sin ventana con dos perfiles, dos tablas
@@ -826,3 +826,9 @@ después la clave de la pestaña al dispositivo (se vuelve a abrir con la casill
   conoce; no filtra nada).
 
 Mutantes después de las correcciones: 27, los 27 detectados.
+
+**Ronda 2 (B1 de la re-verificación).** La clave propia de *Voice* de un dispositivo se reemplazaba sin preguntar cuando
+la copia se actualizaba en otro: la pregunta por *Voice* miraba si la clave **del asistente** venía de la copia. Ahora la
+anotación de cada copia lleva `voiceFromCopy` (se pone al abrir una copia con *Voice* o al subir la del dispositivo; se
+saca al elegir *Keep my voice key*, al abrir una copia sin *Voice*, al cambiar *Voice* a mano y al olvidarla), y solo con
+eso se toma la de la copia sin preguntar. Mutantes: 30, los 30 detectados.
