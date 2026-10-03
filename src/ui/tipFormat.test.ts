@@ -225,6 +225,9 @@ describe('tipRows: los renglones', () => {
       '**Shift+clic o ⌘⌥⇧↩**: for everyone',
     ]);
     for (const line of tipRows(rows, { mac: false, touch: false })!.split('\n')) expect(line).toMatch(row);
+    // Los nombres de las teclas en castellano (el tooltip viejo de la foto decía «Supr o Retroceso» a mano).
+    expect(tipRows([{ shortcut: 'photoDelete', action: 'borrar la foto' }], { mac: false, lang: 'es', touch: false })).toBe('**Supr / Retroceso**: borrar la foto');
+    expect(tipRows([{ shortcut: 'photoDelete', action: 'borrar la foto' }], { mac: true, lang: 'es', touch: false })).toBe('**Delete / ⌫**: borrar la foto');
     // El atajo es exactamente el del registro.
     expect(tipRows([{ shortcut: 'findPrev', action: 'previous match' }], { mac: false, lang: 'en', touch: false })).toBe(
       `**${shortcutLabel('findPrev', false)}**: previous match`,

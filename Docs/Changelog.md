@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+**Tooltips con gesto o atajo (D226).** Cada tooltip nombraba sus atajos y gestos a su manera («Keyboard: R», «Close
+(Esc)», un ⌘K suelto, «Supr o Retroceso» escrito a mano), algunos en negrita entera y otros sin ella. Ahora todos van
+en renglones «**gesto o atajo**: acción», como el triángulo de colapsar: el anotador, el carrete, la barra de buscar,
+la barra de la foto, el tirador del bloque, el borde de la barra lateral, el asistente, el dictado, comentarios, menús y
+la lupa. Los arma `tipRows.ts` con los atajos del registro (⌘ en la Mac, Ctrl en el resto); en una pantalla táctil, sin
+atajos ni gestos de mouse. Suma al registro Enter en el campo de reemplazar. Una prueba recorre los tooltips de la app
+y falla si alguno nombra un gesto o una tecla por fuera de ese formato.
+
+[ Tooltips con gesto o atajo (D226) - un renglón por acción «gesto o atajo: acción», con los atajos del registro y sin atajos en pantallas táctiles, en todos los tooltips de la app ]
+
 v0.152 :
 
 **Deshacer en orden, entrega 3: anotar una foto es un paso** (P.26): ⌘Z en la página salteaba lo anotado. Ahora, al

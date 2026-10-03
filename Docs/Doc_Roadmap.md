@@ -922,6 +922,11 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    Drive, la consola muestra `net::ERR_UNKNOWN_URL_SCHEME` por la dirección `sdmedia://…` (algo pide la dirección cruda
    antes de que la foto pase a mostrarse desde el dispositivo). No rompe nada a la vista; no se verificó si pasa igual en
    `main`. Reproducción: el arnés de la auditoría (`trabajo/sesion_f554a71f/informes/deshacer-e3-audit/arnes`, R3e).
+25. **Lo que quedó de D226 (tooltips con gesto o atajo, v0.0XX).** (a) Los tooltips de la barra de formato son de
+   BlockNote (su propio globo: *Bold* con ⌘B abajo, y *Comment* y *Assistant* que siguen su forma): pasarlos al formato
+   de renglones pide reemplazar los botones de BlockNote. (b) El tooltip del borde de la barra lateral sale abajo del
+   borde, que ocupa todo el alto de la ventana: queda afuera de la pantalla (ya pasaba antes). Arreglo posible: que
+   `Tooltip.tsx` lo ubique a la altura del mouse cuando el control es más alto que la ventana.
 
 ### C. Esperan a Lega
 

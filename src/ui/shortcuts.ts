@@ -230,7 +230,8 @@ const PC_MODS: Record<string, string> = { Mod: 'Ctrl', Ctrl: 'Ctrl', Alt: 'Alt',
 /** El orden de los modificadores en el rótulo (el que ya usaba la app: ⌘⌥M, ⌘⇧Z; Ctrl+Alt+Shift+…). */
 const ORDER = ['Mod', 'Ctrl', 'Alt', 'Shift'];
 
-const KEY_NAMES: Record<string, { mac: string; pc: string; es?: string }> = {
+/** `es`: el nombre en castellano en todas las plataformas; `pcEs`: solo fuera de la Mac (en la Mac va el símbolo). */
+const KEY_NAMES: Record<string, { mac: string; pc: string; es?: string; pcEs?: string }> = {
   Enter: { mac: '↩', pc: 'Enter' },
   Escape: { mac: 'Esc', pc: 'Esc' },
   ArrowUp: { mac: '↑', pc: '↑' },
@@ -241,7 +242,8 @@ const KEY_NAMES: Record<string, { mac: string; pc: string; es?: string }> = {
   End: { mac: 'End', pc: 'End', es: 'Fin' },
   Space: { mac: 'Space', pc: 'Space', es: 'Espacio' },
   Tab: { mac: '⇥', pc: 'Tab' },
-  Backspace: { mac: '⌫', pc: 'Backspace' },
+  Backspace: { mac: '⌫', pc: 'Backspace', pcEs: 'Retroceso' },
+  Delete: { mac: 'Delete', pc: 'Delete', pcEs: 'Supr' },
 };
 
 /**
@@ -257,8 +259,8 @@ export function keyLabel(keys: string, mac = IS_MAC, lang: 'en' | 'es' = 'en'): 
   const named = KEY_NAMES[key];
   const alone = mods.length === 0;
   const name = named
-    ? lang === 'es' && named.es
-      ? named.es
+    ? lang === 'es' && (named.es || (!mac && named.pcEs))
+      ? (named.es ?? named.pcEs)!
       : mac && !(alone && key === 'Enter')
         ? named.mac
         : named.pc
