@@ -39,10 +39,12 @@ export function defaultDataTest(mainTooltip: string): string {
 
 /**
  * El tooltip de un botón de BlockNote en la barra: con atajo, «**⌘B**: bold» (sin atajos en una pantalla táctil: sin
- * tooltip, como Comment y Assistant); sin atajo, su nombre. Un botón que ya trae `data-tip` (los de la app) queda igual.
+ * tooltip, como Comment y Assistant); sin atajo, su nombre. Un botón que ya trae `data-tip` (los de la app) queda igual,
+ * también sin tooltip si lo trae vacío.
  */
 export function toolbarTip(props: ButtonTipProps, env: TipEnv = {}): string | undefined {
-  if (props['data-tip'] !== undefined) return props['data-tip'];
+  // Un botón de la app trae su `data-tip`, aunque sea `undefined` (Comment en una pantalla táctil: sin tooltip).
+  if ('data-tip' in props) return props['data-tip'];
   const name = props.mainTooltip ?? props.label;
   if (!name) return undefined;
   const id = props['data-test'] ? TOOLBAR_SHORTCUTS[props['data-test']] : undefined;
