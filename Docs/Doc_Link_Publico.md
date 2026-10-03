@@ -2513,12 +2513,19 @@ decisión de Lega. Tampoco se probó con el portero real ni con Drive (ver la li
 **Pruebas:** la migración y `supabase/tests/link_archivos_permisos.sql` en `begin … rollback` contra la base real
 (pasa; 25 mutantes de la migración, 24 detectados y 1 equivalente) y las 29 pruebas SQL de siempre con la migración
 (pasan; `link_publico_permisos.sql` y `archivos_permisos.sql` con las funciones y la política nuevas). El portero:
-`portero/src/core.test.ts` (5 casos nuevos: subir lo suyo con `plink:<huella>` y a `Via_link`, la carpeta del proyecto
+`portero/src/core.test.ts` (6 casos nuevos: subir lo suyo con `plink:<huella>` y a `Via_link`, la carpeta del proyecto
 por la huella sin renombrar nada, Can view, una foto del equipo (`not_mine`), afuera de la rama y el tamaño, revocado a
-mitad, el token de *Reset*, y revocado justo antes del final: en Drive sin confirmar) y `scripts/portero-smoke.mjs`
-(24 de 24). En vitest: `src/sync/linkFiles.test.ts` (el visitante con el motor de verdad, el servidor y el portero en
-memoria: subir, admitir y verlo el equipo; lo escrito que espera al archivo; sacar el bloque; los topes y las carpetas;
-cada guarda) y `src/ui/linkEditUi.test.tsx` (lo de *Share*).
+mitad, el token de *Reset*, revocado justo antes del final (en Drive sin confirmar) y la papelera con un link) y
+`scripts/portero-smoke.mjs` (24 de 24). En vitest: `src/sync/linkFiles.test.ts` (el visitante con el motor de verdad, el
+servidor y el portero en memoria: subir, admitir y verlo el equipo; registrar despierta al motor; lo escrito que espera
+al archivo; sacar el bloque; los topes y las carpetas; cada guarda) y `src/ui/linkEditUi.test.tsx` (lo de *Share*).
+Mutantes de la app y el portero: 26, 23 detectados, 2 equivalentes (esperar solo en la página del archivo: el documento
+ya lo filtra; el servidor en memoria sin lo registrado: lo cubre la prueba SQL) y 1 que llevó a sacar una comprobación
+repetida. **En el navegador** (Chromium sin ventana, la app real del visitante y *Share* real del equipo sobre el
+servidor y el portero en memoria, sin login): el visitante suelta una foto, escribe su nombre, la foto se registra con el
+link, sube su miniatura y el original por el portero, lo escrito llega a la sala recién después, el equipo lo admite y ve
+el archivo; *Share* cuenta lo subido y avisa desde 1 GB; con el tope del día lleno la segunda foto no se registra, lo
+escrito espera y el detalle lo dice; en el teléfono, sin scroll horizontal; sin errores en la consola (14 de 14).
 
 ### Cómo quedó la 2c (v0.157)
 
