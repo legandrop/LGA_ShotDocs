@@ -4,7 +4,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ExportCancelled, ExportEditor, type ExportEditorOptions } from '../export/exportEditor';
-import { parseLinkHash } from '../linkMode';
+import { LinkContext, parseLinkHash } from '../linkMode';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
@@ -46,7 +46,7 @@ const FILE = '0f8fad5b-d9cb-469f-a165-70867728950e';
 const CONFIG = { url: 'https://xyzxyzxyzx.supabase.co', publishableKey: 'sb_publishable_testtest', name: 'Test', localKey: 'test_ws', storage: {} };
 const TOKEN = { view: `sdl_${'V'.repeat(43)}`, edit: `sdl_${'E'.repeat(43)}` };
 
-async function setup(level: 'comment' | 'edit') {
+async function setup(level: 'comment' | 'edit', visitor = false) {
   const d = await makeDevice(new FakeServer());
   devices.push(d);
   const root = await d.tree.create(null, 'Reporte');
@@ -88,9 +88,12 @@ async function setup(level: 'comment' | 'edit') {
   roots.push(r);
   await act(async () =>
     r.render(
-      <ServicesContext.Provider value={services}>
-        <ExportDialog target={{ kind: 'page', id: root }} onClose={() => undefined} />
-      </ServicesContext.Provider>,
+      // `visitor`: alguien que abrió la app con un link público (`LinkContext`), no una cuenta.
+      <LinkContext.Provider value={visitor ? ({ entry: {}, domain: 'x', linkId: '', pageId: root } as never) : null}>
+        <ServicesContext.Provider value={services}>
+          <ExportDialog target={{ kind: 'page', id: root }} onClose={() => undefined} />
+        </ServicesContext.Provider>
+      </LinkContext.Provider>,
     ),
   );
   await settle();
@@ -157,6 +160,18 @@ describe('Export: los links a los archivos con un link público', () => {
     await settle();
     expect(notice()).toBeNull();
     expect(box()).not.toBeNull();
+  });
+
+  it('un visitante del link, sin red, no ve el aviso (usa su propio link); una cuenta sin red, sí', async () => {
+    for (const visitor of [true, false]) {
+      const { d, host } = await setup('comment', visitor);
+      const engine = d.engine as unknown as { patch(p: { online: boolean }): void };
+      await act(async () => engine.patch({ online: false }));
+      await settle();
+      expect(host.querySelector('.export-offline-links') === null, visitor ? 'visitante' : 'cuenta').toBe(visitor);
+      for (const r of roots.splice(0)) act(() => r.unmount());
+      document.body.replaceChildren();
+    }
   });
 
   it('la red se corta y vuelve: la casilla queda como la dejó la persona', async () => {
