@@ -20,6 +20,7 @@ import { importJobFor } from '../import/importJob';
 import { closeHistory, requestRestore, restoreTargetSettled, useHistoryUi } from './historyUi';
 import { hasUnsavedWork } from './lazyPart';
 import { HistoryPanel } from './HistoryPanel';
+import { replaceRunning, replaceSession } from './replaceUi';
 import { PageView } from './PageView';
 
 // Las barreras de error (ErrorBarrier.tsx, Docs/Doc_Sincronizacion.md «Barreras de error»): un editor que tira al
@@ -643,6 +644,37 @@ describe('la barrera de la app', () => {
     // Al irse la pantalla, dejan de mirar.
     act(() => rootOf(host).render(<p />));
     unsaved = true;
+    expect(closing()).toBe(false);
+    expect(hasUnsavedWork()).toBe(false);
+  });
+
+  it('con la pantalla de error, un reemplazo en el proyecto (o su deshacer) que sigue corriendo también hace preguntar al cerrar', async () => {
+    const d = await makeDevice(new FakeServer());
+    devices.push(d);
+    const svc = services(d);
+    // El reemplazo corre fuera de React: sigue aunque la app se haya caído (ErrorBarrier.tsx, `unsavedLocal`).
+    const running = vi.spyOn(replaceSession(svc).engine, 'isRunning').mockReturnValue(false);
+    const host = render(
+      <ServicesContext.Provider value={svc}>
+        <WorkspaceBarrier>
+          <Bomb armed />
+        </WorkspaceBarrier>
+      </ServicesContext.Provider>,
+    );
+    await wait(50);
+    expect(host.querySelector('.app-crash')).not.toBeNull();
+    const closing = () => {
+      const e = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    expect(closing()).toBe(false);
+    expect(hasUnsavedWork()).toBe(false);
+    running.mockReturnValue(true);
+    expect(replaceRunning(svc)).toBe(true);
+    expect(closing()).toBe(true);
+    expect(hasUnsavedWork()).toBe(true);
+    running.mockReturnValue(false);
     expect(closing()).toBe(false);
     expect(hasUnsavedWork()).toBe(false);
   });
