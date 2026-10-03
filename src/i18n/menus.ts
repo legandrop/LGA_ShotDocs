@@ -106,6 +106,16 @@ export const menus = {
     en: "On a shared computer, check it: otherwise whoever uses this browser next could use your key.",
     es: "En una computadora compartida, tildala: si no, quien use este navegador después podría usar tu clave.",
   },
+  'account.forgetVoiceKeyToo': {
+    en: "It also forgets your voice key.",
+    es: "También olvida tu clave de voz.",
+  },
+  // Las notas de voz sin ubicar al salir (Docs/Doc_Dictado.md, 8).
+  'account.voiceNotesLeft': {
+    en: { one: "You have {count} voice note to place on this device.", other: "You have {count} voice notes to place on this device." },
+    es: { one: "Tenés {count} nota de voz para ubicar en este dispositivo.", other: "Tenés {count} notas de voz para ubicar en este dispositivo." },
+  },
+  'account.discardVoiceNotes': { en: "Also delete them", es: "Borrarlas también" },
   'account.forgetAssistantKeySynced': {
     en: "Your synced copy stays in this workspace, protected by your passphrase.",
     es: "Tu copia sincronizada queda en este workspace, protegida por tu frase.",

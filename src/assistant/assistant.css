@@ -484,3 +484,8 @@
   overflow-wrap: anywhere;
   user-select: all;
 }
+
+/* La ventana de salir: cuántas notas de voz quedan, pegado a su casilla (SignOutDialog). */
+.signout-notes {
+  margin: 0.25em 0 0.4em;
+}

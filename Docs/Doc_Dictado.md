@@ -915,7 +915,8 @@ later*.
 - ***Insert as text* también sin red o con la política en *Off*:** no manda nada afuera del dispositivo. *Place* sí
   respeta las dos cosas.
 - **Salir de la cuenta** no borra la cola (es por correo: vuelve al entrar con el mismo). El número en la ventana de
-  salir y la casilla para borrarlas quedan para cuando cierre la clave sincronizada (S1), que reescribe esa ventana.
+  salir y la casilla para borrarlas llegaron con la entrega S2 de la clave sincronizada (`Doc_Clave_Sincronizada.md`,
+  "Cómo quedó S2"), junto con O5 (olvidar la clave olvida también la de *Voice*) y la clave de *Voice* sincronizada.
 - El estado *transcribed* se llama `ready` (una nota escrita nace lista); `recording` y `failed` son de V3.
 
 **Pruebas.** 9 de Vitest en `queue.test.tsx` (la cola, el recorrido de aceptación con recargar y volver la red,

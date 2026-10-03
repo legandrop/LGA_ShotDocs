@@ -7,6 +7,7 @@ import { CloseIcon, MicIcon, SettingsIcon } from '../ui/icons';
 import { IS_MAC, modPressed } from '../ui/findUi';
 import { shortcutLabel } from '../ui/shortcuts';
 import { errorText } from '../assistant/errorText';
+import { isKeyRejected, SyncedKeyHint } from '../assistant/SyncedKeyHint';
 import { openAssistantSettings, useAssistantTarget, useAssistantUi } from '../assistant/assistantUi';
 import { loadSettings, readKey, type AssistantSettings } from '../assistant/keyStore';
 import { fetchPolicy, policyAllows, type AssistantPolicy } from '../assistant/policy';
@@ -44,7 +45,7 @@ type Phase =
   | { kind: 'preview'; plan: Plan }
   /** Recién aplicado: *Undo* mientras sea lo último que se hizo en la página. `queued`: la nota venía de la cola (V2). */
   | { kind: 'applied'; count: number; undo: UndoHandle | null; note: string; added: string[]; at: number; message?: string; queued?: QueuedNote }
-  | { kind: 'error'; message: string; retry: boolean };
+  | { kind: 'error'; message: string; retry: boolean; keyRejected?: boolean };
 
 interface Run {
   note: string;
@@ -391,7 +392,7 @@ export function DictationPanel({ pageId }: { pageId: string }) {
       setPhase({ kind: 'preview', plan: result });
     } catch (err) {
       if (abort.current !== controller) return;
-      setPhase({ kind: 'error', message: errorText(err, providerName, tr), retry: true });
+      setPhase({ kind: 'error', message: errorText(err, providerName, tr), retry: true, keyRejected: isKeyRejected(err) });
     }
   };
 
@@ -1135,6 +1136,7 @@ export function DictationPanel({ pageId }: { pageId: string }) {
                       {tr('dictation.saveForLater')}
                     </button>
                   )}
+                  <SyncedKeyHint show={!!phase.keyRejected} />
                   <button className="link" onClick={backToNote}>
                     {tr('assistant.back')}
                   </button>
