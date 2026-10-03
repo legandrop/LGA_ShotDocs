@@ -320,16 +320,20 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   **Entrega 2a hecha (v0.151: escribir; migración `20261028120000_link_editar.sql` sin aplicar, `schema_version` 19, y el
   interruptor `link_edit_min_version` apagado; ver "Cómo quedó la 2a" en `Doc_Link_Publico.md`).** Para prenderla: la
   barrera de error alrededor de `PageEditor` en `main` (R4), aplicar la migración, subir la mínima y poner
-  `link_edit_min_version`. Falta la 2b (archivos por el link) y la 2c (lo apartado a la vista). Lo encontrado al
-  implementar: si una fila del visitante se aparta, todo lo que sigue de la misma sesión (el mismo autor de Yjs) también,
-  dependa o no, hasta que recarga: adelantar "volver a la página como la ve el equipo" (2c) gana peso. **Su auditoría
+  `link_edit_min_version`. Falta la 2b (archivos por el link). **Su auditoría
   dio no aprobado (el paso 8) y se corrigió en una ronda** (`Doc_Link_Publico.md`, "Correcciones de la auditoría de la
-  2a"). Quedan de esa auditoría: O3 (una versión inventada como `'9999'` en una fila la deja sin decidir y traba lo que
-  sigue de ese link en esa página; *Reset link* lo corta; falta un techo de versión en la base), O9 (la
-  pantalla de link muerto, después de recargar, no ofrece lo mandado y apartado) y O4 (con D14 apagado se escribe igual
-  en la sala). Al publicar la 2a, subir `min_app_version` a ella (O5: la publicada pasa *Can edit* a *Can view* al
-  cambiar el vencimiento). De la re-verificación (BAJO): una página del equipo con más de 100 niveles de sangría aparta
-  todo lo que mande el link en esa página (el tope de profundidad se mide en la página entera; solo con una importación rara).
+  2a"). Queda de esa auditoría O4 (con D14 apagado se escribe igual en la sala). Al publicar la 2a, subir
+  `min_app_version` a ella (O5: la publicada pasa *Can edit* a *Can view* al cambiar el vencimiento).
+  **Entrega 2c hecha (v0.157: lo apartado a la vista; migración `20261029120000_link_apartado.sql` sin aplicar,
+  `schema_version` 20; ver "Cómo quedó la 2c" en `Doc_Link_Publico.md`):** la lista en *Share*, *Set aside (via link)* en
+  el historial, el ícono del árbol y "volver a la página como la ve el equipo" para el visitante (la salida de la cadena
+  de D235); con O3 (el orden de la admisión por dispositivo), O9 (la pantalla de link muerto recuerda lo mandado) y R1
+  (una página ya honda admite lo que no la ahonda); su auditoría la aprobó con observaciones, corregidas (O1 a O4 y O6). Para publicarla: aplicar la migración (con la copia). Quedan: que el
+  dueño pueda descartar lo apartado después de bajarlo (decisión de Lega: va contra "no hay borrado duro"), las filas
+  con una versión inventada cuentan en los 20 MB de lo que espera de su link hasta *Reset link* (BAJO, O5 de su auditoría:
+  no contar lo que tiene una versión mayor que la de cualquier editor que admitió hoy, o mostrarlo en *Share* como
+  trabado), y probar a mano
+  con el link de verdad la descarga y la vuelta a la versión del equipo en Safari del iPhone (la descarga de un JSON).
   **Entrega 2 rediseñada (2026-10-02):** lo que escribe un link espera en una sala
   (`public_link_updates`) y entra a `page_updates` cuando el dispositivo de un editor lo prueba (`link_admit`); partida
   en 2a (texto), 2b (archivos) y 2c (lo apartado a la vista); propuestas LE1 a LE13. **Auditado: aprobado con

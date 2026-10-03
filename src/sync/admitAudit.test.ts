@@ -278,6 +278,48 @@ describe('B4: profundidad sin límite', () => {
   });
 });
 
+// --- R1 de la re-verificación (entrega 2c): una página del equipo ya más honda que el tope --------------------------
+
+describe('R1: una página del equipo de más de 100 grupos anidados sigue admitiendo lo que no la ahonda', () => {
+  /** La página del equipo con una sangría de `depth` niveles (como la arma `deepRow`, pero del equipo). */
+  function deepTeam(depth: number): Uint8Array[] {
+    const rows = teamRows();
+    return [...rows, deepRow(visitorFrom(rows), depth, true)];
+  }
+
+  it(`escribir arriba de todo en una página de ${MAX_GROUP_DEPTH + 5} niveles entra; sumarle un nivel más, no`, () => {
+    const rows = deepTeam(MAX_GROUP_DEPTH + 5);
+    const tester = new AdmissionTester(rows);
+    try {
+      const v = visitorFrom(rows);
+      let sv = Y.encodeStateVector(v);
+      (parOf(v, 0).get(0) as Y.XmlText).insert(0, 'arriba ');
+      expect(tester.test(Y.encodeStateAsUpdate(v, sv))).toMatchObject({ ok: true });
+      // Otra rama igual de honda tampoco la ahonda.
+      sv = Y.encodeStateVector(v);
+      const same = deepRow(v, MAX_GROUP_DEPTH + 5, true);
+      expect(tester.test(same)).toMatchObject({ ok: true });
+      // Más honda que lo que ya tenía: se aparta.
+      const v2 = visitorFrom(rows);
+      expect(tester.test(deepRow(v2, MAX_GROUP_DEPTH + 7, true))).toMatchObject({ ok: false, reason: 'too_deep' });
+      void sv;
+    } finally {
+      tester.destroy();
+    }
+  });
+
+  it('una página dentro del tope sigue sin dejar pasarlo', () => {
+    const rows = deepTeam(MAX_GROUP_DEPTH - 20);
+    const tester = new AdmissionTester(rows);
+    try {
+      const v = visitorFrom(rows);
+      expect(tester.test(deepRow(v, MAX_GROUP_DEPTH + 1, true))).toMatchObject({ ok: false, reason: 'too_deep' });
+    } finally {
+      tester.destroy();
+    }
+  });
+});
+
 // --- Al azar: el visitante honesto con el editor real, con fotos en línea, tablas y listas --------------------------
 
 type Act = (e: Editor, rnd: () => number) => void;

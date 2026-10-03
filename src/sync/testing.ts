@@ -38,7 +38,7 @@ import {
   type TeamRemote,
 } from './remote';
 import { linkAuthorKey, type HistoryRow, type PageVersionRow } from './history';
-import { LINK_EDIT_SCHEMA_VERSION, type AdmitDecision, type AdmitPageRow, type AdmitResult, type AdmitWorkRow, type LinkUpdateRow } from './linkAdmitApi';
+import { LINK_ASIDE_SCHEMA_VERSION, LINK_EDIT_SCHEMA_VERSION, type AdmitDecision, type AdmitPageRow, type AdmitResult, type AdmitWorkRow, type LinkAsideRow, type LinkUpdateRow } from './linkAdmitApi';
 import {
   CommentQueue,
   commentsDbName,
@@ -402,6 +402,11 @@ export class FakeServer {
     };
   }
 
+  /** La base en la versión 20 (la lista de lo apartado, entrega 2c). Después de `enableLinkEdit`. */
+  enableLinkAside(): void {
+    this.settings = { ...this.settings!, schemaVersion: Math.max(this.settings?.schemaVersion ?? 1, LINK_ASIDE_SCHEMA_VERSION) };
+  }
+
   /** `private.link_edit_version_allowed`. */
   linkEditVersionAllowed(version: string | null | undefined): boolean {
     const min = this.settings?.linkEditMinVersion;
@@ -500,7 +505,8 @@ export class FakeServer {
       if (r.decidedAt !== null) continue;
       const l = this.linkById(r.linkId);
       if (!l || l.revoked || l.expired || l.level !== 'edit') continue;
-      const key = `${r.pageId}:${r.linkId}`;
+      // El orden es por (página, link, dispositivo) desde la 2c (O3): la versión más vieja, por dispositivo.
+      const key = `${r.pageId}:${r.linkId}:${r.device ?? '-'}`;
       const g = groups.get(key) ?? { page: r.pageId, link: l, waiting: 0, bytes: 0, first: r.appVersion };
       g.waiting++;
       g.bytes += r.bytes;
@@ -538,9 +544,15 @@ export class FakeServer {
       const l = this.linkById(r.linkId);
       if (!l || l.revoked || l.expired || l.level !== 'edit') continue;
       const key = `${r.pageId}:${r.linkId}`;
-      if (blocked.has(key)) continue;
-      if (!this.seesDeleted(uid, r.pageId) || this.linkPageLevel(l, r.pageId) < 3 || r.appVersion > v) {
+      const keyDevice = `${key}:${r.device ?? '-'}`;
+      if (blocked.has(key) || blocked.has(keyDevice)) continue;
+      if (!this.seesDeleted(uid, r.pageId) || this.linkPageLevel(l, r.pageId) < 3) {
         blocked.add(key);
+        continue;
+      }
+      // Una versión más nueva que la de quien admite traba solo lo que sigue de su dispositivo (O3, 2c).
+      if (r.appVersion > v) {
+        blocked.add(keyDevice);
         continue;
       }
       if (total > 0 && total + r.bytes > 4194304) break;
@@ -567,7 +579,7 @@ export class FakeServer {
         if ((u.decision === 'admitted') !== d.ok) break;
         continue;
       }
-      if (this.linkRoom.some((x) => x.pageId === u.pageId && x.linkId === u.linkId && x.n < u.n && x.decidedAt === null)) {
+      if (this.linkRoom.some((x) => x.pageId === u.pageId && x.linkId === u.linkId && x.device === u.device && x.n < u.n && x.decidedAt === null)) {
         throw new RemoteError('admit_out_of_order', true, 'P0001');
       }
       if (u.appVersion > v) throw new RemoteError('admit_version', true, 'P0001');
@@ -618,6 +630,41 @@ export class FakeServer {
         const state: 'aside' | 'held' | 'waiting' = r.decision === 'aside' ? 'aside' : !l || this.linkPageLevel(l, pageId) < 3 ? 'held' : 'waiting';
         return { id: r.id, link_id: r.linkId, author: r.author, created_at: new Date(r.createdAt).toISOString(), bytes: r.bytes, state, reason: r.reason };
       });
+  }
+
+  /** `public_link_aside`: lo apartado de todos los links en las páginas que la persona ve con lo borrado (entrega 2c). */
+  linkAside(uid: string) {
+    if (this.team && (!this.role(uid) || this.role(uid) === 'guest')) return [];
+    const seen = new Map<string, boolean>();
+    const sees = (pageId: string) => {
+      if (!seen.has(pageId)) seen.set(pageId, this.seesDeleted(uid, pageId) && (!this.team || this.pageLevel(uid, pageId) >= 3));
+      return seen.get(pageId)!;
+    };
+    // Hasta 200 por página, las más nuevas (O3 de la auditoría de la 2c: no un tope para todo el workspace).
+    const perPage = new Map<string, number>();
+    const root = (linkId: string) => {
+      const p = this.linkById(linkId)?.pageId ?? null;
+      return p && (!this.team || this.pageLevel(uid, p) >= 1) ? p : null;
+    };
+    return this.linkRoom
+      .filter((r) => r.decision === 'aside' && sees(r.pageId))
+      .sort((a, b) => b.n - a.n)
+      .filter((r) => {
+        const k = (perPage.get(r.pageId) ?? 0) + 1;
+        perPage.set(r.pageId, k);
+        return k <= 200;
+      })
+      .map((r) => ({
+        id: r.id,
+        page_id: r.pageId,
+        link_id: r.linkId,
+        link_page_id: root(r.linkId),
+        author: r.author,
+        created_at: new Date(r.createdAt).toISOString(),
+        decided_at: r.decidedAt === null ? null : new Date(r.decidedAt).toISOString(),
+        bytes: r.bytes,
+        reason: r.reason,
+      }));
   }
 
   /** `private.has_plain_readers`: alguien activo con Ver o Comentar, un invitado con cualquier nivel, o un link vivo. */
@@ -2161,6 +2208,12 @@ export class FakeRemote
     this.server.check();
     if ((this.server.settings?.schemaVersion ?? 0) < LINK_EDIT_SCHEMA_VERSION) return [];
     return this.server.linkUpdatesOf(this.userId, pageId);
+  }
+
+  async linkAside(): Promise<LinkAsideRow[]> {
+    this.server.check();
+    if ((this.server.settings?.schemaVersion ?? 0) < LINK_ASIDE_SCHEMA_VERSION) return [];
+    return this.server.linkAside(this.userId);
   }
 
   async linkUpdateBytes(id: string): Promise<Uint8Array> {

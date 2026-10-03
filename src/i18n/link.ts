@@ -57,12 +57,12 @@ export const link = {
   },
   'link.edit.aside': {
     en: {
-      one: "Some of your changes on a page couldn't be added, and what you write next on it won't reach the team either. Keep a copy:",
-      other: "Some of your changes on {count} pages couldn't be added, and what you write next on them won't reach the team either. Keep a copy:",
+      one: "Some of your changes on a page couldn't be added, and what you write next on it won't reach the team either. On the page you can go back to the team's version. Keep a copy:",
+      other: "Some of your changes on {count} pages couldn't be added, and what you write next on them won't reach the team either. On each page you can go back to the team's version. Keep a copy:",
     },
     es: {
-      one: "Algunos de tus cambios en una página no se pudieron sumar, y lo que escribas ahí después tampoco va a llegar al equipo. Guardá una copia:",
-      other: "Algunos de tus cambios en {count} páginas no se pudieron sumar, y lo que escribas ahí después tampoco va a llegar al equipo. Guardá una copia:",
+      one: "Algunos de tus cambios en una página no se pudieron sumar, y lo que escribas ahí después tampoco va a llegar al equipo. En la página podés volver a la versión del equipo. Guardá una copia:",
+      other: "Algunos de tus cambios en {count} páginas no se pudieron sumar, y lo que escribas ahí después tampoco va a llegar al equipo. En cada página podés volver a la versión del equipo. Guardá una copia:",
     },
   },
   'link.edit.downloadThem': { en: "Download them", es: "Bajarlos" },
@@ -90,5 +90,70 @@ export const link = {
   'link.aside.held': {
     en: { one: "{count} change from a link that stopped editing this page is on hold.", other: "{count} changes from a link that stopped editing this page are on hold." },
     es: { one: "{count} cambio de un link que dejó de editar esta página queda en espera.", other: "{count} cambios de un link que dejó de editar esta página quedan en espera." },
+  },
+  // Lo apartado a la vista (entrega 2c): volver a la página como la ve el equipo, los motivos y el ícono del árbol.
+  'link.startOver.title': {
+    en: "Some of your changes on this page couldn't be added.",
+    es: "Algunos de tus cambios en esta página no se pudieron sumar.",
+  },
+  'link.startOver.text': {
+    en: "What you write next here won't reach the team either. Download a copy, then go back to the page as the team sees it to keep writing.",
+    es: "Lo que escribas acá después tampoco va a llegar al equipo. Bajá una copia y después volvé a la página como la ve el equipo para seguir escribiendo.",
+  },
+  'link.startOver.button': { en: "Show the team's version", es: "Ver la versión del equipo" },
+  'link.startOver.tip': {
+    en: "Downloads a copy of what you have here first, then replaces this page in this browser",
+    es: "Primero baja una copia de lo que tenés acá y después reemplaza esta página en este navegador",
+  },
+  'link.startOver.confirm': {
+    en: "A copy of this page as you have it is downloaded first. Then this browser shows the page as the team sees it, and what of yours isn't on it is removed from the page here (it stays in the copy).",
+    es: "Primero se baja una copia de esta página como la tenés. Después este navegador muestra la página como la ve el equipo, y lo tuyo que no está en ella sale de la página acá (queda en la copia).",
+  },
+  'link.startOver.done': {
+    en: "This page now shows the team's version. What you write now reaches the team.",
+    es: "Esta página ahora muestra la versión del equipo. Lo que escribas ahora le llega al equipo.",
+  },
+  'link.startOver.changed': {
+    en: "The page changed while the copy was being prepared, so nothing was replaced. Try again.",
+    es: "La página cambió mientras se preparaba la copia, así que no se reemplazó nada. Probá de nuevo.",
+  },
+  'link.startOver.notReady': {
+    en: "The team's version of this page isn't ready yet. Nothing was replaced. Try again in a few minutes.",
+    es: "La versión del equipo de esta página todavía no está lista. No se reemplazó nada. Probá en unos minutos.",
+  },
+  'link.startOver.offline': {
+    en: "You're offline, so nothing was replaced. Try again when you're back online.",
+    es: "No hay conexión, así que no se reemplazó nada. Probá de nuevo cuando vuelva.",
+  },
+  'link.startOver.lateTitle': {
+    en: "Something you typed while this page changed to the team's version wasn't added.",
+    es: "Algo que escribiste mientras esta página pasaba a la versión del equipo no se sumó.",
+  },
+  'link.startOver.lateText': {
+    en: "It's kept in this browser and comes in the copy you download.",
+    es: "Queda guardado en este navegador y viene en la copia que bajás.",
+  },
+  'link.startOver.lateDismiss': { en: "Got it", es: "Entendido" },
+  'link.startOver.failed': {
+    en: "Nothing was replaced: {reason}",
+    es: "No se reemplazó nada: {reason}",
+  },
+  'link.reason.link_revoked': {
+    en: "the link was reset or turned off before it was added",
+    es: "el link se renovó o se apagó antes de que entrara",
+  },
+  'link.reason.pending': {
+    en: "it came after another change that couldn't be added",
+    es: "vino después de otro cambio que no se pudo sumar",
+  },
+  'link.reason.media': {
+    en: "it uses a photo or an image from outside the shared pages",
+    es: "usa una foto o una imagen de afuera de las páginas compartidas",
+  },
+  'link.reason.size': { en: "it would make the page too big", es: "haría la página demasiado grande" },
+  'link.reason.other': { en: "the app couldn't add it safely", es: "la app no lo pudo sumar de forma segura" },
+  'link.aside.tree': {
+    en: "Changes sent through a link were set aside here",
+    es: "Acá hay cambios mandados con un link que quedaron aparte",
   },
 } satisfies Dict;

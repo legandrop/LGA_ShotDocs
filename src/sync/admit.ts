@@ -4,7 +4,7 @@ import { mediaIdsInDoc } from '../media/usage';
 import { findUnknownContent, type KnownContent } from '../ui/unknownContent';
 import { checkCleanBase } from './clean';
 import { pendingKey } from './compact';
-import { depthProblem, shapeProblem, urlsInDoc } from './linkShape';
+import { depthProblem, pageDepth, shapeProblem, urlsInDoc, type PageDepth } from './linkShape';
 import { CONTENT_FRAGMENT } from './structure';
 
 // La prueba de admisión de lo que escribe un link público (Docs/Doc_Link_Publico.md, E2.3, LE3). Lo que manda un
@@ -62,6 +62,8 @@ export class AdmissionTester {
   /** La copia con GC: de acá sale la base limpia (como `buildCleanBase`). */
   private clean!: Y.Doc;
   private readonly accepted: Uint8Array[] = [];
+  /** La profundidad de la copia antes de la fila que se prueba (R1: una página ya honda admite lo que no la ahonda). */
+  private depth: PageDepth = { groups: 0, nodes: 0 };
   private readonly maxBase: number;
 
   constructor(
@@ -84,6 +86,7 @@ export class AdmissionTester {
       Y.applyUpdate(this.work, merged);
       Y.applyUpdate(this.clean, merged);
     }
+    this.depth = pageDepth(this.work);
   }
 
   /** Prueba una fila. Si entra, queda aplicada para las que siguen. */
@@ -124,7 +127,7 @@ export class AdmissionTester {
       }
       if (pendingKey(doc) !== pendingBefore) return (verdict = { ok: false, reason: 'pending' });
       // 8, primero lo barato y lo que protege a lo que sigue: la profundidad de la página entera (B4), sin recursión.
-      const deep = depthProblem(doc);
+      const deep = depthProblem(doc, this.depth);
       if (deep) return (verdict = { ok: false, reason: 'too_deep', detail: deep });
       // 4. Nada que esta versión no conozca (si antes no había).
       const unknown = unknownBefore === null ? findUnknownContent(doc, known) : null;
@@ -148,6 +151,9 @@ export class AdmissionTester {
       if (base.length > this.maxBase) return (verdict = { ok: false, reason: 'too_big' });
       const problem = checkCleanBase(base, this.clean);
       if (problem) return (verdict = { ok: false, reason: `clean_${problem.replace(/\s+/g, '_')}` });
+      // Lo que entró queda en la copia: la próxima fila se compara con esta profundidad.
+      const now = pageDepth(doc);
+      this.depth = { groups: Math.max(this.depth.groups, now.groups), nodes: Math.max(this.depth.nodes, now.nodes) };
       return (verdict = { ok: true, media });
     } finally {
       // Lo que no entró ya quedó aplicado en las copias: se rearman sin la fila.

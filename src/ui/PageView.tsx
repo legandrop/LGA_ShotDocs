@@ -14,6 +14,7 @@ import { PageBarrier } from './ErrorBarrier';
 import { CollapseIcon, HeaderIcon } from './icons';
 import { lazyPart, Part } from './lazyPart';
 import { LinkAsideNotice } from './LinkAsideNotice';
+import { LinkVisitorAsideNotice } from './LinkVisitorAsideNotice';
 import { useFloating } from './menus';
 import { pageFormat, sheetSize, SHEET_MARGIN_MM, mm } from './pageFormat';
 import { headerLevels, headerPages, ownHeader } from './titles';
@@ -93,6 +94,7 @@ export function PageView({ id }: { id: string }) {
       {/* Una plantilla propia (Docs/Doc_Plantillas.md, 5.2): qué es y sus ajustes. */}
       <TemplateBanner pageId={id} />
       <LinkAsideNotice pageId={id} />
+      <LinkVisitorAsideNotice pageId={id} />
       <PageHeader id={id} editable={perms.canEditRow(id)} />
       <TitleInput id={id} title={page.title} readOnly={!perms.canEditRow(id)} />
       {/* Si el editor tira un error con lo que tiene la página, falla solo la página (ErrorBarrier.tsx). */}

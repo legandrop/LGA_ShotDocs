@@ -167,6 +167,16 @@ export function dirtyRange(): IDBKeyRange {
 }
 
 /**
+ * Clave en `meta` de lo que tenía la página en este dispositivo antes de volver a la versión del equipo (un visitante con
+ * un link, Docs/Doc_Link_Publico.md, entrega 2c): un update de Yjs, todo junto. No se borra nunca y sale en "bajar lo
+ * pendiente". Las versiones anteriores no la leen.
+ */
+export function startedOverKey(pageId: string): string {
+  return `${STARTED_OVER_PREFIX}${pageId}`;
+}
+export const STARTED_OVER_PREFIX = 'startedOver:';
+
+/**
  * Si la página tiene algo sin subir: la marca de ediciones sin subir (`dirty`), un envío sin confirmar o
  * una versión mayor que la confirmada (lo de siempre: así lo guardado por una versión anterior se sigue
  * subiendo), salvo que esa versión sea solo la guardia (`guardVersion`).
