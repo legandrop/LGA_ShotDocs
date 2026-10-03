@@ -489,6 +489,13 @@ miniaturas, en memoria): con 4 fotos, la vuelta se cerró a los 120 s con 2 subi
 registradas y con su miniatura, sin error; una foto nueva durante la espera se registró con su miniatura sin abrir
 ninguna subida; al volver el portero subieron las 5, una vez cada una.
 
+**Entrega 4 de carpetas (v0.0XX), probado en Chromium** con el cliente del portero de verdad (partes por
+`XMLHttpRequest`) contra un portero local que hace de portero con Drive colgado (contesta `504 stalled` a los 3 s, en
+lugar de los 90 s): un archivo de 9 MiB al que Drive no le contesta la última parte cerró la vuelta a los 9 s (con el
+plazo de la respuesta eran más de 4 minutos), mandó la primera parte de 8 MiB una sola vez y llegó una vez al volver
+Drive; las partes llevaron `?stall=1` y la pregunta de cuánto llegó, no. Con 2 fotos sueltas la vuelta se cerró a los
+6 s, sin otro error, y al volver Drive subieron las 2, una vez cada una.
+
 **Lo que queda afuera** (anotado en `Doc_Roadmap.md`, B.11): probarlo en Safari de iPhone y con una red lenta de
 verdad.
 

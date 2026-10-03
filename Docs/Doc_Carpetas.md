@@ -433,6 +433,12 @@ páginas) y `portero/src/folders.test.ts` (`partial` con 40 subcarpetas y más d
 afuera; sin `partial`, `409` como antes; Drive que no contesta una parte con y sin `?stall=1`; la base colgada en la
 última parte).
 
+**Recorrido en Chromium** (sin ventana, con el cliente real del portero, partes por `XMLHttpRequest`, contra un portero
+local): con el portero colgado, una carpeta de 3 archivos cerró la vuelta a los 61 s; al cortarse y volver la red
+(el evento `online` de verdad) subió en 0,3 s en vez de esperar los 10 s que faltaban. Otra, en la segunda espera (20
+s): *Pause* y *Resume* volvió a probar el portero 60 s y la espera siguiente fue de 10 s (antes, 40 s). Cada archivo
+llegó una vez. Lo del portero con Drive colgado, en `Doc_Portero.md`, "Subidas que se traban".
+
 ## Qué se pide
 
 1. Arrastrar una carpeta (con subcarpetas) a la página. Va al Drive del dueño, a `<Proyecto>/Carpetas/<nombre>`.
