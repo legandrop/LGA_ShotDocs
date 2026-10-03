@@ -1175,7 +1175,9 @@ code {
   padding: 3px 10px;
 }
 
+/* Los tres del mismo ancho, alineados a la derecha (Font tiene dos opciones: más anchas). */
 .pref-icons .segmented {
+  width: 132px;
   gap: 2px;
   padding: 2px;
   border-radius: 8px;
@@ -1183,10 +1185,14 @@ code {
 
 .menu .pref-icons .segmented button,
 .pref-icons .segmented button {
-  width: 40px;
   height: 28px;
   padding: 0;
   border-radius: 6px;
+}
+
+/* Los demás selectores del panel, un poco más bajos. */
+.account-menu .segmented button {
+  height: 30px;
 }
 
 .pref-label {
