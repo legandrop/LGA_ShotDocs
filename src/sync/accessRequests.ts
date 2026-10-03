@@ -237,6 +237,14 @@ const ASKED_KEEP = 200;
 
 type Store = Pick<Storage, 'getItem' | 'setItem'>;
 
+/**
+ * Dónde se anota: por workspace **y por persona** (O4 de la auditoría): en un dispositivo compartido, otra cuenta del mismo
+ * workspace no ve *You asked for access on…* de un pedido ajeno.
+ */
+export function askedScope(localKey: string, userId: string): string {
+  return `${localKey}.${userId}`;
+}
+
 function storage(): Store | null {
   try {
     return typeof localStorage === 'undefined' ? null : localStorage;
@@ -245,9 +253,9 @@ function storage(): Store | null {
   }
 }
 
-function readAsked(localKey: string, store: Store | null): Record<string, string> {
+function readAsked(scope: string, store: Store | null): Record<string, string> {
   try {
-    const raw = store?.getItem(ASKED_KEY + localKey);
+    const raw = store?.getItem(ASKED_KEY + scope);
     const parsed = raw ? (JSON.parse(raw) as unknown) : null;
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, string>) : {};
   } catch {
@@ -255,20 +263,20 @@ function readAsked(localKey: string, store: Store | null): Record<string, string
   }
 }
 
-/** Cuándo pidió acceso a este archivo desde este dispositivo (ISO), o `null`. */
-export function askedAt(localKey: string, fileId: string, store: Store | null = storage()): string | null {
-  const at = readAsked(localKey, store)[fileId];
+/** Cuándo pidió acceso a este archivo desde este dispositivo (ISO), o `null`. `scope`: `askedScope(clave local, persona)`. */
+export function askedAt(scope: string, fileId: string, store: Store | null = storage()): string | null {
+  const at = readAsked(scope, store)[fileId];
   return typeof at === 'string' && !Number.isNaN(Date.parse(at)) ? at : null;
 }
 
-/** Anota que lo pidió ahora (se guardan los últimos 200 por workspace; si no se puede guardar, no pasa nada). */
-export function rememberAsked(localKey: string, fileId: string, now = new Date(), store: Store | null = storage()): void {
-  const all = readAsked(localKey, store);
+/** Anota que lo pidió ahora (los últimos 200 por workspace y persona; si no se puede guardar, no pasa nada). */
+export function rememberAsked(scope: string, fileId: string, now = new Date(), store: Store | null = storage()): void {
+  const all = readAsked(scope, store);
   delete all[fileId];
   all[fileId] = now.toISOString();
   const kept = Object.entries(all).slice(-ASKED_KEEP);
   try {
-    store?.setItem(ASKED_KEY + localKey, JSON.stringify(Object.fromEntries(kept)));
+    store?.setItem(ASKED_KEY + scope, JSON.stringify(Object.fromEntries(kept)));
   } catch {
     // Sin almacenamiento (ventana privada, lleno): el pedido igual llegó a la base.
   }

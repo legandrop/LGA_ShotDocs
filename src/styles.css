@@ -4819,15 +4819,40 @@ button.link.danger {
   align-items: flex-end;
 }
 
-.access-request-fields label {
+.access-request-fields label,
+.access-request-field {
   display: grid;
   gap: 4px;
   min-width: 0;
 }
 
+/* El nombre de la página, de la misma altura que el campo del nivel (O5). */
+.access-request-page {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+/* Los tres botones en un renglón también en el teléfono (O5): sin cortar el texto y con menos relleno. */
 .access-request-form .modal-actions {
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+}
+
+.access-request-form .modal-actions button {
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .access-request-form .modal-actions {
+    gap: 6px;
+  }
+
+  .access-request-form .modal-actions button {
+    padding-inline: 10px;
+  }
 }
 
 .share-requests {

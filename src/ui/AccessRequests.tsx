@@ -87,9 +87,11 @@ export function AccessRequestForm({
             </select>
           </label>
         ) : (
-          <p className="small">
-            <span className="pref-label">{tr('requests.page')}</span> {request.pages[0].title || tr('common.untitled')}
-          </p>
+          // Una sola página: el mismo renglón de rótulo y valor que el nivel, así quedan alineados (O5).
+          <div className="access-request-field">
+            <span className="pref-label">{tr('requests.page')}</span>
+            <span className="access-request-page">{request.pages[0].title || tr('common.untitled')}</span>
+          </div>
         )}
         <label>
           <span className="pref-label">{tr('requests.level')}</span>

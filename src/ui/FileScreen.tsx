@@ -4,7 +4,7 @@ import { fileKind, isFolderMime } from '../media/attachments';
 import { useLinkMode } from '../linkMode';
 import { fileReturnPath, navigate } from '../router';
 import { useServices, useSyncStatus } from '../services';
-import { ACCESS_REQUESTS_SCHEMA_VERSION, askedAt, rememberAsked, requestAccess } from '../sync/accessRequests';
+import { ACCESS_REQUESTS_SCHEMA_VERSION, askedAt, askedScope, rememberAsked, requestAccess } from '../sync/accessRequests';
 import { errorMessage, isNetworkError } from '../sync/types';
 import { AttachmentSheet } from './AttachmentSheet';
 import { createCarreteLoader } from './carreteLoader';
@@ -172,8 +172,9 @@ export function FileScreen({ localKey, id }: { localKey: string; id: string }) {
  */
 function RequestAccess({ localKey, id, onHasAccess }: { localKey: string; id: string; onHasAccess: () => void }) {
   const tr = useT();
-  const { client } = useServices();
-  const [asked, setAsked] = useState(() => askedAt(localKey, id));
+  const { client, user } = useServices();
+  const scope = askedScope(localKey, user.id);
+  const [asked, setAsked] = useState(() => askedAt(scope, id));
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
@@ -185,8 +186,8 @@ function RequestAccess({ localKey, id, onHasAccess }: { localKey: string; id: st
     try {
       const res = await requestAccess(client, id);
       if (res === 'has_access') return onHasAccess();
-      rememberAsked(localKey, id);
-      setAsked(askedAt(localKey, id) ?? new Date().toISOString());
+      rememberAsked(scope, id);
+      setAsked(askedAt(scope, id) ?? new Date().toISOString());
       setSent(true);
       setConfirming(false);
     } catch (err) {

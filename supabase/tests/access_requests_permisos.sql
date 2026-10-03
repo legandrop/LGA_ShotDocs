@@ -147,7 +147,8 @@ insert into public.pages (id, workspace_id, parent_id, title, sort_key, settings
   (pg_temp.u('e2b5'), pg_temp.u('e2e0'), pg_temp.u('e2b0'), 'T', 'a4', '{}'),
   (pg_temp.u('e2b6'), pg_temp.u('e2e1'), null, 'QP', 'a0', '{}'),
   (pg_temp.u('e2b7'), pg_temp.u('e2e2'), null, 'DP', 'a0', '{}');
--- Archivos: F en P y en P2 (P primero), F3 en P3, F4 en P4, G en T, QF en QP, DF en DP, F5 en ninguna página.
+-- Archivos: F en P y en P2 (P primero), F3 en P3, F4 en P4, G en T, QF en QP, DF en DP, F5 en ninguna página; FP (ya en
+-- la papelera de Drive) y F6 en P.
 insert into public.files (id, project_id, name, mime, size, created_by) values
   (pg_temp.u('e2f0'), pg_temp.u('e2e0'), 'f.pdf', 'application/pdf', 10, pg_temp.u('e2a0')),
   (pg_temp.u('e2f3'), pg_temp.u('e2e0'), 'f3.mp4', 'video/mp4', 10, pg_temp.u('e2a0')),
@@ -155,7 +156,9 @@ insert into public.files (id, project_id, name, mime, size, created_by) values
   (pg_temp.u('e2f5'), pg_temp.u('e2e0'), 'g.pdf', 'application/pdf', 10, pg_temp.u('e2a0')),
   (pg_temp.u('e2f6'), pg_temp.u('e2e1'), 'qf.pdf', 'application/pdf', 10, pg_temp.u('e2a3')),
   (pg_temp.u('e2f7'), pg_temp.u('e2e2'), 'df.pdf', 'application/pdf', 10, pg_temp.u('e2a0')),
-  (pg_temp.u('e2f8'), pg_temp.u('e2e0'), 'f5.pdf', 'application/pdf', 10, pg_temp.u('e2a0'));
+  (pg_temp.u('e2f8'), pg_temp.u('e2e0'), 'f5.pdf', 'application/pdf', 10, pg_temp.u('e2a0')),
+  (pg_temp.u('e2f9'), pg_temp.u('e2e0'), 'fp.pdf', 'application/pdf', 10, pg_temp.u('e2a0')),
+  (pg_temp.u('e2fa'), pg_temp.u('e2e0'), 'f6.pdf', 'application/pdf', 10, pg_temp.u('e2a0'));
 insert into public.page_files (page_id, file_id, created_at) values
   (pg_temp.u('e2b2'), pg_temp.u('e2f0'), now()),
   (pg_temp.u('e2b1'), pg_temp.u('e2f0'), now() - interval '1 minute'),
@@ -163,7 +166,11 @@ insert into public.page_files (page_id, file_id, created_at) values
   (pg_temp.u('e2b4'), pg_temp.u('e2f4'), now()),
   (pg_temp.u('e2b5'), pg_temp.u('e2f5'), now()),
   (pg_temp.u('e2b6'), pg_temp.u('e2f6'), now()),
-  (pg_temp.u('e2b7'), pg_temp.u('e2f7'), now());
+  (pg_temp.u('e2b7'), pg_temp.u('e2f7'), now()),
+  (pg_temp.u('e2b1'), pg_temp.u('e2f9'), now()),
+  (pg_temp.u('e2b1'), pg_temp.u('e2fa'), now());
+-- FP se mandó a la papelera de Drive y su página sigue viva (por ejemplo, se restauró la página después: O1).
+update public.files set trashed_at = now(), purged_at = now() where id = pg_temp.u('e2f9');
 -- d: Editar y crear páginas solo sobre P. m: Editar sobre P.
 insert into public.grants (user_id, page_id, level) values
   (pg_temp.u('e2a1'), pg_temp.u('e2b1'), 'edit_pages'),
@@ -421,11 +428,41 @@ begin
   where id = pg_temp.rid('e2a4', 'e2f0');
   perform pg_temp.check(pg_temp.run_as('e2a0', format('select count(*) from public.access_requests_pending() where user_id = %L and file_id = %L',
                                                      pg_temp.u('e2a4'), pg_temp.u('e2f0'))), '0', 'la lista muestra uno de 31 días');
+  -- Tampoco se decide por su id (O2 de la auditoría).
+  perform pg_temp.check(pg_temp.decide('e2a0', pg_temp.rid('e2a4', 'e2f0'), true, 'e2b1'), 'error:request_not_found', 'aceptar uno de 31 días');
+  perform pg_temp.check(pg_temp.decide('e2a0', pg_temp.rid('e2a4', 'e2f0'), false, null), 'error:request_not_found', 'rechazar uno de 31 días');
+  perform pg_temp.check(pg_temp.states('e2a4', 'e2f0'), 'pending', 'decidir uno de 31 días lo cambió');
   perform pg_temp.check(pg_temp.ask('e2a4', 'e2f0'), 'sent', 'b renueva');
   perform pg_temp.check(pg_temp.ask('e2a4', 'e2f0'), 'sent', 'b renueva otra vez');
   assert (select times from public.access_requests where id = pg_temp.rid('e2a4', 'e2f0')) = 2, 'renovar dos veces en la hora no sumó una';
   perform pg_temp.check(pg_temp.run_as('e2a0', format('select count(*) from public.access_requests_pending() where user_id = %L and file_id = %L',
                                                      pg_temp.u('e2a4'), pg_temp.u('e2f0'))), '1', 'renovado, la lista no lo muestra');
+end;
+$$;
+
+-- ---------------------------------------------------------------------------------------------------
+-- 7b. Un archivo en la papelera de Drive (`purged_at`) en una página viva (O1 de la auditoría)
+-- ---------------------------------------------------------------------------------------------------
+do $$
+begin
+  -- Pedirlo deja un void (la misma respuesta) y no aparece.
+  perform pg_temp.check(pg_temp.ask('e2a5', 'e2f9'), 'sent', 'e pide FP');
+  perform pg_temp.check(pg_temp.states('e2a5', 'e2f9'), 'void', 'FP no quedó void');
+  perform pg_temp.check(pg_temp.run_as('e2a0', format('select count(*) from public.access_requests_pending() where file_id = %L',
+                                                     pg_temp.u('e2f9'))), '0', 'la lista muestra FP');
+  -- Un pendiente de un archivo que después se manda a Drive: sale de la lista y no se decide; si vuelve, aparece.
+  perform pg_temp.check(pg_temp.ask('e2a5', 'e2fa'), 'sent', 'e pide F6');
+  perform pg_temp.check(pg_temp.run_as('e2a0', format('select count(*) from public.access_requests_pending() where file_id = %L',
+                                                     pg_temp.u('e2fa'))), '1', 'la lista no muestra F6');
+  update public.files set trashed_at = now(), purged_at = now() where id = pg_temp.u('e2fa');
+  perform pg_temp.check(pg_temp.run_as('e2a0', format('select count(*) from public.access_requests_pending() where file_id = %L',
+                                                     pg_temp.u('e2fa'))), '0', 'la lista muestra F6 en la papelera de Drive');
+  perform pg_temp.check(pg_temp.decide('e2a0', pg_temp.rid('e2a5', 'e2fa'), true, 'e2b1'), 'error:request_not_found',
+    'aceptar F6 en la papelera de Drive');
+  perform pg_temp.check(pg_temp.grant_of('e2a5', 'e2b1'), '(ninguno)', 'aceptar F6 le dio permiso a e');
+  update public.files set trashed_at = null, purged_at = null where id = pg_temp.u('e2fa');
+  perform pg_temp.check(pg_temp.run_as('e2a0', format('select count(*) from public.access_requests_pending() where file_id = %L',
+                                                     pg_temp.u('e2fa'))), '1', 'restaurado, la lista no muestra F6');
 end;
 $$;
 

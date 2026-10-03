@@ -49,12 +49,14 @@ revoke all on public.access_requests from public, anon, authenticated;
 -- ---------------------------------------------------------------------------------------------------
 -- 2. Pedir
 -- ---------------------------------------------------------------------------------------------------
--- ¿Vale? Lo usa una página viva y no hubo un rechazo de ese archivo a esa persona en 24 horas.
+-- ¿Vale? El archivo no se mandó a la papelera de Drive (`purged_at`), lo usa una página viva y no hubo un rechazo de ese
+-- archivo a esa persona en 24 horas.
 create function private.access_request_valid(uid uuid, p_file uuid)
 returns boolean
 language sql stable security definer set search_path = ''
 as $$
-  select exists (select 1 from public.page_files pf
+  select not exists (select 1 from public.files f where f.id = p_file and f.purged_at is not null)
+     and exists (select 1 from public.page_files pf
                  where pf.file_id = p_file and pf.removed_at is null and not pf.is_foreign
                    and private.page_alive(pf.page_id))
      and not exists (select 1 from public.access_requests r
@@ -85,7 +87,8 @@ begin
   end if;
   -- Dos pestañas a la vez no pasan el tope.
   perform pg_advisory_xact_lock(hashtextextended('access_request:' || uid::text, 0));
-  -- Repetido: el mismo camino valga o no (no mira si el archivo existe).
+  -- Repetido: el mismo camino valga o no; después de `file_level` (la misma pregunta que `media_file` y `POST /pass`, con
+  -- su diferencia de tiempo ya aceptada en LF4) no vuelve a mirar el archivo.
   select * into cur from public.access_requests r
   where r.user_id = uid and r.file_id = p_file and r.state in ('pending', 'void')
   for update;
@@ -115,8 +118,8 @@ $$;
 -- ---------------------------------------------------------------------------------------------------
 -- 3. Los pendientes de quien decide
 -- ---------------------------------------------------------------------------------------------------
--- Los de 30 días, de miembros vivos que todavía no ven el archivo, sobre archivos que usa alguna página viva que quien
--- llama puede compartir; con solo esas páginas (id y título, en el orden en que se agregó el archivo). Hasta 100. Un
+-- Los de 30 días, de miembros vivos que todavía no ven el archivo, sobre archivos que no se mandaron a la papelera de
+-- Drive y usa alguna página viva que quien llama puede compartir; con solo esas páginas (id y título, en el orden en que se agregó el archivo). Hasta 100. Un
 -- invitado, alguien sin membresía o una sesión con contraseña no ven nada.
 create function public.access_requests_pending()
 returns table (id uuid, user_id uuid, email text, role text, file_id uuid, file_name text, mime text,
@@ -135,7 +138,7 @@ begin
     from public.access_requests r
     join public.members m on m.user_id = r.user_id and m.removed_at is null
     join auth.users u on u.id = r.user_id
-    join public.files f on f.id = r.file_id
+    join public.files f on f.id = r.file_id and f.purged_at is null
     cross join lateral (
       select jsonb_agg(jsonb_build_object('page_id', pg.id, 'title', pg.title) order by pf.created_at, pg.id) as pages
       from public.page_files pf join public.pages pg on pg.id = pf.page_id
@@ -156,8 +159,9 @@ $$;
 -- 4. Decidir
 -- ---------------------------------------------------------------------------------------------------
 -- `p_accept` explícito (LF20): un error de la app que pierde la página nunca rechaza un pedido. «No existe», «ya
--- decidido» y «no te toca» dan el mismo error (`request_not_found`). Dos que deciden a la vez: la fila se bloquea y el
--- segundo recibe `request_not_found`.
+-- decidido», «no te toca», «de hace más de 30 días» (la lista no lo muestra, LF14) y «el archivo se mandó a la papelera
+-- de Drive» dan el mismo error (`request_not_found`). Dos que deciden a la vez: la fila se bloquea y el segundo recibe
+-- `request_not_found`.
 create function public.decide_access_request(p_id uuid, p_accept boolean, p_page uuid default null,
                                              p_level text default 'view')
 returns text
@@ -168,7 +172,9 @@ declare
   r   public.access_requests;
 begin
   select * into r from public.access_requests ar where ar.id = p_id for update;
-  if not found or r.state <> 'pending' or not exists (
+  if not found or r.state <> 'pending' or r.asked_at <= now() - interval '30 days'
+     or exists (select 1 from public.files f where f.id = r.file_id and f.purged_at is not null)
+     or not exists (
       select 1 from public.page_files pf
       where pf.file_id = r.file_id and pf.removed_at is null and not pf.is_foreign
         and private.page_alive(pf.page_id) and private.user_can_share_page(pf.page_id, uid)) then

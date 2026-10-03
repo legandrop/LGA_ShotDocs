@@ -312,8 +312,9 @@ el pase no coincidirían.
 - Solo un miembro vivo con sesión permitida (`workspace_role`): si no, `not_member`. `anon` no puede llamarla.
 - Si ya lo ve (`file_level ≥ 1`): `has_access` (la persona ya lo sabe; no es un dato nuevo).
 - **Repetido** (ya hay uno `pending` o `void` de esa persona y ese archivo): renueva la fila como mucho una vez por hora y
-  responde `sent`. **Este camino no mira si el archivo existe**: repetir el mismo id mil veces no sirve para medir nada
-  nuevo. Un `void` de hace más de un día se vuelve a mirar (por ejemplo, pasó el día del rechazo).
+  responde `sent`. **Este camino no vuelve a mirar el archivo** (antes pasó por `file_level`, la misma pregunta de
+  `media_file` y `POST /pass`, con la diferencia de tiempo ya aceptada en LF4): repetir el mismo id mil veces no sirve
+  para medir nada nuevo. Un `void` de hace más de un día se vuelve a mirar (por ejemplo, pasó el día del rechazo).
 - **Nuevo:** si la persona ya creó **20 filas en 24 horas** (valgan o no), `rate_limited`. Si no, crea la fila: `pending`
   si el archivo lo usa una página viva (`private.page_alive`: ni ella ni una de arriba en la papelera, proyecto sin
   borrar) y no hubo un rechazo de ese archivo en 24 horas; `void` si no. Responde `sent` en los dos casos.
@@ -1016,3 +1017,23 @@ Supabase** antes de confirmar; *Not now* volvió a `/`; un `#ws=` roto volvió a
 
 **Versiones viejas:** no hace falta subir `min_app_version`: la migración no cambia nada de lo que usa la versión
 publicada y la app nueva ofrece *Request access* y la lista solo con la base en la 22.
+
+**Ronda 1 de la auditoría de E2** (aprobado con observaciones, sin bloqueantes):
+
+- **O1:** un archivo mandado a la papelera de Drive (`files.purged_at`) en una página viva (por ejemplo, la página se
+  restauró después) dejaba el pedido pendiente y en la lista. Ahora pedirlo deja `void`, la lista no lo muestra y decidirlo
+  da `request_not_found`; si el archivo vuelve, el pedido aparece otra vez.
+- **O2:** un pedido de más de 30 días (oculto en la lista, LF14) se podía decidir por su id: ahora `request_not_found`.
+- **O4:** lo que recuerda el dispositivo («You asked for access on…») es por workspace **y por persona**: otra cuenta en
+  el mismo dispositivo no ve el pedido ajeno.
+- **O3:** pruebas del paso previo de *Share* al dar acceso con la privacidad de lo borrado prendida (*Retry* / *Share
+  anyway*, también con una invitada que recibe Editar) y del número en el título de la pestaña.
+- **O5:** la página y el nivel alineados cuando el archivo está en una sola página; los tres botones en un renglón en el
+  teléfono (medido en Chromium a 375 px).
+- **O6:** la ayuda dice que el archivo se abre solo si la pantalla queda abierta (o al abrir el link de nuevo).
+- **O7:** corregido el texto de 5.2 y el comentario de la migración (el camino del pedido repetido pasa antes por
+  `file_level`).
+- Al roadmap: O8 (dos que deciden a la vez, sin prueba con dos sesiones), O9 (el servidor en memoria sin el tope ni las
+  24 horas) y el título *Mentions* del panel de la campana cuando arriba tiene pedidos.
+- SQL: la prueba suma los casos de O1 y O2; **24 mutantes, 21 detectados** (los 4 nuevos, detectados; los 3 vivos son
+  los equivalentes de antes).

@@ -15,7 +15,7 @@ let schemaVersion: number | null = null;
 let link: { entry: { localKey: string } } | null = null;
 
 // Los servicios son los mismos en cada dibujo (como en la app).
-const services = { client: { rpc }, media: { fileInfo }, files: {}, workspace: { config: { localKey: 'wanka_1' } } };
+const services = { client: { rpc }, media: { fileInfo }, files: {}, workspace: { config: { localKey: 'wanka_1' } }, user: { id: 'ana' } };
 vi.mock('../services', () => ({
   useServices: () => services,
   useSyncStatus: () => ({ online, schemaVersion }),
@@ -39,6 +39,7 @@ beforeEach(() => {
   online = true;
   schemaVersion = null;
   link = null;
+  services.user.id = 'ana';
   localStorage.clear();
   host = document.createElement('div');
   document.body.append(host);
@@ -177,6 +178,19 @@ describe('FileScreen: Request access', () => {
     const day = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date());
     expect(host.textContent).toContain(t('file.requestedOn', { date: day }));
     expect(button(t('file.requestAgain'))).toBeTruthy();
+  });
+
+  it('lo que recuerda es de cada persona: otra cuenta en el mismo dispositivo no ve el pedido ajeno (O4)', async () => {
+    schemaVersion = 22;
+    base(() => null);
+    await show();
+    await click(t('file.request'));
+    await click(t('file.request'));
+    await reset();
+    services.user.id = 'beto';
+    await show();
+    expect(host.textContent).not.toContain(t('file.requestAgain'));
+    expect(button(t('file.request'))).toBeTruthy();
   });
 
   it('Cancel no manda nada', async () => {

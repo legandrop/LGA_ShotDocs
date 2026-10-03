@@ -10,6 +10,7 @@ import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { ShareRequests } from './AccessRequests';
 import { MentionsBell } from './MentionsBell';
+import { resetTitleBadge } from './titleBadge';
 
 // Los pedidos de acceso en la interfaz (P.30, entrega 2; Docs/Doc_Links_PDF.md, 5.3): la sección de la campana con su
 // número, la ventana de decidir (la página donde se agregó primero y Ver por defecto; rechazar es otro botón, LF20) y
@@ -106,9 +107,10 @@ async function click(el: HTMLElement): Promise<void> {
 }
 
 /** El dueño con dos páginas (Escena 12 y Reporte, en ese orden) que usan el mismo archivo, y una clienta que lo pide. */
-async function setup() {
+async function setup(options: { clean?: boolean } = {}) {
   const server = new FakeServer();
   server.enableMentions();
+  if (options.clean) server.enableClean();
   server.addMember(CLIENTA, 'guest', 'clienta@cliente.com');
   const owner = await makeDevice(server);
   devices.push(owner);
@@ -215,6 +217,55 @@ describe('la campana con pedidos de acceso', () => {
     expect(bell.querySelector('.mentions-count')).toBeNull();
     await click(bell);
     expect(document.querySelector(`section[aria-label="${t('requests.title')}"]`)).toBeNull();
+  });
+});
+
+describe('el número fuera de la app (O3 b de la auditoría)', () => {
+  it('el título de la pestaña suma los pedidos', async () => {
+    resetTitleBadge();
+    document.title = 'Shot Docs';
+    const { server, owner, inbox } = await setup();
+    await mount(services(owner, server.ownerId, inbox), <MentionsBell />);
+    expect(document.title).toBe('(1) Shot Docs');
+    resetTitleBadge();
+  });
+});
+
+describe('dar acceso con la privacidad de lo borrado prendida (useShareGate, D14; O3 a de la auditoría)', () => {
+  it('no se pudo subir lo pendiente: avisa con Retry y Share anyway y no da acceso; Share anyway lo da', async () => {
+    const { server, owner, scene, inbox } = await setup({ clean: true });
+    expect(owner.engine.getStatus().cleanOn).toBe(true);
+    const upload = vi.spyOn(owner.engine, 'uploadPagesFirst').mockResolvedValue(false);
+    const host = await mount(services(owner, server.ownerId, inbox), <ShareRequests pageId={scene} onDecided={() => undefined} />);
+    await click(button(t('requests.review'), host));
+    await click(button(t('requests.give'), host));
+    const warn = host.querySelector('[role="alert"]')!;
+    expect(warn.textContent).toContain('Retry');
+    expect(warn.textContent).toContain('Share anyway');
+    expect(upload).toHaveBeenCalledTimes(1);
+    expect(upload.mock.calls[0][0]).toContain(scene);
+    expect(server.grants.some((g) => g.user_id === CLIENTA)).toBe(false);
+    expect(server.accessRequests[0].state).toBe('pending');
+    await click(button('Share anyway', warn));
+    expect(upload).toHaveBeenCalledTimes(1);
+    expect(server.grants.find((g) => g.user_id === CLIENTA)).toMatchObject({ page_id: scene, level: 'view' });
+  });
+
+  it('una invitada no ve lo borrado aunque reciba Editar: también pasa por el paso previo, y después se arman las bases', async () => {
+    const { server, owner, scene, inbox } = await setup({ clean: true });
+    const upload = vi.spyOn(owner.engine, 'uploadPagesFirst').mockResolvedValue(true);
+    const prepare = vi.spyOn(owner.engine, 'prepareBases').mockResolvedValue(undefined as never);
+    const host = await mount(services(owner, server.ownerId, inbox), <ShareRequests pageId={scene} onDecided={() => undefined} />);
+    await click(button(t('requests.review'), host));
+    const level = host.querySelectorAll('select')[1];
+    await act(async () => {
+      level.value = 'edit';
+      level.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await click(button(t('requests.give'), host));
+    expect(upload).toHaveBeenCalledTimes(1);
+    expect(prepare).toHaveBeenCalledTimes(1);
+    expect(server.grants.find((g) => g.user_id === CLIENTA)).toMatchObject({ page_id: scene, level: 'edit' });
   });
 });
 

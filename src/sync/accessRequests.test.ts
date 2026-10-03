@@ -4,6 +4,7 @@ import {
   accessRequestsEnabled,
   AccessRequestsInbox,
   askedAt,
+  askedScope,
   parseAccessRequest,
   rememberAsked,
   requestAccess,
@@ -229,6 +230,14 @@ describe('cuándo pidió (el dispositivo de quien pide)', () => {
     for (let i = 205; i < 404; i++) rememberAsked('w', `f${i}`, new Date(Date.UTC(2026, 9, 3, 0, 0, i)), store);
     expect(askedAt('w', 'f5', store)).toBe('2026-10-05T00:00:00.000Z');
     expect(Object.keys(JSON.parse(store.data.get('shotdocs.accessAsked.w')!))).toHaveLength(200);
+  });
+
+  it('por persona: otra cuenta del mismo workspace en el mismo dispositivo no lo ve (O4)', () => {
+    const store = memory();
+    rememberAsked(askedScope('wanka_1', 'ana'), 'f1', new Date('2026-10-03T10:00:00Z'), store);
+    expect(askedAt(askedScope('wanka_1', 'ana'), 'f1', store)).toBe('2026-10-03T10:00:00.000Z');
+    expect(askedAt(askedScope('wanka_1', 'beto'), 'f1', store)).toBeNull();
+    expect(askedAt(askedScope('otro_ws', 'ana'), 'f1', store)).toBeNull();
   });
 
   it('sin almacenamiento, no tira', () => {

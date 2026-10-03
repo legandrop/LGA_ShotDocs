@@ -683,7 +683,9 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   aplicar su migración** (`20261031120000_access_requests`, schema 22) y la prueba de aceptación 4 de Lega. Falta E3
   opcional (pedir una página). Quedan para después: el correo al pedir y al aceptar (B.8), pedir acceso sin cuenta, el
   link de un video en línea y los textos de invitación en el choque de clave y en *Join a workspace?* para una dirección
-  de archivo (O7 c). **Hecho (v0.165):** *Export* avisa sin red (O6, *No connection: file links … can't use the public link*; un visitante del link no lo ve, con prueba). Queda (chico): el aviso sale también si el PDF no lleva ningún archivo, porque la ventana no cuenta los adjuntos antes de armar, igual que el de las fotos sin conexión.
+  de archivo (O7 c). De la auditoría de E2 (chico): una prueba de dos personas decidiendo a la vez con dos sesiones
+  reales (O8; hoy por lectura del `for update`), el tope y las 24 horas en el servidor en memoria (O9) y el título
+  *Mentions* del panel de la campana cuando arriba tiene pedidos. **Hecho (v0.165):** *Export* avisa sin red (O6, *No connection: file links … can't use the public link*; un visitante del link no lo ve, con prueba). Queda (chico): el aviso sale también si el PDF no lleva ningún archivo, porque la ventana no cuenta los adjuntos antes de armar, igual que el de las fotos sin conexión.
 - **P.28 Hecho (v0.156): la tabla del reporte en el teléfono** (`Doc_Tabla_Telefono.md`): en pantalla angosta ninguna
   columna con ancho guardado baja de 96 px y la tabla se desplaza de costado dentro de su bloque; la celda donde se
   escribe se acomoda a la vista. La compu y el PDF no cambian. Falta probarlo en un iPhone real (dedo, teclado abierto).
