@@ -573,7 +573,8 @@ intenta pedirla y deja `net::ERR_UNKNOWN_URL_SCHEME` en la consola. Lo que arma 
   con una imagen mínima y después se pone la verdadera.
 - **Sin vista previa** (`showPreview: false`, solo por una importación o una fila): BlockNote arma un `<a href>` con el
   nombre en vez de un `<img>`, que no pide nada. No se envuelve: sale el vínculo con su `sdmedia://` y su nombre. La versión
-  anterior saca el mismo HTML.
-- **`renderHTML` de la foto en línea** (lo que serializa ProseMirror al copiar o arrastrar): sin `loading`. Se midió en
-  Chromium y WebKit sin ventana (`about:blank`): en el documento inerte de ProseMirror no hay pedido con ni sin la marca, y
-  una imagen ya enganchada a la página se pide con la marca igual.
+  anterior saca el mismo HTML. Pegado solo ese HTML, queda texto plano (`sdmedia://` no es un destino de enlace permitido).
+- **`renderHTML` de la foto en línea** (el HTML interno que serializa ProseMirror al copiar o arrastrar): lleva `loading="lazy"`
+  antes del `src`. Hace falta: al arrastrar por el tirador, BlockNote vuelve a leer ese HTML con `innerHTML` en la página
+  viva (`SideMenu.onDragStart`) y sin la marca el navegador pide el `sdmedia://`. Una medición en un documento inerte no
+  lo muestra (no ve esa ruta); lo exigen dos pruebas de `quietImage.test.ts`, una que dispara el arrastre.

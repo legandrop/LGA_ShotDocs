@@ -3,14 +3,14 @@
 v0.0XX :
 
 **Restos de dos auditorías, solo pruebas y un ajuste.** (1) Claves de orden (B.23): si el objetivo de la ventana de
-rehacer pasaba de 64 a 128 caracteres, ninguna prueba fallaba; ahora una prueba arma un hueco con la clave entre 65 y 128
-y exige claves de 64 o menos (y que un hueco corto no rehaga de más); no hubo error de lógica. (2) Una foto sin vista
-previa (llega por una importación o una fila) salía en el HTML externo con la imagen mínima `data:image/gif…` en el
-vínculo y en su texto; ahora va como siempre, con su `sdmedia://` y su nombre (misma regla que BlockNote: sin vista
-previa no hay `<img>`). La versión anterior saca el mismo HTML y ve el mismo bloque. (3) El `loading` del
-`renderHTML` de la foto en línea no cambiaba nada en Chromium ni en WebKit (medido en tres situaciones): se sacó, con
-una prueba de ida y vuelta.
-[ Restos de B.23 y B.24 - la prueba que fija la ventana de claves en 64, la foto sin vista previa sin la imagen mínima en el HTML externo y la foto en línea sin loading inútil ]
+rehacer pasaba de 64 a 128 caracteres, ninguna prueba fallaba; ahora una barre las profundidades de 40 a 120 (incluido el
+borde 64/65) y exige claves de 64 o menos sin rehacer de más. No había error de lógica. (2) Una foto sin vista previa
+(llega por una importación o una fila) salía en el HTML externo con la imagen mínima `data:image/gif…` en el vínculo y
+en su texto; ahora sale con su `sdmedia://` y su nombre, como el original de BlockNote. (3) El `loading` del
+`renderHTML` de la foto en línea se queda: sin él, arrastrar un párrafo por el tirador vuelve a dejar
+`ERR_UNKNOWN_URL_SCHEME` (BlockNote relee ese HTML con `innerHTML` en la página viva). Ahora lo exigen dos pruebas, una
+por la ruta del arrastre.
+[ Restos de B.23 y B.24 - la prueba que fija la ventana de claves en 64, la foto sin vista previa sin la imagen mínima en el HTML externo y la prueba del loading de la foto en línea al arrastrar ]
 
 v0.158 :
 

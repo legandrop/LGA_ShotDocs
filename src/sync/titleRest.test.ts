@@ -692,5 +692,23 @@ describe('otros topes del árbol', () => {
     const s = rekeyWindow(shallow, shallow.length - 1);
     expect(s.from).toBe(shallow.length - 1);
     expect(s.keys).toHaveLength(1);
+    // Cada profundidad de 40 a 120 caracteres, una por una (incluido el borde: 64 sí se queda, 65 no): la ventana es solo el
+    // hueco si la clave directa mide 64 o menos; si mide más, crece y las claves nuevas quedan en 64 o menos.
+    const lengths = new Set<number>();
+    for (let until = 40; until <= 120; until++) {
+      const list = grow(until);
+      const hole = list.length - 1;
+      const directLength = keyBetween(list[hole - 1].sort_key, list[hole].sort_key).length;
+      lengths.add(directLength);
+      const win = rekeyWindow(list, hole);
+      if (directLength <= roomy) expect(win.from, `directa de ${directLength}`).toBe(hole);
+      else {
+        expect(win.from, `directa de ${directLength}`).toBeLessThan(hole);
+        expect(Math.max(...win.keys.map((k) => k.length)), `directa de ${directLength}`).toBeLessThanOrEqual(roomy);
+      }
+    }
+    // El barrido tiene que pasar justo por los dos lados del borde.
+    expect(lengths.has(roomy)).toBe(true);
+    expect(lengths.has(roomy + 1)).toBe(true);
   });
 });

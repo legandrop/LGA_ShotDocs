@@ -931,7 +931,7 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    `updated_at` que tenía la fila al rechazarse con el de ahora; un rechazo de una versión anterior, sin ese dato, deja
    el título y manda el texto entero a la página), con la prueba del renombre posterior en la cola (mutante R3), y
    rehacer las claves de orden toca solo las páginas amontonadas alrededor del hueco. **Hecho (tanda 16):** una prueba fija
-   el objetivo de la ventana en la mitad del tope (64; los mutantes 128, 32 y 72 mueren). Queda: si otro dispositivo movió a
+   el objetivo de la ventana en la mitad del tope (64; mueren los mutantes 65, 63, 72, 128 y 32). Queda: si otro dispositivo movió a
    la vez una de esas, gana el último que llega (vuelve a su lugar anterior; no se pierde nada, solo el lugar). Pasa solo
    después de unas 600 páginas puestas en el mismo hueco. Arreglo completo: mandar el rehecho como una sola operación del
    servidor que no toque una hermana movida después.
@@ -940,11 +940,14 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    el documento vivo, y el navegador lo pide al instante. Pasaba igual en `main`. Ahora la dirección sale con
    `loading="lazy"` puesto antes del `src` (`src/ui/quietImage.ts`, con `editorSchema.ts` e `inlinePhoto.ts`): sin pedido,
    y pegar trae las mismas fotos. Pruebas en `quietImage.test.ts`, más la reproducción en Chromium (cero pedidos fallidos).
-   Las observaciones de su auditoría **quedaron hechas (tanda 16):** (O3) el `loading` del `renderHTML` de la foto en línea no
-   cambia nada (medido en Chromium y WebKit: el documento inerte de ProseMirror no pide nada y una imagen ya en la página se
-   pide igual): se sacó, con una prueba de ida y vuelta de lo que serializa; (O4) una foto con `showPreview: false` ya no sale
-   con la imagen mínima `data:image/gif…` en el `<a href>` ni en su texto (se envuelve solo con vista previa), con prueba y
-   con el esquema anterior. Pegar ese vínculo trae un enlace, no una foto (como antes de B.24).
+   Las observaciones de su auditoría **quedaron hechas (tanda 16):** (O3) el `loading` del `renderHTML` de la foto en línea
+   **sí tiene efecto**: BlockNote vuelve a leer ese HTML con `innerHTML` en la página viva al arrastrar por el tirador
+   (`SideMenu.onDragStart`) y sin la marca el navegador pide el `sdmedia://`; se probó y se dejó, con dos pruebas (una por
+   la ruta del arrastre; la medición inicial en un documento inerte no veía esa ruta); (O4) una foto con `showPreview: false`
+   ya no sale con la imagen mínima `data:image/gif…` en el `<a href>` ni en su texto (se envuelve solo con vista previa),
+   con prueba y con el esquema anterior. Pegar solo ese HTML trae texto plano (`sdmedia://` no es un destino de enlace
+   permitido), no un enlace ni una foto; con el portapapeles completo vuelve el bloque intacto. Queda (BAJO): arrastrar
+   una tabla con foto en una celda por el tirador (misma ruta; no se midió).
 25. **Lo que quedó de D226 (tooltips con gesto o atajo, v0.156).** (a) Los botones propios de BlockNote en la barra de
    formato (*Bold* con ⌘B abajo, *Italic*, etc.) siguen con su globo: pasarlos al formato de renglones pide reemplazar
    esos botones. *Comment* y *Assistant*, que son de la app, ya usan los renglones. (b) **Hecho (v0.156):** el tooltip

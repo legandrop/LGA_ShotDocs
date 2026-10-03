@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { SideMenuExtension } from '@blocknote/core';
 import * as Y from 'yjs';
 import { mountEditor, unmountAll, view } from './collabHarness';
 import { schema as mainSchema } from './fixtures/editorSchemaMain';
@@ -158,19 +159,71 @@ describe('quietImage', () => {
 });
 
 describe('foto en línea: renderHTML (el serializador de ProseMirror)', () => {
-  // Es el HTML que ProseMirror arma al copiar o arrastrar (en un documento inerte, que no pide nada): sin la marca de
-  // `loading` (no cambia nada, ver Doc_Imagenes.md), lo que importa es que la dirección y el nombre vuelvan al pegar.
+  // Es el HTML interno que ProseMirror arma al copiar o arrastrar. BlockNote lo vuelve a leer con `innerHTML` en la página
+  // viva al arrastrar por el tirador (SideMenu, `onDragStart`): ahí un `<img src="sdmedia://…">` sin `loading` antes del
+  // `src` se pide y deja `ERR_UNKNOWN_URL_SCHEME` en la consola. Se mira el orden de los atributos al volver a leerlo.
+  const photoDoc = (url: string) =>
+    [{ type: 'paragraph', content: [{ type: 'text', text: 'a ', styles: {} }, { type: 'photo', props: { url, name: 'Linea.jpg', w: 0.3 } }] }] as never[];
+  const orderOf = (html: string) => {
+    const box = document.createElement('div');
+    box.innerHTML = html;
+    return Array.from(box.querySelectorAll('img')).map((img) => img.getAttributeNames());
+  };
+
   it.each([URL_, 'https://a.test/x.png'])('serializar y volver a leer deja la foto intacta (%s)', (url) => {
     const E = mountEditor(new Y.Doc());
-    E.replaceBlocks(E.document, [{ type: 'paragraph', content: [{ type: 'text', text: 'a ', styles: {} }, { type: 'photo', props: { url, name: 'Linea.jpg', w: 0.3 } }] }] as never[]);
+    E.replaceBlocks(E.document, photoDoc(url));
     const v = view(E);
     const html = v.serializeForClipboard(v.state.doc.slice(0, v.state.doc.content.size)).dom.innerHTML;
     expect(html).toContain('data-inline-content-type="photo"');
     expect(html).toContain(`src="${url}"`);
-    expect(html).not.toContain('loading=');
+    const names = orderOf(html);
+    expect(names).toHaveLength(1);
+    // De la app: con la marca antes del src. De otro lado: sin marca.
+    if (isAppMediaUrl(url)) expect(names[0].indexOf('loading')).toBeGreaterThanOrEqual(0);
+    if (isAppMediaUrl(url)) expect(names[0].indexOf('loading')).toBeLessThan(names[0].indexOf('src'));
+    else expect(names[0]).not.toContain('loading');
     const blocks = E.tryParseHTMLToBlocks(html) as unknown as { content?: { type: string; props?: Record<string, unknown> }[] }[];
     const photo = blocks.flatMap((b) => (Array.isArray(b.content) ? b.content : [])).find((c) => c.type === 'photo');
     expect(photo?.props).toMatchObject({ url, name: 'Linea.jpg', w: 0.3 });
+  });
+
+  it('arrastrar el párrafo por el tirador: el HTML que BlockNote relee en la página viva lleva la marca antes del src', () => {
+    const E = mountEditor(new Y.Doc());
+    E.replaceBlocks(E.document, photoDoc(URL_));
+    const data = new Map<string, string>();
+    const dataTransfer = {
+      effectAllowed: '',
+      clearData: () => data.clear(),
+      setData: (k: string, v: string) => void data.set(k, v),
+      getData: (k: string) => data.get(k) ?? '',
+      setDragImage: () => undefined,
+    };
+    // Lo que `onDragStart` le hace al HTML interno: `innerHTML` en un `div` del documento vivo.
+    const reads: string[][][] = [];
+    const desc = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML')!;
+    Object.defineProperty(Element.prototype, 'innerHTML', {
+      ...desc,
+      set(this: Element, v: string) {
+        desc.set!.call(this, v);
+        if (this.querySelector('img')) reads.push(Array.from(this.querySelectorAll('img')).map((img) => img.getAttributeNames()));
+      },
+    });
+    try {
+      E.getExtension(SideMenuExtension)!.blockDragStart({ dataTransfer: dataTransfer as never, clientY: 0 }, E.document[0]);
+      expect(data.get('blocknote/html')).toContain(URL_);
+      const ev = new Event('dragstart', { bubbles: true });
+      Object.defineProperty(ev, 'dataTransfer', { value: dataTransfer });
+      view(E).root.dispatchEvent(ev);
+    } finally {
+      Object.defineProperty(Element.prototype, 'innerHTML', desc);
+    }
+    const mine = reads.flat().filter((names) => names.includes('src'));
+    expect(mine.length).toBeGreaterThanOrEqual(1);
+    for (const names of mine) {
+      expect(names).toContain('loading');
+      expect(names.indexOf('loading')).toBeLessThan(names.indexOf('src'));
+    }
   });
 });
 
