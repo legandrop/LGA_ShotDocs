@@ -602,14 +602,15 @@ describe('teléfono', () => {
 // jsdom no calcula el layout: se prueba el cascado del CSS real de la fila (el ancho de los botones, que es lo que
 // le saca lugar al nombre) y las clases que prenden los estados. La medición en pantalla está en el informe.
 describe('ancho del nombre de la fila', () => {
-  function rowCss(): string {
+  function rowCss(withMedia = false): string {
     const css = readFileSync(resolve(__dirname, '../styles.css'), 'utf8').replace(/\r\n/g, '\n');
     const from = css.indexOf('\n.tree-row {');
     const to = css.indexOf('\n.row-actions button {');
     expect(from).toBeGreaterThan(0);
     expect(to).toBeGreaterThan(from);
-    // Sin la parte táctil: jsdom no resuelve `@media`.
-    return css.slice(from, to).replace(/@media \(hover: none\) \{[\s\S]*?\n\}\n/, '');
+    // Sin la parte táctil (salvo que se pida): jsdom no resuelve `@media`.
+    const rules = css.slice(from, to);
+    return withMedia ? rules : rules.replace(/@media \(hover: none\) \{[\s\S]*?\n\}\n/, '');
   }
   const actionsWidth = (el: HTMLElement) => getComputedStyle(el.querySelector('.row-actions')!).width;
 
@@ -632,8 +633,8 @@ describe('ancho del nombre de la fila', () => {
       act(() => more.focus());
       expect(actionsWidth(dos)).toBe('auto');
       act(() => more.blur());
-      // La página abierta los muestra siempre (como antes).
-      expect(actionsWidth(row('Uno.A.1'))).toBe('auto');
+      // En la compu, la página abierta también llega al borde: sus botones salen solo con hover, foco o menú.
+      expect(actionsWidth(row('Uno.A.1'))).toBe('0px');
       // Con el menú ⋯ abierto, aunque el foco se vaya al menú.
       act(() => more.click());
       expect(dos.classList.contains('menu-open')).toBe(true);
@@ -643,6 +644,31 @@ describe('ancho del nombre de la fila', () => {
       expect(document.querySelector('.menu')).toBeNull();
       expect(dos.classList.contains('menu-open')).toBe(false);
       expect(row('Uno.B').classList.contains('menu-open')).toBe(false);
+    } finally {
+      style.remove();
+    }
+  });
+
+  it('el CSS muestra los botones con hover, foco o menú abierto (jsdom no calcula :hover) y en la compu no por ser la abierta', () => {
+    const css = rowCss();
+    const shown = css.match(/((?:\.tree-row[^{,]*\.row-actions,?\s*)+)\{\s*opacity: 1;/)![1];
+    expect(shown.replace(/\s+/g, ' ').trim()).toBe(
+      '.tree-row:hover .row-actions, .tree-row.menu-open .row-actions, .tree-row:focus-within .row-actions',
+    );
+  });
+
+  it('en el teléfono (hover: none) solo la página abierta tiene los botones, a la vista siempre', async () => {
+    await app();
+    const touch = rowCss(true).match(/@media \(hover: none\) \{([\s\S]*?)\n\}\n/)![1];
+    const style = document.createElement('style');
+    // jsdom no evalúa `@media`: se prueba el contenido de la regla táctil como si valiera.
+    style.textContent = rowCss() + touch;
+    document.head.append(style);
+    try {
+      expect(actionsWidth(row('Uno.A.1'))).toBe('auto');
+      expect(getComputedStyle(row('Uno.A.1').querySelector('.row-actions')!).display).not.toBe('none');
+      expect(getComputedStyle(row('Dos').querySelector('.row-actions')!).display).toBe('none');
+      expect(getComputedStyle(row('Uno.B').querySelector('.row-actions')!).display).toBe('none');
     } finally {
       style.remove();
     }
