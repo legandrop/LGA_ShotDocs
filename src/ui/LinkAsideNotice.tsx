@@ -79,7 +79,7 @@ export function LinkAsideNotice({ pageId }: { pageId: string }) {
   };
 
   return (
-    <div className="notice link-aside-notice" role="status">
+    <div className="banner link-aside-notice" role="status">
       {aside.length > 0 && (
         <p>
           <strong>{tr('link.aside.title', { count: aside.length })}</strong> {tr('link.aside.detail', { reason: reasons })}{' '}

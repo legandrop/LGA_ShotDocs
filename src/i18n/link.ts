@@ -50,7 +50,6 @@ export const link = {
     en: "Write your name so your changes can be sent. It's shown with “(via link)”.",
     es: "Escribí tu nombre para que se manden tus cambios. Se muestra con “(vía link)”.",
   },
-  'link.edit.editingAs': { en: "Editing as {name}", es: "Editás como {name}" },
   'link.edit.waiting': { en: "Sent, waiting for the team", es: "Enviado, esperando al equipo" },
   'link.edit.waitingDetail': {
     en: "Your changes reach the page when someone from the team opens the app. Until then they're saved in this browser.",
