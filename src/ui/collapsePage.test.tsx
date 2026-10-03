@@ -161,7 +161,8 @@ describe('colapsar en la página', () => {
     await wait();
     expect(hiddenCount(first.host)).toBe(2);
     expect(toggles(first.host)[0].getAttribute('aria-expanded')).toBe('false');
-    expect(toggles(first.host)[0].dataset.tip).toMatch(/just for you/);
+    // Colapsado solo para vos: el clic lo abre y Shift+clic lo colapsa para todos (D226: «gesto o atajo: acción»).
+    expect(toggles(first.host)[0].dataset.tip).toMatch(/^\*\*Click or [^*]+\*\*: expand$/m);
 
     // El menú de la página sabe cuántos títulos hay y cuántos están colapsados.
     expect(collapseControlFor(page)?.counts()).toEqual({ headings: 2, collapsed: 1 });

@@ -430,6 +430,20 @@ describe('el reemplazo en la línea de tiempo (entrega 2)', () => {
     expect(timeline.peek(project, 'redo')).toBeNull();
   });
 
+  it('auditoría O4 (la ventana): escribir enseguida, antes de que el motor lea su registro, también le saca el rehacer', async () => {
+    // La marca de «algo nuevo en el medio» se toma al llamar, antes del primer `await` (re-verificación de la entrega 2):
+    // tomada después, lo escrito en ese momento no contaba y el reemplazo quedaba para rehacer.
+    const { timeline, engine, app, replaceAll, go, project, text } = await setup({ Z: ['nada'], P: ['la cámara'] });
+    await go('Z');
+    const op = await replaceAll('camara', 'Camera');
+    const undoing = engine.undo(op, { inOrder: timeline.replaceIsNext(op, 'undo') });
+    type(app.editor!, ' nuevo');
+    await undoing;
+    expect(await text('P')).toBe('la cámara');
+    expect(timeline.replaceState(op)).toBeNull();
+    expect(timeline.peek(project, 'redo')).toBeNull();
+  });
+
   it('el Undo del panel cuando el reemplazo ES lo último hace lo mismo que ⌘Z: se puede rehacer', async () => {
     const { timeline, text, replaceAll, engine, runner } = await setup({ A: ['la cámara'] });
     const op = await replaceAll('camara', 'Camera');

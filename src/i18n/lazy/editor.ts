@@ -342,27 +342,20 @@ export const editor = {
   },
   'collapse.collapse': { en: "Collapse", es: "Colapsar" },
   'collapse.expand': { en: "Expand", es: "Abrir" },
-  'collapse.onlyYou': { en: "Just for you: others still see it as it was.", es: "Solo para vos: los demás lo siguen viendo como estaba." },
-  'collapse.collapsedForYou': { en: "Collapsed just for you.", es: "Colapsado solo para vos." },
   'collapse.label': { en: "{action} section “{title}”", es: "{action} la sección «{title}»" },
-  // Para todos (entrega 2): el tooltip del triángulo dice si lo que se ve es de todos o solo tuyo.
-  'collapse.collapseJustYou': { en: "Collapse just for you", es: "Colapsar solo para vos" },
-  'collapse.collapsedJustYou': { en: "Collapsed just for you", es: "Colapsado solo para vos" },
-  'collapse.collapsedForAll': { en: "Collapsed for everyone", es: "Colapsado para todos" },
-  'collapse.openJustYou': { en: "Expanded just for you", es: "Abierto solo para vos" },
-  'collapse.shiftForAll': { en: "Shift+click: for everyone", es: "Shift+clic: para todos" },
-  'collapse.clickOpenShiftCollapseAll': {
-    en: "Click: expand · Shift+click: collapse for everyone",
-    es: "Clic: abrir · Shift+clic: colapsar para todos",
-  },
-  'collapse.clickOpenYouShiftOpenAll': {
-    en: "Click: expand just for you · Shift+click: expand for everyone",
-    es: "Clic: abrir solo para vos · Shift+clic: abrir para todos",
-  },
-  'collapse.clickCollapseShiftOpenAll': {
-    en: "Click: collapse · Shift+click: expand for everyone",
-    es: "Clic: colapsar · Shift+clic: abrir para todos",
-  },
+  // El tooltip del triángulo (Doc_Colapsar.md §3; D226): un renglón por acción, «gesto o atajo: acción».
+  'collapse.gesture.click': { en: "Click", es: "Clic" },
+  'collapse.gesture.shiftClick': { en: "Shift+click", es: "Shift+clic" },
+  // Con el atajo (sin una clave suelta "{a} or {b}": traducir lo guardado la confundiría con cualquier "… or …").
+  'collapse.gesture.clickOr': { en: "Click or {shortcut}", es: "Clic o {shortcut}" },
+  'collapse.gesture.shiftClickOr': { en: "Shift+click or {shortcut}", es: "Shift+clic o {shortcut}" },
+  'collapse.act.collapseJustYou': { en: "collapse just for you", es: "colapsar solo para vos" },
+  'collapse.act.collapse': { en: "collapse", es: "colapsar" },
+  'collapse.act.expand': { en: "expand", es: "abrir" },
+  'collapse.act.expandJustYou': { en: "expand just for you", es: "abrir solo para vos" },
+  'collapse.act.forEveryone': { en: "for everyone", es: "para todos" },
+  'collapse.act.collapseForEveryone': { en: "collapse for everyone", es: "colapsar para todos" },
+  'collapse.act.expandForEveryone': { en: "expand for everyone", es: "abrir para todos" },
   'collapse.keptOpen': {
     en: "Someone collapsed this section for everyone. It stays expanded for you while you work in it.",
     es: "Alguien colapsó esta sección para todos. Queda abierta para vos mientras trabajás en ella.",

@@ -201,7 +201,7 @@ export function Shell() {
   const [moving, setMoving] = useState<string | null>(null);
   const [formatting, setFormatting] = useState<string | null>(null);
   const [sharing, setSharing] = useState<ShareTarget | null>(null);
-  const [notice, dismissNotice, noticeAction] = useNotice();
+  const [notice, dismissNotice, noticeAction, noticeSecond] = useNotice();
   const perms = usePermissions();
   const status = useSyncStatus();
   // "Importar de Coda" es solo de la cuenta de Lega (codaOwner.ts): para los demás el diálogo ni se monta.
@@ -501,6 +501,17 @@ export function Shell() {
               }}
             >
               {noticeAction.label}
+            </button>
+          )}
+          {noticeSecond && (
+            <button
+              className="link"
+              onClick={() => {
+                dismissNotice();
+                noticeSecond.run();
+              }}
+            >
+              {noticeSecond.label}
             </button>
           )}
           <button className="link" onClick={dismissNotice}>

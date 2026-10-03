@@ -122,7 +122,8 @@ importa para Shot Docs, con dónde está en ese repo:
   termina. Number: cada clic pone el siguiente.
 - **Editar:** Select (V) elige con clic o recuadro; arrastrar mueve; tiradores para el tamaño y los extremos de la
   flecha; Supr/Backspace borra; ⌘/Ctrl+Z y ⌘/Ctrl+Shift+Z (o Ctrl+Y en Windows) deshacen y rehacen **solo lo de esta
-  foto en esta sesión** (lo de otros no se deshace).
+  foto en esta sesión** (lo de otros no se deshace). Al cerrarlo, todo lo de esa vez es **un paso** del ⌘/Ctrl+Z de la
+  página, en el orden en que editaste (`Doc_Deshacer.md`, sección 19).
 - **Salir:** Esc deselecciona; con nada elegido, cierra. *Done* cierra. No hay nada sin guardar: cada forma se guarda al
   soltar.
 - **Los demás** que editan y tienen la página abierta ven aparecer cada forma al soltarla. Quien recibe la base limpia
@@ -208,7 +209,10 @@ doc.getMap('photoMarkup')                    // al lado de CONTENT_FRAGMENT y de
   corre solo cuando alguien que edita abre la página: si nadie la abre, las notas siguen en la última base. Esto último se
   suma a «lo que no garantiza» de `Doc_Privacidad_Borrado.md` en la entrega 2.
 - **El deshacer del anotador** es un `Y.UndoManager` sobre el mapa raíz con un origen propio por foto
-  (`sd-markup:<fileId>` en `trackedOrigins`): deshace solo lo de esa foto en esa sesión.
+  (`sd-markup:<fileId>` en `trackedOrigins`): deshace solo lo de esa foto en esa sesión. No borra una forma tuya que
+  otra persona cambió, y nunca borra el marco de la foto (puede haber formas del otro que todavía no llegaron; un marco
+  sin formas no se dibuja): `protectMarkupOthers`, `Doc_Deshacer.md` 19.2 y 19.5. Al cerrarse, sus pasos pasan a la
+  línea de tiempo de la página como uno solo.
 
 ## 4. Cómo se ven en cada lugar
 
@@ -272,7 +276,8 @@ que también vacía los trazos borrados.
 - Se escribe **al soltar** (no en cada cuadro del arrastre): los demás ven la forma terminada y las filas no se llenan de
   posiciones intermedias. Mientras se arrastra, solo lo ve quien arrastra.
 - El deshacer del anotador es un `Y.UndoManager` con el origen propio de esa foto (`sd-markup:<fileId>`): nunca deshace
-  lo de otro ni el texto de la página; el ⌘/Ctrl+Z de la página nunca deshace anotaciones.
+  lo de otro ni el texto de la página. Desde la entrega 3 de `Doc_Deshacer.md` (sección 19), el ⌘/Ctrl+Z de la página
+  deshace lo de una vez en el anotador como un paso, después de cerrarlo; con el anotador abierto, sigue el suyo.
 - **Número (Number) a la vez:** el siguiente es "el más alto + 1", como en FrameRev; dos que ponen números a la vez
   pueden repetir uno. Se renumera a mano (doble clic en el número).
 - **Orden de apilado a la vez:** dos formas con el mismo `zValue` se ordenan por su `shapeId`, igual en todos los
@@ -520,8 +525,8 @@ Cada entrega lleva su auditoría independiente antes de pasar a `main`.
    pelearse con el dibujo; se prueba en un iPhone real (entrega 3).
 7. **Borrar contra mover a la vez:** gana borrar; se recupera desde el historial (entrega 5). Hasta entonces, desde las
    filas (no se pierde, pero no hay botón).
-8. **Deshacer en dos lugares:** ⌘/Ctrl+Z en la página no deshace anotaciones y en el anotador no deshace texto. Se dice
-   en la ayuda.
+8. **Deshacer en dos lugares:** en el anotador, ⌘/Ctrl+Z no deshace texto; en la página, deshace lo de una vez en el
+   anotador como un solo paso, en el orden en que editaste (`Doc_Deshacer.md`, sección 19). Se dice en la ayuda.
 9. **Canvas del iPhone:** la copia quemada se achica a 16 MP; se avisa.
 10. **⌘[ y ⌘] en la Mac** son "atrás" y "adelante" del navegador: si `preventDefault` no los frena en algún navegador,
     se cambian por otra tecla en el registro (entrega 2).
@@ -655,7 +660,8 @@ grosor mínimo de pantalla que queda en el PDF (O2) pasó al roadmap.
   mismo color dos veces no deja un hueco más). El lápiz se simplifica al soltar (Douglas-Peucker a medio píxel de
   pantalla), relativo a su primer punto y redondeado al píxel del marco, con el tope de 5000 puntos.
 - **Deshacer propio:** un `Y.UndoManager` sobre el mapa con el origen `sd-markup:<fileId>`, uno por sesión del
-  anotador: lo de otro editor (llega por la red) y lo de otra foto no se deshacen. La poda tiene su propio origen.
+  anotador: lo de otro editor (llega por la red) y lo de otra foto no se deshacen. La poda tiene su propio origen. Al
+  cerrarse, lo que quedó en su pila pasa a la línea de tiempo de la página como un paso (`Doc_Deshacer.md`, 19).
 - **El marco:** si la foto no tenía anotaciones, el de la primera forma es la **medida del archivo**
   (`files.width/height`, ya girada, del registro del dispositivo, también sin red: `MediaQueue.dimensions`) o, si no
   se sabe, la del original cargado; **nunca la de la vista previa** (corrección B1). Sin ninguna de las dos, se ve la

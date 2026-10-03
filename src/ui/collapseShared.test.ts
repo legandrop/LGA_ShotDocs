@@ -4,11 +4,12 @@ import { withCollaboration } from '@blocknote/core/yjs';
 import { TextSelection } from '@tiptap/pm/state';
 import { afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
-import { t } from '../i18n';
+import { t, translate } from '../i18n';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import type { HeadingRecord } from './collapse';
 import { connect, yText } from './collabHarness';
 import { toggleTip } from './CollapseToggles';
+import { shortcutLabel } from './shortcuts';
 import {
   collapseExtension,
   collapseState,
@@ -255,23 +256,42 @@ describe('un cambio que trae el mapa y contenido juntos', () => {
   });
 });
 
-describe('el tooltip del triángulo (Doc_Colapsar.md §3)', () => {
-  const tip = (collapsed: boolean, forAll: boolean, canShare: boolean) => toggleTip(t as never, { collapsed, forAll }, canShare).split('\n').slice(0, 2);
-  it('quien puede editar: los cuatro estados', async () => {
-    expect(tip(false, false, true)).toEqual([`**${t('collapse.collapseJustYou')}**`, t('collapse.shiftForAll')]);
-    expect(tip(true, false, true)).toEqual([`**${t('collapse.collapsedJustYou')}**`, t('collapse.clickOpenShiftCollapseAll')]);
-    expect(tip(true, true, true)).toEqual([`**${t('collapse.collapsedForAll')}**`, t('collapse.clickOpenYouShiftOpenAll')]);
-    expect(tip(false, true, true)).toEqual([`**${t('collapse.openJustYou')}**`, t('collapse.clickCollapseShiftOpenAll')]);
+describe('el tooltip del triángulo (Doc_Colapsar.md §3; D226: un renglón por acción, «gesto o atajo: acción»)', () => {
+  const tip = (collapsed: boolean, forAll: boolean, canShare: boolean, opts: { touch?: boolean; mac?: boolean; lang?: string } = {}) =>
+    toggleTip(t as never, { collapsed, forAll }, canShare, { mac: true, lang: 'en', ...opts }).split('\n');
+  it('quien puede editar, en la Mac: los cuatro estados, con los atajos del registro', async () => {
+    expect(tip(false, false, true)).toEqual(['**Click or ⌘⌥↩**: collapse just for you', '**Shift+click or ⌘⌥⇧↩**: for everyone']);
+    expect(tip(true, false, true)).toEqual(['**Click or ⌘⌥↩**: expand', '**Shift+click or ⌘⌥⇧↩**: collapse for everyone']);
+    expect(tip(true, true, true)).toEqual(['**Click or ⌘⌥↩**: expand just for you', '**Shift+click or ⌘⌥⇧↩**: expand for everyone']);
+    expect(tip(false, true, true)).toEqual(['**Click or ⌘⌥↩**: collapse', '**Shift+click or ⌘⌥⇧↩**: expand for everyone']);
+    // Los atajos salen del registro (si cambian ahí, cambian acá).
+    expect(tip(false, false, true)[0]).toContain(shortcutLabel('collapse', true));
+    expect(tip(false, false, true)[1]).toContain(shortcutLabel('collapseEveryone', true));
   });
-  it('quien solo ve o comenta: sin Shift', async () => {
+  it('en Windows, con Ctrl; en castellano', async () => {
+    expect(tip(false, false, true, { mac: false })).toEqual([
+      `**Click or ${shortcutLabel('collapse', false)}**: collapse just for you`,
+      `**Shift+click or ${shortcutLabel('collapseEveryone', false)}**: for everyone`,
+    ]);
+    expect(tip(false, false, true, { mac: false })[0]).toMatch(/Ctrl\+Alt\+Enter/);
+    const es = (key: Parameters<typeof translate>[1], params?: Record<string, string>) => translate('es', key, params);
+    expect(toggleTip(es as never, { collapsed: false, forAll: false }, true, { mac: true, lang: 'es' }).split('\n')).toEqual([
+      '**Clic o ⌘⌥↩**: colapsar solo para vos',
+      '**Shift+clic o ⌘⌥⇧↩**: para todos',
+    ]);
+  });
+  it('quien solo ve o comenta: solo el primer renglón; en una pantalla táctil, sin atajos', async () => {
     for (const [c, f] of [
       [false, false],
       [true, false],
       [true, true],
       [false, true],
-    ] as const)
+    ] as const) {
+      expect(tip(c, f, false)).toHaveLength(1);
       expect(tip(c, f, false).join(' ')).not.toMatch(/Shift/);
-    expect(tip(true, true, false)[0]).toBe(`**${t('collapse.expand')}**`);
+    }
+    expect(tip(true, true, false)).toEqual(['**Click or ⌘⌥↩**: expand just for you']);
+    expect(tip(false, false, false, { touch: true })).toEqual(['**Click**: collapse just for you']);
   });
 });
 
