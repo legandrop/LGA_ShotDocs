@@ -227,6 +227,18 @@ export class SyncEngine {
     // Qué páginas le llegan a este dispositivo como base limpia (con el interruptor prendido y sin ver lo borrado).
     tree.baseReader = (pageId) => this.isBaseReader(pageId);
     docs.isBaseReader = (pageId) => this.isBaseReader(pageId);
+    // Un link con archivos (entrega 2b, Docs/Doc_Link_Publico.md): lo escrito de una página no sale mientras muestre un
+    // archivo agregado acá que la base todavía no registró. En la sala, esa fila se apartaría (`foreign_media`) y, en
+    // cadena, todo lo que siga de esta sesión en la página; esperando, sale apenas el archivo queda registrado.
+    if (options.linkVisitor && options.media) {
+      const media = options.media;
+      docs.holdUpload = async (pageId, doc) => {
+        const unregistered = await media.unregisteredOn(pageId).catch(() => new Set<string>());
+        if (unregistered.size === 0) return false;
+        const shown = mediaIdsInDoc(doc);
+        return [...unregistered].some((id) => shown.has(id));
+      };
+    }
     files.onQueued = poke;
     if (options.media) {
       options.media.onQueued = poke;

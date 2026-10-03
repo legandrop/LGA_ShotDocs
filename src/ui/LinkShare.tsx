@@ -10,6 +10,7 @@ import {
   deletePublicLinkComments,
   expiryFor,
   getPublicLink,
+  LINK_DRIVE_WARN_BYTES,
   LINK_SCHEMA_VERSION,
   resetPublicLink,
   revokePublicLink,
@@ -33,6 +34,11 @@ import { teamErrorText } from './teamText';
 
 function megabytes(bytes: number): string {
   return (bytes / 1_048_576).toFixed(bytes < 10_485_760 ? 1 : 0);
+}
+
+/** Lo subido al Drive: en MB, o en GB desde 1 GB (*1.2 GB*). */
+export function driveSize(bytes: number): string {
+  return bytes >= 1_073_741_824 ? `${(bytes / 1_073_741_824).toFixed(1)} GB` : `${megabytes(bytes)} MB`;
 }
 
 /** El fin del día elegido (hora local), o `null` si no es una fecha futura. */
@@ -264,6 +270,15 @@ export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => 
                 held: link.edits.held,
               })}
             </p>
+          )}
+          {/* Lo que subió al Drive del dueño (entrega 2b): el uso y, desde 1 GB, el aviso. */}
+          {link.files && (link.level === 'edit' || link.files.total > 0) && (
+            <p className="muted small team-lead">
+              {tr('share.link.files', { today: usage.file?.n ?? 0, total: link.files.total, size: driveSize(link.files.bytes) })}
+            </p>
+          )}
+          {link.files && link.files.bytes > LINK_DRIVE_WARN_BYTES && (
+            <p className="warn small team-lead">{tr('share.link.filesBig', { size: driveSize(link.files.bytes) })}</p>
           )}
           {link.limited && <p className="warn small team-lead">{tr('share.link.limited')}</p>}
           {link.comments > 0 && (

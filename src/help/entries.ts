@@ -140,6 +140,8 @@ const PUBLIC_LINK = '0.111';
 const LINK_EDIT = '0.151';
 /** Lo apartado a la vista (Doc_Link_Publico.md, entrega 2c): la versión la pone quien publica, igual que en el changelog. */
 const LINK_ASIDE = '0.157';
+/** Fotos y archivos por un link (Doc_Link_Publico.md, entrega 2b): la versión la pone quien publica, igual que en el changelog. */
+const LINK_FILES = '0.0XX';
 /** Exportar una rama o un proyecto como PDF (P.22, Doc_Exportar.md, entrega 1): la versión se pone al publicar. */
 const EXPORT_PDF = '0.122';
 /** Exportar como zip (P.22, Doc_Exportar.md, entrega 2): la versión se pone al publicar. */
@@ -741,6 +743,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.editingWithLink.text',
     words: ['link', 'editar', 'edit', 'visitante', 'visitor', 'nombre', 'name', 'esperando', 'waiting', 'apartado', 'set aside', 'bajar', 'download'],
     since: LINK_EDIT,
+  },
+  {
+    id: 'linkFiles',
+    section: 'sharing',
+    title: 'help.linkFiles.title',
+    text: 'help.linkFiles.text',
+    words: ['link', 'foto', 'photo', 'video', 'archivo', 'file', 'subir', 'upload', 'drive', 'tope', 'limit', '500 MB', 'carpeta', 'folder'],
+    since: LINK_FILES,
   },
   {
     id: 'linkAside',

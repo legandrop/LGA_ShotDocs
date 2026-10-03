@@ -5,11 +5,12 @@ import { fromBase64, toBase64 } from '../lib/base64';
 import type { AccessSnapshot } from './access';
 import type { CommentAuthor, CommentRemote, CommentRow, ListedComment, NewComment } from './comments';
 import { SupabaseRemote, timed, toRemoteError, MAX_REQUEST_TIMEOUT_MS, REQUEST_TIMEOUT_MS, type CleanWorkRow, type CleanPushResult, type LinkResult } from './remote';
-import type { AdmitPageRow, AdmitResult, AdmitWorkRow, LinkAsideRow, LinkUpdateRow } from './linkAdmitApi';
+import { LINK_FILES_SCHEMA_VERSION, type AdmitPageRow, type AdmitResult, type AdmitWorkRow, type LinkAsideRow, type LinkUpdateRow } from './linkAdmitApi';
 import {
   AUTHOR_MISSING,
   RemoteError,
   type MediaFileRow,
+  type NewMediaFile,
   type PageRow,
   type PageUseRow,
   type ProjectRow,
@@ -25,8 +26,10 @@ import {
 //
 // Con *Can edit* (entrega 2a, Docs/Doc_Link_Publico.md, E2.2): es un invitado con Editar sobre la página del link y
 // escribe con `plink_push_page_update`, que deja lo escrito en la sala de espera (devuelve 0: todavía no está en la
-// página). Lo ve entrar cuando un editor lo admite y arma la base siguiente. Crear, mover, renombrar, subir archivos
-// (hasta la 2b), compartir, compactar, el historial y las versiones con nombre siguen cerrados.
+// página). Lo ve entrar cuando un editor lo admite y arma la base siguiente. Desde la entrega 2b (con la base en la 21)
+// sube fotos, videos y archivos al Drive del dueño: los registra con `plink_register_file` (con los topes de E2.5), sube
+// la miniatura y el original va por el portero con el header del link; carpetas, no (LE7). Crear, mover, renombrar,
+// compartir, compactar, el historial y las versiones con nombre siguen cerrados.
 
 /** Lo que devuelve `plink_open`. */
 export interface LinkOpenInfo {
@@ -62,10 +65,16 @@ function readOnly(): never {
   throw new RemoteError(LINK_READ_ONLY, true, '42501');
 }
 
-/** Subir fotos, videos y archivos por un link llega con la entrega 2b: hasta entonces, un aviso que se entiende. */
+/** Una base anterior a la entrega 2b (versión 21) no sabe de archivos por un link: un aviso que se entiende. */
 function noUploads(): never {
   throw new RemoteError(stored('link.edit.noUploads'), true, '42501');
 }
+
+/** Lo más que pesa un archivo que sube un link (`file_max_bytes`, E2.5): la app no guarda uno más grande. */
+export const LINK_FILE_MAX_BYTES = 500 * 1024 * 1024;
+
+/** Carpetas por un link, no (LE7): cientos de archivos y subcarpetas en el Drive del dueño. */
+export const LINK_FOLDER_MIME = 'inode/directory';
 
 /** El tope de una subida por un link (`push_max_bytes`, 1 MB): una más grande no se manda (R1 de la re-verificación). */
 export const LINK_PUSH_MAX_BYTES = 1024 * 1024;
@@ -408,7 +417,24 @@ export class LinkRemote extends SupabaseRemote {
   }
 
   override async uploadFile(): Promise<void> {
-    return noUploads();
+    // Las imágenes viejas sin portero (`sdfile://`, bucket `page-files`): nunca por un link.
+    return readOnly();
+  }
+
+  /**
+   * Las funciones de archivos del visitante (entrega 2b): `link_not_found` dice que el link murió (la pantalla lo
+   * muestra); un tope de archivos (`link_rate_limited`) no: queda en el aviso del archivo, sin cortar el link entero.
+   */
+  private async fileCall<T>(fn: string, args: Record<string, unknown>): Promise<T> {
+    const info = await this.open();
+    if (info.level !== 'edit') return readOnly();
+    if (info.schema_version < LINK_FILES_SCHEMA_VERSION) return noUploads();
+    const { data, error, status } = await timed(this.linkClient.rpc(fn, args));
+    if (error) {
+      if (linkProblemOf(error.message) === 'link_not_found') this.onProblem('link_not_found');
+      throw toRemoteError(error, status);
+    }
+    return data as T;
   }
 
   /** Las imágenes viejas `sdfile://` (bucket `page-files`) no se abren por un link (3.9). */
@@ -448,8 +474,24 @@ export class LinkRemote extends SupabaseRemote {
     return [];
   }
 
-  override async registerFile(): Promise<LinkResult> {
-    return noUploads();
+  /**
+   * Registra un archivo nuevo en una página de la rama (`plink_register_file`): cuenta en los topes del link y nunca
+   * vincula un id que ya existe de otro. Una carpeta no (LE7).
+   */
+  override async registerFile(file: NewMediaFile): Promise<LinkResult> {
+    if (file.mime === LINK_FOLDER_MIME) throw new RemoteError(stored('link.edit.noFolders'), true, '42501');
+    await this.fileCall<string>('plink_register_file', {
+      p_id: file.id,
+      p_page_id: file.pageId,
+      p_name: file.name,
+      p_mime: file.mime,
+      p_size: file.size,
+      p_width: file.width,
+      p_height: file.height,
+      p_duration: file.duration,
+      p_app_version: this.version(),
+    });
+    return 'ok';
   }
 
   /** El uso de un archivo en una página lo registra el dispositivo de un editor al reconciliar (E2.4): acá, nada. */
@@ -457,12 +499,16 @@ export class LinkRemote extends SupabaseRemote {
     return 'ok';
   }
 
-  override async uploadThumb(): Promise<void> {
-    return noUploads();
+  /** La miniatura de un archivo que registró este link (la política `thumbs_insert_link` mira el header). */
+  override async uploadThumb(fileId: string, data: Blob, stalledBefore = 0): Promise<void> {
+    const info = await this.open();
+    if (info.level !== 'edit') return readOnly();
+    if (info.schema_version < LINK_FILES_SCHEMA_VERSION) return noUploads();
+    return super.uploadThumb(fileId, data, stalledBefore);
   }
 
-  override async setFileThumb(): Promise<void> {
-    return noUploads();
+  override async setFileThumb(fileId: string): Promise<void> {
+    await this.fileCall('plink_set_file_thumb', { p_file_id: fileId });
   }
 
   /** Lo mismo al sacar una foto: la desvincula el editor al reconciliar. */

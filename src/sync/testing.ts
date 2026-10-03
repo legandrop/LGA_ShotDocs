@@ -38,7 +38,7 @@ import {
   type TeamRemote,
 } from './remote';
 import { linkAuthorKey, type HistoryRow, type PageVersionRow } from './history';
-import { LINK_ASIDE_SCHEMA_VERSION, LINK_EDIT_SCHEMA_VERSION, type AdmitDecision, type AdmitPageRow, type AdmitResult, type AdmitWorkRow, type LinkAsideRow, type LinkUpdateRow } from './linkAdmitApi';
+import { LINK_ASIDE_SCHEMA_VERSION, LINK_EDIT_SCHEMA_VERSION, LINK_FILES_SCHEMA_VERSION, type AdmitDecision, type AdmitPageRow, type AdmitResult, type AdmitWorkRow, type LinkAsideRow, type LinkUpdateRow } from './linkAdmitApi';
 import {
   CommentQueue,
   commentsDbName,
@@ -127,6 +127,9 @@ export interface FakePublicLink {
   expired?: boolean;
   /** `push_bytes_total`. */
   pushBytes?: number;
+  /** `files_total` y `upload_bytes_total` (entrega 2b). */
+  filesTotal?: number;
+  uploadBytes?: number;
 }
 
 /** Una fila de la sala de espera (`public_link_updates`). */
@@ -387,7 +390,11 @@ export class FakeServer {
   /** `public_link_updates`: la sala de espera, en orden de llegada. */
   readonly linkRoom: FakeRoomRow[] = [];
   /** Los topes de los links que miran las pruebas (`plink_limit`, con los valores de la migración). */
-  linkLimits = { push_max_bytes: 1048576, waiting_bytes: 20971520, push: 2000, push_bytes: 20971520, life_push_bytes: 104857600, pass: 3000 };
+  linkLimits = {
+    push_max_bytes: 1048576, waiting_bytes: 20971520, push: 2000, push_bytes: 20971520, life_push_bytes: 104857600, pass: 3000,
+    // Archivos (entrega 2b, E2.5): 100 por día, 500 de por vida, 500 MB cada uno, 1 GB por día y 5 GB de por vida.
+    file: 100, life_files: 500, file_max_bytes: 524288000, upload_bytes: 1073741824, life_upload_bytes: 5368709120,
+  };
   /** Lo que contó cada link hoy (`public_link_usage`): `<link>:<tipo>` → cantidad y bytes. */
   readonly linkUsage = new Map<string, { n: number; bytes: number }>();
   /** Los pedidos de la admisión, en orden (`link_admit_pages`, `link_admit_work` con sus páginas, `link_admit`). */
@@ -400,6 +407,11 @@ export class FakeServer {
       schemaVersion: Math.max(this.settings?.schemaVersion ?? 1, LINK_EDIT_SCHEMA_VERSION),
       linkEditMinVersion: minVersion,
     };
+  }
+
+  /** La base en la versión 21 (archivos por un link, entrega 2b) y con portero. Después de `enableLinkEdit`. */
+  enableLinkFiles(): void {
+    this.settings = { ...this.settings!, schemaVersion: Math.max(this.settings?.schemaVersion ?? 1, LINK_FILES_SCHEMA_VERSION), mediaUrl: PORTERO_URL };
   }
 
   /** La base en la versión 20 (la lista de lo apartado, entrega 2c). Después de `enableLinkEdit`. */
@@ -442,8 +454,9 @@ export class FakeServer {
     return undefined;
   }
 
-  /** `private.link_media_allowed`: el archivo lo usa hoy una página de la rama del link. */
+  /** `private.link_media_allowed`: el archivo lo registró el link (entrega 2b) o lo usa hoy una página de su rama. */
   linkMediaAllowed(l: FakePublicLink, fileId: string): boolean {
+    if (this.mediaFiles.get(fileId)?.plink_id === l.id) return true;
     for (const key of this.pageFiles) {
       const [pageId, file] = key.split(':');
       if (file === fileId && this.linkPageLevel(l, pageId) > 0) return true;
@@ -452,14 +465,69 @@ export class FakeServer {
   }
 
   /** Cuenta lo que gasta un link (`plink_count`); con un tope lleno, `link_rate_limited` sin sumar. */
-  linkCount(l: FakePublicLink, kind: 'push' | 'pass', bytes: number): string | null {
+  linkCount(l: FakePublicLink, kind: 'push' | 'pass' | 'file' | 'upload', bytes: number): string | null {
     const key = `${l.id}:${kind}`;
     const cur = this.linkUsage.get(key) ?? { n: 0, bytes: 0 };
     const next = { n: cur.n + 1, bytes: cur.bytes + bytes };
-    if (next.n > this.linkLimits[kind]) return kind;
+    if (kind !== 'upload' && next.n > this.linkLimits[kind]) return kind;
     if (kind === 'push' && next.bytes > this.linkLimits.push_bytes) return 'push_bytes';
+    if (kind === 'upload' && next.bytes > this.linkLimits.upload_bytes) return 'upload_bytes';
     this.linkUsage.set(key, next);
     return null;
+  }
+
+  /** `private.plink_file_level` con el link dado: el nivel de la rama si una página viva de la rama usa el archivo. */
+  linkFileLevel(l: FakePublicLink, fileId: string): number {
+    let level = 0;
+    for (const key of this.pageFiles) {
+      const [pageId, file] = key.split(':');
+      if (file === fileId) level = Math.max(level, this.linkPageLevel(l, pageId));
+    }
+    return level;
+  }
+
+  /**
+   * `plink_register_file` (entrega 2b), en el mismo orden que la migración: el nivel, la idempotencia (nunca un id ajeno),
+   * la versión, las carpetas, el tamaño, los de por vida y los del día. Lo rechazado no suma. Devuelve el error o `null`.
+   */
+  linkRegisterFile(l: FakePublicLink, file: NewMediaFile, version: string | null): { message: string; code: string; detail?: string } | null {
+    const page = this.pages.get(file.pageId);
+    if (!page || this.linkPageLevel(l, file.pageId) < 3) return { message: 'page_not_found', code: 'P0002' };
+    const existing = this.mediaFiles.get(file.id);
+    if (existing) {
+      if (existing.plink_id === l.id && this.pageFiles.has(`${file.pageId}:${file.id}`)) return null;
+      return { message: 'file_other_project', code: 'P0001' };
+    }
+    if (!this.linkEditVersionAllowed(version)) return { message: 'app_outdated', code: 'P0001' };
+    if (file.mime === 'inode/directory') return { message: 'folder_not_allowed', code: 'P0001' };
+    if (!(file.size > 0) || file.size > this.linkLimits.file_max_bytes) return { message: 'file_too_big', code: '22023' };
+    if ((l.filesTotal ?? 0) + 1 > this.linkLimits.life_files) return { message: 'link_rate_limited', code: 'P0001', detail: 'life_files' };
+    if ((l.uploadBytes ?? 0) + file.size > this.linkLimits.life_upload_bytes) {
+      return { message: 'link_rate_limited', code: 'P0001', detail: 'life_upload_bytes' };
+    }
+    const usage = new Map(this.linkUsage);
+    const over = this.linkCount(l, 'file', 0) ?? this.linkCount(l, 'upload', file.size);
+    if (over) {
+      // Lo rechazado no suma (la transacción entera vuelve atrás).
+      this.linkUsage.clear();
+      for (const [k, v] of usage) this.linkUsage.set(k, v);
+      return { message: 'link_rate_limited', code: 'P0001', detail: over };
+    }
+    l.filesTotal = (l.filesTotal ?? 0) + 1;
+    l.uploadBytes = (l.uploadBytes ?? 0) + file.size;
+    this.mediaFiles.set(file.id, {
+      id: file.id, project_id: page.workspace_id, name: file.name || 'file', mime: file.mime, size: file.size, width: file.width,
+      height: file.height, duration: file.duration, thumb_at: null, drive_id: null, trashed_at: null, purged_at: null,
+      drive_trashed_at: null, plink_id: l.id,
+    });
+    this.pageFiles.add(`${file.pageId}:${file.id}`);
+    this.mediaCalls.push(`plink_register_file ${file.id}`);
+    return null;
+  }
+
+  /** `plink_set_file_drive` y la política de miniaturas del link: un archivo que registró este link y que la rama usa. */
+  linkOwnsFile(l: FakePublicLink, fileId: string): boolean {
+    return this.mediaFiles.get(fileId)?.plink_id === l.id && this.linkFileLevel(l, fileId) >= 3;
   }
 
   /** `private.link_waiting_bytes`: lo que espera del link en las páginas donde hoy edita. */
@@ -726,7 +794,7 @@ export class FakeServer {
    */
   writeVersionSince: number | null = WRITE_VERSION_SINCE;
   /** `files`, con el proyecto (sale de la página), el tamaño y quién lo registró. */
-  readonly mediaFiles = new Map<string, MediaFileRow & { project_id: string; size: number; created_by?: string }>();
+  readonly mediaFiles = new Map<string, MediaFileRow & { project_id: string; size: number; created_by?: string; plink_id?: string }>();
   /** `page_files` en uso (sin `removed_at`): `<página>:<archivo>`. */
   readonly pageFiles = new Set<string>();
   /** `page_files` con `removed_at` (la página dejó de usar el archivo; la fila queda). */
@@ -1200,6 +1268,8 @@ interface FakeUpload {
   done?: { id: string; name: string; mimeType: string; size: number };
   /** Subida de un portero anterior al paso 6 (ver `FakePortero.legacy`). */
   legacy?: boolean;
+  /** La abrió un link (entrega 2b): solo ese token la sigue. */
+  link?: string;
 }
 
 /**
@@ -1276,6 +1346,13 @@ export class FakePortero {
     const body = typeof init.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : undefined;
     this.calls.push({ method, path: url.pathname, range, body });
     if (!this.server.online) throw new TypeError('Failed to fetch');
+    // Un link público (portero/src/core.ts): lo de ver y, desde la entrega 2b, subir lo que registró él (cada parte vuelve
+    // a preguntar). Nunca carpetas, la papelera ni lo del dueño.
+    const linkToken = headers.get('x-shotdocs-link');
+    if (linkToken !== null) {
+      const denied = this.linkDenied(method, url.pathname, linkToken, body, range);
+      if (denied) return denied;
+    }
     if (this.hang && url.pathname.startsWith('/upload')) {
       return new Promise<Response>((_, reject) =>
         init.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true }),
@@ -1307,13 +1384,13 @@ export class FakePortero {
         ? undefined
         : [...this.drive].find(([driveId, d]) => d.file === id && d.data.length === media.size && !this.driveTrash.has(driveId));
       if (stored) {
-        const linked = this.link(id, stored[0]);
+        const linked = this.link(id, stored[0], linkToken);
         return json({ status: 'done', file: { id: stored[0], name: media.name, mimeType: media.mime, size: media.size }, linked });
       }
       // `only: 'known'`: el portero no lo recuerda ni lo encuentra; no abre nada.
       if (body?.only === 'known') return json({ status: 'unknown' });
       const uploadId = `up-${this.next++}`;
-      this.uploads.set(uploadId, { file: id, size: media.size, data: new Uint8Array(media.size), received: 0 });
+      this.uploads.set(uploadId, { file: id, size: media.size, data: new Uint8Array(media.size), received: 0, ...(linkToken ? { link: linkToken } : {}) });
       return json({ uploadId, folder: `LGA_ShotDocs/${this.server.projects.get(media.project_id)?.name}/${body.day}` });
     }
     const uploadId = /^\/upload\/(.+)$/.exec(url.pathname)?.[1];
@@ -1321,7 +1398,7 @@ export class FakePortero {
       const up = this.uploads.get(uploadId);
       if (!up) return json({ error: 'This upload does not exist anymore: start it again.' }, 404);
       if (up.done && up.legacy) return json({ status: 'done', file: up.done });
-      if (up.done) return json({ status: 'done', file: up.done, linked: this.link(up.file, up.done.id) });
+      if (up.done) return json({ status: 'done', file: up.done, linked: this.link(up.file, up.done.id, linkToken) });
       const part = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(range ?? '');
       if (part && init.body instanceof Blob) {
         if (this.cutAfterParts !== null && this.parts >= this.cutAfterParts) throw new TypeError('Load failed');
@@ -1342,7 +1419,7 @@ export class FakePortero {
           return json({ status: 'done', file: up.done });
         }
         this.drive.set(driveId, { file: up.file, data: up.data, folder: `LGA_ShotDocs/${this.server.projects.get(media.project_id)?.name}`, name: media.name });
-        return json({ status: 'done', file: up.done, linked: this.link(up.file, driveId) });
+        return json({ status: 'done', file: up.done, linked: this.link(up.file, driveId, linkToken) });
       }
       return json({ status: 'incomplete', received: up.received });
     }
@@ -1464,9 +1541,46 @@ export class FakePortero {
   };
 
   /** `set_file_drive`, como lo llama el portero. */
-  private link(file: string, driveId: string): boolean {
+  /** Lo que el portero le contesta a un link antes de hacer nada (`null`: sigue como con una cuenta). */
+  private linkDenied(method: string, path: string, token: string, body: Record<string, unknown> | undefined, range?: string): Response | null {
+    const upload = method === 'POST' && path === '/upload';
+    const part = method === 'PUT' && /^\/upload\/[^/]+$/.test(path);
+    if (!upload && !part) {
+      if (['POST /pass', 'POST /verify', 'POST /folder/list', 'GET /drive/status'].includes(`${method} ${path}`)) return null;
+      return json({ error: 'This is not available through a link.', code: 'link_denied' }, 403);
+    }
+    if (part && path.startsWith('/upload/f.')) return json({ error: 'This is not available through a link.', code: 'link_denied' }, 403);
+    const l = this.server.publicLinks.get(token);
+    if (!l || this.server.linkPageLevel(l, l.pageId) === 0) return json({ error: 'This link does not work anymore.', code: 'link_not_found' }, 401);
+    let file: string;
+    if (upload) {
+      if (body?.file === undefined) return json({ error: 'This is not available through a link.', code: 'link_denied' }, 403);
+      file = String(body.file);
+    } else {
+      const up = this.uploads.get(path.slice('/upload/'.length));
+      if (!up || up.link !== token) return json({ error: 'This upload does not exist anymore: start it again.' }, 404);
+      // Preguntar cuánto llegó no manda nada: no vuelve a preguntarle a la base.
+      if (!/^bytes \d+-\d+\/\d+$/.test(range ?? '')) return null;
+      file = up.file;
+    }
+    const level = this.server.linkFileLevel(l, file);
+    if (level < 1) return json({ error: 'This file does not exist or you cannot see it.', code: 'not_found' }, 404);
+    if (level < 3) return json({ error: 'You cannot add files to this page.', code: 'not_allowed' }, 403);
+    if (this.server.mediaFiles.get(file)?.plink_id !== l.id) {
+      return json({ error: 'Only files added through this link can be uploaded with it.', code: 'not_mine' }, 403);
+    }
+    return null;
+  }
+
+  private link(file: string, driveId: string, linkToken: string | null = null): boolean {
     if (this.failLink) return false;
     if (this.lieLinked) return true;
+    // Con un link, `plink_set_file_drive`: solo lo que registró él, con el link andando (si no, queda en Drive sin
+    // confirmar).
+    if (linkToken !== null) {
+      const l = this.server.publicLinks.get(linkToken);
+      if (!l || !this.server.linkOwnsFile(l, file)) return false;
+    }
     const media = this.server.mediaFiles.get(file);
     if (media && !media.drive_id) media.drive_id = driveId;
     return true;

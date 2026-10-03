@@ -105,6 +105,15 @@ export const teamDialogs = {
     en: "{added} changes added today · {waiting} waiting · {aside} set aside · {held} on hold",
     es: "{added} cambios sumados hoy · {waiting} esperando · {aside} apartados · {held} en espera",
   },
+  // Lo que sube el link al Drive (entrega 2b, Docs/Doc_Link_Publico.md, E2.8).
+  'share.link.files': {
+    en: "Files added through the link: {today} today · {total} in all ({size} in your Drive)",
+    es: "Archivos sumados con el link: {today} hoy · {total} en total ({size} en tu Drive)",
+  },
+  'share.link.filesBig': {
+    en: "This link has uploaded {size} to your Drive. Reset link if it went too far.",
+    es: "Este link ya subió {size} a tu Drive. Si se escapó, Renovar link.",
+  },
   // Lo apartado a la vista (entrega 2c, Docs/Doc_Link_Publico.md).
   'share.link.asideTitle': {
     en: { one: "{count} change sent through this page's link was set aside", other: "{count} changes sent through this page's link were set aside" },

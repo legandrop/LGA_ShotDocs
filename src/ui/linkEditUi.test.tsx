@@ -206,3 +206,39 @@ describe('el aviso de lo apartado y el historial', () => {
     expect(hostHistory.textContent).toContain('Ana (via link)');
   });
 });
+
+describe('lo que el link sube al Drive, en Share (entrega 2b)', () => {
+  /** `get_public_link` con un link Can edit que ya subió archivos. */
+  function filesClient(files: { total: number; bytes: number } | undefined, level: 'edit' | 'comment' = 'edit', today = 2) {
+    const link = {
+      id: 'l1', page_id: 'p', level, created_at: '2026-10-03T10:00:00Z', expires_at: null, created_by_name: 'owner',
+      token: 'sdl_' + 'x'.repeat(43), alive: true, usage_today: { file: { n: today, bytes: 0 } }, limited: false, comments: 0,
+      edits: { waiting: 0, held: 0, aside: 0, admitted_today: 0, push_bytes_total: 0 }, ...(files ? { files } : {}),
+    };
+    return { rpc: async (fn: string) => (fn === 'get_public_link' ? { data: { clean_on: true, edit_on: true, link, above: null }, error: null, status: 200 } : { data: [], error: null, status: 200 }), auth: {} };
+  }
+
+  it('cuántos archivos subió (hoy y en total, con el peso) y, desde 1 GB, el aviso; sin la base 21 o en Can view sin archivos, nada', async () => {
+    prefs.set({ language: 'en' });
+    const big = await teamDevice();
+    const host = await mount(services(big.d, filesClient({ total: 3, bytes: 1.25 * 1024 ** 3 })), <LinkShare pageId={big.page} onClose={() => undefined} />);
+    expect(host.textContent).toContain('Files added through the link: 2 today · 3 in all (1.3 GB in your Drive)');
+    expect(host.textContent).toContain('This link has uploaded 1.3 GB to your Drive.');
+    act(() => roots.pop()!.unmount());
+
+    const small = await teamDevice();
+    const host2 = await mount(services(small.d, filesClient({ total: 1, bytes: 5 * 1024 ** 2 })), <LinkShare pageId={small.page} onClose={() => undefined} />);
+    expect(host2.textContent).toContain('(5.0 MB in your Drive)');
+    expect(host2.textContent).not.toContain('has uploaded');
+    act(() => roots.pop()!.unmount());
+
+    // Una base anterior a la 21 no lo dice; un link Can view sin archivos tampoco lo muestra.
+    const old = await teamDevice();
+    const host3 = await mount(services(old.d, filesClient(undefined)), <LinkShare pageId={old.page} onClose={() => undefined} />);
+    expect(host3.textContent).not.toContain('Files added through the link');
+    act(() => roots.pop()!.unmount());
+    const view = await teamDevice();
+    const host4 = await mount(services(view.d, filesClient({ total: 0, bytes: 0 }, 'comment', 0)), <LinkShare pageId={view.page} onClose={() => undefined} />);
+    expect(host4.textContent).not.toContain('Files added through the link');
+  });
+});

@@ -22,7 +22,7 @@ export interface PublicLink {
   token: string | null;
   /** Anda hoy (no venció y quien lo creó todavía puede compartir). */
   alive: boolean;
-  usage_today: Partial<Record<'open' | 'pull' | 'pass' | 'comment' | 'push', LinkUsage>>;
+  usage_today: Partial<Record<'open' | 'pull' | 'pass' | 'comment' | 'push' | 'file' | 'upload', LinkUsage>>;
   /** Llegó a un tope del día. */
   limited: boolean;
   /** Comentarios vivos escritos con el link. */
@@ -32,7 +32,12 @@ export interface PublicLink {
    * dejó de editar esa página por algo que puede volver), cuánto se apartó y cuánto entró hoy. Sin la versión 19, no está.
    */
   edits?: { waiting: number; held: number; aside: number; admitted_today: number; push_bytes_total: number };
+  /** Los archivos que registró el link y cuánto pesan, de por vida (entrega 2b, versión 21). Sin la 21, no está. */
+  files?: { total: number; bytes: number };
 }
+
+/** Desde cuánto subido al Drive por un link *Share* avisa (E2.10: 1 GB). */
+export const LINK_DRIVE_WARN_BYTES = 1024 * 1024 * 1024;
 
 export interface PublicLinkInfo {
   /** El interruptor de D14 (sin él no se crean links, D33). */

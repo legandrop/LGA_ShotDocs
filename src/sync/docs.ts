@@ -167,6 +167,12 @@ export class PageDocs {
    * sincronización. Una base que cubre lo guardado lo reemplaza (ver `applyRemote`).
    */
   isBaseReader?: (pageId: string) => boolean;
+  /**
+   * Antes de armar lo que se sube de una página, con lo que se va a subir: `true` la deja para la vuelta siguiente (lo
+   * escrito queda sin subir, a la vista). Un link (entrega 2b) espera mientras la página muestre un archivo propio que la
+   * base todavía no conoce (`SyncEngine`, `MediaQueue.unregisteredOn`).
+   */
+  holdUpload?: (pageId: string, doc: Y.Doc) => Promise<boolean>;
   private readonly unsupportedListeners = new Set<(pageId: string) => void>();
   private readonly renderFailedListeners = new Set<(pageId: string) => void>();
   private readonly removedWritingListeners = new Set<(pageId: string) => void>();
@@ -569,6 +575,10 @@ export class PageDocs {
               s.ackedVersion = Math.max(s.ackedVersion, saved.state.version);
             });
             continue;
+          }
+          if (this.holdUpload && (await this.holdUpload(pageId, saved.doc))) {
+            saved.doc.destroy();
+            break;
           }
           // Los elementos que el servidor no tiene y solo los borrados que no tiene (B.15).
           let upload = buildUpload(saved.doc, saved.state.syncedSV, knownDeletes(saved.state, saved.generation));

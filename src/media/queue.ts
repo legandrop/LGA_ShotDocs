@@ -220,6 +220,10 @@ function friendly(err: unknown): string {
   const message = errorMessage(err);
   if (message === 'page_not_found') return stored('queue.pageNotFound');
   if (message === 'file_other_project') return stored('queue.otherProject');
+  // Por un link (entrega 2b, Docs/Doc_Link_Publico.md, E2.5): los topes de archivos y las carpetas.
+  if (message === 'file_too_big') return stored('link.edit.fileTooBig');
+  if (message === 'link_rate_limited') return stored('link.edit.filesLimited');
+  if (message === 'folder_not_allowed') return stored('link.edit.noFolders');
   return message;
 }
 
@@ -240,6 +244,13 @@ export interface MediaQueueOptions {
    * lo hace el dispositivo de un editor al reconciliar lo admitido. Sin la opción, como siempre.
    */
   noUsage?: boolean;
+  /**
+   * Lo más que pesa un archivo que se puede agregar (un link: 500 MB, E2.5). Uno más grande no se guarda (se avisa): con
+   * un link, la base lo rechazaría y la página no mandaría lo escrito mientras lo muestre. Sin la opción, sin tope.
+   */
+  maxFileBytes?: number;
+  /** Sin carpetas (un link, LE7): soltar una avisa y no registra nada. */
+  noFolders?: boolean;
   /** El cliente del portero para una dirección (`workspace_settings.media_url`). */
   portero: (baseUrl: string) => MediaPortero;
   /** El proyecto de una página (se guarda con el archivo). */
@@ -587,6 +598,11 @@ export class MediaQueue {
     return !!this.db && this.schemaReady && this.options.noUsage !== true;
   }
 
+  /** Sin carpetas (un link, LE7). */
+  get noFolders(): boolean {
+    return this.options.noFolders === true;
+  }
+
   /** La base tiene la papelera de archivos (versión 6). */
   get trashEnabled(): boolean {
     return !!this.db && this.schemaReady && this.trashReady;
@@ -631,6 +647,17 @@ export class MediaQueue {
     }
   }
 
+  /**
+   * Los archivos agregados en este dispositivo a esta página que todavía no están registrados en la base. Con un link
+   * (entrega 2b), el motor no manda lo escrito de la página mientras su documento muestre alguno: en la sala, una fila
+   * con un archivo que la base no conoce se apartaría (`foreign_media`) y, en cadena, todo lo que siga de esa sesión.
+   */
+  async unregisteredOn(pageId: string): Promise<Set<string>> {
+    if (!this.db) return new Set();
+    const pending = await this.db.getAllFromIndex('files', 'pending', 1);
+    return new Set(pending.filter((r) => r.pageId === pageId && !r.registered).map((r) => r.id));
+  }
+
   /** Hay un archivo a medio guardar en el dispositivo: cerrar la app ahora lo perdería. */
   hasUnsavedWrites(): boolean {
     return this.adding > 0;
@@ -646,6 +673,7 @@ export class MediaQueue {
    */
   async addFolder(pageId: string, name: string, size: number): Promise<{ id: string; url: string }> {
     if (!this.db) throw new FileRejected(t('queue.cannotAdd', { reason: localize(this.unavailable ?? '') }));
+    if (this.options.noFolders) throw new FileRejected(t('link.edit.noFolders'));
     if (!this.enabled) throw new FileRejected(t('queue.needsDrive'));
     // Se registra en el acto: con una versión más vieja que la mínima no se puede (no queda nada a medias).
     if (this.outdatedNow) throw new FileRejected(t('queue.outdated'));
@@ -764,6 +792,7 @@ export class MediaQueue {
   private async save(pageId: string, file: Blob & { name?: string }, heic = false): Promise<string> {
     if (!this.db) throw new FileRejected(t('queue.cannotAdd', { reason: localize(this.unavailable ?? '') }));
     if (file.size <= 0) throw new FileRejected(t('queue.empty'));
+    if (this.options.maxFileBytes !== undefined && file.size > this.options.maxFileBytes) throw new FileRejected(t('link.edit.fileTooBig'));
     const mime = normalizeMime(file.type, file.name);
     const name = cleanName(file.name, mime);
     // Un adjunto solo va por el portero (sin él, las fotos siguen por el camino de antes).
@@ -1457,6 +1486,9 @@ export class MediaQueue {
         } else {
           record = await this.patch(record.id, { registered: true });
         }
+        // Un link no manda lo escrito de una página mientras muestre un archivo propio sin registrar
+        // (`unregisteredOn`): ya registrado, que el motor lo mande pronto.
+        if (this.options.noUsage) this.onQueued?.();
       }
       // Una carpeta (P.9) no tiene original: lo de adentro lo sube su propia cola. Registrada, está lista (vuelve
       // acá, por ejemplo, después de restaurar una copia de la base).
