@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+**Link público, entrega 2c: lo apartado a la vista** (P.19). Lo que un visitante mandó y no entró solo se veía en un
+aviso de la página y un número en *Share*, y quien tenía algo apartado seguía escribiendo sin que llegara nada (D235).
+Ahora *Share* lista lo apartado de los links de la página (también de los anteriores) con quién, cuándo, dónde y por
+qué, y lo baja; el árbol marca la página y el historial lo muestra como *Set aside (via link)*, sin aplicarlo. El
+visitante baja su copia y vuelve a la versión del equipo, solo con red y si nada cambió en el medio; lo de antes queda
+además en el navegador. También: la admisión ordena por dispositivo (una versión inventada traba solo el suyo, O3), la
+pantalla de link muerto recuerda lo mandado (O9) y una página ya honda admite lo que no la ahonda (R1). Migración
+`20261029120000_link_apartado.sql`, sin aplicar (`schema_version` 20).
+[ Link público entrega 2c - lo apartado en Share, el historial y el árbol, volver a la versión del equipo sin perder nada, el orden de la admisión por dispositivo, lo mandado recordado y la página ya honda ]
+
 v0.152 :
 
 **Deshacer en orden, entrega 3: anotar una foto es un paso** (P.26): ⌘Z en la página salteaba lo anotado. Ahora, al

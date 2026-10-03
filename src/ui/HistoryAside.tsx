@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useT } from '../i18n';
+import '../i18n/lazy/history';
 import { useServices, useTree } from '../services';
 import { insertedText } from '../sync/admit';
 import { canListAside, type LinkAsideRow } from '../sync/linkAdmitApi';

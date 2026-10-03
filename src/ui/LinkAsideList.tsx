@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useT } from '../i18n';
+import '../i18n/lazy/teamDialogs';
 import { useServices, useTree } from '../services';
 import { canListAside, type LinkAsideRow } from '../sync/linkAdmitApi';
 import { asideReasonText, downloadLinkChanges, useLinkAside } from './linkAside';

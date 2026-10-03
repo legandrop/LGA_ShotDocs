@@ -1074,8 +1074,8 @@ Dos auditorías independientes (base y portero; app y motor) dijeron «no pasa»
 
 ## Entrega 2: *Can edit* (rediseño 2026-10-02)
 
-**Estado: la 2a está implementada (v0.151; ver "Cómo quedó la 2a", al final de esta sección), con su migración sin
-aplicar y el interruptor apagado; la 2b y la 2c, en diseño.** El SQL de E2.11 queda como el borrador que se auditó; lo
+**Estado: la 2a está implementada (v0.151; ver "Cómo quedó la 2a", al final de esta sección), con el interruptor
+apagado; la 2c también (v0.0XX, "Cómo quedó la 2c", con su migración sin aplicar); la 2b, en diseño.** El SQL de E2.11 queda como el borrador que se auditó; lo
 que cambió al implementarlo está en "Cómo quedó la 2a".
 Reemplaza a 3.8 (3.8.1 a 3.8.3), a la fila *Compactar* de 3.10, a lo de la entrega 2 en 3.15, 4, 5 y 6, y a la fila 2
 de la sección 7: todo eso queda como historia. Se diseñó contra `main` v0.137 (copias resumidas listas y apagadas, D14
@@ -2162,7 +2162,7 @@ notify pgrst, 'reload schema';
 |---|---|---|---|
 | **2a** | Escribir: la migración de E2.11 (sin la 2b), la prueba de admisión, el motor (admitir antes de armar bases), el visitante que escribe, *Share* con *Can edit*, el aviso de lo apartado, el historial, la ayuda | Migración ~650 líneas y su prueba SQL ~500; app ~1100 (admit y forma ~350, motor ~200, linkRemote ~100, docs ~80, UI ~300, i18n y ayuda ~70); pruebas vitest ~900. **~3200** (la auditoría estimó 3000 a 3300 con B1 a B3) | **Alto**: escrituras sin cuenta |
 | **2b** | Archivos: `plink_register_file`, el portero, las miniaturas, la cola de fotos en modo link | Migración ~200 y prueba SQL ~200; portero ~120 y su prueba ~150; app ~200; pruebas ~250. **~1100** | **Alto**: el Drive del dueño |
-| **2c** | Lo apartado a la vista: la lista en *Share*, *Set aside (via link)* en el historial (sin aplicarlas), "volver a la página como la ve el equipo" para el visitante (después de bajar lo suyo), el ícono del árbol | ~600 | Medio |
+| **2c** | Lo apartado a la vista: la lista en *Share*, *Set aside (via link)* en el historial (sin aplicarlas), "volver a la página como la ve el equipo" para el visitante (después de bajar lo suyo), el ícono del árbol. **Hecha (v0.0XX, "Cómo quedó la 2c")** | ~600 | Medio |
 
 Se puede publicar la 2a sola (texto) y prender el interruptor; la 2b agrega el botón de subir en modo link.
 
@@ -2444,9 +2444,76 @@ lo tiene el equipo en la sala) y O4 (con D14 apagado igual se escribe en la sala
 view*: por eso, **al publicar, subir `min_app_version` a la versión de la 2a** antes de prender el interruptor.
 **O10:** quien publica completa `v0.151` en el changelog y `LINK_EDIT = '0.151'` en `src/help/entries.ts` a la vez.
 
-**Falta:** la 2b (archivos por el link) y la 2c (lo apartado a la vista: la lista en *Share*, *Set aside (via link)*
-en el historial, "volver a la página como la ve el equipo" para el visitante, el ícono del árbol). Al roadmap, lo de la
-re-verificación que sigue abierto (E2.18).
+**Falta:** la 2b (archivos por el link). La 2c está hecha (abajo). Al roadmap, lo de la re-verificación que sigue
+abierto (E2.18).
+
+### Cómo quedó la 2c (v0.0XX)
+
+**Estado:** implementada en la rama, con la migración `20261029120000_link_apartado.sql` **sin aplicar** (sube
+`schema_version` a **20**). La app pide lo apartado solo con la base en la 20; con la 19 todo sigue como en la 2a.
+
+**Lo que ve el equipo** (lo ve quien ve lo borrado de cada página; sale de `public_link_aside()`, una sola consulta sin
+bytes, guardada en memoria y pedida como mucho cada 2 minutos con las sincronizaciones, y en el acto al abrir *Share* o
+el historial; `src/ui/linkAside.ts`):
+
+- **La lista en *Share***, debajo de *General access* (`LinkAsideList.tsx`): *N changes sent through this page's link
+  were set aside*, con cada uno (la página, *Ana (via link)*, cuándo, el motivo en palabras y *earlier link* si vino por
+  un link anterior, antes de *Reset link*), *Download it* por fila y *Download all*. Se ve aunque el link esté apagado
+  (*Restricted*): lo de los links revocados sigue ahí. Muestra 20 y cuenta el resto; *Download all* baja todo.
+- ***Set aside (via link)* en el historial** (`HistoryPanel.tsx`, `HistoryAside.tsx`): una entrada entre las versiones,
+  por la hora en que llegó, con *Ana (via link)*. Elegirla muestra quién, el motivo, el texto que trae (leído de los
+  bytes, sin aplicarlos a nada) y *Download it*. No es una versión: no se restaura ni se ve en *Only named versions*.
+- **El ícono del árbol** (`LinkAsideTreeIcon.tsx`, una línea en `Sidebar.tsx`): un signo de atención en la fila de una
+  página con algo apartado, con el tooltip *Changes sent through a link were set aside here*.
+- **Los motivos en palabras** (también en el aviso de la página de la 2a): *the link was reset or turned off before it
+  was added*, *it came after another change that couldn't be added*, *it uses a photo or an image from outside the
+  shared pages*, *it would make the page too big* y, para lo demás, *the app couldn't add it safely*. El código queda en
+  el archivo que se baja (el mismo JSON de la 2a, con la página de cada cambio).
+
+**Lo que ve el visitante: volver a la página como la ve el equipo** (`LinkVisitorAsideNotice.tsx`,
+`src/sync/linkStartOver.ts`, `PageDocs.replaceWithServer`). Con algo suyo apartado en una página, lo que siga
+escribiendo ahí cuelga de lo apartado (el mismo autor de Yjs) y también se aparta (D235). En la página: *Some of your
+changes on this page couldn't be added. What you write next here won't reach the team either…*, con *Download them* y
+*Show the team's version*. Este último, después de confirmar:
+
+1. mira cómo está guardada la página (las filas, la marca de lo sin subir y la versión);
+2. **baja la copia** (lo de este navegador de esa página, entera); si la descarga falla, no sigue;
+3. pide la base del equipo; **sin red, o sin base todavía** (la página tiene contenido y no hay base), no toca nada;
+4. cambia lo guardado de la página por la base, **solo si sigue igual que en 1** (si se escribió algo en el medio:
+   *The page changed while the copy was being prepared, so nothing was replaced*). Lo de antes no se tira: queda junto en
+   el navegador (`meta`, `startedOver:<página>`, un update de Yjs que suma las vueltas) y sale en la próxima copia
+   (`beforeStartingOver`, con su texto). La página se reabre con otro autor de Yjs: lo que escriba desde ahí entra;
+5. el aviso deja de mostrarse para lo que ya había (lo apartado y lo que todavía esperaba de la sesión de antes, que se
+   va a apartar en cadena), guardado con el link (`asideSeen`); si después se aparta algo más, vuelve. Las otras pestañas
+   del mismo link (`BroadcastChannel`) vuelven a armar la página desde lo guardado.
+
+**Además, de la auditoría de la 2a:**
+
+| Qué | Cómo quedó |
+|---|---|
+| **O3.** Una versión inventada (`'9999'`) en una fila la dejaba sin decidir y trababa lo que mandaran después todos los visitantes de ese link en esa página | El orden de la admisión es por (página, link, **dispositivo**) en `link_admit_pages`, `link_admit_work` y `link_admit`: traba solo lo que sigue de ese dispositivo. Es seguro porque lo de otro dispositivo nunca depende de lo que este no tiene admitido (cada visitante escribe sobre bases). Se descartó un techo de versión: la base no sabe cuál es la publicada más nueva, así que o rechazaba a un visitante honesto apenas se publica, o dejaba pasar una versión inventada un poco más chica. Lo que queda: esas filas cuentan en los 20 MB de lo que espera de su link (*Reset link* las aparta) |
+| **O9.** Después de recargar, la pantalla de link muerto no ofrecía lo mandado que no entró | El visitante recuerda con el link (`LinkEntry.sent`) las páginas donde mandó algo; se olvidan cuando el estado dice que ya no esperan ni tienen nada apartado sin ver. La pantalla de link muerto las suma a lo que ofrece bajar |
+| **R1** de la re-verificación. Una página del equipo de más de 100 grupos anidados apartaba todo lo del link | El tope de profundidad mira lo que agrega la fila: se aparta si pasa el tope **y** deja la página más honda que antes (`depthProblem(doc, antes)`, `pageDepth`). Lo que no la ahonda entra; una página dentro del tope sigue sin poder pasarlo |
+
+**Decisiones de esta entrega** (con la recomendación; valen hasta que Lega diga otra cosa):
+
+- **Lo de antes de volver, guardado también en el navegador** (además de la copia que se baja): una descarga que el
+  navegador no guardó no se lleva nada. Crece solo con lo que el visitante tenía en esa página.
+- **La lista de *Share* muestra los links de la página, también los anteriores** (lo de *Reset link* es lo más común
+  de lo apartado), y no lo de los links de las páginas de arriba (eso está en el *Share* de esas páginas).
+- **El ícono del árbol, solo en la página** (no en una madre plegada, como las menciones): mínimo, porque otro frente
+  cambia la fila del árbol (D233).
+- **Sin descartar lo apartado:** sigue para siempre (va contra "no hay borrado duro"; queda en el roadmap como
+  decisión de Lega).
+
+**Pruebas:** la migración y `supabase/tests/link_apartado_permisos.sql` en `begin … rollback` contra la base real
+(pasa; 8 mutantes: 7 detectados y 1 equivalente) y las 28 pruebas SQL de siempre con la migración (pasan, salvo
+`link_publico_permisos.sql`, que ya falla sin ella: supone el interruptor de *Can edit* apagado y en la base está
+prendido). En vitest: `linkAside.test.ts` (la lista con el reseteado y los permisos, el orden por dispositivo con el
+motor, volver a la versión del equipo: el camino entero y que **nada apartado se pierde** sin haber bajado la copia, sin
+red, sin base, con algo escrito en el medio y con dos pestañas; lo mandado recordado al recargar), `admitAudit.test.ts`
+(R1), `linkAsideStore.test.ts` (cuándo pregunta) y `linkAsideUi.test.tsx` (*Share*, el historial, el árbol y el aviso del
+visitante, montados). No toca el editor (ningún tipo de bloque ni propiedad nueva).
 
 ## Cómo se midió
 
