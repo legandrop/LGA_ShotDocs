@@ -617,7 +617,9 @@ describe('ancho del nombre de la fila', () => {
   it('sin hover, foco ni menú los botones no ocupan lugar; con foco o menú abierto sí', async () => {
     await app();
     const style = document.createElement('style');
-    style.textContent = rowCss();
+    // jsdom no calcula `:focus-visible` (el foco de teclado contra el del mouse): acá vale como `:focus`, para probar el
+    // cableado de la regla. La diferencia con el mouse está medida en Chromium (Docs/Doc_Roadmap.md, P.16).
+    style.textContent = rowCss().replace(/:focus-visible/g, ':focus');
     document.head.append(style);
     try {
       const dos = row('Dos');
@@ -651,10 +653,13 @@ describe('ancho del nombre de la fila', () => {
 
   it('el CSS muestra los botones con hover, foco o menú abierto (jsdom no calcula :hover) y en la compu no por ser la abierta', () => {
     const css = rowCss();
-    const shown = css.match(/((?:\.tree-row[^{,]*\.row-actions,?\s*)+)\{\s*opacity: 1;/)![1];
+    const shown = css.match(/\n(\.tree-row:hover[^{]*)\{\s*opacity: 1;/)![1];
     expect(shown.replace(/\s+/g, ' ').trim()).toBe(
-      '.tree-row:hover .row-actions, .tree-row.menu-open .row-actions, .tree-row:focus-within .row-actions',
+      '.tree-row:hover .row-actions, .tree-row.menu-open .row-actions, .tree-row:is(:focus-visible, :has(:focus-visible)) .row-actions',
     );
+    // P.16 O3: con `:focus-within` un clic del mouse (en el triángulo, la fila o un botón) dejaba ⋯ y + a la vista hasta que
+    // el foco se iba. Es solo el foco que se ve (teclado); lo medido con el mouse está en el recorrido de Chromium.
+    expect(shown).not.toContain(':focus-within');
   });
 
   it('en el teléfono (hover: none) solo la página abierta tiene los botones, a la vista siempre', async () => {

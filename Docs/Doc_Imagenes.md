@@ -561,3 +561,20 @@ cortada una vez, la conversión siguiente lo baja y convierte.
   service worker (la caché `heic-decoder` y que `/licenses/` no caiga en la app).
 - Por dónde seguir: una segunda auditoría de `convertNow` en `src/media/queue.ts` (el caso de dos pestañas
   anotado arriba queda abierto) y la prueba a mano en la app antes de publicar.
+
+## Copiar o arrastrar una foto del Drive: el HTML que sale (B.24)
+
+La foto del Drive lleva una dirección `sdmedia://<id>` que el navegador no sabe abrir; si un `<img>` la recibe como `src`
+intenta pedirla y deja `net::ERR_UNKNOWN_URL_SCHEME` en la consola. Lo que arma el editor para el portapapeles:
+
+- **Foto-bloque** (`toExternalHTML` de BlockNote, envuelto en `src/ui/quietImage.ts`) y **foto en línea** (`render`
+  de `inlinePhoto.ts`): la dirección sale escrita en el `<img>` y en `data-url`, con `loading="lazy"` puesto antes del
+  `src`, y el pegado lee lo mismo. El de BlockNote pone el `src` al crear la imagen, antes de poder marcarla: se lo arma
+  con una imagen mínima y después se pone la verdadera.
+- **Sin vista previa** (`showPreview: false`, solo por una importación o una fila): BlockNote arma un `<a href>` con el
+  nombre en vez de un `<img>`, que no pide nada. No se envuelve: sale el vínculo con su `sdmedia://` y su nombre. La versión
+  anterior saca el mismo HTML. Pegado solo ese HTML, queda texto plano (`sdmedia://` no es un destino de enlace permitido).
+- **`renderHTML` de la foto en línea** (el HTML interno que serializa ProseMirror al copiar o arrastrar): lleva `loading="lazy"`
+  antes del `src`. Hace falta: al arrastrar por el tirador, BlockNote vuelve a leer ese HTML con `innerHTML` en la página
+  viva (`SideMenu.onDragStart`) y sin la marca el navegador pide el `sdmedia://`. Una medición en un documento inerte no
+  lo muestra (no ve esa ruta); lo exigen dos pruebas de `quietImage.test.ts`, una que dispara el arrastre.

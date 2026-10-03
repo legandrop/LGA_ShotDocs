@@ -13,6 +13,7 @@ import {
   DayReportIcon,
   HistoryIcon,
   CollapseAllIcon,
+  ContrastIcon,
   DarkIcon,
   ExpandAllIcon,
   ExportIcon,
@@ -425,16 +426,20 @@ export function PageMenu(props: {
   );
 }
 
+/**
+ * Un selector de una preferencia. Con `icons`, cada opción es solo su ícono (Appearance, Font, Contrast): el nombre va
+ * en el tooltip y en `aria-label`, y el rótulo queda a la izquierda en el mismo renglón (así el panel no crece).
+ */
 function Segmented<K extends keyof Prefs>(props: {
   label: string;
   pref: K;
   options: { value: Prefs[K]; label: string; icon?: ReactNode; sample?: ReactNode }[];
-  tall?: boolean;
+  icons?: boolean;
 }) {
   const current = usePrefs()[props.pref];
   const id = `pref-${props.pref}`;
   return (
-    <div className="pref">
+    <div className={props.icons ? 'pref pref-icons' : 'pref'}>
       <span className="pref-label" id={id}>
         {props.label}
       </span>
@@ -443,18 +448,28 @@ function Segmented<K extends keyof Prefs>(props: {
           <button
             key={o.value}
             type="button"
-            className={props.tall ? 'tall' : undefined}
             aria-pressed={current === o.value}
+            aria-label={props.icons ? o.label : undefined}
+            data-tip={props.icons ? o.label : undefined}
             onClick={() => prefs.set({ [props.pref]: o.value } as Partial<Prefs>)}
           >
             {o.icon}
             {o.sample}
-            {o.label}
+            {!props.icons && o.label}
           </button>
         ))}
       </div>
     </div>
   );
+}
+
+/**
+ * El alto del panel de la cuenta: lo que queda en la ventana desde donde se apoya (abajo, el botón de la cuenta) con
+ * 8 px de margen. Con más contenido, el panel se recorre adentro (`.account-menu`) en vez de salirse por arriba.
+ */
+export function accountMaxHeight(position: MenuPosition): string | undefined {
+  const edge = position.bottom ?? position.top;
+  return edge === undefined ? undefined : `calc(100dvh - ${Math.max(0, Math.round(edge)) + 8}px)`;
 }
 
 export function AccountMenu({
@@ -511,7 +526,7 @@ export function AccountMenu({
   }
 
   return (
-    <div ref={ref} className="menu account-menu" role="dialog" aria-label={tr('account.label')} style={position}>
+    <div ref={ref} className="menu account-menu" role="dialog" aria-label={tr('account.label')} style={{ ...position, maxHeight: accountMaxHeight(position) }}>
       <div className="account-head">
         <span className="avatar large">{user.email.charAt(0) || '?'}</span>
         <div className="who">
@@ -524,7 +539,7 @@ export function AccountMenu({
       <Segmented
         label={tr('account.appearance')}
         pref="theme"
-        tall
+        icons
         options={[
           { value: 'system', label: tr('account.theme.system'), icon: <SystemIcon /> },
           { value: 'light', label: tr('account.theme.light'), icon: <LightIcon /> },
@@ -534,10 +549,21 @@ export function AccountMenu({
       <Segmented
         label={tr('account.font')}
         pref="font"
-        tall
+        icons
         options={[
           { value: 'default', label: tr('account.font.default'), sample: <span className="sample sans">Aa</span> },
           { value: 'editorial', label: tr('account.font.editorial'), sample: <span className="sample serif">Aa</span> },
+        ]}
+      />
+      {/* El contraste del texto del documento (Docs/Doc_Contraste.md): encabezado, negrita y texto común. */}
+      <Segmented
+        label={tr('account.contrast')}
+        pref="contrast"
+        icons
+        options={[
+          { value: 'none', label: tr('account.contrast.none'), icon: <ContrastIcon level="none" /> },
+          { value: 'contrast', label: tr('account.contrast.contrast'), icon: <ContrastIcon level="contrast" /> },
+          { value: 'more', label: tr('account.contrast.more'), icon: <ContrastIcon level="more" /> },
         ]}
       />
       <Segmented

@@ -86,6 +86,10 @@ export const help = {
     en: "When the app brings something new, the ? at the bottom of the sidebar shows a dot. Open the help: What's new, at the top, lists what's new or changed since you last looked, and those entries say New. Once you've opened it, the dot goes away until the next new thing. It's remembered on this device.",
     es: "Cuando la app trae algo nuevo, el ? de abajo de la barra lateral muestra un punto. Abrí la ayuda: Novedades, arriba de todo, lista lo nuevo o cambiado desde la última vez que la miraste, y esas entradas dicen Nuevo. Una vez abierta, el punto se va hasta la próxima novedad. Se recuerda en este dispositivo.",
   },
+  'help.news.textTouch': {
+    en: "When the app brings something new, the ? at the bottom of the page list shows a dot (on a phone, so does the menu button at the top left). Open the help: What's new, at the top, lists what's new or changed since you last looked, and those entries say New. Once you've opened it, the dots go away until the next new thing. It's remembered on this device.",
+    es: "Cuando la app trae algo nuevo, el ? de abajo de la lista de páginas muestra un punto (en el teléfono, también el botón de menú de arriba a la izquierda). Abrí la ayuda: Novedades, arriba de todo, lista lo nuevo o cambiado desde la última vez que la miraste, y esas entradas dicen Nuevo. Una vez abierta, los puntos se van hasta la próxima novedad. Se recuerda en este dispositivo.",
+  },
   'help.showMe.title': { en: "Show me", es: "Mostrame" },
   'help.showMe.text': {
     en: "Entries with Show me open the practice page and point at that part of the screen, just that step of the tour. Done (or Esc) takes you back where you were. Nothing you do there is saved.",
@@ -174,10 +178,10 @@ export const help = {
     en: "Select text to get the formatting bar: bold, italic, colors, links. {bold} bold, {italic} italic, {underline} underline, {strike} strikethrough, {code} code, {link} link.",
     es: "Elegí texto y aparece la barra de formato: negrita, cursiva, colores, links. {bold} negrita, {italic} cursiva, {underline} subrayado, {strike} tachado, {code} código, {link} link.",
   },
-  'help.tablePhone.title': { en: "Wide tables on a phone", es: "Tablas anchas en el teléfono" },
+  'help.tablePhone.title': { en: "Wide tables on a phone or tablet", es: "Tablas anchas en el teléfono o la tablet" },
   'help.tablePhone.text': {
-    en: "On a narrow screen a table keeps its column widths and scrolls sideways inside its block: swipe it left or right. The page itself doesn't move, and when you jump to another cell with Tab or the arrows it slides into view. On a computer and in the PDF nothing changes.",
-    es: "En una pantalla angosta la tabla mantiene el ancho de sus columnas y se desplaza de costado dentro de su bloque: deslizala a la izquierda o a la derecha. La página no se mueve, y al pasar a otra celda con Tab o las flechas, la celda se acomoda a la vista. En la compu y en el PDF no cambia nada.",
+    en: "On a narrow screen (a phone, or a tablet held upright) a table keeps its column widths and scrolls sideways inside its block: swipe it left or right. The page itself doesn't move, and when you jump to another cell with Tab or the arrows it slides into view. On a computer and in the PDF nothing changes (a tablet gets the same as a phone, except on a page with a sheet size like A4).",
+    es: "En una pantalla angosta (un teléfono, o una tablet vertical) la tabla mantiene el ancho de sus columnas y se desplaza de costado dentro de su bloque: deslizala a la izquierda o a la derecha. La página no se mueve, y al pasar a otra celda con Tab o las flechas, la celda se acomoda a la vista. En la compu y en el PDF no cambia nada (una tablet recibe lo mismo que el teléfono, salvo en una página con tamaño de hoja, como A4).",
   },
   'help.blockTypes.title': { en: "Headings, lists and quotes", es: "Títulos, listas y citas" },
   'help.blockTypes.text': {
@@ -594,7 +598,12 @@ export const help = {
   'help.prefs.title': { en: "Appearance", es: "Apariencia" },
   'help.prefs.text': {
     en: "In the account menu: light, dark or system theme, default or editorial typeface, text size and page width. They're saved in your account and follow you to every device.",
-    es: "En el menú de la cuenta: tema claro, oscuro o del sistema, letra común o editorial, tamaño del texto y ancho de la página. Se guardan en tu cuenta y te siguen a cada dispositivo.",
+    es: "En el menú de la cuenta: tema claro, oscuro o del sistema, fuente normal o editorial, tamaño del texto y ancho de la página. Se guardan en tu cuenta y te siguen a cada dispositivo.",
+  },
+  'help.contrast.title': { en: "Text contrast", es: "Contraste del texto" },
+  'help.contrast.text': {
+    en: "In the account menu, Contrast gives the page text three shades: headings the strongest, bold a little softer and the rest a little softer still. More contrast makes the steps clearer; No contrast shows everything in one shade. Text with a color you picked keeps its color. It applies to the page, to a version in the history and to the PDF (always in the light shades), and it follows you to every device.",
+    es: "En el menú de la cuenta, Contraste le da tres tonos al texto de la página: los encabezados, los más fuertes; la negrita, un poco más suave, y el resto, un poco más todavía. Más contraste marca más los pasos; Sin contraste muestra todo en un solo tono. El texto con un color elegido conserva su color. Vale en la página, en una versión del historial y en el PDF (siempre con los tonos claros), y te sigue a cada dispositivo.",
   },
   'help.language.title': { en: "Language", es: "Idioma" },
   'help.language.text': {

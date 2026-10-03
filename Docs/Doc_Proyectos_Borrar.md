@@ -3616,7 +3616,7 @@ verdad con Drive y base de mentira.
 **Ayuda (regla de P.13):** la entrada de la entrega 1 suma un párrafo; está en `Doc_Tutorial.md`, "Entradas esperando
 la ayuda".
 
-## Cómo quedó: una sola papelera (v0.0XX)
+## Cómo quedó: una sola papelera (v0.162)
 
 **Qué pasaba.** Había dos papeleras: *Trash* abajo de la barra lateral, arriba del nombre de la cuenta (páginas y, en
 otra pestaña, archivos), y *Deleted projects* adentro del selector de proyectos. Lega no entendía la diferencia (un

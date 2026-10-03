@@ -125,7 +125,9 @@ export const PhotoNode = Node.create({
     return [
       'span',
       mergeAttributes(HTMLAttributes, { 'data-inline-content-type': PHOTO, class: 'sd-photo' }),
-      // `loading` primero: un `sdmedia://` en un `<img>` que no se muestra no se pide (quietImage.ts).
+      // `loading` primero: un `sdmedia://` en un `<img>` que no se muestra no se pide (quietImage.ts). Hace falta: al arrastrar
+      // por el tirador, BlockNote vuelve a leer este HTML con `innerHTML` en la página viva (SideMenu, `onDragStart`) y
+      // sin la marca el navegador lo pide.
       ['img', { ...(isAppMediaUrl(node.attrs.url) ? { loading: 'lazy' } : {}), src: String(node.attrs.url ?? ''), alt: String(node.attrs.name ?? '') }],
     ];
   },

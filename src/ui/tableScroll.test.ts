@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { NARROW_QUERY, revealCell, revealSelectionCell, selectionCell } from './tableScroll';
+import { TABLE_SCROLL_QUERY, revealCell, revealSelectionCell, selectionCell } from './tableScroll';
 
 // La celda con el cursor a la vista en una tabla que se desplaza de costado (P.28): solo mueve el contenedor de la
 // tabla, solo de costado, solo en pantalla angosta y nunca toca el documento.
@@ -96,7 +96,7 @@ describe('revealSelectionCell', () => {
   it('en pantalla angosta acomoda la celda; en pantalla ancha no toca nada', () => {
     const { wrapper, cell } = setup({ left: 220, right: 320 });
     select(cell.querySelector('p')!);
-    vi.stubGlobal('matchMedia', (q: string) => ({ matches: q === NARROW_QUERY }));
+    vi.stubGlobal('matchMedia', (q: string) => ({ matches: q === TABLE_SCROLL_QUERY }));
     expect(revealSelectionCell()).toBe(true);
     expect(wrapper.scrollLeft).toBe(40);
 
