@@ -194,7 +194,7 @@ export function PhotoSizeButtons() {
         <BarButton
           test="photoSize-thumb"
           label={tr('cellSize.thumb')}
-          tip={`**${tr('cellSize.thumb')}**\n${tr(many ? 'photoTip.thumbAll' : 'photoTip.thumb')}`}
+          tip={`${tr('cellSize.thumb')}\n${tr(many ? 'photoTip.thumbAll' : 'photoTip.thumb')}`}
           icon={<ThumbIcon />}
           selected={choice.widths.every((w) => w === 0)}
           onClick={() => {
@@ -209,7 +209,7 @@ export function PhotoSizeButtons() {
           className="image-size-button"
           test={`photoSize-${SIZE_LABELS[f].text}`}
           label={tr(cell ? 'cellSize.full' : SIZE_LABELS[f].tip)}
-          tip={`**${tr(cell ? 'cellSize.full' : SIZE_LABELS[f].tip)}**\n${tr(cell ? (many ? 'photoTip.sizeCellAll' : 'photoTip.sizeCell') : many ? 'photoTip.sizeAll' : 'photoTip.size')}`}
+          tip={`${tr(cell ? 'cellSize.full' : SIZE_LABELS[f].tip)}\n${tr(cell ? (many ? 'photoTip.sizeCellAll' : 'photoTip.sizeCell') : many ? 'photoTip.sizeAll' : 'photoTip.size')}`}
           selected={choice.widths.every((w) => Math.abs(w - f) < 1e-4)}
           onClick={() => {
             setPhotoWidths(view, choice.positions, f);
@@ -225,7 +225,7 @@ export function PhotoSizeButtons() {
         <BarButton
           test="photoArrange"
           label={tr('imageSize.arrange')}
-          tip={`**${tr('imageSize.arrange')}**\n${arrangeTip}`}
+          tip={`${tr('imageSize.arrange')}\n${arrangeTip}`}
           icon={<ArrangeIcon />}
           disabled={!arrange.adjacent || !ready}
           onClick={() => {

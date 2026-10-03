@@ -6,7 +6,8 @@ import { blockIdOf } from './carreteModel';
 import { hiddenInDom } from './collapseDom';
 import { collapseState, headingCollapse, onCollapseChange, toggleCollapsed, toggleShared } from './collapseEditor';
 import { triangleBox } from './gutterLayout';
-import { IS_MAC, shortcutLabel } from './shortcuts';
+import { IS_MAC } from './shortcuts';
+import { tipRows } from './tipRows';
 
 // El triángulo de cada título (P.11, Docs/Doc_Colapsar.md, sección 3). Una capa encima del editor, como el
 // margen de comentarios: no entra al documento (no molesta al escribir) y anda igual en solo lectura. Con el
@@ -50,10 +51,9 @@ function coarsePointer(): boolean {
 type Translate = (key: Parameters<ReturnType<typeof useT>>[0], params?: Record<string, string | number>) => string;
 
 /**
- * El tooltip del triángulo (Doc_Colapsar.md §3; D226, Lega 2026-10-03): un renglón por acción, «gesto o atajo: acción»,
- * con el gesto y el atajo en negrita (el tooltip los pinta en blanco) y la acción en el gris normal. Los atajos salen
- * del registro (`collapse` y `collapseEveryone`, shortcuts.ts). Quien no puede compartir (solo ve o comenta, o en una
- * pantalla táctil) ve solo el primer renglón; en una pantalla táctil, sin atajos.
+ * El tooltip del triángulo (Doc_Colapsar.md §3; D226, Lega 2026-10-03): un renglón por acción, «gesto o atajo: acción»
+ * (tipRows.ts), con los atajos del registro (`collapse` y `collapseEveryone`, shortcuts.ts). Quien no puede compartir
+ * (solo ve o comenta, o en una pantalla táctil) ve solo el primer renglón; en una pantalla táctil, sin atajos.
  */
 export function toggleTip(
   tr: Translate,
@@ -61,13 +61,6 @@ export function toggleTip(
   canShare: boolean,
   { touch = false, mac = IS_MAC, lang = language() }: { touch?: boolean; mac?: boolean; lang?: string } = {},
 ): string {
-  const keys = lang === 'es' ? 'es' : 'en';
-  const line = (shift: boolean, shortcut: string, action: Parameters<Translate>[0]) => {
-    const label = touch
-      ? tr(shift ? 'collapse.gesture.shiftClick' : 'collapse.gesture.click')
-      : tr(shift ? 'collapse.gesture.shiftClickOr' : 'collapse.gesture.clickOr', { shortcut: shortcutLabel(shortcut, mac, keys) });
-    return `**${label}**: ${tr(action)}`;
-  };
   // Lo que hace el clic: según lo que se ve y si es tuyo o de todos.
   const click: Parameters<Translate>[0] = !t.collapsed
     ? t.forAll
@@ -76,10 +69,16 @@ export function toggleTip(
     : t.forAll
       ? 'collapse.act.expandJustYou'
       : 'collapse.act.expand';
-  const first = line(false, 'collapse', click);
-  if (!canShare) return first;
   const shift: Parameters<Translate>[0] = t.forAll ? 'collapse.act.expandForEveryone' : t.collapsed ? 'collapse.act.collapseForEveryone' : 'collapse.act.forEveryone';
-  return [first, line(true, 'collapseEveryone', shift)].join('\n');
+  return (
+    tipRows(
+      [
+        { gesture: 'click', shortcut: 'collapse', action: tr(click) },
+        canShare && { gesture: 'shiftClick', shortcut: 'collapseEveryone', action: tr(shift) },
+      ],
+      { touch, mac, lang: lang === 'es' ? 'es' : 'en' },
+    ) ?? ''
+  );
 }
 
 export function CollapseToggles({

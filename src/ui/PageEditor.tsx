@@ -83,6 +83,7 @@ import { ySyncPluginKey, yUndoPluginKey } from 'y-prosemirror';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { undoTimelineFor } from './undoTimeline';
 import { revealChange, revealPhoto } from './undoReveal';
+import { revealSelectionCell } from './tableScroll';
 
 // El carrete se baja aparte, la primera vez que se abre (roadmap B.4).
 const Carrete = lazyPart(() => import('./Carrete').then((m) => m.Carrete));
@@ -664,6 +665,9 @@ export function BlockEditor({
     onEditor?.(editor as unknown as FindEditor);
     return () => onEditor?.(null);
   }, [editor, onEditor]);
+
+  // Una tabla que se desplaza de costado (pantalla angosta): la celda con el cursor entra entera (tableScroll.ts).
+  useEffect(() => editor.onSelectionChange(() => void revealSelectionCell()), [editor]);
 
   useEffect(() => {
     const focus = () => editor.focus();

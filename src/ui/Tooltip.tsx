@@ -1,10 +1,11 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { placeNear } from './floating';
+import { placeNear, type Rect, type Side } from './floating';
 
 // Tooltips propios, con el mismo estilo que las apps LGA en Qt: fondo oscuro, borde fino, una flecha que
 // apunta al control y se da vuelta si no entra, y la misma espera de 600 ms. Cualquier elemento con
-// `data-tip` lo usa. Formato: `**negrita**` para los rótulos y un salto de línea por renglón.
+// `data-tip` lo usa. Formato: un salto de línea por renglón; `**negrita**` (blanca) solo para el gesto o el atajo de
+// un renglón «gesto o atajo: acción», que arma tipRows.ts (D226). Ningún otro texto va en negrita.
 //   - `data-tip-plain`: el texto va tal cual (títulos de páginas escritos por el usuario).
 //   - `data-tip-overflow`: solo aparece si el texto del elemento está cortado.
 //
@@ -22,6 +23,8 @@ interface Shown {
   target: HTMLElement;
   text: string;
   plain: boolean;
+  /** La altura del mouse al llegar al control (`null` con el teclado): ahí va el globo de un control muy alto. */
+  y?: number | null;
 }
 
 const isCut = (el: HTMLElement) => el.scrollWidth > el.clientWidth + 1;
@@ -39,6 +42,7 @@ export function TooltipLayer() {
   const lastHidden = useRef(0);
   const current = useRef<HTMLElement | null>(null);
   const pending = useRef<HTMLElement | null>(null);
+  const pointerY = useRef<number | null>(null);
 
   useEffect(() => {
     const clear = () => {
@@ -61,7 +65,7 @@ export function TooltipLayer() {
         const tip = target.isConnected ? tipOf(target) : null;
         if (!tip) return;
         current.current = target;
-        setShown(tip);
+        setShown({ ...tip, y: pointerY.current });
       };
       if (immediate || (warm && Date.now() - lastHidden.current < WARM_MS)) open();
       else {
@@ -77,6 +81,7 @@ export function TooltipLayer() {
       if (target && (target === current.current || target === pending.current)) return;
       if (!target) return hide();
       hide();
+      pointerY.current = e.clientY;
       show(target, false);
     };
     const onOut = (e: PointerEvent) => {
@@ -95,6 +100,7 @@ export function TooltipLayer() {
       if (!target.matches?.(':focus-visible')) return;
       const tip = target.closest<HTMLElement>('[data-tip]');
       if (!tip) return;
+      pointerY.current = null;
       if (isTreeRow(target)) show(tip, false, false);
       else show(tip, true);
     };
@@ -139,28 +145,43 @@ export function TooltipLayer() {
     const check = setInterval(() => {
       const next = shown.target.isConnected ? tipOf(shown.target) : null;
       if (!next) setShown(null);
-      else if (next.text !== shown.text) setShown(next);
+      else if (next.text !== shown.text) setShown({ ...next, y: shown.y });
     }, 250);
     return () => clearInterval(check);
   }, [shown]);
 
   return shown
-    ? createPortal(<TooltipBubble target={shown.target} text={shown.text} plain={shown.plain} />, document.body)
+    ? createPortal(<TooltipBubble target={shown.target} text={shown.text} plain={shown.plain} y={shown.y ?? null} />, document.body)
     : null;
 }
 
-function TooltipBubble({ target, text, plain }: { target: HTMLElement; text: string; plain: boolean }) {
+/**
+ * Dónde apunta el globo: el control, salvo que sea más alto que media ventana (el borde de la barra lateral ocupa todo
+ * el alto): entonces un punto del control a la altura del mouse (o del medio de lo que se ve, con el teclado), y el
+ * globo va al costado. Así nunca queda afuera de la pantalla (B.25b, auditoría de D226).
+ */
+export function tipAnchor(r: Rect, viewportHeight: number, y: number | null): { rect: Rect; sides: Side[] } {
+  if (r.height <= viewportHeight / 2) return { rect: r, sides: ['below', 'above', 'right', 'left'] };
+  const top = Math.max(r.top, 0);
+  const bottom = Math.min(r.top + r.height, viewportHeight);
+  const at = y !== null && y >= top && y <= bottom ? y : (top + bottom) / 2;
+  return { rect: { left: r.left, width: r.width, top: at, height: 0 }, sides: ['right', 'left', 'below', 'above'] };
+}
+
+function TooltipBubble({ target, text, plain, y }: { target: HTMLElement; text: string; plain: boolean; y: number | null }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [place, setPlace] = useState<{ left: number; top: number; arrow: number; below: boolean } | null>(null);
+  const [place, setPlace] = useState<{ left: number; top: number; arrow: number; side: Side } | null>(null);
 
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
     const b = el.getBoundingClientRect();
     // Abajo si entra; si no, arriba (la misma cuenta que los globitos de la recorrida, floating.ts).
-    const place = placeNear(target.getBoundingClientRect(), b, { width: window.innerWidth, height: window.innerHeight }, { gap: GAP, edge: EDGE });
-    setPlace({ left: place.left, top: place.top, arrow: place.arrow, below: place.side === 'below' });
-  }, [target, text]);
+    // Abajo si entra; si no, arriba; si tampoco, a un costado; y si nada entra, corrido para quedar adentro.
+    const { rect, sides } = tipAnchor(target.getBoundingClientRect(), window.innerHeight, y);
+    const place = placeNear(rect, b, { width: window.innerWidth, height: window.innerHeight }, { sides, gap: GAP, edge: EDGE });
+    setPlace({ left: place.left, top: place.top, arrow: place.arrow, side: place.side });
+  }, [target, text, y]);
 
   useEffect(() => {
     // No pisa una descripción que el control ya tenga.
@@ -176,10 +197,10 @@ function TooltipBubble({ target, text, plain }: { target: HTMLElement; text: str
       ref={ref}
       id="shotdocs-tooltip"
       role="tooltip"
-      className={`tooltip ${place?.below === false ? 'above' : 'below'}`}
+      className={`tooltip ${place?.side ?? 'below'}`}
       style={
         place
-          ? { left: place.left, top: place.top, ['--arrow-x' as string]: `${place.arrow}px` }
+          ? { left: place.left, top: place.top, [place.side === 'below' || place.side === 'above' ? '--arrow-x' : '--arrow-y']: `${place.arrow}px` }
           : { left: -9999, top: -9999 }
       }
     >
@@ -188,7 +209,7 @@ function TooltipBubble({ target, text, plain }: { target: HTMLElement; text: str
   );
 }
 
-/** `**Drag:** resize\n**Double-click:** reset` → renglones con rótulos en negrita. */
+/** `**Drag**: resize\n**Double-click**: reset` → renglones con el gesto o el atajo en negrita. */
 export function renderTip(text: string): ReactNode {
   return text.split('\n').map((line, i) => (
     <span key={i} className="tooltip-line">

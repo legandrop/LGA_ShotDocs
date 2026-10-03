@@ -7,6 +7,7 @@ import { selectWholeBlock } from './blockHandle';
 import { endSectionDrag, startSectionDrag } from './collapseEditor';
 import { handlePlace } from './gutterLayout';
 import { BlockDotsIcon } from './icons';
+import { tipRows } from './tipRows';
 
 // El menú lateral de cada bloque (pedido de Lega sobre v0.053/v0.054): solo tres puntos, sin el "+" de BlockNote
 // ni su menú del tirador. Arrastrar los puntos mueve el bloque (lo de BlockNote, `blockDragStart`; un título
@@ -70,7 +71,10 @@ function DotsHandle({ block }: { block: { id: string } }) {
       className="sd-drag-handle"
       draggable
       aria-label={tr('block.handleLabel')}
-      data-tip={`**${tr('block.handleClick')}**\n${tr('block.handleDrag')}`}
+      data-tip={tipRows([
+        { gesture: 'click', action: tr('block.handleClick') },
+        { gesture: 'drag', action: tr('block.handleDrag') },
+      ])}
       onDragStart={(e) => {
         sideMenu.blockDragStart(e, block as never);
         // Un título colapsado se arrastra con su sección entera (Doc_Colapsar.md, "Mover la sección entera").

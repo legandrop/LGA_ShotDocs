@@ -3,7 +3,7 @@ import { useT } from '../i18n';
 import '../i18n/lazy/editor';
 import { useSyncStatus } from '../services';
 import { AssistantIcon } from '../ui/icons';
-import { shortcutLabel } from '../ui/shortcuts';
+import { asAction, tipRows } from '../ui/tipRows';
 import { currentTarget, openAssistant } from './assistantUi';
 
 /**
@@ -27,8 +27,8 @@ function AssistantToolbarButtonShown() {
     <Components.FormattingToolbar.Button
       className="bn-button sd-assistant-button"
       label={tr('editor.assistant')}
-      mainTooltip={tr('editor.assistant')}
-      secondaryTooltip={online ? shortcutLabel('assistant') : tr('editor.assistantOffline')}
+      // El tooltip de la app (D226), no el de BlockNote: «**⌘⌥J**: assistant»; sin red, el aviso.
+      data-tip={online ? tipRows([{ shortcut: 'assistant', action: asAction(tr('editor.assistant')) }]) : tr('editor.assistantOffline')}
       icon={<AssistantIcon size={18} />}
       onClick={() => openAssistant()}
     />

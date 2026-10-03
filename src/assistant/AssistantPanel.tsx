@@ -7,6 +7,7 @@ import { writeNewPage } from '../templates/dayReportCreate';
 import { CloseIcon, SettingsIcon } from '../ui/icons';
 import { IS_MAC, modPressed } from '../ui/findUi';
 import { shortcutLabel } from '../ui/shortcuts';
+import { asAction, tipRows } from '../ui/tipRows';
 import { appliedDoc, applySuggestion, retakeSnapshot, takeSnapshot, type ApplyOutcome, type Snapshot } from './apply';
 import { clearCaptionRequest, closeAssistant, openAssistantSettings, useAssistantTarget, useAssistantUi } from './assistantUi';
 import { CaptionSection } from './CaptionSection';
@@ -679,7 +680,7 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
     );
     const copyButton = <button onClick={copy}>{tr('assistant.copy')}</button>;
     const discardButton = (
-      <button onClick={discard} data-tip={shortcutLabel('menusClose')}>
+      <button onClick={discard} data-tip={tipRows([{ shortcut: 'menusClose', action: asAction(tr('assistant.discard')) }])}>
         {tr('assistant.discard')}
       </button>
     );
@@ -713,7 +714,7 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
       );
     return (
       <>
-        <button className="primary" disabled={!canEdit || (result.type === 'format' && !hasEditor)} data-tip={shortcutLabel('assistantApply')} onClick={() => void apply()}>
+        <button className="primary" disabled={!canEdit || (result.type === 'format' && !hasEditor)} data-tip={tipRows([{ shortcut: 'assistantApply', action: asAction(tr('assistant.apply')) }])} onClick={() => void apply()}>
           {tr('assistant.apply')}
         </button>
         {discardButton}
