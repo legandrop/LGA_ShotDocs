@@ -196,6 +196,8 @@ describe('la papelera en el selector de proyectos', () => {
     expect(filter.querySelector('[aria-pressed="true"]')?.textContent).toBe('All');
     expect(document.querySelector('.trash-scope [aria-pressed="true"]')?.textContent).toBe('This project');
     expect(document.querySelector('.trash-menu [title]')).toBeNull();
+    // *Empty* es de los archivos: con *All* no está.
+    expect(byText('Empty')).toBeUndefined();
   });
 
   it('con *All projects* suma lo de los otros proyectos, con el nombre de cada uno', async () => {
@@ -299,10 +301,10 @@ describe('la papelera en el selector de proyectos', () => {
 });
 
 describe('quién ve qué (la base sigue mandando)', () => {
-  it('un miembro que ve el proyecto abierto: sin Restore ni archivos; de los borrados, solo el que veía, sin quién lo borró', async () => {
+  it('un miembro que edita sin crear páginas: sin Restore ni archivos; de los borrados, solo el que veía, sin quién lo borró', async () => {
     const { server, p, o, q } = await workspace();
     server.addMember('ana', 'member');
-    server.grant('ana', { projectId: p }, 'view');
+    server.grant('ana', { projectId: p }, 'edit');
     server.grant('ana', { projectId: o }, 'edit_pages');
     // Q también está borrado, pero Ana nunca lo vio.
     server.deletedProjects.set(q, { at: new Date().toISOString(), by: server.ownerId });
@@ -319,10 +321,10 @@ describe('quién ve qué (la base sigue mandando)', () => {
     expect(document.querySelector('.trash-filter')?.textContent).not.toContain('Files');
     expect(server.mediaCalls.filter((c) => c.startsWith('trashed_files'))).toEqual([]);
     expect(shown()).not.toContain('file:foto1.jpg');
-    // Las páginas de la papelera que ve, sin Restore.
-    for (const li of document.querySelectorAll<HTMLElement>('.trash-item[data-kind="page"]')) {
-      expect(byText('Restore', li)).toBeUndefined();
-    }
+    // Las páginas de la papelera que ve (con "editar"), sin Restore: restaurar pide "editar y crear páginas".
+    const pages = [...document.querySelectorAll<HTMLElement>('.trash-item[data-kind="page"]')];
+    expect(pages.map((li) => li.querySelector('.title')?.textContent)).toEqual(['Escena vieja']);
+    for (const li of pages) expect(byText('Restore', li)).toBeUndefined();
   });
 
   it('quien no veía ningún proyecto borrado no ve ninguno', async () => {
