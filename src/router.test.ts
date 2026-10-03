@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isPublicRoute, pagePath, parseRoute, PRIVACY_PATH, TERMS_PATH } from './router';
+import { isPublicRoute, oauthConsentPath, pagePath, parseRoute, PRIVACY_PATH, TERMS_PATH } from './router';
 
 // Las direcciones de la app: la política de privacidad y las condiciones son las únicas públicas (se ven sin
 // sesión ni workspace); todas las demás pasan por el login.
@@ -39,5 +39,20 @@ describe('isPublicRoute', () => {
     for (const path of ['/', pagePath(ID), '/trash', '/media-test', '/nada']) {
       expect(isPublicRoute(parseRoute(path))).toBe(false);
     }
+  });
+});
+
+describe('la pantalla de permiso de un asistente (MCP)', () => {
+  it('/oauth/consent/<ref> lleva el ref; no es pública (pide sesión)', () => {
+    expect(parseRoute('/oauth/consent/znlvpuddswymxpffgvbz')).toEqual({ name: 'oauthConsent', projectRef: 'znlvpuddswymxpffgvbz' });
+    expect(parseRoute('/oauth/consent/znlvpuddswymxpffgvbz/')).toEqual({ name: 'oauthConsent', projectRef: 'znlvpuddswymxpffgvbz' });
+    expect(parseRoute(oauthConsentPath('abc123'))).toEqual({ name: 'oauthConsent', projectRef: 'abc123' });
+    expect(isPublicRoute(parseRoute('/oauth/consent/znlvpuddswymxpffgvbz'))).toBe(false);
+  });
+
+  it('sin ref, con mayúsculas, con otra cosa adentro o con barras de más: el inicio', () => {
+    const paths = ['/oauth/consent', '/oauth/consent/', '/oauth/consent/ZNLV', '/oauth/consent/a.b', '/oauth/consent/ab',
+      '/oauth/consent/abc/def', '/oauth/consent/../p', '/oauth/consent/' + 'a'.repeat(41), '/x/oauth/consent/abc'];
+    for (const path of paths) expect(parseRoute(path), path).toEqual({ name: 'home' });
   });
 });
