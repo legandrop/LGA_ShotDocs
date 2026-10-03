@@ -5,6 +5,7 @@ import { checkPageLengths, checkProjectName, jsonbTextLength } from './lengthChe
 import { CONTENT_FRAGMENT } from './structure';
 import { FakeServer, makeDevice, type Device } from './testing';
 import { onlyTitleRests, prependRest, restParagraphs, TITLE_REST_PREFIX, watchTitleRests } from './titleRest';
+import { sameInstant } from './tree';
 import type { FailedOp, QueuedOp } from './types';
 
 // El tope del título (500 caracteres, `pages_title_check`) y lo que sobra, que va al principio de la página
@@ -45,6 +46,24 @@ async function drain(d: Device, moved: string[] = []): Promise<void> {
 
 const words = (n: number) => Array.from({ length: n }, (_, i) => `palabra${i}`).join(' ');
 const REJECTED = 'new row for relation "pages" violates check constraint "pages_title_check"';
+
+/** Cómo quedó guardado el rechazo: el de esta versión, o el de v0.152 (sin cómo estaba la fila). */
+type Format = 'nuevo' | 'v0.152';
+const FORMATS: Format[] = ['nuevo', 'v0.152'];
+
+/**
+ * El servidor rechaza un renombre largo de `id`. `nuevo`: por `failOp`, que guarda cómo estaba la fila (reloj del
+ * servidor). `v0.152`: el registro tal cual lo dejó esa versión en la IndexedDB (se lee al abrir la próxima vez).
+ */
+async function rejectLong(d: Device, id: string, title: string, format: Format, error = REJECTED): Promise<void> {
+  if (format === 'nuevo') {
+    const op: QueuedOp = { opId: crypto.randomUUID(), op: { kind: 'update', id, patch: { title } }, createdAt: Date.now() };
+    op.seq = await d.db.add('ops', op);
+    await d.tree.failOp(op, error);
+  } else {
+    await d.db.add('failedOps', { op: { kind: 'update', id, patch: { title } }, opSeq: 1, error, failedAt: Date.now() } as FailedOp);
+  }
+}
 
 describe('cortar por caracteres de la base', () => {
   it('cuenta puntos de código, no unidades de JS, y no parte un emoji en el borde', () => {
@@ -243,10 +262,12 @@ describe('la cola: lo que ya rechazó el servidor por el largo', () => {
     const a = await device(server, name);
     const id = await a.tree.create(null, 'Algo');
     await a.engine.syncNow();
-    // Lo que dejó la versión anterior: el renombre largo ya rechazado, guardado en el dispositivo.
+    // El rechazo guarda cómo estaba la fila (reloj del servidor) y sobrevive a cerrar la app.
     const long = `${words(100)}\nfinal`;
-    const failed: FailedOp = { op: { kind: 'update', id, patch: { title: long } }, opSeq: 999, error: REJECTED, failedAt: Date.now() };
-    await a.db.add('failedOps', failed);
+    const op: QueuedOp = { opId: crypto.randomUUID(), op: { kind: 'update', id, patch: { title: long } }, createdAt: Date.now() };
+    op.seq = await a.db.add('ops', op);
+    await a.tree.failOp(op, REJECTED);
+    expect(a.tree.failedOps()[0].rowUpdatedAt).toBe(server.pages.get(id)!.updated_at);
     await a.engine.stop();
     a.db.close();
     devices.splice(devices.indexOf(a), 1);
@@ -254,11 +275,12 @@ describe('la cola: lo que ya rechazó el servidor por el largo', () => {
     const b = await device(server, name);
     // Se arregla con el árbol del servidor a la vista (la primera sincronización): ahí se sabe si el título cambió.
     expect(b.tree.failedOps()).toHaveLength(1);
+    expect(b.tree.failedOps()[0].rowUpdatedAt).toBe(server.pages.get(id)!.updated_at);
     await b.engine.syncNow();
     expect(b.tree.failedOps()).toEqual([]);
     const queued = b.tree.pendingOps();
     expect(queued).toHaveLength(1);
-    expect(queued[0].seq).toBe(999);
+    expect(queued[0].seq).toBe(op.seq);
     const title = (queued[0].op as { patch: { title: string } }).patch.title;
     expect(codePointLength(title)).toBeLessThanOrEqual(500);
     expect(b.tree.get(id)?.title).toBe(title);
@@ -268,6 +290,33 @@ describe('la cola: lo que ya rechazó el servidor por el largo', () => {
     const status = b.engine.getStatus();
     expect(status.failedOps).toBe(0);
     expect(await blocks(b, id)).toEqual([long.slice(title.length).split('\n')[0].trim(), 'final']);
+  });
+
+  it('un rechazo que guardó una versión anterior (sin cómo estaba la fila): el título queda y el texto va entero a la página', async () => {
+    const server = new FakeServer();
+    const name = crypto.randomUUID();
+    const a = await device(server, name);
+    const id = await a.tree.create(null, 'Algo');
+    await a.engine.syncNow();
+    // Tal cual lo deja v0.152 en la IndexedDB: `{ op, opSeq, error, failedAt }` y la clave.
+    const long = `${words(100)}\nfinal`;
+    await a.db.add('failedOps', { op: { kind: 'update', id, patch: { title: long } }, opSeq: 7, error: REJECTED, failedAt: Date.now() } as FailedOp);
+    await a.engine.stop();
+    a.db.close();
+    devices.splice(devices.indexOf(a), 1);
+
+    const b = await device(server, name);
+    expect(b.tree.failedOps()).toHaveLength(1);
+    expect(b.tree.failedOps()[0].rowUpdatedAt).toBeUndefined();
+    await b.engine.syncNow();
+    expect(b.tree.failedOps()).toEqual([]);
+    expect(b.tree.pendingOps()).toEqual([]);
+    await drain(b);
+    await b.engine.syncNow();
+    // Sin un dato del reloj del servidor no se sabe si «Algo» es más nuevo que el rechazo: no se pisa.
+    expect(server.pages.get(id)?.title).toBe('Algo');
+    expect(b.engine.getStatus().failedOps).toBe(0);
+    expect(await blocks(b, id)).toEqual([words(100), 'final']);
   });
 
   it('un cambio largo que una versión anterior dejó sin subir se corta al abrir', async () => {
@@ -311,94 +360,143 @@ describe('la cola: lo que ya rechazó el servidor por el largo', () => {
     expect(await blocks(d, id)).toEqual(['w'.repeat(10)]);
   });
 
-  /** Lo que dejó la versión anterior: «Algo» en el servidor y su renombre largo rechazado. */
-  async function rejectedLongRename(server: FakeServer, name: string, error = REJECTED) {
+  /**
+   * «Algo» en el servidor y su renombre largo rechazado. `nuevo`: el rechazo de esta versión (`failOp`, guarda cómo
+   * estaba la fila). `v0.152`: lo que dejó una versión anterior en la IndexedDB, sin ese dato.
+   */
+  async function rejectedLongRename(server: FakeServer, name: string, { error = REJECTED, format = 'nuevo' as Format } = {}) {
     const a = await device(server, name);
     const id = await a.tree.create(null, 'Algo');
     await a.engine.syncNow();
     const long = words(100);
-    await a.db.add('failedOps', { op: { kind: 'update', id, patch: { title: long } }, opSeq: 1, error, failedAt: Date.now() } as FailedOp);
+    await rejectLong(a, id, long, format, error);
     // Lo que pase después del rechazo tiene un `updated_at` posterior en el servidor.
     await new Promise((r) => setTimeout(r, 5));
     return { a, id, long };
   }
 
-  it('si después del rechazo la persona renombró la página, su título queda y el texto largo va entero a la página', async () => {
+  for (const format of FORMATS) {
+    it(`si después del rechazo la persona renombró la página, su título queda y el texto largo va entero a la página (${format})`, async () => {
+      const server = new FakeServer();
+      const name = crypto.randomUUID();
+      const { a, id, long } = await rejectedLongRename(server, name, { format });
+      // Al ver el rechazo, lo arregló a mano y subió.
+      await a.tree.rename(id, 'Lo arreglé a mano');
+      await a.engine.syncNow();
+      await a.engine.stop();
+      a.db.close();
+      devices.splice(devices.indexOf(a), 1);
+
+      const b = await device(server, name);
+      await b.engine.syncNow();
+      await drain(b);
+      await b.engine.syncNow();
+      expect(server.pages.get(id)?.title).toBe('Lo arreglé a mano');
+      expect(b.tree.failedOps()).toEqual([]);
+      expect(b.tree.pendingOps()).toEqual([]);
+      expect(await blocks(b, id)).toEqual([long]);
+    });
+
+    it(`si después del rechazo otro dispositivo renombró la página, tampoco se pisa (${format})`, async () => {
+      const server = new FakeServer();
+      const name = crypto.randomUUID();
+      const { a, id, long } = await rejectedLongRename(server, name, { format });
+      await a.engine.stop();
+      a.db.close();
+      devices.splice(devices.indexOf(a), 1);
+      const other = await device(server);
+      await other.engine.syncNow();
+      await other.tree.rename(id, 'Título del otro');
+      await other.engine.syncNow();
+
+      const b = await device(server, name);
+      await b.engine.syncNow();
+      await drain(b);
+      await b.engine.syncNow();
+      expect(server.pages.get(id)?.title).toBe('Título del otro');
+      expect(await blocks(b, id)).toEqual([long]);
+      await other.engine.syncNow();
+      expect(await blocks(other, id)).toEqual([long]);
+    });
+
+    it(`un renombre posterior en la cola de este dispositivo también gana (${format})`, async () => {
+      const server = new FakeServer();
+      const name = crypto.randomUUID();
+      const { a, id, long } = await rejectedLongRename(server, name, { format });
+      server.online = false;
+      await a.tree.rename(id, 'Corto, sin red');
+      await a.engine.stop();
+      a.db.close();
+      devices.splice(devices.indexOf(a), 1);
+      server.online = true;
+
+      const b = await device(server, name);
+      await b.engine.syncNow();
+      await drain(b);
+      await b.engine.syncNow();
+      expect(server.pages.get(id)?.title).toBe('Corto, sin red');
+      expect(await blocks(b, id)).toEqual([long]);
+    });
+  }
+
+  it('con la app desactualizada (la cola no sube), el renombre que espera en la cola no lo pisa la reparación', async () => {
     const server = new FakeServer();
     const name = crypto.randomUUID();
     const { a, id, long } = await rejectedLongRename(server, name);
-    // Al ver el rechazo, lo arregló a mano (con la versión anterior) y subió.
-    await a.tree.rename(id, 'Lo arreglé a mano');
-    await a.engine.syncNow();
     await a.engine.stop();
     a.db.close();
     devices.splice(devices.indexOf(a), 1);
-
+    // `min_app_version` más nueva: el árbol baja (y se repara) pero la cola no sale; la fila del servidor no cambió.
+    server.settings = { ...server.settings!, minAppVersion: 999 };
     const b = await device(server, name);
+    await b.tree.rename(id, 'Corto, en la cola');
     await b.engine.syncNow();
-    await drain(b);
-    await b.engine.syncNow();
-    expect(server.pages.get(id)?.title).toBe('Lo arreglé a mano');
+    expect(b.engine.getStatus().outdated).toBe(true);
     expect(b.tree.failedOps()).toEqual([]);
-    expect(b.tree.pendingOps()).toEqual([]);
+    expect(b.tree.pendingOps().map((o) => o.op)).toEqual([{ kind: 'update', id, patch: { title: 'Corto, en la cola' } }]);
+    await drain(b);
     expect(await blocks(b, id)).toEqual([long]);
+    server.settings = { ...server.settings!, minAppVersion: null };
+    await b.engine.syncNow();
+    expect(server.pages.get(id)?.title).toBe('Corto, en la cola');
+    expect(b.engine.getStatus().failedOps).toBe(0);
   });
 
-  it('si después del rechazo otro dispositivo renombró la página, tampoco se pisa', async () => {
+  it('dos rechazos largos de la misma página: el más nuevo vuelve cortado y el otro va entero a la página', async () => {
     const server = new FakeServer();
-    const name = crypto.randomUUID();
-    const { a, id, long } = await rejectedLongRename(server, name);
-    await a.engine.stop();
-    a.db.close();
-    devices.splice(devices.indexOf(a), 1);
-    const other = await device(server);
-    await other.engine.syncNow();
-    await other.tree.rename(id, 'Título del otro');
-    await other.engine.syncNow();
-
-    const b = await device(server, name);
-    await b.engine.syncNow();
-    await drain(b);
-    await b.engine.syncNow();
-    expect(server.pages.get(id)?.title).toBe('Título del otro');
-    expect(await blocks(b, id)).toEqual([long]);
-    await other.engine.syncNow();
-    expect(await blocks(other, id)).toEqual([long]);
-  });
-
-  it('un renombre posterior en la cola de este dispositivo también gana', async () => {
-    const server = new FakeServer();
-    const name = crypto.randomUUID();
-    const { a, id, long } = await rejectedLongRename(server, name);
-    server.online = false;
-    await a.tree.rename(id, 'Corto, sin red');
-    await a.engine.stop();
-    a.db.close();
-    devices.splice(devices.indexOf(a), 1);
-    server.online = true;
-
-    const b = await device(server, name);
-    await b.engine.syncNow();
-    await drain(b);
-    await b.engine.syncNow();
-    expect(server.pages.get(id)?.title).toBe('Corto, sin red');
-    expect(await blocks(b, id)).toEqual([long]);
+    const d = await device(server);
+    const id = await d.tree.create(null, 'Algo');
+    await d.engine.syncNow();
+    const first = `primero ${'x'.repeat(520)}`;
+    const second = words(100);
+    await rejectLong(d, id, first, 'nuevo');
+    await rejectLong(d, id, second, 'nuevo');
+    await d.engine.syncNow();
+    await drain(d);
+    await d.engine.syncNow();
+    const title = server.pages.get(id)!.title;
+    expect(second.startsWith(title)).toBe(true);
+    expect(codePointLength(title)).toBeLessThanOrEqual(500);
+    expect((await blocks(d, id)).sort()).toEqual([first, second.slice(title.length).trim()].sort());
+    expect(d.engine.getStatus().failedOps).toBe(0);
   });
 
   it('un rechazo por otra causa (permisos) no se toca, aunque el título sea largo', async () => {
     const server = new FakeServer();
     const name = crypto.randomUUID();
     const RLS = 'new row violates row-level security policy for table "pages"';
-    const { a, id } = await rejectedLongRename(server, name, RLS);
-    await a.engine.stop();
-    a.db.close();
-    devices.splice(devices.indexOf(a), 1);
-    const b = await device(server, name);
-    await b.engine.syncNow();
-    expect(b.tree.failedOps().map((f) => f.error)).toEqual([RLS]);
-    expect(b.tree.pendingOps()).toEqual([]);
-    expect(b.tree.titleRests()).toEqual([]);
-    expect(server.pages.get(id)?.title).toBe('Algo');
+    for (const format of FORMATS) {
+      const { a, id } = await rejectedLongRename(server, `${name}-${format}`, { error: RLS, format });
+      await a.engine.stop();
+      a.db.close();
+      devices.splice(devices.indexOf(a), 1);
+      const b = await device(server, `${name}-${format}`);
+      await b.engine.syncNow();
+      expect(b.tree.failedOps().map((f) => f.error)).toEqual([RLS]);
+      expect(b.tree.pendingOps()).toEqual([]);
+      expect(b.tree.titleRests()).toEqual([]);
+      expect(server.pages.get(id)?.title).toBe('Algo');
+    }
   });
 
   it('Retry no lo vuelve a mandar largo, y «Hide» no descarta un rechazo por el largo', async () => {
@@ -423,6 +521,65 @@ describe('la cola: lo que ya rechazó el servidor por el largo', () => {
     expect(server.pages.get(id)!.title).not.toBe('Algo');
     expect(b.tree.failedOps()).toEqual([]);
   });
+});
+
+describe('el reloj del dispositivo no decide si el título cambió', () => {
+  const HOUR = 3_600_000;
+  it('compara dos updated_at del servidor por el momento, no por el texto; sin el dato, no son el mismo', () => {
+    expect(sameInstant('2026-10-03T12:00:00.123456+00:00', '2026-10-03T12:00:00.123456+00:00')).toBe(true);
+    expect(sameInstant('2026-10-03T12:00:00.123+00:00', '2026-10-03T12:00:00.123Z')).toBe(true);
+    expect(sameInstant('2026-10-03T12:00:00.123+00:00', '2026-10-03T12:00:00.124Z')).toBe(false);
+    expect(sameInstant(undefined, '2026-10-03T12:00:00Z')).toBe(false);
+    expect(sameInstant(null, '2026-10-03T12:00:00Z')).toBe(false);
+    expect(sameInstant('cualquier cosa', 'otra')).toBe(false);
+  });
+
+  // `skew`: cuánto va adelantado el reloj del dispositivo contra el de la base (negativo: atrasado).
+  for (const skew of [3 * HOUR, 30 * HOUR, -3 * HOUR]) {
+    for (const format of FORMATS) {
+      for (const renamed of [true, false]) {
+        const clock = `reloj ${skew > 0 ? 'adelantado' : 'atrasado'} ${Math.abs(skew) / HOUR} h`;
+        it(`${clock}, rechazo ${format}, ${renamed ? 'renombrada después' : 'sin cambios después'}`, async () => {
+          const server = new FakeServer();
+          server.treeClock = () => Date.now() - skew;
+          const name = crypto.randomUUID();
+          const a = await device(server, name);
+          const id = await a.tree.create(null, 'Algo');
+          await a.engine.syncNow();
+          const long = words(100);
+          await rejectLong(a, id, long, format);
+          await a.engine.stop();
+          a.db.close();
+          devices.splice(devices.indexOf(a), 1);
+          if (renamed) {
+            // Unos segundos después del rechazo, desde otro dispositivo: con el reloj adelantado, «antes» del rechazo.
+            const other = await device(server);
+            await other.engine.syncNow();
+            await other.tree.rename(id, 'Título nuevo');
+            await other.engine.syncNow();
+          }
+
+          const b = await device(server, name);
+          await b.engine.syncNow();
+          await drain(b);
+          await b.engine.syncNow();
+          expect(b.engine.getStatus().failedOps).toBe(0);
+          expect(b.tree.pendingOps()).toEqual([]);
+          const title = server.pages.get(id)!.title;
+          if (renamed) {
+            expect(title).toBe('Título nuevo');
+            expect(await blocks(b, id)).toEqual([long]);
+          } else if (format === 'nuevo') {
+            expect(long.startsWith(title) && codePointLength(title) <= 500 && title !== 'Algo').toBe(true);
+            expect(await blocks(b, id)).toEqual([long.slice(title.length).trim()]);
+          } else {
+            expect(title).toBe('Algo');
+            expect(await blocks(b, id)).toEqual([long]);
+          }
+        });
+      }
+    }
+  }
 });
 
 describe('otros topes del árbol', () => {

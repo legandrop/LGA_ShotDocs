@@ -69,6 +69,17 @@ export function isLengthRejection(f: FailedOp): boolean {
   return /\b(pages_title_check|workspaces_name_length)\b/.test(f.error) && fitOp(f.op) !== null;
 }
 
+/**
+ * Dos `updated_at` del servidor son el mismo momento. Sin el primero (`null` o sin guardar) no hay con qué comparar:
+ * no lo son. Igualdad, no "antes o después": los dos salen del mismo reloj, y cualquier diferencia es un cambio.
+ */
+export function sameInstant(was: string | null | undefined, now: string): boolean {
+  if (typeof was !== 'string') return false;
+  if (was === now) return true;
+  const a = Date.parse(was);
+  return Number.isFinite(a) && a === Date.parse(now);
+}
+
 /** La página a la que va lo que sobró del título de un cambio. */
 function restPage(op: TreeOp): string | null {
   return op.kind === 'create' ? op.page.id : op.kind === 'update' ? op.id : null;
@@ -579,16 +590,19 @@ export class PageTree {
   }
 
   /**
-   * El título de la página cambió después de que el servidor rechazó `f`: lo cambió el servidor (otro dispositivo, o
-   * esta persona al ver el rechazo) o hay un cambio de título posterior en este dispositivo. Del servidor se mira su
-   * `updated_at` contra el momento del rechazo (cambia con el título, el lugar, la papelera o los ajustes, no con el
-   * contenido): en la duda, se toma como cambiado, y el texto largo va entero a la página sin pisar nada.
+   * El título de la página pudo cambiar después de que el servidor rechazó `f`: lo cambió el servidor (otro
+   * dispositivo, o esta persona al ver el rechazo) o hay un cambio de título posterior en este dispositivo. Del
+   * servidor se mira si su `updated_at` sigue siendo el que tenía la fila al fallar (`rowUpdatedAt`): reloj del
+   * servidor contra reloj del servidor, sin la hora del dispositivo, que puede ir adelantada horas y esconder un
+   * renombre. `updated_at` cambia con el título, el lugar, la papelera o los ajustes, no con el contenido. En la duda
+   * (otro valor, la fila no estaba, o un rechazo de una versión anterior que no guardó el dato) se toma como cambiado:
+   * el texto largo va entero a la página y el título de ahora queda. Nada se pisa ni se pierde.
    */
   private titleChangedAfter(f: FailedOp): boolean {
     if (f.op.kind !== 'update') return false;
     const id = f.op.id;
     const row = this.snapshot.get(id);
-    if (row && Date.parse(row.updated_at) > f.failedAt) return true;
+    if (row && !sameInstant(f.rowUpdatedAt, row.updated_at)) return true;
     const later = (op: TreeOp, seq: number | undefined) =>
       op.kind === 'update' && op.id === id && op.patch.title !== undefined && (seq ?? Infinity) > (f.opSeq ?? -1);
     return this.ops.some((o) => later(o.op, o.seq)) || this.failed.some((g) => g !== f && later(g.op, g.opSeq));
@@ -666,6 +680,9 @@ export class PageTree {
    */
   async failOp(op: QueuedOp, error: string): Promise<void> {
     const failed: FailedOp = { op: op.op, opSeq: op.seq, error, failedAt: Date.now() };
+    // Cómo estaba la fila al fallar (reloj del servidor): `titleChangedAfter` compara contra esto y no contra la hora
+    // del dispositivo, que puede ir adelantada (Docs/Doc_Sincronizacion.md, "Topes de largo").
+    if (op.op.kind === 'update') failed.rowUpdatedAt = this.snapshot.get(op.op.id)?.updated_at ?? null;
     const tx = this.db.transaction(['ops', 'failedOps'], 'readwrite');
     await tx.objectStore('ops').delete(op.seq!);
     failed.seq = await tx.objectStore('failedOps').add(failed);
@@ -680,8 +697,8 @@ export class PageTree {
    * nada que reintentar no escribe nada ni avisa.
    */
   async retryFailed(only: (f: FailedOp) => boolean = () => true): Promise<void> {
-    // Los rechazados por un tope de largo no: volverían a fallar, y su momento de rechazo es lo que dice si el título
-    // cambió después (`repairRejected` los arregla con el próximo árbol que baje, que *Retry* pide enseguida).
+    // Los rechazados por un tope de largo no: volverían a fallar, y cómo estaba la fila al rechazarse es lo que dice si
+    // el título cambió después (`repairRejected` los arregla con el próximo árbol que baje, que *Retry* pide enseguida).
     const retry = this.failed.filter((f) => only(f) && !isLengthRejection(f));
     if (retry.length === 0) return;
     const tx = this.db.transaction(['ops', 'failedOps'], 'readwrite');
