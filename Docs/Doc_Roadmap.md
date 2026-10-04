@@ -173,7 +173,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   final, `CON`…, a lo sumo 255 bytes) y cortes de 200 y 250 caracteres por grafema. *Retry missing*, el tope sin avance
   de cada pedido (R1) y el ZWJ de los emojis compuestos en la app (O4), hechos (rama `lega/carpetas-restos`); listar
   hasta 40 subcarpetas por pedido (`dirs` en `/folder/list`) y el ZWJ en el portero, hechos (v0.119, rama
-  `lega/carpetas-e2`). **Corrección implementada (v0.0XX, pendiente de revisión):** *Cancel* y el plazo cancelan también la fuente
+  `lega/carpetas-e2`). **Corrección implementada (v0.176):** *Cancel* y el plazo cancelan también la fuente
   de un cuerpo de error HTTP atascado, liberando el lector; se mantienen los reintentos y *Retry missing* sin repetir
   lo completado (`Doc_Carpetas.md`, "Cancelar un error que queda a medias"). Falta (BAJO): Firefox sin tope por el service worker y probar a mano en Safari, el iPhone y con
   el Drive real (si Drive rechaza la consulta con varios padres, la app cae a de a una sin perder nada, pero gasta un
@@ -649,9 +649,9 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   la página, ⌘Z lo deshace entero con la foto a la vista y ⌘⇧Z lo rehace, sin llevarse lo de otra persona; con *Show* en
   el aviso de ⌘Z de un reemplazo con páginas cambiadas, el foco que sigue en el panel después del *Undo* de "Last" y la
   prueba de la ventana de O4; con sus correcciones: deshacer nunca borra el marco de una foto, la foto lejana a la vista
-  y rehacer un pegado con anotaciones después de ir y volver; sección 19). Pendientes chicos: una página con historia que estaba en la papelera durante
-  el ⌘Z de un reemplazo, restaurada después, deja "Toma 1: cámara" (18.4, auditoría O1: el reemplazo tendría que quedar
-  a la vez para rehacer y para deshacer; mediano); con el panel abierto y el foco puesto por programa en el editor,
+  y rehacer un pegado con anotaciones después de ir y volver; sección 19). **O1 corregida (v0.175, sección 22):** la página
+  con historia en la papelera durante el ⌘Z de un reemplazo conserva su paso; restaurada, deshacer el reemplazo y luego
+  lo escrito deja el texto exacto, y se puede rehacer todo. Pendientes chicos: con el panel abierto y el foco puesto por programa en el editor,
   Ctrl+Shift+Z deshace (no se llega con el mouse ni el teclado: el panel es modal); y la copia propia de lo ajeno que se
   va con un renglón deshecho (17.2, de Yjs, 1 en 300). Botones de deshacer en el teléfono y el árbol (mover, crear, papelera) quedan afuera (DH1, DH8).
 - **P.27 Dictado por voz y notas informales que se ubican en el reporte** (Lega, 2026-10-02): dictar en toda la app,

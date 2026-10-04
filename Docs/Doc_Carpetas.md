@@ -100,7 +100,7 @@ contesta, espera probándolo cada 5 segundos en vez de anotar el archivo como fa
 están. Cancelar un zip lo borra (no queda un archivo a medias); cancelar una carpeta deja lo ya bajado. Sin red, el
 botón se ve apagado y, con el clic, dice que hace falta conexión.
 
-**Cancelar un error que queda a medias (v0.0XX):** también se corta en el acto cuando el servidor ya contestó un
+**Cancelar un error que queda a medias (v0.176):** también se corta en el acto cuando el servidor ya contestó un
 error HTTP pero su cuerpo JSON dejó de llegar. El lector de ese cuerpo pertenece a la bajada: *Cancel* y el plazo
 vigente de 30 segundos cancelan la fuente, liberan el bloqueo del cuerpo y retiran sus escuchas y temporizadores.
 Sin un código JSON completo se conserva la clasificación HTTP: 429 y 5xx tienen cuatro intentos; los otros errores
