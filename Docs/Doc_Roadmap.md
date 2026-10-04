@@ -289,7 +289,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   - **Hecho (v0.171), de su auditoría:** (O3) el servidor de las pruebas aplica el corte por `uploaded_at` de
     `drive_trash_first`, como la base; (O4) un proyecto borrado para siempre ya no suma en el peso lo que nunca subió (lo
     mandado a la papelera de Drive cuenta ahí sus 30 días, como cualquier archivo). Migración
-    `20261103120000_purgados_peso_link_total.sql` (schema 25), **sin aplicar** (`Doc_Proyectos_Borrar.md`, "Restos de la
+    `20261103120000_purgados_peso_link_total.sql` (schema 25), **aplicada** (`Doc_Proyectos_Borrar.md`, "Restos de la
     auditoría de la entrega 3").
 - **P.16 Hecho (v0.074): el árbol de páginas con el teclado** (Lega, 2026-10-01). Con el foco en una fila
   (queda ahí después de un clic): ↑ / ↓ abren la página visible anterior o siguiente (una pulsación al
@@ -410,10 +410,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   mostraba como «formato cambiado»).
   Las tres observaciones de la re-verificación de la 2b quedaron **hechas (v0.165)**: la prueba del link muerto con varios
   archivos, la del *Download it* de la insignia con el link vivo, y *Share* con «500 or more» cuando la lista llega al tope
-  de la base (sin SQL). **Falta, si alguna vez importa:** el total exacto de archivos de todos los links de la página (una
-  cuenta aparte en `public_link_files`, con migración); hoy pasado el tope solo se dice «o más».
+  de la base (sin SQL). **Hecho en v0.171:** el total exacto de archivos de todos los links de la página, mediante
+  `public_link_files.total` y la migración aplicada de schema 25; «o más» queda solo para una base anterior.
 - **P.25 Sacar una foto o filmar desde la app** (Lega, 2026-10-01). **Hecho para la web (v0.110):** *Take photo* y
-  *Record video* en el menú "/" y en el menú de la página, solo en el teléfono y la tableta (el video, con portero):
+  *Record video* en el menú "/" y en el menú de la página, solo en teléfonos (D302, v0.172; el video, con portero):
   abren la cámara con el selector del sistema y lo sacado entra en el renglón y sube por la cola de siempre; *Save to
   camera roll* (*Guardar en Fotos*) en la barra de cada foto o video abre la hoja de compartir con el original. Ver
   `Doc_Fotos_En_Linea.md`, "Cámara". **Falta:** probarlo en un iPhone y un Android reales. **Para la app nativa**
@@ -702,7 +702,7 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   link de un video en línea y los textos de invitación en el choque de clave y en *Join a workspace?* para una dirección
   de archivo (O7 c). De la auditoría de E2 (chico): una prueba de dos personas decidiendo a la vez con dos sesiones
   reales (O8; hoy por lectura del `for update`), el tope y las 24 horas en el servidor en memoria (O9) y el título
-  *Mentions* del panel de la campana cuando arriba tiene pedidos. **Hecho (v0.165):** *Export* avisa sin red (O6, *No connection: file links … can't use the public link*; un visitante del link no lo ve, con prueba). **Hecho (v0.171, D279 B):** *Share* dice el total exacto de los archivos de los links de la página aunque pasen de 500 (columna `total` de `public_link_files`, migración `20261103120000_purgados_peso_link_total.sql`, schema 25, sin aplicar; `Doc_Link_Publico.md`, "El total exacto"). Queda (chico): el aviso sale también si el PDF no lleva ningún archivo, porque la ventana no cuenta los adjuntos antes de armar, igual que el de las fotos sin conexión.
+  *Mentions* del panel de la campana cuando arriba tiene pedidos. **Hecho (v0.165):** *Export* avisa sin red (O6, *No connection: file links … can't use the public link*; un visitante del link no lo ve, con prueba). **Hecho (v0.171, D279 B):** *Share* dice el total exacto de los archivos de los links de la página aunque pasen de 500 (columna `total` de `public_link_files`, migración `20261103120000_purgados_peso_link_total.sql`, schema 25, aplicada; `Doc_Link_Publico.md`, "El total exacto"). Queda (chico): el aviso sale también si el PDF no lleva ningún archivo, porque la ventana no cuenta los adjuntos antes de armar, igual que el de las fotos sin conexión.
 - **P.28 Hecho (v0.156): la tabla del reporte en el teléfono** (`Doc_Tabla_Telefono.md`): en pantalla angosta ninguna
   columna con ancho guardado baja de 96 px y la tabla se desplaza de costado dentro de su bloque; la celda donde se
   escribe se acomoda a la vista. La compu y el PDF no cambian. Falta probarlo en un iPhone real (dedo, teclado abierto).

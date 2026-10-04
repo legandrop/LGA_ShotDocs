@@ -108,6 +108,9 @@ In production (v0.049). What works today:
 - Photos in table cells: with the cursor in a cell, pasted, dropped or picked photos go into that cell as
   thumbnails as tall as a row, side by side. Their toolbar has *Thumbnail* and *Full cell width* (handles resize them inside the cell);
   they open full screen like any photo and print the same. Photos in a cell of a Coda table stay in their cell.
+- On phones, *Take photo* and *Record video* in the slash menu and page menu open the phone's camera and add
+  the result at the cursor. Videos need the workspace's Drive. Computers and tablets can add existing photos and
+  videos. If Request Desktop Site hides a phone's identity, switch back to the mobile site for the camera actions.
 - Photos in rows: the first click selects a photo (handles and its toolbar), the second opens it; quick sizes
   (full, 1/2, 1/3, 1/4 of the page) put photos and videos side by side, *Arrange in rows* lays out a run of
   photos in rows of equal height, and on the phone each account chooses rows or stacked. The PDF keeps the

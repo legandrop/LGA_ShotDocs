@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.172 :
+
+**Sacar fotos y filmar solo en teléfonos (D302).** Las entradas *Take photo* y *Record video* se habilitaban por
+tener un puntero táctil: ese dato también incluye tabletas y computadoras con pantalla táctil. Ahora se ofrecen
+solo cuando el navegador identifica un iPhone o un teléfono Android Mobile con puntos de toque, y se excluyen
+las identidades de escritorio y tableta. La misma comprobación guarda la acción y el selector de captura, para
+que una llamada directa tampoco abra la cámara en esos equipos. Las fotos y los videos existentes se siguen
+agregando desde el selector normal, pegados o soltados. Si *Sitio de escritorio* oculta la identidad del teléfono,
+la cámara espera a volver al sitio móvil. Ayuda en ambos idiomas y documentación ajustadas; pruebas de teléfonos,
+tabletas, laptops táctiles y captura directa rechazada, conservando la carga normal y el esquema publicado.
+[Limitar la captura de fotos y videos a teléfonos]
+
 v0.171 :
 
 **Restos de SQL (P.14 y P.30).** (1) Un proyecto borrado para siempre seguía sumando en el peso lo que nunca subió (en

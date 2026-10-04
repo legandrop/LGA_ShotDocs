@@ -16,12 +16,24 @@ export const CAMERA_FACING = 'environment';
 
 /**
  * Lo que se ofrece para sacar con la cámara: nada en la compu (ahí `capture` no abre la cámara sino el mismo
- * selector de "/Image", y sería una entrada repetida); en el teléfono o la tableta, la foto, y el video solo con
+ * selector de "/Image", y sería una entrada repetida); solo en el teléfono, la foto, y el video solo con
  * portero (sin portero solo se guardan imágenes).
  */
-export function cameraKinds(opts: { touch: boolean; videos: boolean }): CameraKind[] {
-  if (!opts.touch) return [];
+export function cameraKinds(opts: { phone: boolean; videos: boolean }): CameraKind[] {
+  if (!opts.phone) return [];
   return opts.videos ? ['photo', 'video'] : ['photo'];
+}
+
+/**
+ * Captura solo en teléfonos identificables: iPhone o Android Mobile con pantalla táctil. Un puntero grueso o
+ * una ventana chica también pueden ser de una computadora o tableta, así que no alcanzan. Si "Sitio de
+ * escritorio" oculta la identidad del teléfono, se omite la cámara; elegir archivos existentes sigue disponible.
+ */
+export function capturePhone(n: Pick<Navigator, 'userAgent' | 'maxTouchPoints'> | undefined = typeof navigator === 'undefined' ? undefined : navigator): boolean {
+  if (!n || !(n.maxTouchPoints > 0)) return false;
+  const ua = n.userAgent;
+  if (/iPad|iPod|Tablet|PlayBook|Silk|Kindle|Windows|Macintosh|CrOS/i.test(ua)) return false;
+  return /iPhone/i.test(ua) || (/Android/i.test(ua) && /\bMobile\b/i.test(ua));
 }
 
 /** Si este dispositivo es de toque (el puntero principal es un dedo): el teléfono y la tableta. */

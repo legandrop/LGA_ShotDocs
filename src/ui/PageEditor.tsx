@@ -29,7 +29,7 @@ import { CONTENT_FRAGMENT } from '../sync/structure';
 import { editorSchemaOptions, insertPageBreakForSlashMenu, SCRIPT_PROP, setVideosAccepted } from './editorSchema';
 import { dropTarget, insertFiles, isEmptyParagraph, isFilesTransfer, takeFiles, type FileEditor, type InsertAt } from './fileDrop';
 import { addFiles, dropPos, pickFiles, type AddFilesOptions, type PhotoEditor, type PickExtra } from './inlinePhotoCreate';
-import { CAMERA_ACCEPT, CAMERA_FACING, cameraKinds, registerPageCamera, touchDevice, type CameraKind } from './camera';
+import { CAMERA_ACCEPT, CAMERA_FACING, cameraKinds, capturePhone, registerPageCamera, type CameraKind } from './camera';
 import { readFolder, summarize, takeDrop, type FolderSource } from '../media/folderRead';
 import { FolderAskDialog, FolderProgressDialog } from './FolderDialog';
 import { FolderViewer } from './FolderViewer';
@@ -632,13 +632,15 @@ export function BlockEditor({
   }, [editor, pageId, preview, filesNotice]);
 
   // Sacar una foto o filmar (camera.ts): el selector con `capture`, por el mismo camino que "/Image". Solo en un
-  // dispositivo de toque; el video, con portero.
-  const cameraOffer = useMemo(() => cameraKinds({ touch: touchDevice(), videos: media.enabled }), [media.enabled]);
-  const openCamera = (kind: CameraKind, extra: PickExtra = {}) =>
+  // teléfono; el video, con portero.
+  const cameraOffer = useMemo(() => cameraKinds({ phone: capturePhone(), videos: media.enabled }), [media.enabled]);
+  const openCamera = (kind: CameraKind, extra: PickExtra = {}) => {
+    if (!editable || !cameraKinds({ phone: capturePhone(), videos: media.enabled }).includes(kind)) return;
     pickFiles(editor as unknown as PhotoEditor, CAMERA_ACCEPT[kind], fileOptions(editor as unknown as FileEditor), {
       capture: CAMERA_FACING,
       ...extra,
     });
+  };
   const openCameraRef = useRef(openCamera);
   openCameraRef.current = openCamera;
   // Si la persona puso el cursor en la página en esta visita: si no, lo del menú de la página va al final.

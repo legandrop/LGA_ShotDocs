@@ -5,13 +5,14 @@
 import { BlockNoteEditor, type PartialBlock } from '@blocknote/core';
 import { withCollaboration } from '@blocknote/core/yjs';
 import { TextSelection } from '@tiptap/pm/state';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import {
   CAMERA_ACCEPT,
   CAMERA_FACING,
   cameraKinds,
+  capturePhone,
   canShareFiles,
   pageCameraFor,
   registerPageCamera,
@@ -28,18 +29,41 @@ import { brokenGaps, storedPhotos } from './photoHarness';
 import { findUnknownContent } from './unknownContent';
 
 afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   unmountAll();
   document.body.replaceChildren();
 });
 
 describe('qué se ofrece', () => {
   it('la cámara: nada en la compu; en el teléfono la foto, y el video solo con portero', () => {
-    expect(cameraKinds({ touch: false, videos: true })).toEqual([]);
-    expect(cameraKinds({ touch: false, videos: false })).toEqual([]);
-    expect(cameraKinds({ touch: true, videos: false })).toEqual(['photo']);
-    expect(cameraKinds({ touch: true, videos: true })).toEqual(['photo', 'video']);
+    expect(cameraKinds({ phone: false, videos: true })).toEqual([]);
+    expect(cameraKinds({ phone: false, videos: false })).toEqual([]);
+    expect(cameraKinds({ phone: true, videos: false })).toEqual(['photo']);
+    expect(cameraKinds({ phone: true, videos: true })).toEqual(['photo', 'video']);
     expect(CAMERA_ACCEPT).toEqual({ photo: 'image/*', video: 'video/*' });
     expect(CAMERA_FACING).toBe('environment');
+  });
+
+  it.each([
+    ['iPhone', 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1', 5, true],
+    ['Android teléfono', 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 Chrome/140.0.0.0 Mobile Safari/537.36', 5, true],
+    ['Windows sin touch', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/140.0.0.0 Safari/537.36', 0, false],
+    ['laptop táctil', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/140.0.0.0 Safari/537.36', 10, false],
+    ['iPad móvil', 'Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X) Mobile/15E148 Safari/604.1', 5, false],
+    ['iPad escritorio', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 Safari/605.1.15', 5, false],
+    ['Android tableta', 'Mozilla/5.0 (Linux; Android 15; SM-X710) Chrome/140.0.0.0 Safari/537.36', 10, false],
+    ['tableta con Mobile', 'Mozilla/5.0 (Linux; Android 15; Tablet) Chrome/140.0.0.0 Mobile Safari/537.36', 10, false],
+    ['Kindle con Mobile', 'Mozilla/5.0 (Linux; Android 9; KFTUWI) Silk/86.3.12 Mobile Safari/537.36', 10, false],
+    ['Mac', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) Safari/605.1.15', 0, false],
+    ['iPhone disfrazado de escritorio', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) Safari/605.1.15', 5, false],
+    ['Android en sitio escritorio', 'Mozilla/5.0 (X11; Linux x86_64) Chrome/140.0.0.0 Safari/537.36', 5, false],
+    ['UA iPhone sin touch', 'Mozilla/5.0 (iPhone) Mobile Safari/604.1', 0, false],
+    ['desconocido con touch', '', 5, false],
+  ])('captura de teléfono: %s', (_name, userAgent, maxTouchPoints, expected) => {
+    const phone = capturePhone({ userAgent, maxTouchPoints });
+    expect(phone).toBe(expected);
+    expect(cameraKinds({ phone, videos: true })).toEqual(expected ? ['photo', 'video'] : []);
   });
 
   it('compartir archivos: solo con share y canShare que acepte una foto', () => {
@@ -190,11 +214,44 @@ const T0 = 3;
 const caret = (E: BlockNoteEditor, pos: number) => viewOf(E).dispatch(viewOf(E).state.tr.setSelection(TextSelection.create(viewOf(E).state.doc, pos)));
 
 describe('sacar con la cámara', () => {
+  beforeEach(() => {
+    vi.stubGlobal('navigator', Object.create(navigator, {
+      userAgent: { configurable: true, get: () => 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Mobile/15E148 Safari/604.1' },
+      maxTouchPoints: { configurable: true, get: () => 5 },
+    }));
+  });
   const page = (): PartialBlock[] =>
     [
       { id: 'a', type: 'paragraph', content: [text('Plano 1')] },
       { id: 'z', type: 'paragraph', content: [text('Último')] },
     ] as never;
+
+  it.each([
+    ['computadora táctil', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/140.0.0.0 Safari/537.36'],
+    ['iPad', 'Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X) Mobile/15E148 Safari/604.1'],
+    ['tableta Android', 'Mozilla/5.0 (Linux; Android 15; SM-X710) Chrome/140.0.0.0 Safari/537.36'],
+  ])('la invocación directa no abre captura en %s, pero sí permite archivos existentes', async (_name, ua) => {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(ua);
+    const E = mountCreating(page());
+    caret(E, T0 + 'Plano'.length);
+    const stored: string[] = [];
+    const click = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => undefined);
+    for (const accept of [CAMERA_ACCEPT.photo, CAMERA_ACCEPT.video]) {
+      pickFiles(E as unknown as PhotoEditor, accept, options(stored), { capture: CAMERA_FACING });
+      expect(document.querySelector('input[type=file]')).toBeNull();
+    }
+    expect(click).not.toHaveBeenCalled();
+    expect(lines(E)).toEqual(['Plano 1', 'Último']);
+    pickFiles(E as unknown as PhotoEditor, 'image/*,video/*', options(stored));
+    const { input, take } = picker();
+    expect(input.multiple).toBe(true);
+    expect(input.hasAttribute('capture')).toBe(false);
+    take(shot(), shot('clip.mp4', 'video/mp4'));
+    await tick(20);
+    expect(stored).toEqual(['image.jpg', 'clip.mp4']);
+    expect(lines(E)[0]).toContain('[image.jpg@');
+    expect(lines(E)[0]).toContain('[clip.mp4@');
+  });
 
   it('el selector pide la cámara de atrás, una sola toma, y la foto entra en el renglón donde estaba el cursor', async () => {
     const E = mountCreating(page());

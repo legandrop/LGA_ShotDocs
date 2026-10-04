@@ -1034,10 +1034,16 @@ cualquier foto, y poder guardarla en el carrete del teléfono.
 - **Dónde se ofrece:** en el menú "/", después de *Image*, y en el menú de la página (•••), arriba. Desde el menú de la
   página, si la persona no puso el cursor en la página en esta visita, la foto va al final (en el renglón vacío del
   final o en uno nuevo); si lo puso, donde estaba. *Record video* solo con portero (sin portero no se guardan videos).
-- **En la compu no se ofrece** (decisión propuesta, A): ahí `capture` no abre la cámara sino el mismo selector de
-  "/Image", así que sería una entrada repetida. Se ofrece con el puntero principal de toque (`pointer: coarse`, el
-  teléfono y la tableta; `deviceTraits().phone`). La otra opción (B: abrir la cámara de la compu con `getUserMedia` en
-  una ventana propia) es otro trabajo y nadie lo pidió.
+- **Solo en teléfonos (D302, v0.172).** No se ofrece ni se abre captura en computadoras, laptops táctiles ni
+  tabletas/iPad. `capturePhone` pide una identidad iPhone o Android Mobile y puntos de toque; excluye identidades
+  de tabletas y escritorio. El tamaño de ventana y `pointer: coarse` no distinguen un teléfono y no se usan. La
+  guarda se aplica también antes de disparar la acción y al selector `pickFiles` cuando pide `capture`, para que
+  una llamada directa o un callback viejo no abra la cámara. "/Image", pegar y soltar fotos/videos existentes
+  siguen disponibles en todos los dispositivos, con los permisos y el portero de siempre.
+  **Límite:** no hay una identificación física infalible desde la web. Un teléfono con *Sitio de escritorio* que
+  oculta su identidad queda sin estas acciones hasta volver al sitio móvil; un navegador que se hace pasar por
+  otro dispositivo puede imitar sus señales. Ante una identidad desconocida no se ofrece captura. Esto no cambia
+  *Save to camera roll*, que sigue según la capacidad de compartir del dispositivo.
 - ***Save to camera roll*** (*Guardar en Fotos*) en la barra de cualquier foto o video (en línea o bloque), después de
   bajar: abre la hoja de compartir del sistema (`navigator.share({ files })`) con el original y su tipo, donde se elige
   *Guardar imagen* o *Guardar video*. Solo en un dispositivo de toque y si el navegador comparte archivos (`canShare`);
@@ -1045,6 +1051,18 @@ cualquier foto, y poder guardarla en el carrete del teléfono.
   abre la hoja en el acto; uno que hay que bajar del Drive se baja con el toque y, si el navegador ya no deja abrir la
   hoja (`NotAllowedError`: pide un toque reciente), avisa *The original is ready. Tap … again* y el siguiente toque la
   abre. En castellano dice *Guardar en Fotos* y no "en el carrete": en la app "el carrete" es el visor de fotos.
+
+### Restricción a teléfonos (D302, v0.172): verificación
+
+`camera.test.ts`: 28 pruebas, con iPhone y Android Mobile, computadoras con y sin toque, iPad móvil y escritorio,
+tabletas Android, Kindle, identidades desconocidas y teléfonos en *Sitio de escritorio*. La llamada directa a
+`pickFiles` con captura no crea selector en equipos excluidos ni cambia la página; el selector normal sí inserta
+una foto y un video existentes. Se mantienen las pruebas de inserción, cancelación y esquema publicado.
+Recorrido local con el editor y el menú de página reales, servidor en memoria y Chromium sin ventana: 20 de 20
+comprobaciones. Las dos entradas aparecen en el menú de página y en "/camera" en iPhone (inglés y castellano)
+y Android, y faltan en computadora, laptop táctil e iPad. Fuente Inter efectivamente dibujada, capturas revisadas,
+sin excepciones ni pedidos de red externos. Esto prueba la presentación y las guardas; la cámara nativa real
+todavía debe probarse en un iPhone y un Android físicos, como indica P.25.
 
 ### Lo que queda para la app nativa
 
