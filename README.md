@@ -54,7 +54,7 @@ its own project: a tree of pages you own.
 
 ## Status
 
-In production (v0.049). What works today:
+In development. What works today:
 
 - Email sign-in with an 8-digit code, which works inside the installed iPhone app (a sign-in link would
   open Safari instead). It needs your own mail server (SMTP) in Supabase, and sign-ups are invite-only.
@@ -92,7 +92,10 @@ In production (v0.049). What works today:
   the owner and admins can send them to the Google Drive trash (recoverable there for 30 days).
 - How much each project takes in the owner's Drive: in the project menu, in the *Google Drive* dialog (owner
   only, with the Drive trash and what is still uploading) and at the top of the file trash (v0.050; it shows
-  once the workspace database is on version 7).
+  once the workspace database is on version 7). After *Delete forever*, files that never reached Drive no longer
+  count toward the project size; files in the Drive trash keep counting there for 30 days.
+- In *Share*, the team sees the exact number of files added through all links to the page, including earlier
+  links, even beyond 500 files; the list shows the newest 20.
 - Google Drive links: paste one and keep it as a link, as plain text, or as a card with the Drive player.
 - Links to other pages: a link to a page of the app opens it in the same tab (Ctrl/⌘+click, in a new one).
 - Photos in the line of text (v0.078): pasted, dropped or picked photos and videos go into the line, where the
@@ -106,6 +109,9 @@ In production (v0.049). What works today:
 - Photos in table cells: with the cursor in a cell, pasted, dropped or picked photos go into that cell as
   thumbnails as tall as a row, side by side. Their toolbar has *Thumbnail* and *Full cell width* (handles resize them inside the cell);
   they open full screen like any photo and print the same. Photos in a cell of a Coda table stay in their cell.
+- On phones, *Take photo* and *Record video* in the slash menu and page menu open the phone's camera and add
+  the result at the cursor. Videos need the workspace's Drive. Computers and tablets can add existing photos and
+  videos. If Request Desktop Site hides a phone's identity, switch back to the mobile site for the camera actions.
 - Photos in rows: the first click selects a photo (handles and its toolbar), the second opens it; quick sizes
   (full, 1/2, 1/3, 1/4 of the page) put photos and videos side by side, *Arrange in rows* lays out a run of
   photos in rows of equal height, and on the phone each account chooses rows or stacked. The PDF keeps the
@@ -147,8 +153,8 @@ In production (v0.049). What works today:
 - Keyboard in the page tree: ↑ and ↓ open the previous or next page, → and ← expand and collapse (← on a page with nothing to collapse goes to its parent page).
 - Page breaks and PDF: pages with a paper size show where each sheet starts, and *Export PDF / Print* in the page menu prints exactly those sheets. A manual page break (*Page break* in the / menu, or Ctrl+Enter, ⌘↩ on a Mac) makes what follows start on a new sheet, on screen and in the PDF.
 - Export a branch or a whole project as PDF: *Export…* in the page menu (the page and the pages inside) or *Export project…* in the project list. It starts with a contents page that links to each page and says on which PDF page it starts, every page keeps its own paper size (in Chrome or Edge on a computer), photos keep their annotations and go as they were taken, at full resolution (tick *Smaller file* for a lighter PDF with photos scaled to their printed size), and comments can be included with names but never email addresses. If it is too much for one PDF on the device, it comes out in parts (*Part 1*, *Part 2*…), split between pages, and at the end any page that could not be exported is listed with a link and *Export again*. Pages in the trash are never included, and a guest exports only what they can see.
-- Links to files in a PDF: in an exported or printed PDF, every attachment, folder and video links to the file, with its name below (photos don't). Whoever opens the link signs in and sees the file only if they can see a page where it is; if not, they just see that they don't have access. *Export…* can use the page's public link instead, after saying which page and level it opens.
-- Request access: whoever opens a file link or a page link without access can ask for it; the people who can share that page (or a page with that file) see the request in the bell and in *Share*, and give access to that page (never less than the person already has) or decline it.
+- Links to files in a PDF: in an exported or printed PDF, every attachment, folder and video links to the file, with its name below (photos don't). Whoever opens the link signs in and sees the file only if they can see a page where it is; if not, they just see that they don't have access. *Export…* can use the page's public link instead, after saying which page and level it opens. Offline, it warns about file links only when the PDF contains attachments, folders or videos, and about lower-resolution photos only when their originals are missing from this device.
+- Request access: whoever opens a file link or a page link without access can ask for it, even with nothing shared yet; the people who can share that page (or a page with that file) see the request in the bell and in *Share*, and give access to that page (never less than the person already has) or decline it.
 - Export a branch or a whole project as a zip to archive it: a folder for each page with the page as a web page that opens in any browser without a connection, its text as Markdown, a JPEG of every photo (also iPhone HEIC photos), the original photos, attachments and videos from Drive if you tick them, and the comments with names but never email addresses. It also keeps the blocks and the page tree for importing it back later. On Chrome and Edge on a computer it is written as it is made (or into a folder); in other browsers it is built in memory. Only the workspace owner and admins can export a zip, and only from a computer.
 - Import a Shot Docs archive: *Import Shot Docs archive…* in the project list brings an exported zip (or its unzipped folder) back as a new project, never on top of an existing one, with its pages in order, sheet sizes, blocks, collapsed headings, photo annotations, template marks, comments with their names and dates, and photos and files, which upload to the workspace's Drive. A photo whose original was left out comes back from its preview; a video or file that is not in the zip keeps its name in its place. If it stops, choosing the same zip again resumes without repeating anything. Only the workspace owner and admins can import.
 - English and Spanish: the whole interface in both languages, chosen in the account menu and saved in your account (Script is *Guion* in Spanish).

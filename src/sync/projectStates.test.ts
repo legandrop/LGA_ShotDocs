@@ -328,3 +328,52 @@ describe('una base sin la migración 9', () => {
     expect(info).toMatchObject({ pages: 2, drive_bytes: 5000000000, shared_with: 1, files: 0, foreign_only_here: 0 });
   });
 });
+
+// *Delete forever* en el servidor de las pruebas, igual que `purge_project` (O3 de la auditoría de la entrega 3): la
+// carpeta mandada a la papelera de Drive cubre solo lo subido hasta el pedido; lo subido después fue a otra carpeta.
+describe('Delete forever: la carpeta cubre solo lo subido hasta el pedido, como la base', () => {
+  const DAY = 86_400_000;
+  const iso = (ms: number) => new Date(ms).toISOString();
+
+  async function purgeable(uploadedAt: (requested: number) => (string | null)[]) {
+    const { server, owner, o } = await workspace();
+    server.enableProjectPurge();
+    await owner.engine.syncNow();
+    const requested = Date.now() - 2 * DAY;
+    uploadedAt(requested).forEach((at, i) => {
+      server.mediaFiles.set(`f${i}`, {
+        id: `f${i}`, name: `f${i}.jpg`, mime: 'image/jpeg', width: null, height: null, duration: null, thumb_at: null,
+        drive_id: `drive_f${i}_xxxxx`, size: 10, trashed_at: null, purged_at: null, drive_trashed_at: null, project_id: o,
+        uploaded_at: at,
+      });
+    });
+    await owner.remote.deleteProject(o);
+    server.deletedProjects.get(o)!.at = iso(Date.now() - 31 * DAY);
+    server.projectDrive.set(o, { requested_at: iso(requested), trashed_at: iso(requested + 60_000), missing_at: null });
+    return { server, owner, o, requested };
+  }
+
+  it('un archivo subido después del pedido la vuelve a pedir (drive_trash_first) y no marca nada', async () => {
+    const { server, owner, o, requested } = await purgeable((r) => [iso(r - DAY), iso(r + 1000)]);
+    await expect(owner.remote.purgeProject(o)).rejects.toThrow('drive_trash_first');
+    expect(server.deletedProjects.get(o)?.purged).toBeFalsy();
+    expect(server.mediaFiles.get('f0')?.drive_trashed_at).toBeFalsy();
+    expect(server.projectDrive.get(o)?.requested_at).toBe(iso(requested));
+  });
+
+  it('lo subido hasta el pedido (también en el mismo instante, o sin fecha, de antes) queda marcado con las fechas de la carpeta', async () => {
+    const { server, owner, o, requested } = await purgeable((r) => [iso(r - DAY), iso(r), null]);
+    // Al borrar el proyecto entraron a la papelera de archivos: esa fecha se conserva (`coalesce`).
+    const trashed = ['f0', 'f1', 'f2'].map((id) => server.mediaFiles.get(id)!.trashed_at);
+    expect(trashed.every(Boolean)).toBe(true);
+    await owner.remote.purgeProject(o);
+    expect(server.deletedProjects.get(o)?.purged).toBeTruthy();
+    for (const [i, id] of ['f0', 'f1', 'f2'].entries()) {
+      const f = server.mediaFiles.get(id)!;
+      expect(f.trashed_at).toBe(trashed[i]);
+      expect(f.purged_at).toBe(iso(requested));
+      expect(f.drive_trashed_at).toBe(iso(requested + 60_000));
+    }
+    expect(server.projectDrive.has(o)).toBe(false);
+  });
+});

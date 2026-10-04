@@ -1000,7 +1000,8 @@ un zip de más de 1 GB en Firefox (el tope).
 **Qué ve el usuario.** En la ventana *Export*, la casilla *Sharp photos* se reemplaza por *Smaller file (lower-resolution
 photos)*, destildada (D85): sin tildar, cada foto va como se tomó, en resolución completa; tildada, achicada a su ancho
 impreso a 200 ppp (lo de la entrega 1, con la nítida de 2048 pedida al Drive si hace falta). Sin red, la ventana avisa que
-las fotos cuyo original no está en el dispositivo van en menor resolución. Ya no hay "demasiadas páginas o fotos,
+las fotos cuyo original no está en el dispositivo van en menor resolución, y solo si alguna foto de lo que se exporta está en ese caso
+(`planFiles`, `src/export/planFiles.ts`, lee lo guardado en el dispositivo; con *Smaller file* no sale; si una copia está marcada como no soportada o ilegible, se conserva el aviso preventivo). Ya no hay "demasiadas páginas o fotos,
 exportá una rama": si lo elegido pasa un tope, el PDF sale **en partes** (D84): "Part 1 ready: pages 1 to 33 of 300 ·
 120 PDF pages", el diálogo de imprimir con el nombre `<título> <fecha> Part 1`, y *Prepare part 2*, que arma la siguiente
 soltando la anterior ("Save this part first"); en la última, "This is the last part". El índice de cada parte dice

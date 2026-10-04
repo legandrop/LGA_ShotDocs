@@ -181,10 +181,11 @@ const CONTRAST = '0.161';
 /** Los links a los archivos en el PDF (P.30, Doc_Links_PDF.md, entrega 1): el número lo pone quien publica. */
 const FILE_LINKS = '0.164';
 /**
- * *Request access*: llegó en v0.166 desde la dirección de un archivo (P.30, entrega 2) y sube con la entrega 3, que lo
- * suma a una página sin acceso. El número lo pone quien publica.
+ * *Request access*: llegó en v0.166 desde la dirección de un archivo (P.30, entrega 2), subió en v0.169 con la entrega 3,
+ * que lo suma a una página sin acceso, y sube con los restos (Doc_Links_PDF.md, sección 19): también sin ningún proyecto,
+ * y el link de una página con más de un workspace en el dispositivo. El número lo pone quien publica.
  */
-const ACCESS_REQUESTS_PAGES = '0.169';
+const ACCESS_REQUESTS_RESTOS = '0.173';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -780,8 +781,8 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'sharing',
     title: 'help.accessRequests.title',
     text: 'help.accessRequests.text',
-    words: ['request access', 'pedir acceso', 'pedido', 'request', 'campana', 'bell', 'give access', 'dar acceso', 'decline', 'rechazar', 'pdf', 'archivo', 'file', 'página', 'page', 'sin acceso', 'no access'],
-    since: ACCESS_REQUESTS_PAGES,
+    words: ['request access', 'pedir acceso', 'pedido', 'request', 'campana', 'bell', 'give access', 'dar acceso', 'decline', 'rechazar', 'pdf', 'archivo', 'file', 'página', 'page', 'sin acceso', 'no access', 'workspace', 'sin proyectos', 'no projects'],
+    since: ACCESS_REQUESTS_RESTOS,
   },
   {
     id: 'linkAside',

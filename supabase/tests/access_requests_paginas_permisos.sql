@@ -434,6 +434,16 @@ begin
   perform pg_temp.check(pg_temp.decide('e3a0', pg_temp.ridp('e3a6', 'e3b1'), true, 'e3b1'), 'error:member_not_found', 'aceptar a y sacado');
   perform pg_temp.check(pg_temp.askp('e3a6', 'e3b3'), 'error:not_member', 'y sacado pide');
 
+  -- El borde de los 30 días: con 29 días y 23 horas se lista; con 30 días y 1 hora ya no, y no se decide.
+  update public.access_requests set asked_at = now() - interval '29 days 23 hours', created_at = now() - interval '29 days 23 hours'
+  where id = pg_temp.ridp('e3a5', 'e3b3');
+  perform pg_temp.check(pg_temp.seen('e3a0', 'e3a5'), '1', 'la lista no muestra uno de 29 días y 23 horas');
+  update public.access_requests set asked_at = now() - interval '30 days 1 hour', created_at = now() - interval '30 days 1 hour'
+  where id = pg_temp.ridp('e3a5', 'e3b3');
+  perform pg_temp.check(pg_temp.seen('e3a0', 'e3a5'), '0', 'la lista muestra uno de 30 días y 1 hora');
+  perform pg_temp.check(pg_temp.decide('e3a0', pg_temp.ridp('e3a5', 'e3b3'), true, 'e3b3'), 'error:request_not_found', 'aceptar uno de 30 días y 1 hora');
+  perform pg_temp.check(pg_temp.decide('e3a0', pg_temp.ridp('e3a5', 'e3b3'), false, null), 'error:request_not_found', 'rechazar uno de 30 días y 1 hora');
+
   -- 30 días: oculto y sin decidir; renovar lo trae; renovar dos veces en la hora suma una.
   update public.access_requests set asked_at = now() - interval '31 days', created_at = now() - interval '31 days'
   where id = pg_temp.ridp('e3a5', 'e3b3');

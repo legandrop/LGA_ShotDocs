@@ -74,15 +74,28 @@ export interface PublicLinkFile {
 }
 
 /**
- * Cuántos archivos devuelve `public_link_files` como mucho (el `limit 500` de la migración 20261030120000). Si llegan tantos, el
- * total de verdad puede ser mayor: quien muestra la cantidad dice «o más» (O-R3 de la re-verificación de la entrega 2b).
+ * Cuántos archivos devuelve `public_link_files` como mucho (el `limit 500` de la migración 20261030120000). Si llegan tantos
+ * y la base no dice el total (anterior a la 25), el total de verdad puede ser mayor: quien muestra la cantidad dice «o
+ * más» (O-R3 de la re-verificación de la entrega 2b).
  */
 export const PUBLIC_LINK_FILES_MAX = 500;
 
-/** Los archivos que subieron los links de la página, también los anteriores. `page_not_found` si no ve lo borrado. */
-export async function getPublicLinkFiles(client: SupabaseClient, pageId: string): Promise<PublicLinkFile[]> {
-  const rows = await call<Record<string, unknown>[] | null>(client, 'public_link_files', { p_page: pageId });
-  return (rows ?? []).map((r) => ({
+/** La lista (hasta `PUBLIC_LINK_FILES_MAX`) y cuántos son en total; `total` es `null` con una base anterior a la 25. */
+export interface PublicLinkFiles {
+  rows: PublicLinkFile[];
+  total: number | null;
+}
+
+/**
+ * Los archivos que subieron los links de la página, también los anteriores. `page_not_found` si no ve lo borrado. Desde
+ * la versión 25 de la base (20261103120000_purgados_peso_link_total.sql) cada fila trae `total`, la cantidad de todos
+ * aunque la lista se corte (D279 B); sin esa columna, `total` queda en `null`.
+ */
+export async function getPublicLinkFiles(client: SupabaseClient, pageId: string): Promise<PublicLinkFiles> {
+  const list = (await call<Record<string, unknown>[] | null>(client, 'public_link_files', { p_page: pageId })) ?? [];
+  const first = list[0]?.total;
+  const total = first == null || !Number.isFinite(Number(first)) ? null : Math.max(Number(first), list.length);
+  const rows = list.map((r) => ({
     id: String(r.id),
     link_id: String(r.link_id),
     link_live: r.link_live === true,
@@ -94,6 +107,7 @@ export async function getPublicLinkFiles(client: SupabaseClient, pageId: string)
     uploaded: r.uploaded === true,
     trashed: r.trashed === true,
   }));
+  return { rows, total: rows.length === 0 ? 0 : total };
 }
 
 /** `null` si la sesión no puede compartir la página. */

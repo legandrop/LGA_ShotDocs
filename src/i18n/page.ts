@@ -22,6 +22,11 @@ export const page = {
     en: "Request sent. If someone gives you access, the page opens here.",
     es: "Pedido enviado. Si alguien te da acceso, la página se abre acá.",
   },
+  // Con más de un workspace en el dispositivo, `/p/<id>` no dice de cuál es: sin *Request access* (Doc_Links_PDF.md, 19).
+  'page.otherWorkspace': {
+    en: "If this link is from another of your workspaces, switch to it in Workspaces and open the link again.",
+    es: "Si este link es de otro de tus workspaces, cambiá a ese en Workspaces y abrí el link de nuevo.",
+  },
   'page.inTrash': { en: "This page is in the trash.", es: "Esta página está en la papelera." },
   'page.insideTrashed': {
     en: "This page is inside “{title}”, which is in the trash.",

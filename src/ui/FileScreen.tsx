@@ -50,7 +50,7 @@ export const NO_ACCESS_RECHECK_MS = 60_000;
 
 export function FileScreen({ localKey, id }: { localKey: string; id: string }) {
   const tr = useT();
-  const { client, media, files, workspace } = useServices();
+  const { client, media, files, workspace, user } = useServices();
   const { online, schemaVersion } = useSyncStatus();
   const link = useLinkMode();
   const ownKey = link ? link.entry.localKey : workspace.config.localKey;
@@ -139,7 +139,7 @@ export function FileScreen({ localKey, id }: { localKey: string; id: string }) {
           <>
             <h1>{tr('file.noAccess.title')}</h1>
             {canRequest ? (
-              <RequestAccess localKey={localKey} target={{ kind: 'file', id }} onHasAccess={() => setAttempt((n) => n + 1)} />
+              <RequestAccess client={client} userId={user.id} localKey={localKey} target={{ kind: 'file', id }} onHasAccess={() => setAttempt((n) => n + 1)} />
             ) : (
               <p className="muted">{tr('file.noAccess.text')}</p>
             )}

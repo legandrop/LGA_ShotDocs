@@ -286,10 +286,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   marca (`purged_at`), ninguna fila se borra, y la carpeta va antes a la papelera de Drive si no estaba. Migración
   `20261101120000_proyectos_purgar.sql` (versión 23) **aplicada** (v0.167; `Doc_Proyectos_Borrar.md`,
   "Cómo quedó (entrega 3)"). Auditada (aprobada con observaciones) y publicada.
-  - Pendiente chico (auditoría, O3): el servidor de las pruebas (`src/sync/testing.ts`, `purgeProject`) no aplica el
-    corte por `uploaded_at` de `drive_trash_first` (la base sí): hoy no cambia ninguna prueba, pero puede esconder un error.
-  - Pendiente chico (auditoría, O4): un proyecto borrado para siempre sigue sumando en el peso (`project_sizes`) de quien
-    lo maneja (lo nunca subido en la papelera de la app, lo mandado en la de Drive), sin forma de sacarlo desde la app.
+  - **Hecho (v0.171), de su auditoría:** (O3) el servidor de las pruebas aplica el corte por `uploaded_at` de
+    `drive_trash_first`, como la base; (O4) un proyecto borrado para siempre ya no suma en el peso lo que nunca subió (lo
+    mandado a la papelera de Drive cuenta ahí sus 30 días, como cualquier archivo). Migración
+    `20261103120000_purgados_peso_link_total.sql` (schema 25), **aplicada** (`Doc_Proyectos_Borrar.md`, "Restos de la
+    auditoría de la entrega 3").
 - **P.16 Hecho (v0.074): el árbol de páginas con el teclado** (Lega, 2026-10-01). Con el foco en una fila
   (queda ahí después de un clic): ↑ / ↓ abren la página visible anterior o siguiente (una pulsación al
   instante; con la tecla apretada el foco corre y se abre la última al frenar, 150 ms), → despliega o pasa a la
@@ -409,10 +410,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   mostraba como «formato cambiado»).
   Las tres observaciones de la re-verificación de la 2b quedaron **hechas (v0.165)**: la prueba del link muerto con varios
   archivos, la del *Download it* de la insignia con el link vivo, y *Share* con «500 or more» cuando la lista llega al tope
-  de la base (sin SQL). **Falta, si alguna vez importa:** el total exacto de archivos de todos los links de la página (una
-  cuenta aparte en `public_link_files`, con migración); hoy pasado el tope solo se dice «o más».
+  de la base (sin SQL). **Hecho en v0.171:** el total exacto de archivos de todos los links de la página, mediante
+  `public_link_files.total` y la migración aplicada de schema 25; «o más» queda solo para una base anterior.
 - **P.25 Sacar una foto o filmar desde la app** (Lega, 2026-10-01). **Hecho para la web (v0.110):** *Take photo* y
-  *Record video* en el menú "/" y en el menú de la página, solo en el teléfono y la tableta (el video, con portero):
+  *Record video* en el menú "/" y en el menú de la página, solo en teléfonos (D302, v0.172; el video, con portero):
   abren la cámara con el selector del sistema y lo sacado entra en el renglón y sube por la cola de siempre; *Save to
   camera roll* (*Guardar en Fotos*) en la barra de cada foto o video abre la hoja de compartir con el original. Ver
   `Doc_Fotos_En_Linea.md`, "Cámara". **Falta:** probarlo en un iPhone y un Android reales. **Para la app nativa**
@@ -646,7 +647,7 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   la página, ⌘Z lo deshace entero con la foto a la vista y ⌘⇧Z lo rehace, sin llevarse lo de otra persona; con *Show* en
   el aviso de ⌘Z de un reemplazo con páginas cambiadas, el foco que sigue en el panel después del *Undo* de "Last" y la
   prueba de la ventana de O4; con sus correcciones: deshacer nunca borra el marco de una foto, la foto lejana a la vista
-  y rehacer un pegado con anotaciones después de ir y volver; sección 19). **O1 corregida (v0.0XX, sección 22):** la página
+  y rehacer un pegado con anotaciones después de ir y volver; sección 19). **O1 corregida (v0.175, sección 22):** la página
   con historia en la papelera durante el ⌘Z de un reemplazo conserva su paso; restaurada, deshacer el reemplazo y luego
   lo escrito deja el texto exacto, y se puede rehacer todo. Pendientes chicos: con el panel abierto y el foco puesto por programa en el editor,
   Ctrl+Shift+Z deshace (no se llega con el mouse ni el teclado: el panel es modal); y la copia propia de lo ajeno que se
@@ -692,16 +693,22 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   `20261031120000_access_requests` aplicada (schema 22). Falta la prueba de aceptación 4 de Lega. **Hecho (v0.169):
   la entrega 3**, pedir también una página desde `/p/<id>` sin acceso (la misma pantalla para «no existe» y «sin
   acceso»), con los pedidos en la campana y en *Share* de esa página y el permiso solo sobre ella; migración
-  `20261102120000_access_requests_paginas` aplicada (schema 24). De la auditoría de E3 (chico): `/p/<id>` no
-  lleva la clave del workspace ni el `#ws=` como `/f/`, así que con más de un workspace conectado el pedido va a la base
-  del que está abierto y nadie lo recibe (O1: que la dirección de una página lleve la clave local, o no ofrecer pedir
-  con más de un workspace); quien no ve ningún proyecto cae en `NoProjects` y no ve *Request access* ni en `/p/` ni en
-  `/f/` (O2: mostrar la pantalla sin acceso con esas rutas); y lo de E2 que sigue (O6): el servidor en memoria sin el
-  tope ni las 24 horas, y `page_level` que tarda distinto si la página existe (la diferencia ya aceptada en LF4). Quedan para después: el correo al pedir y al aceptar (B.8), pedir acceso sin cuenta, el
-  link de un video en línea y los textos de invitación en el choque de clave y en *Join a workspace?* para una dirección
-  de archivo (O7 c). De la auditoría de E2 (chico): una prueba de dos personas decidiendo a la vez con dos sesiones
-  reales (O8; hoy por lectura del `for update`), el tope y las 24 horas en el servidor en memoria (O9) y el título
-  *Mentions* del panel de la campana cuando arriba tiene pedidos. **Hecho (v0.165):** *Export* avisa sin red (O6, *No connection: file links … can't use the public link*; un visitante del link no lo ve, con prueba). Queda (chico): el aviso sale también si el PDF no lleva ningún archivo, porque la ventana no cuenta los adjuntos antes de armar, igual que el de las fotos sin conexión.
+  `20261102120000_access_requests_paginas` aplicada (schema 24). **Hecho (v0.173): los restos
+  de las auditorías de E2 y E3** (`Doc_Links_PDF.md`, sección 19): con más de un workspace en el dispositivo, la pantalla
+  sin acceso de `/p/<id>` no ofrece *Request access* (iría a la base del abierto) y dice que se cambie al workspace del
+  link (O1, LF21; la dirección no cambia); quien no ve ningún proyecto y abre `/p/` o `/f/` ve la pantalla sin acceso con
+  *Request access* en vez de *No projects yet* (O2); el panel de la campana se titula *Access requests and mentions*
+  cuando tiene pedidos; el servidor en memoria con el tope de 20 por día, la hora, las 24 horas y los 30 días de la base
+  (O9), y el borde de 30 días (30 días y 1 hora) en las dos pruebas SQL, **verificadas contra la base en rollback**:
+  dos positivos y dos negativos con el corte cambiado a 31 días, detectados por la aserción de 30 días y 1 hora;
+  los dos positivos volvieron a pasar después. La auditoría además acreditó diez mutantes locales por aserción concreta;
+  los 21 históricos no se validaron de ese modo ni se cuentan como evidencia independiente. Queda (chico): que la
+  dirección de una página lleve el workspace (`/p/<id>?w=<clave local>`,
+  LF21 A) cuando haya varios workspaces en uso; `page_level` que tarda distinto si la página existe (la diferencia ya
+  aceptada en LF4); y una prueba de dos personas decidiendo a la vez con dos sesiones reales (O8 de E2; hoy por lectura
+  del `for update`: el servidor en memoria no la puede probar). Quedan para después: el correo al pedir y al aceptar
+  (B.8), pedir acceso sin cuenta, el link de un video en línea y los textos de invitación en el choque de clave y en
+  *Join a workspace?* para una dirección de archivo (O7 c). **Hecho (v0.165):** *Export* avisa sin red (O6, *No connection: file links … can't use the public link*; un visitante del link no lo ve, con prueba). **Hecho (v0.171, D279 B):** *Share* dice el total exacto de los archivos de los links de la página aunque pasen de 500 (columna `total` de `public_link_files`, migración `20261103120000_purgados_peso_link_total.sql`, schema 25, aplicada; `Doc_Link_Publico.md`, "El total exacto"). **Hecho (v0.174):** el aviso de links sale solo con adjuntos, videos o carpetas; el de fotos solo si falta su original. La ventana cuenta desde el dispositivo sin pedir metadatos a la red, con pruebas.
 - **P.28 Hecho (v0.156): la tabla del reporte en el teléfono** (`Doc_Tabla_Telefono.md`): en pantalla angosta ninguna
   columna con ancho guardado baja de 96 px y la tabla se desplaza de costado dentro de su bloque; la celda donde se
   escribe se acomoda a la vista. La compu y el PDF no cambian. Falta probarlo en un iPhone real (dedo, teclado abierto).
@@ -714,9 +721,10 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   **Hecho (restos de la tanda 17):** el contador de comentarios (globo y número) también entra en el margen en el teléfono:
   pastilla de 20 px con el globo arriba y el número abajo, sin superposición con el texto a 360, 375, 390 y 414 px con 1, 12 y
   120 comentarios (antes 19,8 a 35,2 px encima); la compu y el PDF no cambian (`Doc_Tabla_Telefono.md`).
-  Quedan (chicos, de la auditoría): el botón mide 20 px de ancho (menos que los 44 px de las guías táctiles; confirmarlo
-  con el dedo en un iPhone real) y ninguna prueba automática mide la superposición (la del CSS lee el texto del archivo): un
-  cambio de `--gutter` la rompería sin aviso.
+  **Hecho (v0.174):** la superposición se mide de verdad: una prueba de la suite calcula el diseño desde los valores del CSS
+  (`commentMarginLayout.test.ts`) y `scripts/medir-telefono.mjs` la mide en Chromium de 360 a 414 px con 1, 12 y 120 comentarios.
+  Queda (chico, de la auditoría): el botón mide 20 px de ancho (menos que los 44 px de las guías táctiles; confirmarlo
+  con el dedo en un iPhone real).
   Quedan (chicos): lo que headless no prueba (el impulso del dedo, el teclado abierto, un editor remoto moviendo la selección
   mientras se escribe en una tabla).
 - **P.29 Hecho (v0.161): contraste del texto y el panel de la cuenta** (Lega, 2026-10-03; `Doc_Contraste.md`): *Contrast*
@@ -988,7 +996,10 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    regenera el fixture, la firma y vacía `NUEVO_SIN_PUBLICAR`; se corre al publicar un cambio del esquema, en la misma tanda
    que lo publica (ver `Doc_Fotos_En_Linea.md`, "El esquema publicado de las pruebas"). Queda: el fixture sigue tomando de hoy
    los módulos compartidos (`photoSpec`, `driveCard`, `imageRowsEditor`, `cellThumbs`, `quietImage`): lo que no es el esquema
-   (por ejemplo, el `parseHTML` de la foto) no lo cubre la firma.
+   (por ejemplo, el `parseHTML` de la foto) no lo cubre la firma. **Hecho (v0.174):** el hueco de la auditoría (el fixture
+   regenerado a mano dejaba la firma laxa y `NUEVO_SIN_PUBLICAR` con líneas ya publicadas): ahora, cuando el esquema y los
+   módulos que importa son los de `origin/main`, la prueba exige la firma de hoy y la lista vacía; con un módulo distinto se
+   salta, sin falsa alarma por un atributo nuevo de la foto.
 
 21. **Hecho (v0.132): restos del deshacer de Yjs** (entrega 0 de P.26, `Doc_Deshacer.md`, sección 16). Deshacer lo
    escrito seguía lo que otro deshacer había vuelto a poner solo hasta el primer corte: dejaba restos si se había escrito

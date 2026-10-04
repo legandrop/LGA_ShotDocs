@@ -220,12 +220,12 @@ export const editor = {
   },
   // Sacar una foto o filmar y guardar en el carrete (camera.ts).
   'camera.takePhotoHint': {
-    en: "Opens the camera; the photo goes in the line, at the cursor",
-    es: "Abre la cámara; la foto va en el renglón, donde está el cursor",
+    en: "Opens the phone camera; the photo goes in the line, at the cursor",
+    es: "Abre la cámara del teléfono; la foto va en el renglón, donde está el cursor",
   },
   'camera.recordVideoHint': {
-    en: "Opens the camera; the video goes in the line, at the cursor",
-    es: "Abre la cámara; el video va en el renglón, donde está el cursor",
+    en: "Opens the phone camera; the video goes in the line, at the cursor",
+    es: "Abre la cámara del teléfono; el video va en el renglón, donde está el cursor",
   },
   'camera.save': { en: "Save to camera roll", es: "Guardar en Fotos" },
   'camera.saveVideo': { en: "Save video to camera roll", es: "Guardar el video en Fotos" },

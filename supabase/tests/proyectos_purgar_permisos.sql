@@ -402,8 +402,9 @@ begin
   assert (public.media_project('00000000-0000-4000-8000-0000000d1001') ->> 'purged_at') is not null,
     'media_project no le dice al portero que está borrado para siempre';
   assert pg_temp.sees('00000000-0000-4000-8000-0000000d1001') = 0, 'la admin ve P';
-  -- f1, f2 y f4 (de la carpeta) y f6 (mandado solo) en la papelera de Drive; f5 (sin subir) en la papelera de la app.
-  assert pg_temp.size_of('00000000-0000-4000-8000-0000000d1001') = '0/0 4000000/1 321007/4 0/0',
+  -- f1, f2 y f4 (de la carpeta) y f6 (mandado solo) en la papelera de Drive; f5 (sin subir) ya no suma en ningún
+  -- lado (20261103120000_purgados_peso_link_total.sql: no ocupa el Drive y ya no se sube).
+  assert pg_temp.size_of('00000000-0000-4000-8000-0000000d1001') = '0/0 0/0 321007/4 0/0',
     format('peso de P borrado para siempre: %s', pg_temp.size_of('00000000-0000-4000-8000-0000000d1001'));
 end;
 $$;

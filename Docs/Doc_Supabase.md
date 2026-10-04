@@ -60,6 +60,7 @@ Las migraciones están en `supabase/migrations/`, en orden:
 | `20261031120000_access_requests.sql` | **Aplicada** (v0.166) (P.30, entrega 2; `Doc_Links_PDF.md`, "Cómo quedó la entrega 2"). *Request access*: la tabla `access_requests` (RLS sin políticas y `revoke all`: solo la tocan las funciones), `request_access` (miembro con sesión permitida; `sent` exista o no el archivo, `has_access`, `rate_limited` con 20 filas nuevas por día), `access_requests_pending` (los de 30 días que quien llama puede decidir, con solo sus páginas) y `decide_access_request` (aceptar explícito, LF20; `share()` solo si sube, LF11). Sube `schema_version` a 22 (`ACCESS_REQUESTS_SCHEMA_VERSION`). Detalle en la sección "Pedidos de acceso a un archivo". |
 | `20261101120000_proyectos_purgar.sql` | **Aplicada** (v0.167) (P.14, entrega 3, *Delete forever*; `Doc_Proyectos_Borrar.md`, "Cómo quedó (entrega 3)"). Borrar un proyecto para siempre es una marca, no un borrado: `workspaces.purged_at` y `purged_by` (con `check`: solo un proyecto borrado; no se escriben desde la API) y `purge_project(p)` (security definer): solo dueño y admins que manejan el proyecto (`can_purge_project`), recién a los 30 días de borrado (`project_trash_not_due`), con la carpeta del proyecto ya en la papelera de Drive si tenía archivos subidos (`drive_trash_first`) y con la versión mínima; marca sus archivos subidos como mandados a la papelera de Drive (`project_files_purged`). `restore_project`, `request_project_drive_trash` y `project_drive_untrashed` rechazan uno así (`project_purged`), `trashed_projects` lo deja afuera (misma firma), `media_project` suma `purged_at`, y un archivo de otro proyecto que solo usaban sus páginas deja de estar frenado (`file_in_deleted_project`, `trashed_files`, `files_due_for_purge`). Ninguna fila se borra. Sube `schema_version` a 23 (`PROJECT_PURGE_SCHEMA_VERSION`); va después de la 22. |
 | `20261102120000_access_requests_paginas.sql` | **Aplicada** (v0.169) (P.30, entrega 3; `Doc_Links_PDF.md`, "Cómo quedó la entrega 3"). *Request access* también para una página: `access_requests` suma `target_page_id` (sin clave foránea), `file_id` deja de ser obligatorio, `check` `access_requests_target` (uno de los dos) e índice único parcial por persona y página; `request_page_access(página)` con las reglas y el tope de `request_access` (compartido); `access_requests_pending()` se crea de nuevo con `target_page_id` al final y los pedidos de páginas que quien llama puede compartir; `decide_access_request` (misma firma) da el permiso solo sobre la página pedida. `request_access` no cambia. Sube `schema_version` a 24 (`ACCESS_REQUESTS_PAGES_SCHEMA_VERSION`); va después de la 23. Detalle en "Pedidos de acceso a una página". |
+| `20261103120000_purgados_peso_link_total.sql` | **Aplicada** (v0.171) (restos de P.14 y P.30; `Doc_Proyectos_Borrar.md`, "Restos de la auditoría de la entrega 3", y `Doc_Link_Publico.md`, "El total exacto"). `project_sizes` (misma firma) deja de sumar lo nunca subido de un proyecto borrado para siempre (`purged_at`); lo mandado a la papelera de Drive cuenta ahí sus 30 días, como siempre. `public_link_files` se crea de nuevo con `total` al final (`count(*) over ()`, antes del `limit 500`): cuántos archivos registraron los links de la página; lista, orden y permisos iguales. Sube `schema_version` a 25; va después de la 24. Detalle en "El peso de lo purgado y el total de los links". |
 
 Reglas del esquema:
 
@@ -271,6 +272,21 @@ páginas de la lista traen `file_id` nulo, que esa versión descarta.
   y `page_invalid` si la página elegida no es la pedida. Lo demás, como en la 22.
 - **Pruebas:** `supabase/tests/access_requests_paginas_permisos.sql`; la de la 22 tiene que seguir pasando con la 24
   adelante (las dos corridas en `begin … rollback` contra la base real).
+
+### El peso de lo purgado y el total de los links
+
+Migración `20261103120000_purgados_peso_link_total.sql` (**aplicada**, `schema_version` 25). Compatible con la versión
+publicada: `project_sizes` no cambia de firma y `public_link_files` suma una columna al final que esa versión no lee.
+
+- **`project_sizes()`**: el cuerpo de la 10 (`20261005120000_proyectos_drive.sql`) con `purged_at` en la puerta; en un
+  proyecto borrado para siempre, un archivo sin `drive_id` no tiene estado y no suma en ninguna columna. Lo subido de un
+  proyecto así ya está marcado como mandado a la papelera de Drive (`purge_project` lo exige) y cuenta ahí 30 días.
+- **`public_link_files(página)`**: se borra y se crea otra vez (cambiar las columnas de una función que devuelve una tabla
+  lo pide; en la misma transacción) con `total bigint` al final. Mismos permisos (`sees_deleted`, sin `anon`).
+- **Pruebas:** `supabase/tests/purgados_peso_link_total_permisos.sql` (el peso antes y después de purgar, uno borrado sin
+  purgar, lo subido fuera de la papelera de Drive, los 30 días, la fila sin nombre de la dueña, quién no ve el peso, 503
+  archivos en dos links con 500 filas y `total` 503, quién no lista, `anon`); `proyectos_purgar_permisos.sql` ajustada al
+  peso nuevo. Las 34 pruebas SQL pasan con la 25 adelante, en `begin … rollback` contra la base real.
 
 ### Compactar: los snapshots
 

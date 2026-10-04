@@ -832,7 +832,7 @@ semillas en la suite, `TIMELINE_SEEDS` para más) y las de atajos (`shortcuts.te
   posiciones relativas. Vale también para el *Undo* del panel de siempre.
 - **El *Undo* del aviso y del panel cuando el reemplazo es lo último** hace lo mismo que ⌘Z: queda para rehacer, con
   *Redo* en el aviso (antes no había rehacer).
-- **Las páginas que no se pudieron deshacer** (papelera, sin permiso, sin bajar): desde v0.0XX su paso queda para el
+- **Las páginas que no se pudieron deshacer** (papelera, sin permiso, sin bajar): desde v0.175 su paso queda para el
   próximo ⌘Z si vuelve a estar accesible (sección 22); *Undo the rest* también usa la pila mientras siga retenida.
   ⌘⇧Z rehace solo las que se deshicieron.
 - **Fuera de orden no borra lo de rehacer**: Yjs resuelve el orden y lo que estaba para rehacer sigue andando.
@@ -864,7 +864,7 @@ semillas en la suite, `TIMELINE_SEEDS` para más) y las de atajos (`shortcuts.te
   now"), la restaurás y ⌘Z: deshace lo escrito pero queda "Toma 1: Camera"; *Undo the rest* lo deja "Toma 1: cámara"
   en vez de "Toma 1: ". Es el resto de D167 en ese rincón: texto de más, nada de menos. Causa: el paso de esa página
   sale de la pila al pasar el reemplazo a rehacer (18.2). Arreglarlo pide que un reemplazo quede a la vez para rehacer
-  (las páginas hechas) y para deshacer (las que faltan). **Corregido en v0.0XX (sección 22).**
+  (las páginas hechas) y para deshacer (las que faltan). **Corregido en v0.175 (sección 22).**
 - Una prueba de la ventana de O4 (re-verificación): la marca de «algo nuevo en el medio» se toma antes del primer `await`; un
   mutante que la toma después sobrevive. El código está bien; falta la prueba. **Hecha con la entrega 3 (19.1).**
 - La memoria en el iPhone (entrega 1) y el gesto de deshacer de iOS en la PWA instalada.
@@ -1211,7 +1211,7 @@ archivo nuevo; sin la parte 1, la del "dso".
 - Reportarlo a Yjs con los casos mínimos de 21.2, junto con los de 16.1, 16.4 y 20.1.
 - Los ids de bloques repetidos (21.1) siguen como estaban: el texto es el mismo, el id del repetido no.
 
-## 22. Reemplazo con una página en la papelera (v0.0XX)
+## 22. Reemplazo con una página en la papelera (v0.175)
 
 La página con historia que no pudo deshacerse conserva su paso del reemplazo. Lo hecho en las demás páginas queda
 para rehacer, y lo pendiente queda para deshacer en el lugar que tenía antes del reemplazo. Al restaurarla, el próximo

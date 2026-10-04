@@ -6,6 +6,7 @@ import { absolutePositionToRelativePosition, relativePositionToAbsolutePosition,
 import * as Y from 'yjs';
 import { t } from '../i18n';
 import '../i18n/lazy/editor';
+import { capturePhone } from './camera';
 import { PHOTO } from './inlinePhoto';
 import { notify } from './notice';
 
@@ -379,6 +380,8 @@ export interface PickExtra {
  * dentro del clic o la tecla (el iPhone no abre el selector fuera de un toque). Con `extra.capture`, la cámara.
  */
 export function pickFiles(editor: PhotoEditor, accept: string, opts: AddFilesOptions, extra: PickExtra = {}): void {
+  // También se guarda la entrada directa: un callback viejo no abre captura en una computadora o tableta.
+  if (extra.capture && !capturePhone()) return;
   const view = editor.prosemirrorView;
   if (!view) return;
   const pos = extra.at ? null : pasteSpot(view.state);

@@ -13,7 +13,8 @@ import { usePermissions, useServices, useSyncStatus, useTree } from '../services
 import type { PageTree } from '../sync/tree';
 import { isPrintShortcut } from './printPage';
 import { sizeLabel } from './pageFormat';
-import { zipAllowed } from '../export/exportZip';
+import { appArchiveMedia, zipAllowed } from '../export/exportZip';
+import { planFiles, type PlanFiles } from '../export/planFiles';
 import { ExportZipPanel } from './ExportZip';
 import { detectPlatform, isMobilePlatform } from './install';
 import { porteroDownload } from './sharpImages';
@@ -59,7 +60,7 @@ const convertHeic = async (blob: Blob) => (await import('../media/heicConvert'))
 
 export function ExportDialog(props: { target: ExportTarget; onClose: () => void }) {
   const tree = useTree();
-  const { docs, media, comments, commentsDb, user, engine, client, workspace } = useServices();
+  const { docs, media, mediaDb, comments, commentsDb, user, engine, client, workspace } = useServices();
   const linkMode = useLinkMode();
   const status = useSyncStatus();
   const tr = useT();
@@ -125,6 +126,21 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
   const [printed, setPrinted] = useState(false);
   const online = status.online && (typeof navigator === 'undefined' || navigator.onLine !== false);
   const working = phase.name === 'working' || zipBusy;
+  // Los avisos de «sin conexión» (fotos en menor resolución, links a los archivos) solo salen si el PDF lleva archivos:
+  // se leen de lo guardado en el dispositivo, sin red. Mientras se lee, ninguno; si una página no se puede leer, salen.
+  const [planned, setPlanned] = useState<PlanFiles | null>(null);
+  useEffect(() => {
+    setPlanned(null);
+    if (!media.enabled || online) return;
+    const controller = new AbortController();
+    planFiles(plan, docs, appArchiveMedia(media, mediaDb), controller.signal).then(
+      (found) => !controller.signal.aborted && setPlanned(found),
+      () => !controller.signal.aborted && setPlanned({ files: 0, photosWithoutOriginal: 0, unknown: true }),
+    );
+    return () => controller.abort();
+  }, [plan, media, mediaDb, docs, online]);
+  const offlinePhotos = !!planned && (planned.unknown || planned.photosWithoutOriginal > 0);
+  const offlineLinks = !!planned && (planned.unknown || planned.files > 0);
 
   // Al cerrar: cancela lo que está armando, deja la impresión como estaba y suelta la vista.
   useEffect(
@@ -366,11 +382,11 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
                     {tr('exportDialog.comments')}
                   </label>
                 </div>
-                {media.enabled && !smaller && !online && <p className="muted">{tr('exportDialog.offlineOriginals')}</p>}
+                {media.enabled && !smaller && !online && offlinePhotos && <p className="muted">{tr('exportDialog.offlineOriginals')}</p>}
                 <FileLinksNotice plan={fileLinks} checked={useFileLinks} onChange={chooseFileLinks} />
                 {/* Sin red no se puede pedir el link público de la página (Doc_Links_PDF.md, 3.3): los links van con la dirección
                     de siempre y la ventana lo dice. Un visitante del link usa el suyo y no ve este aviso. */}
-                {media.enabled && !linkMode && !online && !fileLinks && <p className="muted export-offline-links">{tr('exportDialog.offlineFileLinks')}</p>}
+                {media.enabled && !linkMode && !online && !fileLinks && offlineLinks && <p className="muted export-offline-links">{tr('exportDialog.offlineFileLinks')}</p>}
                 {!named && <p className="muted">{tr('exportDialog.oneSize', { size: rootSize })}</p>}
                 <p className="muted">{tr('exportDialog.margins')}</p>
                 {plan.length === 0 && <p className="error">{tr('exportDialog.empty')}</p>}

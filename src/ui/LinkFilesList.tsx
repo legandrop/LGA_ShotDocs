@@ -21,6 +21,8 @@ export function LinkFilesList({ pageId, linkId }: { pageId: string; linkId: stri
   const { client, media } = useServices();
   const status = useSyncStatus();
   const [rows, setRows] = useState<PublicLinkFile[]>([]);
+  /** Cuántos son en total (la base 25 lo dice aunque la lista se corte); `null` con una base anterior. */
+  const [total, setTotal] = useState<number | null>(null);
   const [failed, setFailed] = useState(false);
   const supported = (status.schemaVersion ?? 0) >= LINK_FILES_SCHEMA_VERSION;
 
@@ -29,7 +31,11 @@ export function LinkFilesList({ pageId, linkId }: { pageId: string; linkId: stri
     let live = true;
     // Sin permiso (no ve lo borrado) o sin red: la lista no se muestra.
     getPublicLinkFiles(client, pageId).then(
-      (list) => live && setRows(list),
+      (got) => {
+        if (!live) return;
+        setRows(got.rows);
+        setTotal(got.total);
+      },
       () => undefined,
     );
     return () => {
@@ -43,8 +49,10 @@ export function LinkFilesList({ pageId, linkId }: { pageId: string; linkId: stri
   }, [rows, media]);
 
   if (!supported || rows.length === 0) return null;
-  // Lista cortada en el tope: hay al menos esos, quizás más (la base no devuelve el total de los links anteriores).
-  const capped = rows.length >= PUBLIC_LINK_FILES_MAX;
+  // Con el total de la base (versión 25, D279 B) la cantidad es exacta aunque la lista llegue cortada. Sin él, una lista
+  // cortada en el tope dice «o más»: hay al menos esos, quizás más.
+  const count = total ?? rows.length;
+  const capped = total === null && rows.length >= PUBLIC_LINK_FILES_MAX;
   const lang = tr.lang === 'es' ? 'es' : 'en';
   const when = (iso: string) => new Date(iso).toLocaleString(lang, { dateStyle: 'medium', timeStyle: 'short' });
 
@@ -61,7 +69,7 @@ export function LinkFilesList({ pageId, linkId }: { pageId: string; linkId: stri
   return (
     <div className="link-aside-list link-files-list">
       <p className="small team-lead">
-        <strong>{tr(capped ? 'share.link.filesTitleCapped' : 'share.link.filesTitle', { count: rows.length })}</strong> <span className="muted">{tr('share.link.filesHint')}</span>
+        <strong>{tr(capped ? 'share.link.filesTitleCapped' : 'share.link.filesTitle', { count })}</strong> <span className="muted">{tr('share.link.filesHint')}</span>
       </p>
       <ul className="link-aside-rows">
         {rows.slice(0, SHOWN).map((r) => (
@@ -84,8 +92,8 @@ export function LinkFilesList({ pageId, linkId }: { pageId: string; linkId: stri
           </li>
         ))}
       </ul>
-      {rows.length > SHOWN && (
-        <p className="muted small">{tr(capped ? 'share.link.filesCappedMore' : 'share.link.asideMore', { count: rows.length - SHOWN })}</p>
+      {count > SHOWN && (
+        <p className="muted small">{tr(capped ? 'share.link.filesCappedMore' : 'share.link.asideMore', { count: count - SHOWN })}</p>
       )}
       {failed && <p className="error">{tr('sync.downloadFailed')}</p>}
     </div>

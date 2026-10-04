@@ -1,6 +1,6 @@
 # Links a los archivos en el PDF y *Request access* (P.30)
 
-**Estado: diseño auditado el 2026-10-03 ("aprobado con condiciones" en E1, E2 y E3) y corregido; E1 hecha (v0.164, sección 16); E2 hecha (v0.166, sección 17), con su migración aplicada; E3 hecha (v0.169, sección 18), con su migración aplicada.**
+**Estado: diseño auditado el 2026-10-03 ("aprobado con condiciones" en E1, E2 y E3) y corregido; E1 hecha (v0.164, sección 16); E2 hecha (v0.166, sección 17), con su migración aplicada; E3 hecha (v0.169, sección 18), con su migración aplicada; los restos de las auditorías de E2 y E3 hechos (v0.173, sección 19).**
 Pedido de Lega del 2026-10-03, diseñado contra `main` v0.158. Toca permisos, Row Level Security y privacidad, y suma una
 tabla: **riesgo alto**. Las decisiones ya tomadas por Lega están en "Qué se pide"; las nuevas (LF1 a LF16, sección 10)
 son propuestas con la recomendación tomada; LF17 a LF20 son de Lega, sobre los hallazgos de la auditoría. **Las
@@ -261,7 +261,7 @@ el pase no coincidirían.
   el link.
 - **Hoy (D14 apagado) no se puede crear un link público en Wanka:** la parte del link de E1 se prueba con el servidor
   falso y la prueba de aceptación 3 espera a que se prenda el interruptor (O9).
-- **Sin red al exportar** no se puede saber si hay link: los links van con `#ws=` y la ventana lo dice (v0.165): *No connection: file links in this PDF can't use the public link of the page, even if it has one. They ask to sign in.* Sale solo en la ventana del PDF, con archivos en Drive conectados, sin red (o con la red caída del navegador) y sin los links ya pedidos; un visitante del link no lo ve (usa el suyo). Prueba: `exportFileLinks.test.tsx`.
+- **Sin red al exportar** no se puede saber si hay link: los links van con `#ws=` y la ventana lo dice (v0.165): *No connection: file links in this PDF can't use the public link of the page, even if it has one. They ask to sign in.* Sale solo en la ventana del PDF, con archivos en Drive conectados, sin red (o con la red caída del navegador), sin los links ya pedidos **y solo si las páginas que se exportan usan algún adjunto, video o carpeta** (hecho en v0.174: la ventana lee de lo guardado en el dispositivo, `planFiles`, qué `sdmedia://` usan, sin los borrados ni las fotos; una página que no se puede leer (excepción o snapshot marcado como no soportado/ilegible) deja el aviso por las dudas, conservando el conteo de los archivos que sí se pueden leer; mientras lee, no sale); un visitante del link no lo ve (usa el suyo). Un PDF sin ningún archivo no tiene links que arreglar. Pruebas: `exportFileLinks.test.tsx` (sin archivos, con fotos cuyo original está o falta y con un adjunto) y `planFiles.test.ts`.
 - **Revocar, *Reset link*, vencer, la página a la papelera o quien lo creó sin permiso de compartir:** el token deja de
   valer en el acto (lo valida la base en cada pedido); el link del PDF abre la pantalla del link muerto, que para una
   ruta `/f/` suma **Sign in instead** (LF16): convierte la dirección en la de miembro (`u`, `k`, `l` del mismo payload,
@@ -951,7 +951,7 @@ que diga otra cosa.
   proyectos" en vez de la del archivo: la del archivo se dibuja adentro de la app.
 - Se preguntan como mucho 40 links públicos por exportación (`MAX_LINK_LOOKUPS`).
 - Sin red al exportar, la ventana no lo avisaba (3.3 decía que sí; observación O6 de la auditoría): no se piden links y el
-  PDF va con la dirección de siempre (`#ws=`), que es lo seguro. **Hecho (v0.165):** ahora la ventana lo dice (3.3).
+  PDF va con la dirección de siempre (`#ws=`), que es lo seguro. **Hecho (v0.165):** ahora la ventana lo dice (3.3). **Hecho (v0.174):** solo si el PDF lleva algún adjunto, video o carpeta.
 
 **Ronda 1 de la auditoría de E1** (aprobado con observaciones, sin bloqueantes): si la red se cortaba y volvía con la
 ventana *Export* abierta, la casilla volvía a su valor de fábrica y un *Can view* destildado a mano podía salir con el
@@ -1105,3 +1105,79 @@ No hace falta subir `min_app_version`. La app nueva ofrece pedir una página sol
 - **O5:** el README suma el link de una página.
 - Al roadmap (P.30): O1 (`/p/<id>` sin la clave del workspace: con más de uno conectado, el pedido va a la base abierta),
   O2 (quien no ve ningún proyecto cae en `NoProjects`, sin *Request access*) y O6 (lo de E2 que sigue).
+
+## 19. Cómo quedaron los restos (v0.173)
+
+Lo que dejaron las auditorías de E2 y E3 (O1, O2 y O6 de E3; O9 y el título de la campana de E2).
+
+| Pieza | Dónde |
+|---|---|
+| Saber si se conoce el workspace de `/p/<id>` (O1) | `src/ui/RequestAccess.tsx` (`usePageWorkspaceKnown`); `RequestAccess` recibe el cliente y la persona por props |
+| La pantalla sin acceso de una página con dos workspaces | `src/ui/PageView.tsx` (`RequestPage`), texto `page.otherWorkspace` |
+| La pantalla sin acceso sin ningún proyecto (O2) | `src/ui/NoProjectsRoute.tsx` (`NoProjectsAccess`, `useNoProjectsAccess`); `src/ui/Workspace.tsx` (`NoProjectsBoot`, `NoProjectsOpen`) |
+| El título del panel de la campana | `src/ui/MentionsBell.tsx`, texto `mentions.titleWithRequests` |
+| El servidor en memoria con el tope y las horas (O9) | `src/sync/testing.ts` (`askAccess`, `ACCESS_REQUESTS_PER_DAY`, `ACCESS_REQUEST_DAYS_MS`) |
+| El borde de los 30 días en las pruebas SQL | `supabase/tests/access_requests_permisos.sql` y `access_requests_paginas_permisos.sql` (sección 7) |
+
+- **O1, `/p/<id>` con más de un workspace en el dispositivo.** La dirección de una página no dice de qué workspace es, a
+  diferencia de `/f/<clave local>/<id>`. Con un solo workspace en el dispositivo (hoy, Wanka) nada cambia. Con dos o más,
+  la pantalla sin acceso de una página **no ofrece *Request access*** (el pedido iría a la base del workspace abierto y
+  nadie lo recibiría) y dice *If this link is from another of your workspaces, switch to it in Workspaces and open the link
+  again.* La dirección no cambia: `/p/<id>` sigue abriendo igual en cualquier versión. La de un archivo ofrece pedir como
+  antes. Decisión al programar (LF21, abajo).
+- **O2, sin ningún proyecto.** Quien abre `/p/<id>` o `/f/<clave>/<id>` sin ver ningún proyecto ya no cae en *No projects
+  yet*: ve la pantalla sin acceso de siempre (la de una página o la de un archivo), con *Request access* con las mismas
+  condiciones (cuenta, red, la base en la 24 para una página y en la 22 para un archivo, un solo workspace para una
+  página) y *Go to Shot Docs*, que lleva al inicio con *No projects yet*. Vale al arrancar sin proyectos (sin la
+  sincronización abierta: la pantalla pregunta la membresía y la versión de la base) y con la app abierta cuando dejan
+  de compartirle todo. Sin membresía (o sacado), con un link público o en cualquier otra dirección, *No projects yet* como
+  siempre. Como sin proyectos no se ve nada, la pantalla no le pregunta a la base por lo pedido: es la misma exista o no.
+  Si le dan acceso, el proyecto llega con la próxima pregunta (cada 60 s al arrancar, cada 10 s con la app abierta) y la
+  app abre la dirección; si al pedir la base dice `has_access`, vuelve a buscar los proyectos enseguida.
+- **El panel de la campana** se titula *Access requests and mentions* cuando arriba tiene pedidos, con un rótulo para cada
+  parte (*Access requests* y *Mentions*); sin pedidos, *Mentions* como siempre. El globito de la campana no cambia.
+- **O9, el servidor en memoria** hace lo mismo que la base: 20 filas nuevas por persona y día (archivos y páginas juntos;
+  repetir uno abierto no cuenta), renovar como mucho una vez por hora, un `void` de más de un día que se vuelve a mirar,
+  el rechazo de 24 horas, los 30 días de la lista y de decidir, y el archivo en la papelera de Drive. Con su reloj
+  (`server.now()`). Las pruebas de la interfaz reciben `rate_limited` del servidor, no de un doble.
+- **El borde de los 30 días:** las dos pruebas SQL suman un pedido de 29 días y 23 horas (se lista) y uno de 30 días y 1
+  hora (ni se lista ni se decide). **Ambas pasaron contra la base en transacciones con rollback.** Al cambiar el corte
+  de 30 a 31 días dentro de cada transacción, ambas fallaron por la aserción concreta de que no se debe listar el pedido
+  de 30 días y 1 hora (2 de 2 negativos detectados). Después se repitieron los dos positivos y volvieron a pasar,
+  comprobando la restauración de las funciones originales. Sin aplicar una migración; el mismo borde también está
+  probado en el servidor en memoria.
+- **O6, `page_level` tarda distinto** si la página existe: sin cambios (la diferencia ya aceptada en LF4).
+- **O8, dos personas decidiendo a la vez:** sigue sin prueba con dos sesiones reales. El servidor en memoria corre en un
+  solo hilo y no tiene `for update`, así que una prueba ahí no diría nada de la base; queda en el roadmap.
+
+**Pruebas:** `src/sync/accessRequestsServer.test.ts` (las reglas de tiempo y el tope del servidor en memoria, con el borde
+de 30 días), `src/ui/accessRequestsRestos.test.tsx` (O1, O2 al arrancar y con la app abierta, el tope que llega del
+servidor) y dos casos en `src/ui/accessRequests.test.tsx` (el título del panel). La verificación dirigida, incluyendo
+`src/sync/accessRequests.test.ts`, pasa **49 de 49 pruebas en cuatro archivos**, y TypeScript sin errores. La revisión
+independiente suma siete casos propios: **56 de 56 en cinco archivos**, incluidos permisos y los tiempos exactos.
+La tanda anterior registró 21 mutantes, sin validar por aserción concreta sus fallos; no se contabilizan como evidencia
+independiente. La auditoría nueva detectó **10 de 10 mutantes por la aserción concreta esperada**, cubriendo workspace,
+membresía, esquema, título, tope, renovación, reevaluación, vencimiento, purgado y permiso para decidir. Un recorrido nuevo en Chromium 148 sin
+ventana con los componentes reales sobre el servidor en memoria: **20 de 20 en inglés en la compu y 20 de 20 en
+castellano en el teléfono** (390 × 844), sin excepciones ni pedidos fuera de localhost. No sustituye la prueba en un
+iPhone ni prueba el login de la app. Los permisos del contrato SQL se verificaron aparte con los dos archivos de
+prueba en rollback; no se probó la concurrencia con dos sesiones reales.
+
+### LF21 · `/p/<id>` con más de un workspace (decidido al programar, sobre O1 de E3)
+
+- **Qué pasaba:** Lega tiene Wanka y el workspace de otro estudio en la compu. Un supervisor del otro estudio le pasa el
+  link de una página; la app abre Wanka (el último abierto), la página no está, y *Request access* deja el pedido en la
+  base de Wanka, donde nadie puede decidirlo. La pantalla dice *Request sent* y nunca pasa nada.
+- **Las opciones:**
+  - **A.** Que la dirección de una página lleve el workspace (`/p/<id>?w=<clave local>` o `/w/<clave>/p/<id>`), como `/f/`:
+    tocar todas las direcciones que arma la app, el arranque y los links internos; un contrato nuevo.
+  - **B.** No ofrecer *Request access* de una página con más de un workspace en el dispositivo, y decir que se cambie al
+    del link.
+  - **C.** Preguntarle a cada workspace del dispositivo si tiene la página: manda el id a servidores ajenos y pide una
+    sesión en cada uno; rompe «cada workspace es una isla».
+- **Elegí B porque** es lo más seguro y simple: ningún pedido va a una base equivocada, ninguna dirección cambia (las
+  viejas abren igual en todas las versiones) y hoy hay un solo workspace en uso (Wanka), así que nadie pierde
+  nada. El aviso además explica por qué la página «no existe» cuando el link es de otro workspace, cosa que antes no se
+  decía.
+- **Si preferís otra:** A es lo completo para cuando haya varios workspaces de verdad (paso 12 en uso): con `?w=` las
+  versiones viejas siguen abriendo la dirección; queda en el roadmap (P.30).

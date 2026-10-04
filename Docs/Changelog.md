@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.175 :
 
 **Deshacer un reemplazo con una página en la papelera (P.26, O1).** Si una página editada estaba en la papelera al
 deshacer un reemplazo del proyecto, su paso salía de la pila. Restaurarla y deshacer lo escrito dejaba letras del
@@ -12,6 +12,55 @@ quita lo de rehacer sin sacar lo pendiente. Al abandonar una página inaccesible
 dependían de letras reemplazadas y podían mutilar la nota al restaurarla. Sin cambios del formato guardado.
 
 [ Deshacer un reemplazo conserva el paso de la página en la papelera hasta restaurarla o volver a intentar ]
+
+v0.174 :
+
+**Los avisos de Export sin conexión y las medidas del margen.** La ventana avisaba de links a archivos y fotos en
+menor resolución aunque lo elegido no tuviera ninguno. Ahora lee copias del contenido guardado en el dispositivo:
+el aviso de links corresponde a adjuntos, videos y carpetas; las fotos solo avisan cuando falta su original y no se
+eligió *Smaller file*. El conteo no pide metadatos a la red. La superposición de los comentarios del teléfono se
+comprueba calculando los valores del CSS en la suite y midiendo los nodos de texto en Chromium; cuatro cambios
+deliberados de ancho, margen y posición hacen fallar la medida. La guarda del esquema exige firma actual y lista
+de novedades vacía cuando sus módulos coinciden con lo publicado. Se ajustan la ayuda y la documentación.
+Si la copia está marcada como no soportada o ilegible, el conteo mantiene el aviso preventivo sin descartar sus archivos legibles.
+
+[ Export avisa sin conexión según lo que lleva el PDF y el margen de comentarios se mide en el navegador ]
+
+v0.173 :
+
+**Pedir acceso: los restos de E2 y E3.** (1) Con varios workspaces en el dispositivo, *Request access* de una página
+iba a la base del abierto aunque el link fuera de otro: `/p/<id>` no dice de qué workspace es. Ahora ahí no se ofrece y
+la pantalla dice que se cambie al del link; la dirección no cambia (LF21). (2) Sin ningún proyecto se caía en *No
+projects yet*, sin poder pedir: ahora `/p/` y `/f/` muestran la pantalla sin acceso con *Request access*, al arrancar y
+con la app abierta. (3) El panel de la campana se titula *Access requests and mentions* si tiene pedidos. (4) El
+servidor en memoria suma el tope por día y las horas de la base, y las pruebas SQL el borde de 30 días, verificado
+contra la base en rollback con positivos y negativos por aserción concreta. Ayuda.
+
+[Restos de pedir acceso - con varios workspaces el link de una página no ofrece Request access y dice que se cambie de workspace, sin proyectos las direcciones de página y archivo muestran la pantalla sin acceso con Request access, el título del panel de la campana, y el servidor en memoria con el tope y las horas de la base]
+
+v0.172 :
+
+**Sacar fotos y filmar solo en teléfonos (D302).** Las entradas *Take photo* y *Record video* se habilitaban por
+tener un puntero táctil: ese dato también incluye tabletas y computadoras con pantalla táctil. Ahora se ofrecen
+solo cuando el navegador identifica un iPhone o un teléfono Android Mobile con puntos de toque, y se excluyen
+las identidades de escritorio y tableta. La misma comprobación guarda la acción y el selector de captura, para
+que una llamada directa tampoco abra la cámara en esos equipos. Las fotos y los videos existentes se siguen
+agregando desde el selector normal, pegados o soltados. Si *Sitio de escritorio* oculta la identidad del teléfono,
+la cámara espera a volver al sitio móvil. Ayuda en ambos idiomas y documentación ajustadas; pruebas de teléfonos,
+tabletas, laptops táctiles y captura directa rechazada, conservando la carga normal y el esquema publicado.
+[Limitar la captura de fotos y videos a teléfonos]
+
+v0.171 :
+
+**Restos de SQL (P.14 y P.30).** (1) Un proyecto borrado para siempre seguía sumando en el peso lo que nunca subió (en
+la papelera de la app o como "sin subir"), sin forma de sacarlo: `project_sizes` ya no lo cuenta; lo mandado a la
+papelera de Drive cuenta ahí sus 30 días, como cualquier archivo. (2) *Share* decía «500 or more» archivos de los links
+de la página porque la base corta la lista en 500: `public_link_files` suma la columna `total` (`count(*) over ()`,
+antes del `limit`) y *Share* da la cantidad exacta. (3) El servidor de las pruebas aceptaba la carpeta mandada para
+cualquier archivo; ahora cubre solo lo subido hasta el pedido, como la base. Migración
+`20261103120000_purgados_peso_link_total` (schema 25, aplicada), con su prueba SQL y 11 mutantes.
+
+[ Restos de SQL - un proyecto borrado para siempre ya no suma en el peso lo que nunca subió, Share dice el total exacto de los archivos de los links de la página, y el servidor de las pruebas aplica el corte por fecha de subida de la carpeta (migración, schema 25) ]
 
 v0.170 :
 

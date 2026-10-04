@@ -96,6 +96,27 @@ arriba), con la compu y la tablet de testigo. Prueba: `commentButtonPhone.test.t
 hace diseño, así que lo que mide la superposición de verdad es la medida de Chromium, que se repite a mano si cambian el
 margen o la tipografía del contador).
 
+**Quién mide la superposición ahora (v0.174).** La prueba de arriba lee el texto de la hoja: un cambio de `--gutter` o del ancho
+del botón que dejara otra forma del mismo texto la rompía sin que el diseño se enterara, o no la rompía cuando el diseño sí
+quedaba mal. Hay dos medidas más, que no leen el texto:
+- **En la suite:** `src/ui/commentMarginLayout.test.ts` calcula el diseño desde los *valores* del CSS que valen a 360, 375,
+  390, 414, 430 y 760 px (`src/test/cssLayout.ts`: cascada con `!important`, especificidad y orden, `var(--x)`, las abreviadas
+  `padding` y `padding-inline`): el texto termina a `padding-right` del editor, el botón y el contador están pegados al borde
+  con `right` y miden su `width` o `min-width` o su contenido (el ícono y tres dígitos), y se tapan si `ancho + right > margen`.
+  Avisa si el botón o el contador son más anchos que el margen, si el margen del editor se achica, si algo sale de la pantalla
+  (`right` negativo) o si el número del contador se agranda. Subir `--gutter` **no** da aviso a propósito: el botón y el margen
+  suben juntos y en el navegador no hay superposición (se midió). La cuenta no sabe de `calc()`, `max()` ni porcentajes: ahí da
+  `NaN` y la prueba falla en voz alta.
+- **En un navegador de verdad:** `scripts/medir-telefono.mjs` (con vite andando; la página `src/dev/medir-telefono.html` monta la
+  página real sobre el servidor en memoria, sin login) mide en Chromium sin ventana a 360, 375, 390 y 414 px el botón de
+  comentar y el contador con 1, 12 y 120 comentarios contra el final del texto (los nodos de texto, no las cajas), y sale con
+  código 1 si algo tapa o se sale. Hoy: 20 px de ancho en los 16 casos, y el texto termina a 0,1, 1,2, 2,3 y 12,4 px antes
+  (a 360, 375, 390 y 414 px). Lo corre quien toque el margen, el ancho o la tipografía del contador; necesita `playwright-core`
+  y un Chromium ya instalado (`SD_PLAYWRIGHT_CORE`, `SD_CHROMIUM`).
+
+Mutantes (cada uno rompe la prueba de la suite y el script): botón de 60 px, margen del editor de 12 px, `min-width` del
+contador de 60 px, `right: -4px`.
+
 ## Pruebas
 
 `src/ui/tableScroll.test.ts` (la lógica de acomodar la celda: cortada por la derecha, por la izquierda, entera, tabla

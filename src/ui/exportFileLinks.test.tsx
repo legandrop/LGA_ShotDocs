@@ -2,11 +2,14 @@
 import 'fake-indexeddb/auto';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import * as Y from 'yjs';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ExportCancelled, ExportEditor, type ExportEditorOptions } from '../export/exportEditor';
 import { LinkContext, parseLinkHash } from '../linkMode';
+import { MEDIA_SCHEME, mediaIdOf } from '../media/queue';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
+import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { ExportDialog } from './ExportDialog';
 import { appLinkSource, setMediaLinkSource } from './mediaLinks';
@@ -46,11 +49,42 @@ const FILE = '0f8fad5b-d9cb-469f-a165-70867728950e';
 const CONFIG = { url: 'https://xyzxyzxyzx.supabase.co', publishableKey: 'sb_publishable_testtest', name: 'Test', localKey: 'test_ws', storage: {} };
 const TOKEN = { view: `sdl_${'V'.repeat(43)}`, edit: `sdl_${'E'.repeat(43)}` };
 
-async function setup(level: 'comment' | 'edit', visitor = false) {
+/** Un bloque `image` con esa dirección en el contenido de la página (lo que ve el aviso de «sin conexión»). */
+function insertFile(doc: Y.Doc, fileId: string): void {
+  const fragment = doc.getXmlFragment(CONTENT_FRAGMENT);
+  doc.transact(() => {
+    if (fragment.length === 0) fragment.insert(0, [new Y.XmlElement('blockGroup')]);
+    const group = fragment.get(0) as Y.XmlElement;
+    const container = new Y.XmlElement('blockContainer');
+    container.setAttribute('id', crypto.randomUUID());
+    const image = new Y.XmlElement('image');
+    image.setAttribute('url', MEDIA_SCHEME + fileId);
+    container.insert(0, [image]);
+    group.insert(group.length, [container]);
+  });
+}
+
+/**
+ * `files`: qué lleva la página de adentro: nada (el PDF sin archivos), una foto con su original en el dispositivo (`local`) o una
+ * foto cuyo original no está acá (`remote`, ya subida y liberada: solo el registro) o un adjunto (`file`).
+ */
+async function setup(level: 'comment' | 'edit', visitor = false, files: 'none' | 'local' | 'remote' | 'file' = 'file') {
   const d = await makeDevice(new FakeServer());
   devices.push(d);
   const root = await d.tree.create(null, 'Reporte');
   const child = await d.tree.create(root, 'Día 1');
+  if (files !== 'none') {
+    const id = mediaIdOf(await d.media.add(child, new File([new Uint8Array(2048)], 'IMG_0001.JPG', { type: 'image/jpeg' })))!;
+    if (files === 'file') {
+      const stored = (await d.mediaDb.get('files', id))!;
+      await d.mediaDb.put('files', { ...stored, name: 'reporte.pdf', mime: 'application/pdf' });
+    }
+    const doc = await d.docs.open(child);
+    insertFile(doc, id);
+    d.docs.close(child);
+    await d.docs.flush();
+    if (files === 'remote') await d.mediaDb.delete('blobs', id);
+  }
   // El link público está en la página de adentro: sus archivos usan su token; los de la raíz, la dirección de siempre.
   const rpc = vi.fn(async (fn: string, args: { p_page?: string }) => {
     if (fn === 'public_link_pages') return { data: [{ page_id: child }], error: null, status: 200 };
@@ -172,6 +206,52 @@ describe('Export: los links a los archivos con un link público', () => {
       for (const r of roots.splice(0)) act(() => r.unmount());
       document.body.replaceChildren();
     }
+  });
+
+  // Los avisos de «sin conexión» solo salen si el PDF lleva archivos (observación O4 de la auditoría de obs-ui): sin ninguno no
+  // hay links a archivos que arreglar ni fotos que bajar de resolución, y decirlo era mentir.
+  describe('sin red, los avisos dependen de los archivos que lleva el PDF', () => {
+    const LINKS = "No connection: file links in this PDF can't use the public link";
+    const PHOTOS = 'No connection: photos whose original is not on this device';
+    const offline = async (files: 'none' | 'local' | 'remote' | 'file') => {
+      const t = await setup('comment', false, files);
+      const engine = t.d.engine as unknown as { patch(p: { online: boolean }): void };
+      await act(async () => engine.patch({ online: false }));
+      await settle();
+      return t;
+    };
+
+    it('un PDF sin ningún archivo: ni el aviso de los links ni el de las fotos', async () => {
+      const { host } = await offline('none');
+      expect(host.textContent).not.toContain(LINKS);
+      expect(host.textContent).not.toContain(PHOTOS);
+    });
+
+    it('con una foto cuyo original está en el dispositivo: ningún aviso', async () => {
+      const { host } = await offline('local');
+      expect(host.textContent).not.toContain(LINKS);
+      expect(host.textContent).not.toContain(PHOTOS);
+    });
+
+    it('con una foto cuyo original no está: solo el aviso de fotos', async () => {
+      const { host } = await offline('remote');
+      expect(host.textContent).not.toContain(LINKS);
+      expect(host.textContent).toContain(PHOTOS);
+    });
+
+    it('con Smaller file y una foto no sale ningún aviso', async () => {
+      const { host } = await offline('remote');
+      const box = [...host.querySelectorAll<HTMLInputElement>('.export-options input[type="checkbox"]')][0]!;
+      await act(async () => box.click());
+      expect(host.textContent).not.toContain(PHOTOS);
+      expect(host.textContent).not.toContain(LINKS);
+    });
+
+    it('con un adjunto: solo el aviso de los links', async () => {
+      const { host } = await offline('file');
+      expect(host.textContent).toContain(LINKS);
+      expect(host.textContent).not.toContain(PHOTOS);
+    });
   });
 
   it('la red se corta y vuelve: la casilla queda como la dejó la persona', async () => {
