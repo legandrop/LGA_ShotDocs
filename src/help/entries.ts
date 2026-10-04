@@ -516,7 +516,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'photos',
     title: 'help.photosDownloadAnnotated.title',
     text: 'help.photosDownloadAnnotated.text',
-    words: ['download', 'annotations', 'descargar', 'anotaciones', 'jpeg', 'png', 'original'],
+    words: ['download', 'annotations', 'descargar', 'anotaciones', 'jpeg', 'png', 'webp', 'original'],
     since: '0.178',
   },
   {
@@ -524,7 +524,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'photos',
     title: 'help.photosCopyAnnotated.title',
     text: 'help.photosCopyAnnotated.text',
-    words: ['copy', 'clipboard', 'annotations', 'png', 'copiar', 'portapapeles', 'anotaciones', 'pegar'],
+    words: ['copy', 'clipboard', 'annotations', 'webp', 'png', 'copiar', 'portapapeles', 'anotaciones', 'pegar'],
     since: '0.180',
   },
   {

@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX : WebP estático simple como PNG anotado
+
+Las fotos WebP que ya se podían agregar y ver no se podían bajar ni copiar con sus anotaciones. Ahora Carrete y las barras de una foto elegida admiten originales estáticos simples, tanto VP8 opaco como VP8L con transparencia. El resultado es un PNG completo y su nombre y dimensiones se muestran antes de descargarlo o copiarlo. Una comprobación del contenedor y sus cabeceras rechaza animación, metadatos, extensiones y tamaños incompatibles antes de decodificar; nunca elige silenciosamente un frame. El original permanece intacto y disponible. Se conservan los límites del dispositivo, cancelación, contexto y permisos existentes, sin reducción automática ni cambios del documento. JPEG y PNG mantienen sus salidas anteriores. Se actualizan ayuda y documentación. HEIC real, WebP extendido, carpetas, FrameRev y la comprobación física en Safari siguen pendientes.
+
+[Exportar WebP estático simple como PNG anotado]
+
 v0.182 : Bajar y copiar una foto anotada desde su barra
 
 Las barras de fotos sólo permitían bajar el original aunque la página tuviera anotaciones. Ahora, al elegir una sola foto del Drive anotada en una página editable, el mismo botón Download abre una hoja con Original, Download y Copy. Vale para fotos de bloque, fila, renglón y celda, con preparación explícita y un segundo gesto para sacar el resultado completo. Reutiliza los motores de descarga y copia; no modifica la foto ni las formas. La hoja se descarta al cambiar la aparición elegida, selección, página, contexto, sesión o permiso, y vuelve a validar antes de producir una salida. Original y Close quedan disponibles si el cuerpo anotado sigue cargando o falla; Escape cancela la preparación pendiente. Las demás fuentes y acciones conservan su conducta. E4 sigue abierta por carpetas, FrameRev y pruebas físicas en Safari/iPhone.

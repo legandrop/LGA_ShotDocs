@@ -4,6 +4,8 @@ import { MAX_POINTS, MAX_SHAPES, MAX_TEXT, MARKUP_FORMAT_VERSION, parseMarkupKey
 import { contrastInk, headHalfWidth, headLength, MARKUP_FONT, MAX_DRAWN_CHARS, numberInk, wrapLines } from '../ui/markupSvg';
 
 import { checkRasterAbort, RasterError } from './rasterError';
+import { webpInfo } from './webpInfo';
+import { checkRasterPng } from './rasterPng';
 export { checkRasterAbort, RasterError, type RasterFailure } from './rasterError';
 export const rasterLimits = (mobile: boolean) => ({ bytes: (mobile ? 64 : 128) * 1024 ** 2, pixels: mobile ? 16_000_000 : 64_000_000, side: mobile ? 8192 : 16384 });
 export function checkRasterSize(width: number, height: number, mobile: boolean): void {
@@ -41,11 +43,18 @@ export function rasterSnapshot(map: Y.Map<unknown>, fileId: string): PhotoMarkup
   return { fileId, frame: { ...frame }, shapes, newer: false };
 }
 
-export interface RasterInfo { width: number; height: number; mime: 'image/jpeg' | 'image/png' }
+export interface RasterInfo { width: number; height: number; mime: 'image/jpeg' | 'image/png' | 'image/webp' }
 /** Solo cabeceras y chunks: se rechaza antes de entrar a un decodificador. */
 export async function rasterInfo(blob: Blob, mobile: boolean, signal: AbortSignal): Promise<RasterInfo> {
   checkRasterAbort(signal);
   if (!blob.size || blob.size > rasterLimits(mobile).bytes) throw new RasterError('size');
+  const probe = new Uint8Array(await blob.slice(0, 30).arrayBuffer());
+  checkRasterAbort(signal);
+  if (String.fromCharCode(...probe.slice(0, 4)) === 'RIFF') {
+    const info = await webpInfo(blob, probe, signal);
+    checkRasterSize(info.width, info.height, mobile);
+    return { ...info, mime: 'image/webp' };
+  }
   const head = new Uint8Array(await blob.slice(0, 256 * 1024).arrayBuffer());
   checkRasterAbort(signal);
   const jpg = jpegInfo(head);
@@ -193,10 +202,11 @@ export async function prepareMarkupRaster(original: Blob, name: string, photo: P
     drawRasterMarkup(c, photo, canvas.width, canvas.height);
     checkRasterAbort(signal);
     // Copiar codifica este mismo Canvas en PNG, sin una pérdida JPEG intermedia.
-    const mime = output === 'png' ? 'image/png' : info.mime;
+    const mime = output === 'png' || info.mime === 'image/webp' ? 'image/png' : info.mime;
     const blob = await rasterWait(new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, mime, .92)), signal);
     if (!blob || blob.type !== mime || !blob.size) throw new RasterError('encode');
-    if (output === 'png' && blob.size > rasterLimits(mobile).bytes) throw new RasterError('size');
+    if ((output === 'png' || info.mime === 'image/webp') && blob.size > rasterLimits(mobile).bytes) throw new RasterError('size');
+    if (info.mime === 'image/webp') await checkRasterPng(blob, info.width, info.height, signal);
     checkRasterAbort(signal);
     const base = name.replace(/\.[^.]*$/, '').replace(/[\\/\x00-\x1f]/g, '_').trim() || 'photo';
     return { blob, name: `${base}_annotated.${mime === 'image/png' ? 'png' : 'jpg'}`, width: info.width, height: info.height };
