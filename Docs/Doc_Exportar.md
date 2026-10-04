@@ -1062,9 +1062,11 @@ el portero de verdad (tiempo de bajada y pedidos al Worker: unos dos por foto), 
 
 - **O1 · *Cancel* con una bajada colgada.** La señal de cortar llega a cada bajada (`original` y `best` de
   `deviceImages`, `porteroDownload` y su `fetch`), y cada foto corre en carrera con ella: *Cancel* vuelve enseguida
-  aunque un `fetch` no termine nunca. Cada bajada tiene un tope de tiempo (`ORIGINAL_TIMEOUT_MS`, 90 s: un original de
-  44 MB a 1 MB/s entra); la que vence sale achicada, se cuenta, y su página va a la lista de D88 ("some photos took too
-  long to download…") para *Export again*.
+  aunque un `fetch` no termine nunca. Desde v0.0XX, cada original tiene un plazo **de 30 s sin recibir bytes nuevos**
+  (`ORIGINAL_TIMEOUT_MS`), desde el inicio, incluyendo esperar el pase y las cabeceras. Una descarga que sigue
+  avanzando no vence por durar más de 90 s en total. La que se detiene sale achicada, se cuenta, y su página va a la
+  lista de D88 ("some photo downloads received no data for 30 seconds…") para *Export again*. *Smaller file* conserva
+  su plazo total de 90 s para preparar la nítida.
 - **O2 · Fotos gigantes giradas.** Lo que se pasa a JPEG entero va de a pocas: un semáforo por píxeles
   (`DECODE_PIXELS`, 150 millones en curso: dos fotos de 61 MP, o una sola más grande; una de medidas desconocidas, como
   un HEIC, sola). Más de 100 millones (`MAX_CONVERT_PIXELS`) no se pasa entera: se achica a su ancho impreso desde su
@@ -1086,6 +1088,26 @@ el portero de verdad (tiempo de bajada y pedidos al Worker: unos dos por foto), 
 - **O9 · El PDF con originales para quien solo ve.** No es una decisión nueva: Lega ya decidió en D60 que el PDF lo
   saca cualquiera que vea (el zip, solo dueño y admins). Con D85 ese PDF lleva las fotos en su resolución original.
 - **O10 y O11** (el margen de 500 MB en una compu de 8 GB; Safari y Firefox sin medir) quedan para la prueba a mano.
+
+### Originales lentos y detenidos (v0.0XX)
+
+El plazo del original empieza antes de pedir el pase y esperar las cabeceras. Solo un pedazo de cuerpo con bytes
+nuevos renueva los 30 s: recibir cabeceras o un pedazo vacío no alcanza. Al vencer o pulsar *Cancel*, se corta la
+señal de la descarga y se cancela el lector del cuerpo; se libera su bloqueo y no se entrega una foto parcial.
+Los consumidores del portero que no piden progreso conservan la lectura anterior con `res.blob()`.
+
+**Lo probado:** reloj controlado con una descarga que entrega bytes cada 20 s y termina a los 120 s, cuerpo
+detenido con y sin bytes previos, espera del pase y de las cabeceras, cancelación durante ambas etapas, limpieza
+de temporizadores y lectores, originales locales, bytes y MIME completos y renovación de un pase vencido. Las
+pruebas existentes conservan el aviso D88, *Export again*, *Smaller file*, los topes y el original compartido
+entre partes. El recorrido de la ventana real en Chromium sin ventana dio **13 de 13 comprobaciones**: un PDF
+con el JPEG original de 2048 × 1280, otro con la miniatura de 320 × 200 tras detenerse, el aviso en castellano,
+volver a exportar completo y *Cancel* durante cabeceras y cuerpo. Los dos PDF se leyeron y se renderizaron;
+texto, imagen y hojas visibles correctos.
+
+**Límite de esa medición:** el recorrido acorta solo los relojes de espera a 1:100 y controla el stream, no mide
+una red de Drive durante dos minutos. Quedan para probar en dispositivos reales Safari/iPhone y el diálogo
+de imprimir con originales reales; no se abrió una impresora ni se usó un servicio real para esta verificación.
 
 ## Cómo quedó la entrega 3 (v0.141: volver a Shot Docs desde el zip)
 

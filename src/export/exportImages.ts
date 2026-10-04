@@ -57,9 +57,10 @@ export interface ImageSource {
   /**
    * El original de una FOTO (nunca de un video ni de un adjunto): el del dispositivo o, con red, bajado del Drive por
    * el portero. `null` si no se puede (sin red, sin portero): la foto sale con `best`, achicada, y se cuenta. Tira
-   * `DownloadTimeout` si la bajada pasa su tope de tiempo (sale achicada, contada, y la página va a la lista de D88).
+   * `DownloadTimeout` si la bajada deja de recibir bytes (sale achicada, contada, y la página va a la lista de D88).
+   * `received` informa bytes nuevos y positivos: cada chunk renueva el plazo, no las cabeceras ni eventos vacíos.
    */
-  original?(id: string, signal?: AbortSignal): Promise<Blob | null>;
+  original?(id: string, signal?: AbortSignal, received?: (bytes: number) => void): Promise<Blob | null>;
   /**
    * Si `id` es una foto: `false` para un video o un adjunto (no cuentan como "menos resolución"), `null` si no se sabe
    * (sin red y sin la ficha guardada: se cuenta igual, mejor avisar de más que de menos).
@@ -75,34 +76,48 @@ export class DownloadTimeout extends Error {
   }
 }
 
-/** El tope de tiempo de cada bajada de un original (uno de 44 MB a 1 MB/s entra). */
-export const ORIGINAL_TIMEOUT_MS = 90_000;
+/** Un original vence tras 30 s sin bytes nuevos, aunque la descarga completa dure varios minutos. */
+export const ORIGINAL_TIMEOUT_MS = 30_000;
+/** *Smaller file* conserva el plazo total previo para preparar su imagen nítida. */
+const SHARP_TIMEOUT_MS = 90_000;
 
 /**
- * Corre `run` con su propia señal de cortar, que se corta con `outer` (*Cancel*) o al pasar `ms` (y ahí tira
+ * Corre `run` con su propia señal de cortar, que se corta con `outer` (*Cancel*) o al pasar `ms` sin bytes (y ahí tira
  * `DownloadTimeout`). Vuelve enseguida aunque `run` no termine nunca (un `fetch` colgado).
  */
-export function withDeadline<T>(run: (signal: AbortSignal) => Promise<T>, ms: number, outer?: AbortSignal | null): Promise<T> {
+export function withDeadline<T>(run: (signal: AbortSignal, received: (bytes: number) => void) => Promise<T>, ms: number, outer?: AbortSignal | null): Promise<T> {
   const ctl = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let onAbort: (() => void) | undefined;
+  let finished = false;
+  let arm: () => void;
   const stopped = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => {
-      ctl.abort();
-      reject(new DownloadTimeout());
-    }, ms);
+    arm = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        reject(new DownloadTimeout());
+        ctl.abort();
+      }, ms);
+    };
+    arm();
     onAbort = () => {
-      ctl.abort();
       reject(new DOMException('Aborted', 'AbortError'));
+      ctl.abort();
     };
     if (outer?.aborted) onAbort();
     else outer?.addEventListener('abort', onAbort, { once: true });
   });
-  const work = run(ctl.signal);
+  const work = Promise.resolve().then(() => {
+    if (ctl.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    return run(ctl.signal, (bytes) => {
+      if (!finished && !ctl.signal.aborted && Number.isFinite(bytes) && bytes > 0) arm();
+    });
+  });
   // La que pierde la carrera no deja un rechazo sin atender.
   work.catch(() => undefined);
   stopped.catch(() => undefined);
   return Promise.race([work, stopped]).finally(() => {
+    finished = true;
     clearTimeout(timer);
     if (onAbort) outer?.removeEventListener('abort', onAbort);
   });
@@ -388,7 +403,7 @@ export interface ShrinkOptions {
   carry?: Map<string, Blob> | null;
   /** Píxeles que se pueden estar convirtiendo a la vez (`DECODE_PIXELS`; las pruebas lo achican). */
   decodePixels?: number;
-  /** El tope de tiempo de cada bajada (`ORIGINAL_TIMEOUT_MS`; las pruebas lo achican). */
+  /** Sin bytes para originales (`ORIGINAL_TIMEOUT_MS`); total para nítidas (90 s). Las pruebas lo achican. */
   downloadMs?: number;
 }
 
@@ -546,7 +561,7 @@ export async function shrinkImages(root: HTMLElement, options: ShrinkOptions): P
     const t0 = performance.now();
     if (!blob && id && options.source) {
       const source = options.source;
-      blob = await withDeadline((signal) => source.best(id, signal), options.downloadMs ?? ORIGINAL_TIMEOUT_MS, options.signal).catch(() => null);
+      blob = await withDeadline((signal) => source.best(id, signal), options.downloadMs ?? SHARP_TIMEOUT_MS, options.signal).catch(() => null);
     }
     const fromSource = !!blob;
     if (!blob && (src.startsWith('blob:') || src.startsWith('data:'))) blob = await fetchBlob(src);
@@ -590,7 +605,7 @@ export async function shrinkImages(root: HTMLElement, options: ShrinkOptions): P
       let late = false;
       if (!original) {
         try {
-          original = await withDeadline((signal) => getOriginal(id, signal), options.downloadMs ?? ORIGINAL_TIMEOUT_MS, options.signal);
+          original = await withDeadline((signal, received) => getOriginal(id, signal, received), options.downloadMs ?? ORIGINAL_TIMEOUT_MS, options.signal);
         } catch (err) {
           late = err instanceof DownloadTimeout;
           original = null;
@@ -701,7 +716,7 @@ export function deviceImages(
   options: {
     download?: ((id: string, signal?: AbortSignal) => Promise<Blob>) | null;
     maxDownloads?: number;
-    originals?: ((id: string, signal?: AbortSignal) => Promise<Blob>) | null;
+    originals?: ((id: string, signal?: AbortSignal, received?: (bytes: number) => void) => Promise<Blob>) | null;
   } = {},
 ): ImageSource & { downloads(): number; originalsFetched(): number } {
   let downloads = 0;
@@ -720,7 +735,7 @@ export function deviceImages(
         .catch(() => null);
       return view ? fetchBlob(view.url) : null;
     },
-    async original(id, signal) {
+    async original(id, signal, received) {
       if (!media.source) return media.localImage(id);
       const source = await media.source(id).catch(() => null);
       // Solo fotos: un video o un adjunto nunca se baja para el PDF (sale su cuadro o su ícono).
@@ -728,7 +743,7 @@ export function deviceImages(
       if (source.original) return source.original;
       if (!options.originals) return null;
       try {
-        const blob = await options.originals(id, signal);
+        const blob = await options.originals(id, signal, received);
         fetched++;
         return blob;
       } catch (err) {

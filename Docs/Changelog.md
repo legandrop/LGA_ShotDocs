@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+**El PDF espera los originales que siguen bajando.** Una foto que tardaba más de 90 segundos en llegar se
+descartaba aunque recibiera datos constantemente: salía en menor resolución y la página quedaba en *Export again*.
+Ahora el plazo del original vence tras 30 segundos sin bytes nuevos, desde que se empieza a pedirlo. Cada parte
+positiva recibida renueva ese plazo; las cabeceras y partes vacías no lo extienden. La descarga incremental se usa
+solo cuando el PDF pide progreso; los demás consumidores conservan su camino anterior. Al vencer el plazo o pulsar
+*Cancel*, se corta la señal y se cancela y libera el lector del cuerpo. Se mantienen los originales locales,
+la renovación del pase, los topes del PDF, las partes y sus originales ya traídos, y el plazo de *Smaller file*.
+Ayuda y avisos en ambos idiomas; pruebas de descargas largas, detenidas y canceladas con streams y reloj controlados.
+[Esperar los originales del PDF mientras reciban datos]
+
 v0.174 :
 
 **Los avisos de Export sin conexión y las medidas del margen.** La ventana avisaba de links a archivos y fotos en
