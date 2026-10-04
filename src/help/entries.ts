@@ -184,7 +184,7 @@ const FILE_LINKS = '0.164';
  * *Request access*: llegó en v0.166 desde la dirección de un archivo (P.30, entrega 2) y sube con la entrega 3, que lo
  * suma a una página sin acceso. El número lo pone quien publica.
  */
-const ACCESS_REQUESTS_PAGES = '0.0XX';
+const ACCESS_REQUESTS_PAGES = '0.169';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---

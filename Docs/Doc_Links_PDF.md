@@ -1,6 +1,6 @@
 # Links a los archivos en el PDF y *Request access* (P.30)
 
-**Estado: diseño auditado el 2026-10-03 ("aprobado con condiciones" en E1, E2 y E3) y corregido; E1 hecha (v0.164, sección 16); E2 hecha (v0.166, sección 17), con su migración aplicada; E3 hecha (v0.0XX, sección 18), con su migración sin aplicar.**
+**Estado: diseño auditado el 2026-10-03 ("aprobado con condiciones" en E1, E2 y E3) y corregido; E1 hecha (v0.164, sección 16); E2 hecha (v0.166, sección 17), con su migración aplicada; E3 hecha (v0.169, sección 18), con su migración sin aplicar.**
 Pedido de Lega del 2026-10-03, diseñado contra `main` v0.158. Toca permisos, Row Level Security y privacidad, y suma una
 tabla: **riesgo alto**. Las decisiones ya tomadas por Lega están en "Qué se pide"; las nuevas (LF1 a LF16, sección 10)
 son propuestas con la recomendación tomada; LF17 a LF20 son de Lega, sobre los hallazgos de la auditoría. **Las
@@ -1038,7 +1038,7 @@ publicada y la app nueva ofrece *Request access* y la lista solo con la base en 
 - SQL: la prueba suma los casos de O1 y O2; **24 mutantes, 21 detectados** (los 4 nuevos, detectados; los 3 vivos son
   los equivalentes de antes).
 
-## 18. Cómo quedó la entrega 3 (v0.0XX)
+## 18. Cómo quedó la entrega 3 (v0.169)
 
 | Pieza | Dónde |
 |---|---|

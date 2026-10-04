@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.169 :
 
 **Links del PDF, entrega 3: pedir una página.** Quien abría `/p/<id>` sin acceso solo leía «no existe o no tenés
 acceso», sin cómo pedirla: *Request access* existía solo para los archivos. Ahora `access_requests` suma otra columna,
