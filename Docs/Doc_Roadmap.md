@@ -647,9 +647,9 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   la página, ⌘Z lo deshace entero con la foto a la vista y ⌘⇧Z lo rehace, sin llevarse lo de otra persona; con *Show* en
   el aviso de ⌘Z de un reemplazo con páginas cambiadas, el foco que sigue en el panel después del *Undo* de "Last" y la
   prueba de la ventana de O4; con sus correcciones: deshacer nunca borra el marco de una foto, la foto lejana a la vista
-  y rehacer un pegado con anotaciones después de ir y volver; sección 19). Pendientes chicos: una página con historia que estaba en la papelera durante
-  el ⌘Z de un reemplazo, restaurada después, deja "Toma 1: cámara" (18.4, auditoría O1: el reemplazo tendría que quedar
-  a la vez para rehacer y para deshacer; mediano); con el panel abierto y el foco puesto por programa en el editor,
+  y rehacer un pegado con anotaciones después de ir y volver; sección 19). **O1 corregida (v0.175, sección 22):** la página
+  con historia en la papelera durante el ⌘Z de un reemplazo conserva su paso; restaurada, deshacer el reemplazo y luego
+  lo escrito deja el texto exacto, y se puede rehacer todo. Pendientes chicos: con el panel abierto y el foco puesto por programa en el editor,
   Ctrl+Shift+Z deshace (no se llega con el mouse ni el teclado: el panel es modal); y la copia propia de lo ajeno que se
   va con un renglón deshecho (17.2, de Yjs, 1 en 300). Botones de deshacer en el teléfono y el árbol (mover, crear, papelera) quedan afuera (DH1, DH8).
 - **P.27 Dictado por voz y notas informales que se ubican en el reporte** (Lega, 2026-10-02): dictar en toda la app,

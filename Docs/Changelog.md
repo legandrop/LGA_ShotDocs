@@ -1,5 +1,18 @@
 # Changelog — LGA Shot Docs
 
+v0.175 :
+
+**Deshacer un reemplazo con una página en la papelera (P.26, O1).** Si una página editada estaba en la papelera al
+deshacer un reemplazo del proyecto, su paso salía de la pila. Restaurarla y deshacer lo escrito dejaba letras del
+reemplazo; *Undo the rest* tampoco devolvía el texto exacto. Ahora el reemplazo conserva a la vez lo deshecho para
+rehacer y lo pendiente para deshacer, en su orden anterior. Restaurada la página, el próximo ⌘Z deshace el reemplazo
+ahí; el siguiente deshace lo escrito antes sin restos, y ⌘⇧Z vuelve a hacer todo. *Undo the rest* usa la misma pila.
+Si sigue en la papelera al siguiente intento, se avisa y se continúa con los pasos anteriores. Escribir algo nuevo
+quita lo de rehacer sin sacar lo pendiente. Al abandonar una página inaccesible también se olvidan sus pasos anteriores:
+dependían de letras reemplazadas y podían mutilar la nota al restaurarla. Sin cambios del formato guardado.
+
+[ Deshacer un reemplazo conserva el paso de la página en la papelera hasta restaurarla o volver a intentar ]
+
 v0.174 :
 
 **Los avisos de Export sin conexión y las medidas del margen.** La ventana avisaba de links a archivos y fotos en
