@@ -872,6 +872,8 @@ export class FakeServer {
     target_page_id: string | null;
     state: 'pending' | 'accepted' | 'declined' | 'void';
     times: number;
+    /** Cuándo se pidió la primera vez (cuenta en el tope de 20 por día y en las 24 horas de un `void`). */
+    created_at: string;
     asked_at: string;
     decided_at: string | null;
     decided_by: string | null;
@@ -1632,6 +1634,13 @@ const ROLE_RANK: Record<Role, number> = { guest: 1, member: 2, admin: 3, owner: 
 /** Los errores de `register_file` y compañía (ver supabase/migrations/20260930150000_archivos.sql). */
 const pageNotFound = () => new RemoteError('page_not_found', true, 'P0002');
 const fileNotFound = () => new RemoteError('file_not_found', true, 'P0002');
+// Los pedidos de acceso (P.30): las mismas horas y el mismo tope que la base.
+const ACCESS_HOUR_MS = 3_600_000;
+const ACCESS_DAY_MS = 24 * ACCESS_HOUR_MS;
+/** `access_requests_pending` y decidir: los de 30 días (LF14; O2 de la auditoría de E2). */
+export const ACCESS_REQUEST_DAYS_MS = 30 * ACCESS_DAY_MS;
+/** Filas nuevas por persona y día, archivos y páginas juntos. */
+export const ACCESS_REQUESTS_PER_DAY = 20;
 
 export class FakeRemote
   implements
@@ -2751,7 +2760,9 @@ export class FakeRemote
   }
 
   /** `private.can_share`. */
-  // --- pedidos de acceso (P.30, entrega 2): las reglas de 20261031120000_access_requests.sql, sin el tope ni las horas ---
+  // --- pedidos de acceso (P.30): las reglas de 20261031120000_access_requests.sql y 20261102120000_access_requests_paginas.sql,
+  // con el tope de 20 filas nuevas por persona y día, renovar como mucho una vez por hora, las 24 horas de un rechazo y de
+  // un `void`, y los 30 días de la lista y de decidir; el reloj es el del servidor (`server.now()`) ---
 
   /** Las páginas vivas que usan el archivo (sin los usos ajenos ni los sacados). */
   private aliveFilePages(fileId: string): string[] {
@@ -2762,27 +2773,45 @@ export class FakeRemote
       .filter((p) => this.server.pages.has(p) && !this.server.pageInTrash(p) && !this.server.pageInDeletedProject(p));
   }
 
-  /** `request_access`: `sent` exista o no el archivo (`void` si no vale), `has_access` si ya lo ve. */
-  async requestAccess(fileId: string): Promise<'sent' | 'has_access'> {
-    this.server.check();
-    if (!this.server.role(this.userId)) throw new RemoteError('not_member', true, '42501');
-    if (this.aliveFilePages(fileId).some((p) => this.server.pageLevel(this.userId, p) >= 1)) return 'has_access';
-    const now = new Date().toISOString();
-    const open = this.server.accessRequests.find((r) => r.user_id === this.userId && r.file_id === fileId && (r.state === 'pending' || r.state === 'void'));
+  /** El archivo se mandó a la papelera de Drive (`files.purged_at`): no vale pedirlo ni decidirlo. */
+  private filePurged(fileId: string): boolean {
+    return !!this.server.mediaFiles.get(fileId)?.purged_at;
+  }
+
+  /** Hace cuánto (en ms, con el reloj del servidor) pasó algo guardado como texto ISO. */
+  private agoMs(iso: string | null): number {
+    return iso === null ? Infinity : this.server.now() - Date.parse(iso);
+  }
+
+  /** Un rechazo de lo mismo a esa persona en las últimas 24 horas (`decided_at > now() - interval '24 hours'`). */
+  private declinedLately(match: (r: FakeServer['accessRequests'][number]) => boolean): boolean {
+    return this.server.accessRequests.some((r) => match(r) && r.state === 'declined' && this.agoMs(r.decided_at) < ACCESS_DAY_MS);
+  }
+
+  /**
+   * El camino común de `request_access` y `request_page_access` después de `has_access`: el pedido abierto se renueva
+   * (una vez por hora; un `void` de más de un día se vuelve a mirar), y uno nuevo cuenta en el tope y queda `void` si no vale.
+   */
+  private askAccess(match: (r: FakeServer['accessRequests'][number]) => boolean, valid: () => boolean, target: { file_id: string | null; target_page_id: string | null }): 'sent' {
+    const now = new Date(this.server.now()).toISOString();
+    const open = this.server.accessRequests.find((r) => match(r) && (r.state === 'pending' || r.state === 'void'));
     if (open) {
-      open.times += 1;
-      open.asked_at = now;
+      if (this.agoMs(open.asked_at) > ACCESS_HOUR_MS) {
+        open.asked_at = now;
+        open.times = Math.min(open.times + 1, 1000);
+        if (open.state === 'void' && this.agoMs(open.created_at) > ACCESS_DAY_MS && valid()) open.state = 'pending';
+      }
       return 'sent';
     }
-    const declined = this.server.accessRequests.some((r) => r.user_id === this.userId && r.file_id === fileId && r.state === 'declined');
-    const valid = this.aliveFilePages(fileId).length > 0 && !declined;
+    const today = this.server.accessRequests.filter((r) => r.user_id === this.userId && this.agoMs(r.created_at) < ACCESS_DAY_MS).length;
+    if (today >= ACCESS_REQUESTS_PER_DAY) throw new RemoteError('rate_limited', true, 'P0001');
     this.server.accessRequests.push({
       id: crypto.randomUUID(),
       user_id: this.userId,
-      file_id: fileId,
-      target_page_id: null,
-      state: valid ? 'pending' : 'void',
+      ...target,
+      state: valid() ? 'pending' : 'void',
       times: 1,
+      created_at: now,
       asked_at: now,
       decided_at: null,
       decided_by: null,
@@ -2790,6 +2819,18 @@ export class FakeRemote
       level: null,
     });
     return 'sent';
+  }
+
+  /** `request_access`: `sent` exista o no el archivo (`void` si no vale), `has_access` si ya lo ve. */
+  async requestAccess(fileId: string): Promise<'sent' | 'has_access'> {
+    this.server.check();
+    if (!this.server.role(this.userId)) throw new RemoteError('not_member', true, '42501');
+    if (this.aliveFilePages(fileId).some((p) => this.server.pageLevel(this.userId, p) >= 1)) return 'has_access';
+    const mine = (r: FakeServer['accessRequests'][number]) => r.user_id === this.userId && r.file_id === fileId;
+    return this.askAccess(mine, () => !this.filePurged(fileId) && this.aliveFilePages(fileId).length > 0 && !this.declinedLately(mine), {
+      file_id: fileId,
+      target_page_id: null,
+    });
   }
 
   /** La página está viva (ni ella ni una de arriba en la papelera, proyecto sin borrar). */
@@ -2802,29 +2843,8 @@ export class FakeRemote
     this.server.check();
     if (!this.server.role(this.userId)) throw new RemoteError('not_member', true, '42501');
     if (this.server.pages.has(pageId) && this.server.pageLevel(this.userId, pageId) >= 1) return 'has_access';
-    const now = new Date().toISOString();
     const mine = (r: FakeServer['accessRequests'][number]) => r.user_id === this.userId && r.target_page_id === pageId;
-    const open = this.server.accessRequests.find((r) => mine(r) && (r.state === 'pending' || r.state === 'void'));
-    if (open) {
-      open.times += 1;
-      open.asked_at = now;
-      return 'sent';
-    }
-    const valid = this.pageAlive(pageId) && !this.server.accessRequests.some((r) => mine(r) && r.state === 'declined');
-    this.server.accessRequests.push({
-      id: crypto.randomUUID(),
-      user_id: this.userId,
-      file_id: null,
-      target_page_id: pageId,
-      state: valid ? 'pending' : 'void',
-      times: 1,
-      asked_at: now,
-      decided_at: null,
-      decided_by: null,
-      page_id: null,
-      level: null,
-    });
-    return 'sent';
+    return this.askAccess(mine, () => this.pageAlive(pageId) && !this.declinedLately(mine), { file_id: null, target_page_id: pageId });
   }
 
   /** `access_requests_pending` y `decide_access_request` de esta sesión. */
@@ -2836,7 +2856,11 @@ export class FakeRemote
         ? this.pageAlive(r.target_page_id) && canDecide() && this.canShare({ pageId: r.target_page_id })
           ? [r.target_page_id]
           : []
-        : this.aliveFilePages(r.file_id!).filter((p) => canDecide() && this.canShare({ pageId: p }));
+        : this.filePurged(r.file_id!)
+          ? []
+          : this.aliveFilePages(r.file_id!).filter((p) => canDecide() && this.canShare({ pageId: p }));
+    // Los de más de 30 días ni se listan ni se deciden (`asked_at > now() - interval '30 days'`).
+    const recent = (r: FakeServer['accessRequests'][number]) => this.agoMs(r.asked_at) < ACCESS_REQUEST_DAYS_MS;
     const sees = (r: FakeServer['accessRequests'][number]) =>
       r.target_page_id !== null
         ? this.server.pageLevel(r.user_id, r.target_page_id) >= 1
@@ -2846,7 +2870,7 @@ export class FakeRemote
         this.server.check();
         if (!this.server.role(this.userId) || this.server.role(this.userId) === 'guest') return [];
         return this.server.accessRequests
-          .filter((r) => r.state === 'pending' && r.user_id !== this.userId && this.server.role(r.user_id))
+          .filter((r) => r.state === 'pending' && recent(r) && r.user_id !== this.userId && this.server.role(r.user_id))
           .filter((r) => !sees(r))
           .map((r) => ({ r, pages: shareable(r) }))
           .filter(({ pages }) => pages.length > 0)
@@ -2867,8 +2891,8 @@ export class FakeRemote
       decide: async (id, accept, pageId, level) => {
         this.server.check();
         const r = this.server.accessRequests.find((x) => x.id === id);
-        if (!r || r.state !== 'pending' || shareable(r).length === 0) throw new RemoteError('request_not_found', true, 'P0002');
-        const now = new Date().toISOString();
+        if (!r || r.state !== 'pending' || !recent(r) || shareable(r).length === 0) throw new RemoteError('request_not_found', true, 'P0002');
+        const now = new Date(this.server.now()).toISOString();
         if (!accept) {
           Object.assign(r, { state: 'declined', decided_at: now, decided_by: this.userId });
           return 'declined';

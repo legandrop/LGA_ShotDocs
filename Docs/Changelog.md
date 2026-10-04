@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.173 :
+
+**Pedir acceso: los restos de E2 y E3.** (1) Con varios workspaces en el dispositivo, *Request access* de una página
+iba a la base del abierto aunque el link fuera de otro: `/p/<id>` no dice de qué workspace es. Ahora ahí no se ofrece y
+la pantalla dice que se cambie al del link; la dirección no cambia (LF21). (2) Sin ningún proyecto se caía en *No
+projects yet*, sin poder pedir: ahora `/p/` y `/f/` muestran la pantalla sin acceso con *Request access*, al arrancar y
+con la app abierta. (3) El panel de la campana se titula *Access requests and mentions* si tiene pedidos. (4) El
+servidor en memoria suma el tope por día y las horas de la base, y las pruebas SQL el borde de 30 días, verificado
+contra la base en rollback con positivos y negativos por aserción concreta. Ayuda.
+
+[Restos de pedir acceso - con varios workspaces el link de una página no ofrece Request access y dice que se cambie de workspace, sin proyectos las direcciones de página y archivo muestran la pantalla sin acceso con Request access, el título del panel de la campana, y el servidor en memoria con el tope y las horas de la base]
+
 v0.172 :
 
 **Sacar fotos y filmar solo en teléfonos (D302).** Las entradas *Take photo* y *Record video* se habilitaban por

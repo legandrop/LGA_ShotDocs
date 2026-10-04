@@ -65,6 +65,7 @@ import { errorMessage } from '../sync/types';
 import { disposeUndoTimeline } from './undoTimeline';
 import { useUndoTimelineKeys } from './undoTimelineUi';
 import { appLinkSource, setMediaLinkSource } from './mediaLinks';
+import { isAccessRoute, NoProjectsAccess, useNoProjectsAccess, type AccessRoute } from './NoProjectsRoute';
 
 // La página de práctica (P.13, Docs/Doc_Tutorial.md): se baja aparte, con sus plantillas y sus textos.
 const PracticeView = lazyPart(() => import('../tutorial/PracticeView').then((m) => m.PracticeView));
@@ -147,7 +148,7 @@ export function Workspace({ user, link }: { user: AuthUser; link?: LinkBoot }) {
       </main>
     );
   }
-  if (boot.state === 'empty') return <NoProjects user={user} onRetry={boot.retry} />;
+  if (boot.state === 'empty') return <NoProjectsBoot user={user} onRetry={boot.retry} link={!!link} />;
   return (
     <ServicesContext.Provider value={boot.services}>
       {/* Un error que no dejó seguir: pantalla con *Reload* en vez de blanco, con la sincronización viva (ErrorBarrier.tsx). */}
@@ -167,6 +168,34 @@ function Gate() {
   // la misma pantalla que al entrar sin proyectos, con los borrados que se pueden restaurar.
   if (tree.hasNoProjects()) return <NoProjectsOpen />;
   return <Shell />;
+}
+
+/**
+ * El arranque no encontró ningún proyecto. Con la dirección de una página o de un archivo, la pantalla sin acceso con
+ * *Request access* (P.30, sección 19 de Doc_Links_PDF.md, O2) en vez de «No projects yet»; sin membresía, con un link
+ * público o en cualquier otra dirección, «No projects yet» como siempre.
+ */
+export function NoProjectsBoot({ user, onRetry, link }: { user: AuthUser; onRetry: () => void; link: boolean }) {
+  const route = useRoute();
+  const { client, config } = useWorkspace();
+  const tr = useT();
+  const wanted = !link && isAccessRoute(route);
+  const access = useNoProjectsAccess(user.id, wanted);
+  if (wanted && !access) return <main className="center-screen muted">{tr('shell.opening')}</main>;
+  if (wanted && access?.member) {
+    return (
+      <NoProjectsAccess
+        route={route as AccessRoute}
+        client={client}
+        userId={user.id}
+        localKey={config.localKey}
+        schemaVersion={access.schemaVersion}
+        online={typeof navigator === 'undefined' || navigator.onLine !== false}
+        onHasAccess={onRetry}
+      />
+    );
+  }
+  return <NoProjects user={user} onRetry={onRetry} />;
 }
 
 /**
@@ -686,12 +715,29 @@ export function Home() {
  * "Sin proyectos" en un dispositivo ya abierto (le borraron o dejaron de compartir todos los proyectos): lo que el
  * dispositivo tiene sin subir o rechazado sigue a la vista, se puede bajar como archivo, y salir avisa (P.14).
  */
-function NoProjectsOpen() {
+export function NoProjectsOpen() {
   const services = useServices();
-  const { engine, user, workspace } = services;
+  const { engine, user, workspace, client } = services;
   const status = useSyncStatus();
+  const route = useRoute();
+  const link = useLinkMode();
   const pending =
     usePendingCount() + status.failedOps + status.failedMedia + status.failedComments;
+  // La dirección de una página o de un archivo: la pantalla sin acceso con *Request access* (O2). *Go to Shot Docs* lleva
+  // al inicio, que muestra esta misma pantalla sin proyectos con lo que falta subir.
+  if (!link && isAccessRoute(route)) {
+    return (
+      <NoProjectsAccess
+        route={route}
+        client={client}
+        userId={user.id}
+        localKey={workspace.config.localKey}
+        schemaVersion={status.schemaVersion}
+        online={status.online}
+        onHasAccess={() => void engine.syncNow()}
+      />
+    );
+  }
   return (
     <NoProjects
       user={user}

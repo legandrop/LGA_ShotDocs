@@ -3,6 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { t } from '../i18n';
+import { prefs } from '../prefs';
 import { ServicesContext, type Services } from '../services';
 import { AccessRequestsInbox } from '../sync/accessRequests';
 import type { SupabaseRemote } from '../sync/remote';
@@ -217,6 +218,27 @@ describe('la campana con pedidos de acceso', () => {
     expect(bell.querySelector('.mentions-count')).toBeNull();
     await click(bell);
     expect(document.querySelector(`section[aria-label="${t('requests.title')}"]`)).toBeNull();
+    // Solo menciones: el título de siempre y sin rótulos por parte.
+    const panel = document.querySelector<HTMLElement>('.mentions-panel')!;
+    expect(panel.getAttribute('aria-label')).toBe(t('mentions.title'));
+    expect(panel.querySelector('h2')?.textContent).toBe(t('mentions.title'));
+    expect(panel.querySelectorAll('h3')).toHaveLength(0);
+  });
+
+  it('con pedidos arriba, el panel se titula con las dos cosas y cada parte lleva su rótulo (restos, sección 19)', async () => {
+    const { server, owner, inbox } = await setup();
+    const host = await mount(services(owner, server.ownerId, inbox), <MentionsBell />);
+    await click(host.querySelector<HTMLButtonElement>('.mentions-bell')!);
+    const panel = document.querySelector<HTMLElement>('.mentions-panel')!;
+    expect(panel.getAttribute('aria-label')).toBe(t('mentions.titleWithRequests'));
+    expect(panel.querySelector('h2')?.textContent).toBe('Access requests and mentions');
+    expect([...panel.querySelectorAll('h3')].map((h) => h.textContent)).toEqual([t('requests.title'), t('mentions.title')]);
+    act(() => prefs.set({ language: 'es' }));
+    try {
+      expect(panel.querySelector('h2')?.textContent).toBe('Pedidos de acceso y menciones');
+    } finally {
+      act(() => prefs.set({ language: 'en' }));
+    }
   });
 });
 

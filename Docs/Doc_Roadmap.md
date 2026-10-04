@@ -693,16 +693,22 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   `20261031120000_access_requests` aplicada (schema 22). Falta la prueba de aceptación 4 de Lega. **Hecho (v0.169):
   la entrega 3**, pedir también una página desde `/p/<id>` sin acceso (la misma pantalla para «no existe» y «sin
   acceso»), con los pedidos en la campana y en *Share* de esa página y el permiso solo sobre ella; migración
-  `20261102120000_access_requests_paginas` aplicada (schema 24). De la auditoría de E3 (chico): `/p/<id>` no
-  lleva la clave del workspace ni el `#ws=` como `/f/`, así que con más de un workspace conectado el pedido va a la base
-  del que está abierto y nadie lo recibe (O1: que la dirección de una página lleve la clave local, o no ofrecer pedir
-  con más de un workspace); quien no ve ningún proyecto cae en `NoProjects` y no ve *Request access* ni en `/p/` ni en
-  `/f/` (O2: mostrar la pantalla sin acceso con esas rutas); y lo de E2 que sigue (O6): el servidor en memoria sin el
-  tope ni las 24 horas, y `page_level` que tarda distinto si la página existe (la diferencia ya aceptada en LF4). Quedan para después: el correo al pedir y al aceptar (B.8), pedir acceso sin cuenta, el
-  link de un video en línea y los textos de invitación en el choque de clave y en *Join a workspace?* para una dirección
-  de archivo (O7 c). De la auditoría de E2 (chico): una prueba de dos personas decidiendo a la vez con dos sesiones
-  reales (O8; hoy por lectura del `for update`), el tope y las 24 horas en el servidor en memoria (O9) y el título
-  *Mentions* del panel de la campana cuando arriba tiene pedidos. **Hecho (v0.165):** *Export* avisa sin red (O6, *No connection: file links … can't use the public link*; un visitante del link no lo ve, con prueba). **Hecho (v0.171, D279 B):** *Share* dice el total exacto de los archivos de los links de la página aunque pasen de 500 (columna `total` de `public_link_files`, migración `20261103120000_purgados_peso_link_total.sql`, schema 25, aplicada; `Doc_Link_Publico.md`, "El total exacto"). Queda (chico): el aviso sale también si el PDF no lleva ningún archivo, porque la ventana no cuenta los adjuntos antes de armar, igual que el de las fotos sin conexión.
+  `20261102120000_access_requests_paginas` aplicada (schema 24). **Hecho (v0.173): los restos
+  de las auditorías de E2 y E3** (`Doc_Links_PDF.md`, sección 19): con más de un workspace en el dispositivo, la pantalla
+  sin acceso de `/p/<id>` no ofrece *Request access* (iría a la base del abierto) y dice que se cambie al workspace del
+  link (O1, LF21; la dirección no cambia); quien no ve ningún proyecto y abre `/p/` o `/f/` ve la pantalla sin acceso con
+  *Request access* en vez de *No projects yet* (O2); el panel de la campana se titula *Access requests and mentions*
+  cuando tiene pedidos; el servidor en memoria con el tope de 20 por día, la hora, las 24 horas y los 30 días de la base
+  (O9), y el borde de 30 días (30 días y 1 hora) en las dos pruebas SQL, **verificadas contra la base en rollback**:
+  dos positivos y dos negativos con el corte cambiado a 31 días, detectados por la aserción de 30 días y 1 hora;
+  los dos positivos volvieron a pasar después. La auditoría además acreditó diez mutantes locales por aserción concreta;
+  los 21 históricos no se validaron de ese modo ni se cuentan como evidencia independiente. Queda (chico): que la
+  dirección de una página lleve el workspace (`/p/<id>?w=<clave local>`,
+  LF21 A) cuando haya varios workspaces en uso; `page_level` que tarda distinto si la página existe (la diferencia ya
+  aceptada en LF4); y una prueba de dos personas decidiendo a la vez con dos sesiones reales (O8 de E2; hoy por lectura
+  del `for update`: el servidor en memoria no la puede probar). Quedan para después: el correo al pedir y al aceptar
+  (B.8), pedir acceso sin cuenta, el link de un video en línea y los textos de invitación en el choque de clave y en
+  *Join a workspace?* para una dirección de archivo (O7 c). **Hecho (v0.165):** *Export* avisa sin red (O6, *No connection: file links … can't use the public link*; un visitante del link no lo ve, con prueba). **Hecho (v0.171, D279 B):** *Share* dice el total exacto de los archivos de los links de la página aunque pasen de 500 (columna `total` de `public_link_files`, migración `20261103120000_purgados_peso_link_total.sql`, schema 25, aplicada; `Doc_Link_Publico.md`, "El total exacto"). Queda (chico): el aviso sale también si el PDF no lleva ningún archivo, porque la ventana no cuenta los adjuntos antes de armar, igual que el de las fotos sin conexión.
 - **P.28 Hecho (v0.156): la tabla del reporte en el teléfono** (`Doc_Tabla_Telefono.md`): en pantalla angosta ninguna
   columna con ancho guardado baja de 96 px y la tabla se desplaza de costado dentro de su bloque; la celda donde se
   escribe se acomoda a la vista. La compu y el PDF no cambian. Falta probarlo en un iPhone real (dedo, teclado abierto).

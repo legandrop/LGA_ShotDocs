@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { locale, useT } from '../i18n';
-import { useServices } from '../services';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { askedAt, askedScope, rememberAsked, requestAccess, requestPageAccess, type AccessTarget } from '../sync/accessRequests';
 import { errorMessage, isNetworkError } from '../sync/types';
+import { useWorkspaceList } from '../workspaces';
 
 // *Request access* (P.30; Docs/Doc_Links_PDF.md, 5.2): en la pantalla sin acceso de un archivo (`/f/`, entrega 2) y de una
 // página (`/p/<id>`, entrega 3). Antes de mandar dice quién va a ver el pedido (LF19). La respuesta de la base es la misma
@@ -10,18 +11,22 @@ import { errorMessage, isNetworkError } from '../sync/types';
 // listar los pedidos propios).
 
 export function RequestAccess({
+  client,
+  userId,
   localKey,
   target,
   onHasAccess,
 }: {
+  /** El cliente del workspace con la sesión de quien pide (con o sin la sincronización abierta: O2, sin proyectos). */
+  client: SupabaseClient;
+  userId: string;
   localKey: string;
   target: AccessTarget;
   /** La base dice que ya lo ve: la pantalla vuelve a preguntar (el archivo) o sincroniza el árbol (la página). */
   onHasAccess: () => void;
 }) {
   const tr = useT();
-  const { client, user } = useServices();
-  const scope = askedScope(localKey, user.id);
+  const scope = askedScope(localKey, userId);
   const [asked, setAsked] = useState(() => askedAt(scope, target));
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -83,4 +88,14 @@ export function RequestAccess({
       {error && <p className="error">{error}</p>}
     </div>
   );
+}
+
+/**
+ * Si se sabe de qué workspace es una dirección de página (`/p/<id>`, sección 19 de Doc_Links_PDF.md, O1): la dirección
+ * no lo dice, así que solo se sabe con un solo workspace en el dispositivo. Con más de uno, *Request access* de una página
+ * no se ofrece (el pedido iría a la base del que está abierto). La dirección de un archivo (`/f/<clave local>/<id>`) sí
+ * lo dice y no pasa por acá.
+ */
+export function usePageWorkspaceKnown(): boolean {
+  return useWorkspaceList().workspaces.length <= 1;
 }

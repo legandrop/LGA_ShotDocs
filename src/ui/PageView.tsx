@@ -13,7 +13,7 @@ import { isLetter, modPressed } from './findUi';
 import { codePointLength, DB_LIMITS, splitTitle } from '../lib/dbLimits';
 import { notify } from './notice';
 import { PageBarrier } from './ErrorBarrier';
-import { RequestAccess } from './RequestAccess';
+import { RequestAccess, usePageWorkspaceKnown } from './RequestAccess';
 import { CollapseIcon, HeaderIcon } from './icons';
 import { lazyPart, Part } from './lazyPart';
 import { LinkAsideNotice } from './LinkAsideNotice';
@@ -117,15 +117,25 @@ export function PageView({ id }: { id: string }) {
  * la misma pantalla y la base responde lo mismo, así que no dice nada de la página. Solo con cuenta (con un link público
  * no se pide, LF3), con red y con la base del workspace en la 24. Si alguien da acceso, la página llega con la próxima
  * sincronización del árbol (cada 10 s) y se abre sola.
+ *
+ * `/p/<id>` no dice de qué workspace es (sección 19, O1): con más de uno en el dispositivo, el pedido iría a la base del
+ * que está abierto aunque la página sea de otro, y nadie lo recibiría. Ahí no se ofrece: la pantalla dice que cambie al
+ * workspace del link y lo abra de nuevo.
  */
 function RequestPage({ id }: { id: string }) {
-  const { workspace, engine } = useServices();
+  const { workspace, engine, client, user } = useServices();
   const { online, schemaVersion } = useSyncStatus();
   const link = useLinkMode();
-  if (link || !online || (schemaVersion ?? 0) < ACCESS_REQUESTS_PAGES_SCHEMA_VERSION) return null;
+  const known = usePageWorkspaceKnown();
+  const tr = useT();
+  if (link) return null;
+  if (!known) return <p className="muted">{tr('page.otherWorkspace')}</p>;
+  if (!online || (schemaVersion ?? 0) < ACCESS_REQUESTS_PAGES_SCHEMA_VERSION) return null;
   return (
     <RequestAccess
       key={id}
+      client={client}
+      userId={user.id}
       localKey={workspace.config.localKey}
       target={{ kind: 'page', id }}
       onHasAccess={() => void engine.syncNow()}

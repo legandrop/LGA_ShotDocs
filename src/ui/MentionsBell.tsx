@@ -143,10 +143,13 @@ function MentionsPanel({ anchor, onClose, onReview }: { anchor: HTMLElement | nu
     showComments({ kind: 'thread', threadId: item.threadId ?? item.commentId, resolved: item.resolved }, item.pageId);
   };
 
+  // Con pedidos de acceso arriba, el título dice las dos cosas y cada parte lleva su rótulo (P.30, restos de E2).
+  const withRequests = requests.ready && requests.items.length > 0;
+  const title = tr(withRequests ? 'mentions.titleWithRequests' : 'mentions.title');
   return (
-    <div ref={ref} className="mentions-panel" role="dialog" aria-label={tr('mentions.title')} style={style}>
+    <div ref={ref} className="mentions-panel" role="dialog" aria-label={title} style={style}>
       <header className="mentions-head">
-        <h2>{tr('mentions.title')}</h2>
+        <h2>{title}</h2>
         {inbox.items.some((m) => !m.read) && (
           <button className="link" onClick={() => void mentions?.markAllRead()}>
             {tr('mentions.markAll')}
@@ -154,7 +157,7 @@ function MentionsPanel({ anchor, onClose, onReview }: { anchor: HTMLElement | nu
         )}
       </header>
       {!status.online && <p className="comments-note">{time ? tr('mentions.offline', { time }) : tr('mentions.offlineNever')}</p>}
-      {requests.ready && requests.items.length > 0 && (
+      {withRequests && (
         <section aria-label={tr('requests.title')}>
           <h3 className="access-requests-head">{tr('requests.title')}</h3>
           <ul className="access-requests">
@@ -164,6 +167,7 @@ function MentionsPanel({ anchor, onClose, onReview }: { anchor: HTMLElement | nu
           </ul>
         </section>
       )}
+      {withRequests && <h3 className="access-requests-head">{tr('mentions.title')}</h3>}
       {inbox.items.length === 0 ? (
         <p className="muted mentions-empty">{tr('mentions.empty')}</p>
       ) : (

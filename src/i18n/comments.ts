@@ -105,6 +105,8 @@ export const comments = {
   },
   // La campana de las menciones (Doc_Menciones.md, 2.3): está siempre en la barra de arriba.
   'mentions.title': { en: "Mentions", es: "Menciones" },
+  // El título del panel cuando arriba tiene pedidos de acceso (Doc_Links_PDF.md, 19).
+  'mentions.titleWithRequests': { en: "Access requests and mentions", es: "Pedidos de acceso y menciones" },
   'mentions.unread': {
     en: { one: "{count} unread", other: "{count} unread" },
     es: { one: "{count} sin leer", other: "{count} sin leer" },

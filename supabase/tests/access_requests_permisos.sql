@@ -423,6 +423,19 @@ begin
   perform pg_temp.check(pg_temp.decide('e2a0', pg_temp.rid('e2a6', 'e2f0'), true, 'e2b1'), 'error:member_not_found', 'aceptar a y sacado');
   perform pg_temp.check(pg_temp.ask('e2a6', 'e2f4'), 'error:not_member', 'y sacado pide');
 
+  -- El borde de los 30 días (la auditoría de E2: un corte movido a 31 días no lo detectaba nada): con 29 días y 23
+  -- horas se lista; con 30 días y 1 hora ya no, y no se decide.
+  update public.access_requests set asked_at = now() - interval '29 days 23 hours', created_at = now() - interval '29 days 23 hours'
+  where id = pg_temp.rid('e2a4', 'e2f0');
+  perform pg_temp.check(pg_temp.run_as('e2a0', format('select count(*) from public.access_requests_pending() where user_id = %L and file_id = %L',
+                                                     pg_temp.u('e2a4'), pg_temp.u('e2f0'))), '1', 'la lista no muestra uno de 29 días y 23 horas');
+  update public.access_requests set asked_at = now() - interval '30 days 1 hour', created_at = now() - interval '30 days 1 hour'
+  where id = pg_temp.rid('e2a4', 'e2f0');
+  perform pg_temp.check(pg_temp.run_as('e2a0', format('select count(*) from public.access_requests_pending() where user_id = %L and file_id = %L',
+                                                     pg_temp.u('e2a4'), pg_temp.u('e2f0'))), '0', 'la lista muestra uno de 30 días y 1 hora');
+  perform pg_temp.check(pg_temp.decide('e2a0', pg_temp.rid('e2a4', 'e2f0'), true, 'e2b1'), 'error:request_not_found', 'aceptar uno de 30 días y 1 hora');
+  perform pg_temp.check(pg_temp.decide('e2a0', pg_temp.rid('e2a4', 'e2f0'), false, null), 'error:request_not_found', 'rechazar uno de 30 días y 1 hora');
+
   -- 30 días: oculto; renovar lo trae; renovar dos veces en la hora suma una.
   update public.access_requests set asked_at = now() - interval '31 days', created_at = now() - interval '31 days'
   where id = pg_temp.rid('e2a4', 'e2f0');
