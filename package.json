@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "esquema:publicado": "node scripts/esquema-publicado.mjs",
     "db:migrate": "node scripts/db-migrate.mjs",
     "db:test": "node scripts/db-migrate.mjs --test",
     "workspace:setup": "node scripts/setup-workspace.mjs",
