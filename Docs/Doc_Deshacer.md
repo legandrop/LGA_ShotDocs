@@ -16,9 +16,9 @@ número final lo pone quien las cierre con Lega. Lo medido salió de prototipos 
 - **El pedido.** ⌘Z (Ctrl+Z en Windows) sigue el **orden en que editaste**, no la página: deshace lo último que
   hiciste, después lo anterior, y si una de esas cosas fue un *Replace all in project*, deshace ese reemplazo en todas
   las páginas que tocó.
-- **Hoy** cada página tiene su propia pila de deshacer (la de Yjs, por y-prosemirror) que **muere al cambiar de
-  página**, y el reemplazo del proyecto no está en ninguna pila: se deshace solo con *Undo* del aviso o del panel.
-- **La propuesta:** una **línea de tiempo** por proyecto y por pestaña que anota, en orden, cada paso de deshacer de
+- **Antes de las entregas 1 y 2** cada página tenía su propia pila de deshacer (la de Yjs, por y-prosemirror) que **moría al cambiar de
+  página**, y el reemplazo del proyecto no estaba en ninguna pila: se deshacía solo con *Undo* del aviso o del panel.
+- **Implementado en las entregas 1 y 2:** una **línea de tiempo** por proyecto y por pestaña que anota, en orden, cada paso de deshacer de
   cada página y cada reemplazo del proyecto. Las pilas de Yjs de cada página siguen siendo las que deshacen (nada nuevo
   en el documento): la línea de tiempo solo decide **cuál** va primero y las mantiene vivas al cambiar de página.
 - ⌘Z: si lo último fue en esta página, se deshace acá (como hoy). Si fue en otra, **la app va a esa página y lo deshace
@@ -267,7 +267,7 @@ Reemplazaste en 50 páginas; después escribiste en *Shot 12*; antes del reempla
 | **Otra persona editó después lo mismo** | Lo tuyo se deshace igual y lo suyo queda (Yjs, por origen). Si borró justo lo tuyo, ese paso no cambia nada y se pasa al anterior. En un reemplazo: en las páginas con historia, el deshacer de Yjs (medido: con "XX" escrito por el otro adentro de "Camera", deshacer deja "cámaraXX"; deshacer también lo escrito antes deja solo "XX"); en las demás, las anclas ("had changed", queda como está, con *Show*). Nunca se borra nada del otro: 0 en 300 corridas al azar con el otro escribiendo y borrando, también adentro de renglones que creaste (17.3). |
 | **Sin red** | Igual que con red: todo es local. Lo deshecho queda pendiente de subir, como cualquier edición. |
 | **La página no está abierta** | Si tiene pasos, su documento está retenido (3.2): ⌘Z la abre (instantáneo, ya está en memoria). Las páginas que solo tocó un reemplazo se deshacen sin abrirlas en pantalla, como hoy. |
-| **La página se fue a la papelera, perdiste Editar, o la borraron** | Ese paso se saca y el aviso lo dice: "Can't undo in “Shot 12”: it's in the trash. ⌘Z again for the previous change." En un reemplazo, esas páginas quedan para *Undo the rest* del panel, como hoy. |
+| **La página se fue a la papelera, perdiste Editar, o la borraron** | Ese paso se saca y el aviso lo dice: "Can't undo in “Shot 12”: it's in the trash. ⌘Z again for the previous change." En un reemplazo, el paso de la página queda para el próximo ⌘Z si se restaura; si sigue inaccesible, sale y queda *Undo the rest* del panel (sección 22). |
 | **El documento retenido se rearmó** (llegó algo que no se pudo aplicar) | Sus pasos ya no valen: se sacan y el próximo ⌘Z que llegue ahí avisa "Older changes in “Shot 12” can't be undone (the page was reloaded)" y sigue con el anterior en el ⌘Z siguiente. |
 | **Cambiar de proyecto** | Cada proyecto tiene su línea de tiempo (DH7). Al volver, sigue donde estaba (si no se pasó el tope). |
 | **Cambiar de workspace, cerrar sesión, recargar, cerrar la pestaña** | Se pierde la línea de tiempo (DH4). Los reemplazos siguen en el panel con *Undo*. Dos pestañas: cada una la suya. |
@@ -832,8 +832,9 @@ semillas en la suite, `TIMELINE_SEEDS` para más) y las de atajos (`shortcuts.te
   posiciones relativas. Vale también para el *Undo* del panel de siempre.
 - **El *Undo* del aviso y del panel cuando el reemplazo es lo último** hace lo mismo que ⌘Z: queda para rehacer, con
   *Redo* en el aviso (antes no había rehacer).
-- **Las páginas que no se pudieron deshacer** (papelera, sin permiso, sin bajar): su paso sale de la pila y quedan para
-  *Undo the rest* del panel, por las anclas; ⌘⇧Z rehace solo las que se deshicieron.
+- **Las páginas que no se pudieron deshacer** (papelera, sin permiso, sin bajar): desde v0.0XX su paso queda para el
+  próximo ⌘Z si vuelve a estar accesible (sección 22); *Undo the rest* también usa la pila mientras siga retenida.
+  ⌘⇧Z rehace solo las que se deshicieron.
 - **Fuera de orden no borra lo de rehacer**: Yjs resuelve el orden y lo que estaba para rehacer sigue andando.
 - **Un reemplazo que no cambió nada no borra lo de rehacer** (`beginReplace` va con el primer cambio).
 - **Sin *Show*** en el aviso de ⌘Z cuando algo había cambiado: el aviso lo cuenta ("2 had changed…"); *Show* tampoco
@@ -863,7 +864,7 @@ semillas en la suite, `TIMELINE_SEEDS` para más) y las de atajos (`shortcuts.te
   now"), la restaurás y ⌘Z: deshace lo escrito pero queda "Toma 1: Camera"; *Undo the rest* lo deja "Toma 1: cámara"
   en vez de "Toma 1: ". Es el resto de D167 en ese rincón: texto de más, nada de menos. Causa: el paso de esa página
   sale de la pila al pasar el reemplazo a rehacer (18.2). Arreglarlo pide que un reemplazo quede a la vez para rehacer
-  (las páginas hechas) y para deshacer (las que faltan): mediano, al roadmap. **Sigue pendiente** (19.4).
+  (las páginas hechas) y para deshacer (las que faltan). **Corregido en v0.0XX (sección 22).**
 - Una prueba de la ventana de O4 (re-verificación): la marca de «algo nuevo en el medio» se toma antes del primer `await`; un
   mutante que la toma después sobrevive. El código está bien; falta la prueba. **Hecha con la entrega 3 (19.1).**
 - La memoria en el iPhone (entrega 1) y el gesto de deshacer de iOS en la PWA instalada.
@@ -1209,6 +1210,30 @@ archivo nuevo; sin la parte 1, la del "dso".
 
 - Reportarlo a Yjs con los casos mínimos de 21.2, junto con los de 16.1, 16.4 y 20.1.
 - Los ids de bloques repetidos (21.1) siguen como estaban: el texto es el mismo, el id del repetido no.
+
+## 22. Reemplazo con una página en la papelera (v0.0XX)
+
+La página con historia que no pudo deshacerse conserva su paso del reemplazo. Lo hecho en las demás páginas queda
+para rehacer, y lo pendiente queda para deshacer en el lugar que tenía antes del reemplazo. Al restaurarla, el próximo
+⌘Z deshace el reemplazo ahí, sin cambiar de página; el siguiente vuelve a su página y deshace lo escrito antes,
+exactamente. *Undo the rest* usa esa misma pila si la página sigue retenida. ⌘⇧Z vuelve a hacer lo escrito y después
+el reemplazo en todas las páginas deshechas.
+
+Si el siguiente ⌘Z llega mientras todas las páginas pendientes siguen inaccesibles, se avisa y se olvidan sus pasos,
+como con una página en la papelera. El siguiente ⌘Z sigue con lo anterior. El panel conserva *Undo the rest* por las
+anclas. Algo nuevo elimina lo de rehacer en el proyecto, pero conserva lo pendiente para deshacer. Rehacer antes de
+restaurar junta lo hecho con lo pendiente, en una sola entrada. Los topes y el rearmado del documento liberan también
+los pasos pendientes. Esto vive solamente en la memoria de la pestaña, sin cambiar el formato guardado ni el esquema.
+
+Pruebas con el editor real, Yjs y el servidor en memoria: restaurar antes de seguir, *Undo the rest*, *Undo* fuera
+de orden, una sola página afectada, continuar sin restaurar y escribir algo nuevo antes de restaurar. El esquema
+anterior abre lo deshecho y rehecho sin escribir en el documento. La memoria del iPhone y el gesto de iOS siguen
+pendientes de comprobar en los dispositivos.
+
+Verificación dirigida: 95 pruebas en cuatro archivos de la línea de tiempo; TypeScript sin errores. En Chromium sin
+ventana, 64 comprobaciones en cinco recorridos: restaurar y deshacer/rehacer con Ctrl y con ⌘, *Undo the rest*, y
+continuar sin restaurar con ambos atajos. Los recorridos usan el editor de la app y dos dispositivos contra el servidor
+en memoria; el segundo baja el mismo texto. La simulación de ⌘ no sustituye comprobar una Mac o el gesto de iOS.
 
 ## Correcciones de la auditoría (2026-10-02)
 

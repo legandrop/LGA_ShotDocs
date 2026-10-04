@@ -532,7 +532,7 @@ describe('el reemplazo en la línea de tiempo (entrega 2)', () => {
     expect(await texts()).toEqual({ A: 'la Camera', B: 'otra Camera' });
   });
 
-  it('una página con historia que no se pudo deshacer: su paso del reemplazo sale de la pila y lo de antes sigue en orden', async () => {
+  it('una página con historia que no se pudo deshacer: su paso del reemplazo queda para deshacer y lo de antes sigue en orden (O1)', async () => {
     const { d, ids, app, runner, replaceAll, go, text, where } = await setup({ A: ['la cámara'], B: ['otra cámara'] });
     await go('A');
     type(app.editor!, ' uno');
@@ -545,10 +545,196 @@ describe('el reemplazo en la línea de tiempo (entrega 2)', () => {
     expect(await text('A')).toBe('la cámara uno');
     expect(await text('B')).toBe('otra Camera dos');
     await d.tree.restore(ids.B);
-    // Lo próximo es lo escrito en B (después de lo de A): el paso del reemplazo que quedó en B no lo tapa.
+    // Lo próximo es el reemplazo en B (iba después de lo escrito en B), sin moverte; después, lo escrito en B.
+    await runner.run('undo');
+    expect(where()).toBe('A');
+    expect(await text('B')).toBe('otra cámara dos');
     await runner.run('undo');
     expect(where()).toBe('B');
+    expect(await text('B')).toBe('otra cámara');
+    await runner.run('undo');
+    expect(where()).toBe('A');
+    expect(await text('A')).toBe('la cámara');
+  });
+
+  // O1 (18.4): la página con historia que estaba en la papelera durante el ⌘Z del reemplazo, restaurada después. Su paso
+  // del reemplazo queda para deshacer (en su lugar del orden) mientras lo hecho en las demás queda para rehacer.
+  it('O1: restaurada la página, ⌘Z deshace el reemplazo ahí y ⌘Z lo escrito: "Toma 1: " exacto; ⌘⇧Z dos veces lo vuelve todo', async () => {
+    const { d, ids, app, runner, replaceAll, go, text, texts, where, engine, project, timeline } = await setup({ A: ['Toma 1: '], B: ['otra cámara'] });
+    await go('A');
+    type(app.editor!, 'cámara roja');
+    await go('B');
+    const op = await replaceAll('camara', 'Camera');
+    const afterReplace = await texts();
+    await d.tree.trash(ids.A);
+    await runner.run('undo');
+    expect(await texts()).toEqual({ A: 'Toma 1: Camera roja', B: 'otra cámara' });
+    // A la vez: lo hecho para rehacer, y lo de A todavía para deshacer.
+    expect(timeline.replaceIsNext(op, 'redo')).toBe(true);
+    expect(timeline.replaceIsNext(op, 'undo')).toBe(true);
+    await d.tree.restore(ids.A);
+    await runner.run('undo');
+    expect(where()).toBe('B');
+    expect(await text('A')).toBe('Toma 1: cámara roja');
+    expect(await engine.list(project)).toEqual([]);
+    await runner.run('undo');
+    expect(where()).toBe('A');
+    expect(await text('A')).toBe('Toma 1: ');
+    await runner.run('redo');
+    expect(await text('A')).toBe('Toma 1: cámara roja');
+    await runner.run('redo');
+    expect(await texts()).toEqual(afterReplace);
+    expect((await engine.list(project)).map((h) => h.id)).toEqual([op]);
+  });
+
+  it('O1 con Undo the rest del panel: lo de A vuelve con su pila y ⌘Z deja "Toma 1: "', async () => {
+    const { d, ids, app, runner, replaceAll, go, text, engine, project, timeline } = await setup({ A: ['Toma 1: '], B: ['otra cámara'] });
+    await go('A');
+    type(app.editor!, 'cámara roja');
+    await go('B');
+    const op = await replaceAll('camara', 'Camera');
+    await d.tree.trash(ids.A);
+    await runner.run('undo');
+    await d.tree.restore(ids.A);
+    const [partial] = await engine.list(project);
+    expect(partial.status).toBe('partial');
+    const r = await engine.undo(op, { inOrder: timeline.replaceIsNext(op, 'undo') });
+    expect([r.pages, r.remaining, r.changed]).toEqual([1, 0, 0]);
+    expect(await text('A')).toBe('Toma 1: cámara roja');
+    expect(await engine.list(project)).toEqual([]);
+    await runner.run('undo');
+    expect(await text('A')).toBe('Toma 1: ');
+  });
+
+  it('O1 fuera de orden: el Undo del panel con A en la papelera y algo escrito después; restaurada, ⌘Z llega al reemplazo en A y deja "Toma 1: "', async () => {
+    const { d, ids, app, runner, replaceAll, go, text, timeline, engine } = await setup({ A: ['Toma 1: '], B: ['otra cámara'], C: ['nada'] });
+    await go('A');
+    type(app.editor!, 'cámara roja');
+    await go('B');
+    const op = await replaceAll('camara', 'Camera');
+    await go('C');
+    type(app.editor!, ' más');
+    await d.tree.trash(ids.A);
+    expect(timeline.replaceIsNext(op, 'undo')).toBe(false);
+    await engine.undo(op, { inOrder: false });
+    expect(await text('B')).toBe('otra cámara');
+    await d.tree.restore(ids.A);
+    await runner.run('undo');
+    expect(await text('C')).toBe('nada');
+    await runner.run('undo');
+    expect(await text('A')).toBe('Toma 1: cámara roja');
+    await runner.run('undo');
+    expect(await text('A')).toBe('Toma 1: ');
+  });
+
+  it('O1 con la única página del reemplazo en la papelera: no se deshace nada, y restaurada, ⌘Z y ⌘Z dejan "Toma 1: "', async () => {
+    const { d, ids, app, runner, replaceAll, go, text } = await setup({ A: ['Toma 1: '], B: ['nada'] });
+    await go('A');
+    type(app.editor!, 'cámara roja');
+    await go('B');
+    await replaceAll('camara', 'Camera');
+    await d.tree.trash(ids.A);
+    await runner.run('undo');
+    expect(await text('A')).toBe('Toma 1: Camera roja');
+    await d.tree.restore(ids.A);
+    await runner.run('undo');
+    expect(await text('A')).toBe('Toma 1: cámara roja');
+    await runner.run('undo');
+    expect(await text('A')).toBe('Toma 1: ');
+  });
+
+  it('O1 sin restaurar: el ⌘Z siguiente avisa que A está en la papelera y el otro sigue con lo de antes, como con un paso de página', async () => {
+    const { d, ids, app, runner, replaceAll, go, text, notes, timeline, project } = await setup({ A: ['Toma 1: '], B: ['otra cámara'], C: ['nada'] });
+    await go('C');
+    type(app.editor!, ' uno');
+    await go('A');
+    type(app.editor!, 'cámara roja');
+    await go('B');
+    const op = await replaceAll('camara', 'Camera');
+    await d.tree.trash(ids.A);
+    await runner.run('undo');
+    expect(await text('B')).toBe('otra cámara');
+    await runner.run('undo');
+    expect(notes.at(-1)).toMatch(/^Can't undo in “A”: it's in the trash/);
+    expect(timeline.replaceIsNext(op, 'undo')).toBe(false);
+    expect(timeline.stepsOf(ids.A)).toEqual({ undo: 0, redo: 0 });
+    await runner.run('undo');
+    expect(await text('C')).toBe('nada');
+    // Lo hecho en B sigue para rehacer (después de lo de C).
+    await runner.run('redo');
+    await runner.run('redo');
     expect(await text('B')).toBe('otra Camera');
+    expect(timeline.peek(project, 'redo')).toBeNull();
+  });
+
+  it('O1 y algo nuevo antes de restaurar: se va lo de rehacer, lo de A sigue para deshacer', async () => {
+    const { d, ids, app, runner, replaceAll, go, text, timeline, project } = await setup({ A: ['Toma 1: '], B: ['otra cámara'], C: ['nada'] });
+    await go('A');
+    type(app.editor!, 'cámara roja');
+    await go('B');
+    const op = await replaceAll('camara', 'Camera');
+    await d.tree.trash(ids.A);
+    await runner.run('undo');
+    await go('C');
+    type(app.editor!, ' más');
+    expect(timeline.peek(project, 'redo')).toBeNull();
+    expect(timeline.replaceState(op)).toBe('undo');
+    await d.tree.restore(ids.A);
+    await runner.run('undo');
+    expect(await text('C')).toBe('nada');
+    await runner.run('undo');
+    expect(await text('A')).toBe('Toma 1: cámara roja');
+    expect(await text('B')).toBe('otra cámara');
+    await runner.run('undo');
+    expect(await text('A')).toBe('Toma 1: ');
+  });
+
+  it('O1: rehacer antes de restaurar junta lo pendiente con lo rehecho, y después se deshace todo exactamente', async () => {
+    const { d, ids, app, runner, replaceAll, go, text, texts, timeline } = await setup({ A: ['Toma 1: '], B: ['otra cámara'] });
+    await go('A');
+    type(app.editor!, 'cámara roja');
+    await go('B');
+    const op = await replaceAll('camara', 'Camera');
+    const replaced = await texts();
+    await d.tree.trash(ids.A);
+    await runner.run('undo');
+    await runner.run('redo');
+    expect(await texts()).toEqual(replaced);
+    expect(timeline.replaceState(op)).toBe('undo');
+    await d.tree.restore(ids.A);
+    await runner.run('undo');
+    expect(await texts()).toEqual({ A: 'Toma 1: cámara roja', B: 'otra cámara' });
+    await runner.run('undo');
+    expect(await text('A')).toBe('Toma 1: ');
+    await runner.run('redo');
+    await runner.run('redo');
+    expect(await texts()).toEqual(replaced);
+  });
+
+  it('O1 con dos páginas pendientes: una restaurada usa su pila y la que sigue en la papelera queda para el panel', async () => {
+    const { d, ids, app, runner, replaceAll, go, text, engine, project, timeline } = await setup({ A: ['A: '], B: ['B: '], C: ['otra cámara'] });
+    await go('A');
+    type(app.editor!, 'cámara roja');
+    await go('B');
+    type(app.editor!, 'cámara azul');
+    await go('C');
+    const op = await replaceAll('camara', 'Camera');
+    await d.tree.trash(ids.A);
+    await d.tree.trash(ids.B);
+    await runner.run('undo');
+    expect(timeline.replaceLeft(op)).toEqual(expect.arrayContaining([ids.A, ids.B]));
+    await d.tree.restore(ids.B);
+    await runner.run('undo');
+    expect(await text('B')).toBe('B: cámara azul');
+    expect(await text('A')).toBe('A: Camera roja');
+    expect(timeline.replaceLeft(op)).toEqual([]);
+    expect((await engine.list(project))[0].status).toBe('partial');
+    await runner.run('undo');
+    expect(await text('B')).toBe('B: ');
+    await runner.run('redo');
+    await runner.run('redo');
+    expect(await text('B')).toBe('B: Camera azul');
+    expect(await text('C')).toBe('otra Camera');
   });
 
   it('un reemplazo que ya no está entre los últimos 5 del panel se deshace igual con ⌘Z (con lo guardado en memoria)', async () => {

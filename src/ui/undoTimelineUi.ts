@@ -117,6 +117,16 @@ export function createUndoRunner(deps: UndoUiDeps) {
       if (next.kind === 'replace') {
         // Un reemplazo: en todas sus páginas a la vez; manteniendo apretado se frena acá (3.4).
         if (repeat || !deps.replace) return;
+        // Lo que quedó de un reemplazo (O1: páginas que no se pudieron deshacer) y sigue sin poderse: sale, con el aviso
+        // de un paso de página; esas páginas se olvidan, como con un paso suyo.
+        const left = kind === 'undo' ? timeline.replaceLeft(next.opId) : [];
+        const why = left.map((p) => deps.blocked(p));
+        if (left.length > 0 && why.every((w) => w !== null)) {
+          timeline.dropLeft(next.opId);
+          for (const p of left) timeline.forget(p);
+          cant(kind, left[0], why[0]!);
+          return;
+        }
         busy = true;
         try {
           await deps.replace(kind, next.opId);
