@@ -94,16 +94,21 @@ export function porteroDownload(
   fetchImpl: (url: string, signal?: AbortSignal) => Promise<Response> = (url, signal) => fetch(url, signal ? { signal } : undefined),
   now: () => number = Date.now,
   online: () => boolean = () => typeof navigator === 'undefined' || navigator.onLine !== false,
-): (id: string, signal?: AbortSignal) => Promise<Blob> {
+): (id: string, signal?: AbortSignal, received?: (bytes: number) => void) => Promise<Blob> {
   // Con red, un `fetch` que falla sin respuesta es casi siempre CORS (un portero anterior a v0.059): después de
   // `BREAKER_FAILURES` seguidos no se baja nada por `BREAKER_MS` (la página sigue con las miniaturas).
   let failures = 0;
   let closedUntil = 0;
   // `signal` corta la bajada (exportar: *Cancel*, o el tope de tiempo por original); un corte no cuenta como falla.
-  return async (id, signal) => {
+  return async (id, signal, received) => {
+    const checkAbort = () => {
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    };
+    checkAbort();
     if (now() < closedUntil) throw new Error('portero: paused');
     for (let attempt = 0; ; attempt++) {
       const url = await passFor(media, id);
+      checkAbort();
       let res: Response;
       try {
         res = await fetchImpl(url, signal);
@@ -116,11 +121,44 @@ export function porteroDownload(
         throw err;
       }
       failures = 0;
-      if (res.ok) return res.blob();
+      if (res.ok) return received ? progressBlob(res, signal, received) : res.blob();
+      // Solo el modo con progreso (PDF): un error no deja su cuerpo descargándose mientras se renueva el pase.
+      if (received) void res.body?.cancel().catch(() => undefined);
       forgetPass(media, id);
       if (attempt >= 1 || ![401, 403, 404, 410].includes(res.status)) throw new Error(`portero ${res.status}`);
     }
   };
+}
+
+/** Original del PDF: leer bytes permite distinguir una descarga lenta de una detenida y cancelar su lector real. */
+async function progressBlob(res: Response, signal: AbortSignal | undefined, received: (bytes: number) => void): Promise<Blob> {
+  const reader = res.body?.getReader();
+  if (!reader) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    return res.blob();
+  }
+  const chunks: BlobPart[] = [];
+  const cancel = () => { void reader.cancel(signal?.reason).catch(() => undefined); };
+  signal?.addEventListener('abort', cancel, { once: true });
+  try {
+    if (signal?.aborted) cancel();
+    while (true) {
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      const { done, value } = await reader.read();
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      if (done) return new Blob(chunks, { type: res.headers.get('Content-Type') ?? '' });
+      if (value.byteLength > 0) {
+        chunks.push(value);
+        received(value.byteLength);
+      }
+    }
+  } catch (err) {
+    void reader.cancel(err).catch(() => undefined);
+    throw err;
+  } finally {
+    signal?.removeEventListener('abort', cancel);
+    reader.releaseLock();
+  }
 }
 
 export interface SharpOptions {

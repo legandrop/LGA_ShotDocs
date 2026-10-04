@@ -244,6 +244,7 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
               // original de cada foto, del dispositivo o bajado entero por el portero.
               download: smaller && online ? porteroDownload(media) : null,
               maxDownloads: limits.sharp,
+              // Solo los originales reciben el callback de bytes de deviceImages y activan la lectura con progreso.
               originals: full && online ? porteroDownload(media) : null,
             })
           : null,
