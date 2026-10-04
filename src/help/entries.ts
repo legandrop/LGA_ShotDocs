@@ -463,7 +463,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     title: 'help.photosReplaceBlock.title',
     text: 'help.photosReplaceBlock.text',
     words: ['replace', 'reemplazar', 'bloque', 'block', 'fila', 'row'],
-    since: '0.0XX',
+    since: '0.184',
   },
   {
     id: 'photosInline',

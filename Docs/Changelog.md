@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX : Conservar la última elección al reemplazar una foto de bloque
+v0.184 : Conservar la última elección al reemplazar una foto de bloque
 
 Al elegir dos archivos para reemplazar la misma foto de bloque o de una fila, el primero podía terminar de
 guardarse más tarde y pisar la segunda elección. El callback sólo comprobaba que todavía existiera el id del
@@ -11,6 +11,12 @@ elección pendiente; un segundo archivo fallido tampoco revive el primero. Los a
 conservan. Se mantienen las fotos en línea y celdas, con ayuda en ambos idiomas y comprobaciones de ambos órdenes.
 
 [Conservar la última elección al reemplazar una foto de bloque]
+
+v0.183 : Mantener los menús del carrete dentro del teléfono
+
+En el carrete de un teléfono, los menús de Download y Copy podían empezar fuera de la pantalla: su ancho se alineaba al borde de un botón intermedio de la barra. Eso recortaba el nombre de la copia preparada y las dimensiones del original; en pantallas más angostas también dejaba controles afuera. Ahora los paneles se ubican dentro de los márgenes del viewport móvil, contemplan las áreas seguras y aprovechan el espacio disponible. Los nombres largos se envuelven completos y, si el menú supera el alto disponible, se puede desplazar sin achicar los botones. Original, la preparación, Download, Copy y Close conservan su funcionamiento. En escritorio continúa el anclaje existente. La ayuda explica dónde ver el nombre y las dimensiones y cómo desplazarse hasta los controles.
+
+[Mantener los menús de descarga y copia dentro del carrete móvil]
 
 v0.182 : Bajar y copiar una foto anotada desde su barra
 

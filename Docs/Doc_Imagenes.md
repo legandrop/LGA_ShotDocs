@@ -15,7 +15,7 @@ image*, *Delete image*], todos los botones de 30 × 30 px y con `data-tip`. Sin 
 existe se sigue viendo) ni *Toggle preview*; *Replace image* abre el selector de archivos (sin *Embed*). Ver
 `Doc_Fotos_En_Linea.md`, "Paridad con la foto-bloque".
 
-### Replace de bloque o fila: última elección local (v0.0XX)
+### Replace de bloque o fila: última elección local (v0.184)
 
 Si se elige A y después B antes de que terminen de guardarse, sólo B puede reemplazar la referencia de esa
 foto-bloque, tanto si termina primero como si termina después de A. Elegir texto y volver a la foto no reinicia

@@ -67,7 +67,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
 - **P.3 Hecho (v0.045): fotos y videos en fila** (`Doc_Imagenes.md`, entrega 2): tamaños rápidos 1/1, 1/2, 1/3 y 1/4 en la
   barra, fotos seguidas que entran quedan en una fila, tiradores que imantan a esos tamaños, flechas y Enter
   en una fila, paginación y PDF con la fila entera. Propiedad nueva `rowWidth` en el bloque `image` (sin
-  tipo de bloque nuevo); `min_app_version` quedó en 0.045. En v0.0XX, Replace de foto-bloque/fila conserva
+  tipo de bloque nuevo); `min_app_version` quedó en 0.045. En v0.184, Replace de foto-bloque/fila conserva
   la última elección local con guardados que terminan fuera de orden, sin cambiar fotos en línea/celdas ni persistencia.
 - **P.15 🔴 Fotos en línea: la foto como un carácter del renglón** (Lega, 2026-10-01; **lo primero: sin esto no
   se importa ningún doc de Coda de forma definitiva**). Hoy la foto es un bloque: no se puede poner el cursor a

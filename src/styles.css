@@ -4021,6 +4021,8 @@ svg.sd-markup text {
 .annotated-download-menu p { margin: 0; font-size: 13px; overflow-wrap: anywhere; line-height: 1.4; }
 .annotated-download-menu .carrete-btn-label { display: inline; }
 .annotated-download-menu button:disabled { opacity: .45; cursor: default; }
+.annotated-download-menu { touch-action: pan-y; }
+.annotated-download-menu > * { flex-shrink: 0; }
 .carrete-stage {
   position: relative;
   flex: 1;
@@ -4282,6 +4284,15 @@ svg.sd-markup text {
 }
 
 @media (max-width: 520px) {
+  .carrete .annotated-download-menu {
+    position: fixed;
+    top: calc(64px + env(safe-area-inset-top));
+    left: max(16px, env(safe-area-inset-left));
+    right: max(16px, env(safe-area-inset-right));
+    width: auto;
+    max-height: calc(100dvh - 100px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+
   .carrete-bar {
     padding-left: 12px;
   }
