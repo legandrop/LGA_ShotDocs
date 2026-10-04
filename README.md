@@ -7,6 +7,7 @@ its own project: a tree of pages you own.
 ## Goals
 
 - Copy one annotated JPEG/PNG photo from the photo viewer as a full-size PNG: prepare it first, then tap Copy. Browser image-clipboard support is required; the unchanged original remains available. HEIC, large mobile images, folders and FrameRev export remain pending.
+- On phones, the Download and Copy menus in the photo viewer stay within the screen, wrap the complete file name and show the dimensions. Scroll the menu when its remaining buttons are below.
 - On editable workspace pages, an annotated Drive photo’s existing Download button also offers annotated Download and Copy, including photos in rows, inline and in table cells. Original stays available.
 
 - **Projects.** Each show or job is a project with its own tree of pages. Switch between them from the
