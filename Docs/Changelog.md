@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.183 : Mantener los menús del carrete dentro del teléfono
+
+En el carrete de un teléfono, los menús de Download y Copy podían empezar fuera de la pantalla: su ancho se alineaba al borde de un botón intermedio de la barra. Eso recortaba el nombre de la copia preparada y las dimensiones del original; en pantallas más angostas también dejaba controles afuera. Ahora los paneles se ubican dentro de los márgenes del viewport móvil, contemplan las áreas seguras y aprovechan el espacio disponible. Los nombres largos se envuelven completos y, si el menú supera el alto disponible, se puede desplazar sin achicar los botones. Original, la preparación, Download, Copy y Close conservan su funcionamiento. En escritorio continúa el anclaje existente. La ayuda explica dónde ver el nombre y las dimensiones y cómo desplazarse hasta los controles.
+
+[Mantener los menús de descarga y copia dentro del carrete móvil]
+
 v0.182 : Bajar y copiar una foto anotada desde su barra
 
 Las barras de fotos sólo permitían bajar el original aunque la página tuviera anotaciones. Ahora, al elegir una sola foto del Drive anotada en una página editable, el mismo botón Download abre una hoja con Original, Download y Copy. Vale para fotos de bloque, fila, renglón y celda, con preparación explícita y un segundo gesto para sacar el resultado completo. Reutiliza los motores de descarga y copia; no modifica la foto ni las formas. La hoja se descarta al cambiar la aparición elegida, selección, página, contexto, sesión o permiso, y vuelve a validar antes de producir una salida. Original y Close quedan disponibles si el cuerpo anotado sigue cargando o falla; Escape cancela la preparación pendiente. Las demás fuentes y acciones conservan su conducta. E4 sigue abierta por carpetas, FrameRev y pruebas físicas en Safari/iPhone.
