@@ -15,6 +15,24 @@ image*, *Delete image*], todos los botones de 30 × 30 px y con `data-tip`. Sin 
 existe se sigue viendo) ni *Toggle preview*; *Replace image* abre el selector de archivos (sin *Embed*). Ver
 `Doc_Fotos_En_Linea.md`, "Paridad con la foto-bloque".
 
+### Replace de bloque o fila: última elección local (v0.184)
+
+Si se elige A y después B antes de que terminen de guardarse, sólo B puede reemplazar la referencia de esa
+foto-bloque, tanto si termina primero como si termina después de A. Elegir texto y volver a la foto no reinicia
+esa prioridad. Dos bloques distintos conservan sus operaciones independientes. Cancelar el selector sin elegir
+un archivo no cancela lo que ya se estaba guardando; si falla B, se mantiene la foto actual y el aviso de error,
+sin volver automáticamente a A.
+
+Antes de aplicar el resultado se comprueba que siga abierto el mismo editor editable y que el bloque siga siendo
+una imagen con la dirección original de ese reemplazo. Una fuente cambiada, un bloque eliminado o convertido en
+texto, o una página cerrada no reciben una escritura tardía. Se conservan los archivos guardados por las dos
+elecciones; no se cancela ni borra ninguna cola. Esta corrección no modifica Replace de fotos en línea/celdas,
+las anotaciones ni el formato del documento.
+
+Se verificaron PNG nativos en bloque/fila con ambos órdenes de finalización, el desmontaje real de la barra al
+seleccionar texto, cancelación sin archivo, dos bloques, fallo de guardado y cambios de fuente/tipo/edición/vista.
+Los controles causales distinguen la prioridad, su duración fuera de la barra y la comprobación de la dirección.
+
 ## Lo que se pide
 
 1. **El primer clic elige, el segundo abre.** Hoy, con el mouse, un clic en una foto abre el carrete. El

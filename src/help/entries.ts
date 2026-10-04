@@ -458,6 +458,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
   // --- Fotos y videos ---
   { id: 'photosAdd', section: 'photos', title: 'help.photosAdd.title', text: 'help.photosAdd.text', keys: { paste: 'pasteFiles' }, since: BEFORE_HELP },
   {
+    id: 'photosReplaceBlock',
+    section: 'photos',
+    title: 'help.photosReplaceBlock.title',
+    text: 'help.photosReplaceBlock.text',
+    words: ['replace', 'reemplazar', 'bloque', 'block', 'fila', 'row'],
+    since: '0.184',
+  },
+  {
     id: 'photosInline',
     section: 'photos',
     title: 'help.photosInline.title',

@@ -1,10 +1,28 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX : WebP estático simple como PNG anotado
+v0.185 : WebP estático simple como PNG anotado
 
 Las fotos WebP que ya se podían agregar y ver no se podían bajar ni copiar con sus anotaciones. Ahora Carrete y las barras de una foto elegida admiten originales estáticos simples, tanto VP8 opaco como VP8L con transparencia. El resultado es un PNG completo y su nombre y dimensiones se muestran antes de descargarlo o copiarlo. Una comprobación del contenedor y sus cabeceras rechaza animación, metadatos, extensiones y tamaños incompatibles antes de decodificar; nunca elige silenciosamente un frame. El original permanece intacto y disponible. Se conservan los límites del dispositivo, cancelación, contexto y permisos existentes, sin reducción automática ni cambios del documento. JPEG y PNG mantienen sus salidas anteriores. Se actualizan ayuda y documentación. HEIC real, WebP extendido, carpetas, FrameRev y la comprobación física en Safari siguen pendientes.
 
 [Exportar WebP estático simple como PNG anotado]
+
+v0.184 : Conservar la última elección al reemplazar una foto de bloque
+
+Al elegir dos archivos para reemplazar la misma foto de bloque o de una fila, el primero podía terminar de
+guardarse más tarde y pisar la segunda elección. El callback sólo comprobaba que todavía existiera el id del
+bloque. Ahora cada archivo elegido tiene una prioridad propia de ese bloque y editor: sólo la última selección
+puede aplicar su resultado, incluso después de elegir texto y volver a la foto. También se comprueban la fuente
+anterior, el tipo del bloque y que el mismo editor siga abierto y editable. Cancelar el selector no invalida una
+elección pendiente; un segundo archivo fallido tampoco revive el primero. Los archivos guardados y las colas se
+conservan. Se mantienen las fotos en línea y celdas, con ayuda en ambos idiomas y comprobaciones de ambos órdenes.
+
+[Conservar la última elección al reemplazar una foto de bloque]
+
+v0.183 : Mantener los menús del carrete dentro del teléfono
+
+En el carrete de un teléfono, los menús de Download y Copy podían empezar fuera de la pantalla: su ancho se alineaba al borde de un botón intermedio de la barra. Eso recortaba el nombre de la copia preparada y las dimensiones del original; en pantallas más angostas también dejaba controles afuera. Ahora los paneles se ubican dentro de los márgenes del viewport móvil, contemplan las áreas seguras y aprovechan el espacio disponible. Los nombres largos se envuelven completos y, si el menú supera el alto disponible, se puede desplazar sin achicar los botones. Original, la preparación, Download, Copy y Close conservan su funcionamiento. En escritorio continúa el anclaje existente. La ayuda explica dónde ver el nombre y las dimensiones y cómo desplazarse hasta los controles.
+
+[Mantener los menús de descarga y copia dentro del carrete móvil]
 
 v0.182 : Bajar y copiar una foto anotada desde su barra
 

@@ -7,6 +7,7 @@ its own project: a tree of pages you own.
 ## Goals
 
 - Copy one annotated JPEG/PNG or simple static WebP photo from the photo viewer as a full-size PNG: prepare it first, then tap Copy. Browser image-clipboard support is required; the unchanged original remains available. HEIC, large mobile images, folders and FrameRev export remain pending.
+- On phones, the Download and Copy menus in the photo viewer stay within the screen, wrap the complete file name and show the dimensions. Scroll the menu when its remaining buttons are below.
 - On editable workspace pages, an annotated Drive photo’s existing Download button also offers annotated Download and Copy, including photos in rows, inline and in table cells. Original stays available.
 
 - **Projects.** Each show or job is a project with its own tree of pages. Switch between them from the
@@ -119,6 +120,9 @@ In development. What works today:
   (full, 1/2, 1/3, 1/4 of the page) put photos and videos side by side, *Arrange in rows* lays out a run of
   photos in rows of equal height, and on the phone each account chooses rows or stacked. The PDF keeps the
   rows and breaks sheets where the page shows them. Photos added before v0.078 keep working this way.
+- Replacing a photo block or a photo in a row keeps your latest file choice when saves finish out of order,
+  even after selecting text and returning to the photo. If that choice fails, the current photo stays with an error;
+  an older pending choice does not replace it. A changed source or a closed or read-only page stays untouched.
 - Annotate photos on a computer: *Annotate* in a photo's toolbar (or A in the full-screen viewer) draws arrows,
   ellipses, rectangles, lines, pencil and marker strokes, text and numbered markers on top, with the tools, letters,
   colors and thickness of LGA FrameRev. The original never changes; annotations show on the page, in table cells, in

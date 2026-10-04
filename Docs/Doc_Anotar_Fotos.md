@@ -4,10 +4,12 @@
 compu y la poda; v0.129: el dedo y el lápiz del iPad; ver "Cómo quedó" al final) y, de la entrega 5, copiar y pegar una
 foto con sus anotaciones (D46, v0.132; "Copiar y pegar con las anotaciones", al final); bajar y copiar la imagen con
 anotaciones tiene su primera parte en v0.178 (E4a: una foto JPEG/PNG desde el carrete) y copiarla como PNG en v0.180
-(E4b); desde v0.182 también desde la barra de una foto anotada en una página editable; v0.0XX suma WebP estático simple como PNG (E4c parcial). Los demás formatos, carpetas y FrameRev siguen pendientes.** Pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.108. Las decisiones
+(E4b); desde v0.182 también desde la barra de una foto anotada en una página editable; v0.185 suma WebP estático simple como PNG (E4c parcial). Los demás formatos, carpetas y FrameRev siguen pendientes.** Pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.108. Las decisiones
 (AN1 a AN11, sección 12) son propuestas con la recomendación elegida: el número final lo pone quien las cierre con Lega.
 Auditado el 2026-10-02 (aprobado con condiciones): las correcciones ya están en el texto y resumidas al final
 ("Correcciones de la auditoría").
+
+En v0.183, los menús de Download y Copy del carrete en el teléfono quedan dentro de la pantalla: el nombre preparado se envuelve completo y las dimensiones no se recortan. Si el panel es más alto que el espacio disponible, se desplaza para llegar a Original, la preparación, Download o Copy y Close; los botones mantienen su tamaño. El posicionamiento de escritorio conserva el anclaje de la barra.
 
 ## En corto
 
@@ -292,7 +294,7 @@ miniatura. Las fotos sin anotaciones, selecciones múltiples, direcciones web, a
 adjuntos, carpetas y links públicos conservan sus acciones anteriores. No suma botones permanentes. E4 sigue
 abierta: faltan carpetas, FrameRev y comprobaciones físicas de gesto y memoria en Safari/iPhone.
 
-**E4c parcial (v0.0XX): WebP simple → PNG explícito.** Carrete y las barras anteriores admiten un original
+**E4c parcial (v0.185): WebP simple → PNG explícito.** Carrete y las barras anteriores admiten un original
 WebP estático con un único chunk VP8 o VP8L, incluido alfa. La descarga y la copia salen como PNG real,
 con nombre `<nombre>_annotated.png` y las dimensiones completas visibles antes del gesto de salida.
 JPEG/PNG mantienen sus salidas anteriores. Original conserva sus bytes, nombre y animación si la tuviera.
