@@ -4,7 +4,7 @@
 compu y la poda; v0.129: el dedo y el lápiz del iPad; ver "Cómo quedó" al final) y, de la entrega 5, copiar y pegar una
 foto con sus anotaciones (D46, v0.132; "Copiar y pegar con las anotaciones", al final); bajar y copiar la imagen con
 anotaciones tiene su primera parte en v0.178 (E4a: una foto JPEG/PNG desde el carrete) y copiarla como PNG en v0.180
-(E4b); otros formatos, carpetas y FrameRev siguen pendientes.** Pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.108. Las decisiones
+(E4b); desde v0.182 también desde la barra de una foto anotada en una página editable; otros formatos, carpetas y FrameRev siguen pendientes.** Pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.108. Las decisiones
 (AN1 a AN11, sección 12) son propuestas con la recomendación elegida: el número final lo pone quien las cierre con Lega.
 Auditado el 2026-10-02 (aprobado con condiciones): las correcciones ya están en el texto y resumidas al final
 ("Correcciones de la auditoría").
@@ -244,7 +244,7 @@ malicioso no cuelga la página). Con prueba en la entrega 1.
 con las formas actuales de esa página; otro clic en *Download* guarda el resultado con su nombre y sus dimensiones.
 Puede usarlo quien ve o comenta, sin poder anotar. *Hide annotations* no cambia esa salida. Se toma una copia de las
 formas al iniciar; cerrar, cambiar de foto/contexto o un original que cambia invalida la preparación. Ningún dibujo,
-original o dato sincronizado cambia. No está en las barras, las carpetas ni los links públicos.
+original o dato sincronizado cambia. Las barras se describen abajo; no se ofrece en carpetas ni links públicos.
 
 Solo admite bytes JPEG o PNG estático sin EXIF, con cabecera comprobada antes de decodificar. HEIC real y otros
 formatos quedan pendientes; un HEIC convertido a JPEG por la cola existente se admite como JPEG. Una foto de 48 MP
@@ -274,6 +274,23 @@ pueden editar. PNG generado por Copy además debe entrar en el límite de bytes 
 para lograrlo. Encoder/portapapeles pueden reservar memoria antes de devolver el resultado, por lo que esos topes
 no garantizan RAM libre ni supervivencia de Safari/iPhone. Su gesto y memoria físicos siguen pendientes. Se
 documenta el PNG generado/entregado, sin afirmar identidad binaria tras reencodificación del navegador/OS.
+
+**Barras (v0.182):** con una sola foto del Drive anotada y una página editable del workspace, el botón existente
+*Download* abre una hoja con *Original*, *Download* y *Copy*. Vale para fotos de bloque, en fila, en línea y en una
+celda. Se prepara explícitamente y el siguiente gesto baja o copia el resultado completo con los motores anteriores.
+Abrir, preparar y cerrar no modifica la página ni las anotaciones. *Original* conserva el archivo y su nombre.
+
+La hoja cierra y descarta su preparación al quitar, reemplazar o reordenar la aparición elegida, cambiar selección,
+página, documento, workspace, sesión o permiso. Dos apariciones del mismo archivo se distinguen por su posición y
+su nodo actual. Enfocar los controles de la hoja conserva la selección. *Escape* y *Close* cancelan lo pendiente y
+devuelven el foco al botón de origen si todavía existe; llegar tarde no produce una salida. *Original* vuelve a
+comprobar esa identidad antes del gesto y al llegar una fuente pendiente.
+
+El cuerpo anotado se carga aparte: mientras espera o si falla, *Original* y *Close* siguen disponibles. Sin red se
+usan los mismos límites y la exigencia de original completo; si falta, se muestra un error sin sustituirlo por la
+miniatura. Las fotos sin anotaciones, selecciones múltiples, direcciones web, archivos locales antiguos, videos,
+adjuntos, carpetas y links públicos conservan sus acciones anteriores. No suma botones permanentes. E4 sigue
+abierta: faltan carpetas, FrameRev y comprobaciones físicas de gesto y memoria en Safari/iPhone.
 
 - Se arma **en el dispositivo, al bajar**: el original (del dispositivo o con un pase del portero, que ya manda
   `Access-Control-Allow-Origin` a la app; sin eso el `canvas` queda "manchado" y no se puede leer, así que se prueba con

@@ -15,7 +15,7 @@ const errorKey: Record<RasterFailure, Key> = {
   source: 'carrete.raster.source', encode: 'carrete.raster.encode',
 };
 /** Menú del carrete: el último clic descarga un Blob ya listo, también en Safari. */
-export function AnnotatedDownload({ item, map, loader, original }: { item: CarreteItem; map: Y.Map<unknown>; loader: CarreteLoader; original: ReactNode }) {
+export function AnnotatedDownload({ item, map, loader, original, presentation = 'menu', onDone }: { item: CarreteItem; map: Y.Map<unknown>; loader: CarreteLoader; original: ReactNode; presentation?: 'menu' | 'body'; onDone?: () => void }) {
   const tr = useT(), link = useLinkMode();
   const [open, setOpen] = useState(false), [state, setState] = useState<State>({ at: 'idle' }), [, revised] = useState(0);
   const running = useRef<AbortController | null>(null), context = useRef(link);
@@ -31,7 +31,7 @@ export function AnnotatedDownload({ item, map, loader, original }: { item: Carre
   }, [item.url, item.mediaId, loader, map, link]);
   const fileId = item.mediaId;
   const hasShapes = !!fileId && [...map.keys()].some((key) => key.startsWith(`${fileId}/`));
-  if (link || !fileId || !hasShapes || !loader.annotatedOriginal) return <>{original}</>;
+  if (link || !fileId || !hasShapes || !loader.annotatedOriginal) return presentation === 'body' ? null : <>{original}</>;
   let compatible = true;
   try { rasterSnapshot(map, fileId); } catch { compatible = false; }
 
@@ -59,16 +59,21 @@ export function AnnotatedDownload({ item, map, loader, original }: { item: Carre
     if (!state.isCurrent()) { setState({ at: 'failed', reason: 'source' }); return; }
     startDownload(state.result.blob, state.result.name);
     setState({ at: 'idle' }); setOpen(false);
+    onDone?.();
   };
+  const content = <>
+    <button className="carrete-notice-btn" onClick={() => void prepare()} disabled={!compatible || state.at === 'busy'}>{tr('carrete.withAnnotations')}</button>
+    {!compatible && <p role="status">{tr('carrete.raster.annotations')}</p>}
+    {state.at === 'busy' && <p role="status">{tr('common.preparing')}</p>}
+    {state.at === 'failed' && <p role="alert">{tr(errorKey[state.reason])}</p>}
+    {state.at === 'ready' && <><p>{state.result.name}<br />{state.result.width} × {state.result.height}</p><button className="carrete-notice-btn" onClick={download}>{tr('carrete.download')}</button></>}
+  </>;
+  if (presentation === 'body') return <div className="photo-export-body" role="group" aria-label={tr('carrete.download')}>{content}</div>;
   return <div className="annotated-download">
     <button className="carrete-btn" aria-label={tr('carrete.download')} aria-expanded={open} onClick={() => open ? cancel() : setOpen(true)}><DownloadIcon size={20} /><span className="carrete-btn-label">{tr('carrete.download')} ▾</span></button>
     {open && <div className="annotated-download-menu" role="group" aria-label={tr('carrete.download')}>
       {isValidElement<{ children?: ReactNode }>(original) ? cloneElement(original, { children: <><DownloadIcon size={20} />{tr('carrete.original')}</> }) : original}
-      <button className="carrete-notice-btn" onClick={() => void prepare()} disabled={!compatible || state.at === 'busy'}>{tr('carrete.withAnnotations')}</button>
-      {!compatible && <p role="status">{tr('carrete.raster.annotations')}</p>}
-      {state.at === 'busy' && <p role="status">{tr('common.preparing')}</p>}
-      {state.at === 'failed' && <p role="alert">{tr(errorKey[state.reason])}</p>}
-      {state.at === 'ready' && <><p>{state.result.name}<br />{state.result.width} × {state.result.height}</p><button className="carrete-notice-btn" onClick={download}>{tr('carrete.download')}</button></>}
+      {content}
       <button className="carrete-notice-btn" onClick={cancel}>{tr('common.close')}</button>
     </div>}
   </div>;

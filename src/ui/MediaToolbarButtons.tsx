@@ -39,13 +39,15 @@ function useSelectedImage(): { id: string; url: string; name: string; rowWidth: 
   });
 }
 
-export function OriginalDownloadButton({ fileId, label: given }: { fileId: string; label?: string }) {
+export function OriginalDownloadButton({ fileId, label: given, onOpen, isCurrent }: { fileId: string; label?: string; onOpen?: (trigger: HTMLElement | null) => boolean; isCurrent?: () => boolean }) {
   const dict = useDictionary();
   const { media } = useServices();
   // Se prepara apenas se elige la imagen: así el clic baja enseguida (Safari no abre otra pestaña si hay
   // que esperar). El pase se reusa por horas, así que no cuesta pedirlo.
   const ready = useRef<Promise<Awaited<ReturnType<typeof originalFor>>> | null>(null);
   const settled = useRef<Awaited<ReturnType<typeof originalFor>> | null>(null);
+  const button = useRef<HTMLButtonElement>(null), current = useRef(isCurrent);
+  current.current = isCurrent;
 
   useEffect(() => {
     const pending = originalFor(media, fileId);
@@ -69,10 +71,13 @@ export function OriginalDownloadButton({ fileId, label: given }: { fileId: strin
   }, [media, fileId]);
 
   const onClick = () => {
+    if (current.current && !current.current()) return;
+    if (onOpen?.(button.current)) return;
     const now = settled.current;
     if (now) return startDownload(now.full, now.name);
     (ready.current ?? originalFor(media, fileId)).then(
       (r) => {
+        if (current.current && !current.current()) { if (!settled.current) setTimeout(r.release, 60_000); return; }
         startDownload(r.full, r.name);
         if (!settled.current) setTimeout(r.release, 60_000);
       },
@@ -82,7 +87,7 @@ export function OriginalDownloadButton({ fileId, label: given }: { fileId: strin
   };
 
   const label = given ?? dict.formatting_toolbar.file_download.tooltip.image ?? t('mediaButton.download');
-  return <BarButton label={label} tip={`${label}\n${t('photoTip.download')}`} icon={<DownloadIcon size={18} />} test="mediaDownload" onClick={onClick} />;
+  return <BarButton ref={button} label={label} tip={`${label}\n${t(onOpen ? 'photoTip.export' : 'photoTip.download')}`} icon={<DownloadIcon size={18} />} test="mediaDownload" onClick={onClick} />;
 }
 
 /** La foto elegida es un adjunto (un PDF, un zip…) y no una foto o un video. */

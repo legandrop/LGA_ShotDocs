@@ -260,7 +260,7 @@ export function PhotoToolbar() {
           single && choice.url && (
             <>
               <ViewButton url={choice.url} onView={() => choice.key && actions?.onView(choice.key)} />
-              <DownloadButton url={choice.url} name={choice.name} />
+              <DownloadButton url={choice.url} name={choice.name} photoKey={choice.key} />
               <SaveToRollButton url={choice.url} name={choice.name} />
               <AnnotateButton url={choice.url} name={choice.name} kind={kind} />
               <SuggestCaptionButton kind={kind} photo={() => inlinePhotoRef(view.state.doc, choice.positions[0])} />

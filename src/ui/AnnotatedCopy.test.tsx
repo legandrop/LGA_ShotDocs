@@ -17,7 +17,7 @@ const cleanups: (() => void)[] = [];
 class ImageItem { constructor(readonly data: Record<string, Blob>) {} }
 function pngResult(width = 400, height = 300) { const header = new Uint8Array(33); header.set([137,80,78,71,13,10,26,10]); header.set([73,72,68,82],12); const v = new DataView(header.buffer); v.setUint32(8,13); v.setUint32(16,width); v.setUint32(20,height); return new Blob([header], { type: 'image/png' }); }
 afterEach(() => { for (const f of cleanups.splice(0)) f(); vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.clearAllMocks(); });
-async function setup() {
+async function setup(presentation: 'menu' | 'body' = 'menu') {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   vi.stubGlobal('isSecureContext', true); vi.stubGlobal('ClipboardItem', ImageItem);
   const write = vi.fn<(items: ImageItem[]) => Promise<void>>(async () => undefined);
@@ -30,13 +30,25 @@ async function setup() {
   const loader: CarreteLoader = { annotatedOriginal, preview: vi.fn(), full: vi.fn(), retry: vi.fn(), dispose: vi.fn() };
   const result = { blob: pngResult(), name: 'set_annotated.png', width: 400, height: 300 };
   vi.mocked(prepareMarkupRaster).mockResolvedValue(result);
-  const render = async (link: unknown = null, chosen = item) => { await act(async () => root.render(<LinkContext.Provider value={link as never}><AnnotatedCopy item={chosen} loader={loader} map={map} original={<a href="blob:original">Original download</a>} /></LinkContext.Provider>)); };
+  const render = async (link: unknown = null, chosen = item) => { await act(async () => root.render(<LinkContext.Provider value={link as never}><AnnotatedCopy item={chosen} loader={loader} map={map} original={<a href="blob:original">Original download</a>} presentation={presentation} /></LinkContext.Provider>)); };
   const button = (text: string) => [...host.querySelectorAll('button')].find((b) => b.textContent === text);
   const click = async (text: string) => { const b = button(text); expect(b).toBeDefined(); await act(async () => b!.click()); };
   cleanups.push(() => { act(() => root.unmount()); host.remove(); doc.destroy(); });
-  await render(); return { doc, map, host, result, write, annotatedOriginal, button, click, render, change: () => sourceCurrent = false };
+  await render(); return { doc, map, host, root, result, write, annotatedOriginal, button, click, render, change: () => sourceCurrent = false };
 }
 describe('copiar foto anotada: gesto, vigencia y resultado externo', () => {
+  it('body no prepara al montar ni duplica Original/cierre/popover, y conserva el segundo gesto', async () => {
+    const s = await setup('body'); expect(s.host.querySelector('.annotated-download-menu')).toBeNull(); expect(s.host.querySelector('a')).toBeNull(); expect(s.button('Close')).toBeUndefined();
+    expect(s.annotatedOriginal).not.toHaveBeenCalled(); await s.click('Copy with annotations'); expect(s.write).not.toHaveBeenCalled();
+    await s.click('Copy'); expect(s.write).toHaveBeenCalledOnce(); expect(s.host.textContent).toContain('Copied');
+  });
+  it('desmontar body aborta y descarta PNG tardío sin escribir', async () => {
+    const s = await setup('body'); let deliver!: (v: RasterResult) => void;
+    vi.mocked(prepareMarkupRaster).mockImplementation(() => new Promise((r) => deliver = r));
+    await s.click('Copy with annotations'); const signal = vi.mocked(prepareMarkupRaster).mock.calls[0][4];
+    await act(async () => s.root.render(null)); expect(signal.aborted).toBe(true);
+    await act(async () => deliver(s.result)); expect(s.write).not.toHaveBeenCalled(); expect(s.host.textContent).toBe('');
+  });
   it.each(['disguised', 'dimensions'])('negativa PNG %s rechaza antes de ready/write', async (invalid) => {
     const s = await setup(); vi.mocked(prepareMarkupRaster).mockResolvedValue({ ...s.result, blob: invalid === 'disguised' ? new Blob([new Uint8Array([255,216,255,224,...new Array(40).fill(0)])], { type: 'image/png' }) : pngResult(200,150) });
     await s.click('Copy with annotations'); expect(s.button('Copy')).toBeUndefined(); expect(s.host.textContent).toContain('PNG could not be prepared'); expect(s.write).not.toHaveBeenCalled();

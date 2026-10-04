@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.182 : Bajar y copiar una foto anotada desde su barra
+
+Las barras de fotos sólo permitían bajar el original aunque la página tuviera anotaciones. Ahora, al elegir una sola foto del Drive anotada en una página editable, el mismo botón Download abre una hoja con Original, Download y Copy. Vale para fotos de bloque, fila, renglón y celda, con preparación explícita y un segundo gesto para sacar el resultado completo. Reutiliza los motores de descarga y copia; no modifica la foto ni las formas. La hoja se descarta al cambiar la aparición elegida, selección, página, contexto, sesión o permiso, y vuelve a validar antes de producir una salida. Original y Close quedan disponibles si el cuerpo anotado sigue cargando o falla; Escape cancela la preparación pendiente. Las demás fuentes y acciones conservan su conducta. E4 sigue abierta por carpetas, FrameRev y pruebas físicas en Safari/iPhone.
+
+[Ofrecer descarga y copia anotadas desde las barras de fotos]
+
 v0.181 : Recuperar HEIC antiguos pendientes antes de registrarlos
 
 Los HEIC propios que una versión anterior a v0.075 dejó pendientes sin marca se registraban tal cual al actualizar. La cola ahora los reconoce por sus bytes y conserva una copia protegida del original antes de preparar un JPEG durable. El principal cambia solo después de registrar ese candidato y comprobar una fila positiva con el mismo archivo, proyecto, nombre, tipo y peso: una consulta vacía no demuestra que el registro no exista. Si ganó un HEIC remoto, se conserva; si se perdió la respuesta del JPEG, se retoma el mismo candidato. Las transacciones comprueban revisión y hashes frente a otra pestaña, cancelación o falta de espacio. Las copias cuentan en el espacio ocupado y se liberan por la política vigente de propios. Quedan fuera los HEIC ya registrados y las subidas iniciadas.

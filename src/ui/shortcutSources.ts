@@ -83,6 +83,7 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
     'OfflinePart.tsx',
     'HistoryPanel.tsx',
     'ExportDialog.tsx',
+    'PageEditor.tsx',
     'AssistantPanel.tsx',
     'CaptionSection.tsx',
     'DictationPanel.tsx',

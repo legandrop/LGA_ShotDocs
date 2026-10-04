@@ -20,7 +20,7 @@ const errorKey: Record<RasterFailure, Key> = {
 const CopyIcon = ({ size }: { size: number }) => <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6.5 6.5h10v10h-10zM13.5 6.5v-3h-10v10h3" /></svg>;
 
 /** Preparar no escribe: sólo Copy, con PNG listo, autoriza el envío externo. */
-export function AnnotatedCopy({ item, map, loader, original }: { item: CarreteItem; map: Y.Map<unknown>; loader: CarreteLoader; original: ReactNode }) {
+export function AnnotatedCopy({ item, map, loader, original, presentation = 'menu' }: { item: CarreteItem; map: Y.Map<unknown>; loader: CarreteLoader; original: ReactNode; presentation?: 'menu' | 'body' }) {
   const tr = useT(), link = useLinkMode();
   const [open, setOpen] = useState(false), [state, setState] = useState<State>({ at: 'idle' }), [, revised] = useState(0);
   const running = useRef<AbortController | null>(null), generation = useRef(0), revision = useRef(0), phase = useRef<State['at']>('idle');
@@ -91,14 +91,21 @@ export function AnnotatedCopy({ item, map, loader, original }: { item: CarreteIt
       } },
     );
   };
-  return <div className="annotated-download annotated-copy">
-    <button className="carrete-btn" aria-label={tr('carrete.copy.withAnnotations')} aria-expanded={open} onClick={() => { if (open) close(); else void prepare(); }}><CopyIcon size={20} /><span className="carrete-btn-label">{tr('carrete.copy.withAnnotations')}</span></button>
-    {open && <div className="annotated-download-menu" role="group" aria-label={tr('carrete.copy.withAnnotations')}>
+  const content = <>
       {state.at === 'busy' && <p role="status">{tr('common.preparing')}</p>}
       {state.at === 'writing' && <p role="status">{tr('carrete.copy.writing')}</p>}
       {state.at === 'copied' && <p role="status">{tr('carrete.copy.copied')}</p>}
       {state.at === 'failed' && <p role="alert">{tr(state.key)}</p>}
       {state.at === 'ready' && <><p>{state.result.name}<br />{state.result.width} × {state.result.height}</p>{state.denied && <p role="alert">{tr('carrete.copy.denied')}</p>}<button className="carrete-notice-btn" onClick={copy}>{tr('carrete.copy.action')}</button></>}
+  </>;
+  if (presentation === 'body') return <div className="photo-export-body" role="group" aria-label={tr('carrete.copy.withAnnotations')}>
+    {(state.at === 'idle' || state.at === 'failed') && <button className="carrete-notice-btn" onClick={() => void prepare()}>{tr('carrete.copy.withAnnotations')}</button>}
+    {content}
+  </div>;
+  return <div className="annotated-download annotated-copy">
+    <button className="carrete-btn" aria-label={tr('carrete.copy.withAnnotations')} aria-expanded={open} onClick={() => { if (open) close(); else void prepare(); }}><CopyIcon size={20} /><span className="carrete-btn-label">{tr('carrete.copy.withAnnotations')}</span></button>
+    {open && <div className="annotated-download-menu" role="group" aria-label={tr('carrete.copy.withAnnotations')}>
+      {content}
       {isValidElement<{ children?: ReactNode }>(original) ? cloneElement(original, { children: <><DownloadIcon size={20} />{tr('carrete.original')}</> }) : original}
       <button className="carrete-notice-btn" onClick={close}>{tr('common.close')}</button>
     </div>}

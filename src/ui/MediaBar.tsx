@@ -18,6 +18,7 @@ import { canShareFiles, saveToRollOffered, shareFile, shareFileOf, touchDevice }
 import { porteroDownload } from './sharpImages';
 import { ImageSizeButtons, OriginalDownloadButton, ViewIcon } from './MediaToolbarButtons';
 import { notify } from './notice';
+import { useLinkMode } from '../linkMode';
 
 // La barra de una foto (Docs/Decisiones D-24): la misma para la foto-bloque y para la foto en línea, por sectores con
 // un separador entre ellos:
@@ -41,6 +42,8 @@ export interface MediaActions {
   onDownloadAll?: (blockId: string) => void;
   /** Abre el anotador en esa foto del Drive (P.20, entrega 2); sin esto (no se puede editar), no hay *Annotate*. */
   onAnnotate?: (url: string, name: string) => void;
+  /** Ofrece la hoja anotada para la foto actual; false conserva la descarga original. */
+  onPhotoExport?: (key: string, trigger: HTMLElement | null) => boolean;
 }
 
 export const MediaActionsContext = createContext<MediaActions | null>(null);
@@ -138,10 +141,11 @@ ${tr('photoTip.caption')}`}
  * Bajar: una foto del Drive, su original (OriginalDownloadButton); otra (`sdfile://`, `https`), lo que resuelve el
  * editor, con su nombre.
  */
-export function DownloadButton({ url, name, blockId }: { url: string | null; name: string; blockId?: string }) {
+export function DownloadButton({ url, name, blockId, photoKey }: { url: string | null; name: string; blockId?: string; photoKey?: string | null }) {
   const editor = useBlockNoteEditor();
   const { media } = useServices();
   const actions = useMediaActions();
+  const link = useLinkMode();
   const tr = useT();
   const kind = useMediaKind(url, name);
   const id = mediaIdOf(url);
@@ -161,7 +165,7 @@ export function DownloadButton({ url, name, blockId }: { url: string | null; nam
       />
     );
   }
-  if (id) return <OriginalDownloadButton key={id} fileId={id} label={label} />;
+  if (id) return <OriginalDownloadButton key={id} fileId={id} label={label} onOpen={!link && kind === 'image' && photoKey && actions?.onPhotoExport ? (trigger) => actions.onPhotoExport!(photoKey, trigger) : undefined} />;
   const download = () => {
     const resolve = (editor as unknown as { resolveFileUrl?: (u: string) => Promise<string> }).resolveFileUrl;
     (resolve ? resolve(url) : Promise.resolve(url)).then(
@@ -389,7 +393,7 @@ export function ImageBlockBar() {
           (carreteSourceOf(block.url) || block.url) && (
             <>
               <ViewButton url={block.url} attachment={attachment} onView={() => actions?.onView(block.id)} />
-              <DownloadButton url={block.url} name={block.name} blockId={block.id} />
+              <DownloadButton url={block.url} name={block.name} blockId={block.id} photoKey={block.id} />
               {!attachment && <SaveToRollButton url={block.url} name={block.name} />}
               {!attachment && <AnnotateButton url={block.url} name={block.name} kind={kind} />}
               {!attachment && (

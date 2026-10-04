@@ -4,6 +4,8 @@ import type { Dict } from '../types';
 // Lo que suma la app al editor: Script y Question, comentar un bloque, pegar links de Drive, la tarjeta de Drive y los botones de fotos (se carga aparte, con el editor).
 
 export const editor = {
+  'photoExport.original': { en: "Original", es: "Original" },
+  'photoTip.export': { en: "With annotations, choose Original, Download or Copy", es: "Si tiene anotaciones, elegí Original, Descargar o Copiar" },
   'find.label': { en: "Find in page", es: "Buscar en la página" },
   'find.placeholder': { en: "Find", es: "Buscar" },
   'find.replacePlaceholder': { en: "Replace", es: "Reemplazar" },

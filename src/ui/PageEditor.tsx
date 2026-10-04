@@ -2,6 +2,8 @@ import { filterSuggestionItems, insertOrUpdateBlockForSlashMenu, type Block } fr
 import '@blocknote/core/fonts/inter.css';
 import { withCollaboration } from '@blocknote/core/yjs';
 import { BlockNoteView } from '@blocknote/mantine';
+import { createPortal } from 'react-dom';
+import './photoAnnotatedExports.css';
 import '@blocknote/mantine/style.css';
 import {
   getDefaultReactSlashMenuItems,
@@ -22,6 +24,8 @@ import { createCarreteLoader, type CarreteLoader } from './carreteLoader';
 import { porteroDownload, sharpenImages } from './sharpImages';
 import { attachMarkupOverlay } from './markupOverlay';
 import { PHOTO_MARKUP_MAP } from '../media/markup';
+import { useLinkMode } from '../linkMode';
+import { Permissions } from '../sync/access';
 import { startMarkupPrune } from '../media/markupPrune';
 import { clipScope } from '../media/markupClipboard';
 import { markupClipboardExtension, pasteWithMarkup, trackMarkupInUndo } from './markupClipboardEditor';
@@ -66,11 +70,13 @@ import { PageFormattingToolbar, PageFormattingToolbarController, pageToolbarItem
 import { PageLinkToolbarController } from './toolbarTips';
 import { PhotoToolbarController } from './PhotoToolbar';
 import { MediaActionsContext, type MediaActions } from './MediaBar';
+import { OriginalDownloadButton } from './MediaToolbarButtons';
 import { BACKGROUND_META } from './editorMeta';
 import { notToggleHeading } from './collapseMenus';
 import { clickOpens, mousePressOpens, shiftSelects } from './carreteClick';
 import { FindBar, type FindEditor } from './FindBar';
-import { selectedPhotoKey, spacePhotoKey } from './inlinePhotoEditor';
+import { photoKeyAtPos, selectedPhotoKey, spacePhotoKey } from './inlinePhotoEditor';
+import { selectedPhotos } from './inlinePhotoSize';
 import { shortcutLabel, slashBadge } from './shortcuts';
 import { closeFindBar, isFindShortcut, openFindBar, openFindBarAt, takesFindShortcut } from './findUi';
 import { searchSession } from './projectSearchUi';
@@ -90,6 +96,51 @@ import { revealSelectionCell } from './tableScroll';
 const Carrete = lazyPart(() => import('./Carrete').then((m) => m.Carrete));
 // El anotador de fotos (P.20, entrega 2), también aparte: solo lo abre quien puede editar.
 const Annotator = lazyPart(() => import('./Annotator').then((m) => m.Annotator));
+const PhotoAnnotatedExports = lazyPart(() => import('./PhotoAnnotatedExports').then((m) => m.PhotoAnnotatedExports));
+
+/** Debe montarse como hijo de BlockNoteView: el portal conserva sus providers. */
+export function PhotoAnnotatedSheet({ item, map, loader, onClose, trigger, isCurrent }: { item: CarreteItem; map: Y.Map<unknown>; loader: CarreteLoader; onClose: () => void; trigger?: HTMLElement; isCurrent?: () => boolean }) {
+  const tr = useT(), sheet = useRef<HTMLDivElement>(null), closeButton = useRef<HTMLButtonElement>(null), focused = useRef<HTMLElement | null>(null), [viewport, setViewport] = useState({ width: innerWidth, height: innerHeight });
+  useEffect(() => {
+    const resize = () => setViewport({ width: innerWidth, height: innerHeight });
+    window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
+  }, []);
+  useEffect(() => {
+    const previous = trigger ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    sheet.current?.querySelector<HTMLButtonElement>('button')?.focus();
+    return () => { if (previous?.isConnected) previous.focus(); };
+  }, [trigger]);
+  useEffect(() => {
+    const root = sheet.current;
+    if (!root) return;
+    // Preparar retira o deshabilita su botón: conservar foco y Escape, sin tomar foco externo.
+    const observer = new MutationObserver(() => {
+      const previous = focused.current;
+      if (previous && (!root.contains(previous) || (previous instanceof HTMLButtonElement && previous.disabled)) && (document.activeElement === document.body || document.activeElement === previous)) closeButton.current?.focus();
+    });
+    observer.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled'] });
+    return () => observer.disconnect();
+  }, []);
+  const keyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') { event.stopPropagation(); onClose(); }
+    if (event.key !== 'Tab') return;
+    const buttons = [...(sheet.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [])];
+    const edge = event.shiftKey ? buttons[0] : buttons.at(-1);
+    if (document.activeElement === edge) { event.preventDefault(); (event.shiftKey ? buttons.at(-1) : buttons[0])?.focus(); }
+  };
+  const anchor = trigger?.getBoundingClientRect();
+  const left = Math.max(12, Math.min(anchor?.left ?? (viewport.width - 420) / 2, viewport.width - Math.min(420, viewport.width - 24) - 12));
+  const top = Math.max(12, Math.min(anchor?.bottom ?? 60, viewport.height - 360));
+  return createPortal(<div className="photo-export-backdrop" onClick={onClose}>
+    <div ref={sheet} className="photo-export-sheet" role="dialog" aria-modal="true" aria-label={tr('mediaButton.download')} style={{ left, top, maxHeight: viewport.height - top - 12 }} onClick={(event) => event.stopPropagation()} onKeyDown={keyDown} onFocusCapture={(event) => { focused.current = event.target; }}>
+      <header><h2>{tr('mediaButton.download')}</h2><span className="photo-export-name">{item.name}</span></header>
+      <div className="photo-export-original"><OriginalDownloadButton fileId={item.mediaId!} label={tr('photoExport.original')} isCurrent={isCurrent} /></div>
+      <div className="photo-export-content"><Part fallback={<p role="status">{tr('common.preparing')}</p>}><PhotoAnnotatedExports item={item} map={map} loader={loader} onClose={onClose} /></Part></div>
+      <footer><button ref={closeButton} onClick={onClose}>{tr('common.close')}</button></footer>
+    </div>
+  </div>, document.body);
+}
 
 type Opening =
   | { state: 'loading' }
@@ -349,6 +400,7 @@ export function BlockEditor({
 }) {
   const services = useServices();
   const { docs, files, media, user, db, folders, tree: pageTree, workspace } = services;
+  const link = useLinkMode();
   const scheme = useScheme();
   const tr = useT();
   const editorRef = useRef<{ removeBlocks: (ids: string[]) => unknown; transact: (fn: (tr: { setMeta: (k: string, v: unknown) => unknown }) => void) => void } | null>(null);
@@ -784,6 +836,78 @@ export function BlockEditor({
   // Las anotaciones de las fotos (P.20, Docs/Doc_Anotar_Fotos.md): un mapa del documento de la página, afuera del
   // contenido. Su dibujo va encima de cada foto anotada, montado siempre (así sale también en el PDF).
   const markupMap = useMemo(() => doc.getMap<unknown>(PHOTO_MARKUP_MAP), [doc]);
+  const [photoExport, setPhotoExport] = useState<{ item: CarreteItem; loader: CarreteLoader; trigger?: HTMLElement; isCurrent: () => boolean; dispose: () => void } | null>(null);
+  const exportRef = useRef(photoExport);
+  exportRef.current = photoExport;
+  const exportContext = useRef({ services, workspace, user, pageId, doc, editable, link });
+  exportContext.current = { services, workspace, user, pageId, doc, editable, link };
+  const exportSelection = () => {
+    const state = editor.prosemirrorView?.state;
+    if (!state) return null;
+    const inline = selectedPhotos(state);
+    if (inline.length) return inline.length === 1 ? photoKeyAtPos(state.doc, inline[0]) : null;
+    const node = selectedPhotoKey(state);
+    if (node) return node;
+    const blocks = editor.getSelection()?.blocks ?? [editor.getTextCursorPosition().block];
+    return blocks.length === 1 && blocks[0].type === 'image' ? blocks[0].id : null;
+  };
+  // Además de la clave ordinal, conservar el nodo real: dos apariciones del mismo UUID no son la misma foto.
+  const exportNode = (key: string) => {
+    const pm = editor.prosemirrorView?.state.doc;
+    let found: PMNode | null = null;
+    pm?.descendants((node, pos, parent) => {
+      if ((node.type.name === 'photo' && photoKeyAtPos(pm, pos) === key) || (node.type.name === 'image' && parent?.attrs.id === key)) found = node;
+    });
+    return found;
+  };
+  const closePhotoExport = () => {
+    exportRef.current?.dispose(); exportRef.current = null; setPhotoExport(null);
+  };
+  const openPhotoExport = (key: string, trigger: HTMLElement | null): boolean => {
+    const context = exportContext.current;
+    const permitted = () => new Permissions(services.tree, services.access.get(), user.id).canEditPage(pageId);
+    if (!context.editable || context.link || !editor.isEditable || !permitted() || exportSelection() !== key) return true;
+    const item = collectCarrete(editor.document as unknown as BlockLike[]).find((entry) => entry.key === key);
+    if (!item) return true;
+    const id = item.mediaId, info = id ? media.fileInfo(id) : null;
+    if (!id || media.isFolder(id) || (info ? info.kind !== 'image' : isAttachment(media, id, item.name) || /\.(mp4|m4v|mov|webm|ogv|mkv)$/i.test(item.name)) || ![...markupMap.keys()].some((entry) => entry.startsWith(`${id}/`))) return false;
+    const node = exportNode(key);
+    if (!node) return true;
+    closePhotoExport();
+    const base = createCarreteLoader({ media, files });
+    let disposed = false;
+    const isCurrent = () => {
+      const now = exportContext.current;
+      if (disposed || !now.editable || now.link || !editor.isEditable || !permitted() || now.services !== context.services || now.workspace !== context.workspace || now.user !== context.user || now.pageId !== context.pageId || now.doc !== context.doc || exportSelection() !== key || exportNode(key) !== node) return false;
+      const present = collectCarrete(editor.document as unknown as BlockLike[]).find((entry) => entry.key === key);
+      return present?.url === item.url && present.mediaId === id && !media.isFolder(id) && media.fileInfo(id)?.kind !== 'video' && !isAttachment(media, id, present.name);
+    };
+    const dispose = () => { if (!disposed) { disposed = true; base.dispose(); } };
+    const loader: CarreteLoader = { ...base, annotatedOriginal: async (...args) => {
+      if (!isCurrent()) throw new Error('La foto elegida cambió');
+      const source = await base.annotatedOriginal!(...args);
+      return { ...source, isCurrent: () => isCurrent() && source.isCurrent() };
+    } };
+    exportRef.current = { item, loader, trigger: trigger ?? undefined, isCurrent, dispose };
+    setPhotoExport(exportRef.current);
+    return true;
+  };
+  const openPhotoExportRef = useRef(openPhotoExport);
+  openPhotoExportRef.current = openPhotoExport;
+  useEffect(() => {
+    const check = () => { if (exportRef.current && !exportRef.current.isCurrent()) closePhotoExport(); };
+    const change = editor.onChange(check, false), selection = editor.onSelectionChange(check);
+    return () => { change(); selection(); closePhotoExport(); };
+  }, [editor]);
+  useEffect(() => {
+    if (!photoExport) return;
+    const check = () => { if (exportRef.current && !exportRef.current.isCurrent()) closePhotoExport(); };
+    const access = services.access.subscribe(check), tree = services.tree.subscribe(check);
+    const auth = services.client.auth.onAuthStateChange((event) => { if (event !== 'INITIAL_SESSION') closePhotoExport(); });
+    return () => { access(); tree(); auth.data.subscription.unsubscribe(); closePhotoExport(); };
+  }, [services, photoExport]);
+  useEffect(() => { if (photoExport && !photoExport.isCurrent()) closePhotoExport(); }, [services, workspace, user, pageId, doc, editable, link, photoExport]);
+  useEffect(() => () => photoExport?.dispose(), [photoExport]);
   useEffect(() => {
     let overlay: ReturnType<typeof attachMarkupOverlay> | null = null;
     const start = () => {
@@ -1217,6 +1341,7 @@ export function BlockEditor({
       },
       canComment,
       onView: (key) => void openAtRef.current(key),
+      onPhotoExport: editable && !link ? (key, trigger) => openPhotoExportRef.current(key, trigger) : undefined,
       // Anotar (P.20): solo con la página editable; la barra de la foto ya solo se ve así.
       onAnnotate: editable
         ? (url, name) => {
@@ -1230,7 +1355,7 @@ export function BlockEditor({
         if (folder) setFolderView({ ...folder, download: true });
       },
     }),
-    [editor, media, canComment, editable],
+    [editor, media, canComment, editable, link],
   );
 
   return (
@@ -1268,6 +1393,7 @@ export function BlockEditor({
         {editable && <PhotoToolbarController />}
         {/* Los tres puntos de cada bloque: arrastrar lo mueve, un clic lo elige y abre la barra de formato. */}
         <BlockSideMenuController />
+        {photoExport && <PhotoAnnotatedSheet item={photoExport.item} map={markupMap} loader={photoExport.loader} trigger={photoExport.trigger} isCurrent={photoExport.isCurrent} onClose={closePhotoExport} />}
       </BlockNoteView>
       </MediaActionsContext.Provider>
       {!preview && <CommentMargin editor={editor} pageId={pageId} canComment={canComment} host={host} />}

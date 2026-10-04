@@ -21,6 +21,7 @@ const LAZY_FILES = [
   'ui/DrivePasteMenu.tsx',
   'ui/MediaToolbarButtons.tsx',
   'ui/Carrete.tsx',
+  'ui/PhotoAnnotatedExports.tsx',
   'ui/CommentsPanel.tsx',
   'ui/MembersDialog.tsx',
   'ui/ShareDialog.tsx',
@@ -134,5 +135,12 @@ describe('la primera carga no trae el editor', () => {
   it('ninguna de las partes que se bajan aparte', () => {
     const lazy = LAZY_FILES.map((f) => join(SRC, f)).filter((f) => files.has(f));
     expect(lazy.map((f) => files.get(f)!.join(' → '))).toEqual([]);
+  });
+
+  it('el editor tampoco trae preparación raster ni portapapeles antes de abrir la hoja', () => {
+    const editor = walk([join(SRC, 'ui/PageEditor.tsx')]);
+    const deferred = ['ui/PhotoAnnotatedExports.tsx', 'ui/AnnotatedDownload.tsx', 'ui/AnnotatedCopy.tsx', 'media/markupRaster.ts', 'ui/clipboardImage.ts'];
+    expect(deferred.filter((file) => editor.files.has(join(SRC, file))).map((file) => editor.files.get(join(SRC, file))!.join(' → '))).toEqual([]);
+    expect(editor.files.has(join(SRC, 'ui/MediaToolbarButtons.tsx'))).toBe(true);
   });
 });
