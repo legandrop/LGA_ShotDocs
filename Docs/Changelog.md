@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.178 :
+
+**Una foto anotada para compartir.** El carrete bajaba únicamente el original, aunque la página mostrara flechas,
+texto o números encima. *Download → With annotations* prepara ahora una copia JPEG/PNG local con las formas de esa
+página y permite guardarla con otro clic, conservando dimensiones completas y el original intacto. Las cabeceras,
+bytes y dimensiones se revisan antes de decodificar; EXIF gira una sola vez y el dibujo mantiene el centrado del SVG.
+PNG conserva transparencia y JPEG usa fondo blanco. Formas desconocidas, errores o fotos demasiado grandes rechazan
+la preparación sin reducir ni borrar nada. Funciona sin red con el original local, también para lectores y
+comentadores; todavía no en links públicos. HEIC real, otros formatos y 48 MP en móviles quedan pendientes, igual
+que copiar, carpetas y FrameRev. Incluye ayuda y verificaciones de imágenes, cancelación, permisos y fuentes.
+[Descargar una foto con sus anotaciones desde el carrete]
+
 v0.177 :
 
 **El PDF espera los originales que siguen bajando.** Una foto que tardaba más de 90 segundos en llegar se

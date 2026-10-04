@@ -5,6 +5,7 @@ import { normalizeMime, type MediaQueue, type MediaSource } from '../media/queue
 import type { PageFiles } from '../sync/files';
 import { isNetworkError } from '../sync/types';
 import { fallbackName, type CarreteItem } from './carreteModel';
+import { checkRasterAbort, RasterError } from '../media/rasterError';
 
 // De dónde saca el carrete lo que muestra (Docs/Doc_Carrete.md). Primero lo que ya está a mano (la
 // miniatura, guardada en el dispositivo), después lo grande: la copia local si el archivo está en el
@@ -52,6 +53,8 @@ export interface Full {
 }
 
 export interface CarreteLoader {
+  /** Bytes del original para una copia anotada; nunca convierte ni sustituye una vista. */
+  annotatedOriginal?(item: CarreteItem, signal: AbortSignal, maxBytes: number): Promise<{ blob: Blob; name: string; isCurrent: () => boolean }>;
   preview(item: CarreteItem): Promise<Preview>;
   /** La foto grande o el video. Tira si no se puede (sin red, sin portero, error del portero). */
   full(item: CarreteItem): Promise<Full>;
@@ -333,6 +336,42 @@ export function createCarreteLoader({ media, files }: { media: Media; files: Fil
   };
 
   return {
+    annotatedOriginal: async (item, signal, maxBytes) => {
+      const id = item.mediaId;
+      if (item.source !== 'media' || !id || disposed) throw new RasterError('source');
+      checkRasterAbort(signal);
+      const source = await media.source(id);
+      checkRasterAbort(signal);
+      const signature = (info: ReturnType<NonNullable<Media['fileInfo']>>) => info ? `${info.name}:${info.mime}:${info.size}` : '';
+      const before = signature(media.fileInfo?.(id) ?? null);
+      const isCurrent = () => !disposed && before === signature(media.fileInfo?.(id) ?? null);
+      let blob = source.original;
+      if (blob && blob.size > maxBytes) throw new RasterError('size');
+      if (!blob) {
+        const pass = await passFor(media, id);
+        checkRasterAbort(signal);
+        const response = await fetch(pass, { signal, credentials: 'omit' });
+        if (!response.ok || !response.body) { await response.body?.cancel().catch(() => undefined); throw new RasterError('source'); }
+        if (Number(response.headers.get('Content-Length')) > maxBytes) { await response.body.cancel().catch(() => undefined); throw new RasterError('size'); }
+        const reader = response.body.getReader();
+        const chunks: Uint8Array<ArrayBuffer>[] = [];
+        let count = 0;
+        try {
+          for (;;) {
+            checkRasterAbort(signal);
+            const part = await reader.read();
+            if (part.done) break;
+            count += part.value.byteLength;
+            if (count > maxBytes) throw new RasterError('size');
+            chunks.push(part.value as Uint8Array<ArrayBuffer>);
+          }
+          blob = new Blob(chunks, { type: response.headers.get('Content-Type') ?? source.mime });
+        } finally { await reader.cancel().catch(() => undefined); reader.releaseLock(); }
+      }
+      checkRasterAbort(signal);
+      if (!isCurrent()) throw new RasterError('source');
+      return { blob, name: source.name || fallbackName(item), isCurrent };
+    },
     preview: (item) => {
       const pending = once(previews, item.url, () => loadPreview(item), true);
       void pending.then((p) => {

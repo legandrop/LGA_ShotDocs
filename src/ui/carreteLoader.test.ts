@@ -5,6 +5,35 @@ import { collectCarrete, type CarreteItem } from './carreteModel';
 import { resolveObjectURL } from 'node:buffer';
 import { createCarreteLoader, downloadTarget, isOffline, openTarget, originalFor, passFor, PASS_REUSE_MS } from './carreteLoader';
 
+describe('bytes para la descarga anotada', () => {
+  const id = '12345678-1234-1234-1234-123456789012';
+  const item = itemFor(`sdmedia://${id}`);
+  function loader(original: Blob | null, pass = 'http://local.test/original') {
+    let name = 'set.jpg';
+    const media = { source: vi.fn(async () => ({ original, name, kind: 'image' as const, mime: 'image/jpeg' })), pass: vi.fn(async () => pass), thumbnail: vi.fn(), resolve: vi.fn(), fileInfo: () => ({ name, mime: 'image/jpeg', size: original?.size ?? 4, kind: 'image' as const, local: !!original }) };
+    return { value: createCarreteLoader({ media, files: { resolve: vi.fn() } }), media, change: () => name = 'changed.jpg' };
+  }
+  it('lee original offline, no red/conversión y detecta cambio de fuente', async () => {
+    const blob = new Blob(['photo']), s = loader(blob), network = vi.spyOn(globalThis, 'fetch');
+    const source = await s.value.annotatedOriginal!(item, new AbortController().signal, 100);
+    expect(source.blob).toBe(blob); expect(network).not.toHaveBeenCalled(); expect(s.media.pass).not.toHaveBeenCalled(); expect(source.isCurrent()).toBe(true); s.change(); expect(source.isCurrent()).toBe(false); s.value.dispose();
+  });
+  it('stream cuenta bytes, nunca response.blob, y usa pase de cada cola', async () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(new Uint8Array([1, 2, 3, 4])));
+    for (const pass of ['http://local.test/a', 'http://local.test/b']) {
+      const s = loader(null, pass), source = await s.value.annotatedOriginal!(item, new AbortController().signal, 10); expect(source.blob.size).toBe(4); s.value.dispose();
+    }
+    expect(fetcher.mock.calls.map((c) => c[0])).toEqual(['http://local.test/a', 'http://local.test/b']);
+  });
+  it('exceso por stream o cabecera, 403, sin body y abortado rechazan', async () => {
+    for (const response of [new Response(new Uint8Array(5)), new Response(new Uint8Array(1), { headers: { 'Content-Length': '5' } }), new Response(null, { status: 403 }), new Response(null)]) {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(response); const s = loader(null);
+      await expect(s.value.annotatedOriginal!(item, new AbortController().signal, 4)).rejects.toBeDefined(); s.value.dispose();
+    }
+    const s = loader(new Blob(['photo'])), c = new AbortController(); c.abort(); await expect(s.value.annotatedOriginal!(item, c.signal, 100)).rejects.toBeDefined(); s.value.dispose();
+  });
+});
+
 // De dónde saca el carrete lo que muestra: primero la miniatura, después lo grande (la copia del
 // dispositivo o un pase del portero), con una cola de verdad y un servidor en memoria.
 

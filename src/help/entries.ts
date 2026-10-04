@@ -512,6 +512,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     since: BEFORE_HELP,
   },
   {
+    id: 'photosDownloadAnnotated',
+    section: 'photos',
+    title: 'help.photosDownloadAnnotated.title',
+    text: 'help.photosDownloadAnnotated.text',
+    words: ['download', 'annotations', 'descargar', 'anotaciones', 'jpeg', 'png', 'original'],
+    since: '0.178',
+  },
+  {
     id: 'photosMarkup',
     section: 'photos',
     title: 'help.photosMarkup.title',

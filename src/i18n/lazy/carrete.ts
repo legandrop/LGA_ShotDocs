@@ -4,6 +4,13 @@ import type { Dict } from '../types';
 // El carrete de fotos y videos (se carga aparte, con Carrete.tsx).
 
 export const carrete = {
+  'carrete.original': { en: 'Original', es: 'Original' },
+  'carrete.withAnnotations': { en: 'With annotations', es: 'Con anotaciones' },
+  'carrete.raster.unsupported': { en: 'Annotated downloads currently support JPEG and PNG originals. HEIC and other formats are not supported yet. Download the original instead.', es: 'La descarga anotada admite originales JPEG y PNG. HEIC y otros formatos todavía no están disponibles. Podés bajar el original.' },
+  'carrete.raster.size': { en: 'This photo cannot be prepared at full resolution on this device. No smaller copy was made. Download the original instead.', es: 'Esta foto no se puede preparar en resolución completa en este dispositivo. No se hizo una copia más chica. Podés bajar el original.' },
+  'carrete.raster.annotations': { en: 'These annotations cannot all be included by this version. Download the original or use a newer app; your annotations have not changed.', es: 'Esta versión no puede incluir todas las anotaciones. Podés bajar el original o usar una app más nueva; tus anotaciones no cambiaron.' },
+  'carrete.raster.source': { en: 'The full original could not be prepared, or it changed. Check that it is available offline, or reconnect and try again. Download the original remains available.', es: 'No se pudo preparar el original completo, o cambió. Revisá que esté disponible sin conexión, o reconectá y volvé a probar. Sigue disponible la descarga del original.' },
+  'carrete.raster.encode': { en: 'The annotated photo could not be created on this device. No file was downloaded. Download the original instead.', es: 'No se pudo crear la foto anotada en este dispositivo. No se descargó ningún archivo. Podés bajar el original.' },
   'carrete.label': { en: "Photos, videos and files", es: "Fotos, videos y archivos" },
   'carrete.download': { en: "Download", es: "Descargar" },
   'carrete.open': { en: "Open", es: "Abrir" },
