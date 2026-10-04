@@ -104,7 +104,7 @@ describe('deshacer el borrado de un renglón deja el mismo texto en todos (B.26)
       net.flush();
     };
     step(() => {
-      caretAt(b, 'p0', 15); // "la cámara y la| toma"
+      caretAt(b, 'p0', 15); // "la cámara y la |toma"
       press(b, 'Enter');
     });
     step(() => b.undo());

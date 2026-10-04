@@ -1121,9 +1121,10 @@ Casos mínimos (deterministas; una sola persona, el otro documento recibe cada c
   él mismo al recargar, "ters". Igual con Yjs sin parches, con B.21 y con B.21 y B.22.
 - **Yjs solo, "dos":** borrar "os" y ⌘Z; borrar la "s"; borrar el renglón, ⌘Z y ⌘Z. Sin parches: "dos" en quien deshizo y
   "dso" en el otro; con B.21: "dso" en los dos.
-- **Con el editor de la app** (achicado de la semilla 1406): renglones "la cámara y la toma" y "otro"; Enter después de
-  "y la" y ⌘Z; escribir "AB" antes de "toma"; Enter después de "cámara y"; borrar los dos renglones y deshacer todo. Quien
-  deshizo ve "la cámara y la toma"; el otro, "la cámara y la omat".
+- **Con el editor de la app** (achicado de la semilla 1406): renglones "la cámara y la toma" y "otro"; Enter justo antes
+  de "toma" y ⌘Z; escribir "AB" entre la "t" y la "o" de "toma"; Enter después de "cámara y"; borrar los dos renglones
+  (con el menú del bloque, juntos o de a uno) y deshacer todo. Quien deshizo ve "la cámara y la toma"; el otro, y él mismo
+  al recargar, "la cámara y la omat". Borrándolos con una selección y Backspace no pasa (es otra edición).
 
 ### 21.3 El arreglo
 
