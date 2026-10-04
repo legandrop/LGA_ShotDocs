@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.186 : Conservar las anotaciones al reemplazar una foto
+
+Reemplazar una foto anotada dejaba los dibujos asociados al archivo anterior, sin ofrecer llevarlos al nuevo. Ahora una foto del Drive elegida en una página editable, de bloque, fila, renglón o celda, pregunta si se conservan. Sí copia el marco y todas las formas a un archivo nuevo cuando la proporción orientada es exacta; No reemplaza sin copiar; Cancelar o Escape deja la foto actual. Datos o medidas ilegibles nunca provocan una copia parcial ni una elección automática. Se conservan los atributos actuales, las ediciones ajenas, el original y los archivos ya guardados. El reemplazo y la copia forman una transacción y un paso de deshacer. Cada archivo elegido invalida el intento anterior de esa aparición, incluso si falla o se cancela. Se verificaron dos editores, carreras, permisos, versiones anteriores y guardado local, y se actualizó la ayuda. Safari y dispositivos físicos siguen pendientes.
+
+[Conservar las anotaciones al reemplazar una foto]
+
 v0.185 : WebP estático simple como PNG anotado
 
 Las fotos WebP que ya se podían agregar y ver no se podían bajar ni copiar con sus anotaciones. Ahora Carrete y las barras de una foto elegida admiten originales estáticos simples, tanto VP8 opaco como VP8L con transparencia. El resultado es un PNG completo y su nombre y dimensiones se muestran antes de descargarlo o copiarlo. Una comprobación del contenedor y sus cabeceras rechaza animación, metadatos, extensiones y tamaños incompatibles antes de decodificar; nunca elige silenciosamente un frame. El original permanece intacto y disponible. Se conservan los límites del dispositivo, cancelación, contexto y permisos existentes, sin reducción automática ni cambios del documento. JPEG y PNG mantienen sus salidas anteriores. Se actualizan ayuda y documentación. HEIC real, WebP extendido, carpetas, FrameRev y la comprobación física en Safari siguen pendientes.

@@ -4,6 +4,14 @@ import type { Dict } from '../types';
 // El anotador de fotos (P.20, entrega 2; se carga aparte, con Annotator.tsx).
 
 export const annotator = {
+  'photoReplace.question': { en: "Keep annotations?", es: "¿Conservar las anotaciones?" },
+  'photoReplace.explain': { en: "Copy this photo's annotations to the replacement photo?", es: "¿Copiar las anotaciones de esta foto a la nueva?" },
+  'photoReplace.unavailable': { en: "Annotations cannot be copied to this photo.", es: "No se pueden copiar las anotaciones a esta foto." },
+  'photoReplace.failed': { en: "The photo was not replaced. Try Replace again.", es: "La foto no se reemplazó. Volvé a usar Reemplazar." },
+  'photoReplace.yes': { en: "Yes", es: "Sí" },
+  'photoReplace.no': { en: "No", es: "No" },
+  'photoReplace.without': { en: "Replace without annotations", es: "Reemplazar sin anotaciones" },
+  'photoReplace.cancelSaving': { en: "Cancel leaves the current photo unchanged. The new file may already have been saved.", es: "Cancelar deja la foto actual intacta. El archivo nuevo puede haberse guardado." },
   'annotate.label': { en: "Annotate {name}", es: "Anotar {name}" },
   'annotate.tools': { en: "Tools", es: "Herramientas" },
   'annotate.select': { en: "Select", es: "Elegir" },

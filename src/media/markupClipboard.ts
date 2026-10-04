@@ -195,3 +195,43 @@ export function carryMarkup(doc: Y.Doc, photos: readonly CopiedPhoto[], inConten
   return result;
 }
 
+/** Reemplazar exige copiar TODO: ninguna normalización o campo omitido como en el pegado tolerante. */
+export interface ReplacementMarkup {
+  frame: Record<string, unknown> & { v: number; w: number; h: number };
+  shapes: CopiedShape[];
+}
+export function replacementMarkup(map: Y.Map<unknown>, fileId: string): ReplacementMarkup | null {
+  const frame = map.get(fileId);
+  if (!jsonSafe(frame) || !frame || Array.isArray(frame) || typeof frame !== 'object') return null;
+  const f = frame as ReplacementMarkup['frame'];
+  if (f.v !== 1 || ![f.w, f.h].every((n) => Number.isInteger(n) && n >= 1 && n <= 100_000)) return null;
+  const shapes: CopiedShape[] = [];
+  for (const [key, value] of map) {
+    if (!key.startsWith(`${fileId}/`)) continue;
+    const shapeId = parseMarkupKey(key)?.shapeId;
+    if (!shapeId || !(value instanceof Y.Map)) return null;
+    const fields: Record<string, unknown> = Object.create(null);
+    for (const [name, field] of value) {
+      if (!jsonSafe(field)) return null;
+      fields[name] = structuredClone(field);
+    }
+    shapes.push([shapeId, fields]);
+  }
+  return shapes.length ? { frame: structuredClone(f), shapes } : null;
+}
+
+/** Coordenadas intactas: sólo proporciones exactas, con enteros reales orientados. */
+export function replacementAspect(plan: ReplacementMarkup, oldSize: { width: number; height: number } | null, newSize: { width: number; height: number } | null): boolean {
+  if (!oldSize || !newSize || ![oldSize.width, oldSize.height, newSize.width, newSize.height].every((n) => Number.isInteger(n) && n >= 1 && n <= 100_000)) return false;
+  return plan.frame.w * oldSize.height === plan.frame.h * oldSize.width && oldSize.width * newSize.height === oldSize.height * newSize.width;
+}
+
+/** Plan ya validado: nuevas instancias, sin tocar A ni usar alias para el UUID de store. */
+export function writeReplacementMarkup(map: Y.Map<unknown>, fileId: string, plan: ReplacementMarkup): void {
+  map.set(fileId, structuredClone(plan.frame));
+  for (const [shapeId, fields] of plan.shapes) {
+    const shape = new Y.Map<unknown>();
+    for (const [name, value] of Object.entries(fields)) shape.set(name, structuredClone(value));
+    map.set(shapeKey(fileId, shapeId), shape);
+  }
+}

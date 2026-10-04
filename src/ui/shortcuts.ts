@@ -194,6 +194,7 @@ export const SHORTCUTS: Shortcut[] = [
 
   // --- Menús, paneles y diálogos ---
   { id: 'menusMove', keys: ['ArrowUp', 'ArrowDown', 'Home', 'End'], place: 'menus', owner: 'app', source: 'dom' },
+  // También cancela Keep annotations? durante la medición o el guardado, con foco dentro de la hoja.
   { id: 'menusClose', keys: ['Escape'], place: 'menus', owner: 'app', source: 'dom' },
   { id: 'listPick', keys: ['ArrowUp', 'ArrowDown', 'Enter'], place: 'menus', context: 'list', owner: 'app', source: 'dom' },
   { id: 'listClose', keys: ['Escape'], place: 'menus', context: 'list', owner: 'app', source: 'dom' },

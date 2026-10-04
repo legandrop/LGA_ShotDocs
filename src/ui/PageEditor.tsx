@@ -27,7 +27,7 @@ import { PHOTO_MARKUP_MAP } from '../media/markup';
 import { useLinkMode } from '../linkMode';
 import { Permissions } from '../sync/access';
 import { startMarkupPrune } from '../media/markupPrune';
-import { clipScope } from '../media/markupClipboard';
+import { clipScope, MARKUP_PASTE_ORIGIN, writeReplacementMarkup } from '../media/markupClipboard';
 import { markupClipboardExtension, pasteWithMarkup, trackMarkupInUndo } from './markupClipboardEditor';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { editorSchemaOptions, insertPageBreakForSlashMenu, SCRIPT_PROP, setVideosAccepted } from './editorSchema';
@@ -91,6 +91,10 @@ import type { Node as PMNode } from '@tiptap/pm/model';
 import { undoTimelineFor } from './undoTimeline';
 import { revealChange, revealPhoto } from './undoReveal';
 import { revealSelectionCell } from './tableScroll';
+import { liveView, trackSpot, takeSpot, spotsOf } from './inlinePhotoCreate';
+import type { ReplacePick } from './photoReplaceIntent';
+import { startPhotoReplacement } from './photoReplace';
+import { PhotoReplaceSheet, type PhotoReplacement } from './PhotoReplaceSheet';
 
 // El carrete se baja aparte, la primera vez que se abre (roadmap B.4).
 const Carrete = lazyPart(() => import('./Carrete').then((m) => m.Carrete));
@@ -841,6 +845,9 @@ export function BlockEditor({
   exportRef.current = photoExport;
   const exportContext = useRef({ services, workspace, user, pageId, doc, editable, link });
   exportContext.current = { services, workspace, user, pageId, doc, editable, link };
+  const [photoReplacement, setPhotoReplacement] = useState<PhotoReplacement | null>(null);
+  const replacementClose = useRef<(() => void) | null>(null);
+  const replacementCancels = useRef(new Set<() => void>());
   const exportSelection = () => {
     const state = editor.prosemirrorView?.state;
     if (!state) return null;
@@ -860,6 +867,73 @@ export function BlockEditor({
     });
     return found;
   };
+  const prepareReplace = (key: string, trigger: HTMLElement | null): ReplacePick | null | undefined => {
+    const context = exportContext.current, view = liveView(editor as never);
+    const permitted = () => new Permissions(services.tree, services.access.get(), user.id).canEditPage(pageId);
+    const contextCurrent = () => {
+      const now = exportContext.current;
+      return !!view && liveView(editor as never) === view && now.services === context.services && now.workspace === context.workspace && now.user === context.user && now.pageId === context.pageId && now.doc === context.doc && now.editable && !now.link && editor.isEditable && permitted();
+    };
+    if (!contextCurrent() || exportSelection() !== key) return null;
+    const item = collectCarrete(editor.document as unknown as BlockLike[]).find((entry) => entry.key === key), id = item?.mediaId;
+    const info = id ? media.fileInfo(id) : null;
+    if (!item || !id || media.isFolder(id) || (info ? info.kind !== 'image' : isAttachment(media, id, item.name) || /\.(mp4|m4v|mov|webm|ogv|mkv)$/i.test(item.name)) || ![...markupMap.keys()].some((entry) => entry === id || entry.startsWith(`${id}/`))) return undefined;
+    const atKey = () => {
+      const matches: { node: PMNode; pos: number }[] = [];
+      view!.state.doc.descendants((node, pos, parent) => {
+        if ((node.type.name === 'photo' && photoKeyAtPos(view!.state.doc, pos) === key) || (node.type.name === 'image' && parent?.attrs.id === key)) matches.push({ node, pos });
+      });
+      return matches.length === 1 ? matches[0] : null;
+    };
+    // Leer la identidad que ya mantiene el binding; nunca modificarlo ni aceptar un mapping ambiguo.
+    const mapping = () => ySyncPluginKey.getState(view!.state)?.binding?.mapping as Map<unknown, PMNode | PMNode[]> | undefined;
+    const captured = atKey(), identities = captured ? [...(mapping() ?? [])].filter(([, node]) => node === captured.node).map(([identity]) => identity) : [];
+    if (identities.length !== 1) return null;
+    const identity = identities[0];
+    const isCurrent = () => {
+      if (!contextCurrent() || exportSelection() !== key || media.isFolder(id) || isAttachment(media, id, item.name) || media.fileInfo(id)?.kind === 'video') return false;
+      const current = atKey(), map = mapping();
+      return !!current && current.node.attrs.url === item.url && map?.get(identity) === current.node && [...map.values()].filter((node) => node === current.node).length === 1;
+    };
+    return { isCurrent, receive: (file, intent) => {
+      if (!isCurrent() || !intent.isCurrent()) { intent.release(); return; }
+      const spot = captured!.node.type.name === 'photo' ? trackSpot(view!, atKey()!.pos, false) : null;
+      let ownClose: (() => void) | null = null;
+      startPhotoReplacement({ file, intent, trigger, doc, oldId: id, map: markupMap, isCurrent: () => isCurrent() && (spot === null || spotsOf(view!.state).find((entry) => entry.id === spot)?.pos === atKey()?.pos),
+        dimensions: () => info?.kind === 'image' ? media.dimensions(id) : Promise.resolve(null), store: fileOptions(editor).store,
+        inContent: (candidate) => collectCarrete(editor.document as unknown as BlockLike[]).some((entry) => entry.mediaId === candidate),
+        isPhoto: (candidate) => media.fileInfo(candidate)?.kind === 'image' && !media.isFolder(candidate),
+        prepare: (url, name) => {
+          if (!isCurrent()) return null;
+          const current = atKey()!;
+          const transaction = view!.state.tr.setNodeMarkup(current.pos, undefined, { ...current.node.attrs, url, name });
+          return view!.state.applyTransaction(transaction).transactions.length ? transaction : null;
+        },
+        commit: (transaction, candidate, plan) => {
+          let written = false;
+          undoTimelineFor(services).compose(pageId, MARKUP_PASTE_ORIGIN, () => {
+            view!.dispatch(transaction);
+            if (!view!.state.doc.eq(transaction.doc)) return;
+            if (plan) writeReplacementMarkup(markupMap, candidate, plan);
+            written = true;
+          });
+          return written;
+        },
+        watch: (check, cancel) => {
+          ownClose = cancel; replacementClose.current = cancel; replacementCancels.current.add(cancel);
+          const change = editor.onChange(check, false), selection = editor.onSelectionChange(check), access = services.access.subscribe(check), tree = services.tree.subscribe(check);
+          const auth = services.client.auth.onAuthStateChange((event) => { if (event !== 'INITIAL_SESSION') cancel(); });
+          return () => { change(); selection(); access(); tree(); auth.data.subscription.unsubscribe(); replacementCancels.current.delete(cancel); };
+        },
+        show: (state) => { if (replacementClose.current !== ownClose) return; if (!state) replacementClose.current = null; setPhotoReplacement(state); },
+        cleanup: () => { if (spot !== null) takeSpot(view!, spot); }, canReturnFocus: contextCurrent,
+      });
+    } };
+  };
+  const prepareReplaceRef = useRef(prepareReplace);
+  prepareReplaceRef.current = prepareReplace;
+  useEffect(() => { for (const cancel of replacementCancels.current) cancel(); }, [services, workspace, user, pageId, doc, editable, link]);
+  useEffect(() => () => { for (const cancel of replacementCancels.current) cancel(); }, [editor]);
   const closePhotoExport = () => {
     exportRef.current?.dispose(); exportRef.current = null; setPhotoExport(null);
   };
@@ -1342,6 +1416,7 @@ export function BlockEditor({
       canComment,
       onView: (key) => void openAtRef.current(key),
       onPhotoExport: editable && !link ? (key, trigger) => openPhotoExportRef.current(key, trigger) : undefined,
+      onReplacePick: editable && !link ? (key, trigger) => prepareReplaceRef.current(key, trigger) : undefined,
       // Anotar (P.20): solo con la página editable; la barra de la foto ya solo se ve así.
       onAnnotate: editable
         ? (url, name) => {
@@ -1394,6 +1469,7 @@ export function BlockEditor({
         {/* Los tres puntos de cada bloque: arrastrar lo mueve, un clic lo elige y abre la barra de formato. */}
         <BlockSideMenuController />
         {photoExport && <PhotoAnnotatedSheet item={photoExport.item} map={markupMap} loader={photoExport.loader} trigger={photoExport.trigger} isCurrent={photoExport.isCurrent} onClose={closePhotoExport} />}
+        {photoReplacement && <PhotoReplaceSheet attempt={photoReplacement} />}
       </BlockNoteView>
       </MediaActionsContext.Provider>
       {!preview && <CommentMargin editor={editor} pageId={pageId} canComment={canComment} host={host} />}

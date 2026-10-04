@@ -13,6 +13,29 @@ const THUMB_QUALITY = 0.8;
 /** Lo máximo que se espera a que el navegador abra un archivo. */
 const PROBE_TIMEOUT_MS = 10_000;
 
+/** Medidas reales orientadas del candidato; cancelar suelta imagen, URL, timer y listener. */
+export function orientedImageSize(file: Blob, signal: AbortSignal): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) { reject(new DOMException('Cancelado', 'AbortError')); return; }
+    const image = new Image(), url = URL.createObjectURL(file);
+    const finish = (size?: { width: number; height: number }) => {
+      clearTimeout(timer); signal.removeEventListener('abort', abort);
+      image.onload = image.onerror = null; image.src = ''; URL.revokeObjectURL(url);
+      if (size) resolve(size);
+      else reject(new DOMException('No se pudieron medir las dimensiones', signal.aborted ? 'AbortError' : 'DataError'));
+    };
+    const abort = () => finish();
+    const timer = setTimeout(abort, PROBE_TIMEOUT_MS);
+    signal.addEventListener('abort', abort, { once: true });
+    image.onerror = abort;
+    image.onload = () => {
+      const width = image.naturalWidth, height = image.naturalHeight;
+      finish([width, height].every((n) => Number.isInteger(n) && n >= 1 && n <= 100_000) ? { width, height } : undefined);
+    };
+    image.src = url;
+  });
+}
+
 export interface Probe {
   width: number | null;
   height: number | null;

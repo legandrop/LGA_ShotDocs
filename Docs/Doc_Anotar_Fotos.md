@@ -1,5 +1,21 @@
 # Anotar sobre las fotos (P.20)
 
+## Reemplazar conservando las anotaciones (v0.186, AN2/E5 parcial)
+
+En una página editable del workspace, **Replace image** de una sola foto del Drive anotada abre **Keep annotations?**. Vale para bloque, fila, renglón y celda. La pregunta pertenece al archivo efectivamente elegido y a esa aparición, aunque haya otras con el mismo UUID. Las fotos sin anotaciones, los archivos, videos, carpetas y direcciones externas conservan su recorrido vigente.
+
+- **Yes:** copia el marco y el conjunto completo de formas a las claves del UUID nuevo, cuando las medidas orientadas de ambos originales y el marco tienen exactamente la misma proporción. No reescala el marco ni acepta diferencias de un píxel. Conserva campos JSON y tipos de forma desconocidos representables. Si falta autoridad de medidas o hay datos que no se pueden copiar íntegros, no ofrece Yes.
+- **No / Replace without annotations:** reemplaza sin copiar dibujos; siempre requiere esta elección explícita.
+- **Cancel / Escape:** deja intacta la foto actual, también durante medición y guardado. Un archivo que ya se guardó localmente permanece con su cola; cancelar nunca lo borra.
+
+El foco inicial queda en Cancel, Tab y Shift+Tab se mantienen en la hoja y el foco de un botón que desaparece al guardar pasa a Cancel. Al cerrar solo vuelve al control original si sigue conectado al mismo contexto; no se enfoca una barra nueva como si fuera el mismo control.
+
+Primero se guarda el archivo con la cola vigente y después se comprueban otra vez identidad de aparición, permisos, contexto, referencia anterior, medidas y mapa actual. Se conservan los atributos actuales, incluidos un pie o ancho editados por otra persona durante la espera. Una aparición borrada/recreada con el mismo id y dirección, o reordenada entre dos con el mismo UUID, no recibe un resultado obsoleto. Una elección nueva de archivo invalida irrevocablemente la anterior, incluso si falla o se cancela; cancelar el selector sin File no crea una intención nueva. Cambiar selección, página, sesión o permiso, cerrar el editor o reemplazar la fuente cancela el intento anotado.
+
+La referencia y la copia se escriben juntas en una transacción y un paso de deshacer. Deshacer respeta las anotaciones que otra persona haya cambiado; rehacer no vuelve a guardar el archivo. Los topes codificados de foto, mapa de página y contenido base se comprueban fuera del documento vivo, sin copia parcial. El original A y su mapa no se reescriben: otra aparición de A conserva sus dibujos. Solo cuando A queda sin ninguna referencia se aplica AN11 vigente, con su espera y sus condiciones de sincronización.
+
+No agrega tipos ni propiedades de bloque: los esquemas anteriores conservan el contenido, la nueva referencia y el mapa. Se verificaron dos editores, orden de intenciones, errores, permisos, JSON futuro, proporción orientada, recarga offline en IndexedDB del navegador y geometría desktop/móvil en Chromium. La emulación móvil no acredita Safari, iPhone o iPad físicos. Este recorrido no cierra la entrega 5: historial de anotaciones y búsqueda de sus textos siguen pendientes.
+
 **Estado: entregas 0 a 3 hechas (v0.116: el mapa, sus pruebas y ver las anotaciones; v0.123: el anotador en la
 compu y la poda; v0.129: el dedo y el lápiz del iPad; ver "Cómo quedó" al final) y, de la entrega 5, copiar y pegar una
 foto con sus anotaciones (D46, v0.132; "Copiar y pegar con las anotaciones", al final); bajar y copiar la imagen con
@@ -196,8 +212,7 @@ doc.getMap('photoMarkup')                    // al lado de CONTENT_FRAGMENT y de
   bloque) comparte las anotaciones (se dice en la ayuda); la misma foto en otra página sale limpia, salvo que se copie
   y se pegue ahí: copiar y pegar la lleva con sus anotaciones (D46, "Copiar y pegar con las anotaciones"). Convertir una foto-bloque en foto en línea (`convertPhotos.ts`) no cambia la `url`,
   así que las anotaciones siguen. **Reemplazar** la foto (barra de la foto) cambia el archivo: si la nueva tiene la misma
-  proporción, se pregunta *Keep annotations?* y se copian a las claves nuevas; las del archivo viejo quedan huérfanas y
-  las saca la poda.
+  proporción, se pregunta *Keep annotations?* y se copian a las claves nuevas (v0.186, sección "Reemplazar conservando las anotaciones"). Las del archivo viejo solo quedan huérfanas si no queda ninguna aparición suya en la página; entonces las saca la poda vigente.
 - **Una foto sacada de la página: la poda (AN11).** Un dispositivo que edita la página borra, como una edición normal,
   las claves `<fileId>` y `<fileId>/*` de un archivo que ya no está en el contenido (`mediaIdsInDoc`,
   `src/media/usage.ts`) desde hace más de 10 minutos (así no la dispara un cortar y pegar). Nunca se hace mientras se

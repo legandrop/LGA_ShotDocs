@@ -38,7 +38,9 @@ afterEach(async () => {
 
 const tick = (ms = 20) => new Promise((r) => setTimeout(r, ms));
 const PHOTO_ID = '0f8fad5b-d9cb-469f-a165-708677289501';
+const NEXT_PHOTO_ID = '0f8fad5b-d9cb-469f-a165-708677289502';
 const FRAME = { w: 4000, h: 3000 };
+const photoUrl = (e: Editor) => (e.getBlock('A-foto')!.props as { url: string }).url;
 /** Una forma que se dibuja (una línea, con los campos del formato). */
 const rect = (posX: number) => ({ type: 'line', zValue: 1, posX, posY: 10, startX: 0, startY: 0, endX: 50, endY: 50, strokeColor: '#FF0000' });
 const markupOf = (doc: Y.Doc) => doc.getMap<unknown>(PHOTO_MARKUP_MAP).toJSON() as Record<string, Record<string, unknown>>;
@@ -181,6 +183,86 @@ async function setup(opts: { maxPages?: number; maxSteps?: number; photoInA?: bo
 }
 
 describe('anotar como un paso de la línea de tiempo (entrega 3)', () => {
+  it('referencia y mapa conjuntos: un update, undo colaborativo completo y UM nuevo al remontar', async () => {
+    const { ids, app, runner } = await setup();
+    await app.go(ids.A);
+    const doc = app.doc!;
+    addShape(doc, PHOTO_ID, 'original', { ...rect(8), future: { v: 9, unknown: ['intacto'] } } as never, FRAME);
+    const map = doc.getMap<unknown>(PHOTO_MARKUP_MAP);
+    map.set('json-futuro', { v: 99, datos: ['no tocar'] });
+    const original = structuredClone(markupOf(doc));
+    type(app.editor!, 'antes');
+    const before = app.timeline.stepsOf(ids.A).undo;
+    const records: { origin: unknown; url: string; map: unknown }[] = [];
+    const record = (_u: Uint8Array, origin: unknown) => records.push({ origin, url: photoUrl(app.editor!), map: markupOf(doc) });
+    doc.on('update', record);
+    expect(app.timeline.compose(ids.A, MARKUP_PASTE_ORIGIN, () => {
+      app.editor!.updateBlock('A-foto', { props: { url: `sdmedia://${NEXT_PHOTO_ID}` } });
+      addShape(doc, NEXT_PHOTO_ID, 'copiada', { ...rect(8), future: { v: 9, unknown: ['intacto'] } } as never, FRAME);
+    })).toBe('done');
+    doc.off('update', record);
+    expect(records).toHaveLength(1);
+    expect(records[0].url).toBe(`sdmedia://${NEXT_PHOTO_ID}`);
+    expect((records[0].map as Record<string, unknown>)[`${NEXT_PHOTO_ID}/copiada`]).toBeDefined();
+    expect(app.timeline.stepsOf(ids.A).undo).toBe(before + 1);
+    const peer = new Y.Doc();
+    Y.applyUpdate(peer, Y.encodeStateAsUpdate(doc));
+    const peerEditor = mountEditor(peer, 'otra persona');
+    mounted.push(peerEditor);
+    const wire = connect(doc, peer);
+    updateShape(peer, NEXT_PHOTO_ID, 'copiada', { posX: 123, future: { v: 10, remote: ['conservar', { n: 2 }] } } as never);
+    wire.flush();
+    const remoteShape = structuredClone(markupOf(peer)[`${NEXT_PHOTO_ID}/copiada`]);
+    for (let remount = 0; remount < 2; remount++) {
+      if (remount) await app.go(ids.A);
+      await runner.run('undo');
+      expect(photoUrl(app.editor!)).toBe(`sdmedia://${PHOTO_ID}`);
+      expect(markupOf(doc)[`${NEXT_PHOTO_ID}/copiada`]).toEqual(remoteShape);
+      expect(markupOf(doc)[NEXT_PHOTO_ID]).toEqual({ v: 1, ...FRAME });
+      for (const [key, value] of Object.entries(original)) expect(markupOf(doc)[key]).toEqual(value);
+      await runner.run('redo');
+      expect(photoUrl(app.editor!)).toBe(`sdmedia://${NEXT_PHOTO_ID}`);
+      expect(markupOf(doc)[`${NEXT_PHOTO_ID}/copiada`]).toEqual(remoteShape);
+      wire.flush();
+    }
+    peerEditor.unmount();
+    mounted.splice(mounted.indexOf(peerEditor), 1);
+    peer.destroy();
+    app.timeline.dispose();
+  });
+
+  it('mapa conjunto: forma offline ajena y marco sobreviven al undo y la reconexión', async () => {
+    const { ids, app, runner } = await setup();
+    await app.go(ids.A);
+    const doc = app.doc!;
+    app.timeline.compose(ids.A, MARKUP_PASTE_ORIGIN, () => {
+      app.editor!.updateBlock('A-foto', { props: { url: `sdmedia://${NEXT_PHOTO_ID}` } });
+      addShape(doc, NEXT_PHOTO_ID, 'copiada', rect(8), FRAME);
+    });
+    const peer = new Y.Doc();
+    Y.applyUpdate(peer, Y.encodeStateAsUpdate(doc));
+    const peerEditor = mountEditor(peer, 'otra persona offline');
+    mounted.push(peerEditor);
+    const wire = connect(doc, peer);
+    wire.offline();
+    addShape(peer, NEXT_PHOTO_ID, 'offline', { ...rect(81), future: { offline: true } } as never, FRAME);
+    const expected = structuredClone(markupOf(peer)[`${NEXT_PHOTO_ID}/offline`]);
+    await runner.run('undo');
+    expect(photoUrl(app.editor!)).toBe(`sdmedia://${PHOTO_ID}`);
+    expect(markupOf(doc)[NEXT_PHOTO_ID]).toEqual({ v: 1, ...FRAME });
+    wire.online();
+    expect(markupOf(doc)[`${NEXT_PHOTO_ID}/offline`]).toEqual(expected);
+    expect(markupOf(doc)[NEXT_PHOTO_ID]).toEqual({ v: 1, ...FRAME });
+    await runner.run('redo');
+    wire.flush();
+    expect(markupOf(doc)[`${NEXT_PHOTO_ID}/offline`]).toEqual(expected);
+    expect(markupOf(peer)[`${NEXT_PHOTO_ID}/offline`]).toEqual(expected);
+    expect(photoUrl(app.editor!)).toBe(`sdmedia://${NEXT_PHOTO_ID}`);
+    peerEditor.unmount();
+    mounted.splice(mounted.indexOf(peerEditor), 1);
+    peer.destroy();
+    app.timeline.dispose();
+  });
   it('aceptación: anotar en A, escribir en B; ⌘Z, ⌘Z vuelve a A y saca la anotación entera; ⌘⇧Z, ⌘⇧Z lo vuelve todo', async () => {
     const { ids, app, runner, notes, where } = await setup();
     await app.go(ids.A);

@@ -1,4 +1,5 @@
 import * as Y from 'yjs';
+import { PHOTO_MARKUP_MAP } from '../media/markup';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 
 // Deshacer en el orden en que editaste (P.26, entrega 1; Docs/Doc_Deshacer.md, sección 3).
@@ -261,6 +262,7 @@ export class UndoTimeline {
     // Se toma del editor y no se importa y-prosemirror acá: este archivo va en la primera carga (firstLoad.test.ts).
     if (!isProtected(um)) this.editorFilter = um.deleteFilter;
     protectOthers(um);
+    protectMarkupOthers(um, doc.getMap(PHOTO_MARKUP_MAP));
     const page = h;
     const onAdded = (e: StackEvent) => this.onStackItem(page, um, e, true);
     const onUpdated = (e: StackEvent) => this.onStackItem(page, um, e, false);
@@ -402,6 +404,24 @@ export class UndoTimeline {
     return this.pages.get(pageId)?.retained === true;
   }
 
+  /** Referencia y anotaciones preparadas: una transacción síncrona y un paso propio del editor montado. */
+  compose(pageId: string, origin: unknown, work: () => void): StepResult {
+    const h = this.pages.get(pageId);
+    const um = h?.um;
+    if (!h || !um) return 'notMounted';
+    if (h.info?.editable?.() === false) return 'readOnly';
+    const timeout = um.captureTimeout;
+    um.stopCapturing();
+    um.captureTimeout = Number.MAX_SAFE_INTEGER;
+    try {
+      h.doc.transact(work, origin);
+    } finally {
+      um.captureTimeout = timeout;
+      um.stopCapturing();
+    }
+    return 'done';
+  }
+
   /**
    * Deshace (o rehace) el paso de arriba de `pageId`, que tiene que estar en pantalla y editable. **Un paso por vez**:
    * a Yjs se le pasa solo ese (los de abajo se sacan un momento), así un paso que ya no cambia nada no hace que Yjs siga
@@ -416,6 +436,7 @@ export class UndoTimeline {
     const stack = kind === 'undo' ? um.undoStack : um.redoStack;
     if (stack.length === 0) return 'empty';
     const below = stack.splice(0, stack.length - 1);
+    markupStepOf.set(um, stack[0]);
     let result: StackItem | null = null;
     let failed = false;
     try {
@@ -427,6 +448,7 @@ export class UndoTimeline {
       console.warn('Deshacer: Yjs no pudo deshacer un paso; se descarta.', err);
       failed = true;
     } finally {
+      markupStepOf.delete(um);
       // Yjs no reemplaza la lista que está sacando (`clear` solo corre con una edición nueva).
       const now = kind === 'undo' ? um.undoStack : um.redoStack;
       now.unshift(...below);
@@ -1199,8 +1221,8 @@ function mapHasOthers(item: MapItemLike): boolean {
 
 /** Envuelve el filtro de borrado de un `UndoManager` sobre el mapa de anotaciones `map` (ver arriba). Una vez. */
 export function protectMarkupOthers(um: UndoManager, map: Y.Map<unknown>): void {
-  if (protectedManagers.has(um)) return;
-  protectedManagers.add(um);
+  if (markupProtectedManagers.has(um)) return;
+  markupProtectedManagers.add(um);
   const previous = um.deleteFilter;
   um.deleteFilter = (raw) => {
     if (!previous(raw)) return false;
@@ -1254,6 +1276,7 @@ export function markupManager(map: Y.Map<unknown>): UndoManager {
 }
 
 const protectedManagers = new WeakSet<UndoManager>();
+const markupProtectedManagers = new WeakSet<UndoManager>();
 
 const isProtected = (um: UndoManager) => protectedManagers.has(um);
 

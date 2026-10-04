@@ -123,6 +123,7 @@ In development. What works today:
 - Replacing a photo block or a photo in a row keeps your latest file choice when saves finish out of order,
   even after selecting text and returning to the photo. If that choice fails, the current photo stays with an error;
   an older pending choice does not replace it. A changed source or a closed or read-only page stays untouched.
+- Replace one annotated Drive photo on an editable page: **Keep annotations?** offers **Yes** when the new image has exactly the same proportions after orientation. **Yes** copies all its drawings, **No** replaces without copying, and **Cancel** or Escape keeps the current photo. This works for blocks, rows, inline photos and table cells, also offline. The original stays intact, replacing and copying share one undo step, and a newer choice never revives an older pending replacement. If dimensions or annotation data cannot be checked, replacement without annotations remains an explicit choice.
 - Annotate photos on a computer: *Annotate* in a photo's toolbar (or A in the full-screen viewer) draws arrows,
   ellipses, rectangles, lines, pencil and marker strokes, text and numbered markers on top, with the tools, letters,
   colors and thickness of LGA FrameRev. The original never changes; annotations show on the page, in table cells, in

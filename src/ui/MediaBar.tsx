@@ -19,8 +19,8 @@ import { porteroDownload } from './sharpImages';
 import { ImageSizeButtons, OriginalDownloadButton, ViewIcon } from './MediaToolbarButtons';
 import { notify } from './notice';
 import { useLinkMode } from '../linkMode';
-import type { EditorView } from '@tiptap/pm/view';
 import { liveView } from './inlinePhotoCreate';
+import { claimReplacement, replacementPicker, type ReplacePick } from './photoReplaceIntent';
 
 // La barra de una foto (Docs/Decisiones D-24): la misma para la foto-bloque y para la foto en línea, por sectores con
 // un separador entre ellos:
@@ -46,6 +46,8 @@ export interface MediaActions {
   onAnnotate?: (url: string, name: string) => void;
   /** Ofrece la hoja anotada para la foto actual; false conserva la descarga original. */
   onPhotoExport?: (key: string, trigger: HTMLElement | null) => boolean;
+  /** Captura la aparición al abrir el selector; el File recibe el mismo token que el fallback. */
+  onReplacePick?: (key: string, trigger: HTMLElement | null) => ReplacePick | null | undefined;
 }
 
 export const MediaActionsContext = createContext<MediaActions | null>(null);
@@ -276,9 +278,12 @@ export function CommentButton({ blockId }: { blockId: string | null }) {
 }
 
 /** Reemplazar: el selector de archivos del sistema (uno); lo elegido se guarda y pasa a ser la foto. */
-export function ReplaceButton({ accept, kind = 'image', onFile }: { accept: string; kind?: MediaKind; onFile: (file: File) => void }) {
+export function ReplaceButton({ accept, kind = 'image', onFile, onPick }: { accept: string; kind?: MediaKind; onFile: (file: File) => void; onPick?: (trigger: HTMLElement | null) => ((file: File) => void) | null }) {
   const tr = useT();
+  const button = useRef<HTMLButtonElement>(null);
   const pick = () => {
+    const receive = onPick ? onPick(button.current) : onFile;
+    if (!receive) return;
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = accept;
@@ -287,14 +292,14 @@ export function ReplaceButton({ accept, kind = 'image', onFile }: { accept: stri
     input.addEventListener('change', () => {
       const file = input.files?.[0];
       done();
-      if (file) onFile(file);
+      if (file) receive(file);
     });
     input.addEventListener('cancel', done);
     document.body.append(input);
     input.click();
   };
   const label = kindLabel(kind, tr('photoBar.replace'), tr('photoBar.replaceVideo'), tr('photoBar.replaceFile'));
-  return <BarButton label={label} tip={`${label}\n${tr('photoTip.replace')}`} icon={<ReplaceIcon />} test="mediaReplace" onClick={pick} />;
+  return <BarButton ref={button} label={label} tip={`${label}\n${tr('photoTip.replace')}`} icon={<ReplaceIcon />} test="mediaReplace" onClick={pick} />;
 }
 
 /** Renombrar: un campo en un globo, como el de BlockNote; cada letra cambia el nombre. */
@@ -343,9 +348,6 @@ export function DeleteButton({ many, kind = 'image', onDelete }: { many: boolean
 
 // --- La barra de la foto-bloque ---------------------------------------------------------------------------
 
-// La elección pendiente pertenece a la vista y al bloque: ocultar la barra no reinicia su prioridad.
-const pendingReplacements = new WeakMap<EditorView, Map<string, symbol>>();
-
 interface ChosenBlock {
   id: string;
   url: string;
@@ -385,16 +387,8 @@ export function ImageBlockBar() {
   const replace = (file: File) => {
     const view = liveView(editor as never);
     if (!actions || !view || !editor.isEditable) return;
-    const token = Symbol();
-    let pending = pendingReplacements.get(view);
-    if (!pending) pendingReplacements.set(view, (pending = new Map()));
-    pending.set(block.id, token);
-    const release = () => {
-      const current = pendingReplacements.get(view);
-      if (current?.get(block.id) !== token) return;
-      current.delete(block.id);
-      if (!current.size) pendingReplacements.delete(view);
-    };
+    const intent = claimReplacement(view, `block:${block.id}`);
+    const release = intent.release;
     let stored: Promise<string>;
     try {
       stored = actions.store(file);
@@ -405,7 +399,7 @@ export function ImageBlockBar() {
     stored.then(
       (url) => {
         try {
-          if (pendingReplacements.get(view)?.get(block.id) !== token) return;
+          if (!intent.isCurrent()) return;
           if (liveView(editor as never) !== view || !editor.isEditable) return;
           const current = editor.getBlock(block.id);
           if (current?.type !== 'image' || (current.props as { url?: unknown }).url !== block.url) return;
@@ -436,7 +430,10 @@ export function ImageBlockBar() {
           <AlignButtons current={block.align} onAlign={(a) => update({ textAlignment: a })} />,
           actions?.canComment && <CommentButton blockId={block.id} />,
           <>
-            {actions && <ReplaceButton accept={actions.accept.block} kind={kind} onFile={replace} />}
+            {actions && <ReplaceButton accept={actions.accept.block} kind={kind} onFile={replace} onPick={(trigger) => {
+              const view = liveView(editor as never);
+              return view ? replacementPicker(view, `block:${block.id}`, actions.onReplacePick?.(block.id, trigger), replace) : null;
+            }} />}
             {/* Un archivo del Drive no se renombra (la tarjeta y la descarga usan el nombre del archivo). */}
             {!id && <RenameButton name={block.name} kind={kind} onRename={(name) => update({ name })} />}
             <DeleteButton many={false} kind={kind} onDelete={() => {

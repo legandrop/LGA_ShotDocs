@@ -494,8 +494,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   sus flechas); a otro proyecto o workspace no viajan, y al portapapeles no va nada nuevo
   (`src/media/markupClipboard.ts`, `src/ui/markupClipboardEditor.ts`). Falta a mano: ⌘C y ⌘V de verdad en Safari de la
   Mac y en el iPhone. **Con plantillas (v0.136):** las anotaciones también viajan al usar una plantilla del mismo proyecto y al
-  guardar como plantilla (*Clear filled-in values* las saca con las fotos). De la entrega 5 quedan el historial de las anotaciones, *Keep annotations?* al reemplazar y buscar
-  en sus textos.
+  guardar como plantilla (*Clear filled-in values* las saca con las fotos). **Keep annotations? (v0.186, AN2/E5 parcial):** reemplazar una foto anotada de bloque, fila, renglón o celda ofrece Sí para copiar el mapa completo con proporción orientada exacta, No sin copiar y Cancelar sin cambiar la foto. Archivo y mapa originales se conservan; referencia y copia comparten un paso de deshacer, con la última intención por aparición. De la entrega 5 quedan el historial de las anotaciones y buscar en sus textos; falta comprobar este reemplazo físicamente en Safari/iPhone.
   De la auditoría de la entrega 2 (`Doc_Anotar_Fotos.md`, "Correcciones de la auditoría de la entrega 2"), pendientes:
   una prueba que caiga si la condición «página sincronizada» de `PageEditor` (red, nada sin subir, nada sin bajar) que
   frena la poda se rompe (hoy, con `synced = async () => true`, la suite sigue en verde; la re-verificación lo comprobó en

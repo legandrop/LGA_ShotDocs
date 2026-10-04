@@ -64,6 +64,7 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
   sidebarResize: ['SidebarResizer.tsx'],
   menusMove: ['menus.tsx'],
   menusClose: [
+    'PhotoReplaceSheet.tsx',
     'menus.tsx',
     'MoveDialog.tsx',
     'ShareDialog.tsx',

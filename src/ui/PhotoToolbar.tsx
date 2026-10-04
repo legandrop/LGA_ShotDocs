@@ -8,6 +8,7 @@ import { useT } from '../i18n';
 import '../i18n/lazy/editor';
 import { mediaIdOf } from '../media/queue';
 import { BarButton } from './BarButton';
+import { claimReplacement, replacementPicker } from './photoReplaceIntent';
 import { ThumbHeightMenu } from './CellThumbsMenu';
 import { tablesOf, thumbHeightOfTables, type ThumbHeight } from './cellThumbs';
 import { ROW_PRESETS } from './imageRows';
@@ -271,7 +272,7 @@ export function PhotoToolbar() {
           choice.inTable === 'none' && <AlignButtons current={choice.align} inline onAlign={(a) => alignBlocks(editor, choice.blocks, a)} />,
           actions?.canComment && <CommentButton blockId={choice.blocks[0] ?? null} />,
           <>
-            {single && actions && <ReplaceButton accept={actions.accept.inline} kind={kind} onFile={(file) => replacePhoto(editor, choice.positions[0], choice.url ?? '', file, actions.store)} />}
+            {single && actions && <ReplaceButton accept={actions.accept.inline} kind={kind} onFile={(file) => replacePhoto(editor, choice.positions[0], choice.url ?? '', file, actions.store)} onPick={(trigger) => replacementPicker(view, `photo:${choice.key}`, choice.key ? actions.onReplacePick?.(choice.key, trigger) : null, (file) => replacePhoto(editor, choice.positions[0], choice.url ?? '', file, actions.store))} />}
             {/* Un archivo del Drive no se renombra (la descarga y la papelera usan el nombre del archivo), como la foto-bloque. */}
             {single && !fileId && <RenameButton name={choice.name} kind={kind} onRename={(name) => renamePhoto(view, name)} />}
             <DeleteButton many={!single} kind={kind} onDelete={() => deletePhotos(view, choice.positions)} />
@@ -321,17 +322,19 @@ function deletePhotos(view: EditorView, positions: readonly number[]): void {
 function replacePhoto(editor: AnyEditor, pos: number, oldUrl: string, file: File, store: (f: File) => Promise<string>): void {
   const view = editor.prosemirrorView;
   if (!view) return;
+  const intent = claimReplacement(view, `photo:${photoKeyAtPos(view.state.doc, pos)}`);
   const spot = trackSpot(view, pos, false);
   store(file).then(
     (url) => {
-      if (!liveView(editor as never)) return;
+      if (!liveView(editor as never)) { intent.release(); return; }
       const at = takeSpot(view, spot);
       const node = at === null ? null : view.state.doc.nodeAt(at);
-      if (at === null || node?.type.name !== PHOTO || node.attrs.url !== oldUrl) return;
-      view.dispatch(view.state.tr.setNodeMarkup(at, undefined, { ...node.attrs, url, name: file.name || 'image' }));
+      if (intent.isCurrent() && editor.isEditable && at !== null && node?.type.name === PHOTO && node.attrs.url === oldUrl) view.dispatch(view.state.tr.setNodeMarkup(at, undefined, { ...node.attrs, url, name: file.name || 'image' }));
+      intent.release();
     },
     () => {
       if (liveView(editor as never)) takeSpot(view, spot);
+      intent.release();
     },
   );
 }
