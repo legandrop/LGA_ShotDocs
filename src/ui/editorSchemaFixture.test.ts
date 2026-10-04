@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { BlockNoteEditor } from '@blocknote/core';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { editorSchemaOptions } from './editorSchema';
 import { FIRMA_PUBLICADA } from './fixtures/editorSchemaMain.firma';
@@ -104,5 +104,39 @@ describe('el fixture del esquema publicado', () => {
       body(fixture) === published,
       `origin/main cambió ${SCHEMA} y src/ui/fixtures/editorSchemaMain.ts quedó con el esquema de antes: las pruebas de que lo nuevo degrada comparan contra una versión que ya no existe. Corré \`npm run esquema:publicado\` y commiteá el fixture y su firma. (Si origin/main de tu copia está desactualizado, hacé \`git fetch\`.)`,
     ).toBe(true);
+  });
+
+  // El hueco de la auditoría de la tanda 17 (O6): cuando esta copia NO tocó el esquema ni los módulos que éste importa (los de
+  // los atributos de la foto, de la tarjeta de Drive y de las filas de fotos, que la firma fija), no hay nada "de esta tanda"
+  // que anotar: lo publicado es lo de hoy. Si alguien regeneró solo el fixture a mano, la firma queda más laxa y
+  // NUEVO_SIN_PUBLICAR con líneas que ya son lo publicado, y las otras pruebas no avisan (la diferencia coincide con la
+  // lista). Se exige solo cuando ninguno de esos módulos difiere de origin/main: un atributo nuevo de la foto (su módulo
+  // cambia, el esquema no) lleva su línea en NUEVO_SIN_PUBLICAR a propósito y esta prueba se salta, sin falsa alarma. Los
+  // módulos de más abajo (lo que importan esos) no se miran: si cambian solos, se salta de menos, nunca de más.
+  it('con el esquema y sus módulos iguales a origin/main, lo publicado es lo de hoy y no queda nada sin publicar', (ctx) => {
+    const SCHEMA = 'src/ui/editorSchema.ts';
+    const modules = [...readFileSync(SCHEMA, 'utf8').matchAll(/from '\.\/([\w-]+)'/g)]
+      .map((m) => ['ts', 'tsx'].map((ext) => `src/ui/${m[1]}.${ext}`).find((f) => existsSync(f)))
+      .filter((f): f is string => !!f);
+    expect(modules.length, 'la prueba no encontró los módulos que importa editorSchema.ts').toBeGreaterThan(3);
+    let differing: string;
+    try {
+      differing = execFileSync('git', ['diff', '--name-only', 'origin/main', '--', SCHEMA, ...modules], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+        timeout: 15_000,
+      }).trim();
+    } catch {
+      ctx.skip('no hay git u origin/main en esta copia');
+      return;
+    }
+    if (differing !== '') {
+      ctx.skip(`esta copia cambió ${differing.split(/\r?\n/).join(', ')} respecto de origin/main (una tanda sin publicar)`);
+      return;
+    }
+    expect(NUEVO_SIN_PUBLICAR, `El esquema y sus módulos son los de origin/main: no puede haber nada sin publicar. ${HOW}`).toEqual([]);
+    expect(now, `El esquema y sus módulos son los de origin/main pero la firma publicada (fixtures/editorSchemaMain.firma.ts) no es la de hoy. ${HOW}`).toEqual(
+      [...FIRMA_PUBLICADA].sort(),
+    );
   });
 });

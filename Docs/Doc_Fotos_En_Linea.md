@@ -894,7 +894,11 @@ con su valor de fábrica y las marcas) y falla si algo se saca, o si algo se sum
 prueba de que la publicada lo conserva). La firma es un texto fijo y no sale del fixture porque este toma de hoy el módulo de la
 foto en línea, el de la tarjeta de Drive y el de las filas: un atributo nuevo de `photo` también aparecía en la "publicada".
 Otra prueba compara el fixture con `origin/main:src/ui/editorSchema.ts` cuando la copia no cambió el esquema: si se publicó un
-cambio del esquema sin regenerar, falla (se salta sola en una rama que lo cambia a propósito y sin git u `origin/main`).
+cambio del esquema sin regenerar, falla (se salta sola en una rama que lo cambia a propósito y sin git u `origin/main`). Una tercera,
+cuando ni `editorSchema.ts` ni los módulos que importa (`photoSpec`, `driveCard`, `imageRowsEditor`, `cellThumbs`, `quietImage`,
+`shortcuts`) difieren de `origin/main`, exige que la firma publicada sea la de hoy y que `NUEVO_SIN_PUBLICAR` esté vacío (así un
+fixture regenerado a mano, con la firma o la lista a medias, avisa); si alguno de esos módulos cambió, se salta, así un atributo
+nuevo de la foto (que lleva su línea en la lista) no da falsa alarma.
 **Al publicar una versión que cambia el esquema:** `npm run esquema:publicado` (con Node 22: `npx -y node@22 scripts/esquema-publicado.mjs`)
 regenera el fixture y la firma y vacía `NUEVO_SIN_PUBLICAR`; se commitean los tres archivos con la tanda que publica.
 

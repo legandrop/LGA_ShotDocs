@@ -1,5 +1,18 @@
 # Changelog — LGA Shot Docs
 
+v0.174 :
+
+**Los avisos de Export sin conexión y las medidas del margen.** La ventana avisaba de links a archivos y fotos en
+menor resolución aunque lo elegido no tuviera ninguno. Ahora lee copias del contenido guardado en el dispositivo:
+el aviso de links corresponde a adjuntos, videos y carpetas; las fotos solo avisan cuando falta su original y no se
+eligió *Smaller file*. El conteo no pide metadatos a la red. La superposición de los comentarios del teléfono se
+comprueba calculando los valores del CSS en la suite y midiendo los nodos de texto en Chromium; cuatro cambios
+deliberados de ancho, margen y posición hacen fallar la medida. La guarda del esquema exige firma actual y lista
+de novedades vacía cuando sus módulos coinciden con lo publicado. Se ajustan la ayuda y la documentación.
+Si la copia está marcada como no soportada o ilegible, el conteo mantiene el aviso preventivo sin descartar sus archivos legibles.
+
+[ Export avisa sin conexión según lo que lleva el PDF y el margen de comentarios se mide en el navegador ]
+
 v0.173 :
 
 **Pedir acceso: los restos de E2 y E3.** (1) Con varios workspaces en el dispositivo, *Request access* de una página

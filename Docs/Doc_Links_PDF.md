@@ -261,7 +261,7 @@ el pase no coincidirían.
   el link.
 - **Hoy (D14 apagado) no se puede crear un link público en Wanka:** la parte del link de E1 se prueba con el servidor
   falso y la prueba de aceptación 3 espera a que se prenda el interruptor (O9).
-- **Sin red al exportar** no se puede saber si hay link: los links van con `#ws=` y la ventana lo dice (v0.165): *No connection: file links in this PDF can't use the public link of the page, even if it has one. They ask to sign in.* Sale solo en la ventana del PDF, con archivos en Drive conectados, sin red (o con la red caída del navegador) y sin los links ya pedidos; un visitante del link no lo ve (usa el suyo). Prueba: `exportFileLinks.test.tsx`.
+- **Sin red al exportar** no se puede saber si hay link: los links van con `#ws=` y la ventana lo dice (v0.165): *No connection: file links in this PDF can't use the public link of the page, even if it has one. They ask to sign in.* Sale solo en la ventana del PDF, con archivos en Drive conectados, sin red (o con la red caída del navegador), sin los links ya pedidos **y solo si las páginas que se exportan usan algún adjunto, video o carpeta** (hecho en v0.174: la ventana lee de lo guardado en el dispositivo, `planFiles`, qué `sdmedia://` usan, sin los borrados ni las fotos; una página que no se puede leer (excepción o snapshot marcado como no soportado/ilegible) deja el aviso por las dudas, conservando el conteo de los archivos que sí se pueden leer; mientras lee, no sale); un visitante del link no lo ve (usa el suyo). Un PDF sin ningún archivo no tiene links que arreglar. Pruebas: `exportFileLinks.test.tsx` (sin archivos, con fotos cuyo original está o falta y con un adjunto) y `planFiles.test.ts`.
 - **Revocar, *Reset link*, vencer, la página a la papelera o quien lo creó sin permiso de compartir:** el token deja de
   valer en el acto (lo valida la base en cada pedido); el link del PDF abre la pantalla del link muerto, que para una
   ruta `/f/` suma **Sign in instead** (LF16): convierte la dirección en la de miembro (`u`, `k`, `l` del mismo payload,
@@ -951,7 +951,7 @@ que diga otra cosa.
   proyectos" en vez de la del archivo: la del archivo se dibuja adentro de la app.
 - Se preguntan como mucho 40 links públicos por exportación (`MAX_LINK_LOOKUPS`).
 - Sin red al exportar, la ventana no lo avisaba (3.3 decía que sí; observación O6 de la auditoría): no se piden links y el
-  PDF va con la dirección de siempre (`#ws=`), que es lo seguro. **Hecho (v0.165):** ahora la ventana lo dice (3.3).
+  PDF va con la dirección de siempre (`#ws=`), que es lo seguro. **Hecho (v0.165):** ahora la ventana lo dice (3.3). **Hecho (v0.174):** solo si el PDF lleva algún adjunto, video o carpeta.
 
 **Ronda 1 de la auditoría de E1** (aprobado con observaciones, sin bloqueantes): si la red se cortaba y volvía con la
 ventana *Export* abierta, la casilla volvía a su valor de fábrica y un *Can view* destildado a mano podía salir con el

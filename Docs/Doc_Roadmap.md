@@ -708,7 +708,7 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   aceptada en LF4); y una prueba de dos personas decidiendo a la vez con dos sesiones reales (O8 de E2; hoy por lectura
   del `for update`: el servidor en memoria no la puede probar). Quedan para después: el correo al pedir y al aceptar
   (B.8), pedir acceso sin cuenta, el link de un video en línea y los textos de invitación en el choque de clave y en
-  *Join a workspace?* para una dirección de archivo (O7 c). **Hecho (v0.165):** *Export* avisa sin red (O6, *No connection: file links … can't use the public link*; un visitante del link no lo ve, con prueba). **Hecho (v0.171, D279 B):** *Share* dice el total exacto de los archivos de los links de la página aunque pasen de 500 (columna `total` de `public_link_files`, migración `20261103120000_purgados_peso_link_total.sql`, schema 25, aplicada; `Doc_Link_Publico.md`, "El total exacto"). Queda (chico): el aviso sale también si el PDF no lleva ningún archivo, porque la ventana no cuenta los adjuntos antes de armar, igual que el de las fotos sin conexión.
+  *Join a workspace?* para una dirección de archivo (O7 c). **Hecho (v0.165):** *Export* avisa sin red (O6, *No connection: file links … can't use the public link*; un visitante del link no lo ve, con prueba). **Hecho (v0.171, D279 B):** *Share* dice el total exacto de los archivos de los links de la página aunque pasen de 500 (columna `total` de `public_link_files`, migración `20261103120000_purgados_peso_link_total.sql`, schema 25, aplicada; `Doc_Link_Publico.md`, "El total exacto"). **Hecho (v0.174):** el aviso de links sale solo con adjuntos, videos o carpetas; el de fotos solo si falta su original. La ventana cuenta desde el dispositivo sin pedir metadatos a la red, con pruebas.
 - **P.28 Hecho (v0.156): la tabla del reporte en el teléfono** (`Doc_Tabla_Telefono.md`): en pantalla angosta ninguna
   columna con ancho guardado baja de 96 px y la tabla se desplaza de costado dentro de su bloque; la celda donde se
   escribe se acomoda a la vista. La compu y el PDF no cambian. Falta probarlo en un iPhone real (dedo, teclado abierto).
@@ -721,9 +721,10 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   **Hecho (restos de la tanda 17):** el contador de comentarios (globo y número) también entra en el margen en el teléfono:
   pastilla de 20 px con el globo arriba y el número abajo, sin superposición con el texto a 360, 375, 390 y 414 px con 1, 12 y
   120 comentarios (antes 19,8 a 35,2 px encima); la compu y el PDF no cambian (`Doc_Tabla_Telefono.md`).
-  Quedan (chicos, de la auditoría): el botón mide 20 px de ancho (menos que los 44 px de las guías táctiles; confirmarlo
-  con el dedo en un iPhone real) y ninguna prueba automática mide la superposición (la del CSS lee el texto del archivo): un
-  cambio de `--gutter` la rompería sin aviso.
+  **Hecho (v0.174):** la superposición se mide de verdad: una prueba de la suite calcula el diseño desde los valores del CSS
+  (`commentMarginLayout.test.ts`) y `scripts/medir-telefono.mjs` la mide en Chromium de 360 a 414 px con 1, 12 y 120 comentarios.
+  Queda (chico, de la auditoría): el botón mide 20 px de ancho (menos que los 44 px de las guías táctiles; confirmarlo
+  con el dedo en un iPhone real).
   Quedan (chicos): lo que headless no prueba (el impulso del dedo, el teclado abierto, un editor remoto moviendo la selección
   mientras se escribe en una tabla).
 - **P.29 Hecho (v0.161): contraste del texto y el panel de la cuenta** (Lega, 2026-10-03; `Doc_Contraste.md`): *Contrast*
@@ -995,7 +996,10 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    regenera el fixture, la firma y vacía `NUEVO_SIN_PUBLICAR`; se corre al publicar un cambio del esquema, en la misma tanda
    que lo publica (ver `Doc_Fotos_En_Linea.md`, "El esquema publicado de las pruebas"). Queda: el fixture sigue tomando de hoy
    los módulos compartidos (`photoSpec`, `driveCard`, `imageRowsEditor`, `cellThumbs`, `quietImage`): lo que no es el esquema
-   (por ejemplo, el `parseHTML` de la foto) no lo cubre la firma.
+   (por ejemplo, el `parseHTML` de la foto) no lo cubre la firma. **Hecho (v0.174):** el hueco de la auditoría (el fixture
+   regenerado a mano dejaba la firma laxa y `NUEVO_SIN_PUBLICAR` con líneas ya publicadas): ahora, cuando el esquema y los
+   módulos que importa son los de `origin/main`, la prueba exige la firma de hoy y la lista vacía; con un módulo distinto se
+   salta, sin falsa alarma por un atributo nuevo de la foto.
 
 21. **Hecho (v0.132): restos del deshacer de Yjs** (entrega 0 de P.26, `Doc_Deshacer.md`, sección 16). Deshacer lo
    escrito seguía lo que otro deshacer había vuelto a poner solo hasta el primer corte: dejaba restos si se había escrito

@@ -83,7 +83,7 @@ Punto de entrada de la documentación. Todo lo de `Docs/` está en castellano, s
   editor real, en jsdom), interfaz (`src/ui/`; las de editar a la vez son `src/ui/collab*.test.ts`, ver
   `Doc_Colaboracion.md`; las de fotos en línea corren 300 agendas al azar por caso y suman alrededor de un
   minuto y medio), el cliente del portero (`src/media/`), el portero
-  (`portero/src/`), la ayuda (`src/help/`), las plantillas (`src/templates/`), la recorrida y la página de práctica (`src/tutorial/`), el importador de Coda y el de los archivos de Shot Docs (`src/import/`), exportar y leer un zip (`src/export/`) y los comandos que preparan un workspace y exportan de Coda (`scripts/*.test.mjs`, sin red). `npm run typecheck`
+  (`portero/src/`), la ayuda (`src/help/`), las plantillas (`src/templates/`), la recorrida y la página de práctica (`src/tutorial/`), el importador de Coda y el de los archivos de Shot Docs (`src/import/`), exportar y leer un zip (`src/export/`, incluyendo el conteo local de archivos para los avisos sin conexión); las pruebas del margen de comentarios calculan el CSS y se contrastan con `scripts/medir-telefono.mjs` en Chromium. También cubre los comandos que preparan un workspace y exportan de Coda (`scripts/*.test.mjs`, sin red). `npm run typecheck`
   revisa los tipos de la app pero no los del portero: esos van con `npx tsc -p portero --noEmit`.
 
 ## Direcciones de la app
