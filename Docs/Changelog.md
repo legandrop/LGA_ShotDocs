@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.185 : WebP estático simple como PNG anotado
+
+Las fotos WebP que ya se podían agregar y ver no se podían bajar ni copiar con sus anotaciones. Ahora Carrete y las barras de una foto elegida admiten originales estáticos simples, tanto VP8 opaco como VP8L con transparencia. El resultado es un PNG completo y su nombre y dimensiones se muestran antes de descargarlo o copiarlo. Una comprobación del contenedor y sus cabeceras rechaza animación, metadatos, extensiones y tamaños incompatibles antes de decodificar; nunca elige silenciosamente un frame. El original permanece intacto y disponible. Se conservan los límites del dispositivo, cancelación, contexto y permisos existentes, sin reducción automática ni cambios del documento. JPEG y PNG mantienen sus salidas anteriores. Se actualizan ayuda y documentación. HEIC real, WebP extendido, carpetas, FrameRev y la comprobación física en Safari siguen pendientes.
+
+[Exportar WebP estático simple como PNG anotado]
+
 v0.184 : Conservar la última elección al reemplazar una foto de bloque
 
 Al elegir dos archivos para reemplazar la misma foto de bloque o de una fila, el primero podía terminar de

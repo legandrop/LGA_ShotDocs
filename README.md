@@ -6,7 +6,7 @@ its own project: a tree of pages you own.
 
 ## Goals
 
-- Copy one annotated JPEG/PNG photo from the photo viewer as a full-size PNG: prepare it first, then tap Copy. Browser image-clipboard support is required; the unchanged original remains available. HEIC, large mobile images, folders and FrameRev export remain pending.
+- Copy one annotated JPEG/PNG or simple static WebP photo from the photo viewer as a full-size PNG: prepare it first, then tap Copy. Browser image-clipboard support is required; the unchanged original remains available. HEIC, large mobile images, folders and FrameRev export remain pending.
 - On phones, the Download and Copy menus in the photo viewer stay within the screen, wrap the complete file name and show the dimensions. Scroll the menu when its remaining buttons are below.
 - On editable workspace pages, an annotated Drive photo’s existing Download button also offers annotated Download and Copy, including photos in rows, inline and in table cells. Original stays available.
 
@@ -132,7 +132,7 @@ In development. What works today:
   thickness; one finger draws, two fingers zoom and move the photo without drawing, and text is typed in a regular box
   with the phone keyboard. Once you use a pencil (Apple Pencil on the iPad), only the pencil draws and your finger moves
   the photo, like in Notes.
-- In the full-screen viewer, **Download → With annotations** prepares a local JPEG/PNG copy with the page’s drawings at full original dimensions. The original stays untouched, and it works offline with a full local original. HEIC and other formats, public links, and photos too large for the device (including 48 MP on phones) are not supported yet; Original remains available, with no automatic reduction.
+- In the full-screen viewer, **Download → With annotations** prepares a local JPEG/PNG copy with the page’s drawings at full original dimensions. The original stays untouched, and it works offline with a full local original. Simple static WebP (one VP8 or VP8L chunk) is exported as PNG with its filename and full dimensions shown before saving. Animated WebP and WebP with metadata are rejected without flattening; Original keeps the unchanged bytes. HEIC and other formats, public links, and photos too large for the device (including 48 MP on phones) are not supported yet; Original remains available, with no automatic reduction.
 - Copy or cut an annotated photo and paste it on another page of the same project: its annotations come with it (also
   into another window of the app), pasting twice doesn't repeat them, and undo right after pasting removes the photo
   with them. On a page of another project it arrives without them, and nothing of the annotations goes to the

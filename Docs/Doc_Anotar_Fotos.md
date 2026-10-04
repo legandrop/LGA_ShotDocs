@@ -4,7 +4,7 @@
 compu y la poda; v0.129: el dedo y el lápiz del iPad; ver "Cómo quedó" al final) y, de la entrega 5, copiar y pegar una
 foto con sus anotaciones (D46, v0.132; "Copiar y pegar con las anotaciones", al final); bajar y copiar la imagen con
 anotaciones tiene su primera parte en v0.178 (E4a: una foto JPEG/PNG desde el carrete) y copiarla como PNG en v0.180
-(E4b); desde v0.182 también desde la barra de una foto anotada en una página editable; otros formatos, carpetas y FrameRev siguen pendientes.** Pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.108. Las decisiones
+(E4b); desde v0.182 también desde la barra de una foto anotada en una página editable; v0.185 suma WebP estático simple como PNG (E4c parcial). Los demás formatos, carpetas y FrameRev siguen pendientes.** Pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.108. Las decisiones
 (AN1 a AN11, sección 12) son propuestas con la recomendación elegida: el número final lo pone quien las cierre con Lega.
 Auditado el 2026-10-02 (aprobado con condiciones): las correcciones ya están en el texto y resumidas al final
 ("Correcciones de la auditoría").
@@ -293,6 +293,19 @@ usan los mismos límites y la exigencia de original completo; si falta, se muest
 miniatura. Las fotos sin anotaciones, selecciones múltiples, direcciones web, archivos locales antiguos, videos,
 adjuntos, carpetas y links públicos conservan sus acciones anteriores. No suma botones permanentes. E4 sigue
 abierta: faltan carpetas, FrameRev y comprobaciones físicas de gesto y memoria en Safari/iPhone.
+
+**E4c parcial (v0.185): WebP simple → PNG explícito.** Carrete y las barras anteriores admiten un original
+WebP estático con un único chunk VP8 o VP8L, incluido alfa. La descarga y la copia salen como PNG real,
+con nombre `<nombre>_annotated.png` y las dimensiones completas visibles antes del gesto de salida.
+JPEG/PNG mantienen sus salidas anteriores. Original conserva sus bytes, nombre y animación si la tuviera.
+
+Se comprueban RIFF, longitud exacta, único chunk, padding cero, dimensiones y flags antes del decoder nativo.
+VP8X, animación, metadatos y chunks desconocidos se rechazan, sin elegir un frame ni convertir implícitamente.
+El PNG generado debe conservar dimensiones, firma y MIME y entrar en los límites existentes del dispositivo;
+un error deja Original disponible y no produce una copia reducida. No se conservan metadatos ni se promete
+identidad de color entre dispositivos. Alfa transparente conserva transparencia; los píxeles parcialmente
+transparentes pueden redondearse por premultiplicación nativa. No cambia el documento ni su esquema.
+HEIC real, otros WebP/formatos, 48 MP móvil, carpetas, FrameRev y Safari físico siguen pendientes: E4 no se cierra.
 
 - Se arma **en el dispositivo, al bajar**: el original (del dispositivo o con un pase del portero, que ya manda
   `Access-Control-Allow-Origin` a la app; sin eso el `canvas` queda "manchado" y no se puede leer, así que se prueba con
