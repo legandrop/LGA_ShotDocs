@@ -409,8 +409,9 @@ export class UndoTimeline {
     try {
       result = kind === 'undo' ? um.undo() : um.redo();
     } catch (err) {
-      // B.22: con dos personas, Yjs a veces tira `TypeError` en `redoItem` (la copia del padre ya no está). El paso ya
-      // salió de la pila; se descarta y se avisa como uno que no cambia nada.
+      // B.22: con dos personas, Yjs tiraba `TypeError` en `redoItem` cuando la copia del padre ya había sido recolectada.
+      // El parche de Yjs lo arregla (salta lo que no tiene dónde volver); esto queda por si Yjs tira por otra causa. El
+      // paso ya salió de la pila; se descarta y se avisa como uno que no cambia nada.
       console.warn('Deshacer: Yjs no pudo deshacer un paso; se descarta.', err);
       failed = true;
     } finally {

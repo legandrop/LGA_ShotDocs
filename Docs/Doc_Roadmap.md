@@ -998,14 +998,22 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    con una letra de antes de menos con el editor (antes 7) y 10 de 3.000 en un modelo de párrafos (antes 112). Quedan
    casos raros con las mismas letras en otro orden (1 de 300 con el editor; algunos los trae la parte de `redoItem` del
    parche, sin pérdida). Pendiente: reportarlo a Yjs con los casos mínimos (`Doc_Deshacer.md`, 16.1 y 16.4).
-22. **La excepción del ⌘Z de Yjs con dos personas** (la encontró la auditoría de la entrega 0 de P.26; ya pasaba antes del
-   parche de B.21). Con dos personas editando la misma página, a veces `UndoManager.undo()` tira `TypeError` (`reading
-   'client'`) en `redoItem`, cuando la copia del padre que tiene que volver ya fue recolectada (1 de 150 con dos editores
-   reales; 24 de 3.000 en un modelo de párrafos); qué deja ese ⌘Z en pantalla no está medido. **Atrapada en la línea de
-   tiempo (P.26, entrega 1, v0.140):** el paso se descarta, se avisa y el ⌘Z se frena (probado simulando el error). En
-   900 corridas al azar de la línea de tiempo con el editor, también 300 con otra persona escribiendo y borrando texto,
-   no apareció ninguna. Falta: medirla con dos editores borrando y deshaciendo bloques enteros, y ver si se arregla con
-   el parche de Yjs o se reporta (`Doc_Deshacer.md`, 16.6 y 17).
+22. **Hecho (v0.170): la excepción del ⌘Z de Yjs con dos personas** (la encontró la auditoría de la entrega 0 de P.26; ya
+   pasaba antes del parche de B.21). Con dos personas, a veces `UndoManager.undo()` tiraba `TypeError` en `redoItem`: el
+   ⌘Z tenía que volver a poner algo en la copia de un renglón que la otra persona había borrado y Yjs ya había
+   recolectado (vaciar rehacer le saca la marca que la guardaba). La línea de tiempo lo atrapaba (v0.140) y frenaba el ⌘Z.
+   **Medido** con dos editores borrando y deshaciendo bloques enteros: 10 de 3.000 corridas (13 ⌘Z); ninguno dejaba
+   nada a medias ni los editores distintos, pero el paso se perdía (en 7 de 13, renglones enteros que tenían que
+   volver). **Arreglado en el parche de Yjs:** lo que no tiene dónde volver se salta, lo demás del paso se hace y, si se
+   saltó algo, lo insertado por ese paso se deja (puede ser el mismo texto movido). De 10 a 0 con el editor, de 24 a 0
+   (y de 236 a 0 en 20.000 más) en el modelo de párrafos; sin la excepción, idéntico; al final nunca falta más texto
+   que con el ⌘Z frenado (en un ⌘Z suelto sí puede: el editor borra un bloque que no entra en el esquema y vuelve con los
+   siguientes). Sin `min_app_version`.
+   Queda: con dos editores, 6 de 3.000 corridas terminan con los dos textos distintos (las mismas sin el arreglo, ninguna
+   con la excepción; **arreglado en B.26**); el Enter deshecho cuya mitad vuelve a un renglón que otro borró desaparece
+   (de Yjs, sin copias); la reparación del editor cuando lo que vuelve con un deshacer de dos personas no entra en el
+   esquema y se borra el bloque (pasa también sin B.22; merece su propio ítem); reportarlo a Yjs (`Doc_Deshacer.md`,
+   sección 20).
 23. **Hecho (v0.152): los topes de largo de la base en la app.** Un título de más de 500 caracteres quedaba rechazado
    para siempre (`pages_title_check`). El árbol corta títulos, nombres de proyecto y claves de orden, lo que sobra del
    título va al principio de la página y lo ya rechazado vuelve a la cola cortado (`Doc_Sincronizacion.md`, "Topes de
@@ -1043,6 +1051,22 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    envuelto (`PageLinkToolbarController`, `toolbarTips.tsx`), *Open in new tab* y *Remove link* con su nombre en `data-tip`
    (no tienen atajo: es un ícono) y *Edit link* sin globo (es un botón con texto y BlockNote lo rotulaba «Edit»: repetía
    lo que ya dice); sin el globo de BlockNote. Prueba `linkToolbarTips.test.tsx` con la barra real.
+26. **Hecho (v0.170): dos personas con textos distintos después de deshacer** (lo dejó B.22: 6 de 3.000 corridas con
+   dos editores terminaban con los dos textos distintos para siempre, "y la toma" en uno y "y la omat" en el otro). Los
+   dos `Y.Doc` tenían las mismas ediciones: la memoria de quien deshacía no coincidía con lo que mandaba (ni con lo que
+   ve él mismo al recargar). **De Yjs, también sin nuestros parches:** al deshacer el borrado de un renglón, los vecinos
+   de cada letra que vuelve se buscan siguiendo las copias, y con un original y su copia en el mismo texto quedaban
+   cruzados. **Arreglado en el parche de Yjs:** los vecinos se toman como los lee otro dispositivo (el derecho a la
+   derecha del izquierdo, el izquierdo sin partir). De 6 a 0 con dos editores, de 22 a 0 en el modelo de párrafos y de
+   33 a 0 documentos distintos de lo guardado con una persona; ninguna letra de menos; versiones mezcladas sin
+   diferencias nuevas (las que quedan empiezan en un ⌘Z de una versión vieja: por eso `min_app_version` sube a esta
+   versión; `Doc_Deshacer.md`, sección 21). Queda: el Enter deshecho cuya mitad vuelve a un renglón que otro borró (20.5)
+   no es de esta familia; extender la decisión F de B.22 lo arregla pero empeora *Replace all* y cambia 655 de 3.000
+   corridas: propuesta de dejar lo insertado solo si es el mismo texto movido, a medir (21.5). Reportarlo a Yjs. De la
+   auditoría (chicos): con vecinos cruzados el recorrido nuevo puede ir hasta el final del renglón (no medible en páginas
+   reales); en ~0,15 % de las corridas, justo después de una negrita, la marca de formato difiere un paso y se iguala
+   (de Yjs, nunca texto); el arnés de dos editores muestra en ~50 % de las corridas algún paso donde un editor no muestra
+   exactamente su documento (la reparación del esquema, ya conocida).
 
 ### C. Esperan a Lega
 

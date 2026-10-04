@@ -2,7 +2,8 @@
 
 **Estado: entregas 0 (v0.132: el límite de Yjs, arreglado con un parche; sección 16), 1 (v0.140: la línea de tiempo
 con las páginas; sección 17), 2 (v0.144: el reemplazo adentro; sección 18) y 3 (v0.152: anotar una foto como un paso;
-sección 19) hechas.** Pedido de Lega
+sección 19) hechas; B.22 (v0.170: el ⌘Z con dos personas ya no tira la excepción de Yjs; sección 20) y B.26 (v0.170:
+deshacer el borrado de un renglón ya no deja a dos personas con textos distintos; sección 21) también.** Pedido de Lega
 del 2026-10-02, al responder cómo se deshace un reemplazo en todo el proyecto (una pregunta de su lista de decisiones;
 no es la D-10 de `Doc_Decisiones.md`). Se diseñó contra `main` v0.123
 y se revisó contra v0.125. Las decisiones (DH1 a DH10, sección 11) son propuestas con la recomendación elegida: el
@@ -664,7 +665,9 @@ persona) y `src/ui/yjsUndoRedoneEditor.test.ts` (los dos casos con el editor y 1
 - **El documento local distinto de lo guardado** (auditoría; de Yjs, previo al parche): en el modelo de párrafos, después
   de deshacer o rehacer, el orden en memoria a veces no coincide con el que sale al rearmarlo desde sus ediciones (lo que
   ve otro dispositivo o la misma página al recargar): 42 de 3.000 sin el parche y 33 con él; con texto, 0; con el editor
-  real, 1 de 300 en los dos. Nunca faltan letras: solo cambia el orden, y recargar lo arregla.
+  real, 1 de 300 en los dos. Nunca faltan letras: solo cambia el orden, y recargar lo arregla. **Arreglado en B.26
+  (sección 21)**, junto con lo de volver a ubicar el vecino izquierdo: era la causa de los textos distintos con dos
+  personas.
 
 Todo es raro, se ve y se arregla escribiendo; lo único con algo de menos es lo de los bloques enteros, menos que antes, y
 la letra está en el historial de versiones.
@@ -690,7 +693,7 @@ restos), sin cruzarse con este. **No hace falta subir `min_app_version`.**
   3.000 del modelo de párrafos, `UndoManager.undo()` tira `TypeError` (`reading 'client'`) en `redoItem`, cuando la copia
   del padre ya fue recolectada y `redone` queda sin valor. Con la línea de tiempo se deshace más lejos: la entrega 1
   tiene que atrapar esa excepción en su deshacer (descartar el paso y avisar, como un paso que no cambia nada, 3.4) y
-  medirla. Está en el roadmap (B.22).
+  medirla. Está en el roadmap (B.22). **Medida y arreglada en el parche (v0.170, sección 20).**
 - **Al actualizar Yjs** (o al pasar a `@blocknote/core/y`, Yjs 14, `Doc_Colaboracion.md`): ver si la versión nueva ya lo
   trae; si no, rehacer el parche en los tres archivos y `npx patch-package yjs`. Las dos pruebas lo cubren. Conviene
   reportarlo a Yjs con los dos casos mínimos de 16.1.
@@ -779,7 +782,8 @@ semillas en la suite, `TIMELINE_SEEDS` para más) y las de atajos (`shortcuts.te
 
 - La memoria en el iPhone con 20 páginas retenidas (si aprieta, el tope baja a 10) y el gesto de deshacer de iOS en la
   PWA instalada.
-- La excepción de Yjs con dos personas (B.22) medida con dos editores borrando bloques enteros.
+- La excepción de Yjs con dos personas (B.22) medida con dos editores borrando bloques enteros. **Hecho (v0.170):**
+  medida y arreglada en el parche de Yjs (sección 20).
 - Entregas 2 (el reemplazo adentro, C1, DH9, `planRedo`; hecha, sección 18) y 3 (anotar como un paso).
 - Pruebas que faltan (auditoría, O1): no limpiar el `meta` al montar (A5), los ⌘Z que llegan mientras cruza (A7, probado
   en el navegador, sin prueba en la suite) y esperar a que el editor sea editable (A9). **Hechas con la entrega 2**
@@ -987,6 +991,224 @@ Auditoría independiente sobre `d29bd15`: no aprobado, un bloqueante chico; 1.00
 - **F2** (un error de la consola al pegar una foto): al roadmap (B.24).
 - **D226**, que viaja con esta entrega (pedido de Lega): el tooltip del triángulo de colapsar, un renglón por acción
   (`Doc_Colapsar.md`, §3).
+
+## 20. B.22: la excepción del ⌘Z con dos personas, cómo quedó (v0.170)
+
+### 20.1 La causa
+
+- Deshacer un borrado vuelve a poner cada cosa **adentro de la copia de su padre**: `redoItem` (`Item.js`) sigue
+  `parentItem.redone` hasta el renglón que está hoy en el documento.
+- Las copias que escribe un deshacer quedan guardadas (`keep`) para que Yjs no las recolecte. Pero esa marca se pone y
+  se saca **subiendo por los padres** (`keepItem`), y cuando Yjs vacía la lista de rehacer (al escribir algo nuevo) le
+  saca la marca a lo que guardaban esos pasos y a todos sus padres: también a la copia del renglón.
+- Si después **otra persona** borra esa copia, en este dispositivo Yjs la recolecta en el momento (`tryGcDeleteSet`): el
+  renglón queda como un item sin su tipo (`ContentDeleted`) y lo de adentro como `GC` (sin `redone` ni padre). Si la
+  borra uno mismo, ese borrado la vuelve a guardar: por eso hacen falta dos personas.
+- Cuando un ⌘Z tiene que volver a poner algo de ese renglón, `redoItem` llega al `GC` y tira `TypeError` ("reading
+  'client'"; si lo borrado era un hijo directo del renglón, como una foto en línea, "reading '_item'"). El paso ya salió
+  de la pila y no se hizo nada: lo que tenía en otros renglones tampoco vuelve.
+
+Caso mínimo (Yjs solo): A escribe los renglones "abc" y "xyz". B borra la "b" y la "y" en un paso; borra el renglón
+"ac" entero; ⌘Z (vuelve una copia); escribe "Z" en la copia y ⌘Z; escribe "q" en el otro renglón (vacía rehacer). A
+borra la copia. B: ⌘Z (se va la "q") y ⌘Z: `TypeError`, y "xz" se queda sin la "y". Con una foto en línea en vez de
+la "b", el mismo caso tira "reading '_item'".
+
+### 20.2 Lo medido antes del arreglo
+
+| Prueba | Resultado |
+|---|---|
+| **Dos editores reales** (BlockNote con el esquema de la app, conectados en cola como la app, con la reparación; 5 bloques con foto en línea y tabla; 40 acciones con 16 % de borrar 1 o 2 bloques enteros, Enter, Backspace, ⌘Z y ⌘⇧Z; después los dos deshacen todo, intercalado; 3.000 corridas) | **10 corridas con la excepción, 13 ⌘Z**, todas en el deshacer final |
+| Qué deja en pantalla cada ⌘Z frenado | **nada cambia**: 0 de 13 tocaron el documento, el editor muestra el texto del documento 13 de 13 y los dos editores terminan iguales 10 de 10 corridas. Lo que se pierde es **el paso**: el mismo ⌘Z con el arreglo vuelve a poner texto en 7 de 13 (renglones enteros: "tercero", la tabla, "segundo renglón", "la cámara y la toma"), saca letras escritas por esa persona en 3 y no cambia letras en 3 |
+| Modelo de párrafos de la auditoría (dos personas, 3.000 semillas) | 24 con la excepción (25 ⌘Z); ninguno cambió el documento; con el arreglo, 11 de esos 24 ⌘Z cambian algo |
+| 20.000 semillas más del modelo | 236 con la excepción (1,2 %) |
+
+La línea de tiempo atrapaba la excepción (17.2): el paso se descartaba con "Nothing to undo there…" y el ⌘Z se frenaba.
+No quedaba nada a medias, pero ese paso ya no se podía deshacer, y lo que tenía para volver no volvía.
+
+### 20.3 El arreglo
+
+En el parche de Yjs (`patches/yjs+13.6.33.patch`), marcado `LGA-SHOTDOCS-PATCH (B.22)` en `dist/yjs.mjs`,
+`dist/yjs.cjs` y `src` (`assertYjsPatched` lo exige):
+
+- **`redoItem`**: si al seguir la copia del padre llega a un `GC` o a un item sin su tipo, no vuelve a poner esa cosa
+  (devuelve `null`, como ya hace Yjs cuando el padre no se puede volver a poner) y deja una marca en la transacción.
+  Un atributo del renglón (`parentSub`, como la alineación o el ancho de una foto) se salta sin marca: no es texto
+  movido.
+- **`popStackItem`**: si la marca está, ese paso **no saca lo que había insertado**. Lo insertado puede ser el mismo
+  texto movido (un Enter, un bloque arrastrado): sacarlo cuando el original no tiene dónde volver lo haría desaparecer.
+  Sobra texto en vez de faltar **al final de la historia**, no en cada ⌘Z: un ⌘Z que antes se frenaba y ahora se
+  hace puede volver a poner algo en una estructura que el esquema no acepta, y el editor borra ese bloque (en 2 o 3 de
+  3.000 corridas, una vez una tabla de la otra persona); con los ⌘Z siguientes vuelve, y las letras que faltan al final
+  nunca son más que con el ⌘Z frenado. No es nuevo: con B.21, dos ⌘Z que tiraban ya borraban así. Por ejemplo, un *Replace all* de la página "b" → "B" en dos renglones, deshecho cuando
+  uno de los dos ya no existe, deja "xbBz" en el otro (vuelve la "b" y la "B" queda). Lo demás del paso se hace.
+
+Actúa donde antes Yjs tiraba la excepción: al llegar a un `GC` el código anterior seguía con `undefined` y tiraba
+siempre, y al llegar a un item sin su tipo tiraba siempre con texto y renglones. Con un atributo de ese renglón, Yjs a
+veces lo saltaba sin tirar (cuando a la derecha hay un valor de otra persona): por eso los atributos no marcan, y ese
+caso queda igual que antes (lo encontró la auditoría; está en la prueba). Como B.21, decide qué escribe el deshacer de este dispositivo; lo que sale son ediciones comunes: **no hace
+falta subir `min_app_version`**. La línea de tiempo sigue atrapando la excepción, por si Yjs tira por otra causa.
+
+Se descartaron:
+
+- **Saltar y sacar igual lo insertado** (lo que hace Yjs cuando el padre se borró sin copia). Con el editor, en 2 de las
+  10 corridas el final quedaba con texto de antes de menos que con el ⌘Z frenado: un Enter deshecho sacaba " la toma"
+  del renglón nuevo y no lo podía devolver al de arriba, que la otra persona había borrado.
+- **Frenar el paso entero, sin la excepción**: deja afuera lo que sí tiene dónde volver (los 7 de 13 de arriba).
+- **Revisar también los vecinos** (`leftTrace`, `rightTrace`) por si son un `GC`: no apareció en 23.000 corridas del
+  modelo ni en 3.000 con el editor (todas las excepciones salen del padre); no se agregó código que no se puede probar.
+
+### 20.4 Lo medido con el arreglo
+
+| Prueba | Con B.21 | Con B.21 y B.22 |
+|---|---|---|
+| Dos editores reales, bloques enteros (3.000) | 10 corridas con la excepción | **0**; terminan iguales 2.994 en los dos casos, y las 10 corridas de la excepción terminan con el mismo texto que con el ⌘Z frenado |
+| Modelo de párrafos, dos personas (3.000) | 24 con la excepción | **0**; las mismas 2.978 terminan iguales (las 22 que no, ya estaban) |
+| 20.000 semillas más del modelo | 236 | **0** |
+| Las 2.976 semillas del modelo sin la excepción | — | cada ⌘Z da **idéntico**, antes y después (también con la corrección de los atributos, que en la auditoría dio 30.000 de 30.000 idénticas) |
+| Letras de antes que faltan al final (las 24 semillas de la excepción) | 55 | 55 |
+| Versiones mezcladas (una persona con B.22 y otra sin él, párrafos y texto) | — | ninguna deja de converger por el arreglo |
+| Una persona (los tres generadores de 16.3) y mapas (anotar) | — | idénticos |
+
+Las pruebas: `src/ui/yjsUndoGone.test.ts` (los dos casos mínimos, el atributo en conflicto, `dist/yjs.cjs`, el caso con dos editores, el Enter
+cuyo texto no tiene dónde volver y 3.000 semillas del modelo). Cada parte del arreglo sacada hace fallar alguna.
+
+### 20.5 Lo que queda
+
+- **De Yjs, sin copias y sin el arreglo** (encontrado al medir): A parte un renglón con Enter, B borra el de arriba y A
+  hace ⌘Z: la segunda mitad vuelve al renglón borrado y desaparece también. Lo hace Yjs con cualquier padre borrado por
+  otro; está en el historial y ⌘⇧Z lo trae.
+- Con dos editores, 6 de 3.000 corridas terminan con los dos textos distintos (las mismas 6 sin el arreglo, ninguna con
+  la excepción; en 5, también rearmando cada documento desde cero), y 22 de 3.000 en el modelo de párrafos. Ya estaba:
+  queda para investigar aparte. **Investigado y arreglado en B.26 (sección 21).**
+- La reparación del editor después de un deshacer con dos personas: cuando lo que vuelve no entra en el esquema, el
+  editor borra el bloque entero (lo dicho en 20.3; pasa también sin B.22: 298 de 35.184 ⌘Z en la auditoría). Es otro
+  ítem del roadmap.
+- Reportarlo a Yjs con los casos mínimos de 20.1, junto con los de 16.1 y 16.4.
+
+## 21. B.26: dos personas con textos distintos después de deshacer, cómo quedó (v0.170)
+
+### 21.1 En qué capa se rompía
+
+Con el arnés de B.22 (dos editores reales, 3.000 corridas), las 6 corridas que terminaban distintas se miraron capa por
+capa:
+
+- **Los dos `Y.Doc` tenían las mismas ediciones** (el mismo vector de estado, nada pendiente en la red) y aun así otro
+  texto: "y la toma" en uno y "y la omat" en el otro. Rearmar cada documento desde sus ediciones da el texto **del otro**,
+  y armar uno nuevo con todas las ediciones da siempre lo mismo. O sea: **la memoria de quien deshizo no coincide con lo
+  que dicen sus propias ediciones** (lo que recibe el otro, y lo que ve él mismo al recargar). No es la carga desde cero
+  (un snapshot o la compactación) ni la red.
+- **El editor no agrega nada:** en las 3.000 corridas cada editor muestra el texto de su documento, y los dos editores
+  muestran lo mismo salvo los ids de bloques repetidos (abajo).
+- **Es de Yjs, no de un parche nuestro.** Modelo de párrafos de dos personas (3.000 semillas): 27 distintas con Yjs sin
+  parches, 22 con B.21 y las mismas 22 con B.21 y B.22. Con una sola persona también pasa: 33 de 3.000 del modelo de una
+  persona dejan la memoria distinta de lo rearmado (es "el documento local distinto de lo guardado" de 16.4; nadie lo ve
+  hasta que otro abre la página o se recarga).
+
+Fuera del texto, dos cosas que ya estaban y no son textos distintos: en ~25 % de las corridas quedan dos bloques con el
+mismo id y cada editor le pone al repetido un id al azar distinto (`Doc_Colaboracion.md`, "Ids repetidos"); y en 103 la
+página termina vacía, y el editor la muestra con un párrafo vacío.
+
+### 21.2 La causa
+
+- Al deshacer el borrado de un renglón, `redoItem` (`Item.js`) vuelve a poner cada letra en la copia del renglón y le
+  busca los vecinos siguiendo las copias (`redone`): el izquierdo desde la letra de la izquierda, el derecho desde la
+  letra misma hacia la derecha.
+- Un ⌘Z anterior dentro del mismo renglón deja **el original borrado y su copia en el mismo texto**, la copia pegada a
+  la izquierda. Siguiendo las copias, el vecino izquierdo (la copia) y el derecho (el original, que apunta a esa copia)
+  terminan **en la misma letra**, o el derecho queda antes que el izquierdo: los vecinos quedan **cruzados**.
+- Con vecinos cruzados, Yjs ubica la letra en la memoria con un recorrido que depende de cómo tiene partidos los items, y
+  la manda con `origin` y `rightOrigin` (sus dos letras de al lado). Otro dispositivo la ubica por esas dos letras y, con
+  los items partidos o juntados de otra forma, cae en otro lugar. Desde ahí cada uno sigue con su orden: Yjs nunca
+  compara los textos.
+- Pariente, de la parte de B.21 del parche (16.4): el vecino izquierdo es el item que termina en la última letra de su
+  copia, y buscar el derecho puede partir ese item. El izquierdo queda más corto y la letra cae en el medio de su vecino
+  ("dso"). Eso era igual para todos, pero la corrección conocida (volver a tomar el izquierdo después de buscar el
+  derecho) armaba más vecinos cruzados (16.4: de 33 a 52 documentos distintos de lo guardado), y no se había aplicado.
+
+Casos mínimos (deterministas; una sola persona, el otro documento recibe cada cambio):
+
+- **Yjs solo, "tres":** borrar "re" y ⌘Z; borrar "es" y ⌘Z; borrar el renglón y ⌘Z. Quien deshizo ve "tres"; el otro, y
+  él mismo al recargar, "ters". Igual con Yjs sin parches, con B.21 y con B.21 y B.22.
+- **Yjs solo, "dos":** borrar "os" y ⌘Z; borrar la "s"; borrar el renglón, ⌘Z y ⌘Z. Sin parches: "dos" en quien deshizo y
+  "dso" en el otro; con B.21: "dso" en los dos.
+- **Con el editor de la app** (achicado de la semilla 1406): renglones "la cámara y la toma" y "otro"; Enter justo antes
+  de "toma" y ⌘Z; escribir "AB" entre la "t" y la "o" de "toma"; Enter después de "cámara y"; borrar los dos renglones
+  (con el menú del bloque, juntos o de a uno) y deshacer todo. Quien deshizo ve "la cámara y la toma"; el otro, y él mismo
+  al recargar, "la cámara y la omat". Borrándolos con una selección y Backspace no pasa (es otra edición).
+
+### 21.3 El arreglo
+
+En el parche de Yjs (`patches/yjs+13.6.33.patch`, marca `LGA-SHOTDOCS-PATCH (B.26)` en `dist/yjs.mjs`, `dist/yjs.cjs` y
+`src`; `assertYjsPatched` la exige), en `redoItem`, después de buscar los dos vecinos:
+
+1. **El izquierdo se vuelve a tomar** como el item que termina en la misma letra que antes de buscar el derecho: si
+   buscar el derecho lo partió, ya no queda más corto y la letra no cae en el medio de su vecino.
+2. **El derecho tiene que estar a la derecha del izquierdo.** Si es el mismo o está antes, se toma como derecho el que
+   hoy está pegado al izquierdo.
+
+Lo que sale (`origin`, `rightOrigin`) son entonces dos letras en orden, y cualquier dispositivo (y la recarga) ubica la
+letra en el mismo lugar que quien deshizo. Cumple las tres condiciones: **nunca saca ni agrega texto** (solo decide
+dónde va lo que vuelve); **lo que decide viaja**: es una edición común, que cualquier versión, vieja o nueva, ubica igual
+sin saber nada de las copias; y con versiones mezcladas no aparece ninguna diferencia nueva: las que quedan empiezan
+siempre en un ⌘Z hecho con una versión vieja (y pueden alcanzar a los dispositivos que lo reciben, como antes; medido en
+100.000 corridas mezcladas, 27 a 56 de cada 10.000). Para la compatibilidad no hace falta subir `min_app_version`, pero
+se sube a la versión que publica B.26 porque corta esa última fuente (LEY 1: no cuesta nada). Si los vecinos no estaban
+cruzados ni el izquierdo partido, hace lo mismo que antes. Cuesta un recorrido del vecino izquierdo al derecho por cada
+tramo que vuelve; normalmente están al lado, y con vecinos cruzados puede ir hasta el final del renglón.
+
+Se descartaron: **solo la parte 2** (converge igual, 3.000 de 3.000, pero deja el "dso" de B.21); **solo la parte 1**
+(es la corrección de 16.4: arma más vecinos cruzados, y sin la parte 2 diverge); **ubicar en la memoria como lo haría
+otro dispositivo** (rearmar los vecinos desde `origin` y `rightOrigin`; razonado, no medido): arregla esa memoria,
+pero con vecinos cruzados dos dispositivos que tienen los items partidos de otra forma siguen ubicándolo distinto entre
+ellos; y **dejar el lugar
+de la memoria y corregir `origin` y `rightOrigin` después de ubicarlo**: idéntico en las 3.000 semillas a la parte 2, y
+cambia un dato del item después de integrarlo.
+
+### 21.4 Lo medido
+
+| Prueba | Con B.21 y B.22 | Con B.26 |
+|---|---|---|
+| Dos editores reales, bloques enteros (el arnés de B.22, 3.000 corridas) | **6 distintas**; rearmar da otro texto en las 6 | **0**: 3.000 iguales, y rearmar da lo mismo en las 3.000 |
+| Las mismas corridas, texto final | — | igual en 2.991; en las 6 que divergían queda el orden bueno ("y la toma", "renglón", "tercero"); en 2 cambia el orden de un renglón ya desordenado, a mejor (" y la tomGHa" en vez de " y omGHala t"); 3 son el azar del arnés (dan distinto corriendo dos veces la misma librería) |
+| Letras de antes que faltan al final (editor, por semilla) | — | idénticas: ninguna corrida con una letra menos |
+| Modelo de párrafos, dos personas (3.000) | 22 distintas (sin parches, 27) | **0**; letras faltantes idénticas semilla por semilla |
+| Modelo de una persona (la auditoría de B.21, 3.000) | 33 con la memoria distinta de lo rearmado; 2.971 exactas, 19 en otro orden, 10 con letras de menos (14) | **0**; 2.985 exactas, 5 en otro orden, las mismas 10 (14 letras) |
+| Versiones mezcladas, modelo de dos personas (3.000) | — | vieja con nueva: 2.985 y 2.993 iguales (las que faltan son las de la vieja: 15 y 7, que suman las 22); nueva con nueva: 3.000. Ninguna distinta nueva |
+| Los generadores de texto de B.21 (una persona, y dos a la vez con versiones mezcladas) | — | idénticos: 3.000 exactas, 3.000 convergen |
+
+Las pruebas: `src/ui/yjsUndoCrossed.test.ts` (6: los dos casos mínimos, `dist/yjs.cjs`, el caso con el editor, 3.000
+semillas del modelo de una persona y las seis semillas de B.22 con dos editores) y la prueba al azar de
+`yjsUndoGone.test.ts`, que ahora exige las 3.000 iguales. Sin el arreglo fallan las 7; sin la parte 2, 5 de las 6 del
+archivo nuevo; sin la parte 1, la del "dso".
+
+### 21.5 El Enter con el renglón de arriba borrado (20.5)
+
+- **No es la misma familia:** los dos ven lo mismo, no diverge. Es cómo deshace Yjs (igual sin parches, con B.21, B.22 y
+  B.26): el ⌘Z del Enter tiene que devolver la segunda mitad al renglón de arriba; como lo borró otra persona (sin copia
+  propia), `redoItem` no la puede volver a poner y devuelve `null`, y el paso igual saca lo que insertó, el renglón nuevo
+  con esa mitad. Caso mínimo (Yjs solo): "la cámara y la toma" y "otro"; A parte después de "cámara ", B borra el de
+  arriba, A ⌘Z: queda "otro" solo; ⌘⇧Z trae "y la toma".
+- **Arreglo posible, medido y no aplicado:** extender la decisión F de B.22 (si algo del paso no puede volver, lo
+  insertado se deja) a cualquier padre borrado por otro, no solo al recolectado. Con eso el ⌘Z del Enter deja "y la
+  toma" y no hace nada más (la línea de tiempo lo avisa como un paso que no cambia nada). Medido:
+  - Converge igual (modelo de dos personas y versiones mezcladas, 3.000 de 3.000; dos editores, 3.000 de 3.000).
+  - **Cambia mucho más que B.22:** el final de 655 de 3.000 corridas con dos editores; en 609 quedan letras que hoy
+    desaparecen (las letras de antes que faltan bajan de 11.501 a 6.350 en total), pero en 34 quedan letras de menos que
+    hoy y en 4 faltan más letras de antes (el arnés llama a Yjs sin la línea de tiempo: un paso que ya no cambia nada hace
+    que Yjs deshaga también el anterior en el mismo ⌘Z, y la corrida sigue por otro camino).
+  - **Empeora un caso que hoy sale bien:** *Replace all* "b" → "B" en "abc" y "xbz", la otra persona borra el primer
+    renglón, ⌘Z: hoy "xbz" (exacto); con la extensión, "xbBz" en el que quedó (y así en cada renglón con una
+    coincidencia).
+- **Por qué no se aplicó:** no cumple "nunca peor que hoy" (el *Replace all* y las 4 corridas), y cambia el deshacer en
+  una de cada cinco corridas, no solo donde Yjs fallaba. **Propuesta para un ítem aparte:** dejar lo insertado solo
+  cuando es **el mismo texto movido** (lo que no pudo volver y lo que el paso insertó tienen el mismo contenido: un Enter,
+  un bloque arrastrado), medido con el arnés de la línea de tiempo (sin el doble paso de Yjs). Hasta entonces, la segunda
+  mitad está en el historial de la página y ⌘⇧Z la trae.
+
+### 21.6 Lo que queda
+
+- Reportarlo a Yjs con los casos mínimos de 21.2, junto con los de 16.1, 16.4 y 20.1.
+- Los ids de bloques repetidos (21.1) siguen como estaban: el texto es el mismo, el id del repetido no.
 
 ## Correcciones de la auditoría (2026-10-02)
 

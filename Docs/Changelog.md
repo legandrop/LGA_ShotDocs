@@ -1,5 +1,18 @@
 # Changelog — LGA Shot Docs
 
+v0.170 :
+
+**El ⌘Z con dos personas (B.22 y B.26).** (1) A veces ⌘Z tiraba `TypeError` y el paso se descartaba: lo que tenía que
+volver (renglones enteros) no volvía. Causa: deshacer vuelve a poner cada cosa en la copia de su renglón y, si otra
+persona la había borrado, Yjs ya la había recolectado. El parche de Yjs ahora salta lo que no tiene dónde volver, hace
+lo demás y, si saltó algo, deja lo insertado por ese paso: con dos editores, de 10 a 0 en 3.000 corridas. (2) En 6 de
+3.000 corridas los dos terminaban con textos distintos para siempre ("y la toma" y "y la omat"). Causa, de Yjs: al
+deshacer el borrado de un renglón, los vecinos de la letra que vuelve quedaban cruzados, y quien deshacía la ubicaba
+en otro lugar que los demás. El parche ahora toma los vecinos como los lee otro dispositivo: de 6 a 0, sin ninguna
+letra de menos. Sube `min_app_version` a esta versión (los ⌘Z de una versión vieja todavía pueden cruzarse).
+
+[ Deshacer con dos personas sin la excepción de Yjs y sin textos distintos - el parche de Yjs salta lo que no tiene dónde volver y toma los vecinos de lo que vuelve como los lee otro dispositivo ]
+
 v0.169 :
 
 **Links del PDF, entrega 3: pedir una página.** Quien abría `/p/<id>` sin acceso solo leía «no existe o no tenés
