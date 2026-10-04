@@ -117,10 +117,10 @@ function assertYProsemirrorPatched(): void {
 // `require`) y `src` (por si algo importa `yjs/src/index.js`).
 function assertYjsPatched(): void {
   const files: [string, string[]][] = [
-    ['dist/yjs.mjs', ['const lgaFollowRedoneRange', 'lgaFollowRedoneRange(transaction, store, struct)', 'leftTrace.redone.clock + leftTrace.length - 1', 'if (!(parentItem.content instanceof ContentType))', '!lgaParentGone && undoManager.deleteFilter(item)']],
-    ['dist/yjs.cjs', ['const lgaFollowRedoneRange', 'lgaFollowRedoneRange(transaction, store, struct)', 'leftTrace.redone.clock + leftTrace.length - 1', 'if (!(parentItem.content instanceof ContentType))', '!lgaParentGone && undoManager.deleteFilter(item)']],
+    ['dist/yjs.mjs', ['const lgaFollowRedoneRange', 'lgaFollowRedoneRange(transaction, store, struct)', 'leftTrace.redone.clock + leftTrace.length - 1', 'if (!(next instanceof Item))', 'if (!(parentItem.content instanceof ContentType))', '!lgaParentGone && undoManager.deleteFilter(item)']],
+    ['dist/yjs.cjs', ['const lgaFollowRedoneRange', 'lgaFollowRedoneRange(transaction, store, struct)', 'leftTrace.redone.clock + leftTrace.length - 1', 'if (!(next instanceof Item))', 'if (!(parentItem.content instanceof ContentType))', '!lgaParentGone && undoManager.deleteFilter(item)']],
     ['src/utils/UndoManager.js', ['const lgaFollowRedoneRange', 'lgaFollowRedoneRange(transaction, store, struct)', '!lgaParentGone && undoManager.deleteFilter(item)']],
-    ['src/structs/Item.js', ['leftTrace.redone.clock + leftTrace.length - 1', 'if (!(parentItem.content instanceof ContentType))']],
+    ['src/structs/Item.js', ['leftTrace.redone.clock + leftTrace.length - 1', 'if (!(next instanceof Item))', 'if (!(parentItem.content instanceof ContentType))']],
   ];
   for (const [file, wanted] of files) {
     let source = '';

@@ -8,7 +8,8 @@ vuelve a poner cada cosa en la copia de su renglón, y si otra persona la había
 (vaciar rehacer le saca la marca que la guardaba) y el deshacer llegaba a un hueco. El parche de Yjs ahora salta lo que
 no tiene dónde volver, hace lo demás y, si saltó algo, deja lo insertado por ese paso (puede ser el mismo texto movido
 por un Enter). Medido con dos editores borrando y deshaciendo bloques enteros: de 10 a 0 en 3.000 corridas, y de 24 a
-0 en el modelo de párrafos; sin la excepción, idéntico. Sin `min_app_version`.
+0 en el modelo de párrafos; sin la excepción, idéntico (un atributo del renglón se salta como antes). Al final nunca
+falta más texto que con el ⌘Z frenado. Sin `min_app_version`.
 
 [ Deshacer con dos personas sin la excepción de Yjs - el parche salta lo que no tiene dónde volver porque otra persona borró su renglón, hace lo demás del paso y deja lo insertado si saltó algo; medido con dos editores borrando bloques enteros ]
 

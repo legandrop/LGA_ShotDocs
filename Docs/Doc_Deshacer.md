@@ -1030,13 +1030,20 @@ En el parche de Yjs (`patches/yjs+13.6.33.patch`), marcado `LGA-SHOTDOCS-PATCH (
 
 - **`redoItem`**: si al seguir la copia del padre llega a un `GC` o a un item sin su tipo, no vuelve a poner esa cosa
   (devuelve `null`, como ya hace Yjs cuando el padre no se puede volver a poner) y deja una marca en la transacción.
+  Un atributo del renglón (`parentSub`, como la alineación o el ancho de una foto) se salta sin marca: no es texto
+  movido.
 - **`popStackItem`**: si la marca está, ese paso **no saca lo que había insertado**. Lo insertado puede ser el mismo
   texto movido (un Enter, un bloque arrastrado): sacarlo cuando el original no tiene dónde volver lo haría desaparecer.
-  Sobra texto en vez de faltar: por ejemplo, un *Replace all* de la página "b" → "B" en dos renglones, deshecho cuando
+  Sobra texto en vez de faltar **al final de la historia**, no en cada ⌘Z: un ⌘Z que antes se frenaba y ahora se
+  hace puede volver a poner algo en una estructura que el esquema no acepta, y el editor borra ese bloque (en 2 o 3 de
+  3.000 corridas, una vez una tabla de la otra persona); con los ⌘Z siguientes vuelve, y las letras que faltan al final
+  nunca son más que con el ⌘Z frenado. No es nuevo: con B.21, dos ⌘Z que tiraban ya borraban así. Por ejemplo, un *Replace all* de la página "b" → "B" en dos renglones, deshecho cuando
   uno de los dos ya no existe, deja "xbBz" en el otro (vuelve la "b" y la "B" queda). Lo demás del paso se hace.
 
-Solo actúa donde antes Yjs tiraba la excepción: en los dos caminos el código anterior seguía con `undefined` y tiraba
-siempre. Como B.21, decide qué escribe el deshacer de este dispositivo; lo que sale son ediciones comunes: **no hace
+Actúa donde antes Yjs tiraba la excepción: al llegar a un `GC` el código anterior seguía con `undefined` y tiraba
+siempre, y al llegar a un item sin su tipo tiraba siempre con texto y renglones. Con un atributo de ese renglón, Yjs a
+veces lo saltaba sin tirar (cuando a la derecha hay un valor de otra persona): por eso los atributos no marcan, y ese
+caso queda igual que antes (lo encontró la auditoría; está en la prueba). Como B.21, decide qué escribe el deshacer de este dispositivo; lo que sale son ediciones comunes: **no hace
 falta subir `min_app_version`**. La línea de tiempo sigue atrapando la excepción, por si Yjs tira por otra causa.
 
 Se descartaron:
@@ -1055,12 +1062,12 @@ Se descartaron:
 | Dos editores reales, bloques enteros (3.000) | 10 corridas con la excepción | **0**; terminan iguales 2.994 en los dos casos, y las 10 corridas de la excepción terminan con el mismo texto que con el ⌘Z frenado |
 | Modelo de párrafos, dos personas (3.000) | 24 con la excepción | **0**; las mismas 2.978 terminan iguales (las 22 que no, ya estaban) |
 | 20.000 semillas más del modelo | 236 | **0** |
-| Las 2.976 semillas del modelo sin la excepción | — | cada ⌘Z da **idéntico**, antes y después |
+| Las 2.976 semillas del modelo sin la excepción | — | cada ⌘Z da **idéntico**, antes y después (también con la corrección de los atributos, que en la auditoría dio 30.000 de 30.000 idénticas) |
 | Letras de antes que faltan al final (las 24 semillas de la excepción) | 55 | 55 |
 | Versiones mezcladas (una persona con B.22 y otra sin él, párrafos y texto) | — | ninguna deja de converger por el arreglo |
 | Una persona (los tres generadores de 16.3) y mapas (anotar) | — | idénticos |
 
-Las pruebas: `src/ui/yjsUndoGone.test.ts` (los dos casos mínimos, `dist/yjs.cjs`, el caso con dos editores, el Enter
+Las pruebas: `src/ui/yjsUndoGone.test.ts` (los dos casos mínimos, el atributo en conflicto, `dist/yjs.cjs`, el caso con dos editores, el Enter
 cuyo texto no tiene dónde volver y 3.000 semillas del modelo). Cada parte del arreglo sacada hace fallar alguna.
 
 ### 20.5 Lo que queda
@@ -1071,6 +1078,9 @@ cuyo texto no tiene dónde volver y 3.000 semillas del modelo). Cada parte del a
 - Con dos editores, 6 de 3.000 corridas terminan con los dos textos distintos (las mismas 6 sin el arreglo, ninguna con
   la excepción; en 5, también rearmando cada documento desde cero), y 22 de 3.000 en el modelo de párrafos. Ya estaba:
   queda para investigar aparte.
+- La reparación del editor después de un deshacer con dos personas: cuando lo que vuelve no entra en el esquema, el
+  editor borra el bloque entero (lo dicho en 20.3; pasa también sin B.22: 298 de 35.184 ⌘Z en la auditoría). Es otro
+  ítem del roadmap.
 - Reportarlo a Yjs con los casos mínimos de 20.1, junto con los de 16.1 y 16.4.
 
 ## Correcciones de la auditoría (2026-10-02)

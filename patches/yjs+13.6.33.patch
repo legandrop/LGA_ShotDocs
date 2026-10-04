@@ -1,5 +1,5 @@
 diff --git a/node_modules/yjs/dist/yjs.cjs b/node_modules/yjs/dist/yjs.cjs
-index a29f8ef..6486ff5 100644
+index a29f8ef..befad2b 100644
 --- a/node_modules/yjs/dist/yjs.cjs
 +++ b/node_modules/yjs/dist/yjs.cjs
 @@ -3499,6 +3499,43 @@ const clearUndoManagerStackItem = (tr, um, stackItem) => {
@@ -102,7 +102,7 @@ index a29f8ef..6486ff5 100644
            item.delete(transaction);
            performedChange = true;
          }
-@@ -9691,8 +9740,21 @@ const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemoteMapCh
+@@ -9691,8 +9740,25 @@ const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemoteMapCh
      if (parentItem.redone === null && (!redoitems.has(parentItem) || redoItem(transaction, parentItem, redoitems, itemsToDelete, ignoreRemoteMapChanges, um) === null)) {
        return null
      }
@@ -120,12 +120,16 @@ index a29f8ef..6486ff5 100644
 +      parentItem = next;
 +    }
 +    if (!(parentItem.content instanceof ContentType)) {
-+      transaction.meta.set('lga-shotdocs:parentGone', true);
++      // Solo con hijos de lista (texto, renglones): un atributo (`parentSub`) no es texto movido, y en ese camino Yjs a
++      // veces ya devolvía `null` sin tirar (un valor de otra persona a la derecha); ahí el paso sigue como antes.
++      if (item.parentSub === null) {
++        transaction.meta.set('lga-shotdocs:parentGone', true);
++      }
 +      return null
      }
    }
    const parentType = parentItem === null ? /** @type {AbstractType<any>} */ (item.parent) : /** @type {ContentType} */ (parentItem.content).type;
-@@ -9709,7 +9771,9 @@ const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemoteMapCh
+@@ -9709,7 +9775,9 @@ const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemoteMapCh
        let leftTrace = left;
        // trace redone until parent matches
        while (leftTrace !== null && /** @type {AbstractType<any>} */ (leftTrace.parent)._item !== parentItem) {
@@ -137,7 +141,7 @@ index a29f8ef..6486ff5 100644
        if (leftTrace !== null && /** @type {AbstractType<any>} */ (leftTrace.parent)._item === parentItem) {
          left = leftTrace;
 diff --git a/node_modules/yjs/dist/yjs.mjs b/node_modules/yjs/dist/yjs.mjs
-index bd77560..fa37d56 100644
+index bd77560..18d0f6b 100644
 --- a/node_modules/yjs/dist/yjs.mjs
 +++ b/node_modules/yjs/dist/yjs.mjs
 @@ -3462,6 +3462,43 @@ const clearUndoManagerStackItem = (tr, um, stackItem) => {
@@ -240,7 +244,7 @@ index bd77560..fa37d56 100644
            item.delete(transaction);
            performedChange = true;
          }
-@@ -9654,8 +9703,21 @@ const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemoteMapCh
+@@ -9654,8 +9703,25 @@ const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemoteMapCh
      if (parentItem.redone === null && (!redoitems.has(parentItem) || redoItem(transaction, parentItem, redoitems, itemsToDelete, ignoreRemoteMapChanges, um) === null)) {
        return null
      }
@@ -258,12 +262,16 @@ index bd77560..fa37d56 100644
 +      parentItem = next;
 +    }
 +    if (!(parentItem.content instanceof ContentType)) {
-+      transaction.meta.set('lga-shotdocs:parentGone', true);
++      // Solo con hijos de lista (texto, renglones): un atributo (`parentSub`) no es texto movido, y en ese camino Yjs a
++      // veces ya devolvía `null` sin tirar (un valor de otra persona a la derecha); ahí el paso sigue como antes.
++      if (item.parentSub === null) {
++        transaction.meta.set('lga-shotdocs:parentGone', true);
++      }
 +      return null
      }
    }
    const parentType = parentItem === null ? /** @type {AbstractType<any>} */ (item.parent) : /** @type {ContentType} */ (parentItem.content).type;
-@@ -9672,7 +9734,9 @@ const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemoteMapCh
+@@ -9672,7 +9738,9 @@ const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemoteMapCh
        let leftTrace = left;
        // trace redone until parent matches
        while (leftTrace !== null && /** @type {AbstractType<any>} */ (leftTrace.parent)._item !== parentItem) {
@@ -275,10 +283,10 @@ index bd77560..fa37d56 100644
        if (leftTrace !== null && /** @type {AbstractType<any>} */ (leftTrace.parent)._item === parentItem) {
          left = leftTrace;
 diff --git a/node_modules/yjs/src/structs/Item.js b/node_modules/yjs/src/structs/Item.js
-index fca5827..3396804 100644
+index fca5827..a5f033d 100644
 --- a/node_modules/yjs/src/structs/Item.js
 +++ b/node_modules/yjs/src/structs/Item.js
-@@ -163,8 +163,21 @@ export const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemo
+@@ -163,8 +163,25 @@ export const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemo
      if (parentItem.redone === null && (!redoitems.has(parentItem) || redoItem(transaction, parentItem, redoitems, itemsToDelete, ignoreRemoteMapChanges, um) === null)) {
        return null
      }
@@ -296,12 +304,16 @@ index fca5827..3396804 100644
 +      parentItem = next
 +    }
 +    if (!(parentItem.content instanceof ContentType)) {
-+      transaction.meta.set('lga-shotdocs:parentGone', true)
++      // Solo con hijos de lista (texto, renglones): un atributo (`parentSub`) no es texto movido, y en ese camino Yjs a
++      // veces ya devolvía `null` sin tirar (un valor de otra persona a la derecha); ahí el paso sigue como antes.
++      if (item.parentSub === null) {
++        transaction.meta.set('lga-shotdocs:parentGone', true)
++      }
 +      return null
      }
    }
    const parentType = parentItem === null ? /** @type {AbstractType<any>} */ (item.parent) : /** @type {ContentType} */ (parentItem.content).type
-@@ -181,7 +194,9 @@ export const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemo
+@@ -181,7 +198,9 @@ export const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemo
        let leftTrace = left
        // trace redone until parent matches
        while (leftTrace !== null && /** @type {AbstractType<any>} */ (leftTrace.parent)._item !== parentItem) {
