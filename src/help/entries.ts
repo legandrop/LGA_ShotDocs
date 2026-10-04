@@ -128,6 +128,8 @@ const DICTATION_VOICE = '0.139';
 const DICTATION_V4 = '0.150';
 /** Una sola papelera en el selector de proyectos (Doc_Proyectos_Borrar.md, "Cómo quedó: una sola papelera"): la versión la pone quien publica. */
 const ONE_TRASH = '0.162';
+/** *Delete forever* de un proyecto borrado (P.14, entrega 3, Doc_Proyectos_Borrar.md): la versión la pone quien publica. */
+const PROJECT_PURGE = '0.167';
 /** Las tablas anchas se desplazan de costado en el teléfono (P.28, Doc_Tabla_Telefono.md): la versión la pone quien publica. */
 const TABLE_PHONE = '0.156';
 /** Las plantillas de fábrica (Docs/Doc_Plantillas.md, entregas 0 y 1): la versión se ajusta al publicar. */
@@ -178,6 +180,8 @@ const HELP_3 = '0.158';
 const CONTRAST = '0.161';
 /** Los links a los archivos en el PDF (P.30, Doc_Links_PDF.md, entrega 1): el número lo pone quien publica. */
 const FILE_LINKS = '0.164';
+/** *Request access* desde la dirección de un archivo (P.30, entrega 2): el número lo pone quien publica. */
+const ACCESS_REQUESTS = '0.166';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -263,6 +267,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
   },
   { id: 'projectsArchive', section: 'pages', title: 'help.projectsArchive.title', text: 'help.projectsArchive.text', since: BEFORE_HELP },
   { id: 'projectsDrive', section: 'pages', title: 'help.projectsDrive.title', text: 'help.projectsDrive.text', when: 'admin', since: BEFORE_HELP },
+  {
+    id: 'projectsPurge',
+    section: 'pages',
+    title: 'help.projectsPurge.title',
+    text: 'help.projectsPurge.text',
+    words: ['delete forever', 'borrar para siempre', 'para siempre', 'forever', 'definitivo', 'permanently', 'purge', 'purgar', '30 days', '30 días'],
+    when: 'admin',
+    since: PROJECT_PURGE,
+  },
   { id: 'workspaces', section: 'pages', title: 'help.workspaces.title', text: 'help.workspaces.text', since: BEFORE_HELP },
 
   // --- Escribir ---
@@ -758,6 +771,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.linkFiles.text',
     words: ['link', 'foto', 'photo', 'video', 'archivo', 'file', 'subir', 'upload', 'drive', 'tope', 'limit', '500 MB', 'carpeta', 'folder'],
     since: LINK_FILES,
+  },
+  {
+    id: 'accessRequests',
+    section: 'sharing',
+    title: 'help.accessRequests.title',
+    text: 'help.accessRequests.text',
+    words: ['request access', 'pedir acceso', 'pedido', 'request', 'campana', 'bell', 'give access', 'dar acceso', 'decline', 'rechazar', 'pdf', 'archivo', 'file'],
+    since: ACCESS_REQUESTS,
   },
   {
     id: 'linkAside',

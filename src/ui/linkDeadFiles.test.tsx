@@ -36,50 +36,82 @@ afterEach(() => {
 const settle = () => act(async () => new Promise((r) => setTimeout(r, 30)));
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
-describe('el link muerto con un archivo sin subir (B1)', () => {
-  it('Reset link a mitad de la subida: la pantalla ofrece bajar el original, el mismo archivo', async () => {
-    prefs.set({ language: 'en' });
-    const server = new FakeServer();
-    server.enableTeam();
-    server.enableClean(0.1);
-    server.enableLinkEdit(0.1);
-    server.enableLinkFiles();
-    const e1 = await makeDevice(server, undefined, '0.200');
-    const page = await e1.tree.create(null, 'Brief');
-    await e1.engine.syncNow();
-    const doc0 = await e1.docs.open(page);
-    doc0.transact(() => group(doc0).push([block('e0', 'Del equipo')]), 'test');
-    await e1.docs.flush(page);
-    e1.docs.close(page);
-    await e1.engine.syncNow();
-    const token = addPublicLink(server, page, server.ownerId, 'edit');
-    await e1.engine.prepareBases([page]);
 
-    // El visitante, con la base de archivos del link de este navegador (la que lee la pantalla del link muerto).
-    const entry = rememberLink({ u: 'https://abcdefghijklmnopqrst.supabase.co', k: 'sb_publishable_x', l: 'wanka_1', t: token }, localStorage as KeyValueStore);
-    const v = await makeLinkDevice(server, token, entry.device, '0.200', 'Ana', mediaDbName(linkDbName(entry)));
-    await v.engine.syncNow();
-    await v.engine.prefetchPage(page);
-    // Un "video" de 3 MB que no llega a subir: ninguna parte le llega al portero.
-    server.portero.cutAfterParts = 0;
-    const bytes = new Uint8Array(3 * 1024 * 1024).map((_, i) => (i * 31) % 251);
+/** Los bytes de un archivo de prueba: cada uno, con su largo y su dibujo (si se bajara otro, no coincidiría). */
+const bytesOf = (size: number, seed: number) => new Uint8Array(size).map((_, i) => (i * seed + (i >> 8)) % 251);
+
+interface Dropped {
+  name: string;
+  type: string;
+  bytes: Uint8Array<ArrayBuffer>;
+}
+
+/**
+ * Un visitante con el link que suelta archivos que no llegan a subir (ninguna parte le llega al portero) y el link que
+ * muere: devuelve la entrada del link de este navegador y lo que quedó en su base de archivos.
+ */
+async function deadLinkWith(files: Dropped[]) {
+  prefs.set({ language: 'en' });
+  const server = new FakeServer();
+  server.enableTeam();
+  server.enableClean(0.1);
+  server.enableLinkEdit(0.1);
+  server.enableLinkFiles();
+  const e1 = await makeDevice(server, undefined, '0.200');
+  const page = await e1.tree.create(null, 'Brief');
+  await e1.engine.syncNow();
+  const doc0 = await e1.docs.open(page);
+  doc0.transact(() => group(doc0).push([block('e0', 'Del equipo')]), 'test');
+  await e1.docs.flush(page);
+  e1.docs.close(page);
+  await e1.engine.syncNow();
+  const token = addPublicLink(server, page, server.ownerId, 'edit');
+  await e1.engine.prepareBases([page]);
+
+  // El visitante, con la base de archivos del link de este navegador (la que lee la pantalla del link muerto).
+  const entry = rememberLink({ u: 'https://abcdefghijklmnopqrst.supabase.co', k: 'sb_publishable_x', l: 'wanka_1', t: token }, localStorage as KeyValueStore);
+  const v = await makeLinkDevice(server, token, entry.device, '0.200', 'Ana', mediaDbName(linkDbName(entry)));
+  await v.engine.syncNow();
+  await v.engine.prefetchPage(page);
+  // Ninguna parte le llega al portero: los archivos quedan sin subir.
+  server.portero.cutAfterParts = 0;
+  const ids: string[] = [];
+  for (const [i, f] of files.entries()) {
     // Un Blob de Node: el de jsdom no pasa por el IndexedDB de las pruebas (en el navegador, el de siempre).
-    const url = await v.media.add(page, Object.assign(new NodeBlob([bytes], { type: 'video/mp4' }) as unknown as Blob, { name: 'toma-12.mp4' }));
+    const url = await v.media.add(page, Object.assign(new NodeBlob([f.bytes], { type: f.type }) as unknown as Blob, { name: f.name }));
     const doc = await v.docs.open(page);
-    doc.transact(() => group(doc).push([block('vid', '', 'image', { url })]), 'test');
+    doc.transact(() => group(doc).push([block(`vid${i}`, '', 'image', { url })]), 'test');
     await v.docs.flush(page);
     v.docs.close(page);
-    await v.media.idle();
-    for (let i = 0; i < 2; i++) {
-      await v.engine.syncNow();
-      await v.engine.syncMedia();
-    }
-    const id = url.slice('sdmedia://'.length);
-    expect(server.mediaFiles.get(id)?.plink_id).toBeDefined();
-    expect(server.mediaFiles.get(id)!.drive_id).toBeNull();
-    // Reset link: el link de este navegador ya no anda.
-    resetPublicLink(server, token);
-    await v.engine.stop();
+    ids.push(url.slice('sdmedia://'.length));
+  }
+  await v.media.idle();
+  for (let i = 0; i < 2; i++) {
+    await v.engine.syncNow();
+    await v.engine.syncMedia();
+  }
+  // El primero llegó a registrarse y no a subir; después de ese corte la cola espera un rato, y los demás siguen solo en
+  // este navegador: la pantalla del link muerto los ofrece igual.
+  expect(server.mediaFiles.get(ids[0])?.plink_id).toBeDefined();
+  expect(server.mediaFiles.get(ids[0])!.drive_id).toBeNull();
+  // Reset link: el link de este navegador ya no anda.
+  resetPublicLink(server, token);
+  await v.engine.stop();
+  return { entry };
+}
+
+/** Mismo largo y mismos bytes (sin `toEqual`: con un original distinto, comparar y mostrar cien mil números se cuelga). */
+const bytesEqual = async (blob: Blob, bytes: Uint8Array) => {
+  const got = new Uint8Array(await blob.arrayBuffer());
+  expect(got.length).toBe(bytes.length);
+  expect(Buffer.from(got).equals(Buffer.from(bytes))).toBe(true);
+};
+
+describe('el link muerto con un archivo sin subir (B1)', () => {
+  it('Reset link a mitad de la subida: la pantalla ofrece bajar el original, el mismo archivo', async () => {
+    // Un "video" de 3 MB que no llega a subir.
+    const bytes = new Uint8Array(3 * 1024 * 1024).map((_, i) => (i * 31) % 251);
+    const { entry } = await deadLinkWith([{ name: 'toma-12.mp4', type: 'video/mp4', bytes }]);
 
     // La app del link vuelve a abrir: el servidor dice que no anda.
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(json(404, { message: 'link_not_found', code: 'P0002', details: null, hint: null }))));
@@ -103,7 +135,53 @@ describe('el link muerto con un archivo sin subir (B1)', () => {
     for (let i = 0; i < 20 && saved.length === 0; i++) await settle();
     expect(saved).toHaveLength(1);
     // El mismo original, byte por byte.
-    expect(new Uint8Array(await saved[0].arrayBuffer())).toEqual(bytes);
+    await bytesEqual(saved[0], bytes);
     expect(host.textContent).toContain('downloaded');
+  });
+
+  // O-R1 de la re-verificación: con un solo archivo, «baja ese archivo» y «baja el primero de la base» dan lo mismo.
+  it('con varios archivos sin subir, cada botón baja su propio original (no el primero ni el último)', async () => {
+    const files: Dropped[] = [
+      { name: 'toma-01.mp4', type: 'video/mp4', bytes: bytesOf(150_000, 31) },
+      { name: 'ref-02.pdf', type: 'application/pdf', bytes: bytesOf(90_000, 17) },
+      { name: 'foto-03.zip', type: 'application/zip', bytes: bytesOf(210_000, 7) },
+    ];
+    const { entry } = await deadLinkWith(files);
+
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(json(404, { message: 'link_not_found', code: 'P0002', details: null, hint: null }))));
+    const saved: Blob[] = [];
+    vi.stubGlobal(
+      'URL',
+      Object.assign(URL, {
+        createObjectURL: (b: Blob) => {
+          saved.push(b);
+          return 'blob:saved';
+        },
+        revokeObjectURL: () => undefined,
+      }),
+    );
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    await act(async () => root.render(<LinkApp entry={entry} />));
+    for (let i = 0; i < 20 && !files.every((f) => host.textContent?.includes(f.name)); i++) await settle();
+    expect(host.textContent).toContain("3 photos or files you added didn't finish uploading");
+    const buttonOf = (name: string) => [...host.querySelectorAll('button')].find((b) => b.textContent === name)!;
+    // En un orden que no es el de la lista: el del medio, el último, el primero.
+    for (const f of [files[1], files[2], files[0]]) {
+      const before = saved.length;
+      await act(async () => buttonOf(f.name).click());
+      for (let i = 0; i < 20 && saved.length === before; i++) await settle();
+      expect(saved).toHaveLength(before + 1);
+      await bytesEqual(saved[before], f.bytes);
+    }
+    // Cada uno se marca como bajado, y nada se borró: sigue en el navegador para bajarlo otra vez.
+    expect(host.textContent!.match(/downloaded/g)).toHaveLength(3);
+    const again = saved.length;
+    await act(async () => buttonOf(files[1].name).click());
+    for (let i = 0; i < 20 && saved.length === again; i++) await settle();
+    expect(saved).toHaveLength(again + 1);
+    await bytesEqual(saved[again], files[1].bytes);
   });
 });

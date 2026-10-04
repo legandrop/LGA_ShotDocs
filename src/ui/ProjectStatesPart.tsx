@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import { locale, t, useT } from '../i18n';
 import '../i18n/lazy/projectStates';
 import { formatSize } from '../media/fileTrash';
@@ -301,19 +301,48 @@ function driveLine(r: TrashedProjectRow, tr: ReturnType<typeof useT>): string | 
 /** Cómo está la lista de borrados: cargando (`null`), sin la función en la base (`missing`) o las filas. */
 export type DeletedRows = TrashedProjectRow[] | null | 'missing';
 
+/** Las preguntas del renglón de un borrado. */
+export type DeletedAsk = { id: string; kind: 'missing' | 'send' | 'purge' };
+
+/** *Delete forever* (entrega 3): pasados los 30 días, a dueños y admins que lo manejan (`can_purge`), con la base en la 23. */
+export function canOfferPurge(r: TrashedProjectRow, purgeReady: boolean): boolean {
+  return purgeReady && r.can_purge && r.days_left === 0;
+}
+
+/** Lo que pasó al borrar para siempre, en palabras de la persona. */
+function purgeError(err: unknown): string {
+  const code = errorMessage(err);
+  if (code === 'project_trash_not_due') return t('purgeProject.notDue');
+  if (code === 'project_not_deleted') return t('purgeProject.notDeleted');
+  if (code === 'drive_trash_first') return t('purgeProject.driveFirst');
+  return projectStateError(err, t);
+}
+
 /** Lo que comparten los renglones de los borrados: el trabajo en curso, la pregunta abierta y las acciones. */
 export interface DeletedProjects {
   rows: DeletedRows;
   error: string | null;
   busy: string | null;
-  /** Una pregunta en el renglón: restaurar sin los archivos, o mandar la carpeta a la papelera de Drive. */
-  ask: { id: string; kind: 'missing' | 'send' } | null;
-  setAsk: (ask: { id: string; kind: 'missing' | 'send' } | null) => void;
+  /**
+   * Una pregunta en el renglón: restaurar sin los archivos, mandar la carpeta a la papelera de Drive o borrarlo para
+   * siempre (con la palabra).
+   */
+  ask: DeletedAsk | null;
+  setAsk: (ask: DeletedAsk | null) => void;
   askRef: RefObject<HTMLDivElement | null>;
+  /** El error de la pregunta abierta (borrar para siempre): se muestra en el renglón, no al pie de la lista. */
+  askError: string | null;
   load: () => void;
   restore: (row: TrashedProjectRow, withoutDrive?: boolean) => Promise<void>;
   send: (row: TrashedProjectRow) => Promise<void>;
+  purge: (row: TrashedProjectRow) => Promise<void>;
+  /** Mandando la carpeta antes de borrar para siempre, o borrando (para el texto del botón). */
+  purgeStep: 'drive' | 'purge' | null;
   drive: ProjectDrive | null;
+  /** Con la base en la versión 23 y con red: se ofrece *Delete forever*. */
+  purgeReady: boolean;
+  /** Los números de un borrado (`project_delete_info`): la pregunta de *Delete forever* cuenta los usados afuera. */
+  deleteInfo: (projectId: string) => Promise<ProjectDeleteInfo>;
 }
 
 /**
@@ -331,12 +360,22 @@ export function useDeletedProjects(props: {
   onRestored: (row: TrashedProjectRow) => void | Promise<void>;
   drive?: ProjectDrive | null;
   enabled?: boolean;
+  /** *Delete forever* (entrega 3): con la base en la versión 23 y con red. Sin esto no se ofrece. */
+  purgeReady?: boolean;
+  /** Después de borrar uno para siempre (el peso de los proyectos cambió). */
+  onPurged?: (row: TrashedProjectRow) => void | Promise<void>;
 }): DeletedProjects {
   const enabled = props.enabled ?? true;
   const [rows, setRows] = useState<DeletedRows>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [ask, setAsk] = useState<{ id: string; kind: 'missing' | 'send' } | null>(null);
+  const [ask, setAskState] = useState<DeletedAsk | null>(null);
+  const [askError, setAskError] = useState<string | null>(null);
+  const [purgeStep, setPurgeStep] = useState<'drive' | 'purge' | null>(null);
+  const setAsk = (next: DeletedAsk | null) => {
+    setAskError(null);
+    setAskState(next);
+  };
   const askRef = useRef<HTMLDivElement>(null);
   const live = useRef(true);
   useEffect(() => {
@@ -346,11 +385,12 @@ export function useDeletedProjects(props: {
     };
   }, []);
 
-  // La pregunta del renglón puede quedar abajo del borde del selector: se la trae a la vista, con el foco en su botón.
+  // La pregunta del renglón puede quedar abajo del borde del selector: se la trae a la vista, con el foco en su botón
+  // (o en el campo de la palabra, al borrar para siempre).
   useEffect(() => {
     if (!ask) return;
     askRef.current?.scrollIntoView?.({ block: 'nearest' });
-    askRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
+    askRef.current?.querySelector<HTMLElement>('input, button')?.focus();
   }, [ask]);
 
   const load = () => {
@@ -412,7 +452,68 @@ export function useDeletedProjects(props: {
     }
   }
 
-  return { rows, error, busy, ask, setAsk, askRef, load, restore, send, drive: props.drive ?? null };
+  const { remote } = props;
+  const deleteInfo = useCallback((projectId: string) => remote.projectDeleteInfo(projectId), [remote]);
+
+  /**
+   * *Delete forever* (entrega 3): la base decide (plazo, permisos, la carpeta). Si contesta que la carpeta tiene que ir
+   * antes a la papelera de Drive (`drive_trash_first`), el portero la manda y se vuelve a pedir; si eso falla, no se
+   * marca nada. Ninguna fila se borra ni nada sale del dispositivo: el proyecto deja la papelera y no se restaura más.
+   */
+  async function purge(row: TrashedProjectRow) {
+    setBusy(row.id);
+    setAskError(null);
+    setPurgeStep('purge');
+    try {
+      try {
+        await props.remote.purgeProject(row.id);
+      } catch (err) {
+        if (errorMessage(err) !== 'drive_trash_first') throw err;
+        if (!props.drive) {
+          setAskError(t('purgeProject.driveFailed', { reason: t('projectDrive.noPortero') }));
+          return;
+        }
+        setPurgeStep('drive');
+        try {
+          await props.drive.trash(row.id);
+        } catch (driveErr) {
+          setAskError(t('purgeProject.driveFailed', { reason: projectDriveError(driveErr) }));
+          return;
+        }
+        setPurgeStep('purge');
+        await props.remote.purgeProject(row.id);
+      }
+      setAsk(null);
+      setRows((list) => (Array.isArray(list) ? list.filter((r) => r.id !== row.id) : list));
+      notify(t('purgeProject.done', { name: row.name }));
+      await props.onPurged?.(row);
+    } catch (err) {
+      if (live.current) setAskError(purgeError(err));
+    } finally {
+      if (live.current) {
+        setBusy(null);
+        setPurgeStep(null);
+      }
+    }
+  }
+
+  return {
+    rows,
+    error,
+    busy,
+    ask,
+    setAsk,
+    askRef,
+    askError,
+    load,
+    restore,
+    send,
+    purge,
+    purgeStep,
+    drive: props.drive ?? null,
+    purgeReady: !!props.purgeReady && enabled,
+    deleteInfo,
+  };
 }
 
 /**
@@ -430,6 +531,7 @@ export function DeletedProjectItem(props: { row: TrashedProjectRow; list: Delete
   const unfinished = folderSent(r) && !r.drive_trashed_at;
   const asking = list.ask?.id === r.id ? list.ask.kind : null;
   const busy = list.busy;
+  const offerPurge = canOfferPurge(r, list.purgeReady);
   return (
     <div className="deleted-project-item" data-kind="project">
       <div className="deleted-project-row">
@@ -452,19 +554,27 @@ export function DeletedProjectItem(props: { row: TrashedProjectRow; list: Delete
         )}
       </div>
       {needsStaff && <p className="muted small deleted-project-note">{tr('deletedList.needsStaff')}</p>}
-      {canSend && !asking && (
+      {(canSend || offerPurge) && !asking && (
         <div className="deleted-project-actions">
-          <button
-            className="link"
-            disabled={busy !== null}
-            onClick={() => (unfinished ? void list.send(r) : list.setAsk({ id: r.id, kind: 'send' }))}
-          >
-            {bytes !== null && bytes > 0
-              ? tr('deletedList.sendToDriveSize', { size: formatSize(bytes, tr.lang) })
-              : tr('deletedList.sendToDrive')}
-          </button>
+          {canSend && (
+            <button
+              className="link"
+              disabled={busy !== null}
+              onClick={() => (unfinished ? void list.send(r) : list.setAsk({ id: r.id, kind: 'send' }))}
+            >
+              {bytes !== null && bytes > 0
+                ? tr('deletedList.sendToDriveSize', { size: formatSize(bytes, tr.lang) })
+                : tr('deletedList.sendToDrive')}
+            </button>
+          )}
+          {offerPurge && (
+            <button className="link danger" disabled={busy !== null} onClick={() => list.setAsk({ id: r.id, kind: 'purge' })}>
+              {tr('purgeProject.open')}
+            </button>
+          )}
         </div>
       )}
+      {asking === 'purge' && <PurgeAsk row={r} list={list} />}
       {asking === 'send' && (
         <div ref={list.askRef} className="deleted-project-ask" role="group" aria-label={tr('deletedList.sendToDrive')}>
           <p className="small">{tr('deletedList.sendConfirm', { folder: driveFolderLabel(r.name) })}</p>
@@ -492,6 +602,85 @@ export function DeletedProjectItem(props: { row: TrashedProjectRow; list: Delete
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * La pregunta de *Delete forever* en el renglón: qué pasa, la palabra del idioma de la app (como en la ventana de
+ * borrar, sin mayúscula ni corrector en el iPhone) y el botón, que se habilita recién con ella. Enter confirma; Escape
+ * vuelve al renglón sin cerrar la papelera.
+ */
+function PurgeAsk({ row: r, list }: { row: TrashedProjectRow; list: DeletedProjects }) {
+  const tr = useT();
+  const [word, setWord] = useState('');
+  // Los archivos de este proyecto que usan páginas vivas de otros proyectos (`used_elsewhere`, como en la ventana de
+  // borrar): se van con la carpeta y esas páginas los pierden cuando Google vacía su papelera. El botón espera a saberlo;
+  // si no se puede leer, no frena (la base decide igual).
+  const [usedElsewhere, setUsedElsewhere] = useState<number | 'loading' | 'failed'>('loading');
+  const { deleteInfo } = list;
+  useEffect(() => {
+    let live = true;
+    deleteInfo(r.id).then(
+      (info) => live && setUsedElsewhere(info.used_elsewhere),
+      () => live && setUsedElsewhere('failed'),
+    );
+    return () => {
+      live = false;
+    };
+  }, [deleteInfo, r.id]);
+  const working = list.busy === r.id;
+  const ready = deleteWordMatches(word, tr.lang) && list.busy === null && usedElsewhere !== 'loading';
+  const confirm = () => {
+    if (ready) void list.purge(r);
+  };
+  return (
+    <div ref={list.askRef} className="deleted-project-ask" role="group" aria-label={tr('purgeProject.button')}>
+      <p className="small">{tr('purgeProject.confirm', { name: r.name })}</p>
+      {typeof usedElsewhere === 'number' && usedElsewhere > 0 && (
+        <p className="small delete-project-warning">{tr('purgeProject.usedElsewhere', { count: usedElsewhere })}</p>
+      )}
+      <form
+        className="delete-project-word"
+        onSubmit={(e) => {
+          e.preventDefault();
+          confirm();
+        }}
+      >
+        <label htmlFor={`purge-word-${r.id}`} className="small">
+          {tr.rich('deleteProject.typeWord', { word: <strong>{deleteWord(tr.lang)}</strong> })}
+        </label>
+        <input
+          id={`purge-word-${r.id}`}
+          value={word}
+          disabled={working}
+          autoComplete="off"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+          onChange={(e) => setWord(e.target.value)}
+          onKeyDown={(e) => {
+            // Escape cierra solo la pregunta: ni vuelve a la lista de proyectos ni cierra el selector.
+            if (e.key !== 'Escape' || working) return;
+            e.preventDefault();
+            e.stopPropagation();
+            list.setAsk(null);
+          }}
+        />
+      </form>
+      {list.askError && <p className="error small">{list.askError}</p>}
+      <div className="deleted-project-actions">
+        <button className="primary danger" disabled={!ready} onClick={confirm}>
+          {working
+            ? list.purgeStep === 'drive'
+              ? tr('purgeProject.sendingDrive')
+              : tr('purgeProject.purging')
+            : tr('purgeProject.button')}
+        </button>
+        <button className="link" disabled={working} onClick={() => list.setAsk(null)}>
+          {tr('common.cancel')}
+        </button>
+      </div>
     </div>
   );
 }

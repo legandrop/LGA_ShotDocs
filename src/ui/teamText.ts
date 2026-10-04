@@ -26,6 +26,9 @@ const MESSAGES: Record<string, Key> = {
   page_not_found: 'teamError.pageNotFound',
   page_in_trash: 'teamError.pageInTrash',
   project_not_found: 'teamError.projectNotFound',
+  request_not_found: 'teamError.requestNotFound',
+  page_invalid: 'teamError.pageInvalid',
+  decision_invalid: 'teamError.decisionInvalid',
 };
 
 const known = (message: string): string | null => (Object.hasOwn(MESSAGES, message) ? t(MESSAGES[message]) : null);

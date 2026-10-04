@@ -2,7 +2,7 @@
 // El alto de las miniaturas de una tabla (Docs/Doc_Fotos_En_Linea.md, "Alto de las miniaturas (D27 → B)"): una propiedad
 // más de la tabla (`thumbHeight`: 64, 96 o 160 px; de fábrica 96), no un tipo nuevo. Acá: el valor de fábrica, cambiarlo
 // sin tocar las fotos y en un solo deshacer, lo que se ve en el bloque, copiar y pegar, dos a la vez y la versión
-// publicada (que la ignora y, si edita la tabla, vuelve a 96 sin perder nada).
+// de antes (v0.083 a v0.092: la ignora y, si edita la tabla, vuelve a 96 sin perder nada) y la publicada de hoy (la conoce).
 import { BlockNoteEditor, selectedFragmentToHTML, type PartialBlock } from '@blocknote/core';
 import { NodeSelection, TextSelection } from '@tiptap/pm/state';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -264,10 +264,8 @@ describe('versiones publicadas (D98)', () => {
     return doc;
   }
 
-  const versions = [
-    ['la versión publicada', publishedSchema],
-    ['la versión publicada de v0.083 a v0.092', previousPublished],
-  ] as const;
+  // La publicada de hoy (fixtures/editorSchemaMain.ts) ya conoce el alto; las que no lo conocen son las de antes.
+  const versions = [['la versión publicada de v0.083 a v0.092 (no conoce el alto)', previousPublished]] as const;
   for (const [name, published] of versions) {
     it(`${name} abre la página sin escribir nada; al editar la tabla no pierde ninguna foto ni texto, y la tabla vuelve a 96`, async () => {
       const shared = largePage();
@@ -298,9 +296,24 @@ describe('versiones publicadas (D98)', () => {
     });
   }
 
-  it('esta versión abre una página de la versión publicada (tablas sin la propiedad) sin escribir nada, con 96', async () => {
+  it('la versión publicada de hoy conoce el alto: abre la página sin escribir nada y al editar la tabla lo conserva', async () => {
+    const shared = largePage();
+    const before = storedPhotos(shared);
+    const { doc, updates } = copyOf(shared);
+    const published = mountEditor(doc, 'old', publishedSchema);
+    await tick(20);
+    expect(updates).toEqual([]);
+    expect(viewOf(published).state.schema.nodes.table.spec.attrs?.[THUMB_HEIGHT_PROP]).toBeDefined();
+    const pv = viewOf(published);
+    pv.dispatch(pv.state.tr.insertText(' nota', cellPos(published, 1, 0, true)));
+    await tick(20);
+    expect(storedPhotos(doc)).toEqual(before);
+    expect(storedHeights(doc)[0]).toBe(160);
+  });
+
+  it('esta versión abre una página de una versión sin la propiedad (tablas sin ella) sin escribir nada, con 96', async () => {
     const shared = new Y.Doc();
-    const old = mountEditor(shared, 'old', publishedSchema);
+    const old = mountEditor(shared, 'old', previousPublished);
     old.replaceBlocks(old.document, page());
     unmountAll();
     expect(storedHeights(shared)).toEqual([undefined, undefined]);
@@ -317,7 +330,7 @@ describe('versiones publicadas (D98)', () => {
     const A = mounted(undefined, docA);
     const docB = new Y.Doc();
     Y.applyUpdate(docB, Y.encodeStateAsUpdate(docA));
-    const old = mountEditor(docB, 'old', publishedSchema);
+    const old = mountEditor(docB, 'old', previousPublished);
     const net = connect(docA, docB, 'sync');
     setThumbHeight(viewOf(A), tables(A), 64);
     await tick(20);

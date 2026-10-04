@@ -63,6 +63,7 @@ import { collapseSaver, loadCollapse } from './collapseStore';
 import { CollapseToggles } from './CollapseToggles';
 import { BlockSideMenuController } from './BlockSideMenu';
 import { PageFormattingToolbar, PageFormattingToolbarController, pageToolbarItems } from './PageToolbar';
+import { PageLinkToolbarController } from './toolbarTips';
 import { PhotoToolbarController } from './PhotoToolbar';
 import { MediaActionsContext, type MediaActions } from './MediaBar';
 import { BACKGROUND_META } from './editorMeta';
@@ -1254,10 +1255,13 @@ export function BlockEditor({
         className="editor"
         slashMenu={false}
         formattingToolbar={false}
+        linkToolbar={false}
         sideMenu={false}
       >
         <SuggestionMenuController triggerCharacter="/" getItems={slashItems} />
         <PageFormattingToolbarController formattingToolbar={formattingToolbar} />
+        {/* La barra de los links (Edit link, Open in new tab, Remove link) con los tooltips de la app (toolbarTips.tsx). */}
+        <PageLinkToolbarController />
         {/* La barra de la foto en línea elegida (PhotoToolbar.tsx). */}
         {editable && <PhotoToolbarController />}
         {/* Los tres puntos de cada bloque: arrastrar lo mueve, un clic lo elige y abre la barra de formato. */}

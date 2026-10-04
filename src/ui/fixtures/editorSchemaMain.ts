@@ -1,13 +1,10 @@
-// Copia de src/ui/editorSchema.ts de la versión publicada: v0.107 (main en 71ed5e8, con la foto en línea y las fotos en
-// las celdas). Las pruebas la usan para comprobar que lo nuevo degrada en la versión que hoy puede estar abierta en
-// otro dispositivo. No se edita a mano: cambian solo los imports ('./x' pasa a '../x'). Los módulos que importa
-// (driveCard, imageRowsEditor, inlinePhoto, shortcuts) son los de hoy, como en editorSchemaAnterior.ts.
-//
-// Cómo se regenera, al publicar una versión que cambia el esquema (editorSchemaFixture.test.ts avisa si quedó vieja):
-//   git show origin/main:src/ui/editorSchema.ts | sed "s#from '\./#from '../#" > cuerpo.ts
-// y este encabezado arriba, con la versión y el commit nuevos; después se vacía NUEVO_SIN_PUBLICAR en
-// editorSchemaFixture.test.ts. Lo de versiones más viejas queda en editorSchemaAnterior.ts (v0.083 a v0.092, antes del
-// salto de hoja) y editorSchemaSoloScript.ts (hasta v0.040, solo Script).
+// Copia de src/ui/editorSchema.ts de la versión publicada. Las pruebas la usan para comprobar
+// que lo nuevo degrada en la versión que hoy puede estar abierta en otro dispositivo. No se edita a mano: la escribe
+// scripts/esquema-publicado.mjs (`npm run esquema:publicado`) y cambian solo los imports ('./x' pasa a '../x'). Los
+// módulos que importa (driveCard, imageRowsEditor, inlinePhoto, shortcuts, cellThumbs, quietImage) son los de hoy, así que
+// los atributos que vienen de ellos los fija la firma (fixtures/editorSchemaMain.firma.ts), no este archivo. Lo de versiones
+// más viejas queda en editorSchemaAnterior.ts (v0.083 a v0.092, antes del salto de hoja) y editorSchemaSoloScript.ts
+// (hasta v0.040, solo Script).
 
 import {
   addDefaultPropsExternalHTML,
@@ -25,8 +22,10 @@ import {
 import type { Node as PMNode, Slice } from '@tiptap/pm/model';
 import { type EditorState, Plugin, PluginKey, TextSelection } from '@tiptap/pm/state';
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
+import { cellThumbsExtension, DEFAULT_THUMB_HEIGHT, THUMB_HEIGHT_PROP } from '../cellThumbs';
 import { createDriveCardView, DRIVE_CARD_PROP, driveLinkInContent } from '../driveCard';
 import { imageRowsExtension, ROW_WIDTH_PROP } from '../imageRowsEditor';
+import { quietExternalHtml } from '../quietImage';
 import { photoSpec } from '../inlinePhoto';
 import { shortcutKeys } from '../shortcuts';
 
@@ -545,9 +544,23 @@ const image = {
   },
   implementation: {
     ...blockSpecs.image.implementation,
+    // Copiar o arrastrar una foto del Drive no pide su `sdmedia://` al navegador (quietImage.ts, B.24).
+    toExternalHTML: quietExternalHtml(blockSpecs.image.implementation.toExternalHTML as never) as never,
     meta: { ...blockSpecs.image.implementation.meta, fileBlockAccept: imageAccept },
   },
   extensions: [...(blockSpecs.image.extensions ?? []), imageRowsExtension],
+};
+
+// La tabla, con una propiedad más: `thumbHeight` (cellThumbs.ts, Docs/Doc_Fotos_En_Linea.md, "Alto de las miniaturas
+// (D27 → B)"), el alto en px de las miniaturas de sus celdas (64, 96 o 160; de fábrica 96). El tipo sigue siendo
+// `table`: una versión vieja la ignora y muestra 96, y si edita la tabla pierde solo el alto (vuelve a 96).
+const table = {
+  ...blockSpecs.table,
+  config: {
+    ...blockSpecs.table.config,
+    propSchema: { ...blockSpecs.table.config.propSchema, [THUMB_HEIGHT_PROP]: { default: DEFAULT_THUMB_HEIGHT as number } },
+  },
+  extensions: [...(blockSpecs.table.extensions ?? []), cellThumbsExtension],
 };
 
 /** El workspace tiene portero: el bloque `image` ofrece también videos y cualquier archivo. Lo llama el editor al abrirse. */
@@ -556,7 +569,7 @@ export function setVideosAccepted(on: boolean): void {
 }
 
 /** Los bloques de la app (sin el contenido en línea: una prueba arma con ellos el esquema de la versión anterior). */
-export const appBlockSpecs = { ...blockSpecs, image, paragraph: createParagraph() };
+export const appBlockSpecs = { ...blockSpecs, image, table, paragraph: createParagraph() };
 
 // El contenido en línea: el de BlockNote (texto y link) más la foto en línea (inlinePhoto.ts), el único tipo
 // de nodo que se sumó después de la regla "nada de tipos nuevos". Lo cubre el resguardo de `unknownContent.ts`.

@@ -886,8 +886,17 @@ Nada nuevo en el documento: el mismo nodo, con la marca del renglón (`lgaStable
 celda (probado). La versión publicada de v0.083 a v0.092 (`fixtures/editorSchemaAnterior.ts`) abre una página con fotos
 en celdas **sin escribir nada** y, al escribir en esas celdas, no borra ninguna foto; las de v0.052 a v0.076 (sin
 `photo`) no la abren (el resguardo). Una versión de v0.078 a v0.104 la abre y la ve con las fotos grandes (como antes).
-La publicada hoy (`fixtures/editorSchemaMain.ts`, regenerada desde v0.107) también la abre sin escribir nada.
-`editorSchemaFixture.test.ts` falla si ese fixture queda distinto de `editorSchema.ts` sin declararlo.
+La publicada hoy (`fixtures/editorSchemaMain.ts`) también la abre sin escribir nada.
+
+**El esquema publicado de las pruebas (restos de la tanda 17).** `editorSchemaFixture.test.ts` compara el esquema de hoy con la
+**firma** de la versión publicada (`fixtures/editorSchemaMain.firma.ts`: los nodos, qué contenido acepta cada uno, sus atributos
+con su valor de fábrica y las marcas) y falla si algo se saca, o si algo se suma sin declararlo en `NUEVO_SIN_PUBLICAR` (con su
+prueba de que la publicada lo conserva). La firma es un texto fijo y no sale del fixture porque este toma de hoy el módulo de la
+foto en línea, el de la tarjeta de Drive y el de las filas: un atributo nuevo de `photo` también aparecía en la "publicada".
+Otra prueba compara el fixture con `origin/main:src/ui/editorSchema.ts` cuando la copia no cambió el esquema: si se publicó un
+cambio del esquema sin regenerar, falla (se salta sola en una rama que lo cambia a propósito y sin git u `origin/main`).
+**Al publicar una versión que cambia el esquema:** `npm run esquema:publicado` (con Node 22: `npx -y node@22 scripts/esquema-publicado.mjs`)
+regenera el fixture y la firma y vacía `NUEVO_SIN_PUBLICAR`; se commitean los tres archivos con la tanda que publica.
 
 ### Lo medido
 

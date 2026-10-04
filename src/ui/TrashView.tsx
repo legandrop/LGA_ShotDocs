@@ -13,7 +13,7 @@ import { locale, t, useT } from '../i18n';
 import '../i18n/lazy/projectStates';
 import { navigate, pagePath } from '../router';
 import { usePermissions, useProjectSizes, useServices, useSyncStatus, useTree } from '../services';
-import { PROJECT_STATES_SCHEMA_VERSION } from '../sync/remote';
+import { PROJECT_PURGE_SCHEMA_VERSION, PROJECT_STATES_SCHEMA_VERSION } from '../sync/remote';
 import type { PageRow, TrashedFileRow, TrashedProjectRow } from '../sync/types';
 import { errorMessage } from '../sync/types';
 import { PageIcon, RestoreIcon, TrashIcon } from './icons';
@@ -110,11 +110,15 @@ export function TrashPanel(props: { current: string; onClose: () => void }) {
     remote,
     drive,
     enabled: statesReady && online,
+    // *Delete forever* (P.14, entrega 3): con la base en la versión 23.
+    purgeReady: (status.schemaVersion ?? 0) >= PROJECT_PURGE_SCHEMA_VERSION,
     onRestored: async () => {
       // Vuelve a la lista de proyectos en la próxima sincronización, con los mismos permisos (no se tocaron).
       await engine.syncNow();
       void sizeStore.refresh();
     },
+    // Sus archivos pasaron a la papelera de Drive: el peso cambió.
+    onPurged: () => void sizeStore.refresh(),
   });
 
   // Los proyectos del alcance: el abierto, o todos los que el dispositivo conoce (activos y archivados).

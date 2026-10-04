@@ -236,6 +236,8 @@ export interface SizesRemote {
 export const PROJECT_STATES_SCHEMA_VERSION = 9;
 /** La versión con la carpeta de un proyecto borrado en la papelera de Drive (P.14, entrega 2, migración 10). */
 export const PROJECT_DRIVE_SCHEMA_VERSION = 10;
+/** La versión con *Delete forever* (P.14, entrega 3, 20261101120000_proyectos_purgar.sql): `purge_project`. */
+export const PROJECT_PURGE_SCHEMA_VERSION = 23;
 /**
  * La versión con los snapshots de compactar (Docs/Doc_Compactar.md; 20261019120000_compactar_leer.sql): `pages.snapshot_seq`,
  * `pages.content_epoch`, `pull_page_content` y las funciones de compactar. Constante propia: no sube `DB_SCHEMA_VERSION`
@@ -308,6 +310,12 @@ export interface ProjectStatesRemote {
   /** La papelera de proyectos de la sesión. `null` si la base todavía no tiene la función. */
   trashedProjects(): Promise<TrashedProjectRow[] | null>;
   projectDeleteInfo(projectId: string): Promise<ProjectDeleteInfo>;
+  /**
+   * *Delete forever* (versión 23): una marca, ninguna fila se borra. Solo dueño y admins que lo manejan, recién a los
+   * 30 días de borrado. Errores: `project_not_found`, `not_allowed`, `project_not_deleted`, `project_trash_not_due`,
+   * `drive_trash_first` (primero la carpeta a la papelera de Drive, por el portero). Repetirlo no cambia nada.
+   */
+  purgeProject(projectId: string): Promise<void>;
 }
 
 /** Un autor del historial de una página, con su correo. */
@@ -904,6 +912,11 @@ export class SupabaseRemote
     const { data, error, status } = await timed(this.client.rpc('project_delete_info', { p_project: projectId }));
     if (error) throw toRemoteError(error, status);
     return parseDeleteInfo(data);
+  }
+
+  async purgeProject(projectId: string): Promise<void> {
+    const { error, status } = await timed(this.client.rpc('purge_project', { p_project: projectId }));
+    if (error) throw toRemoteError(error, status);
   }
 
   async createProject(project: NewProject): Promise<void> {
