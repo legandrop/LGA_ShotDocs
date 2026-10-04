@@ -517,7 +517,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     title: 'help.photosDownloadAnnotated.title',
     text: 'help.photosDownloadAnnotated.text',
     words: ['download', 'annotations', 'descargar', 'anotaciones', 'jpeg', 'png', 'original'],
-    since: '0.0XX',
+    since: '0.178',
   },
   {
     id: 'photosMarkup',

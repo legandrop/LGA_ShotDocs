@@ -3,7 +3,7 @@
 **Estado: entregas 0 a 3 hechas (v0.116: el mapa, sus pruebas y ver las anotaciones; v0.123: el anotador en la
 compu y la poda; v0.129: el dedo y el lápiz del iPad; ver "Cómo quedó" al final) y, de la entrega 5, copiar y pegar una
 foto con sus anotaciones (D46, v0.132; "Copiar y pegar con las anotaciones", al final); bajar y copiar la imagen con
-anotaciones tiene su primera parte en v0.0XX (E4a: una foto JPEG/PNG desde el carrete); copiar, carpetas y FrameRev siguen pendientes.** Pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.108. Las decisiones
+anotaciones tiene su primera parte en v0.178 (E4a: una foto JPEG/PNG desde el carrete); copiar, carpetas y FrameRev siguen pendientes.** Pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.108. Las decisiones
 (AN1 a AN11, sección 12) son propuestas con la recomendación elegida: el número final lo pone quien las cierre con Lega.
 Auditado el 2026-10-02 (aprobado con condiciones): las correcciones ya están en el texto y resumidas al final
 ("Correcciones de la auditoría").
@@ -239,7 +239,7 @@ malicioso no cuelga la página). Con prueba en la entrega 1.
 
 ## 5. Bajar con anotaciones: la copia quemada (AN4)
 
-**E4a (v0.0XX):** en el carrete de una página del workspace, *Download → With annotations* prepara una foto JPEG/PNG
+**E4a (v0.178):** en el carrete de una página del workspace, *Download → With annotations* prepara una foto JPEG/PNG
 con las formas actuales de esa página; otro clic en *Download* guarda el resultado con su nombre y sus dimensiones.
 Puede usarlo quien ve o comenta, sin poder anotar. *Hide annotations* no cambia esa salida. Se toma una copia de las
 formas al iniciar; cerrar, cambiar de foto/contexto o un original que cambia invalida la preparación. Ningún dibujo,

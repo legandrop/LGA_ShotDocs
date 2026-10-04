@@ -20,7 +20,8 @@ its own project: a tree of pages you own.
   used behind the scenes to import, export and back up your pages.
 - **Undo in the order you edited.** Ctrl/⌘+Z undoes your last change in the project even if it was on another page:
   the app takes you there and undoes it in view (*Back* returns you). A replace across the project is one step, undone
-  and redone in every page it changed. Ctrl/⌘+Shift+Z redoes. It lasts until you reload the tab.
+  and redone in every page it changed. If a page was in the trash during undo, restore it before your next undo to
+  undo its replacement first, then the earlier edits. Ctrl/⌘+Shift+Z redoes. It lasts until you reload the tab.
 - **Script text.** Paste a screenplay and turn it into *Script*: it shows in a screenplay typeface, with
   INT/EXT, DAY, NIGHT and DAWN/DUSK marked in color.
 - **Templates.** Reusable page layouts such as *Pre-production Notes*, *On-Set Report* or *Shot
@@ -53,7 +54,7 @@ its own project: a tree of pages you own.
 
 ## Status
 
-In production (v0.049). What works today:
+In development. What works today:
 
 - Email sign-in with an 8-digit code, which works inside the installed iPhone app (a sign-in link would
   open Safari instead). It needs your own mail server (SMTP) in Supabase, and sign-ups are invite-only.
@@ -138,7 +139,8 @@ In production (v0.049). What works today:
   stays in the page as a folder card. Opening it shows what is in that Drive folder right now, with thumbnails,
   the photo viewer and downloads; whoever sees the page sees the folder, and nothing above it. *Download all*
   saves the whole folder as a .zip (in Chrome and Edge on a computer, written as it arrives and with no size limit,
-  or straight into a folder; elsewhere, built in memory up to 1 GB, 500 MB on a phone).
+  or straight into a folder; elsewhere, built in memory up to 1 GB, 500 MB on a phone). Cancel also stops a download
+  whose server error response stalls; it discards the unfinished zip or keeps completed files in the chosen folder.
 - Collapse sections by their headings: a triangle next to any heading hides everything up to the next heading
   of its level (just for you, saved on the device; Ctrl/⌘+Alt+Enter, and *Collapse all* in the page menu).
   Shift+click collapses or expands it for everyone who views the page (if you can edit it); the tooltip says
@@ -153,6 +155,8 @@ In production (v0.049). What works today:
 - Keyboard in the page tree: ↑ and ↓ open the previous or next page, → and ← expand and collapse (← on a page with nothing to collapse goes to its parent page).
 - Page breaks and PDF: pages with a paper size show where each sheet starts, and *Export PDF / Print* in the page menu prints exactly those sheets. A manual page break (*Page break* in the / menu, or Ctrl+Enter, ⌘↩ on a Mac) makes what follows start on a new sheet, on screen and in the PDF.
 - Export a branch or a whole project as PDF: *Export…* in the page menu (the page and the pages inside) or *Export project…* in the project list. It starts with a contents page that links to each page and says on which PDF page it starts, every page keeps its own paper size (in Chrome or Edge on a computer), photos keep their annotations and go as they were taken, at full resolution (tick *Smaller file* for a lighter PDF with photos scaled to their printed size), and comments can be included with names but never email addresses. If it is too much for one PDF on the device, it comes out in parts (*Part 1*, *Part 2*…), split between pages, and at the end any page that could not be exported is listed with a link and *Export again*. Pages in the trash are never included, and a guest exports only what they can see.
+- Original photo downloads for a PDF can take as long as needed while data keeps arriving. If a download receives
+  no data for 30 seconds, the PDF uses the available lower-resolution copy and lists the page with *Export again*.
 - Links to files in a PDF: in an exported or printed PDF, every attachment, folder and video links to the file, with its name below (photos don't). Whoever opens the link signs in and sees the file only if they can see a page where it is; if not, they just see that they don't have access. *Export…* can use the page's public link instead, after saying which page and level it opens. Offline, it warns about file links only when the PDF contains attachments, folders or videos, and about lower-resolution photos only when their originals are missing from this device.
 - Request access: whoever opens a file link or a page link without access can ask for it, even with nothing shared yet; the people who can share that page (or a page with that file) see the request in the bell and in *Share*, and give access to that page (never less than the person already has) or decline it.
 - Export a branch or a whole project as a zip to archive it: a folder for each page with the page as a web page that opens in any browser without a connection, its text as Markdown, a JPEG of every photo (also iPhone HEIC photos), the original photos, attachments and videos from Drive if you tick them, and the comments with names but never email addresses. It also keeps the blocks and the page tree for importing it back later. On Chrome and Edge on a computer it is written as it is made (or into a folder); in other browsers it is built in memory. Only the workspace owner and admins can export a zip, and only from a computer.

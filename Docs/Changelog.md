@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.178 :
 
 **Una foto anotada para compartir.** El carrete bajaba únicamente el original, aunque la página mostrara flechas,
 texto o números encima. *Download → With annotations* prepara ahora una copia JPEG/PNG local con las formas de esa
@@ -11,6 +11,44 @@ la preparación sin reducir ni borrar nada. Funciona sin red con el original loc
 comentadores; todavía no en links públicos. HEIC real, otros formatos y 48 MP en móviles quedan pendientes, igual
 que copiar, carpetas y FrameRev. Incluye ayuda y verificaciones de imágenes, cancelación, permisos y fuentes.
 [Descargar una foto con sus anotaciones desde el carrete]
+
+v0.177 :
+
+**El PDF espera los originales que siguen bajando.** Una foto que tardaba más de 90 segundos en llegar se
+descartaba aunque recibiera datos constantemente: salía en menor resolución y la página quedaba en *Export again*.
+Ahora el plazo del original vence tras 30 segundos sin bytes nuevos, desde que se empieza a pedirlo. Cada parte
+positiva recibida renueva ese plazo; las cabeceras y partes vacías no lo extienden. La descarga incremental se usa
+solo cuando el PDF pide progreso; los demás consumidores conservan su camino anterior. Al vencer el plazo o pulsar
+*Cancel*, se corta la señal y se cancela y libera el lector del cuerpo. Se mantienen los originales locales,
+la renovación del pase, los topes del PDF, las partes y sus originales ya traídos, y el plazo de *Smaller file*.
+Ayuda y avisos en ambos idiomas; pruebas de descargas largas, detenidas y canceladas con streams y reloj controlados.
+[Esperar los originales del PDF mientras reciban datos]
+
+v0.176 :
+
+**Cancelar Download all cuando el cuerpo de un error queda a medias.** El servidor podía contestar 403, 429 o 5xx
+y dejar su JSON abierto. La lectura automática retenía el cuerpo: cancelar no detenía su fuente y el plazo vencía
+sin liberarla. Ahora ese cuerpo se consume con un lector propio, unido a la señal de la bajada y al plazo vigente.
+Ambos cancelan la fuente, sueltan el bloqueo y limpian sus escuchas y temporizadores; Cancel propaga su cancelación
+sin transformarla en un archivo faltante. Un JSON válido conserva su código, incluido el pase vencido que se renueva
+una vez; los errores sin JSON completo mantienen su clasificación HTTP y los cuatro intentos para 429 y 5xx.
+Retry missing sigue pidiendo solo lo pendiente. Se agregan regresiones de fuente realmente cancelada, limpieza y
+reintento, y se comprueba la ventana de descarga con respuestas simuladas. Ayuda y documentación actualizadas.
+
+[ Download all cancela la fuente de los errores HTTP que quedan a medias ]
+
+v0.175 :
+
+**Deshacer un reemplazo con una página en la papelera (P.26, O1).** Si una página editada estaba en la papelera al
+deshacer un reemplazo del proyecto, su paso salía de la pila. Restaurarla y deshacer lo escrito dejaba letras del
+reemplazo; *Undo the rest* tampoco devolvía el texto exacto. Ahora el reemplazo conserva a la vez lo deshecho para
+rehacer y lo pendiente para deshacer, en su orden anterior. Restaurada la página, el próximo ⌘Z deshace el reemplazo
+ahí; el siguiente deshace lo escrito antes sin restos, y ⌘⇧Z vuelve a hacer todo. *Undo the rest* usa la misma pila.
+Si sigue en la papelera al siguiente intento, se avisa y se continúa con los pasos anteriores. Escribir algo nuevo
+quita lo de rehacer sin sacar lo pendiente. Al abandonar una página inaccesible también se olvidan sus pasos anteriores:
+dependían de letras reemplazadas y podían mutilar la nota al restaurarla. Sin cambios del formato guardado.
+
+[ Deshacer un reemplazo conserva el paso de la página en la papelera hasta restaurarla o volver a intentar ]
 
 v0.174 :
 

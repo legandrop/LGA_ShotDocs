@@ -133,8 +133,8 @@ export const exportPdf = {
   'exportDialog.failedList': { en: "These pages could not be exported in full:", es: "Estas páginas no se pudieron exportar enteras:" },
   'exportDialog.failedTooBig': { en: "too many photos for one PDF", es: "demasiadas fotos para un PDF" },
   'exportDialog.failedTimeout': {
-    en: "some photos took too long to download and are at a lower resolution",
-    es: "algunas fotos tardaron demasiado en bajar y van en menor resolución",
+    en: "some photo downloads received no data for 30 seconds; those photos are at a lower resolution",
+    es: "algunas fotos no recibieron datos durante 30 segundos y van en menor resolución",
   },
   'exportDialog.printFirst': {
     en: "Open the print dialog and save this PDF first: this replaces it.",
