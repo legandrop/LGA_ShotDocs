@@ -3,7 +3,7 @@
 **Estado: entregas 0 a 3 hechas (v0.116: el mapa, sus pruebas y ver las anotaciones; v0.123: el anotador en la
 compu y la poda; v0.129: el dedo y el lápiz del iPad; ver "Cómo quedó" al final) y, de la entrega 5, copiar y pegar una
 foto con sus anotaciones (D46, v0.132; "Copiar y pegar con las anotaciones", al final); bajar y copiar la imagen con
-anotaciones (entrega 4) sigue en diseño.** Pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.108. Las decisiones
+anotaciones tiene su primera parte en v0.0XX (E4a: una foto JPEG/PNG desde el carrete); copiar, carpetas y FrameRev siguen pendientes.** Pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.108. Las decisiones
 (AN1 a AN11, sección 12) son propuestas con la recomendación elegida: el número final lo pone quien las cierre con Lega.
 Auditado el 2026-10-02 (aprobado con condiciones): las correcciones ya están en el texto y resumidas al final
 ("Correcciones de la auditoría").
@@ -239,13 +239,31 @@ malicioso no cuelga la página). Con prueba en la entrega 1.
 
 ## 5. Bajar con anotaciones: la copia quemada (AN4)
 
+**E4a (v0.0XX):** en el carrete de una página del workspace, *Download → With annotations* prepara una foto JPEG/PNG
+con las formas actuales de esa página; otro clic en *Download* guarda el resultado con su nombre y sus dimensiones.
+Puede usarlo quien ve o comenta, sin poder anotar. *Hide annotations* no cambia esa salida. Se toma una copia de las
+formas al iniciar; cerrar, cambiar de foto/contexto o un original que cambia invalida la preparación. Ningún dibujo,
+original o dato sincronizado cambia. No está en las barras, las carpetas ni los links públicos.
+
+Solo admite bytes JPEG o PNG estático sin EXIF, con cabecera comprobada antes de decodificar. HEIC real y otros
+formatos quedan pendientes; un HEIC convertido a JPEG por la cola existente se admite como JPEG. Una foto de 48 MP
+en teléfono no se prepara: *Original* sigue disponible y no se fabrica una copia reducida. Sin red hace falta el
+original completo en el dispositivo, nunca se reemplaza por una vista/miniatura. Fuentes remotas se cuentan por stream.
+Guardas de intento: móvil 64 MiB, 16 MP y eje máximo 8192; computadora 128 MiB, 64 MP y eje máximo 16384. Son límites
+de preparación, no garantía de memoria libre; errores de decoder/Canvas/encoder se muestran sin archivo parcial.
+JPEG a calidad 0,92 sobre blanco, PNG con alfa, EXIF JPEG orientado una vez; marco distinto usa escala *meet* y centrado
+igual al SVG. Tipos/versiones desconocidos, formas ilegibles y excesos de texto/puntos/formas rechazan toda la salida
+sin limpiar el mapa. El compositor nativo está en `src/media/markupRaster.ts`; la UI en `src/ui/AnnotatedDownload.tsx`.
+El gesto y memoria de Safari/iPhone reales siguen pendientes de comprobación en esos dispositivos. E4 no está cerrada.
+
 - Se arma **en el dispositivo, al bajar**: el original (del dispositivo o con un pase del portero, que ya manda
   `Access-Control-Allow-Origin` a la app; sin eso el `canvas` queda "manchado" y no se puede leer, así que se prueba con
   las dos fuentes, también el `blob:` del dispositivo), un `canvas` del tamaño de la foto, las formas dibujadas con la API
   del `canvas` (no el SVG pasado a imagen: así no cargaría la letra de la app y el texto saldría con otra), y JPEG
   (calidad 92) o PNG si el original es PNG. Nombre: `<nombre>_annotated.jpg`. Nunca se sube ni se guarda en Drive.
-- **En el iPhone** Safari no deja un `canvas` de más de unos 16,7 millones de píxeles: una foto de 48 MP se achica a
-  ese tope (se avisa *Reduced to 16 MP on this device*). En la compu, tamaño completo.
+- **Resolución completa o error (D85):** la copia mantiene las dimensiones orientadas del original. En teléfonos se
+  rechaza una preparación de más de 16 millones de píxeles; no se achica automáticamente. *Original* sigue disponible.
+  No se ofrece *Smaller file* en esta primera parte.
 - **Download all** (`Doc_Carpetas.md`) suma la opción *Include annotated copies*: al lado de cada original anotado va su
   `_annotated`. Los originales siempre van.
 - **Copiar** (*Copy with annotations*) deja la imagen quemada en el portapapeles, para pegarla en un mail o en
@@ -499,10 +517,10 @@ anotador en solo lectura (*Update the app to edit these annotations*).
 | # | Qué | Prueba de aceptación |
 |---|---|---|
 | **0** | **Prueba técnica, sin publicar:** con el editor de la versión publicada (como `collabPhotosVersions.published.test.ts`), un `Y.Doc` con `photoMarkup` se abre, se edita y vuelve sin perder una clave; la base limpia lo conserva y vacía lo borrado; `version()` del historial lo trae. **Carrera:** dos dispositivos anotan por primera vez la misma foto sin red y, al juntarse, están todas las formas. **Foto sacada:** después de la poda, el texto de su anotación no está en los bytes de la base limpia. Medir con el dedo a 60 y 120 Hz en el iPhone. Comprobar con fotos reales de iPhone (verticales, HEIC pasado a JPEG) que `files.width/height` tienen la proporción de lo que se ve. | Las pruebas pasan; si la proporción falla en algún caso, se corrige el marco antes de seguir |
-| **1** | **Ver:** el SVG en la misma caja que el `<img>` (`meet`) sobre la foto en línea, la foto-bloque, la celda, el carrete (con *Hide annotations*) y la vista de impresión, montado siempre en las fotos anotadas; el dibujo de las 9 formas; el mapa tratado como entrada no confiable; tipos desconocidos ignorados; la ayuda dice qué son. Prueba con el esquema anterior. | Una página con un mapa sembrado en la prueba (flecha, círculo, texto) muestra lo mismo en la página, la celda de 96 px, el carrete y el PDF, alineado con la foto en vertical y horizontal; **imprimir una página larga con la foto anotada fuera de la pantalla saca las flechas**; un mapa con colores, números y textos maliciosos se dibuja acotado y sin HTML; una versión anterior abre esa página y el mapa sigue intacto |
+| **1** | **Ver:** el SVG en la misma caja que el `<img>` (`meet`) sobre la foto en línea, la foto-bloque, la celda, el carrete (con *Hide annotations*) y la vista de impresión, montado siempre en las fotos anotadas; el dibujo de las 8 formas; el mapa tratado como entrada no confiable; tipos desconocidos ignorados; la ayuda dice qué son. Prueba con el esquema anterior. | Una página con un mapa sembrado en la prueba (flecha, círculo, texto) muestra lo mismo en la página, la celda de 96 px, el carrete y el PDF, alineado con la foto en vertical y horizontal; **imprimir una página larga con la foto anotada fuera de la pantalla saca las flechas**; un mapa con colores, números y textos maliciosos se dibuja acotado y sin HTML; una versión anterior abre esa página y el mapa sigue intacto |
 | **2** | **Anotar en la compu:** el anotador, las 9 herramientas, letras, `[` `]`, Shift y Alt, colores, grosor (AN7), estilo por herramienta, deshacer propio por foto, escribir al soltar, topes en bytes codificados, la poda de huérfanos (AN11); *Annotate* en la barra y A en el carrete; ayuda y atajos en el registro; pruebas de dos editores a la vez y con la versión anterior. | Lega abre una foto de set, pone una flecha roja, un círculo y un texto, cierra: se ven en la página y en el PDF; en otra pestaña aparecen sin recargar; dos pestañas dibujando a la vez conservan todo; con la red cortada anota, y al volver sube; ⌘[ en Safari y Chrome cambia el grosor y no va "atrás"; sacar la foto anotada y, a los 10 minutos, la base limpia ya no trae sus notas |
 | **3** | **El dedo (y el lápiz en el iPad):** la tira de abajo, la hoja de propiedades, dos dedos para ampliar, el lápiz en el iPad, el texto con el teclado del teléfono, sin red. | En el iPhone: anotar una foto con el dedo ampliando para un detalle, en modo avión; al volver la señal aparece en la compu. En un iPad con lápiz: el lápiz dibuja y el dedo mueve |
-| **4** | **Bajar y copiar:** *Download → With annotations* (formas dibujadas con la API del `canvas`), *Copy with annotations*, la opción en *Download all*, el tope de 16 MP en el iPhone, *Export for FrameRev* (`.frproj` v2). | La foto bajada tiene las flechas donde estaban, al tamaño del original y con la misma letra que en pantalla, desde el portero y desde la copia del dispositivo; el `.frproj` abre en FrameRev con las mismas formas y se pueden editar |
+| **4** | **Bajar y copiar:** *Download → With annotations* (formas dibujadas con la API del `canvas`), *Copy with annotations*, la opción en *Download all*, la guarda de preparación completa en el iPhone (sin reducción automática), *Export for FrameRev* (`.frproj` v2). | La foto bajada tiene las flechas donde estaban, al tamaño del original y con la misma letra que en pantalla, desde el portero y desde la copia del dispositivo; el `.frproj` abre en FrameRev con las mismas formas y se pueden editar |
 | **5** | **Historial, copiar y buscar:** versiones de "solo anotó", ver y restaurar anotaciones (también las podadas), copiar y pegar una foto con sus anotaciones a otra página (**hecho en v0.132, D46**), *Keep annotations?* al reemplazar, buscar en los textos de las anotaciones. | Borrar una flecha, cerrar todo, volver desde el historial y recuperarla; pegar la foto en otra página con las flechas |
 | **6** | **(Opcional, si Lega lo pide) Dibujar en un comentario** (nivel comentar): el dibujo va con el comentario, no con la foto de la página. | Un invitado que comenta marca una ventana; el equipo ve el dibujo al abrir el hilo |
 
@@ -527,7 +545,7 @@ Cada entrega lleva su auditoría independiente antes de pasar a `main`.
    filas (no se pierde, pero no hay botón).
 8. **Deshacer en dos lugares:** en el anotador, ⌘/Ctrl+Z no deshace texto; en la página, deshace lo de una vez en el
    anotador como un solo paso, en el orden en que editaste (`Doc_Deshacer.md`, sección 19). Se dice en la ayuda.
-9. **Canvas del iPhone:** la copia quemada se achica a 16 MP; se avisa.
+9. **Canvas del iPhone:** se prepara a resolución completa dentro de las guardas o se rechaza explícitamente; no se achica (D85).
 10. **⌘[ y ⌘] en la Mac** son "atrás" y "adelante" del navegador: si `preventDefault` no los frena en algún navegador,
     se cambian por otra tecla en el registro (entrega 2).
 11. **Números repetidos** si dos ponen Number a la vez; y **la misma foto dos veces en la página** comparte el dibujo. Se

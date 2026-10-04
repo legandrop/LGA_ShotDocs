@@ -124,6 +124,7 @@ In production (v0.049). What works today:
   thickness; one finger draws, two fingers zoom and move the photo without drawing, and text is typed in a regular box
   with the phone keyboard. Once you use a pencil (Apple Pencil on the iPad), only the pencil draws and your finger moves
   the photo, like in Notes.
+- In the full-screen viewer, **Download → With annotations** prepares a local JPEG/PNG copy with the page’s drawings at full original dimensions. The original stays untouched, and it works offline with a full local original. HEIC and other formats, public links, and photos too large for the device (including 48 MP on phones) are not supported yet; Original remains available, with no automatic reduction.
 - Copy or cut an annotated photo and paste it on another page of the same project: its annotations come with it (also
   into another window of the app), pasting twice doesn't repeat them, and undo right after pasting removes the photo
   with them. On a page of another project it arrives without them, and nothing of the annotations goes to the
