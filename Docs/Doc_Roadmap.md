@@ -689,8 +689,10 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   la entrega 2**, *Request access*: la pantalla sin acceso lo pide (con el aviso de quién lo verá), la campana y *Share*
   muestran los pedidos a quien puede compartir y la ventana da acceso (nunca baja) o rechaza; la pantalla `/f/` vuelve a
   donde estaba y reintenta sola al volver la red; pruebas de `http://localhost` y de *Sign in instead* (O4). Migración
-  `20261031120000_access_requests` aplicada (schema 22). Falta la prueba de aceptación 4 de Lega. Falta E3
-  opcional (pedir una página). Quedan para después: el correo al pedir y al aceptar (B.8), pedir acceso sin cuenta, el
+  `20261031120000_access_requests` aplicada (schema 22). Falta la prueba de aceptación 4 de Lega. **Hecho (v0.0XX):
+  la entrega 3**, pedir también una página desde `/p/<id>` sin acceso (la misma pantalla para «no existe» y «sin
+  acceso»), con los pedidos en la campana y en *Share* de esa página y el permiso solo sobre ella; migración
+  `20261102120000_access_requests_paginas` **sin aplicar** (schema 24). Quedan para después: el correo al pedir y al aceptar (B.8), pedir acceso sin cuenta, el
   link de un video en línea y los textos de invitación en el choque de clave y en *Join a workspace?* para una dirección
   de archivo (O7 c). De la auditoría de E2 (chico): una prueba de dos personas decidiendo a la vez con dos sesiones
   reales (O8; hoy por lectura del `for update`), el tope y las 24 horas en el servidor en memoria (O9) y el título
