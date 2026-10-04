@@ -4,6 +4,18 @@ import type { Dict } from '../types';
 // El carrete de fotos y videos (se carga aparte, con Carrete.tsx).
 
 export const carrete = {
+  'carrete.copy.withAnnotations': { en: 'Copy with annotations', es: 'Copiar con anotaciones' },
+  'carrete.copy.action': { en: 'Copy', es: 'Copiar' },
+  'carrete.copy.writing': { en: 'Copying…', es: 'Copiando…' },
+  'carrete.copy.copied': { en: 'Copied', es: 'Copiado' },
+  'carrete.copy.unsupported': { en: 'This browser cannot copy images here. You can download the original instead.', es: 'Este navegador no puede copiar imágenes acá. Podés bajar el original.' },
+  'carrete.copy.denied': { en: 'Your browser did not allow this copy. Tap Copy to try again, or download the original.', es: 'El navegador no permitió esta copia. Tocá Copiar para reintentar, o bajá el original.' },
+  'carrete.copy.changed': { en: 'The annotations changed. Close and prepare the copy again.', es: 'Las anotaciones cambiaron. Cerrá y volvé a preparar la copia.' },
+  'carrete.copy.format': { en: 'Annotated copies currently support JPEG and PNG originals. Download the original instead.', es: 'Las copias anotadas admiten originales JPEG y PNG. Podés bajar el original.' },
+  'carrete.copy.size': { en: 'This photo cannot be copied at full resolution on this device. No smaller copy was made. Download the original instead.', es: 'Esta foto no se puede copiar en resolución completa en este dispositivo. No se hizo una copia más chica. Podés bajar el original.' },
+  'carrete.copy.annotations': { en: 'This version cannot include all annotations. Download the original or use a newer app; your annotations have not changed.', es: 'Esta versión no puede incluir todas las anotaciones. Podés bajar el original o usar una app más nueva; tus anotaciones no cambiaron.' },
+  'carrete.copy.source': { en: 'The full original is unavailable or changed. Check its offline copy or reconnect, then prepare again. Original is still available.', es: 'El original completo no está disponible o cambió. Revisá su copia sin conexión o reconectá y volvé a preparar. Original sigue disponible.' },
+  'carrete.copy.encode': { en: 'The annotated PNG could not be prepared. No image was copied. Download the original instead.', es: 'No se pudo preparar el PNG anotado. No se copió ninguna imagen. Podés bajar el original.' },
   'carrete.original': { en: 'Original', es: 'Original' },
   'carrete.withAnnotations': { en: 'With annotations', es: 'Con anotaciones' },
   'carrete.raster.unsupported': { en: 'Annotated downloads currently support JPEG and PNG originals. HEIC and other formats are not supported yet. Download the original instead.', es: 'La descarga anotada admite originales JPEG y PNG. HEIC y otros formatos todavía no están disponibles. Podés bajar el original.' },

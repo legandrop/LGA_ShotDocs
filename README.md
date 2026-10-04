@@ -6,6 +6,8 @@ its own project: a tree of pages you own.
 
 ## Goals
 
+- Copy one annotated JPEG/PNG photo from the photo viewer as a full-size PNG: prepare it first, then tap Copy. Browser image-clipboard support is required; the unchanged original remains available. HEIC, large mobile images, folders and FrameRev export remain pending.
+
 - **Projects.** Each show or job is a project with its own tree of pages. Switch between them from the
   top of the sidebar without leaving the page you are on.
 - **Search.** Ctrl/⌘+F finds and replaces in the open page. Ctrl/⌘+K (or the magnifying glass next to

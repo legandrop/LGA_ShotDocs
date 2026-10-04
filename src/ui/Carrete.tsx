@@ -34,6 +34,7 @@ import {
 import { downloadProps, isOffline, type AttachmentView, type CarreteLoader, type Full } from './carreteLoader';
 import { CarreteMarkup, useHasMarkup } from './CarreteMarkup';
 import { AnnotatedDownload } from './AnnotatedDownload';
+import { AnnotatedCopy } from './AnnotatedCopy';
 import { AnnotateIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, DownloadIcon, EyeIcon, EyeOffIcon, OpenIcon } from './icons';
 import { isLetter } from './findUi';
 import { asAction, tipRows } from './tipRows';
@@ -801,6 +802,7 @@ export function Carrete({ items, start, loader, online, onClose, markup = null, 
         {markup && item.mediaId && view.kind === 'image' && !view.file
           ? <AnnotatedDownload key={item.url} item={item} map={markup} loader={loader} original={downloadLink('carrete-btn', true)} />
           : downloadLink('carrete-btn', true)}
+        {markup && item.mediaId && view.kind === 'image' && !view.file && <AnnotatedCopy key={`copy:${item.url}`} item={item} map={markup} loader={loader} original={downloadLink('carrete-btn', true)} />}
         <button className="carrete-btn" aria-label={tr('common.close')} data-tip={tipRows([{ shortcut: 'carreteClose', action: asAction(tr('common.close')) }])} onClick={requestClose}>
           <CloseIcon size={22} />
         </button>

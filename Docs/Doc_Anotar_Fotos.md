@@ -3,7 +3,8 @@
 **Estado: entregas 0 a 3 hechas (v0.116: el mapa, sus pruebas y ver las anotaciones; v0.123: el anotador en la
 compu y la poda; v0.129: el dedo y el lápiz del iPad; ver "Cómo quedó" al final) y, de la entrega 5, copiar y pegar una
 foto con sus anotaciones (D46, v0.132; "Copiar y pegar con las anotaciones", al final); bajar y copiar la imagen con
-anotaciones tiene su primera parte en v0.178 (E4a: una foto JPEG/PNG desde el carrete); copiar, carpetas y FrameRev siguen pendientes.** Pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.108. Las decisiones
+anotaciones tiene su primera parte en v0.178 (E4a: una foto JPEG/PNG desde el carrete) y copiarla como PNG en v0.180
+(E4b); otros formatos, carpetas y FrameRev siguen pendientes.** Pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.108. Las decisiones
 (AN1 a AN11, sección 12) son propuestas con la recomendación elegida: el número final lo pone quien las cierre con Lega.
 Auditado el 2026-10-02 (aprobado con condiciones): las correcciones ya están en el texto y resumidas al final
 ("Correcciones de la auditoría").
@@ -255,6 +256,24 @@ JPEG a calidad 0,92 sobre blanco, PNG con alfa, EXIF JPEG orientado una vez; mar
 igual al SVG. Tipos/versiones desconocidos, formas ilegibles y excesos de texto/puntos/formas rechazan toda la salida
 sin limpiar el mapa. El compositor nativo está en `src/media/markupRaster.ts`; la UI en `src/ui/AnnotatedDownload.tsx`.
 El gesto y memoria de Safari/iPhone reales siguen pendientes de comprobación en esos dispositivos. E4 no está cerrada.
+
+**E4b (v0.180), Copy with annotations:** junto a Download en el carrete, prepara un PNG real con el compositor
+del original y las anotaciones; cuando está listo muestra sus dimensiones completas y otro toque en *Copy* lo
+envía al portapapeles. El JPEG original se codifica directamente en PNG, sin un JPEG anotado intermedio; Download
+mantiene JPEG92/PNG como antes. La copia no conserva metadata ni garantiza cómo la aplicación receptora pega la
+imagen. *Original* sigue disponible. Sin API de imágenes/contexto seguro o ante rechazo del navegador se muestra
+el error, nunca una URL/miniatura como sustituto ni éxito sin confirmar.
+
+La preparación se descarta si cambia la foto, el contexto, la fuente, su marco o sus formas antes de *Copy*;
+cambios en otra foto no la invalidan. Cerrar cancela antes de enviar. Después de invocar la escritura, la API
+externa no permite revocar: cerrar sólo descarta la vista y sus respuestas tardías. No se lee ni restaura el
+portapapeles previo, ni se reintenta automáticamente. Se muestra *Copied* sólo cuando el navegador confirma.
+
+Admite las mismas fuentes completas JPEG/PNG, sesiones y guardas de E4a; no está en links públicos, también si
+pueden editar. PNG generado por Copy además debe entrar en el límite de bytes de esa plataforma; no se reduce
+para lograrlo. Encoder/portapapeles pueden reservar memoria antes de devolver el resultado, por lo que esos topes
+no garantizan RAM libre ni supervivencia de Safari/iPhone. Su gesto y memoria físicos siguen pendientes. Se
+documenta el PNG generado/entregado, sin afirmar identidad binaria tras reencodificación del navegador/OS.
 
 - Se arma **en el dispositivo, al bajar**: el original (del dispositivo o con un pase del portero, que ya manda
   `Access-Control-Allow-Origin` a la app; sin eso el `canvas` queda "manchado" y no se puede leer, así que se prueba con

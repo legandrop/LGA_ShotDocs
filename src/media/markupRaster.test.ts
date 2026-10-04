@@ -20,6 +20,20 @@ function png(w: number, h: number, extra = ''): Blob {
 }
 afterEach(() => vi.unstubAllGlobals());
 describe('foto completa antes de decodificar', () => {
+  it.each([undefined, 'png'] as const)('encode %s conserva JPEG default o PNG directo con un solo decode', async (output) => {
+    const decoded = vi.fn(async () => ({ width: 400, height: 300, close: vi.fn() }));
+    const context = new Proxy({} as Record<string, unknown>, { get: (o, key: string) => o[key] ?? (() => undefined), set: (o, key: string, v) => { o[key] = v; return true; } });
+    const canvas = { width: 0, height: 0, getContext: () => context, toBlob: vi.fn((cb: (b: Blob) => void, mime: string) => cb(new Blob(['encoded'], { type: mime }))) };
+    vi.stubGlobal('document', { fonts: { ready: Promise.resolve() }, createElement: () => canvas }); vi.stubGlobal('createImageBitmap', decoded);
+    const { map } = photo(); const snap = { ...rasterSnapshot(map, id), shapes: [] };
+    const result = await prepareMarkupRaster(jpeg(400, 300), 'source.jpg', snap, false, new AbortController().signal, output);
+    const mime = output ? 'image/png' : 'image/jpeg'; expect(canvas.toBlob).toHaveBeenCalledOnce(); expect(canvas.toBlob).toHaveBeenCalledWith(expect.any(Function), mime, .92); expect(decoded).toHaveBeenCalledOnce(); expect(result.blob.type).toBe(mime); expect(result.name).toBe(`source_annotated.${output ? 'png' : 'jpg'}`); expect(result.width).toBe(400); expect(context.fillStyle).toBe('#FFFFFF'); expect(canvas.width).toBe(0);
+  });
+  it('PNG generado sobre el límite se rechaza sin reducir y libera Canvas', async () => {
+    const canvas = { width: 0, height: 0, getContext: () => new Proxy({}, { get: () => () => undefined, set: () => true }), toBlob: (cb: (b: unknown) => void) => cb({ type: 'image/png', size: 64 * 1024 ** 2 + 1 }) };
+    vi.stubGlobal('document', { fonts: { ready: Promise.resolve() }, createElement: () => canvas }); vi.stubGlobal('createImageBitmap', vi.fn(async () => ({ width: 400, height: 300, close: vi.fn() })));
+    const { map } = photo(); await expect(prepareMarkupRaster(jpeg(400, 300), 'source.jpg', { ...rasterSnapshot(map, id), shapes: [] }, true, new AbortController().signal, 'png')).rejects.toMatchObject({ reason: 'size' }); expect(canvas.width).toBe(0);
+  });
   it.each([1, 2, 3, 4, 5, 6, 7, 8])('EXIF %i fija dimensiones orientadas una sola vez', async (o) => {
     expect(await rasterInfo(jpeg(400, 300, o), false, new AbortController().signal)).toEqual({ width: o >= 5 ? 300 : 400, height: o >= 5 ? 400 : 300, mime: 'image/jpeg' });
   });

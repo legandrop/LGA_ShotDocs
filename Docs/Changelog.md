@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.180 : Copiar una foto con anotaciones desde el carrete
+
+El carrete ya permitía bajar una foto anotada, pero faltaba copiar esa imagen para pegarla en otra app. Ahora Copy with annotations prepara un PNG al tamaño completo desde un original JPEG o PNG y habilita Copy como segundo gesto. El PNG sale directamente del mismo canvas, sin una recomprensión JPEG intermedia; Download mantiene su formato anterior. La preparación verifica las anotaciones, el original y los límites del dispositivo, y se descarta si cambian antes de copiar. Un cierre cancela la preparación; una escritura iniciada depende del navegador y no puede revocarse. Original conserva su descarga intacta. Los links públicos, HEIC, las fotos grandes en móvil, carpetas y FrameRev siguen pendientes. Ayuda y documentación acompañan el recorrido.
+
+[Copiar una foto anotada como PNG desde el carrete]
+
 v0.179 :
 
 **Lista o cuadrícula para las carpetas.** El visor sólo ofrecía filas con miniaturas pequeñas, aunque su diseño

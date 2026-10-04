@@ -520,6 +520,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     since: '0.178',
   },
   {
+    id: 'photosCopyAnnotated',
+    section: 'photos',
+    title: 'help.photosCopyAnnotated.title',
+    text: 'help.photosCopyAnnotated.text',
+    words: ['copy', 'clipboard', 'annotations', 'png', 'copiar', 'portapapeles', 'anotaciones', 'pegar'],
+    since: '0.180',
+  },
+  {
     id: 'photosMarkup',
     section: 'photos',
     title: 'help.photosMarkup.title',

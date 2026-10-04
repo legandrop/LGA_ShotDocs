@@ -175,7 +175,7 @@ export function rasterWait<T>(pending: Promise<T>, signal: AbortSignal, timeout 
   });
 }
 export interface RasterResult { blob: Blob; name: string; width: number; height: number }
-export async function prepareMarkupRaster(original: Blob, name: string, photo: PhotoMarkup, mobile: boolean, signal: AbortSignal): Promise<RasterResult> {
+export async function prepareMarkupRaster(original: Blob, name: string, photo: PhotoMarkup, mobile: boolean, signal: AbortSignal, output?: 'png'): Promise<RasterResult> {
   const info = await rasterInfo(original, mobile, signal);
   await rasterWait(document.fonts?.ready ?? Promise.resolve(), signal);
   checkRasterAbort(signal);
@@ -192,10 +192,13 @@ export async function prepareMarkupRaster(original: Blob, name: string, photo: P
     c.drawImage(bitmap, 0, 0); bitmap.close(); bitmap = undefined;
     drawRasterMarkup(c, photo, canvas.width, canvas.height);
     checkRasterAbort(signal);
-    const blob = await rasterWait(new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, info.mime, .92)), signal);
-    if (!blob || blob.type !== info.mime || !blob.size) throw new RasterError('encode');
+    // Copiar codifica este mismo Canvas en PNG, sin una pérdida JPEG intermedia.
+    const mime = output === 'png' ? 'image/png' : info.mime;
+    const blob = await rasterWait(new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, mime, .92)), signal);
+    if (!blob || blob.type !== mime || !blob.size) throw new RasterError('encode');
+    if (output === 'png' && blob.size > rasterLimits(mobile).bytes) throw new RasterError('size');
     checkRasterAbort(signal);
     const base = name.replace(/\.[^.]*$/, '').replace(/[\\/\x00-\x1f]/g, '_').trim() || 'photo';
-    return { blob, name: `${base}_annotated.${info.mime === 'image/png' ? 'png' : 'jpg'}`, width: info.width, height: info.height };
+    return { blob, name: `${base}_annotated.${mime === 'image/png' ? 'png' : 'jpg'}`, width: info.width, height: info.height };
   } finally { bitmap?.close(); canvas.width = 0; canvas.height = 0; }
 }
