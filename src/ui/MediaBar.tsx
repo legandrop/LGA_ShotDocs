@@ -19,6 +19,8 @@ import { porteroDownload } from './sharpImages';
 import { ImageSizeButtons, OriginalDownloadButton, ViewIcon } from './MediaToolbarButtons';
 import { notify } from './notice';
 import { useLinkMode } from '../linkMode';
+import type { EditorView } from '@tiptap/pm/view';
+import { liveView } from './inlinePhotoCreate';
 
 // La barra de una foto (Docs/Decisiones D-24): la misma para la foto-bloque y para la foto en línea, por sectores con
 // un separador entre ellos:
@@ -341,6 +343,9 @@ export function DeleteButton({ many, kind = 'image', onDelete }: { many: boolean
 
 // --- La barra de la foto-bloque ---------------------------------------------------------------------------
 
+// La elección pendiente pertenece a la vista y al bloque: ocultar la barra no reinicia su prioridad.
+const pendingReplacements = new WeakMap<EditorView, Map<string, symbol>>();
+
 interface ChosenBlock {
   id: string;
   url: string;
@@ -378,12 +383,38 @@ export function ImageBlockBar() {
   const attachment = !!id && isAttachment(media, id, block.name);
   const update = (props: Record<string, unknown>) => editor.updateBlock(block.id, { props } as never);
   const replace = (file: File) => {
-    if (!actions) return;
-    actions.store(file).then(
+    const view = liveView(editor as never);
+    if (!actions || !view || !editor.isEditable) return;
+    const token = Symbol();
+    let pending = pendingReplacements.get(view);
+    if (!pending) pendingReplacements.set(view, (pending = new Map()));
+    pending.set(block.id, token);
+    const release = () => {
+      const current = pendingReplacements.get(view);
+      if (current?.get(block.id) !== token) return;
+      current.delete(block.id);
+      if (!current.size) pendingReplacements.delete(view);
+    };
+    let stored: Promise<string>;
+    try {
+      stored = actions.store(file);
+    } catch (error) {
+      release();
+      throw error;
+    }
+    stored.then(
       (url) => {
-        if (editor.getBlock(block.id)) update({ url, name: file.name || 'file' });
+        try {
+          if (pendingReplacements.get(view)?.get(block.id) !== token) return;
+          if (liveView(editor as never) !== view || !editor.isEditable) return;
+          const current = editor.getBlock(block.id);
+          if (current?.type !== 'image' || (current.props as { url?: unknown }).url !== block.url) return;
+          update({ url, name: file.name || 'file' });
+        } finally {
+          release();
+        }
       },
-      () => undefined,
+      release,
     );
   };
   return (
