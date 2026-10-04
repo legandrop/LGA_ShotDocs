@@ -1,6 +1,6 @@
 # Links a los archivos en el PDF y *Request access* (P.30)
 
-**Estado: diseño auditado el 2026-10-03 ("aprobado con condiciones" en E1, E2 y E3) y corregido; E1 hecha (v0.164, sección 16); E2 hecha (v0.166, sección 17), con su migración aplicada; E3 hecha (v0.169, sección 18), con su migración sin aplicar.**
+**Estado: diseño auditado el 2026-10-03 ("aprobado con condiciones" en E1, E2 y E3) y corregido; E1 hecha (v0.164, sección 16); E2 hecha (v0.166, sección 17), con su migración aplicada; E3 hecha (v0.169, sección 18), con su migración aplicada.**
 Pedido de Lega del 2026-10-03, diseñado contra `main` v0.158. Toca permisos, Row Level Security y privacidad, y suma una
 tabla: **riesgo alto**. Las decisiones ya tomadas por Lega están en "Qué se pide"; las nuevas (LF1 a LF16, sección 10)
 son propuestas con la recomendación tomada; LF17 a LF20 son de Lega, sobre los hallazgos de la auditoría. **Las
@@ -1042,7 +1042,7 @@ publicada y la app nueva ofrece *Request access* y la lista solo con la base en 
 
 | Pieza | Dónde |
 |---|---|
-| La migración (sección 11 «E3» y O19; `schema_version` 24), **sin aplicar** | `supabase/migrations/20261102120000_access_requests_paginas.sql` |
+| La migración (sección 11 «E3» y O19; `schema_version` 24), **aplicada** (v0.169) | `supabase/migrations/20261102120000_access_requests_paginas.sql` |
 | Su prueba SQL (en `begin … rollback`); la de la 22 sigue pasando con la 24 adelante | `supabase/tests/access_requests_paginas_permisos.sql` |
 | Pedir una página y lo que recuerda el dispositivo (`p:<id>`, aparte de los archivos) | `src/sync/accessRequests.ts` (`requestPageAccess`, `ACCESS_REQUESTS_PAGES_SCHEMA_VERSION`, `askedAt`/`rememberAsked` con `AccessTarget`) |
 | *Request access* compartido por las dos pantallas sin acceso | `src/ui/RequestAccess.tsx` (antes adentro de `FileScreen.tsx`) |

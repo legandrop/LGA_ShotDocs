@@ -9,7 +9,7 @@ acceso», sin cómo pedirla: *Request access* existía solo para los archivos. A
 comparte el tope de 20 por día. La lista y decidir suman los pedidos de páginas: los ve quien puede compartir esa página
 (o una de arriba) y el permiso va solo sobre ella, sin bajar nunca uno que ya existe. La pantalla sin acceso de una
 página ofrece *Request access* con la base en la 24; la campana, *Share* y la ventana son las de E2. Migración
-`20261102120000_access_requests_paginas` (schema 24, sin aplicar), con su prueba SQL y 32 mutantes; ayuda.
+`20261102120000_access_requests_paginas` (schema 24), con su prueba SQL y 32 mutantes; ayuda.
 
 [Pedir acceso a una página (Request access, P.30 entrega 3) - la pantalla sin acceso de /p/ lo pide sin decir nada de la página, quien puede compartirla lo ve en la campana y en Share y da acceso solo sobre ella sin bajar permisos o rechaza, con el mismo tope por día (migración, schema 24)]
 

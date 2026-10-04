@@ -692,7 +692,7 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   `20261031120000_access_requests` aplicada (schema 22). Falta la prueba de aceptación 4 de Lega. **Hecho (v0.169):
   la entrega 3**, pedir también una página desde `/p/<id>` sin acceso (la misma pantalla para «no existe» y «sin
   acceso»), con los pedidos en la campana y en *Share* de esa página y el permiso solo sobre ella; migración
-  `20261102120000_access_requests_paginas` **sin aplicar** (schema 24). De la auditoría de E3 (chico): `/p/<id>` no
+  `20261102120000_access_requests_paginas` aplicada (schema 24). De la auditoría de E3 (chico): `/p/<id>` no
   lleva la clave del workspace ni el `#ws=` como `/f/`, así que con más de un workspace conectado el pedido va a la base
   del que está abierto y nadie lo recibe (O1: que la dirección de una página lleve la clave local, o no ofrecer pedir
   con más de un workspace); quien no ve ningún proyecto cae en `NoProjects` y no ve *Request access* ni en `/p/` ni en
