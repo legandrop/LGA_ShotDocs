@@ -1095,3 +1095,13 @@ No hace falta subir `min_app_version`. La app nueva ofrece pedir una página sol
   aviso antes de mandar, la base en la 23, sin red, con un link, `has_access` que sincroniza y abre la página, el tope; la
   campana, la ventana sin lista de páginas, *Share* solo en esa página, rechazar y nunca baja). **8 mutantes** de la app,
   detectados.
+
+**Ronda 1 de la auditoría de E3** (aprobado con observaciones, sin bloqueantes):
+
+- **O3:** la pista de la pantalla de una página decía «compartirlo»; ahora tiene su texto (`page.requestHint`,
+  «compartirla»), con una prueba en castellano.
+- **O4:** la prueba de «todavía buscando» no probaba ese caso: ahora un dispositivo que nunca sincronizó muestra
+  *Looking for the page…* sin *Request access* (el mutante que lo mostraba, detectado).
+- **O5:** el README suma el link de una página.
+- Al roadmap (P.30): O1 (`/p/<id>` sin la clave del workspace: con más de uno conectado, el pedido va a la base abierta),
+  O2 (quien no ve ningún proyecto cae en `NoProjects`, sin *Request access*) y O6 (lo de E2 que sigue).

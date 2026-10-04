@@ -60,7 +60,7 @@ export function RequestAccess({
       ) : day ? (
         <p className="muted">{tr('file.requestedOn', { date: day })}</p>
       ) : null}
-      {!sent && !day && <p className="muted">{tr('file.requestHint')}</p>}
+      {!sent && !day && <p className="muted">{tr(page ? 'page.requestHint' : 'file.requestHint')}</p>}
       {confirming ? (
         <>
           <p className="muted small">{tr(page ? 'page.requestNote' : 'file.requestNote')}</p>

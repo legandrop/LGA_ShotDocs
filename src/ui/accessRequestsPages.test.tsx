@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { t } from '../i18n';
 import { LinkContext } from '../linkMode';
+import { prefs } from '../prefs';
 import { ServicesContext, type Services } from '../services';
 import { AccessRequestsInbox } from '../sync/accessRequests';
 import type { SupabaseRemote } from '../sync/remote';
@@ -197,7 +198,30 @@ describe('la pantalla sin acceso de una página', () => {
     expect(hasButton(t('file.request'), other)).toBe(true);
   });
 
-  it('sin el botón: base en la 23, sin red, con un link público, o todavía buscando', async () => {
+  it('todavía buscando (el árbol no llegó nunca): «Looking for the page…» y sin el botón', async () => {
+    const { guest, scene } = await setup();
+    // Lo que ve un dispositivo que todavía no sincronizó ni una vez: el árbol puede no tener la página aunque la vea.
+    const looking = { ...guest.engine.getStatus(), lastSyncAt: null };
+    vi.spyOn(guest.engine, 'getStatus').mockReturnValue(looking);
+    const host = await mount(services(guest, CLIENTA), <PageView id={scene} />);
+    expect(host.textContent).toContain(t('page.looking'));
+    expect(host.textContent).not.toContain(t('page.notFound'));
+    expect(hasButton(t('file.request'), host)).toBe(false);
+  });
+
+  it('en castellano la pista habla de la página («compartirla»), no de un archivo', async () => {
+    const { guest, scene } = await setup();
+    act(() => prefs.set({ language: 'es' }));
+    try {
+      const host = await mount(services(guest, CLIENTA), <PageView id={scene} />);
+      expect(host.textContent).toContain('compartirla');
+      expect(host.textContent).not.toContain('compartirlo');
+    } finally {
+      act(() => prefs.set({ language: 'en' }));
+    }
+  });
+
+  it('sin el botón: base en la 23, sin red o con un link público', async () => {
     const old = await setup(23);
     const host = await mount(services(old.guest, CLIENTA), <PageView id={old.scene} />);
     expect(host.textContent).toContain(t('page.notFound'));

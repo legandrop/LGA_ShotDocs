@@ -10,6 +10,10 @@ export const page = {
   },
   // *Request access* para una página (Doc_Links_PDF.md, entrega 3): lo demás es lo de un archivo (files.ts). Nunca
   // nombra la página.
+  'page.requestHint': {
+    en: "You can ask the people who can share it to give you access.",
+    es: "Podés pedirles acceso a quienes pueden compartirla.",
+  },
   'page.requestNote': {
     en: "The people who can share this page will see your email and your role.",
     es: "Quienes pueden compartir esta página van a ver tu correo y tu rol.",
