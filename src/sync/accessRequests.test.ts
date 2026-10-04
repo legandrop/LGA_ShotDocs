@@ -8,6 +8,7 @@ import {
   parseAccessRequest,
   rememberAsked,
   requestAccess,
+  requestPageAccess,
   supabaseAccessRequests,
   type AccessRequest,
   type AccessRequestsRemote,
@@ -35,7 +36,7 @@ const ROW = {
 };
 
 function req(id: string, pages = ['p1']): AccessRequest {
-  return { id, userId: `u-${id}`, email: `${id}@x.com`, role: 'member', fileId: `f-${id}`, fileName: `${id}.pdf`, mime: 'application/pdf', askedAt: '2026-10-03T12:00:00Z', times: 1, pages: pages.map((p) => ({ pageId: p, title: p })) };
+  return { id, userId: `u-${id}`, email: `${id}@x.com`, role: 'member', fileId: `f-${id}`, targetPageId: null, fileName: `${id}.pdf`, mime: 'application/pdf', askedAt: '2026-10-03T12:00:00Z', times: 1, pages: pages.map((p) => ({ pageId: p, title: p })) };
 }
 
 function fakeClient(answer: (fn: string, args: Record<string, unknown>) => { data?: unknown; error?: unknown }) {
@@ -63,6 +64,7 @@ describe('las filas y la base', () => {
       email: 'ana@example.com',
       role: 'guest',
       fileId: 'f1',
+      targetPageId: null,
       fileName: 'plano.pdf',
       mime: 'application/pdf',
       askedAt: '2026-10-03T12:00:00Z',
@@ -77,6 +79,40 @@ describe('las filas y la base', () => {
     expect(parseAccessRequest({ ...ROW, role: 'superuser' })).toBeNull();
     expect(parseAccessRequest({ ...ROW, id: null })).toBeNull();
     expect(parseAccessRequest({ ...ROW, pages: [{ title: 'sin id' }, { page_id: 'p9', title: null }] })?.pages).toEqual([{ pageId: 'p9', title: '' }]);
+  });
+
+  it('entrega 3: una página pedida trae su sola página; un archivo y una página a la vez, ninguno, u otra página, no', () => {
+    const PAGE = { ...ROW, id: 'r3', file_id: null, file_name: null, mime: null, target_page_id: 'p1', pages: [{ page_id: 'p1', title: 'Escena 12' }] };
+    expect(parseAccessRequest(PAGE)).toMatchObject({ id: 'r3', fileId: null, targetPageId: 'p1', fileName: '', pages: [{ pageId: 'p1', title: 'Escena 12' }] });
+    // La app publicada (sin `target_page_id`) descartaba las filas sin archivo: la nueva también descarta las rotas.
+    expect(parseAccessRequest({ ...PAGE, file_id: 'f1' })).toBeNull();
+    expect(parseAccessRequest({ ...PAGE, target_page_id: null })).toBeNull();
+    expect(parseAccessRequest({ ...PAGE, pages: [{ page_id: 'p2', title: 'Otra' }] })).toBeNull();
+    expect(parseAccessRequest({ ...PAGE, pages: [{ page_id: 'p1', title: 'A' }, { page_id: 'p2', title: 'B' }] })).toBeNull();
+    // Una fila de archivo con la columna nueva en nulo, como la manda la 24.
+    expect(parseAccessRequest({ ...ROW, target_page_id: null })?.fileId).toBe('f1');
+  });
+
+  it('entrega 3: pedir una página va a request_page_access; el tope se tira igual', async () => {
+    const { client, rpc } = fakeClient((_fn, args) => ({ data: args.p_page === 'mine' ? 'has_access' : 'sent' }));
+    expect(await requestPageAccess(client, 'p1')).toBe('sent');
+    expect(await requestPageAccess(client, 'mine')).toBe('has_access');
+    expect(rpc).toHaveBeenCalledWith('request_page_access', { p_page: 'p1' });
+    expect(rpc).not.toHaveBeenCalledWith('request_access', expect.anything());
+    const limited = fakeClient(() => ({ data: null, error: { message: 'rate_limited', code: 'P0001' } }));
+    await expect(requestPageAccess(limited.client, 'p1')).rejects.toThrow('rate_limited');
+  });
+
+  it('entrega 3: lo que recuerda el dispositivo de una página no se mezcla con un archivo del mismo id', () => {
+    const store = new Map<string, string>();
+    const fake = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) };
+    rememberAsked('w.u', { kind: 'page', id: 'x1' }, new Date('2026-10-03T12:00:00Z'), fake);
+    expect(askedAt('w.u', { kind: 'page', id: 'x1' }, fake)).toBe('2026-10-03T12:00:00.000Z');
+    expect(askedAt('w.u', { kind: 'file', id: 'x1' }, fake)).toBeNull();
+    expect(askedAt('w.u', 'x1', fake)).toBeNull();
+    // Un archivo se guarda como en la entrega 2 (por su id), así lo anotado antes se sigue leyendo.
+    rememberAsked('w.u', 'f9', new Date('2026-10-02T12:00:00Z'), fake);
+    expect(askedAt('w.u', { kind: 'file', id: 'f9' }, fake)).toBe('2026-10-02T12:00:00.000Z');
   });
 
   it('pedir: sent o has_access; un error de la base se tira con su mensaje', async () => {

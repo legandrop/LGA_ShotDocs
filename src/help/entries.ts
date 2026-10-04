@@ -180,8 +180,11 @@ const HELP_3 = '0.158';
 const CONTRAST = '0.161';
 /** Los links a los archivos en el PDF (P.30, Doc_Links_PDF.md, entrega 1): el número lo pone quien publica. */
 const FILE_LINKS = '0.164';
-/** *Request access* desde la dirección de un archivo (P.30, entrega 2): el número lo pone quien publica. */
-const ACCESS_REQUESTS = '0.166';
+/**
+ * *Request access*: llegó en v0.166 desde la dirección de un archivo (P.30, entrega 2) y sube con la entrega 3, que lo
+ * suma a una página sin acceso. El número lo pone quien publica.
+ */
+const ACCESS_REQUESTS_PAGES = '0.169';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -777,8 +780,8 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'sharing',
     title: 'help.accessRequests.title',
     text: 'help.accessRequests.text',
-    words: ['request access', 'pedir acceso', 'pedido', 'request', 'campana', 'bell', 'give access', 'dar acceso', 'decline', 'rechazar', 'pdf', 'archivo', 'file'],
-    since: ACCESS_REQUESTS,
+    words: ['request access', 'pedir acceso', 'pedido', 'request', 'campana', 'bell', 'give access', 'dar acceso', 'decline', 'rechazar', 'pdf', 'archivo', 'file', 'página', 'page', 'sin acceso', 'no access'],
+    since: ACCESS_REQUESTS_PAGES,
   },
   {
     id: 'linkAside',

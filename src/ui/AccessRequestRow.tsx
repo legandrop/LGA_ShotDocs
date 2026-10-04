@@ -1,4 +1,4 @@
-import { locale, useT } from '../i18n';
+import { locale, useT, type Translate } from '../i18n';
 import { ROLE_LABELS } from '../sync/access';
 import type { AccessRequest } from '../sync/accessRequests';
 
@@ -17,13 +17,21 @@ export function agoText(iso: string, lang: Parameters<typeof locale>[0], now = D
   return new Intl.DateTimeFormat(locale(lang), { month: 'short', day: 'numeric' }).format(t);
 }
 
+/** «<correo> pide acceso a <archivo>» o, si pidió una página (entrega 3), «… a la página <título>». */
+export function requestText(request: AccessRequest, tr: Translate): string {
+  if (request.targetPageId) {
+    return tr('requests.asksPage', { email: request.email, page: request.pages[0]?.title || tr('common.untitled') });
+  }
+  return tr('requests.asks', { email: request.email, file: request.fileName || tr('common.untitled') });
+}
+
 /** Una fila: quién pide qué, su rol, cuándo y cuántas veces, y *Review*. */
 export function AccessRequestRow({ request, onReview }: { request: AccessRequest; onReview: () => void }) {
   const tr = useT();
   return (
     <li className="access-request">
       <span className="access-request-text">
-        <span>{tr('requests.asks', { email: request.email, file: request.fileName || tr('common.untitled') })}</span>
+        <span>{requestText(request, tr)}</span>
         <span className="muted small">
           {tr(ROLE_LABELS[request.role])} · {agoText(request.askedAt, tr.lang)}
           {request.times > 1 ? ` · ${tr('requests.times', { count: request.times })}` : ''}

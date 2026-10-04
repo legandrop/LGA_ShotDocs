@@ -1,5 +1,18 @@
 # Changelog — LGA Shot Docs
 
+v0.169 :
+
+**Links del PDF, entrega 3: pedir una página.** Quien abría `/p/<id>` sin acceso solo leía «no existe o no tenés
+acceso», sin cómo pedirla: *Request access* existía solo para los archivos. Ahora `access_requests` suma otra columna,
+`target_page_id`, con `file_id` opcional, un `check` de uno de los dos y un pedido abierto por persona y página;
+`request_page_access` repite las reglas de E2 (la misma respuesta exista o no, `void` si no vale, rechazo de 24 horas) y
+comparte el tope de 20 por día. La lista y decidir suman los pedidos de páginas: los ve quien puede compartir esa página
+(o una de arriba) y el permiso va solo sobre ella, sin bajar nunca uno que ya existe. La pantalla sin acceso de una
+página ofrece *Request access* con la base en la 24; la campana, *Share* y la ventana son las de E2. Migración
+`20261102120000_access_requests_paginas` (schema 24), con su prueba SQL y 32 mutantes; ayuda.
+
+[Pedir acceso a una página (Request access, P.30 entrega 3) - la pantalla sin acceso de /p/ lo pide sin decir nada de la página, quien puede compartirla lo ve en la campana y en Share y da acceso solo sobre ella sin bajar permisos o rechaza, con el mismo tope por día (migración, schema 24)]
+
 v0.168 :
 
 **Restos de la tanda 17.** (1) El contador de comentarios del teléfono (globo y número, 40 a 55 px) pasaba hasta 35 px sobre el final de un renglón largo: ahora es una pastilla de 20 px, el margen, con el globo arriba y el número abajo; sin superposición a 360, 375, 390 y 414 px; la compu y el PDF no cambian. (2) B.20: el fixture del esquema publicado estaba viejo sin aviso (le faltaba el alto de las miniaturas) y la prueba no veía un atributo nuevo de la foto. Ahora compara contra una firma fija, avisa si origin/main cambió el esquema sin regenerar, y `npm run esquema:publicado` lo regenera.
