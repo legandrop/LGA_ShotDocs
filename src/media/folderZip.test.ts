@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { BlobSink, canRetry, MemoryCapExceeded, MISSING_NAME, planFolder, planRetry, refreshPass, runDownload, type DownloadPlan, type FileOut, type FolderLister, type MissingItem } from './folderZip';
+import { describe, expect, it, vi } from 'vitest';
+import { BlobSink, canRetry, MemoryCapExceeded, MISSING_NAME, planFolder, planRetry, refreshPass, runDownload, type DownloadPlan, type DownloadTarget, type FileOut, type FolderLister, type MissingItem } from './folderZip';
 import { PorteroError, type FolderEntry, type FolderListing, type FolderListingMany } from './portero';
 import { concat, hasPython, pythonReadZip, text } from '../test/zipCheck';
 
@@ -735,6 +735,125 @@ describe('Download all: un portero que deja de contestar sin cortar (R1)', () =>
     );
     await expect(run).rejects.toMatchObject({ name: 'AbortError' });
     expect(Date.now() - started).toBeLessThan(5_000);
+  });
+});
+
+describe('Download all: cancelar el cuerpo de un error HTTP', () => {
+  function partialError(status = 403) {
+    let controller: ReadableStreamDefaultController<Uint8Array>;
+    let pulling: () => void;
+    const consumed = new Promise<void>((ok) => { pulling = ok; });
+    const cancel = vi.fn();
+    let reads = 0;
+    const body = new ReadableStream<Uint8Array>({
+      start(c) { controller = c; c.enqueue(new TextEncoder().encode('{"code":"pass_')); },
+      pull() { if (++reads > 1) pulling(); },
+      cancel,
+    });
+    return { response: new Response(body, { status }), body, cancel, consumed, finish: () => controller.close() };
+  }
+
+  it('Cancel corta la fuente de un 403 parcial y termina AbortError sin esperar el plazo', async () => {
+    vi.useFakeTimers();
+    const w = world({ 'a.txt': 'aaa' });
+    const plan = await planFolder(w.lister, 'carpeta-1', 'X');
+    const error = partialError();
+    w.behave.set(w.idOf('a.txt'), () => error.response);
+    const ctrl = new AbortController();
+    const added = vi.spyOn(ctrl.signal, 'addEventListener');
+    const removed = vi.spyOn(ctrl.signal, 'removeEventListener');
+    const settled = runDownload(plan, { kind: 'zip', sink: new BlobSink() }, { fetch: w.fetcher, wait: noWait, stallMs: 60_000, missingText }, { signal: ctrl.signal }).catch((e) => e);
+    try {
+      await error.consumed;
+      ctrl.abort();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(error.cancel).toHaveBeenCalledOnce();
+      expect(error.body.locked).toBe(false);
+      expect(await settled).toMatchObject({ name: 'AbortError' });
+      expect(vi.getTimerCount()).toBe(0);
+      expect(w.requests).toHaveLength(1);
+      for (const [event, listener] of added.mock.calls) expect(removed).toHaveBeenCalledWith(event, listener);
+    } finally {
+      if (!error.cancel.mock.calls.length) error.finish();
+      await settled;
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([429, 503])('el plazo cancela cada cuerpo %i atascado, suelta locks y conserva cuatro intentos y Retry missing', async (status) => {
+    vi.useFakeTimers();
+    const w = world({ 'a.txt': 'aaa', 'b.txt': 'bbb' });
+    const plan = await planFolder(w.lister, 'carpeta-1', 'X');
+    const errors: ReturnType<typeof partialError>[] = [];
+    w.behave.set(w.idOf('a.txt'), () => {
+      const error = partialError(status); errors.push(error); return error.response;
+    });
+    const ctrl = new AbortController();
+    const added = vi.spyOn(ctrl.signal, 'addEventListener');
+    const removed = vi.spyOn(ctrl.signal, 'removeEventListener');
+    try {
+      const run = runDownload(plan, { kind: 'zip', sink: new BlobSink() }, { fetch: w.fetcher, wait: noWait, stallMs: 25, missingText }, { signal: ctrl.signal });
+      await vi.runAllTimersAsync();
+      const result = await run;
+      expect(errors).toHaveLength(4);
+      for (const error of errors) {
+        expect(error.cancel).toHaveBeenCalledOnce();
+        expect(error.body.locked).toBe(false);
+      }
+      expect(vi.getTimerCount()).toBe(0);
+      expect(result.done).toBe(1);
+      expect(result.missing).toEqual([{ path: 'a.txt', reason: 'failed', detail: `The media server answered ${status}.` }]);
+      for (const [event, listener] of added.mock.calls) expect(removed).toHaveBeenCalledWith(event, listener);
+      w.behave.clear();
+      const before = w.requests.length;
+      const retry = await planRetry(w.lister, 'carpeta-1', plan, result.missing);
+      expect((await runDownload(retry, { kind: 'zip', sink: new BlobSink() }, { fetch: w.fetcher, wait: noWait, missingText })).done).toBe(1);
+      expect(w.requests.slice(before).map((r) => r.id)).toEqual([w.idOf('a.txt')]);
+    } finally {
+      for (const error of errors) if (!error.cancel.mock.calls.length) error.finish();
+      vi.useRealTimers();
+    }
+  });
+
+  it('Cancel durante un 403 parcial conserva el archivo ya terminado en la carpeta', async () => {
+    vi.useFakeTimers();
+    const w = world({ 'a.txt': 'listo', 'b.txt': 'pendiente' });
+    const plan = await planFolder(w.lister, 'carpeta-1', 'X');
+    const error = partialError();
+    w.behave.set(w.idOf('b.txt'), () => error.response);
+    const saved = new Map<string, string>();
+    const remove = vi.fn();
+    let savedOne!: () => void;
+    const firstClosed = new Promise<void>((ok) => { savedOne = ok; });
+    const target: DownloadTarget = {
+      kind: 'dir', makeDir: async () => undefined, remove,
+      makeFile: async (path) => {
+        const parts: Uint8Array[] = [];
+        return {
+          write: async (chunk) => { parts.push(chunk); },
+          close: async () => { saved.set(path, new TextDecoder().decode(concat(parts))); savedOne(); },
+          abort: async () => { saved.delete(path); },
+        };
+      },
+    };
+    const ctrl = new AbortController();
+    const settled = runDownload(plan, target, { fetch: w.fetcher, wait: noWait, stallMs: 60_000, missingText }, { signal: ctrl.signal }).catch((e) => e);
+    try {
+      await Promise.all([firstClosed, error.consumed]);
+      ctrl.abort();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(await settled).toMatchObject({ name: 'AbortError' });
+      expect(error.cancel).toHaveBeenCalledOnce();
+      expect(error.body.locked).toBe(false);
+      expect([...saved]).toEqual([['a.txt', 'listo']]);
+      expect(remove).not.toHaveBeenCalled();
+      expect(w.requests.map((r) => r.id)).toEqual([w.idOf('a.txt'), w.idOf('b.txt')]);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      if (!error.cancel.mock.calls.length) error.finish();
+      await settled;
+      vi.useRealTimers();
+    }
   });
 });
 

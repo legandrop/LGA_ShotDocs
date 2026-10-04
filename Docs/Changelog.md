@@ -1,5 +1,18 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+**Cancelar Download all cuando el cuerpo de un error queda a medias.** El servidor podía contestar 403, 429 o 5xx
+y dejar su JSON abierto. La lectura automática retenía el cuerpo: cancelar no detenía su fuente y el plazo vencía
+sin liberarla. Ahora ese cuerpo se consume con un lector propio, unido a la señal de la bajada y al plazo vigente.
+Ambos cancelan la fuente, sueltan el bloqueo y limpian sus escuchas y temporizadores; Cancel propaga su cancelación
+sin transformarla en un archivo faltante. Un JSON válido conserva su código, incluido el pase vencido que se renueva
+una vez; los errores sin JSON completo mantienen su clasificación HTTP y los cuatro intentos para 429 y 5xx.
+Retry missing sigue pidiendo solo lo pendiente. Se agregan regresiones de fuente realmente cancelada, limpieza y
+reintento, y se comprueba la ventana de descarga con respuestas simuladas. Ayuda y documentación actualizadas.
+
+[ Download all cancela la fuente de los errores HTTP que quedan a medias ]
+
 v0.174 :
 
 **Los avisos de Export sin conexión y las medidas del margen.** La ventana avisaba de links a archivos y fotos en

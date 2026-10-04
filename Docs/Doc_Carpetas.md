@@ -100,6 +100,15 @@ contesta, espera probándolo cada 5 segundos en vez de anotar el archivo como fa
 están. Cancelar un zip lo borra (no queda un archivo a medias); cancelar una carpeta deja lo ya bajado. Sin red, el
 botón se ve apagado y, con el clic, dice que hace falta conexión.
 
+**Cancelar un error que queda a medias (v0.0XX):** también se corta en el acto cuando el servidor ya contestó un
+error HTTP pero su cuerpo JSON dejó de llegar. El lector de ese cuerpo pertenece a la bajada: *Cancel* y el plazo
+vigente de 30 segundos cancelan la fuente, liberan el bloqueo del cuerpo y retiran sus escuchas y temporizadores.
+Sin un código JSON completo se conserva la clasificación HTTP: 429 y 5xx tienen cuatro intentos; los otros errores
+de archivo se anotan y el resto sigue. Un 403 con `pass_expired` completo renueva el pase una vez, como antes.
+*Retry missing* mantiene lo que ya terminó y pide solo lo pendiente. Las pruebas reproducen cuerpos 403, 429 y 503
+parciales, comprueban la cancelación de la fuente y la limpieza, y recorren *Cancel* en la ventana real con un
+servidor simulado; no reemplazan la comprobación pendiente en Safari, iPhone y Drive real.
+
 **Cómo está hecho:**
 
 - `src/media/folderZip.ts`: `planFolder` recorre el árbol con `/folder/list` (hasta 40 subcarpetas por pedido con `dirs`, 4 pedidos a la vez,
@@ -228,8 +237,7 @@ el ZWJ. Recorrido en Chromium con el mismo arnés: 22 de 22 (los tres destinos, 
 
 **Lo que falta de la entrega 2 (BAJO):** Firefox por el service worker (sin tope) queda para otra entrega (D24). Los documentos de Google no se bajan como PDF
 (decisión 5). Probar a mano en Safari, el iPhone y con el Drive real (lista de la tanda). De la auditoría de
-`lega/carpetas-restos` (sin acción, BAJO): `within(stallMs, () => res.json())` no corta el
-cuerpo de un error que se cuelga (se suelta al cerrar la conexión); la fecha de `MISSING_FILES.txt` usa el formato del
+`lega/carpetas-restos` (sin acción, BAJO): la fecha de `MISSING_FILES.txt` usa el formato del
 sistema y no el idioma de la app; en memoria, que Safari y el iPhone no reemplacen el segundo zip guardado (probar a
 mano). De la auditoría de la entrega 2:
 
