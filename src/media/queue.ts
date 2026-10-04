@@ -25,6 +25,7 @@ import {
 import type { DueFileRow, MediaFileRow } from '../sync/types';
 import { HEIC_TIMEOUT_MS, HeicError, heicFailure, isHeicFile, isHeicType, jpegName, JPEG_TYPE } from './heic';
 import { convertHeic as convertHeicNow } from './heicConvert';
+import { recoverHeic, recoveryActive } from './heicRecovery';
 import { dropCopy, readCopy, readOfflineView } from './offlineStore';
 import { attachmentPreview, previewable, PreviewUnavailable } from './pdfPreview';
 
@@ -1446,6 +1447,26 @@ export class MediaQueue {
     // Storage no contestó a tiempo al subir la miniatura (el tope de `uploadThumb`).
     let thumbStalled = false;
     try {
+      // Los HEIC previos sin marca son envíos inciertos: el candidato no reemplaza al original antes de confirmar su fila.
+      if (this.db) {
+        const recovered = await recoverHeic(record.id, {
+          db: this.db, remote: this.remote, convert: blob => this.convertWithLimit(blob),
+          measure: blob => this.probe(blob, JPEG_TYPE),
+          stopped: () => this.stopped, offline: () => this.offline(), now: this.now,
+          tries: HEIC_ONLINE_TRIES, retry: HEIC_RETRY_MS,
+        });
+        if (this.stopped) return 'cancelled';
+        if (recovered === null) return 'neutral';
+        if (recovered) {
+          record = recovered;
+          if (record.probed === false) await this.ensureProbed(record.id);
+          if (this.stopped) return 'cancelled';
+          record = (await this.store.get('files', record.id)) ?? record;
+          this.remember(record.id, record, true);
+          this.noView.delete(record.id);
+          this.thumbReady(record.id);
+        }
+      }
       // Un HEIC todavía sin convertir: antes de registrarlo se termina (o se prueba otra vez) la conversión. Una
       // vez registrado como HEIC ya no se convierte: el archivo existe así en la base y en Drive.
       if (isConvertible(record)) {
@@ -1711,6 +1732,7 @@ export class MediaQueue {
 
   /** En qué anda una foto HEIC que no se ve, para el aviso de la página (ver `HeicState`). */
   private heicState(record: MediaRecord): HeicState {
+    if (recoveryActive(record)) return this.offline() ? 'waiting' : 'retrying';
     if (record.heic === 'failed') return 'failed';
     // Registrado sin convertir (una pestaña de una versión anterior, por ejemplo): queda como HEIC.
     if (!record.heic || record.registered) return record.heic ? 'failed' : 'none';

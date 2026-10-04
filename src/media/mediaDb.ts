@@ -1,4 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
+import type { HeicRecovery } from './heicRecovery';
 
 // Las fotos y los videos que se agregan a las páginas (`sdmedia://<id>`), en una base IndexedDB aparte:
 // `<nombre de la base local>:media`. La base de siempre no cambia de versión: una versión vieja de la app
@@ -71,6 +72,8 @@ export interface MediaRecord {
    * a probar antes de subir el HEIC tal cual (queue.ts). Opcional: una versión anterior no lo escribe ni lo lee.
    */
   heicMisses?: number;
+  /** Recuperación de un HEIC anterior sin marca: original y candidato durables, sin cambiar la versión de la base. */
+  heicRecovery?: HeicRecovery;
   /**
    * Cuándo se confirmó la subida (`markUploaded`). Opcional: lo subido antes de esta versión no lo tiene. Un
    * original propio no se libera antes de 14 días desde acá (Docs/Doc_Copias_Locales.md, sección 5.2).

@@ -491,6 +491,31 @@ version is available*; la foto queda esperando.
 comprobación; el hueco más largo de la página mientras tanto fue de 12 ms. El JPEG pesa alrededor de 1,3 a 1,5
 veces el HEIC (3,3 a 6,5 MB) y lleva el perfil Display P3 entero.
 
+**HEIC anterior sin marca (v0.181).** Al actualizar, la cola reconoce por sus bytes los HEIC propios que una
+versión anterior a v0.075 dejó pendientes, sin marca de conversión ni subida iniciada. Antes de convertirlos
+guarda una copia protegida del HEIC. Prepara un JPEG durable, pero conserva el HEIC como archivo principal
+hasta registrar el candidato y leer una fila positiva que coincida en identificador, proyecto, nombre, tipo y
+peso. Una consulta vacía puede significar falta de acceso: nunca autoriza reemplazar el original. Si la fila
+ganadora ya es HEIC, se conserva y se sube ese HEIC; si la respuesta del registro JPEG se pierde, al reabrir la
+app se recupera el mismo candidato sin convertir otra vez. Un resultado desconocido conserva ambas copias.
+
+La recuperación también se prepara durante una pausa del portero, sin empezar la subida. Sin red se puede
+preparar el candidato si el decodificador está disponible; el registro y la promoción esperan. Las escrituras
+comprueban, en una transacción, revisión, estado y hash del principal; una escritura de otra pestaña o un
+`stop` impiden promover al llegar una respuesta tardía. El `stop` descarta el resultado de la conversión:
+el Worker ya iniciado termina o vence su tope habitual. La falta de espacio revierte la transacción sin
+sustituir el principal. Las propiedades son opcionales y las claves auxiliares no cambian la versión de
+IndexedDB: una escritura antigua que conserve el registro con `spread` mantiene la recuperación. Una copia
+de otra revisión se cuenta y se protege, aunque una versión anterior deje de referenciarla.
+
+El espacio ocupado incluye principal, HEIC protegido y candidato. Los auxiliares de una recuperación
+confirmada se liberan junto con el original propio, solo por la política existente: Drive comprobado,
+14 días desde la subida, sin marcas de disponibilidad offline y con la misma revisión y hashes. No se
+liberan por un barrido de prefijos. Esta entrega no convierte HEIC ya registrados o con subida iniciada,
+no cambia la fila remota existente y no cierra todo el pendiente de HEIC. La prueba nativa usa un HEIC real
+sintético de 96 × 64, con orientación a 64 × 96 y perfil sRGB, decoder/encoder e IndexedDB de Chromium:
+registro, promoción y reapertura conservan los hashes. No demuestra memoria de HEIC de 48 MP en Safari físico.
+
 **Pendiente / para después:**
 
 - **Los HEIC ya subidos** sin convertir siguen sin verse (con su aviso). Convertirlos pide bajar el original,
@@ -513,15 +538,17 @@ veces el HEIC (3,3 a 6,5 MB) y lleva el perfil Display P3 entero.
   cerraría rechazando también cuando una mitad entera, la de arriba o la de abajo, es distinta.
 - **`min_app_version` frena la cola de archivos desde v0.090** (antes, revisado en v0.086, solo frenaba el
   contenido). La app nueva se frena sola, y la migración `20261006120000_version_minima_archivos.sql` frena a las versiones publicadas cuando la mínima es 0.090 o más: una pestaña de v0.074 queda con el
-  HEIC detenido en el dispositivo, sin perderlo, hasta actualizar. Ojo: al actualizar, un HEIC que esa versión
-  guardó sin la marca de convertir se registra tal cual (el freno lo demora, no lo convierte). Detalle en
+  HEIC detenido en el dispositivo, sin perderlo, hasta actualizar. Desde v0.181, al actualizar se recuperan los
+  propios sin marca y sin envío iniciado mediante el recorrido anterior; los ya registrados o enviados se conservan. Detalle en
   `Doc_Sincronizacion.md`, "La versión mínima y los archivos".
 
 **Archivos:** `src/media/heic.ts` (reconocer, nombre, meter el perfil en el JPEG), `heifColor.mjs` y
 `heifColor.d.mts` (cuál es el perfil: la imagen principal y `nclx`; compartido con el comando de Coda), `heicDecode.ts` (decodificar, codificar
 y comprobar), `heicLib.ts` (cargar la librería), `heic.worker.ts`, `heicConvert.ts` (el Worker y el respaldo),
 `queue.ts` (`add`, `ensureConverted`, `convertNow`, `heicState`, `HEIC_ONLINE_TRIES`), `src/ui/heicNames.ts` (el nombre del bloque) y
-`src/lib/optionalImport.ts`. **Pruebas:** `heic.test.ts` (firma, tipo y secuencias, nombre, perfil, el color de
+`src/lib/optionalImport.ts`. La recuperación anterior sin marca está en `heicRecovery.ts`, con las copias
+contabilizadas por `offline.ts` y liberadas bajo guardas por `ownFree.ts`; sus pruebas causales están en
+`heicRecovery.test.ts`. **Pruebas:** `heic.test.ts` (firma, tipo y secuencias, nombre, perfil, el color de
 la imagen principal con cabeceras armadas a mano (otra imagen con perfil antes, una grilla, `ipma` de 32 bits,
 sin color, perfil y `nclx` juntos, cortada), el perfil Display P3 desde `nclx` contra los números del de un
 iPhone, la comprobación del JPEG (también un documento, un cielo y una noche con un canvas vacío de su color, y un

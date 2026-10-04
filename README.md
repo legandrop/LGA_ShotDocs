@@ -134,6 +134,7 @@ In development. What works today:
   clipboard.
 - iPhone photos (HEIC) are converted to JPEG on your device when you add them to a page, so every browser
   shows them; the converter is downloaded only the first time it is needed.
+  Older HEIC photos still queued on this device are also prepared as JPEG before their upload starts. Registration is checked before the original is replaced; an already registered HEIC keeps its original format, and uncertain results keep the original protected.
 - Attach any file (PDF, zip, anything): drop or paste it, it goes to the owner's Drive and shows as a card;
   a PDF shows its first page as a preview (also offline once seen), opens in a new tab, and everything else
   downloads with its name. In the full-screen viewer, files appear large among the photos, with Open and Download.

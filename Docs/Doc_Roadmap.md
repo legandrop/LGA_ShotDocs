@@ -917,10 +917,12 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
     - **Frenar a las versiones viejas (v0.074 o anterior registra un HEIC sin convertir).** Verificado en v0.086
       que `min_app_version` no frenaba la cola de archivos. **Hecho en el código (v0.090):** la app se frena sola y
       la migración `20261006120000_version_minima_archivos.sql` frena a las publicadas cuando la mínima es 0.090 o
-      más (`Doc_Sincronizacion.md`, "La versión mínima y los archivos"). **Falta:** aplicar la migración (con copia
-      de seguridad), publicar la v0.090 y, cuando Lega la tenga en sus dispositivos, subir `min_app_version` a
-      0.090. Un HEIC que una versión anterior a v0.075 guardó sin la marca se registra tal cual al actualizar: se
-      cerraría convirtiendo también, antes de registrarlo, un HEIC propio sin la marca.
+      más (`Doc_Sincronizacion.md`, "La versión mínima y los archivos"). La migración está aplicada: verificado el
+      2026-10-04 con mínima 0.170 y las guardas efectivas; tras publicar esta entrega se eleva a 0.181.
+      **Hecho parcial (v0.181):** los HEIC propios antiguos sin marca, pendientes y sin subida iniciada, preparan un
+      JPEG durable y lo promueven después de registrar el candidato y leer una fila positiva exacta. El HEIC queda
+      protegido durante el registro incierto. Los ya registrados como HEIC conservan sus bytes; las subidas iniciadas
+      quedan fuera. No cierra los demás pendientes de B13 ni acredita HEIC de 48 MP/Safari físico.
     - **Hecho (v0.086): el perfil de color** es el de la imagen principal (`pitm` → `ipma` → `ipco`), en la app y
       en el comando de Coda (el mismo código, `src/media/heifColor.mjs`), y un HEIC con solo `nclx` lleva un
       Display P3 o BT.2020 estándar. HDR (`nclx` PQ o HLG) sigue sin perfil.

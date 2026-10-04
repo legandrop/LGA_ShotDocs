@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.181 : Recuperar HEIC antiguos pendientes antes de registrarlos
+
+Los HEIC propios que una versión anterior a v0.075 dejó pendientes sin marca se registraban tal cual al actualizar. La cola ahora los reconoce por sus bytes y conserva una copia protegida del original antes de preparar un JPEG durable. El principal cambia solo después de registrar ese candidato y comprobar una fila positiva con el mismo archivo, proyecto, nombre, tipo y peso: una consulta vacía no demuestra que el registro no exista. Si ganó un HEIC remoto, se conserva; si se perdió la respuesta del JPEG, se retoma el mismo candidato. Las transacciones comprueban revisión y hashes frente a otra pestaña, cancelación o falta de espacio. Las copias cuentan en el espacio ocupado y se liberan por la política vigente de propios. Quedan fuera los HEIC ya registrados y las subidas iniciadas.
+
+[Recuperar HEIC antiguos pendientes conservando original y registro confirmado]
+
 v0.180 : Copiar una foto con anotaciones desde el carrete
 
 El carrete ya permitía bajar una foto anotada, pero faltaba copiar esa imagen para pegarla en otra app. Ahora Copy with annotations prepara un PNG al tamaño completo desde un original JPEG o PNG y habilita Copy como segundo gesto. El PNG sale directamente del mismo canvas, sin una recomprensión JPEG intermedia; Download mantiene su formato anterior. La preparación verifica las anotaciones, el original y los límites del dispositivo, y se descarta si cambian antes de copiar. Un cierre cancela la preparación; una escritura iniciada depende del navegador y no puede revocarse. Original conserva su descarga intacta. Los links públicos, HEIC, las fotos grandes en móvil, carpetas y FrameRev siguen pendientes. Ayuda y documentación acompañan el recorrido.

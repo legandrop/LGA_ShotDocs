@@ -1,6 +1,7 @@
 import type { MediaDb, MediaRecord } from './mediaDb';
 import { md5Blob } from './md5';
 import { MARK_PREFIX, MARKS_REV, protects, type OfflineMark } from './offlineStore';
+import { hasRecovery, keepAlive, recoveryActive, recoveryKeys, validRecovery } from './heicRecovery';
 
 // Liberar el original de un archivo agregado en este dispositivo (Docs/Doc_Copias_Locales.md, entrega 2, sección
 // 5.3). `freeOwn` es la ÚNICA función de la app que borra `blobs[<id>]`, la clave sin prefijo de un original propio
@@ -24,6 +25,8 @@ export interface OwnGuard {
   now: number;
   /** Cuándo estrenó este dispositivo el tope (`space:rollout`): la fecha de subida de lo anterior a `uploadedAt`. */
   rollout: number | null;
+  /** La recuperación que se vio al comprobar Drive; una revisión distinta conserva todas sus copias. */
+  recoveryRev?: string | null;
 }
 
 /** Por qué un original propio no se puede liberar (todavía). `null`: se puede, en lo que mira el dispositivo. */
@@ -36,6 +39,7 @@ export type OwnBlock = 'missing' | 'freed' | 'waiting' | 'blocked' | 'recent' | 
 export function ownBlock(record: MediaRecord, hasBlob: boolean, marks: readonly OfflineMark[], now: number, rollout: number | null): OwnBlock | null {
   if (record.freedAt) return 'freed';
   if (!hasBlob) return 'missing';
+  if (recoveryActive(record)) return 'waiting';
   if (record.pending !== 0 || !record.driveId || record.uploadId || record.heic === 'pending' || record.heic === 'sent') return 'waiting';
   if (record.blocked) return 'blocked';
   const uploaded = record.uploadedAt ?? rollout;
@@ -68,10 +72,25 @@ export async function freeOwn(db: MediaDb, id: string, guard: OwnGuard): Promise
   if (ownBlock(record, !!blob, marks, guard.now, guard.rollout) !== null) return stop();
   if (record.driveId !== guard.driveId || record.size !== guard.size || !blob || blob.size !== record.size) return stop();
   if (!record.md5 || record.md5 !== guard.md5) return stop();
+  let auxiliary = 0;
+  if (hasRecovery(record)) {
+    if (!validRecovery(record) || record.heicRecovery!.rev !== guard.recoveryRev) return stop();
+    if (await keepAlive(() => files.get(id), () => md5Blob(blob)) !== guard.md5) return stop();
+    const h = record.heicRecovery!;
+    const keys = recoveryKeys(record);
+    for (let at = 0; at < keys.length; at++) {
+      const saved = await blobs.get(keys[at]);
+      if (!saved) { if (at === 0) return stop(); else continue; }
+      const expected = at === 0 ? h.original : h.jpeg;
+      if (!expected || saved.size !== expected.size || await keepAlive(() => files.get(id), () => md5Blob(saved)) !== expected.md5) return stop();
+      auxiliary += saved.size;
+    }
+    for (const key of keys) await blobs.delete(key);
+  } else if (guard.recoveryRev) return stop();
   await blobs.delete(record.id);
   await files.put({ ...record, freedAt: guard.now });
   await tx.done;
-  return blob.size;
+  return blob.size + auxiliary;
 }
 
 /**

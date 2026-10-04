@@ -29,6 +29,7 @@ import {
 } from './offlineStore';
 import { branchPages, estimateSharp, olderUrlsInDoc, wanted, weigh, type FileFacts, type Weights } from './offlinePlan';
 import { ensureMd5, freeOwn, ownBlock } from './ownFree';
+import { recoveryBytes, recoveryKeys, unreferencedRecoveryBytes } from './heicRecovery';
 import { PorteroError, type VerifyResult } from './portero';
 import type { MediaQueue } from './queue';
 import { mediaIdsInDoc } from './usage';
@@ -461,27 +462,33 @@ export class OfflineManager {
     const records = (await db.getAll('files')) as MediaRecord[];
     let candidates = 0;
     let candidateCount = 0;
+    const recoveryReferences = new Set<string>();
     for (const r of records) {
-      if (!(await db.getKey('blobs', r.id))) continue;
+      for (const key of recoveryKeys(r)) recoveryReferences.add(key);
+      const additional = await recoveryBytes(db, r);
+      const primary = await db.get('blobs', r.id);
+      const bytes = (primary?.size ?? 0) + additional;
+      if (!bytes) continue;
       if (r.pending === 1) {
-        out.waiting += r.size;
+        out.waiting += bytes;
         out.waitingCount++;
-        out.kept += r.size;
+        out.kept += bytes;
       } else if (protects(marks, r.id).orig) {
-        out.offline += r.size;
+        out.offline += bytes;
       } else {
-        out.kept += r.size;
+        out.kept += bytes;
         // Lo que la entrega 2 puede ofrecer liberar (Drive lo comprueba recién al liberar).
-        const block = ownBlock(r, true, marks, now, rollout);
+        const block = ownBlock(r, !!primary, marks, now, rollout);
         if (block === 'recent') {
-          own.recent += r.size;
+          own.recent += bytes;
           own.recentCount++;
         } else if (block === null && !this.opened.has(r.id)) {
-          candidates += r.size;
+          candidates += bytes;
           candidateCount++;
         }
       }
     }
+    out.kept += await unreferencedRecoveryBytes(db, recoveryReferences);
     if (candidates > 0) {
       if (!this.deps.online()) own.held = 'offline';
       else if (!(await this.hasFeature('verify'))) own.held = 'server';
@@ -630,7 +637,7 @@ export class OfflineManager {
     }
     // Después, los originales agregados en este dispositivo (entrega 2), solo si hoy se pueden comprobar.
     if (this.deps.online() && (await this.hasFeature('verify'))) {
-      for (const c of await this.ownCandidates()) out.push({ id: c.record.id, name: c.record.name, bytes: c.record.size, usedAt: c.usedAt, own: true });
+      for (const c of await this.ownCandidates()) out.push({ id: c.record.id, name: c.record.name, bytes: c.record.size + await recoveryBytes(db, c.record), usedAt: c.usedAt, own: true });
     }
     return out;
   }
@@ -738,7 +745,7 @@ export class OfflineManager {
       let sum = 0;
       while (at < candidates.length && batch.length < 15 && freed + sum < goal) {
         batch.push(candidates[at]);
-        sum += candidates[at].record.size;
+        sum += candidates[at].record.size + await recoveryBytes(db, candidates[at].record);
         at++;
       }
       let rows: MediaFileRow[];
@@ -800,7 +807,7 @@ export class OfflineManager {
           note('changed');
           continue;
         }
-        const bytes = await freeOwn(db, record.id, { rev, driveId: r.driveId, size: r.size, md5, now: this.now(), rollout }).catch(() => 0);
+        const bytes = await freeOwn(db, record.id, { rev, driveId: r.driveId, size: r.size, md5, now: this.now(), rollout, recoveryRev: record.heicRecovery?.rev ?? null }).catch(() => 0);
         if (bytes > 0) {
           freed += bytes;
           report.own++;
