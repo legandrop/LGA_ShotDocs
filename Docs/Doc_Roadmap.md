@@ -998,7 +998,7 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    con una letra de antes de menos con el editor (antes 7) y 10 de 3.000 en un modelo de párrafos (antes 112). Quedan
    casos raros con las mismas letras en otro orden (1 de 300 con el editor; algunos los trae la parte de `redoItem` del
    parche, sin pérdida). Pendiente: reportarlo a Yjs con los casos mínimos (`Doc_Deshacer.md`, 16.1 y 16.4).
-22. **Hecho (v0.0XX): la excepción del ⌘Z de Yjs con dos personas** (la encontró la auditoría de la entrega 0 de P.26; ya
+22. **Hecho (v0.170): la excepción del ⌘Z de Yjs con dos personas** (la encontró la auditoría de la entrega 0 de P.26; ya
    pasaba antes del parche de B.21). Con dos personas, a veces `UndoManager.undo()` tiraba `TypeError` en `redoItem`: el
    ⌘Z tenía que volver a poner algo en la copia de un renglón que la otra persona había borrado y Yjs ya había
    recolectado (vaciar rehacer le saca la marca que la guardaba). La línea de tiempo lo atrapaba (v0.140) y frenaba el ⌘Z.
@@ -1051,7 +1051,7 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    envuelto (`PageLinkToolbarController`, `toolbarTips.tsx`), *Open in new tab* y *Remove link* con su nombre en `data-tip`
    (no tienen atajo: es un ícono) y *Edit link* sin globo (es un botón con texto y BlockNote lo rotulaba «Edit»: repetía
    lo que ya dice); sin el globo de BlockNote. Prueba `linkToolbarTips.test.tsx` con la barra real.
-26. **Hecho (v0.0XX): dos personas con textos distintos después de deshacer** (lo dejó B.22: 6 de 3.000 corridas con
+26. **Hecho (v0.170): dos personas con textos distintos después de deshacer** (lo dejó B.22: 6 de 3.000 corridas con
    dos editores terminaban con los dos textos distintos para siempre, "y la toma" en uno y "y la omat" en el otro). Los
    dos `Y.Doc` tenían las mismas ediciones: la memoria de quien deshacía no coincidía con lo que mandaba (ni con lo que
    ve él mismo al recargar). **De Yjs, también sin nuestros parches:** al deshacer el borrado de un renglón, los vecinos

@@ -2,7 +2,7 @@
 
 **Estado: entregas 0 (v0.132: el límite de Yjs, arreglado con un parche; sección 16), 1 (v0.140: la línea de tiempo
 con las páginas; sección 17), 2 (v0.144: el reemplazo adentro; sección 18) y 3 (v0.152: anotar una foto como un paso;
-sección 19) hechas; B.22 (v0.0XX: el ⌘Z con dos personas ya no tira la excepción de Yjs; sección 20) y B.26 (v0.0XX:
+sección 19) hechas; B.22 (v0.170: el ⌘Z con dos personas ya no tira la excepción de Yjs; sección 20) y B.26 (v0.170:
 deshacer el borrado de un renglón ya no deja a dos personas con textos distintos; sección 21) también.** Pedido de Lega
 del 2026-10-02, al responder cómo se deshace un reemplazo en todo el proyecto (una pregunta de su lista de decisiones;
 no es la D-10 de `Doc_Decisiones.md`). Se diseñó contra `main` v0.123
@@ -693,7 +693,7 @@ restos), sin cruzarse con este. **No hace falta subir `min_app_version`.**
   3.000 del modelo de párrafos, `UndoManager.undo()` tira `TypeError` (`reading 'client'`) en `redoItem`, cuando la copia
   del padre ya fue recolectada y `redone` queda sin valor. Con la línea de tiempo se deshace más lejos: la entrega 1
   tiene que atrapar esa excepción en su deshacer (descartar el paso y avisar, como un paso que no cambia nada, 3.4) y
-  medirla. Está en el roadmap (B.22). **Medida y arreglada en el parche (v0.0XX, sección 20).**
+  medirla. Está en el roadmap (B.22). **Medida y arreglada en el parche (v0.170, sección 20).**
 - **Al actualizar Yjs** (o al pasar a `@blocknote/core/y`, Yjs 14, `Doc_Colaboracion.md`): ver si la versión nueva ya lo
   trae; si no, rehacer el parche en los tres archivos y `npx patch-package yjs`. Las dos pruebas lo cubren. Conviene
   reportarlo a Yjs con los dos casos mínimos de 16.1.
@@ -782,7 +782,7 @@ semillas en la suite, `TIMELINE_SEEDS` para más) y las de atajos (`shortcuts.te
 
 - La memoria en el iPhone con 20 páginas retenidas (si aprieta, el tope baja a 10) y el gesto de deshacer de iOS en la
   PWA instalada.
-- La excepción de Yjs con dos personas (B.22) medida con dos editores borrando bloques enteros. **Hecho (v0.0XX):**
+- La excepción de Yjs con dos personas (B.22) medida con dos editores borrando bloques enteros. **Hecho (v0.170):**
   medida y arreglada en el parche de Yjs (sección 20).
 - Entregas 2 (el reemplazo adentro, C1, DH9, `planRedo`; hecha, sección 18) y 3 (anotar como un paso).
 - Pruebas que faltan (auditoría, O1): no limpiar el `meta` al montar (A5), los ⌘Z que llegan mientras cruza (A7, probado
@@ -992,7 +992,7 @@ Auditoría independiente sobre `d29bd15`: no aprobado, un bloqueante chico; 1.00
 - **D226**, que viaja con esta entrega (pedido de Lega): el tooltip del triángulo de colapsar, un renglón por acción
   (`Doc_Colapsar.md`, §3).
 
-## 20. B.22: la excepción del ⌘Z con dos personas, cómo quedó (v0.0XX)
+## 20. B.22: la excepción del ⌘Z con dos personas, cómo quedó (v0.170)
 
 ### 20.1 La causa
 
@@ -1085,7 +1085,7 @@ cuyo texto no tiene dónde volver y 3.000 semillas del modelo). Cada parte del a
   ítem del roadmap.
 - Reportarlo a Yjs con los casos mínimos de 20.1, junto con los de 16.1 y 16.4.
 
-## 21. B.26: dos personas con textos distintos después de deshacer, cómo quedó (v0.0XX)
+## 21. B.26: dos personas con textos distintos después de deshacer, cómo quedó (v0.170)
 
 ### 21.1 En qué capa se rompía
 

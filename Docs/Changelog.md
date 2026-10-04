@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.170 :
 
 **El ⌘Z con dos personas (B.22 y B.26).** (1) A veces ⌘Z tiraba `TypeError` y el paso se descartaba: lo que tenía que
 volver (renglones enteros) no volvía. Causa: deshacer vuelve a poner cada cosa en la copia de su renglón y, si otra
