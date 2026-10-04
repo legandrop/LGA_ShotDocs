@@ -20,7 +20,8 @@ its own project: a tree of pages you own.
   used behind the scenes to import, export and back up your pages.
 - **Undo in the order you edited.** Ctrl/⌘+Z undoes your last change in the project even if it was on another page:
   the app takes you there and undoes it in view (*Back* returns you). A replace across the project is one step, undone
-  and redone in every page it changed. Ctrl/⌘+Shift+Z redoes. It lasts until you reload the tab.
+  and redone in every page it changed. If a page was in the trash during undo, restore it before your next undo to
+  undo its replacement first, then the earlier edits. Ctrl/⌘+Shift+Z redoes. It lasts until you reload the tab.
 - **Script text.** Paste a screenplay and turn it into *Script*: it shows in a screenplay typeface, with
   INT/EXT, DAY, NIGHT and DAWN/DUSK marked in color.
 - **Templates.** Reusable page layouts such as *Pre-production Notes*, *On-Set Report* or *Shot
@@ -53,7 +54,7 @@ its own project: a tree of pages you own.
 
 ## Status
 
-In production (v0.049). What works today:
+In development. What works today:
 
 - Email sign-in with an 8-digit code, which works inside the installed iPhone app (a sign-in link would
   open Safari instead). It needs your own mail server (SMTP) in Supabase, and sign-ups are invite-only.
@@ -137,7 +138,8 @@ In production (v0.049). What works today:
   stays in the page as a folder card. Opening it shows what is in that Drive folder right now, with thumbnails,
   the photo viewer and downloads; whoever sees the page sees the folder, and nothing above it. *Download all*
   saves the whole folder as a .zip (in Chrome and Edge on a computer, written as it arrives and with no size limit,
-  or straight into a folder; elsewhere, built in memory up to 1 GB, 500 MB on a phone).
+  or straight into a folder; elsewhere, built in memory up to 1 GB, 500 MB on a phone). Cancel also stops a download
+  whose server error response stalls; it discards the unfinished zip or keeps completed files in the chosen folder.
 - Collapse sections by their headings: a triangle next to any heading hides everything up to the next heading
   of its level (just for you, saved on the device; Ctrl/⌘+Alt+Enter, and *Collapse all* in the page menu).
   Shift+click collapses or expands it for everyone who views the page (if you can edit it); the tooltip says

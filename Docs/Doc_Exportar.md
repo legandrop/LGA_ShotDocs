@@ -1062,7 +1062,7 @@ el portero de verdad (tiempo de bajada y pedidos al Worker: unos dos por foto), 
 
 - **O1 · *Cancel* con una bajada colgada.** La señal de cortar llega a cada bajada (`original` y `best` de
   `deviceImages`, `porteroDownload` y su `fetch`), y cada foto corre en carrera con ella: *Cancel* vuelve enseguida
-  aunque un `fetch` no termine nunca. Desde v0.0XX, cada original tiene un plazo **de 30 s sin recibir bytes nuevos**
+  aunque un `fetch` no termine nunca. Desde v0.177, cada original tiene un plazo **de 30 s sin recibir bytes nuevos**
   (`ORIGINAL_TIMEOUT_MS`), desde el inicio, incluyendo esperar el pase y las cabeceras. Una descarga que sigue
   avanzando no vence por durar más de 90 s en total. La que se detiene sale achicada, se cuenta, y su página va a la
   lista de D88 ("some photo downloads received no data for 30 seconds…") para *Export again*. *Smaller file* conserva
@@ -1089,7 +1089,7 @@ el portero de verdad (tiempo de bajada y pedidos al Worker: unos dos por foto), 
   saca cualquiera que vea (el zip, solo dueño y admins). Con D85 ese PDF lleva las fotos en su resolución original.
 - **O10 y O11** (el margen de 500 MB en una compu de 8 GB; Safari y Firefox sin medir) quedan para la prueba a mano.
 
-### Originales lentos y detenidos (v0.0XX)
+### Originales lentos y detenidos (v0.177)
 
 El plazo del original empieza antes de pedir el pase y esperar las cabeceras. Solo un pedazo de cuerpo con bytes
 nuevos renueva los 30 s: recibir cabeceras o un pedazo vacío no alcanza. Al vencer o pulsar *Cancel*, se corta la
