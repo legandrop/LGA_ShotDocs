@@ -1,5 +1,13 @@
 # Buscar en el proyecto y en la página (P.12)
 
+## Texto de anotaciones en el proyecto (P.20/E5 parcial, v0.187)
+
+Ctrl/⌘+K también encuentra el texto completo que el lector de anotaciones acepta, aunque la caja lo recorte al dibujarlo. El fragmento **Annotation / Anotación** abre la página y esa misma foto en el Carrete, incluidas fotos en línea y en celdas. No inicia Annotate ni señala una forma individual. Funciona con las páginas y originales disponibles en el dispositivo, también sin red y con permiso de solo ver.
+
+El índice deriva estas unidades en memoria: foto actualmente referenciada y forma válida, una vez por UUID/forma. No busca mapas huérfanos, formas retiradas, nodos desconocidos ni versiones anteriores. Respeta los límites y la compatibilidad del lector existente. Ctrl/⌘+F y Reemplazar conservan sus unidades y ordinales; no reemplazan anotaciones.
+
+Al abrir se vuelven a comprobar página, contexto, permiso, referencia, forma y texto después de preparar la foto. Un nuevo resultado invalida al anterior. Si la foto cambió de lugar se busca su UUID actual; si desapareció la foto o la coincidencia, queda la página y un aviso para buscar otra vez, sin abrir una vecina. Buscar no escribe ni poda el documento. La comprobación física en Safari/iPhone y el historial de anotaciones siguen pendientes.
+
 Estado: **entrega 1 hecha (v0.051): buscar y reemplazar en la página; entrega 2 hecha (v0.054): buscar en el
 proyecto (Ctrl/⌘+K); ajustes de v0.057 (lo que encontró Lega probando); entrega 3 hecha (v0.094): reemplazar en
 todo el proyecto**. "Correcciones de la auditoría" manda

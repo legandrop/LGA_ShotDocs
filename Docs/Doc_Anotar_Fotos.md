@@ -1,5 +1,9 @@
 # Anotar sobre las fotos (P.20)
 
+## Buscar texto de anotaciones (v0.187, E5 parcial)
+
+Ctrl/⌘+K encuentra el texto completo de las formas textuales válidas de fotos actualmente presentes, también en renglones y celdas. Un resultado **Annotation / Anotación** abre esa foto en el Carrete de la página; no inicia una edición. Reusa los permisos, el índice local y los límites del lector, funciona sin red y no escribe ni poda mapas. La referencia y el texto se revalidan al terminar la preparación, evitando abrir una foto vecina si el resultado cambió. Detalle en `Doc_Buscar.md`, "Texto de anotaciones en el proyecto". La entrega 5 sigue parcial: faltan el historial de anotaciones y comprobaciones físicas.
+
 ## Reemplazar conservando las anotaciones (v0.186, AN2/E5 parcial)
 
 En una página editable del workspace, **Replace image** de una sola foto del Drive anotada abre **Keep annotations?**. Vale para bloque, fila, renglón y celda. La pregunta pertenece al archivo efectivamente elegido y a esa aparición, aunque haya otras con el mismo UUID. Las fotos sin anotaciones, los archivos, videos, carpetas y direcciones externas conservan su recorrido vigente.

@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.187 : Buscar texto de anotaciones en el proyecto
+
+Las anotaciones se veían sobre las fotos, pero buscar en el proyecto solo encontraba títulos, texto, pies y nombres de archivo. Ahora Ctrl/⌘+K también encuentra el texto completo de las formas válidas, aunque su caja lo recorte al dibujar. Cada fragmento Anotación abre la página y la misma foto en el Carrete, incluidas fotos en línea y celdas, también sin red y con permiso de solo ver. El índice deriva los datos actuales en memoria, sin escribir, podar mapas ni incluir fotos retiradas o formas desconocidas. Antes de abrir se revalidan contexto, permiso, referencia y texto después de preparar; otro resultado invalida el anterior y nunca se abre una vecina por su lugar anterior. Buscar y Reemplazar conservan sus unidades y ordinales. Se actualizan ayuda y documentación. El historial de anotaciones y las comprobaciones físicas en Safari/iPhone siguen pendientes.
+
+[Buscar texto de anotaciones en el proyecto]
+
 v0.186 : Conservar las anotaciones al reemplazar una foto
 
 Reemplazar una foto anotada dejaba los dibujos asociados al archivo anterior, sin ofrecer llevarlos al nuevo. Ahora una foto del Drive elegida en una página editable, de bloque, fila, renglón o celda, pregunta si se conservan. Sí copia el marco y todas las formas a un archivo nuevo cuando la proporción orientada es exacta; No reemplaza sin copiar; Cancelar o Escape deja la foto actual. Datos o medidas ilegibles nunca provocan una copia parcial ni una elección automática. Se conservan los atributos actuales, las ediciones ajenas, el original y los archivos ya guardados. El reemplazo y la copia forman una transacción y un paso de deshacer. Cada archivo elegido invalida el intento anterior de esa aparición, incluso si falla o se cancela. Se verificaron dos editores, carreras, permisos, versiones anteriores y guardado local, y se actualizó la ayuda. Safari y dispositivos físicos siguen pendientes.

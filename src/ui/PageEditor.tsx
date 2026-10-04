@@ -23,9 +23,9 @@ import { carreteItemsOf, collectCarrete, inlinePhotosOf, parsePhotoKey, photoKey
 import { createCarreteLoader, type CarreteLoader } from './carreteLoader';
 import { porteroDownload, sharpenImages } from './sharpImages';
 import { attachMarkupOverlay } from './markupOverlay';
-import { PHOTO_MARKUP_MAP } from '../media/markup';
+import { PHOTO_MARKUP_MAP, readPhotoMarkup } from '../media/markup';
 import { useLinkMode } from '../linkMode';
-import { Permissions } from '../sync/access';
+import { LEVEL_VIEW, Permissions } from '../sync/access';
 import { startMarkupPrune } from '../media/markupPrune';
 import { clipScope, MARKUP_PASTE_ORIGIN, writeReplacementMarkup } from '../media/markupClipboard';
 import { markupClipboardExtension, pasteWithMarkup, trackMarkupInUndo } from './markupClipboardEditor';
@@ -79,7 +79,9 @@ import { photoKeyAtPos, selectedPhotoKey, spacePhotoKey } from './inlinePhotoEdi
 import { selectedPhotos } from './inlinePhotoSize';
 import { shortcutLabel, slashBadge } from './shortcuts';
 import { closeFindBar, isFindShortcut, openFindBar, openFindBarAt, takesFindShortcut } from './findUi';
-import { searchSession } from './projectSearchUi';
+import { searchSession, type ResultRequest } from './projectSearchUi';
+import { normalize, normalizeQuery, searchNormalized } from '../search/normalize';
+import '../i18n/lazy/search';
 import { registerRestoreTarget } from './historyUi';
 import { historyMarksExtension, type HistoryMarksInput } from './historyMarks';
 import { restoreInEditor } from './historyRestore';
@@ -155,6 +157,8 @@ type Opening =
 /** En pantallas táctiles no se lleva el foco a la barra al ir a un resultado: el teclado taparía la página. */
 const coarsePointer = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
+type AnnotationNavigator = { editor: FindEditor; open(request: ResultRequest, isCurrent: () => boolean): void };
+
 export function PageEditor({ pageId }: { pageId: string }) {
   const services = useServices();
   const { docs, engine, db } = services;
@@ -179,6 +183,10 @@ export function PageEditor({ pageId }: { pageId: string }) {
   // editor: el editor se vuelve a montar (al terminar de bajar, al cambiar el permiso o el idioma) y la
   // búsqueda sigue.
   const [findEditor, setFindEditor] = useState<FindEditor | null>(null);
+  const [annotationNavigator, setAnnotationNavigator] = useState<AnnotationNavigator | null>(null);
+  const registerAnnotationNavigator = useCallback((next: AnnotationNavigator | null, own?: AnnotationNavigator) => {
+    setAnnotationNavigator((current) => next ?? (current === own ? null : current));
+  }, []);
   // Se suma si el editor no se pudo volver a dibujar después de un error (editorRecovery.ts): se monta de nuevo.
   const [remounts, setRemounts] = useState(0);
   const remount = useCallback(() => setRemounts((n) => n + 1), []);
@@ -207,9 +215,13 @@ export function PageEditor({ pageId }: { pageId: string }) {
   useEffect(() => {
     if (!findEditor) return;
     const take = () => {
+      if (search.peekRequest()?.annotation && annotationNavigator?.editor !== findEditor) return;
       const request = search.takeRequest(pageId);
       if (!request) return;
-      if (request.term) {
+      if (request.annotation) {
+        closeFindBar();
+        annotationNavigator?.open(request, search.requestValidity());
+      } else if (request.term) {
         const target = request.blockId ? { pageId, blockId: request.blockId, occurrence: request.occurrence ?? 0 } : null;
         openFindBarAt(request.term, target, { focus: !coarsePointer(), ...request.options });
       } else {
@@ -219,7 +231,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
     };
     take();
     return search.subscribe(take);
-  }, [findEditor, pageId, search]);
+  }, [findEditor, annotationNavigator, pageId, search]);
 
   // Si el servidor tiene contenido de esta página que el dispositivo todavía no bajó, se muestra lo que
   // hay en solo lectura: editar sobre un documento a medio bajar arma una estructura paralela. Cuando
@@ -325,6 +337,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
         permsKnown={perms.known}
         canComment={canComment}
         onEditor={setFindEditor}
+        onAnnotationNavigator={registerAnnotationNavigator}
         onBroken={remount}
         inTimeline
       />
@@ -364,6 +377,7 @@ export function BlockEditor({
   permsKnown,
   canComment,
   onEditor,
+  onAnnotationNavigator,
   onBroken,
   filesNotice,
   preview = false,
@@ -379,6 +393,7 @@ export function BlockEditor({
   permsKnown: boolean;
   canComment: boolean;
   onEditor?: (editor: FindEditor | null) => void;
+  onAnnotationNavigator?: (next: AnnotationNavigator | null, own?: AnnotationNavigator) => void;
   /** El editor no se pudo volver a dibujar después de un error: hay que montarlo de nuevo. */
   onBroken?: () => void;
   /**
@@ -1306,6 +1321,70 @@ export function BlockEditor({
       !!target.closest('.ProseMirror-selectednode') &&
       (editor.isFocused() || lastPress.current === photoKeyOf(target));
   };
+
+  const annotationContext = useRef({ services, workspace, user, pageId, doc, editor });
+  annotationContext.current = { services, workspace, user, pageId, doc, editor };
+  const annotationPending = useRef<(() => void) | null>(null);
+  const openAnnotationResult = (request: ResultRequest, requestCurrent: () => boolean) => {
+    annotationPending.current?.();
+    const target = request.annotation;
+    if (!target || !request.term || request.pageId !== pageId) return;
+    const context = annotationContext.current;
+    let cancelled = false;
+    let published = false;
+    const loader = createCarreteLoader({ media, files });
+    const cancel = () => {
+      cancelled = true;
+      if (!published) loader.dispose();
+      if (annotationPending.current === cancel) annotationPending.current = null;
+    };
+    annotationPending.current = cancel;
+    const contextCurrent = () => {
+      const now = annotationContext.current;
+      const row = services.tree.get(pageId);
+      return !cancelled && requestCurrent()
+        && now.services === context.services && now.workspace === context.workspace && now.user === context.user
+        && now.pageId === context.pageId && now.doc === context.doc && now.editor === context.editor
+        && !!row && row.workspace_id === target.projectId && !services.tree.isTrashed(pageId)
+        && new Permissions(services.tree, services.access.get(), user.id).pageLevel(pageId) >= LEVEL_VIEW;
+    };
+    const shapeMatches = () => {
+      const shape = readPhotoMarkup(markupMap, target.fileId)?.shapes.find((s) => s.id === target.shapeId);
+      return !!shape && shape.type === 'text' && searchNormalized(shape.text, normalize(shape.text), normalizeQuery(request.term!)).length > 0;
+    };
+    const resolve = () => {
+      if (!contextCurrent()) return null;
+      const items = collectCarrete(editor.document as unknown as BlockLike[], (id) => media.isFolder(id));
+      const info = media.fileInfo(target.fileId);
+      if (info && info.kind !== 'image') return null;
+      const start = items.findIndex((item) => item.mediaId === target.fileId && item.blockId === request.blockId);
+      const fallback = start >= 0 ? start : items.findIndex((item) => item.mediaId === target.fileId);
+      return fallback >= 0 ? { items, start: fallback, loader } : null;
+    };
+    const changed = () => { if (contextCurrent()) notify(t('search.annotationChanged')); cancel(); };
+    if (!resolve() || !shapeMatches()) { changed(); return; }
+    void carreteItemsOf(editor.document as unknown as BlockLike[], media, {
+      onLate: () => {
+        const current = resolve();
+        if (!current || !shapeMatches()) return;
+        setCarrete((open) => open?.loader === loader ? current : open);
+      },
+    }).then(() => {
+      const current = resolve();
+      // La forma y el texto se releen después de preparar; nunca aceptar la foto por su ordinal anterior.
+      if (!current || !shapeMatches()) { changed(); return; }
+      published = true;
+      setCarrete(current);
+    }).catch(changed);
+  };
+  const openAnnotationResultRef = useRef(openAnnotationResult);
+  openAnnotationResultRef.current = openAnnotationResult;
+  useEffect(() => {
+    if (!onAnnotationNavigator || preview) return;
+    const own: AnnotationNavigator = { editor: editor as unknown as FindEditor, open: (request, current) => openAnnotationResultRef.current(request, current) };
+    onAnnotationNavigator(own);
+    return () => { annotationPending.current?.(); onAnnotationNavigator(null, own); };
+  }, [editor, onAnnotationNavigator, preview]);
 
   /** `key`: la foto (`photoKeyOf`), o el id de un bloque `image` (la barra de la foto: "View"). */
   const openAt = (key: string | null, kind = pressKind.current) => {

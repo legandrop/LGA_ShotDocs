@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
+import { addShape, deleteShape } from '../media/markup';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { parseWords, ProjectIndex, SNIPPETS_PER_PAGE, titlesOnly, type IndexTree } from './projectIndex';
 
@@ -137,7 +138,7 @@ describe('el índice del proyecto', () => {
     const index = new ProjectIndex(d.tree, d.docs);
     await index.refresh(d.tree.workspaceId);
     const [hit] = index.query(d.tree.workspaceId, 'camara').hits;
-    expect(hit.snippets.map((s) => [s.blockId, s.field, s.occurrence])).toEqual([
+    expect(hit.snippets.map((s) => [s.blockId, s.field, s.field === 'annotation' ? undefined : s.occurrence])).toEqual([
       ['hijo', 'text', 0],
       ['foto', 'caption', 0],
       // La segunda del bloque de la foto (la primera está en el pie): la barra de la página cuenta igual.
@@ -575,4 +576,38 @@ describe('el índice del proyecto', () => {
     expect(narrow).toBeLessThan(100 * slack);
     expect(noChange).toBeLessThan(500 * slack);
   }, 120_000);
+});
+
+describe('anotaciones en el índice del proyecto', () => {
+  it('lee el snapshot offline, refresca el texto vivo y conserva frase/ordinales y filtro de acceso', async () => {
+    const d = await device();
+    const id = await page(d, 'Foto', [{ id: 'ordinary', text: 'cámara normal' }]);
+    const doc = await d.docs.open(id);
+    const file = '12345678-1234-1234-1234-123456789001';
+    const image = new Y.XmlElement('image');
+    image.setAttribute('url', `sdmedia://${file}`);
+    const b = new Y.XmlElement('blockContainer'); b.setAttribute('id', 'photo'); b.insert(0, [image]);
+    (doc.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement).insert(1, [b]);
+    addShape(doc, file, 's', { type: 'text', text: 'cámara anotada', posX: 10, posY: 10 }, { w: 640, h: 480 });
+    d.docs.close(id); await d.docs.flush();
+    const index = new ProjectIndex(d.tree, d.docs);
+    await index.refresh(d.tree.workspaceId);
+    const [hit] = index.query(d.tree.workspaceId, 'anotada').hits;
+    expect(hit.snippets[0]).toMatchObject({ field: 'annotation', fileId: file, shapeId: 's', blockId: 'photo' });
+    expect('occurrence' in hit.snippets[0]).toBe(false);
+    expect(index.phrase(d.tree.workspaceId, 'anotada')).toEqual([]);
+    expect(index.phrase(d.tree.workspaceId, 'cámara')[0].matches.map((m) => m.occurrence)).toEqual([0]);
+    expect(index.query('otro-proyecto', 'anotada').hits).toEqual([]);
+    const live = await d.docs.open(id);
+    deleteShape(live, file, 's');
+    await index.refresh(d.tree.workspaceId);
+    expect(index.query(d.tree.workspaceId, 'anotada').hits).toEqual([]);
+    addShape(live, file, 's2', { type: 'text', text: 'luz nueva' }, { w: 640, h: 480 });
+    await index.refresh(d.tree.workspaceId);
+    expect(index.query(d.tree.workspaceId, 'nueva').hits).toHaveLength(1);
+    await d.engine.syncNow();
+    await d.tree.setSnapshot([]);
+    expect(index.query(d.tree.workspaceId, 'nueva').hits).toEqual([]);
+    index.dispose();
+  });
 });

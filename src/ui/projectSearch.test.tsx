@@ -773,3 +773,25 @@ describe('el pedido de ir a un resultado', () => {
     now.mockRestore();
   });
 });
+
+describe('vigencia de una navegación asíncrona a anotaciones', () => {
+  it('consumir y cerrar no invalidan; B, caducidad y dispose invalidan A', async () => {
+    const d = await makeDevice(new FakeServer()); devices.push(d);
+    const session = searchSession(d);
+    const now = vi.spyOn(Date, 'now').mockReturnValue(10_000);
+    try {
+      session.requestResult({ pageId: 'p', term: 'cámara', annotation: { projectId: 'project', fileId: 'file', shapeId: 's' } });
+      const currentA = session.requestValidity();
+      expect(session.takeRequest('p')?.annotation?.shapeId).toBe('s');
+      session.setOpen(true); session.setOpen(false);
+      expect(currentA()).toBe(true);
+      session.requestResult({ pageId: 'p', term: null });
+      expect(currentA()).toBe(false);
+      const currentB = session.requestValidity(); session.takeRequest('p');
+      expect(currentB()).toBe(true);
+      now.mockReturnValue(70_001); expect(currentB()).toBe(false);
+      session.requestResult({ pageId: 'p', term: null });
+      const last = session.requestValidity(); session.dispose(); expect(last()).toBe(false);
+    } finally { now.mockRestore(); }
+  });
+});

@@ -371,8 +371,8 @@ export const help = {
   },
   'help.findProject.title': { en: "Search the whole project", es: "Buscar en todo el proyecto" },
   'help.findProject.text': {
-    en: "{search} or the magnifying glass next to + searches the titles and text of every page in the project, offline too, and takes you to the exact spot, opening the collapsed section that hides it. It also lists matching projects. The arrow left of the field opens Replace.",
-    es: "{search} o la lupa al lado del + buscan en los títulos y el texto de todas las páginas del proyecto, también sin red, y te llevan al lugar exacto, abriendo la sección colapsada que lo esconde. También muestran los proyectos que coinciden. La flecha a la izquierda del campo despliega Reemplazar.",
+    en: "{search} or the magnifying glass next to + searches the titles and text of every page in the project, offline too, and takes you to the exact spot, opening the collapsed section that hides it. Annotation results also find the complete text of drawings on photos, including inline photos and table cells; selecting one opens that photo in the viewer. If it changed or was removed, the page stays open and a notice asks you to search again. It also lists matching projects. The arrow left of the field opens Replace.",
+    es: "{search} o la lupa al lado del + buscan en los títulos y el texto de todas las páginas del proyecto, también sin red, y te llevan al lugar exacto, abriendo la sección colapsada que lo esconde. Los resultados Anotación también encuentran el texto completo de los dibujos de las fotos, incluidas las de renglones y celdas; elegir uno abre esa foto en el Carrete. Si cambió o se retiró, la página queda abierta y un aviso pide buscar otra vez. También muestran los proyectos que coinciden. La flecha a la izquierda del campo despliega Reemplazar.",
   },
   'help.replaceProject.title': { en: "Replace in the whole project", es: "Reemplazar en todo el proyecto" },
   'help.replaceProject.text': {

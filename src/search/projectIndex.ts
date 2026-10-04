@@ -4,6 +4,7 @@ import type { PageRow } from '../sync/types';
 import { SEPARATOR, unitsFromYDoc, type UnitField } from './extract';
 import { findIn, normalize, normalizeQuery, searchNormalized, type Normalized, type SearchOptions } from './normalize';
 import { treeContentGap } from '../sync/clean';
+import { annotationUnitsFromYDoc, type AnnotationUnit } from './annotationExtract';
 
 // La búsqueda en todo el proyecto (Docs/Doc_Buscar.md, secciones 7 y 8, con las correcciones 5, 7, 8 y 15 a
 // 17). Sin React, como `projectSizes.ts`: una instancia por instancia de servicios, en memoria.
@@ -58,6 +59,7 @@ interface Entry {
    */
   mark: string;
   units: IndexedUnit[];
+  annotationUnits: (AnnotationUnit & { folded: string })[];
 }
 
 export interface SearchWord {
@@ -66,9 +68,8 @@ export interface SearchWord {
   norm: string;
 }
 
-export interface Snippet {
+interface SnippetText {
   blockId: string;
-  field: UnitField;
   /** Un pedazo del texto del bloque alrededor de la primera coincidencia. */
   text: string;
   /** Lo encontrado, en posiciones de `text`. */
@@ -78,9 +79,13 @@ export interface Snippet {
   cutEnd: boolean;
   /** La palabra que coincidió primero en este bloque, como se escribió (corrección 5). */
   term: string;
-  /** Cuál de las coincidencias de `term` en el bloque es (contando desde 0, en el orden del documento). */
-  occurrence: number;
 }
+
+export type Snippet = SnippetText & (
+  // occurrence pertenece sólo a las unidades de ProseMirror, contando desde 0 dentro del bloque.
+  | { field: UnitField; occurrence: number }
+  | { field: 'annotation'; fileId: string; shapeId: string }
+);
 
 export interface PageHit {
   page: PageRow;
@@ -210,6 +215,12 @@ function indexUnits(doc: Y.Doc): IndexedUnit[] {
   return unitsFromYDoc(doc).map((u) => ({ ...u, folded: normalize(u.text).text }));
 }
 
+function indexAnnotations(doc: Y.Doc): Entry['annotationUnits'] {
+  return annotationUnitsFromYDoc(doc).map((u) => ({ ...u, folded: normalize(u.text).text }));
+}
+
+type QueryUnit = IndexedUnit | Entry['annotationUnits'][number];
+
 interface Ranked {
   page: PageRow;
   order: number;
@@ -217,7 +228,7 @@ interface Ranked {
   count: number;
   inTitle: boolean[];
   /** Los bloques con alguna palabra y cuántas veces está cada una (en el texto normalizado). */
-  matched: { unit: IndexedUnit; index: number; counts: number[] }[];
+  matched: { unit: QueryUnit; index: number; counts: number[] }[];
   units: IndexedUnit[];
 }
 
@@ -413,12 +424,12 @@ export class ProjectIndex {
     // Antes de leer: una edición que se guarde mientras tanto la vuelve a marcar.
     this.stale.delete(pageId);
     if (live) {
-      this.entries.set(pageId, { mark: liveMark(live), units: indexUnits(live) });
+      this.entries.set(pageId, { mark: liveMark(live), units: indexUnits(live), annotationUnits: indexAnnotations(live) });
       return;
     }
     const snap = await this.docs.indexSnapshot(pageId);
     try {
-      this.entries.set(pageId, { mark: markOf(snap.state), units: indexUnits(snap.doc) });
+      this.entries.set(pageId, { mark: markOf(snap.state), units: indexUnits(snap.doc), annotationUnits: indexAnnotations(snap.doc) });
       if (snap.state) this.states.set(pageId, snap.state);
     } finally {
       snap.doc.destroy();
@@ -490,11 +501,13 @@ export class ProjectIndex {
   private rank(page: PageRow, order: number, words: SearchWord[], onlyTitles: boolean): Ranked | null {
     const titleNorm = this.titleNorm(page.title ?? '');
     const inTitle = words.map((w) => findIn(titleNorm.text, w.norm, {}, titleNorm.map).length > 0);
-    const units = onlyTitles ? [] : (this.entries.get(page.id)?.units ?? []);
+    const entry = this.entries.get(page.id);
+    const units = onlyTitles ? [] : (entry?.units ?? []);
+    const queryUnits: QueryUnit[] = [...units, ...(onlyTitles ? [] : (entry?.annotationUnits ?? []))];
     const inBody = words.map(() => false);
     const matched: Ranked['matched'] = [];
     let count = inTitle.filter(Boolean).length;
-    units.forEach((unit, index) => {
+    queryUnits.forEach((unit, index) => {
       let counts: number[] | null = null;
       for (let i = 0; i < words.length; i++) {
         const n = countIn(unit.folded, words[i].norm);
@@ -545,7 +558,7 @@ export class ProjectIndex {
     };
   }
 
-  private snippet(unit: IndexedUnit, lists: [number, number][][], words: SearchWord[], units: IndexedUnit[]): Snippet {
+  private snippet(unit: QueryUnit, lists: [number, number][][], words: SearchWord[], units: IndexedUnit[]): Snippet {
     // La primera coincidencia del bloque y su palabra (a igualdad, la más larga).
     let first: [number, number] = [0, 0];
     let termIndex = -1;
@@ -560,7 +573,7 @@ export class ProjectIndex {
     // Cuál es en el bloque: las de esa palabra en las unidades de antes del mismo bloque (la barra de la página
     // las cuenta igual, corrección 5).
     let occurrence = 0;
-    for (const u of units) {
+    for (const u of unit.field === 'annotation' ? [] : units) {
       if (u === unit) break;
       if (u.blockId !== unit.blockId || !u.folded.includes(term.norm)) continue;
       occurrence += searchNormalized(u.text, normalize(u.text), term.norm).length;
@@ -585,14 +598,15 @@ export class ProjectIndex {
       .map(([s, e]): [number, number] => [Math.max(s, start) - start, Math.min(e, end) - start]);
     return {
       blockId: unit.blockId,
-      field: unit.field,
       // Un salto de línea adentro del bloque se ve como un espacio (mismo largo: los tramos no se corren).
       text: text.slice(start, end).replaceAll(SEPARATOR, ' '),
       ranges,
       cutStart: start > 0,
       cutEnd: end < text.length,
       term: term.raw,
-      occurrence,
+      ...(unit.field === 'annotation'
+        ? { field: 'annotation' as const, fileId: unit.fileId, shapeId: unit.shapeId }
+        : { field: unit.field, occurrence }),
     };
   }
 }

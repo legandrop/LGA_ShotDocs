@@ -17,6 +17,8 @@ export interface ResultRequest {
   occurrence?: number;
   /** *Aa* y palabra entera (desde reemplazar en el proyecto, que busca la frase con esas opciones). */
   options?: { matchCase?: boolean; wholeWord?: boolean };
+  /** Destino de sólo lectura: la key de una foto en línea se resuelve al abrir, nunca se guarda. */
+  annotation?: { projectId: string; fileId: string; shapeId: string };
 }
 
 /** Un pedido de ir a un resultado vale este rato: si la página nunca llega a abrirse, no queda colgado. */
@@ -28,6 +30,14 @@ export class SearchSession {
   private pending: (ResultRequest & { at: number }) | null = null;
   private readonly listeners = new Set<() => void>();
   private version = 0;
+  private requestGeneration = 0;
+  private requestAt = 0;
+
+  /** Sigue vigente después de consumir pending; cerrar el panel no es otra intención. */
+  requestValidity(): () => boolean {
+    const generation = this.requestGeneration;
+    return () => generation === this.requestGeneration && Date.now() - this.requestAt <= REQUEST_TTL_MS;
+  }
 
   constructor(
     private readonly tree: IndexTree,
@@ -42,6 +52,7 @@ export class SearchSession {
 
   /** Suelta el índice y los avisos (al cerrar los servicios). */
   dispose(): void {
+    this.requestGeneration++;
     this.indexInstance?.dispose();
     this.indexInstance = null;
     this.pending = null;
@@ -71,7 +82,9 @@ export class SearchSession {
 
   /** Guarda el pedido de ir a un resultado; lo toma el editor de esa página cuando está listo (o ya). */
   requestResult(request: ResultRequest): void {
-    this.pending = { ...request, at: Date.now() };
+    this.requestGeneration++;
+    this.requestAt = Date.now();
+    this.pending = { ...request, at: this.requestAt };
     this.changed();
   }
 

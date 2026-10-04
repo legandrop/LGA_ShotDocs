@@ -218,12 +218,16 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
       setLimit((n) => n + PAGE_LIMIT);
     } else if (item.kind === 'snippet') {
       const { snippet } = item;
-      go({ pageId: item.hit.page.id, term: snippet.term, blockId: snippet.blockId, occurrence: snippet.occurrence });
+      go({ pageId: item.hit.page.id, term: snippet.term, blockId: snippet.blockId, ...(snippet.field === 'annotation'
+        ? { annotation: { projectId, fileId: snippet.fileId, shapeId: snippet.shapeId } }
+        : { occurrence: snippet.occurrence }) });
     } else {
       // La página: arriba si lo encontrado está en el título; si no, en su mejor coincidencia.
       const first = item.hit.snippets[0];
       if (item.hit.titleRanges.length > 0 || !first) go({ pageId: item.hit.page.id, term: null });
-      else go({ pageId: item.hit.page.id, term: first.term, blockId: first.blockId, occurrence: first.occurrence });
+      else go({ pageId: item.hit.page.id, term: first.term, blockId: first.blockId, ...(first.field === 'annotation'
+        ? { annotation: { projectId, fileId: first.fileId, shapeId: first.shapeId } }
+        : { occurrence: first.occurrence }) });
     }
   };
 
@@ -412,7 +416,7 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
                       'search-snippet',
                       <span className="search-snippet-text">
                         {snippet.field !== 'text' && (
-                          <span className="search-field-label">{tr(snippet.field === 'caption' ? 'search.inCaption' : 'search.inName')} </span>
+                          <span className="search-field-label">{tr(snippet.field === 'annotation' ? 'search.inAnnotation' : snippet.field === 'caption' ? 'search.inCaption' : 'search.inName')} </span>
                         )}
                         {snippet.cutStart && '…'}
                         <Highlight text={snippet.text} ranges={snippet.ranges} />
