@@ -3777,13 +3777,26 @@ ahí (se baja con *Download my unsynced changes*). **No hace falta subir `min_ap
    Elegí A porque es el mismo criterio que la ventana de borrar y la última oportunidad de verlo. Si no se puede leer, no
    frena (la base decide igual). Si preferís B, se saca el aviso de `PurgeAsk`.
 
+### Restos de la auditoría de la entrega 3 (v0.171)
+
+- **El peso de uno borrado para siempre (O4).** `project_sizes` sumaba lo que el proyecto nunca subió en la papelera de
+  la app o como "sin subir", para siempre y sin forma de sacarlo. La migración `20261103120000_purgados_peso_link_total.sql`
+  (`schema_version` 25, aplicada) lo deja afuera: no ocupa el Drive y nadie lo va a subir (nadie ve el proyecto). Lo
+  subido sigue contando donde está de verdad: en la papelera de Drive durante 30 días desde que se mandó, y después deja
+  de contar solo, como cualquier archivo. Un borrado sin purgar sigue sumando todo (se puede restaurar). Ninguna fila se
+  borra; la app no cambia (suma lo que da la base). Prueba: `supabase/tests/purgados_peso_link_total_permisos.sql` (y la
+  de la 23, ajustada a este peso).
+- **El servidor de las pruebas como la base (O3).** `purgeProject` de `src/sync/testing.ts` aceptaba la carpeta mandada
+  para cualquier archivo; ahora la carpeta cubre solo lo subido hasta el pedido (`uploaded_at`, que el portero falso
+  anota al confirmar; sin fecha, de antes), da `drive_trash_first` si hay algo subido después y marca con las fechas de
+  la carpeta, como `project_files_purged`.
+
 ## Pendiente
 
 - **Entrega 2** (publicada en v0.080, migración 10 aplicada): falta la prueba técnica con Drive de verdad (sección 3.9;
   prender `TEST_MODES=1`, correrla con un proyecto de prueba y sacar la variable); recién después borrar ERSO con la
   casilla.
-- **Entrega 3** (*Delete forever*): implementada y auditada (aprobada con observaciones; la 1 corregida: la pregunta
-  avisa de los archivos usados en otros proyectos), sin publicar. Falta la copia de seguridad, aplicar la 22 y después la
-  23 (`npm run db:migrate`) y publicar.
-- Dos observaciones de la auditoría de la entrega 3, en el roadmap (P.14): el servidor de las pruebas no aplica el corte
-  por fecha de subida de `drive_trash_first`, y un proyecto borrado para siempre sigue sumando en el peso.
+- **Entrega 3** (*Delete forever*): publicada en v0.167, migración 23 aplicada. Auditada con observaciones; la 1
+  corregida: la pregunta avisa de los archivos usados en otros proyectos.
+- Las dos observaciones chicas de la auditoría de la entrega 3 (O3 y O4) quedaron hechas en v0.171 (arriba); falta
+  aplicar su migración (la 25) con la tanda.

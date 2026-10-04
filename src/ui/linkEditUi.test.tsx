@@ -332,6 +332,51 @@ describe('los archivos de los links de la página, en Share (decisión de Lega, 
     prefs.set({ language: 'en' });
   });
 
+  // D279 B: desde la base 25 cada fila trae `total` (todos los archivos de los links de la página, aunque la lista se corte
+  // en 500): el título dice la cantidad exacta y nunca «o más».
+  it('con el total de la base (versión 25), 500 filas de 503 dicen «503 files», sin «o más»', async () => {
+    const many = (n: number, total: number) =>
+      Array.from({ length: n }, (_, i) => row(`f${String(i).padStart(3, '0')}`, { uploaded: false, total }));
+    prefs.set({ language: 'en' });
+    const { server, d, page } = await teamDevice();
+    server.enableLinkFiles();
+    await d.engine.syncNow();
+    const host = await mount(services(d, filesClient(many(500, 503)).client), <LinkShare pageId={page} onClose={() => undefined} />);
+    const list = host.querySelector('.link-files-list')!;
+    expect(list.querySelector('strong')!.textContent).toBe("503 files were added through this page's link");
+    expect(list.querySelectorAll('li')).toHaveLength(20);
+    expect(list.textContent).toContain('and 483 more');
+    expect(list.textContent).not.toContain('or more');
+    expect(list.textContent).not.toContain("plus older ones that aren't listed");
+    act(() => roots.pop()!.unmount());
+    // Con pocos, la cantidad de siempre (el total coincide con la lista).
+    const b = await teamDevice();
+    b.server.enableLinkFiles();
+    await b.d.engine.syncNow();
+    const one = await mount(services(b.d, filesClient(many(1, 1)).client), <LinkShare pageId={b.page} onClose={() => undefined} />);
+    expect(one.querySelector('.link-files-list strong')!.textContent).toBe("1 file was added through this page's link");
+    act(() => roots.pop()!.unmount());
+    // En castellano.
+    prefs.set({ language: 'es' });
+    const c = await teamDevice();
+    c.server.enableLinkFiles();
+    await c.d.engine.syncNow();
+    const es = await mount(services(c.d, filesClient(many(500, 1234)).client), <LinkShare pageId={c.page} onClose={() => undefined} />);
+    expect(es.querySelector('.link-files-list strong')!.textContent).toBe('Se sumaron 1234 archivos con el link de esta página');
+    expect(es.querySelector('.link-files-list')!.textContent).toContain('y 1214 más');
+    prefs.set({ language: 'en' });
+  });
+
+  it('la migración 25 da el total con una ventana antes del mismo tope de la app, y sube la versión a 25', async () => {
+    const { readFileSync } = await import('node:fs');
+    const sql = readFileSync('supabase/migrations/20261103120000_purgados_peso_link_total.sql', 'utf8');
+    const body = sql.slice(sql.indexOf('create function public.public_link_files'), sql.indexOf('revoke all on function public.public_link_files'));
+    expect(body).toContain('trashed boolean, total bigint)');
+    expect(body.indexOf('count(*) over ()')).toBeLessThan(body.search(/limit \d+;/));
+    expect(Number(/limit (\d+);/.exec(body)![1])).toBe(PUBLIC_LINK_FILES_MAX);
+    expect(sql).toContain('set schema_version = 25 where id and schema_version < 25');
+  });
+
   it('sin permiso (no ve lo borrado) o con la base anterior a la 21: no hay lista', async () => {
     prefs.set({ language: 'en' });
     const a = await teamDevice();

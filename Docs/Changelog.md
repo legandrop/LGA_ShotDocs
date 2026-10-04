@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.171 :
+
+**Restos de SQL (P.14 y P.30).** (1) Un proyecto borrado para siempre seguía sumando en el peso lo que nunca subió (en
+la papelera de la app o como "sin subir"), sin forma de sacarlo: `project_sizes` ya no lo cuenta; lo mandado a la
+papelera de Drive cuenta ahí sus 30 días, como cualquier archivo. (2) *Share* decía «500 or more» archivos de los links
+de la página porque la base corta la lista en 500: `public_link_files` suma la columna `total` (`count(*) over ()`,
+antes del `limit`) y *Share* da la cantidad exacta. (3) El servidor de las pruebas aceptaba la carpeta mandada para
+cualquier archivo; ahora cubre solo lo subido hasta el pedido, como la base. Migración
+`20261103120000_purgados_peso_link_total` (schema 25, aplicada), con su prueba SQL y 11 mutantes.
+
+[ Restos de SQL - un proyecto borrado para siempre ya no suma en el peso lo que nunca subió, Share dice el total exacto de los archivos de los links de la página, y el servidor de las pruebas aplica el corte por fecha de subida de la carpeta (migración, schema 25) ]
+
 v0.170 :
 
 **El ⌘Z con dos personas (B.22 y B.26).** (1) A veces ⌘Z tiraba `TypeError` y el paso se descartaba: lo que tenía que

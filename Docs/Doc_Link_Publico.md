@@ -2557,6 +2557,13 @@ app y el portero, todos detectados.
 | **O-R2.** El *Download it* del detalle de la insignia con el link vivo no tenía prueba automática | `linkBadgeDownload.test.tsx`: con la insignia real (`SyncBadge`), el link vivo y el tope del día en cero, dos archivos quedan sin registrar; el detalle los nombra con el motivo y cada *Download it* baja el original de su fila, con su nombre. Mueren: bajar el de otra fila, el nombre equivocado, sin botón y un blob distinto |
 | **O-R3.** `public_link_files` corta en 500 y *Share* titulaba con la cantidad que llegó | **Sin tocar el SQL:** `PUBLIC_LINK_FILES_MAX` (500, el `limit` de la migración; una prueba lee el SQL y lo compara) y, con la lista en el tope, el título dice *500 or more files were added through this page's link* y la línea del resto aclara que hay anteriores sin listar (*and 480 more, plus older ones that aren't listed*). Con 499 dice la cantidad exacta. Pedir el total exacto necesitaría un cambio de SQL (cuenta aparte en `public_link_files`); no se hizo, y «o más» alcanza para lo que el equipo decide con ese número |
 
+**El total exacto (v0.171, D279 B):** la migración aplicada `20261103120000_purgados_peso_link_total.sql` (`schema_version` 25)
+crea otra vez `public_link_files` con la columna `total` al final (`count(*) over ()`, que se calcula antes del
+`limit 500`): cada fila dice cuántos archivos registraron todos los links de la página. La lista, el orden, el tope y los
+permisos no cambian, y la app publicada pide las columnas por nombre e ignora la nueva. Con `total`, *Share* titula con
+la cantidad exacta (*503 files were added through this page's link*, *and 483 more*) y nunca dice «o más»; sin la
+columna (base anterior a la 25), sigue como en O-R3. La prueba SQL es `supabase/tests/purgados_peso_link_total_permisos.sql`.
+
 ### Cómo quedó la 2c (v0.157)
 
 **Estado:** implementada en la rama, con la migración `20261029120000_link_apartado.sql` **sin aplicar** (sube

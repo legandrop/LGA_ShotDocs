@@ -91,7 +91,10 @@ In production (v0.049). What works today:
   the owner and admins can send them to the Google Drive trash (recoverable there for 30 days).
 - How much each project takes in the owner's Drive: in the project menu, in the *Google Drive* dialog (owner
   only, with the Drive trash and what is still uploading) and at the top of the file trash (v0.050; it shows
-  once the workspace database is on version 7).
+  once the workspace database is on version 7). After *Delete forever*, files that never reached Drive no longer
+  count toward the project size; files in the Drive trash keep counting there for 30 days.
+- In *Share*, the team sees the exact number of files added through all links to the page, including earlier
+  links, even beyond 500 files; the list shows the newest 20.
 - Google Drive links: paste one and keep it as a link, as plain text, or as a card with the Drive player.
 - Links to other pages: a link to a page of the app opens it in the same tab (Ctrl/⌘+click, in a new one).
 - Photos in the line of text (v0.078): pasted, dropped or picked photos and videos go into the line, where the

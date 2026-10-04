@@ -796,7 +796,11 @@ export class FakeServer {
    */
   writeVersionSince: number | null = WRITE_VERSION_SINCE;
   /** `files`, con el proyecto (sale de la página), el tamaño y quién lo registró. */
-  readonly mediaFiles = new Map<string, MediaFileRow & { project_id: string; size: number; created_by?: string; plink_id?: string }>();
+  readonly mediaFiles = new Map<
+    string,
+    // `uploaded_at`: cuándo lo confirmó el portero (`set_file_drive`); sin él, como un archivo de antes de esa columna.
+    MediaFileRow & { project_id: string; size: number; created_by?: string; plink_id?: string; uploaded_at?: string | null }
+  >();
   /** `page_files` en uso (sin `removed_at`): `<página>:<archivo>`. */
   readonly pageFiles = new Set<string>();
   /** `page_files` con `removed_at` (la página dejó de usar el archivo; la fila queda). */
@@ -1605,7 +1609,10 @@ export class FakePortero {
       if (!l || !this.server.linkOwnsFile(l, file)) return false;
     }
     const media = this.server.mediaFiles.get(file);
-    if (media && !media.drive_id) media.drive_id = driveId;
+    if (media && !media.drive_id) {
+      media.drive_id = driveId;
+      media.uploaded_at = new Date().toISOString();
+    }
     return true;
   }
 
@@ -1873,17 +1880,24 @@ export class FakeRemote
     if (Date.parse(d.at) > Date.now() - 30 * 86_400_000) throw new RemoteError('project_trash_not_due', true, 'P0001');
     const drive = this.server.projectDrive.get(projectId);
     const folderGone = !!drive && (!!drive.trashed_at || !!drive.missing_at);
+    // La carpeta mandada cubre solo lo subido hasta el pedido (`uploaded_at <= drive_trash_requested_at`, sin fecha
+    // cuenta como de antes): lo subido después fue a otra carpeta y la vuelve a pedir, como en la base (O3).
+    const covered = (f: { uploaded_at?: string | null }) =>
+      !!drive && (!f.uploaded_at || Date.parse(f.uploaded_at) <= Date.parse(drive.requested_at));
     const files = [...this.server.mediaFiles.values()].filter((f) => f.project_id === projectId && f.drive_id && !f.drive_trashed_at);
-    if (files.length > 0 && !folderGone) throw new RemoteError('drive_trash_first', true, 'P0001');
+    if (files.some((f) => !(folderGone && covered(f)))) throw new RemoteError('drive_trash_first', true, 'P0001');
     this.checkWriteVersion();
-    const now = new Date().toISOString();
-    for (const f of files) {
-      f.trashed_at ??= now;
-      f.purged_at ??= now;
-      f.drive_trashed_at = now;
+    // `project_files_purged`: los subidos que cubre la carpeta, con las fechas del pedido y de la confirmación.
+    if (drive) {
+      for (const f of this.server.mediaFiles.values()) {
+        if (f.project_id !== projectId || !f.drive_id || !covered(f)) continue;
+        f.trashed_at ??= drive.requested_at;
+        f.purged_at ??= drive.requested_at;
+        f.drive_trashed_at ??= drive.trashed_at ?? drive.missing_at ?? drive.requested_at;
+      }
     }
     this.server.projectDrive.delete(projectId);
-    d.purged = { at: now, by: this.userId };
+    d.purged = { at: new Date().toISOString(), by: this.userId };
   }
 
   async projectDeleteInfo(projectId: string): Promise<ProjectDeleteInfo> {

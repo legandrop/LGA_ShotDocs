@@ -286,10 +286,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   marca (`purged_at`), ninguna fila se borra, y la carpeta va antes a la papelera de Drive si no estaba. Migración
   `20261101120000_proyectos_purgar.sql` (versión 23) **aplicada** (v0.167; `Doc_Proyectos_Borrar.md`,
   "Cómo quedó (entrega 3)"). Auditada (aprobada con observaciones) y publicada.
-  - Pendiente chico (auditoría, O3): el servidor de las pruebas (`src/sync/testing.ts`, `purgeProject`) no aplica el
-    corte por `uploaded_at` de `drive_trash_first` (la base sí): hoy no cambia ninguna prueba, pero puede esconder un error.
-  - Pendiente chico (auditoría, O4): un proyecto borrado para siempre sigue sumando en el peso (`project_sizes`) de quien
-    lo maneja (lo nunca subido en la papelera de la app, lo mandado en la de Drive), sin forma de sacarlo desde la app.
+  - **Hecho (v0.171), de su auditoría:** (O3) el servidor de las pruebas aplica el corte por `uploaded_at` de
+    `drive_trash_first`, como la base; (O4) un proyecto borrado para siempre ya no suma en el peso lo que nunca subió (lo
+    mandado a la papelera de Drive cuenta ahí sus 30 días, como cualquier archivo). Migración
+    `20261103120000_purgados_peso_link_total.sql` (schema 25), **sin aplicar** (`Doc_Proyectos_Borrar.md`, "Restos de la
+    auditoría de la entrega 3").
 - **P.16 Hecho (v0.074): el árbol de páginas con el teclado** (Lega, 2026-10-01). Con el foco en una fila
   (queda ahí después de un clic): ↑ / ↓ abren la página visible anterior o siguiente (una pulsación al
   instante; con la tecla apretada el foco corre y se abre la última al frenar, 150 ms), → despliega o pasa a la
@@ -701,7 +702,7 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   link de un video en línea y los textos de invitación en el choque de clave y en *Join a workspace?* para una dirección
   de archivo (O7 c). De la auditoría de E2 (chico): una prueba de dos personas decidiendo a la vez con dos sesiones
   reales (O8; hoy por lectura del `for update`), el tope y las 24 horas en el servidor en memoria (O9) y el título
-  *Mentions* del panel de la campana cuando arriba tiene pedidos. **Hecho (v0.165):** *Export* avisa sin red (O6, *No connection: file links … can't use the public link*; un visitante del link no lo ve, con prueba). Queda (chico): el aviso sale también si el PDF no lleva ningún archivo, porque la ventana no cuenta los adjuntos antes de armar, igual que el de las fotos sin conexión.
+  *Mentions* del panel de la campana cuando arriba tiene pedidos. **Hecho (v0.165):** *Export* avisa sin red (O6, *No connection: file links … can't use the public link*; un visitante del link no lo ve, con prueba). **Hecho (v0.171, D279 B):** *Share* dice el total exacto de los archivos de los links de la página aunque pasen de 500 (columna `total` de `public_link_files`, migración `20261103120000_purgados_peso_link_total.sql`, schema 25, sin aplicar; `Doc_Link_Publico.md`, "El total exacto"). Queda (chico): el aviso sale también si el PDF no lleva ningún archivo, porque la ventana no cuenta los adjuntos antes de armar, igual que el de las fotos sin conexión.
 - **P.28 Hecho (v0.156): la tabla del reporte en el teléfono** (`Doc_Tabla_Telefono.md`): en pantalla angosta ninguna
   columna con ancho guardado baja de 96 px y la tabla se desplaza de costado dentro de su bloque; la celda donde se
   escribe se acomoda a la vista. La compu y el PDF no cambian. Falta probarlo en un iPhone real (dedo, teclado abierto).
