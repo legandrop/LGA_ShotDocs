@@ -296,7 +296,7 @@ describe(`al azar, dos personas con renglones (${PAIRS} semillas)`, () => {
       if (r.same) same++;
     }
     expect(errors).toEqual([]); // sin el arreglo: 24 de 3.000 (30009, 30012, 30014, 30018…)
-    // Los dos terminan iguales salvo los casos de Yjs que ya estaban (otro orden, B.21: 22 de 3.000 con o sin arreglo).
-    expect(same).toBeGreaterThanOrEqual(PAIRS - Math.ceil(PAIRS * 0.01));
+    // Los dos terminan iguales (antes de B.26, 22 de 3.000 no: Docs/Doc_Deshacer.md, "B.26: cómo quedó").
+    expect(same).toBe(PAIRS);
   }, 120_000);
 });

@@ -113,14 +113,18 @@ function assertYProsemirrorPatched(): void {
 // Yjs también lleva un arreglo propio (patches/yjs+13.6.33.patch, Docs/Doc_Deshacer.md, "El límite de Yjs"): deshacer
 // sigue en todo su largo lo que otro deshacer volvió a poner. Sin él, deshacer deja restos de lo escrito y a veces se
 // lleva texto de antes. Y (B.22, "B.22: cómo quedó") el ⌘Z con dos personas ya no tira `TypeError` cuando la copia del
-// padre fue recolectada. Se miran los tres archivos: `dist/yjs.mjs` (la app y las pruebas), `dist/yjs.cjs` (lo que pide
+// padre fue recolectada. Y (B.26) deshacer el borrado de un renglón ya no deja a dos personas con textos distintos. Se
+// miran los tres archivos: `dist/yjs.mjs` (la app y las pruebas), `dist/yjs.cjs` (lo que pide
 // `require`) y `src` (por si algo importa `yjs/src/index.js`).
 function assertYjsPatched(): void {
+  // B.26 ("B.26: cómo quedó"): al deshacer el borrado de un renglón, los dos vecinos de lo que vuelve se toman como los
+  // va a leer otro dispositivo (sin eso, dos personas podían quedar con textos distintos para siempre).
+  const B26 = ['const lgaLeftEnd = left !== null ? left.lastId : null', 'left = getItemCleanEnd(transaction, store, lgaLeftEnd)', 'while (o !== null && o !== right)'];
   const files: [string, string[]][] = [
-    ['dist/yjs.mjs', ['const lgaFollowRedoneRange', 'lgaFollowRedoneRange(transaction, store, struct)', 'leftTrace.redone.clock + leftTrace.length - 1', 'if (!(parentItem.content instanceof ContentType))', '!lgaParentGone && undoManager.deleteFilter(item)']],
-    ['dist/yjs.cjs', ['const lgaFollowRedoneRange', 'lgaFollowRedoneRange(transaction, store, struct)', 'leftTrace.redone.clock + leftTrace.length - 1', 'if (!(parentItem.content instanceof ContentType))', '!lgaParentGone && undoManager.deleteFilter(item)']],
+    ['dist/yjs.mjs', ['const lgaFollowRedoneRange', 'lgaFollowRedoneRange(transaction, store, struct)', 'leftTrace.redone.clock + leftTrace.length - 1', 'if (!(parentItem.content instanceof ContentType))', '!lgaParentGone && undoManager.deleteFilter(item)', ...B26]],
+    ['dist/yjs.cjs', ['const lgaFollowRedoneRange', 'lgaFollowRedoneRange(transaction, store, struct)', 'leftTrace.redone.clock + leftTrace.length - 1', 'if (!(parentItem.content instanceof ContentType))', '!lgaParentGone && undoManager.deleteFilter(item)', ...B26]],
     ['src/utils/UndoManager.js', ['const lgaFollowRedoneRange', 'lgaFollowRedoneRange(transaction, store, struct)', '!lgaParentGone && undoManager.deleteFilter(item)']],
-    ['src/structs/Item.js', ['leftTrace.redone.clock + leftTrace.length - 1', 'if (!(parentItem.content instanceof ContentType))']],
+    ['src/structs/Item.js', ['leftTrace.redone.clock + leftTrace.length - 1', 'if (!(parentItem.content instanceof ContentType))', ...B26]],
   ];
   for (const [file, wanted] of files) {
     let source = '';

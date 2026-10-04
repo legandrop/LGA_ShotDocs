@@ -1,5 +1,5 @@
 diff --git a/node_modules/yjs/dist/yjs.cjs b/node_modules/yjs/dist/yjs.cjs
-index a29f8ef..6486ff5 100644
+index a29f8ef..00efc69 100644
 --- a/node_modules/yjs/dist/yjs.cjs
 +++ b/node_modules/yjs/dist/yjs.cjs
 @@ -3499,6 +3499,43 @@ const clearUndoManagerStackItem = (tr, um, stackItem) => {
@@ -136,8 +136,43 @@ index a29f8ef..6486ff5 100644
        }
        if (leftTrace !== null && /** @type {AbstractType<any>} */ (leftTrace.parent)._item === parentItem) {
          left = leftTrace;
+@@ -9717,6 +9781,8 @@ const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemoteMapCh
+       }
+       left = left.left;
+     }
++    // LGA-SHOTDOCS-PATCH (B.26): dónde termina el vecino izquierdo (ver abajo).
++    const lgaLeftEnd = left !== null ? left.lastId : null;
+     while (right !== null) {
+       /**
+        * @type {Item|null}
+@@ -9732,6 +9798,25 @@ const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemoteMapCh
+       }
+       right = right.right;
+     }
++    // LGA-SHOTDOCS-PATCH (B.26): los dos vecinos, como los va a leer otro dispositivo. (1) Buscar el derecho puede
++    // partir el item del izquierdo (`getItemCleanStart`) y dejarlo más corto: se vuelve a tomar el que termina en la
++    // misma letra que antes, y lo vuelto no cae en el medio de su vecino. (2) El derecho tiene que estar a la derecha
++    // del izquierdo: siguiendo las copias (`redone`), los dos pueden terminar en la misma letra (un original y su copia
++    // quedaron en el mismo texto) o el derecho antes que el izquierdo. Con los vecinos cruzados, este dispositivo
++    // ubicaba lo vuelto en un lugar y los demás (que lo ubican por `origin` y `rightOrigin`, y al recargar también
++    // este) en otro: los textos quedaban distintos. Se toma como derecho el que hoy está pegado al izquierdo.
++    if (lgaLeftEnd !== null) {
++      left = getItemCleanEnd(transaction, store, lgaLeftEnd);
++    }
++    if (left !== null && right !== null) {
++      let o = left.right;
++      while (o !== null && o !== right) {
++        o = o.right;
++      }
++      if (o === null) {
++        right = left.right;
++      }
++    }
+   } else {
+     right = null;
+     if (item.right && !ignoreRemoteMapChanges) {
 diff --git a/node_modules/yjs/dist/yjs.mjs b/node_modules/yjs/dist/yjs.mjs
-index bd77560..fa37d56 100644
+index bd77560..bdcdf3e 100644
 --- a/node_modules/yjs/dist/yjs.mjs
 +++ b/node_modules/yjs/dist/yjs.mjs
 @@ -3462,6 +3462,43 @@ const clearUndoManagerStackItem = (tr, um, stackItem) => {
@@ -274,8 +309,43 @@ index bd77560..fa37d56 100644
        }
        if (leftTrace !== null && /** @type {AbstractType<any>} */ (leftTrace.parent)._item === parentItem) {
          left = leftTrace;
+@@ -9680,6 +9744,8 @@ const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemoteMapCh
+       }
+       left = left.left;
+     }
++    // LGA-SHOTDOCS-PATCH (B.26): dónde termina el vecino izquierdo (ver abajo).
++    const lgaLeftEnd = left !== null ? left.lastId : null;
+     while (right !== null) {
+       /**
+        * @type {Item|null}
+@@ -9695,6 +9761,25 @@ const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemoteMapCh
+       }
+       right = right.right;
+     }
++    // LGA-SHOTDOCS-PATCH (B.26): los dos vecinos, como los va a leer otro dispositivo. (1) Buscar el derecho puede
++    // partir el item del izquierdo (`getItemCleanStart`) y dejarlo más corto: se vuelve a tomar el que termina en la
++    // misma letra que antes, y lo vuelto no cae en el medio de su vecino. (2) El derecho tiene que estar a la derecha
++    // del izquierdo: siguiendo las copias (`redone`), los dos pueden terminar en la misma letra (un original y su copia
++    // quedaron en el mismo texto) o el derecho antes que el izquierdo. Con los vecinos cruzados, este dispositivo
++    // ubicaba lo vuelto en un lugar y los demás (que lo ubican por `origin` y `rightOrigin`, y al recargar también
++    // este) en otro: los textos quedaban distintos. Se toma como derecho el que hoy está pegado al izquierdo.
++    if (lgaLeftEnd !== null) {
++      left = getItemCleanEnd(transaction, store, lgaLeftEnd);
++    }
++    if (left !== null && right !== null) {
++      let o = left.right;
++      while (o !== null && o !== right) {
++        o = o.right;
++      }
++      if (o === null) {
++        right = left.right;
++      }
++    }
+   } else {
+     right = null;
+     if (item.right && !ignoreRemoteMapChanges) {
 diff --git a/node_modules/yjs/src/structs/Item.js b/node_modules/yjs/src/structs/Item.js
-index fca5827..3396804 100644
+index fca5827..8a42362 100644
 --- a/node_modules/yjs/src/structs/Item.js
 +++ b/node_modules/yjs/src/structs/Item.js
 @@ -163,8 +163,21 @@ export const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemo
@@ -312,6 +382,41 @@ index fca5827..3396804 100644
        }
        if (leftTrace !== null && /** @type {AbstractType<any>} */ (leftTrace.parent)._item === parentItem) {
          left = leftTrace
+@@ -189,6 +204,8 @@ export const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemo
+       }
+       left = left.left
+     }
++    // LGA-SHOTDOCS-PATCH (B.26): dónde termina el vecino izquierdo (ver abajo).
++    const lgaLeftEnd = left !== null ? left.lastId : null
+     while (right !== null) {
+       /**
+        * @type {Item|null}
+@@ -204,6 +221,25 @@ export const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemo
+       }
+       right = right.right
+     }
++    // LGA-SHOTDOCS-PATCH (B.26): los dos vecinos, como los va a leer otro dispositivo. (1) Buscar el derecho puede
++    // partir el item del izquierdo (`getItemCleanStart`) y dejarlo más corto: se vuelve a tomar el que termina en la
++    // misma letra que antes, y lo vuelto no cae en el medio de su vecino. (2) El derecho tiene que estar a la derecha
++    // del izquierdo: siguiendo las copias (`redone`), los dos pueden terminar en la misma letra (un original y su copia
++    // quedaron en el mismo texto) o el derecho antes que el izquierdo. Con los vecinos cruzados, este dispositivo
++    // ubicaba lo vuelto en un lugar y los demás (que lo ubican por `origin` y `rightOrigin`, y al recargar también
++    // este) en otro: los textos quedaban distintos. Se toma como derecho el que hoy está pegado al izquierdo.
++    if (lgaLeftEnd !== null) {
++      left = getItemCleanEnd(transaction, store, lgaLeftEnd)
++    }
++    if (left !== null && right !== null) {
++      let o = left.right
++      while (o !== null && o !== right) {
++        o = o.right
++      }
++      if (o === null) {
++        right = left.right
++      }
++    }
+   } else {
+     right = null
+     if (item.right && !ignoreRemoteMapChanges) {
 diff --git a/node_modules/yjs/src/utils/UndoManager.js b/node_modules/yjs/src/utils/UndoManager.js
 index e5c4dc8..385f5dd 100644
 --- a/node_modules/yjs/src/utils/UndoManager.js
