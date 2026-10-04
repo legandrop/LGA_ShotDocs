@@ -1,5 +1,13 @@
 # Historial de versiones de una página (P.18)
 
+## Sesiones de anotaciones (v0.188, primera parte de E5)
+
+Los cambios nuevos de `photoMarkup` cuentan al agrupar sesiones y enumerar sus autores, incluso al borrar una forma, deshacerla o cambiar datos de un formato futuro. Colapsar y volver a subir lo ya recibido siguen sin sumar autores. Después de integrar filas nuevas se reclasifican todos los tramos frescos conservados: una dependencia que llega tarde puede hacer reconocible una fila anterior, sin cambiar quién trajo primero sus relojes o borrados.
+
+Una sesión de solo anotaciones muestra **Annotated nombre / Anotó nombre** cuando tiene un único UUID y todas sus referencias históricas tienen el mismo nombre no vacío. Se lee el fragmento del snapshot final de esa sesión con `typeListToArraySnapshot` y `getAttributes(snapshot)`, sin consultas de archivos ni nombres de otra página. La primera API es un export marcado `@private` en Yjs 13.6.33, versión fijada; no se presupone estabilidad al actualizarla. Una referencia ausente, ambigua, varios UUID o una clave desconocida muestran **Annotations changed / Cambios en anotaciones**. El nombre manual conserva prioridad; **Only named versions** sigue usando solo esos nombres manuales y la versión actual.
+
+Esta entrega no compara ni restaura el mapa: **Show changes** todavía compara el contenido del editor y **Restore** conserva las anotaciones actuales. La sesión seleccionada y la ayuda lo aclaran. Apagar **Show changes** permite usar el visor histórico limpio ya existente. No hay migración, nuevos mensajes, persistencia, esquema de editor ni versión mínima; los cortes y la caché siguen reconstruyendo el resumen desde las mismas filas. E5 sigue parcial.
+
 **Estado: entregas 1 (v0.098), 2 (v0.103) y 3 (v0.106) implementadas, más los restos de las auditorías ("Lo que
 quedó de las entregas"); ver "Cómo quedó" de cada una, al final, que mandan sobre el diseño en lo que tocan. La migración de la entrega 1 (`20261007120000_historial.sql`) está aplicada
 desde v0.098; la de la entrega 3 (`20261011120000_versiones_con_nombre.sql`), probada en `begin … rollback` contra la

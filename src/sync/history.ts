@@ -2,6 +2,7 @@ import * as Y from 'yjs';
 import type { HistoryRemote } from './remote';
 import { CONTENT_FRAGMENT, normalizeStructure, seedClientId, seedTextClientId } from './structure';
 import { RemoteError, REQUEST_TIMEOUT } from './types';
+import { PHOTO_MARKUP_MAP, parseMarkupKey } from '../media/markup';
 
 // El historial de versiones de una página (P.18, Docs/Doc_Historial.md). Todo se arma en el dispositivo con las
 // filas de `page_updates` (autor y hora puestos por la base), sin guardar nada nuevo:
@@ -145,6 +146,8 @@ export interface HistorySession {
   end: string;
   /** Quiénes cambiaron algo en esta sesión, en orden de aparición (`null`: una cuenta borrada). */
   authors: (string | null)[];
+  /** Sesión solo de anotaciones; nombre inequívoco en su snapshot, o rótulo genérico. */
+  annotation?: { name: string | null };
 }
 
 /** Hasta qué reloj llega cada autor de Yjs en la fila y qué borra, sin integrarla. */
@@ -204,18 +207,56 @@ function rootKey(item: Y.Item): string | null {
   }
 }
 
-/** Si algún elemento de `[from, to)` del autor `client` es del contenido de la página (no un hueco, no el colapsar). */
-function touchesContent(doc: Y.Doc, client: number, from: number, to: number): boolean {
+interface RowChanges {
+  content: boolean;
+  markup: boolean;
+  subjects: Set<string>;
+  unknown: boolean;
+}
+
+/** Clasifica los tramos frescos con el documento ya integrado, sin volver a adjudicar sus relojes. */
+function classifyRange(doc: Y.Doc, client: number, from: number, to: number, out: RowChanges): void {
   const list = doc.store.clients.get(client);
-  if (!list || list.length === 0) return false;
+  if (!list || list.length === 0) return;
   const last = list[list.length - 1];
-  if (from >= last.id.clock + last.length) return false;
+  if (from >= last.id.clock + last.length) return;
   let i = Y.findIndexSS(list, Math.max(from, list[0].id.clock));
   for (; i < list.length && list[i].id.clock < to; i++) {
     const s = list[i];
-    if (s instanceof Y.Item && rootKey(s) === CONTENT_FRAGMENT) return true;
+    if (!(s instanceof Y.Item)) continue;
+    const root = rootKey(s);
+    if (root === CONTENT_FRAGMENT) out.content = true;
+    if (root === PHOTO_MARKUP_MAP) {
+      out.markup = true;
+      let key = s.parentSub;
+      let type = s.parent as Y.AbstractType<unknown>;
+      while (type._item) {
+        key = type._item.parentSub;
+        type = type._item.parent as Y.AbstractType<unknown>;
+      }
+      const subject = key === null ? null : parseMarkupKey(key);
+      if (subject) out.subjects.add(subject.fileId.toLowerCase());
+      else out.unknown = true;
+    }
   }
-  return false;
+}
+
+/** Nombre de una única referencia lógica, leído en el final histórico de la sesión (no en el estado actual).
+ * typeListToArraySnapshot es el export @private de Yjs 13.6.33 fijado por el lockfile. */
+function annotationName(doc: Y.Doc, snapshot: Y.Snapshot, subject: string): string | null {
+  const names = new Set<string>();
+  const walk = (type: Y.XmlFragment | Y.XmlElement) => {
+    for (const child of Y.typeListToArraySnapshot(type, snapshot)) {
+      if (!(child instanceof Y.XmlElement)) continue;
+      const attrs = child.getAttributes(snapshot);
+      if (typeof attrs.url === 'string' && attrs.url.startsWith('sdmedia://') && attrs.url.slice(10).toLowerCase() === subject) {
+        names.add(typeof attrs.name === 'string' ? attrs.name.trim() : '');
+      }
+      walk(child);
+    }
+  };
+  walk(doc.getXmlFragment(CONTENT_FRAGMENT));
+  return names.size === 1 ? [...names][0] || null : null;
 }
 
 /** Lo que una fila trajo por primera vez: tramos `[cliente, desde, hasta)` agregados y borrados. */
@@ -266,7 +307,8 @@ export class PageHistory {
   private readonly inserts = new RangeIndex();
   private readonly deletes = new RangeIndex();
   /** Si la fila cambió algo del contenido que ninguna anterior traía. */
-  private readonly contributes: boolean[] = [];
+  private contributes: boolean[] = [];
+  private changes: RowChanges[] = [];
   /** Lo que trajo cada fila por primera vez (para la diferencia solo de lo tocado). */
   readonly fresh: RowFresh[] = [];
   private readonly snapshots = new Map<number, Y.Snapshot>();
@@ -314,12 +356,10 @@ export class PageHistory {
     // Quién trajo cada tramo por primera vez, si eso tocó el contenido, y el texto huérfano.
     for (let i = start; i < this.metas.length; i++) {
       const m = this.metas[i];
-      let touched = false;
       const got: RowFresh = { ins: [], del: [] };
       for (const [client, to] of m.to) {
         for (const [a, b] of this.inserts.add(client, m.from.get(client) ?? 0, to, i)) {
           got.ins.push([client, a, b]);
-          if (!touched && touchesContent(this.doc, client, a, b)) touched = true;
         }
       }
       // Antes de sumar los borrados de esta fila: huérfano es lo que llegó a algo borrado por una fila ANTERIOR.
@@ -328,13 +368,18 @@ export class PageHistory {
         for (const it of items) {
           for (const [a, b] of this.deletes.add(client, it.clock, it.clock + it.len, i)) {
             got.del.push([client, a, b]);
-            if (!touched && touchesContent(this.doc, client, a, b)) touched = true;
           }
         }
       }
-      this.contributes.push(touched);
       this.fresh.push(got);
     }
+    // Una dependencia tardía puede integrar tramos de filas anteriores: reemplazar todos los derivados, no unirlos.
+    this.changes = this.fresh.map((got) => {
+      const out: RowChanges = { content: false, markup: false, subjects: new Set(), unknown: false };
+      for (const [client, from, to] of [...got.ins, ...got.del]) classifyRange(this.doc, client, from, to, out);
+      return out;
+    });
+    this.contributes = this.changes.map((c) => c.content || c.markup);
     this.sessions = this.group(this.gapMs);
     this.snapshots.clear();
     this.buildSnapshots();
@@ -491,6 +536,13 @@ export class PageHistory {
         this.snapshots.set(i, Y.createSnapshot(ds, new Map(sv)));
       }
     });
+    for (const s of this.sessions) {
+      const changes = this.changes.slice(s.first, s.last + 1);
+      if (!changes.some((c) => c.markup) || changes.some((c) => c.content)) continue;
+      const subjects = new Set(changes.flatMap((c) => [...c.subjects]));
+      const subject = subjects.size === 1 && !changes.some((c) => c.unknown) ? [...subjects][0] : null;
+      s.annotation = { name: subject ? annotationName(this.doc, this.snapshots.get(s.last)!, subject) : null };
+    }
   }
 
   /** El snapshot de la versión al final de la sesión `index`. */

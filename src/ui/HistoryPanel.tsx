@@ -911,7 +911,7 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
         </button>
         <h1 className="history-title">
           <span className="history-heading">{tr('history.title')}</span>
-          {session && chosenName && <span className="history-version-name">{chosenName}</span>}
+          {session && (chosenName || session.annotation) && <span className="history-version-name">{chosenName ?? (session.annotation?.name ? tr('history.annotated', { name: session.annotation.name }) : tr('history.annotationsChanged'))}</span>}
           {session && <span className="history-when">{whenLabel(session.end, lang)}</span>}
         </h1>
         {session && !asideRow && (
@@ -954,6 +954,7 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
             <p className="banner history-offline-saved">{tr('history.offlineSaved', { when: whenInline(new Date(ready.offlineAt).toISOString(), lang) })}</p>
           )}
           {unsynced && <p className="banner">{tr('history.unsynced')}</p>}
+          {session?.annotation && <p className="banner history-annotations-notice">{tr('history.annotationsPending')}</p>}
           {(unknown || shapeOk === false) && <p className="banner">{tr('history.partial')}</p>}
           {current?.error && <p className="banner">{tr('history.versionFailed', { reason: current.error })}</p>}
           {/* Mientras se arma la versión, o su unión con los cambios. */}
@@ -1283,6 +1284,7 @@ function SessionList({
             {header && <h2 className="history-day">{day}</h2>}
             <button className="history-session" aria-current={i === index && asideChosen === null ? 'true' : undefined} onClick={() => onPick(i)}>
               {labels.name && <span className="history-name">{labels.name}</span>}
+              {!labels.name && s.annotation && <span className="history-name">{s.annotation.name ? tr('history.annotated', { name: s.annotation.name }) : tr('history.annotationsChanged')}</span>}
               <span className="history-time" data-tip={tr('history.serverTimeTip')}>
                 {timeLabel(s.end, lang)}
               </span>

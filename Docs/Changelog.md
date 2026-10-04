@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.188 : Sesiones y autores de anotaciones en el historial
+
+Una edición que solo cambiaba anotaciones no formaba su propia sesión ni sumaba a su autor: el historial clasificaba únicamente el contenido del editor. Ahora también cuenta los tramos nuevos del mapa de anotaciones, incluidos borrados, deshacer y formatos futuros. Al llegar una dependencia tardía vuelve a clasificar los tramos anteriores sin cambiar su atribución original. Las sesiones de solo anotaciones muestran el nombre inequívoco de la foto en esa versión o un rótulo genérico; los nombres manuales conservan prioridad y el filtro sigue usando solo esos nombres. La ayuda y la sesión seleccionada aclaran el alcance: Mostrar cambios aún no compara formas y Restaurar conserva las anotaciones actuales. Ver las anotaciones con Mostrar cambios apagado usa el visor histórico existente. Se mantienen filas, caché, permisos y compatibilidad, sin migración ni nuevos bloques. E5 sigue parcial.
+
+[v0.188: contar sesiones y autores de anotaciones en el historial]
+
 v0.187 : Buscar texto de anotaciones en el proyecto
 
 Las anotaciones se veían sobre las fotos, pero buscar en el proyecto solo encontraba títulos, texto, pies y nombres de archivo. Ahora Ctrl/⌘+K también encuentra el texto completo de las formas válidas, aunque su caja lo recorte al dibujar. Cada fragmento Anotación abre la página y la misma foto en el Carrete, incluidas fotos en línea y celdas, también sin red y con permiso de solo ver. El índice deriva los datos actuales en memoria, sin escribir, podar mapas ni incluir fotos retiradas o formas desconocidas. Antes de abrir se revalidan contexto, permiso, referencia y texto después de preparar; otro resultado invalida el anterior y nunca se abre una vecina por su lugar anterior. Buscar y Reemplazar conservan sus unidades y ordinales. Se actualizan ayuda y documentación. El historial de anotaciones y las comprobaciones físicas en Safari/iPhone siguen pendientes.

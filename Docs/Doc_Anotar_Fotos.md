@@ -1,8 +1,14 @@
 # Anotar sobre las fotos (P.20)
 
+## Sesiones y autores del historial (v0.188, E5 parcial)
+
+Las ediciones de anotaciones cuentan como cambios de la página al formar sesiones y mostrar autores. Las sesiones de solo anotaciones llevan **Annotated nombre / Anotó nombre** si el nombre de su foto es inequívoco en el snapshot final de esa sesión; en otro caso, **Annotations changed / Cambios en anotaciones**. Se conserva el nombre histórico aunque después se renombre o retire la foto. Un nombre manual de versión tiene prioridad, y el filtro de versiones con nombre sigue usando solo nombres manuales. No se busca el nombre en otro proyecto ni se consulta Drive.
+
+Esta primera parte no cambia la restauración ni la comparación: apagar **Show changes** deja ver las anotaciones del visor histórico limpio existente; con esa opción prendida todavía no se comparan formas. **Restore** conserva las anotaciones actuales. La pantalla y la ayuda lo indican. Recuperar una forma desde la restauración y comparar las anotaciones siguen pendientes; tampoco se cierran las comprobaciones físicas. Detalle del cálculo y compatibilidad en `Doc_Historial.md`, "Sesiones de anotaciones".
+
 ## Buscar texto de anotaciones (v0.187, E5 parcial)
 
-Ctrl/⌘+K encuentra el texto completo de las formas textuales válidas de fotos actualmente presentes, también en renglones y celdas. Un resultado **Annotation / Anotación** abre esa foto en el Carrete de la página; no inicia una edición. Reusa los permisos, el índice local y los límites del lector, funciona sin red y no escribe ni poda mapas. La referencia y el texto se revalidan al terminar la preparación, evitando abrir una foto vecina si el resultado cambió. Detalle en `Doc_Buscar.md`, "Texto de anotaciones en el proyecto". La entrega 5 sigue parcial: faltan el historial de anotaciones y comprobaciones físicas.
+Ctrl/⌘+K encuentra el texto completo de las formas textuales válidas de fotos actualmente presentes, también en renglones y celdas. Un resultado **Annotation / Anotación** abre esa foto en el Carrete de la página; no inicia una edición. Reusa los permisos, el índice local y los límites del lector, funciona sin red y no escribe ni poda mapas. La referencia y el texto se revalidan al terminar la preparación, evitando abrir una foto vecina si el resultado cambió. Detalle en `Doc_Buscar.md`, "Texto de anotaciones en el proyecto". La entrega 5 sigue parcial: esta búsqueda no cierra la restauración ni la comparación de anotaciones ni las comprobaciones físicas.
 
 ## Reemplazar conservando las anotaciones (v0.186, AN2/E5 parcial)
 
@@ -18,7 +24,7 @@ Primero se guarda el archivo con la cola vigente y después se comprueban otra v
 
 La referencia y la copia se escriben juntas en una transacción y un paso de deshacer. Deshacer respeta las anotaciones que otra persona haya cambiado; rehacer no vuelve a guardar el archivo. Los topes codificados de foto, mapa de página y contenido base se comprueban fuera del documento vivo, sin copia parcial. El original A y su mapa no se reescriben: otra aparición de A conserva sus dibujos. Solo cuando A queda sin ninguna referencia se aplica AN11 vigente, con su espera y sus condiciones de sincronización.
 
-No agrega tipos ni propiedades de bloque: los esquemas anteriores conservan el contenido, la nueva referencia y el mapa. Se verificaron dos editores, orden de intenciones, errores, permisos, JSON futuro, proporción orientada, recarga offline en IndexedDB del navegador y geometría desktop/móvil en Chromium. La emulación móvil no acredita Safari, iPhone o iPad físicos. Este recorrido no cierra la entrega 5: historial de anotaciones y búsqueda de sus textos siguen pendientes.
+No agrega tipos ni propiedades de bloque: los esquemas anteriores conservan el contenido, la nueva referencia y el mapa. Se verificaron dos editores, orden de intenciones, errores, permisos, JSON futuro, proporción orientada, recarga offline en IndexedDB del navegador y geometría desktop/móvil en Chromium. La emulación móvil no acredita Safari, iPhone o iPad físicos. Al publicar v0.186, este recorrido dejaba pendientes el historial de anotaciones y la búsqueda de sus textos. La búsqueda se publicó en v0.187; el alcance actual del historial se detalla arriba.
 
 **Estado: entregas 0 a 3 hechas (v0.116: el mapa, sus pruebas y ver las anotaciones; v0.123: el anotador en la
 compu y la poda; v0.129: el dedo y el lápiz del iPad; ver "Cómo quedó" al final) y, de la entrega 5, copiar y pegar una

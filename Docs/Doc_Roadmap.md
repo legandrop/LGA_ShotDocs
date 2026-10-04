@@ -1116,3 +1116,28 @@ Pedido de Lega (2026-10-01), para cuando la app esté terminada:
   Microsoft; un instalador propio fuera de la Store necesita además un certificado de firma (por ejemplo, Azure
   Trusted Signing).
 - Google Play, no.
+
+## Al final del alcance: evaluar funciones de reportes de rodaje
+
+Reserva expresa de Lega (2026-10-04): estas oportunidades se ofrecen **sólo cuando todo el resto de
+la app esté terminado y probado, incluidas las pruebas pendientes**. Quedan fuera del trabajo
+autónomo autorizado. No se diseña ni implementa ninguna por iniciativa propia ni por seguimiento
+automático: cada implementación requiere **consentimiento expreso de Lega** después de ofrecerlas.
+No hay una decisión que pedir ahora. Referencia funcional: [Wrangler VFX](https://www.wranglervfx.com/learn).
+
+**Registro del rodaje y referencias:**
+
+- Claquetas y tomas con numeración y duplicación automáticas.
+- Biblioteca reutilizable de cámaras, lentes y kits.
+- Registro de tiempos de rodaje y generación de DTR.
+- Cálculo de nombres y rangos para archivos HDRI y series DSLR.
+- Fotos de referencia relacionadas con claqueta, toma y cámara.
+- Seguimiento de lens grids por lente.
+- Lectura de distanciómetros Bluetooth.
+
+**Intercambio y entrega:**
+
+- Exportación tabular especializada a CSV, VES y Excel.
+- Integración directa con ShotGrid.
+- Importación de Setellite, VES y ZoeLog con mapeos reutilizables.
+- Correo de entrega preparado con destinatarios, resumen y PDF.

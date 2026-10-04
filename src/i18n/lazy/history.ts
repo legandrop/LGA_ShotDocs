@@ -4,6 +4,12 @@ import type { Dict } from '../types';
 // El historial de versiones de una página (P.18, Docs/Doc_Historial.md). Se carga aparte, con su pantalla.
 
 export const history = {
+  'history.annotated': { en: "Annotated {name}", es: "Anotó {name}" },
+  'history.annotationsChanged': { en: "Annotations changed", es: "Cambios en anotaciones" },
+  'history.annotationsPending': {
+    en: "Show changes does not compare annotations yet. Restore keeps the current annotations.",
+    es: "Mostrar cambios todavía no compara anotaciones. Restaurar conserva las anotaciones actuales.",
+  },
   'history.title': { en: "Version history", es: "Historial de versiones" },
   'history.back': { en: "Back to the page", es: "Volver a la página" },
   'history.loading': { en: "Loading the history…", es: "Cargando el historial…" },
