@@ -650,7 +650,11 @@ export class UndoTimeline {
       }
       list!.splice(at, 1);
       this.tagged.delete(item);
-      if (h && !h.um && this.size(h) === 0) this.drop(h, false);
+      // Segundo intento inaccesible: el texto sigue reemplazado. Sus pasos anteriores dependen de las letras que
+      // solo este paso podía devolver; dejarlos vivos mutilaría la nota al restaurar (B1). Como en el caso de todas
+      // inaccesibles del runner, se olvida la historia de esa página; el panel conserva Undo the rest por las anclas.
+      if (kind === 'undo') this.forget(pageId);
+      else if (h && !h.um && this.size(h) === 0) this.drop(h, false);
     }
     if (restUndo) {
       // Lo que quedó otra vez no se espera más (ver arriba): `left` está vacío.

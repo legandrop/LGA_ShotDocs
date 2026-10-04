@@ -737,6 +737,31 @@ describe('el reemplazo en la línea de tiempo (entrega 2)', () => {
     expect(await text('C')).toBe('otra Camera');
   });
 
+  it('auditoría B1: después de dos pendientes y rehacer, restaurar la olvidada nunca mutila su nota anterior', async () => {
+    const { d, ids, app, runner, replaceAll, go, text, engine, timeline } = await setup({ A: ['plano'], B: ['toma'], C: ['otra cámara'] });
+    await go('A');
+    type(app.editor!, ' cámara roja');
+    await go('B');
+    type(app.editor!, ' cámara azul');
+    await go('C');
+    const op = await replaceAll('camara', 'Camera');
+    await d.tree.trash(ids.A);
+    await d.tree.trash(ids.B);
+    await runner.run('undo');
+    await d.tree.restore(ids.A);
+    await runner.run('undo');
+    expect(await text('A')).toBe('plano cámara roja');
+    expect(await text('B')).toBe('toma Camera azul');
+    await runner.run('redo');
+    await runner.run('undo');
+    await d.tree.restore(ids.B);
+    await runner.run('undo');
+    // Se olvidó la historia que dependía de letras reemplazadas: la nota queda completa.
+    expect(await text('B')).toBe('toma Camera azul');
+    await engine.undo(op, { inOrder: timeline.replaceIsNext(op, 'undo') });
+    expect(await text('B')).toBe('toma cámara azul');
+  });
+
   it('un reemplazo que ya no está entre los últimos 5 del panel se deshace igual con ⌘Z (con lo guardado en memoria)', async () => {
     const words = ['uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis'];
     const { runner, replaceAll, text, engine, project } = await setup({ A: [words.join(' ')] });

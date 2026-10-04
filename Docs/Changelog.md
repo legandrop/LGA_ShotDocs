@@ -8,7 +8,8 @@ reemplazo; *Undo the rest* tampoco devolvía el texto exacto. Ahora el reemplazo
 rehacer y lo pendiente para deshacer, en su orden anterior. Restaurada la página, el próximo ⌘Z deshace el reemplazo
 ahí; el siguiente deshace lo escrito antes sin restos, y ⌘⇧Z vuelve a hacer todo. *Undo the rest* usa la misma pila.
 Si sigue en la papelera al siguiente intento, se avisa y se continúa con los pasos anteriores. Escribir algo nuevo
-quita lo de rehacer sin sacar lo pendiente. Ayuda y documentación actualizadas; sin cambios del formato guardado.
+quita lo de rehacer sin sacar lo pendiente. Al abandonar una página inaccesible también se olvidan sus pasos anteriores:
+dependían de letras reemplazadas y podían mutilar la nota al restaurarla. Sin cambios del formato guardado.
 
 [ Deshacer un reemplazo conserva el paso de la página en la papelera hasta restaurarla o volver a intentar ]
 

@@ -1219,8 +1219,9 @@ para rehacer, y lo pendiente queda para deshacer en el lugar que tenía antes de
 exactamente. *Undo the rest* usa esa misma pila si la página sigue retenida. ⌘⇧Z vuelve a hacer lo escrito y después
 el reemplazo en todas las páginas deshechas.
 
-Si el siguiente ⌘Z llega mientras todas las páginas pendientes siguen inaccesibles, se avisa y se olvidan sus pasos,
-como con una página en la papelera. El siguiente ⌘Z sigue con lo anterior. El panel conserva *Undo the rest* por las
+Si al siguiente intento una página pendiente sigue inaccesible, se olvidan todos sus pasos, también los anteriores,
+como con una página en la papelera. Las páginas restauradas sí se deshacen; el aviso cuenta cuáles siguen pendientes.
+Si todas siguen inaccesibles, se avisa y el siguiente ⌘Z sigue con lo anterior. El panel conserva *Undo the rest* por las
 anclas. Algo nuevo elimina lo de rehacer en el proyecto, pero conserva lo pendiente para deshacer. Rehacer antes de
 restaurar junta lo hecho con lo pendiente, en una sola entrada. Los topes y el rearmado del documento liberan también
 los pasos pendientes. Esto vive solamente en la memoria de la pestaña, sin cambiar el formato guardado ni el esquema.
@@ -1230,10 +1231,16 @@ de orden, una sola página afectada, continuar sin restaurar y escribir algo nue
 anterior abre lo deshecho y rehecho sin escribir en el documento. La memoria del iPhone y el gesto de iOS siguen
 pendientes de comprobar en los dispositivos.
 
-Verificación dirigida: 95 pruebas en cuatro archivos de la línea de tiempo; TypeScript sin errores. En Chromium sin
+Verificación dirigida: 96 pruebas en cuatro archivos de la línea de tiempo; TypeScript sin errores. En Chromium sin
 ventana, 64 comprobaciones en cinco recorridos: restaurar y deshacer/rehacer con Ctrl y con ⌘, *Undo the rest*, y
 continuar sin restaurar con ambos atajos. Los recorridos usan el editor de la app y dos dispositivos contra el servidor
 en memoria; el segundo baja el mismo texto. La simulación de ⌘ no sustituye comprobar una Mac o el gesto de iOS.
+
+**Corrección de la auditoría:** con dos páginas pendientes y una restaurada, se sacaba el paso del reemplazo de la
+otra pero quedaban sus pasos anteriores. Restaurarla tras rehacer/deshacer dejaba «tomaCamera» en lugar de conservar
+«toma Camera azul»: su historia dependía de letras que el reemplazo ya había cambiado. Ahora se olvida toda la
+historia de esa página al segundo intento inaccesible, incluso cuando las demás se pudieron deshacer. Su nota queda
+intacta y *Undo the rest* devuelve «toma cámara azul»; las otras páginas conservan su deshacer y rehacer.
 
 ## Correcciones de la auditoría (2026-10-02)
 
