@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX : Mantener los menús del carrete dentro del teléfono
+v0.183 : Mantener los menús del carrete dentro del teléfono
 
 En el carrete de un teléfono, los menús de Download y Copy podían empezar fuera de la pantalla: su ancho se alineaba al borde de un botón intermedio de la barra. Eso recortaba el nombre de la copia preparada y las dimensiones del original; en pantallas más angostas también dejaba controles afuera. Ahora los paneles se ubican dentro de los márgenes del viewport móvil, contemplan las áreas seguras y aprovechan el espacio disponible. Los nombres largos se envuelven completos y, si el menú supera el alto disponible, se puede desplazar sin achicar los botones. Original, la preparación, Download, Copy y Close conservan su funcionamiento. En escritorio continúa el anclaje existente. La ayuda explica dónde ver el nombre y las dimensiones y cómo desplazarse hasta los controles.
 

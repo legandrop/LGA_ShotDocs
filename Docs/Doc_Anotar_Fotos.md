@@ -9,7 +9,7 @@ anotaciones tiene su primera parte en v0.178 (E4a: una foto JPEG/PNG desde el ca
 Auditado el 2026-10-02 (aprobado con condiciones): las correcciones ya están en el texto y resumidas al final
 ("Correcciones de la auditoría").
 
-En v0.0XX, los menús de Download y Copy del carrete en el teléfono quedan dentro de la pantalla: el nombre preparado se envuelve completo y las dimensiones no se recortan. Si el panel es más alto que el espacio disponible, se desplaza para llegar a Original, la preparación, Download o Copy y Close; los botones mantienen su tamaño. El posicionamiento de escritorio conserva el anclaje de la barra.
+En v0.183, los menús de Download y Copy del carrete en el teléfono quedan dentro de la pantalla: el nombre preparado se envuelve completo y las dimensiones no se recortan. Si el panel es más alto que el espacio disponible, se desplaza para llegar a Original, la preparación, Download o Copy y Close; los botones mantienen su tamaño. El posicionamiento de escritorio conserva el anclaje de la barra.
 
 ## En corto
 
