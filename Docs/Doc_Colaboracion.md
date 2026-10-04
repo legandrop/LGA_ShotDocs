@@ -228,10 +228,13 @@ escribía ahí creaba su propio texto; después los juntaba copiando uno en el o
 
 `patches/yjs+13.6.33.patch` (Yjs fijo en 13.6.33): el deshacer sigue entera la copia que otro deshacer volvió a poner
 (sin él dejaba restos y a veces se llevaba texto de antes), y desde v0.0XX el ⌘Z con dos personas ya no tira
-`TypeError` cuando la copia del renglón fue recolectada (B.22). La causa, el arreglo y lo medido están en
-`Doc_Deshacer.md`, secciones 16 y 20. Al actualizar Yjs: ver si la versión nueva lo trae; si no, rehacerlo en
-`dist/yjs.mjs`, `dist/yjs.cjs` y `src` (marcas `LGA-SHOTDOCS-PATCH (B.21)` y `(B.22)`), regenerar con
-`npx patch-package yjs` y correr `src/ui/yjsUndoRedone*.test.ts` y `src/ui/yjsUndoGone.test.ts`. `vite.config.ts` (`assertYjsPatched`) no deja correr nada sin el parche.
+`TypeError` cuando la copia del renglón fue recolectada (B.22). Y desde v0.0XX deshacer el borrado de un renglón ya no
+deja a dos personas con **textos distintos para siempre** (B.26: Yjs ubicaba la letra que vuelve en un lugar en la
+memoria de quien deshacía y en otro en los demás, cuando sus vecinos quedaban cruzados; pasaba también sin nuestros
+parches). La causa, el arreglo y lo medido están en `Doc_Deshacer.md`, secciones 16, 20 y 21. Al actualizar Yjs: ver si
+la versión nueva lo trae; si no, rehacerlo en `dist/yjs.mjs`, `dist/yjs.cjs` y `src` (marcas `LGA-SHOTDOCS-PATCH (B.21)`,
+`(B.22)` y `(B.26)`), regenerar con `npx patch-package yjs` y correr `src/ui/yjsUndoRedone*.test.ts`,
+`src/ui/yjsUndoGone.test.ts` y `src/ui/yjsUndoCrossed.test.ts`. `vite.config.ts` (`assertYjsPatched`) no deja correr nada sin el parche.
 
 ### A futuro: `@blocknote/core/y` (y-prosemirror 2, Yjs 14)
 

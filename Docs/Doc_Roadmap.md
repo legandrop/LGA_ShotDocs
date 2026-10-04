@@ -972,7 +972,7 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    saltó algo, lo insertado por ese paso se deja (puede ser el mismo texto movido). De 10 a 0 con el editor, de 24 a 0
    (y de 236 a 0 en 20.000 más) en el modelo de párrafos; sin la excepción, idéntico. Sin `min_app_version`.
    Queda: con dos editores, 6 de 3.000 corridas terminan con los dos textos distintos (las mismas sin el arreglo, ninguna
-   con la excepción; para investigar aparte); el Enter deshecho cuya mitad vuelve a un renglón que otro borró desaparece
+   con la excepción; **arreglado en B.26**); el Enter deshecho cuya mitad vuelve a un renglón que otro borró desaparece
    (de Yjs, sin copias); reportarlo a Yjs (`Doc_Deshacer.md`, sección 20).
 23. **Hecho (v0.152): los topes de largo de la base en la app.** Un título de más de 500 caracteres quedaba rechazado
    para siempre (`pages_title_check`). El árbol corta títulos, nombres de proyecto y claves de orden, lo que sobra del
@@ -1008,6 +1008,18 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    del teléfono, con los atajos en los tooltips de las herramientas, deshacer, encuadrar y el grosor; el mutante
    `{ touch: true }` ya no sobrevive. Fuera de esta barra queda la de los links (*Edit link*, *Open in new tab*, *Remove
    link*, al pasar por un link), con el globo de BlockNote solo con el nombre (sin atajos).
+26. **Hecho (v0.0XX): dos personas con textos distintos después de deshacer** (lo dejó B.22: 6 de 3.000 corridas con
+   dos editores terminaban con los dos textos distintos para siempre, "y la toma" en uno y "y la omat" en el otro). Los
+   dos `Y.Doc` tenían las mismas ediciones: la memoria de quien deshacía no coincidía con lo que mandaba (ni con lo que
+   ve él mismo al recargar). **De Yjs, también sin nuestros parches:** al deshacer el borrado de un renglón, los vecinos
+   de cada letra que vuelve se buscan siguiendo las copias, y con un original y su copia en el mismo texto quedaban
+   cruzados. **Arreglado en el parche de Yjs:** los vecinos se toman como los lee otro dispositivo (el derecho a la
+   derecha del izquierdo, el izquierdo sin partir). De 6 a 0 con dos editores, de 22 a 0 en el modelo de párrafos y de
+   33 a 0 documentos distintos de lo guardado con una persona; ninguna letra de menos; versiones mezcladas sin
+   diferencias nuevas. Sin `min_app_version` (`Doc_Deshacer.md`, sección 21). Queda: el Enter deshecho cuya mitad
+   vuelve a un renglón que otro borró (20.5) no es de esta familia; extender la decisión F de B.22 lo arregla pero
+   empeora *Replace all* y cambia 655 de 3.000 corridas: propuesta de dejar lo insertado solo si es el mismo texto
+   movido, a medir (21.5). Reportarlo a Yjs.
 
 ### C. Esperan a Lega
 

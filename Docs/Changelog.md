@@ -10,7 +10,15 @@ no tiene dónde volver, hace lo demás y, si saltó algo, deja lo insertado por 
 por un Enter). Medido con dos editores borrando y deshaciendo bloques enteros: de 10 a 0 en 3.000 corridas, y de 24 a
 0 en el modelo de párrafos; sin la excepción, idéntico. Sin `min_app_version`.
 
-[ Deshacer con dos personas sin la excepción de Yjs - el parche salta lo que no tiene dónde volver porque otra persona borró su renglón, hace lo demás del paso y deja lo insertado si saltó algo; medido con dos editores borrando bloques enteros ]
+**Dos personas con textos distintos después de deshacer (B.26).** Con dos editores borrando y deshaciendo bloques
+enteros, 6 de 3.000 corridas terminaban con los dos textos distintos para siempre ("y la toma" en uno, "y la omat" en el
+otro). Causa, de Yjs (también sin nuestros parches): al deshacer el borrado de un renglón, los vecinos de cada letra que
+vuelve se buscan siguiendo las copias; con un original y su copia en el mismo texto quedaban cruzados, y quien deshacía
+ubicaba la letra en un lugar y los demás (y él mismo al recargar) en otro. El parche de Yjs ahora toma los vecinos como
+los lee otro dispositivo. De 6 a 0 con el editor y de 22 a 0 en el modelo de párrafos, sin ninguna letra de menos. Sin
+`min_app_version`.
+
+[ Deshacer con dos personas sin la excepción de Yjs - el parche salta lo que no tiene dónde volver porque otra persona borró su renglón, hace lo demás del paso y deja lo insertado si saltó algo; medido con dos editores borrando bloques enteros; y deshacer el borrado de un renglón ya no deja a dos personas con textos distintos (B.26) ]
 
 v0.164 :
 
