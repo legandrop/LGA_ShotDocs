@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.179 :
+
+**Lista o cuadrícula para las carpetas.** El visor sólo ofrecía filas con miniaturas pequeñas, aunque su diseño
+contemplaba comparar referencias en una cuadrícula. Ahora tiene List y Grid: las tarjetas muestran la miniatura
+completa, el nombre, peso o tipo y la acción de bajar, con columnas que se adaptan al ancho. Cambiar de vista
+conserva las entradas, su orden, la subcarpeta y las páginas ya cargadas; no vuelve a listar ni pide originales.
+La elección se recuerda únicamente en este dispositivo, sin guardar listados o pases. Si el almacenamiento está
+bloqueado, la vista sigue funcionando mientras esté abierta. La navegación, los documentos de Google, los accesos
+directos y las acciones de abrir y descargar mantienen su conducta. Se comprueban la preferencia, la paginación,
+las acciones y la geometría en teléfono y computadora, en ambos idiomas y temas. Ayuda y documentación.
+[Lista y cuadrícula en el visor de carpetas con elección recordada por dispositivo]
+
 v0.178 :
 
 **Una foto anotada para compartir.** El carrete bajaba únicamente el original, aunque la página mostrara flechas,

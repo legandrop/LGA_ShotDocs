@@ -166,7 +166,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   **Entrega 1 hecha (v0.081):** soltar una carpeta, la ventana de qué se sube, su cola propia (los bytes por el
   portero), la tarjeta, el visor con el carrete y bajar uno, retomar volviendo a soltarla, y el portero con la
   regla de no salir del árbol. Las carpetas soltadas van al Drive sin espacios, con guiones bajos (D3 → B, 2026-10-02; antes, del 2026-10-01 a v0.127, conservaban su nombre). Falta: que Lega decida `drive.readonly` (ver lo agregado a mano en Drive), probar
-  la subida directa a Google con el Drive real, "Agregar a esta carpeta", la cuadrícula, la lista sin red, "Seguir"
+  la subida directa a Google con el Drive real, "Agregar a esta carpeta", la lista sin red, "Seguir"
   en Chrome y Edge y el botón "Carpeta…" del menú `/`. **Entrega 2 hecha (*Bajar todo*, rama `lega/carpetas-zip`):**
   zip sin comprimir con Zip64 escrito a medida que llega en Chrome y Edge, o el árbol en una carpeta; en memoria con
   tope en Firefox, Safari y los teléfonos (D24); nombres de Drive limpios para Windows y la Mac (`.`, `..`, punto al
@@ -190,6 +190,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   esperas (O5), el listado de varias subcarpetas ya no corta con `409` por más de un minuto entre páginas (O7) y una
   parte a la que Drive no le contesta al portero cuenta como trabada a los 90 s (B.11). Detalle en
   `Doc_Carpetas.md`, "Cómo quedó", "Cómo quedó (entrega 2)", "Cómo quedó (entrega 3)" y "Cómo quedó (entrega 4)".
+  **Hecho (v0.179):** el visor ofrece List/Grid, con miniaturas completas y columnas adaptadas al ancho; conserva el mismo listado y sus acciones, y recuerda sólo la vista en este dispositivo. No agrega cache offline de la lista (`Doc_Carpetas.md`, "Lista y cuadrícula").
 - **P.10 Espacio en el dispositivo y "Available offline"** (Lega, 2026-09-30 y D-25 del 2026-10-01): tope
   elegible, de fábrica 2 GB por workspace en cada dispositivo (pasado el tope, un aviso ofrece liberar las copias ya
   confirmadas en el Drive que hace más que no se abren, y se liberan recién con el sí; la miniatura queda), marcar una página o un proyecto para usarlo sin red (con una ventana de casillas y

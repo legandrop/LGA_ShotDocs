@@ -12,6 +12,7 @@ import { downloadNow, openInNewTab } from './attachmentOpen';
 import { FolderGlyph, useFolderProgress } from './FolderDialog';
 import { lazyPart, Part } from './lazyPart';
 import { FolderDownloadDialog } from './FolderDownload';
+import './folderGrid.css';
 
 // El visor de una carpeta (P.9, Docs/Doc_Carpetas.md, sección 8): lo que hay ahora en la carpeta de Drive,
 // servido por el portero con los mismos pases que las fotos. Las migas de pan empiezan en la carpeta (nunca más
@@ -22,6 +23,16 @@ import { FolderDownloadDialog } from './FolderDownload';
 const Carrete = lazyPart(() => import('./Carrete').then((m) => m.Carrete));
 
 type FolderLister = { folderList: (file: string, dir?: string | null, pageToken?: string | null) => Promise<FolderListing> };
+
+type FolderView = 'list' | 'grid';
+const VIEW_KEY = 'shotdocs.folderView';
+function storedView(): FolderView {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'grid' ? 'grid' : 'list';
+  } catch {
+    return 'list';
+  }
+}
 
 interface Level {
   id: string | null;
@@ -50,6 +61,7 @@ export function FolderViewer({
   const [next, setNext] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [view, setView] = useState<FolderView>(storedView);
   const [carrete, setCarrete] = useState<{ items: CarreteItem[]; start: number; loader: CarreteLoader } | null>(null);
   const [downloading, setDownloading] = useState(startDownload && online);
   /** Sin conexión, el botón explica por qué no baja (en vez de no hacer nada). */
@@ -125,6 +137,15 @@ export function FolderViewer({
   const download = (entry: Extract<FolderEntry, { type: 'file' }>) =>
     downloadNow({ url: forceDownload(entry.url), name: entry.name, release: () => undefined });
 
+  const chooseView = (mode: FolderView) => {
+    setView(mode);
+    try {
+      localStorage.setItem(VIEW_KEY, mode);
+    } catch {
+      // Sin almacenamiento disponible, la elección sigue funcionando mientras esté abierto el visor.
+    }
+  };
+
   return (
     <div className="modal-backdrop folder-viewer-backdrop" onClick={onClose}>
       <div className="modal folder-viewer" role="dialog" aria-modal="true" aria-label={name} onClick={(e) => e.stopPropagation()}>
@@ -159,6 +180,14 @@ export function FolderViewer({
             </button>
           </div>
         </header>
+        <div className="folder-view-choice" role="group" aria-label={tr('folders.view')}>
+          <button className="button" aria-pressed={view === 'list'} onClick={() => chooseView('list')}>
+            {tr('folders.list')}
+          </button>
+          <button className="button" aria-pressed={view === 'grid'} onClick={() => chooseView('grid')}>
+            {tr('folders.grid')}
+          </button>
+        </div>
         {offlineNote && !online && <p className="muted small">{tr('folders.downloadAllOffline')}</p>}
         {upload && upload.state !== 'done' && (
           <p className="folder-upload-strip small">
@@ -174,7 +203,7 @@ export function FolderViewer({
         {entries === null && loading && <p className="muted small">{tr('folders.loading')}</p>}
         {entries && entries.length === 0 && !loading && <p className="muted small">{tr('folders.viewerEmpty')}</p>}
         {entries && entries.length > 0 && (
-          <ul className="folder-list">
+          <ul className={`folder-list${view === 'grid' ? ' folder-grid' : ''}`}>
             {entries.map((entry, i) => (
               <li key={'id' in entry ? entry.id : `${entry.type}:${entry.name}:${i}`} className={`folder-row folder-row-${entry.type}`}>
                 {entry.type === 'folder' && (

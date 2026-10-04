@@ -310,8 +310,8 @@ export const help = {
   },
   'help.folderOpen.title': { en: "Open a folder", es: "Abrir una carpeta" },
   'help.folderOpen.text': {
-    en: "Click the card twice (once on the phone or without edit access), press {open} with it selected, or Open in its bar. You see what is in the Drive folder right now: subfolders first, then files with their thumbnail. A photo or a video opens in the viewer; a PDF opens in a new tab; the rest downloads. {up} goes up one level.",
-    es: "Dos clics en la tarjeta (uno en el teléfono o sin permiso de editar), {open} con la tarjeta elegida, o Abrir en su barra. Ves lo que hay ahora en la carpeta de Drive: primero las subcarpetas, después los archivos con su miniatura. Una foto o un video se abren en el carrete; un PDF, en otra pestaña; lo demás se baja. {up} sube un nivel.",
+    en: "Click the card twice (once on the phone or without edit access), press {open} with it selected, or Open in its bar. You see what is in the Drive folder right now: subfolders first, then files with their thumbnail. Use List or Grid to change the view; your choice is remembered on this device. A photo or a video opens in the viewer; a PDF opens in a new tab; the rest downloads. {up} goes up one level.",
+    es: "Dos clics en la tarjeta (uno en el teléfono o sin permiso de editar), {open} con la tarjeta elegida, o Abrir en su barra. Ves lo que hay ahora en la carpeta de Drive: primero las subcarpetas, después los archivos con su miniatura. Usá Lista o Cuadrícula para cambiar la vista; se recuerda en este dispositivo. Una foto o un video se abren en el carrete; un PDF, en otra pestaña; lo demás se baja. {up} sube un nivel.",
   },
   'help.folderDownload.title': { en: "Download a whole folder", es: "Bajar una carpeta entera" },
   'help.folderDownload.text': {

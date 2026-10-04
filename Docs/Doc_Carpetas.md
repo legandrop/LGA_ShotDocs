@@ -270,6 +270,28 @@ mano). De la auditoría de la entrega 2:
   papelera deja de listarse en el acto; los tipos de Google no se crean por las subidas; textos (plurales, ocultos
   sin contar carpetas, la tarjeta sin cortar, documentos de Google, sin *Pause* en una detenida).
 
+## Lista y cuadrícula (v0.179, implementado)
+
+El visor ofrece **List / Lista** y **Grid / Cuadrícula** debajo de las migas y las acciones. Sin una elección guardada,
+abre List; Grid muestra las mismas entradas en tarjetas adaptadas al ancho de la ventana, con miniaturas completas
+(sin recortar la foto), nombre, peso o tipo y el botón de bajar cada archivo. En un teléfono de 360 px entran dos
+columnas; una pantalla más angosta usa una. La lista se desplaza dentro del visor, dejando accesible *Show more*.
+
+La elección se recuerda por navegador y dispositivo (`shotdocs.folderView`, sólo `list` o `grid`), para cualquier
+carpeta que se abra después; no se guarda en la cuenta ni viaja a otros dispositivos. Un valor desconocido abre
+List. Si el navegador bloquea el almacenamiento, se puede cambiar de vista mientras el visor está abierto.
+
+Cambiar de vista conserva las entradas, su orden, la subcarpeta y lo cargado con *Show more*: no vuelve a listar ni
+pide originales. Las migas, Escape, abrir un archivo y *Download* usan sus acciones de siempre; los accesos
+directos y los documentos de Google siguen sin abrirse. No se guardan listados ni pases para usarlos sin red: ese
+pendiente continúa separado. No cambia ningún permiso o regla del árbol ni lo guardado en una página.
+
+Implementación en `src/ui/FolderViewer.tsx`, con CSS propio en `src/ui/folderGrid.css` y textos EN/ES. Las siete
+pruebas del componente verifican entradas/pedidos, paginación con error, navegación, recuerdo y storage bloqueado,
+acciones y carpeta vacía/sin red. El recorrido de ventana real mide columnas, miniaturas y ausencia de
+desbordamiento en escritorio y teléfono, en ambos idiomas y temas. La comprobación física en Safari/iPhone y
+Drive real sigue pendiente; esta entrega no cierra P.9 ni toda la entrega 1b.
+
 **Lo que falta, con su nivel:**
 
 - **Lega (MEDIO):** decidir `drive.readonly` (decisión 1). Hoy el portero pide `drive.file`: el visor muestra lo
@@ -277,7 +299,7 @@ mano). De la auditoría de la entrega 2:
   ya es código); hace falta el cambio de permiso y que el dueño reconecte (ver el informe de la tanda).
 - **Subida directa del navegador a Google (plan A, BAJO):** no se probó (pide el Drive real); los bytes van por el
   portero, que entra en el plan gratis (unos 10.300 pedidos por carpeta de 10.000 archivos, sección 12).
-- **Entrega 1b pendiente (BAJO):** "Agregar a esta carpeta", la cuadrícula, la copia de la última lista para
+- **Entrega 1b pendiente (BAJO):** "Agregar a esta carpeta", la copia de la última lista para
   verla sin red, retomar con "Seguir" en Chrome y Edge (`FileSystemHandle`), el botón "Carpeta…" del menú `/`,
   la cuenta de pedidos del día y contar lo que falta subir en "sacar el workspace del dispositivo".
 - **Entrega 2:** *Bajar todo* como zip. **Hecho** ("Cómo quedó (entrega 2)").

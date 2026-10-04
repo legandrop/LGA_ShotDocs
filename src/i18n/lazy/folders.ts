@@ -138,6 +138,9 @@ export const folders = {
   'folders.openFolder': { en: "Open the folder", es: "Abrir la carpeta" },
   'folders.closeTip': { en: "It keeps uploading while this tab is open", es: "Sigue subiendo mientras la pestaña esté abierta" },
   'folders.viewerEmpty': { en: "This folder is empty.", es: "Esta carpeta está vacía." },
+  'folders.view': { en: "View", es: "Vista" },
+  'folders.list': { en: "List", es: "Lista" },
+  'folders.grid': { en: "Grid", es: "Cuadrícula" },
   'folders.loading': { en: "Loading…", es: "Cargando…" },
   'folders.loadMore': { en: "Show more", es: "Mostrar más" },
   'folders.notReady': {

@@ -137,7 +137,9 @@ In development. What works today:
   downloads with its name. In the full-screen viewer, files appear large among the photos, with Open and Download.
 - Drop a whole folder, subfolders included: a window shows what goes up, it uploads to the owner's Drive and
   stays in the page as a folder card. Opening it shows what is in that Drive folder right now, with thumbnails,
-  the photo viewer and downloads; whoever sees the page sees the folder, and nothing above it. *Download all*
+  the photo viewer and downloads; whoever sees the page sees the folder, and nothing above it.
+  Choose List or Grid to browse the same folder; Grid shows full thumbnails, and this device remembers your view.
+  *Download all*
   saves the whole folder as a .zip (in Chrome and Edge on a computer, written as it arrives and with no size limit,
   or straight into a folder; elsewhere, built in memory up to 1 GB, 500 MB on a phone). Cancel also stops a download
   whose server error response stalls; it discards the unfinished zip or keeps completed files in the chosen folder.

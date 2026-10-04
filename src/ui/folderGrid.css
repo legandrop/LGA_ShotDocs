@@ -1,0 +1,88 @@
+/* El modo de vista de carpetas sólo cambia la presentación del mismo listado. */
+.folder-viewer-backdrop {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.folder-viewer .folder-viewer-head,
+.folder-viewer > .button,
+.folder-viewer .folder-view-choice {
+  flex-shrink: 0;
+}
+
+.folder-viewer .folder-view-choice {
+  display: flex;
+  align-self: flex-start;
+  gap: 4px;
+}
+
+.folder-view-choice .button[aria-pressed='true'] {
+  color: var(--text);
+  background: var(--hover);
+  border-color: var(--text);
+}
+
+.folder-viewer .folder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(140px, 100%), 1fr));
+  align-content: start;
+  gap: 12px;
+  padding-top: 12px;
+}
+
+.folder-grid .folder-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.folder-grid .folder-row-main {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 0;
+  border-radius: 4px;
+}
+
+.folder-grid .folder-row-icon {
+  position: relative;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+}
+
+.folder-grid .folder-row-icon img {
+  position: absolute;
+  inset: 0;
+  object-fit: contain;
+}
+
+.folder-grid .folder-row-name {
+  flex: none;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  min-height: 2.6em;
+  line-height: 1.3;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.folder-grid .folder-row-size {
+  display: block;
+}
+
+.folder-grid .folder-row-download,
+.folder-viewer .folder-view-choice .button {
+  min-height: 40px;
+}
+
+@media (max-width: 760px) {
+  .folder-viewer .folder-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(130px, 100%), 1fr));
+    gap: 8px;
+  }
+}
