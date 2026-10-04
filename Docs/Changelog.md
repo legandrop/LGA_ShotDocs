@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX : Conservar la última elección al reemplazar una foto de bloque
+
+Al elegir dos archivos para reemplazar la misma foto de bloque o de una fila, el primero podía terminar de
+guardarse más tarde y pisar la segunda elección. El callback sólo comprobaba que todavía existiera el id del
+bloque. Ahora cada archivo elegido tiene una prioridad propia de ese bloque y editor: sólo la última selección
+puede aplicar su resultado, incluso después de elegir texto y volver a la foto. También se comprueban la fuente
+anterior, el tipo del bloque y que el mismo editor siga abierto y editable. Cancelar el selector no invalida una
+elección pendiente; un segundo archivo fallido tampoco revive el primero. Los archivos guardados y las colas se
+conservan. Se mantienen las fotos en línea y celdas, con ayuda en ambos idiomas y comprobaciones de ambos órdenes.
+
+[Conservar la última elección al reemplazar una foto de bloque]
+
 v0.182 : Bajar y copiar una foto anotada desde su barra
 
 Las barras de fotos sólo permitían bajar el original aunque la página tuviera anotaciones. Ahora, al elegir una sola foto del Drive anotada en una página editable, el mismo botón Download abre una hoja con Original, Download y Copy. Vale para fotos de bloque, fila, renglón y celda, con preparación explícita y un segundo gesto para sacar el resultado completo. Reutiliza los motores de descarga y copia; no modifica la foto ni las formas. La hoja se descarta al cambiar la aparición elegida, selección, página, contexto, sesión o permiso, y vuelve a validar antes de producir una salida. Original y Close quedan disponibles si el cuerpo anotado sigue cargando o falla; Escape cancela la preparación pendiente. Las demás fuentes y acciones conservan su conducta. E4 sigue abierta por carpetas, FrameRev y pruebas físicas en Safari/iPhone.
