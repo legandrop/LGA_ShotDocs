@@ -695,10 +695,39 @@ export async function runDownload(
     if (res.ok) return res;
     let code = '';
     try {
-      code = ((await within(stallMs, () => res.json())) as { code?: string }).code ?? '';
+      code = await within(stallMs, async (s) => {
+        const reader = res.body?.getReader();
+        if (!reader) return '';
+        const stop = () => { void reader.cancel().catch(() => undefined); };
+        s.addEventListener('abort', stop, { once: true });
+        let ended = false;
+        try {
+          // El cuerpo de un error también puede quedar a medias: Cancel y el plazo deben cortar su fuente.
+          if (s.aborted) {
+            stop();
+            throw abortError();
+          }
+          const decoder = new TextDecoder();
+          let text = '';
+          for (;;) {
+            const part = await reader.read();
+            if (s.aborted) throw abortError();
+            if (part.done) {
+              ended = true;
+              break;
+            }
+            text += decoder.decode(part.value, { stream: true });
+          }
+          return (JSON.parse(text + decoder.decode()) as { code?: string }).code ?? '';
+        } finally {
+          s.removeEventListener('abort', stop);
+          if (!ended && !s.aborted) stop();
+          reader.releaseLock();
+        }
+      });
     } catch {
-      // sin cuerpo JSON (o no llegó)
-      res.body?.cancel().catch(() => undefined);
+      if (signal?.aborted) throw abortError();
+      // Sin cuerpo JSON (o no llegó): conserva la clasificación por el estado HTTP.
     }
     if (res.status === 403 && code === 'pass_expired') throw new FileFailed('pass_expired', true);
     if (res.status >= 500 || res.status === 429) throw new TypeError(`The media server answered ${res.status}.`);

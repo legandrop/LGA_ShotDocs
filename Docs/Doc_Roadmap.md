@@ -173,7 +173,9 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   final, `CON`…, a lo sumo 255 bytes) y cortes de 200 y 250 caracteres por grafema. *Retry missing*, el tope sin avance
   de cada pedido (R1) y el ZWJ de los emojis compuestos en la app (O4), hechos (rama `lega/carpetas-restos`); listar
   hasta 40 subcarpetas por pedido (`dirs` en `/folder/list`) y el ZWJ en el portero, hechos (v0.119, rama
-  `lega/carpetas-e2`). Falta (BAJO): Firefox sin tope por el service worker y probar a mano en Safari, el iPhone y con
+  `lega/carpetas-e2`). **Corrección implementada (v0.176):** *Cancel* y el plazo cancelan también la fuente
+  de un cuerpo de error HTTP atascado, liberando el lector; se mantienen los reintentos y *Retry missing* sin repetir
+  lo completado (`Doc_Carpetas.md`, "Cancelar un error que queda a medias"). Falta (BAJO): Firefox sin tope por el service worker y probar a mano en Safari, el iPhone y con
   el Drive real (si Drive rechaza la consulta con varios padres, la app cae a de a una sin perder nada, pero gasta un
   pedido de más por tanda; medir el CPU de un pedido con 40 subcarpetas en el plan gratis). De la auditoría de la entrega
   2 (BAJO, decidido, sin acción): la confianza de 60 s del listado de varias deja listar hasta 60 s una subcarpeta recién

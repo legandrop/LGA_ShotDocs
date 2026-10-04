@@ -138,7 +138,8 @@ In development. What works today:
   stays in the page as a folder card. Opening it shows what is in that Drive folder right now, with thumbnails,
   the photo viewer and downloads; whoever sees the page sees the folder, and nothing above it. *Download all*
   saves the whole folder as a .zip (in Chrome and Edge on a computer, written as it arrives and with no size limit,
-  or straight into a folder; elsewhere, built in memory up to 1 GB, 500 MB on a phone).
+  or straight into a folder; elsewhere, built in memory up to 1 GB, 500 MB on a phone). Cancel also stops a download
+  whose server error response stalls; it discards the unfinished zip or keeps completed files in the chosen folder.
 - Collapse sections by their headings: a triangle next to any heading hides everything up to the next heading
   of its level (just for you, saved on the device; Ctrl/⌘+Alt+Enter, and *Collapse all* in the page menu).
   Shift+click collapses or expands it for everyone who views the page (if you can edit it); the tooltip says
