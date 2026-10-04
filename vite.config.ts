@@ -121,10 +121,10 @@ function assertYjsPatched(): void {
   // va a leer otro dispositivo (sin eso, dos personas podían quedar con textos distintos para siempre).
   const B26 = ['const lgaLeftEnd = left !== null ? left.lastId : null', 'left = getItemCleanEnd(transaction, store, lgaLeftEnd)', 'while (o !== null && o !== right)'];
   const files: [string, string[]][] = [
-    ['dist/yjs.mjs', ['const lgaFollowRedoneRange', 'lgaFollowRedoneRange(transaction, store, struct)', 'leftTrace.redone.clock + leftTrace.length - 1', 'if (!(parentItem.content instanceof ContentType))', '!lgaParentGone && undoManager.deleteFilter(item)', ...B26]],
-    ['dist/yjs.cjs', ['const lgaFollowRedoneRange', 'lgaFollowRedoneRange(transaction, store, struct)', 'leftTrace.redone.clock + leftTrace.length - 1', 'if (!(parentItem.content instanceof ContentType))', '!lgaParentGone && undoManager.deleteFilter(item)', ...B26]],
+    ['dist/yjs.mjs', ['const lgaFollowRedoneRange', 'lgaFollowRedoneRange(transaction, store, struct)', 'leftTrace.redone.clock + leftTrace.length - 1', 'if (!(next instanceof Item))', 'if (!(parentItem.content instanceof ContentType))', '!lgaParentGone && undoManager.deleteFilter(item)', ...B26]],
+    ['dist/yjs.cjs', ['const lgaFollowRedoneRange', 'lgaFollowRedoneRange(transaction, store, struct)', 'leftTrace.redone.clock + leftTrace.length - 1', 'if (!(next instanceof Item))', 'if (!(parentItem.content instanceof ContentType))', '!lgaParentGone && undoManager.deleteFilter(item)', ...B26]],
     ['src/utils/UndoManager.js', ['const lgaFollowRedoneRange', 'lgaFollowRedoneRange(transaction, store, struct)', '!lgaParentGone && undoManager.deleteFilter(item)']],
-    ['src/structs/Item.js', ['leftTrace.redone.clock + leftTrace.length - 1', 'if (!(parentItem.content instanceof ContentType))', ...B26]],
+    ['src/structs/Item.js', ['leftTrace.redone.clock + leftTrace.length - 1', 'if (!(next instanceof Item))', 'if (!(parentItem.content instanceof ContentType))', ...B26]],
   ];
   for (const [file, wanted] of files) {
     let source = '';

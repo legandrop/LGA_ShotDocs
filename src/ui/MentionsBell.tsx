@@ -3,9 +3,12 @@ import { createPortal } from 'react-dom';
 import { locale, useT } from '../i18n';
 import { useLinkMode } from '../linkMode';
 import { navigate, pagePath } from '../router';
-import { useServices, useSyncStatus, useTree } from '../services';
+import { useAccessRequests, useServices, useSyncStatus, useTree } from '../services';
+import type { AccessRequest } from '../sync/accessRequests';
 import { labelForEmail } from '../sync/comments';
 import type { InboxSnapshot, MentionItem } from '../sync/mentions';
+import { AccessRequestRow } from './AccessRequestRow';
+import { lazyPart, Part } from './lazyPart';
 import { showComments } from './commentsUi';
 import { useFloating } from './menus';
 import { mentionSegments, plainCoda } from './mentionText';
@@ -16,6 +19,9 @@ import { setAppBadge, setTitleCount } from './titleBadge';
 // de menciones sin leer (1 a 9, y 9+). Al tocarla, la lista de la más nueva a la más vieja; abrir una lleva a la
 // página con el hilo abierto y la marca leída. Sin red, lo guardado. No está con un link público ni con la base del
 // workspace sin migrar.
+//
+// Los pedidos de acceso a un archivo (P.30, entrega 2, Docs/Doc_Links_PDF.md, 5.3): para quien puede decidirlos, una
+// sección arriba de las menciones y su número sumado al de la campana. *Review* abre la ventana de decidir.
 
 const EMPTY: InboxSnapshot = { ready: false, items: [], unread: 0, checkedAt: null, loaded: false };
 const noSubscribe = () => () => undefined;
@@ -31,11 +37,14 @@ export function MentionsBell() {
   const { mentions } = useServices();
   const link = useLinkMode();
   const inbox = useInbox();
+  const requests = useAccessRequests();
   const [open, setOpen] = useState(false);
+  const [reviewing, setReviewing] = useState<AccessRequest | null>(null);
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
   const tr = useT();
+  const pending = requests.ready ? requests.items.length : 0;
   // El número también en el título de la pestaña y en el ícono de la app instalada (entrega 2).
-  const shown = mentions && !link && inbox.ready ? inbox.unread : 0;
+  const shown = mentions && !link && inbox.ready ? inbox.unread + pending : 0;
   useEffect(() => {
     setTitleCount(shown);
     setAppBadge(shown);
@@ -49,16 +58,17 @@ export function MentionsBell() {
     [],
   );
   if (!mentions || link || !inbox.ready) return null;
-  const count = inbox.unread >= 10 ? '9+' : String(inbox.unread);
-  const label =
-    inbox.unread > 0
-      ? `${tr('mentions.title')} · ${inbox.unread >= 10 ? tr('mentions.unreadMany') : tr('mentions.unread', { count: inbox.unread })}`
-      : tr('mentions.title');
+  const total = inbox.unread + pending;
+  const count = total >= 10 ? '9+' : String(total);
+  const parts = [tr('mentions.title')];
+  if (inbox.unread > 0) parts.push(inbox.unread >= 10 ? tr('mentions.unreadMany') : tr('mentions.unread', { count: inbox.unread }));
+  if (pending > 0) parts.push(tr('requests.count', { count: pending }));
+  const label = parts.join(' · ');
   return (
     <>
       <button
         ref={setAnchor}
-        className={`icon-button mentions-bell${inbox.unread > 0 ? ' has-count' : ''}`}
+        className={`icon-button mentions-bell${total > 0 ? ' has-count' : ''}`}
         aria-label={label}
         data-tip={label}
         aria-expanded={open}
@@ -66,13 +76,34 @@ export function MentionsBell() {
         onClick={() => setOpen(!open)}
       >
         <BellIcon />
-        {inbox.unread > 0 && <span className="comments-toggle-count mentions-count">{count}</span>}
+        {total > 0 && <span className="comments-toggle-count mentions-count">{count}</span>}
       </button>
       {/* Afuera de la barra de arriba: `.topbar` arma su propio apilado y el panel de comentarios lo taparía. */}
-      {open && createPortal(<MentionsPanel anchor={anchor} onClose={() => setOpen(false)} />, document.body)}
+      {open &&
+        createPortal(
+          <MentionsPanel
+            anchor={anchor}
+            onClose={() => setOpen(false)}
+            onReview={(r) => {
+              setOpen(false);
+              setReviewing(r);
+            }}
+          />,
+          document.body,
+        )}
+      {reviewing &&
+        createPortal(
+          <Part onClose={() => setReviewing(null)}>
+            <AccessRequestDialog request={reviewing} onClose={() => setReviewing(null)} />
+          </Part>,
+          document.body,
+        )}
     </>
   );
 }
+
+// La ventana de decidir se baja la primera vez que se abre (lleva lo de compartir).
+const AccessRequestDialog = lazyPart(() => import('./AccessRequests').then((m) => m.AccessRequestDialog));
 
 function BellIcon({ size = 19 }: { size?: number }) {
   return (
@@ -83,9 +114,10 @@ function BellIcon({ size = 19 }: { size?: number }) {
   );
 }
 
-function MentionsPanel({ anchor, onClose }: { anchor: HTMLElement | null; onClose: () => void }) {
-  const { mentions, user, comments } = useServices();
+function MentionsPanel({ anchor, onClose, onReview }: { anchor: HTMLElement | null; onClose: () => void; onReview: (r: AccessRequest) => void }) {
+  const { mentions, user, comments, accessRequests } = useServices();
   const inbox = useInbox();
+  const requests = useAccessRequests();
   const status = useSyncStatus();
   const tree = useTree();
   const project = useCurrentProject();
@@ -95,7 +127,8 @@ function MentionsPanel({ anchor, onClose }: { anchor: HTMLElement | null; onClos
   // Abrir la campana: lo cambiado y el índice liviano (sin volver a bajar los textos).
   useEffect(() => {
     void mentions?.open();
-  }, [mentions]);
+    void accessRequests?.poll();
+  }, [mentions, accessRequests]);
 
   const r = anchor?.getBoundingClientRect();
   const style = r ? { top: r.bottom + 4, right: Math.max(8, window.innerWidth - r.right) } : undefined;
@@ -121,6 +154,16 @@ function MentionsPanel({ anchor, onClose }: { anchor: HTMLElement | null; onClos
         )}
       </header>
       {!status.online && <p className="comments-note">{time ? tr('mentions.offline', { time }) : tr('mentions.offlineNever')}</p>}
+      {requests.ready && requests.items.length > 0 && (
+        <section aria-label={tr('requests.title')}>
+          <h3 className="access-requests-head">{tr('requests.title')}</h3>
+          <ul className="access-requests">
+            {requests.items.map((r) => (
+              <AccessRequestRow key={r.id} request={r} onReview={() => onReview(r)} />
+            ))}
+          </ul>
+        </section>
+      )}
       {inbox.items.length === 0 ? (
         <p className="muted mentions-empty">{tr('mentions.empty')}</p>
       ) : (

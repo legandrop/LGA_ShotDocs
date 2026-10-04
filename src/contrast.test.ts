@@ -290,4 +290,39 @@ describe('reglas del editor', () => {
       }
     }
   });
+
+  it('en oscuro, los nueve resaltados llegan a 4,5:1 con el texto por defecto en los tres niveles (el gris, el amarillo y el naranja de BlockNote no llegaban)', () => {
+    const rule = ruleAt(".bn-container[data-color-scheme='dark'] {");
+    const override = (name: string) => new RegExp(`--bn-colors-highlights-${name}-background: (#[0-9a-f]{6});`, 'i').exec(rule)?.[1].toLowerCase();
+    // Solo se tocan los tres que no llegaban: los demás siguen siendo los de BlockNote.
+    expect(['gray', 'yellow', 'orange'].map(override)).toEqual(['#676663', '#806200', '#9d5209']);
+    for (const other of ['brown', 'red', 'green', 'blue', 'purple', 'pink']) expect(override(other), other).toBeUndefined();
+    const text = '#ece9e2';
+    const palette = COLORS_DARK_MODE_DEFAULT as Record<string, { background: string }>;
+    for (const level of LEVELS) {
+      // La tinta de un resaltado es la del encabezado, igual en los tres niveles.
+      expect(resolveInks('root', attrsOf('dark', level))['--ink-heading']).toBe(text);
+      for (const [name, c] of Object.entries(palette)) {
+        const bg = override(name) ?? c.background;
+        expect(contrastRatio(text, bg), `${level} ${name} ${bg}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+    // Sigue siendo el mismo matiz: más oscuro, no otro color (el rojo del gris sigue gris: R, G y B casi iguales).
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(override('gray')!.slice(i, i + 2), 16));
+    expect(Math.max(r, g, b) - Math.min(r, g, b)).toBeLessThan(10);
+  });
+
+  it('el modo claro y el PDF (siempre claro) conservan los fondos de BlockNote: el cambio es solo del esquema oscuro', () => {
+    // Todo lo que define un fondo de resaltado en styles.css cuelga del esquema oscuro; ninguna regla lo toca en claro.
+    const re = /([^{}]+)\{([^{}]*)\}/g;
+    let m: RegExpExecArray | null;
+    let found = 0;
+    while ((m = re.exec(CSS))) {
+      if (!/--bn-colors-highlights-[a-z]+-background/.test(m[2])) continue;
+      found++;
+      for (const sel of topLevel(m[1])) expect(sel, sel).toContain("[data-color-scheme='dark']");
+    }
+    expect(found).toBe(1);
+    expect(CSS).not.toMatch(/\.print-view[^{}]*--bn-colors-highlights/);
+  });
 });

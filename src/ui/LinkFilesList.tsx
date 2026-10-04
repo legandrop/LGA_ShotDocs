@@ -4,7 +4,7 @@ import '../i18n/lazy/teamDialogs';
 import { formatSize } from '../media/fileTrash';
 import { useServices, useSyncStatus } from '../services';
 import { LINK_FILES_SCHEMA_VERSION } from '../sync/linkAdmitApi';
-import { getPublicLinkFiles, type PublicLinkFile } from '../sync/publicLinks';
+import { getPublicLinkFiles, PUBLIC_LINK_FILES_MAX, type PublicLinkFile } from '../sync/publicLinks';
 import { downloadNow, prepareAndGet, prepareAttachment, preparedFor } from './attachmentOpen';
 
 // En Share de una página, debajo de lo apartado (Docs/Doc_Link_Publico.md, "Cómo quedó la 2b", decisión de Lega del
@@ -13,7 +13,7 @@ import { downloadNow, prepareAndGet, prepareAttachment, preparedFor } from './at
 // siguen en el Drive del dueño y acá se ven, con su nombre, y se bajan. Sale de `public_link_files` (a partir de
 // `files.plink_id`, no de las filas apartadas) y lo ve quien ve lo borrado de la página.
 
-/** Cuántos se muestran (la lista llega con hasta 500). */
+/** Cuántos se muestran (la lista llega con hasta `PUBLIC_LINK_FILES_MAX`). */
 const SHOWN = 20;
 
 export function LinkFilesList({ pageId, linkId }: { pageId: string; linkId: string | null }) {
@@ -43,6 +43,8 @@ export function LinkFilesList({ pageId, linkId }: { pageId: string; linkId: stri
   }, [rows, media]);
 
   if (!supported || rows.length === 0) return null;
+  // Lista cortada en el tope: hay al menos esos, quizás más (la base no devuelve el total de los links anteriores).
+  const capped = rows.length >= PUBLIC_LINK_FILES_MAX;
   const lang = tr.lang === 'es' ? 'es' : 'en';
   const when = (iso: string) => new Date(iso).toLocaleString(lang, { dateStyle: 'medium', timeStyle: 'short' });
 
@@ -59,7 +61,7 @@ export function LinkFilesList({ pageId, linkId }: { pageId: string; linkId: stri
   return (
     <div className="link-aside-list link-files-list">
       <p className="small team-lead">
-        <strong>{tr('share.link.filesTitle', { count: rows.length })}</strong> <span className="muted">{tr('share.link.filesHint')}</span>
+        <strong>{tr(capped ? 'share.link.filesTitleCapped' : 'share.link.filesTitle', { count: rows.length })}</strong> <span className="muted">{tr('share.link.filesHint')}</span>
       </p>
       <ul className="link-aside-rows">
         {rows.slice(0, SHOWN).map((r) => (
@@ -82,7 +84,9 @@ export function LinkFilesList({ pageId, linkId }: { pageId: string; linkId: stri
           </li>
         ))}
       </ul>
-      {rows.length > SHOWN && <p className="muted small">{tr('share.link.asideMore', { count: rows.length - SHOWN })}</p>}
+      {rows.length > SHOWN && (
+        <p className="muted small">{tr(capped ? 'share.link.filesCappedMore' : 'share.link.asideMore', { count: rows.length - SHOWN })}</p>
+      )}
       {failed && <p className="error">{tr('sync.downloadFailed')}</p>}
     </div>
   );

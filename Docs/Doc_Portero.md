@@ -292,6 +292,10 @@ exige: `restore_project` da `drive_untrash_first`). Con la sesión de la persona
 - **Mandar y traer de un mismo proyecto van de a uno** en el Worker. Si lo restauraron mientras se mandaba (la base
   responde `project_drive_not_requested` al confirmar), lo que se mandó en ese pedido vuelve y la respuesta es `409
   project_restored`.
+- **Borrado para siempre** (P.14, entrega 3, migración 23): con `purged_at` en `media_project`, las dos rutas responden
+  `409 project_purged` antes de ir a Drive o a la base; si la base lo rechaza al pedir (`request_project_drive_trash`),
+  lo mismo. *Delete forever* usa `/project/trash` tal como está, antes de marcar el proyecto (`Doc_Proyectos_Borrar.md`,
+  "Cómo quedó (entrega 3)").
 
 Códigos de error de `/project/trash` y `/project/untrash`:
 
@@ -306,6 +310,7 @@ Códigos de error de `/project/trash` y `/project/untrash`:
 | 409 | `nothing_to_untrash` | Traer la de un proyecto que nunca la mandó. | Restaurar directo. |
 | 409 | `drive_other_account` | Drive está conectado a otra cuenta de Google que la que se usó para mandarla. Nada se tocó. | Pedir que se conecte la de antes; **no** ofrecer restaurar sin los archivos. |
 | 409 | `project_restored` | Lo restauraron mientras se mandaba: lo mandado volvió. | Avisar. |
+| 409 | `project_purged` | El proyecto se borró para siempre: su carpeta ya no se manda ni se trae. No se tocó nada. | "Se borró para siempre". |
 | 503 | `drive_not_connected` | Drive no está conectado (o venció la conexión). No se pidió nada a la base. | Avisar que el dueño conecte Drive. |
 | 502 | `drive_failed` | Drive no contestó bien (o la red). El pedido queda sin confirmar y el registro con lo intentado. | Repetir: termina sin perder ninguna. |
 | 502 | `db_outdated` | La base no tiene la migración 10. | Avisar. |

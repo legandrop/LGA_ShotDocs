@@ -7,6 +7,7 @@ import type { CommentThread, CommentView } from '../sync/comments';
 import { editorSchemaOptions } from '../ui/editorSchema';
 import { PHOTO } from '../ui/inlinePhoto';
 import { internalPageId } from '../ui/internalLinks';
+import type { Contrast } from '../prefs';
 import type { PageFormat } from '../ui/pageFormat';
 import { printGeometry } from '../ui/pageFormat';
 import { authorLabel, blockText, type CommentSource } from './exportComments';
@@ -185,6 +186,11 @@ export interface PageHtmlInput {
   /** Los comentarios, ya armados (la sección de exportComments.ts), o `null`. */
   comments: HTMLElement | null;
   lang: string;
+  /**
+   * El contraste del texto que eligió quien exporta (`prefs.contrast`, Docs/Doc_Contraste.md): va como `data-contrast` del
+   * `<html>`, y las reglas de `style.css` (las mismas de la app) lo aplican igual que en el PDF. Sin él, *Contrast*.
+   */
+  contrast?: Contrast;
 }
 
 /** Las reglas `@page` de la hoja de una página, para imprimir el `.html` con su tamaño. */
@@ -283,7 +289,7 @@ export function pageHtml(input: PageHtmlInput): string {
   const index = hrefOf(relativePath(from, 'index.html'));
   return [
     '<!doctype html>',
-    `<html lang="${escapeHtml(input.lang)}" class="sd-archive">`,
+    `<html lang="${escapeHtml(input.lang)}" class="sd-archive"${input.contrast ? ` data-contrast="${input.contrast}"` : ''}>`,
     '<head>',
     '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',

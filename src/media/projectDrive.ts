@@ -68,6 +68,8 @@ export function projectDriveError(err: unknown): string {
         return t('projectDrive.outdated');
       case 'project_restored':
         return t('projectDrive.restoredMeanwhile');
+      case 'project_purged':
+        return t('project.errorPurged');
       case 'no_portero':
         return t('projectDrive.noPortero');
     }

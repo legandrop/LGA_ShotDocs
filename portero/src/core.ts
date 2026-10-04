@@ -134,6 +134,8 @@ interface MediaProject {
   drive_trash_requested_at: string | null;
   drive_trashed_at: string | null;
   drive_missing_at: string | null;
+  /** Borrado para siempre (P.14, entrega 3, migración 23): su carpeta ya no se manda ni se trae. Sin la 23, no viene. */
+  purged_at?: string | null;
 }
 
 /** Una carpeta de Drive como la devuelven `files.get` y `files.list` con los campos que pide el portero. */
@@ -504,6 +506,11 @@ function otherAccount(): HttpError {
     'Google Drive is connected to another account: connect the one this project used to restore its files.',
     'drive_other_account',
   );
+}
+
+/** El proyecto se borró para siempre (P.14, entrega 3): su carpeta no se manda ni se trae más; no se toca Drive. */
+function projectPurged(): HttpError {
+  return new HttpError(409, 'This project was deleted forever: its folder is not sent or brought back anymore.', 'project_purged');
 }
 
 /** Un error de `/project/trash` o `/project/untrash` sin código (Drive que no contesta, la red) sale con uno. */
@@ -2279,6 +2286,7 @@ export class Portero {
     let media = await this.mediaProject(who, project);
     if (!media) throw new HttpError(404, 'This project does not exist or you cannot send its files to the Google Drive trash.', 'not_found');
     if (!media.deleted_at) throw new HttpError(409, 'Only the folder of a deleted project goes to the Google Drive trash.', 'project_not_deleted');
+    if (media.purged_at) throw projectPurged();
     const saved = await this.store.get<ProjectTrash>(`projectTrash:${project}`);
     // Ya confirmado (y no es un pedido nuevo después de restaurarlo sin la carpeta): nada que hacer.
     if (media.drive_trashed_at && !media.drive_missing_at) {
@@ -2363,6 +2371,7 @@ export class Portero {
   private async bringProjectFolder(project: string, who: Who, onlySearch = false): Promise<ProjectDriveResult> {
     const media = await this.mediaProject(who, project);
     if (!media) throw new HttpError(404, 'This project does not exist or you cannot bring its files back.', 'not_found');
+    if (media.purged_at) throw projectPurged();
     const requestedAt = media.drive_trash_requested_at;
     if (!requestedAt) throw new HttpError(409, 'The folder of this project was never sent to the Google Drive trash.', 'nothing_to_untrash');
 
@@ -2572,6 +2581,7 @@ export class Portero {
     if (message === 'project_not_deleted') {
       throw new HttpError(409, 'Only the folder of a deleted project goes to the Google Drive trash.', 'project_not_deleted');
     }
+    if (message === 'project_purged') throw projectPurged();
     if (message === 'project_drive_not_requested') {
       throw new HttpError(409, 'Nobody asked to send the folder of this project to the Google Drive trash.', 'project_drive_not_requested');
     }

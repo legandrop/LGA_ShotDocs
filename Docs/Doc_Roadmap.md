@@ -281,6 +281,15 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   (`Doc_Proyectos_Borrar.md`, "Cómo quedó: una sola papelera"). Falta probarla a mano en la compu y el iPhone.
   Pendiente chico: con *All projects* se hace una consulta `trashed_files` por proyecto (la primera vez); con muchos
   proyectos convendría una función de la base que las junte (migración nueva).
+  **Entrega 3, *Delete forever* (v0.167, D-23 (6)):** en el renglón de un proyecto borrado de la papelera, pasados los
+  30 días, dueños y admins que lo manejan escriben la palabra y el proyecto sale de la papelera para siempre; es una
+  marca (`purged_at`), ninguna fila se borra, y la carpeta va antes a la papelera de Drive si no estaba. Migración
+  `20261101120000_proyectos_purgar.sql` (versión 23) **aplicada** (v0.167; `Doc_Proyectos_Borrar.md`,
+  "Cómo quedó (entrega 3)"). Auditada (aprobada con observaciones) y publicada.
+  - Pendiente chico (auditoría, O3): el servidor de las pruebas (`src/sync/testing.ts`, `purgeProject`) no aplica el
+    corte por `uploaded_at` de `drive_trash_first` (la base sí): hoy no cambia ninguna prueba, pero puede esconder un error.
+  - Pendiente chico (auditoría, O4): un proyecto borrado para siempre sigue sumando en el peso (`project_sizes`) de quien
+    lo maneja (lo nunca subido en la papelera de la app, lo mandado en la de Drive), sin forma de sacarlo desde la app.
 - **P.16 Hecho (v0.074): el árbol de páginas con el teclado** (Lega, 2026-10-01). Con el foco en una fila
   (queda ahí después de un clic): ↑ / ↓ abren la página visible anterior o siguiente (una pulsación al
   instante; con la tecla apretada el foco corre y se abre la última al frenar, 150 ms), → despliega o pasa a la
@@ -398,9 +407,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   pregunta al cerrar la pantalla de error (`replaceRunning`), y restaurar sin el editor ya no escribe los atributos por
   defecto en los bloques iguales a la versión (los saltea; la vista de diferencias comparaba los atributos guardados y los
   mostraba como «formato cambiado»).
-  Observaciones de la re-verificación de la 2b (chicas): la prueba del link muerto usa un solo archivo (no distingue «baja
-  ese» de «baja el primero»), falta la prueba automática del *Download it* de la insignia con el link vivo (anda a mano), y
-  la lista de *Share* corta en 500 archivos y titula con 500 aunque haya más.
+  Las tres observaciones de la re-verificación de la 2b quedaron **hechas (v0.165)**: la prueba del link muerto con varios
+  archivos, la del *Download it* de la insignia con el link vivo, y *Share* con «500 or more» cuando la lista llega al tope
+  de la base (sin SQL). **Falta, si alguna vez importa:** el total exacto de archivos de todos los links de la página (una
+  cuenta aparte en `public_link_files`, con migración); hoy pasado el tope solo se dice «o más».
 - **P.25 Sacar una foto o filmar desde la app** (Lega, 2026-10-01). **Hecho para la web (v0.110):** *Take photo* y
   *Record video* en el menú "/" y en el menú de la página, solo en el teléfono y la tableta (el video, con portero):
   abren la cámara con el selector del sistema y lo sacado entra en el renglón y sube por la cola de siempre; *Save to
@@ -675,11 +685,16 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   la entrega 1.** Cada adjunto, carpeta y video del PDF (exportar o imprimir) lleva un link a su dirección fija
   (`/f/<clave local>/<id>`, con la dirección del Supabase después del `#`), que abre el archivo con sesión y permiso,
   pide entrar sin sesión y vuelve, y sin permiso muestra una sola pantalla sin nada del archivo. *Export* puede usar el
-  link público de la página (aviso con página y nivel, *Can edit* destildado); imprimir, nunca. Falta: E2 (*Request
-  access* con la tabla `access_requests`, la campana y *Share*; riesgo alto), E3 opcional (pedir una página). Quedan
-  para después: el correo al pedir y al aceptar (B.8), pedir acceso sin cuenta, el link de un video en línea, y en la
-  pantalla `/f/` volver a donde estaba y reintentar sola al volver la red (observaciones de la auditoría de E1).
-  También de E1: pruebas de `http://localhost` y de *Sign in instead* (O4) y que *Export* avise sin red (O6).
+  link público de la página (aviso con página y nivel, *Can edit* destildado); imprimir, nunca. **Hecho (v0.166):
+  la entrega 2**, *Request access*: la pantalla sin acceso lo pide (con el aviso de quién lo verá), la campana y *Share*
+  muestran los pedidos a quien puede compartir y la ventana da acceso (nunca baja) o rechaza; la pantalla `/f/` vuelve a
+  donde estaba y reintenta sola al volver la red; pruebas de `http://localhost` y de *Sign in instead* (O4). Migración
+  `20261031120000_access_requests` aplicada (schema 22). Falta la prueba de aceptación 4 de Lega. Falta E3
+  opcional (pedir una página). Quedan para después: el correo al pedir y al aceptar (B.8), pedir acceso sin cuenta, el
+  link de un video en línea y los textos de invitación en el choque de clave y en *Join a workspace?* para una dirección
+  de archivo (O7 c). De la auditoría de E2 (chico): una prueba de dos personas decidiendo a la vez con dos sesiones
+  reales (O8; hoy por lectura del `for update`), el tope y las 24 horas en el servidor en memoria (O9) y el título
+  *Mentions* del panel de la campana cuando arriba tiene pedidos. **Hecho (v0.165):** *Export* avisa sin red (O6, *No connection: file links … can't use the public link*; un visitante del link no lo ve, con prueba). Queda (chico): el aviso sale también si el PDF no lleva ningún archivo, porque la ventana no cuenta los adjuntos antes de armar, igual que el de las fotos sin conexión.
 - **P.28 Hecho (v0.156): la tabla del reporte en el teléfono** (`Doc_Tabla_Telefono.md`): en pantalla angosta ninguna
   columna con ancho guardado baja de 96 px y la tabla se desplaza de costado dentro de su bloque; la celda donde se
   escribe se acomoda a la vista. La compu y el PDF no cambian. Falta probarlo en un iPhone real (dedo, teclado abierto).
@@ -687,17 +702,23 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   que en un iPad vertical (768 a 834 px, con el cajón a la vista) el reporte ya no se encoge (columnas de 96 en lugar de
   47 a 57) y se desplaza, salvo en una página con formato de hoja (A4, A3, Carta) entre 761 y 1024 px, que queda como el
   PDF (decisión de Lega, ronda 1); también se arregló el botón de comentar del margen, que salía 4 px de la pantalla.
-  Queda un detalle de diseño: con `right: 0` ese botón (28 px) tapa hasta 8 px del final de un renglón muy largo, porque
-  el margen de la página en el teléfono es de 20 px; si se ve apretado, `right: 2px` sigue sin cortarlo.
+  **Hecho (v0.165):** el botón de comentar mide el margen de la página en el teléfono (20 px, pegado al borde) y ya no
+  tapa el final de un renglón largo (medido a 375 y 390 px: sin superposición); el área del dedo sigue de 44 px de alto.
+  **Hecho (restos de la tanda 17):** el contador de comentarios (globo y número) también entra en el margen en el teléfono:
+  pastilla de 20 px con el globo arriba y el número abajo, sin superposición con el texto a 360, 375, 390 y 414 px con 1, 12 y
+  120 comentarios (antes 19,8 a 35,2 px encima); la compu y el PDF no cambian (`Doc_Tabla_Telefono.md`).
+  Quedan (chicos, de la auditoría): el botón mide 20 px de ancho (menos que los 44 px de las guías táctiles; confirmarlo
+  con el dedo en un iPhone real) y ninguna prueba automática mide la superposición (la del CSS lee el texto del archivo): un
+  cambio de `--gutter` la rompería sin aviso.
   Quedan (chicos): lo que headless no prueba (el impulso del dedo, el teclado abierto, un editor remoto moviendo la selección
   mientras se escribe en una tabla).
 - **P.29 Hecho (v0.161): contraste del texto y el panel de la cuenta** (Lega, 2026-10-03; `Doc_Contraste.md`): *Contrast*
   (de fábrica), *More contrast* y *No contrast* para el texto con el color por defecto, en la página, el historial y el
   PDF (en claro); el panel de la cuenta con íconos, su propio desplazamiento y *Sign out other devices* alineado a la
-  izquierda. Queda: verlo en un iPhone real (el panel con el teclado del sistema y la barra de Safari) y, si Lega lo
-  quiere, llevar la preferencia al zip de exportar (hoy sale con *Contrast*, como sale con la fuente normal).
-  En el modo oscuro los resaltados gris (2,32:1), amarillo (2,60:1) y naranja (3,69:1) de la paleta de BlockNote quedan bajo
-  4,5:1 con el texto por defecto, igual que antes del contraste: ajustar esos fondos si Lega los usa.
+  izquierda. Queda: verlo en un iPhone real (el panel con el teclado del sistema y la barra de Safari).
+  **Hecho (v0.165):** el zip de exportar lleva el contraste que eligió quien exporta (como el PDF), y en oscuro los
+  resaltados gris (2,32:1), amarillo (2,60:1) y naranja (3,69:1) pasaron a 4,74, 4,73 y 4,75:1 con el texto por defecto,
+  sin tocar el claro ni el PDF (`Doc_Contraste.md`, sección 5).
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
@@ -949,10 +970,18 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
     papelera y la restaura antes de que suba lo primero recibe un rechazo en la segunda (la página queda en la
     papelera, la restaura el dueño; no se pierde nada). Ver `Doc_Supabase.md`, "La papelera de páginas y quién la ve".
 
-20. **El esquema publicado de las pruebas (lo que quedó de B.20, v0.109).** `src/ui/fixtures/editorSchemaMain.ts` se
-   regeneró desde v0.107 y `editorSchemaFixture.test.ts` avisa si queda distinto de `editorSchema.ts`. Queda: la prueba
-   no ve un atributo nuevo del nodo `photo` (el fixture usa el de hoy), y nada avisa si nadie lo regenera después de
-   publicar un cambio del esquema: al publicar una versión que cambia `editorSchema.ts`, regenerarlo.
+20. **Hecho (restos de la tanda 17): el esquema publicado de las pruebas** (B.20, v0.109). `src/ui/fixtures/editorSchemaMain.ts`
+   es la copia del esquema de la versión publicada y `editorSchemaFixture.test.ts` lo compara con el de hoy. Lo que quedaba
+   abierto, resuelto: (1) la prueba no veía un atributo nuevo de `photo` porque el fixture importa de hoy el módulo de la
+   foto; ahora compara contra una **firma fija** (`fixtures/editorSchemaMain.firma.ts`) y lo ve (medido: con la prueba
+   anterior, un atributo agregado a `photo` pasaba; con la nueva falla); (2) nada avisaba si nadie regeneraba el fixture
+   después de publicar (ya estaba viejo: sin el alto de las miniaturas ni `quietImage`): una prueba compara el fixture con
+   `origin/main:src/ui/editorSchema.ts` cuando esta copia no cambió el esquema y falla con `npm run esquema:publicado`; se salta
+   sola en una rama que cambia el esquema a propósito y sin git u `origin/main`. `npm run esquema:publicado` (`scripts/esquema-publicado.mjs`)
+   regenera el fixture, la firma y vacía `NUEVO_SIN_PUBLICAR`; se corre al publicar un cambio del esquema, en la misma tanda
+   que lo publica (ver `Doc_Fotos_En_Linea.md`, "El esquema publicado de las pruebas"). Queda: el fixture sigue tomando de hoy
+   los módulos compartidos (`photoSpec`, `driveCard`, `imageRowsEditor`, `cellThumbs`, `quietImage`): lo que no es el esquema
+   (por ejemplo, el `parseHTML` de la foto) no lo cubre la firma.
 
 21. **Hecho (v0.132): restos del deshacer de Yjs** (entrega 0 de P.26, `Doc_Deshacer.md`, sección 16). Deshacer lo
    escrito seguía lo que otro deshacer había vuelto a poner solo hasta el primer corte: dejaba restos si se había escrito
@@ -970,10 +999,14 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    nada a medias ni los editores distintos, pero el paso se perdía (en 7 de 13, renglones enteros que tenían que
    volver). **Arreglado en el parche de Yjs:** lo que no tiene dónde volver se salta, lo demás del paso se hace y, si se
    saltó algo, lo insertado por ese paso se deja (puede ser el mismo texto movido). De 10 a 0 con el editor, de 24 a 0
-   (y de 236 a 0 en 20.000 más) en el modelo de párrafos; sin la excepción, idéntico. Sin `min_app_version`.
+   (y de 236 a 0 en 20.000 más) en el modelo de párrafos; sin la excepción, idéntico; al final nunca falta más texto
+   que con el ⌘Z frenado (en un ⌘Z suelto sí puede: el editor borra un bloque que no entra en el esquema y vuelve con los
+   siguientes). Sin `min_app_version`.
    Queda: con dos editores, 6 de 3.000 corridas terminan con los dos textos distintos (las mismas sin el arreglo, ninguna
    con la excepción; **arreglado en B.26**); el Enter deshecho cuya mitad vuelve a un renglón que otro borró desaparece
-   (de Yjs, sin copias); reportarlo a Yjs (`Doc_Deshacer.md`, sección 20).
+   (de Yjs, sin copias); la reparación del editor cuando lo que vuelve con un deshacer de dos personas no entra en el
+   esquema y se borra el bloque (pasa también sin B.22; merece su propio ítem); reportarlo a Yjs (`Doc_Deshacer.md`,
+   sección 20).
 23. **Hecho (v0.152): los topes de largo de la base en la app.** Un título de más de 500 caracteres quedaba rechazado
    para siempre (`pages_title_check`). El árbol corta títulos, nombres de proyecto y claves de orden, lo que sobra del
    título va al principio de la página y lo ya rechazado vuelve a la cola cortado (`Doc_Sincronizacion.md`, "Topes de
@@ -1006,8 +1039,11 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    del mouse si el control es más alto que media ventana, y corrido si no entra en ningún lado).
    (c) **Hecho (v0.163):** una prueba del anotador en una ventana angosta con mouse (`annotatorTouch.test.tsx`): la tira
    del teléfono, con los atajos en los tooltips de las herramientas, deshacer, encuadrar y el grosor; el mutante
-   `{ touch: true }` ya no sobrevive. Fuera de esta barra queda la de los links (*Edit link*, *Open in new tab*, *Remove
-   link*, al pasar por un link), con el globo de BlockNote solo con el nombre (sin atajos).
+   `{ touch: true }` ya no sobrevive. (d) **Hecho (v0.165):** la barra de los links (*Edit link*, *Open in new tab*,
+   *Remove link*, al pasar por un link) también: la página dibuja su `LinkToolbarController` con el botón de BlockNote
+   envuelto (`PageLinkToolbarController`, `toolbarTips.tsx`), *Open in new tab* y *Remove link* con su nombre en `data-tip`
+   (no tienen atajo: es un ícono) y *Edit link* sin globo (es un botón con texto y BlockNote lo rotulaba «Edit»: repetía
+   lo que ya dice); sin el globo de BlockNote. Prueba `linkToolbarTips.test.tsx` con la barra real.
 26. **Hecho (v0.0XX): dos personas con textos distintos después de deshacer** (lo dejó B.22: 6 de 3.000 corridas con
    dos editores terminaban con los dos textos distintos para siempre, "y la toma" en uno y "y la omat" en el otro). Los
    dos `Y.Doc` tenían las mismas ediciones: la memoria de quien deshacía no coincidía con lo que mandaba (ni con lo que

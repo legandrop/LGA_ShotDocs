@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useT } from '../i18n';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { locale, useT } from '../i18n';
 import { fileKind, isFolderMime } from '../media/attachments';
 import { useLinkMode } from '../linkMode';
-import { navigate } from '../router';
+import { fileReturnPath, navigate } from '../router';
 import { useServices, useSyncStatus } from '../services';
+import { ACCESS_REQUESTS_SCHEMA_VERSION, askedAt, askedScope, rememberAsked, requestAccess } from '../sync/accessRequests';
+import { errorMessage, isNetworkError } from '../sync/types';
 import { AttachmentSheet } from './AttachmentSheet';
 import { createCarreteLoader } from './carreteLoader';
 import type { CarreteItem } from './carreteModel';
@@ -15,6 +17,10 @@ import { lazyPart, Part } from './lazyPart';
 // (`media_file`, con sesión; `plink_media_files`, con un link público): nunca lo que el dispositivo sabe de antes (O4).
 // "No existe", "sin acceso", "en la papelera" y "proyecto borrado" dan la misma pantalla, sin el nombre del archivo, del
 // proyecto ni de la página (LF4).
+//
+// Entrega 2 (5.2): con la base del workspace en la versión 22 y una cuenta, la pantalla sin acceso ofrece *Request
+// access*, que antes dice quién va a ver el pedido (LF19); el dispositivo recuerda cuándo se pidió. Mientras está a la
+// vista vuelve a preguntar cada 60 segundos, sin parpadear: si le dieron acceso, abre el archivo.
 
 const Carrete = lazyPart(() => import('./Carrete').then((m) => m.Carrete));
 
@@ -39,14 +45,21 @@ function readRow(row: FileRow): State {
   };
 }
 
+/** Cada cuánto vuelve a preguntar la pantalla sin acceso mientras está a la vista (5.3). */
+export const NO_ACCESS_RECHECK_MS = 60_000;
+
 export function FileScreen({ localKey, id }: { localKey: string; id: string }) {
   const tr = useT();
   const { client, media, files, workspace } = useServices();
-  const { online } = useSyncStatus();
+  const { online, schemaVersion } = useSyncStatus();
   const link = useLinkMode();
   const ownKey = link ? link.entry.localKey : workspace.config.localKey;
   const [state, setState] = useState<State>({ name: 'loading' });
   const [attempt, setAttempt] = useState(0);
+  // Una pregunta de fondo (cada 60 s) no muestra "Opening…" ni cambia la pantalla si falla.
+  const quiet = useRef(false);
+  const current = useRef(state.name);
+  current.current = state.name;
 
   useEffect(() => {
     // La dirección es de otro workspace (no debería pasar: el arranque elige el workspace por la clave del camino).
@@ -55,14 +68,17 @@ export function FileScreen({ localKey, id }: { localKey: string; id: string }) {
       return;
     }
     let live = true;
+    const background = quiet.current;
+    quiet.current = false;
     const offline = !online || (typeof navigator !== 'undefined' && navigator.onLine === false);
     if (offline) {
+      if (background) return;
       // Sin red: solo lo que ya está en el dispositivo; nunca "sin acceso" por estar sin red.
       const info = media.fileInfo(id);
       setState(info?.local ? { name: 'ready', fileName: info.name, mime: info.mime, deleted: false } : { name: 'offline' });
       return;
     }
-    setState({ name: 'loading' });
+    if (!background) setState({ name: 'loading' });
     const ask = link
       ? client.rpc('plink_media_files', { p_ids: [id] }).then(({ data, error }) => {
           if (error) throw error;
@@ -76,7 +92,7 @@ export function FileScreen({ localKey, id }: { localKey: string; id: string }) {
       (row) => live && setState(readRow(row)),
       (err: unknown) => {
         console.warn('[archivo] no se pudo preguntar por el archivo', err);
-        if (live) setState({ name: 'failed' });
+        if (live && !background) setState({ name: 'failed' });
       },
     );
     return () => {
@@ -84,7 +100,29 @@ export function FileScreen({ localKey, id }: { localKey: string; id: string }) {
     };
   }, [client, media, id, localKey, ownKey, link, online, attempt]);
 
-  const close = () => navigate('/');
+  // Sin acceso y a la vista: vuelve a preguntar cada 60 s (5.3). Sin red o con un error: al volver la red (O7).
+  useEffect(() => {
+    const again = (background: boolean) => {
+      quiet.current = background;
+      setAttempt((n) => n + 1);
+    };
+    const visible = () => typeof document === 'undefined' || document.visibilityState !== 'hidden';
+    const timer = setInterval(() => {
+      if (current.current === 'none' && visible()) again(true);
+    }, NO_ACCESS_RECHECK_MS);
+    const onOnline = () => {
+      if (current.current === 'offline' || current.current === 'failed') again(false);
+    };
+    window.addEventListener('online', onOnline);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('online', onOnline);
+    };
+  }, []);
+
+  // Vuelve a donde estaba si llegó desde la app; si no, al inicio del workspace (O7).
+  const close = () => navigate(fileReturnPath());
+  const canRequest = !link && (schemaVersion ?? 0) >= ACCESS_REQUESTS_SCHEMA_VERSION;
 
   if (state.name === 'ready' && !state.deleted) {
     if (isFolderMime(state.mime)) return <FolderViewer fileId={id} name={state.fileName} onClose={close} />;
@@ -100,7 +138,11 @@ export function FileScreen({ localKey, id }: { localKey: string; id: string }) {
         {state.name === 'none' && (
           <>
             <h1>{tr('file.noAccess.title')}</h1>
-            <p className="muted">{tr('file.noAccess.text')}</p>
+            {canRequest ? (
+              <RequestAccess localKey={localKey} id={id} onHasAccess={() => setAttempt((n) => n + 1)} />
+            ) : (
+              <p className="muted">{tr('file.noAccess.text')}</p>
+            )}
           </>
         )}
         {state.name === 'otherWorkspace' && <p className="muted">{tr('file.incomplete')}</p>}
@@ -121,6 +163,72 @@ export function FileScreen({ localKey, id }: { localKey: string; id: string }) {
         )}
       </div>
     </main>
+  );
+}
+
+/**
+ * *Request access* (5.2): antes de mandar dice quién va a ver el pedido (LF19). La respuesta de la base es la misma
+ * exista o no el archivo; el dispositivo anota cuándo se pidió (la base no deja listar los pedidos propios).
+ */
+function RequestAccess({ localKey, id, onHasAccess }: { localKey: string; id: string; onHasAccess: () => void }) {
+  const tr = useT();
+  const { client, user } = useServices();
+  const scope = askedScope(localKey, user.id);
+  const [asked, setAsked] = useState(() => askedAt(scope, id));
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function send() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await requestAccess(client, id);
+      if (res === 'has_access') return onHasAccess();
+      rememberAsked(scope, id);
+      setAsked(askedAt(scope, id) ?? new Date().toISOString());
+      setSent(true);
+      setConfirming(false);
+    } catch (err) {
+      setError(
+        isNetworkError(err)
+          ? tr('file.requestOffline')
+          : errorMessage(err) === 'rate_limited'
+            ? tr('file.requestLimited')
+            : tr('file.requestFailed'),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const day = asked ? new Intl.DateTimeFormat(locale(tr.lang), { month: 'short', day: 'numeric' }).format(Date.parse(asked)) : null;
+  return (
+    <div className="file-request">
+      {sent ? <p>{tr('file.requestSent')}</p> : day ? <p className="muted">{tr('file.requestedOn', { date: day })}</p> : null}
+      {!sent && !day && <p className="muted">{tr('file.requestHint')}</p>}
+      {confirming ? (
+        <>
+          <p className="muted small">{tr('file.requestNote')}</p>
+          <div className="file-request-actions">
+            <button className="primary" disabled={busy} onClick={() => void send()}>
+              {tr('file.request')}
+            </button>
+            <button disabled={busy} onClick={() => setConfirming(false)}>
+              {tr('common.cancel')}
+            </button>
+          </div>
+        </>
+      ) : (
+        !sent && (
+          <button className="primary" onClick={() => setConfirming(true)}>
+            {day ? tr('file.requestAgain') : tr('file.request')}
+          </button>
+        )
+      )}
+      {error && <p className="error">{error}</p>}
+    </div>
   );
 }
 

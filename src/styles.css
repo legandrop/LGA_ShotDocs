@@ -1696,6 +1696,16 @@ code {
   --bn-font-family: var(--font);
 }
 
+/* Los fondos de los resaltados en oscuro: el gris, el amarillo y el naranja de BlockNote (#9b9a97, #b58b00, #b7600a) son
+   tan claros que el texto por defecto (#ece9e2, la tinta plena de un resaltado en los tres niveles de contraste) daba
+   2,32:1, 2,60:1 y 3,69:1. Los mismos tonos más oscuros (mismo matiz y saturación, solo menos luz) llegan a 4,7:1 o
+   más. Solo con el esquema oscuro: el claro y el PDF (siempre claro) conservan los de BlockNote. Doc_Contraste.md. */
+.bn-container[data-color-scheme='dark'] {
+  --bn-colors-highlights-gray-background: #676663;
+  --bn-colors-highlights-yellow-background: #806200;
+  --bn-colors-highlights-orange-background: #9d5209;
+}
+
 .bn-container .bn-default-styles {
   font-size: var(--doc-size);
   line-height: 1.6;
@@ -2242,6 +2252,11 @@ code {
 
 .deleted-project-ask .deleted-project-actions {
   padding-left: 0;
+}
+
+/* *Delete forever*: la palabra, con aire antes de los botones. */
+.deleted-project-ask .delete-project-word {
+  margin-bottom: 8px;
 }
 
 /* Adentro del selector (`.menu button` ocupa todo el ancho): el link de *Send files…* va a la izquierda y entero. */
@@ -4755,6 +4770,128 @@ button.link.danger {
   font-size: 12px;
 }
 
+/* Los pedidos de acceso a un archivo (P.30, entrega 2): arriba de las menciones, en Share y en su ventana. */
+.access-requests {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.mentions-panel .access-requests {
+  max-height: min(30vh, 240px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.access-requests-head {
+  margin: 8px 12px 2px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+.access-request {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.access-request-text {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.access-request-form {
+  display: grid;
+  gap: 8px;
+}
+
+.access-request-form p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.access-request-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: flex-end;
+}
+
+.access-request-fields label,
+.access-request-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* El nombre de la página, de la misma altura que el campo del nivel (O5). */
+.access-request-page {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+/* Los tres botones en un renglón también en el teléfono (O5): sin cortar el texto y con menos relleno. */
+.access-request-form .modal-actions {
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.access-request-form .modal-actions button {
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .access-request-form .modal-actions {
+    gap: 6px;
+  }
+
+  .access-request-form .modal-actions button {
+    padding-inline: 10px;
+  }
+}
+
+.share-requests {
+  margin: 4px 0 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+}
+
+.share-requests .access-requests {
+  padding: 0;
+  border-bottom: none;
+}
+
+.share-requests .access-request {
+  padding: 4px 0;
+}
+
+.file-request {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+
+.file-request p {
+  margin: 0;
+}
+
+.file-request-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 @media (max-width: 760px) {
   /* En el teléfono, una hoja desde abajo (la posición que pone useFloating no cuenta acá). */
   .mentions-panel {
@@ -5260,6 +5397,46 @@ button.thread-anchor:hover:not(:disabled) {
   .comment-count,
   .comment-add {
     right: 0;
+  }
+
+  /* El botón de comentar entra justo en el margen de la página (--gutter, 20 px): con sus 28 px de siempre tapaba hasta
+     8 px del final de un renglón muy largo. Para el dedo, el área que responde se estira para arriba y para abajo (el
+     ancho es el del margen: nunca llega al texto). */
+  .comment-add {
+    width: var(--gutter);
+  }
+
+  .comment-add::after {
+    content: '';
+    position: absolute;
+    inset: -10px 0;
+  }
+
+  /* El contador de comentarios también entra en el margen: con el globo y el número uno al lado del otro medía 40 a 55
+     px y tapaba hasta 35 px del final de un renglón largo. Ahora el globo va arriba y el número abajo, en una pastilla
+     del ancho del margen (20 px, pegada al borde; el alto crece y el área del dedo se estira un poco para arriba y para
+     abajo, unos 47 px en total). Con 4 dígitos o más (mil comentarios en un bloque) el ancho crece antes de cortar el número. */
+  .comment-count {
+    min-width: var(--gutter);
+    padding: 2px 0;
+    height: auto;
+    flex-direction: column;
+    justify-content: center;
+    gap: 1px;
+    border-radius: 10px;
+    font-size: 10px;
+    letter-spacing: -0.02em;
+  }
+
+  .comment-count svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .comment-count::after {
+    content: '';
+    position: absolute;
+    inset: -8px 0;
   }
 }
 

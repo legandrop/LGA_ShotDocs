@@ -15,6 +15,7 @@ import { PageFiles } from './files';
 import { openLocalDb, type LocalDb } from './localDb';
 import {
   PROJECT_DRIVE_SCHEMA_VERSION,
+  PROJECT_PURGE_SCHEMA_VERSION,
   PROJECT_STATES_SCHEMA_VERSION,
   SNAPSHOT_SCHEMA_VERSION,
   type AccessRow,
@@ -55,6 +56,7 @@ import {
   ARCHIVE_COMMENTS_SCHEMA_VERSION,
 } from './comments';
 import { MentionsInbox, type InboxResponse, type MentionCandidate, type MentionsRemote } from './mentions';
+import type { AccessRequestsRemote } from './accessRequests';
 import { CLEAN_SCHEMA_VERSION } from './clean';
 import { normalizeStructure, seedIfEmpty } from './structure';
 import { PageTree } from './tree';
@@ -857,6 +859,19 @@ export class FakeServer {
   mentionSharingEnabled = false;
   /** Las llamadas a `share_for_mention` (`<página> <persona>`). */
   readonly mentionShares: string[] = [];
+  /** `access_requests` (P.30, entrega 2): los pedidos de acceso a un archivo; nada se borra. */
+  readonly accessRequests: {
+    id: string;
+    user_id: string;
+    file_id: string;
+    state: 'pending' | 'accepted' | 'declined' | 'void';
+    times: number;
+    asked_at: string;
+    decided_at: string | null;
+    decided_by: string | null;
+    page_id: string | null;
+    level: GrantLevel | null;
+  }[] = [];
   /** `comment_mentions`, con las filas sacadas (`removed_at`): nada se borra. */
   readonly mentions: {
     id: string;
@@ -878,7 +893,7 @@ export class FakeServer {
    * La papelera de proyectos (P.14): id → cuándo y quién lo borró. Con el proyecto acá, todos los niveles dan 0
    * y no se ve por ningún camino, como en la base (`user_page_level`, `workspaces_select`).
    */
-  readonly deletedProjects = new Map<string, { at: string; by: string }>();
+  readonly deletedProjects = new Map<string, { at: string; by: string; purged?: { at: string; by: string } }>();
 
   /**
    * La carpeta de cada proyecto en la papelera de Drive (P.14, entrega 2, versión 10): pedida, confirmada y, si se
@@ -890,6 +905,12 @@ export class FakeServer {
   enableProjectDrive(): void {
     this.enableProjectStates();
     this.settings = { ...this.settings!, schemaVersion: Math.max(this.settings!.schemaVersion, PROJECT_DRIVE_SCHEMA_VERSION) };
+  }
+
+  /** Prende *Delete forever* (P.14, entrega 3): la base en la versión 23. */
+  enableProjectPurge(): void {
+    this.enableProjectDrive();
+    this.settings = { ...this.settings!, schemaVersion: Math.max(this.settings!.schemaVersion, PROJECT_PURGE_SCHEMA_VERSION) };
   }
 
   /** Prende archivar y borrar proyectos: la base en la versión 9. */
@@ -1780,6 +1801,8 @@ export class FakeRemote
   async restoreProject(projectId: string, withoutDrive = false): Promise<void> {
     this.projectStatesCheck(projectId);
     if (!this.server.deletedProjects.has(projectId)) return;
+    // Como la migración 23: uno borrado para siempre no vuelve.
+    if (this.server.deletedProjects.get(projectId)!.purged) throw new RemoteError('project_purged', true, 'P0001');
     this.checkWriteVersion();
     // Como la migración 10: con la carpeta pedida para la papelera de Drive, primero traerla (o sin ella, con marca).
     const d = this.server.projectDrive.get(projectId);
@@ -1798,7 +1821,7 @@ export class FakeRemote
     const role = this.server.role(this.userId);
     const staff = !this.team || role === 'owner' || role === 'admin';
     return [...this.server.deletedProjects.entries()]
-      .filter(([id]) => this.server.couldViewProject(this.userId, id))
+      .filter(([id, d]) => !d.purged && this.server.couldViewProject(this.userId, id))
       .sort((a, b) => (a[1].at < b[1].at ? 1 : -1))
       .map(([id, d]) => {
         const p = this.server.projects.get(id)!;
@@ -1824,6 +1847,41 @@ export class FakeRemote
           can_purge: can && (role === 'owner' || role === 'admin' || !this.team),
         };
       });
+  }
+
+  /**
+   * *Delete forever* como `purge_project` (migración 23): una marca; ninguna fila se borra. Los archivos subidos quedan
+   * como mandados a la papelera de Drive, que tiene que tener la carpeta antes (`drive_trash_first`).
+   */
+  async purgeProject(projectId: string): Promise<void> {
+    this.server.check();
+    if ((this.server.settings?.schemaVersion ?? 0) < PROJECT_PURGE_SCHEMA_VERSION) {
+      throw new RemoteError('Could not find the function', true, 'PGRST202');
+    }
+    const project = this.server.projects.get(projectId);
+    if (!project || !this.server.couldViewProject(this.userId, projectId)) {
+      throw new RemoteError('project_not_found', true, 'P0002');
+    }
+    const role = this.server.role(this.userId);
+    const staff = !this.team || role === 'owner' || role === 'admin';
+    if (!staff || !this.server.canManageProject(this.userId, projectId)) throw this.denied('not_allowed');
+    const d = this.server.deletedProjects.get(projectId);
+    if (d?.purged) return;
+    if (!d) throw new RemoteError('project_not_deleted', true, 'P0001');
+    if (Date.parse(d.at) > Date.now() - 30 * 86_400_000) throw new RemoteError('project_trash_not_due', true, 'P0001');
+    const drive = this.server.projectDrive.get(projectId);
+    const folderGone = !!drive && (!!drive.trashed_at || !!drive.missing_at);
+    const files = [...this.server.mediaFiles.values()].filter((f) => f.project_id === projectId && f.drive_id && !f.drive_trashed_at);
+    if (files.length > 0 && !folderGone) throw new RemoteError('drive_trash_first', true, 'P0001');
+    this.checkWriteVersion();
+    const now = new Date().toISOString();
+    for (const f of files) {
+      f.trashed_at ??= now;
+      f.purged_at ??= now;
+      f.drive_trashed_at = now;
+    }
+    this.server.projectDrive.delete(projectId);
+    d.purged = { at: now, by: this.userId };
   }
 
   async projectDeleteInfo(projectId: string): Promise<ProjectDeleteInfo> {
@@ -2677,6 +2735,90 @@ export class FakeRemote
   }
 
   /** `private.can_share`. */
+  // --- pedidos de acceso (P.30, entrega 2): las reglas de 20261031120000_access_requests.sql, sin el tope ni las horas ---
+
+  /** Las páginas vivas que usan el archivo (sin los usos ajenos ni los sacados). */
+  private aliveFilePages(fileId: string): string[] {
+    return [...this.server.pageFiles]
+      .map((k) => k.split(':'))
+      .filter(([, f]) => f === fileId)
+      .map(([p]) => p)
+      .filter((p) => this.server.pages.has(p) && !this.server.pageInTrash(p) && !this.server.pageInDeletedProject(p));
+  }
+
+  /** `request_access`: `sent` exista o no el archivo (`void` si no vale), `has_access` si ya lo ve. */
+  async requestAccess(fileId: string): Promise<'sent' | 'has_access'> {
+    this.server.check();
+    if (!this.server.role(this.userId)) throw new RemoteError('not_member', true, '42501');
+    if (this.aliveFilePages(fileId).some((p) => this.server.pageLevel(this.userId, p) >= 1)) return 'has_access';
+    const now = new Date().toISOString();
+    const open = this.server.accessRequests.find((r) => r.user_id === this.userId && r.file_id === fileId && (r.state === 'pending' || r.state === 'void'));
+    if (open) {
+      open.times += 1;
+      open.asked_at = now;
+      return 'sent';
+    }
+    const declined = this.server.accessRequests.some((r) => r.user_id === this.userId && r.file_id === fileId && r.state === 'declined');
+    const valid = this.aliveFilePages(fileId).length > 0 && !declined;
+    this.server.accessRequests.push({
+      id: crypto.randomUUID(),
+      user_id: this.userId,
+      file_id: fileId,
+      state: valid ? 'pending' : 'void',
+      times: 1,
+      asked_at: now,
+      decided_at: null,
+      decided_by: null,
+      page_id: null,
+      level: null,
+    });
+    return 'sent';
+  }
+
+  /** `access_requests_pending` y `decide_access_request` de esta sesión. */
+  accessRequestsRemote(): AccessRequestsRemote {
+    const shareable = (fileId: string) => this.aliveFilePages(fileId).filter((p) => this.server.role(this.userId) !== 'guest' && this.canShare({ pageId: p }));
+    return {
+      pending: async () => {
+        this.server.check();
+        if (!this.server.role(this.userId) || this.server.role(this.userId) === 'guest') return [];
+        return this.server.accessRequests
+          .filter((r) => r.state === 'pending' && r.user_id !== this.userId && this.server.role(r.user_id))
+          .filter((r) => !this.aliveFilePages(r.file_id).some((p) => this.server.pageLevel(r.user_id, p) >= 1))
+          .map((r) => ({ r, pages: shareable(r.file_id) }))
+          .filter(({ pages }) => pages.length > 0)
+          .map(({ r, pages }) => ({
+            id: r.id,
+            userId: r.user_id,
+            email: this.server.members.get(r.user_id)?.email ?? '',
+            role: this.server.role(r.user_id)!,
+            fileId: r.file_id,
+            fileName: this.server.mediaFiles.get(r.file_id)?.name ?? '',
+            mime: this.server.mediaFiles.get(r.file_id)?.mime ?? '',
+            askedAt: r.asked_at,
+            times: r.times,
+            pages: pages.map((p) => ({ pageId: p, title: this.server.pages.get(p)?.title ?? '' })),
+          }));
+      },
+      decide: async (id, accept, pageId, level) => {
+        this.server.check();
+        const r = this.server.accessRequests.find((x) => x.id === id);
+        if (!r || r.state !== 'pending' || shareable(r.file_id).length === 0) throw new RemoteError('request_not_found', true, 'P0002');
+        const now = new Date().toISOString();
+        if (!accept) {
+          Object.assign(r, { state: 'declined', decided_at: now, decided_by: this.userId });
+          return 'declined';
+        }
+        if (!pageId || !shareable(r.file_id).includes(pageId)) throw new RemoteError('page_invalid', true, '22023');
+        if (!this.server.role(r.user_id)) throw new RemoteError('member_not_found', true, 'P0002');
+        // Nunca baja (LF11).
+        if (this.server.pageLevel(r.user_id, pageId) < levelValue(level)) await this.share(r.user_id, { pageId }, level);
+        Object.assign(r, { state: 'accepted', decided_at: now, decided_by: this.userId, page_id: pageId, level });
+        return 'accepted';
+      },
+    };
+  }
+
   private canShare(target: { projectId: string } | { pageId: string }): boolean {
     const uid = this.userId;
     const role = this.server.role(uid);

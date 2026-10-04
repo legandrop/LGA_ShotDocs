@@ -85,7 +85,65 @@ function goneParent(Yjs: typeof Y, image = false) {
   return { collected, error, a: fa.toString(), b: fb.toString(), canUndo: um.canUndo(), canRedo: um.canRedo() };
 }
 
+/**
+ * Un atributo (no texto) del renglón recolectado, en conflicto con otra persona. B, en un paso, alinea el renglón 1 y
+ * escribe "W" en el 2; A, a la vez, alinea el renglón 1 y su valor queda a la derecha. B borra el renglón 1, lo vuelve,
+ * escribe y deshace en la copia y escribe en otro lado; A borra la copia. El ⌘Z de B que deshace el paso: el atributo
+ * no tiene dónde volver y Yjs ya lo saltaba sin tirar (el valor de A está a la derecha). Como un atributo no es texto
+ * movido, el paso tiene que seguir como siempre y sacar la "W".
+ */
+function goneParentAttribute(Yjs: typeof Y) {
+  const A = new Yjs.Doc();
+  A.clientID = 1;
+  const B = new Yjs.Doc();
+  B.clientID = 2;
+  const fa = A.getXmlFragment('f');
+  const fb = B.getXmlFragment('f');
+  const sync = () => {
+    Yjs.applyUpdate(B, Yjs.encodeStateAsUpdate(A, Yjs.encodeStateVector(B)));
+    Yjs.applyUpdate(A, Yjs.encodeStateAsUpdate(B, Yjs.encodeStateVector(A)));
+  };
+  const aligned = (text: string) => {
+    const p = row(Yjs, text);
+    p.setAttribute('align', 'a0');
+    return p;
+  };
+  A.transact(() => fa.insert(0, [aligned('abc'), aligned('xyz')]));
+  sync();
+  const um = new Yjs.UndoManager(fb, { trackedOrigins: new Set([TYPING]), captureTimeout: 0 });
+  const text = (i: number) => (fb.get(i) as Y.XmlElement).get(0) as Y.XmlText;
+  const edit = (fn: () => void) => {
+    B.transact(fn, TYPING);
+    um.stopCapturing();
+  };
+  edit(() => {
+    (fb.get(0) as Y.XmlElement).setAttribute('align', 'b1');
+    text(1).insert(0, 'W');
+  });
+  A.transact(() => (fa.get(0) as Y.XmlElement).setAttribute('align', 'r'));
+  sync();
+  edit(() => fb.delete(0, 1));
+  um.undo();
+  edit(() => text(0).insert(0, 'Z'));
+  um.undo();
+  edit(() => text(1).insert(0, 'q'));
+  sync();
+  A.transact(() => fa.delete(0, 1));
+  sync();
+  um.undo(); // se va la "q"
+  const done = um.undo() !== null; // el paso del atributo y la "W"
+  sync();
+  return { done, a: fa.toString(), b: fb.toString() };
+}
+
 describe('el ⌘Z con la copia del padre recolectada (B.22)', () => {
+  it('un atributo sin dónde volver no frena el resto del paso (como sin el arreglo)', () => {
+    const r = goneParentAttribute(Y);
+    expect(r.done).toBe(true); // marcando también los atributos: el paso se descartaba
+    expect(r.b).toBe('<paragraph align="a0">xyz</paragraph>'); // y la "W" quedaba
+    expect(r.a).toBe(r.b);
+  });
+
   it('no tira la excepción: vuelve lo que tiene dónde volver y salta lo demás', () => {
     const r = goneParent(Y);
     expect(r.collected).toBe(true); // el caso es el de la excepción: la copia es un `GC`

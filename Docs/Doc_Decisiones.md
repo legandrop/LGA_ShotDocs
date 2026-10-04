@@ -226,7 +226,8 @@ diga otra cosa.
   otro texto de un tooltip va en negrita** (los nombres de los botones, como *Download image*, van en el gris). Los
   arma `src/ui/tipRows.ts` y lo controla `src/ui/tipFormat.test.ts`; *Comment* y *Assistant* de la barra de formato
   también, y desde v0.163 los botones propios de BlockNote en esa barra (*Bold*, *Italic*, alinear…; `src/ui/toolbarTips.tsx`):
-  con atajo, su renglón; sin atajo, el nombre (son íconos).
+  con atajo, su renglón; sin atajo, el nombre (son íconos). Desde v0.165 también la barra de los links (*Open in new tab*,
+  *Remove link*: el nombre; *Edit link*, sin globo porque es un botón con texto).
   Todo globo queda adentro de la ventana: abajo, arriba, a un costado o corrido (`Tooltip.tsx`).
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)

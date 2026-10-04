@@ -84,6 +84,7 @@ export function projectStateError(err: unknown, t: Translate = current): string 
   if (code === 'drive_untrash_first') return t('project.errorDriveFirst');
   if (code === 'project_not_found') return t('project.errorNotFound');
   if (code === 'project_deleted') return t('project.errorDeleted');
+  if (code === 'project_purged') return t('project.errorPurged');
   if (code === APP_OUTDATED) return t('common.appOutdated');
   return t('project.stateFailed', { reason: code });
 }

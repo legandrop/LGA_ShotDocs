@@ -1,12 +1,12 @@
 # Links a los archivos en el PDF y *Request access* (P.30)
 
-**Estado: diseño auditado el 2026-10-03 ("aprobado con condiciones" en E1, E2 y E3) y corregido; E1 en programación.**
+**Estado: diseño auditado el 2026-10-03 ("aprobado con condiciones" en E1, E2 y E3) y corregido; E1 hecha (v0.164, sección 16); E2 hecha (v0.166, sección 17), con su migración aplicada.**
 Pedido de Lega del 2026-10-03, diseñado contra `main` v0.158. Toca permisos, Row Level Security y privacidad, y suma una
 tabla: **riesgo alto**. Las decisiones ya tomadas por Lega están en "Qué se pide"; las nuevas (LF1 a LF16, sección 10)
 son propuestas con la recomendación tomada; LF17 a LF20 son de Lega, sobre los hallazgos de la auditoría. **Las
 correcciones de la auditoría (sección 15) mandan sobre lo de arriba.**
-La migración de la entrega 2 está en borrador (sección 7), probada contra la base real en una transacción que se
-deshace (sección 9).
+La migración de la entrega 2 es `supabase/migrations/20261031120000_access_requests.sql` (sección 17; el borrador de la
+sección 7 con `schema_version` 22), probada contra la base real en una transacción que se deshace.
 
 ## En corto
 
@@ -261,7 +261,7 @@ el pase no coincidirían.
   el link.
 - **Hoy (D14 apagado) no se puede crear un link público en Wanka:** la parte del link de E1 se prueba con el servidor
   falso y la prueba de aceptación 3 espera a que se prenda el interruptor (O9).
-- **Sin red al exportar** no se puede saber si hay link: los links van con `#ws=` y la ventana lo dice.
+- **Sin red al exportar** no se puede saber si hay link: los links van con `#ws=` y la ventana lo dice (v0.165): *No connection: file links in this PDF can't use the public link of the page, even if it has one. They ask to sign in.* Sale solo en la ventana del PDF, con archivos en Drive conectados, sin red (o con la red caída del navegador) y sin los links ya pedidos; un visitante del link no lo ve (usa el suyo). Prueba: `exportFileLinks.test.tsx`.
 - **Revocar, *Reset link*, vencer, la página a la papelera o quien lo creó sin permiso de compartir:** el token deja de
   valer en el acto (lo valida la base en cada pedido); el link del PDF abre la pantalla del link muerto, que para una
   ruta `/f/` suma **Sign in instead** (LF16): convierte la dirección en la de miembro (`u`, `k`, `l` del mismo payload,
@@ -312,8 +312,9 @@ el pase no coincidirían.
 - Solo un miembro vivo con sesión permitida (`workspace_role`): si no, `not_member`. `anon` no puede llamarla.
 - Si ya lo ve (`file_level ≥ 1`): `has_access` (la persona ya lo sabe; no es un dato nuevo).
 - **Repetido** (ya hay uno `pending` o `void` de esa persona y ese archivo): renueva la fila como mucho una vez por hora y
-  responde `sent`. **Este camino no mira si el archivo existe**: repetir el mismo id mil veces no sirve para medir nada
-  nuevo. Un `void` de hace más de un día se vuelve a mirar (por ejemplo, pasó el día del rechazo).
+  responde `sent`. **Este camino no vuelve a mirar el archivo** (antes pasó por `file_level`, la misma pregunta de
+  `media_file` y `POST /pass`, con la diferencia de tiempo ya aceptada en LF4): repetir el mismo id mil veces no sirve
+  para medir nada nuevo. Un `void` de hace más de un día se vuelve a mirar (por ejemplo, pasó el día del rechazo).
 - **Nuevo:** si la persona ya creó **20 filas en 24 horas** (valgan o no), `rate_limited`. Si no, crea la fila: `pending`
   si el archivo lo usa una página viva (`private.page_alive`: ni ella ni una de arriba en la papelera, proyecto sin
   borrar) y no hubo un rechazo de ese archivo en 24 horas; `void` si no. Responde `sent` en los dos casos.
@@ -949,8 +950,8 @@ que diga otra cosa.
 - Un dispositivo sin ningún proyecto visible (por ejemplo, un invitado al que le sacaron todo) ve la pantalla de "sin
   proyectos" en vez de la del archivo: la del archivo se dibuja adentro de la app.
 - Se preguntan como mucho 40 links públicos por exportación (`MAX_LINK_LOOKUPS`).
-- Sin red al exportar, la ventana no lo avisa (3.3 decía que sí): no se piden links y el PDF va con la dirección de
-  siempre (`#ws=`), que es lo seguro.
+- Sin red al exportar, la ventana no lo avisaba (3.3 decía que sí; observación O6 de la auditoría): no se piden links y el
+  PDF va con la dirección de siempre (`#ws=`), que es lo seguro. **Hecho (v0.165):** ahora la ventana lo dice (3.3).
 
 **Ronda 1 de la auditoría de E1** (aprobado con observaciones, sin bloqueantes): si la red se cortaba y volvía con la
 ventana *Export* abierta, la casilla volvía a su valor de fábrica y un *Can view* destildado a mano podía salir con el
@@ -965,3 +966,74 @@ adjunto y la de la carpeta (270 × 74 pt, el área de la tarjeta), el cuadro del
 (12 pt de alto) y el de Drive como estaba; la foto, ninguno. La vista de medir y la de imprimir midieron lo mismo (751 px).
 En un perfil limpio, `/f/…#ws=` de un servidor desconocido mostró *Join a workspace?* con el host y **ningún pedido a ese
 Supabase** antes de confirmar; *Not now* volvió a `/`; un `#ws=` roto volvió a `/` con el aviso.
+
+## 17. Cómo quedó la entrega 2 (v0.166)
+
+| Pieza | Dónde |
+|---|---|
+| La migración (la tabla y las tres funciones de la sección 7, `schema_version` 22), **aplicada** (v0.166) | `supabase/migrations/20261031120000_access_requests.sql` |
+| Su prueba SQL (en `begin … rollback`) | `supabase/tests/access_requests_permisos.sql` |
+| Pedir, la lista, decidir y lo que recuerda el dispositivo de quien pide | `src/sync/accessRequests.ts` (`requestAccess`, `AccessRequestsInbox`, `askedAt`/`rememberAsked`) |
+| Cuándo se pregunta la lista (base en la 22 y un rol que no es invitado) | `accessRequestsEnabled`, prendida desde `src/services.ts` (`accessRequests`) |
+| *Request access* en la pantalla sin acceso (con el aviso de LF19), *You asked for access on…*, la pregunta de fondo cada 60 s | `src/ui/FileScreen.tsx` (`RequestAccess`) |
+| La sección de la campana y su número, la ventana de decidir, los pedidos en *Share* | `src/ui/AccessRequests.tsx`, `src/ui/MentionsBell.tsx`, `src/ui/ShareDialog.tsx` (`ShareRequests`) |
+| La ayuda (*Access requests*) | `src/help/entries.ts`, `src/i18n/lazy/help.ts` |
+| El servidor en memoria con los pedidos | `src/sync/testing.ts` (`requestAccess`, `accessRequestsRemote`) |
+
+**Distinto de lo diseñado o sumado (decidido al programar):**
+
+- **La campana suma los pedidos a su número** (el de la pestaña y el ícono de la app instalada también) y la sección
+  aparece solo si hay alguno: un miembro que no comparte nada no ve una sección vacía.
+- **La lista se pregunta solo con la base en la 22 y para quien no es invitado** (la base igual filtra; esto ahorra la
+  pregunta de cada minuto a un invitado).
+- **Decidir usa el mismo paso previo que *Share*** para quien recibe Ver o Comentar o es invitado (sube lo pendiente
+  antes, con *Retry* / *Share anyway*, y después prepara la base limpia): aceptar es compartir.
+- **En *Share* la decisión se abre ahí mismo** (no una ventana arriba de otra), con la página de *Share* elegida si el
+  archivo está en ella; desde la campana, una ventana con la primera página donde se agregó.
+- **Pedido ya decidido por otro:** la ventana lo dice (*Someone already decided this request…*) y sale de la lista.
+- **La pantalla `/f/` (O7 de la auditoría de E1):** *Close* / *Go to Shot Docs* vuelve a la ruta de la app desde la que
+  se abrió (si se llegó de afuera, al inicio); sin red o con un error, reintenta sola al volver la red; la pregunta de
+  fondo de cada 60 s no muestra *Opening…* ni cambia la pantalla si falla.
+- **El aviso de choque de clave y *Join a workspace?*** siguen con el texto de las invitaciones (O7 c): queda en el
+  roadmap.
+- **Quien pide sin la base migrada** sigue viendo *Ask whoever shared the document with you*; con un link público, igual
+  (sin cuenta no se pide, LF3).
+
+**Pruebas:**
+
+- **SQL, en la base real dentro de una transacción que se deshace** (la migración y la prueba en una sola consulta):
+  pasa entera. **20 mutantes** de las guardas principales: **17 detectados**; los 3 vivos son equivalentes: la lista sin
+  el corte de invitados (`user_can_share_page` ya los deja afuera), decidir sin `member_not_found` (lo tira `share()` con
+  el mismo error) y la tabla sin `enable row level security` (la base de Wanka tiene `rls_auto_enable`, que la prende
+  sola; además el `revoke all` cierra la tabla). El `for update` de decidir no se puede probar con una sola sesión: lo
+  cubre la prueba de «decidir dos veces».
+- **App:** `src/sync/accessRequests.test.ts` (las filas, lo que se manda al decidir, la lista y el dispositivo),
+  `src/ui/accessRequests.test.tsx` (la campana, la ventana y *Share* contra el servidor en memoria: dar acceso, rechazar,
+  ya decidido, sin red, nunca baja), `src/ui/fileScreen.test.tsx` (pedir, el aviso antes, *Cancel*, la base vieja y el
+  link, `has_access`, el tope, la pregunta de fondo, la red que vuelve y *Close*).
+- **O4 de la auditoría de E1:** `http://localhost` en el `#ws=` con la app publicada (`src/fileLinkTake.test.ts` y
+  `src/fileLink.test.ts`) y *Sign in instead* con `leaveLinks()` (`src/ui/linkApp.test.tsx`). El de `alive: false`
+  ya estaba cubierto desde la ronda 1 de E1 (`exportLinks.test.ts`, el link A).
+
+**Versiones viejas:** no hace falta subir `min_app_version`: la migración no cambia nada de lo que usa la versión
+publicada y la app nueva ofrece *Request access* y la lista solo con la base en la 22.
+
+**Ronda 1 de la auditoría de E2** (aprobado con observaciones, sin bloqueantes):
+
+- **O1:** un archivo mandado a la papelera de Drive (`files.purged_at`) en una página viva (por ejemplo, la página se
+  restauró después) dejaba el pedido pendiente y en la lista. Ahora pedirlo deja `void`, la lista no lo muestra y decidirlo
+  da `request_not_found`; si el archivo vuelve, el pedido aparece otra vez.
+- **O2:** un pedido de más de 30 días (oculto en la lista, LF14) se podía decidir por su id: ahora `request_not_found`.
+- **O4:** lo que recuerda el dispositivo («You asked for access on…») es por workspace **y por persona**: otra cuenta en
+  el mismo dispositivo no ve el pedido ajeno.
+- **O3:** pruebas del paso previo de *Share* al dar acceso con la privacidad de lo borrado prendida (*Retry* / *Share
+  anyway*, también con una invitada que recibe Editar) y del número en el título de la pestaña.
+- **O5:** la página y el nivel alineados cuando el archivo está en una sola página; los tres botones en un renglón en el
+  teléfono (medido en Chromium a 375 px).
+- **O6:** la ayuda dice que el archivo se abre solo si la pantalla queda abierta (o al abrir el link de nuevo).
+- **O7:** corregido el texto de 5.2 y el comentario de la migración (el camino del pedido repetido pasa antes por
+  `file_level`).
+- Al roadmap: O8 (dos que deciden a la vez, sin prueba con dos sesiones), O9 (el servidor en memoria sin el tope ni las
+  24 horas) y el título *Mentions* del panel de la campana cuando arriba tiene pedidos.
+- SQL: la prueba suma los casos de O1 y O2; **24 mutantes, 21 detectados** (los 4 nuevos, detectados; los 3 vivos son
+  los equivalentes de antes).
