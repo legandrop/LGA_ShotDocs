@@ -2,7 +2,9 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from
 import { useT } from '../i18n';
 import { usePrefs } from '../prefs';
 import { navigate, pagePath } from '../router';
-import { usePermissions, useSyncStatus, useTree } from '../services';
+import { useLinkMode } from '../linkMode';
+import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
+import { ACCESS_REQUESTS_PAGES_SCHEMA_VERSION } from '../sync/accessRequests';
 import { DayReportButton } from '../templates/dayReportUi';
 import { TemplateBanner } from '../templates/ownTemplatesUi';
 import { disarmTitleUndo, titleUndoFor } from '../templates/templatesUi';
@@ -11,6 +13,7 @@ import { isLetter, modPressed } from './findUi';
 import { codePointLength, DB_LIMITS, splitTitle } from '../lib/dbLimits';
 import { notify } from './notice';
 import { PageBarrier } from './ErrorBarrier';
+import { RequestAccess } from './RequestAccess';
 import { CollapseIcon, HeaderIcon } from './icons';
 import { lazyPart, Part } from './lazyPart';
 import { LinkAsideNotice } from './LinkAsideNotice';
@@ -57,6 +60,7 @@ export function PageView({ id }: { id: string }) {
         <p className="muted">
           {status.lastSyncAt === null ? tr('page.looking') : tr('page.notFound')}
         </p>
+        {status.lastSyncAt !== null && <RequestPage id={id} />}
       </article>
     );
   }
@@ -105,6 +109,27 @@ export function PageView({ id }: { id: string }) {
       </PageBarrier>
       <CommentsSlot pageId={id} />
     </article>
+  );
+}
+
+/**
+ * *Request access* para una página que no está en el árbol (Doc_Links_PDF.md, entrega 3): «no existe» y «sin acceso» son
+ * la misma pantalla y la base responde lo mismo, así que no dice nada de la página. Solo con cuenta (con un link público
+ * no se pide, LF3), con red y con la base del workspace en la 24. Si alguien da acceso, la página llega con la próxima
+ * sincronización del árbol (cada 10 s) y se abre sola.
+ */
+function RequestPage({ id }: { id: string }) {
+  const { workspace, engine } = useServices();
+  const { online, schemaVersion } = useSyncStatus();
+  const link = useLinkMode();
+  if (link || !online || (schemaVersion ?? 0) < ACCESS_REQUESTS_PAGES_SCHEMA_VERSION) return null;
+  return (
+    <RequestAccess
+      key={id}
+      localKey={workspace.config.localKey}
+      target={{ kind: 'page', id }}
+      onHasAccess={() => void engine.syncNow()}
+    />
   );
 }
 

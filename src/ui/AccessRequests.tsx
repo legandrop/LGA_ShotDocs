@@ -3,11 +3,11 @@ import { useT } from '../i18n';
 import { useAccessRequests, useServices, useSyncStatus } from '../services';
 import { GRANT_LEVELS, LEVEL_LABELS, ROLE_LABELS, type GrantLevel } from '../sync/access';
 import type { AccessRequest } from '../sync/accessRequests';
-import { AccessRequestRow, agoText } from './AccessRequestRow';
+import { AccessRequestRow, agoText, requestText } from './AccessRequestRow';
 import { ShareGateNotes, useShareGate } from './shareGate';
 import { teamErrorText } from './teamText';
 
-// Los pedidos de acceso a un archivo (P.30, entrega 2; Docs/Doc_Links_PDF.md, 5.3): lo que se decide, desde la campana
+// Los pedidos de acceso a un archivo o a una página (P.30, entregas 2 y 3; Docs/Doc_Links_PDF.md, 5.3): lo que se decide, desde la campana
 // (en una ventana) y en *Share* de la página. Se baja aparte; la fila de cada pedido está en AccessRequestRow.tsx. Dar
 // acceso es un permiso de los de siempre sobre una página que usa el archivo (la primera donde se agregó, por defecto),
 // *View* por defecto, con el mismo paso previo que *Share* para quien no ve lo borrado (useShareGate). Rechazar es un
@@ -69,7 +69,7 @@ export function AccessRequestForm({
   return (
     <div className="access-request-form" role="group" aria-label={tr('requests.title')}>
       <p>
-        <strong>{tr('requests.asks', { email: request.email, file: request.fileName || tr('common.untitled') })}</strong>
+        <strong>{requestText(request, tr)}</strong>
       </p>
       <p className="muted small">
         {tr(ROLE_LABELS[request.role])} · {agoText(request.askedAt, tr.lang)}
@@ -124,7 +124,7 @@ export function AccessRequestForm({
 }
 
 /**
- * En *Share* de una página: los pedidos de archivos de esa página que la persona puede decidir, arriba (LF12). *Review*
+ * En *Share* de una página: los pedidos de esa página y de sus archivos que la persona puede decidir, arriba (LF12). *Review*
  * abre la decisión ahí mismo, con esta página elegida. `onDecided`: para volver a leer quién tiene acceso.
  */
 export function ShareRequests({ pageId, onDecided }: { pageId: string; onDecided: () => void }) {

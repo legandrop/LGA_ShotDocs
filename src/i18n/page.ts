@@ -8,6 +8,20 @@ export const page = {
     en: "This page does not exist or you do not have access to it.",
     es: "Esta página no existe o no tenés acceso.",
   },
+  // *Request access* para una página (Doc_Links_PDF.md, entrega 3): lo demás es lo de un archivo (files.ts). Nunca
+  // nombra la página.
+  'page.requestHint': {
+    en: "You can ask the people who can share it to give you access.",
+    es: "Podés pedirles acceso a quienes pueden compartirla.",
+  },
+  'page.requestNote': {
+    en: "The people who can share this page will see your email and your role.",
+    es: "Quienes pueden compartir esta página van a ver tu correo y tu rol.",
+  },
+  'page.requestSent': {
+    en: "Request sent. If someone gives you access, the page opens here.",
+    es: "Pedido enviado. Si alguien te da acceso, la página se abre acá.",
+  },
   'page.inTrash': { en: "This page is in the trash.", es: "Esta página está en la papelera." },
   'page.insideTrashed': {
     en: "This page is inside “{title}”, which is in the trash.",

@@ -1149,10 +1149,12 @@ En el parche de Yjs (`patches/yjs+13.6.33.patch`, marca `LGA-SHOTDOCS-PATCH (B.2
 Lo que sale (`origin`, `rightOrigin`) son entonces dos letras en orden, y cualquier dispositivo (y la recarga) ubica la
 letra en el mismo lugar que quien deshizo. Cumple las tres condiciones: **nunca saca ni agrega texto** (solo decide
 dónde va lo que vuelve); **lo que decide viaja**: es una edición común, que cualquier versión, vieja o nueva, ubica igual
-sin saber nada de las copias; y **las versiones mezcladas convergen**: una versión vieja sigue armando sus propios vecinos
-cruzados (su diferencia de siempre), pero ninguna nueva. **No hace falta subir `min_app_version`.** Si los vecinos no
-estaban cruzados ni el izquierdo partido, hace lo mismo que antes. Cuesta un recorrido del vecino izquierdo al derecho
-por cada tramo que vuelve; normalmente están al lado.
+sin saber nada de las copias; y con versiones mezcladas no aparece ninguna diferencia nueva: las que quedan empiezan
+siempre en un ⌘Z hecho con una versión vieja (y pueden alcanzar a los dispositivos que lo reciben, como antes; medido en
+100.000 corridas mezcladas, 27 a 56 de cada 10.000). Para la compatibilidad no hace falta subir `min_app_version`, pero
+se sube a la versión que publica B.26 porque corta esa última fuente (LEY 1: no cuesta nada). Si los vecinos no estaban
+cruzados ni el izquierdo partido, hace lo mismo que antes. Cuesta un recorrido del vecino izquierdo al derecho por cada
+tramo que vuelve; normalmente están al lado, y con vecinos cruzados puede ir hasta el final del renglón.
 
 Se descartaron: **solo la parte 2** (converge igual, 3.000 de 3.000, pero deja el "dso" de B.21); **solo la parte 1**
 (es la corrección de 16.4: arma más vecinos cruzados, y sin la parte 2 diverge); **ubicar en la memoria como lo haría

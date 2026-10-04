@@ -689,8 +689,15 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   la entrega 2**, *Request access*: la pantalla sin acceso lo pide (con el aviso de quién lo verá), la campana y *Share*
   muestran los pedidos a quien puede compartir y la ventana da acceso (nunca baja) o rechaza; la pantalla `/f/` vuelve a
   donde estaba y reintenta sola al volver la red; pruebas de `http://localhost` y de *Sign in instead* (O4). Migración
-  `20261031120000_access_requests` aplicada (schema 22). Falta la prueba de aceptación 4 de Lega. Falta E3
-  opcional (pedir una página). Quedan para después: el correo al pedir y al aceptar (B.8), pedir acceso sin cuenta, el
+  `20261031120000_access_requests` aplicada (schema 22). Falta la prueba de aceptación 4 de Lega. **Hecho (v0.169):
+  la entrega 3**, pedir también una página desde `/p/<id>` sin acceso (la misma pantalla para «no existe» y «sin
+  acceso»), con los pedidos en la campana y en *Share* de esa página y el permiso solo sobre ella; migración
+  `20261102120000_access_requests_paginas` aplicada (schema 24). De la auditoría de E3 (chico): `/p/<id>` no
+  lleva la clave del workspace ni el `#ws=` como `/f/`, así que con más de un workspace conectado el pedido va a la base
+  del que está abierto y nadie lo recibe (O1: que la dirección de una página lleve la clave local, o no ofrecer pedir
+  con más de un workspace); quien no ve ningún proyecto cae en `NoProjects` y no ve *Request access* ni en `/p/` ni en
+  `/f/` (O2: mostrar la pantalla sin acceso con esas rutas); y lo de E2 que sigue (O6): el servidor en memoria sin el
+  tope ni las 24 horas, y `page_level` que tarda distinto si la página existe (la diferencia ya aceptada en LF4). Quedan para después: el correo al pedir y al aceptar (B.8), pedir acceso sin cuenta, el
   link de un video en línea y los textos de invitación en el choque de clave y en *Join a workspace?* para una dirección
   de archivo (O7 c). De la auditoría de E2 (chico): una prueba de dos personas decidiendo a la vez con dos sesiones
   reales (O8; hoy por lectura del `for update`), el tope y las 24 horas en el servidor en memoria (O9) y el título
@@ -1052,10 +1059,14 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    cruzados. **Arreglado en el parche de Yjs:** los vecinos se toman como los lee otro dispositivo (el derecho a la
    derecha del izquierdo, el izquierdo sin partir). De 6 a 0 con dos editores, de 22 a 0 en el modelo de párrafos y de
    33 a 0 documentos distintos de lo guardado con una persona; ninguna letra de menos; versiones mezcladas sin
-   diferencias nuevas. Sin `min_app_version` (`Doc_Deshacer.md`, sección 21). Queda: el Enter deshecho cuya mitad
-   vuelve a un renglón que otro borró (20.5) no es de esta familia; extender la decisión F de B.22 lo arregla pero
-   empeora *Replace all* y cambia 655 de 3.000 corridas: propuesta de dejar lo insertado solo si es el mismo texto
-   movido, a medir (21.5). Reportarlo a Yjs.
+   diferencias nuevas (las que quedan empiezan en un ⌘Z de una versión vieja: por eso `min_app_version` sube a esta
+   versión; `Doc_Deshacer.md`, sección 21). Queda: el Enter deshecho cuya mitad vuelve a un renglón que otro borró (20.5)
+   no es de esta familia; extender la decisión F de B.22 lo arregla pero empeora *Replace all* y cambia 655 de 3.000
+   corridas: propuesta de dejar lo insertado solo si es el mismo texto movido, a medir (21.5). Reportarlo a Yjs. De la
+   auditoría (chicos): con vecinos cruzados el recorrido nuevo puede ir hasta el final del renglón (no medible en páginas
+   reales); en ~0,15 % de las corridas, justo después de una negrita, la marca de formato difiere un paso y se iguala
+   (de Yjs, nunca texto); el arnés de dos editores muestra en ~50 % de las corridas algún paso donde un editor no muestra
+   exactamente su documento (la reparación del esquema, ya conocida).
 
 ### C. Esperan a Lega
 

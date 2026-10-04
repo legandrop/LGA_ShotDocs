@@ -1,6 +1,6 @@
 # Links a los archivos en el PDF y *Request access* (P.30)
 
-**Estado: diseño auditado el 2026-10-03 ("aprobado con condiciones" en E1, E2 y E3) y corregido; E1 hecha (v0.164, sección 16); E2 hecha (v0.166, sección 17), con su migración aplicada.**
+**Estado: diseño auditado el 2026-10-03 ("aprobado con condiciones" en E1, E2 y E3) y corregido; E1 hecha (v0.164, sección 16); E2 hecha (v0.166, sección 17), con su migración aplicada; E3 hecha (v0.169, sección 18), con su migración aplicada.**
 Pedido de Lega del 2026-10-03, diseñado contra `main` v0.158. Toca permisos, Row Level Security y privacidad, y suma una
 tabla: **riesgo alto**. Las decisiones ya tomadas por Lega están en "Qué se pide"; las nuevas (LF1 a LF16, sección 10)
 son propuestas con la recomendación tomada; LF17 a LF20 son de Lega, sobre los hallazgos de la auditoría. **Las
@@ -305,7 +305,7 @@ el pase no coincidirían.
 - **Row Level Security prendida y sin políticas**, y `revoke all` a `public`, `anon` y `authenticated`: nadie la lee ni la
   escribe directo (probado: `permission denied` para leer y para insertar). Solo las tres funciones `SECURITY DEFINER`.
 - **Páginas (E3):** la decisión de Lega menciona «qué archivo o página». Esta entrega guarda archivos; para pedir una
-  página (`/p/<id>` sin acceso) se suma `page_id` como objetivo con un `check` de uno de los dos, en E3.
+  página (`/p/<id>` sin acceso) E3 suma otra columna, `target_page_id`, con un `check` de uno de los dos (sección 18).
 
 ### 5.2 Pedir: `request_access(archivo)`
 
@@ -850,7 +850,7 @@ página se mandó a la papelera dentro de la prueba. **42 de 42 comprobaciones c
 |---|---|---|---|
 | **E1** | La ruta `/f/` (router, `#ws=` en `computeStart`, la pantalla en `Workspace` y en `LinkApp`, *Sign in instead*, `emailRedirectTo`), los links en la copia de impresión (exportar, imprimir y medir), el link público al exportar con su aviso y casilla, la ayuda (*File links in PDFs*), `Doc_Exportar.md`. Sin migración ni portero. | Medio (privacidad de la pantalla y de lo que lleva el PDF; ningún permiso nuevo) | ~600-900 líneas con pruebas |
 | **E2** | La migración de la sección 7 (con su `schema_version`), *Request access* en la pantalla, la sección de la campana, los pedidos en *Share*, la ventana de decidir, la ayuda (*Access requests*). | Alto (tabla nueva, RLS, permisos) | ~200 de SQL, ~500-700 de app, pruebas SQL con mutantes |
-| **E3** (opcional) | *Request access* también en `/p/<id>` sin acceso, con **otra columna** para la página pedida (`target_page_id`; `page_id` ya es «donde se dio el permiso»), `file_id` sin `not null`, un `check` de uno de los dos y el índice único por objetivo (O19). | Bajo-medio | ~200 |
+| **E3** (opcional; hecha, sección 18) | *Request access* también en `/p/<id>` sin acceso, con **otra columna** para la página pedida (`target_page_id`; `page_id` ya es «donde se dio el permiso»), `file_id` sin `not null`, un `check` de uno de los dos y el índice único por objetivo (O19). | Bajo-medio | ~200 |
 
 **Prueba de aceptación de cada entrega (Lega, a mano):**
 
@@ -1037,3 +1037,71 @@ publicada y la app nueva ofrece *Request access* y la lista solo con la base en 
   24 horas) y el título *Mentions* del panel de la campana cuando arriba tiene pedidos.
 - SQL: la prueba suma los casos de O1 y O2; **24 mutantes, 21 detectados** (los 4 nuevos, detectados; los 3 vivos son
   los equivalentes de antes).
+
+## 18. Cómo quedó la entrega 3 (v0.169)
+
+| Pieza | Dónde |
+|---|---|
+| La migración (sección 11 «E3» y O19; `schema_version` 24), **aplicada** (v0.169) | `supabase/migrations/20261102120000_access_requests_paginas.sql` |
+| Su prueba SQL (en `begin … rollback`); la de la 22 sigue pasando con la 24 adelante | `supabase/tests/access_requests_paginas_permisos.sql` |
+| Pedir una página y lo que recuerda el dispositivo (`p:<id>`, aparte de los archivos) | `src/sync/accessRequests.ts` (`requestPageAccess`, `ACCESS_REQUESTS_PAGES_SCHEMA_VERSION`, `askedAt`/`rememberAsked` con `AccessTarget`) |
+| *Request access* compartido por las dos pantallas sin acceso | `src/ui/RequestAccess.tsx` (antes adentro de `FileScreen.tsx`) |
+| La pantalla sin acceso de `/p/<id>` | `src/ui/PageView.tsx` (`RequestPage`) |
+| El texto del pedido de una página en la campana, *Share* y la ventana | `src/ui/AccessRequestRow.tsx` (`requestText`), `src/ui/AccessRequests.tsx` |
+| El servidor en memoria con los pedidos de páginas | `src/sync/testing.ts` (`requestPageAccess`, `accessRequestsRemote`) |
+
+**La base.** `access_requests` suma `target_page_id` (sin clave foránea, como `file_id`: una página que no existe también
+deja su fila `void`), `file_id` deja de ser obligatorio, el `check` `access_requests_target` pide uno de los dos
+(`num_nonnulls = 1`) y un índice único parcial deja un solo pedido abierto por persona y página.
+`request_page_access(página)` repite las reglas de `request_access`: miembro con sesión permitida, `has_access` si ya la
+ve (`page_level`, la misma pregunta que el `select` de `pages`), `sent` exista o no, `void` si no vale (no existe, ella
+o una de arriba en la papelera, proyecto borrado, o un rechazo en 24 horas), renovar como mucho una vez por hora, y
+**el mismo tope** de 20 filas nuevas por persona y día, contando archivos y páginas juntos, con el mismo candado.
+`access_requests_pending()` se borra y se crea de nuevo (la fila suma `target_page_id` al final): un pedido de página lo
+ve quien puede compartir esa página (`user_can_share_page`, que ya cuenta un permiso sobre una de arriba), con esa sola
+página en `pages`, y nunca si quien pide ya la ve. `decide_access_request` (misma firma) decide los dos: para una página,
+el permiso va **solo** sobre la página pedida (`page_invalid` con otra, también con la de arriba o una de abajo), con
+las mismas reglas de E2 (rechazar explícito, nunca baja, 30 días, `request_not_found` igual para todo lo que no toca).
+`request_access(archivo)` no cambia.
+
+**Distinto de lo diseñado o sumado (decidido al programar):**
+
+- **El permiso, solo sobre la página pedida.** Quien decide no elige otra (ni la de arriba, que daría de más, LF11): la
+  ventana muestra la página sin lista, como un archivo que está en una sola.
+- **Una función aparte para pedir una página** (`request_page_access`) en vez de sumarle un parámetro a `request_access`:
+  la de la 22 queda igual y la app publicada no se entera.
+- **El tope es uno solo** para archivos y páginas (20 filas nuevas por día entre los dos).
+- **La pantalla sin acceso de una página** es la de siempre (*This page does not exist or you do not have access to it.*)
+  con *Request access* abajo, solo con cuenta (con un link público, nada, LF3), con red y con la base en la 24. No vuelve
+  a preguntar cada minuto: el árbol se sincroniza cada 10 segundos y, si le dan acceso, la página aparece y se abre sola.
+  Si la base dice `has_access` (el árbol todavía no llegó), sincroniza en vez de pedir.
+- **En *Share*** el pedido de una página aparece solo en esa página (no en la de arriba ni en las de abajo); el rótulo pasa
+  a *Access requests to this page and its files*.
+- **Lo que recuerda el dispositivo** de una página va con `p:` delante del id: no se mezcla con un archivo, y lo anotado
+  por E2 se sigue leyendo igual.
+
+**Versiones viejas.** La app publicada lee la lista nueva sin problema: las filas de páginas traen `file_id`
+nulo y su `parseAccessRequest` las descarta, así que no las muestra ni las decide; la columna nueva al final se ignora.
+No hace falta subir `min_app_version`. La app nueva ofrece pedir una página solo con la base en la 24.
+
+**Pruebas:**
+
+- **SQL, en la base real dentro de una transacción que se deshace** (la migración y la prueba en una sola consulta):
+  `access_requests_paginas_permisos.sql` pasa entera, y `access_requests_permisos.sql` (la de la 22) también, con la 24
+  adelante. **32 mutantes** de las guardas: **31 detectados**; el vivo es el equivalente de E2 (decidir sin
+  `member_not_found`: lo tira `share()` con el mismo error).
+- **App:** `src/sync/accessRequests.test.ts` (la fila de una página, las rotas, `request_page_access`, lo que recuerda el
+  dispositivo) y `src/ui/accessRequestsPages.test.tsx` (la pantalla igual para una página que existe y una que no, el
+  aviso antes de mandar, la base en la 23, sin red, con un link, `has_access` que sincroniza y abre la página, el tope; la
+  campana, la ventana sin lista de páginas, *Share* solo en esa página, rechazar y nunca baja). **8 mutantes** de la app,
+  detectados.
+
+**Ronda 1 de la auditoría de E3** (aprobado con observaciones, sin bloqueantes):
+
+- **O3:** la pista de la pantalla de una página decía «compartirlo»; ahora tiene su texto (`page.requestHint`,
+  «compartirla»), con una prueba en castellano.
+- **O4:** la prueba de «todavía buscando» no probaba ese caso: ahora un dispositivo que nunca sincronizó muestra
+  *Looking for the page…* sin *Request access* (el mutante que lo mostraba, detectado).
+- **O5:** el README suma el link de una página.
+- Al roadmap (P.30): O1 (`/p/<id>` sin la clave del workspace: con más de uno conectado, el pedido va a la base abierta),
+  O2 (quien no ve ningún proyecto cae en `NoProjects`, sin *Request access*) y O6 (lo de E2 que sigue).

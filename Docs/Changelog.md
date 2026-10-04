@@ -2,24 +2,29 @@
 
 v0.0XX :
 
-**El ⌘Z con dos personas sin la excepción de Yjs (B.22).** A veces ⌘Z tiraba `TypeError` y la línea de tiempo
-descartaba el paso: lo que tenía que volver (renglones enteros, en 7 de 13 casos medidos) no volvía. Causa: deshacer
-vuelve a poner cada cosa en la copia de su renglón, y si otra persona la había borrado, Yjs ya la había recolectado
-(vaciar rehacer le saca la marca que la guardaba) y el deshacer llegaba a un hueco. El parche de Yjs ahora salta lo que
-no tiene dónde volver, hace lo demás y, si saltó algo, deja lo insertado por ese paso (puede ser el mismo texto movido
-por un Enter). Medido con dos editores borrando y deshaciendo bloques enteros: de 10 a 0 en 3.000 corridas, y de 24 a
-0 en el modelo de párrafos; sin la excepción, idéntico (un atributo del renglón se salta como antes). Al final nunca
-falta más texto que con el ⌘Z frenado. Sin `min_app_version`.
+**El ⌘Z con dos personas (B.22 y B.26).** (1) A veces ⌘Z tiraba `TypeError` y el paso se descartaba: lo que tenía que
+volver (renglones enteros) no volvía. Causa: deshacer vuelve a poner cada cosa en la copia de su renglón y, si otra
+persona la había borrado, Yjs ya la había recolectado. El parche de Yjs ahora salta lo que no tiene dónde volver, hace
+lo demás y, si saltó algo, deja lo insertado por ese paso: con dos editores, de 10 a 0 en 3.000 corridas. (2) En 6 de
+3.000 corridas los dos terminaban con textos distintos para siempre ("y la toma" y "y la omat"). Causa, de Yjs: al
+deshacer el borrado de un renglón, los vecinos de la letra que vuelve quedaban cruzados, y quien deshacía la ubicaba
+en otro lugar que los demás. El parche ahora toma los vecinos como los lee otro dispositivo: de 6 a 0, sin ninguna
+letra de menos. Sube `min_app_version` a esta versión (los ⌘Z de una versión vieja todavía pueden cruzarse).
 
-**Dos personas con textos distintos después de deshacer (B.26).** Con dos editores borrando y deshaciendo bloques
-enteros, 6 de 3.000 corridas terminaban con los dos textos distintos para siempre ("y la toma" en uno, "y la omat" en el
-otro). Causa, de Yjs (también sin nuestros parches): al deshacer el borrado de un renglón, los vecinos de cada letra que
-vuelve se buscan siguiendo las copias; con un original y su copia en el mismo texto quedaban cruzados, y quien deshacía
-ubicaba la letra en un lugar y los demás (y él mismo al recargar) en otro. El parche de Yjs ahora toma los vecinos como
-los lee otro dispositivo. De 6 a 0 con el editor y de 22 a 0 en el modelo de párrafos, sin ninguna letra de menos. Sin
-`min_app_version`.
+[ Deshacer con dos personas sin la excepción de Yjs y sin textos distintos - el parche de Yjs salta lo que no tiene dónde volver y toma los vecinos de lo que vuelve como los lee otro dispositivo ]
 
-[ Deshacer con dos personas sin la excepción de Yjs - el parche salta lo que no tiene dónde volver porque otra persona borró su renglón, hace lo demás del paso y deja lo insertado si saltó algo; medido con dos editores borrando bloques enteros; y deshacer el borrado de un renglón ya no deja a dos personas con textos distintos (B.26) ]
+v0.169 :
+
+**Links del PDF, entrega 3: pedir una página.** Quien abría `/p/<id>` sin acceso solo leía «no existe o no tenés
+acceso», sin cómo pedirla: *Request access* existía solo para los archivos. Ahora `access_requests` suma otra columna,
+`target_page_id`, con `file_id` opcional, un `check` de uno de los dos y un pedido abierto por persona y página;
+`request_page_access` repite las reglas de E2 (la misma respuesta exista o no, `void` si no vale, rechazo de 24 horas) y
+comparte el tope de 20 por día. La lista y decidir suman los pedidos de páginas: los ve quien puede compartir esa página
+(o una de arriba) y el permiso va solo sobre ella, sin bajar nunca uno que ya existe. La pantalla sin acceso de una
+página ofrece *Request access* con la base en la 24; la campana, *Share* y la ventana son las de E2. Migración
+`20261102120000_access_requests_paginas` (schema 24), con su prueba SQL y 32 mutantes; ayuda.
+
+[Pedir acceso a una página (Request access, P.30 entrega 3) - la pantalla sin acceso de /p/ lo pide sin decir nada de la página, quien puede compartirla lo ve en la campana y en Share y da acceso solo sobre ella sin bajar permisos o rechaza, con el mismo tope por día (migración, schema 24)]
 
 v0.168 :
 
