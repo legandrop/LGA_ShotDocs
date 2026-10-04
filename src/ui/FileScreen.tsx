@@ -1,16 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { locale, useT } from '../i18n';
+import { useT } from '../i18n';
 import { fileKind, isFolderMime } from '../media/attachments';
 import { useLinkMode } from '../linkMode';
 import { fileReturnPath, navigate } from '../router';
 import { useServices, useSyncStatus } from '../services';
-import { ACCESS_REQUESTS_SCHEMA_VERSION, askedAt, askedScope, rememberAsked, requestAccess } from '../sync/accessRequests';
-import { errorMessage, isNetworkError } from '../sync/types';
+import { ACCESS_REQUESTS_SCHEMA_VERSION } from '../sync/accessRequests';
 import { AttachmentSheet } from './AttachmentSheet';
 import { createCarreteLoader } from './carreteLoader';
 import type { CarreteItem } from './carreteModel';
 import { FolderViewer } from './FolderViewer';
 import { lazyPart, Part } from './lazyPart';
+import { RequestAccess } from './RequestAccess';
 
 // La dirección fija de un archivo (P.30, Docs/Doc_Links_PDF.md, 2.3): `/f/<clave local>/<id>`, la que lleva cada tarjeta
 // y cada video del PDF. Quien decide si se ve es la base, siempre con la misma función que el portero para el pase
@@ -139,7 +139,7 @@ export function FileScreen({ localKey, id }: { localKey: string; id: string }) {
           <>
             <h1>{tr('file.noAccess.title')}</h1>
             {canRequest ? (
-              <RequestAccess localKey={localKey} id={id} onHasAccess={() => setAttempt((n) => n + 1)} />
+              <RequestAccess localKey={localKey} target={{ kind: 'file', id }} onHasAccess={() => setAttempt((n) => n + 1)} />
             ) : (
               <p className="muted">{tr('file.noAccess.text')}</p>
             )}
@@ -163,72 +163,6 @@ export function FileScreen({ localKey, id }: { localKey: string; id: string }) {
         )}
       </div>
     </main>
-  );
-}
-
-/**
- * *Request access* (5.2): antes de mandar dice quién va a ver el pedido (LF19). La respuesta de la base es la misma
- * exista o no el archivo; el dispositivo anota cuándo se pidió (la base no deja listar los pedidos propios).
- */
-function RequestAccess({ localKey, id, onHasAccess }: { localKey: string; id: string; onHasAccess: () => void }) {
-  const tr = useT();
-  const { client, user } = useServices();
-  const scope = askedScope(localKey, user.id);
-  const [asked, setAsked] = useState(() => askedAt(scope, id));
-  const [confirming, setConfirming] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [sent, setSent] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function send() {
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await requestAccess(client, id);
-      if (res === 'has_access') return onHasAccess();
-      rememberAsked(scope, id);
-      setAsked(askedAt(scope, id) ?? new Date().toISOString());
-      setSent(true);
-      setConfirming(false);
-    } catch (err) {
-      setError(
-        isNetworkError(err)
-          ? tr('file.requestOffline')
-          : errorMessage(err) === 'rate_limited'
-            ? tr('file.requestLimited')
-            : tr('file.requestFailed'),
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const day = asked ? new Intl.DateTimeFormat(locale(tr.lang), { month: 'short', day: 'numeric' }).format(Date.parse(asked)) : null;
-  return (
-    <div className="file-request">
-      {sent ? <p>{tr('file.requestSent')}</p> : day ? <p className="muted">{tr('file.requestedOn', { date: day })}</p> : null}
-      {!sent && !day && <p className="muted">{tr('file.requestHint')}</p>}
-      {confirming ? (
-        <>
-          <p className="muted small">{tr('file.requestNote')}</p>
-          <div className="file-request-actions">
-            <button className="primary" disabled={busy} onClick={() => void send()}>
-              {tr('file.request')}
-            </button>
-            <button disabled={busy} onClick={() => setConfirming(false)}>
-              {tr('common.cancel')}
-            </button>
-          </div>
-        </>
-      ) : (
-        !sent && (
-          <button className="primary" onClick={() => setConfirming(true)}>
-            {day ? tr('file.requestAgain') : tr('file.request')}
-          </button>
-        )
-      )}
-      {error && <p className="error">{error}</p>}
-    </div>
   );
 }
 

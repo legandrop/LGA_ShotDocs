@@ -8,9 +8,16 @@ import { errorMessage, isNetworkError } from './types';
 // página viva que usa el archivo ve los pendientes (`access_requests_pending`) en la campana y en *Share* de la página, y
 // los decide (`decide_access_request`). Rechazar es explícito (LF20). Nada de esto se guarda en el dispositivo salvo,
 // para quien pide, cuándo lo pidió: la base no le deja listar sus pedidos (sería la misma pregunta por otro camino).
+//
+// Entrega 3 (supabase/migrations/20261102120000_access_requests_paginas.sql): también se pide una página desde `/p/<id>`
+// sin acceso (`request_page_access`). La lista trae esos pedidos con `target_page_id` y una sola página (la pedida), y
+// decidirlos da el permiso sobre ella; la campana, *Share* y la ventana de decidir son las mismas.
 
 /** La versión de la base con los pedidos de acceso. */
 export const ACCESS_REQUESTS_SCHEMA_VERSION = 22;
+
+/** La versión de la base que también deja pedir una página (entrega 3). */
+export const ACCESS_REQUESTS_PAGES_SCHEMA_VERSION = 24;
 
 /** Cada cuánto se pregunta con la ventana a la vista (el mismo ciclo de la campana, LF12). */
 export const ACCESS_REQUESTS_EVERY_MS = 60_000;
@@ -21,7 +28,10 @@ export interface AccessRequest {
   userId: string;
   email: string;
   role: Role;
-  fileId: string;
+  /** El archivo pedido, o `null` si se pidió una página (entrega 3). */
+  fileId: string | null;
+  /** La página pedida (entrega 3), o `null` si se pidió un archivo. Es la única de `pages`. */
+  targetPageId: string | null;
   fileName: string;
   mime: string;
   askedAt: string;
@@ -48,24 +58,35 @@ export async function requestAccess(client: SupabaseClient, fileId: string): Pro
   return res === 'has_access' ? 'has_access' : 'sent';
 }
 
+/** Pedir acceso a una página (entrega 3): `sent` exista o no, `has_access` si ya la ve. Tira `rate_limited` (el mismo tope). */
+export async function requestPageAccess(client: SupabaseClient, pageId: string): Promise<'sent' | 'has_access'> {
+  const res = await call<unknown>(client, 'request_page_access', { p_page: pageId });
+  return res === 'has_access' ? 'has_access' : 'sent';
+}
+
 /** Una fila de `access_requests_pending`, o `null` si no tiene la forma. */
 export function parseAccessRequest(r: Record<string, unknown>): AccessRequest | null {
   const s = (v: unknown) => (typeof v === 'string' ? v : null);
   const id = s(r.id);
   const userId = s(r.user_id);
   const fileId = s(r.file_id);
-  if (!id || !userId || !fileId || !isRole(r.role)) return null;
+  const targetPageId = s(r.target_page_id);
+  // Un archivo o una página, nunca los dos ni ninguno (el `check` de la tabla).
+  if (!id || !userId || !fileId === !targetPageId || !isRole(r.role)) return null;
   const pages = (Array.isArray(r.pages) ? r.pages : [])
     .map((p) => (p && typeof p === 'object' ? (p as Record<string, unknown>) : null))
     .filter((p): p is Record<string, unknown> => !!p && typeof p.page_id === 'string')
     .map((p) => ({ pageId: p.page_id as string, title: s(p.title) ?? '' }));
   if (pages.length === 0) return null;
+  // Una página pedida se da solo sobre ella: la lista trae esa sola.
+  if (targetPageId && (pages.length !== 1 || pages[0].pageId !== targetPageId)) return null;
   return {
     id,
     userId,
     email: s(r.email) ?? '',
     role: r.role,
     fileId,
+    targetPageId,
     fileName: s(r.file_name) ?? '',
     mime: s(r.mime) ?? '',
     askedAt: s(r.asked_at) ?? '',
@@ -263,17 +284,32 @@ function readAsked(scope: string, store: Store | null): Record<string, string> {
   }
 }
 
-/** Cuándo pidió acceso a este archivo desde este dispositivo (ISO), o `null`. `scope`: `askedScope(clave local, persona)`. */
-export function askedAt(scope: string, fileId: string, store: Store | null = storage()): string | null {
-  const at = readAsked(scope, store)[fileId];
+/** Lo que se pidió: un archivo (por su id) o una página (entrega 3). */
+export interface AccessTarget {
+  kind: 'file' | 'page';
+  id: string;
+}
+
+/** La clave de lo pedido en el dispositivo: el id de un archivo tal cual (como en la entrega 2), el de una página con `p:`. */
+function askedKey(target: AccessTarget | string): string {
+  return typeof target === 'string' ? target : target.kind === 'page' ? `p:${target.id}` : target.id;
+}
+
+/**
+ * Cuándo pidió acceso a este archivo (su id) o a esta página desde este dispositivo (ISO), o `null`. `scope`:
+ * `askedScope(clave local, persona)`.
+ */
+export function askedAt(scope: string, target: AccessTarget | string, store: Store | null = storage()): string | null {
+  const at = readAsked(scope, store)[askedKey(target)];
   return typeof at === 'string' && !Number.isNaN(Date.parse(at)) ? at : null;
 }
 
 /** Anota que lo pidió ahora (los últimos 200 por workspace y persona; si no se puede guardar, no pasa nada). */
-export function rememberAsked(scope: string, fileId: string, now = new Date(), store: Store | null = storage()): void {
+export function rememberAsked(scope: string, target: AccessTarget | string, now = new Date(), store: Store | null = storage()): void {
   const all = readAsked(scope, store);
-  delete all[fileId];
-  all[fileId] = now.toISOString();
+  const key = askedKey(target);
+  delete all[key];
+  all[key] = now.toISOString();
   const kept = Object.entries(all).slice(-ASKED_KEEP);
   try {
     store?.setItem(ASKED_KEY + scope, JSON.stringify(Object.fromEntries(kept)));

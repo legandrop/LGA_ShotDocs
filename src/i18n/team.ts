@@ -108,19 +108,23 @@ export const team = {
     es: "No se puede dar acceso en esa página. Elegí otra.",
   },
   'teamError.decisionInvalid': { en: "Choose Give access or Decline.", es: "Elegí Dar acceso o Rechazar." },
-  // Los pedidos de acceso a un archivo (Doc_Links_PDF.md, 5.3): en la campana, en Share y en la ventana de decidir.
+  // Los pedidos de acceso a un archivo o a una página (Doc_Links_PDF.md, 5.3 y entrega 3): en la campana, en Share y en la ventana de decidir.
   'requests.title': { en: "Access requests", es: "Pedidos de acceso" },
   'requests.count': {
     en: { one: "{count} access request", other: "{count} access requests" },
     es: { one: "{count} pedido de acceso", other: "{count} pedidos de acceso" },
   },
   'requests.asks': { en: "{email} asks for access to {file}", es: "{email} pide acceso a {file}" },
+  'requests.asksPage': { en: "{email} asks for access to the page {page}", es: "{email} pide acceso a la página {page}" },
   'requests.times': {
     en: { one: "{count} time", other: "{count} times" },
     es: { one: "{count} vez", other: "{count} veces" },
   },
   'requests.review': { en: "Review", es: "Revisar" },
-  'requests.onPage': { en: "Access requests to files on this page", es: "Pedidos de acceso a archivos de esta página" },
+  'requests.onPage': {
+    en: "Access requests to this page and its files",
+    es: "Pedidos de acceso a esta página y a sus archivos",
+  },
   'requests.page': { en: "Page", es: "Página" },
   'requests.level': { en: "Access", es: "Acceso" },
   'requests.scope': {

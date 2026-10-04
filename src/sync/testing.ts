@@ -859,11 +859,13 @@ export class FakeServer {
   mentionSharingEnabled = false;
   /** Las llamadas a `share_for_mention` (`<página> <persona>`). */
   readonly mentionShares: string[] = [];
-  /** `access_requests` (P.30, entrega 2): los pedidos de acceso a un archivo; nada se borra. */
+  /** `access_requests` (P.30, entregas 2 y 3): los pedidos de acceso a un archivo o a una página; nada se borra. */
   readonly accessRequests: {
     id: string;
     user_id: string;
-    file_id: string;
+    file_id: string | null;
+    /** La página pedida (entrega 3); con un archivo, `null`. */
+    target_page_id: string | null;
     state: 'pending' | 'accepted' | 'declined' | 'void';
     times: number;
     asked_at: string;
@@ -2764,6 +2766,42 @@ export class FakeRemote
       id: crypto.randomUUID(),
       user_id: this.userId,
       file_id: fileId,
+      target_page_id: null,
+      state: valid ? 'pending' : 'void',
+      times: 1,
+      asked_at: now,
+      decided_at: null,
+      decided_by: null,
+      page_id: null,
+      level: null,
+    });
+    return 'sent';
+  }
+
+  /** La página está viva (ni ella ni una de arriba en la papelera, proyecto sin borrar). */
+  private pageAlive(pageId: string): boolean {
+    return this.server.pages.has(pageId) && !this.server.pageInTrash(pageId) && !this.server.pageInDeletedProject(pageId);
+  }
+
+  /** `request_page_access` (entrega 3): `sent` exista o no la página (`void` si no vale), `has_access` si ya la ve. */
+  async requestPageAccess(pageId: string): Promise<'sent' | 'has_access'> {
+    this.server.check();
+    if (!this.server.role(this.userId)) throw new RemoteError('not_member', true, '42501');
+    if (this.server.pages.has(pageId) && this.server.pageLevel(this.userId, pageId) >= 1) return 'has_access';
+    const now = new Date().toISOString();
+    const mine = (r: FakeServer['accessRequests'][number]) => r.user_id === this.userId && r.target_page_id === pageId;
+    const open = this.server.accessRequests.find((r) => mine(r) && (r.state === 'pending' || r.state === 'void'));
+    if (open) {
+      open.times += 1;
+      open.asked_at = now;
+      return 'sent';
+    }
+    const valid = this.pageAlive(pageId) && !this.server.accessRequests.some((r) => mine(r) && r.state === 'declined');
+    this.server.accessRequests.push({
+      id: crypto.randomUUID(),
+      user_id: this.userId,
+      file_id: null,
+      target_page_id: pageId,
       state: valid ? 'pending' : 'void',
       times: 1,
       asked_at: now,
@@ -2777,15 +2815,26 @@ export class FakeRemote
 
   /** `access_requests_pending` y `decide_access_request` de esta sesión. */
   accessRequestsRemote(): AccessRequestsRemote {
-    const shareable = (fileId: string) => this.aliveFilePages(fileId).filter((p) => this.server.role(this.userId) !== 'guest' && this.canShare({ pageId: p }));
+    const canDecide = () => this.server.role(this.userId) !== 'guest';
+    // Dónde se puede dar el permiso: las páginas vivas con el archivo que se pueden compartir, o la página pedida.
+    const shareable = (r: FakeServer['accessRequests'][number]) =>
+      r.target_page_id !== null
+        ? this.pageAlive(r.target_page_id) && canDecide() && this.canShare({ pageId: r.target_page_id })
+          ? [r.target_page_id]
+          : []
+        : this.aliveFilePages(r.file_id!).filter((p) => canDecide() && this.canShare({ pageId: p }));
+    const sees = (r: FakeServer['accessRequests'][number]) =>
+      r.target_page_id !== null
+        ? this.server.pageLevel(r.user_id, r.target_page_id) >= 1
+        : this.aliveFilePages(r.file_id!).some((p) => this.server.pageLevel(r.user_id, p) >= 1);
     return {
       pending: async () => {
         this.server.check();
         if (!this.server.role(this.userId) || this.server.role(this.userId) === 'guest') return [];
         return this.server.accessRequests
           .filter((r) => r.state === 'pending' && r.user_id !== this.userId && this.server.role(r.user_id))
-          .filter((r) => !this.aliveFilePages(r.file_id).some((p) => this.server.pageLevel(r.user_id, p) >= 1))
-          .map((r) => ({ r, pages: shareable(r.file_id) }))
+          .filter((r) => !sees(r))
+          .map((r) => ({ r, pages: shareable(r) }))
           .filter(({ pages }) => pages.length > 0)
           .map(({ r, pages }) => ({
             id: r.id,
@@ -2793,8 +2842,9 @@ export class FakeRemote
             email: this.server.members.get(r.user_id)?.email ?? '',
             role: this.server.role(r.user_id)!,
             fileId: r.file_id,
-            fileName: this.server.mediaFiles.get(r.file_id)?.name ?? '',
-            mime: this.server.mediaFiles.get(r.file_id)?.mime ?? '',
+            targetPageId: r.target_page_id,
+            fileName: r.file_id ? (this.server.mediaFiles.get(r.file_id)?.name ?? '') : '',
+            mime: r.file_id ? (this.server.mediaFiles.get(r.file_id)?.mime ?? '') : '',
             askedAt: r.asked_at,
             times: r.times,
             pages: pages.map((p) => ({ pageId: p, title: this.server.pages.get(p)?.title ?? '' })),
@@ -2803,13 +2853,13 @@ export class FakeRemote
       decide: async (id, accept, pageId, level) => {
         this.server.check();
         const r = this.server.accessRequests.find((x) => x.id === id);
-        if (!r || r.state !== 'pending' || shareable(r.file_id).length === 0) throw new RemoteError('request_not_found', true, 'P0002');
+        if (!r || r.state !== 'pending' || shareable(r).length === 0) throw new RemoteError('request_not_found', true, 'P0002');
         const now = new Date().toISOString();
         if (!accept) {
           Object.assign(r, { state: 'declined', decided_at: now, decided_by: this.userId });
           return 'declined';
         }
-        if (!pageId || !shareable(r.file_id).includes(pageId)) throw new RemoteError('page_invalid', true, '22023');
+        if (!pageId || !shareable(r).includes(pageId)) throw new RemoteError('page_invalid', true, '22023');
         if (!this.server.role(r.user_id)) throw new RemoteError('member_not_found', true, 'P0002');
         // Nunca baja (LF11).
         if (this.server.pageLevel(r.user_id, pageId) < levelValue(level)) await this.share(r.user_id, { pageId }, level);
