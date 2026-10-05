@@ -3,11 +3,21 @@
 ## NVIDIA con clave propia (v0.189)
 
 NVIDIA aparece primero y es la opción inicial de un formulario sin ajustes. Abrir, probar o cancelar conserva los
-ajustes anteriores, incluido el modelo escrito. Test consulta el catálogo y muestra sólo los dos perfiles admitidos;
+ajustes anteriores, incluido el modelo escrito. Test consulta el catálogo y muestra sólo los cuatro perfiles admitidos;
 listar modelos no comprueba inferencia. Qwen `qwen/qwen3.5-122b-a10b` admite texto y Suggest caption, con máximo 16000
 tokens de salida y thinking desactivado; Llama `meta/llama-3.3-70b-instruct`, sólo texto con máximo 4096. No se deducen
 capacidades por el nombre. Voice conserva su elección entre OpenAI, Gemini y compatible; Dictate to report puede
 usar NVIDIA para ubicar la nota escrita o ya transcrita, nunca para enviar la grabación.
+
+Kimi K3 (`moonshotai/kimi-k3`) y GLM 5.3 (`z-ai/glm-5.3`) se eligen manualmente para texto, con cota de la app de
+16000 tokens de generación; no habilitan Suggest caption ni audio. La preferencia automática conserva Qwen y después
+Llama; si el catálogo trae sólo los nuevos, hay que elegir uno. No se migran ni sustituyen ajustes guardados.
+Los pedidos de un turno conservan system/user, max_tokens y stream; no añaden parámetros de pensamiento. Kimi usa el
+esfuerzo máximo predeterminado por NVIDIA si se omite reasoning_effort. No se promete latencia ni espacio exclusivo
+para contenido frente al razonamiento. GLM no publica máximo de max_tokens en su esquema;16000 es una cota de la app.
+Referencias: [Kimi](https://docs.api.nvidia.com/nim/re/reference/moonshotai-kimi-k3-infer) y
+[GLM](https://docs.api.nvidia.com/nim/reference/z-ai-glm-5-3-infer). Las pruebas locales conectan cliente y portero con
+servicios simulados; la inferencia desde la app con clave personal sigue pendiente y listar no la acredita.
 
 La falta de CORS exige pasar por el portero propio del workspace: dos rutas fijas, GET
 `/assistant/nvidia/models` y POST `/assistant/nvidia/chat/completions`, hacia integrate.api.nvidia.com/v1. El aviso

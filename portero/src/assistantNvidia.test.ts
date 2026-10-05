@@ -47,6 +47,25 @@ async function outcome(res: Response) {
 }
 const statusOf = async (res: Response) => (await outcome(res)).status;
 describe('NVIDIA por la isla del workspace', () => {
+  it('T27: el catálogo real del portero filtra desconocidos y conserva los cuatro IDs', async () => {
+    const ids = [QWEN, LLAMA, 'moonshotai/kimi-k3', 'z-ai/glm-5.3'];
+    const h = harness({models:{data:[...ids,'desconocido'].map(id=>({id}))}});
+    const result = await outcome(await h.portero.handle(req({}, {path:'/assistant/nvidia/models',method:'GET'})));
+    expect(JSON.parse(result.text).find((f:{event:string})=>f.event==='sd.models').value.data).toEqual(ids.map(id=>({id})));
+    expect(h.calls.some(c=>c.url.endsWith('/chat/completions'))).toBe(false);
+  });
+
+  it.each(['moonshotai/kimi-k3', 'z-ai/glm-5.3'])('T27: %s usa sólo texto16000 y rechaza excesos/fotos antes del vendor', async model => {
+    const h = harness();
+    await (await h.portero.handle(req({model,maxTokens:16000}))).text();
+    expect(JSON.parse(inferCalls(h)[0].init.body as string)).toEqual({model,messages:[{role:'system',content:'Reglas'},{role:'user',content:'Lo elegido'}],max_tokens:16000,stream:true});
+    for (const body of [{maxTokens:16001},{maxTokens:16000,image:{mime:'image/jpeg',data:'/9j/'}}]) {
+      const denied = harness();
+      expect(await statusOf(await denied.portero.handle(req({model,...body})))).toBe(422);
+      expect(inferCalls(denied)).toHaveLength(0);
+    }
+  });
+
   it.each(['auth','policy','page','models','chat'].flatMap((boundary) => [301,302,307,308].map((status) => ({boundary,status}))))('cierra y no sigue $boundary $status', async ({boundary,status}) => {
     const h=harness(); let cancelled=0;
     const original=h.upstream.getMockImplementation()!;

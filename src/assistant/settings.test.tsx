@@ -78,6 +78,24 @@ async function click(el: HTMLElement) {
 }
 
 describe('los ajustes de un proveedor compatible', () => {
+  it.each(['moonshotai/kimi-k3', 'z-ai/glm-5.3'])('T27: guardar y reabrir el modelo manual %s conserva clave y ajustes', async model => {
+    await saveSettings(EMAIL, { provider: 'nvidia', model: 'qwen/qwen3.5-122b-a10b', models: [] }, KEY);
+    const calls = provider();
+    const host = await mount();
+    const before = await loadSettings(EMAIL);
+    await type(host.querySelector<HTMLInputElement>('input[list="assistant-models"]')!, model);
+    await click(button(host, 'Test'));
+    expect(await loadSettings(EMAIL)).toEqual(before);
+    expect(calls).toHaveLength(0); // Sin portero configurado: Test falla, nunca reescribe lo guardado.
+    expect(await loadSettings(EMAIL)).toEqual(before);
+    await click(button(host, 'Save'));
+    for (const r of roots.splice(0)) act(() => r.unmount());
+    const reopened = await mount();
+    expect(reopened.querySelector<HTMLInputElement>('input[list="assistant-models"]')!.value).toBe(model);
+    expect(await loadSettings(EMAIL)).toMatchObject({ provider: 'nvidia', model, hasKey: true, models: [] });
+    expect(calls).toHaveLength(0);
+  });
+
   it('con la misma dirección, Test usa la clave guardada', async () => {
     await saveSettings(EMAIL, { provider: 'compatible', baseUrl: A, model: 'modelo-1', models: [] }, KEY);
     const calls = provider();

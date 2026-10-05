@@ -1,5 +1,5 @@
 import { nvidiaRequest, readNvidiaChannel, type NvidiaContext } from './nvidiaTransport';
-import { NVIDIA_MODELS, nvidiaProfile } from './nvidiaModels';
+import { nvidiaProfile } from './nvidiaModels';
 
 // Los proveedores del asistente (Docs/Doc_Asistente.md, secciones 3 y 5): NVIDIA, Anthropic, OpenAI, Google (Gemini) y
 // "compatible con OpenAI" (OpenRouter, Ollama, LM Studio). Un adaptador propio con `fetch` por proveedor, sin sus SDK:
@@ -231,7 +231,7 @@ export async function listModels(config: ProviderConfig, key: string, fetcher: F
  */
 export function defaultModel(provider: ProviderId, models: ModelInfo[]): string {
   const ids = models.map((m) => m.id);
-  if (provider === 'nvidia') return Object.keys(NVIDIA_MODELS).find((id) => ids.includes(id)) ?? '';
+  if (provider === 'nvidia') return ['qwen/qwen3.5-122b-a10b', 'meta/llama-3.3-70b-instruct'].find((id) => ids.includes(id)) ?? '';
   const dated = /-\d{4}-\d{2}-\d{2}$|-\d{8}$/;
   const pick = (re: RegExp) => ids.find((id) => re.test(id) && !dated.test(id) && !/preview|exp/i.test(id)) ?? ids.find((id) => re.test(id));
   const found =

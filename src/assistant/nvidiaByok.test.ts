@@ -12,6 +12,24 @@ const request={system:'instrucciones',user:'lo elegido',maxTokens:16000};
 const done='event: sd.done\ndata: {"cut":false,"usage":{"input":null,"output":null}}\n\n';
 const sse=(text:string,kind='chat')=>new Response('event: sd.ready\ndata: '+JSON.stringify({v:1,kind})+'\n\n'+text,{headers:{'Content-Type':'text/event-stream','X-Shotdocs-Nvidia-Protocol':'1'}});
 describe('NVIDIA en el adaptador y consumidores',()=>{
+  it.each(['moonshotai/kimi-k3', 'z-ai/glm-5.3'])('T27: %s acota generación sin enviar imagen', async model => {
+    const fetcher = vi.fn(async () => sse(done));
+    await complete({provider:'nvidia',model}, KEY, {...request,maxTokens:16001}, {nvidia:context,fetcher});
+    expect(JSON.parse((fetcher.mock.calls[0] as unknown as [string,RequestInit])[1].body as string)).toMatchObject({model,maxTokens:16000,user:request.user});
+    await expect(complete({provider:'nvidia',model}, KEY, {...request,image:{mime:'image/jpeg',data:'/9j/'}}, {nvidia:context,fetcher})).rejects.toMatchObject({kind:'model',message:'nvidia_no_vision'});
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('T27: catálogo admite los cuatro perfiles sin cambiar la preferencia automática', async () => {
+    const ids = [MODEL, 'meta/llama-3.3-70b-instruct', 'moonshotai/kimi-k3', 'z-ai/glm-5.3'];
+    const fetcher = vi.fn(async () => sse('event: sd.models\ndata: '+JSON.stringify({data:[...ids, 'desconocido'].map(id=>({id}))})+'\n\n'+done, 'models'));
+    const models = await listModels(config, KEY, fetcher, undefined, context);
+    expect(models.map(m=>m.id)).toEqual(ids);
+    expect(defaultModel('nvidia', models)).toBe(MODEL);
+    expect(defaultModel('nvidia', models.slice(1))).toBe(ids[1]);
+    expect(defaultModel('nvidia', models.slice(2))).toBe('');
+  });
+
   it('separa destino/credenciales y usa solamente el contenido final',async()=>{
     const fetcher=vi.fn(async()=>sse('event: sd.delta\ndata: {"text":"respuesta"}\n\n'+done+''));
     const result=await complete(config,KEY,request,{nvidia:context,fetcher}); expect(result).toMatchObject({text:'respuesta',cut:false});

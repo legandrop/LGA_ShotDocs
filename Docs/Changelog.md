@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.194 : Kimi K3 y GLM 5.3 se pueden elegir para texto con NVIDIA
+
+El catálogo de NVIDIA incluía Kimi K3 y GLM 5.3, pero la app sólo admitía los perfiles de Qwen y Llama: los nuevos se descartaban al listar y no se podían guardar ni usar para transformar texto. Ahora se reconocen sus identificadores exactos y se pueden elegir manualmente, con una cota de 16000 tokens de generación y sin enviar fotos ni audio. La elección automática conserva Qwen y después Llama; si sólo aparecen los nuevos, pide elegir. Los ajustes y las claves ya guardados no se sustituyen. No se añaden parámetros de pensamiento ni se presenta la comparación limitada como una preferencia global. Se mantienen el portero, los permisos y los cortes de respuestas incompletas. Las pruebas conectan el panel y el portero con servicios simulados, comprueban guardar y reabrir, y actualizan la ayuda.
+
+[Admitir Kimi K3 y GLM 5.3 como modelos de texto elegidos manualmente]
+
 v0.193 : El anotador muestra la herramienta elegida en la tira
 
 En una pantalla angosta, el anotador recordaba la última herramienta pero abría la tira desde el principio. Si se había usado Texto o Número, su botón podía quedar fuera de la vista aunque siguiera elegido. Ahora la tira se desplaza lo necesario para mostrar la herramienta activa al abrir, elegir otra o cambiar el ancho disponible. El movimiento queda dentro de ese único contenedor horizontal: no mueve la foto, no toma el foco y no escribe formas ni pasos de deshacer. La tira conserva el deslizamiento manual y la barra de una pantalla ancha mantiene su comportamiento. Se actualizan ayuda y documentación. Las pruebas verifican el componente real en inglés y castellano, el cambio de ancho, la selección y el cierre y reapertura; quitar el revelado hace fallar la misma guarda de visibilidad.

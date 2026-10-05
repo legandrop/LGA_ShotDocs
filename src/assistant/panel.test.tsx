@@ -14,6 +14,8 @@ import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { AssistantPanel } from './AssistantPanel';
 import { closeAssistant, registerAssistantTarget } from './assistantUi';
 import { closeAssistantDb, saveSettings } from './keyStore';
+import { Portero, type Env, type Store } from '../../portero/src/core';
+import { handleNvidia } from '../../portero/src/assistantNvidia';
 
 // El panel del asistente con el editor real y un proveedor simulado (Docs/Doc_Asistente.md, pruebas 5, 7, 8 y 9 de la
 // sección 13): pedir, ver la vista previa, aplicar; sin clave; sin Editar; sin red; la política del dueño; lo que se
@@ -110,7 +112,7 @@ interface Setup {
   pageId: string;
 }
 
-async function setup(opts: { key?: boolean; editable?: boolean; editableRef?: { current: boolean }; client?: unknown; blocks?: unknown[]; offline?: boolean; baseUrl?: string } = {}): Promise<Setup> {
+async function setup(opts: { key?: boolean; editable?: boolean; editableRef?: { current: boolean }; client?: unknown; blocks?: unknown[]; offline?: boolean; baseUrl?: string; nvidiaModel?: string } = {}): Promise<Setup> {
   const server = new FakeServer();
   const device = await makeDevice(server);
   devices.push(device);
@@ -121,7 +123,8 @@ async function setup(opts: { key?: boolean; editable?: boolean; editableRef?: { 
     await device.engine.syncNow().catch(() => undefined);
   }
   if (opts.key !== false) {
-    if (opts.baseUrl) await saveSettings('lega@wanka.tv', { provider: 'compatible', baseUrl: opts.baseUrl, model: 'llama3', models: [] }, '');
+    if (opts.nvidiaModel) await saveSettings('lega@wanka.tv', { provider: 'nvidia', model: opts.nvidiaModel, models: [] }, KEY);
+    else if (opts.baseUrl) await saveSettings('lega@wanka.tv', { provider: 'compatible', baseUrl: opts.baseUrl, model: 'llama3', models: [] }, '');
     else await saveSettings('lega@wanka.tv', { provider: 'anthropic', model: 'claude-haiku-4-5', models: [] }, KEY);
   }
   const ed = mountEditor(new Y.Doc());
@@ -166,7 +169,53 @@ function selectAll(ed: Editor, id: string, a: number, b: number) {
 
 const blockText = (ed: Editor, id: string) => ((ed.getBlock(id)?.content ?? []) as { text?: string }[]).map((c) => c.text ?? '').join('');
 
+/** El transporte del panel conecta el portero real; sólo Supabase/vendor/control se simulan como en sus fixtures. */
+function hostedNvidia(finish: string | null) {
+  const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), {status,headers:{'Content-Type':'application/json'}});
+  const env = {SUPABASE_URL:'https://isla.example',SUPABASE_PUBLISHABLE_KEY:'publicable',APP_ORIGINS:'https://app.example'} as Env;
+  const calls: RequestInit[] = [];
+  const upstream = vi.fn<typeof fetch>(async (input, init) => {
+    const url = String(input);
+    if (url.endsWith('/rpc/media_whoami')) return json({user_id:'propio',is_owner:false,role:'member'});
+    if (url.includes('/workspace_settings?')) return json([{assistant_policy:'on'}]);
+    if (url.includes('/pages?')) return json([{id:new URL(url).searchParams.get('id')!.slice(3)}]);
+    calls.push(init!);
+    return new Response('data: '+JSON.stringify({choices:[{delta:{reasoning_content:'razonamiento no aplicable'}}]})+'\n\ndata: '+JSON.stringify({choices:[{delta:{content:'La cámara se movió en la toma 3'},finish_reason:finish}]})+'\n\n'+(finish ? 'data: [DONE]\n\n' : ''), {headers:{'Content-Type':'text/event-stream'}});
+  });
+  const namespace = {newUniqueId:()=>({toString:()=>'a'.repeat(64)}),idFromString:()=>({toString:()=>'a'.repeat(64)}),get:()=>({fetch:async(request:Request)=>handleNvidia(request,env,upstream,signal=>portero.authenticateNvidia(request,signal))})};
+  const portero = new Portero({...env,NVIDIA_REQUESTS:namespace}, {get:vi.fn(),put:vi.fn(),delete:vi.fn()} as Store, upstream);
+  vi.stubGlobal('fetch', vi.fn<typeof fetch>(async (url, init) => {
+    if (String(url).endsWith('/prepare')) return json({v:1,id:'a'.repeat(64),capability:'c'.repeat(43),prepareExpiresAt:30000,retentionExpiresAt:600000},201);
+    if (String(url).endsWith('/stop')) return json({v:1,id:'a'.repeat(64),state:'stopped',rootAborted:true,cleanupJoined:true});
+    return portero.handle(new Request(String(url), {...init,headers:{...init?.headers,Origin:'https://app.example'}}));
+  }));
+  const client = {auth:{getSession:async()=>({data:{session:{access_token:'sesion-sintetica'}}})},from:()=>({select:()=>({maybeSingle:async()=>({data:{media_url:'https://gateway.example',assistant_policy:'on'},error:null})})})};
+  return {client,calls};
+}
+
 describe('el panel', () => {
+  it.each(['moonshotai/kimi-k3','z-ai/glm-5.3'].flatMap(model=>['stop','length',null].map(finish=>({model,finish}))))('T27: hook→portero real→Apply $model/$finish', async ({model,finish}) => {
+    const hosted = hostedNvidia(finish);
+    const {host,ed} = await setup({nvidiaModel:model,client:hosted.client});
+    selectAll(ed, 'p', 0, 31);
+    await click(button(host, 'Fix spelling & grammar'));
+    for (let i=0;i<30&&!button(host,'Apply')&&!host.querySelector('.assistant-error');i++) await wait(30);
+    expect(hosted.calls).toHaveLength(1);
+    const body = JSON.parse(hosted.calls[0].body as string);
+    expect(Object.keys(body).sort()).toEqual(['max_tokens','messages','model','stream']);
+    expect(body).toMatchObject({model,stream:true,messages:[{role:'system'},{role:'user'}]});
+    expect(host.textContent).not.toContain('razonamiento no aplicable');
+    if (finish === 'stop') {
+      expect(button(host,'Apply')?.disabled).toBe(false);
+      await click(button(host,'Apply'));
+      expect(blockText(ed,'p')).toBe('La cámara se movió en la toma 3');
+    } else {
+      expect(button(host,'Apply')).toBeUndefined();
+      expect(host.textContent).toContain(finish === 'length' ? 'The answer was cut off.' : 'NVIDIA had a problem');
+      expect(blockText(ed,'p')).toBe('el kamara se movio en la toma 3');
+    }
+  });
+
   it('sin clave: ofrece configurar el asistente', async () => {
     const { host } = await setup({ key: false });
     expect(host.textContent).toContain('Set up the assistant');
