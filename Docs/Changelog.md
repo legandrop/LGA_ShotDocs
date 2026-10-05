@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.192 : El PDF cuenta las vistas de archivos que salen como marcadores
+
+Sin conexión y sin miniaturas guardadas, la cola podía resolver una vista de archivo como marcador. El PDF lo conservaba, pero la ventana terminaba sin contar esos marcadores: el aviso de menor resolución solo seguía las fotos que se procesaban como imágenes. Ahora el armado registra las vistas de la app representadas por un marcador y lleva esa cantidad a la ventana, aparte de las fotos reducidas y del límite de conversión. El texto distingue singular y plural en inglés y castellano, sin afirmar que falte el original. Se conservan los vectores, los links y las referencias; las tarjetas de adjuntos y los vectores externos no entran en la cuenta. No cambian las descargas ni los topes. Se actualizan ayuda y documentación; las pruebas comprueban la cola real offline, fichas desconocidas, mezclas y cancelar.
+
+[Contar las vistas de archivos representadas por marcadores al exportar PDF]
+
 v0.191 : El PDF distingue fotos reducidas por el límite de conversión
 
 Al exportar fotos muy grandes que necesitaban convertirse a JPEG, la ventana decía que sus originales no estaban disponibles aunque los hubiera usado para preparar una copia más chica. El total de fotos en menor resolución mezclaba esa reducción con las que no tenían un original accesible. Ahora el armado conserva un contador separado para el límite de conversión y lo lleva a la ventana: cada causa muestra su cantidad, con singular y plural en inglés y castellano, sin contar dos veces una foto. Smaller file y las páginas reducidas para entrar mantienen sus avisos. Los topes, la forma de convertir y los plazos de descarga no cambian. Se actualizan ayuda y documentación; las pruebas dirigidas comprueban originales presentes y ausentes, mezclas, JPEG derecho y cancelar.

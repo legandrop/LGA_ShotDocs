@@ -126,6 +126,10 @@ export const exportPdf = {
     en: { one: "{count} photo is at a lower resolution: its original was not available (no connection, or the browser cannot open it).", other: "{count} photos are at a lower resolution: their originals were not available (no connection, or the browser cannot open them)." },
     es: { one: "{count} foto va en menor resolución: su original no estaba a mano (sin conexión, o el navegador no lo abre).", other: "{count} fotos van en menor resolución: sus originales no estaban a mano (sin conexión, o el navegador no los abre)." },
   },
+  'exportDialog.previewMarkers': {
+    en: { one: "{count} media preview is shown as a marker in this PDF.", other: "{count} media previews are shown as markers in this PDF." },
+    es: { one: "{count} vista previa de archivo se muestra como marcador en este PDF.", other: "{count} vistas previas de archivos se muestran como marcadores en este PDF." },
+  },
   'exportDialog.conversionLimited': {
     en: { one: "{count} photo is at a lower resolution: converting it at full size exceeds the export limit.", other: "{count} photos are at a lower resolution: converting them at full size exceeds the export limit." },
     es: { one: "{count} foto va en menor resolución: convertirla a tamaño completo supera el límite de exportación.", other: "{count} fotos van en menor resolución: convertirlas a tamaño completo supera el límite de exportación." },

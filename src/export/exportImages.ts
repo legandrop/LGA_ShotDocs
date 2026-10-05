@@ -374,7 +374,9 @@ export interface ShrinkResult {
   lowRes: number;
   /** De las anteriores, originales presentes que superan el límite de conversión a JPEG entero. */
   conversionLimited: number;
-  /** De esas, las que no llegaron porque la bajada pasó su tope de tiempo. */
+  /** Vistas de archivos de la app que salen como marcador, no como foto/cuadro. No atribuye una causa. */
+  previewMarkers: number;
+  /** Fotos que no llegaron porque la bajada pasó su tope de tiempo. */
   timedOut: number;
   /** Milisegundos sumados de cada paso (traer la imagen, abrirla, achicarla), para medir. */
   ms: { best: number; open: number; draw: number };
@@ -465,7 +467,7 @@ const BEFORE = 'sdExportSrc';
  */
 export async function shrinkImages(root: HTMLElement, options: ShrinkOptions): Promise<ShrinkResult> {
   const resizer = options.resizer ?? browserResizer;
-  const out: ShrinkResult = { urls: [], shrunk: 0, kept: 0, full: 0, lowRes: 0, conversionLimited: 0, timedOut: 0, ms: { best: 0, open: 0, draw: 0 } };
+  const out: ShrinkResult = { urls: [], shrunk: 0, kept: 0, full: 0, lowRes: 0, conversionLimited: 0, previewMarkers: 0, timedOut: 0, ms: { best: 0, open: 0, draw: 0 } };
   const gate = pixelGate(options.decodePixels ?? DECODE_PIXELS);
   /** Los originales traídos para esta página (si no entra en la parte, pasan a la siguiente). */
   const fetched = new Map<string, Blob>();
@@ -473,9 +475,13 @@ export async function shrinkImages(root: HTMLElement, options: ShrinkOptions): P
   const jobs: Job[] = [];
   for (const img of root.querySelectorAll<HTMLImageElement>(MEDIA_IMG)) {
     const src = img.getAttribute('src') ?? '';
-    if (!src || vector(src) || img.closest('.drive-card')) continue;
+    if (!src || img.closest('.drive-card')) continue;
     const cssWidth = img.getBoundingClientRect().width;
     if (!(cssWidth > 0)) continue;
+    if (vector(src)) {
+      if (src.startsWith('data:image/svg') && mediaIdOf(img.closest('[data-url]')?.getAttribute('data-url'))) out.previewMarkers++;
+      continue;
+    }
     // La proporción de lo que se ve, fija: la imagen nueva no cambia el alto.
     if (!img.style.aspectRatio && img.naturalWidth > 0 && img.naturalHeight > 0) img.style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight}`;
     jobs.push({ img, src, cssWidth, id: mediaIdOf(img.closest('[data-url]')?.getAttribute('data-url')) });

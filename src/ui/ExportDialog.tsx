@@ -310,6 +310,7 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
   const count = (which: (p: PdfBook['pages'][number]) => boolean) => pages.filter(which).length;
   const lowRes = pages.reduce((sum, p) => sum + (p.shrunkToFit ? 0 : p.lowRes - p.conversionLimited), 0);
   const conversionLimited = pages.reduce((sum, p) => sum + (p.shrunkToFit ? 0 : p.conversionLimited), 0);
+  const previewMarkers = pages.reduce((sum, p) => sum + p.previewMarkers, 0);
   /** Terminó todo lo elegido (la última parte, o el único PDF): ahí va la lista de las que fallaron (D88). */
   const finished = phase.name === 'ready' && phase.book.to >= phase.book.total;
   /** En un táctil, lo listo se suelta solo después de abrir su diálogo (si no, se perdería sin guardar). */
@@ -444,6 +445,7 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
             )}
             {lowRes > 0 && <p className="muted">{tr('exportDialog.lowRes', { count: lowRes })}</p>}
             {conversionLimited > 0 && <p className="muted">{tr('exportDialog.conversionLimited', { count: conversionLimited })}</p>}
+            {previewMarkers > 0 && <p className="muted">{tr('exportDialog.previewMarkers', { count: previewMarkers })}</p>}
             {count((p) => p.shrunkToFit) > 0 && <p className="muted">{tr('exportDialog.shrunkPages', { count: count((p) => p.shrunkToFit) })}</p>}
             {count((p) => p.imagesTimedOut) > 0 && <p className="muted">{tr('exportDialog.missingPhotos', { count: count((p) => p.imagesTimedOut) })}</p>}
             {count((p) => p.outdated) > 0 && <p className="muted">{tr('exportDialog.outdatedPages', { count: count((p) => p.outdated) })}</p>}

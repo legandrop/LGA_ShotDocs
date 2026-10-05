@@ -1081,6 +1081,12 @@ el portero de verdad (tiempo de bajada y pedidos al Worker: unos dos por foto), 
   500 MB, +1,4 a +3,1 GB (como antes).
 - **O3 · Sin red, las miniaturas no se contaban.** `isPhoto` dice `null` cuando no se sabe (sin red y sin la ficha
   guardada) y eso se cuenta igual; solo un video o un adjunto (con tipo conocido) no cuentan.
+  **Marcadores (v0.192):** cuando una vista de archivo de la app ya está resuelta como marcador SVG, el PDF la conserva
+  y la ventana muestra una cantidad aparte, con singular/plural en inglés y castellano. No la confunde con una foto en menor
+  resolución ni deduce que falte su original. Incluye marcadores de fotos, videos o tipo desconocido; excluye tarjetas de
+  adjuntos y vectores externos. No añade pedidos ni modifica referencias, descargas o reintentos. Verificado con la cola
+  real sin red ni miniaturas locales, con ficha conocida y desconocida, y con el componente real en Chromium sin ventana.
+  Los recorridos físicos en Safari/iPhone y las otras reservas de P.22 siguen pendientes.
 - **O4 · README** al día (resolución completa, *Smaller file*, partes, la lista). **O5 · Ayuda:** el título pasa a
   *Export pages and projects as PDF*.
 - **O6 · Originales bajados dos veces.** Si una página no entra en una parte, los originales que ya trajo pasan a la

@@ -6,6 +6,7 @@ import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { ExportDialog } from '../ui/ExportDialog';
+import { placeholderUrl } from '../media/probe';
 import { appComments } from './exportComments';
 import { ExportEditor } from './exportEditor';
 import { deviceImages, jpegInfo, PhotoLimitError, PixelBudget, shrinkImages, type ImageSource, type Resizer } from './exportImages';
@@ -155,6 +156,36 @@ describe('exportar 1b: la cabecera de un JPEG', () => {
 });
 
 describe('exportar 1b: las fotos en resolución completa (D85)', () => {
+  it.each([true, false])('P22: cuenta marcadores propios sin descargar, y excluye tarjetas/vectores externos (full=%s)', async (full) => {
+    const root = viewWithPhotos(6);
+    const imgs = [...root.querySelectorAll('img')];
+    imgs[0].src = placeholderUrl('image', 'photo.jpg');
+    imgs[1].src = placeholderUrl('video', 'video.mp4');
+    imgs[2].src = placeholderUrl('image', 'external.svg');
+    imgs[2].parentElement!.removeAttribute('data-url');
+    imgs[3].src = placeholderUrl('image', 'file.pdf');
+    imgs[3].parentElement!.classList.add('drive-card');
+    imgs[4].src = 'https://external.test/logo.svg';
+    imgs[5].src = placeholderUrl(null, 'not shown');
+    imgs[5].getBoundingClientRect = () => ({ width: 0, height: 0 }) as DOMRect;
+    const before = imgs.map(img => [img.src, img.parentElement!.getAttribute('data-url')]);
+    const source = { best: vi.fn(async () => null), original: vi.fn(async () => null) };
+    const out = await shrinkImages(root, { source, full, budget: new PixelBudget(1e10, 1e10), resizer: fakeResizer() });
+    expect([out.previewMarkers, out.lowRes, out.conversionLimited]).toEqual([2, 0, 0]);
+    expect(source.best).not.toHaveBeenCalled();
+    expect(source.original).not.toHaveBeenCalled();
+    expect(imgs.map(img => [img.src, img.parentElement!.getAttribute('data-url')])).toEqual(before);
+  });
+
+  it('P22: marcador, original no disponible y conversión limitada conservan cantidades independientes', async () => {
+    stubUrls();
+    const root = viewWithPhotos(3);
+    root.querySelector('img')!.src = placeholderUrl(null, 'not available yet');
+    const source: ImageSource = { best: async () => null, original: async id => id === ID(2) ? jpegBlob(12000, 9000, { orientation: 6 }) : null, isPhoto: async () => true };
+    const out = await shrinkImages(root, { source, full: true, budget: new PixelBudget(1e10, 1e10), resizer: fakeResizer() });
+    expect([out.previewMarkers, out.lowRes, out.conversionLimited]).toEqual([1, 2, 1]);
+  });
+
   it('un JPEG derecho entra tal cual (sin dibujarlo), y cuenta sus píxeles y su peso', async () => {
     stubUrls();
     const root = viewWithPhotos(2);
@@ -484,6 +515,31 @@ async function waitFor(host: HTMLElement, text: string | RegExp) {
 }
 
 describe('exportar 1b: la ventana', () => {
+  it.each([false, true])('P22: cola real offline con marcador asentado y metadatos conocidos=%s', async (known) => {
+    stubUrls(); photosHaveWidth();
+    const server = new FakeServer(); server.enableMedia();
+    const { device, root } = await photoProject(2, 1, server);
+    await device.engine.syncNow();
+    if (known) await device.mediaDb.put('known', { id: ID(1), name: 'photo.jpg', mime: 'image/jpeg', width: 480, height: 360, duration: null, thumbAt: null, driveId: null, fetchedAt: Date.now() });
+    server.online = false;
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    // jsdom no decodifica SVG: solo esa frontera; resolve, editor, copia y exportador son reales.
+    const complete = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'complete')!.get!;
+    vi.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockImplementation(function (this: HTMLImageElement) { return this.getAttribute('src')?.startsWith('data:image/svg') ? true : complete.call(this); });
+    const create = ExportEditor.create.bind(ExportEditor);
+    vi.spyOn(ExportEditor, 'create').mockImplementation(options => create({ ...options, imageTimeoutMs: 200, copyTimeoutMs: 200 }));
+    vi.stubGlobal('print', vi.fn());
+    const host = await mount(device, { kind: 'page', id: root });
+    await act(async () => button(host, 'Export PDF')!.click());
+    await waitFor(host, /Ready: \d+ PDF pages?/);
+    const photo = document.querySelector<HTMLImageElement>('.sd-export-book img.bn-visual-media')!;
+    expect(photo.src).toMatch(/^data:image\/svg/);
+    expect(photo.closest('[data-url]')?.getAttribute('data-url')).toBe(`sdmedia://${ID(1)}`);
+    expect(host.textContent).toContain('1 media preview is shown as a marker in this PDF.');
+    expect(host.textContent).not.toContain('1 photo is at a lower resolution');
+    expect(host.textContent).not.toContain('photos that did not load in time');
+  });
+
   it.each([['limit', 1, 0], ['missing', 0, 1], ['mixed', 1, 1], ['straight', 0, 0], ['smaller', 0, 0]] as const)('T26: separa los motivos de fotos al terminar (%s)', async (kind, limited, unavailable) => {
     stubUrls();
     photosHaveWidth();
