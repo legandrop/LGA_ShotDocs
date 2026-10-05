@@ -5,7 +5,7 @@ import { fileKind, isFolderMime, mimeFromName } from '../media/attachments';
 // o de una carpeta y cada cuadro de un video llevan un link a la dirección fija del archivo (`/f/…`), la tarjeta entera
 // (`<a>` con `display: block`, medido en Chromium: un rectángulo exacto; en línea sumaba una franja) y debajo el nombre
 // como texto con el mismo link. Las fotos no. Tampoco el marcador de un archivo de otro proyecto, la tarjeta de uno
-// borrado ni el "no está en este dispositivo", ni un video en línea (`.sd-photo`): el nombre debajo rompería el renglón.
+// borrado ni el "no está en este dispositivo". Un video en línea enlaza solo su cuadro, sin nombre ni renglón extra.
 //
 // La vista de medir (las marcas de hoja, SheetBreaks) suma el mismo renglón del nombre, sin link, y decide con la misma
 // función: así las marcas siguen coincidiendo con el PDF (LF6).
@@ -115,6 +115,24 @@ export function addMediaLinks(
     if (href) (name as HTMLAnchorElement).href = href;
     name.textContent = target.name || '—';
     (img.closest('.bn-visual-media-wrapper') ?? img.closest('a') ?? img).after(name);
+  }
+  for (const holder of copy.querySelectorAll<HTMLElement>(`.sd-photo[data-url^="${MEDIA}"]`)) {
+    if (holder.tagName !== 'SPAN' || holder.closest('a') || !holder.querySelector(':scope > img.bn-visual-media')) continue;
+    const id = holder.getAttribute('data-url')!.slice(MEDIA.length).toLowerCase();
+    if (!UUID.test(id)) continue;
+    const info = source.info(id);
+    if (!info || fileKind(info.mime, info.name) !== 'video' || !source.linkable(id, options.pageId)) continue;
+    const href = options.href ? safeHref(options.href(id)) : null;
+    if (!href) continue;
+    // El propio contenedor pasa a ser el enlace: la imagen y las marcas siguen siendo hijos directos.
+    const a = document.createElement('a');
+    for (const attr of holder.attributes) {
+      if (attr.name === 'class' || attr.name === 'style' || attr.name.startsWith('data-')) a.setAttribute(attr.name, attr.value);
+    }
+    a.classList.add('sd-inline-media-link');
+    a.href = href;
+    a.append(...holder.childNodes);
+    holder.replaceWith(a);
   }
 }
 

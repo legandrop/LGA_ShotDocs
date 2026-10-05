@@ -3,10 +3,7 @@
 Lo que falta, por importancia. El orden de trabajo lo manda `Plan_Workspaces.md` (secciones 10 y 11); las
 fases originales están en `Plan_ShotDocs.md`, sección 9.
 
-**NVIDIA BYOK, entrega v0.189:** texto y Caption Qwen, texto Llama y catálogo por el portero propio, con sesión y
-permisos frescos. No cierra la fase 5 ni el MCP: falta comprobar inferencia real con la clave de cada persona, y
-NVIDIA no se usa para audio. No se prometen otros modelos, cuotas ni un servicio compartido. Doc_Asistente.md
-describe la excepción al recorrido directo, Stop por un control aislado al propietario del pedido y su confirmación, el rechazo de respuestas y catálogos incompletos, y los límites. Se comprobó el Worker local real con entradas sintéticas y la UI con pasarela simulada; faltan inferencia desde la app con clave propia, dispositivos físicos, vencimiento físico de los metadatos y recuperación tras reinicios. Parar no garantiza detener cómputo ni cobros remotos.
+**NVIDIA BYOK, entrega v0.189; aceptación real v0.197:** catálogo y una respuesta de texto de Kimi K3 por la app y el portero propio, con clave personal, comprobados online en Windows sobre texto sintético. Conservó los datos pedidos; Apply aplicó la sugerencia, Undo recuperó el original exacto y Redo restauró la sugerencia sin otro envío. Siguen pendientes Stop real, cambios concurrentes, otros dispositivos, otros modelos y Caption, vencimiento físico de metadatos y recuperación tras reinicios. No cierra la fase 5 ni el MCP, no cambia la selección automática y NVIDIA no se usa para audio. Parar no garantiza detener cómputo ni cobros remotos. Detalle: `Doc_Asistente.md`.
 
 ## Regla para todo lo que se haga: cada workspace es una isla
 
@@ -717,8 +714,8 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   LF21 A) cuando haya varios workspaces en uso; `page_level` que tarda distinto si la página existe (la diferencia ya
   aceptada en LF4); y una prueba de dos personas decidiendo a la vez con dos sesiones reales (O8 de E2; hoy por lectura
   del `for update`: el servidor en memoria no la puede probar). Quedan para después: el correo al pedir y al aceptar
-  (B.8), pedir acceso sin cuenta, el link de un video en línea y los textos de invitación en el choque de clave y en
-  *Join a workspace?* para una dirección de archivo (O7 c). **Hecho (v0.165):** *Export* avisa sin red (O6, *No connection: file links … can't use the public link*; un visitante del link no lo ve, con prueba). **Hecho (v0.171, D279 B):** *Share* dice el total exacto de los archivos de los links de la página aunque pasen de 500 (columna `total` de `public_link_files`, migración `20261103120000_purgados_peso_link_total.sql`, schema 25, aplicada; `Doc_Link_Publico.md`, "El total exacto"). **Hecho (v0.174):** el aviso de links sale solo con adjuntos, videos o carpetas; el de fotos solo si falta su original. La ventana cuenta desde el dispositivo sin pedir metadatos a la red, con pruebas.
+  (B.8), pedir acceso sin cuenta y los textos de invitación en el choque de clave y en
+  *Join a workspace?* para una dirección de archivo (O7 c). **Hecho (v0.165):** *Export* avisa sin red (O6, *No connection: file links … can't use the public link*; un visitante del link no lo ve, con prueba). **Hecho (v0.171, D279 B):** *Share* dice el total exacto de los archivos de los links de la página aunque pasen de 500 (columna `total` de `public_link_files`, migración `20261103120000_purgados_peso_link_total.sql`, schema 25, aplicada; `Doc_Link_Publico.md`, "El total exacto"). **Hecho (v0.174):** el aviso de links sale solo con adjuntos, videos o carpetas; el de fotos solo si falta su original. La ventana cuenta desde el dispositivo sin pedir metadatos a la red, con pruebas. **Hecho (v0.198):** el cuadro de un video en línea, también dentro de una celda, lleva su enlace sin nombre ni renglón añadido; conserva geometría y permisos existentes. El resto de P.30 sigue pendiente.
 - **P.28 Hecho (v0.156): la tabla del reporte en el teléfono** (`Doc_Tabla_Telefono.md`): en pantalla angosta ninguna
   columna con ancho guardado baja de 96 px y la tabla se desplaza de costado dentro de su bloque; la celda donde se
   escribe se acomoda a la vista. La compu y el PDF no cambian. Falta probarlo en un iPhone real (dedo, teclado abierto).

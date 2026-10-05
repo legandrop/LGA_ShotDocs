@@ -53,7 +53,7 @@ function editor(): HTMLElement {
     block(ID.unknownPdf, 'nuevo.pdf'),
     block(ID.unknown, 'sin_extension'),
     block(ID.deleted, 'borrado.zip'),
-    // Una foto en línea con un video, y una tarjeta de Drive pegada: sin cambios.
+    // Un video en línea y una tarjeta de Drive pegada.
     `<p><span class="sd-photo" data-url="sdmedia://${ID.video}"><img class="bn-visual-media"></span></p>`,
     `<div class="drive-card"><a class="drive-card-open" href="https://drive.google.com/x">Drive</a></div>`,
   ].join('');
@@ -68,7 +68,7 @@ afterEach(() => {
 });
 
 describe('addMediaLinks', () => {
-  it('adjunto, video y carpeta con link y nombre debajo; foto, otro proyecto, borrado y en línea, no', () => {
+  it('adjunto, video y carpeta con nombre; video en línea solo con cuadro enlazado', () => {
     const root = editor();
     addMediaLinks(root, { source: source(), pageId: 'P1', href: (id) => source().href(id) });
     expect(linkedIds(root)).toEqual([ID.pdf, ID.video, ID.folder, ID.unknownPdf]);
@@ -82,7 +82,47 @@ describe('addMediaLinks', () => {
     expect(names[0].previousElementSibling?.classList.contains('bn-visual-media-wrapper')).toBe(true);
     // La foto en línea y la tarjeta de Drive quedan como estaban.
     expect(root.querySelector('.sd-photo a')).toBeNull();
+    expect(root.querySelector<HTMLAnchorElement>('a.sd-photo')?.href).toContain(`/f/wanka_1/${ID.video}#ws=abc`);
     expect(root.querySelector('.drive-card a')!.getAttribute('href')).toBe('https://drive.google.com/x');
+  });
+
+  it('el cuadro inline conserva hijos y presentación, sin copiar eventos ni crear links anidados', () => {
+    const root = editor();
+    const holder = root.querySelector<HTMLElement>('.sd-photo')!;
+    holder.classList.add('sd-photo-sized'); holder.style.width = '36%'; holder.dataset.w = '36';
+    holder.setAttribute('onclick', 'externo()'); holder.setAttribute('href', 'https://externo.test');
+    const img = holder.firstElementChild!;
+    const marks = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); holder.append(marks);
+    addMediaLinks(root, { source: source(), pageId: 'P1', href: id => source().href(id) });
+    const a = root.querySelector<HTMLAnchorElement>('a.sd-inline-media-link')!;
+    expect([...a.children]).toEqual([img, marks]);
+    expect(a.style.width).toBe('36%'); expect(a.dataset.w).toBe('36');
+    expect(a.classList.contains('sd-photo-sized')).toBe(true); expect(a.hasAttribute('onclick')).toBe(false);
+    expect(a.querySelector('.sd-media-name')).toBeNull();
+    addMediaLinks(root, { source: source(), pageId: 'P1', href: () => 'https://otro.test' });
+    expect(root.querySelectorAll('.sd-inline-media-link')).toHaveLength(1);
+    const linked = document.createElement('a'); linked.href = 'https://escrito.test/';
+    const nested = document.createElement('span'); nested.className = 'sd-photo'; nested.dataset.url = `sdmedia://${ID.video}`;
+    nested.append(document.createElement('img')); nested.firstElementChild!.className = 'bn-visual-media'; linked.append(nested); root.append(linked);
+    addMediaLinks(root, { source: source(), pageId: 'P1', href: id => source().href(id) });
+    expect(linked.children).toHaveLength(1); expect(linked.querySelector('a')).toBeNull();
+  });
+
+  it('inline exige video conocido, UUID, imagen directa, permiso por página y href seguro', () => {
+    for (const [id, over, href, direct] of [
+      [ID.photo, {}, 'https://app.test/x', true], [ID.unknownPdf, {}, 'https://app.test/x', true],
+      ['invalido', {}, 'https://app.test/x', true], [ID.video, { linkable: () => false }, 'https://app.test/x', true],
+      [ID.video, {}, 'javascript:alert(1)', true], [ID.video, {}, 'https://app.test/x', false],
+    ] as const) {
+      const root = editor(); const holder = root.querySelector<HTMLElement>('.sd-photo')!;
+      holder.dataset.url = `sdmedia://${id}`;
+      if (!direct) { const wrapper = document.createElement('span'); wrapper.append(...holder.childNodes); holder.append(wrapper); }
+      addMediaLinks(root, { source: source(over), pageId: 'P1', href: () => href });
+      expect(root.querySelector('.sd-inline-media-link')).toBeNull();
+    }
+    const root = editor(); let pageSeen: string | null = null;
+    addMediaLinks(root, { source: source({ linkable: (_id, page) => { pageSeen = page; return true; } }), pageId: 'P2', href: id => `https://app.test/f/${id}#link=own` });
+    expect(root.querySelector<HTMLAnchorElement>('.sd-inline-media-link')?.href).toContain('#link=own'); expect(pageSeen).toBe('P2');
   });
 
   it('el marcador de otro proyecto depende de la página', () => {

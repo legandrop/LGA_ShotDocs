@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.198 :
+
+El cuadro de un video en línea quedaba sin enlace al imprimir o exportar un PDF, aunque los videos en bloque ya lo tenían. Se había excluido para no agregar el nombre debajo y alterar el renglón o la celda. Ahora el propio contenedor del cuadro lleva el enlace, conservando su presentación y sus hijos, sin sumar texto ni ocupar otra línea. Solo se ofrece para un video conocido, con una dirección de archivo válida y disponible en esa página. No se enlazan fotos ni marcadores de otro proyecto o de un archivo borrado, y se conserva cualquier enlace ya escrito. La copia usa los mismos permisos y la política de links públicos existentes. Se actualizan la ayuda y la documentación sin dar por terminado el resto de acceso a archivos.
+
+[Enlazar los cuadros de videos en línea en el PDF]
+
 v0.197 :
 
 Probar NVIDIA podía fallar de inmediato en Chromium aunque el portero estuviera disponible. El control llamaba a la función nativa de conexión como un método propio, con un receptor que el navegador rechaza: no llegaba a salir el pedido de preparación y la interfaz mostraba un problema de conexión al portero. Ahora Preparar y Parar invocan esa misma función sin adoptar el objeto del control como receptor. No se cambian la dirección, sesión, clave, permisos, límites ni secuencia del pedido. La preparación conserva quince segundos y la parada tres desde que dispone del control. La comprobación con el módulo real en Chromium distingue el fallo anterior sin petición del pedido admitido y la parada confirmada posteriores. El catálogo sigue sin acreditar inferencia.

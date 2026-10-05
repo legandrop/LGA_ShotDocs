@@ -3535,6 +3535,8 @@ code {
   --img-gap: 8px;
 }
 
+.print-view a.sd-inline-media-link { color: inherit; text-decoration: none; }
+
 .sd-photo {
   display: inline-block;
   position: relative;

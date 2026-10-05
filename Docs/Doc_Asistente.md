@@ -17,7 +17,7 @@ esfuerzo máximo predeterminado por NVIDIA si se omite reasoning_effort. No se p
 para contenido frente al razonamiento. GLM no publica máximo de max_tokens en su esquema;16000 es una cota de la app.
 Referencias: [Kimi](https://docs.api.nvidia.com/nim/re/reference/moonshotai-kimi-k3-infer) y
 [GLM](https://docs.api.nvidia.com/nim/reference/z-ai-glm-5-3-infer). Las pruebas locales conectan cliente y portero con
-servicios simulados; la inferencia desde la app con clave personal sigue pendiente y listar no la acredita.
+servicios simulados. En v0.197 se comprobó también una respuesta real de texto de Kimi K3 desde la app con clave personal (alcance abajo); listar modelos por sí solo sigue sin acreditar inferencia.
 
 La falta de CORS exige pasar por el portero propio del workspace: dos rutas fijas, GET
 `/assistant/nvidia/models` y POST `/assistant/nvidia/chat/completions`, hacia integrate.api.nvidia.com/v1. El aviso
@@ -80,10 +80,7 @@ habilita Apply. Un terminal duplicado, texto después del final o evento descono
 Test emite `sd.models`, seguido de `sd.done` y EOF; su lista no cambia ante un error o cancelación. Ambos tipos de
 `sd.done` tienen `usage:{input,output}`; en el catálogo es `{input:null,output:null}`, nunca `usage:null`.
 
-**Alcance comprobado:** consumidores reales contra el Worker/DO SQLite local con pedidos sintéticos, cancelación
-antes y durante consultas/proveedor, aislamiento de controles y vencimiento preparado a 31 s. La UI EN/ES se verificó
-con el editor real y una pasarela simulada, separadamente del Worker local. Todavía no se acreditó inferencia real
-a través de la app con una clave personal, dispositivos físicos, purga física 600 s ni crash. No cierra la fase 5 ni MCP.
+**Alcance comprobado:** consumidores reales contra el Worker/DO SQLite local con pedidos sintéticos, cancelación antes y durante consultas/proveedor, aislamiento de controles y vencimiento preparado a 31 s; UI EN/ES con editor real y pasarela simulada. En v0.197 se comprobó online en Windows el catálogo y una respuesta real de texto de Kimi K3, desde la app por el portero propio con clave personal. El texto sintético conservó los datos pedidos; Apply aplicó la sugerencia, Undo recuperó el original exacto y Redo restauró la sugerencia, sin otro envío. Esta aceptación no cubre Stop real, cambios concurrentes, otros dispositivos, otros modelos o Caption, purga física a 600 s ni recuperación tras reinicios. No acredita todos los recorridos del asistente ni cierra la fase 5 o MCP.
 
 **Estado: entregas A1 (v0.118), A2 (v0.126) y A3 (v0.146) implementadas (ver "Cómo quedó A1", "Cómo quedó A2" y
 "Cómo quedó A3" al final; la migración de A2, sin aplicar); la clave sincronizada (D72 → B, `Doc_Clave_Sincronizada.md`),

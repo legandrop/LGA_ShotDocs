@@ -205,7 +205,7 @@ el pase no coincidirían.
 | Tarjeta de un link de Drive pegado | La tarjeta con su link a Drive | Sin cambios. |
 | Link a otra página | Interno o solo texto (`rewriteLinks`) | Sin cambios. |
 | Marcador de un archivo de otro proyecto (`foreign`), tarjeta de uno borrado, *not on this device* | La tarjeta o el marcador | Sin link (O6). |
-| Video en línea (`.sd-photo`, también en una celda) | Su cuadro | Sin link en E1: el nombre debajo rompería el renglón y la celda; queda en el roadmap. |
+| Video en línea (`.sd-photo`, también en una celda) | Su cuadro | Desde v0.198, solo el cuadro lleva el link: sin nombre ni renglón extra. Requiere video conocido, UUID válido y el permiso de la página. |
 
 ### 3.2 Cómo se pone el link
 
@@ -1181,3 +1181,8 @@ prueba en rollback; no se probó la concurrencia con dos sesiones reales.
   decía.
 - **Si preferís otra:** A es lo completo para cuando haya varios workspaces de verdad (paso 12 en uso): con `?w=` las
   versiones viejas siguen abriendo la dirección; queda en el roadmap (P.30).
+
+
+## Video en línea en el PDF (v0.198)
+
+La copia de imprimir o exportar transforma el propio contenedor del cuadro en un enlace, conservando su ancho, clases, estilo, imagen y anotaciones como hijos directos. No agrega nombre ni renglón. Usa la misma dirección y política de acceso de los videos en bloque; sin información de video, sin archivo disponible o con un marcador de otro proyecto no añade el enlace. No cambia una dirección ya escrita ni anida enlaces. Las fotos y el documento guardado siguen intactos. La vista de medir conserva su geometría sin enlaces. El permiso al abrir y la política de links públicos de Export siguen siendo los existentes; no incorpora permisos ni llamadas nuevas.
