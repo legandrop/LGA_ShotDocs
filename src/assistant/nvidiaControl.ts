@@ -32,7 +32,8 @@ export class NvidiaControl {
     controller.signal.addEventListener('abort', cancel, { once: true });
     try {
       const { base, token } = this.destination!;
-      const response = await this.http(`${base}/assistant/nvidia/${path}`, { method: 'POST', headers: {
+      const http = this.http;
+      const response = await http(`${base}/assistant/nvidia/${path}`, { method: 'POST', headers: {
         Authorization: `Bearer ${token}`, 'Content-Type': 'application/json',
       }, body: JSON.stringify(value), signal: controller.signal, redirect: 'error', cache: 'no-store' });
       if (controller.signal.aborted) { await response.body?.cancel().catch(() => undefined); throw invalid(); }

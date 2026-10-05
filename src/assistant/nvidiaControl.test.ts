@@ -20,6 +20,16 @@ const stream = (kind: 'models' | 'chat', terminal = true) => new Response(`event
 afterEach(() => { vi.useRealTimers(); vi.mocked(readKey).mockClear(); });
 
 describe('control explícito NVIDIA unido al consumidor', () => {
+  it('Prepare y Stop invocan fetch sin adoptar el control como receiver', async () => {
+    const paths: string[] = [];
+    const http: typeof fetch = function (this: unknown, url) {
+      expect(this).toBeUndefined(); paths.push(String(url).split('/').at(-1)!);
+      return Promise.resolve(String(url).endsWith('/prepare') ? json(handle, 201) : json(ack));
+    };
+    const control = new NvidiaControl(new AbortController().signal, async () => destination, () => {}, 'models', http);
+    await control.prepare(); expect(await control.stop()).toBe('confirmed'); await control.close();
+    expect(paths).toEqual(['prepare', 'stop']);
+  });
   it('prepare permite validar la sesión durante más de tres segundos antes de leer la clave', async () => {
     vi.useFakeTimers();
     const http = vi.fn<typeof fetch>((url, init) => String(url).endsWith('/models') ? Promise.resolve(stream('models')) : new Promise((resolve, reject) => {

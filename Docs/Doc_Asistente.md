@@ -46,6 +46,11 @@ Una interrupción de conexión NVIDIA tampoco sugiere arrancar un modelo local. 
 de 3 s una vez disponible el control; si Prepare estaba pendiente, primero espera su resultado. Ese límite no
 promete que toda la espera visible de Parar dure tres segundos. No se añaden reintentos ni se cambian ajustes guardados.
 
+Prepare y Stop invocan el `fetch` nativo como función libre. Adoptar el control como receptor produce
+`Illegal invocation` en Chromium antes de emitir HTTP. La verificación del módulo real con el navegador y un
+portero sintético distingue esa falla sin pedido del Prepare admitido y del ACK de parada después del arreglo.
+No acredita sesión o inferencia reales por sí sola.
+
 Start usa ese control una sola vez y abre un canal SSE propio con `X-Shotdocs-Nvidia-Protocol: 1` y `sd.ready`.
 Después vuelve a comprobar sesión, política y acceso a la página antes de contactar NVIDIA. Chat y Test realizan sus
 consultas bajo la misma raíz de ese propietario, con guardas antes y después de cada espera.

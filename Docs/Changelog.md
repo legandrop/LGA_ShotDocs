@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.197 :
+
+Probar NVIDIA podía fallar de inmediato en Chromium aunque el portero estuviera disponible. El control llamaba a la función nativa de conexión como un método propio, con un receptor que el navegador rechaza: no llegaba a salir el pedido de preparación y la interfaz mostraba un problema de conexión al portero. Ahora Preparar y Parar invocan esa misma función sin adoptar el objeto del control como receptor. No se cambian la dirección, sesión, clave, permisos, límites ni secuencia del pedido. La preparación conserva quince segundos y la parada tres desde que dispone del control. La comprobación con el módulo real en Chromium distingue el fallo anterior sin petición del pedido admitido y la parada confirmada posteriores. El catálogo sigue sin acreditar inferencia.
+
+[Invocar la conexión NVIDIA con el receptor correcto del navegador]
+
 v0.196 :
 
 Probar NVIDIA podía cortar una preparación válida del portero antes de consultar el catálogo y mostrar un error genérico que sugería revisar un modelo local. La preparación compartía el límite de tres segundos de Parar, aunque la validación de sesión del portero dispone de diez. Ahora la preparación espera hasta quince segundos y conserva un límite separado de tres para el pedido de parada. Los avisos distinguen la preparación vencida y la conexión al portero; el primero aclara que todavía no se envió la clave a NVIDIA. La clave se lee después del control admitido. Parar durante la espera sigue cerrando ese control sin iniciar un pedido tardío. Se conservan rechazos de sesión, confirmación de parada, catálogo completo y ajustes guardados. La ayuda describe la espera.
