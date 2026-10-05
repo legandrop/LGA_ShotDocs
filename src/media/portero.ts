@@ -547,9 +547,9 @@ export class Portero {
    * que listar de a una. Con `partial`, el portero puede dejar algunas para después (`later`) o darlas por perdidas
    * (`failed`) también en las páginas siguientes, en vez de cortar con `409 changed` (uno anterior lo ignora).
    */
-  async folderListDirs(file: string, dirs: string[], pageToken: string | null = null): Promise<FolderListingMany | null> {
+  async folderListDirs(file: string, dirs: string[], pageToken: string | null = null, skip: string[] = []): Promise<FolderListingMany | null> {
     const body = await this.request<Partial<FolderListingMany>>('POST', '/folder/list', {
-      json: { file, dirs, pageToken, partial: true },
+      json: { file, dirs, pageToken, partial: true, ...(skip.length ? { skip } : {}) },
       stallMs: CONTROL_TIMEOUT_MS,
     });
     if (!body.lists || typeof body.lists !== 'object') return null;

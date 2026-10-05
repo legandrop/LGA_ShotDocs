@@ -462,9 +462,12 @@ se traban".
   mandaría una parte vacía, el portero la rechazaría con `400` y el archivo gastaría un intento, con el error a la vista
   hasta *Retry*. No se pierde ni se duplica nada. Es un camino de antes (una respuesta perdida) que el tope de 90 s
   hace más probable con archivos enormes.
-- **Comprobaciones de más en el listado (O4, informativa):** en una página siguiente el portero vuelve a comprobar
-  también las subcarpetas que la app ya descartó (no sabe cuáles son) y gasta parte de su tope de 36 llamados. Con 40
-  subcarpetas convergió en 2 vueltas; no hay bucle. Si hiciera falta, la app podría mandar cuáles saltear (`skip`).
+- **Comprobaciones de más en el listado (O4, implementado):** la app manda las subcarpetas descartadas de esta vuelta
+  en `skip`, sin cambiar los `dirs` ni el token. El portero valida IDs, tope y pertenencia a `dirs`; solo los omite con
+  `partial: true` y un token válido. No aportan contenido ni gastan comprobaciones de pertenencia; las activas conservan
+  `inTree` y la confianza corta vigente. Una nueva vuelta de las aplazadas o un reintento empieza sin ese `skip`.
+  Un portero anterior puede ignorarlo: la app sigue descartando lo incompleto. No cambia la detección dentro del plazo
+  de confianza, ni se acredita aquí el comportamiento físico de Google Drive.
 
 **Pruebas:** `src/media/folders.test.ts` (la vuelta de la red despierta la espera y la siguiente es más larga; no
 despierta la de Drive que pide ir más despacio, ni por una subida de la tanda ni por el pedido entero (`503 rate`); *Pause* con tres esperas

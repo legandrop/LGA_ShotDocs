@@ -1,5 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { planFolder } from '../../src/media/folderZip';
+import { Portero as MediaPortero } from '../../src/media/portero';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanFileName, cutText, DRIVE_CALL_BUDGET, driveFolderName, FOLDER_BATCH, LIST_TRUST_MS, PART_ANSWER_MS, Portero, TREE_TTL_MS, validFolderPath, type Env, type Store } from './core';
@@ -981,6 +983,60 @@ describe('carpetas: listar varias subcarpetas de una vez (dirs)', () => {
     const listsSince = (from: number) => s.world.listQueries.length - from;
     return { ...s, tree, add, ids, ask, askOk, listsSince, names };
   }
+
+  it('O4: Download all conserva tres páginas y el plan, sin metadata de la descartada y comprobando las activas', async () => {
+    const { world, ids, add, tree, ask } = await many();
+    for (let i = 0; i < 250; i++) add(`h${String(i).padStart(3, '0')}.jpg`, [ids[i % 2]!]);
+    let pages = 0;
+    const thirdMetadata = { omitted: -1, active: -1 };
+    const metadata = (id: string, from: number) => world.calls.slice(from).filter((c) => c === `GET www.googleapis.com/drive/v3/files/${id}`).length;
+    const client = new MediaPortero(SELF, {
+      token: async () => 'viewer-jwt',
+      fetch: async (_input, init) => {
+        const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        if (body.dirs) {
+          pages++;
+          if (pages === 2) world.drive.get(ids[0]!)!.parents = world.drive.get(tree.root.id)!.parents;
+          if (pages > 1) vi.useFakeTimers({ now: Date.now() + TREE_TTL_MS + 1000, toFake: ['Date'] });
+        }
+        const before = world.calls.length;
+        const response = await ask(body);
+        if (pages === 3 && body.dirs) {
+          Object.assign(thirdMetadata, { omitted: metadata(ids[0]!, before), active: metadata(ids[1]!, before) });
+        }
+        return response;
+      },
+    });
+    const plan = await planFolder(client, F1, 'R');
+    expect(pages).toBe(3);
+    expect(thirdMetadata.omitted).toBe(0);
+    expect(thirdMetadata.active).toBeGreaterThan(0);
+    expect(plan.files.map((f) => f.path)).toEqual(Array.from({ length: 125 }, (_, i) => `D1/h${String(i * 2 + 1).padStart(3, '0')}.jpg`));
+    expect(plan.skipped).toEqual([{ path: 'D0/', reason: 'folder', detail: 'not_found', dirId: ids[0] }]);
+    expect(new Set(world.listQueries.slice(-3)).size).toBe(1);
+  });
+
+  it('O4: skip rechaza valores, exceso e IDs ajenos antes de listar', async () => {
+    const { world, ids, ask } = await many();
+    for (const skip of [null, 'invalid', [3], ['bad id'], ['outsidexxxxxxx'], Array(41).fill(ids[0])]) {
+      const before = world.listQueries.length;
+      expect((await ask({ dirs: [ids[0]], partial: true, skip })).status).toBe(400);
+      expect(world.listQueries.length).toBe(before);
+    }
+  });
+
+  it('O4: skip sin token válido o sin partial estricto conserva la comprobación previa', async () => {
+    const { world, ids, add, askOk } = await many();
+    for (let i = 0; i < 120; i++) add(`k${i}.jpg`, [ids[0]!]);
+    const first = await askOk({ dirs: [ids[0]] });
+    for (const body of [{ partial: true }, { partial: true, pageToken: 'invalid token' }, { partial: 'true', pageToken: first.nextPageToken }]) {
+      vi.useFakeTimers({ now: Date.now() + TREE_TTL_MS + 1000, toFake: ['Date'] });
+      const before = world.calls.length;
+      const out = await askOk({ dirs: [ids[0]], skip: [ids[0]], ...body });
+      expect(Object.keys(out.lists)).toEqual([ids[0]]);
+      expect(world.calls.slice(before)).toContain(`GET www.googleapis.com/drive/v3/files/${ids[0]}`);
+    }
+  });
 
   it('una sola consulta a Drive para varias subcarpetas, agrupada por padre, con el pase de cada archivo', async () => {
     const { world, ids, add, askOk, listsSince } = await many();

@@ -154,6 +154,8 @@ In development. What works today:
   saves the whole folder as a .zip (in Chrome and Edge on a computer, written as it arrives and with no size limit,
   or straight into a folder; elsewhere, built in memory up to 1 GB, 500 MB on a phone). Cancel also stops a download
   whose server error response stalls; it discards the unfinished zip or keeps completed files in the chosen folder.
+  While listing more pages, it skips checks for subfolders already set aside in that pass, keeping checks for the
+  remaining folders. Folders deferred for another pass are checked again when their turn starts.
 - Collapse sections by their headings: a triangle next to any heading hides everything up to the next heading
   of its level (just for you, saved on the device; Ctrl/⌘+Alt+Enter, and *Collapse all* in the page menu).
   Shift+click collapses or expands it for everyone who views the page (if you can edit it); the tooltip says

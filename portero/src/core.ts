@@ -2103,9 +2103,15 @@ export class Portero {
     }
     // Sin repetidas y en orden: la consulta tiene que ser la misma en cada página (Drive ata el `pageToken` a ella).
     const dirs = [...new Set(given as string[])].sort();
+    const omitted = body.skip === undefined ? [] : body.skip;
+    if (!Array.isArray(omitted) || omitted.length > LIST_DIRS_MAX || !omitted.every((d) => typeof d === 'string' && DRIVE_ID.test(d) && dirs.includes(d))) {
+      throw new HttpError(400, 'Skipped folders must belong to the requested folders.', 'bad_request');
+    }
     const pageToken = typeof body.pageToken === 'string' && /^[\w.~-]{1,2000}$/.test(body.pageToken) ? body.pageToken : '';
     // La app sabe dejar subcarpetas para después también en las páginas siguientes (ver arriba).
     const partial = body.partial === true;
+    // Conserva la consulta del token; las omitidas no se comprueban ni aportan contenido a esta vuelta.
+    const skip = new Set(pageToken && partial ? omitted as string[] : []);
     const known = this.known(root);
     const accepted: string[] = [];
     const failed: Record<string, string> = {};
@@ -2123,6 +2129,7 @@ export class Portero {
     } else {
       let checked = 0;
       for (const dir of dirs) {
+        if (skip.has(dir)) continue;
         if (checked > 0 && this.driveCalls >= DRIVE_CALL_BUDGET) {
           later.push(dir);
           continue;

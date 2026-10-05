@@ -74,12 +74,12 @@ function world(tree: Tree, opts: { page?: number } = {}) {
     err: () => null,
     partial: () => null,
   };
-  const manyLog: { ids: string[]; token: string | null }[] = [];
+  const manyLog: { ids: string[]; token: string | null; skip: string[] }[] = [];
   const listerDirs: FolderLister = {
     folderList: lister.folderList,
-    async folderListDirs(file, ids, token = null): Promise<FolderListingMany | null> {
+    async folderListDirs(file, ids, token = null, skip = []): Promise<FolderListingMany | null> {
       expect(file).toBe('carpeta-1');
-      manyLog.push({ ids, token });
+      manyLog.push({ ids, token, skip });
       expect(ids.length).toBeGreaterThan(0);
       expect(ids.length).toBeLessThanOrEqual(40);
       const code = cfg.err(manyLog.length, ids, token);
@@ -97,8 +97,8 @@ function world(tree: Tree, opts: { page?: number } = {}) {
       } else accepted = ids;
       const flat = accepted.flatMap((id) => dirs.get(id)!.map((e) => [id, e] as const));
       const from = Number(token ?? 0);
-      const lists: Record<string, FolderEntry[]> = Object.fromEntries(accepted.map((id) => [id, []]));
-      for (const [id, e] of flat.slice(from, from + cfg.page)) lists[id]!.push(e);
+      const lists: Record<string, FolderEntry[]> = Object.fromEntries(accepted.filter((id) => !skip.includes(id)).map((id) => [id, []]));
+      for (const [id, e] of flat.slice(from, from + cfg.page)) lists[id]?.push(e);
       const out = token ? cfg.partial(manyLog.length, ids, token) : null;
       for (const id of out?.later ?? []) {
         delete lists[id];
@@ -1154,6 +1154,8 @@ describe('Download all: varias subcarpetas por pedido (dirs)', () => {
     // Sin caer a listar de a una (solo la raíz, que no tiene id); B se pidió de nuevo en otra vuelta, sola.
     expect(w.listed).toEqual([null]);
     expect(w.manyLog.filter((x) => x.token === null).map((x) => x.ids.length)).toEqual([4, 1]);
+    expect(w.manyLog.filter((x) => x.token === null).every((x) => x.skip.length === 0)).toBe(true);
+    expect(w.manyLog[3]!.skip).toEqual([b, c]);
     // Las páginas siguientes repitieron los mismos dirs de su primer pedido (Drive ata el token a la consulta).
     const first = w.manyLog[0]!.ids.join();
     for (const x of w.manyLog.slice(1).filter((x) => x.token !== null && x.ids.length === 4)) expect(x.ids.join()).toBe(first);

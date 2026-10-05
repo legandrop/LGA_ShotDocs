@@ -26,7 +26,7 @@ export interface FolderLister {
    * anterior (no devolvió `lists`): se lista de a una con `folderList`, como sin este método. Las páginas siguientes
    * van con los mismos `dirs`; en ellas, `later` y `failed` pueden traer algunas que ya venían (ver `listRound`).
    */
-  folderListDirs?(file: string, dirs: string[], pageToken?: string | null): Promise<FolderListingMany | null>;
+  folderListDirs?(file: string, dirs: string[], pageToken?: string | null, skip?: string[]): Promise<FolderListingMany | null>;
 }
 
 /** El nombre de la lista de lo que no se pudo bajar (en inglés, como la app; el texto de adentro va en su idioma). */
@@ -203,7 +203,9 @@ export async function planFolder(
     try {
       do {
         const ids = query ?? accepted.map((n) => n.id!);
-        const page: FolderListingMany | null = await withRate(() => lister.folderListDirs!(fileId, ids, token), wait, opts.signal);
+        const active = new Set(accepted.map((n) => n.id!));
+        const skip: string[] = token ? ids.filter((id) => !active.has(id)) : [];
+        const page: FolderListingMany | null = await withRate(() => lister.folderListDirs!(fileId, ids, token, skip), wait, opts.signal);
         if (!page) {
           if (token) throw new Error('The media server changed its answer.');
           // Un portero anterior: de a una, también las que siguen.
