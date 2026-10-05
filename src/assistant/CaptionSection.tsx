@@ -11,7 +11,8 @@ import type { AssistantTarget } from './assistantUi';
 import { applyCaption, buildCaptionRequest, captionPlace, cleanCaption } from './caption';
 import { captionImage, CaptionImageError, type CaptionImage } from './captionImage';
 import { errorText } from './errorText';
-import { readKey } from './keyStore';
+import { readRequestKey, useNvidiaTransport, type NvidiaContext } from './nvidiaTransport';
+import { nvidiaProfile } from './nvidiaModels';
 import { isKeyRejected, SyncedKeyHint } from './SyncedKeyHint';
 import type { PhotoRef } from './photoRef';
 import { LANGUAGES } from './prompt';
@@ -61,6 +62,7 @@ export function captionErrorText(err: unknown, provider: string, tr: Translate):
 }
 
 interface Props {
+  pageId?: string;
   photo: PhotoRef;
   config: ProviderConfig;
   email: string;
@@ -77,16 +79,19 @@ interface Props {
   onClose: (note?: string) => void;
 }
 
-export function CaptionSection({ photo, config, email, destination, providerName, blocked, canEdit, target, onUsage, onClose }: Props) {
+export function CaptionSection({ pageId, photo, config, email, destination, providerName, blocked, canEdit, target, onUsage, onClose }: Props) {
+  const captureNvidia = useNvidiaTransport(pageId);
   const tr = useT();
   const { media } = useServices();
   const [phase, setPhase] = useState<Phase>({ kind: 'confirm' });
+  const [stopping, setStopping] = useState(false);
   const [language, setLanguage] = useState(() => savedLanguage(tr.lang));
   const [caption, setCaption] = useState('');
   const [thumb, setThumb] = useState<string | null>(null);
   const [sent, setSent] = useState<CaptionImage | null>(null);
   const image = useRef<CaptionImage | null>(null);
   const abort = useRef<AbortController | null>(null);
+  const activeNvidia = useRef<NvidiaContext | undefined>(undefined);
   const root = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
 
@@ -118,14 +123,24 @@ export function CaptionSection({ photo, config, email, destination, providerName
   }, [phase.kind]);
 
   const send = async () => {
-    if (blocked) return;
+    if (blocked || stopping) return;
     const controller = new AbortController();
     abort.current?.abort();
     abort.current = controller;
     onUsage(null);
     const lang = LANGUAGES.find((l) => l.id === language) ?? LANGUAGES[0];
     keepLanguage(lang.id);
+    let nvidia: NvidiaContext | undefined;
     try {
+      nvidia = captureNvidia(config, controller, (state) => {
+        if (abort.current !== controller) return;
+        setStopping(state === 'stopping');
+        setPhase({ kind: 'error', message: tr(state === 'stopping' ? 'assistant.nvidia.stopping' : state === 'confirmed' ? 'assistant.nvidia.stopped' : 'assistant.nvidia.stopUnconfirmed'), again: state !== 'stopping' });
+      });
+      activeNvidia.current = nvidia;
+      if (config.provider === 'nvidia' && (!pageId || !canEdit())) throw new ProviderError('workspace', 'workspace_page');
+      if (config.provider === 'nvidia' && !nvidiaProfile(config.model)?.vision) { setPhase({ kind: 'error', message: tr('assistant.nvidia.noVision'), again: false }); return; }
+      nvidia?.check();
       if (!image.current) {
         setPhase({ kind: 'preparing' });
         const editor = target?.editor?.() as { resolveFileUrl?: (u: string) => Promise<string> } | null | undefined;
@@ -137,9 +152,12 @@ export function CaptionSection({ photo, config, email, destination, providerName
         if (abort.current !== controller) return;
         setSent(image.current);
       }
+      nvidia?.check();
+      if (config.provider === 'nvidia' && !canEdit()) throw new ProviderError('workspace', 'workspace_page');
       setPhase({ kind: 'running', text: '' });
       // La clave se descifra recién acá y queda solo en esta llamada.
-      const answer = await complete(config, await readKey(email, config), buildCaptionRequest(lang.english, image.current), {
+      const answer = await complete(config, await readRequestKey(config, email, nvidia), buildCaptionRequest(lang.english, image.current), {
+        nvidia,
         signal: controller.signal,
         onText: (text) => {
           if (abort.current === controller) setPhase({ kind: 'running', text });
@@ -156,12 +174,14 @@ export function CaptionSection({ photo, config, email, destination, providerName
       setPhase({ kind: 'preview', text: clean.text, linksRemoved: clean.linksRemoved });
     } catch (err) {
       if (abort.current !== controller) return;
+      if (controller.signal.aborted && nvidia) return;
       setPhase({ kind: 'error', message: captionErrorText(err, providerName, tr), again: true, keyRejected: isKeyRejected(err) });
-    }
+    } finally { await nvidia?.close(); }
   };
 
   const stop = () => {
     abort.current?.abort();
+    if (activeNvidia.current) return;
     abort.current = null;
     setPhase({ kind: 'error', message: tr('assistant.stopped'), again: true });
   };
@@ -230,6 +250,7 @@ export function CaptionSection({ photo, config, email, destination, providerName
       {phase.kind === 'confirm' && (
         <>
           <p className="assistant-caption-ask">{tr('assistant.caption.confirm', { provider: destination })}</p>
+          {config.provider === 'nvidia' && <p className="muted assistant-hint">{tr('assistant.nvidia.route')}</p>}
           <p className="muted assistant-hint">{tr('assistant.caption.confirmText')}</p>
           <div className="assistant-row">
             <span className="assistant-small">{tr('assistant.caption.language')}</span>

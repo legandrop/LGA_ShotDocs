@@ -42,7 +42,7 @@ export interface KeyPayload {
 
 /** La clave de *Voice* adentro del sobre: a dónde va y la clave. Anthropic no transcribe. */
 export interface VoicePayload {
-  provider: Exclude<ProviderId, 'anthropic'>;
+  provider: Exclude<ProviderId, 'anthropic' | 'nvidia'>;
   baseUrl?: string;
   model: string;
   apiKey: string;
@@ -202,8 +202,7 @@ function validVoice(v: unknown): v is VoicePayload {
   const p = v as Record<string, unknown>;
   return (
     typeof p.provider === 'string' &&
-    p.provider !== 'anthropic' &&
-    (PROVIDERS as readonly string[]).includes(p.provider) &&
+    ['openai', 'gemini', 'compatible'].includes(p.provider) &&
     (p.baseUrl === undefined || typeof p.baseUrl === 'string') &&
     typeof p.model === 'string' &&
     typeof p.apiKey === 'string'

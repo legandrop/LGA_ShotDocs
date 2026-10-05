@@ -1,16 +1,20 @@
-// Los cuatro proveedores del asistente (Docs/Doc_Asistente.md, secciones 3 y 5): Anthropic, OpenAI, Google (Gemini) y
+import { nvidiaRequest, readNvidiaChannel, type NvidiaContext } from './nvidiaTransport';
+import { NVIDIA_MODELS, nvidiaProfile } from './nvidiaModels';
+
+// Los proveedores del asistente (Docs/Doc_Asistente.md, secciones 3 y 5): NVIDIA, Anthropic, OpenAI, Google (Gemini) y
 // "compatible con OpenAI" (OpenRouter, Ollama, LM Studio). Un adaptador propio con `fetch` por proveedor, sin sus SDK:
 // pedir, recibir por partes, cancelar, leer el uso de tokens y los errores. El pedido va directo del navegador al
-// proveedor, con la clave de la persona; nada pasa por el portero ni por Supabase.
+// proveedor, salvo NVIDIA que usa el portero propio del workspace con la clave de la persona, sin guardarla allí.
 //
 // La clave nunca se escribe en un error, un log ni la consola: los mensajes del proveedor se pasan por `redact`, que la
 // saca (OpenAI, por ejemplo, repite parte de la clave en el 401).
 
-export type ProviderId = 'anthropic' | 'openai' | 'gemini' | 'compatible';
+export type ProviderId = 'nvidia' | 'anthropic' | 'openai' | 'gemini' | 'compatible';
 
-export const PROVIDERS: ProviderId[] = ['anthropic', 'openai', 'gemini', 'compatible'];
+export const PROVIDERS: ProviderId[] = ['nvidia', 'anthropic', 'openai', 'gemini', 'compatible'];
 
 export const PROVIDER_NAMES: Record<ProviderId, string> = {
+  nvidia: 'NVIDIA',
   anthropic: 'Anthropic',
   openai: 'OpenAI',
   gemini: 'Google Gemini',
@@ -24,7 +28,7 @@ export const SPEND_LIMIT_URLS: Partial<Record<ProviderId, string>> = {
   gemini: 'https://aistudio.google.com/',
 };
 
-const BASE: Record<Exclude<ProviderId, 'compatible'>, string> = {
+const BASE: Record<Exclude<ProviderId, 'compatible' | 'nvidia'>, string> = {
   anthropic: 'https://api.anthropic.com/v1',
   openai: 'https://api.openai.com/v1',
   gemini: 'https://generativelanguage.googleapis.com/v1beta',
@@ -70,6 +74,7 @@ export type ProviderErrorKind =
   | 'network'
   | 'server'
   | 'badRequest'
+  | 'workspace'
   | 'aborted';
 
 /** Un error del proveedor, ya sin la clave. `retryAfter`: segundos, solo si se pudieron leer. */
@@ -99,6 +104,7 @@ export function redact(text: string, key: string): string {
 }
 
 function baseOf(config: ProviderConfig): string {
+  if (config.provider === 'nvidia') return '';
   if (config.provider === 'compatible') return (config.baseUrl ?? '').trim().replace(/\/+$/, '');
   return BASE[config.provider];
 }
@@ -172,6 +178,7 @@ async function send(fetcher: Fetch, url: string, init: RequestInit, key: string)
   try {
     res = await fetcher(url, init);
   } catch (err) {
+    if (err instanceof ProviderError) throw err;
     if ((err as { name?: string })?.name === 'AbortError') throw new ProviderError('aborted', 'Stopped');
     // Sin red, CORS rechazado o un modelo local apagado: el navegador no dice cuál.
     throw new ProviderError('network', redact(String((err as Error)?.message ?? err), key));
@@ -191,7 +198,15 @@ export interface ModelInfo {
 const NOT_TEXT = /embed|tts|whisper|dall-e|image|audio|realtime|moderation|transcribe|speech|search-preview|computer-use|davinci|babbage|imagen|veo|aqa|lyria/i;
 
 /** La lista de modelos del proveedor (`Test` la usa: si la clave anda, la lista llega). */
-export async function listModels(config: ProviderConfig, key: string, fetcher: Fetch = fetch, signal?: AbortSignal): Promise<ModelInfo[]> {
+export async function listModels(config: ProviderConfig, key: string, fetcher: Fetch = fetch, signal?: AbortSignal, nvidia?: NvidiaContext): Promise<ModelInfo[]> {
+  if (config.provider === 'nvidia') {
+    try {
+    const res = await nvidiaRequest(nvidia, key, 'models', undefined, signal, fetcher);
+    if (!res.ok) throw await errorFrom(res, key);
+    const result = await readNvidiaChannel(res, 'models', nvidia!, signal);
+    return result.models.filter((m) => nvidiaProfile(m.id)).map((m) => ({ id: m.id, name: m.id }));
+    } finally { await nvidia?.close(); }
+  }
   const base = baseOf(config);
   if (!base) throw new ProviderError('badRequest', 'Missing base URL');
   if (config.provider === 'gemini') {
@@ -216,6 +231,7 @@ export async function listModels(config: ProviderConfig, key: string, fetcher: F
  */
 export function defaultModel(provider: ProviderId, models: ModelInfo[]): string {
   const ids = models.map((m) => m.id);
+  if (provider === 'nvidia') return Object.keys(NVIDIA_MODELS).find((id) => ids.includes(id)) ?? '';
   const dated = /-\d{4}-\d{2}-\d{2}$|-\d{8}$/;
   const pick = (re: RegExp) => ids.find((id) => re.test(id) && !dated.test(id) && !/preview|exp/i.test(id)) ?? ids.find((id) => re.test(id));
   const found =
@@ -253,7 +269,7 @@ export function outputCap(config: ProviderConfig, maxTokens: number): number {
 }
 
 /** Lee un cuerpo con eventos (`text/event-stream`): cada `data:` con su JSON, en orden. */
-async function* events(res: Response, signal?: AbortSignal): AsyncGenerator<{ event: string; data: string }> {
+async function* events(res: Response, signal?: AbortSignal, bounded = false): AsyncGenerator<{ event: string; data: string }> {
   const reader = res.body?.getReader();
   if (!reader) {
     // Sin cuerpo por partes (un servidor local, una prueba): todo junto.
@@ -263,18 +279,24 @@ async function* events(res: Response, signal?: AbortSignal): AsyncGenerator<{ ev
   }
   const decoder = new TextDecoder();
   let buffer = '';
+  let size = 0;
+  const stop = () => { void reader.cancel().catch(() => undefined); };
+  if (bounded) signal?.addEventListener('abort', stop, { once: true });
   try {
     for (;;) {
       if (signal?.aborted) throw new ProviderError('aborted', 'Stopped');
       const { value, done } = await reader.read();
       if (done) break;
+      if (bounded && (size += value.byteLength) > 8 * 1024 * 1024) throw new ProviderError('network', 'Response too large');
       buffer += decoder.decode(value, { stream: true });
       let at: number;
       while ((at = buffer.search(/\r?\n\r?\n/)) >= 0) {
         const chunk = buffer.slice(0, at);
+        if (bounded && new TextEncoder().encode(chunk).length > 256 * 1024) throw new ProviderError('network', 'Event too large');
         buffer = buffer.slice(at).replace(/^\r?\n\r?\n/, '');
         yield* parseEvents(chunk);
       }
+      if (bounded && new TextEncoder().encode(buffer).length > 256 * 1024) throw new ProviderError('network', 'Event too large');
     }
     buffer += decoder.decode();
     if (buffer.trim()) yield* parseEvents(buffer);
@@ -283,6 +305,7 @@ async function* events(res: Response, signal?: AbortSignal): AsyncGenerator<{ ev
     if (err instanceof ProviderError) throw err;
     throw new ProviderError('network', 'The connection was interrupted');
   } finally {
+    if (bounded) { signal?.removeEventListener('abort', stop); await reader.cancel().catch(() => undefined); }
     reader.releaseLock?.();
   }
 }
@@ -315,12 +338,22 @@ export async function complete(
   config: ProviderConfig,
   key: string,
   request: CompletionRequest,
-  options: { fetcher?: Fetch; signal?: AbortSignal; onText?: (text: string) => void } = {},
+  options: { fetcher?: Fetch; signal?: AbortSignal; onText?: (text: string) => void; nvidia?: NvidiaContext } = {},
 ): Promise<Completion> {
   const fetcher = options.fetcher ?? fetch;
   const base = baseOf(config);
-  if (!base) throw new ProviderError('badRequest', 'Missing base URL');
+  if (!base && config.provider !== 'nvidia') throw new ProviderError('badRequest', 'Missing base URL');
+  const profile = config.provider === 'nvidia' ? nvidiaProfile(config.model) : null;
+  if (config.provider === 'nvidia' && (!profile || request.image && !profile.vision)) throw new ProviderError('model', request.image ? 'nvidia_no_vision' : 'nvidia_model');
   const { signal } = options;
+  if (config.provider === 'nvidia') {
+    try {
+    const res = await nvidiaRequest(options.nvidia, key, 'chat/completions', { ...request, model: config.model, maxTokens: Math.min(request.maxTokens, profile!.tokens) }, signal, fetcher);
+    if (!res.ok) throw await errorFrom(res, key);
+    const result = await readNvidiaChannel(res, 'chat', options.nvidia!, signal, options.onText);
+    return { text: result.text, cut: result.cut, usage: result.usage };
+    } finally { await options.nvidia?.close(); }
+  }
   let text = '';
   let cut = false;
   let finished = false;
@@ -330,7 +363,7 @@ export async function complete(
     text += piece;
     options.onText?.(text);
   };
-  let url: string;
+  let url = '';
   let body: unknown;
   switch (config.provider) {
     case 'anthropic':
@@ -410,6 +443,7 @@ export async function complete(
       };
   }
   const res = await send(fetcher, url, { method: 'POST', headers: headers(config, key), body: JSON.stringify(body), signal }, key);
+  if (!res.ok) throw await errorFrom(res, key);
   try {
     for await (const { event, data } of events(res, signal)) {
       if (data === '[DONE]') {

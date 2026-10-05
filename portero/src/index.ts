@@ -3,6 +3,7 @@
 // nada a mano en Cloudflare. Toda la lógica está en core.ts.
 import { DurableObject } from 'cloudflare:workers';
 import { Portero, type Env as PorteroEnv, type Store as PorteroStore } from './core';
+export { NvidiaRequestOwner } from './nvidiaRequestOwner';
 
 export class Store extends DurableObject {
   async read(key: string): Promise<unknown> {
@@ -20,6 +21,7 @@ export class Store extends DurableObject {
 
 interface Env extends PorteroEnv {
   STORE: DurableObjectNamespace<Store>;
+  NVIDIA_REQUESTS: DurableObjectNamespace<unknown>;
 }
 
 /**

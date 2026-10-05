@@ -1,5 +1,51 @@
 # Portero de archivos
 
+## Pasarela NVIDIA BYOK (v0.189)
+
+El portero propio del workspace también recibe, de forma transitoria, la clave NVIDIA y el pedido del asistente;
+no los guarda, registra ni reintenta. GET `/assistant/nvidia/models` y POST
+`/assistant/nvidia/chat/completions` son las únicas rutas que contactan el host y rutas NVIDIA fijos, sin seguir redirecciones ni aceptar destinos
+configurables. La sesión de Supabase es independiente de `x-shotdocs-nvidia-key`; se verifican rol, política On y
+permisos RLS frescos. No depende de que Drive esté conectado ni admite links públicos o tokens MCP.
+
+POST `/assistant/nvidia/prepare` admite sesión y rol antes de asignar un Durable Object propietario de esa petición.
+Devuelve control ligado a workspace/sesión/pedido antes de que el cliente descifre la clave; no recibe BYOK ni inicia
+inferencia. Start consume ese control una vez, abre SSE y repite auth/política/permisos frescos. POST
+`/assistant/nvidia/stop` y `/assistant/nvidia/status` llegan al mismo propietario mediante id y capability, sin clave.
+Un control rechazado no cancela otra operación; un Start duplicado no sustituye ni detiene el primero.
+
+Stop es un mensaje explícito por un canal independiente, no una inferencia basada en desconexión HTTP. El propietario
+aborta su raíz antes de storage y une sus operaciones/lectores; `storage.sync()` precede al ACK de cierre confirmado.
+La app diferencia ACK confirmado y Stop sólo local sin confirmación. El Worker conserva `enable_request_signal` como
+mecanismo adicional; cerrar el pedido propio no garantiza detener cómputo o cobro ya iniciado en NVIDIA. El deadline absoluto es 180 s.
+Las consultas de permiso tienen 10 s; body 2 MiB, catálogo 1 MiB y SSE 8 MiB. Las rutas de Drive/MCP conservan su recorrido.
+Errores de sesión/portero/política no se presentan como clave NVIDIA rechazada. El catálogo no prueba inferencia.
+Detalle de perfiles, límites y privacidad en Doc_Asistente.md, entrega NVIDIA.
+
+El HTTP 200 temprano sólo confirma que se abrió el canal propio, identificado por `X-Shotdocs-Nvidia-Protocol: 1`.
+`sd.ready` precede autenticación, política y permisos; los errores posteriores van en `sd.error` con código/estado
+fijos. Chat usa `sd.delta` y `sd.done`; el catálogo, `sd.models` y `sd.done`. Sólo terminal válido y EOF limpio permiten
+aceptar el resultado. Test no actualiza su lista con un catálogo parcial, y Apply no admite una respuesta incompleta.
+Las tareas y readers quedan unidos al propietario y su cierre; no se prolongan con waitUntil ni trabajo desligado.
+
+### Binding, vencimiento y publicación
+
+`NVIDIA_REQUESTS` usa la clase exportada `NvidiaRequestOwner` con SQLite, separada de `STORE`/`Store` de Drive.
+`portero/wrangler.jsonc` conserva migración v1 de Store y agrega v2 con `new_sqlite_classes:["NvidiaRequestOwner"]`;
+no cambia credenciales/variables del workspace ni pide claves globales. La publicación habitual desde main incorpora
+binding y migración junto al código; no se habilita NVIDIA mediante un deploy manual separado. Sin estas rutas o su binding, la preparación falla antes de descifrar o enviar la clave y no inicia inferencia.
+Un Worker con las rutas nuevas pero sin binding responde con el error de pasarela desactualizada.
+
+Prepare vence a 30 s, Start a 180 s y metadata a su vencimiento absoluto 600 s. Estado compacto ≤512 bytes, sin clave/texto/foto
+persistidos; timer/alarma y todas las entradas comprueban el vencimiento, con cierres idempotentes. No se retira clase,
+binding ni almacenamiento por asumir que 600 s equivalen a purga física: un descenso o retiro requiere una entrega
+separada que conserve los controles pendientes y verifique su compatibilidad. STORE sigue guardando sólo su estado
+anterior de Drive. No se introduce otra base ni tabla Supabase.
+
+La cancelación/aislamiento se comprobó con Worker y Durable Objects reales en workerd local, consumidores reales y
+fixtures sintéticas. La UI usa una pasarela simulada en sus recorridos EN/ES; no es una inferencia real contra NVIDIA.
+No están acreditados el recorrido de inferencia de la app con clave personal, purga física 600 s, crash o coste remoto.
+
 El portero es un Worker de Cloudflare en la cuenta del dueño del workspace (código en `portero/`). Guarda la
 conexión con el Google Drive del dueño, sube los archivos a su Drive y los devuelve en streaming. Nadie
 más recibe la conexión con Drive: con ella se abre todo lo que la app subió, de todos los proyectos. El

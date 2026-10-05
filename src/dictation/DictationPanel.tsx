@@ -10,7 +10,8 @@ import { asAction, tipRows } from '../ui/tipRows';
 import { errorText } from '../assistant/errorText';
 import { isKeyRejected, SyncedKeyHint } from '../assistant/SyncedKeyHint';
 import { openAssistantSettings, useAssistantTarget, useAssistantUi } from '../assistant/assistantUi';
-import { loadSettings, readKey, type AssistantSettings } from '../assistant/keyStore';
+import { loadSettings, type AssistantSettings } from '../assistant/keyStore';
+import { useNvidiaTransport, readRequestKey, type NvidiaContext } from '../assistant/nvidiaTransport';
 import { fetchPolicy, policyAllows, type AssistantPolicy } from '../assistant/policy';
 import { complete, isLocalProvider, PROVIDER_NAMES, type Usage } from '../assistant/providers';
 import '../assistant/assistant.css';
@@ -158,6 +159,7 @@ const clock = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms
 const newId = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`).toString();
 
 export function DictationPanel({ pageId }: { pageId: string }) {
+  const captureNvidia = useNvidiaTransport(pageId);
   const { user, workspace, client, tree, docs, comments } = useServices();
   const status = useSyncStatus();
   const perms = usePermissions();
@@ -220,6 +222,8 @@ export function DictationPanel({ pageId }: { pageId: string }) {
   const appliedAt = useRef(0);
   const tooSoon = () => Date.now() - appliedAt.current < DOUBLE_TAP_MS;
   const abort = useRef<AbortController | null>(null);
+  const activeNvidia = useRef<NvidiaContext | undefined>(undefined);
+  const [stopping, setStopping] = useState(false);
   const root = useRef<HTMLElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
 
@@ -406,7 +410,7 @@ export function DictationPanel({ pageId }: { pageId: string }) {
 
   /** Manda la nota con una foto nueva de la página (también después de *ask* y en *Try again*). */
   const place = async (note: string, answered?: Run['answered'], fromQueue?: QueuedNote) => {
-    if (!settings || !config || phase.kind === 'running') return;
+    if (!settings || !config || stopping || phase.kind === 'running') return;
     if (!note.trim()) return;
     const view = target?.view();
     if (!view) return;
@@ -430,9 +434,16 @@ export function DictationPanel({ pageId }: { pageId: string }) {
     const { recent, addrs } = recentForRequest(recentOf(pageId), map, view.state);
     const shot = activeShot;
     const request = buildPlaceRequest(map, note, { recent, answered, activeShot: shot });
+    let nvidia: NvidiaContext | undefined;
     try {
       // La clave se descifra recién acá y queda solo en esta llamada.
-      const answer = await complete(config, await readKey(user.email, config), request, { signal: controller.signal });
+      nvidia = captureNvidia(config, controller, (state) => {
+        if (abort.current !== controller) return;
+        setStopping(state === 'stopping');
+        setPhase({ kind: 'compose', note: tr(state === 'stopping' ? 'assistant.nvidia.stopping' : state === 'confirmed' ? 'assistant.nvidia.stopped' : 'assistant.nvidia.stopUnconfirmed') });
+      });
+      activeNvidia.current = nvidia;
+      const answer = await complete(config, await readRequestKey(config, user.email, nvidia), request, { signal: controller.signal, nvidia });
       if (abort.current !== controller) return;
       setUsage(answer.usage);
       const result = answer.cut ? 'unreadable' : validateAnswer(answer.text, map, { note, words, activeShot: shot, recent: addrs }, builtinShot(map.lang));
@@ -457,12 +468,14 @@ export function DictationPanel({ pageId }: { pageId: string }) {
       setPhase({ kind: 'preview', plan: result, extra: extra.changes, extraNotes: extra.notes });
     } catch (err) {
       if (abort.current !== controller) return;
+      if (controller.signal.aborted && nvidia) return;
       setPhase({ kind: 'error', message: errorText(err, providerName, tr), retry: true, keyRejected: isKeyRejected(err) });
-    }
+    } finally { await nvidia?.close(); }
   };
 
   const stop = () => {
     abort.current?.abort();
+    if (activeNvidia.current) return;
     abort.current = null;
     setPhase({ kind: 'compose', note: tr('assistant.stopped') });
   };
@@ -1227,7 +1240,7 @@ export function DictationPanel({ pageId }: { pageId: string }) {
                   <p className="dictation-heard dictation-note">“{queued.text}”</p>
                 )}
                 <div className="assistant-buttons">
-                  <button className="primary dictation-big" disabled={blocked || !queued.text.trim()} data-tip={tipRows([{ shortcut: 'dictationPlace', action: asAction(tr('dictation.place')) }])} onClick={() => void place(queued.text, undefined, queued)}>
+                  <button className="primary dictation-big" disabled={blocked || stopping || !queued.text.trim()} data-tip={tipRows([{ shortcut: 'dictationPlace', action: asAction(tr('dictation.place')) }])} onClick={() => void place(queued.text, undefined, queued)}>
                     {tr('dictation.place')}
                   </button>
                   {queued.audio && (
@@ -1272,7 +1285,7 @@ export function DictationPanel({ pageId }: { pageId: string }) {
                   onChange={(e) => setText(e.target.value)}
                 />
                 <div className="assistant-buttons">
-                  <button className="primary dictation-big" disabled={blocked || !text.trim()} data-tip={tipRows([{ shortcut: 'dictationPlace', action: asAction(tr('dictation.place')) }])} onClick={() => void place(text)}>
+                  <button className="primary dictation-big" disabled={blocked || stopping || !text.trim()} data-tip={tipRows([{ shortcut: 'dictationPlace', action: asAction(tr('dictation.place')) }])} onClick={() => void place(text)}>
                     {tr('dictation.place')}
                   </button>
                   {offline && text.trim() && (
@@ -1512,4 +1525,3 @@ export function DictationPanel({ pageId }: { pageId: string }) {
     </aside>
   );
 }
-

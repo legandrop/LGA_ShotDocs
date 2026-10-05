@@ -11,7 +11,7 @@ import { AppIcon } from './icons';
 // nota arriba que lo explica, y los links del resto de la app sí se traducen.
 
 /** La fecha de la última versión de los dos textos. */
-export const LEGAL_UPDATED = 'October 3, 2026';
+export const LEGAL_UPDATED = 'October 4, 2026';
 export const CONTACT_EMAIL = 'info@lega.com.ar';
 const REPO_URL = 'https://github.com/legandrop/LGA_ShotDocs';
 const USER_DATA_POLICY = 'https://developers.google.com/terms/api-services-user-data-policy';
@@ -178,15 +178,18 @@ function Privacy() {
           four times a day and we keep the last 30 days plus one copy per month.
         </li>
         <li>
-          <strong>The assistant</strong> (optional, off until you set it up with your own provider: Anthropic, OpenAI,
+          <strong>The assistant</strong> (optional, off until you set it up with your own provider: NVIDIA, Anthropic, OpenAI,
           Google, another service, or a model on your own computer, which needs no key). A key is stored encrypted on
           your device and, only if you turn on sync, encrypted with your passphrase in the workspace’s database. When
-          you ask the assistant for something, your browser sends it directly to that provider, under your own
-          account with it, never through us: the text you selected (or the page, for page actions), for Dictate to
+          you ask the assistant for something, your browser sends it to that provider, under your own
+          account with it. NVIDIA requests pass through your workspace owner's gatekeeper:
+          it receives your key and request transiently and forwards them to NVIDIA without storing or logging them.
+          Your workspace session is checked separately. Other providers are contacted directly. Requests contain
+          the text you selected (or the page, for page actions), for Dictate to
           report your note or voice recording and the text of the page it goes into, or, for Suggest caption, a copy
           of the photo of up to 1,024 pixels without its location data (the app asks you each time before sending a
           photo). The provider handles it under its own terms. The workspace owner can turn the assistant off or allow
-          only local models.
+          only local models. NVIDIA is not used for voice recordings; voice uses OpenAI, Gemini or a compatible service.
         </li>
       </ul>
       <p>

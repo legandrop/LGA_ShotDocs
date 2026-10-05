@@ -342,7 +342,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     title: 'help.assistant.title',
     text: 'help.assistant.text',
     keys: { open: 'assistant', undo: 'undo', apply: 'assistantApply' },
-    words: ['asistente', 'corregir', 'ortografía', 'gramática', 'traducir', 'resumir', 'acortar', 'mejorar', 'assistant', 'fix', 'spelling', 'grammar', 'translate', 'improve', 'shorter', 'ai', 'ia', 'claude', 'gpt', 'gemini'],
+    words: ['asistente', 'corregir', 'ortografía', 'gramática', 'traducir', 'resumir', 'acortar', 'mejorar', 'assistant', 'fix', 'spelling', 'grammar', 'translate', 'improve', 'shorter', 'ai', 'ia', 'claude', 'gpt', 'gemini', 'nvidia', 'stop', 'parar', 'cancelar', 'cancel', 'portero', 'gateway', 'confirmado'],
     since: ASSISTANT,
   },
   {
@@ -350,7 +350,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'writing',
     title: 'help.assistantKey.title',
     text: 'help.assistantKey.text',
-    words: ['clave', 'api key', 'key', 'proveedor', 'provider', 'anthropic', 'openai', 'gemini', 'openrouter', 'ollama', 'lm studio', 'tope', 'gasto', 'spending limit', 'olvidar', 'forget', 'local'],
+    words: ['clave', 'api key', 'key', 'proveedor', 'provider', 'nvidia', 'qwen', 'llama', 'anthropic', 'openai', 'gemini', 'openrouter', 'ollama', 'lm studio', 'tope', 'gasto', 'spending limit', 'olvidar', 'forget', 'local'],
     since: ASSISTANT,
   },
   {

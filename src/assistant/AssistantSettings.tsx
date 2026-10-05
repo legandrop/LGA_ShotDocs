@@ -4,7 +4,10 @@ import '../i18n/lazy/assistant';
 import { useServices } from '../services';
 import { errorText } from './errorText';
 import { closeAssistantSettings, signOutDialogOpen } from './assistantUi';
-import { forgetKey, forgetTabKey, loadSettings, readKey, sameDestination, saveSettings, type AssistantSettings as Saved } from './keyStore';
+import { forgetKey, forgetTabKey, loadSettings, sameDestination, saveSettings, type AssistantSettings as Saved } from './keyStore';
+import { useNvidiaTransport, readRequestKey, type NvidiaContext } from './nvidiaTransport';
+import { nvidiaProfile } from './nvidiaModels';
+import { readMediaUrl } from '../media/portero';
 import { KeySyncSection } from './KeySyncSection';
 import { defaultModel, listModels, PROVIDER_NAMES, PROVIDERS, SPEND_LIMIT_URLS, type ModelInfo, type ProviderId } from './providers';
 import { WorkspacePolicy } from './WorkspacePolicy';
@@ -25,10 +28,11 @@ function hostOf(url: string): string {
 }
 
 export function AssistantSettings() {
-  const { user } = useServices();
+  const { user, client } = useServices();
+  const captureNvidia = useNvidiaTransport();
   const tr = useT();
   const [saved, setSaved] = useState<Saved | null | undefined>(undefined);
-  const [provider, setProvider] = useState<ProviderId>('anthropic');
+  const [provider, setProvider] = useState<ProviderId>('nvidia');
   const [baseUrl, setBaseUrl] = useState('');
   const [key, setKey] = useState('');
   const [model, setModel] = useState('');
@@ -36,6 +40,14 @@ export function AssistantSettings() {
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const first = useRef<HTMLSelectElement>(null);
+  const testAbort = useRef<AbortController | null>(null);
+  const [gatewayHost, setGatewayHost] = useState('');
+  useEffect(() => {
+    let live = true;
+    setGatewayHost('');
+    if (provider === 'nvidia') void readMediaUrl(client).then((url) => { if (live && url) setGatewayHost(hostOf(url)); }).catch(() => undefined);
+    return () => { live = false; testAbort.current?.abort(); };
+  }, [client, user.id, provider, baseUrl, model]);
 
   /** Lo guardado cambió (al abrir, o al abrir una copia sincronizada): el formulario muestra lo de ahora. */
   const showSaved = (s: Saved | null) => {
@@ -84,10 +96,12 @@ export function AssistantSettings() {
   /** A quién va la clave, para el aviso: en uno compatible, el host de la dirección. */
   const destination = provider === 'compatible' ? hostOf(baseUrl) || name : name;
   /** La clave que se usa para *Test*: la escrita, o la guardada si es del mismo proveedor y la misma dirección. */
-  const keyForTest = async () => (key.trim() ? key.trim() : sameProvider && saved?.hasKey ? await readKey(user.email, { provider, baseUrl }) : '');
+  const keyForTest = async (context?: NvidiaContext) => (key.trim() ? key.trim() : sameProvider && saved?.hasKey ? await readRequestKey({ provider, baseUrl, model }, user.email, context) : '');
   const needsKey = provider !== 'compatible';
 
   const changeProvider = (next: ProviderId) => {
+    testAbort.current?.abort();
+    testAbort.current = null;
     setProvider(next);
     setMessage(null);
     if (next === saved?.provider) {
@@ -100,10 +114,21 @@ export function AssistantSettings() {
   };
 
   const test = async (): Promise<ModelInfo[] | null> => {
+    const controller = new AbortController();
+    testAbort.current?.abort();
+    testAbort.current = controller;
     setBusy(true);
     setMessage(null);
+    let context: NvidiaContext | undefined;
     try {
-      const k = await keyForTest();
+      context = captureNvidia({ provider, baseUrl, model }, controller, (state) => {
+        if (testAbort.current !== controller) return;
+        setBusy(state === 'stopping');
+        setMessage({ ok: false, text: tr(state === 'stopping' ? 'assistant.nvidia.stopping' : state === 'confirmed' ? 'assistant.nvidia.stopped' : 'assistant.nvidia.stopUnconfirmed') });
+      });
+      await context?.prepare();
+      const k = await keyForTest(context);
+      context?.check();
       if (needsKey && !k) {
         setMessage({ ok: false, text: tr('assistant.settings.needKey', { provider: name }) });
         return null;
@@ -112,16 +137,19 @@ export function AssistantSettings() {
         setMessage({ ok: false, text: tr('assistant.settings.needUrl') });
         return null;
       }
-      const list = await listModels({ provider, baseUrl, model }, k);
+      const list = await listModels({ provider, baseUrl, model }, k, fetch, controller.signal, context);
+      if (controller.signal.aborted || testAbort.current !== controller) return null;
       setModels(list);
-      if (!model || !list.some((m) => m.id === model)) setModel(defaultModel(provider, list));
-      setMessage({ ok: true, text: tr('assistant.settings.works') });
+      if (!model || provider !== 'nvidia' && !list.some((m) => m.id === model)) setModel(defaultModel(provider, list));
+      setMessage({ ok: !!list.length, text: tr(provider === 'nvidia' ? list.length ? 'assistant.nvidia.modelsLoaded' : 'assistant.nvidia.noModels' : 'assistant.settings.works') });
       return list;
     } catch (err) {
+      if (controller.signal.aborted || testAbort.current !== controller) return null;
       setMessage({ ok: false, text: errorText(err, name, tr) });
       return null;
     } finally {
-      setBusy(false);
+      await context?.close();
+      if (testAbort.current === controller) setBusy(false);
     }
   };
 
@@ -147,6 +175,7 @@ export function AssistantSettings() {
       setMessage({ ok: false, text: tr('assistant.settings.needModel') });
       return;
     }
+    if (provider === 'nvidia' && !nvidiaProfile(chosen)) { setMessage({ ok: false, text: tr('assistant.nvidia.noModels') }); return; }
     setBusy(true);
     try {
       const next = await saveSettings(user.email, { provider, baseUrl, model: chosen, models: list }, key.trim() ? key.trim() : sameProvider ? undefined : '');
@@ -254,8 +283,10 @@ export function AssistantSettings() {
                 ))}
               </datalist>
             </label>
+            {provider === 'nvidia' && <p className="muted assistant-small">{tr('assistant.nvidia.route')} {gatewayHost}</p>}
+            {provider === 'nvidia' && model === 'meta/llama-3.3-70b-instruct' && <p className="muted assistant-small">{tr('assistant.nvidia.llamaLimit')}</p>}
             <p className="muted assistant-small">
-              {saved?.sync && sameProvider
+              {provider === 'nvidia' ? tr('assistant.nvidia.storage') : saved?.sync && sameProvider
                 ? tr('assistant.settings.staysSynced', { provider: destination, workspace: saved.sync.name || saved.sync.ref })
                 : tr('assistant.settings.stays', { provider: destination })}{' '}
               {limitUrl && (
@@ -279,6 +310,7 @@ export function AssistantSettings() {
               <button disabled={busy} onClick={() => void test()}>
                 {tr('assistant.settings.test')}
               </button>
+              {busy && provider === 'nvidia' && <button onClick={() => testAbort.current?.abort()}>{tr('assistant.stop')}</button>}
               <button className="primary" disabled={busy} onClick={() => void save()}>
                 {tr('assistant.settings.save')}
               </button>

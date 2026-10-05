@@ -14,8 +14,16 @@
 // (`purge_file`): solo el dueño y los admins. Nunca se borra nada en Drive: solo se manda a su papelera.
 
 import { handleMcp, isMcpPath, tokenClientId } from './mcp';
+import { routeNvidiaOwner, nvidiaBytes, NvidiaDenied, type NvidiaWho } from './assistantNvidia';
 
+export interface NvidiaOwnerNamespace {
+  newUniqueId(): { toString(): string };
+  idFromString(value: string): { toString(): string };
+  get(id: { toString(): string }): { fetch(req: Request): Promise<Response> };
+}
 export interface Env {
+  NVIDIA_REQUESTS?: NvidiaOwnerNamespace;
+  STORE?: { idFromName(name: string): unknown; get(id: unknown): { read(key: string): Promise<unknown>; write(key: string, value: unknown): Promise<void>; remove(key: string): Promise<void> } };
   /** Dirección y clave publicable del Supabase del workspace (las dos son públicas). */
   SUPABASE_URL: string;
   SUPABASE_PUBLISHABLE_KEY: string;
@@ -213,6 +221,7 @@ export interface DriveFile {
 interface Who {
   userId: string;
   isOwner: boolean;
+  role?: string;
   /** El encabezado `Authorization` de la persona, para preguntarle a la base con su sesión. */
   auth: string;
   /**
@@ -680,8 +689,15 @@ export class Portero {
   async handle(req: Request): Promise<Response> {
     const url = new URL(req.url);
     try {
-      if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(req, this.env) });
+      if (req.method === 'OPTIONS' && !url.pathname.startsWith('/assistant/nvidia/')) return new Response(null, { status: 204, headers: cors(req, this.env) });
       const path = url.pathname;
+      if (path.startsWith('/assistant/nvidia/')) {
+        if (req.method === 'OPTIONS') {
+          const allowed = cors(req, this.env);
+          return new Response(null, { status: allowed['Access-Control-Allow-Origin'] ? 204 : 403, headers: allowed['Access-Control-Allow-Origin'] ? { ...allowed, 'Access-Control-Allow-Headers': 'Authorization, Content-Type, x-shotdocs-nvidia-key, x-shotdocs-nvidia-control, x-shotdocs-nvidia-owner, x-shotdocs-nvidia-capability' } : {} });
+        }
+        return await routeNvidiaOwner(req, this.env, (signal) => this.authenticateNvidia(req, signal));
+      }
       if (path === '/health') return json(req, this.env, { ok: true });
       if (path === '/drive/callback' && req.method === 'GET') return await this.callback(url);
       const pass = /^\/m\/([^/]+)$/.exec(path)?.[1];
@@ -734,7 +750,13 @@ export class Portero {
 
   // --- la base del workspace, con la sesión de la persona ------------------------------------------
 
-  private rpc(auth: string, fn: string, args: unknown, link?: string): Promise<Response> {
+  async authenticateNvidia(req: Request, signal: AbortSignal): Promise<NvidiaWho> {
+    try { return await this.whoami(req, signal); }
+    catch (err) { throw new NvidiaDenied(err instanceof HttpError && [401,403].includes(err.status) ? 401 : 502,
+      err instanceof HttpError && [401,403].includes(err.status) ? 'workspace_session' : 'workspace_unavailable'); }
+  }
+
+  private rpc(auth: string, fn: string, args: unknown, link?: string, signal?: AbortSignal): Promise<Response> {
     return this.http(`${this.env.SUPABASE_URL.replace(/\/+$/, '')}/rest/v1/rpc/${fn}`, {
       method: 'POST',
       headers: {
@@ -744,6 +766,7 @@ export class Portero {
         ...(link ? { 'x-shotdocs-link': link } : {}),
       },
       body: JSON.stringify(args),
+      ...(signal ? { signal, cache: 'no-store' as const, redirect: 'manual' as const } : {}),
     });
   }
 
@@ -753,7 +776,7 @@ export class Portero {
   }
 
   // Quién es: la sesión de Supabase de la persona, validada por el propio Supabase.
-  private async whoami(req: Request): Promise<Who> {
+  private async whoami(req: Request, signal?: AbortSignal): Promise<Who> {
     // Un link público: con el header del link nunca se usa (ni se reenvía) un `Authorization` que venga en el pedido.
     const link = req.headers.get('x-shotdocs-link');
     if (link !== null) {
@@ -768,12 +791,16 @@ export class Portero {
     // subidas, carpetas ni la papelera. Las sesiones de la app no traen `client_id`. Vale con el MCP prendido o no
     // (Doc_Asistente.md, 9.2, plan B, punto 3).
     if (tokenClientId(auth) !== null) throw new HttpError(403, 'This sign-in is for an assistant connection and only works with it.', 'assistant_token');
-    const res = await this.rpc(auth, 'media_whoami', {});
+    const res = await this.rpc(auth, 'media_whoami', {}, undefined, signal);
+    // Sólo el recorrido NVIDIA con signal cierra el body rechazado; Drive mantiene su comportamiento.
+    if (signal && (!res.ok || signal.aborted)) await res.body?.cancel().catch(() => undefined);
+    if (signal?.aborted) throw new HttpError(502, 'The workspace did not answer.');
     if (res.status === 401 || res.status === 403) throw new HttpError(401, 'Your session expired: sign in again.');
     if (!res.ok) throw new HttpError(502, `The workspace did not answer (${res.status}).`);
-    const who = (await res.json()) as { user_id: string | null; is_owner: boolean };
+    const who = (signal ? JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(await nvidiaBytes(res.body, 64 * 1024, signal)))
+      : await res.json()) as { user_id: string | null; is_owner: boolean; role?: string };
     if (!who.user_id) throw new HttpError(401, 'Sign in to the app first.');
-    return { userId: who.user_id, isOwner: who.is_owner === true, auth };
+    return { userId: who.user_id, isOwner: who.is_owner === true, auth, role: who.role };
   }
 
   /** El archivo de la app y el nivel de la persona sobre él; `null` si no existe o no lo puede ver. */

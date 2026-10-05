@@ -19,7 +19,7 @@ import { dictationDb } from './dictationDb';
 // La clave se descifra justo antes de cada pedido y no queda en ninguna variable global ni en el estado de React.
 
 /** Los proveedores que transcriben (Anthropic no recibe audio). */
-export type VoiceProviderId = Exclude<ProviderId, 'anthropic'>;
+export type VoiceProviderId = Exclude<ProviderId, 'anthropic' | 'nvidia'>;
 export const VOICE_PROVIDERS: VoiceProviderId[] = ['openai', 'gemini', 'compatible'];
 
 /** El modelo de transcripción que se preelige por proveedor (barato y con pistas de vocabulario). */
@@ -83,7 +83,7 @@ const KEY_ID = 'k:aes';
 
 /** Si el proveedor del asistente sirve para transcribir. */
 export function assistantTranscribes(s: Pick<AssistantSettings, 'provider'> | null | undefined): s is Pick<AssistantSettings, 'provider'> & { provider: VoiceProviderId } {
-  return !!s && s.provider !== 'anthropic';
+  return !!s && (VOICE_PROVIDERS as readonly string[]).includes(s.provider);
 }
 
 async function deviceKey(): Promise<CryptoKey> {

@@ -3,6 +3,11 @@
 Lo que falta, por importancia. El orden de trabajo lo manda `Plan_Workspaces.md` (secciones 10 y 11); las
 fases originales están en `Plan_ShotDocs.md`, sección 9.
 
+**NVIDIA BYOK, entrega v0.189:** texto y Caption Qwen, texto Llama y catálogo por el portero propio, con sesión y
+permisos frescos. No cierra la fase 5 ni el MCP: falta comprobar inferencia real con la clave de cada persona, y
+NVIDIA no se usa para audio. No se prometen otros modelos, cuotas ni un servicio compartido. Doc_Asistente.md
+describe la excepción al recorrido directo, Stop por un control aislado al propietario del pedido y su confirmación, el rechazo de respuestas y catálogos incompletos, y los límites. Se comprobó el Worker local real con entradas sintéticas y la UI con pasarela simulada; faltan inferencia desde la app con clave propia, dispositivos físicos, vencimiento físico de los metadatos y recuperación tras reinicios. Parar no garantiza detener cómputo ni cobros remotos.
+
 ## Regla para todo lo que se haga: cada workspace es una isla
 
 Un **workspace** es de un dueño y tiene varios proyectos. Es su Supabase (login, textos, permisos), el

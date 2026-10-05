@@ -13,7 +13,7 @@ import { clearCaptionRequest, closeAssistant, openAssistantSettings, useAssistan
 import { CaptionSection } from './CaptionSection';
 import { selectedPhotoRef, type PhotoRef } from './photoRef';
 import { applyFormat, formatSnapshotFrom, FORMATS, planFormat, takeFormatSnapshot, type FormatOutcome, type FormatPlan, type FormatSnapshot, type FormatTarget, type LostText } from './format';
-import { loadSettings, readKey, rememberLanguage, type AssistantSettings } from './keyStore';
+import { loadSettings, rememberLanguage, type AssistantSettings } from './keyStore';
 import { fetchSyncMeta, type KeySyncClient } from './keySyncRemote';
 import { cleanAnswer, diffKeys, parseAnswer, plainNew, type Atom, type NewUnit, type OldUnit, type Parsed } from './markup';
 import { parseSummary, plainBlocks, toPartialBlocks, type MdBlock, type MdParsed } from './mdBlocks';
@@ -21,6 +21,7 @@ import { insertSummary, parsePageTranslation, subpageAllowed, subpageBlocks, tak
 import { fetchPolicy, policyAllows, type AssistantPolicy } from './policy';
 import { buildRequest, EDIT_ONLY, LANGUAGES, PAGE_ACTIONS, type Action } from './prompt';
 import { complete, isLocalProvider, PROVIDER_NAMES, type Usage } from './providers';
+import { useNvidiaTransport, readRequestKey, type NvidiaContext } from './nvidiaTransport';
 import './assistant.css';
 import { errorText } from './errorText';
 import { isKeyRejected, SyncedKeyHint } from './SyncedKeyHint';
@@ -250,6 +251,7 @@ function BlocksPreview({ blocks, tr, added }: { blocks: MdBlock[]; tr: Translate
 }
 
 export function AssistantPanel({ pageId }: { pageId: string }) {
+  const captureNvidia = useNvidiaTransport(pageId);
   const services = useServices();
   const { user, workspace, client, tree, docs } = services;
   const status = useSyncStatus();
@@ -260,6 +262,7 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
   const [settings, setSettings] = useState<AssistantSettings | null | undefined>(undefined);
   const [policy, setPolicy] = useState<AssistantPolicy | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
+  const [stopping, setStopping] = useState(false);
   const [usage, setUsage] = useState<Usage | null>(null);
   const [language, setLanguage] = useState('en');
   const [formatTarget, setFormatTarget] = useState<FormatTarget>('bullets');
@@ -268,6 +271,7 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
   const [photo, setPhoto] = useState<PhotoRef | null>(null);
   const run = useRef<Run | null>(null);
   const abort = useRef<AbortController | null>(null);
+  const activeNvidia = useRef<NvidiaContext | undefined>(undefined);
   const root = useRef<HTMLElement>(null);
 
   // Los ajustes se vuelven a leer al cerrar la ventana de ajustes (pudo cambiar el proveedor o la clave).
@@ -343,7 +347,7 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
   const allowed = policy === null || !config ? true : policyAllows(policy, config);
   const offline = !status.online && !local;
   const providerName = settings ? PROVIDER_NAMES[settings.provider] : '';
-  const busy = phase.kind === 'running' || phase.kind === 'busy';
+  const busy = stopping || phase.kind === 'running' || phase.kind === 'busy';
 
   /** Lo que no se pudo pedir, como aviso en la lista de acciones. */
   const idleNote = (reason: string, action: Action) =>
@@ -421,9 +425,17 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
         format: next.target,
         title: next.title,
       });
+      let nvidia: NvidiaContext | undefined;
       try {
         // La clave se descifra recién acá y queda solo en esta llamada.
-        const answer = await complete(config, await readKey(user.email, config), request, {
+        nvidia = captureNvidia(config, controller, (state) => {
+          if (abort.current !== controller) return;
+          setStopping(state === 'stopping');
+          setPhase((p) => ({ kind: 'error', action: next.action, text: 'text' in p ? p.text : undefined, message: tr(state === 'stopping' ? 'assistant.nvidia.stopping' : state === 'confirmed' ? 'assistant.nvidia.stopped' : 'assistant.nvidia.stopUnconfirmed') }));
+        });
+        activeNvidia.current = nvidia;
+        const answer = await complete(config, await readRequestKey(config, user.email, nvidia), request, {
+          nvidia,
           signal: controller.signal,
           onText: (text) => {
             if (abort.current === controller) setPhase({ kind: 'running', action: next.action, text });
@@ -457,14 +469,16 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
         setPhase({ kind: 'preview', action: next.action, result, warnings: warningsOf(next, result, tr) });
       } catch (err) {
         if (abort.current !== controller) return;
+        if (controller.signal.aborted && nvidia) return;
         setPhase({ kind: 'error', action: next.action, message: errorText(err, providerName, tr), keyRejected: isKeyRejected(err) });
-      }
+      } finally { await nvidia?.close(); }
     },
-    [settings, config, busy, target, language, formatTarget, instruction, user.email, tr, providerName, canEdit, tree, pageId],
+    [settings, config, busy, target, language, formatTarget, instruction, user.email, tr, providerName, canEdit, tree, pageId, captureNvidia],
   );
 
   const stop = () => {
     abort.current?.abort();
+    if (activeNvidia.current) return;
     abort.current = null;
     setPhase((p) => (p.kind === 'running' ? { kind: 'error', action: p.action, message: tr('assistant.stopped'), text: p.text } : p));
   };
@@ -761,6 +775,7 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
             {!canEdit && (perms.known || target?.editable() === false) && <p className="assistant-notice">{tr('assistant.readOnly')}</p>}
             {photo && config && (
               <CaptionSection
+                pageId={pageId}
                 // El destino va en la clave: si la persona cambia de proveedor (o de dirección) en los ajustes, la
                 // sección vuelve a empezar y vuelve a preguntar antes de mandar la foto (auditoría de A3, B-1).
                 key={`${photo.blockId}#${photo.index}:${photo.url}|${config.provider}|${config.baseUrl ?? ''}`}
@@ -870,7 +885,7 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
                 {phase.text && <div className="assistant-stream">{cleanAnswer(phase.text)}</div>}
                 <div className="assistant-buttons">
                   {run.current && (
-                    <button className="primary" disabled={blocked} onClick={() => void start(run.current!.action, run.current!, phase.retake)}>
+                    <button className="primary" disabled={blocked || stopping} onClick={() => void start(run.current!.action, run.current!, phase.retake)}>
                       {tr('assistant.tryAgain')}
                     </button>
                   )}

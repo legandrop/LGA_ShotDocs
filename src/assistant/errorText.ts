@@ -8,6 +8,8 @@ import { ProviderError } from './providers';
 export function errorText(err: unknown, provider: string, tr: Translate): string {
   if (!(err instanceof ProviderError)) return tr('assistant.error.other', { provider, message: String((err as Error)?.message ?? err) });
   switch (err.kind) {
+    case 'workspace':
+      return tr(err.message === 'workspace_session' ? 'assistant.nvidia.session' : err.message === 'workspace_policy' ? 'assistant.nvidia.policy' : err.message === 'workspace_page' ? 'assistant.nvidia.page' : err.message === 'gateway_outdated' ? 'assistant.nvidia.outdated' : err.message === 'nvidia_pending' ? 'assistant.nvidia.pending' : 'assistant.nvidia.unavailable');
     case 'auth':
       return tr('assistant.error.auth', { provider });
     case 'forbidden':

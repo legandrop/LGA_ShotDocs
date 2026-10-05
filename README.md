@@ -33,7 +33,7 @@ its own project: a tree of pages you own.
 - **Works everywhere.** macOS, Windows and iPhone, from the same app.
 - **Real page sizes.** A page can be free-form or set to a paper size (A5, A4, A3, Letter), per page or
   for a whole branch. What you see while editing is exactly what the PDF export looks like.
-- **Assistant with your own key.** Add your own API key from Anthropic, OpenAI, Google Gemini or an
+- **Assistant with your own key.** Add your own API key from NVIDIA, Anthropic, OpenAI, Google Gemini or an
   OpenAI-compatible service (OpenRouter, or a local model such as Ollama) and fix, improve, shorten, translate,
   rewrite or reshape what you select, summarize and translate a whole page, or suggest a caption for a photo. You see
   a preview first; applying it is a regular edit: synced, versioned and undoable. The workspace owner can turn it off or allow only local models.
@@ -185,9 +185,9 @@ In development. What works today:
   a two-minute tour with Next walks through the app on a practice page that is never saved or synced; it can be
   replayed, and the practice page reopened, from the help. *Show me* on an entry opens the practice page at just
   that step and brings you back; a dot on the "?" means there is something new, listed under *What's new*.
-- Assistant (account menu → *Assistant…*): choose Anthropic, OpenAI, Google Gemini or an OpenAI-compatible service,
+- Assistant (account menu → *Assistant…*): choose NVIDIA, Anthropic, OpenAI, Google Gemini or an OpenAI-compatible service,
   paste your API key and pick a model from your provider's list. The key is stored encrypted on that device and sent
-  only to that provider. *Sync across my devices* encrypts it on the device with a six-word passphrase the app proposes
+  to that provider. NVIDIA requests and keys pass through the gatekeeper of your workspace without being stored or logged there; other providers are contacted directly. NVIDIA supports Qwen (text and captions) and Llama (text), with no audio. Test lists admitted models and does not prove inference access. Stop uses a separate control request to the same gatekeeper and waits for confirmation; until it finishes, new requests and Apply stay disabled. If confirmation cannot be obtained, the app says so. Incomplete answers cannot be applied and partial catalogues are discarded. A confirmed Stop does not guarantee that the provider stops processing or charging for work it already received. Verification used a real local Worker with synthetic inputs and a simulated gatekeeper for the editor UI; inference from the app with a personal key, physical expiry and crash recovery remain unverified. Existing settings are preserved. *Sync across my devices* encrypts it on the device with a six-word passphrase the app proposes
   and stores only that encrypted copy in the workspace, so another device unlocks it with the passphrase (on a borrowed
   computer, only for that tab); *Change passphrase…* re-encrypts it, the voice key travels in the same copy, and *Sign
   out other devices* in the account menu is there for a lost device. Select text and press Ctrl+Alt+J (⌘⌥J on a Mac), or use *Assistant* in the toolbar or the

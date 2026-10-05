@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.189 : NVIDIA con clave propia y Stop confirmado por el portero
+
+NVIDIA aparece primero al configurar un asistente nuevo, sin cambiar preferencias guardadas. La clave propia y el pedido pasan por el portero del workspace, con rutas fijas, sesión separada y comprobaciones vigentes de permisos. Qwen admite texto y pies de foto; Llama, texto; Voice conserva sus proveedores. Test lista modelos y no confirma acceso a inferencia. Cada pedido tiene un control aislado: Stop llega al mismo propietario y espera el cierre antes de confirmar. Rechazar un control ajeno o un inicio duplicado no detiene el pedido vigente. Mientras se espera no se inicia otro pedido ni se aplica una respuesta parcial; los catálogos incompletos se descartan. Se actualizan ayuda y documentación. La comprobación local no acredita inferencia real con una clave propia, vencimiento físico ni reinicios; parar no garantiza detener cómputo o cobros remotos.
+
+[Agregar NVIDIA con clave propia y Stop confirmado por el portero]
+
 v0.188 : Sesiones y autores de anotaciones en el historial
 
 Una edición que solo cambiaba anotaciones no formaba su propia sesión ni sumaba a su autor: el historial clasificaba únicamente el contenido del editor. Ahora también cuenta los tramos nuevos del mapa de anotaciones, incluidos borrados, deshacer y formatos futuros. Al llegar una dependencia tardía vuelve a clasificar los tramos anteriores sin cambiar su atribución original. Las sesiones de solo anotaciones muestran el nombre inequívoco de la foto en esa versión o un rótulo genérico; los nombres manuales conservan prioridad y el filtro sigue usando solo esos nombres. La ayuda y la sesión seleccionada aclaran el alcance: Mostrar cambios aún no compara formas y Restaurar conserva las anotaciones actuales. Ver las anotaciones con Mostrar cambios apagado usa el visor histórico existente. Se mantienen filas, caché, permisos y compatibilidad, sin migración ni nuevos bloques. E5 sigue parcial.

@@ -1,5 +1,69 @@
 # Asistente con la clave de cada usuario y servidor MCP (fase 5)
 
+## NVIDIA con clave propia (v0.189)
+
+NVIDIA aparece primero y es la opción inicial de un formulario sin ajustes. Abrir, probar o cancelar conserva los
+ajustes anteriores, incluido el modelo escrito. Test consulta el catálogo y muestra sólo los dos perfiles admitidos;
+listar modelos no comprueba inferencia. Qwen `qwen/qwen3.5-122b-a10b` admite texto y Suggest caption, con máximo 16000
+tokens de salida y thinking desactivado; Llama `meta/llama-3.3-70b-instruct`, sólo texto con máximo 4096. No se deducen
+capacidades por el nombre. Voice conserva su elección entre OpenAI, Gemini y compatible; Dictate to report puede
+usar NVIDIA para ubicar la nota escrita o ya transcrita, nunca para enviar la grabación.
+
+La falta de CORS exige pasar por el portero propio del workspace: dos rutas fijas, GET
+`/assistant/nvidia/models` y POST `/assistant/nvidia/chat/completions`, hacia integrate.api.nvidia.com/v1. El aviso
+identifica portero→NVIDIA. La sesión de Supabase y la clave BYOK viajan separadas. Se comprueban rol vigente, política
+On y acceso RLS a la página en cada chat; links públicos y tokens MCP quedan excluidos. El contexto se captura antes
+de descifrar la clave y se vuelve a comprobar después de cada espera. Sin portero actualizado, sesión, conexión o
+permiso se muestra el error correspondiente; nunca se cambia a una clave global ni a otro workspace.
+
+No se persisten ni registran clave/texto, no se cachea inferencia y no hay reintentos automáticos. Se rechazan destinos
+y parámetros no admitidos y redirecciones; Cancel/Stop y cambio de contexto cancelan el canal del pedido, con deadline
+absoluto 180 s, consultas Supabase 10 s, body 2 MiB, catálogo 1 MiB y stream 8 MiB. El cliente limita cada evento/buffer a 256 KiB
+y texto recibido a 128 Ki caracteres. Caption exige Editar y conserva el JPEG≤1024 px sin EXIF y el aviso por foto.
+Listar≠inferir y una respuesta HTTP 200 no equivale a éxito del pedido. Los términos y disponibilidad dependen de la cuenta NVIDIA; no se promete cuota gratis,
+visión de otros modelos ni éxito de inferencia real sin una clave propia.
+
+### Preparar, pedir y parar chat y Test (v0.189)
+
+Antes de descifrar la clave, el cliente captura el contexto y pide un control al portero. `POST /assistant/nvidia/prepare`
+valida la sesión y el rol antes de asignar un propietario Durable Object por petición, independiente del objeto que
+guarda Drive. Devuelve un id y una capability impredecible ligados al workspace, sesión y clase de pedido. Prepare no
+recibe la clave ni inicia inferencia. Si se para mientras se prepara, el control obtenido se cierra y no se inicia Start.
+
+Start usa ese control una sola vez y abre un canal SSE propio con `X-Shotdocs-Nvidia-Protocol: 1` y `sd.ready`.
+Después vuelve a comprobar sesión, política y acceso a la página antes de contactar NVIDIA. Chat y Test realizan sus
+consultas bajo la misma raíz de ese propietario, con guardas antes y después de cada espera.
+
+**Stop (Parar)** manda `POST /assistant/nvidia/stop` por un canal separado al mismo propietario. No depende de que
+desconectar HTTP o cancelar el reader entregue la orden al servidor. El propietario aborta la raíz antes de escribir
+estado, espera sus operaciones/lectores propios y la confirmación durable de storage antes de responder el ACK. Un
+control ajeno o un Start duplicado rechazado no detiene la operación admitida. `POST /assistant/nvidia/status` permite
+consultar el estado con el mismo control, sin iniciar inferencia ni incluir la clave.
+
+Mientras espera esa confirmación, la interfaz impide pedir otra vez y aplicar. Después distingue cierre confirmado
+por el portero de cierre sólo local sin confirmación; en este último caso el servidor puede seguir trabajando. El
+flag `enable_request_signal` y el cierre de readers se conservan como mecanismos adicionales. Ningún ACK garantiza
+detener procesamiento o cobro que NVIDIA ya haya iniciado.
+
+El control preparado vence a 30 s; Start tiene deadline absoluto 180 s. El propietario conserva sólo metadatos de control
+hasta su vencimiento absoluto 600 s: nunca clave, texto ni foto en storage. Se comprueba vencimiento en cada entrada y
+se usan timer/alarma y cierre idempotente. Esos plazos no prometen purga física exacta a 600 s ni recuperación tras crash.
+
+Los errores posteriores llegan como `sd.error`, con un código fijo y su estado 401/403/429 u otro admitido; no se refleja
+el cuerpo del proveedor, una dirección de redirección ni sus credenciales. Un error de transporte de autenticación es 502,
+no una sesión rechazada 401. RetryAfter se admite sólo para 429 y con un valor acotado; no dispara reintentos.
+
+Chat emite `sd.delta` para la vista previa. Sólo un finish_reason reconocido, `[DONE]` y EOF limpio del proveedor
+permiten emitir `sd.done`; el cliente exige además EOF limpio del canal. Una respuesta cortada queda incompleta y no
+habilita Apply. Un terminal duplicado, texto después del final o evento desconocido también impiden aceptarla.
+Test emite `sd.models`, seguido de `sd.done` y EOF; su lista no cambia ante un error o cancelación. Ambos tipos de
+`sd.done` tienen `usage:{input,output}`; en el catálogo es `{input:null,output:null}`, nunca `usage:null`.
+
+**Alcance comprobado:** consumidores reales contra el Worker/DO SQLite local con pedidos sintéticos, cancelación
+antes y durante consultas/proveedor, aislamiento de controles y vencimiento preparado a 31 s. La UI EN/ES se verificó
+con el editor real y una pasarela simulada, separadamente del Worker local. Todavía no se acreditó inferencia real
+a través de la app con una clave personal, dispositivos físicos, purga física 600 s ni crash. No cierra la fase 5 ni MCP.
+
 **Estado: entregas A1 (v0.118), A2 (v0.126) y A3 (v0.146) implementadas (ver "Cómo quedó A1", "Cómo quedó A2" y
 "Cómo quedó A3" al final; la migración de A2, sin aplicar); la clave sincronizada (D72 → B, `Doc_Clave_Sincronizada.md`),
 entregas S1 (v0.138) y S2 (v0.143) implementadas; la prueba técnica M0 del MCP hecha en lo que no necesita infraestructura real (v0.145:
@@ -18,16 +82,18 @@ de un proyecto), corregidos acá. Ver "Correcciones de la auditoría (2026-10-02
   shorter*, *Translate to…* y una instrucción libre (*Ask…*). La segunda (A2): *Summarize page*, *Translate page* y *Format
   as…* (lista, casillas, tabla, títulos). Imágenes: no en la primera (IA5); en la A3, sugerir el pie de una foto mirándola.
   "Ajustar imágenes" (recortar, achicar, comprimir) no necesita un modelo: pasa al roadmap de fotos.
-- **Proveedores (IA8):** Anthropic, OpenAI, Google (Gemini) y "compatible con OpenAI" (OpenRouter o un modelo local, como
+- **Proveedores (IA8):** NVIDIA, Anthropic, OpenAI, Google (Gemini) y "compatible con OpenAI" (OpenRouter o un modelo local, como
   Ollama o LM Studio). Cada persona pone **su** clave y elige el modelo de la lista que da su proveedor. La app no trae
   ninguna clave ni cobra nada.
-- **La clave (IA1, D-06): en el dispositivo.** No pasa por el portero, y nunca la ve otro miembro ni el dueño: eso es
-  lo que la protege. Se guarda cifrada, pero **el cifrado solo evita que se vea en claro por accidente** (una captura, un
+- **La clave (IA1, D-06): en el dispositivo.** Los proveedores originales no pasan por el portero. NVIDIA es la excepción:
+  la clave y el pedido atraviesan el portero del dueño del workspace hacia NVIDIA, sin guardarse ni registrarse allí.
+  Se guarda cifrada, pero **el cifrado solo evita que se vea en claro por accidente** (una captura, un
   export): quien usa ese navegador, o un script que corra dentro de la app, la puede usar. Por eso la app recomienda un
   tope de gasto en el proveedor. **Cambiada por Lega (D72 → B, 2026-10-02):** además, una copia sincronizada entre los
   dispositivos de la persona, cifrada en el dispositivo con una frase que solo sabe ella y guardada en el Supabase del
   workspace donde la prende (el servidor ve solo lo cifrado). Diseño en `Doc_Clave_Sincronizada.md` (CS1 a CS9).
-- **Cómo viaja (IA3): directo del navegador al proveedor.** Los cuatro aceptan pedidos desde el navegador (CORS probado
+- **Cómo viaja (IA3):** NVIDIA pasa por el portero del workspace porque su endpoint no admite el CORS del navegador.
+  Los cuatro proveedores originales van directo y aceptan pedidos desde el navegador (CORS probado
   el 2026-10-02 desde el origen de la app). Por el portero costaría pedidos del plan gratis y pondría la clave y el texto
   en la infraestructura del dueño sin ganar nada.
 - **Cómo cambia la página (IA4): vista previa, y aplicar es una edición más** que se deshace con Ctrl/⌘+Z, entra al
@@ -71,7 +137,8 @@ de un proyecto), corregidos acá. Ver "Correcciones de la auditoría (2026-10-02
    encima de algo que cambió desde que se pidió. Nada de lo que hace borra filas, archivos ni páginas.
 2. **Nada de tipos de bloque nuevos** (ni propiedades nuevas en la entrega 1): lo que devuelve el modelo se convierte
    solo a los bloques que ya existen, y lo que no se reconoce queda como texto.
-3. **Cada workspace es una isla.** Nada pasa por servidores de Lega. La clave va del dispositivo al proveedor; el MCP
+3. **Cada workspace es una isla.** Nada pasa por servidores de Lega. La clave va del dispositivo al proveedor (NVIDIA,
+   a través del portero propio del workspace); el MCP
    vive en el portero del dueño y entra con el Supabase del workspace.
 4. **Los miembros nunca reciben las claves del dueño** (ni el dueño las de los miembros). No existe una clave del
    workspace.
@@ -231,13 +298,15 @@ retirado desaparece, sin publicar una versión de la app. La lista y la elecció
 
 Directo del navegador al proveedor, con `fetch` y la respuesta por partes (streaming), cancelable con *Stop*.
 
-- **Por el portero** (descartado): cada pedido pasaría por el Worker del dueño (gasta sus 100 000 pedidos diarios del plan
+- **Por el portero** (descartado para los cuatro proveedores originales; necesario para NVIDIA): cada pedido pasaría por el Worker del dueño (gasta sus 100 000 pedidos diarios del plan
   gratis y le pone la clave y el texto de cada miembro en su infraestructura, donde un registro de Cloudflare los podría
   guardar). No gana nada: los cuatro proveedores aceptan el navegador.
 - **Por una función de Supabase** (descartado con IA1-C): sumaría un servicio más a cada workspace y la clave quedaría en
   la base del dueño.
-- **Qué sale del dispositivo:** al proveedor elegido, el texto del pedido (sección 6.2) y nada más. Nada a Lega, nada al
-  portero, nada a Supabase. El pedido no lleva el nombre del workspace ni el del proyecto ni correos.
+- **Qué sale del dispositivo:** al proveedor elegido, el texto del pedido (sección 6.2). Nada a Lega. Con NVIDIA, el portero
+  propio recibe además la clave, la sesión separada y el id de página para comprobar permisos; Supabase recibe solo la
+  sesión y las consultas de permiso/política, nunca la clave ni el contenido del pedido. El upstream NVIDIA no recibe
+  ids de página, nombres del workspace/proyecto ni correos.
 - **Encabezado de Anthropic:** `anthropic-dangerous-direct-browser-access: true` existe justamente para el caso "cada uno
   trae su clave"; el nombre avisa que una clave en el navegador la ve quien tenga las herramientas abiertas, que acá es
   su dueño.
@@ -836,8 +905,9 @@ el reporte.
   workspace (el servidor ve solo lo cifrado).
 - **C.** En Supabase (Vault) sin cifrar de punta a punta, y un servidor llama al proveedor.
 
-**Elegí A porque** la clave nunca sale del dispositivo salvo hacia el proveedor, así que ningún servidor (ni el dueño del
-Supabase) la tiene; cargarla una vez por dispositivo es poco. Dicho con honestidad: en ese navegador, quien lo usa o un
+**Elegí A porque** los proveedores originales reciben la clave directamente y ningún servidor del workspace la guarda.
+La excepción posterior es NVIDIA: la clave atraviesa el portero propio de forma transitoria, sin persistencia ni
+registro (ver entrega NVIDIA al principio). Cargarla una vez por dispositivo es poco. Dicho con honestidad: en ese navegador, quien lo usa o un
 script dentro de la app la puede usar igual; por eso la app recomienda un tope de gasto en el proveedor. C la deja legible
 para el dueño de la base de cada workspace, y B la repartiría en cada workspace donde esté la persona.
 
@@ -879,8 +949,9 @@ de OpenAI.
 - **B.** Por el portero del dueño.
 - **C.** Por una función de Supabase.
 
-**Elegí A porque** los cuatro proveedores aceptan el navegador (probado el 2026-10-02) y así la clave y el texto no pasan
-por la infraestructura del dueño ni gastan su plan gratis. B y C no agregan nada y suman un lugar más por donde pasa todo.
+**Elegí A porque** los cuatro proveedores originales aceptan el navegador (probado el 2026-10-02): su clave y texto
+no atraviesan la infraestructura del dueño ni gastan su plan de Workers. NVIDIA se agregó después con B, portero
+propio transitorio, por ausencia de CORS. Para los proveedores originales B y C suman un intermediario innecesario.
 
 **Si preferís otra:** B se puede sumar para un proveedor que no acepte el navegador, con la clave solo de paso.
 
