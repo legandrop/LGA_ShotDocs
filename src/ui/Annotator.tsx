@@ -284,6 +284,7 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose, onUn
   const [draftText, setDraftText] = useState<string | null>(null);
 
   const dialogRef = useRef<HTMLDivElement>(null);
+  const toolsRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const shapesRef = useRef<SVGSVGElement>(null);
@@ -305,6 +306,27 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose, onUn
   const spaceHeld = useRef(false);
   const measureTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const measure: Measure = useMemo(() => markupMeasure() ?? roughMeasure, []);
+
+  // Al abrir o elegir una herramienta, mostrarla en su tira sin desplazar la foto ni tomar el foco.
+  useLayoutEffect(() => {
+    const strip = toolsRef.current;
+    if (!compact || !strip) return;
+    const reveal = () => {
+      const selected = strip.querySelector<HTMLElement>('[aria-pressed="true"]');
+      if (!selected || strip.clientWidth <= 0) return;
+      const bounds = strip.getBoundingClientRect();
+      const button = selected.getBoundingClientRect();
+      const left = bounds.left + strip.clientLeft;
+      const right = left + strip.clientWidth;
+      const shift = button.left < left ? button.left - left : button.right > right ? button.right - right : 0;
+      if (shift) strip.scrollLeft += shift;
+    };
+    reveal();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(reveal);
+    observer.observe(strip);
+    return () => observer.disconnect();
+  }, [compact, tool]);
 
   // --- el marco, las formas y los topes ------------------------------------------------------------------
 
@@ -1327,7 +1349,7 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose, onUn
     );
   });
   const tools = (
-    <div className="annotator-tools" role="toolbar" aria-label={tr('annotate.tools')}>
+    <div ref={toolsRef} className="annotator-tools" role="toolbar" aria-label={tr('annotate.tools')}>
       {toolButtons}
     </div>
   );

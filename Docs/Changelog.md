@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.193 : El anotador muestra la herramienta elegida en la tira
+
+En una pantalla angosta, el anotador recordaba la última herramienta pero abría la tira desde el principio. Si se había usado Texto o Número, su botón podía quedar fuera de la vista aunque siguiera elegido. Ahora la tira se desplaza lo necesario para mostrar la herramienta activa al abrir, elegir otra o cambiar el ancho disponible. El movimiento queda dentro de ese único contenedor horizontal: no mueve la foto, no toma el foco y no escribe formas ni pasos de deshacer. La tira conserva el deslizamiento manual y la barra de una pantalla ancha mantiene su comportamiento. Se actualizan ayuda y documentación. Las pruebas verifican el componente real en inglés y castellano, el cambio de ancho, la selección y el cierre y reapertura; quitar el revelado hace fallar la misma guarda de visibilidad.
+
+[Mostrar la herramienta elegida en la tira del anotador]
+
 v0.192 : El PDF cuenta las vistas de archivos que salen como marcadores
 
 Sin conexión y sin miniaturas guardadas, la cola podía resolver una vista de archivo como marcador. El PDF lo conservaba, pero la ventana terminaba sin contar esos marcadores: el aviso de menor resolución solo seguía las fotos que se procesaban como imágenes. Ahora el armado registra las vistas de la app representadas por un marcador y lleva esa cantidad a la ventana, aparte de las fotos reducidas y del límite de conversión. El texto distingue singular y plural en inglés y castellano, sin afirmar que falte el original. Se conservan los vectores, los links y las referencias; las tarjetas de adjuntos y los vectores externos no entran en la cuenta. No cambian las descargas ni los topes. Se actualizan ayuda y documentación; las pruebas comprueban la cola real offline, fichas desconocidas, mezclas y cancelar.

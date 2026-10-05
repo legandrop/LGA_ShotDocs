@@ -884,6 +884,13 @@ Auditoría independiente: **aprobado con observaciones**, sin bloqueantes. Lo qu
 | O3 (un `pointercancel` del sistema descarta el trazo en curso), O5 (la tira no se desliza hasta la herramienta elegida) | Al roadmap (P.20) |
 | O4 (el foco en el mismo toque, sin prueba que caiga en jsdom), O6 (la foto rota del arnés) | Sin cambios: el primero va en la lista de Lega; el segundo es del arnés |
 
+**O5 resuelto en v0.193:** al abrir el anotador compacto, la tira muestra la herramienta recordada, aunque esté al final.
+También la revela al elegir otra o cambiar el ancho disponible. Se mueve solamente la tira horizontal: no toma el foco,
+no desplaza la foto y no escribe formas ni pasos de deshacer. El deslizamiento manual sigue disponible. Comprobado con
+el componente real en Chromium sin ventana, EN/ES a 360 y 320 px, selección, cierre/reapertura y documento Yjs intacto;
+la misma guarda de visibilidad falla al quitar el revelado y pasa restaurado. No acredita un teléfono o iPad físicos ni
+cambia la observación O3 sobre `pointercancel`.
+
 ## Copiar y pegar con las anotaciones (D46, v0.132)
 
 Lega cambió AN2 (D46, 2026-10-02): las anotaciones siguen siendo de la foto **en esa página**, pero copiar y pegar una

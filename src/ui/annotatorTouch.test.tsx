@@ -15,7 +15,7 @@ import * as Y from 'yjs';
 import { PHOTO_MARKUP_MAP, readPhotoMarkup, writeFrame } from '../media/markup';
 import { Annotator } from './Annotator';
 import { inputOf, movePoints, routeDown } from './annotatorTouch';
-import { loadPrefs } from './annotatorStyles';
+import { loadPrefs, savePrefs } from './annotatorStyles';
 import { shortcutLabel } from './shortcuts';
 import type { CarreteItem } from './carreteModel';
 import { connect, mountEditor, tick, unmountAll, yText } from './collabHarness';
@@ -440,6 +440,52 @@ describe('una ventana angosta con mouse: la tira del teléfono, con los atajos e
 });
 
 describe('el teléfono: la tira, la hoja y el texto', () => {
+  it.each([true, false])('O5: revela la herramienta recordada y la selección sólo dentro de la tira (compact=%s)', async (compact) => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: compact, media: query, addEventListener() {}, removeEventListener() {} }));
+    const resize = new Set<() => void>();
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(private callback: () => void) {}
+      observe(target: Element) { if (target.classList.contains('annotator-tools')) resize.add(this.callback); }
+      disconnect() { resize.delete(this.callback); }
+    });
+    let width = 200;
+    const originalRect = Element.prototype.getBoundingClientRect;
+    const originalWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')!;
+    Element.prototype.getBoundingClientRect = function () {
+      if (this.classList.contains('annotator-tools')) return rect(10, 760, width, 44);
+      if (this.hasAttribute('data-tool')) {
+        const strip = this.parentElement!;
+        const index = [...strip.children].indexOf(this);
+        return rect(10 + index * 46 - strip.scrollLeft, 760, 44, 44);
+      }
+      return originalRect.call(this);
+    };
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get() { return this.classList.contains('annotator-tools') ? width : originalWidth.get!.call(this); } });
+    try {
+      savePrefs({ ...loadPrefs(), tool: 'number' });
+      const doc = new Y.Doc(); writeFrame(doc, ID, FRAME.w, FRAME.h);
+      const before = Array.from(Y.encodeStateAsUpdate(doc));
+      const { el } = await open(doc);
+      const strip = el.querySelector<HTMLElement>('.annotator-tools')!;
+      expect(strip.scrollLeft).toBe(compact ? 212 : 0);
+      const focus = document.activeElement;
+      tool(el, 'select');
+      expect(strip.scrollLeft).toBe(0);
+      tool(el, 'number');
+      expect(strip.scrollLeft).toBe(compact ? 212 : 0);
+      width = 160;
+      act(() => resize.forEach(fn => fn()));
+      expect(strip.scrollLeft).toBe(compact ? 252 : 0);
+      // Leer el documento y el foco no modifica el recorrido ni sustituye la guarda de visibilidad Native.
+      expect(Array.from(Y.encodeStateAsUpdate(doc))).toEqual(before);
+      expect(document.activeElement).toBe(focus);
+      expect(loadPrefs().tool).toBe('number');
+    } finally {
+      Element.prototype.getBoundingClientRect = originalRect;
+      Object.defineProperty(HTMLElement.prototype, 'clientWidth', originalWidth);
+    }
+  });
+
   it('las herramientas van en la tira de abajo; el punto de color abre la hoja; tocar la foto la cierra sin dibujar', async () => {
     phone();
     const doc = new Y.Doc();
