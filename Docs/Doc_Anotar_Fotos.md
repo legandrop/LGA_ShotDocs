@@ -831,6 +831,20 @@ Auditoría independiente: **no aprobado**, con dos bloqueantes de arreglo chico.
 
 ## Cómo quedó la entrega 3 (el dedo y el lápiz, v0.129)
 
+### Interrupciones del dibujo (O3, v0.195)
+
+Si el sistema envía `pointercancel`, se conserva sólo un dibujo nuevo desarrollado: rectángulo, elipse, flecha o línea
+que supera la tolerancia de su entrada original, o lápiz/marcador con al menos dos puntos distintos. Se usa el último
+movimiento aceptado, nunca las coordenadas, el tipo de puntero ni los modificadores de la cancelación. Queda en un paso
+de Deshacer; un `pointerup` posterior no lo duplica. Esto preserva trabajo interrumpido y puede dejar una marca accidental,
+que se retira con Deshacer. Durante ese dibujo, Escape descarta el borrador y deja abierto el anotador.
+
+Se conservan las cancelaciones de toques, números, selección, movimiento de formas y tiradores; el segundo dedo que
+inicia un pellizco y la prioridad del lápiz siguen descartando el primer borrador. Un marco, documento o foto distintos,
+formato futuro de sólo lectura o tope alcanzado impiden la promoción. Se usa la escritura local, formato y Undo existentes;
+no se recupera un borrador si el proceso muere sin entregar el evento ni se promete persistencia antes de confirmar el
+almacenamiento local. El gesto físico del borde, llamadas y Apple Pencil siguen pendientes en dispositivos reales.
+
 **La pantalla del teléfono y del iPad** (`Annotator.tsx`, con el puntero principal táctil o la ventana de 760 px o
 menos): arriba deshacer, rehacer, borrar, encuadrar y *Done*; abajo una tira con las nueve herramientas (se desliza si
 no entran) y el punto de color, siempre a la vista, con el grosor al lado. El punto abre una hoja con la franja de la

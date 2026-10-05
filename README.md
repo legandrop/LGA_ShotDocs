@@ -133,7 +133,9 @@ In development. What works today:
   people who can edit the page annotate.
 - Annotate photos on a phone or an iPad: the tools sit in a strip at the bottom and the color dot opens the colors and
   thickness. The selected tool stays visible when opening, choosing a tool or resizing the window; the strip can still be swiped.
-  One finger draws, two fingers zoom and move the photo without drawing, and text is typed in a regular box
+  A system interruption preserves a developed new drawing up to its last accepted point; Undo removes it. Escape
+  discards an unfinished drawing without closing the annotator. One finger draws, two fingers zoom and move the photo
+  without drawing, and text is typed in a regular box
   with the phone keyboard. Once you use a pencil (Apple Pencil on the iPad), only the pencil draws and your finger moves
   the photo, like in Notes.
 - In the full-screen viewer, **Download → With annotations** prepares a local JPEG/PNG copy with the page’s drawings at full original dimensions. The original stays untouched, and it works offline with a full local original. Simple static WebP (one VP8 or VP8L chunk) is exported as PNG with its filename and full dimensions shown before saving. Animated WebP and WebP with metadata are rejected without flattening; Original keeps the unchanged bytes. HEIC and other formats, public links, and photos too large for the device (including 48 MP on phones) are not supported yet; Original remains available, with no automatic reduction.

@@ -12,7 +12,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
-import { PHOTO_MARKUP_MAP, readPhotoMarkup, writeFrame } from '../media/markup';
+import { addShape, PHOTO_MARKUP_MAP, readPhotoMarkup, writeFrame } from '../media/markup';
 import { Annotator } from './Annotator';
 import { inputOf, movePoints, routeDown } from './annotatorTouch';
 import { loadPrefs, savePrefs } from './annotatorStyles';
@@ -222,7 +222,7 @@ describe('el anotador con el dedo', () => {
     expect(boxTransform(el)).toBe('translate3d(0px, 0px, 0) scale(1)');
   });
 
-  it('un tercer dedo no rompe el pellizco; un dedo que se cancela (el sistema se quedó el gesto) no escribe', async () => {
+  it('un tercer dedo no rompe el pellizco; una interrupción conserva el rectángulo desarrollado', async () => {
     const doc = new Y.Doc();
     writeFrame(doc, ID, FRAME.w, FRAME.h);
     const { el, stage } = await open(doc);
@@ -235,7 +235,106 @@ describe('el anotador con el dedo', () => {
     ptr(stage, 'pointerdown', 100, 100, { id: 15 });
     ptr(stage, 'pointermove', 300, 300, { id: 15 });
     ptr(stage, 'pointercancel', 300, 300, { id: 15 });
+    expect(shapes(doc)).toHaveLength(1);
+  });
+
+  it.each(['arrow', 'rectangle', 'pencil', 'marker'])('pointercancel conserva %s hasta el último movimiento, una vez y con Undo propio', async (drawing) => {
+    const doc = new Y.Doc();
+    writeFrame(doc, ID, FRAME.w, FRAME.h);
+    const { el, stage } = await open(doc);
+    tool(el, drawing);
+    const updates: unknown[] = [];
+    doc.on('update', (_u, origin) => updates.push(origin));
+    ptr(stage, 'pointerdown', 100, 100);
+    ptr(stage, 'pointermove', 300, 300);
+    expect(updates).toEqual([]);
+    ptr(stage, 'pointercancel', 990, 700, { kind: 'mouse' });
+    const [shape] = shapes(doc);
+    const type = drawing === 'pencil' ? 'freehand_pencil' : drawing === 'marker' ? 'freehand_marker' : drawing;
+    expect(shape).toMatchObject({ type, posX: 400, posY: 400 });
+    if (shape.type === 'arrow') expect(shape.end).toEqual([800, 800]);
+    if (shape.type === 'rectangle') expect(shape.rect).toEqual({ x: 0, y: 0, w: 800, h: 800 });
+    if (shape.type === 'freehand_pencil' || shape.type === 'freehand_marker') expect(shape.points).toEqual([0, 0, 800, 800]);
+    ptr(stage, 'pointerup', 990, 700);
+    expect(updates).toEqual([`sd-markup:${ID}`]);
+    const remote = new Y.Doc();
+    Y.applyUpdate(remote, Y.encodeStateAsUpdate(doc));
+    addShape(remote, ID, 'de-otro', { type: 'line', zValue: 9, posX: 1, posY: 1, startX: 0, startY: 0, endX: 50, endY: 50 });
+    act(() => Y.applyUpdate(doc, Y.encodeStateAsUpdate(remote, Y.encodeStateVector(doc)), 'remote'));
+    act(() => el.querySelector<HTMLButtonElement>('button[aria-label="Undo"]')!.click());
+    expect(shapes(doc).map((s) => s.id)).toEqual(['de-otro']);
+    act(() => el.querySelector<HTMLButtonElement>('button[aria-label="Redo"]')!.click());
+    expect(shapes(doc)).toHaveLength(2);
+    remote.destroy();
+  });
+
+  it('cancel usa tolerancia de la entrada original; punto único, gesto corto y otro puntero no escriben', async () => {
+    const doc = new Y.Doc();
+    writeFrame(doc, ID, FRAME.w, FRAME.h);
+    const { el, stage } = await open(doc);
+    for (const drawing of ['arrow', 'pencil', 'number', 'text']) {
+      tool(el, drawing);
+      ptr(stage, 'pointerdown', 100, 100);
+      if (drawing === 'arrow') ptr(stage, 'pointermove', 105, 100);
+      ptr(stage, 'pointercancel', 900, 600, { kind: 'mouse' });
+      expect(shapes(doc)).toEqual([]);
+    }
+    tool(el, 'arrow');
+    ptr(stage, 'pointerdown', 100, 100);
+    ptr(stage, 'pointermove', 300, 300);
+    ptr(stage, 'pointercancel', 300, 300, { id: 99 });
     expect(shapes(doc)).toEqual([]);
+    ptr(stage, 'pointercancel', 900, 600);
+    expect(shapes(doc)).toHaveLength(1);
+    tool(el, 'select');
+    const before = Y.encodeStateAsUpdate(doc);
+    ptr(stage, 'pointerdown', 200, 200);
+    ptr(stage, 'pointermove', 450, 450);
+    ptr(stage, 'pointercancel', 450, 450);
+    expect(Y.encodeStateAsUpdate(doc)).toEqual(before);
+  });
+
+  it.each(['arrow', 'pencil'])('Escape descarta %s sin cerrar y el siguiente dibujo funciona', async (drawing) => {
+    const doc = new Y.Doc();
+    writeFrame(doc, ID, FRAME.w, FRAME.h);
+    const { el, stage } = await open(doc);
+    tool(el, drawing);
+    ptr(stage, 'pointerdown', 100, 100);
+    ptr(stage, 'pointermove', 300, 300);
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })));
+    expect(el.isConnected).toBe(true);
+    ptr(stage, 'pointercancel', 300, 300);
+    expect(shapes(doc)).toEqual([]);
+    stroke(stage, [100, 100], [300, 300], { id: 2 });
+    expect(shapes(doc)).toHaveLength(1);
+  });
+
+  it.each(['frame', 'future', 'context', 'limit'])('cancel no promueve un borrador invalidado por %s', async (change) => {
+    const doc = new Y.Doc();
+    writeFrame(doc, ID, FRAME.w, FRAME.h);
+    const { el, stage } = await open(doc);
+    tool(el, 'pencil');
+    ptr(stage, 'pointerdown', 100, 100);
+    ptr(stage, 'pointermove', 300, 300);
+    if (change === 'context') {
+      const other = new Y.Doc();
+      writeFrame(other, ID, FRAME.w, FRAME.h);
+      await act(async () => roots.at(-1)!.render(<Annotator doc={other} fileId={ID} name={ITEM.name} item={ITEM} loader={loader} onClose={() => undefined} />));
+      ptr(stage, 'pointercancel', 300, 300);
+      expect(shapes(other)).toEqual([]);
+    } else if (change === 'limit') {
+      act(() => { for (let i = 0; i < 60; i++) addShape(doc, ID, `t${i}`, { type: 'text', zValue: i, posX: 10, posY: 10, text: 'x'.repeat(2000), fontSize: 10 }); });
+      const before = Y.encodeStateAsUpdate(doc);
+      ptr(stage, 'pointercancel', 300, 300);
+      expect(Y.encodeStateAsUpdate(doc)).toEqual(before);
+      return;
+    } else {
+      act(() => map(doc).set(ID, { v: change === 'future' ? 999 : 1, w: 8000, h: 6000 }));
+      await act(async () => tick(10));
+      ptr(stage, 'pointercancel', 300, 300);
+    }
+    expect(shapes(doc)).toEqual([]);
+    expect(el.isConnected).toBe(true);
   });
 
   it('tocar o hacer clic en un tirador sin moverlo no cambia la forma', async () => {
@@ -675,7 +774,9 @@ describe('sin red y con las versiones que siguen abiertas', () => {
     tool(b.el, 'rectangle');
     pinchOpen(a.stage);
     for (const id of [11, 12]) ptr(a.stage, 'pointerup', 500, 375, { id });
-    stroke(a.stage, [500, 375], [700, 375], { id: 60 });
+    ptr(a.stage, 'pointerdown', 500, 375, { id: 60 });
+    ptr(a.stage, 'pointermove', 700, 375, { id: 60 });
+    ptr(a.stage, 'pointercancel', 0, 0, { id: 60 });
     stroke(b.stage, [2100, 100], [2200, 200], { id: 61, kind: 'mouse' });
     expect(shapes(docA).length).toBe(1);
     expect(shapes(docB).length).toBe(1);
@@ -709,7 +810,9 @@ describe('sin red y con las versiones que siguen abiertas', () => {
       writeFrame(doc, ID, FRAME.w, FRAME.h);
       const { el, stage } = await open(doc);
       tool(el, 'pencil');
-      stroke(stage, [100, 100], [300, 250], { id: 70 });
+      ptr(stage, 'pointerdown', 100, 100, { id: 70 });
+      ptr(stage, 'pointermove', 300, 250, { id: 70 });
+      ptr(stage, 'pointercancel', 0, 0, { id: 70 });
       stroke(stage, [100, 400], [300, 450], { id: 11, kind: 'pen' });
       tool(el, 'text');
       ptr(stage, 'pointerdown', 500, 500, { id: 12, kind: 'pen' });

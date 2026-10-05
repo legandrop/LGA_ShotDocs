@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.195 :
+
+Una interrupción del sistema descartaba el dibujo que todavía se estaba trazando sobre una foto, aunque ya se viera una flecha o una línea útil. Ahora se conserva sólo un dibujo nuevo desarrollado hasta su último movimiento aceptado: no se toman las coordenadas ni el tipo de puntero de la cancelación. La tolerancia corresponde al dedo, lápiz o mouse que empezó; un trazo libre necesita dos puntos distintos. Queda un paso de Deshacer y soltar después no lo duplica. Escape descarta el borrador sin cerrar el anotador. Los toques, números, movimientos de formas y el primer dedo de un pellizco mantienen su cancelación. Un cambio de marco o documento, formato futuro o tope alcanzado impide escribir. Se conservan formato, sincronización y anotaciones ajenas. Las interrupciones físicas de Safari y Apple Pencil siguen pendientes.
+
+[Conservar el dibujo desarrollado ante una interrupción del sistema]
+
 v0.194 : Kimi K3 y GLM 5.3 se pueden elegir para texto con NVIDIA
 
 El catálogo de NVIDIA incluía Kimi K3 y GLM 5.3, pero la app sólo admitía los perfiles de Qwen y Llama: los nuevos se descartaban al listar y no se podían guardar ni usar para transformar texto. Ahora se reconocen sus identificadores exactos y se pueden elegir manualmente, con una cota de 16000 tokens de generación y sin enviar fotos ni audio. La elección automática conserva Qwen y después Llama; si sólo aparecen los nuevos, pide elegir. Los ajustes y las claves ya guardados no se sustituyen. No se añaden parámetros de pensamiento ni se presenta la comparación limitada como una preferencia global. Se mantienen el portero, los permisos y los cortes de respuestas incompletas. Las pruebas conectan el panel y el portero con servicios simulados, comprueban guardar y reabrir, y actualizan la ayuda.

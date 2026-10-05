@@ -296,6 +296,8 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose, onUn
   const drag = useRef<Drag | null>(null);
   /** Con qué se apoyó lo que se arrastra ahora (el lápiz manda sobre el dedo; la palma no dibuja). */
   const dragInput = useRef<InputType | null>(null);
+  /** El sujeto y marco donde empezó el borrador: una interrupción no lo transporta a otra foto. */
+  const dragContext = useRef<{ doc: Y.Doc; fileId: string; frame: MarkupFrame | null } | null>(null);
   /** Los dedos apoyados en la foto (en la pantalla), para los gestos de dos dedos. */
   const touches = useRef(new Map<number, { x: number; y: number }>());
   /** El último toque (para el doble toque en un texto o un número, con Select). */
@@ -701,6 +703,14 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose, onUn
         deleteSelected();
         return;
       case 'escape':
+        if (drag.current?.mode === 'draw' || drag.current?.mode === 'stroke') {
+          touches.current.delete(drag.current.pointerId);
+          drag.current = null;
+          dragInput.current = null;
+          dragContext.current = null;
+          redraw();
+          return;
+        }
         if (text) commitText();
         else if (numberEdit) setNumberEdit(null);
         else if (selection.length > 0) setSelection([]);
@@ -851,6 +861,7 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose, onUn
     const begin = (next: Drag) => {
       drag.current = next;
       dragInput.current = input;
+      dragContext.current = { doc, fileId, frame: realFrame };
     };
     // La rueda apretada o la barra espaciadora: mover la foto ampliada.
     if (e.button === 1 || (e.button === 0 && spaceHeld.current)) {
@@ -1012,7 +1023,8 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose, onUn
   };
 
   const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
-    const input = inputOf(e.pointerType);
+    const cancelled = e.type === 'pointercancel';
+    const input = cancelled ? dragInput.current : inputOf(e.pointerType);
     touches.current.delete(e.pointerId);
     if (input === 'touch') setHover(null);
     const d = drag.current;
@@ -1027,10 +1039,17 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose, onUn
       return;
     }
     if (d.pointerId !== e.pointerId) return;
+    const context = dragContext.current;
     drag.current = null;
     dragInput.current = null;
-    const cancelled = e.type === 'pointercancel';
-    if (cancelled || !frame) {
+    dragContext.current = null;
+    const sameFrame = !!realFrame && context?.frame?.v === realFrame.v && context.frame.w === realFrame.w && context.frame.h === realFrame.h;
+    if (!frame || !input || (cancelled && (
+      !canCreate || !canEdit || limitState(measureLimits(doc, fileId)).state === 'full' ||
+      context?.doc !== doc || context.fileId !== fileId || !sameFrame ||
+      (d.mode !== 'draw' && d.mode !== 'stroke') ||
+      (d.mode === 'stroke' && !d.points.some((value, index) => index >= 2 && value !== d.points[index % 2]))
+    ))) {
       redraw();
       return;
     }
