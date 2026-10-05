@@ -541,8 +541,9 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   `20261026120000_comentarios_archivo.sql`, **sin aplicar**: con la base vieja esperan para *Resume*); sigue donde quedó
   sin duplicar; zips rotos y hostiles avisados sin crear nada. Falta: aplicar la migración (con su prueba SQL) y a mano
   ERSO entero con el portero de verdad, Safari y el iPhone (`Doc_Exportar.md`, "Cómo quedó la entrega 3"). Sigue la 4.
-  Quedó de la re-verificación de la 1b (BAJO): una foto de más de 100 MP que hay que pasar a JPEG (girada, PNG, CMYK)
-  sale a 200 ppp y el aviso dice «sin conexión» (llevarla al tope de píxeles de a una y dar su motivo); sin red y sin
+  **Aviso de conversión aclarado (v0.191):** una foto de más de 100 MP que hay que pasar a JPEG (girada, PNG, CMYK)
+  conserva la reducción existente a su ancho impreso; la ventana cuenta aparte ese límite y los originales no disponibles,
+  sin sumar dos veces la misma foto. No cambia los topes ni acredita memoria o impresión física. Quedó de la re-verificación: sin red y sin
   miniaturas en el dispositivo las fotos salen como marcador y la ventana no lo cuenta al terminar (de antes); el tope de
   bajada del original ya vence por 30 s sin recibir bytes (v0.177), y puede durar más de 90 s si avanza; faltan pruebas de que la
   parte siguiente no vuelve a bajar los originales; si la pestaña se cuelga en la parte N, no se puede retomar desde ahí.

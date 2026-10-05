@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.191 : El PDF distingue fotos reducidas por el límite de conversión
+
+Al exportar fotos muy grandes que necesitaban convertirse a JPEG, la ventana decía que sus originales no estaban disponibles aunque los hubiera usado para preparar una copia más chica. El total de fotos en menor resolución mezclaba esa reducción con las que no tenían un original accesible. Ahora el armado conserva un contador separado para el límite de conversión y lo lleva a la ventana: cada causa muestra su cantidad, con singular y plural en inglés y castellano, sin contar dos veces una foto. Smaller file y las páginas reducidas para entrar mantienen sus avisos. Los topes, la forma de convertir y los plazos de descarga no cambian. Se actualizan ayuda y documentación; las pruebas dirigidas comprueban originales presentes y ausentes, mezclas, JPEG derecho y cancelar.
+
+[Distinguir el límite de conversión y los originales no disponibles al exportar PDF]
+
 v0.190 : Download all evita comprobar subcarpetas ya apartadas de una vuelta
 
 Al recorrer muchas subcarpetas, las páginas siguientes volvían a comprobar también las que Download all ya había dejado para después o dado por perdidas. Eso consumía parte del tope de llamadas de cada pedido, aunque la descarga convergía y conservaba lo disponible. Ahora la app manda las apartadas en una lista acotada, sin cambiar la consulta original ni el token de continuación. El portero valida que pertenezcan al conjunto pedido y solo las omite cuando recibe el modo parcial explícito y un token válido. Las carpetas activas conservan sus comprobaciones de pertenencia y el plazo de confianza existente. Una vuelta nueva o un reintento empieza sin omisiones heredadas. Se mantienen el descarte de resultados incompletos, la lista de faltantes, cancelar y la compatibilidad con porteros anteriores. Se actualizan ayuda y documentación.

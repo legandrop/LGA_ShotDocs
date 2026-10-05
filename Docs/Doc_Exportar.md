@@ -1070,7 +1070,12 @@ el portero de verdad (tiempo de bajada y pedidos al Worker: unos dos por foto), 
 - **O2 · Fotos gigantes giradas.** Lo que se pasa a JPEG entero va de a pocas: un semáforo por píxeles
   (`DECODE_PIXELS`, 150 millones en curso: dos fotos de 61 MP, o una sola más grande; una de medidas desconocidas, como
   un HEIC, sola). Más de 100 millones (`MAX_CONVERT_PIXELS`) no se pasa entera: se achica a su ancho impreso desde su
-  propio original, sola, y se cuenta. El peso del JPEG nuevo vuelve a chequearse contra el tope. **Medido de nuevo**
+  propio original, sola, y se cuenta. Desde v0.191, la ventana explica este límite de conversión por separado de los
+  originales no disponibles, con sus cantidades, sin contar una foto en los dos avisos. El total `lowRes` sigue incluyendo
+  ambas causas; `conversionLimited` es solo un contador del armado, no se guarda ni cambia el documento. *Smaller file*
+  y las páginas reducidas para entrar conservan sus avisos existentes. Se verificó el componente con originales de
+  cabecera controlada, mezcla de causas y JPEG derecho; eso no acredita una decodificación de 108 MP ni un dispositivo físico.
+  El peso del JPEG nuevo vuelve a chequearse contra el tope. **Medido de nuevo**
   (arnés `parts.tsx`, Chromium sin ventana, todas giradas): 13 fotos de 50 MP, **+2,1 GB** (la auditoría midió +3,4 GB
   de a cuatro); 13 de 108 MP, **+1,1 GB** (antes +6,6 GB), achicadas desde el original; las de teléfono en partes de
   500 MB, +1,4 a +3,1 GB (como antes).

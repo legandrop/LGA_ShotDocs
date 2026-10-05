@@ -108,8 +108,10 @@ export interface BookPage {
   failReason?: 'error' | 'photos';
   /** Fotos que no llegaron a tiempo (pueden salir en blanco). */
   imagesTimedOut: boolean;
-  /** Con resolución completa: fotos que salieron achicadas (sin su original a mano, o la página sola pasaba el tope). */
+  /** Fotos achicadas por original no disponible, conversión limitada o página que sola pasaba el tope. */
   lowRes: number;
+  /** De las anteriores, limitadas por conversión con su original disponible. */
+  conversionLimited: number;
   /** Sus fotos solas pasaban el tope de un PDF: salieron todas achicadas (avisado arriba del título). */
   shrunkToFit: boolean;
   /** Fotos cuyo original no llegó a tiempo (la bajada pasó su tope): salieron achicadas y la página va a la lista. */
@@ -334,7 +336,7 @@ export async function buildPdf(options: BuildOptions): Promise<PdfBook> {
     views.add(view);
     view.page.append(el('h1', 'page-title', page.title.trim() || t('common.untitled')));
     noteLine(view, t(reason === 'photos' ? 'exportPdf.failedPhotos' : 'exportPdf.failedPage'));
-    place(view, page, { outdated: false, unknown: false, failed: true, failReason: reason, imagesTimedOut: false, lowRes: 0, shrunkToFit: false, timedOut: 0 });
+    place(view, page, { outdated: false, unknown: false, failed: true, failReason: reason, imagesTimedOut: false, lowRes: 0, conversionLimited: 0, shrunkToFit: false, timedOut: 0 });
   };
 
   /** Con el progreso de lo elegido entero (no el de esta parte). */
@@ -422,7 +424,7 @@ export async function buildPdf(options: BuildOptions): Promise<PdfBook> {
         if (shrunk.shrunk + shrunk.full > 0) await imagesLoaded(view.root, options.photoLoadMs ?? 6000);
         const ms = { ...out.ms, photos: t1 - t0, load: performance.now() - t1, ...Object.fromEntries(Object.entries(shrunk.ms).map(([k, v]) => [`photo_${k}`, v])) };
         const lowRes = shrunkToFit ? shrunk.shrunk + shrunk.kept : shrunk.lowRes;
-        place(view, page, { outdated, unknown, failed: false, imagesTimedOut: out.imagesTimedOut, lowRes, shrunkToFit, timedOut: shrunk.timedOut, ms });
+        place(view, page, { outdated, unknown, failed: false, imagesTimedOut: out.imagesTimedOut, lowRes, conversionLimited: shrunk.conversionLimited, shrunkToFit, timedOut: shrunk.timedOut, ms });
       },
       onFailed: (page) => placeFailed(page, 'error'),
     });

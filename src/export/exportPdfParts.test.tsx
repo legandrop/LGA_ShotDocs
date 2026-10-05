@@ -9,6 +9,7 @@ import { ExportDialog } from '../ui/ExportDialog';
 import { appComments } from './exportComments';
 import { ExportEditor } from './exportEditor';
 import { deviceImages, jpegInfo, PhotoLimitError, PixelBudget, shrinkImages, type ImageSource, type Resizer } from './exportImages';
+import * as exportImages from './exportImages';
 import { exportPlan } from './exportPages';
 import { anchorId, buildPdf, deviceLimits, PDF_LIMITS, SMALL_DESKTOP, type BuildOptions, type PdfLimits } from './exportPdf';
 import { writeBlocks } from './testProject';
@@ -483,6 +484,33 @@ async function waitFor(host: HTMLElement, text: string | RegExp) {
 }
 
 describe('exportar 1b: la ventana', () => {
+  it.each([['limit', 1, 0], ['missing', 0, 1], ['mixed', 1, 1], ['straight', 0, 0], ['smaller', 0, 0]] as const)('T26: separa los motivos de fotos al terminar (%s)', async (kind, limited, unavailable) => {
+    stubUrls();
+    photosHaveWidth();
+    const present = jpegBlob(12000, 9000, { orientation: 6 });
+    const count = kind === 'mixed' ? 2 : 1;
+    const originalFor = (id: string) => kind === 'missing' || (kind === 'mixed' && id === ID(2)) ? null : kind === 'straight' ? jpegBlob(12000, 9000) : present;
+    const server = new FakeServer();
+    server.enableMedia();
+    const { device, root } = await photoProject(2, count, server);
+    await device.engine.syncNow();
+    vi.spyOn(device.media, 'resolve').mockResolvedValue('https://thumbs.test/photo.jpg');
+    vi.spyOn(device.media, 'localImage').mockImplementation(async (id) => originalFor(id));
+    vi.spyOn(device.media, 'view').mockResolvedValue({ url: 'https://thumbs.test/photo.jpg', side: 480 });
+    vi.spyOn(device.media, 'source').mockImplementation(async (id) => ({ kind: 'image', name: 'photo.jpg', mime: 'image/jpeg', original: originalFor(id) }));
+    vi.spyOn(exportImages, 'workerResizer').mockReturnValue({ ...fakeResizer(), dispose: () => undefined });
+    const create = ExportEditor.create.bind(ExportEditor);
+    vi.spyOn(ExportEditor, 'create').mockImplementation((options) => create({ ...options, imageTimeoutMs: 0, copyTimeoutMs: 0 }));
+    vi.stubGlobal('print', vi.fn());
+    const host = await mount(device, { kind: 'page', id: root });
+    if (kind === 'smaller') await act(async () => host.querySelector<HTMLInputElement>('.export-options input[type="checkbox"]')!.click());
+    await act(async () => button(host, 'Export PDF')!.click());
+    await waitFor(host, /Ready: \d+ PDF pages?/);
+    expect(host.textContent?.includes('1 photo is at a lower resolution: converting it at full size exceeds the export limit.')).toBe(limited === 1);
+    expect(host.textContent?.includes('1 photo is at a lower resolution: its original was not available')).toBe(unavailable === 1);
+    expect(host.textContent).not.toContain('2 photos are at a lower resolution');
+  });
+
   it('*Smaller file* reemplaza a *Sharp photos* y arranca destildada', async () => {
     const server = new FakeServer();
     server.enableMedia();
@@ -677,11 +705,13 @@ describe('exportar 1b: correcciones de la auditoría', () => {
     });
     expect(out2.full).toBe(0);
     expect(out2.lowRes).toBe(1);
+    expect(out2.conversionLimited).toBe(1);
     expect(r2.draws.every(([w, h]) => w * h < 100_000_000)).toBe(true);
     // Un JPEG derecho gigante sí pasa tal cual (no se decodifica).
     const root3 = viewWithPhotos(1);
     const out3 = await shrinkImages(root3, { source: { best: async () => null, original: async () => jpegBlob(12000, 9000, { size: 44_000_000 }) }, budget: new PixelBudget(1e12, 1e12), resizer: fakeResizer(), full: true });
     expect(out3.full).toBe(1);
+    expect(out3.conversionLimited).toBe(0);
   });
 
   it('O3: sin red y sin la ficha de la foto (no se sabe si es foto), la que sale como miniatura se cuenta igual', async () => {
@@ -694,6 +724,7 @@ describe('exportar 1b: correcciones de la auditoría', () => {
       full: true,
     });
     expect(out.lowRes).toBe(2);
+    expect(out.conversionLimited).toBe(0);
     // Con la cola de verdad: sin ficha (`kind: null`, sin tipo) no se sabe; un adjunto (con tipo) no cuenta.
     const media = {
       localImage: async () => null,

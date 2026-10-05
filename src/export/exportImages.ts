@@ -370,8 +370,10 @@ export interface ShrinkResult {
   kept: number;
   /** Con resolución completa: fotos que salieron con su original (tal cual, o pasado a JPEG del mismo tamaño). */
   full: number;
-  /** Con resolución completa: fotos cuyo original no se pudo usar (sin red, o el navegador no lo abre): achicadas. */
+  /** Con resolución completa: fotos achicadas por original no disponible o por límite de conversión. */
   lowRes: number;
+  /** De las anteriores, originales presentes que superan el límite de conversión a JPEG entero. */
+  conversionLimited: number;
   /** De esas, las que no llegaron porque la bajada pasó su tope de tiempo. */
   timedOut: number;
   /** Milisegundos sumados de cada paso (traer la imagen, abrirla, achicarla), para medir. */
@@ -463,7 +465,7 @@ const BEFORE = 'sdExportSrc';
  */
 export async function shrinkImages(root: HTMLElement, options: ShrinkOptions): Promise<ShrinkResult> {
   const resizer = options.resizer ?? browserResizer;
-  const out: ShrinkResult = { urls: [], shrunk: 0, kept: 0, full: 0, lowRes: 0, timedOut: 0, ms: { best: 0, open: 0, draw: 0 } };
+  const out: ShrinkResult = { urls: [], shrunk: 0, kept: 0, full: 0, lowRes: 0, conversionLimited: 0, timedOut: 0, ms: { best: 0, open: 0, draw: 0 } };
   const gate = pixelGate(options.decodePixels ?? DECODE_PIXELS);
   /** Los originales traídos para esta página (si no entra en la parte, pasan a la siguiente). */
   const fetched = new Map<string, Blob>();
@@ -621,6 +623,7 @@ export async function shrinkImages(root: HTMLElement, options: ShrinkOptions): P
       if (done === 'huge') {
         // Más grande de lo que se puede pasar entera a JPEG: achicada desde su original, sola, y contada.
         out.lowRes++;
+        out.conversionLimited++;
         return shrink(job, original);
       }
       if (options.signal?.aborted) return;

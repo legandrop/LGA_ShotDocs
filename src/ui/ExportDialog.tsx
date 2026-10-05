@@ -308,7 +308,8 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
   const rootSize = plan[0] ? sizeLabel(plan[0].format.size === 'free' ? 'A4' : plan[0].format.size, tr) : 'A4';
   const pages = phase.name === 'ready' ? phase.book.pages : [];
   const count = (which: (p: PdfBook['pages'][number]) => boolean) => pages.filter(which).length;
-  const lowRes = pages.reduce((sum, p) => sum + (p.shrunkToFit ? 0 : p.lowRes), 0);
+  const lowRes = pages.reduce((sum, p) => sum + (p.shrunkToFit ? 0 : p.lowRes - p.conversionLimited), 0);
+  const conversionLimited = pages.reduce((sum, p) => sum + (p.shrunkToFit ? 0 : p.conversionLimited), 0);
   /** Terminó todo lo elegido (la última parte, o el único PDF): ahí va la lista de las que fallaron (D88). */
   const finished = phase.name === 'ready' && phase.book.to >= phase.book.total;
   /** En un táctil, lo listo se suelta solo después de abrir su diálogo (si no, se perdería sin guardar). */
@@ -442,6 +443,7 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
               <p className="muted">{phase.book.to < phase.book.total ? tr('exportDialog.nextPartNote') : tr('exportDialog.lastPart')}</p>
             )}
             {lowRes > 0 && <p className="muted">{tr('exportDialog.lowRes', { count: lowRes })}</p>}
+            {conversionLimited > 0 && <p className="muted">{tr('exportDialog.conversionLimited', { count: conversionLimited })}</p>}
             {count((p) => p.shrunkToFit) > 0 && <p className="muted">{tr('exportDialog.shrunkPages', { count: count((p) => p.shrunkToFit) })}</p>}
             {count((p) => p.imagesTimedOut) > 0 && <p className="muted">{tr('exportDialog.missingPhotos', { count: count((p) => p.imagesTimedOut) })}</p>}
             {count((p) => p.outdated) > 0 && <p className="muted">{tr('exportDialog.outdatedPages', { count: count((p) => p.outdated) })}</p>}
