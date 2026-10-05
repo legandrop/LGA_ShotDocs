@@ -23,7 +23,10 @@ export class NvidiaControl {
     if (signal.aborted) this.abort();
   }
   private async request(path: 'prepare' | 'stop', value: unknown): Promise<unknown> {
-    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 3000);
+    // Prepare incluye validar la sesión (hasta 10 s en el portero) y arrancar el dueño del pedido.
+    // Stop conserva su presupuesto corto, separado de esa preparación.
+    let timedOut = false;
+    const controller = new AbortController(), timer = setTimeout(() => { timedOut = true; controller.abort(); }, path === 'prepare' ? 15000 : 3000);
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined, cancellation: Promise<void> | undefined;
     const cancel = () => { if (reader) cancellation ??= reader.cancel().catch(() => undefined); };
     controller.signal.addEventListener('abort', cancel, { once: true });
@@ -51,7 +54,12 @@ export class NvidiaControl {
       }
       if (response.status !== (path === 'prepare' ? 201 : 200)) throw invalid();
       return json;
-    } catch (err) { if (err instanceof ProviderError) throw err; throw new ProviderError('network', 'The connection was interrupted'); }
+    } catch (err) {
+      if (path === 'prepare' && timedOut) throw new ProviderError('workspace', 'prepare_timeout');
+      if (err instanceof ProviderError) throw err;
+      if (path === 'prepare') throw new ProviderError('workspace', 'prepare_unavailable');
+      throw new ProviderError('network', 'The connection was interrupted');
+    }
     finally { clearTimeout(timer); controller.signal.removeEventListener('abort', cancel); if (reader) { await (cancellation ?? reader.cancel().catch(() => undefined)); reader.releaseLock(); } }
   }
   async prepare(): Promise<NvidiaHandle> {

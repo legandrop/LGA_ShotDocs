@@ -40,6 +40,12 @@ valida la sesión y el rol antes de asignar un propietario Durable Object por pe
 guarda Drive. Devuelve un id y una capability impredecible ligados al workspace, sesión y clase de pedido. Prepare no
 recibe la clave ni inicia inferencia. Si se para mientras se prepara, el control obtenido se cierra y no se inicia Start.
 
+La preparación dispone de 15 s en el cliente: incluye la validación de sesión, que el portero limita a 10 s,
+y el arranque del propietario. Si vence, el aviso identifica al portero y aclara que no se envió la clave a NVIDIA.
+Una interrupción de conexión NVIDIA tampoco sugiere arrancar un modelo local. El pedido Stop conserva su límite
+de 3 s una vez disponible el control; si Prepare estaba pendiente, primero espera su resultado. Ese límite no
+promete que toda la espera visible de Parar dure tres segundos. No se añaden reintentos ni se cambian ajustes guardados.
+
 Start usa ese control una sola vez y abre un canal SSE propio con `X-Shotdocs-Nvidia-Protocol: 1` y `sd.ready`.
 Después vuelve a comprobar sesión, política y acceso a la página antes de contactar NVIDIA. Chat y Test realizan sus
 consultas bajo la misma raíz de ese propietario, con guardas antes y después de cada espera.

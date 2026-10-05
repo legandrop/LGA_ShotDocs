@@ -20,6 +20,8 @@ export const assistant = {
   'assistant.nvidia.outdated': { en: "Update this workspace’s file gateway to use NVIDIA. Your key has not been rejected.", es: "Actualizá el portero de este workspace para usar NVIDIA. No se rechazó tu clave." },
   'assistant.nvidia.pending': { en: "NVIDIA returned a pending request. No answer was applied; automatic polling is not supported.", es: "NVIDIA devolvió un pedido pendiente. No se aplicó una respuesta; no se consulta automáticamente su estado." },
   'assistant.nvidia.unavailable': { en: "The workspace’s NVIDIA gateway is not available. Check the gateway connection and try again.", es: "La pasarela NVIDIA del workspace no está disponible. Revisá la conexión del portero y volvé a intentar." },
+  'assistant.nvidia.prepareTimeout': { en: "The workspace gateway took too long to prepare the NVIDIA request. Your key has not been sent to NVIDIA. Check the gateway connection and try again.", es: "El portero del workspace tardó demasiado en preparar el pedido NVIDIA. Tu clave no se envió a NVIDIA. Revisá la conexión del portero y volvé a intentar." },
+  'assistant.nvidia.network': { en: "Couldn’t connect to this workspace’s NVIDIA gateway. Check the gateway connection and try again.", es: "No se pudo conectar con la pasarela NVIDIA de este workspace. Revisá la conexión del portero y volvé a intentar." },
   'assistant.title': { en: "Assistant", es: "Asistente" },
   'assistant.settings': { en: "Assistant settings", es: "Ajustes del asistente" },
   'assistant.close': { en: "Close the assistant", es: "Cerrar el asistente" },

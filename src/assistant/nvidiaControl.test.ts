@@ -4,6 +4,8 @@ import { createNvidiaContext, readRequestKey } from './nvidiaTransport';
 import { readKey } from './keyStore';
 import { complete, listModels } from './providers';
 import type { Services } from '../services';
+import { errorText } from './errorText';
+import { translate, type Translate } from '../i18n';
 vi.mock('./keyStore', async (load) => ({ ...await load<typeof import('./keyStore')>(), readKey: vi.fn(async () => 'nvapi-SENUELO-descifrado') }));
 
 const destination = { base: 'https://isla-antigua.example', token: 'sesion-de-prueba' };
@@ -18,6 +20,60 @@ const stream = (kind: 'models' | 'chat', terminal = true) => new Response(`event
 afterEach(() => { vi.useRealTimers(); vi.mocked(readKey).mockClear(); });
 
 describe('control explícito NVIDIA unido al consumidor', () => {
+  it('prepare permite validar la sesión durante más de tres segundos antes de leer la clave', async () => {
+    vi.useFakeTimers();
+    const http = vi.fn<typeof fetch>((url, init) => String(url).endsWith('/models') ? Promise.resolve(stream('models')) : new Promise((resolve, reject) => {
+      const timer = setTimeout(() => resolve(json(handle, 201)), 4000);
+      init!.signal!.addEventListener('abort', () => { clearTimeout(timer); reject(new Error('timeout')); }, { once: true });
+    }));
+    const context = fakeContext(http, 'models');
+    const reading = readRequestKey(config, 'sintetico@example.invalid', context).catch((err: unknown) => err);
+    await vi.advanceTimersByTimeAsync(3001);
+    expect(readKey).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(999);
+    expect(await reading).toBe('nvapi-SENUELO-descifrado');
+    expect(http).toHaveBeenCalledTimes(1);
+    expect(await listModels(config, 'clave-senuelo', http, undefined, context)).toHaveLength(1);
+    expect(http.mock.calls.map(([url]) => String(url).split('/').at(-1))).toEqual(['prepare', 'models']);
+    await context.close();
+  });
+  it('prepare sin respuesta vence a los quince segundos sin leer clave ni enviar start', async () => {
+    vi.useFakeTimers();
+    const http = vi.fn<typeof fetch>((_url, init) => new Promise((_resolve, reject) => {
+      init!.signal!.addEventListener('abort', () => reject(new Error('timeout')), { once: true });
+    }));
+    const context = fakeContext(http, 'models');
+    const reading = readRequestKey(config, 'sintetico@example.invalid', context).catch((err: unknown) => err);
+    await vi.advanceTimersByTimeAsync(15000);
+    const err = await reading;
+    expect(err).toMatchObject({ kind: 'workspace', message: 'prepare_timeout' });
+    for (const lang of ['en', 'es'] as const) {
+      const tr = ((key, params) => translate(lang, key, params)) as Translate;
+      expect(errorText(err, 'NVIDIA', tr)).toBe(translate(lang, 'assistant.nvidia.prepareTimeout'));
+    }
+    await context.close(); expect(readKey).not.toHaveBeenCalled(); expect(http).toHaveBeenCalledTimes(1);
+  });
+  it('Stop durante prepare lento espera su handle y lo cierra sin clave ni start tardío', async () => {
+    vi.useFakeTimers(); const controller = new AbortController(), states: string[] = [];
+    const http = vi.fn<typeof fetch>(async (url) => String(url).endsWith('/prepare')
+      ? new Promise<Response>((resolve) => setTimeout(() => resolve(json(handle, 201)), 4000)) : json(ack));
+    const control = new NvidiaControl(controller.signal, async () => destination, () => {}, 'models', http, (state) => states.push(state));
+    const prepared = control.prepare().catch((err: unknown) => err);
+    await vi.advanceTimersByTimeAsync(5); controller.abort();
+    await vi.advanceTimersByTimeAsync(3995); await control.close();
+    expect(await prepared).toMatchObject({ kind: 'aborted' });
+    expect(states).toEqual(['stopping', 'confirmed']);
+    expect(http.mock.calls.map(([url]) => String(url).split('/').at(-1))).toEqual(['prepare', 'stop']);
+    expect(readKey).not.toHaveBeenCalled();
+  });
+  it('una conexión fallida de prepare se atribuye al portero sin leer la clave', async () => {
+    const context = fakeContext(async () => { throw new TypeError('Failed to fetch'); }, 'models');
+    const err = await context.prepare().catch((error: unknown) => error);
+    expect(err).toMatchObject({ kind: 'workspace', message: 'prepare_unavailable' });
+    const tr = ((key, params) => translate('en', key, params)) as Translate;
+    expect(errorText(err, 'NVIDIA', tr)).toBe(translate('en', 'assistant.nvidia.network'));
+    await context.close(); expect(readKey).not.toHaveBeenCalled();
+  });
   it('readRequestKey no descifra antes del handle admitido', async () => {
     const entered = deferred<void>(), prepared = deferred<Response>();
     const http: typeof fetch = async (url) => { if (String(url).endsWith('/prepare')) { entered.resolve(); return prepared.promise; } return json({ ...ack, rootAborted: false }); };

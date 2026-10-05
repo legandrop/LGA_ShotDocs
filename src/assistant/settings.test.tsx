@@ -43,14 +43,14 @@ function provider() {
   return calls;
 }
 
-async function mount(): Promise<HTMLElement> {
+async function mount(extra: Partial<Services> = {}): Promise<HTMLElement> {
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
   roots.push(root);
   act(() =>
     root.render(
-      <ServicesContext.Provider value={{ user: { id: 'u1', email: EMAIL } } as unknown as Services}>
+      <ServicesContext.Provider value={{ user: { id: 'u1', email: EMAIL }, ...extra } as unknown as Services}>
         <AssistantSettings />
       </ServicesContext.Provider>,
     ),
@@ -78,6 +78,33 @@ async function click(el: HTMLElement) {
 }
 
 describe('los ajustes de un proveedor compatible', () => {
+  const nvidiaServices = () => ({
+    workspace: { config: { localKey: 'isla-sintetica' } },
+    client: { from: () => ({ select: () => ({ maybeSingle: async () => ({ data: { media_url: 'https://portero.example' }, error: null }) }) }),
+      auth: { getSession: async () => ({ data: { session: { access_token: 'sesion-sintetica' } } }) } },
+  }) as unknown as Partial<Services>;
+  it('Test NVIDIA sin clave conserva el aviso y no consulta el catálogo ni guarda ajustes', async () => {
+    const id = 'a'.repeat(64), paths: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: RequestInfo | URL) => {
+      const path = new URL(String(url)).pathname; paths.push(path);
+      const prepare = path.endsWith('/prepare');
+      return new Response(JSON.stringify(prepare
+        ? { v: 1, id, capability: 'C'.repeat(43), prepareExpiresAt: 30000, retentionExpiresAt: 600000 }
+        : { v: 1, id, state: 'stopped', rootAborted: true, cleanupJoined: true }), { status: prepare ? 201 : 200 });
+    }));
+    const host = await mount(nvidiaServices()); await click(button(host, 'Test'));
+    expect(host.querySelector('[role="status"]')?.textContent).toContain('NVIDIA');
+    expect(host.querySelector('[role="status"]')?.textContent).toContain('key');
+    expect(paths).toEqual(['/assistant/nvidia/prepare', '/assistant/nvidia/stop']);
+    expect(await loadSettings(EMAIL)).toBeNull();
+  });
+  it('Test NVIDIA muestra la conexión al portero sin sugerir un modelo local', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
+    const host = await mount(nvidiaServices()); await click(button(host, 'Test'));
+    const message = host.querySelector('[role="status"]')?.textContent;
+    expect(message).toContain('workspace’s NVIDIA gateway'); expect(message).not.toContain('local model');
+    expect(button(host, 'Test').disabled).toBe(false); expect(await loadSettings(EMAIL)).toBeNull();
+  });
   it.each(['moonshotai/kimi-k3', 'z-ai/glm-5.3'])('T27: guardar y reabrir el modelo manual %s conserva clave y ajustes', async model => {
     await saveSettings(EMAIL, { provider: 'nvidia', model: 'qwen/qwen3.5-122b-a10b', models: [] }, KEY);
     const calls = provider();

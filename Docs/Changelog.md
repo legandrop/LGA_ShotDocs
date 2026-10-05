@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.196 :
+
+Probar NVIDIA podía cortar una preparación válida del portero antes de consultar el catálogo y mostrar un error genérico que sugería revisar un modelo local. La preparación compartía el límite de tres segundos de Parar, aunque la validación de sesión del portero dispone de diez. Ahora la preparación espera hasta quince segundos y conserva un límite separado de tres para el pedido de parada. Los avisos distinguen la preparación vencida y la conexión al portero; el primero aclara que todavía no se envió la clave a NVIDIA. La clave se lee después del control admitido. Parar durante la espera sigue cerrando ese control sin iniciar un pedido tardío. Se conservan rechazos de sesión, confirmación de parada, catálogo completo y ajustes guardados. La ayuda describe la espera.
+
+[Separar la espera de preparación NVIDIA del pedido de parada]
+
 v0.195 :
 
 Una interrupción del sistema descartaba el dibujo que todavía se estaba trazando sobre una foto, aunque ya se viera una flecha o una línea útil. Ahora se conserva sólo un dibujo nuevo desarrollado hasta su último movimiento aceptado: no se toman las coordenadas ni el tipo de puntero de la cancelación. La tolerancia corresponde al dedo, lápiz o mouse que empezó; un trazo libre necesita dos puntos distintos. Queda un paso de Deshacer y soltar después no lo duplica. Escape descarta el borrador sin cerrar el anotador. Los toques, números, movimientos de formas y el primer dedo de un pellizco mantienen su cancelación. Un cambio de marco o documento, formato futuro o tope alcanzado impide escribir. Se conservan formato, sincronización y anotaciones ajenas. Las interrupciones físicas de Safari y Apple Pencil siguen pendientes.
