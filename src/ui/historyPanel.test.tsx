@@ -14,6 +14,10 @@ import { FakeRemote, FakeServer, makeDevice, type Device } from '../sync/testing
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { HistoryPanel, mergeRows, recentOther } from './HistoryPanel';
 import { canSeeHistory, closeHistory, registerRestoreTarget } from './historyUi';
+import { addShape, PHOTO_MARKUP_MAP, writeFrame } from '../media/markup';
+import { BlockNoteEditor, BlockNoteSchema, defaultBlockSpecs } from '@blocknote/core';
+import { withCollaboration } from '@blocknote/core/yjs';
+import { compareAnnotations } from './historyAnnotations';
 
 // La pantalla del historial (P.18, Docs/Doc_Historial.md, entrega 1) montada contra el servidor en memoria: la lista
 // con quién y cuándo, sin red, sin permiso, lo sin subir y el camino de restaurar (que pide el editor de la página).
@@ -615,6 +619,106 @@ class CountingWorker {
     this.terminated = true;
   }
 }
+
+/** Retiene payloads reales del Worker para el recorrido sesión → aparte → resolución tardía. */
+class HoldingAnnotationWorker extends CountingWorker {
+  static holding = true;
+  static held: { resolve(): void; reject(): void }[] = [];
+  override postMessage(message: unknown) {
+    const { id, req } = message as { id: number; req: HistoryRequest };
+    if (req.op === 'version' && HoldingAnnotationWorker.holding) {
+      HoldingAnnotationWorker.held.push({
+        resolve: () => super.postMessage(message),
+        reject: () => this.onmessage?.({ data: { id, ok: false, error: 'fallo dirigido del par' } }),
+      });
+    } else super.postMessage(message);
+  }
+}
+
+describe('comparación de dibujos históricos', () => {
+  it('el esquema anterior conserva referencias y mapas al abrir después de la comparación', async () => {
+    const { a, pageId } = await setup({ photo: true });
+    const current = await a.docs.open(pageId);
+    writeFrame(current, TRASHED_FILE, 1920, 1080);
+    addShape(current, TRASHED_FILE, 'arrow', { type: 'arrow', startX: 0, startY: 0, endX: 400, endY: 200 });
+    const old = new Y.Doc(), empty = new Y.Doc(); Y.applyUpdate(old, Y.encodeStateAsUpdate(current));
+    const before = old.getMap(PHOTO_MARKUP_MAP).toJSON();
+    expect(compareAnnotations(empty, old).cards).toHaveLength(1);
+    const { audio: _a, video: _v, file: _f, ...oldSpecs } = defaultBlockSpecs;
+    const oldSchema = BlockNoteSchema.create({ blockSpecs: oldSpecs });
+    const editor = BlockNoteEditor.create(withCollaboration({ schema: oldSchema, collaboration: { fragment: old.getXmlFragment(CONTENT_FRAGMENT), user: { name: 'Legacy', color: '#000' } } }));
+    const host = document.createElement('div'); document.body.append(host);
+    try {
+      await act(async () => editor.mount(host)); await settle(50);
+      expect(JSON.stringify(editor.document)).toContain(`sdmedia://${TRASHED_FILE}`);
+      expect(old.getMap(PHOTO_MARKUP_MAP).toJSON()).toEqual(before);
+      expect(current.getMap(PHOTO_MARKUP_MAP).toJSON()).toEqual(before);
+    } finally { await act(async () => editor.unmount()); old.destroy(); empty.destroy(); a.docs.close(pageId); }
+  });
+  it('una fila ilegible mantiene el aviso parcial y no anuncia cuentas de formas', async () => {
+    prefs.set({ language: 'en' });
+    const { a, pageId, server } = await setup({ photo: true });
+    server.now = () => Date.parse('2026-09-30T18:00:00Z');
+    const document = await a.docs.open(pageId);
+    writeFrame(document, TRASHED_FILE, 1920, 1080);
+    addShape(document, TRASHED_FILE, 'arrow', { type: 'arrow', startX: 0, startY: 0, endX: 400, endY: 200 });
+    await a.docs.flush(pageId); await a.engine.syncNow(); a.docs.close(pageId);
+    const value = services(a, server.ownerId), read = value.remote.pageHistory.bind(value.remote);
+    value.remote.pageHistory = async (...args) => {
+      const rows = await read(...args), last = rows.at(-1);
+      return args[1] === 0 && last ? [...rows, { ...last, id: last.id + 1, seq: last.seq + 1, data: new Uint8Array([255]) }] : rows;
+    };
+    const host = await mount(value, pageId);
+    expect(host.querySelector('.history-annotations')?.textContent).toContain('Partial annotation comparison');
+    expect(host.querySelector('.history-annotations')?.textContent).not.toContain('Added:');
+    expect(host.textContent).toContain(t('history.unreadable', { count: 1 }));
+  });
+  it.each(['success', 'rejection'])('aparte invalida payloads tardíos (%s); volver a la misma sesión carga un par nuevo', async (ending) => {
+    prefs.set({ language: 'en' });
+    const { a, pageId, server } = await setup({ photo: true });
+    server.settings!.schemaVersion = 20;
+    server.now = () => Date.parse('2026-09-30T18:00:00Z');
+    const document = await a.docs.open(pageId);
+    writeFrame(document, TRASHED_FILE, 1920, 1080);
+    addShape(document, TRASHED_FILE, 'arrow', { type: 'arrow', startX: 0, startY: 0, endX: 400, endY: 200, strokeColor: '#123456' });
+    await a.docs.flush(pageId); await a.engine.syncNow();
+    const before = Y.encodeStateAsUpdate(document);
+    const value = services(a, server.ownerId);
+    value.remote.linkAside = async () => [{ id: 'aside-1', page_id: pageId, link_id: 'link-1', link_page_id: pageId, author: 'Visitor', created_at: '2026-09-30T18:30:00Z', decided_at: null, bytes: 2, reason: 'link_revoked' }];
+    value.remote.linkUpdateBytes = async () => new Uint8Array([0, 0]);
+    const g = globalThis as { Worker?: unknown }, saved = g.Worker;
+    HoldingAnnotationWorker.holding = true; HoldingAnnotationWorker.held = []; g.Worker = HoldingAnnotationWorker;
+    try {
+      const host = await mount(value, pageId);
+      expect(HoldingAnnotationWorker.held.length).toBeGreaterThan(1);
+      const aside = host.querySelector<HTMLButtonElement>('.history-aside-row .history-session');
+      expect(aside).not.toBeNull();
+      await act(async () => aside!.click());
+      const released = HoldingAnnotationWorker.held.splice(0);
+      await act(async () => released.forEach((reply) => ending === 'success' ? reply.resolve() : reply.reject()));
+      await settle(200);
+      expect(host.querySelector('.history-aside')).not.toBeNull();
+      expect(host.querySelector('.history-annotations')).toBeNull();
+      expect(host.textContent).not.toContain('Annotation comparison unavailable');
+      HoldingAnnotationWorker.holding = false;
+      const session = [...host.querySelectorAll<HTMLButtonElement>('.history-session')].find((button) => !button.closest('.history-aside-row'))!;
+      await act(async () => session.click()); await settle(250);
+      expect(host.querySelector('.history-aside')).toBeNull();
+      expect(host.querySelector('.history-annotations')).not.toBeNull();
+      expect(host.querySelector('.history-annotation-pair')?.textContent).toContain('Before');
+      expect(host.querySelector('.history-annotation-pair')?.textContent).toContain('Selected version');
+      expect(host.querySelector('.history-annotation-drawing [stroke="#123456"]')).not.toBeNull();
+      expect(host.querySelector('.history-page .history-annotations')).toBeNull();
+      expect(Y.encodeStateAsUpdate(document)).toEqual(before);
+      expect(document.getMap(PHOTO_MARKUP_MAP).size).toBe(2);
+      const toggle = host.querySelector<HTMLInputElement>('.history-changes input')!;
+      await act(async () => toggle.click()); await settle(150);
+      expect(host.querySelector('.history-annotations')).toBeNull();
+      await act(async () => toggle.click()); await settle(150);
+      expect(host.querySelector('.history-annotations')).not.toBeNull();
+    } finally { g.Worker = saved; a.docs.close(pageId); }
+  });
+});
 
 /** Un evento de copiar con un portapapeles en memoria (jsdom no tiene `ClipboardEvent`). */
 function copyEvent(data: Map<string, string>): Event {

@@ -4,7 +4,7 @@
 
 Las ediciones de anotaciones cuentan como cambios de la página al formar sesiones y mostrar autores. Las sesiones de solo anotaciones llevan **Annotated nombre / Anotó nombre** si el nombre de su foto es inequívoco en el snapshot final de esa sesión; en otro caso, **Annotations changed / Cambios en anotaciones**. Se conserva el nombre histórico aunque después se renombre o retire la foto. Un nombre manual de versión tiene prioridad, y el filtro de versiones con nombre sigue usando solo nombres manuales. No se busca el nombre en otro proyecto ni se consulta Drive.
 
-Esta primera parte no cambia la restauración ni la comparación: apagar **Show changes** deja ver las anotaciones del visor histórico limpio existente; con esa opción prendida todavía no se comparan formas. **Restore** conserva las anotaciones actuales. La pantalla y la ayuda lo indican. Recuperar una forma desde la restauración y comparar las anotaciones siguen pendientes; tampoco se cierran las comprobaciones físicas. Detalle del cálculo y compatibilidad en `Doc_Historial.md`, "Sesiones de anotaciones".
+Esta primera parte no cambiaba la restauración ni la comparación. El subtramo siguiente agrega **Annotation changes**: con **Show changes** compara los dibujos soportados de la versión anterior y la seleccionada, sin cargar originales ni atribuir formas a personas. Las referencias ausentes y los datos parciales se anuncian explícitamente. Apagar la opción conserva el visor histórico limpio. **Restore** conserva las anotaciones actuales; recuperar formas mediante restauración y las comprobaciones físicas siguen pendientes. Detalle en `Doc_Historial.md`, "Comparar dibujos con Show changes".
 
 ## Buscar texto de anotaciones (v0.187, E5 parcial)
 

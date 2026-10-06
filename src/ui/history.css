@@ -1,5 +1,17 @@
 /* El historial de versiones (P.18, HistoryPanel.tsx). Se baja con su pantalla. */
 
+.history-annotations { margin: 24px 0; padding: 16px; border: 1px solid var(--border); border-radius: 8px; }
+.history-annotations h2 { margin: 0 0 8px; font-size: 16px; }
+.history-annotation-card { margin-top: 12px; border-top: 1px solid var(--border); }
+.history-annotation-toggle { display: flex; justify-content: space-between; gap: 12px; width: 100%; padding: 12px 0; background: transparent; color: var(--text); text-align: left; }
+.history-annotation-toggle > span:first-child { overflow-wrap: anywhere; }
+.history-annotation-content { padding-bottom: 12px; }
+.history-annotation-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+.history-annotation-pair h3 { margin: 8px 0; font-size: 13px; }
+.history-annotation-drawing { position: relative; width: 100%; background: #b9b9b9; border: 1px solid var(--border); }
+.history-annotation-drawing > svg.sd-markup { position: absolute; inset: 0; width: 100%; height: 100%; }
+@media (max-width: 600px) { .history-annotation-pair { grid-template-columns: minmax(0, 1fr); } }
+
 /* Los colores de cada persona: se leen en el tema claro y en el oscuro (por orden de aparición en la página). */
 :root {
   --hist-1: #2f6fb3;

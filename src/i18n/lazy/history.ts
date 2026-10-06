@@ -4,11 +4,24 @@ import type { Dict } from '../types';
 // El historial de versiones de una página (P.18, Docs/Doc_Historial.md). Se carga aparte, con su pantalla.
 
 export const history = {
+  'history.annotationsTitle': { en: "Annotation changes", es: "Cambios en anotaciones" },
+  'history.annotationsScope': { en: "Drawings only. Compares supported drawings with the previous version; photos are not loaded.", es: "Sólo dibujos. Compara dibujos soportados con la versión anterior; no carga las fotos." },
+  'history.annotationsBefore': { en: "Before", es: "Antes" },
+  'history.annotationsSelected': { en: "Selected version", es: "Versión elegida" },
+  'history.annotationsAbsent': { en: "Photo not in this version", es: "La foto no está en esta versión" },
+  'history.annotationsUnavailable': { en: "These annotations cannot be shown", es: "Estas anotaciones no se pueden mostrar" },
+  'history.annotationsEmpty': { en: "No supported drawings", es: "Sin dibujos soportados" },
+  'history.annotationsPartial': { en: "Partial annotation comparison: some data cannot be represented or exceeds drawing limits.", es: "Comparación parcial: algunos datos no se pueden representar o superan los límites de dibujo." },
+  'history.annotationsUnchanged': { en: "No changes to displayed annotations", es: "Sin cambios en las anotaciones representables" },
+  'history.annotationsPhoto': { en: "Photo · {id}", es: "Foto · {id}" },
+  'history.annotationsCounts': { en: "Added: {added} · Removed: {removed} · Changed: {changed}", es: "Agregadas: {added} · Borradas: {removed} · Cambiadas: {changed}" },
+  'history.annotationsFrame': { en: "Drawing frame changed", es: "Cambió el marco del dibujo" },
+  'history.annotationsCompareFailed': { en: "Annotation comparison unavailable", es: "La comparación de anotaciones no está disponible" },
   'history.annotated': { en: "Annotated {name}", es: "Anotó {name}" },
   'history.annotationsChanged': { en: "Annotations changed", es: "Cambios en anotaciones" },
   'history.annotationsPending': {
-    en: "Show changes does not compare annotations yet. Restore keeps the current annotations.",
-    es: "Mostrar cambios todavía no compara anotaciones. Restaurar conserva las anotaciones actuales.",
+    en: "Show changes compares supported drawings separately from the photos. Restore keeps the current annotations.",
+    es: "Mostrar cambios compara los dibujos soportados por separado de las fotos. Restaurar conserva las anotaciones actuales.",
   },
   'history.title': { en: "Version history", es: "Historial de versiones" },
   'history.back': { en: "Back to the page", es: "Volver a la página" },

@@ -45,6 +45,8 @@ import { HistoryAside } from './HistoryAside';
 import { useLinkAside } from './linkAside';
 import type { LinkAsideRow } from '../sync/linkAdmitApi';
 import { historyServices } from './historyServices';
+import { AnnotationAttempt, compareAnnotations, type AnnotationComparison } from './historyAnnotations';
+import { HistoryAnnotationChanges } from './HistoryAnnotationChanges';
 import { closeHistory, requestRestore, restoreTargetSettled } from './historyUi';
 import { dismissNotice, notify } from './notice';
 import { BlockEditor } from './PageEditor';
@@ -384,6 +386,48 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
   const chosenName = session && ready ? (sessionLabels(session, ready.rows, ready.versions).named?.label ?? null) : null;
   const versionKey = session ? String(session.seq) : '';
   const changesKey = session ? `${session.seq}:${index > 0 ? sessions[index - 1].seq : 0}` : '';
+
+  // Los mapas se leen de versiones limpias: la unión del editor no contiene photoMarkup.
+  const annotationAttempt = useRef(new AnnotationAttempt());
+  const [annotationPair, setAnnotationPair] = useState<{
+    key: string; pageId: string; token: number; builder: HistoryEngine; rows: HistoryRow[]; summary: HistorySummary;
+    comparison: AnnotationComparison | null; failed: boolean;
+  } | null>(null);
+  const annotationAllowed = showChanges && !!session && !asideRow && asideChosen === null;
+  useEffect(() => {
+    const attempt = annotationAttempt.current;
+    const token = attempt.start();
+    if (!annotationAllowed || !builder || !ready || !session) {
+      setAnnotationPair(null);
+      return () => attempt.invalidate();
+    }
+    const previous = index > 0 ? sessions[index - 1].seq : null;
+    const pairContext = { key: changesKey, pageId, token, builder, rows: ready.rows, summary: ready.summary };
+    Promise.all([builder.version(session.seq), previous === null ? null : builder.version(previous)]).then(
+      ([selected, before]) => {
+        if (!attempt.current(token)) return;
+        const a = new Y.Doc(), b = new Y.Doc();
+        try {
+          if (before) Y.applyUpdate(a, before.update);
+          Y.applyUpdate(b, selected.update);
+          const comparison = compareAnnotations(a, b);
+          if (ready.summary.unreadable) {
+            comparison.partial = true;
+            comparison.cards.forEach((card) => { card.partial = true; card.counts = false; });
+          }
+          if (attempt.current(token)) setAnnotationPair({ ...pairContext, comparison, failed: false });
+        } catch {
+          if (attempt.current(token)) setAnnotationPair({ ...pairContext, comparison: null, failed: true });
+        } finally { a.destroy(); b.destroy(); }
+      },
+      () => {
+        if (attempt.current(token)) setAnnotationPair({ ...pairContext, comparison: null, failed: true });
+      },
+    );
+    return () => attempt.invalidate();
+  }, [annotationAllowed, builder, pageId, changesKey, ready?.rows, ready?.summary]);
+  const annotations = annotationAllowed && annotationPair?.pageId === pageId && annotationPair.key === changesKey && annotationPair.builder === builder &&
+    annotationPair.rows === ready?.rows && annotationPair.summary === ready?.summary ? annotationPair : null;
 
   // El documento de la versión elegida (lo arma el Worker): en memoria, nunca se guarda ni se sube.
   const [picked, setPicked] = useState<{ key: string; doc: Y.Doc | null; orphans: HistoryOrphan[]; error: string | null } | null>(null);
@@ -957,6 +1001,7 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
           {session?.annotation && <p className="banner history-annotations-notice">{tr('history.annotationsPending')}</p>}
           {(unknown || shapeOk === false) && <p className="banner">{tr('history.partial')}</p>}
           {current?.error && <p className="banner">{tr('history.versionFailed', { reason: current.error })}</p>}
+          {annotations?.failed && <p className="banner">{tr('history.annotationsCompareFailed')}</p>}
           {/* Mientras se arma la versión, o su unión con los cambios. */}
           {asideRow && <HistoryAside row={asideRow} />}
           {session && !asideRow && (!current || waitingUnion) && <p className="muted history-version-loading">{tr('history.loadingVersion')}</p>}
@@ -1018,6 +1063,7 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
               </ServicesContext.Provider>
             </article>
           )}
+          {annotations?.comparison && <HistoryAnnotationChanges key={annotations.token} comparison={annotations.comparison} />}
         </section>
         <aside className="history-list" aria-label={tr('history.versions')} ref={listRef}>
           {/* En el teléfono la lista va sola (sin la versión): el aviso de lo guardado va también acá. */}
@@ -1059,6 +1105,8 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
             aside={asideHere}
             asideChosen={asideChosen}
             onPickAside={(id) => {
+              annotationAttempt.current.invalidate();
+              setAnnotationPair(null);
               setAsideChosen(id);
               setMessage(null);
               setPane('version');

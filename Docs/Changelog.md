@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.203 :
+
+Las sesiones de anotaciones ya figuraban en el historial, pero Mostrar cambios sólo comparaba el editor y no permitía ver qué dibujos cambiaron. Ahora una sección separada muestra Antes y Versión elegida con los dibujos soportados de cada foto, sin cargar originales. Lee dos copias históricas limpias y compara formas por sus identificadores y campos representables; conserva marcos, colores y nombres históricos, sin atribuir formas a personas. Los datos futuros, ilegibles o que exceden los límites se anuncian como parciales y omiten las cuentas. Una foto ausente no se confunde con formas borradas. Sólo una tarjeta expandida dibuja sus dos vistas. Seleccionar una entrada apartada invalida la carga inmediatamente, y las respuestas tardías no la reponen. La comparación queda fuera del editor, su portapapeles y exportación. Restaurar conserva las anotaciones actuales; la entrega cinco sigue parcial.
+
+[Comparar dibujos de dos versiones históricas sin modificar las anotaciones]
+
 v0.202 :
 
 Preparar un PDF podía copiar el título anterior mientras su campo todavía esperaba guardar, o tomar el documento antes de recibir el sobrante de un título largo. Ahora Export PDF, las partes siguientes y Export again preparan las escrituras locales y esperan hasta ocho segundos su confirmación y la transferencia habitual del sobrante al documento. Si falla el guardado o cambia el contexto, la ventana se conserva sin iniciar otro PDF; Cancel invalida la preparación sin cancelar una escritura aceptada. Títulos, permisos, páginas y opciones se releen después de esperar. La parte siguiente conserva el libro anterior si cambió el orden, la estructura, el formato o las opciones que determinan el corte, y ofrece reiniciar explícitamente. Se protegen avance, resultados tardíos e impresión frente a otro dueño. No cambia el zip, la reimportación ni las salidas externas.

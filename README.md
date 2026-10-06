@@ -61,7 +61,7 @@ its own project: a tree of pages you own.
 
 In development. What works today:
 
-- Annotation edits count in version-history sessions and authors. Annotation-only sessions show the photo name from that version when it is unambiguous; manual version names take priority. Turn Show changes off to view the existing historical annotations. Comparing annotations and restoring their map remain pending: Restore keeps the current annotations.
+- Annotation edits count in version-history sessions and authors. Annotation-only sessions show the photo name from that version when it is unambiguous; manual version names take priority. **Show changes** compares supported drawings in separate **Before / Selected version** panels, without loading the original photo or attributing individual shapes to an author. Unsupported data is marked as partial. Turn it off to view the existing historical annotations. Restoring their map remains pending: Restore keeps the current annotations.
 
 - Email sign-in with an 8-digit code, which works inside the installed iPhone app (a sign-in link would
   open Safari instead). It needs your own mail server (SMTP) in Supabase, and sign-ups are invite-only.
