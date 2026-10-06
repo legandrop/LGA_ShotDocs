@@ -2,12 +2,15 @@ import type { Node as PMNode, Schema } from '@tiptap/pm/model';
 import type { EditorView } from '@tiptap/pm/view';
 import { updateYFragment, yUndoPluginKey, yXmlFragmentToProseMirrorRootNode } from 'y-prosemirror';
 import * as Y from 'yjs';
-import { sameShape, traceFromSets, yShape, type ContentShape } from '../sync/history';
+import { MAX_RESTORE_BYTES, sameShape, traceFromSets, versionBytes, yShape, type ContentShape } from '../sync/history';
 import { CONTENT_FRAGMENT } from '../sync/structure';
-import type { RestoreOutcome } from './historyUi';
+import type { RestoreContext, RestoreOutcome } from './historyUi';
 import { asOneUndoStep } from './undoGuard';
 import { BACKGROUND_META } from './editorMeta';
 import { subscribeStepPopped } from './undoTimeline';
+import { PHOTO_MARKUP_MAP, parseMarkupKey } from '../media/markup';
+import { PAGE_BASE_CAP, PAGE_MARKUP_CAP, PHOTO_MARKUP_CAP, pageMarkupBytes, photoMarkupBytes } from '../media/markupLimits';
+import { lineProbe, rawEqual, rawLine, recoveryCurrent } from '../sync/historyMapWitness';
 
 // Restaurar una versión del historial (P.18, Docs/Doc_Historial.md, sección 6): una edición nueva POR EL EDITOR, la
 // misma vía que escribir. Una sola transacción de ProseMirror reemplaza el contenido de la página; y-prosemirror (con
@@ -181,7 +184,9 @@ export function restoreInEditor(
   view: EditorView,
   version: Y.Doc,
   onEdit: (fn: () => void) => () => void = () => () => undefined,
+  context?: RestoreContext,
 ): RestoreOutcome {
+  if (context) return integratedRestore(view, version, onEdit, context);
   if (!view.editable) return { ok: false, reason: 'notEditable' };
   const { node, complete } = versionNode(version, view.state.schema);
   if (!node || !complete) return { ok: false, reason: 'shape' };
@@ -209,6 +214,109 @@ export function restoreInEditor(
   const step = undo?.undoStack[size - 1];
   const trace = step ? traceFromSets(step.insertions, step.deletions) : undefined;
   return { ok: true, undo: () => undoRestore(view, size), onEdit, onUndone: (fn) => onStepUndone(undo, step, fn), trace };
+}
+
+const RESTORE_EDITOR = Symbol('restore-editor-map');
+const RECOVER_LINE = Symbol('recover-line');
+function integratedRestore(view: EditorView, version: Y.Doc, onEdit: (fn: () => void) => () => void, context: RestoreContext): RestoreOutcome {
+  const { lease, timeline, pageId, recovery } = context;
+  const doc = lease.doc, manager = editorUndo(view), root = doc.getMap(PHOTO_MARKUP_MAP);
+  if (!manager || !timeline || !pageId || view !== lease.view || manager !== lease.manager || !view.editable || !lease.current() || !context.guard() || !timeline.matchesEditor(pageId, doc, manager)) return { ok: false, reason: 'notEditable' };
+  const recover = context.kind === 'recover-line';
+  if (!recover && versionBytes(version) > MAX_RESTORE_BYTES) return { ok: false, reason: 'shape' };
+  const target = recover ? { node: view.state.doc, complete: true } : versionNode(version, view.state.schema);
+  if (!target.node || !target.complete) return { ok: false, reason: 'shape' };
+  const wanted = target.node;
+  const changes: { map: Y.Map<unknown>; key: string; value?: string | number }[] = [];
+  try {
+    if (recover) {
+      if (!recovery || !recoveryCurrent(doc, recovery)) return { ok: false, reason: 'notEditable' };
+      const map = root.get(recovery.key);
+      if (!(map instanceof Y.Map)) return { ok: false, reason: 'shape' };
+      for (const key of recovery.fill) {
+        if (map.has(key)) return { ok: false, reason: 'notEditable' };
+        changes.push({ map, key, value: recovery.baseline[key] });
+      }
+    } else {
+      const previous = version.getMap(PHOTO_MARKUP_MAP);
+      for (const key of new Set([...root.keys(), ...previous.keys()])) {
+        const current = root.get(key), selected = previous.get(key), parsed = parseMarkupKey(key);
+        if (!parsed?.shapeId) {
+          if (selected !== undefined && !rawEqual(current, selected)) return { ok: false, reason: 'shape' };
+          continue;
+        }
+        if (!(current instanceof Y.Map) || selected !== undefined && !(selected instanceof Y.Map)) return { ok: false, reason: 'shape' };
+        const before = rawLine(current), after = selected instanceof Y.Map ? rawLine(selected, selected.size > 0) : {};
+        if (selected instanceof Y.Map && lineProbe(doc, key) !== lineProbe(version, key)) return { ok: false, reason: 'shape' };
+        for (const field of new Set([...Object.keys(before), ...Object.keys(after)])) {
+          if (field in before !== (field in after) || !Object.is(before[field], after[field])) changes.push({ map: current, key: field, value: after[field] });
+        }
+      }
+    }
+    const projection = new Y.Doc();
+    try {
+      Y.applyUpdate(projection, Y.encodeStateAsUpdate(doc));
+      const projectedRoot = projection.getMap(PHOTO_MARKUP_MAP);
+      for (const change of changes) {
+        const key = [...root].find(([, map]) => map === change.map)?.[0];
+        const map = key ? projectedRoot.get(key) : null;
+        if (!(map instanceof Y.Map)) return { ok: false, reason: 'shape' };
+        if (change.value === undefined) map.delete(change.key); else map.set(change.key, change.value);
+      }
+      if (!view.state.doc.eq(wanted)) writeNode(projection, wanted);
+      const photos = new Set([...projectedRoot.keys()].map(key => parseMarkupKey(key)?.fileId).filter((id): id is string => !!id));
+      // Cota conservadora de la copia pública: no fabrica ni entrega una base limpia.
+      if (pageMarkupBytes(projectedRoot) > PAGE_MARKUP_CAP || [...photos].some(id => photoMarkupBytes(projectedRoot, id) > PHOTO_MARKUP_CAP) || Y.encodeStateAsUpdate(projection).byteLength > PAGE_BASE_CAP) return { ok: false, reason: 'shape' };
+    } finally { projection.destroy(); }
+  } catch { return { ok: false, reason: 'shape' }; }
+  const steps = restoreSteps(view.state.doc, wanted);
+  if (steps?.length === 0 && changes.length === 0) return { ok: true, undo: () => false, onEdit };
+  const beforeBytes = Y.encodeStateAsUpdate(doc), beforeXML = doc.getXmlFragment(CONTENT_FRAGMENT).toString();
+  const beforeMap = root.toJSON(), beforeNode = view.state.doc, beforeStep = manager.undoStack.at(-1);
+  const origin = recover ? RECOVER_LINE : RESTORE_EDITOR;
+  manager.addToScope(root);
+  manager.trackedOrigins.add(origin);
+  const updates: Uint8Array[] = [];
+  const capture = (update: Uint8Array, from: unknown) => { if (from === origin) updates.push(update.slice()); };
+  doc.on('update', capture);
+  let attempted = false;
+  try {
+    if (!lease.current() || !context.guard() || recover && !recoveryCurrent(doc, recovery!)) return { ok: false, reason: 'notEditable' };
+    attempted = true;
+    const result = timeline.compose(pageId, origin, () => {
+      if (!steps) view.dispatch(view.state.tr.replaceWith(0, view.state.doc.content.size, wanted.content).setMeta(BACKGROUND_META, true));
+      else for (const step of steps) view.dispatch(view.state.tr.replaceWith(step.from, step.to, step.blocks).setMeta(BACKGROUND_META, true));
+      if (!view.state.doc.eq(wanted)) return;
+      for (const change of changes) {
+        if (change.value === undefined) change.map.delete(change.key); else change.map.set(change.key, change.value);
+      }
+    });
+    const step = manager.undoStack.at(-1);
+    const replay = new Y.Doc();
+    let equivalent = false;
+    try {
+      Y.applyUpdate(replay, beforeBytes);
+      if (updates[0]) Y.applyUpdate(replay, updates[0]);
+      equivalent = rawEqual(replay.getMap(PHOTO_MARKUP_MAP).toJSON(), root.toJSON()) && replay.getXmlFragment(CONTENT_FRAGMENT).toString() === doc.getXmlFragment(CONTENT_FRAGMENT).toString();
+    } finally { replay.destroy(); }
+    if (result !== 'done' || !view.state.doc.eq(wanted) || !step || step === beforeStep || updates.length !== 1 || !equivalent) {
+      if (step && step !== beforeStep) timeline.stepExact(pageId, doc, manager, step, 'undo');
+      const restored = view.state.doc.eq(beforeNode) && doc.getXmlFragment(CONTENT_FRAGMENT).toString() === beforeXML && rawEqual(root.toJSON(), beforeMap);
+      return { ok: false, reason: restored ? 'failed' : 'changed' };
+    }
+    return {
+      ok: true,
+      undo: () => lease.current() && timeline.stepExact(pageId, doc, manager, step, 'undo') === 'done',
+      onEdit,
+      onUndone: fn => onStepUndone(manager, step, fn),
+      trace: traceFromSets(step.insertions, step.deletions),
+      receipt: { step, manager, origin, update: updates[0], doc },
+    };
+  } catch {
+    const step = manager.undoStack.at(-1);
+    if (attempted && step && step !== beforeStep) timeline.stepExact(pageId, doc, manager, step, 'undo');
+    return { ok: false, reason: rawEqual(root.toJSON(), beforeMap) && doc.getXmlFragment(CONTENT_FRAGMENT).toString() === beforeXML ? 'failed' : 'changed' };
+  } finally { doc.off('update', capture); }
 }
 
 interface PoppedEvent {

@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.207 :
+
+Restore conservaba las anotaciones actuales aunque la versión elegida tuviera otros campos. Además, una línea retirada podía recibir cambios posteriores que impedían completar sus campos sin reemplazar valores nuevos. Ahora Restore aplica los campos soportados con el texto en una sola acción. Recover drawing reconoce un retiro completo bajo el mismo padre y muestra una vista previa de lo faltante y de todos los valores que conservará. Escribe sólo lo faltante, mantiene la identidad de los cambios posteriores y se deshace en un paso. La oferta se invalida al editar, cambiar de selección, cuenta o editor. El aviso de éxito espera el guardado local confirmado; un fallo conserva el cambio pendiente. Historia incompleta, datos ambiguos y límites excedidos impiden la acción. Siguen pendientes otros tipos de formas, padres eliminados y pruebas físicas de dispositivos.
+
+[Restaurar líneas y recuperar campos faltantes conservando cambios posteriores]
+
 v0.206 :
 
 Los links antiguos a páginas sólo llevaban el UUID: copiar su dirección o abrir otra pestaña podía elegir el workspace preferido del dispositivo. Además, recargar una cuenta desde una pestaña que había abierto un link público podía recuperar ese acceso y perder la selección normal. El editor ahora califica el anchor con su origen sin escribir el documento. El arranque prioriza la clave explícita y rechaza destinos inválidos o desconocidos antes del cliente. Un clic del editor hacia otra cuenta espera el guardado local y cancela si cambia el contexto o la referencia. Renovar la sesión del mismo usuario conserva la apertura con modificador; invalida una salida que ya esperaba guardar. La comparación de anotaciones importa sus textos al cargarse. Siguen pendientes selección rica, arrastre, hashes públicos antiguos, transporte completo por importación/exportación y pruebas reales de permisos y dispositivos.

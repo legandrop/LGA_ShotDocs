@@ -86,7 +86,7 @@ import { normalize, normalizeQuery, searchNormalized } from '../search/normalize
 import '../i18n/lazy/search';
 import { registerRestoreTarget } from './historyUi';
 import { historyMarksExtension, type HistoryMarksInput } from './historyMarks';
-import { restoreInEditor } from './historyRestore';
+import { editorUndo, restoreInEditor } from './historyRestore';
 import { RemovedWritingBanner } from './RemovedWritingBanner';
 import { registerAssistantTarget, type AssistantEditor } from '../assistant/assistantUi';
 import { TemplateHost } from '../templates/TemplateHost';
@@ -704,12 +704,15 @@ export function BlockEditor({
   // mientras se pueda editar (y la página esté completa: `editable` ya lo dice).
   useEffect(() => {
     if (!editable) return;
-    return registerRestoreTarget(pageId, (version) => {
+    return registerRestoreTarget(pageId, (version, _schema, context) => {
       const view = editor.prosemirrorView;
       if (!view) return { ok: false, reason: 'notEditable' };
-      return restoreInEditor(view, version, (fn) => editor.onChange(() => fn(), false));
+      return restoreInEditor(view, version, (fn) => editor.onChange(() => fn(), false), context ? { ...context, timeline: undoTimelineFor(services), pageId } : undefined);
+    }, () => {
+      const view = editor.prosemirrorView, manager = view && editorUndo(view);
+      return view && manager && editableRef.current && linkScope.live ? { doc, view, schema: view.state.schema, manager } : null;
     });
-  }, [editor, pageId, editable]);
+  }, [editor, doc, pageId, editable, services, linkScope]);
 
   // El asistente (Docs/Doc_Asistente.md, A1) usa este editor: lo elegido, la guarda y aplicar. No una versión del
   // historial ni la página de práctica.

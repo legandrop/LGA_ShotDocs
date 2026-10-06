@@ -57,7 +57,12 @@ async function everything(engine: HistoryEngine, rows: ReturnType<typeof simulat
   const half = Math.floor(rows.length * 0.8);
   const first = await engine.load(rows.slice(0, half), pageId);
   const summary = await engine.append(rows.slice(half));
-  const out: unknown[] = [first, summary];
+  // Cada lector posee una generación distinta; el contenido y su SV/DS sí deben coincidir.
+  const content = (reply: typeof summary) => {
+    expect(reply.cut?.generation).toEqual(expect.any(String));
+    return { ...reply, cut: reply.cut && { ...reply.cut, generation: 'lector-propio' } };
+  };
+  const out: unknown[] = [content(first), content(summary)];
   for (const s of summary.sessions) {
     const v = await engine.version(s.seq);
     const c = await engine.changes(s.seq);

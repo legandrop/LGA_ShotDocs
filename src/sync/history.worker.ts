@@ -18,7 +18,8 @@ scope.addEventListener('message', (event) => {
   const { id, req } = event.data;
   try {
     const reply = core.handle(req);
-    scope.postMessage({ id, ok: true, reply }, transferables(reply));
+    // La evidencia de recuperación siempre se copia; nunca se detacha su fuente.
+    scope.postMessage({ id, ok: true, reply }, req.op === 'recover-line' ? [] : transferables(reply));
   } catch (err) {
     scope.postMessage({ id, ok: false, error: err instanceof Error ? err.message : String(err) });
   }

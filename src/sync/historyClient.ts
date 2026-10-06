@@ -1,5 +1,5 @@
 import type { HistoryRow } from './history';
-import { HistoryCore, type HistoryReply, type HistoryRequest, type HistorySummary, type VersionPayload } from './historyCore';
+import { HistoryCore, type HistoryCut, type RecoveryReply, type HistoryReply, type HistoryRequest, type HistorySummary, type VersionPayload } from './historyCore';
 import type { VersionChanges } from './historyDiff';
 
 // La pantalla del historial habla con esto (Docs/Doc_Historial.md, sección 8). Arma el historial en un Web Worker
@@ -19,6 +19,8 @@ export interface HistoryEngine {
   version(seq: number): Promise<VersionPayload>;
   /** Sus cambios contra la anterior de la lista. */
   changes(seq: number): Promise<VersionChanges>;
+  epoch(): string;
+  recoverLine(liveUpdate: Uint8Array, scope: string, intent: number): Promise<RecoveryReply>;
   destroy(): void;
 }
 
@@ -51,6 +53,7 @@ export function createHistoryEngine(makeWorker: () => WorkerLike | null = defaul
   let core: HistoryCore | null = null;
   let nextId = 1;
   let destroyed = false;
+  let generation = 0, revision = 0, confirmed: HistoryCut | null = null, acknowledged = -1;
   const pending = new Map<number, Pending>();
   /** Lo que armó el historial (cargar, sumar filas, los cortes), para volver a armarlo en la página si el Worker se cae. */
   const log: { id: number; req: HistoryRequest }[] = [];
@@ -58,6 +61,8 @@ export function createHistoryEngine(makeWorker: () => WorkerLike | null = defaul
 
   const onMain = () => {
     if (core) return core;
+    generation++;
+    confirmed = null;
     core = new HistoryCore();
     if (worker) {
       try {
@@ -69,10 +74,16 @@ export function createHistoryEngine(makeWorker: () => WorkerLike | null = defaul
     }
     if (readyTimer) clearTimeout(readyTimer);
     // Lo que el Worker ya tenía (sin lo que todavía no contestó: eso se hace abajo, en orden).
-    for (const entry of log) if (!pending.has(entry.id)) core.handle(entry.req);
+    for (const entry of log) if (!pending.has(entry.id)) {
+      const reply = core.handle(entry.req);
+      if ('cut' in reply && reply.cut) confirmed = reply.cut;
+    }
     const left = [...pending.values()].sort((a, b) => a.id - b.id);
+    if (!left.some(p => p.req.op === 'load' || p.req.op === 'append' || p.req.op === 'breaks')) acknowledged = revision;
     pending.clear();
-    for (const p of left) run(p);
+    for (const p of left) {
+      if (p.req.op === 'recover-line') p.reject(new Error('selection_changed')); else run(p);
+    }
     return core;
   };
 
@@ -97,6 +108,7 @@ export function createHistoryEngine(makeWorker: () => WorkerLike | null = defaul
   else {
     const w = worker;
     w.onmessage = (event) => {
+      if (worker !== w || destroyed) return;
       const data = event.data as { ready?: boolean; id?: number; ok?: boolean; reply?: HistoryReply; error?: string };
       if (data.ready) {
         if (readyTimer) clearTimeout(readyTimer);
@@ -125,6 +137,8 @@ export function createHistoryEngine(makeWorker: () => WorkerLike | null = defaul
   const send = <T extends HistoryReply>(req: HistoryRequest): Promise<T> => {
     if (destroyed) return Promise.reject(new Error('cancelled'));
     const id = nextId++;
+    if (req.op === 'load' || req.op === 'append' || req.op === 'breaks') { revision++; confirmed = null; }
+    const issued = revision, handle = generation;
     if (req.op === 'load' || req.op === 'append' || req.op === 'breaks') log.push({ id, req });
     return new Promise<T>((resolve, reject) => {
       const p: Pending = { id, req, resolve: resolve as (r: HistoryReply) => void, reject };
@@ -135,6 +149,10 @@ export function createHistoryEngine(makeWorker: () => WorkerLike | null = defaul
       } catch {
         onMain();
       }
+    }).then(reply => {
+      if (req.op === 'recover-line' && (handle !== generation || issued !== revision)) throw new Error('selection_changed');
+      if ('cut' in reply && reply.cut && issued === revision && (handle === generation || req.op !== 'recover-line')) { confirmed = reply.cut; acknowledged = revision; }
+      return reply;
     });
   };
 
@@ -149,8 +167,14 @@ export function createHistoryEngine(makeWorker: () => WorkerLike | null = defaul
     breaks: (after, before) => send<HistorySummary>({ op: 'breaks', after, before }),
     version: (seq) => send<VersionPayload>({ op: 'version', seq }),
     changes: (seq) => send<VersionChanges>({ op: 'changes', seq }),
+    epoch: () => `${generation}:${revision}:${acknowledged}:${confirmed?.generation ?? ''}:${confirmed?.revision ?? -1}`,
+    recoverLine: (liveUpdate, scope, intent) => confirmed && acknowledged === revision
+      ? send<RecoveryReply>({ op: 'recover-line', liveUpdate: liveUpdate.slice(), scope, intent, cut: { ...confirmed, snapshot: confirmed.snapshot.slice() } })
+      : Promise.reject(new Error('history_pending')),
     destroy: () => {
       destroyed = true;
+      generation++;
+      confirmed = null;
       if (readyTimer) clearTimeout(readyTimer);
       for (const p of pending.values()) p.reject(new Error('cancelled'));
       pending.clear();

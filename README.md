@@ -65,7 +65,7 @@ its own project: a tree of pages you own.
 
 In development. What works today:
 
-- Annotation edits count in version-history sessions and authors. Annotation-only sessions show the photo name from that version when it is unambiguous; manual version names take priority. **Show changes** compares supported drawings in separate **Before / Selected version** panels, without loading the original photo or attributing individual shapes to an author. Unsupported data is marked as partial. Turn it off to view the existing historical annotations. Restoring their map remains pending: Restore keeps the current annotations.
+- Annotation edits count in version-history sessions and authors. Annotation-only sessions show the photo name from that version when it is unambiguous; manual version names take priority. **Show changes** compares supported drawings in separate **Before / Selected version** panels, without loading the original photo or attributing individual shapes to an author. Unsupported data is marked as partial. Turn it off to view the existing historical annotations. Restore also restores supported line fields when the photo, drawing parent and frame still match. When later changes arrive for a removed line, **Recover drawing** previews the missing fields while keeping all current values. It saves on this device first and can be undone in one step. Ambiguous or unsupported data prevents restoration; recovering a deleted drawing parent remains pending.
 
 - Email sign-in with an 8-digit code, which works inside the installed iPhone app (a sign-in link would
   open Safari instead). It needs your own mail server (SMTP) in Supabase, and sign-ups are invite-only.

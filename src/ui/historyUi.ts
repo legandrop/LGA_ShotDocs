@@ -2,6 +2,21 @@ import { useSyncExternalStore } from 'react';
 import type { Permissions } from '../sync/access';
 import { HISTORY_SCHEMA_VERSION, type RestoreTrace } from '../sync/history';
 import { IS_MAC, isLetter, modPressed } from './findUi';
+import type * as Y from 'yjs';
+import type { EditorView } from '@tiptap/pm/view';
+import type { LineRecovery } from '../sync/historyMapWitness';
+import type { UndoTimeline } from './undoTimeline';
+
+export interface RestoreBinding { doc: Y.Doc; view: EditorView; schema: EditorView['state']['schema']; manager: Y.UndoManager }
+export interface RestoreLease extends RestoreBinding { current(): boolean }
+export interface RestoreContext {
+  kind: 'restore' | 'recover-line';
+  lease: RestoreLease;
+  guard(): boolean;
+  recovery?: LineRecovery;
+  timeline?: UndoTimeline;
+  pageId?: string;
+}
 
 // El historial de versiones (P.18, Docs/Doc_Historial.md): si está abierto y para qué página, quién lo puede ver y
 // el pedido de restaurar que toma el editor de la página. Va en la primera carga (es chico); la pantalla del
@@ -73,24 +88,35 @@ export type RestoreOutcome =
       trace?: RestoreTrace;
       /** `false`: no se deshace desde el aviso (se restauró sin el editor, desde la barrera de la página). */
       undoable?: false;
+      receipt?: { step: unknown; manager: Y.UndoManager; origin: unknown; update: Uint8Array; doc: Y.Doc };
     }
   /** `shape`: la versión no pasó la ida y vuelta (algo que el editor no puede armar); `notEditable`: sin editor. */
-  | { ok: false; reason: 'shape' | 'notEditable' | 'failed' };
+  | { ok: false; reason: 'shape' | 'notEditable' | 'failed' | 'changed' };
 
 /**
  * `schema`: el de ProseMirror del editor que muestra la versión en el historial. El editor de la página usa el suyo; la
  * barrera de la página (ErrorBarrier.tsx), que restaura sin editor, necesita este para la ida y vuelta.
  */
-type RestoreTarget = (version: import('yjs').Doc, schema?: import('@tiptap/pm/model').Schema | null) => RestoreOutcome;
+type RestoreTarget = (version: import('yjs').Doc, schema?: import('@tiptap/pm/model').Schema | null, context?: RestoreContext) => RestoreOutcome;
 
-const targets = new Map<string, RestoreTarget>();
+const targets = new Map<string, { run: RestoreTarget; binding?: () => RestoreBinding | null }>();
 
 /** El editor editable de una página se anota acá; devuelve cómo darse de baja. */
-export function registerRestoreTarget(pageId: string, target: RestoreTarget): () => void {
-  targets.set(pageId, target);
+export function registerRestoreTarget(pageId: string, target: RestoreTarget, binding?: () => RestoreBinding | null): () => void {
+  const entry = { run: target, binding };
+  targets.set(pageId, entry);
   return () => {
-    if (targets.get(pageId) === target) targets.delete(pageId);
+    if (targets.get(pageId) === entry) targets.delete(pageId);
   };
+}
+
+export function captureRestoreTarget(pageId: string): RestoreLease | null {
+  const entry = targets.get(pageId), binding = entry?.binding?.();
+  if (!entry || !binding) return null;
+  return { ...binding, current: () => {
+    const now = entry.binding?.();
+    return targets.get(pageId) === entry && !!now && now.doc === binding.doc && now.view === binding.view && now.schema === binding.schema && now.manager === binding.manager;
+  } };
 }
 
 const pendingTargets = new Map<string, Promise<unknown>>();
@@ -123,8 +149,10 @@ export function requestRestore(
   pageId: string,
   version: import('yjs').Doc,
   schema?: import('@tiptap/pm/model').Schema | null,
+  context?: RestoreContext,
 ): RestoreOutcome {
   const target = targets.get(pageId);
   if (!target) return { ok: false, reason: 'notEditable' };
-  return target(version, schema);
+  if (context && (!target.binding || !context.lease.current() || !context.guard())) return { ok: false, reason: 'notEditable' };
+  return target.run(version, schema, context);
 }

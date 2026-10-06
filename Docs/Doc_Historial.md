@@ -1,5 +1,15 @@
 # Historial de versiones de una página (P.18)
 
+## Restaurar y recuperar campos de una línea (v0.207, E5 parcial)
+
+Restore también restaura los nueve campos de una línea si siguen siendo la misma foto, el mismo mapa de la forma y el mismo marco. No recrea un padre eliminado. Texto y campos se restauran en una sola acción y se deshacen juntos con Undo o el atajo habitual. Los datos no identificables sin ambigüedad impiden la restauración y conservan el contenido actual.
+
+Cuando la historia permite identificar una línea completa retirada y el mismo mapa recibe después campos nuevos, aparece **Recover drawing**. La vista previa enumera los campos que faltan y los valores actuales que conservará. Recuperar escribe sólo los que faltan: una posición escrita después del retiro conserva su valor y su identidad. Un retiro posterior corta esa posibilidad.
+
+La oferta corresponde a la selección y al documento actuales. Otra edición, incluso un borrado sin inserciones, un cambio de selección, cuenta, permiso o editor, o el reemplazo del cálculo del historial la invalida. Una respuesta antigua no repone la oferta ni repite la escritura. El aviso de éxito requiere guardado confirmado en el dispositivo y el contexto de la acción vigente. Si el dispositivo no puede guardar, el cambio permanece pendiente y se informa el problema.
+
+Este recorrido admite líneas completas de nueve campos bajo evidencia del mismo padre. Datos opacos, historia incompleta, rangos parciales o ambiguos y evidencia perdida por compactación se rechazan. Antes de escribir se comprueban los límites de anotaciones por foto y página y el tamaño de la copia completa; una historia muy grande puede impedir la acción. No habilita recuperación genérica de formas o padres eliminados y no completa E5. Este alcance reemplaza la conservación del mapa indicada para las entregas anteriores.
+
 ## Sesiones de anotaciones (v0.188, primera parte de E5)
 
 Los cambios nuevos de `photoMarkup` cuentan al agrupar sesiones y enumerar sus autores, incluso al borrar una forma, deshacerla o cambiar datos de un formato futuro. Colapsar y volver a subir lo ya recibido siguen sin sumar autores. Después de integrar filas nuevas se reclasifican todos los tramos frescos conservados: una dependencia que llega tarde puede hacer reconocible una fila anterior, sin cambiar quién trajo primero sus relojes o borrados.

@@ -422,6 +422,19 @@ export class UndoTimeline {
     return 'done';
   }
 
+  /** El aviso/compensación sólo consume el paso exacto de su editor y documento. */
+  stepExact(pageId: string, doc: Y.Doc, manager: Y.UndoManager, item: unknown, kind: StepKind): StepResult {
+    const h = this.pages.get(pageId);
+    const stack = kind === 'undo' ? manager.undoStack : manager.redoStack;
+    if (!h || h.doc !== doc || h.um !== manager || stack.at(-1) !== item) return 'notMounted';
+    return this.step(pageId, kind);
+  }
+
+  matchesEditor(pageId: string, doc: Y.Doc, manager: Y.UndoManager): boolean {
+    const h = this.pages.get(pageId);
+    return !!h && h.doc === doc && h.um === manager && h.info?.editable?.() !== false;
+  }
+
   /**
    * Deshace (o rehace) el paso de arriba de `pageId`, que tiene que estar en pantalla y editable. **Un paso por vez**:
    * a Yjs se le pasa solo ese (los de abajo se sacan un momento), así un paso que ya no cambia nada no hace que Yjs siga

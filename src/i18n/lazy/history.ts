@@ -4,6 +4,21 @@ import type { Dict } from '../types';
 // El historial de versiones de una página (P.18, Docs/Doc_Historial.md). Se carga aparte, con su pantalla.
 
 export const history = {
+  'history.drawingChangedAfterRemoval': { en: 'Drawing changed after removal', es: 'Dibujo modificado después de retirarlo' },
+  'history.recoverDrawing': { en: 'Recover drawing', es: 'Recuperar dibujo' },
+  'history.drawingRecovered': { en: 'Drawing recovered', es: 'Dibujo recuperado' },
+  'history.drawingRecoveryUnavailable': { en: 'This drawing cannot be recovered from the current selection. Select a version again.', es: 'No se puede recuperar este dibujo desde la selección actual. Volvé a elegir una versión.' },
+  'history.drawingRecoveryFields': { en: 'Previous fields to add: {fields}. Current values will be kept.', es: 'Campos anteriores que se agregarán: {fields}. Se conservarán los valores actuales.' },
+  'history.drawingRecoveryLive': { en: 'Kept values: {fields}.', es: 'Valores conservados: {fields}.' },
+  'history.drawingField.type': { en: 'Drawing type', es: 'Tipo de dibujo' },
+  'history.drawingField.layer': { en: 'Layer', es: 'Capa' },
+  'history.drawingField.offsetX': { en: 'Horizontal offset', es: 'Desplazamiento horizontal' },
+  'history.drawingField.offsetY': { en: 'Vertical offset', es: 'Desplazamiento vertical' },
+  'history.drawingField.startX': { en: 'Start position (horizontal)', es: 'Posición inicial (horizontal)' },
+  'history.drawingField.startY': { en: 'Start position (vertical)', es: 'Posición inicial (vertical)' },
+  'history.drawingField.endX': { en: 'End position (horizontal)', es: 'Posición final (horizontal)' },
+  'history.drawingField.endY': { en: 'End position (vertical)', es: 'Posición final (vertical)' },
+  'history.drawingField.color': { en: 'Color', es: 'Color' },
   'history.annotationsTitle': { en: "Annotation changes", es: "Cambios en anotaciones" },
   'history.annotationsScope': { en: "Drawings only. Compares supported drawings with the previous version; photos are not loaded.", es: "Sólo dibujos. Compara dibujos soportados con la versión anterior; no carga las fotos." },
   'history.annotationsBefore': { en: "Before", es: "Antes" },

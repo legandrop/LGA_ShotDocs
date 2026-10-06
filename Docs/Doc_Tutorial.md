@@ -17,6 +17,8 @@ diseño de colapsar (`Doc_Colapsar.md`, rama `lega/colapsar`).
    donde se vuelve a ver la recorrida.
 4. Los dos idiomas (es/en), el teléfono y que la ayuda **no quede vieja**: cada función nueva suma su parte.
 
+La ayuda de Version history también explica Recover drawing: recupera campos faltantes de una línea retirada cuando existe historia completa, conserva sus valores actuales en la vista previa, guarda primero en el dispositivo y se deshace en un paso. No se agrega una práctica que necesite historia o conexión de ejemplo.
+
 ## Reglas que no se rompen
 
 - **La práctica no toca nada real.** El documento de ejemplo no es una página del árbol, no se guarda en la

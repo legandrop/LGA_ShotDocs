@@ -14,7 +14,7 @@ import {
   type ReactNode,
 } from 'react';
 import * as Y from 'yjs';
-import { t, useT } from '../i18n';
+import { t, useT, type Key } from '../i18n';
 import '../i18n/lazy/history';
 import { mediaIdsInDoc } from '../media/usage';
 import { isDeletedRow } from '../media/queue';
@@ -47,7 +47,10 @@ import type { LinkAsideRow } from '../sync/linkAdmitApi';
 import { historyServices } from './historyServices';
 import { AnnotationAttempt, compareAnnotations, type AnnotationComparison } from './historyAnnotations';
 import { HistoryAnnotationChanges } from './HistoryAnnotationChanges';
-import { closeHistory, requestRestore, restoreTargetSettled } from './historyUi';
+import { canSeeHistory, captureRestoreTarget, closeHistory, requestRestore, restoreTargetSettled } from './historyUi';
+import { recoveryCurrent, recoveryPreview, type LineRecovery } from '../sync/historyMapWitness';
+import { PHOTO_MARKUP_MAP, readPhotoMarkup } from '../media/markup';
+import { createMarkupSvg, drawMarkup } from './markupSvg';
 import { dismissNotice, notify } from './notice';
 import { BlockEditor } from './PageEditor';
 import { ErrorBarrier } from './ErrorBarrier';
@@ -74,6 +77,17 @@ import './history.css';
 
 /** Cuánto antes de restaurar se avisa que otra persona estuvo editando. */
 const RECENT_OTHERS_MS = 2 * 60_000;
+const RECOVERY_FIELD_KEYS: Record<string, Key> = {
+  type: 'history.drawingField.type',
+  zValue: 'history.drawingField.layer',
+  posX: 'history.drawingField.offsetX',
+  posY: 'history.drawingField.offsetY',
+  startX: 'history.drawingField.startX',
+  startY: 'history.drawingField.startY',
+  endX: 'history.drawingField.endX',
+  endY: 'history.drawingField.endY',
+  strokeColor: 'history.drawingField.color',
+};
 
 /** Lo bajado: las filas (en orden), los correos de los autores y la lista que armó el Worker. */
 interface Ready {
@@ -567,6 +581,68 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
     'history.why.notOpen': tr('history.why.notOpen'),
   };
 
+  const owner = useRef({ services, pageId, user, tree, builder, chosen, version, blocker });
+  owner.current = { services, pageId, user, tree, builder, chosen, version, blocker };
+  const lifetime = useRef({ live: true, attempt: 0 });
+  useEffect(() => { lifetime.current.live = true; return () => { lifetime.current.live = false; lifetime.current.attempt++; }; }, []);
+  function prepareIntent() {
+    const captured = owner.current, lease = captureRestoreTarget(pageId), token = ++lifetime.current.attempt;
+    const account = captured.user.id, storageKey = captured.services.dbName;
+    const epoch = builder?.epoch(), snapshot = lease && Y.snapshot(lease.doc);
+    let revision = 0, destroyed = false;
+    const edited = () => { revision++; }, dead = () => { destroyed = true; };
+    lease?.doc.on('afterTransaction', edited);
+    lease?.doc.on('destroy', dead);
+    const post = () => {
+      const now = owner.current;
+      const st = now.services.engine.getStatus(), currentPermissions = new Permissions(now.tree, now.services.access.get(), now.user.id);
+      return lifetime.current.live && token === lifetime.current.attempt && now.services === captured.services && now.services.dbName === storageKey && now.pageId === captured.pageId && now.user.id === account && now.builder === captured.builder && now.chosen === captured.chosen && now.version === captured.version && (!lease || lease.current()) && !destroyed && !now.tree.isTrashed(now.pageId) && !st.outdated && canSeeHistory(currentPermissions, now.pageId, st.schemaVersion);
+    };
+    const guard = () => {
+      const now = owner.current, live = now.services.engine.getStatus();
+      return post() && revision === 0 && (!lease || Y.equalSnapshots(snapshot!, Y.snapshot(lease.doc))) && now.builder?.epoch() === epoch && !now.tree.isTrashed(now.pageId) && !now.blocker && live.online && !live.outdated && canSeeHistory(new Permissions(now.tree, now.services.access.get(), now.user.id), now.pageId, live.schemaVersion);
+    };
+    const off = () => { lease?.doc.off('afterTransaction', edited); lease?.doc.off('destroy', dead); };
+    return { lease, guard, post, off, token, epoch, scope: JSON.stringify([dbName, user.id, pageId]) };
+  }
+  type Intent = ReturnType<typeof prepareIntent>;
+  const [recovery, setRecovery] = useState<{ intent: Intent; candidates: LineRecovery[] } | null>(null);
+  const confirmationIntent = useRef<Intent | null>(null);
+  useEffect(() => () => confirmationIntent.current?.off(), []);
+  useEffect(() => {
+    if (!builder || !ready || !version || blocker || asideRow || confirm || busy || !captureRestoreTarget(pageId)) { setRecovery(null); return; }
+    const intent = prepareIntent();
+    setRecovery(null);
+    if (!intent.lease || !intent.guard()) { intent.off(); return; }
+    void builder.recoverLine(Y.encodeStateAsUpdate(intent.lease.doc), intent.scope, intent.token).then(reply => {
+      if (intent.guard() && !reply.partial && reply.scope === intent.scope && reply.intent === intent.token && reply.candidates.every(dto => recoveryCurrent(intent.lease!.doc, dto))) setRecovery({ intent, candidates: reply.candidates });
+    }, () => { if (intent.post()) setRecovery(null); });
+    return () => { intent.off(); if (lifetime.current.attempt === intent.token) lifetime.current.attempt++; };
+  }, [builder, ready?.rows, version, versionKey, blocker, asideRow, services, pageId]);
+
+  async function recoverDrawing(dto: LineRecovery) {
+    const intent = recovery?.intent;
+    if (!intent?.lease || !version || !intent.guard() || !recoveryCurrent(intent.lease.doc, dto)) { setMessage(tr('history.drawingRecoveryUnavailable')); return; }
+    setBusy(true);
+    try {
+      await engine.syncNow();
+      if (!intent.guard()) throw new Error(tr('history.drawingRecoveryUnavailable'));
+      await refreshRows(true);
+      if (!intent.guard()) throw new Error(tr('history.drawingRecoveryUnavailable'));
+      const [pending, absent] = await Promise.all([docs.unsyncedPages(), engine.isMissingContent(pageId)]);
+      if (!intent.guard() || pending.includes(pageId) || absent) throw new Error(tr('history.drawingRecoveryUnavailable'));
+      const outcome = requestRestore(pageId, version, pmSchema, { kind: 'recover-line', lease: intent.lease, guard: intent.guard, recovery: dto });
+      if (!outcome.ok || !outcome.receipt || outcome.receipt.doc !== intent.lease.doc || outcome.receipt.manager !== intent.lease.manager || !outcome.receipt.update.length) throw new Error(tr('history.drawingRecoveryUnavailable'));
+      // PRE queda consumido por la transacción propia. POST no vuelve a autorizarla.
+      await docs.flush(pageId);
+      if (!intent.post()) return;
+      if (!docs.isSaved(pageId)) throw new Error(tr('history.restoreFailed', { reason: tr('history.why.pending') }));
+      closeHistory();
+      notify(t('history.drawingRecovered'), { label: t('history.undo'), run: () => { if (outcome.undo()) notify(t('history.undone')); } });
+    } catch (err) { if (intent.post()) setMessage(tr('history.restoreFailed', { reason: errorMessage(err) })); }
+    finally { intent.off(); setBusy(false); }
+  }
+
   // Mientras está abierto, el teclado no puede llegar a la página escondida (B3 de la auditoría): el foco pasa a la
   // pantalla del historial y lo demás de la app queda `inert`. Al cerrar, todo vuelve y el foco a donde estaba.
   const screenRef = useRef<HTMLDivElement>(null);
@@ -769,6 +845,7 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
   async function askRestore() {
     if (!ready || !version) return;
     setMessage(null);
+    const intent = prepareIntent();
     let photos = 0;
     const ids = [...mediaIdsInDoc(version)];
     if (ids.length) {
@@ -778,6 +855,9 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
         photos = 0;
       }
     }
+    if (!intent.guard()) { intent.off(); return; }
+    confirmationIntent.current?.off();
+    confirmationIntent.current = intent;
     const other = recentOther(ready.rows, user.id);
     confirmSeq.current = ready.rows.length ? ready.rows[ready.rows.length - 1].seq : 0;
     setConfirm({ photos, others: other === undefined ? null : nameOf(other) });
@@ -788,16 +868,19 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
     if (!version || !session) return;
     // La cuenta de fotos de la confirmación sirve también si hay que volver a preguntar (O1).
     const photos = confirm?.photos ?? 0;
+    const intent = confirmationIntent.current ?? prepareIntent();
     setConfirm(null);
     setBusy(true);
     setMessage(tr('history.syncing'));
     try {
       await engine.syncNow();
+      if (!intent.guard()) throw new Error(tr('history.drawingRecoveryUnavailable'));
       // Lo que llegó al servidor desde que se mostró la confirmación (O1 de la auditoría; la lista se pudo actualizar
       // sola mientras tanto, O3): si otra persona cambió la página, se vuelve a preguntar con el aviso de quién.
       let afterSeq = ready?.rows[ready.rows.length - 1]?.seq ?? 0;
       if (ready) {
         const all = (await refreshRows(true)) ?? ready.rows;
+        if (!intent.post()) return;
         afterSeq = all[all.length - 1]?.seq ?? 0;
         const since = all.filter((row) => row.seq > confirmSeq.current);
         const others = since.filter((row) => row.createdBy !== user.id);
@@ -805,10 +888,12 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
           confirmSeq.current = since[since.length - 1].seq;
           setMessage(null);
           setConfirm({ photos, others: nameOf(others[others.length - 1].createdBy) });
+          confirmationIntent.current = prepareIntent();
           return;
         }
       }
       const [pages, stillMissing] = await Promise.all([docs.unsyncedPages(), engine.isMissingContent(pageId)]);
+      if (!intent.guard()) throw new Error(tr('history.drawingRecoveryUnavailable'));
       const why: Blocker | null = !engine.getStatus().online
         ? 'history.why.offline'
         : pages.includes(pageId)
@@ -828,7 +913,8 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
       // El esquema del editor que muestra la versión: con él restaura la barrera de la página si el editor tiró un error
       // (si la barrera todavía se está preparando, se la espera).
       await restoreTargetSettled(pageId);
-      const outcome = requestRestore(pageId, version, pmSchema);
+      if (!intent.guard()) throw new Error(tr('history.drawingRecoveryUnavailable'));
+      const outcome = requestRestore(pageId, version, pmSchema, intent.lease ? { kind: 'restore', lease: intent.lease, guard: intent.guard } : undefined);
       if (!outcome.ok) {
         // `failed`: el editor lo intentó y lo deshizo (la comprobación final no dio): la página quedó como estaba.
         if (outcome.reason === 'failed') setMessage(tr('history.restoreUnchanged'));
@@ -836,6 +922,11 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
         return;
       }
       const key = `history:${pageId}:${session.seq}:${Date.now()}`;
+      if (intent.lease && (!outcome.trace || !outcome.trace.ins.length && !outcome.trace.del.length)) return;
+      if (intent.lease && (!outcome.receipt || outcome.receipt.doc !== intent.lease.doc || outcome.receipt.manager !== intent.lease.manager || !outcome.receipt.update.length)) throw new Error(tr('history.drawingRecoveryUnavailable'));
+      await docs.flush(pageId);
+      if (!intent.post()) return;
+      if (!docs.isSaved(pageId)) throw new Error(tr('history.restoreFailed', { reason: tr('history.why.pending') }));
       const date = whenLabel(session.end, lang);
       // "Restored from…" en la lista: la marca se guarda cuando la restauración llega al servidor (historyLoad.ts).
       // Sin huella (no cambió nada) no hay marca.
@@ -879,8 +970,10 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
         void mark.done.then(stop);
       }
     } catch (err) {
-      setMessage(tr('history.restoreFailed', { reason: errorMessage(err) }));
+      if (intent.post()) setMessage(tr('history.restoreFailed', { reason: errorMessage(err) }));
     } finally {
+      intent.off();
+      if (confirmationIntent.current === intent) confirmationIntent.current = null;
       setBusy(false);
     }
   }
@@ -1064,6 +1157,13 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
             </article>
           )}
           {annotations?.comparison && <HistoryAnnotationChanges key={annotations.token} comparison={annotations.comparison} />}
+          {recovery?.candidates.map(dto => <section className="history-annotations" key={dto.key}>
+            <h2>{tr('history.drawingChangedAfterRemoval')}</h2>
+            <p>{tr('history.drawingRecoveryFields', { fields: dto.fill.map(field => tr(RECOVERY_FIELD_KEYS[field])).join(', ') })}</p>
+            <RecoveryDrawing dto={dto} />
+            <p>{tr('history.drawingRecoveryLive', { fields: Object.entries(dto.live).map(([field, value]) => `${tr(RECOVERY_FIELD_KEYS[field])}: ${value}`).join(', ') })}</p>
+            <button className="primary" disabled={busy} onClick={() => void recoverDrawing(dto)}>{tr('history.recoverDrawing')}</button>
+          </section>)}
         </section>
         <aside className="history-list" aria-label={tr('history.versions')} ref={listRef}>
           {/* En el teléfono la lista va sola (sin la versión): el aviso de lo guardado va también acá. */}
@@ -1201,6 +1301,27 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
       )}
     </div>
   );
+}
+
+/** Sólo representación: el SVG comparte renderer; esta copia no autoriza escribir. */
+export function RecoveryDrawing({ dto }: { dto: LineRecovery }) {
+  const host = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const copy = new Y.Doc(), fileId = dto.key.slice(0, dto.key.indexOf('/'));
+    try {
+      const map = copy.getMap(PHOTO_MARKUP_MAP);
+      map.set(fileId, structuredClone(dto.frame));
+      map.set(dto.key, new Y.Map(Object.entries(recoveryPreview(dto))));
+      const photo = readPhotoMarkup(map, fileId);
+      if (!photo || !host.current) return;
+      const svg = createMarkupSvg();
+      drawMarkup(svg, photo);
+      host.current.style.aspectRatio = `${photo.frame.w}/${photo.frame.h}`;
+      host.current.replaceChildren(svg);
+      return () => svg.remove();
+    } finally { copy.destroy(); }
+  }, [dto]);
+  return <div ref={host} className="history-annotation-drawing" style={{ maxWidth: 480 }} />;
 }
 
 /** El campo para nombrar o renombrar una versión: Enter guarda, Escape deja como estaba, salir del campo guarda. */

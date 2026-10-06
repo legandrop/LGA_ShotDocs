@@ -1,6 +1,11 @@
 import * as Y from 'yjs';
 import { PageHistory, type HistoryOrphan, type HistoryRow, type HistorySession } from './history';
 import { versionChanges, type VersionChanges } from './historyDiff';
+import { observeLineRecovery, type LineRecovery } from './historyMapWitness';
+import { PHOTO_MARKUP_MAP, parseMarkupKey } from '../media/markup';
+
+export interface HistoryCut { generation: string; revision: number; snapshot: Uint8Array }
+export interface RecoveryReply { cut: HistoryCut; scope: string; intent: number; candidates: LineRecovery[]; partial: boolean }
 
 // Lo que arma el historial de una página, con mensajes (Docs/Doc_Historial.md, sección 8): lo mismo corre en un Web
 // Worker (history.worker.ts) o, si el navegador no lo deja, en la página (historyClient.ts). La pantalla manda las
@@ -10,6 +15,7 @@ import { versionChanges, type VersionChanges } from './historyDiff';
 
 /** Lo que necesita la lista. */
 export interface HistorySummary {
+  cut?: HistoryCut;
   sessions: HistorySession[];
   /** Todas las personas, en orden de aparición (para los colores). */
   people: (string | null)[];
@@ -20,6 +26,7 @@ export interface HistorySummary {
 
 /** Una versión: su documento (en memoria; nunca se guarda ni se sube) y el texto huérfano que llegó en ella. */
 export interface VersionPayload {
+  cut?: HistoryCut;
   update: Uint8Array;
   orphans: HistoryOrphan[];
 }
@@ -30,16 +37,21 @@ export type HistoryRequest =
   /** Los cortes de las versiones con nombre y de las restauraciones (`versionBreaks` en history.ts). */
   | { op: 'breaks'; after: number[]; before: number[] }
   | { op: 'version'; seq: number }
-  | { op: 'changes'; seq: number };
+  | { op: 'changes'; seq: number }
+  | { op: 'recover-line'; cut: HistoryCut; scope: string; intent: number; liveUpdate: Uint8Array };
 
-export type HistoryReply = HistorySummary | VersionPayload | VersionChanges;
+export type HistoryReply = HistorySummary | VersionPayload | VersionChanges | RecoveryReply;
 
 export class HistoryCore {
   private history: PageHistory | null = null;
+  private cut(): HistoryCut {
+    const h = this.history!;
+    return { generation: h.generation, revision: h.revision, snapshot: Y.encodeSnapshot(Y.snapshot(h.doc)) };
+  }
 
   private summary(): HistorySummary {
     const h = this.history!;
-    return { sessions: h.sessions, people: h.people(), unreadable: h.unreadable.length, rows: h.rows.length };
+    return { sessions: h.sessions, people: h.people(), unreadable: h.unreadable.length, rows: h.rows.length, cut: this.cut() };
   }
 
   /** La sesión por el `seq` de su última fila (los índices cambian al sumar filas; el `seq` no). */
@@ -68,10 +80,24 @@ export class HistoryCore {
         const doc = this.history!.version(i);
         const update = Y.encodeStateAsUpdate(doc);
         doc.destroy();
-        return { update, orphans: this.history!.orphansOf(i) };
+        return { update, orphans: this.history!.orphansOf(i), cut: this.cut() };
       }
       case 'changes':
         return versionChanges(this.history!, this.index(req.seq), 'changed');
+      case 'recover-line': {
+        const h = this.history, live = new Y.Doc(), candidates: LineRecovery[] = [];
+        if (!h || req.cut.generation !== h.generation || req.cut.revision !== h.revision || !Y.equalSnapshots(Y.decodeSnapshot(req.cut.snapshot), Y.snapshot(h.doc))) throw new Error('selection_changed');
+        let partial = h.unreadable.length > 0;
+        try {
+          Y.applyUpdate(live, req.liveUpdate);
+          if (!partial) for (const key of live.getMap(PHOTO_MARKUP_MAP).keys()) if (parseMarkupKey(key)?.shapeId) {
+            try { const dto = observeLineRecovery(h.doc, h.rows, req.liveUpdate, key); if (dto) candidates.push(dto); }
+            catch { partial = true; }
+          }
+          if (h.revision !== req.cut.revision) throw new Error('selection_changed');
+          return { cut: this.cut(), scope: req.scope, intent: req.intent, candidates, partial };
+        } finally { live.destroy(); }
+      }
     }
   }
 

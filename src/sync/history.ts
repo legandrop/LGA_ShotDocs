@@ -302,6 +302,8 @@ export class PageHistory {
   readonly rows: HistoryRow[] = [];
   /** El documento del historial: todas las filas aplicadas en orden, sin GC. */
   readonly doc: Y.Doc;
+  readonly generation = crypto.randomUUID();
+  revision = 0;
   sessions: HistorySession[] = [];
   private readonly metas: RowMeta[] = [];
   private readonly inserts = new RangeIndex();
@@ -325,6 +327,7 @@ export class PageHistory {
 
   constructor(rows: readonly HistoryRow[], gapMs = SESSION_GAP_MS, pageId?: string) {
     this.doc = new Y.Doc({ gc: false });
+    this.doc.on('update', () => { this.revision++; });
     this.gapMs = gapMs;
     this.seedClients = new Set(pageId ? [seedClientId(pageId), seedTextClientId(pageId)] : []);
     this.append(rows);
@@ -336,6 +339,7 @@ export class PageHistory {
    * Devuelve cuántas sumó.
    */
   append(rows: readonly HistoryRow[]): number {
+    this.revision++;
     const lastSeq = this.rows.length ? this.rows[this.rows.length - 1].seq : -Infinity;
     const fresh = rows.filter((r) => r.seq > lastSeq).sort((a, b) => a.seq - b.seq);
     if (fresh.length === 0 && this.rows.length > 0) return 0;
@@ -391,6 +395,7 @@ export class PageHistory {
    * snapshots si cambiaron; devuelve si cambiaron.
    */
   setBreaks(after: Iterable<number>, before: Iterable<number>): boolean {
+    this.revision++;
     const a = new Set(after);
     const b = new Set(before);
     const same = (x: Set<number>, y: Set<number>) => x.size === y.size && [...x].every((v) => y.has(v));
