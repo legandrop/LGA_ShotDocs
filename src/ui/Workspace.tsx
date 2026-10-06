@@ -316,16 +316,19 @@ export function Shell() {
   // que se está subiendo (P.9): cortada, hay que volver a soltarla para terminar.
   useEffect(() => {
     const importing = importJobFor(tree);
-    const unsaved = () =>
+    // Exportar espera lo mismo menos la carpeta que se está subiendo: lo de adentro va al Drive y no forma parte del PDF
+    // ni del zip (ahí solo está su tarjeta con su link; exportada durante la subida, sale con la nota de avance de ese
+    // momento). Una importación o un reemplazo en curso sí lo frenan (se exportaría un proyecto a medio escribir).
+    const unsavedForExport = () =>
       docs.hasUnsavedEdits() ||
       !!docs.getWriteError() ||
       !!titlePreparation.current?.unsaved() ||
       tree.hasUnsavedWrites() ||
       media.hasUnsavedWrites() ||
       comments.hasUnsavedWrites() ||
-      !!folders?.busy() ||
       importing.get().running ||
       replaceRunning({ docs });
+    const unsaved = () => unsavedForExport() || !!folders?.busy();
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       if (!unsaved()) return;
       e.preventDefault();
@@ -339,6 +342,7 @@ export function Shell() {
       stamp: () => titlePreparation.current?.stamp(),
       current: () => live && currentContext.current === context,
       unsaved,
+      unsavedForExport,
       flush: () => docs.flush(),
       prepare: () => {
         const title = titlePreparation.current;

@@ -240,7 +240,7 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
       const freshTitle = onlyId ? what[0].title : now.target.kind === 'project' ? (now.tree.project(now.target.id)?.name ?? '') : (now.tree.get(now.target.id)?.title ?? '');
       setSelectionChanged(false);
       void buildPrepared(from, part, onlyId, what, freshTitle, now, key, current);
-    }, () => !initial.tree.titleRests().some((rest) => pages().some((page) => page.id === rest.pageId)));
+    }, () => !initial.tree.titleRests().some((rest) => pages().some((page) => page.id === rest.pageId)), true);
     if (current()) setPreparing(false);
   }
 

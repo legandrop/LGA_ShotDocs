@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.210 :
+
+Con una carpeta subiendo, *Export PDF* y *Prepare .zip* no arrancaban: esperaban ocho segundos y volvían a la ventana con el aviso de cambios sin guardar, durante toda la subida. La espera previa a exportar usaba el criterio de cerrar la pestaña, que cuenta las subidas de carpetas aunque su contenido va al Drive y no forma parte del PDF ni del zip. Ahora exportar espera lo que falta guardar en el dispositivo y sigue frenado por una importación o un reemplazo en curso, que dejarían el proyecto a medio escribir (D303); durante la subida, la tarjeta de la carpeta sale con su nota de avance. Cerrar la pestaña, recargar y cambiar de workspace siguen contando la subida. Además, catorce pruebas de la ventana Export fallaban por montarla sin el registro de guardado de la app; ahora lo registran, y otra nueva abre Export desde la app entera.
+
+[Exportar sin esperar la subida de carpetas y reparar las pruebas de la ventana Export]
+
 v0.209 :
 
 H1–H4 quedaban demasiado próximos al texto normal y el triángulo podía desaparecer al abrir solo para vos una sección colapsada en la vista compartida. Ahora los cuatro encabezados crecen progresivamente: con cuerpo de 16 px usan 28, 24, 21 y 18 px. El incremento se limita según el título real de cada diseño, incluido el PDF, para que H1 siga siendo menor sin agrandar el título ni cambiar H5 o los H6 existentes. La dirección del triángulo conserva el estado local; permanece visible si la vista compartida está colapsada o difiere de la propia. Cuando difieren, el tono de acento de cada tema y una explicación en el tooltip y la etiqueta accesible distinguen ambos estados, incluso al pasar el mouse. Clic y Shift+clic conservan su alcance, los atajos salen del registro y la ayuda acompaña el cambio.

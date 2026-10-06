@@ -1,5 +1,7 @@
 # Roadmap
 
+**Espera de guardado al exportar v0.210 (D303):** una carpeta subiendo ya no frena *Export*; una importación o un reemplazo en curso en el proyecto sí. Quedan pendientes: (1) con una importación o un reemplazo en curso el aviso es el general de cambios sin guardar y no dice la causa real; (2) cuando el fallo ya se conoce (el título no se pudo guardar) igual se esperan los ocho segundos antes de avisar; (3) al cancelar o fallar un zip guardado con el selector de archivos puede quedar un `.zip` vacío en el destino (sin verificar en un navegador); (4) que la exportación resuelva la tarjeta de una carpeta sin la nota de subida: exportada mientras sube, hoy sale con el avance de ese momento en lugar de *Google Drive folder* y su peso. Detalle: `Doc_Exportar.md`, "Guardado local antes del PDF".
+
 **Vista previa Format as… v0.208:** avisa antes de Apply cuando la forma elegida quitará Script. Discard conserva el original y Undo recupera también ese formato. Los demás pendientes de P.24 y de la fase 5 siguen abiertos.
 
 **Ventana Export v0.205:** el título completo se ajusta al ancho y las acciones pasan a otro renglón cuando el nombre del ZIP no deja sitio para *Close*. El cierre queda accesible; selectores del sistema, dispositivos y los demás recorridos de exportación mantienen sus pendientes.

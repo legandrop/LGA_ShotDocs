@@ -53,6 +53,8 @@ export interface PendingWrites {
   unsaved: () => boolean;
   /** Espera las escrituras en curso. */
   flush: () => Promise<void>;
+  /** Lo que frena exportar: lo mismo que `unsaved` sin las subidas de carpetas, cuyo contenido no va en lo exportado. */
+  unsavedForExport?: () => boolean;
   /** Dueño montado y preparación del título, sólo para las salidas controladas. */
   owner?: object;
   current?: () => boolean;
@@ -87,13 +89,17 @@ export function reloadByHand(): void {
   void saveBeforeExit(pendingWrites?.owner ?? null, () => attempt === manualAttempt && getDraftRevision() === draftRevision, () => pageReload.now());
 }
 
-/** Prepara una vez, espera sólo guardado local y ejecuta la salida sin otro await después del control final. */
-export async function saveBeforeExit(owner: object | null, current: () => boolean, action: () => void, ready: () => boolean = () => true): Promise<boolean> {
+/**
+ * Prepara una vez, espera sólo guardado local y ejecuta la salida sin otro await después del control final. Con
+ * `forExport`, lo pendiente es lo que frena exportar (`unsavedForExport`), no todo lo que frena salir.
+ */
+export async function saveBeforeExit(owner: object | null, current: () => boolean, action: () => void, ready: () => boolean = () => true, forExport = false): Promise<boolean> {
   const writes = pendingWrites;
   try {
     if (!writes && !hadOwner && owner === null && current() && ready()) { action(); return true; }
     if (!writes || writes.owner !== owner || !current() || !writes.current?.()) throw new Error('Salida obsoleta');
     const stamp = writes.stamp?.();
+    const pending = () => (forExport && writes.unsavedForExport ? writes.unsavedForExport() : writes.unsaved());
     const deadline = Date.now() + reloadTimings.saveWaitMs;
     let preparing = true;
     let failed = false;
@@ -102,7 +108,7 @@ export async function saveBeforeExit(owner: object | null, current: () => boolea
       () => { preparing = false; failed = true; },
     );
     const participant: PendingWrites = {
-      unsaved: () => preparing || failed || writes.unsaved() || !ready(),
+      unsaved: () => preparing || failed || pending() || !ready(),
       flush: async () => { await preparation; if (!failed) await writes.flush(); },
     };
     if (!(await waitForSaved(participant, deadline)) || pendingWrites !== writes || !writes.current?.() ||

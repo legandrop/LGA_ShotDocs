@@ -12,6 +12,7 @@ import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, fakeConvertHeic, makeDevice, type Device } from '../sync/testing';
 import { ExportDialog } from '../ui/ExportDialog';
+import { watchPendingWrites } from '../ui/lazyPart';
 import { hasPython, pythonReadZip, text, type PyEntry, type PyZip } from '../test/zipCheck';
 import { SHARED_COLLAPSE_MAP } from '../ui/collapseEditor';
 import { porteroDownload } from '../ui/sharpImages';
@@ -57,8 +58,10 @@ beforeAll(() => {
 const devices: Device[] = [];
 const editors: ExportEditor[] = [];
 const roots: Root[] = [];
+const watches: (() => void)[] = [];
 afterEach(async () => {
   for (const r of roots.splice(0)) act(() => r.unmount());
+  for (const unwatch of watches.splice(0)) unwatch();
   for (const e of editors.splice(0)) e.destroy();
   for (const d of devices.splice(0)) {
     d.offline.stop();
@@ -734,7 +737,7 @@ describe('exportar zip: la ventana', () => {
   function services(d: Device): Services {
     const config = { url: 'https://x.supabase.co', publishableKey: 'sb_publishable_test', name: 'Test', localKey: 'test', storage: {} };
     const client = { auth: { getSession: async () => ({ data: { session: null } }) } } as never;
-    return {
+    const s = {
       workspace: { config, client },
       client,
       user: { id: d.remote.userId, email: OWNER_EMAIL },
@@ -753,6 +756,14 @@ describe('exportar zip: la ventana', () => {
       sizes: d.sizes,
       shutdown: async () => undefined,
     } as unknown as Services;
+    // Como la app abierta (Shell, Workspace.tsx): la ventana espera el guardado local de estos servicios antes de exportar.
+    watches.push(watchPendingWrites({
+      owner: s,
+      current: () => true,
+      unsaved: () => d.docs.hasUnsavedEdits() || !!d.docs.getWriteError() || d.tree.hasUnsavedWrites() || d.media.hasUnsavedWrites() || d.comments.hasUnsavedWrites(),
+      flush: () => d.docs.flush(),
+    }));
+    return s;
   }
 
   const settle = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)));

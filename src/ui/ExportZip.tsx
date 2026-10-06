@@ -197,7 +197,7 @@ export function ExportZipPanel(props: ExportZipProps) {
       const handle = mode === 'file' ? await showSaveFilePicker!({ suggestedName: zipName, types: [{ description: 'Zip', accept: { 'application/zip': ['.zip'] } }], id: 'shotdocs-export' }) : mode === 'dir' ? await showDirectoryPicker!({ mode: 'readwrite', id: 'shotdocs-export' }) : null;
       picked = true;
       check();
-      const saved = await saveBeforeExit(initial.services, () => current() && !ctrl.signal.aborted, () => undefined, titleReady);
+      const saved = await saveBeforeExit(initial.services, () => current() && !ctrl.signal.aborted, () => undefined, titleReady, true);
       check();
       if (!saved) { setPhase({ at: 'choose' }); return; }
       const now = live.current;

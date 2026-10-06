@@ -233,6 +233,15 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
   con atajo, su renglón; sin atajo, el nombre (son íconos). Desde v0.165 también la barra de los links (*Open in new tab*,
   *Remove link*: el nombre; *Edit link*, sin globo porque es un botón con texto).
   Todo globo queda adentro de la ventana: abajo, arriba, a un costado o corrido (`Tooltip.tsx`).
+- **D303 · Exportar espera solo lo que falta guardar en el dispositivo** (2026-10-06; tomada al arreglarlo, Lega la puede cambiar). Antes de armar el PDF o el
+  zip, *Export* espera lo que todavía no llegó al dispositivo: el contenido, el título abierto y su sobrante, los cambios
+  del árbol, un archivo a medio guardar y los comentarios. Una carpeta que se está subiendo no lo frena (vuelve a ser
+  como antes de la espera de guardado local): lo de adentro va al Drive y no forma parte del PDF ni del zip, donde solo
+  está la tarjeta de la carpeta con su link; si se exporta durante la subida, la tarjeta sale con la nota de avance de
+  ese momento (*Uploading 3 of 10*). Una importación o un reemplazo en curso en el proyecto sí lo siguen frenando,
+  porque se exportaría un proyecto a medio escribir.
+  Cerrar la pestaña, recargar y cambiar de workspace no cambian: siguen contando también la subida (v0.210;
+  `Doc_Exportar.md`, "Guardado local antes del PDF").
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 

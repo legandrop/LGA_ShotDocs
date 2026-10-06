@@ -6,6 +6,7 @@ import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { ExportDialog } from '../ui/ExportDialog';
+import { watchPendingWrites } from '../ui/lazyPart';
 import { placeholderUrl } from '../media/probe';
 import { appComments } from './exportComments';
 import { ExportEditor } from './exportEditor';
@@ -44,8 +45,10 @@ beforeAll(() => {
 const devices: Device[] = [];
 const editors: ExportEditor[] = [];
 const roots: Root[] = [];
+const watches: (() => void)[] = [];
 afterEach(async () => {
   for (const r of roots.splice(0)) act(() => r.unmount());
+  for (const unwatch of watches.splice(0)) unwatch();
   for (const e of editors.splice(0)) e.destroy();
   for (const d of devices.splice(0)) {
     await d.engine.stop();
@@ -470,7 +473,7 @@ describe('exportar 1b: el PDF en partes (D84)', () => {
 function services(d: Device): Services {
   const config = { url: 'https://x.supabase.co', publishableKey: 'sb_publishable_test', name: 'Test', localKey: 'test', storage: {} };
   const client = { auth: { getSession: async () => ({ data: { session: null } }) } } as never;
-  return {
+  const s = {
     workspace: { config, client },
     client,
     user: { id: d.remote.userId, email: 'owner@test' },
@@ -489,6 +492,14 @@ function services(d: Device): Services {
     sizes: d.sizes,
     shutdown: async () => undefined,
   } as unknown as Services;
+  // Como la app abierta (Shell, Workspace.tsx): la ventana espera el guardado local de estos servicios antes de exportar.
+  watches.push(watchPendingWrites({
+    owner: s,
+    current: () => true,
+    unsaved: () => d.docs.hasUnsavedEdits() || !!d.docs.getWriteError() || d.tree.hasUnsavedWrites() || d.media.hasUnsavedWrites() || d.comments.hasUnsavedWrites(),
+    flush: () => d.docs.flush(),
+  }));
+  return s;
 }
 
 const settle = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)));
