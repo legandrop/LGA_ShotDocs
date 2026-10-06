@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.208 :
+
+Al usar Format as… Headings sobre un párrafo Script, el texto pasaba a ser un título y perdía su formato sin avisarlo antes de aplicar. La vista previa solo enumeraba las advertencias sobre palabras y ediciones simultáneas. Ahora el plan compara la forma efectiva con la estructura original de los bloques elegidos y muestra un aviso en inglés o castellano cuando Script desaparecerá. El aviso cubre los cambios de tipo y los reemplazos completos, y no aparece si el párrafo conserva Script o si ese formato está fuera de lo elegido. Discard mantiene el documento original; Apply conserva la forma pedida y Undo recupera también Script. Se comprobaron el panel y editor reales, las guardas de permisos y cambios concurrentes, el descarte y deshacer exactos y cuatro vistas de escritorio y ancho de teléfono. La ayuda y la documentación acompañan el cambio.
+
+[Avisar antes de quitar Script al dar forma al texto]
+
 v0.207 :
 
 Restore conservaba las anotaciones actuales aunque la versión elegida tuviera otros campos. Además, una línea retirada podía recibir cambios posteriores que impedían completar sus campos sin reemplazar valores nuevos. Ahora Restore aplica los campos soportados con el texto en una sola acción. Recover drawing reconoce un retiro completo bajo el mismo padre y muestra una vista previa de lo faltante y de todos los valores que conservará. Escribe sólo lo faltante, mantiene la identidad de los cambios posteriores y se deshace en un paso. La oferta se invalida al editar, cambiar de selección, cuenta o editor. El aviso de éxito espera el guardado local confirmado; un fallo conserva el cambio pendiente. Historia incompleta, datos ambiguos y límites excedidos impiden la acción. Siguen pendientes otros tipos de formas, padres eliminados y pruebas físicas de dispositivos.

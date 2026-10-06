@@ -1,5 +1,7 @@
 # Roadmap
 
+**Vista previa Format as… v0.208:** avisa antes de Apply cuando la forma elegida quitará Script. Discard conserva el original y Undo recupera también ese formato. Los demás pendientes de P.24 y de la fase 5 siguen abiertos.
+
 **Ventana Export v0.205:** el título completo se ajusta al ancho y las acciones pasan a otro renglón cuando el nombre del ZIP no deja sitio para *Close*. El cierre queda accesible; selectores del sistema, dispositivos y los demás recorridos de exportación mantienen sus pendientes.
 
 **LF21, tramo de guardado local v0.199:** preparación explícita del título y barrera de ocho segundos para *Reload* de avisos y cambio/unión/creación de workspace desde uno abierto. En v0.200 el título completo se conserva hasta confirmar su encabezado y sobrante en el dispositivo; un rechazo mantiene el borrador para reintentar en la misma sesión. En v0.202 el PDF prepara esas escrituras y espera la transferencia durable del sobrante antes de tomar su copia; las partes siguientes comprueban continuidad del plan y conservan el libro anterior si cambió. El ZIP incorpora esa barrera antes de abrir el escritor y toma títulos, documentos y selección actuales, invalidando resultados tardíos. En v0.206 se incorpora el tramo de editor/arranque: anchors propios calificados sin escribir el documento, w normal prioritaria sobre el link público recordado y barrera local para un clic del editor hacia otra cuenta. Sigue parcial: faltan selección rica en clipboard, drag, hashes públicos antiguos, transporte completo por importación/exportación, cuentas/RLS reales y Safari/iPhone físicos. O1/Request access y los demás recorridos no se cierran con este tramo. Auth y salidas externas conservan sus recorridos.
@@ -617,8 +619,8 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   la pantalla de permiso muestra el host del `redirect_uri` además del nombre del cliente. De la re-verificación de M0: la migración del plan B da `execute` sobre `private.mcp_pre_request` a `anon`, `authenticated` y `service_role` (hecho, con su prueba), y la vuelta atrás del paso 1 vacía por SQL las contraseñas que pueda haber puesto un tercero (o deja el hook conectado). Lo que Lega prueba con
   sus claves está en "Cómo quedó A1" y "Cómo quedó A2". Quedó de A2 (chico): la política no se actualiza en vivo en un
   panel ya abierto (se lee al abrirlo); *Format as…* no conserva los colores de un bloque al que le cambia el texto, y
-  cuando junta varios bloques en menos (renglones a una tabla) los comentarios de los que sobran quedan sin bloque;
-  *Format as… Headings* sobre un bloque Script le saca el Script sin decirlo en la vista previa. Quedó de la auditoría de A1 (chico): la barra de formato de BlockNote se dibuja encima del panel
+  cuando junta varios bloques en menos (renglones a una tabla) los comentarios de los que sobran quedan sin bloque.
+  Quedó de la auditoría de A1 (chico): la barra de formato de BlockNote se dibuja encima del panel
   cuando lo elegido queda debajo; una traducción a japonés o chino de cerca de 20 000 caracteres todavía puede
   llegar cortada (se avisa y no se aplica; afinar el tope por idioma o por modelo); un modelo que razona por un servicio
   compatible (OpenRouter) no lleva el margen de tokens, y en OpenAI y Gemini se podría además bajar cuánto piensan

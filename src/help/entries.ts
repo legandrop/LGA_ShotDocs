@@ -394,7 +394,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     title: 'help.assistantFormat.title',
     text: 'help.assistantFormat.text',
     keys: { apply: 'assistantApply', undo: 'undo' },
-    words: ['formato', 'forma', 'viñetas', 'casillas', 'tabla', 'títulos', 'format', 'bullets', 'checklist', 'table', 'headings', 'asistente', 'assistant'],
+    words: ['formato', 'forma', 'viñetas', 'casillas', 'tabla', 'títulos', 'format', 'bullets', 'checklist', 'table', 'headings', 'guion', 'script', 'asistente', 'assistant'],
     since: ASSISTANT_A2,
   },
   {

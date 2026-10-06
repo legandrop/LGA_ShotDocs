@@ -974,6 +974,7 @@ function warningsOf(run: Run, result: Result, tr: Translate): string[] {
     else if (before > 0 && after * 3 < before) out.push(tr('assistant.muchShorter'));
   }
   if (result.type === 'format' && result.plan.added.size > 0) out.push(tr('assistant.format.added'));
+  if (result.type === 'format' && result.plan.removesScript) out.push(tr('assistant.format.removesScript'));
   if (result.type === 'format') out.push(tr('assistant.format.history'));
   return out;
 }

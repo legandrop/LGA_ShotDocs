@@ -1368,6 +1368,7 @@ contenido). Migración `20261017120000_asistente_politica_ventana.sql` **sin apl
   se parte (se perderían): *Some of these blocks have blocks nested inside…*; cambiarle solo el tipo, sí. La guarda es
   la de A1 más el tipo y las propiedades de cada bloque (si otro tildó la casilla mientras pensaba, no aplica). Al
   final comprueba que quedó lo pedido y, si no, deshace. Ctrl/⌘+Enter aplica (el atajo `assistantApply` de A1).
+- **Aviso antes de quitar Script (v0.208):** si la forma propuesta quita Script, la vista previa lo avisa antes de Apply, tanto al cambiar el tipo como al partir o reemplazar los bloques. El aviso sale del plan efectivo: no aparece si el mismo párrafo conserva Script ni por un Script fuera de lo elegido. Discard no cambia nada; Apply conserva la forma elegida y Undo restaura el documento original, incluido Script. No cambian las guardas de permisos ni de cambios mientras pensaba.
 - **La política del workspace** (`WorkspacePolicy.tsx`, en *Assistant…* del menú de la cuenta): solo el dueño y los
   admins ven *This workspace* con *On*, *Local models only* y *Off*; se guarda al elegir con `set_assistant_policy`
   (función nueva, `security definer`, que vuelve a mirar el rol) y queda recordada en el dispositivo. Dice que es una

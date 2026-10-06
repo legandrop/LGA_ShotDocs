@@ -83,6 +83,45 @@ describe('Format as…: lo que se manda', () => {
 });
 
 describe('Format as…: aplicar', () => {
+  it.each([
+    ['## INT. SET - DÍA', 'type', true],
+    ['## INT. SET — DÍA', 'update', true],
+    ['- INT. SET - DÍA', 'type', true],
+    ['[ ] INT. SET - DÍA', 'type', true],
+    ['INT. SET - DÍA', 'type', false],
+    ['INT. SET — DÍA', 'update', false],
+    ['INT. SET\n\nDÍA', 'replace', true],
+    ['| Escena |\n|---|\n| INT. SET - DÍA |', 'replace', true],
+  ])('Script: %s detecta su pérdida real en modo %s (%s)', (answer, mode, removes) => {
+    const ed = page([{ id: 'p', type: 'paragraph', props: { script: true }, content: 'INT. SET - DÍA' }]);
+    select(ed, 'p', 0, 'p', 13);
+    const fs = snap(ed);
+    const before = JSON.stringify(ed.document);
+    const p = plan(fs, answer);
+    expect(p.mode).toBe(mode);
+    expect(p.removesScript).toBe(removes);
+    expect(JSON.stringify(ed.document)).toBe(before);
+    expect(applyFormat(ed$(ed), view(ed), fs, p, true).ok).toBe(true);
+    expect(ed.document.some((b) => (b.props as Record<string, unknown>).script === true)).toBe(!removes);
+    if (JSON.stringify(ed.document) !== before) ed.undo();
+    expect(JSON.stringify(ed.document)).toBe(before);
+  });
+
+  it('un Script afuera de lo elegido no causa aviso; cambiarlo después del pedido bloquea Apply', () => {
+    const ed = page([
+      { id: 'p', type: 'paragraph', content: 'INT. SET - DÍA' },
+      { id: 'q', type: 'paragraph', props: { script: true }, content: 'afuera' },
+    ]);
+    select(ed, 'p', 0, 'p', 13);
+    const fs = snap(ed);
+    const p = plan(fs, '## INT. SET - DÍA');
+    expect(p.removesScript).toBe(false);
+    ed.updateBlock('p', { props: { script: true } } as never);
+    const before = JSON.stringify(ed.document);
+    expect(applyFormat(ed$(ed), view(ed), fs, p, true)).toEqual({ ok: false, reason: 'changed' });
+    expect(JSON.stringify(ed.document)).toBe(before);
+  });
+
   it('Checklist sobre tres renglones: solo cambia el tipo; ids, hijos, colores y fotos quedan; un paso de deshacer', () => {
     const ed = page([
       { id: 'a', type: 'paragraph', props: { textColor: 'blue' }, content: 'Pedir el LiDAR', children: [{ id: 'h', type: 'paragraph', content: 'detalle' }] },
@@ -308,6 +347,27 @@ describe('Format as…: aplicar', () => {
 });
 
 describe('Format as…: editar a la vez y versiones viejas (6.5, regla del editor)', () => {
+  it('Script convertido a Heading abre en el esquema anterior sin borrar texto ni la foto; Undo conserva el original', async () => {
+    const doc = new Y.Doc();
+    const ed = page([{ id: 'p', type: 'paragraph', props: { script: true }, content: [{ type: 'text', text: 'INT. SET - DÍA ', styles: { bold: true } }, photo('set')] }], doc);
+    select(ed, 'p', 0, 'p', 15);
+    const original = JSON.stringify(ed.document);
+    const fs = snap(ed);
+    const p = plan(fs, '## **INT. SET - DÍA** ⟦photo:1⟧', 'headings');
+    expect(p.removesScript).toBe(true);
+    expect(applyFormat(ed$(ed), view(ed), fs, p, true).ok).toBe(true);
+    const copy = new Y.Doc();
+    Y.applyUpdate(copy, Y.encodeStateAsUpdate(doc));
+    const before = yText(copy);
+    const old = mountEditor(copy, 'old', mainSchema);
+    await settle();
+    expect(yText(copy)).toBe(before);
+    expect(old.getBlock('p')?.type).toBe('heading');
+    expect(textOf(old, 'p')).toBe('INT. SET - DÍA [foto]');
+    ed.undo();
+    expect(JSON.stringify(ed.document)).toBe(original);
+  });
+
   it('lo que otro escribe afuera de lo elegido queda; lo que escribe SIN RED adentro de un bloque que cambió de tipo queda solo en el historial', async () => {
     const da = new Y.Doc();
     const db = new Y.Doc();

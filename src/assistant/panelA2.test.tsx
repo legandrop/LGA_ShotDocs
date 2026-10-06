@@ -6,6 +6,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ServicesContext, type Services } from '../services';
+import { prefs } from '../prefs';
 import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { mountEditor, posOf, unmountAll, view, type Editor } from '../ui/collabHarness';
@@ -56,6 +57,7 @@ afterEach(async () => {
   indexedDB.deleteDatabase('shotdocs-assistant');
   vi.unstubAllGlobals();
   localStorage.clear();
+  prefs.set({ language: 'en' });
   document.body.innerHTML = '';
 });
 
@@ -174,6 +176,41 @@ async function choose(select: HTMLSelectElement, value: string) {
 }
 
 describe('el panel, entrega A2', () => {
+  it.each(['en', 'es'] as const)('Headings sobre Script (%s): avisa antes de Apply, descartar conserva todo y deshacer restaura el guion exacto', async (language) => {
+    prefs.set({ language });
+    const formatLabel = language === 'en' ? 'Format as…' : 'Dar forma de…';
+    const applyLabel = language === 'en' ? 'Apply' : 'Aplicar';
+    const warning = language === 'en'
+      ? 'Applying this shape will remove Script formatting. You can undo it after applying.'
+      : 'Aplicar esta forma va a quitar el formato Guion. Podés deshacerlo después de aplicar.';
+    const { host, ed } = await setup({ blocks: [
+      { id: 'p', type: 'paragraph', props: { script: true, textColor: 'blue' }, content: [{ type: 'text', text: 'INT. SET - DÍA', styles: { bold: true } }] },
+      { id: 'q', type: 'paragraph', content: 'Medir el set' },
+    ] });
+    const before = JSON.stringify(ed.document);
+    provider('## **INT. SET - DÍA**');
+    selectBlocks(ed, 'p', 'p', 13);
+    await choose(host.querySelector<HTMLSelectElement>(`select[aria-label="${language === 'en' ? 'Shape' : 'Forma'}"]`)!, 'headings');
+    await click(button(host, formatLabel));
+    await until(host, applyLabel);
+    expect(host.querySelector('.assistant-diff')?.textContent).toContain('INT. SET - DÍA');
+    expect(host.querySelector('.assistant-warning')?.textContent).toBe(warning);
+    expect(JSON.stringify(ed.document)).toBe(before);
+    await click(button(host, language === 'en' ? 'Discard' : 'Descartar'));
+    expect(JSON.stringify(ed.document)).toBe(before);
+    selectBlocks(ed, 'p', 'p', 13);
+    await click(button(host, formatLabel));
+    await until(host, applyLabel);
+    expect(host.textContent).toContain(warning);
+    await click(button(host, applyLabel));
+    expect(ed.getBlock('p')?.type).toBe('heading');
+    expect((ed.getBlock('p')?.props as Record<string, unknown>).script).not.toBe(true);
+    expect(textOf(ed, 'p')).toBe('INT. SET - DÍA');
+    expect(textOf(ed, 'q')).toBe('Medir el set');
+    ed.undo();
+    expect(JSON.stringify(ed.document)).toBe(before);
+  });
+
   it('Summarize page manda el título y la página, muestra el resumen sin pedir nada afuera e Insert at top lo agrega (un deshacer)', async () => {
     const { host, ed } = await setup();
     const { calls, fetcher } = provider('- Hay que pedir el LiDAR\n- Faltan [fotos](https://evil.example) ![x](https://evil.example/a.png)');

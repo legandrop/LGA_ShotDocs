@@ -268,6 +268,10 @@ export const assistant = {
     en: "Edits others make to this text at the same time may only remain in the history.",
     es: "Lo que otros escriban en este texto al mismo tiempo puede quedar solo en el historial.",
   },
+  'assistant.format.removesScript': {
+    en: "Applying this shape will remove Script formatting. You can undo it after applying.",
+    es: "Aplicar esta forma va a quitar el formato Guion. Podés deshacerlo después de aplicar.",
+  },
   'assistant.format.lost': {
     en: "The suggestion leaves out text that was selected ({words}). Nothing can be applied: try again, or copy it.",
     es: "La sugerencia deja afuera texto de lo elegido ({words}). No se puede aplicar: probá de nuevo, o copiala.",

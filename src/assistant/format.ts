@@ -88,6 +88,8 @@ export interface FormatPlan {
   mode: 'type' | 'update' | 'replace';
   blocks: MdBlock[];
   linksRemoved: boolean;
+  /** La forma aplicada deja de usar el párrafo Script de lo elegido. Solo para el aviso previo. */
+  removesScript: boolean;
   /** Las letras de las palabras que la respuesta agrega (no estaban en lo elegido): la vista previa las marca. */
   added: Set<Atom>;
 }
@@ -195,7 +197,14 @@ export function planFormat(answer: string, fs: FormatSnapshot, target?: FormatTa
     const sameText = blocks.every((b, i) => b.kind !== 'text' || sameKeys(atomKeys(b.atoms), (pieces[i] as TextPiece).units.map((u) => plainKey(u.key))));
     mode = sameText ? 'type' : 'update';
   }
-  return { mode, blocks, linksRemoved: parsed.linksRemoved, added: words.added };
+  const removesScript = pieces.some((p, i) => {
+    if (p.kind !== 'text') return false;
+    const before = JSON.parse(fs.shapes.get(p.blockId) || 'null');
+    if (before?.type !== 'paragraph' || before.props.script !== true) return false;
+    // Reemplazar crea bloques sin Script; actualizar el mismo párrafo conserva su propiedad.
+    return mode === 'replace' || (blocks[i].kind === 'text' && blocks[i].type !== 'paragraph');
+  });
+  return { mode, blocks, linksRemoved: parsed.linksRemoved, removesScript, added: words.added };
 }
 
 export type FormatOutcome = ApplyOutcome | { ok: false; reason: 'nested' };

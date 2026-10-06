@@ -209,7 +209,7 @@ In development. What works today:
   page menu: *Fix spelling & grammar*, *Improve writing*, *Make shorter*, *Translate to…* or *Ask…*. The preview marks
   what changes word by word; *Apply* replaces it as one edit you undo with Ctrl+Z, and nothing is applied if the text
   changed while the assistant was working. Photos and links inside the selection stay. *Format as…* turns the selected
-  lines into a bulleted list, a checklist, a table or headings. *Summarize page* adds a summary at the top or below the
+  lines into a bulleted list, a checklist, a table or headings. The preview warns before Apply if this removes Script formatting; Discard keeps the original, and Undo restores its Script formatting too. *Summarize page* adds a summary at the top or below the
   cursor, and *Translate page* replaces the text of every block in place or creates a translated subpage. *Suggest
   caption*, in a photo's toolbar or in the assistant with the photo selected, first asks before sending the photo to
   your provider (a copy of up to 1,024 pixels without its location data, never the original, and nothing else from the
