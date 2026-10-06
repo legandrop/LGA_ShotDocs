@@ -24,8 +24,18 @@ export function isAllowedImage(type: string): boolean {
 /** El tope del bucket. */
 export const MAX_FILE_BYTES = 25 * 1024 * 1024;
 
-/** El archivo no se puede guardar: el mensaje se muestra tal cual. */
-export class FileRejected extends Error {}
+/**
+ * El archivo no se puede guardar: el mensaje se muestra tal cual. `permanent`: es por el archivo mismo (está vacío,
+ * pasa el tope), así que probar de nuevo más tarde da lo mismo; sin eso, es por el momento (no hay lugar, falta Drive).
+ */
+export class FileRejected extends Error {
+  constructor(
+    message: string,
+    readonly permanent = false,
+  ) {
+    super(message);
+  }
+}
 
 /**
  * Imágenes pegadas en las páginas. Se guardan primero en el dispositivo y se suben después, igual que

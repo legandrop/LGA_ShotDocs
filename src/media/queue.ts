@@ -799,8 +799,8 @@ export class MediaQueue {
 
   private async save(pageId: string, file: Blob & { name?: string }, heic = false): Promise<string> {
     if (!this.db) throw new FileRejected(t('queue.cannotAdd', { reason: localize(this.unavailable ?? '') }));
-    if (file.size <= 0) throw new FileRejected(t('queue.empty'));
-    if (this.options.maxFileBytes !== undefined && file.size > this.options.maxFileBytes) throw new FileRejected(t('link.edit.fileTooBig'));
+    if (file.size <= 0) throw new FileRejected(t('queue.empty'), true);
+    if (this.options.maxFileBytes !== undefined && file.size > this.options.maxFileBytes) throw new FileRejected(t('link.edit.fileTooBig'), true);
     const mime = normalizeMime(file.type, file.name);
     const name = cleanName(file.name, mime);
     // Un adjunto solo va por el portero (sin él, las fotos siguen por el camino de antes).

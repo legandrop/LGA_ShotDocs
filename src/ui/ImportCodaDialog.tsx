@@ -1,7 +1,9 @@
+import { importAttemptFor, newImportReservation, type ImportRunOptions } from '../import/importCommit';
+import { normalizeProjectName } from '../sync/tree';
 import { useEffect, useRef, useState } from 'react';
 import { useT } from '../i18n';
 import '../i18n/lazy/importCoda';
-import { countComments, findResumable, folderFromFiles, importCoda, importSize, metaJournal } from '../import/codaImport';
+import { codaProblemText, countComments, findResumable, folderFromFiles, importCoda, importSize, metaJournal } from '../import/codaImport';
 import { useImportJob } from '../import/importJob';
 import { formatSize } from '../media/fileTrash';
 import { useServices, useSyncStatus } from '../services';
@@ -44,6 +46,7 @@ export function ImportCodaDialog() {
   const folders = canPickFolders();
   const ready = media.enabled && folders;
   const journal = metaJournal(db);
+  const attempt = useRef(importAttemptFor(job));
 
   const size = folder ? importSize(folder) : 0;
   useEffect(() => {
@@ -64,15 +67,38 @@ export function ImportCodaDialog() {
       const earlier = await findResumable(picked, { tree, journal });
       job.set({ folder: picked, name: picked.manifest.doc.name, resumable: earlier });
     } catch (err) {
-      job.set({ folder: null, resumable: null, error: err instanceof Error ? err.message : String(err) });
+      job.set({ folder: null, resumable: null, error: codaProblemText(err, 'job') });
     }
   };
 
-  const start = (resume: boolean) => {
-    if (!folder || busy) return;
+  const start = (intent: ImportRunOptions['intent']) => {
+    if (!folder || busy || attempt.current.running) return;
+    const sourceKey = folder.manifest.doc.id;
+    const projectName = normalizeProjectName(name);
+    const pending = attempt.current;
+    if (intent !== 'resume') {
+      // El reintento de lo mismo sigue con su reserva (nunca crea otro proyecto). Otra carpeta, otro botón u otro
+      // nombre es otra importación, con otra reserva.
+      if (!pending.reservation || pending.sourceKey !== sourceKey || pending.intent !== intent || pending.reservation.projectName !== projectName) pending.reservation = newImportReservation(sourceKey, projectName);
+      pending.sourceKey = sourceKey;
+      pending.intent = intent;
+    } else pending.intent = intent;
+    const options = { projectName, intent, reservation: pending.reservation, generationId: pending.reservation?.generationId };
+    pending.running = true;
     const deps = { tree, docs, media, journal, comments, userEmail: user.email || undefined };
-    void job.run((onProgress) => importCoda(folder, deps, { projectName: name.trim(), resume, onProgress }), {
-      beacon: dbName,
+    void job.run(async (onProgress) => {
+      try {
+        return await importCoda(folder, deps, { ...options, onProgress });
+      } catch (err) {
+        // Con un error, lo que quedó guardado decide qué se ofrece después: seguir e importar a un proyecto nuevo, o
+        // Import otra vez. Así cambiar el nombre y reintentar nunca deja sin salida.
+        const earlier = await findResumable(folder, { tree, journal }).catch(() => null);
+        job.set({ resumable: earlier });
+        throw new Error(codaProblemText(err, 'job'));
+      }
+    }, { beacon: dbName }).finally(() => {
+      pending.running = false;
+      if (!job.get().error) pending.reservation = undefined;
     });
   };
 
@@ -178,15 +204,15 @@ export function ImportCodaDialog() {
             </button>
           ) : resumable && !busy ? (
             <>
-              <button className="primary" disabled={!ready} onClick={() => start(true)}>
+              <button className="primary" disabled={!ready} onClick={() => start('resume')}>
                 {tr('import.resume')}
               </button>
-              <button className="secondary" disabled={!ready || !name.trim()} onClick={() => start(false)}>
+              <button className="secondary" disabled={!ready || !name.trim()} onClick={() => start('new')}>
                 {tr('import.startOver')}
               </button>
             </>
           ) : (
-            <button className="primary" disabled={!ready || !folder || !name.trim() || busy} onClick={() => start(false)}>
+            <button className="primary" disabled={!ready || !folder || !name.trim() || busy} onClick={() => start('initial')}>
               {busy ? tr('import.importing') : tr('import.start')}
             </button>
           )}

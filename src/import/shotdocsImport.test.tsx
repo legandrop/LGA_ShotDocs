@@ -502,6 +502,7 @@ describe('volver a Shot Docs: cortes, la base y los zips hostiles', () => {
     const docs = {
       open: w.a.docs.open.bind(w.a.docs),
       close: w.a.docs.close.bind(w.a.docs),
+      isSaved: w.a.docs.isSaved.bind(w.a.docs),
       flush: async (id?: string) => {
         await w.a.docs.flush(id);
         if (++writes === 4) throw new Error('corte');
@@ -543,6 +544,7 @@ describe('volver a Shot Docs: cortes, la base y los zips hostiles', () => {
         return w.a.docs.open(id, o);
       },
       close: w.a.docs.close.bind(w.a.docs),
+      isSaved: w.a.docs.isSaved.bind(w.a.docs),
       flush: w.a.docs.flush.bind(w.a.docs),
     };
     const first = await importArchive(archive, deps(w.a, { docs: docs as never }));
@@ -685,6 +687,31 @@ describe('volver a Shot Docs: cortes, la base y los zips hostiles', () => {
     // Al seguir, la página se reescribió con el archivo (nunca quedó un "not in the archive" de algo que sí estaba).
     expect(JSON.stringify(state.blocks)).not.toContain(NOT_IN_ARCHIVE);
     expect(JSON.stringify(state.blocks)).toContain('sdmedia://IMG_0412.JPG');
+  });
+
+  it('una foto dañada en el zip (su CRC no coincide): la página entra con su texto y las demás fotos, anotada, y no queda para seguir', async () => {
+    const w = await world();
+    // Se cambia un byte del original de IMG_0412.JPG adentro del zip.
+    const bytes = new Uint8Array(await (await zipOf(w, w.a)).arrayBuffer());
+    const mark = new TextEncoder().encode('SEED1|');
+    let at = -1;
+    for (let i = 0; at < 0 && i + mark.length < bytes.length; i++) if (mark.every((b, j) => bytes[i + j] === b)) at = i;
+    expect(at).toBeGreaterThan(0);
+    bytes[at + 20] ^= 0xff;
+    const archive = await openArchive(await openZip(new Blob([bytes])));
+    const result = await importArchive(archive, deps(w.a));
+    // Reintentar no la arregla: se anota como una que falta y la importación termina.
+    expect(result.resumable).toBe(false);
+    expect(result.pages).toBe(9);
+    expect(result.files).toBe(4);
+    expect(result.problems.some((p) => p.startsWith('Escena 1: IMG_0412.JPG:') && p.includes('is damaged in the zip'))).toBe(true);
+    const scene = allPages(w.a, result.projectId).find((p) => p.title === 'Escena 1')!.id;
+    const text = JSON.stringify((await pageState(w.a, scene)).blocks);
+    expect(text).toContain(`IMG_0412.JPG ${NOT_IN_ARCHIVE}`);
+    expect(text).toContain('sdmedia://IMG_0500.JPG');
+    expect(text).toContain('sdmedia://IMG_0600.JPG');
+    expect(text).toContain('INT. CASA DE ANA - NOCHE');
+    expect(await findArchiveResumable(archive, { tree: w.a.tree, journal: archiveJournal(w.a.db) })).toBeNull();
   });
 
   it('sin el Drive conectado, un archivo con fotos no empieza; uno solo de texto sí', async () => {

@@ -1,3 +1,8 @@
+import type { ImportJournal } from './codaImport';
+import { Buffer } from 'node:buffer';
+import { beforeAll as beforeAllRealm } from 'vitest';
+import { pendingImport, type ImportEnvelope } from './importCommit';
+beforeAllRealm(() => { vi.stubGlobal('Uint8Array', Object.getPrototypeOf(Buffer.prototype).constructor); });
 // @vitest-environment jsdom
 import { BlockNoteEditor } from '@blocknote/core';
 import { yXmlFragmentToBlocks } from '@blocknote/core/yjs';
@@ -47,6 +52,8 @@ const SCENE =
   `<span ${GRAY}>Si no, roto.</span></li><li><span style="font-weight: bold;">Split</span></li></ul>` +
   `<div>${img('bl-bbb', 'bl-xyz')}<br>${img('bl-ccc', 'foto set.png', 1200)}</div><div><br></div><div><br></div>`;
 
+// Como la app (ImportCodaDialog.tsx): la importación siempre recibe el diario de la base local.
+const withJournal = (d: Device): ImportDeps => ({ ...d, journal: metaJournal(d.db) });
 const editors: BlockNoteEditor[] = [];
 const devices: Device[] = [];
 afterEach(() => {
@@ -212,7 +219,7 @@ describe('importar la carpeta', () => {
     devices.push(a);
     await a.engine.syncNow();
 
-    const result = await importCoda(makeFolder(), a, { projectName: 'MGTZD (prueba)' });
+    const result = await importCoda(makeFolder(), withJournal(a), { projectName: 'MGTZD (prueba)' });
     expect(result).toMatchObject({ pages: 4, files: 4, problems: [] });
     await a.media.idle();
     for (let i = 0; i < 4; i++) {
@@ -265,7 +272,7 @@ describe('importar la carpeta', () => {
     const folder = makeFolder();
     const text = folder.text;
     folder.text = async (p) => (p === 'pages/s1.html' ? Promise.reject(new Error('disco roto')) : text(p));
-    const result = await importCoda(folder, a);
+    const result = await importCoda(folder, withJournal(a));
     expect(result.problems).toEqual(['001 | Primera | Iglesia: disco roto']);
     expect(result.files).toBe(1);
     await a.engine.syncNow();
@@ -340,6 +347,7 @@ describe('importar la carpeta', () => {
         open: (id, o) => (++opens === 3 && crashAt ? Promise.reject(new Error('sin espacio')) : a.docs.open(id, o)),
         close: (id) => a.docs.close(id),
         flush: (id) => a.docs.flush(id),
+        isSaved: (id) => a.docs.isSaved(id),
       },
       media: {
         add: async (pageId, file) => {
@@ -372,7 +380,7 @@ describe('importar la carpeta', () => {
     expect(result).toMatchObject({ pages: 4, files: 4, problems: [] });
     // Solo el archivo de s2 se guardó en la segunda vuelta; los de s1 se reusaron.
     expect(added.sort()).toEqual(['bl-bbb.png', 'foto set.png', 'image.png', 'otra.png']);
-    expect(await journal.get('DOC')).toBeUndefined();
+    expect(await pendingImport(journal, 'DOC')).toMatchObject({ complete: true });
 
     await a.media.idle();
     for (let i = 0; i < 4; i++) {
@@ -390,9 +398,9 @@ describe('importar la carpeta', () => {
   it('una página que no se pudo escribir anota que sus archivos quedaron guardados sin ubicar', async () => {
     const { a } = await mediaDevice();
     let opens = 0;
-    const deps: ImportDeps = {
+    const deps: ImportDeps = { journal: metaJournal(a.db),
       ...a,
-      docs: { open: (id, o) => (++opens === 3 ? Promise.reject(new Error('sin espacio')) : a.docs.open(id, o)), close: a.docs.close.bind(a.docs), flush: a.docs.flush.bind(a.docs) },
+      docs: { open: (id, o) => (++opens === 3 ? Promise.reject(new Error('sin espacio')) : a.docs.open(id, o)), close: a.docs.close.bind(a.docs), flush: a.docs.flush.bind(a.docs), isSaved: a.docs.isSaved.bind(a.docs) },
     };
     const result = await importCoda(makeFolder(), deps);
     expect(result.problems).toEqual([
@@ -437,7 +445,7 @@ describe('importar la carpeta', () => {
       const has = folder.has;
       folder.has = (p) => p !== 'media/bl-ddd.png' && has(p);
       folder.paths = () => ['pages/s2.html'];
-      const result = await importCoda(folder, a);
+      const result = await importCoda(folder, withJournal(a));
       expect(result.problems).toEqual(['002 | Segunda | Calle: falta el archivo bl-ddd']);
       await expect(folderFromFiles([new File(['{}'], 'x.txt')])).rejects.toThrow('no tiene manifest.json');
     } finally {
@@ -452,7 +460,7 @@ describe('importar la carpeta', () => {
       `<div><img src="http://example.com/b.png"></div>` +
       `<img src="data:image/png;base64,AAAA">` +
       `<div>${img('bl-k', 'k.png')}</div>`;
-    const result = await importCoda(smallFolder([page('p', 'Fotos', null, 0, ['bl-k'])], { p: html }, ['bl-k']), a);
+    const result = await importCoda(smallFolder([page('p', 'Fotos', null, 0, ['bl-k'])], { p: html }, ['bl-k']), withJournal(a));
     expect(result.problems).toEqual([
       'Fotos: an image not stored in Coda stays linked to its site: https://example.com/a.png',
       'Fotos: an image not stored in Coda was left out: http://example.com/b.png',
@@ -509,7 +517,7 @@ describe('importar la carpeta', () => {
     expect(plan.reattached.map((p) => p.id)).toEqual(['c', 'a']);
 
     const { server, a } = await mediaDevice();
-    const result = await importCoda(smallFolder(pages, { a: '<p>a</p>', b: '<p>b</p>', c: '<p>c</p>', d: '<p>d</p>' }), a);
+    const result = await importCoda(smallFolder(pages, { a: '<p>a</p>', b: '<p>b</p>', c: '<p>c</p>', d: '<p>d</p>' }), withJournal(a));
     expect(result.problems).toEqual([
       'C: went to the top level: its parent page is missing or the pages loop',
       'A: went to the top level: its parent page is missing or the pages loop',
@@ -528,7 +536,7 @@ describe('importar la carpeta', () => {
     const table = { ...page('t', 'Tabla', null, 1), contentType: 'embed', file: 't.html' };
     const result = await importCoda(
       smallFolder([page('p', 'Texto', null, 0), table], { p: '<p>hola</p>' }, [], { problems: ['Tabla: página de tipo "embed", no se exporta'] }),
-      a,
+      withJournal(a),
     );
     expect(result.problems).toEqual(['Tabla: a “embed” page (not text): it comes in empty']);
     expect(result.exportProblems).toEqual(['Tabla: página de tipo "embed", no se exporta']);
@@ -538,7 +546,7 @@ describe('importar la carpeta', () => {
     const { a } = await mediaDevice();
     const add = vi.spyOn(a.media, 'add');
     const html = `<div>${img('bl-d', 'd.png')}</div><p>medio</p><div>${img('bl-d', 'd.png')}</div>`;
-    const result = await importCoda(smallFolder([page('p', 'Dos', null, 0, ['bl-d'])], { p: html }, ['bl-d']), a);
+    const result = await importCoda(smallFolder([page('p', 'Dos', null, 0, ['bl-d'])], { p: html }, ['bl-d']), withJournal(a));
     expect(result).toMatchObject({ files: 1, problems: [] });
     expect(add).toHaveBeenCalledTimes(1);
     const pageId = [...a.tree.children(null)].find((p) => p.title === 'Dos')!.id;
@@ -556,7 +564,7 @@ describe('importar la carpeta', () => {
         'canvas-B': '<table><tbody><tr><td><a href="coda-page:canvas-A">volver</a></td></tr></tbody></table>',
       },
     );
-    const result = await importCoda(folder, a);
+    const result = await importCoda(folder, withJournal(a));
     const byTitle = new Map(projectPages(a, result.projectId).map((p) => [p.title, p.id]));
     const idA = byTitle.get('Plano A')!;
     const idB = byTitle.get('Plano B')!;
@@ -621,7 +629,7 @@ describe('importar la carpeta', () => {
     });
     const tree = a.tree;
     const folder = smallFolder([page('m', 'Madre', null, 0), page('h', 'Hija', 'm', 0)], { m: '<div>m</div>', h: '<div>h</div>' });
-    const result = await importCoda(folder, { tree, docs: a.docs, media: a.media });
+    const result = await importCoda(folder, { journal: metaJournal(a.db), tree, docs: a.docs, media: a.media });
     expect(result.problems).toEqual([]);
     const roots = a.tree.roots(result.projectId).map((p) => p.title);
     expect(roots).toEqual(['Madre']);
@@ -658,14 +666,14 @@ describe('importar la carpeta', () => {
     let opens = 0;
     const deps: ImportDeps = {
       tree: a.tree,
-      docs: { open: (id, o) => (++opens === 2 ? Promise.reject(new Error('sin espacio')) : a.docs.open(id, o)), close: (id) => a.docs.close(id), flush: (id) => a.docs.flush(id) },
+      docs: { open: (id, o) => (++opens === 2 ? Promise.reject(new Error('sin espacio')) : a.docs.open(id, o)), close: (id) => a.docs.close(id), flush: (id) => a.docs.flush(id), isSaved: (id) => a.docs.isSaved(id) },
       media: a.media,
       journal,
     };
     const result = await importCoda(folder, deps);
     expect(result.problems).toEqual(['Dos: sin espacio']);
     // En el diario, la página que usa el archivo de otra queda marcada (no se cuenta dos veces al seguir).
-    const saved = await journal.get('DOC2');
+    const saved = await journal.loadState!('DOC2').then(s => (s.raw as ImportEnvelope<ImportJournal>).generations[(s.raw as ImportEnvelope<ImportJournal>).activeGenerationId].journal);
     expect(saved?.media['p2 bl-r']).toMatchObject({ shared: true });
     expect(saved?.media['p1 bl-r']).toMatchObject({ key: 'bl-r' });
   });
@@ -673,7 +681,7 @@ describe('importar la carpeta', () => {
   it('una página embebida con archivo (lo que mostraba, traído por el comando) se importa como cualquier otra', async () => {
     const { a } = await mediaDevice();
     const embed = { ...page('e1', 'Reporte embebido', null, 0), contentType: 'embed' };
-    const result = await importCoda(smallFolder([embed], { e1: '<div><a href="https://www.youtube.com/watch?v=1">video</a></div>' }), a);
+    const result = await importCoda(smallFolder([embed], { e1: '<div><a href="https://www.youtube.com/watch?v=1">video</a></div>' }), withJournal(a));
     expect(result.problems).toEqual([]);
     const id = a.tree.roots(result.projectId)[0].id;
     const doc = await a.docs.open(id);
@@ -690,7 +698,7 @@ describe('importar la carpeta', () => {
       { t: html, v1: html, v2: html },
       ['bl-r'],
     );
-    const result = await importCoda(folder, a);
+    const result = await importCoda(folder, withJournal(a));
     expect(result).toMatchObject({ files: 1, problems: [] });
     expect(add).toHaveBeenCalledTimes(1);
     const pages = projectPages(a, result.projectId);
@@ -713,7 +721,7 @@ describe('importar la carpeta', () => {
     const { a } = await mediaDevice();
     const seen: [number, string, boolean][] = [];
     let ticked = false;
-    await importCoda(makeFolder(), a, {
+    await importCoda(makeFolder(), withJournal(a), {
       onProgress: (p) => {
         seen.push([p.done, p.page, ticked]);
         ticked = false;
@@ -749,6 +757,7 @@ describe('importar la carpeta', () => {
         open: (id, o) => (opts.failOpen?.(++opens) ? Promise.reject(new Error('sin espacio')) : a.docs.open(id, o)),
         close: (id) => a.docs.close(id),
         flush: (id) => a.docs.flush(id),
+        isSaved: (id) => a.docs.isSaved(id),
       },
       media: {
         add: async (pageId, file) => {
@@ -825,7 +834,7 @@ describe('importar la carpeta', () => {
     expect(again).toMatchObject({ projectId: result.projectId, problems: [], resumable: false });
     // Nada se guardó de nuevo: los tres archivos de s1 ya estaban.
     expect(second.added).toEqual([]);
-    expect(await first.deps.journal!.get('DOC')).toBeUndefined();
+    expect(await pendingImport(first.deps.journal!, 'DOC')).toMatchObject({ complete: true });
     expect(await imagesOf(a, findPage(a, '001 | Primera | Iglesia'))).toHaveLength(3);
     await a.media.idle();
     for (let i = 0; i < 4; i++) {
@@ -843,7 +852,9 @@ describe('importar la carpeta', () => {
     expect(result.problems).toEqual(['001 | Primera | Iglesia: foto set.png: QuotaExceededError']);
     expect(result.resumable).toBe(true);
     const s1 = findPage(a, '001 | Primera | Iglesia');
-    expect(await imagesOf(a, s1)).toHaveLength(2);
+    // Todo o nada por página (D305): con un archivo sin guardar la página no se escribe; al seguir entra entera.
+    expect(await imagesOf(a, s1)).toHaveLength(0);
+    expect(await pageText(a, s1)).not.toContain('Brief Sup');
 
     const second = spyDeps(a);
     const again = await importCoda(folder, second.deps, { resume: true });
@@ -852,7 +863,7 @@ describe('importar la carpeta', () => {
     expect(await imagesOf(a, s1)).toHaveLength(3);
   });
 
-  it('al seguir, una página a medias que la persona editó no se pisa (escrita antes: queda como la dejó)', async () => {
+  it('al seguir, una página que quedó sin escribir y la persona editó no se pisa: su texto queda y lo importado va debajo, entero', async () => {
     const { a } = await mediaDevice();
     const folder = makeFolder();
     await importCoda(folder, spyDeps(a, { failAdd: (name) => name === 'foto set.png' }).deps);
@@ -860,9 +871,14 @@ describe('importar la carpeta', () => {
     await typeInto(a, s1, 'NOTAS DEL USUARIO');
 
     const again = await importCoda(folder, spyDeps(a).deps, { resume: true });
-    expect(await pageText(a, s1)).toContain('NOTAS DEL USUARIO');
+    // Todo o nada por página (D305): la página no se había escrito, así que lo importado entra entero debajo de lo suyo.
+    const text = await pageText(a, s1);
+    expect(text.match(/NOTAS DEL USUARIO/g)).toHaveLength(1);
+    expect(text.match(/Brief Sup/g)).toHaveLength(1);
+    expect(text.indexOf('NOTAS DEL USUARIO')).toBeLessThan(text.indexOf('Brief Sup'));
+    expect(await imagesOf(a, s1)).toHaveLength(3);
     expect(again.problems).toEqual([
-      '001 | Primera | Iglesia: was edited after the import stopped: it stays as you left it (what failed there was not retried)',
+      '001 | Primera | Iglesia: was edited after the import stopped: your text stays and the import went below it',
     ]);
     expect(again.resumable).toBe(false);
   });
@@ -946,7 +962,7 @@ describe('importar la carpeta', () => {
   it('un diario cuyo proyecto no está no se ofrece, pero se conserva (el proyecto puede volver de la papelera, P.14)', async () => {
     const { a } = await mediaDevice();
     const journal = metaJournal(a.db);
-    await journal.put({ docId: 'DOC', projectId: 'no-existe', projectName: 'X', pages: {}, media: {} });
+    await journal.put({ recoveryVersion: 2, docId: 'DOC', projectId: 'no-existe', projectName: 'X', pages: {}, media: {} });
     expect(await findResumable(makeFolder(), { tree: a.tree, journal })).toBeNull();
     expect(await journal.get('DOC')).toMatchObject({ projectId: 'no-existe' });
   });
@@ -956,7 +972,7 @@ describe('importar la carpeta', () => {
     const html =
       `<p>antes</p><div><video controls><source src="https://cdn.example.com/v.mp4" type="video/mp4"></video></div>` +
       `<iframe src="https://www.youtube.com/embed/abc"></iframe><embed src="https://example.com/x.swf">`;
-    const result = await importCoda(smallFolder([page('p', 'Videos', null, 0)], { p: html }), a);
+    const result = await importCoda(smallFolder([page('p', 'Videos', null, 0)], { p: html }), withJournal(a));
     expect(result.problems).toEqual([
       'Videos: a video or embed from another site stays as a link: https://cdn.example.com/v.mp4',
       'Videos: a video or embed from another site stays as a link: https://www.youtube.com/embed/abc',
@@ -971,7 +987,7 @@ describe('importar la carpeta', () => {
     const { a } = await mediaDevice();
     const url = 'https://drive.google.com/file/d/1AAAaaaBBBbbbCCCcccDDDdddEEEeeeFFF/view?usp=sharing';
     const html = `<ul><li><span>Referencia:</span><span>${url}</span></li></ul><div><span>Toma elegida:</span><span>${url}</span></div>`;
-    const result = await importCoda(smallFolder([page('p', 'Links', null, 0)], { p: html }), a);
+    const result = await importCoda(smallFolder([page('p', 'Links', null, 0)], { p: html }), withJournal(a));
     expect(result.problems).toEqual([]);
     const pageId = findPage(a, 'Links');
     const doc = await a.docs.open(pageId);

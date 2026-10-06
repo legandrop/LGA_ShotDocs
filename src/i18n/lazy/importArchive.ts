@@ -159,7 +159,6 @@ export const importArchive = {
     es: "una versión más nueva de la app la editó mientras tanto; actualizá la app y seguí",
   },
   'importArchive.note.appended': { en: "it already had other text; the imported content went below", es: "ya tenía otro texto; lo importado quedó debajo" },
-  'importArchive.note.kept': { en: "it was edited after the first import; it was left as it is", es: "se editó después de la primera importación; quedó como estaba" },
   'importArchive.note.promoted': {
     en: { one: "{count} thread had its first comment deleted; its first reply opens it now", other: "{count} threads had their first comment deleted; their first reply opens them now" },
     es: { one: "{count} hilo tenía el primer comentario borrado; ahora lo abre su primera respuesta", other: "{count} hilos tenían el primer comentario borrado; ahora los abre su primera respuesta" },
@@ -221,6 +220,35 @@ export const importArchive = {
   'importArchive.block.tooMany': {
     en: "the page has too many blocks; the ones after the limit were left out",
     es: "la página tiene demasiados bloques; los que pasan el tope quedaron afuera",
+  },
+  // Lo que quedó pendiente (importCommit.ts, `importPendingText`): en el diálogo y en la lista del final.
+  'importArchive.pending.job.changed': {
+    en: "An earlier import of this archive was left unfinished, or it changed in another tab. Try again with the options below.",
+    es: "Una importación anterior de este archivo quedó sin terminar, o cambió en otra pestaña. Probá de nuevo con las opciones de abajo.",
+  },
+  'importArchive.pending.job.unreadable': {
+    en: "This device has an import record for this archive that this version of the app can't read. Update the app and close its other tabs.",
+    es: "Este dispositivo tiene un registro de importación de este archivo que esta versión de la app no puede leer. Actualizá la app y cerrá sus otras pestañas.",
+  },
+  'importArchive.pending.page.unsaved': {
+    en: "could not be saved on this device yet; resume the import",
+    es: "todavía no se pudo guardar en este dispositivo; seguí la importación",
+  },
+  'importArchive.pending.page.changed': {
+    en: "changed while it was being imported; resume the import",
+    es: "cambió mientras se importaba; seguí la importación",
+  },
+  'importArchive.pending.page.mismatch': {
+    en: "was left in a state the import can't continue; use Import into a new project",
+    es: "quedó en un estado que la importación no puede seguir; usá Importar a un proyecto nuevo",
+  },
+  'importArchive.pending.page.invalid': {
+    en: "could not be prepared for importing, and Resume will give the same result; use Import into a new project",
+    es: "no se pudo preparar para importar, y Seguir va a dar lo mismo; usá Importar a un proyecto nuevo",
+  },
+  'importArchive.pending.close': {
+    en: "Everything came in, but the import could not be marked as finished: choose the same archive again and use Resume.",
+    es: "Entró todo, pero la importación no se pudo anotar como terminada: elegí el mismo archivo de nuevo y usá Seguir.",
   },
 } satisfies Dict;
 

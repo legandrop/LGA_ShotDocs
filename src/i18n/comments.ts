@@ -56,6 +56,14 @@ export const comments = {
     en: "The imported comment has an invalid date.",
     es: "El comentario importado tiene una fecha inválida.",
   },
+  'commentError.importMoved': {
+    en: "An imported comment no longer matches the page or thread it was saved with.",
+    es: "Un comentario importado ya no coincide con la página o el hilo con que se guardó.",
+  },
+  'commentError.importEarlier': {
+    en: "An imported comment was left in the queue by an earlier version of the app and can't be imported again.",
+    es: "Un comentario importado quedó en la cola con una versión anterior de la app y no se puede volver a importar.",
+  },
   'commentError.threadInvalid': {
     en: "The reply does not match its thread.",
     es: "La respuesta no corresponde a su hilo.",

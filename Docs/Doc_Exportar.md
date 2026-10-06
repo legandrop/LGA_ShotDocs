@@ -328,11 +328,54 @@ Reporte_ERSO/
   viejos, en el mismo Supabase chocarían con los originales (`comment_conflict`); con estos, reintentar no duplica. Las
   respuestas apuntan al id nuevo de su hilo. **Un hilo cuyo primer comentario se borró** (la base lo da con el texto
   vacío y `import_comment` no acepta un texto vacío): la primera respuesta viva pasa a abrir el hilo, con su autor y su
-  fecha, y queda anotado en la lista del final.
+  fecha, y queda anotado en la lista del final. **Desde v0.211 cada comentario importado deja un recibo en el
+  dispositivo** al entrar a la cola, que no se borra cuando sube ni cuando después se edita o se borra: *Resume* no lo
+  pone otra vez en la cola ni le cambia el texto o el bloque (hasta v0.210, uno ya subido volvía a la cola). Es un
+  registro local, no una confirmación del servidor (`Doc_Importar_Coda.md`, "Cómo entran", *Ids estables y recibo*).
 - **Sigue donde quedó**, como la de Coda: anotación en `meta`, páginas terminadas, archivos ya guardados; nunca pisa lo
   que la persona escribió mientras tanto. **La clave es el id del archivo más el SHA-256 de su `manifest.json`**
-  (`shotdocsImport:<id>:<huella>`): un zip editado o armado a mano con el mismo id no ofrece seguir sobre el proyecto de
-  otra importación.
+  (`shotdocsImport2:<id>:<huella>` desde v0.211; antes, `shotdocsImport:<id>:<huella>`): un zip editado o armado a mano
+  con el mismo id no ofrece seguir sobre el proyecto de otra importación. Desde v0.211 (las reglas son las de
+  `Doc_Importar_Coda.md`, "Si se corta: seguir donde quedó", con los mismos nombres de botones):
+  - **Cada importación es una generación** con la identidad del proyecto reservada en el dispositivo antes de crearlo:
+    si se corta, reintentar o *Resume* usa los mismos ids y no crea otro proyecto. *Import into a new project* abre
+    otra generación en otro proyecto sin tocar el anterior. Importar otra vez un zip que ya había terminado crea otro
+    proyecto, como siempre; la importación terminada queda registrada en el dispositivo en vez de borrarse.
+  - **Todo o nada por página (D305), solo ante fallos que se pueden reintentar.** Si un archivo de la página no se
+    pudo guardar por algo que puede cambiar al probar de nuevo (el dispositivo no tiene dónde guardar archivos, es un
+    adjunto y el Drive no está conectado, no entra en la cuota, no hay espacio al guardarlo, se pasó el tope de lo que
+    se descomprime de una vez, no se pudo leer del disco, o el registro de la importación no se pudo guardar), la
+    página no se escribe y queda para *Resume*, que la escribe entera, una sola vez. Hasta v0.210 entraba con el texto
+    y las demás fotos, y *Resume* la reescribía. **Lo definitivo no deja la página para seguir:** un archivo que falta
+    en el zip o está dañado, uno vacío (0 bytes) o uno que pasa el tope por archivo se anotan, y la página entra con su
+    texto y lo demás, con el nombre del archivo en su lugar; lo mismo una página sin su JSON o exportada incompleta y
+    un `comments.json` que no se puede leer. Eso es lo publicado desde antes: sin cambios. Con la base sin la
+    migración de comentarios, la página entra y sus comentarios esperan a *Resume*.
+  - **El resumen del final** ("Imported N pages and M files.") cuenta las páginas que entraron, no las del manifest:
+    con una que quedó para seguir, N es menor.
+  - **Dos arreglos chicos:** si el registro no se puede guardar justo después de crear una página, esa página ya no
+    aparece duplicada; y un nombre de proyecto de más de 200 caracteres que al cortarse terminaba en un espacio ya no
+    hace fallar la importación (vale para cualquier proyecto nuevo).
+  - **Si la persona escribió en una página que quedó para seguir**, su texto queda arriba y lo importado va debajo,
+    entero, anotado en la lista del final. Ya no existe «quedó como estaba» (una página editada después de la primera
+    importación que no se volvía a intentar): una página ya escrita no se vuelve a escribir, así que sus bloques y los
+    comentarios anclados a ellos no cambian.
+  - **Un corte entre anotar el plan de una página y aplicarlo:** si al documento no le llegó nada del plan, la página
+    se planifica de nuevo (lo escrito queda arriba); si le llegó entero y después se editó, vale como aplicada; en
+    cualquier otro caso no se toca y su renglón dice cómo salir. Como el archivo conserva los ids de los bloques,
+    una página que quedó para seguir y en la que la persona ya tiene un bloque con el id de uno importado tampoco
+    se toca: *Resume* da el mismo resultado y la salida es *Import into a new project*, como dice su renglón ("could
+    not be prepared for importing, and Resume will give the same result; use Import into a new project").
+  - **Después de un error**, la ventana ofrece *Resume* e *Import into a new project* sin volver a elegir el zip;
+    cambiar el nombre y elegir el proyecto nuevo entra con ese nombre. Si otra pestaña dejó una importación del mismo
+    zip sin terminar, *Import* no crea un segundo proyecto: avisa y ofrece seguirla.
+  - **Una importación sin terminar cuyo proyecto está en la papelera** (o ya no se ve): no se ofrece seguirla e
+    *Import* crea un proyecto nuevo; a partir de ahí la anterior ya no se puede seguir aunque su proyecto vuelva.
+  - **Una importación sin terminar hecha con v0.210 o anterior (D304)** no se puede seguir y no bloquea: al elegir el
+    zip se ofrece *Import*, que entra a un proyecto nuevo; el proyecto a medias queda como estaba y el registro viejo
+    pasa entero a una clave de archivo del dispositivo (`shotdocsImportEarlier1:…`).
+  - **Los motivos se leen:** lo que quedó pendiente sale en la ventana y en la lista del final con un texto en inglés
+    o en castellano (`importArchive.pending.*`), nunca con el nombre interno del estado.
 - **Lo que vuelve igual:** el árbol y su orden, los títulos, los formatos de hoja, los bloques con todas sus
   propiedades (Script, preguntas, saltos de hoja, fotos en línea con su tamaño, fotos en las celdas), el colapsado para
   todos (del mapa aparte), los comentarios y sus respuestas, los originales incluidos.
@@ -1249,9 +1292,11 @@ zip grande desde Archivos); la migración aplicada y su prueba SQL.
   afuera, su texto. `javascript:`, `data:` y lo demás, texto, anotado.
 - **EX20 · Sin red.** Se puede importar sin red, como la de Coda: todo queda en el dispositivo (páginas, archivos,
   comentarios) y sube al volver. Es lo más seguro para no perder nada: nada depende de la red a mitad.
-- **EX21 · Seguir donde quedó sin duplicar.** Antes de escribir una página se anota la huella de lo que se va a escribir
-  (probada en un documento aparte): un corte entre escribir y anotar no deja la página "editada por la persona" con una
-  copia abajo. Si el editor no acepta los bloques de una página (un zip armado a mano), va su texto en párrafos, anotado.
+- **EX21 · Seguir donde quedó sin duplicar.** Hasta v0.210, antes de escribir una página se anotaba la huella de lo que
+  se iba a escribir (probada en un documento aparte): un corte entre escribir y anotar no dejaba la página "editada por
+  la persona" con una copia abajo. Desde v0.211 la huella no se usa: se anota el plan completo de la página antes de
+  aplicarlo y una página ya escrita no se vuelve a escribir (sección 3, "Sigue donde quedó"). Sin cambios: si el editor
+  no acepta los bloques de una página (un zip armado a mano), va su texto en párrafos, anotado.
 - **EX22 · La carpeta descomprimida.** Además del zip, *Choose unzipped folder* en una computadora (el diseño lo
   preveía para Chrome y Edge; anda en todos los de escritorio con `webkitdirectory`).
 

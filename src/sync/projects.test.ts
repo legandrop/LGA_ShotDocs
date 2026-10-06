@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { FakeServer, makeDevice, type Device } from './testing';
+import { normalizeProjectName } from './tree';
 
 const devices: Device[] = [];
 async function device(server: FakeServer): Promise<Device> {
@@ -16,6 +17,17 @@ afterEach(() => {
 });
 
 describe('proyectos', () => {
+  it('el nombre de un proyecto queda igual si se normaliza otra vez (cortado, sin un espacio en la punta)', async () => {
+    // 199 letras, un espacio y más texto: al cortar en 200 el último carácter es el espacio.
+    const long = `${'x'.repeat(199)} cola que no entra`;
+    const once = normalizeProjectName(long);
+    expect(once).toBe('x'.repeat(199));
+    expect(normalizeProjectName(once)).toBe(once);
+    for (const name of ['  Bosque Negro  ', 'a', `${'ñ'.repeat(200)}  `, '   ', '']) expect(normalizeProjectName(normalizeProjectName(name))).toBe(normalizeProjectName(name));
+    const a = await device(new FakeServer());
+    expect(a.tree.project(await a.tree.createProject(long))?.name).toBe(once);
+  });
+
   it('se crean sin red y suben antes que sus páginas', async () => {
     const server = new FakeServer();
     const a = await device(server);

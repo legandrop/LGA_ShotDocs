@@ -863,8 +863,10 @@ Paso 10 de `Plan_Workspaces.md` (sección 4), con la base en la versión 5
 - **Comentarios importados** (`Doc_Importar_Coda.md`, "3. Comentarios"): la operación `import` de la cola lleva
   la fecha original y, si es de alguien de afuera, su nombre y correo; sube con `import_comment` (base en la
   versión 8) y en todo lo demás se trata como un alta (se le funde una edición, descartarla se lleva sus
-  respuestas). Volver a ponerla en la cola con el mismo id no la repite; si todavía no salió, toma el bloque
-  nuevo. Una versión de la app anterior a v0.060 no la conoce y la daría por subida sin mandarla: por eso se
+  respuestas). Volver a ponerla en la cola con el mismo id no la repite ni la cambia: desde v0.211 cada una deja
+  un recibo en el dispositivo y, al seguir una importación, una página ya escrita no se vuelve a escribir, así que
+  el bloque es el mismo (hasta v0.210, si todavía no había salido tomaba el bloque nuevo). Una versión de la app
+  anterior a v0.060 no la conoce y la daría por subida sin mandarla: por eso se
   recargan las pestañas antes de importar, y además cada una queda en `meta` (`import:<id>`) hasta que el
   servidor la confirma; al abrir, lo que está ahí y ya no está ni en la cola ni en lo bajado vuelve a la cola.
   Después de restaurar una copia, lo importado por esta persona vuelve como `import`, con su autor y resuelto.

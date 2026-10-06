@@ -829,6 +829,13 @@ Auditoría independiente: **no aprobado**, con dos bloqueantes de arreglo chico.
 | O5 Un texto que otro borra mientras se edita se perdía | Se vuelve a crear con lo escrito, en el mismo lugar y con su letra (con prueba) |
 | O2, O3 (*Annotate* de `PageEditor` sin prueba), O4, O6, O7, O8, O9 | Al roadmap (P.20) |
 
+**Guardas del editor comprobadas (v0.211).** Dos pendientes de esta auditoría tienen ahora prueba con `PageEditor`, el
+botón de anotar, el documento, la sincronización y la poda reales (`src/ui/pageMarkupGuards.test.tsx`). Con permiso de
+solo ver, la página no es editable, no se ofrece *Annotate* y las teclas no cambian el contenido ni las anotaciones ni
+dejan nada por subir; cuando el permiso pasa a editar, el botón aparece. La poda no corre con un cambio local sin subir,
+con contenido de otro dispositivo sin bajar o sin red, y corre con la página sincronizada. Los demás pendientes de la
+entrega 2 siguen en el roadmap (P.20); esto no cierra la entrega 2 ni las entregas siguientes.
+
 ## Cómo quedó la entrega 3 (el dedo y el lápiz, v0.129)
 
 ### Interrupciones del dibujo (O3, v0.195)

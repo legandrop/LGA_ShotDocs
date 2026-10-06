@@ -1,3 +1,5 @@
+import { importAttemptFor, newImportReservation, type ImportRunOptions } from '../import/importCommit';
+import { normalizeProjectName } from '../sync/tree';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useT } from '../i18n';
 import '../i18n/lazy/importArchive';
@@ -6,6 +8,7 @@ import { useImportJob } from '../import/importJob';
 import {
   ArchiveError,
   archiveJournal,
+  archiveProblemText,
   archiveWeight,
   COMMENTS_PATH,
   findArchiveResumable,
@@ -70,6 +73,7 @@ export function ImportArchiveDialog() {
   const folders = canPickFolders();
   const phone = useMemo(() => isMobilePlatform(detectPlatform()), []);
   const journal = archiveJournal(db);
+  const attempt = useRef(importAttemptFor(job));
   const weight = archive ? archiveWeight(archive) : null;
   const needsDrive = !!weight && weight.files > 0 && !media.enabled;
 
@@ -96,9 +100,7 @@ export function ImportArchiveDialog() {
           ? err.message
           : err instanceof ZipReadError
             ? new ArchiveError(err.code === 'notZip' ? 'notZip' : err.code === 'tooBig' || err.code === 'tooMany' ? 'tooBig' : 'damaged').message
-            : err instanceof Error
-              ? err.message
-              : String(err);
+            : archiveProblemText(err, 'job');
       job.set({ archive: null, archiveResumable: null, error: message });
     } finally {
       setReading(false);
@@ -116,10 +118,35 @@ export function ImportArchiveDialog() {
   const noRoom = !!weight && free !== null && weight.bytes > free;
   const ready = !!archive && !busy && !reading && !needsDrive && !noRoom;
 
-  const start = (resume: boolean) => {
-    if (!archive || busy) return;
+  const start = (intent: ImportRunOptions['intent']) => {
+    if (!archive || busy || attempt.current.running) return;
+    const sourceKey = archive.key;
+    const projectName = normalizeProjectName(name);
+    const pending = attempt.current;
+    if (intent !== 'resume') {
+      // El reintento de lo mismo sigue con su reserva (nunca crea otro proyecto). Otro archivo, otro botón u otro
+      // nombre es otra importación, con otra reserva.
+      if (!pending.reservation || pending.sourceKey !== sourceKey || pending.intent !== intent || pending.reservation.projectName !== projectName) pending.reservation = newImportReservation(sourceKey, projectName);
+      pending.sourceKey = sourceKey;
+      pending.intent = intent;
+    } else pending.intent = intent;
+    const options = { projectName, intent, reservation: pending.reservation, generationId: pending.reservation?.generationId };
+    pending.running = true;
     const deps = { tree, docs, media, journal, comments, userEmail: user.email || undefined, schemaVersion: status.schemaVersion ?? null };
-    void job.runArchive((onProgress) => importArchive(archive, deps, { projectName: name.trim(), resume, onProgress }), { beacon: dbName });
+    void job.runArchive(async (onProgress) => {
+      try {
+        return await importArchive(archive, deps, { ...options, onProgress });
+      } catch (err) {
+        // Con un error, lo que quedó guardado decide qué se ofrece después: seguir e importar a un proyecto nuevo, o
+        // Import otra vez. Así cambiar el nombre y reintentar nunca deja sin salida.
+        const earlier = await findArchiveResumable(archive, { tree, journal }).catch(() => null);
+        job.set({ archiveResumable: earlier });
+        throw new Error(archiveProblemText(err, 'job'));
+      }
+    }, { beacon: dbName }).finally(() => {
+      pending.running = false;
+      if (!job.get().error) pending.reservation = undefined;
+    });
   };
 
   const close = () => job.close();
@@ -226,15 +253,15 @@ export function ImportArchiveDialog() {
             </button>
           ) : resumable && !busy ? (
             <>
-              <button className="primary" disabled={!ready} onClick={() => start(true)}>
+              <button className="primary" disabled={!ready} onClick={() => start('resume')}>
                 {tr('importArchive.resume')}
               </button>
-              <button className="secondary" disabled={!ready || !name.trim()} onClick={() => start(false)}>
+              <button className="secondary" disabled={!ready || !name.trim()} onClick={() => start('new')}>
                 {tr('importArchive.startOver')}
               </button>
             </>
           ) : (
-            <button className="primary" disabled={!ready || !name.trim()} onClick={() => start(false)}>
+            <button className="primary" disabled={!ready || !name.trim()} onClick={() => start('initial')}>
               {busy ? tr('importArchive.importing') : tr('importArchive.start')}
             </button>
           )}

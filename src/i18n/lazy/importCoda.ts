@@ -132,10 +132,6 @@ export const importCoda = {
     en: "was edited after the import stopped: your text stays and the import went below it",
     es: "se editó después del corte: tu texto queda y lo importado va debajo",
   },
-  'import.keptEdited': {
-    en: "was edited after the import stopped: it stays as you left it (what failed there was not retried)",
-    es: "se editó después del corte: queda como la dejaste (lo que había fallado ahí no se reintentó)",
-  },
   'import.unsupported': {
     en: "has content from a newer version of the app: it was not changed (update the app and resume the import)",
     es: "tiene contenido de una versión más nueva de la app: no se tocó (actualizá la app y seguí la importación)",
@@ -143,6 +139,39 @@ export const importCoda = {
   'import.reattached': {
     en: "went to the top level: its parent page is missing or the pages loop",
     es: "quedó en el primer nivel: falta su página madre o las páginas forman un círculo",
+  },
+  'import.noDocId': {
+    en: "This folder's export doesn't say which doc it is from. Export the doc again with coda-export.",
+    es: "La exportación de esta carpeta no dice de qué doc es. Exportá el doc de nuevo con coda-export.",
+  },
+  // Lo que quedó pendiente (importCommit.ts, `importPendingText`): en el diálogo y en la lista del final.
+  'import.pending.job.changed': {
+    en: "An earlier import of this folder was left unfinished, or it changed in another tab. Try again with the options below.",
+    es: "Una importación anterior de esta carpeta quedó sin terminar, o cambió en otra pestaña. Probá de nuevo con las opciones de abajo.",
+  },
+  'import.pending.job.unreadable': {
+    en: "This device has an import record for this folder that this version of the app can't read. Update the app and close its other tabs.",
+    es: "Este dispositivo tiene un registro de importación de esta carpeta que esta versión de la app no puede leer. Actualizá la app y cerrá sus otras pestañas.",
+  },
+  'import.pending.page.unsaved': {
+    en: "could not be saved on this device yet; resume the import",
+    es: "todavía no se pudo guardar en este dispositivo; seguí la importación",
+  },
+  'import.pending.page.changed': {
+    en: "changed while it was being imported; resume the import",
+    es: "cambió mientras se importaba; seguí la importación",
+  },
+  'import.pending.page.mismatch': {
+    en: "was left in a state the import can't continue; use Import into a new project",
+    es: "quedó en un estado que la importación no puede seguir; usá Importar a un proyecto nuevo",
+  },
+  'import.pending.page.invalid': {
+    en: "could not be prepared for importing, and Resume will give the same result; use Import into a new project",
+    es: "no se pudo preparar para importar, y Seguir va a dar lo mismo; usá Importar a un proyecto nuevo",
+  },
+  'import.pending.close': {
+    en: "Everything came in, but the import could not be marked as finished: choose the same folder again and use Resume.",
+    es: "Entró todo, pero la importación no se pudo anotar como terminada: elegí la misma carpeta de nuevo y usá Seguir.",
   },
 } satisfies Dict;
 

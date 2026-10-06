@@ -1177,8 +1177,9 @@ sin subir `min_app_version`. Lo fija una prueba con el esquema publicado (`ui/fi
 9. **El borde de una foto borrada** no se reemplaza desde el proyecto (raro; se avisa).
 10. **Deshacer con el otro a la vez** puede volver a poner algo que el otro borró sin ver el reemplazo, o tomar como
     propio un texto idéntico que el otro escribió (sección 3). Queda texto de más, nunca de menos.
-11. **Importar de Coda otra vez** (v0.087): una página que tocó el reemplazo cambió su huella y queda como "kept" (no
-    se pisa). No pierde nada; es lo esperado para una página editada.
+11. **Importar de Coda otra vez** (v0.087): una página que tocó el reemplazo cambió su huella y quedaba como "kept" (no
+    se pisaba). No perdía nada; era lo esperado para una página editada. Desde v0.211 ese estado no existe: al seguir,
+    una página ya escrita no se vuelve a escribir (`Doc_Importar_Coda.md`, "Si se corta: seguir donde quedó").
 
 ### 8. Entregas
 
@@ -1240,7 +1241,8 @@ de Coda); y lo que deshacer puede hacer con el otro a la vez (volver a poner alg
 reemplazo, o tomar como propio un texto idéntico que el otro escribió: texto de más, nunca de menos), que corrige la
 frase "ningún carácter del otro" (se contaba por id). La auditoría además reprodujo las mediciones del prototipo (300
 corridas al azar sin pérdidas; 300 páginas en 1,4 s en su máquina) y revisó `main` hasta v0.087: el reemplazo no toca
-el mapa de "colapsado para todos", y una página reemplazada queda "kept" al volver a importar de Coda.
+el mapa de "colapsado para todos", y una página reemplazada quedaba "kept" al volver a importar de Coda (así hasta
+v0.210; desde v0.211 ese estado no existe).
 
 ## Cómo quedó (entrega 3, v0.094): reemplazar en todo el proyecto
 

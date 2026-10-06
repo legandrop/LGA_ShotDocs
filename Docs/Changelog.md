@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.211 :
+
+Una importación de Coda o de un archivo que se cortaba al crear el proyecto podía duplicar el proyecto al reintentar: el id se elegía al crearlo y el registro para seguir se escribía después. Además, al seguir, un comentario subido volvía a la cola y una página con un archivo sin guardar se escribía dos veces. Ahora cada importación reserva la identidad del proyecto antes de crearlo, y reintentar o Resume usa la misma. Si un archivo no se pudo guardar por algo reintentable (sin espacio), la página espera a Resume y entra entera, una sola vez (D305); uno vacío, dañado o que falta se anota y la página entra, como antes. Cada comentario deja un recibo local que impide repetirlo. Un registro de una versión anterior no bloquea: Import crea otro proyecto (D304). Lo pendiente se explica en inglés y castellano. Dos pruebas cubren las guardas de Annotate.
+
+[Reservar la identidad de cada importación, escribir cada página una sola vez y conservar los recibos de comentarios]
+
 v0.210 :
 
 Con una carpeta subiendo, *Export PDF* y *Prepare .zip* no arrancaban: esperaban ocho segundos y volvían a la ventana con el aviso de cambios sin guardar, durante toda la subida. La espera previa a exportar usaba el criterio de cerrar la pestaña, que cuenta las subidas de carpetas aunque su contenido va al Drive y no forma parte del PDF ni del zip. Ahora exportar espera lo que falta guardar en el dispositivo y sigue frenado por una importación o un reemplazo en curso, que dejarían el proyecto a medio escribir (D303); durante la subida, la tarjeta de la carpeta sale con su nota de avance. Cerrar la pestaña, recargar y cambiar de workspace siguen contando la subida. Además, catorce pruebas de la ventana Export fallaban por montarla sin el registro de guardado de la app; ahora lo registran, y otra nueva abre Export desde la app entera.

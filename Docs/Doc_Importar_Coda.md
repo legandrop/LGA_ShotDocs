@@ -98,8 +98,9 @@ código está en `src/import/` y el diálogo en `src/ui/ImportCodaDialog.tsx`.
 - **El estado vive afuera del diálogo** (`src/import/importJob.ts`, uno por workspace abierto) y el diálogo lo
   dibuja el Shell (`ImportCodaHost`), no el selector de proyectos: si el selector se desmonta (se cierra la
   barra lateral en el celular), la importación y su resultado siguen a la vista.
-- **Al terminar**: cuántas páginas y archivos, la lista de lo que no se pudo traer y, aparte, lo que anotó el
-  comando al bajar el doc (`manifest.problems`). Si quedó algo para reintentar, lo dice ("elegí la misma
+- **Al terminar**: cuántas páginas y archivos entraron ("Imported N pages and M files."; desde v0.211 N cuenta
+  las páginas terminadas, no las del manifest: con una que quedó para seguir es menor), la lista de lo que no se
+  pudo traer y, aparte, lo que anotó el comando al bajar el doc (`manifest.problems`). Si quedó algo para reintentar, lo dice ("elegí la misma
   carpeta de nuevo y usá Seguir").
 
 Va por los mismos caminos que usa la app al escribir, así que funciona sin red y lo guardado en el
@@ -119,40 +120,105 @@ anotada en la lista del final, y las demás siguen:
 
 ### Si se corta: seguir donde quedó
 
-Mientras importa, la app anota en el dispositivo (`meta` de la base local, clave `codaImport:<id del doc>`;
-la tabla ya existía, la base no cambia) qué página de la app es cada página de Coda, la huella de lo que la
-importación escribió en cada una, cuáles están terminadas y la dirección `sdmedia://` de cada archivo apenas
-queda guardado. Al volver a elegir la misma carpeta el diálogo lo dice ("no terminó: 12 de 35 páginas") y
-ofrece **Seguir**, que continúa en el mismo proyecto: no crea otra vez las páginas ya creadas, saltea las
-terminadas y usa los archivos ya guardados en vez de guardarlos (y subirlos al Drive) de nuevo. **Importar a
-un proyecto nuevo** empieza de cero (el proyecto a medias queda; desde P.14 se puede borrar desde el selector, y
-va a la papelera de proyectos: `Doc_Proyectos_Borrar.md`).
+Cada importación de un doc es una **generación** con identidad propia (desde v0.211). Mientras importa, la app
+anota en el dispositivo (`meta` de la base local, clave `codaImport2:<id del doc>`; la tabla ya existía, la base
+no cambia) las generaciones de ese doc y cuál es la vigente; de cada una, qué página de la app es cada página de
+Coda, cuáles están terminadas y la dirección `sdmedia://` de cada archivo apenas queda guardado. Al volver a
+elegir la misma carpeta el diálogo lo dice ("no terminó: 12 de 35 páginas") y ofrece **Seguir**, que continúa la
+generación vigente en el mismo proyecto: no crea otra vez las páginas ya creadas, saltea las terminadas y usa los
+archivos ya guardados en vez de guardarlos (y subirlos al Drive) de nuevo.
 
-- **Qué queda para seguir.** La anotación se borra solo cuando todas las páginas quedaron terminadas. Queda
-  sin terminar una página cuyo contenido no se pudo escribir ("3 archivos quedaron guardados pero la página no
-  se pudo escribir") o a la que le faltó guardar un archivo (sin espacio en el dispositivo, por ejemplo): al
-  seguir se reintenta, con los archivos ya guardados, y solo se guarda lo que faltó. Un archivo que no está en
-  la carpeta no deja la página sin terminar (volver a probar no lo trae). Se corta a mitad (se cerró la app, se
-  cortó la luz) igual: lo que no llegó a terminar se sigue.
-- **Nunca pisa lo que escribió la persona.** Antes de escribir una página sin terminar, se mira qué tiene: si
-  está vacía (la raíz inicial) o sigue igual a lo que dejó la importación (misma huella: texto, formato y
-  elementos en orden), se reemplaza. Si la importación no la había llegado a escribir y la persona escribió
-  algo, lo importado va debajo de su texto. Si la importación la había escrito y la persona la cambió después,
-  queda como la dejó (lo que había fallado ahí no se reintenta). Las dos cosas quedan anotadas.
-- **Una página terminada** no se vuelve a tocar al seguir, aunque la persona la haya mandado a la papelera
-  (no vuelve). Una sin terminar que se mandó a la papelera sí se crea de nuevo.
-- **Si el proyecto ya no está** (se perdió el acceso, o está en la papelera de proyectos), no se ofrece seguir, pero
-  la anotación se conserva (desde P.14): si el proyecto se restaura, se puede seguir. Una importación nueva del mismo
-  doc la reemplaza.
+- **La identidad se reserva antes de crear el proyecto.** En una sola transacción de la base local quedan
+  anotados el id de la generación, el del proyecto y el de la operación que lo crea, con el nombre elegido. Recién
+  después se crea el proyecto con esos ids: la operación entra a la cola de salida junto con su recibo y con el
+  registro de a qué operación pertenece ese proyecto, también en una sola transacción (si se aborta, no queda
+  ninguna de las tres cosas). Si se corta entre la reserva y el proyecto, reintentar o **Seguir** usa los mismos
+  ids: no aparece un segundo proyecto ni una segunda operación en la cola, tampoco con un doble clic, después de
+  cerrar y abrir la app o cuando el servidor ya confirmó la operación. Un recibo que no coincide con la reserva
+  (otro id, otro nombre, incompleto o de un formato que la app no conoce) frena la importación sin escribir nada, y
+  una reserva nunca toma un proyecto que no creó ella. El nombre se reserva como se guarda, cortado a 200 caracteres
+  y sin espacios en las puntas: uno más largo que al cortarse terminaba en un espacio hacía fallar la importación, y
+  ya no (así queda el nombre de cualquier proyecto nuevo, no solo de los importados).
+- **Después de un error**, el diálogo mira lo que quedó guardado y ofrece **Seguir** e **Importar a un proyecto
+  nuevo** ahí mismo, sin volver a elegir la carpeta. Cambiar el nombre y elegir el proyecto nuevo es otra
+  importación, con su propia reserva: entra con el nombre nuevo.
+- **Importar a un proyecto nuevo** abre otra generación, con otro proyecto y otros ids. La anterior queda como
+  estaba: su proyecto, el contenido de sus páginas (también lo que la persona escribió ahí), sus archivos, sus
+  comentarios en cola y su anotación no se tocan, pero deja de ofrecerse para seguir. Si el intento se corta,
+  repetirlo usa los ids de ese mismo intento. El proyecto a medias se puede borrar desde el selector (desde P.14;
+  va a la papelera de proyectos: `Doc_Proyectos_Borrar.md`).
+- **Al terminar, la anotación se conserva.** Cuando todas las páginas quedaron terminadas la generación se marca
+  como terminada: no se borra (hasta v0.210 se borraba) y ya no ofrece seguir. Importar otra vez la misma carpeta
+  crea otro proyecto, como siempre, en una generación nueva y sin tocar el anterior.
+- **Otra pestaña importando la misma carpeta.** Si después de elegir la carpeta otra pestaña dejó una importación
+  de ese doc sin terminar, **Importar** no crea un segundo proyecto: avisa que hay una importación anterior sin
+  terminar y ofrece seguirla o importar a un proyecto nuevo.
+- **Todo o nada por página (D305, desde v0.211), solo ante fallos que se pueden reintentar.** Cada página se
+  escribe entera y una sola vez. Si uno de sus archivos no se pudo guardar por algo que puede cambiar al probar de
+  nuevo (el dispositivo no tiene dónde guardar archivos, es un adjunto y el Drive no está conectado, no entra en la
+  cuota, no hay espacio al guardarlo, no se pudo leer del disco, o el registro de la importación no se pudo
+  guardar), queda anotado en la lista del final y la página **no se escribe**: los archivos que sí se guardaron
+  quedan anotados, al seguir se guarda solo el que faltó y la página entra entera, con el texto y todas sus fotos.
+  Hasta v0.210 entraba con el texto y las demás fotos, y al seguir se reescribía. **Lo definitivo no deja la página
+  para seguir**, porque volver a probar da lo mismo: un archivo que no está en la carpeta, uno vacío (0 bytes) o uno
+  que pasa el tope por archivo, una página sin su HTML o un `comments.json` que no se puede leer se anotan y la
+  página entra con su texto y lo demás. Que la página entre con lo que hay es lo publicado desde antes: sin cambios.
+  Una página que no se pudo escribir o guardar en el dispositivo también queda para seguir, con el motivo en la
+  lista del final ("3 archivos quedaron guardados pero la página no se pudo escribir", "todavía no se pudo guardar
+  en este dispositivo"). Si se corta a mitad (se cerró la app, se cortó la luz), igual: lo que no llegó a terminar
+  se sigue.
+- **Nunca pisa lo que escribió la persona.** Antes de tocar una página, la importación arma aparte el resultado
+  completo, lo anota en el dispositivo (el plan de esa página) y recién después lo aplica al documento; la página
+  se da por terminada cuando el documento quedó guardado igual al plan. Si la persona escribió en una página que
+  había quedado para seguir, su texto queda arriba y lo importado va debajo, entero, y queda anotado ("tu texto
+  queda y lo importado va debajo"). Si la página cambia justo mientras se importa, el plan no se aplica y la
+  página queda para seguir. Ya no existe «queda como la dejaste» (hasta v0.210, una página que la importación
+  había escrito a medias y la persona había cambiado no se volvía a intentar): con el todo o nada, una página o
+  no está escrita o está escrita entera.
+- **Una página ya escrita no se vuelve a escribir al seguir.** Sus bloques conservan sus ids, así que los
+  comentarios anclados a ellos no cambian de lugar, y lo que la persona editó después queda. Una terminada no se
+  vuelve a tocar aunque la persona la haya mandado a la papelera (no vuelve). Una sin terminar que se mandó a la
+  papelera sí se crea de nuevo.
+- **Un corte entre anotar el plan y aplicarlo.** Al seguir se mira cuánto del plan llegó al documento. Si no
+  llegó nada, el plan se descarta y la página se planifica de nuevo sobre lo que hay ahora (lo escrito queda
+  arriba). Si llegó entero, vale como aplicado aunque la persona haya editado la página después, y no se toca.
+  En cualquier otro caso la página no se toca y su renglón en la lista del final dice cómo salir (**Importar a un
+  proyecto nuevo**).
+- **Un bloque importado con el id de uno que la persona ya tiene.** En una página que quedó para seguir, si la
+  persona ya tiene un bloque con el mismo id que uno de los que hay que importar (pasa con un archivo de Shot Docs,
+  que conserva los ids de los bloques), la página no se toca: lo suyo no se pisa y lo importado no entra. **Seguir**
+  da el mismo resultado todas las veces; la salida es **Importar a un proyecto nuevo**, y el renglón de la página lo
+  dice ("no se pudo preparar para importar, y Seguir va a dar lo mismo; usá Importar a un proyecto nuevo").
+- **Si el proyecto ya no está** (se perdió el acceso, o está en la papelera de proyectos), no se ofrece seguir y
+  la anotación se conserva. Si el proyecto se restaura antes de importar de nuevo, se puede seguir. **Importar**
+  sobre la misma carpeta crea un proyecto nuevo en otra generación (desde v0.211; la anterior queda guardada como
+  estaba), y a partir de ahí la importación anterior ya no se puede seguir aunque su proyecto vuelva de la
+  papelera.
+- **Un registro de importación de una versión anterior a v0.211 (D304)** (clave `codaImport:<id del doc>`, de una
+  importación que quedó sin terminar) no bloquea y no se puede seguir: al elegir la carpeta se ofrece **Importar**,
+  que entra a un proyecto nuevo. El proyecto que había quedado a medias no se toca, y el registro viejo no se
+  convierte ni se borra: en la misma transacción que reserva la importación nueva pasa entero a una clave de
+  archivo del dispositivo (`codaImportEarlier1:<id del doc>:<uuid>`; un archivado nunca se pisa).
+- **Un registro que esta versión no puede leer** (de una versión más nueva de la app, por ejemplo): el diálogo lo
+  dice al elegir la carpeta, pide actualizar la app y cerrar sus otras pestañas, y no toca el registro.
+- **Los motivos se leen.** Lo que quedó pendiente sale en el diálogo y en la lista del final con un texto en
+  inglés o en castellano, del diccionario de la app (`import.pending.*`, y para los comentarios
+  `commentError.importMoved` y `commentError.importEarlier`); el nombre interno del estado nunca llega a la
+  pantalla.
 - **Huecos que quedan** (un corte en el instante justo): una página creada y no anotada todavía se crea de
   nuevo al seguir (queda una vacía de más, con el mismo título), y un archivo guardado y no anotado todavía se
   guarda de nuevo (entra dos veces al Drive; la copia de más, sin página que la use, va a la papelera de
   archivos a los pocos minutos, en un workspace que la tiene). `tree.create` y `media.add` eligen su propio id, así que no hay cómo anotar
-  antes de crear.
+  antes de crear. El proyecto ya no tiene ese hueco: su id se reserva antes de crearlo. Y si lo que falla no es un
+  corte sino guardar el registro justo después de crear una página, desde v0.211 esa página no se olvida ni se crea
+  dos veces: queda anotada con el próximo guardado que sale.
 
 ### El manifest
 
-Sin `pages` (o si no es JSON) es un error claro antes de mostrar nada. Lo que falta en una página toma un
+Sin `pages` (o si no es JSON) es un error claro antes de mostrar nada. Sin el id del doc (`doc.id`) la carpeta no
+se importa (desde v0.211): no habría con qué reconocer esa importación para seguirla ni para no repetirla, y al
+apretar **Importar** el diálogo pide exportar el doc de nuevo con coda-export, sin crear nada (hasta v0.210 se
+importaba, sin poder seguirla). Lo que falta en una página toma un
 valor por defecto: sin nombre entra como "Untitled", sin orden va por orden de llegada, sin `media` sin
 archivos, sin id (o con el id repetido) recibe uno propio, derivado de lo que tiene (nombre, padre, orden,
 archivo) y no de su lugar en la lista, así la anotación para seguir lo reconoce aunque el manifest cambie de
@@ -520,11 +586,18 @@ transformarla, en `comments.json` en la raíz de la carpeta exportada:
   otro.
 - **Fechas:** la original de cada comentario. Un hilo resuelto entra resuelto, con la fecha de su último
   comentario (Coda no dice cuándo se resolvió) y sin quién.
-- **Ids estables:** el id de cada comentario sale del proyecto y del `commentUri` de Coda (SHA-256 con forma
-  de uuid). Seguir una importación cortada no repite nada: lo que ya está en la cola no se vuelve a poner, y lo
-  que ya subió lo reconoce la base. Si la página se vuelve a escribir al seguir (sus bloques cambian de id), el
-  hilo pasa al bloque nuevo: si todavía no salió de la cola, ahí mismo; si ya subió, la base lo mueve (con sus
-  respuestas) al recibirlo de nuevo.
+- **Ids estables y recibo:** el id de cada comentario sale del proyecto y del `commentUri` de Coda (SHA-256 con
+  forma de uuid). Desde v0.211, los comentarios de cada página se arman junto con su plan (con los bloques como
+  van a quedar) y, al entrar a la cola, cada uno deja en el dispositivo, en la misma transacción, un **recibo**
+  (`importReceipt2:<id>`, en `meta` de la base local de comentarios) con su página, su origen y su hilo. El recibo
+  no se borra cuando el comentario sube ni cuando después se edita o se borra. Mientras está, volver a importarlo
+  (seguir una importación cortada) no lo pone otra vez en la cola ni le cambia el texto o el bloque: uno que la
+  persona editó o borró no vuelve a entrar. Hasta v0.210, uno ya subido volvía a la cola al seguir. Si la cola no
+  acepta los comentarios de una página (el mismo id con otra página, otro origen u otro hilo; o uno que quedó en
+  la cola con una versión anterior, sin recibo, que no se modifica), la página ya quedó escrita, el motivo sale
+  en la lista del final y sus comentarios quedan para seguir. **El recibo es local:** dice que este dispositivo ya
+  lo puso en la cola, no que el servidor lo tenga; eso lo sigue diciendo la cola, que suelta cada comentario solo
+  cuando el servidor lo confirma.
 - **Datos raros:** un comentario sin texto en Coda (solo una imagen o un adjunto) entra como "(no text in
   Coda)", así el hilo no se pierde; un nombre de más de 200 caracteres se corta; un correo que no parece correo
   no se guarda; una fecha anterior a 2000 o futura queda como la de la importación. Uno de más de 10.000

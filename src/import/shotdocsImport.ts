@@ -1,3 +1,5 @@
+import { beginImportGeneration, generationStore, pendingImport, type RecoveryStore, type ImportRunOptions } from './importCommit';
+import { normalizeProjectName } from '../sync/tree';
 import { BlockNoteEditor, type PartialBlock } from '@blocknote/core';
 import { withCollaboration } from '@blocknote/core/yjs';
 import * as Y from 'yjs';
@@ -9,6 +11,7 @@ import { carryMarkup, type CopiedPhoto } from '../media/markupClipboard';
 import { mediaIdOf, type MediaQueue } from '../media/queue';
 import { ARCHIVE_COMMENTS_SCHEMA_VERSION, type CommentQueue, type ImportedComment } from '../sync/comments';
 import type { PageDocs } from '../sync/docs';
+import { FileRejected } from '../sync/files';
 import type { LocalDb } from '../sync/localDb';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import type { PageTree } from '../sync/tree';
@@ -18,9 +21,10 @@ import { SHARED_COLLAPSE_MAP } from '../ui/collapseEditor';
 import { editorSchemaOptions } from '../ui/editorSchema';
 import { PAGE_SIZES } from '../ui/pageFormat';
 import { cleanArchiveBlocks, textOnlyBlocks, type NoteKey } from './archiveBlocks';
-import { contentFingerprint, HIDDEN_IMAGE, treePlan, writePage, type CodaManifestPage } from './codaImport';
+import { HIDDEN_IMAGE, treePlan, writePage, type CodaManifestPage } from './codaImport';
 import type { PageBlock } from './codaComments';
 import { cutText } from '../lib/graphemes';
+import { closeCommit, forgetReviewed, ImportPending, importPendingText, openCommit, recoveryStore, type ClosedCommit, type ImportCommit, type ImportNote, type PendingTexts } from './importCommit';
 
 // Volver a Shot Docs desde el zip que arma la app (P.22, entrega 3; Docs/Doc_Exportar.md, sección 3 y "Cómo quedó la
 // entrega 3"). Siempre a un PROYECTO NUEVO: nunca encima de uno que existe (regla 5). Por los mismos caminos que la
@@ -35,8 +39,10 @@ import { cutText } from '../lib/graphemes';
 // comentarios, con `import_comment` (origen `'shotdocs'`, base 18 o más), cada uno con un id nuevo derivado del
 // proyecto nuevo: reintentar no duplica y dos importaciones del mismo zip no chocan.
 //
-// Sigue donde quedó (diario en `meta`, clave `shotdocsImport:<id del archivo>:<SHA-256 del manifest>`): ni las
-// páginas, ni los archivos, ni los comentarios se repiten, y lo que la persona escribió mientras tanto nunca se pisa.
+// Sigue donde quedó (registro en `meta`, clave `shotdocsImport2:<id del archivo>:<SHA-256 del manifest>`, con una
+// generación por cada importación de ese archivo: importCommit.ts): ni las páginas, ni los archivos, ni los
+// comentarios se repiten, y lo que la persona escribió mientras tanto nunca se pisa. El registro de una importación
+// hecha con una versión anterior (clave `shotdocsImport:…`) no se sigue: queda archivado tal cual (D304).
 
 export const MANIFEST_PATH = '_shotdocs/manifest.json';
 export const COMMENTS_PATH = '_shotdocs/comments.json';
@@ -483,6 +489,8 @@ export function archiveTemplateId(id: string | null, page: (oldId: string) => st
 
 export interface ArchiveJournalPage {
   pageId: string;
+  /** El plan de la página mientras no terminó; de una terminada queda solo que se confirmó. */
+  commit?: ImportCommit | ClosedCommit;
   /** El árbol (ajustes, ícono, plantilla) ya quedó. */
   meta?: true;
   /** La huella de lo que escribió la importación, y la que iba a escribir (antes de escribir). */
@@ -494,6 +502,7 @@ export interface ArchiveJournalPage {
 }
 
 export interface ArchiveJournal {
+  recoveryVersion: 2;
   key: string;
   projectId: string;
   projectName: string;
@@ -502,30 +511,22 @@ export interface ArchiveJournal {
   media: Record<string, { url: string; name: string; preview?: true }>;
 }
 
-export interface ArchiveJournalStore {
+export interface ArchiveJournalStore extends RecoveryStore<ArchiveJournal> {
   get(key: string): Promise<ArchiveJournal | undefined>;
-  put(journal: ArchiveJournal): Promise<void>;
-  remove(key: string): Promise<void>;
+  put(journal: ArchiveJournal, expected?: ArchiveJournal): Promise<void>;
+  remove(key: string, expected?: ArchiveJournal): Promise<void>;
 }
 
-const JOURNAL_PREFIX = 'shotdocsImport:';
-
 /** El diario en `meta` de la base local (la tabla ya existe: la base no cambia). */
-export function archiveJournal(db: Pick<LocalDb, 'get' | 'put' | 'delete'>): ArchiveJournalStore {
-  return {
-    get: async (key) => (await db.get('meta', JOURNAL_PREFIX + key)) as ArchiveJournal | undefined,
-    put: async (journal) => {
-      await db.put('meta', journal, JOURNAL_PREFIX + journal.key);
-    },
-    remove: (key) => db.delete('meta', JOURNAL_PREFIX + key),
-  };
+export function archiveJournal(db: Pick<LocalDb, 'transaction'>): ArchiveJournalStore {
+  return recoveryStore<ArchiveJournal>(db, 'shotdocsImport', (j) => j.key);
 }
 
 // --- Importar --------------------------------------------------------------------------------------------------------
 
 export interface ArchiveImportDeps {
   tree: Pick<PageTree, 'create' | 'createProject' | 'project' | 'get' | 'isTrashed' | 'setPatch' | 'dropFresh'>;
-  docs: Pick<PageDocs, 'open' | 'close' | 'flush'>;
+  docs: Pick<PageDocs, 'open' | 'close' | 'flush' | 'isSaved'>;
   media: Pick<MediaQueue, 'add' | 'enabled'>;
   journal?: ArchiveJournalStore;
   comments?: Pick<CommentQueue, 'importComments'>;
@@ -561,7 +562,10 @@ export interface ArchiveResumable {
 
 /** Si hay una importación cortada de este archivo cuyo proyecto sigue estando, cuánto llegó a hacer. */
 export async function findArchiveResumable(archive: ShotDocsArchive, deps: Pick<ArchiveImportDeps, 'tree' | 'journal'>): Promise<ArchiveResumable | null> {
-  const journal = await deps.journal?.get(archive.key);
+  const pending = deps.journal ? await pendingImport(deps.journal, archive.key) : {};
+  if (pending.complete) return null;
+  const journal = pending.journal;
+  if (!journal && pending.reservation) return { projectId: pending.reservation.projectId, projectName: pending.reservation.projectName, done: 0, total: archive.manifest.pages.length };
   if (!journal) return null;
   const project = deps.tree.project(journal.projectId);
   if (!project) return null;
@@ -569,11 +573,23 @@ export async function findArchiveResumable(archive: ShotDocsArchive, deps: Pick<
   return { projectId: journal.projectId, projectName: project.name, done, total: archive.manifest.pages.length };
 }
 
+/** El texto de un error de la importación de un archivo para la persona (`where`: ver `PendingTexts`). */
+export function archiveProblemText(err: unknown, where: keyof PendingTexts = 'page'): string {
+  return importPendingText(err, where, {
+    job: { changed: t('importArchive.pending.job.changed'), unreadable: t('importArchive.pending.job.unreadable') },
+    page: { unsaved: t('importArchive.pending.page.unsaved'), changed: t('importArchive.pending.page.changed'), mismatch: t('importArchive.pending.page.mismatch'), invalid: t('importArchive.pending.page.invalid') },
+    close: t('importArchive.pending.close'),
+  });
+}
+
+/** La página queda para seguir y el motivo ya está anotado: no suma otro renglón a la lista. */
+const LATER = new Error('later');
+
 /** Le da un respiro al navegador entre página y página. */
 const breathe = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 /** La huella que va a tener la página con esos bloques (en un documento aparte, antes de escribir la de verdad). */
-function expectedFingerprint(blocks: PartialBlock<any, any, any>[]): string {
+function validateBlocks(blocks: PartialBlock<any, any, any>[]): void {
   const doc = new Y.Doc();
   const fragment = doc.getXmlFragment(CONTENT_FRAGMENT);
   const editor = BlockNoteEditor.create(
@@ -585,7 +601,7 @@ function expectedFingerprint(blocks: PartialBlock<any, any, any>[]): string {
   try {
     editor.mount(host);
     if (blocks.length) editor.replaceBlocks(editor.document, blocks);
-    return contentFingerprint(fragment);
+
   } finally {
     editor.unmount();
     host.remove();
@@ -612,7 +628,20 @@ const NOTE_ORDER = Object.keys(BLOCK_NOTES) as NoteKey[];
 export async function importArchive(
   archive: ShotDocsArchive,
   deps: ArchiveImportDeps,
-  options: { projectName?: string; resume?: boolean; onProgress?: (p: ArchiveProgress) => void } = {},
+  options: ImportRunOptions & { projectName?: string; onProgress?: (p: ArchiveProgress) => void } = {},
+): Promise<ArchiveImportResult> {
+  try {
+    return await runArchiveImport(archive, deps, options);
+  } finally {
+    // Termine o se corte: lo que se recordó para revisar los planes de esta importación ya no hace falta.
+    forgetReviewed();
+  }
+}
+
+async function runArchiveImport(
+  archive: ShotDocsArchive,
+  deps: ArchiveImportDeps,
+  options: ImportRunOptions & { projectName?: string; onProgress?: (p: ArchiveProgress) => void },
 ): Promise<ArchiveImportResult> {
   const { manifest, source } = archive;
   const weight = archiveWeight(archive);
@@ -628,16 +657,27 @@ export async function importArchive(
   const filesById = new Map(manifest.files.map((f) => [f.id, f]));
 
   const store = deps.journal;
-  let journal = options.resume && store ? await store.get(archive.key) : undefined;
-  if (journal && !deps.tree.project(journal.projectId)) journal = undefined;
-  if (!journal) {
-    const projectName = (options.projectName || manifest.projectName || manifest.title || t('project.untitled')).trim().slice(0, 200);
-    const projectId = await deps.tree.createProject(projectName);
-    journal = { key: archive.key, projectId, projectName, pages: {}, media: {} };
-  }
+  if (!store) throw new ImportPending('invalid');
+  const generations = generationStore<ArchiveJournal>(store);
+  const session = await beginImportGeneration<ArchiveJournal>(generations, archive.key, normalizeProjectName(options.projectName || manifest.projectName || manifest.title || t('project.untitled')), options, deps.tree,
+    (projectId, projectName) => ({ recoveryVersion: 2, key: archive.key, projectId, projectName, pages: {}, media: {} }));
+  let snapshot = session.snapshot;
+  const journal = session.journal;
+  let durable = structuredClone(journal);
   const state = journal;
+  // Las páginas creadas cuyo alta todavía no quedó en el registro: si el guardado falla, no se olvidan (se crearían de
+  // nuevo al escribirlas, y quedaría una página de más); entran con el próximo guardado que salga.
+  const created = new Map<string, string>();
   const save = async () => {
-    await store?.put(state).catch(() => undefined);
+    try {
+      snapshot = await generations.saveGeneration(snapshot, session.generationId, state);
+      durable = structuredClone(state);
+      created.clear();
+    } catch (err) {
+      if (durable) Object.assign(state, structuredClone(durable));
+      for (const [id, pageId] of created) state.pages[id] ??= { pageId };
+      throw err;
+    }
   };
   await save();
 
@@ -668,6 +708,7 @@ export async function importArchive(
     const pageId = await deps.tree.create(live(parent) ? parent : null, p.title, state.projectId);
     // Una página sin título no es "recién creada": no ofrece las plantillas.
     if (!p.title) await deps.tree.dropFresh(pageId).catch(() => undefined);
+    created.set(p.id, pageId);
     state.pages[p.id] = { pageId };
     await save();
     return pageId;
@@ -700,6 +741,49 @@ export async function importArchive(
     try {
       const pageId = live(entry?.pageId) ? entry.pageId : await create(p);
       const current = state.pages[p.id];
+      const notes: ImportNote[] = [];
+      const note = (key: string, args?: ImportNote['args']) => { notes.push({ key, ...(args ? { args } : {}) }); };
+      const checkpoint = async (commit: ImportCommit) => {
+        const before = current.commit;
+        current.commit = commit;
+        try { await save(); } catch (err) { current.commit = before; throw err; }
+      };
+      const valid = () => !!deps.tree.project(state.projectId) && deps.tree.get(pageId)?.workspace_id === state.projectId && !deps.tree.isTrashed(pageId);
+      const finish = async (commit: ImportCommit) => {
+        if (!valid()) throw new ImportPending('changed');
+        for (const n of commit.notes) pageNotes.push(t(n.key as Parameters<typeof t>[0], n.args));
+        // Con la base sin la migración, la página ya quedó escrita y sus comentarios esperan: se suman al seguir.
+        if (commit.commentsPlan.length && commentsWait) throw LATER;
+        if (commit.commentsPlan.length) {
+          try {
+            await deps.comments!.importComments(commit.commentsPlan);
+          } catch (err) {
+            // La página ya quedó escrita; sus comentarios se reintentan al seguir (el mismo id no se repite).
+            pageNotes.push(t('importArchive.note.commentsFailed', { reason: archiveProblemText(err) }));
+            throw LATER;
+          }
+        }
+        current.comments = commit.commentsPlan.length;
+        comments += current.comments;
+        // Terminada: no se vuelve a escribir, así que del plan queda solo que se confirmó.
+        current.commit = closeCommit();
+        current.done = true;
+        await save();
+      };
+      const discard = async () => {
+        const before = current.commit;
+        delete current.commit;
+        try { await save(); } catch (err) { current.commit = before; throw err; }
+      };
+      // Con el plan ya anotado, la página no se vuelve a armar; salvo que el plan nunca le haya llegado (`replan`).
+      const plan = openCommit(current.commit);
+      const earlier = plan ? await writePage(deps.docs, pageId, [], { commit: plan, checkpoint, valid, discard, prepare: async () => { throw new ImportPending('invalid'); } }) : null;
+      if (earlier && earlier.result !== 'replan') {
+        files += current.files ?? 0;
+        await finish(earlier.commit!);
+        for (const n of pageNotes) problems.push(`${title}: ${n}`);
+        continue;
+      }
 
       // El árbol: ajustes, ícono y plantilla con los ids nuevos (una vez).
       if (!current.meta) {
@@ -718,6 +802,8 @@ export async function importArchive(
       let rawBlocks: unknown = [];
       let collapsed: string[] = [];
       let markup: CopiedPhoto[] = [];
+      // Solo lo que se puede reintentar deja la página para seguir (un archivo que no se pudo guardar ahora). Lo que
+      // falta en el archivo no vuelve por reintentar: se anota y la página entra con lo que hay.
       let complete = true;
       if (!p.json || !source.has(p.json)) {
         pageNotes.push(t('importArchive.note.noContent'));
@@ -742,7 +828,7 @@ export async function importArchive(
       for (const oldId of mediaIdsInBlocks(rawBlocks)) {
         if (state.media[oldId]) continue;
         const f = filesById.get(oldId);
-        if (f && recompressed(archive, f)) pageNotes.push(t('importArchive.note.recompressed', { name: f.name }));
+        if (f && recompressed(archive, f)) note('importArchive.note.recompressed', { name: f.name });
         const got = f ? chosenBlob(archive, f) : null;
         if (!f || !got) continue;
         try {
@@ -754,22 +840,32 @@ export async function importArchive(
           pageFiles++;
           if (got.preview) {
             previews++;
-            pageNotes.push(t('importArchive.note.preview', { name: f.name }));
+            note('importArchive.note.preview', { name: f.name });
           }
         } catch (err) {
-          complete = false;
+          // Solo lo que se puede reintentar deja la página para seguir (sin lugar, el tope de lo que se descomprime de
+          // una vez, el registro que no se pudo guardar). Un archivo dañado en el zip, o que el dispositivo rechaza por
+          // lo que es (vacío), no entra por reintentar: se anota y su nombre queda en su lugar, como uno que falta.
+          const permanent = (err instanceof ZipReadError && err.code !== 'tooBig') || (err instanceof FileRejected && err.permanent);
+          if (!permanent) complete = false;
           const why =
             err instanceof ZipReadError && err.code === 'tooBig'
               ? t('importArchive.note.recompressedTotal')
               : err instanceof ZipReadError
                 ? t('importArchive.note.damagedFile', { path: got.path })
-                : err instanceof Error
-                  ? err.message
-                  : String(err);
+                : archiveProblemText(err);
           pageNotes.push(`${f.name}: ${why}`);
         }
       }
       files += pageFiles;
+      current.files = (current.files ?? 0) + pageFiles;
+      if (!complete) {
+        // La página no se escribe a medias: al seguir se escribe entera, una sola vez. Lo anotado de los archivos que
+        // sí se guardaron se muestra ahora (al seguir ya no se vuelven a mirar).
+        for (const n of notes) pageNotes.push(t(n.key as Parameters<typeof t>[0], n.args));
+        await save();
+        throw LATER;
+      }
 
       // Los bloques, revisados y con los ids nuevos.
       const counts = new Map<NoteKey, { n: number; details: Set<string> }>();
@@ -788,34 +884,21 @@ export async function importArchive(
       });
       for (const key of NOTE_ORDER) {
         const c = counts.get(key);
-        if (c) pageNotes.push(t(BLOCK_NOTES[key], { count: c.n, list: [...c.details].join(', ') }));
+        if (c) note(BLOCK_NOTES[key], { count: c.n, list: [...c.details].join(', ') });
       }
 
-      // Antes de escribir, los bloques se prueban en un documento aparte: así se sabe si el editor los acepta y la huella
-      // de lo que va a quedar. Si la importación se corta entre escribir y anotarlo, al seguir se reconoce la página
-      // como propia (y no se le suma una copia abajo).
       let toWrite = blocks;
-      let expected: string;
-      try {
-        expected = expectedFingerprint(blocks);
-      } catch {
-        // El editor no acepta los bloques: va el texto, en párrafos (nunca se pierde el texto), anotado.
-        pageNotes.push(t('importArchive.note.textOnly'));
+      try { validateBlocks(blocks); }
+      catch {
+        note('importArchive.note.textOnly');
         toWrite = textOnlyBlocks(blocks);
-        expected = expectedFingerprint(toWrite);
+        validateBlocks(toWrite);
       }
-      if (!current.written) {
-        current.expected = expected;
-        await save();
-      }
-      const firstWrite = !current.written;
       const newIds = new Set(mediaIdsInBlocks(toWrite));
       const extra = (doc: Y.Doc, written: PageBlock[]) => {
-        if (!firstWrite) return;
         const ids = new Set(written.map((b) => b.id));
         const map = doc.getMap(SHARED_COLLAPSE_MAP);
         for (const id of collapsed) if (ids.has(id) && map.get(id) !== true) map.set(id, true);
-        // Las anotaciones, con el id de archivo nuevo (solo las fotos que quedaron en la página).
         const photos: CopiedPhoto[] = [];
         for (const m of markup) {
           const nowId = mediaIdOf(state.media[m.fileId]?.url);
@@ -823,56 +906,36 @@ export async function importArchive(
         }
         if (photos.length) {
           const carried = carryMarkup(doc, photos, newIds, 'sd-archive-import');
-          if (carried.skipped.some((s) => s.reason !== 'notInContent')) pageNotes.push(t('importArchive.note.markupSkipped', { count: carried.skipped.length }));
+          if (carried.skipped.some((s) => s.reason !== 'notInContent')) note('importArchive.note.markupSkipped', { count: carried.skipped.length });
         }
       };
-      // Si la importación nunca la escribió (`expected` y no `written`) y la persona ya escribió otra cosa ahí, lo
-      // importado va debajo: `kept` (no tocar) vale solo para lo que la importación sí escribió. Un error al guardar
-      // sube: la página queda sin terminar, para seguir.
-      let outcome = await writePage(deps.docs, pageId, toWrite, current.written ?? current.expected, extra);
-      if (outcome.result === 'kept' && !current.written) outcome = await writePage(deps.docs, pageId, toWrite, undefined, extra);
+      const outcome = await writePage(deps.docs, pageId, toWrite, {
+        checkpoint,
+        valid,
+        prepare: async (written, appended) => {
+          if (appended) note('importArchive.note.appended');
+          const built = await buildArchiveComments(threads?.get(p.id) ?? [], {
+            projectId: state.projectId, pageId, blockIds: new Set(written.map((b) => b.id)), mine,
+          });
+          if (built.promoted) note('importArchive.note.promoted', { count: built.promoted });
+          if (built.unanchored) note('importArchive.note.unanchored', { count: built.unanchored });
+          if (built.redated) note('importArchive.note.redated', { count: built.redated });
+          return { notes, commentsPlan: built.comments };
+        },
+      }, extra);
       if (outcome.result === 'unsupported') {
         pageNotes.push(t('importArchive.note.unsupported'));
-        complete = false;
-      } else if (outcome.result === 'appended') pageNotes.push(t('importArchive.note.appended'));
-      else if (outcome.result === 'kept') pageNotes.push(t('importArchive.note.kept'));
-
-      // Los comentarios de la página, con los bloques como quedaron.
-      let pageComments = 0;
-      const pageThreads = threads?.get(p.id) ?? [];
-      if (pageThreads.length && outcome.result !== 'unsupported') {
-        if (commentsWait) complete = false;
-        else {
-          try {
-            const built = await buildArchiveComments(pageThreads, { projectId: state.projectId, pageId, blockIds: new Set(outcome.blocks.map((b) => b.id)), mine });
-            pageComments = await deps.comments!.importComments(built.comments);
-            if (built.promoted) pageNotes.push(t('importArchive.note.promoted', { count: built.promoted }));
-            if (built.unanchored) pageNotes.push(t('importArchive.note.unanchored', { count: built.unanchored }));
-            if (built.redated) pageNotes.push(t('importArchive.note.redated', { count: built.redated }));
-          } catch (err) {
-            complete = false;
-            pageNotes.push(t('importArchive.note.commentsFailed', { reason: err instanceof Error ? err.message : String(err) }));
-          }
-        }
+        throw LATER;
       }
-      comments += pageComments;
-      state.pages[p.id] = {
-        ...current,
-        pageId,
-        files: (current.files ?? 0) + pageFiles,
-        comments: pageComments || undefined,
-        ...(outcome.fingerprint ? { written: outcome.fingerprint } : {}),
-        ...(complete && outcome.result !== 'unsupported' ? { done: true as const } : {}),
-      };
-      await save();
+      await finish(outcome.commit!);
     } catch (err) {
-      pageNotes.push(err instanceof Error ? err.message : String(err));
+      if (err !== LATER) pageNotes.push(archiveProblemText(err));
     }
     for (const n of pageNotes) problems.push(`${title}: ${n}`);
   }
 
-  const resumable = pages.some((p) => !state.pages[p.id]?.done);
-  if (!resumable) await store?.remove(archive.key).catch(() => undefined);
+  let resumable = pages.some((p) => !state.pages[p.id]?.done);
+  if (!resumable) try { await generations.completeGeneration(snapshot, session.generationId); } catch (err) { resumable = true; problems.push(archiveProblemText(err, 'close')); }
   options.onProgress?.({ done: pages.length, total: pages.length, page: '' });
-  return { projectId: state.projectId, pages: pages.length, files, previews, comments, problems, resumable: resumable && !!store };
+  return { projectId: state.projectId, pages: pages.filter((p) => state.pages[p.id]?.done).length, files, previews, comments, problems: [...new Set(problems)], resumable: resumable && !!store };
 }

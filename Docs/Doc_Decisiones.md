@@ -242,6 +242,24 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
   porque se exportaría un proyecto a medio escribir.
   Cerrar la pestaña, recargar y cambiar de workspace no cambian: siguen contando también la subida (v0.210;
   `Doc_Exportar.md`, "Guardado local antes del PDF").
+- **D304 · Un registro de importación de una versión anterior no bloquea** (2026-10-06; tomada al repararlo, Lega la puede cambiar). Una
+  importación de Coda o de un archivo de Shot Docs que quedó sin terminar con v0.210 o anterior no se puede seguir:
+  al elegir la carpeta o el zip no se ofrece *Resume*, se ofrece *Import*, que entra a un proyecto nuevo. El proyecto
+  que había quedado a medias no se toca, y el registro viejo no se convierte ni se borra: pasa entero a una clave de
+  archivo del dispositivo. **Por qué:** la app está en desarrollo, y seguir sobre el formato anterior exigía
+  rediseñar (v0.211; `Doc_Importar_Coda.md`, "Si se corta: seguir donde quedó").
+- **D305 · La importación es todo o nada por página, ante fallos que se pueden reintentar** (2026-10-06; tomada al repararlo, Lega la puede cambiar). Una
+  página con un archivo que no se pudo guardar por algo que puede cambiar al probar de nuevo queda sin escribir hasta
+  *Resume*, y ahí entra entera; antes entraba con el texto y las demás fotos y *Resume* la reescribía. Se pueden
+  reintentar: el dispositivo sin dónde guardar archivos, un adjunto sin el Drive conectado, no entrar en la cuota,
+  quedarse sin espacio al guardar, el tope de lo que se descomprime de una vez, un error al leer el archivo del disco
+  y el registro de la importación que no se pudo guardar. **No aplica a lo definitivo** (sin cambios frente a lo
+  publicado): un archivo vacío, uno que pasa el tope por archivo, uno dañado o que falta en el zip, o que no está en
+  la carpeta, se anotan y la página entra con su texto y lo demás (en el zip, el nombre del archivo queda en su
+  lugar). Si la persona escribió en una página que quedó para seguir, su texto queda arriba y lo importado va debajo;
+  ya no existe «queda como la dejaste». **Por qué:** no se pierde nada (el texto y los archivos ya guardados esperan
+  a *Resume*), y la paridad exacta con el estado intermedio anterior complicaba el guardado atómico de cada página
+  para un caso raro (v0.211; mismo doc).
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 

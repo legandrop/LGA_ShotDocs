@@ -3,7 +3,7 @@ import { Blob as NodeBlob, File as NodeFile } from 'node:buffer';
 import { afterEach, describe, expect, it } from 'vitest';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { acrossBlocks, anchorBlock, buildComments, codaCommentId, normalizeText, parseCodaComments, type CodaThread } from './codaComments';
-import { COMMENTS_FILE, countComments, importCoda, type CodaFolder, type CodaManifestPage } from './codaImport';
+import { COMMENTS_FILE, countComments, importCoda, metaJournal, type CodaFolder, type CodaManifestPage } from './codaImport';
 
 // Los comentarios de Coda al importar (Doc_Importar_Coda.md, "3. Comentarios"): `comments.json` con la forma
 // que devuelve el servidor MCP de Coda, el anclaje por texto, los ids estables y la importación entera contra
@@ -300,7 +300,7 @@ describe('comentarios de Coda: importar la carpeta', () => {
     const { server, a } = await setup();
     const f = folder(COMMENTS);
     expect(await countComments(f)).toBe(5);
-    const result = await importCoda(f, { ...a, comments: a.comments, userEmail: ME });
+    const result = await importCoda(f, { ...a, comments: a.comments, userEmail: ME, journal: metaJournal(a.db) });
     expect(result.comments).toBe(5);
     expect(result.problems).toEqual(['Escena: the text of 1 comment was not found; it is on the whole page']);
     for (let i = 0; i < 3; i++) await a.engine.syncNow();
@@ -356,7 +356,7 @@ describe('comentarios de Coda: importar la carpeta', () => {
       file: async (p) => new Blob([String(files.get(p))]),
       size: (p) => files.get(p)?.length ?? 0,
     };
-    const result = await importCoda(f, { ...a, comments: a.comments, userEmail: ME });
+    const result = await importCoda(f, { ...a, comments: a.comments, userEmail: ME, journal: metaJournal(a.db) });
     expect(result.problems).toEqual([]);
     for (let i = 0; i < 3; i++) await a.engine.syncNow();
     const tablePage = [...server.pages.values()].find((p) => p.workspace_id === result.projectId && p.title === 'Tabla')!;
@@ -373,12 +373,11 @@ describe('comentarios de Coda: importar la carpeta', () => {
     expect(byBody.get('Comentario 3')).toBe(okBlock.id);
   });
 
-  it('seguir una importación cortada no repite comentarios, y lo que no salió toma los bloques nuevos de la página', async () => {
+  it('seguir una importación cortada no repite comentarios, y quedan en el bloque que tiene su texto', async () => {
     const { server, a } = await setup();
     const f = folder(COMMENTS);
-    const { metaJournal } = await import('./codaImport');
     // Los comentarios quedan en la cola pero la página no se llega a anotar como terminada (un corte justo
-    // después): al seguir se vuelve a escribir, con bloques de otro id, y se vuelven a poner en la cola.
+    // después): al seguir, la página ya escrita no se vuelve a escribir y los comentarios no se repiten.
     server.online = false;
     let cut = true;
     const comments = {
@@ -399,7 +398,7 @@ describe('comentarios de Coda: importar la carpeta', () => {
     for (let i = 0; i < 3; i++) await a.engine.syncNow();
     expect(server.comments.size).toBe(5);
     expect(a.engine.getStatus().failedComments).toBe(0);
-    // El hilo 1 apunta al bloque que tiene su texto ahora, no al de la primera escritura.
+    // El hilo 1 apunta al bloque que tiene su texto.
     const scene = [...server.pages.values()].find((p) => p.workspace_id === first.projectId && p.title === 'Escena')!;
     const doc = await a.docs.open(scene.id);
     const { pageBlocks } = await import('./codaComments');
@@ -410,10 +409,9 @@ describe('comentarios de Coda: importar la carpeta', () => {
     expect(root1.block_id).toBe(now.find((b) => b.text.includes('A cuántos fps'))?.id);
   });
 
-  it('seguir con red después de que los comentarios subieron: el hilo pasa al bloque nuevo, sin conflictos', async () => {
+  it('seguir con red después de que los comentarios subieron: el hilo sigue en su bloque, sin conflictos', async () => {
     const { server, a } = await setup();
     const f = folder(COMMENTS);
-    const { metaJournal } = await import('./codaImport');
     let cut = true;
     const comments = {
       importComments: async (list: Parameters<typeof a.comments.importComments>[0]) => {
@@ -441,22 +439,22 @@ describe('comentarios de Coda: importar la carpeta', () => {
     const byBody = new Map([...server.comments.values()].map((c) => [c.body, c]));
     const target = now.find((b) => b.text.includes('A cuántos fps'))?.id;
     expect(target).toBeTruthy();
-    // La página se volvió a escribir: el bloque es otro.
-    expect(target).not.toBe(before);
+    // La página ya escrita no se vuelve a escribir al seguir: el bloque es el mismo y el hilo nunca se movió.
+    expect(target).toBe(before);
     expect(byBody.get('Comentario 1')!.block_id).toBe(target);
     expect(byBody.get('Respuesta 1')!.block_id).toBe(target);
   });
 
   it('un comments.json roto o de otro doc se anota y la importación sigue sin comentarios', async () => {
     const { server, a } = await setup();
-    const broken = await importCoda(folder('{no es json'), { ...a, comments: a.comments });
+    const broken = await importCoda(folder('{no es json'), { ...a, comments: a.comments, journal: metaJournal(a.db) });
     expect(broken.comments).toBe(0);
     expect(broken.problems).toEqual(["The comments.json in this folder can't be read: the comments were not imported."]);
-    const other = await importCoda(folder({ ...COMMENTS, docId: 'OTRO' }), { ...a, comments: a.comments });
+    const other = await importCoda(folder({ ...COMMENTS, docId: 'OTRO' }), { ...a, comments: a.comments, journal: metaJournal(a.db) });
     expect(other.comments).toBe(0);
     expect(other.problems[0]).toContain('another doc');
     // Sin la cola de comentarios, también se anota.
-    const off = await importCoda(folder(COMMENTS), { ...a, comments: undefined });
+    const off = await importCoda(folder(COMMENTS), { ...a, comments: undefined, journal: metaJournal(a.db) });
     expect(off.problems[0]).toContain("can't be saved");
     await a.engine.syncNow();
     expect(server.comments.size).toBe(0);
@@ -464,7 +462,7 @@ describe('comentarios de Coda: importar la carpeta', () => {
 
   it('sin comments.json importa igual que antes', async () => {
     const { a } = await setup();
-    const result = await importCoda(folder(undefined), { ...a, comments: a.comments });
+    const result = await importCoda(folder(undefined), { ...a, comments: a.comments, journal: metaJournal(a.db) });
     expect(result).toMatchObject({ comments: 0, problems: [] });
   });
 });

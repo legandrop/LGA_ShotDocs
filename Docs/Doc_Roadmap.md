@@ -505,10 +505,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   (`src/media/markupClipboard.ts`, `src/ui/markupClipboardEditor.ts`). Falta a mano: ⌘C y ⌘V de verdad en Safari de la
   Mac y en el iPhone. **Con plantillas (v0.136):** las anotaciones también viajan al usar una plantilla del mismo proyecto y al
   guardar como plantilla (*Clear filled-in values* las saca con las fotos). **Keep annotations? (v0.186, AN2/E5 parcial):** reemplazar una foto anotada de bloque, fila, renglón o celda ofrece Sí para copiar el mapa completo con proporción orientada exacta, No sin copiar y Cancelar sin cambiar la foto. Archivo y mapa originales se conservan; referencia y copia comparten un paso de deshacer, con la última intención por aparición. **Buscar sus textos (v0.187, E5 parcial):** Ctrl/⌘+K encuentra anotaciones textuales válidas de fotos presentes y abre la misma foto en el Carrete, también en renglones/celdas, sin red y para quien solo ve. No modifica las anotaciones ni Reemplazar. **Comparar dibujos históricos (E5 parcial):** Show changes muestra dibujos soportados en Before y Selected version, sin cargar originales, sin autor por forma y con aviso para datos parciales; una entrada apartada no se compara. **Restore y Recover drawing (v0.207, E5 parcial):** restauran campos de líneas soportadas con el mismo padre y marco. Recover drawing completa sólo los campos faltantes de una línea retirada con historia inequívoca y conserva todos los valores posteriores; una nueva edición invalida la oferta, se confirma el guardado local antes del aviso y se deshace en un paso. Quedan otros tipos de forma, padres eliminados y las comprobaciones físicas de búsqueda y reemplazo en Safari/iPhone; no completa E5.
-  De la auditoría de la entrega 2 (`Doc_Anotar_Fotos.md`, "Correcciones de la auditoría de la entrega 2"), pendientes:
-  una prueba que caiga si la condición «página sincronizada» de `PageEditor` (red, nada sin subir, nada sin bajar) que
-  frena la poda se rompe (hoy, con `synced = async () => true`, la suite sigue en verde; la re-verificación lo comprobó en
-  el navegador); una prueba que caiga si `PageEditor` ofrece *Annotate* sin poder editar; un marco ilegible lo pisa la primera forma
+  De la auditoría de la entrega 2 (`Doc_Anotar_Fotos.md`, "Correcciones de la auditoría de la entrega 2"): las dos
+  guardas de `PageEditor` tienen prueba con el editor real desde v0.211 (con solo ver no ofrece *Annotate* ni escribe
+  con las teclas; la poda espera red y que no haya nada sin subir ni sin bajar; ver "Guardas del editor comprobadas"
+  en ese doc). Siguen pendientes: un marco ilegible lo pisa la primera forma
   (revisar el día que cambie `v`); una forma con grosor 0 y sin relleno no se ve pero se puede elegir (sirve para
   borrarla; decidir); un workspace sin la migración del equipo no conoce los permisos y nunca poda.
 - **P.22 Exportar una página o un proyecto entero** (Lega, 2026-10-02): PDF y/o zip con las páginas y las fotos, para
@@ -546,6 +546,37 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   `20261026120000_comentarios_archivo.sql`, **sin aplicar**: con la base vieja esperan para *Resume*); sigue donde quedó
   sin duplicar; zips rotos y hostiles avisados sin crear nada. Falta: aplicar la migración (con su prueba SQL) y a mano
   ERSO entero con el portero de verdad, Safari y el iPhone (`Doc_Exportar.md`, "Cómo quedó la entrega 3"). Sigue la 4.
+  **Importación por generaciones (v0.211, parcial; también *Import from Coda…*; D304 y D305):** cada importación
+  reserva en el dispositivo su identidad (generación, proyecto y la operación que lo crea) antes de crear el proyecto;
+  reintentar o *Resume* usa los mismos ids y no crea otro proyecto; *Import into a new project*, o importar otra vez
+  algo ya terminado, abre otra generación sin tocar la anterior; cada página se escribe entera o no se escribe, y una
+  ya escrita no se vuelve a escribir al seguir (el todo o nada vale solo ante fallos que se pueden reintentar: un
+  archivo que falta, vacío, dañado o pasado del tope se anota y la página entra); un registro de una versión anterior
+  no bloquea y queda archivado; cada
+  comentario importado deja un recibo local que impide ponerlo otra vez en la cola; y lo que queda pendiente se dice
+  con un texto en inglés o en castellano (`Doc_Importar_Coda.md`, "Si se corta: seguir donde quedó"). Probado con la
+  base local simulada y los dos diálogos montados. **No cierra la importación.** Falta: el selector real de carpeta y
+  de archivo e IndexedDB en un navegador real; el Drive y los permisos reales; el aborto de una transacción sobre la
+  anotación de un archivo de Shot Docs (los abortos se probaron sobre la de Coda y sobre la creación del proyecto); y
+  limpiar los registros archivados de versiones anteriores, que hoy quedan en el dispositivo sin que nada los borre.
+  Pendientes conocidos de la importación: (a) si la app se corta justo entre crear una
+  página (o guardar un archivo) y anotarlo, al seguir queda una página vacía o un archivo local de más; ya pasaba en
+  v0.210, y el arreglo es reservar el id antes de crear, como se hace con el proyecto; (b) una carpeta de Coda vuelta
+  a exportar sin una de sus páginas entre el corte y *Resume* nunca cierra la importación: cada *Resume* termina en
+  "Everything came in, but the import could not be marked as finished"; (c) un comentario importado cuyo recibo
+  corresponde a otra página no tiene salida por *Resume*, solo por *Import into a new project*; (d) al crear el
+  proyecto reservado se vuelve a leer el árbol entero, lo que podría cruzarse con una sincronización en curso (no se
+  reprodujo); (e) el registro de importaciones de una misma carpeta o zip crece con cada importación terminada, sin
+  poda; (f) una carpeta de Coda sin id de doc se avisa al apretar *Import* y no al elegirla; (g) un registro de esta
+  versión que no se puede leer se avisa, pero no tiene salida desde la app; (h) la lectura y la escritura anteriores
+  del registro (`get`, `put` y `remove` del diario) ya no las usa la app y siguen en el código con otra política que
+  D304, porque varias pruebas dependen de ellas; (i) el resumen del final no tiene forma singular ("Imported 1 pages",
+  "Se importaron 1 páginas"), y ahora que cuenta las páginas terminadas sale más seguido; (j) en el caso (b) el aviso
+  manda a *Resume*, que repite lo mismo: falta decir que la salida es *Import into a new project* (sin probar que el
+  proyecto nuevo entre en ese caso); (k) un zip vuelto a comprimir por otra herramienta trata cualquier error al leer
+  una entrada comprimida como archivo dañado, también uno pasajero de lectura del disco: la página entra sin esa foto y
+  *Resume* no la reintenta; (l) una página pendiente que la persona mandó a la papelera, más un guardado del registro
+  que falla justo al crearla de nuevo, puede dejar esa página dos veces.
   **Aviso de conversión aclarado (v0.191):** una foto de más de 100 MP que hay que pasar a JPEG (girada, PNG, CMYK)
   conserva la reducción existente a su ancho impreso; la ventana cuenta aparte ese límite y los originales no disponibles,
   sin sumar dos veces la misma foto. No cambia los topes ni acredita memoria o impresión física.
