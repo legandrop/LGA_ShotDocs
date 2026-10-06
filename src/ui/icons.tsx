@@ -71,7 +71,7 @@ export const LightIcon = icon(
 export const DarkIcon = icon('M15.5 12.25A6 6 0 0 1 7.75 4.5a6 6 0 1 0 7.75 7.75z');
 // El contraste del texto (Docs/Doc_Contraste.md): un encabezado y dos renglones, cada uno con la opacidad de su nivel
 // (todos iguales sin contraste; más apagados cuanto más marcada la jerarquía).
-const CONTRAST_STEPS = { none: [1, 1, 1], contrast: [1, 0.68, 0.45], more: [1, 0.5, 0.26] } as const;
+const CONTRAST_STEPS = { none: [1, 1, 1], contrast: [1, 0.9, 0.45], more: [1, 0.94, 0.36] } as const;
 export function ContrastIcon({ level, size = 18 }: { level: keyof typeof CONTRAST_STEPS; size?: number }) {
   const [h, b, t] = CONTRAST_STEPS[level];
   return (

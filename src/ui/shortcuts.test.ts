@@ -66,7 +66,7 @@ describe('el registro', () => {
     expect(both('collapse')).toEqual(['⌘⌥↩', 'Ctrl+Alt+Enter']);
     expect(both('collapseEveryone')).toEqual(['⌘⌥⇧↩', 'Ctrl+Alt+Shift+Enter']);
     expect(both('commentsSend')).toEqual(['⌘↩', 'Ctrl+Enter']);
-    expect(both('heading')).toEqual(['⌘⌥1…6', 'Ctrl+Alt+1…6']);
+    expect(both('heading')).toEqual(['⌘⌥1…5', 'Ctrl+Alt+1…5']);
     expect(both('redo')).toEqual(['⌘⇧Z / ⌘Y', 'Ctrl+Shift+Z / Ctrl+Y']);
     expect(both('moveUp')).toEqual(['⌘⇧↑', 'Ctrl+Shift+↑']);
     expect(both('findNext')).toEqual(['Enter / F3 / ⌘G', 'Enter / F3 / Ctrl+G']);
@@ -127,7 +127,8 @@ describe('el registro', () => {
  * Teclas de edición que no se documentan como atajos (escribir, borrar, moverse con las flechas): las maneja el
  * editor en todos los programas igual. Cualquier otra que aparezca en el editor tiene que estar en el registro.
  */
-const UNDOCUMENTED = new Set(['Backspace', 'Delete', 'Enter', 'Escape', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Shift-ArrowDown', 'Shift-ArrowRight']);
+// Mod-Alt-6 permanece en BlockNote por compatibilidad, sin oferta en menús ni ayuda.
+const UNDOCUMENTED = new Set(['Mod-Alt-6', 'Backspace', 'Delete', 'Enter', 'Escape', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Shift-ArrowDown', 'Shift-ArrowRight']);
 /**
  * Extensiones de BlockNote que no vemos: los bloques con vista previa (LaTeX, diagramas) no están en el esquema
  * de la app. Si BlockNote los suma al esquema por defecto, hay que revisar.

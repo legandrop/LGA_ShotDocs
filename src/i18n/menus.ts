@@ -88,7 +88,7 @@ export const menus = {
   // El contraste del texto del documento (Docs/Doc_Contraste.md): el nombre de cada opción va en su tooltip.
   'account.contrast': { en: "Contrast", es: "Contraste" },
   'account.contrast.none': { en: "No contrast", es: "Sin contraste" },
-  'account.contrast.contrast': { en: "Contrast", es: "Contraste" },
+  'account.contrast.contrast': { en: "Normal contrast", es: "Contraste normal" },
   'account.contrast.more': { en: "More contrast", es: "Más contraste" },
   'account.textSize': { en: "Text size", es: "Tamaño del texto" },
   'account.textSize.small': { en: "Small", es: "Chico" },

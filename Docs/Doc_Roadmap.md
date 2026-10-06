@@ -737,7 +737,8 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   con el dedo en un iPhone real).
   Quedan (chicos): lo que headless no prueba (el impulso del dedo, el teclado abierto, un editor remoto moviendo la selección
   mientras se escribe en una tabla).
-- **P.29 Hecho (v0.161): contraste del texto y el panel de la cuenta** (Lega, 2026-10-03; `Doc_Contraste.md`): *Contrast*
+- **Hecho (v0.201): escala H1–H5 y contraste normal:** encabezados progresivos, H5/H6 como texto normal bold; H6 existente se conserva y sale solo de los menús. Normal conserva el antiguo cuerpo de More; More aumenta la jerarquía con negrita próxima al encabezado y cuerpo legible, también en Script y PDF (Doc_Contraste.md).
+- **P.29 Hecho (v0.161): contraste del texto y el panel de la cuenta** (Lega, 2026-10-03; `Doc_Contraste.md`): *Normal contrast*
   (de fábrica), *More contrast* y *No contrast* para el texto con el color por defecto, en la página, el historial y el
   PDF (en claro); el panel de la cuenta con íconos, su propio desplazamiento y *Sign out other devices* alineado a la
   izquierda. Queda: verlo en un iPhone real (el panel con el teclado del sistema y la barra de Safari).

@@ -1,87 +1,32 @@
-# Contraste del texto y el panel de la cuenta
+# Contraste del texto y escala de encabezados
 
-Pedido de Lega del 2026-10-03 (v0.161). Cómo está hoy.
+Actualizado en v0.201. La preferencia conserva sus valores guardados `none`, `contrast` y `more`.
 
 ## 1. Qué hace
 
-*Contrast*, en el panel de la cuenta (clic en el nombre), le da al texto del documento con el **color por defecto** una
-jerarquía de tres tonos:
+En el panel de la cuenta, **Normal contrast / Contraste normal** conserva el cuerpo que antes tenía *More contrast*: claro `#5a5750`, oscuro `#b0aba1`. La negrita queda más próxima al encabezado. **More contrast / Más contraste** marca todavía más la jerarquía: apaga algo más el cuerpo y acerca la negrita al encabezado, sin igualarla. **No contrast / Sin contraste** mantiene una sola tinta.
 
-| Nivel | Encabezados | Negrita fuera de un encabezado | Texto común |
-|---|---|---|---|
-| *No contrast* | el de siempre | igual al encabezado | igual al encabezado |
-| *Contrast* (de fábrica) | el de siempre | un poco menos blanca o negra | un poco menos que la negrita |
-| *More contrast* | el de siempre | más apagada que en *Contrast* | más apagado que en *Contrast* |
+Los encabezados conservan `#1b1a17` en claro y `#ece9e2` en oscuro. Los colores elegidos, los links, las citas y los resaltados conservan sus reglas; el cambio no escribe en el documento. Pantalla e historial usan la misma hoja de estilos. PDF, impresión y páginas HTML del zip usan los tonos claros.
 
-- El **texto con un color elegido** (unas letras o un bloque entero, que BlockNote pinta también en sus hijos) no cambia,
-  ni la negrita ni los encabezados de adentro: siguen con ese color. Tampoco los links, la cita (gris, también su
-  negrita) ni lo borrado que marca el historial con *Show changes*.
-- Lo **resaltado** (un color de fondo elegido, en unas letras o en un bloque y sus hijos) queda afuera de la jerarquía:
-  su texto y su negrita van con la tinta plena de siempre. En oscuro los fondos de BlockNote son claros o saturados y
-  un tono más apagado bajaba de 4,5:1 (rojo 4,64 → 3,20 con *Contrast*; amarillo 1,38 con *More*). Además, en oscuro
-  tres fondos (gris, amarillo, naranja) ya no llegaban ni con la tinta plena: ver «Los resaltados en oscuro» (sección 5).
-- *No contrast* es **exactamente lo de antes**: las reglas de los encabezados, la negrita y el resaltado no corren
-  (`:root:not([data-contrast='none'])`) y el texto común resuelve a `--text`. Medido en Chromium contra `main`, elemento
-  por elemento (44 textos, claro y oscuro, página y PDF): cero diferencias.
-- La negrita adentro de un encabezado va con el encabezado.
-- Vale en la página, en la vista de una versión del historial (usa el mismo editor) y en el PDF y la impresión, que
-  siempre usan los tonos del **modo claro** (`.print-view`), también con la app en oscuro.
-- No cambia el resto de la interfaz (árbol, menús, diálogos) ni el título de la página, que ya es el tono del encabezado.
-- Se guarda como *Appearance*: en las preferencias de la cuenta (`user_settings.prefs.contrast`, `src/prefs.ts`), con la
-  copia local del dispositivo, y sigue a la persona en todos sus dispositivos. Una versión anterior de la app no conoce
-  la clave: la descarta y, si sube sus preferencias, la borra de la cuenta; los dispositivos con esta versión siguen con
-  la que tenían (lo mismo que `language` y `phoneImages`).
+## 2. Tokens y legibilidad
 
-**El zip de exportar** lleva la preferencia (v0.165): cada página `.html` sale con `<html data-contrast="…">` y las
-reglas de su `style.css` (las mismas de la app) la aplican igual que en el PDF, siempre con los tonos claros. Antes salía
-siempre con *Contrast*. Decisión: el PDF ya seguía el nivel de quien exporta, y un zip que sale distinto del PDF de la
-misma persona sorprendería; el archivo no es una copia fija para comparar sino la página como la ve quien la exporta.
-No lleva la fuente (sigue la normal). `buildZip` toma `options.contrast` o, sin él, `prefs.contrast`. El `index.html` del
-zip no lleva texto del documento y no cambia.
+| Tono | Claro | Oscuro |
+|---|---|---|
+| Encabezado, todos los niveles | `#1b1a17` | `#ece9e2` |
+| Negrita, Normal contrast | `#282621` | `#e0ddd5` |
+| Cuerpo, Normal contrast | `#5a5750` | `#b0aba1` |
+| Negrita, More contrast | `#24231f` | `#e5e2da` |
+| Cuerpo, More contrast | `#646058` | `#aaa59b` |
 
-## 2. Los tokens
+Todos los tonos por defecto llegan a WCAG AA de 4,5:1 contra la página y el papel. En las marcas oscuras de Script, el cuerpo de *More* usa un piso local `#b0aba1` para conservar AA sobre DAY. Un color elegido sigue siendo `currentColor`; la vista de impresión redefine el token con el cuerpo claro. Las marcas y sus fondos no cambian.
 
-En `src/styles.css`, al principio: un token por modo y por nivel (`--ink-light-*`, `--ink-dark-*`), y tres tonos que
-los eligen según `data-contrast` en `<html>` (`--ink-heading`, `--ink-bold`, `--ink-body`). Sin el atributo (antes de
-que carguen las preferencias) vale *Contrast*.
+## 2.1. H1–H5 y H6 existente
 
-Razones de contraste WCAG 2.x (la peor contra los fondos donde va el texto: `--bg` de la página y la hoja, y blanco de
-`--surface` y del papel; en oscuro, `#171716` y `#1f1e1c`):
+Los menús ofrecen H1–H5. Con texto normal de 16 px, sus tamaños son 25,6 / 22,4 / 19,2 / 17,6 / 16 px; todos usan peso 700. Los tres tamaños de texto conservan esas proporciones. Editorial mantiene su familia serif en H1–H4, con peso 700 sintetizado desde la cara disponible de Instrument Serif. El título de página conserva su tamaño y peso propios, incluido Editorial 400.
 
-| Token | Valor | Claro: página / blanco | Oscuro: página / superficie |
-|---|---|---|---|
-| encabezado claro (todos los niveles) | `#1b1a17` | 16,68 / 17,40 | — |
-| negrita claro, *Contrast* | `#33312c` | 12,45 / 12,99 | — |
-| texto común claro, *Contrast* | `#46433d` | 9,45 / 9,86 | — |
-| negrita claro, *More* | `#3a3833` | 11,23 / 11,71 | — |
-| texto común claro, *More* | `#5a5750` | 6,91 / 7,21 | — |
-| encabezado oscuro (todos los niveles) | `#ece9e2` | — | 14,80 / 13,74 |
-| negrita oscuro, *Contrast* | `#dad6cd` | — | 12,37 / 11,49 |
-| texto común oscuro, *Contrast* | `#c8c3b8` | — | 10,21 / 9,48 |
-| negrita oscuro, *More* | `#cfcac0` | — | 10,99 / 10,20 |
-| texto común oscuro, *More* | `#b0aba1` | — | 7,85 / 7,29 |
+H5 y H6 comparten tamaño, fuente heredada del párrafo, peso 700, tracking normal y altura de línea 1,5 con el texto normal en negrita. H6 conserva esquema, importación, contenido, plegado y atajos existentes: solo deja de ofrecerse en los dos menús. No se convierte ni reescribe al abrir.
 
-Por qué estos valores:
-
-- **El encabezado es el `--text` de siempre** (`#1b1a17` / `#ece9e2`): Lega pidió los encabezados como hoy.
-- **Los pasos son de tono, no de color:** los grises salen de la misma familia cálida de la paleta (papel y tinta), así
-  el texto no se ve azulado ni verdoso al lado de los encabezados.
-- **Cada paso baja entre 2 y 4 puntos de razón en *Contrast* y entre 3 y 5,5 en *More*** (el ojo nota menos la misma
-  diferencia cerca del negro o del blanco): se nota al leer sin que el texto común parezca deshabilitado. El texto común más apagado (*More*) queda en 6,9:1 en claro y 7,3:1 en oscuro, por
-  encima de WCAG AAA (7:1) en oscuro y de AA (4,5:1) en todos.
-- **El texto común oscuro de *More* es `#b0aba1` y no algo más bajo** porque el texto de un bloque Script va sobre sus
-  marcas (lugar, día, noche, hora dorada): sobre la marca de día en oscuro (`#4a3e16`), `#b0aba1` da 4,61:1; un tono
-  más apagado (`#aca79d`) daba 4,40:1. En claro, el peor caso sobre una marca es 5,39:1.
-- El texto común queda siempre más marcado que `--muted` de la interfaz (`#5e5a52` / `#a29d93`, lo apagado de los
-  menús y los rótulos), también en *More*.
-
-`src/contrast.test.ts` resuelve los tokens con la cascada (especificidad y orden de las reglas, también la de
-`.print-view` adentro de `:root`) para cada modo, nivel y destino, y comprueba 4,5:1 contra los fondos y las marcas de
-Script, el orden encabezado > negrita > texto común, que *More* marca más que *Contrast*, que *No contrast* es un solo
-tono (y que toda regla que pinta con el tono del encabezado o de la negrita está apagada con *No contrast*), que sobre
-los nueve resaltados de BlockNote, en claro y oscuro, el texto da lo mismo que antes, y que el PDF tiene los del modo
-claro.
-
+Las comprobaciones históricas de las siguientes secciones describen la entrega original; los tokens vigentes son los de arriba.
 ## 3. Cómo se aplica sin tocar los colores elegidos
 
 ```css

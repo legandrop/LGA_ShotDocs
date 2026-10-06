@@ -93,7 +93,7 @@ describe('panel de la cuenta: Appearance, Font y Contrast', () => {
     const contrast = group(host, 'Contrast');
     expect(names(appearance)).toEqual(['System', 'Light', 'Dark']);
     expect(names(font)).toEqual(['Default', 'Editorial']);
-    expect(names(contrast)).toEqual(['No contrast', 'Contrast', 'More contrast']);
+    expect(names(contrast)).toEqual(['No contrast', 'Normal contrast', 'More contrast']);
     for (const b of [...appearance, ...font, ...contrast]) {
       expect(b.dataset.tip).toBe(b.getAttribute('aria-label'));
       expect(b.hasAttribute('title')).toBe(false);
@@ -119,8 +119,8 @@ describe('panel de la cuenta: Appearance, Font y Contrast', () => {
     expect(document.documentElement.dataset.contrast).toBe('none');
 
     act(() => prefs.set({ language: 'es' }));
-    expect(names(group(host, 'Contraste'))).toEqual(['Sin contraste', 'Contraste', 'Más contraste']);
-    expect(group(host, 'Contraste')[1].dataset.tip).toBe('Contraste');
+    expect(names(group(host, 'Contraste'))).toEqual(['Sin contraste', 'Contraste normal', 'Más contraste']);
+    expect(group(host, 'Contraste')[1].dataset.tip).toBe('Contraste normal');
     expect(group(host, 'Fuente')).toHaveLength(2);
     expect(group(host, 'Tamaño del texto')).toHaveLength(3);
     expect(host.textContent).not.toContain('Letra');

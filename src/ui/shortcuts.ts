@@ -37,7 +37,7 @@ export interface Shortcut {
    * están en `shortcutSources.ts`.
    */
   source: 'keymap' | 'window' | 'dom' | 'react' | 'typed';
-  /** Cómo se muestra si no son las teclas de `keys` (por ejemplo, "⌘⌥1…6" en vez de seis atajos). */
+  /** Cómo se muestra si no son las teclas de `keys` (por ejemplo, "⌘⌥1…5" en vez de cinco atajos). */
   display?: string[];
 }
 
@@ -75,8 +75,8 @@ export const SHORTCUTS: Shortcut[] = [
   // --- Editor: BlockNote ---
   {
     id: 'heading',
-    keys: ['Mod-Alt-1', 'Mod-Alt-2', 'Mod-Alt-3', 'Mod-Alt-4', 'Mod-Alt-5', 'Mod-Alt-6'],
-    display: ['Mod-Alt-1', '…', '6'],
+    keys: ['Mod-Alt-1', 'Mod-Alt-2', 'Mod-Alt-3', 'Mod-Alt-4', 'Mod-Alt-5'],
+    display: ['Mod-Alt-1', '…', '5'],
     place: 'editor',
     owner: 'blocknote',
     source: 'keymap',
@@ -293,7 +293,6 @@ const SLASH_SHORTCUTS: Record<string, [string, number]> = {
   heading_3: ['heading', 2],
   heading_4: ['heading', 3],
   heading_5: ['heading', 4],
-  heading_6: ['heading', 5],
   quote: ['quote', 0],
   toggle_list: ['toggle', 0],
   numbered_list: ['numbered', 0],

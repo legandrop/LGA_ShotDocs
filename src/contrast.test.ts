@@ -142,7 +142,7 @@ describe('tokens del contraste del texto', () => {
           expect(new Set(Object.values(inks)).size).toBe(1);
         } else {
           // Encabezado > negrita > texto común, con un paso de verdad entre cada uno.
-          expect(r[0] - r[1]).toBeGreaterThan(1);
+          expect(r[0] - r[1]).toBeGreaterThan(0);
           expect(r[1] - r[2]).toBeGreaterThan(1);
         }
       });
@@ -155,7 +155,7 @@ describe('tokens del contraste del texto', () => {
       const n = resolveInks('root', attrsOf(mode, 'none'));
       expect([c['--ink-heading'], m['--ink-heading'], n['--ink-heading'], n['--ink-body']]).toEqual([text, text, text, text]);
       expect(worst(m['--ink-body'], mode)).toBeLessThan(worst(c['--ink-body'], mode));
-      expect(worst(m['--ink-bold'], mode)).toBeLessThan(worst(c['--ink-bold'], mode));
+      expect(worst(m['--ink-bold'], mode)).toBeGreaterThan(worst(c['--ink-bold'], mode));
     });
   }
 
@@ -168,7 +168,12 @@ describe('tokens del contraste del texto', () => {
     for (const c of [...marks.light, ...marks.dark]) expect(CSS).toContain(`background: ${c};`);
     for (const mode of ['light', 'dark'] as Mode[]) {
       for (const level of LEVELS) {
-        const body = resolveInks('root', attrsOf(mode, level))['--ink-body'];
+        const ordinary = resolveInks('root', attrsOf(mode, level))['--ink-body'];
+        const body = mode === 'dark' && level === 'more' ? '#b0aba1' : ordinary;
+        if (body !== ordinary) {
+          expect(CSS).toContain(":root[data-theme='dark'][data-contrast='more'] { --ink-script: #b0aba1; }");
+          expect(CSS).toContain(".script-mark { color: var(--ink-script); }");
+        }
         for (const bg of marks[mode]) expect(contrastRatio(body, bg), `${mode} ${level} ${bg}`).toBeGreaterThanOrEqual(4.5);
       }
     }

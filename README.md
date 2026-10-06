@@ -20,7 +20,7 @@ its own project: a tree of pages you own.
   says how many changes in how many pages), and *Undo* puts back everything nobody changed afterwards.
 - **Pages and subpages.** A sidebar with a tree of pages, as deep as you need. Every page can hold
   content and other pages; a "folder" is just a page with no content.
-- **Visual editor.** Headings, lists, checklists, tables and images. You never see Markdown; it is only
+- **Visual editor.** Headings H1–H5 in gradual steps, lists, checklists, tables and images. H5 matches normal bold text; existing H6 content remains supported and looks like H5. You never see Markdown; it is only
   used behind the scenes to import, export and back up your pages.
 - **Undo in the order you edited.** Ctrl/⌘+Z undoes your last change in the project even if it was on another page:
   the app takes you there and undoes it in view (*Back* returns you). A replace across the project is one step, undone
@@ -49,7 +49,7 @@ its own project: a tree of pages you own.
   and sign in to see only the pages shared with them. A page can also be shared with *Anyone with the link*: they
   open it without an account, see that page and the ones inside, and comment with a name.
 - **Your look, everywhere.** Light or dark theme, a default or an editorial typeface, text contrast
-  (headings, bold and body text in three shades, also in the PDF), text size and page width, saved in
+  (No contrast, Normal contrast or More contrast, with bold close to headings and softer body text, also in the PDF), text size and page width, saved in
   your account and applied on every device. Scene titles like `064 | Name | Place` show
   as a short code and a name in the sidebar, and each page can show the pages that contain it above its
   title.

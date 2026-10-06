@@ -170,8 +170,8 @@ export const help = {
   // --- Escribir ---
   'help.slash.title': { en: "The / menu", es: "El menú /" },
   'help.slash.text': {
-    en: "Type / on an empty line to add headings, lists, checklists, a table, a quote, code, a divider, an image, Script, a question or a page break. Keep typing to filter; ↑ ↓ and Enter pick, Esc closes.",
-    es: "Escribí / en un renglón vacío para sumar títulos, listas, casillas, una tabla, una cita, código, un divisor, una foto, Script, una pregunta o un salto de hoja. Seguí escribiendo para filtrar; ↑ ↓ y Enter eligen, Esc cierra.",
+    en: "Type / on an empty line to add headings, lists, checklists, a table, a quote, code, a divider, an image, Script, a question or a page break. Keep typing to filter; ↑ ↓ and Enter pick, Esc closes. Heading choices run from H1 to H5 in gradual steps; H5 matches normal bold text. Existing H6 headings keep their content and look like H5.",
+    es: "Escribí / en un renglón vacío para sumar títulos, listas, casillas, una tabla, una cita, código, un divisor, una foto, Script, una pregunta o un salto de hoja. Seguí escribiendo para filtrar; ↑ ↓ y Enter eligen, Esc cierra. Los encabezados del menú van de H1 a H5 en pasos graduales; H5 se ve como el texto normal en negrita. Los H6 existentes conservan su contenido y se ven como H5.",
   },
   'help.blocks.title': { en: "Moving blocks", es: "Mover bloques" },
   'help.blocks.text': {
@@ -190,13 +190,13 @@ export const help = {
   },
   'help.blockTypes.title': { en: "Headings, lists and quotes", es: "Títulos, listas y citas" },
   'help.blockTypes.text': {
-    en: "{heading} heading 1 to 6, {paragraph} normal text, {quote} quote, {numbered} numbered list, {bullet} bulleted list, {checklist} checklist, {toggle} toggle list.",
-    es: "{heading} título 1 a 6, {paragraph} texto común, {quote} cita, {numbered} lista numerada, {bullet} lista con viñetas, {checklist} lista de casillas, {toggle} lista plegable.",
+    en: "{heading} heading 1 to 5, {paragraph} normal text, {quote} quote, {numbered} numbered list, {bullet} bulleted list, {checklist} checklist, {toggle} toggle list.",
+    es: "{heading} título 1 a 5, {paragraph} texto común, {quote} cita, {numbered} lista numerada, {bullet} lista con viñetas, {checklist} lista de casillas, {toggle} lista plegable.",
   },
   'help.markdown.title': { en: "Typing shortcuts", es: "Atajos al escribir" },
   'help.markdown.text': {
-    en: "At the start of a line: # (to ######) and a space make a heading, - a bulleted list, 1. a numbered list, [] a checklist, > a quote, --- a divider and ``` a code block.",
-    es: "Al principio de un renglón: # (hasta ######) y un espacio hacen un título, - una lista con viñetas, 1. una numerada, [] una de casillas, > una cita, --- un divisor y ``` un bloque de código.",
+    en: "At the start of a line: # (to #####) and a space make a heading, - a bulleted list, 1. a numbered list, [] a checklist, > a quote, --- a divider and ``` a code block.",
+    es: "Al principio de un renglón: # (hasta #####) y un espacio hacen un título, - una lista con viñetas, 1. una numerada, [] una de casillas, > una cita, --- un divisor y ``` un bloque de código.",
   },
   'help.script.title': { en: "Script", es: "Script (guion)" },
   'help.script.text': {
@@ -642,8 +642,8 @@ export const help = {
   },
   'help.contrast.title': { en: "Text contrast", es: "Contraste del texto" },
   'help.contrast.text': {
-    en: "In the account menu, Contrast gives the page text three shades: headings the strongest, bold a little softer and the rest a little softer still. More contrast makes the steps clearer; No contrast shows everything in one shade. Text with a color you picked keeps its color. It applies to the page, to a version in the history, to the PDF and to the pages of an exported zip (those always in the light shades), and it follows you to every device.",
-    es: "En el menú de la cuenta, Contraste le da tres tonos al texto de la página: los encabezados, los más fuertes; la negrita, un poco más suave, y el resto, un poco más todavía. Más contraste marca más los pasos; Sin contraste muestra todo en un solo tono. El texto con un color elegido conserva su color. Vale en la página, en una versión del historial, en el PDF y en las páginas de un zip exportado (esos siempre con los tonos claros), y te sigue a cada dispositivo.",
+    en: "In the account menu, Normal contrast gives the page text three shades: headings the strongest, bold a little softer and the rest a little softer still. More contrast softens the body text further while keeping bold close to headings; No contrast shows everything in one shade. Text with a color you picked keeps its color. It applies to the page, to a version in the history, to the PDF and to the pages of an exported zip (those always in the light shades), and it follows you to every device.",
+    es: "En el menú de la cuenta, Contraste normal le da tres tonos al texto de la página: los encabezados, los más fuertes; la negrita, un poco más suave, y el resto, un poco más todavía. Más contraste apaga un poco más el texto común y mantiene la negrita cerca del encabezado; Sin contraste muestra todo en un solo tono. El texto con un color elegido conserva su color. Vale en la página, en una versión del historial, en el PDF y en las páginas de un zip exportado (esos siempre con los tonos claros), y te sigue a cada dispositivo.",
   },
   'help.language.title': { en: "Language", es: "Idioma" },
   'help.language.text': {
@@ -690,7 +690,7 @@ export const help = {
     en: "Select the whole page (collapsed sections too)",
     es: "Elegir la página entera (también lo colapsado)",
   },
-  'shortcut.heading': { en: "Heading 1 to 6", es: "Título 1 a 6" },
+  'shortcut.heading': { en: "Heading 1 to 5", es: "Título 1 a 5" },
   'shortcut.quote': { en: "Quote", es: "Cita" },
   'shortcut.numbered': { en: "Numbered list", es: "Lista numerada" },
   'shortcut.bullet': { en: "Bulleted list", es: "Lista con viñetas" },

@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.201 :
+
+Los encabezados heredaban tamaños muy separados: H1 era tres veces el texto y H5 y H6 quedaban más pequeños que un párrafo. Ahora los menús ofrecen H1 a H5 con una escala progresiva; H5 tiene exactamente la fuente, el tamaño, el peso y la altura del texto normal en negrita. Los H6 existentes conservan su contenido y se ven como H5. Editorial conserva la familia de los encabezados grandes con peso 700 y el título de página mantiene su presentación. Contraste normal conserva el cuerpo del antiguo Más contraste; el nuevo Más contraste separa más el cuerpo del encabezado, con negritas próximas a la tinta plena. Las marcas oscuras de Script mantienen un piso legible. Colores elegidos, resaltados, links, esquema, importación y preferencias guardadas permanecen compatibles.
+
+[Ajustar escala de encabezados y jerarquía del contraste]
+
 v0.200 :
 
 Un título pegado de más de quinientos caracteres se recortaba en el campo antes de que IndexedDB confirmara el encabezado y su sobrante. Si esa transacción rechazaba, salir del campo podía guardar solamente el encabezado. Ahora el texto completo permanece asociado a la página y al workspace durante el intento; el campo espera de solo lectura y, ante el rechazo, conserva el borrador para editar o reintentar. Volver a esa página en la misma sesión lo recupera. Blur, Enter y la preparación antes de salir comparten el mismo intento, que conserva un identificador estable del sobrante. Además, agregar, reparar o retirar sobrantes modifica una lista recién leída dentro de la transacción: un retiro con caché antigua no borra otra adición confirmada. Se preservan los límites, la transferencia al editor y la compatibilidad del formato existente.

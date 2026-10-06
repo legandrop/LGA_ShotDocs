@@ -8,7 +8,8 @@ const TOGGLE_HEADING_KEYS = new Set(['toggle_heading', 'toggle_heading_2', 'togg
 
 /** Para filtrar el menú "/": deja todo menos los encabezados plegables. */
 export function notToggleHeading(item: { key?: string } | object): boolean {
-  return !TOGGLE_HEADING_KEYS.has(String((item as { key?: string }).key));
+  const key = String((item as { key?: string }).key);
+  return key !== 'heading_6' && !TOGGLE_HEADING_KEYS.has(key);
 }
 
 /**
@@ -17,7 +18,7 @@ export function notToggleHeading(item: { key?: string } | object): boolean {
  */
 export function headingItems(items: BlockTypeSelectItem[]): BlockTypeSelectItem[] {
   return items
-    .filter((item) => !(item.type === 'heading' && item.props?.isToggleable === true))
+    .filter((item) => !(item.type === 'heading' && (item.props?.isToggleable === true || item.props?.level === 6)))
     .map((item) => {
       if (item.type !== 'heading' || !item.props || !('isToggleable' in item.props)) return item;
       const { isToggleable: _t, ...props } = item.props;
