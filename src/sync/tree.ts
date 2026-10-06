@@ -1,3 +1,4 @@
+import { ImportPending, validUuid, matchesProjectIdentity, projectReceiptKey, projectOwnerKey } from './importIdentity';
 import { generateKeyBetween, generateNKeysBetween } from 'fractional-indexing';
 import { t } from '../i18n';
 import { cutText } from '../lib/graphemes';
@@ -205,6 +206,10 @@ function applyOp(pages: Map<string, PageRow>, projects: Map<string, ProjectRow>,
  * El árbol que se ve es la última copia que mandó el servidor más los cambios locales que todavía están
  * en la cola de salida. Cuando el servidor confirma un cambio, sale de la cola y pasa a la copia.
  */
+export function normalizeProjectName(name: string): string {
+  return cutText(name.trim(), DB_LIMITS.projectName) || t('project.untitled');
+}
+
 export class PageTree {
   private snapshot = new Map<string, PageRow>();
   private projectSnapshot = new Map<string, ProjectRow>();
@@ -482,9 +487,49 @@ export class PageTree {
   }
 
   /** Crea un proyecto. Funciona sin red: sube antes que las páginas que se le creen. */
-  async createProject(name: string): Promise<string> {
-    const id = crypto.randomUUID();
-    await this.enqueue({ kind: 'createProject', project: { id, name: cutText(name.trim(), DB_LIMITS.projectName) || t('project.untitled') } });
+  async createProject(name: string, reserved?: { projectId: string; operationId: string }): Promise<string> {
+    const id = reserved?.projectId ?? crypto.randomUUID();
+    const projectName = normalizeProjectName(name);
+    if (!reserved) {
+      await this.enqueue({ kind: 'createProject', project: { id, name: projectName } });
+      return id;
+    }
+    if (!validUuid(id) || !validUuid(reserved.operationId)) throw new ImportPending('invalid');
+    const opId = reserved.operationId;
+    const op: TreeOp = { kind: 'createProject', project: { id, name: projectName } };
+    const tx = this.db.transaction(['ops', 'meta'], 'readwrite');
+    let replay = false;
+    void tx.done.catch(() => undefined);
+    this.writing++;
+    try {
+      const meta = tx.objectStore('meta'), ops = tx.objectStore('ops');
+      const [receipt, owner] = await Promise.all([meta.get(projectReceiptKey(opId)), meta.get(projectOwnerKey(id))]);
+      if (receipt !== undefined || owner !== undefined) {
+        if (!matchesProjectIdentity(receipt, owner, { projectId: id, operationId: opId, projectName })) throw new ImportPending('changed');
+        replay = true;
+      } else {
+        const queued = await ops.getAll();
+        const projects = await meta.get(PROJECTS_KEY) as ProjectRow[] | undefined;
+        if (queued.some(q => q.opId === opId || q.op.kind === 'createProject' && q.op.project.id === id)
+          || projects?.some(p => p.id === id)) throw new ImportPending('changed');
+        const seq = await ops.add({ opId, op, createdAt: Date.now() });
+        await meta.put({ receiptVersion: 1, opId, op, seq }, projectReceiptKey(opId));
+        await meta.put({ ownerVersion: 1, projectId: id, operationId: opId }, projectOwnerKey(id));
+      }
+      await tx.done;
+    } catch (error) {
+      try {
+      tx.abort();
+    } catch { /* La TX puede haber terminado. */
+    }
+      await tx.done.catch(() => undefined);
+      throw error;
+    } finally {
+    this.writing--;
+  }
+    await this.load();
+    if (!replay && !this.project(id)) throw new ImportPending('changed');
+    this.onQueued?.();
     return id;
   }
 

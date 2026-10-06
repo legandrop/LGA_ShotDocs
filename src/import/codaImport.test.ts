@@ -1,3 +1,8 @@
+import type { ImportJournal } from './codaImport';
+import { Buffer } from 'node:buffer';
+import { beforeAll as beforeAllRealm } from 'vitest';
+import type { ImportEnvelope } from './importCommit';
+beforeAllRealm(() => { vi.stubGlobal('Uint8Array', Object.getPrototypeOf(Buffer.prototype).constructor); });
 // @vitest-environment jsdom
 import { BlockNoteEditor } from '@blocknote/core';
 import { yXmlFragmentToBlocks } from '@blocknote/core/yjs';
@@ -340,6 +345,7 @@ describe('importar la carpeta', () => {
         open: (id, o) => (++opens === 3 && crashAt ? Promise.reject(new Error('sin espacio')) : a.docs.open(id, o)),
         close: (id) => a.docs.close(id),
         flush: (id) => a.docs.flush(id),
+        isSaved: (id) => a.docs.isSaved(id),
       },
       media: {
         add: async (pageId, file) => {
@@ -390,9 +396,9 @@ describe('importar la carpeta', () => {
   it('una página que no se pudo escribir anota que sus archivos quedaron guardados sin ubicar', async () => {
     const { a } = await mediaDevice();
     let opens = 0;
-    const deps: ImportDeps = {
+    const deps: ImportDeps = { journal: metaJournal(a.db),
       ...a,
-      docs: { open: (id, o) => (++opens === 3 ? Promise.reject(new Error('sin espacio')) : a.docs.open(id, o)), close: a.docs.close.bind(a.docs), flush: a.docs.flush.bind(a.docs) },
+      docs: { open: (id, o) => (++opens === 3 ? Promise.reject(new Error('sin espacio')) : a.docs.open(id, o)), close: a.docs.close.bind(a.docs), flush: a.docs.flush.bind(a.docs), isSaved: a.docs.isSaved.bind(a.docs) },
     };
     const result = await importCoda(makeFolder(), deps);
     expect(result.problems).toEqual([
@@ -621,7 +627,7 @@ describe('importar la carpeta', () => {
     });
     const tree = a.tree;
     const folder = smallFolder([page('m', 'Madre', null, 0), page('h', 'Hija', 'm', 0)], { m: '<div>m</div>', h: '<div>h</div>' });
-    const result = await importCoda(folder, { tree, docs: a.docs, media: a.media });
+    const result = await importCoda(folder, { journal: metaJournal(a.db), tree, docs: a.docs, media: a.media });
     expect(result.problems).toEqual([]);
     const roots = a.tree.roots(result.projectId).map((p) => p.title);
     expect(roots).toEqual(['Madre']);
@@ -658,14 +664,14 @@ describe('importar la carpeta', () => {
     let opens = 0;
     const deps: ImportDeps = {
       tree: a.tree,
-      docs: { open: (id, o) => (++opens === 2 ? Promise.reject(new Error('sin espacio')) : a.docs.open(id, o)), close: (id) => a.docs.close(id), flush: (id) => a.docs.flush(id) },
+      docs: { open: (id, o) => (++opens === 2 ? Promise.reject(new Error('sin espacio')) : a.docs.open(id, o)), close: (id) => a.docs.close(id), flush: (id) => a.docs.flush(id), isSaved: (id) => a.docs.isSaved(id) },
       media: a.media,
       journal,
     };
     const result = await importCoda(folder, deps);
     expect(result.problems).toEqual(['Dos: sin espacio']);
     // En el diario, la página que usa el archivo de otra queda marcada (no se cuenta dos veces al seguir).
-    const saved = await journal.get('DOC2');
+    const saved = await journal.loadState!('DOC2').then(s => (s.raw as ImportEnvelope<ImportJournal>).generations[(s.raw as ImportEnvelope<ImportJournal>).activeGenerationId].journal);
     expect(saved?.media['p2 bl-r']).toMatchObject({ shared: true });
     expect(saved?.media['p1 bl-r']).toMatchObject({ key: 'bl-r' });
   });
@@ -749,6 +755,7 @@ describe('importar la carpeta', () => {
         open: (id, o) => (opts.failOpen?.(++opens) ? Promise.reject(new Error('sin espacio')) : a.docs.open(id, o)),
         close: (id) => a.docs.close(id),
         flush: (id) => a.docs.flush(id),
+        isSaved: (id) => a.docs.isSaved(id),
       },
       media: {
         add: async (pageId, file) => {
@@ -946,7 +953,7 @@ describe('importar la carpeta', () => {
   it('un diario cuyo proyecto no está no se ofrece, pero se conserva (el proyecto puede volver de la papelera, P.14)', async () => {
     const { a } = await mediaDevice();
     const journal = metaJournal(a.db);
-    await journal.put({ docId: 'DOC', projectId: 'no-existe', projectName: 'X', pages: {}, media: {} });
+    await journal.put({ recoveryVersion: 2, docId: 'DOC', projectId: 'no-existe', projectName: 'X', pages: {}, media: {} });
     expect(await findResumable(makeFolder(), { tree: a.tree, journal })).toBeNull();
     expect(await journal.get('DOC')).toMatchObject({ projectId: 'no-existe' });
   });

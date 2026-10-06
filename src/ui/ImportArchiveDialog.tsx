@@ -1,3 +1,5 @@
+import { importAttemptFor, newImportReservation, pendingImport, type ImportRunOptions } from '../import/importCommit';
+import { normalizeProjectName } from '../sync/tree';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useT } from '../i18n';
 import '../i18n/lazy/importArchive';
@@ -70,6 +72,7 @@ export function ImportArchiveDialog() {
   const folders = canPickFolders();
   const phone = useMemo(() => isMobilePlatform(detectPlatform()), []);
   const journal = archiveJournal(db);
+  const attempt = useRef(importAttemptFor(job));
   const weight = archive ? archiveWeight(archive) : null;
   const needsDrive = !!weight && weight.files > 0 && !media.enabled;
 
@@ -116,10 +119,30 @@ export function ImportArchiveDialog() {
   const noRoom = !!weight && free !== null && weight.bytes > free;
   const ready = !!archive && !busy && !reading && !needsDrive && !noRoom;
 
-  const start = (resume: boolean) => {
-    if (!archive || busy) return;
+  const start = (intent: ImportRunOptions['intent']) => {
+    if (!archive || busy || attempt.current.running) return;
+    const sourceKey = archive.key;
+    const projectName = normalizeProjectName(name);
+    const pending = attempt.current;
+    if (intent !== 'resume') {
+      if (pending.intent === intent && pending.reservation && pending.sourceKey === sourceKey && pending.reservation.projectName !== projectName) {
+        job.set({ error: 'Import pending: changed' });
+        return;
+      }
+      if (!pending.reservation || pending.sourceKey !== sourceKey || pending.intent !== intent) pending.reservation = newImportReservation(sourceKey, projectName);
+      pending.sourceKey = sourceKey;
+      pending.intent = intent;
+    } else pending.intent = intent;
+    const options = { projectName, intent, reservation: pending.reservation, generationId: pending.reservation?.generationId };
+    pending.running = true;
     const deps = { tree, docs, media, journal, comments, userEmail: user.email || undefined, schemaVersion: status.schemaVersion ?? null };
-    void job.runArchive((onProgress) => importArchive(archive, deps, { projectName: name.trim(), resume, onProgress }), { beacon: dbName });
+    void job.runArchive(async (onProgress) => {
+      const selected = intent === 'initial' && (await pendingImport(journal, sourceKey)).complete ? 'new' : intent;
+      return importArchive(archive, deps, { ...options, intent: selected, onProgress });
+    }, { beacon: dbName }).finally(() => {
+      pending.running = false;
+      if (!job.get().error) pending.reservation = undefined;
+    });
   };
 
   const close = () => job.close();
@@ -226,15 +249,15 @@ export function ImportArchiveDialog() {
             </button>
           ) : resumable && !busy ? (
             <>
-              <button className="primary" disabled={!ready} onClick={() => start(true)}>
+              <button className="primary" disabled={!ready} onClick={() => start('resume')}>
                 {tr('importArchive.resume')}
               </button>
-              <button className="secondary" disabled={!ready || !name.trim()} onClick={() => start(false)}>
+              <button className="secondary" disabled={!ready || !name.trim()} onClick={() => start('new')}>
                 {tr('importArchive.startOver')}
               </button>
             </>
           ) : (
-            <button className="primary" disabled={!ready || !name.trim()} onClick={() => start(false)}>
+            <button className="primary" disabled={!ready || !name.trim()} onClick={() => start('initial')}>
               {busy ? tr('importArchive.importing') : tr('importArchive.start')}
             </button>
           )}

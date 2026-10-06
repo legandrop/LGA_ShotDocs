@@ -1,3 +1,5 @@
+import { importAttemptFor, newImportReservation, pendingImport, type ImportRunOptions } from '../import/importCommit';
+import { normalizeProjectName } from '../sync/tree';
 import { useEffect, useRef, useState } from 'react';
 import { useT } from '../i18n';
 import '../i18n/lazy/importCoda';
@@ -44,6 +46,7 @@ export function ImportCodaDialog() {
   const folders = canPickFolders();
   const ready = media.enabled && folders;
   const journal = metaJournal(db);
+  const attempt = useRef(importAttemptFor(job));
 
   const size = folder ? importSize(folder) : 0;
   useEffect(() => {
@@ -68,11 +71,29 @@ export function ImportCodaDialog() {
     }
   };
 
-  const start = (resume: boolean) => {
-    if (!folder || busy) return;
+  const start = (intent: ImportRunOptions['intent']) => {
+    if (!folder || busy || attempt.current.running) return;
+    const sourceKey = folder.manifest.doc.id;
+    const projectName = normalizeProjectName(name);
+    const pending = attempt.current;
+    if (intent !== 'resume') {
+      if (pending.intent === intent && pending.reservation && pending.sourceKey === sourceKey && pending.reservation.projectName !== projectName) {
+        job.set({ error: 'Import pending: changed' });
+        return;
+      }
+      if (!pending.reservation || pending.sourceKey !== sourceKey || pending.intent !== intent) pending.reservation = newImportReservation(sourceKey, projectName);
+      pending.sourceKey = sourceKey;
+      pending.intent = intent;
+    } else pending.intent = intent;
+    const options = { projectName, intent, reservation: pending.reservation, generationId: pending.reservation?.generationId };
+    pending.running = true;
     const deps = { tree, docs, media, journal, comments, userEmail: user.email || undefined };
-    void job.run((onProgress) => importCoda(folder, deps, { projectName: name.trim(), resume, onProgress }), {
-      beacon: dbName,
+    void job.run(async (onProgress) => {
+      const selected = intent === 'initial' && (await pendingImport(journal, sourceKey)).complete ? 'new' : intent;
+      return importCoda(folder, deps, { ...options, intent: selected, onProgress });
+    }, { beacon: dbName }).finally(() => {
+      pending.running = false;
+      if (!job.get().error) pending.reservation = undefined;
     });
   };
 
@@ -178,15 +199,15 @@ export function ImportCodaDialog() {
             </button>
           ) : resumable && !busy ? (
             <>
-              <button className="primary" disabled={!ready} onClick={() => start(true)}>
+              <button className="primary" disabled={!ready} onClick={() => start('resume')}>
                 {tr('import.resume')}
               </button>
-              <button className="secondary" disabled={!ready || !name.trim()} onClick={() => start(false)}>
+              <button className="secondary" disabled={!ready || !name.trim()} onClick={() => start('new')}>
                 {tr('import.startOver')}
               </button>
             </>
           ) : (
-            <button className="primary" disabled={!ready || !folder || !name.trim() || busy} onClick={() => start(false)}>
+            <button className="primary" disabled={!ready || !folder || !name.trim() || busy} onClick={() => start('initial')}>
               {busy ? tr('import.importing') : tr('import.start')}
             </button>
           )}
