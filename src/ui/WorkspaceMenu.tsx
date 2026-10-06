@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { t, useT } from '../i18n';
 import type { MediaRecord } from '../media/mediaDb';
 import { prefs } from '../prefs';
@@ -184,9 +184,13 @@ export function WorkspaceSection(props: {
  */
 export function RemoveWorkspaceDialog({ onClose }: { onClose: () => void }) {
   const services = useServices();
-  const { db, mediaDb, commentsDb, docs, tree, user, client, dbName } = services;
+  const { db, mediaDb, commentsDb, docs, tree, user, client, dbName, folders } = services;
   const { current } = useCurrentWorkspace();
   const status = useSyncStatus();
+  // Las carpetas a medio subir desde este dispositivo (P.9): su lista de trabajo se va con el workspace. No frena
+  // (los archivos siguen en el disco de la persona, nunca estuvieron en la app), pero se dice cuánto falta.
+  useSyncExternalStore(folders?.subscribe ?? noFolders, folders?.getRevision ?? noRevision);
+  const folderFilesLeft = (folders?.all() ?? []).reduce((n, p) => n + (p.state === 'done' ? 0 : Math.max(0, p.files - p.doneFiles)), 0);
   const [summary, setSummary] = useState<UnsyncedSummary | null>(null);
   const [downloaded, setDownloaded] = useState(false);
   const [media, setMedia] = useState<MediaRecord[]>([]);
@@ -294,8 +298,9 @@ export function RemoveWorkspaceDialog({ onClose }: { onClose: () => void }) {
             <PendingMediaList media={media} downloaded={mediaDone} onDownload={(m) => void downloadMedia(m)} />
           </>
         )}
-        {summary !== null && pending === 0 && <p className="muted">{tr('removeWs.allUploaded')}</p>}
+        {summary !== null && pending === 0 && folderFilesLeft === 0 && <p className="muted">{tr('removeWs.allUploaded')}</p>}
         {mediaDb === null && <p className="muted">{tr('removed.mediaKept')}</p>}
+        {folderFilesLeft > 0 && <p className="warn">{tr('removeWs.folders', { count: folderFilesLeft })}</p>}
         {error && <p className="error">{error}</p>}
         <div className="welcome-actions">
           <button className="primary danger" disabled={!canRemove || busy !== null} onClick={() => void remove()}>
@@ -309,3 +314,6 @@ export function RemoveWorkspaceDialog({ onClose }: { onClose: () => void }) {
     </div>
   );
 }
+
+const noFolders = () => () => undefined;
+const noRevision = () => 0;

@@ -1195,6 +1195,26 @@ El clic normal del editor hacia otro workspace usa la barrera local existente: p
 
 Dentro de un link público, un link propio antiguo sin w ni hash reproduce en el anchor el acceso público vigente, sin modificar el documento ni ampliar permisos. Una w explícita representa una cuenta normal, incluso si coincide la clave; usa la barrera para salir del modo público. Un hash previo queda literal. Siguen pendientes clipboard de selección rica, drag, hashes públicos antiguos, transporte completo por importación/exportación y la verificación con usuarios/RLS reales y Safari/iPhone físicos. LF21 continúa abierto.
 
+### LF21 · Copiar y cortar (v0.216)
+
+Copiar o cortar una selección con links a páginas propias dejaba en el portapapeles la dirección del documento, sin
+workspace (y relativa, si así estaba escrita): pegada en un correo o en un chat, abría el workspace preferido de quien
+la recibe, o no abría nada. Ahora, después de que el editor arma el portapapeles, lo que se pega **afuera** de la app
+(`text/html` y `text/plain`) lleva la dirección entera con `w`, igual que el anchor de la vista. Lo que la app lee al
+pegar **adentro** (`blocknote/html`) queda literal: copiar y pegar en el mismo workspace no escribe la clave en el
+documento ni genera actualizaciones. Si el navegador no guardó ese formato propio, no se toca nada (pegar adentro
+leería el HTML común). Una `w` ajena, un hash de acceso y los links a otros sitios quedan como están. Dentro de un
+link público no se cambia nada: el anchor de la vista lleva el acceso del link y eso no se copia a escondidas.
+
+Queda afuera, a propósito: **arrastrar** (lo soltado en otra pestaña de la app se lee del HTML común, así que
+calificarlo escribiría la clave propia en el documento, y una `w` explícita se trata como cuenta dentro de un link
+público: es una decisión de producto) y **pegar adentro de la app en otro workspace** (el formato propio viaja sin
+identidad; el diseño es sumar al portapapeles la clave de origen y calificar al pegar solo cuando no coincide con la
+del workspace abierto). El HTML se reescribe sin tocar nada más que la dirección: una selección que empieza en el
+espacio antes del link conserva ese espacio. Pruebas: `src/ui/pageLinkView.test.ts`, con el editor real y un
+portapapeles simulado; sin Safari ni dispositivos físicos. LF21 continúa abierto. Dos restos anotados en
+`Doc_Roadmap.md`: el texto plano de un link cuyo texto visible es su propia dirección, y la sospecha sobre Safari.
+
 ## Video en línea en el PDF (v0.198)
 
 La copia de imprimir o exportar transforma el propio contenedor del cuadro en un enlace, conservando su ancho, clases, estilo, imagen y anotaciones como hijos directos. No agrega nombre ni renglón. Usa la misma dirección y política de acceso de los videos en bloque; sin información de video, sin archivo disponible o con un marcador de otro proyecto no añade el enlace. No cambia una dirección ya escrita ni anida enlaces. Las fotos y el documento guardado siguen intactos. La vista de medir conserva su geometría sin enlaces. El permiso al abrir y la política de links públicos de Export siguen siendo los existentes; no incorpora permisos ni llamadas nuevas.

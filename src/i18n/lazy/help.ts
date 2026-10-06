@@ -315,8 +315,8 @@ export const help = {
 
   'help.folderDrop.title': { en: "Drop a folder", es: "Soltar una carpeta" },
   'help.folderDrop.text': {
-    en: "Drag a folder from your computer onto the page. A window shows what goes up: how many files, in how many folders, how much it weighs, and what is skipped (hidden and system files, unless you tick Include hidden files). Upload sends it to the owner's Google Drive and leaves a folder card in the page. Keep the tab open until it finishes.",
-    es: "Arrastrá una carpeta de tu computadora a la página. Una ventana muestra qué se sube: cuántos archivos, en cuántas carpetas, cuánto pesa y qué se saltea (los archivos ocultos y del sistema, salvo que tildes Incluir archivos ocultos). Subir la manda al Google Drive del dueño y deja una tarjeta de carpeta en la página. Dejá la pestaña abierta hasta que termine.",
+    en: "Drag a folder from your computer onto the page, or on a computer type / and choose Folder to pick it (an empty folder, only by dragging). A window shows what goes up: how many files, in how many folders, how much it weighs, and what is skipped (hidden and system files, unless you tick Include hidden files). Upload sends it to the owner's Google Drive and leaves a folder card in the page. Keep the tab open until it finishes.",
+    es: "Arrastrá una carpeta de tu computadora a la página o, en una computadora, escribí / y elegí Carpeta para buscarla (una carpeta vacía, solo arrastrándola). Una ventana muestra qué se sube: cuántos archivos, en cuántas carpetas, cuánto pesa y qué se saltea (los archivos ocultos y del sistema, salvo que tildes Incluir archivos ocultos). Subir la manda al Google Drive del dueño y deja una tarjeta de carpeta en la página. Dejá la pestaña abierta hasta que termine.",
   },
   'help.folderUpload.title': { en: "While it uploads", es: "Mientras sube" },
   'help.folderUpload.text': {

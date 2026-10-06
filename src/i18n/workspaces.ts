@@ -64,6 +64,16 @@ export const workspaces = {
     en: { one: "The {count} change that was never uploaded will only be in what you downloaded (the file and the photos and videos).", other: "The {count} changes that were never uploaded will only be in what you downloaded (the file and the photos and videos)." },
     es: { one: "El cambio que nunca se subió va a quedar solo en lo que descargaste (el archivo y las fotos y videos).", other: "Los {count} cambios que nunca se subieron van a quedar solo en lo que descargaste (el archivo y las fotos y videos)." },
   },
+  'removeWs.folders': {
+    en: {
+      one: "A folder upload is unfinished on this device: {count} file left. Removing the workspace stops it for good: the folder in the page keeps only what already reached Google Drive. Your files stay on your disk.",
+      other: "A folder upload is unfinished on this device: {count} files left. Removing the workspace stops it for good: the folder in the page keeps only what already reached Google Drive. Your files stay on your disk.",
+    },
+    es: {
+      one: "Hay una carpeta a medio subir en este dispositivo: falta {count} archivo. Quitar el workspace corta la subida para siempre: la carpeta de la página queda solo con lo que ya llegó a Google Drive. Tus archivos siguen en tu disco.",
+      other: "Hay una carpeta a medio subir en este dispositivo: faltan {count} archivos. Quitar el workspace corta la subida para siempre: la carpeta de la página queda solo con lo que ya llegó a Google Drive. Tus archivos siguen en tu disco.",
+    },
+  },
   'removeWs.confirm': {
     en: "Remove “{name}” from this device? {warning}You can join it again later with an invitation link.",
     es: "¿Quitar “{name}” de este dispositivo? {warning}Después podés volver a unirte con un link de invitación.",

@@ -275,11 +275,27 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
   una reserva nueva no repita un proyecto (v0.213; mismo doc).
 - **D308 · Al cancelar o fallar un zip, el archivo del destino se borra solo si estaba vacío al elegirlo** (2026-10-06; tomada al repararlo, Lega la puede cambiar). El
   selector del navegador crea el `.zip` vacío al elegir el nombre; ese se saca. Uno que al elegirlo tenía contenido
-  (se eligió reemplazar un zip anterior) no se borra. Si el navegador no dice el peso, tampoco. Qué hace el
-  navegador con el contenido de un archivo existente al elegirlo queda por verificar.
+  (se eligió reemplazar un zip anterior) no se borra. Si el navegador no dice el peso, tampoco. **Chrome y Edge
+  (los únicos navegadores con ese selector) vacían el archivo existente en el momento de elegirlo**, antes de que la
+  app haga nada: sale de leer el código de Chromium (al guardar, crea el archivo si no existe y lo trunca si existe);
+  no se vio en un navegador. Entonces, hoy, elegir reemplazar un zip anterior lo pierde igual: queda en 0 bytes al
+  elegirlo y, por estar vacío, se saca al cancelar. La regla solo evita llevarse un archivo con contenido en un
+  navegador que no lo vacíe. Conservar el zip anterior pide otro diseño (`Doc_Roadmap.md`).
   **Por qué:** desde v0.204 no se borraba nada, para no llevarse un archivo de la persona, y quedaba un zip vacío;
   mirar si estaba vacío da las dos cosas (v0.213; `Doc_Exportar.md`, "Guardado local antes del PDF"). Sin verificar
   en un navegador real.
+  Desde v0.216 la misma regla vale para *Download all* de una carpeta, incluido el zip de *Retry missing*
+  (`Doc_Carpetas.md`).
+- **D309 · *Folder* en el menú "/", solo en computadora** (2026-10-06; tomada al implementarlo, Lega la puede
+  cambiar). Abre el selector de carpetas del sistema y sigue el mismo camino que una carpeta arrastrada. En un teléfono
+  no se ofrece: ahí el selector de carpetas no está probado y se sigue pidiendo comprimir. No se ofrece sin permiso de
+  editar, sin Drive conectado ni entrando por un link.
+- **D310 · Quitar el workspace con una carpeta a medio subir avisa y no frena** (2026-10-06; tomada al implementarlo,
+  Lega la puede cambiar). La ventana dice cuántos archivos faltan y que esa subida se corta. **Por qué:** los archivos
+  siguen en el disco de la persona; lo que se pierde es la lista de trabajo, no un dato.
+- **D311 · Al copiar o cortar, los links a páginas propias llevan el workspace solo en lo que se pega afuera de la
+  app** (2026-10-06; tomada al implementarlo, Lega la puede cambiar). El documento y lo que se pega adentro no cambian.
+  Entrando por un link público no se agrega nada (no se copia el acceso a escondidas), y el arrastre no se toca.
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 

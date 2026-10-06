@@ -7,6 +7,7 @@ import { prefs } from '../prefs';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
+import { FolderUploads } from '../media/folderUpload';
 import { WANKA_LOCAL_KEY, WorkspaceContext } from '../workspace';
 import {
   addWorkspace,
@@ -324,6 +325,43 @@ describe('en la app abierta', () => {
     });
     await act(() => vi.waitFor(() => expect(saved).toEqual(['IMG_0001.MOV'])));
     await act(() => vi.waitFor(() => expect(remove.disabled).toBe(false)));
+  });
+
+  it('con una carpeta a medio subir, quitar dice cuántos archivos faltan y que se corta; sin ninguna, no dice nada', async () => {
+    loadWorkspaces(WANKA);
+    updateWorkspaces((l) => addWorkspace(l, STUDIO));
+    // Una base propia: sin nada sin subir de las otras pruebas.
+    const dbName = crypto.randomUUID();
+    const d = await device(dbName);
+    // Una carpeta de tres archivos que no puede subir (sin portero): queda con los tres pendientes.
+    const folders = new FolderUploads(null, { portero: () => null, wait: async () => undefined });
+    const file = (name: string) => ({ path: name, file: new File([new Uint8Array(4)], name) });
+    await folders.start('carpeta-1', 'pagina', { name: 'Referencias', files: [file('a.jpg'), file('b.jpg'), file('c.mov')], dirs: [], skipped: [] });
+    await act(() => vi.waitFor(() => expect(folders.busy()).toBe(false)));
+    expect(folders.progress('carpeta-1')!.state).not.toBe('done');
+    await mount(
+      <ServicesContext.Provider value={{ ...services(d, STUDIO, dbName), folders }}>
+        <RemoveWorkspaceDialog onClose={() => undefined} />
+      </ServicesContext.Provider>,
+    );
+    await act(() => vi.waitFor(() => expect(button(document.body, 'Remove from this device').disabled).toBe(false)));
+    expect(document.body.textContent).toContain('A folder upload is unfinished on this device: 3 files left. Removing the workspace stops it for good');
+    // No frena (los archivos siguen en el disco de la persona), pero tampoco dice que ya se subió todo.
+    expect(document.body.textContent).not.toContain('Everything on this device was already uploaded.');
+    // Se dejó de seguir la carpeta: el aviso se va y vuelve el de siempre.
+    await act(async () => folders.forget('carpeta-1'));
+    expect(document.body.textContent).not.toContain('unfinished');
+    expect(document.body.textContent).toContain('Everything on this device was already uploaded.');
+
+    for (const r of roots.splice(0)) act(() => r.unmount());
+    document.body.innerHTML = '';
+    await mount(
+      <ServicesContext.Provider value={services(d, STUDIO, dbName)}>
+        <RemoveWorkspaceDialog onClose={() => undefined} />
+      </ServicesContext.Provider>,
+    );
+    await act(() => vi.waitFor(() => expect(document.body.textContent).toContain('Everything on this device was already uploaded.')));
+    expect(document.body.textContent).not.toContain('unfinished');
   });
 });
 

@@ -109,6 +109,19 @@ de archivo se anotan y el resto sigue. Un 403 con `pass_expired` completo renuev
 parciales, comprueban la cancelación de la fuente y la limpieza, y recorren *Cancel* en la ventana real con un
 servidor simulado; no reemplazan la comprobación pendiente en Safari, iPhone y Drive real.
 
+**El zip elegido, al cancelar o fallar (v0.216, D308):** *Download as .zip…* sacaba siempre el archivo del destino
+al cancelar o fallar. Ahora sigue la regla de la exportación a zip: el `.zip` vacío que crea el selector al elegir
+el nombre se saca; uno que al elegirlo tenía contenido no se borra (lo escrito a medias se descarta sin tocarlo), y
+si el navegador no dice cuánto pesa, tampoco. Si el archivo elegido no se puede abrir para escribir, el vacío recién
+creado también se saca. Vale igual para el zip de *Retry missing*. Probado con el selector simulado
+(`src/ui/folderDownloadDialog.test.tsx`).
+
+**Esto no conserva un zip que se eligió reemplazar.** Chrome y Edge, los únicos navegadores con ese selector, vacían
+el archivo existente en el momento de elegirlo, antes de que la app haga nada (sale de leer el código de Chromium: al
+guardar, crea el archivo si no existe y lo trunca si existe; no se vio en un navegador). El zip anterior queda en 0
+bytes al elegirlo y, por estar vacío, se saca al cancelar. La regla solo evita llevarse un archivo con contenido en
+un navegador que no lo vacíe. Conservarlo pide otro diseño (`Doc_Roadmap.md`), igual que en la exportación.
+
 **Cómo está hecho:**
 
 - `src/media/folderZip.ts`: `planFolder` recorre el árbol con `/folder/list` (hasta 40 subcarpetas por pedido con `dirs`, 4 pedidos a la vez,
@@ -300,8 +313,10 @@ Drive real sigue pendiente; esta entrega no cierra P.9 ni toda la entrega 1b.
 - **Subida directa del navegador a Google (plan A, BAJO):** no se probó (pide el Drive real); los bytes van por el
   portero, que entra en el plan gratis (unos 10.300 pedidos por carpeta de 10.000 archivos, sección 12).
 - **Entrega 1b pendiente (BAJO):** "Agregar a esta carpeta", la copia de la última lista para
-  verla sin red, retomar con "Seguir" en Chrome y Edge (`FileSystemHandle`), el botón "Carpeta…" del menú `/`,
-  la cuenta de pedidos del día y contar lo que falta subir en "sacar el workspace del dispositivo".
+  verla sin red, retomar con "Seguir" en Chrome y Edge (`FileSystemHandle`) y la cuenta de pedidos del día. El
+  porqué de cada una, en "Cómo quedó (v0.216)".
+- **Hecho (v0.216):** *Folder* en el menú `/` y lo que falta subir al quitar el workspace del dispositivo ("Cómo
+  quedó (v0.216)").
 - **Entrega 2:** *Bajar todo* como zip. **Hecho** ("Cómo quedó (entrega 2)").
 - **Nombres de las carpetas: decidido (D3 → B, 2026-10-02).** Sin espacios, nunca: guiones bajos también en las
   carpetas que suelta el usuario (ver "Respondidas por Lega", punto 6). Hecho en `driveFolderName`.
@@ -314,6 +329,41 @@ listar, accesos directos, documentos de Google, subcarpeta movida afuera, ciclos
 `src/media/folders.test.ts` (leer más de 100 por carpeta, salteados, `webkitdirectory`, la cola de punta a punta,
 un error que no frena, retomar por ruta y peso después de cerrar, pausar, la fila de la carpeta, sin red, la
 tarjeta). Recorrido en Chromium con el portero real en la página y un Drive de mentira: 16 de 16.
+
+## Cómo quedó (v0.216)
+
+**`/` › *Folder* (`src/ui/folderPick.ts`).** En una computadora, el menú `/` ofrece *Folder* después de *Image*:
+abre el selector de carpetas del sistema (`<input webkitdirectory>`) y lo elegido sigue el camino de una carpeta
+soltada: la misma ventana, la oferta de seguir una subida a medias de esa página, y el bloque después del renglón
+donde estaba el cursor (un renglón vacío se reemplaza). No se ofrece sin permiso de editar, en la práctica, sin
+portero, por un link, ni en un teléfono (ahí el selector no entrega carpetas de forma pareja y no está probado: se
+sigue pidiendo comprimirla). Una carpeta sin archivos no llega por el selector (el navegador no la da): la app lo
+dice y pide arrastrarla. Si se cambia de página con el selector abierto, lo elegido no va a otra página. No hay
+tipo de bloque ni propiedad nueva: es el mismo bloque de una carpeta soltada.
+
+**Quitar el workspace con una carpeta a medias.** La lista de trabajo de una carpeta se borra con el workspace, así
+que esa subida no se puede retomar después. La ventana de quitar ahora dice cuántos archivos de carpetas faltan
+subir, que se corta para siempre y que la carpeta de la página queda con lo que ya llegó a Drive. No frena: los
+archivos siguen en el disco de la persona, nunca estuvieron en la app. Con una carpeta a medias no dice "todo lo de
+este dispositivo ya se subió".
+
+**Lo que sigue pendiente de la entrega 1b, y por qué:**
+
+- **"Agregar a esta carpeta":** el peso de la carpeta está en su fila de la base (`files.size`, de ahí salen el peso
+  del proyecto y el de la tarjeta en otros dispositivos) y hoy no hay cómo cambiarlo después de registrarla: pide una
+  función nueva en la base. Para carpetas de otra persona falta además la regla que decide Lega.
+- **La lista sin red:** guardar el listado en el dispositivo deja una copia nueva de nombres de archivos que tiene
+  que irse cuando la persona pierde el acceso a la página, y no puede ir en la base de las carpetas (subirle la
+  versión dejaría afuera a una versión anterior de la app abierta en el mismo dispositivo): va en una base aparte,
+  con su tope, su borrado al quitar el workspace y su limpieza al perder el acceso. Los pases guardados vencen a las
+  8 horas: sin red la lista se ve, pero abrir o bajar pide conexión.
+- **"Seguir" en Chrome y Edge:** guardar el acceso a la carpeta del disco y volver a pedir el permiso solo se puede
+  comprobar en un navegador de verdad.
+- **Subida directa a Google** y **`drive.readonly`:** siguen como estaban (Drive real y decisión de Lega).
+
+**Pruebas:** `src/ui/folderPick.test.ts` (cuándo se ofrece, la carpeta leída con subcarpetas y salteados, carpeta sin
+archivos, cerrar el selector, cambio de página) y `src/ui/workspaces.test.tsx` (el aviso con tres archivos
+pendientes, que no frena y que se va al dejar de seguir la carpeta). El selector real del sistema no se probó.
 
 ## Cómo quedó (entrega 3, v0.142)
 

@@ -16,6 +16,12 @@ const failing = new Set<string>();
 /** Los archivos cuyo pedido queda colgado (hasta que se cancela). */
 const hanging = new Set<string>();
 const suggested: string[] = [];
+/** Lo que pesa el archivo elegido en el selector al elegirlo (`undefined`: el navegador no lo dice). */
+let pickedSize: number | undefined;
+/** Los zips que se sacaron del destino (`handle.remove`). */
+const removedZips: string[] = [];
+/** El selector deja elegir, pero el archivo no se puede abrir para escribir. */
+let writableFails = false;
 let dirPicks = 0;
 const roots: Root[] = [];
 
@@ -90,6 +96,9 @@ beforeEach(() => {
   failing.clear();
   hanging.clear();
   suggested.length = 0;
+  pickedSize = undefined;
+  removedZips.length = 0;
+  writableFails = false;
   dirPicks = 0;
   picked = null;
   vi.stubGlobal('fetch', async (input: RequestInfo | URL, init: RequestInit = {}) => {
@@ -106,10 +115,15 @@ beforeEach(() => {
   const w = window as unknown as Record<string, unknown>;
   w.showSaveFilePicker = async (opts: { suggestedName: string }) => {
     suggested.push(opts.suggestedName);
+    const size = pickedSize;
     return {
       name: opts.suggestedName,
-      createWritable: async () => ({ write: async () => undefined, close: async () => undefined, abort: async () => undefined }),
-      remove: async () => undefined,
+      createWritable: async () => {
+        if (writableFails) throw new DOMException('no', 'NoModificationAllowedError');
+        return { write: async () => undefined, close: async () => undefined, abort: async () => undefined };
+      },
+      remove: async () => void removedZips.push(opts.suggestedName),
+      ...(size === undefined ? {} : { getFile: async () => ({ size }) }),
     };
   };
   w.showDirectoryPicker = async () => {
@@ -243,6 +257,46 @@ describe('Download all: la ventana con Retry missing', () => {
     await click('Retry missing');
     await until(() => /Done: X \(missing files\)\.zip is saved/.test(text()));
     expect(suggested).toEqual(['X.zip', 'X (missing files).zip', 'X (missing files).zip']);
+  });
+
+  it.each([
+    ['el zip vacío que acaba de crear el selector se saca del destino', 0, ['X.zip']],
+    ['un zip que ya tenía contenido al elegirlo (se eligió reemplazarlo) no se borra', 2048, []],
+    ['si el navegador no dice cuánto pesa el archivo elegido, no se borra', undefined, []],
+  ] as const)('al cancelar la bajada, %s', async (_what, size, removed) => {
+    pickedSize = size;
+    hanging.add('a');
+    await mount();
+    await click('Download as .zip…');
+    await until(() => button('Cancel') !== null && /of 3 files/.test(text()));
+    await click('Cancel');
+    await until(() => /cancelled/i.test(text()));
+    expect(removedZips).toEqual(removed);
+  });
+
+  it('si el archivo elegido no se puede abrir para escribir, el vacío recién creado se saca y uno con contenido queda', async () => {
+    writableFails = true;
+    pickedSize = 0;
+    await mount();
+    await click('Download as .zip…');
+    await until(() => button('Close') !== null && !/files in/.test(text()));
+    expect(removedZips).toEqual(['X.zip']);
+    for (const r of roots.splice(0)) act(() => r.unmount());
+    document.body.innerHTML = '';
+    removedZips.length = 0;
+    pickedSize = 2048;
+    await mount();
+    await click('Download as .zip…');
+    await until(() => button('Close') !== null && !/files in/.test(text()));
+    expect(removedZips).toEqual([]);
+  });
+
+  it('el zip que terminó de escribirse no se borra aunque el selector lo haya creado vacío', async () => {
+    pickedSize = 0;
+    await mount();
+    await click('Download as .zip…');
+    await until(() => /Done: X.zip is saved/.test(text()));
+    expect(removedZips).toEqual([]);
   });
 
   it('a una carpeta, un archivo que falla no borra uno que ya estaba (lo trajo un reintento cancelado)', async () => {

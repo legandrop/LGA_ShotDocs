@@ -199,8 +199,9 @@ export function ExportZipPanel(props: ExportZipProps) {
     let opened: Opened | null = null;
     let picked = false;
     // El selector crea el `.zip` vacío apenas se elige el nombre. Si después se cancela o falla, ese archivo vacío se
-    // saca; uno que ya tenía contenido al elegirlo (se eligió reemplazar un zip anterior) nunca se borra: sigue como
-    // estaba, porque lo escrito a medias se descarta sin tocarlo.
+    // saca; uno que tiene contenido al elegirlo nunca se borra (D308). Ojo: Chrome y Edge vacían el archivo existente
+    // al elegirlo en el selector (según el código de Chromium), así que ahí un zip reemplazado ya llega vacío y se
+    // saca igual; conservarlo pide otro diseño (Docs/Doc_Roadmap.md).
     let dropEmpty: (() => Promise<void>) | null = null;
     let editor: ExportEditor | null = null;
     let last = 0;

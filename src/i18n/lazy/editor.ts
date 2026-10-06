@@ -220,6 +220,16 @@ export const editor = {
     en: "Photos and videos go in the line, at the cursor",
     es: "Las fotos y los videos van en el renglón, donde está el cursor",
   },
+  // "Folder" del menú "/" (folderPick.ts).
+  'editor.folder': { en: "Folder", es: "Carpeta" },
+  'editor.folderHint': {
+    en: "Uploads a whole folder to Google Drive, with its subfolders",
+    es: "Sube una carpeta entera a Google Drive, con sus subcarpetas",
+  },
+  'editor.folderNoFiles': {
+    en: "That folder has no files to upload. To add an empty folder, drag it onto the page.",
+    es: "Esa carpeta no tiene archivos para subir. Para agregar una carpeta vacía, arrastrala a la página.",
+  },
   // Sacar una foto o filmar y guardar en el carrete (camera.ts).
   'camera.takePhotoHint': {
     en: "Opens the phone camera; the photo goes in the line, at the cursor",

@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.216 :
+
+*Download all* de una carpeta sacaba siempre el archivo del destino al cancelar o fallar. Ahora sigue la regla de la exportación (D308): saca solo uno vacío. Eso no conserva un zip que se eligió reemplazar: Chrome y Edge, los únicos con ese selector, lo vacían al elegirlo (leído en el código de Chromium, sin verlo en un navegador); pide otro diseño. Subir una carpeta pedía arrastrarla: el menú `/` suma *Folder*, que en una computadora abre el selector del sistema (D309). Quitar el workspace se llevaba sin aviso la lista de una carpeta a medio subir: la ventana dice cuántos archivos faltan y que la subida se corta (D310). Copiar o cortar links a páginas propias los dejaba sin workspace: lo que se pega afuera de la app lleva la dirección entera con su workspace; el documento y lo pegado adentro no cambian (D311).
+
+[Sacar solo el zip vacío al cancelar Download all, elegir una carpeta desde el menú /, avisar las carpetas a medias al quitar el workspace y llevar el workspace en los links copiados]
+
 v0.215 :
 
 Al link público le quedaban restos. Con el campo de fecha de vencimiento abierto, apagar el link y prender otro lo hacía reaparecer con la fecha anterior, y Enter no confirmaba: el campo era de la ventana y no del link. Ahora se cierra con su link y es un formulario. El árbol no decía qué páginas tienen link ni *Share* quién lo creó: se suma un ícono, que la base confirma página por página a quien puede compartirla, y la línea del creador. Quien entró con un link perdía de vista sus comentarios sin mandar cuando el link dejaba de andar, leía «Ask for edit access» y podía escribir «(via link)» en su nombre: la pantalla del link caído los muestra para copiarlos, el aviso dice qué pedir y el nombre sale limpio. Los errores del link se dicen en palabras.

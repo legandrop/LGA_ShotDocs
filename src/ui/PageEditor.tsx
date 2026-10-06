@@ -35,7 +35,8 @@ import { dropTarget, insertFiles, isEmptyParagraph, isFilesTransfer, takeFiles, 
 import { addFiles, dropPos, pickFiles, type AddFilesOptions, type PhotoEditor, type PickExtra } from './inlinePhotoCreate';
 import { CAMERA_ACCEPT, CAMERA_FACING, cameraKinds, capturePhone, registerPageCamera, type CameraKind } from './camera';
 import { readFolder, summarize, takeDrop, type FolderSource } from '../media/folderRead';
-import { FolderAskDialog, FolderProgressDialog } from './FolderDialog';
+import { FolderAskDialog, FolderGlyph, FolderProgressDialog } from './FolderDialog';
+import { folderSlashOffer, pickFolder } from './folderPick';
 import { FolderViewer } from './FolderViewer';
 import { renameConvertedHeic } from './heicNames';
 import { isAttachment, markAttachments } from './attachments';
@@ -747,6 +748,9 @@ export function BlockEditor({
   };
   const openCameraRef = useRef(openCamera);
   openCameraRef.current = openCamera;
+  // "Folder" del menú "/" (folderPick.ts): elegir una carpeta con el selector del sistema, en vez de arrastrarla.
+  const folderOffer = folderSlashOffer({ editable, practice: !!filesNotice, portero: media.enabled, noFolders: !!media.noFolders, queue: !!folders });
+  const chooseFolderRef = useRef<() => void>(() => undefined);
   // Si la persona puso el cursor en la página en esta visita: si no, lo del menú de la página va al final.
   const cursorPlaced = useRef(false);
   useEffect(() => {
@@ -1152,10 +1156,24 @@ export function BlockEditor({
       icon: kind === 'photo' ? <CameraIcon size={18} /> : <VideoIcon size={18} />,
       onItemClick: () => openCameraRef.current(kind),
     }));
-    const withCamera = imageAt >= 0 ? [...variants.slice(0, imageAt + 1), ...camera, ...variants.slice(imageAt + 1)] : [...variants, ...camera];
+    // "Folder" (P.9): la carpeta entera al Drive, después de "Image" y de la cámara.
+    const folder: DefaultReactSuggestionItem[] = folderOffer
+      ? [
+          {
+            title: tr('editor.folder'),
+            subtext: tr('editor.folderHint'),
+            aliases: ['folder', 'carpeta', 'directory', 'directorio', 'drive', 'upload', 'subir'],
+            group: imageAt >= 0 ? variants[imageAt].group : basic,
+            icon: <FolderGlyph size={18} />,
+            onItemClick: () => chooseFolderRef.current(),
+          },
+        ]
+      : [];
+    const added = [...camera, ...folder];
+    const withCamera = imageAt >= 0 ? [...variants.slice(0, imageAt + 1), ...added, ...variants.slice(imageAt + 1)] : [...variants, ...added];
     return (query: string) =>
       Promise.resolve(filterSuggestionItems([...withCamera.slice(0, at), ...extra, ...withCamera.slice(at)], query));
-  }, [editor, tr, media, cameraOffer]);
+  }, [editor, tr, media, cameraOffer, folderOffer]);
 
   const toolbarItems = useMemo(
     () => pageToolbarItems(editor.dictionary, tr),
@@ -1245,6 +1263,21 @@ export function BlockEditor({
       (p) => p.pageId === pageId && p.name === source.name && p.state !== 'done' && folders!.hasAnyPath(p.id, paths),
     );
     return match?.id ?? null;
+  };
+
+  // "Folder" del menú "/": lo elegido en el selector abre la misma ventana que una carpeta soltada, y su bloque va
+  // después del renglón donde estaba el cursor (un renglón vacío se reemplaza, como al soltar).
+  chooseFolderRef.current = () => {
+    const view = editor.prosemirrorView;
+    if (!folderOffer || !view) return;
+    const at: InsertAt = { blockId: editor.getTextCursorPosition().block.id, placement: 'after' };
+    pickFolder(
+      (sources) => {
+        if (sources.length === 0) return notify(t('editor.folderNoFiles'));
+        setFolderAsk({ sources, at, resumes: sources.map((source) => sameUpload(source)) });
+      },
+      () => !view.isDestroyed,
+    );
   };
 
   /** Sube las carpetas confirmadas: registra cada una, pone su bloque donde se soltó y empieza a subir. */

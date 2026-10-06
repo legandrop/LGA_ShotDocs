@@ -204,13 +204,29 @@ export function FolderDownloadDialog({ fileId, name, onClose }: { fileId: string
           types: [{ description: 'Zip', accept: { 'application/zip': ['.zip'] } }],
           id: 'shotdocs-download',
         });
-        const writable = await handle.createWritable();
+        // El selector crea el `.zip` vacío apenas se elige el nombre. Si después se cancela o falla, ese archivo vacío
+        // se saca; uno que ya tenía contenido al elegirlo (se eligió reemplazar un zip anterior) nunca se borra: sigue
+        // como estaba, porque lo escrito a medias se descarta sin tocarlo. Si el navegador no dice el peso, tampoco
+        // (D308, la misma regla que la exportación a zip). Ojo: Chrome y Edge vacían el archivo existente al elegirlo
+        // en el selector (según el código de Chromium), así que ahí un zip reemplazado ya llega vacío y se saca igual;
+        // conservarlo pide otro diseño (Docs/Doc_Roadmap.md).
+        const empty = (await handle.getFile?.().then((f) => f.size === 0, () => false)) ?? false;
+        const dropEmpty = async () => {
+          if (empty) await handle.remove?.().catch(() => undefined);
+        };
+        let writable: Writable;
+        try {
+          writable = await handle.createWritable();
+        } catch (err) {
+          await dropEmpty();
+          throw err;
+        }
         return {
           target: { kind: 'zip', sink: { write: (c) => writable.write(c) }, crc: () => crc.stream() },
           finish: () => writable.close(),
           discard: async () => {
             await writable.abort().catch(() => undefined);
-            await handle.remove?.().catch(() => undefined);
+            await dropEmpty();
           },
           saved: handle.name,
           sink: null,
