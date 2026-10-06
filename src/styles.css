@@ -4507,6 +4507,13 @@ button.link.danger {
   font-size: 13px;
 }
 
+/* Un comentario sin mandar, en la pantalla del link que ya no anda: entero y con sus saltos de línea. */
+.removed-media .link-dead-comment {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
 @media (max-width: 520px) {
   .team-invite-row,
   .team-invite-actions {
@@ -8148,6 +8155,16 @@ button.folder-row-main:hover {
   align-self: center;
   flex: none;
   margin: 0 2px;
+  color: var(--warn);
+}
+.tree-row .tree-link {
+  display: inline-flex;
+  align-self: center;
+  flex: none;
+  margin: 0 2px;
+  color: var(--muted-2);
+}
+.tree-row .tree-link.off {
   color: var(--warn);
 }
 .link-aside-list {

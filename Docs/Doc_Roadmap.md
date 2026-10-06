@@ -350,8 +350,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
 - **P.19 Link público: *Anyone with the link*** (Lega, 2026-10-02): en *Share*, además de personas y correos, un link
   que cualquiera abre sin cuenta, con *Can view* (que siempre puede comentar) o *Can edit*; "debería estar seguro".
   **Entregas 0 y 1 hechas (v0.114: *Can view*, migración aplicada (verificada en la base el 2026-10-06); ver "Cómo quedó" en `Doc_Link_Publico.md`).** Para
-  publicarla del todo falta prender el interruptor de D14 (`clean_min_version`, hoy nulo, apagado); la migración ya está aplicada. Falta: el ícono del árbol para las
-  páginas con link, el detalle *Can view link, created by…* para el equipo, y las entregas 2 y 3.
+  publicarla del todo falta prender el interruptor de D14 (`clean_min_version`, hoy nulo, apagado); la migración ya está aplicada. **Hecho en v0.215:** el ícono del árbol para las
+  páginas con link propio (lo ve quien puede compartir la página; lo confirma la base) y, en *Share*, quién creó el link y
+  cuándo. Falta: decir en cada comentario de qué link vino (*Can view link, created by…*; la base no lo entrega por id de
+  link: diseño en `Doc_Link_Publico.md`, "Restos del link (v0.215)"), y la entrega 3.
   **Entrega 2a hecha (v0.151: escribir; migración `20261028120000_link_editar.sql` aplicada (verificada en la base el 2026-10-06), `schema_version` 19, y el
   interruptor `link_edit_min_version` ya prendido en 0.151; ver "Cómo quedó la 2a" en `Doc_Link_Publico.md`).** Para prenderla hacía falta: la
   barrera de error alrededor de `PageEditor` en `main` (R4), aplicar la migración, subir la mínima y poner
@@ -401,19 +403,31 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   (`Doc_Link_Publico.md`, "Entrega 2: *Can edit* (rediseño 2026-10-02)").
   **Observaciones de las auditorías que quedaron para después** (ninguna pierde datos ni abre el link): en el visitante, *Open my workspace* desde la
   cabecera del link, pruebas de las guardas de la interfaz (*Resolve*, papelera, preferencias, cartel del dominio,
-  modo liviano), avisar y ofrecer copiar los comentarios sin subir cuando el link muere, limpiar las bases locales de
-  links viejos, un texto propio del
-  link en vez de «Ask for edit access», rechazar «(via link)» en el nombre, la ayuda
+  modo liviano), limpiar las bases locales de
+  links viejos, que la base rechace «(via link)» en el nombre (la app ya lo saca), la ayuda
   según quién la lee; en la base, tiempos de un token que ya existe (el doc dice «cuesta lo mismo»), el costo sin contar
-  de `plink_tree(sig)` (26 ms con 423 páginas), el `max_rows` de PostgREST (1000: ramas más grandes llegan cortadas), la
-  prueba del portero de los pases de 2 horas en `/folder/list`, el texto de «cada archivo listado cuenta como un pase»,
-  y una línea de ayuda por `revoke_public_link` con la raíz en la papelera (`page_in_trash`).
+  de `plink_tree(sig)` (26 ms con 423 páginas), y el `max_rows` de PostgREST (1000: ramas más grandes llegan cortadas).
+  **Hecho en v0.215, de esas observaciones:** la pantalla del link que ya no anda muestra los comentarios sin mandar, para
+  copiarlos; quien entró con un link que no edita lee qué pedir (otro link) en vez de «Ask for edit access»; el nombre
+  del visitante no puede traer «(via link)»; la prueba del portero de los pases de 2 horas en `/folder/list`; el texto de
+  los pases del listado (cuenta uno por pedido, no uno por archivo); y la línea de ayuda del link de una página en la
+  papelera, con los errores del link dichos en palabras en *Share* (`Doc_Link_Publico.md`, "Restos del link (v0.215)").
   **Hecho en v0.212, de esas observaciones:** *Restricted* pregunta antes como *Reset link*; el uso de hoy en singular y en
   plural; `LinkRemote` cierra también archivar, borrar, restaurar y borrar para siempre un proyecto; y la fecha de
   vencimiento de un link que ya existe se elige en un campo de la ventana, sin `prompt()` (`Doc_Link_Publico.md`, "Restos
   de las auditorías, en *Share* y en el visitante").
-  Quedó de su revisión: con el campo de fecha abierto, apagar el link con *Restricted* y volver a *Anyone* hace
-  reaparecer el campo con la fecha anterior (no guarda nada sin *Set date*); Enter en el campo de fecha no confirma.
+  Las dos observaciones de su revisión quedaron **hechas en v0.215**: el campo de fecha se cierra cuando el link se apaga,
+  se renueva o se crea otro, y Enter en el campo confirma como *Set date*.
+  **Quedó de v0.215** (`Doc_Link_Publico.md`, "Restos del link (v0.215)", "Lo que queda, sabido"): (a) si una
+  confirmación del ícono viaja justo mientras *Share* crea o apaga ese link, la respuesta vieja pisa la nueva y se corrige
+  sola en la vuelta siguiente (2 a 10 minutos); (b) **privacidad:** `public_link_pages()` contesta a cualquiera que ve la
+  página, invitados incluidos si la llaman a mano, y revela que la página tiene un link: cerrarlo pide una migración (que
+  conteste solo con `can_share`; el diseño está en el doc); (c) la pantalla del link que ya no anda abre (y crea si no
+  existía) la base local de comentarios, y un comentario ya entregado cuyo acuse se perdió figura como «no mandado»; el
+  aviso del link *Can edit* que esta app usa solo para leer no sabe decir si hay que actualizar la app o si editar con
+  un link está apagado (haría falta que `plink_open` lo cuente). Aparte, no es del link: `src/export/export.test.tsx`
+  («dibuja cada página…») falla bajo carga también con la versión publicada (la sincronización de fondo le cambia la
+  cuenta de operaciones pendientes mientras dibuja): conviene estabilizarla.
   **Diseño en `Doc_Link_Publico.md`** (auditado: aprobado con condiciones, ya corregido; D29 a D31): el token
   del link validado por la base en cada pedido (sin cuentas ni cambios en el login; las sesiones anónimas de Supabase no
   andan con el registro cerrado), solo la página y lo de abajo, como un invitado (base limpia de D14, sin historial ni

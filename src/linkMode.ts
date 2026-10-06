@@ -316,10 +316,17 @@ function navigationType(): string | null {
   }
 }
 
-/** El nombre que escribe el visitante: 1 a 60 caracteres, sin controles ni marcas de dirección (como la base). */
+/** «(via link)» y «(vía link)», con los espacios y las mayúsculas que sean: la app lo suma al mostrar el nombre. */
+const VIA_LINK = /[(（]\s*v[ií]a\s+link\s*[)）]/gi;
+
+/**
+ * El nombre que escribe el visitante: 1 a 60 caracteres, sin controles ni marcas de dirección (como la base) y sin
+ * «(via link)»: ese rótulo lo pone la app al lado del nombre, así que escrito en el nombre saldría dos veces.
+ */
 export function cleanVisitorName(raw: string): string {
   // eslint-disable-next-line no-control-regex
-  return raw.replace(/[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2069\ufeff]/g, '').trim().slice(0, 60).trim();
+  const plain = raw.replace(/[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2069\ufeff]/g, '');
+  return plain.replace(VIA_LINK, ' ').replace(/\s+/g, ' ').trim().slice(0, 60).trim();
 }
 
 // --- El workspace del link: nombres propios en el dispositivo y un cliente sin sesión -------------------------------
@@ -392,6 +399,16 @@ export function linkDomain(entry: Pick<LinkEntry, 'url'>): string {
   return hostOf(entry.url);
 }
 
+/**
+ * El link abierto es *Can edit* pero la base se lo deja usar a esta app solo como *Can view* (lo que dijo `plink_open`,
+ * guardado en el servidor del link): editar con un link está apagado en el workspace, o esta versión de la app es más
+ * vieja que la que lo prendió. La app no sabe cuál de las dos.
+ */
+export function linkEditUnavailable(remote: unknown): boolean {
+  const opened = (remote as { opened?: { level?: unknown; link_level?: unknown } | null } | null)?.opened;
+  return opened?.level === 'comment' && opened.link_level === 'edit';
+}
+
 // --- El nombre del visitante (P8): guardado en el dispositivo, por link ---------------------------------------------
 
 const nameListeners = new Set<() => void>();
@@ -402,7 +419,8 @@ export function setVisitorName(id: string, name: string, store: KeyValueStore = 
 }
 
 export function visitorName(id: string, store: KeyValueStore = browserStore()): string {
-  return readLinks(store).links.find((l) => l.id === id)?.name ?? '';
+  // Limpio también al leer: un nombre guardado por una versión anterior puede traer «(via link)».
+  return cleanVisitorName(readLinks(store).links.find((l) => l.id === id)?.name ?? '');
 }
 
 /** El nombre con el que comenta el visitante del link abierto ('' si todavía no lo escribió, o sin link). */

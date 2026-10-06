@@ -130,6 +130,27 @@ async function sharedPage(level: 'view' | 'comment') {
 }
 
 describe('comentarios en la página', () => {
+  it('quien entró con un link que no edita lee qué pedir (otro link), no «Ask for edit access»', async () => {
+    const { guest, page } = await sharedPage('comment');
+    // Los permisos de un visitante: los de quien comenta, con la marca del link (`contentOnly`, lo que pone `LinkRemote`).
+    const base = services(guest, 'cli');
+    const access = { ...guest.access, load: guest.access.load, subscribe: guest.access.subscribe, getRevision: guest.access.getRevision, get: () => ({ ...guest.access.get()!, contentOnly: true }) };
+    const host = await mount({ ...base, access: access as never }, <PageEditor pageId={page} />);
+    await wait(150);
+    expect(host.querySelector('.ProseMirror')?.getAttribute('contenteditable')).toBe('false');
+    expect(host.textContent).toContain('This link lets you read this page and comment on it. To change it, ask whoever shared it for a link that can edit.');
+    expect(host.textContent).not.toContain('Ask for edit access');
+    act(() => roots.pop()!.unmount());
+
+    // Un link que deja editar pero que esta app solo puede usar para leer y comentar (editar con un link está apagado, o
+    // la app es más vieja que la versión que lo prendió): no se lo manda a pedir un link que ya tiene.
+    const remote = Object.assign(Object.create(guest.remote as object) as object, { opened: { level: 'comment', link_level: 'edit' } });
+    const host2 = await mount({ ...base, access: access as never, remote: remote as never }, <PageEditor pageId={page} />);
+    await wait(150);
+    expect(host2.textContent).toContain("This link can edit, but editing through a link isn't available right now");
+    expect(host2.textContent).not.toContain('ask whoever shared it for a link that can edit');
+  });
+
   it('con Comentar, el invitado contesta una pregunta desde "Answer" aunque la página sea de solo lectura', async () => {
     const { server, guest, page, questionId } = await sharedPage('comment');
     const host = await mount(

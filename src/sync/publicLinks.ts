@@ -115,6 +115,15 @@ export function getPublicLink(client: SupabaseClient, pageId: string): Promise<P
   return call(client, 'get_public_link', { p_page: pageId });
 }
 
+/**
+ * Los ids de las páginas que la sesión ve y que tienen un link vivo propio (`public_link_pages`). Solo dice dónde mirar:
+ * el detalle de cada una lo da `get_public_link`, que contesta solo a quien puede compartir esa página.
+ */
+export async function getPublicLinkPages(client: SupabaseClient): Promise<string[]> {
+  const rows = (await call<{ page_id: unknown }[] | null>(client, 'public_link_pages', {})) ?? [];
+  return rows.map((r) => String(r.page_id));
+}
+
 /** El nivel de un link: *Can view* (que comenta) o *Can edit* (entrega 2a, con su interruptor). */
 export type LinkLevel = 'comment' | 'edit';
 

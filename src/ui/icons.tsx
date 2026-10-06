@@ -121,6 +121,10 @@ export const DownloadIcon = icon('M10 3.5v9M6.25 9L10 12.75 13.75 9M4 16.25h12',
 export const OpenIcon = icon('M11 3.75h5.25V9M16 4l-6.5 6.5M14.25 11.5v3.75a1 1 0 0 1-1 1h-8.5a1 1 0 0 1-1-1v-8.5a1 1 0 0 1 1-1H8.5', { strokeWidth: 1.6 });
 export const HeaderIcon = icon('M4 6h12M4 10h7M4 14h9');
 export const ShareIcon = icon('M10 12.5V3.75M6.75 7L10 3.75 13.25 7M5.5 10.5H5a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1h-.5');
+// Un link público (dos eslabones): la página se abre con un link, sin cuenta.
+export const LinkIcon = icon(
+  'M8.25 11.75a3.75 3.75 0 0 0 5.3 0l2.7-2.7a3.75 3.75 0 0 0-5.3-5.3l-1.35 1.35M11.75 8.25a3.75 3.75 0 0 0-5.3 0l-2.7 2.7a3.75 3.75 0 0 0 5.3 5.3l1.35-1.35',
+);
 export const MembersIcon = icon(
   'M7.5 9.25a2.75 2.75 0 1 0 0-5.5 2.75 2.75 0 0 0 0 5.5zM2.75 16.25a4.75 4.75 0 0 1 9.5 0M13.25 4a2.5 2.5 0 0 1 0 5M14.5 11.75a4.25 4.25 0 0 1 2.75 4.5',
 );

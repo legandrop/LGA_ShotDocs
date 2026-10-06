@@ -140,6 +140,8 @@ const OWN_TEMPLATES = '0.124';
 const DAY_REPORTS = '0.121';
 /** El link público, *Can view* (Doc_Link_Publico.md, entrega 1): la versión se pone al publicar, igual que en el changelog. */
 const PUBLIC_LINK = '0.111';
+/** El ícono del árbol de las páginas con link y quién lo creó, en *Share* (Doc_Link_Publico.md): la versión la pone quien publica. */
+const PUBLIC_LINK_TREE = '0.215';
 /** *Can edit* por un link (Doc_Link_Publico.md, entrega 2a): la versión la pone quien publica, igual que en el changelog. */
 const LINK_EDIT = '0.151';
 /** Lo apartado a la vista (Doc_Link_Publico.md, entrega 2c): la versión la pone quien publica, igual que en el changelog. */
@@ -766,8 +768,8 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'sharing',
     title: 'help.publicLink.title',
     text: 'help.publicLink.text',
-    words: ['link', 'enlace', 'público', 'public', 'anyone', 'cualquiera', 'sin cuenta', 'without an account', 'reset', 'renovar', 'vence', 'expires'],
-    since: PUBLIC_LINK,
+    words: ['link', 'enlace', 'público', 'public', 'anyone', 'cualquiera', 'sin cuenta', 'without an account', 'reset', 'renovar', 'vence', 'expires', 'árbol', 'tree', 'papelera', 'trash'],
+    since: PUBLIC_LINK_TREE,
   },
   {
     id: 'openedWithLink',

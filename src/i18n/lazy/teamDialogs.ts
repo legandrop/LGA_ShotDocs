@@ -206,6 +206,19 @@ export const teamDialogs = {
     es: "Llegó al tope del día: las visitas nuevas siguen mañana. Si se escapó, Renovar link.",
   },
   'share.link.above': { en: "Anyone with the link to “{title}” can view this page.", es: "Cualquiera con el link de “{title}” puede ver esta página." },
+  'share.link.aboveEdit': { en: "Anyone with the link to “{title}” can edit this page.", es: "Cualquiera con el link de “{title}” puede editar esta página." },
+  // Qué link es (3.7: *created by…*): lo ve quien comparte la página.
+  'share.link.createdBy': { en: "Created by {name} on {date}.", es: "Lo creó {name} el {date}." },
+  'share.link.created': { en: "Created on {date}.", es: "Creado el {date}." },
+  'share.link.error.gone': {
+    en: "This link was turned off or reset somewhere else. Here's how it is now.",
+    es: "Este link se apagó o se renovó en otro lado. Así está ahora.",
+  },
+  'share.link.error.invalid': { en: "The link couldn't be saved. Try again.", es: "No se pudo guardar el link. Probá de nuevo." },
+  'share.link.error.trash': {
+    en: "This page is in the trash, so its link doesn't work. Restoring the page turns the link back on: restore it to change the link or turn it off.",
+    es: "Esta página está en la papelera, así que su link no anda. Al restaurarla el link vuelve a andar: restaurala para cambiarlo o apagarlo.",
+  },
   'share.link.goAbove': { en: "Go to it", es: "Ir a esa" },
   'share.link.visitors': { en: "the link", es: "el link" },
   'share.link.deleteComments': {

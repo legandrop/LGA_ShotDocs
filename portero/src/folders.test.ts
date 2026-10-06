@@ -56,6 +56,10 @@ function fakeWorld() {
   const drive = new Map<string, DriveItem>();
   const base = new Map<string, { name: string; mime: string; size: number; drive_id: string | null; levels: Record<string, number>; created_by?: string | null }>();
   const uploads = new Map<string, { meta: DriveItem; size: number; data: Uint8Array<ArrayBuffer>; got: number }>();
+  /** Los links públicos que la base conoce: qué nivel da cada uno sobre cada archivo, y si se revocó. */
+  const links = new Map<string, { files: Record<string, number>; revoked?: boolean }>();
+  /** Lo que el portero le preguntó a la base con el header de un link. */
+  const linkCalls: { path: string; authorization: string | null; link: string | null }[] = [];
   let n = 0;
   let rateAfter = Infinity;
   let sessionsOpened = 0;
@@ -92,6 +96,18 @@ function fakeWorld() {
     const method = init.method ?? 'GET';
     calls.push(`${method} ${url.host}${url.pathname}`);
 
+    if (url.host === 'ws.example' && headers.has('x-shotdocs-link')) {
+      // Un link público (rol anon): la clave publicable y el token; para las carpetas, solo `plink_media_file`.
+      linkCalls.push({ path: url.pathname, authorization: headers.get('Authorization'), link: headers.get('x-shotdocs-link') });
+      if (url.pathname !== '/rest/v1/rpc/plink_media_file') return json({ code: '42501', message: 'permission denied' }, 401);
+      const l = links.get(headers.get('x-shotdocs-link')!);
+      if (!l || l.revoked) return json({ code: 'P0002', message: 'link_not_found' }, 404);
+      const id = (JSON.parse(String(init.body ?? '{}')) as { p_file?: string }).p_file ?? '';
+      const f = base.get(id);
+      const level = l.files[id] ?? 0;
+      if (!f || level === 0) return json(null);
+      return json({ id, project_id: PROJECT, project_name: '', name: f.name, mime: f.mime, size: f.size, drive_id: f.drive_id, created_at: '2026-10-01T10:00:00Z', level, mine: false });
+    }
     if (url.host === 'ws.example') {
       const user = sessions.get((headers.get('Authorization') ?? '').replace('Bearer ', ''));
       if (!user) return json({ message: 'JWT expired' }, 401);
@@ -209,6 +225,8 @@ function fakeWorld() {
     http,
     drive,
     base,
+    links,
+    linkCalls,
     calls,
     listQueries,
     /** Después de `count` listados más de carpetas, Drive contesta 500. */
@@ -935,6 +953,59 @@ describe('carpetas: ver, nunca hacia arriba', () => {
     }
     const appThumb = await p.handle(new Request(photo.thumb!, { headers: { Origin: APP } }));
     expect(appThumb.headers.get('Access-Control-Allow-Origin')).toBe(APP);
+  });
+
+  it('con un link público, los pases de lo listado duran 2 horas (los de una cuenta, 8), en una carpeta y en varias; un link revocado no lista nada', async () => {
+    const { p, tree, add, world } = await filled();
+    add('foto.jpg', tree.root.id);
+    add('dentro.jpg', tree.dirs.Fotos!);
+    const LINK = 'sdl_' + 'L'.repeat(43);
+    world.links.set(LINK, { files: { [F1]: 2 } });
+    /** Cuándo vence un pase (la parte firmada de `/m/<pase>`). */
+    const until = (url: string) => (JSON.parse(Buffer.from(new URL(url).pathname.split('/')[2]!.split('.')[0]!, 'base64url').toString()) as { u: number }).u;
+    const TWO_HOURS = 2 * 3600_000;
+    // Aunque el pedido traiga la sesión de alguien, con el link no se usa.
+    const linkList = (body: unknown) => call(p, '/folder/list', 'owner-jwt', body, { headers: { 'x-shotdocs-link': LINK } });
+
+    const before = Date.now();
+    const one = await linkList({ file: F1 });
+    expect(one.status).toBe(200);
+    const photo = ((await one.json()) as Listed).entries.find((e) => e.name === 'foto.jpg')!;
+    expect(until(photo.url!) - before).toBeGreaterThan(TWO_HOURS - 60_000);
+    expect(until(photo.url!) - before).toBeLessThanOrEqual(TWO_HOURS + 60_000);
+    // El pase sirve el archivo.
+    expect((await p.handle(new Request(photo.url!))).status).toBe(200);
+
+    // Varias subcarpetas de una vez (*Download all*): lo mismo.
+    const many = await linkList({ file: F1, dirs: [tree.dirs.Fotos] });
+    expect(many.status).toBe(200);
+    const inside = ((await many.json()) as { lists: Record<string, { name: string; url?: string }[]> }).lists[tree.dirs.Fotos!]!.find((e) => e.name === 'dentro.jpg')!;
+    expect(until(inside.url!) - before).toBeGreaterThan(TWO_HOURS - 60_000);
+    expect(until(inside.url!) - Date.now()).toBeLessThanOrEqual(TWO_HOURS + 60_000);
+
+    // Cada listado se validó contra la base con el link y la clave publicable: una vez por pedido (la carpeta), no una
+    // por archivo listado, y nunca con la sesión que venía en el pedido.
+    expect(world.linkCalls).toHaveLength(2);
+    for (const c of world.linkCalls) {
+      expect(c).toEqual({ path: '/rest/v1/rpc/plink_media_file', authorization: `Bearer ${env.SUPABASE_PUBLISHABLE_KEY}`, link: LINK });
+    }
+
+    // Una cuenta sigue con 8 horas.
+    const own = ((await (await call(p, '/folder/list', 'viewer-jwt', { file: F1 })).json()) as Listed).entries.find((e) => e.name === 'foto.jpg')!;
+    expect(until(own.url!) - Date.now()).toBeGreaterThan(7 * 3600_000);
+
+    // Lo que el link no ve, o un link revocado: ni lista ni pases.
+    world.links.set(LINK, { files: {} });
+    const unseen = await linkList({ file: F1 });
+    expect(unseen.status).toBe(404);
+    world.links.set(LINK, { files: { [F1]: 2 }, revoked: true });
+    for (const body of [{ file: F1 }, { file: F1, dirs: [tree.dirs.Fotos] }]) {
+      const res = await linkList(body);
+      expect(res.status).toBe(401);
+      const text = JSON.stringify(await res.json());
+      expect(text).toContain('link_not_found');
+      expect(text).not.toContain('/m/');
+    }
   });
 
   it('Download all: lo de una subcarpeta lo baja quien ve la página; quien no, ni lista ni recibe pases', async () => {

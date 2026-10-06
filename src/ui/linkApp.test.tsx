@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
+import 'fake-indexeddb/auto';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readLinks, rememberLink } from '../linkMode';
+import { commentsDbName, openCommentsDb, type CommentOp } from '../sync/comments';
 import type { KeyValueStore } from '../workspaces';
 import { LinkApp, SLOW_OPEN_MS } from './LinkApp';
+import { linkDbName } from './LinkEditBar';
 
 // Abrir el link sin red (Docs/Doc_Link_Publico.md, 3.10): quien ya lo abrió una vez vuelve a ver lo guardado aunque no
 // haya señal; con red, un link revocado o vencido se corta sin mostrar nada. La página de verdad (el editor, el motor) se
@@ -71,6 +74,54 @@ async function mount(entry: ReturnType<typeof entryFor>) {
   for (let i = 0; i < 5; i++) await act(async () => void (await Promise.resolve()));
   return host;
 }
+
+describe('el link dejó de andar con comentarios sin mandar', () => {
+  /** Deja en la cola de comentarios de este link (la de este navegador) lo que el visitante escribió y no salió. */
+  async function queue(entry: ReturnType<typeof entryFor>, ops: CommentOp[]) {
+    const db = await openCommentsDb(commentsDbName(linkDbName(entry)));
+    for (const op of ops) await db.add('outbox', { op, attempted: false, failed: false, error: null, queuedAt: 1 });
+    db.close();
+  }
+  const add = (id: string, body: string): CommentOp => ({ kind: 'add', id, pageId: 'page-1', blockId: null, threadId: null, body, at: '2026-10-05T10:00:00Z' });
+
+  it('los muestra enteros y los copia: el último texto de cada uno, sin el que el visitante borró', async () => {
+    const entry = entryFor(true);
+    await queue(entry, [
+      add('c1', 'La toma 12 va de noche.'),
+      add('c2', 'Borrador'),
+      { kind: 'edit', id: 'c2', pageId: 'page-1', body: 'Falta el plano\ndel puerto.', at: '2026-10-05T10:01:00Z' },
+      add('c3', 'Me arrepentí'),
+      { kind: 'delete', id: 'c3', pageId: 'page-1', at: '2026-10-05T10:02:00Z' },
+      { kind: 'resolve', id: 'c9', pageId: 'page-1', resolved: true, at: '2026-10-05T10:03:00Z' },
+    ]);
+    const copied: string[] = [];
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText: async (text: string) => void copied.push(text) } });
+    stubFetch(() => Promise.resolve(json(404, { message: 'link_not_found', code: 'P0002', details: null, hint: null })));
+    const host = await mount(entry);
+    const box = () => host.querySelector('[data-link-unsent-comments]');
+    for (let i = 0; i < 40 && !box(); i++) await act(async () => new Promise((r) => setTimeout(r, 10)));
+    expect(host.textContent).toContain('This link no longer works');
+    expect(box()!.textContent).toContain("2 comments you wrote weren't sent:");
+    expect([...box()!.querySelectorAll('li')].map((li) => li.textContent)).toEqual(['La toma 12 va de noche.', 'Falta el plano\ndel puerto.']);
+    const button = [...box()!.querySelectorAll('button')].find((b) => b.textContent === 'Copy the text')!;
+    await act(async () => button.click());
+    for (let i = 0; i < 5; i++) await act(async () => void (await Promise.resolve()));
+    expect(copied).toEqual(['La toma 12 va de noche.\n\nFalta el plano\ndel puerto.']);
+    expect(box()!.textContent).toContain('Copied');
+    // Copiar no saca nada de la cola: siguen ahí.
+    const db = await openCommentsDb(commentsDbName(linkDbName(entry)));
+    expect(await db.count('outbox')).toBe(6);
+    db.close();
+  });
+
+  it('sin nada sin mandar no dice nada de comentarios', async () => {
+    stubFetch(() => Promise.resolve(json(404, { message: 'link_not_found', code: 'P0002', details: null, hint: null })));
+    const host = await mount(entryFor(true));
+    for (let i = 0; i < 10; i++) await act(async () => new Promise((r) => setTimeout(r, 10)));
+    expect(host.textContent).toContain('This link no longer works');
+    expect(host.querySelector('[data-link-unsent-comments]')).toBeNull();
+  });
+});
 
 describe('abrir un link sin red', () => {
   it('con lo guardado de una visita anterior y sin red: muestra la página guardada y avisa', async () => {

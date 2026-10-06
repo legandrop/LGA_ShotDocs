@@ -33,6 +33,15 @@ export const link = {
   'link.broken': { en: "This link is incomplete: copy it again.", es: "Este link está incompleto: copialo de nuevo." },
   'link.shared': { en: "Shared with a link · {domain}", es: "Compartido con un link · {domain}" },
   'link.viaLink': { en: "(via link)", es: "(vía link)" },
+  // Una página que el link no deja editar: con una cuenta se pide el permiso; con un link, otro link.
+  'link.readOnly': {
+    en: "This link lets you read this page and comment on it. To change it, ask whoever shared it for a link that can edit.",
+    es: "Con este link podés leer esta página y comentarla. Para cambiarla, pedile a quien lo compartió un link que deje editar.",
+  },
+  'link.readOnlyEditOff': {
+    en: "This link can edit, but editing through a link isn't available right now (it may need a newer version of the app). You can read this page and comment on it.",
+    es: "Este link deja editar, pero editar con un link no está disponible ahora (puede hacer falta una versión más nueva de la app). Podés leer esta página y comentarla.",
+  },
   'link.yourName': { en: "Your name", es: "Tu nombre" },
   'link.namePrompt': {
     en: "Write your name to comment. It's shown with “(via link)”.",
@@ -97,6 +106,11 @@ export const link = {
       other: "{count} fotos o archivos que agregaste no terminaron de subir. Bajá cada uno:",
     },
   },
+  'link.dead.comments': {
+    en: { one: "{count} comment you wrote wasn't sent:", other: "{count} comments you wrote weren't sent:" },
+    es: { one: "{count} comentario que escribiste no se mandó:", other: "{count} comentarios que escribiste no se mandaron:" },
+  },
+  'link.dead.copyComments': { en: "Copy the text", es: "Copiar el texto" },
   'link.dead.unsent': {
     en: { one: "You have {count} page with unsent changes.", other: "You have {count} pages with unsent changes." },
     es: { one: "Tenés {count} página con cambios sin mandar.", other: "Tenés {count} páginas con cambios sin mandar." },
@@ -179,4 +193,9 @@ export const link = {
     en: "Changes sent through a link were set aside here",
     es: "Acá hay cambios mandados con un link que quedaron aparte",
   },
+  // El ícono del árbol en una página con un link propio (3.11): lo ve quien puede abrir su Share.
+  'link.tree.view': { en: "Anyone with the link can view and comment", es: "Cualquiera con el link puede ver y comentar" },
+  'link.tree.edit': { en: "Anyone with the link can edit", es: "Cualquiera con el link puede editar" },
+  'link.tree.off': { en: "This page's link isn't working: see Share", es: "El link de esta página no anda: mirá Compartir" },
+  'link.tree.by': { en: "{what} · created by {name}", es: "{what} · lo creó {name}" },
 } satisfies Dict;

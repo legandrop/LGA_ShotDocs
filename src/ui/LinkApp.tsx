@@ -20,7 +20,8 @@ import { errorMessage, isNetworkError } from '../sync/types';
 import { WorkspaceContext, type ActiveWorkspace } from '../workspace';
 import { formatSize } from '../media/fileTrash';
 import type { MediaRecord } from '../media/mediaDb';
-import { downloadLinkPages, LinkEditBar, linkMediaBlob, linkUnsentMedia, linkUnsentPages } from './LinkEditBar';
+import { copyText } from '../invite';
+import { downloadLinkPages, LinkEditBar, linkMediaBlob, linkUnsentComments, linkUnsentMedia, linkUnsentPages } from './LinkEditBar';
 import { saveBlob } from './unsyncedDownload';
 import { setLightImages } from './sharpImages';
 import { Workspace } from './Workspace';
@@ -207,6 +208,7 @@ export function LinkApp({ entry }: { entry: LinkEntry }) {
  * navegador no se pierde (E2.9): se dice cuántas páginas tienen algo sin mandar y se baja como archivo, con lo que se mandó
  * y no llegó a entrar; y las fotos y archivos que agregó y no terminaron de subir se bajan de a uno, con su original (con
  * el link muerto no suben nunca; B1 de la auditoría de la 2b).
+ * Los comentarios que escribió y no llegaron a mandarse (también con *Can view*) se muestran enteros, con *Copy the text*.
  */
 function DeadLink({ entry, remote, onLeave }: { entry: LinkEntry; remote: LinkRemote; onLeave: () => void }) {
   const tr = useT();
@@ -215,6 +217,8 @@ function DeadLink({ entry, remote, onLeave }: { entry: LinkEntry; remote: LinkRe
   const [failed, setFailed] = useState(false);
   const [media, setMedia] = useState<MediaRecord[]>([]);
   const [mediaDone, setMediaDone] = useState<ReadonlySet<string>>(new Set());
+  const [comments, setComments] = useState<{ id: string; body: string }[]>([]);
+  const [copied, setCopied] = useState(false);
   const sent = remote.linkEdits();
   // Lo que se mandó y puede no haber entrado: también lo de antes de recargar la app (guardado con el link, O9).
   const extra = [...new Set([...sent.waiting, ...sent.aside, ...remote.sentPages()])];
@@ -227,6 +231,10 @@ function DeadLink({ entry, remote, onLeave }: { entry: LinkEntry; remote: LinkRe
     );
     linkUnsentMedia(entry).then(
       (list) => live && setMedia(list),
+      () => undefined,
+    );
+    linkUnsentComments(entry).then(
+      (list) => live && setComments(list),
       () => undefined,
     );
     return () => {
@@ -295,6 +303,22 @@ function DeadLink({ entry, remote, onLeave }: { entry: LinkEntry; remote: LinkRe
                     {formatSize(m.size, tr.lang)}
                     {mediaDone.has(m.id) ? ` · ${tr('removed.downloaded')}` : ''}
                   </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {comments.length > 0 && (
+          <div className="removed-media" data-link-unsent-comments>
+            <span>{tr('link.dead.comments', { count: comments.length })}</span>{' '}
+            <button className="link" onClick={() => void copyText(comments.map((c) => c.body).join('\n\n')).then(setCopied)}>
+              {copied ? tr('common.copied') : tr('link.dead.copyComments')}
+            </button>
+            {/* El texto entero a la vista: si el navegador no deja copiar, se selecciona a mano. */}
+            <ul>
+              {comments.map((c) => (
+                <li key={c.id} className="link-dead-comment">
+                  {c.body}
                 </li>
               ))}
             </ul>

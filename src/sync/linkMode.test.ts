@@ -63,6 +63,28 @@ describe('el link: dirección, lo guardado y los headers', () => {
     expect(cleanVisitorName('x'.repeat(80))).toHaveLength(60);
   });
 
+  it('el nombre no puede traer «(via link)»: la app lo pone al lado, y escrito en el nombre saldría dos veces', () => {
+    expect(cleanVisitorName('Ana (via link)')).toBe('Ana');
+    expect(cleanVisitorName('Ana (vía link)')).toBe('Ana');
+    expect(cleanVisitorName('Ana ( VIA   Link ) Pérez')).toBe('Ana Pérez');
+    expect(cleanVisitorName('(via link)(via link) Ana')).toBe('Ana');
+    // Solo el rótulo: no queda nombre, y la app lo vuelve a pedir.
+    expect(cleanVisitorName(' (via link) ')).toBe('');
+    // Un nombre con paréntesis propios, o que nombra un link sin ser el rótulo, queda como está.
+    expect(cleanVisitorName('Ana (cliente)')).toBe('Ana (cliente)');
+    expect(cleanVisitorName('Olivia Linker')).toBe('Olivia Linker');
+    // El corte de 60 se hace después de sacarlo, y un nombre ya guardado con el rótulo se lee limpio.
+    expect(cleanVisitorName('x'.repeat(60) + ' (via link)')).toBe('x'.repeat(60));
+    const store = memoryStore();
+    const a = rememberLink({ u: URL_, k: KEY, l: 'wanka_1', t: T }, store);
+    setVisitorName(a.id, 'Ana (via link)', store);
+    expect(readLinks(store).links[0].name).toBe('Ana');
+    const saved = readLinks(store);
+    saved.links[0].name = 'Lega (via link)';
+    store.setItem('shotdocs-links', JSON.stringify(saved));
+    expect(visitorName(a.id, store)).toBe('Lega');
+  });
+
   it('lo guardado del link nunca se llama como lo de una cuenta, y los headers llevan el link sin sesión', () => {
     const entry = rememberLink({ u: URL_, k: KEY, l: 'wanka_1', t: T }, memoryStore());
     const names = linkStorageNames(entry);

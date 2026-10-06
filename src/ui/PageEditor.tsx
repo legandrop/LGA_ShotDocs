@@ -24,7 +24,7 @@ import { createCarreteLoader, type CarreteLoader } from './carreteLoader';
 import { porteroDownload, sharpenImages } from './sharpImages';
 import { attachMarkupOverlay } from './markupOverlay';
 import { PHOTO_MARKUP_MAP, readPhotoMarkup } from '../media/markup';
-import { useLinkMode } from '../linkMode';
+import { linkEditUnavailable, useLinkMode } from '../linkMode';
 import { LEVEL_VIEW, Permissions } from '../sync/access';
 import { startMarkupPrune } from '../media/markupPrune';
 import { clipScope, MARKUP_PASTE_ORIGIN, writeReplacementMarkup } from '../media/markupClipboard';
@@ -322,7 +322,12 @@ export function PageEditor({ pageId }: { pageId: string }) {
       )}
       {!canEdit && perms.known && (
         <p className="muted editor-missing">
-          {canComment ? tr('editor.commentOnly') : tr('page.viewOnly')}
+          {/* Quien entró con un link no tiene a quién pedirle permiso desde la app: se le dice qué pedir. */}
+          {perms.viaLink
+            ? tr(linkEditUnavailable(services.remote) ? 'link.readOnlyEditOff' : 'link.readOnly')
+            : canComment
+              ? tr('editor.commentOnly')
+              : tr('page.viewOnly')}
         </p>
       )}
       {/* Las plantillas (Docs/Doc_Plantillas.md): la tira de la página vacía y la ventana *Templates*. */}

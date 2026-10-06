@@ -17,6 +17,7 @@ import { ProjectSwitcher } from './ProjectSwitcher';
 import { LinkHeader } from './LinkHeader';
 import { MentionTreeDot } from './mentionDots';
 import { LinkAsideTreeIcon } from './LinkAsideTreeIcon';
+import { LinkTreeIcon } from './LinkTreeIcon';
 import { useLinkMode } from '../linkMode';
 import { useSearchSession } from './projectSearchUi';
 import { shortcutLabel } from './shortcuts';
@@ -320,6 +321,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
             </span>
           )}
           <MentionTreeDot pageId={page.id} collapsed={children.length > 0 && !open} />
+          <LinkTreeIcon pageId={page.id} />
           <LinkAsideTreeIcon pageId={page.id} />
           <OfflineBadge kind="page" id={page.id} />
           <span className="row-actions">

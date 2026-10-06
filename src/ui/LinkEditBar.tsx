@@ -2,6 +2,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useT } from '../i18n';
 import { cleanVisitorName, linkStorageNames, setVisitorName, type LinkEntry } from '../linkMode';
 import { mediaDbName, openMediaDb, type MediaRecord } from '../media/mediaDb';
+import { commentsDbName, openCommentsDb } from '../sync/comments';
 import { openLocalDb } from '../sync/localDb';
 import type { LinkEdits, LinkRemote } from '../sync/linkRemote';
 import { PageTree } from '../sync/tree';
@@ -60,6 +61,25 @@ export async function linkUnsentMedia(entry: LinkEntry): Promise<MediaRecord[]> 
       if ((await db.count('blobs', r.id)) > 0) out.push(r);
     }
     return out;
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Los comentarios que el visitante escribió y no llegaron a mandarse (la cola de este navegador): con el link muerto no
+ * se mandan nunca, así que la pantalla de "este link ya no anda" los muestra para copiarlos. Por comentario, su último
+ * texto (el alta y sus ediciones); uno que él mismo borró después no se ofrece. Se leen aparte, sin la sincronización.
+ */
+export async function linkUnsentComments(entry: LinkEntry): Promise<{ id: string; body: string }[]> {
+  const db = await openCommentsDb(commentsDbName(linkDbName(entry)));
+  try {
+    const texts = new Map<string, string>();
+    for (const { op } of await db.getAll('outbox')) {
+      if (op.kind === 'add' || op.kind === 'edit') texts.set(op.id, op.body);
+      else if (op.kind === 'delete') texts.delete(op.id);
+    }
+    return [...texts].filter(([, body]) => body.trim() !== '').map(([id, body]) => ({ id, body }));
   } finally {
     db.close();
   }

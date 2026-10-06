@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useT } from '../i18n';
+import { useT, type Translate } from '../i18n';
 import '../i18n/lazy/teamDialogs';
 import { copyText, copyWhenReady } from '../invite';
 import { publicLinkUrl } from '../linkMode';
@@ -23,6 +23,7 @@ import {
 } from '../sync/publicLinks';
 import { LinkAsideList } from './LinkAsideList';
 import { LinkFilesList } from './LinkFilesList';
+import { linkPagesStore } from './linkPages';
 import { notify } from './notice';
 import { ShareGateNotes, UNSYNCED_BEFORE_SHARE, useShareGate } from './shareGate';
 import { teamErrorText } from './teamText';
@@ -56,8 +57,25 @@ export function dateInDays(days: number, now = Date.now()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/**
+ * Los errores propios del link, en palabras (los demás, como los del equipo). `link_not_found`: el link se apagó o se
+ * renovó en otro lado mientras esta ventana estaba abierta; `page_in_trash`: la página fue a la papelera (su link ya no
+ * anda, y vuelve a andar al restaurarla); `link_invalid`: una fecha que ya pasó si se estaba mandando una (`dated`), y
+ * si no, un pedido que la base no aceptó (un id repetido al crear o renovar): se prueba de nuevo.
+ */
+export function linkErrorText(tr: Translate, err: unknown, dated = false): string {
+  const message = err instanceof Error ? err.message : String(err);
+  if (message === 'link_not_found') return tr('share.link.error.gone');
+  if (message === 'page_in_trash') return tr('share.link.error.trash');
+  if (message === 'clean_off') return tr('share.link.cleanOff');
+  if (message === 'edit_off') return tr('share.link.editOff');
+  if (message === 'link_invalid') return tr(dated ? 'share.link.badDate' : 'share.link.error.invalid');
+  return teamErrorText(err);
+}
+
 export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => void }) {
-  const { client, workspace } = useServices();
+  const services = useServices();
+  const { client, workspace } = services;
   const status = useSyncStatus();
   const tr = useT();
   const gate = useShareGate();
@@ -78,17 +96,29 @@ export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => 
     if (!supported) return;
     let live = true;
     getPublicLink(client, pageId).then(
-      (data) => live && setInfo(data),
-      (err: unknown) => live && setError(teamErrorText(err)),
+      (data) => {
+        if (!live) return;
+        setInfo(data);
+        // El ícono del árbol de esta página cambia con lo que la base acaba de decir, sin esperar su próxima vuelta.
+        linkPagesStore(services)?.learn(pageId, data);
+      },
+      (err: unknown) => live && setError(linkErrorText(tr, err)),
     );
     return () => {
       live = false;
     };
+    // `services` y `tr` cambian de identidad sin que cambie a quién se le pregunta: alcanza con el cliente y la página.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client, pageId, reload, supported]);
+
+  const link = info?.link ?? null;
+  // El campo de fecha es de un link: si ese link se apaga, se renueva o se crea otro, se cierra (no reaparece, con la
+  // fecha que se estaba eligiendo para el anterior, al volver a *Anyone with the link*).
+  const linkId = link?.id ?? null;
+  useEffect(() => setNewDate(null), [linkId]);
 
   if (!supported || info === null) return null;
 
-  const link = info?.link ?? null;
   const urlOf = (l: Pick<PublicLink, 'token'>) =>
     publicLinkUrl(location.origin, {
       u: workspace.config.url,
@@ -97,14 +127,17 @@ export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => 
       t: l.token ?? '',
     });
 
-  async function run(label: string, work: () => Promise<void>) {
+  /** `dated`: lo que se manda lleva una fecha elegida a mano (para decir bien un `link_invalid`). */
+  async function run(label: string, work: () => Promise<void>, dated = false) {
     setBusy(label);
     setError(null);
     try {
       await work();
       setReload((n) => n + 1);
     } catch (err) {
-      if (err !== UNSYNCED_BEFORE_SHARE) setError(teamErrorText(err));
+      if (err !== UNSYNCED_BEFORE_SHARE) setError(linkErrorText(tr, err, dated));
+      // El link ya no está como lo mostraba esta ventana (lo cambiaron en otro lado): se vuelve a leer.
+      if (err instanceof Error && err.message === 'link_not_found') setReload((n) => n + 1);
     } finally {
       setBusy(null);
     }
@@ -139,10 +172,23 @@ export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => 
       if (!ok) throw UNSYNCED_BEFORE_SHARE;
       return createPublicLink(client, pageId, expires, level);
     });
-    void run('on', async () => {
-      await copyCreated(created);
-      gate.after(scope, true, tr('share.link.visitors'));
-    });
+    void run(
+      'on',
+      async () => {
+        await copyCreated(created);
+        gate.after(scope, true, tr('share.link.visitors'));
+      },
+      expiry === 'date',
+    );
+  }
+
+  /** Pone el vencimiento en la fecha elegida (*Set date*, o Enter en el campo: es un formulario); una fecha pasada o vacía avisa y no manda nada. */
+  function confirmDate() {
+    if (newDate === null || busy !== null) return;
+    const at = endOfDay(newDate);
+    if (!at) return setError(tr('share.link.badDate'));
+    setNewDate(null);
+    void run('expiry', async () => void (await setPublicLinkExpiry(client, pageId, at, linkLevel)), true);
   }
 
   const usage = link?.usage_today ?? {};
@@ -160,7 +206,7 @@ export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => 
       {info === undefined && !error && <p className="muted small">{tr('common.loading')}</p>}
       {info?.above && !link && (
         <p className="muted small team-lead">
-          {tr('share.link.above', { title: info.above.title || tr('share.via.pageAbove') })}{' '}
+          {tr(info.above.level === 'edit' ? 'share.link.aboveEdit' : 'share.link.above', { title: info.above.title || tr('share.via.pageAbove') })}{' '}
           {info.above.title !== null && (
             <button
               type="button"
@@ -226,6 +272,12 @@ export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => 
           <p className="muted small team-lead">{tr('share.link.anyoneHint')}</p>
           {/* Los PDF exportados con este link lo llevan en sus links a archivos (P.30, LF18). */}
           <p className="muted small team-lead">{tr('share.link.pdfHint')}</p>
+          {/* Qué link es: quién lo creó y cuándo (el link deja de andar si esa persona ya no puede compartir la página). */}
+          <p className="muted small team-lead" data-link-created>
+            {link.created_by_name
+              ? tr('share.link.createdBy', { name: link.created_by_name, date: new Date(link.created_at).toLocaleDateString() })
+              : tr('share.link.created', { date: new Date(link.created_at).toLocaleDateString() })}
+          </p>
           {!link.alive && <p className="warn small team-lead">{tr('share.link.notAlive')}</p>}
           <div className="team-invite-actions link-share-actions">
             <button
@@ -272,19 +324,19 @@ export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => 
             />
           </label>
           {newDate !== null && (
-            <div className="link-share-row" data-link-expiry="date">
+            // Un formulario: Enter en el campo lo manda el navegador, igual que *Set date*. Sin la validación del
+            // navegador (`min`), para que una fecha pasada la avise la ventana con sus palabras.
+            <form
+              className="link-share-row"
+              data-link-expiry="date"
+              noValidate
+              onSubmit={(e) => {
+                e.preventDefault();
+                confirmDate();
+              }}
+            >
               <input type="date" value={newDate} min={dateInDays(0)} aria-label={tr('share.link.date')} disabled={busy !== null} onChange={(e) => setNewDate(e.target.value)} />
-              <button
-                type="button"
-                className="primary"
-                disabled={busy !== null}
-                onClick={() => {
-                  const at = endOfDay(newDate);
-                  if (!at) return setError(tr('share.link.badDate'));
-                  setNewDate(null);
-                  void run('expiry', async () => void (await setPublicLinkExpiry(client, pageId, at, linkLevel)));
-                }}
-              >
+              <button type="submit" className="primary" disabled={busy !== null}>
                 {tr('share.link.setDate')}
               </button>
               <button
@@ -297,7 +349,7 @@ export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => 
               >
                 {tr('common.cancel')}
               </button>
-            </div>
+            </form>
           )}
           <p className="muted small team-lead">
             {tr('share.link.usage', {

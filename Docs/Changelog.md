@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.215 :
+
+Al link público le quedaban restos. Con el campo de fecha de vencimiento abierto, apagar el link y prender otro lo hacía reaparecer con la fecha anterior, y Enter no confirmaba: el campo era de la ventana y no del link. Ahora se cierra con su link y es un formulario. El árbol no decía qué páginas tienen link ni *Share* quién lo creó: se suma un ícono, que la base confirma página por página a quien puede compartirla, y la línea del creador. Quien entró con un link perdía de vista sus comentarios sin mandar cuando el link dejaba de andar, leía «Ask for edit access» y podía escribir «(via link)» en su nombre: la pantalla del link caído los muestra para copiarlos, el aviso dice qué pedir y el nombre sale limpio. Los errores del link se dicen en palabras.
+
+[Marcar en el árbol las páginas con link, decir quién lo creó y cerrar los restos del link público en Share y en el visitante]
+
 v0.214 :
 
 Los ajustes de una página subían como objeto entero: si dos dispositivos cambiaban a la vez dos ajustes distintos, quedaba el del último y el otro se perdía (por ejemplo, la marca de la carpeta de reportes). Ahora el cambio dice qué clave tocó y la base la fusiona, con los permisos de la escritura de siempre; sin la función, sube entero como antes. Renombrar una versión con nombre pisaba el anterior sin rastro: la base lo guarda, con quién lo cambió. La versión mínima no frenaba compartir ni invitar: ahora la base rechaza a una app más vieja, y *Share* y *Members* lo dicen en palabras. Y un "no existe" de la base llegaba con estado 500 y la app lo reintentaba para siempre, cortando la sincronización en esa página: ahora es un rechazo definitivo y las demás páginas siguen. Ninguna de las tres migraciones sube `schema_version`.

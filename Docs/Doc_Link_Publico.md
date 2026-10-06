@@ -467,8 +467,10 @@ nivel del link y estos frenos, en este orden (todo en la misma transacción: lo 
     `plink_media_file` pedidos de a muchos en un solo pedido). Gasta pedidos de Workers (uno por miniatura) y, en una
     dirección `*.workers.dev`, dos llamados a Drive por miniatura (sin caché de Cloudflare).
   - Hasta tener la prueba, **no se escribe la política de `thumbs` para `anon`**.
-- **Carpetas (P.9)** y ***Download all*** (v0.105): andan con los pases del listado; cada archivo listado cuenta como un
-  pase para el tope.
+- **Carpetas (P.9)** y ***Download all*** (v0.105): andan con los pases del listado. **Cada pedido de listado cuenta un
+  pase** para el tope (el de la carpeta: el portero le pregunta a la base una vez por pedido, `plink_media_file`, y firma
+  él los pases de hasta 100 archivos, que duran 2 horas); los archivos listados no cuentan de a uno. Bajar una carpeta
+  de 1000 archivos gasta unos 10 pases de los 3000 del día, más los de sus subcarpetas (hasta 40 por pedido).
 - **Las imágenes viejas `sdfile://`** (bucket `page-files`, sin registro de uso): no se abren para el link (se ven como
   imagen no disponible). En Wanka son 60, de desarrollo; abrirlas pediría registrarlas en `files` (ítem aparte de D14).
 - **Tarjetas de Drive** (link, texto o tarjeta): como a cualquiera, el reproductor de Drive anda si el visitante tiene
@@ -2670,6 +2672,79 @@ Queda al roadmap (O5): lo trabado por una versión inventada sigue contando en l
   sin mandar el pedido (la base ya los rechazaba para `anon`).
 
 Pruebas en `linkShare.test.tsx` (3 más) y `linkMode.test.ts` (1 más). Siguen en el roadmap las demás observaciones.
+
+### Restos del link (v0.215)
+
+**Para el equipo:**
+
+- **El ícono del árbol** (`LinkTreeIcon.tsx`, `src/ui/linkPages.ts`): un signo de link en la fila de cada página con un
+  link vivo propio, con un tooltip que dice lo que el link deja hacer y quién lo creó (*Anyone with the link can edit ·
+  created by lega*); si el link no anda sin haber vencido (quien lo creó ya no puede compartir la página), se ve en el
+  color de aviso y manda a *Share*. **Un link vencido no lleva ícono** (la lista tampoco lo trae): que venció lo dice
+  *Share*. **Lo ve solo quien puede abrir *Share* de esa página, y lo decide la base:** `public_link_pages()`
+  dice dónde mirar (los ids) y cada página se confirma con `get_public_link`, la función de *Share*, que no contesta nada
+  a quien no puede compartirla. Lo que la app calcula por su cuenta solo ahorra pedidos (un invitado no pregunta nada).
+  La lista se pide como mucho cada 2 minutos (también después de un pedido que falló: un servidor caído no recibe uno por
+  cada aviso de la sincronización) y cada página se vuelve a confirmar cada 10 (hasta 20 por vuelta); abrir
+  *Share* actualiza el ícono en el acto con lo que acaba de leer. Del link se guarda el nivel, quién lo creó y si anda:
+  nunca el token. Con la app abierta por un link, nada.
+  **Lo guardado es de una sesión:** hay un store por cada armado de los servicios (su clave es el motor de
+  sincronización, que nace y muere con ellos), no por cliente de Supabase, que es uno por workspace y pestaña y lo
+  comparten todas las cuentas que entran sin recargar. Otra cuenta en la misma pestaña, o la misma después de rearmar los
+  servicios (la pestaña que retoma, un reintento de arranque), arranca con uno vacío y pregunta de nuevo. Y si a la
+  persona le bajan el rol a invitado o la sacan con la app abierta, se vacía en el acto (una vuelta en viaje ya no
+  escribe nada).
+- **Quién creó el link, en *Share*:** *Created by lega on 2/10/2026* debajo de las líneas del link (sin la cuenta, solo
+  la fecha). El link de una página de arriba se dice con su nivel (*…can edit this page*; antes, siempre *can view*).
+- **Los errores del link, en palabras:** si el link se apagó o se renovó en otro lado con la ventana abierta, *This link
+  was turned off or reset somewhere else* y la ventana vuelve a leer cómo quedó (antes mostraba `link_not_found`); con la
+  página en la papelera, que el link no anda y que restaurarla lo vuelve a prender; `link_invalid` es *Pick a date in the
+  future.* solo cuando se mandó una fecha elegida a mano, y si no (un id repetido al crear o renovar), *The link couldn't
+  be saved. Try again.* La ayuda (*Share with a link*) suma
+  esa línea, el ícono y quién lo creó.
+- **El campo de fecha** (las dos observaciones de la revisión de v0.212): se cierra cuando el link se apaga, se renueva o
+  se crea otro, y Enter confirma como *Set date*.
+
+**Para el visitante:**
+
+- **Comentarios sin mandar cuando el link muere:** la pantalla *This link no longer works* los muestra enteros (el
+  último texto de cada uno; no el que él mismo borró) con *Copy the text*. Copiar no saca nada de la cola.
+- **Qué pedir:** en una página que el link no deja editar, *This link lets you read this page and comment on it. To
+  change it, ask whoever shared it for a link that can edit*, en la página y en el menú (antes, «Ask for edit access»,
+  que con un link no existe). Si el link ya es *Can edit* y la base se lo deja usar a esta app solo para leer y comentar
+  (`plink_open` da `level` `comment` con `link_level` `edit`), no se lo manda a pedir otro: *This link can edit, but
+  editing through a link isn't available right now (it may need a newer version of the app)…*. La app no sabe cuál de
+  las dos causas es (editar con un link apagado en el workspace, o una app más vieja que la versión que lo prendió): para
+  decirlo haría falta que `plink_open` lo cuente.
+- **El nombre sin «(via link)»:** la app lo saca al guardarlo y al leerlo (también «(vía link)», con cualquier espacio
+  o mayúscula): escrito en el nombre salía dos veces. **Que la base lo rechace** (alguien que llama a la API a mano) pide
+  una migración; no cambia quién puede hacerse pasar por quién, porque el rótulo lo pone siempre la app del equipo.
+
+**El portero:** la prueba que faltaba de los pases de 2 horas en `/folder/list` con un link (una carpeta y varias, el
+link revocado y lo que no ve), en `portero/src/folders.test.ts`. Y el texto de 3.9: el listado cuenta un pase por pedido,
+no uno por archivo.
+
+**Lo que queda, sabido:**
+
+- **Una confirmación que llega tarde.** Si la respuesta de `get_public_link` de una vuelta viaja justo mientras *Share*
+  crea o apaga ese mismo link, la respuesta vieja pisa la nueva y el ícono queda mal hasta la vuelta siguiente (entre 2 y
+  10 minutos), que lo corrige sola. Arreglarlo es numerar los pedidos por página y descartar la respuesta de uno anterior
+  al último `learn`.
+- **`public_link_pages()` es también un tema de privacidad, no solo de pedidos.** La función contesta a cualquiera que ve
+  la página, invitados incluidos, si la llaman a mano: les dice que esa página (que ya ven) tiene un link público. La app
+  no se lo muestra a nadie que no comparta, pero la base lo entrega. Cerrarlo pide una migración: el diseño con
+  `can_share` de la tabla de abajo.
+- **La pantalla del link que ya no anda y la base local de comentarios.** Para leer la cola abre la base local de
+  comentarios del link, y la crea vacía si no existía. Y un comentario que la base ya recibió pero cuyo acuse se perdió
+  (sigue en la cola) figura como «no mandado»: quien lo copia y lo vuelve a mandar por otro lado lo duplica.
+
+**Lo que sigue pidiendo la base (sin hacer, diseño):**
+
+| Qué | Por qué no alcanza lo de hoy | Diseño |
+|---|---|---|
+| De qué link vino cada comentario (*Can view link, created by lega*, 3.7) | `list_comments` da `plink_id`, pero ninguna función dice el nivel ni el creador de un link por su id (`get_public_link` es por página y solo del link vivo; el de una página de arriba llega sin creador), y un comentario puede ser de un link ya renovado | Una función `public_link_labels(p_ids uuid[])` para `authenticated`, que devuelva `id`, `level`, `created_by_name` y `revoked` solo de los links cuya raíz la sesión puede compartir (`private.can_share(null, page_id)`), hasta 200 ids por pedido; el panel de comentarios la llama con los `plink_id` de la página y arma el detalle. Sin `can_share`, nada (ni existencia) |
+| Que `public_link_pages()` conteste solo a quien comparte (privacidad), y que el ícono no dependa de dos pedidos | `public_link_pages()` lista a quien ve la página (nivel 1), no a quien la comparte: un invitado que la llama a mano se entera de que la página tiene link, y por eso la app confirma cada una con `get_public_link` | Cambiar su cuerpo a `private.can_share(null, pl.page_id)` y sumar `level`, `created_by_name` y `alive` al resultado (columnas al final: la app publicada lee solo `page_id`); el ícono pasa a un solo pedido |
+| Que la base rechace «(via link)» en el nombre | `plink_add_comment` y `plink_push_page_update` limpian controles y marcas de dirección, no el rótulo | Donde las dos validan el nombre (hoy `btrim(p_author)` y el chequeo de largo y de caracteres), sacar `\(\s*v[ií]a\s+link\s*\)` (sin distinguir mayúsculas) antes del `btrim`; si queda vacío, `author_missing` como hoy |
 
 ## Cómo se midió
 

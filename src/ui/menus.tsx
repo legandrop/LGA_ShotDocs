@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { printAsSeen, setPrintAsSeen } from './printAsSeen';
 import { t, useT } from '../i18n';
+import { linkEditUnavailable } from '../linkMode';
 import { importJobFor } from '../import/importJob';
 import { prefs, usePrefs, type Prefs } from '../prefs';
 import { useOffline, usePermissions, useServices, useSyncStatus, useTree } from '../services';
@@ -177,7 +178,7 @@ export function PageMenu(props: {
   const canEditRow = perms.canEditRow(props.pageId);
   const canManage = perms.canManagePage(props.pageId);
   const format = pageFormat(tree, props.pageId);
-  const { media, mediaDb, offline } = useServices();
+  const { media, mediaDb, offline, remote } = useServices();
   // "Available offline" (P.10): marcada ella o una de arriba.
   useOffline();
   const canOffline = !!mediaDb && offlineSupported();
@@ -421,7 +422,9 @@ export function PageMenu(props: {
       )}
       <hr />
       {item(tr('pageMenu.trash'), <TrashIcon />, props.onTrash, true, canManage)}
-      {!canEdit && perms.known && <p className="menu-note">{tr('page.viewOnly')}</p>}
+      {!canEdit && perms.known && (
+        <p className="menu-note">{tr(!perms.viaLink ? 'page.viewOnly' : linkEditUnavailable(remote) ? 'link.readOnlyEditOff' : 'link.readOnly')}</p>
+      )}
     </div>
   );
 }
