@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.204 :
+
+El zip podía abrir el escritor del destino y copiar un título anterior, o leer una página antes de guardar el sobrante de un título largo. Ahora prepara las escrituras locales con la barrera de ocho segundos existente y espera la transferencia durable al documento. Después relee títulos, páginas, hojas, permisos y estimación de peso; un cambio estructural pide preparar de nuevo. El selector sigue dentro del clic, pero el escritor y la carpeta nueva se abren después de validar. Cancelar conserva lo ya aceptado e invalida avances y resultados tardíos; el botón de guardar comprueba también la página y el workspace actuales. Descartar un archivo elegido aborta el escritor sin borrarlo. Las carpetas conservan los archivos parciales ya confirmados. No cambia el formato del archivo ni el contrato de reimportación.
+
+[Guardar los cambios locales antes de escribir el archivo ZIP]
+
 v0.203 :
 
 Las sesiones de anotaciones ya figuraban en el historial, pero Mostrar cambios sólo comparaba el editor y no permitía ver qué dibujos cambiaron. Ahora una sección separada muestra Antes y Versión elegida con los dibujos soportados de cada foto, sin cargar originales. Lee dos copias históricas limpias y compara formas por sus identificadores y campos representables; conserva marcos, colores y nombres históricos, sin atribuir formas a personas. Los datos futuros, ilegibles o que exceden los límites se anuncian como parciales y omiten las cuentas. Una foto ausente no se confunde con formas borradas. Sólo una tarjeta expandida dibuja sus dos vistas. Seleccionar una entrada apartada invalida la carga inmediatamente, y las respuestas tardías no la reponen. La comparación queda fuera del editor, su portapapeles y exportación. Restaurar conserva las anotaciones actuales; la entrega cinco sigue parcial.

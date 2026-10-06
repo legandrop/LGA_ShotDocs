@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { localize, t, useT } from '../i18n';
 import '../i18n/lazy/exportPdf';
 import '../i18n/lazy/exportZip';
 import { appComments } from '../export/exportComments';
 import { ExportCancelled, ExportEditor } from '../export/exportEditor';
-import type { ExportPlanPage } from '../export/exportPages';
+import { exportPlan, type ExportPlanPage } from '../export/exportPages';
 import {
   appArchiveMedia,
   buildZip,
@@ -12,6 +12,7 @@ import {
   porteroCost,
   remoteOf,
   totalOf,
+  zipAllowed,
   type ZipEstimate,
   missingLine,
   type ZipInclude,
@@ -24,8 +25,10 @@ import { BlobSink, isAbort, MemoryCapExceeded, type DownloadTarget } from '../me
 import { CrcWorkerPool } from '../media/crc32';
 import { zipOverhead } from '../media/zipWriter';
 import { useServices, useSyncStatus, useTree } from '../services';
-import { dirTarget, freshFolder, memoryCap, pickers, type DirHandle } from './FolderDownload';
+import { dirTarget, freshFolder, memoryCap, pickers, type DirHandle, type FileHandle } from './FolderDownload';
 import { porteroDownload } from './sharpImages';
+import { saveBeforeExit } from './lazyPart';
+import { Permissions } from '../sync/access';
 
 // El zip de la ventana *Export* (P.22, Docs/Doc_Exportar.md, secciones 2.3 y 7; entrega 2). Antes de empezar dice cuánto
 // pesa (por casilla: *Original photos*, *Attachments*, *Videos*; las vistas JPEG van siempre), cuántos pedidos al portero
@@ -70,21 +73,34 @@ const DEFAULT_INCLUDE: ZipInclude = { originals: true, attachments: true, videos
 export function ExportZipPanel(props: ExportZipProps) {
   const tr = useT();
   const tree = useTree();
-  const { docs, media, mediaDb, comments, commentsDb, user, engine } = useServices();
+  const services = useServices();
+  const { docs, media, mediaDb } = services;
   const status = useSyncStatus();
   const online = status.online && (typeof navigator === 'undefined' || navigator.onLine !== false);
   const [include, setInclude] = useState<ZipInclude>(DEFAULT_INCLUDE);
   const [estimate, setEstimate] = useState<ZipEstimate | null>(null);
   const [phase, setPhase] = useState<Phase>({ at: 'choose' });
   const abort = useRef<AbortController | null>(null);
+  const generation = useRef(0);
+  const mounted = useRef(true);
+  const ready = useRef<(() => boolean) | null>(null);
+  const contextOf = (owner = services, chosen = props) => `${owner.user.id}|${owner.workspace.config.url}|${owner.workspace.config.localKey}|${location.pathname}|${location.search}|${chosen.kind}:${chosen.project?.id ?? chosen.plan[0]?.id ?? ''}`;
+  const context = contextOf();
+  const live = useRef({ services, tree, props, include, context });
+  live.current = { services, tree, props, include, context };
+  const selection = (plan: ExportPlanPage[], kind: string, project: string | undefined) => JSON.stringify([kind, project, plan.map((p) => [p.id, p.parent, p.depth, p.format.size, p.format.landscape])]);
   const { showSaveFilePicker, showDirectoryPicker } = pickers();
   const cap = memoryCap();
   const archiveMedia = useMemo(() => (media.enabled ? appArchiveMedia(media, mediaDb, porteroDownload(media)) : null), [media, mediaDb]);
   const busy = phase.at === 'working';
 
   useEffect(() => props.onBusy(busy), [busy]);
-  // Cerrar la ventana en el medio cancela.
-  useEffect(() => () => abort.current?.abort(), []);
+  useLayoutEffect(() => {
+    mounted.current = true;
+    setPhase({ at: 'choose' });
+    ready.current = null;
+    return () => { mounted.current = false; generation.current++; abort.current?.abort(); ready.current = null; };
+  }, [services, context]);
 
   // Lo que pesa, al elegir el zip o cambiar qué se exporta.
   useEffect(() => {
@@ -95,7 +111,7 @@ export function ExportZipPanel(props: ExportZipProps) {
       () => undefined,
     );
     return () => ctrl.abort();
-  }, [props.plan, archiveMedia]);
+  }, [props.plan, archiveMedia, docs, services, context]);
 
   // Con un zip en curso, el navegador pide confirmar antes de cerrar la pestaña.
   useEffect(() => {
@@ -117,83 +133,137 @@ export function ExportZipPanel(props: ExportZipProps) {
   const memory = !showSaveFilePicker;
   const tooBig = memory && zipBytes > cap;
 
-  /** Abre el destino (tiene que ser en el clic: el navegador no abre los selectores sin un gesto). */
-  const open = async (mode: Mode): Promise<Opened | null> => {
+  /** El selector da sólo el handle en el gesto; el escritor y la carpeta se abren después de guardar. */
+  const open = async (mode: Mode, handle: FileHandle | DirHandle | null, title: string): Promise<Opened> => {
     const crc = new CrcWorkerPool();
+    const name = `${rootName(title)}.zip`;
     try {
       if (mode === 'file') {
-        const handle = await showSaveFilePicker!({
-          suggestedName: zipName,
-          types: [{ description: 'Zip', accept: { 'application/zip': ['.zip'] } }],
-          id: 'shotdocs-export',
-        });
-        const writable = await handle.createWritable();
+        const file = handle as FileHandle;
+        const writable = await file.createWritable();
         return {
           target: { kind: 'zip', sink: { write: (c) => writable.write(c) }, crc: () => crc.stream() },
           finish: () => writable.close(),
-          discard: async () => {
-            await writable.abort().catch(() => undefined);
-            await handle.remove?.().catch(() => undefined);
-          },
-          saved: handle.name,
+          discard: () => writable.abort().catch(() => undefined),
+          saved: file.name,
           sink: null,
           crc,
         };
       }
       if (mode === 'dir') {
-        const top: DirHandle = await freshFolder(await showDirectoryPicker!({ mode: 'readwrite', id: 'shotdocs-export' }), rootName(props.title));
+        const top: DirHandle = await freshFolder(handle as DirHandle, rootName(title));
         return { target: dirTarget(top), finish: async () => undefined, discard: async () => undefined, saved: top.name, sink: null, crc };
       }
       const sink = new BlobSink(cap);
-      return { target: { kind: 'zip', sink, crc: () => crc.stream() }, finish: async () => undefined, discard: async () => undefined, saved: zipName, sink, crc };
+      return { target: { kind: 'zip', sink, crc: () => crc.stream() }, finish: async () => undefined, discard: async () => undefined, saved: name, sink, crc };
     } catch (err) {
       crc.close();
-      // Cerró el selector sin elegir: sigue como estaba.
-      if (!isAbort(err)) setPhase({ at: 'failed', reason: localize(err instanceof Error ? err.message : String(err)) });
-      return null;
+      throw err;
     }
   };
 
   const run = async (mode: Mode) => {
-    const opened = await open(mode);
-    if (!opened) return;
+    const token = ++generation.current;
+    const initial = live.current;
     const ctrl = new AbortController();
     abort.current = ctrl;
+    ready.current = null;
     setPhase({ at: 'working', mode, progress: null });
+    const current = () => mounted.current && generation.current === token && live.current.services === initial.services && contextOf(live.current.services, live.current.props) === initial.context;
+    const key = selection(initial.props.plan, initial.props.kind, initial.props.project?.id);
+    let preparedKey: string | null = null;
+    const pages = () => {
+      const now = live.current;
+      const ids = new Set(now.props.plan.map((p) => p.id));
+      const target = now.props.kind === 'project' ? now.props.project?.id : now.props.plan[0]?.id;
+      return target ? exportPlan(now.tree, now.props.kind, target).filter((p) => ids.has(p.id)) : [];
+    };
+    const metadata = () => JSON.stringify([live.current.props.project ? live.current.tree.project(live.current.props.project.id)?.name : null, pages().map((page) => [page.title, page.header])]);
+    const titleReady = () => !initial.tree.titleRests().some((rest) => pages().some((page) => page.id === rest.pageId));
+    const check = () => {
+      if (!current() || ctrl.signal.aborted) throw new ExportCancelled();
+      const now = live.current;
+      if (selection(now.props.plan, now.props.kind, now.props.project?.id) !== key || selection(pages(), now.props.kind, now.props.project?.id) !== key) throw Error(t('exportZip.selectionChanged'));
+      const permission = new Permissions(now.tree, now.services.access.get(), now.services.user.id);
+      if (!zipAllowed(permission) || pages().some((page) => permission.pageLevel(page.id) < 1)) throw Error(t('exportDialog.empty'));
+      if (preparedKey !== null && (metadata() !== preparedKey || !titleReady())) throw Error(t('exportZip.selectionChanged'));
+    };
+    let opened: Opened | null = null;
+    let picked = false;
     let editor: ExportEditor | null = null;
     let last = 0;
     try {
+      // Cesión del gesto: no hay ningún await antes de pedir el selector.
+      const handle = mode === 'file' ? await showSaveFilePicker!({ suggestedName: zipName, types: [{ description: 'Zip', accept: { 'application/zip': ['.zip'] } }], id: 'shotdocs-export' }) : mode === 'dir' ? await showDirectoryPicker!({ mode: 'readwrite', id: 'shotdocs-export' }) : null;
+      picked = true;
+      check();
+      const saved = await saveBeforeExit(initial.services, () => current() && !ctrl.signal.aborted, () => undefined, titleReady);
+      check();
+      if (!saved) { setPhase({ at: 'choose' }); return; }
+      const now = live.current;
+      const plan = pages();
+      const permission = new Permissions(now.tree, now.services.access.get(), now.services.user.id);
+      if (!plan.length || !zipAllowed(permission) || plan.some((page) => permission.pageLevel(page.id) < 1)) throw Error(t('exportDialog.empty'));
+      const title = now.props.kind === 'project' ? (now.tree.project(now.props.project!.id)?.name ?? '') : (now.tree.get(plan[0].id)?.title ?? '');
+      const project = now.props.project ? { id: now.props.project.id, name: title } : null;
+      preparedKey = metadata();
+      const { docs, media, mediaDb, comments, commentsDb, user, engine } = now.services;
+      const include = { ...now.include };
+      const online = engine.getStatus().online && navigator.onLine !== false;
+      const archive = media.enabled ? appArchiveMedia(media, mediaDb, porteroDownload(media)) : null;
+      const measured = await estimateZip(plan, docs, archive, ctrl.signal);
+      check();
+      const total = totalOf(measured, include);
+      const bytes = total.bytes + plan.length * 40_000 + zipOverhead([], (plan.length * 4 + total.files * 2) * 2);
+      if (mode === 'memory' && bytes > cap) throw new MemoryCapExceeded(cap);
+      opened = await open(mode, handle, title);
+      check();
+      const target = opened.target.kind === 'zip'
+        ? { ...opened.target, sink: { write: (chunk: Uint8Array) => { check(); return (opened!.target as Extract<DownloadTarget, { kind: 'zip' }>).sink.write(chunk); } } }
+        : {
+            ...opened.target,
+            makeDir: async (path: string) => { check(); await (opened!.target as Extract<DownloadTarget, { kind: 'dir' }>).makeDir(path); check(); },
+            makeFile: async (path: string) => {
+              check();
+              const writer = await (opened!.target as Extract<DownloadTarget, { kind: 'dir' }>).makeFile(path);
+              try { check(); } catch (err) { await writer.abort(); throw err; }
+              return { ...writer, write: (chunk: Uint8Array) => { check(); return writer.write(chunk); }, close: async () => { check(); await writer.close(); check(); } };
+            },
+          };
       const withMedia = media.enabled;
       editor = await ExportEditor.create({
         lang: tr.lang,
         resolveFileUrl: withMedia ? (url, pageId) => media.resolve(url, pageId) : undefined,
         media: withMedia ? media : null,
       });
+      check();
       const states = await docs.states();
+      check();
       const result = await buildZip({
-        title: props.title,
-        kind: props.kind,
-        project: props.project,
-        plan: props.plan,
-        rows: (id) => tree.get(id),
+        title,
+        kind: now.props.kind,
+        project,
+        plan,
+        rows: (id) => now.tree.get(id),
         source: docs,
         editor,
-        media: archiveMedia,
+        media: archive,
         include,
         comments: include.comments ? appComments(comments, commentsDb, { id: user.id, email: user.email }) : null,
         me: { id: user.id, email: user.email },
         gap: (id) => {
-          const row = tree.get(id);
-          if (!row || tree.hasUnsentCreate(id)) return null;
-          return tree.contentGap(row, states.get(id)?.cursor ?? 0);
+          const row = now.tree.get(id);
+          if (!row || now.tree.hasUnsentCreate(id)) return null;
+          return now.tree.contentGap(row, states.get(id)?.cursor ?? 0);
         },
         online,
-        target: opened.target,
-        expected: remote,
+        target,
+        expected: remoteOf(measured, include),
         appVersion: __APP_VERSION__,
         lastSync: engine.getStatus().lastSyncAt,
         signal: ctrl.signal,
         onProgress: (progress) => {
+          if (!current() || ctrl.signal.aborted) return;
           // No más de 7 dibujos por segundo (miles de archivos).
           const now = Date.now();
           if (now - last < 150 && !progress.offline) return;
@@ -201,10 +271,15 @@ export function ExportZipPanel(props: ExportZipProps) {
           setPhase({ at: 'working', mode, progress });
         },
       });
+      check();
       await opened.finish();
-      setPhase({ at: 'done', mode, result, saved: opened.saved, blob: opened.sink ? opened.sink.blob() : null, zipName });
+      check();
+      ready.current = () => { try { check(); return true; } catch { return false; } };
+      setPhase({ at: 'done', mode, result, saved: opened.saved, blob: opened.sink ? opened.sink.blob() : null, zipName: `${rootName(title)}.zip` });
     } catch (err) {
-      await opened.discard();
+      await opened?.discard();
+      if (!current()) return;
+      if (!picked && isAbort(err) && !ctrl.signal.aborted) { setPhase({ at: 'choose' }); return; }
       if (err instanceof ExportCancelled || isAbort(err) || ctrl.signal.aborted) setPhase({ at: 'cancelled', mode });
       else {
         console.warn('[exportar] no se pudo armar el zip', err);
@@ -213,12 +288,13 @@ export function ExportZipPanel(props: ExportZipProps) {
       }
     } finally {
       editor?.destroy();
-      opened.crc.close();
+      opened?.crc.close();
       if (abort.current === ctrl) abort.current = null;
     }
   };
 
   const save = (blob: Blob, fileName: string) => {
+    if (!ready.current?.()) return;
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -308,7 +384,7 @@ export function ExportZipPanel(props: ExportZipProps) {
         <div className="export-progress" role="status">
           <progress max={Math.max(1, p?.total ?? props.plan.length)} value={p?.done ?? 0} />
           <span>
-            {p?.step === 'comments'
+            {!p ? tr('exportZip.preparingLocal') : p.step === 'comments'
               ? tr('exportDialog.fetchingComments', { done: Math.min(p.done + 1, p.total), total: p.total })
               : tr('exportDialog.preparing', {
                   done: Math.min((p?.done ?? 0) + 1, p?.total ?? props.plan.length),
@@ -330,7 +406,7 @@ export function ExportZipPanel(props: ExportZipProps) {
           <span className="muted small">{tr('exportZip.keepOpen')}</span>
         </div>
         <div className="modal-actions">
-          <button onClick={(e) => e.detail < 2 && abort.current?.abort()}>{tr('common.cancel')}</button>
+          <button onClick={(e) => { if (e.detail >= 2) return; abort.current?.abort(); generation.current++; setPhase({ at: 'cancelled', mode: phase.mode }); }}>{tr('common.cancel')}</button>
         </div>
       </>
     );
@@ -382,6 +458,7 @@ export function ExportZipPanel(props: ExportZipProps) {
           <button
             className={done.blobSaved ? '' : 'primary'}
             onClick={() => {
+              if (!ready.current?.()) return;
               save(done.blob!, done.zipName);
               setPhase({ ...done, blobSaved: true });
             }}
@@ -393,4 +470,3 @@ export function ExportZipPanel(props: ExportZipProps) {
     </>
   );
 }
-

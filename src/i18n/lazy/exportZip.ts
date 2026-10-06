@@ -124,6 +124,8 @@ export const exportZip = {
   'exportZip.doneFile': { en: "Saved as {name}.", es: "Guardado como {name}." },
   'exportZip.doneDir': { en: "Saved in the folder {name}.", es: "Guardado en la carpeta {name}." },
   'exportZip.ready': { en: "The zip is ready.", es: "El zip está listo." },
+  'exportZip.preparingLocal': { en: "Preparing the archive and saving changes on this device…", es: "Preparando el archivo y guardando los cambios en este dispositivo…" },
+  'exportZip.selectionChanged': { en: "The pages or their layout changed. Prepare the archive again.", es: "Las páginas o su formato cambiaron. Prepará el archivo de nuevo." },
   'exportZip.save': { en: "Save {name}", es: "Guardar {name}" },
   'exportZip.missing': {
     en: { one: "{count} thing is missing (listed in MISSING_FILES.txt).", other: "{count} things are missing (listed in MISSING_FILES.txt)." },

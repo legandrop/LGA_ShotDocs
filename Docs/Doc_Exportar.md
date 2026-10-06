@@ -2,11 +2,13 @@
 
 ## Guardado local antes del PDF (LF21, entrega parcial)
 
+El ZIP también prepara el guardado local antes de escribir: espera el título y la transferencia durable de su sobrante, dentro de la misma barrera de ocho segundos. Relee el título, las páginas elegidas, sus hojas y los permisos locales; si cambió su identidad o estructura, pide preparar el archivo de nuevo. El selector se abre en el clic, pero el escritor y la carpeta nueva esperan esta validación. El nombre elegido en el selector se respeta; el contenido y las rutas internas usan el título recién guardado. Un rechazo conserva el borrador y permite reintentar. Cancelar invalida este archivo y conserva las escrituras aceptadas. Un resultado de otra página o workspace no ofrece una descarga tardía. En carpeta pueden quedar archivos parciales ya escritos, como antes; no hay rollback de lo confirmado por el destino. El formato del archivo y la reimportación conservan su contrato.
+
 *Export PDF*, *Prepare part…* y *Export again* preparan el título abierto y esperan hasta ocho segundos las escrituras locales. El sobrante de un título largo debe haber pasado al documento y quedar guardado antes de tomar su copia para exportar. La espera usa el consumidor habitual del sobrante y sus identificadores, sin duplicarlo. Si falla el guardado o cambia el workspace, la página o el dueño de la ventana, no empieza el PDF; *Cancel* invalida la preparación sin cancelar una escritura aceptada. No se espera la subida al servidor.
 
 Después de preparar se releen el título, las páginas elegidas, sus permisos y las opciones actuales. Para continuar una parte deben mantenerse los identificadores, el orden, la estructura y los formatos del plan anterior, además de sus opciones y límites. Si cambiaron, se conserva el PDF preparado y se ofrece *Export again* desde el principio; en un táctil primero se imprime la parte anterior. Los títulos actuales pueden cambiar sin reinterpretar los índices de páginas. Un resultado tardío no se imprime ni aparece en otro contexto.
 
-Este tramo no cambia el zip, la reimportación, los enlaces entre workspaces ni el cierre externo del navegador.
+Siguen pendientes la reimportación, los enlaces entre workspaces y el cierre externo del navegador como recorridos LF21 completos.
 
 **Estado: entregas 0 (v0.115), 1 (v0.122: el PDF de una rama o de un proyecto), 2 (v0.129: el zip), 1b (v0.134: los
 cambios de Lega al PDF, D84, D85 y D88: fotos en resolución completa, el PDF en partes y la lista de las que fallaron)
