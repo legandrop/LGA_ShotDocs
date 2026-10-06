@@ -52,7 +52,7 @@ export function useRememberWorkspaceName(): void {
  * dispositivo se perdería, así que espera; lo guardado sin subir queda en el dispositivo y sube la próxima
  * vez que se abra ese workspace. `false` cancela.
  */
-export function useLeaveGuard(): (action: () => void) => void {
+export function useLeaveGuard(): (action: () => void, current?: () => boolean) => void {
   const services = useServices();
   const { docs, tree } = services;
   const attempt = useRef(0);
@@ -61,8 +61,8 @@ export function useLeaveGuard(): (action: () => void) => void {
   const pending = usePendingCount();
   const { current } = useCurrentWorkspace();
   const name = current ? displayName(current) : t('noProjects.thisWorkspace');
-  return useCallback((action: () => void) => {
-    if (!live.current) return;
+  return useCallback((action: () => void, current: () => boolean = () => true) => {
+    if (!live.current || !current()) return;
     const token = ++attempt.current;
     // Una importación de Coda o un reemplazo en todo el proyecto en curso: cortados, quedan a medias.
     const importing = importJobFor(tree).get().running || replaceRunning({ docs });
@@ -78,7 +78,7 @@ export function useLeaveGuard(): (action: () => void) => void {
     const accepted = pending === 0 && !settings ? true : !settings ? confirm(t('leave.pending', { count: pending, name })) :
       pending === 0 ? confirm(t('leave.settings', { name })) : confirm(t('leave.both', { count: pending, name }));
     if (!accepted) return;
-    void saveBeforeExit(services, () => live.current && attempt.current === token && getDraftRevision() === draftRevision, action);
+    void saveBeforeExit(services, () => live.current && attempt.current === token && getDraftRevision() === draftRevision && current(), action);
   }, [services, docs, tree, pending, name]);
 }
 

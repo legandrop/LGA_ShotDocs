@@ -44,6 +44,8 @@ import { AttachmentSheet } from './AttachmentSheet';
 import { editorDictionary } from './editorLocale';
 import { findUnknownContent } from './unknownContent';
 import { editorLinkClick, followInternalLink } from './internalLinks';
+import { pageLinkViewExtension } from './pageLinkView';
+import { useLeaveGuard } from './WorkspaceMenu';
 import { redrawFromYjs } from './editorRecovery';
 import {
   CommentMargin,
@@ -422,6 +424,24 @@ export function BlockEditor({
   const link = useLinkMode();
   const scheme = useScheme();
   const tr = useT();
+  const host = useRef<HTMLDivElement>(null);
+  const leave = useLeaveGuard();
+  const leaveRef = useRef(leave);
+  leaveRef.current = leave;
+  const linkScope = useMemo(() => ({ live: true, origin: Object.freeze({
+    appOrigin: location.origin, localKey: link?.entry.localKey ?? workspace.config.localKey,
+  }), publicMode: !!link, publicEntry: link?.entry }), [doc, services, workspace, user, pageId, link?.entry.id]);
+  const linkScopeRef = useRef(linkScope);
+  linkScopeRef.current = linkScope;
+  useEffect(() => { linkScope.live = true; return () => { linkScope.live = false; }; }, [linkScope]);
+  const linkContext = useMemo(() => ({
+    origin: linkScope.origin, publicMode: linkScope.publicMode,
+    root: () => editor.domElement ?? null,
+    current: () => linkScope.live && linkScopeRef.current === linkScope,
+    leave: (action: () => void, current: () => boolean) => leaveRef.current(action, current),
+  }), [linkScope]);
+  const linkContextRef = useRef(linkContext);
+  linkContextRef.current = linkContext;
   const editorRef = useRef<{ removeBlocks: (ids: string[]) => unknown; transact: (fn: (tr: { setMeta: (k: string, v: unknown) => unknown }) => void) => void } | null>(null);
   /** Si la página se puede editar ahora (lo leen las funciones que el editor guarda al crearse). */
   const editableRef = useRef(editable);
@@ -522,7 +542,7 @@ export function BlockEditor({
       ...editorSchemaOptions,
       dictionary: editorDictionary(tr.lang),
       // Un link a otra página de la app la abre en esta pestaña (internalLinks.ts).
-      links: { onClick: (event) => editorLinkClick(event) },
+      links: { onClick: (event) => editorLinkClick(event, linkContextRef.current) },
       // Pegar archivos: las fotos y los videos en el renglón, donde está el cursor (fotos en línea,
       // inlinePhotoCreate.ts); con portero, cualquier otro archivo, un bloque debajo (fileDrop.ts).
       pasteHandler: (ctx) => {
@@ -583,6 +603,7 @@ export function BlockEditor({
       },
       // Las extensiones de la página (editorExtensions.ts): fotos en línea, buscar, deshacer, títulos y colapsar.
       extensions: [
+        pageLinkViewExtension(linkScope.origin, linkScope.publicEntry),
         ...pageEditorExtensions(
           canCollapse
             ? {
@@ -1131,7 +1152,6 @@ export function BlockEditor({
 
   // Comentarios (paso 10): el panel sabe qué dice cada bloque; el margen se dibuja sobre el editor.
   useBlockSourceRegistration(editor, pageId, !preview);
-  const host = useRef<HTMLDivElement>(null);
 
   // Sin portero, pegar o soltar un archivo que no es una imagen haría que el editor intente crear un bloque
   // que no existe en el esquema: se corta antes, con un aviso.
@@ -1525,7 +1545,7 @@ export function BlockEditor({
         if (editor.domElement?.contains(e.target as Node)) cursorPlaced.current = true;
       }}
       onKeyDownCapture={openWithKeyboard}
-      onClickCapture={(e) => !editable && followInternalLink(e.nativeEvent)}
+      onClickCapture={(e) => followInternalLink(e.nativeEvent, linkContext)}
       onClick={openCarrete}
     >
       <MediaActionsContext.Provider value={mediaActions}>

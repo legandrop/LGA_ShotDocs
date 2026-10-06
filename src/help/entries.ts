@@ -334,6 +334,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     more: ['mdHeading', 'mdBullet', 'mdNumbered', 'mdChecklist', 'mdQuote', 'mdDivider', 'mdCode'],
     since: BEFORE_HELP,
   },
+  { id: 'pageLinks', section: 'writing', title: 'help.pageLinks.title', text: 'help.pageLinks.text', words: ['workspace', 'page links', 'enlaces', 'links', 'copiar dirección', 'copy link address'], since: '0.206' },
   { id: 'script', section: 'writing', title: 'help.script.title', text: 'help.script.text', keys: { script: 'script' }, more: ['scriptEnter'], since: BEFORE_HELP },
   { id: 'undo', section: 'writing', title: 'help.undo.title', text: 'help.undo.text', keys: { undo: 'undo', redo: 'redo' }, more: ['selectAll'], since: UNDO_ORDER },
   {

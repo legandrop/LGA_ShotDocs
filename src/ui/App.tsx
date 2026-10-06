@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useAuth } from '../auth';
 import { t, useT } from '../i18n';
-import { isPublicRoute, parseRoute, useRoute, type Route } from '../router';
+import { bindPageNavigationOrigin, canonicalizePageOrigin, documentPageOrigin, isPublicRoute, parseRoute, useRoute, type Route } from '../router';
+import { workspaceSelector } from '../pageLink';
 import { filePath, takeWorkspaceHash } from '../fileLink';
 import { markInviteArrival, setArrivalNotice, takeInviteHash } from '../invite';
 import { buildWorkspace, createWorkspaceClient, WorkspaceContext, type ActiveWorkspace } from '../workspace';
@@ -82,7 +83,7 @@ function startup(): Start {
  * Al abrir la app, antes de crear ningún cliente de Supabase: la lista de workspaces del dispositivo (con el
  * de la compilación adentro, con sus nombres de siempre) y el link de invitación, si se llegó con uno.
  */
-function computeStart(): Start {
+export function computeStart(): Start {
   const build = buildWorkspace();
   const list = loadWorkspaces(build ? { url: build.url, publishableKey: build.publishableKey } : null);
   const fallback = activeWorkspace(list);
@@ -102,13 +103,6 @@ function computeStart(): Start {
   // abierto (si no, un dispositivo que alguna vez abrió un link ignoraría el `#ws=`).
   const route = typeof location === 'undefined' ? null : parseRoute(location.pathname);
   if (route?.name === 'file') return fileStart(list, route, fallback);
-  // Recargar la página de un link (el `#` ya no está en la barra): sigue en el link, aunque el dispositivo tenga un
-  // workspace. Una pestaña nueva abre la app de siempre.
-  const inTab = tabLink();
-  if (inTab) return { kind: 'link', link: inTab };
-  // Sin workspaces en el dispositivo, el último link abierto (quien solo entra con links vuelve a lo suyo).
-  const lastLink = activeLink();
-  if (!fallback && lastLink) return { kind: 'link', link: lastLink };
   const { payload, broken } = takeInviteHash();
   if (broken) setArrivalNotice(t('invite.incomplete'));
   if (payload) {
@@ -122,6 +116,20 @@ function computeStart(): Start {
     if (invite.kind === 'confirm') return { kind: 'confirm', entry: invite.entry, target: invite.target, fallback };
     setArrivalNotice(invite.reason);
   }
+  // La identidad explícita de una página normal manda incluso al restaurar una pestaña de un link.
+  if (route?.name === 'page') {
+    const selector = workspaceSelector(location.search);
+    if (selector.kind !== 'absent') {
+      const entry = selector.kind === 'workspace' ? list.workspaces.find((w) => !w.pending && configOf(w).localKey === selector.key) : undefined;
+      if (!entry) { setArrivalNotice(t('wsError.pageWorkspace')); return { kind: 'welcome' }; }
+      updateWorkspaces((l) => setActive(l, entry.id));
+      return { kind: 'open', entry };
+    }
+  }
+  const inTab = tabLink();
+  if (inTab) return { kind: 'link', link: inTab };
+  const lastLink = activeLink();
+  if (!fallback && lastLink) return { kind: 'link', link: lastLink };
   return fallback ? { kind: 'open', entry: fallback } : { kind: 'welcome' };
 }
 
@@ -210,12 +218,21 @@ function Screen() {
   return <Opened entry={start.entry} />;
 }
 
+/** Valida identidad antes del primer cliente; una clave pendiente espera su recarga de FinishPending. */
+export function createOpenedWorkspace(entry: DeviceWorkspace): ActiveWorkspace {
+  const config = configOf(entry);
+  if (entry.pending) {
+    if (documentPageOrigin()) throw new Error('Workspace pendiente dentro de otra cuenta');
+  } else {
+    bindPageNavigationOrigin({ appOrigin: location.origin, localKey: config.localKey });
+    canonicalizePageOrigin();
+  }
+  return { config, client: createWorkspaceClient(config) };
+}
+
 function Opened({ entry }: { entry: DeviceWorkspace }) {
   // Un solo cliente por workspace y por carga de la app: cambiar de workspace recarga la app.
-  const active = useMemo<ActiveWorkspace>(() => {
-    const config = configOf(entry);
-    return { config, client: createWorkspaceClient(config) };
-  }, [entry]);
+  const active = useMemo<ActiveWorkspace>(() => createOpenedWorkspace(entry), [entry]);
   return (
     <WorkspaceContext.Provider value={active}>
       <Signed active={active} pending={!!entry.pending} />

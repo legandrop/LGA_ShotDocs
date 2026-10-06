@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { useT } from '../i18n';
+import '../i18n/lazy/history';
 import { createMarkupSvg, drawMarkup } from './markupSvg';
 import type { AnnotationComparison, AnnotationSide } from './historyAnnotations';
 

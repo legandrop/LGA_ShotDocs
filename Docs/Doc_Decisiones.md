@@ -3,6 +3,10 @@
 Lo que solo Lega decide. Las abiertas siguen con la opción indicada en `Plan_ShotDocs.md` hasta que Lega
 diga otra cosa.
 
+## Estado técnico de D-13 y D-18 (v0.206, LF21 parcial)
+
+Dentro de la autorización vigente para que cada workspace conserve su identidad, se implementó el tramo de editor y arranque: anchor propio con clave local sin cambiar el documento, selección normal explícita antes del cliente y guardado local antes de un clic del editor hacia otra cuenta. Es un avance técnico parcial de LF21 A; conserva el registro histórico de B y no añade una decisión de Lega ni completa O1/Request access. Clipboard rico, drag, hashes públicos antiguos, importación/exportación completa y aceptación con cuentas/RLS reales y dispositivos físicos siguen en el roadmap.
+
 ## Tomadas
 
 - **D-01 · Nombre: LGA Shot Docs** (2026-09-29). Repo `legandrop/LGA_ShotDocs`; se llamaba

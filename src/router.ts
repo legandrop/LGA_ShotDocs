@@ -1,4 +1,25 @@
 import { useSyncExternalStore } from 'react';
+import { pageLink, qualifyPageLink, type PageLinkOrigin } from './pageLink';
+import { validLocalKey } from './workspaces';
+
+// Una identidad por documento, tomada del cliente elegido; nunca la última vista o preferencia.
+let pageNavigationOrigin: Readonly<PageLinkOrigin> | null = null;
+export function bindPageNavigationOrigin(origin: PageLinkOrigin): void {
+  const url = new URL(origin.appOrigin);
+  if (!/^https?:$/.test(url.protocol) || url.origin !== origin.appOrigin || !validLocalKey(origin.localKey)) throw new Error('Origen de página inválido');
+  if (pageNavigationOrigin && (pageNavigationOrigin.appOrigin !== origin.appOrigin || pageNavigationOrigin.localKey !== origin.localKey)) throw new Error('Otro workspace en el mismo documento');
+  pageNavigationOrigin ??= Object.freeze({ appOrigin: origin.appOrigin, localKey: origin.localKey });
+}
+export function documentPageOrigin(): Readonly<PageLinkOrigin> | null { return pageNavigationOrigin; }
+
+/** Sólo la cuenta elegida canoniza su página; los links públicos no tienen binding. */
+export function canonicalizePageOrigin(): void {
+  const origin = pageNavigationOrigin;
+  if (!origin || parseRoute(location.pathname).name !== 'page') return;
+  const url = new URL(location.href);
+  url.searchParams.set('w', origin.localKey);
+  history.replaceState(history.state, '', url.pathname + url.search + url.hash);
+}
 
 export type Route =
   | { name: 'home' }
@@ -67,6 +88,15 @@ export function fileReturnPath(): string {
 }
 
 export function navigate(path: string, replace = false): void {
+  const origin = pageNavigationOrigin;
+  if (origin) {
+    const link = pageLink(path, origin);
+    if (link) {
+      if (!link.own) throw new Error('Un enlace de otra autoridad requiere abrir otro documento');
+      const url = new URL(qualifyPageLink(path, origin), origin.appOrigin);
+      path = url.pathname + url.search + url.hash;
+    }
+  }
   if (path === location.pathname || path === location.pathname + location.search) return;
   if (path.startsWith('/f/')) {
     if (!location.pathname.startsWith('/f/')) fileReturn = location.pathname + location.search;

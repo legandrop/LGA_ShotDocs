@@ -46,7 +46,7 @@ its own project: a tree of pages you own.
   after its label, the checkbox. You check every change before applying it, and nothing you said is lost.
 - **Offline first, nothing lost.** Every change is saved on your device first and synced when you are
   back online. Edits made offline on two devices are merged, never overwritten.
-  Reload from an app notice and switching, joining or creating a workspace from an open workspace wait up to eight seconds for local saving, including the current page title. A failure or a changed page keeps the current view open for another attempt. This does not add a saving barrier to browser exits, cross-workspace links or signing out.
+  Reload from an app notice and switching, joining or creating a workspace from an open workspace wait up to eight seconds for local saving, including the current page title. A failure or a changed page keeps the current view open for another attempt. Ordinary cross-workspace clicks from the page editor also wait for local saving before opening the destination. Browser exits and signing out keep their existing behavior.
 - **Share a branch, never the tree.** Inside a workspace, people get a role and a permission on a
   project or a page (view, comment, edit, or edit and create pages). A permission covers everything under
   that page and nothing above it: parent pages and sibling branches stay private. Clients join as guests
@@ -110,7 +110,7 @@ In development. What works today:
 - In *Share*, the team sees the exact number of files added through all links to the page, including earlier
   links, even beyond 500 files; the list shows the newest 20.
 - Google Drive links: paste one and keep it as a link, as plain text, or as a card with the Drive player.
-- Links to other pages: a link to a page of the app opens it in the same tab (Ctrl/⌘+click, in a new one).
+- Page links in the editor keep their workspace when you use the browser’s Copy link address or Open link in new tab. An ordinary click opens a page in the current workspace or waits for local saving before opening another workspace. Reloading a normal page keeps its explicit workspace, even if this tab previously opened a public link. In a public link, old links to pages in that workspace keep its access only if they have no explicit workspace or existing fragment. Copying formatted selections, dragging links, older public links with fragments and complete import/export support remain pending; this is partial cross-workspace support.
 - Photos in the line of text (v0.078): pasted, dropped or picked photos and videos go into the line, where the
   text cursor is (or where you drop them), like characters: text can sit next to them, they flow to the next line
   when they don't fit, and you select several with Shift+click, Shift+arrows or by dragging. A single one comes

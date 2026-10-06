@@ -70,7 +70,9 @@ export function takeLinkHash(): { payload: LinkPayload | null; broken: boolean }
   hashRead = true;
   if (!location.hash.startsWith(PREFIX)) return { payload: null, broken: false };
   const payload = parseLinkHash(location.hash);
-  history.replaceState(history.state, '', location.pathname + location.search);
+  const url = new URL(location.href);
+  if (payload) url.searchParams.delete('w');
+  history.replaceState(history.state, '', url.pathname + url.search);
   return { payload, broken: !payload };
 }
 

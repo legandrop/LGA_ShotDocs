@@ -2,7 +2,7 @@
 
 **Ventana Export v0.205:** el título completo se ajusta al ancho y las acciones pasan a otro renglón cuando el nombre del ZIP no deja sitio para *Close*. El cierre queda accesible; selectores del sistema, dispositivos y los demás recorridos de exportación mantienen sus pendientes.
 
-**LF21, tramo de guardado local v0.199:** preparación explícita del título y barrera de ocho segundos para *Reload* de avisos y cambio/unión/creación de workspace desde uno abierto. En v0.200 el título completo se conserva hasta confirmar su encabezado y sobrante en el dispositivo; un rechazo mantiene el borrador para reintentar en la misma sesión. En v0.202 el PDF prepara esas escrituras y espera la transferencia durable del sobrante antes de tomar su copia; las partes siguientes comprueban continuidad del plan y conservan el libro anterior si cambió. El ZIP incorpora esa barrera antes de abrir el escritor y toma títulos, documentos y selección actuales, invalidando resultados tardíos. Sigue parcial: quedan los enlaces entre workspaces y la reimportación. Auth y salidas externas conservan sus recorridos.
+**LF21, tramo de guardado local v0.199:** preparación explícita del título y barrera de ocho segundos para *Reload* de avisos y cambio/unión/creación de workspace desde uno abierto. En v0.200 el título completo se conserva hasta confirmar su encabezado y sobrante en el dispositivo; un rechazo mantiene el borrador para reintentar en la misma sesión. En v0.202 el PDF prepara esas escrituras y espera la transferencia durable del sobrante antes de tomar su copia; las partes siguientes comprueban continuidad del plan y conservan el libro anterior si cambió. El ZIP incorpora esa barrera antes de abrir el escritor y toma títulos, documentos y selección actuales, invalidando resultados tardíos. En v0.206 se incorpora el tramo de editor/arranque: anchors propios calificados sin escribir el documento, w normal prioritaria sobre el link público recordado y barrera local para un clic del editor hacia otra cuenta. Sigue parcial: faltan selección rica en clipboard, drag, hashes públicos antiguos, transporte completo por importación/exportación, cuentas/RLS reales y Safari/iPhone físicos. O1/Request access y los demás recorridos no se cierran con este tramo. Auth y salidas externas conservan sus recorridos.
 
 Lo que falta, por importancia. El orden de trabajo lo manda `Plan_Workspaces.md` (secciones 10 y 11); las
 fases originales están en `Plan_ShotDocs.md`, sección 9.
@@ -716,7 +716,7 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   los dos positivos volvieron a pasar después. La auditoría además acreditó diez mutantes locales por aserción concreta;
   los 21 históricos no se validaron de ese modo ni se cuentan como evidencia independiente. Queda (chico): que la
   dirección de una página lleve el workspace (`/p/<id>?w=<clave local>`,
-  LF21 A) cuando haya varios workspaces en uso; `page_level` que tarda distinto si la página existe (la diferencia ya
+  LF21 A): v0.206 cubre sólo editor y arranque; faltan los demás productores y transportes; `page_level` que tarda distinto si la página existe (la diferencia ya
   aceptada en LF4); y una prueba de dos personas decidiendo a la vez con dos sesiones reales (O8 de E2; hoy por lectura
   del `for update`: el servidor en memoria no la puede probar). Quedan para después: el correo al pedir y al aceptar
   (B.8), pedir acceso sin cuenta y los textos de invitación en el choque de clave y en

@@ -1183,6 +1183,18 @@ prueba en rollback; no se probó la concurrencia con dos sesiones reales.
   versiones viejas siguen abriendo la dirección; queda en el roadmap (P.30).
 
 
+### LF21 · Tramo parcial de editor y arranque (v0.206)
+
+La opción B anterior queda como registro histórico y mantiene el resguardo de *Request access*: esta entrega no completa O1 ni modifica esa pantalla. Se incorpora un tramo de A, limitado al editor y al arranque de páginas normales; no convierte todos los productores y transportes de direcciones de la app.
+
+El editor representa la marca link existente con su especificación original y califica sólo el anchor recién creado de una página propia con la clave local capturada por el editor. Así el menú nativo para copiar su dirección o abrir otra pestaña recibe el workspace antes del gesto, también en solo lectura. El href del modelo y el esquema permanecen iguales; calificar el anchor al montar, reconstruir la vista o leer la página no genera actualizaciones Yjs ni marcas sucias. Una w ajena explícita se conserva y nunca se interpreta como una página propia por compartir UUID.
+
+En una dirección normal /p/<id>, una única w válida elige una entrada conocida y no pendiente antes de crear el cliente. Vacía, repetida, mal formada o desconocida deja la bienvenida con aviso, sin consultar otra isla. Esa selección prevalece sobre un link público recordado al recargar o volver al documento; un hash público o invitación explícitos y las direcciones de archivo conservan sus prioridades. La cuenta normal fija una copia inmutable del origen para ese documento: la navegación propia conserva w y otra identidad requiere un documento nuevo. El modo público no fija ese origen normal ni adopta su sesión.
+
+El clic normal del editor hacia otro workspace usa la barrera local existente: prepara título y documento antes de abrir la dirección capturada. Un rechazo, demora fuera del límite, cambio de servicios/dueño, página, referencia o pathname/search/hash, o desmontaje cancela la salida. El gesto lee el contexto vigente después de renovar la sesión del mismo usuario; una espera iniciada antes de esa renovación conserva su captura anterior y se invalida. No espera confirmación remota ni cubre las salidas externas del navegador.
+
+Dentro de un link público, un link propio antiguo sin w ni hash reproduce en el anchor el acceso público vigente, sin modificar el documento ni ampliar permisos. Una w explícita representa una cuenta normal, incluso si coincide la clave; usa la barrera para salir del modo público. Un hash previo queda literal. Siguen pendientes clipboard de selección rica, drag, hashes públicos antiguos, transporte completo por importación/exportación y la verificación con usuarios/RLS reales y Safari/iPhone físicos. LF21 continúa abierto.
+
 ## Video en línea en el PDF (v0.198)
 
 La copia de imprimir o exportar transforma el propio contenedor del cuadro en un enlace, conservando su ancho, clases, estilo, imagen y anotaciones como hijos directos. No agrega nombre ni renglón. Usa la misma dirección y política de acceso de los videos en bloque; sin información de video, sin archivo disponible o con un marcador de otro proyecto no añade el enlace. No cambia una dirección ya escrita ni anida enlaces. Las fotos y el documento guardado siguen intactos. La vista de medir conserva su geometría sin enlaces. El permiso al abrir y la política de links públicos de Export siguen siendo los existentes; no incorpora permisos ni llamadas nuevas.

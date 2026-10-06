@@ -178,6 +178,11 @@ export const help = {
     en: "Each block has a handle on its left: drag it to move the block, click it to select the block and open its bar. {up} and {down} move it with the keyboard; {indent} and {outdent} nest it.",
     es: "Cada bloque tiene un tirador a su izquierda: arrastralo para mover el bloque, o hacé clic para elegirlo y abrir su barra. {up} y {down} lo mueven con el teclado; {indent} y {outdent} lo meten o lo sacan un nivel.",
   },
+  'help.pageLinks.title': { en: "Page links and workspaces", es: "Links de páginas y workspaces" },
+  'help.pageLinks.text': {
+    en: "Use the browser’s Copy link address or Open link in new tab on a page link in the editor to keep its workspace. An ordinary click opens a page here, or waits for local saving before opening another workspace. If saving fails, the page stays open for another attempt. In a public link, old links to pages in that workspace keep its access only if they have no explicit workspace or existing fragment. Copying selected formatted text, dragging links and old public page links with fragments still need work.",
+    es: "Usá Copiar dirección del enlace o Abrir enlace en una pestaña nueva del navegador sobre un link de página del editor para conservar su workspace. Un clic normal abre la página acá, o espera el guardado local antes de abrir otro workspace. Si falla el guardado, la página queda abierta para reintentar. En un link público, los links antiguos de páginas de ese workspace conservan su acceso sólo si no indican un workspace ni un fragmento previo. Copiar texto seleccionado con formato, arrastrar links y los links públicos antiguos con fragmentos siguen pendientes.",
+  },
   'help.format.title': { en: "Formatting text", es: "Dar formato al texto" },
   'help.format.text': {
     en: "Select text to get the formatting bar: bold, italic, colors, links. {bold} bold, {italic} italic, {underline} underline, {strike} strikethrough, {code} code, {link} link.",

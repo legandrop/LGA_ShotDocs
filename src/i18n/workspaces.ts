@@ -249,5 +249,9 @@ export const workspaces = {
     en: "This workspace is not on this device anymore.",
     es: "Este workspace ya no está en este dispositivo.",
   },
+  'wsError.pageWorkspace': {
+    en: "This page link does not identify a workspace available on this device. Open or join its workspace, then try the link again.",
+    es: "Este link de página no identifica un workspace disponible en este dispositivo. Abrí o unite a su workspace y volvé a probar el link.",
+  },
   'wsError.answered': { en: "the server answered {status}", es: "el servidor respondió {status}" },
 } satisfies Dict;

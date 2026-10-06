@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.206 :
+
+Los links antiguos a páginas sólo llevaban el UUID: copiar su dirección o abrir otra pestaña podía elegir el workspace preferido del dispositivo. Además, recargar una cuenta desde una pestaña que había abierto un link público podía recuperar ese acceso y perder la selección normal. El editor ahora califica el anchor con su origen sin escribir el documento. El arranque prioriza la clave explícita y rechaza destinos inválidos o desconocidos antes del cliente. Un clic del editor hacia otra cuenta espera el guardado local y cancela si cambia el contexto o la referencia. Renovar la sesión del mismo usuario conserva la apertura con modificador; invalida una salida que ya esperaba guardar. La comparación de anotaciones importa sus textos al cargarse. Siguen pendientes selección rica, arrastre, hashes públicos antiguos, transporte completo por importación/exportación y pruebas reales de permisos y dispositivos.
+
+[Conservar el workspace en enlaces del editor y validar la salida tras renovar sesión]
+
 v0.205 :
 
 Un título de exportación largo y sin espacios podía superar el ancho de la ventana. En el ZIP preparado, el nombre del archivo y las acciones también podían empujar Cerrar fuera del diálogo, impidiendo usarlo con un clic normal. La cabecera ahora corta el texto entre caracteres cuando hace falta y la fila de acciones pasa a otro renglón si no entra. El título completo y los controles permanecen en el diálogo, sin ocultar su contenido ni cambiar la preparación, los archivos o la cancelación. Se comprobaron títulos cortos y de quinientos caracteres, inglés y castellano, temas claro y oscuro y tamaños de computadora y teléfono. Las ventanas altas conservan su desplazamiento vertical habitual; la salida ZIP sigue limitada a los dispositivos que ya la admitían.
