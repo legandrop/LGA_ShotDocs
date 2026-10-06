@@ -24,6 +24,22 @@ const lazyModule = () => import('./lazyPart');
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const wait = (ms = 30) => act(async () => sleep(ms));
 
+it('la readiness se consulta en sondeos y guarda final, con el mismo plazo local', async () => {
+  const { watchPendingWrites, saveBeforeExit, reloadTimings } = await lazyModule();
+  const owner = {};
+  const prepared = vi.fn(async () => undefined);
+  const action = vi.fn();
+  let ready = false;
+  const unwatch = watchPendingWrites({ owner, current: () => true, unsaved: () => false, flush: async () => undefined, prepare: prepared });
+  const attempt = saveBeforeExit(owner, () => true, action, () => ready);
+  await sleep(25); expect(action).not.toHaveBeenCalled(); ready = true;
+  expect(await attempt).toBe(true); expect(prepared).toHaveBeenCalledTimes(1); expect(action).toHaveBeenCalledTimes(1);
+  // La readiness pendiente no reinicia el plazo ni habilita una acción con datos incompletos.
+  const previous = reloadTimings.saveWaitMs; reloadTimings.saveWaitMs = 25;
+  try { expect(await saveBeforeExit(owner, () => true, action, () => false)).toBe(false); expect(action).toHaveBeenCalledTimes(1); }
+  finally { reloadTimings.saveWaitMs = previous; unwatch(); }
+});
+
 function render(node: ReactNode): HTMLElement {
   const host = document.createElement('div');
   document.body.append(host);

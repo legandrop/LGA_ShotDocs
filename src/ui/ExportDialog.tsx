@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { t, useT } from '../i18n';
 import { notify } from './notice';
 import '../i18n/lazy/exportPdf';
@@ -24,12 +24,14 @@ import { fileHref, linkHash } from '../fileLink';
 import { useLinkMode } from '../linkMode';
 import { mediaLinkSource } from './mediaLinks';
 import { FileLinksNotice, fileLinksTickedByDefault } from './FileLinksNotice';
+import { saveBeforeExit } from './lazyPart';
+import { Permissions } from '../sync/access';
 
 // La ventana *Export* (P.22, Docs/Doc_Exportar.md, sección 7; entrega 1: el PDF; entrega 2: el zip, en ExportZip.tsx).
 // Desde el menú de una página (esta página, o con las de adentro) o desde el de un proyecto (el proyecto entero). Arma la vista del PDF
 // (src/export/exportPdf.ts) con avance y *Cancel*, y abre el diálogo de imprimir, donde se elige *Save as PDF*. La
 // vista queda armada mientras la ventana está abierta (se puede volver a abrir el diálogo) y se suelta al cerrarla.
-// Exportar nunca escribe nada: lee copias de lo guardado en el dispositivo.
+// Antes del PDF prepara las escrituras locales pendientes; el productor lee copias de lo guardado en el dispositivo.
 //
 // Entrega 1b (Lega 2026-10-02): las fotos van en resolución completa salvo con *Smaller file* (D85); si lo elegido no
 // entra en un PDF de este dispositivo, sale en partes, una por vez (D84: la siguiente se arma al pedirla, soltando la
@@ -60,7 +62,8 @@ const convertHeic = async (blob: Blob) => (await import('../media/heicConvert'))
 
 export function ExportDialog(props: { target: ExportTarget; onClose: () => void }) {
   const tree = useTree();
-  const { docs, media, mediaDb, comments, commentsDb, user, engine, client, workspace } = useServices();
+  const services = useServices();
+  const { docs, media, mediaDb, user, client, workspace } = services;
   const linkMode = useLinkMode();
   const status = useSyncStatus();
   const tr = useT();
@@ -80,6 +83,11 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
   const phone = useMemo(() => isMobilePlatform(detectPlatform()), []);
   const zipBlocked = phone ? tr('exportZip.notOnPhone') : !zipAllowed(perms) ? tr('exportZip.adminsOnly') : null;
   const [phase, setPhase] = useState<Phase>({ name: 'choose' });
+  const [preparing, setPreparing] = useState(false);
+  const [selectionChanged, setSelectionChanged] = useState(false);
+  const generation = useRef(0);
+  const mounted = useRef(true);
+  const continuity = useRef<{ book: PdfBook; signature: string; services: typeof services; context: string } | null>(null);
   const abort = useRef<AbortController | null>(null);
   const book = useRef<PdfBook | null>(null);
   /** Los comentarios: uno por ventana, así las partes no vuelven a bajar los de las páginas ya bajadas. */
@@ -89,7 +97,8 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
   const named = useMemo(() => keepsPageSizes(), []);
   const limits = useMemo(() => deviceLimits(touch), [touch]);
 
-  const plan = useMemo(() => planFor(tree, target, scope), [tree, target, scope]);
+  const revision = tree.getRevision();
+  const plan = useMemo(() => planFor(tree, target, scope), [tree, target, scope, revision]);
   // Los links públicos que pueden usar los links a los archivos (P.30, LF17 y LF18): solo con una cuenta y con red.
   const [fileLinks, setFileLinks] = useState<FileLinkPlan | null>(null);
   /** La casilla: tildada si todos los links son *Can view*, destildada si alguno es *Can edit*. */
@@ -125,7 +134,15 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
   /** El diálogo de imprimir ya se abrió para el PDF listo (en un táctil no se abre solo: hasta entonces, nada lo suelta). */
   const [printed, setPrinted] = useState(false);
   const online = status.online && (typeof navigator === 'undefined' || navigator.onLine !== false);
-  const working = phase.name === 'working' || zipBusy;
+  const working = phase.name === 'working' || zipBusy || preparing;
+  const context = `${user.id}|${workspace.config.url}|${workspace.config.localKey}|${location.pathname}|${location.search}|${target.kind}:${target.id}`;
+  const live = useRef({ services, tree, target, scope, smaller, withComments, useFileLinks, fileLinks, linkMode, context, lang: tr.lang });
+  live.current = { services, tree, target, scope, smaller, withComments, useFileLinks, fileLinks, linkMode, context, lang: tr.lang };
+  const currentContext = () => `${live.current.services.user.id}|${live.current.services.workspace.config.url}|${live.current.services.workspace.config.localKey}|${location.pathname}|${location.search}|${live.current.target.kind}:${live.current.target.id}`;
+  const signature = (pages: ExportPlanPage[], now: typeof live.current) => JSON.stringify([
+    now.context, now.scope, pages.map(({ id, parent, depth, format }) => [id, parent, depth, format.size, format.landscape]),
+    named, now.smaller, now.withComments, now.useFileLinks, limits,
+  ]);
   // Los avisos de «sin conexión» (fotos en menor resolución, links a los archivos) solo salen si el PDF lleva archivos:
   // se leen de lo guardado en el dispositivo, sin red. Mientras se lee, ninguno; si una página no se puede leer, salen.
   const [planned, setPlanned] = useState<PlanFiles | null>(null);
@@ -143,14 +160,25 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
   const offlineLinks = !!planned && (planned.unknown || planned.files > 0);
 
   // Al cerrar: cancela lo que está armando, deja la impresión como estaba y suelta la vista.
-  useEffect(
-    () => () => {
-      abort.current?.abort();
-      unprint.current?.();
-      book.current?.destroy();
-      book.current = null;
+  useLayoutEffect(
+    () => {
+      mounted.current = true;
+      setPhase({ name: 'choose' });
+      setFailures([]);
+      setPreparing(false);
+      setSelectionChanged(false);
+      return () => {
+        mounted.current = false;
+        generation.current++;
+        abort.current?.abort();
+        unprint.current?.();
+        book.current?.destroy();
+        book.current = null;
+        continuity.current = null;
+        commentSource.current = null;
+      };
     },
-    [],
+    [services, context],
   );
 
   const close = () => {
@@ -159,6 +187,7 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
   };
 
   function openPrint(current: PdfBook) {
+    if (!mounted.current || continuity.current?.services !== live.current.services || continuity.current.context !== currentContext() || book.current !== current) return;
     unprint.current?.();
     setPrinted(true);
     try {
@@ -177,9 +206,9 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
       }
       // Ctrl/⌘+P con el PDF listo: este PDF, no la página de atrás (printPage.ts mira `defaultPrevented`). Mientras
       // arma, nada (el libro a medio armar no se imprime).
-      if ((phase.name === 'ready' || phase.name === 'working') && isPrintShortcut(e)) {
+      if ((phase.name === 'ready' || phase.name === 'working' || preparing) && isPrintShortcut(e)) {
         e.preventDefault();
-        if (phase.name === 'ready') openPrint(phase.book);
+        if (phase.name === 'ready' && !preparing) openPrint(phase.book);
       }
     };
     window.addEventListener('keydown', onKey, true);
@@ -190,9 +219,35 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
    * Arma un PDF: lo elegido desde la página `from` (una parte), o una sola página (`only`, *Export again*). Antes suelta
    * lo armado (nunca dos partes en la memoria).
    */
-  async function run(from = 0, part = 1, only: ExportPlanPage | null = null) {
-    const what = only ? [{ ...only, depth: 0, parent: null }] : plan;
-    if (what.length === 0) return;
+  async function run(from = 0, part = 1, onlyId: string | null = null) {
+    const token = ++generation.current;
+    const initial = live.current;
+    const previous = book.current;
+    const proof = continuity.current;
+    const current = () => mounted.current && generation.current === token && live.current.services === initial.services && currentContext() === initial.context && live.current.scope === initial.scope;
+    const pages = () => onlyId ? exportPlan(initial.tree, 'page', onlyId).slice(0, 1) : planFor(initial.tree, initial.target, initial.scope);
+    setPreparing(true);
+    await saveBeforeExit(initial.services, current, () => {
+      const now = live.current;
+      const what = pages();
+      const permission = new Permissions(now.tree, now.services.access.get(), now.services.user.id);
+      if (!what.length || what.some((page) => permission.pageLevel(page.id) < 1)) { notify(t('exportDialog.empty')); return; }
+      const key = signature(what, now);
+      if (from > 0 && (!proof || proof.book !== previous || book.current !== previous || proof.signature !== key)) {
+        setSelectionChanged(true);
+        return;
+      }
+      const freshTitle = onlyId ? what[0].title : now.target.kind === 'project' ? (now.tree.project(now.target.id)?.name ?? '') : (now.tree.get(now.target.id)?.title ?? '');
+      setSelectionChanged(false);
+      void buildPrepared(from, part, onlyId, what, freshTitle, now, key, current);
+    }, () => !initial.tree.titleRests().some((rest) => pages().some((page) => page.id === rest.pageId)));
+    if (current()) setPreparing(false);
+  }
+
+  async function buildPrepared(from: number, part: number, only: string | null, pages: ExportPlanPage[], freshTitle: string, now: typeof live.current, key: string, current: () => boolean) {
+    const what = only ? pages.map((page) => ({ ...page, depth: 0, parent: null })) : pages;
+    const { docs, media, comments, commentsDb, user, engine, workspace, tree } = now.services;
+    const online = engine.getStatus().online && navigator.onLine !== false;
     unprint.current?.();
     // Los originales ya traídos de la página que no entró en la parte anterior (D84: no se bajan dos veces).
     const carry = !only && from > 0 && book.current?.to === from ? book.current.carry : null;
@@ -200,6 +255,7 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
     book.current = null;
     setPrinted(false);
     const controller = new AbortController();
+    const active = () => current() && !controller.signal.aborted;
     abort.current = controller;
     setPhase({ name: 'working', progress: null, part: only ? 1 : part, first: what[only ? 0 : from]?.title });
     if (from === 0 && !only) setFailures([]);
@@ -208,10 +264,10 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
       const withMedia = media.enabled;
       // Con un link público tildado, sus archivos van con el token del link; los demás, con la dirección de siempre.
       const source = mediaLinkSource();
-      const chosen = useFileLinks && fileLinks && fileLinks.links.length > 0 ? fileLinks : null;
+      const chosen = now.useFileLinks && now.fileLinks && now.fileLinks.links.length > 0 ? now.fileLinks : null;
       const config = workspace.config;
       editor = await ExportEditor.create({
-        lang: tr.lang,
+        lang: now.lang,
         mediaHref: chosen
           ? (id, pageId) => {
               const link = chosen.byPage.get(pageId);
@@ -222,11 +278,13 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
         resolveFileUrl: withMedia ? (url, pageId) => media.resolve(url, pageId) : undefined,
         media: withMedia ? media : null,
       });
+      if (!active()) return;
       const states = await docs.states();
-      const full = withMedia && !smaller;
+      if (!active()) return;
+      const full = withMedia && !now.smaller;
       const result = await buildPdf({
         // Una rama nunca nombra el proyecto (regla 2): el índice empieza en su página.
-        title: only ? only.title : title,
+        title: freshTitle,
         plan: what,
         from: only ? 0 : from,
         part: only ? 1 : part,
@@ -242,7 +300,7 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
           ? deviceImages(media, {
               // *Smaller file*: la nítida (2048) pedida al Drive si el dispositivo no la tiene. Resolución completa: el
               // original de cada foto, del dispositivo o bajado entero por el portero.
-              download: smaller && online ? porteroDownload(media) : null,
+              download: now.smaller && online ? porteroDownload(media) : null,
               maxDownloads: limits.sharp,
               // Solo los originales reciben el callback de bytes de deviceImages y activan la lectura con progreso.
               originals: full && online ? porteroDownload(media) : null,
@@ -250,24 +308,26 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
           : null,
         full,
         convertHeic: full ? convertHeic : null,
-        comments: withComments ? (commentSource.current ??= appComments(comments, commentsDb, { id: user.id, email: user.email })) : null,
+        comments: now.withComments ? (commentSource.current ??= appComments(comments, commentsDb, { id: user.id, email: user.email })) : null,
         named,
         limits,
         lastSync: engine.getStatus().lastSyncAt,
         signal: controller.signal,
-        onProgress: (progress) => setPhase({ name: 'working', progress, part: only ? 1 : part, first: undefined }),
+        onProgress: (progress) => { if (active()) setPhase({ name: 'working', progress, part: only ? 1 : part, first: undefined }); },
       });
-      if (controller.signal.aborted) {
+      if (!active()) {
         result.destroy();
         return;
       }
       book.current = result;
+      continuity.current = { book: result, signature: key, services: now.services, context: now.context };
       // Las que fallaron, juntas (D88): las de esta parte se suman; la reexportada sola sale de la lista si salió bien.
       // También las que salieron con alguna foto cuyo original no llegó a tiempo: *Export again* lo vuelve a intentar.
       const failedNow: Failure[] = result.pages
         .filter((p) => p.failed || p.timedOut > 0)
         .map((p) => ({ id: p.id, title: p.title, reason: p.failed ? (p.failReason ?? 'error') : 'timeout' }));
       setFailures((list) => {
+        if (!active()) return list;
         const rest = list.filter((f) => !result.pages.some((p) => p.id === f.id));
         return [...rest, ...failedNow];
       });
@@ -275,6 +335,7 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
       // En la computadora el diálogo se abre solo; en un táctil hace falta un toque (lo pide el navegador).
       if (!touch) openPrint(result);
     } catch (err) {
+      if (!current()) return;
       if (err instanceof ExportCancelled || controller.signal.aborted) {
         setPhase({ name: 'choose' });
       } else {
@@ -288,6 +349,7 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
   }
 
   function cancel() {
+    if (preparing) { generation.current++; setPreparing(false); return; }
     abort.current?.abort();
   }
 
@@ -302,8 +364,7 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
 
   /** *Export again*: esa página sola, en un PDF aparte. */
   function retry(id: string) {
-    const page = exportPlan(tree, 'page', id)[0];
-    if (page) void run(0, 1, page);
+    void run(0, 1, id);
   }
   const rootSize = plan[0] ? sizeLabel(plan[0].format.size === 'free' ? 'A4' : plan[0].format.size, tr) : 'A4';
   const pages = phase.name === 'ready' ? phase.book.pages : [];
@@ -327,7 +388,7 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
       >
         <h2>{tr('exportDialog.title', { title: shownTitle })}</h2>
 
-        {(phase.name === 'choose' || phase.name === 'failed') && (
+        {!preparing && (phase.name === 'choose' || phase.name === 'failed') && (
           <>
             {zipBusy ? null : target.kind === 'page' && inside > 0 ? (
               <fieldset className="export-what">
@@ -405,7 +466,14 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
           </>
         )}
 
-        {phase.name === 'working' && (
+        {preparing && (
+          <>
+            <p role="status">{tr('exportDialog.savingLocal')}</p>
+            <div className="modal-actions"><button onClick={cancel}>{tr('common.cancel')}</button></div>
+          </>
+        )}
+
+        {!preparing && phase.name === 'working' && (
           <>
             <div className="export-progress" role="status">
               <progress max={Math.max(1, phase.progress?.total ?? plan.length)} value={phase.progress?.done ?? 0} />
@@ -430,7 +498,7 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
           </>
         )}
 
-        {phase.name === 'ready' && (
+        {!preparing && phase.name === 'ready' && (
           <>
             <p>
               <strong>
@@ -481,9 +549,15 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
               </div>
             )}
             <p className="muted">{tr('exportDialog.margins')}</p>
+            {selectionChanged && <p className="error">{tr('exportDialog.selectionChanged')}</p>}
             <div className="modal-actions">
               <button onClick={props.onClose}>{tr('common.close')}</button>
-              {phase.book.to < phase.book.total ? (
+              {selectionChanged ? (
+                <>
+                  <button onClick={() => openPrint(phase.book)}>{tr('exportDialog.print')}</button>
+                  <button className="primary" disabled={mustPrintFirst} onClick={() => void run()} {...(mustPrintFirst ? { 'data-tip': tr('exportDialog.printFirst') } : {})}>{tr('exportDialog.retry')}</button>
+                </>
+              ) : phase.book.to < phase.book.total ? (
                 <>
                   {/* En un táctil el diálogo no se abrió solo: lo primero es abrirlo y guardar esta parte. */}
                   <button className={touch ? 'primary' : ''} onClick={() => openPrint(phase.book)}>

@@ -13,6 +13,7 @@ import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { ExportDialog } from './ExportDialog';
 import { appLinkSource, setMediaLinkSource } from './mediaLinks';
+import { watchPendingWrites } from './lazyPart';
 
 // La ventana *Export* arma los links a los archivos (P.30, Docs/Doc_Links_PDF.md, LF17, LF18 y la ronda 1 de la
 // auditoría de E1): con un link público *Can view* tildado, el token de ese link solo para sus páginas; destildado, nunca;
@@ -116,6 +117,7 @@ async function setup(level: 'comment' | 'edit', visitor = false, files: 'none' |
     sizes: d.sizes,
     shutdown: async () => undefined,
   } as unknown as Services;
+  unsets.push(watchPendingWrites({ owner: services, current: () => true, unsaved: () => false, flush: () => d.docs.flush() }));
   const host = document.createElement('div');
   document.body.append(host);
   const r = createRoot(host);

@@ -1,5 +1,13 @@
 # Exportar una página o un proyecto entero (P.22)
 
+## Guardado local antes del PDF (LF21, entrega parcial)
+
+*Export PDF*, *Prepare part…* y *Export again* preparan el título abierto y esperan hasta ocho segundos las escrituras locales. El sobrante de un título largo debe haber pasado al documento y quedar guardado antes de tomar su copia para exportar. La espera usa el consumidor habitual del sobrante y sus identificadores, sin duplicarlo. Si falla el guardado o cambia el workspace, la página o el dueño de la ventana, no empieza el PDF; *Cancel* invalida la preparación sin cancelar una escritura aceptada. No se espera la subida al servidor.
+
+Después de preparar se releen el título, las páginas elegidas, sus permisos y las opciones actuales. Para continuar una parte deben mantenerse los identificadores, el orden, la estructura y los formatos del plan anterior, además de sus opciones y límites. Si cambiaron, se conserva el PDF preparado y se ofrece *Export again* desde el principio; en un táctil primero se imprime la parte anterior. Los títulos actuales pueden cambiar sin reinterpretar los índices de páginas. Un resultado tardío no se imprime ni aparece en otro contexto.
+
+Este tramo no cambia el zip, la reimportación, los enlaces entre workspaces ni el cierre externo del navegador.
+
 **Estado: entregas 0 (v0.115), 1 (v0.122: el PDF de una rama o de un proyecto), 2 (v0.129: el zip), 1b (v0.134: los
 cambios de Lega al PDF, D84, D85 y D88: fotos en resolución completa, el PDF en partes y la lista de las que fallaron)
 y 3 (v0.141: volver a Shot Docs desde el zip, con su migración sin aplicar) hechas; la 4, pendiente** (roadmap P.22;

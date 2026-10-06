@@ -6,7 +6,7 @@ Los botones *Reload* de los avisos y el cambio, unión o creación de un workspa
 
 La comprobación final vuelve a mirar dueño, página, título y escrituras. Una nueva edición del título durante la espera invalida ese intento. Si la vista que preparaba el título ya no está disponible tras un error global, la recarga no toma esa ausencia como prueba de guardado. El editor y sus servicios siguen vivos mientras se espera.
 
-Este tramo no cierra LF21: quedan los enlaces entre workspaces y su exportación/reimportación. No cambia Auth, el cierre externo del navegador ni *beforeunload*, que continúa como aviso y no puede garantizar una espera. Desde v0.200 el título completo espera la confirmación de encabezado y sobrante; ante un rechazo mantiene el borrador en la misma sesión, como se detalla en «Límites».
+El PDF usa también esta preparación y espera a que el consumidor del sobrante del título lo haya escrito y guardado en el documento antes de tomar la copia exportable. La continuación de una parte comprueba el plan actual antes de liberar la anterior; si cambió su estructura u opciones, conserva ese libro y ofrece reiniciar explícitamente. Este tramo no cierra LF21: quedan los enlaces entre workspaces, el zip y la reimportación. No cambia Auth, el cierre externo del navegador ni *beforeunload*, que continúa como aviso y no puede garantizar una espera. Desde v0.200 el título completo espera la confirmación de encabezado y sobrante; ante un rechazo mantiene el borrador en la misma sesión, como se detalla en «Límites».
 
 Cómo funciona hoy la regla de no perder nunca información. El código está en `src/sync/` y las pruebas
 (`npm test`) en `src/sync/sync.test.ts`, `audit.test.ts` (los casos de la auditoría de la fase 1),

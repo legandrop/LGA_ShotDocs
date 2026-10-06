@@ -78,6 +78,11 @@ export const exportPdf = {
     es: "En el diálogo de imprimir, dejá los márgenes y la escala como están: de eso dependen los números de hoja del índice.",
   },
   'exportDialog.empty': { en: "There is nothing to export here.", es: "Acá no hay nada para exportar." },
+  'exportDialog.savingLocal': { en: "Saving changes on this device before export…", es: "Guardando los cambios en este dispositivo antes de exportar…" },
+  'exportDialog.selectionChanged': {
+    en: "The pages or their layout changed. Keep this PDF, or use Export again to start a new one from the beginning.",
+    es: "Cambiaron las páginas o su formato. Conservá este PDF o usá Exportar de nuevo para empezar uno nuevo desde el principio.",
+  },
   // Los links a los archivos con un link público (P.30, Docs/Doc_Links_PDF.md, 3.3, LF18).
   'exportDialog.fileLinksView': {
     en: "File links in this PDF use the public link of “{title}”: anyone with the PDF can open that page and the pages inside it.",

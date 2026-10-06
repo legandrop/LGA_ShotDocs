@@ -88,10 +88,10 @@ export function reloadByHand(): void {
 }
 
 /** Prepara una vez, espera sólo guardado local y ejecuta la salida sin otro await después del control final. */
-export async function saveBeforeExit(owner: object | null, current: () => boolean, action: () => void): Promise<boolean> {
+export async function saveBeforeExit(owner: object | null, current: () => boolean, action: () => void, ready: () => boolean = () => true): Promise<boolean> {
   const writes = pendingWrites;
   try {
-    if (!writes && !hadOwner && owner === null && current()) { action(); return true; }
+    if (!writes && !hadOwner && owner === null && current() && ready()) { action(); return true; }
     if (!writes || writes.owner !== owner || !current() || !writes.current?.()) throw new Error('Salida obsoleta');
     const stamp = writes.stamp?.();
     const deadline = Date.now() + reloadTimings.saveWaitMs;
@@ -102,7 +102,7 @@ export async function saveBeforeExit(owner: object | null, current: () => boolea
       () => { preparing = false; failed = true; },
     );
     const participant: PendingWrites = {
-      unsaved: () => preparing || failed || writes.unsaved(),
+      unsaved: () => preparing || failed || writes.unsaved() || !ready(),
       flush: async () => { await preparation; if (!failed) await writes.flush(); },
     };
     if (!(await waitForSaved(participant, deadline)) || pendingWrites !== writes || !writes.current?.() ||

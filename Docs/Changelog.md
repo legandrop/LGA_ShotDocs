@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.202 :
+
+Preparar un PDF podía copiar el título anterior mientras su campo todavía esperaba guardar, o tomar el documento antes de recibir el sobrante de un título largo. Ahora Export PDF, las partes siguientes y Export again preparan las escrituras locales y esperan hasta ocho segundos su confirmación y la transferencia habitual del sobrante al documento. Si falla el guardado o cambia el contexto, la ventana se conserva sin iniciar otro PDF; Cancel invalida la preparación sin cancelar una escritura aceptada. Títulos, permisos, páginas y opciones se releen después de esperar. La parte siguiente conserva el libro anterior si cambió el orden, la estructura, el formato o las opciones que determinan el corte, y ofrece reiniciar explícitamente. Se protegen avance, resultados tardíos e impresión frente a otro dueño. No cambia el zip, la reimportación ni las salidas externas.
+
+[Preparar el guardado local antes de exportar PDF y conservar la continuidad de sus partes]
+
 v0.201 :
 
 Los encabezados heredaban tamaños muy separados: H1 era tres veces el texto y H5 y H6 quedaban más pequeños que un párrafo. Ahora los menús ofrecen H1 a H5 con una escala progresiva; H5 tiene exactamente la fuente, el tamaño, el peso y la altura del texto normal en negrita. Los H6 existentes conservan su contenido y se ven como H5. Editorial conserva la familia de los encabezados grandes con peso 700 y el título de página mantiene su presentación. Contraste normal conserva el cuerpo del antiguo Más contraste; el nuevo Más contraste separa más el cuerpo del encabezado, con negritas próximas a la tinta plena. Las marcas oscuras de Script mantienen un piso legible. Colores elegidos, resaltados, links, esquema, importación y preferencias guardadas permanecen compatibles.
