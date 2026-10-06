@@ -1153,18 +1153,23 @@ export class PageDocs {
   /**
    * Una página que el servidor rechazó vuelve a intentarse (lo de `clearRejected`, para una sola). En modo link, la
    * primera edición guardada después de un rechazo lo hace (Docs/Doc_Link_Publico.md, E2.9: deshacer un pegado de más de
-   * 1 MB destraba la página sin reabrir la app).
+   * 1 MB destraba la página sin reabrir la app). Con `reason`, solo si el rechazo es por ese motivo (el de otra clase
+   * queda como está).
    */
-  async clearRejectedPage(pageId: string): Promise<boolean> {
+  async clearRejectedPage(pageId: string, reason?: string): Promise<boolean> {
     const state = await this.db.get('docState', pageId);
-    if (!state?.rejected) return false;
+    if (!state?.rejected || (reason !== undefined && state.rejected !== reason)) return false;
+    let cleared = false;
     await this.withLock(pageId, () =>
       updateDocState(this.db, pageId, (s) => {
+        // Se vuelve a mirar con la página tomada: una subida en vuelo pudo cambiar el motivo.
+        if (!s.rejected || (reason !== undefined && s.rejected !== reason)) return;
         s.rejected = undefined;
         s.pending = undefined;
+        cleared = true;
       }),
     );
-    return true;
+    return cleared;
   }
 
   /**

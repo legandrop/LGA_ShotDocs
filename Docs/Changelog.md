@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.217 :
+
+Lo rechazado por un "no existe" de la base quedaba esperando *Retry* o la reapertura de la app aunque la causa se hubiera revertido: ese código es también lo que la base contesta cuando la sesión dejó de ver o de poder editar la página. Ahora el contenido, los comentarios y los archivos rechazados así se reintentan solos cuando el árbol vuelve a mostrar la página, una vez por cada paso de "no" a "sí" y sin tocar rechazos de otra clase. Las menciones editadas mientras la página no se veía se olvidaban, porque la base contesta lo mismo por un comentario que no existe: ahora la cola pregunta por la página y, si no se ve, las deja a la vista hasta que vuelva; una mención sacada después ya no revive al reintentar. El estado dice en palabras que una página no se puede bajar.
+
+[Reintentar solo lo rechazado por "no existe" cuando la página vuelve, conservar las menciones de una página que no se ve y decir en palabras la página que no se puede bajar]
+
 v0.216 :
 
 *Download all* de una carpeta sacaba siempre el archivo del destino al cancelar o fallar. Ahora sigue la regla de la exportación (D308): saca solo uno vacío. Eso no conserva un zip que se eligió reemplazar: Chrome y Edge, los únicos con ese selector, lo vacían al elegirlo (leído en el código de Chromium, sin verlo en un navegador); pide otro diseño. Subir una carpeta pedía arrastrarla: el menú `/` suma *Folder*, que en una computadora abre el selector del sistema (D309). Quitar el workspace se llevaba sin aviso la lista de una carpeta a medio subir: la ventana dice cuántos archivos faltan y que la subida se corta (D310). Copiar o cortar links a páginas propias los dejaba sin workspace: lo que se pega afuera de la app lleva la dirección entera con su workspace; el documento y lo pegado adentro no cambian (D311).

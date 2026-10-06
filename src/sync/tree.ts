@@ -312,6 +312,14 @@ export class PageTree {
     return this.view.get(id);
   }
 
+  /**
+   * La página vino en la última bajada del árbol: la sesión la ve en el servidor. Una creada acá que todavía no subió,
+   * o una que el servidor dejó de mandar (sin permiso, en la papelera para quien no edita, de un proyecto borrado), no.
+   */
+  onServer(id: string): boolean {
+    return this.snapshot.has(id);
+  }
+
   /** Hasta qué `seq` del contenido de la página puede llegar este dispositivo (`serverSeqFor`, clean.ts). */
   serverSeq(row: PageRow): number {
     return serverSeqFor(row, this.baseReader?.(row.id) ?? false);

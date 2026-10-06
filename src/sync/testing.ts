@@ -2972,7 +2972,8 @@ export class FakeRemote
     this.server.check();
     this.server.mediaCalls.push(`register_file ${file.id}`);
     const page = this.server.pages.get(file.pageId);
-    if (!page) throw pageNotFound();
+    // `private.page_level(p_page_id) < 3`: sin poder editar la página (o en un proyecto borrado), no existe.
+    if (!page || this.server.pageInDeletedProject(file.pageId) || (this.team && this.server.pageLevel(this.userId, file.pageId) < 3)) throw pageNotFound();
     // supabase/migrations/20261006120000_version_minima_archivos.sql: la cola de archivos también manda la versión.
     this.checkAppVersion();
     const existing = this.server.mediaFiles.get(file.id);
@@ -3015,7 +3016,7 @@ export class FakeRemote
     this.server.check();
     this.server.mediaCalls.push(`link_page_file ${pageId} ${fileId}`);
     const page = this.server.pages.get(pageId);
-    if (!page) throw pageNotFound();
+    if (!page || this.server.pageInDeletedProject(pageId) || (this.team && this.server.pageLevel(this.userId, pageId) < 3)) throw pageNotFound();
     this.checkAppVersion();
     const file = this.server.mediaFiles.get(fileId);
     if (!file) throw fileNotFound();

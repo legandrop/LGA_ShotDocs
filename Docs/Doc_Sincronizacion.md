@@ -682,7 +682,9 @@ portero) y `picker.ts` (el selector de carpetas de Google).
   arreglar solo (sesión renovándose, Drive sin conectar, 5xx) se reintenta esperando cada vez más, hasta
   10 minutos, con el error a la vista. Lo que no (`page_not_found`, `file_other_project`, un 400, 403 o
   404 del portero, o el 409 de un archivo que la base tiene con otro archivo de Drive) queda detenido y a la vista, **sin descartar el archivo**, y se reintenta con "Retry" o
-  al abrir la app (lo detenido se vuelve a registrar: `register_file` es idempotente). Si el servidor dice
+  al abrir la app (lo detenido se vuelve a registrar: `register_file` es idempotente). Lo detenido por
+  `page_not_found`, y el uso de un archivo que espera por lo mismo, salen solos cuando la página vuelve a ser
+  editable (v0.217; ver "Un 'no existe' se reintenta solo cuando la página vuelve"). Si el servidor dice
   que no existe un archivo que acá figura registrado (un 404 del portero, `file_not_found`), se vuelve a
   registrar en vez de detenerlo; recién si sigue igual tres veces seguidas, se detiene.
 - **Subidas que se traban:** un pedido al portero que deja de moverse (sin error de red) se corta y el
@@ -877,7 +879,12 @@ Paso 10 de `Plan_Workspaces.md` (sección 4), con la base en la versión 5
   en el dispositivo con el motivo en palabras, en el panel (junto al comentario) y en el estado ("rejected
   by the server"), **y no se descarta solo**: se reintenta con "Retry" o al abrir la app, va en el archivo
   de "Download my unsynced changes", y solo la persona puede descartarlo ("Discard…", en el panel o en el
-  detalle del estado). Antes de descartar, la app dice qué pasa (el comentario vuelve como está en el
+  detalle del estado). Los rechazados porque la página "no existe" salen solos cuando la página vuelve a verse
+  (v0.217; ver "Un 'no existe' se reintenta solo cuando la página vuelve"). Las menciones de un comentario
+  (`set_comment_mentions`) reciben `comment_not_found` tanto si el comentario no existe como si la sesión no ve su
+  página: la cola le pregunta a la base por la página (`list_comments`) y, si no se ve, las deja rechazadas a la
+  vista, con la edición de su comentario, en vez de olvidarlas; salen detrás de la edición cuando la página vuelve
+  (`Doc_Menciones.md`, 3.3). Antes de descartar, la app dice qué pasa (el comentario vuelve como está en el
   servidor, el hilo se reabre, se van también N respuestas sin subir) y ofrece copiar el texto. **Un cambio
   rechazado no se aplica en pantalla:** un borrado que la base no aceptó deja ver el comentario, y una
   edición de un comentario que otro borró lo muestra borrado, las dos con el motivo. Borrar un comentario
@@ -939,7 +946,8 @@ sin esperarla, la cola de fotos y videos, que tiene su propio ciclo (ver "Archiv
 **Qué es un rechazo y qué una falla pasajera** (`toRemoteError` en `remote.ts`; lo usan todos los pedidos a la base).
 Sin red, una sesión que se está renovando (401) y los estados 408, 425, 429 y 500 o más son pasajeros: el pedido se
 repite en la vuelta siguiente y, si es contenido, la vuelta se corta ahí. Lo demás es un rechazo definitivo: queda a la
-vista con su motivo y se reintenta a mano o al abrir la app. **Desde v0.214, un "no existe" de una función de la base es
+vista con su motivo y se reintenta a mano o al abrir la app (y, si es un "no existe", solo cuando la página vuelve:
+ver abajo). **Desde v0.214, un "no existe" de una función de la base es
 definitivo aunque llegue con estado 500.** Las funciones lo levantan con el código `P0002` (`page_not_found`,
 `file_not_found`, `comment_not_found`, `link_not_found`, `version_not_found`…, también cuando la sesión dejó de ver la
 página) y PostgREST le pone 400 solo al `P0001`: a los demás códigos `P0…` les pone 500. Con el estado solo, la app lo
@@ -949,6 +957,41 @@ queda rechazada (lo escrito sigue en el dispositivo) y las demás siguen. Un 500
 siendo pasajero, igual que el 503 `app_outdated`. El archivo que todavía no llegó al servidor (`file_not_found`) se
 sigue esperando: la cola de fotos y videos lo reconoce por el mensaje, no por esto. El servidor en memoria de un link
 contesta como la base (500 con `P0002`). Pruebas: `src/sync/remoteErrors.test.ts`.
+
+**Un "no existe" se reintenta solo cuando la página vuelve (v0.217; `retryReturned` en `engine.ts`).** Ese "no existe"
+es también lo que la base contesta cuando la sesión dejó de ver o de poder editar la página, y eso se revierte: le
+devuelven el permiso, la página sale de la papelera (una invitada, o quien no edita, no la ve mientras está ahí),
+restauran el proyecto. El
+dato llega con el árbol y los permisos que baja cada ciclo. Con algo rechazado así, cuando una bajada del árbol muestra
+la página en "no" y una posterior en "sí", se limpia ese rechazo y sale en ese mismo ciclo, sin *Retry* ni reabrir la
+app: el contenido rechazado con `page_not_found` y los archivos detenidos o los usos que esperan por lo mismo, cuando
+la página vuelve a ser **editable** (está en el árbol y los permisos bajados dan Editar; sin datos de permisos, alcanza
+con que esté); los comentarios rechazados con `page_not_found`, `comment_not_found` o `thread_not_found`, cuando la
+página vuelve a **verse** (está en el árbol). El cliente solo decide cuándo reintentar: si puede o no, lo sigue
+decidiendo la base.
+- **Sin bucle:** hay un reintento por cada vez que el árbol pasa de "no" a "sí", nunca uno por ciclo. Las páginas
+  que se esperan se anotan en memoria cuando el árbol las muestra en "no"; el reintento las saca de la lista. Si la
+  base vuelve a rechazar, lo escrito sigue en el dispositivo, rechazado y a la vista como antes, y no hay otro
+  reintento hasta que el árbol vuelva a decir "no" y otra vez "sí".
+- **Cuándo se anota el "no":** al bajar el árbol (lo que ya estaba rechazado) y, con ese mismo árbol, en el momento
+  de cada rechazo nuevo: el contenido, apenas la base lo rechaza (`noteLocked`: no espera al final del ciclo, que se
+  puede cortar más abajo si se cae la red); los comentarios, al terminar la vuelta de su cola (`noteHidden`); los
+  archivos, al terminar la vuelta de la suya, que corre después del ciclo (`noteFilesLocked`). Así el "no" queda
+  anotado aunque la app pase sin red todo el rato que dura, y lo rechazado sale solo cuando vuelven la red y la página.
+- **Si la página vuelve solo para ver:** el comentario rechazado se reintenta esa vez, la base lo rechaza por permiso
+  (`comment_denied`, otra clase) y desde ahí no sale solo aunque después llegue el permiso de comentar: queda a la
+  vista para *Retry* o la próxima apertura. Lo mismo no pasa con el contenido ni con los archivos, que esperan a que
+  la página sea editable.
+- **Solo esa clase:** un rechazo por tamaño, por la versión mínima, por un conflicto o por falta del permiso de
+  comentar no se toca; tampoco los cambios del árbol rechazados (renombrar o mover: gana el último que llega, y
+  reintentarlos solos podría pisar un cambio más nuevo de otra persona).
+- **Lo que no cubre:** si el permiso se va y vuelve entre dos bajadas del árbol, el dispositivo nunca ve el "no" y
+  lo rechazado queda para *Retry* o para la próxima apertura de la app, como antes. La lista es por apertura (al
+  abrir se reintenta todo igual).
+- **En el estado:** mientras una página no se puede bajar o subir por esto, el detalle lo dice en palabras ("The page
+  is not on the server, or you can no longer see it." / "…or you cannot edit it."), no con el código de la base.
+
+Pruebas: `src/sync/rejectedReturn.test.ts`.
 
 **Cada consulta a la base tiene un tope de tiempo** (`timed` en `remote.ts`, con `abortSignal`; también
 las de los comentarios y las de la cola de fotos y videos). Sin él, una respuesta que no llegaba nunca (una

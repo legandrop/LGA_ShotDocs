@@ -809,8 +809,9 @@ export class Portero {
       ? await this.rpc(who.auth, 'plink_media_file', { p_file: file }, who.link)
       : await this.rpc(who.auth, 'media_file', { p_file_id: file });
     if (who.link && !res.ok) {
-      // La base contesta `link_not_found` (revocado, vencido, reseteado: P0002, que PostgREST da como 404) o
-      // `link_rate_limited` (un tope del día); una base sin la migración, PGRST202.
+      // La base contesta `link_not_found` (revocado, vencido, reseteado: P0002, que PostgREST da con estado 500, no
+      // 404: por eso abajo un 500 con ese mensaje no cuenta como una falla de la base) o `link_rate_limited` (un tope
+      // del día); una base sin la migración, PGRST202.
       const error = (await res.json().catch(() => null)) as { message?: string; code?: string } | null;
       if (error?.code === 'PGRST202') throw new HttpError(502, 'The workspace database is not up to date for links yet.');
       if (error?.message === 'link_rate_limited') throw new HttpError(429, 'This link has been used a lot today.', 'link_rate_limited');

@@ -594,14 +594,18 @@ export class CommentQueue {
 
   /**
    * Edita un comentario propio. `mentions`: el conjunto nuevo de menciones (sin pasarlo, no cambian); si es el mismo
-   * que ya tiene, no se manda nada.
+   * que ya tiene, no se manda nada. Con el conjunto dado, las menciones rechazadas de una edición anterior del mismo
+   * comentario salen de la cola: vale el conjunto como lo deja esta edición (si no, al reintentarlas volvería una
+   * mención que la persona ya sacó).
    */
   async edit(pageId: string, id: string, body: string, mentions?: MentionRef[]): Promise<void> {
     const text = cleanBody(body);
     const at = this.stamp();
     let named = mentions ? this.mentionsOp(id, pageId, mentions, at) : null;
+    const replaces = named !== null;
+    // Contra lo que el comentario tiene sin contar lo rechazado (la vista no lo aplica): lo bajado y lo que espera subir.
     if (named && sameMentions(toRows(this.view(pageId).get(id)?.mentions ?? []), named.mentions, this.userId)) named = null;
-    await this.enqueue({ kind: 'edit', id, pageId, body: text, at }, named);
+    await this.enqueue({ kind: 'edit', id, pageId, body: text, at }, named, replaces);
   }
 
   /** La operación `mentions` de un comentario (sin repetidos ni uno mismo, hasta 20); `null` si la base no las tiene. */
@@ -700,17 +704,34 @@ export class CommentQueue {
     return ops.length;
   }
 
-  /** Vuelve a intentar lo rechazado (el botón "Retry" y cada vez que se abre la app). */
-  async retryFailed(): Promise<void> {
-    if (!this.db || !this.ops.some((o) => o.failed)) return;
+  /** Vuelve a intentar lo rechazado (el botón "Retry" y cada vez que se abre la app). `only`: solo esos cambios. */
+  async retryFailed(only: (entry: QueuedCommentOp) => boolean = () => true): Promise<void> {
+    if (!this.db || !this.ops.some((o) => o.failed && only(o))) return;
     const tx = this.db.transaction('outbox', 'readwrite');
     for (const entry of await tx.store.getAll()) {
-      if (!entry.failed) continue;
+      if (!entry.failed || !only(entry)) continue;
       await tx.store.put({ ...entry, failed: false, error: null });
     }
     await tx.done;
     await this.reloadOps();
     this.onQueued?.();
+  }
+
+  /**
+   * Las páginas con cambios rechazados porque la base dijo que algo no existe (`page_not_found`, `comment_not_found`,
+   * `thread_not_found`), que es también lo que contesta cuando la sesión dejó de ver la página.
+   */
+  notFoundPages(): string[] {
+    return [...new Set(this.ops.filter((o) => o.failed && isNotFoundRejection(o.error)).map((o) => o.op.pageId))];
+  }
+
+  /**
+   * De estas páginas, vuelve a intentar solo lo rechazado por "no existe": la sincronización lo llama cuando el árbol
+   * vuelve a mostrarlas (ver `retryReturned` en engine.ts). Un rechazo de otra clase (sin permiso para comentar, un
+   * conflicto) queda a la vista como estaba.
+   */
+  retryNotFound(pageIds: ReadonlySet<string>): Promise<void> {
+    return this.retryFailed((entry) => pageIds.has(entry.op.pageId) && isNotFoundRejection(entry.error));
   }
 
   /**
@@ -881,13 +902,20 @@ export class CommentQueue {
 
   private async push(isPageUnsent: (pageId: string) => boolean): Promise<void> {
     const waiting = new Set<string>();
+    // Las páginas que la base dijo en esta pasada que no se ven (ver `sendMentions`).
+    const unseen = new Set<string>();
     for (;;) {
       if (this.stopped) return;
       const entry = await this.claimNext(waiting, isPageUnsent);
       if (!entry) return;
       let result: unknown;
       try {
-        result = await this.send(entry.op);
+        result = entry.op.kind === 'mentions' ? await this.sendMentions(entry.op, unseen) : await this.send(entry.op);
+        if (result === GONE) {
+          // El comentario no está en la base aunque su página se ve: no hay nada que arreglar a mano.
+          await this.forget(entry);
+          continue;
+        }
       } catch (err) {
         if (entry.op.kind === 'mentions' && isMissingFunction(err) && this.mentionsReady) {
           // La base dice que tiene menciones (versión 15) pero la API todavía no ve la función (recarga su caché
@@ -895,7 +923,8 @@ export class CommentQueue {
           throw new RemoteError(errorMessage(err), false, 'PGRST202');
         }
         if (entry.op.kind === 'mentions' && isGoneForMentions(err)) {
-          // El comentario ya no está o no se ve (o la base no tiene menciones): no hay nada que arreglar a mano.
+          // El comentario se borró (o la base no tiene menciones): no hay nada que arreglar a mano. Un
+          // `comment_not_found` que llega hasta acá es de una página que no se ve: sigue abajo y queda a la vista.
           await this.forget(entry);
           continue;
         }
@@ -914,6 +943,50 @@ export class CommentQueue {
       this.dirty.add(entry.op.pageId);
       if (entry.op.kind === 'add') this.onUploaded?.();
     }
+  }
+
+  /**
+   * Manda unas menciones. `set_comment_mentions` contesta `comment_not_found` tanto si el comentario no existe como si
+   * la sesión no ve su página (le sacaron el permiso, está en la papelera, borraron el proyecto), y en el segundo caso
+   * olvidarlas las perdería: tienen que salir cuando la página vuelva. Con esa respuesta se le pregunta a la base por
+   * la página (`commentOnServer`): si no se ve, el error sigue y las menciones quedan rechazadas a la vista, con la
+   * edición de su comentario, hasta reintentar; si se ve y el comentario no está (o está borrado), devuelve `GONE`; y
+   * si está (volvió a verse entre los dos pedidos), se mandan una vez más, una sola: si la base vuelve a contestar lo
+   * mismo, quedan rechazadas.
+   *
+   * `unseen`: las páginas que la base ya dijo en esta pasada que no se ven. Por ellas no se vuelve a preguntar (varias
+   * menciones de una página que no se ve cuestan una sola lista). Solo se recuerda el "no se ve": una lista de una
+   * página que sí se ve no sirve para un comentario que entró después de pedirla.
+   */
+  private async sendMentions(op: MentionsOp, unseen: Set<string>): Promise<unknown> {
+    try {
+      return await this.send(op);
+    } catch (err) {
+      if (!(isPermanent(err) && errorMessage(err) === 'comment_not_found')) throw err;
+      const found = unseen.has(op.pageId) ? 'unseen' : await this.commentOnServer(op);
+      if (found === 'gone') return GONE;
+      if (found === 'there') return this.send(op);
+      unseen.add(op.pageId);
+      throw err;
+    }
+  }
+
+  /**
+   * Qué dice la base de un comentario, mirando su página con `list_comments` (que tira `page_not_found` solo si la
+   * sesión no la ve): `unseen` si no se ve o no se puede saber (una base sin la función), `gone` si se ve y el
+   * comentario no está o está borrado, `there` si está. Una falla pasajera tira, y las menciones esperan en la cola.
+   */
+  private async commentOnServer(op: MentionsOp): Promise<'unseen' | 'gone' | 'there'> {
+    let rows: ListedComment[] | null;
+    try {
+      rows = this.remote.listComments ? await this.remote.listComments(op.pageId, null) : null;
+    } catch (err) {
+      if (isPermanent(err)) return 'unseen';
+      throw err;
+    }
+    if (!rows) return 'unseen';
+    const row = rows.find((r) => r.id === op.id);
+    return row && !row.deleted_at ? 'there' : 'gone';
   }
 
   /** Saca de la cola, sin error a la vista, unas menciones que ya no tienen dónde ir (y su copia en `meta`). */
@@ -1192,17 +1265,20 @@ export class CommentQueue {
     return this.writing > 0;
   }
 
-  private async enqueue(op: CommentOp, mentions: Extract<CommentOp, { kind: 'mentions' }> | null = null): Promise<void> {
+  private async enqueue(op: CommentOp, mentions: MentionsOp | null = null, replacesMentions = false): Promise<void> {
     this.writing++;
     try {
-      await this.enqueueNow(op, mentions);
+      await this.enqueueNow(op, mentions, replacesMentions);
     } finally {
       this.writing--;
     }
   }
 
-  /** `mentions`: las menciones del alta o la edición, que entran detrás en la misma transacción. */
-  private async enqueueNow(op: CommentOp, mentions: Extract<CommentOp, { kind: 'mentions' }> | null = null): Promise<void> {
+  /**
+   * `mentions`: las menciones del alta o la edición, que entran detrás en la misma transacción. `replacesMentions`: la
+   * edición trae el conjunto entero de menciones (aunque sea el mismo que ya tiene y no entre ninguna operación).
+   */
+  private async enqueueNow(op: CommentOp, mentions: MentionsOp | null = null, replacesMentions = false): Promise<void> {
     if (!this.db) throw new CommentInvalid(t('commentError.off', { reason: localize(this.unavailable ?? '') }));
     const tx = this.db.transaction(['outbox', 'meta'], 'readwrite');
     const store = tx.objectStore('outbox');
@@ -1253,6 +1329,19 @@ export class CommentQueue {
     }
     if (!done) {
       await store.add({ op, attempted: false, failed: false, error: null, queuedAt: this.now() });
+    }
+    if (replacesMentions) {
+      // Las menciones rechazadas de este comentario eran de una edición anterior: ya no valen. La copia en `meta` (la
+      // que vuelve a la cola al abrir la app) pasa a ser la de las que siguen esperando; si no queda ninguna ni entra
+      // una ahora, se olvida.
+      const ofComment = all.filter((e) => e.op.kind === 'mentions' && e.op.id === op.id);
+      const stale = ofComment.filter((e) => e.failed);
+      const live = ofComment.filter((e) => !e.failed);
+      for (const e of stale) await store.delete(e.seq!);
+      if (stale.length > 0 && !mentions) {
+        if (live.length > 0) await tx.objectStore('meta').put(live[live.length - 1].op, MENTIONS_KEY + op.id);
+        else await tx.objectStore('meta').delete(MENTIONS_KEY + op.id);
+      }
     }
     if (mentions) {
       // Unas menciones sin mandar del mismo comentario se reemplazan (queda la última); si no, van detrás.
@@ -1486,10 +1575,27 @@ function sameMentions(rows: { user_id: string }[], mentions: MentionRef[], me: s
   return a.size === b.size && [...a].every((id) => b.has(id));
 }
 
-/** Un rechazo de unas menciones que no tiene arreglo a mano: el comentario no está, se borró, o la base no las tiene. */
+/**
+ * Un rechazo de unas menciones que no tiene arreglo a mano: el comentario se borró (`comment_deleted`: la base lo dice
+ * solo a quien ve la página) o la base no las tiene. `comment_not_found` no está acá: también lo contesta cuando la
+ * sesión no ve la página, y eso se puede revertir (ver `sendMentions`).
+ */
 function isGoneForMentions(err: unknown): boolean {
-  const message = errorMessage(err);
-  return (isPermanent(err) && (message === 'comment_not_found' || message === 'comment_deleted')) || isMissingFunction(err);
+  return (isPermanent(err) && errorMessage(err) === 'comment_deleted') || isMissingFunction(err);
+}
+
+/** `sendMentions`: el comentario de unas menciones no está en la base (y su página se ve). */
+const GONE = Symbol('gone');
+
+type MentionsOp = Extract<CommentOp, { kind: 'mentions' }>;
+
+/**
+ * El motivo guardado de un cambio rechazado es un "no existe" de la base (`P0002`): el código, o el texto con que se
+ * guarda (`commentErrorText`). Lo contesta también cuando la sesión dejó de ver la página, y eso se puede revertir.
+ */
+function isNotFoundRejection(error: string | null): boolean {
+  if (!error) return false;
+  return ['page_not_found', 'comment_not_found', 'thread_not_found'].some((code) => error === code || error === commentErrorText(code));
 }
 
 /** La API no tiene la función (base sin migrar, o caché de la API todavía sin recargar). */

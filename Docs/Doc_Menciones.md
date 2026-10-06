@@ -47,8 +47,8 @@ auditoría», al final. **Va después del link público** (su migración sube a 
 - **La app** detecta la base con `MENTIONS_SCHEMA_VERSION = 15` (`src/sync/comments.ts`): con la base en 14, el `@` es
   texto, no hay lista ni campana y no sale ninguna operación nueva. La cola suma la operación `mentions` (en la misma
   transacción que el alta o la edición, con su copia en `meta` `mentions:<id>` y su recuperación al abrir); las de un
-  alta rechazada esperan con ella; `comment_not_found`, `comment_deleted` y una base sin la función las descartan en
-  silencio. A quién no avisó la base queda en `meta` `unnotified:<id>` y solo lo ve el autor.
+  alta rechazada esperan con ella; `comment_deleted` y una base sin la función las descartan en silencio, y
+  `comment_not_found` solo si la página se ve (desde v0.217; sección 3.3). A quién no avisó la base queda en `meta` `unnotified:<id>` y solo lo ve el autor.
 - **La campana** es `src/sync/mentions.ts` (`MentionsInbox`): pregunta al abrir, cada 60 s con la ventana a la vista,
   al volver a la ventana o a la red y después de subir un comentario propio; concilia con `mentions_index` cuando el
   número no coincide y al abrirla; las leídas van primero a `meta` `inbox:read` y no cuentan como cambios sin subir. La
@@ -272,9 +272,27 @@ funciones (sección 7).
 - La base local de comentarios **no cambia de versión** (una versión vieja no podría abrirla): todo lo nuevo va en
   stores que ya existen (`outbox`, `meta`).
 - **Rechazos:** `comment_denied`, `not_allowed` y `app_outdated` se tratan como hoy (a la vista, con *Retry* y
-  *Discard…*). `comment_not_found` y `comment_deleted` sobre una operación `mentions` se **descartan en silencio** (el
-  comentario ya no está o no se ve: la persona no puede arreglar nada), y se borra su copia en `meta`. Que la base
-  descarte a alguien no es un rechazo (2.2).
+  *Discard…*). `comment_deleted` sobre una operación `mentions` se **descarta en silencio** (el comentario se borró: la
+  persona no puede arreglar nada), y se borra su copia en `meta`. Que la base descarte a alguien no es un rechazo (2.2).
+- **`comment_not_found` no alcanza para descartar (v0.217).** La base lo contesta igual si el comentario no existe y si
+  la sesión no ve su página (le sacaron el permiso, está en la papelera, borraron el proyecto), y lo segundo se
+  revierte: olvidar las menciones ahí las perdía aunque la edición del comentario quedara para reintentar. Con esa
+  respuesta la cola le pregunta a la base por la página con `list_comments`, que da `page_not_found` solo si la sesión
+  no la ve: si no se ve (o no se puede saber), las menciones quedan **rechazadas a la vista**, en la cola y con su
+  copia en `meta`, y salen detrás de la edición con *Retry*, al abrir la app o solas cuando el árbol vuelve a mostrar
+  la página (`Doc_Sincronizacion.md`); si se ve y el comentario no está o está borrado, se descartan en silencio como
+  antes; si está (la página volvió entre los dos pedidos), se mandan una vez más, una sola: si la base contesta lo
+  mismo, quedan rechazadas. Una falla pasajera de esa pregunta las deja en la cola, sin rechazo. La respuesta "no se
+  ve" se recuerda por página dentro de cada pasada de la cola: varias menciones de una página que no se ve cuestan
+  una sola lista (la de una página que sí se ve no se recuerda: no serviría para un comentario que entró después de
+  pedirla). Lo que no se distingue con lo que la base contesta hoy: una página borrada para siempre de una que no se
+  ve; en los dos casos las menciones quedan a la vista hasta que la persona las descarta.
+- **Una edición con el conjunto de menciones reemplaza las rechazadas del mismo comentario (v0.217).** Lo rechazado no
+  cuenta para saber qué menciones tiene un comentario, así que una edición que sacaba a alguien nombrado en una
+  edición anterior rechazada no encolaba nada, y al reintentar volvía la mención que la persona ya había sacado (con
+  *Retry* desde antes; desde v0.217, también sola al volver la página). Ahora esa edición saca de la cola las
+  `mentions` rechazadas del comentario y deja la copia en `meta` en la de las que siguen esperando, o la olvida si no
+  queda ninguna: vale el conjunto como lo deja la última edición.
 - **Un comentario que se borra antes de subir** se lleva su `mentions` y su copia en `meta` (si su alta no viaja,
   tampoco sus menciones). La copia en `meta` se borra siempre que el servidor confirma o descarta la operación, como
   `import`: así un descarte no la vuelve a poner en la cola en cada apertura.

@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { CommentQueue, commentsDbName, openCommentsDb, type MentionRef } from './comments';
 import * as Comments098 from './fixtures/v098/comments';
 import { MentionsInbox } from './mentions';
+import { toRemoteError } from './remote';
 import { FakeRemote, FakeServer, makeDevice, type Device } from './testing';
+import { RemoteError } from './types';
 
 // Menciones en comentarios (P.21, entrega 1; Docs/Doc_Menciones.md): la operación `mentions` en la cola (detrás del
 // alta, junta con la anterior sin mandar, reintentos, descartes, una versión vieja que la saca de la cola) y la
@@ -52,6 +54,12 @@ async function workspace(options: { mentions?: boolean } = {}) {
   const ana = await device(server, { id: ANA });
   await ana.engine.syncNow();
   return { server, owner, ana, brief, notes };
+}
+
+/** Le saca a alguien su permiso sobre la página: deja de verla. */
+function ungrant(server: FakeServer, userId: string, pageId: string): void {
+  const at = server.grants.findIndex((g) => g.user_id === userId && g.page_id === pageId);
+  if (at >= 0) server.grants.splice(at, 1);
 }
 
 const beto: MentionRef = { userId: BETO, label: 'beto' };
@@ -177,6 +185,263 @@ describe('la cola', () => {
     expect(ana.engine.getStatus()).toMatchObject({ pendingComments: 0, failedComments: 0 });
     expect(await ana.commentsDb.get('meta', `mentions:${id}`)).toBeUndefined();
     expect(server.mentions).toHaveLength(0);
+  });
+
+  it('las menciones de una edición hecha mientras la página no se ve no se olvidan: quedan con la edición y salen cuando la página vuelve', async () => {
+    const { server, owner, ana, brief } = await workspace();
+    const stop = ana.comments.watch(brief);
+    const id = await ana.comments.add(brief, null, 'fijate la toma 12');
+    await ana.engine.syncNow();
+    // Le sacan la página: la base contesta `comment_not_found` por la edición y también por las menciones.
+    ungrant(server, ANA, brief);
+    await ana.comments.edit(brief, id, '@beto fijate la toma 12', [beto]);
+    await ana.engine.syncNow();
+    expect(ana.comments.failures().map((f) => f.kind)).toEqual(['edit', 'mentions']);
+    expect(ana.engine.getStatus()).toMatchObject({ failedComments: 2, pendingComments: 0 });
+    // Siguen en el dispositivo: en la cola y en su copia.
+    expect(await ana.commentsDb.count('outbox')).toBe(2);
+    expect(await ana.commentsDb.get('meta', `mentions:${id}`)).toBeTruthy();
+    expect(server.mentions).toHaveLength(0);
+    // Mientras no la vea, no se vuelve a pedir nada.
+    const calls = server.commentCalls.length;
+    await ana.engine.syncNow();
+    expect(server.commentCalls.filter((c) => c.startsWith('set_') || c.startsWith('edit')).length).toBe(
+      server.commentCalls.slice(0, calls).filter((c) => c.startsWith('set_') || c.startsWith('edit')).length,
+    );
+
+    // Vuelve a verla: salen la edición y, detrás, las menciones. Beto se entera.
+    server.grant(ANA, { pageId: brief }, 'comment');
+    await ana.engine.syncNow();
+    expect(ana.engine.getStatus()).toMatchObject({ failedComments: 0, pendingComments: 0 });
+    expect(server.comments.get(id)?.body).toBe('@beto fijate la toma 12');
+    expect(server.mentions).toMatchObject([{ comment_id: id, user_id: BETO, label: 'beto' }]);
+    expect(await ana.commentsDb.get('meta', `mentions:${id}`)).toBeUndefined();
+    stop();
+    const s2 = owner.comments.watch(brief);
+    await owner.engine.syncNow();
+    expect(owner.comments.threads(brief)[0].root).toMatchObject({ body: '@beto fijate la toma 12', mentions: [beto] });
+    s2();
+    const b = await inboxOf(server, BETO);
+    expect(b.mentions.getSnapshot()).toMatchObject({ unread: 1 });
+  });
+
+  it('unas menciones que salen solas mientras la página no se ve (la edición ya había entrado) quedan a la vista y salen con Retry', async () => {
+    const { server, ana, brief } = await workspace();
+    const id = await ana.comments.add(brief, null, 'fijate la toma 12');
+    await ana.engine.syncNow();
+    // La edición entra y, antes de que salgan las menciones, le sacan la página.
+    const edit = ana.remote.editComment.bind(ana.remote);
+    ana.remote.editComment = async (commentId, body) => {
+      await edit(commentId, body);
+      ungrant(server, ANA, brief);
+    };
+    await ana.comments.edit(brief, id, '@beto fijate la toma 12', [beto]);
+    await ana.engine.syncNow();
+    expect(server.comments.get(id)?.body).toBe('@beto fijate la toma 12');
+    expect(ana.comments.failures()).toMatchObject([{ kind: 'mentions', pageId: brief }]);
+    expect(await ana.commentsDb.get('meta', `mentions:${id}`)).toBeTruthy();
+    expect(server.mentions).toHaveLength(0);
+
+    server.grant(ANA, { pageId: brief }, 'comment');
+    await ana.comments.retryFailed();
+    await ana.engine.syncNow();
+    expect(ana.engine.getStatus()).toMatchObject({ failedComments: 0, pendingComments: 0 });
+    expect(server.mentions).toMatchObject([{ comment_id: id, user_id: BETO }]);
+  });
+
+  it('si el comentario no está en la base y su página se ve, las menciones se descartan en silencio: lo dice la lista de la página', async () => {
+    const { server, ana, brief } = await workspace();
+    const id = await ana.comments.add(brief, null, '@beto', null, [beto]);
+    // El alta llega y su respuesta se pierde; después la fila desaparece de la base (no hay nada que arreglar a mano).
+    server.loseCommentResponse.add('add');
+    await ana.engine.syncNow();
+    expect(ana.engine.getStatus().pendingComments).toBe(2);
+    const row = server.comments.get(id)!;
+    server.comments.delete(id);
+    // El alta vuelve a entrar (es idempotente) y la fila se va otra vez antes de las menciones.
+    const add = ana.remote.addComment.bind(ana.remote);
+    ana.remote.addComment = async (c) => {
+      server.comments.set(id, row);
+      await add(c);
+      server.comments.delete(id);
+    };
+    await ana.engine.syncNow();
+    expect(server.commentCalls.filter((c) => c.startsWith('set_comment_mentions'))).toHaveLength(1);
+    expect(server.commentCalls).toContain('list all');
+    expect(ana.engine.getStatus()).toMatchObject({ pendingComments: 0, failedComments: 0 });
+    expect(await ana.commentsDb.get('meta', `mentions:${id}`)).toBeUndefined();
+  });
+
+  it('si la página volvió a verse entre el rechazo y la pregunta, las menciones se mandan otra vez y entran', async () => {
+    const { server, ana, brief } = await workspace();
+    const id = await ana.comments.add(brief, null, 'fijate la toma 12');
+    await ana.engine.syncNow();
+    // La primera vez, la base contesta que no existe (como PostgREST: 500 con `P0002`); la página ya se ve de nuevo.
+    const set = ana.remote.setCommentMentions.bind(ana.remote);
+    let refused = 0;
+    ana.remote.setCommentMentions = async (commentId, mentions) => {
+      if (refused++ === 0) throw toRemoteError({ message: 'comment_not_found', code: 'P0002' }, 500);
+      return set(commentId, mentions);
+    };
+    await ana.comments.edit(brief, id, '@beto fijate la toma 12', [beto]);
+    await ana.engine.syncNow();
+    expect(refused).toBe(2);
+    expect(server.mentions).toMatchObject([{ comment_id: id, user_id: BETO }]);
+    expect(ana.engine.getStatus()).toMatchObject({ failedComments: 0, pendingComments: 0 });
+  });
+
+  it('si no se puede preguntar por la página (una falla pasajera), las menciones esperan en la cola sin rechazo ni olvido', async () => {
+    const { server, ana, brief } = await workspace();
+    const id = await ana.comments.add(brief, null, 'fijate la toma 12');
+    await ana.engine.syncNow();
+    const edit = ana.remote.editComment.bind(ana.remote);
+    ana.remote.editComment = async (commentId, body) => {
+      await edit(commentId, body);
+      ungrant(server, ANA, brief);
+    };
+    const list = ana.remote.listComments.bind(ana.remote);
+    ana.remote.listComments = async () => {
+      throw new RemoteError('Internal Server Error', false, '500');
+    };
+    await ana.comments.edit(brief, id, '@beto fijate la toma 12', [beto]);
+    await ana.engine.syncNow();
+    expect(ana.engine.getStatus()).toMatchObject({ failedComments: 0, pendingComments: 1 });
+    expect(await ana.commentsDb.get('meta', `mentions:${id}`)).toBeTruthy();
+
+    ana.remote.listComments = list;
+    server.grant(ANA, { pageId: brief }, 'comment');
+    await ana.engine.syncNow();
+    expect(server.mentions).toMatchObject([{ comment_id: id, user_id: BETO }]);
+    expect(ana.engine.getStatus()).toMatchObject({ failedComments: 0, pendingComments: 0 });
+  });
+
+  it('una mención que la persona sacó en una edición posterior no revive cuando vuelve la página', async () => {
+    const { server, ana, brief } = await workspace();
+    const stop = ana.comments.watch(brief);
+    const id = await ana.comments.add(brief, null, 'fijate la toma 12');
+    await ana.engine.syncNow();
+    // Con la página sin verse: una edición nombra a Beto y queda rechazada, con sus menciones.
+    ungrant(server, ANA, brief);
+    await ana.comments.edit(brief, id, '@beto fijate la toma 12', [beto]);
+    await ana.engine.syncNow();
+    expect(ana.comments.failures().map((f) => f.kind)).toEqual(['edit', 'mentions']);
+    // La edición siguiente lo saca: las menciones rechazadas salen de la cola, con su copia.
+    await ana.comments.edit(brief, id, 'fijate la toma 12, de noche', []);
+    expect(ana.comments.failures().map((f) => f.kind)).toEqual(['edit']);
+    expect(await ana.commentsDb.get('meta', `mentions:${id}`)).toBeUndefined();
+    expect(ana.comments.threads(brief)[0].root.mentions).toEqual([]);
+    await ana.engine.syncNow();
+    const sets = () => server.commentCalls.filter((c) => c.startsWith('set_comment_mentions')).length;
+    const asked = sets();
+
+    // Vuelve la página: queda el texto de la última edición y nadie nombrado. A Beto no le llega nada.
+    server.grant(ANA, { pageId: brief }, 'comment');
+    await ana.engine.syncNow();
+    expect(ana.engine.getStatus()).toMatchObject({ failedComments: 0, pendingComments: 0 });
+    expect(server.comments.get(id)?.body).toBe('fijate la toma 12, de noche');
+    expect(server.mentions.filter((m) => !m.removed_at)).toEqual([]);
+    expect(sets()).toBe(asked);
+    stop();
+    const b = await inboxOf(server, BETO);
+    expect(b.mentions.getSnapshot()).toMatchObject({ unread: 0 });
+    // Sin copia guardada, al abrir la app de nuevo tampoco vuelven a la cola.
+    expect(await ana.commentsDb.get('meta', `mentions:${id}`)).toBeUndefined();
+    expect(await ana.commentsDb.count('outbox')).toBe(0);
+  });
+
+  it('una mención que la persona sacó y volvió a poner sigue puesta cuando vuelve la página', async () => {
+    const { server, ana, brief } = await workspace();
+    const stop = ana.comments.watch(brief);
+    const id = await ana.comments.add(brief, null, '@beto fijate la toma 12', null, [beto]);
+    await ana.engine.syncNow();
+    expect(server.mentions.filter((m) => !m.removed_at)).toMatchObject([{ user_id: BETO }]);
+    ungrant(server, ANA, brief);
+    // La saca (rechazado) y después la vuelve a poner: lo que vale es lo último.
+    await ana.comments.edit(brief, id, 'fijate la toma 12', []);
+    await ana.engine.syncNow();
+    expect(ana.comments.failures().map((f) => f.kind)).toEqual(['edit', 'mentions']);
+    await ana.comments.edit(brief, id, '@beto fijate la toma 12, de noche', [beto]);
+    expect(ana.comments.failures().map((f) => f.kind)).toEqual(['edit']);
+    await ana.engine.syncNow();
+
+    server.grant(ANA, { pageId: brief }, 'comment');
+    await ana.engine.syncNow();
+    expect(ana.engine.getStatus()).toMatchObject({ failedComments: 0, pendingComments: 0 });
+    expect(server.comments.get(id)?.body).toBe('@beto fijate la toma 12, de noche');
+    expect(server.mentions.filter((m) => !m.removed_at)).toMatchObject([{ comment_id: id, user_id: BETO }]);
+    stop();
+  });
+
+  it('al sacar unas menciones rechazadas, la copia guardada pasa a ser la de las que siguen esperando', async () => {
+    const { server, ana, brief } = await workspace();
+    const stop = ana.comments.watch(brief);
+    const id = await ana.comments.add(brief, null, 'fijate la toma 12');
+    await ana.engine.syncNow();
+    server.online = false;
+    // Una cola de una versión anterior: unas menciones que esperan y, detrás, otras rechazadas con su copia guardada.
+    const at = new Date().toISOString();
+    const waiting = { kind: 'mentions' as const, id, pageId: brief, mentions: [beto], at };
+    const rejected = { kind: 'mentions' as const, id, pageId: brief, mentions: [nadie], at };
+    await ana.commentsDb.add('outbox', { op: waiting, attempted: true, failed: false, error: null, queuedAt: 1 });
+    await ana.commentsDb.add('outbox', { op: rejected, attempted: true, failed: true, error: 'comment_denied', queuedAt: 2 });
+    await ana.commentsDb.put('meta', rejected, `mentions:${id}`);
+    await ana.comments.load();
+    // Una edición con el conjunto que ya espera: no entra nada nuevo, y lo rechazado sale.
+    await ana.comments.edit(brief, id, '@beto fijate la toma 12', [beto]);
+    const queued = (await ana.commentsDb.getAll('outbox')).filter((e) => e.op.kind === 'mentions');
+    expect(queued).toMatchObject([{ failed: false, op: { mentions: [beto] } }]);
+    expect(await ana.commentsDb.get('meta', `mentions:${id}`)).toMatchObject({ mentions: [beto] });
+    server.online = true;
+    await ana.engine.syncNow();
+    expect(server.mentions.filter((m) => !m.removed_at)).toMatchObject([{ comment_id: id, user_id: BETO }]);
+    expect(await ana.commentsDb.get('meta', `mentions:${id}`)).toBeUndefined();
+    stop();
+  });
+
+  it('si la base sigue contestando que el comentario no existe aunque la lista lo trae, las menciones se piden dos veces y quedan rechazadas', async () => {
+    const { ana, brief } = await workspace();
+    const id = await ana.comments.add(brief, null, 'fijate la toma 12');
+    await ana.engine.syncNow();
+    let asked = 0;
+    ana.remote.setCommentMentions = async () => {
+      asked++;
+      throw toRemoteError({ message: 'comment_not_found', code: 'P0002' }, 500);
+    };
+    await ana.comments.edit(brief, id, '@beto fijate la toma 12', [beto]);
+    await ana.engine.syncNow();
+    // El pedido, la pregunta por la página (que trae el comentario) y un solo pedido más.
+    expect(asked).toBe(2);
+    expect(ana.comments.failures()).toMatchObject([{ kind: 'mentions', pageId: brief }]);
+    expect(ana.engine.getStatus()).toMatchObject({ failedComments: 1, pendingComments: 0 });
+    expect(await ana.commentsDb.get('meta', `mentions:${id}`)).toBeTruthy();
+    // Rechazadas, no se vuelven a pedir solas.
+    for (let i = 0; i < 3; i++) await ana.engine.syncNow();
+    expect(asked).toBe(2);
+  });
+
+  it('varias menciones de páginas que no se ven cuestan una sola pregunta por página en cada pasada', async () => {
+    const { server, ana, brief, notes } = await workspace();
+    server.grant(ANA, { pageId: notes }, 'comment');
+    await ana.engine.syncNow();
+    const ids: [string, string][] = [];
+    for (const pageId of [brief, brief, brief, notes, notes]) ids.push([pageId, await ana.comments.add(pageId, null, 'fijate la toma 12')]);
+    await ana.engine.syncNow();
+    ungrant(server, ANA, brief);
+    ungrant(server, ANA, notes);
+    for (const [pageId, id] of ids) await ana.comments.edit(pageId, id, '@beto fijate la toma 12', [beto]);
+    const lists = () => server.commentCalls.filter((c) => c === 'list all').length;
+    const sets = () => server.commentCalls.filter((c) => c.startsWith('set_comment_mentions')).length;
+    const before = lists();
+    await ana.engine.syncNow();
+    expect(sets()).toBe(5);
+    expect(lists() - before).toBe(2);
+    expect(ana.engine.getStatus()).toMatchObject({ failedComments: 10, pendingComments: 0 });
+    // Otra pasada (Retry): otra vez una por página, no una por mención.
+    await ana.comments.retryFailed();
+    await ana.engine.syncNow();
+    expect(sets()).toBe(10);
+    expect(lists() - before).toBe(4);
+    expect(ana.engine.getStatus()).toMatchObject({ failedComments: 10, pendingComments: 0 });
   });
 
   it('la confirmación de unas menciones no borra la copia en meta de otras más nuevas del mismo comentario (O3)', async () => {

@@ -390,6 +390,43 @@ describe('Can edit por un link, con el motor de verdad', () => {
     for (const r of server.linkRoom) expect(r.bytes).toBeLessThan(LINK_PUSH_MAX_BYTES);
   });
 
+  it('si el link deja de andar entre bajar el árbol y subir, lo escrito queda rechazado en el dispositivo y sube con la edición guardada siguiente', async () => {
+    const { server, e1, s } = await setup();
+    const token = addPublicLink(server, s, server.ownerId, 'edit');
+    await e1.engine.prepareBases([s]);
+    const v = await visitor(server, token);
+    await v.engine.syncNow();
+    await v.engine.prefetchPage(s);
+    // El link vence con el árbol de este ciclo ya bajado: la base contesta `link_not_found` recién a la subida.
+    const link = server.publicLinks.get(token)!;
+    const push = v.remote.pushUpdate.bind(v.remote);
+    v.remote.pushUpdate = async (pageId, clientUpdateId, update) => {
+      link.expired = true;
+      return push(pageId, clientUpdateId, update);
+    };
+    await write(v, s, '<t3>');
+    await v.engine.syncNow();
+    expect((await v.docs.stateOf(s))?.rejected).toBe('link_not_found');
+    expect(server.linkRoom).toHaveLength(0);
+    // Lo escrito sigue en el dispositivo.
+    expect(await v.docs.unsyncedPages()).toContain(s);
+    expect((await visible(v, s)).has('<t3>')).toBe(true);
+
+    // Le extienden el vencimiento: el link vuelve a andar. Sin una edición nueva, la página sigue rechazada.
+    v.remote.pushUpdate = push;
+    link.expired = false;
+    await v.engine.syncNow();
+    expect((await v.docs.stateOf(s))?.rejected).toBe('link_not_found');
+    expect(server.linkRoom).toHaveLength(0);
+    // La edición guardada siguiente saca el rechazo y sube todo: lo de antes y lo nuevo.
+    await write(v, s, '<t4>');
+    await v.engine.syncNow();
+    await v.engine.syncNow();
+    expect((await v.docs.stateOf(s))?.rejected).toBeUndefined();
+    expect(tokens(server.linkRoom.flatMap((r) => (r.data ? [r.data] : [])))).toEqual(new Set(['<t3>', '<t4>']));
+    expect(await v.docs.unsyncedPages()).not.toContain(s);
+  });
+
   it('dos visitantes en la misma página: entra lo de los dos', async () => {
     const { server, e1, s, tick } = await setup();
     const token = addPublicLink(server, s, server.ownerId, 'edit');

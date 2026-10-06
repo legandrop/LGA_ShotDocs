@@ -218,6 +218,11 @@ export function classify(err: unknown): Outcome {
   return 'retry';
 }
 
+/** Un archivo detenido porque la base dijo que su página no existe o no se puede editar (el aviso de `friendly`). */
+function stoppedByPage(record: Pick<MediaRecord, 'blocked' | 'error'>): boolean {
+  return record.blocked && record.error === stored('queue.pageNotFound');
+}
+
 function friendly(err: unknown): string {
   const message = errorMessage(err);
   if (message === 'page_not_found') return stored('queue.pageNotFound');
@@ -2255,6 +2260,43 @@ export class MediaQueue {
     }
     await tx.done;
     this.onChange?.();
+  }
+
+  /**
+   * Las páginas con archivos detenidos, o usos que esperan, porque la base dijo que la página no existe
+   * (`page_not_found`): es también lo que contesta cuando la sesión dejó de poder editarla.
+   */
+  async notFoundPages(): Promise<string[]> {
+    if (!this.db) return [];
+    const [records, links] = await Promise.all([
+      this.db.getAllFromIndex('files', 'pending', 1),
+      this.db.getAllFromIndex('links', 'pending', 1),
+    ]);
+    return [...new Set([...records.filter(stoppedByPage).map((r) => r.pageId), ...links.filter((l) => l.waiting === 'denied').map((l) => l.pageId)])];
+  }
+
+  /**
+   * De estas páginas, vuelve a intentar solo eso: la sincronización lo llama cuando el árbol vuelve a mostrarlas
+   * editables. Lo detenido por otro motivo queda como estaba, hasta "Retry".
+   */
+  async retryNotFound(pageIds: ReadonlySet<string>): Promise<void> {
+    if (!this.db) return;
+    let changed = false;
+    const tx = this.db.transaction(['files', 'links'], 'readwrite');
+    const files = tx.objectStore('files');
+    for (const r of await files.index('pending').getAll(1)) {
+      if (!pageIds.has(r.pageId) || !stoppedByPage(r)) continue;
+      await files.put({ ...r, blocked: false, retryAt: 0, registered: false, failures: 0, lost: 0 });
+      changed = true;
+    }
+    const links = tx.objectStore('links');
+    for (const l of await links.index('pending').getAll(1)) {
+      if (!pageIds.has(l.pageId) || l.waiting !== 'denied') continue;
+      await links.put({ ...l, blocked: false, waiting: null, retryAt: 0 });
+      changed = true;
+    }
+    await tx.done;
+    if (changed) this.onChange?.();
   }
 
   /**

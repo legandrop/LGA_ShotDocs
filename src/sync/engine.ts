@@ -93,6 +93,11 @@ const COMPACT_CLAIMS_PER_ROUND = 3;
 const COMPACT_RETRY_ROWS = 50;
 const COMPACT_RETRY_MS = 30 * 60_000;
 const PULL_CONCURRENCY = 4;
+/**
+ * Lo que contestan `push_page_update` y `pull_page_content` cuando la página no existe o la sesión no puede editarla
+ * (o verla): así queda guardado el rechazo del contenido (`DocState.rejected`).
+ */
+const PAGE_NOT_FOUND = 'page_not_found';
 
 /**
  * Un ciclo de sincronización, siempre en este orden:
@@ -183,6 +188,14 @@ export class SyncEngine {
   private admission: LinkAdmission | null = null;
   /** La última edición local guardada de cada página en esta apertura (la admisión espera la pausa). */
   private readonly lastEdit = new Map<string, number>();
+  /**
+   * Páginas con algo rechazado por "no existe" que una bajada del árbol mostró como no editables (`sawLocked`: el
+   * contenido y los archivos) o como no visibles (`sawHidden`: los comentarios). Cuando el árbol vuelve a mostrarlas,
+   * eso se reintenta una vez y la página sale de acá (ver `retryReturned`). Solo en memoria: al abrir la app se
+   * reintenta todo.
+   */
+  private readonly sawLocked = new Set<string>();
+  private readonly sawHidden = new Set<string>();
 
   constructor(
     private readonly remote: Remote,
@@ -383,6 +396,94 @@ export class SyncEngine {
     await this.syncNow();
   }
 
+  /**
+   * Lo rechazado porque la base dijo "no existe" vuelve a intentarse solo cuando la página vuelve. Ese "no existe"
+   * (`page_not_found`, `comment_not_found`…) es también lo que la base contesta cuando la sesión dejó de ver o de poder
+   * editar la página, y eso se revierte: le devuelven el permiso, la página sale de la papelera, restauran el
+   * proyecto. El dato llega con el árbol y los permisos que se bajan en cada ciclo.
+   *
+   * Una página se reintenta cuando el árbol pasa de "no" a "sí": con algo suyo rechazado, una bajada del árbol tiene
+   * que haberla mostrado como no editable (o no visible, para los comentarios) y una posterior, como editable. Ahí se
+   * limpia el rechazo y la página sale de la lista de las que se esperan. Si el servidor vuelve a rechazarla, lo
+   * escrito sigue en el dispositivo y queda rechazada como antes: no se reintenta de nuevo hasta que el árbol vuelva
+   * a decir "no" y otra vez "sí". Nunca hay un reintento por ciclo, y quién puede escribir lo sigue decidiendo la base.
+   *
+   * Se mira con el árbol recién bajado, antes de subir nada (acá). Lo que se rechaza después se anota en el momento,
+   * con ese mismo árbol: el contenido, apenas la base lo rechaza (`noteLocked`); los comentarios, al terminar su cola
+   * (`noteHidden`); los archivos, al terminar la suya (`noteFilesLocked`). Así el "no" queda anotado aunque el ciclo
+   * se corte enseguida o la app quede sin red hasta que la página vuelve, cuando el árbol siguiente ya dice "sí".
+   *
+   * Solo esa clase de rechazo: uno por tamaño, por conflicto o por falta del permiso de comentar queda a la vista
+   * hasta "Retry" o hasta reabrir la app. Devuelve si limpió el rechazo del contenido de alguna página.
+   */
+  private async retryReturned(states: Map<string, DocState>): Promise<boolean> {
+    const comments = this.options.comments;
+    const media = this.options.media;
+    const content = [...states.values()].filter((s) => s.rejected === PAGE_NOT_FOUND).map((s) => s.pageId);
+    // La base de archivos del dispositivo puede fallar: el texto y los comentarios siguen igual.
+    const files = (await media?.notFoundPages().catch(() => [])) ?? [];
+    const commented = comments?.notFoundPages() ?? [];
+    const editable = this.backAgain(this.sawLocked, [...content, ...files], (id) => this.editableOnServer(id));
+    const visible = this.backAgain(this.sawHidden, commented, (id) => this.tree.onServer(id));
+    let cleared = false;
+    for (const pageId of content) {
+      if (editable.has(pageId) && (await this.docs.clearRejectedPage(pageId, PAGE_NOT_FOUND))) cleared = true;
+    }
+    if (files.some((id) => editable.has(id))) await media?.retryNotFound(editable).catch(() => undefined);
+    if (visible.size > 0) await comments?.retryNotFound(visible).catch(() => undefined);
+    return cleared;
+  }
+
+  /**
+   * De las páginas con algo rechazado por "no existe", las que el árbol ya había mostrado en "no" (`seen`) y ahora
+   * muestra en "sí" (`ok`): salen de `seen` y se devuelven. Las que están en "no" entran a `seen`, y las que ya no
+   * tienen nada rechazado salen.
+   */
+  private backAgain(seen: Set<string>, pages: string[], ok: (pageId: string) => boolean): Set<string> {
+    const waiting = new Set(pages);
+    for (const id of seen) if (!waiting.has(id)) seen.delete(id);
+    const back = new Set<string>();
+    for (const id of waiting) {
+      if (!ok(id)) seen.add(id);
+      else if (seen.delete(id)) back.add(id);
+    }
+    return back;
+  }
+
+  /**
+   * La base acaba de rechazar por "no existe" el contenido de la página: si el árbol bajado la muestra en "no", queda
+   * anotada. Solo anota (como `noteHidden` y `noteFilesLocked`): nunca reintenta.
+   */
+  private noteLocked(pageId: string): void {
+    if (!this.editableOnServer(pageId)) this.sawLocked.add(pageId);
+  }
+
+  /** Lo mismo con los comentarios rechazados por "no existe", al terminar una vuelta de su cola. */
+  private noteHidden(): void {
+    for (const id of this.options.comments?.notFoundPages() ?? []) if (!this.tree.onServer(id)) this.sawHidden.add(id);
+  }
+
+  /**
+   * Lo mismo con los archivos detenidos (y los usos que esperan) por "no existe", al terminar una vuelta de su cola,
+   * que corre después del ciclo. Nunca tira: la base de archivos puede fallar o estar cerrándose.
+   */
+  private async noteFilesLocked(): Promise<void> {
+    if (this.stopped) return;
+    const pages = (await this.options.media?.notFoundPages().catch(() => [])) ?? [];
+    for (const id of pages) this.noteLocked(id);
+  }
+
+  /**
+   * El árbol y los permisos bajados muestran la página como editable para esta sesión. Sin datos de permisos (una base
+   * sin la versión del equipo) alcanza con que el servidor la mande.
+   */
+  private editableOnServer(pageId: string): boolean {
+    if (!this.tree.onServer(pageId)) return false;
+    const access = this.options.access;
+    const snapshot = access?.get() ?? null;
+    return !access || !snapshot || new Permissions(this.tree, snapshot, access.userId).canEditPage(pageId);
+  }
+
   /** Lo detenido de la cola de fotos y videos se vuelve a intentar; un error de su base no corta nada. */
   private async clearMediaBlocked(): Promise<void> {
     try {
@@ -397,8 +498,14 @@ export class SyncEngine {
    * La sincronización la arranca sola al final de cada ciclo; no hace falta esperarla.
    */
   syncMedia(): Promise<void> {
-    if (this.removed) return Promise.resolve();
-    return this.options.media?.run((pageId) => this.tree.hasUnsentCreate(pageId)) ?? Promise.resolve();
+    const media = this.options.media;
+    if (this.removed || !media) return Promise.resolve();
+    // Termine como termine la vuelta, lo que quedó detenido por "no existe" se anota (ver `retryReturned`).
+    const note = () => this.noteFilesLocked().catch(() => undefined);
+    return media.run((pageId) => this.tree.hasUnsentCreate(pageId)).then(note, async (err) => {
+      await note();
+      throw err;
+    });
   }
 
   /**
@@ -548,7 +655,11 @@ export class SyncEngine {
       await this.tree.setSnapshot(rows, projects);
 
       let contentError: string | null = null;
-      const states = await this.docs.states();
+      let states = await this.docs.states();
+      // Con el árbol y los permisos recién bajados: lo rechazado por "no existe" de una página que volvió sale en este
+      // mismo ciclo. Un error acá no corta nada: queda "Retry".
+      if (!outdated && (await this.retryReturned(states).catch(() => false))) states = await this.docs.states();
+      halt();
       // Con la app vieja para este workspace, el contenido se queda en el dispositivo hasta actualizar.
       for (const pageId of outdated ? [] : await this.docs.unsyncedPages()) {
         halt();
@@ -571,7 +682,9 @@ export class SyncEngine {
             this.options.media?.setOutdated(true);
             break;
           }
-          contentError = errorMessage(err);
+          // En el momento, y no al final del ciclo: si la red se cae más abajo, el "no" ya quedó anotado.
+          if (errorMessage(err) === PAGE_NOT_FOUND) this.noteLocked(pageId);
+          contentError = errorMessage(err) === PAGE_NOT_FOUND ? t('queue.pageNotFound') : errorMessage(err);
         }
       }
 
@@ -607,7 +720,8 @@ export class SyncEngine {
             return;
           }
           if (!isPermanent(err)) throw err;
-          contentError = errorMessage(err);
+          // Una página que el árbol muestra y la base no deja bajar: se dice en palabras, no con el código.
+          contentError = errorMessage(err) === PAGE_NOT_FOUND ? t('commentError.pageNotFound') : errorMessage(err);
         }),
       );
 
@@ -632,7 +746,12 @@ export class SyncEngine {
       // Los comentarios de páginas que todavía no están en el servidor esperan. Sus errores no cortan el
       // ciclo: quedan en su propia cola (`commentError`, `failedComments`).
       // Con la app vieja, los comentarios esperan como los de una página que todavía no está en el servidor.
-      await this.options.comments?.run(this.status.outdated ? () => true : (pageId) => this.tree.hasUnsentCreate(pageId));
+      try {
+        await this.options.comments?.run(this.status.outdated ? () => true : (pageId) => this.tree.hasUnsentCreate(pageId));
+      } finally {
+        // Lo que se rechazó por "no existe" en esta vuelta, con el árbol de este ciclo en "no": queda anotado.
+        this.noteHidden();
+      }
 
       this.patch({ online: true, lastError: contentError ?? fileError, lastSyncAt: Date.now() });
       // Sin esperarla: tiene su propio ciclo y sus propios errores.
