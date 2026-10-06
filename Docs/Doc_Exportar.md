@@ -852,7 +852,10 @@ abrir ese PDF. La ayuda suma *Export pages and projects as one PDF*; sin atajos 
 - `exportImages.ts`: cada foto, la mejor del dispositivo (original, nítida de 2048 o la miniatura que se ve; con *Sharp
   photos*, la nítida pedida al Drive por el portero, hasta 1000), abierta una vez y achicada a su ancho impreso a
   200 ppp (tope 2400 px), de a cuatro a la vez **en Workers** (`resize.worker.ts`, `OffscreenCanvas`; donde no hay, en
-  el hilo principal). El tope cuenta los píxeles ya achicados.
+  el hilo principal). Si un Worker no arranca o falla con una foto en curso, se vuelve al achicador del hilo
+  principal con el mismo original. La prueba dirigida comprueba ambos fallos y el resultado devuelto; el recorrido
+  en Chromium abre una PNG, produce un JPEG de 32 × 16 y conserva los bytes del original. La misma comprobación
+  falla al retirar esa vuelta y pasa al restaurarla. El tope cuenta los píxeles ya achicados.
 - `exportComments.ts`: con *Comments*, antes de dibujar baja los comentarios de cada página del plan (`comments.refresh`,
   lo mismo que abrir la página; "Fetching comments: page N of M", cancelable), así salen los de los demás en las páginas
   que el dispositivo no abrió; sin red, salen los del dispositivo y el índice y la ventana lo dicen. Después, los hilos

@@ -1,5 +1,13 @@
 # Sincronización offline
 
+## Guardado antes de salidas controladas (v0.199, LF21 parcial)
+
+Los botones *Reload* de los avisos y el cambio, unión o creación de un workspace desde la app abierta preparan el título de la página montada y esperan hasta ocho segundos el guardado local. Esa preparación devuelve la escritura real, sin depender de perder el foco ni de esperar el timer del título. Una escritura rechazada, un error de guardado del documento, una cola local pendiente o un cambio de contexto cancelan la salida; la vista conserva el título para volver a intentar. La preferencia de workspace sólo cambia al ejecutar la salida. Lo guardado en el dispositivo puede seguir pendiente de subir: se conservan las preguntas existentes y no se espera confirmación remota.
+
+La comprobación final vuelve a mirar dueño, página, título y escrituras. Una nueva edición del título durante la espera invalida ese intento. Si la vista que preparaba el título ya no está disponible tras un error global, la recarga no toma esa ausencia como prueba de guardado. El editor y sus servicios siguen vivos mientras se espera.
+
+Este tramo no cierra LF21: quedan los enlaces entre workspaces y su exportación/reimportación. No cambia Auth, el cierre externo del navegador ni *beforeunload*, que continúa como aviso y no puede garantizar una espera. El rechazo de la escritura del sobrante de un título largo sigue siendo un problema separado pendiente de resolver; esta barrera no afirma recuperar ese sobrante.
+
 Cómo funciona hoy la regla de no perder nunca información. El código está en `src/sync/` y las pruebas
 (`npm test`) en `src/sync/sync.test.ts`, `audit.test.ts` (los casos de la auditoría de la fase 1),
 `editor.test.ts` (con el editor real, en jsdom), `docs.test.ts` (qué falta subir después de bajar y la

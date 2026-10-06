@@ -42,6 +42,7 @@ its own project: a tree of pages you own.
   after its label, the checkbox. You check every change before applying it, and nothing you said is lost.
 - **Offline first, nothing lost.** Every change is saved on your device first and synced when you are
   back online. Edits made offline on two devices are merged, never overwritten.
+  Reload from an app notice and switching, joining or creating a workspace from an open workspace wait up to eight seconds for local saving, including the current page title. A failure or a changed page keeps the current view open for another attempt. This does not add a saving barrier to browser exits, cross-workspace links or signing out.
 - **Share a branch, never the tree.** Inside a workspace, people get a role and a permission on a
   project or a page (view, comment, edit, or edit and create pages). A permission covers everything under
   that page and nothing above it: parent pages and sibling branches stay private. Clients join as guests

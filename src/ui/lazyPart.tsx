@@ -1,7 +1,7 @@
 import { Component, createElement, lazy, Suspense, type ComponentType, type ReactNode } from 'react';
 import { t } from '../i18n';
 import { optionalImportPending } from '../lib/optionalImport';
-import { hasDrafts } from './commentsUi';
+import { getDraftRevision, hasDrafts } from './commentsUi';
 import { notify } from './notice';
 
 // Partes de la app que se cargan aparte (roadmap B.4): el editor, el carrete y los diálogos. La primera
@@ -48,18 +48,25 @@ export const reloadTimings = {
   pagehideMs: 2000,
 };
 
-interface PendingWrites {
+export interface PendingWrites {
   /** Hay algo que todavía no llegó a IndexedDB. */
   unsaved: () => boolean;
   /** Espera las escrituras en curso. */
   flush: () => Promise<void>;
+  /** Dueño montado y preparación del título, sólo para las salidas controladas. */
+  owner?: object;
+  current?: () => boolean;
+  prepare?: () => Promise<void>;
+  stamp?: () => unknown;
 }
 
 let pendingWrites: PendingWrites | null = null;
+let hadOwner = false;
 
 /** La app abierta avisa cómo saber si hay algo sin guardar (lo mismo que mira su `beforeunload`). */
 export function watchPendingWrites(writes: PendingWrites): () => void {
   pendingWrites = writes;
+  hadOwner ||= !!writes.owner;
   return () => {
     if (pendingWrites === writes) pendingWrites = null;
   };
@@ -71,9 +78,44 @@ let reloading: Promise<never> | null = null;
 export const pageReload = { now: (): void => location.reload() };
 
 /** El botón "Reload" de los avisos: un comentario sin mandar se pierde, así que pregunta antes. */
+let manualAttempt = 0;
 export function reloadByHand(): void {
-  if (hasDrafts() && !window.confirm(t('lazy.draftQuestion'))) return;
-  pageReload.now();
+  const draft = hasDrafts();
+  const draftRevision = getDraftRevision();
+  if (draft && !window.confirm(t('lazy.draftQuestion'))) return;
+  const attempt = ++manualAttempt;
+  void saveBeforeExit(pendingWrites?.owner ?? null, () => attempt === manualAttempt && getDraftRevision() === draftRevision, () => pageReload.now());
+}
+
+/** Prepara una vez, espera sólo guardado local y ejecuta la salida sin otro await después del control final. */
+export async function saveBeforeExit(owner: object | null, current: () => boolean, action: () => void): Promise<boolean> {
+  const writes = pendingWrites;
+  try {
+    if (!writes && !hadOwner && owner === null && current()) { action(); return true; }
+    if (!writes || writes.owner !== owner || !current() || !writes.current?.()) throw new Error('Salida obsoleta');
+    const stamp = writes.stamp?.();
+    const deadline = Date.now() + reloadTimings.saveWaitMs;
+    let preparing = true;
+    let failed = false;
+    const preparation = (writes.prepare?.() ?? Promise.resolve()).then(
+      () => { preparing = false; },
+      () => { preparing = false; failed = true; },
+    );
+    const participant: PendingWrites = {
+      unsaved: () => preparing || failed || writes.unsaved(),
+      flush: async () => { await preparation; if (!failed) await writes.flush(); },
+    };
+    if (!(await waitForSaved(participant, deadline)) || pendingWrites !== writes || !writes.current?.() ||
+        !current() || writes.stamp?.() !== stamp || participant.unsaved()) throw new Error('Guardado local pendiente');
+    action();
+    return true;
+  } catch {
+    if (current()) {
+      if (writes?.owner) notify(t('leave.unsaved'));
+      else alert(t('leave.unsaved'));
+    }
+    return false;
+  }
 }
 
 function canReloadNow(): boolean {
@@ -104,15 +146,15 @@ export function hasUnsavedWork(): boolean {
 }
 
 /** Espera a que lo escrito llegue al dispositivo. Devuelve si quedó todo guardado. */
-export async function waitForSaved(): Promise<boolean> {
-  const writes = pendingWrites;
+export async function waitForSaved(writes = pendingWrites, deadline = Date.now() + reloadTimings.saveWaitMs): Promise<boolean> {
   if (!writes) return true;
-  const deadline = Date.now() + reloadTimings.saveWaitMs;
   for (;;) {
-    await Promise.race([writes.flush().catch(() => undefined), sleep(500)]);
-    if (!writes.unsaved()) return true;
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return false;
+    await Promise.race([writes.flush().catch(() => undefined), sleep(Math.min(500, remaining))]);
     if (Date.now() >= deadline) return false;
-    await sleep(100);
+    if (!writes.unsaved()) return true;
+    await sleep(Math.min(100, deadline - Date.now()));
   }
 }
 

@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.199 :
+
+Recargar desde un aviso o cambiar de workspace podía retirar la vista antes de terminar de guardar en el dispositivo. El título esperaba su pausa de escritura y todavía no aparecía entre los cambios pendientes. Ahora esas salidas preparan el título de la página montada, esperan su escritura real junto con los documentos y las colas locales, y vuelven a comprobar dueño, página, errores y nuevas ediciones antes de ejecutar la recarga o publicar el workspace elegido. La espera incluye la preparación y termina a los ocho segundos; si falla, conserva la vista y permite volver a intentar. Se mantienen las preguntas sobre cambios guardados que faltan subir. Es un tramo parcial de LF21: no cambia Auth, enlaces entre workspaces, exportaciones ni cierres externos, y no resuelve el rechazo al guardar el sobrante de títulos largos.
+
+[Esperar el guardado local del título antes de recargar o cambiar de workspace]
+
 v0.198 :
 
 El cuadro de un video en línea quedaba sin enlace al imprimir o exportar un PDF, aunque los videos en bloque ya lo tenían. Se había excluido para no agregar el nombre debajo y alterar el renglón o la celda. Ahora el propio contenedor del cuadro lleva el enlace, conservando su presentación y sus hijos, sin sumar texto ni ocupar otra línea. Solo se ofrece para un video conocido, con una dirección de archivo válida y disponible en esa página. No se enlazan fotos ni marcadores de otro proyecto o de un archivo borrado, y se conserva cualquier enlace ya escrito. La copia usa los mismos permisos y la política de links públicos existentes. Se actualizan la ayuda y la documentación sin dar por terminado el resto de acceso a archivos.

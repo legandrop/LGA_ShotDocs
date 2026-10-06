@@ -16,7 +16,7 @@ import { installPrintShortcuts } from '../ui/printPage';
 import { ExportDialog } from '../ui/ExportDialog';
 import { appComments, authorLabel, blockText, commentsSection, nameFromEmail } from './exportComments';
 import { ExportEditor } from './exportEditor';
-import { PhotoLimitError, PixelBudget, printSize, shrinkImages, workerResizer, type Resizer } from './exportImages';
+import { browserResizer, PhotoLimitError, PixelBudget, printSize, shrinkImages, workerResizer, type Resizer } from './exportImages';
 import { exportPlan, type ExportSource } from './exportPages';
 import { anchorId, buildPdf, deviceLimits, pageRules, paginateExport, PDF_LIMITS, printBook, rewriteLinks, sheetName, SMALL_DESKTOP_PIXELS, type BuildOptions } from './exportPdf';
 import { keepsPageSizes } from './printSupport';
@@ -250,12 +250,29 @@ describe('exportar PDF: las fotos', () => {
     expect(sent.filter((s) => s.worker === 0).map((s) => s.kind)).toEqual(['open', 'draw', 'close']);
     pool.dispose();
 
-    // Un Worker que no arranca: la foto se hace igual en el hilo principal (acá, jsdom no abre imágenes: `null`).
-    const broken = workerResizer(2, () => {
-      throw new Error('sin Worker');
-    });
-    expect(await broken.open(new Blob(['x']))).toBeNull();
-    broken.dispose();
+    // El fallo tiene que devolver el resultado del hilo principal, no `null` como el resizer de jsdom sin decoder.
+    const jpeg = new Blob([new Uint8Array([255, 216, 255, 217])], { type: 'image/jpeg' });
+    const decoded = { width: 64, height: 32, draw: vi.fn(async () => jpeg), close: vi.fn() };
+    const main = vi.spyOn(browserResizer, 'open').mockResolvedValue(decoded);
+    const original = new Blob(['original'], { type: 'image/png' });
+    const failsInFlight = () => {
+      const w = { onmessage: null, onerror: null as (() => void) | null, terminate: vi.fn(),
+        postMessage: () => queueMicrotask(() => w.onerror?.()) };
+      return w as unknown as Worker;
+    };
+    for (const create of [() => { throw new Error('sin Worker'); }, failsInFlight]) {
+      main.mockClear();
+      const broken = workerResizer(2, create);
+      try {
+        const result = await broken.open(original);
+        expect(result).toBe(decoded);
+        expect(main).toHaveBeenCalledTimes(1);
+        expect(main).toHaveBeenCalledWith(original);
+        expect(await result!.draw(32, 16)).toBe(jpeg);
+        result!.close();
+        expect(decoded.draw).toHaveBeenLastCalledWith(32, 16);
+      } finally { broken.dispose(); }
+    }
   });
 
   it('una foto que el navegador no abre (un HEIC) queda con la que se ve', async () => {

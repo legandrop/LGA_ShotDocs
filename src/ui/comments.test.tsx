@@ -10,7 +10,7 @@ import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { CommentsPanel, when } from './CommentsPanel';
-import { closeComments, showComments } from './commentsUi';
+import { closeComments, setDraft, showComments } from './commentsUi';
 import { paragraphProps, schema } from './editorSchema';
 import { PageEditor } from './PageEditor';
 
@@ -250,6 +250,26 @@ describe('rechazos y borradores en el panel', () => {
     await act(async () => host.querySelector<HTMLElement>('.comments-scrim')!.click());
     expect(ask).toHaveBeenCalledWith('Discard what you wrote?');
     expect(host.querySelector('.comments-panel')).not.toBeNull();
+    const lazy = await import('./lazyPart');
+    let saved = false, release!: () => void;
+    let held = new Promise<void>((resolve) => { release = resolve; });
+    const unwatch = lazy.watchPendingWrites({ owner: {}, current: () => true, unsaved: () => !saved, flush: () => held });
+    const reload = vi.spyOn(lazy.pageReload, 'now').mockImplementation(() => undefined), other = Symbol('otro borrador');
+    ask.mockReturnValue(true);
+    try {
+      lazy.reloadByHand();
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(textarea, 'Texto nuevo todavía sin mandar');
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      saved = true; release(); await wait();
+      expect(reload, 'la confirmación vieja no descarta el texto nuevo').not.toHaveBeenCalled();
+      expect(textarea.value).toBe('Texto nuevo todavía sin mandar');
+      saved = false; held = new Promise<void>((resolve) => { release = resolve; });
+      lazy.reloadByHand(); setDraft(other, true); saved = true; release(); await wait();
+      expect(reload, 'otro borrador invalida aunque hasDrafts siga true').not.toHaveBeenCalled();
+      setDraft(other, false); lazy.reloadByHand(); await wait(); expect(reload).toHaveBeenCalledTimes(1);
+    } finally { setDraft(other, false); unwatch(); reload.mockRestore(); }
     ask.mockReturnValue(true);
     await act(async () => host.querySelector<HTMLElement>('.comments-scrim')!.click());
     expect(host.querySelector('.comments-panel')).toBeNull();

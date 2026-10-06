@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { t, useT } from '../i18n';
 import type { MediaRecord } from '../media/mediaDb';
 import { prefs } from '../prefs';
@@ -24,6 +24,8 @@ import { DeleteBlocked, deleteWorkspaceDatabases, forgetWorkspaceKeys, PendingMe
 import { downloadUnsynced, saveBlob } from './unsyncedDownload';
 import { usePendingCount } from './usePendingCount';
 import type { WorkspacesMode } from './Welcome';
+import { saveBeforeExit } from './lazyPart';
+import { getDraftRevision, hasDrafts } from './commentsUi';
 
 // Los workspaces dentro de la app abierta (paso 12 de Docs/Plan_Workspaces.md): la sección del selector de
 // proyectos, lo que se pregunta antes de dejar el workspace abierto y quitarlo del dispositivo.
@@ -50,25 +52,34 @@ export function useRememberWorkspaceName(): void {
  * dispositivo se perdería, así que espera; lo guardado sin subir queda en el dispositivo y sube la próxima
  * vez que se abra ese workspace. `false` cancela.
  */
-export function useLeaveGuard(): () => boolean {
-  const { docs, tree, media, comments } = useServices();
+export function useLeaveGuard(): (action: () => void) => void {
+  const services = useServices();
+  const { docs, tree } = services;
+  const attempt = useRef(0);
+  const live = useRef(true);
+  useEffect(() => { live.current = true; return () => { live.current = false; ++attempt.current; }; }, [services]);
   const pending = usePendingCount();
   const { current } = useCurrentWorkspace();
   const name = current ? displayName(current) : t('noProjects.thisWorkspace');
-  return useCallback(() => {
+  return useCallback((action: () => void) => {
+    if (!live.current) return;
+    const token = ++attempt.current;
     // Una importación de Coda o un reemplazo en todo el proyecto en curso: cortados, quedan a medias.
     const importing = importJobFor(tree).get().running || replaceRunning({ docs });
-    if (importing || docs.hasUnsavedEdits() || tree.hasUnsavedWrites() || media.hasUnsavedWrites() || comments.hasUnsavedWrites()) {
+    if (importing) {
       alert(t('leave.unsaved'));
-      return false;
+      return;
     }
+    const draft = hasDrafts();
+    const draftRevision = getDraftRevision();
+    if (draft && !confirm(t('lazy.draftQuestion'))) return;
     // Las preferencias sin subir quedan en el dispositivo (una copia por usuario) y suben al volver.
     const settings = prefs.hasUnsynced();
-    if (pending === 0 && !settings) return true;
-    if (!settings) return confirm(t('leave.pending', { count: pending, name }));
-    if (pending === 0) return confirm(t('leave.settings', { name }));
-    return confirm(t('leave.both', { count: pending, name }));
-  }, [docs, tree, media, comments, pending, name]);
+    const accepted = pending === 0 && !settings ? true : !settings ? confirm(t('leave.pending', { count: pending, name })) :
+      pending === 0 ? confirm(t('leave.settings', { name })) : confirm(t('leave.both', { count: pending, name }));
+    if (!accepted) return;
+    void saveBeforeExit(services, () => live.current && attempt.current === token && getDraftRevision() === draftRevision, action);
+  }, [services, docs, tree, pending, name]);
 }
 
 /**
@@ -124,9 +135,10 @@ export function WorkspaceSection(props: {
             aria-current={w.id === current?.id ? 'true' : undefined}
             onClick={() => {
               if (w.id === current?.id) return props.onClose();
-              if (!leave()) return;
-              props.onClose();
-              switchWorkspace(w.id);
+              leave(() => {
+                switchWorkspace(w.id);
+                props.onClose();
+              });
             }}
           >
             <span className="monogram" aria-hidden="true">

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { t, useT } from '../i18n';
 import { clearInviteTarget, rememberInviteTarget, takeArrivalNotice } from '../invite';
 import { useWorkspace } from '../workspace';
@@ -400,16 +400,18 @@ export type WorkspacesMode = 'start' | 'list' | 'join' | 'create';
 
 /**
  * El diálogo de workspaces: la lista para cambiar (desde el login), unirse o crear. `beforeLeave` pregunta
- * antes de dejar el workspace abierto (cambios sin subir); `false` cancela.
+ * antes de dejar el workspace abierto y ejecuta la salida sólo cuando quedó guardado en el dispositivo.
  */
 export function WorkspacesDialog(props: {
   initial: WorkspacesMode;
   currentId: string;
   onClose: () => void;
-  beforeLeave?: () => boolean;
+  beforeLeave?: (action: () => void) => void;
 }) {
   const list = useWorkspaceList();
   const [mode, setMode] = useState<WorkspacesMode>(props.initial);
+  const live = useRef(true);
+  useEffect(() => { live.current = true; return () => { live.current = false; }; }, []);
   const [removable, setRemovable] = useState(false);
   const current = list.workspaces.find((w) => w.id === props.currentId) ?? null;
   const tr = useT();
@@ -433,8 +435,10 @@ export function WorkspacesDialog(props: {
   }, [props.onClose]);
 
   const leave = (fn: () => void) => {
-    if (props.beforeLeave && !props.beforeLeave()) return;
-    fn();
+    if (!live.current) return;
+    const commit = () => { if (live.current) fn(); };
+    if (props.beforeLeave) props.beforeLeave(commit);
+    else fn();
   };
 
   return (
@@ -545,4 +549,3 @@ export function LoginWorkspaceBar({ fixed = false }: { fixed?: boolean } = {}) {
     </>
   );
 }
-

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { AuthUser } from '../auth';
 import { t, useT } from '../i18n';
 import { useCodaOwner } from '../import/codaOwner';
@@ -46,7 +46,7 @@ import { canSeeHistory, closeHistory, historyOpen, isHistoryShortcut, openHistor
 import { useHistoryCachePruning } from './historyCachePrune';
 import { lazyPart, Part, preloadWhenIdle, watchPendingWrites } from './lazyPart';
 import { startAppUpdates, stopAppUpdates } from './appUpdate';
-import { focusTitle, PageView, preloadPageParts } from './PageView';
+import { focusTitle, PageView, preloadPageParts, type TitlePreparation } from './PageView';
 import { CommentsToggle } from './CommentsToggle';
 import { MentionsBell } from './MentionsBell';
 import { Sidebar } from './Sidebar';
@@ -227,7 +227,16 @@ function useInviteTarget(): void {
 export function Shell() {
   const route = useRoute();
   const tree = useTree();
-  const { comments, docs, media, folders, user, workspace, engine } = useServices();
+  const services = useServices();
+  const { comments, docs, media, folders, user, workspace, engine } = services;
+  const titlePreparation = useRef<TitlePreparation | null>(null);
+  const registerTitle = useCallback((title: TitlePreparation) => {
+    titlePreparation.current = title;
+    return () => { if (titlePreparation.current === title) titlePreparation.current = null; };
+  }, []);
+  const context = `${user.id}|${workspace.config.url}|${workspace.config.localKey}|${JSON.stringify(route)}`;
+  const currentContext = useRef(context);
+  currentContext.current = context;
   const keys = workspace.config.storage;
   const navOpen = useNavOpen();
   const [pageMenu, setPageMenu] = useState<{ position: MenuPosition; anchor: HTMLElement } | null>(null);
@@ -309,6 +318,8 @@ export function Shell() {
     const importing = importJobFor(tree);
     const unsaved = () =>
       docs.hasUnsavedEdits() ||
+      !!docs.getWriteError() ||
+      !!titlePreparation.current?.unsaved() ||
       tree.hasUnsavedWrites() ||
       media.hasUnsavedWrites() ||
       comments.hasUnsavedWrites() ||
@@ -322,12 +333,27 @@ export function Shell() {
       e.returnValue = '';
     };
     window.addEventListener('beforeunload', onBeforeUnload);
-    const unwatch = watchPendingWrites({ unsaved, flush: () => docs.flush() });
+    let live = true;
+    const unwatch = watchPendingWrites({
+      owner: services,
+      stamp: () => titlePreparation.current?.stamp(),
+      current: () => live && currentContext.current === context,
+      unsaved,
+      flush: () => docs.flush(),
+      prepare: () => {
+        const title = titlePreparation.current;
+        if (route.name === 'page' && tree.get(route.id) && (!title || title.id !== route.id || title.tree !== tree)) {
+          return Promise.reject(new Error('Título fuera del contexto abierto'));
+        }
+        return title?.prepare() ?? Promise.resolve();
+      },
+    });
     return () => {
+      live = false;
       window.removeEventListener('beforeunload', onBeforeUnload);
       unwatch();
     };
-  }, [comments, docs, tree, media, folders]);
+  }, [services, comments, docs, tree, media, folders, context]);
 
   // Con la app vieja para el workspace (`min_app_version`) no se sube nada: se busca la versión nueva y, cuando toma el
   // control, se recarga sola una vez (appUpdate.ts).
@@ -472,7 +498,7 @@ export function Shell() {
             {/* En el teléfono, mientras no está instalada: el aviso para instalarla (se puede cerrar). */}
             <InstallBanner />
             {route.name === 'page' ? (
-              <PageView key={route.id} id={route.id} />
+              <PageView key={route.id} id={route.id} registerTitle={registerTitle} />
             ) : route.name === 'file' ? (
               <Part>
                 <FileScreen key={route.id} localKey={route.localKey} id={route.id} />

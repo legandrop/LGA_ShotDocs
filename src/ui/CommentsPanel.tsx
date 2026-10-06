@@ -762,11 +762,11 @@ function Composer({
 
   // Lo escrito a medias: cerrar el panel (tocar afuera, Escape, la X) pide confirmación.
   const draftKey = useRef(Symbol('draft'));
-  useEffect(() => {
+  useLayoutEffect(() => {
     const key = draftKey.current;
     setDraft(key, dirty);
     return () => setDraft(key, false);
-  }, [dirty]);
+  }, [dirty, text, picked]);
 
   // En el teléfono, cuando aparece el teclado, el cuadro queda a la vista.
   useEffect(() => {

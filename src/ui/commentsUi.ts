@@ -50,17 +50,22 @@ export function toggleComments(): void {
 }
 
 export function closeComments(): void {
+  if (drafts.size) draftRevision++;
   drafts.clear();
   set({ open: false, target: null, targetPage: null });
 }
 
 // Lo escrito a medias en el panel (una respuesta, un hilo nuevo, una edición). Vive en memoria.
 const drafts = new Set<symbol>();
+let draftRevision = 0;
 
 export function setDraft(key: symbol, dirty: boolean): void {
-  if (dirty) drafts.add(key);
-  else drafts.delete(key);
+  if (dirty) { drafts.add(key); draftRevision++; }
+  else if (drafts.delete(key)) draftRevision++;
 }
+
+/** La confirmación de descarte vale sólo para la revisión que se vio. */
+export function getDraftRevision(): number { return draftRevision; }
 
 export function hasDrafts(): boolean {
   return drafts.size > 0;

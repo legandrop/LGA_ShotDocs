@@ -881,6 +881,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
   // --- Sin red ---
   { id: 'syncStatus', section: 'sync', title: 'help.syncStatus.title', text: 'help.syncStatus.text', showMe: 'sync', since: BEFORE_HELP },
   { id: 'syncSafe', section: 'sync', title: 'help.syncSafe.title', text: 'help.syncSafe.text', since: BEFORE_HELP },
+  { id: 'localSaveExit', section: 'sync', title: 'help.localSaveExit.title', text: 'help.localSaveExit.text', since: '0.199' },
   {
     id: 'updateApp',
     section: 'sync',

@@ -23,6 +23,15 @@ import { pageFormat, sheetSize, SHEET_MARGIN_MM, mm } from './pageFormat';
 import { headerLevels, headerPages, ownHeader } from './titles';
 import { setDocumentTitle } from './titleBadge';
 
+export interface TitlePreparation {
+  id: string;
+  tree: ReturnType<typeof useTree>;
+  unsaved: () => boolean;
+  prepare: () => Promise<void>;
+  stamp: () => object;
+}
+type RegisterTitle = (title: TitlePreparation) => () => void;
+
 const FOCUS_TITLE = 'shotdocs:focus-title';
 
 // El editor (BlockNote con ProseMirror, Tiptap y los estilos de texto) y el panel de comentarios se bajan
@@ -42,7 +51,7 @@ export function focusTitle(): void {
   window.dispatchEvent(new Event(FOCUS_TITLE));
 }
 
-export function PageView({ id }: { id: string }) {
+export function PageView({ id, registerTitle }: { id: string; registerTitle?: RegisterTitle }) {
   const tree = useTree();
   const status = useSyncStatus();
   const perms = usePermissions();
@@ -100,7 +109,7 @@ export function PageView({ id }: { id: string }) {
       <LinkAsideNotice pageId={id} />
       <LinkVisitorAsideNotice pageId={id} />
       <PageHeader id={id} editable={perms.canEditRow(id)} />
-      <TitleInput id={id} title={page.title} readOnly={!perms.canEditRow(id)} />
+      <TitleInput id={id} title={page.title} readOnly={!perms.canEditRow(id)} registerTitle={registerTitle} />
       {/* Si el editor tira un error con lo que tiene la página, falla solo la página (ErrorBarrier.tsx). */}
       <PageBarrier pageId={id}>
         <Part fallback={<EditorSkeleton />}>
@@ -170,7 +179,7 @@ function CommentsSlot({ pageId }: { pageId: string }) {
   );
 }
 
-function TitleInput({ id, title, readOnly }: { id: string; title: string; readOnly: boolean }) {
+function TitleInput({ id, title, readOnly, registerTitle }: { id: string; title: string; readOnly: boolean; registerTitle?: RegisterTitle }) {
   const tree = useTree();
   const tr = useT();
   const [value, setValue] = useState(title);
@@ -179,6 +188,8 @@ function TitleInput({ id, title, readOnly }: { id: string; title: string; readOn
   const ref = useRef<HTMLTextAreaElement>(null);
   /** Lo que viene llegó pegado o soltado (no tecleado): si pasa el tope, lo que sobra va a la página. */
   const bulk = useRef(false);
+  const localTitle = useRef<string | null>(null);
+  const titleStamp = useRef<object>({});
 
   // Si el título cambia desde otro lado (otro dispositivo, la barra lateral), se muestra salvo que se
   // esté escribiendo acá.
@@ -225,8 +236,25 @@ function TitleInput({ id, title, readOnly }: { id: string; title: string; readOn
   const commit = (next: string) => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
-    void tree.rename(id, next.replace(/\s+/g, ' ').trim());
+    return tree.rename(id, next.replace(/\s+/g, ' ').trim()).then(() => {
+      if (localTitle.current === next) localTitle.current = null;
+    });
   };
+
+  useEffect(() => {
+    titleStamp.current = {};
+    return registerTitle?.({
+      id, tree,
+      stamp: () => titleStamp.current,
+      unsaved: () => localTitle.current !== null &&
+        localTitle.current.replace(/\s+/g, ' ').trim() !== tree.get(id)?.title,
+      prepare: () => {
+        if (localTitle.current === null) return Promise.resolve();
+        if (readOnly) return Promise.reject(new Error('Título sin permiso de edición'));
+        return commit(ref.current?.value ?? localTitle.current);
+      },
+    });
+  }, [id, tree, readOnly, registerTitle]);
 
   // Un título escrito justo antes de cambiar de página o de cerrar la app no espera la pausa.
   useEffect(() => {
@@ -259,7 +287,7 @@ function TitleInput({ id, title, readOnly }: { id: string; title: string; readOn
       onBlur={() => {
         focused.current = false;
         disarmTitleUndo(id);
-        if (!readOnly) commit(value);
+        if (!readOnly) void commit(value).catch(() => undefined);
       }}
       onPaste={() => (bulk.current = true)}
       onDrop={() => (bulk.current = true)}
@@ -285,14 +313,18 @@ function TitleInput({ id, title, readOnly }: { id: string; title: string; readOn
           // (el aviso lo da sync/titleRest.ts al escribirlo).
           const { head, rest } = splitTitle(next);
           setValue(head);
+          localTitle.current = head;
+          titleStamp.current = {};
           if (timer.current) clearTimeout(timer.current);
           timer.current = null;
           void tree.rename(id, head.replace(/\s+/g, ' ').trim(), { rest });
           return;
         }
         setValue(next);
+        localTitle.current = next;
+        titleStamp.current = {};
         if (timer.current) clearTimeout(timer.current);
-        timer.current = setTimeout(() => commit(next), 300);
+        timer.current = setTimeout(() => void commit(next).catch(() => undefined), 300);
       }}
       onKeyDown={(e) => {
         // Recién elegida una plantilla, el título no tiene nada para deshacer: Ctrl/⌘+Z saca la plantilla y
@@ -306,7 +338,7 @@ function TitleInput({ id, title, readOnly }: { id: string; title: string; readOn
         if (e.key === 'Enter') {
           e.preventDefault();
           if (readOnly) return;
-          commit(value);
+          void commit(value).catch(() => undefined);
           window.dispatchEvent(new Event('shotdocs:focus-editor'));
         }
       }}

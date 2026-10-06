@@ -1,5 +1,7 @@
 # Roadmap
 
+**LF21, tramo de guardado local v0.199:** preparación explícita del título y barrera de ocho segundos para *Reload* de avisos y cambio/unión/creación de workspace desde uno abierto. Es una entrega parcial: quedan los enlaces entre workspaces, exportación/reimportación y sus consumidores. Auth y salidas externas conservan sus recorridos; sigue pendiente resolver el rechazo al guardar el sobrante de títulos largos.
+
 Lo que falta, por importancia. El orden de trabajo lo manda `Plan_Workspaces.md` (secciones 10 y 11); las
 fases originales están en `Plan_ShotDocs.md`, sección 9.
 
@@ -546,8 +548,9 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   bajada del original ya vence por 30 s sin recibir bytes (v0.177), y puede durar más de 90 s si avanza; faltan pruebas de que la
   parte siguiente no vuelve a bajar los originales; si la pestaña se cuelga en la parte N, no se puede retomar desde ahí.
   Observaciones de la re-verificación de la entrega 1: (R1) el Imprimir del menú del navegador mientras se arma el PDF
-  puede llevar la vista de la página en curso: sacar `print-output` a esa vista hasta `place()`; (R2) la prueba de la
-  vuelta al achicador del hilo principal no distingue la mutación: hacerlo inyectable en `workerResizer`; (R3) con
+  puede llevar la vista de la página en curso: sacar `print-output` a esa vista hasta `place()`; (R2) comprobación
+  reforzada en v0.199: el achicador existente permite controlar ambos fallos del Worker;
+  el recorrido real produce JPEG y distingue retirar la vuelta al hilo principal, sin cambiar `workerResizer`; (R3) con
   *Comments* tildada se hace un pedido por página, en fila: medirlo contra Supabase con 300 páginas y, si pesa, pedir de
   a varias.
 - **P.21 Menciones en comentarios: *@persona*** (Lega, 2026-10-02): escribir `@` en un comentario, elegir a alguien y

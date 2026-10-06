@@ -6,6 +6,8 @@ import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
+import { saveBeforeExit, watchPendingWrites, reloadTimings } from './lazyPart';
+import type { TitlePreparation } from './PageView';
 
 // La página con el editor cargado aparte (roadmap B.4): el título y el encabezado salen enseguida, el cuerpo
 // muestra un esqueleto y el editor se monta cuando termina de bajar. Este archivo no importa el editor.
@@ -78,6 +80,61 @@ function services(d: Device): Services {
 }
 
 describe('la página', () => {
+  it.each(['guardado', 'rechazo', 'contexto'] as const)('la salida conserva el título real: %s', async (mode) => {
+    const device = await makeDevice(new FakeServer());
+    devices.push(device);
+    const page = await device.tree.create(null, 'Original');
+    const owner = services(device);
+    const { PageView } = await import('./PageView');
+    let title: TitlePreparation | undefined;
+    let live = true;
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    roots.push(root);
+    act(() => root.render(<ServicesContext.Provider value={owner}><PageView id={page} registerTitle={(p) => {
+      title = p; return () => { title = undefined; };
+    }} /></ServicesContext.Provider>));
+    const input = host.querySelector<HTMLTextAreaElement>('.page-title')!;
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
+    act(() => { input.focus(); setter.call(input, 'Título nuevo'); input.dispatchEvent(new Event('input', { bubbles: true })); });
+    expect(title?.unsaved()).toBe(true);
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const rename = device.tree.rename.bind(device.tree);
+    const blocked = vi.spyOn(device.tree, 'rename').mockImplementation(async (...args) => {
+      await held;
+      if (mode === 'rechazo') throw new Error('IndexedDB rechazó la escritura');
+      await rename(...args);
+    });
+    const oldWait = reloadTimings.saveWaitMs;
+    reloadTimings.saveWaitMs = 120;
+    const unwatch = watchPendingWrites({ owner, current: () => live,
+      stamp: () => title?.stamp(),
+      prepare: () => title!.prepare(), flush: () => device.docs.flush(),
+      unsaved: () => !!title?.unsaved() || device.tree.hasUnsavedWrites() || device.docs.hasUnsavedEdits(),
+    });
+    const exit = vi.fn();
+    try {
+      const leaving = saveBeforeExit(owner, () => live, exit);
+      expect(exit).not.toHaveBeenCalled();
+      expect(blocked).toHaveBeenCalledTimes(1);
+      if (mode === 'contexto') live = false;
+      await act(async () => { release(); await leaving; });
+      expect(exit).toHaveBeenCalledTimes(mode === 'guardado' ? 1 : 0);
+      expect(input.value).toBe('Título nuevo');
+      if (mode === 'rechazo') {
+        expect(device.tree.get(page)?.title).toBe('Original');
+        blocked.mockRestore();
+        reloadTimings.saveWaitMs = oldWait;
+        await act(async () => { await saveBeforeExit(owner, () => live, exit); });
+        expect(exit).toHaveBeenCalledTimes(1);
+      }
+      const ops = await device.db.getAll('ops');
+      expect(ops.some((o) => o.op.kind === 'update' && o.op.id === page && o.op.patch.title === 'Título nuevo')).toBe(true);
+    } finally { unwatch(); blocked.mockRestore(); reloadTimings.saveWaitMs = oldWait; }
+  });
+
   it('el título sale enseguida y el editor se monta cuando termina de bajar', async () => {
     const server = new FakeServer();
     const device = await makeDevice(server);
