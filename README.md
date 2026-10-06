@@ -95,6 +95,8 @@ In development. What works today:
   comment thread, so a guest with *Comment* can answer without editing the page.
 - Several workspaces: a welcome screen to join one with an invitation link or connect one you created with
   the guide, and a workspace list in the project menu to switch, join, create or remove one from the device.
+- Long pasted titles keep their full text until the title and overflow save locally. If saving fails, the
+  draft stays available in that page for a retry; once saved, the overflow moves into the page without duplication.
 - A file trash per project: photos and videos no page uses anymore show in the *Files* tab of the trash, and
   the owner and admins can send them to the Google Drive trash (recoverable there for 30 days).
 - How much each project takes in the owner's Drive: in the project menu, in the *Google Drive* dialog (owner

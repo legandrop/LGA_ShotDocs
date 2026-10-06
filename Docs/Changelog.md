@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.200 :
+
+Un título pegado de más de quinientos caracteres se recortaba en el campo antes de que IndexedDB confirmara el encabezado y su sobrante. Si esa transacción rechazaba, salir del campo podía guardar solamente el encabezado. Ahora el texto completo permanece asociado a la página y al workspace durante el intento; el campo espera de solo lectura y, ante el rechazo, conserva el borrador para editar o reintentar. Volver a esa página en la misma sesión lo recupera. Blur, Enter y la preparación antes de salir comparten el mismo intento, que conserva un identificador estable del sobrante. Además, agregar, reparar o retirar sobrantes modifica una lista recién leída dentro de la transacción: un retiro con caché antigua no borra otra adición confirmada. Se preservan los límites, la transferencia al editor y la compatibilidad del formato existente.
+
+[Conservar el título completo hasta confirmar su guardado local]
+
 v0.199 :
 
 Recargar desde un aviso o cambiar de workspace podía retirar la vista antes de terminar de guardar en el dispositivo. El título esperaba su pausa de escritura y todavía no aparecía entre los cambios pendientes. Ahora esas salidas preparan el título de la página montada, esperan su escritura real junto con los documentos y las colas locales, y vuelven a comprobar dueño, página, errores y nuevas ediciones antes de ejecutar la recarga o publicar el workspace elegido. La espera incluye la preparación y termina a los ocho segundos; si falla, conserva la vista y permite volver a intentar. Se mantienen las preguntas sobre cambios guardados que faltan subir. Es un tramo parcial de LF21: no cambia Auth, enlaces entre workspaces, exportaciones ni cierres externos, y no resuelve el rechazo al guardar el sobrante de títulos largos.

@@ -9,6 +9,7 @@ import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { codePointLength } from '../lib/dbLimits';
 import { watchTitleRests } from '../sync/titleRest';
 import { notify } from './notice';
+import type { TitlePreparation } from './PageView';
 
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -81,7 +82,7 @@ function services(d: Device): Services {
 // El tope del título (500 caracteres, el de la base): pegar más lo corta y lo que sobra va al principio de la página;
 // teclear más no entra. Antes, el cambio quedaba rechazado por el servidor para siempre (Doc_Sincronizacion.md).
 
-async function open(d: Device, page: string): Promise<HTMLTextAreaElement> {
+async function open(d: Device, page: string, registerTitle?: (title: TitlePreparation) => () => void): Promise<HTMLTextAreaElement> {
   const { PageView } = await import('./PageView');
   const host = document.createElement('div');
   document.body.append(host);
@@ -91,7 +92,7 @@ async function open(d: Device, page: string): Promise<HTMLTextAreaElement> {
     root.render(
       <ServicesContext.Provider value={services(d)}>
         <main className="main">
-          <PageView id={page} />
+          <PageView id={page} registerTitle={registerTitle} />
         </main>
       </ServicesContext.Provider>,
     ),
@@ -132,6 +133,9 @@ describe('el título de la página tiene el tope de la base', () => {
     const long = pasted + '\nsegundo renglón ' + 'z'.repeat(250);
     act(() => void title.dispatchEvent(new Event('paste', { bubbles: true })));
     input(title, long, new Event('input', { bubbles: true }));
+    expect(title.value).toBe(long);
+    expect(title.readOnly).toBe(true);
+    await wait();
     expect(codePointLength(title.value)).toBeLessThanOrEqual(500);
     expect(long.startsWith(title.value)).toBe(true);
     for (let i = 0; i < 100 && (device.tree.titleRests().length > 0 || !document.querySelector('.bn-editor')?.textContent?.includes('segundo renglón')); i++) await wait(30);
@@ -176,9 +180,111 @@ describe('el título de la página tiene el tope de la base', () => {
     const title = await open(device, page);
     act(() => void title.dispatchEvent(new Event('paste', { bubbles: true })));
     input(title, `${'é'.repeat(499)}🎬🎬🎬`, new Event('input', { bubbles: true }));
-    expect(title.value).toBe(`${'é'.repeat(499)}🎬`);
     await wait();
+    expect(title.value).toBe(`${'é'.repeat(499)}🎬`);
     expect(device.tree.get(page)?.title).toBe(`${'é'.repeat(499)}🎬`);
     expect(device.tree.titleRests().map((r) => r.text)).toEqual(['🎬🎬']);
+  });
+
+  it('rechazo local conserva los 745 caracteres tras blur y remonte; reintenta sin duplicar el sobrante', async () => {
+    const d = await makeDevice(new FakeServer());
+    devices.push(d);
+    const page = await d.tree.create(null, 'Anterior');
+    await d.engine.syncNow();
+    const full = 'H'.repeat(500) + 'R'.repeat(245);
+    const original = IDBObjectStore.prototype.put;
+    const abort = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (this: IDBObjectStore, value, key) {
+      const request = original.call(this, value, key!);
+      if (this.name === 'meta' && key === 'titleRests') this.transaction.abort();
+      return request;
+    });
+    try {
+      const first = await open(d, page);
+      input(first, full, new Event('input', { bubbles: true }));
+      await wait();
+      expect(first.value).toBe(full);
+      expect(first.readOnly).toBe(false);
+      act(() => { first.focus(); first.blur(); });
+      await wait();
+      expect(first.value).toBe(full);
+      act(() => roots.pop()!.unmount());
+      await wait();
+      const reopened = await open(d, page);
+      expect(reopened.value).toBe(full);
+      expect(d.tree.hasUnsavedWrites()).toBe(true);
+      expect(await d.db.getAll('ops')).toEqual([]);
+      expect(await d.db.get('meta', 'titleRests')).toBeUndefined();
+      abort.mockRestore();
+      act(() => { reopened.focus(); reopened.blur(); });
+      await wait();
+      expect(reopened.value).toBe('H'.repeat(500));
+      expect(d.tree.pendingTitleDraft(page)).toBeUndefined();
+      expect(await d.db.getAll('ops')).toHaveLength(1);
+      expect((await d.db.get('meta', 'titleRests') as { text: string }[]).map((r) => r.text)).toEqual(['R'.repeat(245)]);
+      act(() => { reopened.focus(); reopened.blur(); });
+      await wait();
+      expect(await d.db.getAll('ops')).toHaveLength(1);
+    } finally { abort.mockRestore(); }
+  });
+
+  it('prepare de la barrera LF21 rechaza con el texto completo y sólo autoriza salir después del retry durable', async () => {
+    const d = await makeDevice(new FakeServer());
+    devices.push(d);
+    const page = await d.tree.create(null, 'Anterior');
+    await d.engine.syncNow();
+    let prepared: TitlePreparation | undefined;
+    const field = await open(d, page, (title) => { prepared = title; return () => { prepared = undefined; }; });
+    const full = 'H'.repeat(500) + 'R'.repeat(245);
+    const original = IDBObjectStore.prototype.put;
+    const abort = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (this: IDBObjectStore, value, key) {
+      const request = original.call(this, value, key!);
+      if (this.name === 'meta' && key === 'titleRests') this.transaction.abort();
+      return request;
+    });
+    try {
+      input(field, full, new Event('input', { bubbles: true }));
+      await wait();
+      expect(prepared!.unsaved()).toBe(true);
+      await act(async () => { await expect(prepared!.prepare()).rejects.toMatchObject({ name: 'AbortError' }); });
+      expect(field.value).toBe(full);
+      expect(d.tree.get(page)?.title).toBe('Anterior');
+      abort.mockRestore();
+      await act(async () => prepared!.prepare());
+      expect(prepared!.unsaved()).toBe(false);
+      expect(field.value).toBe('H'.repeat(500));
+      expect((await d.db.get('meta', 'titleRests') as { text: string }[])[0].text).toBe('R'.repeat(245));
+    } finally { abort.mockRestore(); }
+  });
+
+  it('remonte tras tx.done mantiene readonly hasta terminar refresh y no presta el recibo A a B', async () => {
+    const d = await makeDevice(new FakeServer()); devices.push(d);
+    const page = await d.tree.create(null, 'Anterior'); await d.engine.syncNow();
+    const a = 'A'.repeat(500) + 'resto A', b = 'B'.repeat(500) + 'resto B';
+    let release!: () => void, reached!: () => void;
+    const pause = new Promise<void>((r) => { release = r; });
+    const reading = new Promise<void>((r) => { reached = r; });
+    const original = d.db.get.bind(d.db);
+    const get = vi.spyOn(d.db, 'get').mockImplementation(async (...args: Parameters<typeof d.db.get>) => {
+      const value = await original(...args);
+      if (args[0] === 'meta' && args[1] === 'titleRests') { reached(); await pause; }
+      return value;
+    });
+    try {
+      const first = await open(d, page);
+      input(first, a, new Event('input', { bubbles: true }));
+      await reading;
+      expect((await original('meta', 'titleRests') as { text: string }[])[0].text).toBe('resto A');
+      act(() => roots.pop()!.unmount());
+      const remounted = await open(d, page);
+      input(remounted, b, new Event('input', { bubbles: true }));
+      expect(remounted.readOnly && remounted.value === a && d.tree.pendingTitleDraft(page)?.fullText === a).toBe(true);
+      await expect(d.tree.saveTitleDraft(page, b)).rejects.toThrow('otro texto');
+      await act(async () => { release(); await d.tree.saveTitleDraft(page, a); });
+      expect(remounted.readOnly).toBe(false);
+      expect(remounted.value).toBe('A'.repeat(500));
+      expect(await d.db.getAll('ops')).toHaveLength(1);
+      get.mockRestore(); input(remounted, b, new Event('input', { bubbles: true })); await wait();
+      expect((await original('meta', 'titleRests') as { text: string }[]).map((r) => r.text)).toEqual(['resto A', 'resto B']);
+    } finally { release(); get.mockRestore(); }
   });
 });

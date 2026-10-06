@@ -39,6 +39,40 @@ export interface TitleRest {
   at: number;
 }
 
+/** Título aceptado que todavía no quedó guardado; pertenece sólo a esta instancia del árbol. */
+export interface PendingTitleDraft {
+  fullText: string;
+  head: string;
+  rest: string;
+  busy: boolean;
+}
+
+type TitleDraft = Omit<PendingTitleDraft, 'busy'> & {
+  restId: string;
+  attempt: Promise<void> | null;
+  durable: boolean;
+};
+type RestStore = { get(key: string): Promise<unknown>; put(value: unknown, key: string): Promise<unknown> };
+
+async function readTitleRests(store: Pick<RestStore, 'get'>): Promise<TitleRest[]> {
+  const value = await store.get(TITLE_REST_KEY);
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new Error('Lista de sobrantes de título ilegible');
+  return value as TitleRest[];
+}
+
+function mergeTitleRests(current: TitleRest[], additions: TitleRest[]): TitleRest[] {
+  const next = [...current];
+  for (const rest of additions) {
+    const previous = next.find((r) => r.id === rest.id);
+    if (previous && (previous.pageId !== rest.pageId || previous.text !== rest.text || previous.title !== rest.title)) {
+      throw new Error('Identidad de sobrante de título con otro contenido');
+    }
+    if (!previous) next.push(rest);
+  }
+  return next;
+}
+
 /**
  * El cambio con sus textos dentro de los topes de la base: el título de una página en 500 caracteres (lo que sobra
  * vuelve en `rest`) y el nombre de un proyecto en 200 (la app ya no deja escribir más). Sin nada que cortar, `null`.
@@ -188,6 +222,7 @@ export class PageTree {
   private primary: string;
   private fresh: string[] = [];
   private rests: TitleRest[] = [];
+  private titleDrafts = new Map<string, TitleDraft>();
 
   /** Se llama cuando entra un cambio local a la cola. */
   onQueued?: () => void;
@@ -493,6 +528,36 @@ export class PageTree {
     await this.enqueue({ kind: 'update', id, patch: { title: fitted.head } }, fitted.rest + rest);
   }
 
+  pendingTitleDraft(id: string): PendingTitleDraft | undefined {
+    const draft = this.titleDrafts.get(id);
+    return draft && (!draft.durable || draft.attempt) ? { fullText: draft.fullText, head: draft.head, rest: draft.rest, busy: !!draft.attempt } : undefined;
+  }
+
+  /** Todos los gestos del mismo intento esperan una sola TX; el resto conserva su id al reintentar. */
+  saveTitleDraft(id: string, fullText: string): Promise<void> {
+    let draft = this.titleDrafts.get(id);
+    if (draft?.attempt) return draft.fullText === fullText ? draft.attempt : Promise.reject(new Error('El título todavía está guardando otro texto'));
+    if (!draft || draft.fullText !== fullText) {
+      const { head, rest } = splitTitle(fullText);
+      draft = { fullText, head: head.replace(/\s+/g, ' ').trim(), rest, restId: crypto.randomUUID(), attempt: null, durable: false };
+      this.titleDrafts.set(id, draft);
+    }
+    const saving = draft;
+    const clear = () => { if (this.titleDrafts.get(id) === saving) this.titleDrafts.delete(id); };
+    const write = saving.head === this.get(id)?.title && !saving.rest.trim()
+      ? Promise.resolve().then(() => { saving.durable = true; })
+      : this.enqueue({ kind: 'update', id, patch: { title: saving.head } }, saving.rest, saving.restId, () => { saving.durable = true; });
+    saving.attempt = write.catch((err: unknown) => {
+      if (!saving.durable) throw err;
+      // Falló un aviso posterior: la TX ya confirmó; no se fabrica otro rest al reintentar.
+      console.warn('[title] fallo posterior al guardado local', err);
+    }).finally(() => {
+      saving.attempt = null;
+      if (saving.durable) clear();
+    });
+    return saving.attempt;
+  }
+
   /** Mueve `id` adentro de `parentId`: antes o después de una hermana, o al final si no se indica. */
   async move(id: string, parentId: string | null, position: { before?: string; after?: string } = {}): Promise<void> {
     if (parentId === id || (parentId && this.isDescendant(parentId, id))) {
@@ -538,35 +603,45 @@ export class PageTree {
 
   /** Hay cambios del árbol que todavía se están guardando en el dispositivo. */
   hasUnsavedWrites(): boolean {
-    return this.writing > 0;
+    return this.writing > 0 || [...this.titleDrafts.values()].some((draft) => !draft.durable);
   }
 
   /**
    * Pone el cambio en la cola, con sus textos dentro de los topes de la base (`fitOp`). Lo que sobra del título (y el
    * `extraRest` que cortó quien llama) se anota en la misma transacción, para ir al principio de la página.
    */
-  private async enqueue(op: TreeOp, extraRest = ''): Promise<void> {
+  private async enqueue(op: TreeOp, extraRest = '', restId?: string, onDurable?: () => void): Promise<void> {
     const fitted = fitOp(op);
     const final = fitted?.op ?? op;
     const queued: QueuedOp = { opId: crypto.randomUUID(), op: final, createdAt: Date.now() };
     const restText = (fitted?.rest ?? '') + extraRest;
     const pageId = restPage(final);
-    const rest = pageId && restText.trim() ? this.newRest(pageId, restText, final) : null;
+    const rest = pageId && restText.trim() ? { ...this.newRest(pageId, restText, final), ...(restId ? { id: restId } : {}) } : null;
+    let confirmed: TitleRest[] | null = null;
+    let alreadyWritten = false;
     this.writing++;
     try {
       if (rest) {
         const tx = this.db.transaction(['ops', 'meta'], 'readwrite');
-        queued.seq = await tx.objectStore('ops').add(queued);
-        await tx.objectStore('meta').put([...this.rests, rest], TITLE_REST_KEY);
+        // Si rechaza una petición antes de llegar a `done`, se observa también el rechazo de la TX.
+        void tx.done.catch(() => undefined);
+        const current = await readTitleRests(tx.objectStore('meta'));
+        confirmed = mergeTitleRests(current, [rest]);
+        alreadyWritten = !!restId && current.some((r) => r.id === restId);
+        if (!alreadyWritten) {
+          queued.seq = await tx.objectStore('ops').add(queued);
+          await tx.objectStore('meta').put(confirmed, TITLE_REST_KEY);
+        }
         await tx.done;
       } else {
         queued.seq = await this.db.add('ops', queued);
       }
+      onDurable?.();
     } finally {
       this.writing--;
     }
-    if (rest) this.rests = [...this.rests, rest];
-    this.ops.push(queued);
+    if (!alreadyWritten) this.ops.push(queued);
+    if (confirmed) await this.refreshTitleRests(confirmed);
     this.recompute();
     this.onQueued?.();
     if (rest) this.onTitleRest?.();
@@ -575,6 +650,16 @@ export class PageTree {
   private newRest(pageId: string, text: string, op: TreeOp): TitleRest {
     const title = op.kind === 'create' ? op.page.title : op.kind === 'update' ? (op.patch.title ?? '') : '';
     return { id: crypto.randomUUID(), pageId, text, title, at: Date.now() };
+  }
+
+  private async refreshTitleRests(confirmed: TitleRest[]): Promise<void> {
+    try {
+      this.rests = await readTitleRests({ get: (key) => this.db.get('meta', key) });
+    } catch (err) {
+      // El recibo durable sigue siendo válido si no se pudo refrescar la vista local.
+      this.rests = mergeTitleRests(this.rests, confirmed);
+      console.warn('[titleRest] no se pudo refrescar la lista local', err);
+    }
   }
 
   // --- lo que sobró de los títulos largos ------------------------------------------------------------
@@ -586,10 +671,13 @@ export class PageTree {
 
   /** Lo que sobró ya está escrito (y guardado) en su página: se olvida. */
   async doneTitleRest(id: string): Promise<void> {
-    const next = this.rests.filter((r) => r.id !== id);
-    if (next.length === this.rests.length) return;
-    await this.db.put('meta', next, TITLE_REST_KEY);
-    this.rests = next;
+    const tx = this.db.transaction('meta', 'readwrite');
+    void tx.done.catch(() => undefined);
+    const current = await readTitleRests(tx.store);
+    const next = current.filter((r) => r.id !== id);
+    if (next.length !== current.length) await tx.store.put(next, TITLE_REST_KEY);
+    await tx.done;
+    await this.refreshTitleRests(next);
   }
 
   /**
@@ -610,12 +698,14 @@ export class PageTree {
     }
     if (ops.length === 0) return;
     const tx = this.db.transaction(['ops', 'meta'], 'readwrite');
+    void tx.done.catch(() => undefined);
+    const merged = rests.length ? mergeTitleRests(await readTitleRests(tx.objectStore('meta')), rests) : null;
     for (const o of ops) await tx.objectStore('ops').put(o);
-    if (rests.length) await tx.objectStore('meta').put([...this.rests, ...rests], TITLE_REST_KEY);
+    if (merged) await tx.objectStore('meta').put(merged, TITLE_REST_KEY);
     await tx.done;
     const fixed = new Map(ops.map((o) => [o.seq, o]));
     this.ops = this.ops.map((o) => fixed.get(o.seq) ?? o);
-    this.rests = [...this.rests, ...rests];
+    if (merged) await this.refreshTitleRests(merged);
   }
 
   /**
@@ -670,17 +760,19 @@ export class PageTree {
       if (pageId && fitted.rest.trim()) rests.push(this.newRest(pageId, fitted.rest, fitted.op));
     }
     const tx = this.db.transaction(['ops', 'failedOps', 'meta'], 'readwrite');
+    void tx.done.catch(() => undefined);
+    const merged = rests.length ? mergeTitleRests(await readTitleRests(tx.objectStore('meta')), rests) : null;
     for (const r of requeued) {
       r.op.seq = await tx.objectStore('ops').put(r.op);
       await tx.objectStore('failedOps').delete(r.failed.seq!);
     }
     for (const f of dropped) await tx.objectStore('failedOps').delete(f.seq!);
-    if (rests.length) await tx.objectStore('meta').put([...this.rests, ...rests], TITLE_REST_KEY);
+    if (merged) await tx.objectStore('meta').put(merged, TITLE_REST_KEY);
     await tx.done;
     const gone = new Set([...requeued.map((r) => r.failed), ...dropped]);
     this.ops = [...this.ops, ...requeued.map((r) => r.op)].sort((a, b) => a.seq! - b.seq!);
     this.failed = this.failed.filter((f) => !gone.has(f));
-    this.rests = [...this.rests, ...rests];
+    if (merged) await this.refreshTitleRests(merged);
     return { queued: requeued.length > 0, rests: rests.length > 0 };
   }
 

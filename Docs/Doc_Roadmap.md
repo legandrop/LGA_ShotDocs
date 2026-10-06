@@ -1,6 +1,6 @@
 # Roadmap
 
-**LF21, tramo de guardado local v0.199:** preparación explícita del título y barrera de ocho segundos para *Reload* de avisos y cambio/unión/creación de workspace desde uno abierto. Es una entrega parcial: quedan los enlaces entre workspaces, exportación/reimportación y sus consumidores. Auth y salidas externas conservan sus recorridos; sigue pendiente resolver el rechazo al guardar el sobrante de títulos largos.
+**LF21, tramo de guardado local v0.199:** preparación explícita del título y barrera de ocho segundos para *Reload* de avisos y cambio/unión/creación de workspace desde uno abierto. Es una entrega parcial: quedan los enlaces entre workspaces, exportación/reimportación y sus consumidores. Auth y salidas externas conservan sus recorridos. En v0.200 el título completo se conserva hasta confirmar su encabezado y sobrante en el dispositivo; un rechazo mantiene el borrador para reintentar en la misma sesión.
 
 Lo que falta, por importancia. El orden de trabajo lo manda `Plan_Workspaces.md` (secciones 10 y 11); las
 fases originales están en `Plan_ShotDocs.md`, sección 9.

@@ -6,7 +6,7 @@ Los botones *Reload* de los avisos y el cambio, unión o creación de un workspa
 
 La comprobación final vuelve a mirar dueño, página, título y escrituras. Una nueva edición del título durante la espera invalida ese intento. Si la vista que preparaba el título ya no está disponible tras un error global, la recarga no toma esa ausencia como prueba de guardado. El editor y sus servicios siguen vivos mientras se espera.
 
-Este tramo no cierra LF21: quedan los enlaces entre workspaces y su exportación/reimportación. No cambia Auth, el cierre externo del navegador ni *beforeunload*, que continúa como aviso y no puede garantizar una espera. El rechazo de la escritura del sobrante de un título largo sigue siendo un problema separado pendiente de resolver; esta barrera no afirma recuperar ese sobrante.
+Este tramo no cierra LF21: quedan los enlaces entre workspaces y su exportación/reimportación. No cambia Auth, el cierre externo del navegador ni *beforeunload*, que continúa como aviso y no puede garantizar una espera. Desde v0.200 el título completo espera la confirmación de encabezado y sobrante; ante un rechazo mantiene el borrador en la misma sesión, como se detalla en «Límites».
 
 Cómo funciona hoy la regla de no perder nunca información. El código está en `src/sync/` y las pruebas
 (`npm test`) en `src/sync/sync.test.ts`, `audit.test.ts` (los casos de la auditoría de la fase 1),
@@ -573,6 +573,13 @@ las pruebas aplica los mismos `check` con el mismo error (`src/sync/lengthChecks
   repite. Aviso: *The title was longer than 500 characters: the rest is now the first paragraph of “…”*.
 - **En el título de la página**, pegar, soltar o dictar más de la cuenta deja el título en el tope y manda lo que sobra
   a la página (con sus renglones); teclear pasado el tope no entra y avisa *A title can be up to 500 characters.*
+  El campo conserva el texto completo hasta que la transacción local confirma encabezado y sobrante. Durante ese
+  intento queda de solo lectura. Si IndexedDB rechaza, vuelve a permitir editar y mantiene el texto para reintentar
+  al salir del campo o pulsar Enter; volver a la página en la misma sesión recupera ese borrador. La preparación
+  antes de salir espera el mismo intento y no autoriza el cambio si falló. El borrador pendiente pertenece al árbol
+  y a la página de ese workspace; no es una copia durable si el almacenamiento todavía rechaza. Cada intento conserva
+  el identificador del sobrante, y todos sus escritores releen y modifican la lista dentro de la transacción: retirar
+  un sobrante ya transferido no borra otro que se confirmó desde una conexión distinta.
 - **La cola.** Al abrir, los cambios sin subir que dejó una versión anterior con un título largo se cortan y lo que
   sobra se anota (son lo último que hizo la persona). Los **rechazados por el largo** (solo por `pages_title_check` o
   `workspaces_name_length`: un rechazo por permisos no se toca) se arreglan con el árbol del servidor a la vista, en

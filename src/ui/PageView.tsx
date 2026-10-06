@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useT } from '../i18n';
 import { usePrefs } from '../prefs';
 import { navigate, pagePath } from '../router';
@@ -182,20 +182,35 @@ function CommentsSlot({ pageId }: { pageId: string }) {
 function TitleInput({ id, title, readOnly, registerTitle }: { id: string; title: string; readOnly: boolean; registerTitle?: RegisterTitle }) {
   const tree = useTree();
   const tr = useT();
-  const [value, setValue] = useState(title);
+  const [value, setValue] = useState(() => tree.pendingTitleDraft(id)?.fullText ?? title);
+  const [busy, setBusy] = useState(() => !!tree.pendingTitleDraft(id)?.busy);
+  const scope = useMemo(() => ({ active: true }), [tree, id]);
+  const attempt = useRef<{ scope: typeof scope; promise: Promise<void> } | null>(null);
   const focused = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ref = useRef<HTMLTextAreaElement>(null);
   /** Lo que viene llegó pegado o soltado (no tecleado): si pasa el tope, lo que sobra va a la página. */
   const bulk = useRef(false);
-  const localTitle = useRef<string | null>(null);
+  const localTitle = useRef<string | null>(tree.pendingTitleDraft(id)?.fullText ?? null);
   const titleStamp = useRef<object>({});
 
   // Si el título cambia desde otro lado (otro dispositivo, la barra lateral), se muestra salvo que se
   // esté escribiendo acá.
   useEffect(() => {
-    if (!focused.current) setValue(title);
-  }, [title]);
+    const pending = tree.pendingTitleDraft(id);
+    if (pending) setValue(pending.fullText);
+    else if (!focused.current && localTitle.current === null) setValue(title);
+  }, [title, tree, id]);
+
+  useEffect(() => {
+    scope.active = true;
+    const pending = tree.pendingTitleDraft(id);
+    localTitle.current = pending?.fullText ?? null;
+    setValue(localTitle.current ?? title);
+    setBusy(!!pending?.busy);
+    if (pending?.busy) void commit(pending.fullText).catch(() => undefined);
+    return () => { scope.active = false; };
+  }, [tree, id, scope]);
 
   useEffect(() => {
     const onFocus = () => {
@@ -236,9 +251,25 @@ function TitleInput({ id, title, readOnly, registerTitle }: { id: string; title:
   const commit = (next: string) => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
-    return tree.rename(id, next.replace(/\s+/g, ' ').trim()).then(() => {
-      if (localTitle.current === next) localTitle.current = null;
+    if (attempt.current?.scope === scope) return attempt.current.promise;
+    const full = next;
+    if (scope.active) setBusy(true);
+    const promise = tree.saveTitleDraft(id, full).then(() => {
+      if (!scope.active) return;
+      if (localTitle.current === full) {
+        localTitle.current = null;
+        // El campo se recorta recién después del recibo durable de título y sobrante.
+        if (codePointLength(full) > DB_LIMITS.pageTitle) setValue(splitTitle(full).head);
+      }
+    }, (err: unknown) => {
+      if (scope.active) notify(tr('leave.unsaved'));
+      throw err;
+    }).finally(() => {
+      if (attempt.current?.promise === promise) attempt.current = null;
+      if (scope.active) setBusy(false);
     });
+    attempt.current = { scope, promise };
+    return promise;
   };
 
   useEffect(() => {
@@ -246,12 +277,13 @@ function TitleInput({ id, title, readOnly, registerTitle }: { id: string; title:
     return registerTitle?.({
       id, tree,
       stamp: () => titleStamp.current,
-      unsaved: () => localTitle.current !== null &&
-        localTitle.current.replace(/\s+/g, ' ').trim() !== tree.get(id)?.title,
+      unsaved: () => !!tree.pendingTitleDraft(id) || (localTitle.current !== null &&
+        localTitle.current.replace(/\s+/g, ' ').trim() !== tree.get(id)?.title),
       prepare: () => {
-        if (localTitle.current === null) return Promise.resolve();
+        const pending = localTitle.current ?? tree.pendingTitleDraft(id)?.fullText ?? null;
+        if (pending === null) return Promise.resolve();
         if (readOnly) return Promise.reject(new Error('Título sin permiso de edición'));
-        return commit(ref.current?.value ?? localTitle.current);
+        return commit(pending);
       },
     });
   }, [id, tree, readOnly, registerTitle]);
@@ -259,10 +291,8 @@ function TitleInput({ id, title, readOnly, registerTitle }: { id: string; title:
   // Un título escrito justo antes de cambiar de página o de cerrar la app no espera la pausa.
   useEffect(() => {
     const flushPending = () => {
-      if (!timer.current) return;
-      clearTimeout(timer.current);
-      timer.current = null;
-      void tree.rename(id, (ref.current?.value ?? '').replace(/\s+/g, ' ').trim());
+      const pending = localTitle.current ?? tree.pendingTitleDraft(id)?.fullText ?? null;
+      if (pending !== null && !readOnly) void commit(pending).catch(() => undefined);
     };
     const onHide = () => document.visibilityState === 'hidden' && flushPending();
     window.addEventListener('pagehide', flushPending);
@@ -272,7 +302,7 @@ function TitleInput({ id, title, readOnly, registerTitle }: { id: string; title:
       document.removeEventListener('visibilitychange', onHide);
       flushPending();
     };
-  }, [tree, id]);
+  }, [tree, id, readOnly, scope]);
 
   return (
     <textarea
@@ -282,7 +312,8 @@ function TitleInput({ id, title, readOnly, registerTitle }: { id: string; title:
       value={value}
       placeholder={tr('common.untitled')}
       aria-label={tr('page.title')}
-      readOnly={readOnly}
+      readOnly={readOnly || busy}
+      aria-busy={busy || undefined}
       onFocus={() => (focused.current = true)}
       onBlur={() => {
         focused.current = false;
@@ -292,6 +323,7 @@ function TitleInput({ id, title, readOnly, registerTitle }: { id: string; title:
       onPaste={() => (bulk.current = true)}
       onDrop={() => (bulk.current = true)}
       onChange={(e) => {
+        if (readOnly || attempt.current?.scope === scope || tree.pendingTitleDraft(id)?.busy) return;
         disarmTitleUndo(id);
         const next = e.target.value;
         const pasted = bulk.current;
@@ -311,13 +343,12 @@ function TitleInput({ id, title, readOnly, registerTitle }: { id: string; title:
           }
           // Pegado, soltado o dictado: el título queda en el tope y lo que sobra va al principio de la página
           // (el aviso lo da sync/titleRest.ts al escribirlo).
-          const { head, rest } = splitTitle(next);
-          setValue(head);
-          localTitle.current = head;
+          setValue(next);
+          localTitle.current = next;
           titleStamp.current = {};
           if (timer.current) clearTimeout(timer.current);
           timer.current = null;
-          void tree.rename(id, head.replace(/\s+/g, ' ').trim(), { rest });
+          void commit(next).catch(() => undefined);
           return;
         }
         setValue(next);
@@ -338,8 +369,9 @@ function TitleInput({ id, title, readOnly, registerTitle }: { id: string; title:
         if (e.key === 'Enter') {
           e.preventDefault();
           if (readOnly) return;
-          void commit(value).catch(() => undefined);
-          window.dispatchEvent(new Event('shotdocs:focus-editor'));
+          void commit(value).then(() => {
+            if (scope.active) window.dispatchEvent(new Event('shotdocs:focus-editor'));
+          }).catch(() => undefined);
         }
       }}
     />

@@ -101,11 +101,11 @@ describe('la página', () => {
     expect(title?.unsaved()).toBe(true);
     let release!: () => void;
     const held = new Promise<void>((resolve) => { release = resolve; });
-    const rename = device.tree.rename.bind(device.tree);
-    const blocked = vi.spyOn(device.tree, 'rename').mockImplementation(async (...args) => {
+    const saveTitleDraft = device.tree.saveTitleDraft.bind(device.tree);
+    const blocked = vi.spyOn(device.tree, 'saveTitleDraft').mockImplementation(async (...args) => {
       await held;
       if (mode === 'rechazo') throw new Error('IndexedDB rechazó la escritura');
-      await rename(...args);
+      await saveTitleDraft(...args);
     });
     const oldWait = reloadTimings.saveWaitMs;
     reloadTimings.saveWaitMs = 120;
@@ -116,7 +116,8 @@ describe('la página', () => {
     });
     const exit = vi.fn();
     try {
-      const leaving = saveBeforeExit(owner, () => live, exit);
+      let leaving!: Promise<boolean>;
+      act(() => { leaving = saveBeforeExit(owner, () => live, exit); });
       expect(exit).not.toHaveBeenCalled();
       expect(blocked).toHaveBeenCalledTimes(1);
       if (mode === 'contexto') live = false;

@@ -118,8 +118,8 @@ export const help = {
   },
   'help.pagesTitles.title': { en: "Short titles and the header", es: "Títulos cortos y el encabezado" },
   'help.pagesTitles.text': {
-    en: "Titles like 064 | Name | Place show in the sidebar as a code and a name: Short titles in the ⋯ menu turns it on for a page and everything inside. Above the title, a page can show the pages that contain it.",
-    es: "Títulos como 064 | Nombre | Lugar se ven en la barra lateral como un código y un nombre: Títulos cortos, en el menú ⋯, lo prende para una página y todo lo de adentro. Arriba del título, una página puede mostrar las que la contienen.",
+    en: "Titles like 064 | Name | Place show in the sidebar as a code and a name: Short titles in the ⋯ menu turns it on for a page and everything inside. Above the title, a page can show the pages that contain it. A long pasted title keeps its full text until it saves locally; the rest then moves to the page. If saving fails, keep the app open and retry by leaving the title field or pressing Enter.",
+    es: "Títulos como 064 | Nombre | Lugar se ven en la barra lateral como un código y un nombre: Títulos cortos, en el menú ⋯, lo prende para una página y todo lo de adentro. Arriba del título, una página puede mostrar las que la contienen. Un título pegado largo conserva el texto completo hasta guardarlo localmente; después, lo que sobra pasa a la página. Si falla el guardado, dejá la app abierta y reintentá al salir del campo o pulsar Enter.",
   },
   'help.templates.title': { en: "Templates", es: "Plantillas" },
   'help.templates.text': {
