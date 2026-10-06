@@ -24,7 +24,7 @@ its own project: a tree of pages you own.
   says how many changes in how many pages), and *Undo* puts back everything nobody changed afterwards.
 - **Pages and subpages.** A sidebar with a tree of pages, as deep as you need. Every page can hold
   content and other pages; a "folder" is just a page with no content.
-- **Visual editor.** Headings H1–H5 in gradual steps, lists, checklists, tables and images. H5 matches normal bold text; existing H6 content remains supported and looks like H5. You never see Markdown; it is only
+- **Visual editor.** Headings H1–H5 in gradual steps, with H1–H4 slightly larger and H1 kept below the page title on each layout. Lists, checklists, tables and images. H5 matches normal bold text; existing H6 content remains supported and looks like H5. You never see Markdown; it is only
   used behind the scenes to import, export and back up your pages.
 - **Undo in the order you edited.** Ctrl/⌘+Z undoes your last change in the project even if it was on another page:
   the app takes you there and undoes it in view (*Back* returns you). A replace across the project is one step, undone
@@ -168,8 +168,9 @@ In development. What works today:
   remaining folders. Folders deferred for another pass are checked again when their turn starts.
 - Collapse sections by their headings: a triangle next to any heading hides everything up to the next heading
   of its level (just for you, saved on the device; Ctrl/⌘+Alt+Enter, and *Collapse all* in the page menu).
-  Shift+click collapses or expands it for everyone who views the page (if you can edit it); the tooltip says
-  which. Dragging a collapsed heading, or Ctrl/⌘+Shift+↑/↓, moves its whole section.
+  Shift+click collapses or expands the shared view (if you can edit it); each person can override that view locally.
+  The triangle stays visible when the shared view is collapsed or differs from yours. Its direction shows your view;
+  an accent color, tooltip and accessible label explain any difference. Dragging a collapsed heading, or Ctrl/⌘+Shift+↑/↓, moves its whole section.
   Deleting a collapsed heading deletes its whole section; sheet marks still count everything and the PDF
   prints it all open (or as shown, with *Print as shown* in the page menu).
 - Archive and delete projects: icons next to each project in the project menu (a "⋯" on the phone). Archiving keeps

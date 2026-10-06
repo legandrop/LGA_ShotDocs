@@ -4,7 +4,7 @@ import { useLanguage, useT, language } from '../i18n';
 import '../i18n/lazy/editor';
 import { blockIdOf } from './carreteModel';
 import { hiddenInDom } from './collapseDom';
-import { collapseState, headingCollapse, onCollapseChange, toggleCollapsed, toggleShared } from './collapseEditor';
+import { collapseState, headingCollapse, onCollapseChange, toggleCollapsed, toggleShared, type HeadingCollapse } from './collapseEditor';
 import { triangleBox } from './gutterLayout';
 import { IS_MAC } from './shortcuts';
 import { tipRows } from './tipRows';
@@ -17,7 +17,8 @@ import { tipRows } from './tipRows';
 // el margen izquierdo, sin tapar el texto (corrección 14); las medidas, en gutterLayout.ts.
 //
 // Para todos (entrega 2, Doc_Colapsar.md §3 y §4): quien puede editar colapsa o abre para todos con Shift+clic, y
-// el tooltip dice si lo que se ve es de todos o solo tuyo (se ven igual). En pantallas táctiles, solo para vos.
+// el triángulo queda visible si la vista compartida está colapsada. Si tu vista difiere, usa el acento;
+// tooltip y nombre accesible explican ambos estados. En pantallas táctiles, solo para vos.
 
 type AnyEditor = BlockNoteEditor<any, any, any>;
 
@@ -32,6 +33,7 @@ interface Toggle {
   collapsed: boolean;
   /** Colapsado para todos (el mapa de la página). */
   forAll: boolean;
+  onlyYou: boolean;
   title: string;
 }
 
@@ -50,6 +52,14 @@ function coarsePointer(): boolean {
 
 type Translate = (key: Parameters<ReturnType<typeof useT>>[0], params?: Record<string, string | number>) => string;
 
+/** Ambos estados en palabras: la vista compartida no afirma lo que ve otra persona con su ajuste local. */
+export function toggleStatus(tr: Translate, t: Pick<HeadingCollapse, 'collapsed' | 'forAll'>): string {
+  return tr('collapse.views', {
+    local: tr(t.collapsed ? 'collapse.state.collapsed' : 'collapse.state.expanded'),
+    shared: tr(t.forAll ? 'collapse.state.collapsed' : 'collapse.state.expanded'),
+  });
+}
+
 /**
  * El tooltip del triángulo (Doc_Colapsar.md §3; D226, Lega 2026-10-03): un renglón por acción, «gesto o atajo: acción»
  * (tipRows.ts), con los atajos del registro (`collapse` y `collapseEveryone`, shortcuts.ts). Quien no puede compartir
@@ -61,20 +71,14 @@ export function toggleTip(
   canShare: boolean,
   { touch = false, mac = IS_MAC, lang = language() }: { touch?: boolean; mac?: boolean; lang?: string } = {},
 ): string {
-  // Lo que hace el clic: según lo que se ve y si es tuyo o de todos.
-  const click: Parameters<Translate>[0] = !t.collapsed
-    ? t.forAll
-      ? 'collapse.act.collapse'
-      : 'collapse.act.collapseJustYou'
-    : t.forAll
-      ? 'collapse.act.expandJustYou'
-      : 'collapse.act.expand';
-  const shift: Parameters<Translate>[0] = t.forAll ? 'collapse.act.expandForEveryone' : t.collapsed ? 'collapse.act.collapseForEveryone' : 'collapse.act.forEveryone';
+  const click = t.collapsed ? 'collapse.act.expandJustYou' : 'collapse.act.collapseJustYou';
+  const shift = t.forAll ? 'collapse.act.expandForEveryone' : 'collapse.act.collapseForEveryone';
   return (
     tipRows(
       [
         { gesture: 'click', shortcut: 'collapse', action: tr(click) },
-        canShare && { gesture: 'shiftClick', shortcut: 'collapseEveryone', action: tr(shift) },
+        canShare && !touch && { gesture: 'shiftClick', shortcut: 'collapseEveryone', action: tr(shift) },
+        toggleStatus(tr, t),
       ],
       { touch, mac, lang: lang === 'es' ? 'es' : 'en' },
     ) ?? ''
@@ -172,8 +176,7 @@ export function CollapseToggles({
         size: g.size,
         box: g.box,
         color: getComputedStyle(text).color,
-        collapsed: state.analysis.collapsed.has(id),
-        forAll: headingCollapse(editor.prosemirrorState, id).forAll,
+        ...headingCollapse(editor.prosemirrorState, id),
         title: (text.textContent ?? '').trim(),
       });
       nextBands.push({ id, top: r.top - base.top, bottom: r.bottom - base.top, left: editorLeft - base.left, right: r.right - base.left });
@@ -237,11 +240,11 @@ export function CollapseToggles({
           <button
             key={t.id}
             type="button"
-            className={`sd-collapse-toggle${t.collapsed ? ' collapsed' : ''}${hovered === t.id ? ' shown' : ''}`}
+            className={`sd-collapse-toggle${t.collapsed ? ' collapsed' : ''}${t.forAll ? ' shared-collapsed' : ''}${t.onlyYou ? ' only-you' : ''}${hovered === t.id ? ' shown' : ''}`}
             data-id={t.id}
             style={{ top: t.top, left: t.left, width: t.box, height: t.box, ['--sd-heading-color' as string]: t.color }}
             aria-expanded={!t.collapsed}
-            aria-label={tr('collapse.label', { action, title: t.title })}
+            aria-label={`${tr('collapse.label', { action, title: t.title })}. ${toggleStatus(tr, t)}`}
             data-tip={toggleTip(tr, t, shareable, { touch, lang })}
             // Con el editor editable, Tab anida bloques: el triángulo no entra en el orden de Tab.
             tabIndex={editable ? -1 : 0}

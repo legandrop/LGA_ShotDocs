@@ -1,5 +1,7 @@
 # Documentación de LGA Shot Docs
 
+Escala H1–H4 y límite según el título de página (v0.209): [Contraste](Doc_Contraste.md). Indicador local y vista compartida, con color y explicación accesible: [Colapsar](Doc_Colapsar.md).
+
 Guardado antes de *Reload* y cambio de workspace (v0.199, LF21 parcial): [Sincronización offline](Doc_Sincronizacion.md). Enlaces entre workspaces, Auth y salidas externas quedan fuera de este tramo.
 
 Punto de entrada de la documentación. Todo lo de `Docs/` está en castellano, salvo las guías para usuarios

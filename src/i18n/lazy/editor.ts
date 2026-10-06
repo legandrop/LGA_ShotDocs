@@ -343,12 +343,12 @@ export const editor = {
   'collapse.collapse': { en: "Collapse", es: "Colapsar" },
   'collapse.expand': { en: "Expand", es: "Abrir" },
   'collapse.label': { en: "{action} section “{title}”", es: "{action} la sección «{title}»" },
+  'collapse.state.collapsed': { en: "collapsed", es: "colapsada" },
+  'collapse.state.expanded': { en: "expanded", es: "abierta" },
+  'collapse.views': { en: "Your view: {local}. Shared view: {shared}.", es: "Tu vista: {local}. Vista compartida: {shared}." },
   // El tooltip del triángulo (Doc_Colapsar.md §3; D226): un renglón por acción, «gesto o atajo: acción».
   'collapse.act.collapseJustYou': { en: "collapse just for you", es: "colapsar solo para vos" },
-  'collapse.act.collapse': { en: "collapse", es: "colapsar" },
-  'collapse.act.expand': { en: "expand", es: "abrir" },
   'collapse.act.expandJustYou': { en: "expand just for you", es: "abrir solo para vos" },
-  'collapse.act.forEveryone': { en: "for everyone", es: "para todos" },
   'collapse.act.collapseForEveryone': { en: "collapse for everyone", es: "colapsar para todos" },
   'collapse.act.expandForEveryone': { en: "expand for everyone", es: "abrir para todos" },
   'collapse.keptOpen': {

@@ -388,13 +388,13 @@ export const help = {
   // --- Colapsar ---
   'help.collapse.title': { en: "Collapse a section", es: "Colapsar una sección" },
   'help.collapse.text': {
-    en: "Every heading has a triangle: click it to hide what's under it, up to the next heading of its level, just for you (saved on this device). {collapse} does it from the keyboard; the ⋯ menu collapses or expands them all. The triangle's tooltip says whether it's collapsed for everyone or just for you.",
-    es: "Cada título tiene un triángulo: un clic esconde lo que tiene abajo, hasta el próximo título de su nivel, solo para vos (queda guardado en este dispositivo). {collapse} lo hace con el teclado; el menú ⋯ colapsa o abre todos. El tooltip del triángulo dice si está colapsado para todos o solo para vos.",
+    en: "Every heading has a triangle: click it to hide what's under it, up to the next heading of its level, just for you (saved on this device). {collapse} does it from the keyboard; the ⋯ menu collapses or expands them all. Its direction follows your view. It stays visible when the shared view is collapsed, even if you expanded it. Amber means your view differs from the shared view; the tooltip describes both states.",
+    es: "Cada título tiene un triángulo: un clic esconde lo que tiene abajo, hasta el próximo título de su nivel, solo para vos (queda guardado en este dispositivo). {collapse} lo hace con el teclado; el menú ⋯ colapsa o abre todos. Su dirección sigue tu vista. Queda visible cuando la vista compartida está colapsada, aunque la hayas abierto. Ámbar significa que tu vista difiere de la compartida; el tooltip describe ambos estados.",
   },
   'help.collapseEveryone.title': { en: "Collapse for everyone", es: "Colapsar para todos" },
   'help.collapseEveryone.text': {
-    en: "Shift+click on the triangle (or {everyone}) collapses or expands the section for everyone who views the page, if you can edit it. A plain click still changes it just for you, and what you set for yourself stays even if someone changes it for everyone. On the phone, a tap is always just for you.",
-    es: "Shift+clic en el triángulo (o {everyone}) colapsa o abre la sección para todos los que miran la página, si podés editarla. Un clic sin Shift la sigue cambiando solo para vos, y lo tuyo se mantiene aunque otro la cambie para todos. En el teléfono, un toque es siempre solo para vos.",
+    en: "Shift+click on the triangle (or {everyone}) changes the shared view, if you can edit the page: if your view differs, it shares your current state; otherwise, it collapses or expands the section. A plain click changes it just for you. Each person's local setting stays even if the shared view changes. On the phone, a tap is always just for you.",
+    es: "Shift+clic en el triángulo (o {everyone}) cambia la vista compartida, si podés editar la página: si tu vista difiere, comparte tu estado actual; si no, colapsa o abre la sección. Un clic sin Shift la cambia solo para vos. El ajuste local de cada persona se mantiene aunque cambie la vista compartida. En el teléfono, un toque es siempre solo para vos.",
   },
   'help.collapseMove.title': { en: "Move a collapsed section", es: "Mover una sección colapsada" },
   'help.collapseMove.text': {
@@ -642,8 +642,8 @@ export const help = {
   // --- Preferencias ---
   'help.prefs.title': { en: "Appearance", es: "Apariencia" },
   'help.prefs.text': {
-    en: "In the account menu: light, dark or system theme, default or editorial typeface, text size and page width. They're saved in your account and follow you to every device.",
-    es: "En el menú de la cuenta: tema claro, oscuro o del sistema, fuente normal o editorial, tamaño del texto y ancho de la página. Se guardan en tu cuenta y te siguen a cada dispositivo.",
+    en: "In the account menu: light, dark or system theme, default or editorial typeface, text size and page width. They're saved in your account and follow you to every device. Heading 1 to 4 have a clearer size progression above Heading 5, which keeps its size. On smaller screens, they scale down enough to stay below the page title; the PDF follows its own page-title size too.",
+    es: "En el menú de la cuenta: tema claro, oscuro o del sistema, fuente normal o editorial, tamaño del texto y ancho de la página. Se guardan en tu cuenta y te siguen a cada dispositivo. Los títulos 1 a 4 tienen una escala de tamaños más marcada sobre el título 5, que conserva su tamaño. En pantallas chicas se reducen lo necesario para quedar por debajo del título de la página; el PDF también respeta su propio tamaño de título de página.",
   },
   'help.contrast.title': { en: "Text contrast", es: "Contraste del texto" },
   'help.contrast.text': {

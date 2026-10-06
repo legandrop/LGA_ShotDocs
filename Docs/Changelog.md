@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.209 :
+
+H1–H4 quedaban demasiado próximos al texto normal y el triángulo podía desaparecer al abrir solo para vos una sección colapsada en la vista compartida. Ahora los cuatro encabezados crecen progresivamente: con cuerpo de 16 px usan 28, 24, 21 y 18 px. El incremento se limita según el título real de cada diseño, incluido el PDF, para que H1 siga siendo menor sin agrandar el título ni cambiar H5 o los H6 existentes. La dirección del triángulo conserva el estado local; permanece visible si la vista compartida está colapsada o difiere de la propia. Cuando difieren, el tono de acento de cada tema y una explicación en el tooltip y la etiqueta accesible distinguen ambos estados, incluso al pasar el mouse. Clic y Shift+clic conservan su alcance, los atajos salen del registro y la ayuda acompaña el cambio.
+
+[Ajustar la escala de encabezados y distinguir el colapso local del compartido]
+
 v0.208 :
 
 Al usar Format as… Headings sobre un párrafo Script, el texto pasaba a ser un título y perdía su formato sin avisarlo antes de aplicar. La vista previa solo enumeraba las advertencias sobre palabras y ediciones simultáneas. Ahora el plan compara la forma efectiva con la estructura original de los bloques elegidos y muestra un aviso en inglés o castellano cuando Script desaparecerá. El aviso cubre los cambios de tipo y los reemplazos completos, y no aparece si el párrafo conserva Script o si ese formato está fuera de lo elegido. Discard mantiene el documento original; Apply conserva la forma pedida y Undo recupera también Script. Se comprobaron el panel y editor reales, las guardas de permisos y cambios concurrentes, el descarte y deshacer exactos y cuatro vistas de escritorio y ancho de teléfono. La ayuda y la documentación acompañan el cambio.

@@ -11,15 +11,17 @@ puntos, el triángulo y "Borrar".
 
 ## Qué se pide
 
+**Indicador vigente (v0.209):** la dirección del triángulo siempre muestra tu vista local. Permanece visible si la vista compartida está colapsada, incluso cuando la abriste solo para vos, y cuando los dos estados difieren. En ese caso usa el tono de acento legible de cada tema, también al pasar el mouse o enfocar; el tooltip y la etiqueta accesible explican ambos estados. La vista compartida es la referencia común: otra persona puede tener su propio ajuste local. Con estados iguales conserva el color normal; cuando ambos están abiertos en computadora puede aparecer solo al pasar el mouse. No se agrega un pin manual general ni se cambia el guardado de los estados.
+
 1. Todo título (H1, H2, H3…) colapsa y abre **la sección que tiene abajo**, con un **triángulo lleno** a su
    izquierda (ni contorno ni chevron): apunta a la derecha colapsado y abajo abierto.
 2. Colapsar un título esconde todo lo que sigue **hasta el próximo título de su nivel o mayor**: un H1 esconde
    sus H2 y H3 con lo suyo. Los títulos de adentro **guardan su propio estado** cuando se vuelve a abrir el de
    afuera.
-3. El triángulo aparece al pasar el mouse por el título; en un título colapsado se ve siempre. Nada que
+3. El triángulo aparece al pasar el mouse por el título; si está colapsado localmente o en la vista compartida, o los estados difieren, se ve siempre. Nada que
    activar: todos los títulos lo tienen.
 4. **Por defecto es de cada persona**: un filtro de su vista, los demás no ven ningún cambio.
-5. **Shift+clic colapsa o abre para todos** los que miran la página. Solo quien puede editar la página; el
+5. **Shift+clic colapsa o abre la vista compartida**; cada persona puede ajustar su vista local. Solo quien puede editar la página; el
    tooltip lo explica. A quien solo ve, el tooltip no menciona Shift y Shift+clic hace lo mismo que el clic.
 6. (Respuestas de Lega.) "Colapsar todo / Abrir todo" y un atajo; el PDF sale todo abierto, con una casilla
    para imprimirlo como se ve; **las marcas de hoja en pantalla cuentan todo abierto** ("acá corta la página 5,
@@ -120,14 +122,13 @@ mismo de todos los tooltips con gesto o atajo (Doc_Decisiones.md, D226).
 
 | Estado | Quien puede editar | Quien solo ve o comenta |
 |---|---|---|
-| Abierto para todos | **Clic o ⌘⌥↩**: colapsar solo para vos<br>**Shift+clic o ⌘⌥⇧↩**: para todos | **Clic o ⌘⌥↩**: colapsar solo para vos |
+| Tu vista y la compartida abiertas | **Clic o ⌘⌥↩**: colapsar solo para vos<br>**Shift+clic o ⌘⌥⇧↩**: para todos | **Clic o ⌘⌥↩**: colapsar solo para vos |
 | Colapsado solo para vos | **Clic o ⌘⌥↩**: abrir<br>**Shift+clic o ⌘⌥⇧↩**: colapsar para todos | **Clic o ⌘⌥↩**: abrir |
 | Colapsado para todos | **Clic o ⌘⌥↩**: abrir solo para vos<br>**Shift+clic o ⌘⌥⇧↩**: abrir para todos | **Clic o ⌘⌥↩**: abrir solo para vos |
-| Abierto solo para vos (para los demás está colapsado) | **Clic o ⌘⌥↩**: colapsar<br>**Shift+clic o ⌘⌥⇧↩**: abrir para todos | **Clic o ⌘⌥↩**: colapsar |
+| Tu vista abierta y la compartida colapsada | **Clic o ⌘⌥↩**: colapsar<br>**Shift+clic o ⌘⌥⇧↩**: abrir para todos | **Clic o ⌘⌥↩**: colapsar |
 
 En inglés: *Click or ⌘⌥↩: collapse just for you / Shift+click or ⌘⌥⇧↩: for everyone*, etc. Quien solo ve o comenta
-ve solo el primer renglón; en una pantalla táctil, sin atajos (*Click: …*). Colapsado para todos y colapsado para vos
-**se ven igual**; solo cambia el tooltip.
+ve solo el primer renglón de acción; en una pantalla táctil, sin atajos (*Click: …*). Una explicación adicional indica si tu vista está abierta o colapsada y cómo está la vista compartida. Cuando difieren, el triángulo usa el tono de acento; cuando coinciden, el color normal. El color acompaña esa explicación y no la sustituye.
 
 **Teléfono y pantallas táctiles** (sin mouse ni Shift): el triángulo **se ve siempre, tenue**, en todos los
 títulos (`pointer: coarse` o el diseño del teléfono, `isPhoneLayout`); un toque colapsa o abre **para vos**;

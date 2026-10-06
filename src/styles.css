@@ -1720,10 +1720,16 @@ code {
   letter-spacing: -0.01em;
   line-height: 1.3;
 }
-.bn-container [data-content-type='heading'] h1 { font-size: calc(var(--doc-size) * 1.6); }
-.bn-container [data-content-type='heading'] h2 { font-size: calc(var(--doc-size) * 1.4); }
-.bn-container [data-content-type='heading'] h3 { font-size: calc(var(--doc-size) * 1.2); }
-.bn-container [data-content-type='heading'] h4 { font-size: calc(var(--doc-size) * 1.1); }
+/* H1–H4: 1.75/1.5/1.3125/1.125 del cuerpo. Si el título de la página es más chico (móvil),
+   se comprime solo lo que crece sobre H5: conserva la progresión y H5/H6 no cambian.
+   El límite se resuelve acá, bajo el --title-size real de la página o del PDF. */
+.bn-container {
+  --sd-heading-step: min(calc(var(--doc-size) * 0.75), calc(var(--title-size) - 1px - var(--doc-size)));
+}
+.bn-container [data-content-type='heading'] h1 { font-size: calc(var(--doc-size) + var(--sd-heading-step)); }
+.bn-container [data-content-type='heading'] h2 { font-size: calc(var(--doc-size) + var(--sd-heading-step) * 2 / 3); }
+.bn-container [data-content-type='heading'] h3 { font-size: calc(var(--doc-size) + var(--sd-heading-step) * 5 / 12); }
+.bn-container [data-content-type='heading'] h4 { font-size: calc(var(--doc-size) + var(--sd-heading-step) / 6); }
 .bn-container [data-content-type='heading'] :is(h5, h6) {
   font-family: inherit;
   font-size: var(--doc-size);
@@ -5954,6 +5960,8 @@ button.primary.danger {
 
 .sd-collapse-toggle.shown,
 .sd-collapse-toggle.collapsed,
+.sd-collapse-toggle.shared-collapsed,
+.sd-collapse-toggle.only-you,
 .sd-collapse-toggle:hover,
 .sd-collapse-toggle:focus-visible {
   opacity: 1;
@@ -5966,13 +5974,23 @@ button.primary.danger {
   background: none;
 }
 
+/* La dirección muestra tu vista; el ámbar avisa una diferencia con la vista compartida,
+   incluso al pasar el mouse o enfocar. El tooltip y el nombre accesible dicen ambos estados. */
+.sd-collapse-toggle.only-you,
+.sd-collapse-toggle.only-you:hover:not(:disabled),
+.sd-collapse-toggle.only-you:focus-visible {
+  color: var(--accent-text);
+}
+
 /* En pantallas táctiles se ve siempre, tenue (no hay mouse que pase por el título). */
 .sd-touch .sd-collapse-toggle {
   opacity: 0.6;
   transition: none;
 }
 
-.sd-touch .sd-collapse-toggle.collapsed {
+.sd-touch .sd-collapse-toggle.collapsed,
+.sd-touch .sd-collapse-toggle.shared-collapsed,
+.sd-touch .sd-collapse-toggle.only-you {
   opacity: 1;
 }
 

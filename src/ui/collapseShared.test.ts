@@ -260,10 +260,10 @@ describe('el tooltip del triángulo (Doc_Colapsar.md §3; D226: un renglón por 
   const tip = (collapsed: boolean, forAll: boolean, canShare: boolean, opts: { touch?: boolean; mac?: boolean; lang?: string } = {}) =>
     toggleTip(t as never, { collapsed, forAll }, canShare, { mac: true, lang: 'en', ...opts }).split('\n');
   it('quien puede editar, en la Mac: los cuatro estados, con los atajos del registro', async () => {
-    expect(tip(false, false, true)).toEqual(['**Click or ⌘⌥↩**: collapse just for you', '**Shift+click or ⌘⌥⇧↩**: for everyone']);
-    expect(tip(true, false, true)).toEqual(['**Click or ⌘⌥↩**: expand', '**Shift+click or ⌘⌥⇧↩**: collapse for everyone']);
-    expect(tip(true, true, true)).toEqual(['**Click or ⌘⌥↩**: expand just for you', '**Shift+click or ⌘⌥⇧↩**: expand for everyone']);
-    expect(tip(false, true, true)).toEqual(['**Click or ⌘⌥↩**: collapse', '**Shift+click or ⌘⌥⇧↩**: expand for everyone']);
+    expect(tip(false, false, true)).toEqual(['**Click or ⌘⌥↩**: collapse just for you', '**Shift+click or ⌘⌥⇧↩**: collapse for everyone', 'Your view: expanded. Shared view: expanded.']);
+    expect(tip(true, false, true)).toEqual(['**Click or ⌘⌥↩**: expand just for you', '**Shift+click or ⌘⌥⇧↩**: collapse for everyone', 'Your view: collapsed. Shared view: expanded.']);
+    expect(tip(true, true, true)).toEqual(['**Click or ⌘⌥↩**: expand just for you', '**Shift+click or ⌘⌥⇧↩**: expand for everyone', 'Your view: collapsed. Shared view: collapsed.']);
+    expect(tip(false, true, true)).toEqual(['**Click or ⌘⌥↩**: collapse just for you', '**Shift+click or ⌘⌥⇧↩**: expand for everyone', 'Your view: expanded. Shared view: collapsed.']);
     // Los atajos salen del registro (si cambian ahí, cambian acá).
     expect(tip(false, false, true)[0]).toContain(shortcutLabel('collapse', true));
     expect(tip(false, false, true)[1]).toContain(shortcutLabel('collapseEveryone', true));
@@ -271,13 +271,15 @@ describe('el tooltip del triángulo (Doc_Colapsar.md §3; D226: un renglón por 
   it('en Windows, con Ctrl; en castellano', async () => {
     expect(tip(false, false, true, { mac: false })).toEqual([
       `**Click or ${shortcutLabel('collapse', false)}**: collapse just for you`,
-      `**Shift+click or ${shortcutLabel('collapseEveryone', false)}**: for everyone`,
+      `**Shift+click or ${shortcutLabel('collapseEveryone', false)}**: collapse for everyone`,
+      'Your view: expanded. Shared view: expanded.',
     ]);
     expect(tip(false, false, true, { mac: false })[0]).toMatch(/Ctrl\+Alt\+Enter/);
     const es = (key: Parameters<typeof translate>[1], params?: Record<string, string>) => translate('es', key, params);
     expect(toggleTip(es as never, { collapsed: false, forAll: false }, true, { mac: true, lang: 'es' }).split('\n')).toEqual([
       '**Clic o ⌘⌥↩**: colapsar solo para vos',
-      '**Shift+clic o ⌘⌥⇧↩**: para todos',
+      '**Shift+clic o ⌘⌥⇧↩**: colapsar para todos',
+      'Tu vista: abierta. Vista compartida: abierta.',
     ]);
   });
   it('quien solo ve o comenta: solo el primer renglón; en una pantalla táctil, sin atajos', async () => {
@@ -287,11 +289,13 @@ describe('el tooltip del triángulo (Doc_Colapsar.md §3; D226: un renglón por 
       [true, true],
       [false, true],
     ] as const) {
-      expect(tip(c, f, false)).toHaveLength(1);
+      expect(tip(c, f, false)).toHaveLength(2);
       expect(tip(c, f, false).join(' ')).not.toMatch(/Shift/);
     }
-    expect(tip(true, true, false)).toEqual(['**Click or ⌘⌥↩**: expand just for you']);
-    expect(tip(false, false, false, { touch: true })).toEqual(['**Click**: collapse just for you']);
+    expect(tip(true, true, false)).toEqual(['**Click or ⌘⌥↩**: expand just for you', 'Your view: collapsed. Shared view: collapsed.']);
+    expect(tip(false, false, false, { touch: true })).toEqual(['**Click**: collapse just for you', 'Your view: expanded. Shared view: expanded.']);
+    // Ni siquiera un llamador con permiso de compartir agrega Shift ni atajos en una pantalla táctil.
+    expect(tip(false, true, true, { touch: true })).toEqual(['**Click**: collapse just for you', 'Your view: expanded. Shared view: collapsed.']);
   });
 });
 

@@ -1,6 +1,6 @@
 # Contraste del texto y escala de encabezados
 
-Actualizado en v0.201. La preferencia conserva sus valores guardados `none`, `contrast` y `more`.
+Actualizado en v0.209. La preferencia conserva sus valores guardados `none`, `contrast` y `more`.
 
 ## 1. Qué hace
 
@@ -22,7 +22,7 @@ Todos los tonos por defecto llegan a WCAG AA de 4,5:1 contra la página y el pap
 
 ## 2.1. H1–H5 y H6 existente
 
-Los menús ofrecen H1–H5. Con texto normal de 16 px, sus tamaños son 25,6 / 22,4 / 19,2 / 17,6 / 16 px; todos usan peso 700. Los tres tamaños de texto conservan esas proporciones. Editorial mantiene su familia serif en H1–H4, con peso 700 sintetizado desde la cara disponible de Instrument Serif. El título de página conserva su tamaño y peso propios, incluido Editorial 400.
+Los menús ofrecen H1–H5. Con texto normal de 16 px, sus tamaños nominales son 28 / 24 / 21 / 18 / 16 px; todos usan peso 700. H1–H4 crecen sobre H5 en pasos progresivos. El incremento de H1 es el menor entre el 75 % del cuerpo y el espacio disponible hasta un píxel por debajo del título de página; H2, H3 y H4 usan respectivamente 2/3, 5/12 y 1/6 de ese incremento. Así se conserva la jerarquía en una pantalla angosta sin agrandar el título ni reducir H5. Por ejemplo, cuerpo de 18 px y título de 28 px dan 27 / 24 / 21,75 / 19,5 / 18 px. Editorial mantiene su familia serif en H1–H4, con peso 700 sintetizado desde la cara disponible de Instrument Serif. El título de página conserva su tamaño y peso propios, incluido Editorial 400. Pantalla y PDF aplican el límite con su propio tamaño real de título.
 
 H5 y H6 comparten tamaño, fuente heredada del párrafo, peso 700, tracking normal y altura de línea 1,5 con el texto normal en negrita. H6 conserva esquema, importación, contenido, plegado y atajos existentes: solo deja de ofrecerse en los dos menús. No se convierte ni reescribe al abrir.
 
