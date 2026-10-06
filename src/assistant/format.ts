@@ -3,7 +3,8 @@ import type { EditorView } from '@tiptap/pm/view';
 import { yUndoPluginKey } from 'y-prosemirror';
 import type * as Y from 'yjs';
 import { asOneUndoStep } from '../ui/undoGuard';
-import { snapshotOf, unchangedShift, type ApplyOutcome, type Snapshot } from './apply';
+import { currentRange, snapshotOf, unchangedShift, type ApplyOutcome, type Snapshot } from './apply';
+import { addFormatBorders, bindFormatOrigins, captureFormatOrigins, formatHasBorders, formatOriginsUnchanged, formatReplacePropsSafe, formatWire, prepareFormatAnswer, preparedFormatComplete, traceFormatProtected, type FormatOrigins } from './formatOrigins';
 import type { AssistantEditor } from './assistantUi';
 import { collectBetween, plainKey, WORD, type Atom, type Piece, type TextPiece } from './markup';
 import { atomKeys, inlineContent, parseShape, toPartialBlocks, type MdBlock, type Restore, type ShapeError } from './mdBlocks';
@@ -29,6 +30,8 @@ export type FormatTarget = 'bullets' | 'checklist' | 'table' | 'headings';
 export const FORMATS: FormatTarget[] = ['bullets', 'checklist', 'table', 'headings'];
 
 export interface FormatSnapshot {
+  origins: FormatOrigins;
+  wire: unknown;
   snapshot: Snapshot;
   /** Los bloques elegidos, en orden (sin repetir). */
   ids: string[];
@@ -62,17 +65,29 @@ export function takeFormatSnapshot(state: EditorState, editor: AssistantEditor |
   const $to = state.doc.resolve(sel.to);
   const from = $from.parent.isTextblock ? $from.start() : sel.from;
   const to = $to.parent.isTextblock ? $to.end() : sel.to;
-  const snapshot = snapshotOf(state, collectBetween(state.doc, from, to));
+  return formatSnapshotAt(state, editor, from, to);
+}
+
+function formatSnapshotAt(state: EditorState, editor: AssistantEditor, from: number, to: number): FormatSnapshot | FormatSnapError {
+  const origins = captureFormatOrigins(state, editor, from, to);
+  const snapshot = snapshotOf(state, collectBetween(state.doc, from, to, { traceProtected: (entry) => traceFormatProtected(origins, entry) }));
   if (typeof snapshot === 'string') return snapshot;
-  return formatSnapshotFrom(snapshot, editor) ?? 'empty';
+  return formatSnapshotFrom(snapshot, editor, origins) ?? 'empty';
+}
+
+export function retakeFormatSnapshot(state: EditorState, previous: FormatSnapshot, editor: AssistantEditor | null): FormatSnapshot | FormatSnapError {
+  const range = currentRange(state, previous.snapshot);
+  if (!range || !editor) return 'empty';
+  const from = state.doc.resolve(range.from), to = state.doc.resolve(range.to);
+  return formatSnapshotAt(state, editor, from.parent.isTextblock ? from.start() : range.from, to.parent.isTextblock ? to.end() : range.to);
 }
 
 /**
  * Los bloques de una foto ya tomada (también la de *Try again* después de "cambió mientras pensaba", sobre lo que hay
  * hoy entre las anclas): sus ids, su forma para la guarda y lo que vuelve a armar las marcas. `null` sin editor.
  */
-export function formatSnapshotFrom(snapshot: Snapshot, editor: AssistantEditor | null): FormatSnapshot | null {
-  if (!editor) return null;
+export function formatSnapshotFrom(snapshot: Snapshot, editor: AssistantEditor | null, origins: FormatOrigins): FormatSnapshot | null {
+  if (!editor || !bindFormatOrigins(origins, snapshot)) return null;
   const ids = [...new Set(snapshot.selected.pieces.map((p) => p.blockId).filter(Boolean))];
   const shapes = new Map(ids.map((id) => [id, shapeOf(editor.getBlock(id))]));
   const blocks = new Map<number, unknown>();
@@ -81,10 +96,16 @@ export function formatSnapshotFrom(snapshot: Snapshot, editor: AssistantEditor |
     const b = editor.getBlock(p.blockId);
     if (b) blocks.set(p.marker, JSON.parse(JSON.stringify(b)));
   }
-  return { snapshot, ids, shapes, restore: { photos: snapshot.selected.photos, links: snapshot.selected.links, blocks } };
+  return { snapshot, ids, shapes, origins, wire: formatWire(origins, snapshot), restore: { photos: snapshot.selected.photos, links: snapshot.selected.links, blocks } };
 }
 
 export interface FormatPlan {
+  blockedReason?: 'nested';
+  prepared?: Map<Atom[], ReturnType<typeof inlineContent>>;
+  styleSafety?: boolean;
+  raw?: string;
+  previewProps?: Map<Atom[], Record<string, unknown>>;
+  originNonce?: string;
   mode: 'type' | 'update' | 'replace';
   blocks: MdBlock[];
   linksRemoved: boolean;
@@ -180,7 +201,16 @@ export function planFormat(answer: string, fs: FormatSnapshot, target?: FormatTa
     links: new Set(fs.snapshot.selected.links.keys()),
     blocks: new Set(pieces.flatMap((p) => (p.kind === 'block' ? [p.marker] : []))),
   };
-  const parsed = parseShape(answer, known);
+  let linksRemoved = false;
+  const wire = answer.trim().startsWith('{') ? prepareFormatAnswer(answer, fs.origins, (markdown) => {
+    const value = parseShape(markdown, known);
+    if (typeof value === 'string') return value;
+    linksRemoved = value.linksRemoved;
+    return value.blocks;
+  }, fs.restore) : null;
+  const invalid = (blockedReason?: 'nested'): FormatPlan => ({ blockedReason, mode: 'update', blocks: [], linksRemoved: false, removesScript: false, added: new Set(), styleSafety: false, raw: answer });
+  if (answer.trim().startsWith('{') && !wire) return invalid();
+  const parsed = wire ? { blocks: wire.blocks, linksRemoved } : parseShape(answer, known);
   if (typeof parsed === 'string') return parsed;
   const { blocks } = parsed;
   const sameShape =
@@ -204,10 +234,30 @@ export function planFormat(answer: string, fs: FormatSnapshot, target?: FormatTa
     // Reemplazar crea bloques sin Script; actualizar el mismo párrafo conserva su propiedad.
     return mode === 'replace' || (blocks[i].kind === 'text' && blocks[i].type !== 'paragraph');
   });
-  return { mode, blocks, linksRemoved: parsed.linksRemoved, removesScript, added: words.added };
+  let prepared: FormatPlan['prepared'];
+  if (mode !== 'type') {
+    if (wire) prepared = wire.prepare() ?? undefined;
+    else if ([...fs.origins.runs.values()].every((r) => r.valid && Object.keys(r.styles).length === 0) && fs.origins.protected.size === 0) {
+      prepared = new Map(blocks.flatMap((b) => b.kind === 'text' ? [[b.atoms, inlineContent(b.atoms, fs.restore)] as const] : b.kind === 'table' ? b.rows.flat().map((c) => [c, inlineContent(c, fs.restore)] as const) : []));
+    }
+    if (mode === 'replace' && fs.ids.some((id) => JSON.parse(fs.origins.blocks.get(id)!.bn).children.length > 0)) return invalid('nested');
+    if (!preparedFormatComplete(blocks, prepared) || (mode === 'replace' && (formatHasBorders(fs.origins) || !formatReplacePropsSafe(fs.origins)))) return invalid();
+    if (mode === 'update') for (let i = 0; i < blocks.length; i++) {
+      const b = blocks[i], piece = pieces[i];
+      if (b.kind !== 'text' || piece.kind !== 'text') continue;
+      const content = addFormatBorders(fs.origins, piece.blockId, prepared!.get(b.atoms)!);
+      if (!content) return invalid();
+      prepared!.set(b.atoms, content);
+    }
+  } else prepared = wire?.prepare() ?? undefined;
+  const previewProps = new Map<Atom[], Record<string, unknown>>();
+  if (mode !== 'replace') blocks.forEach((b, i) => {
+    if (b.kind === 'text' && pieces[i].kind === 'text') previewProps.set(b.atoms, JSON.parse(fs.origins.blocks.get(pieces[i].blockId)!.bn).props);
+  });
+  return { mode, blocks, linksRemoved: parsed.linksRemoved, removesScript, added: words.added, prepared, previewProps, originNonce: fs.origins.nonce, styleSafety: true };
 }
 
-export type FormatOutcome = ApplyOutcome | { ok: false; reason: 'nested' };
+export type FormatOutcome = ApplyOutcome | { ok: false; reason: 'nested' | 'styleConflict' };
 
 /** Las propiedades del tipo nuevo (las demás, como el color, quedan las del bloque). */
 function propsOf(b: Extract<MdBlock, { kind: 'text' }>): Record<string, unknown> {
@@ -222,7 +272,9 @@ function propsOf(b: Extract<MdBlock, { kind: 'text' }>): Record<string, unknown>
  */
 export function applyFormat(editor: AssistantEditor | null, view: EditorView | null, fs: FormatSnapshot, plan: FormatPlan, canEdit: boolean): FormatOutcome {
   if (!canEdit || !editor || !view?.editable) return { ok: false, reason: 'readOnly' };
-  if (unchangedShift(view.state, fs.snapshot) === null) return { ok: false, reason: 'changed' };
+  const shift = unchangedShift(view.state, fs.snapshot);
+  if (shift === null || !formatOriginsUnchanged(view.state, editor, fs.origins, shift)) return { ok: false, reason: 'changed' };
+  if (plan.styleSafety === false || (plan.originNonce !== undefined && plan.originNonce !== fs.origins.nonce) || (plan.mode !== 'type' && !preparedFormatComplete(plan.blocks, plan.prepared))) return { ok: false, reason: plan.blockedReason ?? 'styleConflict' };
   for (const id of fs.ids) if (shapeOf(editor.getBlock(id)) !== fs.shapes.get(id)) return { ok: false, reason: 'changed' };
   const { pieces } = fs.snapshot.selected;
   if (plan.mode === 'replace' && fs.ids.some((id) => (editor.getBlock(id)?.children.length ?? 0) > 0)) return { ok: false, reason: 'nested' };
@@ -238,7 +290,7 @@ export function applyFormat(editor: AssistantEditor | null, view: EditorView | n
         // que ningún id queda repetido; los de las marcas de bloque vuelven con el suyo.
         const textIds = [...new Set(pieces.filter((p) => p.kind === 'text').map((p) => p.blockId))];
         let next = 0;
-        const blocks = toPartialBlocks(plan.blocks, fs.restore).map((b, i) =>
+        const blocks = toPartialBlocks(plan.blocks, fs.restore, (atoms) => plan.prepared!.get(atoms)!).map((b, i) =>
           plan.blocks[i].kind === 'marker' || next >= textIds.length ? b : { ...(b as object), id: textIds[next++] },
         );
         editor.replaceBlocks(fs.ids, blocks);
@@ -253,7 +305,7 @@ export function applyFormat(editor: AssistantEditor | null, view: EditorView | n
         const sameType = current?.type === b.type && Object.entries(props).every(([k, v]) => current.props[k] === v);
         if (plan.mode === 'type' && sameType) return;
         const update: Record<string, unknown> = { type: b.type, props };
-        if (plan.mode === 'update') update.content = inlineContent(b.atoms, fs.restore);
+        if (plan.mode === 'update') update.content = plan.prepared!.get(b.atoms);
         editor.updateBlock(piece.blockId, update);
         changed++;
       });

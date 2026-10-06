@@ -162,7 +162,8 @@ const unitKey = (text: string, marks: MdMark[], link: number | null) =>
  * Las unidades de un pedazo de texto: cada palabra, cada signo o espacio, cada foto y cada salto de renglón, con su
  * formato. Los links se numeran a medida que aparecen (`links`), uno por tramo seguido con la misma dirección.
  */
-export function oldUnits(doc: PMNode, from: number, to: number, photos: Map<number, PMNode>, links: Map<number, Mark>, counter: { photo: number; link: number }): OldUnit[] {
+export interface ProtectedTrace { kind: 'link' | 'photo'; n: number; from: number; to: number }
+export function oldUnits(doc: PMNode, from: number, to: number, photos: Map<number, PMNode>, links: Map<number, Mark>, counter: { photo: number; link: number }, traceProtected?: (entry: ProtectedTrace) => void): OldUnit[] {
   const out: OldUnit[] = [];
   let lastLink: { mark: Mark; n: number; end: number } | null = null;
   doc.nodesBetween(from, to, (node, pos) => {
@@ -182,6 +183,7 @@ export function oldUnits(doc: PMNode, from: number, to: number, photos: Map<numb
           links.set(link, linkMark);
         }
         lastLink = { mark: linkMark, n: link, end };
+        traceProtected?.({ kind: 'link', n: link, from: start, to: end });
       } else lastLink = null;
       const carry = carryOf(node.marks);
       // Palabras enteras, o un signo por unidad.
@@ -212,6 +214,7 @@ export function oldUnits(doc: PMNode, from: number, to: number, photos: Map<numb
       if (pos >= from && pos + node.nodeSize <= to) {
         const n = ++counter.photo;
         photos.set(n, node);
+      traceProtected?.({ kind: 'photo', n: n, from: pos, to: pos + node.nodeSize });
         out.push({ key: `\u0001photo:${n}`, from: pos, to: pos + node.nodeSize, carry: [], text: '', atom: 'photo', marks: [], link: null });
       }
       return false;
@@ -320,7 +323,7 @@ export function collectSelection(state: EditorState): Selected | SelectError {
  * Lo que hay entre dos posiciones, como pedazos (lo usa también la comprobación después de aplicar). Con `cells` (la
  * página entera, entrega A2), cada celda de una tabla es su propio pedazo: así *Translate page* traduce las tablas.
  */
-export function collectBetween(doc: PMNode, from: number, to: number, opts: { cells?: boolean } = {}): Selected | SelectError {
+export function collectBetween(doc: PMNode, from: number, to: number, opts: { cells?: boolean; traceProtected?: (entry: ProtectedTrace) => void } = {}): Selected | SelectError {
   // Las dos puntas en la misma celda: solo esa celda. Si no, las tablas no se tocan (van como marca).
   const cellA = cellAt(doc, from);
   const singleCell = !!opts.cells || (cellA >= 0 && cellA === cellAt(doc, to));
@@ -337,7 +340,7 @@ export function collectBetween(doc: PMNode, from: number, to: number, opts: { ce
       const start = Math.max(from, pos + 1);
       const end = Math.min(to, pos + 1 + node.content.size);
       if (end <= start) return false;
-      const units = oldUnits(doc, start, end, photos, links, counter);
+      const units = oldUnits(doc, start, end, photos, links, counter, opts.traceProtected);
       // Un renglón vacío, con solo espacios o solo fotos no viaja: no hay texto que cambiar.
       if (units.every((u) => u.atom || /^\s*$/.test(u.text))) return false;
       // Los espacios y saltos de renglón de las puntas no viajan (el modelo los perdería): quedan como están.

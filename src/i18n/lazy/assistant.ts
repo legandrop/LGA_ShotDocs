@@ -260,6 +260,10 @@ export const assistant = {
     en: "Format as… works on whole blocks, not inside a table cell.",
     es: "Dar forma de… trabaja con bloques enteros, no adentro de una celda.",
   },
+  'assistant.styleConflict': {
+    en: 'The response could not preserve the original formatting. Try again or discard it.',
+    es: 'La respuesta no pudo conservar el formato original. Probá de nuevo o descartala.',
+  },
   'assistant.format.nested': {
     en: "Some of these blocks have blocks nested inside, and the new shape would remove them. Nothing was applied.",
     es: "Algunos de estos bloques tienen bloques adentro, y la forma nueva los sacaría. No se aplicó nada.",

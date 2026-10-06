@@ -53,6 +53,11 @@ const textOf = (ed: Editor, id: string) =>
 const shape = (ed: Editor) =>
   ed.document.map((b) => [b.type, ((b.content ?? []) as { type: string; text?: string }[]).map((c) => (c.type === 'photo' ? '[foto]' : c.text ?? '')).join('')]);
 
+/** Respuestas de prueba con los identificadores explícitos de su captura; los oráculos quedan independientes. */
+function wireAnswer(fs: FormatSnapshot, markdown: (token: (id: number) => string) => string, spans: { origin: string; text: string }[]): string {
+  const token = (id: number) => `SD${fs.origins.nonce}R${id}END`;
+  return JSON.stringify({ version: 1, nonce: fs.origins.nonce, markdown: markdown(token), spans: spans.map((span, id) => ({ id, ...span })) });
+}
 describe('Format as…: lo que se manda', () => {
   it('se estira a bloques enteros: el pedido lleva los bloques tocados completos, nada más', () => {
     const ed = page([
@@ -158,7 +163,7 @@ describe('Format as…: aplicar', () => {
     ]);
     select(ed, 'p', 0, 'p', 5);
     const fs = snap(ed);
-    const p = plan(fs, '- Lente 35 mm\n- T2.8\n- ISO 800 ⟦photo:1⟧');
+    const p = plan(fs, wireAnswer(fs, (t) => `- ${t(0)}\n- ${t(1)}\n- ${t(2)}⟦photo:1⟧`, [{ origin: 'r0', text: 'Lente 35 mm' }, { origin: 'r0', text: 'T2.8' }, { origin: 'r0', text: 'ISO 800 ' }]));
     expect(p.mode).toBe('replace');
     const out = applyFormat(ed$(ed), view(ed), fs, p, true);
     expect(out.ok).toBe(true);
@@ -235,9 +240,9 @@ describe('Format as…: aplicar', () => {
     const ed = page([{ id: 'a', type: 'paragraph', content: 'Lente y filtro', children: [{ id: 'h', type: 'paragraph', content: 'hijo' }] }]);
     select(ed, 'a', 0, 'a', 14);
     const fs = snap(ed);
-    expect(applyFormat(ed$(ed), view(ed), fs, plan(fs, '- Lente\n- filtro'), true)).toEqual({ ok: false, reason: 'nested' });
+    expect(applyFormat(ed$(ed), view(ed), fs, plan(fs, wireAnswer(fs, (t) => `- ${t(0)}\n- ${t(1)}`, [{ origin: 'r0', text: 'Lente' }, { origin: 'r0', text: 'filtro' }])), true)).toEqual({ ok: false, reason: 'nested' });
     expect(ed.getBlock('a')!.children.map((c) => c.id)).toEqual(['h']);
-    expect(applyFormat(ed$(ed), view(ed), fs, plan(fs, '- Lente y filtro'), true).ok).toBe(true);
+    expect(applyFormat(ed$(ed), view(ed), fs, plan(fs, wireAnswer(fs, (t) => `- ${t(0)}`, [{ origin: 'r0', text: 'Lente y filtro' }])), true).ok).toBe(true);
     expect(ed.getBlock('a')!.type).toBe('bulletListItem');
     expect(ed.getBlock('a')!.children.map((c) => c.id)).toEqual(['h']);
   });
@@ -411,7 +416,7 @@ describe('Format as…: editar a la vez y versiones viejas (6.5, regla del edito
     );
     select(ed, 'a', 0, 'b', 12);
     const fs = snap(ed);
-    expect(applyFormat(ed$(ed), view(ed), fs, plan(fs, '## Tomas\n| Toma | Lente |\n|---|---|\n| 1 ⟦photo:1⟧ | 35 mm |\n| 2 | 50 mm |\n[ ] revisar', 'table'), true).ok).toBe(true);
+    expect(applyFormat(ed$(ed), view(ed), fs, plan(fs, wireAnswer(fs, (t) => `## ${t(0)}\n| ${t(1)} | ${t(2)} |\n|---|---|\n| ${t(3)}⟦photo:1⟧ | ${t(4)} |\n| ${t(5)} | ${t(6)} |\n[ ] ${t(7)}`, [{ origin: 'r0', text: 'Tomas' }, { origin: 'r0', text: 'Toma' }, { origin: 'r0', text: 'Lente' }, { origin: 'r0', text: '1 ' }, { origin: 'r0', text: '35 mm' }, { origin: 'r1', text: '2' }, { origin: 'r1', text: '50 mm' }, { origin: 'r1', text: 'revisar' }]), 'table'), true).ok).toBe(true);
     const copy = new Y.Doc();
     Y.applyUpdate(copy, Y.encodeStateAsUpdate(doc));
     const before = yText(copy);

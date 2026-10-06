@@ -68,7 +68,7 @@ export function snapshotOf(state: EditorState, selected: Selected | 'empty' | 't
 }
 
 /** Dónde está ahora lo elegido (por las anclas), o `null` si ya no está. Sin Yjs (pruebas), donde estaba. */
-function currentRange(state: EditorState, snapshot: Snapshot): { from: number; to: number } | null {
+export function currentRange(state: EditorState, snapshot: Snapshot): { from: number; to: number } | null {
   const binding = bindingOf(state);
   if (!snapshot.anchors || !binding) return { from: snapshot.selected.from, to: snapshot.selected.to };
   try {

@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { useT, type Translate } from '../i18n';
+import { useScheme } from '../prefs';
+import { COLORS_DEFAULT, COLORS_DARK_MODE_DEFAULT } from '@blocknote/core';
 import '../i18n/lazy/assistant';
 import { navigate, pagePath } from '../router';
 import { usePermissions, useServices, useSyncStatus } from '../services';
@@ -12,7 +14,8 @@ import { appliedDoc, applySuggestion, retakeSnapshot, takeSnapshot, type ApplyOu
 import { clearCaptionRequest, closeAssistant, openAssistantSettings, useAssistantTarget, useAssistantUi } from './assistantUi';
 import { CaptionSection } from './CaptionSection';
 import { selectedPhotoRef, type PhotoRef } from './photoRef';
-import { applyFormat, formatSnapshotFrom, FORMATS, planFormat, takeFormatSnapshot, type FormatOutcome, type FormatPlan, type FormatSnapshot, type FormatTarget, type LostText } from './format';
+import { applyFormat, retakeFormatSnapshot, FORMATS, planFormat, takeFormatSnapshot, type FormatOutcome, type FormatPlan, type FormatSnapshot, type FormatTarget, type LostText } from './format';
+import type { inlineContent } from './mdBlocks';
 import { loadSettings, rememberLanguage, type AssistantSettings } from './keyStore';
 import { fetchSyncMeta, type KeySyncClient } from './keySyncRemote';
 import { cleanAnswer, diffKeys, parseAnswer, plainNew, type Atom, type NewUnit, type OldUnit, type Parsed } from './markup';
@@ -178,7 +181,42 @@ function NewText({ units, prefix }: { units: NewUnit[]; prefix: string }) {
  * Unas letras nuevas con su formato (sin links ni fotos de verdad). Las de `added` (palabras que la respuesta agrega y
  * no estaban en lo elegido, *Format as…*) van subrayadas como en la diferencia de A1.
  */
-function Atoms({ atoms, added }: { atoms: Extract<MdBlock, { kind: 'text' }>['atoms']; added?: Set<Atom> }) {
+function previewColors(styles: Record<string, unknown>, scheme: 'light' | 'dark'): CSSProperties {
+  const colors = scheme === 'dark' ? COLORS_DARK_MODE_DEFAULT : COLORS_DEFAULT;
+  const text = typeof styles.textColor === 'string' ? colors[styles.textColor]?.text : undefined;
+  const background = typeof styles.backgroundColor === 'string' ? colors[styles.backgroundColor]?.background : undefined;
+  return { color: text, backgroundColor: background ? `var(--bn-colors-highlights-${styles.backgroundColor}-background, ${background})` : undefined, fontWeight: styles.bold ? 'bolder' : undefined, fontStyle: styles.italic ? 'italic' : undefined };
+}
+
+function ResolvedInline({ content, atoms, added }: { content: ReturnType<typeof inlineContent>; atoms: Atom[]; added?: Set<Atom> }) {
+  const scheme = useScheme();
+  let cursor = 0;
+  // Los estilos vienen del contenido ya reconstruido; el cursor sólo conserva el subrayado de palabras agregadas.
+  const render = (items: ReturnType<typeof inlineContent>, inLink = false): ReactNode => items.map((item, i) => {
+    if (item.type === 'photo') { cursor++; return <span key={i} className="assistant-chip">▣</span>; }
+    if (item.type === 'link') return <span key={i}>{render(item.content, true)}</span>;
+    const styles = item.styles as Record<string, unknown>;
+    const cls = ['bold', 'italic', 'underline', 'strike', 'code'].filter((m) => styles[m]).map((m) => `md-${m}`).join(' ');
+    const text: ReactNode[] = [];
+    let pending = '', highlighted = false;
+    const flush = () => { if (pending) text.push(highlighted ? <ins key={text.length}>{pending}</ins> : pending); pending = ''; };
+    for (const ch of item.text) {
+      const next = added?.has(atoms[cursor++]) ?? false;
+      if (next !== highlighted) { flush(); highlighted = next; }
+      pending += ch;
+    }
+    flush();
+    return <span key={i} className={cls} data-text-color={styles.textColor as string | undefined} data-background-color={styles.backgroundColor as string | undefined} style={previewColors(styles, scheme)}>{inLink ? <span className="md-link">{text}</span> : text}</span>;
+  });
+  return <>{render(content)}</>;
+}
+function Atoms({ atoms, added, resolvedInline, blockProps }: { atoms: Extract<MdBlock, { kind: 'text' }>['atoms']; added?: Set<Atom>; resolvedInline?: (atoms: Atom[]) => ReturnType<typeof inlineContent> | undefined; blockProps?: (atoms: Atom[]) => Record<string, unknown> | undefined }) {
+  const scheme = useScheme();
+  const resolved = resolvedInline?.(atoms);
+  if (resolved) {
+    const props = blockProps?.(atoms);
+    return <span className="bn-container" data-color-scheme={scheme} style={previewColors(props ?? {}, scheme)} data-text-color={props?.textColor as string | undefined} data-background-color={props?.backgroundColor as string | undefined}><ResolvedInline content={resolved} atoms={atoms} added={added} /></span>;
+  }
   const out: ReactNode[] = [];
   let run: ReactNode[] = [];
   const flush = (n: number) => {
@@ -204,7 +242,7 @@ function Atoms({ atoms, added }: { atoms: Extract<MdBlock, { kind: 'text' }>['at
 }
 
 /** Los bloques nuevos (*Summarize page*, *Format as…*), dibujados con su forma: nada de links ni imágenes de verdad. */
-function BlocksPreview({ blocks, tr, added }: { blocks: MdBlock[]; tr: Translate; added?: Set<Atom> }) {
+export function BlocksPreview({ blocks, tr, added, resolvedInline, blockProps }: { blocks: MdBlock[]; tr: Translate; added?: Set<Atom>; resolvedInline?: (atoms: Atom[]) => ReturnType<typeof inlineContent> | undefined; blockProps?: (atoms: Atom[]) => Record<string, unknown> | undefined }) {
   return (
     <>
       {blocks.map((b, i) => {
@@ -223,11 +261,11 @@ function BlocksPreview({ blocks, tr, added }: { blocks: MdBlock[]; tr: Translate
                     {r.map((c, k) =>
                       b.header && j === 0 ? (
                         <th key={k}>
-                          <Atoms atoms={c} added={added} />
+                          <Atoms atoms={c} added={added} resolvedInline={resolvedInline} blockProps={blockProps} />
                         </th>
                       ) : (
                         <td key={k}>
-                          <Atoms atoms={c} added={added} />
+                          <Atoms atoms={c} added={added} resolvedInline={resolvedInline} blockProps={blockProps} />
                         </td>
                       ),
                     )}
@@ -242,7 +280,7 @@ function BlocksPreview({ blocks, tr, added }: { blocks: MdBlock[]; tr: Translate
         return (
           <p key={i} className={cls}>
             {lead && <span className="assistant-lead">{lead}</span>}
-            <Atoms atoms={b.atoms} added={added} />
+            <Atoms atoms={b.atoms} added={added} resolvedInline={resolvedInline} blockProps={blockProps} />
           </p>
         );
       })}
@@ -372,8 +410,9 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
       let next: Run;
       if (again && retake) {
         // Lo elegido cambió: se pide de nuevo sobre lo que hay hoy en el mismo lugar (la página entera, otra vez).
-        const snapshot = PAGE_ACTIONS.has(again.action) ? takePageSnapshot(view.state) : retakeSnapshot(view.state, again.snapshot);
-        const format = typeof snapshot !== 'string' && again.action === 'format' ? formatSnapshotFrom(snapshot, editor) : undefined;
+        const fresh = again.action === 'format' && again.format ? retakeFormatSnapshot(view.state, again.format, editor) : undefined;
+        const format = typeof fresh === 'object' ? fresh : undefined;
+        const snapshot = fresh ? typeof fresh === 'string' ? fresh : fresh.snapshot : PAGE_ACTIONS.has(again.action) ? takePageSnapshot(view.state) : retakeSnapshot(view.state, again.snapshot);
         if (typeof snapshot === 'string' || format === null) {
           run.current = null;
           setPhase({ kind: 'idle', note: idleNote(typeof snapshot === 'string' ? snapshot : 'empty', again.action) });
@@ -420,6 +459,7 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
       setUsage(null);
       setPhase({ kind: 'running', action: next.action, text: '' });
       const request = buildRequest(next.action, next.snapshot.selected, {
+        formatWire: next.format?.wire,
         language: next.language,
         instruction: next.instruction,
         format: next.target,
@@ -500,7 +540,7 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
           ? tr('assistant.readOnly')
           : outcome.reason === 'nested'
             ? tr('assistant.format.nested')
-            : tr('assistant.failed');
+            : outcome.reason === 'styleConflict' ? tr('assistant.styleConflict') : tr('assistant.failed');
     setPhase({ kind: 'error', action, message, retake: outcome.reason === 'changed' });
   };
 
@@ -682,7 +722,8 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
           ),
         ),
       ];
-    return <BlocksPreview blocks={result.type === 'summary' ? result.md.blocks : result.plan.blocks} added={result.type === 'format' ? result.plan.added : undefined} tr={tr} />;
+    if (result.type === 'format' && result.plan.styleSafety === false) return <><p role="alert">{tr(result.plan.blockedReason === 'nested' ? 'assistant.format.nested' : 'assistant.styleConflict')}</p><pre>{result.plan.raw}</pre></>;
+    return <BlocksPreview blocks={result.type === 'summary' ? result.md.blocks : result.plan.blocks} added={result.type === 'format' ? result.plan.added : undefined} resolvedInline={result.type === 'format' ? (atoms) => result.plan.prepared?.get(atoms) : undefined} blockProps={result.type === 'format' ? (atoms) => result.plan.previewProps?.get(atoms) : undefined} tr={tr} />;
   };
 
   const previewButtons = (p: Extract<Phase, { kind: 'preview' }>, r: Run) => {
@@ -728,7 +769,7 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
       );
     return (
       <>
-        <button className="primary" disabled={!canEdit || (result.type === 'format' && !hasEditor)} data-tip={tipRows([{ shortcut: 'assistantApply', action: asAction(tr('assistant.apply')) }])} onClick={() => void apply()}>
+        <button className="primary" disabled={!canEdit || (result.type === 'format' && (!hasEditor || result.plan.styleSafety === false))} data-tip={tipRows([{ shortcut: 'assistantApply', action: asAction(tr('assistant.apply')) }])} onClick={() => void apply()}>
           {tr('assistant.apply')}
         </button>
         {discardButton}

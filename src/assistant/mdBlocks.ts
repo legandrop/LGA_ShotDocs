@@ -206,7 +206,7 @@ export function inlineContent(atoms: Atom[], restore: Restore): InlineOut[] {
 }
 
 /** Los bloques de BlockNote (sin id: el editor les pone uno nuevo), con las marcas vueltas a lo que eran. */
-export function toPartialBlocks(blocks: MdBlock[], restore: Restore): unknown[] {
+export function toPartialBlocks(blocks: MdBlock[], restore: Restore, resolve = inlineContent): unknown[] {
   return blocks.map((b) => {
     if (b.kind === 'marker') return restore.blocks.get(b.n);
     if (b.kind === 'table') {
@@ -215,14 +215,14 @@ export function toPartialBlocks(blocks: MdBlock[], restore: Restore): unknown[] 
         content: {
           type: 'tableContent',
           ...(b.header ? { headerRows: 1 } : {}),
-          rows: b.rows.map((r) => ({ cells: r.map((c) => inlineContent(c, restore)) })),
+          rows: b.rows.map((r) => ({ cells: r.map((c) => resolve(c, restore)) })),
         },
       };
     }
     const props: Record<string, unknown> = {};
     if (b.type === 'heading') props.level = b.level ?? 2;
     if (b.type === 'checkListItem') props.checked = !!b.checked;
-    return { type: b.type, props, content: inlineContent(b.atoms, restore) };
+    return { type: b.type, props, content: resolve(b.atoms, restore) };
   });
 }
 
