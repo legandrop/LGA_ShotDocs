@@ -6,7 +6,7 @@
 // ellas sus anotaciones.
 import { BlockNoteEditor } from '@blocknote/core';
 import { withCollaboration } from '@blocknote/core/yjs';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 import { addShape, PHOTO_MARKUP_MAP, updateShape, type ShapeFields } from '../media/markup';
 import { PHOTO_MARKUP_CAP } from '../media/markupLimits';
@@ -322,6 +322,52 @@ describe('usar una plantilla propia: las anotaciones viajan con sus fotos', () =
     expect(mediaIdsInDoc(doc).has(ID(2))).toBe(true);
     expect(mapOf(doc).size).toBe(0);
     a.docs.close(page);
+  });
+});
+
+describe('el reporte del día creado sin abrirlo: las anotaciones que no entran se avisan', () => {
+  const huge = [{ fileId: ID(2), frame: { v: 1, ...FRAME }, shapes: [['gigante', { type: 'text', text: 'x'.repeat(PHOTO_MARKUP_CAP + 10) }]] as [string, Record<string, unknown>][] }];
+
+  it('writeNewPage dice cuántas fotos quedaron sin anotaciones por el tope, y cero cuando entran todas', async () => {
+    const server = new FakeServer();
+    const a = await device(server);
+    await sync(a);
+    const home = a.tree.workspaceId;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const big = await a.tree.create(null, 'Con una foto pesada', home);
+    expect(await writeNewPage(a.docs, big, PHOTO_BLOCKS, [], huge)).toEqual({ markupSkipped: 1 });
+    warn.mockRestore();
+    // La página se creó igual, con la foto limpia.
+    const made = await openMap(a, big);
+    expect(made.media).toEqual([ID(2), ID(3), ID(4)]);
+    expect(made.map).toEqual({});
+
+    const tpl = await templateIn(a, home);
+    const read = await readOwnTemplate(deps(a), tpl, home);
+    if (read.status !== 'ok') throw new Error(read.status);
+    const fits = await a.tree.create(null, 'Todo entra', home);
+    expect(await writeNewPage(a.docs, fits, read.blocks, read.collapsed, read.markup)).toEqual({ markupSkipped: 0 });
+    expect(Object.keys((await openMap(a, fits)).map)).toHaveLength(5);
+  });
+
+  it('createDayReport avisa a quien lo llama, una vez y solo si algo no entró', async () => {
+    const server = new FakeServer();
+    const a = await device(server);
+    await sync(a);
+    const home = a.tree.workspaceId;
+    const folder = await a.tree.create(null, 'Reportes', home);
+    const plan = await planDayReport(deps(a), { parentId: folder, projectId: home });
+    const skipped = vi.fn();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const template = { id: ID(50), blocks: PHOTO_BLOCKS as never, collapsed: [], markup: huge, removed: 0 };
+    const id = await createDayReport(deps(a), plan, plan.suggestion, 'en', { canMark: true, template, onMarkupSkipped: skipped });
+    warn.mockRestore();
+    expect(skipped.mock.calls).toEqual([[1]]);
+    expect((await openMap(a, id)).media).toEqual([ID(2), ID(3), ID(4)]);
+
+    const clean = vi.fn();
+    await createDayReport(deps(a), plan, { ...plan.suggestion, day: 2 }, 'en', { canMark: true, onMarkupSkipped: clean });
+    expect(clean).not.toHaveBeenCalled();
   });
 });
 

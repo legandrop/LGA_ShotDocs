@@ -3,8 +3,8 @@
 **Estado: entregas 0 y 1 implementadas (v0.114, *Can view*; migración aplicada, ver "Cómo quedó (entregas 0 y 1)"
 al final); la 2 (*Can edit*) se rediseñó el 2026-10-02 contra v0.137 (sala de espera y admisión por un editor, ver
 "Entrega 2: *Can edit* (rediseño 2026-10-02)", al final) y se auditó: aprobado con condiciones, corregido y aprobado en la re-verificación (E2.18).
-**La 2a (escribir) está implementada (v0.151), con su migración sin aplicar y el interruptor `link_edit_min_version`
-apagado: ver "Cómo quedó la 2a"; no se prende hasta que la barrera de error alrededor de `PageEditor` esté en `main`
+**La 2a (escribir) está implementada (v0.151), con su migración aplicada y el interruptor `link_edit_min_version`
+prendido en 0.151 (era nulo al implementarla): ver "Cómo quedó la 2a"; la barrera de error alrededor de `PageEditor` que se pedía antes de prenderlo (R4) ya está en `main`
 (R4)** (roadmap P.19;
 pedido de Lega del 2026-10-02). Corregido con la auditoría
 independiente del mismo día ("aprobado con condiciones"; ver "Correcciones de la auditoría", al final) y con las
@@ -600,6 +600,8 @@ cliente sin sesión (3.2), y volver al workspace es elegirlo en el selector (rec
 
 ## 4. Migración (borrador, sin aplicar)
 
+*Hoy: la migración real es `20261012120000_link_publico.sql`, aplicada (verificado en la base el 2026-10-06).*
+
 Va como `supabase/migrations/<fecha>_link_publico.sql`, con `supabase/tests/link_publico_permisos.sql`, en la entrega 1
 (la escritura de contenido y la cuarentena, en la 2). Necesita `pgcrypto` (`extensions.gen_random_bytes`,
 `extensions.digest`), que Supabase ya trae.
@@ -999,7 +1001,7 @@ strict-origin-when-cross-origin` para toda la app, `public/robots.txt` con `Disa
 
 ### Entrega 1: *Can view*
 
-- **Migración `20261012120000_link_publico.sql` (sin aplicar):** `public_links`, `public_link_usage`,
+- **Migración `20261012120000_link_publico.sql` (aplicada, verificado en la base el 2026-10-06):** `public_links`, `public_link_usage`,
   `public_link_usage_all`, `private.db_guard` y `workspace_settings.link_limits` (vacío: valen los topes por defecto de
   `private.plink_limit`); `comments.plink_id`, `plink_author` y `plink_device_hash`; la regla única
   `private.user_can_share_page` (que `can_share` llama, ahora también "nunca un invitado": un dueño de proyecto pasado a
@@ -1040,7 +1042,7 @@ strict-origin-when-cross-origin` para toda la app, `public/robots.txt` con `Disa
   modo link, sin mirar si hay una sesión: nunca mezcla permisos); los links guardados viven en su propia lista
   (`shotdocs-links`) y no en el selector de workspaces; el ícono del árbol para las páginas con link y el detalle
   *Can view link, created by…* para el equipo quedan para después (la función `public_link_pages` ya está).
-- **Para publicar:** aplicar la migración (con la copia de seguridad), prender el interruptor de D14 y subir
+- **Para publicar** (hoy la migración está aplicada y `min_app_version` en 0.181; D14, `clean_min_version`, sigue apagado; verificado en la base el 2026-10-06): aplicar la migración (con la copia de seguridad), prender el interruptor de D14 y subir
   `min_app_version` a esta versión (recomendado: la publicada muestra un comentario de un link como de una cuenta
   borrada y no tiene *General access*; no se pierde nada).
 
@@ -1404,6 +1406,8 @@ se suman `waiting_bytes` y los de archivos de la 2b. Ajustables en `workspace_se
   (20 MB esperando: solo frena a su propio link). Todo se corta con *Reset link*.
 
 ### E2.11 Migración (borrador, sin aplicar)
+
+*Hoy: las migraciones reales son `20261028120000_link_editar.sql` y `20261030120000_link_archivos.sql`, aplicadas (verificado en la base el 2026-10-06).*
 
 Va como `supabase/migrations/<fecha>_link_editar.sql` (2a) y `<fecha>_link_archivos.sql` (2b), con
 `supabase/tests/link_editar_permisos.sql`. No toca `pull_page_updates`, `pull_page_content`, `push_page_update`,
@@ -2323,8 +2327,8 @@ editor real. Corregido en este documento:
 
 ### Cómo quedó la 2a (v0.151)
 
-**Estado:** implementada en la rama, con la migración `20261028120000_link_editar.sql` **sin aplicar** y el interruptor
-**apagado** (`link_edit_min_version` nulo: *Can edit* se ve apagado en *Share*, `plink_push_page_update` da
+**Estado:** implementada en la rama, con la migración `20261028120000_link_editar.sql` (**aplicada**, verificado en la base el 2026-10-06) y el interruptor
+**apagado al implementarla** (hoy `link_edit_min_version` está en 0.151; `link_edit_min_version` nulo: *Can edit* se ve apagado en *Share*, `plink_push_page_update` da
 `app_outdated`, `plink_open` da *Can view* y nadie admite). Sube `schema_version` a **19**.
 
 **La base** (`supabase/migrations/20261028120000_link_editar.sql`): todo E2.11 sin la 2b (la sala
@@ -2414,7 +2418,7 @@ waiting for the team*, un editor la admite, el equipo ve *Ana (via link)* en el 
 texto una sola vez, una fila hostil (un `Y.Map` en un párrafo) queda apartada con `bad_shape` sin tocar la página, y el
 equipo ve el aviso con *Download it*; en el teléfono, sin scroll horizontal; sin errores en la consola.
 
-**Para prenderlo** (con la barrera de error de `PageEditor` ya en `main`, R4): aplicar la migración (con la copia de
+**Para prenderlo** (hoy la migración está aplicada y `link_edit_min_version` en 0.151; verificado en la base el 2026-10-06; con la barrera de error de `PageEditor` ya en `main`, R4): aplicar la migración (con la copia de
 seguridad), publicar, subir `min_app_version` a esta versión y
 `update public.workspace_settings set link_edit_min_version = <esta versión> where id;` (el de D14 ya tiene que estar
 prendido). Apagar es volver a ponerlo en nulo: los links quedan en *Can view* de hecho y lo que espera, esperando.
@@ -2566,7 +2570,7 @@ columna (base anterior a la 25), sigue como en O-R3. La prueba SQL es `supabase/
 
 ### Cómo quedó la 2c (v0.157)
 
-**Estado:** implementada en la rama, con la migración `20261029120000_link_apartado.sql` **sin aplicar** (sube
+**Estado:** implementada en la rama, con la migración `20261029120000_link_apartado.sql` (**aplicada**, verificado en la base el 2026-10-06; sube
 `schema_version` a **20**). La app pide lo apartado solo con la base en la 20; con la 19 todo sigue como en la 2a.
 
 **Lo que ve el equipo** (lo ve quien ve lo borrado de cada página; sale de `public_link_aside()`, una sola consulta sin
@@ -2653,6 +2657,19 @@ La re-verificación encontró dos cosas más, corregidas en una ronda:
 
 Queda al roadmap (O5): lo trabado por una versión inventada sigue contando en los 20 MB que esperan de su link, hasta
 *Reset link*.
+
+### Restos de las auditorías, en *Share* y en el visitante (v0.212)
+
+- **El vencimiento en una fecha** de un link que ya existe se elige en un campo de fecha de la misma ventana (propone
+  dentro de 7 días, no deja elegir un día pasado, *Set date* y *Cancel*), en lugar del cuadro `prompt()` del navegador.
+  Una fecha pasada o vacía avisa *Pick a date in the future.* y no manda nada.
+- **Volver a *Restricted* pregunta antes**, con el mismo texto que *Reset link*: apagar el link lo deja sin efecto para
+  siempre (prenderlo otra vez crea otro). Sin confirmar, el selector vuelve a *Anyone with the link*.
+- **El uso de hoy en singular y en plural** (*opened 1 time · 2 comments*, *abierto 1 vez · 2 comentarios*).
+- **`LinkRemote` cierra también los proyectos:** archivar, borrar, restaurar y borrar para siempre tiran `link_read_only`
+  sin mandar el pedido (la base ya los rechazaba para `anon`).
+
+Pruebas en `linkShare.test.tsx` (3 más) y `linkMode.test.ts` (1 más). Siguen en el roadmap las demás observaciones.
 
 ## Cómo se midió
 

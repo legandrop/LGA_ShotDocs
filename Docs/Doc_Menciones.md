@@ -66,7 +66,7 @@ auditoría», al final. **Va después del link público** (su migración sube a 
 
 ## Cómo quedó la entrega 2
 
-- **La migración** `supabase/migrations/20261016120000_menciones_e2.sql` (sin aplicar; sube `schema_version` a 16):
+- **La migración** `supabase/migrations/20261016120000_menciones_e2.sql` (aplicada, verificado en la base el 2026-10-06; sube `schema_version` a 16):
   - `mention_candidates` suma las filas `has_access = false`: los miembros activos (también invitados) que no ven la
     página, nunca uno mismo ni quien sacaron del workspace, después de los que la ven. Solo si quien pide es dueño o
     admin, **y** puede compartir esa página (`can_share`), **y** la página no está en la papelera.
@@ -379,6 +379,8 @@ nuevo enseguida. Avisar de otros workspaces sin abrirlos queda para el correo (e
   de correo. Es solo presentación: la base no cambia y una versión vieja la sigue viendo cruda, como hoy.
 
 ## 7. Migración (borrador, sin aplicar)
+
+*Hoy: las migraciones reales, `20261015120000_menciones.sql` y `20261016120000_menciones_e2.sql`, están aplicadas (verificado en la base el 2026-10-06).*
 
 Nombre propuesto: `supabase/migrations/20261013120000_menciones.sql` (quedó `20261015120000_menciones.sql`). **Va después de la del link público** (rama
 `lega/link-publico-impl`, que sube `schema_version` a 14 y desde ahí la app ofrece *Anyone with the link*): esta sube a

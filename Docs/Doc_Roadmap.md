@@ -283,12 +283,12 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   para restaurar, sin borrar filas; tres entregas (archivar y borrar; la carpeta del Drive; *Delete forever*) con
   sus migraciones probadas en `begin; … rollback;` contra la base. **Entrega 1 implementada (v0.077, rama
   `lega/proyectos-borrar`):** íconos de archivar y borrar en el selector, la ventana con la palabra, las listas de
-  archivados y de borrados con *Restore*, el primer proyecto de cada dispositivo y la pantalla sin proyectos; falta
-  aplicar la migración 9 (después de la auditoría del código y la copia de seguridad) y subir `min_app_version`.
+  archivados y de borrados con *Restore*, el primer proyecto de cada dispositivo y la pantalla sin proyectos; la
+  migración 9 ya está aplicada (verificada en la base el 2026-10-06; antes de aplicarla hizo falta la auditoría del código y la copia de seguridad).
   **Entrega 2 implementada (rama `lega/proyectos-borrar-drive`):** la casilla de Drive en la ventana de borrar
   (destildada; dueño y admins), las rutas `/project/trash` y `/project/untrash` del portero, restaurar trayendo la
-  carpeta, *Restore without its files* solo con `missing` de verdad y *Look for its files again*; falta la auditoría,
-  aplicar la migración 10, publicar y correr la prueba técnica. Después, la 3 (*Delete forever*).
+  carpeta, *Restore without its files* solo con `missing` de verdad y *Look for its files again*; la
+  migración 10 ya está aplicada (verificada en la base el 2026-10-06); falta correr la prueba técnica. Después, la 3 (*Delete forever*).
   **Una sola papelera (v0.162, pedido de Lega del 2026-10-03):** *Trash* sale de la barra lateral y reemplaza a
   *Deleted projects* en el selector de proyectos, con proyectos, páginas y archivos juntos del más nuevo al más viejo,
   el filtro *All / Projects / Pages / Files* y *This project / All projects*; sin migración
@@ -347,21 +347,21 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   Ojo: `npm run db:test` aplica las migraciones de verdad; esta se probó con un script en `begin … rollback`.
 - **P.19 Link público: *Anyone with the link*** (Lega, 2026-10-02): en *Share*, además de personas y correos, un link
   que cualquiera abre sin cuenta, con *Can view* (que siempre puede comentar) o *Can edit*; "debería estar seguro".
-  **Entregas 0 y 1 hechas (v0.114: *Can view*, migración sin aplicar; ver "Cómo quedó" en `Doc_Link_Publico.md`).** Para
-  publicarla: aplicar la migración, prender el interruptor de D14 y subir la mínima. Falta: el ícono del árbol para las
+  **Entregas 0 y 1 hechas (v0.114: *Can view*, migración aplicada (verificada en la base el 2026-10-06); ver "Cómo quedó" en `Doc_Link_Publico.md`).** Para
+  publicarla del todo falta prender el interruptor de D14 (`clean_min_version`, hoy nulo, apagado); la migración ya está aplicada. Falta: el ícono del árbol para las
   páginas con link, el detalle *Can view link, created by…* para el equipo, y las entregas 2 y 3.
-  **Entrega 2a hecha (v0.151: escribir; migración `20261028120000_link_editar.sql` sin aplicar, `schema_version` 19, y el
-  interruptor `link_edit_min_version` apagado; ver "Cómo quedó la 2a" en `Doc_Link_Publico.md`).** Para prenderla: la
+  **Entrega 2a hecha (v0.151: escribir; migración `20261028120000_link_editar.sql` aplicada (verificada en la base el 2026-10-06), `schema_version` 19, y el
+  interruptor `link_edit_min_version` ya prendido en 0.151; ver "Cómo quedó la 2a" en `Doc_Link_Publico.md`).** Para prenderla hacía falta: la
   barrera de error alrededor de `PageEditor` en `main` (R4), aplicar la migración, subir la mínima y poner
-  `link_edit_min_version`. **Su auditoría
+  `link_edit_min_version` (la migración y el interruptor ya están en la base). **Su auditoría
   dio no aprobado (el paso 8) y se corrigió en una ronda** (`Doc_Link_Publico.md`, "Correcciones de la auditoría de la
   2a"). Queda de esa auditoría O4 (con D14 apagado se escribe igual en la sala). Al publicar la 2a, subir
   `min_app_version` a ella (O5: la publicada pasa *Can edit* a *Can view* al cambiar el vencimiento).
-  **Entrega 2c hecha (v0.157: lo apartado a la vista; migración `20261029120000_link_apartado.sql` sin aplicar,
+  **Entrega 2c hecha (v0.157: lo apartado a la vista; migración `20261029120000_link_apartado.sql` aplicada (verificada en la base el 2026-10-06),
   `schema_version` 20; ver "Cómo quedó la 2c" en `Doc_Link_Publico.md`):** la lista en *Share*, *Set aside (via link)* en
   el historial, el ícono del árbol y "volver a la página como la ve el equipo" para el visitante (la salida de la cadena
   de D235); con O3 (el orden de la admisión por dispositivo), O9 (la pantalla de link muerto recuerda lo mandado) y R1
-  (una página ya honda admite lo que no la ahonda); su auditoría la aprobó con observaciones, corregidas (O1 a O4 y O6). Para publicarla: aplicar la migración (con la copia). Quedan: que el
+  (una página ya honda admite lo que no la ahonda); su auditoría la aprobó con observaciones, corregidas (O1 a O4 y O6). La migración ya está aplicada. Quedan: que el
   dueño pueda descartar lo apartado después de bajarlo (decisión de Lega: va contra "no hay borrado duro"), las filas
   con una versión inventada cuentan en los 20 MB de lo que espera de su link hasta *Reset link* (BAJO, O5 de su auditoría:
   no contar lo que tiene una versión mayor que la de cualquier editor que admitió hoy, o mostrarlo en *Share* como
@@ -371,8 +371,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   `20261030120000_link_archivos.sql` aplicada, `schema_version` 21, y el portero; ver "Cómo quedó la 2b" en
   `Doc_Link_Publico.md`):** registrar con los topes de E2.5 sin vincular nunca un id ajeno, la miniatura, el original por
   el portero solo de lo que registró el link (con cada parte validada), la carpeta del proyecto por su huella o
-  `Via_link`, y lo escrito de una página que espera a que sus archivos estén registrados. Para publicarla: aplicar la
-  migración (con la copia) y publicar el portero con la app. **Decisión de Lega (2026-10-03), hecha en la ronda 1:** lo que
+  `Via_link`, y lo escrito de una página que espera a que sus archivos estén registrados. La migración ya está aplicada (verificada en la base el 2026-10-06); falta publicar el portero con la app si no está. **Decisión de Lega (2026-10-03), hecha en la ronda 1:** lo que
   subió un link no se borra ni va solo a la papelera; *Share* lista los archivos de los links de la página (de
   `files.plink_id`, también de links reseteados y lo subido sin usar) con *Download*. **Junto a D184** (descartar lo
   apartado, cuando exista): descartar manda también sus archivos a la papelera de archivos. Quedan: que `plink_open` diga
@@ -401,13 +400,18 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   **Observaciones de las auditorías que quedaron para después** (ninguna pierde datos ni abre el link): en el visitante, *Open my workspace* desde la
   cabecera del link, pruebas de las guardas de la interfaz (*Resolve*, papelera, preferencias, cartel del dominio,
   modo liviano), avisar y ofrecer copiar los comentarios sin subir cuando el link muere, limpiar las bases locales de
-  links viejos, confirmar *Restricted* como *Reset link*, los plurales de «Today: opened 1 times», un texto propio del
-  link en vez de «Ask for edit access», `LinkRemote` cerrando también `deleteProject` (la 2a cerró `namePageVersion`,
-  `share` y compactar), rechazar «(via link)» en el nombre, un selector de fecha en vez de `prompt()` al cambiar el vencimiento, la ayuda
+  links viejos, un texto propio del
+  link en vez de «Ask for edit access», rechazar «(via link)» en el nombre, la ayuda
   según quién la lee; en la base, tiempos de un token que ya existe (el doc dice «cuesta lo mismo»), el costo sin contar
   de `plink_tree(sig)` (26 ms con 423 páginas), el `max_rows` de PostgREST (1000: ramas más grandes llegan cortadas), la
   prueba del portero de los pases de 2 horas en `/folder/list`, el texto de «cada archivo listado cuenta como un pase»,
   y una línea de ayuda por `revoke_public_link` con la raíz en la papelera (`page_in_trash`).
+  **Hecho en v0.212, de esas observaciones:** *Restricted* pregunta antes como *Reset link*; el uso de hoy en singular y en
+  plural; `LinkRemote` cierra también archivar, borrar, restaurar y borrar para siempre un proyecto; y la fecha de
+  vencimiento de un link que ya existe se elige en un campo de la ventana, sin `prompt()` (`Doc_Link_Publico.md`, "Restos
+  de las auditorías, en *Share* y en el visitante").
+  Quedó de su revisión: con el campo de fecha abierto, apagar el link con *Restricted* y volver a *Anyone* hace
+  reaparecer el campo con la fecha anterior (no guarda nada sin *Set date*); Enter en el campo de fecha no confirma.
   **Diseño en `Doc_Link_Publico.md`** (auditado: aprobado con condiciones, ya corregido; D29 a D31): el token
   del link validado por la base en cada pedido (sin cuentas ni cambios en el login; las sesiones anónimas de Supabase no
   andan con el registro cerrado), solo la página y lo de abajo, como un invitado (base limpia de D14, sin historial ni
@@ -451,14 +455,19 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   (*Save as template…* con *Clear filled-in values*, la carpeta *Templates*, la franja con *Template settings…* y *Stop
   using as template*, *Customize*, las de otros proyectos sin sus fotos, *Wait* / *Use built-in* a medio bajar y el
   selector de plantilla del globito, con el aviso de O4). **D82 hecha** (v0.130): *On-Set Report* en la raíz del proyecto
-  ofrece crear o elegir la carpeta de reportes y mueve ahí la página (ya no sale como plantilla común). Quedan dos
-  sorpresas anotadas por la auditoría: *Apply template…* en una página de la raíz con subpáginas las mueve con la página, y
-  la ventana no avisa si la carpeta elegida ya tiene el reporte de hoy (mostrar el *already exists* con *Open*).
+  ofrece crear o elegir la carpeta de reportes y mueve ahí la página (ya no sale como plantilla común). **Hecho en v0.212,
+  las dos sorpresas de su auditoría:** la ventana dice que las subpáginas se mueven con la página, y avisa si la carpeta
+  elegida ya tiene el reporte de hoy (*already exists*, con *Open* y *Create another*; `Doc_Plantillas.md`, "Cómo quedó
+  (restos de la raíz y del reporte del día)").
   **Las anotaciones de las fotos viajan con la plantilla (v0.136, D46 aplicado a las plantillas):** al usarla (también el
   reporte del día) y al guardar como plantilla, mismas reglas que copiar y pegar; *Clear filled-in values* las saca con las
   fotos; entre proyectos no viajan (`Doc_Plantillas.md`, "Cómo quedó (las anotaciones de las fotos)"). Falta a mano: usar
-  una plantilla con fotos anotadas en la Mac y en el iPhone. De su auditoría (BAJO): en el reporte del día, si las anotaciones
-  no entran por los topes, el aviso queda solo en la consola (llevarlo a la pantalla, como al usar una plantilla); dos
+  una plantilla con fotos anotadas en la Mac y en el iPhone. **Hecho en v0.212:** en el reporte del día, si las anotaciones
+  no entran por los topes, el aviso sale en pantalla, como al usar una plantilla. Quedó de su revisión: *Create another*
+  desde la raíz numera el día como el siguiente (*Day 02*) y el globito propone el mismo día de rodaje (unificarlo es un
+  cambio de comportamiento); si la plantilla tiene a la vez fotos quitadas y anotaciones que no entran, el segundo aviso
+  pisa al primero; Enter mientras se lee la carpeta no da señal visible; el texto del aviso de anotaciones habla de una
+  página que "ya tiene demasiadas" aunque sea recién creada. De su auditoría (BAJO): dos
   guardas dobles (si se saca una capa la otra filtra igual) no tienen una prueba por capa. **Falta** que Lega revise el contenido de las tres (PL1) y
   pruebe el atajo en Firefox y Safari de la Mac y con un teclado latinoamericano físico. Quedan para después la marca
   *2 reports for…* en la barra lateral con la papelera ofrecida para el repetido sin tocar (O6), y en *Buscar en el
@@ -468,8 +477,8 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   pisan la descripción, la limitación conocida de `settings` (O2); guardar un reporte con *Use for day reports* cambia la
   plantilla de la carpeta para todo el equipo (O3, decidido así: D94); un invitado con *Edit & create pages* guarda
   plantillas, como permite la base (O4). Quedó de la auditoría de
-  la entrega 1: *Exit* de la vista previa abierta desde la ventana va al inicio y no a la página donde se elegía
-  (Atrás sí vuelve); y un aviso de ProseMirror en la consola al abrir la vista previa (sin efecto visible). De la
+  la entrega 1: un aviso de ProseMirror en la consola al abrir la vista previa (sin efecto visible); *Exit* de la vista
+  previa ya vuelve a la página donde se elegía (el inicio abre la última página abierta; fijado con una prueba en v0.212). De la
   auditoría de la entrega 2 (las demás observaciones, corregidas): un invitado con *Edit & create pages* crea reportes,
   porque la base mira el nivel y no el rol; si un cliente nunca tiene que crear páginas, es una decisión del modelo de
   permisos (`Plan_Workspaces.md`); y al reusar un reporte vacío hecho por la app se le cambia el número de día por el
@@ -543,8 +552,8 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   desde el zip** (*Import Shot Docs archive…* en el selector, dueño y admins, EX16): siempre a un proyecto nuevo, con el
   árbol, los ajustes, las marcas de plantilla, los bloques revisados contra el esquema, el colapsado, las anotaciones,
   los archivos (sin original, la vista de la foto o su nombre) y los comentarios (migración
-  `20261026120000_comentarios_archivo.sql`, **sin aplicar**: con la base vieja esperan para *Resume*); sigue donde quedó
-  sin duplicar; zips rotos y hostiles avisados sin crear nada. Falta: aplicar la migración (con su prueba SQL) y a mano
+  `20261026120000_comentarios_archivo.sql`, **aplicada**, verificada en la base el 2026-10-06; con la base vieja esperaban para *Resume*); sigue donde quedó
+  sin duplicar; zips rotos y hostiles avisados sin crear nada. Falta: correr la prueba SQL de esa migración (ya aplicada) y a mano
   ERSO entero con el portero de verdad, Safari y el iPhone (`Doc_Exportar.md`, "Cómo quedó la entrega 3"). Sigue la 4.
   **Importación por generaciones (v0.211, parcial; también *Import from Coda…*; D304 y D305):** cada importación
   reserva en el dispositivo su identidad (generación, proyecto y la operación que lo crea) antes de crear el proyecto;
@@ -592,9 +601,9 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   a varias.
 - **P.21 Menciones en comentarios: *@persona*** (Lega, 2026-10-02): escribir `@` en un comentario, elegir a alguien y
   que le llegue un aviso en la app; por correo cuando haya clave de Resend (C.12). **Entrega 1 programada (v0.120;
-  migración `20261015120000_menciones.sql` sin aplicar):** el `@` con la lista, el pintado, la cola, la campana y el
+  migración `20261015120000_menciones.sql` aplicada, verificada en la base el 2026-10-06):** el `@` con la lista, el pintado, la cola, la campana y el
   punto en el botón de comentarios; auditada y corregida. **Entrega 2 programada (v0.125; migración
-  `20261016120000_menciones_e2.sql` sin aplicar, `schema_version` 16):** compartir desde la mención (dueño y admins que
+  `20261016120000_menciones_e2.sql` aplicada, verificada en la base el 2026-10-06, `schema_version` 16):** compartir desde la mención (dueño y admins que
   pueden compartir la página, con Comentar y solo esa página), el punto en el árbol y el número en el título de la
   pestaña y en el ícono de la app. Falta la entrega 3 (correo), y un detalle cosmético (O6 de la
   auditoría): un comentario con mención cuenta como 2 cambios sin subir (alta y menciones). **Diseño en `Doc_Menciones.md`** (auditado y
@@ -613,13 +622,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   Lega). **A1 implementada (v0.118):** ajustes con los cuatro proveedores y la clave en el dispositivo, el panel con *Fix*,
   *Improve*, *Shorter*, *Translate to…* y *Ask…* sobre lo elegido, vista previa por palabras, *Apply* con un deshacer y
   la guarda de "cambió mientras pensaba", permisos, sin red, atajo, ayuda, CSP y la migración de `assistant_policy`
-  (sin aplicar; la aplica quien publica). **A2 implementada (v0.126):** *Summarize page* (*Insert at top* / *Insert
+  (aplicada, verificada en la base el 2026-10-06; `assistant_policy` en `on`). **A2 implementada (v0.126):** *Summarize page* (*Insert at top* / *Insert
   below*), *Translate page* (*Replace page content* en su lugar o *Create translated subpage*), *Format as…* (viñetas,
   casillas, tabla, títulos) y la política del workspace en *Assistant…* para dueño y admins, con su migración
-  `20261017120000_asistente_politica_ventana.sql` (sin aplicar). **La clave sincronizada, S1 implementada (v0.138,
+  `20261017120000_asistente_politica_ventana.sql` (aplicada, verificada en la base el 2026-10-06). **La clave sincronizada, S1 implementada (v0.138,
   D72 → B, `Doc_Clave_Sincronizada.md`):** prender la copia cifrada con una frase, abrirla en otro dispositivo
   (preguntando si cambia el destino), *Update* / *Replace synced key…*, *Stop syncing* y *Sign out other devices*; su
-  migración `20261023120000_clave_sincronizada.sql`, sin aplicar. **S2 implementada (v0.143, sin migración):**
+  migración `20261023120000_clave_sincronizada.sql`, aplicada (verificada en la base el 2026-10-06). **S2 implementada (v0.143, sin migración):**
   *Change passphrase…*, *Keep the key on this device*, rechazar una copia más vieja, *Also sync in this workspace…*, el
   botón en el 401, la clave de *Voice* en el mismo sobre y las notas de voz en la ventana de salir. Falta medir en el
   iPhone y el gestor de contraseñas real (recorrido de Lega). Quedó de la auditoría de S2 (improbable): *Change
@@ -869,7 +878,7 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    **Entrega 3 hecha (v0.137): listos para prender, siguen apagados.** La marca del rearmado se guarda (R-1) y la
    espera olvida `syncedSV` una vez por época (R-2); la base manda la huella de cada snapshot y el dispositivo no aplica
    uno que no coincide: lo invalida, y quien compacta invalida una base corrupta (O-D); `pull_page_content` sin versión
-   (v0.127 a v0.133) ya no sirve snapshots (migración `20261025120000_compactar_prender.sql`, sin aplicar); el script de
+   (v0.127 a v0.133) ya no sirve snapshots (migración `20261025120000_compactar_prender.sql`, aplicada, verificada en la base el 2026-10-06; Compactar sigue apagado: `snapshot_min_version` nulo); el script de
    restaurar empieza por anularlos (D142); armar devuelve el control cada 30 ms, medido con la CPU frenada ×4 y ×6
    (O-C). **Falta (Lega):** la prueba de punta a punta con sesión y la medición en el iPhone (pruebas 7 y 8 de
    `Doc_Compactar.md`); después, el SQL de prender que está en "Cómo quedó la entrega 3" (sube también
@@ -1010,19 +1019,20 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
     iPhone (Safari, app instalada) que se actualiza sola al volver la red (solo se midió Chromium). **Hecho (v0.099):**
     la base frena por versión los cambios del árbol y los comentarios (header `x-shotdocs-version`, migración
     `20261008120000_version_minima_arbol.sql`, rechazo 503 que ninguna versión marca como rechazado) y *Update now*
-    sigue cada instalación desde `updatefound`; archivar, borrar y restaurar proyectos también frenan. **Falta:**
-    aplicar la migración, publicar y, cuando Lega tenga esta versión en sus dispositivos, subir `min_app_version` a
-    ella; compartir, invitar y la papelera de archivos siguen sin versión; un workspace autohospedado necesita CORS que
-    acepte `x-shotdocs-version`. Menor (auditoría, O6): si una instalación falló y después el servidor vuelve a publicar
-    la misma versión que corre, *Update now* sigue diciendo que falló en vez de recargar (cualquier instalación nueva
-    lo borra; no pierde nada). Ver `Doc_Sincronizacion.md`, "La versión mínima, el árbol y los comentarios" y "Volver
+    sigue cada instalación desde `updatefound`; archivar, borrar y restaurar proyectos también frenan. La migración ya
+    está aplicada (verificada en la base el 2026-10-06) y `min_app_version` está en 0.181. **Falta:** compartir e invitar
+    siguen sin freno en la app, y esas dos y la papelera de archivos, en la base; un workspace autohospedado necesita CORS
+    que acepte `x-shotdocs-version`. La papelera de archivos ya se frena sola en la app (la cola no manda
+    nada con una versión menor a la mínima). **Hecho en v0.212** (auditoría, O6): si una instalación falló y después el
+    servidor vuelve a publicar la misma versión que corre, *Update now* recarga en vez de seguir diciendo que falló. Ver
+    `Doc_Sincronizacion.md`, "La versión mínima, el árbol y los comentarios" y "Volver
     después de mucho tiempo sin red".
 18. **Que lo borrado no llegue a quien solo ve la página (D14). Entregas 0 y 1 hechas (v0.104), migración
     `20261010120000_privacidad_borrado.sql` aplicada e interruptor apagado.** Quien no edita baja siempre la última
     base limpia (armada por un editor, con lo borrado como hueco), con `clean_reset_seq` al compartir, invitar y mover,
     los permisos de los usos sacados de archivos, la columna `update` cerrada y la línea al compartir y la ayuda.
-    **Falta para prenderlo** (antes de invitar al primer cliente de verdad): aplicar la migración, el cambio del script
-    de restaurar, `min_app_version` en esta versión, la prueba de punta a punta (7) y `clean_min_version`. Después: (2)
+    **Falta para prenderlo** (antes de invitar al primer cliente de verdad): el cambio del script
+    de restaurar (la migración ya está aplicada), `min_app_version` en esta versión, la prueba de punta a punta (7) y `clean_min_version`. Después: (2)
     medir; (3) limpiar el dispositivo de quien deja de ver lo borrado; (4) deltas si hacen falta; medir en el iPhone. La subida
     no cambia (D19). Las páginas en la papelera ya no se leen con Ver (ítem 19, v0.102). Lega aceptó la demora del
     cliente (D22, sección 13).

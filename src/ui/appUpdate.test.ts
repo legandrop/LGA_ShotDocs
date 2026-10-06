@@ -346,6 +346,32 @@ describe('la versión nueva de la app cuando el workspace pide una más nueva', 
     updates.stop();
   });
 
+  it('una instalación que falló y después el servidor publica otra vez la versión que corre: "Update now" recarga, sin decir que falló', async () => {
+    const worker = fakeWorker();
+    const { updates, reloadByHand, onStuck } = setup(worker, 1000, { published: 'index-viejo.js' });
+    await tick();
+    worker.failInstall(worker.startInstall());
+    updates.setOutdated(true);
+    await tick();
+    await updates.updateNow();
+    expect(reloadByHand).toHaveBeenCalledTimes(1);
+    expect(onStuck).not.toHaveBeenCalledWith('failed');
+    expect(onStuck).not.toHaveBeenCalledWith('force');
+    updates.stop();
+
+    // Sin poder leer qué versión tiene el servidor, la falla anotada sigue valiendo.
+    const blind = fakeWorker();
+    const unknown = setup(blind, 1000, { published: null });
+    await tick();
+    blind.failInstall(blind.startInstall());
+    unknown.updates.setOutdated(true);
+    await tick();
+    await unknown.updates.updateNow();
+    expect(unknown.onStuck).toHaveBeenLastCalledWith('failed');
+    expect(unknown.reloadByHand).not.toHaveBeenCalled();
+    unknown.updates.stop();
+  });
+
   it('una versión que llegó a instalarse y después quedó reemplazada no es una falla', async () => {
     const worker = fakeWorker();
     const { updates, onStuck } = setup(worker, 1000, { published: 'index-nuevo.js' });

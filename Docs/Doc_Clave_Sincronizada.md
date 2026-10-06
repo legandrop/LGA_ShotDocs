@@ -678,8 +678,8 @@ tiene que cumplir:
 ## Cómo quedó S1 (v0.138)
 
 **Qué hay.** La migración `20261023120000_clave_sincronizada.sql` (la tabla de la sección 5, con una condición más:
-la sesión tiene que ser de la app, `private.session_allowed()`, como en el resto de la base; no sube `schema_version`,
-sin aplicar). En el dispositivo: el sobre (`src/assistant/keySync.ts`, con la lista de la EFF en `wordlist.ts`), la
+la sesión tiene que ser de la app, `private.session_allowed()`, como en el resto de la base; no sube `schema_version`;
+aplicada, verificado en la base el 2026-10-06). En el dispositivo: el sobre (`src/assistant/keySync.ts`, con la lista de la EFF en `wordlist.ts`), la
 tabla (`keySyncRemote.ts`), los pasos sin interfaz (`keySyncFlow.ts`) y la sección *Sync across my devices* de
 *Assistant…* (`KeySyncSection.tsx`): *Turn on sync…* (frase generada o propia), *Unlock* (muestra el destino y el
 final de la clave, y pregunta si cambia), *Update synced key*, *Replace synced key…*, *Stop syncing*, *Choose a new

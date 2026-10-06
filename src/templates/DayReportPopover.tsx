@@ -109,6 +109,8 @@ export function DayReportPopover({ folderId, anchor, onClose }: Props) {
           template: choice?.template ?? null,
           // La de la carpeta que no se pudo usar (O4) no se pisa: se anota solo una que se usó o la que se eligió.
           markTemplate: choice?.notice ? undefined : (choice?.template?.id ?? null),
+          // Como al usar una plantilla en una página abierta: se dice en pantalla, no solo en la consola.
+          onMarkupSkipped: () => notify(t('templates.markupTooMany')),
         },
       );
       if (choice?.template?.removed) notify(t('templates.mediaRemoved', { count: choice.template.removed }));

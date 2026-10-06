@@ -18,7 +18,7 @@ Siguen pendientes la reimportación, los enlaces entre workspaces y el cierre ex
 
 **Estado: entregas 0 (v0.115), 1 (v0.122: el PDF de una rama o de un proyecto), 2 (v0.129: el zip), 1b (v0.134: los
 cambios de Lega al PDF, D84, D85 y D88: fotos en resolución completa, el PDF en partes y la lista de las que fallaron)
-y 3 (v0.141: volver a Shot Docs desde el zip, con su migración sin aplicar) hechas; la 4, pendiente** (roadmap P.22;
+y 3 (v0.141: volver a Shot Docs desde el zip, con su migración, aplicada) hechas; la 4, pendiente** (roadmap P.22;
 pedido de Lega del 2026-10-02). Se diseñó contra `main` v0.108. Cómo quedaron, al final:
 "Cómo quedó la entrega 0" (el editor de exportación medido con 300 páginas), "Cómo quedó la entrega 1" (el PDF, medido
 con la impresión real de Chrome y Edge) y "Cómo quedó la entrega 2" (el zip, abierto con `file://` en Chromium y
@@ -1227,7 +1227,7 @@ nuevos. Un comentario que volvió se ve "from an archive".
   mismas guardas (cerrar la app, cambiar de workspace, la otra pestaña); los textos de esas guardas pasan a decir "An
   import is running".
 - La base: `supabase/migrations/20261026120000_comentarios_archivo.sql` suma `'shotdocs'` a `comments.imported_from` y
-  sube `schema_version` a 18 (`ARCHIVE_COMMENTS_SCHEMA_VERSION`). **Sin aplicar.** Su prueba va en
+  sube `schema_version` a 18 (`ARCHIVE_COMMENTS_SCHEMA_VERSION`). **Aplicada** (verificado en la base el 2026-10-06). Su prueba va en
   `supabase/tests/comentarios_importados_permisos.sql` (sin correr: pide la base).
 
 **Lo probado** (suite con Node 22: 3245 pruebas, 3240 pasan y 5 salteadas, 34 más que v0.134; en los archivos nuevos: `zipReader.test.ts` 8, `archiveBlocks.test.ts` 6,

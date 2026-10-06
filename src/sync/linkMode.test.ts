@@ -15,6 +15,7 @@ import { legacyStorageNames, storageNamesFor } from '../workspace';
 import type { KeyValueStore } from '../workspaces';
 import { linkCommentRow, linkProblemOf } from './linkRemote';
 import { addPublicLink, makeLinkDevice, type LinkDevice } from './linkTesting';
+import type { SupabaseRemote } from './remote';
 import { FakeServer, makeDevice, type Device } from './testing';
 
 // El link público, entrega 1 (Docs/Doc_Link_Publico.md, sección 6.2): el visitante sin cuenta con el motor de verdad
@@ -268,6 +269,22 @@ describe('el visitante con el motor de verdad', () => {
     expect(v.problems).toContain('link_not_found');
     expect(await stored(v.db, s)).toEqual(before);
     expect(server.updates.get(s)?.length).toBe(updatesBefore);
+  });
+
+  it('un link no archiva, borra, restaura ni borra para siempre un proyecto: el pedido ni sale', async () => {
+    const { server, e1, s } = await setup();
+    const token = addPublicLink(server, s);
+    const v = await visitor(server, token);
+    await v.engine.syncNow();
+    const project = e1.tree.workspaceId;
+    const sent = v.calls.length;
+    // Como lo llama la app: por el tipo común, que es el que recibe el proyecto.
+    const remote: SupabaseRemote = v.remote;
+    await expect(remote.setProjectArchived(project, true)).rejects.toThrow('link_read_only');
+    await expect(remote.deleteProject(project)).rejects.toThrow('link_read_only');
+    await expect(remote.restoreProject(project)).rejects.toThrow('link_read_only');
+    await expect(remote.purgeProject(project)).rejects.toThrow('link_read_only');
+    expect(v.calls.length).toBe(sent);
   });
 
   it('quien creó el link deja de poder compartir (pasa a invitado): el link se apaga', async () => {

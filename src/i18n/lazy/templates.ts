@@ -169,6 +169,7 @@ export const templates = {
     en: "The folder keeps every report of the shoot, so each new one can copy the previous day and number the days. This page goes inside it.",
     es: "La carpeta junta todos los reportes del rodaje, así cada nuevo copia el día anterior y numera los días. Esta página queda adentro.",
   },
+  'dayReport.rootSubpages': { en: "Its subpages move with it.", es: "Sus subpáginas se mueven con ella." },
   'dayReport.rootFolder': { en: "Folder", es: "Carpeta" },
   'dayReport.rootNew': { en: "New folder…", es: "Carpeta nueva…" },
   'dayReport.rootName': { en: "Folder name", es: "Nombre de la carpeta" },

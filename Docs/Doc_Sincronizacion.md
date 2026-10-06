@@ -1238,7 +1238,7 @@ registrando y subiendo archivos (por ejemplo, un HEIC sin pasar a JPEG, `Doc_Ima
   vieja rechazada deja el archivo detenido en el dispositivo, con el error a la vista; al abrir la versión nueva,
   lo detenido se vuelve a intentar (`clearBlocked`) y sale.
 
-**Para que frene a las versiones viejas:** aplicar la migración (con copia de seguridad), publicar la v0.090 y,
+**Para que frene a las versiones viejas** (hoy la migración está aplicada y `min_app_version` en 0.181; verificado en la base el 2026-10-06): aplicar la migración (con copia de seguridad), publicar la v0.090 y,
 cuando Lega la tenga en sus dispositivos, subir `min_app_version` a 0.090 o más. 0.090 está escrito en
 `private.files_version_allowed`: si esta versión se publica con otro número, se cambia ahí y en la prueba antes de
 aplicar (`minVersion.test.ts` falla si no coincide con la entrada del changelog que nombra la migración). Si la app
@@ -1296,8 +1296,9 @@ los cambios del árbol que una versión anterior dejó rechazados con `app_outda
 otro estado). El servidor en memoria (`src/sync/testing.ts`) sigue la misma regla (`FakeServer.writeVersionSince`,
 `FakeRemote.versionHeader`).
 
-**Qué no frena:** compartir e invitar y la papelera de archivos, que van por funciones sin versión; son acciones con
-red y en el momento, no colas. Un header alto falso pasa: la mínima es una guarda de compatibilidad, no de seguridad
+**Qué no frena la base:** compartir e invitar y la papelera de archivos, que van por funciones sin versión; son
+acciones con red y en el momento, no colas. En la app, la cola de archivos sí deja de mandar a la papelera con una
+versión menor a la mínima. Un header alto falso pasa: la mínima es una guarda de compatibilidad, no de seguridad
 (quien puede editar puede escribir igual por la API), y una app vieja de verdad no manda el header.
 
 **Otros workspaces (D-18):** el CORS de la base tiene que aceptar el header `x-shotdocs-version` (ver
@@ -1396,7 +1397,9 @@ quizás con `min_app_version` subida. Qué pasa, paso a paso:
    dispositivo sin ninguna versión para abrir sin red: el estado dice que libere espacio o busque mejor conexión y
    vuelva a tocar *Update now*. Cada instalación se sigue desde que empieza (`updatefound`, desde v0.099): también la
    que empezó el navegador solo y la que falla antes de que *Update now* la mire, que antes parecía un navegador que
-   nunca empezó a instalar y ofrecía forzar. Solo si el navegador **nunca empezó** a instalar nada y el servidor publica otra versión
+   nunca empezó a instalar y ofrecía forzar. Desde v0.212, si después de una instalación fallida el servidor vuelve a publicar
+   la misma versión que ya corre (se lee igual que para forzar), no queda nada por instalar y *Update now* recarga en vez
+   de seguir diciendo que falló; sin poder leer la versión publicada, la falla anotada sigue valiendo. Solo si el navegador **nunca empezó** a instalar nada y el servidor publica otra versión
    (lee `/index.html?version-check=…` sin caché; si el servidor redirige a `/`, `fetch` sigue la redirección), el estado
    ofrece **Force the update**: saca el service worker y recarga desde el servidor, sin tocar lo guardado en el
    dispositivo. Antes exige todo guardado, red (comprobada leyendo la versión publicada justo antes) y lugar libre en

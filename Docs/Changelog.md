@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.212 :
+
+La ventana *Day reports go in a folder* no miraba la carpeta elegida: creaba sin avisar un segundo reporte del mismo día y no decía que las subpáginas se mueven con la página. Ahora la lee y, si ya está el de hoy, ofrece *Open* o *Create another*. En *New day report*, las anotaciones que no entraban por los topes se avisaban solo en la consola; ahora, en pantalla. En *Share*, la fecha de vencimiento de un link existente se pedía con el cuadro del navegador y el uso del día no tenía singular: hay un campo de fecha y plurales, y volver a *Restricted* pregunta antes. Un link ya no manda pedidos de archivar ni borrar proyectos. *Update now* decía que falló aunque el servidor publicara otra vez la versión en uso: ahora recarga. La documentación refleja las migraciones ya aplicadas en la base.
+
+[Avisar el reporte de hoy en la carpeta elegida, elegir la fecha del link en la ventana y recargar con Update now tras una instalación fallida]
+
 v0.211 :
 
 Una importación de Coda o de un archivo que se cortaba al crear el proyecto podía duplicar el proyecto al reintentar: el id se elegía al crearlo y el registro para seguir se escribía después. Además, al seguir, un comentario subido volvía a la cola y una página con un archivo sin guardar se escribía dos veces. Ahora cada importación reserva la identidad del proyecto antes de crearlo, y reintentar o Resume usa la misma. Si un archivo no se pudo guardar por algo reintentable (sin espacio), la página espera a Resume y entra entera, una sola vez (D305); uno vacío, dañado o que falta se anota y la página entra, como antes. Cada comentario deja un recibo local que impide repetirlo. Un registro de una versión anterior no bloquea: Import crea otro proyecto (D304). Lo pendiente se explica en inglés y castellano. Dos pruebas cubren las guardas de Annotate.

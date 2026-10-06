@@ -124,12 +124,13 @@ function blocksOf(reader: Reader, doc: Y.Doc): never[] {
 
 /**
  * Lee los reportes de `parentId` (o de la raíz de `projectId`) y arma la propuesta del globito (6.3, 6.4). `exclude`: la
- * página que se está llenando (la tira de una página vacía). Lee lo guardado en el dispositivo, sin red.
+ * página que se está llenando (la tira de una página vacía). Lee lo guardado en el dispositivo, sin red. `skipTemplate`:
+ * no lee la plantilla de la carpeta (para quien solo quiere saber qué reportes hay).
  */
 export async function planDayReport(
   deps: DayReportDeps,
   target: { parentId: string | null; projectId: string },
-  options: { exclude?: string; now?: Date } = {},
+  options: { exclude?: string; now?: Date; skipTemplate?: boolean } = {},
 ): Promise<DayReportPlan> {
   const { tree, docs } = deps;
   const siblings: PageRow[] = (target.parentId ? tree.children(target.parentId) : tree.roots(target.projectId)).filter(
@@ -196,7 +197,9 @@ export async function planDayReport(
   // más alto de los demás; si ninguno tiene, la cantidad (abajo).
   const days = reports.map((r) => r.day).filter((d): d is number => d !== null);
   const previousDay = facts?.day ?? last?.day ?? (days.length ? Math.max(...days) : null);
-  const resolved = await resolveReportTemplate(deps, folderTemplateId(tree, target.parentId), target.projectId);
+  const resolved = options.skipTemplate
+    ? { template: null, notice: null }
+    : await resolveReportTemplate(deps, folderTemplateId(tree, target.parentId), target.projectId);
   return {
     template: resolved.template,
     templateNotice: resolved.notice,
@@ -312,6 +315,8 @@ export async function createDayReport(
     template?: ReportTemplate | null;
     /** Lo que se anota en la carpeta como su plantilla: `undefined` no la toca (la suya no se pudo usar, O4). */
     markTemplate?: string | null;
+    /** Avisa cuántas fotos de la plantilla quedaron sin sus anotaciones porque no entraban en los topes de la página. */
+    onMarkupSkipped?: (photos: number) => void;
   },
 ): Promise<string> {
   const { tree } = deps;
@@ -337,7 +342,8 @@ export async function createDayReport(
     id = await tree.create(plan.parentId, title, plan.projectId, { templateId, before: placeBefore(plan, input.date) });
   }
   try {
-    await writeNewPage(deps.docs, id, blocks, template?.collapsed ?? [], template?.markup ?? []);
+    const written = await writeNewPage(deps.docs, id, blocks, template?.collapsed ?? [], template?.markup ?? []);
+    if (written.markupSkipped) options.onMarkupSkipped?.(written.markupSkipped);
   } catch (err) {
     throw new DayReportWriteError(id, err);
   }
@@ -359,15 +365,17 @@ export async function writeNewPage(
   collapsed: string[] = [],
   /** Las anotaciones de las fotos de la plantilla (mismas claves): se escriben solo para las fotos que quedaron en `blocks`. */
   markup: CopiedPhoto[] = [],
-): Promise<void> {
+): Promise<{ markupSkipped: number }> {
   const doc = await docs.open(pageId, { seed: true });
+  // Las fotos que quedaron sin sus anotaciones por los topes: quien llama lo avisa en pantalla (la página igual se crea).
+  let markupSkipped = 0;
   try {
     // Algo que esta versión no conoce: el editor lo borraría. No se toca.
     if (findUnknownContent(doc)) throw new Error('The page has content this version does not know.');
     const rests = onlyTitleRests(doc);
     if (!isEmptyPage(doc) && !rests) {
       await docs.flush(pageId);
-      return;
+      return { markupSkipped };
     }
     const editor = BlockNoteEditor.create(
       withCollaboration({
@@ -397,7 +405,8 @@ export async function writeNewPage(
         // quedan limpias, nunca se corta la creación.
         try {
           const result = carryMarkup(doc, markup, mediaIdsInDoc(doc));
-          if (result.skipped.length) console.warn('[anotaciones] anotaciones de la plantilla que no entraron', result.skipped);
+          markupSkipped = result.skipped.length;
+          if (markupSkipped) console.warn('[anotaciones] anotaciones de la plantilla que no entraron', result.skipped);
         } catch (err) {
           console.warn('[anotaciones] no se pudieron copiar las anotaciones de la plantilla', err);
         }
@@ -410,4 +419,5 @@ export async function writeNewPage(
   } finally {
     docs.close(pageId);
   }
+  return { markupSkipped };
 }

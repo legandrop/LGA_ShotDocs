@@ -50,6 +50,12 @@ export function endOfDay(date: string, now = Date.now()): string | null {
   return end.getTime() > now ? end.toISOString() : null;
 }
 
+/** La fecha local de dentro de `days` días, como la escribe un `<input type="date">`. */
+export function dateInDays(days: number, now = Date.now()): string {
+  const d = new Date(now + days * 86_400_000);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => void }) {
   const { client, workspace } = useServices();
   const status = useSyncStatus();
@@ -62,6 +68,8 @@ export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => 
   const [expiry, setExpiry] = useState<ExpiryChoice | 'date'>('never');
   const [level, setLevel] = useState<LinkLevel>('comment');
   const [date, setDate] = useState('');
+  // La fecha que se está eligiendo para un link que ya existe (`null`: el campo no se muestra).
+  const [newDate, setNewDate] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
 
   const supported = (status.schemaVersion ?? 0) >= LINK_SCHEMA_VERSION;
@@ -175,7 +183,8 @@ export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => 
             disabled={busy !== null || (!link && !info.clean_on)}
             onChange={(e) => {
               if (e.target.value === 'anyone') turnOn();
-              else void run('off', () => revokePublicLink(client, pageId));
+              // Apagarlo deja sin efecto el link para siempre (prenderlo de nuevo crea otro): se confirma, como *Reset link*.
+              else if (confirm(tr('share.link.resetConfirm'))) void run('off', () => revokePublicLink(client, pageId));
             }}
           >
             <option value="restricted">{tr('share.link.restricted')}</option>
@@ -253,18 +262,49 @@ export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => 
               disabled={busy !== null}
               onChange={(choice) => {
                 if (choice === 'date') {
-                  const asked = prompt(tr('share.link.datePrompt'), new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10));
-                  const at = asked ? endOfDay(asked.trim()) : null;
-                  if (asked && !at) return setError(tr('share.link.badDate'));
-                  if (at) void run('expiry', async () => void (await setPublicLinkExpiry(client, pageId, at, linkLevel)));
+                  setError(null);
+                  setNewDate(dateInDays(7));
                   return;
                 }
+                setNewDate(null);
                 void run('expiry', async () => void (await setPublicLinkExpiry(client, pageId, expiryFor(choice), linkLevel)));
               }}
             />
           </label>
+          {newDate !== null && (
+            <div className="link-share-row" data-link-expiry="date">
+              <input type="date" value={newDate} min={dateInDays(0)} aria-label={tr('share.link.date')} disabled={busy !== null} onChange={(e) => setNewDate(e.target.value)} />
+              <button
+                type="button"
+                className="primary"
+                disabled={busy !== null}
+                onClick={() => {
+                  const at = endOfDay(newDate);
+                  if (!at) return setError(tr('share.link.badDate'));
+                  setNewDate(null);
+                  void run('expiry', async () => void (await setPublicLinkExpiry(client, pageId, at, linkLevel)));
+                }}
+              >
+                {tr('share.link.setDate')}
+              </button>
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={() => {
+                  setError(null);
+                  setNewDate(null);
+                }}
+              >
+                {tr('common.cancel')}
+              </button>
+            </div>
+          )}
           <p className="muted small team-lead">
-            {tr('share.link.usage', { opens, comments: commentsToday, mb: megabytes(usage.pull?.bytes ?? 0) })}
+            {tr('share.link.usage', {
+              opens: tr('share.link.usageOpens', { count: opens }),
+              comments: tr('share.link.usageComments', { count: commentsToday }),
+              mb: megabytes(usage.pull?.bytes ?? 0),
+            })}
           </p>
           {link.edits && (link.level === 'edit' || link.edits.waiting + link.edits.held + link.edits.aside + link.edits.admitted_today > 0) && (
             <p className="muted small team-lead">

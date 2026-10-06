@@ -157,7 +157,7 @@ Archivar no toca ninguna política: los niveles no cambian.
 
 ### 1.3 La migración, completa
 
-`supabase/migrations/20261001120000_proyectos_archivar_borrar.sql` (probada en rollback contra la base real, sección 9.3; sin aplicar):
+`supabase/migrations/20261001120000_proyectos_archivar_borrar.sql` (probada en rollback contra la base real, sección 9.3; hoy aplicada, verificado en la base el 2026-10-06):
 
 ```sql
 -- LGA Shot Docs · archivar y borrar proyectos (P.14 del roadmap; Docs/Doc_Proyectos_Borrar.md), entrega 1.
@@ -2160,7 +2160,7 @@ esta regla, un vencimiento de rutina terminaba en archivos perdidos para la app.
 ### 3.6 La migración de la entrega 2
 
 `supabase/migrations/20261005120000_proyectos_drive.sql` (`schema_version` 10; probada en rollback encima de la 9,
-sección 9.3; sin aplicar). Cambia respecto del borrador: `trashed_projects` y `project_sizes` escritas enteras,
+sección 9.3; hoy aplicada, verificado en la base el 2026-10-06). Cambia respecto del borrador: `trashed_projects` y `project_sizes` escritas enteras,
 `restore_project` con su permiso después del `drop`, `project_drive_untrashed` que no toca nada si no había
 marca, y `project_files_purged` que bloquea los archivos en orden de id.
 

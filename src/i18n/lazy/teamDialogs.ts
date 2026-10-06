@@ -186,12 +186,20 @@ export const teamDialogs = {
   },
   'share.link.onDate': { en: "On a date…", es: "Una fecha…" },
   'share.link.date': { en: "Expiry date", es: "Fecha de vencimiento" },
-  'share.link.datePrompt': { en: "Expires at the end of (YYYY-MM-DD):", es: "Vence al final del día (AAAA-MM-DD):" },
+  'share.link.setDate': { en: "Set date", es: "Poner fecha" },
   'share.link.badDate': { en: "Pick a date in the future.", es: "Elegí una fecha futura." },
   'share.link.expiresOn': { en: "on {date}", es: "el {date}" },
   'share.link.usage': {
-    en: "Today: opened {opens} times · {comments} comments · {mb} MB downloaded",
-    es: "Hoy: abierto {opens} veces · {comments} comentarios · {mb} MB bajados",
+    en: "Today: {opens} · {comments} · {mb} MB downloaded",
+    es: "Hoy: {opens} · {comments} · {mb} MB bajados",
+  },
+  'share.link.usageOpens': {
+    en: { one: "opened {count} time", other: "opened {count} times" },
+    es: { one: "abierto {count} vez", other: "abierto {count} veces" },
+  },
+  'share.link.usageComments': {
+    en: { one: "{count} comment", other: "{count} comments" },
+    es: { one: "{count} comentario", other: "{count} comentarios" },
   },
   'share.link.limited': {
     en: "Daily limit reached: new visits are paused until tomorrow. Reset link if it went too far.",

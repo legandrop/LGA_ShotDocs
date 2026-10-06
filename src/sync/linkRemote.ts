@@ -416,6 +416,23 @@ export class LinkRemote extends SupabaseRemote {
     return readOnly();
   }
 
+  /** Ni archivar, borrar, restaurar o borrar para siempre un proyecto: el pedido no sale. */
+  override async setProjectArchived(): Promise<never> {
+    return readOnly();
+  }
+
+  override async deleteProject(): Promise<never> {
+    return readOnly();
+  }
+
+  override async restoreProject(): Promise<never> {
+    return readOnly();
+  }
+
+  override async purgeProject(): Promise<never> {
+    return readOnly();
+  }
+
   override async uploadFile(): Promise<void> {
     // Las imágenes viejas sin portero (`sdfile://`, bucket `page-files`): nunca por un link.
     return readOnly();

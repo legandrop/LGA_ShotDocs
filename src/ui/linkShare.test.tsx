@@ -3,11 +3,12 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseLinkHash } from '../linkMode';
+import { prefs } from '../prefs';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
-import { endOfDay, LinkShare } from './LinkShare';
+import { dateInDays, endOfDay, LinkShare } from './LinkShare';
 
 // *General access* en Share (Docs/Doc_Link_Publico.md, 3.11): montado de verdad, con un cliente que contesta las
 // funciones de quien comparte como la migración (20261012120000_link_publico.sql), simplificadas.
@@ -34,9 +35,10 @@ function fakeClient(opts: { cleanOn: boolean; canShare: boolean }) {
   const links: Link[] = [];
   const calls: { fn: string; args: Record<string, unknown> }[] = [];
   let n = 0;
+  const state = { usage: { open: { n: 4, bytes: 0 }, comment: { n: 1, bytes: 30 } } };
   const json = (l: Link) => ({
     id: l.id, page_id: l.page_id, level: l.level, created_at: '2026-10-02T10:00:00Z', expires_at: l.expires_at,
-    created_by_name: 'owner', token: l.token, alive: true, usage_today: { open: { n: 4, bytes: 0 }, comment: { n: 1, bytes: 30 } },
+    created_by_name: 'owner', token: l.token, alive: true, usage_today: state.usage,
     limited: false, comments: 1,
   });
   const live = (page: unknown) => links.find((l) => l.page_id === page && !l.revoked);
@@ -66,7 +68,14 @@ function fakeClient(opts: { cleanOn: boolean; canShare: boolean }) {
     }
     return { data: null, error: { message: 'unexpected ' + fn, code: '42501' }, status: 401 };
   };
-  return { client: { rpc, auth: { signOut: vi.fn() } }, calls, links };
+  return {
+    client: { rpc, auth: { signOut: vi.fn() } },
+    calls,
+    links,
+    set usage(value: typeof state.usage) {
+      state.usage = value;
+    },
+  };
 }
 
 function services(d: Device, client: unknown): Services {
@@ -110,6 +119,13 @@ async function mount(value: Services, node: React.ReactNode): Promise<HTMLElemen
 }
 
 const settle = () => act(async () => new Promise((r) => setTimeout(r, 30)));
+
+function setDate(input: HTMLInputElement, value: string) {
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
 
 function pick(host: HTMLElement, label: string, value: string) {
   const select = host.querySelector(`select[aria-label="${label}"]`) as HTMLSelectElement;
@@ -163,7 +179,7 @@ describe('General access (Share)', () => {
     expect(url.search).toBe('');
     expect(parseLinkHash(url.hash)).toMatchObject({ u: 'https://znlvpuddswymxpffgvbz.supabase.co', k: 'sb_publishable_testtesttest', t: f.links[0].token });
     expect(host.textContent).toContain('Copy link');
-    expect(host.textContent).toContain('opened 4 times');
+    expect(host.textContent).toContain('Today: opened 4 times · 1 comment · 0.0 MB downloaded');
     // Vence en 7 días.
     pick(host, 'Expires', '7');
     await settle();
@@ -181,6 +197,84 @@ describe('General access (Share)', () => {
     await settle();
     expect(f.links.every((l) => l.revoked)).toBe(true);
     expect(host.textContent).toContain('Restricted');
+  });
+
+  it('el uso de hoy se dice en singular y en plural', async () => {
+    const { d, page } = await setup();
+    const f = fakeClient({ cleanOn: true, canShare: true });
+    f.links.push({ id: 'l1', page_id: page, token: 'sdl_' + 'y'.repeat(43), level: 'comment', expires_at: null, revoked: false });
+    f.usage = { open: { n: 1, bytes: 0 }, comment: { n: 2, bytes: 30 } };
+    const host = await mount(services(d, f.client), <LinkShare pageId={page} onClose={() => undefined} />);
+    expect(host.textContent).toContain('Today: opened 1 time · 2 comments · 0.0 MB downloaded');
+    act(() => prefs.set({ language: 'es' }));
+    expect(host.textContent).toContain('Hoy: abierto 1 vez · 2 comentarios · 0.0 MB bajados');
+    act(() => prefs.set({ language: 'en' }));
+  });
+
+  it('On a date… muestra un campo de fecha en la ventana, sin el cuadro del navegador; una fecha pasada no se manda', async () => {
+    const { d, page } = await setup();
+    const asked = vi.fn(() => '2030-01-01');
+    vi.stubGlobal('prompt', asked);
+    const f = fakeClient({ cleanOn: true, canShare: true });
+    f.links.push({ id: 'l1', page_id: page, token: 'sdl_' + 'y'.repeat(43), level: 'comment', expires_at: null, revoked: false });
+    const host = await mount(services(d, f.client), <LinkShare pageId={page} onClose={() => undefined} />);
+    const dateRow = () => host.querySelector('[data-link-expiry="date"]');
+    const button = (text: string) => [...dateRow()!.querySelectorAll('button')].find((b) => b.textContent === text)!;
+    expect(dateRow()).toBeNull();
+    pick(host, 'Expires', 'date');
+    expect(asked).not.toHaveBeenCalled();
+    const input = dateRow()!.querySelector('input[type="date"]') as HTMLInputElement;
+    // Propone dentro de 7 días y no deja elegir un día pasado.
+    expect(input.value).toBe(dateInDays(7));
+    expect(input.min).toBe(dateInDays(0));
+    expect(f.calls.some((c) => c.fn === 'set_public_link')).toBe(false);
+
+    setDate(input, '2020-01-01');
+    await act(async () => button('Set date').click());
+    await settle();
+    expect(host.textContent).toContain('Pick a date in the future.');
+    expect(f.calls.some((c) => c.fn === 'set_public_link')).toBe(false);
+
+    setDate(dateRow()!.querySelector('input[type="date"]') as HTMLInputElement, '2031-03-09');
+    await act(async () => button('Set date').click());
+    await settle();
+    const set = f.calls.filter((c) => c.fn === 'set_public_link');
+    expect(set).toHaveLength(1);
+    expect(set[0].args.p_expires).toBe(new Date(2031, 2, 9, 23, 59, 59).toISOString());
+    expect(dateRow()).toBeNull();
+    expect(host.textContent).not.toContain('Pick a date in the future.');
+
+    // Cancel cierra el campo sin cambiar nada, y se lleva el aviso de la fecha mala.
+    pick(host, 'Expires', 'date');
+    setDate(dateRow()!.querySelector('input[type="date"]') as HTMLInputElement, '2020-01-01');
+    await act(async () => button('Set date').click());
+    expect(host.textContent).toContain('Pick a date in the future.');
+    await act(async () => button('Cancel').click());
+    expect(dateRow()).toBeNull();
+    expect(host.textContent).not.toContain('Pick a date in the future.');
+    expect(f.calls.filter((c) => c.fn === 'set_public_link')).toHaveLength(1);
+  });
+
+  it('volver a Restricted pregunta antes: sin confirmar el link sigue, confirmando se apaga', async () => {
+    const { d, page } = await setup();
+    const answers = [false, true];
+    const asked: string[] = [];
+    vi.stubGlobal('confirm', (text: string) => {
+      asked.push(text);
+      return answers.shift();
+    });
+    const f = fakeClient({ cleanOn: true, canShare: true });
+    f.links.push({ id: 'l1', page_id: page, token: 'sdl_' + 'y'.repeat(43), level: 'comment', expires_at: null, revoked: false });
+    const host = await mount(services(d, f.client), <LinkShare pageId={page} onClose={() => undefined} />);
+    pick(host, 'General access', 'restricted');
+    await settle();
+    expect(asked).toEqual(['The current link will stop working for everyone who has it.']);
+    expect(f.calls.some((c) => c.fn === 'revoke_public_link')).toBe(false);
+    expect(f.links[0].revoked).toBe(false);
+    expect((host.querySelector('select[aria-label="General access"]') as HTMLSelectElement).value).toBe('anyone');
+    pick(host, 'General access', 'restricted');
+    await settle();
+    expect(f.links[0].revoked).toBe(true);
   });
 
   it('una fecha de vencimiento: el fin de ese día, y nunca una del pasado', () => {

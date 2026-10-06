@@ -424,6 +424,8 @@ una página compartida pase de 100 KB y se edite mucho todos los días con lecto
 
 ## 7. Migración (borrador, sin aplicar)
 
+*Hoy: la migración real es `20261010120000_privacidad_borrado.sql`, aplicada; el interruptor `clean_min_version` sigue nulo, apagado (verificado en la base el 2026-10-06).*
+
 Va como `supabase/migrations/<fecha>_privacidad_borrado.sql`, con su prueba
 `supabase/tests/privacidad_borrado_permisos.sql`, en la entrega 1. Deja el interruptor apagado. Necesita `pgcrypto`
 (`extensions.digest`), que Supabase ya trae.
@@ -815,7 +817,7 @@ punta con usuarios de verdad) está escrita para la carpeta privada de pruebas y
 - **La prueba SQL suma** las hijas de una página compartida con Ver, la página que solo ve un invitado con Editar,
   `clean_seq` en 0 al reiniciar el proyecto, una base que llega más allá de `update_seq` y una página sin lectores.
 
-**Para prender el interruptor** (antes de invitar al primer cliente de verdad): aplicar la migración (con copia de
+**Para prender el interruptor** (hoy la migración está aplicada y `clean_min_version` es nulo; verificado en la base el 2026-10-06; antes de invitar al primer cliente de verdad): aplicar la migración (con copia de
 seguridad); que el script de restaurar del repo de copias vacíe `page_clean_bases` y deje `clean_seq` en 0 y
 `clean_reset_seq` en el `update_seq` restaurado; publicar esta versión y subir `min_app_version` a ella (la base no deja prender el interruptor
 antes); correr la prueba 7; y recién ahí `update public.workspace_settings set clean_min_version = <esta versión> where id`.

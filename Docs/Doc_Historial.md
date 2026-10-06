@@ -27,7 +27,7 @@ Las cuentas identifican formas agregadas, retiradas o con campos representables 
 **Estado: entregas 1 (v0.098), 2 (v0.103) y 3 (v0.106) implementadas, más los restos de las auditorías ("Lo que
 quedó de las entregas"); ver "Cómo quedó" de cada una, al final, que mandan sobre el diseño en lo que tocan. La migración de la entrega 1 (`20261007120000_historial.sql`) está aplicada
 desde v0.098; la de la entrega 3 (`20261011120000_versiones_con_nombre.sql`), probada en `begin … rollback` contra la
-base, SIN aplicar.** Pedido de Lega del 2026-10-01 (en el plan figuraba como fase 6). Toca la regla de no perder datos
+base, aplicada el 2026-10-02.** Pedido de Lega del 2026-10-01 (en el plan figuraba como fase 6). Toca la regla de no perder datos
 (restaurar es una edición) y los permisos (el historial muestra lo borrado), así que cada entrega va con sus pruebas y
 su auditoría. **Diseño auditado:** lo que encontró la auditoría independiente del diseño está corregido en el texto
 ("Correcciones de la auditoría"). Las cuatro preguntas, **decididas el 2026-10-01** con la recomendación (sección 15).
@@ -519,6 +519,8 @@ comprobaciones en cada caso (sección 11).
   compacta con `mergeUpdates` al pasar de 64 filas: no es un historial.
 
 ## 9. Migración (borrador, sin aplicar)
+
+*Hoy: la migración real es `20261007120000_historial.sql`, aplicada (la de las versiones con nombre, `20261011120000_versiones_con_nombre.sql`, también) (verificado en la base el 2026-10-06).*
 
 Va como `supabase/migrations/<fecha>_historial.sql`, con su prueba `supabase/tests/historial_permisos.sql`. No toca
 `page_updates`, `push_page_update` ni `pull_page_updates`. Lleva su constante opcional en la app
@@ -1066,7 +1068,7 @@ Escape deja como estaba). Mutantes de la app: 25 de 26 hacen fallar alguna prueb
 página termine de subir antes de buscar la fila de la restauración, que solo ahorra pedidos (sin ella, la busca, no la
 encuentra y espera a la sincronización siguiente). Suite, con main v0.105 unido y las correcciones de la auditoría: 2416 (2411 pasan, 5 salteadas).
 
-**Lo que falta:** medir en el iPhone; aplicar la migración. Detalles que quedaron así: Ctrl/⌘+Z de la restauración (en
+**Lo que falta:** medir en el iPhone (la migración ya está aplicada, verificado en la base el 2026-10-06). Detalles que quedaron así: Ctrl/⌘+Z de la restauración (en
 vez del *Undo* del aviso) no deja de lado la marca; en el filtro, la versión actual se ve siempre aunque no tenga
 nombre. De la auditoría (abajo): renombrar pisa el nombre anterior sin dejar rastro (O3) y la ventana de una copia
 restaurada que vuelve atrás el contador de `page_updates` (O7).

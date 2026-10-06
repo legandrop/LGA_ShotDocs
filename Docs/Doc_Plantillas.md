@@ -886,3 +886,29 @@ un solo paso; sin migración y sin subir `min_app_version`.
 
 **Falta (Lega, con sesión real):** usar una plantilla con fotos del Drive anotadas en el iPhone y en la Mac (acá las fotos
 son de prueba, sin Drive), y mirar qué tal quedan las plantillas de fábrica si algún día llevan una foto de referencia.
+
+## Cómo quedó (restos de la raíz y del reporte del día, v0.212)
+
+Manda sobre lo de arriba en lo que toca.
+
+- **La carpeta elegida ya tiene el reporte de hoy** (PL8, la segunda de las «dos cosas que se dejaron así» de D82). La
+  ventana *Day reports go in a folder* lee la carpeta elegida (lo guardado en el dispositivo, sin la plantilla de la
+  carpeta) y, si ya hay un reporte con la fecha de hoy, lo dice como el globito: *Day 05 · 2026-10-02 already exists* (o
+  *2 reports for…*), el botón principal pasa a **Open** (Enter lo abre y la página de la raíz queda como estaba) y
+  *Create another* crea otro a propósito, por el camino de siempre. Un Enter dado mientras se lee la carpeta se recuerda y
+  se resuelve al terminar, así un Enter rápido ya no crea un segundo reporte del mismo día sin avisar (si antes se elige
+  otra carpeta, ese Enter se olvida). Uno en la papelera
+  no cuenta; con *New folder…* no hay nada que avisar. Si la lectura falla, la ventana sigue como antes.
+- **Una página con subpáginas** (la primera de esas dos cosas): la ventana lo dice (*Its subpages move with it.*). El
+  comportamiento no cambia: van con la página adentro de la carpeta.
+- **Las anotaciones que no entran, en el reporte del día.** Hasta acá el aviso quedaba solo en la consola cuando el
+  reporte se creaba sin la página a la vista (*New day report*). Ahora `writeNewPage` dice cuántas fotos quedaron sin sus
+  anotaciones por los topes y el globito muestra el mismo aviso que al usar una plantilla (*Some photos came without their
+  annotations…*). La página se crea igual. Un error al copiarlas (que no es un tope) sigue yendo solo a la consola.
+- ***Exit* de la vista previa.** La observación de la entrega 1 (iba al inicio y no a la página donde se elegía) ya no se
+  reproduce: el inicio abre la última página abierta del proyecto, que es esa. Queda fijado con una prueba
+  (`practice.test.tsx`).
+- **Pruebas.** `dayReportRoot.test.tsx` (7 más: el aviso y Enter, *Create another*, el Enter recordado y el que se olvida
+  al cambiar de carpeta, la papelera y *New folder…*, con y sin subpáginas), `templateMarkup.test.ts` (2 más) y `dayReportHost.test.tsx` (el globito con una
+  plantilla cuyas anotaciones pasan el tope). Queda una diferencia con el globito: *Create another* desde la raíz numera
+  el día como el siguiente (`Day 02`), no como el mismo día de rodaje; unificarlo es un cambio aparte.

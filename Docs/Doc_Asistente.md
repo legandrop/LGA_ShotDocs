@@ -83,7 +83,7 @@ Test emite `sd.models`, seguido de `sd.done` y EOF; su lista no cambia ante un e
 **Alcance comprobado:** consumidores reales contra el Worker/DO SQLite local con pedidos sintéticos, cancelación antes y durante consultas/proveedor, aislamiento de controles y vencimiento preparado a 31 s; UI EN/ES con editor real y pasarela simulada. En v0.197 se comprobó online en Windows el catálogo y una respuesta real de texto de Kimi K3, desde la app por el portero propio con clave personal. El texto sintético conservó los datos pedidos; Apply aplicó la sugerencia, Undo recuperó el original exacto y Redo restauró la sugerencia, sin otro envío. Esta aceptación no cubre Stop real, cambios concurrentes, otros dispositivos, otros modelos o Caption, purga física a 600 s ni recuperación tras reinicios. No acredita todos los recorridos del asistente ni cierra la fase 5 o MCP.
 
 **Estado: entregas A1 (v0.118), A2 (v0.126) y A3 (v0.146) implementadas (ver "Cómo quedó A1", "Cómo quedó A2" y
-"Cómo quedó A3" al final; la migración de A2, sin aplicar); la clave sincronizada (D72 → B, `Doc_Clave_Sincronizada.md`),
+"Cómo quedó A3" al final; las migraciones de A1 y de A2, aplicadas, verificado en la base el 2026-10-06); la clave sincronizada (D72 → B, `Doc_Clave_Sincronizada.md`),
 entregas S1 (v0.138) y S2 (v0.143) implementadas; la prueba técnica M0 del MCP hecha en lo que no necesita infraestructura real (v0.145:
 el MCP en el portero detrás de un interruptor apagado, lo comprobado y medido, y los pasos que faltan; ver "Cómo quedó
 M0"); el resto del MCP, en diseño** (roadmap P.24; pedido de Lega del 2026-10-02, que decide entre las opciones
@@ -1220,7 +1220,7 @@ Corregido en 9.2, 9.3, 9.3 bis, 9.7, 9.8, las pruebas 12, 15 y 16, M0, M2, los r
 
 Implementada en `src/assistant/` (se baja aparte, la primera vez que se abre el panel o los ajustes: unos 44 KB más
 5 KB, sin tocar el paquete principal salvo el atajo, el host del panel y la ventana de salir). Migración
-`20261014120000_asistente_politica.sql` **sin aplicar** (la aplica quien publica, con su copia de seguridad).
+`20261014120000_asistente_politica.sql` (**aplicada**, verificado en la base el 2026-10-06).
 
 ### Qué hay
 
@@ -1338,7 +1338,7 @@ una clave sin prefijo conocido en un error.
 
 Implementada en `src/assistant/` (la misma parte que se baja al abrir el panel: pasa de unos 44 KB a 68 KB sin
 comprimir, 23 KB comprimida, porque suma el conversor de Markdown con forma y el camino de crear una página con
-contenido). Migración `20261017120000_asistente_politica_ventana.sql` **sin aplicar** (la aplica quien publica).
+contenido). Migración `20261017120000_asistente_politica_ventana.sql` (**aplicada**, verificado en la base el 2026-10-06).
 
 ### Qué hay
 
@@ -1849,7 +1849,7 @@ configuración real. Prender cada paso lo hace el coordinador, en orden, con su 
    de prenderlo se leen con `GET /v1/projects/<ref>/analytics/endpoints/logs` (SQL de ClickHouse sobre la tabla `logs`,
    `source = 'auth_logs'`, `log_attributes['path'] = '/token'` y `['grant_type']`, `['status']`; ventanas de hasta 24
    horas; el viejo `logs.all` ya no existe).
-2. **El plan B en la base:** `supabase/migrations/20261027120000_mcp_plan_b.sql` (sin aplicar; `Doc_Supabase.md`, "El
+2. **El plan B en la base:** `supabase/migrations/20261027120000_mcp_plan_b.sql` (aplicada, verificado en la base el 2026-10-06; `Doc_Supabase.md`, "El
    MCP: plan B", con el SQL de volver atrás). `private.mcp_pre_request()` sale enseguida si los claims no dicen
    `client_id` (sin convertir nada: una sesión normal no puede hacerla fallar) y si no, deja pasar solo
    `/rpc/mcp_[a-z0-9_]+`. La ejecutan `anon`, `authenticated` y `service_role` (PostgREST la llama en todo pedido, con el

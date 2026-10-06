@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { closeHelp } from '../help/helpUi';
 import { prefs } from '../prefs';
+import { navigate, pagePath } from '../router';
 import { ServicesContext, type Services } from '../services';
 import { FileRejected } from '../sync/files';
 import type { SupabaseRemote } from '../sync/remote';
@@ -327,6 +328,26 @@ describe('la página de práctica no toca nada real', () => {
     });
     await wait(300);
     expect(await snapshot(h)).toEqual(before);
+  });
+
+  it('Exit de la vista previa de una plantilla vuelve a la página desde donde se abrió', async () => {
+    const h = await app();
+    await until(() => h.host.querySelector('.tree'), 'el árbol');
+    const [brief] = h.d.tree.roots(h.d.tree.workspaceId);
+    const inside = h.d.tree.children(brief.id)[0].id;
+    // Se abre una página, después otra (la última abierta), y desde esa la vista previa, como hace la ventana Templates.
+    act(() => navigate(pagePath(brief.id)));
+    await until(() => h.host.querySelector(`article.page[data-page-id="${brief.id}"]`), 'la primera página');
+    act(() => navigate(pagePath(inside)));
+    await until(() => h.host.querySelector(`article.page[data-page-id="${inside}"]`), 'la segunda página');
+    act(() => navigate('/practice?template=on-set'));
+    await until(() => h.host.querySelector('.practice-banner'), 'la vista previa');
+    // Cambiar de plantilla adentro de la vista previa no cambia a dónde se vuelve.
+    click(button('Shot Breakdown'));
+    await until(() => location.search === '?template=shot-breakdown&lang=en', 'la otra plantilla');
+    click(button('Exit'));
+    await until(() => h.host.querySelector(`article.page[data-page-id="${inside}"]`), 'la página de antes');
+    expect(location.pathname).toBe(pagePath(inside));
   });
 
   it('la práctica de una instancia de servicios no aparece en otra (otro workspace, otra sesión)', async () => {

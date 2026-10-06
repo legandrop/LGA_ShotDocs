@@ -473,6 +473,158 @@ describe('On-Set Report en la raíz: sin red y con dos dispositivos', () => {
   });
 });
 
+describe('On-Set Report en la raíz: la carpeta elegida ya tiene el reporte de hoy', () => {
+  const existsLine = () => dialogEl()?.querySelector('[data-root-report="exists"]') ?? null;
+  const anotherButton = () => dialogEl()?.querySelector<HTMLButtonElement>('[data-root-report="another"]') ?? null;
+
+  /** Una carpeta de reportes con el reporte de hoy adentro. */
+  async function folderWithToday(device: Device) {
+    const folder = await device.tree.create(null, 'Reportes');
+    const plan = await planDayReport(deps(device), { parentId: folder, projectId: device.tree.workspaceId });
+    const first = await createDayReport(deps(device), plan, { ...plan.suggestion, location: 'Estancia La Paz' }, 'en', { canMark: true });
+    return { folder, first };
+  }
+
+  it('lo dice antes de crear otro: Enter abre el de hoy y la página de la raíz queda como estaba', async () => {
+    const { device } = await setup();
+    const { folder, first } = await folderWithToday(device);
+    const page = await device.tree.create(null, '');
+    const host = await open(device, page);
+    click(host.querySelector('.template-strip [data-template="onset"]'));
+    await waitFor(existsLine);
+    expect(existsLine()!.textContent).toBe(`Day 01 · ${localDate()} already exists`);
+    expect(confirmButton().textContent).toBe('Open');
+    expect(anotherButton()!.textContent).toBe('Create another');
+    submit();
+    await waitFor(() => location.pathname === `/p/${first}`);
+    expect(dialogEl()).toBeNull();
+    // Nada se movió ni se creó: la carpeta sigue con un solo reporte y la página, vacía en la raíz.
+    expect(device.tree.children(folder).map((p) => p.id)).toEqual([first]);
+    expect(device.tree.get(page)?.parent_id).toBeNull();
+    expect(device.tree.get(page)?.template_id ?? null).toBeNull();
+    expect(device.tree.get(page)?.title).toBe('');
+  });
+
+  it('Create another crea a propósito otro del mismo día en esa carpeta', async () => {
+    const { device } = await setup();
+    const { folder, first } = await folderWithToday(device);
+    const page = await device.tree.create(null, '');
+    const host = await open(device, page);
+    click(host.querySelector('.template-strip [data-template="onset"]'));
+    await waitFor(anotherButton);
+    click(anotherButton());
+    await waitFor(() => device.tree.get(page)?.title);
+    await wait(100);
+    expect(device.tree.children(folder).map((p) => p.id)).toEqual([first, page]);
+    expect(device.tree.get(page)?.title.startsWith(`${localDate()} | Day `)).toBe(true);
+    expect(device.tree.get(page)?.template_id).toBe(BUILTIN_ONSET);
+    expect(location.pathname).not.toBe(`/p/${first}`);
+  });
+
+  it('Enter mientras se lee la carpeta se recuerda: abre el de hoy en vez de crear otro', async () => {
+    const { device } = await setup();
+    const { folder, first } = await folderWithToday(device);
+    const page = await device.tree.create(null, '');
+    const host = await open(device, page);
+    // La lectura de los reportes queda frenada hasta soltarla.
+    const realSnapshot = device.docs.snapshot.bind(device.docs);
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    device.docs.snapshot = (async (id: string) => {
+      await gate;
+      return realSnapshot(id);
+    }) as typeof device.docs.snapshot;
+    click(host.querySelector('.template-strip [data-template="onset"]'));
+    await waitFor(dialogEl);
+    expect(confirmButton().textContent).toBe('Create report in folder');
+    submit();
+    await wait(80);
+    // Todavía no se sabe qué hay en la carpeta: no se creó ni se movió nada.
+    expect(device.tree.get(page)?.parent_id).toBeNull();
+    expect(dialogEl()).not.toBeNull();
+    release();
+    await waitFor(() => location.pathname === `/p/${first}`);
+    expect(device.tree.children(folder).map((p) => p.id)).toEqual([first]);
+    expect(device.tree.get(page)?.parent_id).toBeNull();
+  });
+
+  it('un Enter recordado se olvida si antes de terminar de leer se elige otra carpeta', async () => {
+    const { device } = await setup();
+    const { first } = await folderWithToday(device);
+    const project = device.tree.workspaceId;
+    const page = await device.tree.create(null, '');
+    const host = await open(device, page);
+    const realSnapshot = device.docs.snapshot.bind(device.docs);
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    device.docs.snapshot = (async (id: string) => {
+      await gate;
+      return realSnapshot(id);
+    }) as typeof device.docs.snapshot;
+    click(host.querySelector('.template-strip [data-template="onset"]'));
+    await waitFor(dialogEl);
+    const rootsBefore = device.tree.roots(project).length;
+    submit();
+    await wait(50);
+    setSelect(field('folder')!, '');
+    await waitFor(() => field('name'));
+    release();
+    await wait(300);
+    // La ventana sigue abierta esperando una decisión: ni se abrió el de hoy ni se creó una carpeta nueva.
+    expect(dialogEl()).not.toBeNull();
+    expect(device.tree.roots(project).length).toBe(rootsBefore);
+    expect(device.tree.get(page)?.parent_id).toBeNull();
+    expect(location.pathname).not.toBe(`/p/${first}`);
+  });
+
+  it('el reporte de hoy en la papelera no cuenta, y con "New folder…" no se avisa', async () => {
+    const { device } = await setup();
+    const { folder, first } = await folderWithToday(device);
+    const page = await device.tree.create(null, '');
+    const host = await open(device, page);
+    click(host.querySelector('.template-strip [data-template="onset"]'));
+    await waitFor(existsLine);
+    setSelect(field('folder')!, '');
+    await waitFor(() => field('name'));
+    expect(existsLine()).toBeNull();
+    expect(confirmButton().textContent).toBe('Create folder and report');
+    click([...dialogEl()!.querySelectorAll('button')].find((b) => b.textContent === 'Cancel'));
+
+    await device.tree.trash(first);
+    click(host.querySelector('.template-strip [data-template="onset"]'));
+    await waitFor(dialogEl);
+    await wait(300);
+    expect(field('folder')!.value).toBe(folder);
+    expect(existsLine()).toBeNull();
+    expect(confirmButton().textContent).toBe('Create report in folder');
+  });
+
+  it('una página con subpáginas: la ventana dice que se mueven con ella, y se mueven', async () => {
+    const { device } = await setup();
+    const page = await device.tree.create(null, 'Jueves');
+    const child = await device.tree.create(page, 'Fotos');
+    await open(device, page);
+    act(() => requestTemplates(page));
+    await waitFor(() => document.querySelector('.templates-dialog'));
+    click(document.querySelector('.templates-dialog [data-template="onset"] button.primary'));
+    await waitFor(dialogEl);
+    expect(dialogEl()!.textContent).toContain('This page goes inside it. Its subpages move with it.');
+    submit();
+    await waitFor(() => device.tree.get(page)?.parent_id);
+    expect(device.tree.get(child)?.parent_id).toBe(page);
+  });
+
+  it('sin subpáginas la ventana no las nombra', async () => {
+    const { device } = await setup();
+    const page = await device.tree.create(null, '');
+    const host = await open(device, page);
+    click(host.querySelector('.template-strip [data-template="onset"]'));
+    await waitFor(dialogEl);
+    expect(dialogEl()!.textContent).toContain('This page goes inside it.');
+    expect(dialogEl()!.textContent).not.toContain('subpages');
+  });
+});
+
 describe('On-Set Report en la raíz: cuando algo falla', () => {
   it('si mover la página falla, avisa en la ventana y el reintento (aun con otro nombre) usa la carpeta que ya quedó: una sola carpeta', async () => {
     const { device } = await setup();

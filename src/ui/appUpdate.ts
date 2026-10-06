@@ -273,9 +273,13 @@ export class AppUpdates {
         }
       } else if (!this.watch.replaced && this.installs.failed) {
         // La instalación empezó y falló antes de que se la mirara (o la había empezado el navegador): tampoco se ofrece
-        // forzar.
-        this.deps.onStuck?.('failed');
-        return;
+        // forzar. Salvo que el servidor haya vuelto a publicar la versión que ya corre: no queda nada por instalar, la
+        // falla anotada es de otra publicación y se recarga como siempre.
+        const [published, running] = [await (this.deps.published ?? publishedScript)(), (this.deps.running ?? runningScript)()];
+        if (!published || !running || published !== running) {
+          this.deps.onStuck?.('failed');
+          return;
+        }
       } else if (!this.watch.replaced && this.outdated) {
         // El navegador no empezó a instalar nada. Si el servidor tiene otra versión, recargar abriría otra vez esta
         // desde la caché: se ofrece forzarla.

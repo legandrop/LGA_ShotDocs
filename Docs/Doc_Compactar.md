@@ -488,6 +488,8 @@ propone.
 
 ## 13. Migración (borrador, sin aplicar)
 
+*Hoy: lo implementado son `20261019120000_compactar_leer.sql`, `20261020120000_compactar_crear.sql` y `20261025120000_compactar_prender.sql`, las tres aplicadas; Compactar sigue apagado porque `snapshot_min_version` es nulo (verificado en la base el 2026-10-06).*
+
 Va como `supabase/migrations/<fecha>_snapshots.sql` en la entrega 1, con su prueba de permisos
 `supabase/tests/snapshots_permisos.sql`. Hace falta `pgcrypto` (`extensions.digest`), que Supabase ya trae.
 

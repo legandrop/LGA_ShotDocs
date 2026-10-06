@@ -10,12 +10,12 @@ import { focusTitle } from '../ui/PageView';
 import { insertTemplate, insertTemplateCopy, isEmptyPage, placeAtFirstDatum, placeAtSummary, type TemplateEditor } from './apply';
 import { BUILTIN_IDS, BUILTIN_KINDS, BUILTIN_SLUGS, builtinBlocks, builtinTexts, type BuiltinKind } from './builtin';
 import { reportTitle } from './dayReport';
-import { markReportFolder, planDayReport, reportBlocks, type ReportTemplate } from './dayReportCreate';
+import { markReportFolder, planDayReport, reportBlocks, reportsOn, type ReportTemplate } from './dayReportCreate';
 import { createReportFolder, reportFolderOptions } from './dayReportRoot';
 import { takeReportFocus } from './dayReportUi';
 import { builtinOrigin, listTemplates, templateInfo, templatesFolderOf, type OwnTemplate } from './own';
 import { customizeBuiltin, readFailureText, readOwnTemplate } from './ownCopy';
-import { RootReportDialog, type RootReportChoice } from './RootReportDialog';
+import { RootReportDialog, type RootReportChoice, type TodayReport } from './RootReportDialog';
 import { armTitleUndo, registerTemplateTarget, takeTemplatesRequest } from './templatesUi';
 import './templates.css';
 
@@ -234,6 +234,26 @@ export function TemplateHost({ pageId, doc, editor, editable, complete }: Props)
     [rootAsk, tree, perms, pageId, doc, applyDayReport],
   );
 
+  // El reporte de hoy que ya tiene la carpeta elegida en la ventana de la raíz (PL8): se avisa antes de crear otro del
+  // mismo día. Sale de lo guardado en el dispositivo, sin leer la plantilla de la carpeta; uno en la papelera no cuenta
+  // (la lectura recorre las páginas vivas de la carpeta).
+  const todayInFolder = useCallback(
+    async (folderId: string): Promise<TodayReport | null> => {
+      const folder = tree.get(folderId);
+      if (!folder) return null;
+      const plan = await planDayReport(
+        { tree, docs, engine },
+        { parentId: folderId, projectId: folder.workspace_id },
+        { exclude: pageId, skipTemplate: true },
+      );
+      const date = plan.suggestion.date;
+      const found = reportsOn(plan, date);
+      const last = found.at(-1);
+      return last ? { id: last.id, date, day: last.day, count: found.length } : null;
+    },
+    [tree, docs, engine, pageId],
+  );
+
   // Después de agregar una plantilla común (de fábrica o propia), el foco. Con título, a la página (el cursor ya quedó
   // en el primer dato); sin título, al título vacío (4.2, paso 5), y mientras no se escriba ahí, Ctrl/Cmd+Z en el título
   // saca la plantilla (y Ctrl/Cmd+Shift+Z la devuelve).
@@ -394,6 +414,12 @@ export function TemplateHost({ pageId, doc, editor, editable, complete }: Props)
       {rootAsk && (
         <RootReportDialog
           folders={rootFolders(tree, perms, pageId)}
+          withSubpages={hasChildren}
+          todayIn={todayInFolder}
+          onOpen={(id) => {
+            setRootAsk(null);
+            navigate(pagePath(id));
+          }}
           defaultName={tr('dayReport.folderName')}
           onConfirm={confirmRootFolder}
           onClose={() => setRootAsk(null)}

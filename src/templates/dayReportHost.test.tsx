@@ -3,6 +3,8 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { EditorView } from '@tiptap/pm/view';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { addShape } from '../media/markup';
+import { PHOTO_MARKUP_CAP } from '../media/markupLimits';
 import { prefs } from '../prefs';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
@@ -12,7 +14,7 @@ import { unmountAll } from '../ui/collabHarness';
 import { IS_MAC } from '../ui/shortcuts';
 import { BUILTIN_ONSET } from './builtinIds';
 import { dayReportsMark, localDate } from './dayReport';
-import { createDayReport, planDayReport } from './dayReportCreate';
+import { createDayReport, planDayReport, writeNewPage } from './dayReportCreate';
 
 // El reporte del día en la página de verdad (PageView con el editor, sobre el servidor en memoria): la tira con *On-Set
 // Report* adentro de una carpeta, el botón *New day report* y su globito, "ya existe", el atajo con AltGr y `code`, los
@@ -332,6 +334,43 @@ describe('el botón New day report y su globito', () => {
       expect(kids.map((p) => p.title)).toEqual([`${localDate()} | Day 01`, `${addDays(localDate(), 2)} | Day 02`]);
       expect(opened()).toBe(true);
     } finally {
+      window.removeEventListener('shotdocs:notice', listen);
+    }
+  });
+
+  it('si las anotaciones de la plantilla de la carpeta no entran, lo dice en pantalla y el reporte se crea igual', async () => {
+    const { device } = await setup();
+    const file = '0f8fad5b-d9cb-469f-a165-708677289502';
+    const templates = await device.tree.create(null, 'Templates');
+    await device.tree.setSetting(templates, 'templatesFolder', true);
+    const tpl = await device.tree.create(templates, 'Con fotos');
+    await writeNewPage(device.docs, tpl, [
+      { type: 'image', props: { url: `sdmedia://${file}`, name: 'markers.jpg' } },
+      { type: 'paragraph', content: 'Notas' },
+    ] as never);
+    // Una foto con más anotaciones de las que entran en una foto (hechas con otros topes, o por otra versión).
+    const doc = await device.docs.open(tpl);
+    addShape(doc, file, 'gigante', { type: 'text', zValue: 1, posX: 0, posY: 0, rectX: 0, rectY: 0, rectW: 100, rectH: 100, text: 'x'.repeat(PHOTO_MARKUP_CAP + 10), fontSize: 90 }, { w: 4000, h: 3000 });
+    await device.docs.flush(tpl);
+    device.docs.close(tpl);
+    await device.tree.setSetting(tpl, 'template', { dayReport: true });
+    const folder = await device.tree.create(null, 'Reportes');
+    await device.tree.setSetting(folder, 'dayReports', { template: tpl });
+    const host = await open(device, folder);
+    const notices: unknown[] = [];
+    const listen = (e: Event) => notices.push((e as CustomEvent).detail);
+    window.addEventListener('shotdocs:notice', listen);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      click(host.querySelector('.day-report-button'));
+      await popoverReady();
+      act(() => popover()!.requestSubmit());
+      const opened = () => device.tree.children(folder).length === 1 && location.pathname === `/p/${device.tree.children(folder)[0].id}`;
+      for (let i = 0; i < 80 && !opened(); i++) await wait(30);
+      expect(opened()).toBe(true);
+      expect(notices).toEqual(['Some photos came without their annotations: this page already has too many.']);
+    } finally {
+      warn.mockRestore();
       window.removeEventListener('shotdocs:notice', listen);
     }
   });
