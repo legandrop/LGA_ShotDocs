@@ -665,27 +665,33 @@ export class CommentQueue {
     this.writing++;
     try {
       const tx = this.db.transaction(['outbox', 'meta'], 'readwrite');
+      try {
       const outbox = tx.objectStore('outbox');
       const meta = tx.objectStore('meta');
       const queued = new Map((await outbox.getAll()).filter((e) => e.op.kind === 'import').map((e) => [e.op.id, e]));
+      const receipts = new Map<string, { pageId: string; source: string; threadId: string | null }>();
       for (const op of ops) {
-        const earlier = queued.get(op.id);
-        // Ya en la cola: si todavía no salió, toma el bloque de ahora (al seguir una importación la página se
-        // vuelve a escribir y sus bloques cambian de id), con el texto que tenga (una edición sin mandar se
-        // funde en el alta). Si ya salió, queda como está: el panel lo muestra igual, como un hilo cuyo bloque
-        // ya no está.
-        if (earlier) {
-          if (!earlier.attempted && !earlier.failed && earlier.op.kind === 'import') {
-            const next = { ...op, body: earlier.op.body };
-            await outbox.put({ ...earlier, op: next });
-            await meta.put(next, IMPORT_KEY + op.id);
-          }
+        const identity = { pageId: op.pageId, source: op.source, threadId: op.threadId };
+        const receipt = receipts.get(op.id) ?? await meta.get('importReceipt2:' + op.id);
+        if (receipt !== undefined) {
+          const r = receipt as typeof identity;
+          if (!r || r.pageId !== identity.pageId || r.source !== identity.source || r.threadId !== identity.threadId) throw new CommentInvalid('The imported comment identity changed.');
           continue;
         }
+        const earlier = queued.get(op.id);
+        // Una operación antigua sin recibo no prueba aceptación v2. Nunca se cambia su ancla o texto.
+        if (earlier) throw new CommentInvalid('This imported comment has no durable receipt.');
         await outbox.add({ op, attempted: false, failed: false, error: null, queuedAt: this.now() });
         await meta.put(op, IMPORT_KEY + op.id);
+        await meta.put(identity, 'importReceipt2:' + op.id);
+        receipts.set(op.id, identity);
       }
       await tx.done;
+      } catch (err) {
+        try { tx.abort(); } catch { /* El rechazo de tx.done ya cerró la transacción. */ }
+        await tx.done.catch(() => undefined);
+        throw err;
+      }
     } finally {
       this.writing--;
     }
