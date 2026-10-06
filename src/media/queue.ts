@@ -1,5 +1,6 @@
 import { localize, stored, t } from '../i18n';
 import { FileRejected } from '../sync/files';
+import { ImportPending, validUuid } from '../sync/importIdentity';
 import { APP_OUTDATED, type MediaRemote } from '../sync/remote';
 import { errorMessage, isNetworkError, isTimeout, RemoteError, STALLS_TO_CLOSE_ROUND } from '../sync/types';
 import { attachmentCardUrl, blobToDataUrl, cleanFileName, EXTENSION_MIME, fileKind, folderCardUrl, FOLDER_MIME, isFolderMime, mimeFromName, type FileKind } from './attachments';
@@ -643,12 +644,19 @@ export class MediaQueue {
    * Una foto HEIC (las del iPhone; Chrome no las muestra) se guarda igual, tal cual y en el acto, marcada
    * `heic: 'pending'`, y enseguida se pasa a JPEG en el dispositivo (`ensureConverted`, Docs/Doc_Imagenes.md,
    * "Fotos HEIC"): lo que se registra y se sube es el JPEG. Para saber si es un HEIC se leen sus primeros bytes.
+   *
+   * Con `reserved.id` (el que una importación anotó antes de guardar el archivo), guardar dos veces es guardar una:
+   * si ese archivo ya está en el dispositivo, vuelve su dirección sin tocarlo (ni guardarlo ni subirlo otra vez).
    */
-  async add(pageId: string, file: Blob & { name?: string }): Promise<string> {
+  async add(pageId: string, file: Blob & { name?: string }, reserved?: { id: string }): Promise<string> {
     this.adding++;
     try {
+      if (reserved) {
+        if (!validUuid(reserved.id)) throw new ImportPending('invalid');
+        if (this.db && (await this.db.get('files', reserved.id))) return MEDIA_SCHEME + reserved.id;
+      }
       const heic = !!this.db && file.size > 0 && (await isHeicFile(file));
-      return await this.save(pageId, file, heic);
+      return await this.save(pageId, file, heic, reserved?.id);
     } finally {
       this.adding--;
     }
@@ -797,7 +805,7 @@ export class MediaQueue {
     return this.url ? this.porteroFor(this.url) : null;
   }
 
-  private async save(pageId: string, file: Blob & { name?: string }, heic = false): Promise<string> {
+  private async save(pageId: string, file: Blob & { name?: string }, heic = false, reservedId?: string): Promise<string> {
     if (!this.db) throw new FileRejected(t('queue.cannotAdd', { reason: localize(this.unavailable ?? '') }));
     if (file.size <= 0) throw new FileRejected(t('queue.empty'), true);
     if (this.options.maxFileBytes !== undefined && file.size > this.options.maxFileBytes) throw new FileRejected(t('link.edit.fileTooBig'), true);
@@ -812,7 +820,7 @@ export class MediaQueue {
       throw err;
     }
     this.askPersist();
-    const id = crypto.randomUUID();
+    const id = reservedId ?? crypto.randomUUID();
     const record: MediaRecord = {
       id,
       pageId,
@@ -2339,6 +2347,22 @@ export class MediaQueue {
       });
     }
     return this.resolveOwn(id);
+  }
+
+  /**
+   * `resolve` para lo que se exporta (el PDF y el zip). Lo único distinto: la tarjeta de una carpeta que se está
+   * subiendo desde este dispositivo sale como va a quedar, con *Google Drive folder* y el peso que se sabe, sin la nota
+   * de avance ("Uploading 3 of 10"), que es de este momento y de este dispositivo. Lo que se ve en la página no cambia.
+   */
+  async resolveForExport(url: string, pageId?: string): Promise<string> {
+    const shown = await this.resolve(url, pageId);
+    const id = mediaIdOf(url);
+    const note = id ? this.folderNotes.get(id) : undefined;
+    if (!id || !note || !this.db) return shown;
+    const own = await this.db.get('files', id).catch(() => undefined);
+    if (!own || !isFolderMime(own.mime)) return shown;
+    // Solo la tarjeta propia con esa nota: la de otro proyecto o la de una carpeta borrada salen como están.
+    return shown === folderCardUrl({ name: own.name, size: own.size, note }) ? folderCardUrl({ name: own.name, size: own.size }) : shown;
   }
 
   /**

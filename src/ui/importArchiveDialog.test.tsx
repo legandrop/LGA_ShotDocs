@@ -137,12 +137,12 @@ describe('la ventana Import Shot Docs archive', () => {
     expect(host.textContent).toContain('It becomes a new project in this workspace');
     expect(button(host, 'Import')!.disabled).toBe(true);
     await pick(host, await smallZip({ photo: true }));
-    expect(host.textContent).toContain('“Reporte chico”: 1 pages and 1 files');
+    expect(host.textContent).toContain('“Reporte chico”: 1 page and 1 file');
     expect(host.querySelector<HTMLInputElement>('#import-archive-name')!.value).toBe('Reporte chico');
     expect(button(host, 'Import')!.disabled).toBe(false);
     await act(async () => button(host, 'Import')!.click());
     for (let i = 0; i < 100 && !host.textContent?.includes('Imported'); i++) await act(async () => new Promise((r) => setTimeout(r, 20)));
-    expect(host.textContent).toContain('Imported 1 pages and 1 files.');
+    expect(host.textContent).toContain('Imported 1 page and 1 file.');
     const projectId = job.get().archiveResult!.projectId;
     expect(d.tree.project(projectId)?.name).toBe('Reporte chico');
     expect(d.tree.roots(projectId).map((p) => p.title)).toEqual(['Escena']);

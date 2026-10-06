@@ -48,7 +48,7 @@ export function tooBigNote(cap: number): string {
 
 // Lo que da Chrome y Edge (no está en los tipos de TypeScript). Exportar (src/export/zipTarget.ts) usa los mismos.
 export type Writable = { write(data: Uint8Array): Promise<void>; close(): Promise<void>; abort(): Promise<void> };
-export type FileHandle = { name: string; createWritable(): Promise<Writable>; remove?: () => Promise<void> };
+export type FileHandle = { name: string; createWritable(): Promise<Writable>; remove?: () => Promise<void>; getFile?: () => Promise<{ size: number }> };
 export type DirHandle = {
   name: string;
   getDirectoryHandle(name: string, opts?: { create?: boolean }): Promise<DirHandle>;

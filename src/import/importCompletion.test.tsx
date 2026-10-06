@@ -536,7 +536,7 @@ it('Coda: un archivo vacío no se va a poder guardar nunca: se anota y la págin
   expect(direct).toMatchObject({ resumable: false, pages: 1, files: 1, problems: ['a: bl-vacia.png: This file is empty.'] });
 }, 30000);
 
-it.each(['coda', 'archive'] as const)('%s: si el guardado del registro falla al crear una página, la página no se crea dos veces y la importación no termina como si nada', async kind => {
+it.each(['coda', 'archive'] as const)('%s: si el guardado del registro falla al anotar una página, la página no se crea sin su anotación ni dos veces, y la importación no termina como si nada', async kind => {
   // `una vez`: falla solo el primer guardado que anota una página. `siempre`: fallan todos los que anotan páginas.
   for (const mode of ['una vez', 'siempre']) {
     const server = new FakeServer();
@@ -553,10 +553,11 @@ it.each(['coda', 'archive'] as const)('%s: si el guardado del registro falla al 
     } };
     const result = kind === 'coda' ? await importCoda(folder, { ...codaDeps(d), journal: journal as never }) : await importArchive(f.archive, { ...archiveDeps(d), journal: journal as never });
     expect(failed).toBeGreaterThan(0);
-    // Una sola página en el proyecto: la que se creó, no otra más por haberla olvidado.
-    expect(d.tree.roots(result.projectId)).toHaveLength(1);
+    // El id de la página se anota antes de crearla: sin anotación no se crea ninguna (antes se creaba y, al seguir en
+    // otra sesión, el registro no la conocía y se creaba otra); con la anotación al segundo intento, una sola.
+    expect(d.tree.roots(result.projectId)).toHaveLength(mode === 'una vez' ? 1 : 0);
     if (mode === 'una vez') {
-      // El alta que no se pudo anotar entró con el guardado siguiente: quedó todo, y en el registro también.
+      // La anotación que falló se repitió al escribir la página: quedó todo, y en el registro también.
       expect(result).toMatchObject({ resumable: false, pages: 1 });
       const stored = (await activeJournal(base, kind === 'coda' ? folder.manifest.doc.id : f.archive.key))!;
       expect(Object.values(stored.pages)).toEqual([expect.objectContaining({ pageId: d.tree.roots(result.projectId)[0].id, done: true })]);

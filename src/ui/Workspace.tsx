@@ -317,8 +317,8 @@ export function Shell() {
   useEffect(() => {
     const importing = importJobFor(tree);
     // Exportar espera lo mismo menos la carpeta que se está subiendo: lo de adentro va al Drive y no forma parte del PDF
-    // ni del zip (ahí solo está su tarjeta con su link; exportada durante la subida, sale con la nota de avance de ese
-    // momento). Una importación o un reemplazo en curso sí lo frenan (se exportaría un proyecto a medio escribir).
+    // ni del zip (ahí solo está su tarjeta con su link; exportada durante la subida, sale como va a quedar, sin la nota
+    // de avance). Una importación o un reemplazo en curso sí lo frenan (se exportaría un proyecto a medio escribir).
     const unsavedForExport = () =>
       docs.hasUnsavedEdits() ||
       !!docs.getWriteError() ||
@@ -329,6 +329,8 @@ export function Shell() {
       importing.get().running ||
       replaceRunning({ docs });
     const unsaved = () => unsavedForExport() || !!folders?.busy();
+    // Lo que esperar el guardado no resuelve: se le dice a quien exporta, con su causa, sin hacerlo esperar.
+    const exportBlocked = () => (importing.get().running ? t('export.waitImport') : replaceRunning({ docs }) ? t('export.waitReplace') : null);
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       if (!unsaved()) return;
       e.preventDefault();
@@ -343,6 +345,7 @@ export function Shell() {
       current: () => live && currentContext.current === context,
       unsaved,
       unsavedForExport,
+      exportBlocked,
       flush: () => docs.flush(),
       prepare: () => {
         const title = titlePreparation.current;

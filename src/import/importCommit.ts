@@ -142,6 +142,29 @@ export interface RecoveryJournal {
   projectName: string;
   pages: Record<string, { pageId: string; commit?: ImportCommit | ClosedCommit; done?: boolean }>;
   media: Record<string, unknown>;
+  /**
+   * El id con que se va a guardar cada archivo que todavía no quedó anotado en `media` (misma clave): se anota antes
+   * de guardarlo, así repetir el guardado después de un corte usa el mismo id y no deja otro archivo en el dispositivo.
+   */
+  reserved?: Record<string, string>;
+}
+
+/** De cuántas importaciones terminadas de una misma fuente se conserva el detalle (sus páginas y sus archivos). */
+export const KEPT_CLOSED = 3;
+
+// De las terminadas más viejas queda solo la identidad (generación, proyecto, operación y nombre): alcanza para que
+// ninguna reserva nueva repita un proyecto, y el registro deja de crecer con cada importación de la misma fuente. Nunca
+// toca una sin terminar ni la que vino de un registro de un solo diario.
+function trimClosed<T extends RecoveryJournal>(env: ImportEnvelope<T>): void {
+  const closed = Object.values(env.generations)
+    .map((g, at) => ({ g, at }))
+    .filter(({ g }) => g.phase === 'complete' && g.adoptedV2 !== true && !!g.journal)
+    // Las que no dicen cuándo cerraron (anteriores a esta poda) cuentan como las más viejas, en su orden de alta.
+    .sort((a, b) => (b.g.closedAt ?? 0) - (a.g.closedAt ?? 0) || b.at - a.at);
+  for (const { g } of closed.slice(KEPT_CLOSED)) {
+    const { reserved: _reserved, ...rest } = g.journal!;
+    g.journal = { ...rest, pages: {}, media: {} } as unknown as T;
+  }
 }
 
 export interface RecoveryStore<T> {
@@ -162,6 +185,8 @@ export interface ImportReservation {
 }
 export interface ImportGeneration<T> {
   reservation: ImportReservation; phase: 'reserved' | 'ready' | 'complete'; journal?: T; adoptedV2?: true;
+  /** La revisión del registro en la que se terminó: ordena las terminadas (ver `trimClosed`). */
+  closedAt?: number;
 }
 export interface ImportEnvelope<T> {
   recoveryVersion: 3; revision: number; activeGenerationId: string; generations: Record<string, ImportGeneration<T>>;
@@ -172,7 +197,11 @@ export interface GenerationStore<T> extends RecoveryStore<T> {
   reserveNew(expected: ImportSnapshot<T>, reservation: ImportReservation): Promise<ImportSnapshot<T>>;
   adoptV2(expected: ImportSnapshot<T>, generationId: string): Promise<ImportSnapshot<T>>;
   saveGeneration(expected: ImportSnapshot<T>, generationId: string, journal: T): Promise<ImportSnapshot<T>>;
-  completeGeneration(expected: ImportSnapshot<T>, generationId: string): Promise<ImportSnapshot<T>>;
+  /**
+   * `pages`: las páginas que la fuente trae ahora. Con ellas, la importación termina cuando esas están terminadas: una
+   * página anotada que la fuente ya no trae (la carpeta se volvió a exportar sin ella) queda como estaba y no lo impide.
+   */
+  completeGeneration(expected: ImportSnapshot<T>, generationId: string, pages?: readonly string[]): Promise<ImportSnapshot<T>>;
   readGeneration(key: string, generationId: string): Promise<ImportGeneration<T> | undefined>;
 }
 export const newImportReservation = (sourceKey: string, projectName: string): ImportReservation => ({
@@ -272,6 +301,7 @@ export function recoveryStore<T extends RecoveryJournal>(db: Pick<LocalDb, 'tran
     if (!record(v)) return false;
     const j = v as T;
     return j.recoveryVersion === 2 && typeof j.projectId === 'string' && typeof j.projectName === 'string'
+      && (!Object.hasOwn(j, 'reserved') || (record(j.reserved) && Object.values(j.reserved).every(validUuid)))
       && record(j.media) && record(j.pages) && Object.values(j.pages).every((p) => record(p) && typeof p.pageId === 'string'
         && !Object.hasOwn(p, 'written') && !Object.hasOwn(p, 'expected')
         && (!Object.hasOwn(p, 'commit') || (p.done === true && isClosedCommit(p.commit)) || validCommit(p.commit))
@@ -316,12 +346,13 @@ export function recoveryStore<T extends RecoveryJournal>(db: Pick<LocalDb, 'tran
     && plainRecord(v.generations) && Object.hasOwn(v.generations, v.activeGenerationId)
     && Object.entries(v.generations).every(([id, g]) => plainRecord(g) && Object.hasOwn(g, 'reservation') && Object.hasOwn(g, 'phase')
       && (!Object.hasOwn(g, 'adoptedV2') || g.adoptedV2 === true) && validReservation(g.reservation, g.adoptedV2 === true)
+      && (!Object.hasOwn(g, 'closedAt') || Number.isSafeInteger(g.closedAt))
       && g.reservation.generationId === id && g.reservation.sourceKey === key
       && ['reserved', 'ready', 'complete'].includes(g.phase as string)
       && (g.phase === 'reserved' ? !Object.hasOwn(g, 'journal') && g.adoptedV2 !== true
         : Object.hasOwn(g, 'journal') && valid(g.journal) && keyOf(g.journal) === key
           && g.journal.projectId === g.reservation.projectId && g.journal.projectName === g.reservation.projectName));
-  const update = async (expected: ImportSnapshot<T>, action: 'load' | 'reserve' | 'adopt' | 'save' | 'complete', value?: ImportReservation | string, journal?: T): Promise<ImportSnapshot<T>> => {
+  const update = async (expected: ImportSnapshot<T>, action: 'load' | 'reserve' | 'adopt' | 'save' | 'complete', value?: ImportReservation | string, journal?: T, required?: readonly string[]): Promise<ImportSnapshot<T>> => {
     const key = expected.sourceKey;
     const tx = db.transaction(['meta', 'ops'], 'readwrite');
     void tx.done.catch(() => undefined);
@@ -377,8 +408,13 @@ export function recoveryStore<T extends RecoveryJournal>(db: Pick<LocalDb, 'tran
           g.journal = structuredClone(journal);
           g.phase = 'ready';
         } else {
-          if (g.phase !== 'ready' || !g.journal || Object.values(g.journal.pages).some(p => p.done !== true || p.commit?.phase !== 'confirmed')) throw new ImportPending('invalid');
+          // Sin la lista de la fuente, todas las anotadas; con ella, cada una de la lista tiene que estar anotada y terminada.
+          const pages = g.journal?.pages ?? {};
+          const open = (p: { done?: boolean; commit?: ImportCommit | ClosedCommit } | undefined) => !p || p.done !== true || p.commit?.phase !== 'confirmed';
+          if (g.phase !== 'ready' || !g.journal || (required ? required.some(k => !Object.hasOwn(pages, k) || open(pages[k])) : Object.values(pages).some(open))) throw new ImportPending('invalid');
           g.phase = 'complete';
+          g.closedAt = next.revision + 1;
+          trimClosed(next);
         }
       }
       if (!Number.isSafeInteger(next.revision) || next.revision >= Number.MAX_SAFE_INTEGER) throw new ImportPending('changed');
@@ -409,7 +445,7 @@ export function recoveryStore<T extends RecoveryJournal>(db: Pick<LocalDb, 'tran
     await operation(key, 'remove', undefined, expected);
   },
     loadState, reserveNew: (expected, reservation) => update(expected, 'reserve', reservation), adoptV2: (expected, id) => update(expected, 'adopt', id),
-    saveGeneration: (expected, id, journal) => update(expected, 'save', id, journal), completeGeneration: (expected, id) => update(expected, 'complete', id),
+    saveGeneration: (expected, id, journal) => update(expected, 'save', id, journal), completeGeneration: (expected, id, pages) => update(expected, 'complete', id, undefined, pages),
     readGeneration: async (key, id) => {
     const state = await loadState(key);
     return envelope<T>(state.raw) ? structuredClone(state.raw.generations[id]) : undefined;

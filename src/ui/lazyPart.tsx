@@ -55,6 +55,11 @@ export interface PendingWrites {
   flush: () => Promise<void>;
   /** Lo que frena exportar: lo mismo que `unsaved` sin las subidas de carpetas, cuyo contenido no va en lo exportado. */
   unsavedForExport?: () => boolean;
+  /**
+   * Por qué no se puede exportar ahora aunque todo esté guardado (una importación o un reemplazo en curso), ya como
+   * texto para la persona; `null` si nada lo impide. Esperar el guardado no lo resuelve: se avisa en el acto.
+   */
+  exportBlocked?: () => string | null;
   /** Dueño montado y preparación del título, sólo para las salidas controladas. */
   owner?: object;
   current?: () => boolean;
@@ -72,6 +77,14 @@ export function watchPendingWrites(writes: PendingWrites): () => void {
   return () => {
     if (pendingWrites === writes) pendingWrites = null;
   };
+}
+
+/**
+ * Por qué no se puede exportar ahora (ver `exportBlocked`), o `null`. Se sabe en el acto: quien necesita pedir un
+ * selector en el mismo clic lo mira antes, para no hacer elegir un destino y recién después decir que no se puede.
+ */
+export function exportBlockedNow(owner: object | null): string | null {
+  return pendingWrites && pendingWrites.owner === owner ? (pendingWrites.exportBlocked?.() ?? null) : null;
 }
 
 let reloading: Promise<never> | null = null;
@@ -92,12 +105,19 @@ export function reloadByHand(): void {
 /**
  * Prepara una vez, espera sólo guardado local y ejecuta la salida sin otro await después del control final. Con
  * `forExport`, lo pendiente es lo que frena exportar (`unsavedForExport`), no todo lo que frena salir.
+ *
+ * La espera es para lo que se está guardando. Lo que esperar no arregla corta en el acto, sin gastar el plazo: que la
+ * preparación (el título abierto) ya falló, o, al exportar, que hay una importación o un reemplazo en curso
+ * (`exportBlocked`), que además se avisa con su causa en lugar del aviso general.
  */
 export async function saveBeforeExit(owner: object | null, current: () => boolean, action: () => void, ready: () => boolean = () => true, forExport = false): Promise<boolean> {
   const writes = pendingWrites;
+  let cause: string | null = null;
   try {
     if (!writes && !hadOwner && owner === null && current() && ready()) { action(); return true; }
     if (!writes || writes.owner !== owner || !current() || !writes.current?.()) throw new Error('Salida obsoleta');
+    const blocked = () => (cause = forExport ? (writes.exportBlocked?.() ?? null) : null);
+    if (blocked()) throw new Error('Exportación frenada');
     const stamp = writes.stamp?.();
     const pending = () => (forExport && writes.unsavedForExport ? writes.unsavedForExport() : writes.unsaved());
     const deadline = Date.now() + reloadTimings.saveWaitMs;
@@ -111,14 +131,15 @@ export async function saveBeforeExit(owner: object | null, current: () => boolea
       unsaved: () => preparing || failed || pending() || !ready(),
       flush: async () => { await preparation; if (!failed) await writes.flush(); },
     };
-    if (!(await waitForSaved(participant, deadline)) || pendingWrites !== writes || !writes.current?.() ||
-        !current() || writes.stamp?.() !== stamp || participant.unsaved()) throw new Error('Guardado local pendiente');
+    if (!(await waitForSaved(participant, deadline, () => failed || !!blocked())) || pendingWrites !== writes || !writes.current?.() ||
+        !current() || writes.stamp?.() !== stamp || participant.unsaved() || blocked()) throw new Error('Guardado local pendiente');
     action();
     return true;
   } catch {
     if (current()) {
-      if (writes?.owner) notify(t('leave.unsaved'));
-      else alert(t('leave.unsaved'));
+      const text = cause ?? t('leave.unsaved');
+      if (writes?.owner) notify(text);
+      else alert(text);
     }
     return false;
   }
@@ -151,14 +172,17 @@ export function hasUnsavedWork(): boolean {
   return !!pendingWrites?.unsaved() || hasDrafts();
 }
 
-/** Espera a que lo escrito llegue al dispositivo. Devuelve si quedó todo guardado. */
-export async function waitForSaved(writes = pendingWrites, deadline = Date.now() + reloadTimings.saveWaitMs): Promise<boolean> {
+/**
+ * Espera a que lo escrito llegue al dispositivo. Devuelve si quedó todo guardado. `hopeless`: ya se sabe que no va a
+ * quedar por más que se espere; corta ahí.
+ */
+export async function waitForSaved(writes = pendingWrites, deadline = Date.now() + reloadTimings.saveWaitMs, hopeless: () => boolean = () => false): Promise<boolean> {
   if (!writes) return true;
   for (;;) {
     const remaining = deadline - Date.now();
-    if (remaining <= 0) return false;
+    if (remaining <= 0 || hopeless()) return false;
     await Promise.race([writes.flush().catch(() => undefined), sleep(Math.min(500, remaining))]);
-    if (Date.now() >= deadline) return false;
+    if (Date.now() >= deadline || hopeless()) return false;
     if (!writes.unsaved()) return true;
     await sleep(Math.min(100, deadline - Date.now()));
   }

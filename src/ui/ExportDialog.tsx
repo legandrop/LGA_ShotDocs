@@ -275,7 +275,7 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
               return fileHref(location.origin, config.localKey, id, linkHash({ u: config.url, k: config.publishableKey, l: config.localKey, t: link.token }));
             }
           : undefined,
-        resolveFileUrl: withMedia ? (url, pageId) => media.resolve(url, pageId) : undefined,
+        resolveFileUrl: withMedia ? (url, pageId) => media.resolveForExport(url, pageId) : undefined,
         media: withMedia ? media : null,
       });
       if (!active()) return;

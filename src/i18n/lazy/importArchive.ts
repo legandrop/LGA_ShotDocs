@@ -14,8 +14,8 @@ export const importArchive = {
   'importArchive.chooseFolder': { en: "Choose unzipped folder", es: "Elegir carpeta descomprimida" },
   'importArchive.reading': { en: "Reading the archive…", es: "Leyendo el archivo…" },
   'importArchive.found': {
-    en: "“{title}”: {pages} pages and {files} files ({size}).",
-    es: "“{title}”: {pages} páginas y {files} archivos ({size}).",
+    en: "“{title}”: {pages} and {files} ({size}).",
+    es: "“{title}”: {pages} y {files} ({size}).",
   },
   'importArchive.foundComments': {
     en: { one: "It also has {count} comment.", other: "It also has {count} comments." },
@@ -49,6 +49,11 @@ export const importArchive = {
     en: "An earlier import of this archive into “{name}” did not finish ({done} of {total} pages). Resuming continues there without repeating what was already saved.",
     es: "Una importación anterior de este archivo a “{name}” no terminó ({done} de {total} páginas). Si seguís, continúa ahí sin repetir lo que ya se guardó.",
   },
+  // Entró todo y solo faltó anotarla como terminada: no hay páginas por traer.
+  'importArchive.resumeClose': {
+    en: "An earlier import of this archive into “{name}” brought everything in but was not closed. Resume closes it.",
+    es: "Una importación anterior de este archivo a “{name}” trajo todo pero no quedó cerrada. Seguir la cierra.",
+  },
   'importArchive.resume': { en: "Resume", es: "Seguir" },
   'importArchive.startOver': { en: "Import into a new project", es: "Importar a un proyecto nuevo" },
   'importArchive.name': { en: "New project name", es: "Nombre del proyecto nuevo" },
@@ -59,10 +64,13 @@ export const importArchive = {
     es: "Dejá esta ventana abierta hasta que termine. Si se corta, elegí el mismo archivo otra vez para seguir.",
   },
   'importArchive.progress': { en: "Page {current} of {total}:", es: "Página {current} de {total}:" },
+  // `{pages}` y `{files}` llegan ya con su cantidad y en singular o plural (acá y en `importArchive.found`).
   'importArchive.done': {
-    en: "Imported {pages} pages and {files} files.",
-    es: "Se importaron {pages} páginas y {files} archivos.",
+    en: "Imported {pages} and {files}.",
+    es: "Se importaron {pages} y {files}.",
   },
+  'importArchive.countPages': { en: { one: "{count} page", other: "{count} pages" }, es: { one: "{count} página", other: "{count} páginas" } },
+  'importArchive.countFiles': { en: { one: "{count} file", other: "{count} files" }, es: { one: "{count} archivo", other: "{count} archivos" } },
   'importArchive.doneComments': {
     en: { one: "{count} comment uploads with the sync.", other: "{count} comments upload with the sync." },
     es: { one: "{count} comentario se sube con la sincronización.", other: "{count} comentarios se suben con la sincronización." },
@@ -247,8 +255,8 @@ export const importArchive = {
     es: "no se pudo preparar para importar, y Seguir va a dar lo mismo; usá Importar a un proyecto nuevo",
   },
   'importArchive.pending.close': {
-    en: "Everything came in, but the import could not be marked as finished: choose the same archive again and use Resume.",
-    es: "Entró todo, pero la importación no se pudo anotar como terminada: elegí el mismo archivo de nuevo y usá Seguir.",
+    en: "Everything came in, but the import could not be marked as finished: choose the same archive again and use Resume. If Resume says this again, use Import into a new project.",
+    es: "Entró todo, pero la importación no se pudo anotar como terminada: elegí el mismo archivo de nuevo y usá Seguir. Si Seguir vuelve a decir esto, usá Importar a un proyecto nuevo.",
   },
 } satisfies Dict;
 

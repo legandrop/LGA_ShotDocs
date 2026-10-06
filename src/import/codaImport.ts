@@ -88,6 +88,8 @@ export interface ImportJournal {
    * `shared`: la página usa un archivo que se guardó para otra página (no se cuenta dos veces).
    */
   media: Record<string, JournalMedia>;
+  /** El id reservado para cada archivo que todavía no quedó en `media`, con la misma clave (importCommit.ts). */
+  reserved?: Record<string, string>;
 }
 
 export interface JournalMedia {
@@ -426,24 +428,17 @@ async function runCodaImport(
   const state = journal;
   // Si el checkpoint no puede guardarse de forma durable, la escritura se rechaza.
   // Resume conserva el último checkpoint confirmado.
-  // Las páginas creadas cuyo alta todavía no quedó en el registro: si el guardado falla, no se olvidan (se crearían de
-  // nuevo al escribirlas, y quedaría una página de más); entran con el próximo guardado que salga.
-  const created = new Map<string, string>();
   const save = async () => {
     try {
       snapshot = await generations.saveGeneration(snapshot, session.generationId, state);
       durable = structuredClone(state);
-      created.clear();
     } catch (err) {
-      if (durable) Object.assign(state, structuredClone(durable));
-      for (const [id, pageId] of created) state.pages[id] ??= { pageId };
+      if (durable) {
+        Object.assign(state, structuredClone(durable));
+        if (!Object.hasOwn(durable, 'reserved')) delete state.reserved;
+      }
       throw err;
     }
-  };
-  const record = async (id: string, pageId: string) => {
-    created.set(id, pageId);
-    state.pages[id] = { pageId };
-    await save();
   };
   await save();
 
@@ -476,6 +471,27 @@ async function runCodaImport(
   const context: PageContext = { comments: codaComments, projectId: state.projectId, sharedMedia, pageLink };
 
   const live = (pageId: string | undefined): pageId is string => !!pageId && !!deps.tree.get(pageId) && !deps.tree.isTrashed(pageId);
+  // El id de cada página se anota en el registro antes de crearla, como el del proyecto: si el guardado falla, no se
+  // crea nada; si la app se corta entre anotar y crear, al seguir se crea con ese mismo id (y crear dos veces con el
+  // mismo id es crear una). Así nunca queda una página que el registro no conoce. Una anotada que nunca llegó a crearse
+  // (solo tiene su id) lo usa; la que la persona mandó a la papelera, o una que ya tenía algo hecho y no está más en el
+  // árbol, se reemplaza por otra, con un id nuevo y desde cero.
+  const createPage = async (page: CodaManifestPage): Promise<string> => {
+    const entry = state.pages[page.id];
+    let pageId = entry?.pageId;
+    if (!entry || !pageId || deps.tree.get(pageId) || Object.keys(entry).length !== 1) {
+      pageId = crypto.randomUUID();
+      state.pages[page.id] = { pageId };
+      await save();
+    }
+    const parent = page.parentId ? state.pages[page.parentId]?.pageId : undefined;
+    const made = await deps.tree.create(live(parent) ? parent : null, pageTitle(page), state.projectId, { id: pageId });
+    if (made !== pageId) {
+      state.pages[page.id] = { pageId: made };
+      await save();
+    }
+    return made;
+  };
   const parser = BlockNoteEditor.create(editorSchemaOptions) as unknown as BlockNoteEditor<any, any, any>;
   let files = 0;
   let comments = 0;
@@ -493,12 +509,9 @@ async function runCodaImport(
     const mother = page.parentId && planned.has(page.parentId) ? state.pages[page.parentId] : undefined;
     if (page.parentId && planned.has(page.parentId) && !mother?.done && !live(mother?.pageId)) continue;
     try {
-      const parent = page.parentId ? state.pages[page.parentId]?.pageId : undefined;
-      const pageId = await deps.tree.create(live(parent) ? parent : null, pageTitle(page), state.projectId);
-      await record(page.id, pageId);
+      await createPage(page);
     } catch {
-      // Una que no se pudo crear se reintenta al escribirla; una creada cuyo alta no se pudo anotar ya quedó en
-      // `created` y se anota con el próximo guardado.
+      // Una que no se pudo anotar o crear se reintenta al escribirla.
     }
   }
 
@@ -517,12 +530,7 @@ async function runCodaImport(
     }
     // Una página que falla queda creada (vacía o a medias) y anotada, sin terminar: al seguir se reintenta.
     try {
-      let pageId = live(entry?.pageId) ? entry.pageId : null;
-      if (!pageId) {
-        const parent = page.parentId ? state.pages[page.parentId]?.pageId : undefined;
-        pageId = await deps.tree.create(live(parent) ? parent : null, title, state.projectId);
-        await record(page.id, pageId);
-      }
+      const pageId = live(entry?.pageId) ? entry.pageId : await createPage(page);
       const got = await importPage(folder, deps, parser, page, pageId, title, problems, state, save, context);
       // Sin `done: undefined`: el diario solo acepta `done` cuando es un sí o un no. Terminada, no se vuelve a
       // escribir: del plan queda solo que se confirmó.
@@ -536,7 +544,16 @@ async function runCodaImport(
   }
   // Todo terminado: no hay nada que seguir. Si algo quedó sin terminar, el diario queda para seguir.
   let resumable = pages.some((p) => !state.pages[p.id]?.done);
-  if (!resumable) try { await generations.completeGeneration(snapshot, session.generationId); } catch (err) { resumable = true; problems.push(codaProblemText(err, 'close')); }
+  // Una página anotada que la carpeta ya no trae (se volvió a exportar sin ella después de un corte) no impide
+  // terminar: lo que ya entró de ella queda como está, en su proyecto, y se dice.
+  if (!resumable) {
+    for (const [id, entry] of Object.entries(state.pages)) {
+      if (planned.has(id) || entry.done) continue;
+      const left = deps.tree.get(entry.pageId);
+      if (left && !deps.tree.isTrashed(entry.pageId)) problems.push(`${left.title.trim() || t('common.untitled')}: ${t('import.goneFromFolder')}`);
+    }
+    try { await generations.completeGeneration(snapshot, session.generationId, pages.map((p) => p.id)); } catch (err) { resumable = true; problems.push(codaProblemText(err, 'close')); }
+  }
   options.onProgress?.({ done: pages.length, total: pages.length, page: '' });
   return {
     projectId: state.projectId,
@@ -660,6 +677,22 @@ async function importPage(
   const urls = new Map<number, string>();
   const names = new Map<number, string>();
   const byKey = new Map<string, JournalMedia>();
+  // El id de cada archivo que falta guardar se anota antes de guardar ninguno (un solo guardado del registro por
+  // página): si la app se corta entre guardar un archivo y anotarlo, al seguir se guarda con el mismo id, y guardar dos
+  // veces con el mismo id es guardar una. Así no queda un archivo de más en el dispositivo (ni se sube dos veces).
+  const ids = { ...(journal.reserved ?? {}) };
+  let fresh = false;
+  for (const m of media) {
+    const key = m.blobId || m.src;
+    const at = `${page.id} ${key}`;
+    if (m.external || journal.media[at] || ids[at] || context.sharedMedia.has(key) || !findStored(folder, page, m)) continue;
+    ids[at] = crypto.randomUUID();
+    fresh = true;
+  }
+  if (fresh) {
+    journal.reserved = ids;
+    await save();
+  }
   for (const m of media) {
     if (m.external) continue;
     const key = m.blobId || m.src;
@@ -673,6 +706,8 @@ async function importPage(
       }
     }
     if (saved) {
+      // Ya tiene su archivo (el suyo o el de otra página): una reserva que haya quedado no hace falta.
+      if (journal.reserved) delete journal.reserved[`${page.id} ${key}`];
       urls.set(m.index, saved.url);
       names.set(m.index, saved.name);
       if (!byKey.has(key) && !saved.shared) files++;
@@ -688,9 +723,11 @@ async function importPage(
       const blob = await folder.file(`media/${stored}`);
       const type = m.mime || blob.type;
       const file = new File([blob], fileName(m, stored), { type });
-      const got: JournalMedia = { url: await deps.media.add(pageId, file), name: file.name, key };
+      const reserved = journal.reserved?.[`${page.id} ${key}`];
+      const got: JournalMedia = { url: await deps.media.add(pageId, file, reserved ? { id: reserved } : undefined), name: file.name, key };
       // Anotado apenas quedó guardado: si la importación se corta, al seguirla no se guarda (ni sube) otra vez.
       journal.media[`${page.id} ${key}`] = got;
+      if (journal.reserved) delete journal.reserved[`${page.id} ${key}`];
       await save();
       context.sharedMedia.set(key, got);
       byKey.set(key, got);

@@ -13,6 +13,15 @@ export const workspaces = {
     en: "Some of your latest edits are not saved on this device yet. Wait a moment and try again.",
     es: "Algunos de tus últimos cambios todavía no se guardaron en este dispositivo. Esperá un momento y probá de nuevo.",
   },
+  // Exportar con una importación o un reemplazo en curso (lazyPart.tsx, `exportBlocked`): la causa, sin esperar.
+  'export.waitImport': {
+    en: "An import is still running in this workspace, so the export would come out half written. Export again when it finishes.",
+    es: "Hay una importación en curso en este workspace y la exportación saldría a medio escribir. Exportá de nuevo cuando termine.",
+  },
+  'export.waitReplace': {
+    en: "Replacing in the project is still running, so the export would come out half written. Export again when it finishes, or press Stop.",
+    es: "Todavía se está reemplazando en el proyecto y la exportación saldría a medio escribir. Exportá de nuevo cuando termine, o tocá Parar.",
+  },
   'leave.pending': {
     en: { one: "{count} change in {name} is not uploaded yet. It stays saved on this device and uploads the next time you open {name}. Continue?", other: "{count} changes in {name} are not uploaded yet. They stay saved on this device and upload the next time you open {name}. Continue?" },
     es: { one: "Hay {count} cambio en {name} sin subir. Queda guardado en este dispositivo y se sube la próxima vez que abras {name}. ¿Seguir?", other: "Hay {count} cambios en {name} sin subir. Quedan guardados en este dispositivo y se suben la próxima vez que abras {name}. ¿Seguir?" },

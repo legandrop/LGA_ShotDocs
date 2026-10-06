@@ -237,9 +237,10 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
   zip, *Export* espera lo que todavía no llegó al dispositivo: el contenido, el título abierto y su sobrante, los cambios
   del árbol, un archivo a medio guardar y los comentarios. Una carpeta que se está subiendo no lo frena (vuelve a ser
   como antes de la espera de guardado local): lo de adentro va al Drive y no forma parte del PDF ni del zip, donde solo
-  está la tarjeta de la carpeta con su link; si se exporta durante la subida, la tarjeta sale con la nota de avance de
-  ese momento (*Uploading 3 of 10*). Una importación o un reemplazo en curso en el proyecto sí lo siguen frenando,
-  porque se exportaría un proyecto a medio escribir.
+  está la tarjeta de la carpeta con su link; si se exporta durante la subida, la tarjeta salía con la nota de avance de
+  ese momento (*Uploading 3 of 10*) y desde v0.213 sale como va a quedar, con *Google Drive folder* y su peso. Una
+  importación o un reemplazo en curso en el proyecto sí lo siguen frenando, porque se exportaría un proyecto a medio
+  escribir; desde v0.213 se avisa con su causa y sin esperar.
   Cerrar la pestaña, recargar y cambiar de workspace no cambian: siguen contando también la subida (v0.210;
   `Doc_Exportar.md`, "Guardado local antes del PDF").
 - **D304 · Un registro de importación de una versión anterior no bloquea** (2026-10-06; tomada al repararlo, Lega la puede cambiar). Una
@@ -260,6 +261,25 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
   ya no existe «queda como la dejaste». **Por qué:** no se pierde nada (el texto y los archivos ya guardados esperan
   a *Resume*), y la paridad exacta con el estado intermedio anterior complicaba el guardado atómico de cada página
   para un caso raro (v0.211; mismo doc).
+- **D306 · Una página que la carpeta de Coda ya no trae no impide terminar la importación** (2026-10-06; tomada al repararlo, Lega la puede cambiar). Si
+  la carpeta se volvió a exportar sin una página entre el corte y *Resume*, la importación termina cuando están
+  terminadas las páginas que la carpeta trae ahora. La que ya no está queda en el proyecto como estaba, anotada en
+  el registro y nombrada en la lista del final; no se borra ni se manda a la papelera. **Por qué:** antes no cerraba
+  nunca, y borrar algo ya importado por un cambio en la fuente es justo lo que la importación no hace (v0.213;
+  `Doc_Importar_Coda.md`, "Si se corta: seguir donde quedó").
+- **D307 · Del registro de importaciones se conserva el detalle de las tres terminadas más recientes** (2026-10-06; tomada al repararlo, Lega la puede cambiar). Por
+  cada carpeta o zip, el dispositivo guarda una generación por importación. De las terminadas más viejas que las
+  tres últimas queda solo la identidad (generación, proyecto, operación y nombre); sus páginas y archivos anotados
+  se sueltan. Nunca se poda una sin terminar, ni la que vino de un registro de un solo diario, ni un registro
+  archivado (D304). **Por qué:** una terminada no se sigue, así que su detalle no se usa; la identidad sí, para que
+  una reserva nueva no repita un proyecto (v0.213; mismo doc).
+- **D308 · Al cancelar o fallar un zip, el archivo del destino se borra solo si estaba vacío al elegirlo** (2026-10-06; tomada al repararlo, Lega la puede cambiar). El
+  selector del navegador crea el `.zip` vacío al elegir el nombre; ese se saca. Uno que al elegirlo tenía contenido
+  (se eligió reemplazar un zip anterior) no se borra. Si el navegador no dice el peso, tampoco. Qué hace el
+  navegador con el contenido de un archivo existente al elegirlo queda por verificar.
+  **Por qué:** desde v0.204 no se borraba nada, para no llevarse un archivo de la persona, y quedaba un zip vacío;
+  mirar si estaba vacío da las dos cosas (v0.213; `Doc_Exportar.md`, "Guardado local antes del PDF"). Sin verificar
+  en un navegador real.
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 

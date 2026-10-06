@@ -40,6 +40,51 @@ it('la readiness se consulta en sondeos y guarda final, con el mismo plazo local
   finally { reloadTimings.saveWaitMs = previous; unwatch(); }
 });
 
+it('lo que esperar no arregla corta en el acto: la preparación que ya falló y, al exportar, una causa conocida, que se avisa con su texto', async () => {
+  const { watchPendingWrites, saveBeforeExit, reloadTimings } = await lazyModule();
+  const notices: string[] = [];
+  const onNotice = (e: Event) => notices.push(String((e as CustomEvent<string>).detail));
+  window.addEventListener('shotdocs:notice', onNotice);
+  const owner = {};
+  const action = vi.fn();
+  let blocked: string | null = null;
+  const prepare = vi.fn(async (): Promise<void> => { throw new Error('el título no se pudo guardar'); });
+  const unwatch = watchPendingWrites({ owner, current: () => true, unsaved: () => false, flush: async () => undefined, prepare, exportBlocked: () => blocked });
+  // Con el plazo entero por delante: si se esperara, esta prueba no terminaría a tiempo.
+  const previous = reloadTimings.saveWaitMs; reloadTimings.saveWaitMs = 60_000;
+  try {
+    const started = Date.now();
+    expect(await saveBeforeExit(owner, () => true, action)).toBe(false);
+    expect(Date.now() - started).toBeLessThan(2000);
+    expect(notices).toEqual(['Some of your latest edits are not saved on this device yet. Wait a moment and try again.']);
+    // Al exportar con una importación en curso: el aviso es la causa, y ni siquiera se prepara el título.
+    prepare.mockResolvedValue(undefined);
+    blocked = 'Hay una importación en curso';
+    expect(await saveBeforeExit(owner, () => true, action, () => true, true)).toBe(false);
+    expect(notices.at(-1)).toBe('Hay una importación en curso');
+    expect(prepare).toHaveBeenCalledTimes(1);
+    expect(action).not.toHaveBeenCalled();
+    // Esa causa es de exportar: salir (recargar, cambiar de workspace) sigue con su propia cuenta.
+    expect(await saveBeforeExit(owner, () => true, action)).toBe(true);
+    expect(action).toHaveBeenCalledTimes(1);
+    // Y si la causa aparece mientras se espera el guardado, corta ahí.
+    let saving = true;
+    const second = watchPendingWrites({ owner, current: () => true, unsaved: () => saving, unsavedForExport: () => saving, flush: async () => undefined, exportBlocked: () => blocked });
+    blocked = null;
+    const waiting = saveBeforeExit(owner, () => true, action, () => true, true);
+    await sleep(50);
+    blocked = 'Hay un reemplazo en curso';
+    expect(await waiting).toBe(false);
+    expect(notices.at(-1)).toBe('Hay un reemplazo en curso');
+    saving = false;
+    second();
+  } finally {
+    reloadTimings.saveWaitMs = previous;
+    unwatch();
+    window.removeEventListener('shotdocs:notice', onNotice);
+  }
+});
+
 function render(node: ReactNode): HTMLElement {
   const host = document.createElement('div');
   document.body.append(host);

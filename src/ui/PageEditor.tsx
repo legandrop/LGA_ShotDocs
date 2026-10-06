@@ -250,6 +250,10 @@ export function PageEditor({ pageId }: { pageId: string }) {
       const unknown = findUnknownContent(doc);
       if (unknown) setOpening({ state: 'unsupported', what: unknown });
       else setOpening({ state: 'ready', doc, complete, collapse });
+    }).catch((err: unknown) => {
+      // El editor ya se desmontó y la apertura que quedó en camino falló (la base se cerró al salir del workspace): no
+      // hay nada que mostrar ni que cerrar. Con el editor a la vista, el error sigue saliendo como antes.
+      if (!cancelled) throw err;
     });
     return () => {
       cancelled = true;

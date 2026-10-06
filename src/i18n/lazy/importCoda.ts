@@ -20,7 +20,10 @@ export const importCoda = {
   },
   'import.choose': { en: "Choose folder", es: "Elegir carpeta" },
   'import.chooseOther': { en: "Choose another folder", es: "Elegir otra carpeta" },
-  'import.found': { en: "{pages} pages and {files} files ({size}).", es: "{pages} páginas y {files} archivos ({size})." },
+  // `{pages}` y `{files}` llegan ya con su cantidad y en singular o plural (`import.countPages`, `import.countFiles`).
+  'import.found': { en: "{pages} and {files} ({size}).", es: "{pages} y {files} ({size})." },
+  'import.countPages': { en: { one: "{count} page", other: "{count} pages" }, es: { one: "{count} página", other: "{count} páginas" } },
+  'import.countFiles': { en: { one: "{count} file", other: "{count} files" }, es: { one: "{count} archivo", other: "{count} archivos" } },
   'import.room': {
     en: "Files are saved on this device until they upload. Free space for the app: {free}.",
     es: "Los archivos quedan en este dispositivo hasta que se suben. Espacio libre para la app: {free}.",
@@ -33,6 +36,11 @@ export const importCoda = {
     en: "An earlier import of this doc into “{name}” did not finish ({done} of {total} pages). Resuming continues there without repeating what was already saved.",
     es: "Una importación anterior de este doc a “{name}” no terminó ({done} de {total} páginas). Si seguís, continúa ahí sin repetir lo que ya se guardó.",
   },
+  // Entró todo y solo faltó anotarla como terminada: no hay páginas por traer.
+  'import.resumeClose': {
+    en: "An earlier import of this doc into “{name}” brought everything in but was not closed. Resume closes it.",
+    es: "Una importación anterior de este doc a “{name}” trajo todo pero no quedó cerrada. Seguir la cierra.",
+  },
   'import.resume': { en: "Resume", es: "Seguir" },
   'import.startOver': { en: "Import into a new project", es: "Importar a un proyecto nuevo" },
   'import.start': { en: "Import", es: "Importar" },
@@ -42,7 +50,7 @@ export const importCoda = {
     es: "Dejá la app abierta hasta que termine la importación.",
   },
   'import.progress': { en: "Page {current} of {total}:", es: "Página {current} de {total}:" },
-  'import.done': { en: "Imported {pages} pages and {files} files.", es: "Se importaron {pages} páginas y {files} archivos." },
+  'import.done': { en: "Imported {pages} and {files}.", es: "Se importaron {pages} y {files}." },
   'import.foundComments': {
     en: { one: "It also has {count} comment.", other: "It also has {count} comments." },
     es: { one: "Trae además {count} comentario.", other: "Trae además {count} comentarios." },
@@ -73,8 +81,8 @@ export const importCoda = {
     es: "Los archivos se siguen subiendo al Drive mientras la app está abierta. Dejala abierta hasta que el estado diga que se subió todo.",
   },
   'import.problems': {
-    en: { one: "{count} thing could not be imported:", other: "{count} things could not be imported:" },
-    es: { one: "{count} cosa no se pudo importar:", other: "{count} cosas no se pudieron importar:" },
+    en: { one: "{count} thing to check:", other: "{count} things to check:" },
+    es: { one: "{count} cosa para revisar:", other: "{count} cosas para revisar:" },
   },
   'import.exportProblems': {
     en: { one: "coda-export noted {count} thing:", other: "coda-export noted {count} things:" },
@@ -140,6 +148,10 @@ export const importCoda = {
     en: "went to the top level: its parent page is missing or the pages loop",
     es: "quedó en el primer nivel: falta su página madre o las páginas forman un círculo",
   },
+  'import.goneFromFolder': {
+    en: "is no longer in the exported folder: it stays in the project as the interrupted import left it",
+    es: "ya no está en la carpeta exportada: queda en el proyecto como la dejó la importación cortada",
+  },
   'import.noDocId': {
     en: "This folder's export doesn't say which doc it is from. Export the doc again with coda-export.",
     es: "La exportación de esta carpeta no dice de qué doc es. Exportá el doc de nuevo con coda-export.",
@@ -170,8 +182,8 @@ export const importCoda = {
     es: "no se pudo preparar para importar, y Seguir va a dar lo mismo; usá Importar a un proyecto nuevo",
   },
   'import.pending.close': {
-    en: "Everything came in, but the import could not be marked as finished: choose the same folder again and use Resume.",
-    es: "Entró todo, pero la importación no se pudo anotar como terminada: elegí la misma carpeta de nuevo y usá Seguir.",
+    en: "Everything came in, but the import could not be marked as finished: choose the same folder again and use Resume. If Resume says this again, use Import into a new project.",
+    es: "Entró todo, pero la importación no se pudo anotar como terminada: elegí la misma carpeta de nuevo y usá Seguir. Si Seguir vuelve a decir esto, usá Importar a un proyecto nuevo.",
   },
 } satisfies Dict;
 

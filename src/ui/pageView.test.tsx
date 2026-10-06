@@ -165,4 +165,37 @@ describe('la página', () => {
     expect(host.querySelector('.bn-editor')).not.toBeNull();
     expect(host.querySelector('.editor-skeleton')).toBeNull();
   });
+
+  it('si la página se cierra mientras su contenido se está abriendo y esa apertura falla después (la base ya cerrada), no queda un rechazo sin atrapar', async () => {
+    const device = await makeDevice(new FakeServer());
+    devices.push(device);
+    const page = await device.tree.create(null, 'Escena 65');
+    await device.engine.syncNow();
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const opening = vi.spyOn(device.docs, 'open').mockImplementation(async () => {
+      await held;
+      throw new DOMException('The database connection is closing.', 'InvalidStateError');
+    });
+    const loose: unknown[] = [];
+    const onLoose = (reason: unknown) => { loose.push(reason); };
+    process.on('unhandledRejection', onLoose);
+    try {
+      const { PageView } = await import('./PageView');
+      const host = document.createElement('div');
+      document.body.append(host);
+      const root = createRoot(host);
+      act(() => root.render(<ServicesContext.Provider value={services(device)}><main className="main"><PageView id={page} /></main></ServicesContext.Provider>));
+      for (let i = 0; i < 100 && !opening.mock.calls.length; i++) await wait(50);
+      expect(opening).toHaveBeenCalled();
+      act(() => root.unmount());
+      release();
+      await wait(50);
+      await wait(50);
+      expect(loose).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onLoose);
+      opening.mockRestore();
+    }
+  });
 });

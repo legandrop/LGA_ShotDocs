@@ -64,6 +64,8 @@ export function ImportCodaDialog() {
     if (!files?.length) return;
     try {
       const picked = await folderFromFiles(files);
+      // Sin el id del doc esta carpeta no se va a poder importar: se dice al elegirla, no recién al apretar Import.
+      if (!picked.manifest.doc.id) throw new Error(tr('import.noDocId'));
       const earlier = await findResumable(picked, { tree, journal });
       job.set({ folder: picked, name: picked.manifest.doc.name, resumable: earlier });
     } catch (err) {
@@ -132,7 +134,7 @@ export function ImportCodaDialog() {
             {folder && (
               <>
                 <p>
-                  {tr('import.found', { pages: folder.manifest.pages.length, files, size: formatSize(size) })}
+                  {tr('import.found', { pages: tr('import.countPages', { count: folder.manifest.pages.length }), files: tr('import.countFiles', { count: files }), size: formatSize(size) })}
                   {commentCount > 0 && ` ${tr('import.foundComments', { count: commentCount })}`}
                 </p>
                 {free !== null &&
@@ -142,7 +144,11 @@ export function ImportCodaDialog() {
                     <p className="muted">{tr('import.room', { free: formatSize(free) })}</p>
                   ))}
                 {resumable && !busy && (
-                  <p>{tr('import.resumeText', { name: resumable.projectName, done: resumable.done, total: resumable.total })}</p>
+                  <p>
+                    {resumable.total > 0 && resumable.done >= resumable.total
+                      ? tr('import.resumeClose', { name: resumable.projectName })
+                      : tr('import.resumeText', { name: resumable.projectName, done: resumable.done, total: resumable.total })}
+                  </p>
                 )}
                 <label className="pref-label" htmlFor="import-name">
                   {tr('project.newName')}
@@ -163,7 +169,7 @@ export function ImportCodaDialog() {
         {result && (
           <>
             <p>
-              {tr('import.done', { pages: result.pages, files: result.files })}
+              {tr('import.done', { pages: tr('import.countPages', { count: result.pages }), files: tr('import.countFiles', { count: result.files }) })}
               {result.comments > 0 && ` ${tr('import.doneComments', { count: result.comments })}`}
             </p>
             <p className="muted">{tr('import.uploading')}</p>

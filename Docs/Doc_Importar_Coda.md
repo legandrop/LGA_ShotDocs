@@ -150,6 +150,26 @@ archivos ya guardados en vez de guardarlos (y subirlos al Drive) de nuevo.
 - **Al terminar, la anotación se conserva.** Cuando todas las páginas quedaron terminadas la generación se marca
   como terminada: no se borra (hasta v0.210 se borraba) y ya no ofrece seguir. Importar otra vez la misma carpeta
   crea otro proyecto, como siempre, en una generación nueva y sin tocar el anterior.
+- **El registro no crece sin fin (D307, desde v0.213).** De las importaciones terminadas de una misma carpeta se
+  conserva el detalle (qué página es cada una y la dirección de cada archivo) de las tres más recientes. De las
+  anteriores queda solo la identidad: la generación, el proyecto, la operación que lo creó y el nombre, que alcanzan
+  para que ninguna reserva nueva repita un proyecto. Se poda al terminar una importación. Nunca se toca una sin
+  terminar, ni la que vino de un registro de un solo diario, ni los registros archivados de versiones anteriores
+  (D304). Los proyectos, sus páginas y sus archivos no cambian: la poda es solo del registro del dispositivo.
+- **La carpeta vuelta a exportar sin una página (D306, desde v0.213).** Si entre el corte y **Seguir** la carpeta
+  se exportó de nuevo y ya no trae una página que había quedado sin terminar, esa página no impide terminar: la
+  importación se cierra cuando están terminadas las páginas que la carpeta trae ahora. La que ya no está queda en
+  el proyecto como estaba (no se borra nada de lo importado), sigue anotada en el registro y sale en la lista del
+  final ("ya no está en la carpeta exportada: queda en el proyecto como la dejó la importación cortada", porque
+  puede haber quedado vacía o a medias). Hasta v0.212 cada **Seguir**
+  terminaba en "Entró todo, pero la importación no se pudo anotar como terminada".
+- **Si entró todo y no se pudo anotar como terminada**, el aviso nombra las dos salidas (desde v0.213): **Seguir**
+  y, si **Seguir** vuelve a decir lo mismo, **Importar a un proyecto nuevo**, que entra entero a otro proyecto. Al
+  elegir la carpeta otra vez el diálogo ya no dice "no terminó (1 de 1 páginas)": dice que trajo todo y no quedó
+  cerrada, y que **Seguir** la cierra. La lista del final se titula "N cosas para revisar" (antes, "no se pudieron
+  importar", que contradecía ese renglón).
+- **Una carpeta sin el id del doc** (un manifest que no lo trae) se avisa al elegirla, y no deja importarla (desde
+  v0.213; antes el aviso salía recién al apretar **Importar**).
 - **Otra pestaña importando la misma carpeta.** Si después de elegir la carpeta otra pestaña dejó una importación
   de ese doc sin terminar, **Importar** no crea un segundo proyecto: avisa que hay una importación anterior sin
   terminar y ofrece seguirla o importar a un proyecto nuevo.
@@ -205,13 +225,18 @@ archivos ya guardados en vez de guardarlos (y subirlos al Drive) de nuevo.
   inglés o en castellano, del diccionario de la app (`import.pending.*`, y para los comentarios
   `commentError.importMoved` y `commentError.importEarlier`); el nombre interno del estado nunca llega a la
   pantalla.
-- **Huecos que quedan** (un corte en el instante justo): una página creada y no anotada todavía se crea de
-  nuevo al seguir (queda una vacía de más, con el mismo título), y un archivo guardado y no anotado todavía se
-  guarda de nuevo (entra dos veces al Drive; la copia de más, sin página que la use, va a la papelera de
-  archivos a los pocos minutos, en un workspace que la tiene). `tree.create` y `media.add` eligen su propio id, así que no hay cómo anotar
-  antes de crear. El proyecto ya no tiene ese hueco: su id se reserva antes de crearlo. Y si lo que falla no es un
-  corte sino guardar el registro justo después de crear una página, desde v0.211 esa página no se olvida ni se crea
-  dos veces: queda anotada con el próximo guardado que sale.
+- **Cada página y cada archivo se anotan antes de crearse (desde v0.213).** Como el proyecto: el id de la página
+  se guarda en el registro y recién después se crea con ese id (`tree.create` con `id`); el de cada archivo que
+  falta guardar se anota antes de guardar ninguno, en un solo guardado del registro por página (`reserved`), y se
+  guarda con ese id (`media.add` con `id`). Crear o guardar dos veces con el mismo id es hacerlo una vez: la página
+  que ya está en el árbol o en la cola no se encola de nuevo, y el archivo que ya está en el dispositivo devuelve su
+  dirección sin guardarse ni subirse otra vez. Entonces, si la app se corta entre anotar y crear, **Seguir** crea
+  con el mismo id; si se corta entre crear y volver, no crea nada. Si el registro no se puede guardar, no se crea
+  nada (hasta v0.212 la página se creaba y se anotaba con el guardado siguiente). Ya no queda una página vacía de
+  más ni un archivo local de más.
+- **Una página pendiente que se mandó a la papelera** se reemplaza por otra, con un id nuevo que también se anota
+  antes de crearla: si ese guardado falla, no se crea, y al reintentar queda una sola. Hasta v0.212, con el
+  registro fallando justo ahí, podían quedar dos.
 
 ### El manifest
 

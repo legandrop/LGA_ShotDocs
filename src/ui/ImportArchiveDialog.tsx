@@ -186,7 +186,7 @@ export function ImportArchiveDialog() {
             {summary && (
               <>
                 <p>
-                  {tr('importArchive.found', { title: archive.manifest.title || archive.manifest.projectName || '—', pages: archive.manifest.pages.length, files: weight.files, size: formatSize(weight.bytes) })}
+                  {tr('importArchive.found', { title: archive.manifest.title || archive.manifest.projectName || '—', pages: tr('importArchive.countPages', { count: archive.manifest.pages.length }), files: tr('importArchive.countFiles', { count: weight.files }), size: formatSize(weight.bytes) })}
                   {commentCount > 0 && ` ${tr('importArchive.foundComments', { count: commentCount })}`}
                 </p>
                 {weight.previews > 0 && <p className="muted">{tr('importArchive.foundPreviews', { count: weight.previews })}</p>}
@@ -201,7 +201,11 @@ export function ImportArchiveDialog() {
                   ))}
                 {phone && weight.bytes > PHONE_BIG && <p className="error">{tr('importArchive.phoneBig')}</p>}
                 {resumable && !busy && (
-                  <p>{tr('importArchive.resumeText', { name: resumable.projectName, done: resumable.done, total: resumable.total })}</p>
+                  <p>
+                    {resumable.total > 0 && resumable.done >= resumable.total
+                      ? tr('importArchive.resumeClose', { name: resumable.projectName })
+                      : tr('importArchive.resumeText', { name: resumable.projectName, done: resumable.done, total: resumable.total })}
+                  </p>
                 )}
                 <label className="pref-label" htmlFor="import-archive-name">
                   {tr('importArchive.name')}
@@ -222,7 +226,7 @@ export function ImportArchiveDialog() {
         {result && (
           <>
             <p>
-              {tr('importArchive.done', { pages: result.pages, files: result.files })}
+              {tr('importArchive.done', { pages: tr('importArchive.countPages', { count: result.pages }), files: tr('importArchive.countFiles', { count: result.files }) })}
               {result.comments > 0 && ` ${tr('importArchive.doneComments', { count: result.comments })}`}
             </p>
             {result.files > 0 && <p className="muted">{tr('importArchive.uploading')}</p>}

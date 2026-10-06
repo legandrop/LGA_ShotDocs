@@ -250,6 +250,7 @@ const practiceMedia = {
   subscribeThumbs: () => () => undefined,
   ensureLinks: async () => undefined,
   resolve: async (url: string) => url,
+  resolveForExport: async (url: string) => url,
   fileInfo: () => null,
   source: async () => ({ kind: null, name: '', original: null }),
   localImage: async () => null,

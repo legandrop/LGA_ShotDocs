@@ -27,7 +27,8 @@ import { zipOverhead } from '../media/zipWriter';
 import { useServices, useSyncStatus, useTree } from '../services';
 import { dirTarget, freshFolder, memoryCap, pickers, type DirHandle, type FileHandle } from './FolderDownload';
 import { porteroDownload } from './sharpImages';
-import { saveBeforeExit } from './lazyPart';
+import { exportBlockedNow, saveBeforeExit } from './lazyPart';
+import { notify } from './notice';
 import { Permissions } from '../sync/access';
 
 // El zip de la ventana *Export* (P.22, Docs/Doc_Exportar.md, secciones 2.3 y 7; entrega 2). Antes de empezar dice cuánto
@@ -163,6 +164,13 @@ export function ExportZipPanel(props: ExportZipProps) {
   };
 
   const run = async (mode: Mode) => {
+    // Con una importación o un reemplazo en curso no se pide ni el destino: se dice la causa en el mismo clic. Es una
+    // consulta en el acto, así que el selector de más abajo sigue abriéndose con el gesto de la persona.
+    const blocked = exportBlockedNow(live.current.services);
+    if (blocked) {
+      notify(blocked);
+      return;
+    }
     const token = ++generation.current;
     const initial = live.current;
     const ctrl = new AbortController();
@@ -190,16 +198,29 @@ export function ExportZipPanel(props: ExportZipProps) {
     };
     let opened: Opened | null = null;
     let picked = false;
+    // El selector crea el `.zip` vacío apenas se elige el nombre. Si después se cancela o falla, ese archivo vacío se
+    // saca; uno que ya tenía contenido al elegirlo (se eligió reemplazar un zip anterior) nunca se borra: sigue como
+    // estaba, porque lo escrito a medias se descarta sin tocarlo.
+    let dropEmpty: (() => Promise<void>) | null = null;
     let editor: ExportEditor | null = null;
     let last = 0;
     try {
       // Cesión del gesto: no hay ningún await antes de pedir el selector.
       const handle = mode === 'file' ? await showSaveFilePicker!({ suggestedName: zipName, types: [{ description: 'Zip', accept: { 'application/zip': ['.zip'] } }], id: 'shotdocs-export' }) : mode === 'dir' ? await showDirectoryPicker!({ mode: 'readwrite', id: 'shotdocs-export' }) : null;
       picked = true;
+      if (mode === 'file') {
+        const file = handle as FileHandle;
+        const empty = (await file.getFile?.().then((f) => f.size === 0, () => false)) ?? false;
+        if (empty) dropEmpty = async () => { await file.remove?.().catch(() => undefined); };
+      }
       check();
       const saved = await saveBeforeExit(initial.services, () => current() && !ctrl.signal.aborted, () => undefined, titleReady, true);
       check();
-      if (!saved) { setPhase({ at: 'choose' }); return; }
+      if (!saved) {
+        await dropEmpty?.();
+        setPhase({ at: 'choose' });
+        return;
+      }
       const now = live.current;
       const plan = pages();
       const permission = new Permissions(now.tree, now.services.access.get(), now.services.user.id);
@@ -233,7 +254,7 @@ export function ExportZipPanel(props: ExportZipProps) {
       const withMedia = media.enabled;
       editor = await ExportEditor.create({
         lang: tr.lang,
-        resolveFileUrl: withMedia ? (url, pageId) => media.resolve(url, pageId) : undefined,
+        resolveFileUrl: withMedia ? (url, pageId) => media.resolveForExport(url, pageId) : undefined,
         media: withMedia ? media : null,
       });
       check();
@@ -273,11 +294,14 @@ export function ExportZipPanel(props: ExportZipProps) {
       });
       check();
       await opened.finish();
+      // Ya tiene el zip entero: desde acá no se borra.
+      dropEmpty = null;
       check();
       ready.current = () => { try { check(); return true; } catch { return false; } };
       setPhase({ at: 'done', mode, result, saved: opened.saved, blob: opened.sink ? opened.sink.blob() : null, zipName: `${rootName(title)}.zip` });
     } catch (err) {
       await opened?.discard();
+      await dropEmpty?.();
       if (!current()) return;
       if (!picked && isAbort(err) && !ctrl.signal.aborted) { setPhase({ at: 'choose' }); return; }
       if (err instanceof ExportCancelled || isAbort(err) || ctrl.signal.aborted) setPhase({ at: 'cancelled', mode });

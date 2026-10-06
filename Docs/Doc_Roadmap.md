@@ -1,6 +1,6 @@
 # Roadmap
 
-**Espera de guardado al exportar v0.210 (D303):** una carpeta subiendo ya no frena *Export*; una importación o un reemplazo en curso en el proyecto sí. Quedan pendientes: (1) con una importación o un reemplazo en curso el aviso es el general de cambios sin guardar y no dice la causa real; (2) cuando el fallo ya se conoce (el título no se pudo guardar) igual se esperan los ocho segundos antes de avisar; (3) al cancelar o fallar un zip guardado con el selector de archivos puede quedar un `.zip` vacío en el destino (sin verificar en un navegador); (4) que la exportación resuelva la tarjeta de una carpeta sin la nota de subida: exportada mientras sube, hoy sale con el avance de ese momento en lugar de *Google Drive folder* y su peso. Detalle: `Doc_Exportar.md`, "Guardado local antes del PDF".
+**Espera de guardado al exportar v0.210 (D303):** una carpeta subiendo ya no frena *Export*; una importación o un reemplazo en curso en el proyecto sí. **Hecho en v0.213:** con una importación o un reemplazo en curso el aviso dice la causa y no espera; un título que no se pudo guardar se avisa sin gastar los ocho segundos; al cancelar o fallar un zip, el `.zip` vacío que creó el selector se saca (uno que ya tenía contenido no se toca, D308); y la tarjeta de una carpeta que se está subiendo sale en lo exportado con *Google Drive folder* y su peso, sin la nota de avance. Queda pendiente: (1) D308 sin verificar en Chromium (probado con el selector simulado): que el `.zip` vacío se saca, y qué hace el navegador con un archivo existente al elegirlo en el selector; si lo vacía ahí mismo, el zip anterior se perdió al elegirlo y además se borraría por estar vacío; (2) *Download all* de una carpeta todavía borra el archivo elegido al cancelar aunque ya tuviera contenido. Detalle: `Doc_Exportar.md`, "Guardado local antes del PDF".
 
 **Vista previa Format as… v0.208:** avisa antes de Apply cuando la forma elegida quitará Script. Discard conserva el original y Undo recupera también ese formato. Los demás pendientes de P.24 y de la fase 5 siguen abiertos.
 
@@ -568,24 +568,25 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   de archivo e IndexedDB en un navegador real; el Drive y los permisos reales; el aborto de una transacción sobre la
   anotación de un archivo de Shot Docs (los abortos se probaron sobre la de Coda y sobre la creación del proyecto); y
   limpiar los registros archivados de versiones anteriores, que hoy quedan en el dispositivo sin que nada los borre.
-  Pendientes conocidos de la importación: (a) si la app se corta justo entre crear una
-  página (o guardar un archivo) y anotarlo, al seguir queda una página vacía o un archivo local de más; ya pasaba en
-  v0.210, y el arreglo es reservar el id antes de crear, como se hace con el proyecto; (b) una carpeta de Coda vuelta
-  a exportar sin una de sus páginas entre el corte y *Resume* nunca cierra la importación: cada *Resume* termina en
-  "Everything came in, but the import could not be marked as finished"; (c) un comentario importado cuyo recibo
+  **Hecho en v0.213 (los pendientes a, b, e, f, i, j, k y l):** el id de cada página y de cada archivo se anota antes
+  de crearlos, y crear dos veces con el mismo id es crear una (ya no queda una página vacía ni un archivo local de
+  más, ni una página pendiente dos veces); una página que la carpeta de Coda ya no trae no impide terminar (D306); del
+  registro de una misma fuente se conserva el detalle de las tres terminadas más recientes (D307); una carpeta sin id
+  de doc se avisa al elegirla; el resumen dice "1 page"; el aviso de cierre nombra *Import into a new project*
+  (probado que entra); y un error de lectura del disco en un zip vuelto a comprimir ya no se toma por archivo dañado.
+  Pendientes conocidos de la importación: (c) un comentario importado cuyo recibo
   corresponde a otra página no tiene salida por *Resume*, solo por *Import into a new project*; (d) al crear el
   proyecto reservado se vuelve a leer el árbol entero, lo que podría cruzarse con una sincronización en curso (no se
-  reprodujo); (e) el registro de importaciones de una misma carpeta o zip crece con cada importación terminada, sin
-  poda; (f) una carpeta de Coda sin id de doc se avisa al apretar *Import* y no al elegirla; (g) un registro de esta
+  reprodujo); (g) un registro de esta
   versión que no se puede leer se avisa, pero no tiene salida desde la app; (h) la lectura y la escritura anteriores
   del registro (`get`, `put` y `remove` del diario) ya no las usa la app y siguen en el código con otra política que
-  D304, porque varias pruebas dependen de ellas; (i) el resumen del final no tiene forma singular ("Imported 1 pages",
-  "Se importaron 1 páginas"), y ahora que cuenta las páginas terminadas sale más seguido; (j) en el caso (b) el aviso
-  manda a *Resume*, que repite lo mismo: falta decir que la salida es *Import into a new project* (sin probar que el
-  proyecto nuevo entre en ese caso); (k) un zip vuelto a comprimir por otra herramienta trata cualquier error al leer
-  una entrada comprimida como archivo dañado, también uno pasajero de lectura del disco: la página entra sin esa foto y
-  *Resume* no la reintenta; (l) una página pendiente que la persona mandó a la papelera, más un guardado del registro
-  que falla justo al crearla de nuevo, puede dejar esa página dos veces.
+  D304, porque varias pruebas dependen de ellas; (m) un corte entre encolar los comentarios de una página y marcarla
+  terminada, más esa página mandada a la papelera: *Resume* crea otra página y sus comentarios se rechazan siempre
+  (tienen el recibo de la página anterior); la salida hoy es *Import into a new project*, y el arreglo es rehacer los
+  comentarios con identidad nueva al reemplazar una página pendiente (ya pasaba en la versión anterior); (n) un zip
+  cuyo archivo cambió en el disco después de elegirlo deja la página esperando en cada *Resume* hasta volver a
+  elegirlo; (o) el final de *Import from Coda…* muestra "Files keep uploading to Drive…" también con 0 archivos (el
+  de archivo de Shot Docs lo oculta).
   **Aviso de conversión aclarado (v0.191):** una foto de más de 100 MP que hay que pasar a JPEG (girada, PNG, CMYK)
   conserva la reducción existente a su ancho impreso; la ventana cuenta aparte ese límite y los originales no disponibles,
   sin sumar dos veces la misma foto. No cambia los topes ni acredita memoria o impresión física.

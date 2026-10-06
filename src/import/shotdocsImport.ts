@@ -509,6 +509,8 @@ export interface ArchiveJournal {
   pages: Record<string, ArchiveJournalPage>;
   /** Por archivo viejo: la dirección nueva y el nombre (y si es la vista JPEG en lugar del original). */
   media: Record<string, { url: string; name: string; preview?: true }>;
+  /** El id reservado para cada archivo que todavía no quedó en `media`, con la misma clave (importCommit.ts). */
+  reserved?: Record<string, string>;
 }
 
 export interface ArchiveJournalStore extends RecoveryStore<ArchiveJournal> {
@@ -665,17 +667,15 @@ async function runArchiveImport(
   const journal = session.journal;
   let durable = structuredClone(journal);
   const state = journal;
-  // Las páginas creadas cuyo alta todavía no quedó en el registro: si el guardado falla, no se olvidan (se crearían de
-  // nuevo al escribirlas, y quedaría una página de más); entran con el próximo guardado que salga.
-  const created = new Map<string, string>();
   const save = async () => {
     try {
       snapshot = await generations.saveGeneration(snapshot, session.generationId, state);
       durable = structuredClone(state);
-      created.clear();
     } catch (err) {
-      if (durable) Object.assign(state, structuredClone(durable));
-      for (const [id, pageId] of created) state.pages[id] ??= { pageId };
+      if (durable) {
+        Object.assign(state, structuredClone(durable));
+        if (!Object.hasOwn(durable, 'reserved')) delete state.reserved;
+      }
       throw err;
     }
   };
@@ -702,16 +702,29 @@ async function runArchiveImport(
   const live = (pageId: string | undefined): pageId is string => !!pageId && !!deps.tree.get(pageId) && !deps.tree.isTrashed(pageId);
   const newPage = (oldId: string): string | null => state.pages[oldId]?.pageId ?? null;
 
-  // Primero todas las páginas, en el orden del árbol: los links y las marcas de plantilla tienen adónde ir.
+  // Primero todas las páginas, en el orden del árbol: los links y las marcas de plantilla tienen adónde ir. El id de
+  // cada una se anota en el registro antes de crearla, como el del proyecto: si el guardado falla, no se crea nada; si
+  // la app se corta entre anotar y crear, al seguir se crea con ese mismo id (y crear dos veces con el mismo id es
+  // crear una). Una anotada que nunca llegó a crearse (solo tiene su id) lo usa; la que la persona mandó a la
+  // papelera, o una que ya tenía algo hecho y no está más en el árbol, se reemplaza por otra, con un id nuevo y desde
+  // cero.
   const create = async (p: (typeof pages)[number]): Promise<string> => {
+    const entry = state.pages[p.id];
+    let pageId = entry?.pageId;
+    if (!entry || !pageId || deps.tree.get(pageId) || Object.keys(entry).length !== 1) {
+      pageId = crypto.randomUUID();
+      state.pages[p.id] = { pageId };
+      await save();
+    }
     const parent = p.parent ? state.pages[p.parent]?.pageId : undefined;
-    const pageId = await deps.tree.create(live(parent) ? parent : null, p.title, state.projectId);
+    const made = await deps.tree.create(live(parent) ? parent : null, p.title, state.projectId, { id: pageId });
+    if (made !== pageId) {
+      state.pages[p.id] = { pageId: made };
+      await save();
+    }
     // Una página sin título no es "recién creada": no ofrece las plantillas.
-    if (!p.title) await deps.tree.dropFresh(pageId).catch(() => undefined);
-    created.set(p.id, pageId);
-    state.pages[p.id] = { pageId };
-    await save();
-    return pageId;
+    if (!p.title) await deps.tree.dropFresh(made).catch(() => undefined);
+    return made;
   };
   const planned = new Set(pages.map((p) => p.id));
   for (const [i, p] of pages.entries()) {
@@ -825,6 +838,21 @@ async function runArchiveImport(
 
       // Los archivos que usa la página: los que ya se guardaron (para otra página o en una vuelta anterior) se reusan.
       let pageFiles = 0;
+      // El id de cada archivo que falta guardar se anota antes de guardar ninguno (un solo guardado del registro por
+      // página): si la app se corta entre guardar un archivo y anotarlo, al seguir se guarda con el mismo id, y guardar
+      // dos veces con el mismo id es guardar una. Así no queda un archivo de más en el dispositivo.
+      const ids = { ...(state.reserved ?? {}) };
+      let fresh = false;
+      for (const oldId of mediaIdsInBlocks(rawBlocks)) {
+        const f = filesById.get(oldId);
+        if (state.media[oldId] || ids[oldId] || !f || !chosenBlob(archive, f)) continue;
+        ids[oldId] = crypto.randomUUID();
+        fresh = true;
+      }
+      if (fresh) {
+        state.reserved = ids;
+        await save();
+      }
       for (const oldId of mediaIdsInBlocks(rawBlocks)) {
         if (state.media[oldId]) continue;
         const f = filesById.get(oldId);
@@ -834,8 +862,10 @@ async function runArchiveImport(
         try {
           const blob = await source.blob(got.path, got.preview ? 'image/jpeg' : f.mime || undefined);
           const name = got.preview ? `${f.name.replace(/\.[^.]{1,6}$/, '')}.jpg` : f.name;
-          const url = await deps.media.add(pageId, new File([blob], name, { type: got.preview ? 'image/jpeg' : f.mime || blob.type }));
+          const reserved = state.reserved?.[oldId];
+          const url = await deps.media.add(pageId, new File([blob], name, { type: got.preview ? 'image/jpeg' : f.mime || blob.type }), reserved ? { id: reserved } : undefined);
           state.media[oldId] = got.preview ? { url, name, preview: true } : { url, name };
+          if (state.reserved) delete state.reserved[oldId];
           await save();
           pageFiles++;
           if (got.preview) {
@@ -935,7 +965,7 @@ async function runArchiveImport(
   }
 
   let resumable = pages.some((p) => !state.pages[p.id]?.done);
-  if (!resumable) try { await generations.completeGeneration(snapshot, session.generationId); } catch (err) { resumable = true; problems.push(archiveProblemText(err, 'close')); }
+  if (!resumable) try { await generations.completeGeneration(snapshot, session.generationId, pages.map((p) => p.id)); } catch (err) { resumable = true; problems.push(archiveProblemText(err, 'close')); }
   options.onProgress?.({ done: pages.length, total: pages.length, page: '' });
   return { projectId: state.projectId, pages: pages.filter((p) => state.pages[p.id]?.done).length, files, previews, comments, problems: [...new Set(problems)], resumable: resumable && !!store };
 }

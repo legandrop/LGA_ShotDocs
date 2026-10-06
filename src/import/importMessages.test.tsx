@@ -326,10 +326,64 @@ describe('el diálogo: el error se lee y siempre hay con qué seguir', () => {
     expect(await d.db.get('meta', key)).toEqual({ recoveryVersion: 9, future: true });
   });
 
-  it('coda: una carpeta cuyo manifest no trae el id del doc dice qué hacer', async () => {
-    const d = await device(), ui = await open('coda', d, codaFiles(''));
-    await ui.click('Import');
-    expect(ui.shown()).toBe(en('import.noDocId'));
+  it('coda: una carpeta cuyo manifest no trae el id del doc no se importa aunque se llame a la importación sin pasar por el diálogo, y dice qué hacer', async () => {
+    const d = await device();
+    await expect(importCoda(await folderFromFiles(codaFiles('')), codaDeps(d))).rejects.toThrow(en('import.noDocId'));
     expect(d.tree.projects().filter((p) => p.name === 'Doc')).toHaveLength(0);
+    expect((await d.db.getAllKeys('meta')).filter((key) => String(key).startsWith('codaImport'))).toEqual([]);
+  });
+
+  it('coda: una carpeta sin el id del doc lo dice apenas se elige, sin esperar a Import, y no deja importarla', async () => {
+    const d = await device(), ui = await open('coda', d, codaFiles(''));
+    expect(ui.shown()).toBe(en('import.noDocId'));
+    expect(ui.job.get().folder).toBeNull();
+    const start = [...ui.host.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Import')!;
+    expect(start.disabled).toBe(true);
+    expect(d.tree.projects().filter((p) => p.name === 'Doc')).toHaveLength(0);
+    // Elegir después una carpeta buena saca el aviso.
+    const input = ui.host.querySelector<HTMLInputElement>('input[type=file]')!;
+    Object.defineProperty(input, 'files', { value: codaFiles(), configurable: true });
+    await act(async () => {
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      await vi.waitFor(() => expect(ui.job.get().folder).toBeTruthy(), { timeout: 10000 });
+    });
+    expect(ui.shown()).toBeNull();
+  });
+
+  it.each(kinds)('%s: entró todo y solo faltó cerrarla: la lista no dice que algo no se pudo importar, y al elegir la fuente otra vez se ofrece cerrarla, sin contar páginas', async (kind) => {
+    for (const lang of ['en', 'es'] as const) {
+      act(() => prefs.set({ language: lang }));
+      const label = (key: Key, params?: Record<string, string | number>) => translate(lang, key, params);
+      const d = await device(), files = filesOf(kind), source = await sourceOf(kind, files);
+      const closing = async () => { throw new ImportPending('changed'); };
+      const stuck = 'folder' in source
+        ? await importCoda(source.folder, codaDeps(d, { journal: { ...metaJournal(d.db), completeGeneration: closing } }), { projectName: 'Casi' })
+        : await importArchive(source.archive, archiveDeps(d, { journal: { ...archiveJournal(d.db), completeGeneration: closing } }), { projectName: 'Casi' });
+      expect(stuck).toMatchObject({ resumable: true, pages: 1 });
+      const ui = await open(kind, d, files);
+      const text = ui.host.textContent ?? '';
+      expect(text).toContain(label(kind === 'coda' ? 'import.resumeClose' : 'importArchive.resumeClose', { name: 'Casi' }));
+      expect(text).not.toMatch(/1 of 1|1 de 1|did not finish|no terminó/);
+      await ui.click(label(kind === 'coda' ? 'import.resume' : 'importArchive.resume'));
+      expect(ui.job.get().result ?? ui.job.get().archiveResult).toMatchObject({ projectId: stuck.projectId, resumable: false, problems: [] });
+    }
+    // El encabezado de la lista del final, con ese renglón debajo, no lo contradice.
+    for (const key of ['import.problems', 'importArchive.problems'] as const) {
+      expect(en(key, { count: 1 })).toBe('1 thing to check:');
+      expect(translate('es', key, { count: 1 })).toBe('1 cosa para revisar:');
+      expect(translate('es', key, { count: 2 })).toBe('2 cosas para revisar:');
+    }
+  });
+
+  it.each(kinds)('%s: con una sola página, lo encontrado y el resumen del final lo dicen en singular, en inglés y en castellano', async (kind) => {
+    for (const lang of ['en', 'es'] as const) {
+      act(() => prefs.set({ language: lang }));
+      const d = await device(), ui = await open(kind, d, filesOf(kind));
+      const found = lang === 'en' ? '1 page and 0 files' : '1 página y 0 archivos';
+      expect(ui.host.textContent).toContain(found);
+      await ui.click(translate(lang, kind === 'coda' ? 'import.start' : 'importArchive.start'));
+      expect(ui.host.textContent).toContain(lang === 'en' ? 'Imported 1 page and 0 files.' : 'Se importaron 1 página y 0 archivos.');
+      expect(ui.host.textContent).not.toMatch(/1 pages|1 páginas/);
+    }
   });
 });

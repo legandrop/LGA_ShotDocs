@@ -4,8 +4,10 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, expect, it, vi } from 'vitest';
 import { ExportEditor } from '../export/exportEditor';
 import { writeBlocks } from '../export/testProject';
+import { openZip } from '../export/zipReader';
 import type { ImportResult } from '../import/codaImport';
 import { importJobFor } from '../import/importJob';
+import { formatSize } from '../media/fileTrash';
 import { pagePath } from '../router';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
@@ -18,8 +20,9 @@ import { Shell } from './Workspace';
 
 // La ventana *Export* abierta desde la app montada entera (Docs/Doc_Exportar.md, sección 7): el guardado local que espera
 // antes de exportar es el que registra la app, no uno armado por la prueba. Con la página abierta y nada pendiente
-// exporta; una carpeta subiendo no la frena (su tarjeta sale con la nota de avance); una importación o un reemplazo en
-// curso sí, con su aviso; y un título que todavía se está guardando se espera y sale en el PDF.
+// exporta; una carpeta subiendo no la frena (su tarjeta sale sin la nota de avance); una importación o un reemplazo en
+// curso sí, con su causa y sin esperar; un título que todavía se está guardando se espera y sale en el PDF, y uno que no
+// se pudo guardar se avisa en el acto.
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 // Monta el editor: con la máquina cargada, en jsdom tarda.
@@ -47,6 +50,10 @@ beforeAll(() => {
 });
 
 const UNSAVED = 'Some of your latest edits are not saved on this device yet. Wait a moment and try again.';
+const IMPORTING = 'An import is still running in this workspace, so the export would come out half written. Export again when it finishes.';
+const REPLACING = 'Replacing in the project is still running, so the export would come out half written. Export again when it finishes, or press Stop.';
+/** Con la causa ya conocida no se espera el guardado: si se esperara, las pruebas de abajo no llegarían al aviso. */
+const NO_WAIT_MS = 10 * 60_000;
 const READY = /Ready: \d+ PDF pages?\./;
 
 const roots: Root[] = [];
@@ -158,7 +165,7 @@ it('con la página abierta y nada pendiente, Export PDF arma el PDF', async () =
   expect(document.querySelectorAll('.sd-export-book')).toHaveLength(1);
 });
 
-it('una carpeta subiendo no frena el PDF ni el zip, su tarjeta sale con la nota de avance y cerrar la pestaña sigue pidiendo confirmación', async () => {
+it('una carpeta subiendo no frena el PDF ni el zip, su tarjeta sale sin la nota de avance (con su nombre y su peso) y cerrar la pestaña sigue pidiendo confirmación', async () => {
   // Si exportar la esperara, fallaría enseguida en vez de a los 8 s.
   reloadTimings.saveWaitMs = 600;
   // jsdom no carga imágenes: la tarjeta (un SVG) cuenta como cargada y lo demás no se espera de más.
@@ -172,7 +179,8 @@ it('una carpeta subiendo no frena el PDF ni el zip, su tarjeta sale con la nota 
   server.enableMedia();
   // La subida de carpetas necesita el Drive: acá, lo que la app le pregunta mientras hay una subiendo.
   const folders = { busy: () => true, all: () => [], progress: () => undefined, has: () => false, subscribe: () => () => undefined, getRevision: () => 0 };
-  const { page } = await app({
+  let folderUrl = '';
+  const { d, page } = await app({
     server,
     extra: { folders },
     // La carpeta en la página, como queda mientras se sube: su tarjeta con la nota de avance.
@@ -180,6 +188,7 @@ it('una carpeta subiendo no frena el PDF ni el zip, su tarjeta sale con la nota 
       const folder = await d.media.addFolder(id, 'Rushes', 5_000_000);
       await writeBlocks(d.docs, id, [{ type: 'image', props: { url: folder.url, name: 'Rushes' } }]);
       d.media.setFolderNote(folder.id, 'Uploading 3 of 10');
+      folderUrl = folder.url;
     },
   });
   await openWindow(page);
@@ -187,10 +196,14 @@ it('una carpeta subiendo no frena el PDF ni el zip, su tarjeta sale con la nota 
   await until(() => READY.test(shown()) || notices.length > 0, 'el PDF o un aviso');
   expect(notices).toEqual([]);
   expect(shown()).toMatch(READY);
-  // Lo de adentro de la carpeta no va en el PDF: solo su tarjeta, con la nota de ese momento.
+  // Lo de adentro de la carpeta no va en el PDF: solo su tarjeta, como va a quedar (la nota de avance es de este
+  // momento y de este dispositivo, y en la página abierta sigue viéndose).
   const cards = [...document.querySelectorAll<HTMLImageElement>('.sd-export-book img')].map((img) => decodeURIComponent(img.getAttribute('src') ?? ''));
   expect(cards.filter((card) => card.includes('>Rushes<'))).toHaveLength(1);
-  expect(cards.find((card) => card.includes('>Rushes<'))).toContain('>Uploading 3 of 10<');
+  const card = cards.find((c) => c.includes('>Rushes<'))!;
+  expect(card).not.toContain('Uploading');
+  expect(card).toContain(`>Google Drive folder · ${formatSize(5_000_000)}<`);
+  expect(decodeURIComponent(await d.media.resolve(folderUrl))).toContain('>Uploading 3 of 10<');
   await click('Close');
 
   await openWindow(page);
@@ -199,6 +212,19 @@ it('una carpeta subiendo no frena el PDF ni el zip, su tarjeta sale con la nota 
   await until(() => shown().includes('The zip is ready.') || notices.length > 0, 'el zip o un aviso');
   expect(notices).toEqual([]);
   expect(shown()).toContain('The zip is ready.');
+  // Lo mismo en el zip: ni la página para abrir en el navegador ni su texto traen la nota de avance.
+  const saved: Blob[] = [];
+  vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => (saved.push(blob as Blob), 'blob:zip'));
+  // jsdom no navega: el clic del link de descarga no hace nada acá.
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+  await act(async () => [...document.querySelectorAll('button')].find((b) => b.textContent?.startsWith('Save '))!.click());
+  expect(saved).toHaveLength(1);
+  const zip = await openZip(saved[0]);
+  const pages = zip.paths().filter((path) => /\.(html|md)$/.test(path));
+  expect(pages.some((path) => path.endsWith('.html'))).toBe(true);
+  const texts = await Promise.all(pages.map((path) => zip.text(path, 5_000_000)));
+  expect(texts.join(' ')).toContain('Rushes');
+  expect(texts.join(' ')).not.toContain('Uploading');
 
   // Cerrar la pestaña cortaría la subida: eso no cambió.
   const leaving = new Event('beforeunload', { cancelable: true });
@@ -206,8 +232,8 @@ it('una carpeta subiendo no frena el PDF ni el zip, su tarjeta sale con la nota 
   expect(leaving.defaultPrevented).toBe(true);
 });
 
-it('con una importación en curso no exporta y lo avisa', async () => {
-  reloadTimings.saveWaitMs = 600;
+it('con una importación en curso no exporta y avisa la causa en el acto, sin esperar el guardado', async () => {
+  reloadTimings.saveWaitMs = NO_WAIT_MS;
   const { d, page } = await app();
   const importing = deferred<ImportResult>();
   const job = importJobFor(d.tree);
@@ -218,9 +244,8 @@ it('con una importación en curso no exporta y lo avisa', async () => {
   expect(job.get().running).toBe(true);
   await openWindow(page);
   await click('Export PDF');
-  expect(shown()).toContain('Saving changes on this device before export…');
   await until(() => notices.length > 0 || READY.test(shown()), 'el aviso');
-  expect(notices).toEqual([UNSAVED]);
+  expect(notices).toEqual([IMPORTING]);
   expect(shown()).not.toMatch(READY);
   expect(document.querySelectorAll('.sd-export-book')).toHaveLength(0);
   // Vuelve a la ventana como estaba: se puede intentar de nuevo cuando termine.
@@ -231,32 +256,32 @@ it('con una importación en curso no exporta y lo avisa', async () => {
   });
   await click('Export PDF');
   await until(() => READY.test(shown()), 'el PDF, con la importación terminada');
-  expect(notices).toEqual([UNSAVED]);
+  expect(notices).toEqual([IMPORTING]);
 });
 
-it('con un reemplazo en curso no exporta el PDF ni el zip y lo avisa; cuando termina, exporta', async () => {
-  reloadTimings.saveWaitMs = 600;
+it('con un reemplazo en curso no exporta el PDF ni el zip y avisa la causa en el acto; cuando termina, exporta', async () => {
+  reloadTimings.saveWaitMs = NO_WAIT_MS;
   const { page, services: provided } = await app();
   // Un reemplazo de verdad recorre y escribe el proyecto: acá, lo que la app le pregunta mientras hay uno corriendo.
   const running = vi.spyOn(replaceSession(provided).engine, 'isRunning').mockReturnValue(true);
   await openWindow(page);
   await click('Export PDF');
   await until(() => notices.length > 0 || READY.test(shown()), 'el aviso');
-  expect(notices).toEqual([UNSAVED]);
+  expect(notices).toEqual([REPLACING]);
   expect(shown()).not.toMatch(READY);
   expect(document.querySelectorAll('.sd-export-book')).toHaveLength(0);
   await until(() => button('Export PDF'), 'la ventana otra vez');
   await chooseZip();
   await click('Prepare .zip');
   await until(() => notices.length > 1 || shown().includes('The zip is ready.'), 'el segundo aviso');
-  expect(notices).toEqual([UNSAVED, UNSAVED]);
+  expect(notices).toEqual([REPLACING, REPLACING]);
   expect(shown()).not.toContain('The zip is ready.');
   // Terminó: el mismo botón ahora arma el archivo.
   running.mockReturnValue(false);
   await until(() => button('Prepare .zip') && !button('Prepare .zip')!.disabled, 'la ventana otra vez');
   await click('Prepare .zip');
   await until(() => shown().includes('The zip is ready.') || notices.length > 2, 'el zip, con el reemplazo terminado');
-  expect(notices).toEqual([UNSAVED, UNSAVED]);
+  expect(notices).toEqual([REPLACING, REPLACING]);
   expect(shown()).toContain('The zip is ready.');
 });
 
@@ -284,4 +309,25 @@ it('un título que todavía se está guardando se espera y sale en el PDF', asyn
   expect(notices).toEqual([]);
   expect(d.tree.get(page)?.title).toBe('Título recién escrito');
   expect(document.querySelector('.sd-export-book')?.textContent).toContain('Título recién escrito');
+});
+
+it('un título que no se pudo guardar se avisa en el acto, sin esperar el guardado, y el PDF no se arma', async () => {
+  reloadTimings.saveWaitMs = NO_WAIT_MS;
+  const { d, page } = await app();
+  vi.spyOn(d.tree, 'saveTitleDraft').mockRejectedValue(new Error('sin espacio en el dispositivo'));
+  const title = document.querySelector<HTMLTextAreaElement>('textarea.page-title')!;
+  const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
+  act(() => {
+    title.focus();
+    setValue.call(title, 'Título que no entra');
+    title.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await openWindow(page);
+  await click('Export PDF');
+  await until(() => notices.includes(UNSAVED) || READY.test(shown()), 'el aviso');
+  expect(notices).toContain(UNSAVED);
+  expect(shown()).not.toMatch(READY);
+  expect(document.querySelectorAll('.sd-export-book')).toHaveLength(0);
+  expect(d.tree.get(page)?.title).toBe('Raíz');
+  await until(() => button('Export PDF'), 'la ventana otra vez');
 });

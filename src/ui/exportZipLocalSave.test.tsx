@@ -44,9 +44,10 @@ async function setup(prepare: () => Promise<void> = async () => undefined) {
   const producer = vi.spyOn(zip, 'buildZip').mockResolvedValue({ root: 'Raiz', missing: [], lastSync: null } as never);
   return { page, child, services, mount, producer };
 }
-function filePicker(pause: Promise<void> = Promise.resolve()) {
+/** `size`: lo que pesa el archivo elegido al elegirlo (0: lo acaba de crear el selector); sin él, el navegador no lo dice. */
+function filePicker(pause: Promise<void> = Promise.resolve(), size?: number) {
   const writable = { write: vi.fn().mockResolvedValue(undefined), close: vi.fn().mockResolvedValue(undefined), abort: vi.fn().mockResolvedValue(undefined) };
-  const handle = { name: 'Elegido.zip', createWritable: vi.fn(async () => { await pause; return writable; }), remove: vi.fn() };
+  const handle = { name: 'Elegido.zip', createWritable: vi.fn(async () => { await pause; return writable; }), remove: vi.fn().mockResolvedValue(undefined), ...(size === undefined ? {} : { getFile: vi.fn(async () => ({ size })) }) };
   const picker = vi.fn().mockResolvedValue(handle);
   (window as unknown as { showSaveFilePicker: unknown }).showSaveFilePicker = picker;
   return { writable, handle, picker };
@@ -201,4 +202,55 @@ it('otra identidad con referencias compartidas descarta la estimación tardía',
   expect(spy).toHaveBeenCalledTimes(2); expect(host.textContent).toContain('2 pages');
   await act(async () => gate.release()); await settle();
   expect(host.textContent).toContain('2 pages'); expect(host.textContent).not.toContain('9 pages');
+});
+
+it.each([
+  ['el zip vacío que acaba de crear el selector se saca del destino', 0, 1],
+  ['un zip que ya tenía contenido al elegirlo no se toca', 4096, 0],
+] as const)('al cancelar, %s', async (_what, size, removed) => {
+  const gate = deferred(); const s = await setup(); const f = filePicker(gate.promise, size); s.mount();
+  await click('Download .zip…'); expect(f.handle.createWritable).toHaveBeenCalledTimes(1);
+  await click('Cancel'); await act(async () => gate.release()); await settle();
+  expect(f.writable.abort).toHaveBeenCalledTimes(1); expect(s.producer).not.toHaveBeenCalled();
+  expect(f.handle.remove).toHaveBeenCalledTimes(removed);
+});
+
+it('si el zip falla después de abrir el escritor, el vacío recién creado se saca', async () => {
+  const s = await setup(); const f = filePicker(Promise.resolve(), 0); s.mount();
+  s.producer.mockRejectedValueOnce(new Error('se cortó la escritura'));
+  await click('Download .zip…');
+  expect(s.producer).toHaveBeenCalledTimes(1); expect(f.writable.abort).toHaveBeenCalledTimes(1); expect(f.writable.close).not.toHaveBeenCalled();
+  expect(f.handle.remove).toHaveBeenCalledTimes(1);
+});
+
+it('un rechazo de la preparación saca el zip vacío recién creado sin abrir el escritor', async () => {
+  const old = reloadTimings.saveWaitMs; reloadTimings.saveWaitMs = 30; cleanups.push(() => { reloadTimings.saveWaitMs = old; });
+  const s = await setup(async () => { throw Error('Escritura rechazada'); }); const f = filePicker(Promise.resolve(), 0); s.mount();
+  await click('Download .zip…'); expect(s.producer).not.toHaveBeenCalled();
+  expect(f.handle.createWritable).not.toHaveBeenCalled(); expect(f.handle.remove).toHaveBeenCalledTimes(1);
+  expect(host.textContent).toContain('Download .zip…');
+});
+
+it('el zip que terminó de escribirse no se borra aunque el selector lo haya creado vacío', async () => {
+  const s = await setup(); const f = filePicker(Promise.resolve(), 0); s.mount();
+  await click('Download .zip…');
+  expect(s.producer).toHaveBeenCalledTimes(1); expect(f.writable.close).toHaveBeenCalledTimes(1);
+  expect(f.handle.remove).not.toHaveBeenCalled();
+});
+
+it('con una importación o un reemplazo en curso no se pide ni el destino: la causa se avisa en el mismo clic', async () => {
+  const s = await setup(); const f = filePicker(Promise.resolve(), 0);
+  let blocked: string | null = 'Hay una importación en curso';
+  cleanups.push(watchPendingWrites({ owner: s.services, current: () => true, unsaved: () => false, flush: () => device.docs.flush(), exportBlocked: () => blocked }));
+  const notices: string[] = []; const onNotice = (e: Event) => notices.push(String((e as CustomEvent<string>).detail));
+  window.addEventListener('shotdocs:notice', onNotice); cleanups.push(() => window.removeEventListener('shotdocs:notice', onNotice));
+  s.mount();
+  await click('Download .zip…');
+  expect(f.picker).not.toHaveBeenCalled(); expect(f.handle.createWritable).not.toHaveBeenCalled(); expect(s.producer).not.toHaveBeenCalled();
+  expect(notices).toEqual(['Hay una importación en curso']);
+  expect(host.textContent).toContain('Download .zip…');
+  // Terminó: el mismo botón pide el destino y arma el archivo.
+  blocked = null;
+  await click('Download .zip…');
+  expect(f.picker).toHaveBeenCalledTimes(1); expect(s.producer).toHaveBeenCalledTimes(1); expect(notices).toHaveLength(1);
 });

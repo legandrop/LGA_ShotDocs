@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.213 :
+
+Si una importación se cortaba entre crear una página o guardar un archivo y anotarlo, al seguir quedaba una página vacía o un archivo de más, y una página pendiente mandada a la papelera podía duplicarse: el registro se escribía después de crear. Ahora cada id se anota antes, y crear dos veces con el mismo id es crear una. Una carpeta de Coda vuelta a exportar sin una página ya termina (D306), el registro conserva el detalle de las tres importaciones terminadas más recientes (D307), una carpeta sin id de doc se avisa al elegirla, el resumen dice "1 page" y un error de lectura de un zip recomprimido se reintenta. Al exportar, una importación o un reemplazo en curso se avisan con su causa y sin esperar, un zip cancelado no deja un archivo vacío (D308) y la tarjeta de una carpeta sale sin la nota de subida.
+
+[Anotar cada página y cada archivo antes de crearlos al importar, cerrar la importación sin las páginas que la fuente ya no trae y avisar la causa al exportar]
+
 v0.212 :
 
 La ventana *Day reports go in a folder* no miraba la carpeta elegida: creaba sin avisar un segundo reporte del mismo día y no decía que las subpáginas se mueven con la página. Ahora la lee y, si ya está el de hoy, ofrece *Open* o *Create another*. En *New day report*, las anotaciones que no entraban por los topes se avisaban solo en la consola; ahora, en pantalla. En *Share*, la fecha de vencimiento de un link existente se pedía con el cuadro del navegador y el uso del día no tenía singular: hay un campo de fecha y plurales, y volver a *Restricted* pregunta antes. Un link ya no manda pedidos de archivar ni borrar proyectos. *Update now* decía que falló aunque el servidor publicara otra vez la versión en uso: ahora recarga. La documentación refleja las migraciones ya aplicadas en la base.

@@ -447,19 +447,29 @@ export class PageTree {
    * Crea una página adentro de `parentId`, o en la raíz de `projectId` (o del primer proyecto). Una página sin título
    * ni plantilla (la del "+") queda anotada como recién creada acá (`isFresh`): ofrece las plantillas. Va al final, o
    * justo antes de la hermana `before` (el reporte del día con una fecha anterior, Doc_Plantillas.md 6.5).
+   *
+   * Con `id` (el que una importación reservó antes de crearla), crear dos veces es crear una: si la página ya está
+   * (en el árbol o con su alta en la cola), no se encola nada y vuelve el mismo id.
    */
   async create(
     parentId: string | null,
     title = '',
     projectId?: string,
-    options: { templateId?: string; before?: string } = {},
+    options: { templateId?: string; before?: string; id?: string } = {},
   ): Promise<string> {
     const parent = parentId ? this.view.get(parentId) : undefined;
     const workspaceId = parent?.workspace_id ?? projectId ?? this.workspaceId;
+    if (options.id !== undefined) {
+      if (!validUuid(options.id)) throw new ImportPending('invalid');
+      const existing = this.view.get(options.id);
+      // Un id reservado nunca toma una página de otro proyecto.
+      if (existing && existing.workspace_id !== workspaceId) throw new ImportPending('changed');
+      if (existing || this.hasUnsentCreate(options.id)) return options.id;
+    }
     const siblings = this.siblingsIn(parentId, workspaceId);
     const at = options.before ? siblings.findIndex((p) => p.id === options.before) : -1;
     const sortKey = await this.keyAt(siblings, at >= 0 ? at : siblings.length);
-    const id = crypto.randomUUID();
+    const id = options.id ?? crypto.randomUUID();
     const page = { id, workspace_id: workspaceId, parent_id: parentId, title, sort_key: sortKey };
     // Antes de encolar: la página se dibuja apenas entra a la cola y ya tiene que saberse nueva.
     if (!title && !options.templateId) this.fresh = [...this.fresh.filter((f) => f !== id), id].slice(-FRESH_MAX);

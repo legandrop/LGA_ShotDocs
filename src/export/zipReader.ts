@@ -121,8 +121,11 @@ export const INFLATE_PIECE = 16 * 1024;
  * Lo comprimido de a pedazos chicos y solo cuando el descompresor pide más (`highWaterMark: 0`). Con `blob.stream()` el
  * navegador le pasa pedazos grandes y descomprime cada uno entero antes de que el control vea nada: una bomba (2 MB que
  * descomprimen 2 GB) subía +2 GB antes del corte. Así, lo de más que alcanza a salir queda acotado a un pedazo.
+ *
+ * `onReadError`: no se pudo leer un pedazo del archivo (el disco, un permiso que se venció). No dice nada del contenido,
+ * y quien llama lo distingue así de un *deflate* dañado.
  */
-function smallPieces(data: Blob): ReadableStream<Uint8Array> {
+function smallPieces(data: Blob, onReadError: (err: unknown) => void): ReadableStream<Uint8Array> {
   let at = 0;
   return new ReadableStream<Uint8Array>(
     {
@@ -131,7 +134,13 @@ function smallPieces(data: Blob): ReadableStream<Uint8Array> {
           ctl.close();
           return;
         }
-        const piece = new Uint8Array(await data.slice(at, at + INFLATE_PIECE).arrayBuffer());
+        let piece: Uint8Array;
+        try {
+          piece = new Uint8Array(await data.slice(at, at + INFLATE_PIECE).arrayBuffer());
+        } catch (err) {
+          onReadError(err);
+          throw err;
+        }
         at += piece.length;
         ctl.enqueue(piece);
       },
@@ -306,13 +315,18 @@ export async function openZip(blob: Blob, limits: ZipLimits = {}): Promise<Archi
       // Sin acumular adelante: lo que sale se pide de a uno.
       { highWaterMark: 0 },
     );
+    // Un error al leer el zip del disco no es contenido dañado: sale tal cual, como en un archivo sin comprimir, y quien
+    // importa lo trata como algo que se puede reintentar. Dañado es solo lo que rechazan el descompresor o el control.
+    let unread: { error: unknown } | null = null;
     try {
       // Un `Blob` armado por el navegador a medida que llega (lo grande va al disco), nunca una lista de pedazos en memoria.
-      const out = await new Response(smallPieces(data).pipeThrough(new DecompressionStream('deflate-raw') as unknown as ReadableWritablePair<Uint8Array, Uint8Array>).pipeThrough(check) as ReadableStream<Uint8Array>).blob();
+      const out = await new Response(smallPieces(data, (error) => { unread = { error }; }).pipeThrough(new DecompressionStream('deflate-raw') as unknown as ReadableWritablePair<Uint8Array, Uint8Array>).pipeThrough(check) as ReadableStream<Uint8Array>).blob();
       if (failure) throw failure;
       return out.slice(0, out.size, type || '');
     } catch (err) {
       inflated -= e.size;
+      const read = unread as { error: unknown } | null;
+      if (read) throw read.error;
       throw failure ?? (err instanceof ZipReadError ? err : new ZipReadError('damaged', e.name));
     }
   };

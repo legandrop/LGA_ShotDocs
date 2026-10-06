@@ -137,6 +137,42 @@ describe('volver a Shot Docs: leer el zip', () => {
     await expect(src.text('d.txt', 1000)).rejects.toMatchObject({ code: 'crc' });
   });
 
+  it('en un deflate, un error al leer el zip del disco no se toma por contenido dañado: sale tal cual y al leerlo de nuevo se entrega; el dañado de verdad sigue siendo dañado', async () => {
+    const text = 'Escena 12 '.repeat(5000);
+    const zip = await handZip([{ name: 'a.txt', data: enc.encode(text), method: 8 }, { name: 'b.txt', data: enc.encode(text), method: 8 }]);
+    // El mismo zip, con un disco que una vez no deja leer un pedazo de lo comprimido (los pedidos de ese tamaño).
+    let fail = 0;
+    const flaky = (blob: Blob): Blob =>
+      ({
+        size: blob.size,
+        slice: (from?: number, to?: number, type?: string) => flaky(blob.slice(from, to, type)),
+        arrayBuffer: async () => {
+          if (fail > 0 && blob.size > 0 && blob.size <= INFLATE_PIECE && blob.size !== 30) {
+            fail--;
+            throw new DOMException('The requested file could not be read', 'NotReadableError');
+          }
+          return blob.arrayBuffer();
+        },
+      }) as unknown as Blob;
+    const src = await openZip(flaky(zip), { maxDeflateTotal: text.length * 2 });
+    fail = 1;
+    const failed = await src.text('a.txt', 1_000_000).catch((e: unknown) => e);
+    expect(failed).toBeInstanceOf(DOMException);
+    expect(failed).not.toBeInstanceOf(ZipReadError);
+    expect((failed as DOMException).name).toBe('NotReadableError');
+    // Reintentar lo lee, y lo que no se llegó a descomprimir no quedó contado contra el tope del zip (entran los dos).
+    expect(await src.text('a.txt', 1_000_000)).toBe(text);
+    expect(await src.text('b.txt', 1_000_000)).toBe(text);
+
+    // Lo comprimido roto (no es deflate) es contenido dañado, también al leerlo otra vez.
+    const good = new Uint8Array(await zip.arrayBuffer());
+    const broken = good.slice();
+    broken.fill(0xff, 30 + 'a.txt'.length, 30 + 'a.txt'.length + 40);
+    const bad = await openZip(new NodeBlob([broken]) as unknown as Blob);
+    await expect(bad.text('a.txt', 1_000_000)).rejects.toMatchObject({ name: 'ZipReadError' });
+    await expect(bad.text('a.txt', 1_000_000)).rejects.toBeInstanceOf(ZipReadError);
+  });
+
   it('un deflate que dice pesar poco y descomprime mucho (una bomba) se corta', async () => {
     const big = new Uint8Array(2_000_000);
     const src = await openZip(await handZip([{ name: 'bomba.json', data: big, method: 8, size: 100 }]));
