@@ -21,6 +21,12 @@ import { PageTree } from './tree';
 
 type Result = { data: unknown; error: { message: string; code: string } | null; status: number };
 
+/**
+ * El estado con que PostgREST entrega un `raise … using errcode = 'P0002'` (`link_not_found`, `page_not_found`…): 500,
+ * no 404 (da 400 solo al `P0001`). La app lo reconoce como definitivo por el código (`toRemoteError`).
+ */
+const NOT_FOUND_STATUS = 500;
+
 /** Lo que se le pidió al cliente del link: la función y los headers (para ver que nunca va una sesión). */
 export interface LinkCall {
   fn: string;
@@ -70,7 +76,7 @@ export function fakeLinkClient(server: FakeServer, headers: Record<string, strin
     calls.push({ fn, headers: { ...headers } });
     if (!server.online) return fail('Failed to fetch', '', 0);
     const l = link();
-    if (!l || level(l.pageId) === 0) return fail('link_not_found', 'P0002', 404);
+    if (!l || level(l.pageId) === 0) return fail('link_not_found', 'P0002', NOT_FOUND_STATUS);
     switch (fn) {
       case 'plink_open': {
         const s = server.settings;
@@ -103,7 +109,7 @@ export function fakeLinkClient(server: FakeServer, headers: Record<string, strin
       }
       case 'plink_pull_page': {
         const pageId = String(args.p_page_id);
-        if (level(pageId) < 1) return fail('page_not_found', 'P0002', 404);
+        if (level(pageId) < 1) return fail('page_not_found', 'P0002', NOT_FOUND_STATUS);
         if (!server.cleanOn()) return { data: [], error: null, status: 200 };
         const base = server.currentBase(pageId);
         if (!base || base.toSeq <= Number(args.p_after_seq ?? 0)) return { data: [], error: null, status: 200 };
@@ -135,14 +141,14 @@ export function fakeLinkClient(server: FakeServer, headers: Record<string, strin
       }
       case 'plink_set_file_thumb': {
         const id = String(args.p_file_id);
-        if (!server.linkOwnsFile(l, id)) return fail('file_not_found', 'P0002', 404);
+        if (!server.linkOwnsFile(l, id)) return fail('file_not_found', 'P0002', NOT_FOUND_STATUS);
         server.mediaFiles.get(id)!.thumb_at = new Date().toISOString();
         server.mediaCalls.push(`plink_set_file_thumb ${id}`);
         return { data: null, error: null, status: 204 };
       }
       case 'plink_list_comments': {
         const pageId = String(args.p_page_id);
-        if (level(pageId) < 1) return fail('page_not_found', 'P0002', 404);
+        if (level(pageId) < 1) return fail('page_not_found', 'P0002', NOT_FOUND_STATUS);
         const since = (args.p_since as string | null) ?? null;
         const rows = [...server.comments.values()]
           .filter((c) => c.page_id === pageId && (since === null || (c.updated_at ?? c.created_at) >= since))
@@ -162,7 +168,7 @@ export function fakeLinkClient(server: FakeServer, headers: Record<string, strin
       }
       case 'plink_add_comment': {
         const pageId = String(args.p_page_id);
-        if (level(pageId) < 2) return fail('page_not_found', 'P0002', 404);
+        if (level(pageId) < 2) return fail('page_not_found', 'P0002', NOT_FOUND_STATUS);
         const name = String(args.p_author ?? '').trim();
         if (!name || name.length > 60) return fail('author_invalid', '22023', 400);
         const id = String(args.p_id);
@@ -179,7 +185,7 @@ export function fakeLinkClient(server: FakeServer, headers: Record<string, strin
         // Como la migración de la entrega 2a, en el mismo orden: el nivel, la idempotencia, la versión, el nombre, el
         // tamaño, lo que espera, el tope de por vida y los del día. A la sala, nunca a la página.
         const pageId = String(args.p_page_id);
-        if (!args.p_client_update_id || level(pageId) < 3) return fail('page_not_found', 'P0002', 404);
+        if (!args.p_client_update_id || level(pageId) < 3) return fail('page_not_found', 'P0002', NOT_FOUND_STATUS);
         const cid = String(args.p_client_update_id);
         if (server.linkRoom.some((r) => r.linkId === l.id && r.pageId === pageId && r.clientUpdateId === cid)) {
           return { data: 0, error: null, status: 200 };
@@ -218,7 +224,7 @@ export function fakeLinkClient(server: FakeServer, headers: Record<string, strin
       case 'plink_edit_comment':
       case 'plink_delete_comment': {
         const c = server.comments.get(String(args.p_id)) as (CommentRow & { body: string; plink_id?: string; plink_device?: string; updated_at?: string }) | undefined;
-        if (!c || level(c.page_id) < 1) return fail('comment_not_found', 'P0002', 404);
+        if (!c || level(c.page_id) < 1) return fail('comment_not_found', 'P0002', NOT_FOUND_STATUS);
         if (c.plink_id !== l.id || !device() || c.plink_device !== device()) return fail('not_allowed', '42501', 403);
         const now = new Date().toISOString();
         if (fn === 'plink_edit_comment') Object.assign(c, { body: String(args.p_body), edited_at: now, updated_at: now });

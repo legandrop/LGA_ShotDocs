@@ -52,7 +52,7 @@ const OPEN = { link_id: 'link-1', page_id: 'page-1', title: 'Brief', level: 'com
 
 function stubFetch(handler: () => Promise<Response>) {
   const fn = vi.fn((input: RequestInfo | URL) => {
-    if (!String(input).includes('/rest/v1/rpc/plink_open')) return Promise.resolve(json(404, { message: 'link_not_found', code: 'P0002' }));
+    if (!String(input).includes('/rest/v1/rpc/plink_open')) return Promise.resolve(json(500, { message: 'link_not_found', code: 'P0002' }));
     return handler();
   });
   vi.stubGlobal('fetch', fn);
@@ -92,7 +92,7 @@ describe('abrir un link sin red', () => {
   });
 
   it('con red y el link revocado o vencido: se corta, sin mostrar lo guardado', async () => {
-    stubFetch(() => Promise.resolve(json(404, { message: 'link_not_found', code: 'P0002', details: null, hint: null })));
+    stubFetch(() => Promise.resolve(json(500, { message: 'link_not_found', code: 'P0002', details: null, hint: null })));
     const host = await mount(entryFor(true));
     expect(host.textContent).toContain('This link no longer works');
     expect(host.textContent).not.toContain('WORKSPACE');
@@ -131,7 +131,7 @@ describe('el link muerto en la dirección de un archivo (P.30, LF16)', () => {
   });
 
   it('Sign in instead deja de abrir el link en esta pestaña y pasa a la dirección de miembro, sin el token', async () => {
-    stubFetch(() => Promise.resolve(json(404, { message: 'link_not_found', code: 'P0002', details: null, hint: null })));
+    stubFetch(() => Promise.resolve(json(500, { message: 'link_not_found', code: 'P0002', details: null, hint: null })));
     history.replaceState(null, '', `/f/wanka_1/${FILE}`);
     const entry = entryFor(true);
     sessionStorage.setItem('shotdocs-tab-link', entry.id);
@@ -152,7 +152,7 @@ describe('el link muerto en la dirección de un archivo (P.30, LF16)', () => {
   });
 
   it('en la página de un link (no un archivo), sin Sign in instead', async () => {
-    stubFetch(() => Promise.resolve(json(404, { message: 'link_not_found', code: 'P0002', details: null, hint: null })));
+    stubFetch(() => Promise.resolve(json(500, { message: 'link_not_found', code: 'P0002', details: null, hint: null })));
     const host = await mount(entryFor(true));
     expect(host.textContent).toContain('This link no longer works');
     expect(host.textContent).not.toContain('Sign in instead');

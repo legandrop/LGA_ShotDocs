@@ -257,7 +257,7 @@ describe('los archivos de los links de la página, en Share (decisión de Lega, 
       if (fn === 'get_public_link') return { data: { clean_on: true, edit_on: true, link, above: null }, error: null, status: 200 };
       if (fn === 'public_link_files') {
         return 'error' in files
-          ? { data: null, error: { message: files.error, code: 'P0002' }, status: 404 }
+          ? { data: null, error: { message: files.error, code: 'P0002' }, status: 500 }
           : { data: files, error: null, status: 200 };
       }
       return { data: [], error: null, status: 200 };

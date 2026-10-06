@@ -193,7 +193,13 @@ describe('los ajustes de una plantilla (5.2, 7 y 8)', () => {
     };
     await tree.setSetting('x', 'format', { size: 'a4' });
     expect(queued).toEqual([
-      { kind: 'update', id: 'x', patch: { settings: { template: { description: 'd' }, templatesFolder: true, dayReports: { template: 'y' }, format: { size: 'a4' } } } },
+      {
+        kind: 'update',
+        id: 'x',
+        patch: { settings: { template: { description: 'd' }, templatesFolder: true, dayReports: { template: 'y' }, format: { size: 'a4' } } },
+        // La clave que cambió: con ella la base fusiona y no pisa las demás.
+        settingsKeys: ['format'],
+      },
     ]);
   });
 

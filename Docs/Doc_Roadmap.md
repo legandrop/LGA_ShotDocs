@@ -1,5 +1,7 @@
 # Roadmap
 
+**Rechazos definitivos v0.214:** un "no existe" de la base ya no se reintenta para siempre ni corta la sincronización de las demás páginas. Quedan pendientes: (1) una página rechazada así no se reintenta sola cuando vuelve el permiso, sale de la papelera o se restaura el proyecto: sube con *Retry* o al reabrir la app; convendría limpiar el rechazo cuando el árbol vuelve a mostrar la página editable, como ya se hace para quien entra con un link, y lo mismo para comentarios rechazados y archivos detenidos; (2) si las menciones de un comentario se editan justo mientras la página no se ve, la cola las olvida aunque la edición del comentario quede para reintentar; (3) mientras una página no se puede bajar, el estado de sincronización muestra el código `page_not_found` en vez de un texto; (4) falta una prueba que fije que "el archivo todavía no llegó al servidor" se sigue esperando con el error tal como lo entrega la base; (5) un comentario del portero todavía dice que ese "no existe" llega como 404.
+
 **Espera de guardado al exportar v0.210 (D303):** una carpeta subiendo ya no frena *Export*; una importación o un reemplazo en curso en el proyecto sí. **Hecho en v0.213:** con una importación o un reemplazo en curso el aviso dice la causa y no espera; un título que no se pudo guardar se avisa sin gastar los ocho segundos; al cancelar o fallar un zip, el `.zip` vacío que creó el selector se saca (uno que ya tenía contenido no se toca, D308); y la tarjeta de una carpeta que se está subiendo sale en lo exportado con *Google Drive folder* y su peso, sin la nota de avance. Queda pendiente: (1) D308 sin verificar en Chromium (probado con el selector simulado): que el `.zip` vacío se saca, y qué hace el navegador con un archivo existente al elegirlo en el selector; si lo vacía ahí mismo, el zip anterior se perdió al elegirlo y además se borraría por estar vacío; (2) *Download all* de una carpeta todavía borra el archivo elegido al cancelar aunque ya tuviera contenido. Detalle: `Doc_Exportar.md`, "Guardado local antes del PDF".
 
 **Vista previa Format as… v0.208:** avisa antes de Apply cuando la forma elegida quitará Script. Discard conserva el original y Undo recupera también ese formato. Los demás pendientes de P.24 y de la fase 5 siguen abiertos.
@@ -340,9 +342,9 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   al confirmar (O9), la generación del servidor antes de la caché (O7), Ctrl/⌘+Z deja de lado *Restored from…*, el hijo
   repetido de dos sangrías a la vez (O2) y las pruebas de M5 y M10 (`Doc_Historial.md`, "Lo que quedó de las entregas").
   **Falta:** medir en el iPhone. Para después: la marca *Restored from…* se pierde si la app se cierra antes de que la
-  restauración suba y nunca se vuelve a abrir el historial de esa página en una semana (es solo un rótulo); (O3)
-  renombrar pisa el nombre anterior sin rastro (bien hecho pide una función nueva en la base, o sea una migración: desde
-  la app serían dos pedidos y el nombre cambiaría de dueño). Aparte, después: que lo borrado no llegue a quien solo ve la página (decisión 2;
+  restauración suba y nunca se vuelve a abrir el historial de esa página en una semana (es solo un rótulo). **Hecho en
+  v0.214 (O3):** renombrar una versión deja el nombre anterior guardado en la base, con quién lo cambió (migración
+  `20261105120000_versiones_renombrar_rastro.sql`; no se muestra en la app). Aparte, después: que lo borrado no llegue a quien solo ve la página (decisión 2;
   diseño en `Doc_Privacidad_Borrado.md`, B.18).
   Ojo: `npm run db:test` aplica las migraciones de verdad; esta se probó con un script en `begin … rollback`.
 - **P.19 Link público: *Anyone with the link*** (Lega, 2026-10-02): en *Share*, además de personas y correos, un link
@@ -473,8 +475,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   *2 reports for…* en la barra lateral con la papelera ofrecida para el repetido sin tocar (O6), y en *Buscar en el
   proyecto* la marca *Template* con *Replace all* que saltee las plantillas salvo *Include templates* (O9, va con la
   búsqueda). De la auditoría de la entrega 3 (ninguna pierde contenido): dos dispositivos sin red que guardan su primera
-  plantilla crean dos carpetas *Templates* (O1); *Template settings* en un dispositivo y un cambio de formato en otro a la vez
-  pisan la descripción, la limitación conocida de `settings` (O2); guardar un reporte con *Use for day reports* cambia la
+  plantilla crean dos carpetas *Templates* (O1); guardar un reporte con *Use for day reports* cambia la
   plantilla de la carpeta para todo el equipo (O3, decidido así: D94); un invitado con *Edit & create pages* guarda
   plantillas, como permite la base (O4). Quedó de la auditoría de
   la entrega 1: un aviso de ProseMirror en la consola al abrir la vista previa (sin efecto visible); *Exit* de la vista
@@ -482,9 +483,27 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   auditoría de la entrega 2 (las demás observaciones, corregidas): un invitado con *Edit & create pages* crea reportes,
   porque la base mira el nivel y no el rol; si un cliente nunca tiene que crear páginas, es una decisión del modelo de
   permisos (`Plan_Workspaces.md`); y al reusar un reporte vacío hecho por la app se le cambia el número de día por el
-  siguiente al último (no se pierde nada). **Para después:** que la base fusione las claves de `pages.settings`
-  (`settings || patch`) en vez de reemplazar el objeto entero, con su migración: hoy dos cambios de ajustes a la vez
-  se pisan (`Doc_Plantillas.md`, sección 8).
+  siguiente al último (no se pierde nada). **Hecho en v0.214:** la base fusiona las claves de `pages.settings`
+  (`patch_page_settings`, migración `20261104120000_ajustes_fusionar.sql`): dos cambios de ajustes distintos hechos a la
+  vez ya no se pisan (`Doc_Plantillas.md`, sección 8); con eso quedó hecha la O2 de la entrega 3 (*Template settings* en
+  un dispositivo y un cambio de formato en otro a la vez pisaban la descripción). **Quedan de la fusión de ajustes**
+  (ninguno pierde contenido de una página):
+  - **Vale entre dispositivos con v0.214 o más.** Una pestaña con una versión anterior sigue subiendo el objeto de
+    ajustes entero y puede pisar la clave que otro dispositivo cambió a la vez. Se cierra cuando `min_app_version` llega
+    a v0.214.
+  - **Después de restaurar una copia de seguridad** cada dispositivo vuelve a subir lo suyo
+    (`PageTree.recoverAfterRestore`) con los ajustes de la página enteros: dos dispositivos que recuperan a la vez la
+    misma página con ajustes distintos pueden pisarse una clave. Mejora: mandar solo las claves que difieren de las del
+    servidor (con `settingsKeys`, como cualquier otro cambio).
+  - **El tope de 2000 caracteres vale para el resultado de la fusión.** Dos claves grandes puestas desde dos dispositivos
+    (una descripción larga de plantilla y otra) pueden entrar por separado y no juntas: el segundo cambio queda en la
+    lista de rechazados, que muestra el texto crudo de la restricción de la base (`pages_settings_shape`; la lista se
+    arma en `src/ui/SyncBadge.tsx` con `rejectionText`). Falta decirlo en palabras.
+  - **Con una base sin la función** el dispositivo igual muestra los ajustes fusionados por clave, aunque el servidor
+    reemplazó el objeto entero: se ve la clave del otro dispositivo hasta la bajada siguiente del árbol, que la corrige.
+  - **En las pruebas**, el servidor en memoria fusiona con la misma función que el cliente (`mergeSettings`), así que un
+    error en ella no se nota de ese lado (la fusión de verdad la prueba `supabase/tests/ajustes_fusionar_permisos.sql`), y
+    no simula el rechazo `settings_invalid`.
 - **P.20 Anotar sobre las fotos** (Lega, 2026-10-02): flechas, círculos, rectángulos, texto y lápiz encima de una
   foto de set sin tocar el original, cómodo para quien usa LGA FrameRev (mismas letras, colores y grosores).
   **Diseño en `Doc_Anotar_Fotos.md`** (sin código; auditado: aprobado con condiciones, ya corregido; decisiones AN1 a AN11
@@ -1021,12 +1040,18 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
     la base frena por versión los cambios del árbol y los comentarios (header `x-shotdocs-version`, migración
     `20261008120000_version_minima_arbol.sql`, rechazo 503 que ninguna versión marca como rechazado) y *Update now*
     sigue cada instalación desde `updatefound`; archivar, borrar y restaurar proyectos también frenan. La migración ya
-    está aplicada (verificada en la base el 2026-10-06) y `min_app_version` está en 0.181. **Falta:** compartir e invitar
-    siguen sin freno en la app, y esas dos y la papelera de archivos, en la base; un workspace autohospedado necesita CORS
-    que acepte `x-shotdocs-version`. La papelera de archivos ya se frena sola en la app (la cola no manda
-    nada con una versión menor a la mínima). **Hecho en v0.212** (auditoría, O6): si una instalación falló y después el
-    servidor vuelve a publicar la misma versión que corre, *Update now* recarga en vez de seguir diciendo que falló. Ver
-    `Doc_Sincronizacion.md`, "La versión mínima, el árbol y los comentarios" y "Volver
+    está aplicada (verificada en la base el 2026-10-06) y `min_app_version` está en 0.181. **Hecho en v0.214:** compartir,
+    sacar permisos, invitar, cambiar roles y sacar personas también frenan en la base (migración
+    `20261106120000_version_minima_equipo.sql`). **Falta:** en la base sigue sin versión la papelera de archivos: mandar
+    un archivo a la papelera de Drive lo pide el portero, que no recibe la versión de la app (hay que pasársela y que la
+    pase a la base); en la app la cola de archivos ya se frena sola (no manda nada con una versión menor a la mínima). Un
+    workspace autohospedado necesita CORS que acepte `x-shotdocs-version`. Sin reproducir: como aceptar una invitación
+    también frena, una persona invitada que abre por primera vez el workspace con una versión vieja de la app guardada en
+    el dispositivo no la acepta en ese arranque y podría ver la pantalla de «sin proyectos» hasta que la app se actualice
+    y se vuelva a abrir (`src/services.ts`, donde se aceptan las invitaciones antes de buscar el primer proyecto). Si
+    pasa, que esa pantalla ofrezca actualizar. **Hecho en v0.212** (auditoría, O6): si una
+    instalación falló y después el servidor vuelve a publicar la misma versión que corre, *Update now* recarga en vez de
+    seguir diciendo que falló. Ver `Doc_Sincronizacion.md`, "La versión mínima, el árbol y los comentarios" y "Volver
     después de mucho tiempo sin red".
 18. **Que lo borrado no llegue a quien solo ve la página (D14). Entregas 0 y 1 hechas (v0.104), migración
     `20261010120000_privacidad_borrado.sql` aplicada e interruptor apagado.** Quien no edita baja siempre la última

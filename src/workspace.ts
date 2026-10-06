@@ -101,9 +101,10 @@ const clients = new Map<string, SupabaseClient>();
 
 /**
  * El header con la versión de la app, en cada pedido a la base. La base lo mira al escribir el árbol (`pages`,
- * `workspaces`) y los comentarios: con una versión menor que la mínima del workspace (`min_app_version`) contesta
- * `app_outdated` (supabase/migrations/20261008120000_version_minima_arbol.sql; Docs/Doc_Sincronizacion.md, "La versión
- * mínima, el árbol y los comentarios"). Una base sin esa migración lo ignora.
+ * `workspaces`), los comentarios y, desde 20261106120000_version_minima_equipo.sql, al compartir e invitar: con una
+ * versión menor que la mínima del workspace (`min_app_version`) contesta `app_outdated`
+ * (supabase/migrations/20261008120000_version_minima_arbol.sql; Docs/Doc_Sincronizacion.md, "La versión mínima, el
+ * árbol y los comentarios"). Una base sin esas migraciones lo ignora.
  */
 export const APP_VERSION_HEADER = 'x-shotdocs-version';
 

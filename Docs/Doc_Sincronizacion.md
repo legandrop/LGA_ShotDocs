@@ -556,10 +556,11 @@ arma). Siguen apagados en la base hasta la entrega 3.
   reintentar. "Ocultar" solo descarta rechazos que no dejan nada afuera (renombrar, mover o borrar una
   página que ya está en el servidor, o un proyecto rechazado sin páginas, con sus renombres).
 - El contenido de una página se sube recién cuando la página existe en el servidor.
-- Los ajustes de una rama (`pages.settings`) viajan como cualquier otro cambio del árbol. Cada cambio
-  manda el objeto entero: si dos dispositivos cambian ajustes distintos de la misma página sin red, queda
-  el último que llega al servidor. Son preferencias de vista, no contenido, y se vuelven a elegir en un
-  toque.
+- Los ajustes de una rama (`pages.settings`) viajan como cualquier otro cambio del árbol. Desde v0.214 cada
+  cambio dice qué clave tocó y la base la fusiona con las demás (`patch_page_settings`): si dos dispositivos
+  cambian ajustes distintos de la misma página sin red, quedan los dos; si cambian el mismo, el último que
+  llega. Con una base sin esa función, o con un cambio que dejó en la cola una versión anterior, sube el
+  objeto entero y queda el último (`Doc_Plantillas.md`, sección 8).
 
 ### Topes de largo
 
@@ -935,6 +936,20 @@ mala no frena el texto. Corre al abrir la app, un poco después de cada cambio, 
 segundos con la app a la vista, al volver la red y al volver a la ventana. Al final de cada ciclo arranca,
 sin esperarla, la cola de fotos y videos, que tiene su propio ciclo (ver "Archivos grandes").
 
+**Qué es un rechazo y qué una falla pasajera** (`toRemoteError` en `remote.ts`; lo usan todos los pedidos a la base).
+Sin red, una sesión que se está renovando (401) y los estados 408, 425, 429 y 500 o más son pasajeros: el pedido se
+repite en la vuelta siguiente y, si es contenido, la vuelta se corta ahí. Lo demás es un rechazo definitivo: queda a la
+vista con su motivo y se reintenta a mano o al abrir la app. **Desde v0.214, un "no existe" de una función de la base es
+definitivo aunque llegue con estado 500.** Las funciones lo levantan con el código `P0002` (`page_not_found`,
+`file_not_found`, `comment_not_found`, `link_not_found`, `version_not_found`…, también cuando la sesión dejó de ver la
+página) y PostgREST le pone 400 solo al `P0001`: a los demás códigos `P0…` les pone 500. Con el estado solo, la app lo
+tomaba como una falla de la base: reintentaba para siempre un pedido que nunca iba a pasar, y una página que la persona
+ya no podía editar o ver cortaba la subida o la bajada de las demás en cada vuelta. Ahora manda el código: esa página
+queda rechazada (lo escrito sigue en el dispositivo) y las demás siguen. Un 500 con otro código, o sin código, sigue
+siendo pasajero, igual que el 503 `app_outdated`. El archivo que todavía no llegó al servidor (`file_not_found`) se
+sigue esperando: la cola de fotos y videos lo reconoce por el mensaje, no por esto. El servidor en memoria de un link
+contesta como la base (500 con `P0002`). Pruebas: `src/sync/remoteErrors.test.ts`.
+
 **Cada consulta a la base tiene un tope de tiempo** (`timed` en `remote.ts`, con `abortSignal`; también
 las de los comentarios y las de la cola de fotos y videos). Sin él, una respuesta que no llegaba nunca (una
 red que se corta a mitad de camino) dejaba el ciclo colgado para siempre, con `syncing` prendido y el
@@ -1296,9 +1311,10 @@ los cambios del árbol que una versión anterior dejó rechazados con `app_outda
 otro estado). El servidor en memoria (`src/sync/testing.ts`) sigue la misma regla (`FakeServer.writeVersionSince`,
 `FakeRemote.versionHeader`).
 
-**Qué no frena la base:** compartir e invitar y la papelera de archivos, que van por funciones sin versión; son
-acciones con red y en el momento, no colas. En la app, la cola de archivos sí deja de mandar a la papelera con una
-versión menor a la mínima. Un header alto falso pasa: la mínima es una guarda de compatibilidad, no de seguridad
+**Qué no frena la base:** la papelera de archivos (mandar un archivo a la papelera de Drive), que la pide el portero sin
+la versión de la app; es una acción con red y en el momento, no una cola. En la app, la cola de archivos sí deja de
+mandar a la papelera con una versión menor a la mínima. Compartir e invitar frenan desde v0.214 (abajo).
+Un header alto falso pasa: la mínima es una guarda de compatibilidad, no de seguridad
 (quien puede editar puede escribir igual por la API), y una app vieja de verdad no manda el header.
 
 **Otros workspaces (D-18):** el CORS de la base tiene que aceptar el header `x-shotdocs-version` (ver
@@ -1314,6 +1330,32 @@ cuando Lega la tenga en sus dispositivos, subir `min_app_version` a 0.099 o más
 `private.write_version_allowed` y en la prueba: quien publica pone el número real en los dos (la migración no corre
 con el número provisional) y `src/sync/writeVersion.test.ts` falla si no coincide con la entrada del changelog que nombra la
 migración. No sube `schema_version`: la app no necesita saber si la base la tiene.
+
+### La versión mínima, el equipo y los permisos (v0.214)
+
+Quedaba afuera todo lo que cambia quién ve qué: una versión más vieja que la mínima seguía compartiendo, sacando
+permisos, invitando, revocando invitaciones, cambiando roles y sacando personas. Importa porque esas versiones no hacen
+lo que la mínima exige antes de compartir (subir lo pendiente de la rama, por ejemplo: `Doc_Privacidad_Borrado.md`, 4.2).
+
+`grants`, `members` e `invitations` se escriben solo con funciones `security definer` (`share`, `unshare`,
+`create_invitation`, `revoke_invitation`, `accept_invitations`, `set_member_role`, `remove_member`, y las que llaman a
+`share`: `decide_access_request` y `share_for_mention`). Como con los comentarios, lo mira **un trigger en cada tabla**
+(`private.team_write_version`, migración `20261106120000_version_minima_equipo.sql`) y no el cuerpo de cada función:
+ninguna función cambia, y una función nueva que escriba esas tablas queda frenada sola. La regla es la misma
+(`private.require_session_write_version`): solo los pedidos de una sesión de la app, con el header contra la mínima y,
+sin header, solo con una mínima de 0.099 o más. El rechazo es el mismo 503 `app_outdated`.
+
+- Corre **después** de los permisos de cada función y solo cuando una fila se crea o cambia de verdad: repetir algo ya
+  hecho (el mismo permiso, revocar lo revocado, el mismo rol) y leer siguen andando con cualquier versión.
+- El rechazo deshace todo el pedido, también el reinicio de la rama que `share` y `create_invitation` hacen antes de
+  escribir.
+- `accept_invitations` también frena: quien tiene una invitación y abre una versión vieja entra igual (nunca corta la
+  entrada), la app se actualiza sola y la acepta al volver a abrir.
+- La consola, las migraciones, la clave de servicio y los hooks de login no se frenan.
+- En la app: *Share* y *Members* dicen *This workspace needs a newer version of the app…* en vez del código
+  (`src/ui/teamText.ts`). El servidor en memoria sigue la regla (`FakeServer.teamWriteVersion`).
+- Pruebas: `src/sync/teamWriteVersion.test.ts` y `supabase/tests/version_minima_equipo_permisos.sql`. No sube
+  `schema_version`.
 
 ## Barreras de error (v0.147)
 

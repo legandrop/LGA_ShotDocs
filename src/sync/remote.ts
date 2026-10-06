@@ -14,6 +14,7 @@ import {
   type NewProject,
   type PagePatch,
   type PageRow,
+  type PageSettings,
   type ProjectRow,
   type DueFileRow,
   type MediaFileRow,
@@ -50,7 +51,12 @@ export interface Remote {
   renameProject(id: string, name: string): Promise<void>;
   /** Idempotente: si la página ya existe no hace nada. */
   createPage(page: NewPage): Promise<void>;
-  updatePage(id: string, patch: PagePatch): Promise<void>;
+  /**
+   * Cambia una página. Con `settingsKeys` (las claves de `patch.settings` que el cambio tocó) y nada más que ajustes en
+   * el cambio, el servidor fusiona esas claves con las que tenga (`patch_page_settings`); una base sin la función
+   * reemplaza el objeto entero, como siempre.
+   */
+  updatePage(id: string, patch: PagePatch, settingsKeys?: string[]): Promise<void>;
   /** Los ajustes del workspace; `null` si la base todavía no tiene la tabla (falta migrar). */
   fetchWorkspaceSettings(): Promise<WorkspaceSettings | null>;
   /** Idempotente por `clientUpdateId`. Devuelve el `seq` asignado. */
@@ -463,6 +469,21 @@ export function unlinkIgnored(data: unknown): boolean {
   return data === false;
 }
 
+/**
+ * Lo que se le manda a `patch_page_settings`: de las claves que el cambio tocó, las que quedan con su valor (`set`) y
+ * las que se sacan (`unset`).
+ */
+export function settingsDelta(settings: PageSettings, keys: string[]): { set: Record<string, unknown>; unset: string[] } {
+  const source = settings as Record<string, unknown>;
+  const set: Record<string, unknown> = {};
+  const unset: string[] = [];
+  for (const key of keys) {
+    if (source[key] === undefined) unset.push(key);
+    else set[key] = source[key];
+  }
+  return { set, unset };
+}
+
 export const FILES_BUCKET = 'page-files';
 export const THUMBS_BUCKET = 'thumbs';
 
@@ -484,6 +505,13 @@ export const APP_OUTDATED = 'app_outdated';
 
 // 401 llega cuando la sesión venció y se está renovando: se reintenta.
 const TRANSIENT_STATUS = new Set([0, 401, 408, 425, 429, 500, 502, 503, 504]);
+/**
+ * El código con que las funciones de la base dicen que algo no existe o que la sesión no lo ve (`page_not_found`,
+ * `file_not_found`, `link_not_found`, `comment_not_found`…: `raise … using errcode = 'P0002'`). PostgREST contesta 400
+ * solo al `P0001`; a los demás códigos `P0…` les pone estado 500, como si la base hubiera fallado. Es una respuesta
+ * definitiva de la función, no una falla: reintentar el mismo pedido da lo mismo.
+ */
+const NOT_FOUND_CODE = 'P0002';
 
 export function toRemoteError(
   error: { message: string; code?: string | number; status?: number } | null,
@@ -496,7 +524,9 @@ export function toRemoteError(
   if (httpStatus === 0 && /^(AbortError|TimeoutError)\b/.test(error?.message ?? '')) {
     return new RemoteError(REQUEST_TIMEOUT, false, REQUEST_TIMEOUT, true);
   }
-  const permanent = !(TRANSIENT_STATUS.has(httpStatus) || httpStatus >= 500);
+  // Por el código antes que por el estado: con un 500 pasajero, un "no existe" hacía reintentar para siempre un
+  // pedido que nunca iba a pasar, y cortaba la vuelta de sincronización en esa página.
+  const permanent = code === NOT_FOUND_CODE || !(TRANSIENT_STATUS.has(httpStatus) || httpStatus >= 500);
   return new RemoteError(error?.message ?? `HTTP ${httpStatus}`, permanent, code, httpStatus === 0);
 }
 
@@ -941,9 +971,29 @@ export class SupabaseRemote
     if (error) throw toRemoteError(error, status);
   }
 
-  async updatePage(id: string, patch: PagePatch): Promise<void> {
+  /** Desde cuándo la base no tiene `patch_page_settings`; mientras tanto los ajustes suben enteros, como siempre. */
+  private settingsPatchMissingAt = 0;
+
+  async updatePage(id: string, patch: PagePatch, settingsKeys?: string[]): Promise<void> {
     if (this.settingsMissing && patch.settings !== undefined) {
       throw new RemoteError(t('remote.settingsMissing'), true, UNDEFINED_COLUMN);
+    }
+    // Solo ajustes y se sabe qué claves cambiaron: la base las fusiona con las que tenga, y el cambio de otra clave
+    // hecho a la vez en otro dispositivo no se pisa. Con otra cosa en el cambio (o sin las claves), la fila entera.
+    const delta = settingsKeys?.length && patch.settings && Object.keys(patch).length === 1 ? settingsDelta(patch.settings, settingsKeys) : null;
+    if (delta && Date.now() - this.settingsPatchMissingAt >= 10 * 60_000) {
+      const { data, error, status } = await timed(
+        this.client.rpc('patch_page_settings', { p_page_id: id, p_set: delta.set, p_unset: delta.unset }),
+      );
+      if (error?.code === MISSING_FUNCTION) {
+        // Una base sin la migración: se sigue como antes (el objeto entero) y se vuelve a probar en un rato.
+        this.settingsPatchMissingAt = Date.now();
+      } else {
+        if (error) throw toRemoteError(error, status);
+        // Sin fila tocada (la sesión no ve la página o no la puede editar), la función devuelve null.
+        if (data === null || data === undefined) throw new RemoteError('page_not_found', true, 'P0002');
+        return;
+      }
     }
     const { data, error, status } = await timed(this.client.from('pages').update(patch).eq('id', id).select('id'));
     if (error) throw toRemoteError(error, status);

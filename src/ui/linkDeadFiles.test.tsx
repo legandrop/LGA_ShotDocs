@@ -114,7 +114,7 @@ describe('el link muerto con un archivo sin subir (B1)', () => {
     const { entry } = await deadLinkWith([{ name: 'toma-12.mp4', type: 'video/mp4', bytes }]);
 
     // La app del link vuelve a abrir: el servidor dice que no anda.
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(json(404, { message: 'link_not_found', code: 'P0002', details: null, hint: null }))));
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(json(500, { message: 'link_not_found', code: 'P0002', details: null, hint: null }))));
     const saved: Blob[] = [];
     const created = vi.fn((b: Blob) => {
       saved.push(b);
@@ -148,7 +148,7 @@ describe('el link muerto con un archivo sin subir (B1)', () => {
     ];
     const { entry } = await deadLinkWith(files);
 
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(json(404, { message: 'link_not_found', code: 'P0002', details: null, hint: null }))));
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(json(500, { message: 'link_not_found', code: 'P0002', details: null, hint: null }))));
     const saved: Blob[] = [];
     vi.stubGlobal(
       'URL',

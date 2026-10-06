@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.214 :
+
+Los ajustes de una página subían como objeto entero: si dos dispositivos cambiaban a la vez dos ajustes distintos, quedaba el del último y el otro se perdía (por ejemplo, la marca de la carpeta de reportes). Ahora el cambio dice qué clave tocó y la base la fusiona, con los permisos de la escritura de siempre; sin la función, sube entero como antes. Renombrar una versión con nombre pisaba el anterior sin rastro: la base lo guarda, con quién lo cambió. La versión mínima no frenaba compartir ni invitar: ahora la base rechaza a una app más vieja, y *Share* y *Members* lo dicen en palabras. Y un "no existe" de la base llegaba con estado 500 y la app lo reintentaba para siempre, cortando la sincronización en esa página: ahora es un rechazo definitivo y las demás páginas siguen. Ninguna de las tres migraciones sube `schema_version`.
+
+[Fusionar los ajustes por clave, guardar el nombre anterior de una versión, frenar compartir e invitar con la versión mínima y tratar como definitivo el "no existe" de la base]
+
 v0.213 :
 
 Si una importación se cortaba entre crear una página o guardar un archivo y anotarlo, al seguir quedaba una página vacía o un archivo de más, y una página pendiente mandada a la papelera podía duplicarse: el registro se escribía después de crear. Ahora cada id se anota antes, y crear dos veces con el mismo id es crear una. Una carpeta de Coda vuelta a exportar sin una página ya termina (D306), el registro conserva el detalle de las tres importaciones terminadas más recientes (D307), una carpeta sin id de doc se avisa al elegirla, el resumen dice "1 page" y un error de lectura de un zip recomprimido se reintenta. Al exportar, una importación o un reemplazo en curso se avisan con su causa y sin esperar, un zip cancelado no deja un archivo vacío (D308) y la tarjeta de una carpeta sale sin la nota de subida.

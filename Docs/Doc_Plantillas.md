@@ -71,8 +71,9 @@ número de día y la locación de ayer ya escritos, adentro de la carpeta de rep
 - Una foto pegada en una página de **otro proyecto** se registra como uso ajeno (`link_page_file` devuelve `foreign`,
   `src/media/queue.ts`) y se muestra con la tarjeta de "otro proyecto" (`foreignPlaceholder`), no la foto; en el mismo
   proyecto, la cola registra el uso al ver el archivo en el documento (`reconcileMedia`, también sin abrir la página).
-- `updatePage` sube `settings` **entero** (`remote.ts`, `.update(patch)`): dos cambios de ajustes de la misma página
-  hechos a la vez sin red se pisan y gana el último en llegar (ver 8).
+- `updatePage` subía `settings` **entero** (`remote.ts`, `.update(patch)`): dos cambios de ajustes de la misma página
+  hechos a la vez sin red se pisaban y ganaba el último en llegar. Desde v0.214 sube solo la clave que cambió y la
+  base la fusiona (ver 8).
 
 ## 2. Las tres plantillas de fábrica
 
@@ -359,11 +360,20 @@ caché sin red y su propio editor: es lo que esta propuesta evita.
 - **El contenido** son bloques que conoce la versión mínima: una versión vieja abre una página creada desde una
   plantilla sin borrar nada (prueba con el esquema publicado).
 - **Las claves de `settings`**: una versión vieja no las usa y las conserva al cambiar el formato o el encabezado
-  (`setSetting` copia lo que no conoce) **si ya las recibió**. Pero `updatePage` sube el objeto entero: si una versión
-  vieja (o cualquier dispositivo) cambia el formato de la carpeta a la vez que otro la marca, gana el último y la marca
-  se pierde. No se pierde contenido; lo cubre la recuperación de 3 y 6.2. Más adelante, una función de la base que
-  fusione claves (`settings || patch`), con su migración (roadmap P.23). Ve *Templates* como una carpeta común y no
-  ofrece *New day report*.
+  (`setSetting` copia lo que no conoce) **si ya las recibió**. Una versión anterior a v0.214 sube el objeto entero: si
+  cambia el formato de la carpeta a la vez que otro dispositivo la marca y llega última, la marca se pierde. No se
+  pierde contenido; lo cubre la recuperación de 3 y 6.2. Ve *Templates* como una carpeta común y no ofrece *New day
+  report*.
+- **Desde v0.214 los ajustes se fusionan por clave** (migración `20261104120000_ajustes_fusionar.sql`). `setSetting`
+  anota en el cambio qué clave tocó (`settingsKeys`) y `updatePage` la manda a `patch_page_settings(página, poner,
+  sacar)`, que hace `settings = (settings || poner) - sacar` sobre lo que la fila tenga en ese momento: dos dispositivos
+  que cambian claves distintas a la vez dejan las dos; la misma clave, la del último. Corre con los permisos de quien
+  llama (el mismo `update` de siempre, con sus políticas, sus triggers y la versión mínima) y repetirla deja lo mismo.
+  En el dispositivo, el cambio pendiente se aplica igual sobre lo que baje (`mergeSettings`). El cambio sigue llevando
+  el objeto entero: una base sin la función (`PGRST202`) lo recibe por la tabla, como antes, y se vuelve a probar a los
+  10 minutos. Un cambio que una versión anterior dejó en la cola (sin `settingsKeys`) y los que rehacen la fila entera
+  (recuperar después de restaurar una copia, importar) reemplazan el objeto, como siempre. Pruebas:
+  `src/sync/settingsMerge.test.ts` y `supabase/tests/ajustes_fusionar_permisos.sql`.
 - **`template_id`**: una versión vieja no lo baja ni lo escribe. Una página recuperada de la copia local (el `create`
   de recuperación de `tree.recoverAfterRestore`) vuelve sin `template_id`: es informativo; solo pesa para deducir una
   carpeta de reportes (6.2), y la marca de la carpeta lo cubre.
@@ -574,7 +584,7 @@ colapsado remapeado, los dos casos sin red).
 | Hallazgo | Corrección |
 |---|---|
 | **B1** ⌘⌥N es *Open split view* de Chrome en la Mac | Atajo `Mod-Alt-Shift-n` (⌘⌥⇧N / Ctrl+Alt+Shift+N), con la guarda de AltGr y `code` de `isCommentShortcut` (6.1, 9, 10, entrega 2). |
-| **O1** `settings` se sube entero: dos cambios a la vez borran la marca | Escrito en 1, 8 y 12. La marca se deduce (página adentro de *Templates*; carpeta con reportes) y se vuelve a escribir al crear; *Stop using* explícito gana (3, 6.2). Fusión de claves en la base: roadmap P.23. |
+| **O1** `settings` se sube entero: dos cambios a la vez borran la marca | Escrito en 1, 8 y 12. La marca se deduce (página adentro de *Templates*; carpeta con reportes) y se vuelve a escribir al crear; *Stop using* explícito gana (3, 6.2). Fusión de claves en la base: hecha en v0.214 (sección 8). |
 | **O2** Plantilla o reporte anterior a medio bajar | Control de `update_seq` contra lo bajado: la plantilla no se copia a medias (aviso, *Wait*, *Use built-in*); el reporte anterior se usa con aviso (4.2, 4.3, 6.4, 10). |
 | **O3** §1 decía que la foto de otro proyecto se ve rota y no se registra | Corregido: se registra como uso ajeno y muestra la tarjeta de "otro proyecto". Regla de PL10 sin red, con `sdfile://`, carpetas y tarjetas de Drive (4.2). |
 | **O4** La plantilla de la carpeta que esa persona no ve | La de fábrica con aviso, sin escribir `dayReports.template` (6.2, PL5). |

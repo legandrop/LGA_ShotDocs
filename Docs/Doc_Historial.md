@@ -1127,10 +1127,15 @@ de las entregas 2 y 3:
   mira. Otra elige la versión actual y hace llegar en un mismo lote una fila que la agranda y otra que abre una sesión
   nueva: la elegida sigue elegida (sacar la búsqueda por la sesión que contiene el `seq` la hace fallar).
 
-**Lo que sigue anotado:** O3, renombrar pisa el nombre anterior sin rastro. Hacerlo desde la app como «sacar + nombrar»
-son dos pedidos (si el segundo falla, el nombre se pierde) y el nombre nuevo pasaría a ser de quien renombra (cambia quién
-lo puede tocar); hacerlo bien es una función nueva en la base, o sea una migración. No es contenido de la página: queda
-en el roadmap. También siguen la marca que se pierde si la app se cierra antes de que la restauración suba y no se abre
+**O3, hecho en v0.214:** renombrar ya no pisa el nombre anterior sin rastro. La migración
+`20261105120000_versiones_renombrar_rastro.sql` agrega `page_version_labels` (el nombre que tenía, quién lo cambió y
+cuándo), que escribe un trigger de `page_versions` cada vez que cambia `label`. `rename_page_version` no cambia: la
+versión conserva su id y sigue siendo de quien la nombró (no cambia quién la puede tocar), y la app publicada sigue
+igual. La tabla no se lee desde la API ni se muestra en la app: queda en la base, como el texto de un comentario
+borrado. Prueba: `supabase/tests/versiones_renombrar_rastro_permisos.sql`. Se descartó «sacar + nombrar» desde la app:
+son dos pedidos (si el segundo falla, el nombre se pierde) y el nombre nuevo pasaría a ser de quien renombra.
+
+**Lo que sigue anotado:** siguen la marca que se pierde si la app se cierra antes de que la restauración suba y no se abre
 ese historial en una semana, y medir en el iPhone.
 
 **Pruebas nuevas:** `historyRestore.test.ts` (2: la versión con ids repetidos, arriba y en los hijos; `onUndone` con

@@ -198,8 +198,24 @@ function applyOp(pages: Map<string, PageRow>, projects: Map<string, ProjectRow>,
     });
   } else {
     const current = pages.get(op.id);
-    if (current) pages.set(op.id, { ...current, ...op.patch, updated_at: now });
+    if (!current) return;
+    const next = { ...current, ...op.patch, updated_at: now };
+    // Un cambio de ajustes por clave se aplica sobre los que tenga la fila: los de otra clave que llegaron mientras
+    // esperaba en la cola siguen a la vista, como van a quedar en el servidor.
+    if (op.settingsKeys && op.patch.settings) next.settings = mergeSettings(current.settings, op.patch.settings, op.settingsKeys);
+    pages.set(op.id, next);
   }
+}
+
+/** `current` con las claves `keys` como están en `changed`: la que no está ahí se saca. Lo mismo que hace la base. */
+export function mergeSettings(current: PageSettings | undefined, changed: PageSettings, keys: string[]): PageSettings {
+  const merged: Record<string, unknown> = { ...current };
+  const source = changed as Record<string, unknown>;
+  for (const key of keys) {
+    if (source[key] === undefined) delete merged[key];
+    else merged[key] = source[key];
+  }
+  return merged as PageSettings;
 }
 
 /**
@@ -653,7 +669,7 @@ export class PageTree {
     if (value === undefined) delete settings[key];
     else settings[key] = value;
     if (JSON.stringify(settings) === JSON.stringify(current.settings ?? {})) return;
-    await this.enqueue({ kind: 'update', id, patch: { settings } });
+    await this.enqueue({ kind: 'update', id, patch: { settings }, settingsKeys: [key] });
   }
 
   async setPatch(id: string, patch: PagePatch): Promise<void> {

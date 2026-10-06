@@ -59,7 +59,7 @@ import { MentionsInbox, type InboxResponse, type MentionCandidate, type Mentions
 import type { AccessRequestsRemote } from './accessRequests';
 import { CLEAN_SCHEMA_VERSION } from './clean';
 import { normalizeStructure, seedIfEmpty } from './structure';
-import { PageTree } from './tree';
+import { mergeSettings, PageTree } from './tree';
 import { checkPageLengths, checkProjectName } from './lengthChecks';
 import {
   RemoteError,
@@ -795,6 +795,11 @@ export class FakeServer {
    * una mínima de este número o más. `null` simula una base sin esa migración (el header se ignora).
    */
   writeVersionSince: number | null = WRITE_VERSION_SINCE;
+  /**
+   * La versión mínima frena también compartir e invitar (20261106120000_version_minima_equipo.sql): los triggers de
+   * `grants`, `members` e `invitations`, con la misma regla. Apagado, como una base sin esa migración.
+   */
+  teamWriteVersion = true;
   /** `files`, con el proyecto (sale de la página), el tamaño y quién lo registró. */
   readonly mediaFiles = new Map<
     string,
@@ -857,6 +862,13 @@ export class FakeServer {
   readonly loseCommentResponse = new Set<'add' | 'edit' | 'delete' | 'resolve' | 'import' | 'mentions'>();
   /** Funciones de comentarios que fallan una vez como un 500, por el comienzo de su nombre. */
   readonly failCommentOnce = new Set<string>();
+  /**
+   * La base tiene `patch_page_settings` (20261104120000_ajustes_fusionar.sql): un cambio de ajustes por clave se fusiona
+   * con lo que tenga la fila. Apagado, como una base sin la migración: el cliente manda el objeto entero y reemplaza.
+   */
+  settingsPatch = true;
+  /** Los cambios de ajustes que llegaron con sus claves, y si la base los fusionó. */
+  readonly settingsPatchCalls: { id: string; keys: string[]; merged: boolean }[] = [];
   /** La base tiene las menciones (versión 15, 20261015120000_menciones.sql). */
   mentionsEnabled = false;
   /** La entrega 2: filas sin acceso y `share_for_mention` (versión 16, 20261016120000_menciones_e2.sql). */
@@ -1706,6 +1718,15 @@ export class FakeRemote
     if (!allowed) throw new RemoteError('app_outdated', false, 'P0001');
   }
 
+  /**
+   * Los triggers de `grants`, `members` e `invitations` (`private.team_write_version`): justo antes de que una función del
+   * equipo cree o cambie una fila, después de sus permisos. Lo que no escribe nada (repetir algo ya hecho) no pasa por
+   * acá. Quien llama lo pone antes de cualquier cambio: en la base, el rechazo deshace todo el pedido.
+   */
+  private checkTeamWriteVersion(): void {
+    if (this.server.teamWriteVersion) this.checkWriteVersion();
+  }
+
   /** Como el cliente de verdad: los snapshots prendidos según los últimos ajustes leídos (`SupabaseRemote.snapshotsOn`). */
   private snapshotsOn = false;
   /** Como el cliente de verdad: cuándo vio que faltaba `pull_page_content`. */
@@ -1985,10 +2006,17 @@ export class FakeRemote
     });
   }
 
-  async updatePage(id: string, patch: PagePatch): Promise<void> {
+  async updatePage(id: string, patch: PagePatch, settingsKeys?: string[]): Promise<void> {
     this.server.check();
     const page = this.server.pages.get(id);
     if (!page || this.server.pageInDeletedProject(id)) throw new RemoteError('page_not_found', true, 'P0002');
+    // `patch_page_settings`: con las claves que tocó el cambio (y solo ajustes en él), la base las fusiona con las que
+    // tenga la fila, con los mismos permisos y la misma versión que el update de siempre. Sin la función (una base sin
+    // la migración), el cliente manda el objeto entero.
+    if (settingsKeys?.length && patch.settings && Object.keys(patch).length === 1) {
+      this.server.settingsPatchCalls.push({ id, keys: [...settingsKeys], merged: this.server.settingsPatch });
+      if (this.server.settingsPatch) patch = { settings: mergeSettings(page.settings, patch.settings, settingsKeys) };
+    }
     if (this.team) {
       const uid = this.userId;
       // La política de update pide 3: sin eso, la fila no se ve y el update no toca nada.
@@ -2605,6 +2633,7 @@ export class FakeRemote
     let n = 0;
     for (const inv of this.server.invitations) {
       if (inv.used_at || inv.revoked_at || inv.email !== this.email) continue;
+      this.checkTeamWriteVersion();
       const cur = this.server.members.get(uid);
       if (!cur) this.server.members.set(uid, { email: this.email, role: inv.role, removed_at: null });
       else if (cur.removed_at) {
@@ -2644,16 +2673,19 @@ export class FakeRemote
       const level = 'project_id' in g ? this.server.projectLevel(this.userId, g.project_id) : this.server.pageLevel(this.userId, g.page_id);
       if (level < 4) throw this.denied('grant_not_allowed');
     }
+    const em = email.trim().toLowerCase();
+    const live = this.server.invitations.find((i) => i.email === em && !i.used_at && !i.revoked_at);
+    if (live && (live.invited_by ?? this.server.ownerId) !== this.userId) throw new RemoteError('invitation_exists', true, 'P0001');
+    // La invitación se crea o se cambia siempre (como mínimo, su vencimiento): el rechazo por versión deshace también el
+    // reinicio de abajo.
+    this.checkTeamWriteVersion();
     // Al invitar (no al aceptar): a un invitado, o con Ver o Comentar, lo alcanzado empieza de una base nueva.
     for (const g of grants) {
       if (role === 'guest' || g.level === 'view' || g.level === 'comment') {
         this.server.cleanReset('project_id' in g ? { projectId: g.project_id } : { pageId: g.page_id });
       }
     }
-    const em = email.trim().toLowerCase();
-    const live = this.server.invitations.find((i) => i.email === em && !i.used_at && !i.revoked_at);
     if (live) {
-      if ((live.invited_by ?? this.server.ownerId) !== this.userId) throw new RemoteError('invitation_exists', true, 'P0001');
       if (ROLE_RANK[role] > ROLE_RANK[live.role]) live.role = role;
       live.grants.push(...grants);
       return live.id;
@@ -2690,7 +2722,9 @@ export class FakeRemote
       throw new RemoteError('invitation_not_found', true, 'P0002');
     }
     if (inv.used_at) throw new RemoteError('invitation_used', true, 'P0001');
-    inv.revoked_at ??= new Date().toISOString();
+    if (inv.revoked_at) return;
+    this.checkTeamWriteVersion();
+    inv.revoked_at = new Date().toISOString();
   }
 
   async setMemberRole(userId: string, role: Exclude<Role, 'owner'>): Promise<void> {
@@ -2701,6 +2735,8 @@ export class FakeRemote
     if (!cur || cur.removed_at) throw new RemoteError('member_not_found', true, 'P0002');
     if (cur.role === 'owner') throw this.denied('owner_cannot_change');
     if ((cur.role === 'admin' || role === 'admin') && mine !== 'owner') throw this.denied('not_allowed');
+    if (cur.role === role) return;
+    this.checkTeamWriteVersion();
     cur.role = role;
   }
 
@@ -2712,6 +2748,8 @@ export class FakeRemote
     if (!cur) throw new RemoteError('member_not_found', true, 'P0002');
     if (cur.role === 'owner') throw this.denied('owner_cannot_change');
     if (cur.role === 'admin' && mine !== 'owner') throw this.denied('not_allowed');
+    // A alguien ya sacado la base no le toca nada.
+    if (!cur.removed_at) this.checkTeamWriteVersion();
     return this.server.removeMember(userId);
   }
 
@@ -2719,6 +2757,16 @@ export class FakeRemote
     this.server.check();
     if (!this.canShare(target)) throw this.denied('not_allowed');
     if (!this.server.role(userId)) throw new RemoteError('member_not_found', true, 'P0002');
+    // El mismo permiso dado por la misma persona no cambia la fila: no pasa por el trigger.
+    const same = this.server.grants.find(
+      (g) =>
+        g.user_id === userId &&
+        g.project_id === ('projectId' in target ? target.projectId : null) &&
+        g.page_id === ('pageId' in target ? target.pageId : null) &&
+        g.level === level &&
+        (g.granted_by ?? this.userId) === this.userId,
+    );
+    if (!same) this.checkTeamWriteVersion();
     const id = this.server.grant(userId, target, level);
     // Con Ver, Comentar o a un invitado, lo alcanzado empieza de una base nueva.
     if (level === 'view' || level === 'comment' || this.server.role(userId) === 'guest') this.server.cleanReset(target);
@@ -2732,6 +2780,7 @@ export class FakeRemote
     if (!g || !this.canShare(g.project_id ? { projectId: g.project_id } : { pageId: g.page_id! })) {
       throw new RemoteError('grant_not_found', true, 'P0002');
     }
+    this.checkTeamWriteVersion();
     this.server.grants.splice(at, 1);
   }
 

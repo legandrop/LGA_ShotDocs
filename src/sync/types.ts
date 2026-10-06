@@ -154,7 +154,19 @@ export interface NewProject {
  */
 export type TreeOp =
   | { kind: 'create'; page: NewPage }
-  | { kind: 'update'; id: string; patch: PagePatch }
+  | {
+      kind: 'update';
+      id: string;
+      patch: PagePatch;
+      /**
+       * Las claves de `patch.settings` que este cambio puso o sacó (`PageTree.setSetting`). Con ellas el servidor
+       * fusiona esas claves con lo que tenga (`patch_page_settings`) en vez de reemplazar el objeto entero, y el cambio de
+       * otra clave que llegó desde otro dispositivo no se pisa. Sin el campo (un cambio guardado por una versión anterior,
+       * o uno que rehace la fila entera): `patch.settings` reemplaza todo, como siempre. `patch.settings` va siempre
+       * completo, para una base que todavía no tiene la función.
+       */
+      settingsKeys?: string[];
+    }
   | { kind: 'createProject'; project: NewProject }
   | { kind: 'renameProject'; id: string; name: string };
 

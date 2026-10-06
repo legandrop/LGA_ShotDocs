@@ -1161,7 +1161,7 @@ export class SyncEngine {
       case 'create':
         return this.remote.createPage(op.page);
       case 'update':
-        return this.remote.updatePage(op.id, op.patch);
+        return this.remote.updatePage(op.id, op.patch, op.settingsKeys);
       case 'createProject':
         return this.remote.createProject(op.project);
       case 'renameProject':

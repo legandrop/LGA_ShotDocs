@@ -29,6 +29,8 @@ const MESSAGES: Record<string, Key> = {
   request_not_found: 'teamError.requestNotFound',
   page_invalid: 'teamError.pageInvalid',
   decision_invalid: 'teamError.decisionInvalid',
+  // La base frena compartir e invitar a una versión más vieja que la mínima del workspace.
+  app_outdated: 'common.appOutdated',
 };
 
 const known = (message: string): string | null => (Object.hasOwn(MESSAGES, message) ? t(MESSAGES[message]) : null);
