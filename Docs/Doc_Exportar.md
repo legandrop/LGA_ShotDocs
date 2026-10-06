@@ -1,5 +1,9 @@
 # Exportar una página o un proyecto entero (P.22)
 
+## Títulos largos y cierre de la ventana
+
+La cabecera conserva el título completo y corta entre caracteres si no tiene espacios. Cuando el nombre del ZIP y las acciones no entran, pasan a otro renglón para mantener *Close* dentro del diálogo. En un teléfono una ventana alta mantiene su desplazamiento vertical habitual. No cambia la preparación del archivo, la cancelación ni los dispositivos que admiten ZIP.
+
 ## Guardado local antes del PDF (LF21, entrega parcial)
 
 El ZIP también prepara el guardado local antes de escribir: espera el título y la transferencia durable de su sobrante, dentro de la misma barrera de ocho segundos. Relee el título, las páginas elegidas, sus hojas y los permisos locales; si cambió su identidad o estructura, pide preparar el archivo de nuevo. El selector se abre en el clic, pero el escritor y la carpeta nueva esperan esta validación. El nombre elegido en el selector se respeta; el contenido y las rutas internas usan el título recién guardado. Un rechazo conserva el borrador y permite reintentar. Cancelar invalida este archivo y conserva las escrituras aceptadas. Un resultado de otra página o workspace no ofrece una descarga tardía. En carpeta pueden quedar archivos parciales ya escritos, como antes; no hay rollback de lo confirmado por el destino. El formato del archivo y la reimportación conservan su contrato.

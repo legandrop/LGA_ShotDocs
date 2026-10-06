@@ -6751,6 +6751,10 @@ ins.replace-new {
   margin: 0;
 }
 
+.export-dialog > h2 {
+  overflow-wrap: anywhere;
+}
+
 .export-what {
   display: flex;
   flex-direction: column;
@@ -6857,6 +6861,7 @@ ins.replace-new {
 
 .export-dialog .modal-actions {
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .offline-rows {

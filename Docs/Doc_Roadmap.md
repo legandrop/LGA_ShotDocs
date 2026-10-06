@@ -1,5 +1,7 @@
 # Roadmap
 
+**Ventana Export v0.205:** el título completo se ajusta al ancho y las acciones pasan a otro renglón cuando el nombre del ZIP no deja sitio para *Close*. El cierre queda accesible; selectores del sistema, dispositivos y los demás recorridos de exportación mantienen sus pendientes.
+
 **LF21, tramo de guardado local v0.199:** preparación explícita del título y barrera de ocho segundos para *Reload* de avisos y cambio/unión/creación de workspace desde uno abierto. En v0.200 el título completo se conserva hasta confirmar su encabezado y sobrante en el dispositivo; un rechazo mantiene el borrador para reintentar en la misma sesión. En v0.202 el PDF prepara esas escrituras y espera la transferencia durable del sobrante antes de tomar su copia; las partes siguientes comprueban continuidad del plan y conservan el libro anterior si cambió. El ZIP incorpora esa barrera antes de abrir el escritor y toma títulos, documentos y selección actuales, invalidando resultados tardíos. Sigue parcial: quedan los enlaces entre workspaces y la reimportación. Auth y salidas externas conservan sus recorridos.
 
 Lo que falta, por importancia. El orden de trabajo lo manda `Plan_Workspaces.md` (secciones 10 y 11); las

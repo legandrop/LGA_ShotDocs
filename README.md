@@ -2,6 +2,8 @@
 
 ZIP export saves pending local changes, including the current title and text moved from a long title into the page, before writing the archive. Changed page selections require preparing it again; cancelled or outdated attempts cannot offer a late download. The archive format stays compatible with existing imports.
 
+Long export titles wrap within the dialog, and its file name and action buttons use another row when needed so Close stays reachable.
+
 Documentation for VFX work, in the spirit of Notion or Coda but much simpler. Write the VFX
 pre-production notes for each scene, fill in the on-set reports during the shoot, and keep each show in
 its own project: a tree of pages you own.

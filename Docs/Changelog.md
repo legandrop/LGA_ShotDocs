@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.205 :
+
+Un título de exportación largo y sin espacios podía superar el ancho de la ventana. En el ZIP preparado, el nombre del archivo y las acciones también podían empujar Cerrar fuera del diálogo, impidiendo usarlo con un clic normal. La cabecera ahora corta el texto entre caracteres cuando hace falta y la fila de acciones pasa a otro renglón si no entra. El título completo y los controles permanecen en el diálogo, sin ocultar su contenido ni cambiar la preparación, los archivos o la cancelación. Se comprobaron títulos cortos y de quinientos caracteres, inglés y castellano, temas claro y oscuro y tamaños de computadora y teléfono. Las ventanas altas conservan su desplazamiento vertical habitual; la salida ZIP sigue limitada a los dispositivos que ya la admitían.
+
+[Mantener visibles títulos y cierres largos al exportar]
+
 v0.204 :
 
 El zip podía abrir el escritor del destino y copiar un título anterior, o leer una página antes de guardar el sobrante de un título largo. Ahora prepara las escrituras locales con la barrera de ocho segundos existente y espera la transferencia durable al documento. Después relee títulos, páginas, hojas, permisos y estimación de peso; un cambio estructural pide preparar de nuevo. El selector sigue dentro del clic, pero el escritor y la carpeta nueva se abren después de validar. Cancelar conserva lo ya aceptado e invalida avances y resultados tardíos; el botón de guardar comprueba también la página y el workspace actuales. Descartar un archivo elegido aborta el escritor sin borrarlo. Las carpetas conservan los archivos parciales ya confirmados. No cambia el formato del archivo ni el contrato de reimportación.
