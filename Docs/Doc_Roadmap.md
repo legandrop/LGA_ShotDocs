@@ -1031,10 +1031,15 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    que se quedaba con lo de antes y deshacía cambios de otros; dos personas en el mismo párrafo vacío), la
    semilla con un texto vacío, la reparación de bloques con dos contenidos o dos grupos de hijos, y volver a
    dibujar el editor si igual falla. La prueba al azar por el camino de la app pasó de 26 de cada 100 corridas
-   con pérdidas a 0 de 500. Ver `Doc_Colaboracion.md`. `min_app_version` subió a 0.052 al publicar. **Falta:** **evaluar `@blocknote/core/y`** (la integración nueva de BlockNote sobre y-prosemirror 2 y Yjs 14),
-   que compara bloques por identidad y podría resolver parte de lo que sigue pasando cuando uno cambia el
-   tipo, la sangría o la posición de un renglón mientras otro escribe en él; cambia el formato de lo guardado,
-   así que pide un plan de migración y convivencia de versiones.
+   con pérdidas a 0 de 500. Ver `Doc_Colaboracion.md`. `min_app_version` subió a 0.052 al publicar.
+   **`@blocknote/core/y` (y-prosemirror 2, Yjs 14): evaluado en v0.225, ver `Doc_Evaluacion_BlockNote_Y.md`; la
+   decisión es de Lega (D330 y D331, pendientes).** Lo medido: no resuelve lo que se esperaba (escribir en un renglón
+   mientras otro le cambia el tipo, lo sangra o lo junta pierde lo escrito igual que hoy, 300 de 300 agendas; moverlo,
+   más que hoy), Yjs 14 trae los mismos tres errores del deshacer que arregla el parche del repo, sus librerías son
+   todas versiones previas y pasar a ella obliga a convertir cada página guardada (las dos formas no conviven: el
+   editor nuevo vacía una página de hoy). Recomendación: esperar a que Yjs 14 e y-prosemirror 2 salgan estables y
+   volver a correr el banco, que quedó armado. **Falta (si Lega lo aprueba, D331):** mandar a Yjs los casos mínimos de
+   B.21, B.22 y B.26.
 
 11. **Subidas que se traban: lo que quedó de v0.068** (`Doc_Portero.md`, "Subidas que se traban"). La app
    corta los pedidos al portero que dejan de moverse (y, desde v0.070, los de la miniatura a Storage) y

@@ -245,6 +245,10 @@ formato de lo guardado (Yjs 14), así que no es una actualización común: hay q
 páginas guardadas, la convivencia con versiones viejas (`min_app_version`) y volver a pasar todas estas pruebas.
 Está en el roadmap (B.10).
 
+**Evaluado en v0.225 (`Doc_Evaluacion_BlockNote_Y.md`).** Medido con dos editores: no resuelve la tabla de arriba
+(el cambio de tipo, la sangría y juntar siguen borrando el bloque y lo que otro escribía en él), y lo que cambia no
+es el formato binario de Yjs sino dónde vive el texto adentro de cada bloque. La decisión es de Lega (D330).
+
 ## La semilla (v0.052)
 
 La raíz de la semilla es **la misma de siempre** (versión 1, v0.008), byte por byte: mismo autor de Yjs (sale del

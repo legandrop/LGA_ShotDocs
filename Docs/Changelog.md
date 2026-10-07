@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.225 :
+
+Faltaba evaluar `@blocknote/core/y` (roadmap B.10), la integración de BlockNote sobre y-prosemirror 2 y Yjs 14 que se esperaba que evitara perder lo escrito cuando otro cambia el tipo, la sangría o la posición de ese renglón. Se midió fuera del repo con dos editores y las mismas agendas contra el binding de hoy: no lo arregla (300 de 300 agendas en los dos; al mover, 293 contra 173), Yjs 14 trae los tres errores de deshacer que corrige el parche propio, sus librerías son todas versiones previas y BlockNote la usa con un parche que no publica. Los bytes de Yjs no cambian; cambia dónde vive el texto de cada bloque, y las dos formas no conviven en una página. Se suma `Doc_Evaluacion_BlockNote_Y.md` con lo medido, lo que habría que rehacer, el esquema de migración y la recomendación de esperar; quedan D330 y D331 para Lega. Sin cambios de código.
+
+[Evaluar @blocknote/core/y contra el binding de hoy: documento con lo medido, recomendación de esperar y decisiones pendientes]
+
 v0.224 :
 
 Las listas largas que la app pide daban por última "una página con menos de 1000 filas". Con un tope de filas por pedido menor el árbol, los proyectos, los comentarios o los permisos llegaban cortados sin aviso, y el motor toma lo que no vino por borrado. Ahora se piden por clave, con el orden escrito y hasta el total que manda la API: los mismos pedidos que antes en una sincronización, sin migración. El equipo, los accesos, los proyectos borrados y los pesos dan un error si la API los recortó. Además: la verificación del historial que habilita la papelera de archivos recorre hasta el final en vez de fiarse del largo del lote; la vista de compatibilidad de los comentarios pide lo importado y las menciones; un nombre largo ya no ensancha el comentario; y los pedidos a la Management API tienen tope de tiempo.

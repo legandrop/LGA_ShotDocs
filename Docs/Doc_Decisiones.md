@@ -389,6 +389,17 @@ cosa.
 
 ## Abiertas
 
+- **D330 · Migrar el editor a `@blocknote/core/y` (Yjs 14, y-prosemirror 2)** (pendiente; planteada el 2026-10-07 con
+  la evaluación de v0.225, `Doc_Evaluacion_BlockNote_Y.md`). Opción indicada: **esperar** y volver a medir cuando se
+  cumplan tres condiciones (Yjs 14 e y-prosemirror 2 publicadas como estables; BlockNote la documenta, la usa sin
+  parche propio y trae deshacer; Yjs 14 pasa los casos mínimos del deshacer o el parche del repo está rehecho). Lo
+  medido hoy: no arregla lo que se esperaba, empeora el deshacer y el tiempo por tecla, y obliga a convertir todas las
+  páginas guardadas sin vuelta atrás simple. Las otras opciones: empezar ahora por lo que no toca lo guardado (las
+  pruebas con los dos bindings, el parche del deshacer sobre Yjs 14 y una capa propia sobre Yjs), o descartar B.10.
+- **D331 · Mandar a Yjs los casos mínimos del deshacer (B.21, B.22 y B.26)** (pendiente; 2026-10-07). Es un reporte
+  público con la cuenta de Lega en el repositorio de Yjs. Opción indicada: sí: Yjs 14 tiene los mismos tres errores
+  (`Doc_Evaluacion_BlockNote_Y.md`, 3.3) y, si los arreglan ahí, el parche del repo deja de hacer falta el día que se
+  migre. La otra opción: no reportar y seguir con el parche propio.
 - **D-06 · Dónde se guarda la clave del asistente.** Opción indicada: solo en el dispositivo, sin pasar
   por el servidor; la app llama directo al proveedor. Es lo más privado, pero hay que cargarla en cada
   dispositivo. La alternativa es guardarla cifrada en Supabase (Vault) y llamar al proveedor desde una
