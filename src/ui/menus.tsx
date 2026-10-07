@@ -44,7 +44,7 @@ import { openSaveTemplate, useSaveTemplateOffer } from '../templates/ownTemplate
 import { offlineSupported, openOffline, openStorage } from './SpaceHost';
 import { openExport } from './ExportHost';
 import { openHelp } from '../help/helpUi';
-import { isPhoneLayout } from './commentsUi';
+import { draftCount, isPhoneLayout } from './commentsUi';
 import { collapseControlFor } from './collapseControl';
 import { pageCameraFor } from './camera';
 import { notify } from './notice';
@@ -478,12 +478,16 @@ export function accountMaxHeight(position: MenuPosition): string | undefined {
 /**
  * La pregunta antes de cerrar la sesión con algo que solo está en este dispositivo. `pending`: lo que falta subir.
  * `rejected`: lo que el servidor rechazó (cambios del árbol, archivos, comentarios) y las ediciones de comentarios
- * apartadas por un conflicto. Solo con lo pendiente, el texto de siempre.
+ * apartadas por un conflicto. `writing`: los cuadros de comentarios con algo escrito sin mandar, que al salir se
+ * pierden (viven solo en su cuadro). Solo con lo pendiente, el texto de siempre.
  */
-export function signOutQuestion(pending: number, rejected: number): string {
-  if (rejected === 0) return t('account.signOutPending', { count: pending });
-  const parts = [t('account.signOutRejected', { count: rejected }), t('account.signOutAnyway')];
-  if (pending > 0) parts.unshift(t('account.signOutNotUploaded', { count: pending }));
+export function signOutQuestion(pending: number, rejected: number, writing = 0): string {
+  if (rejected === 0 && writing === 0) return t('account.signOutPending', { count: pending });
+  const parts: string[] = [];
+  if (pending > 0) parts.push(t('account.signOutNotUploaded', { count: pending }));
+  if (rejected > 0) parts.push(t('account.signOutRejected', { count: rejected }));
+  if (writing > 0) parts.push(t('comments.draftUnsent', { count: writing }));
+  parts.push(t('account.signOutAnyway'));
   return parts.join(' ');
 }
 
@@ -525,7 +529,10 @@ export function AccountMenu({
     // También lo que el servidor rechazó y las ediciones de comentarios que esperan decisión (cuentan con lo
     // rechazado): quedan en este dispositivo, y la persona se entera antes de salir.
     const rejected = status.failedOps + status.failedMedia + status.failedComments;
-    if ((pending > 0 || rejected > 0) && !confirm(signOutQuestion(pending, rejected))) return;
+    // Y un comentario a medio escribir: vive solo en su cuadro y al salir se pierde sin dónde avisarlo (la pantalla que
+    // muestra los avisos se desmonta). Va en la misma pregunta, una sola.
+    const writing = draftCount();
+    if ((pending > 0 || rejected > 0 || writing > 0) && !confirm(signOutQuestion(pending, rejected, writing))) return;
     // Con una clave del asistente o de *Voice* guardada en este dispositivo, la ventana de salir ofrece olvidarla
     // (Doc_Asistente.md, 4); con notas de voz sin ubicar, las cuenta y ofrece borrarlas (Doc_Dictado.md, 8).
     const wsKey = workspace.config.localKey || workspace.config.url;

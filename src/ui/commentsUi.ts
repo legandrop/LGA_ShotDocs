@@ -75,19 +75,41 @@ export function setDraft(key: symbol, dirty: boolean, draft: Draft = { text: '' 
   else if (drafts.delete(key)) draftRevision++;
 }
 
+/** Si ese cuadro (por la clave con la que se anota) tiene algo escrito sin mandar. */
+export function hasDraft(key: symbol): boolean {
+  return drafts.has(key);
+}
+
+// Los cuadros con algo escrito que se cerraron solos en el mismo momento (al cambiar de página se desmontan todos
+// juntos): van en un solo aviso. La pantalla muestra un aviso a la vez, y con uno por cuadro el texto del primero ya no
+// se podía copiar.
+let closedTexts: string[] = [];
+
+function announceClosed(): void {
+  const texts = closedTexts;
+  closedTexts = [];
+  const many = texts.length > 1;
+  notify(many ? t('comments.draftsClosed', { count: texts.length }) : t('comments.draftClosed'), {
+    label: many ? t('comments.copyAllTexts', { count: texts.length }) : t('sync.copyText'),
+    // Todos, en el orden en que estaban en el panel, separados por una línea en blanco.
+    run: () => void copyText(texts.join('\n\n')),
+  });
+}
+
 /**
  * El cuadro se desmontó. `byPerson`: lo cerró quien escribía (mandó, canceló, o confirmó descartarlo). Si no fue así y
- * tenía algo escrito que nadie descartó (se cambió de página, la página dejó de verse, se pidió otra cosa al panel),
- * lo tipeado no se va en silencio: un aviso lo dice y lo deja copiar mientras está a la vista.
+ * tenía algo escrito que nadie descartó (se cambió de página, la página dejó de verse), lo tipeado no se va en
+ * silencio: un aviso lo dice y lo deja copiar mientras está a la vista. El aviso sale al terminar la tanda en curso,
+ * uno solo por todos los cuadros que se cerraron juntos.
  */
 export function closeDraft(key: symbol, byPerson: boolean): void {
   const draft = drafts.get(key);
   if (!draft) return;
   drafts.delete(key);
   draftRevision++;
-  if (!byPerson && draft.text.trim()) {
-    notify(t('comments.draftClosed'), { label: t('sync.copyText'), run: () => void copyText(draft.text) });
-  }
+  if (byPerson || !draft.text.trim()) return;
+  closedTexts.push(draft.text);
+  if (closedTexts.length === 1) queueMicrotask(announceClosed);
 }
 
 /** La confirmación de descarte vale sólo para la revisión que se vio. */
@@ -95,6 +117,11 @@ export function getDraftRevision(): number { return draftRevision; }
 
 export function hasDrafts(): boolean {
   return drafts.size > 0;
+}
+
+/** Cuántos cuadros tienen algo escrito sin mandar (para decirlo antes de salir de la cuenta o de quitar el workspace). */
+export function draftCount(): number {
+  return drafts.size;
 }
 
 /** La pregunta antes de descartar lo escrito a medias: la del cuadro que no puede guardar, si hay alguno. */

@@ -737,7 +737,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'comments',
     title: 'help.commentBoxKept.title',
     text: 'help.commentBoxKept.text',
-    words: ['resolved', 'resuelto', 'deleted', 'borrado', 'copy text', 'copiar el texto', 'half written', 'a medio escribir', 'lost', 'perder', 'reply', 'respuesta'],
+    words: ['resolved', 'resuelto', 'deleted', 'borrado', 'copy text', 'copiar el texto', 'half written', 'a medio escribir', 'lost', 'perder', 'reply', 'respuesta', 'sign out', 'cerrar sesión'],
     since: COMMENT_BOX_KEPT,
   },
 

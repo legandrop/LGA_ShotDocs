@@ -97,18 +97,24 @@ async function world() {
   document.body.append(host);
   const root = createRoot(host);
   roots.push(root);
-  await act(async () => root.render(<ServicesContext.Provider value={services(phone, server.ownerId)}><CommentsPanel pageId={page} /></ServicesContext.Provider>));
+  const value = services(phone, server.ownerId);
+  /** Dibuja el panel de esa página en el mismo lugar (el mismo `CommentsPanel`, con otra página). */
+  const show = (pageId: string) => act(async () => root.render(<ServicesContext.Provider value={value}><CommentsPanel pageId={pageId} /></ServicesContext.Provider>));
+  await show(page);
   await act(async () => showComments(null));
   await wait();
   const panel = () => host.querySelector<HTMLElement>('.comments-panel')!;
   const buttons = (label: string, within: ParentNode = panel()) => [...within.querySelectorAll<HTMLButtonElement>('button')].filter((b) => b.textContent === label || b.getAttribute('aria-label') === label);
   const click = (label: string, at = 0, within?: ParentNode) => act(async () => buttons(label, within)[at].click());
   const box = () => panel().querySelector<HTMLTextAreaElement>('textarea');
-  const type = (text: string) =>
+  /** Todos los cuadros abiertos, en el orden del panel. */
+  const boxes = () => [...panel().querySelectorAll<HTMLTextAreaElement>('textarea')];
+  const typeIn = (el: HTMLTextAreaElement, text: string) =>
     act(async () => {
-      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(box()!, text);
-      box()!.dispatchEvent(new Event('input', { bubbles: true }));
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(el, text);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
     });
+  const type = (text: string) => typeIn(box()!, text);
   const key = (k: string, mods: KeyboardEventInit = {}) => act(async () => void box()!.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...mods })));
   /** Sube lo de un dispositivo y baja lo que haya (el reloj del servidor se adelanta para que la bajada no espere). */
   const sync = async (d: Device) => {
@@ -128,7 +134,7 @@ async function world() {
   /** Los hilos de arriba (los abiertos) y los de la lista de resueltos, como se ven. */
   const openThreads = () => [...panel().querySelectorAll<HTMLElement>('.comments-body > .comment-thread:not(.composing)')];
   const resolvedThreads = () => [...panel().querySelectorAll<HTMLElement>('.comments-resolved .comment-thread')];
-  return { server, phone, desk, page, id, host, root, panel, buttons, click, box, type, key, sync, fromDesk, copied, outbox, openThreads, resolvedThreads };
+  return { server, phone, desk, page, id, host, root, show, panel, buttons, click, box, boxes, type, typeIn, key, sync, fromDesk, copied, outbox, openThreads, resolvedThreads };
 }
 
 describe('un hilo que se resuelve desde otro lado con un cuadro abierto', () => {
@@ -226,6 +232,31 @@ describe('un hilo que se resuelve desde otro lado con un cuadro abierto', () => 
     expect(w.openThreads()).toHaveLength(1);
     expect(w.panel().querySelector('.comments-resolved')).toBeNull();
   });
+
+  it('el rótulo de los resueltos cuenta los resueltos de verdad: el hilo que se reabrió y sigue ahí por su cuadro no cuenta', async () => {
+    const w = await world();
+    const other = await w.phone.comments.add(w.page, null, 'Otro hilo');
+    await w.sync(w.phone);
+    await w.fromDesk(async () => {
+      await w.desk.engine.syncNow();
+      await w.desk.comments.resolve(w.page, w.id, true);
+      await w.desk.comments.resolve(w.page, other, true);
+    });
+    const toggle = () => w.panel().querySelector<HTMLButtonElement>('.comments-resolved-toggle')!;
+    expect(toggle().textContent).toBe('2 resolved threads');
+    await act(async () => toggle().click());
+    const original = w.resolvedThreads().find((t) => t.textContent!.includes('Original'))!;
+    await w.click('Edit', 0, original);
+    await w.type('Editando en un hilo resuelto');
+    await w.fromDesk(() => w.desk.comments.resolve(w.page, w.id, false));
+    // Los dos siguen en la lista (el reabierto, fijado por su cuadro), y el rótulo dice cuántos están resueltos.
+    expect(w.resolvedThreads()).toHaveLength(2);
+    expect(toggle().textContent).toBe('1 resolved thread');
+    await w.fromDesk(() => w.desk.comments.resolve(w.page, other, false));
+    expect(w.resolvedThreads()).toHaveLength(1);
+    expect(toggle().textContent).toBe('0 resolved threads');
+    expect(w.box()!.value).toBe('Editando en un hilo resuelto');
+  });
 });
 
 describe('un comentario o un hilo que se borra desde otro lado con un cuadro abierto', () => {
@@ -306,6 +337,30 @@ describe('un comentario o un hilo que se borra desde otro lado con un cuadro abi
     expect(ask).not.toHaveBeenCalled();
     expect(w.box()).toBeNull();
     expect(w.openThreads()[0].querySelector('.comment.deleted')).toBeNull();
+  });
+
+  it('con el cuadro de edición abierto en una respuesta, las otras respuestas que se borran dejan de verse: solo sigue la del cuadro', async () => {
+    const w = await world();
+    const first = await w.phone.comments.add(w.page, null, 'Primera respuesta', w.id);
+    const second = await w.phone.comments.add(w.page, null, 'Segunda respuesta', w.id);
+    await w.sync(w.phone);
+    await w.desk.engine.syncNow();
+    await w.click('Edit', 1);
+    await w.type('Primera, editada a medias');
+    const before = w.box();
+    await w.fromDesk(async () => {
+      await w.desk.comments.remove(w.page, first);
+      await w.desk.comments.remove(w.page, second);
+    });
+    expect(w.phone.comments.threads(w.page)[0].replies).toEqual([]);
+    const thread = w.openThreads()[0];
+    // La del cuadro sigue, como borrada y con lo tipeado; la otra se fue del todo (no vuelve como «borrada»).
+    expect(w.box()).toBe(before);
+    expect(w.box()!.value).toBe('Primera, editada a medias');
+    expect(thread.querySelectorAll('.comment.deleted')).toHaveLength(1);
+    expect(thread.querySelector('.comment.deleted textarea')).toBe(before);
+    expect(thread.querySelectorAll('.comment')).toHaveLength(2);
+    expect(thread.textContent).not.toContain('Segunda respuesta');
   });
 
   it('el hilo entero borrado con una respuesta a medio escribir: lo tipeado sigue a la vista, para copiarlo', async () => {
@@ -408,6 +463,8 @@ describe('lo que no cambió, y lo que ya no se va en silencio', () => {
     await w.type('Se iba a perder');
     act(() => w.root.unmount());
     roots.splice(roots.indexOf(w.root), 1);
+    // El aviso sale al terminar la tanda en curso: uno solo por todos los cuadros que se cerraron juntos.
+    await wait();
     expect(notices).toHaveLength(1);
     expect(notices[0]).toMatchObject({ message: 'A comment you were writing was closed before you sent it.', label: 'Copy text' });
     notices[0].run!();
@@ -442,6 +499,177 @@ describe('lo que no cambió, y lo que ya no se va en silencio', () => {
     await wait();
     await w.click('Cerrar los comentarios');
     expect(ask).toHaveBeenLastCalledWith(translate('es', 'comments.conflict.cancelStuck'));
+  });
+});
+
+describe('un comentario nuevo con algo escrito y lo que se le pide al panel', () => {
+  const composing = (w: Awaited<ReturnType<typeof world>>) => [...w.panel().querySelectorAll<HTMLElement>('.comment-thread.composing')];
+  /** A qué bloque va cada comentario de la cola (`null`: a la página). */
+  const places = async (w: Awaited<ReturnType<typeof world>>) => (await w.phone.commentsDb.getAll('outbox')).map((e) => (e.op as { blockId?: string | null }).blockId);
+
+  it('abrir un hilo, o pedir un comentario en otro lado, no se lo lleva: es el mismo cuadro con su texto, sin aviso ni pregunta', async () => {
+    const w = await world();
+    const ask = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    await w.click('Comment on the page');
+    await wait();
+    await w.type('Comentario nuevo a medias');
+    const onPage = w.box()!;
+    // Abrir un hilo para leerlo (la marca del margen, la campana): el hilo se marca y el cuadro nuevo sigue.
+    await act(async () => showComments({ kind: 'thread', threadId: w.id }));
+    await wait();
+    expect(w.openThreads()[0].classList.contains('focused')).toBe(true);
+    expect(composing(w)).toHaveLength(1);
+    expect(w.boxes()).toEqual([onPage]);
+    expect(onPage.value).toBe('Comentario nuevo a medias');
+    // *Comment* en un bloque: se abre otro cuadro, arriba y con el foco; el de la página sigue.
+    await act(async () => showComments({ kind: 'block', blockId: 'bloque-1' }));
+    await wait();
+    expect(composing(w)).toHaveLength(2);
+    const onBlock = w.boxes()[0];
+    expect(onBlock).not.toBe(onPage);
+    expect(onBlock.value).toBe('');
+    expect(document.activeElement).toBe(onBlock);
+    expect(w.boxes()[1]).toBe(onPage);
+    expect(onPage.value).toBe('Comentario nuevo a medias');
+    await w.typeIn(onBlock, 'En el bloque, a medias');
+    // Volver a pedir el de la página (el botón del panel o un pedido de afuera): el mismo cuadro, que toma el foco.
+    await act(async () => showComments({ kind: 'new', blockId: null }));
+    await wait();
+    expect(w.boxes()).toEqual([onBlock, onPage]);
+    expect(document.activeElement).toBe(onPage);
+    await w.click('Comment on the page');
+    expect(w.boxes()).toEqual([onBlock, onPage]);
+    // Y el del bloque, igual, también si ahora es una respuesta a una pregunta.
+    await act(async () => showComments({ kind: 'block', blockId: 'bloque-1', answer: true }));
+    await wait();
+    expect(w.boxes()).toEqual([onBlock, onPage]);
+    expect(document.activeElement).toBe(onBlock);
+    expect(onBlock.value).toBe('En el bloque, a medias');
+    expect(onPage.value).toBe('Comentario nuevo a medias');
+    expect(hasDrafts()).toBe(true);
+    // Cada uno se cierra por su lado: mandar el de la página deja el del bloque como estaba.
+    await w.click('Comment', 0, composing(w)[1]);
+    await wait();
+    expect(await w.outbox()).toEqual(['Comentario nuevo a medias']);
+    // Y va a su lugar (la página), no al del otro cuadro abierto.
+    expect(await places(w)).toEqual([null]);
+    expect(w.boxes()).toEqual([onBlock]);
+    expect(onBlock.value).toBe('En el bloque, a medias');
+    await w.click('Cancel', 0, composing(w)[0]);
+    expect(w.boxes()).toEqual([]);
+    // Nada de esto preguntó ni dejó un aviso: no se cerró nada sin que la persona lo cerrara.
+    expect(ask).not.toHaveBeenCalled();
+    expect(notices).toEqual([]);
+    expect(hasDrafts()).toBe(false);
+  });
+
+  it('con varios cuadros nuevos abiertos, cada uno manda al lugar donde se abrió', async () => {
+    const w = await world();
+    await w.click('Comment on the page');
+    await wait();
+    await w.type('Para la página');
+    await act(async () => showComments({ kind: 'block', blockId: 'bloque-1' }));
+    await wait();
+    await w.typeIn(w.boxes()[0], 'Para el bloque');
+    // El del bloque está arriba y el de la página abajo: se manda primero el de abajo y después el otro.
+    await w.click('Comment', 0, composing(w)[1]);
+    await wait();
+    await w.click('Comment', 0, composing(w)[0]);
+    await wait();
+    expect(await w.outbox()).toEqual(['Para la página', 'Para el bloque']);
+    expect(await places(w)).toEqual([null, 'bloque-1']);
+    expect(w.boxes()).toEqual([]);
+  });
+
+  it('el cuadro nuevo vacío (o solo con espacios) se va con el pedido siguiente, como siempre', async () => {
+    const w = await world();
+    await w.click('Comment on the page');
+    await wait();
+    expect(composing(w)).toHaveLength(1);
+    await act(async () => showComments({ kind: 'thread', threadId: w.id }));
+    await wait();
+    expect(composing(w)).toHaveLength(0);
+    // Pedido de afuera sobre uno vacío: arranca de nuevo. El botón del panel sobre el suyo: el mismo cuadro.
+    await act(async () => showComments({ kind: 'new', blockId: null }));
+    await wait();
+    const first = w.box()!;
+    await w.type('   ');
+    await act(async () => showComments({ kind: 'new', blockId: null }));
+    await wait();
+    expect(composing(w)).toHaveLength(1);
+    expect(w.box()).not.toBe(first);
+    expect(w.box()!.value).toBe('');
+    const second = w.box()!;
+    await w.click('Comment on the page');
+    expect(w.box()).toBe(second);
+    // Uno vacío no se acumula al pedir otro en otro bloque.
+    await act(async () => showComments({ kind: 'block', blockId: 'bloque-1' }));
+    await wait();
+    expect(composing(w)).toHaveLength(1);
+    expect(notices).toEqual([]);
+  });
+});
+
+describe('varios cuadros con algo escrito que se cierran a la vez', () => {
+  it('un solo aviso, que dice cuántos son y copia todos los textos separados por una línea en blanco', async () => {
+    const w = await world();
+    await w.click('Edit');
+    await w.type('Edición a medias');
+    await w.click('Reply');
+    await w.typeIn(w.boxes()[1], 'Respuesta a medias');
+    await w.click('Comment on the page');
+    await wait();
+    await w.typeIn(w.boxes()[0], 'Comentario nuevo a medias');
+    act(() => w.root.unmount());
+    roots.splice(roots.indexOf(w.root), 1);
+    await wait();
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatchObject({ message: '3 comments you were writing were closed before you sent them.', label: 'Copy all 3' });
+    notices[0].run!();
+    await wait();
+    expect(w.copied).toEqual(['Comentario nuevo a medias\n\nEdición a medias\n\nRespuesta a medias']);
+    expect(hasDrafts()).toBe(false);
+  });
+
+  it('en castellano, y con uno vacío entre ellos: cuenta solo los que tenían algo escrito', async () => {
+    const w = await world();
+    act(() => prefs.set({ language: 'es' }));
+    await wait();
+    await w.click('Editar');
+    await w.type('Edición a medias');
+    await w.click('Responder');
+    await w.typeIn(w.boxes()[1], 'Respuesta a medias');
+    await w.click('Comentar la página');
+    await wait();
+    expect(w.boxes()).toHaveLength(3);
+    act(() => w.root.unmount());
+    roots.splice(roots.indexOf(w.root), 1);
+    await wait();
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatchObject({ message: 'Se cerraron 2 comentarios que estabas escribiendo antes de que los mandaras.', label: 'Copiar los 2' });
+    notices[0].run!();
+    await wait();
+    expect(w.copied).toEqual(['Edición a medias\n\nRespuesta a medias']);
+  });
+});
+
+describe('el panel de una página no sigue montado sobre otra', () => {
+  it('si el mismo panel pasa a mostrar otra página, no arrastra el hilo de la anterior con su cuadro: lo escrito va al aviso', async () => {
+    const w = await world();
+    const other = await w.phone.tree.create(null, 'Otra');
+    await w.click('Reply');
+    await w.type('Respuesta a medio escribir');
+    await w.show(other);
+    await wait();
+    // El panel es el de la otra página: sin el hilo de la anterior (ni como borrado) y sin su cuadro.
+    expect(w.panel().textContent).not.toContain('Original');
+    expect(w.panel().textContent).not.toContain('This comment was deleted.');
+    expect(w.box()).toBeNull();
+    expect(w.panel().textContent).toContain('No comments on this page yet.');
+    expect(notices).toEqual([expect.objectContaining({ message: 'A comment you were writing was closed before you sent it.', label: 'Copy text' })]);
+    notices[0].run!();
+    await wait();
+    expect(w.copied).toEqual(['Respuesta a medio escribir']);
   });
 });
 
@@ -531,7 +759,7 @@ describe('los textos', () => {
     const keys = [
       'comments.resolvedWhileWriting', 'comments.reopenedWhileWriting', 'comments.gone.editing', 'comments.gone.replying',
       'comments.gone.cancel', 'comments.draftClosed', 'comments.retryAll', 'comments.discardAllEllipsis', 'comments.discardAll',
-      'commentError.editUnknown',
+      'commentError.editUnknown', 'comments.draftsClosed', 'comments.copyAllTexts', 'comments.draftUnsent',
     ] as const;
     for (const key of keys) {
       expect(translate('en', key, { count: 2 }), key).not.toBe(key);

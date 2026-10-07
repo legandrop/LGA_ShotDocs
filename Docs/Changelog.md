@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.230 :
+
+Quedaban salidas en las que un comentario a medio escribir se perdía sin que la persona lo decidiera. Salir de la cuenta y quitar el workspace del dispositivo no miraban lo que se estaba escribiendo, y el aviso no tenía dónde mostrarse: ahora la pregunta de siempre suma una oración. Un comentario nuevo se cerraba al pedirle otra cosa al panel, porque había un solo lugar para escribirlo: ahora el que tiene texto se queda, uno por bloque. Varios cuadros cerrados a la vez mandaban un aviso cada uno y la pantalla muestra uno: ahora sale uno solo, que los copia todos. En el teléfono el aviso flotante calculaba su ancho sobre media pantalla y quedaba angosto y alto: va anclado a los dos costados, y sus botones ya no se parten en renglones. El rótulo de los resueltos no cuenta un hilo reabierto. D341 a D344.
+
+[Preguntar al salir de la cuenta con un comentario a medio escribir, conservar el comentario nuevo cuando se le pide otra cosa al panel, juntar en un solo aviso los cuadros que se cierran a la vez y anclar el aviso flotante a los costados en el teléfono]
+
 v0.229 :
 
 Un cuadro de comentario abierto (una respuesta, una edición) desaparecía con lo tipeado cuando el hilo se resolvía o el comentario se borraba desde otro lado y el cambio llegaba por la sincronización: el panel cambiaba el hilo de lista o dejaba de mostrarlo, y el cuadro, que guarda lo escrito en su memoria, se desmontaba. Ahora un hilo con un cuadro abierto se queda donde está hasta que el cuadro se cierre, con un aviso de que se resolvió; lo borrado sigue a la vista y su cuadro pasa a no poder guardar, con *Copy text* y confirmación. Cerrar o recargar el navegador con algo escrito pregunta, y cambiar de página deja un aviso con *Copy text*. Además: el cartel de varias rechazadas dice la cantidad, la pantalla sin proyectos pregunta al salir como el menú de la cuenta, y editar sin base ya no puede pisar.

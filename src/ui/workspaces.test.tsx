@@ -22,6 +22,7 @@ import {
 import { GUIDE_URL, JoinConfirm, LoginWorkspaceBar, Welcome } from './Welcome';
 import { DeleteBlocked, deleteWorkspaceDatabases } from './RemovedScreen';
 import { RemoveWorkspaceDialog, WorkspaceSection } from './WorkspaceMenu';
+import { closeComments, setDraft } from './commentsUi';
 
 vi.mock('./unsyncedDownload', () => ({ downloadUnsynced: vi.fn(async () => undefined), saveBlob: vi.fn() }));
 
@@ -299,6 +300,40 @@ describe('en la app abierta', () => {
     const left = await indexedDB.databases();
     expect(left.some((db) => db.name === dbName)).toBe(false);
     expect(host).toBeTruthy();
+  });
+
+  it('con un comentario a medio escribir, la pregunta de quitar lo dice; con un «no» no se borra nada', async () => {
+    loadWorkspaces(WANKA);
+    updateWorkspaces((l) => addWorkspace(l, STUDIO));
+    const dbName = configOf(STUDIO).storage.db('owner');
+    const d = await device(dbName);
+    const signOut = vi.fn(async () => ({ error: null }));
+    await mount(
+      <ServicesContext.Provider value={services(d, STUDIO, dbName, signOut)}>
+        <RemoveWorkspaceDialog onClose={() => undefined} />
+      </ServicesContext.Provider>,
+    );
+    const remove = button(document.body, 'Remove from this device');
+    await shown(() => expect(remove.disabled).toBe(false));
+    const asked: string[] = [];
+    vi.stubGlobal('confirm', (text: string) => (asked.push(text), false));
+    try {
+      // Sin nada escrito, la pregunta de siempre.
+      click(remove);
+      expect(asked).toEqual(['Remove “Studio” from this device? You can join it again later with an invitation link.']);
+      // Con un cuadro de comentarios con algo escrito (vive solo en ese cuadro: quitar el workspace se lo lleva).
+      act(() => setDraft(Symbol('cuadro'), true, { text: 'A medio escribir' }));
+      click(remove);
+      expect(asked[1]).toBe(
+        'Remove “Studio” from this device? A comment you are writing has not been sent and will be lost. You can join it again later with an invitation link.',
+      );
+      await act(() => settled(50));
+      expect(signOut).not.toHaveBeenCalled();
+      expect(readWorkspaces().workspaces.map((w) => w.id)).toContain(STUDIO.id);
+      expect((await indexedDB.databases()).some((db) => db.name === dbName)).toBe(true);
+    } finally {
+      act(() => closeComments());
+    }
   });
 
   it('con fotos o videos sin subir, quitar espera también a que se baje cada original', async () => {

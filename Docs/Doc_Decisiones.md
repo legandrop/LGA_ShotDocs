@@ -486,6 +486,25 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
   al implementarlo, Lega la puede cambiar). *Retry all 3*, *Discard all 3…* y *Discard all 3*, y la confirmación en
   plural; con uno solo, como siempre. Completa D335 (siguen valiendo para todos juntos). *Retry* reintenta además
   todo lo rechazado de la app, como siempre.
+- **D341 · Salir de la cuenta y quitar el workspace del dispositivo preguntan también por un comentario a medio
+  escribir, en la misma pregunta** (2026-10-07; tomada al implementarlo, Lega la puede cambiar). Completa D333: la
+  pregunta de salir suma una oración (*A comment you are writing has not been sent and will be lost.*, con la
+  cantidad si son varios) a lo pendiente y a lo rechazado, y la de quitar el workspace lleva la misma. Con un «no»,
+  el cuadro sigue como estaba. La otra opción: una pregunta aparte antes de la de siempre (dos carteles seguidos,
+  como hoy al cambiar de workspace).
+- **D342 · Un comentario nuevo con algo escrito se queda cuando se le pide otra cosa al panel** (2026-10-07; tomada
+  al implementarlo, Lega la puede cambiar). Abrir un hilo desde el margen o la campana, o tocar *Comment* en otro
+  bloque, ya no lo cierra: puede haber un comentario nuevo en curso por bloque y uno de la página, cada uno hasta
+  que se manda o se cancela; el vacío se va solo, como siempre. La otra opción: preguntar antes de reemplazarlo (un
+  cartel para un gesto frecuente, como tocar la marca de otro hilo para leerlo mientras se escribe).
+- **D343 · Varios cuadros con algo escrito que se cierran a la vez van en un solo aviso** (2026-10-07; tomada al
+  implementarlo, Lega la puede cambiar). Completa D339: el aviso dice cuántos son y su botón, *Copy all 3*, copia
+  todos los textos separados por una línea en blanco. La otra opción: listar cada texto en el aviso con su botón
+  (como el cartel de D335), más alto que lo que entra abajo de la pantalla en un teléfono.
+- **D344 · El rótulo de los resueltos cuenta los hilos resueltos de verdad** (2026-10-07; tomada al implementarlo,
+  Lega la puede cambiar). Un hilo que se reabrió desde otro lado y sigue en esa lista por su cuadro abierto (D337)
+  no cuenta: mientras sea el único ahí, el rótulo dice *0 resolved threads*. La otra opción: esconder el rótulo en
+  ese caso (se pierde el botón de plegar la lista mientras dura el cuadro).
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 

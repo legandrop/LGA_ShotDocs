@@ -48,7 +48,7 @@ import { lazyPart, Part, preloadWhenIdle, watchPendingWrites } from './lazyPart'
 import { startAppUpdates, stopAppUpdates } from './appUpdate';
 import { focusTitle, PageView, preloadPageParts, type TitlePreparation } from './PageView';
 import { CommentsToggle } from './CommentsToggle';
-import { hasDrafts } from './commentsUi';
+import { draftCount, hasDrafts } from './commentsUi';
 import { MentionsBell } from './MentionsBell';
 import { Sidebar } from './Sidebar';
 import { SidebarResizer } from './SidebarResizer';
@@ -909,9 +909,11 @@ export function NoProjects({
           className="link"
           onClick={() => {
             // Como el menú de la cuenta: con algo sin subir, rechazado o esperando decisión, salir pregunta y lo dice
-            // (no se borra nada del dispositivo).
+            // (no se borra nada del dispositivo). También con un comentario a medio escribir (acá no hay panel que lo
+            // tenga: va por si esta pantalla llegara a mostrarse con uno abierto).
             if (replaceBlocksLeaving()) return;
-            if (pending > 0 && !confirm(signOutQuestion(pending - rejected, rejected))) return;
+            const writing = draftCount();
+            if ((pending > 0 || writing > 0) && !confirm(signOutQuestion(pending - rejected, rejected, writing))) return;
             void client.auth.signOut({ scope: 'local' });
           }}
         >

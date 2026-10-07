@@ -20,6 +20,7 @@ import {
   closeComments,
   closeDraft,
   copyText,
+  hasDraft,
   hasDrafts,
   isPhoneLayout,
   isSendShortcut,
@@ -145,12 +146,28 @@ function withHeld(threads: CommentThread[], holds: ReadonlyMap<symbol, Hold>, la
   return out;
 }
 
+/**
+ * Un comentario nuevo que se está escribiendo, en un bloque o en la página entera (`blockId` nulo). Puede haber más de
+ * uno a la vez (uno por bloque): pedirle otra cosa al panel no se lleva el que ya tiene algo escrito.
+ */
+interface Composing {
+  /** Distinto en cada cuadro que se abre: es su `key`. */
+  id: number;
+  blockId: string | null;
+  answer: boolean;
+  /** La clave con la que su cuadro anota lo escrito a medias (`setDraft`): con ella el panel sabe si tiene algo escrito. */
+  draft: symbol;
+  /** Sube cada vez que se lo vuelve a pedir con algo escrito: el cuadro sigue como está y vuelve a tomar el foco. */
+  focus: number;
+}
+
 export function CommentsPanel({ pageId }: { pageId: string }) {
   const ui = useCommentsUi();
   // Al salir de la página, lo pedido para ella no sigue.
   useEffect(() => () => clearCommentsTarget(pageId), [pageId]);
   if (!ui.open) return null;
-  return <Panel pageId={pageId} target={ui.targetPage && ui.targetPage !== pageId ? null : ui.target} nonce={ui.nonce} />;
+  // La `key`: el panel de una página nunca sigue montado sobre otra (mostraría el hilo de la anterior con su cuadro).
+  return <Panel key={pageId} pageId={pageId} target={ui.targetPage && ui.targetPage !== pageId ? null : ui.target} nonce={ui.nonce} />;
 }
 
 function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarget | null; nonce: number }) {
@@ -160,7 +177,8 @@ function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarg
   const source = useBlockSource(pageId);
   const { canComment, canDeleteAny, level } = useCommentAccess(pageId);
   const [showResolved, setShowResolved] = useState(false);
-  const [composing, setComposing] = useState<{ blockId: string | null; answer: boolean } | null>(null);
+  const [composing, setComposing] = useState<Composing[]>([]);
+  const boxes = useRef(0);
   const [focused, setFocused] = useState<string | null>(null);
   const ref = useRef<HTMLElement>(null);
   const tr = useT();
@@ -220,27 +238,53 @@ function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarg
     void mentions.markThreadsRead(pageId, new Set(visible.split(',')));
   }, [mentions, inbox, pageId, visible]);
 
+  // Los comentarios nuevos en curso. Pedirle otra cosa al panel (*Comment* en otro bloque, abrir un hilo desde el
+  // margen o desde la campana) se lleva el cuadro nuevo que está vacío, como siempre, pero no el que ya tiene algo
+  // escrito: ese se queda como está (el mismo cuadro, con su texto) hasta que la persona lo mande o lo cancele.
+  const written = (c: Composing) => hasDraft(c.draft);
+  /** Solo se va a leer: los cuadros nuevos vacíos se cierran. */
+  const dropUnwritten = () => setComposing((all) => (all.every(written) ? all : all.filter(written)));
+  /**
+   * Escribir un comentario nuevo ahí. `asked`: lo pidió el editor, el margen o la campana (y no el botón del panel). Si
+   * en ese lugar ya hay uno con algo escrito, es ese mismo, que vuelve a tomar el foco; uno vacío arranca de nuevo con
+   * cada pedido de afuera, como siempre.
+   */
+  const compose = (blockId: string | null, answer: boolean, asked: boolean) => {
+    // Sobre la lista de ese momento y no la del último dibujo: un cuadro que se acaba de mandar o cancelar no vuelve.
+    const fresh: Composing = { id: ++boxes.current, blockId, answer, draft: Symbol('new'), focus: 0 };
+    setComposing((all) => {
+      const same = all.find((c) => c.blockId === blockId);
+      if (same && (written(same) || !asked)) {
+        const again = { ...same, answer, focus: same.focus + (asked ? 1 : 0) };
+        return all.filter((c) => c === same || written(c)).map((c) => (c === same ? again : c));
+      }
+      return [fresh, ...all.filter((c) => c !== same && written(c))];
+    });
+  };
+
   // Lo que pidió el editor o el margen: un hilo, los de un bloque, o escribir uno nuevo.
   useEffect(() => {
     if (!target) return;
     if (target.kind === 'thread') {
       setFocused(target.threadId);
-      setComposing(null);
+      dropUnwritten();
       if (target.resolved || threads.find((t) => t.id === target.threadId)?.resolved) setShowResolved(true);
     } else if (target.kind === 'block') {
       const onBlock = threads.filter((t) => t.blockId === target.blockId);
       const first = onBlock.find((t) => !t.resolved) ?? (target.answer ? onBlock[0] : undefined);
       if (first) {
         setFocused(first.id);
-        setComposing(null);
+        dropUnwritten();
         if (first.resolved) setShowResolved(true);
       } else {
         setFocused(null);
-        setComposing(canComment ? { blockId: target.blockId, answer: !!target.answer } : null);
+        if (canComment) compose(target.blockId, !!target.answer, true);
+        else dropUnwritten();
       }
     } else {
       setFocused(null);
-      setComposing(canComment ? { blockId: target.blockId, answer: !!target.answer } : null);
+      if (canComment) compose(target.blockId, !!target.answer, true);
+      else dropUnwritten();
     }
     // Solo cuando llega un pedido nuevo (no con cada cambio de los hilos).
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -286,7 +330,7 @@ function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarg
     revealBlock(blockId);
   };
 
-  const empty = open.length === 0 && resolved.length === 0 && !composing;
+  const empty = open.length === 0 && resolved.length === 0 && composing.length === 0;
 
   return (
     <LinkLabels.Provider value={linkLabels}>
@@ -295,7 +339,7 @@ function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarg
         <header className="comments-head">
           <h2>{tr('comments.title')}</h2>
           {canComment && (
-            <button className="link" onClick={() => setComposing({ blockId: null, answer: false })}>
+            <button className="link" onClick={() => compose(null, false, false)}>
               {tr('comments.onPage')}
             </button>
           )}
@@ -322,20 +366,22 @@ function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarg
             <p className="muted comments-empty">{tr('comments.loading')}</p>
           )}
 
-          {composing && (
+          {composing.map((c) => (
             <NewThread
-              key={`${composing.blockId ?? 'page'}:${nonce}`}
+              key={c.id}
               pageId={pageId}
-              blockId={composing.blockId}
-              answer={composing.answer}
+              blockId={c.blockId}
+              answer={c.answer}
+              draftKey={c.draft}
+              refocus={c.focus}
               source={source}
               onReveal={reveal}
               onDone={(id) => {
-                setComposing(null);
+                setComposing((all) => all.filter((x) => x.id !== c.id));
                 if (id) setFocused(id);
               }}
             />
-          )}
+          ))}
 
           {empty && comments.isFresh(pageId) && (
             <p className="muted comments-empty">
@@ -367,7 +413,8 @@ function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarg
             <div className="comments-resolved">
               <button className="comments-resolved-toggle" aria-expanded={showResolved} onClick={() => setShowResolved(!showResolved)}>
                 {showResolved ? <CollapseIcon size={14} /> : <ExpandIcon size={14} />}
-                {tr('comments.resolvedThreads', { count: resolved.length })}
+                {/* Los resueltos de verdad: uno que se reabrió y sigue acá por su cuadro abierto no cuenta. */}
+                {tr('comments.resolvedThreads', { count: resolved.filter((t) => t.resolved).length })}
               </button>
               {resolvedShown.map((t) => (
                   <Thread
@@ -411,6 +458,8 @@ function NewThread({
   pageId,
   blockId,
   answer,
+  draftKey,
+  refocus,
   source,
   onReveal,
   onDone,
@@ -418,6 +467,8 @@ function NewThread({
   pageId: string;
   blockId: string | null;
   answer: boolean;
+  draftKey: symbol;
+  refocus: number;
   source: BlockSource | null;
   onReveal: (id: string | null) => void;
   onDone: (id: string | null) => void;
@@ -430,6 +481,8 @@ function NewThread({
       <Anchor blockId={blockId} source={source} onReveal={onReveal} />
       <Composer
         autoFocus
+        refocus={refocus}
+        draftKey={draftKey}
         mentionPage={pageId}
         placeholder={question ? tr('comments.writeAnswer') : tr('comments.write')}
         submitLabel={question ? tr('comments.answer') : tr('comments.comment')}
@@ -959,6 +1012,9 @@ const UNSAVABLE_QUESTION = { decide: 'comments.conflict.cancelStuck', gone: 'com
  * hay algo escrito: es la única salida del cuadro. `decide`: el comentario tiene otra edición esperando decisión
  * (guardar se rechaza diciéndolo). `gone`: el comentario o el hilo ya no está (se borró desde otro lado con el cuadro
  * abierto): guardar no se ofrece.
+ *
+ * `draftKey`: la clave con la que anota lo escrito a medias, si quien lo monta necesita saber si tiene algo escrito
+ * (`hasDraft`); vale la del montaje. `refocus`: cuando sube, el cuadro vuelve a tomar el foco y queda a la vista.
  */
 function Composer({
   initial = '',
@@ -967,6 +1023,8 @@ function Composer({
   placeholder,
   submitLabel,
   autoFocus,
+  refocus = 0,
+  draftKey: givenDraftKey,
   unsavable = null,
   onSubmit,
   onCancel,
@@ -977,6 +1035,8 @@ function Composer({
   placeholder: string;
   submitLabel: string;
   autoFocus?: boolean;
+  refocus?: number;
+  draftKey?: symbol;
   unsavable?: Unsavable | null;
   onSubmit: (text: string, mentions: MentionRef[] | null) => Promise<unknown>;
   onCancel: () => void;
@@ -1077,12 +1137,12 @@ function Composer({
 
   // Lo escrito a medias: cerrar el panel (tocar afuera, Escape, la X) pide confirmación, con la pregunta de este cuadro
   // si desde acá no se puede guardar.
-  const draftKey = useRef(Symbol('draft'));
+  const draftKey = useRef(givenDraftKey ?? Symbol('draft'));
   useLayoutEffect(() => {
     setDraft(draftKey.current, dirty, { text, question: unsavable ? UNSAVABLE_QUESTION[unsavable] : undefined });
   }, [dirty, text, picked, unsavable]);
   // Al desmontarse: si no lo cerró la persona (mandó, canceló o confirmó descartarlo) y había algo escrito, un aviso
-  // deja copiarlo (se cambió de página, la página dejó de verse, se le pidió otra cosa al panel).
+  // deja copiarlo (se cambió de página, la página dejó de verse).
   useLayoutEffect(() => {
     const key = draftKey.current;
     return () => closeDraft(key, byPerson.current);
@@ -1112,7 +1172,9 @@ function Composer({
     ref.current?.focus({ preventScroll: !isPhoneLayout() });
     const end = ref.current?.value.length ?? 0;
     ref.current?.setSelectionRange(end, end);
-  }, [autoFocus]);
+    // Se lo volvió a pedir con algo escrito: puede haber quedado fuera de la vista del panel.
+    if (refocus > 0) ref.current?.scrollIntoView?.({ block: 'nearest' });
+  }, [autoFocus, refocus]);
 
   const submit = async () => {
     if (busy || unsavable === 'gone') return;

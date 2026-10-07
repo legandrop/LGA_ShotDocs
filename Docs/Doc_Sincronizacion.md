@@ -940,7 +940,8 @@ Paso 10 de `Plan_Workspaces.md` (sección 4), con la base en la versión 5
     estado; Escape ya la pedía en todos), y el error de guardar (`commentError.decideFirst`) dice lo mismo. Ningún
     clic ni tecla adentro del cuadro descarta lo tipeado sin confirmar. Lo que le pasa a un cuadro abierto (este y
     cualquier otro de comentarios) cuando el cambio llega de afuera está en el punto que sigue.
-  - **Un cuadro abierto y lo que llega de afuera (v0.229, D337 a D339).** Lo que se tipea en un cuadro (una
+  - **Un cuadro abierto y lo que llega de afuera (v0.229, D337 a D339; las salidas, v0.230, D341 a D344).** Lo
+    que se tipea en un cuadro (una
     respuesta, una edición) vive solo en la memoria de ese cuadro, y el panel lo desmontaba cuando el hilo cambiaba
     de lista o dejaba de venir: si el hilo se resolvía o el comentario se borraba **desde otro lado** (otra persona,
     u otro dispositivo de la misma) y el cambio llegaba por la sincronización, lo tipeado desaparecía sin ninguna
@@ -967,17 +968,64 @@ Paso 10 de `Plan_Workspaces.md` (sección 4), con la base en la versión 5
       cartel (el cuadro sigue). Si la página **deja de verse** (le sacan el permiso; o va a la papelera y esa
       persona no la ve ahí, como un invitado), la pantalla pasa a «no existe o no tenés acceso» y el panel se
       desmonta: ver lo que sigue.
-    - **Lo que desmonta el cuadro sin que la persona lo cierre** (la página deja de verse, se cambia de página,
-      se le pide otra cosa al panel) ya no es silencioso (D339): si había algo escrito, sale un aviso (*A comment you
+    - **Lo que desmonta el cuadro sin que la persona lo cierre** (la página deja de verse, se cambia de página)
+      ya no es silencioso (D339): si había algo escrito, sale un aviso (*A comment you
       were writing was closed before you sent it.*) con ***Copy text***, 15 segundos (`closeDraft`, `commentsUi.ts`;
       el aviso es el de siempre, `notice.ts`). Mandar, cancelar o cerrar el panel confirmando no lo muestran. **No
       pregunta antes de cambiar de página:** hoy nada frena un cambio de página (el editor y el título guardan en el
       dispositivo, no preguntan), `navigate` tiene 45 llamadores (varios siguen con algo que da por hecho el cambio:
       cambiar de proyecto, deshacer en otra página, *Show* de un reemplazo, imprimir otra página) y el Atrás del
       navegador no se puede frenar.
+    - **Varios cuadros que se cierran a la vez (v0.230, D343).** Al cambiar de página se desmontan todos juntos, y
+      la pantalla muestra un aviso a la vez: con uno por cuadro, el texto del primero ya no se podía copiar. Ahora
+      `closeDraft` junta los que se cierran en la misma tanda y manda **un solo aviso** al terminarla (*3 comments
+      you were writing were closed before you sent them.*), con ***Copy all 3***, que copia todos los textos en el
+      orden del panel, separados por una línea en blanco. Con uno solo, el aviso de siempre.
+    - **Un comentario nuevo y lo que se le pide al panel (v0.230, D342).** El cuadro de un comentario nuevo se
+      cerraba cuando se le pedía otra cosa al panel (*Comment* en otro bloque, abrir un hilo desde el margen o desde
+      la campana, *Comment on the page*): el pedido reemplazaba el único lugar que había para escribir uno nuevo.
+      Ahora los comentarios nuevos en curso son una lista (`Composing`, `CommentsPanel.tsx`): **el que ya tiene algo
+      escrito se queda** como está (el mismo cuadro, con su texto), y puede haber uno por bloque y uno de la página;
+      volver a pedir el mismo lugar le devuelve el foco. El que está vacío (o solo con espacios) se va con el pedido
+      siguiente y arranca de nuevo, como siempre. Cada cuadro sabe si tiene algo escrito por la clave con la que lo
+      anota (`setDraft` / `hasDraft`). Se cierra cuando la persona lo manda o lo cancela.
+    - **El panel es de una página** (`key` por página en `CommentsPanel`): montado sobre otra sin remontarse
+      mostraba el hilo de la anterior como borrado, con su cuadro. En la app no se alcanzaba (la vista de página ya
+      se remonta).
+    - **Un hilo reabierto que sigue entre los resueltos por su cuadro** no cuenta en el rótulo de esa lista (D344):
+      dice cuántos están resueltos de verdad.
     - **Cerrar o recargar el navegador** con algo escrito en un cuadro ahora pregunta: el `beforeunload` de
       `Workspace.tsx` cuenta `hasDrafts()`, lo mismo que ya miraban el botón *Reload*, la recarga por una versión
       nueva y el cambio de workspace.
+    - **Salir de la cuenta, y quitar el workspace del dispositivo (v0.230, D341).** No miraban lo que se estaba
+      escribiendo, y al salir el aviso de arriba no tiene dónde mostrarse (la pantalla que lo dibuja se desmonta):
+      se perdía en silencio. Ahora la pregunta de salir (`signOutQuestion`, `menus.tsx`) suma una oración (*A
+      comment you are writing has not been sent and will be lost.*, o *2 comments…*) a lo pendiente y a lo
+      rechazado: un solo cartel; sin nada de eso, sale sin preguntar como siempre. La pregunta de quitar el
+      workspace lleva la misma oración. Los caminos que desmontan o recargan todo, y qué miran:
+
+      | Camino | Dónde | ¿Mira lo que se está escribiendo? |
+      |---|---|---|
+      | *Sign out* del menú de la cuenta | `menus.tsx`, `signOut` | Sí, desde v0.230: en la pregunta de salir |
+      | *Sign out* de la pantalla sin proyectos | `Workspace.tsx`, `NoProjectsOpen` | Sí, desde v0.230 (esa pantalla no tiene panel: no hay cuadro posible) |
+      | Quitar el workspace del dispositivo | `WorkspaceMenu.tsx`, `remove` | Sí, desde v0.230: en la pregunta de quitar |
+      | Cambiar de workspace, unirse a uno o crear uno | `useLeaveGuard` | Sí (pregunta aparte, antes de la de lo pendiente) |
+      | *Reload* de un aviso o de la pantalla de error, *Update now* | `reloadByHand`, `lazyPart.tsx` | Sí (pregunta) |
+      | Forzar la actualización | `appUpdate.ts`, `confirmDrafts` | Sí (pregunta) |
+      | La recarga sola por una versión nueva, o porque la app quedó vieja | `reloadForNewVersion`, `hasUnsavedWork` | Sí (no recarga) |
+      | Cerrar o recargar el navegador, y lo que navega afuera desde el código (*Update the app* de una página de una versión más nueva, conectar Drive, un link a otro workspace, volver de un link público) | `beforeunload`, `Workspace.tsx` | Sí (la pregunta del navegador) |
+      | La app se reemplaza sola: otra pestaña toma el control, sacaron a la persona, se borraron todos los proyectos, un error que la frena | `Workspace.tsx`, `RemovedScreen.tsx`, `ErrorBarrier.tsx` | No se puede preguntar, y el aviso no tiene dónde mostrarse: anotado en el roadmap |
+    - **El aviso flotante en el teléfono (v0.230).** El estilo general del aviso (`.notice`, `styles.css`) usa
+      `left: 50%` con `translateX(-50%)`: el ancho natural se calcula sobre media pantalla, y a 375 px el aviso de un
+      comentario cerrado medía 210 por 175 px, con *Copiar el texto* en tres renglones. Hasta 760 px (el diseño de
+      teléfono) va anclado a los dos costados (`left` y `right` de 16 px, `width: fit-content`, márgenes automáticos,
+      sin el corrimiento): 343 por 90 px. Vale para todos los que usan ese estilo (el avance de reemplazar, los del
+      espacio, los de un link): medidos uno por uno en un navegador con el estilo de antes y el de ahora, a 375 y
+      760 px mejoran o quedan igual, y a 761 y 1280 px miden lo mismo que antes, salvo los botones del aviso común,
+      que no se achican en ninguna pantalla (en castellano *Copiar el texto* salía en dos renglones también en
+      escritorio: a 1280 px, 640 por 60, y ahora en uno, 640 por 56). En el teléfono un aviso largo tapa el botón
+      redondo de dictar mientras está a la vista (anotado en el roadmap). jsdom
+      no calcula el diseño: `noticeLayout.test.ts` fija lo que lo produce en el CSS.
   - **A la vista (D327):** el comentario muestra los dos textos, cada uno con su rótulo (*Saved now, changed from
     somewhere else* y *What you wrote on this device*), y tres acciones: *Keep mine* (la edición vuelve a la cola con
     la base de lo que se está viendo; si la base volvió a cambiar, vuelve a quedar apartada), *Discard mine…* (pide

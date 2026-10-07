@@ -25,7 +25,7 @@ import { downloadUnsynced, saveBlob } from './unsyncedDownload';
 import { usePendingCount } from './usePendingCount';
 import type { WorkspacesMode } from './Welcome';
 import { saveBeforeExit } from './lazyPart';
-import { getDraftRevision, hasDrafts } from './commentsUi';
+import { draftCount, getDraftRevision, hasDrafts } from './commentsUi';
 
 // Los workspaces dentro de la app abierta (paso 12 de Docs/Plan_Workspaces.md): la sección del selector de
 // proyectos, lo que se pregunta antes de dejar el workspace abierto y quitarlo del dispositivo.
@@ -253,10 +253,12 @@ export function RemoveWorkspaceDialog({ onClose }: { onClose: () => void }) {
 
   async function remove() {
     if (!current || current.legacy) return;
+    // Un comentario a medio escribir se va con la app (vive solo en su cuadro): la misma pregunta lo dice.
+    const writing = draftCount();
     const warning =
-      pending > 0
+      (pending > 0
         ? `${media.length > 0 ? t('removeWs.warningMedia', { count: pending }) : t('removeWs.warning', { count: pending })} `
-        : '';
+        : '') + (writing > 0 ? `${t('comments.draftUnsent', { count: writing })} ` : '');
     if (!confirm(t('removeWs.confirm', { name, warning }))) return;
     setBusy('remove');
     setError(null);

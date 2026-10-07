@@ -1892,6 +1892,24 @@ code {
   box-shadow: var(--shadow);
 }
 
+/* Los botones de un aviso no se achican: cuando no entra, el que se parte en renglones es el texto. */
+.notice > button {
+  flex: none;
+}
+
+/* En el teléfono va anclado a los dos costados. Con `left: 50%` el ancho natural se calcula sobre media pantalla, y un
+   aviso largo con un botón quedaba angosto y alto (210 por 175 px a 375 px de ancho, el botón partido en tres
+   renglones). En pantallas más anchas la posición no cambia. */
+@media (max-width: 760px) {
+  .notice {
+    left: 16px;
+    right: 16px;
+    width: fit-content;
+    margin-inline: auto;
+    transform: none;
+  }
+}
+
 /* --- Móvil --------------------------------------------------------------------------------------- */
 
 @media (max-width: 900px) {
@@ -8322,11 +8340,8 @@ button.folder-row-main:hover {
   gap: 8px;
 }
 .notice.link-limited {
-  position: fixed;
   top: 8px;
   bottom: auto;
-  left: 50%;
-  transform: translateX(-50%);
   z-index: 50;
 }
 /* Can edit por un link (entrega 2a): el nombre del visitante y lo que no entró, abajo; para el equipo, en la página. */

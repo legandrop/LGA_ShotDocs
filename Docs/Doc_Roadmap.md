@@ -445,27 +445,58 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   con ese texto, que es propio, y el aviso habla de «otro lado» (no se pierde nada). Decirlo bien pide que la cola
   recuerde qué texto mandó este dispositivo y lo guarde con lo apartado (`setAside` y la forma de `editConflict:`
   en `meta`, que también leen las versiones anteriores).
-  **Anotado al auditar la v0.229 (las tres primeras son de arreglar pronto):** (1) con dos cuadros con texto que se
-  cierran a la vez (dos respuestas, o edición y respuesta) salen dos avisos y la pantalla muestra uno solo: el texto
-  del primero no se puede copiar (`src/ui/commentsUi.ts`, `src/ui/notice.ts`); juntarlos en un aviso cuyo *Copy
-  text* copie todos. (2) El aviso flotante en el teléfono queda angosto y alto (210 por 175 px a 375: el texto en
-  castellano se parte en 9 renglones), por el estilo general del aviso (`left: 50%` con `translateX`, que limita el
-  ancho a media pantalla): anclarlo a los dos costados. (3) **Salir de la cuenta con un comentario a medio escribir
-  no pregunta** y el aviso no tiene dónde mostrarse: se pierde en silencio (el menú de la cuenta y la pantalla sin
-  proyectos no miran `hasDrafts()`; el cambio de workspace sí). (4) `Panel` no lleva `key` por página: hoy no se
-  alcanza (la vista de página se remonta), pero montado con otra página sin remontarse mostraría el hilo anterior
-  como borrado con su cuadro; es una línea. (5) Falta la prueba de que, con un cuadro de edición abierto, vuelven
-  como borradas todas las respuestas que se borraron y no solo la del cuadro. (6) Un hilo fijado entre los resueltos
-  que se reabrió sigue bajo «1 resolved thread» hasta cerrar el cuadro. Sin recorrer con el router de verdad: el
-  Atrás del navegador y el cambio de proyecto (pasan por el mismo desmontaje).
-  **Anotado al hacer la v0.229:** (a) **cambiar de página con un comentario a medio escribir no pregunta** (deja el
-  aviso con *Copy text* de D339, 15 segundos; el Atrás del navegador, igual): si hace falta más, las opciones son
-  preguntar en `navigate` (45 llamadores, varios siguen con algo que da por hecho el cambio) o guardar el borrador
-  de cada cuadro y devolverlo al volver. (b) Con un comentario nuevo a medio escribir, pedirle otra cosa al panel
-  (*Comment* en otro bloque, abrir un hilo desde el margen o desde la campana) cierra ese cuadro: ahora sale el
-  mismo aviso con *Copy text*, pero no pregunta ni conserva el cuadro (`showComments` y la `key` de `NewThread`,
-  `src/ui/CommentsPanel.tsx`). (c) El panel montado sobre una página que dejó de verse se desmonta entero
-  (`PageView.tsx`): los cuadros se van con el aviso; mantenerlo abierto hasta cerrar los cuadros es otra opción.
+  **Hecho en v0.230 (lo anotado al auditar y al hacer la v0.229):** (1) **salir de la cuenta con un comentario a
+  medio escribir pregunta**: la pregunta de siempre suma una oración (*A comment you are writing has not been sent
+  and will be lost.*), una sola con lo pendiente y lo rechazado; quitar el workspace del dispositivo, igual (D341).
+  Los demás caminos que desmontan todo ya lo miraban (la tabla está en `Doc_Sincronizacion.md`). (2) **Un comentario
+  nuevo con algo escrito ya no se cierra cuando se le pide otra cosa al panel** (*Comment* en otro bloque, abrir un
+  hilo desde el margen o desde la campana, *Comment on the page*): se queda como está, y puede haber uno por bloque
+  (D342). (3) Varios cuadros con texto que se cierran a la vez salen en **un solo aviso**, que dice cuántos son y cuyo
+  botón los copia todos, separados por una línea en blanco (D343). (4) El aviso flotante en el teléfono (hasta
+  760 px) va anclado a los dos costados: a 375 px mide 343 por 90 (antes 210 por 175, con el botón en tres
+  renglones). Y los botones de un aviso no se achican en ninguna pantalla: en escritorio y en castellano *Copiar el
+  texto* salía en dos renglones (a 1280 px, 640 por 60) y ahora en uno (640 por 56); de 761 px para arriba ningún
+  otro aviso cambió (medido). (5) `Panel` lleva `key` por
+  página. (6) La prueba que faltaba: con un cuadro de edición abierto, las otras respuestas que se borran dejan de
+  verse. (7) El rótulo de los resueltos cuenta los resueltos de verdad (D344).
+  **Queda de esa lista:** (a) **cambiar de página con un comentario a medio escribir sigue sin preguntar** (D339 no
+  cambió: el aviso con *Copy text*, 15 segundos; el Atrás del navegador, igual). La salida sin límite de tiempo es
+  guardar el borrador de cada cuadro y devolverlo al reabrirlo; **no se hizo: abre preguntas que no son obvias**. El
+  diseño, para cuando se decida: lo escrito en un cuadro se guarda en el dispositivo mientras se escribe (con un
+  respiro de unos 300 ms, y al desmontarse) en la base de comentarios de **esa cuenta** (`commentsDb`, almacén
+  `meta`, que ya existe y es de clave y valor: no hace falta subir la versión de la base local, que dejaría afuera a
+  una versión anterior abierta), con la clave `draft:<página>:<cuadro>` (`new:<bloque o página>`, `reply:<hilo>`,
+  `edit:<comentario>`) y el valor `{ text, mentions, base, at }` (`base`: el texto del que partía una edición). No
+  entra a la cola ni viaja; se va con la base al quitar el workspace; se borra al mandar, al cancelar y al cerrar el
+  panel confirmando. Al montarse, el panel lee los de su página y el cuadro que tiene uno arranca con ese texto. Lo
+  que hay que decidir antes: cómo se entera la persona de que hay un borrador esperando en otra página (sin una
+  marca en el árbol o en el botón de comentarios queda escondido); qué pasa con una respuesta guardada para un hilo
+  que mientras tanto se resolvió (el panel no ofrece *Reply* ahí) o se borró, con una edición cuyo comentario cambió
+  (la base guardada choca: iría a lo apartado de D326) o se borró, y con un comentario nuevo en un bloque que ya no
+  está; cuánto dura un borrador que nadie reabre y quién lo limpia; si con el borrador guardado siguen haciendo falta
+  las preguntas de cerrar, recargar y salir de la cuenta; y dos pestañas con el mismo cuadro. Tamaño estimado: 250 a
+  300 líneas de producto, más pruebas. (b) El panel montado sobre una página que dejó de verse se desmonta entero
+  (`PageView.tsx`): los cuadros se van con el aviso. (c) Sin recorrer con el router de verdad: el Atrás del navegador
+  y el cambio de proyecto (pasan por el mismo desmontaje).
+  **Anotado al hacer la v0.230:** (i) **las pantallas que reemplazan la app sin que la persona lo pida** (otra
+  pestaña toma el control, sacaron a la persona del workspace, se borraron todos los proyectos, un error que frena la
+  app: `Workspace.tsx`, `RemovedScreen.tsx`, `ErrorBarrier.tsx`) desmontan el cuadro junto con la pantalla que dibuja
+  el aviso: lo tipeado se pierde en silencio, sin pregunta posible. El borrador guardado de (a) lo resolvería; lo
+  barato sería que esas pantallas también dibujen el aviso. (ii) Entre 761 y unos 1100 px el aviso sigue topado en
+  media pantalla (a 1280 px, en 640). (iii) Un aviso con botón reemplazado por otro aviso antes de
+  sus 15 segundos pierde el botón (el de un comentario cerrado, y también *Undo*): el aviso tiene un solo lugar
+  (`notice.ts`). (iv) Cambiar de workspace con un comentario a medio escribir y cambios sin subir hace dos preguntas
+  seguidas (`useLeaveGuard`); salir de la cuenta, una.
+  **Anotado al auditar la v0.230:** (1) **en el teléfono, un aviso largo ahora tapa el botón redondo de dictar**
+  mientras está a la vista (6 o 15 segundos; medido entre 375 y 759 px): es consecuencia de anclarlo a los costados;
+  subir el aviso por encima del botón en el teléfono (`styles.css`, `.notice` y `.dictate-fab`), con los avisos que
+  van apilados a 76 px. (2) Después de una pregunta de la app por el comentario a medio escribir (*Reload*, forzar la
+  actualización, cambiar o quitar el workspace), el `beforeunload` sigue mirando `hasDrafts()` y el navegador
+  mostraría además su propia pregunta (anterior a la v0.230; por lectura: hay que mirarlo en un navegador real).
+  (3) Los botones del aviso miden 21 px de alto en pantallas táctiles. (4) `noticeLayout.test.ts` lee el CSS como
+  texto y su lista de variantes es fija: que las descubra por expresión regular. (5) Con varios cuadros abiertos, un
+  *Cancel* equivocado descarta ese texto sin pregunta (*Cancel* nunca preguntó; Escape y la X, sí). (6) Sin ver: la
+  app real en un navegador y en un teléfono, el Atrás y el cambio de proyecto con el router de verdad.
   **Hecho en v0.228 (lo anotado en la re-verificación de v0.227):** (1) el cuadro de edición abierto sobre lo guardado
   cuando una rechazada vieja se reintenta, choca y pasa a ser lo apartado ya no lleva a perder lo tipeado: el aviso
   dice que desde ahí no se puede guardar, el cuadro suma *Copy text* de lo escrito y *Cancel* pide confirmación (solo

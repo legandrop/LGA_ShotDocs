@@ -10,10 +10,22 @@ export const comments = {
   },
   'comments.discardDraft': { en: "Discard what you wrote?", es: "¿Descartar lo que escribiste?" },
   // Un cuadro con algo escrito se cerró sin que la persona lo cerrara (cambió de página, la página dejó de verse): el
-  // aviso lleva *Copy text* (commentsUi.ts).
+  // aviso lleva *Copy text* (commentsUi.ts). Con varios cuadros cerrados a la vez, un solo aviso dice cuántos son y su
+  // botón los copia todos.
   'comments.draftClosed': {
     en: "A comment you were writing was closed before you sent it.",
     es: "Un comentario que estabas escribiendo se cerró antes de que lo mandaras.",
+  },
+  'comments.draftsClosed': {
+    en: "{count} comments you were writing were closed before you sent them.",
+    es: "Se cerraron {count} comentarios que estabas escribiendo antes de que los mandaras.",
+  },
+  'comments.copyAllTexts': { en: "Copy all {count}", es: "Copiar los {count}" },
+  // Salir de la cuenta o quitar el workspace del dispositivo con algo escrito en un cuadro: va adentro de la pregunta
+  // de siempre (menus.tsx, WorkspaceMenu.tsx).
+  'comments.draftUnsent': {
+    en: { one: "A comment you are writing has not been sent and will be lost.", other: "{count} comments you are writing have not been sent and will be lost." },
+    es: { one: "Un comentario que estás escribiendo no se mandó y se va a perder.", other: "{count} comentarios que estás escribiendo no se mandaron y se van a perder." },
   },
   'comments.comment': { en: "Comment", es: "Comentar" },
   'comments.answer': { en: "Answer", es: "Responder" },

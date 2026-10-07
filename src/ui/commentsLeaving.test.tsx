@@ -2,20 +2,23 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { translate } from '../i18n';
+import { prefs } from '../prefs';
 import { settled } from '../test/settle';
 import { navigate, pagePath } from '../router';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY, WorkspaceContext } from '../workspace';
-import { closeComments, hasDrafts, showComments } from './commentsUi';
+import { closeComments, hasDrafts, setDraft, showComments } from './commentsUi';
 import { signOutQuestion } from './menus';
 import { NoProjectsOpen, Shell } from './Workspace';
 
 // Un comentario a medio escribir y lo que le pasa a la página que lo tiene, con la app montada entera contra el
 // servidor en memoria (Docs/Doc_Sincronizacion.md, "Un cuadro abierto y lo que llega de afuera"): cerrar o recargar
 // el navegador pregunta; cambiar de página, o que la página deje de verse, ya no se lo lleva en silencio (un aviso lo
-// deja copiar); y perder el permiso de comentar o que la página vaya a la papelera no cierran el cuadro.
+// deja copiar, uno solo por todos los cuadros que se cerraron juntos); salir de la cuenta pregunta antes; y perder el
+// permiso de comentar o que la página vaya a la papelera no cierran el cuadro.
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 // Monta el editor: con la máquina cargada, en jsdom tarda.
@@ -59,6 +62,7 @@ afterEach(async () => {
     d.commentsDb.close();
   }
   act(() => closeComments());
+  act(() => prefs.set({ language: 'en' }));
   notices.length = 0;
   document.body.innerHTML = '';
   localStorage.clear();
@@ -112,16 +116,16 @@ function mount(d: Device, node: React.ReactNode, signOut?: () => unknown): void 
 }
 
 /** La app con una página abierta, su hilo «Original» y el panel de comentarios abierto, para quien usa `d`. */
-async function openApp(d: Device, page: string): Promise<void> {
+async function openApp(d: Device, page: string, signOut?: () => unknown): Promise<void> {
   history.replaceState(null, '', pagePath(page));
-  mount(d, <Shell />);
+  mount(d, <Shell />, signOut);
   await until(() => document.querySelector('textarea.page-title'), 'el título de la página abierta');
   act(() => showComments(null));
   await until(() => inPanel('Reply'), 'el panel con el hilo');
 }
 
 /** La dueña con Brief (y otra página), un hilo suyo, y la app abierta en Brief. */
-async function owner() {
+async function owner(signOut?: () => unknown) {
   const server = new FakeServer();
   server.enableComments();
   const d = await makeDevice(server);
@@ -130,7 +134,7 @@ async function owner() {
   const other = await d.tree.create(null, 'Otra');
   await d.comments.add(page, null, 'Original');
   await d.engine.syncNow();
-  await openApp(d, page);
+  await openApp(d, page, signOut);
   return { server, d, page, other };
 }
 
@@ -195,6 +199,105 @@ describe('salir con un comentario a medio escribir', () => {
     await wait();
     expect(copied).toEqual(['Respuesta a medio escribir']);
     expect(hasDrafts()).toBe(false);
+  });
+
+  it('cambiar de página con dos cuadros con algo escrito deja un solo aviso en la app, que dice cuántos son y los copia a los dos', async () => {
+    const { other } = await owner();
+    const boxes = () => [...panel()!.querySelectorAll<HTMLTextAreaElement>('textarea')];
+    const typeIn = (el: HTMLTextAreaElement, text: string) =>
+      act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(el, text);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    await act(async () => inPanel('Edit')!.click());
+    await typeIn(boxes()[0], 'Edición a medio escribir');
+    await act(async () => inPanel('Reply')!.click());
+    await typeIn(boxes()[1], 'Respuesta a medio escribir');
+    const copied: string[] = [];
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (text: string) => void copied.push(text) } });
+    await act(async () => navigate(pagePath(other)));
+    await until(() => document.querySelector<HTMLTextAreaElement>('textarea.page-title')?.value === 'Otra', 'la otra página');
+    expect(notices).toEqual([expect.objectContaining({ message: '2 comments you were writing were closed before you sent them.', label: 'Copy all 2' })]);
+    // En la pantalla hay un aviso solo, con el botón que copia los dos textos.
+    expect(document.querySelectorAll('.notice')).toHaveLength(1);
+    expect(document.querySelector('.notice')!.textContent).toContain('2 comments you were writing were closed before you sent them.');
+    const button = [...document.querySelectorAll<HTMLButtonElement>('.notice button')].find((b) => b.textContent === 'Copy all 2');
+    await act(async () => button!.click());
+    await wait();
+    expect(copied).toEqual(['Edición a medio escribir\n\nRespuesta a medio escribir']);
+    expect(hasDrafts()).toBe(false);
+  });
+});
+
+describe('salir de la cuenta con un comentario a medio escribir', () => {
+  /** Abre el menú de la cuenta y toca *Sign out* (o su nombre en el idioma de la app). */
+  const signOutFromMenu = async (label = 'Sign out') => {
+    if (!document.querySelector('.account-menu')) await act(async () => document.querySelector<HTMLButtonElement>('.account-button')!.click());
+    const button = [...document.querySelectorAll<HTMLButtonElement>('.account-menu button')].find((b) => b.textContent?.trim() === label);
+    await act(async () => button!.click());
+    await wait(60);
+  };
+
+  it('el menú de la cuenta pregunta antes y dice que se va a perder; con un «no», el cuadro sigue con lo tipeado y no se sale', async () => {
+    const signOut = vi.fn(async () => ({ error: null }));
+    await owner(signOut);
+    const ask = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    await act(async () => inPanel('Reply')!.click());
+    await type('Respuesta a medio escribir');
+    const before = box();
+    await signOutFromMenu();
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(ask).toHaveBeenLastCalledWith('A comment you are writing has not been sent and will be lost. Sign out anyway?');
+    expect(ask.mock.calls[0][0]).toBe(signOutQuestion(0, 0, 1));
+    expect(signOut).not.toHaveBeenCalled();
+    expect(box()).toBe(before);
+    expect(box()!.value).toBe('Respuesta a medio escribir');
+    expect(notices).toEqual([]);
+    // En castellano, y con dos cuadros: una sola pregunta, que dice cuántos son.
+    act(() => prefs.set({ language: 'es' }));
+    await wait();
+    await act(async () => inPanel('Editar')!.click());
+    await act(async () => {
+      const edit = panel()!.querySelectorAll<HTMLTextAreaElement>('textarea')[0];
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(edit, 'Edición a medio escribir');
+      edit.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await signOutFromMenu('Cerrar sesión');
+    expect(ask).toHaveBeenCalledTimes(2);
+    expect(ask).toHaveBeenLastCalledWith('2 comentarios que estás escribiendo no se mandaron y se van a perder. ¿Cerrar la sesión igual?');
+    expect(signOut).not.toHaveBeenCalled();
+    act(() => prefs.set({ language: 'en' }));
+    await wait();
+    // Con un «sí», sale.
+    ask.mockReturnValue(true);
+    await signOutFromMenu();
+    await until(() => signOut.mock.calls.length > 0, 'la salida de la cuenta');
+    expect(ask).toHaveBeenCalledTimes(3);
+  });
+
+  it('sin nada escrito en ningún cuadro, el menú de la cuenta sale sin preguntar, como siempre', async () => {
+    const signOut = vi.fn(async () => ({ error: null }));
+    await owner(signOut);
+    const ask = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    // Un cuadro abierto y vacío no cuenta.
+    await act(async () => inPanel('Reply')!.click());
+    await signOutFromMenu();
+    await until(() => signOut.mock.calls.length > 0, 'la salida de la cuenta');
+    expect(ask).not.toHaveBeenCalled();
+  });
+
+  it('la pregunta de salir suma lo que se está escribiendo a lo pendiente y a lo rechazado, en una sola', () => {
+    // Sin nada escrito, las de siempre.
+    expect(signOutQuestion(2, 0, 0)).toBe(signOutQuestion(2, 0));
+    expect(signOutQuestion(3, 1, 0)).toBe(signOutQuestion(3, 1));
+    expect(signOutQuestion(0, 0, 1)).toBe('A comment you are writing has not been sent and will be lost. Sign out anyway?');
+    expect(signOutQuestion(2, 0, 1)).toBe(
+      '2 changes are not uploaded yet: they upload the next time you sign in with this account. A comment you are writing has not been sent and will be lost. Sign out anyway?',
+    );
+    expect(signOutQuestion(3, 1, 2)).toBe(
+      '3 changes are not uploaded yet: they upload the next time you sign in with this account. 1 change was rejected by the server and is only on this device. It stays saved here: you can review it in the sync status the next time you sign in with this account. 2 comments you are writing have not been sent and will be lost. Sign out anyway?',
+    );
+    for (const count of [1, 2]) expect(translate('es', 'comments.draftUnsent', { count })).not.toBe(translate('en', 'comments.draftUnsent', { count }));
   });
 });
 
@@ -288,6 +391,31 @@ describe('salir de la cuenta desde la pantalla sin proyectos', () => {
     expect(signOut).not.toHaveBeenCalled();
     ask.mockReturnValue(true);
     await act(async () => [...document.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === 'Sign out')!.click());
+    expect(signOut).toHaveBeenCalled();
+  });
+
+  it('con un cuadro con algo escrito registrado, también pregunta (hoy esa pantalla no tiene panel: es la misma pregunta por si lo tuviera)', async () => {
+    const server = new FakeServer();
+    server.enableComments();
+    server.addMember(CLIENTA, 'guest', 'clienta@cliente.com');
+    const guest = await makeDevice(server, undefined, undefined, undefined, undefined, { id: CLIENTA });
+    devices.push(guest);
+    await guest.engine.syncNow();
+    expect(guest.tree.hasNoProjects()).toBe(true);
+    const signOut = vi.fn();
+    mount(guest, <NoProjectsOpen />, signOut);
+    await wait(60);
+    const ask = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const press = () => act(async () => [...document.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === 'Sign out')!.click());
+    act(() => setDraft(Symbol('cuadro'), true, { text: 'A medio escribir' }));
+    await press();
+    expect(ask).toHaveBeenCalledWith(signOutQuestion(0, 0, 1));
+    expect(signOut).not.toHaveBeenCalled();
+    // Sin nada escrito ni pendiente, sale sin preguntar.
+    act(() => closeComments());
+    ask.mockClear();
+    await press();
+    expect(ask).not.toHaveBeenCalled();
     expect(signOut).toHaveBeenCalled();
   });
 });
