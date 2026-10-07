@@ -310,6 +310,18 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
   desde el pie del selector de proyectos (*Files by size*, arriba de *Trash*), con un desplegable para elegir el
   proyecto, el más pesado primero; no desde un ícono en cada renglón (le saca ancho al subtítulo, donde está el
   peso), ni desde el diálogo de Google Drive, ni desde la papelera. No borra ni reemplaza: el link abre la página.
+- **D314 · La base limpia «(via link)» del nombre del visitante; no rechaza el pedido** (2026-10-06; tomada al
+  implementarlo, Lega la puede cambiar). El roadmap decía "que la base rechace". Rechazar es un error definitivo: un
+  comentario o una edición de una app anterior a v0.215 con el rótulo en el nombre quedarían sin entregar para siempre.
+  Se guardan con el nombre limpio; si el nombre era solo el rótulo, queda `-`. La otra opción: rechazar
+  (`author_invalid`) y aceptar esa pérdida (`Doc_Link_Publico.md`, "El nombre del visitante sin el rótulo, también en la
+  base").
+- **D315 · El nombre de un comentario importado puede seguir trayendo «(via link)»** (2026-10-06; tomada al
+  implementarlo, Lega la puede cambiar). Al importar un archivo exportado, la app escribe `Ana (via link)` como autor de
+  lo que se había comentado por un link, para que no se pierda de dónde vino. Por eso `import_comment` no limpia ese
+  nombre, y quien puede importar en una página (Editar y crear páginas) puede escribirlo como autor: se ve con la
+  marca de importado, no con el estilo de un visitante. La otra opción: que el archivo diga "vino por un link" en un
+  campo aparte y la base saque el rótulo también ahí.
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 

@@ -300,19 +300,25 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   **Hecho en v0.218:** con *All projects* se hacía una consulta `trashed_files` por proyecto (la primera vez); ahora
   una sola (`trashed_files_all`, migración `20261108120000_papelera_archivos_todos.sql`, aplicada), y
   con una base sin la función, como antes; con más de 1000 archivos, de a páginas de 1000.
-  **Pendiente de v0.218:** (1) **medir y abaratar `trashed_files_all` con muchos datos:** en una copia sembrada tardó
-  2,4 s con 6005 archivos en 150 proyectos, y cada página vuelve a correr la función entera (7 páginas en ese caso);
-  si pesa, que la función reciba desde dónde seguir en vez de un tramo. (2) Si el pedido único falla con muchos
-  proyectos, sale una línea de error con su *Retry* por cada proyecto: juntarlas en una. (3) La consulta por proyecto
-  (`trashed_files`) sigue cortada a 1000 archivos por proyecto, como siempre. (4) De la re-verificación (BAJO): cada
-  página vuelve a leer la base, así que un cambio entre dos páginas (un archivo que sale de la papelera, un proyecto
-  que la sesión deja de ver) corre las filas un lugar y puede faltar un archivo, o un proyecto verse como sin acceso,
-  hasta reabrir la papelera; hace falta más de 1000 archivos y un cambio en los segundos de la carga. Y el corte
-  («una página con menos de 1000 filas es la última») supone que la base entrega 1000 filas o más por pedido: un
-  workspace con su propio Supabase y un tope menor recibiría la lista cortada sin aviso (los comentarios tienen el
-  mismo supuesto). Las dos cosas se resuelven pidiendo el total con cada página (`count: 'exact'`) y repitiendo la
-  carga una vez si lo juntado no coincide, o con la función que recibe desde dónde seguir; y la guía para crear un
-  workspace tendría que decir el tope.
+  **Hecho en v0.221 (lo que quedaba de v0.218):** la papelera de archivos se pide **de a páginas por clave**
+  (`trashed_files_page`, migración `20261110120000_papelera_archivos_por_clave.sql`, aplicada): cada pedido
+  sigue desde la última fila recibida y trabaja solo por su página (6.000 archivos: 7 pedidos que suman 312 ms, contra
+  7 corridas enteras de 420 ms); un cambio entre dos páginas ya no corre ni saltea filas; la app corta solo cuando la
+  base dice que no hay más (no por recibir pocas filas), así que un tope de filas por pedido menor no corta la lista; y
+  la papelera de un proyecto usa lo mismo, sin el corte a 1000 (`Doc_Proyectos_Borrar.md`, "La papelera de archivos, de
+  a páginas por clave"). La guía para crear un workspace dice el tope y `setup-workspace.mjs` lo avisa.
+  **Pendiente:** (1) si el pedido único falla con muchos proyectos, sale una línea de error con su *Retry* por cada
+  proyecto: juntarlas en una. (2) Los **comentarios de una página** (`list_comments`, pedida por tramos y sin orden
+  escrito en el pedido) siguen con los dos supuestos: que la API entrega 1000 filas por pedido y que nada cambia entre
+  dos tramos; hace falta una página con más de 1000 comentarios. El arreglo es el mismo (que la función reciba desde
+  dónde seguir y diga cuándo terminó), con su migración: no se puede cortar por "página vacía" sin duplicar un pedido
+  que la app hace en cada sincronización. Lo mismo, en menor medida, el árbol (`fetchTreeOf`, que ya sigue por id pero
+  corta con menos de 1000 filas) y los usos de archivos (`fetchPageUses`). (3) Con una base sin `trashed_files_page`
+  (un workspace que no aplicó la migración) la papelera sigue como en v0.218. (4) De la auditoría de v0.221 (BAJO,
+  ninguno pierde ni filtra nada; `Doc_Proyectos_Borrar.md`, "La papelera de archivos, de a páginas por clave", "Lo que
+  queda"): *All projects* vuelve a bajar la papelera del proyecto abierto, que ya estaba cargada (viene de la v0.218);
+  si la base repitiera una fila, el error *the same row arrived twice* llega crudo y en inglés; y un lugar armado a
+  mano `(proyecto, nulo, nulo)` sobre un proyecto con archivos lo saltea entero (la app nunca lo arma).
   **Entrega 3, *Delete forever* (v0.167, D-23 (6)):** en el renglón de un proyecto borrado de la papelera, pasados los
   30 días, dueños y admins que lo manejan escriben la palabra y el proyecto sale de la papelera para siempre; es una
   marca (`purged_at`), ninguna fila se borra, y la carpeta va antes a la papelera de Drive si no estaba. Migración
@@ -373,7 +379,9 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   publicarla del todo falta prender el interruptor de D14 (`clean_min_version`, hoy nulo, apagado); la migración ya está aplicada. **Hecho en v0.215:** el ícono del árbol para las
   páginas con link propio (lo ve quien puede compartir la página; lo confirma la base) y, en *Share*, quién creó el link y
   cuándo. Falta: decir en cada comentario de qué link vino (*Can view link, created by…*; la base no lo entrega por id de
-  link: diseño en `Doc_Link_Publico.md`, "Restos del link (v0.215)"), y la entrega 3.
+  link: diseño en `Doc_Link_Publico.md`, "Restos del link (v0.215)"; **no entró en v0.221**: además de la función, la
+  app no guarda el id del link de cada comentario, y con el pedido, el panel, la ayuda y las pruebas es una tanda
+  propia: "Lo que quedó de v0.221"), y la entrega 3.
   **Entrega 2a hecha (v0.151: escribir; migración `20261028120000_link_editar.sql` aplicada (verificada en la base el 2026-10-06), `schema_version` 19, y el
   interruptor `link_edit_min_version` ya prendido en 0.151; ver "Cómo quedó la 2a" en `Doc_Link_Publico.md`).** Para prenderla hacía falta: la
   barrera de error alrededor de `PageEditor` en `main` (R4), aplicar la migración, subir la mínima y poner
@@ -424,9 +432,16 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   **Observaciones de las auditorías que quedaron para después** (ninguna pierde datos ni abre el link): en el visitante, *Open my workspace* desde la
   cabecera del link, pruebas de las guardas de la interfaz (*Resolve*, papelera, preferencias, cartel del dominio,
   modo liviano), limpiar las bases locales de
-  links viejos, que la base rechace «(via link)» en el nombre (la app ya lo saca), la ayuda
+  links viejos, la ayuda
   según quién la lee; en la base, tiempos de un token que ya existe (el doc dice «cuesta lo mismo»), el costo sin contar
   de `plink_tree(sig)` (26 ms con 423 páginas), y el `max_rows` de PostgREST (1000: ramas más grandes llegan cortadas).
+  **Hecho en v0.221, de esas observaciones:** la base saca «(via link)» del nombre del visitante al comentar y al
+  escribir (migración `20261112120000_link_nombre_sin_rotulo.sql`, aplicada). **Limpia en vez de
+  rechazar** (D314): rechazar dejaba sin entregar para siempre lo de una app anterior a v0.215. Queda afuera, a
+  propósito, el nombre de un comentario importado (D315; `Doc_Link_Publico.md`, "El nombre del visitante sin el rótulo,
+  también en la base"). **Queda:** la limpieza no cubre los parecidos, igual que la app (la `í` descompuesta, U+180E,
+  la `ı` sin punto, las letras de ancho completo, las cirílicas que se ven iguales, `[via link]`): cerrarlos pide
+  normalizar el nombre en la app y en la base a la vez.
   **Hecho en v0.215, de esas observaciones:** la pantalla del link que ya no anda muestra los comentarios sin mandar, para
   copiarlos; quien entró con un link que no edita lee qué pedir (otro link) en vez de «Ask for edit access»; el nombre
   del visitante no puede traer «(via link)»; la prueba del portero de los pases de 2 horas en `/folder/list`; el texto de
@@ -443,10 +458,15 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   sola en la vuelta siguiente (2 a 10 minutos); (b) **privacidad, hecho en v0.218:** `public_link_pages()` contestaba a
   cualquiera que ve la página, invitados incluidos si la llamaban a mano, y revelaba que la página tiene un link; ahora
   contesta solo a quien puede compartirla, con lo que dice el ícono (migración
-  `20261107120000_link_paginas_quien_comparte.sql`, aplicada). **Pendiente: medirla con muchos
-  links:** en una copia sembrada, 750 ms con 608 links para quien comparte y 240 a 390 ms para un miembro que no recibe
-  nada; es lineal en todos los links del workspace y la app la pide cada 2 minutos. Propuesta: cortar al principio si
-  el rol de la sesión es nulo o invitado, y mirar el permiso por proyecto antes que por página. **Arreglado en v0.218,
+  `20261107120000_link_paginas_quien_comparte.sql`, aplicada). **Hecho en v0.221:** tardaba 750 ms con 608 links
+  para quien comparte y 240 a 390 ms para un miembro que no recibe nada (lineal en todos los links del workspace, y la
+  app la pide cada 2 minutos); ahora corta al principio sin rol o para un invitado, mira solo los proyectos propios de
+  quien no es dueño ni admin, y mira el permiso una vez por proyecto (la página, solo si el proyecto no alcanza), con el
+  mismo resultado para cada sesión: 182 ms para quien comparte y menos de 1 ms para quien no recibe nada (migración
+  `20261111120000_link_paginas_sin_recorrer_todo.sql`, aplicada; `Doc_Link_Publico.md`, "La lista de páginas
+  con link, sin recorrer todos los links"). **Queda:** un admin sin «Editar y crear páginas» sobre el proyecto entero
+  todavía hace mirar el permiso link por link en ese proyecto (con 613 links, de 400 a entre 270 y 330 ms): pide
+  resolver de una vez sus permisos por página. **Arreglado en v0.218,
   falta probarlo de verdad:** quien entraba por un link no podía abrir originales, videos ni adjuntos, ni subir (el
   portero no aceptaba el header de la versión que manda la app; `Doc_Link_Publico.md`, "El portero no aceptaba la
   versión de la app"): probar un link con fotos, un video y una subida contra el portero real; (c) la pantalla del link que ya no anda abre (y crea si no

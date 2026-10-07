@@ -68,6 +68,9 @@ describe('el link: dirección, lo guardado y los headers', () => {
     expect(cleanVisitorName('Ana (vía link)')).toBe('Ana');
     expect(cleanVisitorName('Ana ( VIA   Link ) Pérez')).toBe('Ana Pérez');
     expect(cleanVisitorName('(via link)(via link) Ana')).toBe('Ana');
+    // Sacar uno puede dejar armado otro: tampoco queda.
+    expect(cleanVisitorName('(via (via link) link) Ana')).toBe('Ana');
+    expect(cleanVisitorName('(via ((via link)via link) link)')).toBe('');
     // Solo el rótulo: no queda nombre, y la app lo vuelve a pedir.
     expect(cleanVisitorName(' (via link) ')).toBe('');
     // Un nombre con paréntesis propios, o que nombra un link sin ser el rótulo, queda como está.

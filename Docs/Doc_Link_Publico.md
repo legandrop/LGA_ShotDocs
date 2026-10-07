@@ -2721,8 +2721,9 @@ Pruebas en `linkShare.test.tsx` (3 más) y `linkMode.test.ts` (1 más). Siguen e
   las dos causas es (editar con un link apagado en el workspace, o una app más vieja que la versión que lo prendió): para
   decirlo haría falta que `plink_open` lo cuente.
 - **El nombre sin «(via link)»:** la app lo saca al guardarlo y al leerlo (también «(vía link)», con cualquier espacio
-  o mayúscula): escrito en el nombre salía dos veces. **Que la base lo rechace** (alguien que llama a la API a mano) pide
-  una migración; no cambia quién puede hacerse pasar por quién, porque el rótulo lo pone siempre la app del equipo.
+  o mayúscula): escrito en el nombre salía dos veces. **Desde v0.221 la base también lo saca** de lo que le llega
+  ("El nombre del visitante sin el rótulo, también en la base"); no cambia quién puede hacerse pasar por quién, porque
+  el rótulo lo pone siempre la app del equipo.
 
 **El portero:** la prueba que faltaba de los pases de 2 horas en `/folder/list` con un link (una carpeta y varias, el
 link revocado y lo que no ve), en `portero/src/folders.test.ts`. Y el texto de 3.9: el listado cuenta un pase por pedido,
@@ -2746,9 +2747,9 @@ no uno por archivo.
 
 | Qué | Por qué no alcanza lo de hoy | Diseño |
 |---|---|---|
-| De qué link vino cada comentario (*Can view link, created by lega*, 3.7) | `list_comments` da `plink_id`, pero ninguna función dice el nivel ni el creador de un link por su id (`get_public_link` es por página y solo del link vivo; el de una página de arriba llega sin creador), y un comentario puede ser de un link ya renovado | Una función `public_link_labels(p_ids uuid[])` para `authenticated`, que devuelva `id`, `level`, `created_by_name` y `revoked` solo de los links cuya raíz la sesión puede compartir (`private.can_share(null, page_id)`), hasta 200 ids por pedido; el panel de comentarios la llama con los `plink_id` de la página y arma el detalle. Sin `can_share`, nada (ni existencia) |
+| **Sin hacer** (ver "Lo que quedó de v0.221"). De qué link vino cada comentario (*Can view link, created by lega*, 3.7) | `list_comments` da `plink_id`, pero ninguna función dice el nivel ni el creador de un link por su id (`get_public_link` es por página y solo del link vivo; el de una página de arriba llega sin creador), y un comentario puede ser de un link ya renovado | Una función `public_link_labels(p_ids uuid[])` para `authenticated`, que devuelva `id`, `level`, `created_by_name` y `revoked` solo de los links cuya raíz la sesión puede compartir (`private.can_share(null, page_id)`), hasta 200 ids por pedido; el panel de comentarios la llama con los `plink_id` de la página y arma el detalle. Sin `can_share`, nada (ni existencia) |
 | **Hecho en v0.218.** Que `public_link_pages()` conteste solo a quien comparte (privacidad), y que el ícono no dependa de dos pedidos | `public_link_pages()` lista a quien ve la página (nivel 1), no a quien la comparte: un invitado que la llama a mano se entera de que la página tiene link, y por eso la app confirma cada una con `get_public_link` | Cambiar su cuerpo a `private.can_share(null, pl.page_id)` y sumar `level`, `created_by_name` y `alive` al resultado (columnas al final: la app publicada lee solo `page_id`); el ícono pasa a un solo pedido |
-| Que la base rechace «(via link)» en el nombre | `plink_add_comment` y `plink_push_page_update` limpian controles y marcas de dirección, no el rótulo | Donde las dos validan el nombre (hoy `btrim(p_author)` y el chequeo de largo y de caracteres), sacar `\(\s*v[ií]a\s+link\s*\)` (sin distinguir mayúsculas) antes del `btrim`; si queda vacío, `author_missing` como hoy |
+| **Hecho en v0.221, limpiando en vez de rechazar** (sección de abajo). Que la base rechace «(via link)» en el nombre | `plink_add_comment` y `plink_push_page_update` limpian controles y marcas de dirección, no el rótulo | Donde las dos validan el nombre (hoy `btrim(p_author)` y el chequeo de largo y de caracteres), sacar `\(\s*v[ií]a\s+link\s*\)` (sin distinguir mayúsculas) antes del `btrim`; si queda vacío, `author_missing` como hoy |
 
 ### La lista de páginas con link, solo para quien comparte (v0.218)
 
@@ -2791,6 +2792,71 @@ cuenta no pasaba: la sesión no manda ese header al portero.
   link: estado, pases, subir por partes, papelera) y exige que todos estén en lo que el portero contesta a la consulta
   previa. Un header nuevo en la app sin su lugar en el CORS la hace fallar.
 - **Falta:** probar un link con fotos, un video y una subida contra el portero real después de publicar.
+
+### La lista de páginas con link, sin recorrer todos los links (v0.221)
+
+Migración `20261111120000_link_paginas_sin_recorrer_todo.sql`. `public_link_pages()` miraba, por cada link vivo del
+workspace, el permiso de la sesión sobre su página (la cadena de páginas de arriba) y, por cada uno que pasaba, lo mismo
+para quien lo creó; la app la pide cada 2 minutos. **Contesta lo mismo a cada sesión**, con menos trabajo:
+
+- Sin rol (o con contraseña) o invitado: nada, de entrada.
+- Quien no es dueño ni admin del workspace: solo los links de los proyectos que creó (la regla pide una de las dos cosas).
+- Los links de un proyecto borrado no se miran (nadie tiene nivel ahí).
+- El permiso se mira **una vez por proyecto**: con nivel 4 sobre el proyecto entero lo tiene sobre cada página, también
+  en la papelera. Solo cuando no alcanza (un admin con el permiso dado página por página) se mira la página con la regla
+  de siempre (`private.user_can_share_page`). Lo mismo para si el link anda, una vez por persona y proyecto.
+
+El atajo vale mientras `private.user_page_level` dé, a quien no es invitado, por lo menos su nivel sobre el proyecto
+entero. **Quien cambie esa regla tiene que correr la prueba** `supabase/tests/link_paginas_sin_recorrer_todo_permisos.sql`:
+compara, para trece personas y en cinco momentos (roles que cambian, la papelera, permisos por página, un proyecto
+borrado), la lista con el cuerpo anterior mirado link por link, y cuenta cuántos permisos de página se miran. La prueba
+de v0.218 (`link_paginas_quien_comparte_permisos.sql`) pasa sin tocarla.
+
+**Medido** (608 links sembrados adentro de una transacción que se deshizo): quien comparte todo por proyecto, de 835 a
+182 ms; una admin con la mitad dada página por página, de 863 a 291 ms; un miembro que no recibe nada, de 543 a 0,2 ms;
+un invitado, de 264 a 0,1 ms. La auditoría, con 613 links: dueña o admin con el proyecto entero, de 760 a 80 ms; un
+miembro que no comparte, de 540 a 2 ms; un invitado, de 240 a 0,1 ms. La firma, las columnas y los permisos no cambian;
+no sube `schema_version`.
+
+**Lo que queda:** un **admin sin «Editar y crear páginas» sobre el proyecto entero** (con Ver, Comentar o Editar, o con
+el permiso dado página por página) todavía hace mirar el permiso link por link en ese proyecto: es el único caso donde
+el proyecto no alcanza para decidir. Medido por la auditoría con 613 links: de 400 a entre 270 y 330 ms. Abaratarlo
+pide resolver de una vez los permisos por página de la sesión (una consulta por proyecto en vez de una por link).
+
+### El nombre del visitante sin el rótulo, también en la base (v0.221)
+
+Migración `20261112120000_link_nombre_sin_rotulo.sql`. La app saca «(via link)» del nombre desde v0.215; la base lo
+guardaba como llegaba (llamando a la API a mano, o con una app anterior, se veía dos veces). Ahora
+`private.plink_author_name` limpia el nombre con la regla de la app en las dos funciones que lo guardan:
+`plink_add_comment` (`comments.plink_author`) y `plink_push_page_update` (`public_link_updates.author`, que la admisión
+copia a `page_updates.plink_author`). Saca «(via link)» y «(vía link)» con las mayúsculas, los espacios (también los de
+ancho fijo) y los paréntesis (también los anchos) que sean, **las veces que haga falta** (sacar uno puede dejar armado
+otro: «(via (via link) link)»; la app tenía ese mismo hueco y también se cerró) y deja un espacio donde quedaron varios.
+
+- **Limpia, no rechaza (D314).** El roadmap pedía rechazar. Pero el error del nombre (`author_invalid`) es definitivo:
+  un comentario o una edición de una app anterior a v0.215 con el rótulo en el nombre quedarían sin entregar para
+  siempre. Se guardan con el nombre limpio. Si el nombre era solo el rótulo, queda `-`. Nada que antes se aceptara
+  se rechaza ahora, y un nombre sin el rótulo se guarda exactamente como antes.
+- **Lo que no cambia:** vacío, más de 60 (medido después de limpiar), controles y marcas de dirección: `author_invalid`.
+  La firma, los errores y los permisos (`anon` con el token del link; una sesión no las ejecuta).
+- **Lo que no cubre.** (1) `import_comment`: el nombre de un comentario importado puede traer el rótulo **a propósito**
+  (al importar un archivo exportado, la app escribe `Ana (via link)` como autor de lo que se había comentado por un
+  link); quien puede importar en una página puede entonces escribir ese texto como autor, con la marca de importado
+  (D315). (2) Lo ya guardado no se reescribe (en la base de Wanka no había ninguna fila con el rótulo al
+  2026-10-06). (3) **Los parecidos**, igual que en la app: una `í` escrita como `i` más el acento suelto (descompuesta),
+  el separador de vocales mongol (U+180E) u otro invisible adentro, la `ı` sin punto, las letras de ancho completo, las
+  letras cirílicas o griegas que se ven iguales, y otros paréntesis (`[via link]`, `{via link}`). Ninguno engaña al
+  equipo sobre quién escribió (el rótulo de verdad lo pone la app, con su estilo); cerrarlos pide normalizar el nombre
+  (NFKC y una tabla de parecidos) en la app y en la base a la vez.
+- Pruebas: `supabase/tests/link_nombre_sin_rotulo_permisos.sql` y `src/sync/linkMode.test.ts`.
+
+### Lo que quedó de v0.221
+
+- **De qué link vino cada comentario.** Sigue sin hacer. La parte de la base es la de la tabla de "Restos del link
+  (v0.215)" (`public_link_labels`, solo lectura, para quien puede compartir la raíz del link). Lo que la frenó es la
+  app: el dispositivo guarda de cada comentario el nombre del visitante pero no el id del link (hay que sumarlo a lo que
+  se guarda y a lo que lee la vista de respaldo), más el pedido con su caché por sesión, el texto en el panel, su
+  entrada en la ayuda y las pruebas. Es una tanda propia, no un resto.
 
 ## Cómo se midió
 

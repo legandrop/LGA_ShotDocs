@@ -81,7 +81,7 @@ async function main() {
     token: process.env.SUPABASE_ACCESS_TOKEN,
     dryRun: opts.dryRun,
   });
-  const io = { log: (line) => console.log(line), askHidden: process.stdin.isTTY ? askHidden : null };
+  const io = { log: (line) => console.log(line), askHidden: process.stdin.isTTY ? askHidden : null, fetch: globalThis.fetch };
   try {
     if (opts.openInviteSignup) {
       await runOpenInviteSignup({ client, opts, io });

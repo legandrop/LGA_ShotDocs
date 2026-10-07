@@ -374,6 +374,76 @@ export function newLocalKey() {
   return s;
 }
 
+// Lo que la app supone de la API y del portero de un workspace. El comando solo lo mira y avisa: no lo cambia.
+// Las listas largas (el árbol de páginas, los comentarios de una página, los archivos de las páginas) se piden de a
+// 1000 filas y una página más corta se toma por la última: con un tope de filas por pedido menor llegan cortadas.
+export const APP_MIN_MAX_ROWS = 1000;
+// Los headers que la app le manda al portero. Tienen que estar todos en su CORS (`cors` en portero/src/core.ts): con
+// uno que falte, el navegador corta el pedido entero antes de mandarlo.
+export const GATEWAY_HEADERS = ['Authorization', 'Content-Type', 'Content-Range', 'Range', 'x-shotdocs-link', 'x-shotdocs-device', 'x-shotdocs-version'];
+
+// El tope de filas por pedido de la API (el ajuste Max rows de la Data API del proyecto), o null si no se pudo leer.
+// La respuesta de /postgrest trae también un secreto (`jwt_secret`): de acá sale solo el número, y se pide una sola vez
+// por corrida (`runSetup`).
+export async function readApiMaxRows(client) {
+  try {
+    const rows = (await client.get('/postgrest'))?.max_rows;
+    return Number.isInteger(rows) ? rows : null;
+  } catch {
+    return null;
+  }
+}
+
+// El aviso del tope de filas, o null si alcanza. Si no se pudo leer, lo dice (sin el motivo: el error de la API puede
+// traer parte de la respuesta).
+export function maxRowsWarning(maxRows) {
+  if (maxRows === null) {
+    return (
+      'Could not read how many rows the API returns per request: check by hand that the Max rows setting of your ' +
+      `project's Data API settings is ${APP_MIN_MAX_ROWS} or more.`
+    );
+  }
+  if (maxRows >= APP_MIN_MAX_ROWS) return null;
+  return (
+    `The API returns at most ${maxRows} rows per request (the Max rows setting of your project's Data API settings). The app ` +
+    `expects ${APP_MIN_MAX_ROWS} or more: with fewer, long lists (the pages of a big project, the comments of a page) ` +
+    `arrive cut short. Set it back to ${APP_MIN_MAX_ROWS}.`
+  );
+}
+
+// Cuánto se espera al portero antes de darlo por caído: uno que acepta la conexión y no contesta frenaría el comando.
+export const GATEWAY_TIMEOUT_MS = 10_000;
+
+// Le pregunta al portero lo que pregunta un navegador antes de un pedido de la app (la consulta previa de CORS, sin
+// sesión): ¿acepta a la app desde su dirección, con todos sus headers? Devuelve el aviso, o null si está bien.
+export async function gatewayWarning({ mediaUrl, appUrl, fetch: fetchImpl, timeoutMs = GATEWAY_TIMEOUT_MS }) {
+  let res;
+  try {
+    res = await fetchImpl(`${mediaUrl}/pass`, {
+      method: 'OPTIONS',
+      // Vencido el tiempo, el pedido se corta y sale por el mismo aviso que un portero que no contesta.
+      signal: AbortSignal.timeout(timeoutMs),
+      headers: {
+        Origin: appUrl,
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': GATEWAY_HEADERS.join(', ').toLowerCase(),
+      },
+    });
+  } catch {
+    return `The file gateway at ${mediaUrl} did not answer: check its address (step 5 of the guide).`;
+  }
+  if (res.headers.get('Access-Control-Allow-Origin') !== appUrl) {
+    return `The file gateway does not accept the app at ${appUrl}: add that address to its APP_ORIGINS variable (step 5 of the guide).`;
+  }
+  const allowed = (res.headers.get('Access-Control-Allow-Headers') ?? '').split(',').map((h) => h.trim().toLowerCase());
+  const missing = GATEWAY_HEADERS.filter((h) => !allowed.includes(h.toLowerCase()));
+  if (!missing.length) return null;
+  return (
+    `The file gateway is older than the app: it does not accept ${missing.join(', ')}, so some files will not open or upload. ` +
+    'Sync your fork on GitHub (step 1) so Cloudflare publishes the gateway again.'
+  );
+}
+
 // Lee todo lo que el comando necesita, solo con GET y consultas de solo lectura.
 export async function readState(client, ownerEmail) {
   const config = sanitizeAuthConfig(await client.get('/config/auth'));
@@ -591,6 +661,15 @@ export async function runSetup({ client, opts, templates, env = {}, io, migratio
   const all = migrations ?? (await readMigrations());
   const state = await readState(client, opts.ownerEmail);
   const plan = planSetup(opts, state, templates, all, env);
+  // Lo que la app supone y el comando solo mira. El tope de filas, una vez por corrida.
+  const rows = maxRowsWarning(await readApiMaxRows(client));
+  if (rows) plan.warnings.push(rows);
+  // El portero, si ya tiene dirección: solo una pregunta (la consulta previa de CORS), nunca un cambio.
+  const mediaUrl = opts.mediaUrl ?? state.settings?.media_url ?? null;
+  if (mediaUrl && io.fetch) {
+    const warning = await gatewayWarning({ mediaUrl, appUrl: opts.appUrl, fetch: io.fetch });
+    if (warning) plan.warnings.push(warning);
+  }
   printPlan(io, opts, state, plan);
 
   if (opts.dryRun) {

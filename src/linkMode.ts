@@ -321,12 +321,18 @@ const VIA_LINK = /[(（]\s*v[ií]a\s+link\s*[)）]/gi;
 
 /**
  * El nombre que escribe el visitante: 1 a 60 caracteres, sin controles ni marcas de dirección (como la base) y sin
- * «(via link)»: ese rótulo lo pone la app al lado del nombre, así que escrito en el nombre saldría dos veces.
+ * «(via link)»: ese rótulo lo pone la app al lado del nombre, así que escrito en el nombre saldría dos veces. La base
+ * lo saca igual de lo que le llega (`private.plink_author_name`, 20261112120000_link_nombre_sin_rotulo.sql).
  */
 export function cleanVisitorName(raw: string): string {
   // eslint-disable-next-line no-control-regex
-  const plain = raw.replace(/[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2069\ufeff]/g, '');
-  return plain.replace(VIA_LINK, ' ').replace(/\s+/g, ' ').trim().slice(0, 60).trim();
+  let name = raw.replace(/[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2069\ufeff]/g, '');
+  // Las veces que haga falta: sacar uno puede dejar armado otro («(via (via link) link)»).
+  for (let before = ''; before !== name; ) {
+    before = name;
+    name = name.replace(VIA_LINK, ' ').replace(/\s+/g, ' ');
+  }
+  return name.trim().slice(0, 60).trim();
 }
 
 // --- El workspace del link: nombres propios en el dispositivo y un cliente sin sesión -------------------------------

@@ -544,8 +544,16 @@ const UNDEFINED_COLUMN = '42703';
 const MISSING_TABLE = new Set(['42P01', 'PGRST205']);
 const MISSING_FUNCTION = 'PGRST202';
 
-/** De a cuántas filas se pide `trashed_files_all`: el tope de filas por pedido de la API (como los comentarios). */
+/**
+ * De a cuántas filas se pide `trashed_files_all` a una base sin `trashed_files_page`: el tope de filas por pedido de la
+ * API (como los comentarios). Ese camino supone que la base entrega esa cantidad por pedido.
+ */
 export const TRASH_ALL_PAGE = 1000;
+/** Cuántas filas se le piden a `trashed_files_page` por pedido (la base no da más de 1000). */
+export const TRASH_PAGE_ROWS = 1000;
+
+/** Una fila de `trashed_files_page` o de `trashed_files_all`: `id` nulo, la papelera que la sesión ve y está vacía. */
+type TrashPageRow = { project_id: string } & Omit<RawTrashedFile, 'id' | 'trashed_at'> & { id: string | null; trashed_at: string | null };
 
 /** Una fila de `trashed_files` como llega (los números grandes pueden venir como texto; el título cambió de nombre). */
 type RawTrashedFile = TrashedFileRow & { page_title?: string | null; trashed_page?: string | null };
@@ -1655,13 +1663,97 @@ export class SupabaseRemote
     return !unlinkIgnored(data);
   }
 
+  /** Desde cuándo la base no tiene `trashed_files_page`; se vuelve a probar cada tanto por si se migró. */
+  private trashPageMissingAt = 0;
+
+  /**
+   * La papelera de archivos pedida de a páginas por clave (`trashed_files_page`,
+   * 20261110120000_papelera_archivos_por_clave.sql): cada pedido dice cuál fue la última fila recibida y la base sigue
+   * desde ahí, así que lo que cambia entre dos pedidos no corre ni saltea filas. Se corta **solo** cuando la base
+   * manda la fila del final (sin proyecto) o una página vacía, nunca por haber recibido pocas filas: si la API recorta
+   * las páginas (un tope de filas por pedido menor), se sigue pidiendo. `projectId`: solo ese proyecto. `null` si la
+   * base no tiene la función (`PGRST202`). Si un pedido falla, tira: nunca una lista parcial.
+   */
+  private async trashPages(projectId: string | null): Promise<TrashPageRow[] | null> {
+    if (Date.now() - this.trashPageMissingAt < 10 * 60_000) return null;
+    const rows: TrashPageRow[] = [];
+    const seen = new Set<string>();
+    let after: { project: string; trashedAt: string | null; id: string | null } | null = null;
+    for (let request = 0; ; request++) {
+      const { data, error, status } = await timed(
+        this.client
+          .rpc('trashed_files_page', {
+            p_project: projectId,
+            p_after_project: after?.project ?? null,
+            p_after_trashed_at: after?.trashedAt ?? null,
+            p_after_id: after?.id ?? null,
+            p_limit: TRASH_PAGE_ROWS,
+          })
+          // El orden de la base, escrito en el pedido: si la API recorta la página, lo que llega es el principio. La
+          // fila del final (sin proyecto) va última.
+          .order('project_id', { ascending: true, nullsFirst: false })
+          .order('trashed_at', { ascending: false, nullsFirst: false })
+          .order('id', { ascending: true }),
+      );
+      // Solo antes de la primera página: la base no tiene la función.
+      if (error?.code === MISSING_FUNCTION && request === 0) {
+        this.trashPageMissingAt = Date.now();
+        return null;
+      }
+      if (error) throw toRemoteError(error, status);
+      const page = (data ?? []) as (Omit<TrashPageRow, 'project_id'> & { project_id: string | null })[];
+      let moved = false;
+      for (const { project_id, ...row } of page) {
+        // La fila del final: no hay más.
+        if (project_id == null) return rows;
+        // Cada página sigue a la anterior: una fila repetida es una base que no avanza, y pedir de nuevo no terminaría.
+        const key = `${project_id}|${row.id ?? ''}`;
+        if (seen.has(key)) throw new RemoteError('trashed_files_page: the same row arrived twice', true);
+        seen.add(key);
+        rows.push({ ...row, project_id });
+        after = { project: project_id, trashedAt: row.id == null ? null : row.trashed_at, id: row.id };
+        moved = true;
+      }
+      // Una página vacía: no hay más (la base siempre manda la fila del final; esto es por si no llegara).
+      if (!moved) return rows;
+    }
+  }
+
   async trashedFiles(projectId: string): Promise<TrashedFileRow[]> {
+    // De a páginas si la base las da: sin el corte del tope de filas por pedido.
+    const paged = await this.trashPages(projectId);
+    if (paged) {
+      // Ni la fila de la papelera vacía: la sesión no la ve (lo que `trashed_files` contesta con este error).
+      if (paged.length === 0) throw new RemoteError('not_allowed', true, '42501');
+      return paged.flatMap(({ project_id: _project, ...row }) => (row.id == null ? [] : [parseTrashedFile({ ...row, id: row.id, trashed_at: row.trashed_at ?? '' })]));
+    }
     const { data, error, status } = await timed(this.client.rpc('trashed_files', { p_project: projectId }));
     if (error) throw toRemoteError(error, status);
     return ((data ?? []) as RawTrashedFile[]).map(parseTrashedFile);
   }
 
   async trashedFilesAll(): Promise<Map<string, TrashedFileRow[]> | null> {
+    const paged = await this.trashPages(null);
+    if (paged) {
+      const byProject = new Map<string, TrashedFileRow[]>();
+      for (const { project_id, ...row } of paged) {
+        const files = byProject.get(project_id) ?? [];
+        byProject.set(project_id, files);
+        // Una fila con solo el proyecto: la sesión ve esa papelera y está vacía.
+        if (row.id != null) files.push(parseTrashedFile({ ...row, id: row.id, trashed_at: row.trashed_at ?? '' }));
+      }
+      return byProject;
+    }
+    return this.trashedFilesAllByRange();
+  }
+
+  /**
+   * Lo mismo con una base sin `trashed_files_page`: `trashed_files_all()` entera, pedida por tramos. Cada tramo corre
+   * la función de nuevo, un cambio entre dos tramos puede correr las filas un lugar y el corte supone que la API
+   * entrega `TRASH_ALL_PAGE` filas por pedido (Docs/Doc_Proyectos_Borrar.md, "La papelera de archivos, de a páginas
+   * por clave").
+   */
+  private async trashedFilesAllByRange(): Promise<Map<string, TrashedFileRow[]> | null> {
     const byProject = new Map<string, TrashedFileRow[]>();
     const seen = new Set<string>();
     // La API devuelve como mucho `TRASH_ALL_PAGE` filas por pedido (el tope de filas de PostgREST): se pide de a

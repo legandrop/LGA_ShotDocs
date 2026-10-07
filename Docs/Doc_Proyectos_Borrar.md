@@ -3671,8 +3671,52 @@ hoja de abajo de siempre en el teléfono:
   siendo un pedido. Si una página falla, falla todo: nunca se muestra una lista parcial, porque un proyecto que no
   llegó se leería como "no ves su papelera". Cada página vuelve a correr la función entera en la base (ver el
   roadmap). La consulta por proyecto (`trashed_files`) no pagina: como antes, un proyecto con más de 1000 archivos en
-  la papelera llega cortado a 1000.
+  la papelera llega cortado a 1000. **Desde v0.221 esto vale solo para una base sin `trashed_files_page`** (el punto
+  que sigue).
   Pruebas: `src/ui/trashAll.test.tsx` y `supabase/tests/papelera_archivos_todos_permisos.sql`.
+- **La papelera de archivos, de a páginas por clave (v0.221).** Pedir `trashed_files_all()` por tramos tenía tres
+  problemas: cada tramo corría la función entera (7 corridas para 6.000 archivos); un cambio entre dos tramos corría
+  las filas un lugar (podía faltar un archivo, o un proyecto verse como sin acceso hasta reabrir); y la app daba por
+  última una página con menos de 1000 filas, así que con un tope de filas por pedido menor (un workspace con su propio
+  Supabase) la lista quedaba cortada sin aviso. `trashed_files_page(p_project, p_after_project, p_after_trashed_at,
+  p_after_id, p_limit)` (migración `20261110120000_papelera_archivos_por_clave.sql`) recibe **la última fila que la
+  app ya tiene** y devuelve las que siguen, hasta `p_limit` (entre 1 y 1000), en un orden fijo: por proyecto y,
+  adentro, como `trashed_files` (lo último primero, después el id). Las filas son las de `trashed_files_all()`. Cuando
+  no queda nada agrega **una fila sin proyecto** (todo nulo): la lista terminó.
+  - **La app corta solo con esa fila (o con una página vacía), nunca por haber recibido pocas filas.** Si la API le
+    recorta la página, la fila del final no llega y sigue pidiendo desde la última que recibió. Lo que entra en una
+    página sigue siendo **un pedido**. Escribe el orden en el pedido (si la API recorta, lo que llega es el principio)
+    y, si una fila llegara dos veces (una base que no avanza), tira en vez de pedir para siempre.
+  - **La de un proyecto también** (`p_project`): *This project* ya no queda cortado en el tope de filas por pedido
+    (1000 de fábrica). **Con un `p_project` cuya papelera la sesión no ve (o que no existe, o borrado) la base contesta
+    solo la fila del final**: no da un error y no revela si el proyecto existe. La app traduce "ninguna fila antes de
+    la del final" al `not_allowed` de siempre (`trashedFiles` en `src/sync/remote.ts`), que la papelera toma por "no la
+    ves".
+  - **Una sola consulta:** el cuerpo de `trashed_files` pasó a `private.trashed_files_rows` (sin permisos, que nadie
+    ejecuta desde la API) y las tres funciones la usan; `trashed_files` y `trashed_files_all()` siguen dando lo mismo,
+    con la misma firma, orden, errores y permisos.
+  - **Compatibilidad:** la app publicada sigue con `trashed_files` y `trashed_files_all()`, que no cambiaron. La app
+    nueva prueba `trashed_files_page`; si la base no la tiene (`PGRST202`) pide como antes (con los tres problemas de
+    arriba) y vuelve a probar a los 10 minutos. No sube `schema_version`.
+  - **Medido** (sembrado adentro de una transacción que se deshizo, 6.000 archivos en 150 proyectos):
+    `trashed_files_all()` entera, 420 ms por corrida (la app publicada la corre 7 veces); por clave, los 7 pedidos
+    suman 312 ms y el más lento tarda 53. La auditoría, con sus datos: la entera 471 ms; por clave, la primera página
+    de 1000 tarda 130 ms, la tercera 55 y la última 9.
+  - **Lo que queda:**
+    - Una fila que entra a la papelera de un proyecto ya pasado no aparece hasta reabrir (la lista es de cuando se
+      empezó a pedir).
+    - Los comentarios de una página (`list_comments`, por tramos), el árbol y los usos de archivos siguen suponiendo
+      que la API entrega 1000 filas por pedido: lo dice la guía para crear un workspace y lo avisa `setup-workspace.mjs`.
+    - Un lugar armado a mano `(proyecto, nulo, nulo)` (el de la fila de una papelera vacía) sobre un proyecto que
+      **tiene** archivos lo saltea entero. No filtra nada (el lugar no da ni quita permisos) y la app nunca lo arma: solo
+      manda la última fila que recibió.
+    - *All projects* vuelve a bajar la papelera del proyecto abierto, que ya estaba cargada (viene de la v0.218: el
+      pedido de todos no sabe cuáles tiene la vista).
+    - Si la base repitiera una fila, el error llega crudo y en inglés (*trashed_files_page: the same row arrived
+      twice*), en el renglón de error de cada proyecto: no debería pasar nunca; falta decirlo en palabras.
+  - Pruebas: `supabase/tests/papelera_archivos_por_clave_permisos.sql` (para cada persona, recorrida de a 1, 2, 3… y
+    con las páginas recortadas, da exactamente lo de `trashed_files_all()` y lo de `trashed_files`; lo que cambia entre
+    dos páginas no corre las demás) y `src/ui/trashAll.test.tsx`.
 - **Permisos:** sin cambios en la base y sin migración. Lo que se ve sale de las mismas consultas de antes: los
   proyectos borrados, de `trashed_projects` (quien no veía *Deleted projects* con alguno adentro, no ve ninguno); los
   archivos, solo de los proyectos con `canSeeFileTrash` y lo que la base devuelve; las páginas, de lo que la base ya

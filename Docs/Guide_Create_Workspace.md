@@ -70,6 +70,10 @@ database changes.
    - In the security options: keep **Data API** on, turn **off** the option that automatically exposes new
      tables, and keep **automatic Row Level Security (RLS)** on.
    - Click **Create new project** and wait a couple of minutes until it is ready. The free plan is enough.
+   - Leave the **Max rows** setting of your project's Data API settings at `1000`, its default. The app asks for long
+     lists (the pages of a project, the comments of a page, the files of its pages) 1000 rows at a time and
+     takes a shorter answer as the end of the list: with a lower limit, a big project would arrive cut short,
+     without any error. A higher limit is fine. The setup command (step 4) tells you if it is too low.
 3. Write down the **project ref**: **Project Settings** (gear icon, bottom left) → **General** → **Project
    ID**. It is 20 lowercase letters and numbers. Your **Project URL** is `https://<project ref>.supabase.co`.
 4. Create a **personal access token**: click your avatar (top right) → **Account preferences** → **Access
@@ -128,6 +132,10 @@ the owner. It only changes what is missing, so you can run it again at any time.
 
    It lists the database changes to apply, each sign-in setting with its current and new value, whether your
    account exists or will be invited, and the workspace settings. Nothing is written.
+
+   It also checks two things it never changes, and prints a **Note** if one is off: that your project's API
+   returns at least 1000 rows per request (step 2), and, once your workspace knows its file gateway (step
+   6.13), that the gateway accepts the app: its address in `APP_ORIGINS`, and every header the app sends.
 4. Run the same line **without `--dry-run`**. When it asks for the **SMTP password**, paste the Resend API key
    (`re_…`) and press Enter: nothing appears on screen while you paste, on purpose. It is never printed.
    (Instead of typing it, you can set it first as `SMTP_PASSWORD`, like the token.)
@@ -309,6 +317,13 @@ with help, testing first on a separate project.
   them. Tell your team.
 - **Sending limits.** 30 emails an hour for the whole workspace (Resend's free plan allows 100 a day), and
   one email a minute to the same address: asking for another code sooner shows an error.
+- **Your file gateway has to keep up with the app.** The app you open is always the latest version, but
+  your gateway only changes when you sync your fork. Before sending a file request, the browser asks the
+  gateway whether it accepts everything the app is about to send; an older gateway that does not know a newer
+  header makes the browser drop the whole request. It looks like this: pages, comments and thumbnails work,
+  but originals, videos or uploads do not (for people who open a shared link, this happens with a gateway
+  from before v0.218). The fix is always the same: **Sync fork** (step 1) and wait for Cloudflare to publish.
+  Running the setup command (with `--dry-run` if you only want to look) tells you if your gateway is behind.
 - **Staying up to date.** When the app changes: **Sync fork** on GitHub (step 1), **download the ZIP again**
   and unzip it (the old folder has the old database changes), open the terminal in the new folder as in
   step 4, and run the setup command again with the same options. The token from the first time has probably

@@ -9,7 +9,6 @@ export const exportZip = {
     en: "Some things are missing: see MISSING_FILES.txt.",
     es: "Faltan algunas cosas: ver MISSING_FILES.txt.",
   },
-  'exportZip.original': { en: "Original: {name}", es: "Original: {name}" },
   'exportZip.missingHead': {
     en: "Missing from “{name}” (exported {date}):",
     es: "Lo que falta en “{name}” (exportado el {date}):",

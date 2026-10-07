@@ -251,10 +251,23 @@ export interface ZipMissing {
   detail?: string;
 }
 
+/** El texto de cada motivo, con su clave escrita entera: así la prueba del diccionario ve que cada una se usa. */
+const WHY_TEXT = {
+  offline: 'exportZip.why.offline',
+  failed: 'exportZip.why.failed',
+  incomplete: 'exportZip.why.incomplete',
+  deleted: 'exportZip.why.deleted',
+  noView: 'exportZip.why.noView',
+  unknown: 'exportZip.why.unknown',
+  pageOutdated: 'exportZip.why.pageOutdated',
+  pageUnknown: 'exportZip.why.pageUnknown',
+  pageFailed: 'exportZip.why.pageFailed',
+} as const satisfies Record<Exclude<MissingWhy, 'comments'>, string>;
+
 /** Un renglón de la lista de lo que falta: la ruta y el motivo (la fecha de lo último sincronizado, para los comentarios). */
 export function missingLine(item: ZipMissing, lastSync: number | null, now: Date = new Date()): string {
   const syncDate = new Intl.DateTimeFormat(locale(), { dateStyle: 'medium', timeStyle: 'short' }).format(lastSync ?? now.getTime());
-  const why = item.why === 'comments' ? t('exportZip.why.comments', { date: syncDate }) : t(`exportZip.why.${item.why}`);
+  const why = item.why === 'comments' ? t('exportZip.why.comments', { date: syncDate }) : t(WHY_TEXT[item.why]);
   return `${item.path} — ${why}${item.detail ? ` (${item.detail})` : ''}`;
 }
 

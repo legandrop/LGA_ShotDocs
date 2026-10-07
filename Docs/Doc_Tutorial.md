@@ -411,7 +411,12 @@ Y pruebas que lo sostienen sin depender de acordarse:
 - Una que lee los pasos y busca cada `data-tour` en el código de `src/ui/`: si se renombra o se borra un ancla,
   falla.
 - La de los textos (`i18n.test.tsx`) cubre `help.ts` y `tour.ts` como las demás partes: mismas claves y mismos
-  `{valores}` en los dos idiomas.
+  `{valores}` en los dos idiomas. Desde v0.221 comprueba además que **cada archivo de `src/i18n/` y de
+  `src/i18n/lazy/` esté en sus listas de partes**: `exportZip` (los textos del zip) estaba en los tipos y no en la
+  lista, así que no pasaba por ningún chequeo; al sumarla apareció una clave que nadie usaba (`exportZip.original`,
+  sacada) y nueve motivos de `MISSING_FILES.txt` que se armaban con una plantilla (`exportZip.why.…`), que ahora van
+  escritos enteros en `src/export/exportZip.ts` para que la prueba vea que cada uno se usa; que cada motivo diga su
+  texto y no el de otro lo mira `src/export/missingWhy.test.ts`, con los dos idiomas.
 - Cada entrada de `Changelog.md` que trae algo visible nombra su entrada de ayuda (costumbre, no prueba).
 
 ### Entradas que suma P.9: carpetas (v0.081)

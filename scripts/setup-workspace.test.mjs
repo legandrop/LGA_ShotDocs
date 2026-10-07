@@ -9,11 +9,15 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { allowedInDryRun, createManagementClient, isReadOnlyQuery, readOnlySql } from './lib/management.mjs';
 import {
+  APP_MIN_MAX_ROWS,
+  GATEWAY_HEADERS,
+  GATEWAY_TIMEOUT_MS,
   HOOK_URI,
   WANKA_REF,
   desiredAuthConfig,
   diffAuthConfig,
   formatAuthDiff,
+  gatewayWarning,
   inviteSignupPreconditions,
   parseArgs,
   planSettings,
@@ -149,6 +153,10 @@ function fakeSupabase({ ref = NEW_REF, config = freshConfig(), db = {}, readOnly
     if (url === `${api}/config/auth` && method === 'PATCH') {
       Object.assign(state.config, JSON.parse(init.body));
       return json(state.config);
+    }
+    // El tope de filas por pedido de la API, si la prueba lo puso. La respuesta de verdad trae además un secreto.
+    if (url === `${api}/postgrest` && method === 'GET' && state.maxRows !== undefined) {
+      return json({ db_schema: 'public', max_rows: state.maxRows, jwt_secret: 'JWT_SUPER_SECRET' });
     }
     if (url.startsWith(`${api}/api-keys`) && method === 'GET') {
       return json([
@@ -573,5 +581,128 @@ describe('de verdad (contra el Supabase falso)', () => {
     };
     const missing = inviteSignupPreconditions(state, [{ version: '1' }]);
     expect(missing.length).toBeGreaterThanOrEqual(4);
+  });
+});
+
+describe('lo que la app supone de la API y del portero', () => {
+  const dryRun = async (db, io = {}) => {
+    const fake = fakeSupabase({ readOnly: true, db });
+    const client = createManagementClient({ ref: NEW_REF, dryRun: true, fetch: fake.fetch });
+    const out = collector();
+    await runSetup({ client, opts: { ...opts({ args: io.args }), dryRun: true }, templates, env: { SMTP_PASSWORD: SMTP_SECRET }, io: { ...out.io, ...io } });
+    expect(fake.writes()).toEqual([]);
+    return out.text();
+  };
+
+  it('avisa si la API entrega menos filas por pedido que las que la app pide, y no si entrega lo de fábrica o más', async () => {
+    const low = await dryRun({ maxRows: 500 });
+    expect(low).toContain('Note: The API returns at most 500 rows per request');
+    expect(low).toContain(`Set it back to ${APP_MIN_MAX_ROWS}.`);
+    // Nunca el secreto que viene en la misma respuesta.
+    expect(low).not.toContain('JWT_SUPER_SECRET');
+    // Dice el nombre del ajuste, sin un camino del panel que puede cambiar.
+    expect(low).toContain("(the Max rows setting of your project's Data API settings)");
+    for (const maxRows of [1000, 5000]) expect(await dryRun({ maxRows })).not.toContain('rows per request');
+    // Si no se puede leer (la API no contesta eso), el comando sigue y dice que no lo pudo mirar, sin el error crudo.
+    const unread = await dryRun({});
+    expect(unread).toContain('Note: Could not read how many rows the API returns per request');
+    expect(unread).toContain('is 1000 or more.');
+    expect(unread).not.toContain('/postgrest');
+    expect(unread).not.toContain('not found');
+    expect(unread).toContain('Dry run: nothing was written.');
+  });
+
+  it('lee el tope de filas una sola vez por corrida, también en una de verdad', async () => {
+    const fake = fakeSupabase({ db: { maxRows: 400 } });
+    const client = createManagementClient({ ref: NEW_REF, fetch: fake.fetch });
+    const out = collector();
+    await runSetup({ client, opts: opts(), templates, env: { SMTP_PASSWORD: SMTP_SECRET }, io: out.io });
+    expect(fake.requests.filter((r) => r.url.endsWith('/postgrest'))).toHaveLength(1);
+    expect(out.text()).toContain('Note: The API returns at most 400 rows per request');
+    expect(out.text()).not.toContain('JWT_SUPER_SECRET');
+    // La respuesta de la API (con su secreto) no queda en lo que el comando devuelve.
+    const dry = fakeSupabase({ readOnly: true, db: { maxRows: 400 } });
+    const result = await runSetup({ client: createManagementClient({ ref: NEW_REF, dryRun: true, fetch: dry.fetch }), opts: { ...opts(), dryRun: true }, templates, env: { SMTP_PASSWORD: SMTP_SECRET }, io: collector().io });
+    expect(JSON.stringify(result)).not.toContain('JWT_SUPER_SECRET');
+    expect(dry.requests.filter((r) => r.url.endsWith('/postgrest'))).toHaveLength(1);
+  });
+
+  /** El portero de mentira: contesta la consulta previa con esos headers aceptados, para esa dirección de la app. */
+  const gateway = (allowed, origin = 'https://docs.studio.com') => {
+    const asked = [];
+    const fetch = async (url, init) => {
+      asked.push({ url, method: init.method, headers: init.headers });
+      const ok = init.headers.Origin === origin;
+      return new Response(null, { status: ok ? 204 : 403, headers: ok ? { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Headers': allowed } : {} });
+    };
+    return { fetch, asked };
+  };
+  const MEDIA = 'https://shotdocs-portero.studio.workers.dev';
+
+  it('la lista de headers es la del CORS del portero de este repo', async () => {
+    const source = await readFile(new URL('../portero/src/core.ts', import.meta.url), 'utf8');
+    const cors = /function cors\([\s\S]*?'Access-Control-Allow-Headers': '([^']+)'/.exec(source)?.[1];
+    expect(cors?.split(',').map((h) => h.trim())).toEqual(GATEWAY_HEADERS);
+  });
+
+  it('un portero al día no da ningún aviso; pregunta lo que pregunta el navegador, sin sesión', async () => {
+    const g = gateway(GATEWAY_HEADERS.join(', '));
+    expect(await gatewayWarning({ mediaUrl: MEDIA, appUrl: 'https://docs.studio.com', fetch: g.fetch })).toBeNull();
+    expect(g.asked).toEqual([
+      {
+        url: `${MEDIA}/pass`,
+        method: 'OPTIONS',
+        headers: {
+          Origin: 'https://docs.studio.com',
+          'Access-Control-Request-Method': 'POST',
+          'Access-Control-Request-Headers': 'authorization, content-type, content-range, range, x-shotdocs-link, x-shotdocs-device, x-shotdocs-version',
+        },
+      },
+    ]);
+    // Mayúsculas y espacios distintos en la respuesta no son un problema.
+    expect(await gatewayWarning({ mediaUrl: MEDIA, appUrl: 'https://docs.studio.com', fetch: gateway(GATEWAY_HEADERS.join(',').toUpperCase()).fetch })).toBeNull();
+  });
+
+  it('un portero anterior, que no acepta un header de la app, se avisa con el header y qué hacer', async () => {
+    const old = gateway('Authorization, Content-Type, Content-Range, Range, x-shotdocs-link, x-shotdocs-device');
+    const warning = await gatewayWarning({ mediaUrl: MEDIA, appUrl: 'https://docs.studio.com', fetch: old.fetch });
+    expect(warning).toContain('does not accept x-shotdocs-version');
+    expect(warning).toContain('Sync your fork');
+  });
+
+  it('un portero que no conoce la dirección de la app, o que no contesta, se avisa', async () => {
+    const other = gateway(GATEWAY_HEADERS.join(', '), 'https://otra.app');
+    expect(await gatewayWarning({ mediaUrl: MEDIA, appUrl: 'https://docs.studio.com', fetch: other.fetch })).toContain('APP_ORIGINS');
+    const down = async () => {
+      throw new TypeError('fetch failed');
+    };
+    expect(await gatewayWarning({ mediaUrl: MEDIA, appUrl: 'https://docs.studio.com', fetch: down })).toContain('did not answer');
+  });
+
+  it('un portero que acepta el pedido y no contesta no frena el comando: pasado el tiempo, el mismo aviso', async () => {
+    let signal;
+    // Nunca contesta; solo termina si le cortan el pedido.
+    const hung = (url, init) =>
+      new Promise((resolve, reject) => {
+        signal = init.signal;
+        init.signal.addEventListener('abort', () => reject(init.signal.reason));
+      });
+    const started = Date.now();
+    const warning = await gatewayWarning({ mediaUrl: MEDIA, appUrl: 'https://docs.studio.com', fetch: hung, timeoutMs: 40 });
+    expect(warning).toContain('did not answer');
+    expect(signal.aborted).toBe(true);
+    expect(Date.now() - started).toBeLessThan(5000);
+    // De fábrica, 10 segundos.
+    expect(GATEWAY_TIMEOUT_MS).toBe(10_000);
+  });
+
+  it('el comando lo mira con la dirección que se le pasa, y sin dirección no pregunta nada', async () => {
+    const old = gateway('Authorization, Content-Type');
+    const text = await dryRun({}, { fetch: old.fetch, args: ['--media-url', MEDIA] });
+    expect(text).toContain('Note: The file gateway is older than the app');
+    expect(old.asked).toHaveLength(1);
+    const none = gateway('');
+    expect(await dryRun({}, { fetch: none.fetch })).not.toContain('file gateway');
+    expect(none.asked).toEqual([]);
   });
 });

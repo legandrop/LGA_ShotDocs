@@ -228,6 +228,9 @@ link. Se verificó contra el portero publicado (la consulta previa no listaba el
 quedó cortado). La regla para lo que venga: todo header que la app le mande al portero tiene que estar en
 `Access-Control-Allow-Headers` (`cors` en `portero/src/core.ts`); lo comprueba la prueba "el CORS acepta todo header que
 la app le manda" de `portero/src/core.test.ts`, con los headers reales de `linkHeaders()` y del cliente de la app.
+**Un workspace con su propio portero** lo publica desde su fork, así que puede quedar atrás de la app (que es siempre la
+última): la guía (`Guide_Create_Workspace.md`, "Good to know") lo dice, y `setup-workspace.mjs` le hace al portero la
+consulta previa y avisa si no acepta algún header de esa lista (`Doc_Supabase.md`, "Preparar un workspace nuevo").
 
 **Subir con un link *Can edit* (entrega 2b):**
 

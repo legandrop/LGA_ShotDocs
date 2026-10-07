@@ -20,6 +20,7 @@ import { dictation } from './lazy/dictation';
 import { drive } from './lazy/drive';
 import { editor } from './lazy/editor';
 import { exportPdf } from './lazy/exportPdf';
+import { exportZip } from './lazy/exportZip';
 import { filesBySize } from './lazy/filesBySize';
 import { help } from './lazy/help';
 import { folders } from './lazy/folders';
@@ -37,7 +38,7 @@ import { tutorial } from './lazy/tutorial';
 import { parts, strings } from './strings';
 
 /** Las partes que viajan con lo que se baja aparte (ver `register` en index.ts). */
-const LAZY = { annotator, assistant, carrete, commentsPanel, dictation, drive, editor, exportPdf, filesBySize, folders, help, history, importArchive, importCoda, install: installDialog, oauthConsent, offline, projectStates, search, teamDialogs, templates, tutorial };
+const LAZY = { annotator, assistant, carrete, commentsPanel, dictation, drive, editor, exportPdf, exportZip, filesBySize, folders, help, history, importArchive, importCoda, install: installDialog, oauthConsent, offline, projectStates, search, teamDialogs, templates, tutorial };
 const ALL_PARTS: Record<string, Record<string, { en: Entry; es: Entry }>> = { ...parts, ...LAZY };
 const ALL = Object.assign({}, ...Object.values(ALL_PARTS)) as Record<Key, { en: Entry; es: Entry }>;
 
@@ -85,6 +86,14 @@ describe('diccionario', () => {
       for (const list of es) for (const n of list) expect(en.flat(), `${key}: {${n}}`).toContain(n);
       for (const list of en) for (const n of list) if (n !== 'count') expect(es.flat(), `${key}: {${n}}`).toContain(n);
     }
+  });
+
+  it('cada archivo de textos está en la lista de partes que revisan estas pruebas', () => {
+    // Una parte que falta acá no pasa por ningún chequeo (le pasó a `exportZip`): ni dos idiomas, ni repetidas, ni sobrantes.
+    const dir = join(SRC, 'i18n');
+    const filesOf = (path: string) => readdirSync(path).filter((n) => /\.ts$/.test(n) && !/\.test\.|\.d\.ts$/.test(n)).map((n) => n.replace(/\.ts$/, '')).sort();
+    expect(filesOf(join(dir, 'lazy'))).toEqual(Object.keys(LAZY).sort());
+    expect(filesOf(dir).filter((n) => !['index', 'strings', 'types'].includes(n))).toEqual(Object.keys(parts).sort());
   });
 
   it('ninguna clave se repite entre partes', () => {

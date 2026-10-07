@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.221 :
+
+La papelera de archivos se pedía por tramos de `trashed_files_all()`: cada tramo corría la función entera, un cambio entre dos tramos corría las filas, y con un tope de filas por pedido menor a 1000 la lista quedaba cortada (la de un proyecto, en el tope: 1000 de fábrica). Ahora se pide de a páginas por clave (`20261110120000_papelera_archivos_por_clave.sql`): la base sigue desde la última fila recibida y dice cuándo terminó. `public_link_pages()` miraba el permiso link por link, también para quien no podía recibir nada; ahora corta de entrada y lo mira una vez por proyecto, con el mismo resultado (`20261111120000_link_paginas_sin_recorrer_todo.sql`). La base saca «(via link)» del nombre del visitante, sin rechazar (`20261112120000_link_nombre_sin_rotulo.sql`, D314). Los textos del zip no pasaban por las pruebas del diccionario: sumados, con una clave sobrante afuera. La guía y `setup-workspace.mjs` avisan un tope de filas bajo y un portero más viejo que la app.
+
+[Pedir la papelera de archivos de a páginas por clave, acortar la lista de páginas con link sin cambiar lo que contesta, sacar en la base «(via link)» del nombre del visitante, sumar los textos del zip a las pruebas del diccionario y avisar el tope de filas y el portero atrasado al preparar un workspace]
+
 v0.220 :
 
 Se veía cuánto ocupa cada proyecto en el Drive, pero no qué archivos hacían ese peso ni en qué página estaba cada uno. Ahora el selector de proyectos tiene *Files by size* al pie: los archivos que ocupan lugar en el Drive, del más pesado al más liviano, con el link a las páginas que usan cada uno y marcado el que no usa ninguna. Arriba se elige el proyecto. Solo lectura, de a 100, con conexión. Sin migración: lee `files` y `page_files` con la sesión, así que cada uno ve lo que sus permisos dejan leer (D312, D313). De paso, el panel de la papelera ya no se desborda con un nombre largo (en Papelera › Archivos el botón de mandar a Drive quedaba fuera de la vista), y mandar un archivo a la papelera de Drive vuelve a pedir el peso. Suma su entrada en la ayuda.
