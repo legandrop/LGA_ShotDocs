@@ -13,9 +13,17 @@ import { linkDbName } from './LinkEditBar';
 // haya señal; con red, un link revocado o vencido se corta sin mostrar nada. La página de verdad (el editor, el motor) se
 // cambia por un cartel: lo que se prueba es qué decide `LinkApp` antes de montarla.
 
+/** Lo que `LinkApp` le pasa a la app de adentro (el servidor del link y el de sus comentarios). */
+const inside = vi.hoisted(() => ({ link: null as { comments: { listComments(pageId: string, since: string | null): Promise<unknown> } } | null }));
+
 vi.mock('./Workspace', async () => {
   const { createElement } = await import('react');
-  return { Workspace: () => createElement('div', { id: 'workspace' }, 'WORKSPACE') };
+  return {
+    Workspace: (props: { link?: typeof inside.link }) => {
+      inside.link = props.link ?? null;
+      return createElement('div', { id: 'workspace' }, 'WORKSPACE');
+    },
+  };
 });
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -145,6 +153,19 @@ describe('abrir un link sin red', () => {
   it('con red y el link revocado o vencido: se corta, sin mostrar lo guardado', async () => {
     stubFetch(() => Promise.resolve(json(500, { message: 'link_not_found', code: 'P0002', details: null, hint: null })));
     const host = await mount(entryFor(true));
+    expect(host.textContent).toContain('This link no longer works');
+    expect(host.textContent).not.toContain('WORKSPACE');
+  });
+
+  it('abierto y andando, si los comentarios contestan que el link ya no anda, la pantalla lo dice', async () => {
+    // `plink_open` contesta bien; cualquier otro pedido (acá, la lista de comentarios), que el link no existe.
+    stubFetch(() => Promise.resolve(json(200, OPEN)));
+    const host = await mount(entryFor(false));
+    expect(host.textContent).toContain('WORKSPACE');
+    // El servidor de comentarios que recibe la app de adentro es el de verdad, con el aviso conectado a la pantalla.
+    await act(async () => {
+      await expect(inside.link!.comments.listComments('page-1', null)).rejects.toThrow('link_not_found');
+    });
     expect(host.textContent).toContain('This link no longer works');
     expect(host.textContent).not.toContain('WORKSPACE');
   });

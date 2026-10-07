@@ -570,6 +570,36 @@ describe('qué cuenta como la misma base', () => {
   });
 });
 
+describe('editar sin decir de qué texto se parte', () => {
+  it('con los comentarios de la página todavía sin cargar, se cargan antes: la edición lleva su base y no pisa', async () => {
+    const { server, phone, desk, brief, id } = await twoDevices();
+    // La app se abre de nuevo en el teléfono (la misma base del dispositivo): nadie abrió todavía los comentarios de
+    // Brief, así que la cola no los tiene cargados.
+    const again = await device(server, undefined, phone.db.name);
+    await again.comments.edit(brief, id, 'Del teléfono');
+    expect((await again.commentsDb.getAll('outbox')).map((e) => (e.op.kind === 'edit' ? [e.op.body, e.op.base] : null))).toEqual([['Del teléfono', 'Original']]);
+    // Mientras tanto la computadora editó: la del teléfono choca en vez de pisar.
+    await desk.comments.edit(brief, id, 'De la computadora');
+    await desk.engine.syncNow();
+    await again.engine.syncNow();
+    expect(edits(server).at(-1)).toEqual(['Del teléfono', 'Original']);
+    expect(server.comments.get(id)?.body).toBe('De la computadora');
+    expect(again.comments.status()).toMatchObject({ pending: 0, failed: 1 });
+  });
+
+  it('un comentario que el dispositivo no tiene no se edita: no hay texto del que partir, y sin base pisaría', async () => {
+    const { server, phone, brief } = await twoDevices();
+    const again = await device(server, undefined, phone.db.name);
+    const unknown = '00000000-0000-4000-8000-00000000c0de';
+    const failure = await again.comments.edit(brief, unknown, 'Sin base').catch((err: unknown) => err);
+    expect(failure).toBeInstanceOf(CommentInvalid);
+    expect((failure as Error).message).toBe("This device doesn't have that comment, so it can't be edited from here.");
+    expect(await again.commentsDb.getAll('outbox')).toEqual([]);
+    await again.engine.syncNow();
+    expect(edits(server)).toEqual([]);
+  });
+});
+
 describe('un solo texto apartado por comentario: nada lo reemplaza sin que la persona lo haya visto', () => {
   const draftOf = (d: Device, id: string) => d.commentsDb.get('meta', `editConflict:${id}`) as Promise<{ body: string } | undefined>;
   const queuedEdits = async (d: Device) => (await d.commentsDb.getAll('outbox')).map((e) => (e.op.kind === 'edit' ? [e.op.body, e.op.base, e.failed] : [e.op.kind, null, e.failed]));

@@ -716,7 +716,12 @@ export class CommentQueue {
   private async queueEdit(pageId: string, id: string, body: string, mentions: MentionRef[] | undefined, base: string | undefined, fromDraft: boolean): Promise<void> {
     const text = cleanBody(body);
     const at = this.stamp();
+    // Sin base y sin el comentario a la vista, puede ser que sus filas todavía no se hayan cargado: se cargan antes.
+    // Si el dispositivo no lo tiene, no hay texto del que partir y la edición no se manda: sin base saldría con la
+    // firma que guarda lo que llega, y pisaría una edición posterior hecha desde otro lado.
+    if (base === undefined && !this.view(pageId).has(id)) await this.ensureRows(pageId);
     const current = this.view(pageId).get(id);
+    if (base === undefined && !current) throw new CommentInvalid(t('commentError.editUnknown'));
     let named = mentions ? this.mentionsOp(id, pageId, mentions, at) : null;
     const replaces = named !== null;
     const op: Extract<CommentOp, { kind: 'edit' }> = { kind: 'edit', id, pageId, body: text, at };
@@ -950,7 +955,8 @@ export class CommentQueue {
         parts.push(replies > 0 ? t('commentDiscard.addWithReplies', { count: replies }) : t('commentDiscard.add'));
       } else if (op.kind === 'edit') {
         text ??= op.body;
-        parts.push(t('commentDiscard.edit'));
+        // Con varias ediciones rechazadas del mismo comentario, lo dice con la cantidad (se descartan todas).
+        parts.push(t('commentDiscard.edit', { count: entries.filter((x) => x.op.kind === 'edit').length }));
       } else if (op.kind === 'delete') {
         parts.push(t('commentDiscard.delete'));
       } else if (op.kind === 'mentions') {

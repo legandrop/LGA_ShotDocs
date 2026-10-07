@@ -1,7 +1,8 @@
 import { useSyncExternalStore } from 'react';
-import { t } from '../i18n';
+import { t, type Key } from '../i18n';
 import { revealCollapsed } from './collapseControl';
 import { IS_MAC, modPressed } from './findUi';
+import { notify } from './notice';
 
 // Lo que comparten el botón de comentarios de la barra de arriba, el panel (o la hoja en el teléfono), el
 // margen del editor y los botones "Comment" del editor: si el panel está abierto y qué mostrar. Vive en
@@ -56,12 +57,37 @@ export function closeComments(): void {
 }
 
 // Lo escrito a medias en el panel (una respuesta, un hilo nuevo, una edición). Vive en memoria.
-const drafts = new Set<symbol>();
+export interface Draft {
+  /** Lo tipeado hasta ahora. */
+  text: string;
+  /**
+   * La pregunta antes de descartarlo, si no es la de siempre: desde ese cuadro no se puede guardar (el comentario
+   * tiene otra edición esperando decisión, o ya no está) y la pregunta dice que hay que copiarlo antes.
+   */
+  question?: Key;
+}
+
+const drafts = new Map<symbol, Draft>();
 let draftRevision = 0;
 
-export function setDraft(key: symbol, dirty: boolean): void {
-  if (dirty) { drafts.add(key); draftRevision++; }
+export function setDraft(key: symbol, dirty: boolean, draft: Draft = { text: '' }): void {
+  if (dirty) { drafts.set(key, draft); draftRevision++; }
   else if (drafts.delete(key)) draftRevision++;
+}
+
+/**
+ * El cuadro se desmontó. `byPerson`: lo cerró quien escribía (mandó, canceló, o confirmó descartarlo). Si no fue así y
+ * tenía algo escrito que nadie descartó (se cambió de página, la página dejó de verse, se pidió otra cosa al panel),
+ * lo tipeado no se va en silencio: un aviso lo dice y lo deja copiar mientras está a la vista.
+ */
+export function closeDraft(key: symbol, byPerson: boolean): void {
+  const draft = drafts.get(key);
+  if (!draft) return;
+  drafts.delete(key);
+  draftRevision++;
+  if (!byPerson && draft.text.trim()) {
+    notify(t('comments.draftClosed'), { label: t('sync.copyText'), run: () => void copyText(draft.text) });
+  }
 }
 
 /** La confirmación de descarte vale sólo para la revisión que se vio. */
@@ -71,9 +97,15 @@ export function hasDrafts(): boolean {
   return drafts.size > 0;
 }
 
+/** La pregunta antes de descartar lo escrito a medias: la del cuadro que no puede guardar, si hay alguno. */
+function discardQuestion(): string {
+  for (const d of drafts.values()) if (d.question) return t(d.question);
+  return t('comments.discardDraft');
+}
+
 /** Cierra el panel; si hay algo escrito sin mandar, pregunta antes. Devuelve si lo cerró. */
 export function requestCloseComments(): boolean {
-  if (drafts.size > 0 && !confirm(t('comments.discardDraft'))) return false;
+  if (drafts.size > 0 && !confirm(discardQuestion())) return false;
   closeComments();
   return true;
 }

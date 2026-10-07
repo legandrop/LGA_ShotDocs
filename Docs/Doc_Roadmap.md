@@ -430,24 +430,42 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   con el nombre entero en el tooltip solo si quedó cortado. Visto en un navegador a 375 px y en escritorio, claro y
   oscuro, sobre una página estática con el HTML del panel; con nombres normales, las 105 cajas del panel miden lo mismo
   que antes. jsdom no calcula el layout: sin prueba automática. Falta mirarlo en la app real. Y la entrega 3.
-  **Anotado al auditar la v0.228 (lo primero es de arreglar pronto):** (1) **un cuadro de comentario abierto
-  desaparece con lo tipeado si el hilo se resuelve o el comentario se borra desde otro lado**, sin ninguna pregunta
-  (anterior a la v0.228; reproducido con una edición y con una respuesta a medio escribir; con el hilo resuelto queda
-  además escondido bajo «1 resolved thread»). El borrado es raro; la resolución no: cualquiera que comenta puede
-  resolver un hilo mientras otra persona está respondiendo, y ese texto no está guardado en ningún lado. Arreglo: en
-  `src/ui/CommentsPanel.tsx`, no pasar a la vista de borrado si hay un cuadro abierto (mostrarlo como el cuadro que
-  no puede guardar, con *Copy text* y confirmación) y mantener entre los abiertos un hilo que tiene algo escrito a
-  medias hasta que el cuadro se cierre. También se va al cambiar de página y al recargar (el aviso de salir del
-  navegador no cuenta un comentario a medio escribir). (2) *Retry* y *Discard…* del cartel de varias rechazadas no
-  dicen que valen para todas, y la confirmación de descartar está en singular. (3) Pruebas que faltan: que *Cancel*
-  y Escape en los cuadros normales siguen como antes (el primero sin preguntar, el segundo preguntando); que la
-  lista del cartel no suma textos de otros comentarios; que la pantalla del link escucha el aviso de los comentarios
-  (`src/ui/LinkApp.tsx`); que la papelera pasa el motivo por `localize`. (4) La otra salida de la cuenta (la
-  pantalla sin proyectos, `src/ui/Workspace.tsx`) sigue con el texto viejo: debería usar `signOutQuestion`.
-  (5) Reintentar varias rechazadas con la misma base: la primera entra y las demás chocan con el texto propio, y el
-  aviso habla de «otro lado» (no se pierde nada). (6) `CommentQueue.edit` llamada sin base y sin los comentarios de
-  la página cargados manda con dos argumentos (el panel no llega ahí): rechazar esa llamada. (7) La X y tocar afuera
-  con el cuadro que no puede guardar preguntan con el texto genérico, que no dice «copialo antes».
+  **Hecho en v0.229 (lo anotado al auditar la v0.228):** (1) **un cuadro de comentario abierto ya no desaparece con
+  lo tipeado si el hilo se resuelve o el comentario se borra desde otro lado** (era anterior a la v0.228): el hilo
+  con un cuadro abierto se queda en su lista hasta que el cuadro se cierre, con un aviso de que se resolvió (D337), y
+  lo borrado sigue a la vista con el cuadro que no puede guardar, *Copy text* y confirmación (D338). Cerrar o recargar
+  el navegador con algo escrito pregunta; cambiar de página, o que la página deje de verse, deja un aviso con *Copy
+  text* (D339). (2) *Retry* y *Discard…* del cartel de varias rechazadas dicen la cantidad, y la confirmación va en
+  plural (D340). (3) Las pruebas que faltaban: *Cancel* sin preguntar y Escape preguntando en los cuadros normales;
+  la lista del cartel sin textos de otros comentarios; la pantalla del link escuchando el aviso de los comentarios;
+  la papelera pasando el motivo por `localize`. (4) La pantalla sin proyectos sale con `signOutQuestion`. (6)
+  `CommentQueue.edit` sin base carga antes los comentarios de la página y rechaza el comentario que el dispositivo
+  no tiene. (7) La X y tocar afuera con el cuadro que no puede guardar preguntan con el texto del caso.
+  **Queda de esa lista:** (5) reintentar varias rechazadas con la misma base: la primera entra y las demás chocan
+  con ese texto, que es propio, y el aviso habla de «otro lado» (no se pierde nada). Decirlo bien pide que la cola
+  recuerde qué texto mandó este dispositivo y lo guarde con lo apartado (`setAside` y la forma de `editConflict:`
+  en `meta`, que también leen las versiones anteriores).
+  **Anotado al auditar la v0.229 (las tres primeras son de arreglar pronto):** (1) con dos cuadros con texto que se
+  cierran a la vez (dos respuestas, o edición y respuesta) salen dos avisos y la pantalla muestra uno solo: el texto
+  del primero no se puede copiar (`src/ui/commentsUi.ts`, `src/ui/notice.ts`); juntarlos en un aviso cuyo *Copy
+  text* copie todos. (2) El aviso flotante en el teléfono queda angosto y alto (210 por 175 px a 375: el texto en
+  castellano se parte en 9 renglones), por el estilo general del aviso (`left: 50%` con `translateX`, que limita el
+  ancho a media pantalla): anclarlo a los dos costados. (3) **Salir de la cuenta con un comentario a medio escribir
+  no pregunta** y el aviso no tiene dónde mostrarse: se pierde en silencio (el menú de la cuenta y la pantalla sin
+  proyectos no miran `hasDrafts()`; el cambio de workspace sí). (4) `Panel` no lleva `key` por página: hoy no se
+  alcanza (la vista de página se remonta), pero montado con otra página sin remontarse mostraría el hilo anterior
+  como borrado con su cuadro; es una línea. (5) Falta la prueba de que, con un cuadro de edición abierto, vuelven
+  como borradas todas las respuestas que se borraron y no solo la del cuadro. (6) Un hilo fijado entre los resueltos
+  que se reabrió sigue bajo «1 resolved thread» hasta cerrar el cuadro. Sin recorrer con el router de verdad: el
+  Atrás del navegador y el cambio de proyecto (pasan por el mismo desmontaje).
+  **Anotado al hacer la v0.229:** (a) **cambiar de página con un comentario a medio escribir no pregunta** (deja el
+  aviso con *Copy text* de D339, 15 segundos; el Atrás del navegador, igual): si hace falta más, las opciones son
+  preguntar en `navigate` (45 llamadores, varios siguen con algo que da por hecho el cambio) o guardar el borrador
+  de cada cuadro y devolverlo al volver. (b) Con un comentario nuevo a medio escribir, pedirle otra cosa al panel
+  (*Comment* en otro bloque, abrir un hilo desde el margen o desde la campana) cierra ese cuadro: ahora sale el
+  mismo aviso con *Copy text*, pero no pregunta ni conserva el cuadro (`showComments` y la `key` de `NewThread`,
+  `src/ui/CommentsPanel.tsx`). (c) El panel montado sobre una página que dejó de verse se desmonta entero
+  (`PageView.tsx`): los cuadros se van con el aviso; mantenerlo abierto hasta cerrar los cuadros es otra opción.
   **Hecho en v0.228 (lo anotado en la re-verificación de v0.227):** (1) el cuadro de edición abierto sobre lo guardado
   cuando una rechazada vieja se reintenta, choca y pasa a ser lo apartado ya no lleva a perder lo tipeado: el aviso
   dice que desde ahí no se puede guardar, el cuadro suma *Copy text* de lo escrito y *Cancel* pide confirmación (solo

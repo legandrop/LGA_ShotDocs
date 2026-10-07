@@ -463,6 +463,29 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
   abierta: si esa respuesta dice que el link ya no anda, la pantalla lo muestra. No gasta nada del tope del día. La
   otra opción: un pedido propio por ciclo (`plink_open` cuenta en el tope de aperturas, 300 por día por link, y no
   alcanza para un visitante con la pestaña abierta varias horas).
+- **D337 · Un hilo con un cuadro abierto se queda donde está; la respuesta a un hilo que se resolvió mientras tanto
+  se puede mandar y no lo reabre** (2026-10-07; tomada al implementarlo, Lega la puede cambiar). Mientras hay una
+  respuesta o una edición abierta en un hilo, el panel no lo cambia de lista aunque se resuelva o se reabra desde
+  otro lado: un aviso discreto lo dice. Mandar la respuesta la guarda en el hilo, que **sigue resuelto** (la base ya
+  lo aceptaba así); al cerrarse el cuadro el hilo pasa a los resueltos, que se abren para que se vea. Las otras
+  opciones: que mandar una respuesta reabra el hilo (deshace lo que otra persona decidió, y un visitante de un link
+  no puede reabrir), o no dejar mandar hasta reabrirlo a mano.
+- **D338 · El cuadro de un comentario o un hilo que se borró desde otro lado no puede guardar** (2026-10-07; tomada
+  al implementarlo, Lega la puede cambiar). Lo tipeado sigue a la vista con *Copy text*, *Save* / *Reply* quedan
+  apagados y *Cancel* pide confirmación (el mismo cuadro de D332). La otra opción: dejar mandar (la base acepta una
+  respuesta en un hilo cuyo primer comentario se borró, y una edición quedaría rechazada con su texto): más caminos
+  y un hilo que reaparece con su primer comentario borrado.
+- **D339 · Cambiar de página con un comentario a medio escribir no pregunta: deja un aviso con *Copy text***
+  (2026-10-07; tomada al implementarlo, Lega la puede cambiar). El aviso dura 15 segundos (el de siempre) y sale
+  cada vez que un cuadro con algo escrito se desmonta sin que la persona lo cierre: al cambiar de página, o si la
+  página deja de verse. Cerrar o recargar el navegador sí pregunta. Las otras opciones: preguntar antes de cambiar
+  de página (hoy nada frena un cambio de página; hay 45 llamadores de `navigate`, y el Atrás del navegador no se
+  puede frenar), o guardar el borrador de cada cuadro y devolverlo al volver a la página (más interfaz: habría que
+  mostrar que hay un borrador esperando).
+- **D340 · Con varios textos rechazados del mismo comentario, los botones llevan la cantidad** (2026-10-07; tomada
+  al implementarlo, Lega la puede cambiar). *Retry all 3*, *Discard all 3…* y *Discard all 3*, y la confirmación en
+  plural; con uno solo, como siempre. Completa D335 (siguen valiendo para todos juntos). *Retry* reintenta además
+  todo lo rechazado de la app, como siempre.
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 

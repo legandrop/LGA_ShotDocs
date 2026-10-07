@@ -70,6 +70,15 @@ export const commentsPanel = {
   'comments.replyPlaceholder': { en: "Reply…", es: "Responder…" },
   'comments.reply': { en: "Reply", es: "Responder" },
   'comments.resolved': { en: "Resolved", es: "Resuelto" },
+  // El hilo cambió de estado (acá o desde otro lado) con un cuadro abierto: el cuadro sigue, y se puede mandar igual.
+  'comments.resolvedWhileWriting': {
+    en: "This thread was resolved while you were writing. You can still send what you wrote: the thread stays resolved.",
+    es: "Este hilo se resolvió mientras escribías. Igual podés mandar lo que escribiste: el hilo sigue resuelto.",
+  },
+  'comments.reopenedWhileWriting': {
+    en: "This thread was reopened while you were writing.",
+    es: "Este hilo se reabrió mientras escribías.",
+  },
   'comments.resolvedBy': { en: "Resolved by {name}", es: "Resuelto por {name}" },
   'comments.reopen': { en: "Reopen", es: "Reabrir" },
   'comments.resolve': { en: "Resolve", es: "Resolver" },
@@ -88,6 +97,20 @@ export const commentsPanel = {
   'comments.link.expired': { en: "expired", es: "vencido" },
   'comments.link.off': { en: "not working", es: "no anda" },
   'comments.deleted': { en: "This comment was deleted.", es: "Este comentario se borró." },
+  // El comentario (o el hilo entero) se borró desde otro lado con un cuadro abierto: lo tipeado sigue a la vista, para
+  // copiarlo; desde ahí ya no se puede guardar.
+  'comments.gone.editing': {
+    en: "This comment was deleted from somewhere else while you were editing it. What you wrote can't be saved from here: copy it if you want to keep it, then cancel.",
+    es: "Este comentario se borró desde otro lado mientras lo editabas. Lo que escribiste no se puede guardar desde acá: copialo si lo querés conservar y después cancelá.",
+  },
+  'comments.gone.replying': {
+    en: "This thread was deleted from somewhere else while you were writing. What you wrote can't be saved from here: copy it if you want to keep it, then cancel.",
+    es: "Este hilo se borró desde otro lado mientras escribías. Lo que escribiste no se puede guardar desde acá: copialo si lo querés conservar y después cancelá.",
+  },
+  'comments.gone.cancel': {
+    en: "Discard what you wrote here? The comment is no longer there, so it can't be saved from this box: copy it first if you want to keep it.",
+    es: "¿Descartar lo que escribiste acá? El comentario ya no está, así que desde este cuadro no se puede guardar: copialo antes si lo querés conservar.",
+  },
   'comments.edited': { en: "edited", es: "editado" },
   'comments.notUploaded': { en: "Not uploaded yet", es: "Todavía sin subir" },
   'comments.editPlaceholder': { en: "Edit the comment…", es: "Editá el comentario…" },
@@ -97,6 +120,10 @@ export const commentsPanel = {
     es: "El servidor no lo aceptó: {reason} Queda en este dispositivo.",
   },
   'comments.discardEllipsis': { en: "Discard…", es: "Descartar…" },
+  // Con varios textos rechazados del mismo comentario, los botones dicen que valen para todos.
+  'comments.retryAll': { en: "Retry all {count}", es: "Reintentar los {count}" },
+  'comments.discardAllEllipsis': { en: "Discard all {count}…", es: "Descartar los {count}…" },
+  'comments.discardAll': { en: "Discard all {count}", es: "Descartar los {count}" },
   // Varios textos rechazados del mismo comentario (dos ediciones, o un alta y su edición): cuántos son, y cada uno con
   // su *Copy text*.
   'comments.rejectedMany': {

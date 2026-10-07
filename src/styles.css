@@ -5238,6 +5238,14 @@ button.thread-anchor:hover:not(:disabled) {
   font-style: italic;
 }
 
+/* Un comentario que se borró con su cuadro de edición abierto: el aviso y el cuadro no van en cursiva (la cursiva es
+   del «se borró»). */
+.comment.deleted p.comment-conflict,
+.comment.deleted .comment-composer p {
+  font-size: 12px;
+  font-style: normal;
+}
+
 .comment-meta {
   display: flex;
   flex-wrap: wrap;

@@ -25,7 +25,7 @@ import { asAction, tipRows } from './tipRows';
 import { disposeSearchSession, isSearchShortcut, otherModalOpen, takesSearchShortcut, useSearchSession } from './projectSearchUi';
 import { ArchiveIcon, DownloadIcon, MicIcon, MoreIcon, PlusIcon, SearchIcon } from './icons';
 import { NavMenuButton } from './NavMenuButton';
-import { menuBelow, PageMenu, type MenuPosition } from './menus';
+import { menuBelow, PageMenu, signOutQuestion, type MenuPosition } from './menus';
 import { MoveDialog } from './MoveDialog';
 import { PageFormatDialog } from './PageFormatDialog';
 import { notify, useNotice } from './notice';
@@ -48,6 +48,7 @@ import { lazyPart, Part, preloadWhenIdle, watchPendingWrites } from './lazyPart'
 import { startAppUpdates, stopAppUpdates } from './appUpdate';
 import { focusTitle, PageView, preloadPageParts, type TitlePreparation } from './PageView';
 import { CommentsToggle } from './CommentsToggle';
+import { hasDrafts } from './commentsUi';
 import { MentionsBell } from './MentionsBell';
 import { Sidebar } from './Sidebar';
 import { SidebarResizer } from './SidebarResizer';
@@ -332,7 +333,8 @@ export function Shell() {
     // Lo que esperar el guardado no resuelve: se le dice a quien exporta, con su causa, sin hacerlo esperar.
     const exportBlocked = () => (importing.get().running ? t('export.waitImport') : replaceRunning({ docs }) ? t('export.waitReplace') : null);
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (!unsaved()) return;
+      // Un comentario a medio escribir vive solo en su cuadro: cuenta como lo demás que se perdería al cerrar.
+      if (!unsaved() && !hasDrafts()) return;
       e.preventDefault();
       // Safari y los Chrome viejos preguntan solo con `returnValue`.
       e.returnValue = '';
@@ -754,8 +756,8 @@ export function NoProjectsOpen() {
   const status = useSyncStatus();
   const route = useRoute();
   const link = useLinkMode();
-  const pending =
-    usePendingCount() + status.failedOps + status.failedMedia + status.failedComments;
+  const rejected = status.failedOps + status.failedMedia + status.failedComments;
+  const pending = usePendingCount() + rejected;
   // La dirección de una página o de un archivo: la pantalla sin acceso con *Request access* (O2). *Go to Shot Docs* lleva
   // al inicio, que muestra esta misma pantalla sin proyectos con lo que falta subir.
   if (!link && isAccessRoute(route)) {
@@ -776,6 +778,7 @@ export function NoProjectsOpen() {
       user={user}
       onRetry={() => void engine.syncNow()}
       pending={pending}
+      rejected={rejected}
       onDownload={() => downloadUnsynced(services, workspace.config.name || t('noProjects.thisWorkspace'))}
     />
   );
@@ -790,12 +793,15 @@ export function NoProjects({
   user,
   onRetry,
   pending = 0,
+  rejected = 0,
   onDownload,
 }: {
   user: AuthUser;
   onRetry: () => void;
   /** Lo que el dispositivo tiene sin subir (con los servicios abiertos); sin servicios, 0. */
   pending?: number;
+  /** De eso, lo que el servidor rechazó o espera decisión (cuenta aparte en la pregunta de salir). */
+  rejected?: number;
   onDownload?: () => Promise<void>;
 }) {
   const { client, config } = useWorkspace();
@@ -902,9 +908,10 @@ export function NoProjects({
         <button
           className="link"
           onClick={() => {
-            // Como el menú de la cuenta: con algo sin subir, salir pregunta (no se borra nada del dispositivo).
+            // Como el menú de la cuenta: con algo sin subir, rechazado o esperando decisión, salir pregunta y lo dice
+            // (no se borra nada del dispositivo).
             if (replaceBlocksLeaving()) return;
-            if (pending > 0 && !confirm(t('account.signOutPending', { count: pending }))) return;
+            if (pending > 0 && !confirm(signOutQuestion(pending - rejected, rejected))) return;
             void client.auth.signOut({ scope: 'local' });
           }}
         >

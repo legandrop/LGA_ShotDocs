@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { stored } from '../i18n';
 import { loadFileTrash } from '../media/fileTrash';
 import { prefs } from '../prefs';
 import { ServicesContext, type Services } from '../services';
@@ -313,6 +314,21 @@ describe('la papelera de archivos con All projects', () => {
     expect(trashCalls(server).filter((call) => call === 'trashed_files_all')).toEqual([]);
     expect(trashCalls(server)).toContain(`trashed_files ${a}`);
     expect(trashCalls(server)).toContain(`trashed_files ${c}`);
+  });
+
+  it('el motivo de un pedido que falló se lee en el idioma de la persona, no como quedó guardado', async () => {
+    const { server, owner } = await workspace(true);
+    await openTrash(owner, server.ownerId);
+    // El motivo llega como se guarda (en inglés): la papelera lo pasa al idioma de ahora.
+    (owner.remote as unknown as { trashedFilesAll: () => Promise<unknown> }).trashedFilesAll = async () => {
+      throw new Error(stored('sync.listRepeatedStuck'));
+    };
+    await allProjects();
+    expect(panel()!.textContent).toContain('A list could not be loaded: the same row arrived twice.');
+    act(() => prefs.set({ language: 'es' }));
+    await settle();
+    expect(panel()!.textContent).toContain('No se pudo cargar una lista: la misma fila llegó dos veces.');
+    expect(panel()!.textContent).not.toContain('A list could not be loaded');
   });
 });
 

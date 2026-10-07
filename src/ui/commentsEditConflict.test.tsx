@@ -407,7 +407,7 @@ describe('una edición propia que no entró', () => {
     expect(box().textContent).toContain('2 texts you wrote for this comment were not accepted. Copy the ones you want to keep:');
     const rows = () => [...box().querySelectorAll<HTMLElement>('.comment-rejected-text')];
     expect(rows().map((r) => r.querySelector('span')!.textContent)).toEqual(['Primera', 'Segunda']);
-    expect(labels()).toEqual(['Copy text', 'Copy text', 'Retry', 'Discard…']);
+    expect(labels()).toEqual(['Copy text', 'Copy text', 'Retry all 2', 'Discard all 2…']);
     const copied = clipboard();
     await act(async () => rows()[1].querySelector('button')!.click());
     await wait();
@@ -417,9 +417,9 @@ describe('una edición propia que no entró', () => {
     await wait();
     expect(copied).toEqual(['Segunda', 'Primera']);
     // Al pedir descartar siguen los dos a la vista, cada uno con su botón.
-    await act(async () => [...box().querySelectorAll('button')].find((b) => b.textContent === 'Discard…')!.click());
+    await act(async () => [...box().querySelectorAll('button')].find((b) => b.textContent === 'Discard all 2…')!.click());
     expect(rows()).toHaveLength(2);
-    expect(labels()).toEqual(['Copied', 'Copy text', 'Discard', 'Cancel']);
+    expect(labels()).toEqual(['Copied', 'Copy text', 'Discard all 2', 'Cancel']);
   });
 
   it('salir de la cuenta con una edición esperando decisión pregunta antes, y dice que queda en este dispositivo', async () => {

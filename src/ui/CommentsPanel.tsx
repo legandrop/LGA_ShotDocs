@@ -1,5 +1,5 @@
-import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { locale, localize, t as current, useT, type Translate } from '../i18n';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { locale, localize, t as current, useT, type Key, type Translate } from '../i18n';
 import '../i18n/lazy/commentsPanel';
 import { setVisitorName, useLinkMode, useVisitorName } from '../linkMode';
 import { useServices, useSyncStatus } from '../services';
@@ -18,6 +18,7 @@ import { errorMessage } from '../sync/types';
 import {
   clearCommentsTarget,
   closeComments,
+  closeDraft,
   copyText,
   hasDrafts,
   isPhoneLayout,
@@ -77,10 +78,71 @@ function linkIdsOf(threads: CommentThread[]): string[] {
 // El botón y los permisos viven aparte (CommentsToggle.tsx) para no bajar el panel con la primera pantalla.
 export { CommentsToggle, useCommentAccess };
 
-function sortThreads(threads: CommentThread[], source: BlockSource | null): CommentThread[] {
+function sortThreads<T extends CommentThread>(threads: T[], source: BlockSource | null): T[] {
   const order = source?.order() ?? new Map<string, number>();
-  const pos = (t: CommentThread) => (t.blockId === null ? -1 : (order.get(t.blockId) ?? Number.MAX_SAFE_INTEGER));
+  const pos = (t: T) => (t.blockId === null ? -1 : (order.get(t.blockId) ?? Number.MAX_SAFE_INTEGER));
   return [...threads].sort((a, b) => pos(a) - pos(b) || (a.root.createdAt < b.root.createdAt ? -1 : 1));
+}
+
+// --- Los cuadros abiertos ------------------------------------------------------------------------------
+//
+// Lo que se está tipeando en un cuadro (una respuesta, una edición) vive en la memoria de ese cuadro: si el cuadro se
+// desmonta, se pierde. Por eso ningún cambio que llega de afuera puede desmontarlo: mientras un hilo tiene un cuadro
+// abierto se queda en la lista en la que estaba (aunque se resuelva o se reabra desde otro lado), y si el hilo o el
+// comentario se borran, siguen a la vista desde la última vez que se mostraron, con el cuadro diciendo que desde ahí
+// ya no se puede guardar. Cuando el cuadro se cierra, el hilo va a donde corresponde.
+
+/** Un cuadro abierto en un hilo: su respuesta (`commentId` nulo) o la edición de uno de sus comentarios. */
+interface Hold {
+  threadId: string;
+  commentId: string | null;
+  /** La lista en la que estaba el hilo cuando se abrió el cuadro: ahí se queda hasta que se cierre. */
+  section: 'open' | 'resolved';
+}
+
+/** Avisa que hay un cuadro abierto en un hilo; devuelve cómo avisar que se cerró. */
+type HoldBox = (threadId: string, commentId: string | null) => () => void;
+
+/** Qué le pasó a un hilo mientras tenía un cuadro abierto (y por eso sigue en la lista en la que estaba). */
+type Moved = 'resolved' | 'reopened' | null;
+
+/** Un hilo como lo muestra el panel. */
+type ShownThread = CommentThread & {
+  /** Se borró entero desde otro lado y sigue a la vista porque tiene un cuadro abierto. */
+  gone?: boolean;
+};
+
+/**
+ * Los hilos de la página, más lo que tiene un cuadro abierto y dejó de venir en ellos: un hilo que se borró entero
+ * (`gone`) o un comentario que se borró con su cuadro de edición abierto. Salen de la última vez que se mostraron
+ * (`last`), marcados como borrados.
+ */
+function withHeld(threads: CommentThread[], holds: ReadonlyMap<symbol, Hold>, last: ReadonlyMap<string, ShownThread>): ShownThread[] {
+  if (holds.size === 0) return threads;
+  // Por hilo, los comentarios con el cuadro de edición abierto.
+  const boxes = new Map<string, Set<string>>();
+  for (const h of holds.values()) {
+    const editing = boxes.get(h.threadId) ?? new Set<string>();
+    if (h.commentId) editing.add(h.commentId);
+    boxes.set(h.threadId, editing);
+  }
+  const deleted = (c: CommentView): CommentView => ({ ...c, deleted: true });
+  const out: ShownThread[] = [...threads];
+  for (const [threadId, editing] of boxes) {
+    const before = last.get(threadId);
+    if (!before) continue;
+    const at = out.findIndex((t) => t.id === threadId);
+    if (at < 0) {
+      out.push({ ...before, gone: true, root: deleted(before.root), replies: before.replies.filter((r) => editing.has(r.id)).map(deleted) });
+      continue;
+    }
+    const now = out[at];
+    const missing = before.replies.filter((r) => editing.has(r.id) && !now.replies.some((n) => n.id === r.id));
+    if (missing.length > 0) {
+      out[at] = { ...now, replies: [...now.replies, ...missing.map(deleted)].sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1)) };
+    }
+  }
+  return out;
 }
 
 export function CommentsPanel({ pageId }: { pageId: string }) {
@@ -107,8 +169,38 @@ function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarg
   // De qué link vino cada comentario hecho por un link: un pedido por el conjunto, y solo si la persona comparte la página.
   const linkLabels = useLinkLabels(pageId, linkIdsOf(threads));
 
-  const open = sortThreads(threads.filter((t) => !t.resolved), source);
-  const resolved = sortThreads(threads.filter((t) => t.resolved), source);
+  // Los cuadros abiertos (ver "Los cuadros abiertos", arriba): cada hilo con uno se queda en su lista y a la vista.
+  const [holds, setHolds] = useState<ReadonlyMap<symbol, Hold>>(new Map());
+  const pinned = new Map<string, Hold['section']>();
+  for (const h of holds.values()) if (!pinned.has(h.threadId)) pinned.set(h.threadId, h.section);
+  /** Lo último que se mostró: los hilos (por si alguno deja de venir con un cuadro abierto) y cuáles iban como resueltos. */
+  const shownBefore = useRef<{ threads: ReadonlyMap<string, ShownThread>; resolved: ReadonlySet<string> }>({ threads: new Map(), resolved: new Set() });
+  const shown = withHeld(threads, holds, shownBefore.current.threads);
+  const inResolved = (t: ShownThread) => (pinned.get(t.id) ?? (t.resolved ? 'resolved' : 'open')) === 'resolved';
+
+  const open = sortThreads(shown.filter((t) => !inResolved(t)), source);
+  const resolved = sortThreads(shown.filter(inResolved), source);
+  useLayoutEffect(() => {
+    shownBefore.current = { threads: new Map(shown.map((t) => [t.id, t])), resolved: new Set(resolved.map((t) => t.id)) };
+  });
+  const holdBox = useCallback<HoldBox>((threadId, commentId) => {
+    const key = Symbol('box');
+    const section = shownBefore.current.resolved.has(threadId) ? 'resolved' : 'open';
+    setHolds((all) => new Map(all).set(key, { threadId, commentId, section }));
+    return () => {
+      setHolds((all) => {
+        const next = new Map(all);
+        next.delete(key);
+        return next;
+      });
+      // El hilo se resolvió con el cuadro abierto: al cerrarse pasa a los resueltos, que se abren para que se vea
+      // adónde fue (con lo que la persona acaba de mandar, si mandó).
+      if (section === 'open' && shownBefore.current.threads.get(threadId)?.resolved) {
+        setShowResolved(true);
+        setFocused(threadId);
+      }
+    };
+  }, []);
 
   // Una edición propia esperando decisión en un hilo resuelto no puede quedar escondida detrás de "N resolved
   // threads": el estado manda a los comentarios de la página, y ahí tiene que estar a la vista.
@@ -120,7 +212,9 @@ function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarg
   // Ver los hilos en el panel marca leídas las menciones de esos hilos (Doc_Menciones.md, 2.3).
   const { mentions } = useServices();
   const inbox = useInbox();
-  const visible = [...open, ...(showResolved ? resolved : [])].map((t) => t.id).join(',');
+  // Un hilo resuelto con un cuadro abierto sigue a la vista aunque la lista de resueltos se pliegue.
+  const resolvedShown = showResolved ? resolved : resolved.filter((t) => pinned.has(t.id));
+  const visible = [...open, ...resolvedShown].map((t) => t.id).join(',');
   useEffect(() => {
     if (!mentions || !inbox.ready || !mentions.unreadOn(pageId)) return;
     void mentions.markThreadsRead(pageId, new Set(visible.split(',')));
@@ -257,6 +351,8 @@ function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarg
             <Thread
               key={t.id}
               thread={t}
+              moved={t.resolved && !t.gone ? 'resolved' : null}
+              onBox={holdBox}
               me={user.id}
               focused={focused === t.id}
               nonce={nonce}
@@ -273,11 +369,12 @@ function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarg
                 {showResolved ? <CollapseIcon size={14} /> : <ExpandIcon size={14} />}
                 {tr('comments.resolvedThreads', { count: resolved.length })}
               </button>
-              {showResolved &&
-                resolved.map((t) => (
+              {resolvedShown.map((t) => (
                   <Thread
                     key={t.id}
                     thread={t}
+                    moved={t.resolved || t.gone ? null : 'reopened'}
+                    onBox={holdBox}
                     me={user.id}
                     focused={focused === t.id}
                     nonce={nonce}
@@ -286,7 +383,7 @@ function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarg
                     canDeleteAny={canDeleteAny}
                     onReveal={reveal}
                   />
-                ))}
+              ))}
             </div>
           )}
         </div>
@@ -345,6 +442,8 @@ function NewThread({
 
 function Thread({
   thread,
+  moved,
+  onBox,
   me,
   focused,
   nonce,
@@ -353,7 +452,9 @@ function Thread({
   canDeleteAny,
   onReveal,
 }: {
-  thread: CommentThread;
+  thread: ShownThread;
+  moved: Moved;
+  onBox: HoldBox;
   me: string;
   focused: boolean;
   nonce: number;
@@ -373,6 +474,8 @@ function Thread({
   useLayoutEffect(() => {
     if (focused) ref.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
   }, [focused, nonce]);
+  // Con el cuadro de la respuesta abierto, el panel no mueve ni saca el hilo (ver "Los cuadros abiertos").
+  useLayoutEffect(() => (replying ? onBox(thread.id, null) : undefined), [replying, onBox, thread.id]);
 
   const resolve = (value: boolean) =>
     void comments.resolve(thread.pageId, thread.id, value).catch((err: unknown) => setError(errorMessage(err)));
@@ -386,17 +489,23 @@ function Thread({
           {thread.resolvedAt ? ` · ${when(thread.resolvedAt, Date.now(), tr)}` : ''}
         </p>
       )}
-      <Comment comment={thread.root} me={me} canComment={canComment} canDeleteAny={canDeleteAny} />
+      <Comment comment={thread.root} me={me} canComment={canComment} canDeleteAny={canDeleteAny} moved={moved} onBox={onBox} />
       {thread.replies.map((r) => (
-        <Comment key={r.id} comment={r} me={me} canComment={canComment} canDeleteAny={canDeleteAny} />
+        <Comment key={r.id} comment={r} me={me} canComment={canComment} canDeleteAny={canDeleteAny} moved={moved} onBox={onBox} />
       ))}
       {error && <p className="comment-error">{error}</p>}
+      {replying && (thread.gone || moved) && (
+        <p className={thread.gone ? 'comment-conflict' : 'comments-note'} role="status">
+          {tr(thread.gone ? 'comments.gone.replying' : MOVED_NOTE[moved!])}
+        </p>
+      )}
       {replying ? (
         <Composer
           autoFocus
           mentionPage={thread.pageId}
           placeholder={question ? tr('comments.writeAnswer') : tr('comments.replyPlaceholder')}
           submitLabel={question ? tr('comments.answer') : tr('comments.reply')}
+          unsavable={thread.gone ? 'gone' : null}
           onSubmit={async (text, mentions) => {
             await comments.add(thread.pageId, thread.blockId, text, thread.id, mentions ?? []);
             setReplying(false);
@@ -424,6 +533,9 @@ function Thread({
   );
 }
 
+/** El aviso de un hilo que cambió de estado con un cuadro abierto: se puede mandar igual, y dice cómo queda el hilo. */
+const MOVED_NOTE = { resolved: 'comments.resolvedWhileWriting', reopened: 'comments.reopenedWhileWriting' } as const satisfies Record<NonNullable<Moved>, Key>;
+
 type Names = { emailOf(id: string | null): string | undefined };
 
 /** El nombre de la herramienta de la que vino un comentario importado. */
@@ -437,7 +549,21 @@ function nameOf(comments: Names, userId: string | null, me: string, tr: Translat
   return comments.emailOf(userId) ?? tr('comments.someone');
 }
 
-function Comment({ comment, me, canComment, canDeleteAny }: { comment: CommentView; me: string; canComment: boolean; canDeleteAny: boolean }) {
+function Comment({
+  comment,
+  me,
+  canComment,
+  canDeleteAny,
+  moved,
+  onBox,
+}: {
+  comment: CommentView;
+  me: string;
+  canComment: boolean;
+  canDeleteAny: boolean;
+  moved: Moved;
+  onBox: HoldBox;
+}) {
   const { comments } = useServices();
   // El texto del que parte la edición: el que la persona tenía delante al abrir el cuadro (`null`: no está editando).
   // Viaja con la edición: si mientras tanto el comentario cambió desde otro lado, la base no lo pisa (`EditConflict`).
@@ -453,16 +579,45 @@ function Comment({ comment, me, canComment, canDeleteAny }: { comment: CommentVi
   // El cuadro está abierto sobre un texto que no es el que quedó esperando decisión (una edición anterior, rechazada,
   // se reintentó y chocó): guardar desde acá se rechaza siempre (`commentError.decideFirst`). El aviso lo dice, y el
   // cuadro ofrece copiar lo escrito y pide confirmación antes de cerrarse: ningún clic ni tecla adentro del cuadro
-  // descarta lo tipeado sin confirmar. (Fuera del cuadro sigue pudiendo irse: al cambiar de página o al recargar, y
-  // si el hilo se resuelve o el comentario se borra desde otro lado mientras el cuadro está abierto.)
+  // descarta lo tipeado sin confirmar. Tampoco lo que llega de afuera: con el cuadro abierto, el panel no mueve ni saca
+  // el hilo (ver "Los cuadros abiertos"), y si el comentario se borró desde otro lado el cuadro sigue acá (`gone`),
+  // con lo tipeado para copiar. Al cambiar de página, un aviso deja copiarlo (`closeDraft`, commentsUi.ts).
   const stuck = editBase !== null && !!comment.conflict && editBase !== comment.conflict.text;
+  const gone = editBase !== null && comment.deleted;
   const tr = useT();
   const linkLabel = useContext(LinkLabels).get(comment.linkId ?? '');
+  useLayoutEffect(() => (editing ? onBox(comment.threadId ?? comment.id, comment.id) : undefined), [editing, onBox, comment.threadId, comment.id]);
+
+  // El cuadro de edición es el mismo elemento (misma `key`) en las dos vistas, la normal y la del comentario borrado:
+  // si el comentario se borra desde otro lado con el cuadro abierto, el cuadro no se desmonta y lo tipeado sigue ahí.
+  const box = editBase !== null && (
+    <Composer
+      key="edit"
+      autoFocus
+      initial={editBase}
+      initialMentions={comment.mentions}
+      mentionPage={comment.pageId}
+      submitLabel={tr('common.save')}
+      placeholder={tr('comments.editPlaceholder')}
+      unsavable={gone ? 'gone' : stuck ? 'decide' : null}
+      onSubmit={async (text, mentions) => {
+        if (text !== editBase) await comments.edit(comment.pageId, comment.id, text, mentions ?? undefined, editBase);
+        setEditBase(null);
+      }}
+      onCancel={() => setEditBase(null)}
+    />
+  );
 
   if (comment.deleted) {
     return (
       <div className="comment deleted">
         <p className="muted">{tr('comments.deleted')}</p>
+        {gone && (
+          <p className="comment-conflict" role="status">
+            {tr('comments.gone.editing')}
+          </p>
+        )}
+        {box}
         {comment.conflict && <EditConflictBox comment={comment} me={me} />}
         {comment.error && <Rejected comment={comment} />}
       </div>
@@ -519,21 +674,14 @@ function Comment({ comment, me, canComment, canDeleteAny }: { comment: CommentVi
           {tr(stuck ? 'comments.conflict.whileEditingStuck' : 'comments.conflict.whileEditing')}
         </p>
       )}
-      {editBase !== null ? (
-        <Composer
-          autoFocus
-          initial={editBase}
-          initialMentions={comment.mentions}
-          mentionPage={comment.pageId}
-          submitLabel={tr('common.save')}
-          placeholder={tr('comments.editPlaceholder')}
-          unsavable={stuck}
-          onSubmit={async (text, mentions) => {
-            if (text !== editBase) await comments.edit(comment.pageId, comment.id, text, mentions ?? undefined, editBase);
-            setEditBase(null);
-          }}
-          onCancel={() => setEditBase(null)}
-        />
+      {/* El hilo se resolvió (o se reabrió) con el cuadro abierto: se puede guardar igual. */}
+      {editBase !== null && moved && !comment.conflict && (
+        <p className="comments-note" role="status">
+          {tr(MOVED_NOTE[moved])}
+        </p>
+      )}
+      {box ? (
+        box
       ) : comment.conflict ? (
         <EditConflictBox comment={comment} me={me} />
       ) : (
@@ -678,13 +826,14 @@ function Rejected({ comment }: { comment: CommentView }) {
   // Todos los textos rechazados de este comentario, en el orden en que se escribieron. Con más de uno (dos ediciones,
   // o un alta y su edición) el cartel dice cuántos son y cada uno lleva su *Copy text*; con uno solo, como siempre.
   const texts = comments.failures().flatMap((f) => (comment.failedSeqs.includes(f.seq) && f.body ? [f.body] : []));
-  const text = texts.length > 1 ? null : (info?.text ?? comment.rejectedText);
+  const many = texts.length > 1;
+  const text = many ? null : (info?.text ?? comment.rejectedText);
   const copy = (value: string, at = 0) => void copyText(value).then((ok) => setCopied(ok ? at : null));
   const tr = useT();
   return (
     <div className="comment-error" role="status">
       <span>{tr('comments.rejected', { reason: localize(comment.error ?? '') })}</span>
-      {texts.length > 1 && (
+      {many && (
         <>
           <span>{tr('comments.rejectedMany', { count: texts.length })}</span>
           {texts.map((value, i) => (
@@ -710,7 +859,7 @@ function Rejected({ comment }: { comment: CommentView }) {
               className="link danger"
               onClick={() => void Promise.all(comment.failedSeqs.map((s) => comments.discard(s))).then(() => setAsking(false))}
             >
-              {tr('common.discard')}
+              {many ? tr('comments.discardAll', { count: texts.length }) : tr('common.discard')}
             </button>
             <button className="link" onClick={() => setAsking(false)}>
               {tr('common.cancel')}
@@ -719,8 +868,9 @@ function Rejected({ comment }: { comment: CommentView }) {
         </>
       ) : (
         <span className="row">
+          {/* Con varios textos, los dos botones valen para todos: lo dicen con la cantidad. */}
           <button className="link" onClick={() => void engine.retryRejected()}>
-            {tr('common.retry')}
+            {many ? tr('comments.retryAll', { count: texts.length }) : tr('common.retry')}
           </button>
           {text && (
             <button className="link" onClick={() => copy(text)}>
@@ -728,7 +878,7 @@ function Rejected({ comment }: { comment: CommentView }) {
             </button>
           )}
           <button className="link danger" onClick={() => setAsking(true)}>
-            {tr('comments.discardEllipsis')}
+            {many ? tr('comments.discardAllEllipsis', { count: texts.length }) : tr('comments.discardEllipsis')}
           </button>
         </span>
       )}
@@ -793,14 +943,22 @@ function EditConflictBox({ comment, me }: { comment: CommentView; me: string }) 
   );
 }
 
+/** Por qué desde un cuadro no se puede guardar (ver `unsavable` en `Composer`). */
+type Unsavable = 'decide' | 'gone';
+
+/** La pregunta antes de descartar lo escrito en un cuadro que no puede guardar: dice que hay que copiarlo antes. */
+const UNSAVABLE_QUESTION = { decide: 'comments.conflict.cancelStuck', gone: 'comments.gone.cancel' } as const satisfies Record<Unsavable, Key>;
+
 /**
  * El cuadro para escribir: Ctrl/⌘+Enter manda, Escape cancela. Crece con el texto. Con `mentionPage` (y la base con
  * menciones), `@` al comienzo o después de un espacio abre la lista de a quién nombrar: ↑ ↓ eligen, Enter o Tab lo
  * ponen, Esc cierra la lista sin borrar lo escrito. Detrás del cuadro, una copia del texto pinta cada mención elegida.
  * Al mandar, `mentions` son las elegidas que siguen escritas (`null` sin menciones).
  *
- * `unsavable`: desde este cuadro no se puede guardar (el comentario tiene otra edición esperando decisión). Suma
- * *Copy text* de lo escrito, y *Cancel* pide confirmación si hay algo escrito: es la única salida del cuadro.
+ * `unsavable`: desde este cuadro no se puede guardar. Suma *Copy text* de lo escrito, y *Cancel* pide confirmación si
+ * hay algo escrito: es la única salida del cuadro. `decide`: el comentario tiene otra edición esperando decisión
+ * (guardar se rechaza diciéndolo). `gone`: el comentario o el hilo ya no está (se borró desde otro lado con el cuadro
+ * abierto): guardar no se ofrece.
  */
 function Composer({
   initial = '',
@@ -809,7 +967,7 @@ function Composer({
   placeholder,
   submitLabel,
   autoFocus,
-  unsavable = false,
+  unsavable = null,
   onSubmit,
   onCancel,
 }: {
@@ -819,7 +977,7 @@ function Composer({
   placeholder: string;
   submitLabel: string;
   autoFocus?: boolean;
-  unsavable?: boolean;
+  unsavable?: Unsavable | null;
   onSubmit: (text: string, mentions: MentionRef[] | null) => Promise<unknown>;
   onCancel: () => void;
 }) {
@@ -833,9 +991,12 @@ function Composer({
   const tr = useT();
   // El texto que se copió con *Copy text* (si después se sigue escribiendo, el botón vuelve a ofrecer copiar).
   const [copiedText, setCopiedText] = useState<string | null>(null);
+  /** El cuadro lo está cerrando quien escribe (ver `closeDraft`). */
+  const byPerson = useRef(false);
   /** Cierra el cuadro. `ask`: con algo escrito, pide confirmación (Escape, siempre; el botón, si acá no se puede guardar). */
   const leave = (ask: boolean) => {
-    if (ask && dirty && !confirm(tr(unsavable ? 'comments.conflict.cancelStuck' : 'comments.discardDraft'))) return;
+    if (ask && dirty && !confirm(tr(unsavable ? UNSAVABLE_QUESTION[unsavable] : 'comments.discardDraft'))) return;
+    byPerson.current = true;
     onCancel();
   };
 
@@ -914,13 +1075,18 @@ function Composer({
     });
   };
 
-  // Lo escrito a medias: cerrar el panel (tocar afuera, Escape, la X) pide confirmación.
+  // Lo escrito a medias: cerrar el panel (tocar afuera, Escape, la X) pide confirmación, con la pregunta de este cuadro
+  // si desde acá no se puede guardar.
   const draftKey = useRef(Symbol('draft'));
   useLayoutEffect(() => {
+    setDraft(draftKey.current, dirty, { text, question: unsavable ? UNSAVABLE_QUESTION[unsavable] : undefined });
+  }, [dirty, text, picked, unsavable]);
+  // Al desmontarse: si no lo cerró la persona (mandó, canceló o confirmó descartarlo) y había algo escrito, un aviso
+  // deja copiarlo (se cambió de página, la página dejó de verse, se le pidió otra cosa al panel).
+  useLayoutEffect(() => {
     const key = draftKey.current;
-    setDraft(key, dirty);
-    return () => setDraft(key, false);
-  }, [dirty, text, picked]);
+    return () => closeDraft(key, byPerson.current);
+  }, []);
 
   // En el teléfono, cuando aparece el teclado, el cuadro queda a la vista.
   useEffect(() => {
@@ -949,12 +1115,15 @@ function Composer({
   }, [autoFocus]);
 
   const submit = async () => {
-    if (busy) return;
+    if (busy || unsavable === 'gone') return;
     setBusy(true);
     setError(null);
+    // Quien manda cierra el cuadro (lo desmonta `onSubmit` cuando lo escrito ya quedó guardado en el dispositivo).
+    byPerson.current = true;
     try {
       await onSubmit(text, candidates.on ? activeMentions(text, picked) : null);
     } catch (err) {
+      byPerson.current = false;
       setError(err instanceof CommentInvalid ? err.message : tr('comments.saveFailed', { reason: errorMessage(err) }));
       setBusy(false);
       return;
@@ -1059,7 +1228,7 @@ function Composer({
         <p className="comment-error">{tooLong ? tr('comments.tooLong', { max: MAX_COMMENT_LENGTH, now: text.length }) : error}</p>
       )}
       <div className="row">
-        <button type="submit" className="primary" disabled={busy || !text.trim() || tooLong} data-tip={tipRows([{ shortcut: 'commentsSend', action: asAction(submitLabel) }])}>
+        <button type="submit" className="primary" disabled={busy || !text.trim() || tooLong || unsavable === 'gone'} data-tip={tipRows([{ shortcut: 'commentsSend', action: asAction(submitLabel) }])}>
           {submitLabel}
         </button>
         {unsavable && dirty && (
@@ -1067,7 +1236,7 @@ function Composer({
             {copiedText === text ? tr('common.copied') : tr('sync.copyText')}
           </button>
         )}
-        <button type="button" className="link" onClick={() => leave(unsavable)}>
+        <button type="button" className="link" onClick={() => leave(!!unsavable)}>
           {tr('common.cancel')}
         </button>
       </div>

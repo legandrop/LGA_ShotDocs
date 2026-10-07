@@ -938,10 +938,46 @@ Paso 10 de `Plan_Workspaces.md` (sección 4), con la base en la versión 5
     waiting for you to choose… What you are writing here can't be saved until you choose: copy it, then cancel…*), el
     cuadro suma ***Copy text*** de lo escrito, *Cancel* **pide confirmación** si hay algo escrito (solo en ese
     estado; Escape ya la pedía en todos), y el error de guardar (`commentError.decideFirst`) dice lo mismo. Ningún
-    clic ni tecla adentro del cuadro descarta lo tipeado sin confirmar. **Lo que todavía lo tira sin preguntar**, en
-    este cuadro y en cualquier otro de comentarios (ya era así): cambiar de página, recargar (el aviso de salir del
-    navegador no cuenta un comentario a medio escribir) y que el hilo se resuelva o el comentario se borre desde otro
-    lado mientras el cuadro está abierto (ver el roadmap).
+    clic ni tecla adentro del cuadro descarta lo tipeado sin confirmar. Lo que le pasa a un cuadro abierto (este y
+    cualquier otro de comentarios) cuando el cambio llega de afuera está en el punto que sigue.
+  - **Un cuadro abierto y lo que llega de afuera (v0.229, D337 a D339).** Lo que se tipea en un cuadro (una
+    respuesta, una edición) vive solo en la memoria de ese cuadro, y el panel lo desmontaba cuando el hilo cambiaba
+    de lista o dejaba de venir: si el hilo se resolvía o el comentario se borraba **desde otro lado** (otra persona,
+    u otro dispositivo de la misma) y el cambio llegaba por la sincronización, lo tipeado desaparecía sin ninguna
+    pregunta. Cómo quedó, en `src/ui/CommentsPanel.tsx` ("Los cuadros abiertos"):
+    - **Cada cuadro abierto le avisa al panel**, y mientras dure, su hilo **se queda en la lista en la que estaba**
+      y a la vista. Si el hilo **se resuelve** con el cuadro abierto, sigue arriba, con *Resolved by…* y un aviso
+      discreto (*This thread was resolved while you were writing. You can still send what you wrote: the thread stays
+      resolved.*). La respuesta se puede mandar igual: la base acepta una respuesta en un hilo resuelto y **no lo
+      reabre** (D337); el panel no ofrece *Reply* en un hilo ya resuelto, y eso no cambió. Cuando el cuadro se cierra
+      (mandó o canceló), el hilo pasa a los resueltos, que se abren para que se vea adónde fue. Al revés (se edita en
+      un hilo resuelto y lo **reabren**): el hilo sigue entre los resueltos hasta cerrar el cuadro, y plegar esa
+      lista no se lo lleva. Sin ningún cuadro abierto, todo se mueve como siempre.
+    - **Si el comentario se borra** con su cuadro de edición abierto, o **el hilo entero** con una respuesta a
+      medio escribir, el panel los sigue mostrando desde la última vez que los mostró (`withHeld`), marcados como
+      borrados, y el cuadro pasa a ser uno **que no puede guardar** (D338): dice que el comentario (o el hilo) se
+      borró desde otro lado, *Save* / *Reply* quedan apagados (Ctrl/⌘+Enter no manda), y tiene *Copy text* y
+      *Cancel* con confirmación, como el de la v0.228. Al cerrarlo, lo borrado deja de verse.
+    - **Cerrar el panel con un cuadro que no puede guardar** (la X, tocar afuera, Escape) pregunta con el texto de
+      ese cuadro («…copialo antes»), no con el genérico: cada borrador registra su pregunta (`setDraft`,
+      `commentsUi.ts`).
+    - **Otros cambios de afuera con el cuadro abierto:** una edición del mismo comentario desde otro dispositivo
+      (v0.227: el cuadro sigue y avisa); **perder el permiso de comentar** (el cuadro sigue; si se manda, el servidor
+      lo rechaza y queda a la vista con su texto); **la página que va a la papelera** y se sigue viendo con su
+      cartel (el cuadro sigue). Si la página **deja de verse** (le sacan el permiso; o va a la papelera y esa
+      persona no la ve ahí, como un invitado), la pantalla pasa a «no existe o no tenés acceso» y el panel se
+      desmonta: ver lo que sigue.
+    - **Lo que desmonta el cuadro sin que la persona lo cierre** (la página deja de verse, se cambia de página,
+      se le pide otra cosa al panel) ya no es silencioso (D339): si había algo escrito, sale un aviso (*A comment you
+      were writing was closed before you sent it.*) con ***Copy text***, 15 segundos (`closeDraft`, `commentsUi.ts`;
+      el aviso es el de siempre, `notice.ts`). Mandar, cancelar o cerrar el panel confirmando no lo muestran. **No
+      pregunta antes de cambiar de página:** hoy nada frena un cambio de página (el editor y el título guardan en el
+      dispositivo, no preguntan), `navigate` tiene 45 llamadores (varios siguen con algo que da por hecho el cambio:
+      cambiar de proyecto, deshacer en otra página, *Show* de un reemplazo, imprimir otra página) y el Atrás del
+      navegador no se puede frenar.
+    - **Cerrar o recargar el navegador** con algo escrito en un cuadro ahora pregunta: el `beforeunload` de
+      `Workspace.tsx` cuenta `hasDrafts()`, lo mismo que ya miraban el botón *Reload*, la recarga por una versión
+      nueva y el cambio de workspace.
   - **A la vista (D327):** el comentario muestra los dos textos, cada uno con su rótulo (*Saved now, changed from
     somewhere else* y *What you wrote on this device*), y tres acciones: *Keep mine* (la edición vuelve a la cola con
     la base de lo que se está viendo; si la base volvió a cambiar, vuelve a quedar apartada), *Discard mine…* (pide
@@ -955,7 +991,17 @@ Paso 10 de `Plan_Workspaces.md` (sección 4), con la base en la versión 5
   - **Varios textos rechazados del mismo comentario (v0.228, D335).** Cuando dos ediciones (o un alta y su edición)
     quedan rechazadas, el cartel rojo del comentario mostraba y copiaba solo el primer texto. Ahora dice cuántos son
     y lista cada uno, cortado con «…», con su *Copy text*; con uno solo queda como estaba. Salen de
-    `CommentQueue.failures()`, en el orden en que se escribieron.
+    `CommentQueue.failures()`, en el orden en que se escribieron. Con más de uno (v0.229), los botones dicen que
+    valen para todos (*Retry all 3*, *Discard all 3…*, *Discard all 3*) y la confirmación lo dice en plural
+    (*Discarding the 3 edits…*). **Sin arreglar:** al reintentar varias con la misma base, la primera entra y las
+    demás chocan con ese texto, que es propio, y el aviso habla de «otro lado» (no se pierde nada). Decirlo bien pide
+    que la cola recuerde qué texto mandó este dispositivo y lo guarde con lo apartado (`setAside`, la forma de
+    `editConflict:` en `meta`): toca las reglas auditadas de la cola, y quedó anotado en el roadmap.
+  - **Editar sin decir de qué texto se parte (v0.229).** `CommentQueue.edit` sin `base` toma el texto que se ve; si
+    los comentarios de la página todavía no se habían cargado, no encontraba ninguno y la edición salía con la firma
+    de dos argumentos, que guarda lo que llega. El panel siempre pasa la base, pero la llamada ya no puede pisar:
+    carga antes los comentarios de la página y, si el dispositivo no tiene ese comentario, la rechaza
+    (`commentError.editUnknown`).
   - **En una pantalla táctil** (`@media (pointer: coarse)`), los botones de la caja del conflicto, del cartel de un
     rechazo y del cuadro de edición tienen 36 px de alto (medían 18); el escritorio no cambia.
   - **Se olvida sola en un único caso:** cuando la base termina teniendo ese mismo texto (no queda nada que

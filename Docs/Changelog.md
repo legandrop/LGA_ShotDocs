@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.229 :
+
+Un cuadro de comentario abierto (una respuesta, una edición) desaparecía con lo tipeado cuando el hilo se resolvía o el comentario se borraba desde otro lado y el cambio llegaba por la sincronización: el panel cambiaba el hilo de lista o dejaba de mostrarlo, y el cuadro, que guarda lo escrito en su memoria, se desmontaba. Ahora un hilo con un cuadro abierto se queda donde está hasta que el cuadro se cierre, con un aviso de que se resolvió; lo borrado sigue a la vista y su cuadro pasa a no poder guardar, con *Copy text* y confirmación. Cerrar o recargar el navegador con algo escrito pregunta, y cambiar de página deja un aviso con *Copy text*. Además: el cartel de varias rechazadas dice la cantidad, la pantalla sin proyectos pregunta al salir como el menú de la cuenta, y editar sin base ya no puede pisar.
+
+[Mantener abierto el cuadro de un comentario cuando el hilo se resuelve o el comentario se borra desde otro lado, avisar con Copy text si se cierra al cambiar de página y preguntar al salir del navegador con un comentario a medio escribir]
+
 v0.228 :
 
 Cierra lo que dejaron anotado las revisiones de v0.226 y v0.227. Comentarios: con el cuadro de edición abierto sobre lo guardado, si una edición rechazada de antes se reintentaba y chocaba, el aviso mandaba a «guardar o cancelar», guardar se rechazaba y *Cancel* descartaba lo tipeado sin preguntar; ahora el aviso lo dice, el cuadro suma *Copy text* y *Cancel* confirma. Varios textos rechazados se listan, cada uno con su copia; salir de la cuenta pregunta también por lo rechazado; botones de 36 px en pantallas táctiles. Link público: una bajada corta y repetida del árbol solo vale si terminó con una respuesta vacía (con totales mal informados quedaba un árbol sin raíz); el detalle del estado dice si la lista de páginas está atrasada, y un link revocado durante esa espera se nota por los comentarios de la página abierta. Más las pruebas pendientes. Decisiones D332 a D336.

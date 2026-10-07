@@ -154,6 +154,8 @@ const LINK_FILES = '0.164';
 const LINK_COMMENTS = '0.222';
 /** Dos ediciones del mismo comentario desde dos dispositivos (Doc_Sincronizacion.md): la versión la pone quien publica. */
 const COMMENT_EDIT_CONFLICT = '0.227';
+/** Un cuadro de comentario abierto y lo que llega de afuera (Doc_Sincronizacion.md): la versión la pone quien publica. */
+const COMMENT_BOX_KEPT = '0.229';
 /** Exportar una rama o un proyecto como PDF (P.22, Doc_Exportar.md, entrega 1): la versión se pone al publicar. */
 const EXPORT_PDF = '0.122';
 /** Exportar como zip (P.22, Doc_Exportar.md, entrega 2): la versión se pone al publicar. */
@@ -729,6 +731,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.commentEditConflict.text',
     words: ['conflict', 'conflicto', 'two devices', 'dos dispositivos', 'phone', 'teléfono', 'offline', 'sin conexión', 'overwrite', 'pisar', 'keep mine', 'dejar el mío', 'discard mine', 'descartar el mío'],
     since: COMMENT_EDIT_CONFLICT,
+  },
+  {
+    id: 'commentBoxKept',
+    section: 'comments',
+    title: 'help.commentBoxKept.title',
+    text: 'help.commentBoxKept.text',
+    words: ['resolved', 'resuelto', 'deleted', 'borrado', 'copy text', 'copiar el texto', 'half written', 'a medio escribir', 'lost', 'perder', 'reply', 'respuesta'],
+    since: COMMENT_BOX_KEPT,
   },
 
   // --- Buscar ---

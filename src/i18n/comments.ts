@@ -9,6 +9,12 @@ export const comments = {
     es: { one: "Comentarios, {count} abierto", other: "Comentarios, {count} abiertos" },
   },
   'comments.discardDraft': { en: "Discard what you wrote?", es: "¿Descartar lo que escribiste?" },
+  // Un cuadro con algo escrito se cerró sin que la persona lo cerrara (cambió de página, la página dejó de verse): el
+  // aviso lleva *Copy text* (commentsUi.ts).
+  'comments.draftClosed': {
+    en: "A comment you were writing was closed before you sent it.",
+    es: "Un comentario que estabas escribiendo se cerró antes de que lo mandaras.",
+  },
   'comments.comment': { en: "Comment", es: "Comentar" },
   'comments.answer': { en: "Answer", es: "Responder" },
   'comments.readOnlyDevice': {
@@ -83,6 +89,11 @@ export const comments = {
   },
   'commentError.badBlock': { en: "This block cannot take comments.", es: "Este bloque no se puede comentar." },
   'commentError.threadGone': { en: "The thread is not here anymore.", es: "El hilo ya no está." },
+  // Editar un comentario que este dispositivo no tiene (sin el texto del que parte, la edición no se manda).
+  'commentError.editUnknown': {
+    en: "This device doesn't have that comment, so it can't be edited from here.",
+    es: "Este dispositivo no tiene ese comentario, así que no se puede editar desde acá.",
+  },
   'commentError.off': {
     en: "Comments are off on this device: {reason}",
     es: "Los comentarios no andan en este dispositivo: {reason}",
@@ -97,8 +108,8 @@ export const comments = {
     es: { one: "Este comentario nunca se subió: descartarlo lo borra de este dispositivo, y también descarta {count} respuesta.", other: "Este comentario nunca se subió: descartarlo lo borra de este dispositivo, y también descarta {count} respuestas." },
   },
   'commentDiscard.edit': {
-    en: "Discarding the edit: the comment comes back as it is on the server.",
-    es: "Se descarta la edición: el comentario vuelve a como está en el servidor.",
+    en: { one: "Discarding the edit: the comment comes back as it is on the server.", other: "Discarding the {count} edits: the comment comes back as it is on the server." },
+    es: { one: "Se descarta la edición: el comentario vuelve a como está en el servidor.", other: "Se descartan las {count} ediciones: el comentario vuelve a como está en el servidor." },
   },
   'commentDiscard.delete': {
     en: "Discarding the delete: the comment comes back.",
