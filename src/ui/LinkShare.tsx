@@ -23,6 +23,7 @@ import {
 } from '../sync/publicLinks';
 import { LinkAsideList } from './LinkAsideList';
 import { LinkFilesList } from './LinkFilesList';
+import { linkLabelsStore } from './linkLabels';
 import { linkPagesStore } from './linkPages';
 import { notify } from './notice';
 import { ShareGateNotes, UNSYNCED_BEFORE_SHARE, useShareGate } from './shareGate';
@@ -101,6 +102,9 @@ export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => 
         setInfo(data);
         // El ícono del árbol de esta página cambia con lo que la base acaba de decir, sin esperar su próxima vuelta.
         linkPagesStore(services)?.learn(pageId, data);
+        // Y el rótulo de los comentarios hechos por un link (si el panel los está mostrando): se apagó, se renovó o
+        // cambió de nivel recién, y lo recordado quedó viejo.
+        linkLabelsStore(services)?.stale();
       },
       (err: unknown) => live && setError(linkErrorText(tr, err)),
     );

@@ -51,7 +51,8 @@ its own project: a tree of pages you own.
   project or a page (view, comment, edit, or edit and create pages). A permission covers everything under
   that page and nothing above it: parent pages and sibling branches stay private. Clients join as guests
   and sign in to see only the pages shared with them. A page can also be shared with *Anyone with the link*: they
-  open it without an account, see that page and the ones inside, and comment with a name.
+  open it without an account, see that page and the ones inside, and comment with a name. Whoever can share the
+  page with the link sees, on each of those comments, which link it came from.
 - **Your look, everywhere.** Light or dark theme, a default or an editorial typeface, text contrast
   (No contrast, Normal contrast or More contrast, with bold close to headings and softer body text, also in the PDF), text size and page width, saved in
   your account and applied on every device. Scene titles like `064 | Name | Place` show

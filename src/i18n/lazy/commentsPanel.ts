@@ -79,6 +79,14 @@ export const commentsPanel = {
   'comments.importedFrom': { en: "from {source}", es: "de {source}" },
   'comments.importedArchive': { en: "from an archive", es: "de un archivo" },
   'comments.importedBy': { en: "Imported by {name}", es: "Lo importó {name}" },
+  // De qué link vino un comentario hecho por un link público (solo para quien puede compartir la página del link):
+  // «Can view link · created by lega · closed».
+  'comments.link.view': { en: "Can view link", es: "Link Puede ver" },
+  'comments.link.edit': { en: "Can edit link", es: "Link Puede editar" },
+  'comments.link.by': { en: "created by {name}", es: "lo creó {name}" },
+  'comments.link.closed': { en: "closed", es: "cerrado" },
+  'comments.link.expired': { en: "expired", es: "vencido" },
+  'comments.link.off': { en: "not working", es: "no anda" },
   'comments.deleted': { en: "This comment was deleted.", es: "Este comentario se borró." },
   'comments.edited': { en: "edited", es: "editado" },
   'comments.notUploaded': { en: "Not uploaded yet", es: "Todavía sin subir" },

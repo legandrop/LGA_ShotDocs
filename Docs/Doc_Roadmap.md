@@ -378,10 +378,15 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   **Entregas 0 y 1 hechas (v0.114: *Can view*, migración aplicada (verificada en la base el 2026-10-06); ver "Cómo quedó" en `Doc_Link_Publico.md`).** Para
   publicarla del todo falta prender el interruptor de D14 (`clean_min_version`, hoy nulo, apagado); la migración ya está aplicada. **Hecho en v0.215:** el ícono del árbol para las
   páginas con link propio (lo ve quien puede compartir la página; lo confirma la base) y, en *Share*, quién creó el link y
-  cuándo. Falta: decir en cada comentario de qué link vino (*Can view link, created by…*; la base no lo entrega por id de
-  link: diseño en `Doc_Link_Publico.md`, "Restos del link (v0.215)"; **no entró en v0.221**: además de la función, la
-  app no guarda el id del link de cada comentario, y con el pedido, el panel, la ayuda y las pruebas es una tanda
-  propia: "Lo que quedó de v0.221"), y la entrega 3.
+  cuándo. **Hecho en v0.222:** decir en cada comentario de qué link vino (*Can view link · created by…*, solo a quien
+  puede compartir la página del link; migración `20261113120000_link_rotulo_comentarios.sql`,
+  **aplicada**; `Doc_Link_Publico.md`, "De qué link vino cada comentario (v0.222)"). Falta: probarlo en la app
+  real con dos cuentas y en el tema oscuro; lo que queda sabido está en esa sección ("Lo que queda": el store no mira
+  la versión mínima, `alive` no mira la papelera, el costo para quien comparte crece con las páginas distintas, y la
+  vista de compatibilidad sigue sin pedir `imported_*` ni `mentions`). Anotado al auditarla (BAJO): el nombre muy
+  largo y sin espacios de una persona con cuenta o de un comentario importado todavía se sale del comentario en el
+  teléfono (500 px en un panel de 375; `.comment-author` no llega a recortar); el nombre de un visitante ya corta. Y
+  la entrega 3.
   **Entrega 2a hecha (v0.151: escribir; migración `20261028120000_link_editar.sql` aplicada (verificada en la base el 2026-10-06), `schema_version` 19, y el
   interruptor `link_edit_min_version` ya prendido en 0.151; ver "Cómo quedó la 2a" en `Doc_Link_Publico.md`).** Para prenderla hacía falta: la
   barrera de error alrededor de `PageEditor` en `main` (R4), aplicar la migración, subir la mínima y poner

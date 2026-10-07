@@ -873,6 +873,11 @@ Paso 10 de `Plan_Workspaces.md` (sección 4), con la base en la versión 5
   recargan las pestañas antes de importar, y además cada una queda en `meta` (`import:<id>`) hasta que el
   servidor la confirma; al abrir, lo que está ahí y ya no está ni en la cola ni en lo bajado vuelve a la cola.
   Después de restaurar una copia, lo importado por esta persona vuelve como `import`, con su autor y resuelto.
+- **Comentarios hechos por un link público** (`Doc_Link_Publico.md`, 3.7): la fila trae el nombre que escribió el
+  visitante (`plink_author`) y el id del link (`plink_id`), y se guarda entera en el dispositivo. El panel muestra
+  `Ana (via link)` y, a quien puede compartir la página del link, de qué link vino (v0.222: `public_link_labels`,
+  pedido una vez por conjunto de links y recordado solo por la sesión; `src/ui/linkLabels.ts`). Cuando se lee la vista
+  `comments_view` en lugar de `list_comments`, se piden también esas dos columnas (sin ellas si la vista no las tiene).
 - **Errores:** sin red, espera. Un error que se arregla solo (un 500, la sesión renovándose) se reintenta
   en la próxima sincronización con el error a la vista (`commentError`). Un rechazo (`comment_denied`,
   `not_allowed`, `comment_deleted`, `comment_conflict`, una página que dejó de estar compartida...) queda

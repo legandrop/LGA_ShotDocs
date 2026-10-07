@@ -322,6 +322,19 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
   nombre, y quien puede importar en una página (Editar y crear páginas) puede escribirlo como autor: se ve con la
   marca de importado, no con el estilo de un visitante. La otra opción: que el archivo diga "vino por un link" en un
   campo aparte y la base saque el rótulo también ahí.
+- **D316 · De qué link vino un comentario: una línea siempre a la vista, solo para quien comparte la página del link,
+  y sin decir en qué página está** (2026-10-07; tomada al implementarlo, Lega la puede cambiar). Debajo del nombre del
+  visitante va *Can view link · created by lega*, también cuando el link ya se apagó, se renovó o venció (*closed*,
+  *expired*): el comentario queda, y saber que su link ya está cerrado es lo que evita ir a buscarlo. Quien comenta o
+  edita sin poder compartir la página del link no ve nada (lo más conservador: la base no le contesta). La base no
+  entrega la página raíz del link: en *Share* de la página del comentario ya figuran su link y el de más arriba. Las
+  otras opciones: mostrarlo solo al pasar el mouse, ocultar el de un link cerrado, o sumar el título de la página del
+  link (`Doc_Link_Publico.md`, "De qué link vino cada comentario (v0.222)").
+- **D317 · El rótulo del link no se guarda en el dispositivo ni sale en lo exportado** (2026-10-07; tomada al
+  implementarlo, Lega la puede cambiar). Se pide a la base y se recuerda solo mientras dura la sesión: sin red el
+  comentario se ve sin rótulo, y otra cuenta en la misma pestaña no recibe nada de la anterior. El PDF y el zip siguen
+  diciendo solo `Ana (via link)`: lo exportado lo lee gente que no administra el link. La otra opción: guardarlo en el
+  dispositivo por cuenta, para verlo sin red.
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 

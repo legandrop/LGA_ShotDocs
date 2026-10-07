@@ -147,6 +147,52 @@ export async function getPublicLinkPages(client: SupabaseClient): Promise<Listed
   });
 }
 
+/**
+ * Lo que la base dice de un link por su id (`public_link_labels`, 20261113120000_link_rotulo_comentarios.sql), para
+ * decir en un comentario de qué link vino: nunca el token ni la página.
+ */
+export interface LinkLabel {
+  level: LinkLevel;
+  /** Quién creó el link (la parte del correo antes de la @), o `null` si su cuenta ya no está. */
+  createdBy: string | null;
+  /** Se apagó (volver a *Restricted*) o se renovó (*Reset link*). */
+  revoked: boolean;
+  /** Venció. */
+  expired: boolean;
+  /** Anda hoy. Uno que no anda sin haberse apagado ni vencido: quien lo creó ya no puede compartir la página. */
+  alive: boolean;
+}
+
+/** Cuántos ids acepta `public_link_labels` por pedido (`ids_invalid` con más). */
+export const LINK_LABELS_MAX = 200;
+
+const MISSING_FUNCTION = 'PGRST202';
+
+/**
+ * Los rótulos de estos links, de a `LINK_LABELS_MAX` ids por pedido. La base contesta solo los de los links cuya página
+ * la sesión puede compartir; de los demás (y de los que no existen) no hay fila. `null` si la base no tiene la función
+ * (`PGRST202`: anterior a la migración).
+ */
+export async function getPublicLinkLabels(client: SupabaseClient, ids: readonly string[]): Promise<Map<string, LinkLabel> | null> {
+  const labels = new Map<string, LinkLabel>();
+  for (let from = 0; from < ids.length; from += LINK_LABELS_MAX) {
+    const { data, error, status } = await timed(client.rpc('public_link_labels', { p_ids: ids.slice(from, from + LINK_LABELS_MAX) }));
+    if (error?.code === MISSING_FUNCTION) return null;
+    if (error) throw toRemoteError(error, status);
+    for (const r of (Array.isArray(data) ? data : []) as Record<string, unknown>[]) {
+      if (typeof r?.id !== 'string' || typeof r.level !== 'string') continue;
+      labels.set(r.id, {
+        level: r.level === 'edit' ? 'edit' : 'comment',
+        createdBy: typeof r.created_by_name === 'string' && r.created_by_name ? r.created_by_name : null,
+        revoked: r.revoked === true,
+        expired: r.expired === true,
+        alive: r.alive === true,
+      });
+    }
+  }
+  return labels;
+}
+
 export function createPublicLink(client: SupabaseClient, pageId: string, expires: string | null, level: LinkLevel = 'comment'): Promise<PublicLink> {
   return call(client, 'create_public_link', { p_id: crypto.randomUUID(), p_page: pageId, p_level: level, p_expires: expires });
 }

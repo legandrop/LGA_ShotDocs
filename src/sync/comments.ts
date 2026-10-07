@@ -89,6 +89,12 @@ export interface CommentRow {
    * demás. Se muestra siempre con "(via link)".
    */
   plink_author?: string | null;
+  /**
+   * El id del link público con el que se escribió (`list_comments` lo trae desde la versión 14 de la base, junto con
+   * el nombre); ausente o `null` en los demás. Se guarda con la fila tal como llega: sirve para decirle a quien
+   * administra el link de cuál vino el comentario (`src/ui/linkLabels.ts`). Nunca es el token.
+   */
+  plink_id?: string | null;
   /** Las menciones activas (`list_comments` desde la versión 15 de la base); `null` si se borró. */
   mentions?: { user_id: string; label: string }[] | null;
 }
@@ -235,6 +241,8 @@ export interface CommentView {
   importedBy: string | null;
   /** El nombre de quien lo escribió con un link público, o `null` (se muestra con "(via link)"). */
   linkAuthor?: string | null;
+  /** El id del link público con el que se escribió, o `null` (para el rótulo de quien administra el link). */
+  linkId?: string | null;
   createdAt: string;
   editedAt: string | null;
   deleted: boolean;
@@ -1475,6 +1483,8 @@ export function fromRow(r: CommentRow): ViewWithResolution {
     importedAuthorEmail: r.imported_author_email ?? null,
     importedBy: r.imported_by ?? null,
     linkAuthor: r.plink_author ?? null,
+    // Solo con el nombre: un id suelto (una fila a medio llegar) no es un comentario de un link.
+    linkId: r.plink_author && typeof r.plink_id === 'string' ? r.plink_id : null,
     createdAt: r.created_at,
     editedAt: r.edited_at,
     deleted: !!r.deleted_at,

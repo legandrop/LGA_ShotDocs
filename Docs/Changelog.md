@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.222 :
+
+Un comentario hecho por un link público mostraba el nombre del visitante y «(via link)», pero quien administra el link no podía saber de cuál vino para decidir cuál apagar. La causa: la base no entregaba el nivel ni el creador de un link por su id (`get_public_link` es por página), y la app no llevaba al panel el id que ya llegaba con cada comentario. La migración `20261113120000_link_rotulo_comentarios.sql` suma `public_link_labels`, que contesta solo a quien puede compartir la página raíz del link, mira el permiso una vez por proyecto y nunca da el token. El panel muestra debajo del nombre *Can view link · created by lega*, y si está cerrado, vencido o no anda; lo pide una vez por conjunto de links y lo recuerda solo por sesión. Sin red o sin la función, el comentario se ve como antes. Suma su entrada en la ayuda.
+
+[Decir en cada comentario hecho por un link de qué link vino, solo a quien puede compartir su página]
+
 v0.221 :
 
 La papelera de archivos se pedía por tramos de `trashed_files_all()`: cada tramo corría la función entera, un cambio entre dos tramos corría las filas, y con un tope de filas por pedido menor a 1000 la lista quedaba cortada (la de un proyecto, en el tope: 1000 de fábrica). Ahora se pide de a páginas por clave (`20261110120000_papelera_archivos_por_clave.sql`): la base sigue desde la última fila recibida y dice cuándo terminó. `public_link_pages()` miraba el permiso link por link, también para quien no podía recibir nada; ahora corta de entrada y lo mira una vez por proyecto, con el mismo resultado (`20261111120000_link_paginas_sin_recorrer_todo.sql`). La base saca «(via link)» del nombre del visitante, sin rechazar (`20261112120000_link_nombre_sin_rotulo.sql`, D314). Los textos del zip no pasaban por las pruebas del diccionario: sumados, con una clave sobrante afuera. La guía y `setup-workspace.mjs` avisan un tope de filas bajo y un portero más viejo que la app.

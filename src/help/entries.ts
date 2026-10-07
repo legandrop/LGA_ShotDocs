@@ -150,6 +150,8 @@ const LINK_EDIT = '0.151';
 const LINK_ASIDE = '0.157';
 /** Fotos y archivos por un link (Doc_Link_Publico.md, entrega 2b): la versión la pone quien publica, igual que en el changelog. */
 const LINK_FILES = '0.164';
+/** De qué link vino cada comentario hecho por un link (Doc_Link_Publico.md, "De qué link vino cada comentario"). */
+const LINK_COMMENTS = '0.222';
 /** Exportar una rama o un proyecto como PDF (P.22, Doc_Exportar.md, entrega 1): la versión se pone al publicar. */
 const EXPORT_PDF = '0.122';
 /** Exportar como zip (P.22, Doc_Exportar.md, entrega 2): la versión se pone al publicar. */
@@ -821,6 +823,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.accessRequests.text',
     words: ['request access', 'pedir acceso', 'pedido', 'request', 'campana', 'bell', 'give access', 'dar acceso', 'decline', 'rechazar', 'pdf', 'archivo', 'file', 'página', 'page', 'sin acceso', 'no access', 'workspace', 'sin proyectos', 'no projects'],
     since: ACCESS_REQUESTS_RESTOS,
+  },
+  {
+    id: 'linkComments',
+    section: 'sharing',
+    title: 'help.linkComments.title',
+    text: 'help.linkComments.text',
+    words: ['link', 'comentario', 'comment', 'visitante', 'visitor', 'via link', 'vía link', 'quién', 'who', 'cerrado', 'closed', 'vencido', 'expired', 'apagar', 'turn off', 'spam'],
+    since: LINK_COMMENTS,
   },
   {
     id: 'linkAside',

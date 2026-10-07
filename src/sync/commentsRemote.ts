@@ -9,13 +9,20 @@ import { timed, toRemoteError } from './remote';
 
 const COLUMNS =
   'id, page_id, block_id, thread_id, body, author_id, created_at, edited_at, resolved_at, resolved_by, deleted_at, deleted_by';
+// Quién escribió con un link público (la vista las trae desde 20261012120000_link_publico.sql): sin ellas, mientras se
+// lee la vista en lugar de `list_comments`, un comentario de un link se guardaba sin su nombre ni su link.
+const LINK_COLUMNS = 'plink_id, plink_author';
 const PAGE = 1000;
 // La función todavía no existe en la base (falta aplicar una migración).
 const MISSING_FUNCTION = 'PGRST202';
+// La vista no tiene una columna pedida (una base anterior a los links públicos).
+const MISSING_COLUMN = '42703';
 
 export class SupabaseCommentRemote implements CommentRemote, MentionsRemote {
   /** Desde cuándo la base no tiene `list_comments`; se vuelve a probar cada tanto por si se migró. */
   private listMissingAt = 0;
+  /** La vista de esta base no tiene las columnas del link (anterior a la versión 14): se lee sin ellas. */
+  private viewWithoutLink = false;
 
   constructor(private readonly client: SupabaseClient) {}
 
@@ -41,20 +48,29 @@ export class SupabaseCommentRemote implements CommentRemote, MentionsRemote {
     }
   }
 
+  /**
+   * La vista de compatibilidad, entera (cuando `list_comments` no está). Pide además quién escribió con un link; si la
+   * vista de esta base no tiene esas columnas, sigue sin ellas (y no las vuelve a pedir): los comentarios se leen igual.
+   */
   async fetchComments(pageId: string): Promise<CommentRow[]> {
     const rows: CommentRow[] = [];
-    for (let from = 0; ; from += PAGE) {
+    for (let from = 0; ; ) {
       const { data, error, status } = await timed(this.client
         .from('comments_view')
-        .select(COLUMNS)
+        .select(this.viewWithoutLink ? COLUMNS : `${COLUMNS}, ${LINK_COLUMNS}`)
         .eq('page_id', pageId)
         .order('created_at')
         .order('id')
         .range(from, from + PAGE - 1));
+      if (error?.code === MISSING_COLUMN && !this.viewWithoutLink) {
+        this.viewWithoutLink = true;
+        continue;
+      }
       if (error) throw toRemoteError(error, status);
       const page = (data ?? []) as unknown as CommentRow[];
       rows.push(...page);
       if (page.length < PAGE) return rows;
+      from += PAGE;
     }
   }
 

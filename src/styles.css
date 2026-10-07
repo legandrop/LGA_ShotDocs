@@ -5294,6 +5294,18 @@ button.thread-anchor:hover:not(:disabled) {
   color: var(--muted);
 }
 
+/* De qué link vino un comentario hecho por un link público (lo ve quien puede compartir la página del link). */
+.comment-link-label {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.comment-link-label.off {
+  font-style: italic;
+}
+
 /* El campo con menciones: detrás del cuadro, una copia del texto que pinta las elegidas (misma letra y medidas). */
 .mention-field {
   position: relative;
@@ -8196,6 +8208,12 @@ button.folder-row-main:hover {
 .comment-via {
   color: var(--accent-text);
   font-weight: 400;
+}
+/* El nombre lo escribe el visitante: uno largo y sin espacios corta en vez de salirse del comentario. */
+.comment-via-link {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .link-name {
   display: flex;

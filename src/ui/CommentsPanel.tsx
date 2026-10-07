@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { locale, localize, t as current, useT, type Translate } from '../i18n';
 import '../i18n/lazy/commentsPanel';
 import { setVisitorName, useLinkMode, useVisitorName } from '../linkMode';
@@ -13,6 +13,7 @@ import {
   type MentionRef,
 } from '../sync/comments';
 import type { MentionCandidate } from '../sync/mentions';
+import type { LinkLabel } from '../sync/publicLinks';
 import { errorMessage } from '../sync/types';
 import {
   clearCommentsTarget,
@@ -30,6 +31,7 @@ import {
   type CommentsTarget,
 } from './commentsUi';
 import { CommentsToggle, useCommentAccess } from './CommentsToggle';
+import { useLinkLabels, type LinkLabelsSnapshot } from './linkLabels';
 import { activeMentions, insertMention, mentionQuery, mentionSegments } from './mentionText';
 import { useInbox } from './MentionsBell';
 import { MentionShareArea } from './MentionShare';
@@ -47,6 +49,29 @@ function useThreads(pageId: string): CommentThread[] {
   useSyncExternalStore(comments.subscribe, comments.getRevision);
   useEffect(() => comments.watch(pageId), [comments, pageId]);
   return comments.threads(pageId);
+}
+
+/**
+ * De qué link vino un comentario hecho por un link público, en palabras: «Can view link · created by lega», y cómo está
+ * si ya no anda («closed», «expired», «not working»). Sin quién lo creó (su cuenta ya no está), no lo inventa.
+ */
+export function linkLabelText(tr: Translate, label: LinkLabel): string {
+  const parts = [label.level === 'edit' ? tr('comments.link.edit') : tr('comments.link.view')];
+  if (label.createdBy) parts.push(tr('comments.link.by', { name: label.createdBy }));
+  if (label.revoked) parts.push(tr('comments.link.closed'));
+  else if (label.expired) parts.push(tr('comments.link.expired'));
+  else if (!label.alive) parts.push(tr('comments.link.off'));
+  return parts.join(' · ');
+}
+
+/** Los rótulos de los links de los comentarios de la página (vacío para quien no puede compartirla: ver linkLabels.ts). */
+const LinkLabels = createContext<LinkLabelsSnapshot>(new Map());
+
+/** Los links de los comentarios de estos hilos, sin repetir. */
+function linkIdsOf(threads: CommentThread[]): string[] {
+  const ids = new Set<string>();
+  for (const t of threads) for (const c of [t.root, ...t.replies]) if (c.linkId && !c.deleted) ids.add(c.linkId);
+  return [...ids];
 }
 
 // El botón y los permisos viven aparte (CommentsToggle.tsx) para no bajar el panel con la primera pantalla.
@@ -78,6 +103,9 @@ function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarg
   const ref = useRef<HTMLElement>(null);
   const tr = useT();
   const link = useLinkMode();
+
+  // De qué link vino cada comentario hecho por un link: un pedido por el conjunto, y solo si la persona comparte la página.
+  const linkLabels = useLinkLabels(pageId, linkIdsOf(threads));
 
   const open = sortThreads(threads.filter((t) => !t.resolved), source);
   const resolved = sortThreads(threads.filter((t) => t.resolved), source);
@@ -160,7 +188,7 @@ function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarg
   const empty = open.length === 0 && resolved.length === 0 && !composing;
 
   return (
-    <>
+    <LinkLabels.Provider value={linkLabels}>
       <div className="comments-scrim" onClick={() => requestCloseComments()} />
       <aside ref={ref} className="comments-panel" aria-label={tr('comments.title')}>
         <header className="comments-head">
@@ -256,7 +284,7 @@ function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarg
           )}
         </div>
       </aside>
-    </>
+    </LinkLabels.Provider>
   );
 }
 
@@ -412,6 +440,7 @@ function Comment({ comment, me, canComment, canDeleteAny }: { comment: CommentVi
   const canEdit = mine && canComment && !comment.deleted;
   const canDelete = !comment.deleted && comments.writable && ((mine && canComment) || canDeleteAny);
   const tr = useT();
+  const linkLabel = useContext(LinkLabels).get(comment.linkId ?? '');
 
   if (comment.deleted) {
     return (
@@ -454,6 +483,10 @@ function Comment({ comment, me, canComment, canDeleteAny }: { comment: CommentVi
         {comment.editedAt && <span className="comment-edited">{tr('comments.edited')}</span>}
         {comment.pending && !comment.error && <span className="comment-pending">{tr('comments.notUploaded')}</span>}
       </div>
+      {/* De qué link vino: solo lo recibe quien puede compartir la página del link (lo decide la base). */}
+      {comment.linkAuthor && linkLabel && (
+        <p className={`comment-link-label${linkLabel.alive ? '' : ' off'}`}>{linkLabelText(tr, linkLabel)}</p>
+      )}
       {editing ? (
         <Composer
           autoFocus

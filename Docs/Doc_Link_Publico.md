@@ -309,8 +309,9 @@ misma recorrida por los padres que `user_page_level` (una sola pasada, PL/pgSQL)
   sin controles ni marcas de dirección, las mismas que limpia el portero en los nombres de archivo) y lo guarda en el
   dispositivo para ese link (P8). Se puede cambiar; los comentarios ya hechos conservan el que tenían.
 - **Cómo se muestra:** `Ana (via link)`, con un ícono de link y otro color; el sufijo no se puede sacar ni escribir en el
-  nombre (así nadie del link se hace pasar por alguien del equipo). Al equipo, además, el detalle dice qué link
-  (*Can view link, created by lega*).
+  nombre (así nadie del link se hace pasar por alguien del equipo). A quien puede compartir la página del link, además,
+  una línea debajo dice qué link (*Can view link · created by lega*, y *closed*, *expired* o *not working* si ya no
+  anda): hecho en v0.222, ver "De qué link vino cada comentario (v0.222)".
 - **En la base:** `comments.author_id` nulo (como los importados de Coda), `plink_id`, `plink_author` (el nombre) y
   `plink_device_hash`. `list_comments` del equipo los devuelve con esos campos; la versión publicada los ignora y los
   muestra como de una cuenta borrada (ya pasa con los importados), así que se sube `min_app_version` con la entrega.
@@ -2747,7 +2748,7 @@ no uno por archivo.
 
 | Qué | Por qué no alcanza lo de hoy | Diseño |
 |---|---|---|
-| **Sin hacer** (ver "Lo que quedó de v0.221"). De qué link vino cada comentario (*Can view link, created by lega*, 3.7) | `list_comments` da `plink_id`, pero ninguna función dice el nivel ni el creador de un link por su id (`get_public_link` es por página y solo del link vivo; el de una página de arriba llega sin creador), y un comentario puede ser de un link ya renovado | Una función `public_link_labels(p_ids uuid[])` para `authenticated`, que devuelva `id`, `level`, `created_by_name` y `revoked` solo de los links cuya raíz la sesión puede compartir (`private.can_share(null, page_id)`), hasta 200 ids por pedido; el panel de comentarios la llama con los `plink_id` de la página y arma el detalle. Sin `can_share`, nada (ni existencia) |
+| **Hecho en v0.222** (sección "De qué link vino cada comentario (v0.222)"; devuelve además `expired` y `alive`, y da `ids_invalid` con más de 200 ids). De qué link vino cada comentario (*Can view link, created by lega*, 3.7) | `list_comments` da `plink_id`, pero ninguna función dice el nivel ni el creador de un link por su id (`get_public_link` es por página y solo del link vivo; el de una página de arriba llega sin creador), y un comentario puede ser de un link ya renovado | Una función `public_link_labels(p_ids uuid[])` para `authenticated`, que devuelva `id`, `level`, `created_by_name` y `revoked` solo de los links cuya raíz la sesión puede compartir (`private.can_share(null, page_id)`), hasta 200 ids por pedido; el panel de comentarios la llama con los `plink_id` de la página y arma el detalle. Sin `can_share`, nada (ni existencia) |
 | **Hecho en v0.218.** Que `public_link_pages()` conteste solo a quien comparte (privacidad), y que el ícono no dependa de dos pedidos | `public_link_pages()` lista a quien ve la página (nivel 1), no a quien la comparte: un invitado que la llama a mano se entera de que la página tiene link, y por eso la app confirma cada una con `get_public_link` | Cambiar su cuerpo a `private.can_share(null, pl.page_id)` y sumar `level`, `created_by_name` y `alive` al resultado (columnas al final: la app publicada lee solo `page_id`); el ícono pasa a un solo pedido |
 | **Hecho en v0.221, limpiando en vez de rechazar** (sección de abajo). Que la base rechace «(via link)» en el nombre | `plink_add_comment` y `plink_push_page_update` limpian controles y marcas de dirección, no el rótulo | Donde las dos validan el nombre (hoy `btrim(p_author)` y el chequeo de largo y de caracteres), sacar `\(\s*v[ií]a\s+link\s*\)` (sin distinguir mayúsculas) antes del `btrim`; si queda vacío, `author_missing` como hoy |
 
@@ -2852,11 +2853,111 @@ otro: «(via (via link) link)»; la app tenía ese mismo hueco y también se cer
 
 ### Lo que quedó de v0.221
 
-- **De qué link vino cada comentario.** Sigue sin hacer. La parte de la base es la de la tabla de "Restos del link
-  (v0.215)" (`public_link_labels`, solo lectura, para quien puede compartir la raíz del link). Lo que la frenó es la
-  app: el dispositivo guarda de cada comentario el nombre del visitante pero no el id del link (hay que sumarlo a lo que
-  se guarda y a lo que lee la vista de respaldo), más el pedido con su caché por sesión, el texto en el panel, su
-  entrada en la ayuda y las pruebas. Es una tanda propia, no un resto.
+- **De qué link vino cada comentario.** **Hecho en v0.222** (sección siguiente). La parte de la base es la de la tabla
+  de "Restos del link (v0.215)" (`public_link_labels`, solo lectura, para quien puede compartir la raíz del link). Al
+  hacerlo se vio que el id del link **ya quedaba guardado** en el dispositivo (la fila de `list_comments` se guarda
+  entera); lo que faltaba era declararlo, pasarlo a la vista del panel y pedirlo en la vista de compatibilidad.
+
+### De qué link vino cada comentario (v0.222)
+
+Migración `20261113120000_link_rotulo_comentarios.sql`. En el panel de comentarios, un comentario hecho por un link
+sigue mostrando `Ana (via link)`; **quien puede compartir la página raíz de ese link** ve además, en una línea debajo,
+de qué link vino: *Can view link · created by lega* (o *Can edit link*), y al final *closed* (se apagó o se renovó),
+*expired* (venció) o *not working* (quien lo creó ya no puede compartir la página). Sirve para decidir qué link apagar
+en *Share* si alguien se porta mal. Los demás (Ver, Comentar, Editar, Editar y crear sin ser admin ni dueño del
+proyecto, un invitado, quien entró por un link) ven lo de siempre.
+
+**La base.** `public_link_labels(p_ids uuid[])` (`stable`, `security definer`, `search_path` vacío, solo
+`authenticated`): por cada id de link devuelve `id`, `level`, `created_by_name` (la parte del correo antes de la @),
+`revoked`, `expired` y `alive` (la cuenta de `public_link_pages`: ni apagado ni vencido, y quien lo creó todavía
+comparte la página). **Nunca el token ni la página.**
+
+- **A quién:** solo los links cuya página raíz la sesión puede compartir: el resultado es, sesión por sesión, el de
+  `private.can_share(null, página)` (la regla de `get_public_link`) mirado link por link. De un link que la sesión no
+  comparte, o que no existe, no hay fila ni error: **las filas no dicen si el id existe**. Sin rol (o con contraseña) o
+  invitado, nada de entrada (ese corte no es solo un atajo: un invitado que creó un proyecto tiene nivel 4 sobre todo el
+  proyecto y no comparte nunca). `anon` no la ejecuta.
+- **Cómo llega con poco trabajo:** el permiso se mira **una vez por proyecto**, como en `public_link_pages()` desde
+  v0.221. Un proyecto borrado no se mira; tampoco uno donde la sesión no puede compartir nada (no lo creó y, si es dueña
+  o admin del workspace, no tiene ningún «Editar y crear páginas» sobre el proyecto ni sobre una página suya); con nivel
+  4 sobre el proyecto entero comparte todas sus páginas sin mirar ninguna; y solo cuando eso no alcanza (un admin con el
+  permiso dado página por página) se mira la página, una vez por página (los links viejos de una página renovada cuestan
+  una sola cuenta). `alive` se mira solo para el link sin apagar ni vencer (uno por página como mucho). Hasta 200 ids
+  por pedido; con más, `ids_invalid` (código `22023`; depende solo de lo que se manda).
+- **El tiempo ya no delata si un link existe a quien no comparte nada en ese proyecto.** La primera versión de la función miraba el permiso de la página de
+  cada link que existía antes de saber si la sesión lo compartía: para quien no comparte, 200 ids ajenos tardaban
+  ~115 ms y 200 inexistentes ~1 ms (lo encontró la auditoría). Con el permiso por proyecto, quien no comparte nada en
+  un proyecto no hace mirar ningún permiso de página (la prueba lo cuenta). **Medido** (200 links en 200 páginas de
+  otra persona, sembrados en una transacción que se deshizo; 40 pares intercalados, mediana): un miembro que solo
+  comenta, 200 ids ajenos 1,02 ms contra 0,66 ms inexistentes, y con un id 0,55 contra 0,53; un admin sin permisos,
+  0,84 contra 0,49 y 0,71 contra 0,66. La diferencia no es cero (queda el cruce con `pages` y `workspaces`): es del
+  orden de 1 ms por pedido de 200 ids, y en cualquiera de los dos sentidos según el plan de la base (la
+  re-verificación midió 0,52 ms los ajenos contra 2,05 ms los inexistentes para el mismo tipo de sesión). Un admin
+  con algún «Editar y crear páginas» dado página por página en un proyecto sí hace mirar las páginas de los links de
+  ese proyecto que pide, **y ahí el tiempo sí lo delata** (medido: 230 ms contra 2 ms con 200 ids; 3,75 contra 0,53
+  ms con uno). Se acepta: ese admin ya comparte parte del proyecto, y lo único que aprende es que un id que ya tiene
+  (los ids salen de comentarios que ya ve) es de un link de otra página del mismo proyecto; no cuál página, ni el
+  nivel, ni quién lo creó. En la prueba, el conteo exacto de permisos mirados para quien comparte (6 y 9) depende
+  de cuántas veces la regla llama por dentro a `user_page_level`: si un cambio inocente lo rompe, pasarlo a una cota.
+- **Lo que le cuesta a quien comparte** crece con las páginas distintas: medido con 200 links en 200 páginas a 5 niveles
+  de profundidad, 175 ms para quien comparte el proyecto entero (todo es `alive`: quien creó cada link, uno por uno) y
+  255 ms para un admin con el permiso dado página por página; con 2 links, 2 a 4 ms. Una página común tiene de uno a
+  tres links. Abaratarlo es mirar a quien creó los links una vez por persona y proyecto, como hace `public_link_pages()`.
+- **La papelera y los proyectos borrados** siguen la regla de siempre: con la raíz en la papelera la sigue recibiendo
+  quien la comparte (ve la papelera), y de un proyecto borrado nadie recibe nada. `alive` no mira la papelera (igual
+  que el ícono del árbol): un link con la raíz en la papelera figura sin *closed* aunque no se pueda abrir.
+
+**La app.**
+
+- **El id viaja y se guarda:** `list_comments` ya traía `plink_id` y la fila se guardaba entera en el dispositivo;
+  ahora está declarado (`CommentRow.plink_id`) y sale en la vista (`CommentView.linkId`, solo si la fila trae también
+  el nombre del visitante). Un dato opcional: una fila guardada sin él se lee igual, y una versión anterior de la app lo
+  ignora. La vista de compatibilidad (`comments_view`, cuando `list_comments` no está) pide también `plink_id` y
+  `plink_author`; si la vista de esa base no los tiene (`42703`, una base anterior a los links), sigue sin ellos.
+- **Cuándo se pide** (`src/ui/linkLabels.ts`): un pedido por el conjunto de links de los comentarios de la página
+  abierta, no uno por comentario; lo ya pedido no se repite hasta pasados 2 minutos (el link pudo apagarse o vencer), y
+  abrir *Share* lo vuelve a pedir en el acto. **Solo si la app sabe que la persona puede compartir esa página**
+  (`canSharePage`; quien comparte la raíz comparte lo de abajo): si no, ni se pregunta. Lo que la app calcula solo
+  ahorra pedidos; el rótulo sale únicamente de lo que la base contesta.
+- **Lo recordado es de una sesión:** un store por motor de sincronización (no por cliente de Supabase, que es el mismo
+  para todas las cuentas de la pestaña), como el del ícono del árbol. Otra cuenta arranca vacía; si el rol baja a
+  invitado con la app abierta, se vacía. Nada se guarda en el dispositivo.
+- **Cuando cambian los permisos de la persona** con la app abierta (le bajan el rol, le sacan un permiso), lo recordado
+  se vuelve a pedir en el acto: lo que la base ya no contesta desaparece en esa misma sincronización, sin esperar los 2
+  minutos; y a quien deja de compartir la página del comentario la línea se le va sin preguntar nada.
+- De un comentario borrado no se pide el link.
+- **Cuando no hay respuesta:** sin red, con una base sin la función (`PGRST202`; se vuelve a probar a los 10 minutos) o
+  con un pedido que falla, el comentario se ve como antes, sin rótulo y sin error.
+- La ayuda suma *Which link a comment came from* (Compartir).
+
+**Decisiones** (`Doc_Decisiones.md`): D316 (la línea se ve siempre, también de un link cerrado o vencido, y no dice en
+qué página está el link) y D317 (no se guarda en el dispositivo ni sale en lo exportado).
+
+**Compatibilidad.** La app publicada contra la base nueva: es una función nueva y nada de lo que existe cambia de
+firma, columnas, errores ni permisos. La app nueva contra una base sin la migración: `PGRST202`, sin rótulo. No sube
+`schema_version` ni pide subir `min_app_version`.
+
+**Pruebas:** `supabase/tests/link_rotulo_comentarios_permisos.sql` (veinte personas: la creadora del proyecto, admins
+con el permiso sobre el proyecto, sobre una rama, sobre una hoja, con Editar sobre el proyecto entero con y sin la hoja,
+solo con Ver, o solo sobre una página de otro proyecto; miembros con Editar y crear sobre el proyecto, una rama o una
+página, uno que creó otro proyecto, Editar, Comentar, Ver, sin permiso; un invitado y uno que creó un proyecto; alguien
+sacado, con contraseña, sin persona y `anon`; links vivos, vencidos, apagados, renovados, en la papelera y de un
+proyecto borrado y purgado; para cada sesión la lista coincide con la regla mirada link por link y con lo que contesta
+`get_public_link`, y se cuenta cuántos permisos de página hace mirar cada una: ninguno quien no comparte nada en el
+proyecto), `src/sync/commentLinkId.test.ts` y `src/ui/linkLabels.test.tsx`.
+
+**Lo que queda:**
+
+- Probarlo en la app real con dos cuentas (una que comparte y una que solo comenta) después de aplicar la migración, y
+  mirar la línea en el tema oscuro y en el teléfono. (El nombre largo de un visitante se midió en una página estática a
+  375 px: ya no desborda el comentario.)
+- El rótulo no dice en qué página está el link (D316): si hiciera falta, la función puede sumar el título de la raíz.
+- El store no mira si la app quedó más vieja que la mínima del workspace: pide igual, como el ícono del árbol (es una
+  lectura; la base no frena lecturas por versión).
+- `alive` no mira la papelera y el costo para quien comparte crece con las páginas distintas (arriba).
+- Cuando se lee la vista de compatibilidad (`comments_view`, sin `list_comments`), `fetchComments` sigue sin pedir
+  `imported_*` ni `mentions`: un importado se ve como de una cuenta borrada y las menciones sin pintar hasta la bajada
+  siguiente con `list_comments`. Ya era así.
 
 ## Cómo se midió
 
