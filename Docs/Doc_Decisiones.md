@@ -335,6 +335,28 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
   comentario se ve sin rótulo, y otra cuenta en la misma pestaña no recibe nada de la anterior. El PDF y el zip siguen
   diciendo solo `Ana (via link)`: lo exportado lo lee gente que no administra el link. La otra opción: guardarlo en el
   dispositivo por cuenta, para verlo sin red.
+- **D318 · Las listas largas le piden el total a la API en vez de hacer un pedido más** (2026-10-07; tomada al
+  implementarlo, Lega la puede cambiar). Para no suponer cuántas filas entrega la API por pedido hay dos formas: pedir
+  el total con el mismo pedido, o seguir hasta una página vacía. Se eligió el total: una sincronización hace los
+  mismos pedidos que antes, a cambio de que la base revise dos veces los permisos de las filas (el árbol pasa de 8 a
+  15 ms). Dos excepciones, donde contar sale caro y la lista no se pide en cada sincronización: los archivos por id
+  (se vuelve a pedir lo que no llegó) y los archivos por peso (un pedido más, vacío, al final). La otra opción: la
+  página vacía en todas, que no carga a la base y suma un pedido por lista (`Doc_Sincronizacion.md`, "Las listas
+  largas").
+- **D319 · Una lista de un pedido que la API recortó es un error, salvo donde un error deja peor que una parte**
+  (2026-10-07; tomada al implementarlo, Lega la puede cambiar). El equipo, quién tiene acceso, los proyectos borrados
+  y el peso de los proyectos: si no entran en el tope de filas del workspace, la pantalla dice *This list is longer
+  than this workspace's database sends in one request…* en vez de mostrar una parte como si fuera todo. Las
+  invitaciones y los nombres de versión llevan el mismo control, pero sus pantallas no muestran errores: no se ven.
+  Con el tope de fábrica (1000) nada de eso pasa. **Sin el control, con lo que llega, como antes:** lo apartado de
+  los links y la papelera de un proyecto en una base sin la función nueva (pasan de 1000 de verdad, y un error las
+  dejaba vacías), los candidatos del `@` y lo que no entró de un link en una página (quien las pide se traga el
+  error). Los correos de quienes comentaron o escribieron se piden por clave, enteros. La otra opción: paginar todas
+  por su clave, que es más trabajo y queda anotado (`Doc_Sincronizacion.md`, "Las listas largas", la tabla).
+- **D320 · Los comandos esperan a Supabase un minuto por un ajuste y diez por el SQL** (2026-10-07; tomada al
+  implementarlo, Lega la puede cambiar). El tope es por pedido: una migración o una prueba larga que está respondiendo
+  no se corta (la API corta por su cuenta cerca de los 100 segundos). Se cambian con `SUPABASE_API_TIMEOUT` y
+  `SUPABASE_QUERY_TIMEOUT`, en segundos (`Doc_Supabase.md`).
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 

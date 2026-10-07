@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { allowedInDryRun, createManagementClient, isReadOnlyQuery, readOnlySql } from './lib/management.mjs';
+import { allowedInDryRun, createManagementClient, isReadOnlyQuery, QUERY_TIMEOUT_MS, readOnlySql, REQUEST_TIMEOUT_MS, timeoutsFromEnv } from './lib/management.mjs';
 import {
   APP_MIN_MAX_ROWS,
   GATEWAY_HEADERS,
@@ -244,6 +244,57 @@ describe('cliente de la Management API', () => {
 
   it('solo acepta refs de proyecto válidos', () => {
     expect(() => createManagementClient({ ref: '../x' })).toThrow();
+  });
+
+  it('una API que acepta el pedido y no contesta no deja el comando esperando para siempre: vence el tope y lo dice', async () => {
+    const signals = [];
+    // Nunca contesta; solo termina si le cortan el pedido.
+    const hung = (url, init) =>
+      new Promise((resolve, reject) => {
+        signals.push(init.signal);
+        init.signal.addEventListener('abort', () => reject(init.signal.reason));
+      });
+    const client = createManagementClient({ ref: NEW_REF, fetch: hung, timeoutMs: 40, queryTimeoutMs: 60 });
+    const started = Date.now();
+    await expect(client.get('/config/auth')).rejects.toThrow(/config\/auth: no answer after 0 seconds\. Try again\..*SUPABASE_API_TIMEOUT/);
+    // Con SQL avisa que la consulta puede seguir corriendo: no hay que repetirla a ciegas.
+    await expect(client.query('select 1')).rejects.toThrow(/database\/query: no answer after 0 seconds\. The query may still be running.*SUPABASE_QUERY_TIMEOUT/);
+    expect(signals.map((s) => s.aborted)).toEqual([true, true]);
+    expect(Date.now() - started).toBeLessThan(5000);
+  });
+
+  it('una respuesta que empieza a llegar y se queda a mitad también vence', async () => {
+    const half = async (url, init) => ({
+      ok: true,
+      status: 200,
+      text: () => new Promise((resolve, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason))),
+    });
+    await expect(createManagementClient({ ref: NEW_REF, fetch: half, timeoutMs: 40 }).get('/postgrest')).rejects.toThrow(/no answer after/);
+  });
+
+  it('el tope es por pedido y el del SQL es largo: una consulta que tarda y contesta no se corta, y otro error sale como siempre', async () => {
+    // Tarda más que el tope de las lecturas, y contesta.
+    const slow = (url, init) =>
+      new Promise((resolve, reject) => {
+        init.signal.addEventListener('abort', () => reject(init.signal.reason));
+        setTimeout(() => resolve(new Response(url.endsWith('/database/query') ? '[{"result":"ok"}]' : '{}', { status: 200 })), 120);
+      });
+    const client = createManagementClient({ ref: NEW_REF, fetch: slow, timeoutMs: 40, queryTimeoutMs: 5000 });
+    expect(await client.query('select pg_sleep(0.1)')).toEqual([{ result: 'ok' }]);
+    expect(await client.query('select pg_sleep(0.1)')).toEqual([{ result: 'ok' }]);
+    await expect(client.get('/config/auth')).rejects.toThrow(/no answer after/);
+    const down = async () => {
+      throw new TypeError('fetch failed');
+    };
+    await expect(createManagementClient({ ref: NEW_REF, fetch: down }).get('/config/auth')).rejects.toThrow('fetch failed');
+    // De fábrica: un minuto para las lecturas y los ajustes, diez para el SQL (la API corta antes por su cuenta).
+    expect([REQUEST_TIMEOUT_MS, QUERY_TIMEOUT_MS]).toEqual([60_000, 600_000]);
+  });
+
+  it('los topes se pueden cambiar desde la terminal, en segundos; un valor que no sirve se ignora', () => {
+    expect(timeoutsFromEnv({ SUPABASE_API_TIMEOUT: '5', SUPABASE_QUERY_TIMEOUT: '1200' })).toEqual({ timeoutMs: 5000, queryTimeoutMs: 1_200_000 });
+    expect(timeoutsFromEnv({ SUPABASE_API_TIMEOUT: 'mucho', SUPABASE_QUERY_TIMEOUT: '0' })).toEqual({ timeoutMs: undefined, queryTimeoutMs: undefined });
+    expect(timeoutsFromEnv({})).toEqual({ timeoutMs: undefined, queryTimeoutMs: undefined });
   });
 });
 

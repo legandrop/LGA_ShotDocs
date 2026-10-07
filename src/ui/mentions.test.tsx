@@ -309,6 +309,27 @@ describe('el pintado', () => {
     expect(byText('desde el link').querySelector('.mention')).toBeNull();
     expect(byText('versión vieja').querySelector('.mention')).toBeNull();
   });
+
+  it('el nombre de un comentario importado, si queda cortado, se lee entero en el tooltip (con su correo, si lo tiene)', async () => {
+    const { server, owner, brief, device } = await workspace();
+    const at = new Date().toISOString();
+    const base = { page_id: brief, block_id: null, thread_id: null, created_at: at, updated_at: at, edited_at: null, resolved_at: null, resolved_by: null, deleted_at: null, deleted_by: null, author_id: null, imported_from: 'coda', imported_by: owner.remote.userId };
+    server.comments.set('c1', { ...base, id: 'c1', body: 'uno', imported_author: 'MaximilianoFernándezDeLaProducción', imported_author_email: 'maxi@x.test' });
+    server.comments.set('c2', { ...base, id: 'c2', body: 'dos', imported_author: 'Pepe' });
+    const b = await device(BETO);
+    const host = await mount(services(b, BETO), <Panel pageId={brief} />);
+    await act(async () => showComments(null));
+    await act(async () => {
+      await b.engine.syncNow();
+    });
+    await wait();
+    const authors = [...host.querySelectorAll('.comment-author')];
+    const tipOf = (name: string) => authors.find((a) => a.textContent === name)!;
+    expect(tipOf('MaximilianoFernándezDeLaProducción').getAttribute('data-tip')).toBe('MaximilianoFernándezDeLaProducción · maxi@x.test');
+    expect(tipOf('Pepe').getAttribute('data-tip')).toBe('Pepe');
+    // Solo si no entra: con el nombre a la vista, el tooltip repetiría lo que ya dice. Nunca `title`.
+    expect(authors.every((a) => a.hasAttribute('data-tip-overflow') && !a.hasAttribute('title'))).toBe(true);
+  });
 });
 
 describe('la campana', () => {

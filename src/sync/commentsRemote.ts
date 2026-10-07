@@ -1,7 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { CommentAuthor, CommentRemote, CommentRow, ImportedComment, ListedComment, NewComment } from './comments';
 import type { InboxResponse, MentionCandidate, MentionsRemote } from './mentions';
-import { timed, toRemoteError } from './remote';
+import { afterPair, COUNTED, KeyedList } from './listPages';
+import { rpcByKey, timed, toRemoteError } from './remote';
+import { RemoteError } from './types';
 
 // Las llamadas de los comentarios a Supabase (supabase/migrations/20260930170000_comentarios.sql). La tabla
 // `comments` no se puede leer con `*` (la columna del texto no se da): se lee `comments_view`, que devuelve
@@ -9,75 +11,106 @@ import { timed, toRemoteError } from './remote';
 
 const COLUMNS =
   'id, page_id, block_id, thread_id, body, author_id, created_at, edited_at, resolved_at, resolved_by, deleted_at, deleted_by';
+// De dónde se importó y quién lo escribió afuera (la vista las trae desde 20260930200000_comentarios_importados.sql):
+// sin ellas, mientras se lee la vista en lugar de `list_comments`, un comentario importado se veía como de una cuenta
+// borrada hasta la bajada siguiente.
+const IMPORTED_COLUMNS = 'imported_from, imported_author, imported_author_email, imported_by';
 // Quién escribió con un link público (la vista las trae desde 20261012120000_link_publico.sql): sin ellas, mientras se
 // lee la vista en lugar de `list_comments`, un comentario de un link se guardaba sin su nombre ni su link.
 const LINK_COLUMNS = 'plink_id, plink_author';
+// A quién nombra cada comentario (20261015120000_menciones.sql).
+const MENTION_COLUMNS = 'mentions';
+/**
+ * Lo que se le pide a la vista, de la base más nueva a la más vieja: si a la vista de esta base le falta una columna
+ * (`42703`), se baja un escalón y no se vuelve a pedir. Cada grupo de columnas llegó después que el anterior.
+ */
+const VIEW_COLUMNS = [
+  `${COLUMNS}, ${IMPORTED_COLUMNS}, ${LINK_COLUMNS}, ${MENTION_COLUMNS}`,
+  `${COLUMNS}, ${IMPORTED_COLUMNS}, ${LINK_COLUMNS}`,
+  `${COLUMNS}, ${IMPORTED_COLUMNS}`,
+  COLUMNS,
+];
+/** Cuántas filas se piden por pedido. La API puede entregar menos (su tope de filas): se sigue desde la última. */
 const PAGE = 1000;
 // La función todavía no existe en la base (falta aplicar una migración).
 const MISSING_FUNCTION = 'PGRST202';
-// La vista no tiene una columna pedida (una base anterior a los links públicos).
+// La vista no tiene una columna pedida (una base anterior a esa columna).
 const MISSING_COLUMN = '42703';
+
+/** El lugar de una fila en un orden por fecha y, a igual fecha, por id; tira si a la fila le falta la fecha. */
+function placeOf(what: string, at: unknown, id: string): { at: string; id: string } {
+  if (typeof at !== 'string' || !at) throw new RemoteError(`${what}: a row without its date`, false);
+  return { at, id };
+}
 
 export class SupabaseCommentRemote implements CommentRemote, MentionsRemote {
   /** Desde cuándo la base no tiene `list_comments`; se vuelve a probar cada tanto por si se migró. */
   private listMissingAt = 0;
-  /** La vista de esta base no tiene las columnas del link (anterior a la versión 14): se lee sin ellas. */
-  private viewWithoutLink = false;
+  /** Qué escalón de `VIEW_COLUMNS` tiene la vista de esta base (0: todas las columnas). */
+  private viewStep = 0;
 
   constructor(private readonly client: SupabaseClient) {}
 
   /**
    * `list_comments(p_page_id, p_since)`: lo de la vista más `updated_at`, calculando el nivel una vez; con
    * `since`, solo lo cambiado. `null` si la base no tiene la función (la cola sigue con la vista).
+   *
+   * Se pide **por clave**, en el orden de la función (`updated_at`, `id`) escrito en el pedido: cada pedido sigue a la
+   * última fila recibida (`p_since` con su fecha, y un filtro que deja afuera lo de esa misma fecha que ya llegó), y la
+   * lista termina cuando lo recibido alcanza el total que dice la API, no por haber recibido pocas filas. En el caso
+   * de siempre (todo entra en una respuesta) es **un pedido**, como antes. Un comentario que cambia entre dos pedidos
+   * vuelve a llegar más adelante con su fecha nueva: queda su última versión. Si un pedido falla, tira: nunca una
+   * lista parcial (la cola la tomaría por todo lo que hay).
    */
   async listComments(pageId: string, since: string | null): Promise<ListedComment[] | null> {
     if (Date.now() - this.listMissingAt < 10 * 60_000) return null;
-    const rows: ListedComment[] = [];
-    for (let from = 0; ; from += PAGE) {
-      const { data, error, status } = await timed(this.client
-        .rpc('list_comments', { p_page_id: pageId, p_since: since })
-        .range(from, from + PAGE - 1));
-      if (error?.code === MISSING_FUNCTION) {
+    const list = new KeyedList<ListedComment>('list_comments', (r) => `${r.updated_at}|${r.id}`);
+    for (;;) {
+      const last = list.last ? placeOf('list_comments', list.last.updated_at, list.last.id) : null;
+      let query = this.client.rpc('list_comments', { p_page_id: pageId, p_since: last ? last.at : since }, COUNTED);
+      if (last) query = query.or(afterPair('updated_at', last.at, 'id', last.id));
+      const { data, error, status, count } = await timed(query.order('updated_at').order('id').limit(PAGE));
+      // Solo antes de la primera página: la base no tiene la función.
+      if (error?.code === MISSING_FUNCTION && !last) {
         this.listMissingAt = Date.now();
         return null;
       }
       if (error) throw toRemoteError(error, status);
-      const page = (data ?? []) as ListedComment[];
-      rows.push(...page);
-      if (page.length < PAGE) return rows;
+      if (list.add((data ?? []) as ListedComment[], count)) break;
     }
+    const byId = new Map<string, ListedComment>();
+    for (const row of list.rows) {
+      byId.delete(row.id);
+      byId.set(row.id, row);
+    }
+    return [...byId.values()];
   }
 
   /**
-   * La vista de compatibilidad, entera (cuando `list_comments` no está). Pide además quién escribió con un link; si la
-   * vista de esta base no tiene esas columnas, sigue sin ellas (y no las vuelve a pedir): los comentarios se leen igual.
+   * La vista de compatibilidad, entera (cuando `list_comments` no está). Pide además de dónde se importó cada
+   * comentario, quién escribió con un link y a quién nombra; si a la vista de esta base le falta alguna de esas
+   * columnas, sigue sin ellas (y no las vuelve a pedir): los comentarios se leen igual. Por clave (`created_at`,
+   * `id`) y hasta el total que dice la API, como `listComments`.
    */
   async fetchComments(pageId: string): Promise<CommentRow[]> {
-    const rows: CommentRow[] = [];
-    for (let from = 0; ; ) {
-      const { data, error, status } = await timed(this.client
-        .from('comments_view')
-        .select(this.viewWithoutLink ? COLUMNS : `${COLUMNS}, ${LINK_COLUMNS}`)
-        .eq('page_id', pageId)
-        .order('created_at')
-        .order('id')
-        .range(from, from + PAGE - 1));
-      if (error?.code === MISSING_COLUMN && !this.viewWithoutLink) {
-        this.viewWithoutLink = true;
+    const list = new KeyedList<CommentRow>('comments_view', (r) => `${r.created_at}|${r.id}`);
+    for (;;) {
+      const last = list.last ? placeOf('comments_view', list.last.created_at, list.last.id) : null;
+      let query = this.client.from('comments_view').select(VIEW_COLUMNS[this.viewStep], COUNTED).eq('page_id', pageId);
+      if (last) query = query.or(afterPair('created_at', last.at, 'id', last.id));
+      const { data, error, status, count } = await timed(query.order('created_at').order('id').limit(PAGE));
+      if (error?.code === MISSING_COLUMN && this.viewStep < VIEW_COLUMNS.length - 1) {
+        this.viewStep++;
         continue;
       }
       if (error) throw toRemoteError(error, status);
-      const page = (data ?? []) as unknown as CommentRow[];
-      rows.push(...page);
-      if (page.length < PAGE) return rows;
-      from += PAGE;
+      if (list.add((data ?? []) as unknown as CommentRow[], count)) return list.rows;
     }
   }
 
   async fetchCommentAuthors(pageId: string): Promise<CommentAuthor[]> {
-    const { data, error, status } = await timed(this.client.rpc('comment_authors', { p_page_id: pageId }));
-    if (error) throw toRemoteError(error, status);
-    return (data ?? []) as CommentAuthor[];
+    // Una fila por persona: entera, por su id. Un correo que falta no puede dejar en error la bajada de los comentarios.
+    return rpcByKey<CommentAuthor>(this.client, 'comment_authors', { p_page_id: pageId }, 'user_id');
   }
 
   async addComment(c: NewComment): Promise<void> {
@@ -130,6 +163,9 @@ export class SupabaseCommentRemote implements CommentRemote, MentionsRemote {
   }
 
   async mentionCandidates(pageId: string): Promise<MentionCandidate[]> {
+    // Un pedido y lo que llegue, sin el control del total: quien lo pide se traga los errores (`refreshCandidates` en
+    // `mentions.ts`), así que con un tope de filas menor que el equipo el `@` se quedaría sin nadie; con lo que llega,
+    // ofrece a esos.
     const { data, error, status } = await timed(this.client.rpc('mention_candidates', { p_page_id: pageId }));
     if (error) throw toRemoteError(error, status);
     // Las filas sin acceso (ME2, entrega 2) le llegan solo al dueño y a los admins que pueden compartir la página.

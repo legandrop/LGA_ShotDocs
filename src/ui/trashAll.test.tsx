@@ -189,6 +189,7 @@ function pageFromBase(rows: ApiRow[], args: PageArgs): (ApiRow | EndRow)[] {
  * pedido, una función no promete ninguno: cada pedido las da empezando por otro lado. `paged`: la base tiene
  * `trashed_files_page` (si no, contesta que la función no existe, y ese intento va a `probes`, no a `requests`).
  * `fail`: el pedido número tal contesta ese error. `before`: lo que pasa en la base justo antes de contestar cada pedido.
+ * Si el pedido pide el total (`count: 'exact'`), va con la respuesta: las filas que había, antes de recortar.
  */
 const MAX_ROWS = 1000;
 type ApiError = { message: string; code: string; status: number };
@@ -198,7 +199,7 @@ function fakeTrashApiWith(rows: ApiRow[], opts: { paged?: boolean; maxRows?: num
   /** Las veces que se probó `trashed_files_page` en una base que no la tiene. */
   const probes: string[] = [];
   const maxRows = opts.maxRows ?? MAX_ROWS;
-  const rpc = (fn: string, args?: ApiArgs) => {
+  const rpc = (fn: string, args?: ApiArgs, options?: { count?: string }) => {
     const request = { fn, args, order: [] as string[], range: null as [number, number] | null };
     const answer = async () => {
       if (fn === 'trashed_files_page' && opts.paged === false) {
@@ -222,7 +223,8 @@ function fakeTrashApiWith(rows: ApiRow[], opts: { paged?: boolean; maxRows?: num
       const to = Math.min(request.range?.[1] ?? Infinity, from + maxRows - 1);
       const data = listed.slice(from, to + 1);
       // `trashed_files` no tiene la columna del proyecto.
-      return { data: fn === 'trashed_files' ? data.map((row) => Object.fromEntries(Object.entries(row).filter(([k]) => k !== 'project_id'))) : data, error: null, status: 200 };
+      const count = options?.count === 'exact' ? listed.length : null;
+      return { data: fn === 'trashed_files' ? data.map((row) => Object.fromEntries(Object.entries(row).filter(([k]) => k !== 'project_id'))) : data, error: null, status: 200, count };
     };
     const builder = {
       order(column: string, o: { ascending?: boolean; nullsFirst?: boolean } = {}) {
@@ -512,16 +514,24 @@ describe('el pedido a una base sin trashed_files_page: trashed_files_all por tra
     ]);
   });
 
-  it('con justo el tope pide una vez más, que llega vacía, y con muchas páginas las junta todas', async () => {
+  it('con justo el tope no pide de más (la API dice el total), y con muchas páginas las junta todas', async () => {
     const exact = fakeTrashApi([...apiFiles('P1', 'uno', MAX_ROWS - 1), apiRow('P2', null)]);
     const all = (await exact.remote.trashedFilesAll())!;
     expect([...all].map(([id, files]) => `${id}:${files.length}`)).toEqual([`P1:${MAX_ROWS - 1}`, 'P2:0']);
-    expect(exact.requests.map((r) => r.range![0])).toEqual([0, TRASH_ALL_PAGE]);
+    expect(exact.requests.map((r) => r.range![0])).toEqual([0]);
 
     const many = fakeTrashApi([...apiFiles('P1', 'uno', 1200), ...apiFiles('P2', 'dos', 1300), ...apiFiles('P3', 'tres', 5)]);
     const big = (await many.remote.trashedFilesAll())!;
     expect([...big].map(([id, files]) => `${id}:${files.length}`)).toEqual(['P1:1200', 'P2:1300', 'P3:5']);
     expect(many.requests).toHaveLength(3);
+  });
+
+  it('con un tope de filas por pedido menor que el de fábrica no queda cortada: sigue desde lo recibido hasta el total', async () => {
+    const rows = [...apiFiles('P1', 'uno', 200), apiRow('P2', null), ...apiFiles('P3', 'tres', 150)];
+    const { remote, requests } = fakeTrashApi(rows, { maxRows: 137 });
+    const all = (await remote.trashedFilesAll())!;
+    expect([...all].map(([id, files]) => `${id}:${files.length}`)).toEqual(['P1:200', 'P2:0', 'P3:150']);
+    expect(requests.map((r) => r.range![0])).toEqual([0, 137, 274]);
   });
 
   it('si una página falla a mitad, falla todo: nunca una lista parcial dada por completa', async () => {

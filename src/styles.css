@@ -5221,6 +5221,9 @@ button.thread-anchor:hover:not(:disabled) {
 
 .comment {
   display: grid;
+  /* La única columna, declarada: si no, mide lo que su contenido más ancho, y un nombre largo y sin espacios (que no
+     corta) ensanchaba el comentario más que el panel en el teléfono. Así el nombre se recorta con "…". */
+  grid-template-columns: minmax(0, 1fr);
   gap: 3px;
 }
 

@@ -978,6 +978,11 @@ export class SyncEngine {
    * leer entero. Si algo no se puede leer, lo anota en la página (`unreadable`: nunca quita) y devuelve
    * `false`; si se lee todo, lo anota en la cola de archivos para no volver a hacerlo. Solo lee: no guarda
    * nada del documento.
+   *
+   * Recorre hasta pasar `upTo` o hasta un lote vacío, **nunca hasta un lote corto**: dar la página por comprobada
+   * habilita mandar archivos a la papelera, y un lote que la API recortó (menos filas que las pedidas, sin que el
+   * historial haya terminado) dejaba sin mirar lo que seguía. Si el último update del servidor queda antes de
+   * `upTo`, cuesta un pedido más, vacío.
    */
   private async verifyHistory(pageId: string, upTo: number): Promise<boolean> {
     const media = this.options.media!;
@@ -994,8 +999,11 @@ export class SyncEngine {
           return false;
         }
       }
-      after = updates[updates.length - 1].seq;
-      if (updates.length < 500) break;
+      const last = updates[updates.length - 1].seq;
+      // Un lote que no avanza (no debería pasar): pedir de nuevo no terminaría. Como cualquier error, no se quita
+      // nada y se espera antes de volver a probar (`verifyWait`).
+      if (!(last > after)) throw new Error('page history does not advance');
+      after = last;
     }
     await media.setVerified(pageId);
     return true;

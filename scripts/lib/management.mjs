@@ -38,7 +38,30 @@ export function allowedInDryRun(method, url, body) {
   }
 }
 
-export function createManagementClient({ ref, token, dryRun = false, fetch: fetchImpl = globalThis.fetch }) {
+// Cuánto se espera la respuesta de cada pedido. Sin tope, si la API acepta el pedido y no contesta nunca, el comando
+// espera lo que espere Node (para siempre). Son dos, y los dos **por pedido**:
+// - Las lecturas y los ajustes (GET, PATCH, invitar) contestan en segundos: un minuto.
+// - El SQL (`/database/query`) es UN pedido que tarda lo que tarde la consulta: una migración o una prueba larga que
+//   está respondiendo no se corta. La API corta por su cuenta cerca de los 100 segundos, así que diez minutos solo
+//   terminan un pedido que la API ya no va a contestar.
+export const REQUEST_TIMEOUT_MS = 60_000;
+export const QUERY_TIMEOUT_MS = 10 * 60_000;
+
+// Los topes que se pueden cambiar desde la terminal, en segundos: SUPABASE_API_TIMEOUT (lecturas y ajustes) y
+// SUPABASE_QUERY_TIMEOUT (SQL). Un valor que no es un número mayor que cero se ignora.
+export function timeoutsFromEnv(env = process.env) {
+  const seconds = (value) => (Number(value) > 0 ? Math.round(Number(value) * 1000) : undefined);
+  return { timeoutMs: seconds(env.SUPABASE_API_TIMEOUT), queryTimeoutMs: seconds(env.SUPABASE_QUERY_TIMEOUT) };
+}
+
+export function createManagementClient({
+  ref,
+  token,
+  dryRun = false,
+  fetch: fetchImpl = globalThis.fetch,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+  queryTimeoutMs = QUERY_TIMEOUT_MS,
+}) {
   if (!/^[a-z0-9]{20}$/.test(ref ?? '')) throw new Error('Invalid project ref: it must be 20 lowercase letters and numbers.');
   const base = `${API}/projects/${ref}`;
 
@@ -53,8 +76,25 @@ export function createManagementClient({ ref, token, dryRun = false, fetch: fetc
     const h = headers ?? {};
     if (!headers && token) h.Authorization = `Bearer ${token}`;
     if (payload !== undefined) h['Content-Type'] = 'application/json';
-    const res = await fetchImpl(url, { method, headers: h, body: payload });
-    const text = await res.text();
+    const isQuery = url === `${base}/database/query`;
+    const limit = isQuery ? queryTimeoutMs : timeoutMs;
+    const signal = AbortSignal.timeout(limit);
+    let res;
+    let text;
+    try {
+      res = await fetchImpl(url, { method, headers: h, body: payload, signal });
+      // La señal también corta la lectura de la respuesta: una que empieza a llegar y se queda a mitad.
+      text = await res.text();
+    } catch (err) {
+      if (!signal.aborted) throw err;
+      // Vencido el tope: el pedido pudo haber llegado. Con SQL, la consulta puede seguir corriendo en la base.
+      throw new Error(
+        `${method} ${url.replace(/\?.*$/, '')}: no answer after ${Math.round(limit / 1000)} seconds.` +
+          (isQuery
+            ? ' The query may still be running, or may have finished: check the database before running it again. To wait longer, set SUPABASE_QUERY_TIMEOUT (seconds).'
+            : ' Try again. To wait longer, set SUPABASE_API_TIMEOUT (seconds).'),
+      );
+    }
     if (!res.ok) {
       const hint =
         res.status === 401

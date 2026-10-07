@@ -376,7 +376,9 @@ export function newLocalKey() {
 
 // Lo que la app supone de la API y del portero de un workspace. El comando solo lo mira y avisa: no lo cambia.
 // Las listas largas (el árbol de páginas, los comentarios de una página, los archivos de las páginas) se piden de a
-// 1000 filas y una página más corta se toma por la última: con un tope de filas por pedido menor llegan cortadas.
+// 1000 filas. Con un tope de filas por pedido menor llegan enteras igual, en más pedidos (Docs/Doc_Sincronizacion.md,
+// "Las listas largas"); pero las listas que se piden de una vez dan un error si no entran, y un link público a una
+// rama más grande que el tope muestra menos páginas.
 export const APP_MIN_MAX_ROWS = 1000;
 // Los headers que la app le manda al portero. Tienen que estar todos en su CORS (`cors` en portero/src/core.ts): con
 // uno que falte, el navegador corta el pedido entero antes de mandarlo.
@@ -407,7 +409,8 @@ export function maxRowsWarning(maxRows) {
   return (
     `The API returns at most ${maxRows} rows per request (the Max rows setting of your project's Data API settings). The app ` +
     `expects ${APP_MIN_MAX_ROWS} or more: with fewer, long lists (the pages of a big project, the comments of a page) ` +
-    `arrive cut short. Set it back to ${APP_MIN_MAX_ROWS}.`
+    `take more requests, some lists (the team, who has access) show an error instead of their rows, and a public link ` +
+    `to a big branch shows fewer pages. Set it back to ${APP_MIN_MAX_ROWS}.`
   );
 }
 

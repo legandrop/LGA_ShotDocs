@@ -7,6 +7,7 @@ import { THUMB_MAX_BYTES } from '../media/probe';
 import { CLEAN_SCHEMA_VERSION } from './clean';
 import { MAX_FILE_BYTES } from './files';
 import { parseAccess, type AccessSnapshot, type GrantLevel, type Role } from './access';
+import { afterPair, COUNTED, KeyedList, wholeList } from './listPages';
 import {
   REQUEST_TIMEOUT,
   RemoteError,
@@ -254,7 +255,10 @@ export interface SizesRemote {
   projectSizes(): Promise<ProjectSizeRow[] | null>;
 }
 
-/** Lo más que PostgREST devuelve en un pedido en este proyecto, pida lo que pida el rango. */
+/**
+ * Cuántas filas se piden por pedido en las listas largas. Es el tope de fábrica de la API (*Max rows*), pero la app no
+ * supone que la API entregue esa cantidad: puede entregar menos y se sigue desde la última fila (`listPages.ts`).
+ */
 export const MAX_ROWS_PER_REQUEST = 1000;
 /** La forma de un uuid (lo único que se escribe, además de un entero, adentro de un filtro armado a mano). */
 const UUID_SHAPE = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
@@ -544,10 +548,7 @@ const UNDEFINED_COLUMN = '42703';
 const MISSING_TABLE = new Set(['42P01', 'PGRST205']);
 const MISSING_FUNCTION = 'PGRST202';
 
-/**
- * De a cuántas filas se pide `trashed_files_all` a una base sin `trashed_files_page`: el tope de filas por pedido de la
- * API (como los comentarios). Ese camino supone que la base entrega esa cantidad por pedido.
- */
+/** De a cuántas filas se pide `trashed_files_all` a una base sin `trashed_files_page` (la API puede entregar menos). */
 export const TRASH_ALL_PAGE = 1000;
 /** Cuántas filas se le piden a `trashed_files_page` por pedido (la base no da más de 1000). */
 export const TRASH_PAGE_ROWS = 1000;
@@ -634,6 +635,22 @@ export function deadline(ms = REQUEST_TIMEOUT_MS): AbortSignal {
 export function timed<T>(query: T, ms = REQUEST_TIMEOUT_MS): T {
   const q = query as T & { abortSignal?: (signal: AbortSignal) => T };
   return typeof q.abortSignal === 'function' ? q.abortSignal(deadline(ms)) : query;
+}
+
+/**
+ * Una función de la base que devuelve **una fila por `key`** (una persona, un id), entera: por esa clave, con el orden
+ * escrito y hasta el total que dice la API (`KeyedList`). Con todo en una respuesta es un pedido. Las filas llegan
+ * ordenadas por la clave, no en el orden de la función: sirve para lo que se busca por id.
+ */
+export async function rpcByKey<T>(client: SupabaseClient, fn: string, args: Record<string, unknown>, key: string): Promise<T[]> {
+  const list = new KeyedList<Record<string, unknown>>(fn, (r) => String(r[key]));
+  for (;;) {
+    let query = client.rpc(fn, args, COUNTED);
+    if (list.last) query = query.gt(key, String(list.last[key]));
+    const { data, error, status, count } = await timed(query.order(key).limit(MAX_ROWS_PER_REQUEST));
+    if (error) throw toRemoteError(error, status);
+    if (list.add((data ?? []) as Record<string, unknown>[], count)) return list.rows as T[];
+  }
 }
 
 /**
@@ -914,9 +931,10 @@ export class SupabaseRemote
   private snapshotsOn = false;
 
   private async fetchTreeOf(projectIds: string[], schemaVersion?: number | null): Promise<PageRow[]> {
-    // De a 1000, por id: si se crean páginas mientras se baja, no se saltea ninguna.
-    const rows: PageRow[] = [];
-    let after: string | null = null;
+    // De a 1000, por id: si se crean páginas mientras se baja, no se saltea ninguna. Hasta el total que dice la API
+    // (o una página vacía), nunca por haber recibido menos de 1000: un árbol cortado se tomaría por "estas páginas ya
+    // no existen" (`PageTree.setSnapshot` reemplaza la copia del dispositivo por lo que llega).
+    const list = new KeyedList<PageRow>('pages', (r) => r.id);
     // `clean_seq` solo con la versión 12 o más; si falta igual, se sigue sin ella un rato (como `settings`).
     const clean = (schemaVersion ?? 0) >= CLEAN_SCHEMA_VERSION && Date.now() - this.cleanSeqMissingAt >= 10 * 60_000;
     // `snapshot_seq` y `content_epoch` con la 17 o más; si faltan igual, se dejan primero ellas (son las más nuevas).
@@ -926,9 +944,9 @@ export class SupabaseRemote
         (this.settingsMissing ? PAGE_COLUMNS_WITHOUT_SETTINGS : PAGE_COLUMNS) +
         (clean ? ', clean_seq' : '') +
         (snap ? ', snapshot_seq, content_epoch' : '');
-      let query = this.client.from('pages').select(columns).in('workspace_id', projectIds);
-      if (after) query = query.gt('id', after);
-      const { data, error, status } = await timed(query.order('id').limit(1000));
+      let query = this.client.from('pages').select(columns, COUNTED).in('workspace_id', projectIds);
+      if (list.last) query = query.gt('id', list.last.id);
+      const { data, error, status, count } = await timed(query.order('id').limit(MAX_ROWS_PER_REQUEST));
       if (error?.code === UNDEFINED_COLUMN && snap) {
         this.snapshotColumnsMissingAt = Date.now();
         return this.fetchTreeOf(projectIds, schemaVersion);
@@ -942,10 +960,7 @@ export class SupabaseRemote
         return this.fetchTreeOf(projectIds, schemaVersion);
       }
       if (error) throw toRemoteError(error, status);
-      const page = data as unknown as PageRow[];
-      rows.push(...page);
-      if (page.length < 1000) return rows;
-      after = page[page.length - 1].id;
+      if (list.add((data ?? []) as unknown as PageRow[], count)) return list.rows;
     }
   }
 
@@ -962,21 +977,25 @@ export class SupabaseRemote
       (schemaVersion ?? 0) >= PROJECT_DRIVE_SCHEMA_VERSION &&
       Date.now() - this.driveColumnsMissingAt >= 10 * 60_000;
     const columns = ['id, name, created_at, owner_id', ...(archived ? ['archived_at'] : []), ...(drive ? ['drive_trash_requested_at, drive_missing_at'] : [])];
-    const { data, error, status } = await timed(this.client
-      .from('workspaces')
-      .select(columns.join(', '))
-      .order('created_at')
-      .limit(1000));
-    if (drive && error?.code === UNDEFINED_COLUMN) {
-      this.driveColumnsMissingAt = Date.now();
-      return this.fetchProjects(schemaVersion);
+    // Por fecha de creación (el orden de la lista) y, a igual fecha, por id: cada pedido sigue al último proyecto
+    // recibido, hasta el total que dice la API. Una lista de proyectos cortada dejaría sin bajar las páginas de los
+    // que faltan, y el dispositivo los daría por borrados. En el caso de siempre es un pedido, como antes.
+    const list = new KeyedList<ProjectRow>('workspaces', (p) => `${p.created_at}|${p.id}`);
+    for (;;) {
+      let query = this.client.from('workspaces').select(columns.join(', '), COUNTED);
+      if (list.last) query = query.or(afterPair('created_at', list.last.created_at, 'id', list.last.id));
+      const { data, error, status, count } = await timed(query.order('created_at').order('id').limit(MAX_ROWS_PER_REQUEST));
+      if (drive && error?.code === UNDEFINED_COLUMN) {
+        this.driveColumnsMissingAt = Date.now();
+        return this.fetchProjects(schemaVersion);
+      }
+      if (archived && error?.code === UNDEFINED_COLUMN) {
+        this.archivedMissingAt = Date.now();
+        return this.fetchProjects(schemaVersion);
+      }
+      if (error) throw toRemoteError(error, status);
+      if (list.add((data ?? []) as unknown as ProjectRow[], count)) return list.rows;
     }
-    if (archived && error?.code === UNDEFINED_COLUMN) {
-      this.archivedMissingAt = Date.now();
-      return this.fetchProjects(schemaVersion);
-    }
-    if (error) throw toRemoteError(error, status);
-    return data as unknown as ProjectRow[];
   }
 
   // --- archivar, borrar y restaurar proyectos (P.14) ---------------------------------------------------
@@ -1000,10 +1019,10 @@ export class SupabaseRemote
   }
 
   async trashedProjects(): Promise<TrashedProjectRow[] | null> {
-    const { data, error, status } = await timed(this.client.rpc('trashed_projects'));
+    const { data, error, status, count } = await timed(this.client.rpc('trashed_projects', undefined, COUNTED));
     if (error?.code === MISSING_FUNCTION) return null;
     if (error) throw toRemoteError(error, status);
-    return ((data ?? []) as Record<string, unknown>[]).map(parseTrashedProject);
+    return wholeList<Record<string, unknown>>(data, count).map(parseTrashedProject);
   }
 
   async projectDeleteInfo(projectId: string): Promise<ProjectDeleteInfo> {
@@ -1085,15 +1104,50 @@ export class SupabaseRemote
     return Number(data);
   }
 
+  /**
+   * Un lote de una función que entrega "hasta `limit` filas después de `afterSeq`", en orden de `seq`
+   * (`pull_page_updates`, `pull_page_content`, `page_history`). Quien llama da la bajada por terminada cuando recibe
+   * menos que `limit`: si la API recortó la respuesta (dice que la función dio más filas que las que mandó: su tope de
+   * filas por pedido), acá se sigue pidiendo desde la última recibida hasta completar lo que la función había dado.
+   * El orden va escrito en el pedido, así lo que llega de una respuesta recortada es el principio. Con todo en una
+   * respuesta es **un pedido**, como antes.
+   */
+  private async seqBatch(
+    ask: (afterSeq: number, limit: number) => PromiseLike<{ data: unknown; error: { message: string; code?: string } | null; status: number; count: number | null }>,
+    afterSeq: number,
+    limit: number,
+  ): Promise<{ rows: Record<string, unknown>[]; error: null; status: number } | { rows: null; error: { message: string; code?: string }; status: number }> {
+    const rows: Record<string, unknown>[] = [];
+    let after = afterSeq;
+    for (;;) {
+      const { data, error, status, count } = await ask(after, limit - rows.length);
+      if (error) return { rows: null, error, status };
+      const page = (data ?? []) as Record<string, unknown>[];
+      rows.push(...page);
+      // Llegó todo lo que la función dio para este pedido (o ya está el lote entero): no hay nada que completar. Si la
+      // API no dice el total, queda como antes: no se pide de más, y lo que falte de una página lo trae la bajada
+      // siguiente (el cursor del contenido).
+      if (page.length === 0 || typeof count !== 'number' || !Number.isFinite(count) || count <= page.length || rows.length >= limit) {
+        return { rows, error: null, status };
+      }
+      after = Number(page[page.length - 1].seq);
+    }
+  }
+
   async pullUpdates(pageId: string, afterSeq: number, limit: number): Promise<RemoteUpdate[]> {
     // Lo que llega no se sabe de antemano: con el lote más chico (uno solo, que puede pesar hasta 8 MB) se
     // da el tope más largo. Si vence un lote más grande, `PageDocs.pullPage` lo achica.
-    const { data, error, status } = await timed(
-      this.client.rpc('pull_page_updates', { p_page_id: pageId, p_after_seq: afterSeq, p_limit: limit }),
-      limit <= 1 ? MAX_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS,
+    const { rows, error, status } = await this.seqBatch(
+      (after, want) =>
+        timed(
+          this.client.rpc('pull_page_updates', { p_page_id: pageId, p_after_seq: after, p_limit: want }, COUNTED).order('seq'),
+          limit <= 1 ? MAX_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS,
+        ),
+      afterSeq,
+      limit,
     );
     if (error) throw toRemoteError(error, status);
-    return (data as { seq: number; update: string }[]).map((r) => ({
+    return (rows as { seq: number; update: string }[]).map((r) => ({
       seq: Number(r.seq),
       data: fromBase64(r.update),
     }));
@@ -1107,21 +1161,25 @@ export class SupabaseRemote
     // Con la versión (entrega 3, 20261025120000_compactar_prender.sql): la base sirve el snapshot solo a una versión
     // permitida y con su huella; la de tres argumentos (v0.127 a v0.133) ya no sirve snapshots. Sin la migración,
     // PGRST202: filas sueltas por 10 minutos.
-    const { data, error, status } = await timed(
-      this.client.rpc('pull_page_content', {
-        p_page_id: pageId,
-        p_after_seq: afterSeq,
-        p_limit: limit,
-        p_app_version: this.appVersion || null,
-      }),
-      limit <= 1 ? MAX_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS,
+    // Un snapshot llega primero y con el `seq` hasta donde cubre: lo que sigue tiene un `seq` mayor, así que el orden
+    // por `seq` es el de la función, y seguir desde la última fila recibida es lo que haría el pedido siguiente.
+    const { rows, error, status } = await this.seqBatch(
+      (after, want) =>
+        timed(
+          this.client
+            .rpc('pull_page_content', { p_page_id: pageId, p_after_seq: after, p_limit: want, p_app_version: this.appVersion || null }, COUNTED)
+            .order('seq'),
+          limit <= 1 ? MAX_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS,
+        ),
+      afterSeq,
+      limit,
     );
     if (error?.code === MISSING_FUNCTION) {
       this.pullContentMissingAt = Date.now();
       return this.pullUpdates(pageId, afterSeq, limit);
     }
     if (error) throw toRemoteError(error, status);
-    return parseContentRows(data);
+    return parseContentRows(rows);
   }
 
   // --- compactar: quien arma los snapshots (Docs/Doc_Compactar.md, sección 4; 20261019120000_compactar_leer.sql) ----
@@ -1235,12 +1293,17 @@ export class SupabaseRemote
 
   async pageHistory(pageId: string, afterSeq: number, limit: number): Promise<HistoryRow[]> {
     // Como `pullUpdates`: el lote de a uno tiene el tope más largo (una fila puede pesar 8 MB).
-    const { data, error, status } = await timed(
-      this.client.rpc('page_history', { p_page_id: pageId, p_after_seq: afterSeq, p_limit: limit }),
-      limit <= 1 ? MAX_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS,
+    const { rows, error, status } = await this.seqBatch(
+      (after, want) =>
+        timed(
+          this.client.rpc('page_history', { p_page_id: pageId, p_after_seq: after, p_limit: want }, COUNTED).order('seq'),
+          limit <= 1 ? MAX_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS,
+        ),
+      afterSeq,
+      limit,
     );
     if (error) throw toRemoteError(error, status);
-    return (data as { id: number; seq: number; created_by: string | null; created_at: string; update: string; plink_author?: string | null }[]).map((r) => ({
+    return (rows as unknown as { id: number; seq: number; created_by: string | null; created_at: string; update: string; plink_author?: string | null }[]).map((r) => ({
       id: Number(r.id),
       seq: Number(r.seq),
       // Una fila que entró por un link (versión 19 de la base): el nombre del visitante (E2.8).
@@ -1290,7 +1353,12 @@ export class SupabaseRemote
     return parseAdmitResults(data);
   }
 
-  /** Lo de un link que no entró a la página (apartado, retenido, esperando), para quien la ve con lo borrado. */
+  /**
+   * Lo de un link que no entró a la página (apartado, retenido, esperando), para quien la ve con lo borrado. La función
+   * corta en 500 filas **adentro** (lo más viejo primero) y no dice cuántas había: con más, el aviso cuenta y descarga
+   * de menos. Acá no hay total que mirar; arreglarlo pide que la función lo devuelva (Docs/Doc_Sincronizacion.md, "Las
+   * listas largas", "Lo que queda").
+   */
   async linkUpdatesOf(pageId: string): Promise<LinkUpdateRow[]> {
     const { data, error, status } = await timed(this.client.rpc('public_link_updates_of', { p_page_id: pageId }));
     if (error?.code === MISSING_FUNCTION) return [];
@@ -1306,7 +1374,14 @@ export class SupabaseRemote
     }));
   }
 
-  /** Lo apartado de todos los links en las páginas que la persona ve con lo borrado (entrega 2c). Sin la migración: nada. */
+  /**
+   * Lo apartado de todos los links en las páginas que la persona ve con lo borrado (entrega 2c). Sin la migración: nada.
+   *
+   * La función ya es una vista recortada (hasta 200 por página, lo más nuevo primero) y lo apartado nunca se borra: con
+   * varias páginas pasa del tope de filas por pedido **de fábrica**. Por eso acá se devuelve lo que llegó, sin el
+   * control del total: un error dejaba sin lista a *Share*, al árbol y al historial, y lo que llega (lo más nuevo)
+   * sirve. Lo que queda afuera no se ve hasta paginarla (Docs/Doc_Sincronizacion.md, "Las listas largas").
+   */
   async linkAside(): Promise<LinkAsideRow[]> {
     const { data, error, status } = await timed(this.client.rpc('public_link_aside'));
     if (error?.code === MISSING_FUNCTION) return [];
@@ -1332,15 +1407,15 @@ export class SupabaseRemote
   }
 
   async pageHistoryAuthors(pageId: string): Promise<HistoryAuthor[]> {
-    const { data, error, status } = await timed(this.client.rpc('page_history_authors', { p_page_id: pageId }));
-    if (error) throw toRemoteError(error, status);
-    return ((data ?? []) as { user_id: string; email: string }[]).map((r) => ({ user_id: String(r.user_id), email: String(r.email ?? '') }));
+    // Una fila por persona: entera, por su id (un correo que falta no puede tirar la carga del historial).
+    const rows = await rpcByKey<{ user_id: string; email: string }>(this.client, 'page_history_authors', { p_page_id: pageId }, 'user_id');
+    return rows.map((r) => ({ user_id: String(r.user_id), email: String(r.email ?? '') }));
   }
 
   async listPageVersions(pageId: string): Promise<PageVersionRow[]> {
-    const { data, error, status } = await timed(this.client.rpc('list_page_versions', { p_page_id: pageId }));
+    const { data, error, status, count } = await timed(this.client.rpc('list_page_versions', { p_page_id: pageId }, COUNTED));
     if (error) throw toRemoteError(error, status);
-    return ((data ?? []) as Record<string, unknown>[]).map(parsePageVersion);
+    return wholeList<Record<string, unknown>>(data, count).map(parsePageVersion);
   }
 
   async namePageVersion(id: string, pageId: string, seq: number, label: string): Promise<PageVersionRow> {
@@ -1415,17 +1490,23 @@ export class SupabaseRemote
     ).maybeSingle();
     if (member.error && MISSING_TABLE.has(String(member.error.code))) return null;
     if (member.error) throw toRemoteError(member.error, member.status);
-    // Los admins ven los permisos de todos: se piden solo los propios.
-    const grants = await timed(this.client
-      .from('grants')
+    // Los admins ven los permisos de todos: se piden solo los propios. Por id y hasta el total que dice la API: con
+    // una lista cortada (antes se pedían "hasta 10000" en un pedido, que la API recorta a su tope sin avisar), a la
+    // persona le faltarían permisos que tiene.
+    const list = new KeyedList<{ id: string }>('grants', (g) => g.id);
+    for (;;) {
       // Todas las columnas: `revoked_at` (un permiso sacado queda en la tabla sin efecto) se filtra acá.
-      .select('*')
-      .eq('user_id', userId)
-      .limit(10000));
-    if (grants.error && MISSING_TABLE.has(String(grants.error.code))) return null;
-    if (grants.error) throw toRemoteError(grants.error, grants.status);
+      let query = this.client.from('grants').select('*', COUNTED).eq('user_id', userId);
+      if (list.last) query = query.gt('id', list.last.id);
+      const grants = await timed(query.order('id').limit(MAX_ROWS_PER_REQUEST));
+      if (grants.error && MISSING_TABLE.has(String(grants.error.code))) return null;
+      if (grants.error) throw toRemoteError(grants.error, grants.status);
+      // No es un rechazo: se vuelve a preguntar en la próxima sincronización y nada cambia.
+      if (!Array.isArray(grants.data)) throw new RemoteError('Unexpected answer for grants.', false);
+      if (list.add(grants.data as { id: string }[], grants.count)) break;
+    }
     try {
-      return parseAccess(member.data, grants.data);
+      return parseAccess(member.data, list.rows);
     } catch (err) {
       // No es un rechazo: se vuelve a preguntar en la próxima sincronización y nada cambia.
       throw new RemoteError(err instanceof Error ? err.message : String(err), false);
@@ -1442,16 +1523,16 @@ export class SupabaseRemote
   // --- equipo (pantalla de miembros y compartir) ---
 
   async listMembers(): Promise<MemberRow[]> {
-    const { data, error, status } = await timed(this.client.rpc('list_members'));
+    const { data, error, status, count } = await timed(this.client.rpc('list_members', undefined, COUNTED));
     if (error) throw toRemoteError(error, status);
-    return (data ?? []) as MemberRow[];
+    return wholeList<MemberRow>(data, count);
   }
 
   async listInvitations(): Promise<InvitationRow[] | null> {
-    const { data, error, status } = await timed(this.client.rpc('list_invitations'));
+    const { data, error, status, count } = await timed(this.client.rpc('list_invitations', undefined, COUNTED));
     if (error?.code === MISSING_FUNCTION) return null;
     if (error) throw toRemoteError(error, status);
-    return (data ?? []) as InvitationRow[];
+    return wholeList<InvitationRow>(data, count);
   }
 
   async revokeInvitation(id: string): Promise<void> {
@@ -1497,12 +1578,12 @@ export class SupabaseRemote
   }
 
   async listAccess(target: { projectId: string } | { pageId: string }): Promise<AccessRow[]> {
-    const { data, error, status } = await timed(this.client.rpc('list_access', {
+    const { data, error, status, count } = await timed(this.client.rpc('list_access', {
       p_project: 'projectId' in target ? target.projectId : null,
       p_page: 'pageId' in target ? target.pageId : null,
-    }));
+    }, COUNTED));
     if (error) throw toRemoteError(error, status);
-    return (data ?? []) as AccessRow[];
+    return wholeList<AccessRow>(data, count);
   }
 
   /**
@@ -1596,13 +1677,30 @@ export class SupabaseRemote
   async fetchMediaFiles(ids: string[]): Promise<MediaFileRow[]> {
     const rows: MediaFileRow[] = [];
     for (let i = 0; i < ids.length; i += 100) {
-      // Todas las columnas: una base anterior a la papelera de archivos (versión 6) no tiene `purged_at` ni
-      // `drive_trashed_at`, y pedirlas por nombre fallaría.
-      const { data, error, status } = await timed(
-        this.client.from('files').select('*').in('id', ids.slice(i, i + 100)),
-      );
-      if (error) throw toRemoteError(error, status);
-      rows.push(...(data as unknown as MediaFileRow[]));
+      // Lo pedido que todavía no llegó. Si la API recorta la respuesta (su tope de filas por pedido), lo que falta se
+      // vuelve a pedir mientras siga llegando algo: un archivo que no vino por el recorte se tomaría por "no existe o
+      // no lo ves". Con todo en una respuesta es un pedido, como antes; si falta alguno de verdad, uno más (vacío).
+      // Sin pedirle el total a la API: contar haría revisar dos veces los permisos de cada archivo.
+      let missing = [...new Set(ids.slice(i, i + 100))];
+      const seen = new Set<string>();
+      while (missing.length > 0) {
+        // Todas las columnas: una base anterior a la papelera de archivos (versión 6) no tiene `purged_at` ni
+        // `drive_trashed_at`, y pedirlas por nombre fallaría.
+        const { data, error, status } = await timed(this.client.from('files').select('*').in('id', missing));
+        if (error) throw toRemoteError(error, status);
+        const page = (data ?? []) as unknown as MediaFileRow[];
+        // La base devuelve los ids en minúscula, los pida como los pida.
+        const got = new Set(page.map((r) => String(r.id).toLowerCase()));
+        for (const r of page) {
+          const id = String(r.id).toLowerCase();
+          if (!seen.has(id)) rows.push(r);
+          seen.add(id);
+        }
+        const left = missing.filter((id) => !got.has(id.toLowerCase()));
+        // Nada de lo pedido en esta respuesta: no hay más (o la base contesta otra cosa, y repetir no terminaría).
+        if (left.length === missing.length) break;
+        missing = left;
+      }
     }
     return rows.map((r) => ({
       id: r.id,
@@ -1624,32 +1722,27 @@ export class SupabaseRemote
 
   async fetchPageUses(pageIds: string[]): Promise<PageUseRow[]> {
     const rows: PageUseRow[] = [];
-    // De a 100 páginas (la lista viaja en la dirección) y de a 1000 filas. Todas las columnas: una base anterior
-    // a la papelera de archivos no tiene `removed_at` ni `is_foreign`. Si se cuela o se pierde una fila porque
-    // algo cambió entre dos lotes, no pasa nada: un uso que no vuelve se manda como siempre.
+    // De a 100 páginas (la lista viaja en la dirección) y de a 1000 filas, por clave (página, archivo) y hasta el
+    // total que dice la API. Todas las columnas: una base anterior a la papelera de archivos no tiene `removed_at` ni
+    // `is_foreign`. Un uso que no vuelve se manda como siempre: acá una fila de menos no rompe nada, pero tampoco se
+    // da por entera una lista que la API recortó.
     for (let i = 0; i < pageIds.length; i += 100) {
-      for (let from = 0; ; from += 1000) {
-        const { data, error, status } = await timed(
-          this.client
-            .from('page_files')
-            .select('*')
-            .in('page_id', pageIds.slice(i, i + 100))
-            .order('page_id')
-            .order('file_id')
-            .range(from, from + 999),
-        );
+      const list = new KeyedList<PageUseRow>('page_files', (r) => `${r.page_id}|${r.file_id}`);
+      for (;;) {
+        let query = this.client.from('page_files').select('*', COUNTED).in('page_id', pageIds.slice(i, i + 100));
+        if (list.last) query = query.or(afterPair('page_id', list.last.page_id, 'file_id', list.last.file_id));
+        const { data, error, status, count } = await timed(query.order('page_id').order('file_id').limit(MAX_ROWS_PER_REQUEST));
         if (error) throw toRemoteError(error, status);
-        const page = (data ?? []) as unknown as PageUseRow[];
-        rows.push(
-          ...page.map((r) => ({
-            page_id: r.page_id,
-            file_id: r.file_id,
-            removed_at: r.removed_at ?? null,
-            is_foreign: r.is_foreign === true,
-          })),
-        );
-        if (page.length < 1000) break;
+        if (list.add((data ?? []) as unknown as PageUseRow[], count)) break;
       }
+      rows.push(
+        ...list.rows.map((r) => ({
+          page_id: r.page_id,
+          file_id: r.file_id,
+          removed_at: r.removed_at ?? null,
+          is_foreign: r.is_foreign === true,
+        })),
+      );
     }
     return rows;
   }
@@ -1727,6 +1820,9 @@ export class SupabaseRemote
       if (paged.length === 0) throw new RemoteError('not_allowed', true, '42501');
       return paged.flatMap(({ project_id: _project, ...row }) => (row.id == null ? [] : [parseTrashedFile({ ...row, id: row.id, trashed_at: row.trashed_at ?? '' })]));
     }
+    // Una base sin `trashed_files_page`: como en v0.218, un pedido y lo que llegue (lo último primero). Una papelera
+    // con más archivos que el tope de filas por pedido es común (un proyecto importado y borrado): con el control del
+    // total daría error para siempre; así se ve lo último que entró, como antes.
     const { data, error, status } = await timed(this.client.rpc('trashed_files', { p_project: projectId }));
     if (error) throw toRemoteError(error, status);
     return ((data ?? []) as RawTrashedFile[]).map(parseTrashedFile);
@@ -1749,9 +1845,9 @@ export class SupabaseRemote
 
   /**
    * Lo mismo con una base sin `trashed_files_page`: `trashed_files_all()` entera, pedida por tramos. Cada tramo corre
-   * la función de nuevo, un cambio entre dos tramos puede correr las filas un lugar y el corte supone que la API
-   * entrega `TRASH_ALL_PAGE` filas por pedido (Docs/Doc_Proyectos_Borrar.md, "La papelera de archivos, de a páginas
-   * por clave").
+   * la función de nuevo y un cambio entre dos tramos puede correr las filas un lugar (Docs/Doc_Proyectos_Borrar.md,
+   * "La papelera de archivos, de a páginas por clave"). El corte ya no supone cuántas filas entrega la API: se sigue
+   * desde lo recibido hasta el total que dice la API (o hasta un tramo vacío).
    */
   private async trashedFilesAllByRange(): Promise<Map<string, TrashedFileRow[]> | null> {
     const byProject = new Map<string, TrashedFileRow[]>();
@@ -1760,10 +1856,10 @@ export class SupabaseRemote
     // páginas hasta agotar, con el orden escrito en el pedido para que una página siga donde terminó la anterior (por
     // proyecto y, adentro, como `trashed_files`: lo último primero). Si una página falla, falla todo: nunca una lista
     // parcial, porque un proyecto que no llegó se leería como "no ves su papelera".
-    for (let from = 0; ; from += TRASH_ALL_PAGE) {
-      const { data, error, status } = await timed(
+    for (let from = 0; ; ) {
+      const { data, error, status, count } = await timed(
         this.client
-          .rpc('trashed_files_all')
+          .rpc('trashed_files_all', undefined, COUNTED)
           .order('project_id', { ascending: true })
           .order('trashed_at', { ascending: false, nullsFirst: false })
           .order('id', { ascending: true })
@@ -1782,21 +1878,26 @@ export class SupabaseRemote
         seen.add(row.id);
         files.push(parseTrashedFile({ ...row, id: row.id }));
       }
-      if (page.length < TRASH_ALL_PAGE) return byProject;
+      from += page.length;
+      // Solo un total que coincide con lo recibido termina la lista (uno menor no se cree: se sigue hasta el vacío).
+      if (page.length === 0 || from === count) return byProject;
     }
   }
 
   async projectSizes(): Promise<ProjectSizeRow[] | null> {
-    const { data, error, status } = await timed(this.client.rpc('project_sizes'));
+    const { data, error, status, count } = await timed(this.client.rpc('project_sizes', undefined, COUNTED));
     if (error?.code === MISSING_FUNCTION) return null;
     if (error) throw toRemoteError(error, status);
-    return ((data ?? []) as Record<string, unknown>[]).map(parseProjectSize);
+    return wholeList<Record<string, unknown>>(data, count).map(parseProjectSize);
   }
 
   async filesBySize(projectId: string, after: SizeCursor | null, limit: number): Promise<SizedFileRow[]> {
     const rows: SizedFileRow[] = [];
     let cursor = after;
-    // De a 1000 como mucho: pedir más en un solo pedido devuelve 1000 y parecería que no hay más.
+    // De a 1000 como mucho. Se sigue hasta juntar `limit` o hasta una página vacía, nunca por haber recibido menos de
+    // lo pedido: si la API recorta la respuesta (su tope de filas por pedido), quien llama daría la lista por
+    // terminada. Cuesta un pedido más (vacío) al llegar al final de la lista. Acá no se le pide el total a la API:
+    // contar haría revisar los permisos de todos los archivos del proyecto en cada tramo.
     while (rows.length < limit) {
       const want = Math.min(MAX_ROWS_PER_REQUEST, limit - rows.length);
       let query = this.client
@@ -1826,7 +1927,7 @@ export class SupabaseRemote
           trashed_at: r.trashed_at ?? null,
         })),
       );
-      if (page.length < want) break;
+      if (page.length === 0) break;
       const last = rows[rows.length - 1];
       cursor = { size: last.size, id: last.id };
     }
@@ -1836,23 +1937,21 @@ export class SupabaseRemote
   async fileUses(fileIds: string[]): Promise<PageUseRow[]> {
     const rows: PageUseRow[] = [];
     // De a 100 archivos (la lista viaja en la dirección) y de a 1000 filas: un archivo puede estar en muchas páginas.
+    // Por clave (archivo, página) y hasta el total que dice la API, como `fetchPageUses`.
     for (let i = 0; i < fileIds.length; i += 100) {
-      for (let from = 0; ; from += MAX_ROWS_PER_REQUEST) {
-        const { data, error, status } = await timed(
-          this.client
-            .from('page_files')
-            .select('page_id, file_id, removed_at, is_foreign')
-            .in('file_id', fileIds.slice(i, i + 100))
-            .is('removed_at', null)
-            .order('file_id')
-            .order('page_id')
-            .range(from, from + MAX_ROWS_PER_REQUEST - 1),
-        );
+      const list = new KeyedList<PageUseRow>('page_files', (r) => `${r.file_id}|${r.page_id}`);
+      for (;;) {
+        let query = this.client
+          .from('page_files')
+          .select('page_id, file_id, removed_at, is_foreign', COUNTED)
+          .in('file_id', fileIds.slice(i, i + 100))
+          .is('removed_at', null);
+        if (list.last) query = query.or(afterPair('file_id', list.last.file_id, 'page_id', list.last.page_id));
+        const { data, error, status, count } = await timed(query.order('file_id').order('page_id').limit(MAX_ROWS_PER_REQUEST));
         if (error) throw toRemoteError(error, status);
-        const page = (data ?? []) as unknown as PageUseRow[];
-        rows.push(...page.map((r) => ({ page_id: r.page_id, file_id: r.file_id, removed_at: null, is_foreign: r.is_foreign === true })));
-        if (page.length < MAX_ROWS_PER_REQUEST) break;
+        if (list.add((data ?? []) as unknown as PageUseRow[], count)) break;
       }
+      rows.push(...list.rows.map((r) => ({ page_id: r.page_id, file_id: r.file_id, removed_at: null, is_foreign: r.is_foreign === true })));
     }
     return rows;
   }

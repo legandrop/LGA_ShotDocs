@@ -114,7 +114,12 @@ function clientWith(answer: (url: URL, body: unknown) => { status: number; body:
         const url = new URL(String(input instanceof Request ? input.url : input));
         urls.push(url);
         const res = answer(url, typeof init?.body === 'string' ? JSON.parse(init.body) : null);
-        return new Response(JSON.stringify(res.body), { status: res.status, headers: { 'content-type': 'application/json' } });
+        // Como la API: si el pedido pide el total (`count=exact`), va en `Content-Range`.
+        const counted = /count=exact/.test(new Headers(init?.headers).get('prefer') ?? '');
+        const total = Array.isArray(res.body) ? res.body.length : 0;
+        const headers: Record<string, string> = { 'content-type': 'application/json' };
+        if (counted && Array.isArray(res.body)) headers['content-range'] = `${total > 0 ? `0-${total - 1}` : '*'}/${total}`;
+        return new Response(JSON.stringify(res.body), { status: res.status, headers });
       },
     },
   });
@@ -128,7 +133,7 @@ describe('la vista de compatibilidad de los comentarios', () => {
     const remote = new SupabaseCommentRemote(client);
     expect(await remote.fetchComments('p')).toEqual([row]);
     expect(urls).toHaveLength(1);
-    expect(urls[0].searchParams.get('select')?.replace(/\s/g, '')).toMatch(/,deleted_by,plink_id,plink_author$/);
+    expect(urls[0].searchParams.get('select')?.replace(/\s/g, '')).toMatch(/,plink_id,plink_author,mentions$/);
   });
 
   it('con una base cuya vista no tiene esas columnas, lee sin ellas y no las vuelve a pedir', async () => {
@@ -138,9 +143,10 @@ describe('la vista de compatibilidad de los comentarios', () => {
         : { status: 200, body: [{ id: 'c1', page_id: 'p' }] });
     const remote = new SupabaseCommentRemote(client);
     expect(await remote.fetchComments('p')).toEqual([{ id: 'c1', page_id: 'p' }]);
-    expect(urls.map((u) => u.searchParams.get('select')?.includes('plink_id'))).toEqual([true, false]);
+    // De a un escalón: primero sin las menciones (que llegaron después), después sin las del link.
+    expect(urls.map((u) => u.searchParams.get('select')?.includes('plink_id'))).toEqual([true, true, false]);
     expect(await remote.fetchComments('p')).toEqual([{ id: 'c1', page_id: 'p' }]);
-    expect(urls.map((u) => u.searchParams.get('select')?.includes('plink_id'))).toEqual([true, false, false]);
+    expect(urls.map((u) => u.searchParams.get('select')?.includes('plink_id'))).toEqual([true, true, false, false]);
   });
 
   it('otro error no se traga: sigue saliendo como siempre', async () => {

@@ -70,10 +70,13 @@ database changes.
    - In the security options: keep **Data API** on, turn **off** the option that automatically exposes new
      tables, and keep **automatic Row Level Security (RLS)** on.
    - Click **Create new project** and wait a couple of minutes until it is ready. The free plan is enough.
-   - Leave the **Max rows** setting of your project's Data API settings at `1000`, its default. The app asks for long
-     lists (the pages of a project, the comments of a page, the files of its pages) 1000 rows at a time and
-     takes a shorter answer as the end of the list: with a lower limit, a big project would arrive cut short,
-     without any error. A higher limit is fine. The setup command (step 4) tells you if it is too low.
+   - Leave the **Max rows** setting of your project's Data API settings at `1000`, its default. With a lower
+     limit the app still gets its long lists whole (the pages of a project, the comments of a page, the files
+     of its pages), but in more requests, so syncing is slower; a few lists it asks for in one request (the
+     team, who has access, the deleted projects) show an error instead of their rows when they are longer
+     than the limit, and a few others (pending invitations, the named versions of a page) are simply not
+     shown; and a public link to a branch with more pages than the limit shows fewer pages. A higher
+     limit is fine. The setup command (step 4) tells you if it is too low.
 3. Write down the **project ref**: **Project Settings** (gear icon, bottom left) → **General** → **Project
    ID**. It is 20 lowercase letters and numbers. Your **Project URL** is `https://<project ref>.supabase.co`.
 4. Create a **personal access token**: click your avatar (top right) → **Account preferences** → **Access
@@ -146,6 +149,11 @@ the owner. It only changes what is missing, so you can run it again at any time.
 
 If something fails, the command says what and stops; fix it and run it again. It refuses to write to a
 project that already has another owner, so it cannot overwrite someone else's workspace.
+
+If Supabase accepts a request and never answers, the command does not wait forever: it stops after one
+minute for a setting, or ten minutes for a database change, and says which request it was. After a database
+change that got no answer, look at the project before running the command again: the change may have been
+applied. To wait longer, set `SUPABASE_API_TIMEOUT` or `SUPABASE_QUERY_TIMEOUT` (in seconds), like the token.
 
 ## 5. Cloudflare: publish your file gateway
 

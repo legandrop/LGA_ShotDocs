@@ -1057,6 +1057,123 @@ decenas de KB; los originales van al Drive por el portero), y desde v0.092 tambi
   no se corta, la que se queda quieta a mitad y las pasadas que esperan) y
   `src/media/queue.test.ts`, "miniaturas que Storage no contesta" (lo que hace la cola).
 
+## Las listas largas: sin suponer cuántas filas entrega la API (v0.224)
+
+La API de la base entrega como mucho un **tope de filas por pedido** (el ajuste *Max rows* del proyecto; de fábrica,
+1000) y **no avisa cuando recorta**. La app daba por última "una página con menos de 1000 filas": con un tope menor (un
+workspace con su propio Supabase) la lista quedaba cortada en silencio. Y una lista cortada no es solo una lista más
+corta: el motor la toma por todo lo que hay.
+
+- **Qué hace el motor con lo que no vino.** `PageTree.setSnapshot` **reemplaza** la copia del árbol por lo que llegó:
+  las páginas y los proyectos que faltan dejan de verse (su contenido sigue en el dispositivo, sin página que lo
+  muestre) y, si además cambió la generación, `recoverAfterRestore` las vuelve a poner en la cola como altas. La cola de
+  comentarios, en una bajada entera, **borra lo guardado de la página y lo cambia por la lista**; y `commentOnServer`
+  lee "no está en la lista" como "se borró" y **tira las menciones** que esperaban. Los permisos propios que faltan
+  apagan en la interfaz lo que la persona sí puede hacer. Por eso ninguna de estas listas puede llegar parcial: o llega
+  entera, o el pedido falla y no se toca nada.
+- **Por clave y hasta el total** (`src/sync/listPages.ts`, `KeyedList`). Cada pedido lleva **el orden escrito** (un
+  orden total: la última columna desempata), pide lo que sigue a **la última fila recibida** y le pide a la API **el
+  total** (`count: 'exact'`, que llega en la misma respuesta, en `Content-Range`). La lista termina cuando lo recibido
+  alcanza ese total, o con una página vacía; nunca por haber recibido pocas filas. Lo que cambia entre dos pedidos no
+  corre ni saltea filas; una fila repetida (una base que no avanza) es un error; si un pedido falla, falla la lista. En
+  el caso de siempre (todo entra en una respuesta) es **un pedido, como antes**. Si la API no mandara el total, o mandara
+  uno menor que lo que entregó (no se le cree), se sigue hasta una página vacía (un pedido más).
+- **Sin migración.** `list_comments` ya recibe desde cuándo (`p_since`) y devuelve por `updated_at` e `id`: el pedido
+  siguiente manda en `p_since` la fecha de la última fila y un filtro que deja afuera lo de esa misma fecha que ya
+  llegó. No sube `schema_version` y anda igual con una base anterior.
+
+| Lista | Dónde | Cómo se pide ahora |
+|---|---|---|
+| Comentarios de una página | `listComments`, `fetchComments` | Por clave (`updated_at`/`created_at`, `id`) y total. Lo editado entre dos pedidos llega con su última versión. |
+| Árbol de páginas | `fetchTreeOf` | Por `id` (ya lo hacía) y total, en vez de "menos de 1000". |
+| Proyectos | `fetchProjects` | Por `created_at`, `id` y total (antes, un pedido con "hasta 1000"). |
+| Permisos propios | `fetchMyAccess` | Por `id` y total (antes, un pedido con "hasta 10000", que la API recortaba a su tope). |
+| Usos de archivos | `fetchPageUses`, `fileUses` | Por clave (página, archivo) y total. |
+| Archivos por id | `fetchMediaFiles` | Se vuelve a pedir lo que no llegó mientras siga llegando algo; sin total (contar revisa dos veces los permisos de cada archivo: 50 ms más cada 100). Un archivo que falta de verdad cuesta un pedido más, vacío. |
+| Archivos por peso | `filesBySize` | Ya iba por clave; termina con una página vacía (un pedido más al final de la lista). Sin total: contar revisaría los permisos de todos los archivos del proyecto en cada tramo. |
+| Lotes de contenido e historial | `pullUpdates`, `pullContent`, `pageHistory` | Si la API recortó el lote (dice que la función dio más filas), se completa desde la última fila: "menos que lo pedido" sigue queriendo decir "no hay más". |
+| Papelera de archivos, base sin `trashed_files_page` | `trashedFilesAllByRange` | Sigue por tramos, pero hasta el total. |
+| Correos de quienes comentaron o escribieron una página | `fetchCommentAuthors`, `pageHistoryAuthors` | Por clave (`user_id`) y total (`rpcByKey`): un correo que falta no deja en error la bajada de comentarios ni la carga del historial. |
+
+**Las listas que se piden de una vez** (una función de la base, sin lugar desde dónde seguir) son dos grupos. Lo que
+decide el grupo es si la lista puede tener de verdad más filas que el tope **de fábrica** y quién recibe el error.
+
+| Lista | ¿Pasa de 1000 de verdad? | Quién recibe un error | Qué hace desde v0.224 |
+|---|---|---|---|
+| Equipo (`list_members`) | No | *Members*: lo muestra. *Share* (sugerencias): se lo traga. | Con el total: si la API la recortó, error (`wholeList`). |
+| Quién tiene acceso (`list_access`) | No | *Share*: lo muestra. | Con el total. |
+| Proyectos borrados (`trashed_projects`) | No | La papelera: lo muestra, con *Retry*. El aviso de "hay algo para restaurar": se lo traga. | Con el total. |
+| Peso de los proyectos (`project_sizes`) | No (una fila por proyecto) | *Drive* y la lista por peso: lo muestran. | Con el total. |
+| Invitaciones (`list_invitations`) | No | *Members* se lo traga: la sección de invitaciones no se muestra. | Con el total. |
+| Nombres de versión (`list_page_versions`) | No | `fetchVersions` se lo traga: el historial se ve sin los nombres. | Con el total. |
+| Candidatos del `@` (`mention_candidates`) | No | `refreshCandidates` se lo traga. | **Lo que llega**, como antes: con el error, el `@` se quedaba sin nadie. |
+| Lo apartado de los links (`public_link_aside`) | **Sí**: hasta 200 por página, y nunca se borra | `LinkAsideStore` se lo traga. | **Lo que llega**, como antes (lo más nuevo): con el error desaparecían la lista de *Share*, el ícono del árbol y las entradas del historial. |
+| Lo que no entró de un link en una página (`public_link_updates_of`) | La función corta en 500 **adentro** | El aviso de la página se lo traga. | **Lo que llega**, como antes. No hay total que mirar: con más de 500, el aviso cuenta y descarga de menos. |
+| Papelera de un proyecto, base sin `trashed_files_page` (`trashed_files`) | **Sí** (un proyecto importado y borrado) | La papelera: lo muestra. | **Lo que llega**, como antes (lo último primero): con el error no se veía nunca. Con la función nueva llega entera, por clave. |
+
+Con el tope de fábrica ninguna de las del primer grupo llega a recortarse; con un tope menor, las que muestran el error
+dicen *This list is longer than this workspace's database sends in one request…* y las otras dos (invitaciones, nombres
+de versión) simplemente no se muestran. Lo de `public_link_aside` lo encontró la auditoría de esta versión: el control
+del total, puesto ahí, dejaba la lista vacía con el tope de fábrica.
+
+- **Dar una página por comprobada** (`verifyHistory` en `engine.ts`, lo que habilita mandar archivos a la papelera)
+  recorre el historial hasta el cursor o hasta un lote vacío, no hasta un lote más corto que lo pedido: un lote
+  recortado dejaba sin mirar lo que seguía.
+- **Lo que cuesta** (medido en la base de Wanka, en transacciones que se deshicieron). Los pedidos de una
+  sincronización son **los mismos** que antes: ajustes, permisos (2), proyectos, árbol (uno cada 100 proyectos) y uno por
+  página de comentarios que se baja. Contar no es gratis en las tablas, porque la base revisa los permisos de cada fila
+  otra vez: el árbol pasa de 8 a 15 ms, los proyectos de 1,5 a 3 y los permisos de 0,2 a 0,4; en una función no cuesta
+  nada (`list_comments`: 0,5 ms con o sin total). Los usos de archivos de 100 páginas pasan de 104 a 207 ms, pero solo
+  se piden para las páginas que un dispositivo nunca comparó.
+- **El costo de contar a escala** (medido por la auditoría, con 3.500 páginas sembradas en una transacción que se
+  deshizo). El primer pedido del árbol pasa de 1,2–2,3 s a 2,3–4,4 s para la dueña (un miembro con permisos página por
+  página, de 2,3 a 4,0 s; un admin sin permisos propios, de 1,2 a 3,2 s), y los usos de 100 páginas con 2.600 filas, de
+  1,1–3,0 a 2,2–5,7 s. La sesión tiene un tope de 8 segundos por sentencia: contar baja a la mitad el tamaño de árbol
+  desde el que la sincronización empieza a fallar entera (de unas 12–24 mil páginas a 6–12 mil). Hoy no pesa (41
+  páginas vivas). **Diseño para cuando haga falta:** en `pages` y `page_files` no pedir el total y, cuando una página
+  llega más corta que lo pedido, confirmar el final con **un** pedido por clave (no encuentra filas y casi no le cuesta
+  a la base, aunque suma una ida y vuelta por lista); o elegir entre las dos formas según el tamaño que tuvo la lista
+  en la sincronización anterior (chica: total; grande: pedido de confirmación). En las funciones y en las tablas
+  chicas el total no cuesta y se queda.
+- **Qué mirar en producción.** Con la pestaña de red, en una sincronización: la respuesta de `rpc/list_comments` (y la
+  de `pages`, `workspaces` y `grants`) trae un `Content-Range` que termina en un número (`0-29/30`), no en `*`. La
+  señal de problema son los pedidos de a pares, donde el segundo contesta `[]`. Si la API no mandara el total en un
+  `rpc`: los comentarios siguen seguros, con un pedido de más por página; los lotes de contenido que la API recorte
+  llegan demorados (los retoma la vuelta siguiente), no perdidos; y el historial y las listas de un pedido quedarían
+  cortados en silencio con un tope de filas bajo. Esto se probó contra una API de mentira que imita a PostgREST y
+  contra las funciones reales por SQL, **no contra la API real** (hace falta una sesión).
+- **Lo que queda.**
+  - **Pruebas que faltan** (lo que cubren anda; lo vio la re-verificación con sondas): la guarda de «el historial
+    no avanza» de `verifyHistory` (sin ella sería un bucle); que un pedido fallido a mitad de `rpcByKey` tire; las
+    pruebas del árbol, los proyectos y los usos por archivo miran solo ids, así que una columna perdida en esos
+    pedidos no se nota; y el camino viejo de la papelera por tramos con un total mentido.
+  - **El modo link** (`plink_tree`, `plink_list_comments`, `plink_media_files`, `plink_pull_page`) sigue pidiendo en un
+    pedido: con una rama más grande que el tope, el visitante ve menos y su dispositivo lo toma por entero; si la raíz
+    del link queda fuera del corte, el link se ve roto. Nada se borra en la base. El arreglo es el mismo (por `id` y
+    total), cuidando que todas las páginas de una bajada traigan la misma firma (`sig`). Urgencia media.
+  - **Se ve menos, sin aviso:** `public_link_aside` (hasta 200 por página, sin tope de páginas: lo que pasa del tope
+    de filas no llega), `public_link_updates_of` (corta en 500 adentro; pide una migración: que devuelva el total, como
+    `public_link_files`), `access_requests_pending` (corta en 100 adentro) y `public_link_pages`.
+  - **Las listas de trabajo** (`files_due_for_purge`, `link_admit_pages`, `link_admit_work`, `clean_work`) no llevan
+    el control: una parte ahora y el resto en la vuelta siguiente es lo que hacen siempre. `link_admit_work` no escribe
+    el orden en el pedido.
+  - **Las listas del primer grupo** dan un error (o no se muestran) con un tope bajo en vez de paginarse; paginarlas es
+    pedirlas por su clave, como los correos.
+  - **El cursor de los comentarios:** `updated_at` es la hora en que empezó la transacción, así que un cambio que
+    empezó antes y se confirmó después de una bajada queda detrás del cursor (reproducido de forma simulada por la
+    auditoría; no empeora respecto de v0.223). Lo barato, sin migración: pedir con `p_since` un minuto atrás.
+  - `fetchTree` con más de 100 proyectos son varios pedidos: una página que cambia de proyecto entre dos puede faltar
+    o repetirse en esa bajada.
+  - Chicos: los errores "the same row arrived twice" y "a row without its date" llegan crudos y en inglés; en
+    `scripts/lib/management.mjs` el "Try again" también sale para invitar (un `POST` que pudo haber llegado);
+    `CommentQueue.refresh` no limpia el error del estado después de una bajada que sale bien; y los pedidos de más ya
+    dichos (`fetchMediaFiles` cuando falta un archivo, `filesBySize` al final de la lista).
+- Pruebas: `src/sync/listPages.test.ts`, contra `src/sync/fakePostgrest.ts` (el cliente de verdad y una API de mentira
+  en el nivel de los pedidos: tope de 1000, 500, 137 y 1, solo las columnas pedidas, otro orden en cada pedido si no se
+  lo escribe, cambios entre dos pedidos, sin total o con un total mentido, y un pedido que falla a mitad);
+  `src/ui/linkAsideStore.test.ts` (lo apartado con más filas que el tope, y los errores que no son de red) y
+  `src/media/trash.test.ts` (el historial con lotes recortados).
+
 ## Permisos en el dispositivo
 
 Desde la versión 4 de la base (`20260930160000_equipo.sql`) las páginas, el contenido y los proyectos se

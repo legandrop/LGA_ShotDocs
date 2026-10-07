@@ -887,6 +887,29 @@ describe('papelera de archivos: correcciones de la auditoría', () => {
     expect(a.media.isVerified(page)).toBe(false);
   });
 
+  it('un lote del historial más corto que lo pedido no lo da por comprobado: sigue hasta el cursor', async () => {
+    const server = new FakeServer();
+    const { a, page, id } = await withPhoto(server);
+    const seq = ++server.pages.get(page)!.update_seq;
+    server.updates.get(page)!.push({ seq, clientUpdateId: crypto.randomUUID(), data: new Uint8Array([9, 9, 9]) });
+    const state = (await a.docs.states()).get(page)!;
+    await a.db.put('docState', { ...state, cursor: seq });
+    // La API entrega de a un update por pedido (su tope de filas), pida lo que pida el lote: el ilegible es el último.
+    const pull = a.remote.pullUpdates.bind(a.remote);
+    const asked: number[] = [];
+    a.remote.pullUpdates = async (pageId, after, limit) => {
+      asked.push(after);
+      return (await pull(pageId, after, limit)).slice(0, 1);
+    };
+    await edit(a, page, (doc) => removeImage(doc, id));
+    await sync(a);
+    // Recorrió todo (un pedido por update) y encontró el ilegible: no quita nada.
+    expect(asked.length).toBeGreaterThanOrEqual(seq);
+    expect(calls(server, 'unlink_page_file')).toEqual([]);
+    expect((await a.docs.states()).get(page)?.unreadable).toBe(true);
+    expect(a.media.isVerified(page)).toBe(false);
+  });
+
   it('con Drive sin conectar no marca nada y "Empty" para; "in_use" solo con ese código', async () => {
     const server = new FakeServer();
     const { a, page, id } = await withPhoto(server);

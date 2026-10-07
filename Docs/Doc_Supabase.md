@@ -571,6 +571,15 @@ Postgres rechaza cualquier escritura dentro de esa transacción, y el cliente co
 **Contra Wanka, solo `--dry-run`** (`Plan_Workspaces.md`, paso 12): de verdad, los seguros no lo dejan. Nunca
 se crean proyectos de Supabase para probarlo; las pruebas usan un Supabase falso en memoria.
 
+**Tope de tiempo por pedido (v0.224).** Si la Management API acepta un pedido y no contesta nunca, `setup-workspace`
+y `db:migrate` esperaban para siempre. Ahora cada pedido tiene su tope (`AbortSignal.timeout` en
+`lib/management.mjs`, como el del portero): **un minuto** las lecturas y los ajustes, y **diez minutos** el SQL
+(`/database/query`). El SQL es un pedido que tarda lo que tarde la consulta, así que una migración o una prueba larga
+que está respondiendo no se corta: la API corta por su cuenta cerca de los 100 segundos, y los diez minutos solo
+terminan un pedido que ya no va a contestar. Al vencer, el comando dice qué pedido fue; con SQL avisa que la consulta
+pudo haber corrido igual y que hay que mirar la base antes de repetirla. Se cambian desde la terminal, en segundos:
+`SUPABASE_API_TIMEOUT` y `SUPABASE_QUERY_TIMEOUT` (D320).
+
 **`--open-invite-signup`** es un paso aparte (no hace el resto): abre el registro solo para invitados, como
 "Abrir el registro solo para invitados" (abajo), pasos 4, 5 y 7 (no conecta el hook opcional *Custom Access
 Token* del paso 6: si fallara, no entraría nadie, y se prueba a mano). Pide que ya esté todo lo anterior (migraciones

@@ -2955,9 +2955,11 @@ proyecto), `src/sync/commentLinkId.test.ts` y `src/ui/linkLabels.test.tsx`.
 - El store no mira si la app quedó más vieja que la mínima del workspace: pide igual, como el ícono del árbol (es una
   lectura; la base no frena lecturas por versión).
 - `alive` no mira la papelera y el costo para quien comparte crece con las páginas distintas (arriba).
-- Cuando se lee la vista de compatibilidad (`comments_view`, sin `list_comments`), `fetchComments` sigue sin pedir
-  `imported_*` ni `mentions`: un importado se ve como de una cuenta borrada y las menciones sin pintar hasta la bajada
-  siguiente con `list_comments`. Ya era así.
+- **Hecho en v0.224:** cuando se lee la vista de compatibilidad (`comments_view`, sin `list_comments`),
+  `fetchComments` pide también `imported_*` y `mentions` (antes, un importado se veía como de una cuenta borrada y las
+  menciones sin pintar hasta la bajada siguiente con `list_comments`). Si a la vista de una base anterior le falta
+  alguna (`42703`), baja de a un escalón (sin las menciones, sin las del link, sin las de importar) y no las vuelve a
+  pedir.
 
 ## Cómo se midió
 

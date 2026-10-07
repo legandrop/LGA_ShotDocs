@@ -50,17 +50,20 @@ describe('la carpeta de un proyecto en Drive, en la app', () => {
     let missing = true;
     const client = {
       from: () => ({
-        select: (columns: string) => ({
-          order: () => ({
+        select: (columns: string) => {
+          // El orden va por dos columnas (fecha y id); la respuesta trae el total, como la API cuando se le pide.
+          const query = {
+            order: () => query,
             limit: async () => {
               calls.push(columns);
               if (missing && columns.includes('drive_')) {
                 return { data: null, error: { message: 'column workspaces.drive_missing_at does not exist', code: '42703' }, status: 400 };
               }
-              return { data: [{ id: 'p1', name: 'P', created_at: '2026-01-01', owner_id: 'u' }], error: null, status: 200 };
+              return { data: [{ id: 'p1', name: 'P', created_at: '2026-01-01', owner_id: 'u' }], error: null, status: 200, count: 1 };
             },
-          }),
-        }),
+          };
+          return query;
+        },
       }),
     };
     const remote = new SupabaseRemote(client as never);

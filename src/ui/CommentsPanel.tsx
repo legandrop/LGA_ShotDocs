@@ -460,8 +460,14 @@ function Comment({ comment, me, canComment, canDeleteAny }: { comment: CommentVi
             {comment.linkAuthor} <span className="comment-via">{tr('link.viaLink')}</span>
           </strong>
         ) : comment.importedAuthor ? (
-          // De afuera (importado, sin cuenta en la app): el nombre de la herramienta de origen y su correo.
-          <strong className="comment-author" data-tip={comment.importedAuthorEmail ?? undefined} data-tip-plain data-tip-overflow>
+          // De afuera (importado, sin cuenta en la app): el nombre de la herramienta de origen. Si no entra y queda
+          // cortado, el tooltip lo dice entero, con su correo.
+          <strong
+            className="comment-author"
+            data-tip={comment.importedAuthorEmail ? `${comment.importedAuthor} · ${comment.importedAuthorEmail}` : comment.importedAuthor}
+            data-tip-plain
+            data-tip-overflow
+          >
             {comment.importedAuthor}
           </strong>
         ) : (

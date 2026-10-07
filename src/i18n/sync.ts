@@ -113,6 +113,10 @@ export const sync = {
     es: "No se pudo armar el archivo. No se borró nada; probá de nuevo.",
   },
   'sync.downloadUnsynced': { en: "Download my unsynced changes", es: "Descargar mis cambios sin sincronizar" },
+  'sync.listCut': {
+    en: "This list is longer than this workspace's database sends in one request, so it is not shown. The workspace owner can raise “Max rows” in the database's Data API settings.",
+    es: "Esta lista es más larga que lo que la base de este workspace manda en un pedido, así que no se muestra. El dueño del workspace puede subir «Max rows» en los ajustes de la Data API de la base.",
+  },
   'engine.mediaOff': {
     en: "Photos and videos are off on this device: {reason}",
     es: "Las fotos y los videos no andan en este dispositivo: {reason}",

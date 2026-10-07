@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.224 :
+
+Las listas largas que la app pide daban por última "una página con menos de 1000 filas". Con un tope de filas por pedido menor el árbol, los proyectos, los comentarios o los permisos llegaban cortados sin aviso, y el motor toma lo que no vino por borrado. Ahora se piden por clave, con el orden escrito y hasta el total que manda la API: los mismos pedidos que antes en una sincronización, sin migración. El equipo, los accesos, los proyectos borrados y los pesos dan un error si la API los recortó. Además: la verificación del historial que habilita la papelera de archivos recorre hasta el final en vez de fiarse del largo del lote; la vista de compatibilidad de los comentarios pide lo importado y las menciones; un nombre largo ya no ensancha el comentario; y los pedidos a la Management API tienen tope de tiempo.
+
+[Pedir el árbol, los proyectos, los comentarios y los permisos por clave hasta el total que dice la API, sin suponer cuántas filas entrega por pedido; pedir a la vista de compatibilidad lo importado y las menciones; recortar el nombre largo de un comentario y ponerle tope de tiempo a los pedidos a la Management API]
+
 v0.223 :
 
 Con dos corridas completas de la suite a la vez, casi ninguna cerraba limpia (2 de 10; 0 de 4 con más carga en la máquina): caían pruebas que solas pasan. Causas: vitest abría 31 procesos por corrida, el doble que núcleos con dos corridas; plazos propios menores que el general; comparaciones de megas con `toEqual` que tardaban decenas de segundos; esperas por condición adentro de un `act`, donde React no dibuja; y ratos fijos antes de mirar. Ahora la suite abre la mitad de los núcleos (sola no tarda más), ningún plazo propio queda por debajo del general (una prueba lo vigila), los megas se comparan byte a byte en milisegundos, y las pruebas de 45 archivos de pantallas esperan la condición o a que termine lo que quedó en marcha (`src/test/shown.ts`). Cambian solo las pruebas y su configuración: seis corridas de seis limpias.

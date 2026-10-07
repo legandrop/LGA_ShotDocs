@@ -35,8 +35,10 @@ class FakePostgrest {
     const filters: ((r: Row) => boolean)[] = [];
     const orders: [string, boolean][] = [];
     let range: [number, number] | null = null;
+    // El pedido pide el total (`count: 'exact'`): va con la respuesta, contado antes de recortar.
+    let counted = false;
     const query = {
-      select: (_columns: string) => query,
+      select: (_columns: string, options?: { count?: string }) => ((counted = options?.count === 'exact'), query),
       eq: (column: string, value: unknown) => (filters.push((r) => r[column] === value), query),
       is: (column: string, value: null) => (filters.push((r) => (r[column] ?? null) === value), query),
       not: (column: string, operator: string, value: null) => {
@@ -47,6 +49,13 @@ class FakePostgrest {
       in: (column: string, list: unknown[]) => (filters.push((r) => list.includes(r[column])), query),
       // Solo la forma que usa la lista: lo que sigue a un archivo en el orden (peso descendente, id).
       or: (text: string) => {
+        // Y lo que sigue a una fila en un orden ascendente de dos columnas (los usos, por clave).
+        const pair = /^(\w+)\.gt\."([^"]*)",and\((\w+)\.eq\."([^"]*)",(\w+)\.gt\."([^"]*)"\)$/.exec(text);
+        if (pair && pair[1] === pair[3] && pair[2] === pair[4]) {
+          const [, a, x, , , b, y] = pair;
+          filters.push((r) => (r[a] as string) > x || (r[a] === x && (r[b] as string) > y));
+          return query;
+        }
         const m = /^size\.lt\.(\d+),and\(size\.eq\.(\d+),id\.gt\.([0-9a-f-]{36})\)$/.exec(text);
         if (!m || m[1] !== m[2]) throw new Error(`filtro sin simular: ${text}`);
         const size = Number(m[1]);
@@ -56,13 +65,13 @@ class FakePostgrest {
       limit: (count: number) => ((range = [0, count - 1]), query),
       order: (column: string, options?: { ascending?: boolean }) => (orders.push([column, options?.ascending !== false]), query),
       range: (from: number, to: number) => ((range = [from, to]), query),
-      then: <T>(resolve: (value: { data: Row[] | null; error: unknown; status: number }) => T) =>
-        Promise.resolve(this.run(table, filters, orders, range)).then(resolve),
+      then: <T>(resolve: (value: { data: Row[] | null; error: unknown; status: number; count?: number | null }) => T) =>
+        Promise.resolve(this.run(table, filters, orders, range, counted)).then(resolve),
     };
     return query;
   }
 
-  private run(table: string, filters: ((r: Row) => boolean)[], orders: [string, boolean][], range: [number, number] | null) {
+  private run(table: string, filters: ((r: Row) => boolean)[], orders: [string, boolean][], range: [number, number] | null, counted: boolean) {
     if (this.fail?.table === table) {
       const { message, code, status } = this.fail;
       return { data: null, error: { message, code }, status };
@@ -80,7 +89,7 @@ class FakePostgrest {
     const [from, to] = range ?? [0, Number.POSITIVE_INFINITY];
     const page = rows.slice(from, Math.min(to + 1, from + this.maxRows));
     this.requests.push({ table, asked: range ? range[1] - range[0] + 1 : null, returned: page.length });
-    return { data: page, error: null, status: 200 };
+    return { data: page, error: null, status: 200, count: counted ? rows.length : null };
   }
 }
 
@@ -119,7 +128,8 @@ describe('lo que se le pide a la base', () => {
     expect(rows.map((r) => r.id)).toEqual([id(2), id(3), id(4), id(1)]);
     expect(rows[0]).toEqual({ id: id(2), name: 'toma.mov', mime: 'video/quicktime', size: 900 * MB, thumb_at: null, trashed_at: null });
     expect(rows[1].trashed_at).toBe('2026-10-01T10:00:00Z');
-    expect(db.requests).toEqual([{ table: 'files', asked: 100, returned: 4 }]);
+    // El tramo corto no cierra la lista (la API podría haberlo recortado): la cierra un pedido más, que llega vacío.
+    expect(db.requests).toEqual([{ table: 'files', asked: 100, returned: 4 }, { table: 'files', asked: 96, returned: 0 }]);
   });
 
   it('el peso llega como número aunque la base lo mande como texto', async () => {
@@ -133,9 +143,9 @@ describe('lo que se le pide a la base', () => {
     expect(rows).toHaveLength(2500);
     expect(strictlyBySize(rows)).toBe(true);
     expect(new Set(rows.map((r) => r.id)).size).toBe(2500);
-    // Ningún pedido pidió más que el tope, y el último (corto) cierra la lista.
-    expect(db.requests.map((r) => r.asked)).toEqual([1000, 1000, 1000]);
-    expect(db.requests.map((r) => r.returned)).toEqual([1000, 1000, 500]);
+    // Ningún pedido pidió más que el tope, y la lista la cierra una página vacía, no la corta.
+    expect(db.requests.map((r) => r.asked)).toEqual([1000, 1000, 1000, 1000]);
+    expect(db.requests.map((r) => r.returned)).toEqual([1000, 1000, 500, 0]);
     expect(MAX_ROWS_PER_REQUEST).toBe(1000);
   });
 
@@ -283,7 +293,8 @@ describe('la lista, de a tramos', () => {
     let changes = 0;
     const stop = list.subscribe(() => changes++);
     await Promise.all([list.loadMore(), list.loadMore(), list.loadMore()]);
-    expect(db.requests.filter((r) => r.table === 'files')).toHaveLength(1);
+    // Un solo tramo: su pedido y el que confirma que no hay más (vacío).
+    expect(db.requests.filter((r) => r.table === 'files').map((r) => r.returned)).toEqual([5, 0]);
     expect(changes).toBeGreaterThanOrEqual(2);
     stop();
   });

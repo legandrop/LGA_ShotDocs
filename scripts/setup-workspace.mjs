@@ -16,7 +16,7 @@
 // está en scripts/lib/setup.mjs.
 
 import { readFile } from 'node:fs/promises';
-import { createManagementClient } from './lib/management.mjs';
+import { createManagementClient, timeoutsFromEnv } from './lib/management.mjs';
 import { USAGE, parseArgs, runOpenInviteSignup, runSetup, validateOptions } from './lib/setup.mjs';
 
 // Pide un texto sin mostrarlo (la contraseña SMTP). Sin dependencias: la terminal en modo crudo.
@@ -80,6 +80,7 @@ async function main() {
     ref: opts.ref,
     token: process.env.SUPABASE_ACCESS_TOKEN,
     dryRun: opts.dryRun,
+    ...timeoutsFromEnv(),
   });
   const io = { log: (line) => console.log(line), askHidden: process.stdin.isTTY ? askHidden : null, fetch: globalThis.fetch };
   try {

@@ -3705,8 +3705,9 @@ hoja de abajo de siempre en el teléfono:
   - **Lo que queda:**
     - Una fila que entra a la papelera de un proyecto ya pasado no aparece hasta reabrir (la lista es de cuando se
       empezó a pedir).
-    - Los comentarios de una página (`list_comments`, por tramos), el árbol y los usos de archivos siguen suponiendo
-      que la API entrega 1000 filas por pedido: lo dice la guía para crear un workspace y lo avisa `setup-workspace.mjs`.
+    - **Hecho en v0.224:** los comentarios de una página, el árbol y los usos de archivos ya no suponen que la API
+      entrega 1000 filas por pedido, y el camino de una base sin `trashed_files_page` sigue hasta el total que dice la
+      API (`Doc_Sincronizacion.md`, "Las listas largas").
     - Un lugar armado a mano `(proyecto, nulo, nulo)` (el de la fila de una papelera vacía) sobre un proyecto que
       **tiene** archivos lo saltea entero. No filtra nada (el lugar no da ni quita permisos) y la app nunca lo arma: solo
       manda la última fila que recibió.

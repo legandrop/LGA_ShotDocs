@@ -308,13 +308,35 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   la papelera de un proyecto usa lo mismo, sin el corte a 1000 (`Doc_Proyectos_Borrar.md`, "La papelera de archivos, de
   a páginas por clave"). La guía para crear un workspace dice el tope y `setup-workspace.mjs` lo avisa.
   **Pendiente:** (1) si el pedido único falla con muchos proyectos, sale una línea de error con su *Retry* por cada
-  proyecto: juntarlas en una. (2) Los **comentarios de una página** (`list_comments`, pedida por tramos y sin orden
-  escrito en el pedido) siguen con los dos supuestos: que la API entrega 1000 filas por pedido y que nada cambia entre
-  dos tramos; hace falta una página con más de 1000 comentarios. El arreglo es el mismo (que la función reciba desde
-  dónde seguir y diga cuándo terminó), con su migración: no se puede cortar por "página vacía" sin duplicar un pedido
-  que la app hace en cada sincronización. Lo mismo, en menor medida, el árbol (`fetchTreeOf`, que ya sigue por id pero
-  corta con menos de 1000 filas) y los usos de archivos (`fetchPageUses`). (3) Con una base sin `trashed_files_page`
-  (un workspace que no aplicó la migración) la papelera sigue como en v0.218. (4) De la auditoría de v0.221 (BAJO,
+  proyecto: juntarlas en una. (2) **Hecho en v0.224, sin migración:** los comentarios de una página, el árbol, los
+  proyectos, los permisos propios, los usos de archivos y los lotes de contenido ya no suponen que la API entrega 1000
+  filas por pedido ni que nada cambia entre dos pedidos: se piden por clave, con el orden escrito, hasta el total que
+  dice la API en la misma respuesta (los mismos pedidos que antes en una sincronización); el equipo, quién tiene
+  acceso, los proyectos borrados y el peso de los proyectos dan un error si la API los recortó; y dar una página por
+  comprobada recorre el historial hasta el cursor (`Doc_Sincronizacion.md`, "Las listas largas", con la tabla de cada
+  lista y quién recibe su error). **Queda, por urgencia** (el detalle, en esa sección, "Lo que queda"):
+  (a) **mirar en la app real**, con la pestaña de red, que la API manda el total en un `rpc` (probado contra una API de
+  mentira y contra las funciones por SQL, no contra la real);
+  (b) **el modo link sin paginar** (`plink_tree`, `plink_list_comments`, `plink_media_files`): con una rama más grande
+  que el tope el visitante ve menos y su dispositivo lo toma por entero, y si la raíz queda fuera del corte el link se
+  ve roto; nada se borra en la base (urgencia media);
+  (c) **el costo de contar a escala:** con 3.500 páginas el primer pedido del árbol pasa de 1,2–2,3 s a 2,3–4,4 s, y
+  el tamaño de árbol desde el que la sincronización falla entera (8 s por sentencia) baja a la mitad; hoy no pesa (41
+  páginas vivas), y el diseño para cuando haga falta está escrito (confirmar el final con un pedido por clave en
+  `pages` y `page_files`, o elegir según el tamaño de la sincronización anterior);
+  (d) **listas donde se ve menos sin aviso:** `public_link_aside` (hasta 200 por página, sin tope de páginas),
+  `public_link_updates_of` (corta en 500 adentro: pide que la función devuelva el total, con migración),
+  `access_requests_pending` (corta en 100 adentro) y `public_link_pages`;
+  (e) **el cursor de los comentarios** (`updated_at` es la hora en que empezó la transacción: un cambio confirmado
+  después de una bajada puede quedar detrás; no empeora respecto de v0.223; lo barato es pedir con `p_since` un minuto
+  atrás), en una tanda propia;
+  (f) paginar por su clave las listas que hoy dan el error o no se muestran con un tope bajo (invitaciones, nombres de
+  versión), y los chicos: errores crudos en inglés ("the same row arrived twice"), el "Try again" de
+  `scripts/lib/management.mjs` que también sale para invitar, `link_admit_work` sin el orden escrito y
+  `CommentQueue.refresh`, que no limpia el error después de una bajada que sale bien. (3) Con una base sin
+  `trashed_files_page` (un workspace que no aplicó la migración) la papelera de todos sigue pidiendo por tramos (un
+  cambio entre dos puede correr las filas), pero desde v0.224 hasta el total, sin suponer el tope; la de un proyecto,
+  como en v0.218 (un pedido, lo último primero). (4) De la auditoría de v0.221 (BAJO,
   ninguno pierde ni filtra nada; `Doc_Proyectos_Borrar.md`, "La papelera de archivos, de a páginas por clave", "Lo que
   queda"): *All projects* vuelve a bajar la papelera del proyecto abierto, que ya estaba cargada (viene de la v0.218);
   si la base repitiera una fila, el error *the same row arrived twice* llega crudo y en inglés; y un lugar armado a
@@ -382,11 +404,22 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   puede compartir la página del link; migración `20261113120000_link_rotulo_comentarios.sql`,
   **aplicada**; `Doc_Link_Publico.md`, "De qué link vino cada comentario (v0.222)"). Falta: probarlo en la app
   real con dos cuentas y en el tema oscuro; lo que queda sabido está en esa sección ("Lo que queda": el store no mira
-  la versión mínima, `alive` no mira la papelera, el costo para quien comparte crece con las páginas distintas, y la
-  vista de compatibilidad sigue sin pedir `imported_*` ni `mentions`). Anotado al auditarla (BAJO): el nombre muy
-  largo y sin espacios de una persona con cuenta o de un comentario importado todavía se sale del comentario en el
-  teléfono (500 px en un panel de 375; `.comment-author` no llega a recortar); el nombre de un visitante ya corta. Y
-  la entrega 3.
+  la versión mínima, `alive` no mira la papelera y el costo para quien comparte crece con las páginas distintas).
+  **Hecho en v0.224:** la vista de compatibilidad de los comentarios pide también `imported_*` y `mentions` (la vista
+  las tiene y una sesión las puede leer: comprobado en la base), bajando de a un escalón si a una base anterior le
+  falta alguna; y el nombre muy largo y sin espacios de una persona con cuenta o de un comentario importado ya no se
+  sale del comentario (500 px en un panel de 375): `.comment` declara su única columna y el nombre se recorta con "…",
+  con el nombre entero en el tooltip solo si quedó cortado. Visto en un navegador a 375 px y en escritorio, claro y
+  oscuro, sobre una página estática con el HTML del panel; con nombres normales, las 105 cajas del panel miden lo mismo
+  que antes. jsdom no calcula el layout: sin prueba automática. Falta mirarlo en la app real. Y la entrega 3.
+  **Anotado en v0.224, sin hacer:** una edición vieja de un comentario pisa una posterior. Dos dispositivos de la misma
+  persona editan el mismo comentario (solo quien lo escribió lo edita) y `edit_comment` guarda el último que **llega**,
+  aunque se haya escrito antes. No sale del lado de la app: la base guarda cuándo llegó cada edición (`edited_at`),
+  no cuándo se escribió, y comparar la hora del dispositivo con la de la base decide mal si la que se escribió después
+  llega primero. Diseño: `edit_comment(p_id, p_body, p_base)` con el `edited_at` que el dispositivo tenía al editar; si
+  ya no coincide, la base no pisa y contesta el texto que tiene, y la app deja la edición propia a la vista como
+  rechazada, con *Keep mine* y *Keep the other*. Pide una migración (la función de dos argumentos sigue para las
+  versiones publicadas) y decidir cómo se muestra.
   **Entrega 2a hecha (v0.151: escribir; migración `20261028120000_link_editar.sql` aplicada (verificada en la base el 2026-10-06), `schema_version` 19, y el
   interruptor `link_edit_min_version` ya prendido en 0.151; ver "Cómo quedó la 2a" en `Doc_Link_Publico.md`).** Para prenderla hacía falta: la
   barrera de error alrededor de `PageEditor` en `main` (R4), aplicar la migración, subir la mínima y poner
@@ -439,7 +472,8 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   modo liviano), limpiar las bases locales de
   links viejos, la ayuda
   según quién la lee; en la base, tiempos de un token que ya existe (el doc dice «cuesta lo mismo»), el costo sin contar
-  de `plink_tree(sig)` (26 ms con 423 páginas), y el `max_rows` de PostgREST (1000: ramas más grandes llegan cortadas).
+  de `plink_tree(sig)` (26 ms con 423 páginas), y el `max_rows` de PostgREST (1000: ramas más grandes llegan cortadas; sigue así después
+  de v0.224, que lo arregló para las cuentas: `Doc_Sincronizacion.md`, "Las listas largas", "Lo que queda").
   **Hecho en v0.221, de esas observaciones:** la base saca «(via link)» del nombre del visitante al comentar y al
   escribir (migración `20261112120000_link_nombre_sin_rotulo.sql`, aplicada). **Limpia en vez de
   rechazar** (D314): rechazar dejaba sin entregar para siempre lo de una app anterior a v0.215. Queda afuera, a

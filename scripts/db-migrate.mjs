@@ -14,7 +14,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createManagementClient } from './lib/management.mjs';
+import { createManagementClient, timeoutsFromEnv } from './lib/management.mjs';
 import { applyPending } from './lib/migrations.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -26,7 +26,7 @@ if (!ref) {
   process.exit(1);
 }
 
-const client = createManagementClient({ ref, token: process.env.SUPABASE_ACCESS_TOKEN });
+const client = createManagementClient({ ref, token: process.env.SUPABASE_ACCESS_TOKEN, ...timeoutsFromEnv() });
 
 await applyPending(client, {
   onStart: (m) => process.stdout.write(`Aplicando ${m.file}… `),

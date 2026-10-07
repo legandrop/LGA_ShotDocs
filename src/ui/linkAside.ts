@@ -5,6 +5,7 @@ import { useServices } from '../services';
 import { insertedText } from '../sync/admit';
 import { canListAside, LINK_ASIDE_SCHEMA_VERSION, type LinkAsideRemote, type LinkAsideRow } from '../sync/linkAdmitApi';
 import type { SyncStatus } from '../sync/engine';
+import { isNetworkError } from '../sync/types';
 import { saveBlob } from './unsyncedDownload';
 
 // Lo apartado de los links, a la vista del equipo (Docs/Doc_Link_Publico.md, entrega 2c): la lista de *Share*, el ícono
@@ -76,9 +77,10 @@ export class LinkAsideStore {
           this.snapshot = { rows, ready: true };
           for (const fn of this.listeners) fn();
         },
-        // Sin respuesta queda lo de antes; la próxima sincronización vuelve a probar.
-        () => {
-          this.askedAt = 0;
+        // Queda lo de antes. Sin red, la próxima sincronización vuelve a probar; con cualquier otro error (la base
+        // contestó que no) se espera lo de siempre: si no, cada aviso del motor volvía a hacer el mismo pedido.
+        (err: unknown) => {
+          if (isNetworkError(err)) this.askedAt = 0;
         },
       )
       .finally(() => {
