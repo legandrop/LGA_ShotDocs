@@ -110,6 +110,13 @@ function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarg
   const open = sortThreads(threads.filter((t) => !t.resolved), source);
   const resolved = sortThreads(threads.filter((t) => t.resolved), source);
 
+  // Una edición propia esperando decisión en un hilo resuelto no puede quedar escondida detrás de "N resolved
+  // threads": el estado manda a los comentarios de la página, y ahí tiene que estar a la vista.
+  const hiddenConflict = resolved.some((t) => [t.root, ...t.replies].some((c) => c.conflict));
+  useEffect(() => {
+    if (hiddenConflict) setShowResolved(true);
+  }, [hiddenConflict]);
+
   // Ver los hilos en el panel marca leídas las menciones de esos hilos (Doc_Menciones.md, 2.3).
   const { mentions } = useServices();
   const inbox = useInbox();
@@ -432,12 +439,16 @@ function nameOf(comments: Names, userId: string | null, me: string, tr: Translat
 
 function Comment({ comment, me, canComment, canDeleteAny }: { comment: CommentView; me: string; canComment: boolean; canDeleteAny: boolean }) {
   const { comments } = useServices();
-  const [editing, setEditing] = useState(false);
+  // El texto del que parte la edición: el que la persona tenía delante al abrir el cuadro (`null`: no está editando).
+  // Viaja con la edición: si mientras tanto el comentario cambió desde otro lado, la base no lo pisa (`EditConflict`).
+  const [editBase, setEditBase] = useState<string | null>(null);
+  const editing = editBase !== null;
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const mine = comment.authorId === me;
-  // `canComment` ya pide que la base de comentarios del dispositivo esté abierta; borrar lo ajeno también.
-  const canEdit = mine && canComment && !comment.deleted;
+  // `canComment` ya pide que la base de comentarios del dispositivo esté abierta; borrar lo ajeno también. Con una
+  // edición propia esperando decisión no se edita de nuevo: primero se elige qué texto queda.
+  const canEdit = mine && canComment && !comment.deleted && !comment.conflict;
   const canDelete = !comment.deleted && comments.writable && ((mine && canComment) || canDeleteAny);
   const tr = useT();
   const linkLabel = useContext(LinkLabels).get(comment.linkId ?? '');
@@ -446,13 +457,14 @@ function Comment({ comment, me, canComment, canDeleteAny }: { comment: CommentVi
     return (
       <div className="comment deleted">
         <p className="muted">{tr('comments.deleted')}</p>
+        {comment.conflict && <EditConflictBox comment={comment} me={me} />}
         {comment.error && <Rejected comment={comment} />}
       </div>
     );
   }
 
   return (
-    <div className={`comment${comment.pending ? ' pending' : ''}`}>
+    <div className={`comment${comment.pending && !comment.conflict ? ' pending' : ''}`}>
       <div className="comment-meta">
         {comment.linkAuthor ? (
           // Escrito con un link público: el nombre que escribió, siempre con "(via link)" (nadie se hace pasar por el equipo).
@@ -487,26 +499,35 @@ function Comment({ comment, me, canComment, canDeleteAny }: { comment: CommentVi
           </span>
         )}
         {comment.editedAt && <span className="comment-edited">{tr('comments.edited')}</span>}
-        {comment.pending && !comment.error && <span className="comment-pending">{tr('comments.notUploaded')}</span>}
+        {comment.pending && !comment.error && !comment.conflict && <span className="comment-pending">{tr('comments.notUploaded')}</span>}
       </div>
       {/* De qué link vino: solo lo recibe quien puede compartir la página del link (lo decide la base). */}
       {comment.linkAuthor && linkLabel && (
         <p className={`comment-link-label${linkLabel.alive ? '' : ' off'}`}>{linkLabelText(tr, linkLabel)}</p>
       )}
-      {editing ? (
+      {/* El cuadro ya estaba abierto cuando la edición anterior chocó: se avisa acá; al guardar, lo escrito pasa a ser
+          lo propio que espera decisión (no se manda), y al cerrar el cuadro se ven los dos textos. */}
+      {editBase !== null && comment.conflict && (
+        <p className="comment-conflict" role="status">
+          {tr('comments.conflict.whileEditing')}
+        </p>
+      )}
+      {editBase !== null ? (
         <Composer
           autoFocus
-          initial={comment.body}
+          initial={editBase}
           initialMentions={comment.mentions}
           mentionPage={comment.pageId}
           submitLabel={tr('common.save')}
           placeholder={tr('comments.editPlaceholder')}
           onSubmit={async (text, mentions) => {
-            if (text !== comment.body) await comments.edit(comment.pageId, comment.id, text, mentions ?? undefined);
-            setEditing(false);
+            if (text !== editBase) await comments.edit(comment.pageId, comment.id, text, mentions ?? undefined, editBase);
+            setEditBase(null);
           }}
-          onCancel={() => setEditing(false)}
+          onCancel={() => setEditBase(null)}
         />
+      ) : comment.conflict ? (
+        <EditConflictBox comment={comment} me={me} />
       ) : (
         <CommentBody comment={comment} me={me} />
       )}
@@ -538,7 +559,7 @@ function Comment({ comment, me, canComment, canDeleteAny }: { comment: CommentVi
           ) : (
             <>
               {canEdit && (
-                <button className="link" onClick={() => setEditing(true)}>
+                <button className="link" onClick={() => setEditBase(comment.body)}>
                   {tr('common.edit')}
                 </button>
               )}
@@ -683,6 +704,63 @@ function Rejected({ comment }: { comment: CommentView }) {
           )}
           <button className="link danger" onClick={() => setAsking(true)}>
             {tr('comments.discardEllipsis')}
+          </button>
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Una edición propia que no entró porque el comentario se cambió antes desde otro lado (otro dispositivo de la misma
+ * persona): los dos textos, cada uno con su rótulo, y la decisión. Nada elige por la persona: "Keep mine" manda lo
+ * suyo sobre lo guardado (si la base volvió a cambiar, vuelve a quedar acá), y "Discard mine…" pide confirmación y deja
+ * lo guardado. En un comentario que además se borró queda solo lo propio, para copiarlo o descartarlo.
+ */
+function EditConflictBox({ comment, me }: { comment: CommentView; me: string }) {
+  const { comments } = useServices();
+  const [asking, setAsking] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const tr = useT();
+  const mine = comment.conflict?.text ?? '';
+  const fail = (err: unknown) => setError(err instanceof CommentInvalid ? err.message : tr('comments.saveFailed', { reason: errorMessage(err) }));
+  return (
+    <div className="comment-conflict" role="status">
+      <span>{tr(comment.deleted ? 'comments.conflict.deleted' : 'comments.conflict.title')}</span>
+      {!comment.deleted && (
+        <>
+          <span className="comment-conflict-label">{tr('comments.conflict.theirs')}</span>
+          <CommentBody comment={comment} me={me} />
+          <span className="comment-conflict-label">{tr('comments.conflict.mine')}</span>
+        </>
+      )}
+      <p className="comment-body comment-conflict-mine">{mine}</p>
+      {error && <span className="comment-conflict-failed">{error}</span>}
+      {asking ? (
+        <>
+          <span>{tr('commentDiscard.conflict')}</span>
+          <span className="row">
+            <button className="link danger" onClick={() => void comments.discardMine(comment.id).catch(fail)}>
+              {tr('common.discard')}
+            </button>
+            <button className="link" onClick={() => setAsking(false)}>
+              {tr('common.cancel')}
+            </button>
+          </span>
+        </>
+      ) : (
+        <span className="row">
+          {!comment.deleted && (
+            <button className="link" onClick={() => void comments.keepMine(comment.id).catch(fail)}>
+              {tr('comments.conflict.keepMine')}
+            </button>
+          )}
+          <button className="link" onClick={() => void copyText(mine).then((ok) => setCopied(ok))}>
+            {copied ? tr('common.copied') : tr('comments.conflict.copyMine')}
+          </button>
+          <button className="link danger" onClick={() => setAsking(true)}>
+            {tr('comments.conflict.discardMine')}
           </button>
         </span>
       )}

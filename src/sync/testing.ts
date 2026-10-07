@@ -50,6 +50,7 @@ import {
   type CommentRemote,
   type CommentRow,
   type CommentsDb,
+  type EditConflict,
   type ImportedComment,
   type NewComment,
   cleanLabel,
@@ -870,6 +871,14 @@ export class FakeServer {
   trashAllEnabled = false;
   /** La base tiene `list_comments` (bajar solo lo cambiado); apagado, la app lee la vista entera. */
   listCommentsEnabled = false;
+  /**
+   * La base tiene `edit_comment(p_id, p_body, p_base)` (20261115120000_comentario_edicion_base.sql): una edición no pisa
+   * un texto que ya no es su base. Apagado, como una base sin la migración: la app cae a la firma de dos argumentos y
+   * se guarda lo último que llega.
+   */
+  editBaseEnabled = false;
+  /** Cada edición de un comentario que llegó, con la base que traía (`undefined`: la firma de dos argumentos). */
+  readonly commentEdits: { id: string; body: string; base: string | undefined }[] = [];
   /** Las funciones de comentarios que se llamaron, en orden (`add <id>`, `edit <id>`...). */
   readonly commentCalls: string[] = [];
   /** Funciones de comentarios que hacen su trabajo y después pierden la respuesta, una vez cada una. */
@@ -3473,14 +3482,30 @@ export class FakeRemote
     this.lostCommentResponse('import');
   }
 
-  async editComment(id: string, body: string): Promise<void> {
+  /**
+   * Con `base` y la base migrada, las reglas de `edit_comment(p_id, p_body, p_base)`
+   * (20261115120000_comentario_edicion_base.sql): el mismo texto da bien antes de mirar el permiso, y un texto que ya
+   * no es la base no se pisa (contesta el conflicto, después de los controles de siempre). Sin `base`, o con la base
+   * sin migrar (lo que hace `SupabaseCommentRemote` con un `PGRST202`), la firma de dos argumentos.
+   */
+  async editComment(id: string, body: string, base?: string): Promise<EditConflict | void> {
     this.commentCheck(`edit ${id}`);
+    const checked = base !== undefined && this.server.editBaseEnabled;
+    this.server.commentEdits.push({ id, body, base: checked ? base : undefined });
     const cur = this.server.comments.get(id);
+    if (checked && cur && cur.author_id === this.userId && !cur.deleted_at && cur.body === body) {
+      this.lostCommentResponse('edit');
+      return;
+    }
     const lvl = cur ? this.commentLevel(cur.page_id) : 0;
     if (!cur || lvl < 1) throw new RemoteError('comment_not_found', true, 'P0002');
     if (cur.author_id !== this.userId) throw new RemoteError('not_allowed', true, '42501');
     if (lvl < 2) throw new RemoteError('comment_denied', true, '42501');
     if (cur.deleted_at) throw new RemoteError('comment_deleted', true, 'P0001');
+    if (checked && cur.body !== base) {
+      this.lostCommentResponse('edit');
+      return { conflict: true, body: cur.body, editedAt: cur.edited_at };
+    }
     if (cur.body !== body) {
       if (!/\S/.test(body) || body.length > 10000) throw new RemoteError('check constraint', true, '23514');
       this.checkWriteVersion();

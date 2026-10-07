@@ -97,6 +97,25 @@ export const commentsPanel = {
     es: "El servidor no lo aceptó: {reason} Queda en este dispositivo.",
   },
   'comments.discardEllipsis': { en: "Discard…", es: "Descartar…" },
+  // Una edición propia que no entró porque el comentario se cambió antes desde otro lado: los dos textos y la decisión.
+  'comments.conflict.title': {
+    en: "Your edit was not saved: this comment had already been changed from somewhere else. Nothing was lost. Choose which text stays.",
+    es: "Tu edición no se guardó: este comentario ya se había cambiado desde otro lado. No se perdió nada. Elegí qué texto queda.",
+  },
+  // Con el cuadro de edición ya abierto cuando llegó el conflicto de la edición anterior.
+  'comments.conflict.whileEditing': {
+    en: "This comment was changed from somewhere else while you were editing. Save or cancel to see both texts and choose.",
+    es: "Este comentario se cambió desde otro lado mientras editabas. Guardá o cancelá para ver los dos textos y elegir.",
+  },
+  'comments.conflict.theirs': { en: "Saved now, changed from somewhere else", es: "Lo que quedó guardado, cambiado desde otro lado" },
+  'comments.conflict.mine': { en: "What you wrote on this device", es: "Lo que escribiste en este dispositivo" },
+  'comments.conflict.keepMine': { en: "Keep mine", es: "Dejar el mío" },
+  'comments.conflict.discardMine': { en: "Discard mine…", es: "Descartar el mío…" },
+  'comments.conflict.copyMine': { en: "Copy mine", es: "Copiar el mío" },
+  'comments.conflict.deleted': {
+    en: "Your edit was not saved, and this comment was deleted since. This is what you wrote on this device:",
+    es: "Tu edición no se guardó, y después este comentario se borró. Esto es lo que escribiste en este dispositivo:",
+  },
   'comments.saveFailed': {
     en: "Could not save it on this device ({reason}).",
     es: "No se pudo guardar en este dispositivo ({reason}).",

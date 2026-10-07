@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { CommentAuthor, CommentRemote, CommentRow, ImportedComment, ListedComment, NewComment } from './comments';
+import type { CommentAuthor, CommentRemote, CommentRow, EditConflict, ImportedComment, ListedComment, NewComment } from './comments';
 import type { InboxResponse, MentionCandidate, MentionsRemote } from './mentions';
 import { afterPair, COUNTED, KeyedList, placeOf } from './listPages';
 import { rpcByKey, timed, toRemoteError } from './remote';
@@ -41,6 +41,8 @@ export class SupabaseCommentRemote implements CommentRemote, MentionsRemote {
   private listMissingAt = 0;
   /** Qué escalón de `VIEW_COLUMNS` tiene la vista de esta base (0: todas las columnas). */
   private viewStep = 0;
+  /** Desde cuándo la base no tiene `edit_comment(p_id, p_body, p_base)`; se vuelve a probar cada tanto por si se migró. */
+  private editBaseMissingAt = 0;
 
   constructor(private readonly client: SupabaseClient) {}
 
@@ -134,7 +136,28 @@ export class SupabaseCommentRemote implements CommentRemote, MentionsRemote {
     if (error) throw toRemoteError(error, status);
   }
 
-  async editComment(id: string, body: string): Promise<void> {
+  /**
+   * Con `base` (el texto del que partió la persona), la firma de tres argumentos
+   * (20261115120000_comentario_edicion_base.sql): si la base ya tiene otro texto no lo pisa y contesta el conflicto.
+   * PostgREST elige la función por los nombres de los argumentos, como con `push_page_update` y su `p_app_version`.
+   * Con una base sin esa firma (`PGRST202`), o sin `base` (una edición guardada por una versión anterior de la app),
+   * la de dos argumentos, que guarda lo que llega: lo de siempre. No se vuelve a probar por 10 minutos.
+   */
+  async editComment(id: string, body: string, base?: string): Promise<EditConflict | void> {
+    if (base !== undefined && Date.now() - this.editBaseMissingAt >= 10 * 60_000) {
+      const { data, error, status } = await timed(this.client.rpc('edit_comment', { p_id: id, p_body: body, p_base: base }));
+      if (error?.code !== MISSING_FUNCTION) {
+        if (error) throw toRemoteError(error, status);
+        const answer = data as { conflict?: unknown; body?: unknown; edited_at?: unknown } | null;
+        if (answer?.conflict !== true) return;
+        return {
+          conflict: true,
+          body: typeof answer.body === 'string' ? answer.body : null,
+          editedAt: typeof answer.edited_at === 'string' ? answer.edited_at : null,
+        };
+      }
+      this.editBaseMissingAt = Date.now();
+    }
     const { error, status } = await timed(this.client.rpc('edit_comment', { p_id: id, p_body: body }));
     if (error) throw toRemoteError(error, status);
   }

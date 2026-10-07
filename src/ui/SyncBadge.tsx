@@ -125,6 +125,9 @@ export function SyncBadge() {
   const [details, setDetails] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const { tone, text, rejected } = useSyncTone();
+  // Lo rechazado que *Retry* puede volver a mandar: todo menos las ediciones apartadas por un conflicto (no están en
+  // la cola; la persona elige en el panel de comentarios).
+  const retryable = rejected - (status.failedComments > 0 ? comments.failures().filter((f) => f.conflictOf).length : 0);
   const visitor = useVisitorEdits();
   const tr = useT();
   const Icon = TONE_ICONS[tone];
@@ -236,7 +239,8 @@ export function SyncBadge() {
           )}
           {rejected > 0 && (
             <>
-              <p>{tr('sync.detail.rejected')}</p>
+              {/* Solo ediciones apartadas por un conflicto: no hay nada que reintentar; se decide en el panel. */}
+              <p>{tr(retryable > 0 ? 'sync.detail.rejected' : 'sync.detail.aside')}</p>
               <ul>
                 {tree.failedOps().map((f) => (
                   <li key={f.seq}>
@@ -278,7 +282,7 @@ export function SyncBadge() {
                 ))}
                 {status.failedComments > 0 &&
                   comments.failures().map((f) => (
-                    <li key={`comment-${f.seq}`}>
+                    <li key={f.conflictOf ? `comment-conflict-${f.conflictOf}` : `comment-${f.seq}`}>
                       {commentAction(tr, f.kind, tree.get(f.pageId)?.title || tr('common.untitled'))}
                       {f.body ? ` (“${f.body.length > 40 ? `${f.body.slice(0, 40)}…` : f.body}”)` : ''}:{' '}
                       <code>{localize(f.error)}</code>{' '}
@@ -291,6 +295,11 @@ export function SyncBadge() {
                         className="link danger"
                         onClick={() => {
                           // Nunca se descarta solo: la persona lo pide y confirma sabiendo qué pasa.
+                          if (f.conflictOf) {
+                            // Una edición apartada por un conflicto no está en la cola: se descarta por su comentario.
+                            if (confirm(`${t('commentDiscard.conflict')} ${t('common.cannotUndo')}`)) void comments.discardMine(f.conflictOf);
+                            return;
+                          }
                           const info = comments.describeDiscard([f.seq]);
                           if (confirm(`${info.message} ${t('common.cannotUndo')}`)) void comments.discard(f.seq);
                         }}
@@ -303,7 +312,7 @@ export function SyncBadge() {
             </>
           )}
           <div className="row">
-            {rejected > 0 && (
+            {retryable > 0 && (
               <button
                 className="link"
                 onClick={() => {

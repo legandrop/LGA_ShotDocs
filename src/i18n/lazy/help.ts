@@ -357,6 +357,11 @@ export const help = {
     en: "Comment on any block with {comment}, the button in its margin or the formatting bar. The comments icon at the top shows every thread of the page. {send} sends, Esc cancels.",
     es: "Comentá cualquier bloque con {comment}, el botón de su margen o la barra de formato. El ícono de comentarios de arriba muestra todos los hilos de la página. {send} manda, Esc cancela.",
   },
+  'help.commentEditConflict.title': { en: "Editing the same comment on two devices", es: "Editar el mismo comentario en dos dispositivos" },
+  'help.commentEditConflict.text': {
+    en: "If you edit one of your comments on two devices, the edit that reaches the server second no longer replaces the first one. On the device where it didn't go through, the comment shows both texts: what is saved now and what you wrote there. Choose Keep mine to save yours over the saved one, or Discard mine to leave it as it is. Nothing is chosen for you: your text stays on that device until you decide.",
+    es: "Si editás un comentario tuyo en dos dispositivos, la edición que llega segunda al servidor ya no reemplaza a la primera. En el dispositivo donde no entró, el comentario muestra los dos textos: lo que quedó guardado y lo que escribiste ahí. Elegí Dejar el mío para guardar el tuyo encima del guardado, o Descartar el mío para dejarlo como está. Nada se elige por vos: tu texto queda en ese dispositivo hasta que decidas.",
+  },
   'help.mentions.title': { en: "Mention someone in a comment", es: "Mencionar a alguien en un comentario" },
   'help.mentions.text': {
     en: "In a comment, type @ and pick someone who can see the page: they get a notice in the bell at the top, with the number of unread mentions. {pick} choose from the list, {close} closes it without erasing what you wrote. Deleting the @name before sending removes the mention. A dot on the comments button and in the page tree means someone mentioned you on that page; the number also shows in the tab title and on the installed app's icon.",

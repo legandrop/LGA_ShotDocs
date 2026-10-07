@@ -91,6 +91,11 @@ export const sync = {
     en: "The server did not accept these changes. Nothing was lost: they stay on this device until you retry.",
     es: "El servidor no aceptó estos cambios. No se perdió nada: quedan en este dispositivo hasta que reintentes.",
   },
+  // Cuando todo lo rechazado son ediciones de comentarios apartadas por un conflicto: no hay nada que reintentar.
+  'sync.detail.aside': {
+    en: "These edits were not saved because their comments had already been changed from somewhere else. Nothing was lost: they stay on this device until you choose which text stays, in each page's comments.",
+    es: "Estas ediciones no se guardaron porque sus comentarios ya se habían cambiado desde otro lado. No se perdió nada: quedan en este dispositivo hasta que elijas qué texto queda, en los comentarios de cada página.",
+  },
   'sync.op.create': { en: "Create “{title}”", es: "Crear “{title}”" },
   'sync.op.createProject': { en: "Create the project “{name}”", es: "Crear el proyecto “{name}”" },
   'sync.op.renameProject': { en: "Rename a project to “{name}”", es: "Renombrar un proyecto como “{name}”" },

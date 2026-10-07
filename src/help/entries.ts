@@ -152,6 +152,8 @@ const LINK_ASIDE = '0.157';
 const LINK_FILES = '0.164';
 /** De qué link vino cada comentario hecho por un link (Doc_Link_Publico.md, "De qué link vino cada comentario"). */
 const LINK_COMMENTS = '0.222';
+/** Dos ediciones del mismo comentario desde dos dispositivos (Doc_Sincronizacion.md): la versión la pone quien publica. */
+const COMMENT_EDIT_CONFLICT = '0.227';
 /** Exportar una rama o un proyecto como PDF (P.22, Doc_Exportar.md, entrega 1): la versión se pone al publicar. */
 const EXPORT_PDF = '0.122';
 /** Exportar como zip (P.22, Doc_Exportar.md, entrega 2): la versión se pone al publicar. */
@@ -720,6 +722,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     since: MENTIONS_SHARE,
   },
   { id: 'questions', section: 'comments', title: 'help.questions.title', text: 'help.questions.text', keys: { question: 'question' }, showMe: 'comments', since: BEFORE_HELP },
+  {
+    id: 'commentEditConflict',
+    section: 'comments',
+    title: 'help.commentEditConflict.title',
+    text: 'help.commentEditConflict.text',
+    words: ['conflict', 'conflicto', 'two devices', 'dos dispositivos', 'phone', 'teléfono', 'offline', 'sin conexión', 'overwrite', 'pisar', 'keep mine', 'dejar el mío', 'discard mine', 'descartar el mío'],
+    since: COMMENT_EDIT_CONFLICT,
+  },
 
   // --- Buscar ---
   {

@@ -104,6 +104,27 @@ export const comments = {
     en: "Discarding the delete: the comment comes back.",
     es: "Se descarta el borrado: el comentario vuelve.",
   },
+  // Una edición propia que no entró porque el comentario se cambió antes desde otro dispositivo (Doc_Sincronizacion.md,
+  // "Dos ediciones del mismo comentario"): el motivo en el detalle del estado, y qué pasa al descartarla.
+  'commentError.editConflict': {
+    en: "It had already been changed from somewhere else, so your edit was not saved. Open the page's comments to choose which text stays.",
+    es: "Ya se había cambiado desde otro lado, así que tu edición no se guardó. Abrí los comentarios de la página para elegir qué texto queda.",
+  },
+  // Otra edición del mismo comentario que también chocó mientras había una esperando decisión (una rechazada vieja
+  // que se reintentó): no reemplaza a la que espera; queda rechazada, con su texto para copiarlo o descartarlo.
+  'commentError.editConflictAgain': {
+    en: "The comment had already been changed from somewhere else, and another edit of yours on it is waiting for you to choose.",
+    es: "El comentario ya se había cambiado desde otro lado, y otra edición tuya de ese comentario está esperando que elijas.",
+  },
+  // Guardar otro texto en un comentario con una edición esperando decisión, sin haber partido de ella.
+  'commentError.decideFirst': {
+    en: "An edit of yours on this comment is waiting for you to choose which text stays. Choose first, then edit it again.",
+    es: "Una edición tuya de este comentario está esperando que elijas qué texto queda. Elegí primero y después volvé a editarlo.",
+  },
+  'commentDiscard.conflict': {
+    en: "Discarding what you wrote on this device. What is saved does not change.",
+    es: "Se descarta lo que escribiste en este dispositivo. Lo guardado no cambia.",
+  },
   'commentDiscard.resolve': { en: "Discarding: the thread reopens.", es: "Se descarta: el hilo se vuelve a abrir." },
   'commentDiscard.reopen': { en: "Discarding: the thread stays resolved.", es: "Se descarta: el hilo sigue resuelto." },
   'commentDiscard.generic': { en: "Discard this change?", es: "¿Descartar este cambio?" },

@@ -5466,6 +5466,41 @@ button.thread-anchor:hover:not(:disabled) {
   gap: 12px;
 }
 
+/* Una edición propia que no entró porque el comentario se cambió antes desde otro lado: los dos textos, cada uno con
+   su rótulo, y la decisión. Es un aviso, no un error: nada se perdió. */
+.comment-conflict {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--warn-border);
+  border-radius: 6px;
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: 12px;
+}
+
+.comment-conflict-label {
+  margin-top: 4px;
+  font-weight: 600;
+}
+
+/* Los dos textos se leen como texto de comentario, también dentro de un comentario borrado (que va en cursiva). */
+.comment-conflict p.comment-body {
+  color: var(--text);
+  font-size: 14px;
+  font-style: normal;
+}
+
+.comment-conflict-failed {
+  color: var(--danger);
+}
+
+.comment-conflict .row {
+  gap: 4px 12px;
+  margin-top: 4px;
+}
+
 .comment-composer {
   display: grid;
   gap: 8px;

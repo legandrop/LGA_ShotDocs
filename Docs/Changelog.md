@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.227 :
+
+Editar el mismo comentario en dos dispositivos perdía texto. `edit_comment` guarda lo último que llega, no lo último que se escribió: una edición hecha antes en un teléfono sin red, al subir, pisaba en silencio la que la misma persona hizo después en la computadora, y ese texto no quedaba en ningún lado. Ahora la edición lleva el texto del que partió (`edit_comment(p_id, p_body, p_base)`, migración `20261115120000_comentario_edicion_base.sql`): si la base ya tiene otro, no escribe y contesta el conflicto. La app saca esa edición de la cola y la deja apartada en el dispositivo, al lado de lo guardado, con *Keep mine* y *Discard mine…*; nada la reintenta, solo se va sola si la base termina teniendo ese mismo texto, y lo demás sigue subiendo. La firma de dos argumentos no cambia, y sin la migración la app sigue como antes. Decisiones D325 a D329.
+
+[Editar un comentario sin pisar una edición posterior hecha desde otro dispositivo: la edición lleva el texto del que partió y, si la base ya tiene otro, queda apartada a la vista para que la persona decida]
+
 v0.226 :
 
 El visitante de un link público pedía el árbol, los comentarios, los archivos y el estado de lo que mandó en un pedido cada uno. La API entrega como mucho su tope de filas y no avisa: con una rama más grande veía menos, su dispositivo lo tomaba por todo y, si la raíz quedaba afuera, el link se veía roto. Ahora cada lista va por clave, con el orden escrito y hasta el total; las filas del árbol de una bajada traen la misma firma, y si cambia a mitad se empieza de nuevo. Lo apartado de los links llega entero. El aviso de lo que no entró de un link contaba y descargaba hasta 500: la migración `20261114120000_link_no_entro_por_clave.sql` suma `public_link_updates_page`, por clave y con el total. Además: el orden escrito en `link_admit_work`, dos errores traducidos y las pruebas que faltaban de v0.224.

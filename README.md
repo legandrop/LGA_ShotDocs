@@ -97,7 +97,9 @@ In development. What works today:
   comment, edit, or edit and create pages. What you cannot change shows read-only, also offline.
 - Comments and questions: comment on any block (or the whole page) from a side panel, or a bottom sheet
   on the phone, with replies, resolve and edit, also offline; a *Question* paragraph is answered in its
-  comment thread, so a guest with *Comment* can answer without editing the page.
+  comment thread, so a guest with *Comment* can answer without editing the page. If you edit the same
+  comment on two devices, the edit that arrives second does not replace the first: the comment shows both
+  texts and you choose which one stays.
 - Several workspaces: a welcome screen to join one with an invitation link or connect one you created with
   the guide, and a workspace list in the project menu to switch, join, create or remove one from the device.
 - Long pasted titles keep their full text until the title and overflow save locally. If saving fails, the

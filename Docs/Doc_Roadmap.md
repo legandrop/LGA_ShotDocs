@@ -430,14 +430,42 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   con el nombre entero en el tooltip solo si quedó cortado. Visto en un navegador a 375 px y en escritorio, claro y
   oscuro, sobre una página estática con el HTML del panel; con nombres normales, las 105 cajas del panel miden lo mismo
   que antes. jsdom no calcula el layout: sin prueba automática. Falta mirarlo en la app real. Y la entrega 3.
-  **Anotado en v0.224, sin hacer:** una edición vieja de un comentario pisa una posterior. Dos dispositivos de la misma
-  persona editan el mismo comentario (solo quien lo escribió lo edita) y `edit_comment` guarda el último que **llega**,
-  aunque se haya escrito antes. No sale del lado de la app: la base guarda cuándo llegó cada edición (`edited_at`),
-  no cuándo se escribió, y comparar la hora del dispositivo con la de la base decide mal si la que se escribió después
-  llega primero. Diseño: `edit_comment(p_id, p_body, p_base)` con el `edited_at` que el dispositivo tenía al editar; si
-  ya no coincide, la base no pisa y contesta el texto que tiene, y la app deja la edición propia a la vista como
-  rechazada, con *Keep mine* y *Keep the other*. Pide una migración (la función de dos argumentos sigue para las
-  versiones publicadas) y decidir cómo se muestra.
+  **Anotado en la re-verificación de v0.227 (ninguno frena):** (1) con el cuadro de edición abierto sobre lo
+  guardado, si una rechazada vieja se reintenta, choca y pasa a ser lo apartado, el aviso dice «guardá o cancelá para
+  ver los dos textos» pero guardar se rechaza («elegí primero»): la única salida es cancelar, que descarta lo tipeado
+  sin confirmación, y ningún texto dice que hay que copiarlo antes (muy poco probable; arreglo: otra variante del
+  aviso en `src/ui/CommentsPanel.tsx` cuando el cuadro no partía de lo apartado, o un *Copy* en el cuadro en ese
+  estado). (2) Pruebas que faltan: una edición posterior sin base se va con lo apartado (si quedara en la cola,
+  saldría con dos argumentos y pisaría); las menciones nuevas al reescribir lo apartado desde el cuadro; la base que
+  toma la segunda de dos ediciones viejas encadenadas; la copia de `mentions` en `meta` cuando quedan otras
+  esperando. (3) Una edición nueva que se funde en una marcada `unchecked` pierde la marca, y si la app se reabre
+  antes de mandarla toma de base lo guardado: un conflicto de más después de restaurar una copia, sin pérdida.
+  (4) Ya era así: con varias ediciones rechazadas del mismo comentario el cartel rojo muestra y copia solo la
+  primera (las demás están en el detalle del estado y en el archivo); y si las menciones de una primera edición que
+  entró se reemplazan por las de una segunda que queda apartada y después se descarta, a quien nombraba la primera no
+  se le avisa.
+  **Hecho en v0.227 (anotado en v0.224):** una edición vieja de un comentario ya no pisa una posterior. Dos
+  dispositivos de la misma persona editaban el mismo comentario (solo quien lo escribió lo edita) y `edit_comment`
+  guardaba el último que **llegaba**, aunque se hubiera escrito antes. Ahora la edición lleva el texto del que partió
+  (`edit_comment(p_id, p_body, p_base)`, migración `20261115120000_comentario_edicion_base.sql`,
+  **aplicada**); si la base ya tiene otro, no pisa, y la app deja lo propio apartado en el dispositivo, al
+  lado de lo guardado, con *Keep mine* y *Discard mine…* (`Doc_Sincronizacion.md`, "Dos ediciones del mismo
+  comentario"; D325 a D329). Se compara el texto y no `edited_at`, que era el diseño anotado: no depende de ninguna
+  fecha y dos ediciones seguidas del mismo dispositivo se encadenan solas. La migración quedó aplicada y `min_app_version`
+  subió a 0.227 al publicar (D329): la mínima frena de verdad una edición nueva
+  hecha desde una versión vieja (503 `app_outdated`, no escribe), pero no cubre lo que esa versión ya dejó en la
+  cola, que al actualizarse toma de base lo guardado en el dispositivo (acierta si no bajó nada en el medio): achica
+  el hueco, no lo cierra. `plink_edit_comment` no cambia: el visitante edita lo suyo desde el mismo navegador, así que
+  no hay dos dispositivos que choquen (dos pestañas siguen con «gana la última»). **Falta verlo con los ojos:** en la
+  app real con dos dispositivos, en el teléfono y en el tema oscuro. El aviso se probó montado en jsdom, que no
+  calcula el layout, y sobre páginas estáticas con el HTML del panel se midió por geometría del DOM y contraste (sin
+  desborde a 375 px, contraste mínimo 5,7); nadie logró capturas de la app andando. **Anotado, sin hacer:** salir de
+  la cuenta no cuenta lo rechazado ni lo apartado en el menú (`src/ui/menus.tsx`; ya era así para lo rechazado, y no
+  se pierde nada: quedan en la base del dispositivo); en el teléfono los botones del aviso miden 18-19 px de alto,
+  igual que los del cartel de rechazo que ya existía (los dos quedan chicos para el dedo); los dos textos del aviso
+  tienen el mismo estilo y los distingue solo el rótulo; «quitar del dispositivo» desde una pestaña con una versión
+  vieja no contaría lo apartado (lo cubre subir la mínima); y, si hace falta, un tercer camino para juntar los dos
+  textos a mano (hoy se copia uno y se edita el otro).
   **Entrega 2a hecha (v0.151: escribir; migración `20261028120000_link_editar.sql` aplicada (verificada en la base el 2026-10-06), `schema_version` 19, y el
   interruptor `link_edit_min_version` ya prendido en 0.151; ver "Cómo quedó la 2a" en `Doc_Link_Publico.md`).** Para prenderla hacía falta: la
   barrera de error alrededor de `PageEditor` en `main` (R4), aplicar la migración, subir la mínima y poner

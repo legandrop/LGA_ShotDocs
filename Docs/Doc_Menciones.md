@@ -293,6 +293,18 @@ funciones (sección 7).
   *Retry* desde antes; desde v0.217, también sola al volver la página). Ahora esa edición saca de la cola las
   `mentions` rechazadas del comentario y deja la copia en `meta` en la de las que siguen esperando, o la olvida si no
   queda ninguna: vale el conjunto como lo deja la última edición.
+- **Las menciones de una edición que la base no aplicó (v0.227).** Si la edición de un comentario choca con otra de la
+  misma persona hecha desde otro dispositivo (`Doc_Sincronizacion.md`, "Dos ediciones del mismo comentario"), sus
+  `mentions` **no se mandan**: nombrarían a alguien sobre un texto que no es el suyo. Salen de la cola con la edición
+  (y su copia en `meta` se olvida, así no vuelven al abrir la app) y quedan guardadas con ella. Cada edición lleva
+  además el conjunto entero de menciones de su texto (`named`), también cuando no cambiaba a quién nombra y por eso no
+  encolaba ninguna `mentions`: si la persona elige quedarse con lo suyo, la edición vuelve a la cola con ese conjunto
+  y, si no es el que quedó en la base, sus `mentions` salen detrás. Para que eso valga siempre, **las `mentions` de
+  una edición nunca salen antes que ella**: si la edición entra a la cola aparte (la anterior ya estaba en viaje), sus
+  `mentions` van detrás de ella y no en el lugar de las anteriores sin mandar (ahí avisaban por un texto que después
+  podía chocar). Tampoco se mandan las de una edición rechazada vieja que al reintentarse choca habiendo otra
+  apartada: quedan en esa edición. Lo apartado se olvida solo cuando la base termina con su mismo texto, aunque las
+  menciones de la base sean otras: en ese caso a quien nombraba la edición apartada no se le avisa.
 - **Un comentario que se borra antes de subir** se lleva su `mentions` y su copia en `meta` (si su alta no viaja,
   tampoco sus menciones). La copia en `meta` se borra siempre que el servidor confirma o descarta la operación, como
   `import`: así un descarte no la vuelve a poner en la cola en cada apertura.

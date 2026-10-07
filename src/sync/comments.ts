@@ -38,6 +38,11 @@ const IMPORT_KEY = 'import:';
 const MENTIONS_KEY = 'mentions:';
 // A quién la base no avisó (lo descartó por permisos): solo lo ve el autor, en este dispositivo.
 const UNNOTIFIED_KEY = 'unnotified:';
+// Una edición propia que la base no aplicó porque el comentario había cambiado desde otro lado (`EditDraft`). Va en
+// `meta` y **no en la cola**: nada la reintenta sola (la cola reintenta lo rechazado cada vez que abre la app), y una
+// versión vieja de la app, que mandaría una edición de la cola con la firma de dos argumentos y pisaría lo guardado, no
+// la toca (de `meta` solo borra `since:` e `import:`).
+const DRAFT_KEY = 'editConflict:';
 
 /** La versión de la base con `comment_mentions` y sus funciones (20261015120000_menciones.sql). */
 export const MENTIONS_SCHEMA_VERSION = 15;
@@ -120,6 +125,42 @@ export interface NewComment {
   body: string;
 }
 
+/**
+ * Lo que contesta `edit_comment(p_id, p_body, p_base)` cuando el texto de la base ya no es el que el dispositivo tenía
+ * al empezar a editar (20261115120000_comentario_edicion_base.sql): no escribió nada, y este es el texto de ahora.
+ */
+export interface EditConflict {
+  conflict: true;
+  /** El texto que tiene la base; `null` si la respuesta no lo trajo. */
+  body: string | null;
+  editedAt: string | null;
+}
+
+function isEditConflict(value: unknown): value is EditConflict {
+  return !!value && typeof value === 'object' && (value as { conflict?: unknown }).conflict === true;
+}
+
+/**
+ * Una edición propia apartada por un conflicto: el texto que la persona escribió en este dispositivo, entero, hasta que
+ * decida (`keepMine` o `discardMine`). Nunca se descarta sola, salvo que la base termine teniendo ese mismo texto.
+ */
+export interface EditDraft {
+  id: string;
+  pageId: string;
+  body: string;
+  /** Cuándo se escribió, en este dispositivo. */
+  at: string;
+  /** Las menciones de ese texto; `null` si la edición no las traía. */
+  mentions: MentionRef[] | null;
+}
+
+/** Lo guardado en `meta` como edición apartada, o `null` si no lo es. */
+function asDraft(value: unknown): EditDraft | null {
+  const d = value as Partial<EditDraft> | null;
+  if (!d || typeof d !== 'object' || typeof d.id !== 'string' || typeof d.pageId !== 'string' || typeof d.body !== 'string') return null;
+  return { id: d.id, pageId: d.pageId, body: d.body, at: typeof d.at === 'string' ? d.at : '', mentions: Array.isArray(d.mentions) ? d.mentions : null };
+}
+
 /** Quien aparece en los comentarios de una página (`comment_authors`). */
 export interface CommentAuthor {
   user_id: string;
@@ -132,8 +173,12 @@ export interface CommentRemote {
   fetchCommentAuthors(pageId: string): Promise<CommentAuthor[]>;
   /** Idempotente: el mismo id con el mismo contenido no hace nada; con otro, `comment_conflict`. */
   addComment(comment: NewComment): Promise<void>;
-  /** El mismo texto no cambia nada. */
-  editComment(id: string, body: string): Promise<void>;
+  /**
+   * El mismo texto no cambia nada. Con `base` (el texto que el dispositivo tenía cuando la persona empezó a editar), la
+   * base no pisa un texto que ya es otro: contesta el conflicto, sin escribir. Sin `base`, o con una base sin esa firma,
+   * guarda lo que llega (como siempre).
+   */
+  editComment(id: string, body: string, base?: string): Promise<EditConflict | void>;
   /** Borrar uno ya borrado no hace nada. */
   deleteComment(id: string): Promise<void>;
   /** Resolver uno resuelto (o abrir uno abierto) no cambia nada. */
@@ -162,7 +207,11 @@ export const PULL_EVERY_MS = 10_000;
 /** Un cambio hecho en el dispositivo, en la cola hasta que el servidor lo confirma. */
 export type CommentOp =
   | { kind: 'add'; id: string; pageId: string; blockId: string | null; threadId: string | null; body: string; at: string }
-  | { kind: 'edit'; id: string; pageId: string; body: string; at: string }
+  // `base`: el texto del que partió la persona (lo que la base tiene que seguir teniendo para que la edición entre); sin
+  // él (una edición guardada por una versión anterior), se manda como siempre. `named`: las menciones de ese texto, el
+  // conjunto entero, para no perderlas si la edición queda apartada por un conflicto. `unchecked`: va sin base a
+  // propósito (lo propio que vuelve después de restaurar una copia), y al abrir la app no se le busca una.
+  | { kind: 'edit'; id: string; pageId: string; body: string; at: string; base?: string; named?: MentionRef[]; unchecked?: true }
   | { kind: 'delete'; id: string; pageId: string; at: string }
   | { kind: 'resolve'; id: string; pageId: string; resolved: boolean; at: string }
   // Las menciones de un comentario propio: el conjunto entero (Doc_Menciones.md, 3.3).
@@ -262,6 +311,11 @@ export interface CommentView {
   mentions: MentionRef[];
   /** Los rótulos de quienes la base no avisó (solo en el dispositivo de quien escribió). */
   unnotified: string[];
+  /**
+   * Una edición propia que no entró porque el comentario cambió antes desde otro lado: lo que la persona escribió en
+   * este dispositivo. `body` es lo que quedó guardado. Espera `keepMine` o `discardMine`.
+   */
+  conflict?: { text: string } | null;
 }
 
 export interface CommentThread {
@@ -299,6 +353,8 @@ export function commentErrorText(error: string, kind?: CommentOp['kind']): strin
       return stored('commentError.conflict');
     case 'comment_deleted':
       return stored('commentError.deleted');
+    case 'base_invalid':
+      return stored('commentError.rejected');
     case 'thread_other_page':
     case 'thread_invalid':
       return stored('commentError.threadInvalid');
@@ -349,6 +405,8 @@ export interface CommentFailure {
   pageId: string;
   body: string | null;
   error: string;
+  /** Es una edición apartada por un conflicto (no está en la cola): el id de su comentario, para `discardMine`. */
+  conflictOf?: string;
 }
 
 /** Qué pasa al descartar un cambio rechazado, en palabras, y el texto que se pierde (para copiarlo). */
@@ -391,6 +449,8 @@ export class CommentQueue {
   private readonly authors = new Map<string, string>();
   /** A quién no avisó la base, por comentario propio (`unnotified:` en `meta`). */
   private readonly unnotified = new Map<string, string[]>();
+  /** Las ediciones propias apartadas por un conflicto, por comentario (`editConflict:` en `meta`). */
+  private readonly drafts = new Map<string, EditDraft>();
   private readonly watched = new Map<string, number>();
   /** Páginas que ya se bajaron en esta sesión (las demás se muestran con lo guardado). */
   private readonly pulled = new Set<string>();
@@ -444,6 +504,7 @@ export class CommentQueue {
     if (!this.db) return;
     await this.restoreImports().catch(() => undefined);
     await this.restoreMentions().catch(() => undefined);
+    await this.baseOldEdits().catch(() => undefined);
     const [ops, authors] = await Promise.all([this.db.getAll('outbox'), this.db.getAll('authors')]);
     this.ops = ops.sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0));
     for (const a of authors) this.authors.set(a.userId, a.email);
@@ -452,7 +513,36 @@ export class CommentQueue {
       const labels = await this.db.get('meta', key);
       if (Array.isArray(labels)) this.unnotified.set(key.slice(UNNOTIFIED_KEY.length), labels.filter((l) => typeof l === 'string'));
     }
+    for (const draft of await loadDrafts(this.db)) this.drafts.set(draft.id, draft);
     this.changed();
+  }
+
+  /**
+   * Las ediciones que una versión anterior de la app dejó en la cola no dicen de qué texto partieron, y sin base se
+   * mandan con la firma que guarda lo que llega. Al abrir, **una sola vez**, cada una toma de base el texto que el
+   * dispositivo tiene guardado de ese comentario (o el de la edición propia que la precede en la cola): si el
+   * dispositivo no bajó nada desde que se escribió, es el texto del que partió, y una edición posterior hecha desde
+   * otro lado ya no se pisa. Si bajó algo en el medio, la base es lo último que vio y la edición entra, como antes:
+   * nunca es peor que mandarla sin base. La que no tiene de dónde sacarla, y las que van sin base a propósito
+   * (`unchecked`), quedan como están.
+   */
+  private async baseOldEdits(): Promise<void> {
+    const db = this.db!;
+    const tx = db.transaction(['outbox', 'comments'], 'readwrite');
+    const outbox = tx.objectStore('outbox');
+    const rows = tx.objectStore('comments');
+    // El texto que deja cada comentario lo que ya está en la cola, en orden (lo rechazado no se aplica).
+    const queued = new Map<string, string>();
+    for (const entry of await outbox.getAll()) {
+      const op = entry.op;
+      if (op.kind === 'edit' && op.base === undefined && !op.unchecked) {
+        const row = queued.has(op.id) ? undefined : await rows.get(op.id);
+        const base = queued.get(op.id) ?? (row && !row.deleted_at && typeof row.body === 'string' ? row.body : undefined);
+        await outbox.put({ ...entry, op: base === undefined ? { ...op, unchecked: true } : { ...op, base } });
+      }
+      if (!entry.failed && (isNew(op) || op.kind === 'edit')) queued.set(op.id, op.body);
+    }
+    await tx.done;
   }
 
   /**
@@ -608,14 +698,87 @@ export class CommentQueue {
    * comentario salen de la cola: vale el conjunto como lo deja esta edición (si no, al reintentarlas volvería una
    * mención que la persona ya sacó).
    */
-  async edit(pageId: string, id: string, body: string, mentions?: MentionRef[]): Promise<void> {
+  async edit(pageId: string, id: string, body: string, mentions?: MentionRef[], base?: string): Promise<void> {
+    await this.queueEdit(pageId, id, body, mentions, base, false);
+  }
+
+  /**
+   * `base`: el texto del comentario que la persona tenía delante cuando empezó a editar (el panel lo toma al abrir el
+   * cuadro); sin pasarlo, el que se ve ahora. Viaja con la edición: si la base ya tiene otro texto (otra edición de la
+   * misma persona, desde otro dispositivo, llegó antes), no lo pisa y la edición queda apartada (`setAside`).
+   * `fromDraft`: la edición sale de una apartada (`keepMine`), que se olvida en la misma escritura.
+   *
+   * Con una edición apartada de ese comentario esperando decisión (el panel no ofrece *Edit*, pero un cuadro que ya
+   * estaba abierto cuando llegó el conflicto sigue abierto), el texto nuevo no entra a la cola: si partía de lo
+   * apartado, **pasa a ser lo apartado** (`rewriteDraft`); si no, se rechaza acá y queda en el cuadro. Encolarlo
+   * dejaría un texto propio sin subir a la vista como si fuera lo guardado, y *Keep mine* lo fundiría con lo apartado.
+   */
+  private async queueEdit(pageId: string, id: string, body: string, mentions: MentionRef[] | undefined, base: string | undefined, fromDraft: boolean): Promise<void> {
     const text = cleanBody(body);
     const at = this.stamp();
+    const current = this.view(pageId).get(id);
     let named = mentions ? this.mentionsOp(id, pageId, mentions, at) : null;
     const replaces = named !== null;
+    const op: Extract<CommentOp, { kind: 'edit' }> = { kind: 'edit', id, pageId, body: text, at };
+    const from = base ?? (current && !current.deleted ? current.body : undefined);
+    if (!fromDraft && this.drafts.has(id) && (await this.rewriteDraft(id, text, at, named?.mentions, from))) return;
+    if (from !== undefined) op.base = from;
+    if (named) op.named = named.mentions;
     // Contra lo que el comentario tiene sin contar lo rechazado (la vista no lo aplica): lo bajado y lo que espera subir.
-    if (named && sameMentions(toRows(this.view(pageId).get(id)?.mentions ?? []), named.mentions, this.userId)) named = null;
-    await this.enqueue({ kind: 'edit', id, pageId, body: text, at }, named, replaces);
+    if (named && sameMentions(toRows(current?.mentions ?? []), named.mentions, this.userId)) named = null;
+    await this.enqueue(op, named, replaces, fromDraft ? id : null);
+  }
+
+  /**
+   * De una edición apartada por un conflicto, **quedarse con la propia**: vuelve a la cola, ahora sobre el texto que
+   * quedó guardado (el que la persona está viendo al decidir), con sus menciones. Si mientras tanto la base volvió a
+   * cambiar, vuelve a quedar apartada: nunca pisa algo que la persona no vio.
+   */
+  async keepMine(id: string): Promise<void> {
+    if (!this.db) return;
+    // Lo guardado en el dispositivo, no lo que esta pestaña recuerda: otra pestaña pudo descartarlo o cambiarlo.
+    const draft = asDraft(await this.db.get('meta', DRAFT_KEY + id));
+    if (!draft) {
+      if (this.drafts.delete(id)) this.changed();
+      return;
+    }
+    this.drafts.set(id, draft);
+    const current = this.view(draft.pageId).get(id);
+    if (!current || current.deleted) throw new CommentInvalid(t('commentError.deleted'));
+    await this.queueEdit(draft.pageId, id, draft.body, draft.mentions ?? undefined, current.body, true);
+  }
+
+  /**
+   * El texto nuevo de un comentario con una edición apartada pasa a ser lo apartado, si partía de ella (`from` es su
+   * texto): cambia el texto, la hora y las menciones del borrador, y nada entra a la cola. Devuelve `false` si ya no
+   * hay nada apartado (otra pestaña lo decidió): la edición sigue como cualquiera. Si partía de otro texto, tira: no
+   * puede reemplazar lo apartado (se perdería) ni encolarse (ver `queueEdit`).
+   */
+  private async rewriteDraft(id: string, text: string, at: string, mentions: MentionRef[] | undefined, from: string | undefined): Promise<boolean> {
+    if (!this.db) return false;
+    this.writing++;
+    try {
+      const tx = this.db.transaction('meta', 'readwrite');
+      const saved = asDraft(await tx.store.get(DRAFT_KEY + id));
+      const draft = saved && from === saved.body ? { ...saved, body: text, at, mentions: mentions ?? saved.mentions } : null;
+      if (draft) await tx.store.put(draft, DRAFT_KEY + id);
+      await tx.done;
+      if (saved && !draft) throw new CommentInvalid(t('commentError.decideFirst'));
+      if (draft) this.drafts.set(id, draft);
+      else this.drafts.delete(id);
+      this.changed();
+      return draft !== null;
+    } finally {
+      this.writing--;
+    }
+  }
+
+  /** De una edición apartada por un conflicto, **descartar la propia** (a mano: nunca se hace solo). Queda lo guardado. */
+  async discardMine(id: string): Promise<void> {
+    if (!this.db || !this.drafts.has(id)) return;
+    await this.db.delete('meta', DRAFT_KEY + id);
+    this.drafts.delete(id);
+    this.changed();
   }
 
   /** La operación `mentions` de un comentario (sin repetidos ni uno mismo, hasta 20); `null` si la base no las tiene. */
@@ -820,9 +983,9 @@ export class CommentQueue {
     return counts;
   }
 
-  /** Las páginas de los cambios de comentarios sin subir o rechazados, una por cambio (P.14). */
+  /** Las páginas de los cambios de comentarios sin subir, rechazados o apartados por un conflicto, una por cambio (P.14). */
   pendingPageIds(): string[] {
-    return this.ops.map((o) => o.op.pageId);
+    return [...this.ops.map((o) => o.op.pageId), ...[...this.drafts.values()].map((d) => d.pageId)];
   }
 
   status(): CommentStatus {
@@ -832,11 +995,12 @@ export class CommentQueue {
       if (o.failed) failed++;
       else pending++;
     }
-    return { pending, failed, error: this.lastError };
+    // Una edición apartada por un conflicto es texto que sigue solo en este dispositivo: cuenta con lo rechazado.
+    return { pending, failed: failed + this.drafts.size, error: this.lastError };
   }
 
   failures(): CommentFailure[] {
-    return this.ops
+    const rejected: CommentFailure[] = this.ops
       .filter((o) => o.failed)
       .map((o) => ({
         seq: o.seq!,
@@ -845,6 +1009,15 @@ export class CommentQueue {
         body: isNew(o.op) || o.op.kind === 'edit' ? o.op.body : null,
         error: o.error ?? '',
       }));
+    const aside: CommentFailure[] = [...this.drafts.values()].map((d) => ({
+      seq: -1,
+      kind: 'edit',
+      pageId: d.pageId,
+      body: d.body,
+      error: stored('commentError.editConflict'),
+      conflictOf: d.id,
+    }));
+    return [...rejected, ...aside];
   }
 
   // --- Sincronización -------------------------------------------------------------------------------------
@@ -934,6 +1107,13 @@ export class CommentQueue {
         if (result === GONE) {
           // El comentario no está en la base aunque su página se ve: no hay nada que arreglar a mano.
           await this.forget(entry);
+          continue;
+        }
+        if (entry.op.kind === 'edit' && isEditConflict(result)) {
+          // La base tiene otro texto y no lo pisó: la edición sale de la cola y queda apartada, a la vista. No es un
+          // rechazo (nada la reintenta) ni frena lo demás. La página se baja en esta vuelta, con lo que quedó guardado.
+          await this.setAside(entry, result);
+          this.dirty.add(entry.op.pageId);
           continue;
         }
       } catch (err) {
@@ -1062,7 +1242,7 @@ export class CommentQueue {
       case 'add':
         return this.remote.addComment({ id: op.id, pageId: op.pageId, blockId: op.blockId, threadId: op.threadId, body: op.body });
       case 'edit':
-        return this.remote.editComment(op.id, op.body);
+        return this.remote.editComment(op.id, op.body, op.base);
       case 'delete':
         return this.remote.deleteComment(op.id);
       case 'resolve':
@@ -1081,6 +1261,84 @@ export class CommentQueue {
           authorEmail: op.authorEmail,
         });
     }
+  }
+
+  /**
+   * Aparta una edición que la base no aplicó (`EditConflict`): en una sola escritura sale de la cola y queda en `meta`
+   * como borrador de su comentario, y lo guardado toma el texto que contestó la base (así se ve enseguida al lado del
+   * propio, aunque la bajada de la página falle). Lo que la persona hizo después sobre ese mismo comentario y todavía
+   * no salió y **partía de este texto** (otra edición con este texto de base; sus menciones) va con ella: el borrador
+   * es su último texto, y nada de eso se manda sobre un texto que no es el suyo. Una edición posterior que no partía
+   * de este texto (se escribió sobre lo guardado, con esta rechazada a la vista) es otro texto: sigue en la cola.
+   *
+   * Hay **un** borrador por comentario. Si ya hay uno con otro texto y esta edición no partía de él (una rechazada
+   * vieja que se reintenta y también choca), no lo reemplaza: reemplazarlo borraría lo último que la persona escribió.
+   * La edición queda en la cola como rechazada, con su texto a la vista para copiarlo o descartarlo, y sus menciones
+   * no se mandan.
+   */
+  private async setAside(entry: QueuedCommentOp, theirs: EditConflict): Promise<void> {
+    if (!this.db || entry.op.kind !== 'edit') return;
+    const first = entry.op;
+    const tx = this.db.transaction(['outbox', 'meta', 'comments'], 'readwrite');
+    const outbox = tx.objectStore('outbox');
+    const meta = tx.objectStore('meta');
+    const rows = tx.objectStore('comments');
+    const all = await outbox.getAll();
+    // Lo que sigue a esta edición en la cola, de su mismo comentario y sin rechazar.
+    const later = all.filter((e) => e.seq! > entry.seq! && !e.failed && e.op.id === first.id);
+    const row = await rows.get(first.id);
+    const next = row && !row.deleted_at && theirs.body !== null ? { ...row, body: theirs.body, edited_at: theirs.editedAt } : null;
+    if (next) await rows.put(next);
+    const gone = new Set<number>();
+    let withMentions = false;
+    let kept: QueuedCommentOp | null = null;
+    let draft: EditDraft | null = asDraft(await meta.get(DRAFT_KEY + first.id));
+    if (draft && draft.body !== first.body && first.base !== draft.body) {
+      kept = { ...entry, failed: true, error: stored('commentError.editConflictAgain') };
+      await outbox.put(kept);
+      // Las menciones de esta edición (hasta la edición siguiente) no se mandan: su conjunto queda en ella (`named`).
+      for (const e of later) {
+        if (e.op.kind === 'edit') break;
+        if (e.op.kind !== 'mentions') continue;
+        withMentions = true;
+        gone.add(e.seq!);
+      }
+    } else {
+      draft = { id: first.id, pageId: first.pageId, body: first.body, at: first.at, mentions: first.named ?? null };
+      gone.add(entry.seq!);
+      let sent: MentionRef[] | null = null;
+      for (const e of later) {
+        if (e.op.kind === 'edit') {
+          // Una edición guardada sin base (de una versión anterior) se toma por continuación: mandarla sola pisaría.
+          if (e.op.base !== undefined && e.op.base !== draft.body) break;
+          draft.body = e.op.body;
+          draft.at = e.op.at;
+          draft.mentions = e.op.named ?? null;
+          sent = null;
+        } else if (e.op.kind === 'mentions') {
+          withMentions = true;
+          sent = e.op.mentions;
+        } else {
+          continue;
+        }
+        gone.add(e.seq!);
+      }
+      // Una edición guardada sin sus menciones (de una versión anterior) las toma de la operación que la seguía.
+      draft.mentions ??= sent;
+      await meta.put(draft, DRAFT_KEY + first.id);
+    }
+    for (const seq of gone) await outbox.delete(seq);
+    if (withMentions) {
+      // La copia de `meta` (la que vuelve a la cola al abrir la app) pasa a ser la de las que siguen esperando.
+      const waiting = all.filter((e) => !gone.has(e.seq!) && !e.failed && e.op.kind === 'mentions' && e.op.id === first.id);
+      if (waiting.length > 0) await meta.put(waiting[waiting.length - 1].op, MENTIONS_KEY + first.id);
+      else await meta.delete(MENTIONS_KEY + first.id);
+    }
+    await tx.done;
+    if (next) this.pageRows(first.pageId)?.set(next.id, next);
+    this.drafts.set(draft.id, draft);
+    this.ops = this.ops.filter((o) => !gone.has(o.seq!)).map((o) => (kept && o.seq === kept.seq ? kept : o));
+    this.changed();
   }
 
   /** Confirmado: sale de la cola y queda en lo guardado, así se sigue viendo hasta la próxima bajada. */
@@ -1159,6 +1417,12 @@ export class CommentQueue {
     this.rows.set(pageId, map);
     this.pulled.add(pageId);
     this.lastPull.set(pageId, this.now());
+    // Una edición apartada cuyo texto ya es el guardado (se eligió lo mismo desde otro dispositivo) no tiene nada que
+    // decidir: se olvida. Es el único caso en que se va sola, y no se pierde nada: ese texto está en la base.
+    for (const draft of [...this.drafts.values()]) {
+      const row = draft.pageId === pageId ? map.get(draft.id) : undefined;
+      if (row && !row.deleted_at && row.body === draft.body) await this.discardMine(draft.id);
+    }
     this.changed();
 
     const unknown = new Set<string>();
@@ -1235,7 +1499,8 @@ export class CommentQueue {
             const named = fromRows(r.mentions);
             if (named.length > 0 && this.mentionsReady) recovered.push({ kind: 'mentions', id: r.id, pageId, mentions: named, at: r.created_at });
           } else if (!s.deleted_at && s.body !== r.body && r.edited_at && (!s.edited_at || r.edited_at > s.edited_at)) {
-            recovered.push({ kind: 'edit', id: r.id, pageId, body: r.body, at: r.edited_at });
+            // Sin base a propósito: vuelve a poner lo propio sobre la copia restaurada, que ya se comparó acá arriba.
+            recovered.push({ kind: 'edit', id: r.id, pageId, body: r.body, at: r.edited_at, unchecked: true });
           }
         }
         if (r.deleted_by === me && r.deleted_at && s && !s.deleted_at) {
@@ -1285,10 +1550,10 @@ export class CommentQueue {
     return this.writing > 0;
   }
 
-  private async enqueue(op: CommentOp, mentions: MentionsOp | null = null, replacesMentions = false): Promise<void> {
+  private async enqueue(op: CommentOp, mentions: MentionsOp | null = null, replacesMentions = false, dropDraft: string | null = null): Promise<void> {
     this.writing++;
     try {
-      await this.enqueueNow(op, mentions, replacesMentions);
+      await this.enqueueNow(op, mentions, replacesMentions, dropDraft);
     } finally {
       this.writing--;
     }
@@ -1297,11 +1562,18 @@ export class CommentQueue {
   /**
    * `mentions`: las menciones del alta o la edición, que entran detrás en la misma transacción. `replacesMentions`: la
    * edición trae el conjunto entero de menciones (aunque sea el mismo que ya tiene y no entre ninguna operación).
+   * `dropDraft`: el comentario cuya edición apartada vuelve a la cola con este cambio (se olvida en la misma escritura).
    */
-  private async enqueueNow(op: CommentOp, mentions: MentionsOp | null = null, replacesMentions = false): Promise<void> {
+  private async enqueueNow(op: CommentOp, mentions: MentionsOp | null = null, replacesMentions = false, dropDraft: string | null = null): Promise<void> {
     if (!this.db) throw new CommentInvalid(t('commentError.off', { reason: localize(this.unavailable ?? '') }));
     const tx = this.db.transaction(['outbox', 'meta'], 'readwrite');
     const store = tx.objectStore('outbox');
+    if (dropDraft && !asDraft(await tx.objectStore('meta').get(DRAFT_KEY + dropDraft))) {
+      // Lo apartado ya no está (otra pestaña lo descartó o lo mandó entre que se leyó y esta escritura): no se manda.
+      await tx.done;
+      if (this.drafts.delete(dropDraft)) this.changed();
+      return;
+    }
     const all = await store.getAll();
     // Sacar de la cola un importado que no salió (se borró antes de subir) lo olvida también en `meta`.
     const drop = async (e: QueuedCommentOp) => {
@@ -1319,8 +1591,11 @@ export class CommentQueue {
         await store.put({ ...add, op: merged });
         if (merged.kind === 'import') await tx.objectStore('meta').put(merged, IMPORT_KEY + merged.id);
         done = true;
-      } else if (edit) {
-        await store.put({ ...edit, op });
+      } else if (edit && edit.op.kind === 'edit') {
+        // La base sigue siendo la de la edición que todavía no salió: lo que el servidor tenía cuando la persona
+        // empezó. La de esta (el texto de aquella, que solo existe acá) no le dice nada a la base.
+        const { base: _own, ...merged } = op;
+        await store.put({ ...edit, op: edit.op.base === undefined ? merged : { ...merged, base: edit.op.base } });
         done = true;
       }
     } else if (op.kind === 'delete') {
@@ -1364,13 +1639,21 @@ export class CommentQueue {
       }
     }
     if (mentions) {
-      // Unas menciones sin mandar del mismo comentario se reemplazan (queda la última); si no, van detrás.
+      // Unas menciones sin mandar del mismo comentario se reemplazan (queda la última); si no, van detrás. Si la
+      // edición entró aparte (la anterior ya estaba en viaje), las menciones van **detrás de ella**, nunca en el lugar
+      // de las anteriores: ahí saldrían antes que su texto y avisarían por una edición que todavía puede chocar.
       const same = all.find((e) => open(e) && e.op.kind === 'mentions');
-      if (same) await store.put({ ...same, op: mentions });
-      else await store.add({ op: mentions, attempted: false, failed: false, error: null, queuedAt: this.now() });
+      const inPlace = same && (done || op.kind !== 'edit');
+      if (inPlace) await store.put({ ...same, op: mentions });
+      else {
+        if (same) await store.delete(same.seq!);
+        await store.add({ op: mentions, attempted: false, failed: false, error: null, queuedAt: this.now() });
+      }
       await tx.objectStore('meta').put(mentions, MENTIONS_KEY + mentions.id);
     }
+    if (dropDraft) await tx.objectStore('meta').delete(DRAFT_KEY + dropDraft);
     await tx.done;
+    if (dropDraft) this.drafts.delete(dropDraft);
     await this.reloadOps();
     this.onQueued?.();
   }
@@ -1453,6 +1736,13 @@ export class CommentQueue {
     for (const [id, labels] of this.unnotified) {
       const c = out.get(id);
       if (c && c.authorId === this.userId && !c.deleted) c.unnotified = labels;
+    }
+    for (const draft of this.drafts.values()) {
+      const c = draft.pageId === pageId ? out.get(draft.id) : undefined;
+      if (!c) continue;
+      // Como un rechazo: el comentario se ve como quedó guardado, con lo propio al lado, y no se esconde si se borró.
+      c.pending = true;
+      c.conflict = { text: draft.body };
     }
     return out;
   }
@@ -1660,7 +1950,7 @@ export function buildThreads(pageId: string, view: Map<string, ViewWithResolutio
   for (const root of view.values()) {
     if (root.threadId) continue;
     const all = (replies.get(root.id) ?? []).sort(byDate);
-    const live = all.filter((r) => !r.deleted || r.pending || r.error);
+    const live = all.filter((r) => !r.deleted || r.pending || r.error || r.conflict);
     const count = (root.deleted ? 0 : 1) + all.filter((r) => !r.deleted).length;
     // Un hilo con todo borrado (y nada por subir) no se muestra.
     if (count === 0 && !root.pending && !live.some((r) => r.pending)) continue;
@@ -1670,7 +1960,7 @@ export function buildThreads(pageId: string, view: Map<string, ViewWithResolutio
       pageId,
       blockId: root.blockId,
       root,
-      replies: live.filter((r) => !r.deleted || r.error),
+      replies: live.filter((r) => !r.deleted || r.error || r.conflict),
       resolved: !!root.resolvedAt,
       resolvedAt: root.resolvedAt ?? null,
       resolvedBy: root.resolvedBy ?? null,
@@ -1689,16 +1979,32 @@ export function isCommentId(value: string): boolean {
 
 // --- Lo sin subir (si sacan a alguien del workspace) ---------------------------------------------------
 
-/** Cuántos cambios de comentarios hay sin subir (también los rechazados), leído directo de la base. */
-export async function unsyncedComments(db: CommentsDb | null): Promise<number> {
-  return db ? db.count('outbox') : 0;
+/** Las ediciones apartadas por un conflicto que guarda el dispositivo (`editConflict:` en `meta`). */
+async function loadDrafts(db: CommentsDb): Promise<EditDraft[]> {
+  const keys = (await db.getAllKeys('meta')).filter((k): k is string => typeof k === 'string' && k.startsWith(DRAFT_KEY));
+  const drafts: EditDraft[] = [];
+  for (const key of keys) {
+    const draft = asDraft(await db.get('meta', key));
+    if (draft) drafts.push(draft);
+  }
+  return drafts;
 }
 
-/** La cola entera, para el archivo con lo que no se subió. */
+/**
+ * Cuántos cambios de comentarios hay sin subir (también los rechazados y las ediciones apartadas por un conflicto),
+ * leído directo de la base.
+ */
+export async function unsyncedComments(db: CommentsDb | null): Promise<number> {
+  return db ? (await db.count('outbox')) + (await loadDrafts(db)).length : 0;
+}
+
+/** La cola entera y las ediciones apartadas por un conflicto, para el archivo con lo que no se subió. */
 export async function exportComments(db: CommentsDb | null): Promise<unknown[]> {
   if (!db) return [];
-  return (await db.getAll('outbox')).map((e) => ({
+  const queued = (await db.getAll('outbox')).map((e) => ({
     ...e.op,
     rejected: e.failed ? e.error : null,
   }));
+  const aside = (await loadDrafts(db)).map((d) => ({ kind: 'edit', ...d, rejected: stored('commentError.editConflict') }));
+  return [...queued, ...aside];
 }

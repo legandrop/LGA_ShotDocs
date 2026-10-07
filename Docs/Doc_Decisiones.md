@@ -387,6 +387,53 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
   ramas de más de 1000 páginas.** La otra opción, anotada con su diseño: una función que entregue el árbol de a
   páginas y cuente lo que entrega, con migración (`Doc_Sincronizacion.md`, "Las listas largas", "Lo que cuesta: el
   cupo del día del link").
+- **D325 · Al editar un comentario, la base compara el texto del que partió la persona, no la fecha de la última
+  edición** (2026-10-07; tomada al implementarlo, Lega la puede cambiar). El roadmap proponía mandar el `edited_at`
+  que el dispositivo tenía. Se manda el texto: un comentario nunca editado no es un caso aparte, no depende de cómo
+  viaja una fecha ni de la hora de ningún dispositivo, y dos ediciones seguidas del mismo dispositivo se encadenan
+  solas (la segunda parte del texto de la primera), sin que la app tenga que reescribir nada al confirmar. Lo que se
+  pierde: si el comentario cambió y volvió a quedar igual que antes, la edición entra (el texto que la persona vio es
+  el que está). La otra opción: `edited_at`, o un contador nuevo en la tabla, que pide cambiar lo que devuelven las
+  listas de comentarios (`Doc_Sincronizacion.md`, "Dos ediciones del mismo comentario").
+- **D326 · La edición que no entró queda apartada en el dispositivo, fuera de la cola, y cuenta con lo rechazado**
+  (2026-10-07; tomada al implementarlo, Lega la puede cambiar). No es un rechazo más de la cola: lo rechazado se
+  reintenta cada vez que abre la app, y una versión anterior de la app que tomara esa edición la mandaría sin base y
+  pisaría. Queda guardada aparte, nada la manda sola, y lo que la persona hizo después sobre ese comentario, todavía
+  no había salido y partía de ese texto va con ella (lo apartado es su último texto; sus menciones no se mandan sobre
+  el texto de otro dispositivo). Hay un solo texto apartado por comentario y nada lo reemplaza sin que la persona lo
+  haya visto: otra edición del mismo comentario que también choca y no partía de él (una rechazada vieja que se
+  reintenta) queda en la cola como rechazada, con su texto, en vez de ocupar su lugar. En el estado suma a *N changes
+  rejected by the server*, con su texto en el detalle, y va en el archivo de lo que no se subió; si todo lo rechazado
+  son ediciones apartadas, el detalle no ofrece *Retry* y dice dónde se decide. La otra opción: un número aparte en
+  el estado ("1 edit to review").
+- **D327 · Lo que ve la persona: los dos textos con su rótulo y tres acciones, *Keep mine*, *Discard mine…* y *Copy
+  mine*** (2026-10-07; tomada al implementarlo, Lega la puede cambiar). En el comentario, primero *Saved now, changed
+  from somewhere else* con lo guardado y después *What you wrote on this device* con lo propio, y arriba una oración
+  que dice que no se perdió nada. Hasta decidir no se ofrece *Edit* sobre ese comentario (borrarlo, sí). El roadmap
+  decía *Keep the other*: se llama *Discard mine…* porque es lo que pasa (lo guardado ya está guardado; lo que se va
+  es lo propio). No hay un cuadro para juntar los dos textos: se copia uno y se edita el otro. Si el cuadro de edición
+  ya estaba abierto cuando llegó el conflicto, sigue abierto con un aviso, y lo que se guarda desde ahí pasa a ser lo
+  propio que espera decisión (no se manda). En un hilo resuelto, los resueltos se abren solos. La otra opción: sumar
+  *Edit mine*, que abre el cuadro con lo propio sobre lo guardado.
+- **D328 · Descartar lo propio pide confirmación y no se puede deshacer; lo apartado se va solo únicamente si la base
+  termina teniendo ese mismo texto** (2026-10-07; tomada al implementarlo, Lega la puede cambiar). *Keep mine* manda
+  lo propio sobre lo que la persona está viendo como guardado; si la base volvió a cambiar mientras tanto, vuelve a
+  quedar apartada (nunca pisa lo que no se vio). Si el comentario se borra después, lo apartado sigue a la vista en
+  el comentario borrado, solo para copiarlo o descartarlo. "Se va solo" vale también cuando las menciones que
+  quedaron en la base son otras que las de la edición apartada: el texto está guardado, y a quien ella nombraba no se
+  le avisa. Fuera de ese caso, lo único que cambia lo apartado es la persona: decidir, o guardar otro texto desde un
+  cuadro que ya tenía abierto con ese (pasa a ser lo apartado). La otra opción: vencerlo a los N días, que es perder
+  texto sin que nadie lo pida.
+- **D329 · `min_app_version` se sube a 0.227 al publicar** (2026-10-07; tomada al implementarlo; por la LEY 1 no
+  espera a nadie). No hace falta para que ande: la app publicada sigue editando con la firma de dos argumentos, igual
+  que hoy. Pero esa firma guarda lo que llega, así que mientras quede abierto un dispositivo con una versión anterior
+  a la v0.227 su edición tardía sigue pisando en silencio. Con la mínima en 0.227 la base frena de verdad una edición
+  nueva hecha desde una versión vieja (503 `app_outdated`: no escribe, y queda en su cola para reintentar).
+  **Achica el hueco, no lo cierra:** lo que la versión vieja ya dejó en la cola no dice de qué texto partió; al
+  actualizarse toma de base lo que el dispositivo tiene guardado, que acierta si no bajó nada en el medio y, si no,
+  entra como antes. `plink_edit_comment` no cambia: el visitante de un link edita lo suyo solo desde el navegador con
+  el que lo escribió, así que no hay dos dispositivos que choquen (dos pestañas de ese navegador siguen con «gana la
+  última»).
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 

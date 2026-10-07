@@ -894,6 +894,73 @@ Paso 10 de `Plan_Workspaces.md` (sección 4), con la base en la versión 5
   rechazado no se aplica en pantalla:** un borrado que la base no aceptó deja ver el comentario, y una
   edición de un comentario que otro borró lo muestra borrado, las dos con el motivo. Borrar un comentario
   propio cuya alta fue rechazada lo saca de la cola sin mandar nada. Lo demás de la cola sigue subiendo.
+- **Dos ediciones del mismo comentario (v0.227).** Solo quien escribió un comentario lo edita, así que el choque es
+  de una persona consigo misma: lo edita en el teléfono sin red y, después, en la computadora. La base guardaba lo
+  último que **llegaba**: cuando el teléfono recuperaba la red, su edición, escrita antes, pisaba la posterior, y el
+  texto pisado no quedaba en ningún lado ni se avisaba en ningún dispositivo. Comparar fechas no lo arregla: la base
+  sabe cuándo llegó cada edición, no cuándo se escribió, y la hora de un dispositivo no es de fiar. Cómo quedó:
+  - **La edición lleva el texto del que partió** (`base` en la operación `edit`): el que la persona tenía delante al
+    abrir el cuadro para editar (el panel lo toma en ese momento, no al guardar). Sube con
+    `edit_comment(p_id, p_body, p_base)` (`20261115120000_comentario_edicion_base.sql`): la base cambia el texto solo
+    si el que tiene sigue siendo ese. Si ya es otro, **no escribe** y contesta `{conflict: true, body, edited_at}`.
+    Se compara el texto y no `edited_at` (D325): un comentario nunca editado no es un caso aparte, no depende de
+    ninguna fecha, y dos ediciones seguidas del mismo dispositivo se encadenan solas (la segunda parte del texto de
+    la primera; si todavía no salió ninguna, se juntan en una y queda la base de la primera).
+  - **Reintentos:** una edición que llegó pero cuya respuesta se perdió encuentra su mismo texto y da bien, sin
+    escribir, antes de mirar la base y el permiso. Si entre la edición y su reintento el comentario se editó desde
+    otro dispositivo, el reintento da conflicto aunque la edición había entrado: queda a la vista de más, nunca de
+    menos.
+  - **La edición que no entró no se descarta ni se reintenta sola:** en una sola escritura sale de la cola y queda
+    **apartada** en `meta` (`editConflict:<id del comentario>`), con lo que la persona hizo después sobre ese
+    comentario, todavía no había salido **y partía de ese texto** (otra edición con ese texto de base, sus
+    menciones): lo apartado es su último texto. Lo guardado toma en el acto el texto que contestó la base, y la
+    página se baja en esa misma vuelta. No está en la cola a propósito: la cola reintenta lo rechazado cada vez que
+    abre la app, y una versión anterior de la app que tomara una edición de la cola la mandaría con la firma de dos
+    argumentos y pisaría. De `meta`, esa versión no toca esa clave. Lo demás de la cola sigue subiendo.
+  - **Un solo texto apartado por comentario, y nada lo reemplaza sin que la persona lo haya visto.** Tres casos:
+    (1) Una edición **rechazada** de antes (por ejemplo, de cuando le habían bajado el permiso) que se reintenta
+    (al abrir la app o con *Retry*) y también choca, habiendo ya otra apartada de ese comentario que no partía de
+    ella: no la reemplaza. Sigue en la cola como rechazada (*…another edit of yours on it is waiting for you to
+    choose*), con su texto para copiarlo o descartarlo, y sus menciones no se mandan; se reintenta como cualquier
+    rechazo, y cuando la apartada se decide pasa a ser ella la que espera decisión. (2) Una edición posterior que
+    **no** partía de la que choca (se escribió sobre lo guardado, con la otra rechazada a la vista) no se va con
+    ella: sale después, y si también choca queda rechazada como en (1). (3) Si el cuadro de edición ya estaba
+    abierto cuando llegó el conflicto de la edición anterior, el cuadro sigue abierto, con un aviso arriba (*This
+    comment was changed from somewhere else while you were editing…*); lo que se guarda desde ese cuadro **pasa a
+    ser lo apartado** (su texto, su hora y sus menciones) y no entra a la cola. Un texto que no partía de lo
+    apartado no la reemplaza ni se encola: se rechaza al guardar y queda en el cuadro.
+  - **A la vista (D327):** el comentario muestra los dos textos, cada uno con su rótulo (*Saved now, changed from
+    somewhere else* y *What you wrote on this device*), y tres acciones: *Keep mine* (la edición vuelve a la cola con
+    la base de lo que se está viendo; si la base volvió a cambiar, vuelve a quedar apartada), *Discard mine…* (pide
+    confirmación) y *Copy mine*. Hasta decidir no se ofrece *Edit*. En un hilo resuelto, la lista de resueltos se
+    abre sola. Cuenta en el estado con lo rechazado (`failedComments`), sale en su detalle con su texto, y va en el
+    archivo de "Download my unsynced changes"; si todo lo rechazado son ediciones apartadas, el detalle dice dónde
+    se decide y no ofrece *Retry* (no hay nada que reintentar).
+  - **Se olvida sola en un único caso:** cuando la base termina teniendo ese mismo texto (no queda nada que
+    decidir), aunque las menciones que quedaron en la base sean otras que las de la edición apartada: el texto está
+    guardado, y lo que no se manda es el aviso a quien ella nombraba.
+  - **Lo que sigue como antes:** un comentario que se borró mientras tanto (`comment_deleted`: la edición queda
+    rechazada con su texto, para copiarlo o descartarlo), el permiso que se bajó (`comment_denied`), y un hilo que
+    se resolvió (no es un conflicto: resolver no cambia el texto). Si el comentario se borra **después** de que una
+    edición quedó apartada, lo apartado sigue a la vista en el comentario borrado, para copiarlo o descartarlo.
+  - **Compatibilidad:** la firma de dos argumentos no se toca; una app publicada sigue guardando lo que llega.
+    PostgREST elige la función por los nombres de los argumentos del pedido (como con `push_page_update` y su
+    `p_app_version`). La app nueva con una base sin la migración (`PGRST202`) cae a la firma de dos argumentos y no
+    vuelve a probar por 10 minutos. No sube `schema_version`. **Mientras quede abierto un dispositivo con una
+    versión anterior a la v0.227, su edición tardía sigue pisando:** con `min_app_version` en 0.227 (D329, se sube
+    al publicar) la base frena de verdad una edición nueva hecha desde una versión vieja (503 `app_outdated`: no
+    escribe, y queda en su cola para reintentar).
+  - **La edición que una versión anterior dejó en la cola** no dice de qué texto partió. Al abrir la app, una sola
+    vez, toma de base el texto que el dispositivo tiene guardado de ese comentario (o el de la edición propia que la
+    precede en la cola): si el dispositivo no bajó nada desde que se escribió, es el texto del que partió y ya no
+    pisa; si bajó algo en el medio, la base es lo último que vio y la edición entra como antes. Achica el hueco, no
+    lo cierra: nunca es peor que mandarla sin base. Las que no tienen de dónde sacarla quedan sin base.
+  - **Lo que no cubre:** el visitante de un link público (`plink_edit_comment`) edita lo suyo solo desde el mismo
+    navegador con el que lo escribió, así que no tiene dos dispositivos que choquen; no cambió (dos pestañas de ese
+    navegador siguen con «gana la última»). Dos pestañas de un mismo dispositivo comparten la cola: ahí vale lo
+    último que se guardó, como en el resto de la cola; *Keep mine* relee lo guardado en el dispositivo antes de
+    mandar, así que lo que otra pestaña descartó no vuelve. Y después de restaurar una copia, las ediciones propias
+    que vuelven a la cola van sin base a propósito (como antes).
 - **Bajar:** los comentarios de la página abierta se bajan al abrirla y después **como mucho cada 10
   segundos** mientras siga abierta (en el acto si se subió algo de ella), y se guardan para verlos sin
   red. Si la base tiene `list_comments(p_page_id, p_since)`, se baja solo lo que cambió desde la última
