@@ -88,6 +88,13 @@ import {
  */
 export const WRITE_VERSION_SINCE = 0.099;
 
+/**
+ * La primera versión de la app que le manda su versión al portero en `POST /trash`: en la base, el número de
+ * `private.require_file_trash_version` (supabase/migrations/20261109120000_version_minima_papelera_archivos.sql;
+ * src/media/trashVersion.test.ts comprueba que sean el mismo). Con una mínima menor, `purge_file` sin versión pasa.
+ */
+export const TRASH_VERSION_SINCE = 0.218;
+
 /** Una fila de `page_snapshots` en el servidor en memoria (20261019120000_compactar_leer.sql). */
 export interface StoredSnapshot {
   id: string;
@@ -854,6 +861,8 @@ export class FakeServer {
   readonly comments = new Map<string, StoredComment>();
   /** La base tiene `import_comment` (versión 8); apagado, la función no existe (PGRST202). */
   importCommentsEnabled = false;
+  /** La base tiene `trashed_files_all` (20261108120000_papelera_archivos_todos.sql); apagado, la función no existe. */
+  trashAllEnabled = false;
   /** La base tiene `list_comments` (bajar solo lo cambiado); apagado, la app lee la vista entera. */
   listCommentsEnabled = false;
   /** Las funciones de comentarios que se llamaron, en orden (`add <id>`, `edit <id>`...). */
@@ -1106,14 +1115,35 @@ export class FakeServer {
     return (role === 'owner' || role === 'admin') && this.projectLevel(uid, projectId) >= 1;
   }
 
-  /** `purge_file`, como lo llama el portero con la sesión de la persona. */
-  purgeFile(uid: string, fileId: string): void {
+  /**
+   * Desde qué versión mínima `purge_file` rechaza un pedido sin versión (`private.require_file_trash_version`).
+   * `null`: una base sin esa migración, que no mira la versión.
+   */
+  trashVersionSince: number | null = TRASH_VERSION_SINCE;
+
+  /**
+   * `purge_file`, como lo llama el portero con la sesión de la persona. `appVersion`: la versión que el portero le
+   * pasa en el header `x-shotdocs-version` (`null`: no la pasa). Con versión, se compara con la mínima; sin versión,
+   * pasa salvo con una mínima de `trashVersionSince` o más. El permiso y el estado del archivo van antes, y pedir de
+   * nuevo lo ya pedido no pasa por la versión.
+   */
+  purgeFile(uid: string, fileId: string, appVersion: string | null = null): void {
     const f = this.mediaFiles.get(fileId);
     if (!f) throw fileNotFound();
     if (!this.canPurgeFiles(uid, f.project_id)) throw new RemoteError('not_allowed', true, '42501');
     if (!f.trashed_at) throw new RemoteError('file_not_trashed', true, 'P0001');
     if (!f.purged_at && this.fileInDeletedProject(fileId)) throw new RemoteError('file_in_deleted_project', true, 'P0001');
+    if (!f.purged_at && !this.trashVersionAllowed(appVersion)) throw new RemoteError('app_outdated', false, 'P0001');
     f.purged_at ??= new Date().toISOString();
+  }
+
+  /** `private.require_file_trash_version`: ¿este pedido puede mandar un archivo a la papelera de Drive? */
+  private trashVersionAllowed(appVersion: string | null): boolean {
+    const min = this.settings?.minAppVersion;
+    if (this.trashVersionSince === null || min == null) return true;
+    const version = appVersion?.trim() || null;
+    if (version === null) return min < this.trashVersionSince;
+    return /^\d{1,4}(\.\d{1,3})?$/.test(version) && Number(version) >= min;
   }
 
   /** `private.file_in_deleted_project` (P.14): lo usa una página de un proyecto borrado. */
@@ -1341,6 +1371,10 @@ export class FakePortero {
   loseAnswer = false;
   /** La base apunta a otro archivo de Drive (409 que no se arregla solo). */
   conflict = false;
+  /** La versión de la app que dijo cada `POST /trash` (`null`: no la dijo, como una app anterior). */
+  readonly trashVersions: (string | null)[] = [];
+  /** `false`: un portero anterior, que no le pasa a la base la versión de la app ni conoce su rechazo. */
+  forwardsAppVersion = true;
   /**
    * Un portero anterior al paso 6: ignora `file`, sube igual, responde `done` sin `linked` y no le avisa a
    * la base.
@@ -1472,10 +1506,19 @@ export class FakePortero {
       if (this.driveDisconnected) {
         return json({ error: 'Google Drive is not connected yet.', code: 'drive_not_connected' }, 503);
       }
+      // La versión de la app, del header o del cuerpo (`requestAppVersion` del portero); un portero anterior no la pasa.
+      const said = headers.get('x-shotdocs-version') ?? (typeof body?.appVersion === 'string' ? body.appVersion : null);
+      const version = !said?.trim() ? null : /^[0-9]{1,4}(\.[0-9]{1,3})?$/.test(said.trim()) ? said.trim() : 'invalid';
+      this.trashVersions.push(version);
       try {
-        this.server.purgeFile(uid, id);
+        this.server.purgeFile(uid, id, this.forwardsAppVersion ? version : null);
       } catch (err) {
         const message = err instanceof Error ? err.message : '';
+        if (message === 'app_outdated') {
+          // Un portero anterior no conoce este rechazo: contesta que la base no respondió bien.
+          if (!this.forwardsAppVersion) return json({ error: 'The workspace did not answer (503).', code: 'db_error' }, 502);
+          return json({ error: 'This workspace needs a newer version of the app. Reload the app to update it and try again.', code: 'app_outdated' }, 426);
+        }
         if (message === 'not_allowed') {
           return json({ error: 'Only the owner or an admin of the workspace can send files to the Google Drive trash.' }, 403);
         }
@@ -3063,6 +3106,27 @@ export class FakeRemote
     this.server.check();
     this.server.mediaCalls.push(`trashed_files ${projectId}`);
     if (!this.server.canSeeFileTrash(this.userId, projectId)) throw this.denied('not_allowed');
+    return this.trashedRows(projectId);
+  }
+
+  /**
+   * `trashed_files_all` (20261108120000_papelera_archivos_todos.sql): de cada proyecto sin borrar cuya papelera de
+   * archivos ve la sesión, lo mismo que `trashed_files`; uno que ve y está vacío, con la lista vacía; los que no ve, no
+   * están. `null` con una base sin la función (como `SupabaseRemote` ante `PGRST202`).
+   */
+  async trashedFilesAll(): Promise<Map<string, TrashedFileRow[]> | null> {
+    this.server.check();
+    this.server.mediaCalls.push('trashed_files_all');
+    if (!this.server.trashAllEnabled) return null;
+    const all = new Map<string, TrashedFileRow[]>();
+    for (const id of [...this.server.projects.keys()].sort()) {
+      if (!this.server.projectDeleted(id) && this.server.canSeeFileTrash(this.userId, id)) all.set(id, this.trashedRows(id));
+    }
+    return all;
+  }
+
+  /** Las filas de la papelera de archivos de un proyecto, ya decidido que la sesión la ve. */
+  private trashedRows(projectId: string): TrashedFileRow[] {
     const day = 86_400_000;
     return [...this.server.mediaFiles.values()]
       .filter((f) => f.project_id === projectId && f.trashed_at && !f.drive_trashed_at)
@@ -3691,6 +3755,7 @@ export async function makeDevice(
         token: async () => `token:${remote.userId}`,
         wait: async () => undefined,
         now: () => Date.now() + server.clockOffset,
+        appVersion,
       }),
     projectOf: (pageId) => tree.get(pageId)?.workspace_id,
     onForeignFile: (name) => server.foreignNotices.push(name),

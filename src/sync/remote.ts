@@ -226,6 +226,21 @@ export interface MediaRemote {
 }
 
 /**
+ * La papelera de archivos de todos los proyectos en un pedido
+ * (supabase/migrations/20261108120000_papelera_archivos_todos.sql). Aparte de `MediaRemote`: solo la pide la papelera
+ * con *All projects*.
+ */
+export interface TrashAllRemote {
+  /**
+   * Por cada proyecto cuya papelera de archivos ve la sesión, sus archivos (una lista vacía: la ve y no hay nada). Un
+   * proyecto que no está: la sesión no ve su papelera (lo que `trashedFiles` contesta con `not_allowed`). `null` si la
+   * base todavía no tiene la función (`PGRST202`): hay que pedir proyecto por proyecto. Siempre completa: lo que no
+   * entra en un pedido se sigue pidiendo, y si algún pedido falla, tira.
+   */
+  trashedFilesAll(): Promise<Map<string, TrashedFileRow[]> | null>;
+}
+
+/**
  * El peso de los proyectos en el Drive (P.7, supabase/migrations/20260930190000_peso_proyectos.sql). Aparte
  * de `MediaRemote`: solo lo pide el store de `src/media/projectSizes.ts`, así las pruebas no tienen que
  * simularlo.
@@ -500,6 +515,23 @@ const UNDEFINED_COLUMN = '42703';
 // La tabla o la función todavía no existen en la base (falta aplicar una migración).
 const MISSING_TABLE = new Set(['42P01', 'PGRST205']);
 const MISSING_FUNCTION = 'PGRST202';
+
+/** De a cuántas filas se pide `trashed_files_all`: el tope de filas por pedido de la API (como los comentarios). */
+export const TRASH_ALL_PAGE = 1000;
+
+/** Una fila de `trashed_files` como llega (los números grandes pueden venir como texto; el título cambió de nombre). */
+type RawTrashedFile = TrashedFileRow & { page_title?: string | null; trashed_page?: string | null };
+
+function parseTrashedFile(r: RawTrashedFile): TrashedFileRow {
+  return {
+    ...r,
+    size: Number(r.size),
+    days_left: Number(r.days_left),
+    in_trashed_page: r.in_trashed_page === true,
+    trashed_page_title: r.trashed_page_title ?? r.page_title ?? r.trashed_page ?? null,
+    in_deleted_project: r.in_deleted_project === true,
+  };
+}
 /** Lo que manda push_page_update cuando la app es más vieja que la mínima del workspace. */
 export const APP_OUTDATED = 'app_outdated';
 
@@ -744,7 +776,7 @@ export function parseProjectSize(row: Record<string, unknown>): ProjectSizeRow {
 }
 
 export class SupabaseRemote
-  implements Remote, MediaRemote, TeamRemote, SizesRemote, ProjectStatesRemote, HistoryRemote, NamedVersionsRemote, SnapshotsRemote
+  implements Remote, MediaRemote, TeamRemote, SizesRemote, TrashAllRemote, ProjectStatesRemote, HistoryRemote, NamedVersionsRemote, SnapshotsRemote
 {
   /** Desde cuándo la base no tiene `pages.settings`; se vuelve a probar cada tanto por si se migró. */
   private settingsMissingAt = 0;
@@ -1598,14 +1630,40 @@ export class SupabaseRemote
   async trashedFiles(projectId: string): Promise<TrashedFileRow[]> {
     const { data, error, status } = await timed(this.client.rpc('trashed_files', { p_project: projectId }));
     if (error) throw toRemoteError(error, status);
-    return ((data ?? []) as (TrashedFileRow & { page_title?: string | null; trashed_page?: string | null })[]).map((r) => ({
-      ...r,
-      size: Number(r.size),
-      days_left: Number(r.days_left),
-      in_trashed_page: r.in_trashed_page === true,
-      trashed_page_title: r.trashed_page_title ?? r.page_title ?? r.trashed_page ?? null,
-      in_deleted_project: r.in_deleted_project === true,
-    }));
+    return ((data ?? []) as RawTrashedFile[]).map(parseTrashedFile);
+  }
+
+  async trashedFilesAll(): Promise<Map<string, TrashedFileRow[]> | null> {
+    const byProject = new Map<string, TrashedFileRow[]>();
+    const seen = new Set<string>();
+    // La API devuelve como mucho `TRASH_ALL_PAGE` filas por pedido (el tope de filas de PostgREST): se pide de a
+    // páginas hasta agotar, con el orden escrito en el pedido para que una página siga donde terminó la anterior (por
+    // proyecto y, adentro, como `trashed_files`: lo último primero). Si una página falla, falla todo: nunca una lista
+    // parcial, porque un proyecto que no llegó se leería como "no ves su papelera".
+    for (let from = 0; ; from += TRASH_ALL_PAGE) {
+      const { data, error, status } = await timed(
+        this.client
+          .rpc('trashed_files_all')
+          .order('project_id', { ascending: true })
+          .order('trashed_at', { ascending: false, nullsFirst: false })
+          .order('id', { ascending: true })
+          .range(from, from + TRASH_ALL_PAGE - 1),
+      );
+      // Solo antes de la primera página: la base no tiene la función.
+      if (error?.code === MISSING_FUNCTION && from === 0) return null;
+      if (error) throw toRemoteError(error, status);
+      const page = (data ?? []) as ({ project_id: string } & Omit<RawTrashedFile, 'id'> & { id: string | null })[];
+      for (const { project_id, ...row } of page) {
+        const files = byProject.get(project_id) ?? [];
+        byProject.set(project_id, files);
+        // Una fila con solo el proyecto: la sesión ve esa papelera y está vacía. Un archivo que entró a la papelera
+        // entre dos páginas corre a los demás un lugar y el último de la página anterior llega de nuevo: una sola vez.
+        if (row.id == null || seen.has(row.id)) continue;
+        seen.add(row.id);
+        files.push(parseTrashedFile({ ...row, id: row.id }));
+      }
+      if (page.length < TRASH_ALL_PAGE) return byProject;
+    }
   }
 
   async projectSizes(): Promise<ProjectSizeRow[] | null> {

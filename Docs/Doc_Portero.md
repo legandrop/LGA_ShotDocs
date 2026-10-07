@@ -206,7 +206,7 @@ Supabase (`Authorization: Bearer …`). "Nivel" es el de la persona sobre el arc
 | `POST /folder/list` | Nivel 1 o más | `{ file, dir?, pageToken? }`: lo que hay ahora en la carpeta (o en la subcarpeta `dir`, adentro del árbol; si no, `404`), sin la papelera de Drive, hasta 100 por pedido (cada archivo lleva su pase firmado; 300 se midieron en ~9,5 ms de CPU en una computadora, al límite de los 10 ms del plan gratis: falta medirlo en Cloudflare). Las subcarpetas traen su id; cada archivo, su pase (`url`, 8 horas, con `m` = la fecha de cambio) y `thumb` si Drive tiene miniatura; los accesos directos y los documentos de Google, solo el nombre. → `{ entries, nextPageToken }`. `409 not_ready` si la carpeta todavía no se creó en Drive. **Con `dirs` en vez de `dir`** (hasta 40 ids de subcarpetas; las dos juntas dan `400`; lo que usa *Download all*): una sola consulta a Drive, `('a' in parents or 'b' in parents …) and trashed = false`, con `parents` entre los campos para agrupar la respuesta, y el mismo tope de 100 cosas (100 pases firmados) por pedido en total, no por subcarpeta. → `{ lists, failed, later, nextPageToken }`: `lists`, por cada subcarpeta aceptada, lo suyo en esa página (puede ser `[]`); `failed`, por cada una que no se puede listar, `not_found` (no existe, está en la papelera o no es del árbol: el mismo `404` de `dir`, sin mostrar nada de afuera); `later`, las que no entraron en el tope de llamados a Drive del pedido (36: se piden de nuevo; cada pedido avanza al menos una). Cada subcarpeta se comprueba una por una (`inTree`), salvo la comprobada hace menos de 60 s (la que Drive mostró adentro de otra ya comprobada): `dir` la sigue mirando siempre. Las páginas siguientes mandan el mismo `dirs` (solo las de `lists`: la consulta no cambia, Drive ata el `pageToken` a ella) y, si una ya no se puede comprobar, `409 changed` (la app empieza de nuevo ese grupo). **Con `partial: true`** (la app desde v0.149) una página siguiente no corta: la consulta sigue con todas, cada una se vuelve a comprobar con la misma regla y dentro del mismo tope de llamados, y la que no entra vuelve en `later` y la que ya no es del árbol en `failed`, sin nada de ellas en `lists`; la app descarta lo que ya tenía de esas y las pide de nuevo. Sin esto, más de un minuto entre páginas (Drive pidió ir más despacio) con 36 subcarpetas o más daba `409` y la app caía a listar de a una. Una app anterior que manda `dir` sigue igual; un portero anterior contesta a `dirs` sin `lists` y la app lista de a una. |
 | `GET /t/<pase>` | Quien tenga el pase | La miniatura que hace Drive del archivo del pase (lado 320), por el portero (Drive no deja usarlas desde una página), con CSP `sandbox`; la guarda la caché de Cloudflare por archivo y fecha de cambio, y el navegador un día. |
 | `POST /pass` con `fileId` | Dueño | La prueba de media: un pase para un archivo de Drive por su id. |
-| `POST /trash` | Dueño o admin (lo decide la base) | `{ file: <id> }`: manda un archivo de la papelera de la app a la papelera de Drive (`PATCH files/<id>` con `trashed: true`; nunca lo borra). Con la sesión de la persona: `media_file`; Drive conectado y, si el archivo está en Drive, que lleve la marca de este (si algo de eso falla, no se le pide nada a la base y el archivo queda como estaba); `purge_file` (la base comprueba que sea dueño o admin con permiso sobre el proyecto y que el archivo esté en la papelera, y lo marca); `media_file` de nuevo (tiene que decir que está en la papelera y pedido); Drive; y al final `media_purged`. Devuelve `{ status: 'done', file, drive }`, con `drive`: `trashed` (quedó en la papelera de Drive), `missing` (en Drive ya no estaba) o `none` (todavía no está en Drive: si la subida seguía en curso, al terminar el portero lo manda solo a la papelera de Drive). Pedirlo de nuevo no hace nada de más. Los errores traen `{ error, code }` (tabla de abajo). |
+| `POST /trash` | Dueño o admin (lo decide la base) | `{ file: <id>, appVersion?: "<versión de la app>" }`: manda un archivo de la papelera de la app a la papelera de Drive (`PATCH files/<id>` con `trashed: true`; nunca lo borra). Con la sesión de la persona: `media_file`; Drive conectado y, si el archivo está en Drive, que lleve la marca de este (si algo de eso falla, no se le pide nada a la base y el archivo queda como estaba); `purge_file` (la base comprueba que sea dueño o admin con permiso sobre el proyecto y que el archivo esté en la papelera, y lo marca; va con la versión de la app, ver "La versión de la app en `/trash`"); `media_file` de nuevo (tiene que decir que está en la papelera y pedido); Drive; y al final `media_purged`. Devuelve `{ status: 'done', file, drive }`, con `drive`: `trashed` (quedó en la papelera de Drive), `missing` (en Drive ya no estaba) o `none` (todavía no está en Drive: si la subida seguía en curso, al terminar el portero lo manda solo a la papelera de Drive). Pedirlo de nuevo no hace nada de más. Los errores traen `{ error, code }` (tabla de abajo). |
 | `POST /project/trash` | Dueño o admin que maneja el proyecto (lo decide la base) | `{ project: <id> }`: manda a la papelera de Drive la carpeta entera de un proyecto **borrado** (`LGA_ShotDocs/<Proyecto>`, con todo lo de adentro). P.14, entrega 2: sección de abajo. Devuelve `{ status: 'done', project, drive, folders }`, con `drive`: `trashed`, `missing` (Drive ya no la tenía) o `none` (nunca tuvo carpeta). |
 | `POST /project/untrash` | Igual | `{ project: <id> }`: la trae de la papelera de Drive (para restaurar el proyecto, o *Look for its files again*). `drive`: `untrashed`, `none`, o `missing` (Drive, con la misma cuenta, no tiene ninguna: **la base no se toca**). |
 | `GET /project/inspect?project=<id>` | Dueño | Solo mirar (la prueba técnica): las carpetas del proyecto en Drive con su estado en la papelera, las carpetas del día y sus archivos (`parents`, `explicitlyTrashed`, `appProperties.sdFile`) y el registro del portero. No cambia nada. |
@@ -220,7 +220,14 @@ Un pedido con el header `x-shotdocs-link` (y sin sesión) es de alguien que abri
 con la clave publicable y el header reenviado: la base valida el link y cuenta el pase) en lugar de `media_file`, nunca
 reenvía un `Authorization` que venga en el pedido, y los pases del link vencen a las 2 horas (también los de
 `/folder/list`; las cuentas siguen con 8). Un link revocado o vencido da `401 link_not_found`; uno que llegó al tope del
-día, `429 link_rate_limited`. CORS acepta `x-shotdocs-link` y `x-shotdocs-device`.
+día, `429 link_rate_limited`. CORS acepta `x-shotdocs-link`, `x-shotdocs-device` y, desde v0.218,
+`x-shotdocs-version`. **Hasta la v0.218 ese tercero faltaba**, y la app abierta por un link lo manda en cada pedido,
+también al portero: el navegador cortaba esos pedidos en la consulta previa (`OPTIONS`), así que por un link no se
+abrían originales, videos ni adjuntos, no se listaban carpetas y no se subía; estaba así desde la primera versión del
+link. Se verificó contra el portero publicado (la consulta previa no listaba el header, y un pedido desde el navegador
+quedó cortado). La regla para lo que venga: todo header que la app le mande al portero tiene que estar en
+`Access-Control-Allow-Headers` (`cors` en `portero/src/core.ts`); lo comprueba la prueba "el CORS acepta todo header que
+la app le manda" de `portero/src/core.test.ts`, con los headers reales de `linkHeaders()` y del cliente de la app.
 
 **Subir con un link *Can edit* (entrega 2b):**
 
@@ -284,6 +291,20 @@ Códigos de error al ver y al subir (mismo formato `{ error, code }`):
 
 Cualquier otro error de Drive sigue como siempre (`404` si no está, `502` lo demás).
 
+**La versión de la app en `/trash` (v0.218).** La base frena por versión mínima casi todo lo que escribe la app
+(`Doc_Sincronizacion.md`, "La versión mínima y la papelera de archivos"); `purge_file` lo llama el portero, así que la
+versión tiene que pasar por él. El portero la toma del header `x-shotdocs-version` o, si no vino, de `appVersion` en el
+cuerpo (lo que manda la app: un header nuevo no pasaría el CORS de un portero anterior), y se la pasa a la base en el
+header `x-shotdocs-version` **solo de `purge_file`**. No decide nada con ella: si tiene forma de versión (`0.218`) va tal
+cual; si no, va `invalid`, que la base no lee y rechaza como a una versión vieja; si no vino o está vacía, no manda el
+header y la base decide como con una app anterior. `media_purged` y los demás pedidos no la llevan. El CORS acepta
+`x-shotdocs-version` desde esta versión (la app abierta por un link público ya mandaba ese header en sus pedidos al
+portero). Un workspace con su propio portero lo actualiza **antes** de subir `min_app_version` a 0.218 o más: con uno
+anterior, la base rechaza los pedidos sin versión y ese portero contesta `502 db_error`. La versión la dice la app y
+nadie la comprueba: quien arme el pedido a mano puede mandar una más alta. La mínima es una guarda de compatibilidad
+(que una app vieja y honesta no escriba lo que ya no sabe escribir bien), no de seguridad; quién puede mandar un archivo
+a la papelera de Drive lo siguen decidiendo los permisos.
+
 Códigos de error de `/trash` (el campo `code`, para que la app decida sin leer el texto):
 
 | Status | `code` | Qué pasó | Qué hace la app |
@@ -295,6 +316,7 @@ Códigos de error de `/trash` (el campo `code`, para que la app decida sin leer 
 | 404 | `not_found` | No existe o la persona no lo ve. | Refrescar la lista. |
 | 409 | `in_use` | Una página lo volvió a usar: ya no está en la papelera. | Refrescar la lista (el archivo salió). |
 | 409 | `in_deleted_project` | Lo usa una página de un proyecto borrado (P.14, `purge_file` da `file_in_deleted_project`): vuelve si se restaura ese proyecto. | No ofrecer el botón (la app desde P.14 no lo ofrece; la anterior recibe este motivo en vez de `db_error`). |
+| 426 | `app_outdated` | La app que lo pidió es más vieja que la versión mínima del workspace (la base contestó su 503 `app_outdated`). No se marcó nada ni se tocó Drive. | Avisar que hay que actualizar la app y no seguir con los demás (la anterior muestra el texto del error, que lo dice entero). |
 | 503 | `drive_not_connected` | Drive no está conectado (o la conexión venció). No se pidió nada a la base. | Avisar que el dueño conecte Drive. |
 | 502 | `drive_failed` | Drive no contestó bien. Si ya se había pedido, queda pedido sin confirmar. | Reintentar más tarde. |
 | 502 | `db_outdated` | La base no tiene la migración de la papelera de archivos. | Avisar. |

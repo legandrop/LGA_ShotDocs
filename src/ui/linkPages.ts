@@ -3,13 +3,15 @@ import { useLinkMode } from '../linkMode';
 import { useServices } from '../services';
 import { Permissions } from '../sync/access';
 import type { SyncStatus } from '../sync/engine';
-import { getPublicLink, getPublicLinkPages, LINK_SCHEMA_VERSION, type LinkLevel, type PublicLinkInfo } from '../sync/publicLinks';
+import { getPublicLink, getPublicLinkPages, LINK_SCHEMA_VERSION, type LinkPageMark, type ListedLinkPage, type PublicLinkInfo } from '../sync/publicLinks';
 
 // Las páginas con un link público propio, para el ícono del árbol (Docs/Doc_Link_Publico.md, 3.11). Lo ve solo quien
-// puede abrir *Share* de esa página, y eso lo decide la base: `public_link_pages` dice dónde mirar y cada página se
-// confirma con `get_public_link`, la misma función de *Share*, que no contesta nada a quien no puede compartirla. Lo que
-// la app calcula por su cuenta (`canShare`) solo ahorra pedidos: nunca muestra un ícono que la base no confirmó. Del
-// link se guarda lo que dice el ícono (el nivel, quién lo creó, si anda), nunca el token.
+// puede abrir *Share* de esa página, y eso lo decide la base. Desde 20261107120000_link_paginas_quien_comparte.sql,
+// `public_link_pages` lista solo lo que la sesión puede compartir y trae lo que dice el ícono: un pedido alcanza. Con
+// una base anterior, la lista solo dice dónde mirar (lista lo que la sesión ve) y cada página se confirma con
+// `get_public_link`, la misma función de *Share*, que no contesta nada a quien no puede compartirla. Lo que la app
+// calcula por su cuenta (`canShare`) solo ahorra pedidos: nunca muestra un ícono que la base no confirmó. Del link se
+// guarda lo que dice el ícono (el nivel, quién lo creó, si anda), nunca el token.
 //
 // Lo guardado es de una sesión: hay un store por cada armado de los servicios (por motor), no por cliente de Supabase,
 // que es el mismo para todas las cuentas que entran al workspace en la pestaña. Otra cuenta, o la misma después de
@@ -22,13 +24,7 @@ export const LINK_PAGE_CONFIRM_MS = 10 * 60_000;
 /** Cuántas páginas se confirman como mucho por vuelta (el resto, en las siguientes). */
 export const LINK_PAGES_PER_ROUND = 20;
 
-export interface LinkPageMark {
-  level: LinkLevel;
-  /** Quién creó el link (la parte del correo antes de la @), o `null` si su cuenta ya no está. */
-  createdBy: string | null;
-  /** Anda hoy. Uno que no anda sin haber vencido: quien lo creó ya no puede compartir la página. */
-  alive: boolean;
-}
+export type { LinkPageMark };
 
 export type LinkPagesSnapshot = ReadonlyMap<string, LinkPageMark>;
 
@@ -36,7 +32,8 @@ const EMPTY: LinkPagesSnapshot = new Map();
 
 /** Lo que el store le pide a la base. */
 export interface LinkPagesApi {
-  pages(): Promise<string[]>;
+  /** Cada página con su marca si la base ya decidió, o solo su id si hay que confirmarla (una base anterior). */
+  pages(): Promise<ListedLinkPage[]>;
   link(pageId: string): Promise<PublicLinkInfo | null>;
 }
 
@@ -118,9 +115,11 @@ export class LinkPagesStore {
   }
 
   /**
-   * Pide la lista (como mucho cada `LINK_PAGES_EVERY_MS`, también después de un pedido que falló) y confirma las páginas
-   * nuevas o confirmadas hace mucho. Sin saber todavía los permisos, sin red o sin la versión de los links, nada. Si la
-   * persona es una invitada o ya no está en el workspace, además se vacía lo guardado: nunca comparte.
+   * Pide la lista (como mucho cada `LINK_PAGES_EVERY_MS`, también después de un pedido que falló). Las páginas que
+   * llegan con su marca (la base ya decidió) se marcan sin más pedidos; las que llegan solo con el id (una base
+   * anterior) se confirman de a una, las nuevas o las confirmadas hace mucho. Sin saber todavía los permisos, sin red o
+   * sin la versión de los links, nada. Si la persona es una invitada o ya no está en el workspace, además se vacía lo
+   * guardado: nunca comparte.
    */
   refresh(): Promise<void> {
     const perms = this.perms();
@@ -149,15 +148,34 @@ export class LinkPagesStore {
     const epoch = this.epoch;
     const pages = await this.api.pages();
     if (epoch !== this.epoch) return;
-    const listed = new Set(pages.filter((id) => perms.canSharePage(id)));
+    // La marca que trae la base, o `null` si la página llegó solo con el id y hay que confirmarla.
+    const fromBase = new Map<string, LinkPageMark | null>();
+    for (const p of pages) {
+      const id = typeof p === 'string' ? p : p.pageId;
+      if (perms.canSharePage(id)) fromBase.set(id, typeof p === 'string' ? null : p.mark);
+    }
+    const listed = new Set(fromBase.keys());
     // Lo que *Share* leyó mientras la lista viajaba es más nuevo que ella: se queda aunque la lista no lo traiga.
     for (const [id, at] of this.confirmedAt) if (at >= started && this.snapshot.has(id)) listed.add(id);
     // Lo que ya no tiene link vivo (o dejó de verse) se va en el acto.
     const kept = new Map([...this.snapshot].filter(([id]) => listed.has(id)));
     for (const id of [...this.confirmedAt.keys()]) if (!listed.has(id)) this.confirmedAt.delete(id);
     const before = this.snapshot;
-    this.snapshot = kept.size === before.size ? before : kept;
-    const due = [...listed].filter((id) => this.now() - (this.confirmedAt.get(id) ?? -Infinity) >= LINK_PAGE_CONFIRM_MS);
+    let changed = kept.size !== before.size;
+    for (const [id, mark] of fromBase) {
+      // Lo que *Share* leyó mientras la lista viajaba gana: un link recién apagado no vuelve con la lista vieja.
+      if (!mark || (this.confirmedAt.get(id) ?? -Infinity) >= started) continue;
+      const had = kept.get(id);
+      if (!had || had.level !== mark.level || had.createdBy !== mark.createdBy || had.alive !== mark.alive) {
+        kept.set(id, mark);
+        changed = true;
+      }
+      this.confirmedAt.set(id, this.now());
+    }
+    this.snapshot = changed ? kept : before;
+    const due = [...listed].filter(
+      (id) => !fromBase.get(id) && this.now() - (this.confirmedAt.get(id) ?? -Infinity) >= LINK_PAGE_CONFIRM_MS,
+    );
     try {
       for (const id of due.slice(0, LINK_PAGES_PER_ROUND)) {
         const info = await this.api.link(id);

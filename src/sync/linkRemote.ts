@@ -537,6 +537,10 @@ export class LinkRemote extends SupabaseRemote {
     return [];
   }
 
+  override async trashedFilesAll(): Promise<Map<string, never[]>> {
+    return new Map();
+  }
+
   override async filesDueForPurge(): Promise<never[]> {
     return [];
   }

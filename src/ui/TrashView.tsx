@@ -27,8 +27,9 @@ import { extensionLabel, fileKind } from '../media/attachments';
 // borrados (P.14), en una sola lista del más nuevo al más viejo, dentro del selector de proyectos. Arriba, el filtro
 // *All / Projects / Pages / Files* y de qué proyectos (el abierto, o todos). Cada tipo hace lo mismo que antes:
 // - Páginas: de la copia del dispositivo (anda sin red); *Restore* a quien puede manejar la página.
-// - Archivos: con red, uno por proyecto que la persona ve (`trashed_files`; la base decide); mandar a la papelera de
-//   Drive y *Empty*, solo el dueño y los admins.
+// - Archivos: con red, de los proyectos que la persona ve (la base decide): con varios, en un solo pedido
+//   (`trashed_files_all`), y con uno solo o con una base sin esa función, uno por proyecto (`trashed_files`); mandar a
+//   la papelera de Drive y *Empty*, solo el dueño y los admins.
 // - Proyectos: con red y la base en la versión 9 (`trashed_projects`: la base decide cuáles ve cada uno). No son de
 //   ningún proyecto abierto: se ven con los dos alcances.
 
@@ -358,8 +359,9 @@ export function TrashPanel(props: { current: string; onClose: () => void }) {
 }
 
 /**
- * Las papeleras de archivos de los proyectos del alcance: una consulta por proyecto (la que había, `trashed_files`),
- * la primera vez que entra en el alcance y con red. Mandar a la papelera de Drive, de a uno o *Empty*, como antes.
+ * Las papeleras de archivos de los proyectos del alcance, la primera vez que cada uno entra en el alcance y con red.
+ * Con varios proyectos por pedir (*All projects*), un solo pedido (`trashed_files_all`); con uno solo, o si la base no
+ * tiene esa función, una consulta por proyecto (`trashed_files`). Mandar a la papelera de Drive, de a uno o *Empty*.
  */
 function useFileTrash(projectIds: string[], online: boolean) {
   const { media, remote, sizes } = useServices();
@@ -369,6 +371,8 @@ function useFileTrash(projectIds: string[], online: boolean) {
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const live = useRef(true);
   const asked = useRef(new Set<string>());
+  /** La base no tiene `trashed_files_all`: en esta vista se pide proyecto por proyecto. */
+  const noAll = useRef(false);
   useEffect(() => {
     live.current = true;
     return () => {
@@ -388,12 +392,54 @@ function useFileTrash(projectIds: string[], online: boolean) {
     [remote],
   );
 
+  /** Varios proyectos en un pedido. Lo que la base no trae, la sesión no lo ve; sin la función, de a uno. */
+  const loadMany = useCallback(
+    (ids: string[]) => {
+      for (const id of ids) asked.current.add(id);
+      setLoaded((l) => {
+        const next = { ...l };
+        for (const id of ids) if (next[id]?.state !== 'ready') next[id] = { state: 'loading' };
+        return next;
+      });
+      remote.trashedFilesAll().then(
+        (all) => {
+          if (!live.current) return;
+          if (all === null) {
+            noAll.current = true;
+            for (const id of ids) reload(id);
+            return;
+          }
+          setLoaded((l) => {
+            const next = { ...l };
+            for (const id of ids) {
+              const files = all.get(id);
+              next[id] = files ? { state: 'ready', files } : { state: 'hidden' };
+            }
+            return next;
+          });
+        },
+        (err: unknown) => {
+          if (!live.current) return;
+          const message = errorMessage(err);
+          setLoaded((l) => {
+            const next = { ...l };
+            for (const id of ids) if (next[id]?.state !== 'ready') next[id] = { state: 'error', message };
+            return next;
+          });
+        },
+      );
+    },
+    [remote, reload],
+  );
+
   // Sin red no se pide nada (quedan cargando); al volver la red, lo que faltaba. Cada proyecto, una vez.
   const key = projectIds.join(',');
   useEffect(() => {
     if (!online) return;
-    for (const id of key ? key.split(',') : []) if (!asked.current.has(id)) reload(id);
-  }, [key, online, reload]);
+    const pending = (key ? key.split(',') : []).filter((id) => !asked.current.has(id));
+    if (pending.length > 1 && !noAll.current) loadMany(pending);
+    else for (const id of pending) reload(id);
+  }, [key, online, reload, loadMany]);
 
   const drop = (file: TrashedFileRow) => {
     setLoaded((l) => {
@@ -418,8 +464,9 @@ function useFileTrash(projectIds: string[], online: boolean) {
       notify(t('fileTrash.inUse', { name: file.name }));
       return true;
     }
-    // Sin Drive conectado no se mandó ni se marcó nada: se avisa, sin error en el archivo.
-    if (outcome.status === 'not_connected') {
+    // Sin Drive conectado, o con la app más vieja que la mínima del workspace, no se mandó ni se marcó nada: se
+    // avisa, sin error en el archivo.
+    if (outcome.status === 'not_connected' || outcome.status === 'outdated') {
       notify(outcome.message);
       return false;
     }

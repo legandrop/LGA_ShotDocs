@@ -3084,6 +3084,9 @@ export class MediaQueue {
     try {
       await this.porteroFor(this.url).trash(id);
     } catch (err) {
+      // La base, por el portero, dijo que esta app es más vieja que la mínima (la subieron después de la última
+      // consulta del motor): no se marcó nada, y el resto de la cola deja de mandar como con cualquier `app_outdated`.
+      if (err instanceof PorteroError && err.code === 'app_outdated') this.markOutdated();
       // Drive falló después de que la base lo marcó como pedido: en las páginas se ve "pedido".
       if (err instanceof PorteroError && err.status >= 500 && err.code !== 'drive_not_connected') await this.refreshDeleted(id);
       throw err;

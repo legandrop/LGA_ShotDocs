@@ -1400,6 +1400,47 @@ sin header, solo con una mínima de 0.099 o más. El rechazo es el mismo 503 `ap
 - Pruebas: `src/sync/teamWriteVersion.test.ts` y `supabase/tests/version_minima_equipo_permisos.sql`. No sube
   `schema_version`.
 
+### La versión mínima y la papelera de archivos (v0.218)
+
+Lo último que quedaba afuera: mandar un archivo de la papelera de la app a la papelera de Drive. `purge_file` no lo
+llama la app sino el portero, con la sesión de la persona, y el portero no sabía qué versión de la app se lo pedía. La
+app ya se frena sola (con una versión menor que la mínima no manda nada de archivos), pero la base no podía exigirlo.
+
+Tres piezas, pensadas para que el orden en que se publican no importe:
+
+- **La app** le dice su versión al portero en `POST /trash`, en el cuerpo (`appVersion`). No en un header: un header
+  nuevo no pasa el CORS de un portero anterior y el navegador cortaría el pedido entero.
+- **El portero** se la pasa a la base en el header `x-shotdocs-version` de `purge_file`, sin decidir nada con ella (lo
+  que no tiene forma de versión viaja como `invalid`, que la base rechaza). También la lee del header, que su CORS
+  acepta desde esta versión.
+- **La base** (`private.require_file_trash_version`, migración `20261109120000_version_minima_papelera_archivos.sql`):
+  con el header, la regla de siempre (menor que la mínima o ilegible: 503 `app_outdated`, sin marcar nada); **sin el
+  header pasa como hasta ahora**, salvo que la mínima sea 0.218 o más, la primera versión que lo manda. Corre después
+  de los permisos y del estado del archivo y solo si va a marcar: repetir lo ya pedido no pasa por ahí, y la
+  confirmación (`media_purged`) no se frena, para que lo pedido termine.
+
+| La base | El portero | La app | Qué pasa |
+|---|---|---|---|
+| con la migración | anterior | cualquiera | Sin header: pasa como siempre (con la mínima menor que 0.218). |
+| con la migración | nuevo | anterior (no dice su versión) | Sin header: lo mismo. |
+| con la migración | nuevo | 0.218 o más | Se compara con la mínima. |
+| sin la migración | cualquiera | cualquiera | La base ignora el header: como siempre. |
+
+**Para cerrar del todo** (que una app anterior a la 0.218 tampoco pueda): subir `min_app_version` a 0.218 o más. Desde
+ahí un pedido sin versión se rechaza. Antes de subirla, el portero tiene que ser el de esta versión (en Wanka se
+publica solo con la app; un workspace con su propio portero lo actualiza primero): con un portero anterior y la mínima
+en 0.218, mandar a Drive falla para todos con *The workspace did not answer (503)*.
+
+**Es una guarda de compatibilidad, no de seguridad.** La versión la dice la app (acá y en todo lo demás que frena la
+mínima) y nadie la comprueba: quien arme el pedido a mano puede mandar una más alta. Sirve para que una app vieja y
+honesta no escriba; lo que cada persona puede hacer lo deciden los permisos, que van antes.
+
+En la app: el portero contesta `426` con `code: 'app_outdated'`; la papelera avisa *This workspace needs a newer version
+of the app…*, no deja un error en el archivo, *Empty* no sigue con los demás y la cola de archivos queda frenada como
+con cualquier `app_outdated`. Pruebas: `src/media/trashVersion.test.ts` (que además ata el 0.218 de la migración, de su
+prueba SQL y del servidor en memoria a la entrada del changelog que la nombra), `portero/src/core.test.ts` y
+`supabase/tests/version_minima_papelera_archivos_permisos.sql`. No sube `schema_version`.
+
 ## Barreras de error (v0.147)
 
 Hasta acá la única barrera de error de React era la de las partes que se bajan aparte (`lazyPart.tsx`, que solo explica

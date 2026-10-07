@@ -260,6 +260,11 @@ export interface PorteroDeps {
   wait?: (ms: number, signal?: AbortSignal) => Promise<void>;
   /** El reloj (las pruebas lo adelantan). */
   now?: () => number;
+  /**
+   * La versión de la app, que va en `POST /trash` para que la base la compare con la mínima del workspace. Por
+   * defecto, la de esta compilación; vacía, no se manda (como una versión anterior).
+   */
+  appVersion?: string;
 }
 
 /**
@@ -444,6 +449,7 @@ export class Portero {
   private readonly wait: (ms: number, signal?: AbortSignal) => Promise<void>;
   private readonly send: PartSender | null;
   private readonly now: () => number;
+  private readonly appVersion: string;
   /**
    * Lo que se aprendió de las respuestas lentas (ver `learn`): a qué velocidad llegó al portero, en bytes por
    * segundo, la última parte que tardó en contestar con el cuerpo ya afuera. `null`: ninguna tardó.
@@ -463,6 +469,7 @@ export class Portero {
     this.link = deps.link ?? null;
     this.wait = deps.wait ?? sleep;
     this.now = deps.now ?? (() => Date.now());
+    this.appVersion = deps.appVersion ?? (typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : '');
   }
 
   status(): Promise<DriveStatus> {
@@ -577,10 +584,14 @@ export class Portero {
    * o `none` (nunca terminó de subirse). Pedirlo de nuevo no hace nada de más. Errores (`PorteroError` con
    * el estado y, si lo manda, el código): 403 sin permiso o si el archivo de Drive no es ese; 404 si no
    * existe; 409 con `code: 'in_use'` si una página lo volvió a usar; 503 con `code: 'drive_not_connected'`;
-   * 502 si Drive falló (se puede volver a pedir).
+   * 502 si Drive falló (se puede volver a pedir); 426 con `code: 'app_outdated'` si esta app es más vieja que la
+   * versión mínima del workspace (no se marcó ni se mandó nada).
+   *
+   * La versión de la app va en el cuerpo (`appVersion`) y no en un header: un header nuevo no pasaría el CORS de un
+   * portero anterior y cortaría el pedido entero. El portero se la pasa a la base, que es la que decide.
    */
   async trash(file: string): Promise<TrashResult> {
-    return this.request<TrashResult>('POST', '/trash', { json: { file } });
+    return this.request<TrashResult>('POST', '/trash', { json: this.appVersion ? { file, appVersion: this.appVersion } : { file } });
   }
 
   /**

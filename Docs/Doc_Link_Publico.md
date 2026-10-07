@@ -750,7 +750,7 @@ notify pgrst, 'reload schema';
 | La página y la barra | 1 | Solo la rama, sin nombres de workspace ni proyecto, *Shared with a link · <dominio>* |
 | Comentarios | 1 | *Your name*, *(via link)*, `mine`, sin resolver |
 | `src/media/portero.ts` | 1 | Pases con el header; sin imagen nítida automática en modo link; miniaturas según el plan que salga de la entrega 0 |
-| `portero/src/core.ts` | 1 (ver) y 2 (subir) | Las rutas de 3.9 con `plink_media_file`; pases de 2 horas (también en `/folder/list`); CORS con `x-shotdocs-link` y `x-shotdocs-device`; sin reenviar `Authorization` con el link |
+| `portero/src/core.ts` | 1 (ver) y 2 (subir) | Las rutas de 3.9 con `plink_media_file`; pases de 2 horas (también en `/folder/list`); CORS con `x-shotdocs-link`, `x-shotdocs-device` y `x-shotdocs-version` (este último recién desde v0.218: ver "El portero no aceptaba la versión de la app"); sin reenviar `Authorization` con el link |
 | `src/sync/docs.ts` | 2 | La cuarentena (3.8.2): `docQuarantine`, la prueba de las filas con `plink_id`, el aviso |
 | La cola sin red | 2 | Los rechazos de 3.8.3 con *Download them*; umbral de la subida sin GC en 1 MB |
 | Historial (Worker incluido) | 2 | *Ana (via link)* y *Set aside (via link)*, con la misma prueba |
@@ -1032,7 +1032,9 @@ strict-origin-when-cross-origin` para toda la app, `public/robots.txt` con `Disa
   su nombre una vez y no resuelve hilos.
 - **El portero:** con `x-shotdocs-link` acepta solo `POST /pass`, `POST /verify`, `POST /folder/list` y
   `GET /drive/status` (lo demás, `403 link_denied`), pregunta `plink_media_file` con la clave publicable y el header,
-  nunca reenvía un `Authorization` y da pases de 2 horas (también en `/folder/list`). CORS acepta los dos headers.
+  nunca reenvía un `Authorization` y da pases de 2 horas (también en `/folder/list`). CORS aceptaba solo
+  `x-shotdocs-link` y `x-shotdocs-device`, y la app manda además `x-shotdocs-version`: por eso los pedidos al portero
+  no pasaban en un navegador hasta la v0.218 ("El portero no aceptaba la versión de la app").
 - **Pruebas:** `supabase/tests/link_publico_permisos.sql` (en `begin … rollback` contra la base real: pasa) y 48
   mutantes de la migración, 45 detectados; los 3 que no, son equivalentes: el chequeo de forma del token (la huella igual
   rechaza), la guarda del token en la política (rendimiento) y el proyecto borrado (`user_can_share_page` ya da falso).
@@ -2683,7 +2685,9 @@ Pruebas en `linkShare.test.tsx` (3 más) y `linkMode.test.ts` (1 más). Siguen e
   color de aviso y manda a *Share*. **Un link vencido no lleva ícono** (la lista tampoco lo trae): que venció lo dice
   *Share*. **Lo ve solo quien puede abrir *Share* de esa página, y lo decide la base:** `public_link_pages()`
   dice dónde mirar (los ids) y cada página se confirma con `get_public_link`, la función de *Share*, que no contesta nada
-  a quien no puede compartirla. Lo que la app calcula por su cuenta solo ahorra pedidos (un invitado no pregunta nada).
+  a quien no puede compartirla (desde v0.218 la lista ya contesta solo a quien comparte y trae lo del ícono: ver "La
+  lista de páginas con link, solo para quien comparte"). Lo que la app calcula por su cuenta solo ahorra pedidos (un
+  invitado no pregunta nada).
   La lista se pide como mucho cada 2 minutos (también después de un pedido que falló: un servidor caído no recibe uno por
   cada aviso de la sincronización) y cada página se vuelve a confirmar cada 10 (hasta 20 por vuelta); abrir
   *Share* actualiza el ícono en el acto con lo que acaba de leer. Del link se guarda el nivel, quién lo creó y si anda:
@@ -2732,8 +2736,8 @@ no uno por archivo.
   al último `learn`.
 - **`public_link_pages()` es también un tema de privacidad, no solo de pedidos.** La función contesta a cualquiera que ve
   la página, invitados incluidos, si la llaman a mano: les dice que esa página (que ya ven) tiene un link público. La app
-  no se lo muestra a nadie que no comparta, pero la base lo entrega. Cerrarlo pide una migración: el diseño con
-  `can_share` de la tabla de abajo.
+  no se lo muestra a nadie que no comparta, pero la base lo entrega. **Hecho en v0.218** con el diseño con `can_share`
+  de la tabla de abajo (sección siguiente).
 - **La pantalla del link que ya no anda y la base local de comentarios.** Para leer la cola abre la base local de
   comentarios del link, y la crea vacía si no existía. Y un comentario que la base ya recibió pero cuyo acuse se perdió
   (sigue en la cola) figura como «no mandado»: quien lo copia y lo vuelve a mandar por otro lado lo duplica.
@@ -2743,8 +2747,50 @@ no uno por archivo.
 | Qué | Por qué no alcanza lo de hoy | Diseño |
 |---|---|---|
 | De qué link vino cada comentario (*Can view link, created by lega*, 3.7) | `list_comments` da `plink_id`, pero ninguna función dice el nivel ni el creador de un link por su id (`get_public_link` es por página y solo del link vivo; el de una página de arriba llega sin creador), y un comentario puede ser de un link ya renovado | Una función `public_link_labels(p_ids uuid[])` para `authenticated`, que devuelva `id`, `level`, `created_by_name` y `revoked` solo de los links cuya raíz la sesión puede compartir (`private.can_share(null, page_id)`), hasta 200 ids por pedido; el panel de comentarios la llama con los `plink_id` de la página y arma el detalle. Sin `can_share`, nada (ni existencia) |
-| Que `public_link_pages()` conteste solo a quien comparte (privacidad), y que el ícono no dependa de dos pedidos | `public_link_pages()` lista a quien ve la página (nivel 1), no a quien la comparte: un invitado que la llama a mano se entera de que la página tiene link, y por eso la app confirma cada una con `get_public_link` | Cambiar su cuerpo a `private.can_share(null, pl.page_id)` y sumar `level`, `created_by_name` y `alive` al resultado (columnas al final: la app publicada lee solo `page_id`); el ícono pasa a un solo pedido |
+| **Hecho en v0.218.** Que `public_link_pages()` conteste solo a quien comparte (privacidad), y que el ícono no dependa de dos pedidos | `public_link_pages()` lista a quien ve la página (nivel 1), no a quien la comparte: un invitado que la llama a mano se entera de que la página tiene link, y por eso la app confirma cada una con `get_public_link` | Cambiar su cuerpo a `private.can_share(null, pl.page_id)` y sumar `level`, `created_by_name` y `alive` al resultado (columnas al final: la app publicada lee solo `page_id`); el ícono pasa a un solo pedido |
 | Que la base rechace «(via link)» en el nombre | `plink_add_comment` y `plink_push_page_update` limpian controles y marcas de dirección, no el rótulo | Donde las dos validan el nombre (hoy `btrim(p_author)` y el chequeo de largo y de caracteres), sacar `\(\s*v[ií]a\s+link\s*\)` (sin distinguir mayúsculas) antes del `btrim`; si queda vacío, `author_missing` como hoy |
+
+### La lista de páginas con link, solo para quien comparte (v0.218)
+
+Migración `20261107120000_link_paginas_quien_comparte.sql`. `public_link_pages()` deja de listar las páginas con link
+que la sesión **ve** y pasa a listar las que **puede compartir** (`private.can_share(null, página)`, la regla de
+`get_public_link`): quien ve la página sin poder compartirla (Ver, Comentar, Editar y crear sin ser admin ni dueño del
+proyecto, un invitado, un admin que solo la ve) ya no recibe su fila, ni llamándola a mano. Devuelve, después de
+`page_id`, lo que dice el ícono: `level`, `created_by_name` (la parte del correo antes de la @) y `alive` (quien lo creó
+todavía puede compartir la página; lo vencido no se lista). Nunca el token.
+
+- **La app publicada** lee solo `page_id` y confirma cada página con `get_public_link`, que ya contestaba solo a quien
+  comparte: recibe las mismas páginas que terminaba mostrando. La exportación (`loadFileLinks`) usa la lista igual.
+- **La app nueva** (`src/ui/linkPages.ts`, `getPublicLinkPages`): una fila que trae `level` se marca con lo que dice,
+  sin pedir nada más; el ícono sale de **un pedido** cada 2 minutos en vez de uno más por página. Una fila que trae solo
+  `page_id` es de una base sin la migración: ahí la lista sigue diciendo solo dónde mirar y cada página se confirma como
+  antes. La app nunca decide sola: sin la marca de la base, pregunta. Lo que *Share* leyó mientras la lista viajaba
+  sigue ganando (un link recién apagado no reaparece).
+- **Lo que no cambia:** `anon` no la llama; quien recibe una fila ya podía leer lo mismo, y más, con `get_public_link`.
+  No sube `schema_version`.
+- **Pruebas:** `supabase/tests/link_paginas_quien_comparte_permisos.sql` (para cada persona, la lista coincide con lo
+  que `get_public_link` le contesta página por página) y `src/ui/linkPagesList.test.ts`.
+
+### El portero no aceptaba la versión de la app (v0.218)
+
+**Estaba roto desde la primera versión del link público (v0.114).** La app abierta por un link manda tres headers en
+cada pedido, también al portero (`linkHeaders` en `src/linkMode.ts`): `x-shotdocs-link`, `x-shotdocs-device` y
+`x-shotdocs-version`. El CORS del portero aceptaba los dos primeros y no el tercero. Antes de un pedido así el navegador
+hace una consulta previa (`OPTIONS`) y, si algún header no está en `Access-Control-Allow-Headers`, corta el pedido
+entero. Resultado: quien entraba por un link veía la página, los comentarios y las miniaturas (salen de Supabase), pero
+no podía abrir originales, videos ni adjuntos (`POST /pass`), ni listar una carpeta, ni subir con *Can edit*. Con una
+cuenta no pasaba: la sesión no manda ese header al portero.
+
+- **Cómo se verificó (2026-10-06):** la consulta previa al portero publicado no devolvía `x-shotdocs-version` entre los
+  headers aceptados, y un pedido con ese header hecho desde un navegador quedó cortado antes de salir.
+- **Por qué no se vio antes:** las pruebas llaman al portero directo, sin la consulta previa del navegador, y la única
+  prueba del CORS miraba los dos headers del link, no los que la app manda de verdad.
+- **El arreglo:** el portero acepta `x-shotdocs-version` (`portero/src/core.ts`, `cors`). Se publica con la app.
+- **La prueba que lo ataja** (`portero/src/core.test.ts`, "el CORS acepta todo header que la app le manda"): toma las
+  claves de `linkHeaders()` y los headers de cada pedido que hace el cliente del portero de la app (con sesión y por un
+  link: estado, pases, subir por partes, papelera) y exige que todos estén en lo que el portero contesta a la consulta
+  previa. Un header nuevo en la app sin su lugar en el CORS la hace fallar.
+- **Falta:** probar un link con fotos, un video y una subida contra el portero real después de publicar.
 
 ## Cómo se midió
 

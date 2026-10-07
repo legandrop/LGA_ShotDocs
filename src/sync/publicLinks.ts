@@ -115,17 +115,37 @@ export function getPublicLink(client: SupabaseClient, pageId: string): Promise<P
   return call(client, 'get_public_link', { p_page: pageId });
 }
 
-/**
- * Los ids de las páginas que la sesión ve y que tienen un link vivo propio (`public_link_pages`). Solo dice dónde mirar:
- * el detalle de cada una lo da `get_public_link`, que contesta solo a quien puede compartir esa página.
- */
-export async function getPublicLinkPages(client: SupabaseClient): Promise<string[]> {
-  const rows = (await call<{ page_id: unknown }[] | null>(client, 'public_link_pages', {})) ?? [];
-  return rows.map((r) => String(r.page_id));
-}
-
 /** El nivel de un link: *Can view* (que comenta) o *Can edit* (entrega 2a, con su interruptor). */
 export type LinkLevel = 'comment' | 'edit';
+
+/** Lo que el ícono del árbol dice de un link: nunca el token. */
+export interface LinkPageMark {
+  level: LinkLevel;
+  /** Quién creó el link (la parte del correo antes de la @), o `null` si su cuenta ya no está. */
+  createdBy: string | null;
+  /** Anda hoy. Uno que no anda sin haber vencido: quien lo creó ya no puede compartir la página. */
+  alive: boolean;
+}
+
+/**
+ * Una página de `public_link_pages`. Con `mark`, la base ya decidió (20261107120000_link_paginas_quien_comparte.sql):
+ * lista solo lo que la sesión puede compartir y dice lo que muestra el ícono. Solo el id (un texto): una base anterior,
+ * que lista lo que la sesión **ve**; ahí el id solo dice dónde mirar y cada página se confirma con `get_public_link`,
+ * que contesta solo a quien puede compartirla.
+ */
+export type ListedLinkPage = string | { pageId: string; mark: LinkPageMark };
+
+/** Las páginas con un link vivo propio (`public_link_pages`), como las da la base de este workspace. */
+export async function getPublicLinkPages(client: SupabaseClient): Promise<ListedLinkPage[]> {
+  const rows = (await call<Record<string, unknown>[] | null>(client, 'public_link_pages', {})) ?? [];
+  return rows.map((r) => {
+    const pageId = String(r.page_id);
+    // Sin la columna del nivel, la base es anterior a la migración: solo el id.
+    if (typeof r.level !== 'string') return pageId;
+    const createdBy = typeof r.created_by_name === 'string' && r.created_by_name ? r.created_by_name : null;
+    return { pageId, mark: { level: r.level === 'edit' ? 'edit' : 'comment', createdBy, alive: r.alive !== false } };
+  });
+}
 
 export function createPublicLink(client: SupabaseClient, pageId: string, expires: string | null, level: LinkLevel = 'comment'): Promise<PublicLink> {
   return call(client, 'create_public_link', { p_id: crypto.randomUUID(), p_page: pageId, p_level: level, p_expires: expires });

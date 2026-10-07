@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import { linkHeaders } from '../../src/linkMode';
+import { Portero as AppPortero } from '../../src/media/portero';
 import {
   CACHE_FILES,
   CACHE_HEAD_PIECES,
@@ -26,6 +28,12 @@ const env: Env = {
 };
 const SELF = 'https://portero.example';
 const APP = 'https://app.example';
+/**
+ * La primera versión de la app que le dice su versión al portero en `POST /trash` (en la base, el número de
+ * `private.require_file_trash_version`). Acá es un número de modelo: las pruebas ponen la mínima en este número, o en
+ * uno más bajo, para ver cada caso.
+ */
+const TRASH_SINCE = 0.3;
 
 function memoryStore(): Store & { data: Map<string, unknown> } {
   const data = new Map<string, unknown>();
@@ -100,6 +108,22 @@ function fakeWorld() {
   /** Quiénes pueden mandar a la papelera de Drive (en la base: dueño y admins con permiso sobre el proyecto). */
   const purgers = new Set(['u-owner', 'u-admin']);
   let trashReady = true;
+  /**
+   * La versión mínima de la app en la base (`workspace_settings.min_app_version`) y desde cuál `purge_file` rechaza
+   * un pedido sin versión (`private.require_file_trash_version`; `null`: una base sin esa migración, que no la mira).
+   */
+  let minAppVersion: number | null = null;
+  let trashVersionSince: number | null = TRASH_SINCE;
+  /** Cada pedido del portero (a la base o a Google) que llevó el header de la versión de la app. */
+  const versioned: string[] = [];
+  /** La versión con la que llegó a la base cada `purge_file` y cada `media_purged` (`null`: sin el header). */
+  const trashVersions: { fn: string; version: string | null }[] = [];
+  const trashVersionAllowed = (header: string | null): boolean => {
+    if (trashVersionSince === null || minAppVersion === null) return true;
+    const version = header?.trim() || null;
+    if (version === null) return minAppVersion < trashVersionSince;
+    return /^\d{1,4}(\.\d{1,3})?$/.test(version) && Number(version) >= minAppVersion;
+  };
   let grantedScope = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email openid';
   let n = 0;
   let mediaGets = 0;
@@ -145,6 +169,8 @@ function fakeWorld() {
     const url = new URL(String(input));
     const headers = new Headers(init.headers);
     calls.push(`${init.method ?? 'GET'} ${url.host}${url.pathname}`);
+    // Todo pedido que sale del portero con la versión de la app, a la base o a Google.
+    if (headers.has('x-shotdocs-version')) versioned.push(`${init.method ?? 'GET'} ${url.host}${url.pathname}`);
     const jsonRes = (body: unknown, status = 200, extra: Record<string, string> = {}) =>
       new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...extra } });
 
@@ -224,10 +250,18 @@ function fakeWorld() {
         if (!f || (f.levels[s.user] ?? 0) === 0) return jsonRes({ code: 'P0002', message: 'file_not_found' }, 500);
         // media_purged también la puede quien edita el archivo (termina una subida de un archivo ya pedido).
         const confirmByEditor = url.pathname.endsWith('/media_purged') && (f.levels[s.user] ?? 0) >= 3;
+        trashVersions.push({ fn: url.pathname.split('/').pop()!, version: headers.get('x-shotdocs-version') });
         if (!purgers.has(s.user) && !confirmByEditor) return jsonRes({ code: '42501', message: 'not_allowed' }, 403);
         if (url.pathname.endsWith('/purge_file')) {
           if (!f.trashed_at) return jsonRes({ code: 'P0001', message: 'file_not_trashed' }, 400);
           if (!f.purged_at && f.in_deleted_project) return jsonRes({ code: 'P0001', message: 'file_in_deleted_project' }, 400);
+          // La versión mínima, después del permiso y del estado y solo si va a marcar: el 503 de la base.
+          if (!f.purged_at && !trashVersionAllowed(headers.get('x-shotdocs-version'))) {
+            return jsonRes(
+              { code: 'P0001', message: 'app_outdated', details: null, hint: 'This version of the app is too old for this workspace. Reload the app to update it.' },
+              503,
+            );
+          }
           f.purged_at ??= '2026-10-30T10:00:00Z';
         } else {
           if (!f.purged_at) return jsonRes({ code: 'P0001', message: 'file_not_purged' }, 400);
@@ -389,6 +423,12 @@ function fakeWorld() {
     failLinks: (times: number) => (linkFailures = times),
     /** La base todavía sin la migración de la papelera de archivos. */
     noTrashYet: () => (trashReady = false),
+    /** La versión mínima de la app en la base. */
+    setMinAppVersion: (min: number | null) => (minAppVersion = min),
+    /** La base sin la migración que mira la versión en `purge_file`. */
+    noTrashVersionYet: () => (trashVersionSince = null),
+    trashVersions,
+    versioned,
     grantOnly: (scope: string) => (grantedScope = scope),
     folders: () => [...files.entries()].filter(([, f]) => f.mime === 'application/vnd.google-apps.folder'),
     /** Cuántas veces se le pidió a Drive el contenido de un archivo. */
@@ -999,6 +1039,16 @@ function trash(p: Portero, jwt: string | undefined, file: string): Promise<Respo
   return call(p, '/trash', { method: 'POST', jwt, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file }) });
 }
 
+/** `POST /trash` diciendo la versión de la app: en el cuerpo (como la app) o en el header. */
+function trashAs(p: Portero, file: string, version: unknown, how: 'body' | 'header' = 'body', jwt = 'owner-jwt'): Promise<Response> {
+  return call(p, '/trash', {
+    method: 'POST',
+    jwt,
+    headers: { 'Content-Type': 'application/json', ...(how === 'header' ? { 'x-shotdocs-version': String(version) } : {}) },
+    body: JSON.stringify(how === 'body' ? { file, appVersion: version } : { file }),
+  });
+}
+
 /** Un archivo subido de verdad al Drive de mentira y que ya está en la papelera de la app. */
 async function trashedFile(world: World, p: Portero, id: string): Promise<string> {
   addBaseFile(world, id, { size: 10 });
@@ -1006,6 +1056,233 @@ async function trashedFile(world: World, p: Portero, id: string): Promise<string
   world.base.get(id)!.trashed_at = '2026-09-30T12:00:00Z';
   return world.base.get(id)!.drive_id!;
 }
+
+describe('portero: la versión de la app en la papelera de archivos', () => {
+  const NEW = TRASH_SINCE.toFixed(3);
+  const OLD = (TRASH_SINCE - 0.002).toFixed(3);
+  /** Lo que la base y Drive saben del archivo después de un pedido. */
+  const state = (world: World, driveId: string) => ({
+    purged: !!world.base.get(FILE_A)!.purged_at,
+    confirmed: !!world.base.get(FILE_A)!.drive_trashed_at,
+    inDriveTrash: !!world.files.get(driveId)!.trashed,
+  });
+  const untouched = { purged: false, confirmed: false, inDriveTrash: false };
+  const done = { purged: true, confirmed: true, inDriveTrash: true };
+
+  it('le pasa a purge_file la versión que dijo la app, del cuerpo o del header, y a ningún otro pedido', async () => {
+    const { world, p } = await setup();
+    await trashedFile(world, p, FILE_A);
+    await trashedFile(world, p, FILE_B);
+    const before = world.calls.length;
+    expect((await trashAs(p, FILE_A, NEW)).status).toBe(200);
+    expect((await trashAs(p, FILE_B, ` ${NEW} `, 'header')).status).toBe(200);
+    expect(world.trashVersions).toEqual([
+      { fn: 'purge_file', version: NEW },
+      { fn: 'media_purged', version: null },
+      { fn: 'purge_file', version: NEW },
+      { fn: 'media_purged', version: null },
+    ]);
+    // Ningún otro pedido a la base ni a Google lleva la versión: de todos los que salieron (`media_whoami`,
+    // `media_file` dos veces, Drive, `media_purged`), solo los dos `purge_file`.
+    expect(world.calls.slice(before).filter((c) => c.includes('/rpc/media_file'))).toHaveLength(4);
+    expect(world.versioned).toEqual(['POST ws.example/rest/v1/rpc/purge_file', 'POST ws.example/rest/v1/rpc/purge_file']);
+  });
+
+  it('una app que no dice su versión (anterior) sigue como antes: purge_file sin el header', async () => {
+    const { world, p } = await setup();
+    const driveId = await trashedFile(world, p, FILE_A);
+    expect((await trash(p, 'owner-jwt', FILE_A)).status).toBe(200);
+    expect(world.trashVersions[0]).toEqual({ fn: 'purge_file', version: null });
+    expect(state(world, driveId)).toEqual(done);
+  });
+
+  it('lo que no tiene forma de versión viaja como "invalid" (la base lo rechaza); vacío o de otro tipo, como si no la dijera', async () => {
+    const { world, p } = await setup();
+    await trashedFile(world, p, FILE_A);
+    for (const bad of ['abc', '0.2180', '1.2.3', '0.218\r\nx-otro: 1', '9'.repeat(40), '-1', '0,218']) {
+      world.base.get(FILE_A)!.purged_at = null;
+      world.base.get(FILE_A)!.drive_trashed_at = null;
+      world.trashVersions.length = 0;
+      await trashAs(p, FILE_A, bad);
+      expect(world.trashVersions[0], bad).toEqual({ fn: 'purge_file', version: 'invalid' });
+    }
+    for (const none of ['', '   ', 218, null, { v: '0.218' }, ['0.218']]) {
+      world.base.get(FILE_A)!.purged_at = null;
+      world.base.get(FILE_A)!.drive_trashed_at = null;
+      world.trashVersions.length = 0;
+      await trashAs(p, FILE_A, none);
+      expect(world.trashVersions[0], JSON.stringify(none)).toEqual({ fn: 'purge_file', version: null });
+    }
+    // El header gana sobre el cuerpo.
+    world.base.get(FILE_A)!.purged_at = null;
+    world.base.get(FILE_A)!.drive_trashed_at = null;
+    world.trashVersions.length = 0;
+    await call(p, '/trash', {
+      method: 'POST',
+      jwt: 'owner-jwt',
+      headers: { 'Content-Type': 'application/json', 'x-shotdocs-version': '0.300' },
+      body: JSON.stringify({ file: FILE_A, appVersion: '0.100' }),
+    });
+    expect(world.trashVersions[0]).toEqual({ fn: 'purge_file', version: '0.300' });
+  });
+
+  it('con una versión menor que la mínima del workspace: 426 app_outdated, sin marcar nada ni tocar Drive', async () => {
+    const { world, p } = await setup();
+    const driveId = await trashedFile(world, p, FILE_A);
+    world.setMinAppVersion(TRASH_SINCE - 0.001);
+    const patches = world.calls.filter((c) => c.startsWith('PATCH')).length;
+    for (const [version, how] of [[OLD, 'body'], [OLD, 'header'], ['no-es-version', 'body']] as const) {
+      const res = await trashAs(p, FILE_A, version, how);
+      expect(res.status).toBe(426);
+      expect(await res.json()).toEqual({
+        error: 'This workspace needs a newer version of the app. Reload the app to update it and try again.',
+        code: 'app_outdated',
+      });
+      // Con CORS: la app lee el motivo.
+      expect(res.headers.get('Access-Control-Allow-Origin')).toBe(APP);
+    }
+    expect(state(world, driveId)).toEqual(untouched);
+    expect(world.calls.filter((c) => c.startsWith('PATCH'))).toHaveLength(patches);
+    expect(world.calls).not.toContain('POST ws.example/rest/v1/rpc/media_purged');
+    // La mínima y una mayor pasan.
+    expect((await trashAs(p, FILE_A, (TRASH_SINCE - 0.001).toFixed(3))).status).toBe(200);
+    expect(state(world, driveId)).toEqual(done);
+  });
+
+  it('sin decir la versión: pasa con la mínima por debajo de la primera versión que la manda, y desde ahí se rechaza', async () => {
+    const { world, p } = await setup();
+    const driveId = await trashedFile(world, p, FILE_A);
+    world.setMinAppVersion(TRASH_SINCE - 0.001);
+    expect((await trash(p, 'owner-jwt', FILE_A)).status).toBe(200);
+    expect(state(world, driveId)).toEqual(done);
+
+    world.base.get(FILE_A)!.purged_at = null;
+    world.base.get(FILE_A)!.drive_trashed_at = null;
+    world.files.get(driveId)!.trashed = false;
+    world.setMinAppVersion(TRASH_SINCE);
+    const res = await trash(p, 'owner-jwt', FILE_A);
+    expect(res.status).toBe(426);
+    expect(await res.json()).toMatchObject({ code: 'app_outdated' });
+    expect(world.base.get(FILE_A)!.purged_at).toBeNull();
+    expect(world.files.get(driveId)!.trashed).toBe(false);
+    // La app nueva, que la dice, pasa.
+    expect((await trashAs(p, FILE_A, NEW)).status).toBe(200);
+  });
+
+  it('el permiso y el estado del archivo van antes que la versión; lo ya pedido termina aunque la app sea vieja', async () => {
+    const { world, p } = await setup();
+    const driveId = await trashedFile(world, p, FILE_A);
+    world.setMinAppVersion(TRASH_SINCE);
+    expect(await (await trashAs(p, FILE_A, OLD, 'body', 'editor-jwt')).json()).toMatchObject({ code: 'not_allowed' });
+    expect(await (await trashAs(p, FILE_A, OLD, 'body', 'stranger-jwt')).json()).toMatchObject({ code: 'not_found' });
+    addBaseFile(world, FILE_B, { size: 10 });
+    await uploadFile(p, 'editor-jwt', FILE_B, bytes(10));
+    expect(await (await trashAs(p, FILE_B, OLD)).json()).toMatchObject({ code: 'in_use' });
+    // Pedido por una app permitida y sin confirmar (Drive falló): una app vieja que lo repite lo termina.
+    world.onPatch(() => 'fail');
+    expect((await trashAs(p, FILE_A, NEW)).status).toBe(502);
+    expect(state(world, driveId)).toEqual({ purged: true, confirmed: false, inDriveTrash: false });
+    world.onPatch(null);
+    expect((await trashAs(p, FILE_A, OLD)).status).toBe(200);
+    expect(state(world, driveId)).toEqual(done);
+  });
+
+  it('con una base que todavía no mira la versión, la versión viaja igual y nada cambia', async () => {
+    const { world, p } = await setup();
+    const driveId = await trashedFile(world, p, FILE_A);
+    world.noTrashVersionYet();
+    world.setMinAppVersion(9);
+    expect((await trashAs(p, FILE_A, OLD)).status).toBe(200);
+    expect(world.trashVersions[0]).toEqual({ fn: 'purge_file', version: OLD });
+    expect(state(world, driveId)).toEqual(done);
+  });
+
+  it('CORS deja pasar el header de la versión de la app', async () => {
+    const { p } = await setup();
+    const res = await p.handle(new Request(`${SELF}/trash`, { method: 'OPTIONS', headers: { Origin: APP } }));
+    expect(res.status).toBe(204);
+    const allowed = res.headers.get('Access-Control-Allow-Headers')!.split(/,\s*/);
+    expect(allowed).toContain('x-shotdocs-version');
+    // Los de siempre siguen.
+    for (const h of ['Authorization', 'Content-Type', 'Content-Range', 'Range', 'x-shotdocs-link', 'x-shotdocs-device']) expect(allowed).toContain(h);
+  });
+});
+
+describe('portero: el CORS acepta todo header que la app le manda', () => {
+  // El contrato entre la app y el portero: el navegador consulta antes (`OPTIONS`) y corta el pedido entero si alguno
+  // de sus headers no está en `Access-Control-Allow-Headers`. La app abierta por un link manda los de `linkHeaders`
+  // en cada pedido, también al portero; con sesión, los que arma su cliente del portero.
+
+  /** Los headers que el portero dice aceptar, en minúsculas. */
+  async function allowed(p: Portero, path: string, method: string): Promise<string[]> {
+    const res = await p.handle(new Request(`${SELF}${path}`, { method: 'OPTIONS', headers: { Origin: APP, 'Access-Control-Request-Method': method } }));
+    expect(res.status).toBe(204);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe(APP);
+    return res.headers.get('Access-Control-Allow-Headers')!.split(',').map((h) => h.trim().toLowerCase());
+  }
+
+  /** El cliente del portero de la app, con cada pedido anotado y contestado por este portero como desde el navegador. */
+  function appClient(p: Portero, deps: { token?: () => Promise<string | null>; link?: Record<string, string> }) {
+    const sent: { method: string; path: string; headers: string[] }[] = [];
+    const client = new AppPortero(SELF, {
+      ...deps,
+      appVersion: '0.218',
+      wait: async () => undefined,
+      fetch: async (input, init = {}) => {
+        const headers = new Headers(init.headers);
+        sent.push({ method: init.method ?? 'GET', path: new URL(String(input)).pathname, headers: [...headers.keys()] });
+        headers.set('Origin', APP);
+        return p.handle(new Request(String(input), { ...init, headers }));
+      },
+    });
+    return { client, sent };
+  }
+
+  it('los de un link público (linkHeaders), con la versión de la app', async () => {
+    const { p } = await setup();
+    const keys = Object.keys(linkHeaders({ token: LINK, device: 'd'.repeat(22) }, '0.218')).map((k) => k.toLowerCase());
+    expect(keys.sort()).toEqual(['x-shotdocs-device', 'x-shotdocs-link', 'x-shotdocs-version']);
+    for (const [path, method] of [['/pass', 'POST'], ['/upload', 'POST'], ['/upload/u1', 'PUT'], ['/folder/list', 'POST'], ['/drive/status', 'GET']] as const) {
+      const list = await allowed(p, path, method);
+      for (const key of keys) expect(list, `${method} ${path}`).toContain(key);
+    }
+  });
+
+  it('cada pedido que hace el cliente de la app, con sesión y por un link, lleva solo headers aceptados', async () => {
+    const { world, p } = await setup();
+    addBaseFile(world, FILE_A, { size: 10 });
+    addBaseFile(world, FILE_B, { size: 10 });
+    world.links.set(LINK, { files: { [FILE_A]: 3, [FILE_B]: 3 }, mine: [FILE_B] });
+    const session = appClient(p, { token: async () => 'owner-jwt' });
+    const link = appClient(p, { link: linkHeaders({ token: LINK, device: 'd'.repeat(22) }, '0.218') });
+
+    // Con sesión: el estado, subir un archivo por partes, un pase y mandarlo a la papelera de Drive.
+    await session.client.status();
+    await session.client.upload(new Blob([bytes(10)]), { appFile: { id: FILE_A, day: '2026-09-30' } });
+    await session.client.pass({ file: FILE_A });
+    world.base.get(FILE_A)!.trashed_at = '2026-09-30T12:00:00Z';
+    await session.client.trash(FILE_A);
+    // Por un link: el estado, un pase y subir (lo que el link no pueda no importa acá: importa lo que el pedido lleva).
+    await link.client.status().catch(() => undefined);
+    await link.client.pass({ file: FILE_B }).catch(() => undefined);
+    await link.client.upload(new Blob([bytes(10)]), { appFile: { id: FILE_B, day: '2026-09-30' } }).catch(() => undefined);
+
+    expect(session.sent.map((r) => `${r.method} ${r.path.replace(/\/upload\/.+/, '/upload/<id>')}`)).toEqual(
+      expect.arrayContaining(['GET /drive/status', 'POST /upload', 'PUT /upload/<id>', 'POST /pass', 'POST /trash']),
+    );
+    expect(link.sent.map((r) => `${r.method} ${r.path}`)).toEqual(expect.arrayContaining(['GET /drive/status', 'POST /pass', 'POST /upload']));
+    // La subida por partes lleva `Content-Range`; los pedidos del link, sus tres headers y nunca una sesión.
+    expect(session.sent.flatMap((r) => r.headers)).toEqual(expect.arrayContaining(['authorization', 'content-type', 'content-range']));
+    for (const r of link.sent) {
+      expect(r.headers).toEqual(expect.arrayContaining(['x-shotdocs-link', 'x-shotdocs-device', 'x-shotdocs-version']));
+      expect(r.headers).not.toContain('authorization');
+    }
+    for (const r of [...session.sent, ...link.sent]) {
+      const list = await allowed(p, r.path, r.method);
+      for (const header of r.headers) expect(list, `${r.method} ${r.path}: ${header}`).toContain(header);
+    }
+  });
+});
 
 describe('portero: papelera de archivos', () => {
   it('manda el archivo a la papelera de Drive (nunca lo borra), después de que la base lo marca, y lo confirma', async () => {

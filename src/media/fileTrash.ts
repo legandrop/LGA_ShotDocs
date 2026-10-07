@@ -46,6 +46,11 @@ export type TrashOutcome =
   | { status: 'in_use'; message: string }
   /** 503 con `code: 'drive_not_connected'`: no se mandó nada ni se marcó nada; los demás fallarían igual. */
   | { status: 'not_connected'; message: string }
+  /**
+   * 426 con `code: 'app_outdated'`: esta app es más vieja que la versión mínima del workspace. No se mandó ni se marcó
+   * nada; los demás fallarían igual hasta actualizar la app.
+   */
+  | { status: 'outdated'; message: string }
   /** Una página de este dispositivo lo usa y todavía no se sincronizó: se saltea. */
   | { status: 'unsent_use'; message: string }
   /** 403, 404, otro 409, 502, sin red...: queda en la lista con el error a la vista. */
@@ -60,6 +65,7 @@ export async function sendToDriveTrash(trash: (fileId: string) => Promise<unknow
     if (err instanceof UnsentUseError) return { status: 'unsent_use', message: err.message };
     if (err instanceof PorteroError && err.code === 'in_use') return { status: 'in_use', message: err.message };
     if (err instanceof PorteroError && err.code === 'drive_not_connected') return { status: 'not_connected', message: driveNotConnected() };
+    if (err instanceof PorteroError && err.code === 'app_outdated') return { status: 'outdated', message: t('queue.outdated') };
     if (err instanceof PorteroError && err.status === 0) {
       return { status: 'error', message: t('fileTrash.noConnection') };
     }
@@ -69,7 +75,8 @@ export async function sendToDriveTrash(trash: (fileId: string) => Promise<unknow
 
 /**
  * "Empty": manda todos de a uno, en orden, avisando el avance después de cada uno. Si uno falla, sigue con
- * los demás; si el Drive no está conectado, para (fallarían todos). Devuelve cómo terminó cada uno.
+ * los demás; si el Drive no está conectado o la app es más vieja que la mínima del workspace, para (fallarían
+ * todos). Devuelve cómo terminó cada uno.
  */
 export async function emptyFileTrash(
   trash: (fileId: string) => Promise<unknown>,
@@ -83,7 +90,7 @@ export async function emptyFileTrash(
     const outcome = await sendToDriveTrash(trash, id);
     results.set(id, outcome);
     onProgress?.(results.size, fileIds.length, id, outcome);
-    if (outcome.status === 'not_connected') break;
+    if (outcome.status === 'not_connected' || outcome.status === 'outdated') break;
   }
   return results;
 }

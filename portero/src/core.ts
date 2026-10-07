@@ -606,7 +606,7 @@ function cors(req: Request, env: Env): Record<string, string> {
   return {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
-    'Access-Control-Allow-Headers': 'Authorization, Content-Type, Content-Range, Range, x-shotdocs-link, x-shotdocs-device',
+    'Access-Control-Allow-Headers': 'Authorization, Content-Type, Content-Range, Range, x-shotdocs-link, x-shotdocs-device, x-shotdocs-version',
     'Access-Control-Max-Age': '600',
     Vary: 'Origin',
   };
@@ -644,6 +644,23 @@ async function readBody(req: Request): Promise<Record<string, unknown>> {
   } catch {
     return {};
   }
+}
+
+/** El header con el que la app le dice su versión a la base, y el portero se la pasa (`purge_file`). */
+const APP_VERSION_HEADER = 'x-shotdocs-version';
+
+/**
+ * La versión de la app que hace el pedido: la del header `x-shotdocs-version` o, si no vino, la de `appVersion` en el
+ * cuerpo (lo que manda la app: un header nuevo no pasaría el CORS de un portero anterior). `null` si no la dijo (una
+ * app anterior). El portero no decide nada con ella: se la pasa a la base, que la compara con la mínima del workspace.
+ * Lo que no tiene forma de versión viaja como `invalid`, que la base no sabe leer y rechaza como a una versión vieja:
+ * mandar basura no es una forma de saltearse el control, y nada raro llega a un header.
+ */
+function requestAppVersion(req: Request, body: Record<string, unknown>): string | null {
+  const raw = req.headers.get(APP_VERSION_HEADER) ?? (typeof body.appVersion === 'string' ? body.appVersion : null);
+  const value = raw?.trim();
+  if (!value) return null;
+  return /^[0-9]{1,4}(\.[0-9]{1,3})?$/.test(value) ? value : 'invalid';
 }
 
 /**
@@ -756,7 +773,7 @@ export class Portero {
       err instanceof HttpError && [401,403].includes(err.status) ? 'workspace_session' : 'workspace_unavailable'); }
   }
 
-  private rpc(auth: string, fn: string, args: unknown, link?: string, signal?: AbortSignal): Promise<Response> {
+  private rpc(auth: string, fn: string, args: unknown, link?: string, signal?: AbortSignal, appVersion?: string | null): Promise<Response> {
     return this.http(`${this.env.SUPABASE_URL.replace(/\/+$/, '')}/rest/v1/rpc/${fn}`, {
       method: 'POST',
       headers: {
@@ -764,6 +781,8 @@ export class Portero {
         Authorization: auth,
         'Content-Type': 'application/json',
         ...(link ? { 'x-shotdocs-link': link } : {}),
+        // La versión de la app que pidió esto, para lo que la base frena por versión mínima.
+        ...(appVersion ? { [APP_VERSION_HEADER]: appVersion } : {}),
       },
       body: JSON.stringify(args),
       ...(signal ? { signal, cache: 'no-store' as const, redirect: 'manual' as const } : {}),
@@ -1503,7 +1522,9 @@ export class Portero {
    *   2. Drive conectado (un token vigente) y, si el archivo está en Drive, que lleve la marca de este
    *      (`appProperties.sdFile`). Si algo de esto falla no se pide nada a la base: el archivo queda en la
    *      papelera de la app como estaba.
-   *   3. `purge_file`: la base decide si puede (solo dueño y admins) y si está en la papelera, y lo marca.
+   *   3. `purge_file`: la base decide si puede (solo dueño y admins) y si está en la papelera, y lo marca. Va con
+   *      la versión de la app que lo pidió (`requestAppVersion`): si es más vieja que la mínima del workspace, la
+   *      base no marca nada y esto responde `426 app_outdated`, sin haber tocado Drive.
    *   4. `media_file` de nuevo: tiene que decir que está en la papelera y pedido.
    *   5. Drive: `trashed: true`. 6. `media_purged`.
    * Pedirlo de nuevo no hace nada de más. Los errores llevan un `code` fijo (Doc_Portero.md).
@@ -1512,6 +1533,7 @@ export class Portero {
     const body = await readBody(req);
     const file = typeof body.file === 'string' ? body.file.toLowerCase() : '';
     if (!UUID.test(file)) throw new HttpError(400, 'Missing the file.', 'bad_request');
+    const appVersion = requestAppVersion(req, body);
 
     let media = await this.trashStep('db_error', () => this.mediaFile(who, file));
     if (!media) throw new HttpError(404, 'This file does not exist or you cannot see it.', 'not_found');
@@ -1532,7 +1554,7 @@ export class Portero {
       }
     }
 
-    await this.trashRpc(who, 'purge_file', file);
+    await this.trashRpc(who, 'purge_file', file, appVersion);
     media = await this.trashStep('db_error', () => this.mediaFile(who, file));
     if (!media?.trashed_at || !media.purged_at) {
       throw new HttpError(502, 'The workspace did not mark this file for the trash.', 'db_error');
@@ -1592,11 +1614,16 @@ export class Portero {
   }
 
   /** `purge_file` o `media_purged` con la sesión de la persona; sus errores, como respuestas claras. */
-  private async trashRpc(who: Who, fn: 'purge_file' | 'media_purged', file: string): Promise<void> {
-    const res = await this.rpc(who.auth, fn, { p_file: file });
+  private async trashRpc(who: Who, fn: 'purge_file' | 'media_purged', file: string, appVersion?: string | null): Promise<void> {
+    const res = await this.rpc(who.auth, fn, { p_file: file }, undefined, undefined, appVersion);
     if (res.ok) return;
     const error = (await res.json().catch(() => null)) as { code?: string; message?: string } | null;
     const message = error?.message ?? '';
+    // La app que lo pidió es más vieja que la versión mínima del workspace (503 `app_outdated` de la base): no se
+    // marcó nada. Un 4xx con el texto entero: la app anterior lo muestra tal cual y no lo toma por una falla de Drive.
+    if (message === 'app_outdated') {
+      throw new HttpError(426, 'This workspace needs a newer version of the app. Reload the app to update it and try again.', 'app_outdated');
+    }
     if (message === 'not_allowed') {
       throw new HttpError(403, 'Only the owner or an admin of the workspace can send files to the Google Drive trash.', 'not_allowed');
     }

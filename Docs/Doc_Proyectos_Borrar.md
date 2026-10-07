@@ -3652,10 +3652,27 @@ hoja de abajo de siempre en el teléfono:
   dos alcances, y con el filtro *Projects* el alcance no aparece.
 - **Cada tipo hace lo de antes:** páginas de la copia del dispositivo (anda sin red), *Restore* a quien puede
   manejarla y el título la abre (y cierra el selector); archivos con red, una consulta `trashed_files` por proyecto la
-  primera vez que entra en el alcance, mandar a la papelera de Drive de a uno o *Empty* (solo dueño y admins, con sus
-  confirmaciones); proyectos con red (`trashed_projects`), con *Restore*, *Restore without its files*, *Send files
+  primera vez que entra en el alcance (desde v0.218, con varios proyectos por pedir, un solo pedido: ver abajo),
+  mandar a la papelera de Drive de a uno o *Empty* (solo dueño y admins, con sus confirmaciones); proyectos con red (`trashed_projects`), con *Restore*, *Restore without its files*, *Send files
   to the Drive trash* y las preguntas en el renglón, iguales (`useDeletedProjects` y `DeletedProjectItem` en
   `ProjectStatesPart.tsx`, que también usa la pantalla "sin proyectos").
+- ***All projects* en un solo pedido (v0.218).** Con muchos proyectos, la primera vez se hacía un pedido por cada uno.
+  `trashed_files_all()` (migración `20261108120000_papelera_archivos_todos.sql`) recorre los proyectos sin borrar y, de
+  los que la sesión puede ver la papelera de archivos (la misma regla, `private.can_see_file_trash`), devuelve las filas
+  de `trashed_files` con `project_id` adelante; llama a `trashed_files`, así que las dos dan siempre lo mismo. De una
+  papelera que ve y está vacía devuelve una fila con solo el proyecto (`id` nulo): la app distingue "vacía" de "no la
+  ves", que no trae nada y no se muestra. La app la usa cuando hay más de un proyecto por pedir; con uno solo (*This
+  project*, o el único que faltaba) sigue con `trashed_files`. Si la base no tiene la función (`PGRST202`), la prueba
+  una vez por cada vez que se abre la papelera y pide proyecto por proyecto, como antes. Si el pedido falla, cada
+  proyecto queda con su error y su *Retry*, que lo pide por separado. Ningún permiso nuevo y no sube `schema_version`.
+  **De a páginas:** la API devuelve como mucho 1000 filas por pedido (`max_rows` de PostgREST), así que la app pide de
+  a 1000 hasta agotar (`trashedFilesAll` en `src/sync/remote.ts`), con el orden escrito en el pedido (proyecto; adentro,
+  lo último primero; el id) para que cada página siga donde terminó la anterior. Hasta 1000 archivos en total sigue
+  siendo un pedido. Si una página falla, falla todo: nunca se muestra una lista parcial, porque un proyecto que no
+  llegó se leería como "no ves su papelera". Cada página vuelve a correr la función entera en la base (ver el
+  roadmap). La consulta por proyecto (`trashed_files`) no pagina: como antes, un proyecto con más de 1000 archivos en
+  la papelera llega cortado a 1000.
+  Pruebas: `src/ui/trashAll.test.tsx` y `supabase/tests/papelera_archivos_todos_permisos.sql`.
 - **Permisos:** sin cambios en la base y sin migración. Lo que se ve sale de las mismas consultas de antes: los
   proyectos borrados, de `trashed_projects` (quien no veía *Deleted projects* con alguno adentro, no ve ninguno); los
   archivos, solo de los proyectos con `canSeeFileTrash` y lo que la base devuelve; las páginas, de lo que la base ya

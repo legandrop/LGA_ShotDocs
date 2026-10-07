@@ -295,8 +295,22 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   *Deleted projects* en el selector de proyectos, con proyectos, páginas y archivos juntos del más nuevo al más viejo,
   el filtro *All / Projects / Pages / Files* y *This project / All projects*; sin migración
   (`Doc_Proyectos_Borrar.md`, "Cómo quedó: una sola papelera"). Falta probarla a mano en la compu y el iPhone.
-  Pendiente chico: con *All projects* se hace una consulta `trashed_files` por proyecto (la primera vez); con muchos
-  proyectos convendría una función de la base que las junte (migración nueva).
+  **Hecho en v0.218:** con *All projects* se hacía una consulta `trashed_files` por proyecto (la primera vez); ahora
+  una sola (`trashed_files_all`, migración `20261108120000_papelera_archivos_todos.sql`, aplicada), y
+  con una base sin la función, como antes; con más de 1000 archivos, de a páginas de 1000.
+  **Pendiente de v0.218:** (1) **medir y abaratar `trashed_files_all` con muchos datos:** en una copia sembrada tardó
+  2,4 s con 6005 archivos en 150 proyectos, y cada página vuelve a correr la función entera (7 páginas en ese caso);
+  si pesa, que la función reciba desde dónde seguir en vez de un tramo. (2) Si el pedido único falla con muchos
+  proyectos, sale una línea de error con su *Retry* por cada proyecto: juntarlas en una. (3) La consulta por proyecto
+  (`trashed_files`) sigue cortada a 1000 archivos por proyecto, como siempre. (4) De la re-verificación (BAJO): cada
+  página vuelve a leer la base, así que un cambio entre dos páginas (un archivo que sale de la papelera, un proyecto
+  que la sesión deja de ver) corre las filas un lugar y puede faltar un archivo, o un proyecto verse como sin acceso,
+  hasta reabrir la papelera; hace falta más de 1000 archivos y un cambio en los segundos de la carga. Y el corte
+  («una página con menos de 1000 filas es la última») supone que la base entrega 1000 filas o más por pedido: un
+  workspace con su propio Supabase y un tope menor recibiría la lista cortada sin aviso (los comentarios tienen el
+  mismo supuesto). Las dos cosas se resuelven pidiendo el total con cada página (`count: 'exact'`) y repitiendo la
+  carga una vez si lo juntado no coincide, o con la función que recibe desde dónde seguir; y la guía para crear un
+  workspace tendría que decir el tope.
   **Entrega 3, *Delete forever* (v0.167, D-23 (6)):** en el renglón de un proyecto borrado de la papelera, pasados los
   30 días, dueños y admins que lo manejan escriben la palabra y el proyecto sale de la papelera para siempre; es una
   marca (`purged_at`), ninguna fila se borra, y la carpeta va antes a la papelera de Drive si no estaba. Migración
@@ -420,9 +434,16 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   se renueva o se crea otro, y Enter en el campo confirma como *Set date*.
   **Quedó de v0.215** (`Doc_Link_Publico.md`, "Restos del link (v0.215)", "Lo que queda, sabido"): (a) si una
   confirmación del ícono viaja justo mientras *Share* crea o apaga ese link, la respuesta vieja pisa la nueva y se corrige
-  sola en la vuelta siguiente (2 a 10 minutos); (b) **privacidad:** `public_link_pages()` contesta a cualquiera que ve la
-  página, invitados incluidos si la llaman a mano, y revela que la página tiene un link: cerrarlo pide una migración (que
-  conteste solo con `can_share`; el diseño está en el doc); (c) la pantalla del link que ya no anda abre (y crea si no
+  sola en la vuelta siguiente (2 a 10 minutos); (b) **privacidad, hecho en v0.218:** `public_link_pages()` contestaba a
+  cualquiera que ve la página, invitados incluidos si la llamaban a mano, y revelaba que la página tiene un link; ahora
+  contesta solo a quien puede compartirla, con lo que dice el ícono (migración
+  `20261107120000_link_paginas_quien_comparte.sql`, aplicada). **Pendiente: medirla con muchos
+  links:** en una copia sembrada, 750 ms con 608 links para quien comparte y 240 a 390 ms para un miembro que no recibe
+  nada; es lineal en todos los links del workspace y la app la pide cada 2 minutos. Propuesta: cortar al principio si
+  el rol de la sesión es nulo o invitado, y mirar el permiso por proyecto antes que por página. **Arreglado en v0.218,
+  falta probarlo de verdad:** quien entraba por un link no podía abrir originales, videos ni adjuntos, ni subir (el
+  portero no aceptaba el header de la versión que manda la app; `Doc_Link_Publico.md`, "El portero no aceptaba la
+  versión de la app"): probar un link con fotos, un video y una subida contra el portero real; (c) la pantalla del link que ya no anda abre (y crea si no
   existía) la base local de comentarios, y un comentario ya entregado cuyo acuse se perdió figura como «no mandado»; el
   aviso del link *Can edit* que esta app usa solo para leer no sabe decir si hay que actualizar la app o si editar con
   un link está apagado (haría falta que `plink_open` lo cuente). Aparte, no es del link: `src/export/export.test.tsx`
@@ -1056,10 +1077,19 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
     sigue cada instalación desde `updatefound`; archivar, borrar y restaurar proyectos también frenan. La migración ya
     está aplicada (verificada en la base el 2026-10-06) y `min_app_version` está en 0.181. **Hecho en v0.214:** compartir,
     sacar permisos, invitar, cambiar roles y sacar personas también frenan en la base (migración
-    `20261106120000_version_minima_equipo.sql`). **Falta:** en la base sigue sin versión la papelera de archivos: mandar
-    un archivo a la papelera de Drive lo pide el portero, que no recibe la versión de la app (hay que pasársela y que la
-    pase a la base); en la app la cola de archivos ya se frena sola (no manda nada con una versión menor a la mínima). Un
-    workspace autohospedado necesita CORS que acepte `x-shotdocs-version`. Sin reproducir: como aceptar una invitación
+    `20261106120000_version_minima_equipo.sql`). **Hecho en v0.218:** la papelera de archivos también frena en la base:
+    la app le dice su versión al portero en `POST /trash`, el portero se la pasa a `purge_file` y la base la compara
+    (migración `20261109120000_version_minima_papelera_archivos.sql`, aplicada); sin la versión pasa
+    como siempre mientras la mínima sea menor que 0.218. **Falta:** subir `min_app_version` a 0.218 (o más) para que una
+    app anterior tampoco pueda, con el portero ya publicado (`Doc_Sincronizacion.md`, "La versión mínima y la papelera
+    de archivos"). Un workspace autohospedado necesita CORS que acepte `x-shotdocs-version`, también en su portero.
+    **Quedó de v0.218:** (1) después del primer rechazo la cola queda frenada, y un segundo intento de mandar a la
+    papelera de Drive sale como error del archivo y no como aviso (`MediaQueue.trash` en `src/media/queue.ts` tira un
+    error común cuando ya está frenada): que salga igual que el primero. (2) La prueba «una app anterior, que no dice
+    su versión…» de `src/media/trashVersion.test.ts` usa el cliente nuevo sin versión, no la app publicada de verdad
+    (la v0.090 copiada de `offlineLargo.test.ts` no manda a la papelera): modelarla con el código publicado. (3) La
+    versión la dice la app y nadie la comprueba (un cliente armado a mano puede mandar una alta): la mínima es una
+    guarda de compatibilidad, no de seguridad, acá y en todo lo demás que frena. Sin reproducir: como aceptar una invitación
     también frena, una persona invitada que abre por primera vez el workspace con una versión vieja de la app guardada en
     el dispositivo no la acepta en ese arranque y podría ver la pantalla de «sin proyectos» hasta que la app se actualice
     y se vuelva a abrir (`src/services.ts`, donde se aceptan las invitaciones antes de buscar el primer proyecto). Si

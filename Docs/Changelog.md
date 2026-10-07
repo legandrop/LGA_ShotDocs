@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.218 :
+
+Quien entraba por un link público no podía abrir originales, videos ni adjuntos, ni subir: la app por link manda su versión en cada pedido al portero, y el portero no aceptaba ese header (roto desde el primer link). Ahora lo acepta. Además, tres restos que pedían la base. `public_link_pages()` le decía a cualquiera que ve una página que tiene un link público: ahora contesta solo a quien puede compartirla, con lo que muestra el ícono del árbol. La papelera con *All projects* pedía los archivos una vez por proyecto: `trashed_files_all()` los junta, de a páginas. Y mandar un archivo a la papelera de Drive no miraba la versión mínima, porque lo pide el portero: la app le dice su versión, el portero la pasa y `purge_file` la compara; sin versión pasa como antes con una mínima menor que 0.218 (`20261109120000_version_minima_papelera_archivos.sql`).
+
+[Aceptar en el portero la versión que manda la app abierta por un link (originales, videos, adjuntos y subidas), contestar la lista de páginas con link solo a quien las comparte, juntar la papelera de archivos de todos los proyectos y frenar por versión mínima el envío de archivos a la papelera de Drive]
+
 v0.217 :
 
 Lo rechazado por un "no existe" de la base quedaba esperando *Retry* o la reapertura de la app aunque la causa se hubiera revertido: ese código es también lo que la base contesta cuando la sesión dejó de ver o de poder editar la página. Ahora el contenido, los comentarios y los archivos rechazados así se reintentan solos cuando el árbol vuelve a mostrar la página, una vez por cada paso de "no" a "sí" y sin tocar rechazos de otra clase. Las menciones editadas mientras la página no se veía se olvidaban, porque la base contesta lo mismo por un comentario que no existe: ahora la cola pregunta por la página y, si no se ve, las deja a la vista hasta que vuelva; una mención sacada después ya no revive al reintentar. El estado dice en palabras que una página no se puede bajar.
