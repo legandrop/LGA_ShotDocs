@@ -317,23 +317,41 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   lista y quién recibe su error). **Queda, por urgencia** (el detalle, en esa sección, "Lo que queda"):
   (a) **mirar en la app real**, con la pestaña de red, que la API manda el total en un `rpc` (probado contra una API de
   mentira y contra las funciones por SQL, no contra la real);
-  (b) **el modo link sin paginar** (`plink_tree`, `plink_list_comments`, `plink_media_files`): con una rama más grande
-  que el tope el visitante ve menos y su dispositivo lo toma por entero, y si la raíz queda fuera del corte el link se
-  ve roto; nada se borra en la base (urgencia media);
+  (b) **el modo link.** **Hecho en v0.226, sin migración:** el árbol, los comentarios, los archivos y el estado de lo
+  mandado del visitante se piden por clave y hasta el total; todas las filas de una bajada del árbol traen la misma
+  firma; si la rama no deja de cambiar, el visitante sigue con el árbol que tenía y la bajada se reintenta de a un
+  intento, cada vez más espaciado. **Queda, antes de usar links sobre ramas de más de 1000 páginas:** cada pedido de
+  más cuenta el árbol entero en el tope del día del link (50 MB entre todos sus visitantes), así que el costo es
+  cuadrático: con el tope de fábrica, 1501 páginas son 0,92 MB por bajada (56 por día), 5001 son 9,2 MB (5 por día),
+  10001 son 33,9 MB (una) y desde unas 12.800 páginas el link no carga nunca; con un tope de 137, 1501 páginas son
+  5,07 MB (10 por día). Pide `plink_tree_page`, que entregue de a páginas y cuente lo que entrega
+  (`Doc_Sincronizacion.md`, "Las listas largas", "Lo que cuesta: el cupo del día del link"). Y chicos del link:
+  `plink_push_status` corta en 500 páginas adentro, sin orden (confirmado con 620), y con un tope de filas bajo gasta
+  varios `pass` por refresco; el orden de lo apartado en la app (`created_at`, `id`) no es exactamente el de la
+  función (`n`), que tendría que devolverlo; una fila que se confirma tarde con un `n` menor no llega en esa bajada
+  del aviso (llega en la siguiente); y los servidores de mentira de las pruebas no imitan el cupo `pull`;
+  (b2) **la firma del árbol de un link mezcla la estructura con el contenido** (ya en la versión publicada; gravedad
+  media). `plink_tree` firma también `clean_seq`, así que el árbol se vuelve a bajar y a contar **entero** con cada
+  base limpia nueva de cualquier página de la rama, también con ramas chicas: 423 páginas son ~130 KB por cambio y
+  por pestaña, unas 400 bajadas por día por link; con el equipo escribiendo y varios visitantes mirando, el cupo del
+  día se puede ir en horas (y entonces nadie baja el árbol ni los comentarios nuevos de ese link hasta el día
+  siguiente). Separar la firma de la estructura de la del contenido (o mandar aparte los `clean_seq` que cambiaron)
+  pide migración;
   (c) **el costo de contar a escala:** con 3.500 páginas el primer pedido del árbol pasa de 1,2–2,3 s a 2,3–4,4 s, y
   el tamaño de árbol desde el que la sincronización falla entera (8 s por sentencia) baja a la mitad; hoy no pesa (41
   páginas vivas), y el diseño para cuando haga falta está escrito (confirmar el final con un pedido por clave en
   `pages` y `page_files`, o elegir según el tamaño de la sincronización anterior);
-  (d) **listas donde se ve menos sin aviso:** `public_link_aside` (hasta 200 por página, sin tope de páginas),
-  `public_link_updates_of` (corta en 500 adentro: pide que la función devuelva el total, con migración),
-  `access_requests_pending` (corta en 100 adentro) y `public_link_pages`;
+  (d) **listas donde se ve menos sin aviso.** **Hecho en v0.226:** `public_link_aside` llega entera (por clave) y lo
+  que no entró de un link en una página también (`public_link_updates_page`, migración
+  `20261114120000_link_no_entro_por_clave.sql`). **Quedan con lo que llega** (D323): `access_requests_pending` (corta
+  en 100 adentro; al decidir uno aparece el siguiente) y `public_link_pages` (hacen falta más de 1000 links vivos);
   (e) **el cursor de los comentarios** (`updated_at` es la hora en que empezó la transacción: un cambio confirmado
   después de una bajada puede quedar detrás; no empeora respecto de v0.223; lo barato es pedir con `p_since` un minuto
   atrás), en una tanda propia;
   (f) paginar por su clave las listas que hoy dan el error o no se muestran con un tope bajo (invitaciones, nombres de
-  versión), y los chicos: errores crudos en inglés ("the same row arrived twice"), el "Try again" de
-  `scripts/lib/management.mjs` que también sale para invitar, `link_admit_work` sin el orden escrito y
-  `CommentQueue.refresh`, que no limpia el error después de una bajada que sale bien. (3) Con una base sin
+  versión), y el chico que queda: el "Try again" de `scripts/lib/management.mjs`, que también sale para invitar
+  (**hechos en v0.226:** los errores crudos en inglés, el orden escrito en `link_admit_work` y `CommentQueue.refresh`,
+  que limpia su error después de una bajada que sale bien). (3) Con una base sin
   `trashed_files_page` (un workspace que no aplicó la migración) la papelera de todos sigue pidiendo por tramos (un
   cambio entre dos puede correr las filas), pero desde v0.224 hasta el total, sin suponer el tope; la de un proyecto,
   como en v0.218 (un pedido, lo último primero). (4) De la auditoría de v0.221 (BAJO,
@@ -472,8 +490,8 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   modo liviano), limpiar las bases locales de
   links viejos, la ayuda
   según quién la lee; en la base, tiempos de un token que ya existe (el doc dice «cuesta lo mismo»), el costo sin contar
-  de `plink_tree(sig)` (26 ms con 423 páginas), y el `max_rows` de PostgREST (1000: ramas más grandes llegan cortadas; sigue así después
-  de v0.224, que lo arregló para las cuentas: `Doc_Sincronizacion.md`, "Las listas largas", "Lo que queda").
+  de `plink_tree(sig)` (26 ms con 423 páginas), y el `max_rows` de PostgREST (1000: ramas más grandes llegaban cortadas;
+  **hecho en v0.226**: `Doc_Sincronizacion.md`, "Las listas largas", "El modo link").
   **Hecho en v0.221, de esas observaciones:** la base saca «(via link)» del nombre del visitante al comentar y al
   escribir (migración `20261112120000_link_nombre_sin_rotulo.sql`, aplicada). **Limpia en vez de
   rechazar** (D314): rechazar dejaba sin entregar para siempre lo de una app anterior a v0.215. Queda afuera, a

@@ -357,6 +357,36 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
   implementarlo, Lega la puede cambiar). El tope es por pedido: una migración o una prueba larga que está respondiendo
   no se corta (la API corta por su cuenta cerca de los 100 segundos). Se cambian con `SUPABASE_API_TIMEOUT` y
   `SUPABASE_QUERY_TIMEOUT`, en segundos (`Doc_Supabase.md`).
+- **D321 · Si el árbol de un link cambia mientras se baja, se empieza de nuevo hasta 3 veces; si no deja de cambiar,
+  el visitante sigue con el árbol que tenía** (2026-10-07; tomada al implementarlo, Lega la puede cambiar). Con una
+  rama más grande que el tope de filas de la API el árbol llega en varios pedidos, y todas sus filas tienen que ser
+  del mismo estado (la misma firma). Si cambia a mitad, lo juntado se descarta. Después de 3 intentos el visitante
+  sigue con el árbol que tenía, sin aviso (lo que escribió sube igual), y la bajada se vuelve a probar de a un
+  intento: a los 20 segundos, después el doble cada vez, hasta cada 10 minutos. Solo si todavía no bajó ningún árbol
+  desde que abrió la app ve un aviso, que se va solo. La otra opción: seguir intentando en cada sincronización (cada
+  intento cuenta en el tope del día del link: se gastaba en minutos), o quedarse con una mezcla de dos estados
+  (`Doc_Sincronizacion.md`, "Las listas largas", "El modo link").
+- **D322 · Lo que no entró de un link en una página se pide entero, con una función nueva, y el aviso no dice «500 de
+  N»** (2026-10-07; tomada al implementarlo, Lega la puede cambiar). El aviso de la página contaba y descargaba hasta
+  500. Había dos formas: que la función de siempre dijera el total y el aviso mostrara «500 de N», o poder seguir desde
+  la última fila. Se eligió seguir (`public_link_updates_page`): el aviso cuenta y *Download it* baja todo, sin un
+  texto nuevo. La función de siempre queda igual para la app publicada. Con miles de filas en una página, el aviso
+  hace un pedido cada 1000 al abrirla y como mucho una vez por minuto.
+- **D323 · Las páginas con link y los pedidos de acceso siguen llegando con lo que entra en un pedido** (2026-10-07;
+  tomada al implementarlo, Lega la puede cambiar). Para que `public_link_pages` pase del tope de fábrica hacen falta
+  más de 1000 links vivos, y lo que faltaría es el ícono del árbol en algunas páginas o la dirección del link en un
+  PDF. `access_requests_pending` muestra los 100 pedidos más nuevos y, al decidir uno, aparece el siguiente. Lo
+  apartado de los links, en cambio, sí pasa a llegar entero: de ahí salen el ícono del árbol y la lista de *Share*.
+  La otra opción: paginar las dos por su clave (`Doc_Sincronizacion.md`, "Las listas largas", "Lo que queda").
+- **D324 · Cada pedido de más del árbol de un link cuenta el árbol entero en su tope del día** (2026-10-07; tomada
+  al implementarlo, Lega la puede cambiar). Se arregló sin migración: la base cuenta cada pedido con los bytes de
+  toda la lista. Solo pesa con una rama más grande que el tope de filas (que antes llegaba cortada), y ahí crece con
+  el cuadrado de la rama: con el tope de fábrica, 1501 páginas son 56 bajadas del árbol por día, 5001 son 5, 10001 es
+  una y desde unas 12.800 el link no carga; con un tope de 137, 1501 páginas son 10. Con el tope lleno nadie baja el
+  árbol ni los comentarios nuevos de ese link hasta el día siguiente. **Hay que resolverlo antes de usar links sobre
+  ramas de más de 1000 páginas.** La otra opción, anotada con su diseño: una función que entregue el árbol de a
+  páginas y cuente lo que entrega, con migración (`Doc_Sincronizacion.md`, "Las listas largas", "Lo que cuesta: el
+  cupo del día del link").
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 

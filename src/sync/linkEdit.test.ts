@@ -1,4 +1,4 @@
-import { afterAll, afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 import { Permissions } from './access';
 import { linkAuthorName } from './history';
@@ -171,6 +171,76 @@ describe('Can edit por un link, con el motor de verdad', () => {
     expect(v.remote.linkEdits()).toMatchObject({ waiting: [], aside: [] });
     // Lo pedido por el visitante fue solo plink_* (nunca la admisión).
     expect(v.calls.every((c) => c.fn.startsWith('plink_'))).toBe(true);
+  });
+
+  it('con una rama más grande que el tope de la API y un pedido del árbol que falla a mitad: lo que el visitante escribió sin subir sigue en su dispositivo y sube después', async () => {
+    const { server, e1, s, h } = await setup();
+    const token = addPublicLink(server, s, server.ownerId, 'edit');
+    await e1.engine.syncNow();
+    await e1.engine.prepareBases([s]);
+    const v = await visitor(server, token);
+    await v.engine.syncNow();
+    expect(await v.engine.prefetchPage(s)).toBe(true);
+    await write(v, s, '<t3>');
+    // La rama crece a 302 páginas y la API entrega de a 137: el segundo pedido del árbol de esta vuelta no llega.
+    for (let i = 0; i < 300; i++) {
+      const id = `00000000-0000-4000-8000-${i.toString(16).padStart(12, '0')}`;
+      server.pages.set(id, { ...server.pages.get(h)!, id, title: `Hija ${i}` });
+    }
+    server.linkMaxRows = 137;
+    const whole = server.branch.bind(server);
+    let asked = 0;
+    server.branch = (id) => {
+      if (++asked === 2) throw new TypeError('Failed to fetch');
+      return whole(id);
+    };
+    await v.engine.syncNow();
+    expect(asked).toBe(2);
+    // El árbol que tenía (S y H, ni una de más) y lo escrito, todavía sin subir.
+    expect(v.tree.children(s).map((p) => p.id)).toEqual([h]);
+    expect(await visible(v, s)).toEqual(new Set(['<t1>', '<t3>']));
+    expect(await v.docs.unsyncedPages()).toEqual([s]);
+    // La vuelta siguiente: la rama entera y lo escrito en la sala.
+    await v.engine.syncNow();
+    expect(v.tree.children(s)).toHaveLength(301);
+    expect(await v.docs.unsyncedPages()).toEqual([]);
+    expect(server.linkRoom).toMatchObject([{ pageId: s, author: 'Ana' }]);
+    expect(await visible(v, s)).toEqual(new Set(['<t1>', '<t3>']));
+  });
+
+  it('mientras la rama no deja de cambiar (y no entra en una respuesta), lo que el visitante escribe sube igual, con el árbol que tenía', async () => {
+    const { server, e1, s, h } = await setup();
+    const token = addPublicLink(server, s, server.ownerId, 'edit');
+    await e1.engine.syncNow();
+    await e1.engine.prepareBases([s]);
+    const v = await visitor(server, token);
+    await v.engine.syncNow();
+    expect(await v.engine.prefetchPage(s)).toBe(true);
+    await write(v, s, '<t3>');
+    // Dos páginas y la API entrega de a una; entre dos pedidos del árbol siempre cambia algo (un título).
+    server.linkMaxRows = 1;
+    const whole = server.branch.bind(server);
+    let asked = 0;
+    server.branch = (id) => {
+      server.pages.set(h, { ...server.pages.get(h)!, title: `H ${++asked}` });
+      return whole(id);
+    };
+    await v.engine.syncNow();
+    expect(asked).toBeGreaterThan(1);
+    expect(v.engine.getStatus().lastError).toBeNull();
+    expect(v.tree.get(h)?.title).toBe('H');
+    expect(await v.docs.unsyncedPages()).toEqual([]);
+    expect(server.linkRoom).toMatchObject([{ pageId: s, author: 'Ana' }]);
+    // La rama se queda quieta: después de la espera, el árbol nuevo.
+    server.branch = whole;
+    const now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 60_000);
+    try {
+      await v.engine.syncNow();
+    } finally {
+      clock.mockRestore();
+    }
+    expect(v.tree.get(h)?.title).toBe(`H ${asked}`);
   });
 
   it('el visitante escribe solo el contenido: ni el título, ni los ajustes, ni el asistente, ni reemplazar en el proyecto', async () => {

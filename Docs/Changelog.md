@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.226 :
+
+El visitante de un link público pedía el árbol, los comentarios, los archivos y el estado de lo que mandó en un pedido cada uno. La API entrega como mucho su tope de filas y no avisa: con una rama más grande veía menos, su dispositivo lo tomaba por todo y, si la raíz quedaba afuera, el link se veía roto. Ahora cada lista va por clave, con el orden escrito y hasta el total; las filas del árbol de una bajada traen la misma firma, y si cambia a mitad se empieza de nuevo. Lo apartado de los links llega entero. El aviso de lo que no entró de un link contaba y descargaba hasta 500: la migración `20261114120000_link_no_entro_por_clave.sql` suma `public_link_updates_page`, por clave y con el total. Además: el orden escrito en `link_admit_work`, dos errores traducidos y las pruebas que faltaban de v0.224.
+
+[Pedir por clave y hasta el total las listas del visitante de un link, lo apartado de los links y lo que no entró de un link en una página]
+
 v0.225 :
 
 Faltaba evaluar `@blocknote/core/y` (roadmap B.10), la integración de BlockNote sobre y-prosemirror 2 y Yjs 14 que se esperaba que evitara perder lo escrito cuando otro cambia el tipo, la sangría o la posición de ese renglón. Se midió fuera del repo con dos editores y las mismas agendas contra el binding de hoy: no lo arregla (300 de 300 agendas en los dos; al mover, 293 contra 173), Yjs 14 trae los tres errores de deshacer que corrige el parche propio, sus librerías son todas versiones previas y BlockNote la usa con un parche que no publica. Los bytes de Yjs no cambian; cambia dónde vive el texto de cada bloque, y las dos formas no conviven en una página. Se suma `Doc_Evaluacion_BlockNote_Y.md` con lo medido, lo que habría que rehacer, el esquema de migración y la recomendación de esperar; quedan D330 y D331 para Lega. Sin cambios de código.

@@ -105,19 +105,35 @@ describe('LinkAsideStore', () => {
     expect(h.calls).toHaveLength(3);
   });
 
-  it('con más apartados que el tope de filas por pedido de fábrica, la lista llega con lo que entra (no vacía ni en error)', async () => {
-    // 1200 apartados en 7 páginas (la función da hasta 200 por página, lo más nuevo primero) y el tope de 1000.
-    const rows = Array.from({ length: 1200 }, (_, i) => ({ id: `id-${i}`, page_id: `p-${i % 7}`, link_id: 'l', link_page_id: 'p-0', author: 'Ana', created_at: '2026-10-01T10:00:00+00:00', decided_at: null, bytes: 10, reason: 'pending' }));
+  it('con más apartados que el tope de filas por pedido de fábrica, la lista llega entera (por clave), lo más nuevo primero', async () => {
+    // 1200 apartados en 7 páginas (la función da hasta 200 por página, lo más nuevo primero) y el tope de 1000. El id no
+    // sigue el orden de llegada; los dos últimos llegaron en el mismo instante.
+    const stamp = (i: number) => `2026-10-01T10:${String(Math.floor(i / 60)).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}+00:00`;
+    const rows = Array.from({ length: 1200 }, (_, i) => ({ id: `id-${String((i * 7919) % 1200).padStart(4, '0')}`, page_id: `p-${i % 7}`, link_id: 'l', link_page_id: 'p-0', author: 'Ana', created_at: stamp(Math.min(i, 1198)), decided_at: null, bytes: 10, reason: 'pending' }));
     const api = fakePostgrest({ functions: { public_link_aside: () => rows } });
     const remote = new SupabaseRemote(api.client, '0.224');
-    expect(await remote.linkAside()).toHaveLength(1000);
+    const listed = await remote.linkAside();
+    expect(listed).toHaveLength(1200);
+    expect(listed.map((r) => r.created_at)).toEqual(rows.map((r) => r.created_at).reverse());
+    expect(listed.slice(0, 2).map((r) => r.id)).toEqual([rows[1199].id, rows[1198].id].sort().reverse());
+    expect(listed[1199]).toEqual(rows[0]);
+    // Dos pedidos, por id y con el total; con todo en una respuesta, uno (como antes).
+    expect(api.requests.map((r) => [r.rows, r.counted, r.query.order])).toEqual([[1000, true, 'id.asc'], [200, true, 'id.asc']]);
+    const small = fakePostgrest({ functions: { public_link_aside: () => rows.slice(0, 30) } });
+    expect(await new SupabaseRemote(small.client, '0.224').linkAside()).toHaveLength(30);
+    expect(small.requests).toHaveLength(1);
+    // Una base sin la función: nada. Un pedido que falla a mitad: el error (el store se queda con la lista anterior).
+    expect(await new SupabaseRemote(fakePostgrest().client, '0.224').linkAside()).toEqual([]);
+    const broken = fakePostgrest({ functions: { public_link_aside: () => rows }, fail: { 2: { status: 500, code: 'XX000', message: 'la base se reinició' } } });
+    await expect(new SupabaseRemote(broken.client, '0.224').linkAside()).rejects.toMatchObject({ message: 'la base se reinició' });
+    api.requests.length = 0;
     const listeners = new Set<() => void>();
     const engine: AsideEngine = { subscribe: (fn) => (listeners.add(fn), () => listeners.delete(fn)), getStatus: () => ({ online: true, schemaVersion: 21 }) };
     const store = new LinkAsideStore(remote, engine, () => true);
     store.subscribe(() => undefined);
     await store.refresh(true);
     expect(store.get()).toMatchObject({ ready: true });
-    expect(store.get().rows).toHaveLength(1000);
+    expect(store.get().rows).toHaveLength(1200);
     const asked = api.requests.length;
     for (let i = 0; i < 5; i++) {
       listeners.forEach((fn) => fn());

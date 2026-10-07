@@ -1057,7 +1057,7 @@ decenas de KB; los originales van al Drive por el portero), y desde v0.092 tambi
   no se corta, la que se queda quieta a mitad y las pasadas que esperan) y
   `src/media/queue.test.ts`, "miniaturas que Storage no contesta" (lo que hace la cola).
 
-## Las listas largas: sin suponer cuántas filas entrega la API (v0.224)
+## Las listas largas: sin suponer cuántas filas entrega la API (v0.224 y v0.226)
 
 La API de la base entrega como mucho un **tope de filas por pedido** (el ajuste *Max rows* del proyecto; de fábrica,
 1000) y **no avisa cuando recorta**. La app daba por última "una página con menos de 1000 filas": con un tope menor (un
@@ -1094,6 +1094,12 @@ corta: el motor la toma por todo lo que hay.
 | Lotes de contenido e historial | `pullUpdates`, `pullContent`, `pageHistory` | Si la API recortó el lote (dice que la función dio más filas), se completa desde la última fila: "menos que lo pedido" sigue queriendo decir "no hay más". |
 | Papelera de archivos, base sin `trashed_files_page` | `trashedFilesAllByRange` | Sigue por tramos, pero hasta el total. |
 | Correos de quienes comentaron o escribieron una página | `fetchCommentAuthors`, `pageHistoryAuthors` | Por clave (`user_id`) y total (`rpcByKey`): un correo que falta no deja en error la bajada de comentarios ni la carga del historial. |
+| Árbol de un link (v0.226) | `LinkRemote.fetchTree` (`plink_tree`) | Por `id` y total. Todas las filas de una bajada traen la misma firma (`sig`) y son tantas como anunció el primer pedido; si no, se empieza de nuevo (abajo, "El modo link"). |
+| Comentarios de una página por un link (v0.226) | `LinkCommentRemote.listComments` (`plink_list_comments`) | Por clave (`updated_at`, `id`) y total, como `list_comments`. |
+| Archivos por un link (v0.226) | `LinkRemote.fetchMediaFiles` (`plink_media_files`) | De a 200 ids (el tope de la función) y cada tanda por `id` y total: un archivo que el link no ve no cuesta un pedido más. |
+| Estado de lo mandado por un link (v0.226) | `LinkRemote.refreshEdits` (`plink_push_status`) | Por `page_id` y total. |
+| Lo apartado de los links (v0.226) | `linkAside` (`public_link_aside`) | Por `id` y total (`rpcByKey`); después vuelve al orden de la función, lo más nuevo primero. |
+| Lo que no entró de un link en una página (v0.226) | `linkUpdatesOf` | Con `public_link_updates_page` (migración `20261114120000`): por `n` (el orden de llegada), de a 1000, hasta el total que la función dice en cada fila. Con una base sin ella, `public_link_updates_of` como antes (hasta 500). |
 
 **Las listas que se piden de una vez** (una función de la base, sin lugar desde dónde seguir) son dos grupos. Lo que
 decide el grupo es si la lista puede tener de verdad más filas que el tope **de fábrica** y quién recibe el error.
@@ -1107,8 +1113,10 @@ decide el grupo es si la lista puede tener de verdad más filas que el tope **de
 | Invitaciones (`list_invitations`) | No | *Members* se lo traga: la sección de invitaciones no se muestra. | Con el total. |
 | Nombres de versión (`list_page_versions`) | No | `fetchVersions` se lo traga: el historial se ve sin los nombres. | Con el total. |
 | Candidatos del `@` (`mention_candidates`) | No | `refreshCandidates` se lo traga. | **Lo que llega**, como antes: con el error, el `@` se quedaba sin nadie. |
-| Lo apartado de los links (`public_link_aside`) | **Sí**: hasta 200 por página, y nunca se borra | `LinkAsideStore` se lo traga. | **Lo que llega**, como antes (lo más nuevo): con el error desaparecían la lista de *Share*, el ícono del árbol y las entradas del historial. |
-| Lo que no entró de un link en una página (`public_link_updates_of`) | La función corta en 500 **adentro** | El aviso de la página se lo traga. | **Lo que llega**, como antes. No hay total que mirar: con más de 500, el aviso cuenta y descarga de menos. |
+| Lo apartado de los links (`public_link_aside`) | **Sí**: hasta 200 por página, y nunca se borra | `LinkAsideStore` se lo traga. | En v0.224, lo que llega. **Desde v0.226, entera, por clave** (la tabla de arriba). |
+| Lo que no entró de un link en una página (`public_link_updates_of`) | La función corta en 500 **adentro** | El aviso de la página se lo traga. | En v0.224, lo que llega. **Desde v0.226, entera, con `public_link_updates_page`**; con una base sin ella, como antes. |
+| Páginas con link (`public_link_pages`) | No (una fila por página con un link vivo) | El ícono del árbol y los links del PDF se lo tragan. | **Lo que llega**, como siempre (D323). |
+| Pedidos de acceso (`access_requests_pending`) | La función corta en 100 **adentro** (lo más nuevo) | La campana y *Share* se lo tragan. | **Lo que llega**: es una lista de trabajo, decidir uno deja ver el siguiente (D323). |
 | Papelera de un proyecto, base sin `trashed_files_page` (`trashed_files`) | **Sí** (un proyecto importado y borrado) | La papelera: lo muestra. | **Lo que llega**, como antes (lo último primero): con el error no se veía nunca. Con la función nueva llega entera, por clave. |
 
 Con el tope de fábrica ninguna de las del primer grupo llega a recortarse; con un tope menor, las que muestran el error
@@ -1116,6 +1124,74 @@ dicen *This list is longer than this workspace's database sends in one request�
 de versión) simplemente no se muestran. Lo de `public_link_aside` lo encontró la auditoría de esta versión: el control
 del total, puesto ahí, dejaba la lista vacía con el tope de fábrica.
 
+- **El modo link (v0.226).** El visitante de un link público pedía sus listas en un pedido cada una. Medido con una
+  rama y una página con más filas que el tope (el motor de verdad contra una API de mentira que recorta):
+
+  | Tope de filas | Rama (páginas) | Veía antes | Ve ahora | Comentarios antes | Ahora | Pedidos del árbol (antes → ahora) |
+  |---|---|---|---|---|---|---|
+  | 1000 | 1203 | 1000 | 1203 | 1000 de 1203 | 1203 | 1 → 2 |
+  | 500 | 1203 | 500 | 1203 | 500 de 1203 | 1203 | 1 → 3 |
+  | 137 | 320 | 137 | 320 | 137 de 320 | 320 | 1 → 3 |
+  | 1 | 7 | 1 | 7 | 1 de 5 | 5 | 1 → 7 |
+
+  Lo que no venía, el dispositivo lo daba por inexistente (`PageTree.setSnapshot` reemplaza). Y como `plink_tree`
+  entrega por `id`, **la raíz del link quedaba afuera** cada vez que su id no estaba entre los primeros: con la
+  función real (por SQL, en una transacción que se deshizo), una rama de 1501 páginas y la raíz con el id más alto, las
+  primeras 1000 filas que entregaría la API venían **sin la raíz** (un árbol sin nada de dónde colgar: el link se veía
+  roto). Con el visitante de *Can edit* no se perdía lo
+  escrito (sigue en su dispositivo), pero trabajaba sobre un árbol incompleto.
+  - **Ahora** cada lista va por clave, con el orden escrito y hasta el total, como las de una cuenta
+    (`src/sync/linkRemote.ts`). Con todo en una respuesta son **los mismos pedidos que antes** (abrir el link y un
+    pedido por lista; medido con el dispositivo entero de un visitante, 41 páginas y 30 comentarios: los mismos 7
+    pedidos, en el mismo orden). Anda igual con el rol `anon` y el token en el header: el filtro, el orden y el total son del
+    pedido, no de la sesión. Ninguna de las cuatro funciones del árbol, los comentarios, los archivos y el contenido
+    corta adentro (`plink_pull_page` da una sola fila: no hay nada que recortar); `plink_push_status` sí, en 500
+    páginas y sin orden (abajo, "Lo que queda").
+  - **La firma del árbol.** `plink_tree` devuelve en cada fila la firma del árbol del que salió. El primer pedido
+    lleva la firma guardada (sin cambios, la base no devuelve nada ni cuenta); los que siguen, ninguna. Todas las
+    filas de una bajada tienen que traer **la misma** y ser tantas como dijo el primer pedido (una respuesta vacía no
+    trae firma: por eso el total). Si el árbol cambió entre dos pedidos, lo juntado se descarta y se empieza de
+    nuevo, hasta 3 veces (`TREE_TRIES`). Nunca se guarda un árbol armado con dos estados.
+  - **Si no deja de cambiar** (una importación, un movimiento masivo en una rama que no entra en una respuesta): el
+    ciclo **sigue con el árbol que tenía**, sin error, así lo que el visitante escribió sube igual; y la bajada se
+    vuelve a probar de a **un** intento, cada vez más espaciado (20 s, el doble cada vez, hasta 10 minutos:
+    `TREE_WAIT_MS`, `TREE_WAIT_MAX_MS`), hasta que una salga bien. Cada intento cuenta el árbol entero en el tope del
+    día del link: tres intentos en cada sincronización lo gastaban en minutos, para todos sus visitantes. Solo si
+    todavía no hay ningún árbol de esta carga de la app es un error (*The shared pages kept changing while they were
+    loading…*): un árbol vacío se tomaría por "no queda ninguna página". Ese caso sí corta el ciclo, con la misma
+    espera.
+  - **Un total que no coincide con las filas.** Dos bajadas seguidas que terminan con la misma firma y la misma
+    cantidad de filas son el árbol, aunque el primer pedido haya anunciado más (una rama que se achicó de verdad
+    cambia de firma): una API que contara de más no deja al link sin árbol.
+  - **Si un pedido falla,** el resultado es el error: el árbol guardado (en `LinkRemote` y en el dispositivo), los
+    comentarios guardados de la página y lo que el visitante escribió sin subir quedan como estaban, y la vuelta
+    siguiente lo completa.
+  - **Lo que cuesta: el cupo del día del link** (medido en la base real, en transacciones que se deshicieron). Las
+    funciones del link son `volatile` y cuentan cada pedido en los topes del día (`pull_bytes`, 50 MB por link **entre
+    todos sus visitantes**). `plink_tree` cuenta los bytes de **todo** el árbol, antes del filtro del pedido: unos
+    307 bytes por página, 41–64 ms por pedido con 1501 páginas. Con una rama de hasta el tope de filas, los pedidos y
+    los bytes son **idénticos a los de la v0.225**. Con una más grande, cada pedido de la bajada cuenta el árbol
+    entero, así que el costo es cuadrático: `ceil(N / tope) × 307 B × N`.
+
+    | Páginas de la rama | Tope de filas | Una bajada del árbol | Bajadas por día (50 MB) |
+    |---|---|---|---|
+    | hasta 1000 | 1000 | como en v0.225 (423 páginas: ~130 KB) | como en v0.225 |
+    | 1501 | 1000 | 0,92 MB | 56 |
+    | 1501 | 500 | 1,84 MB | 28 |
+    | 1501 | 137 | 5,07 MB | 10 |
+    | 5001 | 1000 | 9,2 MB | 5 |
+    | 10001 | 1000 | 33,9 MB | 1 |
+    | desde unas 12.800–13.000 | 1000 | más de 50 MB | ninguna: el link no carga nunca |
+
+    - **Qué dispara una bajada entera:** cada apertura o recarga del link (la firma guardada vive en memoria) y
+      **cada cambio de la firma con la pestaña abierta**, incluida cada base limpia nueva de cualquier página de la
+      rama mientras alguien edita (la firma mezcla la estructura con `clean_seq`: `Doc_Roadmap.md`).
+    - **Al agotarse:** `link_rate_limited` (`pull_bytes`) para **todos** los visitantes de ese link hasta el día
+      siguiente, en el árbol y en los comentarios con novedades (*This link has been used a lot today*). Siguen
+      andando abrir el link, el estado de lo mandado y mandar ediciones. El tope de todos los links
+      (`all_pull_bytes`, 150 MB por día) es compartido: tres links en su tope dejan sin bajar a todos los del
+      workspace.
+    - Antes, una rama más grande que el tope llegaba cortada y contaba un solo pedido.
 - **Dar una página por comprobada** (`verifyHistory` en `engine.ts`, lo que habilita mandar archivos a la papelera)
   recorre el historial hasta el cursor o hasta un lote vacío, no hasta un lote más corto que lo pedido: un lote
   recortado dejaba sin mirar lo que seguía.
@@ -1142,21 +1218,54 @@ del total, puesto ahí, dejaba la lista vacía con el tope de fábrica.
   llegan demorados (los retoma la vuelta siguiente), no perdidos; y el historial y las listas de un pedido quedarían
   cortados en silencio con un tope de filas bajo. Esto se probó contra una API de mentira que imita a PostgREST y
   contra las funciones reales por SQL, **no contra la API real** (hace falta una sesión).
+  - **Con el primer link real** (v0.226; hoy la base no tiene ninguno): que el pedido a `rpc/plink_tree` lleve
+    `Prefer: count=exact` y el header del link; que su `Content-Range` termine en un número; que la segunda
+    sincronización conteste `[]`; y **que el uso del link (`pull`, en *Share*) suba de a uno por pedido HTTP** (que la
+    API no corra la función dos veces para dar el total). Para ver el camino de varios pedidos: bajar un rato *Max
+    rows* de la Data API a 5 y abrir un link con más de 5 páginas (llegan todas, en varios pedidos con la misma
+    firma).
 - **Lo que queda.**
-  - **Pruebas que faltan** (lo que cubren anda; lo vio la re-verificación con sondas): la guarda de «el historial
-    no avanza» de `verifyHistory` (sin ella sería un bucle); que un pedido fallido a mitad de `rpcByKey` tire; las
-    pruebas del árbol, los proyectos y los usos por archivo miran solo ids, así que una columna perdida en esos
-    pedidos no se nota; y el camino viejo de la papelera por tramos con un total mentido.
-  - **El modo link** (`plink_tree`, `plink_list_comments`, `plink_media_files`, `plink_pull_page`) sigue pidiendo en un
-    pedido: con una rama más grande que el tope, el visitante ve menos y su dispositivo lo toma por entero; si la raíz
-    del link queda fuera del corte, el link se ve roto. Nada se borra en la base. El arreglo es el mismo (por `id` y
-    total), cuidando que todas las páginas de una bajada traigan la misma firma (`sig`). Urgencia media.
-  - **Se ve menos, sin aviso:** `public_link_aside` (hasta 200 por página, sin tope de páginas: lo que pasa del tope
-    de filas no llega), `public_link_updates_of` (corta en 500 adentro; pide una migración: que devuelva el total, como
-    `public_link_files`), `access_requests_pending` (corta en 100 adentro) y `public_link_pages`.
+  - **Anotado en la re-verificación de v0.226 (ninguno frena):** (1) la bajada corta repetida del árbol del link se
+    acepta con dos intentos de igual firma y cantidad; con una API que mienta de una forma puntual (el primer pedido
+    dice bien el total y los siguientes dicen «esta página es todo lo que queda») eso acepta un árbol incompleto sin
+    la raíz (medido: 274 de 401 páginas). No se llega con una API que cuente bien; se cierra con una línea en
+    `src/sync/linkRemote.ts` (aceptarla solo si la lista terminó con una página vacía). (2) Mientras dura la espera
+    entre intentos del árbol, un link revocado o vencido puede tardar hasta 10 minutos en notarse para un visitante
+    que no escribe (antes, 30 s); el que escribe lo nota en la primera sincronización. (3) En esa espera el visitante
+    ve una lista de páginas atrasada sin ninguna señal (la insignia dice «All synced»): alcanzaría una línea en el
+    detalle de la insignia. (4) Falta la prueba de que `run()` marca el error de comentarios como «de bajada».
+    (5) `sync.listRepeated` dice «se vuelve a intentar» también donde el error es permanente (la papelera de
+    archivos: ahí se reintenta con el botón).
+  - **Hecho en v0.226:** las pruebas que faltaban (la guarda de «el historial no avanza» de `verifyHistory`, un pedido
+    fallido a mitad de `rpcByKey`, las columnas del árbol, de los proyectos y de los usos por archivo, y la papelera
+    por tramos con un total mentido), el modo link, `public_link_aside`, `public_link_updates_of` (con la migración
+    `20261114120000_link_no_entro_por_clave.sql`), el orden escrito en `link_admit_work`, los dos errores que salían
+    crudos (ahora pasan por el diccionario, en los dos idiomas y sin el nombre de la función de la base, que va al
+    registro de la consola: *A list could not be loaded: the same row arrived twice…*) y el error del estado de los
+    comentarios, que `CommentQueue.refresh` limpia cuando la bajada que había fallado sale bien (si era de una bajada
+    y no es también el de otra página; uno igual que vino de una subida no se toca).
+  - **El modo link cuenta de más con una rama grande: antes de usar links sobre ramas de más de 1000 páginas.** Cada
+    pedido de más del árbol cuenta el árbol entero en el tope del día del link (arriba, "Lo que cuesta", con la
+    tabla). **Diseño** (con migración): una función `plink_tree_page(p_sig, p_after, p_limit)` que arme el árbol una
+    vez, devuelva solo la página pedida con la firma y el total, y **cuente los bytes de lo que entrega**; la app la
+    prueba y, con `PGRST202`, sigue como hoy. Lo mismo para `plink_list_comments`.
+  - **`plink_push_status` corta en 500 páginas adentro, sin orden** (confirmado con 620 páginas: llegan 500 y la API
+    dice que el total es 500). Las demás páginas se dejan de recordar (`dropSent`). No se llega en un uso real (hace
+    falta escribir en más de 500 páginas con un link y que nadie lo admita); arreglarlo es escribirle un orden y
+    darle desde dónde seguir, con migración. Y con un tope de filas bajo gasta un `pass` por pedido en cada refresco.
+  - **El orden de lo apartado** en la app (`created_at`, `id`) no es exactamente el de la función (`n`): difiere
+    entre filas con la misma fecha. Para que sea exacto, `public_link_aside` tendría que devolver `n`.
+  - **Una fila que se confirma tarde con un `n` menor** que la última recibida no llega en esa bajada del aviso de la
+    página (solo con dos links escribiendo a la vez en la misma página); llega en el refresco siguiente.
+  - **Los servidores de mentira de las pruebas no imitan el cupo `pull`:** lo que cuenta cada pedido se midió por SQL.
+  - **`public_link_pages` y `access_requests_pending` quedan con lo que llega** (D323). La primera tiene una fila por
+    página con un link vivo: hacen falta más de 1000 links vivos para pasar el tope de fábrica, y lo que falta es un
+    ícono en el árbol o la dirección del link en un PDF. Paginarla es pedirla por `page_id`, pero la piden cuatro
+    lugares con sus pruebas. La segunda corta en 100 adentro (lo más nuevo) y es una lista de trabajo: al decidir un
+    pedido aparece el siguiente.
   - **Las listas de trabajo** (`files_due_for_purge`, `link_admit_pages`, `link_admit_work`, `clean_work`) no llevan
-    el control: una parte ahora y el resto en la vuelta siguiente es lo que hacen siempre. `link_admit_work` no escribe
-    el orden en el pedido.
+    el control: una parte ahora y el resto en la vuelta siguiente es lo que hacen siempre. `link_admit_work` escribe
+    el orden en el pedido desde v0.226 (el de la función: página, link y llegada).
   - **Las listas del primer grupo** dan un error (o no se muestran) con un tope bajo en vez de paginarse; paginarlas es
     pedirlas por su clave, como los correos.
   - **El cursor de los comentarios:** `updated_at` es la hora en que empezó la transacción, así que un cambio que
@@ -1164,15 +1273,21 @@ del total, puesto ahí, dejaba la lista vacía con el tope de fábrica.
     auditoría; no empeora respecto de v0.223). Lo barato, sin migración: pedir con `p_since` un minuto atrás.
   - `fetchTree` con más de 100 proyectos son varios pedidos: una página que cambia de proyecto entre dos puede faltar
     o repetirse en esa bajada.
-  - Chicos: los errores "the same row arrived twice" y "a row without its date" llegan crudos y en inglés; en
-    `scripts/lib/management.mjs` el "Try again" también sale para invitar (un `POST` que pudo haber llegado);
-    `CommentQueue.refresh` no limpia el error del estado después de una bajada que sale bien; y los pedidos de más ya
-    dichos (`fetchMediaFiles` cuando falta un archivo, `filesBySize` al final de la lista).
+  - Chicos: en `scripts/lib/management.mjs` el "Try again" también sale para invitar (un `POST` que pudo haber
+    llegado); y los pedidos de más ya dichos (`fetchMediaFiles` cuando falta un archivo, `filesBySize` al final de la
+    lista).
 - Pruebas: `src/sync/listPages.test.ts`, contra `src/sync/fakePostgrest.ts` (el cliente de verdad y una API de mentira
   en el nivel de los pedidos: tope de 1000, 500, 137 y 1, solo las columnas pedidas, otro orden en cada pedido si no se
   lo escribe, cambios entre dos pedidos, sin total o con un total mentido, y un pedido que falla a mitad);
-  `src/ui/linkAsideStore.test.ts` (lo apartado con más filas que el tope, y los errores que no son de red) y
-  `src/media/trash.test.ts` (el historial con lotes recortados).
+  `src/sync/linkLists.test.ts` (las listas del visitante con los mismos topes: el árbol que cambia a mitad, que no
+  deja de cambiar o que pierde páginas, el pedido que falla, y el dispositivo entero de un visitante con una rama más
+  grande que el tope); `src/sync/linkEdit.test.ts` (lo escrito sin subir cuando el árbol falla a mitad);
+  `src/ui/linkAsideStore.test.ts` (lo apartado con más filas que el tope, y los errores que no son de red);
+  `src/media/trash.test.ts` (el historial con lotes recortados, y el que no avanza) y
+  `supabase/tests/link_no_entro_por_clave_permisos.sql`. Lo del modo link se probó contra la API de mentira y contra
+  las funciones reales por SQL, con el pedido como lo arma la API (el rol `anon`, el token en el header, el filtro por
+  clave, el orden y el total), **no contra la API real**: en producción, con un link abierto y la pestaña de red, la
+  respuesta de `rpc/plink_tree` tiene que traer un `Content-Range` que termine en un número.
 
 ## Permisos en el dispositivo
 

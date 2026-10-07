@@ -7,7 +7,7 @@ import { THUMB_MAX_BYTES } from '../media/probe';
 import { CLEAN_SCHEMA_VERSION } from './clean';
 import { MAX_FILE_BYTES } from './files';
 import { parseAccess, type AccessSnapshot, type GrantLevel, type Role } from './access';
-import { afterPair, COUNTED, KeyedList, wholeList } from './listPages';
+import { afterPair, COUNTED, KeyedList, repeatedRow, wholeList } from './listPages';
 import {
   REQUEST_TIMEOUT,
   RemoteError,
@@ -1330,7 +1330,9 @@ export class SupabaseRemote
   /** Los bytes de lo que espera en estas páginas (hasta 20 páginas y unos 4 MB), en orden por página, link y llegada. */
   async admitWork(pages: string[]): Promise<AdmitWorkRow[]> {
     const { data, error, status } = await timed(
-      this.client.rpc('link_admit_work', { p_app_version: this.appVersion || null, p_pages: pages }),
+      // El orden de la función, escrito en el pedido: si la API recorta la respuesta, lo que llega es el principio de
+      // cada (página, link), que es lo que la admisión decide primero.
+      this.client.rpc('link_admit_work', { p_app_version: this.appVersion || null, p_pages: pages }).order('page_id').order('link_id').order('n'),
       MAX_REQUEST_TIMEOUT_MS,
     );
     if (error?.code === MISSING_FUNCTION) return [];
@@ -1353,17 +1355,26 @@ export class SupabaseRemote
     return parseAdmitResults(data);
   }
 
+  /** Desde cuándo la base no tiene `public_link_updates_page`; se vuelve a probar cada tanto por si se migró. */
+  private linkUpdatesPageMissingAt = 0;
+
   /**
-   * Lo de un link que no entró a la página (apartado, retenido, esperando), para quien la ve con lo borrado. La función
-   * corta en 500 filas **adentro** (lo más viejo primero) y no dice cuántas había: con más, el aviso cuenta y descarga
-   * de menos. Acá no hay total que mirar; arreglarlo pide que la función lo devuelva (Docs/Doc_Sincronizacion.md, "Las
-   * listas largas", "Lo que queda").
+   * Lo de un link que no entró a la página (apartado, retenido, esperando), para quien la ve con lo borrado: **todo**,
+   * lo más viejo primero. Con `public_link_updates_page` (20261114120000_link_no_entro_por_clave.sql) se pide por clave
+   * (`n`, el orden de llegada): cada pedido sigue a la última fila recibida y la función dice en cada fila cuántas
+   * quedaban (`total`), así que ni su tope de filas ni el de la API dejan la lista corta. Con hasta 1000 es un pedido.
+   * Una base sin esa función (`PGRST202`): `public_link_updates_of`, que corta en 500 **adentro** y no dice cuántas
+   * había (el aviso cuenta y descarga hasta ahí, como en v0.225).
    */
   async linkUpdatesOf(pageId: string): Promise<LinkUpdateRow[]> {
-    const { data, error, status } = await timed(this.client.rpc('public_link_updates_of', { p_page_id: pageId }));
-    if (error?.code === MISSING_FUNCTION) return [];
-    if (error) throw toRemoteError(error, status);
-    return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+    let rows = Date.now() - this.linkUpdatesPageMissingAt < 10 * 60_000 ? null : await this.linkUpdatesByKey(pageId);
+    if (!rows) {
+      const { data, error, status } = await timed(this.client.rpc('public_link_updates_of', { p_page_id: pageId }));
+      if (error?.code === MISSING_FUNCTION) return [];
+      if (error) throw toRemoteError(error, status);
+      rows = (data ?? []) as Record<string, unknown>[];
+    }
+    return rows.map((r) => ({
       id: String(r.id),
       link_id: String(r.link_id),
       author: String(r.author),
@@ -1374,29 +1385,58 @@ export class SupabaseRemote
     }));
   }
 
+  /** `null` si la base no tiene `public_link_updates_page`. Si un pedido falla, tira: nunca una lista parcial. */
+  private async linkUpdatesByKey(pageId: string): Promise<Record<string, unknown>[] | null> {
+    const list = new KeyedList<Record<string, unknown>>('public_link_updates_page', (r) => String(r.n));
+    for (;;) {
+      const { data, error, status } = await timed(
+        this.client
+          .rpc('public_link_updates_page', { p_page_id: pageId, p_after: list.last ? Number(list.last.n) : null, p_limit: MAX_ROWS_PER_REQUEST })
+          // El orden de la función, escrito en el pedido: si la API recorta la página, lo que llega es el principio.
+          .order('n'),
+      );
+      // Solo antes de la primera página: la base no tiene la función.
+      if (error?.code === MISSING_FUNCTION && !list.last) {
+        this.linkUpdatesPageMissingAt = Date.now();
+        return null;
+      }
+      if (error) throw toRemoteError(error, status);
+      const page = (data ?? []) as Record<string, unknown>[];
+      // `total`: cuántas quedaban desde esta página, contándola (lo dice la función, antes de su tope y del de la API).
+      if (list.add(page, page.length > 0 ? Number(page[0].total) : 0)) return list.rows;
+    }
+  }
+
   /**
    * Lo apartado de todos los links en las páginas que la persona ve con lo borrado (entrega 2c). Sin la migración: nada.
    *
-   * La función ya es una vista recortada (hasta 200 por página, lo más nuevo primero) y lo apartado nunca se borra: con
-   * varias páginas pasa del tope de filas por pedido **de fábrica**. Por eso acá se devuelve lo que llegó, sin el
-   * control del total: un error dejaba sin lista a *Share*, al árbol y al historial, y lo que llega (lo más nuevo)
-   * sirve. Lo que queda afuera no se ve hasta paginarla (Docs/Doc_Sincronizacion.md, "Las listas largas").
+   * La función ya es una vista recortada (hasta 200 por página) y lo apartado nunca se borra: con varias páginas pasa
+   * del tope de filas por pedido **de fábrica**. Se pide **por clave** (`id`) y hasta el total que dice la API, así
+   * llega entera (el ícono del árbol y la lista de *Share* salen de acá); con todo en una respuesta es un pedido, como
+   * antes. Por clave las filas llegan por id: acá vuelven al orden de la función, lo más nuevo primero. Si un pedido
+   * falla, tira y `LinkAsideStore` se queda con la lista anterior.
    */
   async linkAside(): Promise<LinkAsideRow[]> {
-    const { data, error, status } = await timed(this.client.rpc('public_link_aside'));
-    if (error?.code === MISSING_FUNCTION) return [];
-    if (error) throw toRemoteError(error, status);
-    return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
-      id: String(r.id),
-      page_id: String(r.page_id),
-      link_id: String(r.link_id),
-      link_page_id: typeof r.link_page_id === 'string' ? r.link_page_id : null,
-      author: String(r.author),
-      created_at: String(r.created_at),
-      decided_at: typeof r.decided_at === 'string' ? r.decided_at : null,
-      bytes: Number(r.bytes),
-      reason: typeof r.reason === 'string' ? r.reason : null,
-    }));
+    let rows: Record<string, unknown>[];
+    try {
+      rows = await rpcByKey<Record<string, unknown>>(this.client, 'public_link_aside', {}, 'id');
+    } catch (err) {
+      if (err instanceof RemoteError && err.code === MISSING_FUNCTION) return [];
+      throw err;
+    }
+    return rows
+      .map((r) => ({
+        id: String(r.id),
+        page_id: String(r.page_id),
+        link_id: String(r.link_id),
+        link_page_id: typeof r.link_page_id === 'string' ? r.link_page_id : null,
+        author: String(r.author),
+        created_at: String(r.created_at),
+        decided_at: typeof r.decided_at === 'string' ? r.decided_at : null,
+        bytes: Number(r.bytes),
+        reason: typeof r.reason === 'string' ? r.reason : null,
+      }))
+      .sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : a.id < b.id ? 1 : -1));
   }
 
   /** Los bytes de una fila apartada o retenida (para "Download it"; nunca se aplican). */
@@ -1801,7 +1841,7 @@ export class SupabaseRemote
         if (project_id == null) return rows;
         // Cada página sigue a la anterior: una fila repetida es una base que no avanza, y pedir de nuevo no terminaría.
         const key = `${project_id}|${row.id ?? ''}`;
-        if (seen.has(key)) throw new RemoteError('trashed_files_page: the same row arrived twice', true);
+        if (seen.has(key)) throw repeatedRow('trashed_files_page', key, true);
         seen.add(key);
         rows.push({ ...row, project_id });
         after = { project: project_id, trashedAt: row.id == null ? null : row.trashed_at, id: row.id };

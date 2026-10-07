@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { fromBase64, toBase64 } from '../lib/base64';
 import { AccessStore, Permissions } from './access';
 import { CommentQueue, commentsDbName, openCommentsDb, type CommentRow } from './comments';
+import { answerRows, type FakeRow } from './fakePostgrest';
 import { PageDocs } from './docs';
 import { SyncEngine } from './engine';
 import { PageFiles } from './files';
@@ -261,7 +262,28 @@ export function fakeLinkClient(server: FakeServer, headers: Record<string, strin
       },
     }),
   };
-  return { rpc: (fn: string, args: Record<string, unknown> = {}) => rpc(fn, args), storage } as unknown as SupabaseClient;
+  // El pedido como lo arma supabase-js: sobre lo que contesta la función se escriben un filtro por clave (`gt`, `or`),
+  // el orden y el límite, y la API los aplica con su tope de filas por pedido (`server.linkMaxRows`) y dice el total.
+  let turn = 0;
+  const asked = (fn: string, args: Record<string, unknown>, counted: boolean) => {
+    const params = new URLSearchParams();
+    const builder = {
+      gt: (column: string, value: unknown) => (params.append(column, `gt.${String(value)}`), builder),
+      or: (filter: string) => (params.append('or', `(${filter})`), builder),
+      order: (column: string) => (params.set('order', [params.get('order'), `${column}.asc`].filter(Boolean).join(',')), builder),
+      limit: (n: number) => (params.set('limit', String(n)), builder),
+      then: <A, B>(ok: (r: Result & { count: number | null }) => A, ko?: (e: unknown) => B) =>
+        rpc(fn, args)
+          .then((r) => {
+            if (r.error || !Array.isArray(r.data)) return { ...r, count: null };
+            const { page, total } = answerRows(r.data as FakeRow[], params, server.linkMaxRows, ++turn);
+            return { data: page, error: null, status: 200, count: counted ? total : null };
+          })
+          .then(ok, ko),
+    };
+    return builder;
+  };
+  return { rpc: (fn: string, args: Record<string, unknown> = {}, options?: { count?: string }) => asked(fn, args, options?.count === 'exact'), storage } as unknown as SupabaseClient;
 }
 
 export interface LinkDevice {

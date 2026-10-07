@@ -1,4 +1,4 @@
-import { t } from '../i18n';
+import { stored, t } from '../i18n';
 import { RemoteError } from './types';
 
 // Las listas largas que la app le pide a la base (Docs/Doc_Sincronizacion.md, "Las listas largas"). La API entrega
@@ -45,7 +45,7 @@ export class KeyedList<T> {
     for (const row of page) {
       const key = this.key(row);
       // Cada página sigue a la anterior: una fila repetida es una base que no avanza, y pedir de nuevo no terminaría.
-      if (this.seen.has(key)) throw new RemoteError(`${this.what}: the same row arrived twice`, false);
+      if (this.seen.has(key)) throw repeatedRow(this.what, key);
       this.seen.add(key);
       this.rows.push(row);
     }
@@ -55,6 +55,15 @@ export class KeyedList<T> {
     // sigue hasta la página vacía.
     return count === page.length;
   }
+}
+
+/**
+ * El error de una lista que no avanza. Qué lista y qué fila van al registro; el texto que ve la persona no nombra
+ * funciones de la base.
+ */
+export function repeatedRow(what: string, key: string, permanent = false): RemoteError {
+  console.warn(`Lista ${what}: la fila ${key} llegó dos veces.`);
+  return new RemoteError(stored('sync.listRepeated'), permanent);
 }
 
 /**
@@ -84,4 +93,13 @@ export function quoted(value: string): string {
  */
 export function afterPair(a: string, aValue: string, b: string, bValue: string): string {
   return `${a}.gt.${quoted(aValue)},and(${a}.eq.${quoted(aValue)},${b}.gt.${quoted(bValue)})`;
+}
+
+/** El lugar de una fila en un orden por fecha y, a igual fecha, por id; tira si a la fila le falta la fecha. */
+export function placeOf(what: string, at: unknown, id: string): { at: string; id: string } {
+  if (typeof at !== 'string' || !at) {
+    console.warn(`Lista ${what}: la fila ${id} llegó sin su fecha.`);
+    throw new RemoteError(stored('sync.listNoDate'), false);
+  }
+  return { at, id };
 }

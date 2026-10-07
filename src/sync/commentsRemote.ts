@@ -1,9 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { CommentAuthor, CommentRemote, CommentRow, ImportedComment, ListedComment, NewComment } from './comments';
 import type { InboxResponse, MentionCandidate, MentionsRemote } from './mentions';
-import { afterPair, COUNTED, KeyedList } from './listPages';
+import { afterPair, COUNTED, KeyedList, placeOf } from './listPages';
 import { rpcByKey, timed, toRemoteError } from './remote';
-import { RemoteError } from './types';
 
 // Las llamadas de los comentarios a Supabase (supabase/migrations/20260930170000_comentarios.sql). La tabla
 // `comments` no se puede leer con `*` (la columna del texto no se da): se lee `comments_view`, que devuelve
@@ -36,12 +35,6 @@ const PAGE = 1000;
 const MISSING_FUNCTION = 'PGRST202';
 // La vista no tiene una columna pedida (una base anterior a esa columna).
 const MISSING_COLUMN = '42703';
-
-/** El lugar de una fila en un orden por fecha y, a igual fecha, por id; tira si a la fila le falta la fecha. */
-function placeOf(what: string, at: unknown, id: string): { at: string; id: string } {
-  if (typeof at !== 'string' || !at) throw new RemoteError(`${what}: a row without its date`, false);
-  return { at, id };
-}
 
 export class SupabaseCommentRemote implements CommentRemote, MentionsRemote {
   /** Desde cuándo la base no tiene `list_comments`; se vuelve a probar cada tanto por si se migró. */

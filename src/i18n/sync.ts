@@ -117,6 +117,14 @@ export const sync = {
     en: "This list is longer than this workspace's database sends in one request, so it is not shown. The workspace owner can raise “Max rows” in the database's Data API settings.",
     es: "Esta lista es más larga que lo que la base de este workspace manda en un pedido, así que no se muestra. El dueño del workspace puede subir «Max rows» en los ajustes de la Data API de la base.",
   },
+  'sync.listRepeated': {
+    en: "A list could not be loaded: the same row arrived twice. It will be tried again.",
+    es: "No se pudo cargar una lista: la misma fila llegó dos veces. Se vuelve a intentar.",
+  },
+  'sync.listNoDate': {
+    en: "A list could not be loaded: a row arrived without its date. It will be tried again.",
+    es: "No se pudo cargar una lista: una fila llegó sin su fecha. Se vuelve a intentar.",
+  },
   'engine.mediaOff': {
     en: "Photos and videos are off on this device: {reason}",
     es: "Las fotos y los videos no andan en este dispositivo: {reason}",

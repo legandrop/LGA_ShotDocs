@@ -407,6 +407,8 @@ export class CommentQueue {
   /** Por qué no se pudo bajar una página (a la vista en el panel). */
   private readonly pullErrors = new Map<string, string>();
   private lastError: string | null = null;
+  /** El error del estado vino de bajar una página (no de subir): lo puede limpiar la bajada de esa página que sale bien. */
+  private errorFromPull = false;
   private chain: Promise<unknown> = Promise.resolve();
   private stopped = false;
   private readonly now: () => number;
@@ -869,9 +871,11 @@ export class CommentQueue {
           const pageError = await this.pullSafely(pageId);
           if (pageError) error ??= pageError;
         }
+        this.errorFromPull = error !== null;
       } catch (err) {
         // Sin red no hay nada que mostrar acá: el estado ya dice "Offline".
         error = isNetworkError(err) ? null : commentErrorText(errorMessage(err));
+        this.errorFromPull = false;
       }
       this.setError(error);
     });
@@ -882,8 +886,16 @@ export class CommentQueue {
     return this.serial(async () => {
       if (!this.ready || this.stopped) return;
       await this.recoverIfNeeded();
+      const before = this.pullErrors.get(pageId);
       const error = await this.pullSafely(pageId);
-      if (error) this.setError(error);
+      if (error) {
+        // Solo si no estaba ya a la vista: uno igual que vino de una subida sigue siendo de la subida.
+        if (this.lastError !== error) this.errorFromPull = true;
+        this.setError(error);
+      }
+      // La bajada que había fallado ahora salió bien: si el error del estado era el suyo (de una bajada, y no también
+      // el de otra página), se limpia acá, sin esperar a la próxima vuelta.
+      else if (before && this.errorFromPull && this.lastError === before && ![...this.pullErrors.values()].includes(before)) this.setError(null);
     });
   }
 

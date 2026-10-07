@@ -51,6 +51,10 @@ export const link = {
   'link.changeName': { en: "Change", es: "Cambiar" },
   'link.saveName': { en: "Save", es: "Guardar" },
   // Can edit por un link (entrega 2a, Docs/Doc_Link_Publico.md, E2.9).
+  'link.treeMoving': {
+    en: "The shared pages kept changing while they were loading. It will be tried again shortly.",
+    es: "Las páginas compartidas siguieron cambiando mientras se cargaban. Se vuelve a intentar en un rato.",
+  },
   'link.edit.noUploads': {
     en: "Adding photos, videos and files through a link isn't available yet.",
     es: "Todavía no se pueden subir fotos, videos ni archivos con un link.",

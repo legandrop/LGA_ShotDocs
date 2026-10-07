@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { stored } from '../i18n';
 import { SupabaseCommentRemote } from './commentsRemote';
 import { fakePostgrest, type FakePostgrestOptions, type FakeRow } from './fakePostgrest';
-import { KeyedList, LIST_CUT, wholeList } from './listPages';
+import { KeyedList, LIST_CUT, placeOf, wholeList } from './listPages';
 import { SupabaseRemote } from './remote';
 
 // Las listas largas que la app le pide a la base (Docs/Doc_Sincronizacion.md, "Las listas largas"): ninguna supone
@@ -142,7 +143,10 @@ describe('la vista de compatibilidad de los comentarios (comments_view)', () => 
 /** Un árbol de mentira: `count` páginas repartidas en dos proyectos. */
 function treeApi(count: number, options: FakePostgrestOptions = {}) {
   const projects = [1, 2, 3].map((n) => ({ id: uuid(n, 0xcc), name: `Proyecto ${n}`, created_at: at(n === 3 ? 2 : n), owner_id: uuid(1, 0xbb) }));
-  const pages: FakeRow[] = Array.from({ length: count }, (_, i) => ({ id: uuid(i + 1), workspace_id: projects[i % 2].id, parent_id: null, title: `Página ${i + 1}`, update_seq: 0 }));
+  const pages: FakeRow[] = Array.from({ length: count }, (_, i) => ({
+    id: uuid(i + 1), workspace_id: projects[i % 2].id, parent_id: i > 1 ? uuid(1) : null, title: `Página ${i + 1}`, icon: '📄', sort_key: `a${i}`,
+    settings: { format: 'a4' }, template_id: uuid(7, 0xee), update_seq: i + 1, deleted_at: i % 9 === 0 ? at(i) : null, created_at: at(i), updated_at: at(i + 1),
+  }));
   // Una página de un proyecto que no se pide: nunca llega.
   pages.push({ id: uuid(999_999), workspace_id: projects[2].id, parent_id: null, title: 'De otro proyecto', update_seq: 0 });
   const api = fakePostgrest({ tables: { pages: [...pages].reverse(), workspaces: projects }, ...options });
@@ -153,7 +157,8 @@ describe('el árbol de páginas y los proyectos', () => {
   it.each(CAPS)('con un tope de %i filas por pedido el árbol llega entero, sin páginas repetidas ni salteadas ni un pedido de más', async (cap) => {
     const { remote, requests, pages, projects } = treeApi(rowsFor(cap), { maxRows: cap });
     const rows = await remote.fetchTree([projects[0].id, projects[1].id]);
-    expect(ids(rows)).toEqual(ids(pages as { id: string }[]).slice(0, -1));
+    // Cada página con todas sus columnas (una que el pedido dejara de pedir llegaría nula), no solo su id.
+    expect(rows).toEqual(pages.slice(0, -1));
     expect(requests).toHaveLength(Math.ceil((pages.length - 1) / cap));
     expect(requests.every((r) => r.counted && r.query.order === 'id.asc')).toBe(true);
   });
@@ -186,7 +191,7 @@ describe('el árbol de páginas y los proyectos', () => {
     const projects = Array.from({ length: cap === 1 ? 7 : cap + 40 }, (_, i) => ({ id: uuid(i + 1, 0xcc), name: `P${i}`, created_at: at(Math.floor(i / 4)), owner_id: null }));
     const api = fakePostgrest({ tables: { workspaces: [...projects].reverse() }, maxRows: cap });
     const listed = await new SupabaseRemote(api.client, '0.224').fetchProjects();
-    expect(ids(listed)).toEqual(ids(projects));
+    expect(listed).toEqual(projects);
     expect(api.requests).toHaveLength(Math.ceil(projects.length / cap));
     expect(api.requests[0].query).toMatchObject({ order: 'created_at.asc,id.asc' });
   });
@@ -213,15 +218,17 @@ describe('los permisos propios, los usos de archivos y los archivos', () => {
 
   it.each(CAPS)('con un tope de %i llegan todos los usos de archivos de las páginas, y los de los archivos', async (cap) => {
     const pages = [uuid(1, 0xdd), uuid(2, 0xdd), uuid(3, 0xdd)];
-    const uses = Array.from({ length: rowsFor(cap) }, (_, i) => ({ page_id: pages[i % 3], file_id: uuid(Math.floor(i / 3) + 1, 0xff), removed_at: i % 5 === 0 ? at(1) : null, is_foreign: false }));
+    const uses = Array.from({ length: rowsFor(cap) }, (_, i) => ({ page_id: pages[i % 3], file_id: uuid(Math.floor(i / 3) + 1, 0xff), removed_at: i % 5 === 0 ? at(1) : null, is_foreign: i % 7 === 0 }));
     const api = fakePostgrest({ tables: { page_files: [...uses].reverse() }, maxRows: cap });
     const remote = new SupabaseRemote(api.client, '0.224');
-    const key = (r: { page_id: string; file_id: string }) => `${r.page_id}|${r.file_id}`;
-    expect((await remote.fetchPageUses(pages)).map(key).sort()).toEqual(uses.map(key).sort());
+    // Las filas enteras (con `removed_at` e `is_foreign`), en el orden de la clave de cada pedido.
+    const by = (...keys: ('page_id' | 'file_id')[]) => (a: (typeof uses)[number], b: (typeof uses)[number]) =>
+      keys.map((k) => (a[k] < b[k] ? -1 : a[k] > b[k] ? 1 : 0)).find((c) => c !== 0) ?? 0;
+    expect(await remote.fetchPageUses(pages)).toEqual([...uses].sort(by('page_id', 'file_id')));
     expect(api.requests).toHaveLength(Math.ceil(uses.length / cap));
     api.requests.length = 0;
-    const active = uses.filter((u) => u.removed_at === null);
-    expect((await remote.fileUses([...new Set(uses.map((u) => u.file_id))].slice(0, 100))).map(key).sort()).toEqual(active.filter((u) => Number.parseInt(u.file_id.slice(-12), 16) <= 100).map(key).sort());
+    const active = uses.filter((u) => u.removed_at === null && Number.parseInt(u.file_id.slice(-12), 16) <= 100);
+    expect(await remote.fileUses([...new Set(uses.map((u) => u.file_id))].slice(0, 100))).toEqual(active.sort(by('file_id', 'page_id')));
   });
 
   it.each(CAPS)('con un tope de %i llegan todos los archivos pedidos; los que no existen cuestan un pedido más, vacío', async (cap) => {
@@ -310,6 +317,64 @@ describe('las listas que se piden de una sola vez y los lotes de contenido', () 
     expect(one.requests).toHaveLength(1);
   });
 
+  it('si un pedido falla a mitad de una función pedida por clave, tira: nunca las filas que alcanzaron a llegar', async () => {
+    const people = Array.from({ length: 40 }, (_, i) => ({ user_id: uuid(i + 1, 0xbb), email: `p${i}@x.test` }));
+    const api = fakePostgrest({ functions: { comment_authors: () => people }, maxRows: 17, fail: { 2: { status: 500, code: 'XX000', message: 'la base se reinició' } } });
+    await expect(new SupabaseCommentRemote(api.client).fetchCommentAuthors(PAGE_ID)).rejects.toMatchObject({ message: 'la base se reinició', permanent: false });
+    expect(api.requests).toHaveLength(2);
+  });
+
+  it('la papelera de archivos de una base sin trashed_files_page, por tramos: un total mentido o ausente no la corta', async () => {
+    const project = uuid(1, 0xcc);
+    const files = Array.from({ length: 300 }, (_, i) => ({ project_id: project, id: uuid(i + 1, 0xff), name: `f${i}`, mime: 'image/png', size: 1, thumb_at: null, trashed_at: at(i), days_left: 30 }));
+    for (const how of [{ lowCount: true }, { noCount: true }]) {
+      const api = fakePostgrest({ functions: { trashed_files_all: () => files }, maxRows: 137, ...how });
+      const all = (await new SupabaseRemote(api.client, '0.224').trashedFilesAll())!;
+      expect(all.get(project)!.map((f) => f.id)).toEqual(ids(files).reverse());
+      expect(api.requests.filter((r) => r.target === 'rpc/trashed_files_all').map((r) => r.rows)).toEqual([137, 137, 26, 0]);
+    }
+  });
+
+  /** `public_link_updates_page` como la de la base: lo que sigue a `p_after` por `n`, hasta `p_limit`, y cuántas quedaban. */
+  const updatesPage = (rows: FakeRow[]) => (args: Record<string, unknown>) => {
+    const left = rows.filter((r) => Number(r.n) > Number(args.p_after ?? 0)).sort((a, b) => Number(a.n) - Number(b.n));
+    return left.slice(0, Math.min(Number(args.p_limit), 1000)).map((r) => ({ ...r, total: left.length }));
+  };
+  const notAdmitted = (count: number): FakeRow[] =>
+    Array.from({ length: count }, (_, i) => ({ id: uuid(i + 1, 0xab), link_id: uuid(1, 0xaa), author: `Ana ${i}`, created_at: at(i), bytes: 10 + i, state: i % 3 === 0 ? 'aside' : i % 3 === 1 ? 'held' : 'waiting', reason: i % 3 === 0 ? 'pending' : null, n: 5000 + i * 2 }));
+
+  it.each(CAPS)('con un tope de %i llega todo lo que no entró de un link en una página, en orden de llegada y con sus columnas', async (cap) => {
+    const rows = notAdmitted(cap === 1 ? 7 : cap >= 500 ? 2203 : 320);
+    const api = fakePostgrest({ functions: { public_link_updates_page: updatesPage([...rows].reverse()) }, maxRows: cap });
+    expect(await new SupabaseRemote(api.client, '0.226').linkUpdatesOf(PAGE_ID)).toEqual(rows.map(({ n: _n, ...r }) => r));
+    // La función da hasta 1000 por pedido: con hasta 1000 filas y el tope de fábrica es un pedido, como antes.
+    expect(api.requests).toHaveLength(Math.ceil(rows.length / cap));
+    expect(api.requests[0]).toMatchObject({ target: 'rpc/public_link_updates_page', args: { p_page_id: PAGE_ID, p_after: null, p_limit: 1000 }, query: { order: 'n.asc' } });
+    expect(api.requests[1]?.args?.p_after ?? rows[Math.min(cap, 1000) - 1].n).toBe(rows[Math.min(cap, 1000) - 1].n);
+  });
+
+  it('lo que no entró de un link, con una base sin public_link_updates_page: pide como antes y no vuelve a probar enseguida; un pedido que falla a mitad, tira', async () => {
+    const rows = notAdmitted(700);
+    const old = fakePostgrest({ functions: { public_link_updates_of: () => rows.slice(0, 500).map(({ n: _n, ...r }) => r) } });
+    const remote = new SupabaseRemote(old.client, '0.226');
+    expect(await remote.linkUpdatesOf(PAGE_ID)).toHaveLength(500);
+    expect(await remote.linkUpdatesOf(PAGE_ID)).toHaveLength(500);
+    expect(old.requests.map((r) => r.target)).toEqual(['rpc/public_link_updates_page', 'rpc/public_link_updates_of', 'rpc/public_link_updates_of']);
+    const broken = fakePostgrest({ functions: { public_link_updates_page: updatesPage(rows) }, maxRows: 137, fail: { 3: { status: 500, code: 'XX000', message: 'la base se reinició' } } });
+    await expect(new SupabaseRemote(broken.client, '0.226').linkUpdatesOf(PAGE_ID)).rejects.toMatchObject({ message: 'la base se reinició' });
+    // Una base sin ninguna de las dos (anterior a la versión 19): nada.
+    expect(await new SupabaseRemote(fakePostgrest().client, '0.226').linkUpdatesOf(PAGE_ID)).toEqual([]);
+  });
+
+  it('lo que espera de un link para admitir llega en el orden de la función, escrito en el pedido', async () => {
+    const [pageA, pageB, linkX, linkY] = [uuid(1, 0xdd), uuid(2, 0xdd), uuid(1, 0xaa), uuid(2, 0xaa)];
+    const work = [[pageB, linkX, 4], [pageA, linkY, 9], [pageA, linkX, 7], [pageA, linkX, 3], [pageA, linkY, 2]].map(([page_id, link_id, n], i) => ({ id: uuid(i + 1, 0xab), page_id, link_id, n, data: 'AQID' }));
+    const api = fakePostgrest({ functions: { link_admit_work: () => work } });
+    const got = await new SupabaseRemote(api.client, '0.226').admitWork([pageA, pageB]);
+    expect(got.map((r) => [r.page_id, r.link_id, r.n])).toEqual([[pageA, linkX, 3], [pageA, linkX, 7], [pageA, linkY, 2], [pageA, linkY, 9], [pageB, linkX, 4]]);
+    expect(api.requests[0].query).toEqual({ order: 'page_id.asc,link_id.asc,n.asc' });
+  });
+
   it('las listas que quien las pide no sabe mostrar en error llegan con lo que entra, como antes: los candidatos del @, lo que no entró de un link y la papelera de una base sin la función nueva', async () => {
     const people = Array.from({ length: 12 }, (_, i) => ({ user_id: uuid(i + 1, 0xbb), email: `p${i}@x.test`, label: `p${i}`, has_access: true }));
     const api = fakePostgrest({
@@ -393,7 +458,21 @@ describe('KeyedList', () => {
     expect(list.last).toEqual({ id: 'c' });
     expect(list.add([{ id: 'd' }], 1)).toBe(true);
     expect(new KeyedList<{ id: string }>('prueba', (r) => r.id).add([], undefined)).toBe(true);
-    expect(() => list.add([{ id: 'b' }], 9)).toThrow('prueba: the same row arrived twice');
+    // El texto para la persona no nombra la lista (una función de la base); va al registro, con la fila.
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const message = (fn: () => unknown) => {
+      try {
+        fn();
+      } catch (err) {
+        return (err as Error).message;
+      }
+      return null;
+    };
+    expect(message(() => list.add([{ id: 'b' }], 9))).toBe(stored('sync.listRepeated'));
+    expect(warned.mock.calls).toEqual([['Lista prueba: la fila b llegó dos veces.']]);
+    expect(message(() => placeOf('list_comments', null, 'c'))).toBe(stored('sync.listNoDate'));
+    expect(warned.mock.calls[1]).toEqual(['Lista list_comments: la fila c llegó sin su fecha.']);
+    warned.mockRestore();
   });
 
   it('un total menor que lo que la API mandó no se cree: la lista sigue hasta la página vacía', async () => {

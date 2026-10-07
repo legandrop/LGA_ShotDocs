@@ -155,6 +155,10 @@ describe('diccionario', () => {
       expect(localize(joined)).toBe(
         `${translate('es', 'engine.restoredAll')} ${translate('es', 'engine.skipped', { count: 2, download: translate('es', 'sync.downloadUnsynced') })}`,
       );
+      // Los errores de una lista que no avanza o a la que le falta una fecha: sin nombres de funciones de la base.
+      expect(localize(stored('sync.listRepeated'))).toBe('No se pudo cargar una lista: la misma fila llegó dos veces. Se vuelve a intentar.');
+      expect(localize(stored('sync.listNoDate'))).toBe('No se pudo cargar una lista: una fila llegó sin su fecha. Se vuelve a intentar.');
+      expect(localize(stored('link.treeMoving'))).toBe(translate('es', 'link.treeMoving'));
       // Lo que no es de ninguna clave (un mensaje del servidor) queda tal cual.
       expect(localize('row-level security violation')).toBe('row-level security violation');
     } finally {

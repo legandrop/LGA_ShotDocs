@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { LEVEL_EDIT, Permissions } from './access';
 import { CommentInvalid, LEVEL_COMMENT, unsyncedComments, type CommentThread } from './comments';
 import { FakeServer, makeDevice, type Device } from './testing';
+import { RemoteError } from './types';
 
 // Paso 10, lado de la app: la cola de comentarios sin red, sus reintentos, el orden, los errores a la vista y
 // los niveles. El servidor en memoria sigue las reglas de supabase/migrations/20260930170000_comentarios.sql.
@@ -238,6 +239,52 @@ describe('errores a la vista', () => {
     server.commentsServerError = false;
     await owner.engine.syncNow();
     expect(owner.engine.getStatus()).toMatchObject({ pendingComments: 0, commentError: null });
+  });
+
+  it('la bajada de una página al abrirla que falló y después sale bien limpia su error del estado; el de otra página, no', async () => {
+    const { owner, brief, notes } = await workspace();
+    const list = owner.remote.listComments.bind(owner.remote);
+    owner.remote.listComments = async () => {
+      throw new RemoteError('Internal Server Error', false, '500');
+    };
+    await owner.comments.refresh(brief);
+    expect(owner.comments.status().error).toBe('Internal Server Error');
+    owner.remote.listComments = list;
+    // Otra página que baja bien no limpia un error que no es el suyo.
+    await owner.comments.refresh(notes);
+    expect(owner.comments.status().error).toBe('Internal Server Error');
+    await owner.comments.refresh(brief);
+    expect(owner.comments.status().error).toBeNull();
+  });
+
+  it('la bajada que sale bien no limpia un error que también es el de otra página, ni uno igual que vino de una subida', async () => {
+    const { server, owner, brief, notes } = await workspace();
+    const list = owner.remote.listComments.bind(owner.remote);
+    const down = async () => {
+      throw new RemoteError('Internal Server Error', false, '500');
+    };
+    // Las dos páginas fallan igual: que baje una no limpia el error, que sigue siendo el de la otra.
+    owner.remote.listComments = down;
+    await owner.comments.refresh(brief);
+    await owner.comments.refresh(notes);
+    owner.remote.listComments = list;
+    await owner.comments.refresh(brief);
+    expect(owner.comments.status().error).toBe('Internal Server Error');
+    await owner.comments.refresh(notes);
+    expect(owner.comments.status().error).toBeNull();
+    // Una subida que falla con el mismo texto: la bajada de una página, que falla y después sale bien, no lo limpia.
+    server.commentsServerError = true;
+    await owner.comments.add(brief, null, 'Hola');
+    await owner.comments.run(() => false);
+    expect(owner.comments.status()).toMatchObject({ pending: 1, error: 'Internal Server Error' });
+    owner.remote.listComments = down;
+    await owner.comments.refresh(brief);
+    owner.remote.listComments = list;
+    await owner.comments.refresh(brief);
+    expect(owner.comments.status().error).toBe('Internal Server Error');
+    server.commentsServerError = false;
+    await owner.comments.run(() => false);
+    expect(owner.comments.status()).toMatchObject({ pending: 0, error: null });
   });
 
   it('un rechazo queda en el dispositivo con su motivo, no frena lo demás y no se descarta solo', async () => {

@@ -910,6 +910,28 @@ describe('papelera de archivos: correcciones de la auditoría', () => {
     expect(a.media.isVerified(page)).toBe(false);
   });
 
+  it('un historial que no avanza (la base contesta siempre el mismo lote) no se recorre para siempre ni se da por comprobado', async () => {
+    const server = new FakeServer();
+    const { a, page, id } = await withPhoto(server);
+    const pull = a.remote.pullUpdates.bind(a.remote);
+    let stuck = 0;
+    a.remote.pullUpdates = async (pageId, after, limit) => {
+      // La comprobación arranca desde 0 (las bajadas de siempre, desde el cursor): desde ahí la base contesta siempre lo
+      // mismo. Hasta 50 veces, para que la prueba termine aunque nadie corte la recorrida.
+      if (after === 0 || (stuck > 0 && stuck < 50)) {
+        stuck++;
+        return (await pull(pageId, 0, limit)).slice(0, 1);
+      }
+      return pull(pageId, after, limit);
+    };
+    await edit(a, page, (doc) => removeImage(doc, id));
+    await sync(a);
+    // Dos pedidos: el segundo trae lo mismo que el primero, y ahí se corta con un error (no se quita nada).
+    expect(stuck).toBe(2);
+    expect(calls(server, 'unlink_page_file')).toEqual([]);
+    expect(a.media.isVerified(page)).toBe(false);
+  });
+
   it('con Drive sin conectar no marca nada y "Empty" para; "in_use" solo con ese código', async () => {
     const server = new FakeServer();
     const { a, page, id } = await withPhoto(server);

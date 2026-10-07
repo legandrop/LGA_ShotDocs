@@ -4,8 +4,9 @@ import type { LinkMemory } from '../linkMode';
 import { fromBase64, toBase64 } from '../lib/base64';
 import type { AccessSnapshot } from './access';
 import type { CommentAuthor, CommentRemote, CommentRow, ListedComment, NewComment } from './comments';
-import { SupabaseRemote, timed, toRemoteError, MAX_REQUEST_TIMEOUT_MS, REQUEST_TIMEOUT_MS, type CleanWorkRow, type CleanPushResult, type LinkResult } from './remote';
+import { SupabaseRemote, rpcByKey, timed, toRemoteError, MAX_REQUEST_TIMEOUT_MS, MAX_ROWS_PER_REQUEST, REQUEST_TIMEOUT_MS, type CleanWorkRow, type CleanPushResult, type LinkResult } from './remote';
 import { LINK_FILES_SCHEMA_VERSION, type AdmitPageRow, type AdmitResult, type AdmitWorkRow, type LinkAsideRow, type LinkUpdateRow } from './linkAdmitApi';
+import { afterPair, COUNTED, KeyedList, placeOf } from './listPages';
 import {
   AUTHOR_MISSING,
   RemoteError,
@@ -110,6 +111,25 @@ const STATUS_EVERY_MS = 30_000;
 /** `plink_open` se vuelve a pedir cada tanto (cuenta como una apertura, P11): no en cada ciclo. */
 const OPEN_EVERY_MS = 2 * 60 * 60_000;
 
+/** Cuántas veces se empieza de nuevo la bajada del árbol si cambia entre dos de sus pedidos. */
+export const TREE_TRIES = 3;
+/**
+ * Mientras el árbol no deja de cambiar, un solo intento por vez y cada vez más espaciado (el doble cada vez, hasta
+ * `TREE_WAIT_MAX_MS`): cada pedido cuenta el árbol entero en el tope del día del link, para todos sus visitantes.
+ */
+export const TREE_WAIT_MS = 20_000;
+export const TREE_WAIT_MAX_MS = 10 * 60_000;
+
+/** `wholeTree` no pudo juntar un árbol de un solo estado. */
+const MOVING = 'moving';
+
+// Las listas del visitante (Docs/Doc_Sincronizacion.md, "Las listas largas"): el árbol, los comentarios, los archivos y
+// el estado de lo mandado se piden **por clave**, con el orden escrito y hasta el total que dice la API, como las de una
+// cuenta. La API entrega como mucho su tope de filas por pedido y no avisa cuando recorta: una lista cortada del árbol
+// se tomaba por "estas páginas ya no están" (y sin la raíz, el link se veía roto). Ninguna llega parcial: o entera, o el
+// pedido falla y el dispositivo se queda con lo que tenía. En el caso de siempre es un pedido por lista, como antes.
+// Cada pedido de más vuelve a correr la función y cuenta en los topes del día del link (`pull`, `pass`).
+
 export class LinkRemote extends SupabaseRemote {
   private info: LinkOpenInfo | null = null;
   private openedAt = 0;
@@ -117,6 +137,11 @@ export class LinkRemote extends SupabaseRemote {
   /** La firma del último árbol y sus filas: si no cambió, `plink_tree` no devuelve nada (ni cuenta). */
   private treeSig: string | null = null;
   private treeRows: PageRow[] = [];
+  /** Cuántas bajadas seguidas del árbol no terminaron porque cambiaba, y desde cuándo se vuelve a probar. */
+  private treeFailures = 0;
+  private treeRetryAt = 0;
+  /** La última bajada que terminó con menos filas que las anunciadas: su firma y cuántas trajo. */
+  private treeShort: { sig: string; rows: number } | null = null;
 
   private readonly linkVersion: string;
   /** Lo que escribió este dispositivo: falta el nombre, espera, se apartó (la insignia y los avisos lo muestran). */
@@ -180,6 +205,17 @@ export class LinkRemote extends SupabaseRemote {
       throw toRemoteError(error, status);
     }
     return data as T;
+  }
+
+  /** Una función que devuelve una fila por `key`, entera (`rpcByKey`), con los problemas del link avisados como en `call`. */
+  private async listed<T>(fn: string, args: Record<string, unknown>, key: string): Promise<T[]> {
+    try {
+      return await rpcByKey<T>(this.linkClient, fn, args, key);
+    } catch (err) {
+      const problem = linkProblemOf(err);
+      if (problem) this.onProblem(problem);
+      throw err;
+    }
   }
 
   /** Abre el link (`plink_open`), como mucho cada `OPEN_EVERY_MS`. */
@@ -251,10 +287,23 @@ export class LinkRemote extends SupabaseRemote {
     if (!projectIds.includes(info.link_id)) return [];
     // Una vez por ciclo, cómo va lo que se mandó (mientras algo espera): sus errores no cortan nada.
     if (info.level === 'edit') await this.refreshEdits().catch(() => undefined);
-    const rows = await this.call<Record<string, unknown>[]>('plink_tree', { p_sig: this.treeSig });
-    if (rows.length > 0) {
-      this.treeSig = String(rows[0].sig);
-      this.treeRows = rows.map((r) => ({
+    // Después de una bajada que no terminó porque el árbol cambiaba: un intento por vez, y recién cuando toca.
+    const waiting = this.treeFailures > 0 && Date.now() < this.treeRetryAt;
+    const fresh = waiting ? MOVING : await this.wholeTree(this.treeFailures > 0 ? 1 : TREE_TRIES);
+    if (fresh === MOVING) {
+      if (!waiting) {
+        this.treeFailures++;
+        this.treeRetryAt = Date.now() + Math.min(TREE_WAIT_MS * 2 ** (this.treeFailures - 1), TREE_WAIT_MAX_MS);
+      }
+      // Con un árbol de esta carga de la app, el ciclo sigue con él: lo que el visitante escribió sube igual. Sin
+      // ninguno no hay qué devolver (un árbol vacío se tomaría por "no queda ninguna página"): el error, que se reintenta.
+      if (this.treeSig === null) throw new RemoteError(stored('link.treeMoving'), false);
+      return this.treeRows.map((r) => ({ ...r }));
+    }
+    this.treeFailures = 0;
+    if (fresh) {
+      this.treeSig = fresh.sig;
+      this.treeRows = fresh.rows.map((r) => ({
         id: String(r.id),
         workspace_id: String(r.workspace_id),
         parent_id: r.parent_id ? String(r.parent_id) : null,
@@ -272,6 +321,57 @@ export class LinkRemote extends SupabaseRemote {
     return this.treeRows.map((r) => ({ ...r }));
   }
 
+  /**
+   * El árbol del link **entero**, o `null` si no cambió desde la última bajada. Por `id`, con el orden escrito y hasta
+   * el total que dice la API. El primer pedido lleva la firma guardada (sin cambios, la base no devuelve nada ni
+   * cuenta); los que siguen, ninguna, y piden lo que sigue a la última página recibida.
+   *
+   * Cada fila trae la firma del árbol del que salió (`sig`): todas las de una bajada tienen que traer **la misma**, y
+   * tienen que ser tantas como dijo el primer pedido. Si el árbol cambia entre dos pedidos (otra firma, o menos
+   * páginas que las anunciadas), lo juntado es de dos árboles distintos: se descarta y se empieza de nuevo, hasta
+   * `tries` veces; después, `MOVING`. Nunca devuelve un árbol a medias: si un pedido falla, tira, y el árbol guardado
+   * (acá y en el dispositivo) queda como estaba.
+   *
+   * Dos bajadas seguidas que terminan con **la misma firma y la misma cantidad** de filas, aunque sean menos que las
+   * anunciadas, son el árbol (una rama que se achicó de verdad cambia de firma): una API que anunciara de más no deja
+   * al link sin árbol para siempre.
+   */
+  private async wholeTree(tries: number): Promise<{ sig: string; rows: Record<string, unknown>[] } | typeof MOVING | null> {
+    for (let attempt = 0; attempt < tries; attempt++) {
+      const list = new KeyedList<Record<string, unknown>>('plink_tree', (r) => String(r.id));
+      let sig: string | null = null;
+      let announced: number | null = null;
+      for (;;) {
+        let query = this.linkClient.rpc('plink_tree', { p_sig: list.last ? null : this.treeSig }, COUNTED);
+        if (list.last) query = query.gt('id', String(list.last.id));
+        const { data, error, status, count } = await timed(query.order('id').limit(MAX_ROWS_PER_REQUEST));
+        if (error) {
+          const problem = linkProblemOf(error.message);
+          if (problem) this.onProblem(problem);
+          throw toRemoteError(error, status);
+        }
+        const page = (data ?? []) as Record<string, unknown>[];
+        if (!list.last) {
+          // Sin filas en el primer pedido: el árbol es el de la firma guardada.
+          if (page.length === 0) return null;
+          sig = String(page[0].sig);
+          // Un total menor que lo que mandó no se cree (como en `KeyedList`).
+          if (typeof count === 'number' && count >= page.length) announced = count;
+        }
+        if (page.some((r) => String(r.sig) !== sig)) break;
+        if (!list.add(page, count)) continue;
+        if (announced !== null && list.rows.length !== announced && !(this.treeShort?.sig === sig && this.treeShort.rows === list.rows.length)) {
+          this.treeShort = { sig: sig!, rows: list.rows.length };
+          break;
+        }
+        this.treeShort = null;
+        return { sig: sig!, rows: list.rows };
+      }
+    }
+    return MOVING;
+  }
+
+  /** `plink_pull_page` da **una** fila (la base limpia vigente) o ninguna: no hay lista que la API pueda recortar. */
   override async pullUpdates(pageId: string, afterSeq: number): Promise<RemoteUpdate[]> {
     const rows = await this.call<{ seq: number; update: string }[]>(
       'plink_pull_page',
@@ -346,19 +446,22 @@ export class LinkRemote extends SupabaseRemote {
     const now = Date.now();
     if (!force && (!this.statusDue || now < this.statusOffUntil || now - this.statusAt < STATUS_EVERY_MS)) return;
     this.statusAt = now;
-    const { data, error, status } = await timed(this.linkClient.rpc('plink_push_status'));
-    if (error) {
-      if (linkProblemOf(error.message) === 'link_rate_limited') {
+    let rows: { page_id: string; waiting: number; aside: number }[];
+    try {
+      // Una fila por página, entera (por `page_id`): con una lista cortada, las páginas que faltan se tomaban por
+      // "lo mandado ya entró" y se dejaban de recordar (`dropSent`).
+      rows = await rpcByKey(this.linkClient, 'plink_push_status', {}, 'page_id');
+    } catch (err) {
+      const problem = linkProblemOf(err);
+      if (problem === 'link_rate_limited') {
         const tomorrow = new Date();
         tomorrow.setHours(24, 0, 0, 0);
         this.statusOffUntil = tomorrow.getTime();
         return;
       }
-      const problem = linkProblemOf(error.message);
       if (problem) this.onProblem(problem);
-      throw toRemoteError(error, status);
+      throw err;
     }
-    const rows = (data ?? []) as { page_id: string; waiting: number; aside: number }[];
     this.counts = new Map(rows.map((r) => [String(r.page_id), { waiting: Number(r.waiting) || 0, aside: Number(r.aside) || 0 }]));
     const waiting = rows.filter((r) => Number(r.waiting) > 0).map((r) => String(r.page_id));
     this.statusDue = waiting.length > 0;
@@ -465,8 +568,10 @@ export class LinkRemote extends SupabaseRemote {
     const info = await this.open();
     const out: MediaFileRow[] = [];
     for (let i = 0; i < ids.length; i += 200) {
-      const rows = await this.call<Record<string, unknown>[]>('plink_media_files', { p_ids: ids.slice(i, i + 200) });
-      for (const r of rows ?? []) {
+      // De a 200 ids (el tope de la función) y, de cada tanda, todas las filas: por `id` y hasta el total. Un archivo
+      // que no vino porque la API recortó la respuesta se tomaría por "el link no lo ve".
+      const rows = await this.listed<Record<string, unknown>>('plink_media_files', { p_ids: ids.slice(i, i + 200) }, 'id');
+      for (const r of rows) {
         out.push({
           id: String(r.id),
           name: String(r.name),
@@ -706,9 +811,29 @@ export class LinkCommentRemote implements CommentRemote {
     return data as T;
   }
 
+  /**
+   * Los comentarios de la página, **enteros**: por clave, en el orden de la función (`updated_at`, `id`) escrito en el
+   * pedido y hasta el total que dice la API, como `SupabaseCommentRemote.listComments`. Cada pedido sigue a la última
+   * fila recibida (`p_since` con su fecha y un filtro que deja afuera lo de esa fecha que ya llegó); un comentario que
+   * cambia entre dos pedidos vuelve a llegar con su fecha nueva y queda su última versión. Si un pedido falla, tira:
+   * la cola tomaría una lista parcial por todo lo que hay (en una bajada entera, reemplaza lo guardado de la página).
+   */
   async listComments(pageId: string, since: string | null): Promise<ListedComment[]> {
-    const rows = await this.call<LinkCommentRow[]>('plink_list_comments', { p_page_id: pageId, p_since: since });
-    return (rows ?? []).map((r) => linkCommentRow(r, this.me));
+    const list = new KeyedList<LinkCommentRow>('plink_list_comments', (r) => `${r.updated_at}|${r.id}`);
+    for (;;) {
+      const last = list.last ? placeOf('plink_list_comments', list.last.updated_at, list.last.id) : null;
+      let query = this.client.rpc('plink_list_comments', { p_page_id: pageId, p_since: last ? last.at : since }, COUNTED);
+      if (last) query = query.or(afterPair('updated_at', last.at, 'id', last.id));
+      const { data, error, status, count } = await timed(query.order('updated_at').order('id').limit(MAX_ROWS_PER_REQUEST));
+      if (error) throw toRemoteError(error, status);
+      if (list.add((data ?? []) as LinkCommentRow[], count)) break;
+    }
+    const byId = new Map<string, LinkCommentRow>();
+    for (const row of list.rows) {
+      byId.delete(row.id);
+      byId.set(row.id, row);
+    }
+    return [...byId.values()].map((r) => linkCommentRow(r, this.me));
   }
 
   async fetchComments(pageId: string): Promise<CommentRow[]> {

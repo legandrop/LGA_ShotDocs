@@ -8,8 +8,9 @@ import { asideReasonText, downloadLinkChanges } from './linkAside';
 // En la página, para quien la edita y ve lo borrado (Docs/Doc_Link_Publico.md, E2.8): si algo que mandó un link
 // público no pudo entrar (quedó apartado por la prueba de admisión o porque el link se revocó), un aviso con el motivo y
 // *Download it* (la fila tal cual, para no perder nada). Lo retenido (el link dejó de editar esta página por algo que
-// puede volver) se cuenta en una línea. Lo pide `public_link_updates_of` al abrir la página y después de cada
-// sincronización, como mucho una vez por minuto.
+// puede volver) se cuenta en una línea. Se pide al abrir la página y después de cada sincronización, como mucho una
+// vez por minuto (`linkUpdatesOf`): todo, por clave, con `public_link_updates_page`; con una base anterior a esa función,
+// las primeras 500 filas, con `public_link_updates_of`.
 
 const EVERY_MS = 60_000;
 

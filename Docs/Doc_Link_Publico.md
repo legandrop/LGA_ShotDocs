@@ -2961,6 +2961,43 @@ proyecto), `src/sync/commentLinkId.test.ts` y `src/ui/linkLabels.test.tsx`.
   alguna (`42703`), baja de a un escalón (sin las menciones, sin las del link, sin las de importar) y no las vuelve a
   pedir.
 
+### Las listas del link, enteras (v0.226)
+
+La API de la base entrega como mucho un tope de filas por pedido (1000 de fábrica; menos en un workspace con su propio
+Supabase) y no avisa cuando recorta. El visitante pedía el árbol, los comentarios, los archivos y el estado de lo que
+mandó en un pedido cada uno: con una rama de más páginas que el tope veía menos, su dispositivo lo tomaba por todo lo
+que hay, y si la raíz del link no estaba entre las primeras filas (el árbol llega por `id`) el link se veía roto. El
+detalle, lo medido y lo que cuesta están en `Doc_Sincronizacion.md`, "Las listas largas", "El modo link".
+
+- **El visitante** (`src/sync/linkRemote.ts`): cada lista va por clave, con el orden escrito y hasta el total que dice
+  la API; en el caso de siempre son los mismos pedidos que antes. El árbol, además, exige que todas las filas de una
+  bajada traigan la misma firma y sean tantas como anunció el primer pedido: si cambia a mitad, se empieza de nuevo
+  (hasta 3 veces); si no deja de cambiar, el visitante sigue con el árbol que tenía (lo que escribió sube igual) y la
+  bajada se reintenta de a un intento, cada vez más espaciado (de 20 s a 10 minutos). Ninguna lista llega parcial: o
+  entera, o el pedido falla y el dispositivo se queda con lo que tenía (también con lo que el visitante escribió sin
+  subir). Sin migración: las funciones `plink_*` no cambian.
+- **El aviso de la página** (lo que no entró de un link: `LinkAsideNotice`): `public_link_updates_of` corta en 500
+  filas adentro y no dice cuántas había, así que con más el aviso contaba y descargaba de menos. La migración
+  `20261114120000_link_no_entro_por_clave.sql` suma `public_link_updates_page(p_page_id, p_after, p_limit)`: las
+  mismas filas con los mismos valores, desde la última recibida (`n`, el orden de llegada), hasta 1000 por pedido, con
+  `total` (cuántas quedaban) en cada fila. El aviso cuenta y descarga todo. La función de siempre no se toca; con una
+  base sin la nueva, la app pide como antes.
+- **Lo apartado para *Share*, el árbol y el historial** (`public_link_aside`): por `id` y hasta el total, así llega
+  entera (antes, las primeras 1000 filas); la app la devuelve a su orden, lo más nuevo primero. Sin migración.
+- **Lo que espera para admitir** (`link_admit_work`): el pedido escribe el orden de la función.
+- **Permisos:** `public_link_updates_page` tiene los de `public_link_updates_of` (solo `authenticated`; adentro,
+  `private.sees_deleted` de la página o `page_not_found`). Nada cambia para `anon`.
+- **Compatibilidad.** La app publicada contra la base nueva: una función nueva y nada de lo que existe cambia de
+  firma, columnas, errores ni permisos. La app nueva contra una base sin la migración: `PGRST202` y el aviso pide como
+  antes. No sube `schema_version` ni pide subir `min_app_version`.
+- **Lo que queda:** cada pedido de más del árbol cuenta el árbol entero en el tope del día del link (cuadrático: hay
+  que resolverlo antes de usar links sobre ramas de más de 1000 páginas), la firma del árbol cambia con cada base
+  limpia (se vuelve a bajar entero también con ramas chicas; ya pasaba en la versión publicada), `plink_push_status`
+  corta en 500 páginas adentro, y no se probó contra la API real (`Doc_Sincronizacion.md`, "Las listas largas", "Lo
+  que cuesta: el cupo del día del link", "Qué mirar en producción" y "Lo que queda"; `Doc_Roadmap.md`).
+- **Pruebas:** `src/sync/linkLists.test.ts`, `src/sync/linkEdit.test.ts`, `src/sync/listPages.test.ts`,
+  `src/ui/linkAsideStore.test.ts` y `supabase/tests/link_no_entro_por_clave_permisos.sql`.
+
 ## Cómo se midió
 
 Prototipos fuera del repo, con sus resultados en `res_*.txt`. No se creó ningún usuario, no se entró con login ni se tocó

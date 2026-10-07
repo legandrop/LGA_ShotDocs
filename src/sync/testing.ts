@@ -397,6 +397,8 @@ export class FakeServer {
    * link de las pruebas (`linkTesting.ts`).
    */
   readonly publicLinks = new Map<string, FakePublicLink>();
+  /** El tope de filas por pedido de la API que ve el visitante de un link (de fábrica, 1000). */
+  linkMaxRows = 1000;
 
   // --- link público, entrega 2a: Can edit (20261028120000_link_editar.sql) ------------------------------------------
   /** `public_link_updates`: la sala de espera, en orden de llegada. */
