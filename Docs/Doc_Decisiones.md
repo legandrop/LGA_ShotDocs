@@ -528,6 +528,31 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
   qué, sin nombrarlos. *Retry* vuelve a hacer el pedido único, no uno por proyecto: si ese pedido no sale nunca, la
   papelera de cada proyecto se sigue viendo abriéndolo (*This project*). La otra opción: que *Retry* pida proyecto
   por proyecto, y que cada uno muestre su propio error.
+- **D348 · Lo tipeado en un comentario cuando la app se reemplaza sola queda en un cartel fijo hasta copiarlo o
+  descartarlo** (2026-10-07; tomada al implementarlo, Lega la puede cambiar). Otra pestaña que toma el control, sacar
+  a la persona, quedarse sin proyectos, un error que frena la app o la sesión que se corta: el texto aparece arriba de
+  la pantalla que quedó, entero, con *Copy text* y *Discard* (que pregunta si no se copió), y cerrar o recargar
+  pregunta mientras no se copió. También queda en la pantalla de entrada si la sesión se cortó sin preguntar (vive en
+  la memoria de esa ventana; salir de la cuenta diciendo que sí a perderlo no lo deja). Las otras opciones: el aviso
+  de siempre con 15 segundos en esas pantallas (la persona puede no estar mirando), o guardar el borrador en el
+  dispositivo (el diseño de D339, con sus preguntas abiertas). **Para que Lega lo revise:** en la pantalla de entrada,
+  sin sesión, el cartel muestra lo de la última cuenta (lo puede ver quien esté frente a esa ventana); si entra otra
+  cuenta, se descarta (D350).
+- **D349 · Después de un «sí» de la app a perder un comentario a medio escribir, el navegador no pregunta de nuevo**
+  (2026-10-07; tomada al implementarlo, Lega la puede cambiar). Vale para *Reload*, forzar la actualización, cambiar
+  o quitar el workspace, y solo para lo escrito tal como estaba al contestar; si la salida no ocurre, deja de valer.
+  Cambiar de workspace con un comentario y algo sin subir hace una sola pregunta con las dos cosas. La otra opción:
+  dejar las dos preguntas (la de la app dice qué se pierde; la del navegador, genérica, no). El «sí» de salir de la
+  cuenta se anota recién cuando la salida se ejecuta (cancelar la ventana de salir no deja nada anotado). Lo que quedó
+  en el cartel sin copiar solo lo cubre un «sí» a una pregunta que lo contó (salir de la cuenta, cambiar o quitar el
+  workspace) y tal como estaba: el de *Reload* o forzar la actualización cuenta solo los cuadros abiertos, así que con
+  un cartel el navegador sigue preguntando. Salir de la cuenta descarta el cartel recién cuando la salida ocurrió.
+- **D350 · Lo que quedó en el cartel es de la cuenta que lo escribió: entra otra y se descarta; salir de la cuenta lo
+  cuenta** (2026-10-07; tomada al implementarlo, Lega la puede cambiar). Si entra otra cuenta en la misma ventana, los
+  textos de la anterior se descartan (no se esconden: no quedan en memoria). Las salidas de la cuenta (el menú, la
+  pantalla de «sacaron a la persona», la sin proyectos, el error del arranque) cuentan los textos sin copiar del cartel
+  en la misma oración que un comentario a medio escribir, y con el «sí» lo descartan. La otra opción: esconderlos
+  mientras está la otra cuenta y devolverlos si vuelve la primera (quedan en memoria a mano de otra cuenta).
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 

@@ -1,6 +1,6 @@
 import { t } from '../i18n';
-import { hasDrafts } from './commentsUi';
-import { hasUnsavedWork, pageReload, reloadByHand, reloadForNewVersion, waitForSaved } from './lazyPart';
+import { confirmDraftLoss, draftLossAccepted, withdrawDraftLoss } from './commentsUi';
+import { hasUnsavedWork, pageReload, reloadByHand, reloadForNewVersion, untilLeft, waitForSaved } from './lazyPart';
 
 // La versión nueva de la app cuando el workspace pide una más nueva (`min_app_version`; Docs/Doc_Sincronizacion.md,
 // "Volver después de mucho tiempo sin red").
@@ -388,6 +388,15 @@ export const FORCE_FREE_BYTES = 2 * 5 * 1024 * 1024;
  * hace nada (sin service worker y sin red, la app no abriría). Devuelve si recargó.
  */
 export async function forceUpdate(deps: ForceDeps = defaultForceDeps()): Promise<ForceResult> {
+  const result = await force(deps);
+  // El «sí» a perder un comentario a medio escribir valía para esta recarga: si no se recargó, o la página sigue acá un
+  // rato después, deja de valer.
+  if (result !== 'reloaded') withdrawDraftLoss();
+  else if (draftLossAccepted()) void untilLeft(Promise.resolve(true));
+  return result;
+}
+
+async function force(deps: ForceDeps): Promise<ForceResult> {
   if (!deps.container) return 'noWorker';
   if (!deps.online()) return 'offline';
   if (!(await deps.saved())) return 'unsaved';
@@ -409,7 +418,7 @@ function defaultForceDeps(): ForceDeps {
     online: () => typeof navigator === 'undefined' || navigator.onLine !== false,
     published: publishedScript,
     saved: waitForSaved,
-    confirmDrafts: () => !hasDrafts() || window.confirm(t('lazy.draftQuestion')),
+    confirmDrafts: () => confirmDraftLoss(t('lazy.draftQuestion')),
     freeBytes: async () => {
       const estimate = await navigator.storage?.estimate?.();
       return estimate?.quota != null && estimate.usage != null ? estimate.quota - estimate.usage : null;

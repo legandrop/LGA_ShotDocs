@@ -940,7 +940,8 @@ Paso 10 de `Plan_Workspaces.md` (sección 4), con la base en la versión 5
     estado; Escape ya la pedía en todos), y el error de guardar (`commentError.decideFirst`) dice lo mismo. Ningún
     clic ni tecla adentro del cuadro descarta lo tipeado sin confirmar. Lo que le pasa a un cuadro abierto (este y
     cualquier otro de comentarios) cuando el cambio llega de afuera está en el punto que sigue.
-  - **Un cuadro abierto y lo que llega de afuera (v0.229, D337 a D339; las salidas, v0.230, D341 a D344).** Lo
+  - **Un cuadro abierto y lo que llega de afuera (v0.229, D337 a D339; las salidas, v0.230, D341 a D344; la app que
+    se reemplaza sola, v0.232, D348 y D349).** Lo
     que se tipea en un cuadro (una
     respuesta, una edición) vive solo en la memoria de ese cuadro, y el panel lo desmontaba cuando el hilo cambiaba
     de lista o dejaba de venir: si el hilo se resolvía o el comentario se borraba **desde otro lado** (otra persona,
@@ -996,7 +997,52 @@ Paso 10 de `Plan_Workspaces.md` (sección 4), con la base en la versión 5
       dice cuántos están resueltos de verdad.
     - **Cerrar o recargar el navegador** con algo escrito en un cuadro ahora pregunta: el `beforeunload` de
       `Workspace.tsx` cuenta `hasDrafts()`, lo mismo que ya miraban el botón *Reload*, la recarga por una versión
-      nueva y el cambio de workspace.
+      nueva y el cambio de workspace. **Una sola pregunta (v0.232, D349):** cuando la app ya preguntó por el comentario
+      (*Reload*, forzar la actualización, cambiar o quitar el workspace, salir de la cuenta) y la persona dijo que sí,
+      la recarga que sigue se pedía con el cuadro todavía montado y el navegador mostraba además la suya. Ahora el «sí»
+      queda anotado (`confirmDraftLoss` / `acceptDraftLoss`, `commentsUi.ts`) y el `beforeunload` no repite la
+      pregunta. Vale para lo escrito tal como estaba al contestar (cualquier tecla en un cuadro lo anula) y se retira si
+      la salida no ocurre: no se pudo guardar lo demás, la página sigue ahí dos segundos después (`untilLeft`,
+      `lazyPart.tsx`), forzar la actualización no recargó, quitar el workspace falló. Cambiar de workspace con un
+      comentario a medio escribir y algo sin subir hace además **una sola** pregunta: la oración del comentario va
+      adelante de la de lo pendiente (como al salir de la cuenta); con el comentario solo, la de recargar.
+    - **La app que se reemplaza sola (v0.232, D348).** Otra pestaña toma el control, sacan a la persona del
+      workspace, se queda sin proyectos (con la dirección de una página la pantalla es «no existe o no tenés
+      acceso»), un error frena la app, o se corta la sesión: el cuadro se desmonta junto con `Shell`, que es quien
+      dibuja el aviso, y el aviso de `closeDraft` no lo veía nadie (medido con la app montada en los cuatro primeros:
+      el aviso salía, ninguna pantalla lo mostraba). Nadie pidió nada, así que no hay a quién preguntarle. Ahora
+      `notice.ts` sabe si hay una pantalla montada que dibuja los avisos (`noticeVisible`, anotado en el mismo paso en
+      que se desmonta todo), y `closeDraft`, al terminar la tanda, si no queda ninguna, guarda lo tipeado en memoria
+      (`useLeftDrafts`). Lo muestra un **cartel fijo** (`LeftDrafts.tsx`) que va junto a la barrera de la raíz
+      (`AppBarrier`), afuera de todo lo que se reemplaza y con su propia barrera: *A comment you were writing was not
+      sent. The screen it was on closed. It is not saved anywhere: copy it before you reload or close this window.*,
+      el texto entero (varios, cada uno, en el orden del panel), *Copy text* (*Copy all 3*, que los copia separados por
+      una línea en blanco) y *Discard*. No vence: queda hasta que la persona lo descarta. Mientras no se copió, cerrar
+      o recargar el navegador pregunta y *Discard* pide confirmación. Va arriba, en el flujo de la página: no tapa
+      ningún botón de la pantalla de abajo (la app de vuelta se achica; una pantalla centrada crece y la página se
+      recorre). Con un «sí» a perderlo (salir de la cuenta desde el menú) no se guarda. Cambiar de página con la app a
+      la vista sigue siendo el aviso de 15 segundos (D339). Lo corregido en la auditoría:
+      - **Es de la cuenta que lo escribió (D350).** Cada texto guarda la cuenta (la anota `Workspace` al montarse,
+        `setDraftOwner`). Si entra **otra** cuenta en la misma ventana (después de una sesión cortada, o en el mismo
+        paso, `<Workspace key={auth.user.id}>` de `App.tsx`), lo de la anterior se **descarta**: no queda en memoria,
+        no va al cartel ni a un aviso. En la pantalla de entrada, sin sesión, quedan los de la última cuenta (D348).
+      - **Salir de la cuenta lo cuenta.** Las salidas de la cuenta (el menú; *Sign out and keep it on this device* y
+        *Remove from this device* de la pantalla de «sacaron a la persona»; el *Sign out* de la pantalla sin
+        proyectos y el del error del arranque) suman los textos del cartel sin copiar a la oración de un comentario a
+        medio escribir (`unsentCount`, `signOutHere`, `menus.tsx`); con el «sí», el cartel se descarta. Copiado, no
+        cuenta (el estado de copiado vive con los textos, `markLeftCopied`).
+      - **El «sí» se anota cuando la salida se ejecuta** (`signOutAccepted`, `commentsUi.ts`): con una clave del
+        asistente o notas de voz, *Sign out* abre otra ventana, y cancelarla (Cancel, Escape, tocar afuera) dejaba el
+        «sí» anotado: cerrar la pestaña no preguntaba y un reemplazo posterior perdía el texto. Si la salida falla,
+        deja de valer. Lo mismo al quitar el workspace (se anota al cerrar la sesión; si la página no se va en dos
+        segundos, deja de valer) y al forzar la actualización que recargó.
+      - **La pregunta al cerrar la ventana** vive con los textos (`commentsUi.ts`), no en el cartel: sigue aunque el
+        cartel falle. Si el cartel tira al dibujarse, su barrera muestra un respaldo mínimo (el título y los textos,
+        sin botones, para copiarlos a mano).
+      - **Alto:** el cartel entero mide como mucho el 45 % de la pantalla (`45dvh`); el título y los botones quedan a
+        la vista y los textos se recorren adentro. Medido con tres textos de 300 palabras: a 375×812 mide 366 px y la
+        app de abajo queda con 435; a 812×375, 169 y 194; a 320×568, 256 y 300; a 1280×800, 360 y 428 (con uno corto,
+        a 375×812, 308 y 493). Sin desborde horizontal; los botones siempre adentro del cartel.
     - **Salir de la cuenta, y quitar el workspace del dispositivo (v0.230, D341).** No miraban lo que se estaba
       escribiendo, y al salir el aviso de arriba no tiene dónde mostrarse (la pantalla que lo dibuja se desmonta):
       se perdía en silencio. Ahora la pregunta de salir (`signOutQuestion`, `menus.tsx`) suma una oración (*A
@@ -1006,15 +1052,18 @@ Paso 10 de `Plan_Workspaces.md` (sección 4), con la base en la versión 5
 
       | Camino | Dónde | ¿Mira lo que se está escribiendo? |
       |---|---|---|
-      | *Sign out* del menú de la cuenta | `menus.tsx`, `signOut` | Sí, desde v0.230: en la pregunta de salir |
-      | *Sign out* de la pantalla sin proyectos | `Workspace.tsx`, `NoProjectsOpen` | Sí, desde v0.230 (esa pantalla no tiene panel: no hay cuadro posible) |
-      | Quitar el workspace del dispositivo | `WorkspaceMenu.tsx`, `remove` | Sí, desde v0.230: en la pregunta de quitar |
-      | Cambiar de workspace, unirse a uno o crear uno | `useLeaveGuard` | Sí (pregunta aparte, antes de la de lo pendiente) |
+      | *Sign out* del menú de la cuenta | `menus.tsx`, `signOut` | Sí, desde v0.230: en la pregunta de salir; desde v0.232 también el cartel sin copiar (D350), y el «sí» se anota al salir de verdad |
+      | *Sign out* de la pantalla sin proyectos, y el del error del arranque | `Workspace.tsx`, `NoProjectsOpen`; `signOutHere` | Sí, desde v0.230 (esa pantalla no tiene panel); desde v0.232, el cartel sin copiar |
+      | *Sign out and keep it on this device* y *Remove from this device* (sacaron a la persona) | `RemovedScreen.tsx` | Desde v0.232, el cartel sin copiar (no hay cuadros posibles) |
+      | Quitar el workspace del dispositivo | `WorkspaceMenu.tsx`, `remove` | Sí, desde v0.230: en la pregunta de quitar; desde v0.232 también el cartel |
+      | Cambiar de workspace, unirse a uno o crear uno | `useLeaveGuard` | Sí (desde v0.232, en la misma pregunta que lo pendiente, con el cartel) |
       | *Reload* de un aviso o de la pantalla de error, *Update now* | `reloadByHand`, `lazyPart.tsx` | Sí (pregunta) |
       | Forzar la actualización | `appUpdate.ts`, `confirmDrafts` | Sí (pregunta) |
       | La recarga sola por una versión nueva, o porque la app quedó vieja | `reloadForNewVersion`, `hasUnsavedWork` | Sí (no recarga) |
       | Cerrar o recargar el navegador, y lo que navega afuera desde el código (*Update the app* de una página de una versión más nueva, conectar Drive, un link a otro workspace, volver de un link público) | `beforeunload`, `Workspace.tsx` | Sí (la pregunta del navegador) |
-      | La app se reemplaza sola: otra pestaña toma el control, sacaron a la persona, se borraron todos los proyectos, un error que la frena | `Workspace.tsx`, `RemovedScreen.tsx`, `ErrorBarrier.tsx` | No se puede preguntar, y el aviso no tiene dónde mostrarse: anotado en el roadmap |
+      | La app se reemplaza sola: otra pestaña toma el control, sacaron a la persona, se borraron todos los proyectos, un error que la frena, la sesión que se corta | `Workspace.tsx`, `RemovedScreen.tsx`, `NoProjectsRoute.tsx`, `ErrorBarrier.tsx` | No se puede preguntar; desde v0.232 lo tipeado queda en el cartel fijo de `LeftDrafts.tsx` hasta copiarlo o descartarlo |
+
+      Después de un «sí» a una de esas preguntas, la del navegador no se repite (D349).
     - **El aviso flotante en el teléfono (v0.230).** El estilo general del aviso (`.notice`, `styles.css`) usa
       `left: 50%` con `translateX(-50%)`: el ancho natural se calcula sobre media pantalla, y a 375 px el aviso de un
       comentario cerrado medía 210 por 175 px, con *Copiar el texto* en tres renglones. Hasta 760 px (el diseño de
@@ -1023,9 +1072,19 @@ Paso 10 de `Plan_Workspaces.md` (sección 4), con la base en la versión 5
       espacio, los de un link): medidos uno por uno en un navegador con el estilo de antes y el de ahora, a 375 y
       760 px mejoran o quedan igual, y a 761 y 1280 px miden lo mismo que antes, salvo los botones del aviso común,
       que no se achican en ninguna pantalla (en castellano *Copiar el texto* salía en dos renglones también en
-      escritorio: a 1280 px, 640 por 60, y ahora en uno, 640 por 56). En el teléfono un aviso largo tapa el botón
-      redondo de dictar mientras está a la vista (anotado en el roadmap). jsdom
-      no calcula el diseño: `noticeLayout.test.ts` fija lo que lo produce en el CSS.
+      escritorio: a 1280 px, 640 por 60, y ahora en uno, 640 por 56). jsdom
+      no calcula el diseño: `noticeLayout.test.ts` fija lo que lo produce en el CSS (y desde v0.232 descubre sola las
+      variantes: las clases que acompañan a `notice` en el JSX y los selectores `.notice.<algo>`).
+    - **El aviso y el botón redondo de dictar en el teléfono (v0.232).** Anclado a los costados, un aviso largo tapaba
+      el botón de dictar (`.dictate-fab`, de 18 a 74 px del borde de abajo) mientras estaba a la vista. Ahora, hasta
+      760 px y con el botón en pantalla (no está con el menú abierto ni para quien no dicta: `:has(.dictate-fab)` sobre
+      `.shell`), los avisos de la app arrancan a 84 px. Los apilados (el avance de reemplazar y los del espacio) iban a
+      76 px fijos y un aviso común de varios renglones les quedaba encima (ya pasaba antes): la app anota el alto del
+      aviso a la vista en `--notice-height` (`followNoticeHeight`, `Workspace.tsx`) y los apilados van por encima de
+      él; sin aviso o con uno de un renglón, donde estaban. Medido en un navegador, cada aviso solo y combinado, con y
+      sin el botón y con el menú abierto: a 320, 375, 430, 600 y 759 px ya no se superpone ninguno; a 761 y 1280 px
+      miden lo mismo que antes, en inglés y castellano. Los de un link (`link-*`) no cambian: van afuera de `.shell`
+      y el visitante no dicta.
   - **A la vista (D327):** el comentario muestra los dos textos, cada uno con su rótulo (*Saved now, changed from
     somewhere else* y *What you wrote on this device*), y tres acciones: *Keep mine* (la edición vuelve a la cola con
     la base de lo que se está viendo; si la base volvió a cambiar, vuelve a quedar apartada), *Discard mine…* (pide

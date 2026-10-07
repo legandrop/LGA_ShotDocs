@@ -24,8 +24,9 @@ import { DeleteBlocked, deleteWorkspaceDatabases, forgetWorkspaceKeys, PendingMe
 import { downloadUnsynced, saveBlob } from './unsyncedDownload';
 import { usePendingCount } from './usePendingCount';
 import type { WorkspacesMode } from './Welcome';
-import { saveBeforeExit } from './lazyPart';
-import { draftCount, getDraftRevision, hasDrafts } from './commentsUi';
+import { saveBeforeExit, untilLeft } from './lazyPart';
+import { acceptDraftLoss, getDraftRevision, signOutAccepted, withdrawDraftLoss } from './commentsUi';
+import { unsentCount } from './menus';
 
 // Los workspaces dentro de la app abierta (paso 12 de Docs/Plan_Workspaces.md): la sección del selector de
 // proyectos, lo que se pregunta antes de dejar el workspace abierto y quitarlo del dispositivo.
@@ -70,15 +71,20 @@ export function useLeaveGuard(): (action: () => void, current?: () => boolean) =
       alert(t('leave.unsaved'));
       return;
     }
-    const draft = hasDrafts();
+    // Los cuadros con algo escrito y lo que quedó sin copiar en el cartel (LeftDrafts.tsx): los dos se pierden al recargar.
+    const writing = unsentCount();
     const draftRevision = getDraftRevision();
-    if (draft && !confirm(t('lazy.draftQuestion'))) return;
     // Las preferencias sin subir quedan en el dispositivo (una copia por usuario) y suben al volver.
     const settings = prefs.hasUnsynced();
-    const accepted = pending === 0 && !settings ? true : !settings ? confirm(t('leave.pending', { count: pending, name })) :
-      pending === 0 ? confirm(t('leave.settings', { name })) : confirm(t('leave.both', { count: pending, name }));
-    if (!accepted) return;
-    void saveBeforeExit(services, () => live.current && attempt.current === token && getDraftRevision() === draftRevision && current(), action);
+    const question = pending === 0 && !settings ? null : !settings ? t('leave.pending', { count: pending, name }) :
+      pending === 0 ? t('leave.settings', { name }) : t('leave.both', { count: pending, name });
+    // Una sola pregunta: con un comentario a medio escribir y además algo sin subir, la oración del comentario va
+    // adelante de la de siempre (como al salir de la cuenta); con el comentario solo, la de recargar.
+    const ask = writing > 0 ? (question ? `${t('comments.draftUnsent', { count: writing })} ${question}` : t('lazy.draftQuestion')) : question;
+    if (ask && !confirm(ask)) return;
+    // Con el «sí», la pregunta del navegador al recargar no repite esta (commentsUi.ts).
+    if (writing > 0) acceptDraftLoss(true);
+    void untilLeft(saveBeforeExit(services, () => live.current && attempt.current === token && getDraftRevision() === draftRevision && current(), action));
   }, [services, docs, tree, pending, name]);
 }
 
@@ -253,8 +259,9 @@ export function RemoveWorkspaceDialog({ onClose }: { onClose: () => void }) {
 
   async function remove() {
     if (!current || current.legacy) return;
-    // Un comentario a medio escribir se va con la app (vive solo en su cuadro): la misma pregunta lo dice.
-    const writing = draftCount();
+    // Un comentario a medio escribir se va con la app (vive solo en su cuadro), y lo que quedó sin copiar en el cartel
+    // (LeftDrafts.tsx), también: la misma pregunta lo dice.
+    const writing = unsentCount();
     const warning =
       (pending > 0
         ? `${media.length > 0 ? t('removeWs.warningMedia', { count: pending }) : t('removeWs.warning', { count: pending })} `
@@ -268,12 +275,17 @@ export function RemoveWorkspaceDialog({ onClose }: { onClose: () => void }) {
       // Sin la base de fotos abierta no se sabe si tiene originales sin subir: queda en el dispositivo.
       await deleteWorkspaceDatabases(dbName, mediaDb === null);
       forgetWorkspaceKeys(services.workspace.config.storage, user.id, projectIds);
-      await client.auth.signOut({ scope: 'local' }).catch(() => undefined);
+      // El «sí» se anota recién acá, cuando la salida ocurre: con él, la pregunta del navegador al recargar no repite esta
+      // (commentsUi.ts). Si la página no se va, deja de valer.
+      await signOutAccepted(() => client.auth.signOut({ scope: 'local' }).catch(() => undefined));
       forgetWorkspaceStorage(current);
       updateWorkspaces((l) => removeWorkspace(l, current.id));
       location.replace('/');
+      void untilLeft(Promise.resolve(true));
     } catch (err) {
       setBusy(null);
+      // No se quitó: el «sí» de recién deja de valer.
+      withdrawDraftLoss();
       if (err instanceof DeleteBlocked) {
         setError(t('removeWs.blocked'));
       } else {

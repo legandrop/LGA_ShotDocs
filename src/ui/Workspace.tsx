@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { AuthUser } from '../auth';
 import { t, useT } from '../i18n';
 import { useCodaOwner } from '../import/codaOwner';
@@ -25,7 +25,7 @@ import { asAction, tipRows } from './tipRows';
 import { disposeSearchSession, isSearchShortcut, otherModalOpen, takesSearchShortcut, useSearchSession } from './projectSearchUi';
 import { ArchiveIcon, DownloadIcon, MicIcon, MoreIcon, PlusIcon, SearchIcon } from './icons';
 import { NavMenuButton } from './NavMenuButton';
-import { menuBelow, PageMenu, signOutQuestion, type MenuPosition } from './menus';
+import { menuBelow, PageMenu, signOutHere, signOutQuestion, unsentCount, type MenuPosition } from './menus';
 import { MoveDialog } from './MoveDialog';
 import { PageFormatDialog } from './PageFormatDialog';
 import { notify, useNotice } from './notice';
@@ -48,7 +48,7 @@ import { lazyPart, Part, preloadWhenIdle, watchPendingWrites } from './lazyPart'
 import { startAppUpdates, stopAppUpdates } from './appUpdate';
 import { focusTitle, PageView, preloadPageParts, type TitlePreparation } from './PageView';
 import { CommentsToggle } from './CommentsToggle';
-import { draftCount, hasDrafts } from './commentsUi';
+import { draftLossAccepted, hasDrafts, setDraftOwner, signOutAccepted } from './commentsUi';
 import { MentionsBell } from './MentionsBell';
 import { Sidebar } from './Sidebar';
 import { SidebarResizer } from './SidebarResizer';
@@ -90,6 +90,10 @@ export function Workspace({ user, link }: { user: AuthUser; link?: LinkBoot }) {
   useEffect(() => (readyServices ? () => disposeSearchSession(readyServices) : undefined), [readyServices]);
   // La línea de tiempo de deshacer también (P.26): suelta los documentos que retenía.
   useEffect(() => (readyServices ? () => disposeUndoTimeline(readyServices) : undefined), [readyServices]);
+
+  // Lo tipeado en un comentario es de esta cuenta: si entra otra, lo que quedó de la anterior en el cartel de lo que se
+  // cerró solo se descarta (commentsUi.ts). En el mismo paso en que se desmonta lo de la cuenta anterior.
+  useLayoutEffect(() => setDraftOwner(user.id), [user.id]);
 
   // Las preferencias de la cuenta (tema, fuente…) se bajan al entrar y se suben cuando cambian.
   // Con un link público no hay cuenta: las preferencias quedan las del dispositivo.
@@ -142,7 +146,7 @@ export function Workspace({ user, link }: { user: AuthUser; link?: LinkBoot }) {
           <button className="primary" onClick={boot.retry}>
             {tr('common.tryAgain')}
           </button>
-          <button className="link" onClick={() => void client.auth.signOut({ scope: 'local' })}>
+          <button className="link" onClick={() => signOutHere(() => client.auth.signOut({ scope: 'local' }))}>
             {tr('common.signOut')}
           </button>
         </div>
@@ -333,8 +337,10 @@ export function Shell() {
     // Lo que esperar el guardado no resuelve: se le dice a quien exporta, con su causa, sin hacerlo esperar.
     const exportBlocked = () => (importing.get().running ? t('export.waitImport') : replaceRunning({ docs }) ? t('export.waitReplace') : null);
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      // Un comentario a medio escribir vive solo en su cuadro: cuenta como lo demás que se perdería al cerrar.
-      if (!unsaved() && !hasDrafts()) return;
+      // Un comentario a medio escribir vive solo en su cuadro: cuenta como lo demás que se perdería al cerrar. Si la
+      // persona ya le dijo que sí a la pregunta de la app por ese comentario (recargar, forzar la actualización, cambiar
+      // o quitar el workspace), el navegador no la repite.
+      if (!unsaved() && (!hasDrafts() || draftLossAccepted())) return;
       e.preventDefault();
       // Safari y los Chrome viejos preguntan solo con `returnValue`.
       e.returnValue = '';
@@ -570,7 +576,7 @@ export function Shell() {
       {/* *Save as template* y *Template settings* (Docs/Doc_Plantillas.md, entrega 3). */}
       <OwnTemplatesHost />
       {notice && (
-        <div className="notice" role="status">
+        <div className="notice" role="status" ref={followNoticeHeight}>
           <span>{notice}</span>
           {noticeAction && (
             <button
@@ -601,6 +607,24 @@ export function Shell() {
       )}
     </div>
   );
+}
+
+/**
+ * Anota en la app el alto del aviso a la vista (`--notice-height`): en el teléfono el aviso puede ocupar varios
+ * renglones, y los avisos que van apilados encima (el avance de reemplazar, los del espacio) se corren con él
+ * (styles.css). Sin aviso, la variable no está.
+ */
+function followNoticeHeight(el: HTMLDivElement | null): (() => void) | undefined {
+  const shell = el?.parentElement;
+  if (!el || !shell) return undefined;
+  const set = () => shell.style.setProperty('--notice-height', `${el.offsetHeight}px`);
+  set();
+  const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(set) : null;
+  observer?.observe(el);
+  return () => {
+    observer?.disconnect();
+    shell.style.removeProperty('--notice-height');
+  };
 }
 
 /** El historial de versiones (P.18): a pantalla entera, encima de la página (que sigue montada: restaurar la usa). */
@@ -912,9 +936,9 @@ export function NoProjects({
             // (no se borra nada del dispositivo). También con un comentario a medio escribir (acá no hay panel que lo
             // tenga: va por si esta pantalla llegara a mostrarse con uno abierto).
             if (replaceBlocksLeaving()) return;
-            const writing = draftCount();
+            const writing = unsentCount();
             if ((pending > 0 || writing > 0) && !confirm(signOutQuestion(pending - rejected, rejected, writing))) return;
-            void client.auth.signOut({ scope: 'local' });
+            void signOutAccepted(() => client.auth.signOut({ scope: 'local' }));
           }}
         >
           {tr('common.signOut')}

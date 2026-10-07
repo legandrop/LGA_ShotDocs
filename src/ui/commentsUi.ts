@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { t, type Key } from '../i18n';
 import { revealCollapsed } from './collapseControl';
 import { IS_MAC, modPressed } from './findUi';
-import { notify } from './notice';
+import { noticeVisible, notify } from './notice';
 
 // Lo que comparten el botón de comentarios de la barra de arriba, el panel (o la hoja en el teléfono), el
 // margen del editor y los botones "Comment" del editor: si el panel está abierto y qué mostrar. Vive en
@@ -82,12 +82,98 @@ export function hasDraft(key: symbol): boolean {
 
 // Los cuadros con algo escrito que se cerraron solos en el mismo momento (al cambiar de página se desmontan todos
 // juntos): van en un solo aviso. La pantalla muestra un aviso a la vez, y con uno por cuadro el texto del primero ya no
-// se podía copiar.
-let closedTexts: string[] = [];
+// se podía copiar. Cada uno con la cuenta que lo escribió y si la persona ya había aceptado perderlo (`acceptDraftLoss`).
+let closed: { text: string; owner: string | null; accepted: boolean }[] = [];
+
+// La cuenta de la app abierta (la anota `Workspace` al montarse; sin sesión, queda la última). Lo tipeado es de esa
+// cuenta: nada de lo que quedó de una puede llegar a la app de otra que entra en la misma ventana.
+let owner: string | null = null;
+
+// Lo que quedó de los cuadros que se cerraron cuando la app se reemplazó sola (otra pestaña tomó el control, sacaron a
+// la persona del workspace, se quedó sin proyectos, un error frenó la app, venció la sesión): la pantalla que dibuja
+// los avisos se desmontó con ellos, así que el aviso no lo ve nadie. Lo tipeado queda acá, en memoria, y lo muestra un
+// cartel que está por encima de todo eso (LeftDrafts.tsx) hasta que la persona lo copia o lo descarta.
+export interface LeftDrafts {
+  /** En el orden en que estaban en el panel. */
+  texts: readonly string[];
+  /** La persona ya copió exactamente estos textos. */
+  copied: boolean;
+}
+
+let left: LeftDrafts = { texts: [], copied: false };
+const leftListeners = new Set<() => void>();
+
+// Mientras haya algo en el cartel sin copiar, cerrar o recargar la ventana pregunta. Vive acá y no en el cartel: si el
+// cartel mismo fallara, la pregunta sigue. La anula solo un «sí» de la app cuya pregunta contó el cartel tal como está
+// (`acceptDraftLoss(true)`): el de *Reload* o forzar la actualización cuenta solo los cuadros abiertos.
+function onBeforeUnloadLeft(e: BeforeUnloadEvent): void {
+  if (!left.texts.length || left.copied || acceptedLeft === left) return;
+  e.preventDefault();
+  e.returnValue = '';
+}
+
+function setLeft(next: LeftDrafts): void {
+  const had = left.texts.length > 0;
+  left = next;
+  if (!had && next.texts.length) window.addEventListener('beforeunload', onBeforeUnloadLeft);
+  if (had && !next.texts.length) window.removeEventListener('beforeunload', onBeforeUnloadLeft);
+  for (const fn of leftListeners) fn();
+}
+
+function subscribeLeft(fn: () => void): () => void {
+  leftListeners.add(fn);
+  return () => leftListeners.delete(fn);
+}
+
+/** Lo tipeado en los cuadros que se cerraron sin que quedara una pantalla para avisarlo. */
+export function useLeftDrafts(): LeftDrafts {
+  return useSyncExternalStore(subscribeLeft, () => left);
+}
+
+/** Lo mismo, fuera de React (el respaldo de la barrera del cartel). */
+export function leftDraftsNow(): LeftDrafts {
+  return left;
+}
+
+/** Cuántos textos del cartel no se copiaron: cuentan en las preguntas de salir como un comentario a medio escribir. */
+export function leftUncopied(): number {
+  return left.copied ? 0 : left.texts.length;
+}
+
+/** Se copiaron esos textos (si mientras tanto llegó otro, no cuenta). */
+export function markLeftCopied(texts: readonly string[]): void {
+  if (left.texts === texts && !left.copied) setLeft({ texts, copied: true });
+}
+
+/** La persona lo copió y lo descartó, lo descartó, o salió de la cuenta diciendo que sí a perderlo. */
+export function dropLeftDrafts(): void {
+  if (left.texts.length) setLeft({ texts: [], copied: false });
+}
+
+/**
+ * Entra a la app una cuenta (`Workspace`). Si es otra que la de antes, lo que quedó de la anterior se descarta: no se
+ * esconde, no queda en memoria a mano de otra cuenta.
+ */
+export function setDraftOwner(id: string): void {
+  if (id !== owner) dropLeftDrafts();
+  owner = id;
+}
 
 function announceClosed(): void {
-  const texts = closedTexts;
-  closedTexts = [];
+  // Lo de otra cuenta (la app de otra persona se montó en el mismo paso, `<Workspace key>` en App.tsx) se descarta: ni
+  // aviso ni cartel.
+  const mine = closed.filter((c) => c.owner === owner);
+  closed = [];
+  if (!mine.length) return;
+  const texts = mine.map((c) => c.text);
+  // Para este momento ya se desmontó todo lo que se iba a desmontar: si no quedó quien dibuje el aviso, lo tipeado se
+  // suma al cartel. Lo que la persona aceptó perder (salió de la cuenta diciendo que sí) no se guarda.
+  const keep = mine.filter((c) => !c.accepted).map((c) => c.text);
+  if (!noticeVisible() && keep.length) {
+    setLeft({ texts: [...left.texts, ...keep], copied: false });
+    // Un «sí» anterior no vale para lo que acaba de llegar al cartel.
+    draftRevision++;
+  }
   const many = texts.length > 1;
   notify(many ? t('comments.draftsClosed', { count: texts.length }) : t('comments.draftClosed'), {
     label: many ? t('comments.copyAllTexts', { count: texts.length }) : t('sync.copyText'),
@@ -100,20 +186,79 @@ function announceClosed(): void {
  * El cuadro se desmontó. `byPerson`: lo cerró quien escribía (mandó, canceló, o confirmó descartarlo). Si no fue así y
  * tenía algo escrito que nadie descartó (se cambió de página, la página dejó de verse), lo tipeado no se va en
  * silencio: un aviso lo dice y lo deja copiar mientras está a la vista. El aviso sale al terminar la tanda en curso,
- * uno solo por todos los cuadros que se cerraron juntos.
+ * uno solo por todos los cuadros que se cerraron juntos. Si para entonces no queda una pantalla que dibuje el aviso (la
+ * app se reemplazó sola), lo tipeado queda además para el cartel de `LeftDrafts.tsx`.
  */
 export function closeDraft(key: symbol, byPerson: boolean): void {
   const draft = drafts.get(key);
   if (!draft) return;
+  const accepted = draftLossAccepted();
   drafts.delete(key);
   draftRevision++;
+  // El «sí» sigue valiendo para los demás cuadros que se cierran con la misma salida.
+  if (accepted) acceptedRevision = draftRevision;
   if (byPerson || !draft.text.trim()) return;
-  closedTexts.push(draft.text);
-  if (closedTexts.length === 1) queueMicrotask(announceClosed);
+  closed.push({ text: draft.text, owner, accepted });
+  if (closed.length === 1) queueMicrotask(announceClosed);
 }
 
 /** La confirmación de descarte vale sólo para la revisión que se vio. */
 export function getDraftRevision(): number { return draftRevision; }
+
+// La persona ya contestó que sí a una pregunta de la app que decía que lo escrito se iba a perder (recargar, forzar la
+// actualización, cambiar o quitar el workspace, salir de la cuenta). Vale para lo escrito tal como estaba al contestar:
+// cualquier cambio en un cuadro lo deja sin efecto, y quien preguntó lo retira si la salida no ocurre. Mientras vale, la
+// pregunta del navegador al salir no repite la de la app (`beforeunload`, Workspace.tsx), y lo que se cierra con esa
+// salida no queda para el cartel de `LeftDrafts.tsx`.
+let acceptedRevision = -1;
+// El cartel tal como estaba cuando la pregunta lo contó (`unsentCount`); si después cambia, el «sí» no lo cubre.
+let acceptedLeft: LeftDrafts | null = null;
+
+/** `withLeft`: la pregunta contó también lo que quedó en el cartel sin copiar. */
+export function acceptDraftLoss(withLeft = false): void {
+  acceptedRevision = draftRevision;
+  acceptedLeft = withLeft ? left : null;
+}
+
+/** La salida que se había aceptado no ocurrió: la próxima vuelve a preguntar. */
+export function withdrawDraftLoss(): void {
+  acceptedRevision = -1;
+  acceptedLeft = null;
+}
+
+export function draftLossAccepted(): boolean {
+  return acceptedRevision === draftRevision;
+}
+
+/**
+ * Sale de la cuenta, cosa que la persona ya aceptó aunque se lleve lo escrito a medias y lo que quedó en el cartel (se
+ * le preguntó contándolos). Se anota recién acá, cuando la salida se ejecuta: si antes se cancela la ventana de salir,
+ * no queda nada anotado. Si la salida falla, el «sí» deja de valer.
+ */
+export async function signOutAccepted<T>(run: () => Promise<T>): Promise<T> {
+  acceptDraftLoss(true);
+  try {
+    const result = await run();
+    // El cartel se descarta recién cuando la salida ocurrió: si falla, la persona sigue adentro con su texto.
+    if ((result as { error?: unknown } | undefined)?.error) withdrawDraftLoss();
+    else dropLeftDrafts();
+    return result;
+  } catch (err) {
+    withdrawDraftLoss();
+    throw err;
+  }
+}
+
+/**
+ * Pregunta antes de una salida que se lleva lo escrito a medias (sin nada escrito, no pregunta). Con un «sí», lo anota
+ * (`acceptDraftLoss`). Devuelve si se puede seguir.
+ */
+export function confirmDraftLoss(question: string): boolean {
+  if (drafts.size === 0) return true;
+  if (!window.confirm(question)) return false;
+  acceptDraftLoss();
+  return true;
+}
 
 export function hasDrafts(): boolean {
   return drafts.size > 0;

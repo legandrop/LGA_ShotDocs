@@ -502,23 +502,60 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   300 líneas de producto, más pruebas. (b) El panel montado sobre una página que dejó de verse se desmonta entero
   (`PageView.tsx`): los cuadros se van con el aviso. (c) Sin recorrer con el router de verdad: el Atrás del navegador
   y el cambio de proyecto (pasan por el mismo desmontaje).
+  **Hecho en v0.232 (lo anotado al hacer y al auditar la v0.230):** (i) **cuando la app se reemplaza sola, lo
+  tipeado en un comentario ya no se pierde en silencio**: si al cerrarse un cuadro con texto no queda ninguna pantalla
+  que dibuje el aviso, el texto queda en un **cartel fijo arriba de todo** (*A comment you were writing was not
+  sent…*, con el texto entero, *Copy text* y *Discard*), que no vence y está afuera de lo que se reemplaza (junto a la
+  barrera de la raíz): sirve para otra pestaña que toma el control, sacar a la persona, quedarse sin proyectos, un error
+  que frena la app y la sesión que se corta (D348). Mientras no se copió, cerrar o recargar pregunta; descartarlo sin
+  copiar, también. Salir de la cuenta diciendo que sí a perderlo no lo deja en el cartel. (ii) Después de un «sí» a la
+  pregunta de la app por el comentario (*Reload*, forzar la actualización, cambiar o quitar el workspace) **el navegador
+  ya no pregunta de nuevo**; si la salida no ocurre, el «sí» deja de valer (D349). (iii) Cambiar de workspace con un
+  comentario a medio escribir y algo sin subir hace **una sola pregunta**. (iv) **En el teléfono, los avisos van por
+  encima del botón redondo de dictar** cuando está en pantalla, y los apilados (el avance de reemplazar, los del
+  espacio) por encima del aviso común aunque ocupe varios renglones (medido de 320 a 759 px; de 761 px para arriba no
+  cambió nada). (v) `noticeLayout.test.ts` descubre solas las variantes del aviso. Detalle en `Doc_Sincronizacion.md`,
+  "Un cuadro abierto y lo que llega de afuera". En la auditoría se corrigió: el cartel es de la cuenta que lo escribió
+  (entra otra en la misma ventana y se descarta) y las salidas de la cuenta lo cuentan en su pregunta (D350); el «sí» de
+  salir de la cuenta se anota recién al salir (cancelar la ventana de salir lo dejaba puesto); el cartel entero no pasa
+  del 45 % de la pantalla; si el cartel falla, un respaldo con los textos.
+  **Anotado al auditar la v0.232:** (1) si el respaldo del cartel también fallara, no se ve nada (la pregunta al
+  cerrar la ventana sigue). (2) Un «sí» a *Reload* y, antes de que recargue, la app se reemplaza sola: el texto no va
+  al cartel (la persona había aceptado perderlo). (3) Sin `:has()` (Safari anterior a 15.4) vuelve lo de la v0.230:
+  el aviso largo tapa el botón de dictar y el cartel no achica la app de abajo. (4) De 761 px para arriba los
+  apilados siguen a 76 px fijos: con un aviso común de dos renglones (a 761 px en castellano) se superponen (ya
+  pasaba); llevar `--notice-height` a todos los anchos los movería también a 1280 px con un aviso de 56 px (sin
+  superposición hoy), así que no se hizo. (5) `.link-offline` y el aviso común salen en el mismo lugar, y
+  `.replace-progress-bar` y `.space-notice` también (ya pasaba). (6) La cola de avisos (abajo, iii). (7) Quitar el
+  workspace con éxito retira el «sí» si la página no se va (`untilLeft`), sin prueba propia (la salida es
+  `location.replace`). **Corregido en la re-verificación:** con un cartel sin copiar y además un cuadro abierto, el
+  «sí» a *Reload* (que cuenta solo los cuadros) hacía que el navegador no preguntara por el cartel; y si salir de la
+  cuenta fallaba, el cartel ya se había descartado. **Anotado en la re-verificación:** la pregunta de salir dice «A
+  comment you are writing…» también cuando lo que cuenta es el cartel; ninguna prueba fija que cambiar de workspace
+  con un cartel no pregunte dos veces (si se rompe, pregunta de más: no se pierde nada).
+  **Queda:** entre 761 y unos 1100 px el aviso sigue topado en media pantalla (ii de abajo); los botones del aviso miden
+  21 px de alto en pantallas táctiles (3 de abajo); un *Cancel* equivocado con varios cuadros (5 de abajo); un aviso con
+  botón reemplazado por otro antes de sus 15 segundos pierde el botón (iii de abajo; la salida propuesta: que un aviso
+  sin botón espere a que venza el que tiene uno, en `notice.ts`); el aviso de un link sin red y el común salen en el
+  mismo lugar (se tapan si salen juntos, ya era así); sin ver la app real en un teléfono.
   **Anotado al hacer la v0.230:** (i) **las pantallas que reemplazan la app sin que la persona lo pida** (otra
   pestaña toma el control, sacaron a la persona del workspace, se borraron todos los proyectos, un error que frena la
   app: `Workspace.tsx`, `RemovedScreen.tsx`, `ErrorBarrier.tsx`) desmontan el cuadro junto con la pantalla que dibuja
   el aviso: lo tipeado se pierde en silencio, sin pregunta posible. El borrador guardado de (a) lo resolvería; lo
-  barato sería que esas pantallas también dibujen el aviso. (ii) Entre 761 y unos 1100 px el aviso sigue topado en
+  barato sería que esas pantallas también dibujen el aviso (hecho en v0.232). (ii) Entre 761 y unos 1100 px el aviso sigue topado en
   media pantalla (a 1280 px, en 640). (iii) Un aviso con botón reemplazado por otro aviso antes de
   sus 15 segundos pierde el botón (el de un comentario cerrado, y también *Undo*): el aviso tiene un solo lugar
   (`notice.ts`). (iv) Cambiar de workspace con un comentario a medio escribir y cambios sin subir hace dos preguntas
-  seguidas (`useLeaveGuard`); salir de la cuenta, una.
+  seguidas (`useLeaveGuard`); salir de la cuenta, una (hecho en v0.232).
   **Anotado al auditar la v0.230:** (1) **en el teléfono, un aviso largo ahora tapa el botón redondo de dictar**
   mientras está a la vista (6 o 15 segundos; medido entre 375 y 759 px): es consecuencia de anclarlo a los costados;
   subir el aviso por encima del botón en el teléfono (`styles.css`, `.notice` y `.dictate-fab`), con los avisos que
-  van apilados a 76 px. (2) Después de una pregunta de la app por el comentario a medio escribir (*Reload*, forzar la
+  van apilados a 76 px (hecho en v0.232). (2) Después de una pregunta de la app por el comentario a medio escribir (*Reload*, forzar la
   actualización, cambiar o quitar el workspace), el `beforeunload` sigue mirando `hasDrafts()` y el navegador
-  mostraría además su propia pregunta (anterior a la v0.230; por lectura: hay que mirarlo en un navegador real).
+  mostraría además su propia pregunta (anterior a la v0.230; por lectura: hay que mirarlo en un navegador real; hecho
+  en v0.232).
   (3) Los botones del aviso miden 21 px de alto en pantallas táctiles. (4) `noticeLayout.test.ts` lee el CSS como
-  texto y su lista de variantes es fija: que las descubra por expresión regular. (5) Con varios cuadros abiertos, un
+  texto y su lista de variantes es fija: que las descubra por expresión regular (hecho en v0.232). (5) Con varios cuadros abiertos, un
   *Cancel* equivocado descarta ese texto sin pregunta (*Cancel* nunca preguntó; Escape y la X, sí). (6) Sin ver: la
   app real en un navegador y en un teléfono, el Atrás y el cambio de proyecto con el router de verdad.
   **Hecho en v0.228 (lo anotado en la re-verificación de v0.227):** (1) el cuadro de edición abierto sobre lo guardado

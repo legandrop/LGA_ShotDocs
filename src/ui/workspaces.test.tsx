@@ -22,7 +22,7 @@ import {
 import { GUIDE_URL, JoinConfirm, LoginWorkspaceBar, Welcome } from './Welcome';
 import { DeleteBlocked, deleteWorkspaceDatabases } from './RemovedScreen';
 import { RemoveWorkspaceDialog, WorkspaceSection } from './WorkspaceMenu';
-import { closeComments, setDraft } from './commentsUi';
+import { closeComments, draftLossAccepted, setDraft } from './commentsUi';
 
 vi.mock('./unsyncedDownload', () => ({ downloadUnsynced: vi.fn(async () => undefined), saveBlob: vi.fn() }));
 
@@ -331,7 +331,63 @@ describe('en la app abierta', () => {
       expect(signOut).not.toHaveBeenCalled();
       expect(readWorkspaces().workspaces.map((w) => w.id)).toContain(STUDIO.id);
       expect((await indexedDB.databases()).some((db) => db.name === dbName)).toBe(true);
+      expect(draftLossAccepted()).toBe(false);
+      // Con un «sí» que no llega a quitarlo (otra pestaña tiene la base abierta), el «sí» deja de valer: la pregunta
+      // del navegador al salir vuelve a contar el comentario.
+      const other = await new Promise<IDBDatabase>((resolve, reject) => {
+        const req = indexedDB.open(dbName);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+      vi.stubGlobal('confirm', () => true);
+      try {
+        await act(async () => remove.click());
+        await shown(() => expect(document.body.textContent).toContain('Close other tabs or windows of the app'));
+        expect(draftLossAccepted()).toBe(false);
+      } finally {
+        other.close();
+      }
     } finally {
+      act(() => closeComments());
+    }
+  });
+
+  it('cambiar de workspace con un comentario a medio escribir y algo sin subir hace una sola pregunta, que dice las dos cosas', async () => {
+    loadWorkspaces(WANKA);
+    updateWorkspaces((l) => addWorkspace(l, STUDIO));
+    const d = await device(crypto.randomUUID());
+    const host = await mount(
+      <ServicesContext.Provider value={services(d, STUDIO, 'x')}>
+        <WorkspaceSection onClose={() => undefined} onDialog={() => undefined} onRemove={() => undefined} />
+      </ServicesContext.Provider>,
+    );
+    const wanka = () => [...host.querySelectorAll<HTMLButtonElement>('.workspace-row')].find((b) => !b.hasAttribute('aria-current'))!;
+    const asked: string[] = [];
+    let answer = false;
+    vi.stubGlobal('confirm', (text: string) => (asked.push(text), answer));
+    vi.stubGlobal('alert', vi.fn());
+    const settings = vi.spyOn(prefs, 'hasUnsynced').mockReturnValue(true);
+    try {
+      act(() => setDraft(Symbol('cuadro'), true, { text: 'A medio escribir' }));
+      click(wanka());
+      expect(asked).toEqual([
+        'A comment you are writing has not been sent and will be lost. Your appearance settings in Studio are not uploaded yet. They stay saved on this device and upload the next time you open Studio. Continue?',
+      ]);
+      expect(draftLossAccepted()).toBe(false);
+      // Con el comentario solo, la pregunta de recargar de siempre.
+      settings.mockReturnValue(false);
+      click(wanka());
+      expect(asked[1]).toBe('A comment you wrote has not been sent. Reload anyway and lose it?');
+      // Con un «sí», el navegador no la repite al recargar; si la salida no ocurre (acá no hay app que guarde), deja de valer.
+      answer = true;
+      click(wanka());
+      expect(asked).toHaveLength(3);
+      expect(draftLossAccepted()).toBe(true);
+      await act(() => settled(50));
+      expect(draftLossAccepted()).toBe(false);
+      expect(readWorkspaces().active).toBe(STUDIO.id);
+    } finally {
+      settings.mockRestore();
       act(() => closeComments());
     }
   });

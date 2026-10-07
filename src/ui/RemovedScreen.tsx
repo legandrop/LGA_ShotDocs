@@ -15,6 +15,8 @@ import { errorMessage } from '../sync/types';
 import type { StorageNames } from '../workspace';
 import { forgetWorkspaceStorage, readWorkspaces, removeWorkspace, updateWorkspaces } from '../workspaces';
 import { downloadUnsynced, saveBlob } from './unsyncedDownload';
+import { signOutAccepted } from './commentsUi';
+import { signOutHere, signOutQuestion, unsentCount } from './menus';
 
 // Sacaron a la persona del workspace (sección 8 de Docs/Plan_Workspaces.md). Aparece SOLO con la señal
 // explícita de la base (su fila de `members` con `removed_at`). No borra nada sola: si hay cambios sin
@@ -181,18 +183,17 @@ export function RemovedScreen() {
   async function removeFromDevice() {
     if (importing()) return;
     const mediaLeft = media.filter((m) => !mediaDone.has(m.id)).length;
-    if (
-      !blocked &&
-      pending > 0 &&
-      (!downloaded || mediaLeft > 0) &&
-      !confirm(
-        downloaded
+    // Lo que quedó sin copiar en el cartel de un comentario que se cerró solo (LeftDrafts.tsx) se pierde al salir: la
+    // misma oración que un comentario a medio escribir, adelante de la pregunta de siempre (una sola).
+    const writing = unsentCount();
+    const unsent = writing > 0 ? `${t('comments.draftUnsent', { count: writing })} ` : '';
+    const question =
+      !blocked && pending > 0 && (!downloaded || mediaLeft > 0)
+        ? downloaded
           ? t('removed.confirmMediaLeft', { count: pending, left: mediaLeft })
-          : t('removed.confirmNotDownloaded', { count: pending }),
-      )
-    ) {
-      return;
-    }
+          : t('removed.confirmNotDownloaded', { count: pending })
+        : null;
+    if (question ? !confirm(unsent + question) : writing > 0 && !confirm(signOutQuestion(0, 0, writing))) return;
     setBusy('remove');
     setError(null);
     setBlocked(false);
@@ -201,7 +202,7 @@ export function RemovedScreen() {
       await services.shutdown();
       await deleteWorkspaceDatabases(dbName, mediaDb === null);
       forgetWorkspaceKeys(workspace.config.storage, user.id, projectIds);
-      await client.auth.signOut({ scope: 'local' });
+      await signOutAccepted(() => client.auth.signOut({ scope: 'local' }));
       // Un workspace que no es el de la compilación sale también de la lista del dispositivo (paso 12), y la
       // app vuelve a otro workspace o a la bienvenida.
       const entry = readWorkspaces().workspaces.find((w) => w.id === workspace.config.localKey);
@@ -247,7 +248,7 @@ export function RemovedScreen() {
         <button className={pending > 0 ? 'secondary' : 'primary'} disabled={busy !== null || summary === null} onClick={() => void removeFromDevice()}>
           {busy === 'remove' ? tr('removed.removing') : tr('removed.remove')}
         </button>
-        <button className="link" disabled={busy !== null} onClick={() => !importing() && void client.auth.signOut({ scope: 'local' })}>
+        <button className="link" disabled={busy !== null} onClick={() => !importing() && signOutHere(() => client.auth.signOut({ scope: 'local' }))}>
           {tr('removed.signOutKeep')}
         </button>
       </div>

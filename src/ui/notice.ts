@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 
 const EVENT = 'shotdocs:notice';
 /** Quita un aviso con botón que dejó de valer (por su `key`). */
@@ -35,9 +35,26 @@ export function dismissNotice(key: string): void {
   window.dispatchEvent(new CustomEvent<string>(DISMISS_EVENT, { detail: key }));
 }
 
+// Cuántas pantallas montadas dibujan el aviso (hoy una: `Shell`). Sin ninguna, un aviso no lo ve nadie: quien tiene
+// algo que no se puede perder (lo tipeado en un comentario, commentsUi.ts) lo mira antes de confiar en el aviso.
+let hosts = 0;
+
+/** Si hay una pantalla montada que dibuja los avisos. */
+export function noticeVisible(): boolean {
+  return hosts > 0;
+}
+
 /** El aviso a la vista: el texto, cerrarlo, su botón (si tiene) y el segundo. */
 export function useNotice(): [string | null, () => void, NoticeAction | undefined, NoticeAction | undefined] {
   const [notice, setNotice] = useState<NoticeDetail | null>(null);
+  // Se anota al montarse y se borra al desmontarse en el mismo paso en que se desmonta lo de adentro (un cuadro de
+  // comentario avisa que se cerró en ese paso): quien pregunta después ya ve si quedó alguien para dibujar el aviso.
+  useLayoutEffect(() => {
+    hosts++;
+    return () => {
+      hosts--;
+    };
+  }, []);
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const onNotice = (e: Event) => {

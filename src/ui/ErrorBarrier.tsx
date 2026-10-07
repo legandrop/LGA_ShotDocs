@@ -1,8 +1,10 @@
 import { Component, useEffect, type ErrorInfo, type ReactNode } from 'react';
-import { useT } from '../i18n';
+import { t, useT } from '../i18n';
 import { usePermissions, useServices, useSyncStatus, type Services } from '../services';
 import { importJobFor } from '../import/importJob';
 import { canSeeHistory, markRestorePending, openHistory, registerRestoreTarget } from './historyUi';
+import { useLeftDrafts } from './commentsUi';
+import { LeftDrafts } from './LeftDrafts';
 import { reloadByHand, watchPendingWrites } from './lazyPart';
 import { replaceRunning } from './replaceUi';
 import { usePendingCount } from './usePendingCount';
@@ -178,12 +180,53 @@ function WorkspaceCrash() {
   return <CrashScreen pending={pending} />;
 }
 
-/** La barrera de la raíz (main.tsx): para lo que pase fuera de un workspace (entrar, la bienvenida, un link). */
+/**
+ * La barrera de la raíz (main.tsx): para lo que pase fuera de un workspace (entrar, la bienvenida, un link). Arriba va
+ * el cartel de lo que quedó de un comentario a medio escribir (LeftDrafts.tsx): está afuera de todo lo que se reemplaza
+ * (la app de un workspace, sus pantallas de «sacaron a la persona» y «sin proyectos», la de un error, el login), y con
+ * su propia barrera, para que un error suyo no se lleve la app ni uno de la app se lo lleve a él.
+ */
 export function AppBarrier({ children }: { children: ReactNode }) {
   return (
-    <ErrorBarrier what="La app no se pudo mostrar" fallback={() => <CrashScreen pending={null} />}>
-      {children}
-    </ErrorBarrier>
+    <>
+      <ErrorBarrier
+        what="El cartel de un comentario sin mandar no se pudo mostrar"
+        fallback={() => (
+          // Si el respaldo también fallara, nada: la pregunta al cerrar la ventana sigue (commentsUi.ts).
+          <ErrorBarrier what="El respaldo del cartel no se pudo mostrar" fallback={() => null}>
+            <LeftDraftsPlain />
+          </ErrorBarrier>
+        )}
+      >
+        <LeftDrafts />
+      </ErrorBarrier>
+      <ErrorBarrier what="La app no se pudo mostrar" fallback={() => <CrashScreen pending={null} />}>
+        {children}
+      </ErrorBarrier>
+    </>
+  );
+}
+
+/**
+ * El respaldo del cartel, si el cartel mismo falló: solo el título y los textos, sin botones ni nada más que pueda volver
+ * a fallar, para seleccionarlos y copiarlos a mano.
+ */
+function LeftDraftsPlain() {
+  const { texts } = useLeftDrafts();
+  if (!texts.length) return null;
+  return (
+    <section className="left-drafts" role="alert">
+      <p>
+        <strong>{t('comments.left.title', { count: texts.length })}</strong>
+      </p>
+      <div className="left-drafts-texts">
+        {texts.map((text, i) => (
+          <p key={i} className="left-draft">
+            {text}
+          </p>
+        ))}
+      </div>
+    </section>
   );
 }
 

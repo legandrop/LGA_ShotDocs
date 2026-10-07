@@ -44,7 +44,7 @@ import { openSaveTemplate, useSaveTemplateOffer } from '../templates/ownTemplate
 import { offlineSupported, openOffline, openStorage } from './SpaceHost';
 import { openExport } from './ExportHost';
 import { openHelp } from '../help/helpUi';
-import { draftCount, isPhoneLayout } from './commentsUi';
+import { draftCount, isPhoneLayout, leftUncopied, signOutAccepted } from './commentsUi';
 import { collapseControlFor } from './collapseControl';
 import { pageCameraFor } from './camera';
 import { notify } from './notice';
@@ -479,7 +479,8 @@ export function accountMaxHeight(position: MenuPosition): string | undefined {
  * La pregunta antes de cerrar la sesión con algo que solo está en este dispositivo. `pending`: lo que falta subir.
  * `rejected`: lo que el servidor rechazó (cambios del árbol, archivos, comentarios) y las ediciones de comentarios
  * apartadas por un conflicto. `writing`: los cuadros de comentarios con algo escrito sin mandar, que al salir se
- * pierden (viven solo en su cuadro). Solo con lo pendiente, el texto de siempre.
+ * pierden (viven solo en su cuadro), y lo que quedó sin copiar en el cartel de `LeftDrafts.tsx` (ver `unsentCount`).
+ * Solo con lo pendiente, el texto de siempre.
  */
 export function signOutQuestion(pending: number, rejected: number, writing = 0): string {
   if (rejected === 0 && writing === 0) return t('account.signOutPending', { count: pending });
@@ -489,6 +490,25 @@ export function signOutQuestion(pending: number, rejected: number, writing = 0):
   if (writing > 0) parts.push(t('comments.draftUnsent', { count: writing }));
   parts.push(t('account.signOutAnyway'));
   return parts.join(' ');
+}
+
+/**
+ * Lo que se pierde al salir de la cuenta sin estar en ningún lado: los cuadros con algo escrito y lo que quedó en el
+ * cartel sin copiar (LeftDrafts.tsx). La misma oración en la pregunta de salir, para las dos cosas.
+ */
+export function unsentCount(): number {
+  return draftCount() + leftUncopied();
+}
+
+/**
+ * Salir de la cuenta desde una pantalla sin la app (el error del arranque, la de «sacaron a la persona»): con lo que
+ * quedó sin copiar en el cartel de lo que se cerró solo (LeftDrafts.tsx), pregunta antes, con la oración de un
+ * comentario a medio escribir; con el «sí», el cartel se descarta (después podría entrar otra cuenta).
+ */
+export function signOutHere(run: () => Promise<unknown>): void {
+  const writing = unsentCount();
+  if (writing > 0 && !confirm(signOutQuestion(0, 0, writing))) return;
+  void signOutAccepted(run);
 }
 
 export function AccountMenu({
@@ -531,18 +551,22 @@ export function AccountMenu({
     const rejected = status.failedOps + status.failedMedia + status.failedComments;
     // Y un comentario a medio escribir: vive solo en su cuadro y al salir se pierde sin dónde avisarlo (la pantalla que
     // muestra los avisos se desmonta). Va en la misma pregunta, una sola.
-    const writing = draftCount();
+    // Lo mismo con lo que quedó sin copiar en el cartel de lo que se cerró solo: otra cuenta podría entrar después.
+    const writing = unsentCount();
     if ((pending > 0 || rejected > 0 || writing > 0) && !confirm(signOutQuestion(pending, rejected, writing))) return;
+    // El «sí» se anota y el cartel se descarta recién cuando la salida se ejecuta (`signOutAccepted`): cancelar la
+    // ventana de salir de abajo deja todo como estaba.
+    const leave = () => signOutAccepted(() => client.auth.signOut({ scope: 'local' }));
     // Con una clave del asistente o de *Voice* guardada en este dispositivo, la ventana de salir ofrece olvidarla
     // (Doc_Asistente.md, 4); con notas de voz sin ubicar, las cuenta y ofrece borrarlas (Doc_Dictado.md, 8).
     const wsKey = workspace.config.localKey || workspace.config.url;
     const left = await voiceLeftovers(user.email, wsKey).catch(() => ({ notes: 0, voiceKey: false }));
     if ((await hasAssistantKey(user.email)) || left.notes > 0 || left.voiceKey) {
       onClose();
-      askSignOut(user.email, () => client.auth.signOut({ scope: 'local' }), wsKey);
+      askSignOut(user.email, leave, wsKey);
       return;
     }
-    await client.auth.signOut({ scope: 'local' });
+    await leave();
   }
 
   return (

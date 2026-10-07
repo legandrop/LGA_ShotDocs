@@ -10,7 +10,7 @@ import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY, WorkspaceContext } from '../workspace';
-import { closeComments, hasDrafts, setDraft, showComments } from './commentsUi';
+import { closeComments, dropLeftDrafts, hasDrafts, setDraft, showComments } from './commentsUi';
 import { signOutQuestion } from './menus';
 import { NoProjectsOpen, Shell } from './Workspace';
 
@@ -62,6 +62,8 @@ afterEach(async () => {
     d.commentsDb.close();
   }
   act(() => closeComments());
+  // Desmontar la app con un cuadro con texto lo deja en el cartel (LeftDrafts.tsx): no pasa a la prueba siguiente.
+  act(() => dropLeftDrafts());
   act(() => prefs.set({ language: 'en' }));
   notices.length = 0;
   document.body.innerHTML = '';

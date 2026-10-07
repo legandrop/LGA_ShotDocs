@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.232 :
+
+Cuando la app se reemplazaba sola (otra pestaña tomaba el control, sacaban a la persona del workspace, se quedaba sin proyectos o un error la frenaba), lo tipeado en un comentario se perdía en silencio: el cuadro se desmontaba con la pantalla que dibuja los avisos. Ahora queda en un cartel fijo arriba de todo, con *Copy text* y *Discard*, que no vence ni pasa del 45 % de la pantalla (D348); es de la cuenta que lo escribió: si entra otra, se descarta, y salir de la cuenta lo cuenta en su pregunta (D350). Después de un «sí» de la app a perder un comentario, el navegador no vuelve a preguntar, y ese «sí» se anota recién cuando la salida ocurre (D349). Cambiar de workspace hace una sola pregunta. En el teléfono, los avisos suben por encima del botón de dictar.
+
+[Guardar en un cartel fijo de la cuenta lo tipeado en un comentario cuando la app se reemplaza sola, contarlo al salir de la cuenta, no repetir la pregunta del navegador después de la de la app, juntar las preguntas al cambiar de workspace y subir los avisos del teléfono por encima del botón de dictar]
+
 v0.231 :
 
 Un comentario que empezó antes que el último recibido y confirmó después de una bajada quedaba detrás del cursor (`updated_at` es la hora en que empieza la transacción) y no llegaba; contar duplicaba el costo del primer pedido del árbol; la papelera de *All projects* mostraba un error por proyecto; y las invitaciones y los nombres de versión no se mostraban con un tope de filas bajo. Ahora la bajada de comentarios pide desde un minuto antes hasta que el cursor queda asentado, y eso se guarda con él; el árbol pide el total solo con menos de 1000 páginas, y un pedido que contaba y la base cortó por tiempo se repite sin contar; la papelera muestra un error con un *Retry*; invitaciones y nombres de versión llegan enteros; y el script ya no dice *Try again* al escribir. Sin migración.

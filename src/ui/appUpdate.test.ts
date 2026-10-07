@@ -10,6 +10,8 @@ import {
   type ForceDeps,
   type WorkerContainer,
 } from './appUpdate';
+import { acceptDraftLoss, draftLossAccepted, withdrawDraftLoss } from './commentsUi';
+import { reloadTimings } from './lazyPart';
 
 /**
  * Un `navigator.serviceWorker` de mentira: el navegador encuentra (o no) una versión nueva al buscar. Cada instalación
@@ -435,6 +437,28 @@ describe('forzar la actualización', () => {
       expect(await forceUpdate(deps)).not.toBe('reloaded');
       expect(worker.reg.unregister).not.toHaveBeenCalled();
       expect(reload).not.toHaveBeenCalled();
+    }
+  });
+
+  it('el «sí» a perder un comentario a medio escribir vale para esta recarga: si no recargó, deja de valer', async () => {
+    // Quien pregunta lo anota (`confirmDraftLoss`): mientras vale, la pregunta del navegador al recargar no repite la de la app.
+    const yes = () => (acceptDraftLoss(), true);
+    // La página que se va avisa con `pagehide` (acá no llega nunca).
+    vi.stubGlobal('window', new EventTarget());
+    const pagehideMs = reloadTimings.pagehideMs;
+    reloadTimings.pagehideMs = 30;
+    try {
+      expect(await forceUpdate(forceSetup({ confirmDrafts: yes, freeBytes: async () => 1 }).deps)).toBe('noSpace');
+      expect(draftLossAccepted()).toBe(false);
+      expect(await forceUpdate(forceSetup({ confirmDrafts: yes }).deps)).toBe('reloaded');
+      expect(draftLossAccepted()).toBe(true);
+      // Recargó, pero la página sigue acá un rato después: deja de valer.
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      expect(draftLossAccepted()).toBe(false);
+    } finally {
+      reloadTimings.pagehideMs = pagehideMs;
+      vi.unstubAllGlobals();
+      withdrawDraftLoss();
     }
   });
 

@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 // El aviso flotante (`.notice`: el de `notify`, el avance de reemplazar, los del espacio y los de un link) en el
@@ -49,10 +51,12 @@ describe('el aviso flotante en el teléfono', () => {
   });
 
   it('ningún aviso repite la posición del general: si la repitiera, el anclaje del teléfono no le llegaría', () => {
-    for (const variant of ['.notice.link-limited', '.notice.link-edit-bar', '.notice.replace-progress-bar', '.space-notice']) {
-      const rules = [...css.matchAll(new RegExp(`\\n${variant.replace(/\./g, '\\.')} \\{([^}]*)\\}`, 'g'))].map((m) => m[1]);
-      expect(rules.length, variant).toBeGreaterThan(0);
-      for (const body of rules) {
+    // Las variantes se descubren solas: las clases que acompañan a `notice` en el JSX y las `.notice.<algo>` del CSS. Un
+    // aviso nuevo entra sin tocar esta prueba.
+    const variants = noticeVariants();
+    expect(variants).toEqual(expect.arrayContaining(['link-edit-bar', 'link-limited', 'link-offline', 'replace-progress-bar', 'space-notice']));
+    for (const variant of variants) {
+      for (const body of rulesFor(variant)) {
         expect(body, variant).not.toMatch(/(^|[\s;])left\s*:/);
         expect(body, variant).not.toMatch(/(^|[\s;])right\s*:/);
         expect(body, variant).not.toMatch(/transform\s*:/);
@@ -60,3 +64,56 @@ describe('el aviso flotante en el teléfono', () => {
     }
   });
 });
+
+describe('el aviso y el botón redondo de dictar en el teléfono', () => {
+  it('con el botón en pantalla, los avisos de la app arrancan por encima de él; con el menú abierto (sin botón), donde siempre', () => {
+    const block = phoneBlock();
+    expect(rule(block, '.shell', '  ')).toEqual({ '--notice-base': '20px' });
+    expect(rule(block, '.shell:not(.nav-open):has(.dictate-fab)', '  ')).toEqual({ '--notice-base': '84px' });
+    expect(rule(block, '.shell .notice', '  ')).toEqual({ bottom: 'calc(var(--notice-base) + env(safe-area-inset-bottom))' });
+    // El botón ocupa de 18 a 74 px del borde de abajo: 84 deja 10 px libres.
+    const fab = [...css.matchAll(/\n {2}\.dictate-fab \{([^}]*)\}/g)].map((m) => m[1]).find((b) => b.includes('position: fixed'))!;
+    const bottom = Number(/bottom:\s*calc\((\d+)px/.exec(fab)![1]);
+    const height = Number(/height:\s*(\d+)px/.exec(fab)![1]);
+    expect(bottom + height).toBeLessThan(84);
+  });
+
+  it('los apilados van por encima del aviso común aunque ocupe varios renglones (su alto lo anota la app)', () => {
+    expect(rule(phoneBlock(), '.shell .notice.replace-progress-bar,\n  .shell .space-notice', '  ')).toEqual({
+      bottom: 'calc(var(--notice-base) + max(43px, var(--notice-height, 0px)) + 13px + env(safe-area-inset-bottom))',
+    });
+    // Sin el botón y con un aviso de un renglón, donde estaban (76 px, el general de 760 px para arriba).
+    expect(20 + 43 + 13).toBe(76);
+    expect(css).toContain('\n.notice.replace-progress-bar {\n  bottom: calc(76px + env(safe-area-inset-bottom));\n}');
+  });
+});
+
+/** Las clases que acompañan a `notice` en el JSX de la app y las de los selectores `.notice.<algo>` del CSS. */
+function noticeVariants(): string[] {
+  const found = new Set<string>();
+  const root = fileURLToPath(new URL('..', import.meta.url));
+  for (const file of readdirSync(root, { recursive: true }) as string[]) {
+    if (!file.endsWith('.tsx') || file.endsWith('.test.tsx')) continue;
+    const source = readFileSync(join(root, file), 'utf8');
+    for (const [, list] of source.matchAll(/className="([^"]*)"/g)) {
+      const classes = list.split(/\s+/);
+      if (classes.includes('notice')) for (const c of classes) if (c !== 'notice') found.add(c);
+    }
+  }
+  for (const [, c] of css.matchAll(/\.notice\.([\w-]+)/g)) found.add(c);
+  return [...found].sort();
+}
+
+/** Lo de adentro de cada regla del CSS (en cualquier `@media`) cuyo último tramo de algún selector lleva esa clase. */
+function rulesFor(variant: string): string[] {
+  const plain = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  const bodies: string[] = [];
+  for (const [, selectors, body] of plain.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const hit = selectors.split(',').some((s) => {
+      const last = s.trim().split(/[\s>+~]+/).pop() ?? '';
+      return last.split(/(?=[.:#[])/).includes(`.${variant}`);
+    });
+    if (hit) bodies.push(body);
+  }
+  return bodies;
+}

@@ -1669,6 +1669,76 @@ code {
   line-height: 1.5;
 }
 
+/* Lo que quedó de un comentario a medio escribir cuando la app se reemplazó sola (LeftDrafts.tsx): un cartel arriba de
+   todo, en el flujo de la página (no tapa ningún botón de la pantalla de abajo), hasta que se copia o se descarta. Nunca
+   más alto que casi media pantalla: el título y los botones quedan a la vista, los textos se recorren adentro, y la app
+   de abajo sigue usable. */
+.left-drafts {
+  flex: none;
+  max-height: 45vh;
+  max-height: 45dvh;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  box-sizing: border-box;
+  width: min(640px, calc(100% - 32px));
+  margin: 12px auto 0;
+  padding: 12px 14px;
+  border: 1px solid var(--warn-border);
+  border-radius: 10px;
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: 13px;
+  line-height: 1.5;
+  display: grid;
+  gap: 8px;
+}
+
+.left-drafts p {
+  margin: 0;
+}
+
+/* Los textos, enteros y con sus saltos de línea: si no entran, se recorren. */
+.left-drafts-texts {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.left-drafts .left-draft {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.left-drafts-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Con el cartel, la pantalla de abajo ocupa el resto: la app (que mide el alto entero) se achica, y una pantalla
+   centrada crece con lo que tenga y la página se recorre. */
+#root:has(> .left-drafts) {
+  display: flex;
+  flex-direction: column;
+}
+
+#root:has(> .left-drafts) > :not(.left-drafts) {
+  flex: 1 0 auto;
+  min-height: 0;
+}
+
+#root:has(> .left-drafts) > .shell {
+  flex: 1 1 0;
+  height: auto;
+}
+
 /* El mismo aviso para un diálogo o el carrete, que se abren encima: como diálogo. */
 .part-error-dialog p {
   margin: 0;
@@ -1907,6 +1977,29 @@ code {
     width: fit-content;
     margin-inline: auto;
     transform: none;
+  }
+
+  /* Anclado a los costados, un aviso largo llega hasta el botón redondo de dictar (`.dictate-fab`: de 18 a 74 px del
+     borde de abajo). Con el botón en pantalla (no está con el menú abierto ni para quien no dicta), los avisos de la app
+     arrancan por encima de él. */
+  .shell {
+    --notice-base: 20px;
+  }
+
+  .shell:not(.nav-open):has(.dictate-fab) {
+    --notice-base: 84px;
+  }
+
+  .shell .notice {
+    bottom: calc(var(--notice-base) + env(safe-area-inset-bottom));
+  }
+
+  /* Los que van apilados encima del aviso común: en el teléfono el común puede ocupar varios renglones, y con 76 px
+     fijos quedaban uno sobre el otro. La app anota el alto del aviso a la vista (`--notice-height`, Workspace.tsx); sin
+     aviso, o con uno de un renglón (43 px), quedan donde estaban. */
+  .shell .notice.replace-progress-bar,
+  .shell .space-notice {
+    bottom: calc(var(--notice-base) + max(43px, var(--notice-height, 0px)) + 13px + env(safe-area-inset-bottom));
   }
 }
 

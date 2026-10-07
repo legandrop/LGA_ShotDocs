@@ -1,7 +1,7 @@
 import { Component, createElement, lazy, Suspense, type ComponentType, type ReactNode } from 'react';
 import { t } from '../i18n';
 import { optionalImportPending } from '../lib/optionalImport';
-import { getDraftRevision, hasDrafts } from './commentsUi';
+import { confirmDraftLoss, getDraftRevision, hasDrafts, withdrawDraftLoss } from './commentsUi';
 import { notify } from './notice';
 
 // Partes de la app que se cargan aparte (roadmap B.4): el editor, el carrete y los diálogos. La primera
@@ -95,11 +95,19 @@ export const pageReload = { now: (): void => location.reload() };
 /** El botón "Reload" de los avisos: un comentario sin mandar se pierde, así que pregunta antes. */
 let manualAttempt = 0;
 export function reloadByHand(): void {
-  const draft = hasDrafts();
   const draftRevision = getDraftRevision();
-  if (draft && !window.confirm(t('lazy.draftQuestion'))) return;
+  // Con un «sí», la pregunta del navegador al recargar no repite esta (`confirmDraftLoss`, commentsUi.ts).
+  if (!confirmDraftLoss(t('lazy.draftQuestion'))) return;
   const attempt = ++manualAttempt;
-  void saveBeforeExit(pendingWrites?.owner ?? null, () => attempt === manualAttempt && getDraftRevision() === draftRevision, () => pageReload.now());
+  void untilLeft(saveBeforeExit(pendingWrites?.owner ?? null, () => attempt === manualAttempt && getDraftRevision() === draftRevision, () => pageReload.now()));
+}
+
+/**
+ * El «sí» a perder un comentario a medio escribir vale para la salida que se pidió. Si la salida no ocurre (no se pudo
+ * guardar lo demás, o la página sigue acá un rato después), deja de valer: la próxima vuelve a preguntar.
+ */
+export async function untilLeft(exit: Promise<boolean>): Promise<void> {
+  if (!(await exit) || !(await leavesWithin(reloadTimings.pagehideMs))) withdrawDraftLoss();
 }
 
 /**

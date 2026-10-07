@@ -21,6 +21,23 @@ export const comments = {
     es: "Se cerraron {count} comentarios que estabas escribiendo antes de que los mandaras.",
   },
   'comments.copyAllTexts': { en: "Copy all {count}", es: "Copiar los {count}" },
+  // La app se reemplazó sola con algo escrito en un cuadro (otra ventana tomó el control, sacaron a la persona, un
+  // error…): no quedó pantalla para el aviso, y lo tipeado va en un cartel fijo hasta copiarlo o descartarlo
+  // (LeftDrafts.tsx).
+  'comments.left.title': {
+    en: { one: "A comment you were writing was not sent.", other: "{count} comments you were writing were not sent." },
+    es: { one: "Un comentario que estabas escribiendo no se mandó.", other: "{count} comentarios que estabas escribiendo no se mandaron." },
+  },
+  'comments.left.text': {
+    en: {
+      one: "The screen it was on closed. It is not saved anywhere: copy it before you reload or close this window.",
+      other: "The screen they were on closed. They are not saved anywhere: copy them before you reload or close this window.",
+    },
+    es: {
+      one: "La pantalla en la que estaba se cerró. No quedó guardado en ningún lado: copialo antes de recargar o cerrar esta ventana.",
+      other: "La pantalla en la que estaban se cerró. No quedaron guardados en ningún lado: copialos antes de recargar o cerrar esta ventana.",
+    },
+  },
   // Salir de la cuenta o quitar el workspace del dispositivo con algo escrito en un cuadro: va adentro de la pregunta
   // de siempre (menus.tsx, WorkspaceMenu.tsx).
   'comments.draftUnsent': {
