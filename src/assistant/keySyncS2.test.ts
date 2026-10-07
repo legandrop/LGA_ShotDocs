@@ -13,8 +13,6 @@ import { KeySyncStore } from './keySyncTesting';
 // no se adopta, varias copias en varios workspaces, el `savedAt` que nunca retrocede con un reloj atrasado, y la clave
 // de *Voice* que viaja en el mismo sobre (con la regla 6 también para ella).
 
-vi.setConfig({ testTimeout: 30_000 });
-
 const EMAIL = 'lega@wanka.tv';
 const UID = 'uid-lega-en-wanka';
 const PHRASE = 'acorn-bulb-cider-dove-ember-frost';

@@ -2,6 +2,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { settled } from '../test/settle';
 import * as Y from 'yjs';
 import { pagePath } from '../router';
 import { ServicesContext, type Services } from '../services';
@@ -20,8 +21,6 @@ import { Shell } from './Workspace';
 // e ir a un resultado en otra página y en la misma, con la app de verdad (el árbol, la base local y el editor).
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-// Con la máquina cargada (varias pruebas a la vez), el editor en jsdom tarda: topes holgados.
-vi.setConfig({ testTimeout: 60_000 });
 
 beforeAll(() => {
   window.matchMedia ??= ((query: string) => ({
@@ -63,7 +62,8 @@ afterEach(() => {
   history.replaceState(null, '', '/');
 });
 
-const wait = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const wait = (ms = 30) => act(() => settled(ms));
 
 async function until(check: () => unknown, what: string, tries = 250): Promise<void> {
   for (let i = 0; i < tries; i++) {
@@ -300,7 +300,8 @@ describe('el panel', () => {
     type(input(), 'viejo');
     await until(() => options().some((o) => o.textContent?.includes('Wanka viejo')), 'el archivado que coincide');
     expect(options()[0].textContent).toContain('Wanka viejo');
-    expect(options()[0].textContent).toContain('Archived');
+    // La marca llega con lo que la app lee de la copia del dispositivo, que puede ser un dibujo después del nombre.
+    await until(() => options()[0]?.textContent?.includes('Archived'), 'la marca de archivado');
     void old;
   });
 
@@ -573,7 +574,7 @@ describe('el panel (después de la auditoría)', () => {
     await until(() => host.querySelector('.find-count')?.textContent?.includes('of'), 'la cuenta otra vez');
     await wait(300);
     expect(host.querySelector('.find-count')!.textContent).toBe('3 of 3');
-  }, 20_000);
+  });
 });
 
 describe('crear un proyecto desde el panel (verificación)', () => {
@@ -588,8 +589,12 @@ describe('crear un proyecto desde el panel (verificación)', () => {
       return id;
     });
     const real = d.docs.indexSnapshot.bind(d.docs);
+    // La lectura de esa página queda frenada hasta que la prueba la suelta (un plazo fijo de 1,2 s contra una espera de
+    // medio segundo era una carrera: con la máquina cargada la espera podía terminar después de la lectura).
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
     vi.spyOn(d.docs, 'indexSnapshot').mockImplementation(async (pageId) => {
-      if (pageId === slow) await new Promise((r) => setTimeout(r, 1200));
+      if (pageId === slow) await held;
       return real(pageId);
     });
     type(input(), 'palabrarara');
@@ -598,8 +603,12 @@ describe('crear un proyecto desde el panel (verificación)', () => {
     key(input(), { key: 'ArrowDown' });
     key(input(), { key: 'Enter' });
     expect(d.tree.projects().map((p) => p.name)).not.toContain('palabrarara');
+    await wait(100);
+    expect(panel()!.querySelector('.search-page')).toBeNull();
+    release();
     await until(() => panel()?.querySelector('.search-page'), 'la página lenta');
-    expect(panel()!.querySelector('.search-create')).not.toBeNull();
+    // Con todo leído se vuelve a ofrecer (el dibujo que lo ofrece puede ser uno después del que muestra la página).
+    await until(() => panel()?.querySelector('.search-create'), 'crear el proyecto, ya con todo leído');
   });
 
   it('no se ofrece con páginas que faltan bajar', async () => {

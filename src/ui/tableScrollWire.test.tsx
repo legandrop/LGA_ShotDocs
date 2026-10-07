@@ -6,6 +6,7 @@ import type { EditorView } from '@tiptap/pm/view';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { settled } from '../test/settle';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { CONTENT_FRAGMENT } from '../sync/structure';
@@ -80,7 +81,8 @@ function services(d: Device): Services {
   };
 }
 
-const wait = (ms = 60) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const wait = (ms = 60) => act(() => settled(ms));
 const viewOf = (): EditorView | null => (document.querySelector('.bn-editor') as (HTMLElement & { editor?: { view?: EditorView } }) | null)?.editor?.view ?? null;
 
 describe('la celda a la vista: el enganche en el editor de la página', () => {

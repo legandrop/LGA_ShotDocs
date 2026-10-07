@@ -2,6 +2,8 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { settled } from '../test/settle';
+import { shown } from '../test/shown';
 import * as Y from 'yjs';
 import { prefs } from '../prefs';
 import { ServicesContext, type Services } from '../services';
@@ -71,7 +73,8 @@ function services(d: Device): Services {
   };
 }
 
-const settle = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const settle = (ms = 30) => act(() => settled(ms));
 
 async function mount(value: Services, node: React.ReactNode): Promise<HTMLElement> {
   const host = document.createElement('div');
@@ -138,7 +141,7 @@ async function setup() {
   return { server, a, b, page, ids };
 }
 
-describe('la ventana "Available offline"', { timeout: 30_000 }, () => {
+describe('la ventana "Available offline"', () => {
   it('pesa todas las filas (también lo destildado), muestra el total y arranca; termina en "listo"', async () => {
     const { b, page, ids } = await setup();
     const host = await mount(services(b), <OfflineDialog kind="page" target={page} onClose={() => undefined} />);
@@ -221,17 +224,25 @@ describe('la ventana "Available offline"', { timeout: 30_000 }, () => {
     const { b, page, ids } = await setup();
     await b.offline.mark('page', page);
     await b.offline.idle();
-    const host = await mount(services(b), <OfflineDialog kind="page" target={page} onClose={() => undefined} />);
+    const onClose = vi.fn();
+    const host = await mount(services(b), <OfflineDialog kind="page" target={page} onClose={onClose} />);
     await until(() => host.textContent!.includes('Ready to use offline'));
     const remove = [...host.querySelectorAll('button')].find((x) => x.textContent === 'Remove')!;
     await act(async () => remove.click());
     expect(host.textContent).toContain('Stop keeping “Escena 12” offline?');
     expect(host.querySelector<HTMLInputElement>('.offline-remove input')!.checked).toBe(true);
     const confirm = [...host.querySelectorAll('.offline-remove button')].find((x) => x.textContent === 'Remove') as HTMLButtonElement;
+    const unmark = vi.spyOn(b.offline, 'unmark');
     await act(async () => confirm.click());
+    // Sacar borra las copias de cada archivo y recién al final cierra la ventana: se espera ese final (si no, la prueba
+    // terminaba con la app todavía borrando, y cerrar la base dejaba un rechazo suelto en la corrida).
+    await shown(() => expect(onClose).toHaveBeenCalled());
     await settle();
     expect(await listMarks(b.mediaDb)).toEqual([]);
     expect(await b.mediaDb.get('thumbs', offviewKey(ids[0]))).toBeUndefined();
+    // La casilla tildada llega a quien saca la marca. (En jsdom la nítida nunca se arma, así que la línea de arriba pasa
+    // aunque no se borre nada: lo que borra de verdad lo prueba src/media/offline.test.ts.)
+    expect(unmark).toHaveBeenCalledWith(expect.any(String), true);
   });
 });
 
@@ -275,7 +286,7 @@ describe('"Storage on this device" y el aviso del tope', () => {
   });
 });
 
-describe('liberar los originales agregados en este dispositivo (entrega 2)', { timeout: 30_000 }, () => {
+describe('liberar los originales agregados en este dispositivo (entrega 2)', () => {
   // Liberar de verdad (con el portero y la base en memoria) lo prueba src/media/ownFree.test.ts. Acá, lo que se ve y que
   // nada se libera sin el sí: el uso viene armado (en jsdom la cola no termina de subir los originales).
   const own = (over: Partial<Usage['own']>): Usage => ({

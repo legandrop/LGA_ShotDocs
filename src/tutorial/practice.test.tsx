@@ -2,6 +2,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { settled } from '../test/settle';
 import { closeHelp } from '../help/helpUi';
 import { prefs } from '../prefs';
 import { navigate, pagePath } from '../router';
@@ -77,7 +78,8 @@ afterEach(async () => {
   act(() => prefs.set({ language: 'en' }));
 });
 
-const wait = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const wait = (ms = 30) => act(() => settled(ms));
 async function until(check: () => unknown, what: string, tries = 300): Promise<void> {
   for (let i = 0; i < tries; i++) {
     if (check()) return;

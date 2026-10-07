@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 import { applyLikeApp, mountEditor, unmountAll } from '../ui/collabHarness';
 import { STABLE_GAPS_MARKER } from '../ui/unknownContent';
@@ -247,13 +247,24 @@ describe('la prueba de admisión (los casos del prototipo)', () => {
     const big = editorPage(800, 350);
     const v = visitorFrom(big);
     const rowsOfVisitor = Array.from({ length: 10 }, (_, i) => edit(v, (g) => textOf(g.get(3 + i) as Y.XmlElement).insert(2, `hola ${i}`)));
+    // Lo que dice el título, sin reloj: la copia se arma al crear el probador y ninguna fila que entra la vuelve a armar.
+    const rebuild = vi.spyOn(AdmissionTester.prototype as unknown as { rebuild: () => void }, 'rebuild');
     const tester = new AdmissionTester(big);
-    const t0 = performance.now();
-    for (const r of rowsOfVisitor) expect(tester.test(r).ok).toBe(true);
-    const perRow = (performance.now() - t0) / rowsOfVisitor.length;
+    const perRow = rowsOfVisitor.map((r) => {
+      const t0 = performance.now();
+      expect(tester.test(r).ok).toBe(true);
+      return performance.now() - t0;
+    });
     tester.destroy();
-    // En la PC, unos pocos ms por fila en una página de ~300 KB (el prototipo, armando todo por fila: 13 ms).
-    expect(perRow).toBeLessThan(200);
+    expect(rebuild).toHaveBeenCalledTimes(1);
+    rebuild.mockRestore();
+    // En la PC, unos 6 ms por fila en una página de ~300 KB (el prototipo, armando todo por fila: 13 ms). Este tope en
+    // milisegundos solo detecta algo catastrófico (30 veces más lento): volver a armar la copia por fila lo detecta la
+    // cuenta de arriba. No hay vara tomada en la misma corrida que sirva: medida 40 veces con la máquina cargada, una
+    // fila contra armar la copia dio entre 0,07 y 2,97 (por la mediana y por el mínimo), y armar por fila la llevaría a
+    // 1,7. Va por la mediana y no por el promedio: con la suite entera corriendo junto a otros procesos, una sola pausa
+    // llevó el promedio a 207 ms.
+    expect([...perRow].sort((a, b) => a - b)[perRow.length >> 1]).toBeLessThan(200);
   });
 });
 

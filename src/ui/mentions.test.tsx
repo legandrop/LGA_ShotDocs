@@ -2,6 +2,8 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { settled } from '../test/settle';
+import { shown } from '../test/shown';
 import { ServicesContext, type Services } from '../services';
 import { cleanLabel, labelForEmail, type MentionRef } from '../sync/comments';
 import type { SupabaseRemote } from '../sync/remote';
@@ -84,7 +86,8 @@ function services(d: Device, userId: string, withInbox = true): Services {
   };
 }
 
-const wait = (ms = 60) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const wait = (ms = 60) => act(() => settled(ms));
 
 async function mount(value: Services, node: React.ReactNode): Promise<HTMLElement> {
   const host = document.createElement('div');
@@ -417,7 +420,7 @@ describe('la campana', () => {
     const markAll = [...document.querySelectorAll<HTMLButtonElement>('.mentions-head .link')].find((x) => x.textContent === 'Mark all as read')!;
     await act(async () => markAll.click());
     await wait();
-    expect(bell.querySelector('.mentions-count')).toBeNull();
+    await shown(() => expect(bell.querySelector('.mentions-count')).toBeNull());
     expect(server.mentions.every((m) => m.read_at)).toBe(true);
     expect(document.querySelector('.mentions-head .link')).toBeNull();
 

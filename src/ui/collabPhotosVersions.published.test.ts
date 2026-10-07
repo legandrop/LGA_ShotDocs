@@ -264,7 +264,7 @@ describe('un renglón al que le borraron todas las fotos', () => {
     expect(findUnknownContent(d, { nodes: knownContent().nodes, marks: knownContent().marks })).toBe(`"${STABLE_GAPS_MARKER}"`);
     // La de hoy sí.
     expect(findUnknownContent(d)).toBeNull();
-  }, 60_000);
+  });
 
   it('ANTES (como lo guardaba la v0.076, sin la marca): la versión publicada lo abre y se pierde o duplica texto', async () => {
     const S = withoutMarker(await rowState());

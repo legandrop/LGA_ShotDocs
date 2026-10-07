@@ -110,7 +110,7 @@ it('Recover real: F, Item47, primera actualización, acción única, Undo/Redo, 
   const reloaded = await fresh.docs.open(f.pageId);
   expect(reloaded).not.toBe(f.doc); expect(shape(reloaded).get('posX')).toBe(47); expect(shape(reloaded).get('startX')).toBe(12);
   expect(lineProbe(reloaded, key, 'posX')).toBe(item47); expect(xml(reloaded)).toBe(beforeXML); expect(fresh.docs.isSaved(f.pageId)).toBe(true);
-}, 45_000);
+});
 it('Restore XML y map-only usan el mismo editor y una acción; entrada vieja sin contexto mantiene comportamiento', async () => {
   const f = await mounted(); shape(f.doc).set('strokeColor', '#0000FF');
   const updates: Uint8Array[] = []; const capture = (u: Uint8Array) => updates.push(u.slice()); f.doc.on('update', capture);

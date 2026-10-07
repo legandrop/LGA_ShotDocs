@@ -3,6 +3,7 @@ import 'fake-indexeddb/auto';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { settled } from '../test/settle';
 import * as Y from 'yjs';
 import { useAuth } from '../auth';
 import { ServicesContext, type Services } from '../services';
@@ -20,7 +21,8 @@ import { deleteWorkspaceDatabases } from './RemovedScreen';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const names = async () => (await indexedDB.databases()).map((d) => d.name);
-const wait = (ms = 50) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const wait = (ms = 50) => act(() => settled(ms));
 
 afterEach(() => {
   localStorage.clear();

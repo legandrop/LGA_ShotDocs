@@ -8,6 +8,8 @@ import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { FolderUploads } from '../media/folderUpload';
+import { settled } from '../test/settle';
+import { shown } from '../test/shown';
 import { WANKA_LOCAL_KEY, WorkspaceContext } from '../workspace';
 import {
   addWorkspace,
@@ -58,7 +60,7 @@ async function mount(node: ReactNode): Promise<HTMLElement> {
   const root = createRoot(host);
   roots.push(root);
   await act(async () => root.render(node));
-  await act(async () => new Promise((r) => setTimeout(r, 20)));
+  await act(() => settled(20));
   return host;
 }
 
@@ -270,7 +272,8 @@ describe('en la app abierta', () => {
         <RemoveWorkspaceDialog onClose={() => undefined} />
       </ServicesContext.Provider>,
     );
-    expect(document.body.textContent).toContain('never uploaded');
+    // La ventana primero revisa el dispositivo ("Checking this device…"): se espera lo que encontró, no un rato.
+    await shown(() => expect(document.body.textContent).toContain('never uploaded'));
     const remove = button(document.body, 'Remove from this device');
     expect(remove.disabled).toBe(true);
 
@@ -279,7 +282,7 @@ describe('en la app abierta', () => {
       await new Promise((r) => setTimeout(r, 20));
     });
     // Armar el archivo de lo pendiente tarda lo que tarde: se espera a que el botón se habilite, no un rato.
-    await act(() => vi.waitFor(() => expect(remove.disabled).toBe(false)));
+    await shown(() => expect(remove.disabled).toBe(false));
     vi.stubGlobal('confirm', () => true);
     await act(async () => {
       remove.click();
@@ -287,7 +290,7 @@ describe('en la app abierta', () => {
     });
     // Quitar cierra todo, borra las bases, cierra la sesión y recién al final saca la entrada: se espera ese último
     // paso (con la máquina cargada, borrar las bases tarda más que un rato fijo).
-    await act(() => vi.waitFor(() => expect(readWorkspaces().workspaces.map((w) => w.id)).toEqual([WANKA_LOCAL_KEY])));
+    await shown(() => expect(readWorkspaces().workspaces.map((w) => w.id)).toEqual([WANKA_LOCAL_KEY]));
     expect(signOut).toHaveBeenCalledTimes(1);
     expect(readWorkspaces().workspaces.map((w) => w.id)).toEqual([WANKA_LOCAL_KEY]);
     expect(readWorkspaces().active).toBe(WANKA_LOCAL_KEY);
@@ -315,20 +318,20 @@ describe('en la app abierta', () => {
     );
     const remove = button(document.body, 'Remove from this device');
     // Lo sin subir se cuenta aparte: con la máquina cargada puede tardar más que el montaje.
-    await act(() => vi.waitFor(() => button(document.body, 'Download my unsynced changes')));
+    await shown(() => button(document.body, 'Download my unsynced changes'));
     await act(async () => {
       button(document.body, 'Download my unsynced changes').click();
       await new Promise((r) => setTimeout(r, 20));
     });
     // El archivo no trae los originales: todavía no. (Con la máquina cargada, el aviso puede tardar más de 20 ms.)
-    await act(() => vi.waitFor(() => expect(document.body.textContent).toContain('does not include the original photos and videos')));
+    await shown(() => expect(document.body.textContent).toContain('does not include the original photos and videos'));
     expect(remove.disabled).toBe(true);
     await act(async () => {
       button(document.body, 'IMG_0001.MOV').click();
       await new Promise((r) => setTimeout(r, 20));
     });
-    await act(() => vi.waitFor(() => expect(saved).toEqual(['IMG_0001.MOV'])));
-    await act(() => vi.waitFor(() => expect(remove.disabled).toBe(false)));
+    await shown(() => expect(saved).toEqual(['IMG_0001.MOV']));
+    await shown(() => expect(remove.disabled).toBe(false));
   });
 
   it('con una carpeta a medio subir, quitar dice cuántos archivos faltan y que se corta; sin ninguna, no dice nada', async () => {
@@ -341,14 +344,14 @@ describe('en la app abierta', () => {
     const folders = new FolderUploads(null, { portero: () => null, wait: async () => undefined });
     const file = (name: string) => ({ path: name, file: new File([new Uint8Array(4)], name) });
     await folders.start('carpeta-1', 'pagina', { name: 'Referencias', files: [file('a.jpg'), file('b.jpg'), file('c.mov')], dirs: [], skipped: [] });
-    await act(() => vi.waitFor(() => expect(folders.busy()).toBe(false)));
+    await shown(() => expect(folders.busy()).toBe(false));
     expect(folders.progress('carpeta-1')!.state).not.toBe('done');
     await mount(
       <ServicesContext.Provider value={{ ...services(d, STUDIO, dbName), folders }}>
         <RemoveWorkspaceDialog onClose={() => undefined} />
       </ServicesContext.Provider>,
     );
-    await act(() => vi.waitFor(() => expect(button(document.body, 'Remove from this device').disabled).toBe(false)));
+    await shown(() => expect(button(document.body, 'Remove from this device').disabled).toBe(false));
     expect(document.body.textContent).toContain('A folder upload is unfinished on this device: 3 files left. Removing the workspace stops it for good');
     // No frena (los archivos siguen en el disco de la persona), pero tampoco dice que ya se subió todo.
     expect(document.body.textContent).not.toContain('Everything on this device was already uploaded.');
@@ -364,7 +367,7 @@ describe('en la app abierta', () => {
         <RemoveWorkspaceDialog onClose={() => undefined} />
       </ServicesContext.Provider>,
     );
-    await act(() => vi.waitFor(() => expect(document.body.textContent).toContain('Everything on this device was already uploaded.')));
+    await shown(() => expect(document.body.textContent).toContain('Everything on this device was already uploaded.'));
     expect(document.body.textContent).not.toContain('unfinished');
   });
 });
@@ -406,16 +409,18 @@ describe('quitar sin la base de fotos', () => {
         <RemoveWorkspaceDialog onClose={() => undefined} />
       </ServicesContext.Provider>,
     );
-    expect(document.body.textContent).toContain('could not be opened');
+    await shown(() => expect(document.body.textContent).toContain('could not be opened'));
     vi.stubGlobal('confirm', () => true);
-    await act(async () => {
-      button(document.body, 'Remove from this device').click();
-      await new Promise((r) => setTimeout(r, 50));
+    await act(async () => button(document.body, 'Remove from this device').click());
+    // Borrar las bases tarda lo que tarde: se espera a que no estén, y después el mismo rato de antes y a que no quede
+    // nada en marcha, para que la de fotos haya tenido tiempo de borrarse si alguien la borrara.
+    const names = async () => (await indexedDB.databases()).map((db) => db.name);
+    await shown(async () => {
+      expect(await names()).not.toContain(dbName);
+      expect(await names()).not.toContain(`${dbName}:comments`);
     });
-    const names = (await indexedDB.databases()).map((db) => db.name);
-    expect(names).not.toContain(dbName);
-    expect(names).not.toContain(`${dbName}:comments`);
-    expect(names).toContain(`${dbName}:media`);
+    await act(() => settled(50));
+    expect(await names()).toContain(`${dbName}:media`);
   });
 
   it('deleteWorkspaceDatabases con keepMedia deja la base de fotos', async () => {

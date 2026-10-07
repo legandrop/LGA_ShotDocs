@@ -50,7 +50,7 @@ beforeAll(async () => {
   }
   return tx;
   });
-}, 45000);
+});
 afterAll(() => { vi.restoreAllMocks();
 vi.unstubAllGlobals();
 });
@@ -192,7 +192,7 @@ it('Coda: con la segunda página cortada, la primera queda terminada; al reabrir
   copy.destroy();
   }
 
-}, 30000);
+});
 
 it('Coda: lo que falta en la carpeta (HTML, un archivo, comentarios ilegibles o sin cola) se anota y la página entra', async () => {
   for (const mode of ['missingHTML', 'missingMedia', 'brokenComments', 'commentsOff']) {
@@ -225,7 +225,7 @@ it('Coda: lo que falta en la carpeta (HTML, un archivo, comentarios ilegibles o 
 
     await closeOwn(d);
   }
-}, 30000);
+});
 
 async function archiveFixture(mode: string, userEmail?: string) {
   const page = crypto.randomUUID(), files: Record<string, string> = { '_shotdocs/manifest.json': JSON.stringify({ format: 1, id: crypto.randomUUID(), title: 'Archivo', pages: [{ id: page, parent: null, order: 0, title: 'Page', json: '_shotdocs/pages/p.json', complete: mode !== 'incomplete' }] }) };
@@ -279,7 +279,7 @@ it('Archivo: un valor que el editor no acepta, una página exportada incompleta 
 
     await closeOwn(d);
   }
-}, 30000);
+});
 
 it('Importación sin terminar cuyo proyecto ya no está (papelera): no se ofrece seguir y volver a importar empieza otro proyecto', async () => {
   // Las tres formas de volver a apretar Import: en otra sesión (reserva nueva), en la misma (la reserva de antes) y
@@ -327,7 +327,7 @@ it('Importación sin terminar cuyo proyecto ya no está (papelera): no se ofrece
     }
     await closeOwn(d);
   }
-}, 30000);
+});
 
 /** Lo que la persona escribe en la página: un texto al principio del primer renglón. */
 function typeInto(doc: Y.Doc, text: string) {
@@ -385,7 +385,7 @@ it('Archivo: un plan anotado que nunca llegó a la página se planifica de nuevo
     expect((await fresh.commentsDb.getAll('outbox')).filter(e => e.op.kind === 'import')).toHaveLength(1);
     await closeOwn(fresh);
   }
-}, 30000);
+});
 
 it('Archivo: un plan que sí llegó a la página y no se alcanzó a confirmar vale como aplicado aunque después se edite', async () => {
   const server = new FakeServer();
@@ -444,7 +444,7 @@ it('Coda: un plan anotado que nunca llegó a la página se planifica de nuevo al
   expect(after.xml.indexOf('ESCRITO_ANTES')).toBeLessThan(after.xml.indexOf('CODA_A'));
   expect((await activeJournal(base, folder.manifest.doc.id))!.pages.a).toMatchObject({ done: true, commit: { phase: 'confirmed' } });
   expect((await d.commentsDb.getAll('outbox')).filter(e => e.op.kind === 'import')).toHaveLength(1);
-}, 30000);
+});
 
 it('Archivo, todo o nada por página (D305): con un archivo sin guardar la página no se escribe; lo que la persona escribió queda y al seguir lo importado entra entero debajo', async () => {
   const server = new FakeServer();
@@ -494,7 +494,7 @@ it('Archivo, todo o nada por página (D305): con un archivo sin guardar la pági
   expect(after.xml.indexOf('ESCRITO_POR_LA_PERSONA')).toBeLessThan(after.xml.indexOf('ARCHIVE_TEXT'));
   expect(snapshot(await openDoc(d, pending.pages[other].pageId), 'd305-archive-other').xml.match(/OTRA_PAGINA/g)).toHaveLength(1);
   expect(await d.mediaDb.getAll('files')).toHaveLength(1);
-}, 30000);
+});
 
 it('Coda: un archivo vacío no se va a poder guardar nunca: se anota y la página entra con su texto y lo demás; sin lugar, en cambio, espera', async () => {
   const server = new FakeServer();
@@ -534,7 +534,7 @@ it('Coda: un archivo vacío no se va a poder guardar nunca: se anota y la págin
   await enableDrive(other, server);
   const direct = await importCoda(folder, codaDeps(other));
   expect(direct).toMatchObject({ resumable: false, pages: 1, files: 1, problems: ['a: bl-vacia.png: This file is empty.'] });
-}, 30000);
+});
 
 it.each(['coda', 'archive'] as const)('%s: si el guardado del registro falla al anotar una página, la página no se crea sin su anotación ni dos veces, y la importación no termina como si nada', async kind => {
   // `una vez`: falla solo el primer guardado que anota una página. `siempre`: fallan todos los que anotan páginas.
@@ -568,7 +568,7 @@ it.each(['coda', 'archive'] as const)('%s: si el guardado del registro falla al 
     }
     await closeOwn(d);
   }
-}, 30000);
+});
 
 it('Un nombre de proyecto largo que al cortarse termina en un espacio se importa igual', async () => {
   const server = new FakeServer();
@@ -674,7 +674,7 @@ it('Registro de una versión anterior (D304): no bloquea ni se ofrece seguir; Im
   await expect(metaJournal(d.db).loadState!(malformedKey)).rejects.toMatchObject({ reason: 'invalid' });
   expect(await d.db.get('meta', `codaImport2:${malformedKey}`)).toEqual(malformed);
 
-}, 30000);
+});
 
 it('El registro de un solo diario solo se reemplaza o se borra si sigue exactamente como se leyó (también en campos que esta versión no conoce); un guardado abortado lo deja byte a byte como estaba', async () => {
   const server = new FakeServer();
@@ -765,7 +765,7 @@ it('Un comentario importado de un archivo entra una sola vez: después de subir,
 
     await closeOwn(fresh);
   }
-}, 30000);
+});
 
 it('El registro de un solo diario acepta objetos de otro contexto y rechaza todo lo que no tiene la forma esperada, sin tocar lo guardado', async () => {
   const server = new FakeServer();

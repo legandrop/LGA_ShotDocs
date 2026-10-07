@@ -2,6 +2,7 @@
 import { act, StrictMode, useEffect, useState, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { settled } from '../test/settle';
 import * as Y from 'yjs';
 import { prefs } from '../prefs';
 import { ServicesContext, type Services } from '../services';
@@ -77,7 +78,8 @@ afterEach(async () => {
   document.body.innerHTML = '';
 });
 
-const wait = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const wait = (ms = 30) => act(() => settled(ms));
 async function until(ok: () => boolean, tries = 120) {
   for (let i = 0; i < tries && !ok(); i++) await wait(50);
 }

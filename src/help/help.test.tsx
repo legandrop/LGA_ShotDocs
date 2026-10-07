@@ -2,6 +2,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { settled } from '../test/settle';
 import { prefs } from '../prefs';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
@@ -18,7 +19,6 @@ import { searchHelp } from './search';
 // lo abren el botón "?" y la entrada del menú de la cuenta, ninguna tecla, y Esc lo cierra y devuelve el foco.
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-vi.setConfig({ testTimeout: 60_000 });
 
 describe('buscar en la ayuda', () => {
   const ids = (q: string, lang: 'en' | 'es' = 'en') => searchHelp(HELP_ENTRIES, q, lang).map((h) => h.entry.id);
@@ -116,7 +116,8 @@ afterEach(() => {
   act(() => prefs.set({ language: 'en' }));
 });
 
-const wait = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const wait = (ms = 30) => act(() => settled(ms));
 async function until(check: () => unknown, what: string, tries = 200): Promise<void> {
   for (let i = 0; i < tries; i++) {
     if (check()) return;

@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { settled } from '../test/settle';
 import { navigate, pagePath } from '../router';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
@@ -17,8 +18,6 @@ import { Shell } from './Workspace';
 // la barra lateral de verdad contra el árbol y la base local en memoria.
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-// Las del Shell montan el editor: con la máquina cargada, en jsdom tarda.
-vi.setConfig({ testTimeout: 60_000 });
 
 beforeAll(() => {
   window.matchMedia ??= ((query: string) => ({
@@ -56,7 +55,8 @@ afterEach(() => {
   history.replaceState(null, '', '/');
 });
 
-const wait = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const wait = (ms = 30) => act(() => settled(ms));
 
 async function until(check: () => unknown, what: string, tries = 250): Promise<void> {
   for (let i = 0; i < tries; i++) {

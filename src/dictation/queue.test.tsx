@@ -4,6 +4,7 @@ import type { PartialBlock } from '@blocknote/core';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { settled } from '../test/settle';
 import { navigate, pagePath } from '../router';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
@@ -69,7 +70,8 @@ afterEach(async () => {
   navigate('/', true);
 });
 
-const wait = (ms = 20) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const wait = (ms = 20) => act(() => settled(ms));
 
 function services(d: Device, client: unknown = { auth: {} }): Services {
   const config = { url: 'https://znlvpuddswymxpffgvbz.supabase.co', publishableKey: 'sb_publishable_test', name: 'Wanka', localKey: WS, storage: legacyStorageNames(WS) };

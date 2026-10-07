@@ -3,6 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { EditorView } from '@tiptap/pm/view';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { settled } from '../test/settle';
 import * as Y from 'yjs';
 import { navigate, pagePath } from '../router';
 import { ServicesContext, type Services } from '../services';
@@ -25,7 +26,6 @@ import './PageEditor';
 // cruza; con el foco en el árbol también; en el título no (es del campo).
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-vi.setConfig({ testTimeout: 60_000 });
 
 beforeAll(() => {
   window.matchMedia ??= ((query: string) => ({
@@ -64,7 +64,8 @@ afterEach(async () => {
   history.replaceState(null, '', '/');
 });
 
-const wait = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const wait = (ms = 30) => act(() => settled(ms));
 
 async function until(check: () => unknown, what: string, tries = 250): Promise<void> {
   for (let i = 0; i < tries; i++) {

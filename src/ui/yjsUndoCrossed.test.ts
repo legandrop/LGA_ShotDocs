@@ -307,5 +307,5 @@ describe('dos editores borrando y deshaciendo bloques enteros: las seis semillas
       // Sin el arreglo, las seis terminaban distintas (por ejemplo, "y la toma" en uno y "y la omat" en el otro).
       expect({ seed, same: r.same, b: r.b, reloadedA: r.reloadedA, reloadedB: r.reloadedB }).toEqual({ seed, same: true, b: r.a, reloadedA: r.a, reloadedB: r.a });
     }
-  }, 60_000);
+  });
 });

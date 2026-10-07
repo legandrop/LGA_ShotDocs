@@ -1260,7 +1260,7 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    reales); en ~0,15 % de las corridas, justo después de una negrita, la marca de formato difiere un paso y se iguala
    (de Yjs, nunca texto); el arnés de dos editores muestra en ~50 % de las corridas algún paso donde un editor no muestra
    exactamente su documento (la reparación del esquema, ya conocida).
-27. **Hecho en parte (v0.219): las pruebas que fallaban solo con la máquina cargada.** Con la suite entera corriendo junto a
+27. **Hecho (v0.219 y v0.223): las pruebas que fallaban solo con la máquina cargada.** Con la suite entera corriendo junto a
    otros procesos, cada corrida terminaba con entre 0 y 7 pruebas caídas que solas pasaban. No era la app: eran las
    pruebas. Cuatro causas, cada una con su arreglo: (a) esperar "un rato" después de un clic y mirar: ahora se espera
    a que termine lo que quedó en marcha (`src/test/settle.ts`) o la condición misma, y las esperas por condición ya no
@@ -1268,29 +1268,78 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    escritura, en medio de una prueba que afirma que nada cambió o que algo está sin subir: la prueba lo frena o
    sostiene la subida; (c) topes de tiempo en milisegundos: se miden contra una vara tomada en la misma corrida
    (escribir sin colapsar, armar el plan del reemplazo) o contra el plazo de la propia espera; (d) el editor, que se
-   carga aparte la primera vez, armado dentro del plazo de la primera prueba del archivo: se arma antes.
-   **Queda: con dos corridas completas a la vez la suite todavía no cierra siempre.** La medición independiente dio
-   2 corridas limpias de 10 (la corrida sola pasa entera, y cada prueba caída pasa aislada). Ya no hay rechazos
-   sueltos; lo que cae son pruebas que esta tanda no tocó: plazos propios que vencen (`src/media/offline.test.ts`,
-   «*Original photos*, *Videos* y adjuntos…» con 30 s y «con un portero viejo que corta las partes…» con 60 s, que
-   solas tardan 7 y 12 s; `src/search/projectIndex.test.ts`, «leer para buscar… 80 cruces», 120 s contra 17 s sola),
-   pruebas de esperar un rato y mirar (`src/templates/templateHost.test.tsx`, `src/templates/ownHost.test.tsx`,
-   `src/ui/workspaces.test.tsx`, `src/ui/exportLocalSave.test.tsx`, `src/ui/linkEditUi.test.tsx`), y una vez
-   `collapseEditor` «7.», cuya vara relativa tampoco es inmune (la proporción llegó a 6,9 contra un tope de 4).
-   Siguiente paso: pasar esas esperas a la condición, subir o sacar los plazos propios menores que el general, y
-   repetir la medición. Mientras tanto vale la regla de siempre: lo que falla por tiempo se repite aislado antes de
-   publicar. Tampoco se tocaron otros topes de tiempo fijos con margen amplio (`findEditor`, `pdfPreview`,
-   `carreteModel`, `exportPdfParts`, `folderZip`, `admitAudit`, `codaComments`), y una prueba cortada por tiempo sigue
-   dejando sin dibujar a las que siguen en su archivo.
-   También: (e) pruebas que terminaban con la app todavía trabajando (el final de un reemplazo, de deshacerlo y de
-   rehacerlo): al cerrar la base quedaba un rechazo suelto que la corrida anotaba como error aunque todas las pruebas
-   pasaran; ahora esperan el aviso del final. Una sonda (anotar cada pedido a una base que una prueba ya cerró) encontró
-   127 de esos pedidos tardíos en 30 archivos en dos corridas, todos atajados por la app; no se revisó uno por uno que
-   todos los caminos lo atajen. Lo que estas pruebas todavía no detectan: `collapseEditor` «7.» no nota perder el camino
-   rápido (un 40 % más lento); el tope de reemplazar en 300 páginas (12 veces armar el plan) no nota una regresión de
-   ×3, porque con la máquina cargada la proporción llega sola a 8; `exportPdf` «no espera dos veces» no se ejerce en
-   jsdom (las imágenes nunca cargan); tres archivos de pruebas `keySync*` llevan un plazo propio de 30 s, menor que el general;
-   y la tabla de migraciones de `Doc_Supabase.md` tiene tres filas viejas fuera de orden.
+   carga aparte la primera vez, armado dentro del plazo de la primera prueba del archivo: se arma antes; (e) pruebas
+   que terminaban con la app todavía trabajando (el final de un reemplazo, de deshacerlo y de rehacerlo): al cerrar la
+   base quedaba un rechazo suelto que la corrida anotaba como error aunque todas las pruebas pasaran; ahora esperan el
+   aviso del final. Una sonda (anotar cada pedido a una base que una prueba ya cerró) encontró 127 de esos pedidos
+   tardíos en 30 archivos en dos corridas, todos atajados por la app; no se revisó uno por uno que todos los caminos lo
+   atajen.
+   **v0.223: con dos corridas completas a la vez.** Después de la v0.219 la medición independiente había dado 2
+   corridas limpias de 10. La de arranque de esta tanda (dos rondas de dos corridas, con otros procesos pesados en la
+   máquina) dio 0 de 4: entre 3 y 14 pruebas caídas por corrida y, en dos, un rechazo suelto. Lo que se encontró:
+   (f) **demasiados procesos.** Vitest abría uno por núcleo menos uno: 31 por corrida, 62 con dos corridas en 32
+   núcleos, y cada prueba tardaba entre 6 y 10 veces lo que tarda sola. Ahora abre la mitad de los núcleos (16 en esa
+   PC; nunca menos de 12 ni más que los núcleos menos uno: `testWorkers` en `vite.config.ts`). La corrida sola no tarda
+   más, porque la marcan sus dos archivos más largos y no la cantidad de procesos: medida tres veces de cada forma,
+   154, 156 y 425 s con 31 procesos (la última, con otra carga pesada en la máquina) y 127, 142 y 142 s con 16. Solo con
+   este cambio, sin tocar ninguna prueba, dos corridas a la vez pasaron de entre 3 y 14 caídas a 0 y 1.
+   (g) **plazos propios menores o iguales al general.** Se sacaron los 52 que había (30 s en grupos enteros de
+   `offline.test.ts` y `offlineUi.test.tsx`, 30 y 45 s en las pruebas de importar, `vi.setConfig` de 30 y 60 s en nueve
+   archivos), los pasos de antes y después de cada prueba pasan de 10 a 60 s (`hookTimeout`), y las dos pruebas largas
+   que vencían llevan un plazo acorde (`projectIndex` «80 cruces», de 120 a 600 s; `yjsUndoRedoneEditor`, de 120 a 300).
+   La regla: el plazo no afirma nada, así que ninguno propio es menor o igual al general, y solo las pruebas largas de
+   verdad (más de unos 6 s solas) llevan uno, de 10 veces para arriba de lo que tardan solas.
+   `src/test/patience.test.ts` lo comprueba en todos los archivos de pruebas.
+   (h) **pruebas pesadas por la prueba y no por la app.** En `offline.test.ts`, comparar megas de `Uint8Array` con
+   `toEqual` tardaba entre 7 y 24 s por comparación según la carga (lo de la app, una décima de segundo): ahora compara
+   los mismos bytes en milisegundos, y el archivo pasó de 52 s a entre 10 y 19. En `i18n.test.tsx`, buscar cada clave en
+   todo el código eran miles de pasadas por varios megas: ahora lee cada archivo una vez (de 17 s a 1).
+   (i) **esperar una condición de pantalla adentro de un `act`** (`await act(() => vi.waitFor(…))`): React no dibuja
+   hasta que el `act` termina, así que si el cambio llegaba durante la espera la condición no lo veía nunca y fallaba a
+   su plazo. `src/test/shown.ts` mira entre actos cortos (`workspaces.test.tsx` y las esperas nuevas de esta tanda).
+   (j) **esperar un rato y mirar**, lo que quedaba: los ayudantes de 45 archivos de pruebas de pantallas pasan a
+   `settled` (el mismo rato y, después, a que termine lo que quedó en marcha), y donde después del rato había una
+   afirmación de algo que tiene que llegar se espera eso (`templateHost`, `ownHost`, `exportLocalSave`, `linkAsideUi`,
+   `mentions`, `projectSearch`, `offlineUi`, que además terminaba con la app todavía borrando copias).
+   (k) **carreras contra el reloj.** El resguardo del doble toque del dictado (600 ms de reloj real entre tres clics)
+   se prueba llevando el reloj a mano, a 1 ms del borde; «no se ofrece mientras el índice lee» frenaba una lectura 1,2 s
+   contra una espera de medio segundo, y ahora la frena hasta que la prueba la suelta.
+   (l) **topes de rendimiento.** `collapseEditor` «7.» ya no compara la mediana de una página contra la de la otra
+   (con la máquina cargada iba de 0,8 a 7,2 contra un tope de 4). Compara, con el mismo tope, la tecla más rápida de
+   cada página (de 1,6 a 2,5) y la mediana de las razones por par, cada tecla colapsada contra la que corrió pegada a
+   ella (de 1,5 a 2,6 en 70 mediciones con dos y con tres corridas completas a la vez). La más rápida sola no alcanzaba:
+   no notaba que 9 de cada 10 teclas rearmaran todas las decoraciones (2,3 a 3,0); la de los pares sí (5,8 a 8,6).
+   `admit` «cuánto tarda una fila» afirma sin reloj que la copia se arma una sola vez, y deja el tope de 200 ms por la
+   mediana: no hay vara tomada en la misma corrida que aguante la carga (una fila contra armar la copia dio entre 0,07
+   y 2,97), así que ese tope solo detecta algo catastrófico.
+   De 23 mutantes del código de la app contra las pruebas reescritas, cayeron 22 (el otro, abajo). Medición final:
+   tres rondas de dos corridas completas a la vez, con otros procesos pesados en la máquina; las seis cerraron limpias
+   (código de salida 0, sin errores sueltos), en entre 209 y 400 s. La prueba más lenta de las que usan el plazo general
+   de 60 s tardó 20. La auditoría independiente midió por su cuenta otras ocho de ocho.
+   **Queda:** con tres corridas a la vez se midió una sola ronda (las tres limpias, en 293 s, sobre el árbol anterior a
+   integrar la v0.222); con otra carga que ocupe más núcleos de los que quedan libres no se midió. Siguen 7 esperas
+   `act(() => vi.waitFor(…))` en `exportZipLocalSave.test.tsx`, `historyCacheCleanup.test.tsx` y `pageLinkGate.test.tsx`:
+   lo que esperan no es de pantalla, así que funcionan, pero el patrón es una trampa para quien lo copie a una condición
+   de pantalla. Seis archivos de pruebas de pantallas siguen con el ayudante de rato fijo (`exportPdf.test.tsx`,
+   `exportZip.test.tsx`, `Annotator.test.tsx`, `linkLabels.test.tsx`, `pageMarkupGuards.test.tsx`, `trashAll.test.tsx`;
+   los dos últimos usan relojes falsos). Los bucles de espera por cantidad de vueltas (87 en 38 archivos,
+   `for (…; i < N && !condición; …) await wait(M)`) siguen con su tope de vueltas: con `wait` sobre `settled` cada vuelta
+   espera lo que quedó en marcha, pero no se pasaron a `shown`. Los `tick` y `settle` de rato fijo de unos 60 archivos de
+   pruebas sin pantalla no se tocaron (no cayeron en ninguna medición). Tampoco otros topes de tiempo fijos con margen
+   amplio (`findEditor`, `pdfPreview`, `carreteModel`, `exportPdfParts`, `folderZip`, `admitAudit`, `codaComments`), y
+   una prueba cortada por tiempo sigue dejando sin dibujar a las que siguen en su archivo. La prueba que vigila los
+   plazos (`src/test/patience.test.ts`) mira línea por línea: no ve un plazo que sale de una constante, las opciones
+   `{ timeout }` puestas como último argumento ni una función flecha sin llaves partida en varias líneas, y toma por
+   plazo cualquier `testTimeout:` escrito en un objeto (hoy no hay ninguno de esos casos). Lo que estas pruebas todavía
+   no detectan: `collapseEditor` «7.» no nota siempre perder el camino rápido de escribir (la proporción queda entre 3
+   y 5 contra el tope de 4: cayó 1 de 5 veces); `admit` «cuánto tarda una fila» no nota el costo de volver a armar la
+   copia si no pasa por `rebuild`; en `templateHost`, los *Use* apagados tienen dos resguardos (el botón no llama y
+   aplicar vuelve a mirar si la página está vacía) y sacar solo el del botón no se nota, porque el otro lo frena; el
+   tope de reemplazar en 300 páginas (12 veces armar el plan) no nota una regresión de ×3, porque con la máquina cargada
+   la proporción llega sola a 8; `exportPdf` «no espera dos veces» no se ejerce en jsdom (las imágenes nunca cargan);
+   en `offlineUi` «una marca existente…» la nítida nunca se arma en jsdom, así que solo se comprueba que la casilla de
+   borrar las copias llega a quien saca la marca; y la tabla de migraciones de `Doc_Supabase.md` tiene tres filas viejas
+   fuera de orden.
 
 ### C. Esperan a Lega
 

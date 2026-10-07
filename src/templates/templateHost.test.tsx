@@ -3,6 +3,8 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { EditorView } from '@tiptap/pm/view';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { settled } from '../test/settle';
+import { shown } from '../test/shown';
 import { prefs } from '../prefs';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
@@ -12,7 +14,7 @@ import { mountEditor, typeAt, unmountAll } from '../ui/collabHarness';
 import { IS_MAC } from '../ui/shortcuts';
 import { isEmptyPage } from './apply';
 import { blockedReason } from './TemplateHost';
-import { BUILTIN_PREPRO, BUILTIN_SHOT, builtinBlocks } from './builtin';
+import { BUILTIN_IDS, BUILTIN_PREPRO, BUILTIN_SHOT, builtinBlocks } from './builtin';
 // El editor de la página se carga aparte la primera vez que se muestra. Acá se arma antes de las pruebas: si no, la
 // primera que monta una página pagaba ese armado (cientos de módulos) dentro de su plazo, y con la máquina cargada no
 // le alcanzaba (y una prueba que se corta por tiempo deja a las que siguen en el archivo sin poder dibujar).
@@ -56,7 +58,8 @@ afterEach(async () => {
   act(() => prefs.set({ language: 'en' }));
 });
 
-const wait = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const wait = (ms = 30) => act(() => settled(ms));
 
 function services(d: Device): Services {
   const config = { url: 'https://example.test', publishableKey: 'sb_publishable_test', name: 'Wanka', localKey: WANKA_LOCAL_KEY, storage: legacyStorageNames(WANKA_LOCAL_KEY) };
@@ -107,9 +110,8 @@ async function open(device: Device, pageId: string) {
       </ServicesContext.Provider>,
     ),
   );
-  for (let i = 0; i < 100 && !host.querySelector('.bn-editor'); i++) await wait(50);
+  await shown(() => expect(host.querySelector('.bn-editor')).not.toBeNull());
   await wait(100);
-  expect(host.querySelector('.bn-editor')).not.toBeNull();
   return host;
 }
 
@@ -150,6 +152,14 @@ async function writeElsewhere(device: Device, pageId: string, text: string) {
 
 const stripButtons = (host: HTMLElement) => [...host.querySelectorAll<HTMLButtonElement>('.template-strip button')].map((b) => b.textContent);
 const click = (el: Element | null | undefined) => act(() => (el as HTMLElement).click());
+/**
+ * Espera a que la plantilla elegida haya quedado anotada en la página y, después, a que termine lo que eso dejó en
+ * marcha (aplicarla escribe el documento, anota el árbol y mueve el foco: con la máquina cargada, un rato no alcanzaba).
+ */
+async function applied(device: Device, pageId: string, template: string) {
+  await shown(() => expect(device.tree.get(pageId)?.template_id).toBe(template));
+  await wait(100);
+}
 
 async function docOf(device: Device, pageId: string) {
   const doc = await device.docs.open(pageId);
@@ -166,7 +176,7 @@ describe('la tira de la página vacía', () => {
     expect(host.querySelector('.template-strip')?.getAttribute('aria-label')).toBe('Start from a template');
 
     click(host.querySelector('.template-strip [data-template="prepro"]'));
-    await wait(100);
+    await applied(device, page, BUILTIN_PREPRO);
     const doc = await docOf(device, page);
     expect(isEmptyPage(doc)).toBe(false);
     expect(host.querySelectorAll('.bn-block-outer').length).toBeGreaterThanOrEqual(builtinBlocks('prepro', 'en').length);
@@ -186,8 +196,7 @@ describe('la tira de la página vacía', () => {
     const other = mountEditor(doc, 'otra');
     act(() => typeAt(other, 'initialBlockId', 'start', 'Hola'));
     device.docs.close(page);
-    await wait(100);
-    expect(host.querySelector('.template-strip')).toBeNull();
+    await shown(() => expect(host.querySelector('.template-strip')).toBeNull());
     expect(device.tree.isFresh(page)).toBe(false);
   });
 
@@ -209,7 +218,7 @@ describe('la tira de la página vacía', () => {
     const page = await device.tree.create(null, '');
     const host = await open(device, page);
     click(host.querySelector('.template-strip [data-template="prepro"]'));
-    await wait(100);
+    await applied(device, page, BUILTIN_PREPRO);
     const title = host.querySelector('.page-title')!;
     expect(document.activeElement).toBe(title);
     key(title, 'Enter');
@@ -222,7 +231,7 @@ describe('la tira de la página vacía', () => {
     const page = await device.tree.create(null, '');
     const host = await open(device, page);
     click(host.querySelector('.template-strip [data-template="shot"]'));
-    await wait(100);
+    await applied(device, page, BUILTIN_SHOT);
     const doc = await device.docs.open(page);
     const title = host.querySelector<HTMLTextAreaElement>('.page-title')!;
     expect(document.activeElement).toBe(title);
@@ -254,7 +263,7 @@ describe('la tira de la página vacía', () => {
       const page = await device.tree.create(null, '');
       const host = await open(device, page);
       click(host.querySelector(`.template-strip [data-template="${kind}"]`));
-      await wait(100);
+      await applied(device, page, BUILTIN_IDS[kind]);
       const doc = await device.docs.open(page);
       const title = host.querySelector<HTMLTextAreaElement>('.page-title')!;
       for (const redo of [mod({ shiftKey: true, key: 'z' }), mod({ key: 'y' })]) {
@@ -286,7 +295,9 @@ describe('la tira de la página vacía', () => {
     const { device } = await setup();
     const page = await device.tree.create(null, '');
     const host = await open(device, page);
-    const chip = host.querySelector('.template-strip [data-template="onset"]') as HTMLElement;
+    // Con una plantilla que se inserta directo (la del reporte, en una página suelta, primero pregunta por la carpeta
+    // y no inserta nada: con ella esta prueba pasaba aunque `apply` no volviera a mirar si la página está vacía).
+    const chip = host.querySelector('.template-strip [data-template="prepro"]') as HTMLElement;
     const doc = await device.docs.open(page);
     const other = mountEditor(doc, 'otra');
     // El texto y el clic en la misma pasada: la tira todavía está a la vista y el botón todavía llama a aplicar.
@@ -296,7 +307,7 @@ describe('la tira de la página vacía', () => {
     });
     await wait(100);
     expect(device.tree.get(page)?.template_id ?? null).toBeNull();
-    expect(host.textContent).not.toContain('Camera package');
+    expect(host.textContent).not.toContain('Elements to shoot');
     expect(host.textContent).toContain('Hola');
     device.docs.close(page);
   });
@@ -308,7 +319,7 @@ describe('la tira de la página vacía', () => {
     const host = await open(device, page);
     expect(stripButtons(host)).toEqual(['Notas de preproducción', 'Reporte de rodaje', 'Desglose de plano', 'Más…']);
     click(host.querySelector('.template-strip [data-template="shot"]'));
-    await wait(100);
+    await applied(device, page, BUILTIN_SHOT);
     expect(host.textContent).toContain('Cuadro de referencia');
     expect(device.tree.get(page)?.template_id).toBe(BUILTIN_SHOT);
   });
@@ -325,7 +336,7 @@ describe('la ventana Templates y Apply template…', () => {
     expect([...dialog!.querySelectorAll('li strong')].map((s) => s.textContent)).toEqual(['Pre-production Notes', 'On-Set Report', 'Shot Breakdown']);
     expect(dialog!.querySelectorAll('li .muted').length).toBe(3);
     click(dialog!.querySelector('[data-template="prepro"] button.primary'));
-    await wait(100);
+    await applied(device, page, BUILTIN_PREPRO);
     expect(document.querySelector('.templates-dialog')).toBeNull();
     expect(device.tree.get(page)?.template_id).toBe(BUILTIN_PREPRO);
     expect(host.textContent).toContain('Elements to shoot');
@@ -339,8 +350,7 @@ describe('la ventana Templates y Apply template…', () => {
     const use = () => document.querySelector<HTMLButtonElement>('.templates-dialog [data-template="onset"] button.primary')!;
     expect(use().getAttribute('aria-disabled')).toBeNull();
     await act(async () => writeElsewhere(device, page, 'Escrito en el iPhone'));
-    await wait(100);
-    expect(use().getAttribute('aria-disabled')).toBe('true');
+    await shown(() => expect(use().getAttribute('aria-disabled')).toBe('true'));
     expect(use().dataset.tip).toBe('Only on an empty page');
     click(use());
     await wait(100);
@@ -394,7 +404,7 @@ describe('la ventana Templates y Apply template…', () => {
     click(item());
     expect(document.querySelector('.templates-dialog')).not.toBeNull();
     click(document.querySelector('.templates-dialog [data-template="shot"] button.primary'));
-    await wait(100);
+    await applied(device, page, BUILTIN_SHOT);
     expect(device.tree.get(page)?.template_id).toBe(BUILTIN_SHOT);
     // Una página con título no ofrece la tira, pero el menú sí: el título queda como estaba.
     expect(device.tree.get(page)?.title).toBe('Escena 3');

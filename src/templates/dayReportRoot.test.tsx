@@ -3,6 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { EditorView } from '@tiptap/pm/view';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { settled } from '../test/settle';
 import { prefs } from '../prefs';
 import { ServicesContext, type Services } from '../services';
 import { Permissions } from '../sync/access';
@@ -65,7 +66,8 @@ afterEach(async () => {
   act(() => prefs.set({ language: 'en' }));
 });
 
-const wait = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const wait = (ms = 30) => act(() => settled(ms));
 async function waitFor<T>(fn: () => T | null | undefined | false, tries = 100): Promise<NonNullable<T>> {
   for (let i = 0; i < tries; i++) {
     const v = fn();

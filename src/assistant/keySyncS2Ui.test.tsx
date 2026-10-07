@@ -3,6 +3,7 @@ import 'fake-indexeddb/auto';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { settled } from '../test/settle';
 import { closeDictationDb, DICTATION_DB } from '../dictation/dictationDb';
 import { addNote, listNotes } from '../dictation/queue';
 import { loadVoiceSettings, resetTabOnlyVoice, saveVoiceSettings } from '../dictation/voiceSettings';
@@ -21,7 +22,6 @@ import { isKeyRejected, SyncedKeyHint } from './SyncedKeyHint';
 // aparezca cuando la copia cambió en otro dispositivo, el botón en el 401 y la ventana de salir con las notas de voz.
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-vi.setConfig({ testTimeout: 30_000 });
 
 const EMAIL = 'lega@wanka.tv';
 const UID = 'uid-lega';
@@ -43,7 +43,8 @@ afterEach(async () => {
   document.body.innerHTML = '';
 });
 
-const wait = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const wait = (ms = 30) => act(() => settled(ms));
 async function until(check: () => unknown, what: string, tries = 150): Promise<void> {
   for (let i = 0; i < tries; i++) {
     if (check()) return;

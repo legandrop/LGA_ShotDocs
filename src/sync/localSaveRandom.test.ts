@@ -368,6 +368,6 @@ describe('guardado local y subida, al azar', () => {
   for (let seed = 1; seed <= SEEDS; seed++) {
     it(`semilla ${seed}`, async () => {
       expect(await runSeed(seed)).toEqual([]);
-    }, 60_000);
+    });
   }
 });

@@ -5,6 +5,7 @@ import { TextSelection } from '@tiptap/pm/state';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { settled } from '../test/settle';
 import * as Y from 'yjs';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
@@ -59,7 +60,8 @@ afterEach(async () => {
   document.body.innerHTML = '';
 });
 
-const wait = (ms = 20) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const wait = (ms = 20) => act(() => settled(ms));
 
 function services(d: Device, client: unknown = { auth: {} }): Services {
   const config = { url: 'https://znlvpuddswymxpffgvbz.supabase.co', publishableKey: 'sb_publishable_test', name: 'Wanka', localKey: WANKA_LOCAL_KEY, storage: legacyStorageNames(WANKA_LOCAL_KEY) };

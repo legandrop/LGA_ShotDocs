@@ -59,6 +59,20 @@ function bytes(size: number, seed = 1): Uint8Array<ArrayBuffer> {
 
 const file = (size: number, name: string, type: string, seed = 1) => new File([bytes(size, seed)], name, { type });
 
+/**
+ * Los mismos bytes, uno por uno. `toEqual` con megas de `Uint8Array` tardaba entre 7 y 12 segundos por comparación con
+ * la máquina libre y más de un minuto con la suite entera corriendo junto a otros procesos: era casi todo lo que
+ * tardaban estas pruebas (lo de la app son décimas de segundo), y vencían su plazo sin que nada estuviera mal.
+ */
+async function expectBytes(blob: Blob | null | undefined, expected: Uint8Array): Promise<void> {
+  expect(blob).toBeInstanceOf(Blob);
+  const actual = new Uint8Array(await blob!.arrayBuffer());
+  expect(actual.length).toBe(expected.length);
+  if (Buffer.compare(actual, expected) === 0) return;
+  const at = actual.findIndex((byte, i) => byte !== expected[i]);
+  expect.fail(`los bytes difieren desde el ${at} de ${expected.length}: ${actual[at]} en vez de ${expected[at]}`);
+}
+
 function insert(doc: Y.Doc, fileId: string): void {
   const fragment = doc.getXmlFragment(CONTENT_FRAGMENT);
   doc.transact(() => {
@@ -182,7 +196,7 @@ describe('los pesos (sin tocar nada)', () => {
   });
 });
 
-describe('Available offline', { timeout: 30_000 }, () => {
+describe('Available offline', () => {
   it('de fábrica: las nítidas de 2048 y las miniaturas de toda la rama; sin red se ven igual', async () => {
     const { server, b, page, photo, photo2, video } = await setup();
     const planned: number[] = [];
@@ -215,9 +229,9 @@ describe('Available offline', { timeout: 30_000 }, () => {
   it('*Original photos*, *Videos* y adjuntos: copias enteras por partes, y el carrete las abre sin red', async () => {
     const { server, b, page, photo, video, pdf } = await setup();
     await markAndWait(b, 'page', page, { ...DEFAULT_OPTIONS, originals: true, videos: true });
-    expect(new Uint8Array(await (await readCopy(b.mediaDb, photo))!.arrayBuffer())).toEqual(bytes(2 * MB, 1));
+    await expectBytes(await readCopy(b.mediaDb, photo), bytes(2 * MB, 1));
     expect((await readCopy(b.mediaDb, video))?.size).toBe(MB);
-    expect(new Uint8Array(await (await readCopy(b.mediaDb, pdf))!.arrayBuffer())).toEqual(bytes(300 * 1024, 3));
+    await expectBytes(await readCopy(b.mediaDb, pdf), bytes(300 * 1024, 3));
     server.online = false;
     expect((await b.media.source(video)).original?.size).toBe(MB);
     expect((await b.media.localImage(photo))?.size).toBe(2 * MB);
@@ -227,14 +241,14 @@ describe('Available offline', { timeout: 30_000 }, () => {
     expect(gets.length).toBeGreaterThan(0);
   });
 
-  it('con un portero viejo que corta las partes (caché del arranque), avanza por el Content-Range real', { timeout: 60_000 }, async () => {
+  it('con un portero viejo que corta las partes (caché del arranque), avanza por el Content-Range real', async () => {
     const { server, b, page, video } = await setup({ videoSize: 3 * MB + 123 });
     server.portero.oldOffline = true;
     server.portero.shortParts = 254 * 1024;
     await markAndWait(b, 'page', page, { ...DEFAULT_OPTIONS, videos: true });
     const copy = await readCopy(b.mediaDb, video);
     expect(copy?.size).toBe(3 * MB + 123);
-    expect(new Uint8Array(await copy!.arrayBuffer())).toEqual(bytes(3 * MB + 123, 2));
+    await expectBytes(copy, bytes(3 * MB + 123, 2));
     expect((await getCopy(b.mediaDb, video))!.orig!.parts.length).toBeGreaterThan(10);
   });
 
@@ -462,7 +476,7 @@ describe('Available offline', { timeout: 30_000 }, () => {
   });
 });
 
-describe('después de la auditoría de la implementación', { timeout: 60_000 }, () => {
+describe('después de la auditoría de la implementación', () => {
   /** Un `localStorage` en memoria, con lo marcado en otro workspace del mismo iPhone. */
   function fakeLocal(other: number) {
     const store = new Map<string, string>([['sd:offline:otro', String(other)]]);
@@ -576,7 +590,7 @@ describe('después de la auditoría de la implementación', { timeout: 60_000 },
     vi.restoreAllMocks();
     expect(b.offline.getSnapshot().unsaved).toEqual([{ name: 'IMG_0201.JPG', size: MB }]);
     const kept = b.offline.takeUnsaved(0)!;
-    expect(new Uint8Array(await kept.arrayBuffer())).toEqual(bytes(MB, 31));
+    await expectBytes(kept, bytes(MB, 31));
     expect(b.offline.getSnapshot().unsaved).toEqual([]);
   });
 
@@ -599,7 +613,7 @@ describe('después de la auditoría de la implementación', { timeout: 60_000 },
     expect(await readCopy(b.mediaDb, photo2)).not.toBeNull();
     expect(await readCopy(b.mediaDb, video)).not.toBeNull();
     expect(await readCopy(b.mediaDb, pdf)).not.toBeNull();
-    expect(new Uint8Array(await (await b.mediaDb.get('blobs', unsent))!.arrayBuffer())).toEqual(bytes(MB, 40));
+    await expectBytes(await b.mediaDb.get('blobs', unsent), bytes(MB, 40));
 
     // Sin red: lo mismo, con lo último que se supo de la base.
     server.online = false;

@@ -613,7 +613,7 @@ describe('otros topes del árbol', () => {
     await d.engine.syncNow();
     expect(d.engine.getStatus().failedOps).toBe(0);
     expect(d.tree.pendingOps()).toEqual([]);
-  }, 60_000);
+  });
 
   it('al rehacer las claves se tocan solo las páginas amontonadas en el hueco, no las demás hermanas', async () => {
     const server = new FakeServer();
@@ -646,7 +646,7 @@ describe('otros topes del árbol', () => {
     await d.engine.syncNow();
     expect(d.engine.getStatus().failedOps).toBe(0);
     expect(d.tree.pendingOps()).toEqual([]);
-  }, 60_000);
+  });
 
   it('la ventana de claves nuevas: vecinas que quedan afuera intactas, orden estricto, y con claves repetidas igual sale', () => {
     const keys = (list: string[]) => list.map((sort_key) => ({ sort_key }));

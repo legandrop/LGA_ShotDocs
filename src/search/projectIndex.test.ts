@@ -525,7 +525,9 @@ describe('el índice del proyecto', () => {
     // Lo que las ediciones pidieron sincronizar termina antes de cerrar las bases.
     await new Promise((r) => setTimeout(r, 50));
     for (const d of [a, b, c]) await d.engine.syncNow();
-  }, 120_000);
+    // 80 cruces son unas 5.000 escrituras a la base: sola tarda entre 17 y 35 s. El plazo no afirma nada (solo detecta
+    // un cuelgue): con 120 s vencía cada vez que la máquina tenía otra cosa encima.
+  }, 600_000);
 
   it('1000 páginas: el índice se arma rápido y la primera búsqueda amplia no traba', async () => {
     const d = await device();

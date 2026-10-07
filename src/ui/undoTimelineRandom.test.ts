@@ -286,7 +286,7 @@ async function run(seed: number, { blocks = false, withOther = false, replace = 
 }
 
 describe('la línea de tiempo al azar con el editor', () => {
-  it(`${SEEDS} semillas: deshacer todo vuelve exacto a lo de antes y rehacer todo a lo último`, { timeout: 30_000 + SEEDS * 1500 }, async () => {
+  it(`${SEEDS} semillas: deshacer todo vuelve exacto a lo de antes y rehacer todo a lo último`, { timeout: 60_000 + SEEDS * 1500 }, async () => {
     const results = [];
     for (let s = 1; s <= SEEDS; s++) results.push(await run(s));
     const tally = {
@@ -303,7 +303,7 @@ describe('la línea de tiempo al azar con el editor', () => {
     expect(tally.redoExact).toBe(SEEDS);
   });
 
-  it(`${SEEDS} semillas borrando bloques enteros: nada de letras de antes de menos más allá del resto conocido de Yjs`, { timeout: 30_000 + SEEDS * 1500 }, async () => {
+  it(`${SEEDS} semillas borrando bloques enteros: nada de letras de antes de menos más allá del resto conocido de Yjs`, { timeout: 60_000 + SEEDS * 1500 }, async () => {
     const results = [];
     for (let s = 1; s <= SEEDS; s++) results.push(await run(1000 + s, { blocks: true }));
     const tally = {
@@ -317,7 +317,7 @@ describe('la línea de tiempo al azar con el editor', () => {
     expect(tally.undoLess).toBeLessThanOrEqual(Math.ceil(SEEDS / 100));
   });
 
-  it(`${SEEDS} semillas con reemplazos en las tres (entrega 2): deshacer todo vuelve exacto y rehacer todo a lo último`, { timeout: 30_000 + SEEDS * 2500 }, async () => {
+  it(`${SEEDS} semillas con reemplazos en las tres (entrega 2): deshacer todo vuelve exacto y rehacer todo a lo último`, { timeout: 60_000 + SEEDS * 2500 }, async () => {
     const results = [];
     for (let s = 1; s <= SEEDS; s++) results.push(await run(3000 + s, { replace: true }));
     const tally = {
@@ -336,7 +336,7 @@ describe('la línea de tiempo al azar con el editor', () => {
     expect(tally.redoExact).toBe(SEEDS);
   });
 
-  it(`${SEEDS} semillas con reemplazos, el Undo del panel fuera de orden y otra persona: nada suyo se va y los dos iguales`, { timeout: 30_000 + SEEDS * 2500 }, async () => {
+  it(`${SEEDS} semillas con reemplazos, el Undo del panel fuera de orden y otra persona: nada suyo se va y los dos iguales`, { timeout: 60_000 + SEEDS * 2500 }, async () => {
     const results = [];
     for (let s = 1; s <= SEEDS; s++) results.push(await run(4000 + s, { replace: true, panel: true, withOther: true }));
     const tally = {
@@ -353,7 +353,7 @@ describe('la línea de tiempo al azar con el editor', () => {
     expect(tally.converged).toBe(SEEDS);
   });
 
-  it(`${SEEDS} semillas con otra persona escribiendo y borrando en las tres: nada suyo se va y los dos iguales`, { timeout: 30_000 + SEEDS * 1500 }, async () => {
+  it(`${SEEDS} semillas con otra persona escribiendo y borrando en las tres: nada suyo se va y los dos iguales`, { timeout: 60_000 + SEEDS * 1500 }, async () => {
     const results = [];
     for (let s = 1; s <= SEEDS; s++) results.push(await run(2000 + s, { withOther: true }));
     const tally = {

@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.223 :
+
+Con dos corridas completas de la suite a la vez, casi ninguna cerraba limpia (2 de 10; 0 de 4 con más carga en la máquina): caían pruebas que solas pasan. Causas: vitest abría 31 procesos por corrida, el doble que núcleos con dos corridas; plazos propios menores que el general; comparaciones de megas con `toEqual` que tardaban decenas de segundos; esperas por condición adentro de un `act`, donde React no dibuja; y ratos fijos antes de mirar. Ahora la suite abre la mitad de los núcleos (sola no tarda más), ningún plazo propio queda por debajo del general (una prueba lo vigila), los megas se comparan byte a byte en milisegundos, y las pruebas de 45 archivos de pantallas esperan la condición o a que termine lo que quedó en marcha (`src/test/shown.ts`). Cambian solo las pruebas y su configuración: seis corridas de seis limpias.
+
+[Estabilizar la suite con dos corridas a la vez: menos procesos por corrida, ningún plazo propio por debajo del general y esperas por condición en las pruebas de pantallas]
+
 v0.222 :
 
 Un comentario hecho por un link público mostraba el nombre del visitante y «(via link)», pero quien administra el link no podía saber de cuál vino para decidir cuál apagar. La causa: la base no entregaba el nivel ni el creador de un link por su id (`get_public_link` es por página), y la app no llevaba al panel el id que ya llegaba con cada comentario. La migración `20261113120000_link_rotulo_comentarios.sql` suma `public_link_labels`, que contesta solo a quien puede compartir la página raíz del link, mira el permiso una vez por proyecto y nunca da el token. El panel muestra debajo del nombre *Can view link · created by lega*, y si está cerrado, vencido o no anda; lo pide una vez por conjunto de links y lo recuerda solo por sesión. Sin red o sin la función, el comentario se ve como antes. Suma su entrada en la ayuda.

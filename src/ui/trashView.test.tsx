@@ -2,6 +2,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { settled } from '../test/settle';
 import * as Y from 'yjs';
 import { MEDIA_SCHEME, mediaIdOf } from '../media/queue';
 import { ServicesContext, type Services } from '../services';
@@ -77,7 +78,8 @@ async function mount(value: Services): Promise<HTMLElement> {
   return host;
 }
 
-const settle = () => act(async () => new Promise((r) => setTimeout(r, 30)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const settle = () => act(() => settled(30));
 
 async function sync(d: Device): Promise<void> {
   for (let i = 0; i < 2; i++) {

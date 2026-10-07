@@ -140,5 +140,6 @@ describe(`al azar con el editor (${SEEDS} semillas, 40 acciones)`, () => {
     // Caso conocido, aparte del parche (Doc_Deshacer.md, "Lo que queda"): las mismas letras, en otro orden, cuando lo
     // vuelto a poner tiene como vecino algo que se borró y volvió en otro lado (semilla 123: "segundo rglónen").
     expect(reordered.filter((s) => s !== 123)).toEqual([]);
-  }, 120_000);
+    // 150 semillas con el editor: sola, unos 16 s. Con 120 s vencía con la máquina cargada (el plazo solo detecta un cuelgue).
+  }, 300_000);
 });

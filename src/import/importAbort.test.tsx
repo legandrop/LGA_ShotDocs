@@ -350,5 +350,5 @@ for (const { stage, moment, existing } of cases) {
       expect((await d.db.getAll('ops')).filter((q) => q.opId === r.projectOperationId)).toHaveLength(1);
       expect(d.tree.project(r.projectId)).toBeDefined();
     }
-  }, 30_000);
+  });
 }

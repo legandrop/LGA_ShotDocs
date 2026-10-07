@@ -3,6 +3,7 @@ import { BlockNoteEditor } from '@blocknote/core';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { settled } from '../test/settle';
 import * as Y from 'yjs';
 import { addShape, PHOTO_MARKUP_MAP } from '../media/markup';
 import { PorteroError } from '../media/portero';
@@ -83,7 +84,8 @@ async function open(props: Partial<Parameters<typeof Carrete>[0]> = {}) {
   return { onClose, full: props.loader ? (props.loader.full as typeof full) : full, rerender: (next: Partial<typeof all>) => act(async () => root!.render(<Carrete {...all} {...next} />)) };
 }
 
-const settle = () => act(async () => new Promise((r) => setTimeout(r, 20)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const settle = () => act(() => settled(20));
 const dialog = () => document.querySelector<HTMLElement>('[role="dialog"]')!;
 const counter = () => document.querySelector('.carrete-count')!.textContent;
 const current = () => document.querySelector<HTMLElement>('.carrete-slot:not([aria-hidden])')!;

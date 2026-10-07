@@ -1,5 +1,6 @@
 /// <reference types="vitest/config" />
 import { readFileSync } from 'node:fs';
+import { availableParallelism } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv } from 'vite';
@@ -10,6 +11,18 @@ import { VitePWA } from 'vite-plugin-pwa';
 const PUBLISHED_Y_PROSEMIRROR = fileURLToPath(
   new URL('./node_modules/.cache/lga-y-prosemirror-v0.052/src/y-prosemirror.js', import.meta.url),
 ).replace(/\\/g, '/');
+
+// Cuántos procesos de prueba a la vez: la mitad de los núcleos, nunca menos de 12 (o de los que haya, menos uno).
+// Vitest abre, si no se le dice, uno por núcleo menos uno. En la PC de 32 eso eran 31, y con dos corridas completas a la
+// vez, 62: el doble de procesos que núcleos, y cada prueba tardaba entre 6 y 10 veces lo que tarda sola (los plazos
+// vencían sin que nada estuviera mal). Con 16 por corrida, dos corridas a la vez son un proceso por núcleo. La corrida
+// sola no tarda más: lo que tarda lo marcan sus dos archivos más largos (unos 140 s cada uno; la suma de todos es unas
+// 10 veces eso, así que con 12 procesos o más mandan ellos y no la cantidad de procesos). En una máquina de 13 núcleos o
+// menos no cambia nada. Para probar otra cantidad sin tocar esto: la variable VITEST_MAX_WORKERS.
+function testWorkers(): number {
+  const cores = availableParallelism();
+  return Math.max(1, Math.min(cores - 1, Math.max(12, Math.ceil(cores / 2))));
+}
 
 // La app solo recibe la URL del proyecto y la clave pública. Se leen por nombre, sin exponer prefijos
 // enteros, para que una clave secreta cargada en el mismo entorno nunca termine en el bundle.
@@ -249,7 +262,15 @@ export default defineConfig(({ mode }) => {
       // nada: solo detecta una prueba colgada, y una prueba que se corta por tiempo sigue corriendo de fondo y deja sin
       // dibujar a las que siguen en su archivo. Lo que se cuelga esperando algo lo dice antes su propia espera
       // (src/test/patience.ts), con su mensaje. Las pruebas largas de verdad llevan su propio plazo.
+      //
+      // Regla (desde la v0.223): ninguna prueba lleva un plazo propio menor o igual a este. Un plazo propio es solo para
+      // las pruebas largas de verdad (más de unos 6 s solas), y va de 10 veces para arriba de lo que tardan solas.
+      // src/test/patience.test.ts lo comprueba en todos los archivos de pruebas.
       testTimeout: 60_000,
+      // Lo mismo para lo que corre antes y después de cada prueba (el de vitest es 10 s): armar el editor por primera
+      // vez o cerrar las bases tampoco afirma nada, y con la máquina cargada 10 s eran el tope de un armado de 1 s.
+      hookTimeout: 60_000,
+      maxWorkers: testWorkers(),
       // El plazo por defecto de las esperas por condición (`vi.waitFor`): ver el archivo.
       setupFiles: ['src/test/patience.ts'],
       projects: [

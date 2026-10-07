@@ -3,6 +3,7 @@ import 'fake-indexeddb/auto';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { settled } from '../test/settle';
 import { ServicesContext, type Services } from '../services';
 import { AssistantSettings } from './AssistantSettings';
 import { closeAssistantDb, loadSettings, readKey, saveSettings, setSyncInfo } from './keyStore';
@@ -18,7 +19,6 @@ import { SignOutOthersDialog } from './SignOutOthersDialog';
 // *Sign out other devices* y la ventana de salir.
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-vi.setConfig({ testTimeout: 30_000 });
 
 const EMAIL = 'lega@wanka.tv';
 const UID = 'uid-lega';
@@ -36,7 +36,8 @@ afterEach(async () => {
   document.body.innerHTML = '';
 });
 
-const wait = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const wait = (ms = 30) => act(() => settled(ms));
 async function until(check: () => unknown, what: string, tries = 150): Promise<void> {
   for (let i = 0; i < tries; i++) {
     if (check()) return;

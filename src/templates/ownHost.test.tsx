@@ -2,6 +2,8 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { settled } from '../test/settle';
+import { shown } from '../test/shown';
 import { addShape, PHOTO_MARKUP_MAP } from '../media/markup';
 import { PHOTO_MARKUP_CAP } from '../media/markupLimits';
 import { prefs } from '../prefs';
@@ -68,7 +70,8 @@ afterEach(async () => {
   act(() => prefs.set({ language: 'en' }));
 });
 
-const wait = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const wait = (ms = 30) => act(() => settled(ms));
 
 function services(d: Device, userId = d.remote.userId): Services {
   const config = { url: 'https://example.test', publishableKey: 'sb_publishable_test', name: 'Wanka', localKey: WANKA_LOCAL_KEY, storage: legacyStorageNames(WANKA_LOCAL_KEY) };
@@ -124,9 +127,8 @@ async function open(device: Device, pageId: string, svc = services(device)) {
       </ServicesContext.Provider>,
     ),
   );
-  for (let i = 0; i < 100 && !host.querySelector('.bn-editor'); i++) await wait(50);
+  await shown(() => expect(host.querySelector('.bn-editor')).not.toBeNull());
   await wait(100);
-  expect(host.querySelector('.bn-editor')).not.toBeNull();
   return host;
 }
 
@@ -162,10 +164,8 @@ async function menuFor(device: Device, pageId: string, svc = services(device)) {
 const click = (el: Element | null | undefined) => act(() => (el as HTMLElement).click());
 const dialog = (label: string) => document.querySelector<HTMLElement>(`[role="dialog"][aria-label="${label}"]`);
 
-async function waitFor(check: () => unknown, tries = 80) {
-  for (let i = 0; i < tries && !check(); i++) await wait(30);
-  expect(check()).toBeTruthy();
-}
+/** Espera la condición, no una cantidad de vueltas: con la máquina cargada, 80 vueltas de 30 ms no alcanzaban. */
+const waitFor = (check: () => unknown) => shown(() => expect(check()).toBeTruthy());
 
 function setValue(el: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement, value: string) {
   const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
@@ -234,8 +234,7 @@ describe('Save as template… (5.1)', () => {
     item = await menuFor(device, tpl);
     expect(item('Save as template…')).toBeDefined();
     click(item('Use as template'));
-    await wait(30);
-    expect(isTemplatePage(device.tree, tpl)).toBe(true);
+    await waitFor(() => isTemplatePage(device.tree, tpl));
   });
 
   it('sin permiso para crear en Templates queda apagado y dice por qué', async () => {
@@ -273,12 +272,10 @@ describe('la franja de una plantilla (5.2)', () => {
     act(() => form.requestSubmit());
     await waitFor(() => !dialog('Template settings'));
     expect(templateInfo(device.tree.get(tpl))).toEqual({ description: 'Ours, with drone', dayReport: false });
-    await wait(30);
-    expect(host.querySelector('.template-banner')!.textContent).toContain('Ours, with drone');
+    await shown(() => expect(host.querySelector('.template-banner')!.textContent).toContain('Ours, with drone'));
     click([...host.querySelectorAll('.template-banner button')].find((b) => b.textContent === 'Stop using as template'));
-    await wait(30);
-    expect(isTemplatePage(device.tree, tpl)).toBe(false);
-    expect(host.querySelector('.template-banner')).toBeNull();
+    await waitFor(() => !isTemplatePage(device.tree, tpl));
+    await shown(() => expect(host.querySelector('.template-banner')).toBeNull());
     // La página y su contenido quedan.
     expect(device.tree.get(tpl)).toBeDefined();
     expect(await pageText(device, tpl)).toContain('Camera package');

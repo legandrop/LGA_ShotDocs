@@ -4,6 +4,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ServicesContext, type Services } from '../services';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
+import { settled } from '../test/settle';
+import { shown } from '../test/shown';
 import { watchTitleRests } from '../sync/titleRest';
 import { ExportEditor } from '../export/exportEditor';
 import * as pdf from '../export/exportPdf';
@@ -27,7 +29,14 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 const deferred = () => { let release!: () => void; const promise = new Promise<void>((resolve) => { release = resolve; }); return { promise, release }; };
-const settle = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 125)); });
+// Un rato y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const settle = () => act(() => settled(125));
+/**
+ * Espera a que el PDF se haya armado `times` veces. La salida espera el guardado local volviendo a mirar cada tanto:
+ * después de soltar lo que la frenaba, arma el PDF en su próxima mirada, no en un plazo fijo (con la máquina cargada, un
+ * rato no alcanzaba).
+ */
+const produced = (producer: { mock: { calls: unknown[] } }, times = 1) => shown(() => expect(producer.mock.calls.length).toBeGreaterThanOrEqual(times));
 const click = async (text: string) => { await act(async () => { [...host.querySelectorAll('button')].find((button) => button.textContent === text)!.click(); }); await settle(); };
 
 async function setup(prepare: () => Promise<void> = async () => undefined) {
@@ -57,7 +66,7 @@ it('relee el título y el plan después de la escritura preparada, sin esperar a
   let page = '';
   const s = await setup(async () => { await gate.promise; await device.tree.rename(page, 'Título confirmado'); }); page = s.page;
   await click('Export PDF'); expect(s.producer).not.toHaveBeenCalled();
-  await act(async () => gate.release()); await settle();
+  await act(async () => gate.release()); await settle(); await produced(s.producer);
   expect(s.producer.mock.calls[0][0].title).toBe('Título confirmado');
   expect(s.producer.mock.calls[0][0].plan[0].title).toBe('Título confirmado');
   expect(await device.db.getAll('ops')).not.toHaveLength(0);
@@ -70,7 +79,7 @@ it('espera al consumidor real del sobrante, sin depender de otro render del árb
   vi.spyOn(device.docs, 'edit').mockImplementation(async (...args) => { await gate.promise; return edit(...args); });
   cleanups.push(watchTitleRests(device.tree, device.docs));
   await click('Export PDF'); expect(s.producer).not.toHaveBeenCalled();
-  await act(async () => gate.release()); await settle();
+  await act(async () => gate.release()); await settle(); await produced(s.producer);
   expect(device.tree.titleRests()).toHaveLength(0);
   expect(s.producer).toHaveBeenCalledTimes(1);
   const snap = await device.docs.snapshot(s.page);
@@ -96,30 +105,29 @@ it('otra identidad de Services no recibe el resultado tardío del dueño anterio
   const s = await setup(); const gate = deferred();
   const late = { root: document.createElement('div'), destroy: vi.fn() } as unknown as pdf.PdfBook;
   s.producer.mockImplementation(async () => { await gate.promise; return late; });
-  await click('Export PDF'); expect(s.producer).toHaveBeenCalledTimes(1);
+  await click('Export PDF'); await produced(s.producer); expect(s.producer).toHaveBeenCalledTimes(1);
   s.mount({ ...s.services, workspace: { ...s.services.workspace, config: { ...s.services.workspace.config, localKey: 'otra_isla' } } });
-  await act(async () => gate.release()); await settle();
+  await act(async () => gate.release()); await settle(); await shown(() => expect(late.destroy).toHaveBeenCalled());
   expect(late.destroy).toHaveBeenCalledTimes(1); expect(window.print).not.toHaveBeenCalled();
   expect(host.textContent).toContain('Export PDF');
 });
 
 it('Next part rechaza el índice anterior si se retira una página; reinicio explícito desde cero', async () => {
   let pause: Promise<void> = Promise.resolve(); const s = await setup(() => pause);
-  await click('Export PDF'); const first = s.books[0]; const gate = deferred(); pause = gate.promise;
+  await click('Export PDF'); await produced(s.producer); const first = s.books[0]; const gate = deferred(); pause = gate.promise;
   await click('Prepare part 2'); await act(async () => device.tree.trash(s.a));
-  await act(async () => gate.release()); await settle();
+  await act(async () => gate.release()); await settle(); await shown(() => expect(host.textContent).toContain('The pages or their layout changed'));
   expect(s.producer).toHaveBeenCalledTimes(1); expect(first.destroy).not.toHaveBeenCalled();
-  expect(host.textContent).toContain('The pages or their layout changed');
-  await click('Export again'); expect(s.producer).toHaveBeenCalledTimes(2);
+  await click('Export again'); await produced(s.producer, 2); expect(s.producer).toHaveBeenCalledTimes(2);
   expect(s.producer.mock.calls[1][0].from).toBe(0); expect(s.producer.mock.calls[1][0].carry).toBeNull();
   expect(s.producer.mock.calls[1][0].plan.map((page) => page.id)).toEqual([s.page, s.b]);
 });
 
 it('Next part compatible usa títulos actuales y conserva el carry por páginas', async () => {
   let pause: Promise<void> = Promise.resolve(); const s = await setup(() => pause);
-  await click('Export PDF'); const first = s.books[0]; const gate = deferred(); pause = gate.promise;
+  await click('Export PDF'); await produced(s.producer); const first = s.books[0]; const gate = deferred(); pause = gate.promise;
   await click('Prepare part 2'); await act(async () => device.tree.rename(s.b, 'B vigente'));
-  await act(async () => gate.release()); await settle();
+  await act(async () => gate.release()); await settle(); await produced(s.producer, 2);
   expect(s.producer.mock.calls[1][0].from).toBe(2);
   expect(s.producer.mock.calls[1][0].carry).toBe(first.carry);
   expect(s.producer.mock.calls[1][0].plan[2].title).toBe('B vigente');

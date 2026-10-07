@@ -195,7 +195,6 @@ describe('cada página y cada archivo se anotan en el registro antes de crearse'
       // La página A no cambió de identidad por el corte.
       expect(done.pages[s.ids.a].pageId).toBe(asked[0]);
     },
-    30000,
   );
 
   it.each(kinds)('%s: con un corte entre guardar un archivo y anotarlo, al seguir ese archivo queda una sola vez en el dispositivo', async (kind) => {
@@ -228,7 +227,7 @@ describe('cada página y cada archivo se anotan en el registro antes de crearse'
     expect(xml.match(/sdmedia:\/\//g)).toHaveLength(1);
     // Anotado el archivo, su reserva no queda dando vueltas.
     expect(done.reserved ?? {}).toEqual({});
-  }, 30000);
+  });
 
   it.each(kinds)('%s: una página pendiente que se mandó a la papelera, y el registro que no se puede guardar justo al reemplazarla: queda una sola página nueva', async (kind) => {
     const d = await device(), s = await sourceOf(kind);
@@ -259,7 +258,7 @@ describe('cada página y cada archivo se anotan en el registro antes de crearse'
     const done = (await activeJournal(s.store(d), s.key))!;
     expect(done.pages[s.ids.a].pageId).not.toBe(old);
     expect(d.tree.isTrashed(done.pages[s.ids.a].pageId)).toBe(false);
-  }, 30000);
+  });
 });
 
 describe('una página recién anotada y creada, sin nada escrito, que la persona mandó a la papelera', () => {
@@ -291,7 +290,7 @@ describe('una página recién anotada y creada, sin nada escrito, que la persona
     const trashed = await textOf(old);
     expect(trashed).not.toContain('TEXTO_A');
     expect(trashed).not.toContain('sdmedia://');
-  }, 30000);
+  });
 });
 
 describe('una carpeta de Coda vuelta a exportar sin una página entre el corte y Resume', () => {
@@ -322,7 +321,7 @@ describe('una carpeta de Coda vuelta a exportar sin una página entre el corte y
     expect(fresh).toMatchObject({ resumable: false, pages: 1, problems: [] });
     expect(fresh.projectId).not.toBe(resumed.projectId);
     expect(liveTitles(d, fresh.projectId)).toEqual(['A']);
-  }, 30000);
+  });
 
   it('una página de la carpeta que todavía no terminó sigue impidiendo el cierre', async () => {
     const d = await device(), s = codaSource();
@@ -335,7 +334,7 @@ describe('una carpeta de Coda vuelta a exportar sin una página entre el corte y
     await expect(store.completeGeneration(await store.loadState(s.key), env.activeGenerationId, ['a', 'b'])).rejects.toMatchObject({ reason: 'invalid' });
     await expect(store.completeGeneration(await store.loadState(s.key), env.activeGenerationId, ['a', 'no-anotada'])).rejects.toMatchObject({ reason: 'invalid' });
     expect((await envelopeOf(d, s)).generations[env.activeGenerationId].phase).toBe('ready');
-  }, 30000);
+  });
 });
 
 describe('cuando entró todo y no se pudo anotar como terminada', () => {
@@ -356,7 +355,7 @@ describe('cuando entró todo y no se pudo anotar como terminada', () => {
     expect(fresh.projectId).not.toBe(stuck.projectId);
     expect(liveTitles(d, fresh.projectId)).toEqual(['A', 'B']);
     expect(liveTitles(d, stuck.projectId)).toEqual(['A', 'B']);
-  }, 30000);
+  });
 });
 
 describe('el registro de una misma fuente no crece sin fin', () => {
@@ -387,5 +386,5 @@ describe('el registro de una misma fuente no crece sin fin', () => {
     expect(liveTitles(d, projects[0])).toEqual(['A', 'B']);
     // La que quedó sin terminar ya no es la vigente, pero su proyecto y su registro siguen ahí.
     expect(d.tree.project(before.generations[unfinished].journal!.projectId)).toBeTruthy();
-  }, 60000);
+  });
 });

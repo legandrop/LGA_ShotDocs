@@ -749,7 +749,7 @@ describe('auditoría 1a', () => {
         expect(afterRoot.has(before.hidden.get(id)!), `ronda ${round}: su título sigue`).toBe(false);
       }
     }
-  }, 60_000);
+  });
 
   it('2. cambiarle el id al título (UniqueID) no borra su sección y sigue colapsado', () => {
     const { editor } = page([p('antes'), h(2, 'T'), p('a'), p('b'), h(2, 'U')]);
@@ -862,12 +862,23 @@ describe('auditoría 1a', () => {
     const after = collapseState(view(editor).state)!;
     expect(after.analysis.hidden).toBe(before.analysis.hidden);
     expect(after.analysis.hidden.size).toBe(1000);
-    // Lo que cuesta una tecla con todo colapsado contra lo que cuesta sin colapsar, por la mediana (una pausa suelta de
-    // la máquina no la mueve; al promedio sí). Hoy es cerca del doble. Antes, con las decoraciones en los bloques
-    // costaba 4 veces lo de hoy y rearmando todo más de 6: más de 7 y de 12 veces la página sin colapsar. Un tope en
-    // milisegundos medía también a la máquina: con la suite entera corriendo, la misma tecla tardaba varias veces más.
-    const median = (times: number[]) => [...times].sort((a, b) => a - b)[times.length >> 1];
-    expect(median(folded)).toBeLessThan(4 * median(plain));
+    // Lo que cuesta una tecla con todo colapsado contra lo que cuesta sin colapsar. Hoy es cerca del doble. Antes, con
+    // las decoraciones en los bloques costaba 4 veces lo de hoy y rearmando todo más de 6: más de 7 y de 12 veces la
+    // página sin colapsar. Un tope en milisegundos medía también a la máquina: con la suite entera corriendo, la misma
+    // tecla tardaba varias veces más. Y la mediana de una página contra la mediana de la otra tampoco era inmune: con la
+    // máquina cargada fue de 0,8 a 7,2 (pasaba el tope de 4 sin que nada estuviera mal). Se compara de dos formas, las
+    // dos con el mismo tope:
+    // - la tecla más rápida de las 40 de cada página, lo que cuesta cuando nada la interrumpe (con carga, de 1,6 a 2,5).
+    //   Sola no alcanza: le basta una tecla rápida, y no nota que 9 de cada 10 rearmen todo (da 2,3 a 3,0).
+    // - la mediana de las 40 razones por par: cada tecla colapsada contra la tecla sin colapsar que corrió pegada a
+    //   ella, así una pausa de la máquina les pega a las dos o cae en un solo par. Medida 70 veces con dos y con tres
+    //   corridas completas a la vez, de 1,5 a 2,6 (sin carga, 2,1 a 2,5); con 9 de cada 10 teclas rearmando todo, de
+    //   5,8 a 8,6.
+    // El tope de 4 detecta que la tecla con todo colapsado cueste el doble que hoy. Perder solo el camino rápido de
+    // escribir deja las dos cerca del tope (entre 3 y 5): eso no se detecta siempre.
+    expect(Math.min(...folded)).toBeLessThan(4 * Math.min(...plain));
+    const pairs = folded.map((time, i) => time / plain[i]).sort((a, b) => a - b);
+    expect(pairs[pairs.length >> 1]).toBeLessThan(4);
   });
 
   it('8. pegar algo no toca los títulos plegables que ya estaban', () => {
@@ -1342,7 +1353,7 @@ describe('verificación de cbed5dc: lo escondido se borra solo a propósito', ()
     expect(collapseState(view(editor).state)!.analysis.hidden.size).toBe(2001);
     // 4.000 bloques: unos 37 ms por Enter en jsdom (antes, 83 a 108). Lo que queda es de ProseMirror al dibujar
     // miles de decoraciones (sin colapsar, unos 15). No se mide acá: con otras pruebas a la vez, varía mucho.
-  }, 30_000);
+  });
 });
 
 // --- Verificación de a2390e6 + fbaef68 -----------------------------------------------------------------------

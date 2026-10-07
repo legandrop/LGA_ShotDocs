@@ -3,6 +3,7 @@ import { Blob as NodeBlob } from 'node:buffer';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { settled } from '../test/settle';
 import { prefs } from '../prefs';
 import { ServicesContext, type Services } from '../services';
 import { block, group } from '../sync/historyTesting';
@@ -34,7 +35,8 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-const settle = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const settle = (ms = 30) => act(() => settled(ms));
 
 /** Lo que usa la insignia, con el dispositivo de un visitante (`remote` es el `LinkRemote`, como en el modo link). */
 function servicesOf(v: LinkDevice): Services {

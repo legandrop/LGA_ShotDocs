@@ -261,7 +261,7 @@ describe('B4: profundidad sin límite', () => {
       }
       // Antes: 8000 niveles, ~11 s en el hilo del editor que admite.
       expect(performance.now() - t0).toBeLessThan(3000);
-    }, 60_000);
+    });
   }
 
   it(`una sangría honesta de ${MAX_GROUP_DEPTH - 10} niveles entra; una de ${MAX_GROUP_DEPTH + 1}, no`, () => {

@@ -29,7 +29,7 @@ vi.mock('./PageEditor', async (importOriginal) => {
 // con su propio plazo. La página lo sigue esperando hasta que la prueba suelta la bajada.
 beforeAll(async () => {
   await vi.importActual('./PageEditor');
-}, 60_000);
+});
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

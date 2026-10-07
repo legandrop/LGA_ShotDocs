@@ -4,6 +4,7 @@ import { withCollaboration } from '@blocknote/core/yjs';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { settled } from '../test/settle';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { CONTENT_FRAGMENT } from '../sync/structure';
@@ -84,7 +85,8 @@ function services(d: Device, userId: string): Services {
   };
 }
 
-const wait = (ms = 60) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const wait = (ms = 60) => act(() => settled(ms));
 
 async function mount(value: Services, node: React.ReactNode): Promise<HTMLElement> {
   const host = document.createElement('div');

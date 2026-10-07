@@ -710,6 +710,6 @@ describe('B.15 al azar', () => {
       await fresh.engine.syncNow();
       expect(await read(fresh, pageId), label).toBe(expected.getText('t').toString());
       expected.destroy();
-    }, 60_000);
+    });
   }
 });

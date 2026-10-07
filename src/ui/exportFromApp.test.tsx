@@ -2,6 +2,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, expect, it, vi } from 'vitest';
+import { settled } from '../test/settle';
 import { ExportEditor } from '../export/exportEditor';
 import { writeBlocks } from '../export/testProject';
 import { openZip } from '../export/zipReader';
@@ -83,7 +84,8 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
-const wait = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const wait = (ms = 30) => act(() => settled(ms));
 async function until(check: () => unknown, what: string, tries = 400): Promise<void> {
   for (let i = 0; i < tries; i++) {
     if (check()) return;

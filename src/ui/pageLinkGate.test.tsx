@@ -4,6 +4,7 @@ import { withCollaboration } from '@blocknote/core/yjs';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { settled } from '../test/settle';
 import * as Y from 'yjs';
 import { ServicesContext, type Services } from '../services';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
@@ -24,7 +25,8 @@ import { closeComments, hasDrafts, setDraft } from './commentsUi';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const ID = '0f8fad5b-d9cb-469f-a165-70867728950e';
 const devices: Device[] = []; const roots: Root[] = []; const cleanup: (() => void)[] = [];
-const wait = (ms = 50) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const wait = (ms = 50) => act(() => settled(ms));
 beforeAll(() => {
   window.matchMedia ??= ((query: string) => ({ matches: false, media: query, onchange: null, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent: () => false })) as never;
   globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as never;

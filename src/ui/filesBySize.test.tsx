@@ -2,6 +2,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { settled } from '../test/settle';
 import { ProjectSizes, SIZES_SCHEMA_VERSION } from '../media/projectSizes';
 import { prefs } from '../prefs';
 import { ServicesContext, type Services } from '../services';
@@ -76,7 +77,8 @@ async function mount(value: Services, node: React.ReactNode): Promise<HTMLElemen
   return host;
 }
 
-const settle = () => act(async () => new Promise((r) => setTimeout(r, 30)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const settle = () => act(() => settled(30));
 
 function size(projectId: string, driveBytes: number, driveFiles: number): ProjectSizeRow {
   return {

@@ -52,7 +52,7 @@ beforeAll(async () => {
   vi.stubGlobal('fetch', () => { throw new Error('Red no autorizada'); });
   window.matchMedia ??= ((media: string) => ({ matches: false, media, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {} })) as never;
   globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as never;
-}, 45000);
+});
 afterAll(() => {
   vi.unstubAllGlobals();
 
@@ -156,7 +156,7 @@ it('si el documento de la página no quedó guardado en el dispositivo, la pági
     else { let error: unknown; try { unfinished(r); } catch (e) { error = e; } expect(error).toBeInstanceOf(assert.AssertionError); }
     abort.release(); await d.docs.flush(); abort.restore();
   }
-}, 30000);
+});
 
 it('un corte después de anotar el plan: al reabrir la app y seguir, el texto de la persona y el importado quedan una sola vez, también después de cerrar y abrir otra vez', async () => {
   const unique = (c: ReturnType<typeof capture>) => { assert.equal(c.own, 1); assert.equal(c.imported, 1); };
@@ -188,7 +188,7 @@ it('un corte después de anotar el plan: al reabrir la app y seguir, el texto de
       expect(exactValue(fresh.n, after.n)).toBe(true); unique(fresh); await closeAll(d, doc, page, observed);
     } finally { abort.release(); abort.restore(); observed.restore(); }
   }
-}, 45000);
+});
 
 it('una página cuyo contenido no se puede leer queda sin plan; y un registro en la clave anterior, o uno ilegible, no se pisa ni se toca', async () => {
   const server = new FakeServer(); server.online = false; const d = await device(server, `meta-${crypto.randomUUID()}`);

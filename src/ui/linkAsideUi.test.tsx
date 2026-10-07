@@ -2,6 +2,8 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { settled } from '../test/settle';
+import { shown } from '../test/shown';
 import * as Y from 'yjs';
 import { LinkContext, linkDomain, type LinkEntry } from '../linkMode';
 import { prefs } from '../prefs';
@@ -88,7 +90,8 @@ async function mount(value: Services, node: React.ReactNode): Promise<HTMLElemen
   await settle();
   return host;
 }
-const settle = (ms = 40) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const settle = (ms = 40) => act(() => settled(ms));
 const buttonNamed = (host: HTMLElement, text: string) => [...host.querySelectorAll('button')].find((b) => b.textContent === text)!;
 
 function shareClient(linkId: string) {
@@ -275,7 +278,9 @@ describe('el visitante vuelve a la versión del equipo', () => {
     expect(host.textContent).toContain("Some of your changes on this page couldn't be added.");
     await act(async () => buttonNamed(host, "Show the team's version").click());
     await settle(200);
-    // Bajó la copia primero, y la página es la del equipo.
+    // Bajó la copia primero, y la página es la del equipo. (Armar la copia tarda lo que tarde: se espera a que esté.)
+    await shown(() => expect(saved.length).toBeGreaterThan(0));
+    await shown(() => expect(host.querySelector('.link-visitor-aside')).toBeNull());
     expect(saved).toHaveLength(1);
     const now = await v.docs.open(s);
     expect(JSON.stringify(now.getXmlFragment(CONTENT_FRAGMENT).toJSON())).not.toContain('apartado');

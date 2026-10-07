@@ -61,7 +61,19 @@ function appFiles(dir = SRC, out = new Map<string, string>()): Map<string, strin
   }
   return out;
 }
-const appSource = () => [...appFiles().values()].join('\n');
+
+/**
+ * Por archivo, todo lo que aparece escrito entre comillas simples con forma de clave (`'cuenta.salir'`). Es lo mismo que
+ * preguntar `código.includes("'clave'")` por cada clave, pero leyendo cada archivo una sola vez: miles de claves contra
+ * todo el código eran miles de pasadas por varios megas, y con la máquina cargada la prueba no entraba en su plazo. La
+ * forma de clave se comprueba en cada prueba (una clave con otro carácter no se encontraría).
+ */
+const KEY_SHAPE = /^[\w.:-]+$/;
+let quotedCache: Map<string, Set<string>> | null = null;
+function quotedByFile(): Map<string, Set<string>> {
+  quotedCache ??= new Map([...appFiles()].map(([path, code]) => [path, new Set([...code.matchAll(/'(?=([\w.:-]+)')/g)].map((m) => m[1]))]));
+  return quotedCache;
+}
 
 const forms = (e: Entry): string[] => (typeof e === 'string' ? [e] : [e.one, e.other]);
 const names = (text: string): string[] => [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
@@ -108,8 +120,9 @@ describe('diccionario', () => {
   });
 
   it('no sobra ninguna clave: todas se usan en el código', () => {
-    const source = appSource();
-    const unused = entries.map(([key]) => key).filter((key) => !source.includes(`'${key}'`) && !UNUSED_ALLOWED.has(key));
+    expect(entries.map(([key]) => key).filter((key) => !KEY_SHAPE.test(key))).toEqual([]);
+    const used = new Set([...quotedByFile().values()].flatMap((quoted) => [...quoted]));
+    const unused = entries.map(([key]) => key).filter((key) => !used.has(key) && !UNUSED_ALLOWED.has(key));
     expect(unused).toEqual([]);
   });
 
@@ -119,10 +132,11 @@ describe('diccionario', () => {
     expect(Object.keys(strings).length).toBeLessThan(entries.length);
     const wrong: string[] = [];
     for (const [name, dict] of Object.entries(LAZY)) {
-      for (const key of Object.keys(dict)) {
-        for (const [path, code] of files) {
-          if (code.includes(`'${key}'`) && !code.includes(`i18n/lazy/${name}'`)) wrong.push(`${key} en ${path}`);
-        }
+      const keys = Object.keys(dict);
+      expect(keys.filter((key) => !KEY_SHAPE.test(key))).toEqual([]);
+      for (const [path, quoted] of quotedByFile()) {
+        if (files.get(path)!.includes(`i18n/lazy/${name}'`)) continue;
+        for (const key of keys) if (quoted.has(key)) wrong.push(`${key} en ${path}`);
       }
     }
     expect(wrong).toEqual([]);

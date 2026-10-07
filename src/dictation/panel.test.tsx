@@ -4,6 +4,7 @@ import type { PartialBlock } from '@blocknote/core';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { settled } from '../test/settle';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
@@ -43,6 +44,8 @@ const devices: Device[] = [];
 const offTargets: (() => void)[] = [];
 
 afterEach(async () => {
+  // El reloj llevado a mano (el resguardo del doble toque), si una prueba se cortó antes de soltarlo.
+  vi.restoreAllMocks();
   for (const r of roots.splice(0)) act(() => r.unmount());
   for (const off of offTargets.splice(0)) off();
   closeAssistant();
@@ -64,7 +67,8 @@ afterEach(async () => {
   document.body.innerHTML = '';
 });
 
-const wait = (ms = 20) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const wait = (ms = 20) => act(() => settled(ms));
 
 function services(d: Device, client: unknown = { auth: {} }): Services {
   const config = { url: 'https://znlvpuddswymxpffgvbz.supabase.co', publishableKey: 'sb_publishable_test', name: 'Wanka', localKey: WANKA_LOCAL_KEY, storage: legacyStorageNames(WANKA_LOCAL_KEY) };
@@ -221,6 +225,11 @@ describe('Dictate to report', () => {
     expect(preview.textContent).toContain('50 mm');
     expect(preview.textContent).not.toContain('Row chosen by the assistant');
     expect(s.host.textContent).toContain('Heard “este plano se filmó con un 50 mm”');
+    // El resguardo del doble toque mira el reloj. Acá el reloj se lleva a mano: los toques de abajo caen un milisegundo
+    // antes de que el resguardo termine, tarde lo que tarde la máquina en llegar a cada uno (con la suite entera
+    // corriendo junto a otros procesos llegaban tarde, y el toque que se tenía que ignorar deshacía).
+    const appliedAt = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(appliedAt);
     await click(button(s.host, 'Apply'));
     expect(cellText(s.ed, 3, 3, 3)).toBe('50 mm');
     expect(s.host.textContent).toContain('Applied 1 change.');
@@ -228,10 +237,12 @@ describe('Dictate to report', () => {
     expect((await draft(s.pageId))?.applied).toBe('este plano se filmó con un 50 mm, anotalo donde corresponda');
     expect(s.host.querySelector('.dictation-kept')?.textContent).toContain('Your note “este plano se filmó con un 50 mm, anotalo donde corresponda”');
     // N1: un doble toque en Apply no deshace (el segundo toque cae en el botón que aparece y se ignora).
+    clock.mockReturnValue(appliedAt + DOUBLE_TAP_MS - 1);
     await click(button(s.host, 'Undo'));
     expect(cellText(s.ed, 3, 3, 3)).toBe('50 mm');
     await click(button(s.host, 'Done'));
     expect(s.host.querySelector('.dictation-kept')).toBeTruthy();
+    clock.mockRestore();
     await wait(DOUBLE_TAP_MS);
     await click(button(s.host, 'Undo'));
     expect(cellText(s.ed, 3, 3, 3)).toBe('');

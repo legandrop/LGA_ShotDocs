@@ -2,6 +2,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { settled } from '../test/settle';
 import { t } from '../i18n';
 import { LinkContext } from '../linkMode';
 import { prefs } from '../prefs';
@@ -138,7 +139,8 @@ function services(server: FakeServer, d: Device, userId: string, calls?: string[
   };
 }
 
-const wait = (ms = 60) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const wait = (ms = 60) => act(() => settled(ms));
 
 async function mount(node: React.ReactNode, value?: Services, link: unknown = null): Promise<HTMLElement> {
   const host = document.createElement('div');

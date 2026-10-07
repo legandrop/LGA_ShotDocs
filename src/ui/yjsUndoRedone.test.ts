@@ -174,7 +174,7 @@ describe(`al azar, una página (${SEEDS} semillas)`, () => {
       lost: [],
       redoWrong: [],
     });
-  }, 60_000);
+  });
 });
 
 // Con otra persona escribiendo y borrando a la vez (dos documentos conectados): deshacer nunca saca nada del otro, ni
@@ -239,5 +239,5 @@ describe('al azar, con otra persona a la vez', () => {
       if (missingFromB.length || leftoverFromA || !same) bad.push(`${seed}: ${JSON.stringify(out)}`);
     }
     expect(bad.slice(0, 5)).toEqual([]);
-  }, 60_000);
+  });
 });

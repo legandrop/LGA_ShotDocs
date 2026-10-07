@@ -3,6 +3,7 @@ import { Blob as NodeBlob } from 'node:buffer';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { settled } from '../test/settle';
 import { rememberLink } from '../linkMode';
 import { mediaDbName } from '../media/mediaDb';
 import { prefs } from '../prefs';
@@ -33,7 +34,8 @@ afterEach(() => {
   localStorage.clear();
 });
 
-const settle = () => act(async () => new Promise((r) => setTimeout(r, 30)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const settle = () => act(() => settled(30));
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
 

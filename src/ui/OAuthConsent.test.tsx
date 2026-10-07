@@ -2,6 +2,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { settled } from '../test/settle';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { translate } from '../i18n';
 import '../i18n/lazy/oauthConsent';
@@ -75,7 +76,8 @@ function active(client: SupabaseClient): ActiveWorkspace {
   };
 }
 
-const flush = () => act(async () => new Promise((r) => setTimeout(r, 0)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const flush = () => act(() => settled(0));
 
 async function render(client: SupabaseClient, search = '?authorization_id=auth_123') {
   const go = vi.fn();
