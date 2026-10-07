@@ -14,6 +14,7 @@ import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { CommentsPanel } from './CommentsPanel';
 import { closeComments, showComments } from './commentsUi';
+import { AccountMenu, signOutQuestion } from './menus';
 import { SyncBadge } from './SyncBadge';
 
 // El panel de comentarios montado de verdad, con dos dispositivos de la misma persona contra el servidor en memoria
@@ -320,11 +321,148 @@ describe('una edición propia que no entró', () => {
     expect(server.comments.get(id)?.body).toBe('De la computadora');
   });
 
+  /** Una edición de antes que la base rechazó (de cuando la persona no podía comentar), todavía en la cola. */
+  const rejectedEdit = (pageId: string, id: string, text: string) => ({
+    op: { kind: 'edit' as const, id, pageId, body: text, at: new Date().toISOString(), base: 'Original' },
+    attempted: true, failed: true, error: 'You can view this page but not comment on it.', queuedAt: Date.now(),
+  });
+  const type = (textarea: HTMLTextAreaElement, text: string) =>
+    act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(textarea, text);
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  const clipboard = () => {
+    const copied: string[] = [];
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (t: string) => void copied.push(t) } });
+    return copied;
+  };
+
+  it('con el cuadro abierto sobre lo guardado cuando una edición rechazada de antes se reintenta y choca: el aviso dice que desde ahí no se guarda, lo escrito se puede copiar y Cancel pide confirmación', async () => {
+    const { server, phone, desk, page, id, panel, button, sync } = await phoneAndDesk();
+    await phone.commentsDb.add('outbox', rejectedEdit(page, id, 'VIEJA'));
+    await act(async () => phone.comments.load());
+    // La computadora edita; el teléfono lo baja y la persona abre el cuadro sobre lo guardado y escribe.
+    await desk.comments.edit(page, id, 'PC');
+    await desk.engine.syncNow();
+    await sync(phone);
+    await act(async () => button('Edit')!.click());
+    const textarea = () => panel().querySelector<HTMLTextAreaElement>('textarea')!;
+    expect(textarea().value).toBe('PC');
+    await type(textarea(), 'NUEVO');
+    // Con el cuadro normal, *Cancel* no ofrece copiar nada (se puede guardar).
+    expect(panel().querySelector('.comment-composer')!.textContent).not.toContain('Copy text');
+    // Lo rechazado se reintenta (al abrir la app, o con *Retry*): «VIEJA» choca y pasa a ser lo que espera decisión.
+    await act(async () => phone.comments.retryFailed());
+    await sync(phone);
+    expect(phone.comments.threads(page)[0].root.conflict).toEqual({ text: 'VIEJA' });
+    // El cuadro sigue abierto con lo escrito, y el aviso dice la verdad: desde acá no se guarda.
+    expect(textarea().value).toBe('NUEVO');
+    expect(panel().querySelector('.comment-conflict')!.textContent).toBe(
+      "An earlier edit of yours on this comment was not saved and is waiting for you to choose which text stays. What you are writing here can't be saved until you choose: copy it, then cancel to see both texts.",
+    );
+    // Guardar se rechaza diciendo lo mismo, y lo escrito sigue en el cuadro.
+    await act(async () => button('Save')!.click());
+    await wait();
+    expect(panel().querySelector('.comment-composer .comment-error')!.textContent).toContain("so this text can't be saved yet. Copy it, cancel, choose");
+    expect(textarea().value).toBe('NUEVO');
+    // *Copy text* copia lo tipeado, entero.
+    const copied = clipboard();
+    const composer = () => panel().querySelector<HTMLElement>('.comment-composer')!;
+    const inBox = (label: string) => [...composer().querySelectorAll('button')].find((b) => b.textContent === label)!;
+    await act(async () => inBox('Copy text').click());
+    await wait();
+    expect(copied).toEqual(['NUEVO']);
+    expect(inBox('Copied')).toBeDefined();
+    // *Cancel* es la única salida: pide confirmación, y con un «no» el cuadro sigue con lo escrito.
+    const ask = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    await act(async () => inBox('Cancel').click());
+    expect(ask).toHaveBeenCalledWith("Discard what you wrote here? It can't be saved from this box: copy it first if you want to keep it.");
+    expect(textarea().value).toBe('NUEVO');
+    ask.mockReturnValue(true);
+    await act(async () => inBox('Cancel').click());
+    await wait();
+    ask.mockRestore();
+    // Cerrado el cuadro, se ven los dos textos para elegir; nada de lo tipeado se mandó.
+    expect(panel().querySelector('textarea')).toBeNull();
+    const box = panel().querySelector('.comment-conflict')!.textContent ?? '';
+    expect(box).toContain('PC');
+    expect(box).toContain('VIEJA');
+    expect(await phone.commentsDb.getAll('outbox')).toEqual([]);
+    expect(server.comments.get(id)?.body).toBe('PC');
+  });
+
+  it('varias ediciones rechazadas del mismo comentario: el cartel dice cuántas son y cada texto se copia con su botón', async () => {
+    const { phone, page, id, panel } = await phoneAndDesk();
+    await phone.commentsDb.add('outbox', rejectedEdit(page, id, 'Primera'));
+    await act(async () => phone.comments.load());
+    await wait();
+    const box = () => panel().querySelector<HTMLElement>('.comment-error')!;
+    const labels = () => [...box().querySelectorAll('button')].map((b) => b.textContent);
+    // Con una sola, como siempre: un *Copy text* entre las acciones.
+    expect(box().querySelector('.comment-rejected-text')).toBeNull();
+    expect(labels()).toEqual(['Retry', 'Copy text', 'Discard…']);
+    await phone.commentsDb.add('outbox', rejectedEdit(page, id, 'Segunda'));
+    await act(async () => phone.comments.load());
+    await wait();
+    expect(box().textContent).toContain('2 texts you wrote for this comment were not accepted. Copy the ones you want to keep:');
+    const rows = () => [...box().querySelectorAll<HTMLElement>('.comment-rejected-text')];
+    expect(rows().map((r) => r.querySelector('span')!.textContent)).toEqual(['Primera', 'Segunda']);
+    expect(labels()).toEqual(['Copy text', 'Copy text', 'Retry', 'Discard…']);
+    const copied = clipboard();
+    await act(async () => rows()[1].querySelector('button')!.click());
+    await wait();
+    expect(copied).toEqual(['Segunda']);
+    expect(rows().map((r) => r.querySelector('button')!.textContent)).toEqual(['Copy text', 'Copied']);
+    await act(async () => rows()[0].querySelector('button')!.click());
+    await wait();
+    expect(copied).toEqual(['Segunda', 'Primera']);
+    // Al pedir descartar siguen los dos a la vista, cada uno con su botón.
+    await act(async () => [...box().querySelectorAll('button')].find((b) => b.textContent === 'Discard…')!.click());
+    expect(rows()).toHaveLength(2);
+    expect(labels()).toEqual(['Copied', 'Copy text', 'Discard', 'Cancel']);
+  });
+
+  it('salir de la cuenta con una edición esperando decisión pregunta antes, y dice que queda en este dispositivo', async () => {
+    const { server, phone } = await conflicted();
+    expect(phone.engine.getStatus()).toMatchObject({ pendingComments: 0, failedComments: 1 });
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    roots.push(root);
+    const used = services(phone, server.ownerId);
+    const signOut = (used.client as unknown as { auth: { signOut: ReturnType<typeof vi.fn> } }).auth.signOut;
+    await act(async () => root.render(<ServicesContext.Provider value={used}><AccountMenu position={{ top: 0, left: 0 }} anchor={null} onClose={() => undefined} /></ServicesContext.Provider>));
+    await wait();
+    const ask = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const button = [...host.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Sign out')!;
+    await act(async () => button.click());
+    await wait();
+    expect(ask).toHaveBeenCalledWith(
+      '1 change was rejected by the server and is only on this device. It stays saved here: you can review it in the sync status the next time you sign in with this account. Sign out anyway?',
+    );
+    ask.mockRestore();
+    // Con un «no», no sale.
+    expect(signOut).not.toHaveBeenCalled();
+    expect(phone.comments.status().failed).toBe(1);
+  });
+
+  it('la pregunta de salir: solo lo pendiente, solo lo rechazado, o las dos cosas', () => {
+    expect(signOutQuestion(2, 0)).toBe(translate('en', 'account.signOutPending', { count: 2 }));
+    expect(signOutQuestion(0, 2)).toBe(
+      '2 changes were rejected by the server and are only on this device. They stay saved here: you can review them in the sync status the next time you sign in with this account. Sign out anyway?',
+    );
+    expect(signOutQuestion(3, 1)).toBe(
+      '3 changes are not uploaded yet: they upload the next time you sign in with this account. 1 change was rejected by the server and is only on this device. It stays saved here: you can review it in the sync status the next time you sign in with this account. Sign out anyway?',
+    );
+  });
+
   it('los textos están en los dos idiomas', () => {
     const keys = [
       'comments.conflict.title', 'comments.conflict.theirs', 'comments.conflict.mine', 'comments.conflict.keepMine',
       'comments.conflict.discardMine', 'comments.conflict.copyMine', 'comments.conflict.deleted',
       'commentError.editConflict', 'commentDiscard.conflict',
+      'comments.conflict.whileEditingStuck', 'comments.conflict.cancelStuck', 'commentError.decideFirst', 'comments.rejectedMany',
+      'account.signOutNotUploaded', 'account.signOutRejected', 'account.signOutAnyway',
     ] as const;
     for (const key of keys) {
       expect(translate('en', key), key).not.toBe(key);

@@ -7,6 +7,7 @@ import { settled } from '../test/settle';
 import { prefs } from '../prefs';
 import { ServicesContext, type Services } from '../services';
 import { block, group } from '../sync/historyTesting';
+import { TREE_WAIT_MS } from '../sync/linkRemote';
 import { addPublicLink, makeLinkDevice, type LinkDevice } from '../sync/linkTesting';
 import { FakeServer, makeDevice } from '../sync/testing';
 import { SyncBadge } from './SyncBadge';
@@ -61,6 +62,76 @@ const bytesEqual = async (blob: Blob, bytes: Uint8Array) => {
   expect(got.length).toBe(bytes.length);
   expect(Buffer.from(got).equals(Buffer.from(bytes))).toBe(true);
 };
+
+describe('la insignia de sincronización con un link: la lista de páginas atrasada', () => {
+  it('mientras el árbol nuevo no se puede bajar porque la rama cambia, el detalle lo dice, sin ser un error; se va solo cuando llega', async () => {
+    prefs.set({ language: 'en' });
+    const server = new FakeServer();
+    server.enableTeam();
+    server.enableClean(0.1);
+    const e1 = await makeDevice(server, undefined, '0.200');
+    try {
+      const root = await e1.tree.create(null, 'Brief');
+      const kid = await e1.tree.create(root, 'Una');
+      await e1.tree.create(root, 'Otra');
+      await e1.engine.syncNow();
+      const token = addPublicLink(server, root);
+      // Una rama que no entra en una respuesta: el árbol llega en varios pedidos.
+      server.linkMaxRows = 1;
+      const v = await makeLinkDevice(server, token);
+      visitors.push(v);
+      await v.engine.syncNow();
+
+      const host = document.createElement('div');
+      document.body.appendChild(host);
+      const rendered = createRoot(host);
+      roots.push(rendered);
+      await act(async () => rendered.render(
+        <ServicesContext.Provider value={servicesOf(v)}>
+          <SyncBadge />
+        </ServicesContext.Provider>,
+      ));
+      await settle();
+      const pill = () => host.querySelector<HTMLButtonElement>('.sync-pill')!;
+      const LINE = 'The list of pages may be out of date';
+      expect(pill().textContent).toBe('All synced');
+      // Sin nada que mostrar, la insignia no tiene detalle.
+      expect(pill().getAttribute('aria-expanded')).toBeNull();
+
+      // La rama cambia en cada pedido del árbol: el visitante sigue con el que tenía.
+      const whole = server.branch.bind(server);
+      let moving = true;
+      let turn = 0;
+      server.branch = (id) => {
+        if (moving) server.pages.set(kid, { ...server.pages.get(kid)!, title: `Cambia ${++turn}` });
+        return whole(id);
+      };
+      await act(async () => v.engine.syncNow());
+      await settle();
+      expect(v.tree.get(kid)?.title).toBe('Una');
+      // No es un error: la insignia sigue igual, y el detalle (que ahora existe) lo dice.
+      expect(pill().textContent).toBe('All synced');
+      expect(pill().className).toContain('ok');
+      expect(v.engine.getStatus().lastError).toBeNull();
+      await act(async () => pill().click());
+      expect(host.querySelector('.sync-details')!.textContent).toContain(LINE);
+
+      // La rama se queda quieta y pasa la espera: llega el árbol nuevo y la línea se va sola.
+      moving = false;
+      const later = Date.now() + TREE_WAIT_MS + 1000;
+      vi.spyOn(Date, 'now').mockReturnValue(later);
+      await act(async () => v.engine.syncNow());
+      vi.restoreAllMocks();
+      await settle();
+      expect(v.tree.get(kid)?.title).toBe(`Cambia ${turn}`);
+      expect(host.textContent).not.toContain(LINE);
+    } finally {
+      await e1.engine.stop();
+      e1.db.close();
+      e1.mediaDb.close();
+    }
+  });
+});
 
 describe('la insignia de sincronización con un link vivo: archivo que no se registró', () => {
   it('el detalle lo nombra con su motivo y Download it baja cada original, el mismo archivo', async () => {

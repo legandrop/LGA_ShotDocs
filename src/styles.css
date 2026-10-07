@@ -5501,6 +5501,40 @@ button.thread-anchor:hover:not(:disabled) {
   margin-top: 4px;
 }
 
+/* Varios textos rechazados del mismo comentario: cada uno en su renglón, cortado con «…», con su botón a la derecha. */
+.comment-error .comment-rejected-text {
+  flex-wrap: nowrap;
+  align-items: center;
+  min-width: 0;
+}
+
+.comment-error .comment-rejected-text > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.comment-error .comment-rejected-text > .link {
+  flex: none;
+}
+
+/* En una pantalla táctil, los botones de la caja de un conflicto, del cartel de un rechazo y del cuadro de edición
+   con alto para el dedo (medían 18 px); el escritorio queda igual. */
+@media (pointer: coarse) {
+  .comment-conflict .row,
+  .comment-error .row {
+    row-gap: 0;
+  }
+
+  .comment-conflict .row .link,
+  .comment-error .row .link,
+  .comment-composer .row .link {
+    min-height: 36px;
+  }
+}
+
 .comment-composer {
   display: grid;
   gap: 8px;

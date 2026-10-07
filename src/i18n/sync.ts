@@ -126,6 +126,11 @@ export const sync = {
     en: "A list could not be loaded: the same row arrived twice. It will be tried again.",
     es: "No se pudo cargar una lista: la misma fila llegó dos veces. Se vuelve a intentar.",
   },
+  // El mismo error donde nada lo reintenta solo (la papelera de archivos, que ofrece *Retry* al lado): sin la promesa.
+  'sync.listRepeatedStuck': {
+    en: "A list could not be loaded: the same row arrived twice.",
+    es: "No se pudo cargar una lista: la misma fila llegó dos veces.",
+  },
   'sync.listNoDate': {
     en: "A list could not be loaded: a row arrived without its date. It will be tried again.",
     es: "No se pudo cargar una lista: una fila llegó sin su fecha. Se vuelve a intentar.",

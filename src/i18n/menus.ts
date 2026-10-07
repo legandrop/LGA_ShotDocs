@@ -143,6 +143,17 @@ export const menus = {
     en: { one: "{count} change is not uploaded yet. It stays saved on this device and uploads the next time you sign in with this account. Sign out anyway?", other: "{count} changes are not uploaded yet. They stay saved on this device and upload the next time you sign in with this account. Sign out anyway?" },
     es: { one: "Hay {count} cambio sin subir. Queda guardado en este dispositivo y se sube la próxima vez que entres con esta cuenta. ¿Cerrar la sesión igual?", other: "Hay {count} cambios sin subir. Quedan guardados en este dispositivo y se suben la próxima vez que entres con esta cuenta. ¿Cerrar la sesión igual?" },
   },
+  // Salir con algo que el servidor rechazó, o con una edición propia de un comentario esperando decisión (cuenta con
+  // lo rechazado en el estado): no se pierde, pero la persona se entera. Con lo pendiente además, van las dos oraciones.
+  'account.signOutNotUploaded': {
+    en: { one: "{count} change is not uploaded yet: it uploads the next time you sign in with this account.", other: "{count} changes are not uploaded yet: they upload the next time you sign in with this account." },
+    es: { one: "Hay {count} cambio sin subir: se sube la próxima vez que entres con esta cuenta.", other: "Hay {count} cambios sin subir: se suben la próxima vez que entres con esta cuenta." },
+  },
+  'account.signOutRejected': {
+    en: { one: "{count} change was rejected by the server and is only on this device. It stays saved here: you can review it in the sync status the next time you sign in with this account.", other: "{count} changes were rejected by the server and are only on this device. They stay saved here: you can review them in the sync status the next time you sign in with this account." },
+    es: { one: "Hay {count} cambio que el servidor rechazó y está solo en este dispositivo. Queda guardado acá: lo podés revisar en el estado de la sincronización la próxima vez que entres con esta cuenta.", other: "Hay {count} cambios que el servidor rechazó y están solo en este dispositivo. Quedan guardados acá: los podés revisar en el estado de la sincronización la próxima vez que entres con esta cuenta." },
+  },
+  'account.signOutAnyway': { en: "Sign out anyway?", es: "¿Cerrar la sesión igual?" },
   'pageFormat.free': { en: "Free", es: "Libre" },
   'pageFormat.letter': { en: "Letter", es: "Carta" },
   'pageFormat.size': { en: "Size", es: "Tamaño" },

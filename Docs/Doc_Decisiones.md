@@ -434,6 +434,35 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
   entra como antes. `plink_edit_comment` no cambia: el visitante de un link edita lo suyo solo desde el navegador con
   el que lo escribió, así que no hay dos dispositivos que choquen (dos pestañas de ese navegador siguen con «gana la
   última»).
+- **D332 · El cuadro de edición que no puede guardar: lo dice, ofrece copiar lo escrito y *Cancel* pide
+  confirmación** (2026-10-07; tomada al implementarlo, Lega la puede cambiar). Pasa cuando el cuadro está abierto
+  sobre lo guardado y una edición rechazada de antes se reintenta, choca y queda esperando decisión: desde ese cuadro
+  no se puede guardar. El aviso lo dice, el cuadro suma *Copy text* y *Cancel* pregunta antes de descartar (solo
+  ahí; en los demás cuadros *Cancel* sigue sin preguntar). Van las dos cosas: copiar es la salida que conserva el
+  texto, y la confirmación es lo que impide perderlo por un clic. *Save* no se apaga: si se toca, el error dice lo
+  mismo. La otra opción: dejar guardar ese texto como una segunda edición apartada (rompe «un solo texto apartado
+  por comentario», D326).
+- **D333 · Salir de la cuenta pregunta también por lo rechazado y por las ediciones que esperan decisión**
+  (2026-10-07; tomada al implementarlo, Lega la puede cambiar). La pregunta contaba solo lo pendiente. Ahora suma
+  lo que el servidor rechazó (del árbol, de archivos y de comentarios) y las ediciones apartadas, con un solo número
+  y las mismas palabras que el estado (*N changes were rejected by the server and are only on this device…*); con
+  lo pendiente además, van las dos oraciones. No frena la salida: avisa. La otra opción: un número aparte para las
+  ediciones que esperan decisión.
+- **D334 · La lista de páginas atrasada de un link se dice en el detalle del estado, sin cambiar la insignia**
+  (2026-10-07; tomada al implementarlo, Lega la puede cambiar). No cambia D321: sigue sin ser un error y sin frenar
+  la subida. La insignia sigue diciendo «All synced» (lo del visitante está todo subido) y su detalle suma una
+  línea que se va sola. La otra opción: cambiar el texto de la insignia («Updating the page list…»), más visible y
+  más ruidosa para algo que el visitante no puede resolver.
+- **D335 · Con varios textos rechazados del mismo comentario, el cartel los lista, cada uno con su *Copy text***
+  (2026-10-07; tomada al implementarlo, Lega la puede cambiar). Mostraba y copiaba solo el primero. Cada texto va
+  en un renglón, cortado con «…». *Retry* y *Discard…* siguen valiendo para todos juntos. Con uno solo, el cartel
+  queda como estaba (no muestra el texto). La otra opción: descartar o reintentar cada uno por separado.
+- **D336 · Un link revocado se nota por los comentarios de la página abierta; no se suma ningún pedido**
+  (2026-10-07; tomada al implementarlo, Lega la puede cambiar). Mientras el árbol espera su próximo intento (hasta 10
+  minutos, D321), lo único que el visitante le pide al link en cada ciclo son los comentarios de la página que tiene
+  abierta: si esa respuesta dice que el link ya no anda, la pantalla lo muestra. No gasta nada del tope del día. La
+  otra opción: un pedido propio por ciclo (`plink_open` cuenta en el tope de aperturas, 300 por día por link, y no
+  alcanza para un visitante con la pestaña abierta varias horas).
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 

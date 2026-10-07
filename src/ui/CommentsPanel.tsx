@@ -450,6 +450,12 @@ function Comment({ comment, me, canComment, canDeleteAny }: { comment: CommentVi
   // edición propia esperando decisión no se edita de nuevo: primero se elige qué texto queda.
   const canEdit = mine && canComment && !comment.deleted && !comment.conflict;
   const canDelete = !comment.deleted && comments.writable && ((mine && canComment) || canDeleteAny);
+  // El cuadro está abierto sobre un texto que no es el que quedó esperando decisión (una edición anterior, rechazada,
+  // se reintentó y chocó): guardar desde acá se rechaza siempre (`commentError.decideFirst`). El aviso lo dice, y el
+  // cuadro ofrece copiar lo escrito y pide confirmación antes de cerrarse: ningún clic ni tecla adentro del cuadro
+  // descarta lo tipeado sin confirmar. (Fuera del cuadro sigue pudiendo irse: al cambiar de página o al recargar, y
+  // si el hilo se resuelve o el comentario se borra desde otro lado mientras el cuadro está abierto.)
+  const stuck = editBase !== null && !!comment.conflict && editBase !== comment.conflict.text;
   const tr = useT();
   const linkLabel = useContext(LinkLabels).get(comment.linkId ?? '');
 
@@ -506,10 +512,11 @@ function Comment({ comment, me, canComment, canDeleteAny }: { comment: CommentVi
         <p className={`comment-link-label${linkLabel.alive ? '' : ' off'}`}>{linkLabelText(tr, linkLabel)}</p>
       )}
       {/* El cuadro ya estaba abierto cuando la edición anterior chocó: se avisa acá; al guardar, lo escrito pasa a ser
-          lo propio que espera decisión (no se manda), y al cerrar el cuadro se ven los dos textos. */}
+          lo propio que espera decisión (no se manda), y al cerrar el cuadro se ven los dos textos. Si lo que espera
+          decisión es otro texto (`stuck`), desde acá no se guarda: el aviso dice eso. */}
       {editBase !== null && comment.conflict && (
         <p className="comment-conflict" role="status">
-          {tr('comments.conflict.whileEditing')}
+          {tr(stuck ? 'comments.conflict.whileEditingStuck' : 'comments.conflict.whileEditing')}
         </p>
       )}
       {editBase !== null ? (
@@ -520,6 +527,7 @@ function Comment({ comment, me, canComment, canDeleteAny }: { comment: CommentVi
           mentionPage={comment.pageId}
           submitLabel={tr('common.save')}
           placeholder={tr('comments.editPlaceholder')}
+          unsavable={stuck}
           onSubmit={async (text, mentions) => {
             if (text !== editBase) await comments.edit(comment.pageId, comment.id, text, mentions ?? undefined, editBase);
             setEditBase(null);
@@ -664,21 +672,38 @@ const MAX_OUTSIDERS = 4;
 function Rejected({ comment }: { comment: CommentView }) {
   const { comments, engine } = useServices();
   const [asking, setAsking] = useState(false);
-  const [copied, setCopied] = useState(false);
+  // Cuál se copió (su lugar en la lista; con un solo texto, 0).
+  const [copied, setCopied] = useState<number | null>(null);
   const info = asking ? comments.describeDiscard(comment.failedSeqs) : null;
-  const text = info?.text ?? comment.rejectedText;
-  const copy = () => void copyText(text ?? '').then((ok) => setCopied(ok));
+  // Todos los textos rechazados de este comentario, en el orden en que se escribieron. Con más de uno (dos ediciones,
+  // o un alta y su edición) el cartel dice cuántos son y cada uno lleva su *Copy text*; con uno solo, como siempre.
+  const texts = comments.failures().flatMap((f) => (comment.failedSeqs.includes(f.seq) && f.body ? [f.body] : []));
+  const text = texts.length > 1 ? null : (info?.text ?? comment.rejectedText);
+  const copy = (value: string, at = 0) => void copyText(value).then((ok) => setCopied(ok ? at : null));
   const tr = useT();
   return (
     <div className="comment-error" role="status">
       <span>{tr('comments.rejected', { reason: localize(comment.error ?? '') })}</span>
+      {texts.length > 1 && (
+        <>
+          <span>{tr('comments.rejectedMany', { count: texts.length })}</span>
+          {texts.map((value, i) => (
+            <span key={i} className="row comment-rejected-text">
+              <span>{value}</span>
+              <button className="link" onClick={() => copy(value, i)}>
+                {copied === i ? tr('common.copied') : tr('sync.copyText')}
+              </button>
+            </span>
+          ))}
+        </>
+      )}
       {info ? (
         <>
           <span>{info.message}</span>
           <span className="row">
             {text && (
-              <button className="link" onClick={copy}>
-                {copied ? tr('common.copied') : tr('sync.copyText')}
+              <button className="link" onClick={() => copy(text)}>
+                {copied === 0 ? tr('common.copied') : tr('sync.copyText')}
               </button>
             )}
             <button
@@ -698,8 +723,8 @@ function Rejected({ comment }: { comment: CommentView }) {
             {tr('common.retry')}
           </button>
           {text && (
-            <button className="link" onClick={copy}>
-              {copied ? tr('common.copied') : tr('sync.copyText')}
+            <button className="link" onClick={() => copy(text)}>
+              {copied === 0 ? tr('common.copied') : tr('sync.copyText')}
             </button>
           )}
           <button className="link danger" onClick={() => setAsking(true)}>
@@ -773,6 +798,9 @@ function EditConflictBox({ comment, me }: { comment: CommentView; me: string }) 
  * menciones), `@` al comienzo o después de un espacio abre la lista de a quién nombrar: ↑ ↓ eligen, Enter o Tab lo
  * ponen, Esc cierra la lista sin borrar lo escrito. Detrás del cuadro, una copia del texto pinta cada mención elegida.
  * Al mandar, `mentions` son las elegidas que siguen escritas (`null` sin menciones).
+ *
+ * `unsavable`: desde este cuadro no se puede guardar (el comentario tiene otra edición esperando decisión). Suma
+ * *Copy text* de lo escrito, y *Cancel* pide confirmación si hay algo escrito: es la única salida del cuadro.
  */
 function Composer({
   initial = '',
@@ -781,6 +809,7 @@ function Composer({
   placeholder,
   submitLabel,
   autoFocus,
+  unsavable = false,
   onSubmit,
   onCancel,
 }: {
@@ -790,6 +819,7 @@ function Composer({
   placeholder: string;
   submitLabel: string;
   autoFocus?: boolean;
+  unsavable?: boolean;
   onSubmit: (text: string, mentions: MentionRef[] | null) => Promise<unknown>;
   onCancel: () => void;
 }) {
@@ -801,6 +831,13 @@ function Composer({
   const backdrop = useRef<HTMLDivElement>(null);
   const dirty = text.trim() !== '' && text !== initial;
   const tr = useT();
+  // El texto que se copió con *Copy text* (si después se sigue escribiendo, el botón vuelve a ofrecer copiar).
+  const [copiedText, setCopiedText] = useState<string | null>(null);
+  /** Cierra el cuadro. `ask`: con algo escrito, pide confirmación (Escape, siempre; el botón, si acá no se puede guardar). */
+  const leave = (ask: boolean) => {
+    if (ask && dirty && !confirm(tr(unsavable ? 'comments.conflict.cancelStuck' : 'comments.discardDraft'))) return;
+    onCancel();
+  };
 
   // Las menciones: a quién se eligió, dónde está el cursor y la lista abierta.
   const candidates = useMentionCandidates(mentionPage);
@@ -987,8 +1024,7 @@ function Composer({
               void submit();
             } else if (e.key === 'Escape') {
               e.preventDefault();
-              if (dirty && !confirm(tr('comments.discardDraft'))) return;
-              onCancel();
+              leave(true);
             }
           }}
         />
@@ -1026,7 +1062,12 @@ function Composer({
         <button type="submit" className="primary" disabled={busy || !text.trim() || tooLong} data-tip={tipRows([{ shortcut: 'commentsSend', action: asAction(submitLabel) }])}>
           {submitLabel}
         </button>
-        <button type="button" className="link" onClick={onCancel}>
+        {unsavable && dirty && (
+          <button type="button" className="link" onClick={() => void copyText(text).then((ok) => setCopiedText(ok ? text : null))}>
+            {copiedText === text ? tr('common.copied') : tr('sync.copyText')}
+          </button>
+        )}
+        <button type="button" className="link" onClick={() => leave(unsavable)}>
           {tr('common.cancel')}
         </button>
       </div>

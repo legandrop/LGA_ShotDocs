@@ -418,6 +418,60 @@ describe('qué cuenta como la misma base', () => {
     expect(server.comments.get(other)?.body).toBe('Vuelve tras restaurar');
   });
 
+  it('dos ediciones encadenadas que dejó una versión anterior: la segunda se manda con la primera de base, no con lo guardado', async () => {
+    const { server, phone, brief, id } = await twoDevices();
+    await phone.commentsDb.add('outbox', oldEdit(brief, id, 'Vieja 1'));
+    await phone.commentsDb.add('outbox', oldEdit(brief, id, 'Vieja 2'));
+    await phone.comments.load();
+    // La base de cada una, como quedó en la cola y como llegó a la base: la segunda parte de la primera.
+    expect((await phone.commentsDb.getAll('outbox')).map((e) => (e.op.kind === 'edit' ? [e.op.body, e.op.base] : null))).toEqual([['Vieja 1', 'Original'], ['Vieja 2', 'Vieja 1']]);
+    await phone.engine.syncNow();
+    expect(edits(server)).toEqual([['Vieja 1', 'Original'], ['Vieja 2', 'Vieja 1']]);
+    // Con «Original» de base, la segunda habría chocado con la primera, que acaba de entrar.
+    expect(server.comments.get(id)?.body).toBe('Vieja 2');
+    expect(phone.comments.status()).toMatchObject({ pending: 0, failed: 0 });
+    expect(root(phone, brief).conflict ?? null).toBeNull();
+  });
+
+  it('una edición posterior sin base se va con la que choca: si quedara en la cola, saldría con la firma de dos argumentos y pisaría', async () => {
+    const { server, phone, desk, brief, id } = await twoDevices();
+    await phone.comments.edit(brief, id, 'Uno');
+    // Detrás, una edición sin base (la que va sin base a propósito, o la que escribió una versión anterior de la app).
+    await phone.commentsDb.add('outbox', oldEdit(brief, id, 'Dos', { unchecked: true }));
+    await phone.comments.load();
+    await desk.comments.edit(brief, id, 'De la computadora');
+    await desk.engine.syncNow();
+    const sent = server.commentEdits.length;
+    await phone.engine.syncNow();
+    // Salió solo la primera, con su base. La otra no se mandó: lo apartado es el último texto de la persona.
+    expect(edits(server).slice(sent)).toEqual([['Uno', 'Original']]);
+    expect(server.comments.get(id)?.body).toBe('De la computadora');
+    expect(await phone.commentsDb.getAll('outbox')).toEqual([]);
+    expect(root(phone, brief)).toMatchObject({ body: 'De la computadora', conflict: { text: 'Dos' } });
+    expect(phone.comments.status()).toMatchObject({ pending: 0, failed: 1 });
+    // Tampoco en la vuelta siguiente.
+    await pull(server, phone);
+    expect(server.commentEdits).toHaveLength(sent + 1);
+  });
+
+  it('una edición nueva que se funde en una que va sin base a propósito conserva la marca: al reabrir la app no se le busca una base', async () => {
+    const { server, phone, brief, id } = await twoDevices();
+    const queued = async () => (await phone.commentsDb.getAll('outbox')).map((e) => (e.op.kind === 'edit' ? [e.op.body, e.op.base, e.op.unchecked] : null));
+    await phone.commentsDb.add('outbox', oldEdit(brief, id, 'Va sin base', { unchecked: true }));
+    await phone.comments.load();
+    // La persona la corrige antes de que suba: las dos se juntan en una.
+    await phone.comments.edit(brief, id, 'Corregida');
+    expect(await queued()).toEqual([['Corregida', undefined, true]]);
+    // Se reabre la app antes de mandarla: sin la marca tomaría de base lo guardado («Original»), que no es el texto
+    // del que partió.
+    await phone.comments.load();
+    expect(await queued()).toEqual([['Corregida', undefined, true]]);
+    await phone.engine.syncNow();
+    expect(edits(server)).toEqual([['Corregida', undefined]]);
+    expect(server.comments.get(id)?.body).toBe('Corregida');
+    expect(phone.comments.status()).toMatchObject({ pending: 0, failed: 0 });
+  });
+
   it('después de restaurar una copia, la edición propia que vuelve va sin base a propósito, también si la app se reabre antes de mandarla', async () => {
     const { server, phone, brief, id } = await twoDevices();
     const restore = server.backup();
@@ -767,6 +821,79 @@ describe('las menciones de una edición que choca', () => {
     await phone.engine.syncNow();
     expect(server.comments.get(id)?.body).toBe('@beto mirá esto');
     expect(server.mentions.filter((m) => !m.removed_at)).toMatchObject([{ comment_id: id, user_id: BETO }]);
+  });
+});
+
+describe('las menciones de lo apartado', () => {
+  const copyOf = (d: Device, id: string) => d.commentsDb.get('meta', `mentions:${id}`) as Promise<{ mentions: MentionRef[] } | undefined>;
+  const draftOf = (d: Device, id: string) => d.commentsDb.get('meta', `editConflict:${id}`) as Promise<{ body: string; mentions: MentionRef[] | null } | undefined>;
+  const queueOf = async (d: Device) =>
+    (await d.commentsDb.getAll('outbox')).map((e) => (e.op.kind === 'mentions' ? e.op.mentions.map((m) => m.label).join() : e.op.kind === 'edit' ? e.op.body : e.op.kind));
+  const noNetwork = async (): Promise<never> => {
+    throw new RemoteError('Failed to fetch', false, undefined, true);
+  };
+
+  it('reescribir lo apartado desde el cuadro toma las menciones nuevas; sin pasarlas, quedan las que tenía', async () => {
+    const { server, phone, desk, brief, id } = await twoDevices({ mentions: true });
+    await phone.comments.edit(brief, id, 'TEL-1 @beto', [beto]);
+    await desk.comments.edit(brief, id, 'PC', []);
+    await desk.engine.syncNow();
+    await phone.engine.syncNow();
+    expect(await draftOf(phone, id)).toMatchObject({ body: 'TEL-1 @beto', mentions: [beto] });
+    // El cuadro estaba abierto con «TEL-1 @beto». Un texto corregido, sin tocar a quién nombra: quedan las de antes.
+    await phone.comments.edit(brief, id, 'TEL-2 @beto', undefined, 'TEL-1 @beto');
+    expect(await draftOf(phone, id)).toMatchObject({ body: 'TEL-2 @beto', mentions: [beto] });
+    // Con otro conjunto: vale el nuevo.
+    await phone.comments.edit(brief, id, 'TEL-3 @caro', [caro], 'TEL-2 @beto');
+    expect(await draftOf(phone, id)).toMatchObject({ body: 'TEL-3 @caro', mentions: [caro] });
+    // Nada de eso se mandó: ni el texto ni un aviso.
+    expect(await queueOf(phone)).toEqual([]);
+    expect(server.mentions).toHaveLength(0);
+    await phone.comments.keepMine(id);
+    await phone.engine.syncNow();
+    expect(server.comments.get(id)?.body).toBe('TEL-3 @caro');
+    expect(server.mentions.filter((m) => !m.removed_at).map((m) => m.user_id)).toEqual([CARO]);
+  });
+
+  it('al apartar una edición con sus menciones, la copia guardada pasa a ser la de las que siguen esperando detrás de otra edición', async () => {
+    const { server, phone, desk, brief, id } = await twoDevices({ mentions: true });
+    // «TEL-1» queda rechazada (le bajaron el permiso) y sus menciones, en viaje: salieron y la red se cortó.
+    await phone.comments.edit(brief, id, '@beto TEL-1', [beto]);
+    server.grant(ANA, { pageId: brief }, 'view');
+    const send = phone.remote.setCommentMentions.bind(phone.remote);
+    phone.remote.setCommentMentions = noNetwork;
+    await phone.engine.syncNow();
+    phone.remote.setCommentMentions = send;
+    expect(phone.comments.failures().map((f) => f.kind)).toEqual(['edit']);
+    // Le devuelven el permiso y escribe «TEL-2» sobre lo guardado, nombrando a Caro: sus menciones van detrás de ella.
+    server.grant(ANA, { pageId: brief }, 'comment');
+    await phone.comments.edit(brief, id, 'TEL-2 @caro', [caro]);
+    expect(await queueOf(phone)).toEqual(['@beto TEL-1', 'beto', 'TEL-2 @caro', 'caro']);
+    // La computadora edita y sube. En el teléfono se reintenta lo rechazado: «TEL-1» choca y se aparta con sus
+    // menciones, y la red se corta antes de que salga «TEL-2».
+    await desk.comments.edit(brief, id, 'PC', []);
+    await desk.engine.syncNow();
+    await phone.comments.retryFailed();
+    const edit = phone.remote.editComment.bind(phone.remote);
+    phone.remote.editComment = async (commentId: string, text: string, base?: string) => (text === 'TEL-2 @caro' ? noNetwork() : edit(commentId, text, base));
+    await phone.engine.syncNow();
+    phone.remote.editComment = edit;
+    expect(await draftOf(phone, id)).toMatchObject({ body: '@beto TEL-1', mentions: [beto] });
+    expect(await queueOf(phone)).toEqual(['TEL-2 @caro', 'caro']);
+    // La copia (la que devuelve las menciones a la cola si una versión anterior de la app las saca sin mandarlas)
+    // es la de las que quedaron esperando: no se fue con las apartadas.
+    expect(await copyOf(phone, id)).toMatchObject({ mentions: [caro] });
+    expect(server.mentions).toHaveLength(0);
+    // Vuelve la red: «TEL-2» también choca y, como ya hay una esperando decisión, queda rechazada con su texto; sus
+    // menciones no se mandan, y ahí sí la copia se olvida (al reabrir la app no vuelven a la cola).
+    await phone.engine.syncNow();
+    expect(server.comments.get(id)?.body).toBe('PC');
+    expect(root(phone, brief)).toMatchObject({ body: 'PC', conflict: { text: '@beto TEL-1' }, rejectedText: 'TEL-2 @caro' });
+    expect(await queueOf(phone)).toEqual(['TEL-2 @caro']);
+    expect(await copyOf(phone, id)).toBeUndefined();
+    await phone.comments.load();
+    expect(await queueOf(phone)).toEqual(['TEL-2 @caro']);
+    expect(server.mentions).toHaveLength(0);
   });
 });
 

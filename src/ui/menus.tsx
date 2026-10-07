@@ -475,6 +475,18 @@ export function accountMaxHeight(position: MenuPosition): string | undefined {
   return edge === undefined ? undefined : `calc(100dvh - ${Math.max(0, Math.round(edge)) + 8}px)`;
 }
 
+/**
+ * La pregunta antes de cerrar la sesión con algo que solo está en este dispositivo. `pending`: lo que falta subir.
+ * `rejected`: lo que el servidor rechazó (cambios del árbol, archivos, comentarios) y las ediciones de comentarios
+ * apartadas por un conflicto. Solo con lo pendiente, el texto de siempre.
+ */
+export function signOutQuestion(pending: number, rejected: number): string {
+  if (rejected === 0) return t('account.signOutPending', { count: pending });
+  const parts = [t('account.signOutRejected', { count: rejected }), t('account.signOutAnyway')];
+  if (pending > 0) parts.unshift(t('account.signOutNotUploaded', { count: pending }));
+  return parts.join(' ');
+}
+
 export function AccountMenu({
   position,
   anchor,
@@ -510,12 +522,10 @@ export function AccountMenu({
       alert(t('account.signOutUnsaved'));
       return;
     }
-    if (
-      pending > 0 &&
-      !confirm(t('account.signOutPending', { count: pending }))
-    ) {
-      return;
-    }
+    // También lo que el servidor rechazó y las ediciones de comentarios que esperan decisión (cuentan con lo
+    // rechazado): quedan en este dispositivo, y la persona se entera antes de salir.
+    const rejected = status.failedOps + status.failedMedia + status.failedComments;
+    if ((pending > 0 || rejected > 0) && !confirm(signOutQuestion(pending, rejected))) return;
     // Con una clave del asistente o de *Voice* guardada en este dispositivo, la ventana de salir ofrece olvidarla
     // (Doc_Asistente.md, 4); con notas de voz sin ubicar, las cuenta y ofrece borrarlas (Doc_Dictado.md, 8).
     const wsKey = workspace.config.localKey || workspace.config.url;

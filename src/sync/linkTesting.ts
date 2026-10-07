@@ -347,7 +347,10 @@ export async function makeLinkDevice(
   });
   await media.load();
   const commentsDb = await openCommentsDb(commentsDbName(crypto.randomUUID()));
-  const comments = new CommentQueue(commentsDb, new LinkCommentRemote(client, userId, () => name.value), userId);
+  const comments = new CommentQueue(commentsDb, new LinkCommentRemote(client, userId, () => name.value, () => problems.push('link_not_found')), userId, {
+    // El reloj de las bajadas, como en `makeDevice`: una prueba hace pasar los 10 segundos con `server.clockOffset`.
+    now: () => Date.now() + server.clockOffset,
+  });
   await comments.load();
   const engine = new SyncEngine(remote, tree, docs, files, {
     appVersion,

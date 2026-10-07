@@ -9,7 +9,7 @@ import {
   unsyncedUseWarning,
   type TrashOutcome,
 } from '../media/fileTrash';
-import { locale, t, useT } from '../i18n';
+import { locale, localize, t, useT } from '../i18n';
 import '../i18n/lazy/projectStates';
 import { navigate, pagePath } from '../router';
 import { usePermissions, useProjectSizes, useServices, useSyncStatus, useTree } from '../services';
@@ -348,7 +348,7 @@ export function TrashPanel(props: { current: string; onClose: () => void }) {
         fileErrors.map((e) => (
           <p key={e.id} className="muted small">
             {fileErrors.length > 1 || scope === 'all' ? `${nameOf(e.id)}: ` : ''}
-            {tr('fileTrash.loadFailed', { reason: e.message })}{' '}
+            {tr('fileTrash.loadFailed', { reason: localize(e.message) })}{' '}
             <button className="link" onClick={() => files.reload(e.id)}>
               {tr('common.retry')}
             </button>

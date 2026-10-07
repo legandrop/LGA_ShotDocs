@@ -157,6 +157,8 @@ describe('diccionario', () => {
       );
       // Los errores de una lista que no avanza o a la que le falta una fecha: sin nombres de funciones de la base.
       expect(localize(stored('sync.listRepeated'))).toBe('No se pudo cargar una lista: la misma fila llegó dos veces. Se vuelve a intentar.');
+      // Donde nada lo reintenta solo (la papelera de archivos), el mismo error sin la promesa: no se confunde con el otro.
+      expect(localize(stored('sync.listRepeatedStuck'))).toBe('No se pudo cargar una lista: la misma fila llegó dos veces.');
       expect(localize(stored('sync.listNoDate'))).toBe('No se pudo cargar una lista: una fila llegó sin su fecha. Se vuelve a intentar.');
       expect(localize(stored('link.treeMoving'))).toBe(translate('es', 'link.treeMoving'));
       // Lo que no es de ninguna clave (un mensaje del servidor) queda tal cual.

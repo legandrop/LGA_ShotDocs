@@ -2976,6 +2976,12 @@ detalle, lo medido y lo que cuesta están en `Doc_Sincronizacion.md`, "Las lista
   bajada se reintenta de a un intento, cada vez más espaciado (de 20 s a 10 minutos). Ninguna lista llega parcial: o
   entera, o el pedido falla y el dispositivo se queda con lo que tenía (también con lo que el visitante escribió sin
   subir). Sin migración: las funciones `plink_*` no cambian.
+  - **Desde la v0.228:** mientras el visitante sigue con el árbol que tenía, el detalle del estado lo dice en una
+    línea (*The list of pages may be out of date…*; no es un error y se va sola); un link revocado o vencido durante
+    esa espera se nota en el ciclo siguiente, porque los comentarios de la página abierta (que se piden igual)
+    avisan el `link_not_found` a la pantalla, sin ningún pedido de más; y una bajada del árbol que termina con menos
+    filas que las anunciadas solo se acepta, repetida, si terminó con una respuesta vacía
+    (`Doc_Sincronizacion.md`, "El modo link").
 - **El aviso de la página** (lo que no entró de un link: `LinkAsideNotice`): `public_link_updates_of` corta en 500
   filas adentro y no dice cuántas había, así que con más el aviso contaba y descargaba de menos. La migración
   `20261114120000_link_no_entro_por_clave.sql` suma `public_link_updates_page(p_page_id, p_after, p_limit)`: las

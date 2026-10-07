@@ -116,10 +116,11 @@ export const comments = {
     en: "The comment had already been changed from somewhere else, and another edit of yours on it is waiting for you to choose.",
     es: "El comentario ya se había cambiado desde otro lado, y otra edición tuya de ese comentario está esperando que elijas.",
   },
-  // Guardar otro texto en un comentario con una edición esperando decisión, sin haber partido de ella.
+  // Guardar otro texto en un comentario con una edición esperando decisión, sin haber partido de ella. Dice lo mismo
+  // que el aviso del cuadro (`comments.conflict.whileEditingStuck`): desde ahí no se guarda, y hay que copiarlo antes.
   'commentError.decideFirst': {
-    en: "An edit of yours on this comment is waiting for you to choose which text stays. Choose first, then edit it again.",
-    es: "Una edición tuya de este comentario está esperando que elijas qué texto queda. Elegí primero y después volvé a editarlo.",
+    en: "An edit of yours on this comment is waiting for you to choose which text stays, so this text can't be saved yet. Copy it, cancel, choose, and then edit the comment again.",
+    es: "Una edición tuya de este comentario está esperando que elijas qué texto queda, así que este texto todavía no se puede guardar. Copialo, cancelá, elegí y después volvé a editar el comentario.",
   },
   'commentDiscard.conflict': {
     en: "Discarding what you wrote on this device. What is saved does not change.",

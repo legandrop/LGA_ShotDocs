@@ -59,11 +59,12 @@ export class KeyedList<T> {
 
 /**
  * El error de una lista que no avanza. Qué lista y qué fila van al registro; el texto que ve la persona no nombra
- * funciones de la base.
+ * funciones de la base. `permanent`: nada lo reintenta solo (quien lo muestra ofrece reintentar), así que el texto no
+ * promete «se vuelve a intentar».
  */
 export function repeatedRow(what: string, key: string, permanent = false): RemoteError {
   console.warn(`Lista ${what}: la fila ${key} llegó dos veces.`);
-  return new RemoteError(stored('sync.listRepeated'), permanent);
+  return new RemoteError(stored(permanent ? 'sync.listRepeatedStuck' : 'sync.listRepeated'), permanent);
 }
 
 /**

@@ -140,8 +140,13 @@ export class LinkRemote extends SupabaseRemote {
   /** Cuántas bajadas seguidas del árbol no terminaron porque cambiaba, y desde cuándo se vuelve a probar. */
   private treeFailures = 0;
   private treeRetryAt = 0;
-  /** La última bajada que terminó con menos filas que las anunciadas: su firma y cuántas trajo. */
+  /**
+   * La última bajada que terminó con menos filas que las anunciadas **y con una respuesta vacía** (la API misma dijo
+   * que después de la última fila no hay nada): su firma y cuántas trajo.
+   */
   private treeShort: { sig: string; rows: number } | null = null;
+  /** El árbol que se muestra es el de antes: la bajada del nuevo está pendiente porque la rama no deja de cambiar. */
+  private behind = false;
 
   private readonly linkVersion: string;
   /** Lo que escribió este dispositivo: falta el nombre, espera, se apartó (la insignia y los avisos lo muestran). */
@@ -179,6 +184,19 @@ export class LinkRemote extends SupabaseRemote {
     this.editListeners.add(fn);
     return () => this.editListeners.delete(fn);
   };
+
+  /**
+   * La lista de páginas puede estar atrasada: el árbol cambió y su bajada todavía no pudo terminar (la rama cambia
+   * mientras se baja), así que el visitante sigue con el que tenía. No es un error: el estado lo dice en su detalle,
+   * y se va solo cuando llega el árbol nuevo. Avisa por `subscribeLinkEdits`.
+   */
+  treeBehind = (): boolean => this.behind;
+
+  private setBehind(behind: boolean): void {
+    if (this.behind === behind) return;
+    this.behind = behind;
+    for (const fn of this.editListeners) fn();
+  }
 
   private setEdits(patch: Partial<LinkEdits>): void {
     const next = { ...this.edits, ...patch };
@@ -298,9 +316,11 @@ export class LinkRemote extends SupabaseRemote {
       // Con un árbol de esta carga de la app, el ciclo sigue con él: lo que el visitante escribió sube igual. Sin
       // ninguno no hay qué devolver (un árbol vacío se tomaría por "no queda ninguna página"): el error, que se reintenta.
       if (this.treeSig === null) throw new RemoteError(stored('link.treeMoving'), false);
+      this.setBehind(true);
       return this.treeRows.map((r) => ({ ...r }));
     }
     this.treeFailures = 0;
+    this.setBehind(false);
     if (fresh) {
       this.treeSig = fresh.sig;
       this.treeRows = fresh.rows.map((r) => ({
@@ -334,7 +354,10 @@ export class LinkRemote extends SupabaseRemote {
    *
    * Dos bajadas seguidas que terminan con **la misma firma y la misma cantidad** de filas, aunque sean menos que las
    * anunciadas, son el árbol (una rama que se achicó de verdad cambia de firma): una API que anunciara de más no deja
-   * al link sin árbol para siempre.
+   * al link sin árbol para siempre. Vale **solo si las dos terminaron con una respuesta vacía**: ahí la API misma dijo
+   * que después de la última fila no hay nada, y una que anuncia de más termina siempre así. Una bajada corta que
+   * termina porque un pedido dijo «esta página es todo lo que queda» no prueba nada (si ese total está mal, faltan
+   * páginas, y la raíz, que puede tener el id más alto, entre ellas): se empieza de nuevo y nunca se acepta.
    */
   private async wholeTree(tries: number): Promise<{ sig: string; rows: Record<string, unknown>[] } | typeof MOVING | null> {
     for (let attempt = 0; attempt < tries; attempt++) {
@@ -360,9 +383,14 @@ export class LinkRemote extends SupabaseRemote {
         }
         if (page.some((r) => String(r.sig) !== sig)) break;
         if (!list.add(page, count)) continue;
-        if (announced !== null && list.rows.length !== announced && !(this.treeShort?.sig === sig && this.treeShort.rows === list.rows.length)) {
-          this.treeShort = { sig: sig!, rows: list.rows.length };
-          break;
+        if (announced !== null && list.rows.length !== announced) {
+          // La lista terminó con una respuesta vacía: nada después de la última fila, lo dijo la API.
+          const ended = page.length === 0;
+          const again = ended && this.treeShort?.sig === sig && this.treeShort.rows === list.rows.length;
+          if (!again) {
+            this.treeShort = ended ? { sig: sig!, rows: list.rows.length } : null;
+            break;
+          }
         }
         this.treeShort = null;
         return { sig: sig!, rows: list.rows };
@@ -803,11 +831,23 @@ export class LinkCommentRemote implements CommentRemote {
     private readonly me: string,
     /** El nombre que escribió el visitante (P8), en el momento de subir. */
     private readonly author: () => string,
+    /**
+     * El link dejó de andar (`link_not_found`: revocado, vencido, *Reset link*). Los comentarios de la página abierta
+     * se piden en cada ciclo, también mientras el árbol espera su próximo intento (hasta 10 minutos sin pedirlo): con
+     * este aviso el visitante se entera en ese ciclo, sin ningún pedido de más. Un tope del día no se avisa por acá.
+     */
+    private readonly onDead: () => void = () => undefined,
   ) {}
+
+  /** El error de un pedido, con el aviso de que el link murió si es eso lo que contestó la base. */
+  private failed(error: { message: string; code?: string | number }, status: number): RemoteError {
+    if (linkProblemOf(error.message) === 'link_not_found') this.onDead();
+    return toRemoteError(error, status);
+  }
 
   private async call<T>(fn: string, args: Record<string, unknown>): Promise<T> {
     const { data, error, status } = await timed(this.client.rpc(fn, args));
-    if (error) throw toRemoteError(error, status);
+    if (error) throw this.failed(error, status);
     return data as T;
   }
 
@@ -825,7 +865,7 @@ export class LinkCommentRemote implements CommentRemote {
       let query = this.client.rpc('plink_list_comments', { p_page_id: pageId, p_since: last ? last.at : since }, COUNTED);
       if (last) query = query.or(afterPair('updated_at', last.at, 'id', last.id));
       const { data, error, status, count } = await timed(query.order('updated_at').order('id').limit(MAX_ROWS_PER_REQUEST));
-      if (error) throw toRemoteError(error, status);
+      if (error) throw this.failed(error, status);
       if (list.add((data ?? []) as LinkCommentRow[], count)) break;
     }
     const byId = new Map<string, LinkCommentRow>();

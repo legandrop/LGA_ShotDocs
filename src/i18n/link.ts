@@ -55,6 +55,11 @@ export const link = {
     en: "The shared pages kept changing while they were loading. It will be tried again shortly.",
     es: "Las páginas compartidas siguieron cambiando mientras se cargaban. Se vuelve a intentar en un rato.",
   },
+  // Lo mismo con un árbol ya bajado: el visitante sigue con ese (no es un error). Una línea en el detalle del estado.
+  'link.treeBehind': {
+    en: "The list of pages may be out of date: it kept changing while it was loading, so you still see the earlier one. It updates on its own.",
+    es: "La lista de páginas puede estar atrasada: siguió cambiando mientras se cargaba, así que seguís viendo la anterior. Se actualiza sola.",
+  },
   'link.edit.noUploads': {
     en: "Adding photos, videos and files through a link isn't available yet.",
     es: "Todavía no se pueden subir fotos, videos ni archivos con un link.",

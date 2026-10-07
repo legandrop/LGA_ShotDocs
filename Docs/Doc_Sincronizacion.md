@@ -927,15 +927,37 @@ Paso 10 de `Plan_Workspaces.md` (sección 4), con la base en la versión 5
     ella: sale después, y si también choca queda rechazada como en (1). (3) Si el cuadro de edición ya estaba
     abierto cuando llegó el conflicto de la edición anterior, el cuadro sigue abierto, con un aviso arriba (*This
     comment was changed from somewhere else while you were editing…*); lo que se guarda desde ese cuadro **pasa a
-    ser lo apartado** (su texto, su hora y sus menciones) y no entra a la cola. Un texto que no partía de lo
-    apartado no la reemplaza ni se encola: se rechaza al guardar y queda en el cuadro.
+    ser lo apartado** (su texto, su hora y sus menciones; sin pasar menciones, quedan las que tenía) y no entra a la
+    cola. Un texto que no partía de lo apartado no la reemplaza ni se encola: se rechaza al guardar y queda en el
+    cuadro.
+  - **El cuadro que no puede guardar (v0.228, D332).** Ese último caso se alcanza así: el cuadro está abierto sobre
+    lo guardado y una edición **rechazada** de antes se reintenta, choca y pasa a ser lo apartado. Desde ese cuadro
+    guardar se rechaza siempre, y el aviso de la v0.227 decía «guardá o cancelá para ver los dos textos»: la única
+    salida era *Cancel*, que descartaba lo tipeado sin preguntar. Ahora, cuando el cuadro no partía de lo apartado
+    (`editBase !== conflict.text`), el aviso es otro (*An earlier edit of yours on this comment was not saved and is
+    waiting for you to choose… What you are writing here can't be saved until you choose: copy it, then cancel…*), el
+    cuadro suma ***Copy text*** de lo escrito, *Cancel* **pide confirmación** si hay algo escrito (solo en ese
+    estado; Escape ya la pedía en todos), y el error de guardar (`commentError.decideFirst`) dice lo mismo. Ningún
+    clic ni tecla adentro del cuadro descarta lo tipeado sin confirmar. **Lo que todavía lo tira sin preguntar**, en
+    este cuadro y en cualquier otro de comentarios (ya era así): cambiar de página, recargar (el aviso de salir del
+    navegador no cuenta un comentario a medio escribir) y que el hilo se resuelva o el comentario se borre desde otro
+    lado mientras el cuadro está abierto (ver el roadmap).
   - **A la vista (D327):** el comentario muestra los dos textos, cada uno con su rótulo (*Saved now, changed from
     somewhere else* y *What you wrote on this device*), y tres acciones: *Keep mine* (la edición vuelve a la cola con
     la base de lo que se está viendo; si la base volvió a cambiar, vuelve a quedar apartada), *Discard mine…* (pide
     confirmación) y *Copy mine*. Hasta decidir no se ofrece *Edit*. En un hilo resuelto, la lista de resueltos se
     abre sola. Cuenta en el estado con lo rechazado (`failedComments`), sale en su detalle con su texto, y va en el
     archivo de "Download my unsynced changes"; si todo lo rechazado son ediciones apartadas, el detalle dice dónde
-    se decide y no ofrece *Retry* (no hay nada que reintentar).
+    se decide y no ofrece *Retry* (no hay nada que reintentar). **Al salir de la cuenta (v0.228, D333)** la
+    pregunta cuenta también lo rechazado y lo apartado (antes, solo lo pendiente: con una edición esperando decisión
+    salía sin preguntar) y lo dice: *N changes were rejected by the server and are only on this device. They stay
+    saved here…* No se pierde nada (queda en la base local de esa cuenta); la persona se entera.
+  - **Varios textos rechazados del mismo comentario (v0.228, D335).** Cuando dos ediciones (o un alta y su edición)
+    quedan rechazadas, el cartel rojo del comentario mostraba y copiaba solo el primer texto. Ahora dice cuántos son
+    y lista cada uno, cortado con «…», con su *Copy text*; con uno solo queda como estaba. Salen de
+    `CommentQueue.failures()`, en el orden en que se escribieron.
+  - **En una pantalla táctil** (`@media (pointer: coarse)`), los botones de la caja del conflicto, del cartel de un
+    rechazo y del cuadro de edición tienen 36 px de alto (medían 18); el escritorio no cambia.
   - **Se olvida sola en un único caso:** cuando la base termina teniendo ese mismo texto (no queda nada que
     decidir), aunque las menciones que quedaron en la base sean otras que las de la edición apartada: el texto está
     guardado, y lo que no se manda es el aviso a quien ella nombraba.
@@ -954,7 +976,10 @@ Paso 10 de `Plan_Workspaces.md` (sección 4), con la base en la versión 5
     vez, toma de base el texto que el dispositivo tiene guardado de ese comentario (o el de la edición propia que la
     precede en la cola): si el dispositivo no bajó nada desde que se escribió, es el texto del que partió y ya no
     pisa; si bajó algo en el medio, la base es lo último que vio y la edición entra como antes. Achica el hueco, no
-    lo cierra: nunca es peor que mandarla sin base. Las que no tienen de dónde sacarla quedan sin base.
+    lo cierra: nunca es peor que mandarla sin base. Las que no tienen de dónde sacarla quedan sin base, marcadas
+    (`unchecked`) para no buscarles una otra vez; una edición nueva que se funde en una de esas conserva la marca
+    (v0.228: sin ella, al reabrir la app tomaba de base lo guardado, que no es el texto del que partió). Dos
+    seguidas se encadenan: la segunda se manda con el texto de la primera de base.
   - **Lo que no cubre:** el visitante de un link público (`plink_edit_comment`) edita lo suyo solo desde el mismo
     navegador con el que lo escribió, así que no tiene dos dispositivos que choquen; no cambió (dos pestañas de ese
     navegador siguen con «gana la última»). Dos pestañas de un mismo dispositivo comparten la cola: ahí vale lo
@@ -1227,9 +1252,27 @@ del total, puesto ahí, dejaba la lista vacía con el tope de fábrica.
     todavía no hay ningún árbol de esta carga de la app es un error (*The shared pages kept changing while they were
     loading…*): un árbol vacío se tomaría por "no queda ninguna página". Ese caso sí corta el ciclo, con la misma
     espera.
+  - **La lista atrasada, a la vista (v0.228, D334).** Mientras el visitante sigue con el árbol que tenía, la insignia
+    decía «All synced» sin ninguna señal. Ahora su detalle tiene una línea (*The list of pages may be out of date: it
+    kept changing while it was loading, so you still see the earlier one. It updates on its own.*): no es un error,
+    no cambia el texto ni el color de la insignia, no frena nada, y se va sola cuando llega el árbol nuevo
+    (`LinkRemote.treeBehind`, que avisa por la misma suscripción que lo mandado).
+  - **Un link revocado durante esa espera (v0.228, D336).** En la espera no se pide el árbol, que era el pedido que
+    en cada ciclo contestaba `link_not_found`: un visitante que no escribe podía tardar hasta 10 minutos en enterarse
+    de que el link fue revocado o venció. Los comentarios de la página abierta sí se piden en cada ciclo
+    (`plink_list_comments`, como mucho cada 10 s), y esa función contesta `link_not_found` con el link muerto: ahora
+    `LinkCommentRemote` lo avisa a la pantalla (también al comentar, editar o borrar). **Ningún pedido de más y
+    nada del cupo de bytes:** es el mismo pedido de siempre. Sin ninguna página abierta en pantalla (un link abre
+    en su página, así que es raro) sigue esperando al árbol, como antes. Un tope del día en los comentarios no se
+    avisa por acá (como antes).
   - **Un total que no coincide con las filas.** Dos bajadas seguidas que terminan con la misma firma y la misma
     cantidad de filas son el árbol, aunque el primer pedido haya anunciado más (una rama que se achicó de verdad
-    cambia de firma): una API que contara de más no deja al link sin árbol.
+    cambia de firma): una API que contara de más no deja al link sin árbol. **Solo si las dos terminaron con una
+    respuesta vacía (v0.228):** ahí la API misma dijo que después de la última fila no hay nada, y una que anuncia
+    de más termina siempre así. Antes alcanzaba con la firma y la cantidad: una API que dijera bien el total en el
+    primer pedido y «esta página es todo lo que queda» en los siguientes dejaba aceptar un árbol incompleto y sin la
+    raíz (medido: 274 de 401 páginas). Ahora esa bajada no se acepta nunca: el visitante sigue con el árbol que
+    tenía o, sin ninguno, ve el aviso de siempre.
   - **Si un pedido falla,** el resultado es el error: el árbol guardado (en `LinkRemote` y en el dispositivo), los
     comentarios guardados de la página y lo que el visitante escribió sin subir quedan como estaban, y la vuelta
     siguiente lo completa.
@@ -1292,17 +1335,14 @@ del total, puesto ahí, dejaba la lista vacía con el tope de fábrica.
     rows* de la Data API a 5 y abrir un link con más de 5 páginas (llegan todas, en varios pedidos con la misma
     firma).
 - **Lo que queda.**
-  - **Anotado en la re-verificación de v0.226 (ninguno frena):** (1) la bajada corta repetida del árbol del link se
-    acepta con dos intentos de igual firma y cantidad; con una API que mienta de una forma puntual (el primer pedido
-    dice bien el total y los siguientes dicen «esta página es todo lo que queda») eso acepta un árbol incompleto sin
-    la raíz (medido: 274 de 401 páginas). No se llega con una API que cuente bien; se cierra con una línea en
-    `src/sync/linkRemote.ts` (aceptarla solo si la lista terminó con una página vacía). (2) Mientras dura la espera
-    entre intentos del árbol, un link revocado o vencido puede tardar hasta 10 minutos en notarse para un visitante
-    que no escribe (antes, 30 s); el que escribe lo nota en la primera sincronización. (3) En esa espera el visitante
-    ve una lista de páginas atrasada sin ninguna señal (la insignia dice «All synced»): alcanzaría una línea en el
-    detalle de la insignia. (4) Falta la prueba de que `run()` marca el error de comentarios como «de bajada».
-    (5) `sync.listRepeated` dice «se vuelve a intentar» también donde el error es permanente (la papelera de
-    archivos: ahí se reintenta con el botón).
+  - **Hecho en v0.228 (lo anotado en la re-verificación de v0.226):** la bajada corta repetida del árbol vale solo
+    si terminó con una respuesta vacía; la línea de «lista atrasada» en el detalle de la insignia; el link revocado
+    durante la espera se nota en el ciclo siguiente por los comentarios de la página abierta (los tres, arriba, en
+    "El modo link"); la prueba de que `run()` marca el error de comentarios como «de bajada» (sin esa marca,
+    `refresh` no limpia un error que dejó `run`); y el error de una fila repetida tiene dos textos: el de siempre
+    donde se reintenta solo, y uno sin «se vuelve a intentar» donde no (`sync.listRepeatedStuck`: la papelera de
+    archivos, que ofrece *Retry* al lado; ahí el motivo además se muestra en el idioma de la cuenta, que salía en
+    inglés).
   - **Hecho en v0.226:** las pruebas que faltaban (la guarda de «el historial no avanza» de `verifyHistory`, un pedido
     fallido a mitad de `rpcByKey`, las columnas del árbol, de los proyectos y de los usos por archivo, y la papelera
     por tramos con un total mentido), el modo link, `public_link_aside`, `public_link_updates_of` (con la migración

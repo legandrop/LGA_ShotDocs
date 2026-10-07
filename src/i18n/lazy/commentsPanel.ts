@@ -97,6 +97,12 @@ export const commentsPanel = {
     es: "El servidor no lo aceptó: {reason} Queda en este dispositivo.",
   },
   'comments.discardEllipsis': { en: "Discard…", es: "Descartar…" },
+  // Varios textos rechazados del mismo comentario (dos ediciones, o un alta y su edición): cuántos son, y cada uno con
+  // su *Copy text*.
+  'comments.rejectedMany': {
+    en: "{count} texts you wrote for this comment were not accepted. Copy the ones you want to keep:",
+    es: "El servidor no aceptó {count} textos que escribiste para este comentario. Copiá los que quieras conservar:",
+  },
   // Una edición propia que no entró porque el comentario se cambió antes desde otro lado: los dos textos y la decisión.
   'comments.conflict.title': {
     en: "Your edit was not saved: this comment had already been changed from somewhere else. Nothing was lost. Choose which text stays.",
@@ -106,6 +112,16 @@ export const commentsPanel = {
   'comments.conflict.whileEditing': {
     en: "This comment was changed from somewhere else while you were editing. Save or cancel to see both texts and choose.",
     es: "Este comentario se cambió desde otro lado mientras editabas. Guardá o cancelá para ver los dos textos y elegir.",
+  },
+  // Lo mismo, pero lo que quedó esperando decisión es **otro** texto (una edición anterior que se reintentó y chocó) y
+  // el cuadro no partía de él: desde acá no se puede guardar. Lo dice, y el cuadro ofrece copiar lo escrito.
+  'comments.conflict.whileEditingStuck': {
+    en: "An earlier edit of yours on this comment was not saved and is waiting for you to choose which text stays. What you are writing here can't be saved until you choose: copy it, then cancel to see both texts.",
+    es: "Una edición tuya anterior de este comentario no se guardó y está esperando que elijas qué texto queda. Lo que estás escribiendo acá no se puede guardar hasta que elijas: copialo y después cancelá para ver los dos textos.",
+  },
+  'comments.conflict.cancelStuck': {
+    en: "Discard what you wrote here? It can't be saved from this box: copy it first if you want to keep it.",
+    es: "¿Descartar lo que escribiste acá? Desde este cuadro no se puede guardar: copialo antes si lo querés conservar.",
   },
   'comments.conflict.theirs': { en: "Saved now, changed from somewhere else", es: "Lo que quedó guardado, cambiado desde otro lado" },
   'comments.conflict.mine': { en: "What you wrote on this device", es: "Lo que escribiste en este dispositivo" },

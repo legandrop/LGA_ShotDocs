@@ -257,6 +257,24 @@ describe('errores a la vista', () => {
     expect(owner.comments.status().error).toBeNull();
   });
 
+  it('el error que dejó la vuelta de la sincronización al bajar la página abierta lo limpia la bajada de esa página que sale bien', async () => {
+    const { server, owner, brief } = await workspace();
+    owner.comments.watch(brief);
+    await owner.engine.syncNow();
+    expect(owner.comments.status().error).toBeNull();
+    const list = owner.remote.listComments.bind(owner.remote);
+    owner.remote.listComments = async () => {
+      throw new RemoteError('Internal Server Error', false, '500');
+    };
+    // Pasan los 10 segundos y la vuelta (`run`, no `refresh`) baja la página abierta: falla, y el error es de bajada.
+    server.clockOffset += 11_000;
+    await owner.comments.run(() => false);
+    expect(owner.comments.status().error).toBe('Internal Server Error');
+    owner.remote.listComments = list;
+    await owner.comments.refresh(brief);
+    expect(owner.comments.status().error).toBeNull();
+  });
+
   it('la bajada que sale bien no limpia un error que también es el de otra página, ni uno igual que vino de una subida', async () => {
     const { server, owner, brief, notes } = await workspace();
     const list = owner.remote.listComments.bind(owner.remote);

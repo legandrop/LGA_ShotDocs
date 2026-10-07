@@ -47,6 +47,11 @@ export interface FakePostgrestOptions {
   lowCount?: boolean;
   /** Una API que cuenta de más: dice cinco filas más de las que hay. */
   overCount?: boolean;
+  /**
+   * Una API que miente el total de una forma puntual: el primer pedido de una lista lo dice bien, y los que siguen
+   * (los que piden lo que viene después de una clave, con `gt`) dicen «esta página es todo lo que queda».
+   */
+  lastPageCount?: boolean;
   /** Lo que pasa en la base justo antes de contestar el pedido número tal (desde 1). */
   before?: (request: number) => void;
   /** El pedido número tal contesta este error. */
@@ -201,7 +206,9 @@ export function fakePostgrest(options: FakePostgrestOptions = {}): { client: Sup
     // Sin orden escrito, cada pedido las da empezando por otro lado y al revés.
     const { page, total: matched, offset } = answerRows(source, url.searchParams, maxRows, requests.length);
     request.rows = page.length;
-    const total = counted && !options.noCount ? (options.lowCount ? '1' : String(matched + (options.overCount ? 5 : 0))) : '*';
+    const followUp = options.lastPageCount && [...url.searchParams.values()].some((v) => v.startsWith('gt.'));
+    const said = followUp ? page.length : matched + (options.overCount ? 5 : 0);
+    const total = counted && !options.noCount ? (options.lowCount ? '1' : String(said)) : '*';
     const range = page.length > 0 ? `${offset}-${offset + page.length - 1}` : '*';
     // Solo las columnas pedidas (`select`): una que el pedido dejó de pedir no llega, y una que la fila no tiene va nula.
     const columns = !query.select || query.select.trim() === '*' ? null : query.select.split(',').map((c) => c.trim());

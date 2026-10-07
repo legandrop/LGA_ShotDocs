@@ -430,20 +430,41 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   con el nombre entero en el tooltip solo si quedó cortado. Visto en un navegador a 375 px y en escritorio, claro y
   oscuro, sobre una página estática con el HTML del panel; con nombres normales, las 105 cajas del panel miden lo mismo
   que antes. jsdom no calcula el layout: sin prueba automática. Falta mirarlo en la app real. Y la entrega 3.
-  **Anotado en la re-verificación de v0.227 (ninguno frena):** (1) con el cuadro de edición abierto sobre lo
-  guardado, si una rechazada vieja se reintenta, choca y pasa a ser lo apartado, el aviso dice «guardá o cancelá para
-  ver los dos textos» pero guardar se rechaza («elegí primero»): la única salida es cancelar, que descarta lo tipeado
-  sin confirmación, y ningún texto dice que hay que copiarlo antes (muy poco probable; arreglo: otra variante del
-  aviso en `src/ui/CommentsPanel.tsx` cuando el cuadro no partía de lo apartado, o un *Copy* en el cuadro en ese
-  estado). (2) Pruebas que faltan: una edición posterior sin base se va con lo apartado (si quedara en la cola,
-  saldría con dos argumentos y pisaría); las menciones nuevas al reescribir lo apartado desde el cuadro; la base que
-  toma la segunda de dos ediciones viejas encadenadas; la copia de `mentions` en `meta` cuando quedan otras
-  esperando. (3) Una edición nueva que se funde en una marcada `unchecked` pierde la marca, y si la app se reabre
-  antes de mandarla toma de base lo guardado: un conflicto de más después de restaurar una copia, sin pérdida.
-  (4) Ya era así: con varias ediciones rechazadas del mismo comentario el cartel rojo muestra y copia solo la
-  primera (las demás están en el detalle del estado y en el archivo); y si las menciones de una primera edición que
-  entró se reemplazan por las de una segunda que queda apartada y después se descarta, a quien nombraba la primera no
-  se le avisa.
+  **Anotado al auditar la v0.228 (lo primero es de arreglar pronto):** (1) **un cuadro de comentario abierto
+  desaparece con lo tipeado si el hilo se resuelve o el comentario se borra desde otro lado**, sin ninguna pregunta
+  (anterior a la v0.228; reproducido con una edición y con una respuesta a medio escribir; con el hilo resuelto queda
+  además escondido bajo «1 resolved thread»). El borrado es raro; la resolución no: cualquiera que comenta puede
+  resolver un hilo mientras otra persona está respondiendo, y ese texto no está guardado en ningún lado. Arreglo: en
+  `src/ui/CommentsPanel.tsx`, no pasar a la vista de borrado si hay un cuadro abierto (mostrarlo como el cuadro que
+  no puede guardar, con *Copy text* y confirmación) y mantener entre los abiertos un hilo que tiene algo escrito a
+  medias hasta que el cuadro se cierre. También se va al cambiar de página y al recargar (el aviso de salir del
+  navegador no cuenta un comentario a medio escribir). (2) *Retry* y *Discard…* del cartel de varias rechazadas no
+  dicen que valen para todas, y la confirmación de descartar está en singular. (3) Pruebas que faltan: que *Cancel*
+  y Escape en los cuadros normales siguen como antes (el primero sin preguntar, el segundo preguntando); que la
+  lista del cartel no suma textos de otros comentarios; que la pantalla del link escucha el aviso de los comentarios
+  (`src/ui/LinkApp.tsx`); que la papelera pasa el motivo por `localize`. (4) La otra salida de la cuenta (la
+  pantalla sin proyectos, `src/ui/Workspace.tsx`) sigue con el texto viejo: debería usar `signOutQuestion`.
+  (5) Reintentar varias rechazadas con la misma base: la primera entra y las demás chocan con el texto propio, y el
+  aviso habla de «otro lado» (no se pierde nada). (6) `CommentQueue.edit` llamada sin base y sin los comentarios de
+  la página cargados manda con dos argumentos (el panel no llega ahí): rechazar esa llamada. (7) La X y tocar afuera
+  con el cuadro que no puede guardar preguntan con el texto genérico, que no dice «copialo antes».
+  **Hecho en v0.228 (lo anotado en la re-verificación de v0.227):** (1) el cuadro de edición abierto sobre lo guardado
+  cuando una rechazada vieja se reintenta, choca y pasa a ser lo apartado ya no lleva a perder lo tipeado: el aviso
+  dice que desde ahí no se puede guardar, el cuadro suma *Copy text* de lo escrito y *Cancel* pide confirmación (solo
+  en ese estado), y el error de guardar dice lo mismo (D332). (2) Las cuatro pruebas que faltaban (una edición
+  posterior sin base se va con lo apartado; las menciones nuevas al reescribir lo apartado; la base que se **manda**
+  en la segunda de dos ediciones viejas encadenadas; la copia de las menciones en `meta` cuando quedan otras
+  esperando). (3) Una edición nueva que se funde en una marcada `unchecked` conserva la marca. (4) Con varios textos
+  rechazados del mismo comentario, el cartel dice cuántos son y cada uno lleva su *Copy text* (D335). (5) Salir de la
+  cuenta con algo rechazado o con una edición esperando decisión pregunta antes y lo dice (D333). (6) En una pantalla
+  táctil, los botones de la caja del conflicto, del cartel de un rechazo y del cuadro de edición miden 36 px de alto
+  (18 antes); el escritorio no cambia. Visto en un navegador a 375 px (táctil) y a 1280, sobre una página estática
+  con el HTML del panel; falta mirarlo en la app real (`Doc_Sincronizacion.md`, "Dos ediciones del mismo comentario").
+  **Lo que queda de esa lista:** si las menciones de una primera edición que entró se reemplazan por las de una
+  segunda que queda apartada y después se descarta, a quien nombraba la primera no se le avisa (ya era así). Y lo
+  que se vio al hacerlo: la marca `unchecked` solo se podía perder en una edición que una versión anterior dejó sin
+  base y sin comentario guardado del que tomarla (las que vuelven después de restaurar una copia entran a la cola ya
+  intentadas, y nada se funde en ellas): el caso «después de restaurar» de la nota no se alcanzaba.
   **Hecho en v0.227 (anotado en v0.224):** una edición vieja de un comentario ya no pisa una posterior. Dos
   dispositivos de la misma persona editaban el mismo comentario (solo quien lo escribió lo edita) y `edit_comment`
   guardaba el último que **llegaba**, aunque se hubiera escrito antes. Ahora la edición lleva el texto del que partió

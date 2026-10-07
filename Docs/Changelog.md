@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.228 :
+
+Cierra lo que dejaron anotado las revisiones de v0.226 y v0.227. Comentarios: con el cuadro de edición abierto sobre lo guardado, si una edición rechazada de antes se reintentaba y chocaba, el aviso mandaba a «guardar o cancelar», guardar se rechazaba y *Cancel* descartaba lo tipeado sin preguntar; ahora el aviso lo dice, el cuadro suma *Copy text* y *Cancel* confirma. Varios textos rechazados se listan, cada uno con su copia; salir de la cuenta pregunta también por lo rechazado; botones de 36 px en pantallas táctiles. Link público: una bajada corta y repetida del árbol solo vale si terminó con una respuesta vacía (con totales mal informados quedaba un árbol sin raíz); el detalle del estado dice si la lista de páginas está atrasada, y un link revocado durante esa espera se nota por los comentarios de la página abierta. Más las pruebas pendientes. Decisiones D332 a D336.
+
+[Cerrar lo anotado en las revisiones de v0.226 y v0.227: el cuadro de edición que no puede guardar ya no lleva a perder lo tipeado, el árbol de un link no acepta una bajada corta sin una respuesta vacía, y el visitante se entera de una lista atrasada o de un link revocado]
+
 v0.227 :
 
 Editar el mismo comentario en dos dispositivos perdía texto. `edit_comment` guarda lo último que llega, no lo último que se escribió: una edición hecha antes en un teléfono sin red, al subir, pisaba en silencio la que la misma persona hizo después en la computadora, y ese texto no quedaba en ningún lado. Ahora la edición lleva el texto del que partió (`edit_comment(p_id, p_body, p_base)`, migración `20261115120000_comentario_edicion_base.sql`): si la base ya tiene otro, no escribe y contesta el conflicto. La app saca esa edición de la cola y la deja apartada en el dispositivo, al lado de lo guardado, con *Keep mine* y *Discard mine…*; nada la reintenta, solo se va sola si la base termina teniendo ese mismo texto, y lo demás sigue subiendo. La firma de dos argumentos no cambia, y sin la migración la app sigue como antes. Decisiones D325 a D329.

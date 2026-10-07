@@ -41,6 +41,19 @@ function useVisitorEdits() {
   return useLinkEdits(remote instanceof LinkRemote ? remote : null);
 }
 
+const noSubscribe = () => () => undefined;
+const never = () => false;
+
+/**
+ * Con un link: la lista de páginas puede estar atrasada (cambió y su bajada todavía no pudo terminar, porque la rama
+ * sigue cambiando). No es un error ni frena nada: va como una línea en el detalle, y se va sola con el árbol nuevo.
+ */
+function useVisitorTreeBehind(): boolean {
+  const { remote } = useServices();
+  const link = remote instanceof LinkRemote ? remote : null;
+  return useSyncExternalStore(link?.subscribeLinkEdits ?? noSubscribe, link?.treeBehind ?? never);
+}
+
 function useSyncTone(): { tone: Tone; text: string; rejected: number } {
   const status = useSyncStatus();
   const pending = usePendingCount();
@@ -129,6 +142,7 @@ export function SyncBadge() {
   // la cola; la persona elige en el panel de comentarios).
   const retryable = rejected - (status.failedComments > 0 ? comments.failures().filter((f) => f.conflictOf).length : 0);
   const visitor = useVisitorEdits();
+  const treeBehind = useVisitorTreeBehind();
   const tr = useT();
   const Icon = TONE_ICONS[tone];
   const mediaError = status.pendingMedia > 0 ? status.mediaError : null;
@@ -136,6 +150,7 @@ export function SyncBadge() {
   const hasDetails =
     rejected > 0 ||
     visitor.waiting.length > 0 ||
+    treeBehind ||
     !!commentError ||
     !!status.localError ||
     !!status.lastError ||
@@ -191,6 +206,7 @@ export function SyncBadge() {
           {/* Un link: el pegado de más de 1 MB no se manda (R1); deshacerlo destraba la página. */}
           {status.lastError === 'update_size_invalid' && services.remote instanceof LinkRemote && <p>{tr('link.edit.tooBig')}</p>}
           {visitor.waiting.length > 0 && <p>{tr('link.edit.waitingDetail')}</p>}
+          {treeBehind && <p>{tr('link.treeBehind')}</p>}
           {mediaError && !status.localError && (
             <p>{tr.rich('sync.detail.mediaError', { error: <code>{localize(mediaError)}</code> })}</p>
           )}

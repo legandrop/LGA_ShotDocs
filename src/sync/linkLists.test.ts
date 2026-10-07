@@ -210,6 +210,61 @@ describe('el árbol del link (plink_tree)', () => {
     expect(odd.asked('plink_tree').map((r) => r.rows)).toEqual([300, 0, 290, 0, 290, 0]);
   });
 
+  it('una bajada corta repetida vale solo si terminó con una respuesta vacía: un total que dice «esta página es todo lo que queda» no arma un árbol sin la raíz', async () => {
+    // El primer pedido dice bien el total (401) y los que siguen dicen que su página es lo último: la lista termina
+    // en 274 filas, dos veces igual, y sin la raíz (que tiene el id más alto). Nunca es el árbol.
+    const lying = linkApi(401, { maxRows: 137, lastPageCount: true });
+    await expect(lying.remote.fetchTree([LINK])).rejects.toMatchObject({ message: stored('link.treeMoving'), permanent: false });
+    expect(lying.asked('plink_tree').map((r) => r.rows)).toEqual([137, 137, 137, 137, 137, 137]);
+    // Ni en el intento siguiente, cuando toca: la misma lista corta otra vez sigue sin ser el árbol.
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => 4_000_000_000_000);
+    try {
+      await expect(lying.remote.fetchTree([LINK])).rejects.toMatchObject({ message: stored('link.treeMoving') });
+    } finally {
+      clock.mockRestore();
+    }
+    expect(lying.asked('plink_tree')).toHaveLength(8);
+    // El caso legítimo sigue cargando: una API que anuncia de más termina siempre con una respuesta vacía.
+    const over = linkApi(401, { maxRows: 137, overCount: true });
+    expect(ids(await over.remote.fetchTree([LINK]))).toContain(ROOT);
+    expect(over.asked('plink_tree').map((r) => r.rows)).toEqual([137, 137, 127, 0, 137, 137, 127, 0]);
+  });
+
+  it('mientras la bajada del árbol nuevo está pendiente porque la rama cambia, avisa que la lista puede estar atrasada; se va sola con el árbol nuevo', async () => {
+    const api = linkApi(300, { maxRows: 137 });
+    const told: boolean[] = [];
+    api.remote.subscribeLinkEdits(() => told.push(api.remote.treeBehind()));
+    const first = await api.remote.fetchTree([LINK]);
+    expect(api.remote.treeBehind()).toBe(false);
+    let now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    try {
+      api.base.moving = true;
+      expect(await api.remote.fetchTree([LINK])).toEqual(first);
+      expect(api.remote.treeBehind()).toBe(true);
+      // Sigue atrasada durante la espera (sin pedidos) y después de otro intento que tampoco termina.
+      await api.remote.fetchTree([LINK]);
+      now += TREE_WAIT_MS;
+      await api.remote.fetchTree([LINK]);
+      expect(api.remote.treeBehind()).toBe(true);
+      expect(told).toEqual([true]);
+      // La rama se queda quieta: llega el árbol nuevo y el aviso se va.
+      api.base.moving = false;
+      api.base.pages[0] = { ...api.base.pages[0], title: 'Renombrada' };
+      now += TREE_WAIT_MS * 2;
+      expect((await api.remote.fetchTree([LINK]))[0].title).toBe('Renombrada');
+      expect(api.remote.treeBehind()).toBe(false);
+      expect(told).toEqual([true, false]);
+    } finally {
+      clock.mockRestore();
+    }
+    // Sin ningún árbol de esta carga no es «atrasada»: es el error de siempre.
+    const none = linkApi(300, { maxRows: 137 });
+    none.base.moving = true;
+    await expect(none.remote.fetchTree([LINK])).rejects.toMatchObject({ message: stored('link.treeMoving') });
+    expect(none.remote.treeBehind()).toBe(false);
+  });
+
   it('si un pedido falla a mitad, el resultado es el error (nunca un árbol cortado) y el link avisa si dejó de andar', async () => {
     const broken = linkApi(300, { maxRows: 137, fail: { 4: { status: 500, code: 'XX000', message: 'la base se reinició' } } });
     await expect(broken.remote.fetchTree([LINK])).rejects.toMatchObject({ message: 'la base se reinició', permanent: false });
@@ -337,6 +392,21 @@ describe('los comentarios de una página por un link (plink_list_comments)', () 
     expect(listed.find((r) => r.id === uuid(11, 0xc0))).toMatchObject({ author_id: 'link:yo', plink_author: null });
   });
 
+  it('si la base contesta que el link ya no anda, al bajar o al escribir, avisa; un tope del día o una página que salió de la rama, no', async () => {
+    const dead = { status: 500, code: 'P0002', message: 'link_not_found' };
+    const answers = [dead, { status: 400, code: 'P0001', message: 'link_rate_limited' }, { status: 500, code: 'P0002', message: 'page_not_found' }, dead];
+    const made = linkApi(2, { fail: Object.fromEntries(answers.map((a, i) => [i + 1, a])) });
+    let told = 0;
+    const comments = new LinkCommentRemote(made.client, 'link:yo', () => 'Ana', () => void told++);
+    await expect(comments.listComments(PAGE_ID, at(5))).rejects.toMatchObject({ message: 'link_not_found', permanent: true });
+    expect(told).toBe(1);
+    await expect(comments.listComments(PAGE_ID, at(5))).rejects.toMatchObject({ message: 'link_rate_limited' });
+    await expect(comments.listComments(PAGE_ID, at(5))).rejects.toMatchObject({ message: 'page_not_found' });
+    expect(told).toBe(1);
+    await expect(comments.editComment(uuid(1, 0xc0), 'Otro texto')).rejects.toMatchObject({ message: 'link_not_found' });
+    expect(told).toBe(2);
+  });
+
   it('si un pedido falla, el resultado es el error: nunca una lista parcial; y sin el total sigue hasta una respuesta vacía', async () => {
     const rows = Array.from({ length: 300 }, (_, i) => comment(i + 1));
     const broken = api(rows, { maxRows: 137, fail: { 2: { status: 500, code: 'XX000', message: 'la base se reinició' } } });
@@ -387,6 +457,35 @@ describe('el dispositivo del visitante con una rama más grande que el tope de l
     await v.engine.syncNow();
     expect(all().filter((id) => !v.tree.get(id))).toEqual([]);
     expect(v.tree.children(root)).toHaveLength(all().length - 1);
+  });
+
+  it('un link revocado mientras el árbol espera su próximo intento se nota en el ciclo siguiente, por los comentarios de la página abierta y sin un pedido de más', async () => {
+    const { server, root, token } = await branch(6);
+    server.linkMaxRows = 1;
+    const v = await makeLinkDevice(server, token);
+    visitors.push(v);
+    v.comments.watch(root);
+    await v.engine.syncNow();
+    expect(v.engine.getStatus().lastError).toBeNull();
+    // La rama no deja de cambiar: cada pedido del árbol la encuentra distinta, y el visitante sigue con el que tenía.
+    const whole = server.branch.bind(server);
+    let turn = 0;
+    server.branch = (id) => {
+      server.pages.set(uuid(1), { ...server.pages.get(uuid(1))!, title: `Cambia ${++turn}` });
+      return whole(id);
+    };
+    await v.engine.syncNow();
+    expect(v.engine.getStatus().lastError).toBeNull();
+    expect(v.remote.treeBehind()).toBe(true);
+    expect(v.problems).not.toContain('link_not_found');
+    // Revocan el link. Al árbol no le toca hasta dentro de 20 segundos (y después, hasta cada 10 minutos); a los
+    // comentarios de la página abierta, sí (pasaron sus 10 segundos): es el único pedido del ciclo, y alcanza.
+    server.revokePublicLink(token);
+    const asked = v.calls.length;
+    server.clockOffset += 11_000;
+    await v.engine.syncNow();
+    expect(v.calls.slice(asked).map((c) => c.fn)).toEqual(['plink_list_comments']);
+    expect(v.problems.at(-1)).toBe('link_not_found');
   });
 
   it('si un pedido del árbol falla a mitad, el dispositivo se queda con el árbol que tenía, entero, y lo completa en la vuelta siguiente', async () => {

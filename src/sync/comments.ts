@@ -1593,9 +1593,12 @@ export class CommentQueue {
         done = true;
       } else if (edit && edit.op.kind === 'edit') {
         // La base sigue siendo la de la edición que todavía no salió: lo que el servidor tenía cuando la persona
-        // empezó. La de esta (el texto de aquella, que solo existe acá) no le dice nada a la base.
+        // empezó. La de esta (el texto de aquella, que solo existe acá) no le dice nada a la base. Si aquella iba sin
+        // base a propósito (`unchecked`), esta también: sin la marca, al reabrir la app se le buscaría una base
+        // (`baseOldEdits`) que la otra no tenía.
         const { base: _own, ...merged } = op;
-        await store.put({ ...edit, op: edit.op.base === undefined ? merged : { ...merged, base: edit.op.base } });
+        const kept = edit.op.base !== undefined ? { base: edit.op.base } : edit.op.unchecked ? { unchecked: true as const } : {};
+        await store.put({ ...edit, op: { ...merged, ...kept } });
         done = true;
       }
     } else if (op.kind === 'delete') {

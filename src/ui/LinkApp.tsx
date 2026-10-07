@@ -78,7 +78,8 @@ export function LinkApp({ entry }: { entry: LinkEntry }) {
     const boot: LinkBoot = {
       remote,
       // El nombre se lee al subir: puede cambiar mientras la página está abierta.
-      comments: new LinkCommentRemote(client, user.id, () => visitorName(entry.id)),
+      // Si los comentarios contestan que el link ya no anda, la pantalla lo dice (como cuando lo contesta el árbol).
+      comments: new LinkCommentRemote(client, user.id, () => visitorName(entry.id), () => setProblem('link_not_found')),
       porteroHeaders: linkHeaders(entry, __APP_VERSION__),
     };
     return { remote, user, workspace, boot };

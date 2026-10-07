@@ -670,7 +670,8 @@ describe('el pedido a la base, de a páginas por clave (trashed_files_page)', ()
     const builder = { order: () => builder, then: <A,>(ok: (v: typeof page) => A) => Promise.resolve(page).then(ok) };
     let calls = 0;
     const remote = new SupabaseRemote({ rpc: () => (calls++, builder) } as unknown as SupabaseClient, '0.218');
-    await expect(remote.trashedFilesAll()).rejects.toThrow('the same row arrived twice');
+    // Acá nada lo reintenta solo (la papelera ofrece *Retry*): el texto no promete «se vuelve a intentar».
+    await expect(remote.trashedFilesAll()).rejects.toMatchObject({ message: 'A list could not be loaded: the same row arrived twice.', permanent: true });
     expect(calls).toBe(2);
   });
 
