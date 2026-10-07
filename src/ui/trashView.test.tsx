@@ -262,4 +262,29 @@ describe('papelera: el peso de los archivos (P.7)', () => {
     });
     expect(server.sizesCalls).toBe(calls + 1);
   });
+
+  it('mandar uno a la papelera de Drive vuelve a pedir el peso (si no, la lista por peso lo seguiría contando)', async () => {
+    const { server, owner } = await trashedPhoto();
+    server.enableSizes();
+    await sync(owner);
+    const calls = server.sizesCalls;
+    const host = await mount(services(owner, server.ownerId));
+    await act(async () => byText(host, 'Files')!.click());
+    await vi.waitFor(() => expect(host.textContent).toContain('IMG_0042.JPG'));
+
+    // Sin confirmar no se manda nada ni se pide el peso.
+    const confirm = vi.fn((_message: string) => false);
+    vi.stubGlobal('confirm', confirm);
+    await act(async () => byText(host, 'Send to Drive trash')!.click());
+    await settle();
+    expect(server.sizesCalls).toBe(calls);
+
+    confirm.mockReturnValue(true);
+    await act(async () => byText(host, 'Send to Drive trash')!.click());
+    await vi.waitFor(async () => {
+      await settle();
+      expect(host.textContent).toContain('No files in the trash.');
+    });
+    expect(server.sizesCalls).toBe(calls + 1);
+  });
 });

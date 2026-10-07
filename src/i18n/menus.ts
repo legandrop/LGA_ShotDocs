@@ -19,6 +19,8 @@ export const menus = {
     es: "Un solo PDF con esta página y las de adentro, con un índice.",
   },
   'project.export': { en: "Export project…", es: "Exportar proyecto…" },
+  // La lista de archivos del proyecto ordenados por peso (P.8).
+  'project.filesBySize': { en: "Files by size", es: "Archivos por peso" },
   'pageMenu.printAsSeen': { en: "Print as shown", es: "Imprimir como se ve" },
   'pageMenu.printAsSeenTip': {
     en: "Leaves out collapsed sections.\nThe pages won't match the page marks on screen.",

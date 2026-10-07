@@ -9,7 +9,9 @@ import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { Shell } from '../ui/Workspace';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { HELP_ENTRIES } from './entries';
+import { translate } from '../i18n';
 import { closeHelp } from './helpUi';
+import { isNewer, isValidSince } from './news';
 import { searchHelp } from './search';
 
 // La ayuda (Docs/Doc_Tutorial.md, sección 5): la búsqueda en el dispositivo, y el diálogo de verdad en el Shell:
@@ -47,6 +49,24 @@ describe('buscar en la ayuda', () => {
     // Borrar un proyecto para siempre (P.14, entrega 3).
     expect(first('delete forever')).toBe('projectsPurge');
     expect(ids('borrar para siempre', 'es')).toContain('projectsPurge');
+    // Los archivos de un proyecto por peso (P.8).
+    expect(first('files by size')).toBe('projectsFilesBySize');
+    expect(first('archivos por peso', 'es')).toBe('projectsFilesBySize');
+    expect(ids('liberar espacio', 'es')).toContain('projectsFilesBySize');
+    // Por las palabras de más (ninguna está en el título ni en el texto de ese idioma).
+    expect(ids('weight')).toContain('projectsFilesBySize');
+    expect(ids('tamaño', 'es')).toContain('projectsFilesBySize');
+    // Por una frase del texto.
+    expect(ids('heaviest to lightest')).toContain('projectsFilesBySize');
+    expect(ids('del más pesado al más liviano', 'es')).toContain('projectsFilesBySize');
+    const entry = HELP_ENTRIES.find((e) => e.id === 'projectsFilesBySize')!;
+    expect(entry).toMatchObject({ section: 'pages', when: 'portero' });
+    expect(entry.showMe).toBeUndefined();
+    expect(translate('es', entry.title)).toBe('Archivos por peso');
+    expect(translate('en', entry.title)).toBe('Files by size');
+    // Llegó después de la v0.217: sale en las novedades de quien venía de ahí.
+    expect(isValidSince(entry.since)).toBe(true);
+    expect(isNewer(entry.since, '0.217')).toBe(true);
     // Colapsar para todos y mover la sección entera (Doc_Colapsar.md, 1b y 2).
     expect(ids('shift')).toContain('collapseEveryone');
     expect(ids('para todos', 'es')).toContain('collapseEveryone');

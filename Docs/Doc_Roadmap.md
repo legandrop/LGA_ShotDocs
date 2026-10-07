@@ -165,7 +165,9 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   en el Drive.** El peso en el renglón de cada proyecto del selector, el total con su desglose en el diálogo
   de Google Drive (solo el dueño) y el total de la papelera de archivos, con la confirmación de vaciar
   corregida. Sale de sumar `files.size` en la base (`project_sizes`), sin preguntarle a Drive. Ver
-  `Doc_Peso_Proyectos.md`, "Cómo quedó". La lista por proyecto y el orden por peso van con P.8.
+  `Doc_Peso_Proyectos.md`, "Cómo quedó". La lista de archivos por peso salió con P.8 (v0.220), con los proyectos
+  ordenados por peso para elegir; un acceso desde el diálogo de Google Drive y el orden por peso de la papelera
+  de archivos siguen pendientes (están en lo que falta de P.8).
 - **P.9 Arrastrar una carpeta** (pedido de Lega, 2026-09-30, al responder las decisiones de P.6): hoy se
   rechaza pidiendo que se comprima. Lo que quiere: subir la carpeta entera, con sus subcarpetas, al Drive del
   dueño, con una ventana que muestre qué se está subiendo ("esta carpeta, con todo esto"); en la página queda
@@ -848,9 +850,32 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
   **Hecho (v0.165):** el zip de exportar lleva el contraste que eligió quien exporta (como el PDF), y en oscuro los
   resaltados gris (2,32:1), amarillo (2,60:1) y naranja (3,69:1) pasaron a 4,74, 4,73 y 4,75:1 con el texto por defecto,
   sin tocar el claro ni el PDF (`Doc_Contraste.md`, sección 5).
-- **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
-  archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
-  decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
+- **P.8 Hecho (v0.220, primera entrega, sin migración): ordenar la media por tamaño.** *Files by size*, al pie
+  del selector de proyectos (si algún proyecto muestra un peso): las fotos, los videos, las carpetas y los
+  archivos de un proyecto que ocupan lugar en el Drive, del más pesado al más liviano, con el link a las páginas
+  que usan cada uno y marcado el que no usa ninguna; arriba se elige el proyecto, el más pesado primero. La ve quien ve el peso del proyecto y lista lo que la base le deja leer
+  (D312, D313); de a 100, con *Show more*, siguiendo por clave (peso, id) y no por desplazamiento; solo con red. Ver
+  `Doc_Peso_Proyectos.md`, "Cómo quedó: la lista por peso". **De paso (v0.220):** el panel de la papelera ya no se
+  desborda de costado con un nombre largo (en Papelera › Archivos, publicada, el botón *Send to Drive trash*
+  quedaba fuera de la vista), y mandar un archivo a la papelera de Drive vuelve a pedir el peso de los proyectos.
+  **Falta (siguiente paso):** borrar o reemplazar desde la lista (hoy se abre la página y se hace ahí); dejar
+  elegido el bloque al abrir la página; un acceso desde el diálogo de Google Drive; ordenar por peso la papelera
+  de archivos; el recorrido en la app real con sesión y en un iPhone (también el paginado por clave en un pedido real:
+  la auditoría recorrió el SQL equivalente contra la base real sin repetir ni saltear); y, si el primer tramo tarda
+  (medido: 454 a 734 ms con 2297 archivos; los siguientes, 21 a 78 ms; el tope de 8 s vencería cerca
+  de los 25.000 a 40.000 archivos por proyecto), pasar la lectura a una función con una sola puerta por proyecto
+  (con su migración). **Anotado al auditarla:**
+  - El admin con solo *Ver* se entera de lo que le falta recién al final de la lista (22 *Show more* con 2204
+    archivos), y la nota de arriba le indica algo que no puede hacer. Decirlo arriba, y otra nota para quien no
+    manda archivos a la papelera de Drive.
+  - El motivo de un error de la base sale crudo, en inglés, adentro del texto en castellano ("No se pudo leer la
+    lista de archivos (canceling statement due to statement timeout)"). Lo mismo en la papelera de archivos.
+  - `.menu .project-actions` reserva 30 px por cada ícono aunque no se vea y le corta el subtítulo al dueño:
+    medido, con tres íconos al subtítulo del proyecto abierto le quedan 118 px de los 184 que necesita ("11
+    páginas · 4,6 GB · editado hoy"); con cinco, 60 px menos. Que los íconos no ocupen lugar hasta mostrarse, o
+    que el peso vaya primero.
+  - Servir la app desde un worktree (`node_modules` enlazado al clon principal) da 403 en las fuentes: solo en
+    desarrollo, se arregla con `server.fs.allow` en la configuración de Vite del que la sirve.
 
 ### B. Sin decisiones pendientes
 

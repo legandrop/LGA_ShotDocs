@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.220 :
+
+Se veía cuánto ocupa cada proyecto en el Drive, pero no qué archivos hacían ese peso ni en qué página estaba cada uno. Ahora el selector de proyectos tiene *Files by size* al pie: los archivos que ocupan lugar en el Drive, del más pesado al más liviano, con el link a las páginas que usan cada uno y marcado el que no usa ninguna. Arriba se elige el proyecto. Solo lectura, de a 100, con conexión. Sin migración: lee `files` y `page_files` con la sesión, así que cada uno ve lo que sus permisos dejan leer (D312, D313). De paso, el panel de la papelera ya no se desborda con un nombre largo (en Papelera › Archivos el botón de mandar a Drive quedaba fuera de la vista), y mandar un archivo a la papelera de Drive vuelve a pedir el peso. Suma su entrada en la ayuda.
+
+[Listar los archivos de un proyecto por peso, con el link a las páginas que los usan, y cortar los nombres largos en la papelera]
+
 v0.219 :
 
 Con la suite entera corriendo junto a otros procesos, cada corrida terminaba con pruebas caídas que solas pasaban. No era la app: las pruebas esperaban un rato fijo y miraban, daban por quieto al motor que sincroniza solo, medían contra topes en milisegundos, armaban el editor dentro del plazo de la primera prueba o terminaban con la app todavía trabajando. Las que se habían visto caer ahora esperan la condición, sostienen la subida o miden contra una vara de la misma corrida, y el tope por prueba pasa a 60 s. Con dos corridas a la vez todavía caen algunas que no se tocaron (lista en el roadmap, B.27). Aparte: la marca *Restored from…* de una restauración que no subió antes de cerrar la app se termina sola al sincronizar, sin pedir nada con una app más vieja que la mínima, y `Doc_Supabase.md` lista todas las migraciones.

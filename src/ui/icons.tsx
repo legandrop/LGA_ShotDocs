@@ -48,6 +48,8 @@ export const UnarchiveIcon = icon('M3.25 4.25h13.5v3H3.25zM4.5 7.25v8a1 1 0 0 0 
 export const OfflineMarkIcon = icon('M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM10 6.75v6M7.5 10.5l2.5 2.5 2.5-2.5');
 // "Storage on this device": un disco.
 export const StorageIcon = icon('M3.25 11.5h13.5v3.75a1 1 0 0 1-1 1H4.25a1 1 0 0 1-1-1zM3.25 11.5l2-6.75h9.5l2 6.75M13.25 14h.5');
+// Los archivos por peso (P.8): renglones del más largo al más corto.
+export const SizeListIcon = icon('M4 5.5h12M4 10h8M4 14.5h4.5', { strokeWidth: 1.7 });
 export const SyncedIcon = icon('M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM7.25 10.25l1.9 1.9 3.6-4', {
   strokeWidth: 1.7,
 });

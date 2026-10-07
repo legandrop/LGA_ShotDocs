@@ -142,6 +142,8 @@ const DAY_REPORTS = '0.121';
 const PUBLIC_LINK = '0.111';
 /** El ícono del árbol de las páginas con link y quién lo creó, en *Share* (Doc_Link_Publico.md): la versión la pone quien publica. */
 const PUBLIC_LINK_TREE = '0.215';
+/** *Files by size* en el selector de proyectos (P.8, Doc_Peso_Proyectos.md): la versión la pone quien publica. */
+const FILES_BY_SIZE = '0.220';
 /** *Can edit* por un link (Doc_Link_Publico.md, entrega 2a): la versión la pone quien publica, igual que en el changelog. */
 const LINK_EDIT = '0.151';
 /** Lo apartado a la vista (Doc_Link_Publico.md, entrega 2c): la versión la pone quien publica, igual que en el changelog. */
@@ -273,6 +275,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
   },
   { id: 'projectsArchive', section: 'pages', title: 'help.projectsArchive.title', text: 'help.projectsArchive.text', since: BEFORE_HELP },
   { id: 'projectsDrive', section: 'pages', title: 'help.projectsDrive.title', text: 'help.projectsDrive.text', when: 'admin', since: BEFORE_HELP },
+  {
+    id: 'projectsFilesBySize',
+    section: 'pages',
+    title: 'help.projectsFilesBySize.title',
+    text: 'help.projectsFilesBySize.text',
+    when: 'portero',
+    words: ['peso', 'tamaño', 'size', 'weight', 'pesado', 'heavy', 'heaviest', 'espacio', 'space', 'drive', 'archivos', 'files', 'fotos', 'videos', 'liberar', 'free up', 'ocupa', 'GB'],
+    since: FILES_BY_SIZE,
+  },
   {
     id: 'projectsPurge',
     section: 'pages',

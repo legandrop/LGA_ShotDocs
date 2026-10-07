@@ -483,6 +483,8 @@ function useFileTrash(projectIds: string[], online: boolean) {
     if (!confirm(confirmText(question, false))) return;
     setBusy(file.id);
     const outcome = await sendToDriveTrash(trash, file.id);
+    // El peso del proyecto cambió (aunque se haya cerrado la vista): se vuelve a pedir, como al terminar *Empty*.
+    if (outcome.status === 'done') void sizes.refresh();
     if (!live.current) return;
     setBusy(null);
     if (settle(file, outcome)) reload(projectId);
@@ -531,12 +533,13 @@ function useFileTrash(projectIds: string[], online: boolean) {
 
 /**
  * La miniatura del archivo (la del dispositivo o la del bucket `thumbs`); un adjunto sin miniatura, la etiqueta
- * de su tipo (PDF, ZIP…); si no, un recuadro vacío.
+ * de su tipo (PDF, ZIP…); si no, un recuadro vacío. `has` en falso: se sabe que no hay miniatura y no se pide.
  */
-function FileThumb({ id, name }: { id: string; name: string }) {
+export function FileThumb({ id, name, has = true }: { id: string; name: string; has?: boolean }) {
   const { media } = useServices();
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
+    if (!has) return;
     let alive = true;
     void media.thumbnail(id).then(
       (url) => alive && setSrc(url),
@@ -545,7 +548,7 @@ function FileThumb({ id, name }: { id: string; name: string }) {
     return () => {
       alive = false;
     };
-  }, [media, id]);
+  }, [media, id, has]);
   if (src) return <img className="trash-thumb" src={src} alt={name} />;
   if (fileKind(null, name) === 'file') return <span className="trash-thumb trash-thumb-file" aria-hidden="true">{extensionLabel(name, null)}</span>;
   return <span className="trash-thumb" aria-hidden="true" />;

@@ -107,6 +107,10 @@ In development. What works today:
   only, with the Drive trash and what is still uploading) and at the top of the file trash (v0.050; it shows
   once the workspace database is on version 7). After *Delete forever*, files that never reached Drive no longer
   count toward the project size; files in the Drive trash keep counting there for 30 days.
+- *Files by size*, at the bottom of the project menu: a project's photos, videos, folders and files from heaviest
+  to lightest, each with a link to the pages that use it, and the ones no page uses marked; the project is chosen
+  at the top, heaviest first. It only reads, loads 100 files at a time and needs a connection; it is for the
+  people who see the project's size.
 - In *Share*, the team sees the exact number of files added through all links to the page, including earlier
   links, even beyond 500 files; the list shows the newest 20.
 - Google Drive links: paste one and keep it as a link, as plain text, or as a card with the Drive player.

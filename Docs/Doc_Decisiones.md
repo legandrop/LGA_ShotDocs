@@ -296,6 +296,20 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
 - **D311 · Al copiar o cortar, los links a páginas propias llevan el workspace solo en lo que se pega afuera de la
   app** (2026-10-06; tomada al implementarlo, Lega la puede cambiar). El documento y lo que se pega adentro no cambian.
   Entrando por un link público no se agrega nada (no se copia el acceso a escondidas), y el arrastre no se toca.
+- **D312 · La lista de archivos por peso la ve quien ve el peso del proyecto, y cada uno ve lo que la base le deja
+  leer** (2026-10-06; tomada al implementarlo, Lega la puede cambiar). La entrada está donde se ve el peso (quien ve
+  la papelera de archivos del proyecto: el dueño, los admins con algún permiso sobre el proyecto entero y quien tiene
+  "Editar y crear páginas" sobre el proyecto entero). La lista se lee de `files` y `page_files` con la sesión, sin
+  función nueva ni migración. **Consecuencia:** un admin con solo *Ver* no recibe los archivos sacados de páginas que
+  no edita ni los de páginas que están en la papelera; la lista le dice cuánto falta para llegar al número del
+  proyecto. La alternativa es una función con la puerta de la papelera, que le mostraría todo
+  (`Doc_Peso_Proyectos.md`, "Cómo quedó: la lista por peso").
+- **D313 · La lista por peso muestra lo que ocupa lugar en el Drive y solo se lee** (2026-10-06; tomada al
+  implementarlo, Lega la puede cambiar). Entra lo subido que no se mandó a la papelera de Drive, con lo de la papelera
+  de la app marcado como sin uso; no entra lo que todavía no subió ni lo que ya está en la papelera de Drive. Se abre
+  desde el pie del selector de proyectos (*Files by size*, arriba de *Trash*), con un desplegable para elegir el
+  proyecto, el más pesado primero; no desde un ícono en cada renglón (le saca ancho al subtítulo, donde está el
+  peso), ni desde el diálogo de Google Drive, ni desde la papelera. No borra ni reemplaza: el link abre la página.
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 

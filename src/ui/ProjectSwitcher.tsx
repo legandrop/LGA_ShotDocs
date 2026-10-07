@@ -20,6 +20,7 @@ import {
   RenameIcon,
   SearchIcon,
   ShareIcon,
+  SizeListIcon,
   TrashIcon,
   UnarchiveIcon,
 } from './icons';
@@ -28,7 +29,7 @@ import { notify } from './notice';
 import { editedLabel, monogram, projectStateError, useCurrentProject, useSwitchProject } from './project';
 import { useSearchSession } from './projectSearchUi';
 import { tipRows } from './tipRows';
-import { DeleteProjectDialog, ShareDialog, TrashPanel } from './lazyDialogs';
+import { DeleteProjectDialog, FilesBySizePanel, ShareDialog, TrashPanel } from './lazyDialogs';
 import { Part } from './lazyPart';
 import { OfflineBadge, offlineSupported, openOffline } from './SpaceHost';
 import { openExport } from './ExportHost';
@@ -210,7 +211,9 @@ type Mode =
   | { name: 'rename'; id: string }
   | { name: 'archived' }
   // La papelera única: proyectos, páginas y archivos borrados (TrashView.tsx).
-  | { name: 'trash' };
+  | { name: 'trash' }
+  // Los archivos de un proyecto ordenados por peso (P.8, FilesBySize.tsx).
+  | { name: 'files'; id: string };
 
 function ProjectMenu(props: {
   current: string;
@@ -265,6 +268,15 @@ function ProjectMenu(props: {
   const projects = all.filter((p) => !needle || p.name.toLowerCase().includes(needle));
   const archivedCount = tree.archivedProjects().filter((p) => p.id !== props.current).length;
   const currentName = tree.project(props.current)?.name ?? tr('project.thisProject');
+  // El peso que se muestra de un proyecto: solo a quien ve su papelera de archivos (también en el dispositivo: un
+  // valor guardado no se muestra si se perdió el permiso); 0 si no hay o no lo ve.
+  const weightOf = (id: string) => (perms.canSeeFileTrash(id) ? (sizes.rows?.find((r) => r.project_id === id)?.drive_bytes ?? 0) : 0);
+  // "Files by size" (P.8) se ofrece si algún proyecto muestra un peso; abre el abierto o, si no pesa, el más pesado.
+  const heaviest = tree
+    .projects()
+    .map((p) => p.id)
+    .filter((id) => weightOf(id) > 0)
+    .sort((a, b) => weightOf(b) - weightOf(a));
   const nameOf = (id: string) => tree.project(id)?.name ?? tr('project.thisProject');
 
   const pick = (id: string) => {
@@ -389,6 +401,33 @@ function ProjectMenu(props: {
     );
   }
 
+  if (mode.name === 'files') {
+    return (
+      <div
+        ref={ref}
+        className="menu project-menu trash-menu files-menu"
+        role="dialog"
+        aria-label={tr('project.filesBySize')}
+        style={props.position}
+        onKeyDown={(e) => {
+          // Escape vuelve a la lista de proyectos, como en la papelera.
+          if (e.key !== 'Escape' || e.defaultPrevented) return;
+          e.preventDefault();
+          e.stopPropagation();
+          backToList();
+        }}
+      >
+        <button className="project-back" autoFocus={!touch} onClick={backToList}>
+          <ChevronLeftIcon size={16} />
+          {tr('project.filesBySize')}
+        </button>
+        <Part>
+          <FilesBySizePanel projectId={mode.id} onClose={props.onClose} />
+        </Part>
+      </div>
+    );
+  }
+
   /** Los íconos de un renglón (archivar y borrar solo a quien maneja el proyecto, renombrar con 4 sobre él). */
   const rowActions = (id: string, name: string, archived: boolean) => {
     const canRename = !archived && perms.canRenameProject(id);
@@ -500,9 +539,8 @@ function ProjectMenu(props: {
         {projects.map((p, i) => {
           const stats = tree.projectStats(p.id);
           const archived = !!p.archived_at;
-          // Solo a quien ve la papelera de archivos del proyecto (también en el dispositivo: un valor guardado
-          // no se muestra si se perdió el permiso), y nunca en cero.
-          const bytes = perms.canSeeFileTrash(p.id) ? (sizes.rows?.find((r) => r.project_id === p.id)?.drive_bytes ?? 0) : 0;
+          // Nunca en cero (ver `weightOf`).
+          const bytes = weightOf(p.id);
           const actions = rowActions(p.id, p.name, archived);
           if (confirming === p.id) {
             return (
@@ -700,6 +738,12 @@ function ProjectMenu(props: {
             >
               <ArchiveIcon size={16} />
               {tr('project.archivedList', { count: archivedCount })}
+            </button>
+          )}
+          {heaviest.length > 0 && (
+            <button onClick={() => setMode({ name: 'files', id: heaviest.includes(props.current) ? props.current : heaviest[0] })}>
+              <SizeListIcon size={16} />
+              {tr('project.filesBySize')}
             </button>
           )}
           {/* La papelera única (proyectos, páginas y archivos): anda sin red con las páginas del dispositivo. */}

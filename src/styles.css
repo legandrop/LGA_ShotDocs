@@ -2306,8 +2306,12 @@ code {
   grid-template-columns: minmax(0, 1fr);
 }
 
+/* Una sola columna que no crece con su contenido: sin esto la columna implícita toma el ancho del nombre más largo
+   (van sin corte de renglón), el panel se desborda de costado y lo de la derecha de cada renglón queda fuera de la
+   vista. */
 .trash-panel {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   padding: 2px 6px 6px;
   min-width: 0;
@@ -2438,6 +2442,111 @@ code {
   width: auto;
   height: auto;
   padding: 0;
+}
+
+/* Los archivos de un proyecto por peso (P.8), en el mismo panel que la papelera: el peso a la derecha, que es por lo
+   que se ordena, y abajo del nombre las páginas que lo usan. */
+.files-by-size .files-by-size-head {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* De qué proyecto: los que muestran un peso, el más pesado primero. */
+.files-by-size select {
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.files-by-size .trash-item {
+  align-items: flex-start;
+}
+
+.files-by-size .files-by-size-weight {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 20px;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.files-by-size .files-by-size-unused {
+  color: var(--warn);
+}
+
+.files-by-size .files-by-size-pages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  min-width: 0;
+}
+
+.menu .files-by-size .files-by-size-pages button.link {
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  padding: 0;
+  display: block;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu .files-by-size button.files-by-size-more {
+  width: auto;
+  height: 28px;
+  padding: 0;
+  justify-self: start;
+}
+
+/* La flecha de volver y el proyecto quedan a la vista al bajar por la lista (solo acá: la papelera no cambia). El
+   selector tiene relleno propio: la flecha se pega a su borde de arriba y lo tapa con su fondo. */
+.menu.files-menu .project-back {
+  position: sticky;
+  top: -8px;
+  z-index: 2;
+  background: var(--menu-bg);
+}
+
+/* Un píxel por debajo de la flecha (36 px de alto menos el relleno): sin esa pisada queda una rendija entre los dos
+   por la que se ve pasar la lista. */
+.files-by-size .files-by-size-top {
+  position: sticky;
+  top: 27px;
+  z-index: 1;
+  display: grid;
+  padding: 2px 0 6px;
+  background: var(--menu-bg);
+}
+
+@media (max-width: 760px) {
+  .menu.files-menu .project-back {
+    top: -12px;
+  }
+
+  .files-by-size .files-by-size-top {
+    top: 23px;
+  }
+}
+
+/* En una pantalla táctil, cada link a una página con alto para el dedo (el escritorio queda igual). */
+@media (pointer: coarse) {
+  .menu .files-by-size .files-by-size-pages {
+    gap: 4px 14px;
+  }
+
+  .menu .files-by-size .files-by-size-pages button.link {
+    padding: 10px 0;
+  }
 }
 
 .delete-project-drive {

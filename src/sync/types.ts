@@ -277,6 +277,20 @@ export interface PageUseRow {
   is_foreign?: boolean;
 }
 
+/**
+ * Un archivo de la lista por peso (P.8, Docs/Doc_Peso_Proyectos.md): una fila de `files` que la sesión ve y que
+ * ocupa lugar en el Drive (subida y fuera de la papelera de Drive).
+ */
+export interface SizedFileRow {
+  id: string;
+  name: string;
+  mime: string;
+  size: number;
+  thumb_at: string | null;
+  /** Desde cuándo ninguna página viva lo usa (está en la papelera de archivos); `null` si alguna lo usa. */
+  trashed_at: string | null;
+}
+
 /** Una fila de `trashed_files`: un archivo en la papelera que todavía no llegó a la papelera de Drive. */
 export interface TrashedFileRow {
   id: string;

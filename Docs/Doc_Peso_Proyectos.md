@@ -1,6 +1,7 @@
 # Cuánto ocupa cada proyecto en el Drive (P.7), y la lista por peso (P.8)
 
-Estado: **primera entrega hecha (v0.050)**; migración aplicada en Wanka el 2026-09-30 ~13:35 UTC, con la copia de seguridad en verde antes y las 10 pruebas SQL ok (ver "Cómo quedó", al final). "Correcciones de la auditoría previa" manda sobre lo anterior. Pedido de Lega: "sería
+Estado: **la lista por peso (P.8), primera entrega hecha (v0.220), sin migración** (ver "Cómo quedó: la lista por
+peso", al final). El peso (P.7): **primera entrega hecha (v0.050)**; migración aplicada en Wanka el 2026-09-30 ~13:35 UTC, con la copia de seguridad en verde antes y las 10 pruebas SQL ok (ver "Cómo quedó", al final). "Correcciones de la auditoría previa" manda sobre lo anterior. Pedido de Lega: "sería
 bueno tener el peso en Drive de cada proyecto, de alguna forma que esté visible, tal vez al momento de elegir
 proyectos… para que el usuario vea 'este proyecto me está ocupando 30 gigas en el Drive'. Más adelante (no
 urgente) ver toda la media ordenada por peso, cliquear e ir a la página donde está, y decidir si la deja, la
@@ -74,6 +75,9 @@ MB", "3,4 GB", "30 GB", "1,2 TB"; separadores del idioma; base 1024 como cuenta 
 archivo conocido). `formatSize` suma TB.
 
 ## 5. Media por peso (P.8, esbozo)
+
+(Esbozo del 2026-09-30. La primera entrega salió sin función nueva y solo para leer: ver "Cómo quedó: la lista
+por peso", al final.)
 
 Una función `project_files_by_size(proyecto, límite, cursor)` con la misma puerta, que devuelve nombre, tipo,
 peso, estado y la primera página viva que lo usa (con su título solo si la sesión la ve); una vista como la
@@ -245,3 +249,142 @@ rollback contra la base real. Arreglado:
 - Pruebas nuevas: un archivo vaciado que el portero todavía no mandó a Drive (cuenta en la papelera de la app y
   en el principal), uno en la papelera de Drive hace 29 días (todavía cuenta) y el diálogo con todo en la
   papelera de Drive.
+
+## Cómo quedó: la lista por peso (P.8, primera entrega, v0.220)
+
+**Qué es.** *Files by size* (*Archivos por peso*): los archivos de un proyecto que ocupan lugar en el Drive, del
+más pesado al más liviano, cada uno con su tipo (foto, video, carpeta o archivo), su peso y el link a las páginas
+que lo usan. Solo lectura: no borra ni reemplaza nada.
+
+**Dónde se abre.** En el selector de proyectos, que es donde se ve el peso de cada uno: un renglón *Files by
+size* al pie de la lista, arriba de *Trash*, que aparece si algún proyecto muestra un peso. La lista se abre
+adentro del mismo selector, como la papelera, con la flecha para volver y Escape. Abre el proyecto abierto o, si
+ese no pesa, el más pesado; arriba hay un desplegable para elegir entre los proyectos que muestran un peso, del
+más pesado al más liviano ("MGTZD · 3,4 GB"). Con uno solo, va su nombre sin desplegable.
+
+La flecha de volver y el desplegable quedan fijos arriba al bajar por la lista (`position: sticky`, solo en esta
+lista: la papelera no cambia).
+
+No es un ícono más en el renglón de cada proyecto: los íconos del renglón reservan su ancho aunque no se vean (30
+px cada uno), y uno más le saca 30 px al nombre y al subtítulo, que es donde P.7 dejó el peso a la vista. Medido en
+un navegador (selector de 338 px, dueño, base en la versión 7, que da tres íconos y 92 px reservados): al subtítulo
+del proyecto abierto, "11 páginas · 4,6 GB · editado hoy", le quedan 118 px de los 184 que necesita, y al de otro
+proyecto 174 de 189. Ya se corta sin sumar nada; con la base al día el dueño tiene cinco íconos (60 px menos). Está
+en el roadmap.
+
+**Quién la ve (D312).** Quien ve el peso del proyecto: quien ve su papelera de archivos
+(`Permissions.canSeeFileTrash`, la misma puerta del subtítulo). De la lista, cada uno ve **los archivos que la
+base le deja leer**: no hay función nueva ni nada que salte permisos.
+
+**De dónde sale (sin migración).** La lista son dos lecturas por tramo con la sesión, por las políticas que ya
+existen:
+
+- `files` del proyecto con `drive_id` puesto y sin `drive_trashed_at` (el mismo conjunto que suma el número del
+  proyecto en `project_sizes`), ordenado por `size` descendente y por `id`. La política `files_select`
+  (`private.can_view_file`) deja ver lo propio y lo que usa una página que la sesión ve.
+- `page_files` de esos archivos, solo los usos activos (sin `removed_at`), para armar los links. La política
+  `page_files_select` deja ver los usos de las páginas que la sesión ve.
+
+Además, las miniaturas: una o más lecturas de `files` por id, por lote (los del tramo que tienen miniatura), y una
+bajada del bucket `thumbs` por cada uno. Solo se piden las de los archivos con `thumb_at` (un zip, un PDF sin vista
+previa o un video sin miniatura no piden nada); antes se pedía además la ficha de cada archivo sin miniatura.
+
+Se descartó el esbozo de la sección 5 (una función `project_files_by_size` con la puerta de la papelera) porque
+con las tablas y los permisos que hay alcanza. **El costo:** la base evalúa la política de `files` en cada archivo
+del proyecto en cada tramo (no hay índice por peso: recorrido secuencial con `can_view_file` por fila). Medido en
+la auditoría contra la base real, en una transacción que se deshace, con 2297 archivos en el proyecto: 454 a 549
+ms el primer tramo para el dueño, 716 a 734 ms para un admin con solo *Ver*, y unos 25 ms la lectura de los usos.
+Los tramos siguientes bajan, porque el filtro de peso se evalúa antes que el permiso y cada tramo recorre solo lo
+que falta (21 ms desde la fila 2200 para el dueño, 78 ms desde la 2100 para el admin; por desplazamiento eran 459
+ms). El peor caso es el primer tramo: el tope de una consulta de la sesión es de 8 s y a ese ritmo vencería cerca
+de los 25.000 a 40.000 archivos por proyecto, y la lista lo mostraría como un error con *Retry*. Si pasa, el arreglo es esa función (una sola puerta
+por proyecto), con su migración.
+
+**Lo que no coincide con el número.** A quien ve el peso por ser admin con solo *Ver* sobre el proyecto, la base
+no le deja leer los archivos que ya no usa ninguna página que él vea: los sacados de una página que no edita
+(`private.sees_deleted`) y los de una página que está en la papelera. Están en el número y no en su lista. Con la lista entera cargada, si suma menos que el número del proyecto, abajo dice cuánto falta ("Hay
+900 MB más en archivos que no podés ver desde acá"). El dueño y quien tiene *Editar y crear páginas* sobre el
+proyecto entero ven todo, y a ellos el aviso no les sale.
+
+Para que eso sea cierto en pantalla, el número con el que se compara tiene que ser el de ahora y no el guardado
+(que puede tener hasta 5 minutos): **la lista pide el peso al abrirse**, como el diálogo de Google Drive, y
+**mandar un archivo a la papelera de Drive desde Papelera › Archivos vuelve a pedirlo** (antes solo lo hacía
+*Empty*). El aviso no sale mientras el peso se está pidiendo, ni si ese pedido falló, ni antes de tener la lista
+entera. Sin esto, al dueño que mandaba un archivo a la papelera de Drive y volvía a la lista (el recorrido que la
+misma lista recomienda) le decía que había archivos que no podía ver, por el peso de ese archivo.
+
+**Qué lista (D313).** Lo que ocupa lugar: lo subido que no se mandó a la papelera de Drive. Incluye lo que está en
+la papelera de la app, **marcado** ("No lo usa ninguna página (está en la papelera)", en otro color): es el
+candidato a borrar, y lo dice la base (`files.trashed_at`), no el dispositivo. No lista lo que todavía no subió ni
+lo que ya está en la papelera de Drive.
+
+**Por tramos.** De a 100 archivos (`FILES_BATCH`), los más pesados primero, con *Show more* para el tramo que
+sigue. PostgREST corta en 1000 filas por pedido: `filesBySize` nunca pide más de 1000 de una vez y sigue
+pidiendo, y `fileUses` pide de a 100 archivos y de a 1000 filas (un archivo puede estar en muchas páginas). Un
+tramo se muestra recién con sus usos; si alguno de los dos pedidos falla, se vuelve a pedir entero.
+
+Cada tramo sigue **por clave y no por desplazamiento**: pide lo que viene después del último archivo recibido en
+el orden (peso descendente, id), con el filtro `or=(size.lt.P,and(size.eq.P,id.gt.ID))`. `size` nunca es nulo y
+el id desempata, así que el orden es total. Con un desplazamiento ("salteá 100"), un archivo que sale del conjunto
+entre dos tramos (se mandó a la papelera de Drive) dejaba una fila salteada, y uno que entra, una repetida; por
+clave no pasa ninguna de las dos. Los dos valores van escritos en el filtro: antes se revisa que sean un entero y
+un uuid. Lo ya mostrado no se vuelve a pedir: un archivo que salió del conjunto sigue en la lista hasta cerrarla.
+
+La lista no se guarda en el dispositivo: se arma al abrirla. Lo que sí queda es lo de las miniaturas, como en la
+papelera: cada archivo cuya miniatura se pidió queda entre los conocidos del dispositivo (`known`) y su miniatura,
+guardada.
+
+**Las páginas.** Los títulos salen del árbol del dispositivo: primero las vivas, después las de la papelera ("Día
+2 (en la papelera)"), y las de otro proyecto con su nombre. Hasta tres, y "+N páginas más". Un archivo en uso
+cuyas páginas el dispositivo no conoce dice "En una página que no podés abrir desde este dispositivo". El link
+abre la página y cierra el selector; no deja elegido el bloque. En una pantalla táctil cada link tiene unos 35 px
+de alto (en el escritorio, los 15 de siempre).
+
+**Nombres largos.** El nombre y los links se cortan con "…" y el peso queda siempre a la vista, a la derecha. El
+nombre entero sale en el tooltip, solo cuando está cortado (`data-tip-overflow`; los nombres de cámara difieren al
+final).
+
+**El desborde de costado (arreglado en v0.220, también en la papelera).** `.trash-panel` era una grilla sin
+columnas declaradas: la columna implícita tomaba el ancho del nombre más largo (los nombres van sin corte de
+renglón), el panel se ensanchaba y lo de la derecha de cada renglón quedaba fuera de la vista. En esta lista era el
+peso (panel de 407 px con contenido de 661); en **Papelera › Archivos, que ya estaba publicada**, el botón *Send to
+Drive trash* (con un nombre largo: contenido de 898 px en un panel de 407, el botón en x = 919). Se arregla con
+una línea, `grid-template-columns: minmax(0, 1fr)`: medido después, panel y contenido de 407 px en el escritorio
+(peso y botón en x = 422) y de 349 px en un teléfono de 375 (peso en x = 356). **Límite de las pruebas:** jsdom no
+calcula el layout, así que ninguna prueba automática lo cubre; está visto en un navegador, en la página de prueba
+de la auditoría, a 440 y 375 px, en claro y oscuro, en inglés y castellano.
+
+**Estados.** Cargando; sin red (no pide nada, lo dice, y al volver la red carga sola; con la lista entera no dice
+nada, porque no falta pedir nada); un pedido que falla, con *Retry* (sin red, o el motivo que dio la base, tal
+como lo manda: en inglés); un proyecto sin archivos en el Drive; y sin permiso (no pide nada).
+
+**Código.** `SizedFileRow` (`src/sync/types.ts`); `FilesBySizeRemote`, `filesBySize` y `fileUses`
+(`src/sync/remote.ts`; en las pruebas, `FakeRemote` con las mismas políticas); `src/media/filesBySize.ts` (la
+lista, sin React); `src/ui/FilesBySize.tsx` (se baja aparte, con sus textos en `src/i18n/lazy/filesBySize.ts`); la
+entrada en `src/ui/ProjectSwitcher.tsx` (modo `files`); la entrada `projectsFilesBySize` de la ayuda.
+
+**Pruebas.** `src/media/filesBySize.test.ts`, con un cliente en memoria que imita a PostgREST (filtros, orden,
+rango, el tope de 1000 filas y las políticas): el filtro y el orden, 2500 archivos pasado el tope, un archivo en
+1500 páginas, lo que la política no deja ver, los errores, la lista tramo a tramo, el reintento sin saltear ni
+repetir, el tramo que no se muestra a medias, y el paginado por clave (a igual peso, un archivo que sale del
+conjunto o uno que entra entre dos tramos, y la revisión de lo que se escribe en el filtro).
+`src/ui/filesBySize.test.tsx` (jsdom, contra el servidor en
+memoria): la entrada donde se ve el peso, el orden, el tipo, el peso, el link que abre la página, elegir el
+proyecto (y que no entre uno cuyo peso no se ve), Escape, la página de otro proyecto, el archivo sin uso, quién no
+la ve, el admin que solo ve el proyecto, el peso viejo del dueño (se pide al abrir; sin aviso mientras llega, si
+falla o antes de la lista entera), las miniaturas que no se piden, sin red, el error con *Retry*, el vacío y
+*Show more*. En `src/ui/trashView.test.tsx`, que mandar uno a la papelera de Drive vuelve a pedir el peso.
+
+**Queda.** Borrar o reemplazar desde la lista (hoy: abrir la página y hacerlo ahí; lo sacado se manda a la
+papelera de Drive desde Papelera › Archivos); dejar elegido el bloque al abrir la página; un acceso a la lista
+desde el diálogo de Google Drive; ordenar por peso la papelera de archivos; el recorrido en la app real con sesión
+(un iPhone de verdad incluido); y ver el paginado por clave en un pedido real con sesión (la auditoría recorrió
+el SQL equivalente contra la base real, con 2297 archivos y 38 empates de peso, sin repetir ni saltear, y la API
+acepta la forma del filtro; falta el pedido de punta a punta). Al volver con Shift+Tab, un link puede quedar
+debajo del encabezado fijo (le falta `scroll-padding-top` a la lista). Un archivo más pesado que se sube mientras
+se lista queda antes de lo ya recibido: no aparece hasta reabrir y, con la lista entera, el aviso de lo que falta
+saldría por su peso. Ninguna prueba fija que la papelera siga pidiendo sus miniaturas. En el teléfono cada fila
+mide unos 85 px: 100 archivos son unos 8.500 px de scroll. Del lado de quien ve menos: el admin con solo *Ver* se entera
+de lo que le falta recién al final de la lista (22 *Show more* con 2204 archivos) y la nota de arriba le indica
+algo que no puede hacer (mandar a la papelera de Drive lo que no ve). El motivo de un error de la base sale crudo,
+en inglés, adentro del texto en castellano.

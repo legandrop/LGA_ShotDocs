@@ -3681,6 +3681,12 @@ hoja de abajo de siempre en el teléfono:
   no se ofrece si no había archivos leídos, y *Projects* no dice además "No deleted projects".
 - **El avance de *Empty*** ("Sending 2 of 4…") va arriba de la lista y se ve aunque se cambie de filtro o de alcance a
   mitad (el envío sigue).
+- **Nombres largos (v0.220).** Con un archivo de nombre largo el panel se ensanchaba más que el selector y el botón
+  *Send to Drive trash* quedaba fuera de la vista (medido: contenido de 898 px en un panel de 407). `.trash-panel`
+  ahora declara su única columna (`minmax(0, 1fr)`) y los nombres se cortan con "…". Visto en un navegador; jsdom no
+  calcula el layout, así que no hay prueba automática (`Doc_Peso_Proyectos.md`, "El desborde de costado").
+- **Mandar uno a la papelera de Drive vuelve a pedir el peso de los proyectos (v0.220)**, como ya hacía *Empty*: si
+  no, la lista de archivos por peso lo seguía contando hasta cinco minutos.
 - **La dirección vieja `/trash`** (un marcador): muestra el inicio del proyecto con el selector abierto en la papelera
   (`openProjectTrash`). Con un link público, va a la página compartida.
 - **Lo que se fue:** el botón de la barra lateral y la vista `/trash` a pantalla entera. Los textos que decían

@@ -9,6 +9,7 @@ import type { drive } from './lazy/drive';
 import type { editor } from './lazy/editor';
 import type { exportPdf } from './lazy/exportPdf';
 import type { exportZip } from './lazy/exportZip';
+import type { filesBySize } from './lazy/filesBySize';
 import type { help } from './lazy/help';
 import type { folders } from './lazy/folders';
 import type { history } from './lazy/history';
@@ -50,6 +51,7 @@ type LazyStrings = typeof annotator &
   typeof editor &
   typeof exportPdf &
   typeof exportZip &
+  typeof filesBySize &
   typeof help &
   typeof folders &
   typeof history &

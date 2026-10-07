@@ -21,6 +21,7 @@ import {
   type PageUseRow,
   type NewMediaFile,
   type ProjectSizeRow,
+  type SizedFileRow,
   type ProjectDeleteInfo,
   type TrashedFileRow,
   type TrashedProjectRow,
@@ -251,6 +252,33 @@ export interface SizesRemote {
    * `null` si la base todavía no tiene la función (`PGRST202`).
    */
   projectSizes(): Promise<ProjectSizeRow[] | null>;
+}
+
+/** Lo más que PostgREST devuelve en un pedido en este proyecto, pida lo que pida el rango. */
+export const MAX_ROWS_PER_REQUEST = 1000;
+/** La forma de un uuid (lo único que se escribe, además de un entero, adentro de un filtro armado a mano). */
+const UUID_SHAPE = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+
+/** Dónde quedó la lista por peso: el peso y el id del último archivo recibido. */
+export interface SizeCursor {
+  size: number;
+  id: string;
+}
+
+/**
+ * Los archivos de un proyecto ordenados por peso (P.8, Docs/Doc_Peso_Proyectos.md). Sin función nueva en la
+ * base: lee `files` y `page_files` con la sesión, así que vuelve solo lo que sus políticas dejan ver.
+ */
+export interface FilesBySizeRemote {
+  /**
+   * Un tramo de los archivos del proyecto que ocupan lugar en el Drive (subidos y fuera de la papelera de
+   * Drive), del más pesado al más liviano y, a igual peso, por id. `after` es el último archivo del tramo
+   * anterior (`null` para el primero): sigue por clave y no por desplazamiento, así un archivo que entra o sale
+   * del conjunto entre dos tramos no repite ni saltea ninguno. Menos filas que `limit` quiere decir que no hay más.
+   */
+  filesBySize(projectId: string, after: SizeCursor | null, limit: number): Promise<SizedFileRow[]>;
+  /** Los usos activos (sin `removed_at`) de estos archivos en páginas que la sesión ve. */
+  fileUses(fileIds: string[]): Promise<PageUseRow[]>;
 }
 
 /** La versión de la base con archivar y borrar proyectos (P.14, Docs/Doc_Proyectos_Borrar.md). */
@@ -776,7 +804,7 @@ export function parseProjectSize(row: Record<string, unknown>): ProjectSizeRow {
 }
 
 export class SupabaseRemote
-  implements Remote, MediaRemote, TeamRemote, SizesRemote, TrashAllRemote, ProjectStatesRemote, HistoryRemote, NamedVersionsRemote, SnapshotsRemote
+  implements Remote, MediaRemote, TeamRemote, SizesRemote, TrashAllRemote, FilesBySizeRemote, ProjectStatesRemote, HistoryRemote, NamedVersionsRemote, SnapshotsRemote
 {
   /** Desde cuándo la base no tiene `pages.settings`; se vuelve a probar cada tanto por si se migró. */
   private settingsMissingAt = 0;
@@ -1671,6 +1699,70 @@ export class SupabaseRemote
     if (error?.code === MISSING_FUNCTION) return null;
     if (error) throw toRemoteError(error, status);
     return ((data ?? []) as Record<string, unknown>[]).map(parseProjectSize);
+  }
+
+  async filesBySize(projectId: string, after: SizeCursor | null, limit: number): Promise<SizedFileRow[]> {
+    const rows: SizedFileRow[] = [];
+    let cursor = after;
+    // De a 1000 como mucho: pedir más en un solo pedido devuelve 1000 y parecería que no hay más.
+    while (rows.length < limit) {
+      const want = Math.min(MAX_ROWS_PER_REQUEST, limit - rows.length);
+      let query = this.client
+        .from('files')
+        .select('id, name, mime, size, thumb_at, trashed_at')
+        .eq('project_id', projectId)
+        // Lo que suma `project_sizes` en el número del proyecto: subido y no mandado a la papelera de Drive.
+        .not('drive_id', 'is', null)
+        .is('drive_trashed_at', null);
+      if (cursor) {
+        // Lo que viene después del último recibido en el orden (peso descendente, id): `size` nunca es nulo y el
+        // id desempata, así que el orden es total. Los dos valores van escritos en el filtro: se revisan antes.
+        if (!Number.isSafeInteger(cursor.size) || !UUID_SHAPE.test(cursor.id)) throw new RemoteError('bad_cursor', true);
+        query = query.or(`size.lt.${cursor.size},and(size.eq.${cursor.size},id.gt.${cursor.id})`);
+      }
+      const { data, error, status } = await timed(query.order('size', { ascending: false }).order('id').limit(want));
+      if (error) throw toRemoteError(error, status);
+      const page = (data ?? []) as unknown as SizedFileRow[];
+      rows.push(
+        ...page.map((r) => ({
+          id: r.id,
+          name: r.name,
+          mime: r.mime,
+          // `bigint`: puede llegar como texto.
+          size: Number(r.size) || 0,
+          thumb_at: r.thumb_at ?? null,
+          trashed_at: r.trashed_at ?? null,
+        })),
+      );
+      if (page.length < want) break;
+      const last = rows[rows.length - 1];
+      cursor = { size: last.size, id: last.id };
+    }
+    return rows;
+  }
+
+  async fileUses(fileIds: string[]): Promise<PageUseRow[]> {
+    const rows: PageUseRow[] = [];
+    // De a 100 archivos (la lista viaja en la dirección) y de a 1000 filas: un archivo puede estar en muchas páginas.
+    for (let i = 0; i < fileIds.length; i += 100) {
+      for (let from = 0; ; from += MAX_ROWS_PER_REQUEST) {
+        const { data, error, status } = await timed(
+          this.client
+            .from('page_files')
+            .select('page_id, file_id, removed_at, is_foreign')
+            .in('file_id', fileIds.slice(i, i + 100))
+            .is('removed_at', null)
+            .order('file_id')
+            .order('page_id')
+            .range(from, from + MAX_ROWS_PER_REQUEST - 1),
+        );
+        if (error) throw toRemoteError(error, status);
+        const page = (data ?? []) as unknown as PageUseRow[];
+        rows.push(...page.map((r) => ({ page_id: r.page_id, file_id: r.file_id, removed_at: null, is_foreign: r.is_foreign === true })));
+        if (page.length < MAX_ROWS_PER_REQUEST) break;
+      }
+    }
+    return rows;
   }
 
   async filesDueForPurge(projectId: string): Promise<DueFileRow[]> {

@@ -25,6 +25,8 @@ import {
   type SnapshotsRemote,
   type CleanPushResult,
   type CleanWorkRow,
+  type FilesBySizeRemote,
+  type SizeCursor,
   type NewCleanBase,
   type InvitationGrant,
   type InvitationRow,
@@ -69,6 +71,7 @@ import {
   type TrashedFileRow,
   type NewMediaFile,
   type ProjectSizeRow,
+  type SizedFileRow,
   type NewPage,
   type NewProject,
   type PagePatch,
@@ -1707,7 +1710,8 @@ export class FakeRemote
     ProjectStatesRemote,
     HistoryRemote,
     NamedVersionsRemote,
-    SnapshotsRemote
+    SnapshotsRemote,
+    FilesBySizeRemote
 {
   /** La sesión: por defecto, el dueño del workspace. */
   readonly userId: string;
@@ -3215,6 +3219,55 @@ export class FakeRemote
             rows.push({ page_id: p, file_id: f, removed_at: removed ? new Date().toISOString() : null, is_foreign: foreign });
           }
         }
+      }
+    }
+    return rows;
+  }
+
+  // --- los archivos por peso (P.8): `files` y `page_files`, leídos con sus políticas ---
+
+  /** `private.can_view_file`: lo propio, o lo que usa (sin ser un uso ajeno) una página que la sesión ve. */
+  private seesFile(fileId: string): boolean {
+    const f = this.server.mediaFiles.get(fileId);
+    if (!f) return false;
+    if (!this.team) return true;
+    if (f.created_by === this.userId && this.server.role(this.userId) && !this.server.projectDeleted(f.project_id)) return true;
+    const pagesIn = (set: Set<string>) => [...set].filter((k) => k.endsWith(`:${fileId}`)).map((k) => k.slice(0, k.indexOf(':')));
+    return (
+      pagesIn(this.server.pageFiles).some((p) => this.server.pageLevel(this.userId, p) >= 1) ||
+      // Un uso sacado cuenta solo para quien ve lo borrado de esa página.
+      pagesIn(this.server.removedPageFiles).some((p) => this.server.pageLevel(this.userId, p) >= 1 && this.server.seesDeleted(this.userId, p))
+    );
+  }
+
+  /** `files` del proyecto que ocupan lugar en el Drive, por peso; solo las filas que la sesión ve. */
+  async filesBySize(projectId: string, after: SizeCursor | null, limit: number): Promise<SizedFileRow[]> {
+    this.server.check();
+    this.server.mediaCalls.push(`files_by_size ${projectId} ${after ? after.id : 'start'}`);
+    return [...this.server.mediaFiles.values()]
+      .filter((f) => f.project_id === projectId && !!f.drive_id && !f.drive_trashed_at && this.seesFile(f.id))
+      .filter((f) => !after || f.size < after.size || (f.size === after.size && f.id > after.id))
+      .sort((a, b) => b.size - a.size || (a.id < b.id ? -1 : 1))
+      .slice(0, limit)
+      .map((f) => ({ id: f.id, name: f.name, mime: f.mime, size: f.size, thumb_at: f.thumb_at, trashed_at: f.trashed_at ?? null }));
+  }
+
+  /** Los usos activos de estos archivos en páginas que la sesión ve (uno ajeno, solo a quien ve el archivo). */
+  async fileUses(fileIds: string[]): Promise<PageUseRow[]> {
+    this.server.check();
+    this.server.mediaCalls.push(`file_uses ${fileIds.length}`);
+    const wanted = new Set(fileIds);
+    const rows: PageUseRow[] = [];
+    for (const [set, foreign] of [
+      [this.server.pageFiles, false],
+      [this.server.foreignPageFiles, true],
+    ] as const) {
+      for (const key of set) {
+        const [p, f] = key.split(':');
+        if (!wanted.has(f) || !this.server.pages.has(p) || this.server.pageInDeletedProject(p)) continue;
+        if (this.team && this.server.pageLevel(this.userId, p) < 1) continue;
+        if (foreign && !this.seesFile(f)) continue;
+        rows.push({ page_id: p, file_id: f, removed_at: null, is_foreign: foreign });
       }
     }
     return rows;
