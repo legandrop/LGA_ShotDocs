@@ -43,6 +43,12 @@ const UNNOTIFIED_KEY = 'unnotified:';
 // versión vieja de la app, que mandaría una edición de la cola con la firma de dos argumentos y pisaría lo guardado, no
 // la toca (de `meta` solo borra `since:` e `import:`).
 const DRAFT_KEY = 'editConflict:';
+// Para qué valor del cursor de una página (`since:<página>`) ya no puede quedar nada detrás (`CURSOR_MARGIN_MS`): el
+// mismo texto del cursor. Vale solo mientras es **igual** al cursor guardado, así que una versión anterior de la app,
+// que mueve el cursor sin conocer esta clave, la deja sin efecto sola. Y si el cursor volviera a ese mismo valor
+// (después de restaurar una copia hecha con esa versión), sigue siendo cierta: lo que dice es que ninguna transacción
+// con hora anterior a esa fecha queda sin confirmar ni sin bajar, y eso no deja de ser verdad.
+const SETTLED_KEY = 'settled:';
 
 /** La versión de la base con `comment_mentions` y sus funciones (20261015120000_menciones.sql). */
 export const MENTIONS_SCHEMA_VERSION = 15;
@@ -203,6 +209,31 @@ export type ListedComment = CommentRow & { updated_at?: string | null };
 
 /** Cada cuánto, como mucho, se vuelve a bajar una página abierta (en el acto si se subió algo de ella). */
 export const PULL_EVERY_MS = 10_000;
+
+/**
+ * Cuánto antes del cursor se pide mientras una bajada pudo cruzarse con un cambio a medio confirmar.
+ *
+ * El cursor es el `updated_at` más alto que llegó, y en Postgres `updated_at = now()` es la hora en que **empezó** la
+ * transacción, no la de su confirmación: un cambio que empezó antes que el último recibido y confirmó después de la
+ * bajada queda con una fecha anterior al cursor, y pidiendo «desde el cursor» no llega (hasta que vuelva a cambiar).
+ * Cada cambio de un comentario es una sola sentencia de la API, que la base corta a los 8 segundos (el tope de la
+ * sesión): entre que toma su hora y que se ve pasan, como mucho, esos segundos más la confirmación. Un minuto los
+ * cubre siete veces, con lugar para una bajada de varios pedidos (cada uno mira la base en otro momento).
+ *
+ * No se pide así siempre: los comentarios importados de una página entran todos en unos segundos, y con el margen
+ * fijo cada bajada (una cada 10 segundos por página abierta, y en un link contra su tope del día) los traería a todos
+ * de nuevo para siempre. Un cambio que quedó detrás del cursor ya confirmó, seguro, un margen después de la bajada
+ * que dejó el cursor donde está; por eso el margen va **hasta** una bajada hecha después de ese plazo que no mueva el
+ * cursor (`CommentQueue.pull`). Ahí el cursor queda **asentado**, y eso se guarda con él (`settled:<página>`): desde
+ * entonces se pide desde el cursor, como siempre, también al abrir la app de nuevo, hasta que el cursor se mueva.
+ */
+export const CURSOR_MARGIN_MS = 60_000;
+
+/** La fecha de un cursor corrida `ms` para atrás; `null` si no se puede leer (se baja todo). */
+function before(cursor: string, ms: number): string | null {
+  const at = Date.parse(cursor);
+  return Number.isFinite(at) ? new Date(at - ms).toISOString() : null;
+}
 
 /** Un cambio hecho en el dispositivo, en la cola hasta que el servidor lo confirma. */
 export type CommentOp =
@@ -464,6 +495,12 @@ export class CommentQueue {
   /** Cuándo se bajó cada página por última vez, y las que hay que bajar ya (se subió algo de ellas). */
   private readonly lastPull = new Map<string, number>();
   private readonly dirty = new Set<string>();
+  /**
+   * Por página, el cursor que dejó la última bajada de esta sesión y cuándo (reloj del dispositivo) terminó la bajada
+   * que lo puso en ese valor. Va con el valor: si el cursor guardado ya es otro (lo movió otra versión de la app), de
+   * ese no se sabe desde cuándo está.
+   */
+  private readonly cursorSince = new Map<string, { cursor: string | null; at: number }>();
   /** Por qué no se pudo bajar una página (a la vista en el panel). */
   private readonly pullErrors = new Map<string, string>();
   private lastError: string | null = null;
@@ -1391,13 +1428,25 @@ export class CommentQueue {
    * Baja los comentarios de una página. Con `list_comments` en la base, solo lo que cambió desde la última
    * vez (el cursor, `updated_at`, se guarda con lo bajado); sin la función, la vista entera. Los correos
    * (`comment_authors`) se piden solo si aparece alguien que el dispositivo no conoce.
+   *
+   * Mientras el cursor no está asentado se pide desde un margen antes (`CURSOR_MARGIN_MS`): lo que vuelve a llegar se
+   * funde por id (la fila guardada se reemplaza por la misma), y lo pendiente o apartado del dispositivo no se toca,
+   * porque vive en la cola y en `meta`, no en lo bajado.
    */
   private async pull(pageId: string): Promise<void> {
     this.dirty.delete(pageId);
     const sinceKey = `since:${pageId}`;
+    const settledKey = SETTLED_KEY + pageId;
     const since = this.db ? (((await this.db.get('meta', sinceKey)) as string | undefined) ?? null) : null;
-    const listed = this.remote.listComments ? await this.remote.listComments(pageId, since) : null;
-    const incremental = listed !== null && since !== null;
+    // Sin cursor se baja todo; con uno, desde un margen antes, salvo que ese mismo cursor ya esté asentado.
+    const exact = since === null || (await this.db!.get('meta', settledKey)) === since;
+    const asked = since === null || exact ? since : before(since, CURSOR_MARGIN_MS);
+    // Desde cuándo vale el cursor de ahora, si lo puso una bajada de esta sesión.
+    const mark = this.cursorSince.get(pageId);
+    const heldSince = mark && mark.cursor === since ? mark.at : undefined;
+    const startedAt = this.now();
+    const listed = this.remote.listComments ? await this.remote.listComments(pageId, asked) : null;
+    const incremental = listed !== null && asked !== null;
     const rows = listed ?? (await this.remote.fetchComments(pageId));
     const valid = rows.filter(isRow).filter((r) => r.page_id === pageId);
     let cursor: string | null = listed ? since : null;
@@ -1409,13 +1458,20 @@ export class CommentQueue {
       const { updated_at: _u, ...row } = r as ListedComment;
       return row as CommentRow;
     });
+    // El cursor queda asentado con una bajada **con margen**, pedida un margen después de la que lo dejó donde está,
+    // que no lo movió: todo lo que empezó antes que él ya confirmó y acaba de llegar.
+    const settles = !exact && cursor === since && heldSince !== undefined && startedAt - heldSince >= CURSOR_MARGIN_MS;
     if (this.db) {
       const tx = this.db.transaction(['comments', 'meta'], 'readwrite');
       const store = tx.objectStore('comments');
+      const meta = tx.objectStore('meta');
       if (!incremental) for (const key of await store.index('page').getAllKeys(pageId)) await store.delete(key);
       for (const r of clean) await store.put(r);
-      if (cursor) await tx.objectStore('meta').put(cursor, sinceKey);
-      else await tx.objectStore('meta').delete(sinceKey);
+      if (cursor) await meta.put(cursor, sinceKey);
+      else await meta.delete(sinceKey);
+      // La marca va con lo bajado, en la misma escritura. Un cursor que se movió ya no es el asentado.
+      if (settles) await meta.put(cursor, settledKey);
+      else if (cursor !== since) await meta.delete(settledKey);
       await tx.done;
     }
     const map = incremental ? new Map(this.rows.get(pageId) ?? []) : new Map<string, CommentRow>();
@@ -1423,6 +1479,9 @@ export class CommentQueue {
     this.rows.set(pageId, map);
     this.pulled.add(pageId);
     this.lastPull.set(pageId, this.now());
+    // El cursor se movió, o no se sabe desde cuándo vale lo que vale (la primera bajada de la sesión, o lo movió otra
+    // versión de la app): el plazo empieza ahora.
+    if (cursor !== since || heldSince === undefined) this.cursorSince.set(pageId, { cursor, at: this.now() });
     // Una edición apartada cuyo texto ya es el guardado (se eligió lo mismo desde otro dispositivo) no tiene nada que
     // decidir: se olvida. Es el único caso en que se va sola, y no se pierde nada: ese texto está en la base.
     for (const draft of [...this.drafts.values()]) {
@@ -1521,6 +1580,8 @@ export class CommentQueue {
     // Lo bajado antes de la copia ya no vale como punto de partida: la próxima bajada es entera.
     const tx = db.transaction(['outbox', 'meta'], 'readwrite');
     const meta = tx.objectStore('meta');
+    // Las marcas de cursor asentado (`settled:`) quedan: sin cursor, la primera bajada es entera y, al poner el cursor,
+    // borra la de su página.
     for (const key of await meta.getAllKeys()) if (typeof key === 'string' && key.startsWith('since:')) await meta.delete(key);
     if (recovered.length > 0) {
       // Lo recuperado es más viejo que lo que ya estaba en la cola: va antes.

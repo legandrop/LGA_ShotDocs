@@ -1087,6 +1087,73 @@ Paso 10 de `Plan_Workspaces.md` (sección 4), con la base en la versión 5
   correos (`comment_authors`) se piden solo cuando aparece alguien que el dispositivo no conoce. Una página
   que ya no se ve no corta la bajada de las demás, y el error se ve en el panel. Con la base anterior a la
   versión 5 nada se manda: lo escrito queda en el dispositivo y el estado avisa que falta migrar.
+- **El cursor y los cambios que confirman tarde (v0.231).** El cursor es el `updated_at` más alto que llegó, y la
+  base lo pone con `now()`, que en Postgres es la hora en que **empezó** la transacción, no la de su confirmación.
+  Un cambio A que empezó antes que el último recibido y confirmó después de la bajada queda con una fecha anterior
+  al cursor: pidiendo «desde el cursor» no llegaba **nunca** (el cursor se guarda en el dispositivo y no hay una
+  bajada entera periódica ni aviso en tiempo real que lo tape; solo lo traían que ese comentario volviera a cambiar
+  o restaurar una copia, que borra los cursores). Lo mismo con el visitante de un link, que usa la misma cola
+  (`plink_list_comments`).
+  - **El margen** (`CURSOR_MARGIN_MS`, un minuto, en `src/sync/comments.ts`): la bajada pide desde un minuto antes
+    del cursor. Cada cambio de un comentario es **una** sentencia de la API, que la base corta a los 8 segundos (el
+    tope de la sesión; el del rol de un link no se midió, y de fábrica en Supabase es menor): entre que toma su hora
+    y que se ve pasan, como mucho, esos segundos más la confirmación. Un minuto los cubre siete veces, con lugar
+    para una bajada de varios pedidos (cada uno mira la base en otro momento). El cursor guardado no cambia (sigue
+    siendo la fecha más alta): el margen se resta al pedir.
+  - **Solo hasta que el cursor queda asentado.** Con el margen fijo, cada bajada (una cada 10 segundos por página
+    abierta) volvería a traer para siempre todo lo que cambió en el último minuto de actividad de la página; los
+    comentarios importados de una página entran todos en unos segundos (`import_comment` pone `updated_at = now()`),
+    así que serían todos, y en un link cada fila cuenta en su tope del día. Un cambio que quedó detrás del cursor
+    empezó antes que él y dura menos que el margen: ya confirmó, seguro, un margen después de la bajada que dejó
+    el cursor donde está. Por eso se pide con margen **hasta** una bajada **con margen**, hecha pasado ese plazo,
+    que no mueva el cursor: ahí el cursor queda **asentado**. Desde entonces se pide desde el cursor (una fila por
+    bajada, como antes), hasta que se mueva. El plazo se mide en el dispositivo, como tiempo transcurrido desde la
+    bajada que movió el cursor en esta sesión; no compara su reloj con el de la base.
+  - **El asentado se guarda con el cursor** (`settled:<página>` en `meta`, junto a `since:<página>`, en la misma
+    escritura que lo bajado). Guarda el **valor** del cursor asentado, y vale solo mientras es igual al cursor
+    guardado: al abrir la app, si coinciden, la primera bajada ya pide desde el cursor; si el cursor se movió (lo
+    borra la misma bajada que lo mueve) o no hay marca, se pide con margen y el plazo corre desde esa bajada. Una
+    versión anterior de la app, que no conoce la marca, solo puede mover el cursor: los valores dejan de coincidir.
+    Si el cursor volviera al **mismo** valor (restaurar una copia con esa versión y bajar todo de nuevo), la marca
+    sigue siendo cierta: dice que ninguna transacción con hora anterior a esa fecha quedó sin confirmar ni sin bajar,
+    y eso no deja de ser verdad (lo que empieza después lleva una hora posterior). Restaurar con esta versión borra
+    los cursores; la bajada entera que sigue pone el cursor y, con eso, borra la marca. En el modo link es igual: es
+    la misma cola.
+  - **Por qué no se pierde nada** (supuestos: (1) una transacción de comentario dura menos que el margen; (2) el reloj
+    del dispositivo no salta hacia adelante entre dos bajadas; (3) una bajada es un pedido, que ve la base en un solo
+    momento; con varios, el margen tiene 52 s de sobra para cubrir lo que tarden). Sea R un cambio que confirma
+    después de una bajada y C el cursor cuando se baja la siguiente, puesto por la bajada P. Si R empezó en C o
+    después, llega igual (`>=`). Si empezó antes: R estaba sin confirmar después de P, así que empezó menos de un
+    margen antes de confirmar, y su hora es posterior a C menos un margen; una bajada con margen lo trae. Y una bajada
+    sin margen (el cursor asentado) no puede tocarle: el asentado pidió que una bajada con margen saliera un margen
+    después de P sin mover el cursor, y R, que empezó antes que C, confirmó antes de ese momento, así que esa bajada
+    ya lo trajo.
+  - **Lo que cuesta** (medido en las pruebas: una página con 200 comentarios importados, abierta 2 minutos, una
+    bajada cada 10 segundos):
+
+    | | v0.229 (sin margen) | primera entrega (margen sin guardar) | ahora |
+    |---|---|---|---|
+    | Primera vez que se abre la página en el dispositivo | 211 filas | 1.405 | 1.405 |
+    | Cada vez que se vuelve a abrir la app | 12 | 1.405 | 12 |
+
+    Las 1.405 son la bajada entera (200), seis con margen hasta asentar (200 cada una) y cinco de una fila. Se paga
+    una vez por página y por dispositivo, y otra vez cada vez que el cursor se mueve mientras una tanda de cambios
+    del último minuto sigue dentro del margen. En un link (medido por la auditoría): unos 4,2 KB por comentario
+    importado en esa primera visita (con 300, 1,26 MB del tope de 50 MB del día); antes se pagaba en **cada** visita.
+    Una visita de menos de un minuto no llega a asentar: cada una repite el margen (abajo, "Lo que queda").
+  - **Lo que vuelve a llegar se funde por id.** La fila guardada se reemplaza por la misma (o por una más nueva):
+    nada se duplica. Lo pendiente y lo apartado del dispositivo viven en la cola y en `meta`, no en lo bajado, así
+    que una edición sin subir se sigue viendo y una apartada sigue esperando su decisión. La campana de menciones
+    tiene su propia pregunta (`mentions_inbox`): una bajada de comentarios no la toca (probado).
+  - **Lo que no cubre:** un cambio hecho por fuera de la API en una transacción de más de un minuto (una migración o
+    un SQL a mano que toque `comments.updated_at`; si alguna vez hace falta, esa migración sube la generación o no
+    usa `now()`); un salto del reloj del dispositivo de un minuto o más hacia adelante entre dos bajadas, justo con un
+    cambio a medio confirmar (asentaría antes de tiempo); y lo que una versión anterior de la app ya dejó detrás del
+    cursor antes de esta versión, que no vuelve solo (lo traería una bajada entera).
+  - Pruebas: `src/sync/commentsLateCommit.test.ts`, con el orden «empieza A, baja el dispositivo, confirma A»
+    (`FakeServer.beginComment`), el plazo que se reinicia al moverse el cursor, cada página con su cursor, el asentado
+    que sobrevive a cerrar y abrir, el cursor que movió otra versión de la app, restaurar, el costo con 200
+    importados y el modo link.
 - **Restaurar una copia** (la generación, ver abajo): la cola de comentarios guarda la última generación
   que vio (en su base). Si cambió, **antes de la primera bajada** (que pisaría lo guardado) compara lo
   guardado con lo que tiene el servidor y vuelve a poner en la cola, delante de lo que ya había: los
@@ -1243,7 +1310,7 @@ decenas de KB; los originales van al Drive por el portero), y desde v0.092 tambi
   no se corta, la que se queda quieta a mitad y las pasadas que esperan) y
   `src/media/queue.test.ts`, "miniaturas que Storage no contesta" (lo que hace la cola).
 
-## Las listas largas: sin suponer cuántas filas entrega la API (v0.224 y v0.226)
+## Las listas largas: sin suponer cuántas filas entrega la API (v0.224, v0.226 y v0.231)
 
 La API de la base entrega como mucho un **tope de filas por pedido** (el ajuste *Max rows* del proyecto; de fábrica,
 1000) y **no avisa cuando recorta**. La app daba por última "una página con menos de 1000 filas": con un tope menor (un
@@ -1263,7 +1330,9 @@ corta: el motor la toma por todo lo que hay.
   alcanza ese total, o con una página vacía; nunca por haber recibido pocas filas. Lo que cambia entre dos pedidos no
   corre ni saltea filas; una fila repetida (una base que no avanza) es un error; si un pedido falla, falla la lista. En
   el caso de siempre (todo entra en una respuesta) es **un pedido, como antes**. Si la API no mandara el total, o mandara
-  uno menor que lo que entregó (no se le cree), se sigue hasta una página vacía (un pedido más).
+  uno menor que lo que entregó (no se le cree), se sigue hasta una página vacía (un pedido más). Desde la v0.231 el
+  árbol pide el total **solo mientras es chico**; con uno grande termina con esa página vacía (abajo, "El costo de
+  contar a escala").
 - **Sin migración.** `list_comments` ya recibe desde cuándo (`p_since`) y devuelve por `updated_at` e `id`: el pedido
   siguiente manda en `p_since` la fecha de la última fila y un filtro que deja afuera lo de esa misma fecha que ya
   llegó. No sube `schema_version` y anda igual con una base anterior.
@@ -1271,10 +1340,11 @@ corta: el motor la toma por todo lo que hay.
 | Lista | Dónde | Cómo se pide ahora |
 |---|---|---|
 | Comentarios de una página | `listComments`, `fetchComments` | Por clave (`updated_at`/`created_at`, `id`) y total. Lo editado entre dos pedidos llega con su última versión. |
-| Árbol de páginas | `fetchTreeOf` | Por `id` (ya lo hacía) y total, en vez de "menos de 1000". |
+| Árbol de páginas | `fetchTreeOf` | Por `id` (ya lo hacía) y total, en vez de "menos de 1000". Desde v0.231, el total solo si el dispositivo tiene menos de 1000 páginas; con más, hasta una página vacía. |
 | Proyectos | `fetchProjects` | Por `created_at`, `id` y total (antes, un pedido con "hasta 1000"). |
 | Permisos propios | `fetchMyAccess` | Por `id` y total (antes, un pedido con "hasta 10000", que la API recortaba a su tope). |
-| Usos de archivos | `fetchPageUses`, `fileUses` | Por clave (página, archivo) y total. |
+| Usos de archivos | `fetchPageUses`, `fileUses` | Por clave (página, archivo) y total. Desde v0.231, si la base corta por tiempo un pedido que cuenta, se repite sin el total y el resto de la lista termina con una página vacía. |
+| Invitaciones y nombres de versión (v0.231) | `listInvitations`, `listPageVersions` | Por `id` y total (`rpcByKey`); después vuelven al orden de la función (lo más nuevo primero; fila, fecha, id). |
 | Archivos por id | `fetchMediaFiles` | Se vuelve a pedir lo que no llegó mientras siga llegando algo; sin total (contar revisa dos veces los permisos de cada archivo: 50 ms más cada 100). Un archivo que falta de verdad cuesta un pedido más, vacío. |
 | Archivos por peso | `filesBySize` | Ya iba por clave; termina con una página vacía (un pedido más al final de la lista). Sin total: contar revisaría los permisos de todos los archivos del proyecto en cada tramo. |
 | Lotes de contenido e historial | `pullUpdates`, `pullContent`, `pageHistory` | Si la API recortó el lote (dice que la función dio más filas), se completa desde la última fila: "menos que lo pedido" sigue queriendo decir "no hay más". |
@@ -1296,8 +1366,8 @@ decide el grupo es si la lista puede tener de verdad más filas que el tope **de
 | Quién tiene acceso (`list_access`) | No | *Share*: lo muestra. | Con el total. |
 | Proyectos borrados (`trashed_projects`) | No | La papelera: lo muestra, con *Retry*. El aviso de "hay algo para restaurar": se lo traga. | Con el total. |
 | Peso de los proyectos (`project_sizes`) | No (una fila por proyecto) | *Drive* y la lista por peso: lo muestran. | Con el total. |
-| Invitaciones (`list_invitations`) | No | *Members* se lo traga: la sección de invitaciones no se muestra. | Con el total. |
-| Nombres de versión (`list_page_versions`) | No | `fetchVersions` se lo traga: el historial se ve sin los nombres. | Con el total. |
+| Invitaciones (`list_invitations`) | No | *Members* se lo traga: la sección de invitaciones no se muestra. | En v0.224, con el total. **Desde v0.231, enteras, por clave** (la tabla de arriba). |
+| Nombres de versión (`list_page_versions`) | No | `fetchVersions` se lo traga: el historial se ve sin los nombres. | En v0.224, con el total. **Desde v0.231, enteros, por clave** (la tabla de arriba). |
 | Candidatos del `@` (`mention_candidates`) | No | `refreshCandidates` se lo traga. | **Lo que llega**, como antes: con el error, el `@` se quedaba sin nadie. |
 | Lo apartado de los links (`public_link_aside`) | **Sí**: hasta 200 por página, y nunca se borra | `LinkAsideStore` se lo traga. | En v0.224, lo que llega. **Desde v0.226, entera, por clave** (la tabla de arriba). |
 | Lo que no entró de un link en una página (`public_link_updates_of`) | La función corta en 500 **adentro** | El aviso de la página se lo traga. | En v0.224, lo que llega. **Desde v0.226, entera, con `public_link_updates_page`**; con una base sin ella, como antes. |
@@ -1306,9 +1376,9 @@ decide el grupo es si la lista puede tener de verdad más filas que el tope **de
 | Papelera de un proyecto, base sin `trashed_files_page` (`trashed_files`) | **Sí** (un proyecto importado y borrado) | La papelera: lo muestra. | **Lo que llega**, como antes (lo último primero): con el error no se veía nunca. Con la función nueva llega entera, por clave. |
 
 Con el tope de fábrica ninguna de las del primer grupo llega a recortarse; con un tope menor, las que muestran el error
-dicen *This list is longer than this workspace's database sends in one request…* y las otras dos (invitaciones, nombres
-de versión) simplemente no se muestran. Lo de `public_link_aside` lo encontró la auditoría de esta versión: el control
-del total, puesto ahí, dejaba la lista vacía con el tope de fábrica.
+dicen *This list is longer than this workspace's database sends in one request…*. Las otras dos (invitaciones, nombres
+de versión) simplemente no se mostraban: desde la v0.231 llegan enteras, por su `id`. Lo de `public_link_aside` lo
+encontró la auditoría de la v0.224: el control del total, puesto ahí, dejaba la lista vacía con el tope de fábrica.
 
 - **El modo link (v0.226).** El visitante de un link público pedía sus listas en un pedido cada una. Medido con una
   rama y una página con más filas que el tope (el motor de verdad contra una API de mentira que recorta):
@@ -1410,14 +1480,47 @@ del total, puesto ahí, dejaba la lista vacía con el tope de fábrica.
   página, de 2,3 a 4,0 s; un admin sin permisos propios, de 1,2 a 3,2 s), y los usos de 100 páginas con 2.600 filas, de
   1,1–3,0 a 2,2–5,7 s. La sesión tiene un tope de 8 segundos por sentencia: contar baja a la mitad el tamaño de árbol
   desde el que la sincronización empieza a fallar entera (de unas 12–24 mil páginas a 6–12 mil). Hoy no pesa (41
-  páginas vivas). **Diseño para cuando haga falta:** en `pages` y `page_files` no pedir el total y, cuando una página
-  llega más corta que lo pedido, confirmar el final con **un** pedido por clave (no encuentra filas y casi no le cuesta
-  a la base, aunque suma una ida y vuelta por lista); o elegir entre las dos formas según el tamaño que tuvo la lista
-  en la sincronización anterior (chica: total; grande: pedido de confirmación). En las funciones y en las tablas
-  chicas el total no cuesta y se queda.
+  páginas vivas).
+  - **Hecho en v0.231, sin migración: el árbol pide el total solo mientras es chico** (`CountChoice` y
+    `COUNT_UP_TO_ROWS` en `src/sync/listPages.ts`). Las dos formas del diseño anotado, elegidas por tamaño: con menos
+    de **1000 páginas** pide el total y termina con él (un pedido, como siempre); con 1000 o más no lo pide y termina
+    **solo** con una página vacía pedida por clave (después de la última fila recibida: no encuentra nada y a la base
+    casi no le cuesta, pero es una ida y vuelta más). La garantía es la misma en las dos: `KeyedList` nunca termina
+    por una página corta, y lo que cambia entre dos pedidos no corre ni saltea filas.
+  - **De dónde sale el tamaño.** De lo que el dispositivo ya tiene de la bajada anterior (`PageTree.serverPages`, que
+    la sincronización le pasa a `fetchTree`): está guardado, así que vale desde el primer pedido de cada sesión. De
+    los **usos de archivos** no hay un tamaño anterior (se piden una vez por página, de a 100): siguen pidiendo el
+    total. Se probó elegir por la tanda anterior y se sacó: una tanda con muchas filas no dice nada de la que sigue,
+    y a las chicas les sumaba un pedido vacío.
+  - **Por qué 1000.** Contar cuesta entre 0,2 y 0,6 ms por fila (41 páginas: 7 ms más; 3.500: 1,1–2,1 s más): con
+    1000 filas ya es más que una ida y vuelta, y es desde donde la lista deja de entrar en un pedido de la app. Con
+    menos, no pedir el total sumaría un pedido a cada sincronización chica para no ahorrar nada.
+  - **Si contar no entra en el tope de la base.** Un dispositivo nuevo en un workspace grande, o un árbol que creció
+    de golpe (una importación desde otro dispositivo), todavía «conoce» pocas filas y pide el total. Si la base
+    corta **ese** pedido por tiempo (`57014`), se repite igual, sin el total, y la lista sigue sin contar: cuesta
+    un pedido perdido, una vez, en vez de una sincronización que falla para siempre. Lo mismo en los usos de
+    archivos (por página y por archivo). Un corte por tiempo de un pedido que no contaba es un error como cualquiera.
+  - **Los pedidos, antes y después** (el tope de fábrica, 1000 filas por pedido):
+
+    | Árbol | v0.224 a v0.230 | v0.231 |
+    |---|---|---|
+    | 41 páginas (hoy) | 1 pedido, con total | **igual**: 1 pedido, con total |
+    | 999 páginas | 1, con total | igual |
+    | 3.500, el dispositivo ya las tiene | 4, todos con total (el primero, 2,3–4,4 s; cada uno cuenta todo lo que falta) | 5 sin total: los 4 de antes y uno vacío (el primero, 1,2–2,3 s) |
+    | 3.500, dispositivo nuevo | 4, con total | la primera vez, como antes; desde la segunda sincronización, 5 sin total |
+    | Desde dónde falla entera (8 s por sentencia) | unas 6–12 mil páginas | unas 12–24 mil, como antes de contar |
+
+    Los tiempos son los que midió la auditoría de la v0.224 con y sin el total (3.500 páginas sembradas en una
+    transacción que se deshizo); en esta versión no se volvió a medir contra la base, solo los pedidos, contra la
+    API de mentira.
+  - **Lo que sigue contando:** las funciones (no cuesta), `workspaces` y `grants` (tablas chicas: 1,5 a 3 ms y 0,2
+    a 0,4), `comments_view` (una página, y solo con una base sin `list_comments`) y los usos de archivos
+    (`page_files`: de 1,1–3,0 a 2,2–5,7 s con 2.600 filas en 100 páginas, solo para las páginas que un dispositivo
+    nunca comparó y en la lista por peso).
 - **Qué mirar en producción.** Con la pestaña de red, en una sincronización: la respuesta de `rpc/list_comments` (y la
   de `pages`, `workspaces` y `grants`) trae un `Content-Range` que termina en un número (`0-29/30`), no en `*`. La
-  señal de problema son los pedidos de a pares, donde el segundo contesta `[]`. Si la API no mandara el total en un
+  señal de problema son los pedidos de a pares, donde el segundo contesta `[]` (salvo `pages` con 1000 páginas o
+  más: desde la v0.231 ahí es lo esperado, sin total y con un último pedido vacío). Si la API no mandara el total en un
   `rpc`: los comentarios siguen seguros, con un pedido de más por página; los lotes de contenido que la API recorte
   llegan demorados (los retoma la vuelta siguiente), no perdidos; y el historial y las listas de un pedido quedarían
   cortados en silencio con un tope de filas bajo. Esto se probó contra una API de mentira que imita a PostgREST y
@@ -1429,6 +1532,13 @@ del total, puesto ahí, dejaba la lista vacía con el tope de fábrica.
     rows* de la Data API a 5 y abrir un link con más de 5 páginas (llegan todas, en varios pedidos con la misma
     firma).
 - **Lo que queda.**
+  - **Hecho en v0.231:** el cursor de los comentarios (un margen de un minuto hasta que el cursor queda asentado, y
+    el asentado guardado con él:
+    "Comentarios y preguntas", "El cursor y los cambios que confirman tarde"); el costo de contar a escala en el
+    árbol (el total solo mientras es chico: arriba); las invitaciones y los nombres de versión, enteros por su `id`; y el
+    mensaje de `scripts/lib/management.mjs` cuando un pedido que escribe (invitar, un ajuste) no contesta: ya no
+    dice *Try again* a secas sino *It may have gone through anyway: check before sending it again.* (una lectura
+    sigue diciendo *Try again*).
   - **Hecho en v0.228 (lo anotado en la re-verificación de v0.226):** la bajada corta repetida del árbol vale solo
     si terminó con una respuesta vacía; la línea de «lista atrasada» en el detalle de la insignia; el link revocado
     durante la espera se nota en el ciclo siguiente por los comentarios de la página abierta (los tres, arriba, en
@@ -1467,17 +1577,34 @@ del total, puesto ahí, dejaba la lista vacía con el tope de fábrica.
   - **Las listas de trabajo** (`files_due_for_purge`, `link_admit_pages`, `link_admit_work`, `clean_work`) no llevan
     el control: una parte ahora y el resto en la vuelta siguiente es lo que hacen siempre. `link_admit_work` escribe
     el orden en el pedido desde v0.226 (el de la función: página, link y llegada).
-  - **Las listas del primer grupo** dan un error (o no se muestran) con un tope bajo en vez de paginarse; paginarlas es
-    pedirlas por su clave, como los correos.
-  - **El cursor de los comentarios:** `updated_at` es la hora en que empezó la transacción, así que un cambio que
-    empezó antes y se confirmó después de una bajada queda detrás del cursor (reproducido de forma simulada por la
-    auditoría; no empeora respecto de v0.223). Lo barato, sin migración: pedir con `p_since` un minuto atrás.
+  - **Las listas del primer grupo que muestran el error** (equipo, quién tiene acceso, proyectos borrados, peso de
+    los proyectos) siguen dando el error con un tope bajo en vez de paginarse; paginarlas es pedirlas por su clave y
+    devolverles en la app el orden de la función, como se hizo con las invitaciones y los nombres de versión.
+  - **El cursor de los comentarios** no cubre una transacción de más de un minuto hecha por fuera de la API (arriba,
+    "Lo que no cubre"). Una visita de menos de un minuto a una página con muchos cambios recientes no asienta, y cada
+    visita así repite las bajadas con margen; para eso habría que guardar también desde cuándo vale el cursor (con el
+    reloj del dispositivo entre sesiones) o, con migración, que `list_comments` devuelva la hora de la base, como
+    `mentions_inbox`: con ella el margen hace falta solo si el cursor está a menos de un margen de esa hora. La
+    campana de menciones tiene su propio margen, fijo, de 10 segundos (`mentions.ts`), apenas
+    por encima de los 8 del tope de sentencia; ahí la red es la conciliación con el índice cuando no coincide la
+    cantidad sin leer.
+  - **Cada bajada de comentarios trae al menos una fila** aunque no haya nada nuevo (la función compara con `>=`, y
+    hace falta: dos comentarios pueden compartir fecha). En un link eso cuenta un `pull` y los bytes de esa fila en
+    cada bajada. Para que «nada nuevo» no traiga nada, la función tendría que recibir también el `id` desde dónde
+    seguir.
+  - **El tamaño conocido del árbol** es el de todo el dispositivo, no el de cada tanda de 100 proyectos: con más de
+    100 proyectos y más de 1000 páginas, las tandas chicas también van sin total (un pedido vacío de más por tanda).
+  - **Los usos de archivos siguen contando** (arriba, "De dónde sale el tamaño"). Para no contar las tandas grandes
+    hace falta un tamaño de antemano: la cola de archivos sabe cuántos usos tiene el dispositivo de cada página y se
+    lo podría pasar a `fetchPageUses`. Hoy solo los protege el corte por tiempo, que se repite sin contar.
   - `fetchTree` con más de 100 proyectos son varios pedidos: una página que cambia de proyecto entre dos puede faltar
     o repetirse en esa bajada.
-  - Chicos: en `scripts/lib/management.mjs` el "Try again" también sale para invitar (un `POST` que pudo haber
-    llegado); y los pedidos de más ya dichos (`fetchMediaFiles` cuando falta un archivo, `filesBySize` al final de la
+  - Chicos: los pedidos de más ya dichos (`fetchMediaFiles` cuando falta un archivo, `filesBySize` al final de la
     lista).
-- Pruebas: `src/sync/listPages.test.ts`, contra `src/sync/fakePostgrest.ts` (el cliente de verdad y una API de mentira
+- Pruebas: `src/sync/listCount.test.ts` (v0.231: el árbol con y sin el total según lo que tiene el dispositivo, con
+  los mismos topes, el corte por tiempo de un pedido que cuenta, y las invitaciones y los nombres de versión enteros
+  y en su orden);
+  `src/sync/listPages.test.ts`, contra `src/sync/fakePostgrest.ts` (el cliente de verdad y una API de mentira
   en el nivel de los pedidos: tope de 1000, 500, 137 y 1, solo las columnas pedidas, otro orden en cada pedido si no se
   lo escribe, cambios entre dos pedidos, sin total o con un total mentido, y un pedido que falla a mitad);
   `src/sync/linkLists.test.ts` (las listas del visitante con los mismos topes: el árbol que cambia a mitad, que no

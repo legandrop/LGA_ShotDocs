@@ -114,6 +114,11 @@ export const trash = {
     en: "The file trash could not be read ({reason}). It needs an internet connection.",
     es: "No se pudo leer la papelera de archivos ({reason}). Hace falta conexión a internet.",
   },
+  // El pedido que trae juntas las papeleras de varios proyectos falló: un solo aviso, con un solo *Retry*.
+  'fileTrash.loadFailedMany': {
+    en: "The file trash of {count} projects could not be read ({reason}). It needs an internet connection.",
+    es: "No se pudo leer la papelera de archivos de {count} proyectos ({reason}). Hace falta conexión a internet.",
+  },
   'fileTrash.none': { en: "No files in the trash.", es: "No hay archivos en la papelera." },
   'fileTrash.needsInternet': { en: "Needs an internet connection", es: "Hace falta conexión a internet" },
   // Un archivo que usa una página de un proyecto borrado (P.14): no se manda a Drive hasta que lo restauren.

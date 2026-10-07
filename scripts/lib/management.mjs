@@ -87,12 +87,16 @@ export function createManagementClient({
       text = await res.text();
     } catch (err) {
       if (!signal.aborted) throw err;
-      // Vencido el tope: el pedido pudo haber llegado. Con SQL, la consulta puede seguir corriendo en la base.
+      // Vencido el tope: el pedido pudo haber llegado. Con SQL, la consulta puede seguir corriendo en la base. Una
+      // lectura se repite sin más; lo que escribe (invitar, cambiar un ajuste) pudo haberse hecho: no se dice "Try
+      // again" a secas, porque repetir una invitación a ciegas manda otro correo.
       throw new Error(
         `${method} ${url.replace(/\?.*$/, '')}: no answer after ${Math.round(limit / 1000)} seconds.` +
           (isQuery
             ? ' The query may still be running, or may have finished: check the database before running it again. To wait longer, set SUPABASE_QUERY_TIMEOUT (seconds).'
-            : ' Try again. To wait longer, set SUPABASE_API_TIMEOUT (seconds).'),
+            : method === 'GET'
+              ? ' Try again. To wait longer, set SUPABASE_API_TIMEOUT (seconds).'
+              : ' It may have gone through anyway: check before sending it again. To wait longer, set SUPABASE_API_TIMEOUT (seconds).'),
       );
     }
     if (!res.ok) {

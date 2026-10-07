@@ -505,6 +505,29 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
   Lega la puede cambiar). Un hilo que se reabrió desde otro lado y sigue en esa lista por su cuadro abierto (D337)
   no cuenta: mientras sea el único ahí, el rótulo dice *0 resolved threads*. La otra opción: esconder el rótulo en
   ese caso (se pierde el botón de plegar la lista mientras dura el cuadro).
+- **D345 · El cursor de los comentarios pide desde un minuto antes hasta quedar asentado, y el asentado se guarda**
+  (2026-10-07; tomada al implementarlo, Lega la puede cambiar). Lo anotado era «pedir siempre con un minuto de
+  margen». El minuto sale del tope de 8 segundos por sentencia, con lugar de sobra. No se pide así siempre porque los
+  comentarios importados de una página entran todos en unos segundos: con el margen fijo, cada bajada (una cada 10
+  segundos por página abierta) los traería a todos de nuevo para siempre, y en un link contra su tope del día. El
+  margen va hasta una bajada con margen hecha un minuto después de la que movió el cursor; ahí el cursor queda
+  asentado, se guarda con él, y desde entonces es una fila por bajada, como antes, también al abrir la app de nuevo.
+  Con una página de 200 comentarios importados: 1.405 filas la primera vez que se abre en el dispositivo (antes, 211)
+  y 12 cada vez que se vuelve a abrir (como antes). Las otras opciones: el margen fijo (más simple, más tráfico) o
+  que `list_comments` devuelva la hora de la base, con migración (`Doc_Sincronizacion.md`, "El cursor y los cambios
+  que confirman tarde").
+- **D346 · El árbol pide el total solo mientras el dispositivo tiene menos de 1000 páginas** (2026-10-07; tomada
+  al implementarlo, Lega la puede cambiar). De las dos formas anotadas se eligió «según el tamaño»: no pedir nunca el
+  total sumaba un pedido a cada sincronización chica (la de hoy) para ahorrar en las grandes. El tamaño es lo que el
+  dispositivo ya tiene; 1000 es desde donde contar cuesta más que una ida y vuelta. Si la base corta por tiempo un
+  pedido que contaba, se repite sin contar. Los usos de archivos siguen contando: no tienen un tamaño anterior. La
+  otra opción: confirmar siempre el final con un pedido por clave (`Doc_Sincronizacion.md`, "El costo de contar a
+  escala").
+- **D347 · En la papelera, el error del pedido que junta varios proyectos es una línea con un *Retry* que repite
+  ese pedido** (2026-10-07; tomada al implementarlo, Lega la puede cambiar). La línea dice de cuántos proyectos y por
+  qué, sin nombrarlos. *Retry* vuelve a hacer el pedido único, no uno por proyecto: si ese pedido no sale nunca, la
+  papelera de cada proyecto se sigue viendo abriéndolo (*This project*). La otra opción: que *Retry* pida proyecto
+  por proyecto, y que cada uno muestre su propio error.
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 

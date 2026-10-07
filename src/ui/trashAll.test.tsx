@@ -292,8 +292,8 @@ describe('la papelera de archivos con All projects', () => {
     }
   });
 
-  it('si el pedido falla, cada proyecto queda con su error y Retry lo pide por separado', async () => {
-    const { server, owner, a, c } = await workspace(true);
+  it('si el pedido falla, es un solo error con un solo Retry, que repite ese pedido (no uno por proyecto)', async () => {
+    const { server, owner } = await workspace(true);
     await openTrash(owner, server.ownerId);
     const remote = owner.remote as unknown as { trashedFilesAll: () => Promise<unknown> };
     const original = remote.trashedFilesAll.bind(owner.remote);
@@ -303,17 +303,57 @@ describe('la papelera de archivos con All projects', () => {
     };
     await allProjects();
     expect(files()).toEqual(['de-p.jpg']);
-    const retries = [...panel()!.querySelectorAll<HTMLButtonElement>('button.link')].filter((b) => b.textContent === 'Retry');
-    expect(retries).toHaveLength(3);
-    expect(panel()!.textContent).toContain('se cortó');
+    const retries = () => [...panel()!.querySelectorAll<HTMLButtonElement>('button.link')].filter((b) => b.textContent === 'Retry');
+    expect(retries()).toHaveLength(1);
+    // Una línea, que dice de cuántos proyectos y por qué, sin el nombre de ninguno.
+    const lines = [...panel()!.querySelectorAll('p')].filter((p) => p.textContent?.includes('se cortó'));
+    expect(lines).toHaveLength(1);
+    expect(lines[0].textContent).toContain('The file trash of 3 projects could not be read (se cortó).');
+    expect(lines[0].textContent).not.toMatch(/Arena|Bruma|Costa/);
+    // Falla de nuevo: sigue siendo una línea.
+    server.mediaCalls.length = 0;
+    await act(async () => retries()[0].click());
+    await settle();
+    expect(trashCalls(server)).toEqual(['trashed_files_all']);
+    expect(retries()).toHaveLength(1);
+    // Y cuando sale bien, llega todo con ese único pedido.
     remote.trashedFilesAll = original;
     server.mediaCalls.length = 0;
-    for (const retry of retries) await act(async () => retry.click());
+    await act(async () => retries()[0].click());
     await settle();
     expect(files()).toEqual(['de-a.jpg', 'de-c.jpg', 'de-p.jpg']);
-    expect(trashCalls(server).filter((call) => call === 'trashed_files_all')).toEqual([]);
-    expect(trashCalls(server)).toContain(`trashed_files ${a}`);
-    expect(trashCalls(server)).toContain(`trashed_files ${c}`);
+    expect(trashCalls(server)).toEqual(['trashed_files_all']);
+    expect(retries()).toHaveLength(0);
+  });
+
+  it('en castellano, y con un solo proyecto de ese pedido a la vista: el error de ese proyecto, que se pide solo', async () => {
+    const { server, owner, p } = await workspace(true);
+    // Sin red al abrir: no se pide nada. Al volver, el abierto entra en el pedido que las junta, con los demás.
+    server.online = false;
+    await owner.engine.syncNow();
+    await openTrash(owner, server.ownerId);
+    await act(async () => byText('All projects')!.click());
+    await settle();
+    (owner.remote as unknown as { trashedFilesAll: () => Promise<unknown> }).trashedFilesAll = async () => {
+      throw new Error('se cortó');
+    };
+    server.online = true;
+    await act(async () => owner.engine.syncNow());
+    await settle();
+    act(() => prefs.set({ language: 'es' }));
+    await settle();
+    expect(panel()!.textContent).toContain('No se pudo leer la papelera de archivos de 4 proyectos (se cortó).');
+    expect([...panel()!.querySelectorAll('button.link')].filter((b) => b.textContent === 'Reintentar')).toHaveLength(1);
+    // De vuelta en el proyecto abierto queda uno solo: su línea de siempre, y Reintentar pide el suyo.
+    await act(async () => byText('Este proyecto')!.click());
+    await settle();
+    expect(panel()!.textContent).toContain('No se pudo leer la papelera de archivos (se cortó).');
+    expect(panel()!.textContent).not.toContain('proyectos (se cortó)');
+    server.mediaCalls.length = 0;
+    await act(async () => [...panel()!.querySelectorAll<HTMLButtonElement>('button.link')].find((b) => b.textContent === 'Reintentar')!.click());
+    await settle();
+    expect(trashCalls(server)).toEqual([`trashed_files ${p}`]);
+    expect(files()).toEqual(['de-p.jpg']);
   });
 
   it('el motivo de un pedido que falló se lee en el idioma de la persona, no como quedó guardado', async () => {
@@ -360,7 +400,7 @@ describe('la papelera de archivos con All projects y más archivos que el tope d
     expect(panel()!.querySelector('button.link')).toBeNull();
   });
 
-  it('si la segunda página falla, no muestra lo que llegó en la primera: cada proyecto con su error y su Retry', async () => {
+  it('si la segunda página falla, no muestra lo que llegó en la primera: un solo error con su Retry', async () => {
     const { server, owner } = await withApi({ fail: { 2: { message: 'se cortó', code: '08006', status: 500 } } });
     await openTrash(owner, server.ownerId);
     await act(async () => byText('Files')!.click());
@@ -368,8 +408,8 @@ describe('la papelera de archivos con All projects y más archivos que el tope d
     expect(shownOf('Arena')).toBe(0);
     expect(shownOf('Costa')).toBe(0);
     expect(shownOf('My project')).toBe(1);
-    expect([...panel()!.querySelectorAll('button.link')].filter((b) => b.textContent === 'Retry')).toHaveLength(3);
-    expect(panel()!.textContent).toContain('se cortó');
+    expect([...panel()!.querySelectorAll('button.link')].filter((b) => b.textContent === 'Retry')).toHaveLength(1);
+    expect(panel()!.textContent).toContain('The file trash of 3 projects could not be read (se cortó).');
   });
 });
 

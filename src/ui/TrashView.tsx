@@ -43,10 +43,13 @@ type Item =
   | { kind: 'file'; at: number; projectId: string; file: TrashedFileRow }
   | { kind: 'project'; at: number; row: TrashedProjectRow };
 
-/** La lista de archivos de un proyecto: cargando, con error, lista, o que la base no la deja ver (no se muestra). */
+/**
+ * La lista de archivos de un proyecto: cargando, con error, lista, o que la base no la deja ver (no se muestra).
+ * `joint`: el error es del pedido que trae juntas las papeleras de varios proyectos (un solo aviso y un solo *Retry*).
+ */
 type Loaded =
   | { state: 'loading' }
-  | { state: 'error'; message: string }
+  | { state: 'error'; message: string; joint?: true }
   | { state: 'ready'; files: TrashedFileRow[] }
   | { state: 'hidden' };
 
@@ -158,8 +161,12 @@ export function TrashPanel(props: { current: string; onClose: () => void }) {
   const loading = (shown === 'files' || shown === 'all') && filesLoading ? true : (shown === 'projects' || shown === 'all') && projectsLoading;
   const fileErrors = fileProjects.flatMap((id) => {
     const l = files.loaded[id];
-    return l?.state === 'error' ? [{ id, message: l.message }] : [];
+    return l?.state === 'error' ? [{ id, message: l.message, joint: l.joint === true }] : [];
   });
+  // El pedido que junta varias papeleras falló: es **un** error (el de ese pedido), no uno por proyecto. Con uno solo
+  // de esos proyectos a la vista (se volvió a *This project*), va como el de un proyecto.
+  const jointErrors = fileErrors.filter((e) => e.joint).length > 1 ? fileErrors.filter((e) => e.joint) : [];
+  const ownErrors = fileErrors.filter((e) => !jointErrors.includes(e));
 
   // *Empty* vacía solo la papelera de archivos del proyecto abierto, como antes (decisión de Lega, ronda 1): se ofrece
   // con *Files* y *This project*; con *All projects* no está. Lo que se puede vaciar: los archivos del abierto si la
@@ -344,8 +351,16 @@ export function TrashPanel(props: { current: string; onClose: () => void }) {
       {loading && <p className="muted small">{tr('common.loading')}</p>}
       {!loading && list.length === 0 && emptyText && <p className="muted">{emptyText}</p>}
       {(shown === 'projects' || shown === 'all') && <DeletedProjectsError list={deleted} />}
+      {(shown === 'files' || shown === 'all') && jointErrors.length > 0 && (
+        <p className="muted small">
+          {tr('fileTrash.loadFailedMany', { count: jointErrors.length, reason: localize(jointErrors[0].message) })}{' '}
+          <button className="link" onClick={() => files.load(jointErrors.map((e) => e.id))}>
+            {tr('common.retry')}
+          </button>
+        </p>
+      )}
       {(shown === 'files' || shown === 'all') &&
-        fileErrors.map((e) => (
+        ownErrors.map((e) => (
           <p key={e.id} className="muted small">
             {fileErrors.length > 1 || scope === 'all' ? `${nameOf(e.id)}: ` : ''}
             {tr('fileTrash.loadFailed', { reason: localize(e.message) })}{' '}
@@ -423,7 +438,8 @@ function useFileTrash(projectIds: string[], online: boolean) {
           const message = errorMessage(err);
           setLoaded((l) => {
             const next = { ...l };
-            for (const id of ids) if (next[id]?.state !== 'ready') next[id] = { state: 'error', message };
+            // El error es de este pedido, no de cada proyecto: la lista lo muestra una vez, con un solo *Retry*.
+            for (const id of ids) if (next[id]?.state !== 'ready') next[id] = { state: 'error', message, joint: true };
             return next;
           });
         },
@@ -432,14 +448,21 @@ function useFileTrash(projectIds: string[], online: boolean) {
     [remote, reload],
   );
 
+  /** Pide las papeleras de estos proyectos: varias, en un pedido (si la base las junta); una, o sin esa función, de a una. */
+  const load = useCallback(
+    (ids: string[]) => {
+      if (ids.length > 1 && !noAll.current) loadMany(ids);
+      else for (const id of ids) reload(id);
+    },
+    [reload, loadMany],
+  );
+
   // Sin red no se pide nada (quedan cargando); al volver la red, lo que faltaba. Cada proyecto, una vez.
   const key = projectIds.join(',');
   useEffect(() => {
     if (!online) return;
-    const pending = (key ? key.split(',') : []).filter((id) => !asked.current.has(id));
-    if (pending.length > 1 && !noAll.current) loadMany(pending);
-    else for (const id of pending) reload(id);
-  }, [key, online, reload, loadMany]);
+    load((key ? key.split(',') : []).filter((id) => !asked.current.has(id)));
+  }, [key, online, load]);
 
   const drop = (file: TrashedFileRow) => {
     setLoaded((l) => {
@@ -528,7 +551,7 @@ function useFileTrash(projectIds: string[], online: boolean) {
     for (const id of refresh) reload(id);
   };
 
-  return { loaded, errors, busy, progress, reload, sendOne, emptyAll };
+  return { loaded, errors, busy, progress, reload, load, sendOne, emptyAll };
 }
 
 /**

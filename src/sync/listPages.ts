@@ -6,16 +6,63 @@ import { RemoteError } from './types';
 // recorta. Dar por última "una página con menos de 1000 filas" supone ese tope: con uno menor, la lista quedaba
 // cortada en silencio, y una lista cortada del árbol o de los comentarios se toma por "esto ya no existe".
 //
-// Acá nada supone el tope. Cada pedido lleva el orden escrito y pide **el total** (`count: 'exact'`: la API lo manda
-// en la misma respuesta, sin otro pedido): la lista terminó cuando lo recibido alcanza ese total, o cuando llega una
-// página vacía. Si la API no manda el total, se sigue hasta la página vacía (un pedido más): nunca se corta por
-// haber recibido pocas filas.
+// Acá nada supone el tope. Cada pedido lleva el orden escrito y, casi siempre, pide **el total** (`count: 'exact'`:
+// la API lo manda en la misma respuesta, sin otro pedido): la lista terminó cuando lo recibido alcanza ese total, o
+// cuando llega una página vacía. Si la API no manda el total, o no se le pide (el árbol grande, `CountChoice`), se
+// sigue hasta la página vacía (un pedido más): nunca se corta por haber recibido pocas filas.
 
 /** La opción de supabase-js que le pide a la API el total de filas del pedido (encabezado `Content-Range`). */
 export const COUNTED = { count: 'exact' } as const;
 
 /** El código del error de una lista que se pide de una sola vez y la API recortó (mandó menos filas que las que dijo que había). */
 export const LIST_CUT = 'list_cut';
+
+/**
+ * Desde cuántas filas el árbol de páginas (la tabla grande que se pide en cada sincronización) deja de pedir el total.
+ *
+ * Contar no es gratis en una tabla: la base revisa otra vez los permisos de cada fila, y el pedido tarda el doble
+ * (medido con 3.500 páginas: de 1,2–2,3 s a 2,3–4,4 s, contra un tope de 8 s por sentencia). Sin el total la lista
+ * termina igual de segura, con una página vacía pedida por clave, que a la base casi no le cuesta pero es una ida y
+ * vuelta más. Contar cuesta entre 0,2 y 0,6 ms por fila: con 1000 filas ya es más que esa ida y vuelta, y es también
+ * desde donde la lista deja de entrar en un pedido de la app. Con menos, se cuenta, y es un pedido como siempre.
+ */
+export const COUNT_UP_TO_ROWS = 1000;
+
+/** El código con que la base corta una sentencia que pasó su tope de tiempo. */
+const STATEMENT_TIMEOUT = '57014';
+
+/**
+ * Si una lista de una tabla grande (`pages`, `page_files`) pide el total o no. Las dos formas dan la misma lista: con
+ * el total termina cuando lo recibido lo alcanza; sin él, solo con una página vacía (`KeyedList.add`). Nunca por haber
+ * recibido pocas filas. Una vez que deja de contar, no vuelve en lo que queda de esa lista.
+ */
+export class CountChoice {
+  private counting: boolean;
+
+  /**
+   * `known`: cuántas filas tuvo la lista la última vez, si se sabe (lo que el dispositivo ya tiene de ella). Sin ese
+   * dato se cuenta, como siempre.
+   */
+  constructor(known = 0) {
+    this.counting = known < COUNT_UP_TO_ROWS;
+  }
+
+  /** Lo que va en la opción del pedido (`select(columnas, opción)`). */
+  get option(): typeof COUNTED | undefined {
+    return this.counting ? COUNTED : undefined;
+  }
+
+  /**
+   * El pedido falló. Si contaba y la base lo cortó por tiempo, se deja de contar y hay que **repetirlo** (devuelve
+   * `true`): una lista que creció de golpe, o un dispositivo nuevo en un workspace grande, no queda fallando para
+   * siempre por el costo de contar. Cualquier otro error sigue su camino.
+   */
+  timedOut(error: { code?: string | number } | null): boolean {
+    if (!this.counting || String(error?.code ?? '') !== STATEMENT_TIMEOUT) return false;
+    this.counting = false;
+    return true;
+  }
+}
 
 /**
  * Una lista que se junta **por clave**: cada pedido trae lo que sigue a la última fila recibida (`last`), en un orden

@@ -650,7 +650,7 @@ export class SyncEngine {
       // Primero los proyectos y después sus páginas: nunca llega una página de un proyecto desconocido.
       const projects = await this.remote.fetchProjects(this.status.schemaVersion);
       halt();
-      const rows = await this.remote.fetchTree(projects.map((p) => p.id), this.status.schemaVersion);
+      const rows = await this.remote.fetchTree(projects.map((p) => p.id), this.status.schemaVersion, this.tree.serverPages);
       halt();
       await this.tree.setSnapshot(rows, projects);
 
@@ -841,7 +841,7 @@ export class SyncEngine {
     }
     {
       const projects = await this.remote.fetchProjects(settings.schemaVersion);
-      const rows = await this.remote.fetchTree(projects.map((p) => p.id), settings.schemaVersion);
+      const rows = await this.remote.fetchTree(projects.map((p) => p.id), settings.schemaVersion, this.tree.serverPages);
       // Con permisos conocidos, lo que la persona ya no puede crear no vuelve a la cola (se avisa abajo).
       const access = this.options.access;
       const perms = access?.get() ? new Permissions(this.tree, access.get(), access.userId) : null;

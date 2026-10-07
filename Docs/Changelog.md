@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.231 :
+
+Un comentario que empezó antes que el último recibido y confirmó después de una bajada quedaba detrás del cursor (`updated_at` es la hora en que empieza la transacción) y no llegaba; contar duplicaba el costo del primer pedido del árbol; la papelera de *All projects* mostraba un error por proyecto; y las invitaciones y los nombres de versión no se mostraban con un tope de filas bajo. Ahora la bajada de comentarios pide desde un minuto antes hasta que el cursor queda asentado, y eso se guarda con él; el árbol pide el total solo con menos de 1000 páginas, y un pedido que contaba y la base cortó por tiempo se repite sin contar; la papelera muestra un error con un *Retry*; invitaciones y nombres de versión llegan enteros; y el script ya no dice *Try again* al escribir. Sin migración.
+
+[Bajar los comentarios que confirman tarde sin repetir el margen en cada sesión, contar el árbol solo mientras es chico y juntar en uno el error de la papelera de todos los proyectos]
+
 v0.230 :
 
 Quedaban salidas en las que un comentario a medio escribir se perdía sin que la persona lo decidiera. Salir de la cuenta y quitar el workspace del dispositivo no miraban lo que se estaba escribiendo, y el aviso no tenía dónde mostrarse: ahora la pregunta de siempre suma una oración. Un comentario nuevo se cerraba al pedirle otra cosa al panel, porque había un solo lugar para escribirlo: ahora el que tiene texto se queda, uno por bloque. Varios cuadros cerrados a la vez mandaban un aviso cada uno y la pantalla muestra uno: ahora sale uno solo, que los copia todos. En el teléfono el aviso flotante calculaba su ancho sobre media pantalla y quedaba angosto y alto: va anclado a los dos costados, y sus botones ya no se parten en renglones. El rótulo de los resueltos no cuenta un hilo reabierto. D341 a D344.

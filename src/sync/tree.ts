@@ -308,6 +308,14 @@ export class PageTree {
 
   getRevision = (): number => this.revision;
 
+  /**
+   * Cuántas páginas tiene la copia de la base en el dispositivo (lo que trajo la última bajada del árbol, más lo que la
+   * base confirmó después; sin lo que espera en la cola): el tamaño de la lista que se va a pedir.
+   */
+  get serverPages(): number {
+    return this.snapshot.size;
+  }
+
   get(id: string): PageRow | undefined {
     return this.view.get(id);
   }

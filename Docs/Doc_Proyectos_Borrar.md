@@ -3663,8 +3663,11 @@ hoja de abajo de siempre en el teléfono:
   papelera que ve y está vacía devuelve una fila con solo el proyecto (`id` nulo): la app distingue "vacía" de "no la
   ves", que no trae nada y no se muestra. La app la usa cuando hay más de un proyecto por pedir; con uno solo (*This
   project*, o el único que faltaba) sigue con `trashed_files`. Si la base no tiene la función (`PGRST202`), la prueba
-  una vez por cada vez que se abre la papelera y pide proyecto por proyecto, como antes. Si el pedido falla, cada
-  proyecto queda con su error y su *Retry*, que lo pide por separado. Ningún permiso nuevo y no sube `schema_version`.
+  una vez por cada vez que se abre la papelera y pide proyecto por proyecto, como antes. Si el pedido falla, es **un**
+  error (el de ese pedido) con **un** *Retry*, que lo repite: *The file trash of 3 projects could not be read (…)*
+  (v0.231, D347; hasta la v0.230 salía una línea con su *Retry* por cada proyecto, y cada uno pedía el suyo). Si de
+  esos proyectos queda uno solo a la vista (se volvió a *This project*), va como el error de un proyecto, que se pide
+  solo. Ningún permiso nuevo y no sube `schema_version`.
   **De a páginas:** la API devuelve como mucho 1000 filas por pedido (`max_rows` de PostgREST), así que la app pide de
   a 1000 hasta agotar (`trashedFilesAll` en `src/sync/remote.ts`), con el orden escrito en el pedido (proyecto; adentro,
   lo último primero; el id) para que cada página siga donde terminó la anterior. Hasta 1000 archivos en total sigue

@@ -259,7 +259,12 @@ describe('cliente de la Management API', () => {
     await expect(client.get('/config/auth')).rejects.toThrow(/config\/auth: no answer after 0 seconds\. Try again\..*SUPABASE_API_TIMEOUT/);
     // Con SQL avisa que la consulta puede seguir corriendo: no hay que repetirla a ciegas.
     await expect(client.query('select 1')).rejects.toThrow(/database\/query: no answer after 0 seconds\. The query may still be running.*SUPABASE_QUERY_TIMEOUT/);
-    expect(signals.map((s) => s.aborted)).toEqual([true, true]);
+    // Lo que escribe y no es SQL (invitar, un ajuste) pudo haber llegado: no dice "Try again" a secas.
+    const invite = client.request('POST', 'https://abcdefghijklmnopqrst.supabase.co/auth/v1/invite?redirect_to=x', { body: { email: 'a@x.test' }, headers: { apikey: 'k' } });
+    await expect(invite).rejects.toThrow(/auth\/v1\/invite: no answer after 0 seconds\. It may have gone through anyway: check before sending it again\..*SUPABASE_API_TIMEOUT/);
+    await expect(client.patch('/config/auth', {})).rejects.toThrow(/config\/auth: no answer after 0 seconds\. It may have gone through anyway/);
+    await expect(client.patch('/config/auth', {})).rejects.not.toThrow(/Try again/);
+    expect(signals.map((s) => s.aborted)).toEqual([true, true, true, true, true]);
     expect(Date.now() - started).toBeLessThan(5000);
   });
 

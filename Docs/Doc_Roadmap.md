@@ -307,8 +307,8 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   base dice que no hay más (no por recibir pocas filas), así que un tope de filas por pedido menor no corta la lista; y
   la papelera de un proyecto usa lo mismo, sin el corte a 1000 (`Doc_Proyectos_Borrar.md`, "La papelera de archivos, de
   a páginas por clave"). La guía para crear un workspace dice el tope y `setup-workspace.mjs` lo avisa.
-  **Pendiente:** (1) si el pedido único falla con muchos proyectos, sale una línea de error con su *Retry* por cada
-  proyecto: juntarlas en una. (2) **Hecho en v0.224, sin migración:** los comentarios de una página, el árbol, los
+  **Pendiente:** (1) **Hecho en v0.231:** si el pedido único falla, sale **una** línea de error con **un** *Retry*,
+  que repite ese pedido (antes, una por proyecto; D347). (2) **Hecho en v0.224, sin migración:** los comentarios de una página, el árbol, los
   proyectos, los permisos propios, los usos de archivos y los lotes de contenido ya no suponen que la API entrega 1000
   filas por pedido ni que nada cambia entre dos pedidos: se piden por clave, con el orden escrito, hasta el total que
   dice la API en la misma respuesta (los mismos pedidos que antes en una sincronización); el equipo, quién tiene
@@ -337,19 +337,43 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   día se puede ir en horas (y entonces nadie baja el árbol ni los comentarios nuevos de ese link hasta el día
   siguiente). Separar la firma de la estructura de la del contenido (o mandar aparte los `clean_seq` que cambiaron)
   pide migración;
-  (c) **el costo de contar a escala:** con 3.500 páginas el primer pedido del árbol pasa de 1,2–2,3 s a 2,3–4,4 s, y
-  el tamaño de árbol desde el que la sincronización falla entera (8 s por sentencia) baja a la mitad; hoy no pesa (41
-  páginas vivas), y el diseño para cuando haga falta está escrito (confirmar el final con un pedido por clave en
-  `pages` y `page_files`, o elegir según el tamaño de la sincronización anterior);
+  (c) **el costo de contar a escala. Hecho en v0.231 para el árbol, sin migración** (D346): pide el total solo
+  mientras el dispositivo tiene menos de 1000 páginas; con más no lo pide y termina con una página vacía pedida por
+  clave. Con 41 páginas, el mismo pedido de siempre; con 3.500, 5 pedidos sin total en vez de 4 con total (el
+  primero vuelve a 1,2–2,3 s) y el tamaño desde el que la sincronización falla entera vuelve a unas 12–24 mil
+  páginas. Si la base corta por tiempo un pedido que contaba (el árbol o los usos de archivos), se repite sin
+  contar. **Queda:** medirlo contra la base real con un árbol grande (los tiempos son los de la auditoría de la
+  v0.224); los usos de archivos, que siguen contando porque no tienen un tamaño anterior (la cola de archivos se lo
+  podría pasar); y que el tamaño conocido del árbol es el de todo el dispositivo, no el de cada tanda de 100
+  proyectos;
   (d) **listas donde se ve menos sin aviso.** **Hecho en v0.226:** `public_link_aside` llega entera (por clave) y lo
   que no entró de un link en una página también (`public_link_updates_page`, migración
   `20261114120000_link_no_entro_por_clave.sql`). **Quedan con lo que llega** (D323): `access_requests_pending` (corta
   en 100 adentro; al decidir uno aparece el siguiente) y `public_link_pages` (hacen falta más de 1000 links vivos);
-  (e) **el cursor de los comentarios** (`updated_at` es la hora en que empezó la transacción: un cambio confirmado
-  después de una bajada puede quedar detrás; no empeora respecto de v0.223; lo barato es pedir con `p_since` un minuto
-  atrás), en una tanda propia;
-  (f) paginar por su clave las listas que hoy dan el error o no se muestran con un tope bajo (invitaciones, nombres de
-  versión), y el chico que queda: el "Try again" de `scripts/lib/management.mjs`, que también sale para invitar
+  (e) **el cursor de los comentarios. Hecho en v0.231, sin migración** (D345): `updated_at` es la hora en que empezó
+  la transacción, así que un cambio confirmado después de una bajada quedaba detrás del cursor y no llegaba nunca.
+  La bajada pide desde un minuto antes hasta que el cursor queda asentado (una bajada con margen hecha un minuto
+  después de la que lo movió), guarda el asentado con el cursor (al volver a abrir la app, una fila por bajada, como
+  antes) y funde por id lo que vuelve a llegar; también con un link (`Doc_Sincronizacion.md`, "Comentarios
+  y preguntas", "El cursor y los cambios que confirman tarde"). **Queda:** una transacción de más de un minuto hecha
+  por fuera de la API; el margen fijo de 10 segundos de la campana de menciones; y que cada bajada trae al menos
+  una fila aunque no haya nada nuevo (la función compara con `>=`), que en un link cuenta un `pull` por bajada;
+  **Anotado al auditar la v0.231 (no se corrige ahora):** el plazo del cursor de los comentarios usa `Date.now()`:
+  un salto de la hora del dispositivo de un minuto o más hacia adelante entre dos bajadas asienta antes de tiempo
+  (la alternativa es `performance.now()` dentro de la sesión); una bajada de comentarios de varios pedidos que dure
+  más de unos 52 s (durante una importación de miles) se come el sobrante del margen; `Date.parse` sobre fechas con
+  microsegundos no está verificado en Safari (si no las lee, esa bajada es entera durante el plazo: más tráfico, nunca
+  pérdida); una visita de menos de un minuto no asienta el cursor y cada una repite las bajadas con margen; lo que una
+  versión anterior ya dejó detrás del cursor no vuelve solo (lo traería una bajada entera por página al estrenar la
+  versión); en la papelera, si los pedidos que juntan varios proyectos fallan por motivos distintos, la línea muestra
+  solo el primero; `KeyedList.add` da la lista por terminada si un pedido posterior dice un total igual a su propia
+  página (viene de la v0.224, hipotético: la API cuenta lo que falta desde la clave); y sin medir contra la base real:
+  la forma del `57014` cuando el pedido lleva `count=exact`, el tope de sentencia del rol `anon` (links) y los tiempos
+  del árbol con y sin el total;
+  (f) paginar por su clave las listas que hoy dan el error o no se muestran con un tope bajo. **Hecho en v0.231:**
+  las dos que no se mostraban (invitaciones, nombres de versión) llegan enteras, por su `id`, y el "Try again" de
+  `scripts/lib/management.mjs` ya no sale para lo que escribe (invitar, un ajuste). **Quedan** las cuatro que
+  muestran el error (equipo, quién tiene acceso, proyectos borrados, peso de los proyectos)
   (**hechos en v0.226:** los errores crudos en inglés, el orden escrito en `link_admit_work` y `CommentQueue.refresh`,
   que limpia su error después de una bajada que sale bien). (3) Con una base sin
   `trashed_files_page` (un workspace que no aplicó la migración) la papelera de todos sigue pidiendo por tramos (un

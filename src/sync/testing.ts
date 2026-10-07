@@ -881,6 +881,8 @@ export class FakeServer {
   readonly commentEdits: { id: string; body: string; base: string | undefined }[] = [];
   /** Las funciones de comentarios que se llamaron, en orden (`add <id>`, `edit <id>`...). */
   readonly commentCalls: string[] = [];
+  /** Cada `list_comments` que llegó: desde cuándo pidió y cuántas filas se le entregaron. */
+  readonly commentLists: { since: string | null; rows: number }[] = [];
   /** Funciones de comentarios que hacen su trabajo y después pierden la respuesta, una vez cada una. */
   readonly loseCommentResponse = new Set<'add' | 'edit' | 'delete' | 'resolve' | 'import' | 'mentions'>();
   /** Funciones de comentarios que fallan una vez como un 500, por el comienzo de su nombre. */
@@ -1046,6 +1048,23 @@ export class FakeServer {
   /** Una hora del servidor que siempre avanza (para el orden de los comentarios). */
   commentNow(): string {
     return new Date(Date.UTC(2026, 8, 30, 12) + ++this.commentClock * 1000).toISOString();
+  }
+
+  /**
+   * Una transacción que comenta y **todavía no confirmó**: en Postgres la fila lleva la hora en que la transacción
+   * empezó (`now()`) y nadie la ve hasta que confirma. Toma su hora ahora y devuelve cómo confirmarla; lo que cambie
+   * en el medio queda con horas posteriores, así que la fila aparece con un `updated_at` anterior a lo ya bajado.
+   * `seconds`: cuánto corre además el reloj de la base (lo que tarda la transacción).
+   */
+  beginComment(c: { id: string; pageId: string; body: string; authorId: string; threadId?: string | null }, seconds = 0): () => void {
+    const at = this.commentNow();
+    this.commentClock += seconds;
+    return () => {
+      this.comments.set(c.id, {
+        id: c.id, page_id: c.pageId, block_id: null, thread_id: c.threadId ?? null, body: c.body, author_id: c.authorId,
+        created_at: at, updated_at: at, edited_at: null, resolved_at: null, resolved_by: null, deleted_at: null, deleted_by: null,
+      });
+    };
   }
 
   /** Pierde la respuesta de una función de archivos si se pidió. */
@@ -1819,7 +1838,7 @@ export class FakeRemote
     return null;
   }
 
-  async fetchTree(projectIds: string[], schemaVersion?: number | null): Promise<PageRow[]> {
+  async fetchTree(projectIds: string[], schemaVersion?: number | null, _known?: number): Promise<PageRow[]> {
     this.server.check();
     const ids = new Set(projectIds);
     // `clean_seq`, como pide la columna la app: con la versión 12 o más (y si la base la tiene).
@@ -3324,8 +3343,9 @@ export class FakeRemote
     if (!this.server.listCommentsEnabled) return null;
     this.server.commentCalls.push(`list ${since ?? 'all'}`);
     if (this.commentLevel(pageId) < 1) throw new RemoteError('page_not_found', true, 'P0002');
-    return [...this.server.comments.values()]
-      .filter((c) => c.page_id === pageId && (since === null || (c.updated_at ?? c.created_at) > since))
+    const listed = [...this.server.comments.values()]
+      // Desde `since` **inclusive**, como la función de la base (`updated_at >= p_since`).
+      .filter((c) => c.page_id === pageId && (since === null || (c.updated_at ?? c.created_at) >= since))
       .map((c) => ({
         ...c,
         body: c.deleted_at ? null : c.body,
@@ -3341,6 +3361,8 @@ export class FakeRemote
             }
           : {}),
       }));
+    this.server.commentLists.push({ since, rows: listed.length });
+    return listed;
   }
 
   async fetchCommentAuthors(pageId: string): Promise<CommentAuthor[]> {

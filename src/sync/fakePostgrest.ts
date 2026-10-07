@@ -58,6 +58,11 @@ export interface FakePostgrestOptions {
   fail?: Record<number, FakeFailure>;
   /** Las columnas que una tabla o vista no tiene: pedirlas en `select` da `42703`. */
   missingColumns?: Record<string, string[]>;
+  /**
+   * La base corta por tiempo (`57014`) todo pedido que **cuenta** más de tantas filas: contar revisa los permisos de
+   * todas las que cumplen el filtro, no solo de las que entrega. Un pedido que no pide el total no se corta.
+   */
+  countTimeoutOver?: number;
 }
 
 type Check = (row: FakeRow) => boolean;
@@ -205,6 +210,9 @@ export function fakePostgrest(options: FakePostgrestOptions = {}): { client: Sup
 
     // Sin orden escrito, cada pedido las da empezando por otro lado y al revés.
     const { page, total: matched, offset } = answerRows(source, url.searchParams, maxRows, requests.length);
+    if (counted && options.countTimeoutOver !== undefined && matched > options.countTimeoutOver) {
+      return json(500, { code: '57014', message: 'canceling statement due to statement timeout', details: null, hint: null });
+    }
     request.rows = page.length;
     const followUp = options.lastPageCount && [...url.searchParams.values()].some((v) => v.startsWith('gt.'));
     const said = followUp ? page.length : matched + (options.overCount ? 5 : 0);
