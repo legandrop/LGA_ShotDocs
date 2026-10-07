@@ -91,21 +91,23 @@ export function historyCacheFor(localDbName: string): Promise<HistoryCache | nul
   return got;
 }
 
-/**
- * `prune` sobre la caché de una base local, solo si ya existe (no crea una base vacía para quien nunca abrió el
- * historial). Devuelve las páginas tiradas.
- */
-export async function pruneHistoryCache(localDbName: string, keep: (pageId: string) => boolean): Promise<string[]> {
-  if (!localDbName || typeof indexedDB === 'undefined') return [];
+/** La caché de una base local, solo si ya existe (no crea una base vacía para quien nunca abrió el historial). */
+export async function existingHistoryCache(localDbName: string): Promise<HistoryCache | null> {
+  if (!localDbName || typeof indexedDB === 'undefined') return null;
   const name = historyDbName(localDbName);
   if (!opened.has(name)) {
     try {
-      if (typeof indexedDB.databases !== 'function' || !(await indexedDB.databases()).some((d) => d.name === name)) return [];
+      if (typeof indexedDB.databases !== 'function' || !(await indexedDB.databases()).some((d) => d.name === name)) return null;
     } catch {
-      return [];
+      return null;
     }
   }
-  const cache = await historyCacheFor(localDbName);
+  return historyCacheFor(localDbName);
+}
+
+/** `prune` sobre la caché de una base local, solo si ya existe. Devuelve las páginas tiradas. */
+export async function pruneHistoryCache(localDbName: string, keep: (pageId: string) => boolean): Promise<string[]> {
+  const cache = await existingHistoryCache(localDbName);
   return cache ? cache.prune(keep).catch(() => []) : [];
 }
 
@@ -307,6 +309,11 @@ export class HistoryCache {
 
   async restoresOf(pageId: string): Promise<PendingRestore[]> {
     return (await this.db.getAllFromIndex('restores', 'page', pageId)).sort((a, b) => a.at - b.at);
+  }
+
+  /** Las de todas las páginas (para terminarlas sin abrir el historial de cada una). */
+  async allRestores(): Promise<PendingRestore[]> {
+    return (await this.db.getAll('restores')).sort((a, b) => a.at - b.at);
   }
 
   async hasRestore(id: string): Promise<boolean> {

@@ -8,6 +8,7 @@ import { prefs } from '../prefs';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
+import { settled } from '../test/settle';
 import { TOUR_STEPS } from '../tutorial/steps';
 import { TextSelection } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
@@ -180,7 +181,8 @@ afterEach(async () => {
   act(() => prefs.set({ language: 'en' }));
 });
 
-const wait = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const wait = (ms = 30) => act(() => settled(ms));
 async function until(check: () => unknown, what: string, tries = 300): Promise<void> {
   for (let i = 0; i < tries; i++) {
     if (check()) return;

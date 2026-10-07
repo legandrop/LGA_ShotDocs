@@ -5,11 +5,16 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
+import { settled } from '../test/settle';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { codePointLength } from '../lib/dbLimits';
 import { watchTitleRests } from '../sync/titleRest';
 import { notify } from './notice';
 import type { TitlePreparation } from './PageView';
+// El editor de la página se carga aparte la primera vez que se muestra. Acá se arma antes de las pruebas: si no, la
+// primera que monta una página pagaba ese armado (cientos de módulos) dentro de su plazo, y con la máquina cargada no
+// le alcanzaba (y una prueba que se corta por tiempo deja a las que siguen en el archivo sin poder dibujar).
+import './PageEditor';
 
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -46,7 +51,8 @@ afterEach(async () => {
   document.body.innerHTML = '';
 });
 
-const wait = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const wait = (ms = 30) => act(() => settled(ms));
 
 function services(d: Device): Services {
   const config = {
@@ -191,6 +197,10 @@ describe('el título de la página tiene el tope de la base', () => {
     devices.push(d);
     const page = await d.tree.create(null, 'Anterior');
     await d.engine.syncNow();
+    // Lo que sigue mira la cola del dispositivo. El motor sube solo lo pendiente un rato después de cada cambio: con la
+    // máquina cargada llegaba a subir el cambio de título en medio de la prueba, y la cola quedaba vacía sin que nada
+    // estuviera mal. Acá no hace falta que corra.
+    await d.engine.stop();
     const full = 'H'.repeat(500) + 'R'.repeat(245);
     const original = IDBObjectStore.prototype.put;
     const abort = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (this: IDBObjectStore, value, key) {
@@ -259,6 +269,10 @@ describe('el título de la página tiene el tope de la base', () => {
   it('remonte tras tx.done mantiene readonly hasta terminar refresh y no presta el recibo A a B', async () => {
     const d = await makeDevice(new FakeServer()); devices.push(d);
     const page = await d.tree.create(null, 'Anterior'); await d.engine.syncNow();
+    // Lo que sigue mira la cola del dispositivo. El motor sube solo lo pendiente un rato después de cada cambio: con la
+    // máquina cargada llegaba a subir el cambio de título en medio de la prueba, y la cola quedaba vacía sin que nada
+    // estuviera mal. Acá no hace falta que corra.
+    await d.engine.stop();
     const a = 'A'.repeat(500) + 'resto A', b = 'B'.repeat(500) + 'resto B';
     let release!: () => void, reached!: () => void;
     const pause = new Promise<void>((r) => { release = r; });

@@ -538,7 +538,12 @@ describe('carpetas: subir', () => {
     };
     const id = items[0]!.uploadId;
     expect((await uploadOne(p, id, new Uint8Array(3), 'owner-jwt')).status).toBe(404);
-    const tampered = id.slice(0, -2) + (id.endsWith('A') ? 'BB' : 'AA');
+    // Se toca un carácter de adentro, no los dos últimos: el último carácter de un base64 lleva bits de relleno que no
+    // cuentan, y un id que termina parecido a lo que se le ponía (uno de cada varios cientos) quedaba con los mismos
+    // bytes, o sea sin tocar, y la prueba fallaba sola.
+    const at = id.length - 8;
+    const tampered = id.slice(0, at) + (id[at] === 'A' ? 'B' : 'A') + id.slice(at + 1);
+    expect(tampered).not.toBe(id);
     expect((await uploadOne(p, tampered, new Uint8Array(3))).status).toBe(404);
     const other = new Portero(env, memoryStore(), fakeWorld().http);
     expect((await uploadOne(other, id, new Uint8Array(3))).status).toBe(404);

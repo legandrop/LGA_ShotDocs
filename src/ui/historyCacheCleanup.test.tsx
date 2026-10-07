@@ -2,12 +2,14 @@
 import 'fake-indexeddb/auto';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import * as Y from 'yjs';
 import { useAuth } from '../auth';
 import { ServicesContext, type Services } from '../services';
-import { NAMED_VERSIONS_SCHEMA_VERSION } from '../sync/history';
+import { NAMED_VERSIONS_SCHEMA_VERSION, traceFromSets, type RestoreTrace } from '../sync/history';
 import { deleteHistoryCache, historyCacheFor, historyDbName } from '../sync/historyCache';
-import { FakeServer, makeDevice } from '../sync/testing';
+import { CONTENT_FRAGMENT } from '../sync/structure';
+import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { useHistoryCachePruning } from './historyCachePrune';
 import { storageNamesFor, type WorkspaceConfig } from '../workspace';
 import { deleteWorkspaceDatabases } from './RemovedScreen';
@@ -146,5 +148,203 @@ describe('al perder el permiso (D13)', () => {
       d.mediaDb.close();
     }
     await deleteHistoryCache(dbName);
+  });
+});
+
+describe('Restored from… pendiente (la app se cerró antes de que la restauración subiera)', () => {
+  /** Agrega un párrafo a la página (como el editor) y devuelve la huella de esa edición. */
+  async function edit(d: Device, pageId: string, id: string, text: string): Promise<RestoreTrace> {
+    const doc = await d.docs.open(pageId);
+    let trace: RestoreTrace = { ins: [], del: [] };
+    const on = (tr: Y.Transaction) => {
+      const ins = new Map<number, { clock: number; len: number }[]>();
+      for (const [client, after] of tr.afterState) {
+        const before = tr.beforeState.get(client) ?? 0;
+        if (after > before) ins.set(client, [{ clock: before, len: after - before }]);
+      }
+      trace = traceFromSets({ clients: ins }, tr.deleteSet as unknown as { clients: Map<number, { clock: number; len: number }[]> });
+    };
+    doc.on('afterTransaction', on);
+    doc.transact(() => {
+      const fragment = doc.getXmlFragment(CONTENT_FRAGMENT);
+      if (fragment.length === 0) fragment.insert(0, [new Y.XmlElement('blockGroup')]);
+      const block = new Y.XmlElement('blockContainer');
+      block.setAttribute('id', id);
+      const paragraph = new Y.XmlElement('paragraph');
+      const content = new Y.XmlText();
+      content.insert(0, text);
+      paragraph.insert(0, [content]);
+      block.insert(0, [paragraph]);
+      (fragment.get(0) as Y.XmlElement).insert(0, [block]);
+    }, 'test');
+    doc.off('afterTransaction', on);
+    await d.docs.flush(pageId);
+    d.docs.close(pageId);
+    return trace;
+  }
+
+  it('al volver a abrir la app se marca sola después de sincronizar, sin abrir el historial de esa página', async () => {
+    const server = new FakeServer();
+    server.settings = { ...server.settings!, schemaVersion: NAMED_VERSIONS_SCHEMA_VERSION };
+    const d = await makeDevice(server, undefined, '9.999', {}, NAMED_VERSIONS_SCHEMA_VERSION);
+    const pageId = await d.tree.create(null, 'P');
+    await d.engine.syncNow();
+    await edit(d, pageId, 'a', 'uno');
+    await d.engine.syncNow();
+    await edit(d, pageId, 'b', 'dos');
+    await d.engine.syncNow();
+    const rows = server.updates.get(pageId) ?? [];
+    const dbName = `test-${crypto.randomUUID()}`;
+    const cache = (await historyCacheFor(dbName))!;
+    // Se restaura sin red y la app se cierra: la restauración queda en el dispositivo y su marca, pendiente.
+    server.online = false;
+    const trace = await edit(d, pageId, 'r', 'restaurada');
+    const id = crypto.randomUUID();
+    await cache.addRestore({ id, pageId, userId: server.ownerId, fromSeq: rows[0].seq, afterSeq: rows.at(-1)!.seq, at: Date.now(), trace });
+    // La app otra vez abierta, sin el historial a la vista.
+    const value = {
+      workspace: { config: {}, client: {} },
+      user: { id: server.ownerId, email: 'owner@test' },
+      tree: d.tree,
+      access: d.access,
+      engine: d.engine,
+      remote: d.remote,
+      docs: d.docs,
+      dbName,
+    } as unknown as Services;
+    function Probe() {
+      useHistoryCachePruning(10);
+      return null;
+    }
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    await act(async () => root.render(<ServicesContext.Provider value={value}><Probe /></ServicesContext.Provider>));
+    await wait(100);
+    expect(server.versions).toEqual([]);
+    expect((await cache.allRestores()).map((p) => p.id)).toEqual([id]);
+    // Vuelve la red: sube la restauración y, sin que nadie abra ese historial, queda marcada en su fila.
+    server.online = true;
+    await act(async () => d.engine.syncNow());
+    await act(() => vi.waitFor(() => expect(server.versions.map((v) => [v.id, v.kind])).toEqual([[id, 'restore']])));
+    expect(server.versions[0].seq).toBe((server.updates.get(pageId) ?? []).at(-1)!.seq);
+    await act(() => vi.waitFor(async () => expect(await cache.allRestores()).toEqual([])));
+    act(() => root.unmount());
+    await d.engine.stop();
+    d.db.close();
+    d.mediaDb.close();
+    await deleteHistoryCache(dbName);
+  });
+
+  const closers: (() => Promise<void> | void)[] = [];
+  afterEach(async () => {
+    for (const close of closers.splice(0)) await close();
+  });
+
+  /**
+   * Una restauración que ya subió y cuya marca quedó pendiente (la app se cerró justo antes de marcarla), y la app otra
+   * vez abierta sin el historial a la vista (`open`). Cada prueba pone antes al workspace en el estado que mira.
+   */
+  async function unmarked({ appVersion = '9.999', withCache = true } = {}) {
+    const server = new FakeServer();
+    server.settings = { ...server.settings!, schemaVersion: NAMED_VERSIONS_SCHEMA_VERSION };
+    const d = await makeDevice(server, undefined, appVersion, {}, NAMED_VERSIONS_SCHEMA_VERSION);
+    const pageId = await d.tree.create(null, 'P');
+    await d.engine.syncNow();
+    await edit(d, pageId, 'a', 'uno');
+    await d.engine.syncNow();
+    await edit(d, pageId, 'b', 'dos');
+    await d.engine.syncNow();
+    const rows = [...(server.updates.get(pageId) ?? [])];
+    const trace = await edit(d, pageId, 'r', 'restaurada');
+    await d.engine.syncNow();
+    expect(await d.docs.unsyncedPages()).not.toContain(pageId);
+    const dbName = `test-${crypto.randomUUID()}`;
+    const id = crypto.randomUUID();
+    const cache = withCache ? (await historyCacheFor(dbName))! : null;
+    await cache?.addRestore({ id, pageId, userId: server.ownerId, fromSeq: rows[0].seq, afterSeq: rows.at(-1)!.seq, at: Date.now(), trace });
+    // Lo que el enganche le pide al servidor: el historial de la página, para buscar la fila de la restauración.
+    const asked = vi.spyOn(d.remote, 'pageHistory');
+    let root: ReturnType<typeof createRoot> | null = null;
+    closers.push(async () => {
+      if (root) act(() => root!.unmount());
+      await d.engine.stop();
+      d.db.close();
+      d.mediaDb.close();
+      await deleteHistoryCache(dbName);
+    });
+    const open = async () => {
+      const value = { workspace: { config: {}, client: {} }, user: { id: server.ownerId, email: 'owner@test' }, tree: d.tree, access: d.access, engine: d.engine, remote: d.remote, docs: d.docs, dbName } as unknown as Services;
+      function Probe() {
+        useHistoryCachePruning(10);
+        return null;
+      }
+      const host = document.createElement('div');
+      document.body.append(host);
+      root = createRoot(host);
+      await act(async () => root!.render(<ServicesContext.Provider value={value}><Probe /></ServicesContext.Provider>));
+      await wait(150);
+    };
+    const sync = async () => {
+      await act(async () => d.engine.syncNow());
+      await wait(150);
+    };
+    const marked = () => act(() => vi.waitFor(() => expect(server.versions.map((v) => [v.id, v.kind])).toEqual([[id, 'restore']])));
+    const pending = async () => ((await cache?.allRestores()) ?? []).map((p) => p.id);
+    return { server, d, pageId, dbName, id, asked, open, sync, marked, pending };
+  }
+
+  it('con la app más vieja que la versión mínima del workspace no se intenta y la marca no se pierde: se pone cuando deja de serlo', async () => {
+    const s = await unmarked({ appVersion: '0.200' });
+    // El workspace sube su versión mínima por encima de la de esta app: la base rechazaría la marca.
+    s.server.settings = { ...s.server.settings!, minAppVersion: 0.3 };
+    await s.sync();
+    expect(s.d.engine.getStatus().outdated).toBe(true);
+    expect(s.d.engine.getStatus().lastSyncAt).not.toBeNull();
+    await s.open();
+    await s.sync();
+    expect(s.asked).not.toHaveBeenCalled();
+    expect(s.server.versions).toEqual([]);
+    expect(await s.pending()).toEqual([s.id]);
+    // Ya no es vieja (acá baja la mínima; en la app, al actualizarse): la marca seguía ahí y se pone.
+    s.server.settings = { ...s.server.settings!, minAppVersion: null };
+    await s.sync();
+    await s.marked();
+    await act(() => vi.waitFor(async () => expect(await s.pending()).toEqual([])));
+  });
+
+  it('con la base anterior a las versiones con nombre no pide nada; cuando la base se actualiza, la marca', async () => {
+    const s = await unmarked();
+    s.server.settings = { ...s.server.settings!, schemaVersion: NAMED_VERSIONS_SCHEMA_VERSION - 1 };
+    await s.sync();
+    expect(s.d.engine.getStatus().schemaVersion).toBe(NAMED_VERSIONS_SCHEMA_VERSION - 1);
+    await s.open();
+    await s.sync();
+    expect(s.asked).not.toHaveBeenCalled();
+    expect(await s.pending()).toEqual([s.id]);
+    s.server.settings = { ...s.server.settings!, schemaVersion: NAMED_VERSIONS_SCHEMA_VERSION };
+    await s.sync();
+    await s.marked();
+  });
+
+  it('sin red no pide nada; cuando vuelve, la marca', async () => {
+    const s = await unmarked();
+    s.server.online = false;
+    await s.sync();
+    expect(s.d.engine.getStatus().online).toBe(false);
+    await s.open();
+    expect(s.asked).not.toHaveBeenCalled();
+    expect(await s.pending()).toEqual([s.id]);
+    s.server.online = true;
+    await s.sync();
+    await s.marked();
+  });
+
+  it('a quien nunca abrió el historial en este dispositivo no le crea la caché ni pide nada', async () => {
+    const s = await unmarked({ withCache: false });
+    await s.open();
+    await s.sync();
+    expect(s.asked).not.toHaveBeenCalled();
+    expect(await names()).not.toContain(historyDbName(s.dbName));
   });
 });

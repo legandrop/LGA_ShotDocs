@@ -15,6 +15,10 @@ import { BUILTIN_ONSET } from './builtinIds';
 import { createDayReport, folderTemplateId, planDayReport, writeNewPage } from './dayReportCreate';
 import { isTemplatePage, templateInfo, templatesFolderOf } from './own';
 import { customizeBuiltin } from './ownCopy';
+// El editor de la página se carga aparte la primera vez que se muestra. Acá se arma antes de las pruebas: si no, la
+// primera que monta una página pagaba ese armado (cientos de módulos) dentro de su plazo, y con la máquina cargada no
+// le alcanzaba (y una prueba que se corta por tiempo deja a las que siguen en el archivo sin poder dibujar).
+import '../ui/PageEditor';
 
 // Las plantillas propias en la página de verdad (PageView con el editor, sobre el servidor en memoria; Docs/Doc_Plantillas.md,
 // entrega 3): *Save as template…* del menú y su ventana, la franja de una plantilla con *Template settings…* y *Stop using

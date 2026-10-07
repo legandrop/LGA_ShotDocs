@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { PageHistory, rowHasTrace, traceFromSets, versionBreaks, type HistoryRow, type RestoreTrace } from './history';
 import { HistoryCache, historyDbName } from './historyCache';
-import { loadHistory, markRestoreLater, settleRestores } from './historyLoad';
+import { loadHistory, markRestoreLater, settlePendingRestores, settleRestores } from './historyLoad';
 import type { HistoryRemote, NamedVersionsRemote } from './remote';
 import { CONTENT_FRAGMENT } from './structure';
 import { FakeRemote, FakeServer, makeDevice, type Device } from './testing';
@@ -451,6 +451,140 @@ describe('Restored from…', () => {
     // p2 sin fila propia sigue esperando hasta que pase una semana.
     await settleRestores(remote, cache, pageId, await remote.pageHistory(pageId, 0, 500), undefined, Date.now() + 8 * 24 * 3600_000);
     expect(await cache.restoresOf(pageId)).toEqual([]);
+  });
+
+  it('una marca pendiente de antes (la app se cerró) se termina sola después de sincronizar, sin abrir el historial de esa página', async () => {
+    const { server, a, pageId } = await setup(2);
+    const remote = counting(new FakeRemote(server, '9.999'));
+    const cache = await cacheFor();
+    const deps = { remote, cache, docs: a.docs };
+    const before = (server.updates.get(pageId) ?? []).at(-1)!.seq;
+    // La restauración quedó escrita en el dispositivo y la app se cerró sin que subiera.
+    server.online = false;
+    const trace = await tracedEdit(a, pageId, (g) => g.insert(0, [block('r', 'restaurada')]));
+    const id = `fondo-${crypto.randomUUID()}`;
+    await cache.addRestore({ id, pageId, userId: server.ownerId, fromSeq: 1, afterSeq: before, at: Date.now(), trace });
+    // Con la página sin subir, su fila todavía no está en el servidor: no se pide nada y la marca espera.
+    expect(await settlePendingRestores(deps)).toEqual([]);
+    expect(remote.calls).toEqual([]);
+    // Sube, y justo después se corta la red: sin red no se marca ni se da por buscada.
+    server.online = true;
+    await a.engine.syncNow();
+    server.online = false;
+    expect(await settlePendingRestores(deps)).toEqual([]);
+    expect((await cache.allRestores()).map((p) => p.id)).toEqual([id]);
+    // Con red, la vuelta siguiente la marca en la fila de la restauración, sin que nadie abra el historial.
+    server.online = true;
+    const marked = await settlePendingRestores(deps);
+    expect(marked.map((m) => [m.id, m.kind, m.restoredFromSeq])).toEqual([[id, 'restore', 1]]);
+    expect(marked[0].seq).toBe((server.updates.get(pageId) ?? []).at(-1)!.seq);
+    expect((await remote.listPageVersions(pageId)).map((v) => v.id)).toEqual([id]);
+    expect(await cache.allRestores()).toEqual([]);
+    // Sin marcas pendientes no se pide nada.
+    const calls = remote.calls.length;
+    expect(await settlePendingRestores(deps)).toEqual([]);
+    expect(remote.calls.length).toBe(calls);
+  });
+
+  it('con la app más vieja que la versión mínima la base rechaza la marca, y sigue pendiente hasta que la app se actualiza', async () => {
+    const { server, a, pageId } = await setup(2);
+    const cache = await cacheFor();
+    const before = (server.updates.get(pageId) ?? []).at(-1)!.seq;
+    const trace = await tracedEdit(a, pageId, (g) => g.insert(0, [block('r', 'restaurada')]));
+    await a.engine.syncNow();
+    const id = `app-vieja-${crypto.randomUUID()}`;
+    await cache.addRestore({ id, pageId, userId: server.ownerId, fromSeq: 1, afterSeq: before, at: Date.now(), trace });
+    // El workspace sube su versión mínima por encima de la de esta app: leer se puede, marcar no (`app_outdated`).
+    server.settings = { ...server.settings!, minAppVersion: 0.3 };
+    const old = new FakeRemote(server, '0.200');
+    await expect(old.markPageRestored(crypto.randomUUID(), pageId, before + 1, 1)).rejects.toThrow('app_outdated');
+    // La pantalla del historial de esa página: no la marca y no la deja de lado.
+    expect(await settleRestores(old, cache, pageId, await old.pageHistory(pageId, 0, 500))).toEqual([]);
+    expect((await cache.restoresOf(pageId)).map((p) => p.id)).toEqual([id]);
+    // La vuelta de fondo, lo mismo; y no la da por buscada.
+    expect(await settlePendingRestores({ remote: old, cache, docs: a.docs })).toEqual([]);
+    expect((await cache.allRestores()).map((p) => p.id)).toEqual([id]);
+    expect(await old.listPageVersions(pageId)).toEqual([]);
+    // Con la app actualizada, la misma marca se pone.
+    const updated = new FakeRemote(server, '0.300');
+    expect((await settlePendingRestores({ remote: updated, cache, docs: a.docs })).map((m) => m.id)).toEqual([id]);
+    expect(await cache.allRestores()).toEqual([]);
+  });
+
+  it('si la red se corta justo al marcar, la vuelta de fondo no la da por buscada: la siguiente la marca', async () => {
+    const { server, a, pageId } = await setup(2);
+    const cache = await cacheFor();
+    const before = (server.updates.get(pageId) ?? []).at(-1)!.seq;
+    const trace = await tracedEdit(a, pageId, (g) => g.insert(0, [block('r', 'restaurada')]));
+    await a.engine.syncNow();
+    const id = `corte-${crypto.randomUUID()}`;
+    await cache.addRestore({ id, pageId, userId: server.ownerId, fromSeq: 1, afterSeq: before, at: Date.now(), trace });
+    const real = counting(new FakeRemote(server, '9.999'));
+    let cut = true;
+    // El historial baja; la red se cae en el pedido de marcar.
+    const remote = Object.assign(Object.create(real) as typeof real, {
+      markPageRestored: (...args: Parameters<FakeRemote['markPageRestored']>) =>
+        cut ? Promise.reject(new RemoteError('Failed to fetch', false, undefined, true)) : real.markPageRestored(...args),
+    });
+    expect(await settlePendingRestores({ remote, cache, docs: a.docs })).toEqual([]);
+    expect(real.calls).toHaveLength(1);
+    expect((await cache.allRestores()).map((p) => p.id)).toEqual([id]);
+    // Vuelve la red: la vuelta siguiente la busca otra vez (no quedó como buscada) y la marca.
+    cut = false;
+    expect((await settlePendingRestores({ remote, cache, docs: a.docs })).map((m) => m.id)).toEqual([id]);
+    expect(real.calls).toHaveLength(2);
+    expect(await cache.allRestores()).toEqual([]);
+  });
+
+  it('la fila de la restauración tiene que ser posterior a la última que había al restaurar', async () => {
+    const { server, a, pageId } = await setup(2);
+    const remote = new FakeRemote(server, '9.999');
+    const before = (server.updates.get(pageId) ?? []).at(-1)!.seq;
+    const trace = await tracedEdit(a, pageId, (g) => g.insert(0, [block('r', 'restaurada')]));
+    await a.engine.syncNow();
+    const rows = await remote.pageHistory(pageId, 0, 500);
+    const row = rows.at(-1)!;
+    expect(row.seq).toBeGreaterThan(before);
+    const p = { pageId, userId: server.ownerId, fromSeq: 1, at: Date.now(), trace };
+    // Una marca que dice que esa fila ya estaba cuando se restauró: no es su restauración, aunque traiga su huella.
+    expect(await settleRestores(remote, null, pageId, rows, [{ ...p, id: `ya-estaba-${crypto.randomUUID()}`, afterSeq: row.seq }])).toEqual([]);
+    expect(await remote.listPageVersions(pageId)).toEqual([]);
+    // La misma, con la última fila de antes: sí.
+    const marked = await settleRestores(remote, null, pageId, rows, [{ ...p, id: `posterior-${crypto.randomUUID()}`, afterSeq: before }]);
+    expect(marked.map((m) => m.seq)).toEqual([row.seq]);
+  });
+
+  it('la vuelta de fondo no toca una marca que se está siguiendo, no insiste con una que no encuentra y deja de lado la que venció', async () => {
+    const { server, a, pageId } = await setup(2);
+    const remote = counting(new FakeRemote(server, '9.999'));
+    const cache = await cacheFor();
+    const deps = { remote, cache, docs: a.docs };
+    const before = (server.updates.get(pageId) ?? []).at(-1)!.seq;
+    const trace = await tracedEdit(a, pageId, (g) => g.insert(0, [block('r', 'restaurada')]));
+    await a.engine.syncNow();
+    // La que sigue `markRestoreLater` (la restauración de esta sesión, todavía sin red): la termina él.
+    server.online = false;
+    const following = markRestoreLater({ remote, cache, engine: a.engine, docs: a.docs }, { id: `sigue-${crypto.randomUUID()}`, pageId, userId: 'nadie', fromSeq: 1, afterSeq: before, at: Date.now(), trace });
+    await new Promise((r) => setTimeout(r, 50));
+    server.online = true;
+    const asked = remote.calls.length;
+    expect(await settlePendingRestores(deps)).toEqual([]);
+    expect(remote.calls.length).toBe(asked);
+    await following.cancel();
+    // Una cuya fila no aparece (no es de esa persona): se busca una vez y queda esperando, sin volver a bajar el
+    // historial en cada sincronización.
+    const lost = `perdida-${crypto.randomUUID()}`;
+    await cache.addRestore({ id: lost, pageId, userId: 'nadie', fromSeq: 1, afterSeq: before, at: Date.now(), trace });
+    expect(await settlePendingRestores(deps)).toEqual([]);
+    expect(remote.calls.length).toBe(asked + 1);
+    expect(await settlePendingRestores(deps)).toEqual([]);
+    expect(remote.calls.length).toBe(asked + 1);
+    expect((await cache.allRestores()).map((p) => p.id)).toEqual([lost]);
+    // Otra igual, pero de hace más de una semana: se deja de lado.
+    const old = `vieja-${crypto.randomUUID()}`;
+    await cache.addRestore({ id: old, pageId, userId: 'nadie', fromSeq: 1, afterSeq: before, at: Date.now() - 8 * 24 * 3600_000, trace });
+    expect(await settlePendingRestores(deps)).toEqual([]);
+    expect((await cache.allRestores()).map((p) => p.id)).toEqual([lost]);
   });
 });
 

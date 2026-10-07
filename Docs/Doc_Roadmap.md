@@ -355,8 +355,12 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   `20261011120000_versiones_con_nombre.sql` aplicada (2026-10-02, `schema_version` 13). **Restos de las auditorías hechos (después de v0.106):** restaurar una versión con dos bloques del mismo id, la consulta
   al confirmar (O9), la generación del servidor antes de la caché (O7), Ctrl/⌘+Z deja de lado *Restored from…*, el hijo
   repetido de dos sangrías a la vez (O2) y las pruebas de M5 y M10 (`Doc_Historial.md`, "Lo que quedó de las entregas").
-  **Falta:** medir en el iPhone. Para después: la marca *Restored from…* se pierde si la app se cierra antes de que la
-  restauración suba y nunca se vuelve a abrir el historial de esa página en una semana (es solo un rótulo). **Hecho en
+  **Falta:** medir en el iPhone. **Hecho en v0.219:** la marca *Restored from…* de una restauración que no llegó a
+  subir antes de cerrar la app se termina sola después de sincronizar, sin abrir el historial de esa página (antes se
+  perdía si no se abría en una semana; con la app más vieja que la versión mínima espera en vez de perderse;
+  `Doc_Historial.md`, "*Restored from…* sin abrir el historial", con lo que no se hizo: los pedidos de fondo sin
+  espaciar ni guarda contra dos a la vez y hasta 2.000 filas, la marca de una página que nunca sube, y la marca de fondo
+  que no se ve en un historial ya abierto). **Hecho en
   v0.214 (O3):** renombrar una versión deja el nombre anterior guardado en la base, con quién lo cambió (migración
   `20261105120000_versiones_renombrar_rastro.sql`; no se muestra en la app). Aparte, después: que lo borrado no llegue a quien solo ve la página (decisión 2;
   diseño en `Doc_Privacidad_Borrado.md`, B.18).
@@ -446,9 +450,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   versión de la app"): probar un link con fotos, un video y una subida contra el portero real; (c) la pantalla del link que ya no anda abre (y crea si no
   existía) la base local de comentarios, y un comentario ya entregado cuyo acuse se perdió figura como «no mandado»; el
   aviso del link *Can edit* que esta app usa solo para leer no sabe decir si hay que actualizar la app o si editar con
-  un link está apagado (haría falta que `plink_open` lo cuente). Aparte, no es del link: `src/export/export.test.tsx`
-  («dibuja cada página…») falla bajo carga también con la versión publicada (la sincronización de fondo le cambia la
-  cuenta de operaciones pendientes mientras dibuja): conviene estabilizarla.
+  un link está apagado (haría falta que `plink_open` lo cuente).
   **Diseño en `Doc_Link_Publico.md`** (auditado: aprobado con condiciones, ya corregido; D29 a D31): el token
   del link validado por la base en cada pedido (sin cuentas ni cambios en el login; las sesiones anónimas de Supabase no
   andan con el registro cerrado), solo la página y lo de abajo, como un invitado (base limpia de D14, sin historial ni
@@ -1208,6 +1210,37 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    reales); en ~0,15 % de las corridas, justo después de una negrita, la marca de formato difiere un paso y se iguala
    (de Yjs, nunca texto); el arnés de dos editores muestra en ~50 % de las corridas algún paso donde un editor no muestra
    exactamente su documento (la reparación del esquema, ya conocida).
+27. **Hecho en parte (v0.219): las pruebas que fallaban solo con la máquina cargada.** Con la suite entera corriendo junto a
+   otros procesos, cada corrida terminaba con entre 0 y 7 pruebas caídas que solas pasaban. No era la app: eran las
+   pruebas. Cuatro causas, cada una con su arreglo: (a) esperar "un rato" después de un clic y mirar: ahora se espera
+   a que termine lo que quedó en marcha (`src/test/settle.ts`) o la condición misma, y las esperas por condición ya no
+   se rinden al segundo (`src/test/patience.ts`); (b) el motor que sincroniza solo, un rato después de la última
+   escritura, en medio de una prueba que afirma que nada cambió o que algo está sin subir: la prueba lo frena o
+   sostiene la subida; (c) topes de tiempo en milisegundos: se miden contra una vara tomada en la misma corrida
+   (escribir sin colapsar, armar el plan del reemplazo) o contra el plazo de la propia espera; (d) el editor, que se
+   carga aparte la primera vez, armado dentro del plazo de la primera prueba del archivo: se arma antes.
+   **Queda: con dos corridas completas a la vez la suite todavía no cierra siempre.** La medición independiente dio
+   2 corridas limpias de 10 (la corrida sola pasa entera, y cada prueba caída pasa aislada). Ya no hay rechazos
+   sueltos; lo que cae son pruebas que esta tanda no tocó: plazos propios que vencen (`src/media/offline.test.ts`,
+   «*Original photos*, *Videos* y adjuntos…» con 30 s y «con un portero viejo que corta las partes…» con 60 s, que
+   solas tardan 7 y 12 s; `src/search/projectIndex.test.ts`, «leer para buscar… 80 cruces», 120 s contra 17 s sola),
+   pruebas de esperar un rato y mirar (`src/templates/templateHost.test.tsx`, `src/templates/ownHost.test.tsx`,
+   `src/ui/workspaces.test.tsx`, `src/ui/exportLocalSave.test.tsx`, `src/ui/linkEditUi.test.tsx`), y una vez
+   `collapseEditor` «7.», cuya vara relativa tampoco es inmune (la proporción llegó a 6,9 contra un tope de 4).
+   Siguiente paso: pasar esas esperas a la condición, subir o sacar los plazos propios menores que el general, y
+   repetir la medición. Mientras tanto vale la regla de siempre: lo que falla por tiempo se repite aislado antes de
+   publicar. Tampoco se tocaron otros topes de tiempo fijos con margen amplio (`findEditor`, `pdfPreview`,
+   `carreteModel`, `exportPdfParts`, `folderZip`, `admitAudit`, `codaComments`), y una prueba cortada por tiempo sigue
+   dejando sin dibujar a las que siguen en su archivo.
+   También: (e) pruebas que terminaban con la app todavía trabajando (el final de un reemplazo, de deshacerlo y de
+   rehacerlo): al cerrar la base quedaba un rechazo suelto que la corrida anotaba como error aunque todas las pruebas
+   pasaran; ahora esperan el aviso del final. Una sonda (anotar cada pedido a una base que una prueba ya cerró) encontró
+   127 de esos pedidos tardíos en 30 archivos en dos corridas, todos atajados por la app; no se revisó uno por uno que
+   todos los caminos lo atajen. Lo que estas pruebas todavía no detectan: `collapseEditor` «7.» no nota perder el camino
+   rápido (un 40 % más lento); el tope de reemplazar en 300 páginas (12 veces armar el plan) no nota una regresión de
+   ×3, porque con la máquina cargada la proporción llega sola a 8; `exportPdf` «no espera dos veces» no se ejerce en
+   jsdom (las imágenes nunca cargan); tres archivos de pruebas `keySync*` llevan un plazo propio de 30 s, menor que el general;
+   y la tabla de migraciones de `Doc_Supabase.md` tiene tres filas viejas fuera de orden.
 
 ### C. Esperan a Lega
 

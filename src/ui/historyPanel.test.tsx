@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 import { t } from '../i18n';
 import { prefs } from '../prefs';
@@ -11,6 +11,7 @@ import { HistoryCore, type HistoryRequest } from '../sync/historyCore';
 import type { SupabaseRemote } from '../sync/remote';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeRemote, FakeServer, makeDevice, type Device } from '../sync/testing';
+import { settled } from '../test/settle';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { HistoryPanel, mergeRows, recentOther } from './HistoryPanel';
 import { canSeeHistory, closeHistory, registerRestoreTarget } from './historyUi';
@@ -90,7 +91,28 @@ function services(d: Device, userId: string, dbName = `test-${crypto.randomUUID(
   };
 }
 
-const settle = (ms = 40) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const settle = (ms = 40) => act(() => settled(ms));
+
+/**
+ * Frena la subida del contenido de ese dispositivo hasta soltarla (o hasta el final de la prueba). "Sin subir" y "antes
+ * de que suba" los sostiene la prueba: el motor sube solo un rato después de cada edición, y librado a quién llegaba
+ * primero, con la máquina cargada subía antes de que la prueba mirara.
+ */
+function holdUploads(d: Device) {
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  const push = d.remote.pushUpdate.bind(d.remote);
+  const pushing = vi.spyOn(d.remote, 'pushUpdate').mockImplementation(async (...args) => {
+    await held;
+    return push(...args);
+  });
+  offs.push(() => {
+    release();
+    pushing.mockRestore();
+  });
+  return { release, pushing };
+}
 
 async function mount(value: Services, pageId: string, parent: HTMLElement = document.body): Promise<HTMLElement> {
   const host = document.createElement('div');
@@ -242,6 +264,8 @@ describe('la pantalla del historial', () => {
     prefs.set({ language: 'en' });
     const { a, pageId, server } = await setup();
     server.online = true;
+    holdUploads(a);
+    const uploaded = (server.updates.get(pageId) ?? []).length;
     await edit(a, pageId, (g) => g.insert(0, [block('z', 'Sin subir')]));
     const host = await mount(services(a, server.ownerId), pageId);
     expect(host.textContent).toContain("aren't synced yet");
@@ -252,6 +276,8 @@ describe('la pantalla del historial', () => {
     expect(button.getAttribute('data-tip')).toContain("aren't synced yet");
     // En el teléfono no hay tooltip: el motivo va también en una línea (la muestra el CSS en pantalla angosta).
     expect(host.querySelector('.history-why')?.textContent).toContain("aren't synced yet");
+    // Nada de la página subió mientras tanto: lo que se miró fue con sus cambios sin subir.
+    expect((server.updates.get(pageId) ?? []).length).toBe(uploaded);
   });
 
   it('restaurar: confirma, sincroniza, se lo pide al editor de la página con la versión elegida y deja el aviso con Undo', async () => {
@@ -1151,6 +1177,8 @@ describe('Restored from… y Ctrl/⌘+Z', () => {
       }),
     );
     server.now = () => Date.parse('2026-09-30T17:40:00Z');
+    // La subida de la página espera hasta que se la suelta, después del Ctrl/⌘+Z.
+    const { release, pushing } = holdUploads(a);
     const host = await mount(services(a, server.ownerId), pageId);
     await act(async () => (host.querySelectorAll('.history-session')[2] as HTMLButtonElement).click());
     await settle(300);
@@ -1160,9 +1188,13 @@ describe('Restored from… y Ctrl/⌘+Z', () => {
     await act(async () => confirm.click());
     for (let i = 0; i < 50 && !undone; i++) await settle(5);
     expect(undone).not.toBeNull();
+    // La restauración está subiendo (frenada) y todavía sin marcar: se sigue mirando el deshacer.
+    await vi.waitFor(() => expect(pushing).toHaveBeenCalled());
+    expect(server.versions.some((v) => v.kind === 'restore')).toBe(false);
     expect(watching).toBe(1);
     // Ctrl/⌘+Z antes de que suba; después sube lo que haya quedado (la fila trae la restauración y el deshacer).
     await act(async () => undone!());
+    release();
     await a.docs.flush(pageId);
     await act(async () => void (await a.engine.syncNow()));
     await settle(1000);

@@ -11,6 +11,7 @@ import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
+import { settled } from '../test/settle';
 import { ExportDialog } from './ExportDialog';
 import { appLinkSource, setMediaLinkSource } from './mediaLinks';
 import { watchPendingWrites } from './lazyPart';
@@ -86,6 +87,10 @@ async function setup(level: 'comment' | 'edit', visitor = false, files: 'none' |
     await d.docs.flush();
     if (files === 'remote') await d.mediaDb.delete('blobs', id);
   }
+  // Con red o sin red lo pone cada prueba a mano (`engine.patch`). El motor no corre por su cuenta: un rato después de
+  // lo escrito arriba sincronizaba solo y volvía a decir «con red» en medio de una prueba que había puesto «sin red»
+  // (alcanzaba con que la máquina estuviera cargada).
+  await d.engine.stop();
   // El link público está en la página de adentro: sus archivos usan su token; los de la raíz, la dirección de siempre.
   const rpc = vi.fn(async (fn: string, args: { p_page?: string }) => {
     if (fn === 'public_link_pages') return { data: [{ page_id: child }], error: null, status: 200 };
@@ -148,7 +153,8 @@ async function setup(level: 'comment' | 'edit', visitor = false, files: 'none' |
   return { d, host, root, child, rpc, exportNow, box };
 }
 
-const settle = () => act(async () => new Promise((r) => setTimeout(r, 30)));
+// Un rato y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const settle = () => act(() => settled(30));
 const tokenOf = (href: string | null | undefined) => (href ? parseLinkHash(new URL(href).hash)?.t ?? null : null);
 
 describe('Export: los links a los archivos con un link público', () => {

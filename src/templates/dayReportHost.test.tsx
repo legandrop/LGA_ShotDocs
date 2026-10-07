@@ -15,6 +15,10 @@ import { IS_MAC } from '../ui/shortcuts';
 import { BUILTIN_ONSET } from './builtinIds';
 import { dayReportsMark, localDate } from './dayReport';
 import { createDayReport, planDayReport, writeNewPage } from './dayReportCreate';
+// El editor de la página se carga aparte la primera vez que se muestra. Acá se arma antes de las pruebas: si no, la
+// primera que monta una página pagaba ese armado (cientos de módulos) dentro de su plazo, y con la máquina cargada no
+// le alcanzaba (y una prueba que se corta por tiempo deja a las que siguen en el archivo sin poder dibujar).
+import '../ui/PageEditor';
 
 // El reporte del día en la página de verdad (PageView con el editor, sobre el servidor en memoria): la tira con *On-Set
 // Report* adentro de una carpeta, el botón *New day report* y su globito, "ya existe", el atajo con AltGr y `code`, los

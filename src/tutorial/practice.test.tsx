@@ -17,6 +17,10 @@ import { PracticeWriteError, practiceSession } from './practiceServices';
 import { practiceEn } from './practice.en';
 import { practiceBlocks, PRACTICE_BLOCKS, PRACTICE_ID } from './practiceTemplate';
 import { dismissTour, getTourUi, readDeviceTour, startTour } from './tourState';
+// El editor de la página se carga aparte la primera vez que se muestra. Acá se arma antes de las pruebas: si no, la
+// primera que monta una página pagaba ese armado (cientos de módulos) dentro de su plazo, y con la máquina cargada no
+// le alcanzaba (y una prueba que se corta por tiempo deja a las que siguen en el archivo sin poder dibujar).
+import '../ui/PageEditor';
 
 // La página de práctica y la recorrida con la app de verdad (Shell, barra lateral, editor, comentarios) sobre el
 // servidor en memoria (Docs/Doc_Tutorial.md, "Entregas y pruebas", entrega 2):

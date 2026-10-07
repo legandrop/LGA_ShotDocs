@@ -8,6 +8,7 @@ import { prefs } from '../prefs';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
+import { settled } from '../test/settle';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { ProjectSwitcher } from './ProjectSwitcher';
 
@@ -75,7 +76,8 @@ async function mount(value: Services): Promise<HTMLElement> {
   return host;
 }
 
-const settle = () => act(async () => new Promise((r) => setTimeout(r, 30)));
+// Un rato y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const settle = () => act(() => settled(30));
 
 /** Un workspace con las reglas del equipo, en la versión 9, con tres proyectos del dueño. */
 async function workspace(schema = 9): Promise<{ server: FakeServer; owner: Device; p: string; o: string; q: string }> {

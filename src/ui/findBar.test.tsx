@@ -9,6 +9,7 @@ import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
+import { settled } from '../test/settle';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { schema } from './editorSchema';
 import { FindBar } from './FindBar';
@@ -58,7 +59,17 @@ afterEach(async () => {
   document.body.innerHTML = '';
 });
 
-const wait = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const wait = (ms = 30) => act(() => settled(ms));
+/**
+ * Espera a que la barra haya llevado la coincidencia a la vista. Lo hace en varios pasos encadenados por el reloj (el
+ * dibujo siguiente, y otro más): no alcanza con un rato fijo, que con la máquina cargada se cumplía antes que ellos.
+ */
+const scrolled = (main: HTMLElement) =>
+  vi.waitFor(async () => {
+    await wait(20);
+    expect(main.scrollTop).toBeGreaterThan(0);
+  });
 
 function mountEditor(content: string[], parent: HTMLElement = document.body): BlockNoteEditor {
   const editor = BlockNoteEditor.create(
@@ -472,6 +483,7 @@ describe('sin pelearse con la persona (auditoría de v0.057)', () => {
     const onUser = vi.fn();
     act(() => landOnOccurrence(view, null, { onUser }));
     await wait(50);
+    await scrolled(main);
     expect(main.scrollTop).toBeGreaterThan(0);
     expect(isKeepingInView(view.dom)).toBe(true);
     act(() => void userInputs.wheel(main));
@@ -490,6 +502,7 @@ describe('sin pelearse con la persona (auditoría de v0.057)', () => {
     act(() => openFindBarAt('zanahoria', { pageId: 'p1', blockId: 'b2', occurrence: 0 }, { focus: false }));
     const host = render(<FindBar editor={first} editable={false} complete={false} pageId="p1" />);
     await wait(80);
+    await scrolled(main);
     expect(main.scrollTop).toBeGreaterThan(0);
     expect(hasFindTarget('p1')).toBe(true);
     // La persona desplaza a otro lado.
@@ -514,7 +527,10 @@ describe('sin pelearse con la persona (auditoría de v0.057)', () => {
     act(() => openFindBarAt('zanahoria', { pageId: 'p2', blockId: 'x', occurrence: 0 }, { focus: false }));
     render(<FindBar editor={editor} editable pageId="p2" />);
     await wait(80);
-    expect(isKeepingInView(editor.prosemirrorView!.dom)).toBe(true);
+    await vi.waitFor(async () => {
+      await wait(20);
+      expect(isKeepingInView(editor.prosemirrorView!.dom)).toBe(true);
+    });
     act(() => roots[roots.length - 1].unmount());
     roots.pop();
     expect(isKeepingInView(editor.prosemirrorView!.dom)).toBe(false);

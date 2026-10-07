@@ -1302,7 +1302,7 @@ Donde esto y el diseño no coinciden, vale esto. Va todo junto (el núcleo y la 
   guardado que falla corta todo; el registro que no se puede guardar; el editor que escribe mientras se guarda el
   registro; el editor que falla al dibujar (cuenta como escrito, no se repite, se vuelve a dibujar); la pila de
   deshacer de la página que no lo ve; lo escondido; sin red; **300 páginas** (2,2 s reemplazar y 1,1 s deshacer en esta
-  PC; topes con `SHOTDOCS_STRICT_PERF`); y **al azar con dos dispositivos** (`REPLACE_RANDOM`, 8 por defecto; 40 sin
+  PC; topes en segundos con `SHOTDOCS_STRICT_PERF`, y siempre contra lo que tarda armar el plan en la misma corrida); y **al azar con dos dispositivos** (`REPLACE_RANDOM`, 8 por defecto; 40 sin
   fallas): lo que escribe el otro siempre está, los dos y un dispositivo nuevo terminan iguales, y sin cambios del otro
   todo queda como antes.
 - `src/ui/projectReplace.test.tsx` (5, la app de verdad en jsdom): sin permisos conocidos no hay flecha; la vista previa,

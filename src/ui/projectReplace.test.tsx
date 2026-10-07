@@ -13,6 +13,10 @@ import { saveCollapse } from './collapseStore';
 import { closeFindBar, updateFindUi } from './findUi';
 import { replaceBlocksLeaving, replaceSession, showChanged } from './replaceUi';
 import { Shell } from './Workspace';
+// El editor de la página se carga aparte la primera vez que se muestra. Acá se arma antes de las pruebas: si no, la
+// primera que monta una página pagaba ese armado (cientos de módulos) dentro de su plazo, y con la máquina cargada no
+// le alcanzaba (y una prueba que se corta por tiempo deja a las que siguen en el archivo sin poder dibujar).
+import './PageEditor';
 
 // Reemplazar en todo el proyecto, con la app de verdad (el árbol, la base local, el editor y el panel de Ctrl/⌘+K
 // en jsdom): la flecha solo para quien puede, la vista previa, la confirmación, reemplazar una y dejar afuera, el
@@ -287,6 +291,8 @@ describe('reemplazar', () => {
     key(replaceInput(), { key: 'z', code: 'KeyZ', ctrlKey: true, repeat: true });
     key(replaceInput(), { key: 'z', code: 'KeyZ', ctrlKey: true, shiftKey: true });
     await until(async () => (await textOf(d, b)).includes('Cameras'), 'rehecho desde el panel');
+    // Rehacer sigue un paso más después de que el texto cambió (vuelve a guardar su registro): se espera su aviso.
+    await until(() => document.querySelector('.notice')?.textContent?.includes('Redid “camara” → “Camera” in 2 pages'), 'el aviso de rehacer');
     // Escribir en el campo: Ctrl+Z vuelve a ser del campo (no toca las páginas).
     type(replaceInput(), 'Camara');
     const again = key(replaceInput(), { key: 'z', code: 'KeyZ', ctrlKey: true });
@@ -323,6 +329,9 @@ describe('reemplazar', () => {
     act(() => inB()[0].querySelector<HTMLButtonElement>('.find-text-button')!.click());
     await until(async () => (await textOf(d, b)).includes('dos Xs'), 'la una');
     expect(await textOf(d, b)).toBe('|sin nada|dos Xs en B y una cámara más|');
+    // El reemplazo todavía no terminó cuando el texto ya cambió (le queda ordenar su registro): se espera su aviso.
+    // Sin eso la prueba cerraba la base con ese final en marcha, y el rechazo aparecía suelto en la prueba siguiente.
+    await until(() => document.querySelector('.notice')?.textContent?.includes('1 replacement'), 'el aviso');
   });
 
   it('borrar: las escondidas quedan afuera salvo con la casilla', async () => {
@@ -361,6 +370,8 @@ describe('reemplazar', () => {
       last.click();
     });
     await until(async () => (await textOf(d, b)).includes('cámaras'), 'deshecho desde el panel');
+    // Deshacer sigue un paso más después de que el texto cambió (saca su registro): se espera su aviso.
+    await until(() => document.querySelector('.notice')?.textContent?.includes('Undid “camara” → “Z” in 2 pages'), 'el aviso de deshacer');
     // El foco sigue en el panel (el renglón se fue): Esc lo cierra (P.26, pendiente de la entrega 2).
     await until(() => panel()!.contains(document.activeElement), 'el foco en el panel');
     key(document.activeElement!, { key: 'Escape' });
@@ -453,12 +464,13 @@ describe('Show (deshacer un reemplazo con lugares que habían cambiado)', () => 
       deps,
     );
     expect(went).toEqual(['P1']);
-    await new Promise((r) => setTimeout(r, 200));
+    // El bloque aparece al tercer intento: se espera a que aparezca, no un rato fijo.
+    await until(() => revealed.length > 0, 'el bloque');
     expect(revealed).toEqual(['x']);
     expect(notes.map((n) => n.message)).toEqual(['Changed after the replace, left as it is (1 of 2)']);
     notes[0].next!();
     expect(went).toEqual(['P1', 'P2']);
-    await new Promise((r) => setTimeout(r, 100));
+    await until(() => revealed.length > 1, 'el segundo bloque');
     expect(revealed).toEqual(['x', 'y']);
     expect(notes[1]).toEqual({ message: 'Changed after the replace, left as it is (2 of 2)', next: undefined });
   });

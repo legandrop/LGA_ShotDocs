@@ -7,6 +7,7 @@ import { copyWhenReady, parseInviteHash } from '../invite';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
+import { settled } from '../test/settle';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { MembersDialog } from './MembersDialog';
 import { RemovedScreen } from './RemovedScreen';
@@ -60,13 +61,14 @@ function services(d: Device, userId: string, signOut = vi.fn(async () => ({ erro
   };
 }
 
+// Las esperas de estas pruebas: el rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
 async function mount(value: Services, node: React.ReactNode): Promise<HTMLElement> {
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
   roots.push(root);
   await act(async () => root.render(<ServicesContext.Provider value={value}>{node}</ServicesContext.Provider>));
-  await act(async () => new Promise((r) => setTimeout(r, 20)));
+  await act(() => settled(20));
   return host;
 }
 
@@ -117,7 +119,7 @@ describe('pantallas del equipo', () => {
     type(host.querySelector('input[type="email"]') as HTMLInputElement, 'Cliente@Example.com');
     await act(async () => {
       (host.querySelector('form') as HTMLFormElement).requestSubmit();
-      await new Promise((r) => setTimeout(r, 20));
+      await settled(20);
     });
     expect(server.invitations.map((i) => i.email)).toEqual(['cliente@example.com']);
     expect(copied).toHaveLength(1);
@@ -134,7 +136,7 @@ describe('pantallas del equipo', () => {
     expect(host.textContent).toContain('pendiente@test');
     vi.stubGlobal('confirm', () => true);
     click([...host.querySelectorAll('button')].find((b) => b.textContent === 'Revoke'));
-    await act(async () => new Promise((r) => setTimeout(r, 20)));
+    await act(() => settled(20));
     expect(server.invitations[0].revoked_at).toBeTruthy();
     expect(host.textContent).not.toContain('pendiente@test');
     vi.unstubAllGlobals();
@@ -183,7 +185,7 @@ describe('pantallas del equipo', () => {
     type(host.querySelector('input[type="email"]') as HTMLInputElement, 'bea@test');
     await act(async () => {
       (host.querySelector('form') as HTMLFormElement).requestSubmit();
-      await new Promise((r) => setTimeout(r, 20));
+      await settled(20);
     });
     expect(server.grants.find((g) => g.user_id === 'bea')).toMatchObject({ page_id: page, level: 'edit' });
     expect(host.textContent).toContain('bea@test');
@@ -220,13 +222,13 @@ describe('pantallas del equipo', () => {
     expect(host.textContent).toContain("They'll get the page as it is when the editors' apps refresh it");
     await act(async () => {
       (host.querySelector('form') as HTMLFormElement).requestSubmit();
-      await new Promise((r) => setTimeout(r, 50));
+      await settled(50);
     });
     expect(host.textContent).toContain('There are unsynced changes on these pages');
     expect(server.grants.find((g) => g.user_id === 'bea')).toBeUndefined();
     await act(async () => {
       [...host.querySelectorAll('button')].find((b) => b.textContent === 'Share anyway')!.click();
-      await new Promise((r) => setTimeout(r, 50));
+      await settled(50);
     });
     expect(server.grants.find((g) => g.user_id === 'bea')).toMatchObject({ page_id: page, level: 'view' });
     expect(server.meta(page).reset).toBe(server.pages.get(page)!.update_seq);
@@ -276,7 +278,7 @@ describe('pantallas del equipo', () => {
       const buttons = [...host.querySelectorAll('button')];
       click(buttons.find((b) => b.textContent?.includes('keep it on this device')));
       click(buttons.find((b) => b.textContent?.includes('Remove')));
-      await act(async () => new Promise((r) => setTimeout(r, 20)));
+      await act(() => settled(20));
       expect(signOut).not.toHaveBeenCalled();
       expect(shutdown).not.toHaveBeenCalled();
       expect(alert).toHaveBeenCalledWith('An import is running. Wait until it finishes.');

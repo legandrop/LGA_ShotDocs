@@ -17,6 +17,10 @@ import { createDayReport, folderTemplateId, planDayReport } from './dayReportCre
 import { createReportFolder, reportFolderOptions } from './dayReportRoot';
 import { customizeBuiltin } from './ownCopy';
 import { requestTemplates } from './templatesUi';
+// El editor de la página se carga aparte la primera vez que se muestra. Acá se arma antes de las pruebas: si no, la
+// primera que monta una página pagaba ese armado (cientos de módulos) dentro de su plazo, y con la máquina cargada no
+// le alcanzaba (y una prueba que se corta por tiempo deja a las que siguen en el archivo sin poder dibujar).
+import '../ui/PageEditor';
 
 // *On-Set Report* en la raíz del proyecto (Docs/Doc_Plantillas.md, 6.2, D82, Lega 2026-10-02): no se crea un reporte sin
 // carpeta. La app ofrece una carpeta de reportes (la que ya hay, o una nueva con nombre editable), mueve ahí la página

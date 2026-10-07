@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.219 :
+
+Con la suite entera corriendo junto a otros procesos, cada corrida terminaba con pruebas caídas que solas pasaban. No era la app: las pruebas esperaban un rato fijo y miraban, daban por quieto al motor que sincroniza solo, medían contra topes en milisegundos, armaban el editor dentro del plazo de la primera prueba o terminaban con la app todavía trabajando. Las que se habían visto caer ahora esperan la condición, sostienen la subida o miden contra una vara de la misma corrida, y el tope por prueba pasa a 60 s. Con dos corridas a la vez todavía caen algunas que no se tocaron (lista en el roadmap, B.27). Aparte: la marca *Restored from…* de una restauración que no subió antes de cerrar la app se termina sola al sincronizar, sin pedir nada con una app más vieja que la mínima, y `Doc_Supabase.md` lista todas las migraciones.
+
+[Estabilizar las pruebas bajo carga, terminar sola la marca Restored from… pendiente y completar la tabla de migraciones]
+
 v0.218 :
 
 Quien entraba por un link público no podía abrir originales, videos ni adjuntos, ni subir: la app por link manda su versión en cada pedido al portero, y el portero no aceptaba ese header (roto desde el primer link). Ahora lo acepta. Además, tres restos que pedían la base. `public_link_pages()` le decía a cualquiera que ve una página que tiene un link público: ahora contesta solo a quien puede compartirla, con lo que muestra el ícono del árbol. La papelera con *All projects* pedía los archivos una vez por proyecto: `trashed_files_all()` los junta, de a páginas. Y mandar un archivo a la papelera de Drive no miraba la versión mínima, porque lo pide el portero: la app le dice su versión, el portero la pasa y `purge_file` la compara; sin versión pasa como antes con una mínima menor que 0.218 (`20261109120000_version_minima_papelera_archivos.sql`).

@@ -15,6 +15,10 @@ import { PHOTO_MARKUP_MAP } from '../media/markup';
 import { MARKUP_PASTE_ORIGIN } from '../media/markupClipboard';
 import { undoTimelineFor } from './undoTimeline';
 import { Shell } from './Workspace';
+// El editor de la página se carga aparte la primera vez que se muestra. Acá se arma antes de las pruebas: si no, la
+// primera que monta una página pagaba ese armado (cientos de módulos) dentro de su plazo, y con la máquina cargada no
+// le alcanzaba (y una prueba que se corta por tiempo deja a las que siguen en el archivo sin poder dibujar).
+import './PageEditor';
 
 // Deshacer en el orden en que editaste (P.26, entrega 1) con la app de verdad en jsdom: el árbol, la base local, el
 // editor real y los avisos. ⌘Z en otra página te lleva y lo deshace a la vista, con *Back*; manteniendo apretado no

@@ -13,6 +13,10 @@ import { IS_MAC } from '../ui/shortcuts';
 import { isEmptyPage } from './apply';
 import { blockedReason } from './TemplateHost';
 import { BUILTIN_PREPRO, BUILTIN_SHOT, builtinBlocks } from './builtin';
+// El editor de la página se carga aparte la primera vez que se muestra. Acá se arma antes de las pruebas: si no, la
+// primera que monta una página pagaba ese armado (cientos de módulos) dentro de su plazo, y con la máquina cargada no
+// le alcanzaba (y una prueba que se corta por tiempo deja a las que siguen en el archivo sin poder dibujar).
+import '../ui/PageEditor';
 
 // La tira *Start from a template*, la ventana *Templates* y *Apply template…* en la página de verdad (PageView con el
 // editor, sobre el servidor en memoria): Docs/Doc_Plantillas.md, 4.1 y entrega 1.

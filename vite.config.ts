@@ -242,7 +242,16 @@ export default defineConfig(({ mode }) => {
       // 15 s por prueba (el de vitest es 5 s): las que montan el editor (38 archivos: buscar, la página, las fotos,
       // colapsar, editar a la vez…) tardan cerca de 5 s con la máquina cargada y fallaban por tiempo, cada vez en
       // otra (auditoría de las fotos en línea, ronda 3). Solas pasan siempre; lo que prueban no cambia.
-      testTimeout: 15_000,
+      //
+      // 60 s desde la v0.219. Medido con dos corridas completas a la vez: una prueba tarda entre 6 y 10 veces lo que
+      // tarda sola (más procesos que núcleos), así que 15 s eran el tope de una prueba de 2 s. Tres que solas tardan
+      // entre 1 y 2 s quedaron entre 11 y 14,9 s, a 150 ms de caerse sin que nada estuviera mal. Este tope no afirma
+      // nada: solo detecta una prueba colgada, y una prueba que se corta por tiempo sigue corriendo de fondo y deja sin
+      // dibujar a las que siguen en su archivo. Lo que se cuelga esperando algo lo dice antes su propia espera
+      // (src/test/patience.ts), con su mensaje. Las pruebas largas de verdad llevan su propio plazo.
+      testTimeout: 60_000,
+      // El plazo por defecto de las esperas por condición (`vi.waitFor`): ver el archivo.
+      setupFiles: ['src/test/patience.ts'],
       projects: [
         {
           extends: true,

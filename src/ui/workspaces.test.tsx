@@ -278,12 +278,16 @@ describe('en la app abierta', () => {
       button(document.body, 'Download my unsynced changes').click();
       await new Promise((r) => setTimeout(r, 20));
     });
-    expect(remove.disabled).toBe(false);
+    // Armar el archivo de lo pendiente tarda lo que tarde: se espera a que el botón se habilite, no un rato.
+    await act(() => vi.waitFor(() => expect(remove.disabled).toBe(false)));
     vi.stubGlobal('confirm', () => true);
     await act(async () => {
       remove.click();
       await new Promise((r) => setTimeout(r, 50));
     });
+    // Quitar cierra todo, borra las bases, cierra la sesión y recién al final saca la entrada: se espera ese último
+    // paso (con la máquina cargada, borrar las bases tarda más que un rato fijo).
+    await act(() => vi.waitFor(() => expect(readWorkspaces().workspaces.map((w) => w.id)).toEqual([WANKA_LOCAL_KEY])));
     expect(signOut).toHaveBeenCalledTimes(1);
     expect(readWorkspaces().workspaces.map((w) => w.id)).toEqual([WANKA_LOCAL_KEY]);
     expect(readWorkspaces().active).toBe(WANKA_LOCAL_KEY);

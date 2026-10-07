@@ -4,6 +4,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ServicesContext, type Services } from '../services';
+import { settled } from '../test/settle';
 import { AssistantSettings } from './AssistantSettings';
 import { closeAssistantDb, loadSettings, saveSettings } from './keyStore';
 
@@ -27,7 +28,9 @@ afterEach(async () => {
   document.body.innerHTML = '';
 });
 
-const wait = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts): la pantalla lee sus ajustes de
+// la base del dispositivo, y con la máquina cargada un rato fijo se cumplía antes de que terminara de leerlos.
+const wait = (ms = 30) => act(() => settled(ms));
 
 /** Un `fetch` que contesta la lista de modelos y anota a dónde fue cada pedido y con qué `Authorization`. */
 function provider() {

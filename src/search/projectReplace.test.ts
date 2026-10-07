@@ -515,6 +515,9 @@ describe('sin red', () => {
 describe('rendimiento', () => {
   it('300 páginas de 50 párrafos: reemplazar y deshacer, con tope de tiempo', async () => {
     const d = await device();
+    // Se mide reemplazar, no subir. El motor sube solo un rato después de la última escritura: sin frenarlo, empezaba
+    // a subir las 300 páginas recién creadas en medio de la medición, y el tiempo de eso se le cargaba al reemplazo.
+    await d.engine.stop();
     const PAGES = Number(process.env.REPLACE_PAGES ?? 300);
     const filler = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore ';
     const ids: string[] = [];
@@ -524,6 +527,13 @@ describe('rendimiento', () => {
       ids.push(id);
     }
     const engine = engineOf(d);
+    // La vara se toma en la misma corrida: recorrer las mismas páginas y armar el plan del reemplazo, sin escribir.
+    const planning = async () => {
+      const started = performance.now();
+      expect((await engine.prepare(request(d, ids), { sync: false })).count).toBe(PAGES * 3);
+      return performance.now() - started;
+    };
+    const planBefore = await planning();
     const t0 = performance.now();
     const result = await engine.run(request(d, ids));
     const replaceMs = performance.now() - t0;
@@ -532,11 +542,21 @@ describe('rendimiento', () => {
     const t1 = performance.now();
     expect((await engine.undo(op.id)).undone).toBe(PAGES * 3);
     const undoMs = performance.now() - t1;
-    console.log(`reemplazar ${PAGES} páginas: ${replaceMs.toFixed(0)} ms; deshacer: ${undoMs.toFixed(0)} ms`);
-    // Con la máquina cargada (varias pruebas a la vez) tarda más: el tope estricto solo con SHOTDOCS_STRICT_PERF.
-    const cap = process.env.SHOTDOCS_STRICT_PERF ? 5000 : 25000;
-    expect(replaceMs).toBeLessThan(cap);
-    expect(undoMs).toBeLessThan(cap);
+    // Otra vez después: si la máquina se cargó a mitad de camino, la vara es la más lenta de las dos.
+    const plan = Math.max(planBefore, await planning());
+    console.log(`reemplazar ${PAGES} páginas: ${replaceMs.toFixed(0)} ms; deshacer: ${undoMs.toFixed(0)} ms; armar el plan: ${plan.toFixed(0)} ms`);
+    // Sola, reemplazar cuesta entre 2,1 y 2,7 veces lo que armar el plan, y deshacer entre 1,3 y 1,7. El tope son 12 y
+    // no menos porque la proporción no se mantiene con la máquina cargada: escribir (una pausa por página, la base) se
+    // frena más que leer, y con dos corridas completas a la vez se midió hasta 8. Con 6 y 4, que atraparían una
+    // regresión de ×3, la prueba fallaba sola bajo carga. Así atrapa una de ×5 o más; la más fina es el tope en
+    // segundos, para una máquina libre, solo con SHOTDOCS_STRICT_PERF. Un tope en segundos para todos medía también a
+    // la máquina (25 s contra los 2 que tarda sola: con la suite entera corriendo, los pasaba).
+    if (process.env.SHOTDOCS_STRICT_PERF) {
+      expect(replaceMs).toBeLessThan(5000);
+      expect(undoMs).toBeLessThan(5000);
+    }
+    expect(replaceMs).toBeLessThan(12 * plan);
+    expect(undoMs).toBeLessThan(12 * plan);
   }, 120_000);
 });
 

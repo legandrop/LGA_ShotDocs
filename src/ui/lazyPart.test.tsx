@@ -16,13 +16,16 @@ beforeEach(() => {
 });
 afterEach(() => {
   for (const r of roots.splice(0)) act(() => r.unmount());
+  vi.useRealTimers();
   vi.restoreAllMocks();
   document.body.innerHTML = '';
 });
 
 const lazyModule = () => import('./lazyPart');
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const wait = (ms = 30) => act(async () => sleep(ms));
+// Con el reloj en manos de la prueba (`reloadSetup`), esperar es adelantarlo: pasan exactamente esos milisegundos para
+// la app, tarde lo que tarde la máquina en llegar.
+const wait = (ms = 30) => act(async () => void (vi.isFakeTimers() ? await vi.advanceTimersByTimeAsync(ms) : await sleep(ms)));
 
 it('la readiness se consulta en sondeos y guarda final, con el mismo plazo local', async () => {
   const { watchPendingWrites, saveBeforeExit, reloadTimings } = await lazyModule();
@@ -180,9 +183,17 @@ describe('una parte que se carga aparte', () => {
     expect(reload).not.toHaveBeenCalled();
   });
 
-  /** Tiempos cortos para no esperar de verdad; `leaves`: la recarga dispara `pagehide` (la página se va). */
+  /**
+   * Tiempos cortos para no esperar de verdad; `leaves`: la recarga dispara `pagehide` (la página se va).
+   *
+   * La recarga es una secuencia de plazos (esperar el guardado, mostrar el aviso, ver si la página se va) y estas
+   * pruebas miran qué hay en cada momento. Contra el reloj de verdad, con la máquina cargada la prueba llegaba tarde a
+   * mirar y encontraba el paso siguiente. Por eso el reloj lo maneja la prueba: los plazos de la app y lo que la
+   * prueba espera corren en el mismo tiempo, y el orden de lo que pasa es siempre el mismo.
+   */
   async function reloadSetup({ leaves = true } = {}) {
     const mod = await lazyModule();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
     Object.assign(mod.reloadTimings, { noticeMs: 100, saveWaitMs: 300, pagehideMs: 150 });
     const reload = vi.spyOn(mod.pageReload, 'now').mockImplementation(() => {
       if (leaves) window.dispatchEvent(new Event('pagehide'));

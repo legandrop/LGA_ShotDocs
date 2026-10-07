@@ -128,7 +128,10 @@ describe('enlace en PageEditor y barrera de salida real', () => {
     const saving = vi.spyOn(f.d.tree, 'saveTitleDraft').mockImplementation(async (...args) => { await held; if (mode === 'rejected') throw new Error('Fallo local'); await original(...args); });
     const text = 'T'.repeat(1100); act(() => { input.focus(); setter.call(input, text); input.dispatchEvent(new Event('input', { bubbles: true })); });
     expect(f.title()!.unsaved()).toBe(true);
-    const oldWait = reloadTimings.saveWaitMs; reloadTimings.saveWaitMs = mode === 'saved' ? 1200 : 120; cleanup.push(() => { reloadTimings.saveWaitMs = oldWait; });
+    // Con el título guardado se sale apenas termina de guardarse, tarde lo que tarde: ahí el plazo no puede ser el que
+    // decida (con la máquina cargada, guardar pasaba de los 1,2 s que tenía y la salida se frenaba sin que nada
+    // estuviera mal). En los demás casos sigue corto: ninguno sale, y el de `timeout` lo deja vencer a propósito.
+    const oldWait = reloadTimings.saveWaitMs; reloadTimings.saveWaitMs = mode === 'saved' ? 60_000 : 120; cleanup.push(() => { reloadTimings.saveWaitMs = oldWait; });
     const anchor = f.host.querySelectorAll<HTMLAnchorElement>('a[data-inline-content-type=link]')[1];
     await act(async () => anchor.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
     expect(saving).toHaveBeenCalledOnce();
@@ -141,6 +144,8 @@ describe('enlace en PageEditor y barrera de salida real', () => {
     if (mode === 'draft') act(() => setDraft(Symbol('draft'), true));
     if (mode === 'timeout') await wait(170);
     await act(async () => release()); await wait(mode === 'saved' ? 650 : 180);
+    // La salida espera el guardado volviendo a mirar cada tanto: se espera a que salga, no un rato fijo.
+    if (mode === 'saved') await act(() => vi.waitFor(() => expect(assign).toHaveBeenCalledTimes(1)));
     if (mode === 'saved') expect(anchor.isConnected).toBe(true);
     expect(assign).toHaveBeenCalledTimes(mode === 'saved' ? 1 : 0);
     if (mode === 'saved') {

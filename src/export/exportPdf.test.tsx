@@ -739,23 +739,35 @@ describe('exportar PDF: el editor de exportación (observaciones de la entrega 0
 
   it('con imágenes que nunca llegan, no espera dos veces y después de tres páginas acorta la espera', async () => {
     // Un `resolveFileUrl` que no contesta nunca: la imagen queda "cargando".
-    const e = await ExportEditor.create({ resolveFileUrl: () => new Promise<string>(() => undefined), imageTimeoutMs: 200, copyTimeoutMs: 5000, shortTimeoutMs: 20 });
+    const waits = { image: 400, copy: 5000, short: 20 };
+    const e = await ExportEditor.create({ resolveFileUrl: () => new Promise<string>(() => undefined), imageTimeoutMs: waits.image, copyTimeoutMs: waits.copy, shortTimeoutMs: waits.short });
     editors.push(e);
     const page = (n: number) => ({ id: `p${n}`, title: `P${n}`, header: [], format: { size: 'A4' as const, landscape: false }, blocks: [{ type: 'image', props: { url: `sdmedia://00000000-0000-4000-8000-00000000000${n}`, name: 'x.jpg' } }] as never });
-    const times: number[] = [];
+    // Lo que cada página esperó a sus imágenes y lo que tardó su copia (lo mide el editor, etapa por etapa). Se mira
+    // cada espera contra su plazo y no el tiempo total contra un número fijo: el total lleva también armar y paginar
+    // la página, que con la máquina cargada tarda lo que tarde.
+    const spent: { images: number; copy: number }[] = [];
     const timedOut: boolean[] = [];
     for (let n = 0; n < 6; n++) {
-      const t0 = performance.now();
       const r = await e.render(page(n));
-      times.push(performance.now() - t0);
+      spent.push({ images: r.ms.images, copy: r.ms.copy });
       timedOut.push(r.imagesTimedOut);
       r.view.root.remove();
     }
     expect(timedOut.every(Boolean)).toBe(true);
-    // Sin la espera de la copia (5 s): cada una de las tres primeras, unos 200 ms.
-    for (const ms of times.slice(0, 3)) expect(ms).toBeLessThan(1500);
-    // Las siguientes, con la espera corta.
-    for (const ms of times.slice(3)) expect(ms).toBeLessThan(150);
+    // Las tres primeras esperan sus imágenes el plazo entero, y ninguna espera después el de la copia (5 s): esa
+    // espera, si se hace, no termina antes de su plazo.
+    for (const ms of spent.slice(0, 3)) {
+      expect(ms.images).toBeGreaterThanOrEqual(waits.image);
+      expect(ms.copy).toBeLessThan(waits.copy / 2);
+    }
+    // Las siguientes se rinden antes del plazo entero: eso solo pasa con la espera corta, porque una espera nunca
+    // termina antes de su plazo. Tampoco esperan la copia.
+    for (const ms of spent.slice(3)) {
+      expect(ms.images).toBeGreaterThanOrEqual(waits.short);
+      expect(ms.images).toBeLessThan(waits.image);
+      expect(ms.copy).toBeLessThan(waits.copy / 2);
+    }
   });
 });
 

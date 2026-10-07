@@ -5,12 +5,31 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
+import { settled } from '../test/settle';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { saveBeforeExit, watchPendingWrites, reloadTimings } from './lazyPart';
 import type { TitlePreparation } from './PageView';
 
 // La página con el editor cargado aparte (roadmap B.4): el título y el encabezado salen enseguida, el cuerpo
 // muestra un esqueleto y el editor se monta cuando termina de bajar. Este archivo no importa el editor.
+
+// La bajada del editor espera a que la prueba la suelte (`editorDownload.release()`). Sin eso quedaba librada a cuánto
+// tardaba: las primeras pruebas del archivo ya montan la página y la empiezan, y con la máquina cargada terminaba antes
+// de que la prueba del esqueleto montara la suya; con el editor ya bajado no hay nada que esperar ni esqueleto que ver.
+const editorDownload = vi.hoisted(() => {
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  return { held, release };
+});
+vi.mock('./PageEditor', async (importOriginal) => {
+  await editorDownload.held;
+  return importOriginal();
+});
+// Armar el editor por primera vez (cientos de módulos) es lo caro, y no es lo que mide ninguna prueba: se hace antes,
+// con su propio plazo. La página lo sigue esperando hasta que la prueba suelta la bajada.
+beforeAll(async () => {
+  await vi.importActual('./PageEditor');
+}, 60_000);
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -46,7 +65,8 @@ afterEach(async () => {
   document.body.innerHTML = '';
 });
 
-const wait = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)));
+// El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const wait = (ms = 30) => act(() => settled(ms));
 
 function services(d: Device): Services {
   const config = {
@@ -108,7 +128,15 @@ describe('la página', () => {
       await saveTitleDraft(...args);
     });
     const oldWait = reloadTimings.saveWaitMs;
-    reloadTimings.saveWaitMs = 120;
+    // Diez minutos, mucho más que el tope de la prueba: ningún caso puede pasar (ni fallar) porque se agotó la espera de
+    // la app. Con el título guardado se sale apenas termina de guardarse, tarde lo que tarde; el rechazo y el cambio de
+    // contexto cortan solos. Si alguno dejara de cortar, lo dice la espera de la prueba (abajo), a los 10 s y con su caso.
+    reloadTimings.saveWaitMs = 600_000;
+    const within = async <T,>(pending: Promise<T>, what: string): Promise<T> => {
+      let timer!: ReturnType<typeof setTimeout>;
+      const late = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(`no terminó en 10 s: ${what}`)), 10_000); });
+      try { return await Promise.race([pending, late]); } finally { clearTimeout(timer); }
+    };
     const unwatch = watchPendingWrites({ owner, current: () => live,
       stamp: () => title?.stamp(),
       prepare: () => title!.prepare(), flush: () => device.docs.flush(),
@@ -121,7 +149,7 @@ describe('la página', () => {
       expect(exit).not.toHaveBeenCalled();
       expect(blocked).toHaveBeenCalledTimes(1);
       if (mode === 'contexto') live = false;
-      await act(async () => { release(); await leaving; });
+      await act(async () => { release(); await within(leaving, `la salida con el título (${mode}): la espera de la app no cortó`); });
       expect(exit).toHaveBeenCalledTimes(mode === 'guardado' ? 1 : 0);
       expect(input.value).toBe('Título nuevo');
       if (mode === 'rechazo') {
@@ -160,9 +188,16 @@ describe('la página', () => {
     expect(host.querySelector<HTMLTextAreaElement>('.page-title')?.value).toBe('Escena 64');
     expect(host.querySelector('.editor-skeleton')).not.toBeNull();
     expect(host.querySelector('.bn-editor')).toBeNull();
+    // Mientras el editor no termina de bajar, el esqueleto sigue ahí, pase el tiempo que pase.
+    await wait(50);
+    expect(host.querySelector('.editor-skeleton')).not.toBeNull();
+    expect(host.querySelector('.bn-editor')).toBeNull();
 
-    for (let i = 0; i < 100 && !host.querySelector('.bn-editor'); i++) await wait(50);
-    expect(host.querySelector('.bn-editor')).not.toBeNull();
+    editorDownload.release();
+    await vi.waitFor(async () => {
+      await wait(20);
+      expect(host.querySelector('.bn-editor')).not.toBeNull();
+    });
     expect(host.querySelector('.editor-skeleton')).toBeNull();
   });
 
@@ -181,13 +216,17 @@ describe('la página', () => {
     const onLoose = (reason: unknown) => { loose.push(reason); };
     process.on('unhandledRejection', onLoose);
     try {
+      // El contenido lo abre el editor: acá tiene que estar bajado.
+      editorDownload.release();
       const { PageView } = await import('./PageView');
       const host = document.createElement('div');
       document.body.append(host);
       const root = createRoot(host);
       act(() => root.render(<ServicesContext.Provider value={services(device)}><main className="main"><PageView id={page} /></main></ServicesContext.Provider>));
-      for (let i = 0; i < 100 && !opening.mock.calls.length; i++) await wait(50);
-      expect(opening).toHaveBeenCalled();
+      await vi.waitFor(async () => {
+        await wait(20);
+        expect(opening).toHaveBeenCalled();
+      });
       act(() => root.unmount());
       release();
       await wait(50);

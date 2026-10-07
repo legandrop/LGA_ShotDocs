@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ServicesContext, type Services } from '../services';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
+import { settled } from '../test/settle';
 import { watchTitleRests } from '../sync/titleRest';
 import { ExportEditor } from '../export/exportEditor';
 import * as zip from '../export/exportZip';
@@ -28,7 +29,13 @@ afterEach(async () => {
   document.body.replaceChildren(); vi.restoreAllMocks();
 });
 const deferred = () => { let release!: () => void; const promise = new Promise<void>((resolve) => { release = resolve; }); return { promise, release }; };
-const settle = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 125)); });
+// Un rato y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const settle = () => act(() => settled(125));
+/**
+ * Espera a que el zip se haya armado. La salida espera el guardado local volviendo a mirar cada tanto: después de soltar
+ * lo que la frenaba, arma el zip en su próxima mirada, no en un plazo fijo (con la máquina cargada, un rato no alcanzaba).
+ */
+const produced = (producer: { mock: { calls: unknown[] } }) => act(() => vi.waitFor(() => expect(producer.mock.calls.length).toBeGreaterThan(0)));
 const click = async (text: string) => { await act(async () => { [...host.querySelectorAll('button')].find((button) => button.textContent === text)!.click(); }); await settle(); };
 async function setup(prepare: () => Promise<void> = async () => undefined) {
   const server = new FakeServer(); device = await makeDevice(server);
@@ -57,7 +64,7 @@ it('prepara título antes de producir y no agrega hijas al exportar sólo una p�
   const gate = deferred(); let page = '';
   const s = await setup(async () => { await gate.promise; await device.tree.rename(page, 'Título actual'); }); page = s.page;
   await click('Prepare .zip'); expect(s.producer).not.toHaveBeenCalled();
-  await act(async () => gate.release()); await settle();
+  await act(async () => gate.release()); await settle(); await produced(s.producer);
   expect(s.producer).toHaveBeenCalledTimes(1);
   expect(s.producer.mock.calls[0][0].title).toBe('Título actual');
   expect(s.producer.mock.calls[0][0].plan.map((p) => [p.id, p.title])).toEqual([[s.page, 'Título actual']]);
@@ -71,7 +78,7 @@ it('espera al consumidor real del sobrante hasta su documento durable', async ()
   vi.spyOn(device.docs, 'edit').mockImplementation(async (...args) => { await gate.promise; return edit(...args); });
   cleanups.push(watchTitleRests(device.tree, device.docs));
   await click('Prepare .zip'); expect(s.producer).not.toHaveBeenCalled();
-  await act(async () => gate.release()); await settle();
+  await act(async () => gate.release()); await settle(); await produced(s.producer);
   expect(device.tree.titleRests()).toHaveLength(0); expect(s.producer).toHaveBeenCalledTimes(1);
   const snap = await device.docs.snapshot(s.page);
   expect(snap.doc.getXmlFragment('document-store').toString()).toContain('REST245'); snap.doc.destroy();
@@ -82,7 +89,8 @@ it('el selector recibe el gesto pero el escritor espera la barrera', async () =>
   const button = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Download .zip…')!;
   act(() => button.click()); expect(f.picker).toHaveBeenCalledTimes(1);
   await settle(); expect(f.handle.createWritable).not.toHaveBeenCalled();
-  await act(async () => gate.release()); await settle();
+  await act(async () => gate.release()); await settle(); await produced(s.producer);
+  await act(() => vi.waitFor(() => expect(f.writable.close).toHaveBeenCalledTimes(1)));
   expect(s.producer).toHaveBeenCalledTimes(1); expect(f.writable.close).toHaveBeenCalledTimes(1); expect(f.handle.remove).not.toHaveBeenCalled();
 });
 

@@ -1,7 +1,7 @@
 import { loadPageHistory, rowHasTrace, type HistoryRow, type PageVersionRow } from './history';
 import type { HistoryCache, PendingRestore } from './historyCache';
-import type { HistoryRemote, NamedVersionsRemote } from './remote';
-import { isNetworkError, RemoteError } from './types';
+import { APP_OUTDATED, type HistoryRemote, type NamedVersionsRemote } from './remote';
+import { errorMessage, isNetworkError, RemoteError } from './types';
 
 // Bajar el historial de una página con la caché (P.18, entrega 3; Docs/Doc_Historial.md, secciones 8 y 10), los nombres
 // de versión y las marcas de restauración ("Restored from…") que quedaron pendientes.
@@ -118,8 +118,9 @@ export async function loadHistory(opts: LoadHistoryOptions): Promise<HistoryLoad
 // Restaurar es una edición del editor de la página que sube como cualquier otra: el `seq` de esa fila se sabe recién
 // cuando llega al servidor. Se guarda una marca pendiente (en la caché) y, cuando la página terminó de subir, se busca
 // la primera fila propia posterior a la última que había al restaurar y se marca (`mark_page_restored`). Si la app se
-// cierra antes, la pantalla del historial la termina la próxima vez que se abre esa página (`settleRestores`). Es solo
-// un rótulo: si se pierde, no se pierde nada de la página.
+// cierra antes, la termina la app la próxima vez que se abre, después de sincronizar (`settlePendingRestores`), o la
+// pantalla del historial de esa página (`settleRestores`). Es solo un rótulo: si se pierde, no se pierde nada de la
+// página.
 
 /** Cuánto se espera que la restauración llegue al servidor antes de dejar la marca de lado. */
 const PENDING_MAX_AGE_MS = 7 * 24 * 60 * 60_000;
@@ -131,8 +132,71 @@ const PENDING_MAX_AGE_MS = 7 * 24 * 60 * 60_000;
 const abandoned = new Set<string>();
 
 /**
+ * Un rechazo que se arregla solo y se reintenta: sin red, o esta versión de la app es más vieja que la mínima del
+ * workspace (`app_outdated`: la base rechaza las escrituras hasta que la app se actualiza). Dejar de lado la marca por
+ * eso la perdía para siempre, justo cuando la app todavía podía ponerla después de actualizarse.
+ */
+const retriesLater = (err: unknown) => isNetworkError(err) || errorMessage(err) === APP_OUTDATED;
+
+/** Las marcas que `markRestoreLater` está siguiendo en esta sesión: las termina él, la vuelta de fondo no las toca. */
+const watched = new Set<string>();
+
+/**
+ * Las marcas que la vuelta de fondo ya buscó en esta sesión, con la página subida, sin encontrar su fila: no se vuelve
+ * a bajar el historial por ellas hasta la próxima vez que se abra la app (o el historial de esa página).
+ */
+const searched = new Set<string>();
+
+/** Hasta cuántas filas posteriores a la restauración mira la vuelta de fondo (de a `BACKGROUND_BATCH`). */
+const BACKGROUND_BATCH = 500;
+const BACKGROUND_MAX_ROWS = 2000;
+
+/**
+ * Termina las marcas pendientes de todas las páginas sin abrir el historial de ninguna (la app se cerró antes de que
+ * la restauración subiera): se llama después de cada sincronización. Sin marcas pendientes no pide nada. Una página
+ * con algo sin subir espera a la próxima (su restauración puede no estar todavía en el servidor). Devuelve las marcas
+ * nuevas.
+ */
+export async function settlePendingRestores(
+  deps: { remote: HistoryRemote & NamedVersionsRemote; cache: HistoryCache; docs: { unsyncedPages(): Promise<string[]> } },
+  now = Date.now(),
+): Promise<PageVersionRow[]> {
+  const all = (await deps.cache.allRestores()).filter((p) => !watched.has(p.id) && !searched.has(p.id));
+  if (all.length === 0) return [];
+  const unsynced = new Set(await deps.docs.unsyncedPages());
+  const done: PageVersionRow[] = [];
+  for (const pageId of new Set(all.map((p) => p.pageId))) {
+    if (unsynced.has(pageId)) continue;
+    const pending = all.filter((p) => p.pageId === pageId);
+    const rows: HistoryRow[] = [];
+    try {
+      let after = Math.min(...pending.map((p) => p.afterSeq));
+      while (rows.length < BACKGROUND_MAX_ROWS) {
+        const batch = await deps.remote.pageHistory(pageId, after, BACKGROUND_BATCH);
+        rows.push(...batch);
+        if (batch.length < BACKGROUND_BATCH) break;
+        after = batch[batch.length - 1].seq;
+      }
+    } catch (err) {
+      // Sin red (o con la app vieja), en la próxima vuelta. Lo demás (ya no puede ver el historial de esa página) no
+      // se arregla insistiendo: queda para cuando se abra ese historial, hasta que venza.
+      if (retriesLater(err)) return done;
+      for (const p of pending) searched.add(p.id);
+      continue;
+    }
+    // Las que no se pudieron marcar por algo pasajero (la red se cortó justo ahí) no se dan por buscadas: la vuelta
+    // siguiente las intenta otra vez.
+    const waiting = new Set<string>();
+    done.push(...(await settleRestores(deps.remote, deps.cache, pageId, rows, pending, now, waiting)));
+    for (const p of pending) if (!waiting.has(p.id)) searched.add(p.id);
+  }
+  return done;
+}
+
+/**
  * Busca la fila de cada restauración pendiente de la página entre `rows` y la marca en el servidor. Devuelve las marcas
- * nuevas. Una que nunca va a poder marcarse (la base no la acepta, o pasó una semana) se deja de lado.
+ * nuevas. Una que nunca va a poder marcarse (la base no la acepta, o pasó una semana) se deja de lado. `waiting`: ahí
+ * se anotan las que encontraron su fila y no se pudieron marcar por algo pasajero (siguen pendientes para reintentar).
  */
 export async function settleRestores(
   remote: NamedVersionsRemote,
@@ -141,6 +205,7 @@ export async function settleRestores(
   rows: readonly HistoryRow[],
   pending?: PendingRestore[],
   now = Date.now(),
+  waiting?: Set<string>,
 ): Promise<PageVersionRow[]> {
   const list = pending ?? (cache ? await cache.restoresOf(pageId).catch(() => []) : []);
   const done: PageVersionRow[] = [];
@@ -164,8 +229,11 @@ export async function settleRestores(
       done.push(await remote.markPageRestored(p.id, p.pageId, mine.seq, p.fromSeq));
       await cache?.removeRestore(p.id).catch(() => undefined);
     } catch (err) {
-      // Sin red, se reintenta; lo demás (la base sin la función, una fila que no es propia) no se arregla reintentando.
-      if (!isNetworkError(err)) {
+      // Sin red o con la app más vieja que la mínima, se reintenta; lo demás (la base sin la función, una fila que no
+      // es propia) no se arregla reintentando.
+      if (retriesLater(err)) {
+        waiting?.add(p.id);
+      } else {
         abandoned.add(p.id);
         await cache?.removeRestore(p.id).catch(() => undefined);
       }
@@ -194,9 +262,11 @@ export function markRestoreLater(deps: RestoreMarkDeps, pending: PendingRestore,
   let finish: () => void = () => undefined;
   const done = new Promise<void>((resolve) => (finish = resolve));
   let off: () => void = () => undefined;
+  watched.add(pending.id);
   const stop = () => {
     if (stopped) return;
     stopped = true;
+    watched.delete(pending.id);
     off();
     finish();
   };

@@ -108,6 +108,10 @@ describe('exportar: las páginas', () => {
 
   it('dibuja cada página con el esquema real y no cambia nada guardado, byte por byte', async () => {
     const { device, specs, projectId, ids } = await project(14);
+    // Acá el único que puede escribir es el exportador. El motor sube solo lo pendiente un rato después de la última
+    // escritura, y con eso vacía la cola del árbol y anota en cada página lo que ya subió: si le tocaba en medio de la
+    // prueba (alcanza con que la máquina esté cargada), lo guardado cambiaba sin que el exportador hubiera hecho nada.
+    await device.engine.stop();
     const plan = exportPlan(device.tree, 'project', projectId);
     const before = new Map<string, string>();
     for (const p of plan) before.set(p.id, await stored(device, p.id));

@@ -843,16 +843,31 @@ describe('auditoría 1a', () => {
     const { editor } = page(blocks);
     setAllCollapsed(view(editor), true);
     putCaret(editor, 'T0');
+    // La vara se toma en la misma corrida: la misma página, sin nada colapsado.
+    const { editor: open } = page(blocks);
+    putCaret(open, 'T0');
     const before = collapseState(view(editor).state)!;
-    const started = performance.now();
-    for (let i = 0; i < 40; i++) editor.insertInlineContent('x');
-    const elapsed = performance.now() - started;
+    const folded: number[] = [];
+    const plain: number[] = [];
+    const key = (target: BlockNoteEditor, times: number[]) => {
+      const started = performance.now();
+      target.insertInlineContent('x');
+      times.push(performance.now() - started);
+    };
+    // Una tecla en cada página, alternando: lo que la máquina esté haciendo además les pega a las dos por igual.
+    for (let i = 0; i < 40; i++) {
+      key(open, plain);
+      key(editor, folded);
+    }
     const after = collapseState(view(editor).state)!;
     expect(after.analysis.hidden).toBe(before.analysis.hidden);
     expect(after.analysis.hidden.size).toBe(1000);
-    // 2.000 bloques. Holgado (jsdom es lento; unos 7 ms por tecla en la nube), pero muy por debajo de lo que
-    // costaba antes (28 ms con las decoraciones en los bloques, 45 rearmando todo).
-    expect(elapsed / 40).toBeLessThan(20);
+    // Lo que cuesta una tecla con todo colapsado contra lo que cuesta sin colapsar, por la mediana (una pausa suelta de
+    // la máquina no la mueve; al promedio sí). Hoy es cerca del doble. Antes, con las decoraciones en los bloques
+    // costaba 4 veces lo de hoy y rearmando todo más de 6: más de 7 y de 12 veces la página sin colapsar. Un tope en
+    // milisegundos medía también a la máquina: con la suite entera corriendo, la misma tecla tardaba varias veces más.
+    const median = (times: number[]) => [...times].sort((a, b) => a - b)[times.length >> 1];
+    expect(median(folded)).toBeLessThan(4 * median(plain));
   });
 
   it('8. pegar algo no toca los títulos plegables que ya estaban', () => {

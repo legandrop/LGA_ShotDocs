@@ -7,6 +7,7 @@ import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import type { PageRow, TrashedFileRow, TrashedProjectRow } from '../sync/types';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
+import { settled } from '../test/settle';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { openProjectTrash, ProjectSwitcher } from './ProjectSwitcher';
 import { Sidebar } from './Sidebar';
@@ -65,7 +66,8 @@ function services(d: Device, userId: string): Services {
   };
 }
 
-const settle = () => act(async () => new Promise((r) => setTimeout(r, 30)));
+// Un rato y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
+const settle = () => act(() => settled(30));
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function mount(value: Services, node = <ProjectSwitcher />): Promise<HTMLElement> {
@@ -259,7 +261,12 @@ describe('la papelera en el selector de proyectos', () => {
     await act(async () => byText('Restore', row)!.click());
     await vi.waitFor(() => expect(server.deletedProjects.has(o)).toBe(false));
     await vi.waitFor(() => expect(owner.tree.project(o)?.name).toBe('Bosque Negro'));
-    expect(shown()).not.toContain('project:Bosque Negro');
+    // La fila sale de la lista cuando la pantalla termina de recibir el proyecto restaurado: un paso después de que el
+    // árbol lo tenga. Se espera eso mismo, no un rato.
+    await vi.waitFor(async () => {
+      await settle();
+      expect(shown()).not.toContain('project:Bosque Negro');
+    });
   });
 
   it('un archivo de otro proyecto se manda a la papelera de Drive desde *All projects*, con su confirmación', async () => {
@@ -437,9 +444,13 @@ describe('ronda 1 de la auditoría', () => {
     const confirm = vi.fn((_message: string) => true);
     vi.stubGlobal('confirm', confirm);
     await act(async () => byText('Empty')!.click());
+    // *Empty* manda los archivos de a uno: se espera a que termine con los dos (esperar solo al primero dejaba al
+    // segundo librado a cuánto tardaba).
     await vi.waitFor(async () => {
       await settle();
       expect(server.mediaFiles.get('foto2')?.drive_trashed_at).toBeTruthy();
+      expect(server.mediaFiles.get('foto1')?.drive_trashed_at).toBeTruthy();
+      expect(document.querySelector('.trash-progress')).toBeNull();
     });
     expect(confirm.mock.calls[0]?.[0]).toMatch(/^Empty the file trash of “My project”: send all 2 files to the Google Drive trash\?/);
     expect(server.mediaFiles.get('foto1')?.drive_trashed_at).toBeTruthy();

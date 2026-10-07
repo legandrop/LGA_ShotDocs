@@ -1034,7 +1034,8 @@ dice. Sin red, el ⋯ está apagado (*Naming versions needs a connection.*).
 ***Restored from <fecha>*** (`historyLoad.ts`, `markRestoreLater`): el `seq` de la restauración se sabe recién cuando
 sube. Al restaurar se guarda una marca pendiente (en la caché) con la última fila que había; después de cada
 sincronización, cuando la página no tiene nada sin subir, se busca la primera fila **propia** posterior y se marca
-(`mark_page_restored`). Si la app se cierra antes, la termina la pantalla del historial la próxima vez que se abre esa
+(`mark_page_restored`). Si la app se cierra antes, la termina la app la próxima vez que se abre, después de
+sincronizar (desde v0.219: "*Restored from…* sin abrir el historial", más abajo), o la pantalla del historial de esa
 página (`settleRestores`; una semana de plazo). El *Undo* del aviso la deja de lado (la fila que suba podría traer la
 restauración y el deshacer juntos). Es un rótulo: si se pierde, no se pierde nada de la página.
 
@@ -1135,8 +1136,45 @@ igual. La tabla no se lee desde la API ni se muestra en la app: queda en la base
 borrado. Prueba: `supabase/tests/versiones_renombrar_rastro_permisos.sql`. Se descartó «sacar + nombrar» desde la app:
 son dos pedidos (si el segundo falla, el nombre se pierde) y el nombre nuevo pasaría a ser de quien renombra.
 
-**Lo que sigue anotado:** siguen la marca que se pierde si la app se cierra antes de que la restauración suba y no se abre
-ese historial en una semana, y medir en el iPhone.
+**Lo que sigue anotado:** medir en el iPhone. La marca que se perdía si la app se cerraba antes de que la restauración
+subiera y no se abría ese historial en una semana quedó resuelta en v0.219 (abajo).
+
+### *Restored from…* sin abrir el historial (v0.219)
+
+**Qué pasaba:** la marca pendiente de una restauración quedaba en la caché del historial y la terminaba solo quien la
+había creado (mientras la app seguía abierta) o la pantalla del historial de esa página. Si la app se cerraba antes de
+que la restauración subiera y nadie abría ese historial en una semana, el rótulo no aparecía nunca.
+
+**Cómo quedó:** después de cada sincronización, con red y la base en la versión de los nombres (13), la app mira las
+marcas pendientes de todas las páginas (`settlePendingRestores`, `historyLoad.ts`; enganchado en
+`historyCachePrune.ts`, que ya corre con la app abierta) y las termina igual que la pantalla del historial: la fila
+propia posterior con la huella de la restauración.
+
+- Sin marcas pendientes no pide nada, y sin caché no la crea (quien nunca abrió el historial no tiene marcas).
+- Una página con algo sin subir espera a la sincronización siguiente: su restauración puede no estar en el servidor.
+- Sin red espera, también si la red se corta justo al marcar: esa no se da por buscada y la sincronización siguiente
+  la intenta otra vez. Una marca cuya fila no aparece se busca una sola vez por sesión (no se baja el historial de esa
+  página en cada sincronización); se vuelve a buscar la próxima vez que se abre la app o ese historial, hasta la semana.
+- Con la app más vieja que la versión mínima del workspace no se intenta (la base rechazaría la marca con
+  `app_outdated`): queda pendiente y se pone cuando la app se actualiza. Ese rechazo es pasajero también para la
+  pantalla del historial (`settleRestores`): antes lo tomaba por definitivo y tiraba la marca.
+- Sin la base en la versión de los nombres (13) tampoco corre.
+- La marca de una restauración hecha en esta sesión la sigue terminando `markRestoreLater`: la vuelta de fondo no la
+  toca. Marcar dos veces la misma no rompe nada (la base devuelve la que ya estaba).
+- Mira hasta 2.000 filas posteriores a la restauración; con más que eso, la termina la pantalla del historial.
+
+**Pruebas:** `historyLoad.test.ts` (5: la marca pendiente que espera a que la página suba, no se marca sin red y
+después queda en su fila; la que se está siguiendo, la que no aparece y la que venció; la app más vieja que la mínima;
+la red que se corta justo al marcar; la fila tiene que ser posterior) e `historyCacheCleanup.test.tsx` (5: con la app
+abierta y sin el historial a la vista, se marca sola después de sincronizar; y no corre con la app vieja, con la base
+anterior a la 13, sin red, ni le crea la caché a quien nunca abrió el historial).
+
+**Lo que no se hizo:** la vuelta de fondo pide el historial de a 500 filas (cada pedido con el tope de 30 s de
+siempre), baja hasta 2.000 aunque la fila esté en el primer lote, no se espacia entre una sincronización y la siguiente
+mientras la marca espera por algo pasajero, y no tiene guarda contra dos vueltas a la vez (marcar dos veces no rompe
+nada, pero se pide de más). La marca de una página que nunca termina de subir no vence hasta que esa página sube o se
+abre su historial. Y una marca puesta de fondo no aparece en un historial que ya estaba abierto hasta que se vuelve a
+abrir.
 
 **Pruebas nuevas:** `historyRestore.test.ts` (2: la versión con ids repetidos, arriba y en los hijos; `onUndone` con
 Ctrl/⌘+Z, que no avisa por deshacer otra cosa ni dos veces), `historyPanel.test.tsx` (4: la consulta en curso al
