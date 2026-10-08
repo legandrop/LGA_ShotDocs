@@ -460,6 +460,8 @@ export function archiveSettings(raw: Record<string, unknown>, page: (oldId: stri
   }
   if (typeof raw.split === 'boolean') out.split = raw.split;
   if (raw.templatesFolder === true) out.templatesFolder = true;
+  // Fuera de las relaciones en vivo (D387).
+  if (raw.graph === false) out.graph = false;
   const tpl = raw.template;
   if (tpl === false) out.template = false;
   else if (isObj(tpl)) {

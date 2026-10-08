@@ -1,12 +1,16 @@
 import { useSyncExternalStore } from 'react';
-import { ProjectIndex, type IndexDocs, type IndexTree } from '../search/projectIndex';
+import { localIndexCache } from '../search/indexCache';
+import { ProjectIndex, type IndexCache, type IndexDocs, type IndexTree } from '../search/projectIndex';
+import type { LocalDb } from '../sync/localDb';
 import { useServices } from '../services';
 import { IS_MAC, isLetter, modPressed } from './findUi';
 
 // La búsqueda en todo el proyecto (Docs/Doc_Buscar.md, secciones 7 a 9): lo que vive siempre cargado (la lupa
 // de la barra lateral y Ctrl/⌘+K abren el panel, que se baja aparte). Todo es de cada instancia de servicios
 // (corrección 15), como `projectSizes.ts`: el índice, si el panel está abierto y el pedido de ir a un resultado.
-// Se guarda por `docs` (uno por instancia de servicios) y se arma la primera vez que se pide.
+// Se guarda por `docs` (uno por instancia de servicios) y se arma la primera vez que se pide: al abrir el proyecto, desde
+// las relaciones en vivo (relationsUi.ts), o al abrir el panel. Con la base local, lo leído se guarda en el dispositivo
+// (indexCache.ts) y la próxima vez solo se lee lo que cambió.
 
 /** Ir a un resultado: la página y, si fue en el contenido, la palabra que coincidió y cuál de las del bloque. */
 export interface ResultRequest {
@@ -42,11 +46,12 @@ export class SearchSession {
   constructor(
     private readonly tree: IndexTree,
     private readonly docs: IndexDocs,
+    private readonly cache?: IndexCache,
   ) {}
 
-  /** El índice: se arma la primera vez que se pide (al abrir el panel, no al abrir la app). */
+  /** El índice: se arma la primera vez que se pide (al abrir el proyecto, por las relaciones, o al abrir el panel). */
   get index(): ProjectIndex {
-    this.indexInstance ??= new ProjectIndex(this.tree, this.docs);
+    this.indexInstance ??= new ProjectIndex(this.tree, this.docs, { cache: this.cache });
     return this.indexInstance;
   }
 
@@ -109,9 +114,9 @@ export class SearchSession {
 const sessions = new WeakMap<object, SearchSession>();
 
 /** La búsqueda de una instancia de servicios. */
-export function searchSession(services: { tree: IndexTree; docs: IndexDocs }): SearchSession {
+export function searchSession(services: { tree: IndexTree; docs: IndexDocs; db?: LocalDb }): SearchSession {
   let session = sessions.get(services.docs);
-  if (!session) sessions.set(services.docs, (session = new SearchSession(services.tree, services.docs)));
+  if (!session) sessions.set(services.docs, (session = new SearchSession(services.tree, services.docs, services.db ? localIndexCache(services.db) : undefined)));
   return session;
 }
 

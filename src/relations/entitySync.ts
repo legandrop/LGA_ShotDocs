@@ -38,7 +38,15 @@ export function wantedMark(tree: KindTree, id: string): { kind: EntityKind; code
   }
   if (!mark || mark === 'other' || mark.kind !== 'scene') return undefined;
   const code = reader.titleCode(id);
-  return code && code !== mark.code ? { kind: 'scene', code } : undefined;
+  return code && code !== mark.code && !losesEpisode(code, mark.code) ? { kind: 'scene', code } : undefined;
+}
+
+/**
+ * Un número sin episodio sacado del título (`027`, D383) no reemplaza uno guardado con episodio (`105_027`): la página
+ * salió de la carpeta de su episodio, no dejó de ser esa escena.
+ */
+function losesEpisode(fromTitle: string, stored: string | null | undefined): boolean {
+  return !fromTitle.includes('_') && !!stored?.includes('_');
 }
 
 /** Pone o pone al día la marca de la página (ver arriba). */
@@ -109,7 +117,8 @@ export async function setPageType(tree: SyncTree, id: string, kind: EntityKind |
   if (kind === null) return tree.setSetting(id, 'entity', false);
   const mark = entityMark(row);
   const kept = mark && mark !== 'other' && mark.kind === 'scene' ? (mark.code ?? null) : null;
-  const code = kind === 'scene' ? (kindReader(tree).titleCode(id) ?? kept) : null;
+  const fromTitle = kind === 'scene' ? kindReader(tree).titleCode(id) : null;
+  const code = kind === 'scene' ? (fromTitle && !losesEpisode(fromTitle, kept) ? fromTitle : kept) : null;
   await tree.setSetting(id, 'entity', code ? { kind, code } : { kind });
 }
 

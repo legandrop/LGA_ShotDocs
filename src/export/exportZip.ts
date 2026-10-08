@@ -906,7 +906,7 @@ export async function buildZip(options: ZipOptions): Promise<ZipResult> {
 export function settingsOf(settings: PageRow['settings'] | undefined, page: Pick<ExportPlanPage, 'parent' | 'format'>, inside: ReadonlySet<string>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   const s = (settings ?? {}) as Record<string, unknown>;
-  for (const key of ['format', 'header', 'split', 'template', 'templatesFolder', 'entity', 'holds']) if (s[key] !== undefined) out[key] = s[key];
+  for (const key of ['format', 'header', 'split', 'template', 'templatesFolder', 'entity', 'holds', 'graph']) if (s[key] !== undefined) out[key] = s[key];
   const reports = s.dayReports;
   if (reports === false) out.dayReports = false;
   else if (reports && typeof reports === 'object') {

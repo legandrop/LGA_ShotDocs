@@ -60,6 +60,11 @@ export interface PageSettings {
   /** La carpeta *Templates* del proyecto (una página raíz). No se hereda. */
   templatesFolder?: true;
   /**
+   * `false`: la página y todo lo de adentro quedan fuera de las relaciones en vivo (un archivo, un backup; D387,
+   * Docs/Doc_Relaciones.md). No se hereda con `resolveSetting`: lo lee `registerProject` en la página y sus carpetas.
+   */
+  graph?: false;
+  /**
    * Qué ES la página (Docs/Doc_Estructura_Proyecto.md, «Tipo de página»): una escena, una locación o un día de rodaje.
    * `code`, solo en una escena: su número canónico (`101_074`, con letra propia si la tiene: `101_069A`; siempre con
    * guion bajo). `false`: se dijo a mano que no es nada de eso (gana sobre la carpeta). No se hereda: se lee en la página

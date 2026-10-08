@@ -125,22 +125,61 @@ export function unitPos(unit: PMUnit, at: number): number {
 
 // --- Yjs ---------------------------------------------------------------------------------------------------
 
-/** Las unidades de un Y.Doc guardado (sin editor y sin depender del esquema). */
-export function unitsFromYDoc(doc: Y.Doc): SearchUnit[] {
+/**
+ * Lo que las relaciones en vivo (Docs/Doc_Relaciones.md, sección 3) necesitan de un bloque además de su texto, leído en
+ * la misma pasada que la búsqueda. Solo para los bloques que tienen algo de esto (un título, fotos o links a páginas):
+ * los demás se reconocen por sus unidades.
+ */
+export interface BlockMeta {
+  blockId: string;
+  /** Dónde va: cuántas unidades hay antes de este bloque (sus unidades, si tiene, empiezan ahí). */
+  at: number;
+  /** El nivel de título (1, 2, 3…); 0 si no es un título. */
+  level: number;
+  /** Los ids de `sdmedia://` del bloque (de bloque o en línea), sin los de sus hijos anidados. */
+  media?: string[];
+  /** Los links a páginas de la app en sus unidades: la unidad (índice entre todas), dónde y a qué página. */
+  links?: { unit: number; start: number; end: number; pageId: string }[];
+}
+
+const MEDIA_SCHEME = 'sdmedia://';
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** La foto o archivo de una dirección `sdmedia://<id>` (como `mediaIdOf`, sin cargar la cola de archivos). */
+function mediaOf(url: unknown): string | null {
+  if (typeof url !== 'string' || !url.startsWith(MEDIA_SCHEME)) return null;
+  const id = url.slice(MEDIA_SCHEME.length).toLowerCase();
+  return UUID.test(id) ? id : null;
+}
+
+/** La página de un link de la app (`/p/<id>` o la dirección entera, de cualquier origen), o `null`. */
+export function linkedPageId(href: unknown): string | null {
+  if (typeof href !== 'string') return null;
+  const m = /^(?:[a-z][a-z0-9+.-]*:\/\/[^/?#]*)?\/p\/([^/?#]+)\/?(?:[?#].*)?$/i.exec(href.trim());
+  return m && UUID.test(m[1]) ? m[1].toLowerCase() : null;
+}
+
+/**
+ * Las unidades de un Y.Doc guardado (sin editor y sin depender del esquema). Con `meta`, junta además lo de cada bloque
+ * que usan las relaciones (`BlockMeta`), sin cambiar las unidades.
+ */
+export function unitsFromYDoc(doc: Y.Doc, meta?: BlockMeta[]): SearchUnit[] {
   const out: SearchUnit[] = [];
   const fragment = doc.getXmlFragment(CONTENT_FRAGMENT);
-  for (const child of fragment.toArray()) visitYNode(child, out);
+  for (const child of fragment.toArray()) visitYNode(child, out, meta);
   return out;
 }
 
-function visitYNode(node: Y.XmlElement | Y.XmlText | Y.XmlHook, out: SearchUnit[]): void {
+function visitYNode(node: Y.XmlElement | Y.XmlText | Y.XmlHook, out: SearchUnit[], meta?: BlockMeta[]): void {
   if (!(node instanceof Y.XmlElement)) return;
   if (node.nodeName === NESTED) {
-    for (const child of node.toArray()) visitYNode(child, out);
+    for (const child of node.toArray()) visitYNode(child, out, meta);
     return;
   }
   if (node.nodeName !== CONTAINER) return;
   const blockId = String(node.getAttribute('id') ?? '');
+  const at = out.length;
+  const extra: BlockMeta | null = meta ? { blockId, at, level: 0 } : null;
   let nested: Y.XmlElement | null = null;
   for (const child of node.toArray()) {
     if (!(child instanceof Y.XmlElement)) continue;
@@ -148,13 +187,29 @@ function visitYNode(node: Y.XmlElement | Y.XmlText | Y.XmlHook, out: SearchUnit[
       nested = child;
       continue;
     }
-    collectYText(child, blockId, out);
+    if (extra) {
+      if (child.nodeName === 'heading') extra.level = Math.max(1, Number(child.getAttribute('level')) || 1);
+      collectMedia(child, extra);
+    }
+    collectYText(child, blockId, out, extra);
     for (const field of ['caption', 'name'] as const) {
       const value = child.getAttribute(field) as unknown;
       if (typeof value === 'string' && keep(value)) out.push({ blockId, field, text: value });
     }
   }
-  if (nested) visitYNode(nested, out);
+  if (extra && (extra.level > 0 || extra.media || extra.links)) meta!.push(extra);
+  if (nested) visitYNode(nested, out, meta);
+}
+
+function collectMedia(el: Y.XmlElement, extra: BlockMeta): void {
+  const id = mediaOf(el.getAttribute('url'));
+  if (id) {
+    extra.media ??= [];
+    if (!extra.media.includes(id)) extra.media.push(id);
+  }
+  for (const child of el.toArray()) {
+    if (child instanceof Y.XmlElement && child.nodeName !== NESTED && child.nodeName !== CONTAINER) collectMedia(child, extra);
+  }
 }
 
 /** Un elemento es un bloque de texto si tiene texto adentro, o si no tiene ningún elemento hijo. */
@@ -168,20 +223,34 @@ function isInlineLeaf(el: Y.XmlElement): boolean {
   return el.length === 0 && el.nodeName !== NESTED && el.nodeName !== CONTAINER;
 }
 
-function collectYText(el: Y.XmlElement, blockId: string, out: SearchUnit[]): void {
+function collectYText(el: Y.XmlElement, blockId: string, out: SearchUnit[], extra: BlockMeta | null = null): void {
   if (isYTextblock(el)) {
     let text = '';
+    const links: { start: number; end: number; pageId: string }[] = [];
     for (const child of el.toArray()) {
       if (child instanceof Y.XmlText) {
-        for (const op of child.toDelta() as { insert: unknown }[]) text += typeof op.insert === 'string' ? lines(op.insert) : SEPARATOR;
+        for (const op of child.toDelta() as { insert: unknown; attributes?: { link?: { href?: unknown } } }[]) {
+          const piece = typeof op.insert === 'string' ? lines(op.insert) : SEPARATOR;
+          const pageId = extra ? linkedPageId(op.attributes?.link?.href) : null;
+          if (pageId) {
+            const last = links[links.length - 1];
+            // Un mismo link partido en pedazos (negrita en el medio) es uno solo.
+            if (last && last.end === text.length && last.pageId === pageId) last.end += piece.length;
+            else links.push({ start: text.length, end: text.length + piece.length, pageId });
+          }
+          text += piece;
+        }
       } else {
         text += SEPARATOR;
       }
     }
-    if (keep(text)) out.push({ blockId, field: 'text', text });
+    if (keep(text)) {
+      if (extra && links.length) (extra.links ??= []).push(...links.map((l) => ({ unit: out.length, ...l })));
+      out.push({ blockId, field: 'text', text });
+    }
     return;
   }
   for (const child of el.toArray()) {
-    if (child instanceof Y.XmlElement && child.nodeName !== NESTED && child.nodeName !== CONTAINER) collectYText(child, blockId, out);
+    if (child instanceof Y.XmlElement && child.nodeName !== NESTED && child.nodeName !== CONTAINER) collectYText(child, blockId, out, extra);
   }
 }

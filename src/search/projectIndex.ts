@@ -1,7 +1,7 @@
 import * as Y from 'yjs';
 import type { DocState } from '../sync/localDb';
 import type { PageRow } from '../sync/types';
-import { SEPARATOR, unitsFromYDoc, type UnitField } from './extract';
+import { SEPARATOR, unitsFromYDoc, type BlockMeta, type SearchUnit, type UnitField } from './extract';
 import { findIn, normalize, normalizeQuery, searchNormalized, type Normalized, type SearchOptions } from './normalize';
 import { treeContentGap } from '../sync/clean';
 import { annotationUnitsFromYDoc, type AnnotationUnit } from './annotationExtract';
@@ -19,6 +19,13 @@ import { annotationUnitsFromYDoc, type AnnotationUnit } from './annotationExtrac
 //   `docs.subscribeLocalChange`. La página abierta se lee de su documento vivo (`docs.peek`), con lo recién
 //   escrito; su marca es cuántos cambios tuvo ese documento. Se arma la primera vez que se abre el panel y
 //   después se relee solo lo que cambió, cediendo el hilo entre páginas.
+// - **Relaciones en vivo (Docs/Doc_Relaciones.md):** en la misma pasada se guarda, por bloque, su nivel de título, sus
+//   links a páginas y sus fotos (`BlockMeta`): abrir los documentos es lo caro, y se hace una sola vez para las dos
+//   cosas. Las relaciones arrancan el índice al abrir el proyecto (`retain`: cerrar el panel de buscar ya no corta la
+//   lectura) y releen la página abierta al dejar de escribir (`readOpen`).
+// - **Caché (`IndexCache`):** lo leído de cada página se guarda en el dispositivo con su marca `version:cursor`; al
+//   abrir la app se recupera y solo se lee lo que cambió. Una página con ediciones sin subir (`docDirty:`) se vuelve a
+//   leer igual. Lo que ya no está en el árbol se borra del caché; lo que no se ve se filtra al consultar, como siempre.
 // - **Cómo compara:** cada palabra por separado, sin mayúsculas ni tildes (la ñ vale como n), con partes de
 //   palabras; una página entra si tiene todas, en el título o en cualquier bloque.
 
@@ -60,7 +67,57 @@ interface Entry {
   mark: string;
   units: IndexedUnit[];
   annotationUnits: (AnnotationUnit & { folded: string })[];
+  /** Lo de cada bloque para las relaciones (títulos, links y fotos). */
+  meta: BlockMeta[];
 }
+
+/** Lo que leyó el índice de una página, para las relaciones. Cambia de objeto cada vez que se relee la página. */
+export interface IndexedContent {
+  readonly mark: string;
+  readonly units: readonly SearchUnit[];
+  readonly meta: readonly BlockMeta[];
+}
+
+/** Lo que se guarda de cada página en el dispositivo (sin el texto normalizado: se rearma al recuperarlo). */
+export interface CachedEntry {
+  v: typeof CACHE_FORMAT;
+  mark: string;
+  units: SearchUnit[];
+  annotations: AnnotationUnit[];
+  meta: BlockMeta[];
+}
+
+/** Cambia si cambia lo que se extrae de un documento: lo guardado con otro formato no se usa. */
+export const CACHE_FORMAT = 1;
+
+/** Dónde se guarda lo leído (la base local, `indexCache.ts`). Cualquier error se ignora: es solo un atajo. */
+export interface IndexCache {
+  /**
+   * Lo guardado de un proyecto (solo ese: abrir uno no carga los demás del workspace; auditoría de E1, O1) y las páginas
+   * con ediciones sin subir (esas se vuelven a leer).
+   */
+  load(projectId: string): Promise<{ entries: Map<string, unknown>; dirty: Set<string> }>;
+  /** Guarda o borra (`entry: null`) lo de varias páginas, cada una en su proyecto, en una sola transacción. */
+  save(changes: CacheChange[]): Promise<void>;
+}
+
+/** Guardar (o borrar, `entry: null`) lo de una página bajo un proyecto. */
+export interface CacheChange {
+  pageId: string;
+  projectId: string;
+  entry: CachedEntry | null;
+}
+
+/** Progreso de una lectura grande (la primera vez, o después de muchos cambios). */
+export interface IndexProgress {
+  /** Páginas al día. */
+  ready: number;
+  /** Páginas del proyecto. */
+  total: number;
+}
+
+/** Una lectura con menos páginas que esto no muestra progreso (sería un parpadeo). */
+export const PROGRESS_MIN_PAGES = 20;
 
 export interface SearchWord {
   /** Como se escribió (va a la barra de la página al ir al resultado). */
@@ -130,6 +187,8 @@ export interface IndexInfo {
   missing: number;
   /** Páginas con algo del servidor que esta versión no pudo leer. */
   unreadable: number;
+  /** Mientras lee muchas páginas (`PROGRESS_MIN_PAGES` o más), cuántas están al día; si no, `null`. */
+  progress: IndexProgress | null;
 }
 
 /** Fragmentos por página. */
@@ -211,12 +270,38 @@ export function titlesOnly(words: SearchWord[]): boolean {
   return words.length > 0 && words.every((w) => [...w.norm].length < 2 && !IDEOGRAPHIC.test(w.norm));
 }
 
-function indexUnits(doc: Y.Doc): IndexedUnit[] {
-  return unitsFromYDoc(doc).map((u) => ({ ...u, folded: normalize(u.text).text }));
+/**
+ * El texto normalizado de cada unidad. Con lo leído antes de la misma página (`prev`), lo que no cambió se reusa:
+ * releer la página abierta al dejar de escribir normaliza solo lo que se tocó.
+ */
+function folded<T extends { text: string }>(units: T[], prev?: readonly { text: string; folded: string }[]): (T & { folded: string })[] {
+  const known = new Map<string, string>();
+  if (prev) for (const u of prev) known.set(u.text, u.folded);
+  return units.map((u) => ({ ...u, folded: known.get(u.text) ?? normalize(u.text).text }));
 }
 
-function indexAnnotations(doc: Y.Doc): Entry['annotationUnits'] {
-  return annotationUnitsFromYDoc(doc).map((u) => ({ ...u, folded: normalize(u.text).text }));
+/** Lee una página: el texto de cada bloque (la búsqueda) y lo de cada bloque que usan las relaciones, en una pasada. */
+function readEntry(doc: Y.Doc, mark: string, prev?: Entry): Entry {
+  const meta: BlockMeta[] = [];
+  const units = folded(unitsFromYDoc(doc, meta), prev?.units);
+  return { mark, units, annotationUnits: folded(annotationUnitsFromYDoc(doc), prev?.annotationUnits), meta };
+}
+
+/** Lo que se guarda de una página (sin el texto normalizado). */
+function toCached(entry: Entry): CachedEntry {
+  return {
+    v: CACHE_FORMAT,
+    mark: entry.mark,
+    units: entry.units.map(({ blockId, field, text }) => ({ blockId, field, text })),
+    annotations: entry.annotationUnits.map(({ folded: _f, ...u }) => u),
+    meta: entry.meta,
+  };
+}
+
+/** Lo guardado tiene la forma de ahora (otro formato, o algo roto, no se usa). */
+function validCached(value: unknown): value is CachedEntry {
+  const c = value as CachedEntry | null;
+  return !!c && c.v === CACHE_FORMAT && typeof c.mark === 'string' && Array.isArray(c.units) && Array.isArray(c.annotations) && Array.isArray(c.meta);
 }
 
 type QueryUnit = IndexedUnit | Entry['annotationUnits'][number];
@@ -246,15 +331,67 @@ export class ProjectIndex {
   private disposed = false;
   private readonly unsubscribe: () => void;
   private readonly titles = new Map<string, Normalized>();
+  /** Quienes necesitan que el índice siga leyendo aunque se cierre el panel (las relaciones). */
+  private retainers = 0;
+  /** El progreso de la lectura en curso, si es grande. */
+  private progress: (IndexProgress & { projectId: string }) | null = null;
+  /** El proyecto de la pasada en curso, y si hay que cortarla porque se pidió otro. */
+  private current: string | null = null;
+  private preempt = false;
+  /** Lo recuperado del caché (una sola vez por instancia). */
+  private readonly restored = new Map<string, Promise<void>>();
+  private readonly restoredDone = new Set<string>();
+  /** Lo que falta guardar en el caché (`entry: null`: borrar), con el proyecto bajo el que se guarda. */
+  private readonly unsaved = new Map<string, CacheChange>();
+  /** Bajo qué proyecto está guardada cada página en el caché (para borrarla). */
+  private readonly cachedIn = new Map<string, string>();
+  private saving: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly tree: IndexTree,
     private readonly docs: IndexDocs,
-    private readonly options: { yieldMs?: number; publishMs?: number; writeWaitMs?: number } = {},
+    private readonly options: { yieldMs?: number; publishMs?: number; writeWaitMs?: number; cache?: IndexCache; saveMs?: number } = {},
   ) {
     this.unsubscribe = docs.subscribeLocalChange((pageId) => {
       this.stale.add(pageId);
     });
+  }
+
+  /**
+   * Pide que la lectura siga aunque se cierre el panel de buscar (`cancel` no hace nada mientras alguien la retenga).
+   * Devuelve la función que la suelta.
+   */
+  retain(): () => void {
+    this.retainers++;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.retainers--;
+    };
+  }
+
+  /** Lo leído de una página (para las relaciones), si está leído. Lo de una página que no se ve, también: filtrar es de quien consulta. */
+  content(pageId: string): IndexedContent | undefined {
+    return this.entries.get(pageId);
+  }
+
+  /**
+   * Relee ya la página abierta (su documento vivo) si cambió desde la última lectura: es lo que hacen las relaciones
+   * medio segundo después de dejar de escribir. Sin el documento vivo, la deja para la próxima pasada. Devuelve si leyó.
+   */
+  readOpen(projectId: string, pageId: string): boolean {
+    if (this.disposed || !this.visible(pageId, projectId)) return false;
+    const live = this.docs.peek(pageId);
+    if (!live) {
+      this.stale.add(pageId);
+      return false;
+    }
+    if (this.entries.get(pageId)?.mark === liveMark(live)) return false;
+    this.stale.delete(pageId);
+    this.entries.set(pageId, readEntry(live, liveMark(live), this.entries.get(pageId)));
+    this.publish();
+    return true;
   }
 
   subscribe = (fn: () => void): (() => void) => {
@@ -267,15 +404,91 @@ export class ProjectIndex {
 
   /** Deja de escuchar las ediciones y de leer (al cerrar los servicios: cerrar sesión, cambiar de workspace). */
   dispose(): void {
+    // Lo leído que falta guardar se intenta guardar (la base puede estar cerrándose: entonces se lee la próxima vez).
+    void this.flush();
     this.disposed = true;
     this.unsubscribe();
     this.entries.clear();
     this.listeners.clear();
   }
 
-  /** Corta la lectura en curso (se cerró el panel): lo ya leído queda, lo demás se lee la próxima vez. */
+  /**
+   * Corta la lectura en curso (se cerró el panel): lo ya leído queda, lo demás se lee la próxima vez. Mientras las
+   * relaciones la retengan (`retain`), sigue.
+   */
   cancel(): void {
-    if (this.running) this.cancelled = true;
+    if (this.running && this.retainers === 0) this.cancelled = true;
+  }
+
+  /** Espera a que se guarde en el caché lo leído hasta ahora (para las pruebas y al cerrar). */
+  flush(): Promise<void> {
+    const cache = this.options.cache;
+    if (!cache || this.unsaved.size === 0) return this.saving;
+    const batch = [...this.unsaved.values()];
+    this.unsaved.clear();
+    this.saving = this.saving.then(() => cache.save(batch)).catch(() => undefined);
+    return this.saving;
+  }
+
+  /** Deja para guardar (o borrar, con `null`) lo de una página, bajo su proyecto. */
+  private toSave(pageId: string, projectId: string | undefined, entry: CachedEntry | null): void {
+    if (!this.options.cache || !projectId) return;
+    // Una página que pasó a otro proyecto: lo guardado bajo el anterior se borra.
+    const before = this.cachedIn.get(pageId);
+    if (entry && before && before !== projectId) this.unsaved.set(`${before}:${pageId}`, { pageId, projectId: before, entry: null });
+    this.unsaved.set(`${projectId}:${pageId}`, { pageId, projectId, entry });
+    if (entry) this.cachedIn.set(pageId, projectId);
+    else this.cachedIn.delete(pageId);
+  }
+
+  /**
+   * Recupera lo guardado del proyecto (una vez por proyecto): lo que no se leyó todavía en esta sesión entra con su marca.
+   * Una fila rota se descarta sola (y se borra) sin cortar la pasada (auditoría de E1, O4).
+   */
+  private restore(projectId: string): Promise<void> {
+    const cache = this.options.cache;
+    if (!cache) return Promise.resolve();
+    let pending = this.restored.get(projectId);
+    if (pending) return pending;
+    pending = (async () => {
+      const yieldMs = this.options.yieldMs ?? 12;
+      let loaded: Awaited<ReturnType<IndexCache['load']>>;
+      try {
+        loaded = await cache.load(projectId);
+      } catch {
+        return;
+      }
+      let since = Date.now();
+      for (const [pageId, saved] of loaded.entries) {
+        if (this.disposed) return;
+        this.cachedIn.set(pageId, projectId);
+        // Lo de otro formato o roto se borra. Lo de una página que ya no está en el árbol o es de otro proyecto, también
+        // (lo que no se ve nunca se consulta: `pagesOf`).
+        const row = this.tree.get(pageId);
+        let entry: Entry | null = null;
+        try {
+          if (validCached(saved) && row?.workspace_id === projectId) {
+            entry = { mark: saved.mark, units: folded(saved.units), annotationUnits: folded(saved.annotations), meta: saved.meta };
+          }
+        } catch {
+          entry = null;
+        }
+        if (!entry) {
+          if (!row || row.workspace_id !== projectId || !validCached(saved) || !this.entries.has(pageId)) this.toSave(pageId, projectId, null);
+          continue;
+        }
+        if (!this.entries.has(pageId)) this.entries.set(pageId, entry);
+        if (Date.now() - since >= yieldMs) {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          since = Date.now();
+        }
+      }
+      for (const pageId of loaded.dirty) this.stale.add(pageId);
+    })().finally(() => {
+      this.restoredDone.add(projectId);
+    });
+    this.restored.set(projectId, pending);
+    return pending;
   }
 
   /** Si la página está leída en el índice (para las pruebas). */
@@ -291,6 +504,9 @@ export class ProjectIndex {
     if (this.disposed) return Promise.resolve();
     this.cancelled = false;
     if (this.running) {
+      // Otro proyecto (se cambió de proyecto a mitad de la primera lectura): la pasada del anterior se corta aunque esté
+      // retenida; lo leído queda y se guarda, el resto se lee al volver (auditoría de E1, B2).
+      if (this.current !== projectId) this.preempt = true;
       this.again = projectId;
       return this.running;
     }
@@ -298,6 +514,8 @@ export class ProjectIndex {
       let next: string | null = projectId;
       while (next && !this.disposed && !this.cancelled) {
         this.again = null;
+        this.preempt = false;
+        this.current = next;
         // Un error de la base (se está cerrando, al cambiar de workspace) no rompe nada: se intenta la próxima vez.
         await this.run(next).catch(() => undefined);
         next = this.again;
@@ -305,6 +523,7 @@ export class ProjectIndex {
     })().finally(() => {
       this.running = null;
       this.cancelled = false;
+      this.current = null;
     });
     return this.running;
   }
@@ -339,7 +558,7 @@ export class ProjectIndex {
       if (treeContentGap(this.tree, page, state?.cursor ?? 0) !== null && !this.tree.hasUnsentCreate(page.id)) missing++;
       if (state?.unreadable) unreadable++;
     }
-    return { pages: pages.length, building: this.building, missing, unreadable };
+    return { pages: pages.length, building: this.building, missing, unreadable, progress: this.building && this.progress?.projectId === projectId ? { ready: this.progress.ready, total: this.progress.total } : null };
   }
 
   private publish(): void {
@@ -357,13 +576,23 @@ export class ProjectIndex {
     const publishMs = this.options.publishMs ?? 250;
     // Lo que esta pasada puede esperar, en total, a que se guarden las ediciones (no por página).
     const budget = { ms: this.options.writeWaitMs ?? 2000 };
+    const saveMs = this.options.saveMs ?? 3000;
     let changed = false;
     try {
+      // Solo la primera pasada espera al caché (las demás no suman ni una vuelta de espera).
+      if (!this.restoredDone.has(projectId) && this.options.cache) {
+        await this.restore(projectId);
+        if (this.disposed) return;
+      }
       this.states = await this.docs.states();
       let since = Date.now();
       let published = Date.now();
-      for (const page of this.pagesOf(projectId)) {
-        if (this.disposed || this.cancelled) return;
+      let saved = Date.now();
+      const pages = this.pagesOf(projectId);
+      const todo = pages.filter((page) => this.needsRead(page.id)).length;
+      this.progress = todo >= PROGRESS_MIN_PAGES ? { projectId, ready: pages.length - todo, total: pages.length } : null;
+      for (const page of pages) {
+        if (this.disposed || this.cancelled || this.preempt) return;
         // El árbol pudo cambiar mientras se leía: lo que ya no se ve no se lee.
         if (!this.visible(page.id, projectId) || !this.needsRead(page.id)) continue;
         if (!this.building) {
@@ -373,13 +602,14 @@ export class ProjectIndex {
         }
         try {
           await this.waitForWrites(budget);
-          if (this.disposed || this.cancelled) return;
+          if (this.disposed || this.cancelled || this.preempt) return;
           await this.readPage(page.id);
           changed = true;
         } catch {
           // Esta página no se pudo leer ahora: queda como estaba (o sin leer) y se intenta la próxima vez.
           this.stale.add(page.id);
         }
+        if (this.progress) this.progress = { ...this.progress, ready: Math.min(this.progress.total, this.progress.ready + 1) };
         if (Date.now() - since >= yieldMs) {
           await new Promise((resolve) => setTimeout(resolve, 0));
           since = Date.now();
@@ -389,11 +619,22 @@ export class ProjectIndex {
           published = Date.now();
           changed = false;
         }
+        // Lo leído se guarda de a tandas: si la app se cierra a mitad de la primera lectura, no se empieza de cero.
+        if (Date.now() - saved >= saveMs) {
+          void this.flush();
+          saved = Date.now();
+        }
       }
-      // Lo que ya no está en el árbol no se guarda más (igual se filtra al buscar).
-      for (const id of this.entries.keys()) if (!this.tree.get(id)) this.entries.delete(id);
+      // Lo que ya no está en el árbol no se guarda más (igual se filtra al buscar), tampoco en el caché.
+      for (const id of this.entries.keys()) {
+        if (this.tree.get(id)) continue;
+        this.entries.delete(id);
+        this.toSave(id, this.cachedIn.get(id), null);
+      }
     } finally {
       this.building = false;
+      this.progress = null;
+      void this.flush();
       // Uno al final siempre: también cambian los avisos (páginas por bajar, ilegibles).
       if (!this.disposed) this.publish();
     }
@@ -424,13 +665,17 @@ export class ProjectIndex {
     // Antes de leer: una edición que se guarde mientras tanto la vuelve a marcar.
     this.stale.delete(pageId);
     if (live) {
-      this.entries.set(pageId, { mark: liveMark(live), units: indexUnits(live), annotationUnits: indexAnnotations(live) });
+      // Lo del documento vivo no se guarda en el caché (su marca no es la de lo guardado): al cerrarse la página se
+      // relee de lo guardado y entonces sí.
+      this.entries.set(pageId, readEntry(live, liveMark(live), this.entries.get(pageId)));
       return;
     }
     const snap = await this.docs.indexSnapshot(pageId);
     try {
-      this.entries.set(pageId, { mark: markOf(snap.state), units: indexUnits(snap.doc), annotationUnits: indexAnnotations(snap.doc) });
+      const entry = readEntry(snap.doc, markOf(snap.state));
+      this.entries.set(pageId, entry);
       if (snap.state) this.states.set(pageId, snap.state);
+      this.toSave(pageId, this.tree.get(pageId)?.workspace_id, toCached(entry));
     } finally {
       snap.doc.destroy();
     }

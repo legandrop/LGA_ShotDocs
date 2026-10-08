@@ -610,6 +610,7 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
 - **D377 · Sin episodio no hay número de escena** (2026-10-08; tomada al implementarlo, Lega la puede cambiar). `074 |
   título` en un largo queda escena sin `code`: el contrato es `EP_NNN`. La otra opción: guardar `074` (un formato
   distinto que el motor tendría que distinguir); queda para cuando se mida un largo.
+  Reemplazada por D383.
 - **D378 · *Type* marca también la página misma** (2026-10-08; tomada al implementarlo, Lega la puede cambiar): *This
   page is: Scene / Location / Shoot day / None of these*, en el mismo submenú que *Pages created inside are*. Es la forma
   de corregir una página mal clasificada por su carpeta. La otra opción: solo la carpeta (sin arreglo para un caso
@@ -630,6 +631,45 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
   pausa antes del número no queda escena, y no se suben números a medio escribir (`105_000`, `105_007`). La otra opción:
   corregir sola una marca puesta por la carpeta mientras la página no tenga hijos ni contenido (no distingue una marca
   puesta a mano).
+
+- **D383 · Un proyecto sin episodios numera sus escenas con 3 cifras y su letra (`074`, `069A`)** (2026-10-08; tomada al
+  implementar el motor de relaciones, E1; reemplaza a D377; Lega la puede cambiar). El lector las reconoce con
+  «Escena/Esc/Sc/Scene» delante, como plano `ABC_074_010`, o primero en un título con ceros, con letra o seguidas de
+  `|`, `-`, `:`, `.`, INT/EXT o nada; «plano 12», «toma 74» y un número suelto nunca. `kind.ts` saca `074` del título
+  sin episodio de contexto (después de las formas con episodio) y lo acepta como código guardado; un número sin
+  episodio no reemplaza uno guardado con episodio. Un título de solo `074` en la carpeta de escenas sigue siendo un
+  grupo. La otra opción: largos sin número (no se reconocerían). Ajustada en la corrección de la auditoría (D391).
+- **D391 · En un largo, lo primero de un título cuenta como escena solo con 3 cifras o seguido de INT/EXT**
+  (2026-10-08; corrección de la auditoría de E1, B1; Lega la puede cambiar). Cuenta `074`, `074A` (con ceros, sigan con
+  lo que sigan), `120 | Plaza` (3 cifras con un separador o nada después), `12 - INT. COCINA`, o con «Escena/Sc»
+  delante; nunca una letra pegada a 1–2 cifras («3D Tracking», «4K Plates», «2D») ni una lista numerada («1. General»).
+  `kind.ts` igual: sin episodio, 3 cifras o «Escena» delante; y en la carpeta de escenas de una serie no hay número sin
+  episodio («100 | Notas» al lado de los episodios). Lo dibujado en un título decide de quién son las fotos de la sección.
+  La otra opción: la regla de D383 (títulos comunes de VFX se volvían escenas con sus fotos).
+- **D392 · «Esc» sin punto cuenta solo con un número de 2 cifras o más** (2026-10-08; corrección de la auditoría de E1,
+  O3; Lega la puede cambiar). «Presioná Esc 2 veces» es la tecla; «Esc. 2» y «Esc 27» sí. La otra opción: pedir «Esc»
+  al principio del bloque (deja afuera «ver Esc 27»).
+- **D384 · El índice del proyecto se guarda entero en el dispositivo** (2026-10-08; E1, Lega la puede cambiar). El texto
+  de cada bloque y lo de cada bloque para las relaciones, con la marca `version:cursor` de la página, en `meta`
+  (`searchIndex:`); al abrir la app solo se lee lo que cambió, también para ⌘K. Una página con ediciones sin subir se
+  relee igual. 7 MB para un proyecto como ERSO. La otra opción: guardar solo las referencias (cada inicio volvería a
+  abrir todos los documentos para la búsqueda).
+- **D385 · «Escena/Sc/plano/toma» cuentan como palabra entera delante del número** (2026-10-08; E1, Lega la puede
+  cambiar). En la maqueta «disc 27» valía como «sc 27». En ERSO no cambia nada. La otra opción: la regla de la maqueta.
+- **D386 · El progreso de la primera lectura se muestra solo con 20 páginas o más por leer** (2026-10-08; E1, Lega la
+  puede cambiar). «Reading 340 of 921…» en un renglón después del árbol, pegado al borde de abajo de la barra lateral, chico y
+  apagado, con un tooltip; se va solo. Una
+  lectura chica no lo muestra (sería un parpadeo). La otra opción: mostrarlo siempre que lee.
+- **D387 · `graph: false` saca una página y todo lo de adentro de las relaciones** (2026-10-08; E1, Lega la puede
+  cambiar). Clave de `PageSettings`, no se hereda con `resolveSetting`, viaja al exportar e importar. Para `90 |
+  Archivo` y los backups que repiten nombres. La otra opción: plegarlas como páginas índice (seguirían sumando ruido).
+- **D388 · La ayuda explica la primera lectura** (2026-10-08; E1, Lega la puede cambiar). Entrada *Reading the project*
+  en *Find*: el usuario ve el rótulo. La otra opción: sin entrada hasta que se vean las cabeceras (E3).
+- **D389 · Cerrar el panel de buscar ya no corta la lectura del proyecto** (2026-10-08; E1, Lega la puede cambiar).
+  Las relaciones la retienen. La otra opción: cortarla y que las relaciones la vuelvan a pedir.
+- **D390 · Releer después de un cambio del árbol o una sincronización espera 300 ms; una edición, 500 ms** (2026-10-08;
+  E1, Lega la puede cambiar). Un título que se escribe no relee el estado de todas las páginas por tecla. La otra opción:
+  releer en el acto.
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 

@@ -177,13 +177,24 @@ export function revealDelta(
  * mostrar la barra fuera de la pantalla. Con el cajón cerrado (corrido de costado con `transform`) las medidas de
  * arriba abajo valen igual: queda desplazado para cuando se abra. Devuelve cuánto desplazó.
  */
+function bottomCover(container: HTMLElement): number {
+  try {
+    return parseFloat(getComputedStyle(container).scrollPaddingBottom) || 0;
+  } catch {
+    // Sin estilos (una prueba sin DOM): nada tapa el borde.
+    return 0;
+  }
+}
+
 export function revealRow(row: HTMLElement, container: HTMLElement): number {
   const r = row.getBoundingClientRect();
   const c = container.getBoundingClientRect();
   // Sin caja (el árbol no se dibuja, `display: none`): no hay nada que medir.
   if (!r.height || !c.height) return 0;
   const top = c.top + container.clientTop;
-  let delta = revealDelta(r, { top, bottom: top + container.clientHeight });
+  // Lo que tapa el borde de abajo (el renglón «Reading…» de las relaciones lo anuncia con `scroll-padding-bottom`).
+  const covered = bottomCover(container);
+  let delta = revealDelta(r, { top, bottom: top + container.clientHeight - covered });
   // Hacia arriba, si la fila cabe en la primera pantalla del contenido, se vuelve al principio: así reaparece también
   // el encabezado (el selector de proyectos) en vez de quedar la fila pegada al borde con el encabezado escondido.
   if (delta < 0) {

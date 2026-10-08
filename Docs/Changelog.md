@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.237 :
+
+Las relaciones en vivo no tenían motor: nada sabía qué escenas y locaciones nombra cada página, y el índice de la búsqueda se armaba recién al abrir ⌘K, en memoria, leyendo todo de nuevo en cada sesión. Ahora el lector de escenas (`src/relations/`, medido sobre ERSO: 139 de 139 secciones, 0 falsas, 0 pendientes falsos; largos sin episodios, D383, D391, D392) reconoce con lo que ya lee la búsqueda, que suma por bloque títulos, links y fotos, y con el tipo de página de `kind.ts`; `graph: false` saca una rama (D387). El índice arranca al abrir el proyecto, se guarda en el dispositivo (D384), relee la página abierta medio segundo después de escribir (D389, D390) y muestra «Reading 340 of 921…» la primera vez (D386, D388). Nada escribe en el documento ni sube. Detalle: `Docs/Doc_Relaciones.md`.
+
+[Reconocer escenas y locaciones en el dispositivo con el índice de la búsqueda y el tipo de página, arrancarlo al abrir el proyecto, guardarlo en el dispositivo, releer la página abierta al dejar de escribir, mostrar el progreso de la primera lectura y numerar las escenas de un largo sin episodios]
+
 v0.236 :
 
 La app no sabía qué página era una escena, una locación o un día: todo lo infería la gente leyendo títulos. Ahora una carpeta dice qué se crea adentro (*Type* en el menú ⋯: *Scenes*, *Locations*, *Shoot days*) y muestra el rótulo SCENES / LOCATIONS / SHOOT DAYS en el árbol; sus páginas quedan marcadas en `settings.entity`, con el número de escena canónico sacado del título (`101_074`, también adentro de un episodio), así lo sabe un invitado que no ve la carpeta (D368, D373 a D378, D382: la marca se escribe al confirmar el título). Lo de adentro de una escena es «parte de» ella. Los días son la carpeta de reportes del día, una sola marca (D369, D372). Plantillas nuevas *Scene*, *Location* (marcan la página), *Tech scout* y *Creative scout*; la tira de la página vacía ofrece las que tocan según la carpeta. Sin migración ni tipos de bloque nuevos.

@@ -42,7 +42,8 @@ export type KindTree = Pick<PageTree, 'get' | 'children' | 'isTrashed'>;
 export type EntityMarkRead = { kind: EntityKind; code?: string } | false | 'other' | null;
 
 /** Número canónico de escena: episodio de 3 cifras, guion bajo, escena de 3 cifras y hasta dos letras en mayúscula. */
-export const SCENE_CODE = /^\d{3}_\d{3}[A-Z]{0,2}$/;
+// En un proyecto sin episodios, la escena sola de 3 cifras con su letra (`074`, `069A`; D383).
+export const SCENE_CODE = /^(?:\d{3}_)?\d{3}[A-Z]{0,2}$/;
 
 const isEntityKind = (v: unknown): v is EntityKind => v === 'scene' || v === 'location' || v === 'day';
 
@@ -112,22 +113,34 @@ const FULL_AT_START = /^(?:(?:escena|esc|scene|sc)\.?\s*)?(\d{3})[_-](\d{3})([A-
 const FULL_EXACT = /^(?:(?:escena|esc|scene|sc)\.?\s*)?(\d{3})[_-](\d{3})([A-Za-z]{0,2})$/i;
 /** El pedazo entero es un número corto de escena: `074`, `74`, `069A`, `Escena 74`, `Sc. 074b`. */
 const SHORT_CODE = /^(?:(?:escena|esc|scene|sc)\.?\s*)?(\d{1,3})([A-Za-z]{0,2})$/i;
+/**
+ * Sin episodio (un largo, D383, D391): 3 cifras (`074`, `120A`), o 1–3 con «Escena/Sc» delante (`Escena 74`). Nunca
+ * una letra pegada a 1–2 cifras sola: «3D | Tracking» o «4K | Plates» no son escenas.
+ */
+const FLAT_CODE = /^(?:(?:escena|esc|scene|sc)\.?\s*(\d{1,3})|(\d{3}))([A-Za-z]{0,2})$/i;
 
 /**
  * El número canónico de escena que trae un título (`101_074`, siempre con guion bajo y la letra en mayúscula), o `null`.
  * En orden: un número completo al principio de la primera parte (`101_074 | título`); un número corto que es toda la
  * primera parte, con el episodio de la carpeta (`074 | título` adentro de `101`); una última parte que es entera un
  * número completo (`074 | título | 101-074`, la forma de Doc_Estructura_Proyecto.md). Un número en el medio del texto
- * nombra otra escena y no cuenta. Sin episodio, un número corto no alcanza: queda escena sin código.
+ * nombra otra escena y no cuenta. Sin episodio de contexto, al final, un número de 3 cifras es la escena de un proyecto
+ * sin episodios (`074`, D383); `flat: false` lo apaga (la carpeta de escenas de una serie: «100 | Notas» no es una
+ * escena; auditoría de E1, O9).
  */
-export function sceneCode(title: string | null | undefined, episode: string | null = null): string | null {
+export function sceneCode(title: string | null | undefined, episode: string | null = null, flat = true): string | null {
   const parts = (title ?? '').split('|').map((p) => p.trim());
   const code = (m: RegExpExecArray | null) => (m ? `${m[1]}_${m[2]}${m[3].toUpperCase()}` : null);
   const first = code(FULL_AT_START.exec(parts[0]));
   if (first) return first;
   const short = episode ? SHORT_CODE.exec(parts[0]) : null;
   if (short) return `${episode}_${short[1].padStart(3, '0')}${short[2].toUpperCase()}`;
-  return parts.length > 1 ? code(FULL_EXACT.exec(parts.at(-1)!)) : null;
+  const last = parts.length > 1 ? code(FULL_EXACT.exec(parts.at(-1)!)) : null;
+  if (last) return last;
+  // Sin episodio de contexto, al final: la escena de un proyecto sin episodios (`074 | título` → `074`, D383).
+  const m = episode || !flat ? null : FLAT_CODE.exec(parts[0]);
+  const n = m ? (m[1] ?? m[2]) : null;
+  return m && n && +n > 0 ? `${n.padStart(3, '0')}${m[3].toUpperCase()}` : null;
 }
 
 /**
@@ -146,7 +159,7 @@ function shapeGroup(row: PageRow, holds: EntityKind): boolean {
 // --- El lector -------------------------------------------------------------------------------------------------------
 
 type Own = { kind: EntityKind; code: string | null; source: 'page' | 'folder'; folder: string | null };
-type Context = { holds: EntityKind; folder: string; episode: string | null };
+type Context = { holds: EntityKind; folder: string; episode: string | null; series: boolean };
 
 /**
  * Un lector con memoria para una pasada sobre el árbol (el motor de relaciones lee todas las páginas de un proyecto): la
@@ -161,6 +174,15 @@ export function kindReader(tree: KindTree) {
   const holds = (id: string): EntityKind | null => {
     if (!holdsMemo.has(id)) holdsMemo.set(id, holdsOf(tree, id));
     return holdsMemo.get(id)!;
+  };
+
+  /** La carpeta de escenas es de una serie: tiene alguna carpeta de episodio adentro (auditoría de E1, O9). */
+  const seriesMemo = new Map<string, boolean>();
+  const series = (folderId: string): boolean => {
+    // Un título de solo 3 cifras sin nada adentro todavía no dice que es una serie (puede ser el grupo de un largo).
+    const episode = (c: PageRow) => isEpisodeTitle(c.title) && (!EP_BARE.test(c.title) || tree.children(c.id).length > 0);
+    if (!seriesMemo.has(folderId)) seriesMemo.set(folderId, tree.children(folderId).some(episode));
+    return seriesMemo.get(folderId)!;
   };
 
   const isGroupedDay = (row: PageRow): boolean =>
@@ -187,7 +209,7 @@ export function kindReader(tree: KindTree) {
     if (direct) {
       // Una subcarpeta con su propio tipo, o un grupo (episodio, bloque), no es una entidad.
       if (holds(row.id) || shapeGroup(row, direct)) return null;
-      return { holds: direct, folder: parent.id, episode: direct === 'scene' ? episodeOf(parent.title) : null };
+      return { holds: direct, folder: parent.id, episode: direct === 'scene' ? episodeOf(parent.title) : null, series: direct === 'scene' && series(parent.id) };
     }
     const grand = parentOf(parent);
     if (!grand) return null;
@@ -197,14 +219,14 @@ export function kindReader(tree: KindTree) {
     // (`2026-02-19 | Día 59`): «Call sheets › 2026-02-19 | Call sheet» no es un día (auditoría de E2, O2).
     if (holds(row.id) || shapeGroup(row, above)) return null;
     if (above === 'day' && !isGroupedDay(row)) return null;
-    return { holds: above, folder: grand.id, episode: above === 'scene' ? (episodeOf(parent.title) ?? episodeOf(grand.title)) : null };
+    return { holds: above, folder: grand.id, episode: above === 'scene' ? (episodeOf(parent.title) ?? episodeOf(grand.title)) : null, series: true };
   };
 
   /** El código del título de una escena, con el episodio de su carpeta si la ve. */
   const titleCode = (row: PageRow): string | null => {
     const ctx = context(row);
     const parent = parentOf(row);
-    return sceneCode(row.title, ctx?.episode ?? episodeOf(parent?.title));
+    return sceneCode(row.title, ctx?.episode ?? episodeOf(parent?.title), !ctx?.series);
   };
 
   /** Lo que la página es por sí misma (su marca o su carpeta), sin «parte de». */
@@ -220,7 +242,7 @@ export function kindReader(tree: KindTree) {
         value = { kind: mark.kind, code, source: 'page', folder: ctx && ctx.holds === mark.kind ? ctx.folder : null };
       } else if (mark === null) {
         const ctx = context(row);
-        if (ctx) value = { kind: ctx.holds, code: ctx.holds === 'scene' ? sceneCode(row.title, ctx.episode) : null, source: 'folder', folder: ctx.folder };
+        if (ctx) value = { kind: ctx.holds, code: ctx.holds === 'scene' ? sceneCode(row.title, ctx.episode, !ctx.series) : null, source: 'folder', folder: ctx.folder };
       }
     }
     ownMemo.set(row.id, value);

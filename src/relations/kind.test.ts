@@ -39,8 +39,15 @@ describe('títulos: número de escena y episodio', () => {
     expect(sceneCode('069A | Puerta', '101')).toBe('101_069A');
   });
 
-  it('sin episodio un número corto no alcanza, y lo que no es un número de escena no cuenta', () => {
-    expect(sceneCode('074 | Llegan al bar')).toBeNull();
+  it('sin episodio, un número corto es la escena de un proyecto sin episodios (D383); lo que no es un número de escena no cuenta', () => {
+    // Sin episodio de contexto: la escena de un proyecto sin episodios (D383).
+    expect(sceneCode('074 | Llegan al bar')).toBe('074');
+    expect(sceneCode('074b | Llegan al bar')).toBe('074B');
+    // Sin episodio, 3 cifras o «Escena» delante (D391): «3D | Tracking», «4K | Plates», «74 | x» no.
+    expect(sceneCode('Escena 74 | Cocina')).toBe('074');
+    for (const t of ['3D | Tracking', '4K | Plates', '2D', '74 | Cocina', '1 | Notas', '12A | pasadas']) expect([t, sceneCode(t)]).toEqual([t, null]);
+    expect(sceneCode('0 | nada')).toBeNull();
+    expect(sceneCode('12 tomas de dron')).toBeNull();
     expect(sceneCode('ERSO_105_027_010 Ambulancia')).toBeNull();
     expect(sceneCode('2026-02-19 | Día 59')).toBeNull();
     expect(sceneCode('101_07 | a medio escribir')).toBeNull();
@@ -53,7 +60,7 @@ describe('títulos: número de escena y episodio', () => {
     expect(sceneCode('075 | Persecución, sigue en 105_076', '105')).toBe('105_075');
     expect(sceneCode('074 | Llegan al pozo | igual que 101_080', '105')).toBe('105_074');
     expect(sceneCode('Persecución, sigue en 105_076')).toBeNull();
-    expect(sceneCode('074 | Llegan al pozo | igual que 101_080')).toBeNull();
+    expect(sceneCode('074 | Llegan al pozo | igual que 101_080')).toBe('074');
     // La forma ERSO: la última parte es entera el número.
     expect(sceneCode('027 | El vehículo comienza a zigzaguear | 105-027')).toBe('105_027');
     expect(sceneCode('027 | El vehículo | Escena 105_027')).toBe('105_027');
@@ -229,6 +236,54 @@ describe('el lector con memoria', () => {
     const reader = kindReader(tree);
     for (const id of tree.rows.keys()) expect(reader.kindOf(id), id).toEqual(pageKind(tree, id));
     expect(reader.titleCode('esc027')).toBe('105_027');
-    expect(reader.contextOf('esc027')).toEqual({ holds: 'scene', folder: 'desglose', episode: '105' });
+    expect(reader.contextOf('esc027')).toEqual({ holds: 'scene', folder: 'desglose', episode: '105', series: true });
+  });
+});
+
+describe('un proyecto sin episodios (D383)', () => {
+  it('la escena es de 3 cifras con su letra; adentro de un episodio sigue con el episodio; un título de solo 3 cifras es un grupo', () => {
+    const tree = fakeTree([
+      { id: 'bd', title: 'Breakdown', settings: { holds: 'scene' } },
+      { id: 'a', parent: 'bd', title: '074 | Cocina' },
+      { id: 'td', parent: 'bd', title: '3D | Tracking' },
+      { id: 'b', parent: 'bd', title: '069a | Puerta' },
+      { id: 'ficha', parent: 'a', title: 'ABC_074_010' },
+      { id: 'solo', parent: 'bd', title: '120' },
+      { id: 'serie', title: 'Desglose', settings: { holds: 'scene' } },
+      { id: 'ep', parent: 'serie', title: '105' },
+      { id: 'c', parent: 'ep', title: '074 | Llegan' },
+    ]);
+    const k = kindReader(tree);
+    expect(k.kindOf('a')).toMatchObject({ kind: 'scene', code: '074' });
+    expect(k.kindOf('b')).toMatchObject({ kind: 'scene', code: '069A' });
+    // «3D | Tracking» en la carpeta de escenas de un largo: escena sin número, nunca la 003D (auditoría de E1, B1).
+    expect(k.kindOf('td')).toMatchObject({ kind: 'scene', code: null });
+    expect(k.kindOf('ficha')).toEqual({ kind: 'part', of: 'a', ofKind: 'scene', code: '074' });
+    // Observación anotada: `120` solo se toma por la carpeta de un episodio (grupo); `120 | título` o la marca lo vuelven escena.
+    expect(k.kindOf('solo')).toEqual({ kind: 'none' });
+    expect(k.kindOf('c')).toMatchObject({ kind: 'scene', code: '105_074' });
+  });
+  it('la marca guardada sin episodio vale (SCENE_CODE acepta `074`)', () => {
+    const tree = fakeTree([{ id: 'x', title: 'Cocina', settings: { entity: { kind: 'scene', code: '074' } } }]);
+    expect(pageKind(tree, 'x')).toMatchObject({ kind: 'scene', code: '074' });
+  });
+});
+
+describe('la carpeta de escenas de una serie (auditoría de E1, O9)', () => {
+  it('una página suelta con un número corto, al lado de los episodios, no guarda un número sin episodio', () => {
+    const tree = fakeTree([
+      { id: 'bd', title: 'Desglose', settings: { holds: 'scene' } },
+      { id: 'ep', parent: 'bd', title: '105 | Episodio 5' },
+      { id: 'esc', parent: 'ep', title: '074 | Llegan' },
+      { id: 'notas', parent: 'bd', title: '100 | Notas' },
+      { id: 'uno', parent: 'bd', title: '1 | Notas' },
+      { id: 'canon', parent: 'bd', title: '105_080 | Suelta con su número' },
+    ]);
+    const k = kindReader(tree);
+    expect(k.kindOf('esc')).toMatchObject({ kind: 'scene', code: '105_074' });
+    expect(k.kindOf('notas')).toMatchObject({ kind: 'scene', code: null });
+    expect(k.kindOf('uno')).toMatchObject({ kind: 'scene', code: null });
+    expect(k.titleCode('notas')).toBeNull();
+    expect(k.kindOf('canon')).toMatchObject({ kind: 'scene', code: '105_080' });
   });
 });

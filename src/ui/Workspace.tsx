@@ -23,6 +23,7 @@ import { useWorkspace } from '../workspace';
 import { isFindSelectionTarget, openFindBar } from './findUi';
 import { asAction, tipRows } from './tipRows';
 import { disposeSearchSession, isSearchShortcut, otherModalOpen, takesSearchShortcut, useSearchSession } from './projectSearchUi';
+import { disposeRelationsSession, RelationsRunner } from './relationsUi';
 import { ArchiveIcon, DownloadIcon, MicIcon, MoreIcon, PlusIcon, SearchIcon } from './icons';
 import { NavMenuButton } from './NavMenuButton';
 import { menuBelow, PageMenu, signOutHere, signOutQuestion, unsentCount, type MenuPosition } from './menus';
@@ -87,7 +88,17 @@ export function Workspace({ user, link }: { user: AuthUser; link?: LinkBoot }) {
   // La búsqueda del proyecto es de esta instancia de servicios: al cerrar sesión o cambiar de workspace se
   // suelta (el índice deja de escuchar y de leer, y lo leído se libera).
   const readyServices = boot.state === 'ready' ? boot.services : null;
-  useEffect(() => (readyServices ? () => disposeSearchSession(readyServices) : undefined), [readyServices]);
+  // Las relaciones en vivo usan ese índice: se sueltan antes (dejan de retenerlo).
+  useEffect(
+    () =>
+      readyServices
+        ? () => {
+            disposeRelationsSession(readyServices);
+            disposeSearchSession(readyServices);
+          }
+        : undefined,
+    [readyServices],
+  );
   // La línea de tiempo de deshacer también (P.26): suelta los documentos que retenía.
   useEffect(() => (readyServices ? () => disposeUndoTimeline(readyServices) : undefined), [readyServices]);
 
@@ -442,6 +453,8 @@ export function Shell() {
 
   return (
     <div className={`shell${navOpen ? ' nav-open' : ''}`}>
+      {/* Las relaciones en vivo (Docs/Doc_Relaciones.md): leen el proyecto al abrirlo; con un link público, no. */}
+      {!linkMode && <RelationsRunner />}
       <Sidebar onBrowse={(id) => (keepNav.current = id)} />
       <SidebarResizer />
       <div className="scrim" onClick={() => setNavOpen(false)} />

@@ -7814,6 +7814,32 @@ button.folder-row-main:hover {
   min-width: 0;
 }
 
+/* «Reading 340 of 921…» (Docs/Doc_Relaciones.md, sección 6): un renglón chico y apagado después del árbol, pegado al
+   borde de abajo de la barra mientras el árbol es más largo que la pantalla. */
+/* Mientras se muestra, el árbol que sigue a la página no deja la fila abierta debajo del renglón (auditoría de E1, O8). */
+.sidebar:has(> .index-progress) {
+  scroll-padding-bottom: 40px;
+}
+
+.sidebar .index-progress {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  flex: none;
+  margin: 4px -12px 0;
+  padding: 0 20px env(safe-area-inset-bottom);
+  border-top: 1px solid var(--border);
+  background: var(--sidebar-bg);
+  color: var(--muted);
+  line-height: 32px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+}
+
 .help-button {
   position: relative;
   border: none;

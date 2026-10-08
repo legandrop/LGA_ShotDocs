@@ -83,6 +83,15 @@ marca `false` deja de ser grupo para sus hijos, `kind.ts`). (7) Escribir, espera
 atrás sin salir del campo deja la página sin marca (la carpeta igual le da el tipo; a un invitado le falta): confirmar
 también cuando el título ya se guardó (`PageView.tsx`).
 
+**Anotado al auditar la v0.237 (relaciones en vivo, el motor):** (1) Gramática de una serie, heredada de la maqueta: con
+escenas que existan, «1080p»/«1080i» dan 101_080, «2030h» 102_030, «4050K» 104_050, «Unidad 1002A», «clip 1074A.mov»; y
+en un título, «2026 | Presupuesto» da 102_026. En ERSO no aparece ninguno (0 falsos); para el subrayado (E6), excluir los
+sufijos de unidad `p`, `i`, `K`, `h` cuando la letra no es una escena con letra que existe, y los años 2000–2099 al
+principio de un título. (2) Sin red, cada apertura relee las páginas con ediciones sin subir (`docDirty:`, D384): en el
+set son pocas; medirlo en el iPhone junto con la primera lectura (15–45 s estimados para ERSO) y el rearmado del caché.
+(3) Las cifras de rendimiento son de escritorio con fake-indexeddb: falta la medición en un teléfono real. (re-verificación) Con D391, en un largo «74 | Cocina» sin ceros ya no da la
+escena 074: hace falta «074 | Cocina», «Escena 74» o marcar la página.
+
 ### A. Plan de workspaces (D-17, D-18)
 
 1. **Los pasos 5 a 13 de `Plan_Workspaces.md`** (sección 10, y sección 11 para cómo se hace cada uno).

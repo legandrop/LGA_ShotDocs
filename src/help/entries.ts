@@ -154,6 +154,8 @@ const LINK_COMMENTS = '0.222';
 const COMMENT_EDIT_CONFLICT = '0.227';
 /** Un cuadro de comentario abierto y lo que llega de afuera (Doc_Sincronizacion.md): la versión la pone quien publica. */
 const COMMENT_BOX_KEPT = '0.229';
+/** El índice del proyecto arranca al abrirlo y se guarda en el dispositivo (relaciones en vivo, E1). */
+const INDEX_READING = '0.237';
 /** Exportar una rama o un proyecto como PDF (P.22, Doc_Exportar.md, entrega 1): la versión se pone al publicar. */
 const EXPORT_PDF = '0.122';
 /** Exportar como zip (P.22, Doc_Exportar.md, entrega 2): la versión se pone al publicar. */
@@ -286,6 +288,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     keys: { search: 'search' },
     showMe: 'project-switcher',
     since: BEFORE_HELP,
+  },
+  {
+    id: 'indexReading',
+    section: 'find',
+    title: 'help.indexReading.title',
+    text: 'help.indexReading.text',
+    words: ['reading', 'leyendo', 'index', 'índice', 'first time', 'primera vez', 'scenes', 'escenas', 'locations', 'locaciones'],
+    since: INDEX_READING,
   },
   { id: 'projectsArchive', section: 'pages', title: 'help.projectsArchive.title', text: 'help.projectsArchive.text', since: BEFORE_HELP },
   { id: 'projectsDrive', section: 'pages', title: 'help.projectsDrive.title', text: 'help.projectsDrive.text', when: 'admin', since: BEFORE_HELP },

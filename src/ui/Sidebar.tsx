@@ -21,6 +21,7 @@ import { LinkAsideTreeIcon } from './LinkAsideTreeIcon';
 import { LinkTreeIcon } from './LinkTreeIcon';
 import { useLinkMode } from '../linkMode';
 import { useSearchSession } from './projectSearchUi';
+import { useIndexProgress } from './relationsUi';
 import { shortcutLabel } from './shortcuts';
 import { tipRows } from './tipRows';
 import { SyncBadge } from './SyncBadge';
@@ -39,6 +40,37 @@ function readExpanded(): Set<string> {
 }
 
 type DropZone = 'before' | 'inside' | 'after';
+
+/**
+ * «Reading 340 of 921…» mientras el dispositivo lee muchas páginas del proyecto (la primera vez, o después de muchos
+ * cambios): la búsqueda y las relaciones en vivo (Docs/Doc_Relaciones.md, sección 6). Un renglón chico después del
+ * árbol, pegado al borde de abajo de la barra mientras el árbol es más largo que la pantalla (el pie queda al final del
+ * árbol y en un proyecto grande no se ve): no salta, no se cierra y se va solo al terminar.
+ */
+function IndexProgress() {
+  const tr = useT();
+  const progress = useIndexProgress();
+  const el = useRef<HTMLDivElement>(null);
+  const shown = !!progress;
+  // Al aparecer, si tapa la fila de la página abierta, el árbol se corre lo justo para que se vea (auditoría de E1, O8);
+  // después, el árbol que sigue a la página ya lo cuenta (`scroll-padding-bottom` mientras se muestra, `revealRow`).
+  useLayoutEffect(() => {
+    const label = el.current;
+    const nav = label?.closest<HTMLElement>('.sidebar');
+    const row = nav?.querySelector<HTMLElement>('.tree-row.active');
+    if (!label || !nav || !row) return;
+    const r = row.getBoundingClientRect();
+    const top = label.getBoundingClientRect().top;
+    // Tapada: empieza antes del borde de abajo de la barra y termina debajo del renglón.
+    if (r.bottom > top && r.top < nav.getBoundingClientRect().bottom) nav.scrollTop += r.bottom - top + 4;
+  }, [shown]);
+  if (!progress) return null;
+  return (
+    <div ref={el} className="index-progress" role="status" data-tip={tr('sidebar.readingTip')}>
+      {tr('sidebar.reading', { ready: progress.ready.toLocaleString(), total: progress.total.toLocaleString() })}
+    </div>
+  );
+}
 
 /**
  * `onBrowse` se llama justo antes de que el árbol abra la página `id` sin que la persona la haya elegido con un
@@ -478,6 +510,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
         </button>
       )}
 
+      {!linkMode && <IndexProgress />}
       <div className="sidebar-spacer" />
       <div className="sidebar-footer">
         <div className="footer-row">

@@ -21,6 +21,16 @@ describe('exportar e importar conservan el tipo', () => {
     expect(archiveSettings({ entity: { kind: 'scene', code: '101-074' } }, () => null)).toEqual({ entity: { kind: 'scene' } });
     expect(archiveSettings({ entity: 'scene' }, () => null)).toEqual({});
   });
+
+  it('`graph: false` (fuera de las relaciones, D387) sale y vuelve; otro valor no', () => {
+    const page = { parent: 'x', format: { size: 'free', landscape: false } } as never;
+    const out = settingsOf({ graph: false }, page, new Set());
+    expect(out).toEqual({ graph: false });
+    expect(archiveSettings(out, () => null)).toEqual({ graph: false });
+    expect(archiveSettings({ graph: true }, () => null)).toEqual({});
+    // Un código sin episodio (un largo, D383) también vuelve.
+    expect(archiveSettings({ entity: { kind: 'scene', code: '074' } }, () => null)).toEqual({ entity: { kind: 'scene', code: '074' } });
+  });
 });
 
 describe('la tira de plantillas según el lugar', () => {

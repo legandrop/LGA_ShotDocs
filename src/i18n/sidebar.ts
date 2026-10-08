@@ -31,6 +31,12 @@ export const sidebar = {
   },
   'sidebar.search': { en: "Search this project ({shortcut})", es: "Buscar en el proyecto ({shortcut})" },
   'sidebar.searchAct': { en: "search this project", es: "buscar en el proyecto" },
+  // Mientras el dispositivo lee el proyecto por primera vez (Docs/Doc_Relaciones.md, sección 6).
+  'sidebar.reading': { en: "Reading {ready} of {total}…", es: "Leyendo {ready} de {total}…" },
+  'sidebar.readingTip': {
+    en: "This device is reading the project's pages to search them and recognize scenes and locations. Only the first time: after that, only what changes.",
+    es: "El dispositivo lee las páginas del proyecto para buscarlas y reconocer escenas y locaciones. Solo la primera vez: después, solo lo que cambia.",
+  },
   'project.summary': {
     en: { one: "Project · {count} page", other: "Project · {count} pages" },
     es: { one: "Proyecto · {count} página", other: "Proyecto · {count} páginas" },
