@@ -426,6 +426,20 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   v0.160) un clic con el mouse en el triángulo o en la fila dejaba el foco ahí y, por `:focus-within`, sus ⋯ y + (y el
   nombre cortado) hasta que el foco se iba; ahora la regla es `:is(:focus-visible, :has(:focus-visible))`: con el
   teclado (flechas, Tab) siguen apareciendo, con el mouse no se quedan.
+  El árbol sigue a la página (v0.235): una página abierta por un link, una mención, la lupa ⌘K, el breadcrumb, atrás o
+  adelante, la dirección o una página nueva abre sus madres y desplaza la barra lateral hasta dejar su fila entera a la
+  vista, con 8 px de aire (`revealRow` en `src/ui/treeNav.ts`, efecto en `Sidebar.tsx`). Si la fila ya se ve, no se
+  mueve nada; lo abierto por el árbol mismo (clic, Enter, flechas, plegar una madre) tampoco lo desplaza; hacia arriba, si
+  la fila cabe en la primera pantalla, vuelve al principio (reaparece el selector de proyectos). Si la persona desplazó el
+  árbol a mano en los últimos 200 ms, se espera a que frene (hasta 5 s). Solo toca el desplazamiento de la barra lateral
+  (nunca la ventana ni el editor); en el teléfono con el cajón cerrado queda desplazado para cuando se abra. Arnés para
+  mirarlo en un navegador: `src/dev/arbol-sigue.html`.
+  **Anotado al auditar la v0.235:** (1) D371 puede dar un salto grande por una fila apenas cortada arriba (848 px a 0
+  cuando bastaban 18): volver al principio solo si el trayecto es corto (por ejemplo, `scrollTop` menor que media
+  pantalla), si no, el movimiento mínimo. (2) Faltan pruebas de las guardas negativas: vencimiento de los 5 s con una
+  fila que nunca aparece, rendirse con desplazamiento sin parar, abrir con flechas y plegar la madre de la abierta, y
+  que la marca de lo abierto por el árbol no quede pegada (el recorrido real lo confirmó, la suite no). (3) Con
+  desplazamiento continuo de más de 5 s, o una fila que llega de otro dispositivo pasados los 5 s, el árbol no la sigue.
 - **P.17 Hecho (v0.079): instalar la app** (Lega, 2026-10-01). La app reconoce si está instalada; si no, ofrece
   *Install app* en el menú de la cuenta y en la pantalla de entrar, y en el teléfono un aviso que se cierra por 30
   días. La ventana muestra los pasos con dibujos para iPhone, Android y computadora, con *Install* directo donde

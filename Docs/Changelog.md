@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.235 :
+
+Una página abierta por un link, una mención, la búsqueda, el breadcrumb, atrás y adelante o la dirección dejaba abiertas sus madres en la barra lateral pero el árbol no se desplazaba hasta su fila: había que buscarla a mano. Ahora el árbol sigue a la página: `Sidebar.tsx` abre las madres antes de pintar y `revealRow` (`treeNav.ts`) desplaza solo la barra lateral lo justo para dejar la fila entera a la vista, sin tocar la ventana ni el editor (`scrollIntoView` lo habría hecho); en el teléfono con el cajón cerrado queda desplazado para cuando se abra. Si la fila ya se ve, no se mueve nada; lo abierto con un clic o el teclado en el árbol tampoco lo desplaza; hacia arriba, si cabe en la primera pantalla, vuelve al principio (D371). Si la persona desplazó el árbol a mano hace menos de 200 ms, se espera a que frene (D370).
+
+[Hacer que la barra lateral siga a la página abierta por un link, una mención, la búsqueda, el breadcrumb, atrás y adelante o la dirección: abre sus madres y desplaza el árbol hasta su fila sin mover la ventana ni robarle el desplazamiento a quien lo está moviendo]
+
 v0.234 :
 
 La pantalla muestra un aviso flotante a la vez y el que llegaba reemplazaba al que estaba: el *Copy text* de un comentario cerrado o un *Undo* se perdían antes de sus 15 segundos. Ahora `notice.ts` lleva una cola: al de un comentario cerrado no lo saca nadie (D356), uno sin botón sale enseguida y el del botón vuelve después (D357), y lo que espera vence y tiene tope (D358). El aviso, anclado a los costados solo en el teléfono, topaba en media pantalla hasta unos 1100 px: ahora se ancla a todos los anchos. Sus botones miden 36 px en pantallas táctiles. Los avisos de abajo se apilan por su alto real, también los de un link, y ya no se tapan. La pregunta de salir dice «A comment you wrote…», que vale también para el cartel (D359).

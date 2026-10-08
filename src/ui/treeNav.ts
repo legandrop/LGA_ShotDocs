@@ -146,3 +146,50 @@ export function createOpenScheduler(
     pending: () => target,
   };
 }
+
+/** El aire que queda entre la fila llevada a la vista y el borde del árbol. */
+export const REVEAL_MARGIN = 8;
+/** Cuánto tiene que estar quieto el árbol, sin que la persona lo desplace, para llevarle la fila abierta a la vista. */
+export const REVEAL_QUIET_MS = 200;
+/** Cuánto espera, como mucho, una fila a aparecer y a que el árbol quede quieto antes de dejar de buscarla. */
+export const REVEAL_TTL_MS = 5000;
+
+/**
+ * Cuánto hay que desplazar el área del árbol (`view`, en las mismas coordenadas que `row`) para que la fila se
+ * vea entera: 0 si ya se ve; si no, lo justo para dejarla pegada al borde más cercano con `margin` de aire (como
+ * `scrollIntoView({ block: 'nearest' })`). Positivo, hacia abajo.
+ */
+export function revealDelta(
+  row: { top: number; bottom: number },
+  view: { top: number; bottom: number },
+  margin = REVEAL_MARGIN,
+): number {
+  if (row.top >= view.top && row.bottom <= view.bottom) return 0;
+  if (row.top < view.top) return row.top - view.top - margin;
+  // Más alta que lo que se ve: manda su borde de arriba.
+  if (row.bottom - row.top > view.bottom - view.top) return row.top - view.top - margin;
+  return row.bottom - view.bottom + margin;
+}
+
+/**
+ * Lleva `row` a la vista dentro de `container` (el elemento que se desplaza), sin tocar ningún otro desplazamiento
+ * de la página: `scrollIntoView` también movería la ventana y, en el teléfono con el cajón cerrado, intentaría
+ * mostrar la barra fuera de la pantalla. Con el cajón cerrado (corrido de costado con `transform`) las medidas de
+ * arriba abajo valen igual: queda desplazado para cuando se abra. Devuelve cuánto desplazó.
+ */
+export function revealRow(row: HTMLElement, container: HTMLElement): number {
+  const r = row.getBoundingClientRect();
+  const c = container.getBoundingClientRect();
+  // Sin caja (el árbol no se dibuja, `display: none`): no hay nada que medir.
+  if (!r.height || !c.height) return 0;
+  const top = c.top + container.clientTop;
+  let delta = revealDelta(r, { top, bottom: top + container.clientHeight });
+  // Hacia arriba, si la fila cabe en la primera pantalla del contenido, se vuelve al principio: así reaparece también
+  // el encabezado (el selector de proyectos) en vez de quedar la fila pegada al borde con el encabezado escondido.
+  if (delta < 0) {
+    const offset = container.scrollTop + (r.top - top);
+    if (offset + r.height + REVEAL_MARGIN <= container.clientHeight) delta = -container.scrollTop;
+  }
+  if (delta) container.scrollTop += delta;
+  return delta;
+}

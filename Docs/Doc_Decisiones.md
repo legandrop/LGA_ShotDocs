@@ -579,6 +579,13 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
   (D350), que ya no se están escribiendo; «que escribiste» vale para los dos. Vale para salir de la cuenta, quitar y
   cambiar de workspace. La otra opción: dos oraciones distintas según qué se cuenta (más textos, y una pregunta más
   larga cuando hay de los dos).
+- **D370 · El árbol que sigue a la página no le roba el desplazamiento a quien lo mueve a mano** (2026-10-08; tomada
+  al implementarlo, Lega la puede cambiar). Si la persona movió la barra lateral (rueda, dedo, barra, teclado) en los
+  últimos 200 ms, llevar la fila a la vista espera a que frene, y se rinde a los 5 s. La otra opción: desplazar igual,
+  aunque la persona esté moviendo el árbol (el árbol se le escapa de la mano).
+- **D371 · Hacia arriba, si la fila cabe en la primera pantalla, el árbol vuelve al principio** (2026-10-08; tomada al
+  implementarlo, Lega la puede cambiar). Así reaparece el selector de proyectos arriba. La otra opción: el movimiento
+  mínimo, con la fila pegada al borde de arriba (más quieto, pero el selector queda escondido).
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 

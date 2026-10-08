@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useT } from '../i18n';
 import { navigate, pagePath, useRoute } from '../router';
@@ -25,7 +25,7 @@ import { tipRows } from './tipRows';
 import { SyncBadge } from './SyncBadge';
 import { OfflineBadge, OfflineLine } from './SpaceHost';
 import { splitEnabled, splitSiblings, type SplitTitle } from './titles';
-import { createOpenScheduler, isPlainKey, isTreeKey, treeKeyAction, visibleRows } from './treeNav';
+import { createOpenScheduler, isPlainKey, isTreeKey, REVEAL_QUIET_MS, REVEAL_TTL_MS, revealRow, treeKeyAction, visibleRows } from './treeNav';
 
 const EXPANDED_KEY = 'shotdocs-expanded';
 
@@ -83,6 +83,20 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
   // La fila con el foco del teclado mientras el foco está en el árbol (fuera del árbol, `null`).
   const [focusId, setFocusId] = useState<string | null>(null);
   const rowEls = useRef(new Map<string, HTMLDivElement>());
+  const navEl = useRef<HTMLElement>(null);
+  // La página que el árbol mismo está por abrir (un clic en su fila, Enter, las flechas, plegar una madre): esa
+  // fila ya está a la vista y el árbol no se desplaza. Se anota la página, no un sí o no, como `keepNav` en
+  // Workspace.tsx: si esa navegación no llega a cambiar la página, la marca no vale para la siguiente.
+  const openedByTree = useRef<string | null>(null);
+  // La página abierta cuya fila falta llevar a la vista (abierta por un link, una mención, la búsqueda, el breadcrumb,
+  // atrás y adelante, la dirección, una página nueva): se lleva apenas su fila existe, después de abrir sus madres.
+  // Vence a los `REVEAL_TTL_MS` (una página que no llega a aparecer en el árbol no se queda esperando para siempre).
+  const reveal = useRef<{ id: string; at: number } | null>(null);
+  const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Cuándo la persona desplazó el árbol por su cuenta (rueda, dedo, barra, teclado) por última vez, y hasta cuándo
+  // un desplazamiento es nuestro (su evento `scroll` no cuenta como de la persona).
+  const lastManualScroll = useRef(0);
+  const ownScrollUntil = useRef(0);
 
   // Abrir una página desde el árbol sin clic (flechas, plegar una madre de la abierta). Siempre la última
   // versión, para el temporizador de `opener`.
@@ -91,6 +105,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
     // Contra la página abierta, no contra la dirección: `/p/<id>/` (con barra al final) es la misma página.
     if (id === activeId || !tree.get(id) || tree.isTrashed(id)) return;
     onBrowse?.(id);
+    openedByTree.current = id;
     navigate(pagePath(id));
   };
   const [opener] = useState(() => createOpenScheduler((id) => browse.current(id)));
@@ -111,11 +126,44 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
   // la búsqueda, al cargar) o cuando el árbol llega o cambia (otro dispositivo). No cuando cambia `expanded`:
   // plegar una madre de la página abierta tiene que poder (`collapse` pasa la página abierta a esa madre).
   const revision = tree.getRevision();
-  useEffect(() => {
+  // Antes de pintar: el árbol no se dibuja un cuadro con la fila escondida y recién después abierto.
+  useLayoutEffect(() => {
     if (!activeId) return;
     const ids = tree.ancestors(activeId).map((p) => p.id);
     setExpanded((prev) => (ids.every((id) => prev.has(id)) ? prev : new Set([...prev, ...ids])));
   }, [activeId, tree, revision]);
+
+  // Lo que no abrió el árbol mismo deja su fila a la vista en el árbol (pedido de Lega, "el árbol sigue a la página").
+  // Antes de pintar (`useLayoutEffect`), sin saltos: si la fila ya se ve, no se mueve nada (`revealRow`). Si todavía no
+  // está (sus madres se abren en el efecto de arriba, o el árbol no llegó), se espera a la pasada en que aparece. Y si
+  // la persona está desplazando el árbol a mano, se espera a que frene (`REVEAL_QUIET_MS`): no se le roba el desplazamiento.
+  const tryReveal = () => {
+    const req = reveal.current;
+    if (!req) return;
+    if (Date.now() - req.at > REVEAL_TTL_MS) {
+      reveal.current = null;
+      return;
+    }
+    const el = rowEls.current.get(req.id);
+    const nav = navEl.current;
+    if (!el || !nav) return;
+    const wait = REVEAL_QUIET_MS - (Date.now() - lastManualScroll.current);
+    if (wait > 0) {
+      if (revealTimer.current) clearTimeout(revealTimer.current);
+      revealTimer.current = setTimeout(tryReveal, wait);
+      return;
+    }
+    reveal.current = null;
+    // Su evento `scroll` llega enseguida: no es de la persona.
+    if (revealRow(el, nav)) ownScrollUntil.current = Date.now() + 150;
+  };
+  useLayoutEffect(() => {
+    if (revealTimer.current) clearTimeout(revealTimer.current);
+    reveal.current = activeId && activeId !== openedByTree.current ? { id: activeId, at: Date.now() } : null;
+    openedByTree.current = null;
+  }, [activeId]);
+  useLayoutEffect(tryReveal);
+  useEffect(() => () => (revealTimer.current ? clearTimeout(revealTimer.current) : undefined), []);
 
   const expand = (id: string) => setExpanded((prev) => new Set(prev).add(id));
   /** Pliega `id`. Si la página abierta queda escondida adentro, la abierta pasa a ser `id` (pedido de Lega). */
@@ -195,6 +243,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
       opener.request(action.id, e.repeat);
     } else if (action.type === 'open') {
       opener.cancel();
+      openedByTree.current = action.id;
       navigate(pagePath(action.id));
     } else if (action.type === 'expand') {
       expand(action.id);
@@ -269,6 +318,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
             opener.cancel();
             // El foco queda en la fila (Safari no lo da solo): las flechas siguen desde acá.
             e.currentTarget.focus({ preventScroll: true });
+            openedByTree.current = page.id;
             navigate(pagePath(page.id));
           }}
           onFocus={() => setFocusId(page.id)}
@@ -385,7 +435,14 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
   const canCreateRoot = perms.canCreateIn(null, projectId);
 
   return (
-    <nav className="sidebar" aria-label={tr('sidebar.pages')}>
+    <nav
+      ref={navEl}
+      className="sidebar"
+      aria-label={tr('sidebar.pages')}
+      onScroll={() => {
+        if (Date.now() > ownScrollUntil.current) lastManualScroll.current = Date.now();
+      }}
+    >
       {linkMode ? <LinkHeader /> : <ProjectSwitcher />}
       <SyncBadge />
       <OfflineLine />

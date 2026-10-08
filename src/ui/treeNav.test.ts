@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createOpenScheduler, isPlainKey, isTreeKey, treeKeyAction, visibleRows, type VisibleRow } from './treeNav';
+import { createOpenScheduler, isPlainKey, isTreeKey, revealDelta, revealRow, treeKeyAction, visibleRows, type VisibleRow } from './treeNav';
 
 // Las reglas del teclado del árbol de páginas, sin la interfaz.
 
@@ -147,5 +147,58 @@ describe('createOpenScheduler', () => {
     advance(500);
     expect(opened).toEqual([]);
     expect(s.pending()).toBeNull();
+  });
+});
+
+describe('revealDelta', () => {
+  const view = { top: 100, bottom: 400 };
+  it('si la fila se ve entera, nada', () => {
+    expect(revealDelta({ top: 100, bottom: 132 }, view, 8)).toBe(0);
+    expect(revealDelta({ top: 368, bottom: 400 }, view, 8)).toBe(0);
+  });
+  it('debajo o a medias abajo: lo justo para dejarla con aire abajo', () => {
+    expect(revealDelta({ top: 390, bottom: 422 }, view, 8)).toBe(30);
+    expect(revealDelta({ top: 900, bottom: 932 }, view, 8)).toBe(540);
+  });
+  it('arriba o a medias arriba: lo justo para dejarla con aire arriba', () => {
+    expect(revealDelta({ top: 90, bottom: 122 }, view, 8)).toBe(-18);
+    expect(revealDelta({ top: -500, bottom: -468 }, view, 8)).toBe(-608);
+  });
+  it('más alta que lo que se ve: manda su borde de arriba', () => {
+    expect(revealDelta({ top: 50, bottom: 600 }, view, 8)).toBe(-58);
+  });
+});
+
+describe('revealRow', () => {
+  const box = (top: number, height: number) => ({ top, bottom: top + height, height });
+  const el = (r: { top: number; bottom: number; height: number }) => ({ getBoundingClientRect: () => r }) as unknown as HTMLElement;
+  const area = (top: number, height: number, scrollTop = 0) =>
+    ({ getBoundingClientRect: () => box(top, height), clientTop: 0, clientHeight: height, scrollTop }) as unknown as HTMLElement;
+
+  it('desplaza solo el área que se le da y devuelve cuánto', () => {
+    const c = area(0, 300, 50);
+    expect(revealRow(el(box(500, 32)), c)).toBe(240);
+    expect(c.scrollTop).toBe(290);
+  });
+  it('hacia arriba, si la fila cabe en la primera pantalla, vuelve al principio (reaparece el encabezado)', () => {
+    const c = area(0, 300, 137);
+    // La fila está a 8 px del borde de arriba del área: a 145 px del principio del contenido.
+    expect(revealRow(el(box(-100, 32)), c)).toBe(-137);
+    expect(c.scrollTop).toBe(0);
+  });
+  it('hacia arriba, si no cabe en la primera pantalla, queda pegada al borde con su aire', () => {
+    const c = area(0, 300, 1000);
+    expect(revealRow(el(box(-100, 32)), c)).toBe(-108);
+    expect(c.scrollTop).toBe(892);
+  });
+  it('si la fila se ve, no toca nada', () => {
+    const c = area(0, 300, 50);
+    expect(revealRow(el(box(100, 32)), c)).toBe(0);
+    expect(c.scrollTop).toBe(50);
+  });
+  it('sin caja (el árbol no se dibuja), no mide', () => {
+    const c = area(0, 0, 50);
+    expect(revealRow(el(box(0, 0)), c)).toBe(0);
+    expect(c.scrollTop).toBe(50);
   });
 });
