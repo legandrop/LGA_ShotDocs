@@ -329,6 +329,43 @@
   border-color: var(--lh-scout-line);
 }
 
+/* Un decorado: chip sin relleno, del color del texto (como la maqueta); el nombre largo baja de renglón. */
+.lh .lh-chip.set {
+  background: transparent;
+  color: var(--text-2);
+  border-color: var(--border);
+  white-space: normal;
+}
+
+.lh-chip.set .lh-chip-t {
+  white-space: normal;
+}
+
+.lh .lh-chip.static {
+  cursor: default;
+}
+
+/* La pregunta abierta: un párrafo (no una fila de chips) que lleva a la ficha. */
+.lh .lh-kv > .lh-q {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.lh .lh-q:hover:not(:disabled) .lh-qt,
+.lh .lh-where:hover:not(:disabled) {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.lh .lh-where {
+  font: 11.5px var(--mono);
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
 .lh button.lh-chip:hover {
   box-shadow: 0 0 0 2px var(--focus);
 }
@@ -641,6 +678,22 @@
   align-self: start;
 }
 
+/* Una ficha con pregunta abierta suma un renglón: las miniaturas ocupan los tres (como la maqueta). */
+.lh-ex.has-q .ex-thumbs {
+  grid-row: 2 / span 3;
+}
+
+.lh-ex .qq {
+  grid-column: 1;
+  font-size: 12.5px;
+  color: var(--warn);
+  line-height: 1.45;
+}
+
+.lh-ex .qq b {
+  font-weight: 600;
+}
+
 .lh-ex .ex-thumbs img,
 .lh-ex .ex-thumbs .lh-ph,
 .lh-ex .ex-thumbs .lh-more {
@@ -847,7 +900,8 @@
     grid-template-columns: 1fr;
   }
 
-  .lh-ex .ex-thumbs {
+  .lh-ex .ex-thumbs,
+  .lh-ex.has-q .ex-thumbs {
     grid-column: 1;
     grid-row: auto;
   }

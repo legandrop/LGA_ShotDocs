@@ -1,8 +1,9 @@
 import { SEPARATOR, type SearchUnit } from '../search/extract';
 import type { IndexedContent } from '../search/projectIndex';
 import { dateAtStart, dayInTitle } from '../templates/dayReport';
+import { coordsIn, emptyValue, fieldValues, normLabel, type FieldValue, type PageFields } from './fields';
 import { blocksOf, INDEX_PAGE_MIN, type Mention, type PageRelations, type Section } from './pageRelations';
-import { scan } from './reader';
+import { fold, scan, type Registry } from './reader';
 import { entityRelations, type EntityPage, type RelationSnapshot } from './relationIndex';
 
 // Lo que muestra la cabecera viva de una escena o una locación (Docs/Doc_Relaciones.md, sección 10). Puro: todo sale de
@@ -71,6 +72,23 @@ export interface Excerpt {
   shared: string[];
   photos: PhotoRef[];
   kind: 'section' | 'mention' | 'card' | 'page';
+  /** Una ficha: el primer renglón de su pregunta abierta (campo *Consultas* / *Open question*), si tiene. */
+  question?: string;
+}
+
+/** Un decorado: una página (si la persona la ve) o el texto del campo. */
+export interface SetRef {
+  title: string;
+  pageId: string | null;
+}
+
+/** Una pregunta abierta del desglose (campo *Consultas* / *Open question*), con las fichas que la tienen. */
+export interface OpenQuestion {
+  text: string;
+  /** El campo, para ir ahí. */
+  place: Place;
+  /** Las fichas que la tienen (el nombre del plano o el título); vacío si es de la página de la escena. */
+  cards: { pageId: string; shot: string }[];
 }
 
 export interface PageChip {
@@ -122,6 +140,12 @@ export interface SceneLive {
   noVfx: boolean;
   /** Cuántas de sus fichas con texto dicen «No VFX» (`no`) y cuántas fichas con texto tiene (`of`). */
   noVfxCards: { no: number; of: number };
+  /** Las preguntas abiertas de su desglose (la escena y sus fichas), sin repetir, en orden. */
+  questions: OpenQuestion[];
+  /** Sus decorados: el campo *Locacion Guion* / *Sets* de la escena y de sus fichas. */
+  sets: SetRef[];
+  /** INT/EXT de su desglose, sin repetir («INT-EXT/NOCHE»). */
+  intExt: string[];
   complete: boolean;
 }
 
@@ -147,6 +171,10 @@ export interface LocationLive {
   days: LocationDay[];
   /** Escenas planeadas acá sin sección en ningún reporte. */
   noReport: string[];
+  /** Sus decorados: el campo *Sets* de la locación y las páginas sueltas cuyo campo *Locacion Real* la nombra. */
+  sets: SetRef[];
+  /** Dónde queda: las primeras coordenadas de la locación o de sus scoutings. */
+  where: { text: string; place: Place; pageTitle: string } | null;
   also: PageChip[];
   indexPages: PageChip[];
   photos: PhotoRef[];
@@ -267,6 +295,70 @@ function looseMentions(p: EntityPage): Mention[] {
 
 const shortTitle = (title: string, n = 34) => (title.length > n ? `${title.slice(0, n - 1).replace(/\s+\S*$/, '')}…` : title);
 
+// --- Campos del desglose (Docs/Doc_Relaciones.md, sección 3, «Campos») -----------------------------------------------
+
+const fieldsOf = (src: LiveSource, pageId: string | null | undefined): PageFields | undefined => (pageId ? src.snap.fields.get(pageId) : undefined);
+/** Los valores que dicen algo (no «—» ni vacíos), o que llevan a una página. */
+const valued = (list: FieldValue[]) => list.filter((f) => !emptyValue(f.text) || f.links.length > 0);
+const firstLine = (text: string) => text.split('\n')[0] ?? '';
+
+/** El nombre corto de una ficha: su campo *Shot Name*, o lo primero del título si es un código, o el título. */
+function shotOf(src: LiveSource, pageId: string, title: string): string {
+  const shot = valued(fieldValues(fieldsOf(src, pageId), 'shot'))[0];
+  if (shot) return firstLine(shot.text);
+  const head = title.split(/\s+/)[0] ?? '';
+  return /\d{2,}[_-]\d/.test(head) ? head : shortTitle(title, 28);
+}
+
+/**
+ * Los decorados de unos campos: cada link a una página (con su título si la persona la ve; si no, el texto del link,
+ * que está en una página que sí ve) o cada renglón de texto. Sin repetir.
+ */
+function setsOf(src: LiveSource, list: FieldValue[], into: SetRef[]): void {
+  const keyOf = (s: SetRef) => s.pageId ?? `t:${normLabel(s.title)}`;
+  const seen = new Set(into.map(keyOf));
+  const add = (ref: SetRef) => {
+    if (!ref.title || seen.has(keyOf(ref))) return;
+    seen.add(keyOf(ref));
+    into.push(ref);
+  };
+  for (const f of valued(list)) {
+    if (f.links.length) {
+      for (const l of f.links) {
+        const title = src.title(l.pageId);
+        add(title === undefined ? { title: l.text, pageId: null } : { title: title || l.text, pageId: l.pageId });
+      }
+      continue;
+    }
+    for (const piece of f.text.split('\n')) add({ title: piece.trim(), pageId: null });
+  }
+}
+
+/**
+ * La locación que dice el valor entero de un campo de lugar (*Locacion Real*: «CENADE», «Lübben»), según el registro: su
+ * nombre, o un alias que el registro reconoce para el lugar (`locDayTitleAlias`: los de siempre más el nombre de una
+ * palabra sin paréntesis que vale en el título de un día, D417; sin los genéricos como «Europa») y que no comparte otra
+ * locación. Un alias de varias, ninguna (B1 de la auditoría de E3b: «Europa» no es de ninguna de las seis
+ * «… (Europa)»). Un campo de lugar dice dónde se filma, como el título de un día (D424). No mira títulos de páginas.
+ */
+export function locationOf(R: Registry, text: string): string | null {
+  const key = normLabel(text);
+  if (!key) return null;
+  for (const l of R.locations.values()) if (normLabel(l.name) === key) return l.name;
+  const f = fold(text).trim();
+  const names = new Set(R.locDayTitleAlias.filter((a) => a.f === f).map((a) => a.name));
+  return names.size === 1 ? [...names][0] : null;
+}
+
+/** El texto de una ficha para su extracto: su *Descripción* si la tiene; si no, sus primeros renglones sin las tablas. */
+function cardText(src: LiveSource, pageId: string, pb: PageBlocks | null): string {
+  const desc = valued(fieldValues(fieldsOf(src, pageId), 'description'))[0];
+  if (desc) return clip(desc.text.replace(/\n/g, ' '));
+  if (!pb) return '';
+  const tables = new Set((src.content(pageId)?.meta ?? []).filter((m) => m.cells).map((m) => m.blockId));
+  return clip(pb.texts.filter((t, i) => t && !pb.levels[i] && !tables.has(pb.ids[i])).slice(0, 4).join(' · '));
+}
+
 // --- Escena --------------------------------------------------------------------------------------------------------
 
 /** Las formas en que el proyecto escribe una escena, sin la canónica (máximo `max`, las más usadas primero). */
@@ -348,13 +440,56 @@ export function sceneLive(src: LiveSource, code: string): SceneLive {
   const bdPhotos: PhotoRef[] = [];
   const scoutPhotos: PhotoRef[] = [];
 
-  // Las fichas: un extracto cada una, con sus fotos (todas son de la escena).
+  // Los campos de su desglose (la escena y sus fichas): preguntas abiertas, decorados, INT/EXT.
+  const questions: OpenQuestion[] = [];
+  const sets: SetRef[] = [];
+  const intExt: string[] = [];
+  const own = [...(rel.pageId ? [{ pageId: rel.pageId, title: title(rel.pageId), card: false }] : []), ...cards.map((c) => ({ ...c, card: true }))];
+  for (const o of own) {
+    const pf = fieldsOf(src, o.pageId);
+    if (!pf) continue;
+    for (const f of valued(fieldValues(pf, 'openQuestion'))) {
+      // Dos fichas con la misma pregunta (su primer renglón, lo que se muestra) son una sola, «in 2 cards».
+      const key = normLabel(firstLine(f.text));
+      if (!key) continue;
+      const card = o.card ? { pageId: o.pageId, shot: shotOf(src, o.pageId, o.title) } : null;
+      const known = questions.find((q) => normLabel(firstLine(q.text)) === key);
+      if (known) {
+        if (card && !known.cards.some((x) => x.pageId === card.pageId)) known.cards.push(card);
+        continue;
+      }
+      const place: Place = f.via === 'heading' ? { pageId: o.pageId, blockId: f.blockId, endBlockId: f.endBlockId ?? null } : { pageId: o.pageId, blockId: f.blockId };
+      questions.push({ text: f.text, place, cards: card ? [card] : [] });
+    }
+    setsOf(src, fieldValues(pf, 'set'), sets);
+    for (const f of valued(fieldValues(pf, 'intExt'))) {
+      const v = firstLine(f.text).trim();
+      if (v && !intExt.some((x) => normLabel(x) === normLabel(v))) intExt.push(v);
+    }
+  }
+
+  // Las fichas: un extracto cada una, con sus fotos (todas son de la escena) y su pregunta abierta.
   for (const c of cards) {
     const pr = snap.pages.get(c.pageId);
     const photos = photosOfPage(pr, c.pageId, BREAKDOWN);
     bdPhotos.push(...photos);
     const pb = pageBlocks(src.content(c.pageId));
-    breakdown.push({ place: { pageId: c.pageId, blockId: pb?.ids[0] ?? '' }, pageId: c.pageId, pageTitle: c.title, day: null, heading: '', text: pageText(pb), part: '', shared: [], photos, kind: 'card' });
+    const q = questions.find((x) => x.cards.some((y) => y.pageId === c.pageId));
+    // Con un campo *Shot Name*, el extracto se titula con el plano (como la maqueta); si no, con el título de la ficha.
+    const shot = valued(fieldValues(fieldsOf(src, c.pageId), 'shot'))[0];
+    breakdown.push({
+      place: { pageId: c.pageId, blockId: pb?.ids[0] ?? '' },
+      pageId: c.pageId,
+      pageTitle: c.title,
+      day: null,
+      heading: shot ? firstLine(shot.text) : '',
+      text: cardText(src, c.pageId, pb),
+      part: '',
+      shared: [],
+      photos,
+      kind: 'card',
+      ...(q ? { question: firstLine(q.text) } : {}),
+    });
   }
   // Las fotos de la página de la escena misma también son del desglose.
   if (rel.pageId) bdPhotos.unshift(...photosOfPage(snap.pages.get(rel.pageId), rel.pageId, BREAKDOWN));
@@ -468,6 +603,9 @@ export function sceneLive(src: LiveSource, code: string): SceneLive {
     photos: uniquePhotos([...bdPhotos, ...scoutPhotos, ...shootPhotos]),
     noVfx,
     noVfxCards,
+    questions,
+    sets,
+    intExt,
     complete: rel.complete,
   };
 }
@@ -503,6 +641,30 @@ export function locationLive(src: LiveSource, name: string): LocationLive {
   const title = (id: string) => src.title(id) ?? '';
   const entry = snap.registry.locations.get(name);
   const shotDays = sceneDays(src);
+  const locPage = entry?.pageId ?? rel.pageId;
+
+  // Sus decorados: el campo de la locación misma y las páginas sueltas (no escenas, fichas, días, locaciones ni
+  // scoutings) cuyo campo *Locacion Real* la nombra (la tabla «Decorados» de Coda).
+  const sets: SetRef[] = [];
+  setsOf(src, fieldValues(fieldsOf(src, locPage), 'set'), sets);
+  const setPages = new Set<string>();
+  for (const [pageId, pf] of snap.fields) {
+    const role = roles.get(pageId);
+    if (pageId === locPage || role?.excluded || role?.entity || role?.partOf) continue;
+    if ((snap.pages.get(pageId)?.entities ?? 0) > INDEX_PAGE_MIN || src.title(pageId) === undefined) continue;
+    const here = valued(fieldValues(pf, 'location')).some(
+      (f) =>
+        (!!locPage && f.links.some((l) => l.pageId === locPage)) ||
+        locationOf(snap.registry, f.text) === name ||
+        scan(snap.registry, f.text.replace(/\n/g, ' '), { heading: true, dayTitle: true }).some((h) => {
+          const raw = f.text.replace(/\n/g, ' ').slice(h.s, h.e);
+          return h.kind === 'loc' && h.ref === name && locationOf(snap.registry, raw) === name;
+        }),
+    );
+    if (!here) continue;
+    setPages.add(pageId);
+    if (!sets.some((x) => x.pageId === pageId)) sets.push({ title: title(pageId), pageId });
+  }
 
   // Escenas cuyo desglose (la escena o sus fichas) la nombra.
   const plannedCodes = new Map<string, true>();
@@ -519,7 +681,7 @@ export function locationLive(src: LiveSource, name: string): LocationLive {
       plannedCodes.set(scene, true);
       continue;
     }
-    if (p.own) continue;
+    if (p.own || setPages.has(p.pageId)) continue;
     // Los días cuyo título la nombra se muestran aparte (columna Rodaje).
     if (p.stage === 'shoot' && dayRef(src, p.pageId).locs.includes(name)) continue;
     also.push({ pageId: p.pageId, title: title(p.pageId), blockId: p.mentions.find((m) => !m.hidden)?.blockId });
@@ -587,6 +749,22 @@ export function locationLive(src: LiveSource, name: string): LocationLive {
   }
   days.sort((a, b) => byDay(a.day, b.day, order));
 
+  // Dónde queda: las coordenadas de la locación o, si no, las del primer scouting que las tenga.
+  let where: LocationLive['where'] = null;
+  for (const id of [locPage, ...scouts.map((s) => s.pageId)]) {
+    const pf = fieldsOf(src, id);
+    if (!id || !pf) continue;
+    // Un campo «Coordenadas» cuenta solo si dice una coordenada (no «Ubicación: Ruta 205 km 40»).
+    const field = valued(fieldValues(pf, 'coords'))
+      .map((f) => ({ text: coordsIn(f.text, true), blockId: f.blockId }))
+      .find((f) => f.text);
+    const at = pf.coords ?? (field ? { text: field.text!, blockId: field.blockId } : null);
+    if (at) {
+      where = { text: at.text, place: { pageId: id, blockId: at.blockId }, pageTitle: title(id) };
+      break;
+    }
+  }
+
   return {
     name,
     pageId: entry?.pageId ?? rel.pageId,
@@ -596,6 +774,8 @@ export function locationLive(src: LiveSource, name: string): LocationLive {
     scouting,
     days,
     noReport: planned.filter((s) => !s.days.length).map((s) => s.code),
+    sets,
+    where,
     also,
     indexPages: indexPagesList,
     photos: uniquePhotos([...ownPhotos, ...scoutPhotos, ...days.flatMap((d) => d.photos)]),

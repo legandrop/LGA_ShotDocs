@@ -159,4 +159,25 @@ export const relations = {
   'live.empty.locScouting': { en: "No scouting yet.", es: "Todavía no hay scouting." },
   'live.empty.locShoot': { en: "No shoot day names this location in its title.", es: "Ningún día de rodaje nombra esta locación en el título." },
   'live.reportOn': { en: "report · {days}", es: "reporte · {days}" },
+  // Los campos de las fichas (pregunta abierta, decorados, INT/EXT, coordenadas)
+  'live.openQuestion': { en: "Open question", es: "Pregunta abierta" },
+  'live.openQuestionLine': { en: "Open question:", es: "Pregunta abierta:" },
+  'live.inCards': {
+    en: { one: "in {count} card", other: "in {count} cards" },
+    es: { one: "en {count} ficha", other: "en {count} fichas" },
+  },
+  'live.questionOnScene': { en: "on this page", es: "en esta página" },
+  'live.questionTip': { en: "Opens the page where it is written, with the question highlighted", es: "Abre la página donde está escrita, con la pregunta resaltada" },
+  'live.questionMoreTip': {
+    en: "Opens the page where it is written, with the question highlighted. The others are in Breakdown",
+    es: "Abre la página donde está escrita, con la pregunta resaltada. Las otras están en Desglose",
+  },
+  'live.questions': {
+    en: { one: "{count} question", other: "{count} questions" },
+    es: { one: "{count} pregunta", other: "{count} preguntas" },
+  },
+  'live.intExtTip': { en: "INT/EXT from its breakdown", es: "INT/EXT de su desglose" },
+  'live.sets': { en: "Sets", es: "Decorados" },
+  'live.where': { en: "Where", es: "Dónde" },
+  'live.whereTip': { en: "Written in «{page}»: opens it there", es: "Escrito en «{page}»: lo abre ahí" },
 } satisfies Dict;

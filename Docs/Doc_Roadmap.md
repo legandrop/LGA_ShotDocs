@@ -92,10 +92,17 @@ set son pocas; medirlo en el iPhone junto con la primera lectura (15–45 s esti
 (3) Las cifras de rendimiento son de escritorio con fake-indexeddb: falta la medición en un teléfono real. (re-verificación) Con D391, en un largo «74 | Cocina» sin ceros ya no da la
 escena 074: hace falta «074 | Cocina», «Escena 74» o marcar la página.
 
-**Anotado al auditar la v0.238 (relaciones en vivo, la cabecera):** (1) Faltan filas de la maqueta aprobada:
-*Open question*, *Sets* (decorados), INT/EXT y *Where* (coordenadas); salen de campos de las fichas de Coda y el motor
-no lee campos. Entrega propia: una consulta pura «campo: valor» por ficha (la necesita también E5 para *Open questions
-for today*). (2) El arnés `src/dev/cabecera-viva.html` no vuelve a levantar si se recarga la página (queda esperando
+**Anotado al auditar la v0.238 (relaciones en vivo, la cabecera):** (1) Hecho en la v0.240 (campos de las fichas:
+*Open question*, *Sets*, INT/EXT, *Where*). Queda: *Planned at* todavía sale de las locaciones nombradas y no del campo
+*Locacion Real* (D393; la consulta ya existe); la vista de un decorado (la maqueta muestra «Set at CENADE · used by
+105_027»); un rótulo conocido en una tabla de más de dos columnas (una ficha con columnas de notas) no se lee; los
+rótulos en otros idiomas que castellano e inglés. De la auditoría de la v0.240: (a) una página suelta con un renglón
+«Locación: CENADE» (una nota) pasa a ser decorado de CENADE y sale de «Also named in» (pedir además *Plate*/*Bloque* o
+una carpeta de decorados); (b) cuando la pregunta es una fila de la tabla, ir a ella resalta la tabla entera (resaltar
+la fila); (c) *Planned at* «—» en 105_027 contra «La Arenera (estudio) · breakdown: «Estudio | Autos»» de la maqueta, la
+diferencia de contenido más visible que queda; (d) bordes del lector: una celda combinada (`rowspan`) en la columna de
+rótulos, «Preguntas» con un subtítulo por pregunta (valor vacío), «Preguntas: ninguna por ahora» cuenta como pregunta,
+`fieldDate('31/02/2026')` da una fecha que no existe. (2) El arnés `src/dev/cabecera-viva.html` no vuelve a levantar si se recarga la página (queda esperando
 `__cabecera.listo`): abrirlo de nuevo desde la dirección del arnés. Solo herramienta de desarrollo.
 
 **Hecho el 2026-10-08: ERSO en vivo** (D403 a D415, `Doc_Estructura_Proyecto.md`). Carpetas con tipo, títulos de
@@ -109,7 +116,8 @@ escriben así. Que ⌘K reconozca un número de escena con el lector de relacion
 reorganización de ERSO esperan a que existan): desde D416 el título no da alias de paréntesis, y en ERSO faltan 45 de
 176 «planeada en», 24 de `Europa (plates)` y 19 de `La Arenera (estudio)` (sus fichas dicen «Estudio | Autos»,
 «Europa»), y en el texto «Inquilinato», «Brandemburgo» y «Lübben» solos no se reconocen (en el título de un día sí,
-D417).
+D417). Lo mismo con los decorados: los 3 cuyo *Locacion Real* dice «Estudio» no salen en *Sets* de `La Arenera
+(estudio)` (auditoría de la v0.240, O10).
 
 ### A. Plan de workspaces (D-17, D-18)
 

@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.240 :
+
+La cabecera viva no mostraba la pregunta abierta del desglose, los decorados, INT/EXT ni las coordenadas de la maqueta: salen de campos de las fichas y el motor no leía campos. Ahora `src/relations/fields.ts` lee «rótulo: valor» de lo que ya lee la búsqueda: filas de tablas de dos columnas (el índice guarda fila y columna de cada celda, `CACHE_FORMAT` 2), títulos y renglones «Consultas:» con rótulos conocidos en castellano e inglés, y coordenadas; la foto del índice los trae (`findFields`, también para el día). La escena suma INT/EXT, decorados y *Open question* («in 2 cards», «+1», lleva a la ficha); la locación, *Sets* y *Where*. D419–D428.
+
+[Mostrar en la cabecera viva la pregunta abierta, los decorados, INT/EXT y las coordenadas que dicen los campos de las fichas]
+
 v0.239 :
 
 La cabecera de una locación y la de una escena mostraban relaciones falsas: el registro tomaba como alias de una locación lo de adentro del paréntesis y el nombre sin él, así que `Europa (plates)` se volvía la palabra «plates» de cualquier reporte (la escena 101_074 «planeada en Europa (plates)», 14 días ajenos) y cinco «… (Europa)» compartían «Europa». Ahora el paréntesis no da alias y el nombre sin él solo cuenta con dos palabras o más y si no lo comparte otra locación; con una sola, solo como lugar de un día por su título («Día 73 | Inquilinato»; D416, D417). Además, ERSO pasó a vivo: carpetas con *Type*, títulos `101_074`, lo generado congelado borrado y el Mapa en la papelera (D403–D415). Verificado contra la fuente desde un dispositivo nuevo: 28 de 28, 0 relaciones sin respaldo (antes, 36).

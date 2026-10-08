@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 import { indexKey, localIndexCache, INDEX_PREFIX } from '../search/indexCache';
-import { ProjectIndex, PROGRESS_MIN_PAGES, type IndexTree } from '../search/projectIndex';
+import { CACHE_FORMAT, ProjectIndex, PROGRESS_MIN_PAGES, type IndexTree } from '../search/projectIndex';
 import { dirtyKey } from '../sync/localDb';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
@@ -167,7 +167,7 @@ describe('el índice del proyecto: caché en el dispositivo', () => {
     expect(read.mock.calls.map(([id]) => id)).toEqual([a]);
     const keys = (await d.db.getAllKeys('meta')).map(String).filter((k) => k.startsWith(INDEX_PREFIX));
     expect(keys).toEqual([indexKey(d.tree.workspaceId, a)]);
-    expect(((await d.db.get('meta', indexKey(d.tree.workspaceId, a))) as { v: number }).v).toBe(1);
+    expect(((await d.db.get('meta', indexKey(d.tree.workspaceId, a))) as { v: number }).v).toBe(CACHE_FORMAT);
     second.dispose();
   });
 

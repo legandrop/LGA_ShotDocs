@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { indexKey, localIndexCache } from '../search/indexCache';
 import { ProjectIndex } from '../search/projectIndex';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import type { PageSettings } from '../sync/types';
 import { buildProject, writeBlocks, type Built } from './fixtures/proyectoSintetico';
 import { locationLive, sceneLive, type LiveSource } from './liveView';
-import { RelationIndex } from './relationIndex';
+import { fieldDate } from './fields';
+import { cardFields, findFields, pageFields, RelationIndex } from './relationIndex';
 
 // Lo que muestra la cabecera viva, con el índice de verdad sobre un proyecto sintético con la forma del recorte de la
 // maqueta (Docs/Doc_Relaciones.md, sección 10): todo sale del índice, nada de listas guardadas.
@@ -182,6 +184,141 @@ describe('la cabecera de una locación', () => {
   });
 });
 
+describe('los campos de las fichas (E3b)', () => {
+  it('escena: la pregunta abierta (en cuántas fichas y cuántas más), los decorados por su link, INT/EXT y la descripción', async () => {
+    const { built, src } = await setup();
+    const v = sceneLive(src, '105_027');
+    // La misma pregunta (título «Consultas») en las dos fichas, y otra en un renglón «Open question:» de la 020.
+    expect(v.questions.map((q) => [q.text.split('\n')[0], q.cards.map((c) => c.shot)])).toEqual([
+      ['¿Todo el interior de la ambulancia se filma en estudio o solo el vuelco?', ['PRUEBA_105_027_010', 'PRUEBA_105_027_020']],
+      ['¿la sangre del chofer es práctica o se agrega?', ['PRUEBA_105_027_020']],
+    ]);
+    // Va a la ficha, a la sección «Consultas» entera.
+    expect(v.questions[0].place.pageId).toBe(built.ids.s027_010);
+    expect(v.questions[0].place).toHaveProperty('endBlockId');
+    expect(v.sets).toEqual([{ title: 'Ambulancia | Ruta INT', pageId: built.ids.set_int }]);
+    expect(v.intExt).toEqual(['INT-EXT/NOCHE']);
+    // El extracto de la ficha: su descripción (no la tabla) y su pregunta.
+    const card = v.breakdown.find((e) => e.pageId === built.ids.s027_010)!;
+    expect(card.text).toBe('El fugitivo va acostado atrás; adelante, el chofer y el oficial forcejean.');
+    expect(card.question).toBe('¿Todo el interior de la ambulancia se filma en estudio o solo el vuelco?');
+    // Una escena sin campos no inventa nada.
+    const v026 = sceneLive(src, '105_026');
+    expect([v026.questions, v026.sets, v026.intExt]).toEqual([[], [], []]);
+    expect(v026.breakdown[0].question).toBeUndefined();
+  });
+
+  it('locación: los decorados cuya locación real es ella (no en «Also named in») y dónde queda (las coordenadas del scouting)', async () => {
+    const { built, src } = await setup();
+    const v = locationLive(src, 'CENADE');
+    expect(v.sets).toEqual([
+      { title: 'Ambulancia | Ruta EXT', pageId: built.ids.set_ext },
+      { title: 'Camioneta | Banquina', pageId: built.ids.set_auto },
+    ]);
+    expect(v.also.map((a) => a.pageId)).not.toContain(built.ids.set_ext);
+    expect(v.where).toEqual({ text: `34° 40' 12.5" S 58° 27' 03.1" W`, place: { pageId: built.ids.scout, blockId: expect.any(String) }, pageTitle: 'Tech scout 06/01' });
+    const arenera = locationLive(src, 'La Arenera (estudio)');
+    expect(arenera.sets.map((s) => s.title)).toEqual(['Ambulancia | Ruta INT']);
+    expect(arenera.where).toBeNull();
+  });
+
+  it('en vivo: borrar la pregunta de una ficha la saca; escribir una en la escena la suma', async () => {
+    const { d, built } = await setup();
+    await writeBlocks(d, built.ids.s027_020, [{ table: [['Shot Name', 'PRUEBA_105_027_020'], ['Consultas', '—']] }]);
+    await writeBlocks(d, built.ids.s027, [{ h: 2, text: 'Open questions' }, { p: '¿Se suma lluvia en post?' }]);
+    const { src } = await indexed(d, built.projectId);
+    const v = sceneLive(src, '105_027');
+    expect(v.questions.map((q) => [q.text, q.cards.map((c) => c.shot)])).toEqual([
+      ['¿Se suma lluvia en post?', []],
+      ['¿Todo el interior de la ambulancia se filma en estudio o solo el vuelco?\nReferencias del estilo del vuelco.', ['PRUEBA_105_027_010']],
+    ]);
+  });
+
+  it('B1: un alias que comparten varias locaciones («Europa») no le da decorados a ninguna; uno propio, solo a la suya', async () => {
+    const { d, built } = await setup();
+    await d.tree.create(built.ids.locaciones, 'Lübben (Europa)', built.projectId);
+    await d.tree.create(built.ids.locaciones, 'Brandemburgo (Europa)', built.projectId);
+    await d.tree.create(built.ids.locaciones, 'Arrabal (Plates)', built.projectId);
+    await d.tree.create(built.ids.locaciones, 'Ruta vieja (Plates)', built.projectId);
+    const set = async (title: string, loc: string) => {
+      const id = await d.tree.create(built.ids.decorados, title, built.projectId);
+      await writeBlocks(d, id, [{ table: [['Locacion Real', loc], ['Plate', 'Driving']] }]);
+      return id;
+    };
+    // Un nombre sin paréntesis que comparten dos locaciones tampoco es de ninguna (la regla del registro, D416/D417).
+    await d.tree.create(built.ids.locaciones, 'Berlín (Europa)', built.projectId);
+    await d.tree.create(built.ids.locaciones, 'Berlín (estudio)', built.projectId);
+    await set('Andén | Noche', 'Berlín');
+    await set('París | Calles', 'Europa');
+    await set('Callejón | Noche', 'Plates');
+    const estacion = await set('Lübben | Estación', 'Lübben');
+    const { src } = await indexed(d, built.projectId);
+    for (const loc of ['Berlín (Europa)', 'Berlín (estudio)']) expect(locationLive(src, loc).sets, loc).toEqual([]);
+    for (const loc of ['Lübben (Europa)', 'Brandemburgo (Europa)', 'Arrabal (Plates)', 'Ruta vieja (Plates)']) {
+      expect(locationLive(src, loc).sets.map((x) => x.title), loc).not.toContain('París | Calles');
+      expect(locationLive(src, loc).sets.map((x) => x.title), loc).not.toContain('Callejón | Noche');
+    }
+    expect(locationLive(src, 'Lübben (Europa)').sets).toEqual([{ title: 'Lübben | Estación', pageId: estacion }]);
+    expect(locationLive(src, 'Brandemburgo (Europa)').sets).toEqual([]);
+  });
+
+  it('O2: Where con un campo de coordenadas solo si dice una coordenada', async () => {
+    const { d, built } = await setup();
+    await writeBlocks(d, built.ids.arenera, [{ p: 'Ubicación: Ruta 205 km 40, Ezeiza' }, { p: 'Formato 1.7778, 2.3900' }]);
+    let { src } = await indexed(d, built.projectId);
+    expect(locationLive(src, 'La Arenera (estudio)').where).toBeNull();
+    await writeBlocks(d, built.ids.arenera, [{ p: 'Coordenadas: 34.6701, 58.4508' }]);
+    ({ src } = await indexed(d, built.projectId));
+    expect(locationLive(src, 'La Arenera (estudio)').where?.text).toBe('34.6701, 58.4508');
+  });
+
+  it('O5: las fichas con una fecha (`cardFields`) no cuentan las copias de fichas adentro de un plan del día', async () => {
+    const { d, built } = await setup();
+    const copia = await d.tree.create(built.ids.plan60, 'PRUEBA_105_027_010 (copia)', built.projectId);
+    await writeBlocks(d, copia, [{ table: [['Shot Name', 'PRUEBA_105_027_010'], ['Fecha Rodaje', '06/03/2026']] }]);
+    const { src } = await indexed(d, built.projectId);
+    expect(findFields(src.snap, 'shootDate').map((x) => x.pageId)).toContain(copia);
+    const cards = cardFields(src.snap, 'shootDate').filter((x) => fieldDate(x.field.text) === '2026-03-06');
+    expect(cards.map((x) => [x.pageId, x.scene])).toEqual([
+      [built.ids.s027_010, '105_027'],
+      [built.ids.s027_020, '105_027'],
+    ]);
+  });
+
+  it('la consulta de campos para el día (E5): las fichas con una fecha de rodaje', async () => {
+    const { built, src } = await setup();
+    const dated = findFields(src.snap, 'shootDate').filter((x) => fieldDate(x.field.text) === '2026-03-06');
+    expect(dated.map((x) => x.pageId)).toEqual([built.ids.s027_010, built.ids.s027_020]);
+    expect(pageFields(src.snap, built.ids.notas)).toBeUndefined();
+    expect(pageFields(src.snap, built.ids.s026_010)!.fields.map((f) => [f.label, f.text])).toEqual([['Locación real', 'CENADE']]);
+  });
+});
+
+describe('los campos y la caché del dispositivo', () => {
+  it('se recuperan sin abrir ningún documento; lo guardado con el formato de antes (sin filas de tabla) se relee', async () => {
+    const d = await makeDevice(new FakeServer());
+    devices.push(d);
+    const built = await buildProject(d, fakePhoto, { indexPage: false });
+    const first = new ProjectIndex(d.tree, d.docs, { cache: localIndexCache(d.db) });
+    await first.refresh(built.projectId);
+    await first.flush();
+    first.dispose();
+    // La ficha 010 guardada como antes de las filas de tabla (formato 1): no se usa.
+    const key = indexKey(built.projectId, built.ids.s027_010);
+    await d.db.put('meta', { ...((await d.db.get('meta', key)) as object), v: 1 }, key);
+    const read = vi.spyOn(d.docs, 'indexSnapshot');
+    const index = new ProjectIndex(d.tree, d.docs, { cache: localIndexCache(d.db) });
+    const relations = new RelationIndex(d.tree, index);
+    await index.refresh(built.projectId);
+    await relations.update(built.projectId);
+    expect(read.mock.calls.map(([id]) => id)).toEqual([built.ids.s027_010]);
+    const snap = relations.snapshot(built.projectId)!;
+    expect(findFields(snap, 'shootDate').map((x) => x.pageId)).toEqual([built.ids.s027_010, built.ids.s027_020]);
+    expect(findFields(snap, 'set').map((x) => x.field.links[0]?.pageId)).toEqual([built.ids.set_int, built.ids.set_int]);
+    index.dispose();
+  });
+});
+
 describe('permisos', () => {
   it('un invitado que ve solo la escena ve solo lo de su rama: ningún título ni foto de páginas que no ve', async () => {
     const server = new FakeServer();
@@ -211,5 +348,9 @@ describe('permisos', () => {
       expect(text).not.toContain(owner.tree.get(built.ids[key])!.title);
     }
     for (const label of ['D59 vuelco 1', 'Vuelco 1', 'D70 1']) expect(text).not.toContain(built.photos[label]);
+    // El decorado: el invitado no ve su página; queda el texto del link de la ficha (que sí ve), sin la página.
+    expect(v.sets).toEqual([{ title: 'Ambulancia | Ruta INT', pageId: null }]);
+    expect(text).not.toContain(built.ids.set_int);
+    expect(v.questions.length).toBe(2);
   });
 });

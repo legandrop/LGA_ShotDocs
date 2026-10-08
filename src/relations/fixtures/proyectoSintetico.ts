@@ -17,7 +17,9 @@ export type Block =
   | { photo: string; caption?: string }
   | { cell: string }
   /** Una tabla de un renglón (una ficha como las de Coda: «VFX Cat» | «DMP 2.5D, CG»). */
-  | { row: string[] };
+  | { row: string[] }
+  /** Una tabla de varios renglones; una celda puede llevar links (la ficha de Coda: «Locacion Guion» | link al decorado). */
+  | { table: (string | Run[])[][] };
 
 export interface Built {
   projectId: string;
@@ -35,22 +37,42 @@ export async function writeBlocks(d: Device, pageId: string, blocks: Block[]): P
   ) as unknown as BlockNoteEditor;
   const el = document.createElement('div');
   editor.mount(el);
+  const inline = (runs: Run[]) =>
+    runs.map((r) => (typeof r === 'string' ? { type: 'text', text: r, styles: {} } : { type: 'link', href: `/p/${r.link}`, content: [{ type: 'text', text: r.text, styles: {} }] }));
   const toBn = (b: Block): unknown => {
     if ('h' in b) return { type: 'heading', props: { level: b.h }, content: b.text };
     if ('photo' in b) return { type: 'image', props: { url: `sdmedia://${b.photo}`, caption: b.caption ?? '' } };
     if ('cell' in b) return { type: 'table', content: { type: 'tableContent', rows: [{ cells: [b.cell] }] } };
     if ('row' in b) return { type: 'table', content: { type: 'tableContent', rows: [{ cells: b.row }] } };
-    const runs = typeof b.p === 'string' ? [b.p] : b.p;
-    return {
-      type: 'paragraph',
-      content: runs.map((r) => (typeof r === 'string' ? { type: 'text', text: r, styles: {} } : { type: 'link', href: `/p/${r.link}`, content: [{ type: 'text', text: r.text, styles: {} }] })),
-    };
+    if ('table' in b) return { type: 'table', content: { type: 'tableContent', rows: b.table.map((row) => ({ cells: row.map((c) => (typeof c === 'string' ? c : inline(c))) })) } };
+    return { type: 'paragraph', content: inline(typeof b.p === 'string' ? [b.p] : b.p) };
   };
   editor.replaceBlocks(editor.document, blocks.map(toBn) as never);
   await new Promise((r) => setTimeout(r, 20));
   editor.unmount();
   await d.docs.flush(pageId);
   d.docs.close(pageId);
+}
+
+/** Una ficha de desglose con la forma de las de Coda (inventada): la tabla de campos y sus títulos con texto. */
+function fichaCampos(shot: string, set: string): Block[] {
+  return [
+    {
+      table: [
+        ['Shot Name', shot],
+        ['INT/EXT DIA/NOCHE', 'INT-EXT/NOCHE'],
+        ['Locacion Guion', [{ link: set, text: 'Ambulancia | Ruta INT' }]],
+        ['Locacion Real', 'La Arenera'],
+        ['VFX Cat', 'DMP 2.5D'],
+        ['Fecha Rodaje', '06/03/2026'],
+      ],
+    },
+    { h: 3, text: 'Descripción' },
+    { p: 'El fugitivo va acostado atrás; adelante, el chofer y el oficial forcejean.' },
+    { h: 3, text: 'Consultas' },
+    { p: '¿Todo el interior de la ambulancia se filma en estudio o solo el vuelco?' },
+    { p: 'Referencias del estilo del vuelco.' },
+  ];
 }
 
 /**
@@ -85,6 +107,14 @@ export async function buildProject(
   const bd = await page('desglose', '1.1 | Desglose', null, { holds: 'scene' });
   const ep4 = await page('ep4', '104 | Episodio 4', bd);
   const ep5 = await page('ep5', '105 | Episodio 5', bd);
+  // Los decorados (la tabla «Decorados» de Coda): páginas sueltas con su locación real en un campo.
+  const decorados = await page('decorados', '1.3 | Decorados', null);
+  const setInt = await page('set_int', 'Ambulancia | Ruta INT', decorados);
+  await writeBlocks(d, setInt, [{ table: [['Locacion Real', 'La Arenera'], ['Plate', 'Driving'], ['Bloque', '2']] }]);
+  const setExt = await page('set_ext', 'Ambulancia | Ruta EXT', decorados);
+  await writeBlocks(d, setExt, [{ table: [['Locacion Real', 'CENADE'], ['Plate', 'Ruta']] }]);
+  const setAuto = await page('set_auto', 'Camioneta | Banquina', decorados);
+  await writeBlocks(d, setAuto, [{ table: [['Locacion Real', 'CENADE'], ['Notas', '']] }]);
   for (const [key, n, ep, title, loc, extra] of [
     ['s008', '008', ep4, 'La camioneta frena en la banquina', 'CENADE', ''],
     ['s009', '009', ep4, 'El conductor revisa el mapa', 'CENADE', ''],
@@ -100,11 +130,19 @@ export async function buildProject(
       { p: 'Plano general de la ruta, cámara en grúa.' },
     ];
     if (extra === 'novfx') blocks.push({ cell: 'No VFX' });
-    if (extra === 'q') blocks.push({ p: 'Pregunta abierta: ¿todo el interior en estudio o solo el vuelco?' }, ...(await pics(card, 'Desglose 027', 2)));
+    if (extra === 'q') {
+      // La ficha como sale de Coda: la tabla de campos (con el decorado como link) y los títulos con su texto.
+      blocks.splice(0, blocks.length, ...fichaCampos('PRUEBA_105_027_010', setInt), ...(await pics(card, 'Desglose 027', 2)));
+    }
     await writeBlocks(d, card, blocks);
     if (key === 's027') {
       const card2 = await page('s027_020', 'PRUEBA_105_027_020 Ambulancia interior', scene);
-      await writeBlocks(d, card2, [{ p: 'Locación real: La Arenera' }, { p: 'Interior de la ambulancia con pantallas.' }]);
+      await writeBlocks(d, card2, [
+        ...fichaCampos('PRUEBA_105_027_020', setInt),
+        { h: 3, text: 'Sup Notes' },
+        { p: 'Interior de la ambulancia con pantallas.' },
+        { p: 'Open question: ¿la sangre del chofer es práctica o se agrega?' },
+      ]);
     }
   }
 
@@ -114,6 +152,7 @@ export async function buildProject(
   await writeBlocks(d, cenade, [{ p: 'Acceso por la autopista. Contacto en la guardia.' }]);
   const scout = await page('scout', 'Tech scout 06/01', cenade);
   await writeBlocks(d, scout, [
+    { p: `Predio 34° 40' 12.5" S 58° 27' 03.1" W` },
     { h: 1, text: 'Accesos' },
     { p: 'Portón norte, camiones hasta la playa de maniobras.' },
     ...(await pics(scout, 'Accesos', 2)),

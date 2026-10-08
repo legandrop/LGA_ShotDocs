@@ -771,6 +771,51 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
   en ningún otro texto. Medido sobre ERSO real: de los 70 días con locación en la reorganización, 57 la reciben por su título y
   0 reciben una falsa (como antes de D416; los otros 13 usan otro nombre y esperan los alias), 0 pares nuevos
   sin respaldo (28 de 28). Revertir: sacar `dayTitle: true` en `dayRef` (`src/relations/liveView.ts`).
+- **D419 · Un campo de una página es una fila de una tabla de dos columnas (cualquier rótulo), o un título o un
+  renglón «Rótulo:» con un rótulo conocido** (2026-10-08; E3b, Lega la puede cambiar). Los rótulos conocidos están en
+  `FIELD_LABELS` (`src/relations/fields.ts`), en castellano e inglés, sin tildes ni mayúsculas. Un renglón cuenta solo si
+  empieza con el rótulo y dos puntos: «open question» en el medio de un texto no es un campo. La otra opción: cualquier
+  título o «algo:» como campo (todo reporte con «Llamado 7:00» o «Escena 105_027» sumaría campos de mentira).
+- **D420 · El valor de un título-campo llega hasta el próximo título o hasta un renglón que es otro campo**
+  (2026-10-08; E3b, Lega la puede cambiar). Así «Consultas» con «Open question: …» abajo son dos preguntas. La otra
+  opción: hasta el próximo título de su nivel o mayor, como las secciones (se tragaría los subtítulos de una ficha).
+- **D421 · Las tablas guardan en el índice la fila y la columna de cada celda** (`BlockMeta.cells` y `cols`;
+  2026-10-08; E3b). Sin eso una celda vacía corre los valores de toda la ficha. Sube `CACHE_FORMAT` a 2: la primera vez
+  después de actualizar, el dispositivo relee cada página una vez (como la primera lectura; medido en ERSO: 4,6 s en
+  la PC, ~23 s con la CPU ×4). Una versión vieja abierta (v0.238) y la nueva alternando sobre el mismo dispositivo se
+  pisan la caché: cada una relee todo al recargar después de la otra (no se pierde nada; cada una descarta el formato
+  ajeno); se termina cuando la vieja se actualiza, y `min_app_version` lo acota. La otra opción: emparejar las unidades
+  de a dos (falla con la celda vacía de *Notas*, que ERSO tiene).
+- **D422 · La pregunta abierta de la escena es la primera de su desglose (la escena, después sus fichas en el orden del
+  árbol); dos fichas con el mismo primer renglón cuentan como una («in 2 cards»); tocarla abre la ficha con la pregunta
+  resaltada** (2026-10-08; E3b, Lega la puede cambiar). Un valor «—», «n/a» o vacío no es una pregunta. La maqueta
+  agrupaba por el texto entero y no la hacía tocable. Se revierte en `sceneLive` (`questions`) y `QuestionRow`.
+- **D423 · Los decorados de una escena salen del campo *Locacion Guion* / *Sets* de la escena y de sus fichas**
+  (2026-10-08; E3b, Lega la puede cambiar). Con link, el chip lleva a la página del decorado si la persona la ve; si no
+  la ve (un invitado), muestra el texto del link (que está en la ficha que sí ve) y no lleva a ningún lado. Sin link,
+  cada renglón del valor es un chip que no lleva a ningún lado.
+- **D424 · Los decorados de una locación son su propio campo *Sets* y las páginas sueltas (sin tipo y fuera de escenas,
+  locaciones y días) cuyo campo *Locacion Real* la nombra; esas páginas salen de «Also named in»** (2026-10-08; E3b, Lega
+  la puede cambiar). Es la tabla «Decorados» de Coda. «La nombra» es por su nombre o por un alias que el registro
+  reconoce y que no comparte otra locación (corrección de la auditoría, B1: en ERSO «Europa» le daba los 15 decorados
+  de Europa a las seis locaciones «… (Europa)»); la regla de alias es la del registro, no se deriva del título. Un campo
+  de lugar dice dónde se filma, como el título de un día: valen los alias de lugar del registro (`locDayTitleAlias`,
+  D417), así «Locacion Real: Lübben» es de `Lübben (Europa)` si ninguna otra comparte «Lübben». La fila *Sets* aparece solo si hay alguno; la nota de la maqueta
+  «no art photos or art links in ERSO» no va (habla de ERSO, no de la app).
+- **D425 · INT/EXT de la escena: los valores distintos de su desglose, hasta 3, separados por coma** (2026-10-08; E3b,
+  Lega la puede cambiar). La maqueta mostraba solo el de la primera ficha; con fichas INT y EXT eso diría algo falso.
+- **D426 · *Where* de una locación: las primeras coordenadas escritas en la locación o en sus scoutings (o un campo
+  *Coordenadas* que dice una), solo las coordenadas, y tocarlas lleva a donde están escritas** (2026-10-08; E3b, Lega la
+  puede cambiar). Coordenada = grados con hemisferio o un par decimal con signo o hemisferio; un par sin signo, solo
+  como valor de un campo de coordenadas. «Ubicación: Ruta 205 km 40» o «Formato 1.7778, 2.3900» no son *Where*
+  (corrección de la auditoría, O1 y O2). La maqueta mostraba el renglón entero («PBA 34° 46'…»). La otra opción: abrir un mapa (sale de la app con
+  la ubicación: queda para cuando Lega lo pida).
+- **D427 · Una ficha en la etapa *Breakdown* se titula con su *Shot Name* y muestra su *Descripción*** (2026-10-08;
+  E3b, Lega la puede cambiar), como la maqueta. Sin esos campos, el título de la ficha y sus primeros renglones sin las
+  tablas (antes salía el texto de la tabla, «Shot Name ERSO_… INT/EXT…»).
+- **D428 · Las filas que salen de campos aparecen solo cuando hay un valor, también mientras el índice lee**
+  (2026-10-08; E3b). Nunca dicen «ninguno» ni «0 questions»: sería afirmar una ausencia que el dispositivo puede no
+  saber todavía (D402) o que un invitado no puede ver (D401).
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 

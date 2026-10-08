@@ -78,6 +78,42 @@ Sobre la foto (`relationIndex.snapshot(projectId)`):
 - `pendingRelations(snap)`: las escenas nombradas que no existen, con dónde.
 - `pageRelations(snap, pageId)`: lo que nombra una página (para el subrayado).
 - `indexPages(snap)`.
+- `pageFields(snap, pageId)` y `findFields(snap, nombre)`: los campos de las páginas (abajo).
+
+### Campos: «rótulo: valor» (E3b, v0.240)
+
+Una ficha de desglose importada de Coda es una tabla de dos columnas (`Shot Name | ERSO_105_027_010`, `Locacion Guion |
+Ambulancia | Ruta INT` con su link, `Fecha Rodaje | 06/03/2026`) y unos títulos con su texto (`Descripción`,
+`Consultas`). `src/relations/fields.ts` los lee de lo que ya leyó la búsqueda, sin escribir nada:
+
+- **Tabla de dos columnas:** cada fila cuya primera celda parece un rótulo (corta, con letras, no una oración) es un
+  campo, con cualquier rótulo; una celda vacía da un valor vacío. Para esto `BlockMeta` suma, en las tablas, `cells`
+  (fila y columna de cada unidad) y `cols`: las unidades solas no dicen dónde termina una fila. Las unidades de la
+  búsqueda no cambian (prueba). `CACHE_FORMAT` pasó a 2: lo guardado antes se relee una vez.
+- **Título** que dice entero un rótulo conocido («Consultas», «Open questions:»): el valor es lo de abajo hasta el
+  próximo título o hasta un renglón que es otro campo.
+- **Renglón** que empieza con un rótulo conocido y dos puntos («Consultas: ¿…?», «INT/EXT: INT»). Solo al principio:
+  «quedó una open question: …» o «Open question about…» no son campos.
+- **Rótulos conocidos** (`FIELD_LABELS`, comparados sin tildes ni mayúsculas y con la puntuación como espacio, `normLabel`):
+  `openQuestion` (Consultas, Open question(s), Pregunta abierta…), `set` (Locacion Guion, Decorado(s), Set(s)), `intExt`,
+  `shootDate` (Fecha Rodaje, Shoot date), `location` (Locacion Real, Location), `coords`, `description`, `shot` (Shot
+  Name), `vfxCat`. Un campo nuevo se suma ahí.
+- **Coordenadas:** las primeras de la página (grados con hemisferio, o un par decimal de 4 decimales o más con signo o
+  hemisferio; nunca «N°3925», una dirección, un año, un formato «1.7778, 2.3900» ni una hora), en `PageFields.coords`.
+  Un par decimal sin signo cuenta solo como valor de un campo de coordenadas (`coordsIn(text, true)`).
+
+Cada `FieldValue` trae el rótulo escrito, su clave normalizada, el valor como texto (un renglón por línea), los links del
+valor a páginas de la app (`{ pageId, text }`), el bloque y, en un título, dónde termina (para ir ahí con la sección
+resaltada). El índice de relaciones los calcula con cada lectura de la página (memo por contenido: no dependen de lo
+que existe en el proyecto) y la foto los trae en `snap.fields`, solo de las páginas que la persona ve y que tienen alguno.
+
+**Para E5:** `cardFields(snap, 'shootDate').filter((x) => fieldDate(x.field.text) === '2026-02-20')` da las fichas de
+ese día con su escena (`{ pageId, scene, field }`; `fieldDate` entiende `06/03/2026`, `6-3-2026`, `2026-03-06`).
+`cardFields` es `findFields` solo con lo de adentro de una escena (`roles.get(id)?.partOf?.kind === 'scene'`): en ERSO
+`findFields(snap, 'shootDate')` trae además 102 copias de fichas pegadas adentro de los planes de cada día, que
+contarían doble; `fieldValues(pageFields(snap, id),
+'openQuestion')` da la pregunta abierta de una ficha; `emptyValue` dice si un valor es «—», «n/a» o vacío; una lista de
+rótulos propia (`['Consultas Cat']`) también sirve como nombre.
 
 ## 4. El tipo de cada página (E2: D368, D369)
 
@@ -175,6 +211,13 @@ segundo sin escribir; la más grande, 90–270 ms.
   progreso con su `data-tip` aparece y se va solo, y la foto de relaciones queda completa.
 - `src/relations/kind.test.ts` y `kindCarry.test.ts`: proyectos sin episodios (D383) y `graph: false` al exportar e
   importar (D387).
+- `src/relations/fields.test.ts` (E3b): una ficha con la estructura exacta del HTML de BD Main pasada por la
+  importación de Coda de la app y escrita con el editor real (tabla con celda vacía, link al decorado, celda con un
+  `div` adentro, títulos *Descripción* y *Consultas*); las unidades de la búsqueda iguales con y sin `cells`; renglones
+  «Rótulo:»; lo que no es un campo («open question» en el medio, sin dos puntos, un título más largo, una tabla de tres
+  columnas, una oración en la primera celda); coordenadas y sus trampas; fechas y valores vacíos. Las de la vista, en
+  `liveView.test.ts` (también la caché: los campos vuelven sin abrir documentos y el formato 1 se relee) y las del
+  render, en `liveHeader.test.tsx`.
 
 **Arnés para mirarlo a mano** (solo desarrollo, no se publica): `src/dev/relaciones-motor.html` con vite
 (`/src/dev/relaciones-motor.html?slow=25&theme=dark`). Arma un proyecto inventado de unas 900 páginas (desglose por
@@ -222,6 +265,18 @@ aparece (el visitante no tiene tipos de página, D381). La del día es de E5.
   tienen un campo o una celda que dice entero «No VFX» o «VFX…: No VFX» (una frase que lo dice de pasada no cuenta); si
   son algunas, «No VFX in 1 of 4 cards» (D395). Quien no ve el proyecto entero lee «No report section you can see»
   (D401). Un plan de un día en que la escena ya tiene sección no repite ese día como «planned».
+
+**Campos de las fichas (E3b, v0.240; sección 3, «Campos»).** En la escena, el renglón de arriba empieza con INT/EXT
+de su desglose (los valores distintos, «INT-EXT/NOCHE»); *Breakdown* suma los **decorados** (campo *Locacion Guion* /
+*Sets* de la escena y sus fichas: chip sin relleno que lleva a la página del decorado si la persona la ve, o el texto
+del link si no); **Open question** muestra la primera pregunta abierta del desglose, su primer renglón, con «· in 2
+cards» si varias fichas la comparten o «· PRUEBA_105_027_010» (su *Shot Name*), y «· +1» si hay más; tocarla abre la
+ficha con la pregunta resaltada. La etapa *Breakdown* suma «· 2 questions», y cada ficha se titula con su *Shot Name*,
+muestra su *Descripción* y su «Open question: …». En la locación, **Sets** (el campo de la locación y las páginas
+sueltas cuyo campo *Locacion Real* la nombra por su nombre o por un alias del registro que no comparte otra locación,
+`locationOf`; ya no van a «Also named in») y **Where** (las primeras coordenadas
+de la locación o de sus scoutings; lleva ahí). Las filas aparecen solo con valores: nunca dicen «ninguno», tampoco
+mientras el índice lee (D402).
 
 **Locación.** *Planned here* = escenas cuyo desglose la nombra; *Scouting* = las páginas de adentro, con sus fotos;
 *Shoot* = los días que la nombran en el título, con las escenas que tienen sección ese día y las secciones de arriba
@@ -283,6 +338,15 @@ escena ve sus fichas y nada de días, scoutings ni títulos de otras páginas (p
 - **D400** Lo de adentro de un día que no es su reporte dice «planeada», nunca filmada. Se revierte en `sceneLive`
   (`planMap`) y `sceneDays`.
 
+Campos de las fichas (E3b): **D419** tres formas (tabla de dos columnas con cualquier rótulo; título o renglón solo con
+rótulos conocidos); **D420** el valor de un título llega hasta el próximo título o un renglón que es otro campo;
+**D421** filas y columnas de las tablas en `BlockMeta`, `CACHE_FORMAT` 2; **D422** la pregunta abierta: la primera,
+agrupada por su primer renglón, y lleva a la ficha; **D423** decorados de la escena por el link del campo, con el texto
+del link si la página no se ve; **D424** decorados de la locación: páginas sueltas cuyo *Locacion Real* la nombra, fuera
+de «Also named in»; **D425** INT/EXT: todos los valores distintos (hasta 3); **D426** *Where*: solo las coordenadas, y
+lleva a donde están escritas; **D427** el extracto de una ficha: *Shot Name* y *Descripción*; **D428** las filas solo
+con valores, también mientras lee. Detalle en `Doc_Decisiones.md`.
+
 **Ganchos de desarrollo** (solo con `import.meta.env.DEV`, en el mismo efecto que `__shotdocsRelations`;
 `src/ui/devHooks.test.ts` cuida que no se pongan en otro lado y el build publicado no los trae):
 `window.__shotdocsDev = { tree, docs, projectId }` y `__shotdocsRelations.dump(name)` → `{ name, projectId, complete,
@@ -292,8 +356,7 @@ a vivo, E4).
 
 ### Lo que falta (anotado)
 
-- La **pregunta abierta** del desglose, los **decorados** (*Sets*), INT/EXT y las **coordenadas** de la locación
-  salen en la maqueta de campos de las fichas de Coda; el motor no lee campos. Hace falta una consulta de «campo:
-  valor» por ficha (E5 también la necesita para *Open questions for today*).
+- *Planned at* sigue saliendo de las locaciones que nombra el desglose (D393), no del campo *Locacion Real*; la
+  maqueta pone abajo «breakdown: «Estudio | Autos»», el valor crudo del campo. Ahora se podría con `fieldValues`.
 - Fotos por fuente y carrete de varias páginas (E8); la cabecera del día (E5).
 - `kind.ts` de E2: cuando E1 lo use, la cabecera lo toma solo (lee `registration.roles`).

@@ -1,6 +1,7 @@
 import type { IndexedContent, IndexInfo } from '../search/projectIndex';
 import type { PageRow } from '../sync/types';
 import { INDEX_PAGE_MIN, readPageRelations, type LinkTarget, type Mention, type PageRelations, type Section } from './pageRelations';
+import { fieldValues, readPageFields, type FieldName, type FieldValue, type PageFields } from './fields';
 import { buildRegistry, type Hit, type Registry } from './reader';
 import { registerProject, type PageRole, type Registration, type RegisterTree, type Stage } from './register';
 
@@ -25,6 +26,11 @@ export interface RelationSnapshot {
   registration: Registration;
   /** Las relaciones de cada página leída, visible y no excluida, en el orden de la barra lateral. */
   pages: Map<string, PageRelations>;
+  /**
+   * Los campos («rótulo: valor») y las coordenadas de esas mismas páginas, solo las que tienen alguno (`fields.ts`;
+   * consultas: `pageFields`, `findFields`).
+   */
+  fields: Map<string, PageFields>;
   /** Páginas visibles que el índice todavía no leyó. */
   unread: number;
   /** Todo leído y nada por bajar: lo que dice la foto es todo lo que la persona puede ver. */
@@ -37,6 +43,8 @@ interface Memo {
   rel: PageRelations;
   /** Lo reconocido por texto de unidad (para releer solo lo que cambió). */
   scans: Map<string, Hit[]>;
+  /** Los campos: dependen solo de lo leído (no de lo que existe en el proyecto). */
+  fields: PageFields | null;
 }
 
 export class RelationIndex {
@@ -112,6 +120,7 @@ export class RelationIndex {
       this.worldVersion++;
     }
     const pages = new Map<string, PageRelations>();
+    const fields = new Map<string, PageFields>();
     let unread = 0;
     let since = Date.now();
     const visible = this.source.pagesOf(projectId);
@@ -130,10 +139,12 @@ export class RelationIndex {
         const scans = new Map<string, Hit[]>();
         // Con lo mismo que existe, lo ya reconocido de esta página sirve (la clave incluye el episodio).
         const prev = memo && memo.key === key ? memo.scans : undefined;
-        memo = { content, key, scans, rel: readPageRelations(registry, content.units, content.meta, { ep: role?.ep ?? null, scans: { prev, next: scans } }, linkTarget) };
+        const pageFields = memo && memo.content === content ? memo.fields : readPageFields(content.units, content.meta);
+        memo = { content, key, scans, fields: pageFields, rel: readPageRelations(registry, content.units, content.meta, { ep: role?.ep ?? null, scans: { prev, next: scans } }, linkTarget) };
         this.memo.set(page.id, memo);
       }
       pages.set(page.id, memo.rel);
+      if (memo.fields) fields.set(page.id, memo.fields);
       if (Date.now() - since >= yieldMs) {
         await new Promise((resolve) => setTimeout(resolve, 0));
         since = Date.now();
@@ -142,7 +153,7 @@ export class RelationIndex {
     const ids = new Set(visible.map((p) => p.id));
     for (const id of this.memo.keys()) if (!ids.has(id)) this.memo.delete(id);
     const info = this.source.info(projectId);
-    this.snap = { projectId, registry, registration, pages, unread, complete: unread === 0 && !info.building && info.missing === 0 };
+    this.snap = { projectId, registry, registration, pages, fields, unread, complete: unread === 0 && !info.building && info.missing === 0 };
     this.revision++;
     for (const fn of this.listeners) fn();
   }
@@ -226,6 +237,35 @@ export function pendingRelations(snap: RelationSnapshot): { ref: string; pages: 
 /** Lo que nombra una página (para el subrayado de E6), si está leída y no excluida. */
 export function pageRelations(snap: RelationSnapshot, pageId: string): PageRelations | undefined {
   return snap.pages.get(pageId);
+}
+
+/** Los campos y las coordenadas de una página (si está leída, visible, no excluida y tiene alguno). */
+export function pageFields(snap: RelationSnapshot, pageId: string): PageFields | undefined {
+  return snap.fields.get(pageId);
+}
+
+/**
+ * Todas las páginas con un campo (por su nombre en `FIELD_LABELS` o una lista de rótulos), en el orden de la barra
+ * lateral, cada valor con su página. Por ejemplo, las fichas con una *Fecha Rodaje* (`fieldDate(field.text)`).
+ */
+export function findFields(snap: RelationSnapshot, name: FieldName | readonly string[]): { pageId: string; field: FieldValue }[] {
+  const out: { pageId: string; field: FieldValue }[] = [];
+  for (const [pageId, page] of snap.fields) for (const field of fieldValues(page, name)) out.push({ pageId, field });
+  return out;
+}
+
+/**
+ * Los campos de las **fichas** (lo de adentro de una escena), con su escena: como `findFields`, sin las copias de fichas
+ * que viven adentro de un día (un plan que pegó fichas) ni ninguna otra página. Para el día (E5): las fichas con una
+ * *Fecha Rodaje* o la pregunta abierta de las escenas de mañana.
+ */
+export function cardFields(snap: RelationSnapshot, name: FieldName | readonly string[]): { pageId: string; scene: string; field: FieldValue }[] {
+  const out: { pageId: string; scene: string; field: FieldValue }[] = [];
+  for (const { pageId, field } of findFields(snap, name)) {
+    const part = snap.registration.roles.get(pageId)?.partOf;
+    if (part?.kind === 'scene' && part.ref) out.push({ pageId, scene: part.ref, field });
+  }
+  return out;
 }
 
 /** Las páginas índice del proyecto (más de 20 escenas y locaciones distintas). */

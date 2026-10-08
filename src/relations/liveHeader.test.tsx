@@ -305,7 +305,9 @@ describe('ronda de corrección (auditoría de E3)', () => {
     click(byText(header(host)!, '.lh-stage', 'Breakdown'));
     const ex = header(host)!.querySelector('.lh-panel .lh-ex')!;
     expect(ex.querySelector('.src')!.textContent).toContain('From the breakdown of 105_027');
-    expect(ex.textContent!.split('PRUEBA_105_027_010 Ambulancia').length - 1).toBe(1);
+    // Con el campo Shot Name (E3b), el título es el plano, una sola vez.
+    expect(ex.querySelector('.tt-t')!.textContent).toBe('PRUEBA_105_027_010');
+    expect(ex.textContent!.split('PRUEBA_105_027_010').length - 1).toBe(1);
   });
 
   it('O5 y O6: el foco pasa al control nuevo al plegar y desplegar, con aria-expanded; las fotos sin tooltip repetido', async () => {
@@ -431,5 +433,68 @@ describe('sin cabecera', () => {
     act(() => root.unmount());
     roots.splice(roots.indexOf(root), 1);
     session.dispose();
+  });
+});
+
+describe('los campos de las fichas en la cabecera (E3b)', () => {
+  it('escena: INT/EXT arriba, los decorados al lado de las fichas y la pregunta abierta, que lleva a la ficha', async () => {
+    const { built, host } = await app('s027');
+    await until(() => header(host)?.textContent?.includes('Live'), 'la cabecera');
+    const lh = header(host)!;
+    expect(lh.querySelector('.lh-meta')!.textContent).toMatch(/^INT-EXT\/NOCHE · Episode 105 · also written/);
+    expect(lh.querySelector('.lh-meta [data-tip="INT/EXT from its breakdown"]')).not.toBeNull();
+    // Decorado: chip que lleva a su página.
+    const set = lh.querySelector<HTMLElement>('.lh-chip.set')!;
+    expect(set.textContent).toBe('Ambulancia | Ruta INT');
+    expect(set.closest('.lh-kv')!.querySelector('span')!.textContent).toBe('Breakdown');
+    // La pregunta: su primer renglón, en cuántas fichas y cuántas más.
+    const q = lh.querySelector<HTMLElement>('.lh-q')!;
+    expect(q.closest('.lh-kv')!.querySelector('span')!.textContent).toBe('Open question');
+    expect(q.textContent).toBe('¿Todo el interior de la ambulancia se filma en estudio o solo el vuelco? · in 2 cards · +1');
+    expect(lh.querySelectorAll('[title]').length).toBe(0);
+    // La etapa Desglose dice cuántas preguntas; cada ficha muestra su pregunta y su descripción (no la tabla).
+    expect(byText(lh, '.lh-stage', 'Breakdown')!.querySelector('.sv')!.textContent).toBe('2 cards · 2 questions');
+    click(byText(lh, '.lh-stage', 'Breakdown'));
+    const ex = header(host)!.querySelector('.lh-panel .lh-ex.has-q')!;
+    expect(ex.querySelector('.qq')!.textContent).toBe('Open question: ¿Todo el interior de la ambulancia se filma en estudio o solo el vuelco?');
+    expect(ex.querySelector('.tx')!.textContent).toBe('El fugitivo va acostado atrás; adelante, el chofer y el oficial forcejean.');
+    // Tocar la pregunta: la ficha, con la sección «Consultas» resaltada.
+    click(header(host)!.querySelector('.lh-q'));
+    expect(location.pathname).toBe(pagePath(built.ids.s027_010));
+    await until(() => host.querySelectorAll('.bn-block-outer.rel-flash').length > 0, 'el resaltado de la pregunta');
+    expect(host.querySelector('.bn-block-outer.rel-flash-first')!.textContent).toContain('Consultas');
+    // El decorado lleva a su página.
+    await go(built, 's027');
+    await until(() => header(host)?.querySelector('.lh-chip.set'), 'la cabecera otra vez');
+    click(header(host)!.querySelector('.lh-chip.set'));
+    expect(location.pathname).toBe(pagePath(built.ids.set_int));
+  });
+
+  it('locación: Sets con sus páginas (no en «Also named in») y Where con las coordenadas del scouting', async () => {
+    const { built, host } = await app('cenade');
+    await until(() => header(host)?.textContent?.includes('Live'), 'la cabecera');
+    const lh = header(host)!;
+    const rows = [...lh.querySelectorAll('.lh-col')[0].querySelectorAll(':scope > .lh-kv > span')].map((s) => s.textContent);
+    expect(rows).toEqual(['Planned here', 'Sets', 'Scouting', 'Where']);
+    expect([...lh.querySelectorAll('.lh-chip.set')].map((c) => c.textContent)).toEqual(['Ambulancia | Ruta EXT', 'Camioneta | Banquina']);
+    expect(lh.querySelector('.lh-also')?.textContent ?? '').not.toContain('Ambulancia');
+    const where = lh.querySelector<HTMLElement>('.lh-where')!;
+    expect(where.textContent).toBe(`34° 40' 12.5" S 58° 27' 03.1" W`);
+    expect(where.dataset.tip).toBe('Written in «Tech scout 06/01»: opens it there');
+    click(where);
+    expect(location.pathname).toBe(pagePath(built.ids.scout));
+  });
+
+  it('sin campos no hay filas (nada afirma una ausencia); al escribir una pregunta en una ficha aparece sola', async () => {
+    const { d, built, host } = await app('s026');
+    await until(() => header(host)?.textContent?.includes('Live'), 'la cabecera');
+    expect(header(host)!.querySelector('.lh-q')).toBeNull();
+    expect(header(host)!.querySelector('.lh-chip.set')).toBeNull();
+    await writeBlocks(d, built.ids.s026_010, [{ p: 'Locación real: CENADE' }, { table: [['Consultas', '¿Se ve el cartel de la ruta?'], ['Locacion Guion', 'Ruta | Cartel']] }]);
+    await until(() => header(host)?.querySelector('.lh-q'), 'la pregunta nueva');
+    expect(header(host)!.querySelector('.lh-q')!.textContent).toBe('¿Se ve el cartel de la ruta? · PRUEBA_105_026_010');
+    // Un decorado sin página: chip que no lleva a ningún lado.
+    expect(header(host)!.querySelector('.lh-chip.set.static')!.textContent).toBe('Ruta | Cartel');
+    expect(header(host)!.querySelector('.lh-chip.set.static')!.tagName).toBe('SPAN');
   });
 });

@@ -140,6 +140,13 @@ export interface BlockMeta {
   media?: string[];
   /** Los links a páginas de la app en sus unidades: la unidad (índice entre todas), dónde y a qué página. */
   links?: { unit: number; start: number; end: number; pageId: string }[];
+  /**
+   * Una tabla: dónde cae cada unidad (índice entre todas) en sus filas y columnas, y cuántas columnas tiene. Con esto se
+   * leen los campos «rótulo | valor» de una ficha (`src/relations/fields.ts`): las unidades solas no dicen dónde
+   * termina una fila, y una celda vacía no da unidad.
+   */
+  cells?: { unit: number; row: number; col: number }[];
+  cols?: number;
 }
 
 const MEDIA_SCHEME = 'sdmedia://';
@@ -191,14 +198,48 @@ function visitYNode(node: Y.XmlElement | Y.XmlText | Y.XmlHook, out: SearchUnit[
       if (child.nodeName === 'heading') extra.level = Math.max(1, Number(child.getAttribute('level')) || 1);
       collectMedia(child, extra);
     }
-    collectYText(child, blockId, out, extra);
+    if (extra && child.nodeName === TABLE) collectTable(child, blockId, out, extra);
+    else collectYText(child, blockId, out, extra);
     for (const field of ['caption', 'name'] as const) {
       const value = child.getAttribute(field) as unknown;
       if (typeof value === 'string' && keep(value)) out.push({ blockId, field, text: value });
     }
   }
-  if (extra && (extra.level > 0 || extra.media || extra.links)) meta!.push(extra);
+  if (extra && (extra.level > 0 || extra.media || extra.links || extra.cells)) meta!.push(extra);
   if (nested) visitYNode(nested, out, meta);
+}
+
+const TABLE = 'table';
+
+/**
+ * Una tabla, celda por celda: las mismas unidades que `collectYText` (en el mismo orden), y además la fila y la columna
+ * de cada una. Lo que no es una fila (no debería haber) se lee como antes.
+ */
+function collectTable(table: Y.XmlElement, blockId: string, out: SearchUnit[], extra: BlockMeta): void {
+  const cells: NonNullable<BlockMeta['cells']> = [];
+  let row = 0;
+  let cols = 0;
+  for (const r of table.toArray()) {
+    if (!(r instanceof Y.XmlElement)) continue;
+    if (r.nodeName !== 'tableRow') {
+      collectYText(r, blockId, out, extra);
+      continue;
+    }
+    let col = 0;
+    for (const c of r.toArray()) {
+      if (!(c instanceof Y.XmlElement)) continue;
+      const before = out.length;
+      collectYText(c, blockId, out, extra);
+      for (let i = before; i < out.length; i++) cells.push({ unit: i, row, col });
+      col += Math.max(1, Number(c.getAttribute('colspan')) || 1);
+    }
+    cols = Math.max(cols, col);
+    row++;
+  }
+  if (cells.length) {
+    extra.cells = cells;
+    extra.cols = cols;
+  }
 }
 
 function collectMedia(el: Y.XmlElement, extra: BlockMeta): void {

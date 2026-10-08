@@ -7,7 +7,7 @@ import { useCurrentProject } from '../ui/project';
 import { existingRelationsSession } from '../ui/relationsUi';
 import { goToPlace } from './goToPlace';
 import { useLiveOpen, type FoldKind } from './liveFold';
-import { locationLive, sceneLive, type DayRef, type Excerpt, type LiveSource, type LocationLive, type PageChip, type PhotoRef, type Place, type SceneLive } from './liveView';
+import { locationLive, sceneLive, type DayRef, type Excerpt, type LiveSource, type LocationLive, type OpenQuestion, type PageChip, type PhotoRef, type Place, type SceneLive, type SetRef } from './liveView';
 import './liveHeader.css';
 
 // La cabecera viva de una escena o una locación (Docs/Doc_Relaciones.md, sección 10; diseño S4 «D»): entre el título y
@@ -63,6 +63,7 @@ const PATHS = {
   down: 'm6 9 6 6 6-6',
   go: 'M7 17 17 7M8 7h9v9',
   photo: 'M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM9 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM21 16l-5-5-9 8',
+  set: 'M4 21V4a1 1 0 0 1 1-1h10l4 4v14M2 21h20M14 12h.01',
 } as const;
 
 function Ic({ name, small }: { name: keyof typeof PATHS; small?: boolean }) {
@@ -138,6 +139,51 @@ function Chip({ kind, children, onClick, tip, mono }: { kind: 'scene' | 'loc' | 
       <Ic name={kind === 'page' ? 'page' : kind} />
       <span className="lh-chip-t">{children}</span>
     </button>
+  );
+}
+
+/** Un decorado: lleva a su página si la persona la ve; si no (solo el texto del campo), no lleva a ningún lado. */
+function SetChip({ set }: { set: SetRef }) {
+  if (!set.pageId) {
+    return (
+      <span className="lh-chip set static">
+        <Ic name="set" />
+        <span className="lh-chip-t">{set.title}</span>
+      </span>
+    );
+  }
+  const id = set.pageId;
+  return (
+    <button className="lh-chip set" onClick={() => navigate(pagePath(id))}>
+      <Ic name="set" />
+      <span className="lh-chip-t">{set.title}</span>
+    </button>
+  );
+}
+
+const QUESTION_CHARS = 120;
+const short = (text: string, n: number) => (text.length > n ? `${text.slice(0, n - 1).replace(/\s+\S*$/, '')}…` : text);
+
+/**
+ * La pregunta abierta del desglose (la primera), como la maqueta: su primer renglón, de qué ficha es («· ERSO_105_027_010»
+ * o «· in 2 cards») y cuántas más hay («· +1»). Lleva a la ficha, con la pregunta resaltada.
+ */
+function QuestionRow({ questions, tr }: { questions: OpenQuestion[]; tr: Translate }) {
+  const go = useGo();
+  const q = questions[0];
+  const where = q.cards.length > 1 ? tr('live.inCards', { count: q.cards.length }) : q.cards.length ? q.cards[0].shot : tr('live.questionOnScene');
+  return (
+    <div className="lh-kv">
+      <span>{tr('live.openQuestion')}</span>
+      {/* Un solo botón (un párrafo): un botón dentro del renglón no deja que «· in 2 cards» siga en la misma línea. */}
+      <button className="lh-q" onClick={() => go(q.place)} data-tip={tr(questions.length > 1 ? 'live.questionMoreTip' : 'live.questionTip')}>
+        <span className="lh-qt">{short(q.text.split('\n')[0], QUESTION_CHARS)}</span>{' '}
+        <span className="lh-via">
+          · {where}
+          {questions.length > 1 && <> · +{questions.length - 1}</>}
+        </span>
+      </button>
+    </div>
   );
 }
 
@@ -249,7 +295,7 @@ function ExcerptCard({ ex, tag, tr, code }: { ex: Excerpt; tag: string; tr: Tran
   // Una ficha: el origen dice de qué escena es y el título va una sola vez (como la maqueta).
   const from = ex.kind === 'card' && code ? tr('live.fromBreakdown', { code }) : ex.day ? ex.day.label : ex.pageTitle;
   return (
-    <button className="lh-ex" onClick={() => go(ex.place)} data-tip={tr('live.goTip')}>
+    <button className={`lh-ex${ex.question ? ' has-q' : ''}`} onClick={() => go(ex.place)} data-tip={tr('live.goTip')}>
       <span className="src">
         <span className={`tag ${tag}`}>{ex.kind === 'card' ? tr('live.breakdown') : tag === 'scout' ? tr('live.scouting') : tag === 'shoot' ? tr('live.shoot') : tag === 'plan' ? tr('live.plan') : tr('live.breakdown')}</span>
         <span>{from}</span>
@@ -266,6 +312,11 @@ function ExcerptCard({ ex, tag, tr, code }: { ex: Excerpt; tag: string; tr: Tran
         </span>
       </span>
       {ex.text && <span className="tx">{ex.text}</span>}
+      {ex.question && (
+        <span className="qq">
+          <b>{tr('live.openQuestionLine')}</b> {ex.question}
+        </span>
+      )}
       {ex.photos.length > 0 && (
         <span className="lh-thumbs ex-thumbs">
           {ex.photos.slice(0, 3).map((p) => (
@@ -421,7 +472,14 @@ function SceneHeader({ v, pages, partial }: { v: SceneLive; pages: number; parti
       : absent(tr('live.noReport'));
   const bdExtra = v.breakdown.filter((e) => e.kind !== 'card').length;
   const defs = [
-    { key: 'breakdown' as const, name: tr('live.breakdown'), has: v.breakdown.length > 0, sum: v.cards.length ? tr('live.cards', { count: v.cards.length }) + (bdExtra ? ` · ${tr('live.mentions', { count: bdExtra })}` : '') : bdExtra ? tr('live.mentions', { count: bdExtra }) : absent(tr('live.noCards')) },
+    {
+      key: 'breakdown' as const,
+      name: tr('live.breakdown'),
+      has: v.breakdown.length > 0,
+      sum:
+        (v.cards.length ? tr('live.cards', { count: v.cards.length }) + (bdExtra ? ` · ${tr('live.mentions', { count: bdExtra })}` : '') : bdExtra ? tr('live.mentions', { count: bdExtra }) : absent(tr('live.noCards'))) +
+        (v.questions.length ? ` · ${tr('live.questions', { count: v.questions.length })}` : ''),
+    },
     { key: 'scouting' as const, name: tr('live.scouting'), has: v.scouting.length > 0, sum: scoutSum },
     { key: 'shoot' as const, name: tr('live.shoot'), has: v.shoot.length > 0 || v.plannedDays.length > 0, sum: shootSum },
   ];
@@ -481,6 +539,12 @@ function SceneHeader({ v, pages, partial }: { v: SceneLive; pages: number; parti
       <div className="lh-id">
         <Badge kind="scene" />
         <span className="lh-meta">
+          {v.intExt.length > 0 && (
+            <>
+              <span data-tip={tr('live.intExtTip')}>{v.intExt.slice(0, 3).join(', ')}</span>
+              {(v.episode || v.aliases.length > 0) && ' · '}
+            </>
+          )}
           {v.episode && tr('live.episode', { ep: v.episode })}
           {v.aliases.length > 0 && (
             <>
@@ -521,8 +585,17 @@ function SceneHeader({ v, pages, partial }: { v: SceneLive; pages: number; parti
               ) : (
                 <span className="lh-none">{absent(tr('live.noCards'))}</span>
               )}
+              {v.sets.length > 0 && (
+                <>
+                  <span className="lh-sep">·</span>
+                  {v.sets.map((s) => (
+                    <SetChip key={s.pageId ?? s.title} set={s} />
+                  ))}
+                </>
+              )}
             </div>
           </div>
+          {v.questions.length > 0 && <QuestionRow questions={v.questions} tr={tr} />}
           <div className="lh-kv">
             <span>{tr('live.scouting')}</span>
             <div>
@@ -710,6 +783,16 @@ function LocationHeader({ v, pages, partial }: { v: LocationLive; pages: number;
               )}
             </div>
           </div>
+          {v.sets.length > 0 && (
+            <div className="lh-kv">
+              <span>{tr('live.sets')}</span>
+              <div>
+                {v.sets.map((s) => (
+                  <SetChip key={s.pageId ?? s.title} set={s} />
+                ))}
+              </div>
+            </div>
+          )}
           <div className="lh-kv">
             <span>{tr('live.scouting')}</span>
             <div>
@@ -724,6 +807,16 @@ function LocationHeader({ v, pages, partial }: { v: LocationLive; pages: number;
               )}
             </div>
           </div>
+          {v.where && (
+            <div className="lh-kv">
+              <span>{tr('live.where')}</span>
+              <div>
+                <button className="lh-where mono" onClick={() => go(v.where!.place)} data-tip={tr('live.whereTip', { page: v.where.pageTitle })}>
+                  {v.where.text}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
         <div className="lh-col">
           <div className="lh-col-h">{tr('live.shoot')}</div>

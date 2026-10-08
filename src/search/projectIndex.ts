@@ -88,7 +88,8 @@ export interface CachedEntry {
 }
 
 /** Cambia si cambia lo que se extrae de un documento: lo guardado con otro formato no se usa. */
-export const CACHE_FORMAT = 1;
+// 2: `BlockMeta.cells` y `cols` (las filas y columnas de una tabla, para los campos de una ficha).
+export const CACHE_FORMAT = 2;
 
 /** Dónde se guarda lo leído (la base local, `indexCache.ts`). Cualquier error se ignora: es solo un atajo. */
 export interface IndexCache {

@@ -158,6 +158,8 @@ const COMMENT_BOX_KEPT = '0.229';
 const INDEX_READING = '0.237';
 /** La cabecera viva de escena y locación (relaciones en vivo, E3): la versión se pone al publicar. */
 const LIVE_HEADER = '0.238';
+/** Los campos de las fichas en la cabecera viva (pregunta abierta, decorados, INT/EXT, coordenadas; E3b). */
+const LIVE_FIELDS = '0.240';
 /** Exportar una rama o un proyecto como PDF (P.22, Doc_Exportar.md, entrega 1): la versión se pone al publicar. */
 const EXPORT_PDF = '0.122';
 /** Exportar como zip (P.22, Doc_Exportar.md, entrega 2): la versión se pone al publicar. */
@@ -306,6 +308,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.liveHeader.text',
     words: ['scene', 'escena', 'location', 'locación', 'shot at', 'filmada', 'scouting', 'breakdown', 'desglose', 'header', 'cabecera', 'related', 'relacionado'],
     since: LIVE_HEADER,
+  },
+  {
+    id: 'liveHeaderFields',
+    section: 'find',
+    title: 'help.liveHeaderFields.title',
+    text: 'help.liveHeaderFields.text',
+    words: ['open question', 'pregunta abierta', 'consultas', 'sets', 'decorados', 'int/ext', 'where', 'coordenadas', 'coordinates', 'card', 'ficha', 'campo', 'field'],
+    since: LIVE_FIELDS,
   },
   { id: 'projectsArchive', section: 'pages', title: 'help.projectsArchive.title', text: 'help.projectsArchive.text', since: BEFORE_HELP },
   { id: 'projectsDrive', section: 'pages', title: 'help.projectsDrive.title', text: 'help.projectsDrive.text', when: 'admin', since: BEFORE_HELP },
