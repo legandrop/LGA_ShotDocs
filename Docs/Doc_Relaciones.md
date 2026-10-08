@@ -358,5 +358,103 @@ a vivo, E4).
 
 - *Planned at* sigue saliendo de las locaciones que nombra el desglose (D393), no del campo *Locacion Real*; la
   maqueta pone abajo «breakdown: «Estudio | Autos»», el valor crudo del campo. Ahora se podría con `fieldValues`.
-- Fotos por fuente y carrete de varias páginas (E8); la cabecera del día (E5).
+- Fotos por fuente y carrete de varias páginas (E8). La cabecera del día: sección 11 (E5).
 - `kind.ts` de E2: cuando E1 lo use, la cabecera lo toma solo (lee `registration.roles`).
+
+## 11. El día de rodaje, *Tomorrow* y *Prepare tomorrow's report* (E5, v0.241)
+
+Un reporte del día (lo que el registro dice que es un día, sección 4) muestra la misma cabecera viva, con lo del día
+(maqueta `c_dia.html`), y en el día anterior la tarjeta *Tomorrow* prepara el reporte de mañana (§5 de la propuesta,
+`d_escribir.html`). Todo es interfaz salvo *Prepare*, que es lo único de las relaciones que escribe en un documento.
+
+| Pieza | Archivo |
+|---|---|
+| Qué se muestra (puro, sobre la foto del índice): filas, plan, preguntas, Tomorrow, el título que usa el proyecto | `src/relations/dayLive.ts` (`dayLive`, `planOf`, `openQuestions`, `dayList`, `headingStyleFor`, `linkTargetOf`) |
+| La cabecera del día y la tarjeta | `src/relations/DayHeader.tsx` (usa las piezas de `LiveHeader.tsx`), `liveHeader.css` (`lh-facts`, `lh-mrow`, `lh-tomorrow`, `lh-picker`) |
+| Lo ajustado a mano en la lista de mañana (por dispositivo) | `src/relations/tomorrowPlan.ts` (`shotdocs.tomorrow` en `localStorage`) |
+| Escribir: preparar, deshacer, juntar repetidos | `src/relations/prepareDay.ts` (se baja aparte, con el editor) |
+| En el editor del reporte: el título de la escena y la pregunta abierta | `src/relations/dayDecorations.ts` (decoraciones; `PageEditor.tsx` las registra) |
+| Textos y ayuda | `src/i18n/relations.ts` (`day.*`); ayuda `liveDay` (since 0.241) |
+
+**La cabecera.** Renglón de arriba: *Shoot day*, la fecha larga, la locación del título («per the day title», D398) y el
+día anterior y el siguiente (rótulo corto: «Día 58», o la fecha si el título no tiene número de día, con el título
+entero en el tooltip; en el teléfono las herramientas bajan de renglón y *Live*/*Collapse* quedan a la vista). *Scenes of the day*: una fila por sección de escena del reporte (la más externa de cada
+escena, con su parte), con el título de la escena en vivo, sus fotos y un estado: **shot** (algo escrito o fotos
+debajo), **prepared** (la sección está y sigue vacía), **shot · not in plan** (hay plan y no la nombra); las secciones
+de arriba sin número con fotos («Plates ambulancia», con aviso, llevan a la sección) salvo la **sección general** («Info general», o la primera de
+arriba sin número), cuyas fotos son del día y van primero (lo mismo en el *Shoot* de la locación); las escenas del plan
+sin sección,
+**planned · no section** (D400). *Open questions* (hasta 3, de las fichas de sus escenas, con la ficha y la categoría),
+*Named in the text* y *Plan* (de dónde sale). Tira de fotos por sección. Plegado por tipo `day`: en el teléfono arranca
+en un renglón («CENADE · 2 scenes · 7 photos · 2 open questions»); mientras lee, sin ceros (D402).
+
+**El plan de un día** (`planOf`): lo de adentro del día que no es el reporte (la página *Plan*, D400), en el orden en
+que nombra las escenas → si no, las fichas con *Fecha Rodaje* igual a la fecha del título (`cardFields`, sin las copias
+de fichas pegadas en los planes, más la página de la escena si tiene la fecha), por número → si no, nada.
+
+***Tomorrow*.** El día siguiente (por fecha entre los días que la persona ve) con su plan. La lista se ajusta: sacar (×)
+o *Add scene* (selector por número, `5027`, `105-027`, o por título); lo ajustado se guarda en el dispositivo como
+diferencia con el plan, así si el plan cambia se sigue aplicando. Sin permiso de editar mañana, la tarjeta lo dice y
+no tiene el botón. Si el reporte de mañana tiene títulos repetidos vacíos (dos dispositivos), lo avisa.
+
+***Prepare tomorrow's report*** (`prepareReport`):
+
+1. Si el reporte de mañana no está entero en el dispositivo, intenta bajarlo 8 s; si no, no hace nada y lo avisa. Si
+   tiene contenido que esta versión no conoce, tampoco (`findUnknownContent`).
+2. Lee el documento en el momento (no la foto del índice) con el mismo lector: una escena ya tiene sección si un título
+   la nombra de cualquier forma («Escena 105_029a», «5-29», un link).
+3. Agrega al final (antes del renglón vacío de cierre, si hay), por cada escena que no tiene: un título con la palabra
+   y el nivel que usa el proyecto (`headingStyleFor`: mañana, hoy y los días de antes; si ninguno, «Escena»/«Scene» y
+   el nivel de los títulos de mañana) y el número como link a la escena (`/p/<id>`, marca `link`), y un renglón vacío.
+   No copia el título de la escena. Usa un editor sin pantalla sobre el documento: primero en el dispositivo, después
+   sube.
+4. Lleva al reporte de mañana con lo agregado resaltado y avisa «Día 60 · added 2 sections · 105_029 already had
+   one» (y las escenas sin una página que la persona ve), con *Undo*. Ir a un lugar (también los extractos de E3) sigue
+   el lugar unos segundos mientras la página termina de cargar las fotos de arriba, hasta que la persona toca o
+   desplaza (`keepInView` en `placeFlash.ts`): en un día largo con fotos, el lugar quedaba miles de píxeles abajo.
+
+*Undo* saca cada título agregado con su renglón si siguen iguales y vacíos; uno con algo escrito debajo (o bloques
+nuevos, o el título cambiado) queda, y el aviso lo dice. Si lo agregado ya salió del dispositivo (el `syncedSV` de la
+página tiene algo de este autor posterior a lo de antes de preparar, o hay una subida en camino), saca **solo los
+títulos** y el aviso dice que quedan los renglones: otro dispositivo pudo recibirlo y estar escribiendo en ese renglón
+sin que llegue todavía (D437). *Undo* y la limpieza de repetidos **borran directo en el Y.Doc**: exactamente el
+contenedor de cada bloque, por su id, verificado en el momento (mismo id, mismo texto, vacío), en una transacción; si
+la estructura no es la esperada (un título movido adentro de otro bloque), no borran nada y avisan. Con el editor
+(`removeBlocks`), y-prosemirror reutilizaba contenedores y borraba el del renglón donde otro escribía, cuando la sección
+no era la última (R1 y R2 de la re-verificación de la auditoría). Agregar sí va por el editor: solo inserta. Preparar de nuevo solo agrega lo que falta y nunca toca lo
+escrito.
+
+**Dos dispositivos a la vez, sin red (D436).** Probado con dos Y.Doc (`prepareDay.test.ts`): Yjs no funde dos títulos
+insertados por separado, así que al juntarse queda cada escena dos veces, en el mismo orden en los dos. Solo cuenta ese
+par (dos títulos con la forma de *Prepare*): una sección escrita a mano («Escena 105_029a») nunca hace sacar nada. Nada se pierde:
+lo escrito debajo de cualquiera de las copias queda. La cabecera cuenta una sola fila. *Prepare* de nuevo (en
+cualquiera de los dos) lo resuelve: de una escena con otra sección, saca los títulos preparados y vacíos; si todas son
+preparadas y vacías, deja la primera. Saca **solo el título** (el renglón vacío queda en blanco): si alguien escribe
+sin red en esa copia mientras otro la saca, su texto no se pierde con el bloque (medido); con varias escenas puede quedar
+debajo de la última sección de la tanda y no de la suya. Nunca se limpia solo: solo al tocar *Prepare*.
+
+**En el editor del reporte** (`dayDecorations.ts`). Al lado del link de un título que lleva a una escena, su título en
+vivo (« · La camioneta frena en la banquina»); debajo, la primera pregunta abierta de su desglose con la ficha y la
+categoría (tocarla abre la ficha). Vale para cualquier título de un reporte cuyo link lleva a una escena (no hay marca
+en el documento de «preparado»). Son decoraciones de ProseMirror: no están en el Y.Doc, no se copian, no se imprimen
+(`@media print`); se vuelven a leer con cada foto del índice. Un invitado que no ve las fichas no ve la pregunta.
+
+**Una versión vieja.** Lo escrito son títulos, párrafos y la marca `link`, de siempre: una versión vieja lo abre igual
+(prueba con el esquema anterior en `prepareDay.test.ts`). No sube `min_app_version`.
+
+**Pruebas.** `dayLive.test.ts` (filas, plan por página *Plan* y por desglose, copias de fichas en otro día, «prepared»,
+repetidos, título del proyecto, *Prepare* sobre el reporte de verdad con su *Undo*, reporte sin bajar);
+`prepareDay.test.ts` (solo agrega, no duplica, no pisa, otras formas del número, *Undo* con y sin texto, esquema
+anterior, dos dispositivos: repetidos, los dos escribieron, los dos limpian a la vez, el que escribe mientras otro
+limpia); `prepareCollab.test.ts` (dos Y.Doc: título a mano, *Undo* y limpieza con una, dos y tres secciones, estructura inesperada); `prepareSync.test.ts` (dos y tres dispositivos con el servidor de prueba); `dayHeader.test.tsx` (la app montada: cabecera, quitar de la lista, *Prepare* que escribe solo en mañana y no
+en hoy, aviso y *Undo*, decoraciones en el editor, teléfono plegado sin ceros, invitado sin el botón). Arnés:
+`src/dev/cabecera-viva.html?page=d59&days=1` (el proyecto sintético con fechas en las fichas y el Día 60 sin plan).
+
+**Decisiones:** D429–D445 en `Doc_Decisiones.md`.
+
+### Lo que falta (E5)
+
+- Sin día siguiente no hay tarjeta: crear el reporte de mañana desde ahí (con *New day report*) y prepararlo.
+- *Assign* en una sección sin número (E7) y la barra *Today* sobre el teclado en el teléfono (E6).
+- El link del título preparado se ve como un link, no como la ficha-chip de la maqueta (la ficha es de E6/E7).
+- *Undo* vive en el aviso (15 s); después, se borra a mano.

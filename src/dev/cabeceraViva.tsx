@@ -6,6 +6,8 @@
 //   /src/dev/cabecera-viva.html?page=s027        la escena 105_027 (o cenade, d59, s026…)
 //   &collapsed=1                                   con la sección del día 59 colapsada para todos
 //   &ronda=1 / &lento=1                            casos de la auditoría / índice que nunca termina
+//   &days=1                                        el día de rodaje y Tomorrow (E5): ?page=d59&days=1
+//   &largo=1 / &lentofotos=1                       el Día 60 largo con fotos grandes / fotos que tardan en llegar
 //   window.__cabecera = { listo, ids, ir(clave) }
 import { createRoot } from 'react-dom/client';
 import '@blocknote/core/fonts/inter.css';
@@ -20,7 +22,7 @@ import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
-import { buildProject, writeBlocks } from '../relations/fixtures/proyectoSintetico';
+import { buildProject, writeBlocks, type Block } from '../relations/fixtures/proyectoSintetico';
 import { Shell } from '../ui/Workspace';
 import { SHARED_COLLAPSE_MAP } from '../ui/collapseEditor';
 import { unitsFromYDoc } from '../search/extract';
@@ -57,11 +59,13 @@ const PALETTES = [
   ['#5a4a2f', '#d9b36b', '#fbf1d9'],
 ];
 let count = 0;
-async function drawPhoto(label: string): Promise<Blob> {
+async function drawPhoto(label: string, w = 900, h = 600): Promise<Blob> {
   const c = document.createElement('canvas');
-  c.width = 900;
-  c.height = 600;
-  const g = c.getContext('2d')!;
+  c.width = w;
+  c.height = h;
+  const g0 = c.getContext('2d')!;
+  g0.scale(w / 900, h / 600);
+  const g = g0;
   const [a, b, light] = PALETTES[count++ % PALETTES.length];
   const grad = g.createLinearGradient(0, 0, 900, 600);
   grad.addColorStop(0, a);
@@ -90,15 +94,31 @@ async function main() {
   // dibujada, en el editor y en la cabecera (las dos piden la dirección a `resolve`).
   const drawn = new Map<string, string>();
   const resolve = d.media.resolve.bind(d.media);
-  d.media.resolve = (url: string, pageId?: string) => (drawn.has(url) ? Promise.resolve(drawn.get(url)!) : resolve(url, pageId));
+  // `?lentofotos=1`: cada foto tarda en llegar (0,4 a 2 s), como en un teléfono con mala señal: la página crece mientras
+  // tanto (para probar que ir a un lugar lo sigue hasta que termina de cargar, B3 de la auditoría de E5).
+  const slow = new URLSearchParams(location.search).get('lentofotos') === '1';
+  const wait = () => new Promise((r) => setTimeout(r, slow ? 400 + Math.random() * 1600 : 0));
+  d.media.resolve = (url: string, pageId?: string) => (drawn.has(url) ? wait().then(() => drawn.get(url)!) : resolve(url, pageId));
   await d.engine.syncNow();
-  const built = await buildProject(d, async (label, pageId) => {
-    const blob = Object.assign(await drawPhoto(label), { name: `${label.replace(/\s+/g, '_')}.jpg` });
+  const params = new URLSearchParams(location.search);
+  // `?days=1`: lo del día de rodaje (E5): fechas en las fichas, Día 58 y el Día 60 sin página Plan (como la maqueta).
+  const addPhoto = async (label: string, pageId: string, w?: number, h?: number) => {
+    const blob = Object.assign(await drawPhoto(label, w, h), { name: `${label.replace(/\s+/g, '_')}.jpg` });
     const url = await d.media.add(pageId, blob as Blob & { name: string });
     drawn.set(url, URL.createObjectURL(blob));
     return url.replace('sdmedia://', '');
-  });
-  const params = new URLSearchParams(location.search);
+  };
+  const built = await buildProject(d, (label, pageId) => addPhoto(label, pageId), { days: params.get('days') === '1' });
+  // `?largo=1`: el Día 60 largo, con 24 fotos grandes arriba (como un día de ERSO): después de Prepare, lo agregado
+  // queda al final, miles de píxeles abajo.
+  if (params.get('largo') === '1') {
+    const blocks: Block[] = [{ h: 1, text: 'Info general:' }, { p: 'Llamado 7:00. Lluvia a la tarde.' }];
+    for (let i = 1; i <= 24; i++) blocks.push({ photo: await addPhoto(`D60 grande ${i}`, built.ids.d60, 2400, 1600) });
+    blocks.push({ h: 1, text: 'Escena 105_029a' }, { p: 'Primer plano del fugitivo, luz de atardecer.' });
+    for (let i = 1; i <= 6; i++) blocks.push({ photo: await addPhoto(`D60 029 ${i}`, built.ids.d60, 2400, 1600) });
+    await writeBlocks(d, built.ids.d60, blocks);
+    await d.engine.syncNow();
+  }
   // `?ronda=1`: los casos de la auditoría de la v0.238 (una escena con fichas mezcladas, un día con dos locaciones, el
   // plan de un día en que la escena ya tiene sección).
   if (params.get('ronda') === '1') {

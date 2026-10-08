@@ -119,6 +119,19 @@ reorganización de ERSO esperan a que existan): desde D416 el título no da alia
 D417). Lo mismo con los decorados: los 3 cuyo *Locacion Real* dice «Estudio» no salen en *Sets* de `La Arenera
 (estudio)` (auditoría de la v0.240, O10).
 
+**Anotado en la v0.241 (relaciones en vivo, el día y *Prepare*):** (1) sin día siguiente no hay tarjeta *Tomorrow*:
+crear el reporte de mañana desde ahí (*New day report*) y prepararlo en un paso; (2) *Assign* en una sección sin número
+(E7) y la barra *Today* sobre el teclado (E6); (3) el link del título preparado se ve como link, no como la ficha-chip de
+la maqueta (E6/E7); (4) *Undo* de *Prepare* vive solo en el aviso de 15 s (sin marca guardada de «preparado»);
+(5) medir en ERSO con la app (sin cuenta de Lega en esta tanda) la palabra y el nivel que elige *Prepare* y las 35
+páginas *Plan*. De la auditoría de la v0.241: (6) O2, lo que otro dispositivo escribe al final del reporte mientras se
+prepara queda bajo la última sección agregada (no se pierde, pero esa escena pasa a «shot» con texto ajeno); (7) O4, lo
+que se escribe al final de un título preparado queda después del título en vivo y se lee como parte del título de la
+escena (mostrar el título en vivo de otro modo, o al final del renglón); (8) O-a de la re-verificación: con varias
+escenas, el texto que otro escribe sin red en una copia repetida que *Prepare* saca queda bajo la última sección de la
+tanda y no de la suya (la escena equivocada pasa a «shot»); (9) O-b: lo que otro escribe en el TÍTULO preparado
+mientras se hace *Undo* (ventana de segundos) se pierde con el título.
+
 ### A. Plan de workspaces (D-17, D-18)
 
 1. **Los pasos 5 a 13 de `Plan_Workspaces.md`** (sección 10, y sección 11 para cómo se hace cada uno).

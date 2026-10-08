@@ -84,6 +84,8 @@ import { shortcutLabel, slashBadge } from './shortcuts';
 import { closeFindBar, isFindShortcut, openFindBar, openFindBarAt, takesFindShortcut } from './findUi';
 import { searchSession, type ResultRequest } from './projectSearchUi';
 import { placeFlashExtension, showPlace } from '../relations/placeFlash';
+import { dayDecoInfo, dayDecorationsExtension, goFrom, refreshDayDecorations, type DayDecoInfo } from '../relations/dayDecorations';
+import { existingRelationsSession } from './relationsUi';
 import { normalize, normalizeQuery, searchNormalized } from '../search/normalize';
 import '../i18n/lazy/search';
 import { registerRestoreTarget } from './historyUi';
@@ -458,6 +460,8 @@ export function BlockEditor({
   const linkContextRef = useRef(linkContext);
   linkContextRef.current = linkContext;
   const editorRef = useRef<{ removeBlocks: (ids: string[]) => unknown; transact: (fn: (tr: { setMeta: (k: string, v: unknown) => unknown }) => void) => void } | null>(null);
+  /** En un reporte del día: el título de cada escena en vivo y su pregunta abierta (relations/dayDecorations.ts). */
+  const dayDecoRef = useRef<DayDecoInfo | null>(null);
   /** Si la página se puede editar ahora (lo leen las funciones que el editor guarda al crearse). */
   const editableRef = useRef(editable);
   /** Si se puede colapsar o abrir para todos (Shift+clic): con permiso de editar, conocido. */
@@ -621,6 +625,8 @@ export function BlockEditor({
         pageLinkViewExtension(linkScope.origin, linkScope.publicEntry),
         // Ir al lugar exacto desde la cabecera viva: la sección resaltada un momento (relations/placeFlash.ts).
         placeFlashExtension,
+        // En un reporte del día: el título de la escena al lado de su link y la pregunta abierta del desglose.
+        dayDecorationsExtension(() => dayDecoRef.current),
         ...pageEditorExtensions(
           canCollapse
             ? {
@@ -642,6 +648,31 @@ export function BlockEditor({
     }),
     [doc],
   );
+
+  // Lo que muestra el editor de un reporte del día sale de la foto del índice de relaciones: se vuelve a leer con cada
+  // foto nueva (al escribir acá o en otra página, al sincronizar). No en una versión del historial ni con un link público.
+  useEffect(() => {
+    if (preview || link) return;
+    const session = existingRelationsSession(services);
+    if (!session) return;
+    const update = () => {
+      const projectId = pageTree.get(pageId)?.workspace_id;
+      const snap = projectId ? session.relations.snapshot(projectId) : null;
+      const src = snap ? { snap, title: (id: string) => pageTree.get(id)?.title, content: (id: string) => session.index.content(id) } : null;
+      const next = dayDecoInfo(src, pageId, goFrom(services));
+      if (!next && !dayDecoRef.current) return;
+      dayDecoRef.current = next;
+      const view = editor.prosemirrorView;
+      if (view) refreshDayDecorations(view);
+    };
+    update();
+    const offMount = editor.onMount(update);
+    const off = session.relations.subscribe(update);
+    return () => {
+      off();
+      offMount();
+    };
+  }, [editor, pageId, services, pageTree, preview, link]);
 
   // El menú de la página ("Colapsar todo / Abrir todo") y "Ir al bloque" de los comentarios llegan acá.
   useEffect(() => {

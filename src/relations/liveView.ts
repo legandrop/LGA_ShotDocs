@@ -187,13 +187,13 @@ const EXCERPT_CHARS = 280;
 const flat = (text: string) => text.replaceAll(SEPARATOR, ' ').replace(/\s+/g, ' ').trim();
 
 /** Lo de una página por bloque (para los extractos): el texto de cada bloque, en orden, como lo cuenta `Section.block`. */
-interface PageBlocks {
+export interface PageBlocks {
   ids: string[];
   levels: number[];
   texts: string[];
 }
 
-function pageBlocks(content: IndexedContent | undefined): PageBlocks | null {
+export function pageBlocks(content: IndexedContent | undefined): PageBlocks | null {
   if (!content) return null;
   const blocks = blocksOf(content.units, content.meta);
   return {
@@ -206,7 +206,7 @@ function pageBlocks(content: IndexedContent | undefined): PageBlocks | null {
 const clip = (text: string) => (text.length > EXCERPT_CHARS ? `${text.slice(0, EXCERPT_CHARS - 1).replace(/\s+\S*$/, '')}…` : text);
 
 /** Lo escrito debajo de un título, hasta el final de su sección (sin los subtítulos). */
-function sectionText(pb: PageBlocks | null, s: Section): string {
+export function sectionText(pb: PageBlocks | null, s: Section): string {
   if (!pb) return '';
   const out: string[] = [];
   let n = 0;
@@ -242,6 +242,9 @@ export function dayRef(src: LiveSource, pageId: string): DayRef {
   const names = [...new Set(locs.map((h) => h.ref))];
   return { pageId: dayId, label: label || title, date: dateAtStart(title), loc: names[0] ?? null, locs: names };
 }
+
+/** El título de la sección general de un reporte («Info general:», «General notes»): no es de ninguna escena. */
+export const GENERAL_SECTION = /^\s*(?:info(?:rmaci[oó]n)?\s+general|general(?:\s+info)?|general\s+notes?)(?![\p{L}\p{N}])/iu;
 
 const byDay = (a: DayRef, b: DayRef, order: Map<string, number>) =>
   (a.date ?? '9999') < (b.date ?? '9999') ? -1 : (a.date ?? '9999') > (b.date ?? '9999') ? 1 : (order.get(a.pageId) ?? 0) - (order.get(b.pageId) ?? 0);
@@ -722,8 +725,15 @@ export function locationLive(src: LiveSource, name: string): LocationLive {
     const scenes: LocationDay['scenes'] = [];
     const unresolved: Excerpt[] = [];
     const sections: Excerpt[] = [];
+    let firstUnnumbered = true;
     pr.sections.forEach((s, i) => {
       const outer = !pr.sections.some((o, j) => j < i && o.block < s.block && o.end >= s.end);
+      // La sección general del día («Info general», o la primera de arriba sin número) no es «sin número de escena».
+      if (outer && !s.scenes.length) {
+        const general = firstUnnumbered || GENERAL_SECTION.test(s.title);
+        firstUnnumbered = false;
+        if (general) return;
+      }
       const own = s.scenes.filter((x) => x.kind === 'scene');
       const ex: Excerpt = {
         place: sectionPlace(pageId, s),

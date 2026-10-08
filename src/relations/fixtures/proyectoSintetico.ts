@@ -13,6 +13,8 @@ import type { PageSettings } from '../../sync/types';
 type Run = string | { link: string; text: string };
 export type Block =
   | { h: 1 | 2 | 3; text: string }
+  /** Un título con links («Escena » + el número como link a la escena, como lo deja Prepare). */
+  | { hl: 1 | 2 | 3; runs: Run[] }
   | { p: Run[] | string }
   | { photo: string; caption?: string }
   | { cell: string }
@@ -41,6 +43,7 @@ export async function writeBlocks(d: Device, pageId: string, blocks: Block[]): P
     runs.map((r) => (typeof r === 'string' ? { type: 'text', text: r, styles: {} } : { type: 'link', href: `/p/${r.link}`, content: [{ type: 'text', text: r.text, styles: {} }] }));
   const toBn = (b: Block): unknown => {
     if ('h' in b) return { type: 'heading', props: { level: b.h }, content: b.text };
+    if ('hl' in b) return { type: 'heading', props: { level: b.hl }, content: inline(b.runs) };
     if ('photo' in b) return { type: 'image', props: { url: `sdmedia://${b.photo}`, caption: b.caption ?? '' } };
     if ('cell' in b) return { type: 'table', content: { type: 'tableContent', rows: [{ cells: [b.cell] }] } };
     if ('row' in b) return { type: 'table', content: { type: 'tableContent', rows: [{ cells: b.row }] } };
@@ -75,6 +78,14 @@ function fichaCampos(shot: string, set: string): Block[] {
   ];
 }
 
+/** Con `days`: la fecha de rodaje (y la pregunta abierta con su categoría) de algunas fichas, como en el desglose de Coda. */
+const DAY_FIELDS: Record<string, Block[]> = {
+  s008: [{ table: [['Fecha Rodaje', '20/02/2026'], ['Consultas', '¿Solo planos desde el exterior?'], ['Consultas Cat', 'Locaciones, Guion Técnico']] }],
+  s009: [{ table: [['Fecha Rodaje', '20/02/2026'], ['Consultas', 'Dirección dijo que esto se filma en locación. Confirmar.'], ['Consultas Cat', 'Locaciones, Arte']] }],
+  s025: [{ table: [['Fecha Rodaje', '19/02/2026']] }],
+  s029: [{ table: [['Fecha Rodaje', '20/02/2026'], ['Consultas', 'Definir qué se puede volcar en set y qué intervención lleva.'], ['Consultas Cat', 'Story']] }],
+};
+
 /**
  * Arma el proyecto. `photo(label, pageId)` da el id `sdmedia://` de cada foto: en las pruebas, un id inventado; en el
  * arnés, una imagen dibujada y guardada en el dispositivo.
@@ -82,7 +93,12 @@ function fichaCampos(shot: string, set: string): Block[] {
 export async function buildProject(
   d: Device,
   photo: (label: string, pageId: string) => Promise<string>,
-  options: { name?: string; indexPage?: boolean } = {},
+  /**
+   * `days`: lo del día de rodaje (E5): fechas de rodaje en las fichas de 104_008, 104_009, 105_025 y 105_029, una ficha
+   * de 105_027 para el Día 59, preguntas abiertas con su categoría, un Día 58, un «Sin reporte» sin número de día y el
+   * Día 60 sin su página *Plan* (así el plan sale del desglose, como en la maqueta).
+   */
+  options: { name?: string; indexPage?: boolean; days?: boolean } = {},
 ): Promise<Built> {
   const projectId = await d.tree.createProject(options.name ?? 'Serie de prueba');
   const ids: Record<string, string> = {};
@@ -130,6 +146,7 @@ export async function buildProject(
       { p: 'Plano general de la ruta, cámara en grúa.' },
     ];
     if (extra === 'novfx') blocks.push({ cell: 'No VFX' });
+    if (options.days && DAY_FIELDS[key]) blocks.push(...DAY_FIELDS[key]);
     if (extra === 'q') {
       // La ficha como sale de Coda: la tabla de campos (con el decorado como link) y los títulos con su texto.
       blocks.splice(0, blocks.length, ...fichaCampos('PRUEBA_105_027_010', setInt), ...(await pics(card, 'Desglose 027', 2)));
@@ -143,6 +160,13 @@ export async function buildProject(
         { p: 'Interior de la ambulancia con pantallas.' },
         { p: 'Open question: ¿la sangre del chofer es práctica o se agrega?' },
       ]);
+      if (options.days) {
+        const card3 = await page('s027_030', 'PRUEBA_105_027_030 Ambulancia vuelco', scene);
+        await writeBlocks(d, card3, [
+          { table: [['Shot Name', 'PRUEBA_105_027_030'], ['Fecha Rodaje', '19/02/2026'], ['Locacion Real', 'CENADE']] },
+          { p: 'El vuelco en la curva, con la ambulancia de doble.' },
+        ]);
+      }
     }
   }
 
@@ -165,6 +189,10 @@ export async function buildProject(
 
   // Días de rodaje (la carpeta de reportes): la locación sale del título del día.
   const rodaje = await page('rodaje', '2 | Rodaje', null, { dayReports: {} });
+  if (options.days) {
+    const d58 = await page('d58', '2026-02-18 | Día 58 | CENADE', rodaje);
+    await writeBlocks(d, d58, [{ h: 1, text: 'Info general' }, { p: 'Llamado 8:00. Prueba de cámara en la curva.' }]);
+  }
   const d59 = await page('d59', '2026-02-19 | Día 59 | CENADE', rodaje);
   await writeBlocks(d, d59, [
     { h: 1, text: 'Info general' },
@@ -183,14 +211,21 @@ export async function buildProject(
     ...(await pics(d60, 'D60', 2)),
   ]);
   // El plan del día: adentro del día, no es el reporte (nombra lo planeado, no lo filmado).
-  const plan60 = await page('plan60', 'Plan | Día 60', d60);
-  await writeBlocks(d, plan60, [{ p: 'Orden: 104_008, 104_009, 105_029 y si sobra tiempo la 105_027.' }]);
+  if (!options.days) {
+    const plan60 = await page('plan60', 'Plan | Día 60', d60);
+    await writeBlocks(d, plan60, [{ p: 'Orden: 104_008, 104_009, 105_029 y si sobra tiempo la 105_027.' }]);
+  }
   const d70 = await page('d70', '2026-03-06 | Día 70 | La Arenera', rodaje);
   await writeBlocks(d, d70, [
     { h: 1, text: 'Escena 105_027A + 029B' },
     { p: 'Interior de la ambulancia en estudio, pantallas encendidas.' },
     ...(await pics(d70, 'D70', 4)),
   ]);
+  if (options.days) {
+    // Un día sin número de día en el título (en ERSO, los «Sin reporte»): el botón del día vecino no puede usar el título.
+    const sin = await page('d_sin', '2026-03-10 | Sin reporte | La Arenera (estudio), Colegio Pradere', rodaje);
+    await writeBlocks(d, sin, [{ p: 'No hubo reporte este día.' }]);
+  }
   const d76 = await page('d76', '2026-03-14 | Día 76 | La Arenera', rodaje);
   await writeBlocks(d, d76, [
     { h: 1, text: 'Escena 5-27' },

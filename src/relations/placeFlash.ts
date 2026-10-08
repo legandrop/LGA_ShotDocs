@@ -103,9 +103,63 @@ export function showPlace(pageId: string, blockId: string, endBlockId: string | 
       if (left > 0) setTimeout(() => attempt(left - 1), 60);
       return;
     }
-    el.scrollIntoView?.({ block: endBlockId === undefined ? 'center' : 'start', behavior: 'smooth' });
+    const block: ScrollLogicalPosition = endBlockId === undefined ? 'center' : 'start';
+    el.scrollIntoView?.({ block, behavior: 'smooth' });
     flashPlace(blockId, endBlockId);
+    keepInView(blockId, block);
   };
   const raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (fn: () => void) => setTimeout(fn, 0);
   raf(() => attempt(tries));
+}
+
+/** El contenedor que se desplaza (la columna de la página) o el documento. */
+function scrollParent(el: HTMLElement): HTMLElement | null {
+  for (let n = el.parentElement; n; n = n.parentElement) {
+    const oy = getComputedStyle(n).overflowY;
+    if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight) return n;
+  }
+  return null;
+}
+
+/** Cuánto tiempo se sigue cuidando que el lugar quede a la vista mientras la página termina de medir y cargar. */
+export const KEEP_IN_VIEW_MS = 6000;
+
+/**
+ * Mientras la página termina de dibujarse (las fotos de arriba se cargan y crecen), el lugar se corre para abajo: se
+ * vuelve a ubicar cada vez que su posición en la página cambia, hasta que la persona toca, desplaza o escribe, o pasan
+ * unos segundos (B3 de la auditoría de E5: en un día largo con fotos, ir a una sección quedaba miles de píxeles arriba).
+ * Compara la posición dentro de lo que se desplaza, no en la pantalla: el desplazamiento suave no cuenta como cambio.
+ */
+function keepInView(blockId: string, block: ScrollLogicalPosition, ms = KEEP_IN_VIEW_MS): void {
+  const first = blockElement(blockId);
+  if (!first || typeof window === 'undefined') return;
+  const scroller = scrollParent(first);
+  const posOf = (el: HTMLElement) => {
+    const top = el.getBoundingClientRect().top;
+    return scroller ? top - scroller.getBoundingClientRect().top + scroller.scrollTop : top + window.scrollY;
+  };
+  let last = posOf(first);
+  let stopped = false;
+  const events = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
+  const stop = () => {
+    stopped = true;
+    for (const e of events) window.removeEventListener(e, stop, true);
+  };
+  for (const e of events) window.addEventListener(e, stop, true);
+  const start = Date.now();
+  const tick = () => {
+    if (stopped) return;
+    const el = blockElement(blockId);
+    if (!el || Date.now() - start > ms) {
+      stop();
+      return;
+    }
+    const now = posOf(el);
+    if (Math.abs(now - last) > 2) {
+      last = now;
+      el.scrollIntoView?.({ block, behavior: 'auto' });
+    }
+    setTimeout(tick, 120);
+  };
+  setTimeout(tick, 120);
 }

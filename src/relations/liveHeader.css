@@ -840,6 +840,365 @@
   }
 }
 
+/* --- El día de rodaje y «Tomorrow» (sección 11; maqueta c_dia.html) --- */
+.lh-badge.day {
+  background: var(--lh-day-bg);
+  color: var(--lh-day-fg);
+}
+
+.lh-meta.day {
+  flex: 0 1 auto;
+}
+
+.lh .lh-tbtn.nav {
+  color: var(--muted);
+}
+
+.lh-facts {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  margin: 0;
+  padding: 2px 14px 6px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.lh-facts > dt,
+.lh-facts > dd {
+  margin: 0;
+  padding: 9px 0;
+  border-bottom: 1px dashed var(--border-soft);
+}
+
+.lh-facts > dt {
+  font-size: 12px;
+  color: var(--muted-2);
+  padding-top: 12px;
+}
+
+.lh-facts > dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--text-2);
+  min-width: 0;
+}
+
+.lh-facts > dt:last-of-type,
+.lh-facts > dd:last-of-type {
+  border-bottom: 0;
+}
+
+.lh-mrows,
+.lh-qs {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+.lh-mrow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 7px 8px;
+  border-radius: 8px;
+  width: 100%;
+}
+
+.lh-mrow:hover {
+  background: var(--hover);
+}
+
+.lh .lh-mrow .tt {
+  display: block;
+  font-size: 13px;
+  color: var(--text-2);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.lh-mrow .meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.lh-st.plan {
+  color: var(--lh-scene-fg);
+  border-color: var(--lh-scene-line);
+}
+
+.lh-st.warn {
+  color: var(--warn);
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+}
+
+.lh-st.icon {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 22px;
+  padding: 0;
+}
+
+.lh .lh-chip.out {
+  border-style: dashed;
+  background: transparent;
+}
+
+.lh-dq {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  align-items: center;
+  padding: 3px 0;
+}
+
+.lh .lh-dq .lh-q {
+  display: inline;
+  line-height: 1.45;
+  color: var(--text-2);
+  text-align: left;
+}
+
+.lh-facts > dd.chips {
+  gap: 6px;
+}
+
+.lh-tomorrow {
+  margin: 0 14px 14px;
+  padding: 12px;
+  border: 1px solid var(--lh-scene-line);
+  border-radius: 10px;
+  background: var(--lh-scene-bg);
+}
+
+.lh-tomorrow .th {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.lh-tomorrow .th b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.lh-tomorrow .sub {
+  margin-top: 4px;
+}
+
+.lh-tomorrow .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0;
+  align-items: center;
+}
+
+.lh-tomorrow .tchip {
+  max-width: 240px;
+}
+
+.lh-tomorrow .tchip .k {
+  font: 500 12px var(--mono);
+}
+
+.lh-tomorrow .tchip .tl {
+  color: var(--text-2);
+  font-weight: 400;
+}
+
+.lh .lh-tomorrow .tchip .x {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  color: var(--muted-2);
+  flex: none;
+}
+
+.lh .lh-tomorrow .tchip .x:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.lh-addwrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.lh .lh-tbtn.add {
+  height: 26px;
+  gap: 6px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.lh-picker {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  width: 340px;
+  max-width: calc(100vw - 40px);
+  padding: 6px;
+  border: 1px solid var(--menu-border);
+  border-radius: 10px;
+  background: var(--menu-bg);
+  box-shadow: var(--shadow);
+}
+
+.lh-picker input {
+  width: 100%;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.lh-picker-list {
+  margin-top: 4px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.lh .lh-picker-list button {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  width: 100%;
+  padding: 7px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.lh .lh-picker-list button:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.lh-picker-list .k {
+  font: 500 12px var(--mono);
+  color: var(--lh-scene-fg);
+  flex: none;
+}
+
+.lh-picker-list .t {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-2);
+}
+
+.lh-picker-list .lh-none {
+  display: block;
+  padding: 7px 8px;
+}
+
+.lh-tomorrow .rep {
+  margin: -2px 0 10px;
+  color: var(--warn);
+}
+
+.lh-tomorrow .row2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--muted-2);
+}
+
+.lh .lh-prepare {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--primary-bg);
+  color: var(--primary-text);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.lh .lh-prepare:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--primary-bg) 88%, var(--bg));
+}
+
+/* En el editor de un reporte: el título de la escena en vivo y la pregunta abierta del desglose (dayDecorations.ts).
+   Son vista: no están en el documento, no se copian ni se imprimen. */
+.editor .lh-ltitle {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.55em;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--muted-2);
+  letter-spacing: 0;
+  vertical-align: 0.15em;
+  user-select: none;
+  white-space: nowrap !important;
+}
+
+.editor .lh-qcall {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 2px 0 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px dashed var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: 12.5px;
+  line-height: 1.45;
+  user-select: none;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+
+.editor .lh-qcall b {
+  font-weight: 600;
+}
+
+.editor .lh-qcall .lh-i {
+  margin-top: 2px;
+  width: 13px;
+  height: 13px;
+}
+
+@media print {
+  .editor .lh-ltitle,
+  .editor .lh-qcall {
+    display: none;
+  }
+}
+
 /* En el teléfono */
 @media (max-width: 760px) {
   .lh {
@@ -914,10 +1273,72 @@
     padding: 12px;
   }
 
+
+  .lh-meta.day {
+    flex: 1 1 100%;
+  }
+
+  .lh-facts {
+    grid-template-columns: 1fr;
+    padding: 2px 12px 6px;
+  }
+
+  .lh-facts > dt {
+    padding: 10px 0 0;
+    border-bottom: 0;
+  }
+
+  .lh-facts > dd {
+    padding: 4px 0 10px;
+  }
+
+  .lh-mrow {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .lh .lh-mrow .tt {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .lh-mrow .meta {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+
+  .lh-tomorrow {
+    margin: 0 12px 12px;
+  }
+
+  .lh-tomorrow .tchip {
+    max-width: 100%;
+  }
 }
 
 @media print {
   .lh {
     display: none;
   }
+}
+
+/* El día: las herramientas pueden bajar de renglón y el rótulo de un día vecino se corta; «Live» y «Collapse» siempre
+   a la vista (B2 de la auditoría de E5). */
+.lh-dayh .lh-tools {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.lh .lh-tbtn.nav {
+  min-width: 0;
+}
+
+.lh-tbtn.nav .lbl {
+  max-width: 10em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

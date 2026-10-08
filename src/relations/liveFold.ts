@@ -1,10 +1,11 @@
 import { useSyncExternalStore } from 'react';
 
 // Si la cabecera viva está plegada en un renglón, por tipo de página (escena, locación), en este dispositivo
-// (Docs/Doc_Relaciones.md, sección 10). Plegarla en una escena la pliega en todas las escenas, no en las locaciones.
+// (Docs/Doc_Relaciones.md, secciones 10 y 11). Plegarla en una escena la pliega en todas las escenas, no en las
+// locaciones ni en los días.
 // Mientras la persona no eligió, en el teléfono arranca plegada (el documento queda arriba) y en la computadora abierta.
 
-export type FoldKind = 'scene' | 'location';
+export type FoldKind = 'scene' | 'location' | 'day';
 
 const KEY = 'shotdocs.liveHeader.open';
 const EVENT = 'shotdocs:live-fold';
@@ -15,7 +16,7 @@ function read(): Partial<Record<FoldKind, boolean>> {
     const raw = JSON.parse(localStorage.getItem(KEY) ?? '{}') as unknown;
     if (!raw || typeof raw !== 'object') return {};
     const out: Partial<Record<FoldKind, boolean>> = {};
-    for (const k of ['scene', 'location'] as const) {
+    for (const k of ['scene', 'location', 'day'] as const) {
       const v = (raw as Record<string, unknown>)[k];
       if (typeof v === 'boolean') out[k] = v;
     }

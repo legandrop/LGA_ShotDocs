@@ -180,4 +180,125 @@ export const relations = {
   'live.sets': { en: "Sets", es: "Decorados" },
   'live.where': { en: "Where", es: "Dónde" },
   'live.whereTip': { en: "Written in «{page}»: opens it there", es: "Escrito en «{page}»: lo abre ahí" },
+  // El día de rodaje y «Tomorrow» (sección 11)
+  'live.day': { en: "Shoot day", es: "Día de rodaje" },
+  'live.dayTip': {
+    en: "Built on this device from this report and what the project says about its scenes. Nothing here is saved in the page or printed.",
+    es: "Se arma en este dispositivo con este reporte y lo que dice el proyecto de sus escenas. Nada de esto se guarda en la página ni sale impreso.",
+  },
+  'live.foldDayTip': { en: "Remembered for every shoot day on this device", es: "Se recuerda para todos los días de rodaje en este dispositivo" },
+  'day.perTitle': { en: "per the day title", es: "según el título del día" },
+  'day.scenesOfDay': { en: "Scenes of the day", es: "Escenas del día" },
+  'day.openQuestionsLabel': { en: "Open questions", es: "Preguntas abiertas" },
+  'day.openQuestions': {
+    en: { one: "{count} open question", other: "{count} open questions" },
+    es: { one: "{count} pregunta abierta", other: "{count} preguntas abiertas" },
+  },
+  'day.moreQuestions': {
+    en: { one: "+{count} more: open the scene to see it", other: "+{count} more: open the scenes to see them" },
+    es: { one: "+{count} más: abrí la escena para verla", other: "+{count} más: abrí las escenas para verlas" },
+  },
+  'day.shot': { en: "shot", es: "filmada" },
+  'day.prepared': { en: "prepared", es: "preparada" },
+  'day.preparedTip': { en: "The section is there, but nothing is written under it yet", es: "La sección está, pero todavía no tiene nada escrito debajo" },
+  'day.notInPlan': { en: "shot · not in plan", es: "filmada · fuera del plan" },
+  'day.notInPlanTip': { en: "It has a section, but the plan of this day doesn't name it", es: "Tiene una sección, pero el plan de este día no la nombra" },
+  'day.plannedNoSection': { en: "planned · no section", es: "planeada · sin sección" },
+  'day.plannedNoSectionTip': { en: "The plan of this day names it, but this report has no section for it", es: "El plan de este día la nombra, pero este reporte no tiene una sección suya" },
+  'day.doesntExist': { en: "doesn't exist yet", es: "todavía no existe" },
+  'day.pending': { en: "pending", es: "pendiente" },
+  'day.noSceneNumber': { en: "no scene number", es: "sin número de escena" },
+  'day.unnumberedTip': { en: "Write the scene number in its title and it links by itself", es: "Escribí el número de escena en su título y se relaciona solo" },
+  'day.noSections': { en: "No scene sections yet", es: "Todavía no hay secciones de escenas" },
+  'day.noSectionsSeen': { en: "No scene sections you can see yet", es: "Todavía no hay secciones de escenas que veas" },
+  'day.fromPlan': {
+    en: { one: "{count} scene from", other: "{count} scenes from" },
+    es: { one: "{count} escena de", other: "{count} escenas de" },
+  },
+  'day.fromBreakdown': {
+    en: { one: "{count} scene from the breakdown ({label} {date})", other: "{count} scenes from the breakdown ({label} {date})" },
+    es: { one: "{count} escena del desglose ({label} {date})", other: "{count} escenas del desglose ({label} {date})" },
+  },
+  'day.planNoScenes': { en: "No scene named in", es: "No nombra escenas" },
+  'day.noPage': {
+    en: { one: "{codes} has no page you can see", other: "{codes} have no page you can see" },
+    es: { one: "{codes} no tiene una página que veas", other: "{codes} no tienen una página que veas" },
+  },
+  'day.noPlan': { en: "No Plan page and no breakdown date for this day", es: "Sin página Plan ni fecha del desglose para este día" },
+  'day.noPlanSeen': { en: "No Plan page and no breakdown date you can see for this day", es: "Sin página Plan ni fecha del desglose que veas para este día" },
+  'day.tomorrow': { en: "Tomorrow · {day}", es: "Mañana · {day}" },
+  'day.srcPlan': { en: "from its Plan page", es: "de su página Plan" },
+  'day.srcBreakdown': { en: "from the breakdown ({label} {date}; no Plan page for that day)", es: "del desglose ({label} {date}; ese día no tiene página Plan)" },
+  'day.srcNone': { en: "no Plan page and no breakdown date: add scenes by hand", es: "sin página Plan ni fecha del desglose: sumá escenas a mano" },
+  'day.addScene': { en: "Add scene", es: "Sumar escena" },
+  'day.removeScene': { en: "Remove {code} from tomorrow", es: "Sacar {code} de mañana" },
+  'day.pickerPlaceholder': { en: "Number or title: 029, 5025, ambulance…", es: "Número o título: 029, 5025, ambulancia…" },
+  'day.noMatch': { en: "No scene matches", es: "Ninguna escena coincide" },
+  'day.prepare': { en: "Prepare tomorrow’s report", es: "Preparar el reporte de mañana" },
+  'day.prepareHint': {
+    en: "Adds one section per scene that doesn’t have one yet. It never replaces or removes anything.",
+    es: "Agrega una sección por escena que todavía no tiene una. Nunca reemplaza ni borra nada.",
+  },
+  'day.cantEdit': { en: "You can’t edit «{day}»: preparing it needs edit access.", es: "No podés editar «{day}»: para prepararlo hace falta poder editarlo." },
+  'day.repeated': {
+    en: "Prepared on two devices at once ({codes}): Prepare again removes the repeated empty titles.",
+    es: "Se preparó en dos dispositivos a la vez ({codes}): Preparar de nuevo saca los títulos repetidos vacíos.",
+  },
+  'day.added': {
+    en: { one: "added {count} section", other: "added {count} sections" },
+    es: { one: "se agregó {count} sección", other: "se agregaron {count} secciones" },
+  },
+  'day.nothingToAdd': { en: "nothing to add", es: "nada para agregar" },
+  'day.alreadyHad': {
+    en: { one: "{codes} already had one", other: "{codes} already had one" },
+    es: { one: "{codes} ya tenía una", other: "{codes} ya tenían una" },
+  },
+  'day.merged': {
+    en: { one: "removed {count} repeated empty title", other: "removed {count} repeated empty titles" },
+    es: { one: "se sacó {count} título repetido vacío", other: "se sacaron {count} títulos repetidos vacíos" },
+  },
+  'day.undo': { en: "Undo", es: "Deshacer" },
+  'day.undone': {
+    en: { one: "Undone · {count} section removed; anything already written stays", other: "Undone · {count} sections removed; anything already written stays" },
+    es: { one: "Deshecho · se sacó {count} sección; lo ya escrito queda", other: "Deshecho · se sacaron {count} secciones; lo ya escrito queda" },
+  },
+  'day.undoneShort': {
+    en: { one: "Undone · {count} section removed", other: "Undone · {count} sections removed" },
+    es: { one: "Deshecho · se sacó {count} sección", other: "Deshecho · se sacaron {count} secciones" },
+  },
+  'day.undoKept': {
+    en: { one: "{count} kept: it was changed or has something under it", other: "{count} kept: they were changed or have something under them" },
+    es: { one: "{count} queda: se cambió o tiene algo debajo", other: "{count} quedan: se cambiaron o tienen algo debajo" },
+  },
+  'day.undoNothing': {
+    en: { one: "Nothing removed: the section was changed or has something under it", other: "Nothing removed: the {count} sections were changed or have something under them" },
+    es: { one: "No se sacó nada: la sección se cambió o tiene algo debajo", other: "No se sacó nada: las {count} secciones se cambiaron o tienen algo debajo" },
+  },
+  'day.undoUnexpected': {
+    en: "Nothing undone: tomorrow’s report changed shape (a title was moved). Remove the sections by hand.",
+    es: "No se deshizo nada: el reporte de mañana cambió (se movió un título). Sacá las secciones a mano.",
+  },
+  'day.undoLinesStay': {
+    en: "the empty lines stay, in case someone is writing in them on another device",
+    es: "los renglones vacíos quedan, por si alguien está escribiendo ahí en otro dispositivo",
+  },
+  'day.prepareMissing': {
+    en: "«{day}» isn’t fully on this device yet: try again with a connection.",
+    es: "«{day}» todavía no está entero en este dispositivo: probá de nuevo con conexión.",
+  },
+  'day.prepareUnknown': {
+    en: "«{day}» has content this version doesn’t know: update the app to prepare it.",
+    es: "«{day}» tiene contenido que esta versión no conoce: actualizá la app para prepararlo.",
+  },
+  'day.prepareFailed': { en: "Tomorrow’s report couldn’t be prepared. Nothing was changed.", es: "No se pudo preparar el reporte de mañana. No se cambió nada." },
+  // En el editor, debajo de un título de escena con link en un reporte (dayDecorations.ts)
+  'day.liveTitleTip': {
+    en: "The scene title, shown live from its page: it isn’t copied into the report",
+    es: "El título de la escena, en vivo desde su página: no se copia al reporte",
+  },
+  'day.questionFrom': { en: "Open question from the breakdown", es: "Pregunta abierta del desglose" },
+  'day.questionCallTip': {
+    en: "Shown from the breakdown card, not saved in the report: opens the card there",
+    es: "Se muestra desde la ficha del desglose, no se guarda en el reporte: abre la ficha ahí",
+  },
 } satisfies Dict;

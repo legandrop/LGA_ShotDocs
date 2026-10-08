@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.241 :
+
+Un reporte del día no decía qué escenas tenía ni ayudaba a preparar el de mañana: la cabecera viva solo existía para escenas y locaciones. Ahora el día muestra sus escenas por los títulos de sección («shot», «prepared» si está vacía, «planned · no section»; la sección general no cuenta), las preguntas abiertas, de dónde sale el plan y la tarjeta *Tomorrow*, ajustable. *Prepare tomorrow's report* solo agrega al final del día siguiente «Escena 105_029» con el link; no duplica, no pisa y *Undo* saca solo lo vacío (si ya subió, solo los títulos). El editor muestra el título de la escena y su pregunta abierta como vista. Ir a una sección espera a que carguen las fotos de arriba. Preparado en dos dispositivos a la vez: preparar de nuevo saca el título repetido vacío. D429–D445.
+
+[Mostrar en los días de rodaje sus escenas, su plan y la tarjeta Tomorrow, que prepara el reporte de mañana sin pisar ni duplicar]
+
 v0.240 :
 
 La cabecera viva no mostraba la pregunta abierta del desglose, los decorados, INT/EXT ni las coordenadas de la maqueta: salen de campos de las fichas y el motor no leía campos. Ahora `src/relations/fields.ts` lee «rótulo: valor» de lo que ya lee la búsqueda: filas de tablas de dos columnas (el índice guarda fila y columna de cada celda, `CACHE_FORMAT` 2), títulos y renglones «Consultas:» con rótulos conocidos en castellano e inglés, y coordenadas; la foto del índice los trae (`findFields`, también para el día). La escena suma INT/EXT, decorados y *Open question* («in 2 cards», «+1», lleva a la ficha); la locación, *Sets* y *Where*. D419–D428.

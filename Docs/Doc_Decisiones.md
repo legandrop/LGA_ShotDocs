@@ -816,6 +816,76 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
 - **D428 · Las filas que salen de campos aparecen solo cuando hay un valor, también mientras el índice lee**
   (2026-10-08; E3b). Nunca dicen «ninguno» ni «0 questions»: sería afirmar una ausencia que el dispositivo puede no
   saber todavía (D402) o que un invitado no puede ver (D401).
+- **D429 · Las escenas de un día salen de los títulos de sección de su reporte: «shot» con algo escrito o fotos debajo,
+  «prepared» si la sección sigue vacía, «shot · not in plan» si hay plan y no la nombra** (2026-10-08; E5, Lega la puede
+  cambiar). Una fila por sección (la más externa de cada escena, con su parte); dos secciones vacías de la misma escena
+  son una sola fila. Sin plan, nunca «not in plan». Una sección vacía nunca cuenta como filmada (§9.2 de la propuesta).
+  La sección general del reporte («Info general», o la primera de arriba sin número) no es una fila: sus fotos son del
+  día y van primero (como la maqueta; corrección de la auditoría, B1; vale también para el *Shoot* de la locación).
+- **D430 · El plan de un día: su página *Plan* (lo de adentro del día, en el orden en que nombra las escenas) → las
+  fichas con esa *Fecha Rodaje* (por número) → nada** (2026-10-08; E5). La maqueta ordenaba también el plan por número;
+  el orden del plan es el del día de rodaje y es el que se usa para preparar. Las copias de fichas pegadas en el plan de
+  otro día no cuentan (`cardFields`).
+- **D431 · Una sección de arriba sin número y con fotos es una fila con aviso que lleva a la sección; sin *Assign***
+  (2026-10-08; E5). Asignarle una escena es de E7 (el selector de `/`); el tooltip dice que escribir el número en el
+  título la relaciona sola.
+- **D432 · *Tomorrow* es el día siguiente por fecha entre los días que la persona ve; si no hay, no hay tarjeta**
+  (2026-10-08; E5, Lega la puede cambiar). Crear el reporte de mañana desde la tarjeta queda en el roadmap. Un día se
+  nombra corto en los botones y en la tarjeta: «Día 58», o su fecha («10/03») si el título no tiene número de día (los
+  «Sin reporte» de ERSO), con el título entero en el tooltip solo entonces; en el teléfono, *Live* y *Collapse* quedan
+  siempre a la vista (corrección de la auditoría, B2 y O10).
+- **D433 · Lo que se saca o se suma a la lista de mañana se recuerda en el dispositivo, como diferencia con el plan**
+  (2026-10-08; E5, Lega la puede cambiar). No va al documento ni a la base: es la preparación de quien prepara; si el
+  plan cambia, lo ajustado se sigue aplicando encima. La otra opción: escribirlo en la página *Plan* (tocaría lo de otro).
+- **D434 · El título que agrega *Prepare* usa la palabra y el nivel que ya usa el proyecto** (2026-10-08; E5): el de las
+  secciones de escena de mañana, de hoy o del día anterior más cercano («Escena», título 1 en ERSO); si ninguno tiene,
+  «Escena» o «Scene» por el idioma de la app y el nivel de los títulos de mañana. El número va como link a la escena
+  (`/p/<id>`), sin el título de la escena.
+- **D435 · *Prepare* agrega antes del renglón vacío del final (si lo hay) y solo para escenas con una página que la
+  persona ve** (2026-10-08; E5). Una escena del plan sin página (pendiente) no se puede enlazar: se saltea.
+- **D436 · Dos dispositivos que preparan a la vez sin red: al juntarse quedan títulos repetidos; *Prepare* de nuevo saca
+  los títulos preparados y vacíos que sobran (deja el primero, o el que tiene algo escrito), solo el título, nunca solo**
+  (2026-10-08; E5, Lega la puede cambiar). Yjs no puede fundir dos títulos insertados por separado. Solo cuenta el par:
+  dos o más títulos con la forma de *Prepare* («Escena» + el número como link) de la misma escena; una sección escrita a
+  mano («Escena 105_029a») nunca hace sacar nada, y el aviso de la tarjeta sale solo con ese par (corrección de la
+  auditoría, B4). Se borra **solo el contenedor de cada título, directo en el Y.Doc** (por su id, verificado en el
+  momento, en una transacción), nunca con el editor: `removeBlocks` pasa por y-prosemirror, que reutiliza contenedores y
+  borraba el del renglón donde otro escribía (R2 de la re-verificación). El renglón vacío del repetido queda: si alguien
+  escribe ahí sin red mientras otro limpia, su texto no se pierde (probado con una, dos y tres
+  escenas y con el servidor de prueba), pero con varias escenas puede quedar debajo de la última sección de la tanda y
+  no de la suya (auditoría, O-a; roadmap). La
+  cabecera los cuenta una vez. Un título a mano idéntico al de *Prepare* (con el link) no se puede distinguir: dos de
+  ellos vacíos de la misma escena se juntan igual. La otra opción: limpiar solo al abrir el reporte (borraría sin que
+  nadie lo pida, quizás mientras otro escribe).
+- **D437 · *Undo* de *Prepare* está en el aviso (15 s) y saca cada título agregado con su renglón solo si siguen iguales
+  y vacíos; si lo agregado ya salió del dispositivo, saca solo los títulos** (2026-10-08; E5). Si queda alguno, el aviso
+  lo dice. «Ya salió»: el servidor tiene algo de este dispositivo posterior a lo de antes de preparar, o hay una subida
+  en camino (`syncedSV` y `pending` del estado de la página). Entonces otro dispositivo pudo recibirlo y estar
+  escribiendo en ese renglón sin que llegue todavía: borrar el bloque se llevaría su texto (corrección de la auditoría,
+  O1, con su prueba). El costo: renglones en blanco donde estaban las secciones, y el aviso lo dice. Sin red, *Undo*
+  deja el reporte idéntico. Borra directo en el Y.Doc, bloque por bloque y verificando en el momento que cada uno sigue
+  siendo lo agregado (mismo id, mismo texto, vacío): borrar con el editor perdía lo escrito bajo una sección que no era
+  la última (R1). Si un título quedó adentro de otro bloque (la estructura no es la esperada), no borra nada y avisa. La maqueta mostraba además una franja con *Undo* en el
+  reporte; sin una marca guardada de «preparado», la app no sabe después qué agregó *Prepare*.
+- **D438 · Después de preparar, la app lleva al reporte de mañana con lo agregado resaltado** (2026-10-08; E5), como la
+  maqueta.
+- **D439 · En el editor de un reporte, al lado del link de un título que lleva a una escena, su título en vivo; debajo,
+  la primera pregunta abierta de su desglose** (2026-10-08; E5, Lega la puede cambiar). Para cualquier título con link a
+  una escena (no hay marca de «preparado» en el documento; los títulos sin link de ERSO no la muestran, como la
+  maqueta). Son decoraciones: no se guardan, no se copian, no se imprimen; tocar la pregunta abre la ficha.
+- **D440 · Las preguntas abiertas del día: hasta 3, con la ficha y la categoría** (2026-10-08; E5). La maqueta mostraba
+  solo la categoría; la ficha dice de dónde sale (como la escena, D422).
+- **D441 · El día se pliega por su tipo y en el teléfono arranca plegado** (2026-10-08; E5), como la escena y la
+  locación (D394) y como pedía B2 de C7.
+- **D442 · Sin permiso de editar el reporte de mañana, la tarjeta se ve sin *Prepare* y dice por qué** (2026-10-08;
+  E5). Las ausencias, para quien no ve todo el proyecto, dicen «you can see» (D401).
+- **D443 · *Prepare* no toca un reporte que no está entero en el dispositivo (intenta bajarlo 8 s) ni uno con contenido
+  que esta versión no conoce** (2026-10-08; E5). Sin el reporte entero no se puede saber qué secciones ya tiene:
+  duplicaría.
+- **D444 · *Prepare* lee el reporte en el momento, no la foto del índice** (2026-10-08; E5). La foto puede tener medio
+  segundo de atraso o no haber leído lo que llegó por sincronización: con ella, preparar dos veces seguidas duplicaría.
+- **D445 · La barra *Today* sobre el teclado y la ficha-chip del link quedan para E6/E7** (2026-10-08; E5). E5 escribe
+  el link con la marca `link` de siempre; cómo se dibuja un link a una escena es del subrayado y de `/`.
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 

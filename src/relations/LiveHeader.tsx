@@ -6,11 +6,14 @@ import { usePermissions, useServices, useTree } from '../services';
 import { useCurrentProject } from '../ui/project';
 import { existingRelationsSession } from '../ui/relationsUi';
 import { goToPlace } from './goToPlace';
+import { DayHeader } from './DayHeader';
+import { dayLive } from './dayLive';
 import { useLiveOpen, type FoldKind } from './liveFold';
 import { locationLive, sceneLive, type DayRef, type Excerpt, type LiveSource, type LocationLive, type OpenQuestion, type PageChip, type PhotoRef, type Place, type SceneLive, type SetRef } from './liveView';
 import './liveHeader.css';
 
-// La cabecera viva de una escena o una locación (Docs/Doc_Relaciones.md, sección 10; diseño S4 «D»): entre el título y
+// La cabecera viva de una escena, una locación o un día de rodaje (Docs/Doc_Relaciones.md, secciones 10 y 11; diseño S4
+// «D»): entre el título y
 // el documento, fuera del editor. Es interfaz: no se guarda en la página, no sube a la base y no sale en el PDF. Se
 // redibuja con cada foto nueva del índice de relaciones (al escribir acá o en otra página, al sincronizar). Con un link
 // público no aparece (el visitante no tiene tipos de página, D381).
@@ -33,26 +36,28 @@ function LiveHeaderFor({ pageId, session }: { pageId: string; session: NonNullab
   const snap = session.relations.snapshot(projectId);
   const role = snap?.registration.roles.get(pageId);
   const entity = role && !role.excluded ? role.entity : null;
-  const kind = entity?.kind === 'scene' || entity?.kind === 'location' ? entity.kind : null;
+  const kind = entity?.kind === 'scene' || entity?.kind === 'location' || entity?.kind === 'day' ? entity.kind : null;
   const ref = kind ? entity!.ref : null;
 
   const view = useMemo(() => {
     if (!snap || !kind || !ref) return null;
     const src: LiveSource = { snap, title: (id) => tree.get(id)?.title, content: (id) => session.index.content(id) };
+    if (kind === 'day') return { kind, data: dayLive(src, pageId), src } as const;
     return kind === 'scene' ? ({ kind, data: sceneLive(src, ref) } as const) : ({ kind, data: locationLive(src, ref) } as const);
     // La foto cambia con cada revisión; el árbol (títulos) también se lee de la foto de esa revisión.
-  }, [snap, kind, ref, revision, tree, session]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [snap, kind, ref, pageId, revision, tree, session]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!view || !snap) return null;
   // Quien no ve el proyecto entero (un invitado a una rama) no puede saber qué falta: las ausencias se dicen «you can
   // see» (D401).
   const partial = perms.known && perms.role !== 'owner' && perms.role !== 'admin' && perms.projectLevel(projectId) === 0;
+  if (view.kind === 'day') return <DayHeader v={view.data} src={view.src} pages={snap.pages.size} partial={partial} />;
   return view.kind === 'scene' ? <SceneHeader v={view.data} pages={snap.pages.size} partial={partial} /> : <LocationHeader v={view.data} pages={snap.pages.size} partial={partial} />;
 }
 
 // --- Piezas -----------------------------------------------------------------------------------------------------
 
-const PATHS = {
+export const PATHS = {
   scene: 'M3 7h18v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 7l3-4h4l-3 4M10 7l3-4h4l-3 4',
   loc: 'M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21zM12 7a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z',
   day: 'M5.5 5h13a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM3.5 10h17M8 3v4M16 3v4',
@@ -64,9 +69,16 @@ const PATHS = {
   go: 'M7 17 17 7M8 7h9v9',
   photo: 'M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM9 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM21 16l-5-5-9 8',
   set: 'M4 21V4a1 1 0 0 1 1-1h10l4 4v14M2 21h20M14 12h.01',
+  left: 'm15 6-6 6 6 6',
+  right: 'm9 6 6 6-6 6',
+  plus: 'M12 5v14M5 12h14',
+  x: 'M6 6l12 12M18 6 6 18',
+  wand: 'm15 4 5 5L9 20H4v-5zM13 6l5 5',
+  warn: 'M21.7 18l-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3M12 9v4M12 17h.01',
+  help: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.5V14M12 17h.01',
 } as const;
 
-function Ic({ name, small }: { name: keyof typeof PATHS; small?: boolean }) {
+export function Ic({ name, small }: { name: keyof typeof PATHS; small?: boolean }) {
   return (
     <svg className={`lh-i${small ? ' s' : ''}`} viewBox="0 0 24 24" aria-hidden="true">
       <path d={PATHS[name]} />
@@ -74,7 +86,7 @@ function Ic({ name, small }: { name: keyof typeof PATHS; small?: boolean }) {
   );
 }
 
-const shortDate = (date: string | null): string => {
+export const shortDate = (date: string | null): string => {
   if (!date) return '';
   const [y, m, d] = date.split('-').map(Number);
   try {
@@ -84,7 +96,7 @@ const shortDate = (date: string | null): string => {
   }
 };
 
-function useGo() {
+export function useGo() {
   const services = useServices();
   return (place: Place) => goToPlace(services, place);
 }
@@ -95,7 +107,7 @@ function useGo() {
  */
 const thumbs = new Map<string, Promise<string | null>>();
 
-function Thumb({ id, className }: { id: string; className?: string }) {
+export function Thumb({ id, className }: { id: string; className?: string }) {
   const { media } = useServices();
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
@@ -114,7 +126,7 @@ function Thumb({ id, className }: { id: string; className?: string }) {
   return url ? <img className={className} src={url} alt="" draggable={false} /> : <span className={`lh-ph ${className ?? ''}`} aria-hidden="true" />;
 }
 
-function Thumbs({ photos, max = 3, onMore }: { photos: PhotoRef[]; max?: number; onMore: () => void }) {
+export function Thumbs({ photos, max = 3, onMore }: { photos: PhotoRef[]; max?: number; onMore: () => void }) {
   const go = useGo();
   if (!photos.length) return null;
   return (
@@ -133,7 +145,7 @@ function Thumbs({ photos, max = 3, onMore }: { photos: PhotoRef[]; max?: number;
   );
 }
 
-function Chip({ kind, children, onClick, tip, mono }: { kind: 'scene' | 'loc' | 'day' | 'scout' | 'page'; children: ReactNode; onClick: () => void; tip?: string; mono?: boolean }) {
+export function Chip({ kind, children, onClick, tip, mono }: { kind: 'scene' | 'loc' | 'day' | 'scout' | 'page'; children: ReactNode; onClick: () => void; tip?: string; mono?: boolean }) {
   return (
     <button className={`lh-chip ${kind === 'page' ? 'pg' : kind}${mono ? ' mono' : ''}`} onClick={onClick} data-tip={tip}>
       <Ic name={kind === 'page' ? 'page' : kind} />
@@ -187,7 +199,7 @@ function QuestionRow({ questions, tr }: { questions: OpenQuestion[]; tr: Transla
   );
 }
 
-function DayChip({ day }: { day: DayRef }) {
+export function DayChip({ day }: { day: DayRef }) {
   const date = shortDate(day.date);
   return (
     <Chip kind="day" onClick={() => navigate(pagePath(day.pageId))}>
@@ -197,7 +209,7 @@ function DayChip({ day }: { day: DayRef }) {
   );
 }
 
-function LiveDot({ complete }: { complete: boolean }) {
+export function LiveDot({ complete }: { complete: boolean }) {
   const tr = useT();
   return complete ? (
     <span className="lh-livedot" data-tip={tr('live.liveTip')}>
@@ -216,7 +228,7 @@ function LiveDot({ complete }: { complete: boolean }) {
  * Al plegar o desplegar, el botón que se tocó desaparece: el foco pasa al control nuevo (el renglón o *Collapse*), así
  * con el teclado no cae al principio de la página.
  */
-function useFoldFocus(open: boolean) {
+export function useFoldFocus(open: boolean) {
   const target = useRef<HTMLButtonElement | null>(null);
   const moved = useRef(false);
   useEffect(() => {
@@ -227,12 +239,12 @@ function useFoldFocus(open: boolean) {
   return { ref: target, mark: () => (moved.current = true) };
 }
 
-function Tools({ kind, complete, onFold, foldRef }: { kind: FoldKind; complete: boolean; onFold: () => void; foldRef: RefObject<HTMLButtonElement | null> }) {
+export function Tools({ kind, complete, onFold, foldRef }: { kind: FoldKind; complete: boolean; onFold: () => void; foldRef: RefObject<HTMLButtonElement | null> }) {
   const tr = useT();
   return (
     <span className="lh-tools">
       <LiveDot complete={complete} />
-      <button ref={foldRef} className="lh-tbtn" aria-expanded={true} onClick={onFold} data-tip={tr(kind === 'scene' ? 'live.foldSceneTip' : 'live.foldLocationTip')}>
+      <button ref={foldRef} className="lh-tbtn" aria-expanded={true} onClick={onFold} data-tip={tr(kind === 'scene' ? 'live.foldSceneTip' : kind === 'day' ? 'live.foldDayTip' : 'live.foldLocationTip')}>
         <Ic name="up" small />
         {tr('live.collapse')}
       </button>
@@ -240,12 +252,12 @@ function Tools({ kind, complete, onFold, foldRef }: { kind: FoldKind; complete: 
   );
 }
 
-function Badge({ kind }: { kind: FoldKind }) {
+export function Badge({ kind }: { kind: FoldKind }) {
   const tr = useT();
   return (
-    <span className={`lh-badge ${kind === 'scene' ? 'scene' : 'loc'}`} data-tip={tr(kind === 'scene' ? 'live.sceneTip' : 'live.locationTip')}>
-      <Ic name={kind === 'scene' ? 'scene' : 'loc'} small />
-      {tr(kind === 'scene' ? 'live.scene' : 'live.location')}
+    <span className={`lh-badge ${kind === 'scene' ? 'scene' : kind === 'day' ? 'day' : 'loc'}`} data-tip={tr(kind === 'scene' ? 'live.sceneTip' : kind === 'day' ? 'live.dayTip' : 'live.locationTip')}>
+      <Ic name={kind === 'scene' ? 'scene' : kind === 'day' ? 'day' : 'loc'} small />
+      {tr(kind === 'scene' ? 'live.scene' : kind === 'day' ? 'live.day' : 'live.location')}
     </span>
   );
 }
@@ -254,7 +266,7 @@ function Badge({ kind }: { kind: FoldKind }) {
  * Plegada: un solo renglón. Sin `aria-label`: un lector de pantalla lee el resumen y que se puede desplegar. Mientras el
  * índice lee, el punto «Reading…» también acá (el teléfono arranca plegado).
  */
-function Line({ kind, children, onOpen, complete, lineRef }: { kind: FoldKind; children: ReactNode; onOpen: () => void; complete: boolean; lineRef: RefObject<HTMLButtonElement | null> }) {
+export function Line({ kind, children, onOpen, complete, lineRef }: { kind: FoldKind; children: ReactNode; onOpen: () => void; complete: boolean; lineRef: RefObject<HTMLButtonElement | null> }) {
   const tr = useT();
   return (
     <section className="lh closed" aria-label={tr('live.aria')}>
@@ -329,7 +341,7 @@ function ExcerptCard({ ex, tag, tr, code }: { ex: Excerpt; tag: string; tr: Tran
   );
 }
 
-function Panel({ head, children }: { head: ReactNode; children: ReactNode }) {
+export function Panel({ head, children }: { head: ReactNode; children: ReactNode }) {
   return (
     <div className="lh-panel">
       <div className="lh-panel-h">{head}</div>
@@ -338,7 +350,7 @@ function Panel({ head, children }: { head: ReactNode; children: ReactNode }) {
   );
 }
 
-function Empty({ icon, children }: { icon: keyof typeof PATHS; children: ReactNode }) {
+export function Empty({ icon, children }: { icon: keyof typeof PATHS; children: ReactNode }) {
   return (
     <div className="lh-empty">
       <Ic name={icon} />
@@ -347,7 +359,7 @@ function Empty({ icon, children }: { icon: keyof typeof PATHS; children: ReactNo
   );
 }
 
-function PhotoStrip({ photos, complete, tr }: { photos: PhotoRef[]; complete: boolean; tr: Translate }) {
+export function PhotoStrip({ photos, complete, tr }: { photos: PhotoRef[]; complete: boolean; tr: Translate }) {
   const go = useGo();
   const caption = (p: PhotoRef) => (p.sourceKind === 'breakdown' ? tr('live.source.breakdown') : p.sourceKind === 'location' ? tr('live.source.location') : p.source);
   if (!photos.length) {
