@@ -92,6 +92,12 @@ set son pocas; medirlo en el iPhone junto con la primera lectura (15–45 s esti
 (3) Las cifras de rendimiento son de escritorio con fake-indexeddb: falta la medición en un teléfono real. (re-verificación) Con D391, en un largo «74 | Cocina» sin ceros ya no da la
 escena 074: hace falta «074 | Cocina», «Escena 74» o marcar la página.
 
+**Anotado al auditar la v0.238 (relaciones en vivo, la cabecera):** (1) Faltan filas de la maqueta aprobada:
+*Open question*, *Sets* (decorados), INT/EXT y *Where* (coordenadas); salen de campos de las fichas de Coda y el motor
+no lee campos. Entrega propia: una consulta pura «campo: valor» por ficha (la necesita también E5 para *Open questions
+for today*). (2) El arnés `src/dev/cabecera-viva.html` no vuelve a levantar si se recarga la página (queda esperando
+`__cabecera.listo`): abrirlo de nuevo desde la dirección del arnés. Solo herramienta de desarrollo.
+
 ### A. Plan de workspaces (D-17, D-18)
 
 1. **Los pasos 5 a 13 de `Plan_Workspaces.md`** (sección 10, y sección 11 para cómo se hace cada uno).

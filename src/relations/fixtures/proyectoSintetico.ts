@@ -1,0 +1,183 @@
+import { BlockNoteEditor } from '@blocknote/core';
+import { withCollaboration } from '@blocknote/core/yjs';
+import { CONTENT_FRAGMENT } from '../../sync/structure';
+import type { Device } from '../../sync/testing';
+import { schema } from '../../ui/editorSchema';
+import type { PageSettings } from '../../sync/types';
+
+// Un proyecto sintético con la forma del recorte de la maqueta (S4 «D»): una escena filmada en dos locaciones y tres
+// días, un scouting que la nombra, fichas con una pregunta abierta, fotos por sección, una página índice y un archivo
+// fuera del grafo. Los nombres y textos son inventados (el repo es público: nada de datos reales de un proyecto). Lo
+// usan las pruebas de la cabecera viva y el arnés de desarrollo (`src/dev/cabecera-viva.html`).
+
+type Run = string | { link: string; text: string };
+export type Block =
+  | { h: 1 | 2 | 3; text: string }
+  | { p: Run[] | string }
+  | { photo: string; caption?: string }
+  | { cell: string }
+  /** Una tabla de un renglón (una ficha como las de Coda: «VFX Cat» | «DMP 2.5D, CG»). */
+  | { row: string[] };
+
+export interface Built {
+  projectId: string;
+  /** Las páginas por nombre corto. */
+  ids: Record<string, string>;
+  /** Las fotos por etiqueta. */
+  photos: Record<string, string>;
+}
+
+/** Escribe bloques en una página con el editor de verdad (el mismo esquema de la app). */
+export async function writeBlocks(d: Device, pageId: string, blocks: Block[]): Promise<void> {
+  const doc = await d.docs.open(pageId, { seed: true });
+  const editor = BlockNoteEditor.create(
+    withCollaboration({ schema, collaboration: { fragment: doc.getXmlFragment(CONTENT_FRAGMENT), user: { name: 'f', color: '#000' } } }),
+  ) as unknown as BlockNoteEditor;
+  const el = document.createElement('div');
+  editor.mount(el);
+  const toBn = (b: Block): unknown => {
+    if ('h' in b) return { type: 'heading', props: { level: b.h }, content: b.text };
+    if ('photo' in b) return { type: 'image', props: { url: `sdmedia://${b.photo}`, caption: b.caption ?? '' } };
+    if ('cell' in b) return { type: 'table', content: { type: 'tableContent', rows: [{ cells: [b.cell] }] } };
+    if ('row' in b) return { type: 'table', content: { type: 'tableContent', rows: [{ cells: b.row }] } };
+    const runs = typeof b.p === 'string' ? [b.p] : b.p;
+    return {
+      type: 'paragraph',
+      content: runs.map((r) => (typeof r === 'string' ? { type: 'text', text: r, styles: {} } : { type: 'link', href: `/p/${r.link}`, content: [{ type: 'text', text: r.text, styles: {} }] })),
+    };
+  };
+  editor.replaceBlocks(editor.document, blocks.map(toBn) as never);
+  await new Promise((r) => setTimeout(r, 20));
+  editor.unmount();
+  await d.docs.flush(pageId);
+  d.docs.close(pageId);
+}
+
+/**
+ * Arma el proyecto. `photo(label, pageId)` da el id `sdmedia://` de cada foto: en las pruebas, un id inventado; en el
+ * arnés, una imagen dibujada y guardada en el dispositivo.
+ */
+export async function buildProject(
+  d: Device,
+  photo: (label: string, pageId: string) => Promise<string>,
+  options: { name?: string; indexPage?: boolean } = {},
+): Promise<Built> {
+  const projectId = await d.tree.createProject(options.name ?? 'Serie de prueba');
+  const ids: Record<string, string> = {};
+  const photos: Record<string, string> = {};
+  const page = async (key: string, title: string, parent: string | null, settings?: PageSettings) => {
+    const id = await d.tree.create(parent, title, projectId);
+    if (settings) await d.tree.setPatch(id, { settings });
+    ids[key] = id;
+    return id;
+  };
+  const pics = async (pageId: string, prefix: string, n: number): Promise<Block[]> => {
+    const out: Block[] = [];
+    for (let i = 1; i <= n; i++) {
+      const label = `${prefix} ${i}`;
+      photos[label] = await photo(label, pageId);
+      out.push({ photo: photos[label] });
+    }
+    return out;
+  };
+
+  // Desglose: escenas en grupos de episodio, con sus fichas adentro.
+  const bd = await page('desglose', '1.1 | Desglose', null, { holds: 'scene' });
+  const ep4 = await page('ep4', '104 | Episodio 4', bd);
+  const ep5 = await page('ep5', '105 | Episodio 5', bd);
+  for (const [key, n, ep, title, loc, extra] of [
+    ['s008', '008', ep4, 'La camioneta frena en la banquina', 'CENADE', ''],
+    ['s009', '009', ep4, 'El conductor revisa el mapa', 'CENADE', ''],
+    ['s025', '025', ep5, 'El fugitivo espera escondido', 'CENADE', ''],
+    ['s026', '026', ep5, 'El fugitivo cruza la ruta', 'CENADE', 'novfx'],
+    ['s027', '027', ep5, 'La ambulancia empieza a zigzaguear', 'La Arenera', 'q'],
+    ['s029', '029', ep5, 'El fugitivo abre los ojos', 'La Arenera', ''],
+  ] as const) {
+    const scene = await page(key, `${n} | ${title}`, ep);
+    const card = await page(`${key}_010`, `PRUEBA_${ep === ep4 ? '104' : '105'}_${n}_010 Ambulancia`, scene);
+    const blocks: Block[] = [
+      { p: `Locación real: ${loc}` },
+      { p: 'Plano general de la ruta, cámara en grúa.' },
+    ];
+    if (extra === 'novfx') blocks.push({ cell: 'No VFX' });
+    if (extra === 'q') blocks.push({ p: 'Pregunta abierta: ¿todo el interior en estudio o solo el vuelco?' }, ...(await pics(card, 'Desglose 027', 2)));
+    await writeBlocks(d, card, blocks);
+    if (key === 's027') {
+      const card2 = await page('s027_020', 'PRUEBA_105_027_020 Ambulancia interior', scene);
+      await writeBlocks(d, card2, [{ p: 'Locación real: La Arenera' }, { p: 'Interior de la ambulancia con pantallas.' }]);
+    }
+  }
+
+  // Locaciones con sus scoutings adentro.
+  const locs = await page('locaciones', '1.2 | Locaciones y scoutings', null, { holds: 'location' });
+  const cenade = await page('cenade', 'CENADE', locs);
+  await writeBlocks(d, cenade, [{ p: 'Acceso por la autopista. Contacto en la guardia.' }]);
+  const scout = await page('scout', 'Tech scout 06/01', cenade);
+  await writeBlocks(d, scout, [
+    { h: 1, text: 'Accesos' },
+    { p: 'Portón norte, camiones hasta la playa de maniobras.' },
+    ...(await pics(scout, 'Accesos', 2)),
+    { h: 1, text: '(5027b) Ambulancia vuelca' },
+    { p: 'En el forcejeo la ambulancia pierde el control y se sale de la ruta en la curva; hay espacio para la grúa del lado de afuera.' },
+    ...(await pics(scout, 'Vuelco', 3)),
+  ]);
+  const arenera = await page('arenera', 'La Arenera (estudio)', locs);
+  await writeBlocks(d, arenera, [{ p: 'Estudio con fondo azul y la ambulancia de utilería.' }]);
+
+  // Días de rodaje (la carpeta de reportes): la locación sale del título del día.
+  const rodaje = await page('rodaje', '2 | Rodaje', null, { dayReports: {} });
+  const d59 = await page('d59', '2026-02-19 | Día 59 | CENADE', rodaje);
+  await writeBlocks(d, d59, [
+    { h: 1, text: 'Info general' },
+    { p: 'Llamado 7:00. Sol pleno toda la jornada.' },
+    { h: 1, text: 'Escena 105_027b' },
+    { p: 'Tres tomas del vuelco con la ambulancia de doble. Chrome ball y HDRI en la curva.' },
+    ...(await pics(d59, 'D59 vuelco', 5)),
+    { h: 1, text: 'Plates ambulancia' },
+    { p: 'Plates de ruta para las escenas de traslado.' },
+    ...(await pics(d59, 'D59 plates', 2)),
+  ]);
+  const d60 = await page('d60', '2026-02-20 | Día 60 | CENADE', rodaje);
+  await writeBlocks(d, d60, [
+    { h: 1, text: 'Escena 105_029a' },
+    { p: 'Primer plano del fugitivo, luz de atardecer.' },
+    ...(await pics(d60, 'D60', 2)),
+  ]);
+  // El plan del día: adentro del día, no es el reporte (nombra lo planeado, no lo filmado).
+  const plan60 = await page('plan60', 'Plan | Día 60', d60);
+  await writeBlocks(d, plan60, [{ p: 'Orden: 104_008, 104_009, 105_029 y si sobra tiempo la 105_027.' }]);
+  const d70 = await page('d70', '2026-03-06 | Día 70 | La Arenera', rodaje);
+  await writeBlocks(d, d70, [
+    { h: 1, text: 'Escena 105_027A + 029B' },
+    { p: 'Interior de la ambulancia en estudio, pantallas encendidas.' },
+    ...(await pics(d70, 'D70', 4)),
+  ]);
+  const d76 = await page('d76', '2026-03-14 | Día 76 | La Arenera', rodaje);
+  await writeBlocks(d, d76, [
+    { h: 1, text: 'Escena 5-27' },
+    { p: 'Insertos del volante.' },
+    ...(await pics(d76, 'D76 a', 2)),
+    { h: 1, text: 'Escena 5-27A' },
+    { p: 'Repetición del inserto con otra lente.' },
+    ...(await pics(d76, 'D76 b', 2)),
+  ]);
+
+  // Una nota suelta que la nombra, una página índice y un archivo fuera del grafo.
+  const notas = await page('notas', 'Notas de dirección', null);
+  await writeBlocks(d, notas, [{ p: 'Revisar con dirección la 105_027 antes del día 70.' }]);
+  if (options.indexPage !== false) {
+    const ep1 = await page('ep1', '101 | Episodio 1', bd);
+    const codes: string[] = [];
+    for (let i = 1; i <= 18; i++) {
+      const n = String(i).padStart(3, '0');
+      await page(`e1_${n}`, `${n} | Escena ${i}`, ep1);
+      codes.push(`101_${n}`);
+    }
+    const plan = await page('planning', 'Planning general', null);
+    await writeBlocks(d, plan, [{ p: `Orden previsto: ${codes.join(', ')}, 105_027, 105_029 y CENADE.` }]);
+  }
+  const archivo = await page('archivo', '90 | Archivo', null, { graph: false });
+  await writeBlocks(d, archivo, [{ p: 'Versión vieja: Escena 105_027 en CENADE.' }]);
+  await d.engine.syncNow();
+  return { projectId, ids, photos };
+}

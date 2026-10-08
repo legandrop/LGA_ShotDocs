@@ -21,6 +21,11 @@ export interface ResultRequest {
   occurrence?: number;
   /** *Aa* y palabra entera (desde reemplazar en el proyecto, que busca la frase con esas opciones). */
   options?: { matchCase?: boolean; wholeWord?: boolean };
+  /**
+   * Ir al lugar exacto desde la cabecera viva (Docs/Doc_Relaciones.md, sección 10): sin palabra, el bloque `blockId`
+   * resaltado; con `endBlockId`, la sección entera hasta ese bloque (`null`: hasta el final de la página).
+   */
+  place?: { endBlockId?: string | null };
   /** Destino de sólo lectura: la key de una foto en línea se resuelve al abrir, nunca se guarda. */
   annotation?: { projectId: string; fileId: string; shapeId: string };
 }

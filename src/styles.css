@@ -4875,8 +4875,9 @@ button.link.danger {
   color: var(--muted);
 }
 
-/* El bloque al que lleva un hilo, un momento. */
-.editor [data-node-type='blockContainer'].comment-flash > .bn-block-content {
+/* El bloque al que lleva un hilo, un momento (la decoración va en el bloque de afuera: relations/placeFlash.ts). */
+.editor [data-node-type='blockContainer'].comment-flash > .bn-block-content,
+.editor .bn-block-outer.comment-flash > .bn-block > .bn-block-content {
   border-radius: 6px;
   animation: comment-flash 1.8s ease-out;
 }

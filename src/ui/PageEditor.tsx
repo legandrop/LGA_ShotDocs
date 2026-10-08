@@ -63,7 +63,7 @@ import { DrivePasteMenu } from './DrivePasteMenu';
 import { lazyPart, Part, preloadWhenIdle } from './lazyPart';
 import { SheetBreaks } from './SheetBreaks';
 import type { HeadingRecord } from './collapse';
-import { collapseSupported, headingCounts, revealBlock, setAllCollapsed, SHARED_COLLAPSE_MAP } from './collapseEditor';
+import { collapseSupported, headingCollapse, headingCounts, revealBlock, setAllCollapsed, setCollapsed, SHARED_COLLAPSE_MAP } from './collapseEditor';
 import { pageEditorExtensions } from './editorExtensions';
 import { setCollapseControl } from './collapseControl';
 import { collapseSaver, loadCollapse } from './collapseStore';
@@ -83,6 +83,7 @@ import { selectedPhotos } from './inlinePhotoSize';
 import { shortcutLabel, slashBadge } from './shortcuts';
 import { closeFindBar, isFindShortcut, openFindBar, openFindBarAt, takesFindShortcut } from './findUi';
 import { searchSession, type ResultRequest } from './projectSearchUi';
+import { placeFlashExtension, showPlace } from '../relations/placeFlash';
 import { normalize, normalizeQuery, searchNormalized } from '../search/normalize';
 import '../i18n/lazy/search';
 import { registerRestoreTarget } from './historyUi';
@@ -224,6 +225,10 @@ export function PageEditor({ pageId }: { pageId: string }) {
       if (request.annotation) {
         closeFindBar();
         annotationNavigator?.open(request, search.requestValidity());
+      } else if (request.place && request.blockId) {
+        // Desde la cabecera viva: la sección (o el bloque) abierta y resaltada (relations/placeFlash.ts).
+        closeFindBar();
+        showPlace(pageId, request.blockId, request.place.endBlockId);
       } else if (request.term) {
         const target = request.blockId ? { pageId, blockId: request.blockId, occurrence: request.occurrence ?? 0 } : null;
         openFindBarAt(request.term, target, { focus: !coarsePointer(), ...request.options });
@@ -614,6 +619,8 @@ export function BlockEditor({
       // Las extensiones de la página (editorExtensions.ts): fotos en línea, buscar, deshacer, títulos y colapsar.
       extensions: [
         pageLinkViewExtension(linkScope.origin, linkScope.publicEntry),
+        // Ir al lugar exacto desde la cabecera viva: la sección resaltada un momento (relations/placeFlash.ts).
+        placeFlashExtension,
         ...pageEditorExtensions(
           canCollapse
             ? {
@@ -649,6 +656,12 @@ export function BlockEditor({
       reveal: (blockId) => {
         const view = editor.prosemirrorView;
         return view ? revealBlock(view, blockId) : false;
+      },
+      openSection: (headingId) => {
+        const view = editor.prosemirrorView;
+        if (!view) return;
+        revealBlock(view, headingId);
+        if (headingCollapse(view.state, headingId).collapsed) setCollapsed(view, [headingId], false);
       },
     });
   }, [editor, pageId, canCollapse, preview]);

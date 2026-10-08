@@ -156,6 +156,8 @@ const COMMENT_EDIT_CONFLICT = '0.227';
 const COMMENT_BOX_KEPT = '0.229';
 /** El índice del proyecto arranca al abrirlo y se guarda en el dispositivo (relaciones en vivo, E1). */
 const INDEX_READING = '0.237';
+/** La cabecera viva de escena y locación (relaciones en vivo, E3): la versión se pone al publicar. */
+const LIVE_HEADER = '0.238';
 /** Exportar una rama o un proyecto como PDF (P.22, Doc_Exportar.md, entrega 1): la versión se pone al publicar. */
 const EXPORT_PDF = '0.122';
 /** Exportar como zip (P.22, Doc_Exportar.md, entrega 2): la versión se pone al publicar. */
@@ -296,6 +298,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.indexReading.text',
     words: ['reading', 'leyendo', 'index', 'índice', 'first time', 'primera vez', 'scenes', 'escenas', 'locations', 'locaciones'],
     since: INDEX_READING,
+  },
+  {
+    id: 'liveHeader',
+    section: 'find',
+    title: 'help.liveHeader.title',
+    text: 'help.liveHeader.text',
+    words: ['scene', 'escena', 'location', 'locación', 'shot at', 'filmada', 'scouting', 'breakdown', 'desglose', 'header', 'cabecera', 'related', 'relacionado'],
+    since: LIVE_HEADER,
   },
   { id: 'projectsArchive', section: 'pages', title: 'help.projectsArchive.title', text: 'help.projectsArchive.text', since: BEFORE_HELP },
   { id: 'projectsDrive', section: 'pages', title: 'help.projectsDrive.title', text: 'help.projectsDrive.text', when: 'admin', since: BEFORE_HELP },

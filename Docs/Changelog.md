@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.238 :
+
+Abrir una escena o una locación no decía dónde se filmó ni qué la nombra. Ahora llevan, entre el título y el texto, una cabecera armada con el índice (`src/relations/LiveHeader.tsx`): Preproducción (locaciones de su desglose, fichas, scoutings) y Rodaje (días con una sección suya, la locación según el título; un plan del día dice «planned»; «No report section» y «No VFX» solo si todas sus fichas lo dicen, nunca «not shot»), etapas con extractos, fotos y páginas índice plegadas. Cada extracto lleva al lugar exacto, abierto y resaltado. Se pliega a un renglón por tipo, arranca plegada en el teléfono y mientras lee no afirma ceros. D393–D402. «Ir al bloque» de los comentarios no resaltaba (ProseMirror borraba la clase): usa la misma decoración. En desarrollo, `__shotdocsDev` y `dump()`.
+
+[Mostrar en las escenas y las locaciones una cabecera viva con lo que dice el proyecto, que lleva a la sección exacta y se pliega por tipo]
+
 v0.237 :
 
 Las relaciones en vivo no tenían motor: nada sabía qué escenas y locaciones nombra cada página, y el índice de la búsqueda se armaba recién al abrir ⌘K, en memoria, leyendo todo de nuevo en cada sesión. Ahora el lector de escenas (`src/relations/`, medido sobre ERSO: 139 de 139 secciones, 0 falsas, 0 pendientes falsos; largos sin episodios, D383, D391, D392) reconoce con lo que ya lee la búsqueda, que suma por bloque títulos, links y fotos, y con el tipo de página de `kind.ts`; `graph: false` saca una rama (D387). El índice arranca al abrir el proyecto, se guarda en el dispositivo (D384), relee la página abierta medio segundo después de escribir (D389, D390) y muestra «Reading 340 of 921…» la primera vez (D386, D388). Nada escribe en el documento ni sube. Detalle: `Docs/Doc_Relaciones.md`.

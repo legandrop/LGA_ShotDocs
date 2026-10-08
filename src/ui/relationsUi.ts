@@ -5,6 +5,7 @@ import { entityRelations, indexPages, pageRelations, pendingRelations, RelationI
 import type { RegisterTree } from '../relations/register';
 import { useServices, useSyncStatus, useTree } from '../services';
 import type { LocalDb } from '../sync/localDb';
+import type { PageRow } from '../sync/types';
 import { useCurrentProject } from './project';
 import { searchSession } from './projectSearchUi';
 
@@ -95,6 +96,11 @@ export function relationsSession(services: RelationServices): RelationsSession {
   return session;
 }
 
+/** Las relaciones ya arrancadas (por `RelationsRunner`), sin arrancarlas: para quien solo las muestra (la cabecera viva). */
+export function existingRelationsSession(services: { docs: IndexDocs }): RelationsSession | null {
+  return sessions.get(services.docs) ?? null;
+}
+
 /** Suelta las relaciones de una instancia de servicios (cerrar sesión, cambiar de workspace). Antes que la búsqueda. */
 export function disposeRelationsSession(services: { docs: IndexDocs }): void {
   sessions.get(services.docs)?.dispose();
@@ -117,9 +123,12 @@ export function RelationsRunner(): null {
   }, [session, projectId, status.lastSyncAt, treeRevision]);
   useEffect(() => {
     if (!import.meta.env.DEV) return;
-    // Para auditar sin interfaz (solo en desarrollo): `__shotdocsRelations` en la consola.
-    (window as unknown as Record<string, unknown>).__shotdocsRelations = relationsDebug(session, () => projectId);
-  }, [session, projectId]);
+    // Para auditar sin interfaz (solo en desarrollo, el build lo saca): `__shotdocsRelations` en la consola, y
+    // `__shotdocsDev` con el árbol y los documentos para los guiones de desarrollo (ERSO a vivo, E4).
+    const w = window as unknown as Record<string, unknown>;
+    w.__shotdocsRelations = relationsDebug(session, () => projectId, services.tree);
+    w.__shotdocsDev = { tree: services.tree, docs: services.docs, projectId };
+  }, [session, projectId, services]);
   return null;
 }
 
@@ -133,7 +142,7 @@ export function useIndexProgress(): { ready: number; total: number } | null {
 }
 
 /** Las consultas del índice de relaciones, para la consola del navegador en desarrollo (Docs/Doc_Relaciones.md, 7). */
-export function relationsDebug(session: RelationsSession, project: () => string) {
+export function relationsDebug(session: RelationsSession, project: () => string, tree?: Pick<RegisterTree, 'roots' | 'children'>) {
   const snap = () => session.relations.snapshot(project());
   const short = (r: ReturnType<typeof entityRelations>) => ({
     ...r,
@@ -179,6 +188,42 @@ export function relationsDebug(session: RelationsSession, project: () => string)
     indexPages: () => {
       const s = snap();
       return s && indexPages(s).map((id) => session.index.pagesOf(project()).find((x) => x.id === id)?.title ?? id);
+    },
+    /**
+     * Todo el índice del proyecto en un objeto (para comparar con la fuente en un guion): lo que existe, los duplicados,
+     * los pendientes y, por página visible en el orden del árbol, su fila, su papel, sus relaciones y sus unidades.
+     */
+    dump: (name = 'app') => {
+      const s = snap();
+      if (!s || !tree) return null;
+      const projectId = project();
+      const pages: unknown[] = [];
+      const visit = (row: PageRow) => {
+        const content = session.index.content(row.id);
+        pages.push({
+          id: row.id,
+          parent: row.parent_id,
+          title: row.title,
+          settings: row.settings ?? {},
+          role: s.registration.roles.get(row.id) ?? null,
+          rel: s.pages.get(row.id) ?? null,
+          units: content ? content.units.map((u) => ({ b: u.blockId, f: u.field, t: u.text })) : null,
+        });
+        for (const c of tree.children(row.id)) visit(c);
+      };
+      for (const r of tree.roots(projectId)) visit(r);
+      return {
+        name,
+        projectId,
+        complete: s.complete,
+        registry: {
+          scenes: Object.fromEntries([...s.registry.scenes].map(([k, v]) => [k, v.pageId])),
+          locations: Object.fromEntries([...s.registry.locations].map(([k, v]) => [k, { pageId: v.pageId, aliases: v.aliases }])),
+        },
+        duplicates: s.registration.duplicates,
+        pending: pendingRelations(s),
+        pages,
+      };
     },
     /** Probar el lector con un texto: `scan('Escena 1074C', true)`. */
     scan: (text: string, heading = false) => {

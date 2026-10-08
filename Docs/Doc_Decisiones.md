@@ -670,6 +670,40 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
 - **D390 · Releer después de un cambio del árbol o una sincronización espera 300 ms; una edición, 500 ms** (2026-10-08;
   E1, Lega la puede cambiar). Un título que se escribe no relee el estado de todas las páginas por tecla. La otra opción:
   releer en el acto.
+- **D393 · «Planned at» de una escena son las locaciones que nombra su propio desglose** (2026-10-08; E3, Lega la puede
+  cambiar). La escena y sus fichas; se rotula «named in its breakdown». El motor no lee campos («Locación real»). La otra
+  opción: esperar a leer campos de las fichas (sin dato hasta entonces).
+- **D394 · En el teléfono la cabecera viva de escena y de locación arranca plegada en un renglón** (2026-10-08; E3, Lega
+  la puede cambiar). Lo elegido se recuerda por tipo (escena / locación) en el dispositivo, también en la computadora. La
+  otra opción: plegada solo la del día (C7 B2), abierta en escena y locación.
+- **D395 · «No VFX» solo con un campo o una celda que lo dice entero, y para la escena entera solo si lo dice la escena
+  o todas sus fichas con texto** (2026-10-08; E3, corregida al auditar la v0.238; Lega la puede cambiar). «No VFX» o
+  «VFX…: No VFX»; una frase que lo nombra de pasada no cuenta. Una ficha «No VFX» al lado de otras con DMP o CG (ERSO
+  105_062) dice «No VFX in 1 of 4 cards», no «No VFX»; una ficha sin texto no cuenta. La otra opción: una sola ficha
+  marca la escena (afirmaba de más).
+- **D396 · La tira de fotos de la cabecera muestra la cantidad, sin «All N · by source»** (2026-10-08; E3, Lega la puede
+  cambiar). La vista por fuente y el carrete de varias páginas son de E8; tocar una foto lleva a su sección. La otra
+  opción: un botón que todavía no hace nada.
+- **D397 · Las páginas índice no aportan extractos, días ni fotos a la cabecera** (2026-10-08; E3, Lega la puede
+  cambiar). Van plegadas en un botón «N index pages». La otra opción: listarlas con las demás (inundan la cabecera).
+- **D398 · La locación de un día de rodaje es la que nombra su título** (2026-10-08; E3, Lega la puede cambiar). Vale
+  para «filmada en» de la escena y para los días de la locación, y se rotula «per the day title» (C8 §7.2). La otra
+  opción: una fila *Location* bajo cada sección (no existe todavía).
+- **D399 · Ir al lugar exacto deja abierta, para vos, la sección colapsada** (2026-10-08; E3, Lega la puede cambiar).
+  Como «Ir al bloque» de los comentarios; la búsqueda, en cambio, la vuelve a cerrar al terminar. La otra opción: abrirla
+  solo mientras dura el resaltado.
+- **D400 · Lo de adentro de un día que no es su reporte (un plan, una hoja de llamado) dice «planeada», nunca
+  filmada** (2026-10-08; E3, Lega la puede cambiar). La cabecera de la escena lo muestra como «planned in «Plan | Día
+  60»» y la locación no cuenta esa escena en ese día. En ERSO, los 35 plannings son «parte de» su día y nombran 115
+  escenas. La otra opción: sumarlos como menciones del día (parecería filmada).
+- **D401 · Quien no ve el proyecto entero lee las ausencias como «you can see»** (2026-10-08; corrección de la auditoría
+  de E3, O1; Lega la puede cambiar). Un invitado a una rama (sin ser dueño, admin ni tener permiso sobre el proyecto)
+  ve «No report section you can see» y «No report section you can see yet: …», con un tooltip que dice que un reporte
+  que no ve puede tener la sección. La otra opción: no mostrar la ausencia (el invitado no sabría por qué está vacío).
+- **D402 · Mientras el índice lee, el renglón plegado muestra solo lo que ya encontró y «Reading…»** (2026-10-08;
+  corrección de la auditoría de E3, B2; Lega la puede cambiar). Nada de ceros ni de «No report section» hasta que la
+  lectura termina; el punto «Reading…» va también en el renglón (el teléfono arranca plegado, D394). La otra opción:
+  «Reading…» en lugar de cada cifra (un renglón largo que no dice nada).
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 

@@ -186,3 +186,109 @@ página que lee el índice.
 - Las locaciones por nombre son una señal débil (~87 % coherentes fuera de las páginas índice, C8): nunca dicen
   «filmada en»; eso lo decide E3 con el título del día.
 - Lo que escriben otros en la página abierta se reconoce con la sincronización, no a los 500 ms.
+
+## 10. La cabecera viva de escena y locación (E3, v0.238)
+
+Una página que es escena o locación (lo que dice el registro, sección 4) muestra entre el título y el documento una
+cabecera armada con el índice: **interfaz**, fuera del ProseMirror (`PageView.tsx`, entre `<TitleInput>` y
+`<PageBarrier>`). No se guarda en la página, no sube, no sale en el PDF (`@media print`), y con un link público no
+aparece (el visitante no tiene tipos de página, D381). La del día es de E5.
+
+| Pieza | Archivo |
+|---|---|
+| Qué se muestra (puro, sobre la foto del índice) | `src/relations/liveView.ts` (`sceneLive`, `locationLive`, `dayRef`) |
+| La cabecera | `src/relations/LiveHeader.tsx` + `liveHeader.css` (prefijo `lh-`, un tono por tipo de entidad, claro y oscuro) |
+| Plegado por tipo | `src/relations/liveFold.ts` (`shotdocs.liveHeader.open` en `localStorage`) |
+| Ir al lugar exacto | `src/relations/goToPlace.ts` (pedido `ResultRequest.place`), `src/relations/placeFlash.ts` (decoración pasajera), `PageEditor.tsx` (toma el pedido; `openSection` en `CollapseControl`) |
+| Textos | `src/i18n/relations.ts`; ayuda `liveHeader` (`src/help/entries.ts`, since 0.238) |
+| Arnés | `src/dev/cabecera-viva.html` + `cabeceraViva.tsx`, con `src/relations/fixtures/proyectoSintetico.ts` (nombres inventados) |
+
+**Escena.** Renglón de arriba: el tipo, el episodio y las otras formas en que el proyecto la escribe (`5027b`,
+`105_027b`, `5-27`…), sacadas de las menciones; nunca el número ni la ruta (C7 O3). Dos columnas:
+- *Preproduction*: *Planned at* = locaciones que nombra su propio desglose (la escena y sus fichas: «named in its
+  breakdown»); *Breakdown* = sus fichas (lo de adentro); *Scouting* = las páginas de scouting que la nombran, o si
+  ninguna, los scoutings de las locaciones donde tiene sección («of CENADE»).
+- *Shoot*: un renglón por día cuyo reporte tiene una **sección** con la escena en el título (en orden de fecha), con
+  la locación **del título del día** (rotulada «Location per the day title»), cada sección (`§ Escena 105_027b`, va
+  ahí) y 3 fotos. Un título con dos locaciones («CENADE + La Arenera») cuenta para las dos. Un día que solo la nombra en el texto: «named in the text». Lo de adentro de un día que no es su
+  reporte (el plan del día) la nombra como **planeada** («planned in «Plan | Día 60»», D400), nunca como filmada; la
+  locación tampoco cuenta ese día. Sin sección: **«No report section»**,
+  nunca «not shot» (C7 B4), y **«No VFX · not expected in VFX reports»** si la escena o **todas** sus fichas con texto
+  tienen un campo o una celda que dice entero «No VFX» o «VFX…: No VFX» (una frase que lo dice de pasada no cuenta); si
+  son algunas, «No VFX in 1 of 4 cards» (D395). Quien no ve el proyecto entero lee «No report section you can see»
+  (D401). Un plan de un día en que la escena ya tiene sección no repite ese día como «planned».
+
+**Locación.** *Planned here* = escenas cuyo desglose la nombra; *Scouting* = las páginas de adentro, con sus fotos;
+*Shoot* = los días que la nombran en el título, con las escenas que tienen sección ese día y las secciones de arriba
+sin número que tienen fotos («§ Plates ambulancia»); «No report section yet: …» para las planeadas sin sección.
+
+**Para las dos.** «Also named in» junta las demás páginas que la nombran; las **páginas índice** (más de 20 escenas y
+locaciones, sección 3) van plegadas en un solo botón y no aportan extractos ni fotos. Las ramas con `graph: false` ya
+no están en la foto. Tres **etapas** cerradas (*Breakdown*, *Scouting*, *Shoot*) con su resumen; abrir una muestra
+extractos (título de la sección, unos renglones, 3 fotos) que llevan al lugar exacto. Una **tira de 6 fotos**
+(desglose → scouting → días, sin repetir) con su origen; cada una lleva a su sección. Pie: de cuántas páginas sale.
+
+**En vivo.** Se redibuja con cada foto del índice (`subscribe`/`getRevision`): al escribir acá o en otra página
+(relectura a 500 ms), al sincronizar o cambiar el árbol. React reutiliza lo dibujado (sin parpadeo); las miniaturas se
+piden una vez por sesión con la misma dirección que usa la página (`media.resolve`). Mientras el índice no está
+completo, el renglón dice «Reading…» en vez de «Live», y todo lo que afirmaría una ausencia («None», «No report
+section», «No cards») dice «Reading…».
+
+**Ir al lugar exacto.** Un extracto, una sección o una foto piden a la búsqueda (`searchSession().requestResult`) ir a
+la página con `place: { endBlockId }` y navegan. El editor de esa página, al estar listo, abre lo colapsado que la
+esconde y el título mismo si está colapsado (para vos, como «Ir al bloque» de los comentarios; `openSection`), lleva
+la vista ahí y resalta la sección entera 2,4 s con una decoración de ProseMirror (`placeFlash.ts`): una clase puesta
+a mano en el DOM se pierde porque ProseMirror vuelve a dibujar el bloque. «Ir al bloque» de los comentarios tenía ese problema (la clase
+`comment-flash` duraba menos de 250 ms y no se veía): ahora usa la misma decoración con su estilo, por
+`src/ui/flashControl.ts`, que el editor llena al cargarse (la primera carga no trae ProseMirror).
+
+**Plegado.** A un renglón (~44 px) que resume (*Shot at CENADE, La Arenera · 3 days · 2 cards · 18 photos*). Se
+recuerda por tipo en el dispositivo; mientras la persona no eligió, en el teléfono arranca plegada y en la
+computadora abierta. Mientras el índice lee, el renglón muestra solo lo que ya encontró y el punto «Reading…» (D402).
+Al plegar o desplegar, el foco pasa al control nuevo (el renglón o *Collapse*, los dos con `aria-expanded`); el
+renglón no lleva `aria-label`, así un lector de pantalla lee su resumen.
+
+**Permisos.** Todo sale de la foto del índice, que solo tiene lo que la persona ve: un invitado que ve solo la
+escena ve sus fichas y nada de días, scoutings ni títulos de otras páginas (prueba).
+
+### Decisiones de esta entrega
+
+- **D393 · «Planned at» sale de las locaciones que nombra el desglose de la escena** (la escena y sus fichas), no de
+  un campo «Locación real» (el motor no lee campos). Se rotula «named in its breakdown». Se revierte en
+  `sceneLive` (`planned`).
+- **D394 · En el teléfono la cabecera de escena y de locación arranca plegada** (B2 de C7 lo pedía para el día; el
+  encargo, para todas). Lo elegido se recuerda por tipo y vale también en la computadora del mismo dispositivo. Se
+  revierte en `liveFold.ts` (`liveOpen`: `?? !phone`).
+- **D395 · «No VFX» solo con un campo entero** (la unidad es «No VFX» o «VFX…: No VFX»), y para la escena entera solo
+  si lo dice la escena o todas sus fichas con texto; si son algunas, «No VFX in N of M cards». Se revierte en
+  `liveView.ts` (`NO_VFX`, `noVfxCards`).
+- **D396 · La tira de fotos muestra la cantidad, sin «All N · by source»**: la vista por fuente y el carrete de
+  varias páginas son de E8. Tocar una foto va a su sección. Se revierte en `PhotoStrip`.
+- **D397 · Las páginas índice no aportan extractos, días ni fotos**, solo el botón plegado «N index pages». Se
+  revierte en `sceneLive`/`locationLive` (`indexPage`).
+- **D398 · La locación de un día de rodaje es la que nombra su título**, para la escena y para la locación
+  («per the day title», C8 §7.2). Una fila *Location* bajo la sección queda para cuando exista. Se revierte en
+  `dayRef`.
+- **D399 · Ir al lugar exacto deja abierta, para vos, la sección colapsada** (como «Ir al bloque»), en vez de
+  abrirla solo mientras dura el resaltado como hace buscar: se va ahí a leerla. Se revierte en `openSection`
+  (`PageEditor.tsx`).
+
+- **D401** Quien no ve el proyecto entero lee las ausencias como «you can see» (`partial` en `LiveHeader.tsx`).
+- **D402** Mientras el índice lee, el renglón plegado muestra solo lo encontrado y «Reading…» (`Line`).
+- **D400** Lo de adentro de un día que no es su reporte dice «planeada», nunca filmada. Se revierte en `sceneLive`
+  (`planMap`) y `sceneDays`.
+
+**Ganchos de desarrollo** (solo con `import.meta.env.DEV`, en el mismo efecto que `__shotdocsRelations`;
+`src/ui/devHooks.test.ts` cuida que no se pongan en otro lado y el build publicado no los trae):
+`window.__shotdocsDev = { tree, docs, projectId }` y `__shotdocsRelations.dump(name)` → `{ name, projectId, complete,
+registry: { scenes: {código: pageId}, locations: {nombre: {pageId, aliases}} }, duplicates, pending, pages: [{ id,
+parent, title, settings, role, rel, units: [{b, f, t}] }] }`, las páginas en el orden del árbol (para el guion de ERSO
+a vivo, E4).
+
+### Lo que falta (anotado)
+
+- La **pregunta abierta** del desglose, los **decorados** (*Sets*), INT/EXT y las **coordenadas** de la locación
+  salen en la maqueta de campos de las fichas de Coda; el motor no lee campos. Hace falta una consulta de «campo:
+  valor» por ficha (E5 también la necesita para *Open questions for today*).
+- Fotos por fuente y carrete de varias páginas (E8); la cabecera del día (E5).
+- `kind.ts` de E2: cuando E1 lo use, la cabecera lo toma solo (lee `registration.roles`).

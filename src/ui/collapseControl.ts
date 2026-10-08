@@ -9,6 +9,8 @@ export interface CollapseControl {
   setAll: (collapsed: boolean) => void;
   /** Abre lo que esconde un bloque. Devuelve si estaba escondido. */
   reveal: (blockId: string) => boolean;
+  /** Abre lo que esconde un título y, si está colapsado, el título mismo (ir a una sección desde la cabecera viva). */
+  openSection?: (headingId: string) => void;
 }
 
 let current: CollapseControl | null = null;

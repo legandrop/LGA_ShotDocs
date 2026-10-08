@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { t, type Key } from '../i18n';
 import { revealCollapsed } from './collapseControl';
+import { flashBlock } from './flashControl';
 import { IS_MAC, modPressed } from './findUi';
 import { noticeVisible, notify } from './notice';
 
@@ -396,6 +397,8 @@ export function revealBlock(blockId: string): boolean {
   const el = blockElement(blockId);
   if (!el) return false;
   el.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+  // Con el editor: una decoración (una clase puesta a mano la borraba ProseMirror en menos de 250 ms y no se veía).
+  if (flashBlock(blockId)) return true;
   el.classList.remove('comment-flash');
   void el.offsetWidth;
   el.classList.add('comment-flash');

@@ -5,6 +5,7 @@ import { navigate, pagePath } from '../router';
 import { useLinkMode } from '../linkMode';
 import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
 import { ACCESS_REQUESTS_PAGES_SCHEMA_VERSION } from '../sync/accessRequests';
+import { LiveHeader } from '../relations/LiveHeader';
 import { DayReportButton } from '../templates/dayReportUi';
 import { TemplateBanner } from '../templates/ownTemplatesUi';
 import { disarmTitleUndo, titleUndoFor } from '../templates/templatesUi';
@@ -110,6 +111,8 @@ export function PageView({ id, registerTitle }: { id: string; registerTitle?: Re
       <LinkVisitorAsideNotice pageId={id} />
       <PageHeader id={id} editable={perms.canEditRow(id)} />
       <TitleInput id={id} title={page.title} readOnly={!perms.canEditRow(id)} registerTitle={registerTitle} />
+      {/* La cabecera viva de una escena o una locación (Docs/Doc_Relaciones.md, 10): interfaz, fuera del documento. */}
+      <LiveHeader pageId={id} />
       {/* Si el editor tira un error con lo que tiene la página, falla solo la página (ErrorBarrier.tsx). */}
       <PageBarrier pageId={id}>
         <Part fallback={<EditorSkeleton />}>

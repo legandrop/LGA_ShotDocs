@@ -1,0 +1,162 @@
+import type { Dict } from './types';
+
+// La cabecera viva de las escenas y las locaciones (Docs/Doc_Relaciones.md, sección 10).
+
+export const relations = {
+  'live.aria': { en: "Built automatically from the whole project", es: "Armada sola con todo el proyecto" },
+  'live.scene': { en: "Scene", es: "Escena" },
+  'live.location': { en: "Location", es: "Locación" },
+  'live.sceneTip': {
+    en: "Built on this device from what every page you can see says about this scene. Nothing here is saved in the page or printed.",
+    es: "Se arma en este dispositivo con lo que dicen de esta escena todas las páginas que ves. Nada de esto se guarda en la página ni sale impreso.",
+  },
+  'live.locationTip': {
+    en: "Built on this device from what every page you can see says about this location. Nothing here is saved in the page or printed.",
+    es: "Se arma en este dispositivo con lo que dicen de esta locación todas las páginas que ves. Nada de esto se guarda en la página ni sale impreso.",
+  },
+  'live.episode': { en: "Episode {ep}", es: "Episodio {ep}" },
+  'live.alsoWritten': { en: "also written", es: "también escrita" },
+  'live.live': { en: "Live", es: "En vivo" },
+  'live.liveTip': { en: "Updates as you write, here or in any other page.", es: "Se actualiza mientras escribís, acá o en cualquier otra página." },
+  'live.reading': { en: "Reading…", es: "Leyendo…" },
+  'live.readingTip': {
+    en: "This device is still reading the project: what isn't here yet may still appear.",
+    es: "Este dispositivo todavía está leyendo el proyecto: lo que todavía no está puede aparecer.",
+  },
+  'live.collapse': { en: "Collapse", es: "Plegar" },
+  'live.foldSceneTip': { en: "Remembered for every scene on this device", es: "Se recuerda para todas las escenas en este dispositivo" },
+  'live.foldLocationTip': { en: "Remembered for every location on this device", es: "Se recuerda para todas las locaciones en este dispositivo" },
+  'live.preproduction': { en: "Preproduction", es: "Preproducción" },
+  'live.shoot': { en: "Shoot", es: "Rodaje" },
+  'live.breakdown': { en: "Breakdown", es: "Desglose" },
+  'live.scouting': { en: "Scouting", es: "Scouting" },
+  'live.plannedAt': { en: "Planned at", es: "Planeada en" },
+  'live.plannedVia': { en: "named in its breakdown", es: "la nombra su desglose" },
+  'live.none': { en: "None", es: "Ninguno" },
+  'live.cards': {
+    en: { one: "{count} card", other: "{count} cards" },
+    es: { one: "{count} ficha", other: "{count} fichas" },
+  },
+  'live.namesIt': { en: "names it", es: "la nombra" },
+  'live.ofLoc': { en: "of {loc}", es: "de {loc}" },
+  'live.noReport': { en: "No report section", es: "Sin sección en un reporte" },
+  'live.noReportTip': {
+    en: "No day report has a section titled with this scene. It doesn't say whether it was shot.",
+    es: "Ningún reporte del día tiene una sección con esta escena en el título. No dice si se filmó o no.",
+  },
+  'live.noReportSeen': { en: "No report section you can see", es: "Sin sección en un reporte que veas" },
+  'live.noReportSeenTip': {
+    en: "You see part of this project: a report you can't see may have a section of this scene.",
+    es: "Ves una parte del proyecto: un reporte que no ves puede tener una sección de esta escena.",
+  },
+  'live.noReportYetSeen': { en: "No report section you can see yet: {codes}", es: "Todavía sin sección en un reporte que veas: {codes}" },
+  'live.noVfxSome': { en: "No VFX in {count} of {of} cards", es: "No VFX en {count} de {of} fichas" },
+  'live.noVfxSomeTip': {
+    en: "Only some of its breakdown cards say No VFX: the others may need VFX.",
+    es: "Solo algunas fichas de su desglose dicen No VFX: las otras pueden llevar VFX.",
+  },
+  'live.fromBreakdown': { en: "From the breakdown of {code}", es: "Del desglose de {code}" },
+  'live.noVfx': { en: "No VFX · not expected in VFX reports", es: "No VFX · no se espera en reportes de VFX" },
+  'live.noVfxTip': { en: "Its breakdown says No VFX", es: "Su desglose dice No VFX" },
+  'live.perDayTitle': { en: "Location per the day title", es: "La locación según el título del día" },
+  'live.plannedFor': { en: "planned in «{page}»", es: "planeada en «{page}»" },
+  'live.plannedForTip': {
+    en: "A page inside that day (not its report) names this scene: planned, not necessarily shot.",
+    es: "Una página adentro de ese día (no su reporte) nombra esta escena: planeada, no necesariamente filmada.",
+  },
+  'live.plan': { en: "Plan", es: "Plan" },
+  'live.namedInText': { en: "named in the text", es: "nombrada en el texto" },
+  'live.days': {
+    en: { one: "{count} day", other: "{count} days" },
+    es: { one: "{count} día", other: "{count} días" },
+  },
+  'live.sections': {
+    en: { one: "{count} section", other: "{count} sections" },
+    es: { one: "{count} sección", other: "{count} secciones" },
+  },
+  'live.mentions': {
+    en: { one: "{count} mention", other: "{count} mentions" },
+    es: { one: "{count} mención", other: "{count} menciones" },
+  },
+  'live.sectionsNameIt': {
+    en: { one: "{count} section names it", other: "{count} sections name it" },
+    es: { one: "{count} sección la nombra", other: "{count} secciones la nombran" },
+  },
+  'live.via': { en: "Via {locs}", es: "Por {locs}" },
+  'live.noCards': { en: "No cards", es: "Sin fichas" },
+  'live.panel.breakdown': { en: "cards inside this scene, and other breakdown pages that name it", es: "las fichas de adentro de la escena y otras páginas del desglose que la nombran" },
+  'live.panel.scouting': { en: "where a scout report names it", es: "dónde la nombra un scouting" },
+  'live.panel.shoot': { en: "sections of the day reports, in order", es: "las secciones de los reportes del día, en orden" },
+  'live.panel.scoutsVia': {
+    en: "scoutings of the locations where it was shot · they don't name this scene",
+    es: "los scoutings de las locaciones donde se filmó · no nombran esta escena",
+  },
+  'live.empty.breakdown': { en: "No breakdown cards inside this scene.", es: "No hay fichas de desglose adentro de esta escena." },
+  'live.empty.scouting': { en: "No scouting names this scene.", es: "Ningún scouting nombra esta escena." },
+  'live.empty.shoot': { en: "No report has a section for this scene.", es: "Ningún reporte tiene una sección de esta escena." },
+  'live.empty.shootSeen': { en: "No report you can see has a section for this scene.", es: "Ningún reporte que ves tiene una sección de esta escena." },
+  'live.photos': { en: "Photos", es: "Fotos" },
+  'live.photoCount': {
+    en: { one: "{count} photo", other: "{count} photos" },
+    es: { one: "{count} foto", other: "{count} fotos" },
+  },
+  'live.noPhotos': {
+    en: "none yet: they appear when a related report, scouting or card has them",
+    es: "todavía ninguna: aparecen cuando un reporte, un scouting o una ficha relacionados las tienen",
+  },
+  'live.source.breakdown': { en: "Breakdown", es: "Desglose" },
+  'live.source.location': { en: "Location", es: "Locación" },
+  'live.alsoIn': { en: "Also named in", es: "También la nombran" },
+  'live.indexPages': {
+    en: { one: "{count} index page", other: "{count} index pages" },
+    es: { one: "{count} página índice", other: "{count} páginas índice" },
+  },
+  'live.indexPagesTip': {
+    en: "Pages that name more than 20 scenes and locations (plannings, lists): folded so they don't flood this header.",
+    es: "Páginas que nombran más de 20 escenas y locaciones (plannings, listas): plegadas para que no inunden la cabecera.",
+  },
+  'live.foot': {
+    en: { one: "Built on this device from {count} page · updates as you write", other: "Built on this device from {count} pages · updates as you write" },
+    es: { one: "Armada en este dispositivo con {count} página · se actualiza al escribir", other: "Armada en este dispositivo con {count} páginas · se actualiza al escribir" },
+  },
+  'live.part': { en: "part {part}", es: "parte {part}" },
+  'live.goTip': { en: "Opens the page there, with the section highlighted", es: "Abre la página ahí, con la sección resaltada" },
+  'live.shotAt': { en: "Shot at {locs}", es: "Filmada en {locs}" },
+  // La locación
+  'live.plannedHere': { en: "Planned here", es: "Planeadas acá" },
+  'live.plannedHereVia': { en: "named in their breakdown", es: "las nombra su desglose" },
+  'live.noReportYet': { en: "No report section yet: {codes}", es: "Todavía sin sección en un reporte: {codes}" },
+  'live.noShootDays': { en: "No shoot day names it in its title", es: "Ningún día de rodaje la nombra en el título" },
+  'live.noSceneNumberTip': { en: "Section without a scene number", es: "Sección sin número de escena" },
+  'live.scenesPlanned': {
+    en: { one: "{count} scene planned here", other: "{count} scenes planned here" },
+    es: { one: "{count} escena planeada acá", other: "{count} escenas planeadas acá" },
+  },
+  'live.scenes': {
+    en: { one: "{count} scene", other: "{count} scenes" },
+    es: { one: "{count} escena", other: "{count} escenas" },
+  },
+  'live.shootDays': {
+    en: { one: "{count} shoot day", other: "{count} shoot days" },
+    es: { one: "{count} día de rodaje", other: "{count} días de rodaje" },
+  },
+  'live.withReport': {
+    en: { one: "{count} scene with a report section", other: "{count} scenes with a report section" },
+    es: { one: "{count} escena con sección en un reporte", other: "{count} escenas con sección en un reporte" },
+  },
+  'live.plannedCount': {
+    en: { one: "{count} planned", other: "{count} planned" },
+    es: { one: "{count} planeada", other: "{count} planeadas" },
+  },
+  'live.scoutings': {
+    en: { one: "{count} scouting", other: "{count} scoutings" },
+    es: { one: "{count} scouting", other: "{count} scoutings" },
+  },
+  'live.panel.locBreakdown': { en: "scenes whose breakdown names this location", es: "las escenas cuyo desglose nombra esta locación" },
+  'live.panel.locScouting': { en: "pages inside this location", es: "las páginas de adentro de esta locación" },
+  'live.panel.locShoot': { en: "sections of the reports of its days", es: "las secciones de los reportes de sus días" },
+  'live.empty.locBreakdown': { en: "No breakdown names this location.", es: "Ningún desglose nombra esta locación." },
+  'live.empty.locScouting': { en: "No scouting yet.", es: "Todavía no hay scouting." },
+  'live.empty.locShoot': { en: "No shoot day names this location in its title.", es: "Ningún día de rodaje nombra esta locación en el título." },
+  'live.reportOn': { en: "report · {days}", es: "reporte · {days}" },
+} satisfies Dict;
