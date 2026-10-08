@@ -47,15 +47,51 @@ export interface RegisterTree {
   isTrashed(id: string): boolean;
 }
 
-/** El nombre y los alias de una locación por su título: «CENADE (Centro Nacional)» → CENADE, Centro Nacional. */
+/**
+ * El nombre y los alias de una locación por su título: el título entero y, si lo parten ` / ` o ` | `, cada parte
+ * («Aysa / Planta Bernal» → Aysa, Planta Bernal). Lo de adentro de un paréntesis nunca es alias (D416): en ERSO,
+ * `Europa (plates)` volvía locación a la palabra «plates» de cualquier reporte y cinco «… (Europa)» compartían «Europa».
+ * El nombre sin el paréntesis lo suma `registerProject`, que ve todas las locaciones (`bareLocationName`).
+ */
 export function locationFromTitle(title: string): { name: string; aliases: string[] } {
   const name = title.trim();
   const aliases = new Set<string>([name]);
-  const bare = name.replace(/\s*\(.*?\)\s*/g, ' ').trim();
-  if (bare) aliases.add(bare);
-  for (const m of name.matchAll(/\(([^)]+)\)/g)) aliases.add(m[1].trim());
   for (const part of name.split(/\s+[|/]\s+/)) if (part.trim() && !/^\d+$/.test(part.trim())) aliases.add(part.trim());
   return { name, aliases: [...aliases].filter((a) => fold(a).trim().length > 0) };
+}
+
+/**
+ * El nombre sin el paréntesis, si puede ser alias (D416): de dos palabras o más («La Arenera» de `La Arenera (estudio)`,
+ * «Bar Berlin» de `Bar Berlin (Claridge)`). Una sola palabra suele ser la ciudad o el sustantivo que el guion usa para la
+ * historia («Lübben» de `Lübben (Europa)`: «un auto que viene de Berlín hacia Lübben» es el decorado, no donde se
+ * filmó), y no cuenta. Además, `registerProject` lo descarta si lo comparte otra locación.
+ */
+export function bareLocationName(name: string): string | null {
+  const bare = withoutParens(name);
+  return bare && bare !== name.trim() && bare.split(' ').length >= 2 ? bare : null;
+}
+
+const withoutParens = (name: string): string => name.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+
+/**
+ * Suma a cada locación su nombre sin el paréntesis cuando ninguna otra locación lo comparte (como nombre o igual). De
+ * dos palabras o más es alias en todos lados (D416); de una sola, solo en el título de un día de rodaje (D417):
+ * «2026-03-11 | Día 73 | Inquilinato» es el lugar del día, «…hacia Lübben» en un párrafo no nombra a `Lübben (Europa)`.
+ */
+function withBareNames(locations: LocationInput[]): LocationInput[] {
+  const uses = new Map<string, number>();
+  const count = (s: string) => uses.set(fold(s).trim(), (uses.get(fold(s).trim()) ?? 0) + 1);
+  for (const l of locations) {
+    count(l.name);
+    const bare = withoutParens(l.name);
+    if (bare && bare !== l.name) count(bare);
+  }
+  return locations.map((l) => {
+    const bare = withoutParens(l.name);
+    if (!bare || bare === l.name.trim() || uses.get(fold(bare).trim()) !== 1) return l;
+    if (bareLocationName(l.name)) return { ...l, aliases: [...new Set([...(l.aliases ?? [l.name]), bare])] };
+    return { ...l, dayTitleAliases: [bare] };
+  });
 }
 
 const stageOf = (kind: EntityKind | undefined, own: boolean): Stage =>
@@ -103,7 +139,7 @@ export function registerProject(tree: RegisterTree, projectId: string, kinds: Ki
   };
   for (const root of tree.roots(projectId)) visit(root, false);
   const duplicates = [...byCode].filter(([, ids]) => ids.length > 1).map(([code, pageIds]) => ({ code, pageIds }));
-  return { scenes, locations, roles, duplicates };
+  return { scenes, locations: withBareNames(locations), roles, duplicates };
 }
 
 const epOf = (code: string | null): string | null => (code && /^\d{3}_/.test(code) ? code.slice(0, 3) : null);

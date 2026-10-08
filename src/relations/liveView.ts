@@ -210,7 +210,7 @@ export function dayRef(src: LiveSource, pageId: string): DayRef {
   const n = dayInTitle(title);
   const part = title.split('|').map((p) => p.trim()).find((p) => /(?:^|\s)(?:day|d[ií]a)\s*\d/i.test(p));
   const label = part ?? (n ? `Day ${String(n).padStart(2, '0')}` : title);
-  const locs = scan(src.snap.registry, title, { heading: true }).filter((h) => h.kind === 'loc');
+  const locs = scan(src.snap.registry, title, { heading: true, dayTitle: true }).filter((h) => h.kind === 'loc');
   const names = [...new Set(locs.map((h) => h.ref))];
   return { pageId: dayId, label: label || title, date: dateAtStart(title), loc: names[0] ?? null, locs: names };
 }

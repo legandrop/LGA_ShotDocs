@@ -43,6 +43,8 @@ export interface ScanContext {
   heading?: boolean;
   /** El episodio de la página (la de una escena o lo que está adentro de una): «Esc 27» → `105_027`. */
   ep?: string | null;
+  /** El texto es el título de un día de rodaje (su lugar, D398): valen también los alias solo de título (D417). */
+  dayTitle?: boolean;
 }
 
 export interface SceneInput {
@@ -54,6 +56,8 @@ export interface SceneInput {
 export interface LocationInput {
   name: string;
   aliases?: string[];
+  /** Alias que valen solo en el título de un día de rodaje (D417): «Inquilinato» de `Inquilinato (Cachi 247)`. */
+  dayTitleAliases?: string[];
   pageId?: string | null;
 }
 
@@ -86,6 +90,8 @@ export interface Registry {
   locations: Map<string, LocationEntry>;
   /** Alias de locación ya normalizados, del más largo al más corto. */
   locAlias: { f: string; name: string }[];
+  /** Los mismos más los que valen solo en el título de un día (D417), del más largo al más corto. */
+  locDayTitleAlias: { f: string; name: string }[];
   /** Cambia cuando cambia lo que se reconoce (para no volver a leer de más). */
   signature: string;
 }
@@ -162,21 +168,35 @@ export function buildRegistry(input: { scenes: SceneInput[]; locations: Location
     if (!name || locations.has(name)) continue;
     locations.set(name, { name, aliases: l.aliases?.length ? l.aliases : [name], pageId: l.pageId ?? null });
   }
+  const usable = (a: string) => {
+    const f = fold(a).trim();
+    return f && !GENERIC.has(f) && !(f.length < 4 && a !== a.toUpperCase()) ? f : null;
+  };
+  const longestFirst = (a: { f: string }, b: { f: string }) => b.f.length - a.f.length || (a.f < b.f ? -1 : a.f > b.f ? 1 : 0);
   const locAlias: Registry['locAlias'] = [];
+  const locDayTitleAlias: Registry['locDayTitleAlias'] = [];
   for (const l of locations.values()) {
     for (const a of new Set([l.name, ...l.aliases])) {
-      const f = fold(a).trim();
-      if (!f || GENERIC.has(f)) continue;
-      if (f.length < 4 && a !== a.toUpperCase()) continue;
-      locAlias.push({ f, name: l.name });
+      const f = usable(a);
+      if (f) locAlias.push({ f, name: l.name });
     }
   }
-  locAlias.sort((a, b) => b.f.length - a.f.length || (a.f < b.f ? -1 : a.f > b.f ? 1 : 0));
+  for (const l of input.locations) {
+    const name = l.name.trim();
+    for (const a of l.dayTitleAliases ?? []) {
+      const f = usable(a);
+      if (f && locations.has(name) && !locAlias.some((x) => x.f === f)) locDayTitleAlias.push({ f, name });
+    }
+  }
+  locAlias.sort(longestFirst);
+  locDayTitleAlias.push(...locAlias);
+  locDayTitleAlias.sort(longestFirst);
   const signature = [
     [...scenes.keys()].sort().join(','),
     locAlias.map((a) => `${a.f}=${a.name}`).join(','),
+    locDayTitleAlias.map((a) => `${a.f}=${a.name}`).join(','),
   ].join('|');
-  return { scenes, eps, bases, epByDigit, flat, locations, locAlias, signature };
+  return { scenes, eps, bases, epByDigit, flat, locations, locAlias, locDayTitleAlias, signature };
 }
 
 // Lo que va antes de un número para que cuente en el texto: «Escena», «Esc.», «Sc», «Scene», «plano», «toma»…
@@ -411,9 +431,10 @@ export function scan(R: Registry, text: string, ctx: ScanContext = {}): Hit[] {
     }
   }
   // 7) Locaciones por nombre o alias (palabra entera, sin tildes).
-  if (R.locAlias.length > 0) {
+  const aliases = ctx.dayTitle ? R.locDayTitleAlias : R.locAlias;
+  if (aliases.length > 0) {
     const f = foldSameLength(masked);
-    for (const a of R.locAlias) {
+    for (const a of aliases) {
       let i = 0;
       while ((i = f.indexOf(a.f, i)) >= 0) {
         const j = i + a.f.length;

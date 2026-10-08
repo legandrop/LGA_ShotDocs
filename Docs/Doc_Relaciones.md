@@ -98,8 +98,13 @@ Sobre la foto (`relationIndex.snapshot(projectId)`):
   escenas sigue siendo un grupo: `074 | título` o la marca lo vuelven escena.
 - **`graph: false`** (D387) es una clave de `PageSettings`; la lee `registerProject` en la página y sus carpetas (no
   `kind.ts`), y viaja al exportar e importar.
-- El nombre y los alias de una locación salen de su título (el título, sin el paréntesis, el paréntesis, las partes
-  separadas por ` / ` o ` | `).
+- El nombre y los alias de una locación salen de su título (D416): el título entero y las partes separadas por ` / ` o
+  ` | `. Lo de adentro de un paréntesis nunca es alias. El nombre sin el paréntesis lo es solo con dos palabras o más y
+  si ninguna otra locación lo comparte (`La Arenera (estudio)` → «La Arenera»; `Lübben (Europa)` no da «Lübben», que en
+  el guion es el decorado, ni `Europa (plates)` da «plates», palabra de cualquier reporte de VFX). De una sola palabra
+  y sin compartir, vale solo para el lugar de un día por su título (D417: «Día 73 | Inquilinato» es
+  `Inquilinato (Cachi 247)`; `dayTitleAliases`, `scan(…, { dayTitle: true })` en `dayRef`). Lo arma `registerProject`
+  (`locationFromTitle`, `bareLocationName`).
 
 ## 5. Arranque, caché y relectura
 

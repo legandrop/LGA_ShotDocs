@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.239 :
+
+La cabecera de una locación y la de una escena mostraban relaciones falsas: el registro tomaba como alias de una locación lo de adentro del paréntesis y el nombre sin él, así que `Europa (plates)` se volvía la palabra «plates» de cualquier reporte (la escena 101_074 «planeada en Europa (plates)», 14 días ajenos) y cinco «… (Europa)» compartían «Europa». Ahora el paréntesis no da alias y el nombre sin él solo cuenta con dos palabras o más y si no lo comparte otra locación; con una sola, solo como lugar de un día por su título («Día 73 | Inquilinato»; D416, D417). Además, ERSO pasó a vivo: carpetas con *Type*, títulos `101_074`, lo generado congelado borrado y el Mapa en la papelera (D403–D415). Verificado contra la fuente desde un dispositivo nuevo: 28 de 28, 0 relaciones sin respaldo (antes, 36).
+
+[Dejar de sacar alias de locación del paréntesis del título, que relacionaba en falso la palabra «plates» y «Europa», y documentar el paso de ERSO a relaciones en vivo]
+
 v0.238 :
 
 Abrir una escena o una locación no decía dónde se filmó ni qué la nombra. Ahora llevan, entre el título y el texto, una cabecera armada con el índice (`src/relations/LiveHeader.tsx`): Preproducción (locaciones de su desglose, fichas, scoutings) y Rodaje (días con una sección suya, la locación según el título; un plan del día dice «planned»; «No report section» y «No VFX» solo si todas sus fichas lo dicen, nunca «not shot»), etapas con extractos, fotos y páginas índice plegadas. Cada extracto lleva al lugar exacto, abierto y resaltado. Se pliega a un renglón por tipo, arranca plegada en el teléfono y mientras lee no afirma ceros. D393–D402. «Ir al bloque» de los comentarios no resaltaba (ProseMirror borraba la clase): usa la misma decoración. En desarrollo, `__shotdocsDev` y `dump()`.

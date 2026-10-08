@@ -704,6 +704,73 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
   corrección de la auditoría de E3, B2; Lega la puede cambiar). Nada de ceros ni de «No report section» hasta que la
   lectura termina; el punto «Reading…» va también en el renglón (el teléfono arranca plegado, D394). La otra opción:
   «Reading…» en lugar de cada cifra (un renglón largo que no dice nada).
+- **D403 · En ERSO los días se marcan por bloque, no en `2 | Rodaje`** (2026-10-08; E4, Lega la puede cambiar).
+  *Type* → *Shoot days* en `Bloque 1`, `Bloque 2` y `Europa`: en su primer nivel alcanza la fecha y salen los 73 días.
+  Con `2 | Rodaje` los bloques son grupos y adentro de un grupo un día pide fecha y número: los 14 «Sin reporte» quedan
+  afuera (59 de 73). *New day report* desde un día crea en su bloque. Revertir: *Nothing in particular* en cada bloque y
+  *Shoot days* en `2 | Rodaje`.
+- **D404 · Escenas y locaciones se marcan en la carpeta de arriba** (2026-10-08; E4, Lega la puede cambiar).
+  `1.1 | Desglose` → *Scenes* (los cinco episodios quedan grupos solos) y `1.2 | Locaciones y scoutings` → *Locations*
+  (los scoutings, «parte de» su locación). `1.3 | Decorados` no se marca: decorado no es locación (ES3).
+- **D405 · Los títulos de escena de ERSO llevan `101_074`** (2026-10-08; E4, Lega la puede cambiar). Solo la tercera
+  parte: `074 | título | 101-074` → `074 | título | 101_074`, 226 títulos. El motor no lo necesita (saca el número del
+  corto y el episodio), pero lo visible va en la forma canónica (D368). El número guardado no cambia.
+- **D406 · `graph: false` solo en `90 | Archivo`** (2026-10-08; E4, Lega la puede cambiar). El backup de BD Main
+  duplicaría todo el desglose. BD Main, Rodaje Planning, `1.3 | Decorados` y los grupos EP quedan en el grafo como
+  fuentes originales; la cabecera las pliega como páginas índice. Revertir: borrar la clave `graph` de la fila.
+- **D407 · En la ficha de un día con reporte se van Escenas y Planning; quedan Fecha, Día y Locación** (2026-10-08; E4,
+  Lega la puede cambiar). Escenas listaba también las planeadas y, como link en un día, el motor las contaba filmadas
+  (99 falsas); Planning repite el árbol. Fecha, Día y Locación los lee *New day report*. En los 15 días generados se va la
+  ficha entera y su nota.
+- **D408 · Se borran las primeras líneas de identidad de escena y de locación** (2026-10-08; E4, Lega la puede
+  cambiar). La de locación («Basavilbaso · también: Basavilbaso 1, Basavilbaso 2») relacionaba lugares que el armado
+  separó. Los alias quedan en la reorganización para cuando la app tenga alias de locación. Efecto: ⌘K ya no encuentra
+  la escena por `101-074` (roadmap R).
+- **D409 · Lo generado se borra; lo escrito por alguien se queda** (2026-10-08; E4, Lega la puede cambiar). Fichas,
+  secciones «Relacionado · generado», leyendas, índices de carpeta y `## Notas` vacío se van (3.223 bloques en 365
+  páginas, 116 filas); un bloque que no tiene la forma exacta de lo generado corta la limpieza de su sección y se queda.
+  Las escenas y locaciones quedan como página libre debajo de la cabecera viva.
+- **D410 · Los renglones «→ Escena» de los reportes se conservan con el número `101_074`** (2026-10-08; E4, Lega la
+  puede cambiar). 126 renglones, 139 links: se reescribe solo el texto del link, con el mismo destino.
+- **D411 · `00 | Mapa` va a la papelera** (2026-10-08; E4, Lega la puede cambiar). Era una foto congelada del día de la
+  importación; lo reemplaza el Mapa vivo (roadmap R). Se restaura desde la papelera.
+- **D412 · Los 15 días sin reporte se quedan como páginas vacías** (2026-10-08; E4, Lega la puede cambiar). Son días
+  planeados; la cabecera del día los va a llenar en vivo. La otra opción: mandarlos a la papelera.
+- **D413 · La base real se toca con la app de desarrollo y el código de la app** (2026-10-08; E4, Lega la puede
+  cambiar). Las marcas con clics en el menú *Type*; el renombre, la limpieza y el Mapa por el gancho de desarrollo
+  (`__shotdocsDev`), una transacción de Yjs por página, siempre con ensayo antes; la verificación, desde un perfil de
+  navegador nuevo que baja todo del servidor. La otra opción: escribir en la base por SQL (salta las reglas de la app).
+- **D414 · ERSO pasa a vivo después de E1, E2 y E3 en `main`** (2026-10-08; E4). Sin el motor no hay verificación y sin
+  la cabecera no se ve el resultado.
+- **D415 · La foto de antes se toma después de las marcas; antes de escribir nada, la foto sin marcas y el ensayo**
+  (2026-10-08; E4, al ejecutar). Sin marcas el motor no reconoce entidades y la comparación con la simulación no dice
+  nada; para saber si ERSO había cambiado antes de escribir alcanzan el emparejado del árbol (921 de 921) y el ensayo de
+  la limpieza, igual página por página (365 de 365). La foto con marcas dio 18 bien y 10 mal (la simulación, 17 y 11): el
+  Mapa ya no tenía la frase «Todo lo demás lo arma el mapa», reemplazada por otra el mismo día, y se fue a la papelera.
+- **D416 · Un paréntesis no da alias de locación; el nombre sin él, solo con dos palabras o más y sin compartir**
+  (2026-10-08; corrección de la auditoría de E4, hallazgo 1; Lega la puede cambiar). Qué pasaba: el registro tomaba
+  como alias lo de adentro del paréntesis y el nombre sin él. `Europa (plates)` volvía locación a «plates» (cualquier
+  reporte de VFX: «2 plates de humo negro», «Plates ambulancia»), cinco «… (Europa)» compartían «Europa» y `Lübben
+  (Europa)` tomaba el «Lübben» del guion. En ERSO, 36 pares página–locación sin respaldo: la escena 101_074 «planeada
+  en Europa (plates)» y esa locación con 14 días ajenos. Medido sobre ERSO real contra la reorganización como única
+  verdad: sin ningún alias del paréntesis, 0 falsos pero se pierden «La Arenera» y otros nombres (50 de 58 días con su
+  lugar por el título); con el nombre sin paréntesis si no se comparte, 5 falsos («Lübben»); sumando el paréntesis
+  único que no es palabra común, 6 («Claridge»). Elegí el nombre sin paréntesis solo con dos palabras o más y sin
+  compartir: 0 falsos, 131 de 176 «planeada en» bien (antes 133, con 17 de más; ahora 6 de más, ninguna por alias).
+  Una sola palabra suele ser la ciudad o el sustantivo de la historia; en el texto, «Inquilinato», «Brandemburgo» y
+  «Lübben» solos no se reconocen hasta que existan los alias de locación (en el título de un día, sí: D417). Revertir:
+  volver a sumar el paréntesis y el nombre sin él en `locationFromTitle` (`src/relations/register.ts`).
+- **D417 · El nombre sin paréntesis de una sola palabra vale solo para el lugar de un día por su título** (2026-10-08;
+  re-verificación de E4, R1; decidida por el orquestador, Lega la puede cambiar). Qué pasaba: con D416, tres días
+  verdaderos según la reorganización perdieron su lugar (D398): «Día 73 | Inquilinato», «Día 78 | Lubben Puente y
+  calle» y «Día 79 | Brandemburgo»; sus locaciones decían que ningún día las nombra en el título y sus escenas
+  mostraban esos días sin lugar. Los falsos de «Lübben» que motivaron D416 venían del texto del guion, no de títulos de
+  día. Opciones: dejarlo así (tres días sin lugar), volver a la regla de antes en todos lados (vuelven los falsos del
+  texto) o aceptar la palabra sola solo en el título de un día. Elegí la última: si ninguna otra locación comparte ese
+  nombre, cuenta en el título de un día (`dayTitleAliases` en el registro, `scan(…, { dayTitle: true })` en `dayRef`) y
+  en ningún otro texto. Medido sobre ERSO real: de los 70 días con locación en la reorganización, 57 la reciben por su título y
+  0 reciben una falsa (como antes de D416; los otros 13 usan otro nombre y esperan los alias), 0 pares nuevos
+  sin respaldo (28 de 28). Revertir: sacar `dayTitle: true` en `dayRef` (`src/relations/liveView.ts`).
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 

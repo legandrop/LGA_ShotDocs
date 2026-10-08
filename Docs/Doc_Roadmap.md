@@ -98,6 +98,19 @@ no lee campos. Entrega propia: una consulta pura «campo: valor» por ficha (la 
 for today*). (2) El arnés `src/dev/cabecera-viva.html` no vuelve a levantar si se recarga la página (queda esperando
 `__cabecera.listo`): abrirlo de nuevo desde la dirección del arnés. Solo herramienta de desarrollo.
 
+**Hecho el 2026-10-08: ERSO en vivo** (D403 a D415, `Doc_Estructura_Proyecto.md`). Carpetas con tipo, títulos de
+escena con `101_074`, lo generado congelado borrado y el Mapa en la papelera; verificado contra la fuente desde un
+dispositivo nuevo (28 de 28). **Anotado al pasar ERSO a vivo:** (1) **«Leave out of relations» en el menú ⋯**: no hay
+interfaz para `graph: false` (D387); en ERSO se puso por el gancho de desarrollo. Un renglón en *Type* o en el menú de
+la página, con su entrada de ayuda. (2) **⌘K con las otras formas de un número de escena**: la búsqueda es por
+subcadena, y sin la primera línea de identidad (D408) `101-074` no trae nada y `1074` trae solo los reportes que lo
+escriben así. Que ⌘K reconozca un número de escena con el lector de relaciones y ponga la escena primero (hoy, buscando
+`101_074`, sale antes una ficha `ERSO_101_074_020`). (3) **Alias de locación** que escriba la gente (los de la
+reorganización de ERSO esperan a que existan): desde D416 el título no da alias de paréntesis, y en ERSO faltan 45 de
+176 «planeada en», 24 de `Europa (plates)` y 19 de `La Arenera (estudio)` (sus fichas dicen «Estudio | Autos»,
+«Europa»), y en el texto «Inquilinato», «Brandemburgo» y «Lübben» solos no se reconocen (en el título de un día sí,
+D417).
+
 ### A. Plan de workspaces (D-17, D-18)
 
 1. **Los pasos 5 a 13 de `Plan_Workspaces.md`** (sección 10, y sección 11 para cómo se hace cada uno).
