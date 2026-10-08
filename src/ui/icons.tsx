@@ -31,6 +31,9 @@ export const TemplateIcon = icon('M5.75 2.75h8.5a1 1 0 0 1 1 1v12.5a1 1 0 0 1-1 
 export const DayReportIcon = icon(
   'M4.75 4.25h10.5a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4.75a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1zM3.75 7.75h12.5M7 2.75v3M13 2.75v3M10 10v4.5M7.75 12.25h4.5',
 );
+// El tipo de una página (escena, locación, día; Doc_Estructura_Proyecto.md): una etiqueta.
+export const TypeIcon = icon('M3.75 4.75v4.4a1 1 0 0 0 .3.7l6.3 6.3a1 1 0 0 0 1.4 0l4.2-4.2a1 1 0 0 0 0-1.4l-6.3-6.3a1 1 0 0 0-.7-.3h-4.2a1 1 0 0 0-1 1zM7.25 7.25h.01', { strokeWidth: 1.5 });
+export const CheckIcon = icon('M5 10.5l3.25 3.25L15 7', { strokeWidth: 1.8 });
 export const RenameIcon = icon('M12.5 4.5l3 3L8 15H5v-3z');
 export const MoveIcon = icon('M3.75 6.25h4l1.5 1.5h7v7.5a1 1 0 0 1-1 1h-10.5a1 1 0 0 1-1-1zM8.5 12h5M11.5 10l2 2-2 2');
 // Importar: una carpeta con una flecha que entra.

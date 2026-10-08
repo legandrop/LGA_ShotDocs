@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.236 :
+
+La app no sabía qué página era una escena, una locación o un día: todo lo infería la gente leyendo títulos. Ahora una carpeta dice qué se crea adentro (*Type* en el menú ⋯: *Scenes*, *Locations*, *Shoot days*) y muestra el rótulo SCENES / LOCATIONS / SHOOT DAYS en el árbol; sus páginas quedan marcadas en `settings.entity`, con el número de escena canónico sacado del título (`101_074`, también adentro de un episodio), así lo sabe un invitado que no ve la carpeta (D368, D373 a D378, D382: la marca se escribe al confirmar el título). Lo de adentro de una escena es «parte de» ella. Los días son la carpeta de reportes del día, una sola marca (D369, D372). Plantillas nuevas *Scene*, *Location* (marcan la página), *Tech scout* y *Creative scout*; la tira de la página vacía ofrece las que tocan según la carpeta. Sin migración ni tipos de bloque nuevos.
+
+[Marcar el tipo de las carpetas y de las páginas (escenas, locaciones y días de rodaje), con el número de escena sacado del título, el rótulo en el árbol y las plantillas Scene, Location, Tech scout y Creative scout]
+
 v0.235 :
 
 Una página abierta por un link, una mención, la búsqueda, el breadcrumb, atrás y adelante o la dirección dejaba abiertas sus madres en la barra lateral pero el árbol no se desplazaba hasta su fila: había que buscarla a mano. Ahora el árbol sigue a la página: `Sidebar.tsx` abre las madres antes de pintar y `revealRow` (`treeNav.ts`) desplaza solo la barra lateral lo justo para dejar la fila entera a la vista, sin tocar la ventana ni el editor (`scrollIntoView` lo habría hecho); en el teléfono con el cajón cerrado queda desplazado para cuando se abra. Si la fila ya se ve, no se mueve nada; lo abierto con un clic o el teclado en el árbol tampoco lo desplaza; hacia arriba, si cabe en la primera pantalla, vuelve al principio (D371). Si la persona desplazó el árbol a mano hace menos de 200 ms, se espera a que frene (D370).

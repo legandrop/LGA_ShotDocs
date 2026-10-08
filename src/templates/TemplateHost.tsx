@@ -17,6 +17,8 @@ import { builtinOrigin, listTemplates, templateInfo, templatesFolderOf, type Own
 import { customizeBuiltin, readFailureText, readOwnTemplate } from './ownCopy';
 import { RootReportDialog, type RootReportChoice, type TodayReport } from './RootReportDialog';
 import { armTitleUndo, registerTemplateTarget, takeTemplatesRequest } from './templatesUi';
+import { stripKinds } from './stripKinds';
+import { markFromTemplate } from '../relations/entitySync';
 import './templates.css';
 
 // Las plantillas en una página abierta (Docs/Doc_Plantillas.md, sección 4, entregas 0 y 1): la tira *Start from a
@@ -319,6 +321,8 @@ export function TemplateHost({ pageId, doc, editor, editable, complete }: Props)
       }
       setDialog(false);
       if (tree.get(pageId)?.template_id !== templateId) void tree.setPatch(pageId, { template_id: templateId });
+      // Una propia que salió de *Scene* o *Location* marca la página como la de fábrica (Doc_Estructura_Proyecto.md).
+      void markFromTemplate(tree, pageId, templateId);
       void tree.dropFresh(pageId);
       if (read.removed) notify(t('templates.mediaRemoved', { count: read.removed }));
       if (carried?.skipped.length) notify(t('templates.markupTooMany'));
@@ -386,6 +390,8 @@ export function TemplateHost({ pageId, doc, editor, editable, complete }: Props)
       }
       setDialog(false);
       if (row && row.template_id !== BUILTIN_IDS[kind]) void tree.setPatch(pageId, { template_id: BUILTIN_IDS[kind] });
+      // *Scene* y *Location* marcan la página, esté donde esté (Doc_Estructura_Proyecto.md, «Tipo de página»).
+      void markFromTemplate(tree, pageId, BUILTIN_IDS[kind]);
       void tree.dropFresh(pageId);
       focusAfterInsert(pageEditor);
     },
@@ -400,7 +406,7 @@ export function TemplateHost({ pageId, doc, editor, editable, complete }: Props)
         <div className="template-strip" role="group" aria-label={tr('templates.start')}>
           <span className="template-strip-label mono-label">{tr('templates.start')}</span>
           <div className="template-strip-items">
-            {BUILTIN_KINDS.map((kind) => (
+            {stripKinds(tree, pageId).map((kind) => (
               <button key={kind} className="template-chip" data-template={kind} onClick={() => apply(kind)}>
                 {names[kind]}
               </button>

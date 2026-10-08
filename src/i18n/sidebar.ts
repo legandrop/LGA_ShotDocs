@@ -6,6 +6,11 @@ export const sidebar = {
   'sidebar.collapse': { en: "Collapse", es: "Plegar" },
   'sidebar.expand': { en: "Expand", es: "Desplegar" },
   'sidebar.moreActions': { en: "More actions", es: "Más acciones" },
+  // El rótulo de una carpeta con tipo (Doc_Estructura_Proyecto.md, «Tipo de página»).
+  'sidebar.holdsScenes': { en: "Everything created inside is a scene", es: "Todo lo que se crea adentro es una escena" },
+  'sidebar.holdsLocations': { en: "Everything created inside is a location", es: "Todo lo que se crea adentro es una locación" },
+  'sidebar.tagDays': { en: "Shoot days", es: "Días" },
+  'sidebar.holdsDays': { en: "Everything created inside is a shoot day", es: "Todo lo que se crea adentro es un día de rodaje" },
   'sidebar.addInside': { en: "Add a page inside", es: "Agregar una página adentro" },
   'sidebar.pages': { en: "Pages", es: "Páginas" },
   'sidebar.tree': { en: "Page tree", es: "Árbol de páginas" },

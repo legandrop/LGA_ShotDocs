@@ -16,6 +16,7 @@ import { useCurrentProject } from './project';
 import { ProjectSwitcher } from './ProjectSwitcher';
 import { LinkHeader } from './LinkHeader';
 import { MentionTreeDot } from './mentionDots';
+import { HoldsTag } from '../relations/HoldsTag';
 import { LinkAsideTreeIcon } from './LinkAsideTreeIcon';
 import { LinkTreeIcon } from './LinkTreeIcon';
 import { useLinkMode } from '../linkMode';
@@ -370,6 +371,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
               </span>
             </span>
           )}
+          <HoldsTag pageId={page.id} />
           <MentionTreeDot pageId={page.id} collapsed={children.length > 0 && !open} />
           <LinkTreeIcon pageId={page.id} />
           <LinkAsideTreeIcon pageId={page.id} />

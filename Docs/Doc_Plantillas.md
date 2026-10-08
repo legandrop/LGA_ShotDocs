@@ -922,3 +922,27 @@ Manda sobre lo de arriba en lo que toca.
   al cambiar de carpeta, la papelera y *New folder…*, con y sin subpáginas), `templateMarkup.test.ts` (2 más) y `dayReportHost.test.tsx` (el globito con una
   plantilla cuyas anotaciones pasan el tope). Queda una diferencia con el globito: *Create another* desde la raíz numera
   el día como el siguiente (`Day 02`), no como el mismo día de rodaje; unificarlo es un cambio aparte.
+
+## Cómo quedó (las plantillas de la estructura del proyecto y la carpeta de días, v0.236)
+
+Manda sobre lo de arriba en lo que toca. Detalle del tipo de página en `Doc_Estructura_Proyecto.md`, «Tipo de página».
+
+- **Cuatro de fábrica más** (`builtin.ts`, `builtin.en.ts`, `builtin.es.ts`; ids fijos en `builtinIds.ts`): *Scene* (ficha:
+  escena, decorado, locación y fecha planeadas, INT/EXT, planos de VFX; *Notes*; *Questions*), *Location* (ficha:
+  dirección, mapa, contacto, acceso, energía; *Notes*, *Art links*, *Photos*; los scoutings van adentro), *Tech scout*
+  (ficha: fecha, locación, asistentes; acceso, luz, medidas, notas de VFX, fotos, preguntas) y *Creative scout* (notas de
+  dirección, planos conversados, referencias, decisiones, preguntas). Mismos bloques de siempre, misma prueba con el
+  esquema publicado y el anterior. Los días, scoutings y reportes donde aparece una escena no se escriben en ella: los
+  arma la app.
+- ***Scene* y *Location* marcan la página** (`settings.entity`, `markFromTemplate` en `src/relations/entitySync.ts`),
+  esté donde esté; una propia que salió de ellas (*Customize*) también. Las demás no marcan nada.
+- **La tira de la página vacía ofrece las que tocan donde está** (`stripKinds.ts`): en una carpeta de escenas *Scene*,
+  *Pre-production Notes* y *Shot Breakdown*; en una de locaciones *Location*; adentro de una locación *Tech scout* y
+  *Creative scout*; adentro de una escena *Shot Breakdown* y *Pre-production Notes*; en una carpeta de días *On-Set
+  Report*; en otro lado, las tres de siempre. *More…* sigue mostrando todas.
+- **La carpeta de reportes es la carpeta de días** (D369): una sola marca, `dayReports`. *Type* → *Pages created inside
+  are* → *Shoot days* la marca como carpeta de reportes, y una carpeta de reportes (marcada o deducida) muestra en el
+  árbol el rótulo SHOOT DAYS y contiene días. Elegir *Scenes*, *Locations* o *Nothing in particular* en una carpeta de
+  reportes la deja de usar (`dayReports: false`). *Use for day reports* sigue en el menú y hace lo mismo que *Shoot days* (y *Stop using for day reports*, lo mismo que
+  *Nothing in particular*): pasan por la misma función, así nunca quedan `dayReports` y `holds` de otro tipo a la vez.
+- **Exportar e importar** (Shot Docs → Shot Docs) conservan `entity` y `holds`, y el `template_id` de las siete de fábrica.

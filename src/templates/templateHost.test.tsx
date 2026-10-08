@@ -325,16 +325,52 @@ describe('la tira de la página vacía', () => {
   });
 });
 
+describe('la tira según dónde está la página (Doc_Estructura_Proyecto.md)', () => {
+  it('en una carpeta de escenas ofrece Scene, y usarla marca la página como escena', async () => {
+    const { device } = await setup();
+    const folder = await device.tree.create(null, 'Desglose');
+    await device.tree.setSetting(folder, 'holds', 'scene');
+    const page = await device.tree.create(folder, '');
+    const host = await open(device, page);
+    const chips = [...host.querySelectorAll('.template-strip .template-chip:not(.more)')].map((b) => b.textContent);
+    expect(chips).toEqual(['Scene', 'Pre-production Notes', 'Shot Breakdown']);
+    click(host.querySelector('.template-strip [data-template="scene"]'));
+    await applied(device, page, BUILTIN_IDS.scene);
+    expect(device.tree.get(page)?.settings?.entity).toEqual({ kind: 'scene' });
+    expect(host.textContent).toContain('Location (planned)');
+  });
+
+  it('afuera de una carpeta con tipo, las de siempre; Location desde More… marca la página', async () => {
+    const { device } = await setup();
+    const page = await device.tree.create(null, '');
+    const host = await open(device, page);
+    const chips = [...host.querySelectorAll('.template-strip .template-chip:not(.more)')].map((b) => b.textContent);
+    expect(chips).toEqual(['Pre-production Notes', 'On-Set Report', 'Shot Breakdown']);
+    click([...host.querySelectorAll('.template-strip button')].find((b) => b.textContent === 'More…'));
+    click(document.querySelector('.templates-dialog [data-template="location"] button.primary'));
+    await applied(device, page, BUILTIN_IDS.location);
+    expect(device.tree.get(page)?.settings?.entity).toEqual({ kind: 'location' });
+  });
+});
+
 describe('la ventana Templates y Apply template…', () => {
-  it('More… abre la ventana con las tres, su descripción y la vista previa; Use la agrega', async () => {
+  it('More… abre la ventana con las de fábrica, su descripción y la vista previa; Use la agrega', async () => {
     const { device } = await setup();
     const page = await device.tree.create(null, '');
     const host = await open(device, page);
     click([...host.querySelectorAll('.template-strip button')].find((b) => b.textContent === 'More…'));
     const dialog = document.querySelector('.templates-dialog');
     expect(dialog).not.toBeNull();
-    expect([...dialog!.querySelectorAll('li strong')].map((s) => s.textContent)).toEqual(['Pre-production Notes', 'On-Set Report', 'Shot Breakdown']);
-    expect(dialog!.querySelectorAll('li .muted').length).toBe(3);
+    expect([...dialog!.querySelectorAll('li strong')].map((s) => s.textContent)).toEqual([
+      'Pre-production Notes',
+      'On-Set Report',
+      'Shot Breakdown',
+      'Scene',
+      'Location',
+      'Tech scout',
+      'Creative scout',
+    ]);
+    expect(dialog!.querySelectorAll('li .muted').length).toBe(7);
     click(dialog!.querySelector('[data-template="prepro"] button.primary'));
     await applied(device, page, BUILTIN_PREPRO);
     expect(document.querySelector('.templates-dialog')).toBeNull();

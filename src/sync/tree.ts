@@ -256,6 +256,13 @@ export class PageTree {
   onTitleRest?: () => void;
 
   /**
+   * Se llama después de crear con título (salvo con un id reservado: una importación), renombrar, confirmar el título
+   * escrito en la página (`titleConfirmed`) o mover una página en este dispositivo, con el cambio ya en la cola: la marca
+   * de tipo de la página (`src/relations/entitySync.ts`). Si falla, el cambio igual quedó.
+   */
+  onPlaced?: (id: string, how: 'create' | 'title' | 'move') => Promise<void>;
+
+  /**
    * Si a este dispositivo la página le llega como base limpia y no como filas (Docs/Doc_Privacidad_Borrado.md): lo
    * pone la sincronización según el interruptor del workspace y los permisos. Sin él, todas llegan como filas.
    */
@@ -507,6 +514,7 @@ export class PageTree {
     if (!title && !options.templateId) this.fresh = [...this.fresh.filter((f) => f !== id), id].slice(-FRESH_MAX);
     await this.enqueue({ kind: 'create', page: options.templateId ? { ...page, template_id: options.templateId } : page });
     if (!title && !options.templateId) await this.saveFresh();
+    if (options.id === undefined && title) await this.placed(id, 'create');
     return id;
   }
 
@@ -617,6 +625,26 @@ export class PageTree {
     const fitted = splitTitle(title);
     if (this.view.get(id)?.title === fitted.head && !fitted.rest && !rest.trim()) return;
     await this.enqueue({ kind: 'update', id, patch: { title: fitted.head } }, fitted.rest + rest);
+    await this.placed(id, 'title');
+  }
+
+  /**
+   * El título que se escribe en la página quedó confirmado (Enter, salir del campo, cambiar de página o cerrar la app):
+   * recién ahí cuenta para la marca de tipo. `saveTitleDraft` guarda también en cada pausa al tipear, con títulos a
+   * medio escribir (`Episodio ` antes del `6`), y esos no avisan.
+   */
+  async titleConfirmed(id: string): Promise<void> {
+    await this.placed(id, 'title');
+  }
+
+  /** Avisa `onPlaced` sin dejar que un error ahí parezca un error del cambio (que ya está en la cola). */
+  private async placed(id: string, how: 'create' | 'title' | 'move'): Promise<void> {
+    if (!this.onPlaced) return;
+    try {
+      await this.onPlaced(id, how);
+    } catch (err) {
+      console.warn('[árbol] no se pudo poner la marca de tipo', id, err);
+    }
   }
 
   pendingTitleDraft(id: string): PendingTitleDraft | undefined {
@@ -667,6 +695,7 @@ export class PageTree {
     const sortKey = await this.keyAt(siblings, at);
     if (page.parent_id === parentId && page.sort_key === sortKey) return;
     await this.enqueue({ kind: 'update', id, patch: { parent_id: parentId, sort_key: sortKey } });
+    if (page.parent_id !== parentId) await this.placed(id, 'move');
   }
 
   async trash(id: string): Promise<void> {
@@ -690,6 +719,8 @@ export class PageTree {
 
   async setPatch(id: string, patch: PagePatch): Promise<void> {
     await this.enqueue({ kind: 'update', id, patch });
+    if (patch.parent_id !== undefined) await this.placed(id, 'move');
+    else if (patch.title !== undefined) await this.placed(id, 'title');
   }
 
   /** Hay cambios del árbol que todavía se están guardando en el dispositivo. */

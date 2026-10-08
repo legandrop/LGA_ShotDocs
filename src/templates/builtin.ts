@@ -1,29 +1,55 @@
 import { paragraphProps } from '../ui/editorSchema';
 import { builtinEn } from './builtin.en';
 import { builtinEs } from './builtin.es';
-import { BUILTIN_ONSET, BUILTIN_PREPRO, BUILTIN_SHOT } from './builtinIds';
+import {
+  BUILTIN_CREATIVE_SCOUT,
+  BUILTIN_LOCATION,
+  BUILTIN_ONSET,
+  BUILTIN_PREPRO,
+  BUILTIN_SCENE,
+  BUILTIN_SHOT,
+  BUILTIN_TECH_SCOUT,
+} from './builtinIds';
 
-// Las tres plantillas de fábrica (Docs/Doc_Plantillas.md, sección 2): viven en el código, en todos los workspaces y
-// proyectos, y andan sin red. Solo usan bloques que ya conoce la versión mínima publicada (tablas con encabezado,
+// Las plantillas de fábrica (Docs/Doc_Plantillas.md, sección 2): viven en el código, en todos los workspaces y
+// proyectos, y andan sin red. Las tres primeras son las de siempre; *Scene*, *Location*, *Tech scout* y *Creative scout*
+// son las de la estructura del proyecto (Docs/Doc_Estructura_Proyecto.md): *Scene* y *Location* marcan la página
+// (`settings.entity`, `src/relations/entitySync.ts`). Solo usan bloques que ya conoce la versión mínima publicada (tablas con encabezado,
 // títulos, párrafos, casillas, viñetas, párrafos de guion y preguntas): ningún tipo de bloque ni propiedad nueva.
 // Se arman en el idioma de la interfaz al crearlas (PL9), como la página de práctica. Sin textos de ayuda adentro
 // de la página: los rótulos de las tablas y de las viñetas son contenido; lo demás sale vacío.
 
-export type BuiltinKind = 'prepro' | 'onset' | 'shot';
+export type BuiltinKind = 'prepro' | 'onset' | 'shot' | 'scene' | 'location' | 'techScout' | 'creativeScout';
 
-export const BUILTIN_KINDS: BuiltinKind[] = ['prepro', 'onset', 'shot'];
+export const BUILTIN_KINDS: BuiltinKind[] = ['prepro', 'onset', 'shot', 'scene', 'location', 'techScout', 'creativeScout'];
 
 /**
  * Los ids de las de fábrica, para `pages.template_id` (informativo: de qué plantilla salió una página). Son uuid fijos:
  * no se cambian nunca (el reporte del día deduce la carpeta de reportes por el de *On-Set Report*). Viven en
  * `builtinIds.ts`, que puede ir en la primera carga.
  */
-export { BUILTIN_PREPRO, BUILTIN_ONSET, BUILTIN_SHOT };
+export { BUILTIN_PREPRO, BUILTIN_ONSET, BUILTIN_SHOT, BUILTIN_SCENE, BUILTIN_LOCATION, BUILTIN_TECH_SCOUT, BUILTIN_CREATIVE_SCOUT };
 
-export const BUILTIN_IDS: Record<BuiltinKind, string> = { prepro: BUILTIN_PREPRO, onset: BUILTIN_ONSET, shot: BUILTIN_SHOT };
+export const BUILTIN_IDS: Record<BuiltinKind, string> = {
+  prepro: BUILTIN_PREPRO,
+  onset: BUILTIN_ONSET,
+  shot: BUILTIN_SHOT,
+  scene: BUILTIN_SCENE,
+  location: BUILTIN_LOCATION,
+  techScout: BUILTIN_TECH_SCOUT,
+  creativeScout: BUILTIN_CREATIVE_SCOUT,
+};
 
 /** El nombre de cada una en la dirección de la vista previa (`/practice?template=on-set`). */
-export const BUILTIN_SLUGS: Record<BuiltinKind, string> = { prepro: 'pre-production', onset: 'on-set', shot: 'shot-breakdown' };
+export const BUILTIN_SLUGS: Record<BuiltinKind, string> = {
+  prepro: 'pre-production',
+  onset: 'on-set',
+  shot: 'shot-breakdown',
+  scene: 'scene',
+  location: 'location',
+  techScout: 'tech-scout',
+  creativeScout: 'creative-scout',
+};
 
 export function kindOfSlug(slug: string | null | undefined): BuiltinKind | null {
   const found = BUILTIN_KINDS.find((k) => BUILTIN_SLUGS[k] === slug);
@@ -100,6 +126,41 @@ export interface BuiltinTexts {
     notesHeader: string[];
     questionItems: string[];
     internalRows: Row[];
+  };
+  /** *Scene*: la página de una escena en el desglose. Lo que se cruza (días, scoutings, reportes) lo arma la app. */
+  scene: {
+    facts: Row[];
+    notes: string;
+    questionItems: string[];
+  };
+  /** *Location*: un lugar físico; sus scoutings van adentro, como subpáginas. */
+  location: {
+    facts: Row[];
+    notes: string;
+    artLinks: string;
+    photos: string;
+  };
+  /** *Tech scout*: el recorrido técnico de una locación (adentro de ella). */
+  techScout: {
+    facts: Row[];
+    access: string;
+    accessItems: string[];
+    light: string;
+    measurements: string;
+    measurementsHeader: string[];
+    vfx: string;
+    photos: string;
+    questionItems: string[];
+  };
+  /** *Creative scout*: el recorrido con dirección (adentro de la locación). */
+  creativeScout: {
+    facts: Row[];
+    notes: string;
+    shots: string;
+    shotsHeader: string[];
+    references: string;
+    decisions: string;
+    questionItems: string[];
   };
 }
 
@@ -233,7 +294,57 @@ function shot(t: BuiltinTexts): TemplateBlock[] {
   ];
 }
 
-const BUILDERS: Record<BuiltinKind, (t: BuiltinTexts) => TemplateBlock[]> = { prepro, onset, shot };
+/** *Scene*: la ficha, notas y preguntas. Los días, scoutings y reportes donde aparece los arma la app, no se escriben. */
+function scene(t: BuiltinTexts): TemplateBlock[] {
+  const x = t.scene;
+  return [facts(x.facts), h2(x.notes), p(), h2(t.questions), ...x.questionItems.map(question)];
+}
+
+/** *Location*: la ficha, notas, links de arte y fotos. Los scoutings van adentro, como subpáginas. */
+function location(t: BuiltinTexts): TemplateBlock[] {
+  const x = t.location;
+  return [facts(x.facts), h2(x.notes), p(), h2(x.artLinks), p(), h2(x.photos), p()];
+}
+
+/** *Tech scout*: acceso y energía, luz, medidas, notas de VFX, fotos y preguntas. */
+function techScout(t: BuiltinTexts): TemplateBlock[] {
+  const x = t.techScout;
+  return [
+    facts(x.facts),
+    h2(x.access),
+    ...bullets(x.accessItems),
+    h2(x.light),
+    p(),
+    h2(x.measurements),
+    grid(x.measurementsHeader, 2),
+    h2(x.vfx),
+    p(),
+    h2(x.photos),
+    p(),
+    h2(t.questions),
+    ...x.questionItems.map(question),
+  ];
+}
+
+/** *Creative scout*: notas de dirección, planos conversados, referencias, decisiones y preguntas. */
+function creativeScout(t: BuiltinTexts): TemplateBlock[] {
+  const x = t.creativeScout;
+  return [
+    facts(x.facts),
+    h2(x.notes),
+    p(),
+    h2(x.shots),
+    grid(x.shotsHeader, 2),
+    h2(x.references),
+    p(),
+    h2(x.decisions),
+    ...bullets(['']),
+    h2(t.questions),
+    ...x.questionItems.map(question),
+  ];
+}
+
+const BUILDERS: Record<BuiltinKind, (t: BuiltinTexts) => TemplateBlock[]> = { prepro, onset, shot, scene, location, techScout, creativeScout };
 
 /** Los bloques de una plantilla de fábrica, en un idioma. Cada llamada da objetos nuevos (sin ids). */
 export function builtinBlocks(kind: BuiltinKind, lang: string): TemplateBlock[] {

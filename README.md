@@ -238,11 +238,15 @@ In development. What works today:
   provider turns it into text (OpenAI, Gemini or a compatible service, with the assistant's key or a second one in
   *Voice*); then it is placed like a written note, or written where the cursor was with *Insert at cursor*. Without
   internet the recording is saved and transcribed when you are back online.
-- Templates: a new empty page offers the three built-in ones, and *More…* lists them with your project's own templates
+- Templates: a new empty page offers the built-in ones that fit where it is (*Pre-production Notes*, *On-Set Report*
+  and *Shot Breakdown*; *Scene*, *Location*, *Tech scout* and *Creative scout* in the project's folders), and *More…* lists them with your project's own templates
   and the ones from other projects you can see. *Save as template…* in the page menu copies a page to the project's
   *Templates* folder (optionally clearing the filled-in values); a template is a page you edit like any other, and new
   pages get a copy. *New day report* creates the day's on-set report with today's date, the next shoot day and
   yesterday's location and camera package, offline too, from the report folder's template.
+- Scenes, locations and shoot days: *Type* in a folder's menu sets what's created inside it, the folder shows a small
+  SCENES, LOCATIONS or SHOOT DAYS label, and its pages are marked as such, with the scene number taken from the title
+  (`101_074`). A scene's breakdown cards, a location's scouts and a day's plan count as part of it.
 - Public [privacy policy](https://shotdocs.lega.com.ar/privacy) and [terms](https://shotdocs.lega.com.ar/terms) pages, readable without signing in.
 
 Connecting other AI apps (MCP) comes later. The plan, the decisions and the roadmap are in

@@ -59,6 +59,21 @@ export interface PageSettings {
   template?: { description?: string; dayReport?: true } | false;
   /** La carpeta *Templates* del proyecto (una página raíz). No se hereda. */
   templatesFolder?: true;
+  /**
+   * Qué ES la página (Docs/Doc_Estructura_Proyecto.md, «Tipo de página»): una escena, una locación o un día de rodaje.
+   * `code`, solo en una escena: su número canónico (`101_074`, con letra propia si la tiene: `101_069A`; siempre con
+   * guion bajo). `false`: se dijo a mano que no es nada de eso (gana sobre la carpeta). No se hereda: se lee en la página
+   * misma (nunca con `resolveSetting`), así la sabe también quien ve la página sin su carpeta. Lo lee
+   * `src/relations/kind.ts`.
+   */
+  entity?: { kind: 'scene' | 'location' | 'day'; code?: string } | false;
+  /**
+   * La carpeta da el tipo a lo que se crea adentro: escenas, locaciones o días de rodaje. No se hereda. Los días usan la
+   * carpeta de reportes (`dayReports`): marcar una carpeta como de días escribe `dayReports` y no esta clave; `'day'` acá
+   * se lee igual (cuenta como carpeta de reportes salvo que `dayReports` sea `false`). Se lee con `holdsOf` de
+   * `src/relations/kind.ts`, nunca suelta.
+   */
+  holds?: 'scene' | 'location' | 'day' | false;
 }
 
 export type PagePatch = Partial<Pick<PageRow, 'title' | 'icon' | 'parent_id' | 'sort_key' | 'deleted_at' | 'settings' | 'template_id'>>;

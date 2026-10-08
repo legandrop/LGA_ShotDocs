@@ -132,8 +132,6 @@ const ONE_TRASH = '0.162';
 const PROJECT_PURGE = '0.167';
 /** Las tablas anchas se desplazan de costado en el teléfono (P.28, Doc_Tabla_Telefono.md): la versión la pone quien publica. */
 const TABLE_PHONE = '0.156';
-/** Las plantillas de fábrica (Docs/Doc_Plantillas.md, entregas 0 y 1): la versión se ajusta al publicar. */
-const TEMPLATES = '0.117';
 /** Las plantillas propias (Docs/Doc_Plantillas.md, entrega 3): la versión la pone quien publica. */
 const OWN_TEMPLATES = '0.124';
 /** El reporte del día (Docs/Doc_Plantillas.md, entrega 2): la versión la pone quien publica. */
@@ -250,8 +248,9 @@ export const HELP_ENTRIES: HelpEntry[] = [
     title: 'help.templates.title',
     text: 'help.templates.text',
     keys: { enter: 'titleEnter', undo: 'undo' },
-    words: ['template', 'plantilla', 'report', 'reporte', 'on-set', 'rodaje', 'breakdown', 'desglose', 'preproducción', 'pre-production', 'apply', 'aplicar'],
-    since: TEMPLATES,
+    words: ['template', 'plantilla', 'report', 'reporte', 'on-set', 'rodaje', 'breakdown', 'desglose', 'preproducción', 'pre-production', 'apply', 'aplicar', 'scene', 'escena', 'location', 'locación', 'scout', 'scouting'],
+    // Subió con *Scene*, *Location*, *Tech scout*, *Creative scout* y la tira según la carpeta (llegó en v0.117).
+    since: '0.236',
   },
   {
     id: 'ownTemplates',
@@ -269,6 +268,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
     keys: { newReport: 'newDayReport' },
     words: ['day report', 'reporte del día', 'shoot day', 'día de rodaje', 'on-set', 'rodaje', 'unit', 'unidad', 'location', 'locación'],
     since: DAY_REPORTS,
+  },
+  {
+    id: 'pageTypes',
+    section: 'pages',
+    title: 'help.pageTypes.title',
+    text: 'help.pageTypes.text',
+    words: ['type', 'tipo', 'scene', 'escena', 'location', 'locación', 'shoot day', 'día de rodaje', 'breakdown', 'desglose', 'scout', 'scouting', 'episode', 'episodio', 'folder', 'carpeta'],
+    // El tipo de página y de carpeta (Doc_Estructura_Proyecto.md, «Tipo de página»): el número lo pone quien publica.
+    since: '0.236',
   },
   {
     id: 'projects',

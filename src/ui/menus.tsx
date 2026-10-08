@@ -56,6 +56,8 @@ import { asAction, tipRows } from './tipRows';
 import { askSignOut, askSignOutOthers, openAssistantSettings } from '../assistant/assistantUi';
 import { hasAssistantKey } from '../assistant/keyStore';
 import { voiceLeftovers } from '../dictation/leftovers';
+import { TypeMenuItem, TypeSubmenu } from '../relations/TypeMenu';
+import { markFolderHolds } from '../relations/entitySync';
 
 /**
  * Comportamiento común de menús y paneles flotantes: se cierran con Escape o tocando afuera (tocar el
@@ -205,6 +207,8 @@ export function PageMenu(props: {
   const offerReportFolder = isReportFolder || !(thisRow && isReportPage(thisRow, tree));
   // Las plantillas propias (Doc_Plantillas.md, 5.1): guardar esta página como plantilla (una copia en *Templates*).
   const saveOffer = useSaveTemplateOffer(props.pageId);
+  // *Type* (Doc_Estructura_Proyecto.md): se elige en el mismo menú, en lugar de sus ítems.
+  const [typeOpen, setTypeOpen] = useState(false);
 
   const item = (label: string, icon: ReactNode, action: () => void, danger = false, enabled = true) => (
     <button
@@ -220,6 +224,14 @@ export function PageMenu(props: {
       {label}
     </button>
   );
+
+  if (typeOpen) {
+    return (
+      <div ref={ref} className="menu" role="menu" aria-label={tr('type.menu')} style={props.position}>
+        <TypeSubmenu pageId={props.pageId} onBack={() => setTypeOpen(false)} onClose={props.onClose} />
+      </div>
+    );
+  }
 
   return (
     <div ref={ref} className="menu" role="menu" aria-label={tr('pageMenu.label')} style={props.position}>
@@ -413,13 +425,15 @@ export function PageMenu(props: {
           data-tip={isReportFolder ? undefined : tr('pageMenu.useForDayReportsTip')}
           onClick={() => {
             props.onClose();
-            void tree.setSetting(props.pageId, 'dayReports', isReportFolder ? false : {});
+            // Lo mismo que *Type* → *Shoot days* / *Nothing in particular*: una sola marca (D369, D372).
+            void markFolderHolds(tree, props.pageId, isReportFolder ? null : 'day');
           }}
         >
           <DayReportIcon />
           {isReportFolder ? tr('pageMenu.stopDayReports') : tr('pageMenu.useForDayReports')}
         </button>
       )}
+      {canEditRow && <TypeMenuItem pageId={props.pageId} onOpen={() => setTypeOpen(true)} />}
       <hr />
       {item(tr('pageMenu.trash'), <TrashIcon />, props.onTrash, true, canManage)}
       {!canEdit && perms.known && (

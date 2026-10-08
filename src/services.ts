@@ -25,6 +25,7 @@ import { SupabaseRemote } from './sync/remote';
 import { normalizeStructure, seedIfEmpty } from './sync/structure';
 import { PageTree } from './sync/tree';
 import { watchTitleRests } from './sync/titleRest';
+import { installEntityMarks } from './relations/entitySync';
 import { cutText } from './lib/graphemes';
 import { DB_LIMITS } from './lib/dbLimits';
 import { errorMessage } from './sync/types';
@@ -301,6 +302,8 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser, link
       if (cancelled) return db.close();
 
       const tree = new PageTree(db, workspaceId);
+      // La marca de tipo al crear, renombrar o mover (Doc_Estructura_Proyecto.md). Un link no cambia filas.
+      installEntityMarks(tree, !!link);
       await tree.load();
       const access = new AccessStore(db, user.id);
       await access.load();

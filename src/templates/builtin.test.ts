@@ -125,7 +125,7 @@ describe('plantillas de fábrica', () => {
 
   it('ids fijos (uuid, distintos) y la dirección de la vista previa ida y vuelta', () => {
     const ids = Object.values(BUILTIN_IDS);
-    expect(new Set(ids).size).toBe(3);
+    expect(new Set(ids).size).toBe(BUILTIN_KINDS.length);
     for (const id of ids) expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
     for (const kind of BUILTIN_KINDS) expect(kindOfSlug(BUILTIN_SLUGS[kind])).toBe(kind);
     expect(BUILTIN_SLUGS.onset).toBe('on-set');

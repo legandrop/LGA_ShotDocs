@@ -19,7 +19,7 @@ import { authorLabel, commentsSection, type CommentSource } from './exportCommen
 import { ExportCancelled, type ExportEditor } from './exportEditor';
 import { browserResizer, type Resizer } from './exportImages';
 import { renderPages, type ContentGap, type ExportPlanPage, type ExportSource } from './exportPages';
-import { BUILTIN_ONSET, BUILTIN_PREPRO, BUILTIN_SHOT } from '../templates/builtinIds';
+import { BUILTIN_ALL } from '../templates/builtinIds';
 import { FILES_DIR, FileNames, imageExt, joinPath, pageSlots, pathLimit, rootFolderName, SHOTDOCS_DIR, VIEW_DIR, type PageSlot } from './zipLayout';
 
 // El zip de exportar (P.22, Docs/Doc_Exportar.md, sección 2.3; entrega 2): para ARCHIVAR una rama o un proyecto.
@@ -900,13 +900,13 @@ export async function buildZip(options: ZipOptions): Promise<ZipResult> {
 /**
  * Los ajustes que vuelven: hoja, encabezado, títulos cortos y las marcas de plantilla de v0.124 (auditoría O6): la
  * página es una plantilla propia (`template`), la carpeta *Templates* (`templatesFolder`) y la carpeta de reportes del
- * día (`dayReports`, con su plantilla solo si también se exporta). Nunca uno que nombre una página de afuera. La raíz,
- * con la hoja heredada.
+ * día (`dayReports`, con su plantilla solo si también se exporta), y el tipo de la página y de la carpeta (`entity`,
+ * `holds`, Doc_Estructura_Proyecto.md). Nunca uno que nombre una página de afuera. La raíz, con la hoja heredada.
  */
 export function settingsOf(settings: PageRow['settings'] | undefined, page: Pick<ExportPlanPage, 'parent' | 'format'>, inside: ReadonlySet<string>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   const s = (settings ?? {}) as Record<string, unknown>;
-  for (const key of ['format', 'header', 'split', 'template', 'templatesFolder']) if (s[key] !== undefined) out[key] = s[key];
+  for (const key of ['format', 'header', 'split', 'template', 'templatesFolder', 'entity', 'holds']) if (s[key] !== undefined) out[key] = s[key];
   const reports = s.dayReports;
   if (reports === false) out.dayReports = false;
   else if (reports && typeof reports === 'object') {
@@ -921,7 +921,7 @@ export function settingsOf(settings: PageRow['settings'] | undefined, page: Pick
 /** La plantilla de la que salió una página, si es de fábrica o se exporta también (nunca una página de afuera). */
 function templateIdOf(id: string | null | undefined, inside: ReadonlySet<string>): string | null {
   if (!id) return null;
-  return [BUILTIN_PREPRO, BUILTIN_ONSET, BUILTIN_SHOT].includes(id) || inside.has(id) ? id : null;
+  return BUILTIN_ALL.includes(id) || inside.has(id) ? id : null;
 }
 
 /** Un hilo para `comments.json`: nombres, nunca correos; `mine` si lo escribió quien exporta. */

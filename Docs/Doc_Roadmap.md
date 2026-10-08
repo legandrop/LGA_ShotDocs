@@ -68,6 +68,21 @@ listas generadas y fechadas; para que se sostenga en los proyectos nuevos, la ap
 Anotado al reorganizar: buscar el nombre de una locación trae primero los días que la llevan en el título y después
 la página de la locación; buscar «Día 19» trae primero el planning de ese día.
 
+**Hecho en v0.236:** el tipo de página (escena, locación, día, «parte de»; `settings.entity` y `holds`, D368, D369 y
+D372 a D382) y las plantillas *Scene*, *Location*, *Tech scout* y *Creative scout* (el punto 3, sin la locación en el
+título de *New day report*). Detalle: `Doc_Estructura_Proyecto.md`, «Tipo de página».
+**Anotado al auditar la v0.236:** (1) en una carpeta de locaciones no hay grupos: una subcarpeta (`Scoutings técnicos
+(todos)`) queda locación; la ayuda podría decirlo, o se corrige con *Type* → *None of these*. (2) Un título de solo tres
+cifras (`074`) en una carpeta de escenas es un episodio: en un largo sin episodios una escena así sería grupo (medirlo
+con un largo, junto con D377). (3) En la fila activa del árbol el rótulo SCENES / LOCATIONS / SHOOT DAYS toma el color
+de acento como el resto de la fila; la maqueta no muestra ese caso. (4) Un visitante de un link público no sabe el tipo
+(D381): pide sumar `entity` a `plink_tree`. (5) Las páginas creadas por otro dispositivo o por una versión vieja no
+reciben la marca solas (la carpeta igual las clasifica; volver a marcarla las completa). (6) Confirmar el título: «Episodio » + salir del
+campo + completar «Episodio 7» deja la marca de escena, y *Type* → *None of these* no la deshace del todo (un grupo con
+marca `false` deja de ser grupo para sus hijos, `kind.ts`). (7) Escribir, esperar la pausa y cerrar la app o volver
+atrás sin salir del campo deja la página sin marca (la carpeta igual le da el tipo; a un invitado le falta): confirmar
+también cuando el título ya se guardó (`PageView.tsx`).
+
 ### A. Plan de workspaces (D-17, D-18)
 
 1. **Los pasos 5 a 13 de `Plan_Workspaces.md`** (sección 10, y sección 11 para cómo se hace cada uno).

@@ -5,11 +5,23 @@ import type { BuiltinTexts } from './builtin';
 // rótulo en los dos idiomas: si se renombra *Date*, *Location*, *Unit*… hay que sumar el nombre nuevo allá.
 
 export const builtinEn: BuiltinTexts = {
-  names: { prepro: 'Pre-production Notes', onset: 'On-Set Report', shot: 'Shot Breakdown' },
+  names: {
+    prepro: 'Pre-production Notes',
+    onset: 'On-Set Report',
+    shot: 'Shot Breakdown',
+    scene: 'Scene',
+    location: 'Location',
+    techScout: 'Tech scout',
+    creativeScout: 'Creative scout',
+  },
   descriptions: {
     prepro: 'One page per scene: VFX work, shot list, elements to shoot and questions for the crew.',
     onset: 'One page per shoot day: camera, setups and takes, HDRI, measurements, markers and data.',
     shot: 'One page per VFX shot: frames, plates, work, elements, feedback and bid.',
+    scene: 'A scene in the breakdown: set, planned location and date, notes and questions. The page is marked as a scene.',
+    location: 'A real place: address, contacts, notes, art links and photos; its scouts go inside. The page is marked as a location.',
+    techScout: 'A technical scout, inside its location: access and power, light, measurements, VFX notes and photos.',
+    creativeScout: 'A scout with the director, inside its location: notes, shots discussed, references and decisions.',
   },
   vfxWork: [
     'Set extension · matte painting',
@@ -155,5 +167,36 @@ export const builtinEn: BuiltinTexts = {
     notesHeader: ['Version', 'Date', 'From', 'Notes'],
     questionItems: ['Director: '],
     internalRows: [['Artist · Vendor'], ['Bid (days)']],
+  },
+  scene: {
+    facts: [['Scene'], ['Set'], ['Location (planned)'], ['INT/EXT · Day/Night'], ['Shoot date (planned)'], ['VFX shots (est.)']],
+    notes: 'Notes',
+    questionItems: ['Director: ', 'Production design: '],
+  },
+  location: {
+    facts: [['Address'], ['Map'], ['Contact'], ['Access · Permits'], ['Power · Parking']],
+    notes: 'Notes',
+    artLinks: 'Art links',
+    photos: 'Photos',
+  },
+  techScout: {
+    facts: [['Date'], ['Location'], ['Attendees']],
+    access: 'Access · Power · Parking',
+    accessItems: ['Access: ', 'Power: ', 'Base camp · Parking: '],
+    light: 'Sun path · Light',
+    measurements: 'Measurements',
+    measurementsHeader: ['What', 'Value', 'Notes'],
+    vfx: 'VFX notes',
+    photos: 'Photos',
+    questionItems: ['Production design: ', 'Locations: '],
+  },
+  creativeScout: {
+    facts: [['Date'], ['Location'], ['Attendees']],
+    notes: "Director's notes",
+    shots: 'Shots discussed',
+    shotsHeader: ['Scene', 'Shot', 'Idea', 'VFX'],
+    references: 'References',
+    decisions: 'Decisions',
+    questionItems: ['Director: ', 'DP: '],
   },
 };

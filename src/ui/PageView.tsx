@@ -283,7 +283,8 @@ function TitleInput({ id, title, readOnly, registerTitle }: { id: string; title:
         const pending = localTitle.current ?? tree.pendingTitleDraft(id)?.fullText ?? null;
         if (pending === null) return Promise.resolve();
         if (readOnly) return Promise.reject(new Error('Título sin permiso de edición'));
-        return commit(pending);
+        // Cambiar de página confirma el título: recién ahí cuenta para la marca de tipo (src/relations/entitySync.ts).
+        return commit(pending).then(() => tree.titleConfirmed(id));
       },
     });
   }, [id, tree, readOnly, registerTitle]);
@@ -292,7 +293,7 @@ function TitleInput({ id, title, readOnly, registerTitle }: { id: string; title:
   useEffect(() => {
     const flushPending = () => {
       const pending = localTitle.current ?? tree.pendingTitleDraft(id)?.fullText ?? null;
-      if (pending !== null && !readOnly) void commit(pending).catch(() => undefined);
+      if (pending !== null && !readOnly) void commit(pending).then(() => tree.titleConfirmed(id)).catch(() => undefined);
     };
     const onHide = () => document.visibilityState === 'hidden' && flushPending();
     window.addEventListener('pagehide', flushPending);
@@ -318,7 +319,8 @@ function TitleInput({ id, title, readOnly, registerTitle }: { id: string; title:
       onBlur={() => {
         focused.current = false;
         disarmTitleUndo(id);
-        if (!readOnly) void commit(value).catch(() => undefined);
+        // Salir del campo confirma el título (la pausa de 300 ms no: src/relations/entitySync.ts).
+        if (!readOnly) void commit(value).then(() => tree.titleConfirmed(id)).catch(() => undefined);
       }}
       onPaste={() => (bulk.current = true)}
       onDrop={() => (bulk.current = true)}
@@ -370,6 +372,7 @@ function TitleInput({ id, title, readOnly, registerTitle }: { id: string; title:
           e.preventDefault();
           if (readOnly) return;
           void commit(value).then(() => {
+            void tree.titleConfirmed(id);
             if (scope.active) window.dispatchEvent(new Event('shotdocs:focus-editor'));
           }).catch(() => undefined);
         }

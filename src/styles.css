@@ -9118,3 +9118,34 @@ button.folder-row-main:hover {
    Print-view redefine el token localmente; un color elegido sigue siendo currentColor. */
 :root[data-theme='dark'][data-contrast='more'] { --ink-script: #b0aba1; }
 :root[data-theme='dark'][data-contrast='more'] .bn-container .script-mark { color: var(--ink-script); }
+
+/* El rótulo de una carpeta con tipo en el árbol (Doc_Estructura_Proyecto.md, «Tipo de página»): SCENES, LOCATIONS,
+   SHOOT DAYS, como en la maqueta de las relaciones. No se achica: el nombre lleva «…» antes. */
+.tree-row .tree-holds {
+  flex: none;
+  align-self: center;
+  font: 10px/16px var(--mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 4px;
+  font-weight: 400;
+}
+
+.tree-row.active .tree-holds {
+  color: var(--accent-text);
+}
+
+/* *Type* en el menú de la página: la opción elegida lleva el tilde en el lugar del ícono. */
+.menu .type-mark {
+  display: inline-flex;
+  width: 18px;
+  flex: none;
+  justify-content: center;
+}
+
+.menu .type-mark svg {
+  color: var(--accent-text);
+}

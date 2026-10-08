@@ -4,11 +4,23 @@ import type { BuiltinTexts } from './builtin';
 // `builtin.en.ts` (una prueba lo compara): cambian solo los textos.
 
 export const builtinEs: BuiltinTexts = {
-  names: { prepro: 'Notas de preproducción', onset: 'Reporte de rodaje', shot: 'Desglose de plano' },
+  names: {
+    prepro: 'Notas de preproducción',
+    onset: 'Reporte de rodaje',
+    shot: 'Desglose de plano',
+    scene: 'Escena',
+    location: 'Locación',
+    techScout: 'Scouting técnico',
+    creativeScout: 'Scouting creativo',
+  },
   descriptions: {
     prepro: 'Una página por escena: trabajo de VFX, lista de planos, elementos a filmar y preguntas al equipo.',
     onset: 'Una página por día de rodaje: cámara, planos y tomas, HDRI, medidas, marcadores y material.',
     shot: 'Una página por plano de VFX: cuadros, placas, trabajo, elementos, devoluciones y cotización.',
+    scene: 'Una escena del desglose: decorado, locación y fecha planeadas, notas y preguntas. La página queda marcada como escena.',
+    location: 'Un lugar real: dirección, contactos, notas, links de arte y fotos; sus scoutings van adentro. La página queda marcada como locación.',
+    techScout: 'Un scouting técnico, adentro de su locación: acceso y energía, luz, medidas, notas de VFX y fotos.',
+    creativeScout: 'Un scouting con dirección, adentro de su locación: notas, planos conversados, referencias y decisiones.',
   },
   vfxWork: [
     'Extensión de decorado · matte painting',
@@ -154,5 +166,36 @@ export const builtinEs: BuiltinTexts = {
     notesHeader: ['Versión', 'Fecha', 'De', 'Notas'],
     questionItems: ['Director: '],
     internalRows: [['Artista · Proveedor'], ['Cotización (días)']],
+  },
+  scene: {
+    facts: [['Escena'], ['Decorado'], ['Locación (planeada)'], ['INT/EXT · Día/Noche'], ['Fecha de rodaje (planeada)'], ['Planos de VFX (estim.)']],
+    notes: 'Notas',
+    questionItems: ['Director: ', 'Arte: '],
+  },
+  location: {
+    facts: [['Dirección'], ['Mapa'], ['Contacto'], ['Acceso · Permisos'], ['Energía · Estacionamiento']],
+    notes: 'Notas',
+    artLinks: 'Links de arte',
+    photos: 'Fotos',
+  },
+  techScout: {
+    facts: [['Fecha'], ['Locación'], ['Asistentes']],
+    access: 'Acceso · Energía · Estacionamiento',
+    accessItems: ['Acceso: ', 'Energía: ', 'Base · Estacionamiento: '],
+    light: 'Recorrido del sol · Luz',
+    measurements: 'Medidas',
+    measurementsHeader: ['Qué', 'Valor', 'Notas'],
+    vfx: 'Notas de VFX',
+    photos: 'Fotos',
+    questionItems: ['Arte: ', 'Locaciones: '],
+  },
+  creativeScout: {
+    facts: [['Fecha'], ['Locación'], ['Asistentes']],
+    notes: 'Notas de dirección',
+    shots: 'Planos conversados',
+    shotsHeader: ['Escena', 'Plano', 'Idea', 'VFX'],
+    references: 'Referencias',
+    decisions: 'Decisiones',
+    questionItems: ['Director: ', 'DF: '],
   },
 };

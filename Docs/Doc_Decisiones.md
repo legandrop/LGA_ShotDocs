@@ -586,6 +586,50 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
 - **D371 · Hacia arriba, si la fila cabe en la primera pantalla, el árbol vuelve al principio** (2026-10-08; tomada al
   implementarlo, Lega la puede cambiar). Así reaparece el selector de proyectos arriba. La otra opción: el movimiento
   mínimo, con la fila pegada al borde de arriba (más quieto, pero el selector queda escondido).
+- **D372 · Los días de rodaje se marcan solo con la carpeta de reportes (`dayReports`), nunca con `holds: 'day'`**
+  (2026-10-08; tomada al implementar D369, Lega la puede cambiar). *Type* → *Shoot days* y *Use for day reports* escriben
+  `dayReports` y sacan un `holds` de otro tipo; *Scenes*, *Locations*, *Nothing in particular* y *Stop using for day
+  reports* lo dejan de usar (`dayReports: false`). Una carpeta de reportes deducida por sus reportes también es de días,
+  y `holds: 'day'` se lee igual (salvo con `dayReports: false`). La otra opción: escribir las dos claves (se
+  desincronizan: dejar de usarla para reportes dejaría vivo `holds: 'day'`).
+- **D373 · La marca de una página nueva se escribe al tener título, no al crearla vacía** (2026-10-08; tomada al
+  implementarlo, Lega la puede cambiar). El «+» no sabe si la página va a ser una escena o un grupo (`106 | Episodio 6`,
+  `Bloque 3`); mientras no tiene título, la carpeta ya le da el tipo al leer. Crear con título (*New day report*) marca
+  enseguida, y *Scene*/*Location* marcan al aplicarse. La otra opción: marcar al crear (un episodio nuevo quedaría escena).
+- **D374 · Desmarcar una carpeta deja las marcas de sus páginas** (2026-10-08; tomada al implementarlo, Lega la puede
+  cambiar). Una escena sigue siendo escena; se cambia de a una con *Type* → *None of these*. La otra opción: sacarlas
+  (se pierde lo que sabe un invitado que ve la página sin su carpeta).
+- **D375 · Mover adentro de una carpeta con tipo marca lo que no tenía marca; sacar no desmarca** (2026-10-08; tomada al
+  implementarlo, Lega la puede cambiar). Con un episodio entero, también sus escenas. Nada automático pisa una marca de
+  otro tipo ni «nada de esto». La otra opción: que la marca siga siempre a la carpeta (una escena archivada dejaría de
+  serlo).
+- **D376 · El número de escena sigue al título confirmado, esté donde esté la página** (2026-10-08; tomada al
+  implementarlo, Lega la puede cambiar). Si el título trae otro número canónico se actualiza; si no trae ninguno, el
+  guardado se queda (también al elegir *Scene* sobre una escena que ya lo es). La otra opción: actualizarlo solo adentro
+  de la carpeta (afuera quedaría desactualizado).
+- **D377 · Sin episodio no hay número de escena** (2026-10-08; tomada al implementarlo, Lega la puede cambiar). `074 |
+  título` en un largo queda escena sin `code`: el contrato es `EP_NNN`. La otra opción: guardar `074` (un formato
+  distinto que el motor tendría que distinguir); queda para cuando se mida un largo.
+- **D378 · *Type* marca también la página misma** (2026-10-08; tomada al implementarlo, Lega la puede cambiar): *This
+  page is: Scene / Location / Shoot day / None of these*, en el mismo submenú que *Pages created inside are*. Es la forma
+  de corregir una página mal clasificada por su carpeta. La otra opción: solo la carpeta (sin arreglo para un caso
+  suelto).
+- **D379 · La tira de la página vacía ofrece las plantillas según el lugar** (2026-10-08; tomada al implementarlo, Lega
+  la puede cambiar). *Scene* en una carpeta de escenas, *Location* en una de locaciones, *Tech scout* y *Creative scout*
+  adentro de una locación, *On-Set Report* en una de días; en otro lado, las tres de siempre. *More…* muestra las siete.
+  La otra opción: las siete siempre (una tira demasiado larga).
+- **D380 · El rótulo de los días en castellano es «DÍAS»** (2026-10-08; tomada al implementarlo, Lega la puede
+  cambiar). El árbol mide 288 px y el rótulo no se achica. La otra opción: «DÍAS DE RODAJE» (le come el nombre a la
+  carpeta).
+- **D381 · Un link público no sabe el tipo de las páginas** (2026-10-08; tomada al implementarlo, Lega la puede
+  cambiar). `plink_tree` manda solo `header` y `format`; mostrarlo pide una migración que sume `entity`, y no hace falta
+  para el primer hito. La otra opción: hacer la migración ahora.
+- **D382 · El título escrito en la página cuenta para el tipo recién al confirmarlo** (2026-10-08; tomada en la
+  corrección de la auditoría, Lega la puede cambiar). El título se guarda en cada pausa de 300 ms; la marca y el número
+  se escriben con Enter, al salir del campo, al cambiar de página o al cerrar la app. Así un episodio tipeado con una
+  pausa antes del número no queda escena, y no se suben números a medio escribir (`105_000`, `105_007`). La otra opción:
+  corregir sola una marca puesta por la carpeta mientras la página no tenga hijos ni contenido (no distingue una marca
+  puesta a mano).
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 

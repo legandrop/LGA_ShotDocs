@@ -1,6 +1,15 @@
 import type { PageTree } from '../sync/tree';
 import type { PageRow, ProjectRow } from '../sync/types';
-import { BUILTIN_ONSET, BUILTIN_PREPRO, BUILTIN_SHOT } from './builtinIds';
+import type { BuiltinKind } from './builtin';
+import {
+  BUILTIN_CREATIVE_SCOUT,
+  BUILTIN_LOCATION,
+  BUILTIN_ONSET,
+  BUILTIN_PREPRO,
+  BUILTIN_SCENE,
+  BUILTIN_SHOT,
+  BUILTIN_TECH_SCOUT,
+} from './builtinIds';
 
 // Las plantillas propias (Docs/Doc_Plantillas.md, sección 3 y entrega 3): una plantilla es una PÁGINA, con
 // `settings.template` y normalmente adentro de la carpeta *Templates* del proyecto (`settings.templatesFolder`). Se edita,
@@ -75,18 +84,19 @@ export function templatesFolderOf(tree: Pick<PageTree, 'roots' | 'isTrashed'>, p
  * La plantilla de fábrica de la que salió una plantilla propia (*Customize*, o guardar como plantilla un reporte): para
  * *Use built-in* cuando la propia no terminó de bajar (4.2). `null` si no salió de una.
  */
-export function builtinOrigin(row: PageRow | undefined): 'prepro' | 'onset' | 'shot' | null {
-  switch (row?.template_id) {
-    case BUILTIN_PREPRO:
-      return 'prepro';
-    case BUILTIN_ONSET:
-      return 'onset';
-    case BUILTIN_SHOT:
-      return 'shot';
-    default:
-      return null;
-  }
+export function builtinOrigin(row: PageRow | undefined): BuiltinKind | null {
+  return BY_ID.get(row?.template_id ?? '') ?? null;
 }
+
+const BY_ID = new Map<string, BuiltinKind>([
+  [BUILTIN_PREPRO, 'prepro'],
+  [BUILTIN_ONSET, 'onset'],
+  [BUILTIN_SHOT, 'shot'],
+  [BUILTIN_SCENE, 'scene'],
+  [BUILTIN_LOCATION, 'location'],
+  [BUILTIN_TECH_SCOUT, 'techScout'],
+  [BUILTIN_CREATIVE_SCOUT, 'creativeScout'],
+]);
 
 /** Una plantilla propia en la ventana *Templates*. */
 export interface OwnTemplate {
