@@ -22,7 +22,7 @@ import {
 import { GUIDE_URL, JoinConfirm, LoginWorkspaceBar, Welcome } from './Welcome';
 import { DeleteBlocked, deleteWorkspaceDatabases } from './RemovedScreen';
 import { RemoveWorkspaceDialog, WorkspaceSection } from './WorkspaceMenu';
-import { closeComments, draftLossAccepted, setDraft } from './commentsUi';
+import { closeComments, closeDraft, draftLossAccepted, dropLeftDrafts, leftDraftsNow, setDraft } from './commentsUi';
 
 vi.mock('./unsyncedDownload', () => ({ downloadUnsynced: vi.fn(async () => undefined), saveBlob: vi.fn() }));
 
@@ -325,7 +325,7 @@ describe('en la app abierta', () => {
       act(() => setDraft(Symbol('cuadro'), true, { text: 'A medio escribir' }));
       click(remove);
       expect(asked[1]).toBe(
-        'Remove “Studio” from this device? A comment you are writing has not been sent and will be lost. You can join it again later with an invitation link.',
+        'Remove “Studio” from this device? A comment you wrote has not been sent and will be lost. You can join it again later with an invitation link.',
       );
       await act(() => settled(50));
       expect(signOut).not.toHaveBeenCalled();
@@ -371,7 +371,7 @@ describe('en la app abierta', () => {
       act(() => setDraft(Symbol('cuadro'), true, { text: 'A medio escribir' }));
       click(wanka());
       expect(asked).toEqual([
-        'A comment you are writing has not been sent and will be lost. Your appearance settings in Studio are not uploaded yet. They stay saved on this device and upload the next time you open Studio. Continue?',
+        'A comment you wrote has not been sent and will be lost. Your appearance settings in Studio are not uploaded yet. They stay saved on this device and upload the next time you open Studio. Continue?',
       ]);
       expect(draftLossAccepted()).toBe(false);
       // Con el comentario solo, la pregunta de recargar de siempre.
@@ -389,6 +389,43 @@ describe('en la app abierta', () => {
     } finally {
       settings.mockRestore();
       act(() => closeComments());
+    }
+  });
+
+  it('cambiar de workspace con lo que quedó sin copiar en el cartel pregunta una sola vez: el navegador no repite la pregunta', async () => {
+    loadWorkspaces(WANKA);
+    updateWorkspaces((l) => addWorkspace(l, STUDIO));
+    const d = await device(crypto.randomUUID());
+    const host = await mount(
+      <ServicesContext.Provider value={services(d, STUDIO, 'x')}>
+        <WorkspaceSection onClose={() => undefined} onDialog={() => undefined} onRemove={() => undefined} />
+      </ServicesContext.Provider>,
+    );
+    const wanka = () => [...host.querySelectorAll<HTMLButtonElement>('.workspace-row')].find((b) => !b.hasAttribute('aria-current'))!;
+    // Un cuadro que se cerró sin ninguna pantalla que dibuje el aviso (acá no hay app): lo tipeado queda en el cartel.
+    const key = Symbol('cuadro');
+    setDraft(key, true, { text: 'Lo del cartel' });
+    await act(async () => closeDraft(key, false));
+    expect(leftDraftsNow().texts).toEqual(['Lo del cartel']);
+    const asked: string[] = [];
+    vi.stubGlobal('confirm', (text: string) => (asked.push(text), true));
+    vi.stubGlobal('alert', vi.fn());
+    const browserAsks = () => {
+      const e = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    try {
+      expect(browserAsks()).toBe(true);
+      click(wanka());
+      expect(asked).toEqual(['A comment you wrote has not been sent. Reload anyway and lose it?']);
+      // La recarga que sigue al «sí» no vuelve a preguntar por el cartel.
+      expect(browserAsks()).toBe(false);
+      // La salida no ocurre (acá no hay app que recargue): el «sí» deja de valer y el navegador vuelve a preguntar.
+      await act(() => settled(50));
+      expect(browserAsks()).toBe(true);
+    } finally {
+      act(() => dropLeftDrafts());
     }
   });
 

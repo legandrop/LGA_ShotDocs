@@ -484,7 +484,7 @@ const signOutFromMenu = async () => {
   await act(async () => button!.click());
 };
 const buttonNamed = (label: string) => [...document.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === label);
-const SIGN_OUT_LOSES = 'A comment you are writing has not been sent and will be lost. Sign out anyway?';
+const SIGN_OUT_LOSES = 'A comment you wrote has not been sent and will be lost. Sign out anyway?';
 
 describe('el cartel es de la cuenta que lo escribió', () => {
   it('se corta la sesión y entra otra cuenta en la misma ventana: el texto no le llega, ni queda en memoria', async () => {

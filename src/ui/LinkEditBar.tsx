@@ -8,6 +8,7 @@ import type { LinkEdits, LinkRemote } from '../sync/linkRemote';
 import { PageTree } from '../sync/tree';
 import { exportUnsyncedBlob } from '../sync/unsynced';
 import { unsyncedDocStates } from '../sync/localDb';
+import { followHeight } from './notice';
 import { saveBlob } from './unsyncedDownload';
 
 // Lo que ve quien escribe con un link *Can edit* (Docs/Doc_Link_Publico.md, E2.9), arriba de la app: el nombre la primera
@@ -108,6 +109,9 @@ export function useLinkEdits(remote: LinkRemote | null): LinkEdits {
 const noSubscribe = () => () => undefined;
 const none = () => NONE;
 
+// Va abajo, encima del aviso sin red: los avisos de la app se corren por encima de ella (styles.css).
+const followEditBar = followHeight('--link-edit-step', 13, 'root');
+
 export function LinkEditBar({ entry, remote }: { entry: LinkEntry; remote: LinkRemote }) {
   const tr = useT();
   const edits = useLinkEdits(remote);
@@ -124,7 +128,7 @@ export function LinkEditBar({ entry, remote }: { entry: LinkEntry; remote: LinkR
     remote.nameChanged();
   };
   return (
-    <div className="notice link-edit-bar" role="status">
+    <div className="notice link-edit-bar" role="status" ref={followEditBar}>
       {edits.needName && (
         <form
           className="link-edit-name"

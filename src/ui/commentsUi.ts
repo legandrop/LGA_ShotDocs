@@ -179,6 +179,8 @@ function announceClosed(): void {
     label: many ? t('comments.copyAllTexts', { count: texts.length }) : t('sync.copyText'),
     // Todos, en el orden en que estaban en el panel, separados por una línea en blanco.
     run: () => void copyText(texts.join('\n\n')),
+    // Es lo único que queda de lo tipeado: ningún otro aviso lo saca de la vista antes de su tiempo (notice.ts, D356).
+    keep: true,
   });
 }
 

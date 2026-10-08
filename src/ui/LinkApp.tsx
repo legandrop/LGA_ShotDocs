@@ -22,6 +22,7 @@ import { formatSize } from '../media/fileTrash';
 import type { MediaRecord } from '../media/mediaDb';
 import { copyText } from '../invite';
 import { downloadLinkPages, LinkEditBar, linkMediaBlob, linkUnsentComments, linkUnsentMedia, linkUnsentPages } from './LinkEditBar';
+import { followHeight } from './notice';
 import { saveBlob } from './unsyncedDownload';
 import { setLightImages } from './sharpImages';
 import { Workspace } from './Workspace';
@@ -188,7 +189,7 @@ export function LinkApp({ entry }: { entry: LinkEntry }) {
     <WorkspaceContext.Provider value={setup.workspace}>
       <LinkContext.Provider value={opening.info}>
         {offline && problem === null && (
-          <div className="notice link-offline" role="status">
+          <div className="notice link-offline" role="status" ref={followOffline}>
             <span>{tr('link.offline')}</span>
           </div>
         )}
@@ -203,6 +204,9 @@ export function LinkApp({ entry }: { entry: LinkEntry }) {
     </WorkspaceContext.Provider>
   );
 }
+
+// El aviso de un link sin red va abajo de todo: los demás avisos se corren por encima de él (styles.css).
+const followOffline = followHeight('--link-offline-step', 13, 'root');
 
 /**
  * El link dejó de andar (revocado, *Reset link*, vencido, el creador ya no comparte). Con *Can edit*, lo escrito en este

@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.234 :
+
+La pantalla muestra un aviso flotante a la vez y el que llegaba reemplazaba al que estaba: el *Copy text* de un comentario cerrado o un *Undo* se perdían antes de sus 15 segundos. Ahora `notice.ts` lleva una cola: al de un comentario cerrado no lo saca nadie (D356), uno sin botón sale enseguida y el del botón vuelve después (D357), y lo que espera vence y tiene tope (D358). El aviso, anclado a los costados solo en el teléfono, topaba en media pantalla hasta unos 1100 px: ahora se ancla a todos los anchos. Sus botones miden 36 px en pantallas táctiles. Los avisos de abajo se apilan por su alto real, también los de un link, y ya no se tapan. La pregunta de salir dice «A comment you wrote…», que vale también para el cartel (D359).
+
+[Ordenar los avisos flotantes en una cola sin perder el de un botón, anclarlos a los costados en todas las pantallas, agrandar sus botones en pantallas táctiles, apilarlos sin taparse y ajustar la pregunta de salir cuando cuenta el cartel]
+
 v0.233 :
 
 La información de una escena quedaba repartida entre desglose, scoutings y reportes. Queda documentado un método estándar (D355, `Docs/Doc_Estructura_Proyecto.md`): árbol por etapas, la escena como eje con su número completo en el título y sus fichas adentro, el reporte como día sin partirlo, y cuatro reglas para escribir de modo que todo quede enlazado; el roadmap suma lo que la app necesita para mantenerlo sola y la guía de Coda explica cómo reorganizar un doc al importarlo. Además, con el Drive del dueño desconectado, la cola de archivos le volvía a pedir la subida a todo lo registrado antes de seguir con lo nuevo y, en una importación de miles de fotos, casi no avanzaba: ahora ese 409 cuenta como una trabada, deja de pedir subidas y registra el resto con sus miniaturas.

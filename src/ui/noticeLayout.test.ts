@@ -3,12 +3,13 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-// El aviso flotante (`.notice`: el de `notify`, el avance de reemplazar, los del espacio y los de un link) en el
-// teléfono. Con `left: 50%` y `translateX(-50%)` el ancho natural se calcula sobre media pantalla: a 375 px el aviso de
-// un comentario cerrado medía 210 por 175 px y su botón se partía en tres renglones. En el teléfono va anclado a los dos
-// costados, y los botones de un aviso no se achican en ninguna pantalla. El diseño en pantalla se midió en un navegador (375, 760, 761 y 1280 px, cada
-// aviso con el estilo de antes y el de ahora; ver Docs/Doc_Sincronizacion.md, "Un cuadro abierto y lo que llega de
-// afuera"); acá se fija lo que lo produce en el CSS, y que en pantallas más anchas el estilo general no cambió.
+// El aviso flotante (`.notice`: el de `notify`, el avance de reemplazar, los del espacio y los de un link). Con `left:
+// 50%` y `translateX(-50%)` el ancho natural se calculaba sobre media pantalla: a 375 px el aviso de un comentario
+// cerrado medía 210 por 175 px, y entre 761 y 1279 px topaba en la mitad. Desde la v0.234 va anclado a los dos costados
+// en todas las pantallas, con un tope de 640 px o media pantalla; sus botones de texto tienen alto para el dedo en una
+// pantalla táctil, y los avisos de abajo van apilados según el alto real de los de abajo (ya no a 76 px fijos). El diseño
+// en pantalla se midió en un navegador (375, 761, 900 y 1280 px, temas claro y oscuro; Docs/Doc_Sincronizacion.md, «Los avisos de abajo»); acá se fija
+// lo que lo produce en el CSS.
 
 const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 
@@ -20,37 +21,46 @@ function rule(source: string, selector: string, indent = ''): Record<string, str
   return Object.fromEntries(body.split(';').map((d) => d.trim()).filter(Boolean).map((d) => [d.slice(0, d.indexOf(':')).trim(), d.slice(d.indexOf(':') + 1).trim()]));
 }
 
-/** El bloque `@media (max-width: 760px)` que trae la regla de `.notice`. */
-function phoneBlock(): string {
-  const head = '@media (max-width: 760px) {';
+/** El bloque `@media` con esa cabecera que trae una regla para `selector`. */
+function mediaBlock(head: string, selector: string): string {
   for (let at = css.indexOf(head); at >= 0; at = css.indexOf(head, at + 1)) {
     let depth = 0;
     for (let i = at + head.length - 1; i < css.length; i++) {
       if (css[i] === '{') depth++;
       if (css[i] === '}' && --depth === 0) {
         const block = css.slice(at, i + 1);
-        if (rule(block, '.notice', '  ')) return block;
+        if (rule(block, selector, '  ')) return block;
         break;
       }
     }
   }
-  throw new Error('no hay regla de .notice para el teléfono');
+  throw new Error(`no hay regla de ${selector} en ${head}`);
 }
 
-describe('el aviso flotante en el teléfono', () => {
-  it('va anclado a los dos costados y centrado, sin el corrimiento que lo dejaba en media pantalla', () => {
-    expect(rule(phoneBlock(), '.notice', '  ')).toEqual({ left: '16px', right: '16px', width: 'fit-content', 'margin-inline': 'auto', transform: 'none' });
+const phone = () => mediaBlock('@media (max-width: 760px) {', '.notice');
+const px = (value: string) => Number(/^(-?[\d.]+)px$/.exec(value)![1]);
+
+describe('el aviso flotante', () => {
+  it('va anclado a los dos costados y centrado en todas las pantallas, sin el corrimiento que lo dejaba en media pantalla', () => {
+    const general = rule(css, '.notice')!;
+    expect(general).toMatchObject({ position: 'fixed', left: '16px', right: '16px', width: 'fit-content', 'margin-inline': 'auto', 'max-width': 'max(640px, 50vw)' });
+    expect(general).not.toHaveProperty('transform');
+    // En el teléfono, sin tope: todo el ancho.
+    expect(rule(phone(), '.notice', '  ')).toEqual({ 'max-width': 'none' });
   });
 
   it('sus botones no se achican, en ninguna pantalla: el que se parte en renglones es el texto', () => {
     expect(rule(css, '.notice > button')).toEqual({ flex: 'none' });
   });
 
-  it('en pantallas más anchas el estilo general es el de siempre', () => {
-    expect(rule(css, '.notice')).toMatchObject({ position: 'fixed', left: '50%', transform: 'translateX(-50%)', 'max-width': 'calc(100vw - 32px)' });
+  it('en una pantalla táctil sus botones de texto miden 36 px de alto, y un aviso de un renglón sigue midiendo lo mismo', () => {
+    const touch = rule(mediaBlock('@media (pointer: coarse) {', '.notice button.link'), '.notice button.link', '  ')!;
+    expect(touch['min-height']).toBe('36px');
+    // El margen negativo de arriba y de abajo devuelve lo que creció: queda el renglón de texto de antes (21 px).
+    expect(px(touch['min-height']) + 2 * px(touch['margin-block'])).toBe(21);
   });
 
-  it('ningún aviso repite la posición del general: si la repitiera, el anclaje del teléfono no le llegaría', () => {
+  it('ningún aviso repite la posición del general: si la repitiera, el anclaje no le llegaría', () => {
     // Las variantes se descubren solas: las clases que acompañan a `notice` en el JSX y las `.notice.<algo>` del CSS. Un
     // aviso nuevo entra sin tocar esta prueba.
     const variants = noticeVariants();
@@ -65,26 +75,47 @@ describe('el aviso flotante en el teléfono', () => {
   });
 });
 
+describe('los avisos de abajo, apilados sin taparse', () => {
+  it('de abajo hacia arriba: sin red de un link, el de un link Can edit, el común, el avance de reemplazar y los del espacio', () => {
+    expect(rule(css, '.notice')!.bottom).toBe('calc(20px + env(safe-area-inset-bottom))');
+    expect(rule(css, '.notice.link-edit-bar')!.bottom).toBe('calc(20px + var(--link-offline-step, 0px) + env(safe-area-inset-bottom))');
+    // `.shell` tiene otra regla antes (su diseño): la del lugar de los avisos es la que trae `--notice-base`.
+    const shell = css.slice(css.indexOf('\n.shell {\n  --notice-base'));
+    expect(rule(shell, '.shell')).toEqual({ '--notice-base': 'calc(20px + var(--link-offline-step, 0px) + var(--link-edit-step, 0px))' });
+    expect(rule(css, '.shell .notice')).toEqual({ bottom: 'calc(var(--notice-base) + env(safe-area-inset-bottom))' });
+    // Por encima del común aunque ocupe varios renglones: su lugar es su alto real, y nunca menos que un renglón.
+    expect(rule(css, '.shell .notice.replace-progress-bar')).toEqual({
+      bottom: 'calc(var(--notice-base) + max(43px, var(--notice-height, 0px)) + 13px + env(safe-area-inset-bottom))',
+    });
+    expect(rule(css, '.shell .notice.space-notice')).toEqual({
+      bottom: 'calc(var(--notice-base) + max(43px, var(--notice-height, 0px)) + 13px + var(--progress-step, 0px) + env(safe-area-inset-bottom))',
+    });
+    // Sin avisos de un link ni avance y con un común de un renglón, donde estaban (76 px); ya no hay alturas fijas.
+    expect(20 + 43 + 13).toBe(76);
+    expect(css).not.toContain('calc(76px');
+  });
+
+  it('cada alto que usa el CSS lo anota el aviso que corresponde, con la separación de 13 px entre los apilados', () => {
+    const src = fileURLToPath(new URL('.', import.meta.url));
+    const read = (file: string) => readFileSync(join(src, file), 'utf8');
+    expect(read('Workspace.tsx')).toContain("followHeight('--notice-height', 0, 'parent')");
+    expect(read('Workspace.tsx')).toContain("followHeight('--progress-step', 13, 'parent')");
+    expect(read('LinkApp.tsx')).toContain("followHeight('--link-offline-step', 13, 'root')");
+    expect(read('LinkEditBar.tsx')).toContain("followHeight('--link-edit-step', 13, 'root')");
+    for (const name of ['--notice-height', '--progress-step', '--link-offline-step', '--link-edit-step']) expect(css).toContain(`var(${name}, 0px)`);
+  });
+});
+
 describe('el aviso y el botón redondo de dictar en el teléfono', () => {
-  it('con el botón en pantalla, los avisos de la app arrancan por encima de él; con el menú abierto (sin botón), donde siempre', () => {
-    const block = phoneBlock();
-    expect(rule(block, '.shell', '  ')).toEqual({ '--notice-base': '20px' });
-    expect(rule(block, '.shell:not(.nav-open):has(.dictate-fab)', '  ')).toEqual({ '--notice-base': '84px' });
-    expect(rule(block, '.shell .notice', '  ')).toEqual({ bottom: 'calc(var(--notice-base) + env(safe-area-inset-bottom))' });
+  it('con el botón en pantalla, los avisos de la app arrancan por encima de él (o de los de un link, si van más alto)', () => {
+    expect(rule(phone(), '.shell:not(.nav-open):has(.dictate-fab)', '  ')).toEqual({
+      '--notice-base': 'max(84px, calc(20px + var(--link-offline-step, 0px) + var(--link-edit-step, 0px)))',
+    });
     // El botón ocupa de 18 a 74 px del borde de abajo: 84 deja 10 px libres.
     const fab = [...css.matchAll(/\n {2}\.dictate-fab \{([^}]*)\}/g)].map((m) => m[1]).find((b) => b.includes('position: fixed'))!;
     const bottom = Number(/bottom:\s*calc\((\d+)px/.exec(fab)![1]);
     const height = Number(/height:\s*(\d+)px/.exec(fab)![1]);
     expect(bottom + height).toBeLessThan(84);
-  });
-
-  it('los apilados van por encima del aviso común aunque ocupe varios renglones (su alto lo anota la app)', () => {
-    expect(rule(phoneBlock(), '.shell .notice.replace-progress-bar,\n  .shell .space-notice', '  ')).toEqual({
-      bottom: 'calc(var(--notice-base) + max(43px, var(--notice-height, 0px)) + 13px + env(safe-area-inset-bottom))',
-    });
-    // Sin el botón y con un aviso de un renglón, donde estaban (76 px, el general de 760 px para arriba).
-    expect(20 + 43 + 13).toBe(76);
-    expect(css).toContain('\n.notice.replace-progress-bar {\n  bottom: calc(76px + env(safe-area-inset-bottom));\n}');
   });
 });
 

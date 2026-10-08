@@ -1085,6 +1085,24 @@ Paso 10 de `Plan_Workspaces.md` (sección 4), con la base en la versión 5
       sin el botón y con el menú abierto: a 320, 375, 430, 600 y 759 px ya no se superpone ninguno; a 761 y 1280 px
       miden lo mismo que antes, en inglés y castellano. Los de un link (`link-*`) no cambian: van afuera de `.shell`
       y el visitante no dicta.
+    - **Los avisos de abajo: la cola, el anclaje y el apilado (v0.234, D356 a D359).** La pantalla muestra un aviso
+      a la vez; antes, el que llegaba reemplazaba al que estaba, y el *Copy text* de un comentario cerrado (o un
+      *Undo*) se perdía antes de sus 15 segundos. Ahora `notice.ts` lleva una cola (`arrive`, `advance`,
+      `withoutKey`, funciones puras): el aviso de un comentario cerrado (`keep`) no lo saca nadie y lo que llega
+      espera (D356); uno sin botón sobre uno con botón sale ya y el del botón vuelve con lo que le quedaba, al menos
+      6 s (D357); lo que espera vence pasado su tiempo y esperan como mucho tres (D358). `dismissNotice` saca también
+      al que espera. El estilo general va anclado a los dos costados en todas las pantallas (`left`/`right` 16 px,
+      `width: fit-content`, tope `max(640px, 50vw)`; en el teléfono, sin tope): a 761 px el aviso de un comentario
+      cerrado pasa de 381 por 73 a 640 por 56, a 900 px de 450 a 640 de ancho, y a 1280 px queda igual. En una
+      pantalla táctil (`pointer: coarse`) los botones de texto del aviso miden 36 px (antes 21), con un margen
+      negativo que deja el aviso del mismo alto. Los avisos de abajo se apilan por el alto real de los de abajo
+      (`followHeight`: `--link-offline-step` y `--link-edit-step` en la raíz, `--notice-height` y `--progress-step`
+      en `.shell`), a todos los anchos: de abajo hacia arriba, sin red de un link, el de un link *Can edit*, el común,
+      el avance de reemplazar y los del espacio; ya no hay alturas fijas de 76 px. Medido con el arnés de avisos
+      (21 combinaciones, 375, 761, 900 y 1280 px, inglés y castellano, con y sin el botón de dictar): ninguna
+      superposición dentro de la app (antes, 110). **Queda:** en el teléfono, con un link *Can edit* y el botón de
+      dictar en pantalla, los avisos del link (afuera de `.shell`) siguen debajo del botón (ya pasaba). La pregunta de
+      salir dice «A comment you wrote…», que vale para un cuadro abierto y para el cartel (D359).
   - **A la vista (D327):** el comentario muestra los dos textos, cada uno con su rótulo (*Saved now, changed from
     somewhere else* y *What you wrote on this device*), y tres acciones: *Keep mine* (la edición vuelve a la cola con
     la base de lo que se está viendo; si la base volvió a cambiar, vuelve a quedar apartada), *Discard mine…* (pide

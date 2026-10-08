@@ -38,11 +38,12 @@ export const comments = {
       other: "La pantalla en la que estaban se cerró. No quedaron guardados en ningún lado: copialos antes de recargar o cerrar esta ventana.",
     },
   },
-  // Salir de la cuenta o quitar el workspace del dispositivo con algo escrito en un cuadro: va adentro de la pregunta
-  // de siempre (menus.tsx, WorkspaceMenu.tsx).
+  // Salir de la cuenta o quitar el workspace del dispositivo con algo escrito en un cuadro, o con lo que quedó sin
+  // copiar en el cartel (que ya no se está escribiendo: por eso «que escribiste», D359): va adentro de la pregunta de
+  // siempre (menus.tsx, WorkspaceMenu.tsx).
   'comments.draftUnsent': {
-    en: { one: "A comment you are writing has not been sent and will be lost.", other: "{count} comments you are writing have not been sent and will be lost." },
-    es: { one: "Un comentario que estás escribiendo no se mandó y se va a perder.", other: "{count} comentarios que estás escribiendo no se mandaron y se van a perder." },
+    en: { one: "A comment you wrote has not been sent and will be lost.", other: "{count} comments you wrote have not been sent and will be lost." },
+    es: { one: "Un comentario que escribiste no se mandó y se va a perder.", other: "{count} comentarios que escribiste no se mandaron y se van a perder." },
   },
   'comments.comment': { en: "Comment", es: "Comentar" },
   'comments.answer': { en: "Answer", es: "Responder" },

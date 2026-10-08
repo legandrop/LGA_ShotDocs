@@ -561,6 +561,24 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
   día y no se parte; cada relación se escribe una vez donde nace y lo inverso es derivado; sin galerías ni `#` por
   ahora. Detalle y alternativas descartadas (páginas índice por día, la escena como contenedora de reportes partidos):
   `Doc_Estructura_Proyecto.md`, ES1 a ES10.
+- **D356 · El aviso de un comentario cerrado con *Copy text* no lo saca ningún otro aviso** (2026-10-08; tomada al
+  implementarlo, Lega la puede cambiar). Es lo único que queda de lo tipeado: los avisos que llegan mientras está a la
+  vista esperan su turno y salen cuando vence o lo cierran (`keep` en `notice.ts`). La otra opción: mostrar dos avisos
+  a la vez, uno encima del otro (más lugar tapado y más casos de superposición).
+- **D357 · Un aviso sin botón que llega sobre uno con botón (*Undo*, *Redo*) sale enseguida, y el del botón vuelve
+  después con lo que le quedaba (al menos 6 segundos)** (2026-10-08; tomada al implementarlo, Lega la puede cambiar).
+  Un aviso sin botón suele ser la respuesta a lo que la persona acaba de hacer y no puede esperar 15 segundos. Uno con
+  botón que llega sobre otro con botón lo reemplaza, y el anterior no vuelve (*Undo* y después *Redo*: vale el último).
+  La otra opción, la que proponía el roadmap: que el aviso sin botón espere a que venza el que tiene uno.
+- **D358 · Lo que espera detrás de un aviso de comentario cerrado vence y tiene tope** (2026-10-08; tomada al
+  implementarlo, Lega la puede cambiar). Un aviso que esperó más de lo que iba a estar a la vista (6 o 15 segundos) ya
+  no sale: era de otra página o de otra tecla. Esperan como mucho los últimos tres, sin contar otros avisos de
+  comentarios cerrados, que esperan todos y no vencen. La otra opción: mostrar todos, en orden, por viejos que sean.
+- **D359 · La pregunta de salir dice «A comment you wrote…» (antes «you are writing»)** (2026-10-08; tomada al
+  implementarlo, Lega la puede cambiar). La misma oración cuenta los cuadros abiertos y los textos sin copiar del cartel
+  (D350), que ya no se están escribiendo; «que escribiste» vale para los dos. Vale para salir de la cuenta, quitar y
+  cambiar de workspace. La otra opción: dos oraciones distintas según qué se cuenta (más textos, y una pregunta más
+  larga cuando hay de los dos).
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 

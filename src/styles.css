@@ -1945,16 +1945,22 @@ code {
   color: var(--danger);
 }
 
+/* Anclado a los dos costados y centrado, en todas las pantallas. Con `left: 50%` y `translateX(-50%)` el ancho natural
+   se calculaba sobre media pantalla: en el teléfono un aviso largo quedaba angosto y alto (210 por 175 px a 375 px), y
+   entre 761 y 1279 px topaba en la mitad (380 px a 761). El tope es 640 px o media pantalla, lo que sea más: de 1280 px
+   para arriba, el ancho de siempre. En el teléfono, sin tope: todo el ancho (abajo, con el botón de dictar). */
 .notice {
   position: fixed;
-  left: 50%;
+  left: 16px;
+  right: 16px;
   bottom: calc(20px + env(safe-area-inset-bottom));
-  transform: translateX(-50%);
   z-index: 70;
   display: flex;
   align-items: center;
   gap: 12px;
-  max-width: calc(100vw - 32px);
+  width: fit-content;
+  max-width: max(640px, 50vw);
+  margin-inline: auto;
   padding: 10px 14px;
   border: 1px solid var(--menu-border);
   border-radius: 10px;
@@ -1967,39 +1973,50 @@ code {
   flex: none;
 }
 
-/* En el teléfono va anclado a los dos costados. Con `left: 50%` el ancho natural se calcula sobre media pantalla, y un
-   aviso largo con un botón quedaba angosto y alto (210 por 175 px a 375 px de ancho, el botón partido en tres
-   renglones). En pantallas más anchas la posición no cambia. */
+/* En una pantalla táctil, los botones de texto de un aviso con alto para el dedo (medían 21 px). El margen negativo los
+   deja crecer sobre el relleno del aviso: uno de un renglón sigue midiendo lo mismo. El escritorio queda igual. */
+@media (pointer: coarse) {
+  .notice button.link {
+    min-height: 36px;
+    margin-block: -7.5px;
+  }
+}
+
+/* Los avisos de abajo van apilados, sin taparse. De abajo hacia arriba: los de un link (sin red, y el del nombre y lo
+   que no entró, afuera de la app), el común, el avance de reemplazar y los del espacio. Los que pueden ocupar varios
+   renglones anotan su alto (Workspace.tsx, LinkApp.tsx, LinkEditBar.tsx: `followHeight`); el lugar del común se guarda
+   siempre (43 px, un renglón), así los apilados no saltan cuando sale o se va. Sin avisos de un link ni avance, todos
+   donde estaban. */
+.notice.link-edit-bar {
+  bottom: calc(20px + var(--link-offline-step, 0px) + env(safe-area-inset-bottom));
+}
+
+.shell {
+  --notice-base: calc(20px + var(--link-offline-step, 0px) + var(--link-edit-step, 0px));
+}
+
+.shell .notice {
+  bottom: calc(var(--notice-base) + env(safe-area-inset-bottom));
+}
+
+.shell .notice.replace-progress-bar {
+  bottom: calc(var(--notice-base) + max(43px, var(--notice-height, 0px)) + 13px + env(safe-area-inset-bottom));
+}
+
+.shell .notice.space-notice {
+  bottom: calc(var(--notice-base) + max(43px, var(--notice-height, 0px)) + 13px + var(--progress-step, 0px) + env(safe-area-inset-bottom));
+}
+
+/* En el teléfono, anclado a los costados, un aviso largo llega hasta el botón redondo de dictar (`.dictate-fab`: de 18
+   a 74 px del borde de abajo). Con el botón en pantalla (no está con el menú abierto ni para quien no dicta), los avisos
+   de la app arrancan por encima de él, o de los de un link (un link *Can edit* también tiene el botón), si van más alto. */
 @media (max-width: 760px) {
   .notice {
-    left: 16px;
-    right: 16px;
-    width: fit-content;
-    margin-inline: auto;
-    transform: none;
-  }
-
-  /* Anclado a los costados, un aviso largo llega hasta el botón redondo de dictar (`.dictate-fab`: de 18 a 74 px del
-     borde de abajo). Con el botón en pantalla (no está con el menú abierto ni para quien no dicta), los avisos de la app
-     arrancan por encima de él. */
-  .shell {
-    --notice-base: 20px;
+    max-width: none;
   }
 
   .shell:not(.nav-open):has(.dictate-fab) {
-    --notice-base: 84px;
-  }
-
-  .shell .notice {
-    bottom: calc(var(--notice-base) + env(safe-area-inset-bottom));
-  }
-
-  /* Los que van apilados encima del aviso común: en el teléfono el común puede ocupar varios renglones, y con 76 px
-     fijos quedaban uno sobre el otro. La app anota el alto del aviso a la vista (`--notice-height`, Workspace.tsx); sin
-     aviso, o con uno de un renglón (43 px), quedan donde estaban. */
-  .shell .notice.replace-progress-bar,
-  .shell .space-notice {
-    bottom: calc(var(--notice-base) + max(43px, var(--notice-height, 0px)) + 13px + env(safe-area-inset-bottom));
+    --notice-base: max(84px, calc(20px + var(--link-offline-step, 0px) + var(--link-edit-step, 0px)));
   }
 }
 
@@ -6984,11 +7001,6 @@ ins.replace-new {
   }
 }
 
-/* El avance con el panel cerrado: encima del aviso común, si hay uno. */
-.notice.replace-progress-bar {
-  bottom: calc(76px + env(safe-area-inset-bottom));
-}
-
 .replace-confirm-backdrop {
   position: absolute;
   inset: 0;
@@ -7363,8 +7375,7 @@ ins.replace-new {
 }
 
 .space-notice {
-  /* Arriba de los avisos cortos (`.notice`), que salen en el mismo lugar. */
-  bottom: calc(76px + env(safe-area-inset-bottom));
+  /* Su lugar, encima del aviso común y del avance de reemplazar: con los demás avisos de abajo (`.shell .notice.space-notice`). */
   flex-wrap: wrap;
   max-width: min(560px, calc(100vw - 32px));
   font-size: 13px;

@@ -28,7 +28,7 @@ import { NavMenuButton } from './NavMenuButton';
 import { menuBelow, PageMenu, signOutHere, signOutQuestion, unsentCount, type MenuPosition } from './menus';
 import { MoveDialog } from './MoveDialog';
 import { PageFormatDialog } from './PageFormatDialog';
-import { notify, useNotice } from './notice';
+import { followHeight, notify, useNotice } from './notice';
 import { replaceBlocksLeaving, replaceRunning, replaceSession } from './replaceUi';
 import { InstallBanner, InstallHost } from './InstallBanner';
 import { lastPageOf, rememberPage, useCurrentProject, useSwitchProject } from './project';
@@ -610,22 +610,13 @@ export function Shell() {
 }
 
 /**
- * Anota en la app el alto del aviso a la vista (`--notice-height`): en el teléfono el aviso puede ocupar varios
- * renglones, y los avisos que van apilados encima (el avance de reemplazar, los del espacio) se corren con él
- * (styles.css). Sin aviso, la variable no está.
+ * Anota en la app el alto del aviso a la vista (`--notice-height`): puede ocupar varios renglones, y los avisos que van
+ * apilados encima (el avance de reemplazar, los del espacio) se corren con él (styles.css). Sin aviso, la variable no
+ * está.
  */
-function followNoticeHeight(el: HTMLDivElement | null): (() => void) | undefined {
-  const shell = el?.parentElement;
-  if (!el || !shell) return undefined;
-  const set = () => shell.style.setProperty('--notice-height', `${el.offsetHeight}px`);
-  set();
-  const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(set) : null;
-  observer?.observe(el);
-  return () => {
-    observer?.disconnect();
-    shell.style.removeProperty('--notice-height');
-  };
-}
+const followNoticeHeight = followHeight('--notice-height', 0, 'parent');
+/** Lo mismo con el avance de reemplazar, que va entre el aviso común y los del espacio: su alto más 13 px de separación. */
+const followProgress = followHeight('--progress-step', 13, 'parent');
 
 /** El historial de versiones (P.18): a pantalla entera, encima de la página (que sigue montada: restaurar la usa). */
 function HistoryHost() {
@@ -649,7 +640,7 @@ function ReplaceProgressHost() {
   const tr = useT();
   if (!progress || search.isOpen()) return null;
   return (
-    <div className="notice replace-progress-bar" role="status">
+    <div className="notice replace-progress-bar" role="status" ref={followProgress}>
       <span>{tr(progress.kind === 'undo' ? 'replace.barUndo' : progress.kind === 'redo' ? 'replace.barRedo' : 'replace.bar', { done: progress.done, total: progress.total })}</span>
       {progress.kind === 'replace' && (
         <button className="link" onClick={() => session.engine.stop()}>

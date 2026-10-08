@@ -249,7 +249,7 @@ describe('salir de la cuenta con un comentario a medio escribir', () => {
     const before = box();
     await signOutFromMenu();
     expect(ask).toHaveBeenCalledTimes(1);
-    expect(ask).toHaveBeenLastCalledWith('A comment you are writing has not been sent and will be lost. Sign out anyway?');
+    expect(ask).toHaveBeenLastCalledWith('A comment you wrote has not been sent and will be lost. Sign out anyway?');
     expect(ask.mock.calls[0][0]).toBe(signOutQuestion(0, 0, 1));
     expect(signOut).not.toHaveBeenCalled();
     expect(box()).toBe(before);
@@ -266,7 +266,7 @@ describe('salir de la cuenta con un comentario a medio escribir', () => {
     });
     await signOutFromMenu('Cerrar sesión');
     expect(ask).toHaveBeenCalledTimes(2);
-    expect(ask).toHaveBeenLastCalledWith('2 comentarios que estás escribiendo no se mandaron y se van a perder. ¿Cerrar la sesión igual?');
+    expect(ask).toHaveBeenLastCalledWith('2 comentarios que escribiste no se mandaron y se van a perder. ¿Cerrar la sesión igual?');
     expect(signOut).not.toHaveBeenCalled();
     act(() => prefs.set({ language: 'en' }));
     await wait();
@@ -292,12 +292,12 @@ describe('salir de la cuenta con un comentario a medio escribir', () => {
     // Sin nada escrito, las de siempre.
     expect(signOutQuestion(2, 0, 0)).toBe(signOutQuestion(2, 0));
     expect(signOutQuestion(3, 1, 0)).toBe(signOutQuestion(3, 1));
-    expect(signOutQuestion(0, 0, 1)).toBe('A comment you are writing has not been sent and will be lost. Sign out anyway?');
+    expect(signOutQuestion(0, 0, 1)).toBe('A comment you wrote has not been sent and will be lost. Sign out anyway?');
     expect(signOutQuestion(2, 0, 1)).toBe(
-      '2 changes are not uploaded yet: they upload the next time you sign in with this account. A comment you are writing has not been sent and will be lost. Sign out anyway?',
+      '2 changes are not uploaded yet: they upload the next time you sign in with this account. A comment you wrote has not been sent and will be lost. Sign out anyway?',
     );
     expect(signOutQuestion(3, 1, 2)).toBe(
-      '3 changes are not uploaded yet: they upload the next time you sign in with this account. 1 change was rejected by the server and is only on this device. It stays saved here: you can review it in the sync status the next time you sign in with this account. 2 comments you are writing have not been sent and will be lost. Sign out anyway?',
+      '3 changes are not uploaded yet: they upload the next time you sign in with this account. 1 change was rejected by the server and is only on this device. It stays saved here: you can review it in the sync status the next time you sign in with this account. 2 comments you wrote have not been sent and will be lost. Sign out anyway?',
     );
     for (const count of [1, 2]) expect(translate('es', 'comments.draftUnsent', { count })).not.toBe(translate('en', 'comments.draftUnsent', { count }));
   });

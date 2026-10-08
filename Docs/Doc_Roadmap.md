@@ -551,11 +551,24 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   cuenta fallaba, el cartel ya se había descartado. **Anotado en la re-verificación:** la pregunta de salir dice «A
   comment you are writing…» también cuando lo que cuenta es el cartel; ninguna prueba fija que cambiar de workspace
   con un cartel no pregunte dos veces (si se rompe, pregunta de más: no se pierde nada).
-  **Queda:** entre 761 y unos 1100 px el aviso sigue topado en media pantalla (ii de abajo); los botones del aviso miden
-  21 px de alto en pantallas táctiles (3 de abajo); un *Cancel* equivocado con varios cuadros (5 de abajo); un aviso con
-  botón reemplazado por otro antes de sus 15 segundos pierde el botón (iii de abajo; la salida propuesta: que un aviso
-  sin botón espere a que venza el que tiene uno, en `notice.ts`); el aviso de un link sin red y el común salen en el
-  mismo lugar (se tapan si salen juntos, ya era así); sin ver la app real en un teléfono.
+  **Hecho en v0.234 (lo anotado al auditar la v0.232 y su «Queda»):** los avisos van en cola: el *Copy text* de un
+  comentario cerrado no lo saca ningún otro aviso (D356), uno sin botón sobre uno con botón sale ya y el del botón
+  vuelve (D357), lo que espera vence y tiene tope (D358); el aviso va anclado a los costados a todos los anchos (a 761
+  y 900 px ya no topa en media pantalla); sus botones de texto miden 36 px en pantallas táctiles; los avisos de abajo
+  se apilan por su alto real a todos los anchos, también los de un link (el de sin red y el común ya no salen en el
+  mismo lugar, ni el avance y los del espacio); la pregunta de salir dice «A comment you wrote…», que vale también
+  para el cartel (D359), y una prueba fija que cambiar de workspace con un cartel pregunta una sola vez. Detalle:
+  `Doc_Sincronizacion.md`, «Los avisos de abajo».
+  **Queda:** un *Cancel* equivocado con varios cuadros (5 de abajo); en el teléfono, con un link *Can edit* y el
+  botón de dictar en pantalla, los avisos del link siguen debajo del botón (ya pasaba); sin ver la app real en un
+  teléfono.
+  **Anotado al auditar la v0.234:** (1) mientras un *Copy text* está a la vista, un aviso sin botón que llega después
+  espera 6 s y vence antes de los 15 s del de arriba: no se ve nunca (incluye errores de `notify`; es lo que deciden
+  D356 y D358). (2) Un *Copy text* que llega sobre un *Undo* lo descarta (`notice.ts`, `place`, regla 3): sería más
+  seguro mandar el *Undo* a esperar, como la regla 2. (3) «Esperan como mucho tres» (D358 y `Doc_Sincronizacion.md`)
+  sugiere que se ven los tres: de los avisos sin botón se ve solo el último. (4) Un *Undo* que espera no vence: con
+  avisos sin botón seguidos puede salir unos 50 s después, fuera de contexto. (5) Ya pasaba: si la app se reemplaza
+  sola con un *Copy text* a la vista o esperando, ese texto no pasa al cartel.
   **Anotado al hacer la v0.230:** (i) **las pantallas que reemplazan la app sin que la persona lo pida** (otra
   pestaña toma el control, sacaron a la persona del workspace, se borraron todos los proyectos, un error que frena la
   app: `Workspace.tsx`, `RemovedScreen.tsx`, `ErrorBarrier.tsx`) desmontan el cuadro junto con la pantalla que dibuja
