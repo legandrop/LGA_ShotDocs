@@ -295,8 +295,9 @@ export class UploadError extends PorteroError {
     readonly sent: number,
     readonly cancelled = false,
     readonly stalled = false,
+    code?: string,
   ) {
-    super(message, status, false);
+    super(message, status, false, code);
     this.name = 'UploadError';
   }
 }
@@ -717,7 +718,8 @@ export class Portero {
         }
         if (!error.retryable) {
           const lost = error.status === 404 || error.status === 410;
-          throw new UploadError(error.message, error.status, lost ? null : uploadId, sent);
+          // El código del portero (`drive_not_connected`, por ejemplo) viaja con el error: la cola decide con él.
+          throw new UploadError(error.message, error.status, lost ? null : uploadId, sent, false, false, error.code);
         }
         if (failures >= MAX_RETRIES) {
           throw new UploadError(

@@ -661,6 +661,24 @@ cambiaron): la importación no se entera de los cambios posteriores. Para migrar
 4. El proyecto de prueba queda: la app todavía no borra ni archiva proyectos (P.14 del roadmap). Mientras tanto se le
    cambia el nombre y se mandan sus páginas a la papelera.
 
+### Reorganizar al importar (2026-10-08)
+
+La app importa el árbol que dice `manifest.json`, venga del comando o de otro paso. Para llevar un doc de Coda a la
+estructura estándar (`Doc_Estructura_Proyecto.md`, D355) se puede poner un paso intermedio que lea la carpeta exportada
+y escriba otra carpeta importable: mueve páginas (`parentId`, `order`), las renombra (el título viejo va al
+`subtitle`), genera páginas nuevas (escenas, locaciones, días sin reporte, el Mapa) y **agrega** renglones a las
+originales sin quitarles nada. Reglas que tiene que cumplir:
+
+- Los ids de las páginas originales no cambian: de ellos dependen los links `coda-page:` y los comentarios.
+- Las fotos se nombran por su blob (`data-coda-blob-id`): la misma foto en dos páginas se sube una vez. `media/` puede
+  ser de enlaces duros a la carpeta exportada, sin subcarpetas, y el paso nunca escribe ahí.
+- Un validador antes de importar: ids únicos y padres que existen, cada `coda-page:` con su destino, las mismas fotos
+  por página original, y el texto de cada original igual a la entrada una vez quitado lo agregado (que el paso anota).
+  Tiene que fallar si se le rompe una copia a propósito.
+- Ensayo sin red en un perfil descartable antes de la importación real.
+
+Ese paso es propio de cada doc (sabe cómo se escribieron sus escenas y sus locaciones) y no vive en este repo.
+
 ## Cómo quedó
 
 - `scripts/coda-export.mjs` y `scripts/lib/codaExport.mjs` (lo que decide sin red: a qué dirección va el

@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.233 :
+
+La información de una escena quedaba repartida entre desglose, scoutings y reportes. Queda documentado un método estándar (D355, `Docs/Doc_Estructura_Proyecto.md`): árbol por etapas, la escena como eje con su número completo en el título y sus fichas adentro, el reporte como día sin partirlo, y cuatro reglas para escribir de modo que todo quede enlazado; el roadmap suma lo que la app necesita para mantenerlo sola y la guía de Coda explica cómo reorganizar un doc al importarlo. Además, con el Drive del dueño desconectado, la cola de archivos le volvía a pedir la subida a todo lo registrado antes de seguir con lo nuevo y, en una importación de miles de fotos, casi no avanzaba: ahora ese 409 cuenta como una trabada, deja de pedir subidas y registra el resto con sus miniaturas.
+
+[Documentar la estructura estándar de un proyecto y seguir registrando archivos con sus miniaturas cuando el Drive del dueño está desconectado]
+
 v0.232 :
 
 Cuando la app se reemplazaba sola (otra pestaña tomaba el control, sacaban a la persona del workspace, se quedaba sin proyectos o un error la frenaba), lo tipeado en un comentario se perdía en silencio: el cuadro se desmontaba con la pantalla que dibuja los avisos. Ahora queda en un cartel fijo arriba de todo, con *Copy text* y *Discard*, que no vence ni pasa del 45 % de la pantalla (D348); es de la cuenta que lo escribió: si entra otra, se descarta, y salir de la cuenta lo cuenta en su pregunta (D350). Después de un «sí» de la app a perder un comentario, el navegador no vuelve a preguntar, y ese «sí» se anota recién cuando la salida ocurre (D349). Cambiar de workspace hace una sola pregunta. En el teléfono, los avisos suben por encima del botón de dictar.

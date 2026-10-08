@@ -1394,6 +1394,8 @@ export class FakePortero {
   forbid = false;
   /** Los pedidos de subida nunca contestan (sin error de red) hasta que se abortan. */
   hang = false;
+  /** El Drive del dueño no está conectado: las subidas responden 409 `drive_not_connected`. */
+  disconnected = false;
   /**
    * Lo que pasa mientras sale una parte (pruebas del vigilante): la prueba avisa con `sent` cuántos bytes
    * van saliendo y la parte recién le llega al portero cuando la promesa se resuelve. Una promesa que nunca
@@ -1460,6 +1462,9 @@ export class FakePortero {
     if (linkToken !== null) {
       const denied = this.linkDenied(method, url.pathname, linkToken, body, range);
       if (denied) return denied;
+    }
+    if (this.disconnected && url.pathname.startsWith('/upload')) {
+      return json({ error: 'Google Drive is not connected.', code: 'drive_not_connected' }, 409);
     }
     if (this.hang && url.pathname.startsWith('/upload')) {
       return new Promise<Response>((_, reject) =>

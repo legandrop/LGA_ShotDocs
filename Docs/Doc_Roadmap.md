@@ -50,6 +50,24 @@ Ordenados en cuatro grupos: el plan de workspaces (primero), los pedidos de Lega
 ya, en orden), lo que se puede hacer sin que Lega decida nada, y lo que espera una decisión o una acción de
 Lega.
 
+### R. Relacionar escenas, locaciones y días (pedido de Lega, 2026-10-08)
+
+El método está en `Doc_Estructura_Proyecto.md` (ES1 a ES10, D355). Hoy lo arma una reorganización al importar, con
+listas generadas y fechadas; para que se sostenga en los proyectos nuevos, la app tiene que ganar, en este orden:
+
+1. **Índice de marcas y panel «Relacionado»** fuera del documento: qué páginas mencionan esta escena, locación o día
+   (por el número de escena y por los links `/p/<id>`), calculado en el dispositivo como la búsqueda. Reemplaza a las
+   listas `Relacionado · generado`. Sin migración.
+2. **Selector de escena al escribir**, que conozca los nombres alternativos de la primera línea de cada escena.
+3. **Plantillas *Escena*, *Locación* y *Scouting***, y *New day report* con la locación en el título.
+4. **Galería por fuente** en la escena y en la locación (fotos de sus scoutings y días), como vista, sin copiar bloques.
+5. **Mapa vivo** del proyecto.
+6. **«Repartir por escenas» un reporte**, con prueba de conservación y deshacer. Los encabezados con solo el número,
+   las escenas en títulos de segundo nivel y las secciones que no son de una escena no se reparten solos.
+
+Anotado al reorganizar: buscar el nombre de una locación trae primero los días que la llevan en el título y después
+la página de la locación; buscar «Día 19» trae primero el planning de ese día.
+
 ### A. Plan de workspaces (D-17, D-18)
 
 1. **Los pasos 5 a 13 de `Plan_Workspaces.md`** (sección 10, y sección 11 para cómo se hace cada uno).

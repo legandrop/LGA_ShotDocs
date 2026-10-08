@@ -554,6 +554,14 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
   en la misma oración que un comentario a medio escribir, y con el «sí» lo descartan. La otra opción: esconderlos
   mientras está la otra cuenta y devolverlos si vuelve la primera (quedan en memoria a mano de otra cuenta).
 
+- **D355 · Estructura estándar de un proyecto: escenas, locaciones y días relacionados** (2026-10-08; tomada al
+  reorganizar un proyecto importado de Coda, Lega la puede cambiar). El árbol va por etapas (Mapa,
+  Preproducción con desglose, locaciones y scoutings, y decorados; Rodaje con un día por página; Tablas y referencia;
+  Archivo); la escena es el eje, con su número completo en el título y sus fichas de desglose adentro; el reporte es el
+  día y no se parte; cada relación se escribe una vez donde nace y lo inverso es derivado; sin galerías ni `#` por
+  ahora. Detalle y alternativas descartadas (páginas índice por día, la escena como contenedora de reportes partidos):
+  `Doc_Estructura_Proyecto.md`, ES1 a ES10.
+
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 
 Decisiones de diseño que el plan no fijaba, tomadas al implementar los pasos 5 a 13 de

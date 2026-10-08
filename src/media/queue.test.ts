@@ -873,6 +873,31 @@ describe('cola de archivos: subidas que se traban', () => {
     expect(server.portero.drive.size).toBe(5);
   });
 
+  it('con el Drive sin conectar deja de pedir subidas y registra todo con sus miniaturas; al conectarlo, sube', async () => {
+    const { server, a, ids } = await withFiles(['a.jpg', 'b.jpg', 'c.jpg', 'd.jpg', 'e.jpg']);
+    await a.media.idle();
+    server.portero.disconnected = true;
+    const opens = () => server.portero.calls.filter((c) => c.path === '/upload').length;
+    await a.engine.syncMedia();
+    // Dos 409 seguidos cierran la vuelta como una trabada; el resto se registra con su miniatura sin pedir subidas.
+    expect(opens()).toBe(2);
+    for (const id of ids) {
+      expect(server.mediaFiles.get(id)).toBeTruthy();
+      expect(server.thumbs.has(id)).toBe(true);
+      expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 1, registered: true, blocked: false });
+    }
+    // La vuelta siguiente, dentro de la espera, no le vuelve a pedir nada al portero.
+    await a.engine.syncMedia();
+    expect(opens()).toBe(2);
+    // Conectado el Drive, pasada la espera, sube los originales.
+    server.portero.disconnected = false;
+    server.clockOffset += LATER;
+    await a.engine.syncMedia();
+    server.clockOffset += LATER;
+    await a.engine.syncMedia();
+    for (const id of ids) expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+  });
+
   it('si la espera fue por Storage, mientras espera solo registra (no prueba las miniaturas)', async () => {
     const { server, a, page } = await withFiles([]);
     const setPause = (value: { until: number; count: number; storage?: boolean } | null) =>

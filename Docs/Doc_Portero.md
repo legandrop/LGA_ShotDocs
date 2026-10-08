@@ -543,6 +543,12 @@ contestó (`Doc_Sincronizacion.md`, "Cada consulta a la base tiene un tope de ti
   miniaturas; los otros dispositivos ya los ven, con su miniatura, y el original sale cuando el portero vuelve. Si una
   miniatura se traba ahí, lo que queda solo se registra. Sin red o con la app vieja, se corta como siempre. Es el
   mismo camino de `process` hasta antes de leer el original (`beforeOriginal`).
+- **El Drive sin conectar cuenta como una trabada** (v0.233): un `409 drive_not_connected` del portero (la conexión
+  del dueño venció o se cortó) cierra la vuelta igual que el portero colgado, y la cola pasa a registrar y subir
+  miniaturas sin pedir subidas. Antes era un error común con espera propia por archivo: cada vuelta le volvía a pedir
+  la subida a todo lo ya registrado antes de llegar a lo nuevo, y con miles de archivos (una importación grande) la
+  cola casi no avanzaba (medido: sin el cambio bajaba de ~60 a ~20 archivos por minuto; con él, ~160). El código del portero viaja en el error de la
+  subida (`UploadError.code`). Al reconectar, la espera vence sola (como mucho 10 minutos) o con *Retry*.
 - **Las carpetas (P.9) cierran la vuelta igual** (v0.142): una trabada no gasta intentos, después de una no se empieza
   otro archivo hasta que los que están en curso terminen o se traben, y a la segunda la cola de la carpeta espera
   (`stallWait`, la misma escala). Detalle en `Doc_Carpetas.md`, "Cómo quedó (entrega 3)".

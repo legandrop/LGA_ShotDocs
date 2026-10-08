@@ -1718,7 +1718,12 @@ export class MediaQueue {
       this.onChange?.();
       // Se trabó sin avanzar (el portero o Storage no se movieron): la vuelta lo cuenta para dejar de subir si
       // les pasa lo mismo a los siguientes. Si avanzó, el servidor anda (despacio): no cuenta.
-      const stuck = thumbStalled || (err instanceof UploadError && err.stalled);
+      // Con el Drive del dueño sin conectar (409 `drive_not_connected`) el portero tampoco se va a mover: igual que una
+      // trabada, así la vuelta deja de pedirle subidas y registra el resto con sus miniaturas (`prepareWhilePaused`).
+      // Si no, cada vuelta volvía a pedirle subidas a todo lo ya registrado antes de llegar a lo nuevo, y con miles de
+      // archivos la cola no avanzaba más.
+      const notConnected = err instanceof PorteroError && err.code === 'drive_not_connected';
+      const stuck = thumbStalled || notConnected || (err instanceof UploadError && err.stalled);
       if (stuck && !advanced && outcome === 'retry') {
         this.lastStallWasThumb = thumbStalled;
         return 'stalled';
