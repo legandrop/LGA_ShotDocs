@@ -20,9 +20,14 @@ export const relations = {
   'live.aliasIsName': { en: "“{alias}” is the name of", es: "“{alias}” es el nombre de" },
   'live.aliasNotEither': { en: "not used for either", es: "no cuenta para ninguna" },
   'live.aliasNotHere': { en: "not used here", es: "no cuenta acá" },
-  'live.aliasNoteTip': {
-    en: "Written under Other names on this page. Change it on one of the pages so it counts.",
-    es: "Está escrito en Otros nombres de esta página. Cambialo en una de las dos para que cuente.",
+  // Un texto por caso (D661): el nombre de otra locación no se cambia en las dos, el compartido sí.
+  'live.aliasNoteTipName': {
+    en: "Written under Other names on this page, but it is the name of another location, so it doesn’t count here. Remove it from this page.",
+    es: "Está escrito en Otros nombres de esta página, pero es el nombre de otra locación y por eso no cuenta acá. Sacalo de esta página.",
+  },
+  'live.aliasNoteTipShared': {
+    en: "Written under Other names on this page and on the other one too, so it counts for neither. Change it on one of the two.",
+    es: "Está escrito en Otros nombres de esta página y de la otra, y por eso no cuenta para ninguna. Cambialo en una de las dos.",
   },
   'live.leftOut': { en: "Left out of relations", es: "Fuera de las relaciones" },
   'live.leftOutBy': { en: "by “{title}”", es: "por “{title}”" },
@@ -435,6 +440,10 @@ export const relations = {
   'linkLoc.none': { en: "No location matches", es: "Ninguna locación coincide" },
   'linkLoc.added': { en: "Added “{alias}” to {name}", es: "Se agregó “{alias}” a {name}" },
   'linkLoc.already': { en: "“{alias}” was already a name of {name}", es: "“{alias}” ya era un nombre de {name}" },
+  'linkLoc.notName': {
+    en: "“{alias}” can’t be a name: names are one short phrase without commas",
+    es: "“{alias}” no puede ser un nombre: un nombre es una frase corta, sin comas",
+  },
   'linkLoc.missing': { en: "Open {name} once with a connection, then try again", es: "Abrí {name} una vez con conexión y probá de nuevo" },
   'linkLoc.unknown': { en: "{name} has content this version doesn’t know: update the app first", es: "{name} tiene contenido que esta versión no conoce: actualizá la app primero" },
   'linkLoc.failed': { en: "Couldn’t add the name", es: "No se pudo agregar el nombre" },
@@ -493,6 +502,10 @@ export const relations = {
   'assign.notIn': {
     en: { one: "not in {pages}: open it and fix it by hand", other: "not in {pages}: open them and fix them by hand" },
     es: { one: "no en {pages}: abrila y arreglalo a mano", other: "no en {pages}: abrilas y arreglalo a mano" },
+  },
+  'assign.locked': {
+    en: { one: "also in {pages}, which you can’t edit", other: "also in {pages}, which you can’t edit" },
+    es: { one: "también está en {pages}, que no podés editar", other: "también está en {pages}, que no podés editar" },
   },
   'assign.undo': { en: "Undo", es: "Deshacer" },
   'assign.undone': { en: "Assign undone", es: "Se deshizo la asignación" },

@@ -362,7 +362,7 @@ export function AssignButton({
     | { kind: 'heading'; blockId: string; text: string }
     | { kind: 'mention'; blockId: string; pending: string; ep: string | null }
     /** Un número que no existe, en todos los lugares que lo nombran y la persona puede editar (*Map › Pending*, D567). */
-    | { kind: 'everywhere'; pending: string; places: { pageId: string; blockIds: string[]; ep: string | null }[] };
+    | { kind: 'everywhere'; pending: string; places: { pageId: string; blockIds: string[]; ep: string | null }[]; locked?: string[] };
   near?: readonly string[];
   ep?: string | null;
   className?: string;
@@ -381,12 +381,15 @@ export function AssignButton({
       if (target.kind === 'everywhere') {
         const out = await assignMentionEverywhere(services, target.places, target.pending, scene, src.snap.registry);
         const name = (id: string) => services.tree.get(id)?.title ?? '';
+        // Las páginas que nombran el número y la persona no puede editar quedan como están: se dice (D666).
+        const locked = target.locked?.length ? tr('assign.locked', { pages: target.locked.map((id) => `«${name(id)}»`).join(', '), count: target.locked.length }) : '';
         if (!out.added) {
-          notify(tr(out.failed.some((f) => f.status === 'missing') ? 'assign.missing' : out.failed.some((f) => f.status === 'unknown') ? 'assign.unknown' : 'assign.changedMention'));
+          notify([tr(out.failed.some((f) => f.status === 'missing') ? 'assign.missing' : out.failed.some((f) => f.status === 'unknown') ? 'assign.unknown' : 'assign.changedMention'), locked].filter(Boolean).join(' · '));
           return;
         }
         const parts = [tr('assign.doneEverywhere', { pending: target.pending, code: scene.code, count: out.done.length })];
         if (out.failed.length) parts.push(tr('assign.notIn', { pages: out.failed.map((f) => `«${name(f.pageId)}»`).join(', '), count: out.failed.length }));
+        if (locked) parts.push(locked);
         notify(parts.join(' · '), undoAction(tr, () => undoAssignEverywhere(services, out.done)));
         return;
       }

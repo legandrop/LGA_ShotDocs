@@ -23,6 +23,12 @@ describe('la parte del título que se ofrece', () => {
     expect(titleFragment({ title: '2026-02-12 | Día 56', label: 'Día 56', date: '2026-02-12' })).toBe('');
     expect(titleFragment({ title: 'Día 56', label: 'Día 56', date: null })).toBe('');
   });
+
+  it('no se ofrece lo que el lector no leería como un nombre (D662): con comas o de más de 60 caracteres; limpio si trae comillas', () => {
+    expect(titleFragment({ title: '2026-02-18 | Día 58 | Edif Ministe Hall, Bar Berlin', label: 'Día 58', date: '2026-02-18' })).toBe('');
+    expect(titleFragment({ title: `2026-02-18 | Día 58 | ${'Edificio '.repeat(8)}`, label: 'Día 58', date: '2026-02-18' })).toBe('');
+    expect(titleFragment({ title: '2026-02-18 | Día 58 | «Edif Ministe Hall»?', label: 'Día 58', date: '2026-02-18' })).toBe('Edif Ministe Hall');
+  });
 });
 
 describe('el orden (D532: solo ordena)', () => {

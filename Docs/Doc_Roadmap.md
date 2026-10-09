@@ -164,13 +164,13 @@ vive solo en la cabecera abierta, no en el renglón plegado; (3) un nombre escri
 nombre de la historia (el decorado, como «Mansión Rosenberg») cuenta en el texto: hoy se evita escribiéndolo con una
 palabra (D562); una marca de «solo lugar» por nombre sería la salida general; (4) *Link to a location…* no está en el
 adelanto ni en la barra *Today*; (5) probar la casilla y la acción en un iPhone y un Android de verdad. De la auditoría:
-(6) el `data-tip` de la nota de conflicto dice lo mismo para los dos casos («cambialo en una de las dos»), y cuando el
-nombre es el de otra locación no aplica; (7) *Link to a location…* escribe el texto del título tal cual: con comas se
-parte en varios nombres, vincular dos veces el mismo día lo repite y con más de 60 caracteres el lector lo ignora aunque
-el aviso diga que se agregó (no ofrecerlo si el fragmento no pasa la limpieza de nombres); (8) «Dejar fuera de las
-relaciones» se parte en dos renglones en el menú en castellano; (9) *Leave out* con un link público no tiene prueba (lo
-corta el código); (10) la ayuda podría decir que se eviten nombres de dos palabras comunes («La Casa»), que cuentan en
-todo el texto (D529).
+(6) a (10) hechos en la v0.250 (D661–D663, D668 y la ayuda): un `data-tip` por caso en la nota de conflicto; *Link to a
+location…* no ofrece ni escribe lo que el lector ignoraría (comas, más de 60 caracteres); «Dejar fuera de las relaciones»
+en un renglón; *Leave out* con un link público, con prueba; la ayuda dice que se eviten nombres de dos palabras comunes.
+De la auditoría de la v0.250 (su bloqueante, el menú ⋯ con «POR CARPETA» que se salía de la pantalla, quedó resuelto:
+`useFloating` corrige también el eje horizontal con el ancho real): (11) con el mismo número antes del `/` y en la consulta
+se subrayan los dos mientras el menú está abierto (cosmético); (12) un día cuyo lugar lleva coma («Hall, Pasillo del
+Ministerio») queda sin *Link to a location…* y sin explicación (D662; partirlo en varios nombres sería la alternativa); (13) a 320 px en castellano, con «POR CARPETA», el menú ⋯ (341 px) es más ancho que la pantalla y se sale 43 px (desde 375 px entra).
 
 **Anotado en la v0.245 (relaciones en vivo, el `/`, *Create* y *Assign*):** hechos el punto (2) de la v0.244 y el (1) de
 la v0.242. Queda: (1) un *Merge* de dos páginas de la misma escena que solo agregue (D520; hoy se resuelve a mano); (2)
@@ -190,21 +190,17 @@ v0.248: (2) *Undo* de *Assign* (D566), (3) *Assign* en *Pending* (D567), O6 (D56
 primeros segundos (queda en la papelera, con «Restaurar»); antes de mandarla, una última sincronización que mire si
 alguien la abrió o le escribió, o dejarla listada en *Pending* como las repetidas; además, el aviso de crear tarda
 3,7–7,3 s, *Prepare* sobre una página que llega tarda hasta 12 s sin más señal que el botón apagado, y el aviso «si quedan
-dos…» sale aunque el otro ceda. (1) mientras se tipea
-`/e 105_141` el número sigue subrayado gris de pendiente en el editor (es de `relUnderline.ts`: la consulta abierta ya está
-en `slashDraft.ts` para que el subrayado la salte); (2) otro dispositivo cuenta esa consulta como pendiente hasta que se
+dos…» sale aunque el otro ceda. ~~(1) mientras se tipea
+`/e 105_141` el número sigue subrayado gris de pendiente~~ (hecho en la v0.250, D664); (2) otro dispositivo cuenta esa consulta como pendiente hasta que se
 elige (solo se anota en el dispositivo que tipea); (3) dos dispositivos que crean el reporte de mañana con red en el mismo
 segundo pueden dejar dos reportes (la sincronización en el momento achica la ventana a un viaje; quedan los dos, como
 D520); (4) el reporte de mañana no lleva la locación en el título (D574) y su ficha propone la locación de ayer, como *New
-day report*; (5) *Assign* en *Pending* no dice nada de las páginas que nombran el número y la persona no puede editar (las
-saltea); (6) el *Undo* de *Assign* y del reporte de mañana vive solo en el aviso (15 s, no se pausa con el mouse
+day report*; ~~(5) *Assign* en *Pending* no dice nada de las páginas que no puede editar~~ (hecho en la v0.250, D666); (6) el *Undo* de *Assign* y del reporte de mañana vive solo en el aviso (15 s, no se pausa con el mouse
 encima; un aviso sin botón que llega encima lo corre); (7) probar la tarjeta nueva en un teléfono de verdad. De la
 auditoría de E11 (hechos en la ronda: B1 = D578, B2 = D579 y D580, el orden del *Undo*, el *Undo* parcial en varias
 páginas, «Alguien lo cambió» neutral y el tope corto sin red): (8) la sincronización entre dispositivos tarda 6–20 s en
-la base real, más que lo que vive el *Undo*; (9) `withoutDraft` descuenta todas las menciones del número en el bloque de
-la consulta, también una escrita antes del `/` (mientras el menú está abierto); (10) en el teléfono el botón de dictar
-tapa el final del texto de la tarjeta *Tomorrow*; (11) las fechas largas de la cabecera del día salen en el idioma del
-navegador y no en el de la app (`longDate` usa `locale()`); (12) una foto `sdmedia://` cuyo registro no existe deja
+la base real, más que lo que vive el *Undo*; (9), (10) y (11) hechos en la v0.250 (D665, D669, D667: `withoutDraft` descuenta solo la mención de la
+consulta; la nota de *Tomorrow* deja libre la columna del botón de dictar; las fechas salían siempre en inglés); (12) una foto `sdmedia://` cuyo registro no existe deja
 «usos sin confirmar» que traban *Borrar proyecto* (fuera de E11); (13) la regla de «recién creado en otro dispositivo»
 (D579) usa la hora de la base contra la del dispositivo: con el reloj muy corrido, espera de más o de menos; (14) la
 copia que cede (D580) queda en la papelera, vacía.
@@ -219,8 +215,8 @@ bloques que cambiaron; (4) el lector todavía toma «2026 | Presupuesto» al pri
 de la v0.237): no se tocó porque «2012 | Cocina» puede ser la escena; (5) la barra *Today* no deja elegir otras escenas
 que las del plan (*Add scene* desde ahí); (6) volver link todos los subrayados de una página de una vez; (7) de la
 auditoría: el fondo de `:hover` sí aparece bajo el mouse quieto cuando el subrayado nuevo se dibuja debajo (O9; hecho en la
-v0.248, D571); borrar la última cifra de `105_029` deja medio segundo la referencia vieja en `105_02`
-(O10); ~~*Today* deja un espacio antes de la puntuación (O11)~~ (hecho en la v0.248, D572); en Safari, la fila nueva de la cabecera puede bajar el texto
+v0.248, D571); ~~borrar la última cifra de `105_029` deja medio segundo la referencia vieja en `105_02` (O10)~~ (hecho en la v0.250,
+D670); ~~*Today* deja un espacio antes de la puntuación (O11)~~ (hecho en la v0.248, D572); en Safari, la fila nueva de la cabecera puede bajar el texto
 52 px en la pausa (sin `overflow-anchor`, O2); con dos apariciones iguales del mismo número en un párrafo, si otro escribe
 antes de las dos mientras el adelanto está abierto, *Make it a link* linkea la otra (mismo destino; O12 de la auditoría
 de E6: guardar cuántas apariciones de esa referencia hay antes en el bloque, o una posición relativa de Yjs).

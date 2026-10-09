@@ -12,6 +12,7 @@ import { buildRegistry } from './reader';
 import { anchorOf, linkTextInBlock, locateUnderline, makeLinkAt, relLinkKeyExtension, underlineAt, underlineKey } from './relLink';
 import { buildUnderlines, mapThroughReplace, relUnderlineExtension, UNDERLINE_WAIT_MS, type PeekEvents, type UnderlineInfo } from './relUnderline';
 import { captureNewLinks, undoAssignInDoc } from './assign';
+import { setSlashDraft } from './slashDraft';
 
 // El subrayado pasivo, la ficha de los links y el gesto para volver link (Docs/Doc_Relaciones.md, sección 14): son
 // decoraciones (nada entra al Y.Doc), se corren con lo que se escribe acá y se rearman en el momento con lo que llega de
@@ -94,6 +95,31 @@ function page(): Y.Doc {
   ] as never);
   return doc;
 }
+
+describe('la consulta abierta del / (D664)', () => {
+  it('mientras se tipea /e 105_141 el número no se subraya de pendiente; al cerrarse el menú, sí; el de antes del / queda', async () => {
+    const doc = new Y.Doc();
+    const e0 = mount(doc, { underline: false });
+    e0.replaceBlocks(e0.document, [{ type: 'paragraph', content: 'Revisar /e 105_141' }, { type: 'paragraph', content: 'Ya dije 105_142 y /e 105_142' }] as never);
+    const e = mount(doc);
+    await tick();
+    expect(drawn(e).filter((x) => x.endsWith('pend'))).toEqual(['105_141:rel-u pend', '105_142:rel-u pend', '105_142:rel-u pend']);
+    const blockId = e.document[0].id;
+    // La consulta abierta del primer bloque: su número no se subraya.
+    setSlashDraft({ pageId: 'p', blockId, codes: ['105_141'], query: '/e 105_141' });
+    await tick(UNDERLINE_WAIT_MS + 50);
+    expect(drawn(e).filter((x) => x.endsWith('pend'))).toEqual(['105_142:rel-u pend', '105_142:rel-u pend']);
+    // El menú se cierra (Esc, elegir): vuelve a subrayarse sin tocar el documento.
+    setSlashDraft(null);
+    await tick(UNDERLINE_WAIT_MS + 50);
+    expect(drawn(e).filter((x) => x.endsWith('pend'))).toEqual(['105_141:rel-u pend', '105_142:rel-u pend', '105_142:rel-u pend']);
+    // En el segundo bloque la mención de antes del / no se descuenta (`codes` vacío): las dos siguen subrayadas.
+    setSlashDraft({ pageId: 'p', blockId: e.document[1].id, codes: [], query: '/e 105_142' });
+    await tick(UNDERLINE_WAIT_MS + 50);
+    expect(drawn(e).filter((x) => x.endsWith('pend')).length).toBe(3);
+    setSlashDraft(null);
+  });
+});
 
 describe('el subrayado pasivo', () => {
   it('subraya lo que reconoce el lector (escenas, pendientes, locaciones), nunca lo que ya es link, y no toca el Y.Doc', async () => {
@@ -495,6 +521,21 @@ describe('el adelanto: el toque, el mouse, elegir, editar y lo que lo cierra', (
     expect(drawn(e)).toContain('CENADE:rel-u loc');
     await tick(UNDERLINE_WAIT_MS + 50);
     expect(refs()).toContain('105_027:105_027');
+  });
+
+  it('borrar la última cifra de un número no deja medio segundo la referencia vieja en el resto (O10, D670)', async () => {
+    const e = mount(page());
+    await tick();
+    const v = view(e);
+    const r = drawnRange(e, '105_026');
+    v.dispatch(v.state.tr.delete(r.to - 1, r.to));
+    // «105_02» ya no es 105_026: no queda subrayado con esa referencia; lo de al lado sigue.
+    expect(drawn(e).some((x) => x.startsWith('105_02:'))).toBe(false);
+    expect(drawn(e)).toContain('5029a:rel-u');
+    expect(drawn(e)).toContain('CENADE:rel-u loc');
+    await tick(UNDERLINE_WAIT_MS + 50);
+    // Volver a leer: «105_02» no es nada (falta una cifra).
+    expect([...v.dom.querySelectorAll('.rel-u')].map((x) => x.getAttribute('data-ref'))).not.toContain('105_026');
   });
 
   it('el adelanto con el mouse: solo con un movimiento de verdad, no cuando el subrayado aparece debajo del puntero quieto (B1)', async () => {

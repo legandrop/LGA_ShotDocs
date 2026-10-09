@@ -10,7 +10,7 @@ import { planOf } from './dayLive';
 import { dayRef } from './liveView';
 import { fold, scan, type Registry } from './reader';
 import { anchorOf, linkTextInBlock } from './relLink';
-import { setSlashDraft } from './slashDraft';
+import { setSlashDraft, textWithout } from './slashDraft';
 import type { RelationSnapshot } from './relationIndex';
 import { searchLocations, searchScenes, type SearchSource } from './sceneSearch';
 
@@ -263,17 +263,26 @@ export function relationSlash(env: { editor: Editor; services: Services; pageId:
       if (!menu.shown()) setSlashDraft(null);
     });
   }
-  const noteDraft = (p: SlashPlace | null, q: string) => {
+  const noteDraft = (p: SlashPlace | null, q: string, raw: string) => {
     const view = editor.prosemirrorView;
     const blockId = view ? anchorOf(view.state, view.state.selection.from, '').blockId : null;
-    if (!p || !blockId || !q) return setSlashDraft(null);
+    if (!p || !view || !blockId || !q) return setSlashDraft(null);
     const R = p.snap.registry;
+    const pendings = (text: string) => {
+      const refs = new Set<string>();
+      for (const heading of [false, true]) for (const h of scan(R, text, { heading, ep: p.ep })) if (h.kind === 'pending') refs.add(h.ref);
+      return refs;
+    };
     // Lo que el índice lee en ese renglón (un párrafo o un título) y lo que el `/` ofrecería crear.
-    const codes = new Set<string>();
-    for (const heading of [false, true]) for (const h of scan(R, q, { heading, ep: p.ep })) if (h.kind === 'pending') codes.add(h.ref);
+    const codes = pendings(q);
     const code = pendingCode(R, q, p.ep);
     if (code) codes.add(code.replace(/[A-Z]$/, ''));
-    setSlashDraft({ pageId: env.pageId(), blockId, codes: [...codes] });
+    // Un número que el bloque nombra también afuera de la consulta (antes del `/` o después del cursor) sigue contando: la
+    // consulta solo descuenta la suya (D665).
+    const query = `/${raw}`;
+    const outside = textWithout(view.state.selection.$from.parent, query);
+    if (outside !== null) for (const ref of pendings(outside)) codes.delete(ref);
+    setSlashDraft({ pageId: env.pageId(), blockId, codes: [...codes], query });
   };
 
   return {
@@ -305,7 +314,7 @@ export function relationSlash(env: { editor: Editor; services: Services; pageId:
       if (parsed.mode !== 'scene') setSlashDraft(null);
       if (parsed.mode === 'normal') return null;
       const p = place();
-      if (parsed.mode === 'scene') noteDraft(p, parsed.q);
+      if (parsed.mode === 'scene') noteDraft(p, parsed.q, query);
       if (!p || (parsed.mode === 'scene' && p.snap.registry.scenes.size === 0 && !parsed.q)) return null;
       return parsed.mode === 'scene' ? sceneItems(p, parsed.q) : locationItems(p, parsed.q);
     },

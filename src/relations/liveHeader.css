@@ -2021,3 +2021,12 @@ button.rel-cant.trash,
   flex: none;
   margin-top: 2px;
 }
+
+/* En el teléfono el botón redondo de dictar (`.dictate-fab`, 56 px a 16 de la derecha) queda arriba de lo último que se
+   lee al llegar a la tarjeta *Tomorrow*: el renglón de la nota (y el aviso de arriba) deja libre su columna (D669). */
+@media (max-width: 760px) {
+  .lh-tomorrow .row2,
+  .lh-tomorrow .rep {
+    padding-right: 60px;
+  }
+}

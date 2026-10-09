@@ -1,7 +1,7 @@
 import * as Y from 'yjs';
 import { unitsFromYDoc, type BlockMeta } from '../search/extract';
 import { findUnknownContent } from '../ui/unknownContent';
-import { aliasesFromFields, nameKey } from './aliases';
+import { aliasesFromFields, nameKey, writableName } from './aliases';
 import { FIELD_LABELS, fieldValues, normLabel, readPageFields, type FieldValue } from './fields';
 import { findContainer, withEditor, type PrepareDeps } from './prepareDay';
 
@@ -127,7 +127,8 @@ export function addAliasesInDoc(doc: Y.Doc, names: string[], label: string): { a
   const have = new Set(aliasesFromFields(fields).map(nameKey));
   const added: string[] = [];
   for (const n of names) {
-    const t = n.replace(/\s+/g, ' ').trim();
+    // Solo lo que el lector va a leer como un nombre (D662): sin comas, de hasta 60 caracteres, limpio.
+    const t = writableName(n);
     const k = nameKey(t);
     if (!k || have.has(k)) continue;
     have.add(k);

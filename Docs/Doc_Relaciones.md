@@ -959,7 +959,8 @@ un selector de las locaciones que la persona puede editar, filtrable por cualqui
 parecen (cada palabra del título es el comienzo de una del nombre, sin artículos ni «de»): **la regla solo ordena**
 (D532). Elegir escribe el texto en «Other names» / «Otros nombres» de esa locación (rótulo en el idioma de la app) y
 avisa «Added “Edif Ministe Hall” to Edificio Ministerial Hall» con *Open* y *Undo*; si la página no está en el dispositivo
-y no baja en 8 s, «Open … once with a connection».
+y no baja en 8 s, «Open … once with a connection». Solo se ofrece (y se escribe) un texto que el lector leería como un
+nombre (`writableName`: uno solo, sin comas, hasta 60 caracteres, D662); el nombre de la locación misma dice «already».
 
 ***Leave out of relations*** (D540, D541, D560). Casilla en el menú ⋯ de la página, debajo de *Type*, con permiso de
 cambiar la fila y nunca con un link público; aparece si el proyecto tiene escenas, locaciones o días, o si ya hay una
@@ -1012,7 +1013,8 @@ que nombran esas páginas.
 **El `/`.** `/e 105_027a`: si existe `105_027A`, esa primero; si no, «105_027a · part of 105_027», que deja `105_027a`
 con la letra como se escribió y el link a 105_027 (D569; `searchScenes` lleva la parte en `part`). Mientras el menú está
 abierto en modo escenas, `slashDraft` anota qué números de qué bloque son la consulta y el mapa (la pestaña y el número de
-la fila *Map*) no los cuenta; al cerrarse el menú se borra (D568). Sin episodio propio (un día), el selector y el `/`
+la fila *Map*) no los cuenta, salvo un número que el bloque nombra también afuera de la consulta (D665); el subrayado gris
+salta esa consulta (D664); al cerrarse el menú se borra (D568). Sin episodio propio (un día), el selector y el `/`
 ordenan: las cercanas en su orden (el plan, también el del desglose), las de su episodio, el resto (D570).
 
 **Ver y escribir.** El fondo de `:hover` del subrayado pide `data-rel-mouse` en el contenedor del editor, que pone

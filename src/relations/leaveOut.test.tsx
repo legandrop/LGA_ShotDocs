@@ -13,6 +13,9 @@ import { placedEntity } from './entitySync';
 import { writeBlocks } from './fixtures/proyectoSintetico';
 import { HoldsTag } from './HoldsTag';
 import { LiveHeader } from './LiveHeader';
+import { LinkContext, type LinkInfo } from '../linkMode';
+import { linkFragment } from './LinkLocation';
+import { t } from '../i18n';
 
 // *Leave out of relations* (D540, D541) y el aviso de un nombre escrito que no cuenta (D534), en la interfaz de verdad:
 // la casilla del menú ⋯ escribe solo `graph`, se hereda deshabilitada «By folder», el árbol lo rotula y la cabecera de lo
@@ -221,6 +224,73 @@ describe('la cabecera de lo que quedó afuera (D541) y el nombre que no cuenta (
     expect(note.getAttribute('data-tip')).toContain('Other names');
     act(() => (note.querySelector('.lh-anote-go') as HTMLButtonElement).click());
     expect(location.pathname).toContain(ids.brand);
+  });
+});
+
+describe('el texto de cada aviso de nombre (D661)', () => {
+  it('el nombre de otra locación y el compartido dicen cosas distintas', async () => {
+    const { d, ids } = await project();
+    const norte = await d.tree.create(ids.locs, 'Estudio Norte');
+    const taller = await d.tree.create(ids.locs, 'Taller Sur');
+    await writeBlocks(d, taller, [{ p: 'Otros nombres: Estudio Norte' }]);
+    const session = relationsSession({ tree: d.tree, docs: d.docs, db: d.db });
+    await session.index.refresh(d.tree.workspaceId);
+    await session.relations.update(d.tree.workspaceId);
+    void norte;
+    const own = mount(d, <LiveHeader pageId={taller} />);
+    const name = await shown(() => own.querySelector('.lh-anote')!);
+    expect(name.textContent).toContain('is the name of');
+    expect(name.getAttribute('data-tip')).toContain('name of another location');
+    expect(name.getAttribute('data-tip')).not.toContain('one of the two');
+    const shared = mount(d, <LiveHeader pageId={ids.europa} />);
+    const note = await shown(() => shared.querySelector('.lh-anote')!);
+    expect(note.getAttribute('data-tip')).toContain('on the other one too');
+    expect(note.getAttribute('data-tip')).toContain('one of the two');
+  });
+});
+
+describe('Leave out of relations con un link público (D663)', () => {
+  it('con un link abierto la casilla no se ofrece, ni siquiera en una página que ya tiene la marca', async () => {
+    const { d, ids } = await project();
+    const link = { entry: { id: 'l1' }, domain: 'x.supabase.co', linkId: 'l1', pageId: ids.archivo } as unknown as LinkInfo;
+    // Con una cuenta la casilla está (control); con el link abierto, el mismo menú no la trae.
+    await shown(() => expect(item(menu(d, ids.archivo))).toBeDefined());
+    const host = mount(
+      d,
+      <LinkContext.Provider value={link}>
+        <PageMenu pageId={ids.archivo} position={{ top: 0, left: 0 }} anchor={null} onClose={() => undefined} onNewChild={() => undefined} onRename={() => undefined} onMove={() => undefined} onFormat={() => undefined} onTrash={() => undefined} />
+      </LinkContext.Provider>,
+    );
+    await shown(() => expect(host.querySelector('button')).not.toBeNull());
+    expect(item(host)).toBeUndefined();
+  });
+});
+
+describe('Link to a location… no escribe lo que el lector ignoraría (D662)', () => {
+  it('con comas, más de 60 caracteres o el nombre de la locación misma, el aviso no dice «agregado» y la página no cambia', async () => {
+    const { d, ids } = await project();
+    const edif = await d.tree.create(ids.locs, 'Edificio Ministerial Hall');
+    await writeBlocks(d, edif, [{ p: 'Hall de mármol.' }]);
+    const notices: string[] = [];
+    const listen = (ev: Event) => {
+      const n = (ev as CustomEvent).detail;
+      notices.push(typeof n === 'object' ? n.message : String(n));
+    };
+    window.addEventListener('shotdocs:notice', listen);
+    try {
+      const loc = { name: 'Edificio Ministerial Hall', pageId: edif };
+      for (const raw of ['Edif Ministe Hall, Bar Berlin', 'Edificio '.repeat(8), 'edificio ministerial hall']) await linkFragment(services(d), t, loc, raw);
+      expect(notices.some((m) => m.startsWith('Added'))).toBe(false);
+      expect(notices).toHaveLength(3);
+      expect(notices[0]).toContain('can’t be a name');
+      expect(notices[2]).toBe('“edificio ministerial hall” was already a name of Edificio Ministerial Hall');
+      const { unitsFromYDoc } = await import('../search/extract');
+      const doc = await d.docs.open(edif);
+      expect(unitsFromYDoc(doc).map((u) => u.text)).toEqual(['Hall de mármol.']);
+      d.docs.close(edif);
+    } finally {
+      window.removeEventListener('shotdocs:notice', listen);
+    }
   });
 });
 

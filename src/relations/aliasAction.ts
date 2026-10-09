@@ -1,5 +1,5 @@
 import { fold, type Registry } from './reader';
-import { withoutParens } from './aliases';
+import { withoutParens, writableName } from './aliases';
 import { titlePlace } from './projectMap';
 
 // *Link to a location…* (Docs/Doc_Relaciones.md, sección 17; D539, fase B): desde un día cuyo título nombra un lugar que
@@ -18,11 +18,12 @@ const words = (s: string): string[] =>
 /**
  * La parte de lugar del título de un día, la que se ofrece para escribir («2026-02-18 | Día 58 | Edif Ministe Hall» →
  * «Edif Ministe Hall»): sin la fecha, el rótulo del día ni lo de entre paréntesis («(sin reporte)», «(en blanco)»).
- * Vacía si no queda nada que tenga letras.
+ * Vacía si no queda nada que tenga letras o si no puede ser UN nombre de los que el lector lee (con comas, de más de 60
+ * caracteres: D662), porque escribirlo no serviría; con comillas o un `?` del final se ofrece limpio.
  */
 export function titleFragment(day: { title: string; label: string; date: string | null }): string {
   const place = withoutParens(titlePlace(day));
-  return /\p{L}/u.test(place) ? place : '';
+  return /\p{L}/u.test(place) ? writableName(place) : '';
 }
 
 /**

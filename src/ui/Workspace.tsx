@@ -26,7 +26,7 @@ import { disposeSearchSession, isSearchShortcut, otherModalOpen, takesSearchShor
 import { disposeRelationsSession, RelationsRunner } from './relationsUi';
 import { ArchiveIcon, DownloadIcon, MicIcon, MoreIcon, PlusIcon, SearchIcon } from './icons';
 import { NavMenuButton } from './NavMenuButton';
-import { menuBelow, PageMenu, signOutHere, signOutQuestion, unsentCount, type MenuPosition } from './menus';
+import { menuBelow, PAGE_MENU_WIDTH, PageMenu, signOutHere, signOutQuestion, unsentCount, type MenuPosition } from './menus';
 import { MoveDialog } from './MoveDialog';
 import { PageFormatDialog } from './PageFormatDialog';
 import { followHeight, notify, useNotice } from './notice';
@@ -527,7 +527,7 @@ export function Shell() {
                   aria-expanded={!!pageMenu}
                   onClick={(e) => {
                     const anchor = e.currentTarget;
-                    setPageMenu(pageMenu ? null : { position: menuBelow(anchor), anchor });
+                    setPageMenu(pageMenu ? null : { position: menuBelow(anchor, PAGE_MENU_WIDTH), anchor });
                   }}
                 >
                   <MoreIcon />

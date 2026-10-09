@@ -1339,6 +1339,44 @@ el tipo de bloque: borra y crea, y pierde lo que otro escribe en él).
   0, 1, 2, 2,5, 3 y 3,5 s (dos tandas, 11 corridas): siempre un reporte, nunca secciones repetidas. El costo: el que crea
   espera una sincronización más (aviso a los 4,5–7 s en vez de 2–4). Si preferís otra: no ceder y dejar los dos listados.
 
+- **D661 · El `data-tip` de la nota de un nombre que no cuenta, un texto por caso** (2026-10-09; E17, auditoría de la v0.247
+  (6)). Qué pasaba: decía «cambialo en una de las dos» también cuando el nombre es el de otra locación, y ahí no hay dos
+  páginas que cambiar. Ahora «es el nombre de otra locación… sacalo de esta página» y, para el nombre repetido en dos,
+  «cambialo en una de las dos».
+- **D662 · Lo que se escribe en «Otros nombres» es un nombre que el lector va a leer** (2026-10-09; E17, v0.247 (7)). Qué
+  pasaba: *Link to a location…* escribía el texto del título tal cual; con comas se partía en varios nombres y con más de
+  60 caracteres el lector lo ignoraba mientras el aviso decía «agregado». Las opciones: avisar después o no ofrecerlo.
+  Elegí no ofrecerlo: `writableName` (`aliases.ts`) es la misma limpieza del lector (un solo nombre, comillas y `?` fuera,
+  hasta 60 caracteres, dos letras); `titleFragment` lo usa y el botón no aparece si no pasa; `addAliasesInDoc` también la
+  aplica (nada ignorado se escribe) y, si el texto es el nombre de la locación misma, el aviso dice que ya era un nombre.
+  Un nombre ya presente no se repite (ya lo hacía `addAliasesInDoc`). Si preferís otra: ofrecerlo y partir en varios.
+- **D663 · *Leave out of relations* no se ofrece con un link público: con prueba** (2026-10-09; E17, v0.247 (9)). El código
+  ya lo cortaba (`if (link) return null`); la prueba pone una página que ya tiene la marca (si no, la casilla tampoco
+  salía por falta de sesión) y falla sin la guarda.
+- **D664 · El subrayado gris de pendiente salta la consulta abierta del `/`** (2026-10-09; E17, v0.248 (1)). Qué pasaba:
+  mientras se tipea `/e 105_141` el número quedaba subrayado de pendiente. Ahora `buildUnderlines` lee `slashDraft` (que
+  guarda también la consulta tal como está escrita, `query`) y no subraya los pendientes de esa consulta, en su bloque y
+  desde el `/`; al cerrarse el menú sin tocar el documento (Esc) se vuelve a dibujar.
+- **D665 · La consulta descuenta solo su mención** (2026-10-09; E17, v0.248 (9)). Qué pasaba: `withoutDraft` sacaba el
+  bloque entero de las menciones del número, así que una mención escrita antes del `/` dejaba de contar. Ahora `noteDraft`
+  mira el resto del bloque (`textWithout`, con los links a páginas tapados) y no anota como consulta un número que el
+  bloque nombra también afuera.
+- **D666 · *Assign* en *Pending* dice qué páginas no pudo tocar por permisos** (2026-10-09; E17, v0.248 (5)). El aviso suma
+  «también está en «X», que no podés editar» con las páginas que nombran el número y la persona no edita (se saltean
+  como siempre). Si ninguna se pudo editar, el botón no está (como antes).
+- **D667 · Las fechas largas y cortas de la cabecera salen en el idioma de la app** (2026-10-09; E17, v0.248 (11)). Qué
+  pasaba: `locale() === 'es'` nunca era cierto (`locale()` devuelve `es-AR`), así que salían siempre en inglés
+  («Thu 19 Feb 2026») también con la app en castellano. Ahora `language()`: «jue 19 feb 2026».
+- **D668 · «Dejar fuera de las relaciones» en un renglón** (2026-10-09; E17, v0.247 (8)). Elegí no partir el rótulo ni
+  acortarlo (es el de D540, también citado en los avisos): `white-space: nowrap` y el menú ⋯ se coloca con el ancho real
+  (`PAGE_MENU_WIDTH`, 290; antes 240 y se salía de la pantalla). En inglés el menú no cambia de ancho.
+- **D669 · En el teléfono la nota de la tarjeta *Tomorrow* deja libre la columna del botón de dictar** (2026-10-09; E17,
+  v0.248 (10)). Solo CSS de la tarjeta: `padding-right: 60px` en el renglón de la nota y el aviso, hasta 760 px (donde
+  aparece el botón redondo). El botón sigue tapando lo que pasa por debajo mientras se desliza: es un botón fijo.
+- **D670 · Borrar la última cifra de un número ya no deja la referencia vieja en el resto** (2026-10-09; E17, v0.244 (7),
+  O10). `dropShrunk` saca lo dibujado cuyo tramo quedó más corto al correrlo con la edición; escribir al lado sigue sin
+  apagarlo.
+
 ### D601 · Abrir una página en un dispositivo nuevo no vuelve a registrar las fotos que ya usa
 **Qué pasaba:** en un dispositivo nuevo, abrir una página durante la primera sincronización ponía en la cola un aviso
 «esta página usa esta foto» por cada foto del documento, antes de comparar la página con el servidor. En ERSO, el Día 59:

@@ -6,7 +6,7 @@ import * as Y from 'yjs';
 import { unitsFromYDoc, type BlockMeta } from '../search/extract';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { schema } from '../ui/editorSchema';
-import { aliasesFromFields, resolveLocationNames, withBareNames, writtenLevel } from './aliases';
+import { aliasesFromFields, resolveLocationNames, withBareNames, writableName, writtenLevel } from './aliases';
 import { addAliasesInDoc } from './aliasWrite';
 import { readPageFields, type PageFields } from './fields';
 import { buildRegistry, scan } from './reader';
@@ -193,6 +193,25 @@ describe('escribirlos en la página (D543): solo agrega', () => {
     addAliasesInDoc(b, ['Estudio Autos'], 'Otros nombres');
     Y.applyUpdate(a, Y.encodeStateAsUpdate(b));
     expect(aliasesFromFields(fieldsOf(a)).sort()).toEqual(['Arenera', 'Estudio', 'Estudio Autos']);
+  });
+});
+
+describe('lo que se escribe es un nombre que el lector va a leer (D662)', () => {
+  it('un nombre limpio pasa; con comas, de más de 60 caracteres o de una letra, no', () => {
+    expect(writableName('Edif Ministe Hall')).toBe('Edif Ministe Hall');
+    expect(writableName(' «Edif   Ministe Hall»? ')).toBe('Edif Ministe Hall');
+    expect(writableName('Bar Berlin, Claridge')).toBe('');
+    expect(writableName('Bar Berlin · Claridge')).toBe('');
+    expect(writableName('A'.repeat(61))).toBe('');
+    expect(writableName('B')).toBe('');
+  });
+
+  it('addAliasesInDoc no escribe lo que el lector ignoraría: ni el texto con comas, ni el largo, y limpia las comillas', () => {
+    const doc = docWith([line('Galpón grande.')]);
+    expect(addAliasesInDoc(doc, ['Bar Berlin, Claridge', 'x'.repeat(61), 'B'], 'Otros nombres').added).toEqual([]);
+    expect(texts(doc)).toEqual(['Galpón grande.']);
+    expect(addAliasesInDoc(doc, ['«Edif Ministe Hall»'], 'Otros nombres').added).toEqual(['Edif Ministe Hall']);
+    expect(aliasesFromFields(fieldsOf(doc))).toEqual(['Edif Ministe Hall']);
   });
 });
 

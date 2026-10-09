@@ -612,7 +612,7 @@ function Pending({
               actions={
                 <>
                   <CreateEntityButton want={{ kind: 'scene', code: p.code }} projectId={projectId} className="mp-btn" />
-                  {src && places.length > 0 && <AssignButton src={src} target={{ kind: 'everywhere', pending: p.code, places }} near={nearOf(p.code)} ep={p.code.includes('_') ? p.code.slice(0, 3) : null} className="mp-btn" />}
+                  {src && places.length > 0 && <AssignButton src={src} target={{ kind: 'everywhere', pending: p.code, places, locked: p.mentions.filter((m) => !perms.canEditPage(m.pageId)).map((m) => m.pageId) }} near={nearOf(p.code)} ep={p.code.includes('_') ? p.code.slice(0, 3) : null} className="mp-btn" />}
                 </>
               }
               head={

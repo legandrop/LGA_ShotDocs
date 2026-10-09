@@ -101,6 +101,12 @@ export function useFloating(
       el.style.top = `${Math.max(8, Math.min(above, window.innerHeight - 8 - r.height))}px`;
       el.style.bottom = 'auto';
     }
+    // Y si con su ancho real no entra a la derecha (un renglón más largo que el ancho con que se colocó, como «Dejar
+    // fuera de las relaciones» con «POR CARPETA», D668), se corre a la izquierda hasta entrar.
+    // Una hoja del teléfono (de borde a borde, con `left`/`right` fijados en la hoja de estilos) no se toca.
+    if (getComputedStyle(el).position === 'fixed' && r.right > window.innerWidth - 8 && r.width < window.innerWidth - 16) {
+      el.style.left = `${Math.max(8, window.innerWidth - 8 - r.width)}px`;
+    }
     if (focusFirst) items(el)[0]?.focus({ preventScroll: true });
     return () => {
       // Si el foco quedó en el menú (o se perdió al desmontarlo), vuelve al botón que lo abrió.
@@ -146,6 +152,12 @@ export interface MenuPosition {
   bottom?: number;
   left: number;
 }
+
+/**
+ * El ancho con el que se coloca el menú ⋯ de una página: el renglón más largo es «Dejar fuera de las relaciones» con su
+ * estado (unos 280 px en castellano), que va en un solo renglón (D668).
+ */
+export const PAGE_MENU_WIDTH = 290;
 
 /** Posición de un menú de `width` px abajo de `anchor`; si no entra, `useFloating` lo sube. */
 export function menuBelow(anchor: Element, width = 240): MenuPosition {

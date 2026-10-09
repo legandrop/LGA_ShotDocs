@@ -7,7 +7,7 @@ import type { PageRow } from '../sync/types';
 import { openHelp } from '../help/helpUi';
 import { useHelpDot } from '../tutorial/tourState';
 import { AccountIcon, CollapseIcon, ExpandIcon, HelpIcon, MoreIcon, PlusIcon, SearchIcon } from './icons';
-import { AccountMenu, menuBelow, PageMenu, type MenuPosition } from './menus';
+import { AccountMenu, menuBelow, PAGE_MENU_WIDTH, PageMenu, type MenuPosition } from './menus';
 import { DriveDialogHost, MembersDialog, ShareDialog } from './lazyDialogs';
 import { Part } from './lazyPart';
 import { MoveDialog } from './MoveDialog';
@@ -416,7 +416,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
               onClick={(e) => {
                 e.stopPropagation();
                 const anchor = e.currentTarget;
-                setMenu(menu?.id === page.id ? null : { id: page.id, position: menuBelow(anchor), anchor });
+                setMenu(menu?.id === page.id ? null : { id: page.id, position: menuBelow(anchor, PAGE_MENU_WIDTH), anchor });
               }}
             >
               <MoreIcon size={16} />

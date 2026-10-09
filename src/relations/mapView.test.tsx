@@ -231,7 +231,7 @@ describe('el mapa en la app', () => {
     const { setSlashDraft } = await import('./slashDraft');
     const snap = existingRelationsSession(services(devices[0]))!.relations.snapshot(built.projectId)!;
     const where = pendingRelations(snap).find((p) => p.ref === '105_141')!.pages[0];
-    act(() => setSlashDraft({ pageId: where.pageId, blockId: where.blockIds[0], codes: ['105_141'] }));
+    act(() => setSlashDraft({ pageId: where.pageId, blockId: where.blockIds[0], codes: ['105_141'], query: '/e 105_141' }));
     await shown(() => expect(count()).toBe('1 pending'));
     await shown(() => expect(host.textContent).not.toContain('105_141 doesn’t exist yet'));
     act(() => setSlashDraft(null));
@@ -267,6 +267,37 @@ describe('el mapa en la app', () => {
       expect(await linkedRuns(d, built.ids.d58)).not.toContain(href);
     });
     await shown(() => expect(card()?.textContent).toContain('105_120 doesn’t exist yet'));
+  });
+
+  it('Pending: Assign dice qué páginas que nombran el número no se pueden editar (D666)', async () => {
+    const server = new FakeServer();
+    server.enableTeam();
+    const owner = await makeDevice(server);
+    devices.push(owner);
+    const built = await buildProject(owner, fakePhoto, { days: true, indexPage: false });
+    await writeBlocks(owner, built.ids.notas, [{ p: 'Falta la Escena 105_120 en el desglose.' }]);
+    await writeBlocks(owner, built.ids.d58, [{ h: 1, text: 'Info general' }, { p: 'Llamado 8:00, después la 105_120.' }]);
+    await owner.engine.syncNow();
+    // Beto edita el día y el desglose, y solo ve las notas de dirección.
+    server.addMember('beto', 'member', 'beto@test');
+    server.grant('beto', { pageId: built.ids.rodaje }, 'edit_pages');
+    server.grant('beto', { pageId: built.ids.desglose }, 'edit_pages');
+    server.grant('beto', { pageId: built.ids.notas }, 'view');
+    const beto = await makeDevice(server, crypto.randomUUID(), '0.021', {}, undefined, { id: 'beto', email: 'beto@test' });
+    devices.push(beto);
+    await beto.engine.syncNow();
+    await beto.engine.syncNow();
+    const host = mount(beto, pagePath(built.ids.s027));
+    await until(() => host.querySelector('.page-title'), 'la página');
+    act(() => navigate(mapPath('pending')));
+    const card = () => [...host.querySelectorAll<HTMLElement>('.mp-pcard')].find((c) => c.textContent?.includes('105_120'));
+    await shown(() => expect(card()?.querySelector('.rel-assign')).toBeTruthy());
+    click(card()!.querySelector('.rel-assign'));
+    type(host.querySelector<HTMLInputElement>('.lh-picker input')!, '5026');
+    click(host.querySelector('.lh-picker-list button'));
+    await shown(() => expect(host.textContent).toContain('105_120 now links to 105_026 in 1 page · also in «Notas de dirección», which you can’t edit'));
+    // La página que no podía editar quedó como estaba.
+    expect(await linkedRuns(beto, built.ids.notas)).not.toContain(`/p/${built.ids.s026}`);
   });
 
   it('Scenes por episodio, Shoot days y Pending (con el lugar de los botones de E7); ir a la sección exacta', async () => {

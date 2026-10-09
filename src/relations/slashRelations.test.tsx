@@ -217,6 +217,29 @@ describe('el / en el editor', () => {
     setSlashDraft(null);
   });
 
+  it('un número que el bloque ya nombra antes del / sigue contando: la consulta descuenta solo la suya (D665)', async () => {
+    const { d, built } = await world();
+    const { e } = await editorOn(d, built.ids.notas);
+    const session = relationsSession(d);
+    const slash = relationSlash({ editor: e as never, services: services(d), pageId: () => built.ids.notas, tr: t as never });
+    const src = () => ({ snap: session.relations.snapshot(built.projectId)!, title: (id: string) => d.tree.get(id)?.title, content: () => undefined });
+    const pending = () => projectMap(src()).pending.map((p) => p.code);
+    typeLine(e, 'Ya dije 105_141 y ahora /e 105_141');
+    await until(() => pending().includes('105_141'), 'el índice lee el bloque');
+    // La mención de antes del / existe: la consulta no la descuenta.
+    slash.items('e 105_141');
+    expect(slashDraft()).toBeNull();
+    expect(pending()).toContain('105_141');
+    // Otro número que solo está en la consulta sí se descuenta, con la consulta anotada.
+    typeLine(e, 'Ya dije 105_141 y ahora /e 105_142');
+    await until(() => pending().includes('105_142'), 'el otro número');
+    slash.items('e 105_142');
+    expect(slashDraft()).toMatchObject({ codes: ['105_142'], query: '/e 105_142' });
+    expect(pending()).not.toContain('105_142');
+    expect(pending()).toContain('105_141');
+    setSlashDraft(null);
+  });
+
   it('en un día, /e sin nada: primero las escenas del día; /l cen deja «CENADE» con link; en un título también', async () => {
     const { d, built } = await world();
     const { e } = await editorOn(d, built.ids.d59);

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react';
-import { locale, useT, type Translate } from '../i18n';
+import { language, useT, type Translate } from '../i18n';
 import { useLinkMode } from '../linkMode';
 import { navigate, pagePath } from '../router';
 import { usePermissions, useServices, useTree } from '../services';
@@ -110,7 +110,7 @@ function AliasNotes({ notes, tr }: { notes: LocationLive['aliasNotes']; tr: Tran
   return (
     <div className="lh-anotes">
       {notes.map((n) => (
-        <div key={`${n.kind}:${n.alias}`} className="lh-anote" data-tip={tr('live.aliasNoteTip')}>
+        <div key={`${n.kind}:${n.alias}`} className="lh-anote" data-tip={tr(n.kind === 'name' ? 'live.aliasNoteTipName' : 'live.aliasNoteTipShared')}>
           <Ic name="warn" small />
           <span>
             {n.kind === 'name' ? tr('live.aliasIsName', { alias: n.alias }) : tr('live.aliasShared', { alias: n.alias })}{' '}
@@ -170,7 +170,7 @@ export const shortDate = (date: string | null): string => {
   if (!date) return '';
   const [y, m, d] = date.split('-').map(Number);
   try {
-    return new Intl.DateTimeFormat(locale() === 'es' ? 'es' : 'en-GB', { day: 'numeric', month: 'short' }).format(new Date(y, m - 1, d, 12)).replace('.', '');
+    return new Intl.DateTimeFormat(language() === 'es' ? 'es-AR' : 'en-GB', { day: 'numeric', month: 'short' }).format(new Date(y, m - 1, d, 12)).replace('.', '');
   } catch {
     return date;
   }

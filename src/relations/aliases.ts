@@ -38,6 +38,16 @@ function cleanName(raw: string): string {
 }
 
 /**
+ * Un texto que se quiere escribir como un solo nombre en «Otros nombres» (D527), tal como el lector lo va a leer: limpio, o
+ * vacío si no puede ser UN nombre (con coma, punto y coma, viñeta o « · » se partiría en varios; de más de 60 caracteres o
+ * con menos de dos letras, el lector lo ignora). Así lo que se escribe nunca queda sin contar sin avisar (D662).
+ */
+export function writableName(raw: string): string {
+  const pieces = raw.split(/[,;\n•]|\s·\s/).filter((p) => p.trim());
+  return pieces.length === 1 ? cleanName(pieces[0]) : '';
+}
+
+/**
  * Los nombres escritos en los campos de una página (D527): rótulo «Otros nombres», «Also known as», «aka»… en un
  * renglón, una fila de tabla o un título con una lista abajo. Se separan por coma, punto y coma, renglón, viñeta y « · »
  * (`|` y `/` quedan adentro: «Estudio | Autos» es un nombre). Sin vacíos, «—», números solos, el nombre propio ni

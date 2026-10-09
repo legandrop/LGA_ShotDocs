@@ -10,6 +10,7 @@ import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { settled } from '../test/settle';
 import { shown } from '../test/shown';
 import { unitsFromYDoc } from '../search/extract';
+import { prefs } from '../prefs';
 import { Shell } from '../ui/Workspace';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { buildProject, writeBlocks, type Built } from './fixtures/proyectoSintetico';
@@ -133,6 +134,18 @@ const headingsOf = async (d: Device, pageId: string) => {
 };
 
 describe('la cabecera del día en la app', () => {
+  it('la fecha larga y la corta salen en el idioma de la app, no en inglés fijo (D667)', async () => {
+    try {
+      act(() => prefs.set({ language: 'es' }));
+      const { host } = await app('d59');
+      await until(() => header(host)?.textContent?.includes('En vivo'), 'la cabecera completa');
+      expect(header(host)!.querySelector('.lh-id')!.textContent).toContain('jue 19 feb 2026');
+      expect(header(host)!.querySelector('.lh-id')!.textContent).not.toContain('Thu');
+    } finally {
+      act(() => prefs.set({ language: 'en' }));
+    }
+  });
+
   it('Día 59: escenas, preguntas, plan y Tomorrow; Prepare escribe solo en el Día 60, lleva ahí y se deshace', async () => {
     const { d, built, host } = await app('d59');
     await until(() => header(host)?.textContent?.includes('Live'), 'la cabecera completa');

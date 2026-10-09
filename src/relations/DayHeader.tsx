@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { locale, useT, type Translate } from '../i18n';
+import { language, useT, type Translate } from '../i18n';
 import { navigate, pagePath } from '../router';
 import { usePermissions, useServices, useTree } from '../services';
 import { notify } from '../ui/notice';
@@ -21,12 +21,12 @@ import type { PreparedSection } from './prepareDay';
 // escribe en un documento es *Prepare tomorrow's report*, en el reporte de mañana, y solo agregando (`prepareDay.ts`,
 // que se baja aparte con el editor).
 
-/** «Thu 19 Feb 2026». */
+/** «Thu 19 Feb 2026» / «jue 19 feb 2026», en el idioma de la app (D667: antes salía siempre en inglés). */
 function longDate(date: string | null): string {
   if (!date) return '';
   const [y, m, d] = date.split('-').map(Number);
   try {
-    return new Intl.DateTimeFormat(locale() === 'es' ? 'es' : 'en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+    return new Intl.DateTimeFormat(language() === 'es' ? 'es-AR' : 'en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
       .format(new Date(y, m - 1, d, 12))
       .replace(/[,.]/g, '');
   } catch {

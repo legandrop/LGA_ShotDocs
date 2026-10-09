@@ -1,0 +1,72 @@
+// @vitest-environment jsdom
+import { act, useRef } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { useFloating } from './menus';
+
+// Un menú fijo a la ventana que con su ancho real no entra a la derecha se corre a la izquierda (auditoría de la v0.250:
+// el menú ⋯ con «Dejar fuera de las relaciones · POR CARPETA» mide ~341 px y se colocaba con 290).
+
+beforeAll(() => {
+  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+});
+
+let root: Root | null = null;
+afterEach(() => {
+  act(() => root?.unmount());
+  root = null;
+  document.body.replaceChildren();
+});
+
+function Menu({ left, width }: { left: number; width: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useFloating(ref, () => {}, null, false, false);
+  return (
+    <div
+      ref={(el) => {
+        ref.current = el;
+        // jsdom no mide: el rectángulo sale de la posición y del ancho que el menú tendría.
+        if (el)
+          el.getBoundingClientRect = () => {
+            const l = parseFloat(el.style.left) || 0;
+            return { left: l, right: l + width, width, top: 40, bottom: 140, height: 100, x: l, y: 40, toJSON: () => ({}) } as DOMRect;
+          };
+      }}
+      style={{ position: 'fixed', top: 40, left }}
+    />
+  );
+}
+
+function open(left: number, width: number): HTMLDivElement {
+  const host = document.createElement('div');
+  document.body.append(host);
+  root = createRoot(host);
+  act(() => root!.render(<Menu left={left} width={width} />));
+  return host.firstElementChild as HTMLDivElement;
+}
+
+describe('useFloating corrige también el eje horizontal', () => {
+  it('un menú más ancho que lo previsto, pegado a la derecha, se corre hasta entrar', () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    const el = open(92, 341); // colocado con 290 px: 390 − 290 − 8 = 92; termina en 433
+    expect(parseFloat(el.style.left)).toBe(390 - 8 - 341);
+  });
+
+  it('en una pantalla angosta queda pegado al margen derecho', () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 350 });
+    const el = open(52, 320);
+    expect(parseFloat(el.style.left)).toBe(350 - 8 - 320);
+  });
+
+  it('una hoja de borde a borde del teléfono no se toca', () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    const el = open(0, 390);
+    expect(parseFloat(el.style.left)).toBe(0);
+  });
+
+  it('un menú que entra queda donde estaba', () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 });
+    const el = open(600, 341);
+    expect(parseFloat(el.style.left)).toBe(600);
+  });
+});

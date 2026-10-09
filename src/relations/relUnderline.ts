@@ -11,6 +11,7 @@ import { placeUnits } from './fields';
 import type { LiveSource } from './liveView';
 import { scan, type Hit, type Registry } from './reader';
 import { underlineKey, UNDERLINE_NOW, type UnderlineSpec, type UnderlineState } from './relLink';
+import { slashDraft, subscribeSlashDraft } from './slashDraft';
 import './liveHeader.css';
 
 // El subrayado pasivo, la ficha-chip de un link y el título en vivo (Docs/Doc_Relaciones.md, sección 14; maqueta S4 «D»,
@@ -133,6 +134,8 @@ export function buildUnderlines(doc: PMNode, info: UnderlineInfo | null, memo?: 
   const units = unitsFromPM(doc);
   // El valor de un campo de locación se lee como un lugar, igual que en el índice (D545): lo que cuenta se ve.
   const place = placeUnits(units, metaFromPM(doc, units));
+  // La consulta abierta del `/` (`/e 105_141`) todavía no es un número escrito: no se subraya hasta elegir (D664).
+  const draft = slashDraft();
   for (const [index, unit] of units.entries()) {
     if (unit.field !== 'text' || !unit.node) continue;
     const heading = unit.node.type.name === 'heading';
@@ -143,8 +146,10 @@ export function buildUnderlines(doc: PMNode, info: UnderlineInfo | null, memo?: 
     let hits = next.get(mkey) ?? prev?.get(mkey);
     if (!hits) hits = scan(info.R, text, inPlace ? { heading, ep: info.ep, dayTitle: true } : { heading, ep: info.ep });
     next.set(mkey, hits);
+    const queryAt = draft && unit.field === 'text' && doc.nodeAt(unit.blockPos)?.attrs.id === draft.blockId ? unit.text.lastIndexOf(draft.query) : -1;
     for (const h of hits) {
       if (h.hidden) continue;
+      if (queryAt >= 0 && h.kind === 'pending' && h.s >= queryAt && draft!.codes.includes(h.ref)) continue;
       if (info.self && h.kind === info.self.kind && h.ref === info.self.ref) continue;
       // Lo que ya es link (a una página o afuera) no lleva subrayado.
       if (links.some((l) => l.start < h.e && l.end > h.s)) continue;
@@ -297,6 +302,23 @@ export function dropTouched(set: DecorationSet, mapping: Mapping): DecorationSet
 }
 
 /**
+ * Lo dibujado al que una edición le sacó letras del borde (borrar la última cifra de «105_029»): su tramo quedó más corto
+ * y ya no dice lo que decía, pero `dropTouched` no lo ve porque la edición queda pegada y no adentro (O10 de la
+ * auditoría de la v0.244, D670). Se compara el largo de cada tramo antes y después de correrlo.
+ */
+export function dropShrunk(before: DecorationSet, mapped: DecorationSet, mapping: Mapping): DecorationSet {
+  const gone: Decoration[] = [];
+  for (const d of before.find()) {
+    if (d.from === d.to) continue;
+    const from = mapping.map(d.from, 1);
+    const to = mapping.map(d.to, -1);
+    if (to - from === d.to - d.from) continue;
+    for (const m of mapped.find(from, to, (spec) => spec === d.spec)) if (!gone.includes(m)) gone.push(m);
+  }
+  return gone.length ? mapped.remove(gone) : mapped;
+}
+
+/**
  * El mouse sobre el editor: si se movió de verdad desde la última tecla (B1 de la auditoría de E6). Medio segundo después
  * de escribir, el subrayado nuevo aparece debajo del puntero quieto y Chromium le manda `pointerover` (y puede mandar un
  * `pointermove` en el mismo lugar) como si el mouse hubiera llegado: eso no es pasar el mouse, y el adelanto se abría
@@ -353,6 +375,7 @@ class UnderlineView {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private lastEdit = 0;
   private destroyed = false;
+  private readonly unsubscribeDraft: () => void;
 
   private readonly win: Window | null;
   private readonly onMove = (e: PointerEvent) => {
@@ -375,6 +398,8 @@ class UnderlineView {
     this.win?.addEventListener('pointerdown', this.onDown, true);
     // Lo primero, en cuanto haya un momento libre (el editor recién montado).
     this.schedule(0);
+    // La consulta del `/` se abre y se cierra sin tocar el documento (Esc): al cerrarse, lo escrito vuelve a subrayarse.
+    this.unsubscribeDraft = subscribeSlashDraft(() => this.refresh());
   }
 
   update(view: EditorView, prev: EditorState): void {
@@ -408,6 +433,7 @@ class UnderlineView {
 
   destroy(): void {
     this.destroyed = true;
+    this.unsubscribeDraft();
     if (this.timer) clearTimeout(this.timer);
     this.win?.removeEventListener('pointermove', this.onMove, true);
     this.win?.removeEventListener('pointerdown', this.onDown, true);
@@ -478,7 +504,7 @@ export function relUnderlineExtension(info: () => UnderlineInfo | null, events: 
         if (tr.getMeta(ySyncPluginKey)) return lastCost < SLOW_MS ? compute(tr.doc) : { set: mapThroughReplace(value.set, old.doc, tr.doc), sig: '' };
         // Lo que se escribe acá se corre con lo dibujado: sin parpadeo, hasta que se vuelve a leer. Lo que la edición tocó
         // por dentro se saca: su referencia ya no vale (O5).
-        return { set: dropTouched(value.set.map(tr.mapping, tr.doc), tr.mapping), sig: '' };
+        return { set: dropShrunk(value.set, dropTouched(value.set.map(tr.mapping, tr.doc), tr.mapping), tr.mapping), sig: '' };
       },
     },
     view: (view) => new UnderlineView(view, compute, gate, events),

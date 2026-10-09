@@ -5,6 +5,7 @@ import { navigate, pagePath } from '../router';
 import { usePermissions, useServices, type Services } from '../services';
 import { notify } from '../ui/notice';
 import { locationOptions, type LocationOption } from './aliasAction';
+import { nameKey, writableName } from './aliases';
 import type { Registry } from './reader';
 
 // *Link to a location…* (Docs/Doc_Relaciones.md, sección 17; D539): en la cabecera de un día sin lugar y en *Map › Days*.
@@ -15,7 +16,12 @@ import type { Registry } from './reader';
 type Deps = Pick<Services, 'docs' | 'engine'>;
 
 /** Escribe y avisa (para el botón y las pruebas). */
-export async function linkFragment(services: Deps, tr: Translate, loc: { name: string; pageId: string }, fragment: string): Promise<void> {
+export async function linkFragment(services: Deps, tr: Translate, loc: { name: string; pageId: string }, raw: string): Promise<void> {
+  // Solo se escribe lo que el lector va a leer como un nombre (D662): si no, el aviso diría «agregado» de algo ignorado.
+  const fragment = writableName(raw);
+  if (!fragment) return notify(tr('linkLoc.notName', { alias: raw.trim() }));
+  // El nombre de la locación misma no es «otro nombre»: ya cuenta.
+  if (nameKey(fragment) === nameKey(loc.name)) return notify(tr('linkLoc.already', { alias: fragment, name: loc.name }), { label: tr('create.open'), run: () => navigate(pagePath(loc.pageId)) });
   // Escribir carga el editor sin pantalla (`aliasWrite.ts`): se baja recién al usarlo, no con la primera carga.
   const { addAliasesToPage, undoAddedAliases } = await import('./aliasWrite');
   let res: Awaited<ReturnType<typeof addAliasesToPage>>;
