@@ -43,8 +43,13 @@ function cleanName(raw: string): string {
  * con menos de dos letras, el lector lo ignora). Así lo que se escribe nunca queda sin contar sin avisar (D662).
  */
 export function writableName(raw: string): string {
-  const pieces = raw.split(/[,;\n•]|\s·\s/).filter((p) => p.trim());
+  const pieces = nameParts(raw);
   return pieces.length === 1 ? cleanName(pieces[0]) : '';
+}
+
+/** Las partes en que el lector parte un texto de nombres: coma, punto y coma, renglón, viñeta y « · » (D527). */
+export function nameParts(raw: string): string[] {
+  return raw.split(/[,;\n•]|\s·\s/).filter((p) => p.trim());
 }
 
 /**

@@ -33,7 +33,8 @@ export const page = {
     en: "This copy went to the trash: another device created the same day at the same time. Write in the one that stayed; what is written here brings the copy back once a device that can restore pages syncs.",
     es: "Esta copia fue a la papelera: otro dispositivo creó el mismo día a la vez. Escribí en la que quedó; lo que se escriba acá la trae de vuelta cuando sincroniza un dispositivo que puede restaurar páginas.",
   },
-  'page.cededOpen': { en: "Open “{title}”", es: "Abrir “{title}”" },
+  // Las dos se llaman igual (son el mismo día): se dice cuál es (D706).
+  'page.cededOpen': { en: "Open “{title}” (the one that stayed)", es: "Abrir “{title}” (la que quedó)" },
   'page.insideTrashed': {
     en: "This page is inside “{title}”, which is in the trash.",
     es: "Esta página está adentro de “{title}”, que está en la papelera.",

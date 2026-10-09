@@ -192,6 +192,12 @@ describe('Merge en un dispositivo, con el servidor', () => {
     const t = await text(w.a, w.keep);
     expect(t).toContain('Texto de la segunda.');
     expect(t).toContain('Texto de la segunda. Lo nuevo después de restaurar.');
+    // O6 (D707): lo que la primera unión ya había copiado no se repite; la segunda trae solo el renglón que cambió, con su título
+    // (D713: un título viaja con lo de su sección que se copia; la foto, que no cambió, no se copia otra vez).
+    expect(t.filter((x) => x === 'Plano general')).toHaveLength(2);
+    expect(t.filter((x) => x === 'Texto de la segunda.')).toHaveLength(1);
+    expect(t.filter((x) => x === 'La curva')).toHaveLength(1);
+    expect(second.job.copy?.ids).toHaveLength(3);
     // Dentro de A, ningún id repetido.
     const doc = await w.a.docs.open(w.keep);
     const all: string[] = [];
@@ -227,6 +233,61 @@ describe('Merge en un dispositivo, con el servidor', () => {
     expect(readPointer(w.a.tree.get(w.gone))).toBeNull();
     expect(await text(w.a, w.keep)).toContain('Texto de la segunda.');
     expect(await text(w.a, w.gone)).toContain('Texto de la segunda.');
+  });
+});
+
+describe('lo que no se copió porque A ya lo tenía (D714)', () => {
+  /** Borra de la página el bloque de primer nivel con ese texto, como quien lo borra en otro dispositivo. */
+  async function deleteIn(d: Device, pageId: string, line: string): Promise<void> {
+    const doc = await d.docs.open(pageId);
+    const group = doc.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement;
+    const at = group.toArray().findIndex((c) => c instanceof Y.XmlElement && c.toString().includes(line));
+    if (at < 0) throw new Error('no está');
+    group.delete(at, 1);
+    d.docs.close(pageId);
+    await d.docs.flush(pageId);
+    await d.engine.syncNow();
+  }
+
+  /** El mundo con un renglón idéntico en las dos (el de la que queda): no se copia, y A lo tiene. */
+  async function withTwin(): Promise<World> {
+    const w = await world();
+    await writeBlocks(w.a, w.gone, [{ h: 2, text: 'Plano general' }, { p: 'Texto de la segunda.' }, { p: 'Lo de la primera página.' }]);
+    await w.a.engine.syncNow();
+    await w.b.engine.syncNow();
+    return w;
+  }
+
+  it('si otro dispositivo lo borra de A mientras se une, B no va a la papelera; unir otra vez lo trae', async () => {
+    const w = await withTwin();
+    const out = await merge(w.a, w, {
+      afterStep: async (step) => {
+        if (step === 'uploaded') await deleteIn(w.b, w.keep, 'Lo de la primera página.');
+      },
+    });
+    expect(out.status).toBe('stopped');
+    await w.a.engine.syncNow();
+    // B sigue viva con todo, sin puntero; A tiene la copia y ya no tiene el renglón.
+    expect(w.a.tree.isTrashed(w.gone)).toBe(false);
+    expect(readPointer(w.a.tree.get(w.gone))).toBeNull();
+    expect(await text(w.a, w.gone)).toContain('Lo de la primera página.');
+    expect(await text(w.a, w.keep)).not.toContain('Lo de la primera página.');
+    // Unir otra vez copia solo lo que falta: el renglón vuelve a A y recién entonces B va a la papelera.
+    const again = await merge(w.a, w);
+    expect(again.status).toBe('done');
+    await w.a.engine.syncNow();
+    expect(w.a.tree.isTrashed(w.gone)).toBe(true);
+    const t = await text(w.a, w.keep);
+    expect(t.filter((x) => x === 'Lo de la primera página.')).toHaveLength(1);
+    expect(t.filter((x) => x === 'Texto de la segunda.')).toHaveLength(1);
+  });
+
+  it('sin que nadie lo borre, el mismo caso termina en una sola corrida', async () => {
+    const w = await withTwin();
+    const out = await merge(w.a, w);
+    expect(out.status).toBe('done');
+    await w.a.engine.syncNow();
+    expect(w.a.tree.isTrashed(w.gone)).toBe(true);
   });
 });
 

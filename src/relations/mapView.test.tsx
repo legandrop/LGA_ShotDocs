@@ -16,6 +16,7 @@ import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { buildProject, writeBlocks, type Built } from './fixtures/proyectoSintetico';
 import { DOT_GAP, dotGap, groupDots } from './MapView';
 import { canMergeWith } from './MergeAction';
+import { metaStore, pendingMerges } from './mergeJob';
 
 // El mapa en la app de verdad (Docs/Doc_Relaciones.md, sección 12) y la lupa por entidades (Docs/Doc_Buscar.md,
 // «Escenas y locaciones primero»): la fila Map de la barra lateral, las cuatro pestañas, cada fila lleva a su página o al
@@ -117,8 +118,8 @@ function mount(d: Device, start: string): HTMLElement {
   return host;
 }
 
-async function app(start: (b: Built) => string, prepare?: (d: Device, b: Built) => Promise<void>): Promise<{ d: Device; built: Built; host: HTMLElement }> {
-  const d = await makeDevice(new FakeServer());
+async function app(start: (b: Built) => string, prepare?: (d: Device, b: Built) => Promise<void>, server = new FakeServer()): Promise<{ d: Device; built: Built; host: HTMLElement }> {
+  const d = await makeDevice(server);
   devices.push(d);
   const built = await buildProject(d, fakePhoto, { days: true, indexPage: false });
   await prepare?.(d, built);
@@ -663,5 +664,135 @@ describe('Merge en la app (E16)', () => {
     const perms = { canManagePage: () => true, role: 'member' as const, viaLink: false };
     expect(canMergeWith(perms, { engine: { isBaseReader: () => false } })('p')).toBe(true);
     expect(canMergeWith(perms, { engine: { isBaseReader: () => true } })('p')).toBe(false);
+  });
+});
+
+describe('Merge: dos páginas con el mismo título, y mientras une (E19)', () => {
+  /** 105_029 en dos páginas que se llaman igual: la segunda con más texto y una ficha. */
+  const same = async (dev: Device, b: Built) => {
+    const second = await dev.tree.create(b.ids.ep5, '029 | El fugitivo abre los ojos', b.projectId);
+    await writeBlocks(dev, second, [{ p: 'Lo que escribió el otro dispositivo.' }, { p: 'Otro renglón.' }]);
+    const card = await dev.tree.create(second, 'PRUEBA_105_029_020', b.projectId);
+    await writeBlocks(dev, card, [{ p: 'Una ficha nueva.' }]);
+    b.ids.s029b = second;
+    b.ids.s029b_card = card;
+  };
+  const T = '029 | El fugitivo abre los ojos';
+  const dupCard = (host: HTMLElement) => [...host.querySelectorAll<HTMLElement>('.mp-pcard')].find((c) => c.textContent?.includes('105_029 is in 2 pages'));
+
+  it('D706: Pending las numera «· 1» y «· 2» (con un tooltip) y dice cuánto tiene escrito cada una', async () => {
+    const { host } = await app(() => mapPath('pending'), same);
+    await shown(() => expect(dupCard(host)?.querySelectorAll('.mp-plink').length).toBe(2));
+    const links = [...dupCard(host)!.querySelectorAll<HTMLElement>('.mp-plink')];
+    expect(links.map((l) => l.textContent)).toEqual([`${T} · 1`, `${T} · 2`]);
+    for (const l of links) expect(l.dataset.tip).toContain('Same title');
+    // Cuánto tiene cada una: la segunda tiene dos renglones de más.
+    await shown(() => expect(dupCard(host)!.querySelectorAll('.mp-q').length).toBe(2));
+    const sums = [...dupCard(host)!.querySelectorAll('.mp-q')].map((x) => x.textContent);
+    expect(sums[0]).not.toBe(sums[1]);
+    expect(sums[1]).toMatch(/^ \(\d+ blocks?/);
+  });
+
+  it('D706: el aviso, la fila de después y el cartel de la unida dicen cuál se fue y cuál quedó', async () => {
+    const { d, built, host } = await app(() => mapPath('pending'), same);
+    await shown(() => expect(dupCard(host)?.querySelector('.rel-merge')).toBeTruthy());
+    click(dupCard(host)!.querySelector('.rel-merge'));
+    const dialog = () => document.querySelector<HTMLElement>('.merge-dialog')!;
+    await shown(() => expect(dialog().querySelector('.merge-actions .primary')!.hasAttribute('disabled')).toBe(false));
+    expect([...dialog().querySelectorAll('.merge-title')].map((x) => x.textContent)).toEqual([`${T} · 1`, `${T} · 2`]);
+    click(dialog().querySelector('.merge-actions .primary'));
+    await shown(() => expect(host.textContent).toContain(`Merged «${T} · the one that went» into «${T} · the one that stays»`), 20_000);
+    expect(d.tree.isTrashed(built.ids.s029b)).toBe(true);
+    // Como si otro dispositivo hubiera escrito en ella después.
+    const row = d.tree.get(built.ids.s029b)!;
+    await act(() => d.tree.setSetting(built.ids.s029b, 'merged', { ...row.settings!.merged!, seq: row.update_seq - 1 }));
+    const late = () => [...host.querySelectorAll<HTMLElement>('.mp-pcard')].find((c) => c.textContent?.includes('changed after it was merged'));
+    await shown(() => expect(late()?.textContent).toContain(`«${T} · the one that goes» changed after it was merged into «${T} · the one that stays»`));
+    // En la página unida, el cartel dice cuál es la que quedó.
+    act(() => navigate(pagePath(built.ids.s029b)));
+    await shown(() => expect(host.querySelector('.banner')?.textContent).toContain(`Merged into «${T} · the one that stays»`));
+    expect(host.querySelector('.banner')?.textContent).toContain(`Open «${T} · the one that stays»`);
+  });
+
+  it('O9 y O10: mientras une, Pending no ofrece «Terminar» y la red cortada se dice en el adelanto; cortada la espera, sí', async () => {
+    const server = new FakeServer();
+    const { d, built, host } = await app(() => mapPath('pending'), same, server);
+    await shown(() => expect(dupCard(host)?.querySelector('.rel-merge')).toBeTruthy());
+    // A no termina de subir: la unión queda corriendo, con su trabajo anotado, hasta que se cumple la espera.
+    const real = d.docs.hasOwnUnsent.bind(d.docs);
+    let stuck = true;
+    d.docs.hasOwnUnsent = async (id: string) => (stuck && id === built.ids.s029 ? true : real(id));
+    click(dupCard(host)!.querySelector('.rel-merge'));
+    const dialog = () => document.querySelector<HTMLElement>('.merge-dialog')!;
+    await shown(() => expect(dialog().querySelector('.merge-actions .primary')!.hasAttribute('disabled')).toBe(false));
+    click(dialog().querySelector('.merge-actions .primary'));
+    await shown(async () => expect(await pendingMerges(metaStore(d.db))).toHaveLength(1), 20_000);
+    await act(() => settled(300));
+    // O9: la unión que corre ahora no se ofrece para terminar.
+    expect(host.textContent).not.toContain('didn’t finish');
+    expect(dialog().querySelector('.merge-actions .primary')!.textContent).toBe('Merging…');
+    // O10: la red se corta a mitad: el adelanto lo dice y sigue en «Merging…», sin «Connect to merge».
+    server.online = false;
+    await act(() => d.engine.syncNow().catch(() => undefined));
+    await shown(() => expect(dialog().querySelector('.merge-why')?.textContent).toBe('The connection dropped: the merge goes on by itself when it’s back'));
+    expect(dialog().querySelector('.merge-actions .primary')!.textContent).toBe('Merging…');
+    expect(dialog().textContent).not.toContain('Connect to merge');
+    // Se cumple la espera: queda a mitad, y ahora sí se ofrece terminarla.
+    server.online = true;
+    await shown(() => expect(host.textContent).toContain('didn’t finish'), 20_000);
+    expect(document.querySelector('.merge-dialog')).toBeNull();
+    stuck = false;
+    const finish = [...host.querySelectorAll<HTMLElement>('button')].find((b) => b.textContent === 'Finish');
+    click(finish);
+    await shown(() => expect(d.tree.isTrashed(built.ids.s029b)).toBe(true), 20_000);
+    await shown(() => expect(host.textContent).not.toContain('didn’t finish'));
+  });
+
+  it('O2 y O7: el adelanto decide con los documentos: lo idéntico no agrega nada; con otras mayúsculas, sí', async () => {
+    const both = async (dev: Device, b: Built, second: string) => {
+      await same(dev, b);
+      await writeBlocks(dev, b.ids.s029, [{ p: 'Igual en las dos.' }]);
+      await writeBlocks(dev, b.ids.s029b, [{ p: second }]);
+    };
+    const open = async (second: string) => {
+      const { host } = await app(() => mapPath('pending'), (dev, b) => both(dev, b, second));
+      await shown(() => expect(dupCard(host)?.querySelector('.rel-merge')).toBeTruthy());
+      click(dupCard(host)!.querySelector('.rel-merge'));
+      await shown(() => expect(document.querySelector<HTMLElement>('.merge-actions .primary')!.hasAttribute('disabled')).toBe(false));
+      return document.querySelector<HTMLElement>('.merge-what')!.textContent!;
+    };
+    expect(await open('Igual en las dos.')).toContain('adds nothing new: nothing is copied');
+  });
+
+  it('O7: con las mayúsculas cambiadas la segunda sí agrega, y el adelanto dice cuántos bloques', async () => {
+    const { host } = await app(() => mapPath('pending'), async (dev, b) => {
+      await same(dev, b);
+      await writeBlocks(dev, b.ids.s029, [{ p: 'Igual en las dos.' }]);
+      await writeBlocks(dev, b.ids.s029b, [{ p: 'IGUAL EN LAS DOS.' }]);
+    });
+    await shown(() => expect(dupCard(host)?.querySelector('.rel-merge')).toBeTruthy());
+    click(dupCard(host)!.querySelector('.rel-merge'));
+    await shown(() => expect(document.querySelector<HTMLElement>('.merge-actions .primary')!.hasAttribute('disabled')).toBe(false));
+    const what = document.querySelector<HTMLElement>('.merge-what')!.textContent!;
+    expect(what).not.toContain('adds nothing new');
+    expect(what).toContain('1 block is added.');
+  });
+
+  it('D716: con tres páginas del mismo título, el número es el mismo en Pending y en el adelanto abierto desde la tercera', async () => {
+    const { host, built, d } = await app(() => mapPath('pending'), async (dev, b) => {
+      await same(dev, b);
+      b.ids.s029c = await dev.tree.create(b.ids.ep5, T, b.projectId);
+      await writeBlocks(dev, b.ids.s029c, [{ p: 'La tercera.' }, { p: 'Con tres renglones.' }, { p: 'Y algo más.' }]);
+    });
+    const threeCard = (h: HTMLElement) => [...h.querySelectorAll<HTMLElement>('.mp-pcard')].find((c) => c.textContent?.includes('105_029 is in 3 pages'));
+    await shown(() => expect(threeCard(host)?.querySelectorAll('.mp-plink').length).toBe(3));
+    expect([...threeCard(host)!.querySelectorAll('.mp-plink')].map((l) => l.textContent)).toEqual([`${T} · 1`, `${T} · 2`, `${T} · 3`]);
+    // La cabecera de la tercera ofrece unirla con la primera: se llama «· 3» y no «· 2».
+    act(() => navigate(pagePath(built.ids.s029c)));
+    await shown(() => expect(host.querySelector('.lh-twin .rel-merge')).toBeTruthy());
+    click(host.querySelector('.lh-twin .rel-merge'));
+    await shown(() => expect(document.querySelectorAll('.merge-dialog .merge-title').length).toBe(2));
+    expect([...document.querySelectorAll('.merge-dialog .merge-title')].map((x) => x.textContent)).toEqual([`${T} · 1`, `${T} · 3`]);
+    expect(d.tree.get(built.ids.s029c)).toBeTruthy();
   });
 });

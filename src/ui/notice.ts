@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 const EVENT = 'shotdocs:notice';
 /** Quita un aviso con botón que dejó de valer (por su `key`). */
@@ -29,6 +29,11 @@ export const NOTICE_MS = 6000;
 export const ACTION_NOTICE_MS = 15000;
 /** Cuántos avisos esperan, como mucho, detrás de uno que guarda algo, sin contar los que también guardan algo. */
 export const WAITING_MAX = 3;
+/**
+ * Con el mouse (o el foco) encima, un aviso no vence (D712): al soltarlo queda lo que le quedaba, y al menos esto, para
+ * llegar a tocar un botón que se acaba de ver (el *Undo* de *Assign* o del reporte de mañana es la única forma de volver).
+ */
+export const RESUME_MS = 4000;
 
 /** Muestra un aviso corto al usuario (por ejemplo, una imagen que no se puede agregar), con un botón opcional. */
 export function notify(message: string, action?: NoticeAction, second?: NoticeAction): void {
@@ -142,9 +147,21 @@ export function followHeight(name: string, gap: number, where: 'parent' | 'root'
   };
 }
 
-/** El aviso a la vista: el texto, cerrarlo, su botón (si tiene) y el segundo. */
-export function useNotice(): [string | null, () => void, NoticeAction | undefined, NoticeAction | undefined] {
+/** Quién sostiene el aviso: un mouse encima (no un toque: en el teléfono sigue corriendo) o el foco del teclado. */
+export type HoldSource = 'mouse' | 'focus';
+
+/**
+ * El aviso a la vista: el texto, cerrarlo, su botón (si tiene), el segundo y `hold`: con `true` (el mouse o el foco encima)
+ * el aviso no vence; con `false` en los dos, sigue con lo que le quedaba, al menos `RESUME_MS`.
+ */
+export function useNotice(): [string | null, () => void, NoticeAction | undefined, NoticeAction | undefined, (source: HoldSource, on: boolean) => void] {
   const [state, setState] = useState<NoticeState>(NO_NOTICE);
+  // El mouse y el foco sostienen por separado: soltar uno no libera si el otro sigue (D717).
+  const [heldBy, setHeldBy] = useState<Record<HoldSource, boolean>>({ mouse: false, focus: false });
+  const held = heldBy.mouse || heldBy.focus;
+  // Lo que le quedaba al aviso a la vista cuando se lo pausó.
+  const paused = useRef<{ of: NoticeState['shown']; left: number } | null>(null);
+  const hold = useCallback((source: HoldSource, on: boolean) => setHeldBy((s) => (s[source] === on ? s : { ...s, [source]: on })), []);
   // Se anota al montarse y se borra al desmontarse en el mismo paso en que se desmonta lo de adentro (un cuadro de
   // comentario avisa que se cerró en ese paso): quien pregunta después ya ve si quedó alguien para dibujar el aviso.
   useLayoutEffect(() => {
@@ -172,10 +189,22 @@ export function useNotice(): [string | null, () => void, NoticeAction | undefine
   // El reloj del que está a la vista: al vencer pasa el que sigue (si otro lo reemplazó mientras tanto, no hace nada).
   const shown = state.shown;
   useEffect(() => {
-    if (!shown) return undefined;
-    const timer = setTimeout(() => setState((s) => (s.shown === shown ? advance(s, Date.now()) : s)), Math.max(0, shown.until - Date.now()));
+    if (!shown) {
+      // Sin aviso no hay nada encima: un `mouseleave` que nunca llega (el aviso se desmontó con el mouse encima) no traba el siguiente.
+      paused.current = null;
+      setHeldBy((s) => (s.mouse || s.focus ? { mouse: false, focus: false } : s));
+      return undefined;
+    }
+    if (held) {
+      if (paused.current?.of !== shown) paused.current = { of: shown, left: Math.max(0, shown.until - Date.now()) };
+      return undefined;
+    }
+    const left = paused.current?.of === shown ? paused.current.left : null;
+    paused.current = null;
+    const wait = left === null ? Math.max(0, shown.until - Date.now()) : Math.max(left, RESUME_MS);
+    const timer = setTimeout(() => setState((s) => (s.shown === shown ? advance(s, Date.now()) : s)), wait);
     return () => clearTimeout(timer);
-  }, [shown]);
+  }, [shown, held]);
   const detail = shown?.detail;
-  return [detail?.message ?? null, () => setState((s) => advance(s, Date.now())), detail?.action, detail?.second];
+  return [detail?.message ?? null, () => setState((s) => advance(s, Date.now())), detail?.action, detail?.second, hold];
 }

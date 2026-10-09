@@ -446,6 +446,15 @@ export const relations = {
     es: "Agrega “{fragment}” a los otros nombres de la locación que elijas: este día y cualquier título o campo Locación que lo diga cuentan para ella",
   },
   'linkLoc.unrecognizedTip': { en: "What the title says: no location has this name", es: "Lo que dice el título: ninguna locación tiene este nombre" },
+  // El lugar del título no se puede escribir como un nombre (D711): se dice por qué y qué hacer.
+  'linkLoc.severalTip': {
+    en: "The title names several places, so no single location can take it. Add each place as its own name in the “Other names” of its location.",
+    es: "El título nombra varios lugares, así que ninguna locación puede quedárselo. Agregá cada lugar como un nombre propio en los «Otros nombres» de su locación.",
+  },
+  'linkLoc.unusableTip': {
+    en: "Too long to be a location name (60 characters at most): write a short name in the “Other names” of its location.",
+    es: "Demasiado largo para ser el nombre de una locación (60 caracteres como mucho): escribí un nombre corto en los «Otros nombres» de su locación.",
+  },
   'linkLoc.label': { en: "Other names", es: "Otros nombres" },
   'linkLoc.placeholder': { en: "Location name", es: "Nombre de la locación" },
   'linkLoc.similar': { en: "similar", es: "parecida" },
@@ -548,12 +557,16 @@ export const relations = {
   'merge.commentsUnknown': { en: "comments not checked", es: "comentarios sin revisar" },
   'merge.what': { en: "What happens", es: "Qué pasa" },
   'merge.whatCopy': {
-    en: "Everything in «{from}» is added at the end of «{into}», under “Merged from the other page”. Nothing in «{into}» changes.",
-    es: "Todo lo de «{from}» se agrega al final de «{into}», debajo de «Unido desde la otra página». Nada de «{into}» cambia.",
+    en: "What «{from}» has that «{into}» doesn’t is added at the end of «{into}», under “Merged from the other page”. Nothing in «{into}» changes.",
+    es: "Lo de «{from}» que «{into}» todavía no tiene se agrega al final de «{into}», debajo de «Unido desde la otra página». Nada de «{into}» cambia.",
   },
   'merge.whatCopyDay': {
-    en: "Everything in «{from}» is added at the end of «{into}», under “General · merged from the other report”: each scene section keeps its photos. Nothing in «{into}» changes.",
-    es: "Todo lo de «{from}» se agrega al final de «{into}», debajo de «General · unido desde el otro reporte»: cada sección de escena conserva sus fotos. Nada de «{into}» cambia.",
+    en: "What «{from}» has that «{into}» doesn’t is added at the end of «{into}», under “General · merged from the other report”: each scene section keeps its photos. Nothing in «{into}» changes.",
+    es: "Lo de «{from}» que «{into}» todavía no tiene se agrega al final de «{into}», debajo de «General · unido desde el otro reporte»: cada sección de escena conserva sus fotos. Nada de «{into}» cambia.",
+  },
+  'merge.whatAdds': {
+    en: { one: "{count} block is added.", other: "{count} blocks are added." },
+    es: { one: "Se agrega {count} bloque.", other: "Se agregan {count} bloques." },
   },
   'merge.whatNothing': { en: "«{from}» adds nothing new: nothing is copied.", es: "«{from}» no agrega nada nuevo: no se copia nada." },
   'merge.whatSubpages': {
@@ -652,6 +665,17 @@ export const relations = {
     es: "Dos páginas con el mismo número de escena: las relaciones usan la primera de la barra lateral.",
   },
   'merge.twinDayTip': { en: "Two shoot day reports with the same title.", es: "Dos reportes del día con el mismo título." },
+  'merge.twinNumberTip': {
+    en: "Same title: the numbers follow the order in the sidebar. The first is the one the relations use.",
+    es: "Mismo título: los números siguen el orden de la barra lateral. La primera es la que usan las relaciones.",
+  },
+  'merge.roleGoes': { en: "the one that goes", es: "la que se va" },
+  'merge.roleWent': { en: "the one that went", es: "la que se fue" },
+  'merge.roleStays': { en: "the one that stays", es: "la que queda" },
+  'merge.waitingNet': {
+    en: "The connection dropped: the merge goes on by itself when it’s back",
+    es: "Se cortó la red: la unión sigue sola cuando vuelva",
+  },
   'merge.mergedInto': { en: "Merged into «{title}»", es: "Unida a «{title}»" },
   'merge.openInto': { en: "Open «{title}»", es: "Abrir «{title}»" },
 } satisfies Dict;

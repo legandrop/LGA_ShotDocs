@@ -5,7 +5,7 @@ import type { PageTree } from '../sync/tree';
 import { findUnknownContent } from '../ui/unknownContent';
 import { freshSync } from './createEntity';
 import { readPointer, type MergeBlock } from './merge';
-import { copyIntoDoc, planCopy, separatorBlock, separatorId, undoCopyInDoc, type CopyRecord } from './mergeWrite';
+import { copyIntoDoc, missingFrom, planCopy, separatorBlock, separatorId, skippedSignatures, undoCopyInDoc, type CopyRecord } from './mergeWrite';
 import { isArriving } from './prepareDay';
 
 // El trabajo de *Merge* (E16, alcance reducido, C3): todo en el dispositivo que une, sin funciones nuevas en la base, en
@@ -54,6 +54,11 @@ export interface MergeJob {
    * corrida copió (D687).
    */
   photos?: string[];
+  /**
+   * Las firmas de lo de B que no se copió porque A ya lo tenía idéntico (D714): antes de mandar B a la papelera se vuelve a
+   * mirar que siga en A (otro dispositivo pudo borrarlo mientras se unía).
+   */
+  skipped?: string[];
   /** El `seq` del contenido de B que se copió. */
   seq: number;
   step: MergeStep;
@@ -213,6 +218,7 @@ async function runMergeNow(deps: MergeDeps, req: { keep: string; gone: string; p
     children: deps.tree.children(gone).map((c) => c.id),
     nothing: plan.nothing,
     photos: plan.photos,
+    skipped: plan.skipped,
     seq: plan.seq,
     step: 'started',
     at: new Date().toISOString(),
@@ -222,7 +228,7 @@ async function runMergeNow(deps: MergeDeps, req: { keep: string; gone: string; p
 }
 
 /** B leída sin abrirla en el editor (abrirla podría escribirle una reparación) y A abierta: qué copiar. */
-async function readPlan(deps: MergeDeps, keep: string, gone: string): Promise<{ remap: string[]; nothing: boolean; photos: string[]; seq: number } | 'unknown' | 'missing'> {
+async function readPlan(deps: MergeDeps, keep: string, gone: string): Promise<{ remap: string[]; nothing: boolean; photos: string[]; skipped: string[]; seq: number } | 'unknown' | 'missing'> {
   const b = await deps.docs.indexSnapshot(gone);
   try {
     if (findUnknownContent(b.doc)) return 'unknown';
@@ -231,7 +237,7 @@ async function readPlan(deps: MergeDeps, keep: string, gone: string): Promise<{ 
     const a = await deps.docs.open(keep);
     try {
       if (findUnknownContent(a)) return 'unknown';
-      return { ...planCopy(a, b.doc), seq };
+      return { ...planCopy(a, b.doc), skipped: skippedSignatures(a, b.doc), seq };
     } finally {
       deps.docs.close(keep);
     }
@@ -314,6 +320,16 @@ export async function continueMerge(deps: MergeDeps, job: MergeJob): Promise<Mer
     const from = tree.get(job.from);
     const other = fresh(job.from);
     if (!from || tree.isTrashed(job.from) || (other && other.into !== job.into)) return stop(deps, job, 'from');
+    // Lo que no se copió porque A ya lo tenía (D714): si otro dispositivo lo borró de A mientras se unía, ese renglón solo estaría
+    // en B, que va a la papelera. No se la manda: A queda con la copia y B viva, repetida; unir otra vez copia solo lo que falta.
+    if (job.skipped?.length) {
+      const a = await deps.docs.open(job.into);
+      try {
+        if (missingFrom(a, job.skipped)) return stop(deps, job, 'into');
+      } finally {
+        deps.docs.close(job.into);
+      }
+    }
     // Una subpágina que sigue en B (el movimiento no llegó o lo deshizo otro): se mueve de nuevo y se sigue después.
     const left = job.children.filter((id) => tree.get(id)?.parent_id === job.from && !tree.get(id)?.deleted_at);
     if (left.length) {

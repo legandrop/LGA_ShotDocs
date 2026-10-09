@@ -314,6 +314,23 @@ describe('Tomorrow sin día siguiente: crear y preparar el reporte de mañana (D
     await shown(() => expect(host.textContent).toContain('«2026-03-16 | Día 77» went to the trash'));
   });
 
+  it('D709: si todas las fichas de esa fecha dicen la misma locación, el título de mañana la lleva (y la tarjeta lo dice)', async () => {
+    const d = await makeDevice(new FakeServer());
+    devices.push(d);
+    const built = await buildProject(d, fakePhoto, { indexPage: false, days: true });
+    await writeBlocks(d, built.ids.s029, [{ table: [['Fecha Rodaje', '16/03/2026'], ['Locacion Real', 'CENADE']] }]);
+    await d.engine.syncNow();
+    const host = mount(d, built.ids.d76);
+    const card = await shown(() => {
+      const c = header(host)?.querySelector<HTMLElement>('.lh-tomorrow.new');
+      expect(c).toBeTruthy();
+      return c!;
+    });
+    expect(card.querySelector('.row2')!.textContent).toContain('Creates «2026-03-16 | Día 77 | CENADE» in «2 | Rodaje»');
+    click(card.querySelector('.lh-prepare'));
+    await shown(() => expect(d.tree.children(built.ids.rodaje).some((p) => p.title === '2026-03-16 | Día 77 | CENADE')).toBe(true));
+  });
+
   it('quien ve una parte del proyecto (un invitado a la carpeta de días) no tiene la tarjeta: mañana puede estar donde no ve', async () => {
     const server = new FakeServer();
     server.enableTeam();

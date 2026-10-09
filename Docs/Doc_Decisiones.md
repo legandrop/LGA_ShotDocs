@@ -1460,6 +1460,81 @@ el tipo de bloque: borra y crea, y pierde lo que otro escribe en él).
   idéntico a la plantilla (la carrera de *Create* con texto en las dos duplica «Director:/Arte:» y la tabla, O3); el adelanto
   con el índice atrasado (O2); la segunda unión tras *Restore* repite lo de la primera (O6, se prefiere duplicar);
   `addsNothing` ignora mayúsculas y formato (O7); filas y avisos con el mismo título sin «· 1 / · 2» (O8).
+- **D706 · Dos páginas con el mismo título se distinguen con algo que la persona entiende** (2026-10-09; E19, O8 de E15 y de
+  E16). Qué pasaba: *Pending* (repetidas), el «Open “…”» de la copia que cede y los avisos de *Merge* mostraban dos
+  páginas con el mismo título. Elegí dos formas según qué se pueda decir: **«· 1» / «· 2»** (el orden del árbol, el mismo
+  del adelanto; con un `data-tip` que lo explica) y, en cada fila de repetidas, cuánto tiene escrito cada una (bloques y
+  fotos, de lo que leyó el índice); y, para lo que habla de una unión (avisos, filas de después, el cartel de la unida),
+  **«· la que se va» / «· la que queda»**, porque ahí el árbol ya no sirve (una está en la papelera). El cartel de la copia
+  que cede dice «(la que quedó)». Solo se agrega cuando los títulos son iguales (menos el cartel de la que cedió, que lo
+  son siempre). Si preferís otra: un contador solo, o la fecha de creación.
+- **D707 · *Merge* copia solo lo que la que queda no tiene, decidido con los documentos** (2026-10-09; E19, O2, O3, O6 y O7
+  de E16). Qué pasaba: B se copiaba entera: lo que las dos traían de la plantilla (la carrera de *Create*) y lo que una unión
+  anterior ya había copiado (unir otra vez después de *Restore*) quedaban dos veces; y «no agrega nada» comparaba el texto en
+  minúsculas y sin formato (B con el mismo texto en mayúsculas o en negrita iba a la papelera sin copiarse), con el índice,
+  que puede ir atrasado. Elegí: una **firma** de cada bloque de primer nivel (tipo, atributos menos el id, texto con su
+  formato y lo de adentro) y se copia lo de B cuya firma A no tiene, **contando cuántas veces**; los renglones en blanco del
+  principio y del final no se copian, los de en medio sí. Nada se pierde: lo que no se copia está idéntico en A (o es un
+  renglón en blanco), y B va entera a la papelera con *Restore*; una prueba con mezclas al azar lo verifica. El adelanto lo
+  lee de los documentos (`planCopy`) y dice cuántos bloques se agregan. Si preferís otra: copiar siempre todo (más simple,
+  duplica).
+- **D708 · Mientras une, el adelanto solo dice si la red se cortó** (2026-10-09; E19, O10 de E16). Con la red cortada a mitad
+  decía «Conectate para unir…» con el botón en «Uniendo…»; y lo demás que dice el adelanto cambia a medida que avanza la
+  unión (B entra a la papelera: «ya no son dos»). Ahora, ocupado, calla salvo «Se cortó la red: la unión sigue sola cuando
+  vuelva». La prueba montada (O9) también afirma que *Pending* no ofrece *Finish* mientras la unión corre.
+- **D709 · La locación en el título del reporte de mañana, cuando todas las fichas de esa fecha dicen la misma** (2026-10-09;
+  E19, la opción B de D631). Medido en `mapa.json` de ERSO (la verdad independiente; solo lectura): de 73 días, 12 tienen
+  páginas con esa *Fecha Rodaje* (son los días «Sin reporte», los que se planean con el desglose) y en **11 de esos 12** las
+  fichas dicen un solo lugar, igual al del título; el 12.º (15/03/2026) dice dos. Elegí hacerlo: `plannedPlace` pide que
+  **todas** las páginas con esa fecha tengan un campo de locación, que cada valor sea una locación del registro y que sean
+  la misma; si no, sin lugar. Y solo cuando el título de hoy lleva un lugar (la forma del proyecto: `2026-04-06 | Día 81 |
+  Farmacia Fanfarria`): un proyecto cuyos días no llevan lugar no lo gana. La tarjeta lo muestra antes de crear. Si
+  preferís otra: dejarlo como D574 (nunca la locación).
+- **D710 · El menú ⋯ cabe en 320 px con «POR CARPETA»** (2026-10-09; E19, v0.250 (13)). El renglón más largo mide 341 px
+  y a 320 se salía 43. Elegí: hasta 356 px de pantalla el rótulo baja a dos renglones (el estado no se parte), el menú de
+  página nunca pasa del ancho de la pantalla menos 16 px (`max-width`), `menuBelow` lo coloca pegado al margen cuando no
+  entra y `useFloating` lo vuelve a medir después de correrlo (al correrse se ensancha). Desde 357 px el renglón sigue en una
+  línea. Medido en Chromium a 320, 340, 356, 357, 360, 375 y 390 px, en castellano e inglés.
+- **D711 · Un lugar del título que no puede ser un nombre se muestra y dice por qué** (2026-10-09; E19, v0.250 (12)). Un día
+  cuyo lugar lleva coma («Hall, Pasillo del Ministerio») no ofrece *Link to a location…* (D662) y no decía nada. Opciones:
+  partirlo en varios nombres o explicar. Elegí **explicar**: partirlo pide una locación por cada parte y la persona sabe
+  cuáles son; la cabecera y *Map › Days* muestran el texto apagado con un tooltip distinto para «varios lugares» (agregá cada
+  uno como nombre propio en su locación) y para «demasiado largo» (más de 60 caracteres). Si preferís otra: un selector por
+  cada parte.
+- **D712 · Un aviso con botón no vence con el mouse o el foco encima** (2026-10-09; E19, v0.248 (6)). El *Undo* de *Assign*
+  y del reporte de mañana vive solo en el aviso de 15 s, que seguía corriendo con el mouse encima del botón. Ahora el aviso
+  se detiene mientras el mouse o el foco del teclado están encima y, al soltarlo, queda lo que le quedaba, con un mínimo de
+  4 s (`RESUME_MS`) para llegar al botón; un `mouseleave` que no llega (el aviso se cerró con OK) no traba el siguiente. El
+  aviso pasó a su componente (`NoticeBar.tsx`). La cola (D356–D359) no cambió. Corregida por D717 (el toque y el foco).
+  Queda: el aviso sin botón que llega encima lo corre un rato (es D357).
+- **D713 · Un título idéntico viaja con su sección** (2026-10-09; E19, ronda de corrección, B1 de la auditoría). Qué pasaba: D707
+  saltaba el título de escena idéntico en las dos páginas pero copiaba lo que B había escrito debajo, que quedaba bajo el separador
+  «General · merged from the other report»: el lector toma eso como la sección general y la escena dejaba de ver esa foto y ese
+  texto; el adelanto prometía lo contrario. Elegí lo que sugería la auditoría: un título (`heading`) idéntico se saltea solo si
+  **toda su sección** en B también se saltea (hasta el próximo título de su nivel o de uno más alto, contando los de adentro);
+  si algo de debajo se copia, el título va con eso. Cuesta un título repetido cuando solo cambia una línea de su sección (también
+  en la plantilla de una escena: «Notes»); lo idéntico de adentro igual no se copia. Si preferís otra: copiar siempre los títulos.
+- **D714 · Antes de la papelera se vuelve a mirar que lo salteado siga en la que queda** (2026-10-09; E19, O2). Qué pasaba: si otro
+  dispositivo borraba de A, mientras se unía, un renglón que B tenía idéntico (y por eso no se copió), ese renglón quedaba solo en
+  B, en la papelera. Elegí lo más simple: el trabajo anota las firmas de lo salteado (`job.skipped`) y, después de la última
+  sincronización y antes del puntero, cuenta que A todavía las tenga (`missingFrom`); si falta alguna, **se frena** como cuando
+  aparece un comentario: A queda con la copia y B viva y repetida («… changed while merging…»), y unir otra vez copia solo lo que
+  falta. Una edición de ese renglón en A también lo frena (no es el mismo bloque): se une otra vez y nada se pierde.
+- **D715 · Una foto con anotaciones que A no tiene no es «idéntica»** (2026-10-09; E19, O1). Qué pasaba: la misma foto (pegada en las
+  dos) anotada solo en B daba el mismo bloque, no se copiaba y las formas se quedaban en B. Elegí que un bloque con fotos solo se
+  saltea si **cada forma de B** (su id y sus campos) ya está en A; si no, se copia el bloque y las formas pasan con las reglas de
+  pegar. Si A tiene más anotaciones que B, o las mismas, se saltea.
+- **D716 · «· 1 / · 2» estable con tres páginas y «la que se fue» en el aviso de después** (2026-10-09; E19, O3 y O5). El número
+  de cada repetida sale del grupo entero (`MergePair.group`) y es el mismo en *Pending* y en el adelanto abierto desde la
+  cabecera de la tercera («· 1» y «· 3»). El aviso de una unión hecha dice «la que se fue» (antes «la que se va», que queda para
+  lo que todavía no pasó). El adelanto sigue con «· 1 / · 2» y los avisos con los papeles: son dos nombres para las mismas dos,
+  elegidos en D706 (el árbol ya no sirve cuando una está en la papelera).
+- **D717 · El aviso solo lo sostiene un mouse o el foco, cada uno por su lado** (2026-10-09; E19, O4). En una pantalla táctil un
+  toque emulaba «mouse encima» y retenía el aviso hasta el próximo toque afuera; y el mouse y el foco compartían una bandera.
+  Ahora solo cuenta un puntero de tipo mouse (`onPointerEnter`), el foco es otra bandera y soltar uno no libera si el otro sigue.
+  En el teléfono el aviso sigue corriendo, como decían D712 y la ayuda. El foco que deja un clic o un toque en un botón del
+  aviso no lo sostiene (si no, después de *OK* el aviso siguiente quedaba quieto hasta un clic afuera): solo el que llega
+  con el teclado.
 
 ### D601 · Abrir una página en un dispositivo nuevo no vuelve a registrar las fotos que ya usa
 **Qué pasaba:** en un dispositivo nuevo, abrir una página durante la primera sincronización ponía en la cola un aviso

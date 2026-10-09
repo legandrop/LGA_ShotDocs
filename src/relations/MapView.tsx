@@ -15,9 +15,11 @@ import { mapCounts, mapJson, mapText, projectMap, sceneFilterText, titlePlace, t
 import { searchScenes } from './sceneSearch';
 import { useSlashDraft } from './slashDraft';
 import { AssignButton, CreateEntityButton } from './EntityActions';
-import { titleFragment } from './aliasAction';
+import { titleFragment, titleFragmentWhy } from './aliasAction';
 import { LinkLocationButton } from './LinkLocation';
 import { MergeButton, MergePendingRows, useMergeRows } from './MergeAction';
+import { contentCounts } from './merge';
+import { twinLabels } from './twinNames';
 import './liveHeader.css';
 import './map.css';
 
@@ -514,7 +516,7 @@ function Days({ data, fq, codes, registry }: { data: ProjectMapData; fq: string;
                 // Lo que dice el título, apagado: no nombra una locación que exista (O7 de la auditoría). Y escribirlo en una
                 // locación (D539).
                 <>
-                  <span className="mp-none" data-tip={tr('map.noLocationTip')}>
+                  <span className="mp-none" data-tip={tr(titleFragmentWhy(d) === 'several' ? 'linkLoc.severalTip' : titleFragmentWhy(d) === 'unusable' ? 'linkLoc.unusableTip' : 'map.noLocationTip')}>
                     {titlePlace(d)}
                   </span>
                   {registry && <LinkLocationButton R={registry} fragment={titleFragment(d)} className="mp-linkloc" />}
@@ -563,6 +565,32 @@ export function PendingRow({ head, children, actions }: { head: ReactNode; child
       </div>
       {children}
     </div>
+  );
+}
+
+/**
+ * Las páginas repetidas de una fila (D706): si se llaman igual, «· 1» y «· 2» (el orden del árbol, como en el adelanto de
+ * *Merge*) y, de cada una, cuánto tiene escrito, así se sabe cuál es cuál y dónde está lo de más.
+ */
+function TwinPages({ ids, title, session }: { ids: string[]; title: (id: string) => string; session: Session }) {
+  const tr = useT();
+  const { label, numbered } = twinLabels(ids, title);
+  return (
+    <>
+      {ids.map((id, i) => {
+        const content = session.index.content(id);
+        const c = contentCounts(content);
+        return (
+          <span key={id}>
+            {i > 0 && ' / '}
+            <PageLink pageId={id} className="mp-plink" tip={numbered ? tr('merge.twinNumberTip') : undefined}>
+              {label(id)}
+            </PageLink>
+            {content && <span className="mp-q"> ({[tr('merge.blocks', { count: c.blocks }), c.photos ? tr('merge.photos', { count: c.photos }) : ''].filter(Boolean).join(' · ')})</span>}
+          </span>
+        );
+      })}
+    </>
   );
 }
 
@@ -665,14 +693,7 @@ function Pending({
               }
             >
               <div className="mp-pw">
-                {d.pageIds.map((id, i) => (
-                  <span key={id}>
-                    {i > 0 && ' · '}
-                    <PageLink pageId={id} className="mp-plink">
-                      {title(id)}
-                    </PageLink>
-                  </span>
-                ))}
+                <TwinPages ids={d.pageIds} title={title} session={session} />
               </div>
               <div className="mp-pnote">{tr(d.kind === 'day' ? 'map.duplicateDayHint' : 'map.duplicateHint')}</div>
             </PendingRow>

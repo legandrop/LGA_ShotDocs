@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { likeness, locationOptions, titleFragment } from './aliasAction';
+import { likeness, locationOptions, titleFragment, titleFragmentWhy } from './aliasAction';
 import { buildRegistry } from './reader';
 
 // *Link to a location…* (D539), lo puro: qué parte del título se ofrece y el orden de las locaciones (la regla de parecido
@@ -28,6 +28,19 @@ describe('la parte del título que se ofrece', () => {
     expect(titleFragment({ title: '2026-02-18 | Día 58 | Edif Ministe Hall, Bar Berlin', label: 'Día 58', date: '2026-02-18' })).toBe('');
     expect(titleFragment({ title: `2026-02-18 | Día 58 | ${'Edificio '.repeat(8)}`, label: 'Día 58', date: '2026-02-18' })).toBe('');
     expect(titleFragment({ title: '2026-02-18 | Día 58 | «Edif Ministe Hall»?', label: 'Día 58', date: '2026-02-18' })).toBe('Edif Ministe Hall');
+  });
+});
+
+describe('por qué no se ofrece (D711)', () => {
+  const day = (place: string) => ({ title: `2026-02-18 | Día 58 | ${place}`, label: 'Día 58', date: '2026-02-18' });
+  it('varios lugares (coma, punto y coma, viñeta, « · »), demasiado largo o sin letras suficientes; nada si se ofrece o no hay lugar', () => {
+    expect(titleFragmentWhy(day('Hall, Pasillo del Ministerio'))).toBe('several');
+    expect(titleFragmentWhy(day('Hall; Pasillo'))).toBe('several');
+    expect(titleFragmentWhy(day('Hall · Pasillo'))).toBe('several');
+    expect(titleFragmentWhy(day('Edificio '.repeat(8)))).toBe('unusable');
+    expect(titleFragmentWhy(day('Edif Ministe Hall'))).toBeNull();
+    expect(titleFragmentWhy({ title: '2026-02-12 | Día 56', label: 'Día 56', date: '2026-02-12' })).toBeNull();
+    expect(titleFragmentWhy({ title: '2026-02-12 | Día 56 | 123', label: 'Día 56', date: '2026-02-12' })).toBeNull();
   });
 });
 

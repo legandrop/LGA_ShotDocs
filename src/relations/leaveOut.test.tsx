@@ -294,6 +294,34 @@ describe('Link to a location… no escribe lo que el lector ignoraría (D662)', 
   });
 });
 
+describe('Link to a location… con un lugar que no puede ser un nombre (D711)', () => {
+  it('un día con varios lugares en el título (o uno larguísimo) muestra el texto apagado, sin botón, y el tooltip dice por qué', async () => {
+    const { d, ids, session } = await project();
+    const days = await d.tree.create(null, 'Rodaje');
+    await d.tree.setSetting(days, 'holds', 'day');
+    const several = await d.tree.create(days, '2026-02-18 | Día 58 | Hall, Pasillo del Ministerio');
+    const long = await d.tree.create(days, `2026-02-19 | Día 59 | ${'Edificio '.repeat(8).trim()}`);
+    await d.tree.create(ids.locs, 'Edificio Ministerial Hall');
+    await session.index.refresh(d.tree.workspaceId);
+    await session.relations.update(d.tree.workspaceId);
+    const view = async (pageId: string) => {
+      const host = mount(d, <LiveHeader pageId={pageId} />);
+      return shown(() => {
+        const via = host.querySelector<HTMLElement>('.lh-via[data-tip]');
+        expect(via).toBeTruthy();
+        return { host, via: via! };
+      });
+    };
+    const a = await view(several);
+    expect(a.via.textContent).toBe('Hall, Pasillo del Ministerio');
+    expect(a.via.dataset.tip).toContain('names several places');
+    expect([...a.host.querySelectorAll('button')].some((b) => b.textContent === 'Link to a location…')).toBe(false);
+    const b = await view(long);
+    expect(b.via.dataset.tip).toContain('Too long to be a location name');
+    expect([...b.host.querySelectorAll('button')].some((x) => x.textContent === 'Link to a location…')).toBe(false);
+  });
+});
+
 describe('Link to a location… desde un día sin lugar (D539)', () => {
   it('ofrece primero la parecida, escribe el texto del título en Otros nombres, el día pasa a ser de esa locación y Undo lo saca', async () => {
     const { d, ids, session } = await project();

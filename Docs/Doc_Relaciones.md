@@ -961,7 +961,9 @@ parecen (cada palabra del título es el comienzo de una del nombre, sin artícul
 (D532). Elegir escribe el texto en «Other names» / «Otros nombres» de esa locación (rótulo en el idioma de la app) y
 avisa «Added “Edif Ministe Hall” to Edificio Ministerial Hall» con *Open* y *Undo*; si la página no está en el dispositivo
 y no baja en 8 s, «Open … once with a connection». Solo se ofrece (y se escribe) un texto que el lector leería como un
-nombre (`writableName`: uno solo, sin comas, hasta 60 caracteres, D662); el nombre de la locación misma dice «already».
+nombre (`writableName`: uno solo, sin comas, hasta 60 caracteres, D662); el nombre de la locación misma dice «already». Si el
+título nombra varios lugares (una coma, un punto y coma, una viñeta o « · ») o es demasiado largo, no hay botón: el texto
+queda apagado con un tooltip que dice por qué y qué hacer (`titleFragmentWhy`, D711).
 
 ***Leave out of relations*** (D540, D541, D560). Casilla en el menú ⋯ de la página, debajo de *Type*, con permiso de
 cambiar la fila y nunca con un link público; aparece si el proyecto tiene escenas, locaciones o días, o si ya hay una
@@ -1031,7 +1033,8 @@ al reporte al crearlo) y *Create and prepare tomorrow’s report*, con el títul
 plantilla, lo de ayer); una sincronización buena en el momento (sin ella no crea: «Connect to create…»; si el motor ya
 sabe que no hay red, con tope de 1,5 s); si la carpeta ya tiene un reporte con esa fecha y está llegando de otro
 dispositivo (la fila sí, el contenido no), no se toca («Another device just created…»); si no, se prepara ese. Si no hay,
-la fila sola (título `2026-03-16 | Día 77`, la forma del de hoy sin su locación; `template_id`; marca de día explícita;
+la fila sola (título `2026-03-16 | Día 77`, la forma del de hoy, sin la locación de hoy y con la del desglose solo si todas las
+páginas con esa *Fecha Rodaje* dicen la misma del registro y el título de hoy lleva una: `plannedPlace`, D709, v0.254; `template_id`; marca de día explícita;
 la marca de la carpeta no se toca) y se sube enseguida; una lectura más y, si otro reporte del mismo día con id menor
 apareció, esta página todavía vacía va a la papelera y queda el otro (`yielded`); si no, la plantilla de *New day report*
 y las secciones de las escenas se escriben **de una vez** (`writeNewPage` con los bloques de `sectionBlocks`) y se sube.
@@ -1086,8 +1089,8 @@ perderse (vuelve a subir si alguien restaura la página); ningún otro dispositi
 Un miembro que edita sin poder restaurar sí sube su texto, y la saca el primer dispositivo que puede. Una versión vieja
 (0.249 o antes) que cede lo hace sin marca y esa copia no vuelve sola: por eso `min_app_version` sube a la 0.251 al
 publicar. Si nadie con permiso de restaurar vuelve a abrir la app, el texto queda en la papelera hasta que alguien la abra; si alguien la borra
-de la papelera antes, se va como cualquier página de la papelera. La locación en el título de mañana se evaluó y no se hizo
-(D631).
+de la papelera antes, se va como cualquier página de la papelera. La locación en el título de mañana se evaluó (D631) y se hizo
+en la v0.254 (D709): medido en `mapa.json` de ERSO, 11 de los 12 días con plan dicen un solo lugar.
 
 **Pruebas.** `tomorrowNew.test.ts` con tres dispositivos y el servidor en memoria (C escribe y su texto llega después de la
 papelera: vuelve en C; C sube y se va: vuelve en A; C escribe antes de la última mirada: no cede y suma solo las secciones;
@@ -1102,20 +1105,42 @@ el árbol viejo no pisa una papelera puesta a propósito), `cededBanner.test.tsx
 
 | Pieza | Archivo |
 |---|---|
-| El puntero, las guardas sin red, qué agrega una a la otra, cuál queda, las filas de *Pending* (puro) | `src/relations/merge.ts` (`readPointer`, `mergedTarget`, `mergeGuard`, `audienceOk`, `addsNothing`, `defaultKeep`, `mergeRows`) |
-| La copia en el Y.Doc y su *Undo* (se baja al unir) | `src/relations/mergeWrite.ts` (`copyIntoDoc`, `intactCopy`, `undoCopyInDoc`, `derivedId`, `separatorBlock`) |
+| El puntero, las guardas sin red, cuál queda, lo que dice el adelanto, las filas de *Pending* (puro) | `src/relations/merge.ts` (`readPointer`, `mergedTarget`, `mergeGuard`, `audienceOk`, `defaultKeep`, `dialogHint`, `mergeRows`) |
+| La copia en el Y.Doc, qué copia (`planCopy`) y su *Undo* (se baja al unir) | `src/relations/mergeWrite.ts` (`blockSignature`, `blocksToCopy`, `planCopy`, `copyIntoDoc`, `intactCopy`, `undoCopyInDoc`, `derivedId`, `separatorBlock`) |
+| Los nombres de dos páginas con el mismo título | `src/relations/twinNames.ts` (`twinLabels`, `roleNames`, `sameTitle`) |
 | El trabajo en orden, anotado para seguir, y el *Undo* | `src/relations/mergeJob.ts` (`runMerge`, `continueMerge`, `resumeMerges`, `undoMerge`, `mergeDepsFrom`) |
 | El botón, el adelanto, los avisos, las filas de *Pending*, «Also in», seguir al volver la red | `src/relations/MergeAction.tsx`, `merge.css`; en `MapView.tsx`, `MapNav.tsx`, `LiveHeader.tsx`, `PageView.tsx`, `TrashView.tsx`, `Workspace.tsx` |
 
 **Qué hace.** Con un número de escena en dos páginas (o dos reportes del día con el mismo título), *Map › Pending* y la
 cabecera viva de las dos («Also in «…» · Merge…») ofrecen *Merge…*. El adelanto muestra las dos (bloques, fotos,
 subpáginas, comentarios; «Used by relations» en la primera del árbol), deja elegir cuál queda y dice qué va a pasar. Lo de
-la que se va (B) se **copia** al final de la que queda (A): un título 1 separador («Merged from the other page»; en un
-día, «General · merged from the other report», que el lector toma como la sección general) y una copia exacta de cada
-bloque de B **con los mismos ids**, en una transacción de Yjs y solo insertando. Sus subpáginas pasan a A (`tree.move`).
+la que se va (B) que A todavía no tiene se **copia** al final de la que queda (A): un título 1 separador («Merged from the
+other page»; en un día, «General · merged from the other report», que el lector toma como la sección general) y una copia
+exacta de cada bloque de B que falte, **con los mismos ids**, en una transacción de Yjs y solo insertando. Sus subpáginas pasan a A (`tree.move`).
 B va **entera** a la papelera con el puntero `settings.merged = { into, seq, at }`. Nada se borra de ningún documento.
-Si B no agrega nada (la plantilla sola, sin fotos, subpáginas ni comentarios), no se copia nada. Sin funciones nuevas en
-la base: todo va por los caminos de siempre (D677).
+Si B no agrega nada, no se copia nada. Sin funciones nuevas en la base: todo va por los caminos de siempre (D677).
+
+**Qué se copia (D707, v0.254).** Cada bloque de primer nivel tiene una **firma** (`blockSignature`: tipo, atributos menos el
+`id`, texto con su formato y lo de adentro a cualquier profundidad). De B se copian los bloques cuya firma A no tiene,
+**contando cuántas veces** (con dos iguales en B y uno en A, se copia el otro); los renglones en blanco del principio y del
+final no se copian y los de en medio sí (el ritmo de B). Un título (`heading`) idéntico se saltea solo si **toda su sección** en B también se saltea (hasta el próximo título de su nivel o más
+alto): si algo de debajo se copia, el título va con eso, porque si no lo escrito bajo «Escena 105_027» llegaría bajo el separador
+«General…» y la escena dejaría de verlo (D713). Una foto cuyas formas de B no están todas en A (misma foto, anotada solo en B)
+tampoco es idéntica: se copia y las formas pasan (D715). Así lo que las dos traen de la plantilla (la carrera de *Create*) y lo
+que una unión anterior ya copió (unir otra vez después de *Restore*) no se duplican, y «no agrega nada» compara con las
+mismas mayúsculas y formato. Nada de B se pierde: lo que no se copia está idéntico en A, o es un renglón en blanco, y B va
+entera a la papelera (con *Restore*). El adelanto lo decide con los documentos (`planCopy`, `indexSnapshot` de las dos) y no con el
+índice, que puede ir atrasado, y dice cuántos bloques se agregan; los ids que A ya tiene se calculan al copiar, además de los
+del plan. Las fotos a confirmar son solo las de lo que se copia. **Antes de la papelera** (D714) se cuenta que A todavía tenga las firmas
+de lo salteado (`job.skipped`, `missingFrom`): si otro dispositivo borró alguna mientras se unía, el trabajo se frena como con un
+comentario nuevo (A con la copia, B viva y repetida) y unir otra vez copia solo lo que falta.
+
+**Con el mismo título (D706).** En el adelanto, «· 1» y «· 2» (el orden del árbol); en las filas de repetidas de *Pending*,
+lo mismo con un tooltip y cuánto tiene escrito cada una (bloques y fotos); en los avisos y las filas de después de unir,
+«· la que se va» y «· la que queda» (la que se fue está en la papelera: el árbol ya no sirve); el cartel de la unida dice cuál
+es la que quedó y el de la copia que cede, «(la que quedó)». Con tres o más repetidas el número sale del grupo entero y es el mismo en
+*Pending* y en el adelanto (D716); el aviso de una unión hecha dice «la que se fue». Mientras une, el adelanto solo dice si la
+red se cortó (D708).
 
 **El orden (C3).** Guardas → mover las subpáginas → copiar → A subida entera (`hasOwnUnsent(A)` en falso) → los usos de
 las fotos copiadas confirmados en A (`serverUses`, `link_page_file`) → una sincronización buena y volver a mirar (A viva y
@@ -1167,12 +1192,13 @@ lista ««B» was merged into «A», which is in the trash» con *Restore*. Las 
 **Versión vieja (C8).** Nada de tipos nuevos (el separador es un `heading`); `settings.merged` es una clave que la base
 conserva y una versión vieja ignora; no se sube `min_app_version`. Probado con el esquema publicado.
 
-**Pruebas.** `merge.test.ts` (puntero y cadena, guardas, audiencia, cuál queda, filas), `mergeWrite.test.ts` (copia
-exacta y repetible, ids derivados, otro escribiendo en A, *Undo* de lo intacto con cinco formas de tocar, el editor
-abierto en A, el esquema publicado), `mergeSync.test.ts` (servidor en memoria, dos dispositivos: el orden con B viva hasta
+**Pruebas.** `merge.test.ts` (puntero y cadena, guardas, audiencia, cuál queda, filas, lo que dice el adelanto),
+`mergeWrite.test.ts` (copia exacta y repetible, ids derivados, otro escribiendo en A, *Undo* de lo intacto con cinco formas
+de tocar, el editor abierto en A, el esquema publicado, y de la v0.254: la plantilla repetida, unir otra vez, mayúsculas y
+formato, contar cuántas veces, los renglones en blanco y, con mezclas al azar, que todo bloque de B queda en A), `mergeSync.test.ts` (servidor en memoria, dos dispositivos: el orden con B viva hasta
 el puntero, A sin subir o fotos sin confirmar, cortes después de cada paso, sin red a mitad, otro en B durante y después,
 otro en A, M9 y C7, C9 a y b, dos reportes del mismo día, *Undo*, *Restore* desde una versión vieja, links),
-`mapView.test.tsx` (el adelanto, unir y *Undo* en la app, «Also in» y el banner, *Pending* con *Dismiss*, M1).
+`mapView.test.tsx` (el adelanto, unir y *Undo* en la app, «Also in» y el banner, *Pending* con *Dismiss*, M1; de la v0.254: las dos con el mismo título, el adelanto con los documentos y la red cortada a mitad con *Finish*).
 Mutaciones que caen: sin saltear ids, sin el chequeo de intacto, sin esperar `hasOwnUnsent`, sin confirmar los usos, sin
 M9 al empezar y antes de la papelera, sin validar el puntero, E16-0 sin las duplicadas.
 
@@ -1186,4 +1212,4 @@ unida (`mergedTarget` la ignora), no está en el registro ni en `dayTwins` (est�
 marca ya no vale (otra hora de papelera), así que una unida nunca se lee como cedida. Las dos claves conviven en `settings`
 (la base fusiona por clave).
 
-**Decisiones:** D641–D660 (ajustadas) y D676–D690 en `Doc_Decisiones.md`.
+**Decisiones:** D641–D660 (ajustadas), D676–D690 y, de la v0.254, D706–D708 en `Doc_Decisiones.md`.

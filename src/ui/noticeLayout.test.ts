@@ -98,7 +98,7 @@ describe('los avisos de abajo, apilados sin taparse', () => {
   it('cada alto que usa el CSS lo anota el aviso que corresponde, con la separación de 13 px entre los apilados', () => {
     const src = fileURLToPath(new URL('.', import.meta.url));
     const read = (file: string) => readFileSync(join(src, file), 'utf8');
-    expect(read('Workspace.tsx')).toContain("followHeight('--notice-height', 0, 'parent')");
+    expect(read('NoticeBar.tsx')).toContain("followHeight('--notice-height', 0, 'parent')");
     expect(read('Workspace.tsx')).toContain("followHeight('--progress-step', 13, 'parent')");
     expect(read('LinkApp.tsx')).toContain("followHeight('--link-offline-step', 13, 'root')");
     expect(read('LinkEditBar.tsx')).toContain("followHeight('--link-edit-step', 13, 'root')");

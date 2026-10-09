@@ -172,15 +172,14 @@ const LIVE_UNDERLINE = '0.244';
  * `linkScenes` (antes 0.245, E7). La versión se pone al publicar.
  */
 const REL_RESTOS = '0.248';
-/**
- * La copia que cede al crear el reporte de mañana a la vez en dos dispositivos vuelve de la papelera si alguien escribió
- * en ella, y la tarjeta dice qué está haciendo mientras crea o espera (E15, D626–D630). Sube `liveDay` (antes 0.248).
- */
-const TOMORROW_CEDE = '0.251';
 /** Otros nombres de una locación y Dejar fuera de las relaciones (D526–D545). */
 const LOCATION_NAMES = '0.247';
-/** *Merge…* de dos páginas de la misma escena o de dos reportes del mismo día (E16): la versión se pone al publicar. */
-const MERGE_PAGES = '0.253';
+/**
+ * Lo que quedó de las auditorías de la tanda 5 (E19): *Merge* (E16, 0.253) copia solo lo que la otra no tiene y distingue las
+ * páginas con el mismo título, el título del reporte de mañana (E15, 0.251) con el lugar del desglose, el aviso con *Undo*
+ * que espera al mouse. Sube `liveDay` y `mergePages`. La versión se pone al publicar.
+ */
+const RESTOS_E19 = '0.254';
 /** Exportar una rama o un proyecto como PDF (P.22, Doc_Exportar.md, entrega 1): la versión se pone al publicar. */
 const EXPORT_PDF = '0.122';
 /** Exportar como zip (P.22, Doc_Exportar.md, entrega 2): la versión se pone al publicar. */
@@ -344,7 +343,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     title: 'help.liveDay.title',
     text: 'help.liveDay.text',
     words: ['shoot day', 'día de rodaje', 'tomorrow', 'mañana', 'prepare', 'preparar', 'report', 'reporte', 'plan', 'planning', 'fecha rodaje', 'call sheet', 'new day report', 'create tomorrow', 'crear mañana', 'empty copy', 'copia vacía'],
-    since: TOMORROW_CEDE,
+    since: RESTOS_E19,
   },
   {
     id: 'livePhotos',
@@ -413,7 +412,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     title: 'help.mergePages.title',
     text: 'help.mergePages.text',
     words: ['merge', 'unir', 'juntar', 'duplicate', 'duplicada', 'repetida', 'two pages', 'dos páginas', 'same scene', 'misma escena', 'same day', 'mismo día', 'in 2 pages', 'en 2 páginas', 'pending', 'pendiente'],
-    since: MERGE_PAGES,
+    since: RESTOS_E19,
   },
   { id: 'projectsArchive', section: 'pages', title: 'help.projectsArchive.title', text: 'help.projectsArchive.text', since: BEFORE_HELP },
   { id: 'projectsDrive', section: 'pages', title: 'help.projectsDrive.title', text: 'help.projectsDrive.text', when: 'admin', since: BEFORE_HELP },

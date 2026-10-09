@@ -1111,7 +1111,9 @@ Paso 10 de `Plan_Workspaces.md` (sección 4), con la base en la versión 5
       `withoutKey`, funciones puras): el aviso de un comentario cerrado (`keep`) no lo saca nadie y lo que llega
       espera (D356); uno sin botón sobre uno con botón sale ya y el del botón vuelve con lo que le quedaba, al menos
       6 s (D357); lo que espera vence pasado su tiempo y esperan como mucho tres (D358). `dismissNotice` saca también
-      al que espera. El estilo general va anclado a los dos costados en todas las pantallas (`left`/`right` 16 px,
+      al que espera. Con un mouse (no un toque) o el foco del teclado encima, el aviso no vence y, al soltarlo, sigue con lo que le
+      quedaba (al menos 4 s): así llega el *Undo*; el mouse y el foco sostienen por separado (v0.254, D712, D717; `NoticeBar.tsx`, `useNotice` devuelve `hold`). El estilo
+      general va anclado a los dos costados en todas las pantallas (`left`/`right` 16 px,
       `width: fit-content`, tope `max(640px, 50vw)`; en el teléfono, sin tope): a 761 px el aviso de un comentario
       cerrado pasa de 381 por 73 a 640 por 56, a 900 px de 450 a 640 de ancho, y a 1280 px queda igual. En una
       pantalla táctil (`pointer: coarse`) los botones de texto del aviso miden 36 px (antes 21), con un margen

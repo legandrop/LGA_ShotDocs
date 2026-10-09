@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PageRow } from '../sync/types';
 import { cededMark } from './cededCopy';
-import { addsNothing, audienceOk, canOffer, defaultKeep, mergeGuard, mergeRows, mergedTarget, MAX_CHAIN, readPointer, restorePage } from './merge';
+import { audienceOk, canOffer, defaultKeep, dialogHint, mergeGuard, mergeRows, mergedTarget, MAX_CHAIN, readPointer, restorePage } from './merge';
 
 // Lo puro de *Merge* (E16): el puntero se valida siempre (C2), la cadena tiene tope, las guardas sin red, la audiencia
 // local (C6), cuál queda (D644 con M9) y las filas de *Pending* (C3 punto 3, C9 b).
@@ -76,23 +76,23 @@ describe('las guardas sin red y la audiencia (M1, M2, M4, C6)', () => {
   });
 });
 
-describe('cuál queda (D644 con M9) y qué agrega (D646)', () => {
-  const c = (units: string[], media: string[] = [], links: string[] = []) => ({
-    units: units.map((text, i) => ({ blockId: `b${i}`, field: 'text' as const, text })),
-    meta: [{ blockId: 'm', at: 0, level: 0, media, links: links.map((pageId) => ({ unit: 0, start: 0, end: 1, pageId })) }],
-  });
-  it('la plantilla sola no agrega nada; un texto, una foto o un link nuevo, sí', () => {
-    expect(addsNothing(c(['Notes', 'Director:']), c(['Notes', ' Director: ']))).toBe(true);
-    expect(addsNothing(c(['Notes']), c(['Notes', 'Algo más']))).toBe(false);
-    expect(addsNothing(c(['Notes']), c(['Notes'], ['f1']))).toBe(false);
-    expect(addsNothing(c(['Notes']), c(['Notes'], [], ['p1']))).toBe(false);
-  });
+describe('cuál queda (D644 con M9) y lo que dice el adelanto (D646, D708)', () => {
   it('la que tiene comentarios queda; con las dos, ninguna; si una no agrega nada, queda la otra; si no, la primera', () => {
     const o = (comments: Record<string, number>, nothing: [string, string] | null = null) => ({ comments: (id: string) => comments[id] ?? 0, nothing: (f: string, i: string) => !!nothing && nothing[0] === f && nothing[1] === i });
     expect(defaultKeep(['a', 'b'], o({ b: 1 }))).toBe('b');
     expect(defaultKeep(['a', 'b'], o({ a: 1, b: 2 }))).toBeNull();
     expect(defaultKeep(['a', 'b'], o({}, ['a', 'b']))).toBe('b');
     expect(defaultKeep(['a', 'b'], o({}))).toBe('a');
+  });
+  it('O10: mientras une, solo se dice si la red se cortó; antes de unir, el motivo que impide hacerlo', () => {
+    expect(dialogHint(true, 'offline')).toBe('wait');
+    expect(dialogHint(true, null)).toBeNull();
+    // Lo demás cambia a medida que avanza la unión (la que se va entra a la papelera): no se muestra.
+    expect(dialogHint(true, 'gone')).toBeNull();
+    expect(dialogHint(true, 'checking')).toBeNull();
+    expect(dialogHint(false, 'offline')).toBe('offline');
+    expect(dialogHint(false, 'comments')).toBe('comments');
+    expect(dialogHint(false, null)).toBeNull();
   });
 });
 

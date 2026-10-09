@@ -8,7 +8,9 @@ import { goToPlace } from './goToPlace';
 import { useLiveOpen } from './liveFold';
 import { Badge, Chip, Ic, Line, LiveDot, useFoldFocus, useGo, type HeaderPhotos } from './LiveHeader';
 import { PhotoSources } from './PhotoSources';
-import { titleFragment } from './aliasAction';
+import { titleFragment, titleFragmentWhy } from './aliasAction';
+import { withoutParens } from './aliases';
+import { titlePlace } from './projectMap';
 import { AssignButton, CreateEntityButton, ScenePicker } from './EntityActions';
 import { LinkLocationButton } from './LinkLocation';
 import type { DayRef, LiveSource } from './liveView';
@@ -425,7 +427,7 @@ function TomorrowNew({ v, src, tr, proposal }: { v: DayLive; src: LiveSource; tr
   };
   // El título que va a tener (sin número de día en el de hoy, el número lo decide al crear, como New day report: la fecha).
   const n = nextDayNumber(today?.title ?? '', 0);
-  const title = n ? nextDayTitle(today?.title ?? '', proposal.date, n, tr.lang) : proposal.date;
+  const title = n ? nextDayTitle(today?.title ?? '', proposal.date, n, tr.lang, proposal.place) : proposal.date;
   const source = proposal.plan.source === 'breakdown' ? tr('day.srcBreakdown', { label: proposal.plan.label, date: ddmm(proposal.date) }) : tr('day.srcNone');
 
   const create = async () => {
@@ -442,7 +444,7 @@ function TomorrowNew({ v, src, tr, proposal }: { v: DayLive; src: LiveSource; tr
       const deps = { tree: services.tree, docs: services.docs, engine: services.engine };
       const res = await createTomorrow(
         deps,
-        { projectId, parentId, todayTitle: today?.title ?? '', date: proposal.date, lang: tr.lang, prepare: { scenes, registry: src.snap.registry, linkTarget, word: style.word, level: style.level } },
+        { projectId, parentId, todayTitle: today?.title ?? '', place: proposal.place, date: proposal.date, lang: tr.lang, prepare: { scenes, registry: src.snap.registry, linkTarget, word: style.word, level: style.level } },
         canCreate,
       );
       if (res.status === 'yielded') {
@@ -589,7 +591,10 @@ export function DayHeader({ v, src, pages, partial, photos }: { v: DayLive; src:
   // Sin día siguiente: la tarjeta que crea el reporte de mañana (D573). Solo con el índice completo (si no, mañana puede
   // existir y todavía no estar leído) y si quien mira ve el proyecto entero (si no, mañana puede estar donde no ve).
   const newTomorrow = !v.tomorrow && !v.next && v.complete && !partial ? proposeTomorrow(src, v.day) : null;
-  const fragment = titleFragment({ title: src.title(v.day.pageId) ?? '', label: v.day.label, date: v.day.date });
+  const titleDay = { title: src.title(v.day.pageId) ?? '', label: v.day.label, date: v.day.date };
+  const fragment = titleFragment(titleDay);
+  // Si lo que dice el título no puede ser UN nombre (varios lugares, demasiado largo), no hay botón: se dice por qué (D711).
+  const why = fragment ? null : titleFragmentWhy(titleDay);
   const scenePage = (code: string) => {
     const id = src.snap.registry.scenes.get(code)?.pageId ?? null;
     return id && src.title(id) !== undefined ? id : null;
@@ -634,12 +639,12 @@ export function DayHeader({ v, src, pages, partial, photos }: { v: DayLive; src:
         <LocChips day={v.day} src={src} tr={tr} />
         {v.day.locs.length > 0 && <span className="lh-via">{tr('day.perTitle')}</span>}
         {/* Sin locación por el título: lo que dice el título, apagado, y escribirlo en una locación (D539). */}
-        {v.day.locs.length === 0 && fragment && (
+        {v.day.locs.length === 0 && (fragment || why) && (
           <>
-            <span className="lh-via" data-tip={tr('linkLoc.unrecognizedTip')}>
-              {fragment}
+            <span className="lh-via" data-tip={tr(why === 'several' ? 'linkLoc.severalTip' : why === 'unusable' ? 'linkLoc.unusableTip' : 'linkLoc.unrecognizedTip')}>
+              {fragment || withoutParens(titlePlace(titleDay))}
             </span>
-            <LinkLocationButton R={src.snap.registry} fragment={fragment} />
+            {fragment && <LinkLocationButton R={src.snap.registry} fragment={fragment} />}
           </>
         )}
         <span className="lh-tools">

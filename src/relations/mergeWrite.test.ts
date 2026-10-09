@@ -10,7 +10,7 @@ import { SHARED_COLLAPSE_MAP } from '../ui/collapseEditor';
 import { schema } from '../ui/editorSchema';
 import { schema as publishedSchema } from '../ui/fixtures/editorSchemaMain';
 import { findUnknownContent } from '../ui/unknownContent';
-import { blockIds, copyIntoDoc, derivedId, intactCopy, planCopy, separatorBlock, separatorId, undoCopyInDoc, type CopyRecord } from './mergeWrite';
+import { blockIds, blocksToCopy, blockSignature, copyIntoDoc, derivedId, intactCopy, missingFrom, planCopy, separatorBlock, separatorId, skippedSignatures, undoCopyInDoc, type CopyRecord } from './mergeWrite';
 
 // La copia de *Merge* en el Y.Doc (E16, D645, D649, C4, C5, C8): exacta, con los mismos ids, al final y solo agregando;
 // los ids que A ya tenía, derivados también adentro; repetir no duplica; *Undo* saca solo lo intacto; con el editor
@@ -128,13 +128,13 @@ describe('copiar a la que queda', () => {
     expect(blockIds(a).has(derivedId(B_ID, 'a2'))).toBe(true);
     expect(derivedId(B_ID, 'a2')).toBe(derivedId(B_ID, 'a2'));
     expect(derivedId(B_ID, 'a2')).not.toBe(derivedId('otra', 'a2'));
-    // Mutación «sin saltear ids»: con remap vacío, A queda con dos bloques `a2`.
+    // Aunque el plan no los traiga (A cambió entre el plan y la copia), nunca dos bloques con el mismo id.
     const a2 = pageA();
     copy(a2, pageB('a2'), []);
     const all: string[] = [];
     const walk = (n: Y.XmlElement) => n.toArray().forEach((c) => c instanceof Y.XmlElement && (c.nodeName === 'blockContainer' && all.push(c.getAttribute('id') as string), walk(c)));
     walk(a2.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement);
-    expect(all.filter((id) => id === 'a2')).toHaveLength(2);
+    expect(all.filter((id) => id === 'a2')).toHaveLength(1);
   });
 
   it('D646: con la plantilla sola (lo mismo en las dos), B no agrega nada', () => {
@@ -232,5 +232,242 @@ describe('una versión vieja abierta a la vez (C8, D659)', () => {
     Y.applyUpdate(a, Y.encodeStateAsUpdate(old));
     expect(texts(a)).toEqual([...before, 'Desde la versión vieja']);
     expect(topIds(a).slice(0, 6)).toEqual(['a1', 'a2', separatorId(B_ID), 'b1', 'b2', 'b4']);
+  });
+});
+
+// --- Qué se copia (D707): lo idéntico a lo que A ya tiene no se repite, y nunca se pierde texto ---------------------
+
+type Spec = Record<string, unknown>;
+
+/** Un documento con los bloques dados (ids propios o sin ellos: la firma no los mira). */
+function docOf(blocks: Spec[]): Y.Doc {
+  const doc = new Y.Doc();
+  const e = mount(doc);
+  e.replaceBlocks(e.document, blocks as never);
+  return doc;
+}
+
+const para = (text: string, extra: Spec = {}): Spec => ({ type: 'paragraph', content: text, ...extra });
+const head = (text: string): Spec => ({ type: 'heading', props: { level: 1 }, content: text });
+const bold = (text: string): Spec => ({ type: 'paragraph', content: [{ type: 'text', text, styles: { bold: true } }] });
+const topTexts = (doc: Y.Doc) => texts(doc).filter(Boolean);
+
+function copyWith(a: Y.Doc, b: Y.Doc, key = B_ID): CopyRecord | 'already' | 'empty' {
+  const plan = planCopy(a, b);
+  return copyIntoDoc(a, b, { from: key, remap: plan.remap, separator: () => separatorBlock('Merged', separatorId(key)) });
+}
+
+describe('lo que A ya tiene idéntico no se copia (D707)', () => {
+  it('O3: lo que las dos traen de la plantilla no se duplica; lo escrito en B sí pasa', () => {
+    const template = [head('Notes'), para('Director:'), para('Art:'), para('')];
+    const a = docOf([...template, para('Lo que escribió A.')]);
+    const b = docOf([...template, para('Lo que escribió B.')]);
+    const plan = planCopy(a, b);
+    // El título «Notes» viaja con lo que B escribió debajo (D713); «Director:» y «Art:», idénticos, no.
+    expect(plan).toMatchObject({ nothing: false, blocks: 2 });
+    const rec = copyWith(a, b);
+    expect(typeof rec).not.toBe('string');
+    expect(topTexts(a)).toEqual(['Notes', 'Director:', 'Art:', 'Lo que escribió A.', 'Merged', 'Notes', 'Lo que escribió B.']);
+    // *Undo* saca solo lo copiado.
+    undoCopyInDoc(a, rec as CopyRecord);
+    expect(topTexts(a)).toEqual(['Notes', 'Director:', 'Art:', 'Lo que escribió A.']);
+  });
+
+  it('O6: unir otra vez la misma página (Restore y algo nuevo) copia solo lo nuevo', () => {
+    const a = docOf([head('Notas'), para('De A.')]);
+    const b = docOf([head('Plano'), para('Texto de B.'), para('Otro renglón de B.')]);
+    expect(typeof copyWith(a, b, 'B:uno')).not.toBe('string');
+    const once = topTexts(a);
+    // Con la primera copia en A, B no agrega nada.
+    expect(planCopy(a, b)).toMatchObject({ nothing: true, blocks: 0 });
+    expect(copyWith(a, b, 'B:dos')).toBe('empty');
+    expect(topTexts(a)).toEqual(once);
+    // Alguien escribe un renglón nuevo en B: la segunda unión trae solo ese.
+    const e = mount(b);
+    e.insertBlocks([para('Lo nuevo de B.')] as never, e.document[e.document.length - 1].id, 'after');
+    expect(planCopy(a, b)).toMatchObject({ nothing: false, blocks: 2 });
+    expect(typeof copyWith(a, b, 'B:tres')).not.toBe('string');
+    expect(topTexts(a)).toEqual([...once, 'Merged', 'Plano', 'Lo nuevo de B.']);
+  });
+
+  it('O7: el mismo texto con otras mayúsculas o con otro formato no es lo mismo: se copia', () => {
+    const a = docOf([head('Notes'), para('Director: Ana')]);
+    expect(planCopy(a, docOf([head('Notes'), para('director: ana')])).nothing).toBe(false);
+    expect(planCopy(a, docOf([head('Notes'), bold('Director: Ana')])).nothing).toBe(false);
+    expect(planCopy(a, docOf([head('Notes'), para('Director: Ana', { props: { textColor: 'red' } })])).nothing).toBe(false);
+    // Idéntico, o con un renglón en blanco de más al final: nada.
+    expect(planCopy(a, docOf([head('Notes'), para('Director: Ana'), para('')])).nothing).toBe(true);
+    // Mutación «sin mirar el formato»: dos firmas distintas.
+    expect(blockSignature(blocksToCopy(a, docOf([bold('Director: Ana')]))[0])).not.toBe(blockSignature(blocksToCopy(docOf([]), docOf([para('Director: Ana')]))[0]));
+  });
+
+  it('cuenta cuántas veces: si B tiene dos iguales y A una, la otra se copia', () => {
+    const a = docOf([para('Igual')]);
+    const b = docOf([para('Igual'), para('Igual')]);
+    expect(planCopy(a, b)).toMatchObject({ nothing: false, blocks: 1 });
+  });
+
+  it('los renglones en blanco de en medio se copian (el ritmo de B); los del principio y el final, no', () => {
+    const a = docOf([para('De A.')]);
+    const b = docOf([para(''), para('Uno'), para(''), para('Dos'), para('')]);
+    expect(blocksToCopy(a, b).length).toBe(3);
+    copyWith(a, b);
+    const top = (a.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement).toArray();
+    expect(top.length).toBe(1 + 1 + 3);
+  });
+
+  it('las fotos del plan son solo las de lo que se copia', () => {
+    const photoBlock = (id: string): Spec => ({ type: 'image', props: { url: `sdmedia://${id}` } });
+    const P1 = '0000000b-aaaa-4bbb-8ccc-dddddddddddd';
+    const a = docOf([photoBlock(PHOTO)]);
+    const b = docOf([photoBlock(PHOTO), photoBlock(P1)]);
+    expect(planCopy(a, b).photos).toEqual([P1]);
+  });
+
+  it('nunca se pierde texto: con cualquier mezcla, todo bloque de B queda en A (o es un renglón en blanco)', () => {
+    let seed = 7;
+    const rnd = (n: number) => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed % n;
+    };
+    const pool: Spec[] = [
+      head('Notes'),
+      para('Director:'),
+      para('Art:'),
+      para('director:'),
+      bold('Director:'),
+      para(''),
+      para('Algo de A'),
+      para('Algo de B'),
+      { type: 'bulletListItem', content: 'Item', children: [para('Hijo')] },
+      { type: 'image', props: { url: `sdmedia://${PHOTO}`, caption: 'La curva' } },
+    ];
+    const pick = (): Spec[] => Array.from({ length: rnd(6) }, () => pool[rnd(pool.length)]);
+    const sigs = (doc: Y.Doc) => ((doc.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement | undefined)?.toArray() ?? []).map((c) => blockSignature(c as Y.XmlElement));
+    const blank = sigs(docOf([para('')]))[0];
+    for (let round = 0; round < 40; round++) {
+      const a = docOf(pick());
+      const b = docOf(pick());
+      const before = sigs(a);
+      copyWith(a, b);
+      const after = sigs(a);
+      const count = (list: string[], s: string) => list.filter((x) => x === s).length;
+      // A conserva todo lo suyo, en su lugar.
+      expect(after.slice(0, before.length)).toEqual(before);
+      for (const s of new Set(sigs(b))) {
+        if (s === blank) continue;
+        expect(count(after, s)).toBeGreaterThanOrEqual(count(sigs(b), s));
+      }
+    }
+  });
+});
+
+describe('un título idéntico viaja con su sección (D713)', () => {
+  const h = (text: string, level = 1): Spec => ({ type: 'heading', props: { level }, content: text });
+
+  it('un reporte del día: lo que B escribió bajo «Escena 105_027b» llega con su título y las secciones iguales no se repiten', () => {
+    const a = docOf([h('Info general'), para('Llamado 7:00.'), h('Escena 105_027b'), para('Texto de A.')]);
+    const b = docOf([h('Info general'), para('Llamado 7:00.'), h('Escena 105_027b'), para('Texto de B en la escena.')]);
+    expect(blocksToCopy(a, b).length).toBe(2);
+    copyWith(a, b);
+    expect(topTexts(a)).toEqual(['Info general', 'Llamado 7:00.', 'Escena 105_027b', 'Texto de A.', 'Merged', 'Escena 105_027b', 'Texto de B en la escena.']);
+  });
+
+  it('con dos escenas: solo viaja el título de la que tiene algo de más; un título idéntico sin nada nuevo debajo se saltea', () => {
+    const a = docOf([h('Escena 105_027'), para('Igual.'), h('Escena 105_029'), para('A.')]);
+    const b = docOf([h('Escena 105_027'), para('Igual.'), h('Escena 105_029'), para('A.'), para('Nuevo de B.')]);
+    copyWith(a, b);
+    // «105_029»: su sección tiene algo nuevo, va con el título; «105_027»: idéntica entera, no se copia.
+    expect(topTexts(a)).toEqual(['Escena 105_027', 'Igual.', 'Escena 105_029', 'A.', 'Merged', 'Escena 105_029', 'Nuevo de B.']);
+  });
+
+  it('un título de nivel 1 se queda con todo lo de adentro, también los títulos más chicos; uno chico no arrastra al grande', () => {
+    const a = docOf([h('Escena', 1), h('Plano', 2), para('Igual.')]);
+    const b = docOf([h('Escena', 1), h('Plano', 2), para('Igual.'), h('Otro plano', 2), para('Nuevo.')]);
+    copyWith(a, b);
+    expect(topTexts(a)).toEqual(['Escena', 'Plano', 'Igual.', 'Merged', 'Escena', 'Otro plano', 'Nuevo.']);
+    const c = docOf([h('Escena', 1), para('Igual.'), h('Plano', 2), para('Igual.')]);
+    const d = docOf([h('Escena', 1), para('Igual.'), h('Plano', 2), para('Igual.'), para('Nuevo bajo el plano.')]);
+    copyWith(c, d);
+    // «Escena» incluye la sección «Plano»: algo nuevo en ella la arrastra también.
+    expect(topTexts(c)).toEqual(['Escena', 'Igual.', 'Plano', 'Igual.', 'Merged', 'Escena', 'Plano', 'Nuevo bajo el plano.']);
+  });
+
+  it('nunca se pierde un título con algo de debajo que se copia (al azar, con títulos de dos niveles)', () => {
+    let seed = 11;
+    const rnd = (n: number) => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed % n;
+    };
+    const pool: Spec[] = [h('Info'), h('Escena 1'), h('Escena 2'), h('Plano', 2), para('Igual'), para('Otro'), para('Solo de B'), para('')];
+    const pick = (): Spec[] => Array.from({ length: 1 + rnd(7) }, () => pool[rnd(pool.length)]);
+    const sigs = (doc: Y.Doc) => ((doc.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement | undefined)?.toArray() ?? []).map((c) => blockSignature(c as Y.XmlElement));
+    const levelOfSig = (sig: string) => /<heading \{[^}]*"level":"?(\d)/.exec(sig)?.[1];
+    for (let round = 0; round < 40; round++) {
+      const a = docOf(pick());
+      const b = docOf(pick());
+      const copied = blocksToCopy(a, b).map((x) => blockSignature(x));
+      const all = sigs(b);
+      // Cada bloque copiado que no es un título tiene antes, en lo copiado, el último título de B que lo precede.
+      all.forEach((sig, i) => {
+        if (!copied.includes(sig) || levelOfSig(sig)) return;
+        for (let j = i - 1; j >= 0; j--) {
+          if (levelOfSig(all[j])) {
+            expect(copied.includes(all[j])).toBe(true);
+            return;
+          }
+        }
+      });
+    }
+  });
+});
+
+describe('la misma foto en las dos, anotada solo en una (D715)', () => {
+  const photo = (): Spec => ({ type: 'image', props: { url: `sdmedia://${PHOTO}`, caption: 'La curva' } });
+  const annotate = (doc: Y.Doc, shapeId: string, x: number) => {
+    const m = doc.getMap<unknown>(PHOTO_MARKUP_MAP);
+    if (!m.has(PHOTO)) m.set(PHOTO, { v: 1, w: 1920, h: 1080 });
+    const shape = new Y.Map<unknown>();
+    for (const [k, v] of Object.entries({ t: 'rect', x, y: 10, w: 100, h: 50, c: '#85DC53' })) shape.set(k, v);
+    m.set(`${PHOTO}/${shapeId}`, shape);
+  };
+
+  it('B anotó y A no: el bloque se copia y las formas pasan; si las dos tienen las mismas, no se copia', () => {
+    const a = docOf([para('De A'), photo()]);
+    const b = docOf([para('De B'), photo()]);
+    annotate(b, 's1', 10);
+    expect(blocksToCopy(a, b).map((x) => blockSignature(x)).length).toBe(2);
+    copyWith(a, b);
+    expect(a.getMap<unknown>(PHOTO_MARKUP_MAP).has(`${PHOTO}/s1`)).toBe(true);
+    // Con las mismas formas en las dos (una segunda unión), la foto ya está cubierta: solo viaja lo que cambió.
+    const c = docOf([para('De A'), photo()]);
+    annotate(c, 's1', 10);
+    const d = docOf([para('De B'), photo()]);
+    annotate(d, 's1', 10);
+    expect(blocksToCopy(c, d).length).toBe(1);
+    // A anotó de más (B no anotó nada): tampoco hay nada que llevar de B.
+    const e = docOf([photo()]);
+    annotate(e, 's1', 10);
+    expect(planCopy(e, docOf([photo()])).nothing).toBe(true);
+    // Otra forma con el mismo id pero otros campos: no está cubierta.
+    const f = docOf([photo()]);
+    annotate(f, 's1', 99);
+    expect(planCopy(f, (() => { const g = docOf([photo()]); annotate(g, 's1', 10); return g; })()).nothing).toBe(false);
+  });
+});
+
+describe('volver a mirar lo salteado (D714)', () => {
+  it('missingFrom cuenta lo que A ya no tiene de lo que se saltó, contando cuántas veces', () => {
+    const a = docOf([para('Igual'), para('Igual'), para('De A')]);
+    const b = docOf([para('Igual'), para('Igual'), para('De B')]);
+    const skipped = skippedSignatures(a, b);
+    expect(skipped.length).toBe(2);
+    expect(missingFrom(a, skipped)).toBe(0);
+    // Otro dispositivo borra uno de los renglones de A: falta uno.
+    const e = mount(a);
+    e.removeBlocks([e.document[0]] as never);
+    expect(missingFrom(a, skipped)).toBe(1);
+    // Un renglón en blanco no cuenta como salteado.
+    expect(skippedSignatures(docOf([para('x')]), docOf([para('x'), para('')])).length).toBe(1);
   });
 });

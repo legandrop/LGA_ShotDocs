@@ -1,5 +1,5 @@
 import { fold, type Registry } from './reader';
-import { withoutParens, writableName } from './aliases';
+import { nameParts, withoutParens, writableName } from './aliases';
 import { titlePlace } from './projectMap';
 
 // *Link to a location…* (Docs/Doc_Relaciones.md, sección 17; D539, fase B): desde un día cuyo título nombra un lugar que
@@ -24,6 +24,17 @@ const words = (s: string): string[] =>
 export function titleFragment(day: { title: string; label: string; date: string | null }): string {
   const place = withoutParens(titlePlace(day));
   return /\p{L}/u.test(place) ? writableName(place) : '';
+}
+
+/**
+ * Por qué no se ofrece *Link to a location…* para el lugar del título (D711), si tiene letras y no puede ser UN nombre:
+ * `several` (lo parten una coma, un punto y coma, una viñeta o « · »: serían varios nombres) o `unusable` (de más de 60
+ * caracteres o con menos de dos letras: el lector lo ignora). `null` si se ofrece o si no hay lugar.
+ */
+export function titleFragmentWhy(day: { title: string; label: string; date: string | null }): 'several' | 'unusable' | null {
+  const place = withoutParens(titlePlace(day));
+  if (!/\p{L}/u.test(place) || writableName(place)) return null;
+  return nameParts(place).length > 1 ? 'several' : 'unusable';
 }
 
 /**

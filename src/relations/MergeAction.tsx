@@ -10,8 +10,10 @@ import { getPublicLink } from '../sync/publicLinks';
 import { notify } from '../ui/notice';
 import { useCurrentProject } from '../ui/project';
 import { existingRelationsSession } from '../ui/relationsUi';
-import { addsNothing, restorePage, audienceOk, canOffer, contentCounts, defaultKeep, mergeGuard, mergeRows, type AudienceInfo, type MergeBlock, type MergeRow } from './merge';
+import { restorePage, audienceOk, canOffer, contentCounts, defaultKeep, dialogHint, mergeGuard, mergeRows, type AudienceInfo, type MergeBlock, type MergeRow } from './merge';
 import type { MergeDeps, MergeFailure, MergeJob, MergeOutcome } from './mergeJob';
+import type { CopyPlan } from './mergeWrite';
+import { roleNames, twinLabels } from './twinNames';
 import './merge.css';
 
 // *Merge…* (E16, alcance reducido; Docs/Doc_Relaciones.md, sección 20): el botón en *Map › Pending* y en la cabecera viva
@@ -24,6 +26,8 @@ export interface MergePair {
   code: string;
   pageIds: string[];
   kind?: 'day';
+  /** Todas las páginas repetidas, en el orden del árbol (con tres o más, `pageIds` es la pareja): de ahí salen los «· n» (D716). */
+  group?: string[];
 }
 
 /** M1: nivel 4 en la página, nunca un invitado ni quien recibe base limpia, nunca con un link. */
@@ -77,7 +81,9 @@ export function mergeNotice(tr: Translate, services: Services, out: MergeOutcome
     return;
   }
   const job = out.job;
-  const names = { from: title(job.from), into: title(job.into) };
+  // Dos páginas con el mismo título: cada una dice su papel (D706).
+  // Cuando ya se unió, «la que se fue» (D716).
+  const names = roleNames(tr, title(job.from), title(job.into), out.status === 'done');
   if (out.status === 'pending') {
     notify(tr('merge.pendingNotice', names));
     return;
@@ -111,13 +117,14 @@ export function MergeButton({ pair, className, label }: { pair: MergePair; class
   const perms = usePermissions();
   const [open, setOpen] = useState(false);
   const ids = pair.pageIds.slice(0, 2);
+  const group = pair.group ?? pair.pageIds;
   if (ids.length < 2 || !canOffer({ canMerge: canMergeWith(perms, services) }, ids)) return null;
   return (
     <>
       <button className={`lh-tbtn rel-merge ${className ?? ''}`} data-tip={tr('merge.buttonTip')} onClick={() => setOpen(true)}>
         {label ?? tr('merge.button')}
       </button>
-      {open && <MergeDialog pair={{ ...pair, pageIds: ids }} onClose={() => setOpen(false)} />}
+      {open && <MergeDialog pair={{ ...pair, pageIds: ids, group }} onClose={() => setOpen(false)} />}
     </>
   );
 }
@@ -137,9 +144,12 @@ export function MergeDialog({ pair, onClose }: { pair: MergePair; onClose: () =>
   useSyncExternalStore(session?.relations.subscribe ?? noSubscribe, session?.relations.getRevision ?? zero);
   const [first, second] = pair.pageIds as [string, string];
   const title = (id: string) => tree.get(id)?.title || tr('common.untitled');
-  // Dos reportes con el mismo título: «… · 1» y «… · 2» (el orden de las tarjetas), así se sabe cuál es cuál.
-  const label = (id: string) => (title(first) === title(second) ? `${title(id)} · ${id === first ? 1 : 2}` : title(id));
+  // Dos páginas con el mismo título: «… · 1» y «… · 2» (el orden del árbol), así se sabe cuál es cuál.
+  // Con tres o más repetidas, el número de cada una sale del grupo entero y es el mismo en *Pending* y en el adelanto (D716).
+  const label = twinLabels(pair.group ?? [first, second], title).label;
   const content = (id: string) => session?.index.content(id);
+  // Lo que se copia y los números de cada una, leídos de los documentos y no del índice (que puede ir atrasado, O2).
+  const [docs, setDocs] = useState<{ into: Record<string, CopyPlan>; counts: Record<string, { blocks: number; photos: number }> } | 'failed' | null>(null);
   const [comments, setComments] = useState<Record<string, number | null> | null>(null);
   const [audience, setAudience] = useState<{ a: AudienceInfo | null; b: AudienceInfo | null } | null | 'same'>(null);
   const [keep, setKeep] = useState<string | null>(null);
@@ -171,21 +181,43 @@ export function MergeDialog({ pair, onClose }: { pair: MergePair; onClose: () =>
     };
   }, [services, first, second, tree]);
 
-  const nothing = (from: string, into: string) => {
-    const a = content(into);
-    const b = content(from);
-    return !!a && !!b && tree.children(from).length === 0 && addsNothing(a, b);
-  };
-  const proposed = comments ? defaultKeep([first, second], { comments: (id) => comments[id] ?? 0, nothing }) : first;
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      const { planCopy, readDoc } = await import('./mergeWrite');
+      const a = await services.docs.indexSnapshot(first);
+      const b = await services.docs.indexSnapshot(second);
+      try {
+        const next = {
+          into: { [first]: planCopy(b.doc, a.doc), [second]: planCopy(a.doc, b.doc) },
+          counts: { [first]: contentCounts(readDoc(a.doc)), [second]: contentCounts(readDoc(b.doc)) },
+        };
+        if (live) setDocs(next);
+      } finally {
+        a.doc.destroy();
+        b.doc.destroy();
+      }
+    })().catch((err) => {
+      console.warn('[unir] no se pudo leer el adelanto', err);
+      if (live) setDocs('failed');
+    });
+    return () => {
+      live = false;
+    };
+  }, [services, first, second, status.lastSyncAt]);
+
+  // `from` no agrega nada a la otra (D646): ni texto ni fotos. Para elegir cuál queda, tampoco subpáginas.
+  const nothing = (from: string) => !!docs && docs !== 'failed' && docs.into[from].nothing;
+  const proposed = comments && docs ? defaultKeep([first, second], { comments: (id) => comments[id] ?? 0, nothing: (from) => nothing(from) && tree.children(from).length === 0 }) : first;
   const kept = keep ?? proposed ?? first;
   const gone = kept === first ? second : first;
-  const counts = { [first]: contentCounts(content(first)), [second]: contentCounts(content(second)) };
+  const counts = docs && docs !== 'failed' ? docs.counts : { [first]: contentCounts(content(first)), [second]: contentCounts(content(second)) };
 
   const canMerge = canMergeWith(perms, services);
   const block: MergeBlock | 'commentsUnknown' | 'checking' | null = (() => {
     const guard = mergeGuard({ tree, canMerge, sync: status }, kept, gone);
     if (guard) return guard;
-    if (!comments || audience === null) return 'checking';
+    if (!comments || audience === null || docs === null) return 'checking';
     if ((comments[first] ?? 0) > 0 && (comments[second] ?? 0) > 0) return 'bothComments';
     if (comments[gone] === null) return 'commentsUnknown';
     if (comments[gone]! > 0) return 'comments';
@@ -249,11 +281,14 @@ export function MergeDialog({ pair, onClose }: { pair: MergePair; onClose: () =>
   const names = { from: label(gone), into: label(kept) };
   const goneSubs = tree.children(gone).length;
   const lines = [
-    nothing(gone, kept) ? tr('merge.whatNothing', names) : tr(pair.kind === 'day' ? 'merge.whatCopyDay' : 'merge.whatCopy', names),
+    nothing(gone) ? tr('merge.whatNothing', names) : tr(pair.kind === 'day' ? 'merge.whatCopyDay' : 'merge.whatCopy', names),
+    docs && docs !== 'failed' && docs.into[gone].blocks ? tr('merge.whatAdds', { count: docs.into[gone].blocks }) : '',
     goneSubs ? tr('merge.whatSubpages', { count: goneSubs, into: names.into }) : '',
     tr('merge.whatTrash', names),
   ].filter(Boolean);
-  const blockText = block === 'checking' ? tr('merge.checking') : block ? tr(BLOCK_KEYS[block], { title: names.from }) : null;
+  // Mientras une, lo que importa es si la red se cortó (O10): lo demás cambia a medida que avanza y no se dice.
+  const hint = dialogHint(busy, block);
+  const blockText = hint === 'wait' ? tr('merge.waitingNet') : hint === 'checking' ? tr('merge.checking') : hint ? tr(BLOCK_KEYS[hint], { title: names.from }) : null;
 
   // Afuera de donde está el botón (la cabecera viva tiene sus propios estilos de botones y recorta lo que sale de ella).
   return createPortal(
@@ -335,6 +370,7 @@ export function MergePendingRows() {
   const rows = useMergeRows();
   const jobs = useMergeJobs();
   const title = (id: string) => tree.get(id)?.title || tr('common.untitled');
+  const named = (from: string, into: string) => roleNames(tr, title(from), title(into));
   const [busy, setBusy] = useState<string | null>(null);
   const finish = async (from: string) => {
     setBusy(from);
@@ -351,7 +387,7 @@ export function MergePendingRows() {
       {jobs.map((j) => (
         <PendingRow
           key={`job:${j.from}`}
-          head={<span>{tr('merge.rowUnfinished', { from: title(j.from), into: title(j.into) })}</span>}
+          head={<span>{tr('merge.rowUnfinished', named(j.from, j.into))}</span>}
           actions={
             <button className="mp-btn" disabled={busy === j.from} onClick={() => void finish(j.from)}>
               {tr('merge.finish')}
@@ -362,7 +398,7 @@ export function MergePendingRows() {
       {rows.map((r) => (
         <PendingRow
           key={`merge:${r.from}`}
-          head={<span>{tr(r.kind === 'changed' ? 'merge.rowChanged' : 'merge.rowIntoTrashed', { from: title(r.from), into: title(r.into) })}</span>}
+          head={<span>{tr(r.kind === 'changed' ? 'merge.rowChanged' : 'merge.rowIntoTrashed', named(r.from, r.into))}</span>}
           actions={
             r.kind === 'changed' ? (
               <>
@@ -387,13 +423,13 @@ export function MergePendingRows() {
             ) : (
               perms.canManagePage(r.from) && (
                 <button className="mp-btn" onClick={() => void restorePage(tree, r.from)}>
-                  {tr('merge.restore', { from: title(r.from) })}
+                  {tr('merge.restore', { from: named(r.from, r.into).from })}
                 </button>
               )
             )
           }
         >
-          {r.kind === 'changed' && <div className="mp-pnote">{tr('merge.rowChangedNote', { from: title(r.from) })}</div>}
+          {r.kind === 'changed' && <div className="mp-pnote">{tr('merge.rowChangedNote', { from: named(r.from, r.into).from })}</div>}
         </PendingRow>
       ))}
     </>
@@ -415,7 +451,7 @@ export function TwinLine({ pageId, pair }: { pageId: string; pair: MergePair }) 
         <button className="lh-out-by" onClick={() => navigate(pagePath(other))}>
           «{tree.get(other)?.title || tr('common.untitled')}»
         </button>
-        <MergeButton pair={{ ...pair, pageIds: ids }} className="lh-twin-merge" />
+        <MergeButton pair={{ ...pair, pageIds: ids, group: pair.group ?? pair.pageIds }} className="lh-twin-merge" />
       </div>
     </section>
   );
@@ -432,7 +468,7 @@ export function MergeResumer(): null {
       if (!(await pendingMerges(metaStore(services.db))).length) return;
       const deps = await depsFor(services, () => null);
       for (const out of await resumeMerges(deps)) {
-        if (out.status !== 'pending') mergeNotice(tGlobal as unknown as Translate, services, out, (id) => services.tree.get(id)?.title ?? '');
+        if (out.status !== 'pending') mergeNotice(tGlobal as unknown as Translate, services, out, (id) => services.tree.get(id)?.title || (tGlobal as unknown as Translate)('common.untitled'));
       }
     })().catch((err) => console.warn('[unir] no se pudo seguir', err));
   }, [services, status.online, status.lastSyncAt]);

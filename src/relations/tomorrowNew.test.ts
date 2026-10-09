@@ -12,7 +12,7 @@ import { dayLive, headingStyleFor, linkTargetOf } from './dayLive';
 import { buildProject, writeBlocks, type Built } from './fixtures/proyectoSintetico';
 import { dayRef, type LiveSource } from './liveView';
 import { RelationIndex } from './relationIndex';
-import { addDays, createTomorrow, nextDayNumber, nextDayTitle, proposeTomorrow, reportOnDate, twinsLeft, undoTomorrow, type TomorrowInput } from './tomorrowNew';
+import { addDays, createTomorrow, nextDayNumber, nextDayTitle, plannedPlace, proposeTomorrow, reportOnDate, twinsLeft, undoTomorrow, type TomorrowInput } from './tomorrowNew';
 
 // La tarjeta *Tomorrow* de un día sin día siguiente (D573–D577): crear el reporte de mañana como *New day report* y
 // prepararlo en un paso, con las garantías de *Prepare*: solo agrega, no duplica (dos toques, otro dispositivo), *Undo*
@@ -67,6 +67,7 @@ async function sourceOf(d: Device, built: Built): Promise<{ src: LiveSource; inp
       projectId: built.projectId,
       parentId: built.ids.rodaje,
       todayTitle: d.tree.get(built.ids.d76)!.title,
+      place: p.place,
       date: p.date,
       lang: 'es',
       prepare: { scenes, registry: src.snap.registry, linkTarget: linkTargetOf(src), word: style.word, level: style.level },
@@ -94,6 +95,12 @@ describe('qué propone (puro)', () => {
     expect(nextDayTitle('2026-10-02 | Day 06', '2026-10-03', 7, 'es')).toBe('2026-10-03 | Day 07');
     expect(nextDayTitle('2026-10-02 · Dia 9', '2026-10-03', 10, 'es')).toBe('2026-10-03 | Día 10');
     expect(nextDayTitle('Rodaje del martes', '2026-10-03', 4, 'en')).toBe('2026-10-03 | Day 04');
+    // D709: con el lugar del desglose, solo si el título de hoy lleva uno (la forma del proyecto).
+    expect(nextDayTitle('2026-02-20 | Día 60 | CENADE', '2026-02-21', 61, 'en', 'La Arenera')).toBe('2026-02-21 | Día 61 | La Arenera');
+    expect(nextDayTitle('2026-02-20 | Día 60', '2026-02-21', 61, 'en', 'La Arenera')).toBe('2026-02-21 | Día 61');
+    expect(nextDayTitle('2026-02-20 | Día 60 | ', '2026-02-21', 61, 'en', 'La Arenera')).toBe('2026-02-21 | Día 61');
+    expect(nextDayTitle('Rodaje del martes', '2026-10-03', 4, 'en', 'CENADE')).toBe('2026-10-03 | Day 04');
+    expect(nextDayTitle('2026-02-20 | Día 60 | CENADE', '2026-02-21', 61, 'en', null)).toBe('2026-02-21 | Día 61');
     expect(nextDayNumber('2026-02-20 | Día 60 | CENADE', 3)).toBe(61);
     expect(nextDayNumber('2026-03-10 | Sin reporte', 3)).toBe(3);
     expect(addDays('2026-02-28', 1)).toBe('2026-03-01');
@@ -111,6 +118,41 @@ describe('qué propone (puro)', () => {
     expect(proposeTomorrow(src, { ...lone, date: null })).toBeNull();
     // La cabecera del Día 76 no tiene tarjeta Tomorrow (no hay día siguiente): ahí va esta.
     expect(dayLive(src, built.ids.d76).tomorrow).toBeNull();
+  });
+});
+
+describe('la locación de mañana (D709)', () => {
+  /** Las dos escenas del 16/03, cada una con su *Locacion Real*. */
+  async function placed(first: string, second: string | null) {
+    const { A, built } = await world();
+    await writeBlocks(A, built.ids.s008, [{ table: [['Fecha Rodaje', '16/03/2026'], ['Locacion Real', first]] }]);
+    await writeBlocks(A, built.ids.s029, [{ table: second === null ? [['Fecha Rodaje', '16/03/2026']] : [['Fecha Rodaje', '16/03/2026'], ['Locacion Real', second]] }]);
+    await A.engine.syncNow();
+    const { src, input } = await sourceOf(A, built);
+    return { A, built, src, input };
+  }
+
+  it('todas las páginas con esa fecha dicen la misma locación del registro: esa; si no, nada', async () => {
+    const same = await placed('CENADE', 'CENADE');
+    expect(plannedPlace(same.src, '2026-03-16')).toBe('CENADE');
+    expect(proposeTomorrow(same.src, dayRef(same.src, same.built.ids.d76))!.place).toBe('CENADE');
+    // Dos lugares distintos, una escena sin lugar o un lugar que el registro no conoce: sin lugar en el título.
+    expect(plannedPlace((await placed('CENADE', 'La Arenera (estudio)')).src, '2026-03-16')).toBeNull();
+    expect(plannedPlace((await placed('CENADE', null)).src, '2026-03-16')).toBeNull();
+    expect(plannedPlace((await placed('CENADE', 'Narnia')).src, '2026-03-16')).toBeNull();
+    // Una fecha sin escenas: nada.
+    expect(plannedPlace(same.src, '2026-05-01')).toBeNull();
+  });
+
+  it('el reporte de mañana se crea con el lugar en el título; con la mala, sin lugar', async () => {
+    const good = await placed('CENADE', 'CENADE');
+    const res = await createTomorrow(depsOf(good.A), good.input, canCreate);
+    if (res.status !== 'ok') throw new Error(res.status);
+    expect(good.A.tree.get(res.pageId)!.title).toBe('2026-03-16 | Día 77 | CENADE');
+    const bad = await placed('CENADE', 'La Arenera (estudio)');
+    const res2 = await createTomorrow(depsOf(bad.A), bad.input, canCreate);
+    if (res2.status !== 'ok') throw new Error(res2.status);
+    expect(bad.A.tree.get(res2.pageId)!.title).toBe('2026-03-16 | Día 77');
   });
 });
 

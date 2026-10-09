@@ -3,7 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeDraft, setDraft } from './commentsUi';
-import { arrive, dismissNotice, followHeight, NO_NOTICE, notify, useNotice, WAITING_MAX, type NoticeAction } from './notice';
+import { arrive, dismissNotice, followHeight, NO_NOTICE, notify, RESUME_MS, useNotice, WAITING_MAX, type NoticeAction } from './notice';
 
 // El orden de los avisos (notice.ts, D356 a D358): la pantalla muestra uno a la vez, y uno con botón ya no pierde el
 // botón porque llega otro. Se monta el mismo `useNotice` que usa la app, con el reloj de mentira.
@@ -11,11 +11,11 @@ import { arrive, dismissNotice, followHeight, NO_NOTICE, notify, useNotice, WAIT
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let root: Root | null = null;
-let seen: { text: string | null; action?: NoticeAction; dismiss: () => void } = { text: null, dismiss: () => undefined };
+let seen: { text: string | null; action?: NoticeAction; dismiss: () => void; hold: (source: 'mouse' | 'focus', on: boolean) => void } = { text: null, dismiss: () => undefined, hold: () => undefined };
 
 function Host() {
-  const [text, dismiss, action] = useNotice();
-  seen = { text, action, dismiss };
+  const [text, dismiss, action, , hold] = useNotice();
+  seen = { text, action, dismiss, hold };
   return null;
 }
 
@@ -112,6 +112,49 @@ describe('un aviso con botón y lo que llega después', () => {
     say('Restored the version', button('Undo', { key: 'restaurar' }));
     say('Saved');
     act(() => dismissNotice('restaurar'));
+    await wait(6000);
+    expect(seen.text).toBeNull();
+  });
+});
+
+describe('con el mouse encima el aviso no vence (D712)', () => {
+  const hold = (on: boolean) => act(() => seen.hold('mouse', on));
+
+  it('el Undo se queda mientras el mouse está encima, y al soltarlo sigue con lo que le quedaba', async () => {
+    say('Assigned 105_120', button('Undo'));
+    await wait(10_000);
+    hold(true);
+    await wait(120_000);
+    expect(seen.text).toBe('Assigned 105_120');
+    expect(seen.action?.label).toBe('Undo');
+    hold(false);
+    // Le quedaban 5 segundos (más que el mínimo): vence a los 5.
+    await wait(4999);
+    expect(seen.text).toBe('Assigned 105_120');
+    await wait(1);
+    expect(seen.text).toBeNull();
+  });
+
+  it('si casi no le quedaba, al soltarlo hay un mínimo para llegar al botón', async () => {
+    say('Assigned 105_120', button('Undo'));
+    await wait(14_500);
+    hold(true);
+    await wait(30_000);
+    hold(false);
+    await wait(RESUME_MS - 1);
+    expect(seen.text).toBe('Assigned 105_120');
+    await wait(1);
+    expect(seen.text).toBeNull();
+  });
+
+  it('un aviso que llega con el mouse encima empieza con su tiempo entero, y un mouseleave perdido no traba el siguiente', async () => {
+    say('Uno', button('Undo'));
+    hold(true);
+    await wait(40_000);
+    // El aviso se cierra con OK sin que llegue el mouseleave: el siguiente vence solo.
+    act(() => seen.dismiss());
+    expect(seen.text).toBeNull();
+    say('Dos');
     await wait(6000);
     expect(seen.text).toBeNull();
   });

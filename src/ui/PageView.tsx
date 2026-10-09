@@ -7,6 +7,7 @@ import { usePermissions, useServices, useSyncStatus, useTree } from '../services
 import { ACCESS_REQUESTS_PAGES_SCHEMA_VERSION } from '../sync/accessRequests';
 import { LiveHeader } from '../relations/LiveHeader';
 import { mergedTarget, restorePage } from '../relations/merge';
+import { sameTitle } from '../relations/twinNames';
 import { cededMark } from '../relations/cededCopy';
 import { DayReportButton } from '../templates/dayReportUi';
 import { TemplateBanner } from '../templates/ownTemplatesUi';
@@ -80,6 +81,9 @@ export function PageView({ id, registerTitle }: { id: string; registerTitle?: Re
   const trashedAt = tree.trashedAncestor(id);
   // Una página unida a otra (*Merge*, E16): está en la papelera y su contenido, copiado al final de esa otra.
   const mergedInto = trashedAt?.id === id ? mergedTarget(tree, id) : null;
+  // Si se llaman igual, la que quedó dice que es esa (D706).
+  const intoName = mergedInto ? tree.get(mergedInto)?.title || tr('common.untitled') : '';
+  const intoTitle = mergedInto && sameTitle(intoName, page.title || tr('common.untitled')) ? `${intoName} · ${tr('merge.roleStays')}` : intoName;
   const ceded = trashedAt?.id === id ? cededMark(trashedAt) : null;
   const cededTo = ceded && tree.get(ceded.to) && !tree.isTrashed(ceded.to) ? tree.get(ceded.to)! : null;
   const format = pageFormat(tree, id);
@@ -107,9 +111,9 @@ export function PageView({ id, registerTitle }: { id: string; registerTitle?: Re
           {mergedInto && (
             <>
               {' '}
-              {tr('merge.mergedInto', { title: tree.get(mergedInto)?.title || tr('common.untitled') })}
+              {tr('merge.mergedInto', { title: intoTitle })}
               <button className="link" onClick={() => navigate(pagePath(mergedInto))}>
-                {tr('merge.openInto', { title: tree.get(mergedInto)?.title || tr('common.untitled') })}
+                {tr('merge.openInto', { title: intoTitle })}
               </button>
             </>
           )}

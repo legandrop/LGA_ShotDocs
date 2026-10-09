@@ -30,7 +30,8 @@ import { NavMenuButton } from './NavMenuButton';
 import { menuBelow, PAGE_MENU_WIDTH, PageMenu, signOutHere, signOutQuestion, unsentCount, type MenuPosition } from './menus';
 import { MoveDialog } from './MoveDialog';
 import { PageFormatDialog } from './PageFormatDialog';
-import { followHeight, notify, useNotice } from './notice';
+import { followHeight, notify } from './notice';
+import { NoticeBar } from './NoticeBar';
 import { replaceBlocksLeaving, replaceRunning, replaceSession } from './replaceUi';
 import { InstallBanner, InstallHost } from './InstallBanner';
 import { lastPageOf, rememberPage, useCurrentProject, useSwitchProject } from './project';
@@ -262,7 +263,6 @@ export function Shell() {
   const [moving, setMoving] = useState<string | null>(null);
   const [formatting, setFormatting] = useState<string | null>(null);
   const [sharing, setSharing] = useState<ShareTarget | null>(null);
-  const [notice, dismissNotice, noticeAction, noticeSecond] = useNotice();
   const perms = usePermissions();
   const status = useSyncStatus();
   // "Importar de Coda" es solo de la cuenta de Lega (codaOwner.ts): para los demás el diálogo ni se monta.
@@ -606,47 +606,12 @@ export function Shell() {
       <ReplaceProgressHost />
       {/* *Save as template* y *Template settings* (Docs/Doc_Plantillas.md, entrega 3). */}
       <OwnTemplatesHost />
-      {notice && (
-        <div className="notice" role="status" ref={followNoticeHeight}>
-          <span>{notice}</span>
-          {noticeAction && (
-            <button
-              className="link"
-              onClick={() => {
-                dismissNotice();
-                noticeAction.run();
-              }}
-            >
-              {noticeAction.label}
-            </button>
-          )}
-          {noticeSecond && (
-            <button
-              className="link"
-              onClick={() => {
-                dismissNotice();
-                noticeSecond.run();
-              }}
-            >
-              {noticeSecond.label}
-            </button>
-          )}
-          <button className="link" onClick={dismissNotice}>
-            {tr('common.ok')}
-          </button>
-        </div>
-      )}
+      <NoticeBar />
     </div>
   );
 }
 
-/**
- * Anota en la app el alto del aviso a la vista (`--notice-height`): puede ocupar varios renglones, y los avisos que van
- * apilados encima (el avance de reemplazar, los del espacio) se corren con él (styles.css). Sin aviso, la variable no
- * está.
- */
-const followNoticeHeight = followHeight('--notice-height', 0, 'parent');
-/** Lo mismo con el avance de reemplazar, que va entre el aviso común y los del espacio: su alto más 13 px de separación. */
+/** El alto del avance de reemplazar, que va entre el aviso común y los del espacio: su alto más 13 px de separación. */
 const followProgress = followHeight('--progress-step', 13, 'parent');
 
 /** El historial de versiones (P.18): a pantalla entera, encima de la página (que sigue montada: restaurar la usa). */

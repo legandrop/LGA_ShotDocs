@@ -169,8 +169,8 @@ location…* no ofrece ni escribe lo que el lector ignoraría (comas, más de 60
 en un renglón; *Leave out* con un link público, con prueba; la ayuda dice que se eviten nombres de dos palabras comunes.
 De la auditoría de la v0.250 (su bloqueante, el menú ⋯ con «POR CARPETA» que se salía de la pantalla, quedó resuelto:
 `useFloating` corrige también el eje horizontal con el ancho real): (11) con el mismo número antes del `/` y en la consulta
-se subrayan los dos mientras el menú está abierto (cosmético); (12) un día cuyo lugar lleva coma («Hall, Pasillo del
-Ministerio») queda sin *Link to a location…* y sin explicación (D662; partirlo en varios nombres sería la alternativa); (13) a 320 px en castellano, con «POR CARPETA», el menú ⋯ (341 px) es más ancho que la pantalla y se sale 43 px (desde 375 px entra).
+se subrayan los dos mientras el menú está abierto (cosmético); ~~(12) un día cuyo lugar lleva coma («Hall, Pasillo del
+Ministerio») queda sin *Link to a location…* y sin explicación (D662; partirlo en varios nombres sería la alternativa)~~ (hecho en la v0.254, D711: se explica); ~~(13) a 320 px en castellano, con «POR CARPETA», el menú ⋯ (341 px) es más ancho que la pantalla y se sale 43 px (desde 375 px entra)~~ (hecho en la v0.254, D710).
 
 **Anotado en la v0.245 (relaciones en vivo, el `/`, *Create* y *Assign*):** hechos el punto (2) de la v0.244 y el (1) de
 la v0.242. Queda: ~~(1) un *Merge* de dos páginas de la misma escena que solo agregue (D520; hoy se resuelve a mano)~~ (hecho en la v0.253, E16); (2)
@@ -188,11 +188,11 @@ v0.248: (2) *Undo* de *Assign* (D566), (3) *Assign* en *Pending* (D567), O6 (D56
 **Anotado en la v0.251 (la copia que cede, E15):** (1) abrir la copia que cede sin escribir no se ve (no hay presencia):
 queda en la papelera con su cartel; (2) un comentario en esa copia no la trae de vuelta (solo texto o fotos); (3) crear el
 reporte de mañana sigue tardando 4–7 s: se dice en la tarjeta, pero achicarlo pide una consulta propia de la carpeta en vez
-de la segunda sincronización entera (D629); (4) la locación en el título de mañana cuando todas las fichas del plan dicen
-la misma (D631: barata, en ERSO aplica a 11 de 73 días); (5) probarlo en un teléfono de verdad. De la auditoría de E15:
+de la segunda sincronización entera (D629); ~~(4) la locación en el título de mañana cuando todas las fichas del plan dicen
+la misma (D631: barata, en ERSO aplica a 11 de 73 días)~~ (hecho en la v0.254, D709: en ERSO, 11 de los 12 días con plan); (5) probarlo en un teléfono de verdad. De la auditoría de E15:
 (6) una 0.249 que cede lo hace sin marca y esa copia no vuelve sola (O4: subir `min_app_version` a la 0.251 al publicar);
-(7) *Map › Pending* y el «Open “…”» del cartel muestran dos páginas con el mismo título y no se distingue cuál tiene el
-texto del tercero (O8, ya venía de D520); (8) un invitado que escribe en la copia después de que cedió no la trae de vuelta
+~~(7) *Map › Pending* y el «Open “…”» del cartel muestran dos páginas con el mismo título y no se distingue cuál tiene el
+texto del tercero (O8, ya venía de D520)~~ (hecho en la v0.254, D706); (8) un invitado que escribe en la copia después de que cedió no la trae de vuelta
 (D637): haría falta que el servidor acepte lo escrito en una copia cedida o una restauración condicional en la base (solo
 si `deleted_at` sigue siendo la hora de la marca).
 
@@ -207,8 +207,9 @@ dos…» sale aunque el otro ceda~~ (hecho en la v0.251, D626–D630: vuelve sol
 elige (solo se anota en el dispositivo que tipea); (3) dos dispositivos que crean el reporte de mañana con red en el mismo
 segundo pueden dejar dos reportes (la sincronización en el momento achica la ventana a un viaje; quedan los dos, como
 D520); (4) el reporte de mañana no lleva la locación en el título (D574; evaluado en la v0.251, D631) y su ficha propone la
-locación de ayer, como *New day report*; ~~(5) *Assign* en *Pending* no dice nada de las páginas que no puede editar~~ (hecho en la v0.250, D666); (6) el *Undo* de *Assign* y del reporte de mañana vive solo en el aviso (15 s, no se pausa con el mouse
-encima; un aviso sin botón que llega encima lo corre); (7) probar la tarjeta nueva en un teléfono de verdad. De la
+locación de ayer, como *New day report*; ~~(5) *Assign* en *Pending* no dice nada de las páginas que no puede editar~~ (hecho en la v0.250, D666); (6) el *Undo* de *Assign* y del reporte de mañana vive solo en el aviso (15 s; ~~no se pausa con el mouse
+encima~~ (hecho en la v0.254, D712: se detiene con el mouse o el foco encima); un aviso sin botón que llega encima lo corre
+(D357; en el teléfono no hay mouse y sigue corriendo)); (7) probar la tarjeta nueva en un teléfono de verdad. De la
 auditoría de E11 (hechos en la ronda: B1 = D578, B2 = D579 y D580, el orden del *Undo*, el *Undo* parcial en varias
 páginas, «Alguien lo cambió» neutral y el tope corto sin red): (8) la sincronización entre dispositivos tarda 6–20 s en
 la base real, más que lo que vive el *Undo*; (9), (10) y (11) hechos en la v0.250 (D665, D669, D667: `withoutDraft` descuenta solo la mención de la
@@ -231,12 +232,19 @@ over* (traer a A lo que llegó tarde a B; ubicar los items de las filas posterio
 exportación; (7) *Undo* desde el banner de B sacando la copia; (8) ceder el reporte de mañana uniéndose (D658, puntos (0)
 y (14) de la v0.248; no se tocó `tomorrowNew.ts` por E15, D683); (9) B en la papelera en solo lectura (O5); (10) locaciones
 con el mismo nombre (D660), fundir dos fichas iguales después de unir, unir más de dos de una vez; (11) la versión con
-nombre «Before merging» en A (D656); (12) de la auditoría del resultado (D690): no copiar lo idéntico a la plantilla de la
+nombre «Before merging» en A (D656); (12) de la auditoría del resultado (D690): ~~no copiar lo idéntico a la plantilla de la
 escena (O3), el adelanto con el índice atrasado (O2), la segunda unión tras *Restore* repite lo de la primera (O6),
-`addsNothing` sin mayúsculas ni formato (O7), «· 1 / · 2» en las filas y avisos con el mismo título (O8), y achicar la
-frontera del *Undo* con una edición que llega después de mirar (D689). Carreras que quedan a la vista, probadas: dos dispositivos que unen lo mismo a la vez
+`addsNothing` sin mayúsculas ni formato (O7), «· 1 / · 2» en las filas y avisos con el mismo título (O8)~~ (hechos en la v0.254,
+D706 y D707), y achicar la frontera del *Undo* con una edición que llega después de mirar (D689). Carreras que quedan a la vista, probadas: dos dispositivos que unen lo mismo a la vez
 dejan la copia dos veces en A; dos uniones cruzadas a la vez dejan las dos en la papelera, listadas en *Pending* con
-*Restore* (C9). De la re-verificación: sacar el filtro `isMergeRunning` de las filas «didn't finish» de *Pending* no lo nota ninguna prueba (O9; el candado ya impide la segunda corrida); con la red cortada a mitad, el adelanto dice «conectate para unir» mientras el botón sigue en «Merging…» (O10, anterior).
+*Restore* (C9). De la re-verificación: ~~sacar el filtro `isMergeRunning` de las filas «didn't finish» de *Pending* no lo nota ninguna prueba (O9); con la red cortada a mitad, el adelanto dice «conectate para unir» mientras el botón sigue en «Merging…» (O10)~~ (hechos en la v0.254, D708).
+
+De la ronda de E19 (v0.254; D713–D717): la comparación por firma es de primer nivel, así que un bloque de B que A tiene anidado
+(adentro de una tabla o un toggle) se copia otra vez (se prefiere duplicar a perder); un título que viaja con su sección repite
+el título de A (también el de la plantilla de una escena); y el adelanto numera «· 1 / · 2» mientras los avisos usan «la que se
+va / se fue» (dos nombres para las mismas dos páginas, D716). De la re-verificación: si otro dispositivo SIN red borra de A un
+bloque que la unión salteó y su borrado llega después de unir, ese bloque queda solo en la página que fue a la papelera (con
+*Restore*; bajo: con red, D714 frena la unión).
 
 **Anotado en la v0.244 (relaciones en vivo, el subrayado, el adelanto y *Today*):** (1) probar en un iPhone y un Android
 de verdad lo que el navegador sin pantalla no abre: el teclado (la barra *Today* arriba de él con `visualViewport`, el

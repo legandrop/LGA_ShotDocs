@@ -1,5 +1,4 @@
 import type { IndexedContent } from '../search/projectIndex';
-import { SEPARATOR } from '../search/extract';
 import type { PageRow } from '../sync/types';
 
 // *Merge* de dos páginas de la misma escena o de dos reportes del mismo día (Docs/Doc_Relaciones.md, sección 20; E16,
@@ -74,9 +73,7 @@ export function mergedPages(tree: PointerTree & { trashed(projectId?: string): P
   return out;
 }
 
-// --- Qué agrega una página a la otra (D646) ------------------------------------------------------------------------
-
-const norm = (text: string) => text.replaceAll(SEPARATOR, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+// --- Qué tiene cada página (qué agrega una a la otra lo dice `planCopy`, con los documentos: D646, D707) ---------
 
 /** Cuántos bloques y fotos tiene lo leído de una página (para el adelanto). */
 export function contentCounts(content: Pick<IndexedContent, 'units' | 'meta'> | undefined): { blocks: number; photos: number } {
@@ -91,19 +88,6 @@ export function contentCounts(content: Pick<IndexedContent, 'units' | 'meta'> | 
     }
   }
   return { blocks: blocks.size, photos };
-}
-
-/**
- * Si `b` no agrega nada a `a` (D646): sin fotos, y cada texto no vacío y cada link de `b` ya están en `a`. Es el caso de la
- * carrera de *Create* y de dos reportes de mañana: las dos con la plantilla y nada más. Las subpáginas y los comentarios
- * los mira quien llama.
- */
-export function addsNothing(a: Pick<IndexedContent, 'units' | 'meta'>, b: Pick<IndexedContent, 'units' | 'meta'>): boolean {
-  if (b.meta.some((m) => m.media?.length)) return false;
-  const texts = new Set(a.units.map((u) => norm(u.text)).filter(Boolean));
-  if (b.units.some((u) => norm(u.text) && !texts.has(norm(u.text)))) return false;
-  const links = new Set(a.meta.flatMap((m) => (m.links ?? []).map((l) => l.pageId)));
-  return b.meta.every((m) => (m.links ?? []).every((l) => links.has(l.pageId)));
 }
 
 // --- Las guardas que se miran sin red (§5.4 del plan, ajustadas) ---------------------------------------------------
@@ -130,6 +114,15 @@ export interface MergeGuardContext {
 /** Quién puede ver el botón: nivel 4 en las dos y nunca un invitado (M1). Quien no puede, no ve *Merge*. */
 export function canOffer(ctx: Pick<MergeGuardContext, 'canMerge'>, pageIds: readonly string[]): boolean {
   return pageIds.length >= 2 && pageIds.every((id) => ctx.canMerge(id));
+}
+
+/**
+ * Lo que dice el adelanto debajo de las dos tarjetas (D708): mientras une, solo si la red se cortó (O10: antes decía «conectate
+ * para unir» con el botón en «Uniendo…», y lo demás cambia a medida que avanza la unión); si no, el motivo de lo que impide unir.
+ */
+export function dialogHint(busy: boolean, block: MergeBlock | 'commentsUnknown' | 'checking' | null): 'wait' | MergeBlock | 'commentsUnknown' | 'checking' | null {
+  if (!busy) return block;
+  return block === 'offline' ? 'wait' : null;
 }
 
 /** Las guardas de la unión de `gone` en `keep` que se miran en el momento (las de red las mira el trabajo). */

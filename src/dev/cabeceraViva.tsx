@@ -172,6 +172,13 @@ async function main() {
     await owner.engine.syncNow();
     await d.engine.syncNow();
   }
+  // `?e19=1`: lo mismo con la locación del desglose (D709): las dos fichas del lunes dicen «Locacion Real: CENADE», y el reporte
+  // de mañana lleva ese lugar en el título.
+  if (params.get('e19') === '1') {
+    for (const id of [built.ids.s008, built.ids.s029]) await writeBlocks(owner, id, [{ table: [['Fecha Rodaje', '16/03/2026'], ['Locacion Real', 'CENADE']] }]);
+    await owner.engine.syncNow();
+    await d.engine.syncNow();
+  }
   // `?lento=1`: el índice nunca termina de leer los documentos (para ver la cabecera mientras lee).
   if (params.get('lento') === '1') d.docs.indexSnapshot = () => new Promise(() => undefined);
   // `?collapsed=1`: la sección «Escena 105_027b» del día 59 colapsada para todos (ir ahí tiene que abrirla).

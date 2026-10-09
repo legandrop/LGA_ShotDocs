@@ -108,7 +108,7 @@ describe('el cartel de la copia que cedió', () => {
     const banner = host.querySelector<HTMLElement>('.banner')!;
     expect(banner.textContent).toContain('This copy went to the trash: another device created the same day at the same time. Write in the one that stayed; what is written here brings the copy back once a device that can restore pages syncs.');
     const buttons = [...banner.querySelectorAll<HTMLButtonElement>('button')].map((b) => b.textContent);
-    expect(buttons).toEqual(['Open “2026-03-16 | Día 77”', 'Restore']);
+    expect(buttons).toEqual(['Open “2026-03-16 | Día 77” (the one that stayed)', 'Restore']);
     act(() => banner.querySelector<HTMLButtonElement>('button')!.click());
     expect(location.pathname).toBe(pagePath(kept));
   });

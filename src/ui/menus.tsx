@@ -103,9 +103,11 @@ export function useFloating(
     }
     // Y si con su ancho real no entra a la derecha (un renglón más largo que el ancho con que se colocó, como «Dejar
     // fuera de las relaciones» con «POR CARPETA», D668), se corre a la izquierda hasta entrar.
-    // Una hoja del teléfono (de borde a borde, con `left`/`right` fijados en la hoja de estilos) no se toca.
-    if (getComputedStyle(el).position === 'fixed' && r.right > window.innerWidth - 8 && r.width < window.innerWidth - 16) {
+    // Una hoja del teléfono (de borde a borde, con `left`/`right` fijados en la hoja de estilos) no se toca. Al correrlo se
+    // ensancha (tiene más lugar a su derecha, hasta su tope): si con eso vuelve a pasarse, va pegado al margen (D710).
+    if (getComputedStyle(el).position === 'fixed' && r.right > window.innerWidth - 8 && r.width <= window.innerWidth - 16) {
       el.style.left = `${Math.max(8, window.innerWidth - 8 - r.width)}px`;
+      if (el.getBoundingClientRect().right > window.innerWidth - 8) el.style.left = '8px';
     }
     if (focusFirst) items(el)[0]?.focus({ preventScroll: true });
     return () => {
@@ -159,11 +161,19 @@ export interface MenuPosition {
  */
 export const PAGE_MENU_WIDTH = 290;
 
-/** Posición de un menú de `width` px abajo de `anchor`; si no entra, `useFloating` lo sube. */
+/**
+ * Posición de un menú de `width` px abajo de `anchor`; si no entra, `useFloating` lo sube. En una pantalla más angosta que el
+ * menú (320 px con el renglón largo de «Dejar fuera de las relaciones», D710), va pegado al margen izquierdo y el menú no pasa
+ * del ancho de la pantalla (`PAGE_MENU_MAX`).
+ */
 export function menuBelow(anchor: Element, width = 240): MenuPosition {
   const r = anchor.getBoundingClientRect();
-  return { top: r.bottom + 4, left: Math.max(8, Math.min(r.left, window.innerWidth - width - 8)) };
+  const w = Math.min(width, window.innerWidth - 16);
+  return { top: r.bottom + 4, left: Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) };
 }
+
+/** El tope del ancho de un menú de página: nunca más ancho que la pantalla menos sus márgenes. */
+export const PAGE_MENU_MAX = 'calc(100vw - 16px)';
 
 export function PageMenu(props: {
   pageId: string;
@@ -239,14 +249,14 @@ export function PageMenu(props: {
 
   if (typeOpen) {
     return (
-      <div ref={ref} className="menu" role="menu" aria-label={tr('type.menu')} style={props.position}>
+      <div ref={ref} className="menu" role="menu" aria-label={tr('type.menu')} style={{ ...props.position, maxWidth: PAGE_MENU_MAX }}>
         <TypeSubmenu pageId={props.pageId} onBack={() => setTypeOpen(false)} onClose={props.onClose} />
       </div>
     );
   }
 
   return (
-    <div ref={ref} className="menu" role="menu" aria-label={tr('pageMenu.label')} style={props.position}>
+    <div ref={ref} className="menu" role="menu" aria-label={tr('pageMenu.label')} style={{ ...props.position, maxWidth: PAGE_MENU_MAX }}>
       {props.onShare && item(tr('pageMenu.share'), <ShareIcon />, props.onShare)}
       {camera?.kinds.includes('photo') && item(tr('camera.takePhoto'), <CameraIcon />, () => camera.open('photo'))}
       {camera?.kinds.includes('video') && item(tr('camera.recordVideo'), <VideoIcon />, () => camera.open('video'))}

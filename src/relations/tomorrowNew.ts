@@ -2,8 +2,8 @@ import type { PageTree } from '../sync/tree';
 import { dateAtStart, dayInTitle, isValidDate, reportTitle } from '../templates/dayReport';
 import type { DayReportDeps } from '../templates/dayReportCreate';
 import { planOf, type DayPlan } from './dayLive';
-import { fieldDate } from './fields';
-import type { DayRef, LiveSource } from './liveView';
+import { emptyValue, fieldDate, fieldValues } from './fields';
+import { locationOf, type DayRef, type LiveSource } from './liveView';
 import type { PrepareDeps, PrepareOptions, PrepareResult } from './prepareDay';
 import { BUILTIN_ONSET } from '../templates/builtinIds';
 import { cardFields, findFields } from './relationIndex';
@@ -48,6 +48,35 @@ export interface TomorrowProposal {
   date: string;
   /** El plan de esa fecha (del desglose: el reporte todavía no existe). */
   plan: DayPlan;
+  /** La locación que dicen todas las fichas de esa fecha (D709), si dicen una sola y el registro la reconoce. */
+  place: string | null;
+}
+
+/**
+ * La locación del reporte de mañana, si el desglose la dice sin dudas (D709, la opción B de D631): todas las páginas con esa
+ * *Fecha Rodaje* (las fichas y la página de la escena) tienen un campo de locación, cada uno nombra una locación del registro
+ * y es la misma en todas. Una ficha sin lugar, un lugar que el registro no reconoce o dos lugares distintos: nada (mañana
+ * puede ser otro lugar, y es mejor un título sin lugar que uno equivocado).
+ */
+export function plannedPlace(src: LiveSource, date: string): string | null {
+  const { snap } = src;
+  const pages = new Set<string>();
+  for (const x of cardFields(snap, 'shootDate')) if (fieldDate(x.field.text) === date) pages.add(x.pageId);
+  for (const { pageId, field } of findFields(snap, 'shootDate')) {
+    const role = snap.registration.roles.get(pageId);
+    if (role?.entity?.kind === 'scene' && !role.excluded && fieldDate(field.text) === date) pages.add(pageId);
+  }
+  let place: string | null = null;
+  for (const id of pages) {
+    const values = fieldValues(snap.fields.get(id), 'location').filter((f) => !emptyValue(f.text));
+    if (!values.length) return null;
+    for (const f of values) {
+      const loc = locationOf(snap.registry, f.text);
+      if (!loc || (place && loc !== place)) return null;
+      place = loc;
+    }
+  }
+  return place;
 }
 
 /**
@@ -61,18 +90,22 @@ export function proposeTomorrow(src: LiveSource, day: DayRef): TomorrowProposal 
   const next = [...breakdownDates(src)].filter((d) => d > day.date! && d <= last).sort()[0];
   const date = next ?? addDays(day.date, 1);
   const plan = planOf(src, { pageId: '', label: '', date, loc: null, locs: [] });
-  return { date, plan };
+  return { date, plan, place: plan.source === 'breakdown' ? plannedPlace(src, date) : null };
 }
 
 /**
  * El título del reporte de mañana con la forma del de hoy (D574): `2026-02-20 | Día 60` → `2026-02-21 | Día 61`, con la
- * misma palabra, el mismo separador y los mismos ceros. Lo que va después (la locación de hoy) no se copia: mañana puede ser
- * otro lugar, y el título es de donde la cabecera saca el lugar del día (D398). Sin esa forma, el de *New day report*.
+ * misma palabra, el mismo separador y los mismos ceros. La locación de hoy no se copia: mañana puede ser otro lugar, y el
+ * título es de donde la cabecera saca el lugar del día (D398). Solo si el título de hoy lleva un lugar (la forma del
+ * proyecto: `2026-04-06 | Día 81 | Farmacia Fanfarria`) y el desglose dice uno solo para mañana (`place`, D709), va el de
+ * mañana. Sin esa forma, el de *New day report*.
  */
-export function nextDayTitle(today: string, date: string, day: number, lang: string): string {
+export function nextDayTitle(today: string, date: string, day: number, lang: string, place?: string | null): string {
   const m = /^\s*\d{4}-\d{2}-\d{2}(\s*\|\s*)((?:day|d[ií]a)\s*)(\d+)/iu.exec(today);
   if (!m) return reportTitle(date, day, lang);
-  return `${date}${m[1]}${m[2]}${String(day).padStart(m[3].length, '0')}`;
+  const base = `${date}${m[1]}${m[2]}${String(day).padStart(m[3].length, '0')}`;
+  const hasPlace = /^\s*\|\s*\S/u.test(today.slice(m[0].length));
+  return place?.trim() && hasPlace ? `${base}${m[1]}${place.trim()}` : base;
 }
 
 /** El número de día de mañana: el de hoy + 1, o el que propondría *New day report*. */
@@ -92,6 +125,8 @@ export interface TomorrowInput {
   parentId: string | null;
   /** El título del día de hoy (para la forma del de mañana). */
   todayTitle: string;
+  /** La locación que dice el desglose para mañana (`plannedPlace`, D709), si hay una. */
+  place?: string | null;
   date: string;
   lang: string;
   prepare: PrepareOptions;
@@ -225,7 +260,7 @@ export function createTomorrow(deps: TomorrowDeps, input: TomorrowInput, canCrea
     // 1. Lo local, antes.
     const plan = await planDayReport(deps, { parentId: input.parentId, projectId: input.projectId });
     const day = nextDayNumber(input.todayTitle, plan.suggestion.day);
-    const title = nextDayTitle(input.todayTitle, input.date, day, input.lang);
+    const title = nextDayTitle(input.todayTitle, input.date, day, input.lang, input.place);
     const template = plan.template;
     // 2. Sincronizar. Si el motor ya sabe que no hay red, el tope es corto (1,5 s y no 6): se dice antes (observación de la
     //    auditoría de E11); si la red volvió, esa sincronización igual alcanza.

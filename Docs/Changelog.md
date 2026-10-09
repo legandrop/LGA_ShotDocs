@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.254 :
+
+Restos de las auditorías de la tanda 5. *Merge* copiaba la página entera: ahora compara cada bloque (con sus mayúsculas, formato y anotaciones de fotos) y copia solo lo que la que queda no tiene, así que la plantilla repetida o lo ya unido no se duplica; un título idéntico viaja con lo de su sección que se copia (la escena no pierde lo que B escribió debajo), el adelanto lo lee de los documentos, y si otro dispositivo borra de A algo salteado mientras se une, B no va a la papelera. Dos páginas con el mismo título se distinguen en *Pending*, en el cartel de la copia que cede y en los avisos. El reporte de mañana lleva la locación del desglose; el menú ⋯ cabe a 320 px; un lugar con coma explica por qué no se vincula; el aviso con *Undo* espera al mouse. D706–D717.
+
+[Que Merge copie solo lo que falta sin separar los títulos de su sección, distinga páginas con el mismo título, el reporte de mañana lleve la locación del desglose, el menú ⋯ quepa a 320 px y los avisos con Undo esperen al mouse]
+
 v0.253 :
 
 Dos páginas de la misma escena (dos dispositivos que la crean a la vez, el «+» sin red, una importación) o dos reportes del mismo día se resolvían a mano, perdiendo subpáginas, links y anotaciones; además, un link a la segunda página no contaba para la escena. Ahora cuenta, y *Map › Pending* y la cabecera de las dos ofrecen *Merge…*: un adelanto con las dos; lo de la que se va se copia al final de la otra con los mismos ids (en el Y.Doc, solo agregando), sus subpáginas pasan y va entera a la papelera con un puntero (`settings.merged`), recién cuando el servidor confirmó la copia y los usos de las fotos. Sin funciones nuevas en la base; una página con comentarios no se va. *Undo* saca solo lo copiado intacto; lo que llega tarde se lista en *Pending*. D641–D660, D676–D690.
