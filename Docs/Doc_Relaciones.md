@@ -433,8 +433,8 @@ preparadas y vacías, deja la primera. Saca **solo el título** (el renglón vac
 sin red en esa copia mientras otro la saca, su texto no se pierde con el bloque (medido); con varias escenas puede quedar
 debajo de la última sección de la tanda y no de la suya. Nunca se limpia solo: solo al tocar *Prepare*.
 
-**En el editor del reporte** (`dayDecorations.ts`). Al lado del link de un título que lleva a una escena, su título en
-vivo (« · La camioneta frena en la banquina»); debajo, la primera pregunta abierta de su desglose con la ficha y la
+**En el editor del reporte** (`dayDecorations.ts`). Al final de un título con un link a una escena, su título en
+vivo (« · La camioneta frena en la banquina»; desde la v0.244 lo dibuja el subrayado, sección 14); debajo, la primera pregunta abierta de su desglose con la ficha y la
 categoría (tocarla abre la ficha). Vale para cualquier título de un reporte cuyo link lleva a una escena (no hay marca
 en el documento de «preparado»). Son decoraciones de ProseMirror: no están en el Y.Doc, no se copian, no se imprimen
 (`@media print`); se vuelven a leer con cada foto del índice. Un invitado que no ve las fichas no ve la pregunta.
@@ -455,8 +455,7 @@ en hoy, aviso y *Undo*, decoraciones en el editor, teléfono plegado sin ceros, 
 ### Lo que falta (E5)
 
 - Sin día siguiente no hay tarjeta: crear el reporte de mañana desde ahí (con *New day report*) y prepararlo.
-- *Assign* en una sección sin número (E7) y la barra *Today* sobre el teclado en el teléfono (E6).
-- El link del título preparado se ve como un link, no como la ficha-chip de la maqueta (la ficha es de E6/E7).
+- *Assign* en una sección sin número (E7). La barra *Today* y la ficha del link: hechas en la v0.244 (sección 14).
 - *Undo* vive en el aviso (15 s); después, se borra a mano.
 
 ## 12. El mapa del proyecto, la lupa por escenas y locaciones, y el mapa para un asistente (E9, v0.242)
@@ -634,3 +633,70 @@ montada: tira, galería, fuente con su lugar, carrete de varias páginas con *Go
 - Desde el carrete de varias páginas no se anota (D470): anotar va en la página.
 - Las anotaciones de una foto de otra página salen de una copia de lo guardado: una anotación nueva hecha en otro
   dispositivo mientras el carrete está abierto se ve al volver a abrirlo.
+
+## 14. El subrayado, el adelanto, volverlo link y la barra *Today* (E6, v0.244)
+
+En el editor de la página abierta (maqueta `d_escribir.html` y `c_dia.html`). Todo es vista salvo *Make it a link*.
+
+| Pieza | Archivo |
+|---|---|
+| Subrayado, ficha de los links, título en vivo | `src/relations/relUnderline.ts` (`relUnderlineExtension`, `buildUnderlines`, `underlineInfo`) |
+| Volverlo link y su atajo | `src/relations/relLink.ts` (`makeLinkAt`; atajo `relLink` en `pageEditorExtensions`) |
+| El adelanto | `src/relations/RelPeek.tsx` |
+| La barra *Today* | `src/relations/TodayBar.tsx` |
+| Estilos | `src/relations/liveHeader.css` (prefijos `rel-` y `rp-`) |
+
+**El subrayado.** El texto de cada bloque, como lo lee el índice (los links a páginas tapados), pasa por el mismo lector
+(`scan`) con lo que existe en la foto del índice. Escena o locación reconocida: punteado sutil (el color de su tipo);
+un pendiente (`105_120`): gris de rayas. Lo que ya es link (a una página o afuera) no se subraya; tampoco la propia
+escena o locación en su página, ni nada en una página con `graph: false`. Son decoraciones de ProseMirror: no están en el
+Y.Doc, no viajan, no se copian, no salen en el PDF (la exportación no las tiene) ni al imprimir. Lo escrito acá corre lo
+dibujado en la misma transacción, salvo lo que la edición tocó por dentro (reemplazar con buscar, escribir en el medio
+de un número), que se saca hasta la relectura para no quedar con la referencia vieja (`dropTouched`, D457); medio
+segundo después de la última edición (y con cada foto nueva del índice) se
+vuelve a leer y solo se despacha si cambió algo: ni parpadeo ni cursor movido. Lo que llega de Yjs (otro dispositivo,
+deshacer) reemplaza el documento entero en y-prosemirror: se arma de nuevo en el momento, o en una página que tarda más
+de 12 ms (`SLOW_MS`) se corre por el tramo distinto (`mapThroughReplace`) y se relee al medio segundo. Con un IME
+componiendo, espera. Convive con buscar (las dos decoraciones se suman), colapsar y comentarios.
+
+**La ficha.** Un link a la página de una escena o una locación se ve como ficha (ícono y número, el color de su tipo);
+en un título, la escena suma su título en vivo **al final del título**: lo escrito después del link se lee antes que el
+título (O4 de la auditoría de E5). Una versión vieja ve un link común (prueba con el esquema anterior).
+
+**El adelanto.** Con el mouse, al quedarse un momento (320 ms) sobre un subrayado o una ficha, solo después de un
+movimiento real del puntero (`MouseGate`: cada tecla lo desarma; un subrayado que aparece debajo del puntero quieto no
+lo abre, D455) y nunca con texto elegido (ahí está la barra de formato, D456); en una pantalla táctil, al
+tocar con el teclado cerrado (sin abrirlo) o al mantener apretado. Con el teclado abierto, tocar solo pone el cursor
+(C7, B3); un segundo toque sobre el mismo subrayado lo cierra y pone el cursor. Muestra lo esencial de la cabecera viva
+(dónde y cuándo se filmó, días, desglose, unas fotos; de una locación, sus días, escenas y scoutings), *Open* y *Make it
+a link*; de un pendiente, que no existe (crearlo es de E7). Se cierra con Esc, al escribir, al tocar afuera o al
+desplazar. En el teléfono es una hoja abajo, siempre por encima de la barra *Today*.
+
+**Volverlo link.** Ctrl+Alt+K (⌘⌥K en la Mac; no Tab, que es sangría, ni Ctrl/⌘+Enter, el salto de hoja) o *Make it a
+link*: la marca `link` de siempre hacia `/p/<id>` sobre el mismo texto («5029a» sigue diciendo «5029a»), en un solo paso
+de deshacer (`asOneUndoStep`). Solo con la página editable, y nunca un pendiente ni un texto que ya tiene link. Con el
+atajo donde no hay nada para volver link, un aviso corto dice por qué (D458). **Firefox de la Mac** usa ⌘⌥K para su
+consola y no la deja tomar: ahí se usa el botón *Make it a link* del adelanto (D459).
+
+**La barra *Today*.** En el teléfono, escribiendo en el reporte de un día de rodaje (editor con el foco, página
+editable): las escenas del plan del día (si no hay plan, las que tienen sección), la locación del título, la cámara (si
+el teléfono saca fotos) y el dictado. Tocar una pastilla la escribe donde está el cursor, sin sacarle el foco. Va arriba
+del teclado (`visualViewport`, `--rel-today-space`): los avisos suben por encima, el adelanto también, y el botón redondo
+de dictar se esconde mientras está.
+
+**El lector.** Una letra de unidad pegada a un número de 4 cifras (`1080p`, `1080i`, `4050K`, `2030h`) ya no hace escena
+en el texto, salvo que exista la escena con esa letra (auditoría de la v0.237); en ERSO no cambia nada (sus dos
+«5050h» van en títulos o con «plano»). El precio: una parte con esa letra sin escena propia («la 5029h» por la parte h
+de 105_029) tampoco se reconoce en el texto suelto; con «Escena», «plano» o en un título, sí (D460).
+
+**Medido** (ERSO real, Chromium de escritorio, la página abierta ya leída): *ERSO | BD Main* (la más grande en texto:
+171.670 caracteres en tablas, 472 subrayados) arma en 19–25 ms la primera vez y 3–14 ms después; armar y dibujar, 12–36
+ms. El Día 58 (1.223 bloques, casi todo fotos): 0,2–0,8 ms. El Día 59: 0,1–0,7 ms. En un teléfono, de 3 a 9 veces más.
+
+**Pruebas.** `relUnderline.test.ts` (qué se subraya y qué no, nada en el Y.Doc, lo escrito acá y lo de otro dispositivo
+con dos Y.Doc, el tramo distinto en una página enorme, Ctrl+Alt+K y deshacer en un paso, pendientes y solo lectura, la
+ficha con su título y lo escrito después, el esquema anterior, tocar con el teclado abierto y cerrado, mantener
+apretado, Esc y escribir, el mouse quieto bajo un subrayado nuevo, elegir texto, lo editado por dentro y el aviso del
+atajo); `reader.test.ts` (unidades); `dayHeader.test.tsx` (el título en vivo en la app).
+
+**Decisiones:** D446–D460 en `Doc_Decisiones.md`.

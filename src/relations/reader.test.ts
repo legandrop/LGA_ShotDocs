@@ -185,6 +185,18 @@ describe('los 25 casos para romperlo (C8, sección 10): 0 escenas falsas', () =>
     expect(only('Plates 1074', true)).toBe('—');
     expect(only('Escena 1074', true)).toBe('scene:101_074');
   });
+
+  it('una letra de unidad pegada (1080p, 1080i, 4050K, 2030h) no hace escena en el texto, salvo que exista con esa letra', () => {
+    const units = buildRegistry({ scenes: ['101_080', '102_030', '104_050', '102_024', '102_024P', '105_027'].map((code) => ({ code })), locations: [] });
+    const see = (text: string) => scan(units, text).filter((h) => h.kind !== 'loc').map((h) => `${h.ref}${h.part}`).join(' ') || '—';
+    expect(see('Entregar en 1080p y 1080i')).toBe('—');
+    expect(see('Luz de 4050K')).toBe('—');
+    expect(see('Termina 2030h')).toBe('—');
+    // La escena con esa letra existe: cuenta. Con «Escena» delante o con H, igual que antes. Las demás letras, igual.
+    expect(see('Repetir la 2024p')).toBe('102_024P');
+    expect(see('Escena 1080p')).toBe('101_080P');
+    expect(see('Repetir la 5027b y la 5027c')).toBe('105_027B 105_027C');
+  });
 });
 
 describe('proyectos sin episodios (un largo; D383)', () => {

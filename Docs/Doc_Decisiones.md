@@ -886,6 +886,50 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
   segundo de atraso o no haber leído lo que llegó por sincronización: con ella, preparar dos veces seguidas duplicaría.
 - **D445 · La barra *Today* sobre el teclado y la ficha-chip del link quedan para E6/E7** (2026-10-08; E5). E5 escribe
   el link con la marca `link` de siempre; cómo se dibuja un link a una escena es del subrayado y de `/`.
+- **D446 · Volver link un subrayado: Ctrl+Alt+K (⌘⌥K en la Mac) y el botón *Make it a link* del adelanto** (2026-10-08;
+  E6, Lega la puede cambiar). La maqueta usaba ⌘↵/Ctrl+↵, que es el salto de hoja; Tab es la sangría. ⌘⇧K duplica la
+  pestaña en Edge y abre la consola en Firefox; ⌘⌥L abre las descargas en Chrome y Safari de la Mac. La K es la del link
+  (⌘K). Atajo `relLink` del registro.
+- **D447 · Lo que llega de otro dispositivo se subraya en el momento** (2026-10-08; E6). y-prosemirror reemplaza el
+  documento entero con cada cambio de Yjs (también deshacer): corrido así, el subrayado desaparecía medio segundo (un
+  parpadeo). Se arma de nuevo en el momento; en una página que tarda más de 12 ms, se corre por el tramo distinto y se
+  relee a los 500 ms.
+- **D448 · La página de una escena o una locación no subraya la suya** (2026-10-08; E6). Su adelanto sería la página que
+  se está viendo y volverla link, un link a sí misma.
+- **D449 · La ficha también para los links a una locación** (2026-10-08; E6), como la maqueta (el encargo nombraba la
+  escena); el título en vivo, solo de las escenas y solo en un título.
+- **D450 · El título en vivo de un link a una escena va al final del título, en cualquier página** (2026-10-08; E6; O4
+  de la auditoría de E5). Antes iba pegado al link y solo en los días: lo escrito después del link se leía como parte
+  del título de la escena.
+- **D451 · Tocar con el teclado cerrado abre el adelanto sin abrir el teclado; un segundo toque sobre el mismo lo cierra y
+  pone el cursor. Con el mouse, el adelanto es solo al pasar: el clic pone el cursor** (2026-10-08; E6). Con el teclado
+  abierto, tocar solo pone el cursor (C7, B3).
+- **D452 · La barra *Today*: las escenas del plan del día (si no hay plan, las que tienen sección), la locación, la cámara
+  si el teléfono saca fotos y el micrófono del dictado; el botón redondo de dictar se esconde mientras está** (2026-10-08;
+  E6, Lega la puede cambiar). El botón quedaba encima de la barra; la maqueta del flujo ya tenía el micrófono en ella.
+- **D453 · Una letra de unidad pegada (`1080p`, `1080i`, `4050K`, `2030h`) no hace escena en el texto si no existe la
+  escena con esa letra** (2026-10-08; E6; auditoría de la v0.237). Con el subrayado se vería en cualquier reporte de VFX.
+  En ERSO no cambia nada.
+- **D454 · El adelanto de un pendiente solo dice que no existe; *Create* y *Assign* quedan para E7** (2026-10-08; E6).
+- **D455 · El adelanto con el mouse se abre solo después de un movimiento real del puntero** (2026-10-09; E6, B1 de su
+  auditoría). Al dibujarse el subrayado a los 500 ms, debajo del puntero quieto, Chromium manda `pointerover` al elemento
+  nuevo y el adelanto se abría solo mientras se escribía. Ahora cada tecla desarma el mouse y recién un `pointermove` a
+  otra posición lo vuelve a armar; el toque y mantener apretado no cambian.
+- **D456 · Con texto elegido no sale el adelanto del mouse, y uno abierto con el mouse se cierra** (2026-10-09; E6, O4).
+  Con un doble clic sobre un subrayado salían a la vez la barra de formato y el adelanto. Elegir es para dar formato; el
+  adelanto vuelve al pasar el mouse con el cursor sin elegir nada. Lo abierto por toque no se toca.
+- **D457 · Lo que una edición de acá toca por dentro de un subrayado se saca hasta la relectura** (2026-10-09; E6, O5).
+  Reemplazar con buscar «105_029» por «105_025» dejaba medio segundo el adelanto de 105_029. Escribir pegado a un
+  subrayado, antes o después, no lo apaga.
+- **D458 · Ctrl+Alt+K (⌘⌥K) donde no hay nada para volver link muestra un aviso corto** (2026-10-09; E6, O3): «Nothing
+  to link here», «105_120 doesn’t exist yet: nothing to link to» o «It’s already a link». Responde a una tecla apretada a
+  propósito, así que no molesta. En solo lectura y sin el subrayado (la exportación), nada.
+- **D459 · ⌘⌥K se queda aunque Firefox de la Mac lo use para su consola** (2026-10-09; E6, O6; Lega la puede cambiar).
+  No hay una combinación con K libre en los navegadores de la Mac (⌘⇧K y ⌘⌥L chocan en Edge, Chrome y Safari); en
+  Firefox de la Mac queda el botón *Make it a link* del adelanto. Anotado en `Doc_Relaciones.md`, sección 14.
+- **D460 · «la 5029h» (una parte con letra `p`, `i`, `k` o `h` sin escena propia) ya no se reconoce en el texto**
+  (2026-10-09; E6, O7). Es el precio de D453: esas letras son mucho más a menudo unidades (`1080p`, `2030h`) que partes. Con «Escena»,
+  «plano» o en un título se sigue reconociendo; si existe la escena con esa letra, también. En ERSO no cambia nada.
 - **D466 · En la escena, una fuente por sección de reporte («Día 59 · Escena 105_027b»), no una por día** (2026-10-08;
   E8). La maqueta juntaba el día; el encargo pedía la sección, y una sección es un lugar exacto (el Día 76 tiene dos).
 - **D467 · El carrete recibe todas las fotos de la galería aunque haya una fuente elegida** (2026-10-08; E8), empezando

@@ -121,18 +121,29 @@ export function fabVisible(o: { canEdit: boolean; canComment: boolean; link: boo
  * El botón del teléfono: con Editar (o Comentar, para *Add as comment*, V4) y si la política del workspace no apagó el
  * asistente. En la compu no se ve.
  */
-function DictateFab({ pageId }: { pageId: string }) {
+/**
+ * Si esta página ofrece *Dictate to report* en el teléfono (el botón redondo; también el micrófono de la barra *Today*,
+ * relations/TodayBar.tsx, que lo reemplaza mientras se escribe).
+ */
+export function useDictateOffer(pageId: string): boolean {
   const perms = usePermissions();
   // Con un link público no: el visitante no dicta (Doc_Dictado.md, sección 7).
   const link = useLinkMode();
   const { canComment } = useCommentAccess(pageId);
+  const { workspace } = useServices();
+  const workspaceKey = workspace.config.localKey || workspace.config.url;
+  // Sin cuenta (un link público) no hay *Dictate to report* (Docs/Doc_Link_Publico.md, E2.4).
+  return fabVisible({ canEdit: perms.canEditPage(pageId), canComment, link: !!link || perms.viaLink, policyOff: cachedPolicyValue(workspaceKey) === 'off' });
+}
+
+function DictateFab({ pageId }: { pageId: string }) {
+  const offer = useDictateOffer(pageId);
   const { workspace, user } = useServices();
   const tr = useT();
   const workspaceKey = workspace.config.localKey || workspace.config.url;
   // Las notas guardadas para esta página (V2): el número va sobre el botón.
   const saved = useQueuedNotes(user.email, workspaceKey).filter((n) => n.pageId === pageId).length;
-  // Sin cuenta (un link público) no hay *Dictate to report* (Docs/Doc_Link_Publico.md, E2.4).
-  if (!fabVisible({ canEdit: perms.canEditPage(pageId), canComment, link: !!link || perms.viaLink, policyOff: cachedPolicyValue(workspaceKey) === 'off' })) return null;
+  if (!offer) return null;
   return (
     <button className="dictate-fab" aria-label={saved > 0 ? tr('shell.dictateSaved', { count: saved }) : tr('shell.dictate')} onClick={() => openDictation()}>
       <MicIcon size={26} />

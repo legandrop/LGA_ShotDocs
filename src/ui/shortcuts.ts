@@ -71,6 +71,11 @@ export const SHORTCUTS: Shortcut[] = [
   // triángulo hace lo mismo (es un clic: va en el texto de la ayuda, no en el registro).
   { id: 'collapseEveryone', keys: ['Shift-Mod-Alt-Enter'], place: 'editor', owner: 'app', source: 'keymap' },
   { id: 'selectAll', keys: ['Mod-a'], place: 'editor', owner: 'app', source: 'dom' },
+  // Volver link la escena o la locación subrayada donde está el cursor (Docs/Doc_Relaciones.md, sección 14). Tab no (es
+  // la sangría) ni Ctrl/⌘+Enter (el salto de hoja): la K del link (⌘K) con ⌥. ⌘⌥L no: en la Mac abre las descargas.
+  { id: 'relLink', keys: ['Mod-Alt-k'], place: 'editor', owner: 'app', source: 'keymap' },
+  // Con el adelanto de un subrayado abierto: Esc lo cierra (relUnderline.ts).
+  { id: 'peekClose', keys: ['Escape'], place: 'editor', context: 'peek', owner: 'app', source: 'dom' },
 
   // --- Editor: BlockNote ---
   {

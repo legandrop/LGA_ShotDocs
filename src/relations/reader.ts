@@ -344,7 +344,10 @@ export function scan(R: Registry, text: string, ctx: ScanContext = {}): Hit[] {
       if (!ep) continue;
       const ctxOk = CTX_BEFORE.test(before(s));
       const plano = /^\s+plano/i.test(masked.slice(e));
-      const ok = ctx.heading ? firstInHeading(s) || ctxOk : ctxOk || plano || !!m[3] || /^[hH]/.test(m[0]);
+      // En el texto, una letra pegada alcanza, salvo las de una unidad («1080p», «1080i», «4050K», «2030h»: la auditoría
+      // de la v0.237, para el subrayado) si no existe la escena con esa letra.
+      const unit = !!m[3] && /^[pikh]$/i.test(m[3]) && !/^[hH]/.test(m[0]) && !R.scenes.has(key(ep, pad3(+m[2])) + m[3].toUpperCase());
+      const ok = ctx.heading ? firstInHeading(s) || ctxOk : ctxOk || plano || (!!m[3] && !unit) || /^[hH]/.test(m[0]);
       if (!ok) continue;
       taken.push([s, e]);
       const r = push(s, e, ep, m[2], m[3], 'compact', ctxOk);

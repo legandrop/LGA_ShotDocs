@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.244 :
+
+Escribir un número de escena o una locación no mostraba nada en el texto, volverlo link pedía el diálogo de links y en el teléfono no había atajo para las escenas de hoy. Ahora lo reconocido queda con un subrayado punteado (gris de rayas si no existe) que no se guarda ni se imprime; se relee a los 500 ms. Pasar el mouse (solo con un movimiento real: el subrayado nuevo bajo el puntero quieto abría el adelanto mientras se escribía), tocar con el teclado cerrado o mantener apretado abre un adelanto con *Open* y *Make it a link* (o Ctrl+Alt+K / ⌘⌥K, que avisa si no hay nada), con la marca `link` de siempre y un paso de deshacer. Un link a una escena o locación se ve como ficha. En el reporte del día, la barra *Today* sobre el teclado. D446–D460.
+
+[Subrayar en el texto las escenas y locaciones reconocidas, con su adelanto, el atajo para volverlas link, la ficha del link y la barra Today del teléfono]
+
 v0.243 :
 
 Las fotos de la cabecera viva no se podían ver por fuente ni recorrer juntas: la tira mostraba 6 y llevaba a la sección, y el carrete solo sabía armar su lista desde una página. Ahora «All N · by source» abre la galería agrupada como la maqueta (desglose, *Tech scout* y *Creative scout* separados con su fecha, cada sección de cada reporte «Día 59 · Escena 105_027b»; en la locación, cada día; en el día, cada sección), y cada fuente lleva a su lugar resaltado (`photoGallery.ts`, `PhotoSources.tsx`). Tocar una foto abre el carrete con todas las de la galería, de varias páginas: cada una dice su fuente y *Go to place* va a esa foto, aunque comparta párrafo con otras (`photoTarget.ts`); las anotaciones salen de su página. El carrete de una página sigue igual. D466–D477.

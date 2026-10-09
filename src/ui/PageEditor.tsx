@@ -86,6 +86,9 @@ import { searchSession, type ResultRequest } from './projectSearchUi';
 import { placeFlashExtension, showPlace } from '../relations/placeFlash';
 import { dayDecoInfo, dayDecorationsExtension, goFrom, refreshDayDecorations, type DayDecoInfo } from '../relations/dayDecorations';
 import { existingRelationsSession } from './relationsUi';
+import { refreshRelUnderline, relUnderlineExtension, underlineInfo, type PeekEvents, type UnderlineInfo } from '../relations/relUnderline';
+import { RelPeek } from '../relations/RelPeek';
+import { TodayBar } from '../relations/TodayBar';
 import { normalize, normalizeQuery, searchNormalized } from '../search/normalize';
 import '../i18n/lazy/search';
 import { registerRestoreTarget } from './historyUi';
@@ -462,6 +465,9 @@ export function BlockEditor({
   const editorRef = useRef<{ removeBlocks: (ids: string[]) => unknown; transact: (fn: (tr: { setMeta: (k: string, v: unknown) => unknown }) => void) => void } | null>(null);
   /** En un reporte del día: el título de cada escena en vivo y su pregunta abierta (relations/dayDecorations.ts). */
   const dayDecoRef = useRef<DayDecoInfo | null>(null);
+  /** Lo que se subraya y las fichas de los links (relations/relUnderline.ts), y el adelanto que abren (RelPeek.tsx). */
+  const underlineRef = useRef<UnderlineInfo | null>(null);
+  const peekRef = useRef<PeekEvents | null>(null);
   /** Si la página se puede editar ahora (lo leen las funciones que el editor guarda al crearse). */
   const editableRef = useRef(editable);
   /** Si se puede colapsar o abrir para todos (Shift+clic): con permiso de editar, conocido. */
@@ -627,6 +633,8 @@ export function BlockEditor({
         placeFlashExtension,
         // En un reporte del día: el título de la escena al lado de su link y la pregunta abierta del desglose.
         dayDecorationsExtension(() => dayDecoRef.current),
+        // Las escenas y locaciones reconocidas, subrayadas; los links a ellas, como fichas; el adelanto al pasar o tocar.
+        relUnderlineExtension(() => underlineRef.current, () => peekRef.current),
         ...pageEditorExtensions(
           canCollapse
             ? {
@@ -649,8 +657,9 @@ export function BlockEditor({
     [doc],
   );
 
-  // Lo que muestra el editor de un reporte del día sale de la foto del índice de relaciones: se vuelve a leer con cada
-  // foto nueva (al escribir acá o en otra página, al sincronizar). No en una versión del historial ni con un link público.
+  // Lo que muestra el editor de un reporte del día y el subrayado de cualquier página salen de la foto del índice de
+  // relaciones: se vuelven a leer con cada foto nueva (al escribir acá o en otra página, al sincronizar). No en una versión
+  // del historial ni con un link público.
   useEffect(() => {
     if (preview || link) return;
     const session = existingRelationsSession(services);
@@ -659,10 +668,12 @@ export function BlockEditor({
       const projectId = pageTree.get(pageId)?.workspace_id;
       const snap = projectId ? session.relations.snapshot(projectId) : null;
       const src = snap ? { snap, title: (id: string) => pageTree.get(id)?.title, content: (id: string) => session.index.content(id) } : null;
+      const view = editor.prosemirrorView;
+      underlineRef.current = src ? underlineInfo(src, pageId) : null;
+      if (view) refreshRelUnderline(view);
       const next = dayDecoInfo(src, pageId, goFrom(services));
       if (!next && !dayDecoRef.current) return;
       dayDecoRef.current = next;
-      const view = editor.prosemirrorView;
       if (view) refreshDayDecorations(view);
     };
     update();
@@ -696,6 +707,8 @@ export function BlockEditor({
       },
     });
   }, [editor, pageId, canCollapse, preview]);
+
+  const pmView = useCallback(() => editor.prosemirrorView ?? null, [editor]);
 
   editorRef.current = editor as unknown as NonNullable<typeof editorRef.current>;
   editableRef.current = editable;
@@ -1661,6 +1674,11 @@ export function BlockEditor({
       </BlockNoteView>
       </MediaActionsContext.Provider>
       {!preview && <CommentMargin editor={editor} pageId={pageId} canComment={canComment} host={host} />}
+      {/* El adelanto de un subrayado o una ficha, y la barra Today del teléfono (Docs/Doc_Relaciones.md, sección 14). */}
+      {!preview && !link && <RelPeek eventsRef={peekRef} view={pmView} pageId={pageId} editable={editable} />}
+      {!preview && !link && !filesNotice && (
+        <TodayBar view={pmView} pageId={pageId} editable={editable} camera={cameraOffer.includes('photo') ? () => openCameraRef.current('photo') : null} />
+      )}
       {/* El triángulo de cada título (P.11): una capa encima, como el margen. */}
       {canCollapse && <CollapseToggles editor={editor} host={host} editable={editable} canShare={canShare} />}
       {/* Dónde empieza cada hoja (solo una capa encima; roadmap B.7). */}

@@ -1481,3 +1481,387 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* --- El subrayado pasivo, las fichas de los links, el adelanto y la barra Today (relUnderline.ts, RelPeek.tsx,
+   TodayBar.tsx; Docs/Doc_Relaciones.md, sección 14). Todo es vista: nada está en el documento ni sale impreso. --- */
+
+:root {
+  --rel-pend: #9a958c;
+  --rel-icon-scene: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 7h18v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 7l3-4h4l-3 4M10 7l3-4h4l-3 4'/%3E%3C/svg%3E");
+  --rel-icon-loc: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21zM12 7a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z'/%3E%3C/svg%3E");
+}
+
+:root[data-theme='dark'] {
+  --rel-pend: #8f8a81;
+}
+
+/* Punteado sutil, sin cambiar el lugar de nada: solo la línea de abajo (ni relleno ni borde). */
+.editor .rel-u {
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: var(--lh-scene-fg);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+  border-radius: 3px;
+  -webkit-touch-callout: none;
+}
+
+.editor .rel-u.loc {
+  text-decoration-color: var(--lh-loc-fg);
+}
+
+/* Lo que no existe en el proyecto (un pendiente): gris, de rayas. */
+.editor .rel-u.pend {
+  text-decoration-style: dashed;
+  text-decoration-color: var(--rel-pend);
+  text-decoration-thickness: 1px;
+}
+
+.editor .rel-u.hot {
+  background: var(--lh-scene-bg);
+}
+
+.editor .rel-u.loc.hot {
+  background: var(--lh-loc-bg);
+}
+
+.editor .rel-u.pend.hot {
+  background: var(--hover);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .editor .rel-u:hover {
+    background: var(--lh-scene-bg);
+  }
+
+  .editor .rel-u.loc:hover {
+    background: var(--lh-loc-bg);
+  }
+
+  .editor .rel-u.pend:hover {
+    background: var(--hover);
+  }
+}
+
+/* Un link a la página de una escena o una locación: la ficha (ícono y número). El link sigue siendo el de siempre. */
+.editor a:has(> .rel-chip) {
+  text-decoration: none;
+}
+
+.editor .rel-chip {
+  padding: 1px 6px 1px 5px;
+  border: 1px solid var(--lh-scene-line);
+  border-radius: 6px;
+  background: var(--lh-scene-bg);
+  color: var(--lh-scene-fg);
+  font-family: var(--mono);
+  font-size: 0.86em;
+  font-weight: 500;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  -webkit-touch-callout: none;
+}
+
+.editor .rel-chip::before {
+  content: '';
+  display: inline-block;
+  width: 0.95em;
+  height: 0.95em;
+  margin-right: 0.35em;
+  vertical-align: -0.12em;
+  background: currentColor;
+  -webkit-mask: var(--rel-icon-scene) center / contain no-repeat;
+  mask: var(--rel-icon-scene) center / contain no-repeat;
+}
+
+.editor .rel-chip.loc {
+  border-color: var(--lh-loc-line);
+  background: var(--lh-loc-bg);
+  color: var(--lh-loc-fg);
+  font-family: inherit;
+}
+
+.editor .rel-chip.loc::before {
+  -webkit-mask-image: var(--rel-icon-loc);
+  mask-image: var(--rel-icon-loc);
+}
+
+.editor .rel-chip.hot {
+  box-shadow: 0 0 0 2px var(--lh-scene-line);
+}
+
+.editor .rel-chip.loc.hot {
+  box-shadow: 0 0 0 2px var(--lh-loc-line);
+}
+
+@media print {
+  .editor .rel-u {
+    text-decoration: none;
+    background: none;
+  }
+
+  .editor a:has(> .rel-chip) {
+    text-decoration: underline;
+  }
+
+  .editor .rel-chip {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+  }
+
+  .editor .rel-chip::before,
+  .rel-peek,
+  .rel-today {
+    display: none !important;
+  }
+}
+
+/* El adelanto: en la computadora, debajo del subrayado; en el teléfono, una hoja abajo, por encima de la barra Today. */
+.lh.rel-peek {
+  position: fixed;
+  z-index: 80;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--menu-border);
+  border-radius: 12px;
+  background: var(--menu-bg);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  font-size: 12.5px;
+}
+
+.lh.rel-peek.phone {
+  left: 8px;
+  right: 8px;
+  bottom: calc(8px + var(--rel-today-space, 0px) + env(safe-area-inset-bottom));
+  max-height: 62vh;
+  overflow-y: auto;
+}
+
+.lh.rel-peek .rp-h {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  width: 100%;
+  padding: 12px;
+}
+
+.lh.rel-peek button.rp-h:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.lh.rel-peek .rp-img {
+  flex: none;
+  width: 84px;
+  height: 58px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--hover);
+}
+
+.rel-peek .rp-ht {
+  display: block;
+  min-width: 0;
+}
+
+.rel-peek .rp-k {
+  display: block;
+  font: 12px var(--mono);
+  color: var(--lh-scene-fg);
+}
+
+.rel-peek .rp-k.loc {
+  font-family: inherit;
+  color: var(--lh-loc-fg);
+}
+
+.rel-peek .rp-k.pending {
+  color: var(--muted-2);
+}
+
+.rel-peek .rp-k small {
+  font-size: inherit;
+  color: var(--muted-2);
+}
+
+.rel-peek .rp-tt {
+  display: block;
+  margin-top: 2px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text);
+}
+
+.rel-peek .rp-r {
+  display: grid;
+  grid-template-columns: 82px 1fr;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 12px;
+  color: var(--muted-2);
+}
+
+.rel-peek .rp-r .v {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+  color: var(--text-2);
+}
+
+.rel-peek .rp-r .v.mono {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.rel-peek .rp-thumbs img,
+.rel-peek .rp-thumbs .lh-ph {
+  width: 52px;
+  height: 36px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.rel-peek .rp-note {
+  padding: 2px 12px 12px;
+  line-height: 1.45;
+  color: var(--muted-2);
+}
+
+.rel-peek .rp-f {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border-soft);
+  background: var(--bg);
+}
+
+.rel-peek .rp-f .sp {
+  flex: 1;
+}
+
+.lh.rel-peek .rp-open,
+.lh.rel-peek .rp-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 7px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.lh.rel-peek .rp-open {
+  background: var(--primary-bg);
+  color: var(--primary-text);
+}
+
+.lh.rel-peek .rp-open:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--primary-bg) 88%, var(--bg));
+}
+
+.lh.rel-peek .rp-link {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.lh.rel-peek .rp-link:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.rel-peek kbd {
+  padding-left: 6px;
+  border-left: 1px solid var(--border);
+  font: 10.5px var(--mono);
+  color: var(--muted-2);
+}
+
+@media (pointer: coarse) {
+  .lh.rel-peek .rp-open,
+  .lh.rel-peek .rp-link {
+    min-height: 38px;
+    padding-inline: 14px;
+  }
+}
+
+/* La barra Today, arriba del teclado del teléfono (la altura exacta la pone TodayBar.tsx con visualViewport). */
+.rel-today {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+  background: var(--menu-bg);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.rel-today::-webkit-scrollbar {
+  display: none;
+}
+
+.rel-today .lab {
+  flex: none;
+  font: 10px var(--mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+
+.rel-today .pill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.rel-today .pill .k {
+  font: 500 13px var(--mono);
+  color: var(--lh-scene-fg);
+}
+
+.rel-today .pill.ic {
+  justify-content: center;
+  width: 40px;
+  padding: 0;
+}
+
+.rel-today .pill .lh-i {
+  width: 18px;
+  height: 18px;
+}
+
+/* Con la barra: los avisos de abajo van por encima de ella, el botón redondo de dictar se va (su micrófono está en la
+   barra) y el final de la página puede subir más arriba que la barra. */
+:root:has(.rel-today) .shell.shell {
+  --notice-base: calc(var(--rel-today-space, 56px) + 12px);
+}
+
+:root:has(.rel-today) .dictate-fab {
+  display: none;
+}
+
+:root:has(.rel-today) .editor-host {
+  padding-bottom: 64px;
+}

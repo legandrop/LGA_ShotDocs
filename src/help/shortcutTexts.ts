@@ -23,6 +23,8 @@ export const SHORTCUT_TEXTS: Record<string, Key> = {
   collapse: 'shortcut.collapse',
   'collapseEveryone': 'shortcut.collapseEveryone',
   selectAll: 'shortcut.selectAll',
+  relLink: 'shortcut.relLink',
+  peekClose: 'shortcut.peekClose',
   heading: 'shortcut.heading',
   quote: 'shortcut.quote',
   numbered: 'shortcut.numbered',

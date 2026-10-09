@@ -18,6 +18,8 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
   redo: ['PageView.tsx', 'undoTimelineUi.ts', 'ProjectSearch.tsx'],
   comment: ['EditorComments.tsx', 'commentsUi.ts'],
   selectAll: ['collapseEditor.ts'],
+  // El adelanto de un subrayado (relations/relUnderline.ts y RelPeek.tsx): Esc lo cierra.
+  peekClose: ['relUnderline.ts', 'RelPeek.tsx'],
   photoOpen: ['PageEditor.tsx'],
   photoInlineSelect: ['inlinePhotoEditor.ts'],
   photoInlineType: ['inlinePhotoEditor.ts'],

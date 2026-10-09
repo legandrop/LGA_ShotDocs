@@ -8,10 +8,10 @@ import { openQuestions, sceneTitleOf } from './dayLive';
 import { goToPlace } from './goToPlace';
 import type { LiveSource, Place } from './liveView';
 
-// En el editor de un reporte del día (Docs/Doc_Relaciones.md, sección 11; maqueta `d_escribir.html`): al lado del link de
-// un título de escena («Escena 105_029», el que deja *Prepare*), el título de la escena en vivo; y debajo, la pregunta
-// abierta de su desglose. Son decoraciones de ProseMirror: no están en el documento, no se sincronizan, no se copian ni
-// se imprimen. Así un invitado del día no lee el desglose en el reporte, y el título nunca queda viejo.
+// En el editor de un reporte del día (Docs/Doc_Relaciones.md, sección 11; maqueta `d_escribir.html`): debajo de un título
+// de escena con link («Escena 105_029», el que deja *Prepare*), la pregunta abierta de su desglose (el título de la escena
+// en vivo, al final del título, lo pone `relUnderline.ts`). Son decoraciones de ProseMirror: no están en el documento, no
+// se sincronizan, no se copian ni se imprimen. Así un invitado del día no lee el desglose en el reporte.
 
 export interface DayDecoScene {
   title: string;
@@ -26,18 +26,8 @@ export interface DayDecoInfo {
 
 const key = new PluginKey<DecorationSet>('shotdocs-day-decorations');
 const REFRESH = 'shotdocs-day-decorations-refresh';
-const TITLE_CHARS = 44;
 const QUESTION_CHARS = 160;
 const short = (text: string, n: number) => (text.length > n ? `${text.slice(0, n - 1).replace(/\s+\S*$/, '')}…` : text);
-
-function titleWidget(title: string): HTMLElement {
-  const el = document.createElement('span');
-  el.className = 'lh-ltitle';
-  el.contentEditable = 'false';
-  el.dataset.tip = t('day.liveTitleTip');
-  el.textContent = ` · ${short(title, TITLE_CHARS)}`;
-  return el;
-}
 
 const HELP_ICON =
   '<svg class="lh-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.5V14M12 17h.01"/></svg>';
@@ -88,11 +78,8 @@ function build(doc: PMNode, info: DayDecoInfo | null): DecorationSet {
       const id = href ? linkedPageId(href) : null;
       const scene = id ? info.scene(id) : null;
       if (!scene) continue;
-      // El final del link: un link partido en pedazos (negrita en el medio) es uno solo.
-      let last = i;
-      while (last + 1 < kids.length && hrefOf(kids[last + 1].node) === href) last++;
-      const end = start + 1 + kids[last].offset + kids[last].node.nodeSize;
-      if (scene.title) decos.push(Decoration.widget(end, () => titleWidget(scene.title), { side: 1, ignoreSelection: true, key: `lt:${id}:${scene.title}` }));
+      // El título de la escena en vivo lo dibuja el subrayado (relUnderline.ts), en cualquier página y al final del
+      // título: lo escrito después del link se lee antes que él (O4 de la auditoría de E5).
       const q = scene.question;
       if (q) {
         decos.push(

@@ -5,6 +5,7 @@ import { findExtension } from './findEditor';
 import { inlinePhotoSpotsExtension } from './inlinePhotoCreate';
 import { inlinePhotoExtensions } from './inlinePhotoEditor';
 import { undoGuardExtension } from './undoGuard';
+import { relLinkKeyExtension } from '../relations/relLink';
 
 /**
  * El teclado del salto de hoja (Docs/Doc_Hojas_PDF.md). Cada tecla actúa solo en su caso y si no, sigue la del editor.
@@ -48,6 +49,8 @@ export function pageEditorExtensions(collapse: CollapseOptions | null) {
     pageBreakExtension,
     // Retroceso al principio de un título "sube la línea", en todos los navegadores (también sin colapsar).
     headingBackspaceExtension,
+    // Volver link la escena o la locación subrayada (relations/relLink.ts): sin el subrayado (la exportación) no hace nada.
+    relLinkKeyExtension,
     ...(collapse ? [collapseExtension(collapse)] : []),
   ];
 }

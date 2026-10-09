@@ -166,6 +166,8 @@ const LIVE_DAY = '0.241';
 const LIVE_PHOTOS = '0.243';
 /** El mapa del proyecto, Copy map / JSON y la lupa por escenas y locaciones (relaciones en vivo, E9): la versión se pone al publicar. */
 const LIVE_MAP = '0.242';
+/** El subrayado de escenas y locaciones, su adelanto, volverlo link y la barra Today (relaciones en vivo, E6). */
+const LIVE_UNDERLINE = '0.244';
 /** Exportar una rama o un proyecto como PDF (P.22, Doc_Exportar.md, entrega 1): la versión se pone al publicar. */
 const EXPORT_PDF = '0.122';
 /** Exportar como zip (P.22, Doc_Exportar.md, entrega 2): la versión se pone al publicar. */
@@ -354,6 +356,17 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.searchEntities.text',
     words: ['scene number', 'número de escena', '5027', '101_074', 'location', 'locación', 'search', 'buscar'],
     since: LIVE_MAP,
+  },
+  {
+    id: 'liveUnderline',
+    section: 'find',
+    title: 'help.liveUnderline.title',
+    text: 'help.liveUnderline.text',
+    textTouch: 'help.liveUnderline.textTouch',
+    keys: { link: 'relLink' },
+    more: ['peekClose'],
+    words: ['underline', 'subrayado', 'subrayada', 'preview', 'adelanto', 'make it a link', 'volverlo link', 'link', 'today', 'hoy', 'pending', 'pendiente', 'chip', 'ficha'],
+    since: LIVE_UNDERLINE,
   },
   { id: 'projectsArchive', section: 'pages', title: 'help.projectsArchive.title', text: 'help.projectsArchive.text', since: BEFORE_HELP },
   { id: 'projectsDrive', section: 'pages', title: 'help.projectsDrive.title', text: 'help.projectsDrive.text', when: 'admin', since: BEFORE_HELP },

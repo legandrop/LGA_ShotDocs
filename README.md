@@ -250,6 +250,10 @@ In development. What works today:
 - *Map*, above the pages: every location in time, every scene with where a report has a section of it, the shoot days
   and what's still pending, built from what the pages say; *Copy map* and *Copy JSON* hand it to an assistant, and the
   search finds a scene by any form of its number (`101-074`, `1074`, `5027b`) or a location by name, first.
+- While you write, scene numbers and location names that exist in the project get a subtle dotted underline (nothing
+  pops up). Hover one, or tap it with the keyboard closed, for a preview with *Open* and *Make it a link*
+  (Ctrl+Alt+K / ⌘⌥K); links to scenes and locations show as chips. On a phone, a shoot day report has a *Today* bar above
+  the keyboard with the day's scenes, its location, the camera and dictation.
 - Public [privacy policy](https://shotdocs.lega.com.ar/privacy) and [terms](https://shotdocs.lega.com.ar/terms) pages, readable without signing in.
 
 Connecting other AI apps (MCP) comes later. The plan, the decisions and the roadmap are in

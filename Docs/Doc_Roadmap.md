@@ -86,8 +86,8 @@ también cuando el título ya se guardó (`PageView.tsx`).
 **Anotado al auditar la v0.237 (relaciones en vivo, el motor):** (1) Gramática de una serie, heredada de la maqueta: con
 escenas que existan, «1080p»/«1080i» dan 101_080, «2030h» 102_030, «4050K» 104_050, «Unidad 1002A», «clip 1074A.mov»; y
 en un título, «2026 | Presupuesto» da 102_026. En ERSO no aparece ninguno (0 falsos); para el subrayado (E6), excluir los
-sufijos de unidad `p`, `i`, `K`, `h` cuando la letra no es una escena con letra que existe, y los años 2000–2099 al
-principio de un título. (2) Sin red, cada apertura relee las páginas con ediciones sin subir (`docDirty:`, D384): en el
+sufijos de unidad `p`, `i`, `K`, `h` cuando la letra no es una escena con letra que existe (hecho en la v0.244, en el
+texto), y los años 2000–2099 al principio de un título. (2) Sin red, cada apertura relee las páginas con ediciones sin subir (`docDirty:`, D384): en el
 set son pocas; medirlo en el iPhone junto con la primera lectura (15–45 s estimados para ERSO) y el rearmado del caché.
 (3) Las cifras de rendimiento son de escritorio con fake-indexeddb: falta la medición en un teléfono real. (re-verificación) Con D391, en un largo «74 | Cocina» sin ceros ya no da la
 escena 074: hace falta «074 | Cocina», «Escena 74» o marcar la página.
@@ -130,13 +130,31 @@ que se escribe al final de un título preparado queda después del título en vi
 escena (mostrar el título en vivo de otro modo, o al final del renglón); (8) O-a de la re-verificación: con varias
 escenas, el texto que otro escribe sin red en una copia repetida que *Prepare* saca queda bajo la última sección de la
 tanda y no de la suya (la escena equivocada pasa a «shot»); (9) O-b: lo que otro escribe en el TÍTULO preparado
-mientras se hace *Undo* (ventana de segundos) se pierde con el título.
+mientras se hace *Undo* (ventana de segundos) se pierde con el título. Hecho en la v0.244: la barra *Today* de (2), la
+ficha de (3) y (7) (el título en vivo va al final del título).
+
+**Anotado en la v0.244 (relaciones en vivo, el subrayado, el adelanto y *Today*):** (1) probar en un iPhone y un Android
+de verdad lo que el navegador sin pantalla no abre: el teclado (la barra *Today* arriba de él con `visualViewport`, el
+caret que no quede abajo de la barra), mantener apretado en iOS (el menú del sistema sobre el texto; `-webkit-touch-callout`
+lo apaga en el subrayado) y el dictado del teclado (IME) sobre un número; (2) *Create* y *Assign* desde el adelanto de un
+pendiente, y *Map › Pending* (E7/E9): hoy el adelanto solo dice que no existe; (3) en una página enorme (*BD Main*, 472
+subrayados) armar y dibujar tarda 12–36 ms en la computadora: medirlo en un teléfono, y si molesta, rearmar solo los
+bloques que cambiaron; (4) el lector todavía toma «2026 | Presupuesto» al principio de un título como 102_026 (auditoría
+de la v0.237): no se tocó porque «2012 | Cocina» puede ser la escena; (5) la barra *Today* no deja elegir otras escenas
+que las del plan (*Add scene* desde ahí); (6) volver link todos los subrayados de una página de una vez; (7) de la
+auditoría: el fondo de `:hover` sí aparece bajo el mouse quieto cuando el subrayado nuevo se dibuja debajo (O9; se
+puede atar a `MouseGate` armado); borrar la última cifra de `105_029` deja medio segundo la referencia vieja en `105_02`
+(O10); *Today* deja un espacio antes de la puntuación (O11); en Safari, la fila nueva de la cabecera puede bajar el texto
+52 px en la pausa (sin `overflow-anchor`, O2).
 
 **Anotado en la v0.243 (relaciones en vivo, fotos por fuente y carrete de varias páginas):** (1) las miniaturas de los
 renglones de día y de los extractos van a su lugar, no abren el carrete (D471); (2) anotar desde el carrete de varias
 páginas (hoy solo se ven las anotaciones, D470); (3) las anotaciones de otra página salen de una copia de lo guardado: una
 nueva de otro dispositivo se ve al reabrir el carrete; (4) la leyenda del bloque de cada foto no viaja al carrete de
-varias páginas (el índice no la guarda); (5) dos scoutings del mismo tipo y la misma fecha se rotulan igual.
+varias páginas (el índice no la guarda); (5) dos scoutings del mismo tipo y la misma fecha se rotulan igual; (6) de la
+re-verificación: en el teléfono el primer toque después de deslizar el carrete a veces no hace clic (ya pasaba con el
+carrete de una página; falta un iPhone real), la leyenda de un scouting se corta y en el tema oscuro el contorno de la
+foto resaltada es tenue.
 
 **Anotado en la v0.242 (relaciones en vivo, el mapa y la lupa):** hecho el punto (2) de «ERSO en vivo» (⌘K con las otras
 formas del número, la escena primero). Queda: (1) *Create* y *Assign* en *Map › Pending* (E7, en la ranura `actions` de
