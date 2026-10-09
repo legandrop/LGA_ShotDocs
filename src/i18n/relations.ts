@@ -360,8 +360,20 @@ export const relations = {
     es: "Otro dispositivo creó «{title}» a la vez: queda ese y él lo prepara (la copia vacía de acá fue a la papelera)",
   },
   'day.newTwins': {
-    en: "another device was creating the same day at the same time: if two reports stay, Map › Pending lists them",
-    es: "otro dispositivo estaba creando el mismo día a la vez: si quedan dos reportes, Mapa › Pendientes los lista",
+    en: "Another device created «{title}» at the same time and both reports stayed: Map › Pending lists them",
+    es: "Otro dispositivo creó «{title}» a la vez y quedaron los dos reportes: Mapa › Pendientes los lista",
+  },
+  'day.newCreating': {
+    en: "Creating «{title}»… first it checks that no other device created it.",
+    es: "Creando «{title}»… primero se fija que ningún otro dispositivo lo haya creado.",
+  },
+  'day.prepareWaiting': {
+    en: "Waiting for «{day}» to arrive from the device that just created it…",
+    es: "Esperando que llegue «{day}» del dispositivo que lo acaba de crear…",
+  },
+  'day.cededBack': {
+    en: "«{title}» came back from the trash: someone wrote in it while another device was creating the same day. While both are there, Map › Pending lists them.",
+    es: "«{title}» volvió de la papelera: alguien escribió ahí mientras otro dispositivo creaba el mismo día. Mientras estén los dos, Mapa › Pendientes los lista.",
   },
   'day.prepareBusy': {
     en: "«{day}» was just created on another device and its content hasn’t arrived yet: try again in a moment. Nothing was changed.",

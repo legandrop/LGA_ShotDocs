@@ -79,6 +79,12 @@ export interface PageSettings {
    * `src/relations/kind.ts`, nunca suelta.
    */
   holds?: 'scene' | 'location' | 'day' | false;
+  /**
+   * La copia vacía de un reporte del día que este dispositivo mandó a la papelera porque otro creó el mismo día a la vez
+   * (D580, D626): a qué página cedió (`to`) y la hora de esa papelera (`at`). Si alguien escribe en ella, cualquier
+   * dispositivo la saca de la papelera y le quita la marca (`src/relations/cededCopy.ts`). No se hereda.
+   */
+  ceded?: { to: string; at: string };
 }
 
 export type PagePatch = Partial<Pick<PageRow, 'title' | 'icon' | 'parent_id' | 'sort_key' | 'deleted_at' | 'settings' | 'template_id'>>;

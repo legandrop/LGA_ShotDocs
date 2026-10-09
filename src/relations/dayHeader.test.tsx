@@ -351,7 +351,10 @@ describe('Tomorrow sin día siguiente: crear y preparar el reporte de mañana (D
     const before = d.tree.children(built.ids.rodaje).length;
     server.online = false;
     click(button);
+    // Mientras mira si otro dispositivo ya lo creó, la tarjeta lo dice (no solo el botón apagado, D629).
+    await shown(() => expect(header(host)!.querySelector('.lh-tomorrow.new .row2 [role=status]')?.textContent).toMatch(/^Creating «2026-03-\d\d \| Día 77»… first it checks/));
     await shown(() => expect(host.textContent).toContain('Connect to create tomorrow’s report'), 15000);
+    expect(header(host)!.querySelector('.lh-tomorrow.new .row2 [role=status]')).toBeNull();
     expect(d.tree.children(built.ids.rodaje).length).toBe(before);
     server.online = true;
   });

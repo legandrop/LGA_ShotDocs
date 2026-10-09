@@ -185,25 +185,37 @@ el selector de un día (sin episodio) las escenas con letra de otro episodio sal
 paso: el adelanto de un pendiente ya no le dice «doesn’t exist yet» a quien ve una parte del proyecto (D401). Hecho en la
 v0.248: (2) *Undo* de *Assign* (D566), (3) *Assign* en *Pending* (D567), O6 (D569), O7 en el mapa (D568) y O8 (D570).
 
-**Anotado en la v0.248 (relaciones en vivo, lo que quedaba del `/`, *Assign* y *Tomorrow*):** (0) de la re-verificación
+**Anotado en la v0.251 (la copia que cede, E15):** (1) abrir la copia que cede sin escribir no se ve (no hay presencia):
+queda en la papelera con su cartel; (2) un comentario en esa copia no la trae de vuelta (solo texto o fotos); (3) crear el
+reporte de mañana sigue tardando 4–7 s: se dice en la tarjeta, pero achicarlo pide una consulta propia de la carpeta en vez
+de la segunda sincronización entera (D629); (4) la locación en el título de mañana cuando todas las fichas del plan dicen
+la misma (D631: barata, en ERSO aplica a 11 de 73 días); (5) probarlo en un teléfono de verdad. De la auditoría de E15:
+(6) una 0.249 que cede lo hace sin marca y esa copia no vuelve sola (O4: subir `min_app_version` a la 0.251 al publicar);
+(7) *Map › Pending* y el «Open “…”» del cartel muestran dos páginas con el mismo título y no se distingue cuál tiene el
+texto del tercero (O8, ya venía de D520); (8) un invitado que escribe en la copia después de que cedió no la trae de vuelta
+(D637): haría falta que el servidor acepte lo escrito en una copia cedida o una restauración condicional en la base (solo
+si `deleted_at` sigue siendo la hora de la marca).
+
+**Anotado en la v0.248 (relaciones en vivo, lo que quedaba del `/`, *Assign* y *Tomorrow*):** ~~(0) de la re-verificación
 (media): la copia que cede (D580) puede ir a la papelera con texto de un tercer dispositivo que la abrió y escribió en sus
 primeros segundos (queda en la papelera, con «Restaurar»); antes de mandarla, una última sincronización que mire si
 alguien la abrió o le escribió, o dejarla listada en *Pending* como las repetidas; además, el aviso de crear tarda
 3,7–7,3 s, *Prepare* sobre una página que llega tarda hasta 12 s sin más señal que el botón apagado, y el aviso «si quedan
-dos…» sale aunque el otro ceda. ~~(1) mientras se tipea
+dos…» sale aunque el otro ceda~~ (hecho en la v0.251, D626–D630: vuelve sola si alguien escribió; las esperas se dicen).
+~~(1) mientras se tipea
 `/e 105_141` el número sigue subrayado gris de pendiente~~ (hecho en la v0.250, D664); (2) otro dispositivo cuenta esa consulta como pendiente hasta que se
 elige (solo se anota en el dispositivo que tipea); (3) dos dispositivos que crean el reporte de mañana con red en el mismo
 segundo pueden dejar dos reportes (la sincronización en el momento achica la ventana a un viaje; quedan los dos, como
-D520); (4) el reporte de mañana no lleva la locación en el título (D574) y su ficha propone la locación de ayer, como *New
-day report*; ~~(5) *Assign* en *Pending* no dice nada de las páginas que no puede editar~~ (hecho en la v0.250, D666); (6) el *Undo* de *Assign* y del reporte de mañana vive solo en el aviso (15 s, no se pausa con el mouse
+D520); (4) el reporte de mañana no lleva la locación en el título (D574; evaluado en la v0.251, D631) y su ficha propone la
+locación de ayer, como *New day report*; ~~(5) *Assign* en *Pending* no dice nada de las páginas que no puede editar~~ (hecho en la v0.250, D666); (6) el *Undo* de *Assign* y del reporte de mañana vive solo en el aviso (15 s, no se pausa con el mouse
 encima; un aviso sin botón que llega encima lo corre); (7) probar la tarjeta nueva en un teléfono de verdad. De la
 auditoría de E11 (hechos en la ronda: B1 = D578, B2 = D579 y D580, el orden del *Undo*, el *Undo* parcial en varias
 páginas, «Alguien lo cambió» neutral y el tope corto sin red): (8) la sincronización entre dispositivos tarda 6–20 s en
 la base real, más que lo que vive el *Undo*; (9), (10) y (11) hechos en la v0.250 (D665, D669, D667: `withoutDraft` descuenta solo la mención de la
 consulta; la nota de *Tomorrow* deja libre la columna del botón de dictar; las fechas salían siempre en inglés); (12) una foto `sdmedia://` cuyo registro no existe deja
 «usos sin confirmar» que traban *Borrar proyecto* (fuera de E11); (13) la regla de «recién creado en otro dispositivo»
-(D579) usa la hora de la base contra la del dispositivo: con el reloj muy corrido, espera de más o de menos; (14) la
-copia que cede (D580) queda en la papelera, vacía.
+(D579) usa la hora de la base contra la del dispositivo: con el reloj muy corrido, espera de más o de menos; ~~(14) la
+copia que cede (D580) queda en la papelera, vacía~~ (v0.251, D630: queda, rotulada).
 
 **Anotado en la v0.244 (relaciones en vivo, el subrayado, el adelanto y *Today*):** (1) probar en un iPhone y un Android
 de verdad lo que el navegador sin pantalla no abre: el teclado (la barra *Today* arriba de él con `visualViewport`, el

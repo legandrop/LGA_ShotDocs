@@ -253,6 +253,21 @@ describe('la papelera en el selector de proyectos', () => {
     expect(document.querySelector('.project-menu')).toBeNull();
   });
 
+  it('la copia vacía que cedió (dos dispositivos crearon el mismo día) se reconoce en la lista (D630)', async () => {
+    const { server, owner, p, keep } = await workspace();
+    const copy = await owner.tree.create(null, '2026-03-16 | Día 77', p);
+    await owner.engine.syncNow();
+    const { cedeCopy } = await import('../relations/cededCopy');
+    await cedeCopy(owner.tree, copy, keep);
+    await owner.engine.syncNow();
+    await openTrash(owner, server.ownerId);
+    await act(async () => byText('Pages')!.click());
+    const rows = [...document.querySelectorAll<HTMLElement>('.trash-item[data-kind="page"]')];
+    const of = (title: string) => rows.find((r) => r.querySelector('button.title')?.textContent === title)!;
+    expect(of('2026-03-16 | Día 77').textContent).toContain('Copy that stepped back: another device created the same day at the same time');
+    expect(of('Escena vieja').textContent).not.toContain('Copy that stepped back');
+  });
+
   it('Restore de un proyecto lo devuelve a la lista, como antes', async () => {
     const { server, owner, o } = await workspace();
     await openTrash(owner, server.ownerId);

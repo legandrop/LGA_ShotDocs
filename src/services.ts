@@ -26,6 +26,7 @@ import { normalizeStructure, seedIfEmpty } from './sync/structure';
 import { PageTree } from './sync/tree';
 import { watchTitleRests } from './sync/titleRest';
 import { installEntityMarks } from './relations/entitySync';
+import { watchCededCopies } from './relations/cededCopy';
 import { cutText } from './lib/graphemes';
 import { DB_LIMITS } from './lib/dbLimits';
 import { errorMessage } from './sync/types';
@@ -429,6 +430,17 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser, link
         const short = cutText(rest.title, 60);
         notify(t('page.titleRestMoved', { max: DB_LIMITS.pageTitle, title: (short === rest.title ? short : `${short}…`) || t('common.untitled') }));
       });
+      // La copia de un reporte del día que cedió (D580) y en la que alguien escribió vuelve de la papelera (D626). Un link no
+      // cambia filas.
+      const stopCeded = link
+        ? () => undefined
+        : watchCededCopies(
+            { tree, docs, canRestore: (id) => new Permissions(tree, access.get(), user.id).canManagePage(id) },
+            engine,
+            (ids) => {
+              for (const id of ids) notify(t('day.cededBack', { title: tree.get(id)?.title || t('common.untitled') }));
+            },
+          );
       engine.start();
       online = () => engine.getStatus().online;
       mentions?.start();
@@ -474,6 +486,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser, link
         closing ??= (async () => {
           const stopping = engine.stop();
           stopTitleRests();
+          stopCeded();
           mentions?.stop();
           accessRequests?.stop();
           for (const fn of unwatchRequests) fn();

@@ -172,6 +172,11 @@ const LIVE_UNDERLINE = '0.244';
  * `linkScenes` (antes 0.245, E7). La versión se pone al publicar.
  */
 const REL_RESTOS = '0.248';
+/**
+ * La copia que cede al crear el reporte de mañana a la vez en dos dispositivos vuelve de la papelera si alguien escribió
+ * en ella, y la tarjeta dice qué está haciendo mientras crea o espera (E15, D626–D630). Sube `liveDay` (antes 0.248).
+ */
+const TOMORROW_CEDE = '0.251';
 /** Otros nombres de una locación y Dejar fuera de las relaciones (D526–D545). */
 const LOCATION_NAMES = '0.247';
 /** Exportar una rama o un proyecto como PDF (P.22, Doc_Exportar.md, entrega 1): la versión se pone al publicar. */
@@ -336,8 +341,8 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'find',
     title: 'help.liveDay.title',
     text: 'help.liveDay.text',
-    words: ['shoot day', 'día de rodaje', 'tomorrow', 'mañana', 'prepare', 'preparar', 'report', 'reporte', 'plan', 'planning', 'fecha rodaje', 'call sheet', 'new day report', 'create tomorrow', 'crear mañana'],
-    since: REL_RESTOS,
+    words: ['shoot day', 'día de rodaje', 'tomorrow', 'mañana', 'prepare', 'preparar', 'report', 'reporte', 'plan', 'planning', 'fecha rodaje', 'call sheet', 'new day report', 'create tomorrow', 'crear mañana', 'empty copy', 'copia vacía'],
+    since: TOMORROW_CEDE,
   },
   {
     id: 'livePhotos',

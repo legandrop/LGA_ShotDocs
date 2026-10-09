@@ -28,6 +28,12 @@ export const page = {
     es: "Si este link es de otro de tus workspaces, cambiá a ese en Workspaces y abrí el link de nuevo.",
   },
   'page.inTrash': { en: "This page is in the trash.", es: "Esta página está en la papelera." },
+  // La copia vacía de un reporte del día que cedió porque otro dispositivo creó el mismo día a la vez (D580, D628).
+  'page.cededTrash': {
+    en: "This copy went to the trash: another device created the same day at the same time. Write in the one that stayed; what is written here brings the copy back once a device that can restore pages syncs.",
+    es: "Esta copia fue a la papelera: otro dispositivo creó el mismo día a la vez. Escribí en la que quedó; lo que se escriba acá la trae de vuelta cuando sincroniza un dispositivo que puede restaurar páginas.",
+  },
+  'page.cededOpen': { en: "Open “{title}”", es: "Abrir “{title}”" },
   'page.insideTrashed': {
     en: "This page is inside “{title}”, which is in the trash.",
     es: "Esta página está adentro de “{title}”, que está en la papelera.",

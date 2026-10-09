@@ -1051,3 +1051,48 @@ título, crear, dos toques, dos dispositivos, sin red, sin permiso, *Undo* con y
 existía).
 
 **Decisiones:** D566–D577 en `Doc_Decisiones.md`.
+
+## 19. La copia que cede y un tercer dispositivo (E15, v0.251)
+
+Cuando dos dispositivos crean el reporte de mañana a la vez, el de id mayor cede (sección 18, D580). Un tercero que abre
+esa copia en sus primeros segundos y escribe podía quedar con su texto en la papelera. Ahora (D626–D630,
+`src/relations/cededCopy.ts`):
+
+- **Antes de ceder** se mira una vez más: nada en el servidor después de la última sincronización (`update_seq`) ni en el
+  dispositivo. Si ya escribieron, no cede: le agrega solo las secciones, como *Prepare*, y quedan los dos reportes.
+- **Al ceder**, la fila lleva `settings.ceded` (a cuál cedió y la hora de la papelera) y va a la papelera con esa misma
+  hora (`cedeCopy`). Una versión vieja ignora la clave.
+- **Después**, en cada dispositivo con cuenta (no un link), un vigía (`watchCededCopies`, desde `services.ts`) mira, al
+  terminar cada sincronización (nunca antes de la primera: con el árbol viejo del dispositivo pisaría una papelera puesta
+  a propósito después, D632), las copias cedidas que siguen en la papelera con esa hora: si lo guardado en el dispositivo
+  tiene texto o fotos (lo propio, subido o no, o lo que bajó), la restaura, le quita la marca y avisa «… came back from the
+  trash». Lo hace el primero que lo ve: el que escribió, o cualquiera que baje lo escrito. Una restaurada y borrada a mano
+  ya no vuelve (otra hora). Lo que se miró vacío no se vuelve a leer hasta que cambia `update_seq`, el cursor o la versión
+  (se compara con `stateOf` antes de leer el contenido, D636).
+- Si quien crea encuentra que ya escribieron en su página, le agrega solo las secciones y su *Undo* saca solo esas (D635).
+- **Quedan dos días** con el mismo título: *Map › Pending* los lista (`dayTwins`). El aviso de «quedaron los dos» sale solo
+  si, unos segundos después de crear, el otro sigue vivo (`twinsLeft`, D627) y este dispositivo no avisó ya que volvió
+  (D633).
+- **A la vista:** el cartel de la copia en la papelera dice por qué y tiene «Open “…”» a la que quedó (D628); la lista de la
+  papelera la rotula «Copy that stepped back…» (D630; textos sin prometer de más, D634). La tarjeta dice «Creating «…»…» mientras crea (también la de siempre, que aparece apenas sube la fila, sin *Prepare*
+  hasta que termina: `isCreating`) y la de siempre «Waiting for
+  «…»…» mientras *Prepare* espera un reporte que llega; *Prepare* deja de esperar si ese reporte va a la papelera (D629).
+
+**Límites.** Abrir sin escribir no se ve (no hay presencia). Un comentario en la copia no la trae de vuelta. **Un
+invitado** que escribe en la copia después de que cedió no la trae de vuelta y su texto no sube: en la papelera la página
+le da nivel 0 (`user_page_level`), `push_page_update` lo rechaza y lo escrito queda en su dispositivo como rechazado, sin
+perderse (vuelve a subir si alguien restaura la página); ningún otro dispositivo lo ve, así que nadie la restaura (D637).
+Un miembro que edita sin poder restaurar sí sube su texto, y la saca el primer dispositivo que puede. Una versión vieja
+(0.249 o antes) que cede lo hace sin marca y esa copia no vuelve sola: por eso `min_app_version` sube a la 0.251 al
+publicar. Si nadie con permiso de restaurar vuelve a abrir la app, el texto queda en la papelera hasta que alguien la abra; si alguien la borra
+de la papelera antes, se va como cualquier página de la papelera. La locación en el título de mañana se evaluó y no se hizo
+(D631).
+
+**Pruebas.** `tomorrowNew.test.ts` con tres dispositivos y el servidor en memoria (C escribe y su texto llega después de la
+papelera: vuelve en C; C sube y se va: vuelve en A; C escribe antes de la última mirada: no cede y suma solo las secciones;
+C solo la abre: queda; restaurada y borrada a mano: no vuelve; el aviso de «quedaron dos»; *Prepare* avisa que espera y
+corta si la copia va a la papelera; de la auditoría: un miembro sin permiso de restaurar, y un dispositivo que arranca con
+el árbol viejo no pisa una papelera puesta a propósito), `cededBanner.test.tsx` (el cartel), `trashUnified.test.tsx` (el rótulo),
+`dayHeader.test.tsx` («Creating…»).
+
+**Decisiones:** D626–D637 en `Doc_Decisiones.md`.

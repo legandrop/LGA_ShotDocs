@@ -421,6 +421,8 @@ export interface PrepareDeps {
   tree?: { get(id: string): PageRow | undefined; hasUnsentCreate(id: string): boolean };
   /** Cuánto esperar a que llegue el contenido de una página que está llegando (`ARRIVING_WAIT_MS`; las pruebas, menos). */
   arrivingWaitMs?: number;
+  /** Avisa que se empieza a esperar una página que está llegando (D629): quien toca ve qué pasa y no solo el botón apagado. */
+  onWait?: () => void;
 }
 
 /** Hasta cuándo una página creada en otro dispositivo, sin contenido en el servidor, se espera en vez de darse por vacía. */
@@ -453,9 +455,12 @@ export async function isArriving(deps: Pick<PrepareDeps, 'docs' | 'tree'>, pageI
  */
 async function ready(deps: PrepareDeps, pageId: string): Promise<'ok' | 'missing' | 'busy'> {
   if (await isArriving(deps, pageId)) {
+    deps.onWait?.();
     const end = Date.now() + (deps.arrivingWaitMs ?? ARRIVING_WAIT_MS);
     while (Date.now() < end && (await isArriving(deps, pageId))) {
       if (!deps.engine.syncNow) return 'busy';
+      // Fue a la papelera mientras se esperaba (la copia que cede, D580): no hay nada que esperar.
+      if (deps.tree?.get(pageId)?.deleted_at) return 'busy';
       await deps.engine.syncNow().catch(() => undefined);
       await new Promise((r) => setTimeout(r, 600));
     }

@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.251 :
+
+Cuando dos dispositivos creaban a la vez el reporte de mañana, la copia que cedía iba a la papelera aunque un tercero ya hubiera escrito en ella: su texto llegaba después de la decisión y quedaba escondido. Ahora la copia lleva una marca y cualquier dispositivo que vea algo escrito en ella la saca de la papelera y avisa; quedan los dos días y *Map › Pending* los lista. Si ya escribieron antes de ceder, no cede y le agrega solo las secciones (antes decía que las agregaba sin hacerlo). Además: la tarjeta dice «Creating…» mientras crea y «Waiting for…» mientras *Prepare* espera un reporte que llega; el aviso de «quedaron dos» sale solo si quedaron; la copia en la papelera explica por qué y lleva a la que quedó. D626–D631.
+
+[Que la copia del reporte de mañana que cede vuelva de la papelera si alguien escribió en ella, y que crear y preparar digan qué están esperando]
+
 v0.250 :
 
 Quedaban detalles chicos de las relaciones en vivo. Mientras se tipeaba `/e 105_141` el número se subrayaba de pendiente, y la consulta descontaba también una mención escrita antes del `/`; ahora el subrayado la salta y solo se descuenta lo suyo. *Assign* en *Pending* avisa qué páginas no pudo tocar por permisos. *Link to a location…* ya no ofrece ni escribe un texto con comas o de más de 60 caracteres (el lector lo ignoraría y el aviso decía «agregado»). Las fechas de la cabecera del día salían siempre en inglés (`locale() === 'es'` nunca se cumplía). Borrar la última cifra de `105_029` ya no deja `105_02` subrayado. «Dejar fuera de las relaciones» va en un renglón, la nota de *Tomorrow* no queda bajo el botón de dictar y la nota de conflicto de un nombre explica cada caso. D661–D670.

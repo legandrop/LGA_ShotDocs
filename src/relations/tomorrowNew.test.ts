@@ -12,7 +12,7 @@ import { dayLive, headingStyleFor, linkTargetOf } from './dayLive';
 import { buildProject, writeBlocks, type Built } from './fixtures/proyectoSintetico';
 import { dayRef, type LiveSource } from './liveView';
 import { RelationIndex } from './relationIndex';
-import { addDays, createTomorrow, nextDayNumber, nextDayTitle, proposeTomorrow, reportOnDate, undoTomorrow, type TomorrowInput } from './tomorrowNew';
+import { addDays, createTomorrow, nextDayNumber, nextDayTitle, proposeTomorrow, reportOnDate, twinsLeft, undoTomorrow, type TomorrowInput } from './tomorrowNew';
 
 // La tarjeta *Tomorrow* de un día sin día siguiente (D573–D577): crear el reporte de mañana como *New day report* y
 // prepararlo en un paso, con las garantías de *Prepare*: solo agrega, no duplica (dos toques, otro dispositivo), *Undo*
@@ -160,6 +160,22 @@ describe('crear y preparar el reporte de mañana', () => {
     await B.engine.syncNow();
     await A.engine.syncNow();
     expect((await headingsOf(A, res.pageId)).filter((h) => h.startsWith('Escena'))).toEqual(['Escena 104_008', 'Escena 105_029']);
+  });
+
+  it('mientras crea, se sabe que este dispositivo lo está creando (la tarjeta de siempre lo dice, D629)', async () => {
+    const { A, built } = await world();
+    const { input } = await sourceOf(A, built);
+    const { creatingKey, isCreating, subscribeCreating } = await import('./tomorrowNew');
+    const key = creatingKey(built.projectId, built.ids.rodaje, '2026-03-16');
+    let calls = 0;
+    const off = subscribeCreating(() => calls++);
+    expect(isCreating(key)).toBe(false);
+    const job = createTomorrow(depsOf(A), input, canCreate);
+    expect(isCreating(key)).toBe(true);
+    await job;
+    expect(isCreating(key)).toBe(false);
+    expect(calls).toBe(2);
+    off();
   });
 
   it('sin red no crea nada y lo dice (otro dispositivo pudo crearlo ya)', async () => {
@@ -359,3 +375,278 @@ describe('dos que crean el mismo día a la vez: cede el de id mayor, nunca los d
     expect(live.length).toBe(2);
   });
 });
+
+describe('la copia que cede y un tercer dispositivo que escribe en ella (D626–D630)', () => {
+  const SMALL = '00000000-0000-4000-8000-000000000001';
+
+  /** Espera a que se cumpla algo (los vigías corren solos después de cada sincronización). */
+  async function until(fn: () => boolean | Promise<boolean>, ms = 4000): Promise<boolean> {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      if (await fn()) return true;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    return fn();
+  }
+
+  /** El vigía de `services.ts` en un dispositivo de prueba. */
+  async function watch(d: Device, onBack: (ids: string[]) => void = () => undefined) {
+    const { watchCededCopies } = await import('./cededCopy');
+    return watchCededCopies({ tree: d.tree, docs: d.docs, canRestore: () => true }, d.engine, onBack);
+  }
+
+  /** El texto de una página en un dispositivo (lo guardado ahí). */
+  async function textOf(d: Device, pageId: string): Promise<string> {
+    const { doc } = await d.docs.indexSnapshot(pageId);
+    const { unitsFromYDoc } = await import('../search/extract');
+    const out = unitsFromYDoc(doc).map((u) => u.text).join(' | ');
+    doc.destroy();
+    return out;
+  }
+
+  /**
+   * A y B crean el mismo día a la vez (la fila de B, de id menor, sube justo antes que la de A) y C, un tercero, abre la
+   * copia de A apenas aparece. `third` es lo que hace C justo antes de la última mirada de A.
+   */
+  async function threeDevices(third: (C: Device, copy: string) => Promise<void>) {
+    const { A, built, server } = await world();
+    const B = await makeDevice(server);
+    const C = await makeDevice(server);
+    devices.push(B, C);
+    await B.engine.syncNow();
+    await C.engine.syncNow();
+    const { input } = await sourceOf(A, built);
+    let calls = 0;
+    const engine = {
+      ...A.engine,
+      getStatus: () => A.engine.getStatus(),
+      isMissingContent: (id: string) => A.engine.isMissingContent(id),
+      prefetchPage: (id: string, ms?: number) => A.engine.prefetchPage(id, ms),
+      syncNow: async () => {
+        calls++;
+        if (calls === 2) {
+          await B.tree.create(built.ids.rodaje, '2026-03-16 | Día 77', built.projectId, { id: SMALL, templateId: BUILTIN_ONSET });
+          await B.engine.syncNow();
+        }
+        if (calls === 3) {
+          // La fila de A ya subió: C la ve en el árbol y la abre.
+          await C.engine.syncNow();
+          const copy = C.tree.children(built.ids.rodaje).find((p) => p.title.startsWith('2026-03-16') && p.id !== SMALL)!.id;
+          await third(C, copy);
+        }
+        return A.engine.syncNow();
+      },
+    };
+    const res = await createTomorrow({ tree: A.tree, docs: A.docs, engine: engine as never }, input, canCreate);
+    // Lo que A dejó en la cola (la papelera de la copia) sube.
+    await A.engine.syncNow();
+    return { A, B, C, built, res, server, input };
+  }
+
+  const liveOn = (d: Device, built: Built) => d.tree.children(built.ids.rodaje).filter((p) => p.title.startsWith('2026-03-16') && !d.tree.isTrashed(p.id));
+
+  it('C escribe en la copia y su texto llega después de la papelera: la copia vuelve sola, con el texto, y queda como día repetido', async () => {
+    const { A, B, C, built, res } = await threeDevices(async (C, copy) => {
+      await writeBlocks(C, copy, [{ p: 'Llegó la grúa a las 7 (C)' }]);
+    });
+    // A miró antes de que llegara lo de C: cedió.
+    expect(res.status).toBe('yielded');
+    if (res.status !== 'yielded') return;
+    const copy = res.trashed;
+    expect(A.tree.isTrashed(copy)).toBe(true);
+    expect(A.tree.get(copy)!.settings?.ceded).toMatchObject({ to: SMALL });
+    // C sincroniza (sube su texto, baja la papelera) y su vigía la saca de la papelera.
+    const backOnC: string[] = [];
+    const stop = await watch(C, (ids) => backOnC.push(...ids));
+    await C.engine.syncNow();
+    expect(await until(() => !C.tree.isTrashed(copy))).toBe(true);
+    stop();
+    await C.engine.syncNow();
+    for (const d of [A, B]) await d.engine.syncNow();
+    expect(backOnC).toEqual([copy]);
+    // Este dispositivo ya avisó que volvió: el de «quedaron los dos» no se repite (O3, D633).
+    const { wasRevivedHere } = await import('./cededCopy');
+    expect(wasRevivedHere(copy)).toBe(true);
+    // En todos: la copia viva, sin la marca, con el texto de C; y la de B también. Dos reportes del mismo día, a la vista.
+    for (const d of [A, B, C]) {
+      expect(d.tree.isTrashed(copy)).toBe(false);
+      expect(d.tree.get(copy)!.settings?.ceded).toBeUndefined();
+      expect(liveOn(d, built).map((p) => p.id).sort()).toEqual([SMALL, copy].sort());
+    }
+    expect(await textOf(A, copy)).toContain('Llegó la grúa a las 7 (C)');
+    const { src } = await sourceOf(A, built);
+    const { dayTwins } = await import('./projectMap');
+    expect(dayTwins(src)).toEqual([{ code: '2026-03-16 | Día 77', pageIds: expect.arrayContaining([SMALL, copy]), kind: 'day' }]);
+  });
+
+  it('C sube su texto y se va (no vuelve a abrir la app): A, al bajarlo, saca la copia de la papelera', async () => {
+    const { A, C, res } = await threeDevices(async (C, copy) => {
+      await writeBlocks(C, copy, [{ p: 'Nota de C' }]);
+    });
+    if (res.status !== 'yielded') throw new Error(res.status);
+    const copy = res.trashed;
+    // C sube lo suyo sin vigía (una versión vieja, o la app se cerró enseguida).
+    await C.engine.syncNow();
+    expect(C.tree.isTrashed(copy)).toBe(true);
+    const stop = await watch(A);
+    await A.engine.syncNow();
+    expect(await until(() => !A.tree.isTrashed(copy))).toBe(true);
+    stop();
+    await A.engine.syncNow();
+    await C.engine.syncNow();
+    expect(C.tree.isTrashed(copy)).toBe(false);
+    expect(await textOf(A, copy)).toContain('Nota de C');
+  });
+
+  it('C escribe y sube antes de la última mirada de A: A no cede y le agrega solo las secciones, sin pisar lo de C', async () => {
+    const { A, B, built, res, input } = await threeDevices(async (C, copy) => {
+      await writeBlocks(C, copy, [{ p: 'Nota temprana de C' }]);
+      await C.engine.syncNow();
+    });
+    expect(res).toMatchObject({ status: 'ok', created: true, twins: [SMALL], signature: null });
+    if (res.status !== 'ok') return;
+    expect(res.prepared).toMatchObject({ status: 'ok', added: [{ code: '104_008' }, { code: '105_029' }] });
+    await A.engine.syncNow();
+    await B.engine.syncNow();
+    expect(A.tree.isTrashed(res.pageId)).toBe(false);
+    expect(await textOf(A, res.pageId)).toContain('Nota temprana de C');
+    expect(escenasDe(await headingsOf(A, res.pageId))).toEqual(['Escena 104_008', 'Escena 105_029']);
+    expect(liveOn(B, built).length).toBe(2);
+    // Undo saca solo las secciones agregadas, como el de Prepare; la página y lo de C quedan (O6 de la auditoría, D635).
+    expect(res.joined).toBe(true);
+    expect(await undoTomorrow(depsOf(A), res, built.ids.rodaje, input.prepare.linkTarget)).toMatchObject({ kind: 'prepared', removed: 2 });
+    expect(escenasDe(await headingsOf(A, res.pageId))).toEqual([]);
+    expect(await textOf(A, res.pageId)).toContain('Nota temprana de C');
+    expect(A.tree.isTrashed(res.pageId)).toBe(false);
+  });
+
+  it('C solo la abre (no escribe): la copia queda en la papelera, reconocible, y ningún vigía la saca', async () => {
+    const { A, B, C, res } = await threeDevices(async (C, copy) => {
+      await C.docs.open(copy, { seed: true });
+      C.docs.close(copy);
+    });
+    if (res.status !== 'yielded') throw new Error(res.status);
+    const copy = res.trashed;
+    const stops = await Promise.all([A, B, C].map((d) => watch(d)));
+    for (let k = 0; k < 2; k++) for (const d of [A, B, C]) await d.engine.syncNow();
+    await new Promise((r) => setTimeout(r, 100));
+    for (const s of stops) s();
+    const { cededMark } = await import('./cededCopy');
+    for (const d of [A, B, C]) {
+      expect(d.tree.isTrashed(copy)).toBe(true);
+      expect(cededMark(d.tree.get(copy))).toMatchObject({ to: SMALL });
+    }
+  });
+
+  it('una copia cedida que alguien restauró y volvió a mandar a la papelera a mano: ya no vuelve sola', async () => {
+    const { A, res } = await threeDevices(async () => undefined);
+    if (res.status !== 'yielded') throw new Error(res.status);
+    const copy = res.trashed;
+    await A.tree.restore(copy);
+    await writeBlocks(A, copy, [{ p: 'Lo pasé a la otra' }]);
+    await new Promise((r) => setTimeout(r, 1100));
+    await A.tree.trash(copy);
+    await A.engine.syncNow();
+    const { cededMark, reviveCeded } = await import('./cededCopy');
+    expect(cededMark(A.tree.get(copy))).toBeNull();
+    expect(await reviveCeded({ tree: A.tree, docs: A.docs, canRestore: () => true })).toEqual([]);
+    expect(A.tree.isTrashed(copy)).toBe(true);
+  });
+
+  it('el aviso de «quedaron dos» sale solo si el otro no cedió', async () => {
+    const { A, built, server } = await world();
+    const B = await makeDevice(server);
+    devices.push(B);
+    await B.engine.syncNow();
+    const big = 'ffffffff-ffff-4fff-bfff-ffffffffffff';
+    const mine = await A.tree.create(built.ids.rodaje, '2026-03-16 | Día 77', built.projectId, { templateId: BUILTIN_ONSET });
+    await B.tree.create(built.ids.rodaje, '2026-03-16 | Día 77', built.projectId, { id: big, templateId: BUILTIN_ONSET });
+    await A.engine.syncNow();
+    await B.engine.syncNow();
+    await A.engine.syncNow();
+    // El de B no cede: quedan los dos y se avisa.
+    expect(await twinsLeft(depsOf(A), mine, [big], { tries: 2, gapMs: 10 })).toEqual([big]);
+    // B cede (como hace createTomorrow apenas ve el de A): ya no se avisa.
+    const { cedeCopy } = await import('./cededCopy');
+    await cedeCopy(B.tree, big, mine);
+    await B.engine.syncNow();
+    expect(await twinsLeft(depsOf(A), mine, [big], { tries: 2, gapMs: 10 })).toEqual([]);
+  });
+
+  it('Prepare sobre una página que está llegando avisa que espera, y deja de esperar si esa copia va a la papelera', async () => {
+    const { A, built, server } = await world();
+    const B = await makeDevice(server);
+    devices.push(B);
+    await B.engine.syncNow();
+    const fromB = await sourceOf(B, built);
+    const id = await A.tree.create(built.ids.rodaje, '2026-03-16 | Día 77', built.projectId, { templateId: BUILTIN_ONSET });
+    await A.engine.syncNow();
+    await B.engine.syncNow();
+    const { prepareReport } = await import('./prepareDay');
+    let waits = 0;
+    const started = Date.now();
+    const waiting = prepareReport({ ...depsOf(B), arrivingWaitMs: 8000, onWait: () => waits++ }, id, fromB.input.prepare);
+    const { cedeCopy } = await import('./cededCopy');
+    await cedeCopy(A.tree, id, SMALL);
+    await A.engine.syncNow();
+    expect(await waiting).toEqual({ status: 'busy' });
+    expect(waits).toBe(1);
+    expect(Date.now() - started).toBeLessThan(6000);
+    expect(await headingsOf(B, id)).toEqual([]);
+  });
+  it('(AUD-1 de la auditoría) C sin permiso de restaurar escribe en la copia; su vigía no la saca, el de A (con permiso) sí al bajarlo', async () => {
+    const { A, C, res } = await threeDevices(async (C, copy) => {
+      await writeBlocks(C, copy, [{ p: 'Nota de un miembro que solo edita' }]);
+    });
+    if (res.status !== 'yielded') throw new Error(res.status);
+    const copy = res.trashed;
+    const { watchCededCopies } = await import('./cededCopy');
+    const stopC = watchCededCopies({ tree: C.tree, docs: C.docs, canRestore: () => false }, C.engine, () => undefined);
+    await C.engine.syncNow();
+    await new Promise((r) => setTimeout(r, 300));
+    expect(C.tree.isTrashed(copy)).toBe(true);
+    stopC();
+    const back: string[] = [];
+    const stopA = await watch(A, (ids) => back.push(...ids));
+    await A.engine.syncNow();
+    expect(await until(() => !A.tree.isTrashed(copy))).toBe(true);
+    stopA();
+    expect(back).toEqual([copy]);
+  });
+
+  it('(AUD-2 de la auditoría, O1) un dispositivo cerrado con lo viejo (marca válida y texto) arranca después de que alguien la mandó a la papelera a propósito', async () => {
+    const { A, C, res, server } = await threeDevices(async (C, copy) => {
+      await writeBlocks(C, copy, [{ p: 'Texto de C' }]);
+    });
+    if (res.status !== 'yielded') throw new Error(res.status);
+    const copy = res.trashed;
+    // C sube su texto sin vigía; E (otro dispositivo) baja todo y se cierra sin haber corrido su vigía.
+    await C.engine.syncNow();
+    const E = await makeDevice(server);
+    devices.push(E);
+    await E.engine.syncNow();
+    expect(E.tree.isTrashed(copy)).toBe(true);
+    // A la saca (su vigía) y después la persona la manda a la papelera a propósito.
+    const { reviveCeded, cededMark } = await import('./cededCopy');
+    await A.engine.syncNow();
+    expect(await reviveCeded({ tree: A.tree, docs: A.docs, canRestore: () => true })).toEqual([copy]);
+    await A.engine.syncNow();
+    await new Promise((r) => setTimeout(r, 1100));
+    await A.tree.trash(copy);
+    await A.engine.syncNow();
+    expect(cededMark(A.tree.get(copy))).toBeNull();
+    // E arranca: el vigía no corre antes de la primera sincronización, con el árbol viejo del dispositivo (D632).
+    const backE: string[] = [];
+    const stopE = await watch(E, (ids) => backE.push(...ids));
+    await new Promise((r) => setTimeout(r, 300));
+    await E.engine.syncNow();
+    stopE();
+    await A.engine.syncNow();
+    // La papelera a propósito se respeta: E no la saca (O1 de la auditoría de E15, D632).
+    expect(backE).toEqual([]);
+    expect(E.tree.isTrashed(copy)).toBe(true);
+    expect(A.tree.isTrashed(copy)).toBe(true);
+  });
+});
+
+const escenasDe = (heads: string[]) => heads.filter((h) => h.startsWith('Escena'));

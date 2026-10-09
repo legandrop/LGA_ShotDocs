@@ -21,6 +21,7 @@ import { notify } from './notice';
 import { useProjectDrive } from './project';
 import { DeletedProjectItem, DeletedProjectsError, useDeletedProjects } from './ProjectStatesPart';
 import { extensionLabel, fileKind } from '../media/attachments';
+import { cededMark } from '../relations/cededCopy';
 
 // La papelera única (pedido de Lega, 2026-10-03; Docs/Doc_Proyectos_Borrar.md, "Cómo quedó: una sola papelera"): las
 // páginas, los archivos (fotos y videos que ninguna página usa, paso 11 de Docs/Plan_Workspaces.md) y los proyectos
@@ -300,6 +301,8 @@ export function TrashPanel(props: { current: string; onClose: () => void }) {
                       {p.title || tr('common.untitled')}
                     </button>
                     <span className="when">{new Date(p.deleted_at!).toLocaleString(locale(tr.lang))}</span>
+                    {/* La copia vacía que cedió (D580): se reconoce (D630). */}
+                    {cededMark(p) && <span className="muted small">{tr('trash.ceded')}</span>}
                   </div>
                   {perms.canManagePage(p.id) && (
                     <button className="secondary" onClick={() => void tree.restore(p.id)}>

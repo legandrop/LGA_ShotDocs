@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState, useSyncExternalStore, type ReactNode } from 'react';
 import { language, useT, type Translate } from '../i18n';
 import { navigate, pagePath } from '../router';
 import { usePermissions, useServices, useTree } from '../services';
@@ -13,7 +13,8 @@ import { AssignButton, CreateEntityButton, ScenePicker } from './EntityActions';
 import { LinkLocationButton } from './LinkLocation';
 import type { DayRef, LiveSource } from './liveView';
 import { addToPlan, adjustedPlan, movePlan, removeFromPlan, usePlanAdjust } from './tomorrowPlan';
-import { createTomorrow, nextDayNumber, nextDayTitle, proposeTomorrow, undoTomorrow, type TomorrowProposal } from './tomorrowNew';
+import { wasRevivedHere } from './cededCopy';
+import { createTomorrow, creatingKey, creatingSnapshot, isCreating, nextDayNumber, nextDayTitle, proposeTomorrow, subscribeCreating, twinsLeft, undoTomorrow, type TomorrowProposal } from './tomorrowNew';
 import type { PreparedSection } from './prepareDay';
 
 // La cabecera viva de un día de rodaje y su tarjeta *Tomorrow* (Docs/Doc_Relaciones.md, sección 11; maqueta S4 «D»,
@@ -245,7 +246,14 @@ function Tomorrow({ v, src, tr }: { v: DayLive; src: LiveSource; tr: Translate }
   const codes = adjustedPlan(t.plan.codes, adj);
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Esperando una página que está llegando de otro dispositivo (D629): se dice en vez del texto de ayuda.
+  const [waiting, setWaiting] = useState(false);
   const canEdit = perms.canEditPage(t.day.pageId);
+  // Este dispositivo lo está creando desde la tarjeta del día sin día siguiente (la fila ya subió y el contenido se está
+  // escribiendo): se dice y no se ofrece *Prepare* hasta que termine (D629).
+  useSyncExternalStore(subscribeCreating, creatingSnapshot);
+  const dayRow = services.tree.get(t.day.pageId);
+  const creating = !!t.day.date && !!dayRow && isCreating(creatingKey(src.snap.projectId, dayRow.parent_id, t.day.date));
   const scenePage = (code: string) => {
     const id = src.snap.registry.scenes.get(code)?.pageId ?? null;
     return id && src.title(id) !== undefined ? id : null;
@@ -277,8 +285,9 @@ function Tomorrow({ v, src, tr }: { v: DayLive; src: LiveSource; tr: Translate }
       const style = headingStyleFor(src, v.day.pageId, tr.lang);
       const { prepareReport, undoPrepared } = await import('./prepareDay');
       // Con el árbol: un reporte recién creado en otro dispositivo cuyo contenido todavía no llegó no se prepara (D579).
-      const deps = { docs: services.docs, engine: services.engine, tree: services.tree };
+      const deps = { docs: services.docs, engine: services.engine, tree: services.tree, onWait: () => setWaiting(true) };
       const res = await prepareReport(deps, t.day.pageId, { scenes, registry: src.snap.registry, linkTarget, word: style.word, level: style.level });
+      setWaiting(false);
       if (res.status !== 'ok') {
         notify(tr(res.status === 'missing' ? 'day.prepareMissing' : res.status === 'busy' ? 'day.prepareBusy' : 'day.prepareUnknown', { day: dayShortLabel(t.day) }));
         return;
@@ -320,6 +329,7 @@ function Tomorrow({ v, src, tr }: { v: DayLive; src: LiveSource; tr: Translate }
       console.warn('[relaciones] no se pudo preparar el reporte de mañana', err);
       notify(tr('day.prepareFailed'));
     } finally {
+      setWaiting(false);
       setBusy(false);
     }
   };
@@ -378,11 +388,11 @@ function Tomorrow({ v, src, tr }: { v: DayLive; src: LiveSource; tr: Translate }
       <div className="row2">
         {canEdit ? (
           <>
-            <button className="primary lh-prepare" onClick={() => void prepare()} disabled={busy || (!codes.length && !t.repeated.length)}>
+            <button className="primary lh-prepare" onClick={() => void prepare()} disabled={busy || creating || (!codes.length && !t.repeated.length)}>
               <Ic name="wand" small />
               {tr('day.prepare')}
             </button>
-            <span>{tr('day.prepareHint')}</span>
+            {creating ? <span role="status">{tr('day.newCreating', { title: dayRow?.title ?? '' })}</span> : waiting ? <span role="status">{tr('day.prepareWaiting', { day: dayShortLabel(t.day) })}</span> : <span>{tr('day.prepareHint')}</span>}
           </>
         ) : (
           <span>{tr('day.cantEdit', { day: dayShortLabel(t.day) })}</span>
@@ -456,8 +466,6 @@ function TomorrowNew({ v, src, tr, proposal }: { v: DayLive; src: LiveSource; tr
         if (p.skipped.length) parts.push(tr('day.alreadyHad', { codes: p.skipped.join(', '), count: p.skipped.length }));
         if (p.merged) parts.push(tr('day.merged', { count: p.merged }));
       } else parts.push(tr(p.status === 'missing' ? 'day.prepareMissing' : p.status === 'busy' ? 'day.prepareBusy' : 'day.prepareUnknown', { day: res.title }));
-      // Otro dispositivo creó el mismo día a la vez: quedan los dos, a la vista (D580).
-      if (res.twins.length) parts.push(tr('day.newTwins'));
       if (noPage.length) parts.push(tr('day.noPage', { codes: noPage.join(', '), count: noPage.length }));
       const canUndo = res.created || (p.status === 'ok' && p.added.length > 0);
       notify(
@@ -470,7 +478,7 @@ function TomorrowNew({ v, src, tr, proposal }: { v: DayLive; src: LiveSource; tr
                   (u) => {
                     if (u.kind === 'trashed') notify(tr('create.undone', { title: res.title }));
                     else if (u.kind === 'offline') notify(tr('create.undoOffline', { title: res.title }));
-                    else if (u.kind === 'changed') notify(tr(res.created ? 'create.undoChanged' : 'day.undoUnexpected', { title: res.title }));
+                    else if (u.kind === 'changed') notify(tr(res.created && !res.joined ? 'create.undoChanged' : 'day.undoUnexpected', { title: res.title }));
                     else if (u.kind === 'prepared') notify(u.kept ? `${tr('day.undoneShort', { count: u.removed })} · ${tr('day.undoKept', { count: u.kept })}` : tr('day.undone', { count: u.removed }));
                   },
                   (err) => console.warn('[relaciones] no se pudo deshacer el reporte de mañana', err),
@@ -482,6 +490,17 @@ function TomorrowNew({ v, src, tr, proposal }: { v: DayLive; src: LiveSource; tr
       // Al reporte de mañana, con lo agregado resaltado (o al reporte, si no se agregó nada).
       if (p.status === 'ok' && p.added.length) goToPlace(services, { pageId: res.pageId, blockId: p.added[0].headingId, endBlockId: null });
       else navigate(pagePath(res.pageId));
+      // Otro dispositivo creó el mismo día a la vez: el de id mayor cede solo en unos segundos. El aviso de «quedaron los
+      // dos» sale solo si de verdad quedaron (D627; antes salía siempre).
+      if (res.created && res.twins.length) {
+        void twinsLeft(deps, res.pageId, res.twins).then(
+          (left) => {
+            // Si una de esas la sacó de la papelera este mismo dispositivo, ya avisó lo mismo (D633).
+            if (left.length && !left.some(wasRevivedHere)) notify(tr('day.newTwins', { title: res.title }));
+          },
+          () => undefined,
+        );
+      }
     } catch (err) {
       console.warn('[relaciones] no se pudo crear el reporte de mañana', err);
       notify(tr('day.newFailed'));
@@ -546,7 +565,7 @@ function TomorrowNew({ v, src, tr, proposal }: { v: DayLive; src: LiveSource; tr
               <Ic name="wand" small />
               {tr('day.newCreate')}
             </button>
-            <span>{tr('day.newHint', { title, folder })}</span>
+            {busy ? <span role="status">{tr('day.newCreating', { title })}</span> : <span>{tr('day.newHint', { title, folder })}</span>}
           </>
         ) : (
           <span>{tr('day.newCantCreate', { folder })}</span>

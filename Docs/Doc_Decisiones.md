@@ -1338,6 +1338,8 @@ el tipo de bloque: borra y crea, y pierde lo que otro escribe en él).
   segunda unidad con el mismo título también sale, y puede quedar). Medido en la base real con la hora del toque fijada,
   0, 1, 2, 2,5, 3 y 3,5 s (dos tandas, 11 corridas): siempre un reporte, nunca secciones repetidas. El costo: el que crea
   espera una sincronización más (aviso a los 4,5–7 s en vez de 2–4). Si preferís otra: no ceder y dejar los dos listados.
+  **Corregida por D626–D630** (E15): la copia que cede lleva una marca y vuelve sola de la papelera si alguien escribió en
+  ella; el aviso de «quedaron dos» sale solo si quedaron.
 
 - **D661 · El `data-tip` de la nota de un nombre que no cuenta, un texto por caso** (2026-10-09; E17, auditoría de la v0.247
   (6)). Qué pasaba: decía «cambialo en una de las dos» también cuando el nombre es el de otra locación, y ahí no hay dos
@@ -1417,6 +1419,110 @@ con ella sobre la misma base, como las copias de `src/sync/fixtures/`.
 **Elegí B:** la prueba confirma que la versión anterior no cuenta ni manda las sin confirmar, que manda el `unlink` si la
 persona quitó la foto, y que la versión nueva las confirma después sin mandar nada.
 **Si preferís otra:** A ahorra 3000 líneas de copia, pero la regla del repo pide la prueba con lo publicado.
+
+### D626 · La copia que cede vuelve sola de la papelera si alguien escribió en ella
+**Qué pasaba:** cuando dos dispositivos crean el reporte del mismo día a la vez, el de id mayor manda su página vacía a la
+papelera (D580). Un tercero que la abrió en sus primeros segundos y escribió podía quedar con su texto en la papelera: lo
+escrito sube 1–3 s después de tipear y la decisión ya estaba tomada (re-verificación de E11).
+**Las opciones:** A) una última sincronización antes de la papelera (achica la ventana pero no la cierra: el texto puede
+llegar después de cualquier mirada); B) no ceder nunca (quedan dos reportes, uno vacío, siempre que hay carrera); C) ceder
+con una marca en la fila (`settings.ceded`: a cuál cedió y la hora de la papelera) y que **cualquier dispositivo** que vea
+algo escrito en una copia así (lo suyo, subido o no, o lo que bajó) la saque de la papelera y le quite la marca.
+**Elegí C**, más la mirada antes de ceder (sin nada en el servidor después de la última sincronización ni en el
+dispositivo): el texto no depende de cuándo llega. La copia que vuelve queda como día repetido en *Map › Pending* (D520) y
+quien la devolvió lo ve en un aviso. Si quien cede ve que ya escribieron, no cede y le agrega solo las secciones (antes
+`writeNewPage` no escribía en una página con algo y el aviso decía «se agregaron 2» sin agregarlas). La marca vale solo con
+esa hora de papelera: si alguien la restaura y la vuelve a borrar a mano, no vuelve. Abrirla sin escribir no se ve (no hay
+presencia): queda en la papelera y su cartel lleva a la que quedó (D628).
+**Si preferís otra:** B es sacar `cedeCopy` de `createTomorrow`; A sola deja el caso de la re-verificación abierto.
+
+### D627 · El aviso de «quedaron dos reportes» sale solo si quedaron
+**Qué pasaba:** el que no cede decía «si quedan dos reportes, *Pending* los lista» aunque el otro cediera segundos después.
+**Las opciones:** A) sacar el aviso (*Pending* igual los lista); B) mirar unos segundos si los otros cedieron y avisar solo
+si siguen vivos.
+**Elegí B** (`twinsLeft`: hasta 4 sincronizaciones separadas 2,5 s, en segundo plano): el aviso de crear sale sin esa
+frase y, si de verdad quedaron dos, llega uno aparte con el título.
+**Si preferís otra:** A es borrar la llamada a `twinsLeft` en `DayHeader.tsx`.
+
+### D628 · El cartel de la copia en la papelera dice por qué y lleva a la que quedó
+**Qué pasaba:** quien abría la copia que cedió veía solo «Esta página está en la papelera · Restaurar».
+**Las opciones:** A) dejarlo; B) un cartel propio: que otro dispositivo creó el mismo día a la vez, que si escribe ahí
+vuelve, y un botón a la página que quedó (si existe y no está en la papelera).
+**Elegí B:** es el único rastro que ve alguien que la abrió sin escribir.
+**Si preferís otra:** A es sacar la rama `ceded` del cartel en `PageView.tsx`.
+
+### D629 · Crear y *Prepare* dicen qué están haciendo mientras esperan
+**Qué pasaba:** crear el reporte de mañana tarda 3,7–7,3 s y *Prepare* sobre un reporte que está llegando hasta 12 s, con
+el botón apagado como única señal.
+**Las opciones:** A) achicar las esperas: la segunda lectura después de subir la fila hace falta, porque el árbol se baja
+por partes ordenadas por id y una fila nueva de otro dispositivo puede caer en una parte ya bajada; B) decirlo.
+**Elegí B:** mientras crea, la tarjeta dice «Creating «…»… first it checks that no other device created it» (también la
+tarjeta de siempre, que aparece apenas sube la fila, hasta que termina, y sin *Prepare* mientras tanto); mientras
+*Prepare* espera, «Waiting for «…» to arrive from the device that just created it…». *Prepare* deja de esperar apenas esa
+página va a la papelera (la copia que cedió).
+**Si preferís otra:** una consulta propia de la carpeta en vez de la segunda sincronización entera (un cambio en `remote`
+y en el servidor de prueba).
+
+### D630 · La copia que cedió se ve en la papelera, reconocible
+**Qué pasaba:** queda en la papelera, vacía, igual que cualquier página (roadmap v0.248 (14)).
+**Las opciones:** A) no mostrarla; B) mostrarla con «Empty copy: another device created the same day at the same time».
+**Elegí B:** esconderla sería esconder una página que alguien pudo haber abierto; con el rótulo no confunde. Se borra con
+la papelera como todo.
+**Si preferís otra:** A es filtrar `cededMark` en `TrashView.tsx`.
+
+### D631 · La locación en el título del reporte de mañana: barata, pero se usa poco
+**Qué pasaba:** D574 no copia la locación de hoy al título de mañana; se pidió evaluar si sumarla es barato.
+**Las opciones:** A) dejarlo; B) ponerla solo cuando **todas** las escenas del plan de mañana tienen en su ficha la misma
+*Locación real* y el registro la reconoce (≈40 líneas y sus pruebas, sin tocar el lector).
+**Elegí A por ahora, sin hacerlo:** medido en `mapa.json` de ERSO, de 73 días solo 12 tienen fichas con esa fecha; en 11 las
+fichas dan un solo lugar y coincide con el del título, y en 1 dan varios. Es correcto cuando hay dato pero sirve poco; queda
+en el roadmap.
+**Si preferís otra:** B, en `nextDayTitle` con un argumento más.
+
+### D632 · El vigía de las copias cedidas corre solo después de una sincronización
+**Qué pasaba:** corría también al arrancar, con el árbol guardado en el dispositivo. Un dispositivo cerrado con «copia en la
+papelera, marca válida y texto» que arrancaba después de que otro la había sacado y la persona la había vuelto a mandar a
+la papelera **a propósito**, la sacaba de nuevo (O1 de la auditoría de E15, prueba AUD-2).
+**Las opciones:** A) correr solo cuando cambia `lastSyncAt` (el árbol ya se bajó de nuevo); B) además, que la base
+restaure solo si `deleted_at` sigue siendo la hora de la marca.
+**Elegí A:** una línea, y alcanza: con el árbol al día la marca de esa copia ya no vale. Lo escrito sin red no se pierde:
+quien lo escribió la saca después de su primera sincronización. B queda en el roadmap.
+**Si preferís otra:** B pide una función en la base.
+
+### D633 · Un solo aviso cuando la copia vuelve
+**Qué pasaba:** el que ganó podía recibir «… volvió de la papelera» y, unos segundos después, «… quedaron los dos» (O3).
+**Elegí:** no mandar el segundo si este mismo dispositivo ya la sacó de la papelera (`wasRevivedHere`). Si la sacó otro, el
+de «quedaron los dos» sigue saliendo: acá no se avisó nada.
+
+### D634 · Los textos de la copia no prometen de más
+**Qué pasaba:** el cartel decía «Si escribís acá, vuelve» y la papelera «Copia vacía», pero un invitado no la trae de vuelta
+(D637) y un miembro sin permiso depende de otro dispositivo; «Mapa › Pendientes lista los dos» no se cumple si después se
+deshizo el que ganó (O5).
+**Elegí:** cartel «Esta copia fue a la papelera… Escribí en la que quedó; lo que se escriba acá la trae de vuelta cuando
+sincroniza un dispositivo que puede restaurar páginas»; rótulo «Copia que cedió…»; aviso «Mientras estén los dos, Mapa ›
+Pendientes los lista». Ayuda con el mismo matiz.
+
+### D635 · *Deshacer* cuando el reporte se creó pero alguien ya había escrito
+**Qué pasaba:** en ese camino (D626) el resultado traía `created: true` sin firma: *Deshacer* contestaba «cambió» y no sacaba
+las secciones agregadas (O6).
+**Elegí:** marcarlo (`joined`) y deshacer como *Prepare* (`undoPrepared`): saca solo las secciones agregadas que siguen
+vacías; la página y lo escrito quedan.
+
+### D636 · El vigía compara antes de leer
+**Qué pasaba:** leía el contenido guardado de cada copia cedida (candado, guardado, IndexedDB) en cada sincronización antes
+de mirar si algo había cambiado (O7).
+**Elegí:** comparar primero `update_seq` y el estado guardado (`stateOf`: cursor y versión); el contenido se lee solo si
+cambió algo desde la última vez que se vio vacía.
+
+### D637 · Un invitado que escribe en la copia cedida no la trae de vuelta (límite documentado)
+**Qué pasaba:** una página en la papelera le da nivel 0 a un invitado (`user_page_level`): `push_page_update` rechaza lo que
+escribe y ningún otro dispositivo lo ve (O2). Lo escrito queda en su dispositivo como rechazado, sin perderse, y sube si
+alguien restaura la página.
+**Las opciones:** A) documentarlo (hace falta un invitado con permiso de editar que abra la copia en los segundos de una
+carrera); B) aceptar en la base lo escrito en una copia cedida, o que su dispositivo pida restaurarla.
+**Elegí A** por ahora (Doc_Relaciones, sección 19; roadmap v0.251 (8)); el cartel ya no le promete que vuelve (D634).
+**Si preferís otra:** B toca permisos en la base: pide su propia auditoría de Row Level Security.
+
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 
 Decisiones de diseño que el plan no fijaba, tomadas al implementar los pasos 5 a 13 de

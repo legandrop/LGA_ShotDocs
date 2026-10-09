@@ -14,6 +14,10 @@ export const trash = {
   'trash.scopeCurrent': { en: "This project", es: "Este proyecto" },
   'trash.scopeAll': { en: "All projects", es: "Todos los proyectos" },
   'trash.kindPage': { en: "Page", es: "Página" },
+  'trash.ceded': {
+    en: "Copy that stepped back: another device created the same day at the same time",
+    es: "Copia que cedió: otro dispositivo creó el mismo día a la vez",
+  },
   'trash.kindFile': { en: "File", es: "Archivo" },
   'trash.kindProject': { en: "Project", es: "Proyecto" },
   'trash.hintAll': {
