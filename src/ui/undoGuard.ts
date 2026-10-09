@@ -45,6 +45,12 @@ function blockIds(doc: EditorState['doc']): Set<string> {
 
 let oneStep = 0;
 
+/** Agrupación explícita de asOneUndoStep o de la composición de la línea de tiempo. */
+export function undoGroupingActive(state: EditorState): boolean {
+  const um = (yUndoPluginKey.getState(state as never) as { undoManager?: Y.UndoManager } | undefined)?.undoManager;
+  return oneStep > 0 || um?.captureTimeout === Number.MAX_SAFE_INTEGER;
+}
+
 /**
  * Hace `fn` (varios cambios seguidos del editor) como UN solo paso de deshacer: corta antes y después, y en el medio
  * ni el tiempo (`captureTimeout`) ni sacar bloques lo parten. Lo usa la conversión de fotos-bloque (convertPhotos.ts).

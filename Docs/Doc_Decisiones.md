@@ -1782,6 +1782,57 @@ y el archivo queda en la papelera.
 viejo se actualiza antes de subir, y lo que tenía guardado sin subir sale con el arreglo (el gancho corre también al
 reintentar un envío armado antes). **Si preferís otra:** bajarla a 0.252 por SQL.
 
+### D721 · Reordenar bloques del mismo grupo sin reutilizar el contenedor vecino
+**Qué pasaba:** y-prosemirror reescribía los contenedores al reordenar: si un dispositivo movía sin red y otro borraba
+el movido, podía desaparecer el vecino, que nadie tocó. Pasaba con fotos y texto, tanto con el teclado como arrastrando.
+**Las opciones:** cubrir solo los gestos del teclado y arrastre, modificar el parche de la librería, migrar a Yjs 14,
+o guardar todo reordenamiento del mismo grupo en dos pasadas desde la app.
+**Elegí las dos pasadas:** antes de la traducción habitual se borra el lado de menor peso (incluye los hijos), y luego
+se inserta en el orden final. Los borrados e inserciones se hacen directamente en Yjs por identidad: traducir un
+documento intermedio tampoco conserva los contenedores cuando hay varios tramos separados. El serializador oficial
+arma los nodos nuevos, clonados antes de insertarlos. En un grupo con inversión se reconcilian además sus bloques
+nuevos y borrados intencionales, para que la traducción final reciba el orden completo; los grupos sin inversión
+siguen por el camino habitual. Todo queda en una transacción de Yjs. Reemplaza el límite de la decisión 20 de
+`Doc_Colapsar.md`: la pérdida silenciosa del vecino también ocurría al mover un bloque suelto.
+**El costo:** lo que otro escribe a la vez en el bloque que se recrea se pierde; si esa persona sigue con la página
+abierta en esa sesión, ve el aviso de B.16 con el texto para copiar. La ampliación del aviso tras reabrir se describe
+en `Doc_Colaboracion.md`. Un borrado concurrente del lado recreado puede volver con la copia.
+
+### D722 · Empate al elegir qué lado se conserva
+**Elegí** conservar, entre subsecuencias de igual peso, la que tenga más bloques cuyo nodo del editor cambió: es la
+huella del teclado de BlockNote y conserva lo movido. Si el arrastre conserva todos los nodos, se elige el menor
+índice del último nodo conservado en el orden anterior; los óptimos intermedios usan la misma regla. El desempate es
+fijo, sin depender de cuál dispositivo sincroniza primero.
+
+### D723 · La guarda solo reconoce cambios de orden
+**Elegí** no recrear bloques que desaparecen o cambian de id: con la corrección de ids repetidos, ampliar la guarda
+a esos casos impedía converger a dos editores. Los borrados por id de Prepare y Merge (D436/D437) siguen vigentes.
+Con ids repetidos o ausentes en un grupo se conserva la traducción habitual hasta que una edición deja ids únicos.
+
+### D724 · Versión mínima 0.256 por comportamiento
+**Elegí** subir `workspace_settings.min_app_version` a 0.256 al publicar. No hay esquema, tipo de bloque ni propiedad
+nueva: una versión anterior lee los borrados e inserciones. El mínimo evita que una versión vieja siga generando la
+reescritura al mover; no corrige movimientos que ya estaban guardados sin subir. Se hace durante el desarrollo
+(LEY 1); en producción, un cambio de comportamiento por sí solo no justificaría expulsar versiones anteriores.
+
+### D725 · Entrar en los hijos de un bloque borrado a la vez
+**Qué pasa:** si un bloque entra en los hijos de otro que el otro dispositivo borra a la vez, se borra con su padre.
+Es la misma regla de Yjs que al sangrar con Tab. No se extiende la guarda a cambios de grupo; el aviso de B.16 conserva
+lo que este dispositivo escribió o movió cuando se puede reconocer como propio.
+
+### D726 · Guarda en la app, sin otro parche a la librería
+**Elegí** `src/ui/blockReorder.ts` y una extensión del editor. La instalación envuelve la traducción ya usada por
+`blockMove.ts`, se suelta al destruir el editor y no cambia `node_modules` ni el formato guardado.
+
+### D727 · El aviso después de reabrir queda pendiente por costo
+**Qué pasa:** B.16 solo examina lo propio sin subir o escrito en esa sesión. Si A ya subió sus letras y cerró la app
+antes de recibir el movimiento de B, no ve el aviso aunque esas letras queden dentro del contenedor borrado.
+**Probado:** reconocer un `blockContainer` borrado cuyo id sigue vivo y usar los autores propios persistidos permite
+avisar al rearmar el motor con el mismo IndexedDB, sin avisar por un borrado común. Pero el costo del prototipo en la
+página más grande de ERSO por bytes fue 105,15 ms de media (20 revisiones tras dos de calentamiento, 2.072.235 bytes).
+**Elegí** no activar esa ampliación: supera el límite de 50 ms fijado en C3 por la propuesta auditada. Queda como
+residuo aceptado de esta entrega, con su punto del roadmap. El aviso durante la sesión y el guardado sin GC siguen.
+
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 
 Decisiones de diseño que el plan no fijaba, tomadas al implementar los pasos 5 a 13 de

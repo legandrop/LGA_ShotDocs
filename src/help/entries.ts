@@ -923,7 +923,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     title: 'help.collapseMove.title',
     text: 'help.collapseMove.text',
     keys: { up: 'moveUp', down: 'moveDown' },
-    words: ['mover', 'move', 'arrastrar', 'drag', 'puntos', 'dots', 'sección', 'section'],
+    words: ['mover', 'move', 'arrastrar', 'drag', 'puntos', 'dots', 'sección', 'section', 'reordenar', 'reorder', 'vecino', 'neighbor', 'deshacer', 'undo'],
     since: COLLAPSE_2,
   },
   { id: 'collapsePrint', section: 'collapse', title: 'help.collapsePrint.title', text: 'help.collapsePrint.text', since: BEFORE_HELP },

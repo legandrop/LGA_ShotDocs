@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.256 :
+
+Mover un bloque sin red mientras otro dispositivo lo borraba podía borrar al vecino, que nadie tocó: y-prosemirror reescribía los contenedores. Ahora todo reordenamiento dentro del mismo grupo borra primero el lado de menor peso y lo inserta en el orden final, en una transacción de Yjs. Cubre teclado, arrastre y API sin cambiar el formato; cada movimiento se deshace separado de lo recién escrito. La guarda recorta lo intacto antes de comparar ids. El costo: lo que otro escribe a la vez en el bloque que se recrea se pierde; si esa persona sigue con la página abierta en esa sesión, ve B.16 con el texto. El aviso tras reabrir queda pendiente por costo (D727). Lo borrado de ese lado puede volver, y mover los dos puede dejar copias. D721–D727; mínimo 0.256 por comportamiento.
+
+[Que mover un bloque sin red mientras otro lo borra no se lleve al vecino y cada movimiento se deshaga en un paso]
+
 v0.255 :
 
 En una página ya comparada, si un dispositivo sin red recuperaba una foto (deshacer un borrado, mover el bloque, pegar una copia de la misma página) mientras otro la borraba con red, el archivo iba a la papelera de archivos aunque siguiera en la página: al volver, el primero subía la foto pero no avisaba que la usaba, porque su fila del uso seguía confirmada y la comparación no la volvía a mirar. Ahora, justo antes de subir, las filas confirmadas de las fotos que trae el envío pasan a sin confirmar (guardado, vale aunque la app se cierre) y la comparación del mismo ciclo le pregunta al servidor: manda el `link` solo de las que quitó otro. Esto también destraba un *Merge* que quedaba pendiente en ese caso. D691–D693.

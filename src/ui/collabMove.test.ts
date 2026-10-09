@@ -8,6 +8,7 @@ import { CONTENT_FRAGMENT } from '../sync/structure';
 import { connect, editors, sameDocs, unmountAll, yText } from './collabHarness';
 import { collapseExtension, setCollapsed } from './collapseEditor';
 import { schema } from './editorSchema';
+import { blockReorderExtension } from './blockReorder';
 import { movePage, showsDocNoIds, tallyMoves } from './moveHarness';
 
 // Mover bloques con dos editores a la vez (P.11, entrega 1b; Docs/Doc_Colapsar.md, "Mover la sección entera").
@@ -51,7 +52,7 @@ describe('con el editor de la página (colapsar y el atajo)', () => {
       withCollaboration({
         schema,
         collaboration: { fragment: doc.getXmlFragment(CONTENT_FRAGMENT), user: { name: 'u', color: '#000' } },
-        extensions: [collapseExtension({})],
+        extensions: [collapseExtension({}), blockReorderExtension],
       }),
     ) as unknown as BlockNoteEditor;
     const el = document.createElement('div');

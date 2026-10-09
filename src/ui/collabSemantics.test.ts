@@ -90,7 +90,7 @@ const scenes: Scene[] = [
   { name: 'C1 A sangra p2, B junta p3 con p2', a: tab('p2'), b: join('p3'), kept: ['gamma delta'], lost: ['epsilon'] },
   { name: 'C3 A le cambia el tipo a p2, B junta p3 con p2', a: retype('p2'), b: join('p3'), kept: ['gamma delta'], lost: ['epsilon'] },
   { name: 'C4 A sangra p3, B le cambia el tipo a p2', a: tab('p3'), b: retype('p2'), kept: ['gamma delta', 'epsilon'] },
-  { name: 'C5 A baja p2, B sangra p3', a: move('p2', 'down'), b: tab('p3'), kept: ['epsilon'], lost: ['gamma delta'] },
+  { name: 'C5 A baja p2, B sangra p3: ninguno pierde su texto', a: move('p2', 'down'), b: tab('p3'), kept: ['epsilon', 'gamma delta'] },
   { name: 'C6 A sangra p3, B sangra p2', a: tab('p3'), b: tab('p2'), kept: ['gamma delta'], lost: ['epsilon'] },
   { name: 'C7 A junta p2 con p1, B junta p3 con p2', a: join('p2'), b: join('p3'), kept: ['alpha betagamma delta'], lost: ['epsilon'] },
   { name: 'C8 los dos le ponen el mismo tipo a p1', a: retype('p1'), b: retype('p1'), kept: [], once: ['alpha beta'] },

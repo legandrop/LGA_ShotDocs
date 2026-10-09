@@ -446,6 +446,11 @@ Pruebas:
 
 ### Decididas el 2026-10-01 (1b y 2)
 
+**Desde v0.256, D721 reemplaza el límite de la decisión 20:** todo reordenamiento del mismo grupo pasa por la guarda
+`blockReorder.ts`, aunque no haya una sección colapsada. Se evita que un borrado concurrente borre al vecino. El costo
+de lo escrito a la vez en el lado recreado y los avisos se explican en `Doc_Colaboracion.md`. `blockMove.ts` conserva
+sus reglas para mover la sección entera; la guarda no añade otra pasada cuando ya no hay un cambio de orden pendiente.
+
 20. **El mover en dos pasadas (`blockMove.ts`) se usa solo con secciones colapsadas en juego** (1A): cuando lo que
     se mueve tiene un título colapsado o salta una sección colapsada. Mover un renglón suelto sin nada colapsado
     sigue siendo el de BlockNote. Lega delegó la decisión el 2026-10-01; quedó 1A: solo con secciones

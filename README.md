@@ -46,6 +46,10 @@ its own project: a tree of pages you own.
   after its label, the checkbox. You check every change before applying it, and nothing you said is lost.
 - **Offline first, nothing lost.** Every change is saved on your device first and synced when you are
   back online. Edits made offline on two devices are merged, never overwritten.
+  Reordering blocks within the same group no longer lets a concurrent deletion remove an untouched neighbor.
+  Writing concurrently inside a block that the move recreates can still be removed; while that page stays open
+  in the writing session, it offers the affected text to copy. The notice after reopening remains pending.
+  Concurrent moves can leave duplicate blocks, which receive separate ids on the next edit.
   Reload from an app notice and switching, joining or creating a workspace from an open workspace wait up to eight seconds for local saving, including the current page title. A failure or a changed page keeps the current view open for another attempt. Ordinary cross-workspace clicks from the page editor also wait for local saving before opening the destination. Browser exits and signing out keep their existing behavior.
 - **Share a branch, never the tree.** Inside a workspace, people get a role and a permission on a
   project or a page (view, comment, edit, or edit and create pages). A permission covers everything under

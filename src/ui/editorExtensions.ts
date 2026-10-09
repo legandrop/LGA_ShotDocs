@@ -6,6 +6,7 @@ import { inlinePhotoSpotsExtension } from './inlinePhotoCreate';
 import { inlinePhotoExtensions } from './inlinePhotoEditor';
 import { undoGuardExtension } from './undoGuard';
 import { relLinkKeyExtension } from '../relations/relLink';
+import { blockReorderExtension } from './blockReorder';
 
 /**
  * El teclado del salto de hoja (Docs/Doc_Hojas_PDF.md). Cada tecla actúa solo en su caso y si no, sigue la del editor.
@@ -38,6 +39,8 @@ export const pageBreakExtension = createExtension({
  */
 export function pageEditorExtensions(collapse: CollapseOptions | null) {
   return [
+    // Un mover recrea el lado menor: el borrado concurrente nunca cae sobre un bloque vecino.
+    blockReorderExtension,
     // Las fotos en línea (Docs/Doc_Fotos_En_Linea.md): sus filas, la marca de la selección y su teclado.
     ...inlinePhotoExtensions,
     // El lugar (y la marca de espera) de las fotos que se están guardando (inlinePhotoCreate.ts).

@@ -1839,29 +1839,22 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    cuenta filas sin confirmar; no es regresión); las filas sin confirmar de páginas que ya no se comparan (sin permiso,
    borradas) quedan, inocuas; y `uploadPagesFirst` en paralelo con la comparación podría confirmar con una lectura vieja si
    además otro quita el uso en ese intervalo (improbable).
-30. **PRIORIDAD ALTA: mover un bloque sin red mientras otro dispositivo borra el bloque movido puede borrar el VECINO**
-   (auditoría de la v0.255, H1; anterior). B sin red sube la foto a2 arriba de a1 (Ctrl+Shift+↑); A con red borra a2; al
-   juntarse, desaparece a1, que nadie tocó, y su archivo va a la papelera. Causa: y-prosemirror (`updateYFragment`) no
-   mueve elementos: reescribe los atributos de los existentes, así que el elemento que A borra ya lleva a1 (la misma
-   familia que `removeBlocks`, D436). Alcance probable: cualquier reordenamiento de bloques del mismo tipo, también
-   párrafos. Recuperable desde el historial de la página y, para fotos, desde la papelera hasta que se purgue. Pide su
-   frente (propuesta auditada).
-   **Diseñado y auditado (2026-10-09), sin implementar:** con dos Y.Doc y el editor real fallan 54 de 114 casos (mover
-   con el teclado, arrastrar, deshacer un mover; fotos, párrafos, títulos, listas); con borrado concurrente se pierde
-   texto ajeno en 33–64 de cada 100 agendas al azar. No pasa al cortar y pegar ni al mover una sección colapsada
-   (`blockMove.ts` ya va en dos pasadas). Elegida: envolver `_prosemirrorChanged` y, si en un grupo de bloques los ids
-   cambiaron de orden, borrar antes en Yjs el lado más chico para que la traducción solo inserte (54 → 1 caso, el
-   inherente: entrar en los hijos de un bloque que otro borró). Descartadas: solo teclado y arrastre (no cubre deshacer
-   ni otros caminos), parchear y-prosemirror (16–20 h, toca el parche de huecos estables) y Yjs 14 (mover queda peor).
-   Condiciones de la auditoría para implementarla: (1) ≤ 1 ms por letra en una página de 5000 bloques (el prototipo tarda
-   38 ms) con un contador de visitas para las pruebas; (2) decir el costo tal cual: lo que otro escribía justo en el bloque
-   recreado se pierde y el aviso de B.16 solo sale si esa persona sigue con la app abierta; (3) intentar que el aviso
-   salga también fuera de la sesión (si cuesta más de 2 h, decisión aparte); (4) regla de empate probada; (5) ids
-   repetidos y movidas cruzadas, y una foto duplicada que no pierde el archivo; (6) un mover es un solo paso de deshacer;
-   (7) editor y Yjs iguales en toda la matriz, y el asistente y el dictado nunca escriben en otro bloque; (8) la matriz
-   afirma dónde termina lo escrito; (9) recorrido real con arrastre, con red y con la foto que vuelve; (10) suite, tsc y
-   `collabRandom` ≥ 180 corridas. Subir `min_app_version` al publicar. Estimado ~12 h. La prueba que reproduce y el
-   prototipo están en la rama local `lega/mover-vecino`.
+30. **Reordenar bloques: arreglado el vecino en v0.256; pendiente el aviso tras reabrir** (D721–D727).
+   `blockReorder.ts` conserva los contenedores del lado de mayor peso y recrea el otro antes de traducir el orden
+   final. Deshacer separa el movimiento de lo recién escrito; no cambia el formato. Detalle y costos en
+   `Doc_Colaboracion.md`. El aviso B.16 de las letras escritas a la vez dentro del contenedor recreado sigue limitado
+   a lo propio sin subir o escrito en esa sesión: después de cerrar con todo subido, falta el aviso.
+   **Pendiente (D727):** reconocer el contenedor borrado cuyo id sigue vivo para revisar autores propios tras reabrir.
+   El prototipo funcionó con el motor rearmado y el mismo IndexedDB, pero la revisión de la página mayor de ERSO por
+   bytes costó 105,15 ms de media (20 revisiones tras dos de calentamiento, copia local de 2.072.235 bytes), sobre
+   el límite de 50 ms de la propuesta auditada. La ampliación no está activa. Hay que abaratar esa reconstrucción
+   sin avisar por un borrado normal fuera de sesión ni atribuir letras de otros dispositivos.
+
+   **Diagnóstico de partida (2026-10-09):** y-prosemirror reescribía los contenedores al mover: al subir a2 sobre a1
+   sin red y borrar a2 desde otro dispositivo desaparecía a1. Fallaban 54 de 114 casos del editor real, con fotos,
+   párrafos, títulos y listas; con borrado concurrente se perdía texto ajeno en 33–64 de cada 100 agendas al azar.
+   Se eligió la guarda en la app, en vez de cubrir solo gestos del teclado/arrastre, ampliar el parche de la librería
+   o migrar a Yjs 14. Queda la regla de D725: entrar en los hijos de un padre borrado a la vez se borra con ese padre.
 
 ### C. Esperan a Lega
 

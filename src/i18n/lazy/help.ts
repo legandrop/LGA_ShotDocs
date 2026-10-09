@@ -482,8 +482,8 @@ export const help = {
   },
   'help.collapseMove.title': { en: "Move a collapsed section", es: "Mover una sección colapsada" },
   'help.collapseMove.text': {
-    en: "Dragging the dots of a collapsed heading, or {up} / {down}, moves its whole section, and what was hidden stays hidden. With {up} / {down}, any other block jumps over a collapsed section as if it were a single block. Undo puts it back in one step.",
-    es: "Arrastrar los puntos de un título colapsado, o {up} / {down}, mueve su sección entera, y lo escondido sigue escondido. Con {up} / {down}, cualquier otro bloque salta una sección colapsada como si fuera uno solo. Deshacer la vuelve en un solo paso.",
+    en: "Dragging the dots of a collapsed heading, or {up} / {down}, moves its whole section, and what was hidden stays hidden. With {up} / {down}, any other block jumps over a collapsed section as if it were a single block. Reordering blocks within a group is one Undo step, separate from the text you just wrote. A concurrent deletion no longer removes an untouched neighbor. Text written concurrently in a block the move recreates may be removed; while its writing session stays open, the page offers it to copy.",
+    es: "Arrastrar los puntos de un título colapsado, o {up} / {down}, mueve su sección entera, y lo escondido sigue escondido. Con {up} / {down}, cualquier otro bloque salta una sección colapsada como si fuera uno solo. Reordenar bloques dentro de un grupo es un paso de Deshacer separado de lo recién escrito. Un borrado a la vez ya no se lleva al vecino que nadie tocó. Lo escrito a la vez en un bloque que el movimiento recrea puede perderse; mientras siga abierta la sesión de escritura, la página lo ofrece para copiar.",
   },
   'help.collapsePrint.title': { en: "Print as shown", es: "Imprimir como se ve" },
   'help.collapsePrint.text': {
@@ -667,8 +667,8 @@ export const help = {
   },
   'help.removedWriting.title': { en: "When someone deletes what you were writing in", es: "Cuando alguien borra donde estabas escribiendo" },
   'help.removedWriting.text': {
-    en: "If someone deletes a block (or a list, a table or a section) while you are writing or moving text in it, the deletion wins for everyone. You get a notice on the page with what you wrote or moved there (moving a block or changing its type rewrites its text), so you can copy it and paste it back.",
-    es: "Si alguien borra un bloque (o una lista, una tabla o una sección) mientras escribís o movés texto en él, el borrado gana para todos. Te aparece un aviso en la página con lo que escribiste o moviste ahí (mover un bloque o cambiarle el tipo reescribe su texto), para copiarlo y volver a pegarlo.",
+    en: "If someone deletes a block (or a list, a table or a section) while you are writing or moving text in it, the deletion wins for everyone. The page offers what you wrote or moved to copy and paste back. Reordering can recreate a block: text another device writes in that block at the same time may be removed. You get the notice while the page stays open in that session. After closing and reopening, if all your writing had uploaded, that notice is not available yet.",
+    es: "Si alguien borra un bloque (o una lista, una tabla o una sección) mientras escribís o movés texto en él, el borrado gana para todos. La página ofrece lo que escribiste o moviste para copiarlo y volver a pegarlo. Reordenar puede recrear un bloque: lo que otro dispositivo escribe ahí a la vez puede perderse. El aviso sale mientras la página sigue abierta en esa sesión. Después de cerrar y reabrir, si ya habías subido todo, ese aviso todavía no está disponible.",
   },
   'help.updateApp.title': { en: "When the app asks to be updated", es: "Cuando la app pide actualizarse" },
   'help.updateApp.text': {

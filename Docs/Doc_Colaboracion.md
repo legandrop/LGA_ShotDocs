@@ -42,7 +42,9 @@ Qué pasa, en palabras de usuario (A y B cambian la misma página a la vez, sin 
 | Escribe en un renglón | Lo borra | Se borra, con lo que escribió A (B quiso borrarlo). |
 | Escribe en un renglón | Reemplaza todo su texto | Queda lo de A y lo nuevo de B; el texto viejo no. |
 | Escribe en un renglón | Le cambia el tipo, lo sangra o lo junta con el de arriba | **Se pierde lo que escribió A**; el cambio de B queda. |
-| Escribe en un renglón | Lo mueve arriba | Queda el texto de A, pero puede aparecer en el renglón vecino. |
+| Escribe en un renglón | Lo reordena dentro del mismo grupo | Desde v0.256, queda en ese renglón si se conserva su contenedor. Si se recrea, **se pierde lo escrito a la vez**; B.16 lo ofrece para copiar a quien lo escribió. Nunca se manda al vecino. |
+| Borra un bloque | Lo reordena dentro del mismo grupo | Desde v0.256, el borrado no se lleva un vecino que nadie tocó. Si lo borrado estaba del lado recreado, puede volver con la copia. |
+| Reordena un bloque | Reordena el mismo bloque | Pueden quedar dos copias con el mismo id; se prefiere duplicar a perder. Con la próxima edición el editor les asigna ids distintos. |
 | Borra de la mitad de un renglón a la mitad del siguiente | Escribe al final del segundo | **Se pierde lo de B** (el segundo renglón se juntó con el primero). |
 | Sangra un renglón | Sangra, junta o mueve el renglón de abajo | **Se puede perder el renglón de abajo** (B lo movió adentro de un bloque que A recreó). |
 | Le cambia el tipo a un renglón | Le cambia el tipo al mismo renglón | Queda uno de los dos tipos, con su texto (antes se borraba el renglón entero). |
@@ -82,6 +84,32 @@ estaba y guarda `7}{A` en el medio de `{A0}`. Si B, a la vez, se llevó `{A0}` a
 queda `7}{A` (o, si después escribe algo más en el medio, `7}{A3}{A`). Pasaba igual antes y pasa igual en un renglón sin fotos (es la comparación de siempre de
 y-prosemirror); en la vida real, escribiendo letra por letra, se nota solo con algo pegado de una vez. Las
 pruebas lo cuentan aparte: `lost` (la marca no está tal cual) y `gone` (ni siquiera están sus letras, `lettersGone`).
+
+### Reordenar dentro del mismo grupo (v0.256)
+
+La app guarda los cambios de orden en dos pasadas dentro de una transacción de Yjs: borra el lado de menor peso
+(cuenta los hijos) y lo inserta en su posición final. El borrado y la inserción son directos por identidad en Yjs:
+traducir documentos intermedios reescribe contenedores cuando hay tramos separados, por ejemplo dos intercambios en
+una sola transacción. Los bloques nuevos se serializan y clonan antes de insertarlos; la traducción final ya recibe
+el orden completo del grupo que tenía la inversión. El lado que se conserva mantiene sus contenedores. Así un
+borrado concurrente no cae sobre el vecino, y un movimiento es un paso de deshacer separado de lo recién escrito.
+Vale para el teclado, el arrastre y los cambios de orden de la API del editor; no cambia el formato guardado.
+
+**El costo:** lo que otro escribe a la vez en el bloque que se recrea se pierde; si esa persona sigue con la página
+abierta en esa sesión, ve el aviso de B.16 con el texto. **Después de cerrar y reabrir, si ya había subido todo,
+todavía no sale ese aviso.** Ampliarlo con la huella de un contenedor borrado cuyo id sigue vivo costó 105 ms por
+revisión en la página más grande de ERSO por bytes (20 revisiones, copia local sin GC de 2,07 MB); supera el límite de
+50 ms de la propuesta auditada y queda pendiente (D727). El texto sigue guardado sin GC, aunque falte el aviso.
+Mover a otro grupo sigue las reglas de sangrar: si entra en los hijos de un bloque que otro borró a la vez, se borra
+con ese padre (D725). Un bloque borrado del lado recreado puede volver porque la copia todavía lo tenía.
+
+Entre subsecuencias de igual peso se conserva la que tiene más nodos cambiados por el teclado de BlockNote; si ninguno
+cambió, se elige el menor índice del último nodo conservado en el orden anterior (D722). Con ids ausentes o repetidos en un grupo no se intenta
+reconocer el orden: se usa la traducción habitual hasta que una edición corrige los ids. Una foto repetida sigue
+contando como usada mientras quede una copia en la página.
+
+Una versión vieja lee estos cambios porque son borrados e inserciones normales. El mínimo 0.256 impide que siga
+generando la reescritura al mover, pero no corrige movimientos viejos ya guardados sin subir (D724).
 
 Dos cosas más, sin pérdida de texto:
 

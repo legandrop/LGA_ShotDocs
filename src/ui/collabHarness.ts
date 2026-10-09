@@ -7,6 +7,7 @@ import { yUndoPluginKey, yXmlFragmentToProseMirrorRootNode } from 'y-prosemirror
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT, normalizeStructure } from '../sync/structure';
 import { schema } from './editorSchema';
+import { blockReorderExtension } from './blockReorder';
 
 export type Editor = BlockNoteEditor;
 
@@ -30,6 +31,7 @@ export function mountEditor(doc: Y.Doc, name = 'u', withSchema: unknown = schema
     withCollaboration({
       schema: withSchema as typeof schema,
       collaboration: { fragment: doc.getXmlFragment(CONTENT_FRAGMENT), user: { name, color: '#000' } },
+      extensions: [blockReorderExtension],
     }),
   ) as unknown as BlockNoteEditor;
   const el = document.createElement('div');
