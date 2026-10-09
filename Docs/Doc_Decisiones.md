@@ -1774,6 +1774,14 @@ que entró hace poco), porque es una decisión de producto.
 sobrevivía) y que el bucle de la prueba de filas sin confirmar en lote avance con `Math.max(1, UNCONFIRMED_SCAN_FROM)`, así
 con el umbral en 0 falla en vez de colgarse.
 
+### D694 · La versión mínima sube a 0.255 igual
+**Qué pasaba:** D691 no necesita subir `min_app_version` para funcionar (no cambia nada guardado), pero el riesgo está
+justamente en el dispositivo viejo que vuelve sin red con una foto recuperada: una 0.254 sube su envío sin marcar la fila
+y el archivo queda en la papelera.
+**Elegí** subir `workspace_settings.min_app_version` a 0.255 después de publicarla (2026-10-09, por SQL): el dispositivo
+viejo se actualiza antes de subir, y lo que tenía guardado sin subir sale con el arreglo (el gancho corre también al
+reintentar un envío armado antes). **Si preferís otra:** bajarla a 0.252 por SQL.
+
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 
 Decisiones de diseño que el plan no fijaba, tomadas al implementar los pasos 5 a 13 de
