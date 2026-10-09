@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useT } from '../i18n';
+import { usePrefs } from '../prefs';
 import { navigate, pagePath, useRoute } from '../router';
 import { usePermissions, useServices, useTree } from '../services';
 import type { PageRow } from '../sync/types';
@@ -89,6 +90,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
   const tr = useT();
   // Un punto en el "?" mientras haya una recorrida para ver y la ayuda nunca se haya abierto acá.
   const help = useHelpDot();
+  const { expandSubpages } = usePrefs();
 
   const [expanded, setExpanded] = useState<Set<string>>(readExpanded);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -200,6 +202,13 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
   useEffect(() => () => (revealTimer.current ? clearTimeout(revealTimer.current) : undefined), []);
 
   const expand = (id: string) => setExpanded((prev) => new Set(prev).add(id));
+  /** Elegir explícitamente una página abre sólo su nivel; las flechas y plegar siguen siendo manuales. */
+  const openPage = (id: string) => {
+    opener.cancel();
+    if (expandSubpages === 'onClick' && tree.children(id).length > 0) expand(id);
+    openedByTree.current = id;
+    navigate(pagePath(id));
+  };
   /** Pliega `id`. Si la página abierta queda escondida adentro, la abierta pasa a ser `id` (pedido de Lega). */
   const collapse = (id: string) => {
     // Lo que las flechas iban a abrir no se pierde: se abre ya (o `id`, si quedaba escondido adentro).
@@ -276,9 +285,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
       focusRow(action.id);
       opener.request(action.id, e.repeat);
     } else if (action.type === 'open') {
-      opener.cancel();
-      openedByTree.current = action.id;
-      navigate(pagePath(action.id));
+      openPage(action.id);
     } else if (action.type === 'expand') {
       expand(action.id);
     } else if (action.type === 'collapse') {
@@ -349,11 +356,9 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
           onDragLeave={() => drop?.id === page.id && setDrop(null)}
           onDrop={(e) => onDrop(e, page)}
           onClick={(e) => {
-            opener.cancel();
             // El foco queda en la fila (Safari no lo da solo): las flechas siguen desde acá.
             e.currentTarget.focus({ preventScroll: true });
-            openedByTree.current = page.id;
-            navigate(pagePath(page.id));
+            openPage(page.id);
           }}
           onFocus={() => setFocusId(page.id)}
           tabIndex={tabIndex}

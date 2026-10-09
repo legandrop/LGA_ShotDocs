@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.258 :
+
+Elegir una página en la barra lateral abría su contenido pero dejaba sus subpáginas escondidas: había que tocar además la flecha. Ahora el menú de la cuenta suma *Expand subpages*, con *On click* de fábrica y *Manual* para conservar el comportamiento anterior. Un clic en la fila, Enter o Espacio despliegan ese nivel y muestran todas sus hijas directas; las ramas más profundas conservan su estado. La flecha sigue plegando y desplegando, incluso la página abierta, y otro clic en la misma fila la vuelve a desplegar. Recorrer con las flechas mantiene su funcionamiento. La elección se guarda primero en el dispositivo y sigue a la cuenta entre dispositivos, como las demás preferencias; funciona sin red. Ayuda en ambos idiomas y README al día. No cambia páginas, permisos ni formato. D737.
+
+[Expandir las subpáginas al elegir una página con una preferencia de la cuenta]
+
 v0.257 :
 
 Al tocar *Update now* en la app instalada, el botón parecía no responder: la búsqueda y la instalación podían tardar varios segundos, y recién al tomar el control la versión nueva se veía una recarga. Ahora el clic muestra inmediatamente un círculo de actividad y *Updating the app… Please wait*, también si se cierra el detalle de sincronización. Los botones de actualizar y forzar quedan deshabilitados mientras trabaja; repetir la misma acción reutiliza el intento. El aviso espera también el guardado local previo a recargar, conserva la cantidad de cambios pendientes y termina si se cancela, falla o concluye el intento. Una falla anterior se limpia al reintentar; las nuevas siguen explicando qué hacer. Ayuda y traducciones al día, sin migraciones ni cambios de formato. D736.

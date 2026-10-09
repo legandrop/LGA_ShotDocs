@@ -1840,6 +1840,15 @@ actualizar y forzar deshabilitados durante el intento y una sola ejecución de c
 también el guardado local antes de recargar y termina al cancelar o fallar. Se conserva la cantidad pendiente. No hay
 porcentaje ficticio ni cambios en los datos, la instalación o la mínima requerida: sigue 0.256.
 
+### D737 · Expandir las subpáginas al elegir una página (2026-10-09)
+**Pedido de Lega:** un ajuste para desplegar las subpáginas al hacer clic en una página que las contiene.
+**Elegí:** *Expand subpages* en el menú de la cuenta, *On click* de fábrica y *Manual* como alternativa. Se expande
+el nivel elegido, con todas sus hijas directas; no se abre recursivamente la rama. Enter y Espacio equivalen al clic,
+las flechas de recorrido no expanden automáticamente y la flecha de plegar sigue funcionando sobre la página activa.
+Otro clic en la misma página la despliega de nuevo. La preferencia sigue a la cuenta, guardada primero localmente; no
+cambia contenido ni permisos. Una versión vieja puede omitir esta clave, igual que las otras preferencias nuevas.
+La mínima sigue 0.256; no hay esquema nuevo.
+
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 
 Decisiones de diseño que el plan no fijaba, tomadas al implementar los pasos 5 a 13 de

@@ -37,6 +37,8 @@ export interface Prefs {
    * si sube sus preferencias, la borra de la cuenta; los dispositivos con esta versión siguen con la que tenían.
    */
   contrast: Contrast;
+  /** Expande el nivel de la página elegida en el árbol; no abre recursivamente toda la rama. */
+  expandSubpages: 'manual' | 'onClick';
 }
 
 /** El idioma de fábrica: castellano si el navegador está en castellano (`es`, `es-AR`…); si no, inglés. */
@@ -54,6 +56,7 @@ export const DEFAULT_PREFS: Prefs = {
   language: detectLanguage(),
   phoneImages: 'rows',
   contrast: 'contrast',
+  expandSubpages: 'onClick',
 };
 
 const CHOICES: { [K in keyof Prefs]: readonly Prefs[K][] } = {
@@ -64,6 +67,7 @@ const CHOICES: { [K in keyof Prefs]: readonly Prefs[K][] } = {
   language: ['en', 'es'],
   phoneImages: ['rows', 'stacked'],
   contrast: ['none', 'contrast', 'more'],
+  expandSubpages: ['manual', 'onClick'],
 };
 
 /**

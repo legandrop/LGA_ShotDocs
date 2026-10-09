@@ -675,6 +675,14 @@ export function AccountMenu({
           ]}
         />
       )}
+      <Segmented
+        label={tr('account.expandSubpages')}
+        pref="expandSubpages"
+        options={[
+          { value: 'manual', label: tr('account.expandSubpages.manual') },
+          { value: 'onClick', label: tr('account.expandSubpages.onClick') },
+        ]}
+      />
       {/* Cada idioma con su propio nombre, así se encuentra aunque la app esté en el otro. */}
       <Segmented
         label={tr('account.language')}

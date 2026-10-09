@@ -9,6 +9,41 @@ import type { Prefs } from './prefs';
 const USER = 'u1';
 const OLD_KEYS = { theme: 'system', font: 'default', textSize: 'normal', pageWidth: 'normal' };
 
+describe('expansión de subpáginas en la cuenta', () => {
+  it('arranca al hacer clic y descarta valores desconocidos de la preferencia', async () => {
+    const { cleanPrefs, DEFAULT_PREFS } = await import('./prefs');
+    expect(DEFAULT_PREFS.expandSubpages).toBe('onClick');
+    expect(cleanPrefs({ expandSubpages: 'recursive' }).expandSubpages).toBe('onClick');
+    expect(cleanPrefs({ expandSubpages: 'manual' }).expandSubpages).toBe('manual');
+  });
+
+  it('guarda sin red y sube la elección al volver, sin reemplazar lo demás de la cuenta', async () => {
+    const prefs = await store();
+    const fake = fakeClient({ ...OLD_KEYS, theme: 'dark', expandSubpages: 'onClick' } as Partial<Prefs>);
+    await prefs.attach(fake.client, USER);
+    fake.state.online = false;
+    prefs.set({ expandSubpages: 'manual' });
+    await flush();
+    expect(prefs.hasUnsynced()).toBe(true);
+    expect(JSON.parse(localStorage.getItem('shotdocs-prefs')!).prefs.expandSubpages).toBe('manual');
+    const reopened = await store();
+    expect(reopened.get().expandSubpages).toBe('manual');
+    fake.state.online = true;
+    await reopened.attach(fake.client, USER);
+    await flush();
+    expect(fake.state.pushed.at(-1)).toMatchObject({ theme: 'dark', expandSubpages: 'manual' });
+    expect(reopened.hasUnsynced()).toBe(false);
+  });
+
+  it('leer una cuenta escrita por una versión sin la clave conserva Manual en este dispositivo', async () => {
+    localStorage.setItem('shotdocs-prefs', JSON.stringify({ userId: USER, prefs: { ...OLD_KEYS, expandSubpages: 'manual' }, dirty: false }));
+    const prefs = await store();
+    const fake = fakeClient(OLD_KEYS as Partial<Prefs>);
+    await prefs.attach(fake.client, USER);
+    expect(prefs.get().expandSubpages).toBe('manual');
+  });
+});
+
 /** Un cliente de Supabase mínimo: la fila de `user_settings` en memoria, con o sin red. */
 function fakeClient(account: Partial<Prefs> | null) {
   const state = { account: account as unknown, online: true, reads: 0, pushed: [] as Prefs[] };
@@ -119,7 +154,7 @@ describe('versiones viejas de la app', () => {
     // Primero se leyó la cuenta; gana el tema cambiado acá, el idioma sale de la cuenta.
     expect(state.reads).toBe(1);
     // La clave nueva que la cuenta todavía no tenía sube con su valor de fábrica.
-    expect(state.pushed).toEqual([{ ...OLD_KEYS, theme: 'dark', language: 'es', phoneImages: 'rows', contrast: 'contrast' }]);
+    expect(state.pushed).toEqual([{ ...OLD_KEYS, theme: 'dark', language: 'es', phoneImages: 'rows', contrast: 'contrast', expandSubpages: 'onClick' }]);
     expect(prefs.get().language).toBe('es');
     expect(prefs.hasUnsynced()).toBe(false);
   });
@@ -133,7 +168,7 @@ describe('fotos en fila en el teléfono (phoneImages)', () => {
     await prefs.attach(client, USER);
     await flush();
     expect(prefs.get().phoneImages).toBe('stacked');
-    expect(state.pushed).toEqual([{ ...OLD_KEYS, theme: 'dark', language: 'es', phoneImages: 'stacked', contrast: 'contrast' }]);
+    expect(state.pushed).toEqual([{ ...OLD_KEYS, theme: 'dark', language: 'es', phoneImages: 'stacked', contrast: 'contrast', expandSubpages: 'onClick' }]);
   });
 
   it('un valor desconocido queda en el de fábrica (en fila)', async () => {
@@ -157,8 +192,8 @@ describe('un cambio antes de leer la cuenta', () => {
     fake.open();
     await attaching;
     await flush();
-    expect(prefs.get()).toEqual({ ...account, language: 'es', phoneImages: 'rows', contrast: 'contrast' });
-    expect(fake.state.pushed).toEqual([{ ...account, language: 'es', phoneImages: 'rows', contrast: 'contrast' }]);
+    expect(prefs.get()).toEqual({ ...account, language: 'es', phoneImages: 'rows', contrast: 'contrast', expandSubpages: 'onClick' });
+    expect(fake.state.pushed).toEqual([{ ...account, language: 'es', phoneImages: 'rows', contrast: 'contrast', expandSubpages: 'onClick' }]);
     expect(prefs.hasUnsynced()).toBe(false);
   });
 
@@ -176,8 +211,8 @@ describe('un cambio antes de leer la cuenta', () => {
     window.dispatchEvent(new Event('online'));
     await flush();
     await flush();
-    expect(fake.state.pushed).toEqual([{ ...account, theme: 'light', phoneImages: 'rows', contrast: 'contrast' }]);
-    expect(prefs.get()).toEqual({ ...account, theme: 'light', phoneImages: 'rows', contrast: 'contrast' });
+    expect(fake.state.pushed).toEqual([{ ...account, theme: 'light', phoneImages: 'rows', contrast: 'contrast', expandSubpages: 'onClick' }]);
+    expect(prefs.get()).toEqual({ ...account, theme: 'light', phoneImages: 'rows', contrast: 'contrast', expandSubpages: 'onClick' });
   });
 });
 

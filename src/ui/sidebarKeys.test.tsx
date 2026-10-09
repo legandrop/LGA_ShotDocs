@@ -6,6 +6,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { settled } from '../test/settle';
 import { navigate, pagePath } from '../router';
+import { prefs } from '../prefs';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
@@ -53,6 +54,7 @@ afterEach(() => {
   document.body.innerHTML = '';
   localStorage.clear();
   history.replaceState(null, '', '/');
+  act(() => prefs.set({ expandSubpages: 'onClick' }));
 });
 
 // El rato pedido y, después, a que termine lo que quedó en marcha (src/test/settle.ts).
@@ -92,7 +94,8 @@ function services(device: Device): Services {
  * Uno ▸ Uno.A ▸ Uno.A.1, Uno ▸ Uno.B, Dos (sin subpáginas), Tres ▸ Tres.C. La página abierta es `open` (Uno.A.1
  * si no se dice): sus madres se abren solas, Tres queda cerrada.
  */
-async function app(opts: { open?: 'a1' | 'none'; shell?: boolean; slash?: boolean; shared?: boolean } = {}) {
+async function app(opts: { open?: 'a1' | 'none'; shell?: boolean; slash?: boolean; shared?: boolean; expandSubpages?: 'manual' | 'onClick' } = {}) {
+  prefs.set({ expandSubpages: opts.expandSubpages ?? 'manual' });
   const server = new FakeServer();
   const d = await makeDevice(server);
   devices.push(d);
@@ -132,6 +135,56 @@ function row(title: string): HTMLElement {
 const focusedTitle = () => (document.activeElement as HTMLElement | null)?.closest('.tree-row')?.querySelector('.title')?.textContent;
 const path = () => location.pathname;
 const expandedOf = (title: string) => row(title).getAttribute('aria-expanded');
+
+describe('expandir subpáginas al elegir una página', () => {
+  it('el clic muestra todas las hijas directas y conserva cerradas las ramas más profundas', async () => {
+    const { ids } = await app({ open: 'none', expandSubpages: 'onClick' });
+    act(() => row('Uno').click());
+    expect(path()).toBe(pagePath(ids.uno));
+    expect(titles()).toEqual(['Uno', 'Uno.A', 'Uno.B', 'Dos', 'Tres']);
+    expect(expandedOf('Uno.A')).toBe('false');
+    // La flecha puede cerrarla, incluso siendo la página abierta. Otro clic en la misma la abre de nuevo.
+    act(() => row('Uno').querySelector<HTMLButtonElement>('.toggle')!.click());
+    expect(expandedOf('Uno')).toBe('false');
+    act(() => row('Uno').click());
+    expect(expandedOf('Uno')).toBe('true');
+    expect(JSON.parse(localStorage.getItem('shotdocs-expanded')!)).toContain(ids.uno);
+  });
+
+  it('Manual conserva el comportamiento anterior y cambiar la opción afecta el próximo clic', async () => {
+    await app({ open: 'none' });
+    act(() => row('Tres').click());
+    expect(expandedOf('Tres')).toBe('false');
+    act(() => prefs.set({ expandSubpages: 'onClick' }));
+    expect(expandedOf('Tres')).toBe('false');
+    act(() => row('Tres').click());
+    expect(titles()).toContain('Tres.C');
+    act(() => row('Dos').click());
+    expect(expandedOf('Dos')).toBeNull();
+  });
+
+  it('Enter y Espacio también expanden; recorrer con flechas no expande automáticamente', async () => {
+    await app({ open: 'none', expandSubpages: 'onClick' });
+    focusRow('Tres');
+    press('Enter');
+    expect(expandedOf('Tres')).toBe('true');
+    focusRow('Uno');
+    press(' ');
+    expect(expandedOf('Uno')).toBe('true');
+    await wait(OPEN_DELAY_MS + 30);
+    press('ArrowDown');
+    expect(focusedTitle()).toBe('Uno.A');
+    expect(expandedOf('Uno.A')).toBe('false');
+  });
+
+  it('una rama compartida muestra sólo las hijas que ya tiene permitido ver', async () => {
+    await app({ open: 'none', shared: true, expandSubpages: 'onClick' });
+    act(() => row('Uno.A').click());
+    expect(titles()).toContain('Uno.A.1');
+    expect(titles()).not.toContain('Uno');
+    expect(titles()).not.toContain('Uno.B');
+  });
+});
 
 function press(key: string, init: KeyboardEventInit = {}, target: EventTarget | null = document.activeElement): KeyboardEvent {
   const e = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init });

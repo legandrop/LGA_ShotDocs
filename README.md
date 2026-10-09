@@ -23,7 +23,8 @@ its own project: a tree of pages you own.
   across the project**: a preview of every change, replace one, a page or all of them (after a confirmation that
   says how many changes in how many pages), and *Undo* puts back everything nobody changed afterwards.
 - **Pages and subpages.** A sidebar with a tree of pages, as deep as you need. Every page can hold
-  content and other pages; a "folder" is just a page with no content.
+  content and other pages; a "folder" is just a page with no content. Selecting a page expands its direct subpages
+  by default. Set **Expand subpages → Manual** in the account menu to keep expansion manual.
 - **Visual editor.** Headings H1–H5 in gradual steps, with H1–H4 slightly larger and H1 kept below the page title on each layout. Lists, checklists, tables and images. H5 matches normal bold text; existing H6 content remains supported and looks like H5. You never see Markdown; it is only
   used behind the scenes to import, export and back up your pages.
 - **Undo in the order you edited.** Ctrl/⌘+Z undoes your last change in the project even if it was on another page:

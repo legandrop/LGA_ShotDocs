@@ -51,8 +51,8 @@ export const tutorial = {
   },
   'tour.pages.title': { en: "Your pages", es: "Tus páginas" },
   'tour.pages.text': {
-    en: "Your project's pages live here, nested. + creates one; drag to reorder.",
-    es: "Acá están las páginas del proyecto, unas adentro de otras. Con + creás una; arrastrándolas las ordenás.",
+    en: "Your project's pages live here, nested. Clicking a page shows its subpages by default. + creates one; drag to reorder.",
+    es: "Acá están las páginas del proyecto, unas adentro de otras. De fábrica, un clic en la página muestra sus subpáginas. Con + creás una; arrastrándolas las ordenás.",
   },
   'tour.projects.title': { en: "Projects", es: "Proyectos" },
   'tour.projects.text': {

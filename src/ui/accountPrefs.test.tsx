@@ -25,7 +25,7 @@ afterEach(async () => {
     d.mediaDb.close();
   }
   document.body.innerHTML = '';
-  act(() => prefs.set({ language: 'en', contrast: 'contrast', theme: 'system', font: 'default' }));
+  act(() => prefs.set({ language: 'en', contrast: 'contrast', theme: 'system', font: 'default', expandSubpages: 'onClick' }));
 });
 
 async function menu(position: { top?: number; bottom?: number; left: number } = { top: 0, left: 0 }): Promise<HTMLElement> {
@@ -85,6 +85,17 @@ function group(host: HTMLElement, label: string): HTMLButtonElement[] {
 const names = (buttons: HTMLButtonElement[]) => buttons.map((b) => b.getAttribute('aria-label'));
 
 describe('panel de la cuenta: Appearance, Font y Contrast', () => {
+  it('Expand subpages arranca al hacer clic, permite Manual y guarda la elección local', async () => {
+    prefs.set({ expandSubpages: 'onClick' });
+    const host = await menu();
+    const buttons = group(host, 'Expand subpages');
+    expect(buttons.map((b) => b.textContent)).toEqual(['Manual', 'On click']);
+    expect(buttons.map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'true']);
+    act(() => buttons[0].click());
+    expect(prefs.get().expandSubpages).toBe('manual');
+    expect(JSON.parse(localStorage.getItem('shotdocs-prefs')!).prefs.expandSubpages).toBe('manual');
+    act(() => buttons[1].click());
+  });
   it('son solo íconos: el nombre va en el tooltip y en aria-label, sin texto ni title', async () => {
     act(() => prefs.set({ language: 'en' }));
     const host = await menu();

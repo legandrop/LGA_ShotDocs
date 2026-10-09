@@ -134,6 +134,9 @@ export const menus = {
   'account.phoneImages.rows': { en: "In a row", es: "En fila" },
   'account.phoneImages.stacked': { en: "Stacked", es: "Apiladas" },
   'account.language': { en: "Language", es: "Idioma" },
+  'account.expandSubpages': { en: "Expand subpages", es: "Expandir subpáginas" },
+  'account.expandSubpages.manual': { en: "Manual", es: "Manual" },
+  'account.expandSubpages.onClick': { en: "On click", es: "Al hacer clic" },
   'account.signOutUnsaved': {
     en: "Some of your latest edits are not saved on this device yet. Wait until the red warning goes away, then sign out.",
     es: "Algunos de tus últimos cambios todavía no se guardaron en este dispositivo. Esperá a que se vaya el aviso rojo y después cerrá la sesión.",
