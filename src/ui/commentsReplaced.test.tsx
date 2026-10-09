@@ -374,7 +374,7 @@ describe('una sola pregunta al recargar', () => {
     reloadTimings.pagehideMs = 200;
     const reload = vi.spyOn(pageReload, 'now').mockImplementation(() => undefined);
     const ask = vi.spyOn(window, 'confirm').mockReturnValue(true);
-    act(() => reloadByHand());
+    act(() => { void reloadByHand(); });
     expect(ask).toHaveBeenCalledWith('A comment you wrote has not been sent. Reload anyway and lose it?');
     await until(() => reload.mock.calls.length > 0, 'la recarga');
     // La recarga se pidió con el cuadro todavía montado: la pregunta del navegador no repite la de la app.
@@ -389,7 +389,7 @@ describe('una sola pregunta al recargar', () => {
   it('escribir algo más después del «sí» vuelve a preguntar; decir que no deja todo como estaba', async () => {
     await owner();
     const ask = vi.spyOn(window, 'confirm').mockReturnValue(false);
-    act(() => reloadByHand());
+    act(() => { void reloadByHand(); });
     expect(ask).toHaveBeenCalledTimes(1);
     expect(draftLossAccepted()).toBe(false);
     expect(browserAsks()).toBe(true);
@@ -397,7 +397,7 @@ describe('una sola pregunta al recargar', () => {
     reloadTimings.pagehideMs = 60_000;
     const reload = vi.spyOn(pageReload, 'now').mockImplementation(() => undefined);
     ask.mockReturnValue(true);
-    act(() => reloadByHand());
+    act(() => { void reloadByHand(); });
     await until(() => reload.mock.calls.length > 0, 'la recarga');
     expect(draftLossAccepted()).toBe(true);
     expect(browserAsks()).toBe(false);

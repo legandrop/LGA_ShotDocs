@@ -94,12 +94,12 @@ export const pageReload = { now: (): void => location.reload() };
 
 /** El botón "Reload" de los avisos: un comentario sin mandar se pierde, así que pregunta antes. */
 let manualAttempt = 0;
-export function reloadByHand(): void {
+export function reloadByHand(): Promise<void> {
   const draftRevision = getDraftRevision();
   // Con un «sí», la pregunta del navegador al recargar no repite esta (`confirmDraftLoss`, commentsUi.ts).
-  if (!confirmDraftLoss(t('lazy.draftQuestion'))) return;
+  if (!confirmDraftLoss(t('lazy.draftQuestion'))) return Promise.resolve();
   const attempt = ++manualAttempt;
-  void untilLeft(saveBeforeExit(pendingWrites?.owner ?? null, () => attempt === manualAttempt && getDraftRevision() === draftRevision, () => pageReload.now()));
+  return untilLeft(saveBeforeExit(pendingWrites?.owner ?? null, () => attempt === manualAttempt && getDraftRevision() === draftRevision, () => pageReload.now()));
 }
 
 /**

@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.257 :
+
+Al tocar *Update now* en la app instalada, el botón parecía no responder: la búsqueda y la instalación podían tardar varios segundos, y recién al tomar el control la versión nueva se veía una recarga. Ahora el clic muestra inmediatamente un círculo de actividad y *Updating the app… Please wait*, también si se cierra el detalle de sincronización. Los botones de actualizar y forzar quedan deshabilitados mientras trabaja; repetir la misma acción reutiliza el intento. El aviso espera también el guardado local previo a recargar, conserva la cantidad de cambios pendientes y termina si se cancela, falla o concluye el intento. Una falla anterior se limpia al reintentar; las nuevas siguen explicando qué hacer. Ayuda y traducciones al día, sin migraciones ni cambios de formato. D736.
+
+[Mostrar actividad inmediata al actualizar la app instalada y evitar intentos repetidos]
+
 v0.256 :
 
 Mover un bloque sin red mientras otro dispositivo lo borraba podía borrar al vecino, que nadie tocó: y-prosemirror reescribía los contenedores. Ahora todo reordenamiento dentro del mismo grupo borra primero el lado de menor peso y lo inserta en el orden final, en una transacción de Yjs. Cubre teclado, arrastre y API sin cambiar el formato; cada movimiento se deshace separado de lo recién escrito. La guarda recorta lo intacto antes de comparar ids. El costo: lo que otro escribe a la vez en el bloque que se recrea se pierde; si esa persona sigue con la página abierta en esa sesión, ve B.16 con el texto. El aviso tras reabrir queda pendiente por costo (D727). Lo borrado de ese lado puede volver, y mover los dos puede dejar copias. D721–D727; mínimo 0.256 por comportamiento.

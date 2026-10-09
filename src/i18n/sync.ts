@@ -58,6 +58,9 @@ export const sync = {
     es: "Tus cambios y archivos están guardados en este dispositivo y se suben después de actualizar.",
   },
   'sync.detail.updateNow': { en: "Update now", es: "Actualizar ahora" },
+  'sync.detail.updating': { en: "Updating…", es: "Actualizando…" },
+  'sync.detail.updatingWait': { en: "Updating the app… Please wait.", es: "Actualizando la app… Esperá un momento." },
+  'sync.detail.updateFailed': { en: "Couldn't update the app. Try Update now again.", es: "No se pudo actualizar la app. Probá Actualizar ahora de nuevo." },
   'sync.detail.stuck': {
     en: "The browser didn't load the new version. Forcing it reloads the app from the internet; what is saved on this device stays.",
     es: "El navegador no cargó la versión nueva. Forzarla recarga la app desde internet; lo guardado en este dispositivo queda.",

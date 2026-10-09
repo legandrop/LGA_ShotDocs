@@ -78,7 +78,8 @@ In development. What works today:
   per-account appearance settings. The app can be installed (PWA): *Install app* in the account menu (and a
   dismissible banner on phones) shows the exact steps for iPhone, Android and desktop, with a direct *Install*
   button where the browser offers one. On iPhone the installed app keeps its own storage, which Safari does not
-  clear.
+  clear. *Update now* shows an activity indicator and a waiting message immediately, and disables update buttons
+  while the attempt is running. Pending changes remain counted; cancelling or a failed attempt lets you try again.
 - Offline first: every edit is saved on the device first and synced when a connection is available;
   edits made offline on several devices are merged.
 - Projects, each with its own page tree (v0.013).

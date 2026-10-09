@@ -1833,6 +1833,13 @@ página más grande de ERSO por bytes fue 105,15 ms de media (20 revisiones tras
 **Elegí** no activar esa ampliación: supera el límite de 50 ms fijado en C3 por la propuesta auditada. Queda como
 residuo aceptado de esta entrega, con su punto del roadmap. El aviso durante la sesión y el guardado sin GC siguen.
 
+### D736 · Respuesta inmediata del botón de actualización (2026-10-09)
+**Qué pasaba:** Lega tocó *Update now* en la app instalada con Brave y parecía no hacer nada hasta que recargó más tarde.
+**Elegí:** círculo de actividad y *Updating the app… Please wait* desde el clic; aviso fuera del detalle, botones de
+actualizar y forzar deshabilitados durante el intento y una sola ejecución de cada acción repetida. El estado espera
+también el guardado local antes de recargar y termina al cancelar o fallar. Se conserva la cantidad pendiente. No hay
+porcentaje ficticio ni cambios en los datos, la instalación o la mínima requerida: sigue 0.256.
+
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 
 Decisiones de diseño que el plan no fijaba, tomadas al implementar los pasos 5 a 13 de

@@ -1,4 +1,5 @@
 import { t } from '../i18n';
+import { notify } from './notice';
 import { confirmDraftLoss, draftLossAccepted, withdrawDraftLoss } from './commentsUi';
 import { hasUnsavedWork, pageReload, reloadByHand, reloadForNewVersion, untilLeft, waitForSaved } from './lazyPart';
 
@@ -117,7 +118,7 @@ export interface AppUpdateDeps {
   /** Recarga sola, con las protecciones (por defecto `reloadForNewVersion`). */
   reload?: (cause: unknown) => Promise<unknown>;
   /** La recarga del botón (por defecto `reloadByHand`: pregunta si hay un comentario sin mandar). */
-  reloadByHand?: () => void;
+  reloadByHand?: () => void | Promise<void>;
   /** Hay algo sin guardar o un comentario sin mandar: no se intenta recargar sola (por defecto `hasUnsavedWork`). */
   unsaved?: () => boolean;
   /** El archivo principal de la versión publicada en el servidor (`null` si no se pudo leer). */
@@ -290,7 +291,7 @@ export class AppUpdates {
         }
       }
     }
-    byHand();
+    await byHand();
   }
 
   private onReplaced = (): void => {
@@ -387,7 +388,13 @@ export const FORCE_FREE_BYTES = 2 * 5 * 1024 * 1024;
  * dispositivo (IndexedDB) no se toca. Solo con red: justo antes se lee la versión publicada, y si no contesta no se
  * hace nada (sin service worker y sin red, la app no abriría). Devuelve si recargó.
  */
-export async function forceUpdate(deps: ForceDeps = defaultForceDeps()): Promise<ForceResult> {
+export function forceUpdate(deps: ForceDeps = defaultForceDeps()): Promise<ForceResult> {
+  if (forcing) return forcing;
+  forcing = trackUpdate(() => performForceUpdate(deps)).finally(() => { forcing = null; });
+  return forcing;
+}
+
+async function performForceUpdate(deps: ForceDeps): Promise<ForceResult> {
   const result = await force(deps);
   // El «sí» a perder un comentario a medio escribir valía para esta recarga: si no se recargó, o la página sigue acá un
   // rato después, deja de valer.
@@ -437,6 +444,29 @@ function defaultForceDeps(): ForceDeps {
 // --- La app abierta en un workspace ---------------------------------------------------------------------------------
 
 let current: AppUpdates | null = null;
+let updating = 0;
+let requested: Promise<void> | null = null;
+let forcing: Promise<ForceResult> | null = null;
+const updatingListeners = new Set<() => void>();
+
+/** Estado del intento manual, compartido por la barra lateral y el detalle del teléfono. */
+export function isAppUpdating(): boolean { return updating > 0; }
+
+export function subscribeAppUpdating(fn: () => void): () => void {
+  updatingListeners.add(fn);
+  return () => updatingListeners.delete(fn);
+}
+
+function trackUpdate<T>(run: () => Promise<T>): Promise<T> {
+  updating++;
+  for (const fn of [...updatingListeners]) fn();
+  // El estado cambia antes del primer pedido: el clic tiene respuesta incluso con una red lenta.
+  return Promise.resolve().then(run).finally(() => {
+    updating--;
+    for (const fn of [...updatingListeners]) fn();
+  });
+}
+
 let stuck: Stuck = 'none';
 const stuckListeners = new Set<() => void>();
 
@@ -478,7 +508,12 @@ export function stopAppUpdates(updates: AppUpdates): void {
 
 /** "Update now" del estado de sincronización. Sin la app abierta en un workspace, recarga directo. */
 export function updateNow(): Promise<void> {
-  if (current) return current.updateNow();
-  pageReload.now();
-  return Promise.resolve();
+  if (requested) return requested;
+  const updates = current;
+  setStuck('none');
+  requested = trackUpdate(async () => {
+    if (updates) await updates.updateNow();
+    else await reloadByHand();
+  }).catch(() => notify(t('sync.detail.updateFailed'))).finally(() => { requested = null; });
+  return requested;
 }

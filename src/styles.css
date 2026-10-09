@@ -704,6 +704,20 @@ code {
   flex: none;
 }
 
+.app-update-spinner {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: carrete-spin 0.8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-update-spinner { animation: none; }
+}
+
 .sync-pill.ok {
   color: var(--ok);
 }

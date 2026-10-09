@@ -2196,7 +2196,12 @@ quizás con `min_app_version` subida. Qué pasa, paso a paso:
    a que lo escrito esté guardado, nunca encima de un comentario sin mandar, nunca en bucle: una por minuto). Si en ese
    momento hay algo sin guardar no avisa nada y vuelve a probar con los cambios del estado de sincronización; el aviso
    *A new version is available — reloading* sale recién cuando de verdad va a recargar. *Update now* espera a que la
-   versión nueva tome el control antes de recargar (recargar antes abría otra vez la vieja desde la caché). Si el
+   versión nueva tome el control antes de recargar (recargar antes abría otra vez la vieja desde la caché). Desde v0.257,
+   el intento manual muestra actividad inmediata y *Updating the app… Please wait*, fuera del detalle para que siga
+   visible al cerrarlo. Los dos botones quedan deshabilitados, repetir la misma acción comparte el intento y el
+   contador de cambios pendientes sigue a la vista. El estado dura también durante el guardado local de la recarga
+   manual (`reloadByHand` devuelve su promesa); se libera al cancelar, terminar o fallar. No mide porcentaje ni cambia
+   los plazos o las protecciones de la actualización. Si el
    navegador **empezó a instalarla y no pudo** (el service worker nuevo pasa a `redundant`: un teléfono sin espacio,
    una red que corta la descarga del precache), no se ofrece forzar, porque la causa sigue y forzar dejaría el
    dispositivo sin ninguna versión para abrir sin red: el estado dice que libere espacio o busque mejor conexión y

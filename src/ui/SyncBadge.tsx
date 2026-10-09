@@ -14,9 +14,11 @@ import { LinkRemote } from '../sync/linkRemote';
 import { useLinkEdits } from './LinkEditBar';
 import {
   forceUpdate,
+  isAppUpdating,
   isOfflineNotReady,
   isUpdateStuck,
   setStuck,
+  subscribeAppUpdating,
   subscribeOfflineNotReady,
   subscribeUpdateStuck,
   updateNow,
@@ -140,6 +142,7 @@ export function SyncIcon({ onClick }: { onClick: () => void }) {
 /** Siempre dice si hay cambios sin subir y si algo anda mal (regla 6 de la sincronización). */
 export function SyncBadge() {
   const status = useSyncStatus();
+  const updating = useSyncExternalStore(subscribeAppUpdating, isAppUpdating);
   // "Update now" no trajo la versión nueva aunque el servidor tiene otra: se ofrece forzarla (appUpdate.ts).
   const stuck = useSyncExternalStore(subscribeUpdateStuck, isUpdateStuck);
   // Después de forzar la actualización, hasta que la versión nueva termine de instalarse, sin red no abre.
@@ -192,9 +195,10 @@ export function SyncBadge() {
         aria-expanded={hasDetails ? details : undefined}
         onClick={() => (hasDetails ? setDetails(!details) : void engine.syncNow())}
       >
-        <Icon size={15} />
+        {updating ? <span className="app-update-spinner" aria-hidden="true" /> : <Icon size={15} />}
         <span>{text}</span>
       </button>
+      {updating && <p className="sync-hint" role="status">{tr('sync.detail.updatingWait')}</p>}
       {notReady && <p className="sync-hint">{tr('sync.offlineNotReady')}</p>}
       {rejected > 0 && (
         <button className="sync-warning" onClick={() => setDetails(!details)}>
@@ -229,17 +233,19 @@ export function SyncBadge() {
           {status.outdated && (
             <p>
               <strong>{tr('sync.detail.outdatedTitle')}</strong> {tr('sync.detail.outdated')}{' '}
-              <button className="link" onClick={() => void updateNow()}>
-                {tr('sync.detail.updateNow')}
+              <button className="link" disabled={updating} aria-busy={updating} onClick={() => void updateNow()}>
+                {tr(updating ? 'sync.detail.updating' : 'sync.detail.updateNow')}
               </button>
             </p>
           )}
-          {status.outdated && stuck === 'failed' && <p>{tr('sync.detail.installFailed')}</p>}
+          {status.outdated && !updating && stuck === 'failed' && <p>{tr('sync.detail.installFailed')}</p>}
           {status.outdated && stuck === 'force' && (
             <p>
               {tr('sync.detail.stuck')}{' '}
               <button
                 className="link"
+                disabled={updating}
+                aria-busy={updating}
                 onClick={() =>
                   void forceUpdate().then((result) => {
                     // Sin lugar para instalarla, forzar dejaría la app sin abrir sin red: se explica qué hacer.
@@ -248,7 +254,7 @@ export function SyncBadge() {
                   })
                 }
               >
-                {tr('sync.detail.force')}
+                {tr(updating ? 'sync.detail.updating' : 'sync.detail.force')}
               </button>
             </p>
           )}

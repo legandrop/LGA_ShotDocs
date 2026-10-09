@@ -231,6 +231,22 @@ describe('la versión nueva de la app cuando el workspace pide una más nueva', 
     expect(reloadByHand).toHaveBeenCalledTimes(1);
   });
 
+  it('el intento sigue pendiente mientras la recarga manual guarda lo escrito en el dispositivo', async () => {
+    let saved!: () => void;
+    const saving = new Promise<void>((resolve) => { saved = resolve; });
+    const reloadByHand = vi.fn(() => saving);
+    const updates = new AppUpdates({ container: null, reloadByHand, events: null });
+    let finished = false;
+    const done = updates.updateNow().then(() => { finished = true; });
+    await tick();
+    expect(reloadByHand).toHaveBeenCalledTimes(1);
+    expect(finished).toBe(false);
+    saved();
+    await done;
+    expect(finished).toBe(true);
+    updates.stop();
+  });
+
   it('una versión nueva que tomó el control antes de entrar al workspace también cuenta (se anota desde el arranque)', async () => {
     const worker = fakeWorker();
     const watch = new ControllerWatch(worker.container);
