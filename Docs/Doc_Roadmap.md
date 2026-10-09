@@ -1784,19 +1784,24 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    en `offlineUi` «una marca existente…» la nítida nunca se arma en jsdom, así que solo se comprueba que la casilla de
    borrar las copias llega a quien saca la marca; y la tabla de migraciones de `Doc_Supabase.md` tiene tres filas viejas
    fuera de orden.
-28. **La pastilla mientras se mandan usos de archivos, y las fotos de una página con algo propio sin subir** (D603, de
-   la v0.249). (1) Con usos de verdad por mandar, la pastilla dice «N changes not uploaded» mientras la cola de
-   archivos los está mandando: el ciclo ya terminó (`syncing` en falso) y `uploading` solo lo ponen las subidas de
-   archivos (`SyncBadge.tsx`); debería decir «Uploading N changes…». (2) Una página con algo propio sin subir no usa la
-   lectura de usos del servidor (B.14) y encola todas sus fotos: escribir una letra en una página de 52 fotos durante la
-   primera bajada de un dispositivo nuevo vuelve a mostrar 53 y manda 52 `link_page_file` que no cambian nada.
-   **Subir la prioridad del (2)** (auditoría de la v0.249): es el caso típico en el set, cualquier edición en los ~28 s
-   de la primera bajada. De la misma auditoría: (3) la guarda `hasUnsentCreate` de `linkOnOpen` no tiene prueba propia;
-   (4) `hasUnconfirmed` lee una vez por página en cada ciclo (0,14 ms; peor caso 121–140 ms con 973 páginas en la
-   computadora, 0,5–1,5 s estimados en un teléfono): un solo recorrido de `links` tarda 14 ms; (5) anterior a la v0.249:
-   si se pega una foto y la página se cierra antes de guardarla, el uso queda registrado en el servidor y el archivo
-   nunca llega a la papelera de archivos (la página se da por revisada dentro de la espera de 5 minutos de los
-   archivos propios); no se pierde nada, queda espacio ocupado en Drive.
+28. **Hecho (v0.252): la pastilla mientras se mandan usos de archivos, y las fotos de una página con algo propio sin
+   subir** (D611–D618, de la v0.249). (1) La pastilla dice «Uploading N changes…» mientras la cola de archivos manda
+   (`mediaSending`). (2) Con algo propio sin subir, la lectura de usos del servidor vale para todo salvo las fotos que trae
+   lo propio (diferencia contra `syncedSV`): una letra escrita durante la primera bajada en una página de 52 fotos ya no
+   manda las 52; lo mismo al abrir una página con algo propio (D617). (3) La guarda `hasUnsentCreate` de `linkOnOpen`
+   tiene su prueba. (4) Las filas sin confirmar se leen en un solo recorrido con más de 32 páginas. (5) Una página con un
+   archivo propio dentro de la espera de 5 minutos no queda comparada, así el archivo llega a la papelera. **Queda:**
+   borrar una foto sin el editor (*Assign*, repartir por escenas) en una página que este dispositivo nunca abrió ni
+   comparó, durante su primera bajada, no deja fila y el archivo queda «en uso» para siempre (dirección segura; D618,
+   anterior a la v0.252). Y una vuelta de la cola sin nada que mandar (todo esperando) dice «Uploading» unos
+   milisegundos, como cada ciclo con `syncing`.
+29. **PRIORIDAD ALTA: una foto recuperada con deshacer, sin red, mientras otro dispositivo la borra** (auditoría de la
+   v0.252, O1; anterior a la v0.252). En una página ya comparada, A borra una foto y la recupera con deshacer sin red
+   mientras B la borra con red: el archivo va a la papelera de archivos aunque siga en el documento de A. Lo arregla A
+   recién cuando vuelve a conectarse; si no vuelve antes de que se purgue la papelera de archivos, se pierde el original.
+   Poco probable, pero en la dirección peligrosa. De la misma auditoría: falta una prueba para cuando guardar empieza a
+   fallar mientras se lee lo guardado (la única mutación que sobrevivió); en el vite de desarrollo Ctrl+Z no deshace
+   (en el build sí); el (5) del 28 (pegar y salir antes de guardar) solo se pudo cubrir en el arnés.
 
 ### C. Esperan a Lega
 

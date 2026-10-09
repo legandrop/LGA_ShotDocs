@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.252 :
+
+Un dispositivo nuevo que escribía una letra durante la primera bajada en una página de 52 fotos mostraba 53 cambios y mandaba 52 `link_page_file` que no cambiaban nada, y mientras la cola los mandaba la pastilla decía «not uploaded». La causa: con algo propio sin subir, la comparación descartaba entera la lectura de usos del servidor, y la cola de archivos corre después del ciclo sin avisar. Ahora la lectura vale salvo para las fotos que trae lo propio (la diferencia contra `syncedSV`; si no se sabe o falla, se manda todo), también al abrir la página, y la pastilla dice «Uploading…» mientras la cola manda. Además, una página con un archivo propio en la espera de 5 minutos ya no queda comparada (el archivo llega a la papelera) y las filas sin confirmar se leen en lote (D611–D618).
+
+[Que escribir durante la primera bajada no vuelva a mandar las fotos que el servidor ya tiene, y que la pastilla diga Uploading mientras se mandan los usos]
+
 v0.251 :
 
 Cuando dos dispositivos creaban a la vez el reporte de mañana, la copia que cedía iba a la papelera aunque un tercero ya hubiera escrito en ella: su texto llegaba después de la decisión y quedaba escondido. Ahora la copia lleva una marca y cualquier dispositivo que vea algo escrito en ella la saca de la papelera y avisa; quedan los dos días y *Map › Pending* los lista. Si ya escribieron antes de ceder, no cede y le agrega solo las secciones (antes decía que las agregaba sin hacerlo). Además: la tarjeta dice «Creating…» mientras crea y «Waiting for…» mientras *Prepare* espera un reporte que llega; el aviso de «quedaron dos» sale solo si quedaron; la copia en la papelera explica por qué y lleva a la que quedó. D626–D631.

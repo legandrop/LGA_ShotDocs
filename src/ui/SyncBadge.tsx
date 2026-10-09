@@ -1,6 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { localize, t, useT, type Translate } from '../i18n';
 import type { MediaFailure } from '../media/queue';
+import type { SyncStatus } from '../sync/engine';
 import { useServices, useSyncStatus, useTree } from '../services';
 import { ErrorIcon, OfflineIcon, SyncedIcon, UploadingIcon, WarningIcon } from './icons';
 import { rejectionText } from './teamText';
@@ -21,7 +22,7 @@ import {
   updateNow,
 } from './appUpdate';
 
-type Tone = 'ok' | 'busy' | 'offline' | 'warn' | 'error';
+export type Tone = 'ok' | 'busy' | 'offline' | 'warn' | 'error';
 
 const TONE_ICONS = { ok: SyncedIcon, busy: UploadingIcon, offline: OfflineIcon, warn: WarningIcon, error: ErrorIcon };
 
@@ -59,6 +60,16 @@ function useSyncTone(): { tone: Tone; text: string; rejected: number } {
   const pending = usePendingCount();
   const visitor = useVisitorEdits();
   const tr = useT();
+  return syncTone(status, pending, visitor.waiting.length > 0, tr);
+}
+
+/** El tono y el texto de la pastilla para un estado (sin React: lo prueban `syncBadge.test.ts`). */
+export function syncTone(
+  status: SyncStatus,
+  pending: number,
+  visitorWaiting: boolean,
+  tr: Translate,
+): { tone: Tone; text: string; rejected: number } {
   const changes = tr('sync.changes', { count: pending });
   const rejected = status.failedOps + status.rejectedPages + status.failedMedia + status.failedComments;
   // La cola de fotos y videos tiene su propio ciclo: su error cuenta mientras le quede algo por subir.
@@ -81,16 +92,18 @@ function useSyncTone(): { tone: Tone; text: string; rejected: number } {
   } else if (pending > 0) {
     tone = 'busy';
     const up = status.uploading;
+    // «Uploading» también mientras la cola de archivos manda, que corre después del ciclo (D612).
+    const sending = status.syncing || status.mediaSending;
     text =
       up && up.total > 0
         ? tr('sync.uploadingPercent', { changes, percent: Math.floor((up.sent / up.total) * 100) })
-        : status.syncing
+        : sending
           ? tr('sync.uploading', { changes })
           : tr('sync.notUploaded', { changes });
   } else if (status.lastSyncAt === null) {
     tone = 'busy';
     text = tr('sync.syncing');
-  } else if (visitor.waiting.length > 0) {
+  } else if (visitorWaiting) {
     // Un link: todo mandado, pero todavía en la sala (entra cuando alguien del equipo abre la app).
     text = tr('link.edit.waiting');
   }

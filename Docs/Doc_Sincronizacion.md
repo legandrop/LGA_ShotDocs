@@ -712,6 +712,8 @@ portero) y `picker.ts` (el selector de carpetas de Google).
   cuando la miniatura llega después (se terminó de hacer acá, o la subió otro dispositivo; esto último se
   pregunta como mucho una vez por minuto, solo por los archivos que se mostraron con el ícono), el editor
   cambia la imagen en pantalla sin tocar el documento.
+- **Mientras la cola manda** (una vuelta de `MediaQueue.run` en curso, `mediaSending` en el estado), la pastilla dice
+  «Uploading N changes…» aunque el ciclo ya haya terminado (D612).
 - **Cuenta en los cambios pendientes** (`pendingMedia` en el estado), también los usos de páginas por
   confirmar. Los detenidos por un error cuentan como rechazados (`failedMedia`).
 - **Restaurar una copia:** todo lo de este dispositivo vuelve a la cola, también lo que estaba a medio
@@ -755,9 +757,13 @@ selector de proyectos: `Doc_Proyectos_Borrar.md`, "Cómo quedó: una sola papele
   `MediaQueue.serverUses`) y lo que ya está queda anotado como confirmado, igual que después de mandarlo (si es
   ajeno, como ajeno, sin avisar). Lo que el servidor no tiene, o tiene quitado, se manda como siempre, y si la
   lectura falla (sin red, un error), todo se manda como antes: nunca se deja de mandar un uso sin ver que el
-  servidor lo tiene. Cada página se lee una vez por apertura de la app. La lectura solo se usa si la página no
-  tiene nada propio por subir: si no, entre la lectura y la comparación otro dispositivo pudo quitar un uso que
-  esta página volvió a tener (lo encontró la auditoría; prueba A2 de `trash.test.ts`).
+  servidor lo tiene. Cada página se lee una vez por apertura de la app. Con algo propio por subir, la lectura vale
+  para todo **salvo las fotos que trae lo propio** (D611): la diferencia del documento contra `syncedSV`, la misma que
+  arma la subida (`ownMediaIds` en `src/media/usage.ts`). Esas pueden haber vuelto por lo propio después de que otro
+  dispositivo las quitó entre la lectura y la comparación (prueba A2 de `trash.test.ts`), así que se mandan. Las demás
+  están en el servidor con su `seq`: un `unlink` de otro dispositivo que no las vio lo rechaza `p_seen_seq`. Sin
+  `syncedSV`, o si el cálculo falla, esa página se manda entera, sin cortar la comparación de las siguientes. Antes, una
+  letra escrita durante la primera bajada en una página de 52 fotos hacía mandar las 52.
 - **Abrir una página antes de compararla no cuenta sus fotos** (D601, D602). El editor, al abrir una página, anota
   las fotos del documento (`linkOnOpen` en `src/media/usage.ts`). Si el documento es lo que vino del servidor (la
   página existe ahí, no tiene nada propio sin guardar, sin subir ni rechazado y guardar no está fallando), cada foto
@@ -765,7 +771,8 @@ selector de proyectos: `Doc_Proyectos_Borrar.md`, "Cómo quedó: una sola papele
   sincronizado. La comparación del motor pregunta por esas páginas (`serverUses`, también si ya se habían comparado) y
   cada fila sin confirmar queda confirmada si el servidor la tiene, por mandar si no, o quitada (`unlink_page_file`)
   si la persona sacó la foto: la fila es la línea base que hace falta para eso. Lo que la persona pega o agrega se
-  encola en el acto, como siempre; una página creada acá o con algo propio sin subir, también. Una versión anterior
+  encola en el acto, como siempre; una página creada acá, también. Con algo propio sin subir, queda sin confirmar lo
+  que no trae lo propio y por mandar lo que sí (D617); si algo falla al leerlo, todo por mandar. Una versión anterior
   ve esas filas como confirmadas: no las manda ni las cuenta, y la nueva las resuelve después (`openBaseline.test.ts`,
   con la cola publicada de v0.247). Antes, un dispositivo nuevo que abría el Día 59 de ERSO durante la primera bajada
   mostraba «Uploading 52 changes…» y mandaba 52 `link_page_file` que no cambiaban nada.
@@ -810,7 +817,9 @@ selector de proyectos: `Doc_Proyectos_Borrar.md`, "Cómo quedó: una sola papele
   fila vuelve a "usado" y la página se compara otra vez con el documento nuevo en el próximo ciclo.
 - **Lo agregado en este dispositivo:** `register_file` ya lo cuelga de su página. Cuando el documento lo
   muestra por primera vez se anota (sin mandar nada) para saber después si se quitó; si el documento nunca lo
-  tuvo (se agregó y se borró enseguida), se quita pasados 5 minutos.
+  tuvo (se agregó y se borró enseguida, o la página se cerró antes de ponerlo), se quita pasados 5 minutos.
+  Mientras dura esa espera la página no queda comparada y se vuelve a mirar en cada ciclo, aunque el documento no
+  cambie (D615).
 - **Sin red** no se compara nada (el documento guarda el cambio) y lo que ya está en la cola espera,
   guardado en el dispositivo; cuenta en los cambios pendientes y sale al volver la red. Los usos que esperan
   algo que no depende del dispositivo (`held`, `denied`, `file_not_found`) no cuentan como cambios sin subir

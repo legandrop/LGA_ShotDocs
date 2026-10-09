@@ -1,7 +1,7 @@
 // Los avisos del estado van en inglés y se traducen al mostrarlos (`localize` en SyncBadge.tsx).
 import { stored as t } from '../i18n';
 import type { MediaQueue, MediaStatus } from '../media/queue';
-import { mediaIdsInDoc } from '../media/usage';
+import { mediaIdsInDoc, serverUsesBesidesOwn } from '../media/usage';
 import * as Y from 'yjs';
 import { LEVEL_EDIT, Permissions, TEAM_SCHEMA_VERSION, type AccessStore } from './access';
 import { CLEAN_PER_ROUND, CLEAN_SCHEMA_VERSION, sha256Hex } from './clean';
@@ -32,6 +32,8 @@ export interface SyncStatus {
   mediaError: string | null;
   /** La foto o el video que se está subiendo. */
   uploading: MediaStatus['uploading'];
+  /** La cola de archivos está mandando lo pendiente (usos de páginas y archivos), fuera del ciclo (D612). */
+  mediaSending: boolean;
   /** Comentarios (altas, ediciones, borrados y resoluciones) que faltan subir. */
   pendingComments: number;
   /** Comentarios que el servidor rechazó para siempre. Siguen en el dispositivo, a la vista. */
@@ -121,6 +123,7 @@ export class SyncEngine {
     failedMedia: 0,
     mediaError: null,
     uploading: null,
+    mediaSending: false,
     pendingComments: 0,
     failedComments: 0,
     commentError: null,
@@ -931,10 +934,10 @@ export class SyncEngine {
     // cambios sin subir (B.14). Sin respuesta, se sigue como siempre: se mandan todos.
     // También las que tienen filas sin confirmar (las anotó el editor al abrirlas, D601): una página que ya se había
     // comparado y a la que le llegó una foto de otro dispositivo, por ejemplo.
-    const unseen: string[] = [];
-    for (const id of pages) {
-      if ((media.usageMark(id) === undefined && !this.usesAsked.has(id)) || (await media.hasUnconfirmed(id))) unseen.push(id);
-    }
+    const neverAsked = new Set(pages.filter((id) => media.usageMark(id) === undefined && !this.usesAsked.has(id)));
+    // Con muchas páginas por mirar (todas las marcas cambiaron a la vez), un solo recorrido de las filas (D614).
+    const withUnconfirmed = await media.pagesWithUnconfirmed(pages.filter((id) => !neverAsked.has(id)));
+    const unseen = pages.filter((id) => neverAsked.has(id) || withUnconfirmed.has(id));
     const onServer = unseen.length > 0 ? await media.serverUses(unseen).catch(() => null) : null;
     if (onServer) for (const id of unseen) this.usesAsked.add(id);
     for (const pageId of pages) {
@@ -965,12 +968,23 @@ export class SyncEngine {
             }
           }
         }
-        // Lo que el servidor ya tiene solo se cree si la página no tiene nada propio por subir: con algo propio en
-        // camino (una copia que entró sin pasar por el editor), la lectura puede ser vieja y se manda todo.
-        await media.reconcilePage(pageId, ids, { unlink, seenSeq: snap.state.cursor, onServer: uploaded ? onServer?.get(pageId) : undefined });
+        // Con algo propio en camino, la lectura puede ser vieja para las fotos que trae lo propio (una copia que volvió a
+        // poner una foto que otro dispositivo quitó entre la lectura y la comparación): esas se mandan. Las demás están
+        // en el servidor con su `seq` y la lectura vale (D611). Si no se sabe qué es propio, se manda todo.
+        const uses = onServer?.get(pageId);
+        const server = uploaded ? uses : serverUsesBesidesOwn(uses, snap.doc, snap.state.syncedSV);
+        // Un archivo agregado acá que el documento todavía no muestra, dentro de la espera: la página no queda mirada,
+        // así se lo quita cuando la espera pase aunque el documento no vuelva a cambiar (D615).
+        let graceWait = false;
+        await media.reconcilePage(pageId, ids, {
+          unlink,
+          seenSeq: snap.state.cursor,
+          onServer: server,
+          onGraceWait: () => (graceWait = true),
+        });
         // Solo queda "mirada" si se pudo quitar lo que hiciera falta; si no (a medio subir, algo ilegible o
-        // desconocido, sin comprobar), se vuelve a mirar en el próximo ciclo.
-        if (unlink) marks[pageId] = mark(snap.state);
+        // desconocido, sin comprobar, o un archivo propio en espera), se vuelve a mirar en el próximo ciclo.
+        if (unlink && !graceWait) marks[pageId] = mark(snap.state);
       } finally {
         snap.doc.destroy();
       }
@@ -1335,6 +1349,9 @@ export class SyncEngine {
       failedMedia: media?.failed ?? 0,
       mediaError: media?.error ?? null,
       uploading: media?.uploading ?? null,
+      // Al publicar y no al contar: un conteo que empezó con la vuelta en curso y termina después del último no deja
+      // un «Uploading…» viejo (C3 de la auditoría de E14).
+      mediaSending: this.options.media?.sending ?? false,
       pendingComments: comments?.pending ?? 0,
       failedComments: comments?.failed ?? 0,
       commentError: comments?.error ?? null,

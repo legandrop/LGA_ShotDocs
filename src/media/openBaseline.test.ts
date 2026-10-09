@@ -231,7 +231,10 @@ describe('abrir una página que este dispositivo todavía no comparó (D601)', (
     expect(b.engine.getStatus().pendingMedia).toBe(0);
   });
 
-  it('una página creada acá o con algo propio sin subir se anota como siempre: por mandar', async () => {
+  // Reescrita con D617 (C4 de la auditoría de E14): con algo propio sin subir, lo que vino del servidor queda sin
+  // confirmar y lo que trae lo propio, por mandar. Las mitades «creada acá», «guardar falla» y «el editor tiene algo que
+  // no está guardado» siguen poniendo todo por mandar.
+  it('una página creada acá se anota por mandar; con algo propio sin subir, solo lo que trae lo propio', async () => {
     const server = new FakeServer();
     const { page, id, other, ids } = await project(server);
     const b = await device(server);
@@ -250,12 +253,24 @@ describe('abrir una página que este dispositivo todavía no comparó (D601)', (
     (b.media as unknown as { seenLinks: Set<string> }).seenLinks.clear();
     await edit(b, page, (doc) => insertImage(doc, ids[1]));
     expect(await b.docs.hasOwnUnsent(page)).toBe(true);
-    await open(b, page);
-    await close(b, page);
+    // El editor muestra además una foto que todavía no está en lo guardado: no se sabe de dónde vino.
+    const unsaved = crypto.randomUUID();
+    await linkOnOpen(b, page, [id, ids[1], unsaved]);
     expect(await link(b, page, ids[1])).toMatchObject({ pending: 1 });
-    expect(await link(b, page, id)).toMatchObject({ pending: 1 });
-    // Y una sin nada propio: sin confirmar.
+    expect((await link(b, page, ids[1]))?.unconfirmed).toBeFalsy();
+    expect(await link(b, page, unsaved)).toMatchObject({ pending: 1 });
+    expect(await link(b, page, id)).toMatchObject({ pending: 0, unconfirmed: true });
+    // Guardar está fallando: todo por mandar, aunque no haya nada propio.
     expect(await b.docs.hasOwnUnsent(other)).toBe(false);
+    const writeError = b.docs.getWriteError;
+    b.docs.getWriteError = () => 'QuotaExceededError';
+    await open(b, other);
+    await close(b, other);
+    b.docs.getWriteError = writeError;
+    expect(await link(b, other, ids[0])).toMatchObject({ pending: 1 });
+    // Y una sin nada propio: sin confirmar.
+    await (b.mediaDb as unknown as { clear: (s: string) => Promise<void> }).clear('links');
+    (b.media as unknown as { seenLinks: Set<string> }).seenLinks.clear();
     await open(b, other);
     await close(b, other);
     expect(await link(b, other, ids[0])).toMatchObject({ pending: 0, unconfirmed: true });

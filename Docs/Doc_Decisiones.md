@@ -1523,6 +1523,68 @@ carrera); B) aceptar en la base lo escrito en una copia cedida, o que su disposi
 **Elegí A** por ahora (Doc_Relaciones, sección 19; roadmap v0.251 (8)); el cartel ya no le promete que vuelve (D634).
 **Si preferís otra:** B toca permisos en la base: pide su propia auditoría de Row Level Security.
 
+### D611 · Con algo propio sin subir, la lectura de usos vale para todo lo que no trae lo propio
+**Qué pasaba:** un dispositivo nuevo que escribía una letra en una página de 52 fotos durante la primera bajada (lo típico
+en el set: el ciclo sube antes de bajar, así que la letra llega sin subir a la comparación) mostraba 53 cambios y mandaba
+52 `link_page_file` que no cambiaban nada: con algo propio sin subir, la comparación descartaba entera la lectura de usos
+del servidor (B.14).
+**Las opciones:** A) creerle solo para las filas sin confirmar (no cubre una copia sin el editor de una foto que otro
+dispositivo quita al mismo tiempo, A2 de `trash.test.ts`, con la página abierta); B) esperar a que lo propio suba (un
+ciclo más, y una página rechazada nunca); C) creerle salvo para las fotos que trae lo propio: la diferencia contra
+`syncedSV`, la misma que arma la subida (`ownMediaIds` en `usage.ts`).
+**Elegí C** porque es exactamente donde la lectura puede ser vieja. Una foto que este dispositivo tiene por lo ya
+confirmado está en el servidor con su `seq`: un `unlink` de otro dispositivo que no la vio lo rechaza `p_seen_seq`, y si la
+vio, su documento la tiene y no la quita. Lo único que el otro no puede ver es lo no subido, y en Yjs nada vuelve sin un
+ítem nuevo (pegar, mover, deshacer reescriben el `url`). Sin `syncedSV`, sin lectura, o si el cálculo falla, se manda todo
+como antes, página por página, sin cortar la comparación de las siguientes.
+**Si preferís otra:** B es más simple pero deja los 52 contados un ciclo más.
+
+### D612 · La pastilla dice «Uploading» también mientras la cola de archivos manda
+**Qué pasaba:** con usos de verdad por mandar, decía «N changes not uploaded» mientras salían: la cola corre después del
+ciclo y solo las subidas de archivos ponían `uploading`.
+**Las opciones:** A) dejar `syncing` prendido hasta que termine la cola (mezcla los dos ciclos); B) un estado propio,
+`mediaSending`, verdadero mientras hay una vuelta de la cola en curso.
+**Elegí B,** sin texto nuevo. Se lee de la cola al publicar el conteo, no al empezarlo: un conteo lento que termina después
+del último no deja un «Uploading» viejo. Sin red, con la app vieja o con un error de la cola (Drive sin conectar) ganan sus
+avisos, como antes.
+**Si preferís otra:** prenderlo recién al primer pedido evitaría un parpadeo de milisegundos en vueltas sin nada que mandar.
+
+### D613 · La guarda `hasUnsentCreate` de `linkOnOpen` tiene su prueba
+**Qué pasaba:** sacándola, ninguna prueba fallaba (la cubría de rebote `hasOwnUnsent`).
+**Elegí** una prueba con dependencias de mentira (página sin crear en el servidor y sin nada propio → todo por mandar) y,
+en el arnés, que el uso por mandar de la página nueva frena el `unlink` de la original hasta que se crea.
+
+### D614 · Un solo recorrido de las filas sin confirmar con más de 32 páginas por mirar
+**Qué pasaba:** la comparación leía las filas de cada página por separado: 0,14 ms cada una, 121–140 ms con 973 páginas
+(medido en la auditoría de la v0.249) y unos segundos estimados en un teléfono cuando cambian todas las marcas a la vez.
+**Elegí** `MediaQueue.pagesWithUnconfirmed`: hasta 32 páginas como antes; con más, un `getAll` de todas (14 ms). Solo lee.
+
+### D615 · Una página con un archivo propio en espera no queda mirada
+**Qué pasaba:** un archivo guardado acá que el documento nunca mostró (la página se cerró antes de ponerlo) se quita pasados
+5 minutos, pero la comparación hecha dentro de esa espera daba la página por mirada y, si el documento no volvía a cambiar,
+el uso que creó `register_file` quedaba activo para siempre y el archivo nunca llegaba a la papelera.
+**Elegí** que `reconcilePage` avise (`onGraceWait`, con el mismo predicado que la espera) y el motor no marque la página:
+se vuelve a mirar cada ciclo hasta que pase la espera. Si el archivo terminó en otra página, su `unlink` espera (`held`) a
+que se confirme ese otro uso.
+
+### D616 · La prueba con la versión anterior reutiliza la cola v0.247
+**Qué pasaba:** D611 y D617 no cambian el formato de nada guardado; D617 crea filas sin confirmar en un caso nuevo.
+**Elegí** probar con `src/media/fixtures/v247/queue.ts` (la que peor lee esas filas: las ve confirmadas) y no copiar otra
+cola: una v0.249 solo manda de más (inofensivo). Subir `min_app_version` a la versión que publique esto cierra lo demás.
+
+### D617 · Abrir una página con algo propio sin subir: sin confirmar lo que vino del servidor
+**Qué pasaba:** `linkOnOpen` ponía por mandar todas las fotos si la página ya tenía algo propio (escrito sin el editor,
+como *Assign*, o en otra pestaña): la segunda vía del síntoma de D611.
+**Elegí** la misma regla: sin confirmar las fotos de lo guardado que no trae lo propio; por mandar las que sí, y las que el
+editor muestra y todavía no están guardadas. Página sin crear en el servidor, error al guardar, sin `syncedSV` o cualquier
+falla al leer: todo por mandar, nunca una foto sin fila.
+
+### D618 · Borrar una foto sin el editor en una página nunca comparada queda en el roadmap
+**Qué pasaba:** la auditoría de la propuesta encontró que, si durante la primera bajada algo que no es el editor (*Assign*,
+repartir por escenas) quita una foto de una página que este dispositivo nunca abrió ni comparó, no queda fila y el archivo
+nunca se desvincula (queda «en uso»; dirección segura, sin pérdida). Pasa igual antes y después de D611.
+**Elegí** anotarlo en el roadmap (punto 28) y no arreglarlo acá.
+
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 
 Decisiones de diseño que el plan no fijaba, tomadas al implementar los pasos 5 a 13 de

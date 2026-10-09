@@ -81,6 +81,8 @@ export const TRASH_SCHEMA_VERSION = 6;
  * guardar el archivo y que el bloque aparezca en el documento pasa un instante.
  */
 const OWN_GRACE_MS = 5 * 60_000;
+/** Desde cuántas páginas `pagesWithUnconfirmed` recorre todas las filas de una vez en vez de leer página por página. */
+export const UNCONFIRMED_SCAN_FROM = 32;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 // La misma forma que pide la base (`files.mime`).
@@ -402,6 +404,8 @@ export interface MediaStatus {
   error: string | null;
   /** La subida en curso. */
   uploading: { name: string; sent: number; total: number } | null;
+  /** Hay una vuelta de la cola en curso: lo pendiente se está mandando (D612). */
+  sending: boolean;
 }
 
 export interface MediaFailure {
@@ -1097,11 +1101,19 @@ export class MediaQueue {
    * no cambiaría nada. Queda anotado como confirmado, igual que después de mandarlo (B.14: un dispositivo
    * nuevo contaba como "sin subir" cada foto de lo que bajaba y las mandaba de a una, minutos, sin escribir
    * nada en la base). Lo que no está (o está quitado) se manda como siempre.
+   *
+   * `onGraceWait`: se llama si un archivo agregado acá que el documento no muestra se salteó por la espera
+   * (`OWN_GRACE_MS`); quien compara no da la página por mirada (D615).
    */
   async reconcilePage(
     pageId: string,
     docIds: ReadonlySet<string>,
-    { unlink, seenSeq, onServer }: { unlink: boolean; seenSeq?: number; onServer?: ReadonlyMap<string, { foreign: boolean }> },
+    {
+      unlink,
+      seenSeq,
+      onServer,
+      onGraceWait,
+    }: { unlink: boolean; seenSeq?: number; onServer?: ReadonlyMap<string, { foreign: boolean }>; onGraceWait?: () => void },
   ): Promise<boolean> {
     if (!this.db || !this.schemaReady) return false;
     const allowUnlink = unlink && this.trashReady;
@@ -1145,7 +1157,11 @@ export class MediaQueue {
       }
       // Agregado acá pero el documento nunca lo tuvo (se borró enseguida): pasado un rato, se quita.
       for (const r of own) {
-        if (docIds.has(r.id) || byFile.has(r.id) || this.now() - r.createdAt < OWN_GRACE_MS) continue;
+        if (docIds.has(r.id) || byFile.has(r.id)) continue;
+        if (this.now() - r.createdAt < OWN_GRACE_MS) {
+          onGraceWait?.();
+          continue;
+        }
         writes.push({ ...newLink(pageId, r.id, 1), removed: true, rev: 1, seenSeq });
       }
     }
@@ -1179,6 +1195,25 @@ export class MediaQueue {
     if (!this.db) return false;
     const links = await this.db.getAll('links', IDBKeyRange.bound(`${pageId}:`, `${pageId}:\uffff`));
     return links.some(isUnconfirmed);
+  }
+
+  /**
+   * Cuáles de estas páginas tienen alguna fila sin confirmar (como `hasUnconfirmed`, todas juntas). Con pocas, una
+   * lectura por página (0,14 ms cada una); con más de `UNCONFIRMED_SCAN_FROM`, un solo recorrido de todas las filas
+   * (14 ms con 2700 filas, contra 120–140 ms de 973 lecturas sueltas, D614). Solo lee.
+   */
+  async pagesWithUnconfirmed(pageIds: readonly string[]): Promise<Set<string>> {
+    const out = new Set<string>();
+    if (!this.db || pageIds.length === 0) return out;
+    if (pageIds.length <= UNCONFIRMED_SCAN_FROM) {
+      for (const pageId of pageIds) if (await this.hasUnconfirmed(pageId)) out.add(pageId);
+      return out;
+    }
+    const wanted = new Set(pageIds);
+    for (const link of await this.db.getAll('links')) {
+      if (wanted.has(link.pageId) && isUnconfirmed(link)) out.add(link.pageId);
+    }
+    return out;
   }
 
   /** El archivo es de otro proyecto que la página (si se saben los dos). */
@@ -1275,6 +1310,8 @@ export class MediaQueue {
       this.uploading = null;
       this.onChange?.();
     });
+    // La pastilla dice «Uploading…» mientras la vuelta manda (`status().sending`, D612).
+    this.onChange?.();
     return this.running;
   }
 
@@ -2106,7 +2143,7 @@ export class MediaQueue {
   // --- estado ---------------------------------------------------------------------------------------
 
   async status(): Promise<MediaStatus> {
-    if (!this.db) return { pending: 0, failed: 0, error: null, uploading: null };
+    if (!this.db) return { pending: 0, failed: 0, error: null, uploading: null, sending: false };
     const [records, links] = await Promise.all([
       this.db.getAllFromIndex('files', 'pending', 1),
       this.db.getAllFromIndex('links', 'pending', 1),
@@ -2118,7 +2155,13 @@ export class MediaQueue {
       failed: records.filter((r) => r.blocked).length + links.filter((l) => l.blocked).length,
       error: errors.length > 0 ? localize(errors[errors.length - 1].error ?? '') || null : null,
       uploading: this.uploading,
+      sending: this.sending,
     };
+  }
+
+  /** Hay una vuelta de la cola en curso (manda usos y sube archivos); se apaga en el `finally` de `run`. */
+  get sending(): boolean {
+    return this.running !== null;
   }
 
   /**
