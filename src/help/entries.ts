@@ -179,6 +179,8 @@ const REL_RESTOS = '0.248';
 const TOMORROW_CEDE = '0.251';
 /** Otros nombres de una locación y Dejar fuera de las relaciones (D526–D545). */
 const LOCATION_NAMES = '0.247';
+/** *Merge…* de dos páginas de la misma escena o de dos reportes del mismo día (E16): la versión se pone al publicar. */
+const MERGE_PAGES = '0.253';
 /** Exportar una rama o un proyecto como PDF (P.22, Doc_Exportar.md, entrega 1): la versión se pone al publicar. */
 const EXPORT_PDF = '0.122';
 /** Exportar como zip (P.22, Doc_Exportar.md, entrega 2): la versión se pone al publicar. */
@@ -404,6 +406,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     showMe: 'page-menu',
     words: ['leave out', 'dejar fuera', 'left out', 'fuera', 'archive', 'archivo', 'backup', 'copia', 'relations', 'relaciones', 'map', 'mapa', 'ignore', 'ignorar'],
     since: LOCATION_NAMES,
+  },
+  {
+    id: 'mergePages',
+    section: 'pages',
+    title: 'help.mergePages.title',
+    text: 'help.mergePages.text',
+    words: ['merge', 'unir', 'juntar', 'duplicate', 'duplicada', 'repetida', 'two pages', 'dos páginas', 'same scene', 'misma escena', 'same day', 'mismo día', 'in 2 pages', 'en 2 páginas', 'pending', 'pendiente'],
+    since: MERGE_PAGES,
   },
   { id: 'projectsArchive', section: 'pages', title: 'help.projectsArchive.title', text: 'help.projectsArchive.text', since: BEFORE_HELP },
   { id: 'projectsDrive', section: 'pages', title: 'help.projectsDrive.title', text: 'help.projectsDrive.text', when: 'admin', since: BEFORE_HELP },

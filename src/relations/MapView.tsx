@@ -17,6 +17,7 @@ import { useSlashDraft } from './slashDraft';
 import { AssignButton, CreateEntityButton } from './EntityActions';
 import { titleFragment } from './aliasAction';
 import { LinkLocationButton } from './LinkLocation';
+import { MergeButton, MergePendingRows, useMergeRows } from './MergeAction';
 import './liveHeader.css';
 import './map.css';
 
@@ -134,6 +135,8 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
   const partial = perms.known && perms.role !== 'owner' && perms.role !== 'admin' && perms.projectLevel(projectId) === 0;
   const complete = !!data?.complete;
   const counts = data ? mapCounts(data) : { scenes: 0, locations: 0, days: 0, pending: 0, duplicates: 0, unnumbered: 0, toResolve: 0 };
+  // Lo que llegó tarde a una página unida (E16) también espera en *Pending*.
+  const merges = useMergeRows().length;
   const projectName = tree.project(projectId)?.name ?? tr('project.defaultName');
   // Un número solo si es cierto: mientras lee, un cero no se afirma (D402).
   const num = (n: number) => (n > 0 || complete ? n : null);
@@ -159,7 +162,7 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
     { id: 'locations', icon: 'loc', label: tr('map.tabLocations'), n: counts.locations },
     { id: 'scenes', icon: 'scene', label: tr('map.tabScenes'), n: counts.scenes },
     { id: 'days', icon: 'day', label: tr('map.tabDays'), n: counts.days },
-    { id: 'pending', icon: 'warn', label: tr('map.tabPending'), n: counts.toResolve },
+    { id: 'pending', icon: 'warn', label: tr('map.tabPending'), n: counts.toResolve + merges },
   ];
   const empty = !!data && complete && counts.scenes === 0 && counts.locations === 0 && counts.days === 0;
 
@@ -586,7 +589,8 @@ function Pending({
   // *Assign* necesita la foto (para elegir la escena) y permiso de editar el día (E7).
   const src = snap ? { snap, title: (id: string) => tree.get(id)?.title } : null;
   const title = (id: string) => data.pages.get(id)?.title ?? '';
-  const nothing = !data.pending.length && !data.unnumbered.length && !data.duplicates.length;
+  const merges = useMergeRows();
+  const nothing = !data.pending.length && !data.unnumbered.length && !data.duplicates.length && !merges.length;
   // En el selector de *Assign* de un número, primero las escenas que nombran las páginas donde está escrito.
   const nearOf = (code: string): string[] => {
     const out = new Set<string>();
@@ -645,9 +649,11 @@ function Pending({
             </PendingRow>
             );
           })}
+          <MergePendingRows />
           {data.duplicates.map((d) => (
             <PendingRow
               key={`dup:${d.code}`}
+              actions={<MergeButton pair={d} className="mp-btn" />}
               head={
                 <>
                   <span className="mp-chip mono">

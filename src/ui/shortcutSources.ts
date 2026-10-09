@@ -97,6 +97,7 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
     'TemplateHost.tsx',
     'TemplateDialogs.tsx',
     'RootReportDialog.tsx',
+    'MergeAction.tsx',
   ],
   // El selector de escenas («Add scene» de Tomorrow y *Assign*, relations/EntityActions.tsx) y el de locaciones (*Link to a
   // location…*, relations/LinkLocation.tsx): Enter elige la primera,

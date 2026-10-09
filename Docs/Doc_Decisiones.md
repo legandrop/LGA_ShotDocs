@@ -1378,6 +1378,88 @@ el tipo de bloque: borra y crea, y pierde lo que otro escribe en él).
 - **D670 · Borrar la última cifra de un número ya no deja la referencia vieja en el resto** (2026-10-09; E17, v0.244 (7),
   O10). `dropShrunk` saca lo dibujado cuyo tramo quedó más corto al correrlo con la edición; escribir al lado sigue sin
   apagarlo.
+- **D651 · Un link a cualquier página de una escena repetida cuenta para la escena (parte E16-0)** (2026-10-09; E16, plan
+  §1.4 y auditoría del plan, C1). Qué pasaba: con dos páginas del mismo número, el mapa de destinos de los links tenía solo
+  la primera (`registration.scenes`); un link a la segunda tapaba su texto y no daba mención. Es el caso de la carrera de
+  *Create*: el `/e` del segundo dispositivo apunta a su propia página. Las opciones: esperar al *Merge* o sumarlas al mapa.
+  Elegí sumarlas: `RelationIndex` agrega cada página de `registration.duplicates` con el código de su escena y deja el
+  mapa en la foto (`linkTargets`); `linkTargetOf` (la cabecera del día, *Prepare*) usa ese mismo mapa. Las que están fuera
+  de las relaciones no están en `duplicates` y siguen sin contar. Si preferís otra: no hay; contar una mención no escribe
+  nada.
+- **D641–D660 · *Merge* (E16), con el alcance reducido de la auditoría del plan** (2026-10-09; plan
+  `E16_plan.md`, auditoría `E16_auditoria_plan.md`, C1–C10). Quedan como en el plan: D641 (copiar al final de la que
+  queda y mandar la otra entera a la papelera con un puntero), D642 (*Pending* y la cabecera viva de las dos; los días con
+  el mismo componente), D643 (siempre con el adelanto), D644 (cuál queda, con M9), D645 (en el Y.Doc, al final, los mismos
+  ids, separador título 1; el id del separador y los de B que A ya tenía, derivados, también anidados: C4), D646, D649,
+  D650, D653, D657, D659 y D660. **Cambiadas:** D647 (sin funciones en la base: el orden de C3 en el dispositivo, anotado
+  para seguir), D651 (los links a la unida cuentan para la de A por el puntero; la redirección automática de `/p/B#bloque`
+  y en la exportación, al roadmap), D652 (M1 y una M8 local, C6), D654 (lo que llega tarde se lista en *Pending* con *Open*
+  y *Dismiss*; no se trae), D655 (*Undo* solo en el aviso), D658 (dos reportes del mismo día se unen con el mismo
+  *Merge*; ceder el reporte de mañana uniéndose no se hizo: D683). **No usadas:** D648 (los comentarios no se mueven:
+  D676) y D656 (la versión con nombre «Before merging»: no hace falta sin mover nada de A; al roadmap).
+- **D676 · Una página con comentarios no se va (M9)** (2026-10-09; E16, auditoría del plan, punto 2 y C7). Mover
+  comentarios rompe `comment_mentions` (B1) y pide una función en la base. Elegí no unir si la que se va tiene alguno, en
+  cualquier estado (la base, `comments_view`, más los de la cola del dispositivo): el adelanto propone como la que queda
+  la que tiene comentarios, y si las dos tienen, el botón queda apagado con «Both pages have comments…». Se mira al abrir
+  el adelanto, al empezar y otra vez justo antes de la papelera: uno que aparece en el medio frena ahí y A queda con la
+  copia y B viva («Someone commented on «B» while merging…»). ERSO: 0 comentarios en páginas de escena.
+- **D677 · Sin migración: el puntero es una pista** (2026-10-09; E16, auditoría del plan, punto 1). `settings.merged =
+  { into, seq, at }` va por `patch_page_settings` (como cualquier ajuste) antes de mandar B a la papelera con `tree.trash`
+  (sus políticas, triggers y versión mínima de siempre). Nadie en la base confía en él y la app lo valida al leerlo (C2):
+  B en la papelera, el destino vivo, del mismo proyecto, visible, distinto de B, cadena de hasta 5.
+- **D678 · M6 solo para la que se va** (2026-10-09; E16). Si la que se va está llegando de otro dispositivo (D579), se
+  copiaría nada y su contenido llegaría a la papelera: no se une. La que queda puede estar llegando: su contenido se junta
+  con la copia (Yjs, `mergeRootGroups`). Lo encontró la prueba con la app montada (una escena recién creada y vacía).
+- **D679 · La que se va se lee sin abrirla en el editor** (2026-10-09; E16). `docs.indexSnapshot(B)` (un documento
+  aparte): abrirla con `docs.open` puede escribirle una reparación, que sube su `update_seq` y haría aparecer en *Pending*
+  un «changed after it was merged» falso (O1 de la auditoría).
+- **D680 · *Undo*: qué es «intacto» y el separador** (2026-10-09; E16, C5). Intacto: el contenedor, cada valor de su mapa
+  (y lo que tuvo antes) y cada item de su lista, a cualquier profundidad, son del autor de Yjs de la copia y caen enteros
+  en su rango de relojes, y ninguno está borrado. El separador sale solo si salieron todos los bloques copiados (si alguno
+  queda, el título le da contexto). Las anotaciones y los colapsados copiados quedan (claves sin bloque: no se ven).
+- **D681 · Una unión que quedó a mitad sigue sola** (2026-10-09; E16, C3). `MergeResumer` (montado en el espacio de
+  trabajo) la sigue con cada sincronización buena; *Pending* la lista en el dispositivo que la empezó («Merging «B» into
+  «A» didn’t finish») con *Finish*. Otro dispositivo no la puede terminar (sin cerrojo en la base: E16b).
+- **D682 · *Dismiss* anota también las subpáginas vistas** (2026-10-09; E16). Una página nueva adentro de B después de
+  unir se lista igual que un cambio de texto; *Dismiss* sube `seq` al de ahora y guarda los ids de las subpáginas de ese
+  momento (`kids`), así una nueva después vuelve a listarse.
+- **D683 · Lo que no se hizo en esta tanda** (2026-10-09; E16). Ceder el reporte de mañana uniéndose (punto 7 de la
+  auditoría del plan, roadmap v0.248 (0) y (14)): `tomorrowNew.ts` lo estaba cambiando E15 y el encargo pedía no tocarlo.
+  B en la papelera en solo lectura (O5): no se hizo; lo que se escribe ahí se ve en *Pending*. Los dos, al roadmap.
+- **D684 · Cada unión tiene su id** (2026-10-09; E16, recorrido en la base real). Qué pasaba: el id del separador salía
+  solo de B; si una versión vieja restauraba B, alguien le escribía y se volvía a unir, A ya tenía ese separador, la copia
+  se salteaba y lo nuevo quedaba solo en B, en la papelera, sin aviso (el puntero nuevo tenía el `seq` de ahora). Ahora
+  el trabajo guarda un id propio (`nonce`) y el separador y los ids derivados salen de `B:nonce`: retomar la misma unión no
+  duplica y otra unión de la misma página copia lo suyo, sin ids repetidos en A. La última mirada antes del puntero no
+  frena por un puntero viejo de una página viva (solo por uno de después de empezar, a otra página).
+- **D685 · *Restore* desde la app saca el puntero** (2026-10-09; E16). Si no, una página restaurada y mandada después a la
+  papelera a mano se leería como unida (sus links contarían para la otra). Una versión vieja no lo saca: queda sin efecto
+  mientras esté viva.
+- **D686 · *Merge* y la copia que cede (E15) conviven** (2026-10-09; E16, al unir `main` v0.251). Las dos claves de
+  `settings` (`merged`, `ceded`) son distintas y la base las fusiona por clave. Una copia cedida en la papelera no es una
+  unida (no tiene `merged`) ni está en las repetidas (está en la papelera): no se ofrece para *Merge* ni cambia *Pending*.
+  Si el vigía de E15 la devuelve, queda viva y repetida y se puede unir; su marca deja de valer (otra hora de papelera), así
+  que una página unida nunca se lee como cedida ni la devuelve el vigía. Con prueba.
+- **D687 · Un solo candado por página que se va** (2026-10-09; E16, B1 de la auditoría del resultado). Qué pasaba: la unión
+  del adelanto no se anotaba como corriendo; el vigía (`MergeResumer`), que corre con cada sincronización, encontraba el
+  trabajo y arrancaba otra corrida igual. La segunda no tenía el registro de la copia (`already`), así que no esperaba las
+  fotos: B podía ir a la papelera sin sus usos en A (C3 roto, medido) y avisaba «… queda» con B ya en la papelera. Las
+  opciones: que el vigía saltee lo anotado hace poco, o un candado. Elegí el candado, por dispositivo (`runningOf(docs)`),
+  compartido por `runMerge` (tomado antes de la primera guarda), `resumeMerges` y *Finish*: si la página ya corre, el vigía
+  la saltea sin avisar, *Pending* no ofrece *Finish* y otro *Merge* dice «ya se están uniendo». Además las fotos a confirmar
+  se anotan en el trabajo antes de copiar (`photos`): no dependen de qué corrida copió. Pruebas: `mergeRace.test.ts` (la
+  del auditor, que fallaba, y una corrida sin el registro de la copia) y la montada, sin un segundo aviso.
+- **D688 · Cada guarda del trabajo, con un caso que falla sin ella** (2026-10-09; E16, O4 y O5). Contenido desconocido en la
+  que se va o en la que queda, la que se va llegando de otro dispositivo (M6), la que se va atrás del servidor, la que queda
+  en la papelera antes del puntero, un invitado con *Edit & create pages* y quien recibe base limpia. El informe anterior
+  las daba por probadas y no lo estaban (la de M6 se vio en la app montada y no quedó como prueba).
+- **D689 · La frontera del *Undo*, dicha entera** (2026-10-09; E16, O1). Una edición de otro dispositivo en un bloque copiado
+  que llega después de la mirada del *Undo* (sin red, o con red en el viaje de ida y vuelta) queda en el historial de A, no a
+  la vista. Es la de E5; achicarla (volver a mirar después de un viaje) va al roadmap.
+- **D690 · Lo que la auditoría del resultado anotó y no entra en esta ronda** (2026-10-09; E16). Al roadmap: no copiar lo
+  idéntico a la plantilla (la carrera de *Create* con texto en las dos duplica «Director:/Arte:» y la tabla, O3); el adelanto
+  con el índice atrasado (O2); la segunda unión tras *Restore* repite lo de la primera (O6, se prefiere duplicar);
+  `addsNothing` ignora mayúsculas y formato (O7); filas y avisos con el mismo título sin «· 1 / · 2» (O8).
 
 ### D601 · Abrir una página en un dispositivo nuevo no vuelve a registrar las fotos que ya usa
 **Qué pasaba:** en un dispositivo nuevo, abrir una página durante la primera sincronización ponía en la cola un aviso

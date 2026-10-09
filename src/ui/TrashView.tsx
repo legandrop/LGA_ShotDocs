@@ -21,6 +21,7 @@ import { notify } from './notice';
 import { useProjectDrive } from './project';
 import { DeletedProjectItem, DeletedProjectsError, useDeletedProjects } from './ProjectStatesPart';
 import { extensionLabel, fileKind } from '../media/attachments';
+import { mergedTarget, restorePage } from '../relations/merge';
 import { cededMark } from '../relations/cededCopy';
 
 // La papelera única (pedido de Lega, 2026-10-03; Docs/Doc_Proyectos_Borrar.md, "Cómo quedó: una sola papelera"): las
@@ -301,11 +302,16 @@ export function TrashPanel(props: { current: string; onClose: () => void }) {
                       {p.title || tr('common.untitled')}
                     </button>
                     <span className="when">{new Date(p.deleted_at!).toLocaleString(locale(tr.lang))}</span>
+                    {(() => {
+                      // Unida a otra (*Merge*, E16): lo suyo está copiado allá.
+                      const into = mergedTarget(tree, p.id);
+                      return into ? <span className="muted small">{tr('merge.mergedInto', { title: tree.get(into)?.title || tr('common.untitled') })}</span> : null;
+                    })()}
                     {/* La copia vacía que cedió (D580): se reconoce (D630). */}
                     {cededMark(p) && <span className="muted small">{tr('trash.ceded')}</span>}
                   </div>
                   {perms.canManagePage(p.id) && (
-                    <button className="secondary" onClick={() => void tree.restore(p.id)}>
+                    <button className="secondary" onClick={() => void restorePage(tree, p.id)}>
                       <RestoreIcon size={16} /> {tr('trash.restore')}
                     </button>
                   )}

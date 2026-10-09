@@ -5,6 +5,8 @@ import { aliasesFromFields, resolveLocationNames, type NameSource } from './alia
 import { fieldValues, placeOf, readPageFields, type FieldName, type FieldValue, type PageFields } from './fields';
 import { buildRegistry, type Hit, type Registry } from './reader';
 import { registerProject, type PageRole, type Registration, type RegisterTree, type Stage } from './register';
+import { mergedPages } from './merge';
+import type { PageTree } from '../sync/tree';
 
 // El índice de relaciones del proyecto abierto (Docs/Doc_Relaciones.md, sección 3). No lee documentos: usa lo que ya
 // leyó el índice de la búsqueda (`ProjectIndex.content`) y le pasa el lector a cada página. Cada página se vuelve a
@@ -39,6 +41,11 @@ export interface RelationSnapshot {
   unread: number;
   /** Todo leído y nada por bajar: lo que dice la foto es todo lo que la persona puede ver. */
   complete: boolean;
+  /**
+   * A qué escena o locación lleva un link a cada página: las páginas de escena (también la segunda y las siguientes de
+   * una escena repetida, D651) y las de locación. Lo usan el índice y la cabecera del día (`linkTargetOf`).
+   */
+  linkTargets: ReadonlyMap<string, { kind: 'scene' | 'loc'; ref: string }>;
 }
 
 interface Memo {
@@ -181,7 +188,23 @@ export class RelationIndex {
     const registry = buildRegistry({ scenes: registration.scenes, locations: names.inputs, notes: names.notes });
     const targets = new Map<string, { kind: 'scene' | 'loc'; ref: string }>();
     for (const s of registration.scenes) if (s.pageId) targets.set(s.pageId, { kind: 'scene', ref: registry.scenes.get(s.code)?.code ?? s.code });
+    // Una escena en dos páginas (la carrera de *Create*, una importación, D651): el registro guarda solo la primera, pero
+    // un link a cualquiera de ellas nombra la escena. Sin esto, el `/e` del segundo dispositivo tapaba su texto y no
+    // contaba para nada. Las que están fuera de las relaciones no entran en `duplicates`.
+    for (const dup of registration.duplicates) {
+      const ref = registry.scenes.get(dup.code)?.code ?? dup.code;
+      for (const id of dup.pageIds) if (!targets.has(id)) targets.set(id, { kind: 'scene', ref });
+    }
     for (const l of registration.locations) if (l.pageId) targets.set(l.pageId, { kind: 'loc', ref: l.name });
+    // Una página unida a otra (*Merge*, E16): un link a ella cuenta para lo de la que quedó (el puntero vale solo con ella
+    // en la papelera y la otra viva, C2). Nada se reescribe en los documentos que la linkean.
+    const withTrash = this.tree as RegisterTree & Partial<Pick<PageTree, 'trashed'>>;
+    if (withTrash.trashed) {
+      for (const [from, to] of mergedPages(withTrash as RegisterTree & Pick<PageTree, 'trashed'>, projectId)) {
+        const t = targets.get(to);
+        if (t && !targets.has(from)) targets.set(from, t);
+      }
+    }
     const linkTarget: LinkTarget = (pageId) => targets.get(pageId) ?? null;
     // Lo que, si cambia, obliga a reconocer de nuevo todas las páginas: lo que existe y a qué página lleva cada link.
     const world = `${registry.signature}#${[...targets].map(([id, t]) => `${id}=${t.ref}`).join(',')}`;
@@ -230,7 +253,7 @@ export class RelationIndex {
     }
     for (const id of this.memo.keys()) if (!visibleIds.has(id)) this.memo.delete(id);
     const info = this.source.info(projectId);
-    this.snap = { projectId, registry, registration, pages, fields, unread, complete: unread === 0 && !info.building && info.missing === 0 };
+    this.snap = { projectId, registry, registration, pages, fields, unread, complete: unread === 0 && !info.building && info.missing === 0, linkTargets: targets };
     this.revision++;
     for (const fn of this.listeners) fn();
   }

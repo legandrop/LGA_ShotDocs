@@ -173,7 +173,7 @@ se subrayan los dos mientras el menú está abierto (cosmético); (12) un día c
 Ministerio») queda sin *Link to a location…* y sin explicación (D662; partirlo en varios nombres sería la alternativa); (13) a 320 px en castellano, con «POR CARPETA», el menú ⋯ (341 px) es más ancho que la pantalla y se sale 43 px (desde 375 px entra).
 
 **Anotado en la v0.245 (relaciones en vivo, el `/`, *Create* y *Assign*):** hechos el punto (2) de la v0.244 y el (1) de
-la v0.242. Queda: (1) un *Merge* de dos páginas de la misma escena que solo agregue (D520; hoy se resuelve a mano); (2)
+la v0.242. Queda: ~~(1) un *Merge* de dos páginas de la misma escena que solo agregue (D520; hoy se resuelve a mano)~~ (hecho en la v0.253, E16); (2)
 *Assign* no tiene *Undo* en su aviso (desde el adelanto, ⌘Z; desde la fila, borrar el link o « · 105_025» a mano);
 (3) *Assign* en *Map › Pending* sobre los números que no existen (hoy ahí solo *Create*; *Assign* está en el día y el
 adelanto); (4) el subtítulo «Location · N scenes» del `/l` (hoy dice sus alias); (5) la barra *Today* no tiene un botón
@@ -216,6 +216,27 @@ consulta; la nota de *Tomorrow* deja libre la columna del botón de dictar; las 
 «usos sin confirmar» que traban *Borrar proyecto* (fuera de E11); (13) la regla de «recién creado en otro dispositivo»
 (D579) usa la hora de la base contra la del dispositivo: con el reloj muy corrido, espera de más o de menos; ~~(14) la
 copia que cede (D580) queda en la papelera, vacía~~ (v0.251, D630: queda, rotulada).
+
+**Anotado en la v0.253 (*Merge*, E16, alcance reducido):** queda E16b, para cuando haya un caso real con comentarios o
+con escrituras tardías frecuentes, con los cuatro bloqueantes del plan completo ya anotados (`E16_auditoria_plan.md`):
+(1) **mover los comentarios** de la que se va (B1: `comment_mentions` tiene una clave foránea `(comment_id, page_id)` a
+`comments`; hay que mover las dos tablas en la misma sentencia y la bandeja de menciones de quien no ve A cambia: entra en
+la comparación de audiencia); (2) **cerrojo y comparar-y-fijar en la base** (B2: `settings.merged` lo escribe cualquier
+editor de B, así que el registro de la unión tiene que vivir en una tabla propia que solo escriben las funciones, o un
+trigger que lo proteja; B3: el candado tiene que ser de un dispositivo, con token, no idempotente por persona; B4: toda
+función `security definer` que escriba `pages` llama `private.require_session_write_version()` después de los
+permisos); (3) la comparación de audiencia en la base (`merge_check`; hoy M8 local y conservadora, C6); (4) *Bring it
+over* (traer a A lo que llegó tarde a B; ubicar los items de las filas posteriores es el riesgo más incierto del plan);
+(5) *Finish* desde otro dispositivo con un plazo; (6) la redirección automática de `/p/B#bloque` a A y en la
+exportación; (7) *Undo* desde el banner de B sacando la copia; (8) ceder el reporte de mañana uniéndose (D658, puntos (0)
+y (14) de la v0.248; no se tocó `tomorrowNew.ts` por E15, D683); (9) B en la papelera en solo lectura (O5); (10) locaciones
+con el mismo nombre (D660), fundir dos fichas iguales después de unir, unir más de dos de una vez; (11) la versión con
+nombre «Before merging» en A (D656); (12) de la auditoría del resultado (D690): no copiar lo idéntico a la plantilla de la
+escena (O3), el adelanto con el índice atrasado (O2), la segunda unión tras *Restore* repite lo de la primera (O6),
+`addsNothing` sin mayúsculas ni formato (O7), «· 1 / · 2» en las filas y avisos con el mismo título (O8), y achicar la
+frontera del *Undo* con una edición que llega después de mirar (D689). Carreras que quedan a la vista, probadas: dos dispositivos que unen lo mismo a la vez
+dejan la copia dos veces en A; dos uniones cruzadas a la vez dejan las dos en la papelera, listadas en *Pending* con
+*Restore* (C9). De la re-verificación: sacar el filtro `isMergeRunning` de las filas «didn't finish» de *Pending* no lo nota ninguna prueba (O9; el candado ya impide la segunda corrida); con la red cortada a mitad, el adelanto dice «conectate para unir» mientras el botón sigue en «Merging…» (O10, anterior).
 
 **Anotado en la v0.244 (relaciones en vivo, el subrayado, el adelanto y *Today*):** (1) probar en un iPhone y un Android
 de verdad lo que el navegador sin pantalla no abre: el teclado (la barra *Today* arriba de él con `visualViewport`, el

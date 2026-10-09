@@ -1,0 +1,127 @@
+/* *Merge…* (E16, Docs/Doc_Relaciones.md, sección 20): el renglón «Also in» de la cabecera y el adelanto. */
+
+.lh.lh-twin {
+  margin-bottom: 8px;
+}
+
+.lh .lh-tbtn.rel-merge,
+.mp-pact .rel-merge {
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text);
+  background: transparent;
+  cursor: pointer;
+}
+
+.lh-twin .rel-merge {
+  margin-left: 6px;
+}
+
+.modal.merge-dialog {
+  width: min(620px, 100%);
+  max-height: 82vh;
+  overflow-y: auto;
+}
+
+.merge-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.merge-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.merge-card.on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.merge-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.merge-top input {
+  flex: none;
+  width: auto;
+  height: auto;
+  margin: 0;
+}
+
+.merge-keep {
+  white-space: nowrap;
+}
+
+.merge-tag {
+  margin-left: auto;
+  min-width: 0;
+  font: 10.5px/16px var(--mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+  white-space: nowrap;
+}
+
+.merge-title {
+  overflow-wrap: anywhere;
+}
+
+.merge-folder,
+.merge-sum {
+  font-size: 12px;
+  color: var(--muted-2);
+  overflow-wrap: anywhere;
+}
+
+.merge-what {
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.merge-what ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.merge-what li + li {
+  margin-top: 3px;
+}
+
+.merge-why {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.merge-actions {
+  gap: 8px;
+}
+
+@media (max-width: 560px) {
+  .merge-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .merge-actions button {
+    flex: 1;
+    min-height: 40px;
+  }
+}

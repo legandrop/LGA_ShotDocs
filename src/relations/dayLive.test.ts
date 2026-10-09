@@ -235,3 +235,20 @@ describe('Prepare tomorrow’s report sobre el reporte de verdad', () => {
     expect(res.status).toBe('missing');
   });
 });
+
+describe('E16-0: una escena en dos páginas (D651)', () => {
+  it('el título de una sección con link a la segunda página de la escena cuenta para la escena en el día', async () => {
+    const { d, built, src } = await setup({ days: true });
+    // La segunda página de 105_029 (la carrera de *Create*), linkeada desde un título del Día 70.
+    const second = await d.tree.create(built.ids.ep5, '029 | El fugitivo (otra)', built.projectId);
+    await writeBlocks(d, built.ids.d70, [
+      { hl: 1, runs: ['Escena ', { link: second, text: '105_029' }] },
+      { p: 'Lo de la segunda página.' },
+    ]);
+    const s = await src();
+    expect(s.snap.registration.duplicates.map((x) => x.code)).toEqual(['105_029']);
+    expect(linkTargetOf(s)(second)).toEqual({ kind: 'scene', ref: '105_029' });
+    // La sección es de 105_029 (filmada aunque no estaba en el plan del día); sin el arreglo, el título no nombraba nada.
+    expect(rowsOf(dayLive(s, built.ids.d70))).toEqual(['105_029:notInPlan:0', '105_027:planned']);
+  });
+});

@@ -777,7 +777,8 @@ debajo de su botón, corrido para no salirse de la pantalla (D550).
 
 **Duplicadas.** Aun con las guardas, dos personas pueden crear la misma escena a la vez, o con el «+» sin red: quedan
 las dos páginas, nada se borra solo, las relaciones usan la primera del árbol y cuentan las menciones de las dos, y
-*Map › Pending* las muestra («in 2 pages», E9). Se resuelve a mano.
+*Map › Pending* las muestra («in 2 pages», E9). Un link a cualquiera de las dos cuenta para la escena (D651, E16-0: el
+mapa de destinos de los links, `snap.linkTargets`, las tiene a todas). Se resuelven con *Merge…* (sección 20).
 
 **Pruebas.** `createEntity.test.ts` (cada guarda con su caso negativo: invitado con *Edit & create* en la carpeta con la
 cuenta de la base, permisos desconocidos, índice leyendo, sin red, sin sincronización, papelera, adentro de algo en la
@@ -1096,3 +1097,93 @@ el árbol viejo no pisa una papelera puesta a propósito), `cededBanner.test.tsx
 `dayHeader.test.tsx` («Creating…»).
 
 **Decisiones:** D626–D637 en `Doc_Decisiones.md`.
+
+## 20. *Merge* de dos páginas de la misma escena o del mismo día (E16, v0.253)
+
+| Pieza | Archivo |
+|---|---|
+| El puntero, las guardas sin red, qué agrega una a la otra, cuál queda, las filas de *Pending* (puro) | `src/relations/merge.ts` (`readPointer`, `mergedTarget`, `mergeGuard`, `audienceOk`, `addsNothing`, `defaultKeep`, `mergeRows`) |
+| La copia en el Y.Doc y su *Undo* (se baja al unir) | `src/relations/mergeWrite.ts` (`copyIntoDoc`, `intactCopy`, `undoCopyInDoc`, `derivedId`, `separatorBlock`) |
+| El trabajo en orden, anotado para seguir, y el *Undo* | `src/relations/mergeJob.ts` (`runMerge`, `continueMerge`, `resumeMerges`, `undoMerge`, `mergeDepsFrom`) |
+| El botón, el adelanto, los avisos, las filas de *Pending*, «Also in», seguir al volver la red | `src/relations/MergeAction.tsx`, `merge.css`; en `MapView.tsx`, `MapNav.tsx`, `LiveHeader.tsx`, `PageView.tsx`, `TrashView.tsx`, `Workspace.tsx` |
+
+**Qué hace.** Con un número de escena en dos páginas (o dos reportes del día con el mismo título), *Map › Pending* y la
+cabecera viva de las dos («Also in «…» · Merge…») ofrecen *Merge…*. El adelanto muestra las dos (bloques, fotos,
+subpáginas, comentarios; «Used by relations» en la primera del árbol), deja elegir cuál queda y dice qué va a pasar. Lo de
+la que se va (B) se **copia** al final de la que queda (A): un título 1 separador («Merged from the other page»; en un
+día, «General · merged from the other report», que el lector toma como la sección general) y una copia exacta de cada
+bloque de B **con los mismos ids**, en una transacción de Yjs y solo insertando. Sus subpáginas pasan a A (`tree.move`).
+B va **entera** a la papelera con el puntero `settings.merged = { into, seq, at }`. Nada se borra de ningún documento.
+Si B no agrega nada (la plantilla sola, sin fotos, subpáginas ni comentarios), no se copia nada. Sin funciones nuevas en
+la base: todo va por los caminos de siempre (D677).
+
+**El orden (C3).** Guardas → mover las subpáginas → copiar → A subida entera (`hasOwnUnsent(A)` en falso) → los usos de
+las fotos copiadas confirmados en A (`serverUses`, `link_page_file`) → una sincronización buena y volver a mirar (A viva y
+sin puntero, B viva y sin puntero, las subpáginas en A, B sin comentarios) → el puntero, con el `seq` de B que se copió →
+B a la papelera. Cada paso queda anotado en el dispositivo (`meta`, `mergeJob:<B>`) y se puede repetir sin duplicar
+(mover lo que sigue en B, copiar solo si A no tiene el separador, cuyo id sale de B y de un id propio de la unión: unir
+otra vez la misma página, restaurada y con algo nuevo, sí copia, con otros ids; D684). Si la app se cierra o se va la red,
+sigue sola al volver (`MergeResumer`) o con *Finish* en *Pending* («Merging «B» into «A» didn’t finish»). Un solo candado
+por página que se va, en cada dispositivo, para la unión del adelanto, el vigía y *Finish*: nunca dos corridas del mismo
+trabajo, y la fila «didn’t finish» no sale mientras la unión corre; las fotos a confirmar se anotan antes de copiar (D687).
+B nunca va a la
+papelera antes de que A tenga todo en el servidor.
+
+**Guardas.** M1: nivel 4 en las dos, nunca un invitado, quien recibe base limpia ni un link (quien no puede no ve el
+botón). M2: con red y una sincronización buena en el momento. M3: las dos bajadas enteras y sin nada que esta versión no
+conoce; B se lee sin abrirla en el editor (`indexSnapshot`: abrirla podría escribirle una reparación y avisar un cambio
+falso). M4: vivas, distintas, ninguna adentro de la otra. M6: B no está llegando de otro dispositivo (D579). M8 local
+(C6): el mismo padre, o dueño/admin y ninguna con permisos de página propios ni link público (lo que leen `list_access` y
+`get_public_link`). M9: B sin comentarios en la base (cualquier estado) ni en la cola del dispositivo; se mira al abrir el
+adelanto, al empezar y otra vez antes de la papelera: uno que aparece en el medio frena antes y A queda con la copia y B
+viva (C7). Si las dos tienen, el botón queda apagado con el motivo escrito.
+
+**Ids de bloque.** Iguales en A y B no rompen nada: todo lo que se indexa por id de bloque es por página. Dentro de A nunca
+dos iguales: un id de B que A ya tenía antes de unir (también anidado) va con un id derivado de `B:idViejo`, el mismo en
+todos los dispositivos (C4). La excepción documentada es C9 a.
+
+**Links, papelera y lo que llega tarde.** Un link a B cuenta para la escena de A (el mapa de destinos sigue el puntero;
+`mergedPages`); el puntero vale solo con B en la papelera y A viva, del mismo proyecto, que se ve, con cadenas de hasta 5
+(C2). Una versión vieja que hace *Restore* de B lo deja sin efecto: las dos vuelven a listarse repetidas; *Restore* desde
+esta versión además lo saca (D685). El adelanto va en un portal afuera de la cabecera (sus estilos no lo alcanzan). B en la papelera
+dice «Merged into «A»» con *Open «A»* (banner y lista de la papelera). Si alguien escribe en B después (otro dispositivo
+sin red, una versión vieja), o le agrega una página adentro, *Pending* lo lista (««B» changed after it was merged into
+«A»») con *Open* y *Dismiss* (que sube `seq` y anota las subpáginas vistas): no se trae solo; queda en B. Las anotaciones
+de las fotos pasan con las reglas de pegar (`carryMarkup`); las que no entran quedan en B y el aviso lo dice. Los títulos
+colapsados para todos pasan con su entrada.
+
+***Undo*** (aviso de 15 s, C5): con red, B vuelve sin el puntero, sus subpáginas vuelven a B y de A salen, por id y en una
+transacción, solo los bloques copiados **intactos**: el contenedor, cada atributo y cada hijo son items de esa copia (el
+mismo autor de Yjs y su rango de relojes) y nada está borrado. Uno que alguien tocó queda y el aviso lo dice. La
+frontera (D689): una edición de otro dispositivo en un bloque copiado que llega a A **después** de esa mirada (sin red, o
+con red en el viaje de ida y vuelta, unos cientos de ms) cae en un bloque ya sacado: queda en el historial de A
+(`page_updates`), no a la vista. Después,
+*Restore* de B en la papelera (la copia queda en A).
+
+**Carreras que quedan (C9).** (a) Dos dispositivos unen lo mismo a la vez: los bloques quedan dos veces en A (mismos ids);
+se prefiere duplicar a perder, como `mergeRootGroups`. (b) Uniones cruzadas a la vez: las dos en la papelera; *Pending*
+lista ««B» was merged into «A», which is in the trash» con *Restore*. Las dos se prueban en `mergeSync.test.ts`.
+
+**Versión vieja (C8).** Nada de tipos nuevos (el separador es un `heading`); `settings.merged` es una clave que la base
+conserva y una versión vieja ignora; no se sube `min_app_version`. Probado con el esquema publicado.
+
+**Pruebas.** `merge.test.ts` (puntero y cadena, guardas, audiencia, cuál queda, filas), `mergeWrite.test.ts` (copia
+exacta y repetible, ids derivados, otro escribiendo en A, *Undo* de lo intacto con cinco formas de tocar, el editor
+abierto en A, el esquema publicado), `mergeSync.test.ts` (servidor en memoria, dos dispositivos: el orden con B viva hasta
+el puntero, A sin subir o fotos sin confirmar, cortes después de cada paso, sin red a mitad, otro en B durante y después,
+otro en A, M9 y C7, C9 a y b, dos reportes del mismo día, *Undo*, *Restore* desde una versión vieja, links),
+`mapView.test.tsx` (el adelanto, unir y *Undo* en la app, «Also in» y el banner, *Pending* con *Dismiss*, M1).
+Mutaciones que caen: sin saltear ids, sin el chequeo de intacto, sin esperar `hasOwnUnsent`, sin confirmar los usos, sin
+M9 al empezar y antes de la papelera, sin validar el puntero, E16-0 sin las duplicadas.
+
+**Lo que no hace** (roadmap, E16b): mover comentarios, traer lo tardío con un botón, cerrojo en la base, *Finish* desde
+otro dispositivo, redirección automática de `/p/B#bloque` y en la exportación, *Undo* desde el banner, locaciones repetidas,
+fundir fichas iguales, unir más de dos de una vez, ceder el reporte de mañana uniéndose.
+
+**Con la copia que cede (sección 19).** Una copia cedida en la papelera lleva `settings.ceded`, no `merged`: no es una
+unida (`mergedTarget` la ignora), no está en el registro ni en `dayTwins` (está en la papelera), así que no se ofrece para
+*Merge* ni cambia las repetidas de *Pending*. Si el vigía la devuelve, queda viva y repetida, y ahí sí se puede unir; su
+marca ya no vale (otra hora de papelera), así que una unida nunca se lee como cedida. Las dos claves conviven en `settings`
+(la base fusiona por clave).
+
+**Decisiones:** D641–D660 (ajustadas) y D676–D690 en `Doc_Decisiones.md`.

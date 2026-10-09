@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.253 :
+
+Dos páginas de la misma escena (dos dispositivos que la crean a la vez, el «+» sin red, una importación) o dos reportes del mismo día se resolvían a mano, perdiendo subpáginas, links y anotaciones; además, un link a la segunda página no contaba para la escena. Ahora cuenta, y *Map › Pending* y la cabecera de las dos ofrecen *Merge…*: un adelanto con las dos; lo de la que se va se copia al final de la otra con los mismos ids (en el Y.Doc, solo agregando), sus subpáginas pasan y va entera a la papelera con un puntero (`settings.merged`), recién cuando el servidor confirmó la copia y los usos de las fotos. Sin funciones nuevas en la base; una página con comentarios no se va. *Undo* saca solo lo copiado intacto; lo que llega tarde se lista en *Pending*. D641–D660, D676–D690.
+
+[Unir dos páginas de la misma escena o del mismo día sin perder nada, desde Pending o la cabecera, con Undo, y que un link a la segunda página de una escena repetida cuente para la escena]
+
 v0.252 :
 
 Un dispositivo nuevo que escribía una letra durante la primera bajada en una página de 52 fotos mostraba 53 cambios y mandaba 52 `link_page_file` que no cambiaban nada, y mientras la cola los mandaba la pastilla decía «not uploaded». La causa: con algo propio sin subir, la comparación descartaba entera la lectura de usos del servidor, y la cola de archivos corre después del ciclo sin avisar. Ahora la lectura vale salvo para las fotos que trae lo propio (la diferencia contra `syncedSV`; si no se sabe o falla, se manda todo), también al abrir la página, y la pastilla dice «Uploading…» mientras la cola manda. Además, una página con un archivo propio en la espera de 5 minutos ya no queda comparada (el archivo llega a la papelera) y las filas sin confirmar se leen en lote (D611–D618).

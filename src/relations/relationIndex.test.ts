@@ -396,3 +396,45 @@ describe('auditoría de E1: cambiar de proyecto, caché por proyecto, filas rota
     second.dispose();
   });
 });
+
+describe('E16-0: una escena en más de una página (D651)', () => {
+  it('un link a la segunda (o a la tercera) página de la escena cuenta para la escena; una que está fuera de las relaciones, no', async () => {
+    const d = await device();
+    const bd = await page(d, 'Breakdown', [], null, { holds: 'scene' });
+    const ep = await page(d, '105', [], bd);
+    const first = await page(d, '123 | La camioneta', [{ text: 'la primera' }], ep);
+    // La carrera de *Create*: el otro dispositivo creó la suya y la linkeó desde el día.
+    const second = await page(d, '123 | La camioneta (otra)', [{ text: 'la segunda' }], ep);
+    const third = await page(d, '105_123', [], ep);
+    const out = await page(d, '123 | Fuera', [], ep, { graph: false });
+    const days = await page(d, 'Shoot days', [], null, { holds: 'day' });
+    const day = await page(
+      d,
+      'Día 77',
+      [
+        { link: { pageId: second, text: '→ la de la segunda' } },
+        { link: { pageId: third, text: '→ la de la tercera' } },
+        { link: { pageId: out, text: '→ la de afuera' } },
+      ],
+      days,
+    );
+    const index = new ProjectIndex(d.tree, d.docs);
+    const relations = new RelationIndex(d.tree, index);
+    await index.refresh(d.tree.workspaceId);
+    await relations.update(d.tree.workspaceId);
+    const snap = relations.snapshot(d.tree.workspaceId)!;
+    expect(snap.registration.duplicates).toEqual([{ code: '105_123', pageIds: [first, second, third] }]);
+    const scene = entityRelations(snap, 'scene', '105_123');
+    expect(scene.pageId).toBe(first);
+    const onDay = scene.pages.find((x) => x.pageId === day)!;
+    // Las dos primeras cuentan como links a la escena; la de afuera no da mención.
+    expect(onDay.mentions.map((m) => [m.via, m.ref])).toEqual([
+      ['link', '105_123'],
+      ['link', '105_123'],
+    ]);
+    expect(snap.linkTargets.get(second)).toEqual({ kind: 'scene', ref: '105_123' });
+    expect(snap.linkTargets.get(out)).toBeUndefined();
+    relations.dispose();
+    index.dispose();
+  });
+});

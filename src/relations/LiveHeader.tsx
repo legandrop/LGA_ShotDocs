@@ -13,6 +13,8 @@ import { locationLive, sceneLive, type DayRef, type Excerpt, type LiveSource, ty
 import { dayGallery, locationGallery, sceneGallery, type Gallery } from './photoGallery';
 import { PhotoSources } from './PhotoSources';
 import { leftOutBy } from './register';
+import { TwinLine, type MergePair } from './MergeAction';
+import { dayTwins } from './projectMap';
 import './liveHeader.css';
 
 // La cabecera viva de una escena, una locación o un día de rodaje (Docs/Doc_Relaciones.md, secciones 10 y 11; diseño S4
@@ -65,15 +67,34 @@ function LiveHeaderFor({ pageId, session }: { pageId: string; session: NonNullab
 
   if (out && snap) return <LeftOutLine by={out.own ? null : out.pageId} />;
   if (!view || !snap) return null;
+  // Otra página de la misma escena o del mismo día (E16): «Also in «…» · Merge…» arriba de la cabecera.
+  const title = (id: string) => tree.get(id)?.title;
+  let twin: MergePair | undefined;
+  if (view.kind === 'scene') {
+    const dup = snap.registration.duplicates.find((d) => d.code === ref && d.pageIds.includes(pageId));
+    const seen = dup?.pageIds.filter((id) => title(id) !== undefined) ?? [];
+    if (dup && seen.length > 1) twin = { code: dup.code, pageIds: seen };
+  } else if (view.kind === 'day') {
+    twin = dayTwins({ snap, title }).find((d) => d.pageIds.includes(pageId));
+  }
   // Quien no ve el proyecto entero (un invitado a una rama) no puede saber qué falta: las ausencias se dicen «you can
   // see» (D401).
   const partial = perms.known && perms.role !== 'owner' && perms.role !== 'admin' && perms.projectLevel(projectId) === 0;
   const photos = { gallery: view.gallery, unread: snap.unread, here: pageId };
-  if (view.kind === 'day') return <DayHeader v={view.data} src={view.src} pages={snap.pages.size} partial={partial} photos={photos} />;
-  return view.kind === 'scene' ? (
-    <SceneHeader v={view.data} pages={snap.pages.size} partial={partial} photos={photos} />
-  ) : (
-    <LocationHeader v={view.data} pages={snap.pages.size} partial={partial} photos={photos} />
+  const header =
+    view.kind === 'day' ? (
+      <DayHeader v={view.data} src={view.src} pages={snap.pages.size} partial={partial} photos={photos} />
+    ) : view.kind === 'scene' ? (
+      <SceneHeader v={view.data} pages={snap.pages.size} partial={partial} photos={photos} />
+    ) : (
+      <LocationHeader v={view.data} pages={snap.pages.size} partial={partial} photos={photos} />
+    );
+  if (!twin) return header;
+  return (
+    <>
+      <TwinLine pageId={pageId} pair={twin} />
+      {header}
+    </>
   );
 }
 

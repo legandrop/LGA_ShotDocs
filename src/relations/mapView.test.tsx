@@ -15,6 +15,7 @@ import { Shell } from '../ui/Workspace';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { buildProject, writeBlocks, type Built } from './fixtures/proyectoSintetico';
 import { DOT_GAP, dotGap, groupDots } from './MapView';
+import { canMergeWith } from './MergeAction';
 
 // El mapa en la app de verdad (Docs/Doc_Relaciones.md, sección 12) y la lupa por entidades (Docs/Doc_Buscar.md,
 // «Escenas y locaciones primero»): la fila Map de la barra lateral, las cuatro pestañas, cada fila lleva a su página o al
@@ -539,3 +540,128 @@ describe('la lupa ⌘K: escenas y locaciones primero', () => {
   });
 });
 
+
+describe('Merge en la app (E16)', () => {
+  /** El proyecto con 105_029 en dos páginas: la segunda con texto y una ficha adentro. */
+  const twin = async (dev: Device, b: Built) => {
+    const second = await dev.tree.create(b.ids.ep5, '029 | El fugitivo (otra)', b.projectId);
+    await writeBlocks(dev, second, [{ p: 'Lo que escribió el otro dispositivo.' }]);
+    const card = await dev.tree.create(second, 'PRUEBA_105_029_020', b.projectId);
+    await writeBlocks(dev, card, [{ p: 'Una ficha nueva.' }]);
+    b.ids.s029b = second;
+    b.ids.s029b_card = card;
+  };
+  const dupCard = (host: HTMLElement) => [...host.querySelectorAll<HTMLElement>('.mp-pcard')].find((c) => c.textContent?.includes('105_029 is in 2 pages'));
+  const button = (host: HTMLElement, text: string) => [...host.querySelectorAll<HTMLElement>('button')].find((b) => b.textContent === text);
+
+  it('Pending: Merge… abre el adelanto con las dos, une, avisa con Open y Undo; Undo trae todo de vuelta', async () => {
+    const { d, built, host } = await app(() => mapPath('pending'), twin);
+    await shown(() => expect(dupCard(host)?.querySelector('.rel-merge')).toBeTruthy());
+    expect(dupCard(host)!.querySelector('.rel-merge')!.getAttribute('data-tip')).toBeTruthy();
+    expect(dupCard(host)!.textContent).toContain('Merge… copies what’s written in one');
+    click(dupCard(host)!.querySelector('.rel-merge'));
+    const dialog = () => document.querySelector<HTMLElement>('.merge-dialog')!;
+    await shown(() => expect(dialog().querySelector('.merge-actions .primary')!.hasAttribute('disabled')).toBe(false));
+    expect(dialog().querySelector('h2')!.textContent).toBe('Merge the two pages of 105_029');
+    expect([...dialog().querySelectorAll('.merge-title')].map((x) => x.textContent)).toEqual(['029 | El fugitivo abre los ojos', '029 | El fugitivo (otra)']);
+    // La primera del árbol queda; la otra tiene una subpágina que pasa.
+    expect(dialog().querySelector('.merge-card.on .merge-title')!.textContent).toBe('029 | El fugitivo abre los ojos');
+    expect(dialog().textContent).toContain('Its subpage moves into «029 | El fugitivo abre los ojos».');
+    expect(dialog().querySelector('.merge-actions .primary')!.textContent).toBe('Merge into «029 | El fugitivo abre los ojos»');
+    click(dialog().querySelector('.merge-actions .primary'));
+    await shown(() => expect(host.textContent).toContain('Merged «029 | El fugitivo (otra)» into «029 | El fugitivo abre los ojos»'), 20_000);
+    expect(d.tree.isTrashed(built.ids.s029b)).toBe(true);
+    // D687: el vigía de las uniones a mitad está montado (la app entera) y no corre otra vez la misma unión: ningún
+    // segundo aviso diciendo que la otra «queda», ni la fila «didn’t finish».
+    await wait(1500);
+    expect(host.textContent).not.toContain('changed while merging');
+    expect(host.textContent).not.toContain('didn’t finish');
+    expect(d.tree.get(built.ids.s029b_card)?.parent_id).toBe(built.ids.s029);
+    await shown(() => expect(dupCard(host)).toBeUndefined());
+    expect(await linkedRuns(d, built.ids.s029)).toContain('Lo que escribió el otro dispositivo.');
+    click(button(host, 'Undo'));
+    await shown(() => expect(host.textContent).toContain('Merge undone: «029 | El fugitivo (otra)» is back'), 20_000);
+    expect(d.tree.isTrashed(built.ids.s029b)).toBe(false);
+    expect(d.tree.get(built.ids.s029b_card)?.parent_id).toBe(built.ids.s029b);
+    expect(await linkedRuns(d, built.ids.s029)).not.toContain('Lo que escribió el otro dispositivo.');
+    await shown(() => expect(dupCard(host)).toBeTruthy());
+  });
+
+  it('la cabecera de las dos páginas dice «Also in» con Merge…; la página unida dice a cuál en la papelera', async () => {
+    const { d, built, host } = await app((b) => pagePath(b.ids.s029), twin);
+    await shown(() => expect(host.querySelector('.lh-twin')?.textContent).toContain('Also in«029 | El fugitivo (otra)»Merge…'));
+    act(() => navigate(pagePath(built.ids.s029b)));
+    await shown(() => expect(host.querySelector('.lh-twin')?.textContent).toContain('Also in«029 | El fugitivo abre los ojos»Merge…'));
+    click(host.querySelector('.lh-twin .rel-merge'));
+    await shown(() => expect(document.querySelector<HTMLElement>('.merge-actions .primary')!.hasAttribute('disabled')).toBe(false));
+    click(document.querySelector('.merge-actions .primary'));
+    await shown(() => expect(d.tree.isTrashed(built.ids.s029b)).toBe(true), 20_000);
+    await shown(() => expect(host.querySelector('.banner')?.textContent).toContain('Merged into «029 | El fugitivo abre los ojos»'));
+    expect(host.querySelector('.lh-twin')).toBeNull();
+  });
+
+  it('Pending lista lo que llegó tarde a la página unida, con Open y Dismiss; sin repetidas no hay Merge', async () => {
+    const { d, built, host } = await app(() => mapPath('pending'), twin);
+    await shown(() => expect(dupCard(host)?.querySelector('.rel-merge')).toBeTruthy());
+    click(dupCard(host)!.querySelector('.rel-merge'));
+    await shown(() => expect(document.querySelector<HTMLElement>('.merge-actions .primary')!.hasAttribute('disabled')).toBe(false));
+    click(document.querySelector('.merge-actions .primary'));
+    await shown(() => expect(d.tree.isTrashed(built.ids.s029b)).toBe(true), 20_000);
+    // Como si otro dispositivo hubiera escrito en ella después: el puntero quedó atrás del contenido.
+    const row = d.tree.get(built.ids.s029b)!;
+    await act(() => d.tree.setSetting(built.ids.s029b, 'merged', { ...row.settings!.merged!, seq: row.update_seq - 1 }));
+    const late = () => [...host.querySelectorAll<HTMLElement>('.mp-pcard')].find((c) => c.textContent?.includes('changed after it was merged'));
+    await shown(() => expect(late()).toBeTruthy());
+    expect([...late()!.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Open', 'Dismiss']);
+    expect(host.querySelector('.mp-tab[href="/map/pending"] b')!.textContent).toBe('2');
+    click([...late()!.querySelectorAll('button')].find((b) => b.textContent === 'Dismiss'));
+    await shown(() => expect(late()).toBeUndefined());
+    // Sin repetidas no hay ningún Merge a la vista.
+    expect(host.querySelector('.rel-merge')).toBeNull();
+  });
+
+  it('M1: quien no puede editar y crear páginas en las dos no ve Merge (ni en Pending ni en la cabecera)', async () => {
+    const server = new FakeServer();
+    server.enableTeam();
+    const owner = await makeDevice(server);
+    devices.push(owner);
+    const built = await buildProject(owner, fakePhoto, { days: true, indexPage: false });
+    await twin(owner, built);
+    await owner.engine.syncNow();
+    server.addMember('beto', 'member', 'beto@test');
+    server.grant('beto', { pageId: built.ids.desglose }, 'edit');
+    const beto = await makeDevice(server, crypto.randomUUID(), '0.021', {}, undefined, { id: 'beto', email: 'beto@test' });
+    devices.push(beto);
+    await beto.engine.syncNow();
+    await beto.engine.syncNow();
+    const host = mount(beto, pagePath(built.ids.s029));
+    await shown(() => expect(host.querySelector('.lh-twin')).toBeTruthy());
+    expect(host.querySelector('.rel-merge')).toBeNull();
+    act(() => navigate(mapPath('pending')));
+    await shown(() => expect(dupCard(host)).toBeTruthy());
+    expect(dupCard(host)!.querySelector('.rel-merge')).toBeNull();
+  });
+
+  it('M1: un invitado con Edit & create pages en las dos no ve Merge; tampoco quien recibe base limpia', async () => {
+    const server = new FakeServer();
+    server.enableTeam();
+    const owner = await makeDevice(server);
+    devices.push(owner);
+    const built = await buildProject(owner, fakePhoto, { days: true, indexPage: false });
+    await twin(owner, built);
+    await owner.engine.syncNow();
+    server.addMember('gina', 'guest', 'gina@test');
+    server.grant('gina', { pageId: built.ids.desglose }, 'edit_pages');
+    const gina = await makeDevice(server, crypto.randomUUID(), '0.021', {}, undefined, { id: 'gina', email: 'gina@test' });
+    devices.push(gina);
+    await gina.engine.syncNow();
+    await gina.engine.syncNow();
+    const host = mount(gina, pagePath(built.ids.s029));
+    await shown(() => expect(host.querySelector('.lh-twin')).toBeTruthy());
+    expect(host.querySelector('.rel-merge')).toBeNull();
+    // El lector de base limpia, aparte (con permisos que si no alcanzarían).
+    const perms = { canManagePage: () => true, role: 'member' as const, viaLink: false };
+    expect(canMergeWith(perms, { engine: { isBaseReader: () => false } })('p')).toBe(true);
+    expect(canMergeWith(perms, { engine: { isBaseReader: () => true } })('p')).toBe(false);
+  });
+});

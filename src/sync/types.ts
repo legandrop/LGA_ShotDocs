@@ -85,6 +85,12 @@ export interface PageSettings {
    * dispositivo la saca de la papelera y le quita la marca (`src/relations/cededCopy.ts`). No se hereda.
    */
   ceded?: { to: string; at: string };
+  /**
+   * La página se unió a otra (*Merge*, E16, D641): está en la papelera y su contenido se copió al final de `into` hasta el
+   * `seq` de su contenido. Solo una pista (la escribe cualquier editor): vale solo si la página está en la papelera y
+   * `into` vive (`mergedTarget`, `src/relations/merge.ts`). No se hereda.
+   */
+  merged?: { into: string; seq: number; at: string; kids?: string[] };
 }
 
 export type PagePatch = Partial<Pick<PageRow, 'title' | 'icon' | 'parent_id' | 'sort_key' | 'deleted_at' | 'settings' | 'template_id'>>;

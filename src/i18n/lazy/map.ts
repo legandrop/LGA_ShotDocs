@@ -82,12 +82,12 @@ export const map = {
     es: { one: "{code} está en {count} página", other: "{code} está en {count} páginas" },
   },
   'map.duplicateDayHint': {
-    en: "Two devices may have created the same shoot day at the same time. Move what’s written into one and send the other to the trash; if it’s a second unit, it can stay.",
-    es: "Dos dispositivos pueden haber creado el mismo día de rodaje a la vez. Pasá lo escrito a uno y mandá el otro a la papelera; si es una segunda unidad, puede quedar.",
+    en: "Two devices may have created the same shoot day at the same time: Merge… joins them without losing anything. If it’s a second unit, rename one (“Día 77 · Unit 2”) and it can stay.",
+    es: "Dos dispositivos pueden haber creado el mismo día de rodaje a la vez: Unir… los junta sin perder nada. Si es una segunda unidad, renombrá uno («Día 77 · Unidad 2») y puede quedar.",
   },
   'map.duplicateHint': {
-    en: "The relations use the first one in the sidebar. Move what’s written into one and send the other to the trash.",
-    es: "Las relaciones usan la primera de la barra lateral. Pasá lo escrito a una y mandá la otra a la papelera.",
+    en: "The relations use the first one in the sidebar. Merge… copies what’s written in one to the end of the other and sends it to the trash, without losing anything.",
+    es: "Las relaciones usan la primera de la barra lateral. Unir… copia lo escrito en una al final de la otra y la manda a la papelera, sin perder nada.",
   },
   'map.unnumbered': { en: "«{title}» has no scene number", es: "«{title}» no tiene número de escena" },
   'map.unnumberedHint': { en: "Write the scene number in its heading and it relates by itself", es: "Escribí el número de escena en su título y se relaciona sola" },

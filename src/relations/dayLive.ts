@@ -377,11 +377,12 @@ function repeatedScenes(src: LiveSource, pageId: string): string[] {
 /** La forma del título que agrega *Prepare*: una palabra y el número. */
 const PREPARED_TITLE = /^\s*[\p{L}.]+\s+\S+\s*$/u;
 
-/** A qué escena o locación lleva un link a una página (para leer los títulos con link, como el índice). */
+/**
+ * A qué escena o locación lleva un link a una página (para leer los títulos con link): el mismo mapa que usó el índice,
+ * así una escena en dos páginas cuenta igual en los dos lados (D651).
+ */
 export function linkTargetOf(src: LiveSource): LinkTarget {
-  const map = new Map<string, { kind: 'scene' | 'loc'; ref: string }>();
-  for (const e of src.snap.registry.scenes.values()) if (e.pageId) map.set(e.pageId, { kind: 'scene', ref: e.code });
-  for (const e of src.snap.registry.locations.values()) if (e.pageId) map.set(e.pageId, { kind: 'loc', ref: e.name });
+  const map = src.snap.linkTargets;
   return (pageId) => map.get(pageId) ?? null;
 }
 

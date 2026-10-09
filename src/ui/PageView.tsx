@@ -6,6 +6,7 @@ import { useLinkMode } from '../linkMode';
 import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
 import { ACCESS_REQUESTS_PAGES_SCHEMA_VERSION } from '../sync/accessRequests';
 import { LiveHeader } from '../relations/LiveHeader';
+import { mergedTarget, restorePage } from '../relations/merge';
 import { cededMark } from '../relations/cededCopy';
 import { DayReportButton } from '../templates/dayReportUi';
 import { TemplateBanner } from '../templates/ownTemplatesUi';
@@ -77,6 +78,8 @@ export function PageView({ id, registerTitle }: { id: string; registerTitle?: Re
   }
 
   const trashedAt = tree.trashedAncestor(id);
+  // Una página unida a otra (*Merge*, E16): está en la papelera y su contenido, copiado al final de esa otra.
+  const mergedInto = trashedAt?.id === id ? mergedTarget(tree, id) : null;
   const ceded = trashedAt?.id === id ? cededMark(trashedAt) : null;
   const cededTo = ceded && tree.get(ceded.to) && !tree.isTrashed(ceded.to) ? tree.get(ceded.to)! : null;
   const format = pageFormat(tree, id);
@@ -101,6 +104,15 @@ export function PageView({ id, registerTitle }: { id: string; registerTitle?: Re
           {trashedAt.id === id
             ? tr(ceded ? 'page.cededTrash' : 'page.inTrash')
             : tr('page.insideTrashed', { title: trashedAt.title || tr('common.untitled') })}
+          {mergedInto && (
+            <>
+              {' '}
+              {tr('merge.mergedInto', { title: tree.get(mergedInto)?.title || tr('common.untitled') })}
+              <button className="link" onClick={() => navigate(pagePath(mergedInto))}>
+                {tr('merge.openInto', { title: tree.get(mergedInto)?.title || tr('common.untitled') })}
+              </button>
+            </>
+          )}
           {/* La copia que cedió (D628): a la que quedó, si se ve. */}
           {cededTo && (
             <button className="link" onClick={() => navigate(pagePath(cededTo.id))}>
@@ -108,7 +120,7 @@ export function PageView({ id, registerTitle }: { id: string; registerTitle?: Re
             </button>
           )}
           {perms.canManagePage(trashedAt.id) && (
-            <button className="link" onClick={() => void tree.restore(trashedAt.id)}>
+            <button className="link" onClick={() => void restorePage(tree, trashedAt.id)}>
               {trashedAt.id === id ? tr('trash.restore') : tr('page.restoreNamed', { title: trashedAt.title || tr('common.untitled') })}
             </button>
           )}

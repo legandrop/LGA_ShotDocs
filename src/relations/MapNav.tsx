@@ -5,6 +5,7 @@ import { mapPath, navigate, useRoute } from '../router';
 import { useServices, useTree } from '../services';
 import { useCurrentProject } from '../ui/project';
 import { existingRelationsSession } from '../ui/relationsUi';
+import { mergeRows } from './merge';
 import { pendingSummary } from './projectMap';
 import { useSlashDraft } from './slashDraft';
 import './mapNav.css';
@@ -37,7 +38,8 @@ function MapNavFor({ session }: { session: NonNullable<ReturnType<typeof existin
     [...snap.registration.roles.values()].some((r) => r.entity?.kind === 'day' && !r.excluded);
   if (!typed) return null;
   // El mismo número que la pestaña *Pending* (O4 de la auditoría): números que no existen, duplicadas y secciones sin número.
-  const pending = pendingSummary({ snap, title: (id) => tree.get(id)?.title }).total;
+  // Y lo que llegó tarde a una página unida (E16).
+  const pending = pendingSummary({ snap, title: (id) => tree.get(id)?.title }).total + mergeRows(tree, projectId).length;
   const on = route.name === 'map';
   return (
     <a

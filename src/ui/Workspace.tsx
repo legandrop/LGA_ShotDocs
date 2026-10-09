@@ -24,6 +24,7 @@ import { isFindSelectionTarget, openFindBar } from './findUi';
 import { asAction, tipRows } from './tipRows';
 import { disposeSearchSession, isSearchShortcut, otherModalOpen, takesSearchShortcut, useSearchSession } from './projectSearchUi';
 import { disposeRelationsSession, RelationsRunner } from './relationsUi';
+import { MergeResumer } from '../relations/MergeAction';
 import { ArchiveIcon, DownloadIcon, MicIcon, MoreIcon, PlusIcon, SearchIcon } from './icons';
 import { NavMenuButton } from './NavMenuButton';
 import { menuBelow, PAGE_MENU_WIDTH, PageMenu, signOutHere, signOutQuestion, unsentCount, type MenuPosition } from './menus';
@@ -461,6 +462,8 @@ export function Shell() {
     <div className={`shell${navOpen ? ' nav-open' : ''}`}>
       {/* Las relaciones en vivo (Docs/Doc_Relaciones.md): leen el proyecto al abrirlo; con un link público, no. */}
       {!linkMode && <RelationsRunner />}
+      {/* Una unión de páginas (*Merge*) que quedó a mitad en este dispositivo sigue sola al volver la red (E16). */}
+      {!linkMode && <MergeResumer />}
       <Sidebar onBrowse={(id) => (keepNav.current = id)} />
       <SidebarResizer />
       <div className="scrim" onClick={() => setNavOpen(false)} />
