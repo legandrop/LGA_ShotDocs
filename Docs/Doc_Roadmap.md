@@ -170,8 +170,7 @@ parte en varios nombres, vincular dos veces el mismo día lo repite y con más d
 el aviso diga que se agregó (no ofrecerlo si el fragmento no pasa la limpieza de nombres); (8) «Dejar fuera de las
 relaciones» se parte en dos renglones en el menú en castellano; (9) *Leave out* con un link público no tiene prueba (lo
 corta el código); (10) la ayuda podría decir que se eviten nombres de dos palabras comunes («La Casa»), que cuentan en
-todo el texto (D529). Anterior a esta versión: un dispositivo nuevo muestra «41–52 cambios sin subir» durante la
-primera sincronización sin haber escrito nada (no sube nada; asusta a quien mira).
+todo el texto (D529).
 
 **Anotado en la v0.245 (relaciones en vivo, el `/`, *Create* y *Assign*):** hechos el punto (2) de la v0.244 y el (1) de
 la v0.242. Queda: (1) un *Merge* de dos páginas de la misma escena que solo agregue (D520; hoy se resuelve a mano); (2)
@@ -1777,6 +1776,19 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    en `offlineUi` «una marca existente…» la nítida nunca se arma en jsdom, así que solo se comprueba que la casilla de
    borrar las copias llega a quien saca la marca; y la tabla de migraciones de `Doc_Supabase.md` tiene tres filas viejas
    fuera de orden.
+28. **La pastilla mientras se mandan usos de archivos, y las fotos de una página con algo propio sin subir** (D603, de
+   la v0.249). (1) Con usos de verdad por mandar, la pastilla dice «N changes not uploaded» mientras la cola de
+   archivos los está mandando: el ciclo ya terminó (`syncing` en falso) y `uploading` solo lo ponen las subidas de
+   archivos (`SyncBadge.tsx`); debería decir «Uploading N changes…». (2) Una página con algo propio sin subir no usa la
+   lectura de usos del servidor (B.14) y encola todas sus fotos: escribir una letra en una página de 52 fotos durante la
+   primera bajada de un dispositivo nuevo vuelve a mostrar 53 y manda 52 `link_page_file` que no cambian nada.
+   **Subir la prioridad del (2)** (auditoría de la v0.249): es el caso típico en el set, cualquier edición en los ~28 s
+   de la primera bajada. De la misma auditoría: (3) la guarda `hasUnsentCreate` de `linkOnOpen` no tiene prueba propia;
+   (4) `hasUnconfirmed` lee una vez por página en cada ciclo (0,14 ms; peor caso 121–140 ms con 973 páginas en la
+   computadora, 0,5–1,5 s estimados en un teléfono): un solo recorrido de `links` tarda 14 ms; (5) anterior a la v0.249:
+   si se pega una foto y la página se cierra antes de guardarla, el uso queda registrado en el servidor y el archivo
+   nunca llega a la papelera de archivos (la página se da por revisada dentro de la espera de 5 minutos de los
+   archivos propios); no se pierde nada, queda espacio ocupado en Drive.
 
 ### C. Esperan a Lega
 

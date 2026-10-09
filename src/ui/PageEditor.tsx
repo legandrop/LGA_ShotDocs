@@ -19,6 +19,7 @@ import '../i18n/lazy/folders';
 import { usePermissions, useServices, useSyncStatus } from '../services';
 import { FileRejected, isAllowedImage } from '../sync/files';
 import { isMediaFile, MEDIA_SCHEME, mediaIdOf } from '../media/queue';
+import { linkOnOpen } from '../media/usage';
 import { carreteItemsOf, collectCarrete, inlinePhotosOf, parsePhotoKey, photoKeyOf, photoPropsIn, startIndex, type BlockLike, type CarreteItem } from './carreteModel';
 import { createCarreteLoader, type CarreteLoader } from './carreteLoader';
 import { porteroDownload, sharpenImages } from './sharpImages';
@@ -903,11 +904,12 @@ export function BlockEditor({
     const link = (ids: string[]) => {
       if (ids.length > 0) void media.ensureLinks(pageId, ids).catch(() => undefined);
     };
-    link(collect(editor.document as Block[]));
+    // Al abrir: lo que vino del servidor queda sin confirmar hasta que lo compare el motor (D601, usage.ts).
+    void linkOnOpen({ media, docs, tree: pageTree }, pageId, collect(editor.document as Block[])).catch(() => undefined);
     return editor.onChange((_, { getChanges }) => {
       link(collect(getChanges().filter((c) => c.type === 'insert' || c.type === 'update').map((c) => c.block as Block)));
     }, false);
-  }, [editor, media, pageId, editable]);
+  }, [editor, media, docs, pageTree, pageId, editable]);
 
   // BlockNote resuelve la dirección de una imagen una sola vez. Si la miniatura llega después (se está
   // haciendo en este dispositivo, o la subió otro), se cambia la imagen en pantalla sin tocar el documento.

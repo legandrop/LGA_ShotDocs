@@ -529,6 +529,19 @@ export class PageDocs {
     return [...pages];
   }
 
+  /**
+   * La página tiene algo escrito en este dispositivo que el servidor todavía no confirmó: sin guardar, sin subir o
+   * rechazado. Sin nada de eso, el documento local es lo que vino del servidor (D601, `linkOnOpen`).
+   */
+  async hasOwnUnsent(pageId: string): Promise<boolean> {
+    if (!this.isSaved(pageId)) return true;
+    const tx = this.db.transaction(['docState', 'meta'], 'readonly');
+    const [state, dirty] = await Promise.all([tx.objectStore('docState').get(pageId), tx.objectStore('meta').get(dirtyKey(pageId))]);
+    await tx.done;
+    if (dirty !== undefined) return true;
+    return !!state && (hasUnsyncedContent(state, false) || !!state.rejected);
+  }
+
   /** El estado guardado de una página (sin armar nada). */
   stateOf(pageId: string): Promise<DocState | undefined> {
     return this.db.get('docState', pageId);

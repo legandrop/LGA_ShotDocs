@@ -758,6 +758,17 @@ selector de proyectos: `Doc_Proyectos_Borrar.md`, "Cómo quedó: una sola papele
   servidor lo tiene. Cada página se lee una vez por apertura de la app. La lectura solo se usa si la página no
   tiene nada propio por subir: si no, entre la lectura y la comparación otro dispositivo pudo quitar un uso que
   esta página volvió a tener (lo encontró la auditoría; prueba A2 de `trash.test.ts`).
+- **Abrir una página antes de compararla no cuenta sus fotos** (D601, D602). El editor, al abrir una página, anota
+  las fotos del documento (`linkOnOpen` en `src/media/usage.ts`). Si el documento es lo que vino del servidor (la
+  página existe ahí, no tiene nada propio sin guardar, sin subir ni rechazado y guardar no está fallando), cada foto
+  sin fila queda **sin confirmar**: `pending` 0 y `unconfirmed`, ni contada ni mandada ni en el archivo de lo no
+  sincronizado. La comparación del motor pregunta por esas páginas (`serverUses`, también si ya se habían comparado) y
+  cada fila sin confirmar queda confirmada si el servidor la tiene, por mandar si no, o quitada (`unlink_page_file`)
+  si la persona sacó la foto: la fila es la línea base que hace falta para eso. Lo que la persona pega o agrega se
+  encola en el acto, como siempre; una página creada acá o con algo propio sin subir, también. Una versión anterior
+  ve esas filas como confirmadas: no las manda ni las cuenta, y la nueva las resuelve después (`openBaseline.test.ts`,
+  con la cola publicada de v0.247). Antes, un dispositivo nuevo que abría el Día 59 de ERSO durante la primera bajada
+  mostraba «Uploading 52 changes…» y mandaba 52 `link_page_file` que no cambiaban nada.
 - **Una sola fila por página y archivo** (store `links`, con `removed` y una revisión `rev`): gana lo último
   que se vio en el documento. Borrar y deshacer antes de sincronizar no manda nada; si el deshacer llega
   mientras viaja el `unlink`, la respuesta no marca la fila como hecha (cambió la revisión) y después sale el

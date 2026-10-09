@@ -149,6 +149,14 @@ export interface MediaLink {
    * pone al pegarlo, si ya se sabe que es de otro proyecto (ya se avisó; la fila sigue por mandar).
    */
   foreign?: boolean;
+  /**
+   * Sin confirmar (D601): el editor anotó al abrir la página que el documento, tal como vino del servidor, usa el
+   * archivo, pero este dispositivo todavía no comparó la página con el servidor. Va con `pending` 0: no se cuenta ni se
+   * manda; sirve de línea base para mandar `unlink_page_file` si la persona lo quita. La comparación del motor
+   * (`MediaQueue.reconcilePage`) la confirma, la pone por mandar o la quita. Solo vale con `pending` 0 y sin `removed`:
+   * una versión anterior que no conoce el campo la trata como confirmada (no manda nada; la resuelve después esta).
+   */
+  unconfirmed?: boolean;
 }
 
 /** Lo que el servidor sabe de un archivo (fila de `files`), guardado para mostrarlo sin red. */

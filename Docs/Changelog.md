@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.249 :
+
+Un dispositivo nuevo que abría una página durante la primera sincronización mostraba «Uploading 52 changes…» y después «41 changes not uploaded» sin que nadie escribiera nada, y mandaba 52 `link_page_file` que no cambiaban ninguna fila. La causa: al abrir, el editor ponía en la cola cada foto del documento antes de que el motor comparara la página con el servidor. Ahora, si el documento es lo que vino del servidor, cada foto queda anotada sin confirmar (ni contada ni mandada) y la comparación la confirma con los usos que el servidor ya tiene, la manda o manda el `unlink` si la persona la quitó (D601–D604). Lo pegado o agregado se encola como siempre. Pruebas nuevas en `openBaseline.test.ts`, también con la cola publicada de v0.247.
+
+[Que abrir una página en un dispositivo nuevo no cuente ni mande otra vez las fotos que el servidor ya tiene]
+
 v0.248 :
 
 *Assign* no se podía deshacer, *Map › Pending* no lo ofrecía sobre los números y un día sin día siguiente no tenía tarjeta *Tomorrow*. Ahora el aviso de *Assign* trae *Undo*, que saca solo lo agregado por anclas relativas de Yjs y solo si sigue igual; en *Pending*, *Assign* linkea el número en cada página editable que lo nombra. El último día ofrece crear el reporte de mañana como *New day report* (fecha del desglose, título como los demás días) y prepararlo en un paso: sincroniza antes, prepara el que ya exista, *Undo* va a la papelera solo si nadie escribió. Dos que crean a la vez: cede la copia vacía de id mayor; *Prepare* no escribe en un reporte cuyo contenido llega de otro dispositivo. Además: `/e 105_027a` conserva la parte, en un día el episodio del plan va primero (también tipeando), y otros detalles. D566–D580.

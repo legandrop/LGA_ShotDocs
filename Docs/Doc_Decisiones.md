@@ -1338,6 +1338,47 @@ el tipo de bloque: borra y crea, y pierde lo que otro escribe en él).
   segunda unidad con el mismo título también sale, y puede quedar). Medido en la base real con la hora del toque fijada,
   0, 1, 2, 2,5, 3 y 3,5 s (dos tandas, 11 corridas): siempre un reporte, nunca secciones repetidas. El costo: el que crea
   espera una sincronización más (aviso a los 4,5–7 s en vez de 2–4). Si preferís otra: no ceder y dejar los dos listados.
+
+### D601 · Abrir una página en un dispositivo nuevo no vuelve a registrar las fotos que ya usa
+**Qué pasaba:** en un dispositivo nuevo, abrir una página durante la primera sincronización ponía en la cola un aviso
+«esta página usa esta foto» por cada foto del documento, antes de comparar la página con el servidor. En ERSO, el Día 59:
+«Uploading 52 changes…», después «41 changes not uploaded», y 52 `link_page_file` que no cambiaban ninguna fila.
+**Las opciones:** A) que la pastilla no los cuente (se seguirían mandando: mentiría el conteo); B) no anotarlos al abrir y
+dejarlos a la comparación del motor (pierde la línea base: una foto borrada antes de la primera comparación nunca se
+desvinculaba y el archivo no llegaba nunca a la papelera); C) anotarlos igual, pero **sin confirmar**: `pending` 0 y la
+marca `unconfirmed`, ni contados ni mandados; la comparación (`reconcilePage`) los confirma con lo que el servidor ya tiene
+(`serverUses`, B.14), los pone por mandar o los quita.
+**Elegí C** porque corta la causa sin tocar cuándo se vacía la cola ni el orden de subida, y conserva la línea base para
+mandar el `unlink`. Lo que la persona pega o agrega en el editor se sigue encolando en el acto. Todo uso que el servidor no
+tenga lo encola la comparación en el primer ciclo completo con la página bajada (no con un error al guardar en el
+dispositivo, que la frena, ni en un ciclo que se corta antes). Durante la primera bajada la pastilla dice «Syncing…».
+**Si preferís otra:** A es una línea pero contradice la regla 6; B necesita otra forma de recordar qué tenía la página.
+
+### D602 · Solo queda sin confirmar lo que vino del servidor
+**Qué pasaba:** la marca de sin confirmar supone que el documento local es el del servidor.
+**Las opciones:** A) marcar siempre al abrir; B) marcar solo si la página ya existe en el servidor, no tiene nada propio sin
+guardar, sin subir ni rechazado (`PageDocs.hasOwnUnsent`) y guardar en el dispositivo no está fallando; si no, como antes.
+**Elegí B** porque una página creada acá, duplicada o con una copia que entró sin el editor tiene usos que solo este
+dispositivo conoce: esos se mandan en el acto y siguen frenando el `unlink` del mismo archivo en otra página
+(`hasUnsentUse`). Las filas sin confirmar no frenan ese `unlink` (como las páginas que nunca se abrieron).
+**Si preferís otra:** A dejaría esos usos esperando a la comparación, que no mira páginas sin crear en el servidor.
+
+### D603 · Dos síntomas vecinos van al roadmap
+**Qué pasaba:** al probar D601 quedan dos cosas parecidas que no son esta causa.
+**Las opciones:** A) arreglarlas acá; B) anotarlas como frente aparte.
+**Elegí B:** (1) con usos de verdad por mandar, la pastilla dice «N changes not uploaded» mientras la cola de archivos los
+manda, porque el ciclo ya terminó (`syncing` en falso) y solo las subidas de archivos ponen `uploading`; (2) una página con
+algo propio sin subir no usa la lectura de B.14 y encola todas sus fotos (escribir una letra en una página de 52 fotos
+durante la primera bajada vuelve a mostrar 53). Las dos tocan el texto de la pastilla o la cola: piden su propia revisión.
+**Si preferís otra:** (1) es un cambio de texto en `SyncBadge`; (2) pide decidir cuándo una lectura de usos sigue valiendo.
+
+### D604 · La prueba con la versión anterior usa una copia de la cola publicada
+**Qué pasaba:** la fila de usos gana un campo (`unconfirmed`); una versión anterior puede abrir la misma base.
+**Las opciones:** A) razonar que la ignora; B) copiar `src/media/queue.ts` de v0.247 a `src/media/fixtures/v247/` y probar
+con ella sobre la misma base, como las copias de `src/sync/fixtures/`.
+**Elegí B:** la prueba confirma que la versión anterior no cuenta ni manda las sin confirmar, que manda el `unlink` si la
+persona quitó la foto, y que la versión nueva las confirma después sin mandar nada.
+**Si preferís otra:** A ahorra 3000 líneas de copia, pero la regla del repo pide la prueba con lo publicado.
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 
 Decisiones de diseño que el plan no fijaba, tomadas al implementar los pasos 5 a 13 de

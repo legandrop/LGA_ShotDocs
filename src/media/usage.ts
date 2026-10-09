@@ -1,6 +1,8 @@
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
-import { mediaIdOf } from './queue';
+import type { PageDocs } from '../sync/docs';
+import type { PageTree } from '../sync/tree';
+import { mediaIdOf, type MediaQueue } from './queue';
 
 // Qué fotos y videos (`sdmedia://<id>`) usa una página, leído del documento de Yjs y no del editor: sirve
 // para las páginas cerradas y para lo que llega de otros dispositivos (papelera de archivos, paso 11 de
@@ -31,4 +33,25 @@ export function mediaCountsInDoc(doc: Y.Doc): Map<string, number> {
     stack.push(...item.toArray());
   }
   return counts;
+}
+
+/**
+ * Lo que hace el editor con las fotos y videos de una página al abrirla (D601). Si el documento es lo que vino del
+ * servidor (la página ya existe ahí, no tiene nada propio sin guardar, sin subir ni rechazado, y guardar no está
+ * fallando), cada archivo sin fila se anota sin confirmar: no se cuenta ni se manda, y la comparación del motor lo
+ * confirma con lo que el servidor ya tiene (un dispositivo nuevo que abría una página de 52 fotos mandaba 52
+ * `link_page_file` que no cambiaban nada y la pastilla decía «Uploading 52 changes…»). Si no, como siempre: por mandar.
+ */
+export async function linkOnOpen(
+  deps: {
+    media: Pick<MediaQueue, 'ensureLinks'>;
+    docs: Pick<PageDocs, 'hasOwnUnsent' | 'getWriteError'>;
+    tree: Pick<PageTree, 'hasUnsentCreate'>;
+  },
+  pageId: string,
+  ids: string[],
+): Promise<void> {
+  if (ids.length === 0) return;
+  const fromServer = !deps.tree.hasUnsentCreate(pageId) && !deps.docs.getWriteError() && !(await deps.docs.hasOwnUnsent(pageId));
+  await deps.media.ensureLinks(pageId, ids, { unconfirmed: fromServer });
 }

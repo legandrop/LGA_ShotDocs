@@ -1,11 +1,13 @@
-import { localize, stored, t } from '../i18n';
-import { FileRejected } from '../sync/files';
-import { ImportPending, validUuid } from '../sync/importIdentity';
-import { APP_OUTDATED, type MediaRemote } from '../sync/remote';
-import { errorMessage, isNetworkError, isTimeout, RemoteError, STALLS_TO_CLOSE_ROUND } from '../sync/types';
-import { attachmentCardUrl, blobToDataUrl, cleanFileName, EXTENSION_MIME, fileKind, folderCardUrl, FOLDER_MIME, isFolderMime, mimeFromName, type FileKind } from './attachments';
-import type { KnownFile, MediaDb, MediaLink, MediaRecord } from './mediaDb';
-import { AlreadySentError, PorteroError, UploadError, localDay, type Portero, type UploadProgress, type VerifyResult } from './portero';
+// Copia de la versión publicada (main, v0.247: commit 7c6f32d) de src/media/queue.ts, solo para probar que una versión
+// anterior de la app que abre la misma base de archivos trata bien las filas de usos sin confirmar (D601). No se toca.
+import { localize, stored, t } from '../../../i18n';
+import { FileRejected } from '../../../sync/files';
+import { ImportPending, validUuid } from '../../../sync/importIdentity';
+import { APP_OUTDATED, type MediaRemote } from '../../../sync/remote';
+import { errorMessage, isNetworkError, isTimeout, RemoteError, STALLS_TO_CLOSE_ROUND } from '../../../sync/types';
+import { attachmentCardUrl, blobToDataUrl, cleanFileName, EXTENSION_MIME, fileKind, folderCardUrl, FOLDER_MIME, isFolderMime, mimeFromName, type FileKind } from '../../attachments';
+import type { KnownFile, MediaDb, MediaLink, MediaRecord } from '../../mediaDb';
+import { AlreadySentError, PorteroError, UploadError, localDay, type Portero, type UploadProgress, type VerifyResult } from '../../portero';
 import {
   deletedLabel,
   deletedUrl,
@@ -22,13 +24,13 @@ import {
   withPlayMark,
   type MediaKind,
   type Probe,
-} from './probe';
-import type { DueFileRow, MediaFileRow } from '../sync/types';
-import { HEIC_TIMEOUT_MS, HeicError, heicFailure, isHeicFile, isHeicType, jpegName, JPEG_TYPE } from './heic';
-import { convertHeic as convertHeicNow } from './heicConvert';
-import { recoverHeic, recoveryActive } from './heicRecovery';
-import { dropCopy, readCopy, readOfflineView } from './offlineStore';
-import { attachmentPreview, previewable, PreviewUnavailable } from './pdfPreview';
+} from '../../probe';
+import type { DueFileRow, MediaFileRow } from '../../../sync/types';
+import { HEIC_TIMEOUT_MS, HeicError, heicFailure, isHeicFile, isHeicType, jpegName, JPEG_TYPE } from '../../heic';
+import { convertHeic as convertHeicNow } from '../../heicConvert';
+import { recoverHeic, recoveryActive } from '../../heicRecovery';
+import { dropCopy, readCopy, readOfflineView } from '../../offlineStore';
+import { attachmentPreview, previewable, PreviewUnavailable } from '../../pdfPreview';
 
 // La cola de fotos y videos (paso 6 de Docs/Plan_Workspaces.md; Docs/Doc_Sincronizacion.md, "Archivos
 // grandes"). El archivo se guarda primero en el dispositivo (base `<base local>:media`) y en la página queda
@@ -165,16 +167,10 @@ function newLink(pageId: string, fileId: string, pending: 0 | 1): MediaLink {
   };
 }
 
-/** La fila es una línea base sin confirmar (D601): ni contada ni por mandar, hasta que la compare el motor. */
-export function isUnconfirmed(link: MediaLink): boolean {
-  return link.unconfirmed === true && link.pending === 0 && !link.removed;
-}
-
 /** La misma fila con lo contrario por mandar (usado o quitado), desde cero y con otra revisión. */
 function flipLink(link: MediaLink, removed: boolean): MediaLink {
   return {
     ...link,
-    unconfirmed: false,
     removed,
     rev: (link.rev ?? 0) + 1,
     pending: 1,
@@ -1039,17 +1035,9 @@ export class MediaQueue {
    * bloque de otra página) entran a la cola de `link_page_file`, y uno que la página había dejado de usar
    * (se deshizo el borrado, se volvió a pegar) vuelve a la cola para reactivarlo. Lo ya visto no se vuelve
    * a pedir.
-   *
-   * `unconfirmed` (D601: el llamado del editor al abrir una página cuyo documento vino del servidor, ver
-   * `linkOnOpen` en usage.ts): un archivo sin fila no se pone por mandar sino como línea base sin confirmar
-   * (`pending` 0): no se cuenta ni se manda, y la comparación del motor (`reconcilePage`) lo confirma con lo que
-   * el servidor ya tiene, lo pone por mandar o lo quita. Tampoco avisa de un archivo de otro proyecto: no lo pegó
-   * esta persona. Lo demás (una fila quitada que vuelve, un archivo propio) es igual que sin la opción.
    */
-  async ensureLinks(pageId: string, fileIds: string[], { unconfirmed = false }: { unconfirmed?: boolean } = {}): Promise<void> {
+  async ensureLinks(pageId: string, fileIds: string[]): Promise<void> {
     if (!this.db || this.options.noUsage) return;
-    // Sin la base de usos (la comparación no corre) se anota como siempre: si no, nadie la resolvería.
-    const baseline = unconfirmed && this.schemaReady;
     let added = false;
     for (const fileId of new Set(fileIds.map((id) => id.toLowerCase()))) {
       const key = `${pageId}:${fileId}`;
@@ -1064,8 +1052,6 @@ export class MediaQueue {
       if (link?.removed) {
         await tx.objectStore('links').put(flipLink(link, false));
         added = true;
-      } else if (!link && own?.pageId !== pageId && baseline) {
-        await tx.objectStore('links').put({ ...newLink(pageId, fileId, 0), unconfirmed: true });
       } else if (!link && own?.pageId !== pageId) {
         // El archivo que se agregó en esta página se registra con ella (`register_file`). Uno de otro
         // proyecto también se manda (la base lo guarda como uso ajeno); acá solo se avisa.
@@ -1119,13 +1105,6 @@ export class MediaQueue {
       const link = byFile.get(id);
       if (link) {
         if (link.removed) writes.push(flipLink(link, false));
-        else if (isUnconfirmed(link)) {
-          // La línea base que anotó el editor al abrir (D601): lo que el servidor ya tiene (o registra este
-          // dispositivo con `register_file`) queda confirmado; lo demás, por mandar, como cualquier uso nuevo.
-          const server = onServer?.get(id);
-          if (server || ownIds.has(id)) writes.push({ ...link, unconfirmed: false, ...(server?.foreign ? { foreign: true } : {}) });
-          else writes.push({ ...link, unconfirmed: false, pending: 1, rev: (link.rev ?? 0) + 1 });
-        }
       } else if (ownIds.has(id)) {
         // Lo registra `register_file` con esta página: solo se anota que el documento lo tiene, para saber
         // después si se quitó. No hay nada que mandar.
@@ -1172,13 +1151,6 @@ export class MediaQueue {
       uses.set(row.file_id.toLowerCase(), { foreign: row.is_foreign === true });
     }
     return out;
-  }
-
-  /** La página tiene alguna fila sin confirmar (D601): la comparación tiene que preguntarle al servidor por ella. */
-  async hasUnconfirmed(pageId: string): Promise<boolean> {
-    if (!this.db) return false;
-    const links = await this.db.getAll('links', IDBKeyRange.bound(`${pageId}:`, `${pageId}:\uffff`));
-    return links.some(isUnconfirmed);
   }
 
   /** El archivo es de otro proyecto que la página (si se saben los dos). */
@@ -2379,8 +2351,7 @@ export class MediaQueue {
     }
     const links = tx.objectStore('links');
     for (let cursor = await links.openCursor(); cursor; cursor = await cursor.continue()) {
-      // Las sin confirmar (D601) también: después de restaurar se manda todo lo que el documento usa.
-      await cursor.update({ ...cursor.value, unconfirmed: false, pending: 1, waiting: null, blocked: false, error: null, failures: 0, retryAt: 0 });
+      await cursor.update({ ...cursor.value, pending: 1, waiting: null, blocked: false, error: null, failures: 0, retryAt: 0 });
       count++;
     }
     await tx.objectStore('known').clear();
@@ -2453,7 +2424,7 @@ export class MediaQueue {
     try {
       // La base ya dijo que en esta página es un uso ajeno (quien no ve el archivo no sabe su proyecto).
       const row = this.db ? await this.db.get('links', `${pageId}:${id}`) : undefined;
-      if (row?.foreign && !row.removed && row.pending === 0 && !row.unconfirmed) {
+      if (row?.foreign && !row.removed && row.pending === 0) {
         const meta = (this.db ? await this.db.get('known', id) : undefined) ?? null;
         if (!meta) return null;
         this.remember(id, meta, false);

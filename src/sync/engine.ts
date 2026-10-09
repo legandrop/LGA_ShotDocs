@@ -929,7 +929,12 @@ export class SyncEngine {
     // sus fotos y videos llegaron con el documento y casi siempre el servidor ya los tiene registrados. Se
     // pregunta una vez cuáles (una lectura por cada 100 páginas) para no mandarlos de a uno ni contarlos como
     // cambios sin subir (B.14). Sin respuesta, se sigue como siempre: se mandan todos.
-    const unseen = pages.filter((id) => media.usageMark(id) === undefined && !this.usesAsked.has(id));
+    // También las que tienen filas sin confirmar (las anotó el editor al abrirlas, D601): una página que ya se había
+    // comparado y a la que le llegó una foto de otro dispositivo, por ejemplo.
+    const unseen: string[] = [];
+    for (const id of pages) {
+      if ((media.usageMark(id) === undefined && !this.usesAsked.has(id)) || (await media.hasUnconfirmed(id))) unseen.push(id);
+    }
     const onServer = unseen.length > 0 ? await media.serverUses(unseen).catch(() => null) : null;
     if (onServer) for (const id of unseen) this.usesAsked.add(id);
     for (const pageId of pages) {
