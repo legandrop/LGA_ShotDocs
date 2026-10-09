@@ -1846,6 +1846,22 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    familia que `removeBlocks`, D436). Alcance probable: cualquier reordenamiento de bloques del mismo tipo, también
    párrafos. Recuperable desde el historial de la página y, para fotos, desde la papelera hasta que se purgue. Pide su
    frente (propuesta auditada).
+   **Diseñado y auditado (2026-10-09), sin implementar:** con dos Y.Doc y el editor real fallan 54 de 114 casos (mover
+   con el teclado, arrastrar, deshacer un mover; fotos, párrafos, títulos, listas); con borrado concurrente se pierde
+   texto ajeno en 33–64 de cada 100 agendas al azar. No pasa al cortar y pegar ni al mover una sección colapsada
+   (`blockMove.ts` ya va en dos pasadas). Elegida: envolver `_prosemirrorChanged` y, si en un grupo de bloques los ids
+   cambiaron de orden, borrar antes en Yjs el lado más chico para que la traducción solo inserte (54 → 1 caso, el
+   inherente: entrar en los hijos de un bloque que otro borró). Descartadas: solo teclado y arrastre (no cubre deshacer
+   ni otros caminos), parchear y-prosemirror (16–20 h, toca el parche de huecos estables) y Yjs 14 (mover queda peor).
+   Condiciones de la auditoría para implementarla: (1) ≤ 1 ms por letra en una página de 5000 bloques (el prototipo tarda
+   38 ms) con un contador de visitas para las pruebas; (2) decir el costo tal cual: lo que otro escribía justo en el bloque
+   recreado se pierde y el aviso de B.16 solo sale si esa persona sigue con la app abierta; (3) intentar que el aviso
+   salga también fuera de la sesión (si cuesta más de 2 h, decisión aparte); (4) regla de empate probada; (5) ids
+   repetidos y movidas cruzadas, y una foto duplicada que no pierde el archivo; (6) un mover es un solo paso de deshacer;
+   (7) editor y Yjs iguales en toda la matriz, y el asistente y el dictado nunca escriben en otro bloque; (8) la matriz
+   afirma dónde termina lo escrito; (9) recorrido real con arrastre, con red y con la foto que vuelve; (10) suite, tsc y
+   `collabRandom` ≥ 180 corridas. Subir `min_app_version` al publicar. Estimado ~12 h. La prueba que reproduce y el
+   prototipo están en la rama local `lega/mover-vecino`.
 
 ### C. Esperan a Lega
 
